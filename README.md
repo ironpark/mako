@@ -1,0 +1,137 @@
+# sanbo
+
+Run terminal agents (`claude`, `codex`, `agy`, a plain shell) on any of your
+computers and drive them from one place.
+
+## Layout
+
+    cmd/sanbod        daemon: owns PTYs, joins the mesh
+    cmd/sanbo         front-end CLI: nodes, sessions, attach
+    cmd/sanbo-gui     desktop front-end (ggui), laid out after Paseo
+    internal/protocol wire format (length-prefixed JSON over QUIC)
+    internal/transport QUIC listener/dialer, self-signed node certificate
+    internal/discovery Bonjour (mDNS) + Tailscale MagicDNS ping search
+    internal/session   PTY process plus gostty terminal state
+    internal/daemon    session registry, peer table, gossip, relaying
+    internal/client    front-end connection and attach loop
+    internal/gui       the desktop window: sidebar, tabs, terminal view
+    internal/config    node identity and configuration
+
+## Design
+
+**Daemon / front-end split.** `sanbod` runs on every machine and owns the agent
+processes, so sessions outlive any UI. `sanbo` is a thin client; closing it
+leaves the agent running.
+
+**One connection, whole mesh.** A front-end talks to a single daemon. If a
+request names another node, that daemon relays it — `forwardAttach` splices the
+two streams together, so the front-end never has to reach a remote machine
+directly.
+
+**Discovery.** Two backends run side by side and feed one peer table:
+
+- *Bonjour/mDNS* — each daemon advertises `_sanbo._udp` with its node ID; peers
+  on the same link are found immediately.
+- *Tailscale MagicDNS* — peer names come from `tailscale status --json` (or a
+  configured list) and each is probed on the sanbo port. A name becomes a node
+  only once a handshake succeeds.
+
+Nodes learned on either path are gossiped between daemons, so a machine visible
+to one node becomes visible to all of them.
+
+**Terminal state.** Every session feeds its PTY output into a
+[gostty](https://github.com/ironpark/gostty) terminal as well as to attached
+clients, so a late attach can be handed the current screen (`Attach.Replay`)
+instead of a blank window.
+
+## Usage
+
+    sanbod &                       # start the daemon
+    sanbo nodes                    # daemons on the mesh
+    sanbo agents                   # agents and profiles this node can launch
+    sanbo run claude               # start claude in the current directory
+    sanbo run claude:opus          # ...with its "opus" profile
+    sanbo -node <id> run codex     # ...on another machine
+    sanbo ls                       # sessions across the mesh
+    sanbo attach <session-id>
+    sanbo kill <session-id>
+    sanbo-gui                      # the same, in a window
+
+## Desktop app
+
+`sanbo-gui` is a window onto the mesh, built with
+[ggui](https://github.com/ironpark/ggui) and laid out after
+[Paseo](https://github.com/getpaseo/paseo): projects and their sessions in a
+sidebar, open sessions as tabs, a composer that types a line into the
+selected session, and a details panel for the session and the nodes.
+
+Each tab runs its own terminal on the GUI side, fed from the daemon's stream,
+so the screen is drawn and keys are encoded locally under the modes the
+program set: colours, bold and italic, wide characters, the IME's
+composition at the cursor, drag/double/triple-click selection, and the mouse
+for programs that ask for it (Shift takes it back for selecting). The
+terminal keeps Tab and the Ctrl and Alt chords for the program; ⌘ chords stay
+with the app (⌘T new session, ⌘W close tab, ⌘B sidebar, ⌘, settings, and
+⌘C/⌘V/⌘A for the terminal's clipboard).
+
+Settings (⌘,) cover the app -- theme (system, light, dark), terminal font
+size, line height, cursor, scrollback, copy-on-select, the composer and the
+daemon address -- kept in `gui.json` beside `config.json`, and this node's
+daemon configuration: name, listen address, key, discovery and agents,
+written to `config.json`. Settings ▸ Agents gives each agent its command,
+default flags and environment, and its profiles; the new-session picker
+lists every agent and profile the chosen node has. The daemon follows the
+agents as `config.json` changes, so they apply to the next session; the rest
+is read when it starts.
+
+The app can run the daemon itself, so a machine needs nothing but the app.
+Settings ▸ Daemon chooses: **Auto** (the default) uses a sanbod that is
+already running and otherwise starts one inside the app; **In this app**
+always does; **External** only talks to a sanbod started some other way. A
+daemon in the app listens on the configured address like any other, so the
+CLI and the rest of the mesh reach it, but it owns its sessions' processes:
+they end when it stops or the app quits, and the app asks before stopping it
+with sessions running. Run `sanbod` separately for sessions that outlive the
+window.
+
+`sanbo-gui -render-dir <dir>` renders the window against the running daemon
+to PNGs without showing it, for reviewing layout changes.
+
+## Configuration
+
+`$XDG_CONFIG_HOME/sanbo/config.json` (override the directory with `SANBO_HOME`)
+is written with defaults on first run: node ID and name, listen address,
+discovery toggles, static peers, an optional `psk` shared by all your daemons,
+and `agents`: how this node launches each agent by name.
+
+```json
+"agents": {
+  "claude": {
+    "command": ["claude"],
+    "args": ["--verbose"],
+    "env": {"DISABLE_TELEMETRY": "1"},
+    "profiles": [
+      {"name": "opus", "args": ["--model", "opus"]},
+      {"name": "work", "env": {"CLAUDE_CONFIG_DIR": "~/.claude-work"}}
+    ]
+  },
+  "codex": {"profiles": [{"name": "auto", "args": ["--full-auto"]}]}
+}
+```
+
+A session of `claude:work` runs the command with the agent's flags, then the
+profile's, then any given after `--`, and the agent's environment with the
+profile's over it. No shell starts it, so configured flags and values expand
+`$NAME`, `${NAME}` (from the layer before: the daemon's environment for the
+agent's, the agent's for a profile's) and a leading `~`; write `$$` for a `$`.
+A built-in (`claude`, `codex`, `agy`, `shell`) without a `command` runs its
+default one, and an agent written as a bare command array, as older
+configurations have it, still reads. Nodes tell each other their agents' and
+profiles' names, never their flags or environment.
+
+## Security
+
+Transport is QUIC with TLS 1.3 and a self-signed per-node certificate.
+Certificates are not verified against a CA; peer identity comes from the sanbo
+handshake, optionally gated by the shared `psk`. Do not expose the daemon port
+to an untrusted network — keep it on a LAN or a tailnet.

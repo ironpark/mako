@@ -1,0 +1,287 @@
+package daemon
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net"
+	"runtime"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/quic-go/quic-go"
+
+	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/sanbo/internal/transport"
+)
+
+// peerTTL drops a discovered node that has not been seen for this long.
+const peerTTL = 5 * time.Minute
+
+// Daemon serves front-ends and peers over QUIC.
+type Daemon struct {
+	cfg *config.Config
+	log *slog.Logger
+
+	sessions *registry
+	peers    *peerTable
+
+	ln    *transport.Listener
+	port  int
+	ready chan struct{} // closed once the listener is up; see Ready
+
+	mu       sync.Mutex
+	outbound map[string]*quic.Conn // node ID -> peer connection
+
+	agentFile agentFile
+}
+
+// New builds a daemon from configuration.
+func New(cfg *config.Config, log *slog.Logger) *Daemon {
+	if log == nil {
+		log = slog.Default()
+	}
+	return &Daemon{
+		cfg:      cfg,
+		log:      log,
+		sessions: newRegistry(),
+		peers:    newPeerTable(),
+		outbound: map[string]*quic.Conn{},
+		ready:    make(chan struct{}),
+	}
+}
+
+// Ready is closed once Run is listening, after which Addr is valid. A Run
+// that fails to listen returns its error without closing it.
+func (d *Daemon) Ready() <-chan struct{} { return d.ready }
+
+// Addr is the address the daemon listens on. Valid after Ready.
+func (d *Daemon) Addr() net.Addr { return d.ln.Addr() }
+
+// Self describes this daemon as a node record.
+func (d *Daemon) Self() protocol.Node {
+	addr := d.cfg.Listen
+	if d.ln != nil {
+		addr = d.ln.Addr().String()
+	}
+	return protocol.Node{
+		ID:       d.cfg.NodeID,
+		Name:     d.cfg.Name,
+		Addr:     addr,
+		OS:       runtime.GOOS,
+		Arch:     runtime.GOARCH,
+		Version:  config.Version,
+		Source:   "self",
+		LastSeen: time.Now(),
+		Agents:   agentInfo(d.agents()),
+	}
+}
+
+// Run serves until ctx is cancelled.
+func (d *Daemon) Run(ctx context.Context) error {
+	dir, err := config.Dir()
+	if err != nil {
+		return err
+	}
+	tlsConf, err := transport.ServerTLS(dir)
+	if err != nil {
+		return err
+	}
+	d.ln, err = transport.Listen(d.cfg.Listen, tlsConf)
+	if err != nil {
+		return err
+	}
+	defer d.ln.Close()
+	defer d.sessions.closeAll()
+
+	d.port = portOf(d.ln.Addr())
+	d.log.Info("daemon listening", "addr", d.ln.Addr().String(), "node", d.cfg.NodeID, "name", d.cfg.Name)
+	close(d.ready)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() { defer wg.Done(); d.serve(ctx) }()
+	go func() { defer wg.Done(); d.discover(ctx) }()
+	go func() { defer wg.Done(); d.maintain(ctx) }()
+
+	<-ctx.Done()
+	_ = d.ln.Close()
+	wg.Wait()
+	return nil
+}
+
+func (d *Daemon) serve(ctx context.Context) {
+	for {
+		conn, err := d.ln.Accept(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			d.log.Warn("accept failed", "err", err)
+			continue
+		}
+		go d.serveConn(ctx, conn)
+	}
+}
+
+func (d *Daemon) serveConn(ctx context.Context, conn *quic.Conn) {
+	defer conn.CloseWithError(0, "bye")
+	for {
+		stream, err := transport.AcceptStream(ctx, conn)
+		if err != nil {
+			return
+		}
+		go func() {
+			defer stream.Close()
+			if err := d.serveStream(ctx, conn, stream); err != nil && !isClosed(err) {
+				d.log.Debug("stream ended", "err", err)
+			}
+		}()
+	}
+}
+
+// serveStream handles one request stream. The first frame must be a hello.
+func (d *Daemon) serveStream(ctx context.Context, conn *quic.Conn, stream *transport.Stream) error {
+	env, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+	if env.Type != protocol.TypeHello {
+		return protocol.WriteError(stream, env.ID, errors.New("expected hello"))
+	}
+	var hello protocol.Hello
+	if err := protocol.Decode(env, &hello); err != nil {
+		return protocol.WriteError(stream, env.ID, err)
+	}
+	if d.cfg.PSK != "" && hello.AuthTag != d.cfg.PSK {
+		return protocol.WriteError(stream, env.ID, errors.New("authentication failed"))
+	}
+	if err := stream.Send(protocol.TypeWelcome, env.ID, protocol.Welcome{Node: d.Self()}); err != nil {
+		return err
+	}
+	if hello.IsPeer && hello.NodeID != "" && hello.NodeID != d.cfg.NodeID {
+		d.peers.upsert(protocol.Node{
+			ID:     hello.NodeID,
+			Name:   hello.Name,
+			Addr:   remoteAddr(conn, d.port),
+			Source: "inbound",
+		})
+	}
+
+	for {
+		env, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if err := d.dispatch(ctx, stream, env, hello.IsPeer); err != nil {
+			if isClosed(err) {
+				return err
+			}
+			if writeErr := protocol.WriteError(stream, env.ID, err); writeErr != nil {
+				return writeErr
+			}
+		}
+	}
+}
+
+// fromPeer marks a stream greeted by another daemon rather than a front-end.
+func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
+	switch env.Type {
+	case protocol.TypeListNodes:
+		nodes := append([]protocol.Node{d.Self()}, d.peers.list()...)
+		return stream.Send(protocol.TypeNodes, env.ID, protocol.Nodes{Nodes: nodes})
+
+	case protocol.TypeGossip:
+		var payload protocol.Nodes
+		if err := protocol.Decode(env, &payload); err != nil {
+			return err
+		}
+		for _, node := range payload.Nodes {
+			if node.ID != d.cfg.NodeID {
+				d.peers.merge(node)
+			}
+		}
+		return stream.Send(protocol.TypeNodes, env.ID, protocol.Nodes{Nodes: d.peers.list()})
+
+	case protocol.TypeListSess:
+		return d.handleListSessions(ctx, stream, env, fromPeer)
+
+	case protocol.TypeOpenSession:
+		return d.handleOpenSession(ctx, stream, env)
+
+	case protocol.TypeCloseSess:
+		return d.handleCloseSession(ctx, stream, env)
+
+	case protocol.TypeAttach:
+		return d.handleAttach(ctx, stream, env)
+
+	case protocol.TypeResize:
+		var payload protocol.Resize
+		if err := protocol.Decode(env, &payload); err != nil {
+			return err
+		}
+		s, ok := d.sessions.get(payload.SessionID)
+		if !ok {
+			return fmt.Errorf("unknown session %q", payload.SessionID)
+		}
+		if err := s.Resize(payload.Cols, payload.Rows); err != nil {
+			return err
+		}
+		return stream.Send(protocol.TypeSessionInfo, env.ID, s.Info())
+
+	case protocol.TypeInput:
+		var payload protocol.Input
+		if err := protocol.Decode(env, &payload); err != nil {
+			return err
+		}
+		s, ok := d.sessions.get(payload.SessionID)
+		if !ok {
+			return fmt.Errorf("unknown session %q", payload.SessionID)
+		}
+		_, err := s.Write(payload.Data)
+		return err
+
+	default:
+		return fmt.Errorf("unsupported message %q", env.Type)
+	}
+}
+
+func portOf(addr net.Addr) int {
+	_, port, err := net.SplitHostPort(addr.String())
+	if err != nil {
+		return config.DefaultPort
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil {
+		return config.DefaultPort
+	}
+	return n
+}
+
+// remoteAddr rewrites a peer's ephemeral source port to the sanbo service port,
+// which is where that daemon can be dialed back.
+func remoteAddr(conn *quic.Conn, fallbackPort int) string {
+	host, _, err := net.SplitHostPort(conn.RemoteAddr().String())
+	if err != nil {
+		return conn.RemoteAddr().String()
+	}
+	return net.JoinHostPort(host, strconv.Itoa(fallbackPort))
+}
+
+func isClosed(err error) bool {
+	if err == nil {
+		return false
+	}
+	var appErr *quic.ApplicationError
+	var idleErr *quic.IdleTimeoutError
+	return errors.Is(err, context.Canceled) ||
+		errors.Is(err, net.ErrClosed) ||
+		errors.As(err, &appErr) ||
+		errors.As(err, &idleErr)
+}

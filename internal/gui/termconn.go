@@ -1,0 +1,645 @@
+package gui
+
+import (
+	"context"
+	"errors"
+	"io"
+	"math"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/ironpark/gostty"
+	"github.com/ironpark/gostty/input"
+
+	"github.com/ironpark/sanbo/internal/client"
+	"github.com/ironpark/sanbo/internal/protocol"
+)
+
+// termConn is one attached session as the GUI sees it. The daemon streams
+// raw PTY bytes; a terminal here parses them again, so the screen is drawn
+// and input encoded locally, from the same modes the program set.
+//
+// The daemon's own terminal answers the program's queries, so replies from
+// this one are discarded rather than written back a second time.
+type termConn struct {
+	id  string
+	att sessionLink
+
+	mu       sync.Mutex // guards everything below, the terminal included
+	vt       *gostty.Session
+	state    *gostty.RenderState
+	cells    []gostty.RenderCell
+	clusters []string
+	title    string
+	exited   bool
+	exitCode int
+	err      error
+	cols     uint16
+	rows     uint16
+	closed   bool // vt and state are released; nothing may touch them
+	opts     termOptions
+	gesture  *gostty.Gesture // click counting and drag selection
+	dragging bool
+
+	// wake asks the UI for a frame. Output arrives in bursts, so requests
+	// are coalesced until the frame that drew them has run.
+	wake    func()
+	pending atomic.Bool
+}
+
+// dialTerm attaches to a session and starts reading its stream.
+func dialTerm(ctx context.Context, c *client.Client, psk string, info protocol.SessionInfo, wake func()) (*termConn, error) {
+	att, err := c.AttachStream(ctx, psk, protocol.Attach{SessionID: info.ID, NodeID: info.NodeID, Replay: true})
+	if err != nil {
+		return nil, err
+	}
+	t, err := newTermConn(info.ID, att, info.Cols, info.Rows, wake)
+	if err != nil {
+		_ = att.Close()
+		return nil, err
+	}
+	return t, nil
+}
+
+// newTermConn starts reading an attached link into a fresh terminal.
+func newTermConn(id string, link sessionLink, cols, rows uint16, wake func()) (*termConn, error) {
+	cols, rows = max(cols, 2), max(rows, 2)
+	vt, err := gostty.New(cols, rows,
+		gostty.WithTerminalOptions(gostty.WithScrollbackMaxLines(10000)),
+		gostty.WithStreamOptions(gostty.WithVersionReport("sanbo", "gui")),
+	)
+	if err != nil {
+		return nil, err
+	}
+	state, err := gostty.NewRenderState()
+	if err != nil {
+		vt.Close()
+		return nil, err
+	}
+	gesture, err := vt.Terminal().NewGesture()
+	if err != nil {
+		state.Close()
+		vt.Close()
+		return nil, err
+	}
+	vt.AddGesture(gesture) // closed with the terminal, and before it
+	_ = gesture.SetWordBoundaries(wordBoundaries)
+	// One click places the anchor a drag grows from, two select a word,
+	// three the line.
+	_ = gesture.SetBehaviors(gostty.GestureBehaviorCell, gostty.GestureBehaviorWord, gostty.GestureBehaviorLine)
+	t := &termConn{id: id, att: link, vt: vt, state: state, gesture: gesture, cols: cols, rows: rows, wake: wake}
+	t.mu.Lock()
+	t.applyOptionsLocked(defaultTermOptions())
+	t.mu.Unlock()
+	go t.read()
+	return t, nil
+}
+
+// termOptions are the settings a terminal takes from the window: its
+// colours, how much it remembers, and the cursor shown until a program asks
+// for another.
+type termOptions struct {
+	palette     palette
+	scrollback  int
+	cursorStyle gostty.CursorStyle
+	cursorBlink bool
+}
+
+func defaultTermOptions() termOptions {
+	return termOptionsFor(defaultPrefs(), darkPalette)
+}
+
+func termOptionsFor(p prefs, pal palette) termOptions {
+	style := gostty.CursorStyleBlock
+	switch p.CursorStyle {
+	case "bar":
+		style = gostty.CursorStyleBar
+	case "underline":
+		style = gostty.CursorStyleUnderline
+	}
+	return termOptions{palette: pal, scrollback: p.Scrollback, cursorStyle: style, cursorBlink: p.CursorBlink}
+}
+
+// configure applies options that changed since the last call. It runs on
+// every paint, so it is cheap when nothing did.
+func (t *termConn) configure(o termOptions) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed || o == t.opts {
+		return
+	}
+	t.applyOptionsLocked(o)
+}
+
+func (t *termConn) applyOptionsLocked(o termOptions) {
+	vt := t.vt.Terminal()
+	if o.palette != t.opts.palette {
+		applyPalette(vt, o.palette)
+		// A cell keeps the palette index it was written with, but nothing on
+		// screen changed, so the old render state would hand back the colours
+		// it resolved before. A fresh one resolves them again.
+		if fresh, err := gostty.NewRenderState(); err == nil {
+			_ = t.state.Close()
+			t.state = fresh
+		}
+	}
+	_ = vt.SetScrollbackMaxLines(uint(o.scrollback))
+	_ = vt.SetDefaultCursorStyle(o.cursorStyle)
+	_ = vt.SetDefaultCursorBlink(o.cursorBlink)
+	t.opts = o
+}
+
+// wordBoundaries end a word for double-click selection.
+var wordBoundaries = []rune{
+	0, ' ', '\t', '\'', '"', '`', '|', ':', ';', ',',
+	'(', ')', '[', ']', '{', '}', '<', '>', '$', '│',
+}
+
+// read feeds the stream into the terminal until the session ends or the
+// attachment is closed.
+func (t *termConn) read() {
+	defer t.requestPaint()
+	for {
+		env, err := t.att.Recv()
+		if err != nil {
+			t.mu.Lock()
+			if !t.exited && t.err == nil {
+				t.err = err
+			}
+			t.mu.Unlock()
+			return
+		}
+		switch env.Type {
+		case protocol.TypeSnapshot:
+			var snap protocol.Snapshot
+			if protocol.Decode(env, &snap) == nil {
+				t.mu.Lock()
+				if t.closed {
+					t.mu.Unlock()
+					return
+				}
+				// A snapshot replaces whatever this terminal held; it is the
+				// daemon's screen at the moment of attach.
+				_ = t.vt.Terminal().FullReset()
+				opts := t.opts
+				t.opts = termOptions{}
+				t.applyOptionsLocked(opts)
+				_ = t.vt.Terminal().Resize(max(snap.Cols, 2), max(snap.Rows, 2))
+				t.cols, t.rows = max(snap.Cols, 2), max(snap.Rows, 2)
+				t.feedLocked([]byte(snap.Text))
+				t.mu.Unlock()
+			}
+		case protocol.TypeOutput:
+			var out protocol.Output
+			if protocol.Decode(env, &out) == nil {
+				t.mu.Lock()
+				t.feedLocked(out.Data)
+				t.mu.Unlock()
+			}
+		case protocol.TypeExited:
+			var ex protocol.Exited
+			_ = protocol.Decode(env, &ex)
+			t.mu.Lock()
+			t.exited, t.exitCode = true, ex.ExitCode
+			t.mu.Unlock()
+			return
+		case protocol.TypeError:
+			var e protocol.Error
+			_ = protocol.Decode(env, &e)
+			t.mu.Lock()
+			t.err = errors.New(e.Message)
+			t.mu.Unlock()
+			return
+		}
+		t.requestPaint()
+	}
+}
+
+func (t *termConn) feedLocked(p []byte) {
+	if t.closed {
+		return
+	}
+	_, _ = t.vt.Write(p)
+	stream := t.vt.Stream()
+	_ = stream.WriteReplies(io.Discard)
+	for ev, err := range stream.EventValues() {
+		if err != nil {
+			break
+		}
+		if ev.Kind == gostty.StreamEventTitleChanged {
+			t.title = ev.Title
+		}
+	}
+}
+
+func (t *termConn) requestPaint() {
+	if t.pending.CompareAndSwap(false, true) {
+		t.wake()
+	}
+}
+
+// frame copies the screen for one paint. It runs on the UI goroutine.
+func (t *termConn) frame() (frameSnapshot, error) {
+	t.pending.Store(false)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return frameSnapshot{}, errors.New("detached")
+	}
+	if err := t.state.Update(t.vt.Terminal()); err != nil {
+		return frameSnapshot{}, err
+	}
+	count, err := t.state.CellCount()
+	if err != nil {
+		return frameSnapshot{}, err
+	}
+	n := int(count)
+	if cap(t.cells) < n {
+		t.cells = make([]gostty.RenderCell, n)
+	}
+	t.cells = t.cells[:n]
+	if _, err := t.state.Cells(t.cells); err != nil {
+		return frameSnapshot{}, err
+	}
+	cols, rows := int(t.state.Cols()), int(t.state.Rows())
+	if len(t.clusters) != n {
+		t.clusters = make([]string, n)
+	}
+	var buf [32]rune
+	for i, cell := range t.cells {
+		t.clusters[i] = ""
+		if !cell.Flags.HasGrapheme || cell.Codepoint <= ' ' || cols == 0 {
+			continue
+		}
+		if k, err := t.state.Graphemes(uint16(i%cols), uint16(i/cols), buf[:]); err == nil && k > 1 {
+			t.clusters[i] = string(buf[:min(k, uint(len(buf)))])
+		}
+	}
+	colors, err := t.state.Colors()
+	if err != nil {
+		return frameSnapshot{}, err
+	}
+	cursor, err := t.state.Cursor()
+	if err != nil {
+		return frameSnapshot{}, err
+	}
+	return frameSnapshot{
+		cells:    t.cells,
+		clusters: t.clusters,
+		cols:     cols,
+		rows:     rows,
+		colors:   colors,
+		cursor:   cursor,
+		exited:   t.exited,
+		exitCode: t.exitCode,
+		err:      t.err,
+	}, nil
+}
+
+// resize follows the widget's size: the local terminal at once, the
+// session PTY by a message to the daemon.
+func (t *termConn) resize(cols, rows uint16) {
+	cols, rows = max(cols, 2), max(rows, 2)
+	t.mu.Lock()
+	if t.closed || (cols == t.cols && rows == t.rows) {
+		t.mu.Unlock()
+		return
+	}
+	t.cols, t.rows = cols, rows
+	_ = t.vt.Terminal().Resize(cols, rows)
+	live := !t.exited && t.err == nil
+	t.mu.Unlock()
+	if live {
+		_ = t.att.Resize(cols, rows)
+	}
+}
+
+// key encodes one key event with the terminal's current modes and sends it.
+func (t *termConn) key(ev input.KeyEvent, text string) {
+	var buf frameBuffer
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		return
+	}
+	err := input.EncodeKey(&buf, t.vt.Terminal(), ev, text)
+	if err == nil && len(buf) > 0 {
+		// Typing snaps the viewport back to the bottom, as every terminal does.
+		_ = t.vt.Terminal().ScrollViewport(gostty.ScrollViewportBottom())
+	}
+	t.mu.Unlock()
+	if err == nil && len(buf) > 0 {
+		t.send(buf)
+	}
+}
+
+// paste sends text the way the program asked for it: bracketed when it
+// enabled bracketed paste, plain otherwise.
+func (t *termConn) paste(text string) {
+	if text == "" || !input.IsSafePaste([]byte(text)) {
+		return
+	}
+	var buf frameBuffer
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		return
+	}
+	err := input.EncodePaste(&buf, t.vt.Terminal(), []byte(text))
+	t.mu.Unlock()
+	if err == nil {
+		t.send(buf)
+	}
+}
+
+// sendText writes text followed by Enter, as the composer does.
+func (t *termConn) sendText(text string) {
+	if text != "" {
+		t.paste(text)
+	}
+	t.key(input.KeyEvent{Action: input.KeyActionPress, Key: input.KeyEnter}, "")
+}
+
+// wheel scrolls the scrollback, or on the alternate screen, where there is
+// none, sends the arrows a pager understands.
+func (t *termConn) wheel(lines int) {
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		return
+	}
+	alt := t.vt.Terminal().ActiveScreenKey() == gostty.ScreenKeyAlternate
+	if !alt {
+		_ = t.vt.Terminal().ScrollViewport(gostty.ScrollViewportDelta(-lines))
+	}
+	t.mu.Unlock()
+	if !alt {
+		t.requestPaint()
+		return
+	}
+	key := input.KeyArrowUp
+	if lines < 0 {
+		key, lines = input.KeyArrowDown, -lines
+	}
+	for range lines {
+		t.key(input.KeyEvent{Action: input.KeyActionPress, Key: key}, "")
+	}
+}
+
+func (t *termConn) send(p []byte) {
+	if err := t.att.Input(p); err != nil {
+		t.mu.Lock()
+		if t.err == nil && !t.exited {
+			t.err = err
+		}
+		t.mu.Unlock()
+		t.requestPaint()
+	}
+}
+
+// Selection -----------------------------------------------------------------
+//
+// The gesture counts clicks, applies the granularity, and works out what a
+// drag covers across soft wraps, wide characters and the scrollback; this
+// only feeds it the pointer and puts what it hands back on the screen.
+
+// Double-click policy: how close in time and space two presses have to be.
+const (
+	multiClickInterval = 400 * time.Millisecond
+	multiClickCells    = 2
+)
+
+// pointerCell is a pointer position in a terminal: the cell under it and
+// the pixel position within the grid, which the gesture needs at the edges.
+type pointerCell struct {
+	col, row   int
+	xpos, ypos float64 // xpos in wholeCells units
+	cellW      float64 // whole pixels
+	cols       int
+	height     float64
+}
+
+// wholeCells maps x, from the grid's left edge, into cells of a whole
+// width, which is what libghostty measures in: a cell is whole in device
+// pixels, so on a display of two per point it may be 8.5 points wide.
+// Where the pointer sits within a cell, which decides whether a drag takes
+// it, survives the rounding.
+func wholeCells(x, cellW float64) (xpos, width float64) {
+	width = max(math.Round(cellW), 1)
+	if cellW <= 0 {
+		return x, width
+	}
+	return x / cellW * width, width
+}
+
+func (t *termConn) selectPress(p pointerCell) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return
+	}
+	_ = t.gesture.SetGeometry(gostty.GestureGeometry{
+		Columns: uint32(p.cols), CellWidth: uint32(p.cellW), ScreenHeight: uint32(p.height),
+	})
+	sel, ok, err := t.gesture.Press(gostty.GesturePressEvent{
+		X: uint16(p.col), Y: uint16(p.row), Xpos: p.xpos, Ypos: p.ypos,
+		MaxDistance:      multiClickCells * p.cellW,
+		RepeatIntervalNs: uint64(multiClickInterval),
+		TimeNs:           time.Now().UnixNano(),
+	})
+	if err == nil {
+		t.dragging = true
+		t.applySelectionLocked(sel, ok)
+	}
+}
+
+// selectDrag grows the selection to the pointer; alt selects the block
+// between the corners rather than the flow of text.
+func (t *termConn) selectDrag(p pointerCell, rectangle bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed || !t.dragging {
+		return
+	}
+	ev := gostty.GestureDragEvent{X: uint16(p.col), Y: uint16(p.row), Xpos: p.xpos, Ypos: p.ypos, Rectangle: rectangle}
+	sel, ok, err := t.gesture.Drag(ev)
+	if err != nil {
+		return
+	}
+	t.applySelectionLocked(sel, ok)
+	// Held past the top or bottom, the view scrolls and the selection grows
+	// with it, a row a frame.
+	if dir, err := t.gesture.Autoscroll(); err == nil && dir != gostty.GestureAutoscrollDirectionNone {
+		delta := 1
+		if dir == gostty.GestureAutoscrollDirectionUp {
+			delta = -1
+		}
+		_ = t.vt.Terminal().ScrollViewport(gostty.ScrollViewportDelta(delta))
+		if sel, ok, err := t.gesture.AutoscrollTick(ev); err == nil {
+			t.applySelectionLocked(sel, ok)
+		}
+	}
+}
+
+// selectRelease ends a drag and reports the selected text, for
+// copy-on-select.
+func (t *termConn) selectRelease(p pointerCell) string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed || !t.dragging {
+		return ""
+	}
+	t.dragging = false
+	_ = t.gesture.Release(uint16(p.col), uint16(p.row))
+	return t.selectionLocked()
+}
+
+func (t *termConn) applySelectionLocked(sel gostty.Selection, ok bool) {
+	screen, err := t.vt.Terminal().ActiveScreen()
+	if err != nil {
+		return
+	}
+	if !ok {
+		_ = screen.ClearSelection()
+		return
+	}
+	_, _ = screen.SetSelection(sel)
+}
+
+// selection is the selected text, or "" when nothing is selected.
+func (t *termConn) selection() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return ""
+	}
+	return t.selectionLocked()
+}
+
+func (t *termConn) selectionLocked() string {
+	screen, err := t.vt.Terminal().ActiveScreen()
+	if err != nil {
+		return ""
+	}
+	text, ok, err := screen.SelectionString()
+	if err != nil || !ok {
+		return ""
+	}
+	return text
+}
+
+func (t *termConn) clearSelection() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return
+	}
+	if screen, err := t.vt.Terminal().ActiveScreen(); err == nil {
+		_ = screen.ClearSelection()
+	}
+	_ = t.gesture.Reset()
+	t.dragging = false
+}
+
+// selectAll selects the whole scrollback, not only what is on screen.
+func (t *termConn) selectAll() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return
+	}
+	if screen, err := t.vt.Terminal().ActiveScreen(); err == nil {
+		_, _ = screen.SelectAll()
+	}
+}
+
+// Mouse reporting -------------------------------------------------------------
+
+// mouseReported reports whether the program asked for the mouse (DECSET
+// 1000 and friends), in which case presses, drags and the wheel are its.
+func (t *termConn) mouseReported() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return false
+	}
+	mt, err := t.vt.Terminal().MouseTracking()
+	return err == nil && mt != gostty.MouseTrackingNone
+}
+
+// mouse encodes one mouse event under the program's modes and sends it,
+// reporting whether the modes produced anything.
+func (t *termConn) mouse(ev input.MouseEvent, size input.RenderSize, anyPressed bool) bool {
+	var buf frameBuffer
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		return false
+	}
+	err := input.EncodeMouse(&buf, t.vt.Terminal(), ev, size, anyPressed)
+	t.mu.Unlock()
+	if err != nil || len(buf) == 0 {
+		return false
+	}
+	t.send(buf)
+	return true
+}
+
+func (t *termConn) windowTitle() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.title
+}
+
+// close detaches and releases the terminal. The session keeps running.
+func (t *termConn) close() {
+	_ = t.att.Close()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return
+	}
+	t.closed = true
+	_ = t.state.Close()
+	_ = t.vt.Close()
+}
+
+// sessionLink is the daemon side of a termConn: a client.Attachment, or a
+// recorder in tests.
+type sessionLink interface {
+	Recv() (*protocol.Envelope, error)
+	Input(p []byte) error
+	Resize(cols, rows uint16) error
+	Close() error
+}
+
+// frameSnapshot is what one paint reads. Its slices are reused by the next
+// frame, so they are valid only during the paint that asked for them.
+type frameSnapshot struct {
+	cells      []gostty.RenderCell
+	clusters   []string
+	cols, rows int
+	colors     gostty.RenderColors
+	cursor     gostty.RenderCursor
+	exited     bool
+	exitCode   int
+	err        error
+}
+
+// frameBuffer collects encoder output for one write.
+type frameBuffer []byte
+
+func (b *frameBuffer) Write(p []byte) (int, error) { *b = append(*b, p...); return len(p), nil }
+
+// textAt is a cell's text: its grapheme cluster when it has one, otherwise
+// its codepoint.
+func (f frameSnapshot) textAt(i int) string {
+	if i < 0 || i >= len(f.cells) {
+		return ""
+	}
+	if s := f.clusters[i]; s != "" {
+		return s
+	}
+	return string(f.cells[i].Codepoint)
+}
