@@ -17,9 +17,9 @@ import (
 )
 
 // The window follows Paseo's desktop layout: a sidebar of projects and their
-// sessions, a workspace of tabs over the selected session with a composer
-// under it, and a panel on the right of the project's files and the session's
-// details.
+// sessions, a workspace of tabs over the selected session, whose Chat view
+// carries the composer, and a panel on the right of the project's files and
+// the session's details.
 const (
 	sidebarWidth = 272
 	detailsWidth = 320
@@ -113,10 +113,11 @@ func sidebar(m *model) ggui.Widget {
 	).Gap(10)).Pad(0, 10, 0, 16).Height(headerHeight)
 
 	grouping := ggui.Map(m.Prefs, func(p prefs) string { return p.SidebarGroup })
+	projects := ggui.Map(m.Prefs, func(p prefs) []fileRoot { return p.Projects }).WithEqual(slices.Equal)
 	list := ggui.Reactive(func() ggui.Widget {
 		by := grouping.Get()
 		nodes := m.Nodes.Get()
-		groups := groupSessions(m.Sessions.Get(), by, nodes)
+		groups := groupSessions(m.Sessions.Get(), by, nodes, projects.Get())
 		selected := m.Selected.Get()
 		titles := m.Titles.Get()
 		if len(groups) == 0 {
@@ -193,14 +194,26 @@ func sessionSection(m *model, by string, g sessionGroup, selected string, nodes 
 			}
 			status = linkDot(up)
 		}
-		rows = append(rows, ggui.Box(ggui.Row(
+		row := []ggui.Widget{
 			icon(glyph).Size(15),
-			ggui.Box(ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).MaxWidth(sidebarWidth-90),
+			ggui.Box(ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).MaxWidth(sidebarWidth - 90),
 			status,
 			ggui.Spacer(),
-			ui.Tooltip(ui.ButtonOf(icon("plus").Size(14), func() { m.openNew(nodeID, project) }).
-				Ghost().Pad(3).Radius(5).Name(Tf("New session in %s", name)), T("New session here")),
-		).Gap(10)).Pad(4, 4, 4, 10))
+		}
+		// A folder kept with no sessions has nothing to bring it back once
+		// it leaves, so its menu can drop it.
+		if len(g.Sessions) == 0 {
+			ref := fileRoot{Node: nodeID, Path: project}
+			row = append(row, borderless(ui.MenuOf(icon("ellipsis").Size(14),
+				ui.MenuItem(T("Remove from sidebar"), func() { m.forgetProject(ref) }),
+			).Name(T("Folder actions"))))
+		}
+		row = append(row, ui.Tooltip(ui.ButtonOf(icon("plus").Size(14), func() { m.openNew(nodeID, project) }).
+			Ghost().Pad(3).Radius(5).Name(Tf("New session in %s", name)), T("New session here")))
+		rows = append(rows, ggui.Box(ggui.Row(row...).Gap(10)).Pad(4, 4, 4, 10))
+		if len(g.Sessions) == 0 {
+			rows = append(rows, ggui.Padding(ggui.Box(muted(ggui.Text(T("No sessions")).Size(11.5))).Pad(3, 4), 0, 0, 0, 14))
+		}
 	}
 	for _, s := range g.Sessions {
 		var where []string
@@ -286,7 +299,6 @@ func workspace(m *model) ggui.Widget {
 		workspaceHeader(m),
 		hline(),
 		ggui.Expanded(layoutView(m)),
-		ggui.If(ggui.Derived(func() bool { return m.Prefs.Get().ShowComposer || m.ChatModes.Get()[m.Selected.Get()] }), func() ggui.Widget { return composer(m) }),
 	).Stretch()).Fill(tokSurface0)
 }
 
@@ -408,17 +420,18 @@ func emptyState(m *model) ggui.Widget {
 	).Gap(10).Align(ggui.AlignCenter))
 }
 
-// composer types a line into the selected session: Paseo's message box,
-// which here becomes the program's input followed by Enter.
-func composer(m *model) ggui.Widget {
-	disabled := ggui.Derived(func() bool { return !slices.Contains(m.Attached.Get(), m.Selected.Get()) })
-	field := ui.TextField(m.Composer).
+// composer is the Chat lens's message box: it types a line into that
+// session's live terminal followed by Enter. Terminal mode has no composer;
+// the terminal itself takes the keys, as ovis does.
+func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
+	disabled := ggui.Derived(func() bool { return !slices.Contains(m.Attached.Get(), id) })
+	field := ui.TextField(draft).
 		Placeholder(T("Message the agent, or type a command and press Enter")).
 		Name(T("Message")).
 		BindDisabled(disabled).
-		OnSubmit(func(string) { m.sendComposer() })
+		OnSubmit(func(string) { m.sendComposer(id) })
 	pills := ggui.Reactive(func() ggui.Widget {
-		s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get())
+		s, ok := sessionIn(m.Sessions.Get(), id)
 		if !ok {
 			return ggui.Box()
 		}
@@ -428,7 +441,7 @@ func composer(m *model) ggui.Widget {
 			pill("circle-dot", stateLabel(s.State)),
 		).Gap(6)
 	})
-	send := ui.ButtonOf(iconColored("arrow-up", uitheme.PrimaryFg).Size(15), m.sendComposer).
+	send := ui.ButtonOf(iconColored("arrow-up", uitheme.PrimaryFg).Size(15), func() { m.sendComposer(id) }).
 		Pad(6).Radius(14).Name(T("Send")).BindDisabled(disabled)
 	// Files dropped on the box, from the desktop or the Files tab, are
 	// inserted as paths.
@@ -446,13 +459,15 @@ func composer(m *model) ggui.Widget {
 	})
 	desktop := ggui.Pointer(box).OnDropHover(over.Set).OnDrop(func(ev ggui.DropEvent) {
 		for _, p := range ev.Paths() {
-			m.insertPath(p)
+			m.insertPath(id, p)
 		}
 	})
 	files := ggui.DropZone(desktop, func(d ggui.Dropped[pathDrag]) {
 		over.Set(false)
-		m.insertPath(d.Value.Path)
+		m.insertPath(id, d.Value.Path)
 	}).OnHover(over.Set)
+	// Align fills the height it is given, which would leave the feed above
+	// none: the box keeps its own height and the whole pane's width.
 	return ggui.Box(files).Pad(10, 16, 14, 16)
 }
 

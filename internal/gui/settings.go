@@ -251,12 +251,6 @@ func generalSettings(m *model) ggui.Widget {
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.ConfirmKill }), "").Name(T("Confirm before killing"))),
 			),
 		),
-		section(T("Workspace"),
-			card(
-				row(T("Composer"), T("The message box under the terminal, which types a line into the session."),
-					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.ShowComposer }), "").Name(T("Show composer"))),
-			),
-		),
 		section(T("Connection"),
 			card(
 				row(T("External daemon"), T("The sanbod to use when the daemon does not run in the app. Empty is the one on this machine; it relays to the rest of the mesh."),

@@ -29,8 +29,12 @@ import (
 // the node it runs on, through that node's daemon: a tree whose folders are
 // read as they open, over a preview of the file chosen.
 
-// fileRoot is the directory the panel browses: a session's project.
-type fileRoot struct{ Node, Path string }
+// fileRoot is a project folder on a node: the one the panel browses, or one
+// the sidebar keeps after its last session.
+type fileRoot struct {
+	Node string `json:"node"`
+	Path string `json:"path"`
+}
 
 // dirKey names a directory, or a file, on a node: the tree's keys.
 func dirKey(node, path string) string { return node + "\x00" + path }
@@ -267,18 +271,25 @@ func (m *model) openPreview(it fileItem) {
 	})
 }
 
-// insertPath types a path, relative to the project, into the composer.
-func (m *model) insertPath(path string) {
+// insertPath types a path, relative to the project, into a session's
+// composer draft. With no session named, it goes to the chat in view.
+func (m *model) insertPath(id, path string) {
+	if id == "" {
+		id = m.chatTarget()
+	}
+	if id == "" {
+		return
+	}
 	root := ggui.Untrack(m.filesRoot)
 	rel := path
 	if r := subfolder(path, root.Path); r != "" {
 		rel = r
 	}
-	text := ggui.Peek(m.Composer)
+	text := m.composerDraft(id)
 	if text != "" && !strings.HasSuffix(text, " ") {
 		text += " "
 	}
-	m.Composer.Set(text + rel)
+	m.setComposerDraft(id, text+rel)
 }
 
 // Panel -------------------------------------------------------------------------
@@ -397,7 +408,7 @@ func previewPane(m *model) ggui.Widget {
 			).Gap(8).Align(ggui.AlignBaseline)),
 			ggui.Row(
 				enlarge,
-				iconButton("terminal", T("Insert path in the message"), func() { m.insertPath(path) }),
+				iconButton("terminal", T("Insert path in the message"), func() { m.insertPath("", path) }),
 				iconButton("copy", T("Copy path"), func() { ggui.CurrentClipboard().Write(path) }),
 				iconButton("x", T("Close preview"), func() { m.Preview.Set(filePreview{}); m.FileSel.Set("") }),
 			).Gap(2),

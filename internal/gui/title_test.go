@@ -37,11 +37,11 @@ func TestTitlesUpdateWithoutPollingOrPainting(t *testing.T) {
 		}
 	}
 	// Snapshot metadata restores a title without needing a new OSC from the agent.
-	env, err := protocol.Encode(protocol.TypeSnapshot, "", protocol.Snapshot{SessionID: "s", Cols: 80, Rows: 24, Title: "before attach", Text: "body"})
-	if err != nil {
-		t.Fatal(err)
+	link.in <- &protocol.StreamEvent{
+		Kind:     protocol.FrameSnapshot,
+		Snapshot: protocol.Snapshot{SessionID: "s", Cols: 80, Rows: 24, Title: "before attach"},
 	}
-	link.in <- env
+	link.output(t, "body")
 	update("before attach")
 	// No terminal paints between these updates: hidden tab labels still change.
 	link.output(t, "\x1b]2;live title\x07")

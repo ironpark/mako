@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -33,6 +34,8 @@ type termConn struct {
 	state        *gostty.RenderState
 	cells        []gostty.RenderCell
 	clusters     []string
+	dirtyRows    []uint16
+	hasFrame     bool // cells and clusters hold a complete screen
 	title        string
 	titleKnown   bool
 	titleChanged func() // immutable; posts UI work without acquiring mu
@@ -168,6 +171,7 @@ func (t *termConn) applyOptionsLocked(o termOptions) {
 		if fresh, err := gostty.NewRenderState(); err == nil {
 			_ = t.state.Close()
 			t.state = fresh
+			t.hasFrame = false
 		}
 	}
 	_ = vt.SetScrollbackMaxLines(uint(o.scrollback))
@@ -187,7 +191,7 @@ var wordBoundaries = []rune{
 func (t *termConn) read() {
 	defer t.requestPaint()
 	for {
-		env, err := t.att.Recv()
+		ev, err := t.att.Recv()
 		if err != nil {
 			t.mu.Lock()
 			if !t.exited && t.err == nil {
@@ -196,48 +200,40 @@ func (t *termConn) read() {
 			t.mu.Unlock()
 			return
 		}
-		switch env.Type {
-		case protocol.TypeSnapshot:
-			var snap protocol.Snapshot
-			if protocol.Decode(env, &snap) == nil {
-				t.mu.Lock()
-				if t.closed {
-					t.mu.Unlock()
-					return
-				}
-				// A snapshot replaces whatever this terminal held; it is the
-				// daemon's screen at the moment of attach.
-				_ = t.vt.Terminal().FullReset()
-				opts := t.opts
-				t.opts = termOptions{}
-				t.applyOptionsLocked(opts)
-				_ = t.vt.Terminal().Resize(max(snap.Cols, 2), max(snap.Rows, 2))
-				t.cols, t.rows = max(snap.Cols, 2), max(snap.Rows, 2)
-				t.setTitleLocked(snap.Title)
-				t.progress.Restore(snap.Progress, time.Now())
-				t.wake()
-				t.feedLocked([]byte(snap.Text))
-				t.mu.Unlock()
-			}
-		case protocol.TypeOutput:
-			var out protocol.Output
-			if protocol.Decode(env, &out) == nil {
-				t.mu.Lock()
-				t.feedLocked(out.Data)
-				t.mu.Unlock()
-			}
-		case protocol.TypeExited:
-			var ex protocol.Exited
-			_ = protocol.Decode(env, &ex)
+		switch ev.Kind {
+		case protocol.FrameSnapshot:
+			snap := ev.Snapshot
 			t.mu.Lock()
-			t.exited, t.exitCode = true, ex.ExitCode
+			if t.closed {
+				t.mu.Unlock()
+				return
+			}
+			// A snapshot replaces whatever this terminal held; it is the
+			// daemon's screen at the moment of attach. The screen text
+			// follows as output frames.
+			_ = t.vt.Terminal().FullReset()
+			opts := t.opts
+			t.opts = termOptions{}
+			t.applyOptionsLocked(opts)
+			_ = t.vt.Terminal().Resize(max(snap.Cols, 2), max(snap.Rows, 2))
+			t.cols, t.rows = max(snap.Cols, 2), max(snap.Rows, 2)
+			t.setTitleLocked(snap.Title)
+			t.progress.Restore(snap.Progress, time.Now())
+			t.hasFrame = false
+			t.mu.Unlock()
+			t.wake()
+		case protocol.FrameOutput:
+			t.mu.Lock()
+			t.feedLocked(ev.Data)
+			t.mu.Unlock()
+		case protocol.FrameExited:
+			t.mu.Lock()
+			t.exited, t.exitCode = true, ev.ExitCode
 			t.mu.Unlock()
 			return
-		case protocol.TypeError:
-			var e protocol.Error
-			_ = protocol.Decode(env, &e)
+		case protocol.FrameError:
 			t.mu.Lock()
-			t.err = errors.New(e.Message)
+			t.err = errors.New(ev.Err)
 			t.mu.Unlock()
 			return
 		}
@@ -295,32 +291,56 @@ func (t *termConn) frame() (frameSnapshot, error) {
 	if err := t.state.Update(t.vt.Terminal()); err != nil {
 		return frameSnapshot{}, err
 	}
-	count, err := t.state.CellCount()
+	cols, rows := int(t.state.Cols()), int(t.state.Rows())
+	n := cols * rows
+	if len(t.cells) != n {
+		t.cells = slices.Grow(t.cells[:0], n)[:n]
+		t.clusters = slices.Grow(t.clusters[:0], n)[:n]
+		t.hasFrame = false
+	}
+
+	// Only what changed since the last paint is copied out of the native
+	// state: a frame drawn for a cursor blink or an animation need not touch
+	// it at all.
+	dirty, err := t.state.Dirty()
 	if err != nil {
 		return frameSnapshot{}, err
 	}
-	n := int(count)
-	if cap(t.cells) < n {
-		t.cells = make([]gostty.RenderCell, n)
-	}
-	t.cells = t.cells[:n]
-	if _, err := t.state.Cells(t.cells); err != nil {
-		return frameSnapshot{}, err
-	}
-	cols, rows := int(t.state.Cols()), int(t.state.Rows())
-	if len(t.clusters) != n {
-		t.clusters = make([]string, n)
-	}
-	var buf [32]rune
-	for i, cell := range t.cells {
-		t.clusters[i] = ""
-		if !cell.Flags.HasGrapheme || cell.Codepoint <= ' ' || cols == 0 {
-			continue
+	full := !t.hasFrame || dirty == gostty.RenderDirtyFull
+	if !full && dirty == gostty.RenderDirtyPartial {
+		if cap(t.dirtyRows) < rows {
+			t.dirtyRows = make([]uint16, rows)
 		}
-		if k, err := t.state.Graphemes(uint16(i%cols), uint16(i/cols), buf[:]); err == nil && k > 1 {
-			t.clusters[i] = string(buf[:min(k, uint(len(buf)))])
+		dst := t.dirtyRows[:rows]
+		count, err := t.state.DirtyRows(dst)
+		if err != nil {
+			return frameSnapshot{}, err
+		}
+		changed := int(count)
+		// Copying the whole screen is cheaper than many row copies.
+		full = changed*2 >= rows
+		if !full {
+			for _, y := range dst[:changed] {
+				if int(y) >= rows {
+					continue
+				}
+				row := t.cells[int(y)*cols : (int(y)+1)*cols]
+				if _, err := t.state.RowCells(y, row); err != nil {
+					return frameSnapshot{}, err
+				}
+				t.refreshClustersLocked(int(y), int(y)+1, cols)
+			}
 		}
 	}
+	if full {
+		if _, err := t.state.Cells(t.cells); err != nil {
+			return frameSnapshot{}, err
+		}
+		t.refreshClustersLocked(0, rows, cols)
+	}
+	t.hasFrame = true
+	_ = t.state.Clean()
+
 	colors, err := t.state.Colors()
 	if err != nil {
 		return frameSnapshot{}, err
@@ -340,6 +360,29 @@ func (t *termConn) frame() (frameSnapshot, error) {
 		exitCode: t.exitCode,
 		err:      t.err,
 	}, nil
+}
+
+// refreshClustersLocked rebuilds the grapheme clusters of rows [y0, y1) from
+// the cells already copied for them.
+func (t *termConn) refreshClustersLocked(y0, y1, cols int) {
+	if cols <= 0 {
+		return
+	}
+	var buf [32]rune
+	for y := y0; y < y1; y++ {
+		base := y * cols
+		for x := 0; x < cols; x++ {
+			i := base + x
+			cell := t.cells[i]
+			t.clusters[i] = ""
+			if !cell.Flags.HasGrapheme || cell.Codepoint <= ' ' {
+				continue
+			}
+			if k, err := t.state.Graphemes(uint16(x), uint16(y), buf[:]); err == nil && k > 1 {
+				t.clusters[i] = string(buf[:min(k, uint(len(buf)))])
+			}
+		}
+	}
 }
 
 // resize follows the widget's size: the local terminal at once, the
@@ -735,7 +778,7 @@ func (t *termConn) close() {
 // sessionLink is the daemon side of a termConn: a client.Attachment, or a
 // recorder in tests.
 type sessionLink interface {
-	Recv() (*protocol.Envelope, error)
+	Recv() (*protocol.StreamEvent, error)
 	Input(p []byte) error
 	Resize(cols, rows uint16) error
 	Close() error

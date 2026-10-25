@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	"github.com/ironpark/sanbo/internal/config"
 )
 
 // prefs are the desktop app's own settings, kept apart from the daemon's
-// config.json in gui.json beside it. The struct is comparable, so a signal
-// holding it notifies only on a real change.
+// config.json in gui.json beside it. Equal keeps a signal holding it from
+// notifying on a write that changes nothing.
 type prefs struct {
 	// Appearance
 	Theme    string `json:"theme"`    // system, dark or light
@@ -27,7 +28,6 @@ type prefs struct {
 	// General
 	DefaultAgent   string `json:"default_agent"`
 	DefaultProject string `json:"default_project"`
-	ShowComposer   bool   `json:"show_composer"`
 	ConfirmKill    bool   `json:"confirm_kill"`
 	Daemon         string `json:"daemon"`      // address of an external daemon; empty is the local one
 	DaemonMode     string `json:"daemon_mode"` // auto, embedded or external; see embedded.go
@@ -37,7 +37,15 @@ type prefs struct {
 
 	// The sidebar's sessions: by project, by host, or in one list.
 	SidebarGroup string `json:"sidebar_group"`
+
+	// Projects are the folders the sidebar keeps, so one outlives its last
+	// session. A folder leaves the list from its own menu.
+	Projects []fileRoot `json:"projects,omitempty"`
 }
+
+// Equal compares settings by value, projects included, so the prefs signal
+// drops redundant writes.
+func (p prefs) Equal(o prefs) bool { return reflect.DeepEqual(p, o) }
 
 func defaultPrefs() prefs {
 	home, _ := os.UserHomeDir()
@@ -52,7 +60,6 @@ func defaultPrefs() prefs {
 		CopyOnSelect:   false,
 		DefaultAgent:   "claude",
 		DefaultProject: home,
-		ShowComposer:   true,
 		ConfirmKill:    true,
 		DaemonMode:     "auto",
 		SidebarGroup:   groupProject,
@@ -102,6 +109,18 @@ func (p prefs) normalized() prefs {
 	p.Scrollback = min(max(p.Scrollback, minScrollback), maxScrollback)
 	if p.DefaultAgent == "" {
 		p.DefaultAgent = d.DefaultAgent
+	}
+	if len(p.Projects) > 0 {
+		seen := make(map[fileRoot]bool, len(p.Projects))
+		projects := make([]fileRoot, 0, len(p.Projects))
+		for _, r := range p.Projects {
+			if r.Path == "" || seen[r] {
+				continue
+			}
+			seen[r] = true
+			projects = append(projects, r)
+		}
+		p.Projects = projects
 	}
 	return p
 }

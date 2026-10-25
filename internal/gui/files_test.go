@@ -39,7 +39,7 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 	cfg := config.Default()
 	cfg.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
-	if err := savePrefs(prefs{DaemonMode: "embedded", ShowComposer: true}.normalized()); err != nil {
+	if err := savePrefs(prefs{DaemonMode: "embedded"}.normalized()); err != nil {
 		t.Fatal(err)
 	}
 	m := newModel(cfg, "")
@@ -75,6 +75,9 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 		t.Fatalf("tab %q shows %q", ggui.Peek(m.Selected), ggui.Peek(m.docs[id].text))
 	}
 	p.Frame()
+	if _, ok := p.Find(T("Message")); ok {
+		t.Fatal("a file view showed the chat composer")
+	}
 	p.Text("x")
 	p.Frame()
 	if d, _ := m.doc(id); !d.Dirty || ggui.Peek(m.docs[id].text) != "xpackage main\n" {
@@ -90,15 +93,17 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 		t.Fatal("the Files tab left the project for the file's tab")
 	}
 
-	m.insertPath(path)
-	if got := ggui.Peek(m.Composer); got != filepath.Join("src", "main.go") {
+	// The message box belongs to Chat, not Terminal or a file's tab.
+	m.showTab(session)
+	m.setChatMode(session, true)
+	p.Frame()
+	m.insertPath("", path)
+	if got := m.composerDraft(session); got != filepath.Join("src", "main.go") {
 		t.Fatalf("composer %q, want the path from the project", got)
 	}
 
 	// Dragged onto the message box, a file is inserted as its path.
-	m.showTab(session)
-	p.Frame()
-	m.Composer.Set("")
+	m.setComposerDraft(session, "")
 	f, _ = p.FindRole(ggui.RoleTreeItem, "main.go")
 	box, ok := p.Find(T("Message"))
 	if !ok {
@@ -110,7 +115,7 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 	p.Move(box.Center())
 	p.Release(box.Center())
 	p.Frame()
-	if got := ggui.Peek(m.Composer); got != filepath.Join("src", "main.go") {
+	if got := m.composerDraft(session); got != filepath.Join("src", "main.go") {
 		t.Fatalf("composer %q after the drag, want the file's path", got)
 	}
 

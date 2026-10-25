@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/transcript"
 	"github.com/ironpark/sanbo/internal/transport"
 )
 
@@ -27,7 +26,7 @@ func (d *Daemon) handleReadChat(ctx context.Context, stream *transport.Stream, e
 			return fmt.Errorf("unknown session %s", req.SessionID)
 		}
 		var err error
-		chat, err = transcript.Read(ctx, s.Info(), s.TranscriptEnv(), req.Conversation)
+		chat, err = d.chatForSession(ctx, s)
 		if err != nil {
 			return err
 		}

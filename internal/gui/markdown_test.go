@@ -22,7 +22,7 @@ func TestGroupSessions(t *testing.T) {
 	}
 	nodes := []protocol.Node{{ID: "n1", Name: "mac"}, {ID: "n2", Name: "box"}}
 
-	byProject := groupSessions(sessions, groupProject, nodes)
+	byProject := groupSessions(sessions, groupProject, nodes, nil)
 	got := map[string][]string{}
 	for _, g := range byProject {
 		for _, x := range g.Sessions {
@@ -38,11 +38,11 @@ func TestGroupSessions(t *testing.T) {
 		t.Fatalf("subfolder %q", rel)
 	}
 
-	byHost := groupSessions(sessions, groupHost, nodes)
+	byHost := groupSessions(sessions, groupHost, nodes, nil)
 	if len(byHost) != 2 || nodeName(nodes, byHost[0].NodeID) != "box" || len(byHost[1].Sessions) != 3 {
 		t.Fatalf("by host: %+v", byHost)
 	}
-	if flat := groupSessions(sessions, groupFlat, nodes); len(flat) != 1 || len(flat[0].Sessions) != 4 {
+	if flat := groupSessions(sessions, groupFlat, nodes, nil); len(flat) != 1 || len(flat[0].Sessions) != 4 {
 		t.Fatalf("flat: %+v", flat)
 	}
 }

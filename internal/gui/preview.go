@@ -126,7 +126,6 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					chat.loading = true
 					chat.result.Set(chatResult{Loaded: true, Chat: protocol.Chat{
 						Supported: true, Conversation: "preview",
-						Conversations: []protocol.Conversation{{ID: "preview"}},
 						Messages: []protocol.ChatMessage{
 							{Role: "user", Text: "Add a chat view while keeping the terminal session running."},
 							{Role: "assistant", Text: "The session now has **Chat** and **Terminal** views.\n\n- Switch views without restarting the agent.\n- Read the conversation and send a reply here.\n- Use the terminal for approvals and interactive commands."},

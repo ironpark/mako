@@ -139,7 +139,6 @@ type model struct {
 	NewOpen     *ggui.StateValue[bool]
 	Form        *ggui.StateValue[newSession]
 	FormErr     *ggui.StateValue[string]
-	Composer    *ggui.StateValue[string]
 
 	conns map[string]*termConn // UI goroutine only
 	// revealedTab is the tab each pane last scrolled its tab bar to, so it
@@ -225,7 +224,6 @@ func newModel(cfg *config.Config, addr string) *model {
 		NewOpen:        ggui.State(false),
 		Form:           ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),
 		FormErr:        ggui.State(""),
-		Composer:       ggui.State(""),
 		conns:          map[string]*termConn{},
 		revealedTab:    map[int]string{},
 		dialing:        map[string]bool{},
@@ -398,6 +396,10 @@ func (m *model) poll(ctx context.Context) {
 	m.post(func() {
 		m.Conn.Set(connState{OK: true, Self: self})
 		m.Nodes.Set(nodes)
+		// The sidebar keeps the folders it groups, so a folder outlives its
+		// last session: killing that session leaves the folder to start
+		// another in.
+		m.keepProjects(sessions)
 		// A restarted daemon restores IDs as stopped. Discard their old
 		// terminal links, including hidden tabs, before displaying them again.
 		for _, info := range sessions {
@@ -502,11 +504,78 @@ type sessionGroup struct {
 	Sessions []protocol.SessionInfo
 }
 
+// keepProjects remembers the folders the sidebar groups sessions into. A
+// folder with nothing in it says nothing here, so the list only grows.
+func (m *model) keepProjects(sessions []protocol.SessionInfo) {
+	projects := ggui.Peek(m.Prefs).Projects
+	roots := projectRoots(sessions, projects)
+	known := make(map[fileRoot]bool, len(projects))
+	for _, r := range projects {
+		known[r] = true
+	}
+	var added []fileRoot
+	for _, s := range sessions {
+		root := rootOf(roots, s.NodeID, s.Project)
+		r := fileRoot{Node: s.NodeID, Path: root}
+		if root == "" || known[r] {
+			continue
+		}
+		known[r] = true
+		added = append(added, r)
+	}
+	if len(added) == 0 {
+		return
+	}
+	m.Prefs.Update(func(p prefs) prefs { p.Projects = append(slices.Clone(p.Projects), added...); return p })
+}
+
+// forgetProject drops a folder from the sidebar. It is offered for a folder
+// with no sessions, whose groups would not bring it back.
+func (m *model) forgetProject(r fileRoot) {
+	m.Prefs.Update(func(p prefs) prefs {
+		p.Projects = slices.DeleteFunc(slices.Clone(p.Projects), func(o fileRoot) bool { return o == r })
+		return p
+	})
+}
+
+// projectRoots are each node's project folders, shortest first: the
+// sessions' projects and the ones kept without sessions.
+func projectRoots(sessions []protocol.SessionInfo, projects []fileRoot) map[string][]string {
+	roots := map[string][]string{}
+	add := func(node, path string) {
+		if path != "" {
+			roots[node] = append(roots[node], path)
+		}
+	}
+	for _, s := range sessions {
+		add(s.NodeID, s.Project)
+	}
+	for _, r := range projects {
+		add(r.Node, r.Path)
+	}
+	for _, ps := range roots {
+		sort.Slice(ps, func(a, b int) bool { return len(ps[a]) < len(ps[b]) })
+	}
+	return roots
+}
+
+// rootOf is the shortest root of a node that contains path, or "".
+func rootOf(roots map[string][]string, node, path string) string {
+	for _, root := range roots[node] {
+		if within(path, root) {
+			return root
+		}
+	}
+	return ""
+}
+
 // groupSessions sorts sessions into the sidebar's sections for a grouping.
 // By project, a session started in a folder inside another session's
 // project, as a worktree or a package of its repository is, goes in that
-// project's section.
-func groupSessions(sessions []protocol.SessionInfo, by string, nodes []protocol.Node) []sessionGroup {
+// project's section. Remembered projects are roots too: a folder keeps the
+// sessions started in it after it had none, and keeps a section when it has
+// none.
+func groupSessions(sessions []protocol.SessionInfo, by string, nodes []protocol.Node, projects []fileRoot) []sessionGroup {
 	switch by {
 	case groupFlat:
 		if len(sessions) == 0 {
@@ -520,21 +589,26 @@ func groupSessions(sessions []protocol.SessionInfo, by string, nodes []protocol.
 		})
 		return groups
 	}
-	roots := map[string][]string{} // each node's projects, shortest first
-	for _, s := range sessions {
-		roots[s.NodeID] = append(roots[s.NodeID], s.Project)
-	}
-	for _, ps := range roots {
-		sort.Slice(ps, func(a, b int) bool { return len(ps[a]) < len(ps[b]) })
-	}
+	roots := projectRoots(sessions, projects)
 	groups := bucket(sessions, func(s protocol.SessionInfo) (string, string) {
-		for _, root := range roots[s.NodeID] {
-			if within(s.Project, root) {
-				return s.NodeID, root
-			}
-		}
-		return s.NodeID, s.Project
+		return s.NodeID, rootOf(roots, s.NodeID, s.Project)
 	})
+	// A remembered folder with no sessions keeps a section of its own,
+	// unless a shorter root covers it.
+	present := make(map[string]bool, len(groups))
+	for _, g := range groups {
+		present[g.Key] = true
+	}
+	for _, r := range projects {
+		if r.Path == "" || present[dirKey(r.Node, r.Path)] {
+			continue
+		}
+		if root := rootOf(roots, r.Node, r.Path); root != "" && root != r.Path {
+			continue
+		}
+		present[dirKey(r.Node, r.Path)] = true
+		groups = append(groups, sessionGroup{Key: dirKey(r.Node, r.Path), NodeID: r.Node, Project: r.Path})
+	}
 	sort.SliceStable(groups, func(a, b int) bool {
 		return projectName(groups[a].Project) < projectName(groups[b].Project)
 	})
@@ -755,16 +829,35 @@ func (m *model) kill(id string) {
 	})
 }
 
-// sendComposer types the composer's text into the selected session,
-// followed by Enter.
-func (m *model) sendComposer() {
-	text := ggui.Peek(m.Composer)
-	conn := m.conns[ggui.Peek(m.Selected)]
+// composerDraft is a session's message draft, kept with its chat state so
+// closing the tab drops it.
+func (m *model) composerDraft(id string) string { return ggui.Peek(m.chatState(id).draft) }
+
+func (m *model) setComposerDraft(id, text string) { m.chatState(id).draft.Set(text) }
+
+// chatTarget is the session a message would go to: the focused one while it
+// shows Chat, else a pane that does.
+func (m *model) chatTarget() string {
+	if id := m.Selected.Get(); id != "" && !isDocTab(id) && m.ChatModes.Get()[id] {
+		return id
+	}
+	for _, g := range m.Layout.Get().groups() {
+		if id := g.Active; id != "" && !isDocTab(id) && m.ChatModes.Get()[id] {
+			return id
+		}
+	}
+	return ""
+}
+
+// sendComposer types a session's draft into its terminal, followed by
+// Enter, and clears the draft.
+func (m *model) sendComposer(id string) {
+	conn := m.conns[id]
 	if conn == nil {
 		return
 	}
-	conn.sendText(text)
-	m.Composer.Set("")
+	conn.sendText(m.composerDraft(id))
+	m.setComposerDraft(id, "")
 }
 
 // syncTitles publishes the titles programs set on their terminals.

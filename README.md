@@ -67,30 +67,42 @@ instead of a blank window.
 `sanbo-gui` is a window onto the mesh, built with
 [ggui](https://github.com/ironpark/ggui) and laid out after
 [Paseo](https://github.com/getpaseo/paseo): projects and their sessions in a
-sidebar, open sessions as tabs, a composer that types a line into the
-selected session, and a panel on the right with the project's files, the
-session's details and the nodes. The sidebar groups its sessions by project
-(a session started in a folder inside another's project, as a worktree or a
-package is, goes under that project), by host, or lists them flat, as the
-buttons in its header choose.
+sidebar, open sessions as tabs, a Chat view whose composer types a line into
+the session, and a panel on the right with the project's files, the session's
+details and the nodes. The sidebar groups its sessions by project (a session
+started in a folder inside another's project, as a worktree or a package is,
+goes under that project), by host, or lists them flat, as the buttons in its
+header choose. A project folder outlives its last session: killing the
+sessions leaves the folder, with its button to start another, and the folder's
+menu removes it from the sidebar.
 
-Each session has a **Chat / Terminal** switch (⌘⇧J, also in the command
-palette). Switching keeps the same live PTY connection and remembers the mode
-per tab, including when it moves between panes. Chat reads Claude and Codex's
-native JSONL conversation logs on the session's node, refreshes every two
-seconds, and renders messages, Markdown responses and tool output. An explicit
-conversation ID in the launch command (`claude --session-id`, `claude --resume`,
-`codex resume`) selects that history; otherwise choose the running session's
-conversation from the **Conversation** menu. Matching only the project or the
-newest file would confuse concurrent sessions, so sanbo does not guess. The
-process's `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `HOME` overrides are respected.
+Each Claude and Codex session has a **Chat / Terminal** switch (⌘⇧J, also in
+the command palette); a plain shell, or an agent without a native
+conversation, keeps its terminal alone and draws no switch. Switching keeps
+the same live PTY connection and remembers the mode per tab, including when it
+moves between panes. Chat reads Claude and Codex's native JSONL conversation
+logs on the session's node, refreshes every two
+seconds, and renders the user's turns as bubbles, the agent's replies as
+Markdown, and each tool call as a compact row naming the tool and its command
+or path, with its arguments and output folded away; a failed tool opens to
+show its error. The daemon
+binds each session to its native conversation automatically and
+persists that identity with the launch. Claude receives a fixed session ID;
+Codex's own writable log identifies its conversation. On macOS this uses
+`lsof`, and on Linux `/proc`; launcher children are included. Modern Codex
+versions are launched with `--no-daemon` so the conversation's writer belongs
+to the session rather than a shared app server. The process's
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `HOME` overrides are respected. Chat has
+no history picker: it always shows the conversation belonging to the live PTY.
 
-The chat composer sends to the same live terminal session, even when viewing
-history, and is shown regardless of the terminal composer setting. Use Terminal
-for approvals, interactive menus and special keys; shell and other agents keep
-their terminal view. Logs update when the agent saves them, rather than token by
-token. Chat shows the recent 2 MB of a log (up to 200 messages, with long content
-capped), marks omitted content, follows new messages when at the bottom, and has
+The composer belongs to Chat alone and sends to the same live terminal
+session, even when viewing history; Terminal mode has no second box because
+the terminal itself takes the keys, and each pane keeps its own draft. Use
+Terminal for approvals, interactive menus and special keys; shell and other
+agents keep their terminal view. Logs update when the agent saves them,
+rather than token by token. Chat shows the recent 2 MB of a log (up to 200
+messages, with long content capped), marks omitted content, follows new
+messages when at the bottom, and has
 a **Latest** button to return there. A daemon upgrade is required for chat on
 remote nodes as well.
 
@@ -197,7 +209,7 @@ clipboard).
 
 Settings (⌘,) cover the app -- language (English or Korean, or the
 system's), theme (system, light, dark), terminal font
-size, line height, cursor, scrollback, copy-on-select, the composer and the
+size, line height, cursor, scrollback, copy-on-select and the
 daemon address -- kept in `gui.json` beside `config.json`, and this node's
 daemon configuration: name, listen address, key, discovery and agents,
 written to `config.json`. Settings ▸ Agents gives each agent its command,
@@ -226,10 +238,16 @@ its tab becomes visible (the active tab in each split pane), or when a CLI
 client attaches. Hidden tabs stay stopped until opened. Explicitly killing a
 session removes its saved entry; closing a tab only detaches it.
 
-Restoration starts the program again with its saved launch inputs and current
-profile/MCP settings. It does not restore terminal scrollback or automatically
-resume an AI conversation; conversation continuity depends on the agent's own
-resume options.
+Restoration resolves the current profile/MCP settings and starts Claude or
+Codex with the saved native conversation ID (`--resume ID` / `resume ID`).
+The original startup prompt is not sent again. Native IDs are tracked even
+without opening Chat. Terminal scrollback and shell processes themselves are
+not restored. A saved conversation whose log is missing fails visibly instead
+of silently starting an unrelated conversation.
+
+For older saved sessions without a native ID, the daemon can migrate a unique,
+unclaimed conversation log created during that launch. Ambiguous or unmatched
+existing history is reported rather than choosing the newest conversation.
 
 ## Configuration
 

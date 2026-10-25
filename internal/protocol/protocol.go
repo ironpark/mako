@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 )
 
@@ -88,9 +89,21 @@ type Node struct {
 	Version  string    `json:"version"`
 	Source   string    `json:"source,omitempty"` // mdns, tailscale, static, inbound, gossip, self
 	LastSeen time.Time `json:"last_seen"`
+	// Features are protocol extensions this daemon speaks, so a peer can use
+	// them only where they are understood.
+	Features []string `json:"features,omitempty"`
 	// Agents are what the node can launch, with their profiles' names; its
 	// flags and environment stay on the node.
 	Agents []AgentInfo `json:"agents,omitempty"`
+}
+
+// FeatureAttachBinary is a daemon that frames attach streams as
+// protocol.StreamFrame after the Attach request.
+const FeatureAttachBinary = "attach_binary"
+
+// HasFeature reports whether a node speaks a protocol extension.
+func (n Node) HasFeature(feature string) bool {
+	return slices.Contains(n.Features, feature)
 }
 
 // AgentInfo names an agent a node can launch and its profiles.
@@ -128,10 +141,11 @@ const (
 
 // SessionInfo describes one agent session.
 type SessionInfo struct {
-	ID      string `json:"id"`
-	NodeID  string `json:"node_id"`
-	Agent   string `json:"agent"`
-	Profile string `json:"profile,omitempty"`
+	ID             string `json:"id"`
+	NodeID         string `json:"node_id"`
+	Agent          string `json:"agent"`
+	Profile        string `json:"profile,omitempty"`
+	ConversationID string `json:"conversation_id,omitempty"` // native agent conversation, stable across restarts
 	// Name is what the user called the session; empty, it goes by its
 	// program's title or its agent.
 	Name      string       `json:"name,omitempty"`
@@ -157,6 +171,10 @@ type Attach struct {
 	NodeID    string `json:"node_id,omitempty"`
 	// Replay asks the daemon to send the current screen before live output.
 	Replay bool `json:"replay"`
+	// Binary asks for framed binary messages after this request instead of
+	// JSON envelopes. Output is the hot path, and carrying it as base64
+	// inside JSON costs a third more bytes and a decode per frame.
+	Binary bool `json:"binary,omitempty"`
 }
 
 // Input carries keystrokes toward the session PTY.

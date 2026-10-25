@@ -83,6 +83,7 @@ func (d *Daemon) Self() protocol.Node {
 		Version:  config.Version,
 		Source:   "self",
 		LastSeen: time.Now(),
+		Features: []string{protocol.FeatureAttachBinary},
 		Agents:   agentInfo(d.agents()),
 	}
 }

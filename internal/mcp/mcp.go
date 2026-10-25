@@ -285,10 +285,12 @@ func expandHome(p string) string {
 // Takes reports whether the program command[0] is an agent that takes MCP
 // servers on its command line.
 func Takes(command []string) bool {
-	return len(command) > 0 && kind(command[0]) != ""
+	return len(command) > 0 && Kind(command[0]) != ""
 }
 
-func kind(program string) string {
+// Kind names the agent program a command runs: claude, codex, or "" for
+// another program.
+func Kind(program string) string {
 	switch strings.TrimSuffix(filepath.Base(program), ".exe") {
 	case "claude":
 		return "claude"
@@ -307,7 +309,7 @@ func Apply(command []string, servers []Launch, dir, session string) (out []strin
 		return command, cleanup, nil
 	}
 	var flags []string
-	switch kind(command[0]) {
+	switch Kind(command[0]) {
 	case "claude":
 		path, err := writeClaudeConfig(servers, dir, session)
 		if err != nil {

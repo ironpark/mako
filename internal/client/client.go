@@ -176,14 +176,11 @@ func (c *Client) Kill(ctx context.Context, psk string, req protocol.CloseSession
 // Attach connects the local terminal to a session until it ends or the user
 // detaches. The terminal is put in raw mode for the duration.
 func (c *Client) Attach(ctx context.Context, psk string, req protocol.Attach) error {
-	s, err := c.stream(ctx, psk)
+	a, err := c.AttachStream(ctx, psk, req)
 	if err != nil {
 		return err
 	}
-	defer s.Close()
-	if err := s.Send(protocol.TypeAttach, "", req); err != nil {
-		return err
-	}
+	defer a.Close()
 
 	restore, err := makeRaw(os.Stdin)
 	if err != nil {
@@ -194,46 +191,34 @@ func (c *Client) Attach(ctx context.Context, psk string, req protocol.Attach) er
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	go c.forwardWinch(ctx, s, req.SessionID)
-	go c.forwardInput(ctx, s, req.SessionID, cancel)
+	go c.forwardWinch(ctx, a)
+	go c.forwardInput(ctx, a, cancel)
 
 	for {
-		env, err := s.Recv()
+		ev, err := a.Recv()
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
 			return err
 		}
-		switch env.Type {
-		case protocol.TypeSnapshot:
-			var snap protocol.Snapshot
-			if err := protocol.Decode(env, &snap); err != nil {
+		switch ev.Kind {
+		case protocol.FrameSnapshot:
+			fmt.Fprint(os.Stdout, "\x1b[2J\x1b[H")
+		case protocol.FrameOutput:
+			if _, err := os.Stdout.Write(ev.Data); err != nil {
 				return err
 			}
-			fmt.Fprint(os.Stdout, "\x1b[2J\x1b[H"+snap.Text)
-		case protocol.TypeOutput:
-			var out protocol.Output
-			if err := protocol.Decode(env, &out); err != nil {
-				return err
-			}
-			if _, err := os.Stdout.Write(out.Data); err != nil {
-				return err
-			}
-		case protocol.TypeExited:
-			var exited protocol.Exited
-			_ = protocol.Decode(env, &exited)
-			fmt.Fprintf(os.Stderr, "\r\n[sanbo] session %s exited (%d)\r\n", exited.SessionID, exited.ExitCode)
+		case protocol.FrameExited:
+			fmt.Fprintf(os.Stderr, "\r\n[sanbo] session %s exited (%d)\r\n", req.SessionID, ev.ExitCode)
 			return nil
-		case protocol.TypeError:
-			var e protocol.Error
-			_ = protocol.Decode(env, &e)
-			return fmt.Errorf("remote: %s", e.Message)
+		case protocol.FrameError:
+			return fmt.Errorf("remote: %s", ev.Err)
 		}
 	}
 }
 
-func (c *Client) forwardInput(ctx context.Context, s *transport.Stream, sessionID string, cancel func()) {
+func (c *Client) forwardInput(ctx context.Context, a *Attachment, cancel func()) {
 	defer cancel()
 	buf := make([]byte, 4096)
 	for {
@@ -241,7 +226,7 @@ func (c *Client) forwardInput(ctx context.Context, s *transport.Stream, sessionI
 		if n > 0 {
 			chunk := make([]byte, n)
 			copy(chunk, buf[:n])
-			if err := s.Send(protocol.TypeInput, "", protocol.Input{SessionID: sessionID, Data: chunk}); err != nil {
+			if err := a.Input(chunk); err != nil {
 				return
 			}
 		}
@@ -252,7 +237,7 @@ func (c *Client) forwardInput(ctx context.Context, s *transport.Stream, sessionI
 }
 
 // forwardWinch keeps the remote PTY the same size as the local window.
-func (c *Client) forwardWinch(ctx context.Context, s *transport.Stream, sessionID string) {
+func (c *Client) forwardWinch(ctx context.Context, a *Attachment) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGWINCH)
 	defer signal.Stop(ch)
@@ -262,11 +247,7 @@ func (c *Client) forwardWinch(ctx context.Context, s *transport.Stream, sessionI
 		if err != nil {
 			return
 		}
-		_ = s.Send(protocol.TypeResize, "", protocol.Resize{
-			SessionID: sessionID,
-			Cols:      size.Cols,
-			Rows:      size.Rows,
-		})
+		_ = a.Resize(size.Cols, size.Rows)
 	}
 	send()
 	for {

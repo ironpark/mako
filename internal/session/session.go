@@ -46,18 +46,20 @@ type Session struct {
 	term     *gostty.Session
 	state    protocol.SessionState
 	exitCode *int
-	subs     map[int]chan []byte
+	subs     map[int]*Subscription
 	nextSub  int
 	// final is the screen as the agent left it, plain and styled, kept
 	// when the terminal is released so an exited session can still be
 	// attached to and read.
 	finalPlain, finalStyled protocol.Snapshot
 
-	name     string // guarded by mu
-	title    string // latest terminal title, guarded by mu
-	started  time.Time
-	done     chan struct{}
-	progress activity.Progress // guarded by mu
+	conversationID string // guarded by mu
+	transcriptPath string // guarded by mu
+	name           string // guarded by mu
+	title          string // latest terminal title, guarded by mu
+	started        time.Time
+	done           chan struct{}
+	progress       activity.Progress // guarded by mu
 }
 
 // Start launches the agent on a PTY.
@@ -96,7 +98,7 @@ func Start(spec Spec) (*Session, error) {
 		tty:     tty,
 		term:    term,
 		state:   protocol.StateRunning,
-		subs:    map[int]chan []byte{},
+		subs:    map[int]*Subscription{},
 		started: time.Now(),
 		done:    make(chan struct{}),
 	}
@@ -112,20 +114,21 @@ func (s *Session) Info() protocol.SessionInfo {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return protocol.SessionInfo{
-		ID:        s.spec.ID,
-		NodeID:    s.spec.NodeID,
-		Agent:     s.spec.Agent,
-		Profile:   s.spec.Profile,
-		Name:      s.name,
-		Title:     s.title,
-		Project:   s.spec.Project,
-		Command:   s.spec.Command,
-		State:     s.state,
-		Cols:      s.spec.Cols,
-		Rows:      s.spec.Rows,
-		StartedAt: s.started,
-		ExitCode:  s.exitCode,
-		Busy:      s.state != protocol.StateExited && s.progress.Busy(time.Now()),
+		ID:             s.spec.ID,
+		NodeID:         s.spec.NodeID,
+		Agent:          s.spec.Agent,
+		Profile:        s.spec.Profile,
+		Name:           s.name,
+		ConversationID: s.conversationID,
+		Title:          s.title,
+		Project:        s.spec.Project,
+		Command:        s.spec.Command,
+		State:          s.state,
+		Cols:           s.spec.Cols,
+		Rows:           s.spec.Rows,
+		StartedAt:      s.started,
+		ExitCode:       s.exitCode,
+		Busy:           s.state != protocol.StateExited && s.progress.Busy(time.Now()),
 	}
 }
 
@@ -191,31 +194,21 @@ func (s *Session) snapshotLocked(styled bool) (protocol.Snapshot, error) {
 	}, nil
 }
 
-// Subscribe returns a channel of live PTY output and a function to stop it.
-// A subscriber that falls behind is dropped (its channel closed while the
-// session is still running) rather than stalling the PTY. Subscribing to an
-// exited session yields an already-closed channel.
-func (s *Session) Subscribe() (<-chan []byte, func()) {
-	ch := make(chan []byte, 64)
+// Subscribe returns a view of the session's live PTY output. Subscribing to
+// an exited session yields a subscription that is already closed.
+func (s *Session) Subscribe() *Subscription {
+	sub := &Subscription{s: s, signal: make(chan struct{}, 1)}
 	s.mu.Lock()
 	if s.state == protocol.StateExited {
+		sub.closed = true
 		s.mu.Unlock()
-		close(ch)
-		return ch, func() {}
+		return sub
 	}
-	id := s.nextSub
+	sub.id = s.nextSub
 	s.nextSub++
-	s.subs[id] = ch
+	s.subs[sub.id] = sub
 	s.mu.Unlock()
-
-	return ch, func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		if sub, ok := s.subs[id]; ok {
-			delete(s.subs, id)
-			close(sub)
-		}
-	}
+	return sub
 }
 
 // Done is closed once the agent process has exited.
@@ -264,7 +257,7 @@ func (s *Session) pump() {
 	s.progress = activity.Progress{}
 	for id, sub := range s.subs {
 		delete(s.subs, id)
-		close(sub)
+		sub.closeLocked()
 	}
 	s.finalPlain, _ = s.snapshotLocked(false)
 	s.finalStyled, _ = s.snapshotLocked(true)
@@ -297,13 +290,10 @@ func (s *Session) feed(chunk []byte) {
 		s.progress.Report(ev, now)
 	}
 	for id, sub := range s.subs {
-		select {
-		case sub <- chunk:
-		default:
-			// Slow subscriber: drop it so one stalled front-end cannot block
-			// the PTY reader for everyone else.
+		if !sub.push(chunk) {
+			// Dropped for falling too far behind; the front-end resyncs
+			// from a snapshot rather than stalling the PTY for everyone.
 			delete(s.subs, id)
-			close(sub)
 		}
 	}
 	s.mu.Unlock()

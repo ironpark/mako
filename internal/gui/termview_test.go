@@ -18,21 +18,21 @@ import (
 // fakeLink stands in for a daemon attachment: frames pushed into in are
 // received, input and resizes are recorded.
 type fakeLink struct {
-	in chan *protocol.Envelope
+	in chan *protocol.StreamEvent
 
 	mu      sync.Mutex
 	input   bytes.Buffer
 	resizes [][2]uint16
 }
 
-func newFakeLink() *fakeLink { return &fakeLink{in: make(chan *protocol.Envelope, 16)} }
+func newFakeLink() *fakeLink { return &fakeLink{in: make(chan *protocol.StreamEvent, 16)} }
 
-func (f *fakeLink) Recv() (*protocol.Envelope, error) {
-	env, ok := <-f.in
+func (f *fakeLink) Recv() (*protocol.StreamEvent, error) {
+	ev, ok := <-f.in
 	if !ok {
 		return nil, io.EOF
 	}
-	return env, nil
+	return ev, nil
 }
 
 func (f *fakeLink) Input(p []byte) error {
@@ -61,11 +61,7 @@ func (f *fakeLink) typed() string {
 
 func (f *fakeLink) output(t *testing.T, s string) {
 	t.Helper()
-	env, err := protocol.Encode(protocol.TypeOutput, "", protocol.Output{Data: []byte(s)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.in <- env
+	f.in <- &protocol.StreamEvent{Kind: protocol.FrameOutput, Data: []byte(s)}
 }
 
 func newTestTerminal(t *testing.T) (*fakeLink, *termConn, *ggui.Probe) {

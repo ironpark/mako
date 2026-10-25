@@ -63,11 +63,10 @@ func TestSnapshotRestoresProgressWithoutNewOSC(t *testing.T) {
 	defer close(link.in)
 	conn.pending.Store(true)
 	for _, state := range []uint8{3, 0} {
-		env, err := protocol.Encode(protocol.TypeSnapshot, "", protocol.Snapshot{SessionID: "s", Cols: 80, Rows: 24, Progress: &protocol.ProgressReport{State: state, Value: -1, RemainingMS: 1000}})
-		if err != nil {
-			t.Fatal(err)
+		link.in <- &protocol.StreamEvent{
+			Kind:     protocol.FrameSnapshot,
+			Snapshot: protocol.Snapshot{SessionID: "s", Cols: 80, Rows: 24, Progress: &protocol.ProgressReport{State: state, Value: -1, RemainingMS: 1000}},
 		}
-		link.in <- env
 		select {
 		case <-woke:
 		case <-time.After(time.Second):
