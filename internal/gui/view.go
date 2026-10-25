@@ -157,7 +157,7 @@ func sessionRow(m *model, s protocol.SessionInfo, selected bool, nodes []protoco
 	}
 	sub := fmt.Sprintf("%s · %s", nodeName(nodes, s.NodeID), short(s.ID))
 	content := ggui.Row(
-		icon(agentIcon(s.Agent)).Size(15),
+		&busyGlyph{icon: agentGlyph(s.Agent, tokMuted).Size(15), busy: func() bool { return m.busy(id) }},
 		ggui.Expanded(ggui.Column(
 			ggui.Text(label).Size(13).NoWrap().Ellipsis(),
 			ggui.Text(sub).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis(),
@@ -255,9 +255,9 @@ func tab(m *model, s protocol.SessionInfo, selected, focused bool, title string)
 	// The tab is one flat cell: its hover, its fill and its underline share
 	// the cell's edges, with the content centred in its height.
 	content := ggui.Box(ggui.Row(
-		iconColored(agentIcon(s.Agent), fg).Size(14),
+		&busyGlyph{icon: agentGlyph(s.Agent, fg).Size(14), busy: func() bool { return m.busy(id) }},
 		ggui.Box(ggui.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(150),
-		ui.ButtonOf(icon("x").Size(13), func() { m.closeTab(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", label)),
+		ui.ButtonOf(icon("x").Size(13), func() { m.askKill(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", label)),
 	).Gap(8)).Height(tabBarHeight)
 	btn := ui.ButtonOf(content, func() { m.selectSession(id) }).Ghost().Pad(0, 8, 0, 12).Radius(0).Name(label)
 	underline := tokSurface0
@@ -510,7 +510,7 @@ func newSessionDialog(m *model) ggui.Widget {
 			return nodeName(ggui.Peek(m.Nodes), id)
 		}).Name(T("Node"))),
 		ui.Field(T("Working directory"), ggui.Row(
-			ggui.Expanded(ui.TextField(project).Name(T("Working directory")).OnSubmit(func(string) { m.submitNew() })),
+			ggui.Expanded(ui.TextField(project).Placeholder(T("The node's home folder")).Name(T("Working directory")).OnSubmit(func(string) { m.submitNew() })),
 			ggui.If(local, func() ggui.Widget { return browse }),
 		).Gap(8)),
 		ggui.If(hasErr, func() ggui.Widget {

@@ -11,12 +11,14 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/creack/pty"
 	"github.com/ironpark/gostty"
 
+	"github.com/ironpark/sanbo/internal/activity"
 	"github.com/ironpark/sanbo/internal/protocol"
 )
 
@@ -51,8 +53,9 @@ type Session struct {
 	// attached to and read.
 	finalPlain, finalStyled protocol.Snapshot
 
-	started time.Time
-	done    chan struct{}
+	started  time.Time
+	done     chan struct{}
+	progress activity.Progress // guarded by mu
 }
 
 // Start launches the agent on a PTY.
@@ -74,7 +77,7 @@ func Start(spec Spec) (*Session, error) {
 
 	cmd := exec.Command(spec.Command[0], spec.Command[1:]...)
 	cmd.Dir = spec.Project
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "SANBO_SESSION="+spec.ID)
+	cmd.Env = append(terminalEnv(os.Environ()), "SANBO_SESSION="+spec.ID)
 	for k, v := range spec.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
@@ -118,6 +121,7 @@ func (s *Session) Info() protocol.SessionInfo {
 		Rows:      s.spec.Rows,
 		StartedAt: s.started,
 		ExitCode:  s.exitCode,
+		Busy:      s.state != protocol.StateExited && s.progress.Busy(time.Now()),
 	}
 }
 
@@ -264,14 +268,16 @@ func (s *Session) feed(chunk []byte) {
 	// The daemon's terminal is the one that answers the program's queries
 	// (device attributes, cursor position, size reports): it sees every byte
 	// and exists whether or not anyone is attached, so each query is answered
-	// exactly once. Events are not acted on here; draining them keeps the
-	// queue from growing for the life of the session.
+	// exactly once. Of its events only progress reports are kept, for the
+	// session's state; draining the rest keeps the queue from growing.
 	stream := s.term.Stream()
 	_ = stream.WriteReplies(s.tty)
-	for _, err := range stream.EventValues() {
+	now := time.Now()
+	for ev, err := range stream.EventValues() {
 		if err != nil {
 			break
 		}
+		s.progress.Report(ev, now)
 	}
 	for id, sub := range s.subs {
 		select {
@@ -285,3 +291,29 @@ func (s *Session) feed(chunk []byte) {
 	}
 	s.mu.Unlock()
 }
+
+// terminalEnv is the daemon's environment as a session's program sees it:
+// with the terminal described as the one it runs in, not whichever one the
+// daemon was started from. That terminal is gostty, Ghostty's core, so it
+// is named Ghostty, as of the release whose features it has; programs that
+// look for a terminal by name, as claude does before it reports progress,
+// then find what it supports.
+func terminalEnv(environ []string) []string {
+	out := make([]string, 0, len(environ)+4)
+	for _, kv := range environ {
+		name, _, _ := strings.Cut(kv, "=")
+		switch name {
+		case "TERM", "TERM_PROGRAM", "TERM_PROGRAM_VERSION", "TERM_SESSION_ID", "COLORTERM",
+			"LC_TERMINAL", "LC_TERMINAL_VERSION", "ITERM_SESSION_ID", "ITERM_PROFILE",
+			"GHOSTTY_RESOURCES_DIR", "GHOSTTY_BIN_DIR", "GHOSTTY_SHELL_FEATURES",
+			"KITTY_WINDOW_ID", "WT_SESSION", "VSCODE_INJECTION":
+			continue
+		}
+		out = append(out, kv)
+	}
+	return append(out, "TERM=xterm-256color", "COLORTERM=truecolor",
+		"TERM_PROGRAM=ghostty", "TERM_PROGRAM_VERSION="+ghosttyVersion)
+}
+
+// ghosttyVersion is the Ghostty release gostty's core is at least.
+const ghosttyVersion = "1.2.0"

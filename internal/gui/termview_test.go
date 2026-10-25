@@ -2,6 +2,7 @@ package gui
 
 import (
 	"bytes"
+	"encoding/base64"
 	"io"
 	"runtime"
 	"strings"
@@ -292,5 +293,64 @@ func TestBackspaceTakesAHeldSyllableBack(t *testing.T) {
 	p.Type(ggui.Mods{}, ggui.KeyEnter)
 	if got := link.typed(); got != "가\r" {
 		t.Fatalf("typed %q, want %q", got, "가\r")
+	}
+}
+
+// A program is at work while it says so with a progress report.
+func TestTerminalIsBusyWhileItReportsProgress(t *testing.T) {
+	link, conn, _ := newTestTerminal(t)
+	link.output(t, "printing on its own")
+	waitFor := func(what string, want bool) {
+		t.Helper()
+		deadline := time.Now().Add(2 * time.Second)
+		for conn.busy() != want {
+			if time.Now().After(deadline) {
+				t.Fatalf("busy is not %v %s", want, what)
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	waitFor("with only output", false)
+	link.output(t, "\x1b]9;4;3\x07")
+	waitFor("after an indeterminate report", true)
+	link.output(t, "\x1b]9;4;0\x07")
+	waitFor("once it is removed", false)
+}
+
+// A program that took the mouse, as claude does, sees a drag with the
+// button held, not as motion without one.
+func TestDragReachesAProgramWithTheButtonHeld(t *testing.T) {
+	link, conn, p := newTestTerminal(t)
+	link.output(t, "\x1b[?1049h\x1b[?1002h\x1b[?1003h\x1b[?1006h")
+	for !conn.mouseReported() {
+		time.Sleep(5 * time.Millisecond)
+	}
+	link.typed()
+	p.Press(ggui.Pt(100, 200))
+	if got := link.typed(); !strings.HasSuffix(got, "\x1b[<0;9;9M") { // after the move there
+		t.Fatalf("press sent %q", got)
+	}
+	p.Move(ggui.Pt(160, 200))
+	if got := link.typed(); got != "\x1b[<32;14;9M" {
+		t.Fatalf("drag sent %q, want motion with the left button", got)
+	}
+	p.Release(ggui.Pt(160, 200))
+	if got := link.typed(); got != "\x1b[<0;14;9m" {
+		t.Fatalf("release sent %q", got)
+	}
+}
+
+// What a program copies with OSC 52 reaches the clipboard.
+func TestProgramCopiesToTheClipboard(t *testing.T) {
+	link, _, p := newTestTerminal(t)
+	link.output(t, "\x1b]52;c;"+base64.StdEncoding.EncodeToString([]byte("copied by claude"))+"\x07")
+	deadline := time.Now().Add(2 * time.Second)
+	for ggui.CurrentClipboard().Read() != "copied by claude" {
+		if time.Now().After(deadline) {
+			t.Fatalf("clipboard holds %q", ggui.CurrentClipboard().Read())
+		}
+		p.Frame()
+		time.Sleep(5 * time.Millisecond)
 	}
 }

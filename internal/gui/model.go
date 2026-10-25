@@ -342,6 +342,17 @@ func (m *model) poll(ctx context.Context) {
 
 // Lookups ------------------------------------------------------------------
 
+// busy reports whether a session's program says it is at work: from its
+// terminal here, which hears a report at once, or from its daemon, which
+// heard any it sent before the terminal here attached.
+func (m *model) busy(id string) bool {
+	if conn := m.conns[id]; conn != nil && conn.busy() {
+		return true
+	}
+	s, ok := m.session(id)
+	return ok && s.Busy && s.State != protocol.StateExited
+}
+
 func (m *model) session(id string) (protocol.SessionInfo, bool) {
 	for _, s := range ggui.Peek(m.Sessions) {
 		if s.ID == id {
@@ -483,15 +494,15 @@ func (m *model) closeTab(id string) {
 // openNew shows the new-session dialog, prefilled for a node and project.
 func (m *model) openNew(nodeID, project string) {
 	p := ggui.Peek(m.Prefs)
-	f := newSession{Agent: p.DefaultAgent, NodeID: nodeID, Project: p.DefaultProject}
+	f := newSession{Agent: p.DefaultAgent, NodeID: nodeID, Project: project}
 	if prev := ggui.Peek(m.Form); prev.Agent != "" {
 		f.Agent = prev.Agent // the last choice, within one run
 	}
 	if f.NodeID == "" {
 		f.NodeID = ggui.Peek(m.Conn).Self.ID
 	}
-	if project != "" {
-		f.Project = project
+	if f.Project == "" {
+		f.Project = m.launchProject(f.NodeID)
 	}
 	m.Form.Set(f)
 	m.FormErr.Set("")
@@ -506,11 +517,8 @@ func (m *model) launch(agent, nodeID, project string) {
 
 // submitNew starts the session the dialog describes.
 func (m *model) submitNew() {
+	// Without a working directory the node starts the session in its home.
 	f := ggui.Peek(m.Form)
-	if f.Project == "" {
-		m.FormErr.Set(T("Choose a working directory."))
-		return
-	}
 	nodeID := m.remoteID(f.NodeID)
 	agent, profile := agentspec.SplitTarget(f.Agent)
 	req := protocol.OpenSession{NodeID: nodeID, Agent: agent, Profile: profile, Project: f.Project, Cols: 120, Rows: 36}
@@ -536,9 +544,10 @@ func (m *model) submitNew() {
 }
 
 // askKill confirms before killing a session, unless the settings say not
-// to ask.
+// to ask or its program has already exited. Closing a tab does this: the
+// tab and its session go together, and "Detach tab" keeps one running.
 func (m *model) askKill(id string) {
-	if !ggui.Peek(m.Prefs).ConfirmKill {
+	if s, ok := m.session(id); !ggui.Peek(m.Prefs).ConfirmKill || (ok && s.State == protocol.StateExited) {
 		m.kill(id)
 		return
 	}

@@ -66,7 +66,10 @@ sidebar, open sessions as tabs, a composer that types a line into the
 selected session, and a panel on the right with the project's files, the
 session's details and the nodes.
 
-Tabs arrange into panes by dragging: onto a pane's left, right, top or
+Closing a tab ends its session, asking first while it runs (Settings ▸
+General can turn the question off); "Detach tab" in the header's menu closes
+the tab and leaves the session running in the sidebar. Tabs arrange into
+panes by dragging: onto a pane's left, right, top or
 bottom edge to split it there, onto its middle or its tab bar to move the
 tab into it, along a tab bar to reorder. A session in the sidebar drags in
 the same way, dividers between panes resize them, and a pane closes with its
@@ -85,13 +88,25 @@ refreshed every few seconds while shown, and the diff of a file chosen
 under it. A tab dragged over a tab bar opens the gap it would drop into, and
 the side panels slide open and closed.
 
+Each pane's tab bar ends in a launcher for every agent the session's node
+can start, drawn with the agent's icon: a click starts it in the project of
+the tab shown, or with no tab, in the default working directory here and in
+the home folder on another node; an agent with profiles opens a menu of them
+first. The new-session dialog takes a working directory too, but it can be
+left empty for the node's home. A session's icon, on its tab and in the sidebar, hops
+while its program reports progress (OSC 9;4), as claude does while it works.
+Sessions run with `TERM_PROGRAM=ghostty`, the terminal under them being
+Ghostty's core, so programs find what it supports, and a program that
+selects text itself, as claude does with the mouse, copies it to the
+clipboard (OSC 52).
+
 Each tab runs its own terminal on the GUI side, fed from the daemon's stream,
 so the screen is drawn and keys are encoded locally under the modes the
 program set: colours, bold and italic, wide characters, the IME's
 composition at the cursor, drag/double/triple-click selection, and the mouse
 for programs that ask for it (Shift takes it back for selecting). The
 terminal keeps Tab and the Ctrl and Alt chords for the program; ⌘ chords stay
-with the app (⌘T new session, ⌘W close tab, ⌘B sidebar, ⌘, settings, and
+with the app (⌘T new session, ⌘W close the tab and its session, ⌘B sidebar, ⌘, settings, and
 ⌘C/⌘V/⌘A for the terminal's clipboard).
 
 Settings (⌘,) cover the app -- language (English or Korean, or the

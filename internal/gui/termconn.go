@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/ironpark/gostty"
 	"github.com/ironpark/gostty/input"
 
+	"github.com/ironpark/sanbo/internal/activity"
 	"github.com/ironpark/sanbo/internal/client"
 	"github.com/ironpark/sanbo/internal/protocol"
 )
@@ -53,6 +55,9 @@ type termConn struct {
 	// are coalesced until the frame that drew them has run.
 	wake    func()
 	pending atomic.Bool
+
+	progress activity.Progress // what the program says of its work
+	copied   *string           // what the program last put on the clipboard, until the view takes it
 }
 
 // dialTerm attaches to a session and starts reading its stream.
@@ -96,6 +101,15 @@ func newTermConn(id string, link sessionLink, cols, rows uint16, wake func()) (*
 	// three the line.
 	_ = gesture.SetBehaviors(gostty.GestureBehaviorCell, gostty.GestureBehaviorWord, gostty.GestureBehaviorLine)
 	t := &termConn{id: id, att: link, vt: vt, state: state, gesture: gesture, cols: cols, rows: rows, wake: wake}
+	// A program that selects text itself, as claude does with the mouse,
+	// copies it with OSC 52. The request is served on the UI thread, where
+	// the clipboard is; one asking to read the clipboard is refused.
+	_ = vt.Stream().OnClipboardWriteRequest(func(req *gostty.ClipboardRequest) {
+		if text, ok := clipboardText(req); ok {
+			t.copied = &text // under mu, which feeding holds
+		}
+		_ = req.Allow(false)
+	})
 	t.mu.Lock()
 	t.applyOptionsLocked(defaultTermOptions())
 	t.mu.Unlock()
@@ -230,6 +244,7 @@ func (t *termConn) feedLocked(p []byte) {
 	_, _ = t.vt.Write(p)
 	stream := t.vt.Stream()
 	_ = stream.WriteReplies(io.Discard)
+	now := time.Now()
 	for ev, err := range stream.EventValues() {
 		if err != nil {
 			break
@@ -237,6 +252,7 @@ func (t *termConn) feedLocked(p []byte) {
 		if ev.Kind == gostty.StreamEventTitleChanged {
 			t.title = ev.Title
 		}
+		t.progress.Report(ev, now)
 	}
 }
 
@@ -615,6 +631,48 @@ func (t *termConn) mouse(ev input.MouseEvent, size input.RenderSize, anyPressed 
 	}
 	t.send(buf)
 	return true
+}
+
+// clipboardText is the plain text of a clipboard write, the standard
+// clipboard's only.
+func clipboardText(req *gostty.ClipboardRequest) (string, bool) {
+	if loc, err := req.Location(); err != nil || loc != gostty.ClipboardLocationStandard {
+		return "", false
+	}
+	n, err := req.ContentCount()
+	if err != nil {
+		return "", false
+	}
+	for i := range n {
+		mime, err := req.ContentMime(i)
+		if err != nil || !strings.HasPrefix(mime, "text/plain") {
+			continue
+		}
+		if data, err := req.ContentData(i); err == nil {
+			return string(data), true
+		}
+	}
+	return "", false
+}
+
+// takeCopied hands over what the program put on the clipboard since the
+// last call.
+func (t *termConn) takeCopied() (string, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.copied == nil {
+		return "", false
+	}
+	text := *t.copied
+	t.copied = nil
+	return text, true
+}
+
+// busy reports whether the program says it is at work.
+func (t *termConn) busy() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return !t.exited && t.err == nil && t.progress.Busy(time.Now())
 }
 
 func (t *termConn) windowTitle() string {

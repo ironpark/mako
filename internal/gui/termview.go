@@ -106,6 +106,10 @@ func (t *terminalView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 		t.autoFocus = false
 		dst.RequestFocus(t)
 	}
+	// What the program copied, as claude does a selection made in it.
+	if text, ok := t.conn.takeCopied(); ok {
+		ggui.CurrentClipboard().Write(text)
+	}
 
 	// The platform's mono font and its italic; both fall back to the system
 	// fonts, which carry the symbols agents print (❯ ⏵ ⏺ ⎿).
@@ -514,8 +518,10 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 		return true
 	case ggui.PointerMove:
 		// Motion without a button is reported only in any-event mode, which
-		// the encoder decides from the program's modes.
-		if t.conn.mouseReported() && t.moved(pc) {
+		// the encoder decides from the program's modes. A drag's moves come
+		// as PointerDrag too, which reports them with the button held, so
+		// they are not reported here as well, buttonless and first.
+		if !t.grabbed && !t.selecting && t.conn.mouseReported() && t.moved(pc) {
 			t.reportMouse(input.MouseActionMotion, input.MouseButtonUnknown, false, ev.Pos, ggui.Mods{}, false)
 		}
 		return false

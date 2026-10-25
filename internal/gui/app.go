@@ -67,7 +67,7 @@ func shortcuts(host ggui.Host, m *model) {
 	host.Shortcut("cmd+t", func() { m.openNew("", "") })
 	host.Shortcut("cmd+w", func() {
 		if id := ggui.Peek(m.Selected); id != "" {
-			m.closeTab(id)
+			m.askKill(id)
 		}
 	})
 	host.Shortcut("cmd+b", func() { ggui.Toggle(m.SidebarOpen) })
@@ -79,7 +79,7 @@ func shortcuts(host ggui.Host, m *model) {
 // the chords above are registered.
 var shortcutList = []struct{ Chord, Action string }{
 	{"cmd+t", "New session"},
-	{"cmd+w", "Close tab"},
+	{"cmd+w", "Close tab and session"},
 	{"cmd+b", "Toggle sidebar"},
 	{"cmd+shift+d", "Toggle details panel"},
 	{"cmd+,", "Open settings"},

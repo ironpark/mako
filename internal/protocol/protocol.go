@@ -136,6 +136,7 @@ type SessionInfo struct {
 	Rows      uint16       `json:"rows"`
 	StartedAt time.Time    `json:"started_at"`
 	ExitCode  *int         `json:"exit_code,omitempty"`
+	Busy      bool         `json:"busy,omitempty"` // printing on its own, as an agent at work does
 }
 
 // Sessions is the reply to ListSessions.

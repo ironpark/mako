@@ -20,7 +20,7 @@ var catalogKo = map[string]string{
 	"Toggle details":                     "오른쪽 패널 전환",
 	"Toggle details panel":               "오른쪽 패널 전환",
 	"Close %s":                           "%s 닫기",
-	"Close tab":                          "탭 닫기",
+	"Close tab and session":              "탭과 세션 닫기",
 	"Open settings":                      "설정 열기",
 	"No session open":                    "열린 세션이 없습니다",
 	"Pick a session in the sidebar, or start an agent on any node in the mesh.": "사이드바에서 세션을 고르거나, 메시의 아무 노드에서나 에이전트를 시작하세요.",
@@ -28,7 +28,7 @@ var catalogKo = map[string]string{
 	"Message":                     "메시지",
 	"Send":                        "보내기",
 	"New terminal":                "새 터미널",
-	"New Claude session":          "새 Claude 세션",
+	"New %s session":              "새 %s 세션",
 	"Pane divider":                "창 구분선",
 	"Attaching…":                  "연결 중…",
 	"Daemon settings":             "데몬 설정",
@@ -48,7 +48,7 @@ var catalogKo = map[string]string{
 	"Browse…":                                 "찾아보기…",
 	"Cancel":                                  "취소",
 	"Start session":                           "세션 시작",
-	"Choose a working directory.":             "작업 디렉터리를 선택하세요.",
+	"The node's home folder":                  "노드의 홈 폴더",
 
 	// Right panel
 	"Files":                                 "파일",

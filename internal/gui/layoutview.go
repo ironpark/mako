@@ -112,16 +112,19 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			func(ggui.Dropped[tabDrag]) int { return end }).
 			OnHover(func(bool) { m.leaveHint(id) })
 
-		var launch ggui.Widget = ggui.Box()
+		// The launchers start in the project of the tab shown, or without
+		// one, in the default place on this node.
+		nodeID := m.Conn.Get().Self.ID
+		project := m.launchProject(nodeID)
 		if cur, ok := sessionIn(sessions, g.Active); ok {
-			nodeID, project := cur.NodeID, cur.Project
-			into := func(fn func()) func() { return func() { m.focusGroup(id); fn() } }
-			launch = ggui.Row(
-				iconButton("square-terminal", T("New terminal"), into(func() { m.launch("shell", nodeID, project) })),
-				iconButton("sparkles", T("New Claude session"), into(func() { m.launch("claude", nodeID, project) })),
-				iconButton("plus", T("New session…"), into(func() { m.openNew(nodeID, project) })),
-			).Gap(2)
+			nodeID, project = cur.NodeID, cur.Project
 		}
+		targets := nodeTargets(m.Nodes.Get(), nodeID, m.Agents.Get())
+		focus := func() { m.focusGroup(id) }
+		launch := ggui.Row(
+			quickLaunchers(m, nodeID, project, targets, focus),
+			iconButton("plus", T("New session…"), func() { focus(); m.openNew(nodeID, project) }),
+		).Gap(2)
 		return ggui.Row(
 			ggui.Expanded(bar),
 			// Centred in the bar's height, level with the tabs' labels.

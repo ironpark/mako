@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/ironpark/sanbo/internal/agentspec"
 	"github.com/ironpark/sanbo/internal/protocol"
@@ -52,6 +53,11 @@ func (d *Daemon) handleOpenSession(ctx context.Context, stream *transport.Stream
 	launch, err := agentspec.Resolve(req.Agent, req.Profile, req.Args, req.Env, d.agents())
 	if err != nil {
 		return err
+	}
+	if req.Project == "" { // a front-end that leaves it to the node
+		if req.Project, err = os.UserHomeDir(); err != nil {
+			return err
+		}
 	}
 	s, err := session.Start(session.Spec{
 		ID:      newSessionID(),

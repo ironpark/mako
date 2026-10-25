@@ -20,6 +20,7 @@ type palette struct {
 	Fg, Muted, ExtraMuted          color.RGBA
 	Border, BorderAccent           color.RGBA
 	Accent, AccentBright           color.RGBA
+	Highlight                      color.RGBA // the item under the pointer in a menu or list, over a popover
 	Primary, PrimaryFg             color.RGBA
 	Destructive, Ring              color.RGBA
 	DotRunning, DotExited, DotDown color.RGBA
@@ -36,7 +37,7 @@ var darkPalette = palette{
 	Sidebar: hex(0x141716), SidebarHover: hex(0x1E2120), SidebarSelected: hex(0x272A29),
 	Fg: hex(0xFAFAFA), Muted: hex(0xA1A5A4), ExtraMuted: hex(0x717574),
 	Border: hex(0x252B2A), BorderAccent: hex(0x2F3534),
-	Accent: hex(0x20744A), AccentBright: hex(0x7CCBA0),
+	Accent: hex(0x20744A), AccentBright: hex(0x7CCBA0), Highlight: hex(0x383C3B),
 	Primary: hex(0xFAFAFA), PrimaryFg: hex(0x181B1A),
 	Destructive: hex(0xC64F43), Ring: hex(0xD4D4D8),
 	DotRunning: hex(0x35C264), DotExited: hex(0x717574), DotDown: hex(0xF7796D),
@@ -55,7 +56,7 @@ var lightPalette = palette{
 	Sidebar: hex(0xF4F4F5), SidebarHover: hex(0xE4E4E7), SidebarSelected: hex(0xD4D4D8),
 	Fg: hex(0x1A1A1E), Muted: hex(0x71717A), ExtraMuted: hex(0xA1A1AA),
 	Border: hex(0xE4E4E7), BorderAccent: hex(0xD4D4D8),
-	Accent: hex(0x20744A), AccentBright: hex(0x239956),
+	Accent: hex(0x20744A), AccentBright: hex(0x239956), Highlight: hex(0xE4E4E7),
 	Primary: hex(0x18181B), PrimaryFg: hex(0xFAFAFA),
 	Destructive: hex(0xB04138), Ring: hex(0x18181B),
 	DotRunning: hex(0x299F51), DotExited: hex(0xA1A1AA), DotDown: hex(0xF12E2F),
@@ -119,7 +120,9 @@ func themeFor(p palette) uitheme.Theme {
 	t.Primary, t.PrimaryFg = p.Primary, p.PrimaryFg
 	t.Secondary, t.SecondaryFg = p.Surface2, p.Fg
 	t.Muted, t.MutedFg = p.Surface2, p.Muted
-	t.Accent, t.AccentFg = p.Surface2, p.Fg
+	// Accent is what ggui lights the item under the pointer with, in menus,
+	// selects and lists; it must stand off the popover they open on.
+	t.Accent, t.AccentFg = p.Highlight, p.Fg
 	t.Destructive, t.DestructiveFg = p.Destructive, hex(0xFFFFFF)
 	t.Border = p.Border
 	t.InputBorder = p.BorderAccent
