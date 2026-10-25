@@ -556,7 +556,7 @@ func (r *mdRenderer) image(dest, label string) ggui.Widget {
 	p := r.beside(dest)
 	doc := r.m.docs[r.id]
 	if doc == nil {
-		return nil
+		return ggui.RichText(r.linked(mdStyle{r: r}, dest).span("🖼 " + label)).Size(mdBodySize)
 	}
 	if doc.images == nil {
 		doc.images = map[string]*ggui.StateValue[mdImage]{}

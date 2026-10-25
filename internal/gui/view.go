@@ -286,7 +286,7 @@ func workspace(m *model) ggui.Widget {
 		workspaceHeader(m),
 		hline(),
 		ggui.Expanded(layoutView(m)),
-		ggui.If(ggui.Map(m.Prefs, func(p prefs) bool { return p.ShowComposer }), func() ggui.Widget { return composer(m) }),
+		ggui.If(ggui.Derived(func() bool { return m.Prefs.Get().ShowComposer || m.ChatModes.Get()[m.Selected.Get()] }), func() ggui.Widget { return composer(m) }),
 	).Stretch()).Fill(tokSurface0)
 }
 

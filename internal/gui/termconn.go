@@ -28,21 +28,23 @@ type termConn struct {
 	id  string
 	att sessionLink
 
-	mu       sync.Mutex // guards everything below, the terminal included
-	vt       *gostty.Session
-	state    *gostty.RenderState
-	cells    []gostty.RenderCell
-	clusters []string
-	title    string
-	exited   bool
-	exitCode int
-	err      error
-	cols     uint16
-	rows     uint16
-	closed   bool // vt and state are released; nothing may touch them
-	opts     termOptions
-	gesture  *gostty.Gesture // click counting and drag selection
-	dragging bool
+	mu           sync.Mutex // guards everything below, the terminal included
+	vt           *gostty.Session
+	state        *gostty.RenderState
+	cells        []gostty.RenderCell
+	clusters     []string
+	title        string
+	titleKnown   bool
+	titleChanged func() // immutable; posts UI work without acquiring mu
+	exited       bool
+	exitCode     int
+	err          error
+	cols         uint16
+	rows         uint16
+	closed       bool // vt and state are released; nothing may touch them
+	opts         termOptions
+	gesture      *gostty.Gesture // click counting and drag selection
+	dragging     bool
 
 	// The daemon is told of a size once a burst of them settles, as a
 	// sliding panel resizes the terminal every frame, so the program is
@@ -61,12 +63,12 @@ type termConn struct {
 }
 
 // dialTerm attaches to a session and starts reading its stream.
-func dialTerm(ctx context.Context, c *client.Client, psk string, info protocol.SessionInfo, wake func()) (*termConn, error) {
+func dialTerm(ctx context.Context, c *client.Client, psk string, info protocol.SessionInfo, wake func(), titleChanged func()) (*termConn, error) {
 	att, err := c.AttachStream(ctx, psk, protocol.Attach{SessionID: info.ID, NodeID: info.NodeID, Replay: true})
 	if err != nil {
 		return nil, err
 	}
-	t, err := newTermConn(info.ID, att, info.Cols, info.Rows, wake)
+	t, err := newTermConn(info.ID, att, info.Cols, info.Rows, wake, titleChanged)
 	if err != nil {
 		_ = att.Close()
 		return nil, err
@@ -75,7 +77,7 @@ func dialTerm(ctx context.Context, c *client.Client, psk string, info protocol.S
 }
 
 // newTermConn starts reading an attached link into a fresh terminal.
-func newTermConn(id string, link sessionLink, cols, rows uint16, wake func()) (*termConn, error) {
+func newTermConn(id string, link sessionLink, cols, rows uint16, wake func(), titleChanged ...func()) (*termConn, error) {
 	cols, rows = max(cols, 2), max(rows, 2)
 	vt, err := gostty.New(cols, rows,
 		gostty.WithTerminalOptions(gostty.WithScrollbackMaxLines(10000)),
@@ -101,6 +103,9 @@ func newTermConn(id string, link sessionLink, cols, rows uint16, wake func()) (*
 	// three the line.
 	_ = gesture.SetBehaviors(gostty.GestureBehaviorCell, gostty.GestureBehaviorWord, gostty.GestureBehaviorLine)
 	t := &termConn{id: id, att: link, vt: vt, state: state, gesture: gesture, cols: cols, rows: rows, wake: wake}
+	if len(titleChanged) > 0 {
+		t.titleChanged = titleChanged[0]
+	}
 	// A program that selects text itself, as claude does with the mouse,
 	// copies it with OSC 52. The request is served on the UI thread, where
 	// the clipboard is; one asking to read the clipboard is refused.
@@ -208,6 +213,9 @@ func (t *termConn) read() {
 				t.applyOptionsLocked(opts)
 				_ = t.vt.Terminal().Resize(max(snap.Cols, 2), max(snap.Rows, 2))
 				t.cols, t.rows = max(snap.Cols, 2), max(snap.Rows, 2)
+				t.setTitleLocked(snap.Title)
+				t.progress.Restore(snap.Progress, time.Now())
+				t.wake()
 				t.feedLocked([]byte(snap.Text))
 				t.mu.Unlock()
 			}
@@ -250,9 +258,23 @@ func (t *termConn) feedLocked(p []byte) {
 			break
 		}
 		if ev.Kind == gostty.StreamEventTitleChanged {
-			t.title = ev.Title
+			t.setTitleLocked(ev.Title)
 		}
 		t.progress.Report(ev, now)
+		if ev.Kind == gostty.StreamEventProgressReport {
+			// Hidden terminals may have an outstanding paint forever.
+			t.wake()
+		}
+	}
+}
+
+// Title notifications are independent of paint coalescing: hidden tabs may
+// never paint but must still update their labels.
+func (t *termConn) setTitleLocked(title string) {
+	changed := !t.titleKnown || t.title != title
+	t.title, t.titleKnown = title, true
+	if changed && t.titleChanged != nil {
+		t.titleChanged()
 	}
 }
 
@@ -670,15 +692,28 @@ func (t *termConn) takeCopied() (string, bool) {
 
 // busy reports whether the program says it is at work.
 func (t *termConn) busy() bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return !t.exited && t.err == nil && t.progress.Busy(time.Now())
+	busy, _ := t.busyState()
+	return busy
 }
 
-func (t *termConn) windowTitle() string {
+// A received clear/error/pause overrides old polling data just as a busy
+// report does. A disconnected link falls back to the daemon's metadata.
+func (t *termConn) busyState() (bool, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.title
+	if t.exited {
+		return false, true
+	}
+	if t.closed || t.err != nil {
+		return false, false
+	}
+	return t.progress.Busy(time.Now()), t.progress.Known()
+}
+
+func (t *termConn) windowTitle() (string, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.title, t.titleKnown
 }
 
 // close detaches and releases the terminal. The session keeps running.

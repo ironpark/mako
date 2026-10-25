@@ -3,6 +3,22 @@ package gui
 // catalogKo is the window in Korean. TestEveryStringIsTranslated keeps it
 // complete.
 var catalogKo = map[string]string{
+	"Chat":                        "챗",
+	"Session view":                "세션 보기",
+	"Choose another conversation": "다른 대화 선택",
+	"Conversation":                "대화 기록",
+	"Loading conversation…":       "대화 기록을 불러오는 중…",
+	"Chat is available for Claude and Codex. Use Terminal for this agent.":                                 "챗은 Claude와 Codex를 지원합니다. 이 에이전트는 터미널에서 사용하세요.",
+	"Choose this session's conversation above. If none is listed, send a message in Terminal and refresh.": "위에서 이 세션의 대화를 선택하세요. 기록이 없다면 터미널에서 메시지를 보낸 뒤 새로고침하세요.",
+	"No messages yet. The conversation updates as the agent saves it.":                                     "아직 메시지가 없습니다. 에이전트가 기록을 저장하면 갱신됩니다.",
+	"Showing recent messages; older or long content is omitted.":                                           "최근 메시지를 표시합니다. 오래되거나 긴 내용은 생략됩니다.",
+	"Assistant": "어시스턴트",
+	"You":       "나",
+	"Tool":      "도구",
+	"Messages go to the live session. Use Terminal for approvals and special keys.": "메시지는 실행 중인 세션으로 전송됩니다. 승인과 특수 키는 터미널에서 입력하세요.",
+	"Latest":                   "최신 메시지",
+	"Toggle chat and terminal": "챗과 터미널 전환",
+
 	// Window
 	"Sessions":                           "세션",
 	"No sessions yet. Start one with +.": "아직 세션이 없습니다. +로 새로 시작하세요.",

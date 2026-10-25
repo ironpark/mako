@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ironpark/gostty"
+	"github.com/ironpark/sanbo/internal/protocol"
 )
 
 // Stale is how long a report holds without another, as Ghostty clears its
@@ -19,12 +20,17 @@ const Stale = 15 * time.Second
 type Progress struct {
 	state gostty.ProgressState
 	at    time.Time
+	value int16
+	known bool
 }
 
 // Report records a stream event, if it is a progress report, at now.
 func (p *Progress) Report(ev gostty.Event, now time.Time) {
 	if ev.Kind == gostty.StreamEventProgressReport {
-		p.state, p.at = ev.ProgressState, now
+		p.state, p.at, p.value, p.known = ev.ProgressState, now, int16(ev.Progress), true
+		if !ev.HasProgress {
+			p.value = -1
+		}
 	}
 }
 
@@ -37,4 +43,27 @@ func (p *Progress) Busy(now time.Time) bool {
 		return now.Sub(p.at) < Stale
 	}
 	return false
+}
+
+// Known distinguishes an explicit inactive report from no report yet.
+func (p *Progress) Known() bool { return p.known }
+
+// Snapshot preserves both inactive states and the remaining timeout.
+func (p *Progress) Snapshot(now time.Time) *protocol.ProgressReport {
+	if !p.known {
+		return nil
+	}
+	remaining := max(time.Duration(0), p.at.Add(Stale).Sub(now))
+	return &protocol.ProgressReport{State: uint8(p.state), Value: p.value, RemainingMS: remaining.Milliseconds()}
+}
+
+// Restore replaces local progress when attaching or resynchronizing a screen.
+func (p *Progress) Restore(report *protocol.ProgressReport, now time.Time) {
+	*p = Progress{}
+	if report == nil || report.State > uint8(gostty.ProgressStatePause) {
+		return
+	}
+	remaining := time.Duration(min(max(report.RemainingMS, 0), Stale.Milliseconds())) * time.Millisecond
+	p.state, p.value, p.known = gostty.ProgressState(report.State), report.Value, true
+	p.at = now.Add(remaining - Stale)
 }

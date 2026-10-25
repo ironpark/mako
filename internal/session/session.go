@@ -54,6 +54,7 @@ type Session struct {
 	finalPlain, finalStyled protocol.Snapshot
 
 	name     string // guarded by mu
+	title    string // latest terminal title, guarded by mu
 	started  time.Time
 	done     chan struct{}
 	progress activity.Progress // guarded by mu
@@ -116,6 +117,7 @@ func (s *Session) Info() protocol.SessionInfo {
 		Agent:     s.spec.Agent,
 		Profile:   s.spec.Profile,
 		Name:      s.name,
+		Title:     s.title,
 		Project:   s.spec.Project,
 		Command:   s.spec.Command,
 		State:     s.state,
@@ -184,6 +186,8 @@ func (s *Session) snapshotLocked(styled bool) (protocol.Snapshot, error) {
 		Rows:      s.spec.Rows,
 		Text:      text,
 		Styled:    styled,
+		Title:     s.title,
+		Progress:  s.progress.Snapshot(time.Now()),
 	}, nil
 }
 
@@ -257,6 +261,7 @@ func (s *Session) pump() {
 	s.mu.Lock()
 	s.state = protocol.StateExited
 	s.exitCode = &exitCode
+	s.progress = activity.Progress{}
 	for id, sub := range s.subs {
 		delete(s.subs, id)
 		close(sub)
@@ -277,14 +282,17 @@ func (s *Session) feed(chunk []byte) {
 	// The daemon's terminal is the one that answers the program's queries
 	// (device attributes, cursor position, size reports): it sees every byte
 	// and exists whether or not anyone is attached, so each query is answered
-	// exactly once. Of its events only progress reports are kept, for the
-	// session's state; draining the rest keeps the queue from growing.
+	// exactly once. Keep titles and progress for metadata and replay;
+	// draining the rest keeps the queue from growing.
 	stream := s.term.Stream()
 	_ = stream.WriteReplies(s.tty)
 	now := time.Now()
 	for ev, err := range stream.EventValues() {
 		if err != nil {
 			break
+		}
+		if ev.Kind == gostty.StreamEventTitleChanged {
+			s.title = ev.Title
 		}
 		s.progress.Report(ev, now)
 	}

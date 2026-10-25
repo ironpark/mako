@@ -250,6 +250,8 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeGitDiff:
 		return d.handleGitDiff(ctx, stream, env)
+	case protocol.TypeReadChat:
+		return d.handleReadChat(ctx, stream, env)
 
 	case protocol.TypeResize:
 		var payload protocol.Resize

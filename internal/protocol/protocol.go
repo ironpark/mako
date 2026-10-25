@@ -135,6 +135,7 @@ type SessionInfo struct {
 	// Name is what the user called the session; empty, it goes by its
 	// program's title or its agent.
 	Name      string       `json:"name,omitempty"`
+	Title     string       `json:"title,omitempty"` // latest program-set terminal title
 	Project   string       `json:"project"`
 	Command   []string     `json:"command"`
 	State     SessionState `json:"state"`
@@ -177,12 +178,22 @@ type Resize struct {
 	Rows      uint16 `json:"rows"`
 }
 
+// ProgressReport carries a terminal's latest OSC 9;4 state. RemainingMS is
+// relative so peers do not need synchronized clocks for report expiry.
+type ProgressReport struct {
+	State       uint8 `json:"state"`
+	Value       int16 `json:"value"`
+	RemainingMS int64 `json:"remaining_ms"`
+}
+
 // Snapshot is a rendered view of the session screen, used for replay and for
 // front-ends that only want the current state rather than a live stream.
 type Snapshot struct {
-	SessionID string `json:"session_id"`
-	Cols      uint16 `json:"cols"`
-	Rows      uint16 `json:"rows"`
+	Progress  *ProgressReport `json:"progress,omitempty"`
+	SessionID string          `json:"session_id"`
+	Cols      uint16          `json:"cols"`
+	Rows      uint16          `json:"rows"`
+	Title     string          `json:"title,omitempty"`
 	// Text is the screen contents; VT when Styled, plain text otherwise.
 	Text   string `json:"text"`
 	Styled bool   `json:"styled"`

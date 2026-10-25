@@ -118,6 +118,30 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				until("a terminal", func() bool { return slices.Contains(ggui.Peek(m.Attached), ggui.Peek(m.Selected)) }),
 				frames(30), // the resize reaches the program and its redraw comes back
 				shot("02-session"),
+				// A fixed transcript makes chat layout review independent of
+				// installed agents and personal conversation logs.
+				do(func() {
+					id := ggui.Peek(m.Selected)
+					chat := m.chatState(id)
+					chat.loading = true
+					chat.result.Set(chatResult{Loaded: true, Chat: protocol.Chat{
+						Supported: true, Conversation: "preview",
+						Conversations: []protocol.Conversation{{ID: "preview"}},
+						Messages: []protocol.ChatMessage{
+							{Role: "user", Text: "Add a chat view while keeping the terminal session running."},
+							{Role: "assistant", Text: "The session now has **Chat** and **Terminal** views.\n\n- Switch views without restarting the agent.\n- Read the conversation and send a reply here.\n- Use the terminal for approvals and interactive commands."},
+							{Role: "tool", Text: "go test ./internal/transcript\nok   github.com/ironpark/sanbo/internal/transcript"},
+							{Role: "assistant", Text: "Ready to try. Use **⌘⇧J** to switch views."},
+						},
+					}})
+					m.setChatMode(id, true)
+				}),
+				frames(5), shot("02-chat"),
+				do(func() {
+					id := ggui.Peek(m.Selected)
+					m.setChatMode(id, false)
+					delete(m.chats, id)
+				}),
 				// A second session, dragged to the right of the first.
 				do(func() {
 					s, _ := m.session(ggui.Peek(m.Selected))

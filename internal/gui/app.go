@@ -82,6 +82,7 @@ func shortcuts(host ggui.Host, m *model) {
 	host.Shortcut("cmd+k", m.openPalette)
 	host.Shortcut("cmd+shift+p", m.openPalette)
 	host.Shortcut("cmd+shift+v", m.toggleSelectedPreview)
+	host.Shortcut("cmd+shift+j", m.toggleChat)
 	host.Shortcut("cmd+b", func() { ggui.Toggle(m.SidebarOpen) })
 	host.Shortcut("cmd+shift+d", func() { ggui.Toggle(m.DetailsOpen) })
 	host.Shortcut("cmd+,", func() { m.openSettings("") })
@@ -95,6 +96,7 @@ var shortcutList = []struct{ Chord, Action string }{
 	{"cmd+s", "Save file"},
 	{"cmd+k", "Command palette"},
 	{"cmd+shift+v", "Toggle Markdown preview"},
+	{"cmd+shift+j", "Toggle chat and terminal"},
 	{"cmd+b", "Toggle sidebar"},
 	{"cmd+shift+d", "Toggle details panel"},
 	{"cmd+,", "Open settings"},

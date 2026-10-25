@@ -93,6 +93,8 @@ type model struct {
 	TabHint    *ggui.StateValue[tabHint]     // where in a tab bar it would drop
 	Attached   *ggui.StateValue[[]string]    // tabs whose terminal is connected
 	Titles     *ggui.StateValue[map[string]string]
+	ChatModes  *ggui.StateValue[map[string]bool] // true shows chat; terminal stays attached
+	chats      map[string]*chatState
 
 	// The Files tab: folders read, by dirKey; those open; the row chosen;
 	// and the file shown.
@@ -206,6 +208,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		TabHint:        ggui.State(tabHint{}),
 		Attached:       ggui.State([]string(nil)).WithEqual(slices.Equal),
 		Titles:         ggui.State(map[string]string{}).WithEqual(func(a, b map[string]string) bool { return reflect.DeepEqual(a, b) }),
+		ChatModes:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		chats:          map[string]*chatState{},
 		Dirs:           ggui.State(map[string]dirListing{}).WithEqual(func(a, b map[string]dirListing) bool { return reflect.DeepEqual(a, b) }),
 		FilesOpen:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		FileSel:        ggui.State(""),
@@ -418,8 +422,10 @@ func (m *model) poll(ctx context.Context) {
 // terminal here, which hears a report at once, or from its daemon, which
 // heard any it sent before the terminal here attached.
 func (m *model) busy(id string) bool {
-	if conn := m.conns[id]; conn != nil && conn.busy() {
-		return true
+	if conn := m.conns[id]; conn != nil {
+		if busy, known := conn.busyState(); known {
+			return busy
+		}
 	}
 	s, ok := m.session(id)
 	return ok && s.Busy && s.State != protocol.StateExited
@@ -614,7 +620,7 @@ func (m *model) attach(id string) {
 		c, err := m.client(ctx)
 		var conn *termConn
 		if err == nil {
-			conn, err = dialTerm(context.Background(), c, m.key(), info, wake)
+			conn, err = dialTerm(context.Background(), c, m.key(), info, wake, func() { post(m.syncTitles) })
 		}
 		post(func() {
 			delete(m.dialing, id)
@@ -627,6 +633,7 @@ func (m *model) attach(id string) {
 				return
 			}
 			m.conns[id] = conn
+			m.syncTitles()
 			m.Attached.Set(append(slices.Clone(ggui.Peek(m.Attached)), id))
 		})
 	}()
@@ -646,6 +653,8 @@ func (m *model) closeTab(id string) {
 		conn.close()
 		delete(m.conns, id)
 	}
+	delete(m.chats, id)
+	m.ChatModes.Update(func(v map[string]bool) map[string]bool { v = maps.Clone(v); delete(v, id); return v })
 	m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(s string) bool { return s == id }))
 }
 
@@ -761,9 +770,19 @@ func (m *model) sendComposer() {
 // syncTitles publishes the titles programs set on their terminals.
 func (m *model) syncTitles() {
 	titles := map[string]string{}
+	for _, info := range ggui.Peek(m.Sessions) {
+		if info.Title != "" {
+			titles[info.ID] = info.Title
+		}
+	}
 	for id, conn := range m.conns {
-		if t := conn.windowTitle(); t != "" {
-			titles[id] = t
+		if title, known := conn.windowTitle(); known {
+			// Even an empty live title overrides an older polling result.
+			if title == "" {
+				delete(titles, id)
+			} else {
+				titles[id] = title
+			}
 		}
 	}
 	m.Titles.Set(titles)

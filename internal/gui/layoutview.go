@@ -172,16 +172,7 @@ func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				return ggui.Center(ggui.Column(ui.Spinner(), muted(ggui.Text(T("Attaching…")).Size(13))).Gap(12).Align(ggui.AlignCenter))
 			})
 		default:
-			// Only the current pane's terminal takes the keyboard as it
-			// appears, so a split does not move it.
-			focus := ggui.Peek(m.FocusGroup) == id
-			term := newTerminalView(m.conns[p.ID], func() prefs { return ggui.Peek(m.Prefs) }, focus).
-				OnPress(func() { m.focusGroup(id) })
-			// A file dragged from the Files tab is typed as its path.
-			return ggui.DropZone(term, func(d ggui.Dropped[pathDrag]) {
-				term.setDropOver(false)
-				term.typePaths([]string{d.Value.Path})
-			}).OnHover(term.setDropOver)
+			return sessionView(m, p.ID, id)
 		}
 	})
 	return ggui.Stack(

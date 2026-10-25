@@ -74,6 +74,26 @@ session's details and the nodes. The sidebar groups its sessions by project
 package is, goes under that project), by host, or lists them flat, as the
 buttons in its header choose.
 
+Each session has a **Chat / Terminal** switch (⌘⇧J, also in the command
+palette). Switching keeps the same live PTY connection and remembers the mode
+per tab, including when it moves between panes. Chat reads Claude and Codex's
+native JSONL conversation logs on the session's node, refreshes every two
+seconds, and renders messages, Markdown responses and tool output. An explicit
+conversation ID in the launch command (`claude --session-id`, `claude --resume`,
+`codex resume`) selects that history; otherwise choose the running session's
+conversation from the **Conversation** menu. Matching only the project or the
+newest file would confuse concurrent sessions, so sanbo does not guess. The
+process's `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `HOME` overrides are respected.
+
+The chat composer sends to the same live terminal session, even when viewing
+history, and is shown regardless of the terminal composer setting. Use Terminal
+for approvals, interactive menus and special keys; shell and other agents keep
+their terminal view. Logs update when the agent saves them, rather than token by
+token. Chat shows the recent 2 MB of a log (up to 200 messages, with long content
+capped), marks omitted content, follows new messages when at the bottom, and has
+a **Latest** button to return there. A daemon upgrade is required for chat on
+remote nodes as well.
+
 Closing a tab ends its session, asking first while it runs (Settings ▸
 General can turn the question off); "Detach tab" in the header's menu closes
 the tab and leaves the session running in the sidebar. Tabs arrange into
@@ -156,6 +176,10 @@ first. The new-session dialog takes a working directory too, but it can be
 left empty for the node's home. A session's icon, on its tab and in the sidebar, hops
 while its program reports progress (OSC 9;4), as claude does while it works,
 and its dot in the sidebar, grey at rest, glows a soft green the while.
+Progress is restored on attach; live clear, error and pause reports take
+precedence over older session listings. Like Ghostty, reports expire after
+15 seconds without a refresh, so programs must send keep-alives during long
+operations. Programs that do not emit OSC 9;4 do not show a busy indicator.
 Sessions run with `TERM_PROGRAM=ghostty`, the terminal under them being
 Ghostty's core, so programs find what it supports, and a program that
 selects text itself, as claude does with the mouse, copies it to the
