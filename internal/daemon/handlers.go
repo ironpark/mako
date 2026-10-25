@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
+	"strings"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
 	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/session"
 	"github.com/ironpark/sanbo/internal/transport"
 )
 
@@ -18,7 +16,7 @@ func (d *Daemon) local(nodeID string) bool {
 }
 
 func (d *Daemon) handleListSessions(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
-	sessions := d.sessions.list()
+	sessions := d.listSessions()
 	// A peer asking is already fanning out itself; answering with local
 	// sessions only keeps a mesh cycle from recursing.
 	if fromPeer {
@@ -50,37 +48,10 @@ func (d *Daemon) handleOpenSession(ctx context.Context, stream *transport.Stream
 		return stream.Send(protocol.TypeSessionInfo, env.ID, info)
 	}
 
-	launch, err := agentspec.Resolve(req.Agent, req.Profile, req.Args, req.Env, d.agents())
+	s, err := d.openSession(ctx, req)
 	if err != nil {
 		return err
 	}
-	if req.Project == "" { // a front-end that leaves it to the node
-		if req.Project, err = os.UserHomeDir(); err != nil {
-			return err
-		}
-	}
-	s, err := session.Start(session.Spec{
-		ID:      newSessionID(),
-		NodeID:  d.cfg.NodeID,
-		Agent:   req.Agent,
-		Profile: req.Profile,
-		Project: req.Project,
-		Command: launch.Command,
-		Env:     launch.Env,
-		Cols:    req.Cols,
-		Rows:    req.Rows,
-	})
-	if err != nil {
-		return err
-	}
-	d.sessions.add(s)
-	d.log.Info("session started", "id", s.ID(), "agent", req.Agent, "profile", req.Profile, "project", req.Project)
-
-	go func() {
-		<-s.Done()
-		info := s.Info()
-		d.log.Info("session exited", "id", info.ID, "code", info.ExitCode)
-	}()
 
 	return stream.Send(protocol.TypeSessionInfo, env.ID, s.Info())
 }
@@ -93,13 +64,38 @@ func (d *Daemon) handleCloseSession(ctx context.Context, stream *transport.Strea
 	if !d.local(req.NodeID) {
 		return d.forwardClose(ctx, req, stream, env)
 	}
-	s, ok := d.sessions.get(req.SessionID)
-	if !ok {
-		return fmt.Errorf("unknown session %q", req.SessionID)
+	if err := d.closeSession(req.SessionID); err != nil {
+		return err
 	}
-	_ = s.Close()
-	d.sessions.remove(req.SessionID)
 	return stream.Send(protocol.TypeExited, env.ID, protocol.Exited{SessionID: req.SessionID})
+}
+
+// maxSessionName caps a session's name, which every listing carries.
+const maxSessionName = 200
+
+func (d *Daemon) handleRenameSession(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	var req protocol.RenameSession
+	if err := protocol.Decode(env, &req); err != nil {
+		return err
+	}
+	if !d.local(req.NodeID) {
+		remote := req
+		remote.NodeID = ""
+		var info protocol.SessionInfo
+		if err := d.forward(ctx, req.NodeID, protocol.TypeRenameSess, remote, &info); err != nil {
+			return err
+		}
+		return stream.Send(protocol.TypeSessionInfo, env.ID, info)
+	}
+	name := strings.Join(strings.Fields(req.Name), " ") // one line
+	if len(name) > maxSessionName {
+		return fmt.Errorf("a session name is at most %d bytes", maxSessionName)
+	}
+	info, err := d.renameSession(req.SessionID, name)
+	if err != nil {
+		return err
+	}
+	return stream.Send(protocol.TypeSessionInfo, env.ID, info)
 }
 
 // handleAttach turns the stream into a live session pipe: session output flows
@@ -113,9 +109,9 @@ func (d *Daemon) handleAttach(ctx context.Context, stream *transport.Stream, env
 		return d.forwardAttach(ctx, req, stream)
 	}
 
-	s, ok := d.sessions.get(req.SessionID)
-	if !ok {
-		return fmt.Errorf("unknown session %q", req.SessionID)
+	s, err := d.attachSession(ctx, req.SessionID)
+	if err != nil {
+		return err
 	}
 	out, unsubscribe := s.Subscribe()
 	defer func() { unsubscribe() }()

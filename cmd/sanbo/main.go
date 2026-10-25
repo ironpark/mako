@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -26,6 +27,7 @@ Usage:
                                      start an agent, or one of its profiles, and attach
   sanbo attach <session-id>          attach to a running session
   sanbo kill <session-id>            terminate a session
+  sanbo rename <session-id> [name]   name a session (no name clears it)
   sanbo agents                       list agents and profiles this node can launch
 
 Flags:
@@ -103,6 +105,15 @@ func run(args []string, daemonAddr, nodeID, project string) error {
 			return err
 		}
 		return c.Kill(ctx, cfg.PSK, protocol.CloseSession{SessionID: args[1], NodeID: nodeID})
+	case "rename":
+		if len(args) < 2 {
+			return fmt.Errorf("rename needs a session ID")
+		}
+		if nodeID, err = sessionNode(ctx, c, cfg.PSK, nodeID, args[1]); err != nil {
+			return err
+		}
+		_, err := c.Rename(ctx, cfg.PSK, protocol.RenameSession{SessionID: args[1], NodeID: nodeID, Name: strings.Join(args[2:], " ")})
+		return err
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -149,10 +160,14 @@ func listSessions(ctx context.Context, c *client.Client, psk string) error {
 		return nil
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "SESSION\tNODE\tAGENT\tPROJECT\tSTATE\tUPTIME")
+	fmt.Fprintln(w, "SESSION\tNODE\tAGENT\tNAME\tPROJECT\tSTATE\tUPTIME")
 	for _, s := range sessions {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			s.ID, short(s.NodeID), agentspec.Target(s.Agent, s.Profile), s.Project, s.State, ago(s.StartedAt))
+		name := s.Name
+		if name == "" {
+			name = "-"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			s.ID, short(s.NodeID), agentspec.Target(s.Agent, s.Profile), name, s.Project, s.State, ago(s.StartedAt))
 	}
 	return w.Flush()
 }

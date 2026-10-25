@@ -22,7 +22,8 @@ import (
 const API = "https://api.zed.dev"
 
 // The extension API versions sanbo takes extensions for. Their grammars
-// and languages read the same in every version; their wasm is not run.
+// and languages read the same in every version; their wasm is run only
+// for their context servers (internal/zedhost).
 const (
 	minSchema  = 0
 	maxSchema  = 1
@@ -73,13 +74,34 @@ func (s *Store) client() *http.Client {
 	return http.DefaultClient
 }
 
-// Search lists the store's extensions that provide languages and match
-// query, the most downloaded first, as Zed's own list does.
+// Search lists the store's extensions that provide languages or context
+// servers (MCP servers) and match query, the most downloaded first, as
+// Zed's own list does. The store filters by one kind at a time, so it is
+// asked for each.
 func (s *Store) Search(ctx context.Context, query string) ([]Listing, error) {
+	var out []Listing
+	seen := map[string]bool{}
+	for _, kind := range []string{"languages", "context-servers"} {
+		found, err := s.search(ctx, query, kind)
+		if err != nil {
+			return nil, err
+		}
+		for _, l := range found {
+			if !seen[l.ID] {
+				seen[l.ID] = true
+				out = append(out, l)
+			}
+		}
+	}
+	slices.SortStableFunc(out, func(a, b Listing) int { return b.DownloadCount - a.DownloadCount })
+	return out, nil
+}
+
+func (s *Store) search(ctx context.Context, query, provides string) ([]Listing, error) {
 	q := url.Values{
 		"filter":             {query},
 		"max_schema_version": {fmt.Sprint(maxSchema)},
-		"provides":           {"languages"},
+		"provides":           {provides},
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.api()+"/extensions?"+q.Encode(), nil)
 	if err != nil {

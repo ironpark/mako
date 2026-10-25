@@ -5,7 +5,6 @@ import (
 	"image/color"
 	"log"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -78,11 +77,11 @@ func builtinLanguages() []language {
 
 // extensionsDir is where the Zed extensions are installed.
 func extensionsDir() string {
-	dir, err := config.Dir()
+	dir, err := config.ExtensionsDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(dir, "extensions")
+	return dir
 }
 
 // highlighter parses and colours the open files. It is shared by the
@@ -628,5 +627,6 @@ func (m *model) loadExtensions() {
 			m.Extensions.Set(exts)
 			m.langGen++
 		})
+		m.loadMCPInfo(exts)
 	}()
 }

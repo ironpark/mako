@@ -32,6 +32,7 @@ const (
 	TypeOpenSession Type = "open_session"
 	TypeSessionInfo Type = "session_info"
 	TypeCloseSess   Type = "close_session"
+	TypeRenameSess  Type = "rename_session"
 	TypeAttach      Type = "attach"
 	TypeInput       Type = "input"
 	TypeOutput      Type = "output"
@@ -119,6 +120,7 @@ type OpenSession struct {
 type SessionState string
 
 const (
+	StateStopped  SessionState = "stopped" // restored metadata; starts on attach
 	StateStarting SessionState = "starting"
 	StateRunning  SessionState = "running"
 	StateExited   SessionState = "exited"
@@ -126,10 +128,13 @@ const (
 
 // SessionInfo describes one agent session.
 type SessionInfo struct {
-	ID        string       `json:"id"`
-	NodeID    string       `json:"node_id"`
-	Agent     string       `json:"agent"`
-	Profile   string       `json:"profile,omitempty"`
+	ID      string `json:"id"`
+	NodeID  string `json:"node_id"`
+	Agent   string `json:"agent"`
+	Profile string `json:"profile,omitempty"`
+	// Name is what the user called the session; empty, it goes by its
+	// program's title or its agent.
+	Name      string       `json:"name,omitempty"`
 	Project   string       `json:"project"`
 	Command   []string     `json:"command"`
 	State     SessionState `json:"state"`
@@ -187,6 +192,14 @@ type Snapshot struct {
 type CloseSession struct {
 	SessionID string `json:"session_id"`
 	NodeID    string `json:"node_id,omitempty"`
+}
+
+// RenameSession names a session; an empty Name gives its own back. The
+// reply is its SessionInfo.
+type RenameSession struct {
+	SessionID string `json:"session_id"`
+	NodeID    string `json:"node_id,omitempty"`
+	Name      string `json:"name"`
 }
 
 // Exited reports session termination.

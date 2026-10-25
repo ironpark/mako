@@ -29,6 +29,10 @@ type Profile struct {
 	Name string            `json:"name"`
 	Args []string          `json:"args,omitempty"`
 	Env  map[string]string `json:"env,omitempty"`
+	// ContextServers picks the MCP servers its sessions get, by ID, an
+	// empty list none; unset, they get every server enabled. A server
+	// picked here is given even when turned off for the node.
+	ContextServers *[]string `json:"context_servers,omitempty"`
 }
 
 // UnmarshalJSON also reads an agent written as its command alone, as
@@ -99,6 +103,9 @@ func Lookup(name string, agents map[string]Agent) (Agent, bool) {
 type Launch struct {
 	Command []string
 	Env     map[string]string
+	// ContextServers are the MCP servers its profile picks, nil for the
+	// node's enabled ones.
+	ContextServers *[]string
 }
 
 // Resolve turns an agent name, a profile of it ("" for none) and extra
@@ -160,7 +167,7 @@ func Resolve(name, profile string, args []string, env map[string]string, agents 
 		command = append(command, expand(arg, lookup))
 	}
 	command = append(command, args...)
-	return Launch{Command: command, Env: merged}, nil
+	return Launch{Command: command, Env: merged, ContextServers: p.ContextServers}, nil
 }
 
 // expand writes $NAME, ${NAME} and a leading ~ out, and $$ as $.

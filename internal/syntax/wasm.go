@@ -8,8 +8,8 @@ import (
 )
 
 // Just enough of the wasm binary format to link grammar dynamic libraries:
-// read sections, the dylink.0 custom section, types and imports, rewrite
-// imports and the table section, and emit a tiny module of globals.
+// read sections, the dylink.0 custom section, types and imports, and
+// rewrite imports and the table section.
 
 const (
 	secCustom = 0
@@ -24,6 +24,9 @@ const (
 	kindGlobal = 3
 
 	valI32 = 0x7f
+	valI64 = 0x7e
+	valF32 = 0x7d
+	valF64 = 0x7c
 )
 
 var wasmHeader = []byte{0x00, 'a', 's', 'm', 0x01, 0x00, 0x00, 0x00}
@@ -112,18 +115,6 @@ func writeSections(secs []section) []byte {
 
 // leb is v in unsigned LEB128, which a uvarint is.
 func leb(v uint32) []byte { return binary.AppendUvarint(nil, uint64(v)) }
-
-func sleb(v int32) []byte {
-	var out []byte
-	for {
-		c := byte(v & 0x7f)
-		v >>= 7
-		if (v == 0 && c&0x40 == 0) || (v == -1 && c&0x40 != 0) {
-			return append(out, c)
-		}
-		out = append(out, c|0x80)
-	}
-}
 
 func encName(s string) []byte { return append(leb(uint32(len(s))), s...) }
 
@@ -272,27 +263,9 @@ func growTable(secs []section, extra uint32) (uint32, error) {
 	return 0, errors.New("runtime module defines no table")
 }
 
-// globalModule builds a module that only defines and exports i32 globals.
+// globalDef is an i32 global the linker provides to a grammar.
 type globalDef struct {
 	name    string
 	value   uint32
 	mutable bool
-}
-
-func globalModule(defs []globalDef) []byte {
-	globals := leb(uint32(len(defs)))
-	exports := leb(uint32(len(defs)))
-	for i, d := range defs {
-		mut := byte(0)
-		if d.mutable {
-			mut = 1
-		}
-		globals = append(globals, valI32, mut, 0x41) // i32.const
-		globals = append(globals, sleb(int32(d.value))...)
-		globals = append(globals, 0x0b) // end
-		exports = append(exports, encName(d.name)...)
-		exports = append(exports, kindGlobal)
-		exports = append(exports, leb(uint32(i))...)
-	}
-	return writeSections([]section{{6, globals}, {secExport, exports}})
 }

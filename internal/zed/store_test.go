@@ -66,7 +66,14 @@ func TestInstallFromTheStore(t *testing.T) {
 		switch r.URL.Path {
 		case "/extensions":
 			asked = r.URL.Query().Get("filter")
-			w.Write([]byte(`{"data":[{"id":"zig","name":"Zig","version":"0.4.2","provides":["languages","grammars"],"download_count":5}]}`))
+			switch r.URL.Query().Get("provides") {
+			case "languages":
+				w.Write([]byte(`{"data":[{"id":"zig","name":"Zig","version":"0.4.2","provides":["languages","grammars"],"download_count":5}]}`))
+			case "context-servers":
+				w.Write([]byte(`{"data":[{"id":"zig-mcp","name":"Zig MCP","version":"0.1.0","provides":["context-servers"],"download_count":9},{"id":"zig","name":"Zig","version":"0.4.2","provides":["languages","grammars"],"download_count":5}]}`))
+			default:
+				w.Write([]byte(`{"data":[]}`))
+			}
 		case "/extensions/zig/download":
 			w.Write(archive(t, zigExtension))
 		default:
@@ -77,7 +84,7 @@ func TestInstallFromTheStore(t *testing.T) {
 	s := &Store{Dir: t.TempDir(), API: srv.URL}
 
 	found, err := s.Search(context.Background(), "zi")
-	if err != nil || len(found) != 1 || found[0].ID != "zig" || asked != "zi" {
+	if err != nil || len(found) != 2 || found[0].ID != "zig-mcp" || found[1].ID != "zig" || asked != "zi" {
 		t.Fatalf("search: %+v, %v (asked %q)", found, err, asked)
 	}
 	ext, err := s.Install(context.Background(), "zig")

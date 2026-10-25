@@ -19,6 +19,7 @@ import (
 	"github.com/ironpark/sanbo/internal/agentspec"
 	"github.com/ironpark/sanbo/internal/client"
 	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/sanbo/internal/mcp"
 	"github.com/ironpark/sanbo/internal/protocol"
 	"github.com/ironpark/sanbo/internal/zed"
 )
@@ -54,6 +55,10 @@ type model struct {
 	AgentDraft     *ggui.StateValue[[]agentDraft]
 	HostNote       *ggui.StateValue[string]
 	ConfirmOpen    *ggui.StateValue[bool]
+	RenameOpen     *ggui.StateValue[bool]
+	RenameText     *ggui.StateValue[string]
+	RenameErr      *ggui.StateValue[string]
+	renaming       string // the session RenameOpen names
 	confirmKill    string // the session ConfirmOpen asks about
 	StopOpen       *ggui.StateValue[bool]
 	pendingStop    func() // what StopOpen confirms
@@ -111,6 +116,12 @@ type model struct {
 	ExtResults   *ggui.StateValue[extSearch]
 	ExtBusy      *ggui.StateValue[map[string]bool] // extensions being installed
 	ExtErr       *ggui.StateValue[string]
+	// MCPServers mirrors cfg.ContextServers for the settings page, and
+	// MCPInfo is what the extensions say about setting each up.
+	MCPServers *ggui.StateValue[map[string]mcp.Server]
+	MCPInfo    *ggui.StateValue[map[string]mcpInfo]
+	MCPNote    *ggui.StateValue[string]
+	mcpTexts   map[string]*ggui.StateValue[string]
 
 	// The Changes tab: the project's changes, the folders closed in their
 	// tree, the row chosen, and the diff shown.
@@ -160,6 +171,9 @@ func newModel(cfg *config.Config, addr string) *model {
 		AgentDraft:     ggui.State(draftAgents(cfg.Agents)).WithEqual(slices.Equal),
 		HostNote:       ggui.State(""),
 		ConfirmOpen:    ggui.State(false),
+		RenameOpen:     ggui.State(false),
+		RenameText:     ggui.State(""),
+		RenameErr:      ggui.State(""),
 		StopOpen:       ggui.State(false),
 		DiscardOpen:    ggui.State(false),
 		QuitOpen:       ggui.State(false),
@@ -172,6 +186,9 @@ func newModel(cfg *config.Config, addr string) *model {
 		ExtResults:     ggui.State(extSearch{}).WithEqual(func(a, b extSearch) bool { return reflect.DeepEqual(a, b) }),
 		ExtBusy:        ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		ExtErr:         ggui.State(""),
+		MCPServers:     ggui.State(maps.Clone(cfg.ContextServers)).WithEqual(func(a, b map[string]mcp.Server) bool { return reflect.DeepEqual(a, b) }),
+		MCPInfo:        ggui.State(map[string]mcpInfo(nil)).WithEqual(func(a, b map[string]mcpInfo) bool { return reflect.DeepEqual(a, b) }),
+		MCPNote:        ggui.State(""),
 		Extensions:     ggui.State([]zed.Extension(nil)).WithEqual(func(a, b []zed.Extension) bool { return reflect.DeepEqual(a, b) }),
 		DaemonState:    ggui.State(daemonState{}),
 		DaemonLog:      ggui.State([]string(nil)).WithEqual(slices.Equal),
@@ -300,9 +317,7 @@ func (m *model) setLink(embedAddr string) {
 		}
 	}
 	m.Attached.Set(nil)
-	if id := ggui.Peek(m.Selected); id != "" {
-		m.attach(id)
-	}
+	m.attachVisible()
 }
 
 // key is the pre-shared key requests carry.
@@ -379,7 +394,20 @@ func (m *model) poll(ctx context.Context) {
 	m.post(func() {
 		m.Conn.Set(connState{OK: true, Self: self})
 		m.Nodes.Set(nodes)
+		// A restarted daemon restores IDs as stopped. Discard their old
+		// terminal links, including hidden tabs, before displaying them again.
+		for _, info := range sessions {
+			previous, known := m.session(info.ID)
+			if info.State == protocol.StateStopped && known && previous.State != protocol.StateStopped {
+				if conn := m.conns[info.ID]; conn != nil {
+					conn.close()
+					delete(m.conns, info.ID)
+					m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(id string) bool { return id == info.ID }))
+				}
+			}
+		}
 		m.Sessions.Set(sessions)
+		m.attachVisible()
 		m.syncTitles()
 	})
 }
@@ -548,10 +576,30 @@ func (m *model) selectSession(id string) {
 	}
 }
 
+// attachVisible resumes only the active tab of each visible pane.
+func (m *model) attachVisible() {
+	for _, group := range ggui.Peek(m.Layout).groups() {
+		if group.Active != "" && m.conns[group.Active] == nil {
+			m.attach(group.Active)
+		}
+	}
+}
+
 // attach dials a session's terminal on a worker.
 func (m *model) attach(id string) {
-	if m.conns[id] != nil || m.dialing[id] || isDocTab(id) {
+	if m.dialing[id] || isDocTab(id) {
 		return
+	}
+	if conn := m.conns[id]; conn != nil {
+		conn.mu.Lock()
+		failed := conn.err != nil || conn.closed
+		conn.mu.Unlock()
+		if !failed {
+			return
+		}
+		conn.close()
+		delete(m.conns, id)
+		m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(tab string) bool { return tab == id }))
 	}
 	info, ok := m.session(id)
 	if !ok {
@@ -661,7 +709,7 @@ func (m *model) askKill(id string) {
 		m.askCloseDoc(id)
 		return
 	}
-	if s, ok := m.session(id); !ggui.Peek(m.Prefs).ConfirmKill || (ok && s.State == protocol.StateExited) {
+	if s, ok := m.session(id); !ggui.Peek(m.Prefs).ConfirmKill || (ok && (s.State == protocol.StateExited || s.State == protocol.StateStopped)) {
 		m.kill(id)
 		return
 	}

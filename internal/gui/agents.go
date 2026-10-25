@@ -25,6 +25,10 @@ type agentDraft struct {
 	Agent, Profile     string
 	Command, Args, Env string
 	IsProfile          bool // a profile's name may be blank while it is typed
+	// PickServers gives a profile's sessions the MCP servers in Servers,
+	// one ID a line, rather than every one enabled.
+	PickServers bool
+	Servers     string
 }
 
 // draftAgents lays out cfg's agents for editing: every agent the node can
@@ -36,8 +40,12 @@ func draftAgents(agents map[string]agentspec.Agent) []agentDraft {
 		out = append(out, agentDraft{ID: len(out) + 1, Agent: name,
 			Command: agentspec.JoinArgs(a.Command), Args: agentspec.JoinArgs(a.Args), Env: envText(a.Env)})
 		for _, p := range a.Profiles {
-			out = append(out, agentDraft{ID: len(out) + 1, Agent: name, Profile: p.Name, IsProfile: true,
-				Args: agentspec.JoinArgs(p.Args), Env: envText(p.Env)})
+			d := agentDraft{ID: len(out) + 1, Agent: name, Profile: p.Name, IsProfile: true,
+				Args: agentspec.JoinArgs(p.Args), Env: envText(p.Env)}
+			if p.ContextServers != nil {
+				d.PickServers, d.Servers = true, strings.Join(*p.ContextServers, "\n")
+			}
+			out = append(out, d)
 		}
 	}
 	return out
@@ -101,7 +109,15 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 		if err != nil {
 			return nil, fmt.Errorf(T("%s, environment: %v"), where, err)
 		}
-		a.Profiles = append(a.Profiles, agentspec.Profile{Name: r.Profile, Args: args, Env: env})
+		p := agentspec.Profile{Name: r.Profile, Args: args, Env: env}
+		if r.PickServers {
+			ids := lines(r.Servers)
+			if ids == nil {
+				ids = []string{} // JSON [] means none; null would restore all servers.
+			}
+			p.ContextServers = &ids
+		}
+		a.Profiles = append(a.Profiles, p)
 		out[r.Agent] = a
 	}
 	return out, nil
@@ -148,6 +164,9 @@ func targetLabel(target string) string {
 
 // sessionTitle is the title a session's program set, or its label.
 func sessionTitle(s protocol.SessionInfo, title string) string {
+	if s.Name != "" {
+		return s.Name
+	}
 	if title != "" {
 		return title
 	}
@@ -357,7 +376,7 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 		ui.ButtonOf(icon("trash-2").Size(14), func() { m.removeAgentRow(id) }).Ghost().Pad(6).Radius(6).
 			Name(Tf("Remove %s", p.Agent+":"+p.Profile)),
 	).Gap(8)).Pad(10, 16)
-	return card(
+	return cardWithTail(profileServers(m, id, p.Agent+":"+p.Profile),
 		head,
 		row(T("Flags"), T("Added after the agent's own."),
 			ggui.Box(ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Args })).
@@ -366,4 +385,94 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Env })).
 				Multiline().Lines(3).Style(mono).Name(Tf("%s environment", p.Agent+":"+p.Profile))),
 	)
+}
+
+// mcpServerIDs are the MCP servers this node has: the installed
+// extensions' and those configured with a command, sorted.
+func (m *model) mcpServerIDs() []string {
+	var ids []string
+	for _, e := range m.Extensions.Get() {
+		ids = append(ids, e.ContextServerIDs()...)
+	}
+	for id, s := range m.MCPServers.Get() {
+		if s.Command != nil && !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	return slices.Compact(ids)
+}
+
+// profileServers chooses the MCP servers a profile's sessions get: every
+// one enabled, or those ticked. It shows only when there are servers.
+func profileServers(m *model, id int, name string) ggui.Widget {
+	draft := func() agentDraft {
+		for _, r := range ggui.Peek(m.AgentDraft) {
+			if r.ID == id {
+				return r
+			}
+		}
+		return agentDraft{}
+	}
+	update := func(f func(*agentDraft)) {
+		rows := slices.Clone(ggui.Peek(m.AgentDraft))
+		for i := range rows {
+			if rows[i].ID == id {
+				f(&rows[i])
+			}
+		}
+		m.AgentDraft.Set(rows)
+	}
+	return ggui.Reactive(func() ggui.Widget {
+		m.AgentDraft.Get()
+		d := draft()
+		ids := m.mcpServerIDs()
+		picked := lines(d.Servers)
+		for _, p := range picked { // one since removed stays, to untick
+			if !slices.Contains(ids, p) {
+				ids = append(ids, p)
+			}
+		}
+		if len(ids) == 0 {
+			return ggui.Box()
+		}
+		pick := ggui.Bind(func() bool { return draft().PickServers }, func(v bool) {
+			update(func(d *agentDraft) {
+				d.PickServers = v
+				if v && d.Servers == "" { // start from what it gets now
+					var on []string
+					servers := ggui.Peek(m.MCPServers)
+					for _, s := range m.mcpServerIDs() {
+						if servers[s].On() {
+							on = append(on, s)
+						}
+					}
+					d.Servers = strings.Join(on, "\n")
+				}
+			})
+		})
+		hint := T("Every MCP server enabled for this node.")
+		if d.PickServers {
+			hint = T("Only the servers ticked, even one turned off for the node.")
+		}
+		rows := []ggui.Widget{row(T("MCP servers"), hint, ui.Switch(pick, "").Name(Tf("%s chooses its MCP servers", name)))}
+		if d.PickServers {
+			boxes := make([]ggui.Widget, 0, len(ids))
+			for _, s := range ids {
+				on := ggui.Bind(func() bool { return slices.Contains(lines(draft().Servers), s) }, func(v bool) {
+					update(func(d *agentDraft) {
+						cur := slices.DeleteFunc(lines(d.Servers), func(x string) bool { return x == s })
+						if v {
+							cur = append(cur, s)
+							slices.Sort(cur)
+						}
+						d.Servers = strings.Join(cur, "\n")
+					})
+				})
+				boxes = append(boxes, ui.Checkbox(on, s))
+			}
+			rows = append(rows, ggui.Box(ggui.Column(boxes...).Gap(8).Stretch()).Pad(0, 16, 14, 16))
+		}
+		return ggui.Column(append([]ggui.Widget{hline()}, rows...)...).Stretch()
+	})
 }

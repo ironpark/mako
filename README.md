@@ -15,8 +15,10 @@ computers and drive them from one place.
     internal/daemon    session registry, peer table, gossip, relaying
     internal/client    front-end connection and attach loop
     internal/gui       the desktop window: sidebar, tabs, terminal view, editor
-    internal/syntax    tree-sitter in wasm under wazero: grammars and highlight queries
+    internal/syntax    tree-sitter in wasm under wasmtime: grammars and highlight queries
     internal/zed       Zed extensions: the store, their manifests and languages
+    internal/zedhost   Zed extensions' own wasm components, run under wasmtime's C API
+    internal/mcp       MCP servers for the agents: resolved from extensions, passed on the command line
     internal/config    node identity and configuration
 
 ## Design
@@ -57,6 +59,7 @@ instead of a blank window.
     sanbo ls                       # sessions across the mesh
     sanbo attach <session-id>
     sanbo kill <session-id>
+    sanbo rename <session-id> api  # name it, as its tab shows it
     sanbo-gui                      # the same, in a window
 
 ## Desktop app
@@ -119,12 +122,31 @@ Settings ▸ Extensions finds in Zed's store and installs (under
 its languages' `config.toml` for their file names, comment and tab size,
 and parses with the tree-sitter grammar it carries, compiled to wasm, run
 by the tree-sitter runtime itself compiled to wasm under
-[wazero](https://wazero.io) (`internal/syntax`), and colours by the
-language's `highlights.scm`. The languages Zed builds in rather than
+[wasmtime](https://wasmtime.dev) (via wasmtime-go, `internal/syntax`), and
+colours by the language's `highlights.scm`. The languages Zed builds in rather than
 taking from extensions -- Go, Rust, Python, JavaScript, TypeScript and the
 like -- come with sanbo, built from their grammars' own repositories
 (`internal/syntax/builtin`). An extension's language servers, which its
 own wasm starts, are not run yet.
+
+The store lists extensions with MCP servers (Zed's context servers) as
+well, and a node's claude and codex sessions get those of the extensions
+installed there. To learn how to start one, the daemon runs the
+extension's own wasm, the component Zed would run (`internal/zedhost`),
+and implements the parts of Zed's extension API a context server uses:
+its settings, downloading and unpacking a release, Node.js and npm,
+GitHub releases, the platform, processes the manifest asks for, and HTTP.
+The extension installs its server in its own folder under
+`extension-work/`, beside `extensions/`; the daemon asks again after six
+hours, or when the extension or its settings change, and asks first when
+it starts, so a session need not wait for an install. Settings ▸
+Extensions turns each server on or off and edits its settings (an API
+key, a database URL), showing what the extension says they need and
+filling in its defaults; they are kept in `config.json` under
+`context_servers`, as Zed's own settings name them. A server missing what
+it needs is left out, with the reason in the daemon's log. Claude Code
+gets the servers in an `--mcp-config` file under `run/`, which is
+removed when the session ends; Codex as `-c mcp_servers.…` overrides.
 
 Each pane's tab bar ends in a launcher for every agent the session's node
 can start, drawn with the agent's icon: a click starts it in the project of
@@ -132,7 +154,8 @@ the tab shown, or with no tab, in the default working directory here and in
 the home folder on another node; an agent with profiles opens a menu of them
 first. The new-session dialog takes a working directory too, but it can be
 left empty for the node's home. A session's icon, on its tab and in the sidebar, hops
-while its program reports progress (OSC 9;4), as claude does while it works.
+while its program reports progress (OSC 9;4), as claude does while it works,
+and its dot in the sidebar, grey at rest, glows a soft green the while.
 Sessions run with `TERM_PROGRAM=ghostty`, the terminal under them being
 Ghostty's core, so programs find what it supports, and a program that
 selects text itself, as claude does with the mouse, copies it to the
@@ -172,6 +195,18 @@ window.
 `sanbo-gui -render-dir <dir>` renders the window against the running daemon
 to PNGs without showing it, for reviewing layout changes.
 
+Each daemon saves its sessions' names, agents, profiles, launch arguments and
+working folders in its private `sessions.json`, next to `config.json`. On restart
+it restores the list without launching processes. A session starts again when
+its tab becomes visible (the active tab in each split pane), or when a CLI
+client attaches. Hidden tabs stay stopped until opened. Explicitly killing a
+session removes its saved entry; closing a tab only detaches it.
+
+Restoration starts the program again with its saved launch inputs and current
+profile/MCP settings. It does not restore terminal scrollback or automatically
+resume an AI conversation; conversation continuity depends on the agent's own
+resume options.
+
 ## Configuration
 
 `$XDG_CONFIG_HOME/sanbo/config.json` (override the directory with `SANBO_HOME`)
@@ -203,6 +238,36 @@ A built-in (`claude`, `codex`, `agy`, `shell`) without a `command` runs its
 default one, and an agent written as a bare command array, as older
 configurations have it, still reads. Nodes tell each other their agents' and
 profiles' names, never their flags or environment.
+
+In Settings → Agents, each profile can choose MCP servers from the installed
+extensions and configured commands. Turn on its MCP selection switch and tick
+the servers to use, then save. Leaving every box unchecked disables these
+servers for that profile. In JSON, a profile's `"context_servers": []` selects
+none, an array of server IDs selects those servers (even if disabled globally),
+and omitting the field inherits all enabled servers. Changes apply to new
+sessions.
+
+`context_servers` configures the MCP servers claude and codex sessions get.
+Those of the Zed extensions installed are on unless `enabled` is false;
+`settings` are the extension's own. A server with a `command` is started as
+written, extension or not:
+
+```json
+"context_servers": {
+  "mcp-server-github": {"settings": {"github_personal_access_token": "ghp_…"}},
+  "postgres-context-server": {"enabled": false},
+  "my-server": {"command": {"path": "~/bin/my-mcp", "args": ["--stdio"]}}
+}
+```
+
+## Building
+
+sanbo builds with cgo: wasmtime comes as the static library
+[wasmtime-go](https://github.com/bytecodealliance/wasmtime-go) carries for
+macOS, Linux and Windows on x86-64 and arm64. `internal/zedhost` calls its
+C API directly, with the headers of the same release in
+`internal/zedhost/include` (`include/sync.sh` copies them anew after
+wasmtime-go moves).
 
 ## Security
 

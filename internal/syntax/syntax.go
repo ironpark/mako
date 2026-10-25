@@ -1,8 +1,8 @@
 // Package syntax parses source text with tree-sitter grammars and runs
-// highlight queries over the result, in pure Go.
+// highlight queries over the result.
 //
 // The tree-sitter C runtime is compiled to WebAssembly (runtime/build.sh)
-// and run by wazero. Grammars are the precompiled wasm dynamic libraries
+// and run by wasmtime, through wasmtime-go (cgo). Grammars are the precompiled wasm dynamic libraries
 // that Zed extensions ship (grammars/<name>.wasm); LoadLanguage links one
 // into the runtime's memory and function table, the way a dynamic loader
 // would, so the C parser calls the grammar's lexer and external scanner
@@ -14,14 +14,13 @@ package syntax
 import (
 	"context"
 	_ "embed"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
-	"github.com/tetratelabs/wazero"
-	"github.com/tetratelabs/wazero/api"
-	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
+	"github.com/bytecodealliance/wasmtime-go/v50"
 )
 
 //go:embed runtime/tree-sitter.wasm
@@ -54,34 +53,13 @@ const (
 	matchLimit = 1 << 16
 )
 
-// compileCache shares compiled machine code between Runtimes in the
-// process, so only the first NewRuntime pays for compiling the runtime.
-var compileCache = wazero.NewCompilationCache()
+// engine is shared by every Runtime in the process; compiled modules
+// belong to an engine, so sharing it lets them share compiled code.
+var engine = wasmtime.NewEngine()
 
-// ErrClosed is returned after the Runtime is closed.
-var ErrClosed = errors.New("syntax: runtime closed")
-
-// Runtime is one wazero runtime holding the tree-sitter instance and every
-// language loaded into it. It is safe for concurrent use; calls into wasm
-// are serialized by a mutex.
-type Runtime struct {
-	mu     sync.Mutex
-	ctx    context.Context // for calls; wasm is never interrupted midway
-	wr     wazero.Runtime
-	mod    api.Module
-	mem    api.Memory
-	fns    map[string]api.Function
-	libc   map[string]uint32 // libc export -> function table index
-	table  uint32            // next free reserved table slot
-	tblEnd uint32
-	nlang  int
-	err    error // sticky: set once a trap leaves wasm state unknown
-	closed bool
-}
-
-// NewRuntime compiles and starts the tree-sitter runtime. ctx only
-// bounds the setup.
-func NewRuntime(ctx context.Context) (*Runtime, error) {
+// runtimeMod is the compiled tree-sitter runtime, with its table grown by
+// tableReserve. It is compiled once, by the first NewRuntime.
+var runtimeMod = sync.OnceValues(func() (*runtimeModuleInfo, error) {
 	secs, err := readSections(runtimeWasm)
 	if err != nil {
 		return nil, err
@@ -90,26 +68,99 @@ func NewRuntime(ctx context.Context) (*Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
-	bin := writeSections(secs)
-
-	wr := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().WithCompilationCache(compileCache))
-	r := &Runtime{ctx: context.Background(), wr: wr, table: base, tblEnd: base + tableReserve}
-	if _, err := wasi_snapshot_preview1.Instantiate(ctx, wr); err != nil {
-		wr.Close(ctx)
-		return nil, err
-	}
-	mod, err := wr.InstantiateWithConfig(ctx, bin, wazero.NewModuleConfig().
-		WithName(runtimeModule).WithStartFunctions("_initialize"))
+	mod, err := wasmtime.NewModule(engine, writeSections(secs))
 	if err != nil {
-		wr.Close(ctx)
-		return nil, fmt.Errorf("syntax: start runtime: %w", err)
+		return nil, fmt.Errorf("syntax: compile runtime: %w", err)
 	}
-	r.mod = mod
-	r.mem = mod.Memory()
-	r.fns = map[string]api.Function{}
-	if err := r.readLibc(); err != nil {
-		wr.Close(ctx)
+	info := &runtimeModuleInfo{mod: mod, tableBase: base, funcs: map[string]bool{}}
+	for _, e := range mod.Exports() {
+		if e.Type().FuncType() != nil {
+			info.funcs[e.Name()] = true
+		}
+	}
+	return info, nil
+})
+
+type runtimeModuleInfo struct {
+	mod       *wasmtime.Module
+	tableBase uint32          // first table slot reserved for grammars
+	funcs     map[string]bool // exported function names
+}
+
+// ErrClosed is returned after the Runtime is closed.
+var ErrClosed = errors.New("syntax: runtime closed")
+
+// Runtime is one wasmtime store holding the tree-sitter instance and every
+// language loaded into it. It is safe for concurrent use; calls into wasm
+// are serialized by a mutex.
+type Runtime struct {
+	mu      sync.Mutex
+	store   *wasmtime.Store
+	linker  *wasmtime.Linker
+	inst    *wasmtime.Instance
+	mem     *wasmtime.Memory
+	exports map[string]bool // functions the runtime exports
+	fns     map[string]*wasmtime.Func
+	libc    map[string]uint32 // libc export -> function table index
+	table   uint32            // next free reserved table slot
+	tblEnd  uint32
+	err     error // sticky: set once a trap leaves wasm state unknown
+	closed  bool
+}
+
+// NewRuntime compiles and starts the tree-sitter runtime. ctx only
+// bounds the setup.
+func NewRuntime(ctx context.Context) (*Runtime, error) {
+	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	info, err := runtimeMod()
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	store := wasmtime.NewStore(engine)
+	store.SetWasi(wasmtime.NewWasiConfig())
+	linker := wasmtime.NewLinker(engine)
+	linker.AllowShadowing(true) // each grammar redefines the glue and stubs
+	r := &Runtime{
+		store:   store,
+		linker:  linker,
+		exports: info.funcs,
+		fns:     map[string]*wasmtime.Func{},
+		table:   info.tableBase,
+		tblEnd:  info.tableBase + tableReserve,
+	}
+	fail := func(err error) (*Runtime, error) {
+		linker.Close()
+		store.Close()
+		return nil, err
+	}
+	if err := linker.DefineWasi(); err != nil {
+		return fail(err)
+	}
+	inst, err := linker.Instantiate(store, info.mod)
+	if err != nil {
+		return fail(fmt.Errorf("syntax: start runtime: %w", err))
+	}
+	if err := linker.DefineInstance(store, runtimeModule, inst); err != nil {
+		return fail(err)
+	}
+	r.inst = inst
+	ext := inst.GetExport(store, "memory")
+	if ext == nil || ext.Memory() == nil {
+		return fail(errors.New("syntax: runtime exports no memory"))
+	}
+	r.mem = ext.Memory()
+	if r.exports["_initialize"] {
+		if _, err := r.call("_initialize"); err != nil {
+			return fail(err)
+		}
+	}
+	if err := r.readLibc(); err != nil {
+		return fail(err)
 	}
 	return r, nil
 }
@@ -136,7 +187,7 @@ func (r *Runtime) readLibc() error {
 	}
 	r.libc = make(map[string]uint32, n)
 	for i, name := range names {
-		idx, ok := r.mem.ReadUint32Le(ptr + uint32(i)*4)
+		idx, ok := r.readUint32(ptr + uint32(i)*4)
 		if !ok {
 			return errWasm
 		}
@@ -153,7 +204,10 @@ func (r *Runtime) Close() error {
 		return nil
 	}
 	r.closed = true
-	return r.wr.Close(r.ctx)
+	r.fns = nil
+	r.linker.Close()
+	r.store.Close()
+	return nil
 }
 
 // usable reports why wasm can't be called right now. Callers hold r.mu.
@@ -166,35 +220,48 @@ func (r *Runtime) usable() error {
 
 // call runs an exported runtime function. A trap poisons the runtime:
 // the C heap and stack may be mid-update, so nothing is trusted after.
-func (r *Runtime) call(name string, args ...uint64) ([]uint64, error) {
+func (r *Runtime) call(name string, args ...uint64) (uint32, error) {
 	if err := r.usable(); err != nil {
-		return nil, err
+		return 0, err
 	}
 	f := r.fns[name]
 	if f == nil {
-		if f = r.mod.ExportedFunction(name); f == nil {
-			return nil, fmt.Errorf("syntax: runtime lacks %s", name)
+		if f = r.inst.GetFunc(r.store, name); f == nil {
+			return 0, fmt.Errorf("syntax: runtime lacks %s", name)
 		}
 		r.fns[name] = f
 	}
-	res, err := f.Call(r.ctx, args...)
+	res, err := callFunc(r.store, f, args)
 	if err != nil {
 		r.err = fmt.Errorf("syntax: runtime trapped in %s: %w", name, err)
-		return nil, r.err
+		return 0, r.err
 	}
 	return res, nil
 }
 
 // call1 is call for functions returning one i32.
 func (r *Runtime) call1(name string, args ...uint64) (uint32, error) {
-	res, err := r.call(name, args...)
+	return r.call(name, args...)
+}
+
+// callFunc calls f with i32 arguments and returns its i32 result, if any.
+func callFunc(store *wasmtime.Store, f *wasmtime.Func, args []uint64) (uint32, error) {
+	var in [10]any
+	vals := in[:0]
+	for _, a := range args {
+		vals = append(vals, int32(uint32(a)))
+	}
+	res, err := f.Call(store, vals...)
 	if err != nil {
 		return 0, err
 	}
-	if len(res) == 0 {
-		return 0, nil
+	switch v := res.(type) {
+	case int32:
+		return uint32(v), nil
+	case int64:
+		return uint32(v), nil
 	}
-	return uint32(res[0]), nil
+	return 0, nil
 }
 
 // malloc allocates n bytes in wasm memory.
@@ -222,7 +289,7 @@ func (r *Runtime) writeBytes(b []byte) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	if !r.mem.Write(p, b) {
+	if !r.write(p, b) {
 		r.free(p)
 		return 0, errWasm
 	}
@@ -231,7 +298,7 @@ func (r *Runtime) writeBytes(b []byte) (uint32, error) {
 
 // readString copies n bytes at p out of wasm memory.
 func (r *Runtime) readString(p, n uint32) string {
-	b, ok := r.mem.Read(p, n)
+	b, ok := r.read(p, n)
 	if !ok {
 		return ""
 	}
@@ -245,4 +312,34 @@ func (r *Runtime) readCString(p uint32) (string, error) {
 		return "", err
 	}
 	return r.readString(p, n), nil
+}
+
+// read returns the n bytes at p, or false if they are out of bounds. The
+// slice aliases wasm memory: it is valid only until the next call into
+// wasm, which may grow (and move) the memory.
+func (r *Runtime) read(p, n uint32) ([]byte, bool) {
+	data := r.mem.UnsafeData(r.store)
+	if uint64(p)+uint64(n) > uint64(len(data)) {
+		return nil, false
+	}
+	return data[p : p+n : p+n], true
+}
+
+// readUint32 reads a little-endian uint32 at p.
+func (r *Runtime) readUint32(p uint32) (uint32, bool) {
+	b, ok := r.read(p, 4)
+	if !ok {
+		return 0, false
+	}
+	return binary.LittleEndian.Uint32(b), true
+}
+
+// write copies b to p, or reports false if it would be out of bounds.
+func (r *Runtime) write(p uint32, b []byte) bool {
+	dst, ok := r.read(p, uint32(len(b)))
+	if !ok || uint64(len(b)) > 1<<32-1 {
+		return false
+	}
+	copy(dst, b)
+	return true
 }

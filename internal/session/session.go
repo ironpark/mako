@@ -53,6 +53,7 @@ type Session struct {
 	// attached to and read.
 	finalPlain, finalStyled protocol.Snapshot
 
+	name     string // guarded by mu
 	started  time.Time
 	done     chan struct{}
 	progress activity.Progress // guarded by mu
@@ -114,6 +115,7 @@ func (s *Session) Info() protocol.SessionInfo {
 		NodeID:    s.spec.NodeID,
 		Agent:     s.spec.Agent,
 		Profile:   s.spec.Profile,
+		Name:      s.name,
 		Project:   s.spec.Project,
 		Command:   s.spec.Command,
 		State:     s.state,
@@ -123,6 +125,13 @@ func (s *Session) Info() protocol.SessionInfo {
 		ExitCode:  s.exitCode,
 		Busy:      s.state != protocol.StateExited && s.progress.Busy(time.Now()),
 	}
+}
+
+// SetName names the session, "" for none.
+func (s *Session) SetName(name string) {
+	s.mu.Lock()
+	s.name = name
+	s.mu.Unlock()
 }
 
 // Write sends input to the agent.

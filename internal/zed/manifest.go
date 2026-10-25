@@ -29,10 +29,56 @@ type Manifest struct {
 	Languages       []string                  `toml:"languages"`
 	Grammars        map[string]Grammar        `toml:"grammars"`
 	LanguageServers map[string]LanguageServer `toml:"language_servers"`
-	Lib             struct {
+	// ContextServers are the MCP servers the extension's wasm starts, by
+	// ID; Zed's manifest says nothing more of them.
+	ContextServers map[string]struct{} `toml:"context_servers"`
+	// Capabilities are what the extension's wasm asks to be allowed.
+	Capabilities []Capability `toml:"capabilities"`
+	Lib          struct {
 		Kind    string `toml:"kind"`
 		Version string `toml:"version"` // of the extension API its wasm is built against
 	} `toml:"lib"`
+}
+
+// Capability is a thing an extension's wasm may do. Of Zed's kinds, sanbo
+// reads "process:exec": a command, or "*" for any, and its arguments,
+// each a value or "*" for any one, the last "**" for any rest.
+type Capability struct {
+	Kind    string   `toml:"kind"`
+	Command string   `toml:"command"`
+	Args    []string `toml:"args"`
+}
+
+// AllowsExec reports whether the manifest asks to run command with args.
+func (m Manifest) AllowsExec(command string, args []string) bool {
+	for _, c := range m.Capabilities {
+		if c.Kind == "process:exec" && (c.Command == "*" || c.Command == command) && argsMatch(c.Args, args) {
+			return true
+		}
+	}
+	return false
+}
+
+func argsMatch(patterns, args []string) bool {
+	for i, p := range patterns {
+		if p == "**" && i == len(patterns)-1 {
+			return true
+		}
+		if i >= len(args) || p != "*" && p != args[i] {
+			return false
+		}
+	}
+	return len(args) == len(patterns)
+}
+
+// ContextServerIDs lists the extension's context servers, sorted.
+func (m Manifest) ContextServerIDs() []string {
+	ids := make([]string, 0, len(m.ContextServers))
+	for id := range m.ContextServers {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids
 }
 
 // Grammar is where a grammar the extension carries was built from.

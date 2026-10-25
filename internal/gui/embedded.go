@@ -245,7 +245,7 @@ func (m *model) embeddedSessions() int {
 	self := ggui.Peek(m.Conn).Self.ID
 	n := 0
 	for _, s := range ggui.Peek(m.Sessions) {
-		if s.NodeID == self && s.State != protocol.StateExited {
+		if s.NodeID == self && (s.State == protocol.StateRunning || s.State == protocol.StateStarting) {
 			n++
 		}
 	}

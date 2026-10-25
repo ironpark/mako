@@ -98,3 +98,38 @@ func (g *busyGlyph) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	}
 	dst.Paint(g.icon, r)
 }
+
+// activityDot is a session's status in the sidebar: grey at rest, and a
+// soft green that breathes, its halo swelling and fading, while busy
+// reports its program at work. With motion reduced it is a steady green.
+type activityDot struct {
+	busy    func() bool
+	reduced bool
+}
+
+// glowPeriod is one breath of the dot; dotSize its diameter.
+const (
+	glowPeriod = 1600 * time.Millisecond
+	dotSize    = 7
+)
+
+func (d *activityDot) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	d.reduced = env.ReducedMotion()
+	return c.Constrain(ggui.Sz(dotSize, dotSize))
+}
+
+func (d *activityDot) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	center := ggui.Pt(r.Origin.X+r.Size.W/2, r.Origin.Y+r.Size.H/2)
+	if !d.busy() {
+		dst.FillCircle(center, dotSize/2, tokDotExited)
+		return
+	}
+	glow := 1.0
+	if !d.reduced {
+		// Reading Now asks for the next frame, which keeps it breathing.
+		phase := float64(ggui.Now().UnixNano()%int64(glowPeriod)) / float64(glowPeriod)
+		glow = (1 - math.Cos(phase*2*math.Pi)) / 2
+	}
+	dst.FillCircle(center, dotSize/2+1.5+2*glow, tokDotRunning.Alpha(0.12+0.18*glow))
+	dst.FillCircle(center, dotSize/2, tokDotRunning.Alpha(0.7+0.3*glow))
+}

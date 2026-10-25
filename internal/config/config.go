@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/ironpark/sanbo/internal/agentspec"
+	"github.com/ironpark/sanbo/internal/mcp"
 )
 
 // Version is the build version, overridable at link time.
@@ -41,6 +42,10 @@ type Config struct {
 	// default flags and environment, and its profiles. A built-in left out
 	// launches with its default command.
 	Agents map[string]agentspec.Agent `json:"agents,omitempty"`
+	// ContextServers configure the MCP servers this node's claude and
+	// codex sessions get, by server ID: those of the Zed extensions
+	// installed, which are on unless turned off here, and the user's own.
+	ContextServers map[string]mcp.Server `json:"context_servers,omitempty"`
 }
 
 // Discovery selects which peer discovery backends run.
@@ -73,6 +78,23 @@ func Path() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, "config.json"), nil
+}
+
+// ExtensionsDir is where the Zed extensions are installed, and
+// ExtensionsWorkDir where each keeps what it downloads and installs.
+func ExtensionsDir() (string, error)     { return subdir("extensions") }
+func ExtensionsWorkDir() (string, error) { return subdir("extension-work") }
+
+// RunDir holds files that live as long as a session, as an agent's MCP
+// configuration.
+func RunDir() (string, error) { return subdir("run") }
+
+func subdir(name string) (string, error) {
+	dir, err := Dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, name), nil
 }
 
 // Default builds a configuration for a fresh install.

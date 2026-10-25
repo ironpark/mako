@@ -155,6 +155,13 @@ func (c *Client) GitDiff(ctx context.Context, psk string, req protocol.GitDiff) 
 	return out, err
 }
 
+// Rename names a session, "" for none, and returns it as it is now.
+func (c *Client) Rename(ctx context.Context, psk string, req protocol.RenameSession) (protocol.SessionInfo, error) {
+	var out protocol.SessionInfo
+	err := c.request(ctx, psk, protocol.TypeRenameSess, req, &out)
+	return out, err
+}
+
 // Kill terminates a session.
 func (c *Client) Kill(ctx context.Context, psk string, req protocol.CloseSession) error {
 	s, err := c.stream(ctx, psk)

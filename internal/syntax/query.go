@@ -102,8 +102,8 @@ func (l *Language) NewQuery(source string) (*Query, error) {
 		return nil, err
 	}
 	if ptr == 0 {
-		off, _ := r.mem.ReadUint32Le(out)
-		kind, _ := r.mem.ReadUint32Le(out + 4)
+		off, _ := r.readUint32(out)
+		kind, _ := r.readUint32(out + 4)
 		k := "unknown"
 		if int(kind) < len(queryErrorKinds) {
 			k = queryErrorKinds[kind]
@@ -135,7 +135,7 @@ func (q *Query) load(source string) error {
 		if err != nil {
 			return "", err
 		}
-		n, _ := r.mem.ReadUint32Le(lenp)
+		n, _ := r.readUint32(lenp)
 		return r.readString(p, n), nil
 	}
 	q.names = make([]string, n)
@@ -154,8 +154,8 @@ func (q *Query) load(source string) error {
 		if err != nil {
 			return err
 		}
-		steps, _ := r.mem.ReadUint32Le(lenp)
-		raw, ok := r.mem.Read(p, steps*8)
+		steps, _ := r.readUint32(lenp)
+		raw, ok := r.read(p, steps*8)
 		if !ok {
 			return errWasm
 		}
@@ -363,8 +363,8 @@ func (q *Query) Matches(t *Tree, src []byte, start, end int) ([]Match, error) {
 	if err != nil {
 		return nil, err
 	}
-	n, _ := r.mem.ReadUint32Le(lenp)
-	raw, ok := r.mem.Read(p, n*4)
+	n, _ := r.readUint32(lenp)
+	raw, ok := r.read(p, n*4)
 	if !ok {
 		return nil, errWasm
 	}

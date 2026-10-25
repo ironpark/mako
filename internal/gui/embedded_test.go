@@ -105,3 +105,45 @@ func TestAutoPrefersARunningDaemon(t *testing.T) {
 		t.Fatalf("connected to %q", got)
 	}
 }
+
+// Restart restores both tabs, but only the visible one starts its process.
+func TestRestartResumesOnlyVisibleSession(t *testing.T) {
+	t.Setenv("SANBO_HOME", t.TempDir())
+	cfg := config.Default()
+	cfg.Listen = "127.0.0.1:0"
+	cfg.Discovery = config.Discovery{}
+	if err := savePrefs(prefs{DaemonMode: "embedded"}.normalized()); err != nil {
+		t.Fatal(err)
+	}
+	m := newModel(cfg, "")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))
+	p.Setup(func() { setup(m); m.start(ctx, p.Post) })
+	defer p.Close()
+	defer m.shutdown()
+	probeUntil(t, p, "connection", func() bool { return ggui.Peek(m.Conn).OK })
+	m.launch("shell", "", t.TempDir())
+	probeUntil(t, p, "first session", func() bool { return len(ggui.Peek(m.Sessions)) == 1 })
+	first := ggui.Peek(m.Sessions)[0].ID
+	m.launch("shell", "", t.TempDir())
+	probeUntil(t, p, "second session", func() bool { return len(ggui.Peek(m.Sessions)) == 2 })
+	second := ggui.Peek(m.Selected)
+	if second == first {
+		t.Fatal("second tab was not selected")
+	}
+	m.restartEmbedded()
+	probeUntil(t, p, "restored visible session", func() bool {
+		a, okA := m.session(first)
+		b, okB := m.session(second)
+		return ggui.Peek(m.Conn).OK && okA && okB && a.State == protocol.StateStopped && b.State == protocol.StateRunning
+	})
+	if m.conns[first] != nil {
+		t.Fatal("hidden tab reattached on restart")
+	}
+	m.selectSession(first)
+	probeUntil(t, p, "hidden session activated", func() bool {
+		s, ok := m.session(first)
+		return ok && s.State == protocol.StateRunning
+	})
+}

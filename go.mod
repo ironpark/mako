@@ -4,6 +4,7 @@ go 1.27.1
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/bytecodealliance/wasmtime-go/v50 v50.0.0
 	github.com/creack/pty v1.1.24
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/grandcat/zeroconf v1.0.0
@@ -12,7 +13,7 @@ require (
 	github.com/ironpark/gostty v0.0.0-20260914092046-29dc0d68e78f
 	github.com/quic-go/quic-go v0.62.0
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
-	github.com/tetratelabs/wazero v1.12.0
+	github.com/yuin/goldmark v1.8.6
 	golang.org/x/image v0.46.0
 	golang.org/x/term v0.46.0
 	golang.org/x/text v0.42.0
@@ -42,7 +43,6 @@ require (
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
-	github.com/yuin/goldmark v1.8.6 // indirect
 	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect

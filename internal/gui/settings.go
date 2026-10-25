@@ -149,13 +149,20 @@ func section(title string, children ...ggui.Widget) ggui.Widget {
 }
 
 // card groups rows on a raised surface, a hairline between each.
-func card(rows ...ggui.Widget) ggui.Widget {
-	children := make([]ggui.Widget, 0, 2*len(rows))
+func card(rows ...ggui.Widget) ggui.Widget { return cardWithTail(nil, rows...) }
+
+// cardWithTail is card with tail after the rows and no hairline of its
+// own, for rows that come and go and draw their own.
+func cardWithTail(tail ggui.Widget, rows ...ggui.Widget) ggui.Widget {
+	children := make([]ggui.Widget, 0, 2*len(rows)+1)
 	for i, r := range rows {
 		if i > 0 {
 			children = append(children, hline())
 		}
 		children = append(children, r)
+	}
+	if tail != nil {
+		children = append(children, tail)
 	}
 	return ggui.Box(ggui.Column(children...).Stretch()).Fill(tokSurface1).Border(1, tokBorder).Radius(10)
 }

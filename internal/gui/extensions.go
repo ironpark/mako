@@ -15,7 +15,7 @@ import (
 )
 
 // Settings ▸ Extensions installs Zed extensions from Zed's store, for the
-// languages they give the editor.
+// languages they give the editor and the MCP servers they give agents.
 
 // extSearch is the store's answer to a search.
 type extSearch struct {
@@ -91,7 +91,7 @@ func extensionSettings(m *model) ggui.Widget {
 }
 
 func extensionsAbout() string {
-	return T("Languages for the editor, from Zed's extensions: their grammars and highlighting. Go, Rust, Python, TypeScript and the other languages Zed builds in come with sanbo.")
+	return T("Languages for the editor and MCP servers for the agents, from Zed's extensions. Go, Rust, Python, TypeScript and the other languages Zed builds in come with sanbo.")
 }
 
 // extensionSections are the extensions installed and the store's, for
@@ -112,6 +112,9 @@ func extensionSections(m *model) []ggui.Widget {
 			hint := e.Version
 			if langs := m.extLanguages[id]; len(langs) > 0 {
 				hint += " · " + Tf("Languages: %s", strings.Join(langs, ", "))
+			}
+			if servers := e.ContextServerIDs(); len(servers) > 0 {
+				hint += " · " + Tf("MCP servers: %s", strings.Join(servers, ", "))
 			}
 			rows = append(rows, row(e.Name, hint,
 				ui.Button(T("Remove"), func() { m.uninstallExtension(id) }).Outline()))
@@ -171,6 +174,7 @@ func extensionSections(m *model) []ggui.Widget {
 	})
 	return []ggui.Widget{
 		section(T("Installed"), installed),
+		mcpSection(m),
 		section(T("Zed extension store"),
 			ggui.Row(ggui.Expanded(search), ui.Button(T("Search"), func() { m.searchExtensions(ggui.Peek(query)) }).Outline()).Gap(8),
 			errNote,

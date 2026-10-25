@@ -49,6 +49,7 @@ func (m *model) commands() []ui.CommandEntry {
 	}
 	cmds = append(cmds,
 		item("Close tab", func() { m.askKill(selected) }).Shortcut("cmd+w").Disabled(selected == ""),
+		item("Rename session…", func() { m.askRename(selected) }, "name", "title").Disabled(selected == "" || onDoc),
 		item("Extensions…", func() { m.ExtensionsOpen.Set(true) }, "zed", "language", "grammar", "highlight"),
 		item("Settings", func() { m.openSettings("") }, "preferences").Shortcut("cmd+,"),
 		item("Toggle sidebar", func() { ggui.Toggle(m.SidebarOpen) }).Shortcut("cmd+b"),

@@ -14,6 +14,7 @@ import (
 	"github.com/quic-go/quic-go"
 
 	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/sanbo/internal/mcp"
 	"github.com/ironpark/sanbo/internal/protocol"
 	"github.com/ironpark/sanbo/internal/transport"
 )
@@ -26,6 +27,10 @@ type Daemon struct {
 	cfg *config.Config
 	log *slog.Logger
 
+	sessionMu   sync.Mutex // protects saved launches and activation
+	saved       map[string]savedSession
+	sessionPath string
+
 	sessions *registry
 	peers    *peerTable
 
@@ -37,6 +42,7 @@ type Daemon struct {
 	outbound map[string]*quic.Conn // node ID -> peer connection
 
 	agentFile agentFile
+	mcp       *mcp.Resolver // nil without a configuration directory
 }
 
 // New builds a daemon from configuration.
@@ -51,6 +57,7 @@ func New(cfg *config.Config, log *slog.Logger) *Daemon {
 		peers:    newPeerTable(),
 		outbound: map[string]*quic.Conn{},
 		ready:    make(chan struct{}),
+		mcp:      newResolver(log),
 	}
 }
 
@@ -95,6 +102,9 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return err
 	}
 	defer d.ln.Close()
+	if err := d.loadSessions(dir); err != nil {
+		return err
+	}
 	defer d.sessions.closeAll()
 
 	d.port = portOf(d.ln.Addr())
@@ -103,6 +113,8 @@ func (d *Daemon) Run(ctx context.Context) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	go d.warmContextServers(ctx)
 
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -217,6 +229,9 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeCloseSess:
 		return d.handleCloseSession(ctx, stream, env)
+
+	case protocol.TypeRenameSess:
+		return d.handleRenameSession(ctx, stream, env)
 
 	case protocol.TypeAttach:
 		return d.handleAttach(ctx, stream, env)

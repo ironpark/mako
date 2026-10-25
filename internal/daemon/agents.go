@@ -7,18 +7,22 @@ import (
 	"time"
 
 	"github.com/ironpark/sanbo/internal/agentspec"
+	"github.com/ironpark/sanbo/internal/mcp"
 	"github.com/ironpark/sanbo/internal/protocol"
 )
 
-// agentFile follows the agents of the config file the daemon was started
-// from, so an agent, a flag or a profile edited there applies to the next
-// session without a restart. Everything else in the file is read at start.
+// agentFile follows the agents and MCP servers of the config file the
+// daemon was started from, so an agent, a flag, a profile or a server
+// edited there applies to the next session without a restart. Everything
+// else in the file is read at start.
 type agentFile struct {
-	mu     sync.Mutex
-	path   string
-	mod    time.Time
-	size   int64
-	agents map[string]agentspec.Agent
+	mu      sync.Mutex
+	path    string
+	mod     time.Time
+	size    int64
+	read    bool
+	agents  map[string]agentspec.Agent
+	servers map[string]mcp.Server
 }
 
 // FollowAgents makes the daemon read its agents from the config file at
@@ -34,34 +38,46 @@ func (d *Daemon) FollowAgents(path string) {
 
 // agents are what this daemon can launch now.
 func (d *Daemon) agents() map[string]agentspec.Agent {
+	agents, _ := d.followed()
+	return agents
+}
+
+// contextServers are the MCP servers configured now.
+func (d *Daemon) contextServers() map[string]mcp.Server {
+	_, servers := d.followed()
+	return servers
+}
+
+func (d *Daemon) followed() (map[string]agentspec.Agent, map[string]mcp.Server) {
 	f := &d.agentFile
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.agents == nil {
-		f.agents = d.cfg.Agents
+	if !f.read {
+		f.agents, f.servers, f.read = d.cfg.Agents, d.cfg.ContextServers, true
 	}
 	if f.path == "" {
-		return f.agents
+		return f.agents, f.servers
 	}
 	fi, err := os.Stat(f.path)
 	if err != nil || (fi.ModTime().Equal(f.mod) && fi.Size() == f.size) {
-		return f.agents
+		return f.agents, f.servers
 	}
 	f.mod, f.size = fi.ModTime(), fi.Size()
 	body, err := os.ReadFile(f.path)
 	if err != nil {
-		return f.agents
+		return f.agents, f.servers
 	}
 	var file struct {
-		Agents map[string]agentspec.Agent `json:"agents"`
+		Agents         map[string]agentspec.Agent `json:"agents"`
+		ContextServers map[string]mcp.Server      `json:"context_servers"`
 	}
 	if err := json.Unmarshal(body, &file); err != nil {
 		d.log.Warn("config changed but cannot be read; keeping the agents", "path", f.path, "err", err)
-		return f.agents
+		return f.agents, f.servers
 	}
-	f.agents = file.Agents
+	f.agents, f.servers = file.Agents, file.ContextServers
 	d.log.Info("agents reloaded", "path", f.path)
-	return f.agents
+	return f.agents, f.servers
 }
 
 // agentInfo lists the agents for this node's record: names only, since

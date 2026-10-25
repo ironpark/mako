@@ -51,6 +51,7 @@ func window(m *model) ggui.Widget {
 		ggui.If(inSettings, func() ggui.Widget { return settingsPage(m) }).
 			Else(func() ggui.Widget { return main }),
 		newSessionDialog(m),
+		renameDialog(m),
 		imageViewer(m),
 		paletteDialog(m),
 		extensionsDialog(m),
@@ -79,6 +80,8 @@ func iconButton(name, label string, onTap func()) ggui.Widget {
 // stateLabel names a session's state as the window shows it.
 func stateLabel(st protocol.SessionState) string {
 	switch st {
+	case protocol.StateStopped:
+		return T("saved")
 	case protocol.StateStarting:
 		return T("starting")
 	case protocol.StateRunning:
@@ -87,14 +90,6 @@ func stateLabel(st protocol.SessionState) string {
 		return T("exited")
 	}
 	return string(st)
-}
-
-// stateDot is a session's status: green while it runs, grey once exited.
-func stateDot(state protocol.SessionState) ggui.Widget {
-	if state == protocol.StateExited {
-		return dot(tokDotExited)
-	}
-	return dot(tokDotRunning)
 }
 
 // linkDot is the daemon link's status: green when reachable, red when not.
@@ -248,11 +243,11 @@ func sessionRow(m *model, s protocol.SessionInfo, selected bool, title, sub stri
 			ggui.Text(label).Size(13).NoWrap().Ellipsis(),
 			ggui.Text(sub).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis(),
 		).Gap(2).Stretch()),
-		stateDot(s.State),
+		&activityDot{busy: func() bool { return s.State != protocol.StateExited && m.busy(id) }},
 	).Gap(10)
 	btn := ui.ButtonOf(content, func() { m.selectSession(id) }).Ghost().Pad(7, 10).Radius(7).Name(label)
 	// A row drags into a pane, or to a pane's edge, as a tab does.
-	var w ggui.Widget = btn
+	var w ggui.Widget = sessionMenu(m, btn, id, label, false)
 	if selected {
 		w = ggui.Box(btn).Fill(tokSidebarSel).Radius(7)
 	}
@@ -310,6 +305,7 @@ func workspaceHeader(m *model) ggui.Widget {
 			ggui.Text(projectName(s.Project)).Size(14).Weight(ggui.WeightMedium).NoWrap(),
 			muted(ggui.Text(where).Size(13).NoWrap().Ellipsis()),
 			borderless(ui.MenuOf(icon("ellipsis"),
+				ui.MenuItem(T("Rename…"), func() { m.askRename(id) }),
 				ui.MenuItem(T("Detach tab"), func() { m.closeTab(id) }),
 				ui.MenuItem(T("Show details"), func() { m.DetailsOpen.Set(true) }),
 				ui.MenuDivider(),
@@ -350,7 +346,7 @@ func tab(m *model, s protocol.SessionInfo, selected, focused bool, title string)
 		ui.ButtonOf(icon("x").Size(13), func() { m.askKill(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", label)),
 	).Gap(8)).Height(tabBarHeight)
 	btn := ui.ButtonOf(content, func() { m.selectSession(id) }).Ghost().Pad(0, 8, 0, 12).Radius(0).Name(label)
-	return tabCell(btn, selected, focused)
+	return tabCell(sessionMenu(m, btn, id, label, true), selected, focused)
 }
 
 // tabCell is a tab's flat cell around its button: raised and underlined

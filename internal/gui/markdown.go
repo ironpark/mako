@@ -406,7 +406,12 @@ func (r *mdRenderer) code(n ast.Node, lang string) ggui.Widget {
 	tab := defaultTab
 	var hl *docSyntax
 	ready := ggui.State(0) // counts the highlights the worker has found
-	if lang = strings.Fields(lang + " ")[0]; lang != "" {
+	if f := strings.Fields(lang); len(f) > 0 {
+		lang = f[0] // the info string's first word
+	} else {
+		lang = ""
+	}
+	if lang != "" {
 		if l, ok := m.hl.languageNamed(lang); ok {
 			hl = m.syntaxFor(l)
 			hl.wake = func() { m.post(func() { ready.Set(ggui.Peek(ready) + 1) }) }

@@ -11,6 +11,8 @@ github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be h1:9AeTilPcZAjCFI
 github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be/go.mod h1:ySMOLuWl6zY27l47sB3qLNK6tF2fkHG55UZxx8oIVo4=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
+github.com/bytecodealliance/wasmtime-go/v50 v50.0.0 h1:oC7otiLbHEIDiL+7otXozGw+hnwD4WihronoKYU3drM=
+github.com/bytecodealliance/wasmtime-go/v50 v50.0.0/go.mod h1:xWTHNOKHkN8YVWrTRZpmb1eUOkWPMEXTaVtm3AOEWWE=
 github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=
 github.com/cenkalti/backoff v2.2.1+incompatible/go.mod h1:90ReRw6GdpyfrHakVjL/QHaoyV4aDUVVkXQJJJ3NXXM=
 github.com/cloudflare/circl v1.6.3 h1:9GPOhQGF9MCYUeXyMYlqTR6a5gTrgR/fBLXvUgtVcg8=
@@ -59,10 +61,6 @@ github.com/ironpark/ggip v0.0.0-20261025124749-3c7a3f9bb4d9 h1:GDDJtfFGmLQyQGMUs
 github.com/ironpark/ggip v0.0.0-20261025124749-3c7a3f9bb4d9/go.mod h1:lyP3BN581yb2c3Cb2hliQ0JJ/ky67KuB816JEc5jj9M=
 github.com/ironpark/ggip/ggfxinput v0.0.0-20261025124834-79651b13b701 h1:THRfMg2Ao6r9x+3Ai/ZbJgSrZ3fLX1WKrmILLkqt2Kg=
 github.com/ironpark/ggip/ggfxinput v0.0.0-20261025124834-79651b13b701/go.mod h1:iG9aL/h3qzRYyvE0X14Fmok82A+I1AEXlT8S3UPrOQg=
-github.com/ironpark/ggui v0.0.0-20261025130005-ac34654f3767 h1:b7b+nZcjh7GnWbATLX5grxZu7G3DATMzcaDmTPnqDH4=
-github.com/ironpark/ggui v0.0.0-20261025130005-ac34654f3767/go.mod h1:MufB5vOXkkmxWtVkwwhhuuiLcjz0pOrjZBUvXuP+ghE=
-github.com/ironpark/ggui v0.0.0-20261025131247-884daaf50882 h1:OfTKmj+6fjv1KDaRQrc6WbzyULUhsbC2luRRWyaqL9Q=
-github.com/ironpark/ggui v0.0.0-20261025131247-884daaf50882/go.mod h1:MufB5vOXkkmxWtVkwwhhuuiLcjz0pOrjZBUvXuP+ghE=
 github.com/ironpark/ggui v0.0.0-20261025145903-7b68fc4fb687 h1:5DGMgL9qop6aJGwGbEjr+saK0b1uchy9sVQmDZib2CM=
 github.com/ironpark/ggui v0.0.0-20261025145903-7b68fc4fb687/go.mod h1:MufB5vOXkkmxWtVkwwhhuuiLcjz0pOrjZBUvXuP+ghE=
 github.com/ironpark/gostty v0.0.0-20260914092046-29dc0d68e78f h1:vom1N/5ueuBuESuyq25wZE6Nn0zPoXyKtNmT30q3WQc=
@@ -107,8 +105,6 @@ github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXf
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
-github.com/tetratelabs/wazero v1.12.0 h1:DuWcpNu/FzgEXgGBDp8J1Spc+CWOvvtvVyjKlaZopYU=
-github.com/tetratelabs/wazero v1.12.0/go.mod h1:LvKtzl2RqO4gyF27BiXU+nKAjcV8f38U+kP/q2vgxh0=
 github.com/xanzy/ssh-agent v0.3.3 h1:+/15pJfg/RsTxqYcX6fHqOXZwwMP+2VyYWJeWM2qQFM=
 github.com/xanzy/ssh-agent v0.3.3/go.mod h1:6dzNDKs0J9rVPHPhaGCukekBHKqfl+L3KghI1Bc68Uw=
 github.com/yuin/goldmark v1.8.6 h1:d0VcaP1sx9GkFVkoW+KtggpGi2KZ965i14b0+bDQST4=

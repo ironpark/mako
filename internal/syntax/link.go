@@ -1,11 +1,24 @@
 package syntax
 
 import (
-	"context"
+	"crypto/sha256"
 	"fmt"
-	"github.com/tetratelabs/wazero"
-	"github.com/tetratelabs/wazero/api"
+	"sync"
+
+	"github.com/bytecodealliance/wasmtime-go/v50"
 )
+
+// Grammars import their glue globals and stub functions from these
+// linker modules. Each LoadLanguage redefines them before instantiating.
+const (
+	glueModule = "sanbo_glue"
+	stubModule = "sanbo_stub"
+)
+
+// grammarCache holds compiled grammar modules by the SHA-256 of the
+// grammar wasm. The import rewrite only depends on the grammar and the
+// (embedded) runtime, so a compiled module is reusable by every Runtime.
+var grammarCache sync.Map // [sha256.Size]byte -> *wasmtime.Module
 
 // Language is a grammar linked into a Runtime.
 type Language struct {
@@ -45,7 +58,6 @@ func (r *Runtime) LoadLanguage(name string, grammarWasm []byte) (*Language, erro
 }
 
 func (r *Runtime) link(name string, bin []byte) (*Language, error) {
-	ctx := r.ctx
 	secs, err := readSections(bin)
 	if err != nil {
 		return nil, err
@@ -88,10 +100,7 @@ func (r *Runtime) link(name string, bin []byte) (*Language, error) {
 	}
 	sp := (stack + grammarStack) &^ 15
 
-	r.nlang++
-	id := fmt.Sprintf("%d_%s", r.nlang, name)
-	glueName := "sanbo_glue_" + id
-	stubName := "sanbo_stub_" + id
+	glueName, stubName := glueModule, stubModule
 
 	globals := []globalDef{
 		{name: "__stack_pointer", value: sp, mutable: true},
@@ -115,7 +124,7 @@ func (r *Runtime) link(name string, bin []byte) (*Language, error) {
 		case im.module == "env" && im.kind == kindGlobal && have[im.name]:
 			im.module = glueName
 		case im.module == "env" && im.kind == kindFunc:
-			if r.mod.ExportedFunction(im.name) != nil {
+			if r.exports[im.name] {
 				im.module = runtimeModule
 			} else {
 				im.module = stubName
@@ -138,27 +147,35 @@ func (r *Runtime) link(name string, bin []byte) (*Language, error) {
 	}
 	replaceSection(secs, secImport, encodeImports(ims))
 
-	if _, err := r.wr.InstantiateWithConfig(ctx, globalModule(globals),
-		moduleConfig(glueName)); err != nil {
-		return nil, fmt.Errorf("glue module: %w", err)
-	}
-	if len(stubs) > 0 {
-		if err := r.stubModule(ctx, stubName, stubs, types); err != nil {
-			return nil, err
+	for _, g := range globals {
+		v := wasmtime.ValI32(int32(g.value))
+		ty := wasmtime.NewGlobalType(wasmtime.NewValType(wasmtime.KindI32), g.mutable)
+		glob, err := wasmtime.NewGlobal(r.store, ty, v)
+		if err != nil {
+			return nil, fmt.Errorf("glue global %s: %w", g.name, err)
+		}
+		if err := r.linker.Define(r.store, glueName, g.name, glob); err != nil {
+			return nil, fmt.Errorf("glue global %s: %w", g.name, err)
 		}
 	}
-	mod, err := r.wr.InstantiateWithConfig(ctx, writeSections(secs),
-		moduleConfig("sanbo_lang_"+id))
+	if err := r.defineStubs(stubName, stubs, types); err != nil {
+		return nil, err
+	}
+	mod, err := grammarModule(bin, secs)
+	if err != nil {
+		return nil, err
+	}
+	inst, err := r.linker.Instantiate(r.store, mod)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, init := range []string{"__wasm_apply_data_relocs", "_initialize", "__wasm_call_ctors"} {
-		f := mod.ExportedFunction(init)
+		f := inst.GetFunc(r.store, init)
 		if f == nil {
 			continue
 		}
-		if _, err := f.Call(ctx); err != nil {
+		if _, err := callFunc(r.store, f, nil); err != nil {
 			r.err = fmt.Errorf("syntax: %s trapped in %s: %w", name, init, err)
 			return nil, r.err
 		}
@@ -166,16 +183,15 @@ func (r *Runtime) link(name string, bin []byte) (*Language, error) {
 			break // it runs the constructors itself
 		}
 	}
-	langFn := mod.ExportedFunction("tree_sitter_" + name)
+	langFn := inst.GetFunc(r.store, "tree_sitter_"+name)
 	if langFn == nil {
 		return nil, fmt.Errorf("grammar does not export tree_sitter_%s", name)
 	}
-	res, err := langFn.Call(ctx)
+	ptr, err := callFunc(r.store, langFn, nil)
 	if err != nil {
 		r.err = fmt.Errorf("syntax: tree_sitter_%s trapped: %w", name, err)
 		return nil, r.err
 	}
-	ptr := uint32(res[0])
 
 	abi, err := r.call1("shim_language_abi", uint64(ptr))
 	if err != nil {
@@ -194,36 +210,69 @@ func (r *Runtime) link(name string, bin []byte) (*Language, error) {
 	return &Language{rt: r, name: name, ptr: ptr, parser: parser, abi: abi}, nil
 }
 
-// stubModule satisfies function imports the runtime does not provide with
-// host functions that fail when called, so grammars whose scanners
+// grammarModule compiles the rewritten grammar, or returns the copy
+// compiled earlier from the same grammar wasm.
+func grammarModule(orig []byte, secs []section) (*wasmtime.Module, error) {
+	key := sha256.Sum256(orig)
+	if m, ok := grammarCache.Load(key); ok {
+		return m.(*wasmtime.Module), nil
+	}
+	m, err := wasmtime.NewModule(engine, writeSections(secs))
+	if err != nil {
+		return nil, err
+	}
+	actual, _ := grammarCache.LoadOrStore(key, m)
+	return actual.(*wasmtime.Module), nil
+}
+
+// defineStubs satisfies function imports the runtime does not provide
+// with host functions that trap when called, so grammars whose scanners
 // reference rare libc functions still load.
-func (r *Runtime) stubModule(ctx context.Context, name string, stubs []wasmImport, types []funcType) error {
-	b := r.wr.NewHostModuleBuilder(name)
+func (r *Runtime) defineStubs(module string, stubs []wasmImport, types []funcType) error {
 	for _, s := range stubs {
 		if int(s.typeIdx) >= len(types) {
 			return errWasm
 		}
 		t := types[s.typeIdx]
-		fn := s.name
-		b.NewFunctionBuilder().
-			WithGoModuleFunction(api.GoModuleFunc(func(context.Context, api.Module, []uint64) {
-				panic(fmt.Sprintf("grammar called unsupported function %s", fn))
-			}), valueTypes(t.params), valueTypes(t.results)).
-			Export(fn)
+		params, err := valueTypes(t.params)
+		if err != nil {
+			return err
+		}
+		results, err := valueTypes(t.results)
+		if err != nil {
+			return err
+		}
+		msg := fmt.Sprintf("grammar called unsupported function %s", s.name)
+		fn := wasmtime.NewFunc(r.store, wasmtime.NewFuncType(params, results),
+			func(*wasmtime.Caller, []wasmtime.Val) ([]wasmtime.Val, *wasmtime.Trap) {
+				return nil, wasmtime.NewTrap(msg)
+			})
+		if err := r.linker.Define(r.store, module, s.name, fn); err != nil {
+			return err
+		}
 	}
-	_, err := b.Instantiate(ctx)
-	return err
+	return nil
 }
 
-func valueTypes(b []byte) []api.ValueType {
-	out := make([]api.ValueType, len(b))
-	copy(out, b)
-	return out
-}
-
-// moduleConfig names a module and stops wazero from running _start.
-func moduleConfig(name string) wazero.ModuleConfig {
-	return wazero.NewModuleConfig().WithName(name).WithStartFunctions()
+func valueTypes(b []byte) ([]*wasmtime.ValType, error) {
+	out := make([]*wasmtime.ValType, len(b))
+	for i, c := range b {
+		var k wasmtime.ValKind
+		switch c {
+		case valI32:
+			k = wasmtime.KindI32
+		case valI64:
+			k = wasmtime.KindI64
+		case valF32:
+			k = wasmtime.KindF32
+		case valF64:
+			k = wasmtime.KindF64
+		default:
+			return nil, fmt.Errorf("unsupported value type 0x%x in stub signature", c)
+		}
+		out[i] = wasmtime.NewValType(k)
+	}
+	return out, nil
 }
 
 // MissingImports lists the functions a grammar imports that the runtime
@@ -240,7 +289,7 @@ func (r *Runtime) MissingImports(grammarWasm []byte) ([]string, error) {
 	}
 	var out []string
 	for _, im := range ims {
-		if im.module == "env" && im.kind == kindFunc && r.mod.ExportedFunction(im.name) == nil {
+		if im.module == "env" && im.kind == kindFunc && !r.exports[im.name] {
 			out = append(out, im.name)
 		}
 	}
