@@ -158,7 +158,8 @@ func gitTree(files []protocol.GitFile) []gitItem {
 				}
 				return 1
 			}
-			return strings.Compare(a.Name, b.Name)
+			// As the Files tab orders them.
+			return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
 		})
 		return out
 	}

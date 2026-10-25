@@ -117,3 +117,73 @@ func TestDiffWritesHunks(t *testing.T) {
 		t.Fatal("a path out of the tree was diffed")
 	}
 }
+
+func TestParsePorcelain(t *testing.T) {
+	out := strings.Join([]string{
+		"1 .M N... 100644 100644 100644 422c 422c a file",
+		"1 D. N... 100644 000000 000000 587b 0000 b",
+		"2 R. N... 100644 100644 100644 4286 4286 R100 c2", "c",
+		"1 A. N... 000000 100644 100644 0000 b478 staged",
+		"u UU N... 100644 100644 100644 100644 1 2 3 both",
+		"? b",
+		"? new/n",
+		"",
+	}, "\x00")
+	got := parsePorcelain([]byte(out))
+	want := map[string]git.FileStatus{
+		"a file": {Staging: git.Unmodified, Worktree: git.Modified},
+		"b":      {Staging: git.Deleted, Worktree: git.Untracked}, // unstaged, kept on disk
+		"c2":     {Staging: git.Renamed, Worktree: git.Unmodified, Extra: "c"},
+		"staged": {Staging: git.Added, Worktree: git.Unmodified},
+		"both":   {Staging: git.UpdatedButUnmerged, Worktree: git.UpdatedButUnmerged},
+		"new/n":  {Staging: git.Unmodified, Worktree: git.Untracked},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d entries: %v", len(got), got)
+	}
+	for p, w := range want {
+		if g := got[p]; g == nil || *g != w {
+			t.Errorf("%s: %+v, want %+v", p, g, w)
+		}
+	}
+}
+
+// git's status and go-git's read a tree as the same changes, but for the
+// ignored folders git does not walk.
+func TestStatusMatchesGoGit(t *testing.T) {
+	root := repo(t, map[string]string{"a.go": "a\n", "b.go": "b\n", ".gitignore": "node_modules/\n"})
+	write(t, root, "a.go", "a\nb\n")
+	write(t, root, "src/new.go", "n\n")
+	write(t, root, "node_modules/x/y.js", "y\n")
+	if err := os.Remove(filepath.Join(root, "b.go")); err != nil {
+		t.Fatal(err)
+	}
+	r, _ := git.PlainOpen(root)
+	wt, _ := r.Worktree()
+	fromGit, err := status(wt, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fromGoGit, err := wt.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes := func(st git.Status) map[string]protocol.GitFile {
+		out := map[string]protocol.GitFile{}
+		for p, fs := range st {
+			if f, ok := change(p, fs); ok {
+				out[p] = f
+			}
+		}
+		return out
+	}
+	a, b := changes(fromGit), changes(fromGoGit)
+	if len(a) != 3 || len(a) != len(b) {
+		t.Fatalf("git %v, go-git %v", a, b)
+	}
+	for p, f := range a {
+		if b[p] != f {
+			t.Errorf("%s: git %+v, go-git %+v", p, f, b[p])
+		}
+	}
+}

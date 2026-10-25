@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -46,7 +47,7 @@ func Status(dir string) (protocol.GitChanges, error) {
 		return protocol.GitChanges{}, err
 	}
 	out := protocol.GitChanges{Root: wt.Filesystem.Root(), Branch: branch(repo)}
-	st, err := wt.Status()
+	st, err := status(wt, out.Root)
 	if err != nil {
 		return protocol.GitChanges{}, err
 	}
@@ -70,6 +71,62 @@ func Status(dir string) (protocol.GitChanges, error) {
 	}
 	slices.SortFunc(out.Files, func(a, b protocol.GitFile) int { return strings.Compare(a.Path, b.Path) })
 	return out, nil
+}
+
+// status is the work tree's status. git reports it when it is on the PATH:
+// it skips the folders .gitignore leaves out, where go-git walks every one
+// (node_modules and the like, seconds a time), and it takes no lock an
+// agent's own git would wait on. go-git's is the fallback.
+func status(wt *git.Worktree, root string) (git.Status, error) {
+	out, err := exec.Command("git", "-C", root, "--no-optional-locks",
+		"status", "--porcelain=v2", "-z", "--untracked-files=all").Output()
+	if err != nil {
+		return wt.Status()
+	}
+	return parsePorcelain(out), nil
+}
+
+// parsePorcelain reads git status --porcelain=v2 -z as go-git's status:
+// the same status codes, but for '.' where a side is unchanged.
+func parsePorcelain(out []byte) git.Status {
+	st := git.Status{}
+	file := func(p string) *git.FileStatus {
+		if st[p] == nil {
+			st[p] = &git.FileStatus{Staging: git.Unmodified, Worktree: git.Unmodified}
+		}
+		return st[p]
+	}
+	code := func(c byte) git.StatusCode {
+		if c == '.' {
+			return git.Unmodified
+		}
+		return git.StatusCode(c)
+	}
+	// Each entry's fields, the path last and free to hold spaces.
+	fields := map[byte]int{'1': 9, '2': 10, 'u': 11}
+	records := strings.Split(string(out), "\x00")
+	for i := 0; i < len(records); i++ {
+		r := records[i]
+		if len(r) < 3 {
+			continue
+		}
+		switch n, tracked := fields[r[0]]; {
+		case tracked:
+			parts := strings.SplitN(r, " ", n)
+			if len(parts) < n || len(parts[1]) != 2 {
+				continue
+			}
+			f := file(parts[n-1])
+			f.Staging, f.Worktree = code(parts[1][0]), code(parts[1][1])
+			if r[0] == '2' && i+1 < len(records) { // a rename: the path it had follows
+				i++
+				f.Extra = records[i]
+			}
+		case r[0] == '?':
+			file(r[2:]).Worktree = git.Untracked
+		}
+	}
+	return st
 }
 
 // change reads a file's status codes as one change, or reports none.
