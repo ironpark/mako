@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -29,8 +28,8 @@ const maxCounted = 4 << 20
 // maxDiffLines caps a diff's lines; the rest is left out as truncated.
 const maxDiffLines = 5000
 
-// context is how many unchanged lines a hunk keeps around its changes.
-const context = 3
+// contextLines is how many unchanged lines a hunk keeps around its changes.
+const contextLines = 3
 
 // Status reports the changes of the work tree dir is in, against HEAD,
 // staged or not. A dir in no repository reports NotRepo.
@@ -47,9 +46,17 @@ func Status(dir string) (protocol.GitChanges, error) {
 		return protocol.GitChanges{}, err
 	}
 	out := protocol.GitChanges{Root: wt.Filesystem.Root(), Branch: branch(repo)}
-	st, err := status(wt, out.Root)
+	st, track, err := status(wt, out.Root)
 	if err != nil {
 		return protocol.GitChanges{}, err
+	}
+	out.Upstream, out.Ahead, out.Behind = track.upstream, track.ahead, track.behind
+	if refs, err := repo.Branches(); err == nil {
+		_ = refs.ForEach(func(r *plumbing.Reference) error {
+			out.Branches = append(out.Branches, r.Name().Short())
+			return nil
+		})
+		slices.Sort(out.Branches)
 	}
 	tree := headTree(repo)
 	for p, fs := range st {
@@ -73,23 +80,35 @@ func Status(dir string) (protocol.GitChanges, error) {
 	return out, nil
 }
 
-// status is the work tree's status. git reports it when it is on the PATH:
-// it skips the folders .gitignore leaves out, where go-git walks every one
-// (node_modules and the like, seconds a time), and it takes no lock an
-// agent's own git would wait on. go-git's is the fallback.
-func status(wt *git.Worktree, root string) (git.Status, error) {
+// status is the work tree's status, and its branch's upstream. git reports
+// it when it is on the PATH: it skips the folders .gitignore leaves out,
+// where go-git walks every one (node_modules and the like, seconds a time),
+// and it takes no lock an agent's own git would wait on. go-git's is the
+// fallback, which knows no upstream.
+func status(wt *git.Worktree, root string) (git.Status, tracking, error) {
 	out, err := exec.Command("git", "-C", root, "--no-optional-locks",
-		"status", "--porcelain=v2", "-z", "--untracked-files=all").Output()
+		"status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all").Output()
 	if err != nil {
-		return wt.Status()
+		st, err := wt.Status()
+		return st, tracking{}, err
 	}
-	return parsePorcelain(out), nil
+	st, track := parsePorcelain(out)
+	return st, track, nil
 }
 
-// parsePorcelain reads git status --porcelain=v2 -z as go-git's status:
-// the same status codes, but for '.' where a side is unchanged.
-func parsePorcelain(out []byte) git.Status {
+// tracking is a branch's upstream, and the commits each has that the
+// other lacks.
+type tracking struct {
+	upstream      string
+	ahead, behind int
+}
+
+// parsePorcelain reads git status --porcelain=v2 --branch -z as go-git's
+// status, the same status codes but for '.' where a side is unchanged, and
+// the branch's upstream from its headers.
+func parsePorcelain(out []byte) (git.Status, tracking) {
 	st := git.Status{}
+	var t tracking
 	file := func(p string) *git.FileStatus {
 		if st[p] == nil {
 			st[p] = &git.FileStatus{Staging: git.Unmodified, Worktree: git.Unmodified}
@@ -124,9 +143,13 @@ func parsePorcelain(out []byte) git.Status {
 			}
 		case r[0] == '?':
 			file(r[2:]).Worktree = git.Untracked
+		case strings.HasPrefix(r, "# branch.upstream "):
+			t.upstream = strings.TrimPrefix(r, "# branch.upstream ")
+		case strings.HasPrefix(r, "# branch.ab "):
+			_, _ = fmt.Sscanf(strings.TrimPrefix(r, "# branch.ab "), "+%d -%d", &t.ahead, &t.behind)
 		}
 	}
-	return st
+	return st, t
 }
 
 // change reads a file's status codes as one change, or reports none.
@@ -239,10 +262,8 @@ func lineCount(s string) int {
 // Diff is one file's changes against HEAD as unified diff hunks. from is
 // the path HEAD has it at, for a rename, or "".
 func Diff(root, p, from string) (protocol.Diff, error) {
-	for _, q := range []string{p, from} {
-		if q != "" && (path.IsAbs(q) || strings.HasPrefix(path.Clean(q), "..")) {
-			return protocol.Diff{}, fmt.Errorf("%q is not in the work tree", q)
-		}
+	if err := cmp.Or(inWorkTree(p), inWorkTree(from)); err != nil {
+		return protocol.Diff{}, err
 	}
 	repo, err := git.PlainOpenWithOptions(root, &git.PlainOpenOptions{EnableDotGitCommonDir: true})
 	if err != nil {
@@ -299,12 +320,12 @@ func unified(old, cur string) ([]protocol.DiffLine, bool) {
 			break
 		}
 		last := first
-		for j := first; j < len(lines) && j-last <= 2*context; j++ {
+		for j := first; j < len(lines) && j-last <= 2*contextLines; j++ {
 			if lines[j].op != ' ' {
 				last = j
 			}
 		}
-		start, end := max(first-context, i), min(last+context+1, len(lines))
+		start, end := max(first-contextLines, i), min(last+contextLines+1, len(lines))
 		for _, l := range lines[at:start] {
 			if l.op != '+' {
 				oldBefore = l.old

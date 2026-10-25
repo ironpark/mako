@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -510,16 +511,45 @@ func (c *Cache) ReadBound(info protocol.SessionInfo, path string) (protocol.Chat
 
 // logPaths lists an agent's logs whose file name matches the glob name.
 func logPaths(a *Agent, env map[string]string, name string) ([]string, error) {
-	root := env[a.rootEnv]
-	if root == "" {
-		home := env["HOME"]
-		if home == "" {
-			home, _ = os.UserHomeDir()
-		}
-		root = filepath.Join(home, a.homeDir)
+	return filepath.Glob(logPattern(a, logRoot(a, env), name))
+}
+
+// logPattern is the glob of an agent's logs under root whose file name
+// matches name.
+func logPattern(a *Agent, root, name string) string {
+	return filepath.Join(append(append([]string{root}, a.logDirs...), name)...)
+}
+
+// logRoot is the directory an agent keeps its logs under.
+func logRoot(a *Agent, env map[string]string) string {
+	if root := env[a.rootEnv]; root != "" {
+		return root
 	}
-	pattern := filepath.Join(append(append([]string{root}, a.logDirs...), name)...)
-	return filepath.Glob(pattern)
+	home := env["HOME"]
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
+	return filepath.Join(home, a.homeDir)
+}
+
+// LogOf reports whether path is where agent writes conversation id's log
+// under env, whether or not it has written it yet: a path an agent reports
+// is trusted no further than that. The root may be named through a link.
+func LogOf(agent string, env map[string]string, id, path string) bool {
+	a, ok := Lookup(agent)
+	if !ok || a.rollout || !validID.MatchString(id) || !filepath.IsAbs(path) {
+		return false
+	}
+	path = filepath.Clean(path)
+	root := logRoot(a, env)
+	roots := []string{root}
+	if resolved, err := filepath.EvalSymlinks(root); err == nil && resolved != root {
+		roots = append(roots, resolved)
+	}
+	return slices.ContainsFunc(roots, func(root string) bool {
+		match, err := filepath.Match(logPattern(a, root, id+".jsonl"), path)
+		return err == nil && match
+	})
 }
 
 // Locate finds a known native ID without depending on a rollout filename.

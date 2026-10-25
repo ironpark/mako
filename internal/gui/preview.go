@@ -160,6 +160,16 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				}),
 				until("the preview", func() bool { return !ggui.Peek(m.Preview).Loading }),
 				frames(5), shot("03-files"),
+				// Files of a few kinds, each with its type's icon.
+				do(func() {
+					r := ggui.Untrack(m.filesRoot)
+					for _, sub := range []string{"internal", "internal/gitstat"} {
+						dir := joinPath(r.Path, sub)
+						m.toggleDir(fileItem{Key: dirKey(r.Node, dir), Node: r.Node, Path: dir, Dir: true})
+					}
+					m.Preview.Set(filePreview{})
+				}),
+				frames(30), shot("03-file-icons"),
 				// README.md opened in a tab of its own.
 				do(func() {
 					r := ggui.Untrack(m.filesRoot)
@@ -193,9 +203,29 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				}),
 				frames(2), shot("03-drag"),
 				do(func() { p.Release(ggui.Pt(float64(width)/2, headerHeight/2)) }),
-				do(func() { m.DetailTab.Set(1) }), frames(30), shot("03-changes"),
-				do(func() { m.DetailTab.Set(2) }), frames(2), shot("03-details"),
-				do(func() { m.DetailTab.Set(0); m.openNew("", "") }), frames(2), shot("04-new-session"),
+				do(func() { m.DetailTab.Set(changesTab) }), frames(30), shot("03-changes"),
+				// The history of a project on this node's own daemon, which
+				// another on the mesh may predate.
+				do(func() {
+					wd, _ := os.Getwd()
+					m.launch("shell", ggui.Peek(m.Conn).Self.ID, wd)
+					m.DetailTab.Set(historyTab)
+				}),
+				until("its session", func() bool {
+					s, ok := m.session(ggui.Peek(m.Selected))
+					return ok && s.NodeID == ggui.Peek(m.Conn).Self.ID
+				}),
+				until("the history", func() bool { v := ggui.Peek(m.GitHistory); return v.Root.Path != "" && !v.Loading }),
+				frames(5), shot("03-history"),
+				do(func() {
+					if cs := ggui.Peek(m.GitHistory).History.Commits; len(cs) > 0 {
+						m.openCommit(cs[0].Hash)
+					}
+				}),
+				until("the commit", func() bool { return !ggui.Peek(m.GitCommit).Loading }),
+				frames(5), shot("03-commit"),
+				do(func() { m.DetailTab.Set(sessionTab) }), frames(2), shot("03-details"),
+				do(func() { m.DetailTab.Set(filesTab); m.openNew("", "") }), frames(2), shot("04-new-session"),
 				do(func() { m.NewOpen.Set(false); m.openSettings("general") }), frames(2), shot("05-settings-general"),
 				do(func() { m.Section.Set("appearance") }), frames(2), shot("06-settings-appearance"),
 				do(func() { m.Section.Set("terminal") }), frames(2), shot("07-settings-terminal"),

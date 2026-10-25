@@ -140,3 +140,42 @@ func TestWriteFileKeepsModeAndRefusesAStaleWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestFileOpNeverReplaces(t *testing.T) {
+	dir := t.TempDir()
+	at := func(name string) string { return filepath.Join(dir, name) }
+	op := func(kind, path, to string) error {
+		_, err := fileOp(protocol.FileOp{Op: kind, Path: path, To: to})
+		return err
+	}
+	if err := op(protocol.FileCreate, at("a.txt"), ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := op(protocol.FileCreate, at("a.txt"), ""); err == nil {
+		t.Fatal("created over a file")
+	}
+	if err := op(protocol.FileMkdir, at("sub"), ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := op(protocol.FileCreate, at("sub/b.txt"), ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := op(protocol.FileRename, at("a.txt"), at("sub/b.txt")); err == nil {
+		t.Fatal("renamed over a file")
+	}
+	if err := op(protocol.FileRename, at("a.txt"), at("c.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := op(protocol.FileDelete, at("sub"), ""); err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 || entries[0].Name() != "c.txt" {
+		t.Fatalf("left %v", entries)
+	}
+	for _, bad := range []protocol.FileOp{{Op: protocol.FileDelete, Path: "/"}, {Op: protocol.FileDelete, Path: "relative"}, {Op: "chmod", Path: at("c.txt")}} {
+		if _, err := fileOp(bad); err == nil {
+			t.Errorf("%+v allowed", bad)
+		}
+	}
+}

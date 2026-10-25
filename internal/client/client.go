@@ -155,6 +155,34 @@ func (c *Client) GitDiff(ctx context.Context, psk string, req protocol.GitDiff) 
 	return out, err
 }
 
+// FileOp makes, renames or deletes a file or folder on a node.
+func (c *Client) FileOp(ctx context.Context, psk string, req protocol.FileOp) (protocol.File, error) {
+	var out protocol.File
+	err := c.request(ctx, psk, protocol.TypeFileOp, req, &out)
+	return out, err
+}
+
+// GitLog lists a repository's recent commits on a node.
+func (c *Client) GitLog(ctx context.Context, psk string, req protocol.GitLog) (protocol.GitHistory, error) {
+	var out protocol.GitHistory
+	err := c.request(ctx, psk, protocol.TypeGitLog, req, &out)
+	return out, err
+}
+
+// GitShow reads what one commit changed on a node.
+func (c *Client) GitShow(ctx context.Context, psk string, req protocol.GitShow) (protocol.GitCommitInfo, error) {
+	var out protocol.GitCommitInfo
+	err := c.request(ctx, psk, protocol.TypeGitShow, req, &out)
+	return out, err
+}
+
+// GitRun runs a git operation, a commit or a push and the like, on a node.
+func (c *Client) GitRun(ctx context.Context, psk string, req protocol.GitRun) (protocol.GitResult, error) {
+	var out protocol.GitResult
+	err := c.request(ctx, psk, protocol.TypeGitRun, req, &out)
+	return out, err
+}
+
 // Rename names a session, "" for none, and returns it as it is now.
 func (c *Client) Rename(ctx context.Context, psk string, req protocol.RenameSession) (protocol.SessionInfo, error) {
 	var out protocol.SessionInfo

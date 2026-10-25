@@ -63,18 +63,41 @@ func (m *model) submitRename() {
 }
 
 func renameDialog(m *model) ggui.Widget {
-	hasErr := ggui.Map(m.RenameErr, func(s string) bool { return s != "" })
-	return ui.Dialog(m.RenameOpen, ggui.Column(
-		ui.Field(T("Name"), ui.TextField(m.RenameText).Placeholder(T("Its program's title, or its agent")).
-			Name(T("Session name")).OnSubmit(func(string) { m.submitRename() })),
-		ggui.If(hasErr, func() ggui.Widget {
-			return ggui.TextOf(m.RenameErr).Size(12).Color(tokDotDown)
-		}),
+	return nameDialog(nameAsk{
+		Open: m.RenameOpen, Text: m.RenameText, Err: m.RenameErr,
+		Title: T("Rename session"), Field: T("Session name"), Action: T("Rename"),
+		Placeholder: T("Its program's title, or its agent"), Submit: m.submitRename,
+	})
+}
+
+// nameAsk is a dialog asking for a name: whether it is open, the name
+// typed, and why the last one was refused.
+type nameAsk struct {
+	Open                                    *ggui.StateValue[bool]
+	Text, Err                               *ggui.StateValue[string]
+	Title, Field, Action, Placeholder, Note string
+	Submit                                  func()
+}
+
+// nameDialog asks for a name, submitting it with Enter or the action.
+func nameDialog(a nameAsk) ggui.Widget {
+	hasErr := ggui.Map(a.Err, func(s string) bool { return s != "" })
+	field := ui.TextField(a.Text).Name(a.Field).OnSubmit(func(string) { a.Submit() })
+	if a.Placeholder != "" {
+		field = field.Placeholder(a.Placeholder)
+	}
+	rows := []ggui.Widget{ui.Field(T("Name"), field)}
+	if a.Note != "" {
+		rows = append(rows, muted(ggui.Text(a.Note).Size(12)))
+	}
+	rows = append(rows,
+		ggui.If(hasErr, func() ggui.Widget { return ggui.TextOf(a.Err).Size(12).Color(tokDotDown) }),
 		ggui.Row(
-			ui.Button(T("Cancel"), func() { m.RenameOpen.Set(false) }).Outline(),
-			ui.Button(T("Rename"), m.submitRename),
+			ui.Button(T("Cancel"), func() { a.Open.Set(false) }).Outline(),
+			ui.Button(a.Action, a.Submit),
 		).Gap(8).Justify(ggui.JustifyEnd),
-	).Gap(16).Stretch()).Title(T("Rename session")).Width(420)
+	)
+	return ui.Dialog(a.Open, ggui.Column(rows...).Gap(16).Stretch()).Title(a.Title).Width(420)
 }
 
 // sessionMenu gives a session's tab or sidebar row a context menu; a tab's

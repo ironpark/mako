@@ -53,12 +53,20 @@ type conversations struct {
 	mu       sync.Mutex
 	sessions map[*session.Session]*conversation
 	running  bool
+	// binding serializes binding what hooks report and what listings find,
+	// so the newest report is also the last bound.
+	binding sync.Mutex
 }
 
 // conversation is what the daemon keeps of one session's conversation.
 type conversation struct {
 	outputs uint64 // the session's output count when it was last checked
 	chat    transcript.Cache
+	// seq numbers the newest report the agent's own hook made, 0 for none.
+	// From the first, its reports follow the conversation, and no process
+	// listing does; older reports arrive too late.
+	seq    int64
+	unseen string // the reported log, until the agent writes it
 }
 
 // trackConversation follows s's conversation for as long as it runs.
@@ -91,18 +99,25 @@ func (c *conversations) chatCache(s *session.Session) *transcript.Cache {
 
 // due drops the sessions that ended and returns the ones worth a look: not
 // yet bound, or with output since the last look. A conversation changes only
-// through the agent, and the agent shows it. It reports false, and stops the
-// loop, once nothing is left to follow.
-func (c *conversations) due() ([]*session.Session, bool) {
+// through the agent, and the agent shows it. A hooked session is only worth
+// one while the log it reported is unwritten, and then only that log is: it
+// is among unseen. It reports false, and stops the loop, once nothing is
+// left to follow.
+func (c *conversations) due() (due, unseen []*session.Session, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	var due []*session.Session
 	for s, conv := range c.sessions {
 		select {
 		case <-s.Done():
 			delete(c.sessions, s)
 			continue
 		default:
+		}
+		if conv.seq > 0 {
+			if conv.unseen != "" {
+				unseen = append(unseen, s)
+			}
+			continue
 		}
 		outputs := s.Outputs()
 		if s.TranscriptPath() == "" || outputs != conv.outputs {
@@ -112,21 +127,60 @@ func (c *conversations) due() ([]*session.Session, bool) {
 	}
 	if len(c.sessions) == 0 {
 		c.running = false
-		return nil, false
+		return nil, nil, false
 	}
-	return due, true
+	return due, unseen, true
+}
+
+// report takes a hook's report of s's conversation, numbered seq, unless a
+// newer one came first, and returns the log to bind: "" while unwritten.
+func (c *conversations) report(s *session.Session, seq int64, path string, written bool) (bind string, ok bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	conv, ok := c.sessions[s]
+	if !ok || seq <= conv.seq {
+		return "", false
+	}
+	conv.seq, conv.unseen = seq, path
+	if written {
+		conv.unseen, bind = "", path
+	}
+	return bind, true
+}
+
+// claim is what the hook has said of s: whether it follows s at all, and
+// the log it reported that the agent has yet to write.
+func (c *conversations) claim(s *session.Session) (hooked bool, unseen string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if conv, ok := c.sessions[s]; ok {
+		return conv.seq > 0, conv.unseen
+	}
+	return false, ""
+}
+
+// seen clears s's unwritten log once it is bound.
+func (c *conversations) seen(s *session.Session) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if conv, ok := c.sessions[s]; ok {
+		conv.unseen = ""
+	}
 }
 
 func (d *Daemon) followConversations() {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
-		due, ok := d.conversations.due()
+		due, unseen, ok := d.conversations.due()
 		if !ok {
 			return
 		}
 		if len(due) > 0 {
 			d.checkConversations(due)
+		}
+		for _, s := range unseen {
+			d.checkReported(s)
 		}
 		<-ticker.C
 	}
@@ -159,11 +213,71 @@ func (d *Daemon) checkConversations(sessions []*session.Session) {
 			id = info.ConversationID
 		}
 		if err == nil && path != "" && (id != info.ConversationID || path != s.TranscriptPath()) {
-			if err := d.bindConversation(s, id, path); err != nil {
-				d.log.Warn("save conversation", "session", s.ID(), "err", err)
-			}
+			d.bindPolled(s, id, path)
 		}
 	}
+}
+
+// reportConversation binds a session to the conversation its agent's hook
+// reported. The log may not be written yet, after a fresh start or /clear:
+// then the ID is bound now, and the log once the agent writes it.
+func (d *Daemon) reportConversation(msg hookMessage) error {
+	d.sessionMu.Lock()
+	s, ok := d.sessions.get(msg.Session)
+	d.sessionMu.Unlock()
+	if !ok {
+		return fmt.Errorf("unknown session %q", msg.Session)
+	}
+	info := s.Info()
+	native, ok := transcript.Lookup(info.Agent)
+	if !ok {
+		return nil
+	}
+	id, path, ok := native.ParseHook(msg.Input)
+	if !ok {
+		return nil
+	}
+	if !transcript.LogOf(info.Agent, s.TranscriptEnv(), id, path) {
+		return fmt.Errorf("%s is not where %s keeps conversation %q", path, info.Agent, id)
+	}
+	info.ConversationID = id
+	written := transcript.Verify(info, path) == nil
+	d.conversations.binding.Lock()
+	defer d.conversations.binding.Unlock()
+	bind, ok := d.conversations.report(s, msg.Seq, path, written)
+	if !ok {
+		return nil
+	}
+	return d.bindConversation(s, id, bind)
+}
+
+// bindPolled binds what the listing found, unless the agent's hook took
+// over while it ran: what the hook says is newer.
+func (d *Daemon) bindPolled(s *session.Session, id, path string) {
+	d.conversations.binding.Lock()
+	defer d.conversations.binding.Unlock()
+	if hooked, _ := d.conversations.claim(s); hooked {
+		return
+	}
+	if err := d.bindConversation(s, id, path); err != nil {
+		d.log.Warn("save conversation", "session", s.ID(), "err", err)
+	}
+}
+
+// checkReported binds the log a hook reported once the agent has written it.
+func (d *Daemon) checkReported(s *session.Session) {
+	d.conversations.binding.Lock()
+	defer d.conversations.binding.Unlock()
+	info := s.Info()
+	_, path := d.conversations.claim(s)
+	if path == "" || transcript.Verify(info, path) != nil {
+		return
+	}
+	if err := d.bindConversation(s, info.ConversationID, path); err != nil {
+		d.log.Warn("save conversation", "session", s.ID(), "err", err)
+		return
+	}
+	d.conversations.seen(s)
 }
 
 func (d *Daemon) bindConversation(s *session.Session, id, path string) error {

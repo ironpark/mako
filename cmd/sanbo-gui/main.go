@@ -7,10 +7,15 @@ import (
 	"os"
 
 	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/sanbo/internal/daemon"
 	"github.com/ironpark/sanbo/internal/gui"
 )
 
 func main() {
+	// The app's own daemon runs this program as its agents' hook.
+	if daemon.HookMain() {
+		return
+	}
 	daemonAddr := flag.String("daemon", "", "daemon address (default 127.0.0.1:4242)")
 	renderDir := flag.String("render-dir", "", "render the window to PNGs in this directory, then exit (development)")
 	flag.Parse()

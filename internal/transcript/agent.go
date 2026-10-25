@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 )
@@ -37,6 +38,10 @@ type Agent struct {
 	// values and variadic are options a resumed launch keeps along with the
 	// value, or the values, that follow them.
 	values, variadic []string
+	// settings takes settings for one launch, among them a hook the agent
+	// runs whenever a conversation starts or it switches to another; ""
+	// when the agent has no such hook.
+	settings string
 	// Isolate is a flag that keeps the log's writer in the session's process
 	// tree, so a session can be bound without guessing by cwd or timestamp.
 	// Not every version of the agent has it.
@@ -46,7 +51,7 @@ type Agent struct {
 var agents = []*Agent{
 	{
 		Name: "claude", rootEnv: "CLAUDE_CONFIG_DIR", homeDir: ".claude", logDirs: []string{"projects", "*"},
-		pin: "--session-id", resume: []string{"--resume", "-r"}, fork: "--fork-session",
+		pin: "--session-id", resume: []string{"--resume", "-r"}, fork: "--fork-session", settings: "--settings",
 		pickerValues: []string{"--from-pr"}, pickerFlags: []string{"--continue", "-c"},
 		values:   strings.Fields("--model --effort --settings --setting-sources --system-prompt --system-prompt-file --append-system-prompt --append-system-prompt-file --permission-mode --permission-prompts --permission-prompt-tool --plugin-dir --plugin-url --agent --agents --name -n --debug-file --input-format --output-format --json-schema --max-budget-usd --max-turns --fallback-model --system-prompt-snapshot --remote-control-session-name-prefix"),
 		variadic: strings.Fields("--add-dir --allowedTools --allowed-tools --disallowedTools --disallowed-tools --tools --mcp-config --betas --file"),
@@ -200,4 +205,51 @@ func (a *Agent) Resume(command []string, id string) []string {
 		}
 	}
 	return args
+}
+
+// Hook makes command run the shell command hook whenever the agent starts a
+// conversation or switches to another, alongside the user's own hooks. The
+// hook reads the conversation's ID and log, as JSON, on stdin. It reports
+// false for an agent without such a hook, or a command that brings its own
+// settings.
+func (a *Agent) Hook(command []string, hook string) ([]string, bool) {
+	if a.settings == "" || slices.ContainsFunc(command[1:], func(arg string) bool {
+		name, _, _ := strings.Cut(arg, "=")
+		return name == a.settings
+	}) {
+		return command, false
+	}
+	type handler struct {
+		Type    string `json:"type"`
+		Command string `json:"command"`
+	}
+	type matcher struct {
+		Hooks []handler `json:"hooks"`
+	}
+	settings, err := json.Marshal(map[string]any{"hooks": map[string][]matcher{
+		"SessionStart": {{Hooks: []handler{{Type: "command", Command: hook}}}},
+	}})
+	if err != nil {
+		return command, false
+	}
+	return append(command, a.settings, string(settings)), true
+}
+
+// ParseHook reads what the agent hands the hook Hook installs: the
+// conversation it started or switched to, and its log. It reports false for
+// another event, or a subagent's session, which is not the terminal's.
+func (a *Agent) ParseHook(input []byte) (id, path string, ok bool) {
+	if a.settings == "" {
+		return "", "", false
+	}
+	var in struct {
+		Event          string `json:"hook_event_name"`
+		SessionID      string `json:"session_id"`
+		TranscriptPath string `json:"transcript_path"`
+		AgentID        string `json:"agent_id"`
+	}
+	if json.Unmarshal(input, &in) != nil || in.Event != "SessionStart" || in.AgentID != "" {
+		return "", "", false
+	}
+	return in.SessionID, in.TranscriptPath, true
 }

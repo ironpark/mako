@@ -114,11 +114,12 @@ func onlyImage(n ast.Node) (*ast.Image, bool) {
 	return img, ok && n.FirstChild() == n.LastChild()
 }
 
-// paragraph is n's inline content as one paragraph of text.
+// paragraph is n's inline content as one paragraph of text, which the
+// reader can select and copy.
 func (r *mdRenderer) paragraph(n ast.Node) *ggui.RichTextWidget {
 	var spans []ggui.TextSpan
 	r.inline(n, mdStyle{r: r}, &spans)
-	return ggui.RichText(spans...).Size(mdBodySize).LineHeight(1.55)
+	return ggui.RichText(spans...).Size(mdBodySize).LineHeight(1.55).Selectable()
 }
 
 // alerts are the kinds of GitHub's alert quotes, "> [!NOTE]", and their
@@ -150,7 +151,7 @@ func (r *mdRenderer) quote(n *ast.Blockquote) ggui.Widget {
 				var spans []ggui.TextSpan
 				r.inlineAfter(p, first.Stop, &spans)
 				if len(spans) > 0 {
-					body = append(body, ggui.RichText(spans...).Size(mdBodySize).LineHeight(1.55))
+					body = append(body, ggui.RichText(spans...).Size(mdBodySize).LineHeight(1.55).Selectable())
 				}
 				for c := p.NextSibling(); c != nil; c = c.NextSibling() {
 					if w := r.block(c); w != nil {
@@ -208,7 +209,7 @@ func (r *mdRenderer) html(s string) ggui.Widget {
 	s = htmlComment.ReplaceAllString(s, "")
 	text := strings.Join(strings.Fields(htmlTag.ReplaceAllString(s, " ")), " ")
 	if text != "" {
-		out = append(out, ggui.Text(html.UnescapeString(text)).Size(mdBodySize).LineHeight(1.55))
+		out = append(out, ggui.Text(html.UnescapeString(text)).Size(mdBodySize).LineHeight(1.55).Selectable())
 	}
 	switch len(out) {
 	case 0:

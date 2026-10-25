@@ -23,33 +23,40 @@ const MaxFrameSize = 8 << 20
 type Type string
 
 const (
-	TypeHello       Type = "hello"
-	TypeWelcome     Type = "welcome"
-	TypeError       Type = "error"
-	TypeListNodes   Type = "list_nodes"
-	TypeNodes       Type = "nodes"
-	TypeListSess    Type = "list_sessions"
-	TypeSessions    Type = "sessions"
-	TypeOpenSession Type = "open_session"
-	TypeSessionInfo Type = "session_info"
-	TypeCloseSess   Type = "close_session"
-	TypeRenameSess  Type = "rename_session"
-	TypeAttach      Type = "attach"
-	TypeInput       Type = "input"
-	TypeOutput      Type = "output"
-	TypeResize      Type = "resize"
-	TypeSnapshot    Type = "snapshot"
-	TypeExited      Type = "exited"
-	TypeGossip      Type = "gossip"
-	TypeListDir     Type = "list_dir"
-	TypeDir         Type = "dir"
-	TypeReadFile    Type = "read_file"
-	TypeFile        Type = "file"
-	TypeWriteFile   Type = "write_file"
-	TypeGitStatus   Type = "git_status"
-	TypeGitChanges  Type = "git_changes"
-	TypeGitDiff     Type = "git_diff"
-	TypeDiff        Type = "diff"
+	TypeHello         Type = "hello"
+	TypeWelcome       Type = "welcome"
+	TypeError         Type = "error"
+	TypeListNodes     Type = "list_nodes"
+	TypeNodes         Type = "nodes"
+	TypeListSess      Type = "list_sessions"
+	TypeSessions      Type = "sessions"
+	TypeOpenSession   Type = "open_session"
+	TypeSessionInfo   Type = "session_info"
+	TypeCloseSess     Type = "close_session"
+	TypeRenameSess    Type = "rename_session"
+	TypeAttach        Type = "attach"
+	TypeInput         Type = "input"
+	TypeOutput        Type = "output"
+	TypeResize        Type = "resize"
+	TypeSnapshot      Type = "snapshot"
+	TypeExited        Type = "exited"
+	TypeGossip        Type = "gossip"
+	TypeListDir       Type = "list_dir"
+	TypeDir           Type = "dir"
+	TypeReadFile      Type = "read_file"
+	TypeFile          Type = "file"
+	TypeWriteFile     Type = "write_file"
+	TypeGitStatus     Type = "git_status"
+	TypeGitChanges    Type = "git_changes"
+	TypeGitDiff       Type = "git_diff"
+	TypeDiff          Type = "diff"
+	TypeFileOp        Type = "file_op"
+	TypeGitLog        Type = "git_log"
+	TypeGitHistory    Type = "git_history"
+	TypeGitShow       Type = "git_show"
+	TypeGitCommitInfo Type = "git_commit_info"
+	TypeGitRun        Type = "git_run"
+	TypeGitResult     Type = "git_result"
 )
 
 // Envelope wraps every message. Payload is the JSON body for Type.
@@ -388,6 +395,27 @@ type WriteFile struct {
 // changed since it was read.
 const CodeChanged = "changed"
 
+// CodeUnsupported is the Error code of a request its daemon does not know,
+// being older than the requester.
+const CodeUnsupported = "unsupported"
+
+// FileOp asks a node to make, rename or delete a file or folder. The reply
+// is a File naming the path that now is.
+type FileOp struct {
+	NodeID string `json:"node_id,omitempty"`
+	Op     string `json:"op"`           // a File* operation
+	Path   string `json:"path"`         // absolute
+	To     string `json:"to,omitempty"` // absolute: where a rename moves Path
+}
+
+// Operations of a FileOp.
+const (
+	FileCreate = "create" // an empty file, which must not exist yet
+	FileMkdir  = "mkdir"  // a folder, which must not exist yet
+	FileRename = "rename" // to To, which must not exist yet
+	FileDelete = "delete" // a file, or a folder and all it holds
+)
+
 // GitStatus asks a node for the changes in the repository a directory is in.
 type GitStatus struct {
 	NodeID string `json:"node_id,omitempty"`
@@ -409,6 +437,12 @@ type GitChanges struct {
 	Branch  string    `json:"branch,omitempty"`   // or the commit, detached
 	NotRepo bool      `json:"not_repo,omitempty"` // Path is in no repository
 	Files   []GitFile `json:"files"`
+	// Upstream is the branch Branch tracks, "" for none, and Ahead and
+	// Behind the commits each has that the other lacks.
+	Upstream string   `json:"upstream,omitempty"`
+	Ahead    int      `json:"ahead,omitempty"`
+	Behind   int      `json:"behind,omitempty"`
+	Branches []string `json:"branches,omitempty"` // the local ones
 }
 
 // GitFile is one changed file.
@@ -421,12 +455,88 @@ type GitFile struct {
 	Binary  bool   `json:"binary,omitempty"` // no lines to count
 }
 
-// GitDiff asks a node for one file's changes against HEAD.
+// GitDiff asks a node for one file's changes against HEAD, or with Commit
+// the changes that commit made to it.
 type GitDiff struct {
 	NodeID string `json:"node_id,omitempty"`
 	Root   string `json:"root"`
-	Path   string `json:"path"`           // as GitFile.Path
-	From   string `json:"from,omitempty"` // where HEAD has a renamed file
+	Path   string `json:"path"`             // as GitFile.Path
+	From   string `json:"from,omitempty"`   // where HEAD has a renamed file
+	Commit string `json:"commit,omitempty"` // a commit's hash
+}
+
+// GitLog asks a node for a repository's recent commits: those of its
+// branches, remote branches and tags, newest first.
+type GitLog struct {
+	NodeID string `json:"node_id,omitempty"`
+	Root   string `json:"root"`
+	Max    int    `json:"max,omitempty"` // capped by the daemon
+	// Known is the Fingerprint of the history the requester has, which
+	// comes back Unchanged rather than again.
+	Known string `json:"known,omitempty"`
+}
+
+// GitHistory is the reply to GitLog.
+type GitHistory struct {
+	Commits     []GitCommit `json:"commits"`
+	Current     string      `json:"current,omitempty"`   // the branch checked out
+	More        bool        `json:"more,omitempty"`      // older commits are left out
+	Fingerprint string      `json:"fingerprint"`         // of the refs and HEAD
+	Unchanged   bool        `json:"unchanged,omitempty"` // as Known; Commits are left out
+}
+
+// GitCommit is one commit as a history lists it.
+type GitCommit struct {
+	Hash    string    `json:"hash"`
+	Parents []string  `json:"parents,omitempty"`
+	Author  string    `json:"author"`
+	Time    time.Time `json:"time"`
+	Subject string    `json:"subject"`
+	Refs    []string  `json:"refs,omitempty"` // as git log's %D names them
+}
+
+// GitShow asks a node for what one commit changed.
+type GitShow struct {
+	NodeID string `json:"node_id,omitempty"`
+	Root   string `json:"root"`
+	Hash   string `json:"hash"`
+}
+
+// GitCommitInfo is the reply to GitShow: the commit, its whole message,
+// and the files it changed against its first parent.
+type GitCommitInfo struct {
+	Commit GitCommit `json:"commit"`
+	Email  string    `json:"email,omitempty"`
+	Body   string    `json:"body,omitempty"`
+	Files  []GitFile `json:"files"`
+}
+
+// GitRun asks a node to run a git operation on a work tree.
+type GitRun struct {
+	NodeID string `json:"node_id,omitempty"`
+	Root   string `json:"root"`
+	Op     string `json:"op"` // a GitOp*
+	// Message and Paths are a commit's: the files to commit, as GitFile
+	// paths and the From of a rename, or none for every change.
+	Message string   `json:"message,omitempty"`
+	Paths   []string `json:"paths,omitempty"`
+	Amend   bool     `json:"amend,omitempty"`
+	Branch  string   `json:"branch,omitempty"` // a checkout's or new branch's name
+}
+
+// Operations of a GitRun.
+const (
+	GitOpCommit   = "commit"
+	GitOpPush     = "push"
+	GitOpPull     = "pull" // fast-forward only
+	GitOpFetch    = "fetch"
+	GitOpCheckout = "checkout"
+	GitOpBranch   = "branch" // creates Branch at HEAD and checks it out
+)
+
+// GitResult is the reply to GitRun: what git printed.
+type GitResult struct {
+	Output string `json:"output,omitempty"`
 }
 
 // Diff is the reply to GitDiff: the file's hunks, as unified diff lines.

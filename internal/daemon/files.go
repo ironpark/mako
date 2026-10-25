@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -63,10 +64,60 @@ func (d *Daemon) handleGitStatus(ctx context.Context, stream *transport.Stream, 
 func (d *Daemon) handleGitDiff(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeDiff, func(r *protocol.GitDiff) *string { return &r.NodeID },
 		func(r protocol.GitDiff) (protocol.Diff, error) {
-			if err := absolute(r.Root); err != nil {
-				return protocol.Diff{}, err
-			}
-			return gitstat.Diff(r.Root, r.Path, r.From)
+			return inRepo(ctx, r.Root, func(ctx context.Context) (protocol.Diff, error) {
+				if r.Commit != "" {
+					return gitstat.CommitDiff(ctx, r.Root, r.Commit, r.Path, r.From)
+				}
+				return gitstat.Diff(r.Root, r.Path, r.From)
+			})
+		})
+}
+
+func (d *Daemon) handleFileOp(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeFile, func(r *protocol.FileOp) *string { return &r.NodeID }, fileOp)
+}
+
+// gitTimeout bounds a git operation, a push or a pull over a slow link
+// among them.
+const gitTimeout = 2 * time.Minute
+
+// inRepo runs work on the repository at root, an absolute path, within
+// gitTimeout.
+func inRepo[T any](ctx context.Context, root string, work func(context.Context) (T, error)) (T, error) {
+	if err := absolute(root); err != nil {
+		var zero T
+		return zero, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
+	defer cancel()
+	return work(ctx)
+}
+
+func (d *Daemon) handleGitLog(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeGitHistory, func(r *protocol.GitLog) *string { return &r.NodeID },
+		func(r protocol.GitLog) (protocol.GitHistory, error) {
+			return inRepo(ctx, r.Root, func(ctx context.Context) (protocol.GitHistory, error) {
+				return gitstat.Log(ctx, r.Root, r.Max, r.Known)
+			})
+		})
+}
+
+func (d *Daemon) handleGitShow(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeGitCommitInfo, func(r *protocol.GitShow) *string { return &r.NodeID },
+		func(r protocol.GitShow) (protocol.GitCommitInfo, error) {
+			return inRepo(ctx, r.Root, func(ctx context.Context) (protocol.GitCommitInfo, error) {
+				return gitstat.Show(ctx, r.Root, r.Hash)
+			})
+		})
+}
+
+func (d *Daemon) handleGitRun(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeGitResult, func(r *protocol.GitRun) *string { return &r.NodeID },
+		func(r protocol.GitRun) (protocol.GitResult, error) {
+			return inRepo(ctx, r.Root, func(ctx context.Context) (protocol.GitResult, error) {
+				out, err := gitstat.Run(ctx, r)
+				return protocol.GitResult{Output: out}, err
+			})
 		})
 }
 
@@ -296,4 +347,41 @@ func (d *Daemon) forward(ctx context.Context, nodeID string, typ protocol.Type, 
 	}
 	defer stream.Close()
 	return stream.Request(typ, req, reply)
+}
+
+// fileOp makes, renames or deletes a file or folder. None of them replaces
+// what is already there.
+func fileOp(r protocol.FileOp) (protocol.File, error) {
+	if err := absolute(r.Path); err != nil {
+		return protocol.File{}, err
+	}
+	p := filepath.Clean(r.Path)
+	if filepath.Dir(p) == p {
+		return protocol.File{}, errors.New("not the root of the file system")
+	}
+	switch r.Op {
+	case protocol.FileCreate:
+		f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err != nil {
+			return protocol.File{}, err
+		}
+		return protocol.File{Path: p}, f.Close()
+	case protocol.FileMkdir:
+		return protocol.File{Path: p}, os.Mkdir(p, 0o755)
+	case protocol.FileRename:
+		if err := absolute(r.To); err != nil {
+			return protocol.File{}, err
+		}
+		to := filepath.Clean(r.To)
+		if _, err := os.Lstat(to); err == nil {
+			return protocol.File{}, fmt.Errorf("%s already exists", filepath.Base(to))
+		}
+		return protocol.File{Path: to}, os.Rename(p, to)
+	case protocol.FileDelete:
+		if _, err := os.Lstat(p); err != nil {
+			return protocol.File{}, err
+		}
+		return protocol.File{Path: p}, os.RemoveAll(p)
+	}
+	return protocol.File{}, fmt.Errorf("unknown file operation %q", r.Op)
 }

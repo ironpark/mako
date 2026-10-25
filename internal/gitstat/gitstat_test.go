@@ -129,7 +129,7 @@ func TestParsePorcelain(t *testing.T) {
 		"? new/n",
 		"",
 	}, "\x00")
-	got := parsePorcelain([]byte(out))
+	got, _ := parsePorcelain([]byte(out))
 	want := map[string]git.FileStatus{
 		"a file": {Staging: git.Unmodified, Worktree: git.Modified},
 		"b":      {Staging: git.Deleted, Worktree: git.Untracked}, // unstaged, kept on disk
@@ -160,7 +160,7 @@ func TestStatusMatchesGoGit(t *testing.T) {
 	}
 	r, _ := git.PlainOpen(root)
 	wt, _ := r.Worktree()
-	fromGit, err := status(wt, root)
+	fromGit, _, err := status(wt, root)
 	if err != nil {
 		t.Fatal(err)
 	}

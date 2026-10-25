@@ -116,13 +116,18 @@ func (m *model) chatCapable(id string) bool {
 // stay alive when chat is shown, so switching back has the current screen.
 func sessionView(m *model, id string, group int) ggui.Widget {
 	mode := ggui.Bind(func() bool { return m.ChatModes.Get()[id] }, func(chat bool) { m.focusGroup(group); m.setChatMode(id, chat) })
-	toggle := ui.ToggleGroup[bool](mode).Options([]bool{true, false}).Format(func(chat bool) string {
-		if chat {
-			return T("Chat")
-		}
-		return T("Terminal")
-	}).Name(T("Session view"))
-	bar := ggui.Box(ggui.Row(toggle, ggui.Spacer()).Gap(8)).Pad(6, 12).Fill(tokSurface0)
+	// A switch at the right end, between the two views it chooses, the
+	// one in view in the foreground colour.
+	sw := ui.Switch(mode, "")
+	sw.SetName(T("Session view"))
+	side := func(label string, chat bool) ggui.Widget {
+		text := ggui.Reactive(func() ggui.Widget {
+			return ggui.Text(label).Size(12.5).Color(pick(mode.Get() == chat, tokFg, tokMuted)).NoWrap()
+		})
+		return ui.ButtonOf(text, func() { mode.Set(chat) }).Ghost().Pad(2, 4).Radius(4).Name(label)
+	}
+	bar := ggui.Box(ggui.Row(ggui.Spacer(), side(T("Terminal"), false), sw, side(T("Chat"), true)).Gap(8)).
+		Pad(6, 12).Fill(tokSurface0)
 	body := ggui.Key(ggui.Map(m.ChatModes, func(v map[string]bool) bool { return v[id] }), func(chat bool) ggui.Widget {
 		if chat {
 			return chatView(m, id, group)
@@ -228,11 +233,28 @@ func chatTurn(m *model, id string, info protocol.SessionInfo, msg protocol.ChatM
 	if msg.Role == "user" {
 		bubble := ggui.Box(ggui.Text(msg.Text).Size(14).Selectable()).
 			Fill(tokSurface2).Radius(12).Pad(10, 14).MaxWidth(680)
-		return ggui.Row(ggui.Spacer(), bubble).Stretch()
+		return ggui.Column(
+			ggui.Row(ggui.Spacer(), bubble).Stretch(),
+			ggui.Row(ggui.Spacer(), copyButton(m, msg.Text)).Stretch(),
+		).Gap(2).Stretch()
 	}
 	r := &mdRenderer{m: m, id: id, doc: docInfo{Node: info.NodeID, Path: joinPath(info.Project, "conversation.md")}, src: []byte(msg.Text)}
 	root := markdown.Parser().Parse(text.NewReader(r.src))
-	return ggui.Column(r.blocks(root)...).Gap(10).Stretch()
+	blocks := append(r.blocks(root), ggui.Row(copyButton(m, msg.Text), ggui.Spacer()).Stretch())
+	return ggui.Column(blocks...).Gap(10).Stretch()
+}
+
+// copyButton copies a message as the agent wrote it, Markdown and all, and
+// shows a check for a moment after.
+func copyButton(m *model, text string) ggui.Widget {
+	copied := ggui.State(false)
+	return ggui.View(copied, func(done bool) ggui.Widget {
+		return iconButton(pick(done, "check", "copy"), T("Copy"), func() {
+			ggui.CurrentClipboard().Write(text)
+			copied.Set(true)
+			time.AfterFunc(1500*time.Millisecond, func() { m.post(func() { copied.Set(false) }) })
+		})
+	})
 }
 
 // toolRow is one tool call: a glyph, its name and argument summary, and a

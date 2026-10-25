@@ -326,19 +326,25 @@ func filesView(m *model, r fileRoot) ggui.Widget {
 			if it.Stub {
 				return muted(ggui.Text(it.Name).Size(12.5).NoWrap().Ellipsis())
 			}
-			name := "file"
-			if it.Dir {
-				name = "folder"
-			}
 			label := ggui.Text(it.Name).Size(12.5).NoWrap().Ellipsis()
-			lead := icon(name).Size(14)
 			if it.Ignored {
-				label, lead = label.Color(tokExtraMuted), lead.Color(tokExtraMuted)
+				label = label.Color(tokExtraMuted)
+			}
+			leadIcon := func(open bool) ggui.Widget {
+				w := fileTypeIcon(it.Name, it.Dir, open).Size(14)
+				if it.Ignored {
+					w = w.Color(tokExtraMuted)
+				}
+				return w
+			}
+			lead := leadIcon(false)
+			if it.Dir { // a folder's icon opens with it
+				lead = ggui.View(ggui.Map(m.FilesOpen, func(o map[string]bool) bool { return o[it.Key] }), leadIcon)
 			}
 			row := ggui.Row(lead, ggui.Expanded(label)).Gap(7)
 			// Dragged to a terminal or the message box, it is typed as
 			// its path.
-			return ggui.DragSource(row, pathDrag{Path: it.Path})
+			return fileMenu(m, ggui.DragSource(row, pathDrag{Path: it.Path}), it)
 		}).
 		RowName(func(it fileItem) string { return it.Name }).
 		RowHeight(26).Indent(14).
@@ -375,9 +381,17 @@ func filesView(m *model, r fileRoot) ggui.Widget {
 				}
 				return iconButton("eye-off", T("Show hidden files"), m.toggleHidden)
 			}),
+			newInRoot(m, r),
 			iconButton("refresh-cw", T("Refresh"), m.refreshFiles),
 		).Gap(2),
 	)
+	// A failed delete says why under the header.
+	header = ggui.Column(header, ggui.If(ggui.Map(m.FileNote, func(s string) bool { return s != "" }), func() ggui.Widget {
+		return ggui.Box(ggui.Row(
+			ggui.Expanded(ggui.TextOf(m.FileNote).Size(12).Color(tokDotDown)),
+			iconButton("x", T("Dismiss"), func() { m.FileNote.Set("") }),
+		).Gap(6)).Pad(4, 6, 4, 12)
+	})).Stretch()
 	hasPreview := ggui.Map(m.Preview, func(p filePreview) bool { return p.Key != "" })
 	return treeOverPane(header, ggui.Scroll(ggui.Padding(tree, 4, 4)).Bar(tokSurface3),
 		hasPreview, 0.55, func() ggui.Widget { return previewPane(m) }, T("Preview divider"))
@@ -401,7 +415,7 @@ func previewPane(m *model) ggui.Widget {
 			enlarge = iconButton("maximize-2", T("Enlarge"), func() { m.ImageOpen.Set(true) })
 		}
 		return panelHeader(
-			icon("file").Size(14),
+			fileTypeIcon(p.Name, false, false).Size(14),
 			ggui.Expanded(ggui.Row(
 				ggui.Box(ggui.Text(p.Name).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).MaxWidth(170),
 				ggui.Text(info).Size(11.5).Color(tokExtraMuted).NoWrap(),

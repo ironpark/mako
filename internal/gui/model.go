@@ -102,6 +102,15 @@ type model struct {
 	FilesOpen *ggui.StateValue[map[string]bool]
 	FileSel   *ggui.StateValue[string]
 	Preview   *ggui.StateValue[filePreview]
+	// A file operation asked of the user, the name typed for it, why it
+	// failed, and the dialogs asking; FileNote shows a failure under the
+	// Files header once its dialog has closed.
+	FileAsk        *ggui.StateValue[fileAsk]
+	FileName       *ggui.StateValue[string]
+	FileErr        *ggui.StateValue[string]
+	FileNote       *ggui.StateValue[string]
+	FileNameOpen   *ggui.StateValue[bool]
+	FileDeleteOpen *ggui.StateValue[bool]
 
 	// The files open in tabs, by tab ID; see docs.go.
 	Docs *ggui.StateValue[map[string]docInfo]
@@ -131,6 +140,22 @@ type model struct {
 	GitClosed *ggui.StateValue[map[string]bool]
 	GitSel    *ggui.StateValue[string]
 	GitDiff   *ggui.StateValue[diffView]
+	// The files left out of the next commit, its message, and whether it
+	// amends the last; the operation under way and what the last said.
+	GitSkip    *ggui.StateValue[map[string]bool]
+	GitMessage *ggui.StateValue[string]
+	GitAmend   *ggui.StateValue[bool]
+	GitBusy    *ggui.StateValue[string]
+	GitNote    *ggui.StateValue[gitNote]
+	BranchOpen *ggui.StateValue[bool]
+	BranchName *ggui.StateValue[string]
+	BranchErr  *ggui.StateValue[string]
+	// The History tab: the commits, and the one chosen.
+	GitHistory *ggui.StateValue[historyView]
+	GitCommit  *ggui.StateValue[commitView]
+	// historyReading is set while the history is asked for; UI goroutine
+	// only.
+	historyReading bool
 
 	SidebarOpen *ggui.StateValue[bool]
 	DetailsOpen *ggui.StateValue[bool]
@@ -213,10 +238,26 @@ func newModel(cfg *config.Config, addr string) *model {
 		FilesOpen:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		FileSel:        ggui.State(""),
 		Preview:        ggui.State(filePreview{}).WithEqual(filePreview.same),
+		FileAsk:        ggui.State(fileAsk{}),
+		FileName:       ggui.State(""),
+		FileErr:        ggui.State(""),
+		FileNote:       ggui.State(""),
+		FileNameOpen:   ggui.State(false),
+		FileDeleteOpen: ggui.State(false),
 		Git:            ggui.State(gitView{}).WithEqual(func(a, b gitView) bool { return reflect.DeepEqual(a, b) }),
 		GitClosed:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		GitSel:         ggui.State(""),
 		GitDiff:        ggui.State(diffView{}).WithEqual(func(a, b diffView) bool { return reflect.DeepEqual(a, b) }),
+		GitSkip:        ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		GitMessage:     ggui.State(""),
+		GitAmend:       ggui.State(false),
+		GitBusy:        ggui.State(""),
+		GitNote:        ggui.State(gitNote{}),
+		BranchOpen:     ggui.State(false),
+		BranchName:     ggui.State(""),
+		BranchErr:      ggui.State(""),
+		GitHistory:     ggui.State(historyView{}).WithEqual(func(a, b historyView) bool { return reflect.DeepEqual(a, b) }),
+		GitCommit:      ggui.State(commitView{}).WithEqual(func(a, b commitView) bool { return reflect.DeepEqual(a, b) }),
 		SidebarOpen:    ggui.State(true),
 		DetailsOpen:    ggui.State(true),
 		DetailTab:      ggui.State(0),

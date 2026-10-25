@@ -44,6 +44,9 @@ type Daemon struct {
 
 	agentFile agentFile
 	mcp       *mcp.Resolver // nil without a configuration directory
+
+	hookBinary  string // the program agents run as their hook; see HookMain
+	hookCommand string // the shell command agents run as their hook; "" for none
 }
 
 // New builds a daemon from configuration.
@@ -59,6 +62,8 @@ func New(cfg *config.Config, log *slog.Logger) *Daemon {
 		outbound: map[string]*quic.Conn{},
 		ready:    make(chan struct{}),
 		mcp:      newResolver(log),
+
+		hookBinary: hookProgram,
 	}
 }
 
@@ -110,11 +115,13 @@ func (d *Daemon) Run(ctx context.Context) error {
 	defer d.sessions.closeAll()
 
 	d.port = portOf(d.ln.Addr())
-	d.log.Info("daemon listening", "addr", d.ln.Addr().String(), "node", d.cfg.NodeID, "name", d.cfg.Name)
-	close(d.ready)
-
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if run, err := config.RunDir(); err == nil {
+		d.listenHooks(ctx, run)
+	}
+	d.log.Info("daemon listening", "addr", d.ln.Addr().String(), "node", d.cfg.NodeID, "name", d.cfg.Name)
+	close(d.ready)
 
 	go d.warmContextServers(ctx)
 
@@ -252,6 +259,19 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeGitDiff:
 		return d.handleGitDiff(ctx, stream, env)
+
+	case protocol.TypeFileOp:
+		return d.handleFileOp(ctx, stream, env)
+
+	case protocol.TypeGitLog:
+		return d.handleGitLog(ctx, stream, env)
+
+	case protocol.TypeGitShow:
+		return d.handleGitShow(ctx, stream, env)
+
+	case protocol.TypeGitRun:
+		return d.handleGitRun(ctx, stream, env)
+
 	case protocol.TypeReadChat:
 		return d.handleReadChat(ctx, stream, env)
 
@@ -282,7 +302,7 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return err
 
 	default:
-		return fmt.Errorf("unsupported message %q", env.Type)
+		return &protocol.CodedError{Code: protocol.CodeUnsupported, Message: fmt.Sprintf("unsupported message %q", env.Type)}
 	}
 }
 

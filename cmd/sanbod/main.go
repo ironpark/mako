@@ -16,6 +16,9 @@ import (
 )
 
 func main() {
+	if daemon.HookMain() {
+		return
+	}
 	var (
 		listen  = flag.String("listen", "", "QUIC listen address (default from config)")
 		name    = flag.String("name", "", "node name (default from config)")

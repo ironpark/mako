@@ -76,8 +76,8 @@ header choose. A project folder outlives its last session: killing the
 sessions leaves the folder, with its button to start another, and the folder's
 menu removes it from the sidebar.
 
-Each Claude and Codex session has a **Chat / Terminal** switch (⌘⇧J, also in
-the command palette); a plain shell, or an agent without a native
+Each Claude and Codex session has a **Terminal / Chat** switch at the right of
+its bar (⌘⇧J, also in the command palette); a plain shell, or an agent without a native
 conversation, keeps its terminal alone and draws no switch. Switching keeps
 the same live PTY connection and remembers the mode per tab, including when it
 moves between panes. Chat reads Claude and Codex's native JSONL conversation
@@ -85,10 +85,15 @@ logs on the session's node, refreshes every two
 seconds, and renders the user's turns as bubbles, the agent's replies as
 Markdown, and each tool call as a compact row naming the tool and its command
 or path, with its arguments and output folded away; a failed tool opens to
-show its error. The daemon
+show its error. Text in the conversation can be selected by dragging and
+copied, and each message has a button that copies it as written. The daemon
 binds each session to its native conversation automatically and
-persists that identity with the launch. Claude receives a fixed session ID;
-Codex's own writable log identifies its conversation. On macOS this uses
+persists that identity with the launch. Claude receives a fixed session ID and,
+through `--settings`, a `SessionStart` hook added to the user's own hooks: the
+daemon's program runs as the hook and reports each new, resumed, cleared or
+forked conversation over a private Unix socket. Reports carry when the hook
+ran, so a late one never replaces a newer one. Until the first report, and for
+Codex, the agent's own writable log identifies its conversation. On macOS this uses
 `lsof`, and on Linux `/proc`; launcher children are included. Modern Codex
 versions are launched with `--no-daemon` so the conversation's writer belongs
 to the session rather than a shared app server. The process's
@@ -116,16 +121,31 @@ the same way, dividers between panes resize them, and a pane closes with its
 last tab. The Files tab browses the project of the session shown, on
 whichever node it runs, through that node's daemon: folders open as they are
 read, dotfiles show or hide with the eye button, what .gitignore leaves out
-is dimmed, and a text file chosen opens in a tab of its own, beside the
+is dimmed, and each file shows its type's icon, by the associations of Zed's
+default icon theme (language logos from Simple Icons, the rest Lucide). A text
+file chosen opens in a tab of its own, beside the
 terminals and arranged into panes as they are, while an image is previewed
-under the tree and enlarged with a click. Files and folders dragged from the Files tab or the desktop onto
+under the tree and enlarged with a click. A row's context menu opens or
+previews the file, inserts or copies its path (absolute or relative to the
+project), starts a session in a folder, and makes, renames or deletes files and
+folders on the node, asking for the name or a confirmation first; the header's
+**+** makes a file or folder in the project. Files and folders dragged from the Files tab or the desktop onto
 a terminal are typed as shell-quoted paths, onto the composer inserted, and
 a folder dropped anywhere else opens a new session in it. The Changes tab
 shows the project's git changes against HEAD, read by the daemon of the node
 the session runs on (git status when git is installed, go-git otherwise): a tree of
 the changed files, each folder adding up its files' lines added and removed,
 refreshed every few seconds while shown, and the diff of a file chosen
-under it. A tab dragged over a tab bar opens the gap it would drop into, and
+under it. Its header switches branches or makes a new one, and pulls
+(fast-forward only), pushes and fetches, showing the commits ahead and behind
+the upstream; a branch without an upstream is pushed to its only remote, or
+`origin`, and tracks it. Each changed file has a box: the commit box under the
+tree commits the files ticked with the message typed, or amends the last
+commit. The History tab lists the newest 500 commits of the branches, remote
+branches and tags, with their graph, branches and tags; the commit chosen shows
+its message, author and files, and a file's diff in turn. Git operations run
+the git program on the node, with the user's hooks and credentials, and never
+wait on a password prompt. A tab dragged over a tab bar opens the gap it would drop into, and
 the side panels slide open and closed.
 
 A file's tab is an editor over the whole file (up to 4 MB; a larger one

@@ -52,6 +52,8 @@ func window(m *model) ggui.Widget {
 			Else(func() ggui.Widget { return main }),
 		newSessionDialog(m),
 		renameDialog(m),
+		fileDialogs(m),
+		branchDialog(m),
 		imageViewer(m),
 		paletteDialog(m),
 		extensionsDialog(m),
@@ -489,8 +491,14 @@ func pill(iconName, label string) ggui.Widget {
 
 // Details panel --------------------------------------------------------------
 
-// changesTab is the Changes page's place among the details tabs.
-const changesTab = 1
+// The details panel's tabs, in order.
+const (
+	filesTab = iota
+	changesTab
+	historyTab
+	sessionTab
+	nodesTab
+)
 
 func details(m *model) ggui.Widget {
 	session := ggui.Reactive(func() ggui.Widget {
@@ -522,11 +530,12 @@ func details(m *model) ggui.Widget {
 	pages := []ggui.Widget{
 		filesPanel(m),
 		changesPanel(m),
+		historyPanel(m),
 		ggui.Scroll(ggui.Padding(session, 16)),
 		ggui.Scroll(ggui.Padding(nodes, 12)),
 	}
 	return ggui.Box(ggui.Column(
-		panelTabs(m.DetailTab, T("Files"), T("Changes"), T("Session"), T("Nodes")),
+		panelTabs(m.DetailTab, T("Files"), T("Changes"), T("History"), T("Session"), T("Nodes")),
 		hline(),
 		ggui.Expanded(ggui.Key(m.DetailTab, func(i int) ggui.Widget { return pages[min(max(i, 0), len(pages)-1)] })),
 	).Stretch()).Width(detailsWidth).Fill(tokSurface0)

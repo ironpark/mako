@@ -1,0 +1,12 @@
+The lang-*.svg files in this directory are brand logos from Simple Icons
+v13.21.0 (https://simpleicons.org, https://github.com/simple-icons/simple-icons),
+renamed, prefixed with a one-line source comment, and with path data
+re-spaced (compact arc flags such as "011.73" expanded) so the SVG
+rasterizer reads them; the shapes are unchanged.
+
+Simple Icons is released under CC0 1.0 Universal (public domain dedication):
+https://creativecommons.org/publicdomain/zero/1.0/
+
+The logos themselves remain trademarks of their respective owners; they are
+used here only to identify file types. See
+https://github.com/simple-icons/simple-icons/blob/develop/DISCLAIMER.md

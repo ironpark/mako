@@ -179,6 +179,61 @@ func TestPinOnlyWhenNothingPicksAConversation(t *testing.T) {
 	}
 }
 
+func TestHookAddsSettingsOnlyWhereTheAgentTakesThem(t *testing.T) {
+	claude, _ := Lookup("claude")
+	got, ok := claude.Hook([]string{"claude", "--model", "opus"}, "'/bin/sanbod' hook '/run/h.sock'")
+	if !ok || len(got) != 5 || got[3] != "--settings" {
+		t.Fatalf("hook=%q %v", got, ok)
+	}
+	var settings struct {
+		Hooks map[string][]struct {
+			Hooks []struct{ Type, Command string }
+		}
+	}
+	if err := json.Unmarshal([]byte(got[4]), &settings); err != nil {
+		t.Fatal(err)
+	}
+	if h := settings.Hooks["SessionStart"]; len(h) != 1 || len(h[0].Hooks) != 1 || h[0].Hooks[0].Type != "command" || h[0].Hooks[0].Command != "'/bin/sanbod' hook '/run/h.sock'" {
+		t.Fatalf("settings=%s", got[4])
+	}
+	// Claude's handling of a second --settings is undocumented.
+	if _, ok := claude.Hook([]string{"claude", "--settings=/mine.json"}, "h"); ok {
+		t.Fatal("hook replaced the user's own settings")
+	}
+	codex, _ := Lookup("codex")
+	if _, ok := codex.Hook([]string{"codex"}, "h"); ok {
+		t.Fatal("codex takes no hook settings")
+	}
+	if id, path, ok := claude.ParseHook([]byte(`{"hook_event_name":"SessionStart","session_id":"s","transcript_path":"/p"}`)); !ok || id != "s" || path != "/p" {
+		t.Fatalf("parse=%q %q %v", id, path, ok)
+	}
+	for _, other := range []string{`{"hook_event_name":"Stop","session_id":"s"}`, `{"hook_event_name":"SessionStart","session_id":"s","agent_id":"sub"}`, `not json`} {
+		if _, _, ok := claude.ParseHook([]byte(other)); ok {
+			t.Errorf("%s taken", other)
+		}
+	}
+}
+
+func TestLogOfTrustsOnlyTheAgentsOwnPlace(t *testing.T) {
+	env := map[string]string{"CLAUDE_CONFIG_DIR": "/c"}
+	id := "0b6f4d1e-2f7a-4c55-9a43-2c4f5f6e7a8b"
+	for path, want := range map[string]bool{
+		"/c/projects/-p/" + id + ".jsonl":         true,
+		"/c/projects/-p/../-q/" + id + ".jsonl":   true, // cleaned, still a project
+		"/c/projects/-p/other.jsonl":              false,
+		"/c/" + id + ".jsonl":                     false,
+		"/elsewhere/projects/-p/" + id + ".jsonl": false,
+		"projects/-p/" + id + ".jsonl":            false,
+	} {
+		if got := LogOf("claude", env, id, path); got != want {
+			t.Errorf("LogOf(%s)=%v", path, got)
+		}
+	}
+	if LogOf("claude", env, "../x", "/c/projects/-p/../x.jsonl") || LogOf("codex", map[string]string{"CODEX_HOME": "/c"}, id, "/c/sessions/2026/10/26/rollout-"+id+".jsonl") {
+		t.Fatal("invalid ID or rollout log trusted")
+	}
+}
+
 func TestUpgradeStructuresOlderToolMessages(t *testing.T) {
 	chat := protocol.Chat{Messages: []protocol.ChatMessage{
 		{Role: "assistant", Text: "Running it."},

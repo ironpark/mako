@@ -259,6 +259,9 @@ func (d *Daemon) conversationFor(ctx context.Context, req protocol.OpenSession, 
 	if native.Isolate != "" {
 		launch.Command = withOptionalFlag(ctx, launch.Command, native.Isolate)
 	}
+	if d.hookCommand != "" {
+		launch.Command, _ = native.Hook(launch.Command, d.hookCommand)
+	}
 	return conversationID, transcriptPath, nil
 }
 

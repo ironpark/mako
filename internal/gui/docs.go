@@ -4,7 +4,6 @@ import (
 	"context"
 	"maps"
 	"math"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -250,23 +249,12 @@ func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget 
 		label = name + " ●"
 	}
 	content := ggui.Box(ggui.Row(
-		icon(fileIcon(name)).Size(14).Color(fg),
+		icon(fileIconName(name)).Size(14).Color(fg),
 		ggui.Box(ggui.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(170),
 		ui.ButtonOf(icon("x").Size(13), func() { m.askCloseDoc(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", name)),
 	).Gap(8)).Height(tabBarHeight)
 	btn := ui.ButtonOf(content, func() { m.showTab(id) }).Ghost().Pad(0, 8, 0, 12).Radius(0).Name(name)
 	return tabCell(btn, selected, focused)
-}
-
-// fileIcon is the icon a file's tab shows.
-func fileIcon(name string) string {
-	switch strings.ToLower(filepath.Ext(name)) {
-	case ".md", ".txt", ".rst", ".log":
-		return "file-text"
-	case "":
-		return "file"
-	}
-	return "file-code"
 }
 
 // docView is a file's tab content: a line about the file and the caret,
