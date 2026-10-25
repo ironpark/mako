@@ -155,20 +155,6 @@ func TestNativeConversationSurvivesDaemonRestartWithoutOpeningChat(t *testing.T)
 	}
 }
 
-func TestResumeCommandKeepsSettingsNotPromptOrFork(t *testing.T) {
-	for _, tc := range []struct {
-		agent      string
-		args, want []string
-	}{
-		{"claude", []string{"claude", "--model", "opus", "--settings", "settings.json", "--session-id", "old", "--fork-session", "prompt"}, []string{"claude", "--resume", "new", "--model", "opus", "--settings", "settings.json"}},
-		{"codex", []string{"codex", "-c", "mcp_servers.test.command=tool", "--model", "test", "resume", "--last", "old", "prompt", "--image", "image.png"}, []string{"codex", "resume", "new", "-c", "mcp_servers.test.command=tool", "--model", "test"}},
-	} {
-		if got := resumeCommand(tc.agent, tc.args, "new"); !slices.Equal(got, tc.want) {
-			t.Fatalf("%s: %q want %q", tc.agent, got, tc.want)
-		}
-	}
-}
-
 func TestConcurrentAgentsInSameProjectBindTheirOwnLogs(t *testing.T) {
 	command, root := fakeAgent(t, "codex")
 	cfg := &config.Config{NodeID: "node", Agents: map[string]agentspec.Agent{"codex": {Command: []string{command}, Env: map[string]string{"SANBO_FAKE_AGENT": "codex", "SANBO_FAKE_ROOT": root, "CODEX_HOME": root}}}}

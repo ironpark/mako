@@ -31,8 +31,9 @@ type Daemon struct {
 	saved       map[string]savedSession
 	sessionPath string
 
-	sessions *registry
-	peers    *peerTable
+	sessions      *registry
+	conversations conversations
+	peers         *peerTable
 
 	ln    *transport.Listener
 	port  int

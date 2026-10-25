@@ -1,8 +1,8 @@
 package gui
 
 import (
+	"cmp"
 	"context"
-	"encoding/json"
 	"hash/fnv"
 	"maps"
 	"math"
@@ -295,39 +295,17 @@ func toolBlock(text string, failed bool) ggui.Widget {
 	return ggui.Box(t).Fill(tokSurface0).Border(1, tokBorder).Radius(6).Pad(8, 10)
 }
 
-// toolParts reads a message, structured by this daemon or written by an
-// older one as "Name\n<arguments>" and loose output.
+// toolParts reads a tool message: a call with its result, or output whose
+// call is not in the window.
 func toolParts(msg protocol.ChatMessage) (name, detail, args, result string, failed bool) {
-	if msg.Tool != "" || msg.Output || msg.Result != "" {
-		if msg.Output {
-			name = msg.Tool
-			if name == "" {
-				name = T("Output")
-			}
-			detail = msg.Detail
-			if detail == "" {
-				detail = transcript.OneLine(msg.Text, 120)
-			}
-			return name, detail, "", msg.Text, msg.Error
-		}
-		name = msg.Tool
-		if name == "" {
-			name = T("Tool")
-		}
-		return name, msg.Detail, msg.Text, msg.Result, msg.Error
+	if msg.Output {
+		return cmp.Or(msg.Tool, T("Output")), cmp.Or(msg.Detail, transcript.OneLine(msg.Text, 120)), "", msg.Text, msg.Error
 	}
-	if head, rest, ok := strings.Cut(msg.Text, "\n"); ok && head != "" && !strings.ContainsAny(head, " \t{}[]\"'") {
-		rest = strings.TrimSpace(rest)
-		var raw json.RawMessage
-		if rest == "" || json.Unmarshal([]byte(rest), &raw) == nil {
-			return head, transcript.ToolDetail(raw), rest, "", false
-		}
-	}
-	return T("Output"), transcript.OneLine(msg.Text, 120), "", msg.Text, false
+	return cmp.Or(msg.Tool, T("Tool")), msg.Detail, msg.Text, msg.Result, msg.Error
 }
 
 // chatMessageKey keeps a tool row's fold across refreshes: the log's own ID,
-// or a hash of what an older daemon sent.
+// or a hash of a message without one.
 func chatMessageKey(msg protocol.ChatMessage) string {
 	if msg.ID != "" {
 		return msg.ID

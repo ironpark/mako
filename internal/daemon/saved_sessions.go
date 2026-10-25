@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	"github.com/ironpark/sanbo/internal/agentspec"
+	"github.com/ironpark/sanbo/internal/mcp"
 	"github.com/ironpark/sanbo/internal/protocol"
 	"github.com/ironpark/sanbo/internal/session"
 	"github.com/ironpark/sanbo/internal/transcript"
@@ -101,9 +102,30 @@ func (d *Daemon) listSessions() []protocol.SessionInfo {
 	return out
 }
 
-// startSessionLocked serializes activation, so simultaneous windows cannot
-// launch the same restored session twice. Failed starts retain the saved entry.
-func (d *Daemon) startSessionLocked(ctx context.Context, id string, req protocol.OpenSession) (*session.Session, error) {
+func (d *Daemon) openSession(ctx context.Context, req protocol.OpenSession) (*session.Session, error) {
+	return d.startSession(ctx, newSessionID(), req)
+}
+
+func (d *Daemon) attachSession(ctx context.Context, id string) (*session.Session, error) {
+	d.sessionMu.Lock()
+	s, live := d.sessions.get(id)
+	saved, ok := d.saved[id]
+	d.sessionMu.Unlock()
+	switch {
+	case live:
+		return s, nil
+	case !ok:
+		return nil, fmt.Errorf("unknown session %q", id)
+	}
+	return d.startSession(ctx, id, saved.Request)
+}
+
+// startSession resolves the launch, and the conversation it continues,
+// without holding the session lock: that can mean reading the agent's logs
+// or asking its binary for help. Activation itself is serialized, so
+// simultaneous windows cannot launch a restored session twice; the later one
+// gets the session the first started. Failed starts retain the saved entry.
+func (d *Daemon) startSession(ctx context.Context, id string, req protocol.OpenSession) (*session.Session, error) {
 	launch, err := agentspec.Resolve(req.Agent, req.Profile, req.Args, req.Env, d.agents())
 	if err != nil {
 		return nil, err
@@ -120,10 +142,31 @@ func (d *Daemon) startSessionLocked(ctx context.Context, id string, req protocol
 	}
 	req.Project = project
 
+	d.sessionMu.Lock()
 	previous, existed := d.saved[id]
-	conversationID, transcriptPath, err := d.conversationFor(ctx, id, req, &launch, previous, existed)
+	var claimed map[string]bool // only an older saved session recovers one
+	if existed && previous.Info.ConversationID == "" {
+		claimed = d.claimedLocked(id)
+	}
+	d.sessionMu.Unlock()
+	conversationID, transcriptPath, err := d.conversationFor(ctx, req, &launch, previous, existed, claimed)
 	if err != nil {
 		return nil, err
+	}
+
+	d.sessionMu.Lock()
+	defer d.sessionMu.Unlock()
+	if s, ok := d.sessions.get(id); ok {
+		return s, nil
+	}
+	previous, ok := d.saved[id]
+	if ok != existed {
+		return nil, fmt.Errorf("session %q changed while it was starting", id)
+	}
+	// A conversation recovered for an older saved session is only its own
+	// while no other session took it in the meantime.
+	if existed && previous.Info.ConversationID == "" && d.claimedLocked(id)[conversationID] {
+		return nil, fmt.Errorf("conversation %s already belongs to another session", conversationID)
 	}
 	command, cleanup := d.withContextServers(ctx, launch, id)
 	s, err := session.Start(session.Spec{ID: id, NodeID: d.cfg.NodeID, Agent: req.Agent, Profile: req.Profile,
@@ -154,35 +197,32 @@ func (d *Daemon) startSessionLocked(ctx context.Context, id string, req protocol
 		return nil, fmt.Errorf("save session: %w", err)
 	}
 	d.sessions.add(s)
-	go d.trackConversation(s)
+	d.trackConversation(s)
 	d.log.Info("session started", "id", id, "agent", req.Agent, "project", req.Project)
 	go func() { <-s.Done(); cleanup() }()
 	return s, nil
 }
 
 // conversationFor binds a native agent's command to the conversation the
-// session should resume, returning the ID and log path to persist.
-func (d *Daemon) conversationFor(ctx context.Context, id string, req protocol.OpenSession, launch *agentspec.Launch, previous savedSession, existed bool) (string, string, error) {
+// session should resume, returning the ID and log path to persist. claimed
+// is the conversations other sessions hold.
+func (d *Daemon) conversationFor(ctx context.Context, req protocol.OpenSession, launch *agentspec.Launch, previous savedSession, existed bool, claimed map[string]bool) (string, string, error) {
 	conversationID, transcriptPath := previous.Info.ConversationID, previous.TranscriptPath
-	native := nativeAgent(req.Agent, launch.Command)
-	if existed && conversationID != "" && !native {
+	native, ok := transcript.Lookup(req.Agent)
+	ok = ok && len(launch.Command) > 0 && mcp.Kind(launch.Command[0]) == req.Agent
+	if existed && conversationID != "" && !ok {
 		return "", "", fmt.Errorf("cannot resume %s through a custom wrapper; configure the native %s command", conversationID, req.Agent)
 	}
-	if !native {
+	if !ok {
 		return conversationID, transcriptPath, nil
 	}
+	env := session.TranscriptEnvFrom(launch.Env)
 	if conversationID == "" {
-		conversationID = transcript.ArgumentID(req.Agent, launch.Command)
+		conversationID = native.ArgumentID(launch.Command)
 	}
 	if existed && conversationID == "" {
-		claimed := map[string]bool{}
-		for other, entry := range d.saved {
-			if other != id && entry.Info.ConversationID != "" {
-				claimed[entry.Info.ConversationID] = true
-			}
-		}
 		var err error
-		conversationID, transcriptPath, err = transcript.Recover(ctx, previous.Info, session.TranscriptEnvFrom(launch.Env), claimed)
+		conversationID, transcriptPath, err = transcript.Recover(ctx, previous.Info, env, claimed)
 		if err != nil {
 			return "", "", err
 		}
@@ -193,7 +233,7 @@ func (d *Daemon) conversationFor(ctx context.Context, id string, req protocol.Op
 		lookup.ConversationID = conversationID
 		if transcriptPath == "" {
 			var err error
-			transcriptPath, err = transcript.Locate(ctx, lookup, session.TranscriptEnvFrom(launch.Env))
+			transcriptPath, err = transcript.Locate(ctx, lookup, env)
 			if err != nil {
 				return "", "", err
 			}
@@ -202,40 +242,23 @@ func (d *Daemon) conversationFor(ctx context.Context, id string, req protocol.Op
 			if err := transcript.Verify(lookup, transcriptPath); err != nil {
 				return "", "", fmt.Errorf("cannot resume saved conversation: %w", err)
 			}
-			launch.Command = resumeCommand(req.Agent, launch.Command, conversationID)
-		} else if req.Agent == "claude" {
-			// A newly opened Claude window may not have written its first turn yet.
-			launch.Command = append(launch.Command, "--session-id", conversationID)
+			launch.Command = native.Resume(launch.Command, conversationID)
+		} else if command, ok := native.Pin(launch.Command, conversationID); ok {
+			// A newly opened window may not have written its first turn yet.
+			launch.Command = command
 		} else {
 			return "", "", fmt.Errorf("saved conversation %s is unavailable; refusing to start a new conversation", conversationID)
 		}
-	} else if req.Agent == "claude" && conversationID == "" && !hasConversationSelector(launch.Command) {
-		conversationID = conversationUUID()
-		launch.Command = append(launch.Command, "--session-id", conversationID)
+	} else if conversationID == "" && !native.Picks(launch.Command) {
+		id := conversationUUID()
+		if command, ok := native.Pin(launch.Command, id); ok {
+			conversationID, launch.Command = id, command
+		}
 	}
-	if req.Agent == "codex" {
-		launch.Command = isolatedCodex(ctx, launch.Command)
+	if native.Isolate != "" {
+		launch.Command = withOptionalFlag(ctx, launch.Command, native.Isolate)
 	}
 	return conversationID, transcriptPath, nil
-}
-
-func (d *Daemon) openSession(ctx context.Context, req protocol.OpenSession) (*session.Session, error) {
-	d.sessionMu.Lock()
-	defer d.sessionMu.Unlock()
-	return d.startSessionLocked(ctx, newSessionID(), req)
-}
-
-func (d *Daemon) attachSession(ctx context.Context, id string) (*session.Session, error) {
-	d.sessionMu.Lock()
-	defer d.sessionMu.Unlock()
-	if s, ok := d.sessions.get(id); ok {
-		return s, nil
-	}
-	saved, ok := d.saved[id]
-	if !ok {
-		return nil, fmt.Errorf("unknown session %q", id)
-	}
-	return d.startSessionLocked(ctx, id, saved.Request)
 }
 
 func (d *Daemon) renameSession(id, name string) (protocol.SessionInfo, error) {

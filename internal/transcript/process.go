@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,82 +12,112 @@ import (
 	"strings"
 )
 
-// ProcessLog identifies the log actually open for writing by this process or
-// its launcher children. It never guesses from a project's newest file.
-func ProcessLog(ctx context.Context, pid int, agent, project string) (string, string, error) {
-	pids := []int{pid}
-	out, err := exec.CommandContext(ctx, "ps", "-axo", "pid=,ppid=").Output()
-	if err == nil {
-		pids = descendants(pid, string(out))
+// OpenLogs lists the logs each process tree has open for writing, keyed by
+// the pid at the tree's root. One listing covers every tree, so watching many
+// sessions spawns no more processes than watching one.
+func OpenLogs(ctx context.Context, roots []int) (map[int][]string, error) {
+	tree := map[int]int{} // a pid to the root of its tree
+	for _, root := range roots {
+		tree[root] = root
 	}
-	var paths []string
+	if out, err := exec.CommandContext(ctx, "ps", "-axo", "pid=,ppid=").Output(); err == nil {
+		tree = descendants(roots, string(out))
+	}
+	logs := map[int][]string{}
 	if runtime.GOOS == "linux" {
-		for _, p := range pids {
-			fds, _ := filepath.Glob(fmt.Sprintf("/proc/%d/fd/*", p))
-			for _, fd := range fds {
-				target, err := os.Readlink(fd)
-				if err != nil || !strings.HasSuffix(target, ".jsonl") {
-					continue
-				}
-				data, _ := os.ReadFile(fmt.Sprintf("/proc/%d/fdinfo/%s", p, filepath.Base(fd)))
-				for _, line := range strings.Split(string(data), "\n") {
-					fields := strings.Fields(line)
-					if len(fields) == 2 && fields[0] == "flags:" {
-						flags, _ := strconv.ParseUint(fields[1], 8, 64)
-						if flags&3 != 0 {
-							paths = append(paths, target)
-						}
-					}
+		for pid, root := range tree {
+			logs[root] = append(logs[root], procLogs(pid)...)
+		}
+		return logs, nil
+	}
+	ids := make([]string, 0, len(tree))
+	for pid := range tree {
+		ids = append(ids, strconv.Itoa(pid))
+	}
+	out, err := exec.CommandContext(ctx, "lsof", "-w", "-a", "-p", strings.Join(ids, ","), "-Fpfan").Output()
+	if err != nil && len(out) == 0 {
+		return nil, err
+	}
+	for pid, paths := range writablePaths(string(out)) {
+		if root, ok := tree[pid]; ok {
+			logs[root] = append(logs[root], paths...)
+		}
+	}
+	return logs, nil
+}
+
+// procLogs is the logs pid has open for writing, read from /proc.
+func procLogs(pid int) []string {
+	var paths []string
+	fds, _ := filepath.Glob(fmt.Sprintf("/proc/%d/fd/*", pid))
+	for _, fd := range fds {
+		target, err := os.Readlink(fd)
+		if err != nil || !strings.HasSuffix(target, ".jsonl") {
+			continue
+		}
+		data, _ := os.ReadFile(fmt.Sprintf("/proc/%d/fdinfo/%s", pid, filepath.Base(fd)))
+		for _, line := range strings.Split(string(data), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 2 && fields[0] == "flags:" {
+				flags, _ := strconv.ParseUint(fields[1], 8, 64)
+				if flags&3 != 0 {
+					paths = append(paths, target)
 				}
 			}
 		}
-	} else {
-		ids := make([]string, len(pids))
-		for i, p := range pids {
-			ids[i] = strconv.Itoa(p)
-		}
-		out, err := exec.CommandContext(ctx, "lsof", "-w", "-a", "-p", strings.Join(ids, ","), "-Ffan").Output()
-		if err != nil && len(out) == 0 {
-			return "", "", err
-		}
-		paths = writablePaths(string(out))
+	}
+	return paths
+}
+
+// Identify picks, among the logs a process tree has open for writing, the one
+// conversation of project. It never guesses from a project's newest file.
+func Identify(agent, project string, paths []string) (string, string, error) {
+	a, ok := Lookup(agent)
+	if !ok {
+		return "", "", errUnsupported
 	}
 	var foundID, foundPath string
 	for _, path := range paths {
 		if !strings.HasSuffix(path, ".jsonl") {
 			continue
 		}
-		id, ok := logProject(path, agent, project)
+		id, ok := logProject(path, a, project)
 		if !ok {
 			continue
 		}
 		if foundID != "" && foundID != id {
-			return "", "", fmt.Errorf("multiple writable conversations for process %d", pid)
+			return "", "", errors.New("multiple writable conversations")
 		}
 		foundID, foundPath = id, path
 	}
 	return foundID, foundPath, nil
 }
 
-func writablePaths(output string) []string {
-	var paths []string
+// writablePaths reads lsof's field output: the files each process has open
+// for writing.
+func writablePaths(output string) map[int][]string {
+	paths := map[int][]string{}
+	pid := 0
 	writable := false
 	for _, line := range strings.Split(output, "\n") {
-		if strings.HasPrefix(line, "f") {
+		switch {
+		case strings.HasPrefix(line, "p"):
+			pid, _ = strconv.Atoi(line[1:])
+		case strings.HasPrefix(line, "f"):
 			writable = false
-		}
-		if strings.HasPrefix(line, "a") {
+		case strings.HasPrefix(line, "a"):
 			writable = line == "aw" || line == "au"
-		}
-		if writable && strings.HasPrefix(line, "n") {
-			paths = append(paths, line[1:])
+		case writable && strings.HasPrefix(line, "n"):
+			paths[pid] = append(paths[pid], line[1:])
 		}
 	}
 	return paths
 }
 
-func descendants(root int, output string) []int {
-	parents := map[int]int{}
+// descendants maps every process under roots, the roots included, to the
+// root it runs under.
+func descendants(roots []int, output string) map[int]int {
+	children := map[int][]int{}
 	for _, line := range strings.Split(output, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) != 2 {
@@ -94,17 +125,20 @@ func descendants(root int, output string) []int {
 		}
 		pid, _ := strconv.Atoi(fields[0])
 		parent, _ := strconv.Atoi(fields[1])
-		parents[pid] = parent
+		children[parent] = append(children[parent], pid)
 	}
-	result := []int{root}
-	seen := map[int]bool{root: true}
-	for i := 0; i < len(result); i++ {
-		for pid, parent := range parents {
-			if parent == result[i] && !seen[pid] {
-				seen[pid] = true
-				result = append(result, pid)
+	tree := map[int]int{}
+	for _, root := range roots {
+		queue := []int{root}
+		for len(queue) > 0 {
+			pid := queue[0]
+			queue = queue[1:]
+			if _, seen := tree[pid]; seen {
+				continue
 			}
+			tree[pid] = root
+			queue = append(queue, children[pid]...)
 		}
 	}
-	return result
+	return tree
 }

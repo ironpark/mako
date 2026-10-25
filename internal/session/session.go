@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/creack/pty"
@@ -60,6 +61,7 @@ type Session struct {
 	started        time.Time
 	done           chan struct{}
 	progress       activity.Progress // guarded by mu
+	outputs        atomic.Uint64
 }
 
 // Start launches the agent on a PTY.
@@ -266,6 +268,7 @@ func (s *Session) pump() {
 }
 
 func (s *Session) feed(chunk []byte) {
+	s.outputs.Add(1)
 	s.mu.Lock()
 	if _, err := s.term.Write(chunk); err != nil && !errors.Is(err, io.ErrClosedPipe) {
 		// A parse failure must not kill the session; the raw bytes still reach

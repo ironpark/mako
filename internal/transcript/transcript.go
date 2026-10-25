@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -25,16 +26,14 @@ const maxRead = 2 << 20
 
 var validID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$`)
 
-// Supported reports whether agent writes a native log this package reads.
-func Supported(agent string) bool {
-	return agent == "claude" || agent == "codex"
-}
+var errUnsupported = errors.New("agent has no native conversation")
 
 // Read reads the conversation bound to info's ID. A log the agent has not
 // written yet yields the ID without messages.
 func Read(ctx context.Context, info protocol.SessionInfo, env map[string]string) (protocol.Chat, error) {
-	out := protocol.Chat{Supported: Supported(info.Agent)}
-	if !out.Supported || info.ConversationID == "" {
+	a, ok := Lookup(info.Agent)
+	out := protocol.Chat{Supported: ok}
+	if !ok || info.ConversationID == "" {
 		return out, nil
 	}
 	if !validID.MatchString(info.ConversationID) {
@@ -45,17 +44,17 @@ func Read(ctx context.Context, info protocol.SessionInfo, env map[string]string)
 	if err != nil || path == "" {
 		return out, err
 	}
-	if _, ok := logProject(path, info.Agent, info.Project); !ok {
+	if _, ok := logProject(path, a, info.Project); !ok {
 		return out, nil
 	}
-	out.Messages, out.Truncated, err = readMessages(path, info.Agent)
+	out.Messages, out.Truncated, err = readMessages(path, a)
 	return out, err
 }
 
 // logProject reads a log's identity and reports whether it is a usable
 // conversation of project.
-func logProject(path, agent, project string) (string, bool) {
-	id, cwd := metadata(path, agent)
+func logProject(path string, a *Agent, project string) (string, bool) {
+	id, cwd := metadata(path, a)
 	return id, id != "" && validID.MatchString(id) && samePath(cwd, project)
 }
 
@@ -72,42 +71,6 @@ func samePath(a, b string) bool {
 	return filepath.Clean(a) == filepath.Clean(b)
 }
 
-// ArgumentID extracts an explicitly selected native ID. A fork's source
-// conversation is not the new process's identity.
-func ArgumentID(agent string, args []string) string {
-	var sessionID, resumeID string
-	fork := false
-	for i, arg := range args {
-		name, v, hasValue := strings.Cut(arg, "=")
-		if !hasValue && i+1 < len(args) {
-			v = args[i+1]
-		}
-		switch {
-		case agent == "claude" && name == "--session-id":
-			if sessionID == "" && validID.MatchString(v) {
-				sessionID = v
-			}
-		case agent == "claude" && name == "--fork-session":
-			fork = true
-		case agent == "claude" && (name == "--resume" || name == "-r"):
-			if resumeID == "" && validID.MatchString(v) {
-				resumeID = v
-			}
-		case agent == "codex" && arg == "resume":
-			if resumeID == "" && validID.MatchString(v) {
-				resumeID = v
-			}
-		}
-	}
-	switch {
-	case sessionID != "":
-		return sessionID
-	case fork:
-		return ""
-	}
-	return resumeID
-}
-
 type record struct {
 	Type      string          `json:"type"`
 	Cwd       string          `json:"cwd"`
@@ -118,14 +81,14 @@ type record struct {
 	Payload   json.RawMessage `json:"payload"`
 }
 
-func metadata(path, agent string) (string, string) {
-	id, cwd, _ := scanLog(path, agent)
+func metadata(path string, a *Agent) (string, string) {
+	id, cwd, _ := scanLog(path, a)
 	return id, cwd
 }
 
 // scanLog reads a log's identity record: its native ID, working directory
 // and creation time.
-func scanLog(path, agent string) (id, cwd string, created time.Time) {
+func scanLog(path string, a *Agent) (id, cwd string, created time.Time) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", "", time.Time{}
@@ -141,10 +104,10 @@ func scanLog(path, agent string) (id, cwd string, created time.Time) {
 		if json.Unmarshal(s.Bytes(), &r) != nil {
 			continue
 		}
-		if agent == "claude" && !r.Sidechain && r.Cwd != "" && r.SessionID != "" {
+		if !a.rollout && !r.Sidechain && r.Cwd != "" && r.SessionID != "" {
 			return r.SessionID, r.Cwd, r.Timestamp
 		}
-		if agent == "codex" && r.Type == "session_meta" {
+		if a.rollout && r.Type == "session_meta" {
 			var meta struct {
 				ID        string          `json:"id"`
 				SessionID string          `json:"session_id"`
@@ -171,7 +134,7 @@ func scanLog(path, agent string) (id, cwd string, created time.Time) {
 	return "", "", time.Time{}
 }
 
-func readMessages(path, agent string) ([]protocol.ChatMessage, bool, error) {
+func readMessages(path string, a *Agent) ([]protocol.ChatMessage, bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, false, err
@@ -231,7 +194,7 @@ func readMessages(path, agent string) ([]protocol.ChatMessage, bool, error) {
 			seen[r.UUID] = true
 		}
 		raw := r.Message
-		if agent == "codex" {
+		if a.rollout {
 			if r.Type != "response_item" {
 				continue
 			}
@@ -360,7 +323,27 @@ func toolCall(id, name string, input json.RawMessage) protocol.ChatMessage {
 			args = string(input)
 		}
 	}
-	return protocol.ChatMessage{Role: "tool", ID: id, Tool: name, Detail: ToolDetail(input), Text: args}
+	return protocol.ChatMessage{Role: "tool", ID: id, Tool: name, Detail: toolDetail(input), Text: args}
+}
+
+// Upgrade structures the tool messages of an older daemon, which sent a call
+// as "Name\n<arguments>" and its result as loose text, so a front-end only
+// ever reads one form.
+func Upgrade(chat *protocol.Chat) {
+	for i, m := range chat.Messages {
+		if m.Role != "tool" || m.Tool != "" || m.Output || m.Result != "" {
+			continue
+		}
+		if head, rest, ok := strings.Cut(m.Text, "\n"); ok && head != "" && !strings.ContainsAny(head, " \t{}[]\"'") {
+			rest = strings.TrimSpace(rest)
+			var raw json.RawMessage
+			if rest == "" || json.Unmarshal([]byte(rest), &raw) == nil {
+				chat.Messages[i] = toolCall("", head, raw)
+				continue
+			}
+		}
+		chat.Messages[i] = protocol.ChatMessage{Role: "tool", Text: m.Text, Output: true}
+	}
 }
 
 // argumentsJSON reads the JSON an agent wrote as a string, as Codex does in
@@ -377,9 +360,9 @@ func argumentsJSON(s string) json.RawMessage {
 	return json.RawMessage(s)
 }
 
-// ToolDetail is what a tool row shows beside its name: a command, a path, a
+// toolDetail is what a tool row shows beside its name: a command, a path, a
 // pattern, or the first string the arguments carry.
-func ToolDetail(input json.RawMessage) string {
+func toolDetail(input json.RawMessage) string {
 	var m map[string]any
 	if len(input) == 0 || json.Unmarshal(input, &m) != nil {
 		return ""
@@ -433,7 +416,11 @@ func contentText(raw json.RawMessage) string {
 // Verify reports whether a bound log is present and carries the session's
 // conversation ID, without reading its messages.
 func Verify(info protocol.SessionInfo, path string) error {
-	if id, _ := metadata(path, info.Agent); id != info.ConversationID {
+	a, ok := Lookup(info.Agent)
+	if !ok {
+		return errUnsupported
+	}
+	if id, _ := metadata(path, a); id != info.ConversationID {
 		return fmt.Errorf("conversation log identity does not match session")
 	}
 	return nil
@@ -442,48 +429,65 @@ func Verify(info protocol.SessionInfo, path string) error {
 // ReadBound reads a daemon-verified path, including rollout names that carry
 // a separate file ID. A missing or replaced bound log is an error.
 func ReadBound(info protocol.SessionInfo, path string) (protocol.Chat, error) {
-	out := protocol.Chat{Supported: true, Conversation: info.ConversationID}
+	a, ok := Lookup(info.Agent)
+	out := protocol.Chat{Supported: ok, Conversation: info.ConversationID}
 	if err := Verify(info, path); err != nil {
 		return out, err
 	}
 	var err error
-	out.Messages, out.Truncated, err = readMessages(path, info.Agent)
+	out.Messages, out.Truncated, err = readMessages(path, a)
 	return out, err
 }
 
-// logPaths lists an agent's logs whose file name matches the glob name.
-func logPaths(agent string, env map[string]string, name string) ([]string, error) {
-	home := env["HOME"]
-	if home == "" {
-		home, _ = os.UserHomeDir()
+// Cache keeps the last read of a bound log, so polling a log that has not
+// changed costs one stat.
+type Cache struct {
+	mu   sync.Mutex
+	stat os.FileInfo
+	chat protocol.Chat
+}
+
+// ReadBound is ReadBound, answered from the cache while the log is the same
+// file, unchanged, and still bound to the same conversation.
+func (c *Cache) ReadBound(info protocol.SessionInfo, path string) (protocol.Chat, error) {
+	stat, statErr := os.Stat(path)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if statErr == nil && c.stat != nil && c.chat.Conversation == info.ConversationID && os.SameFile(c.stat, stat) &&
+		c.stat.Size() == stat.Size() && c.stat.ModTime().Equal(stat.ModTime()) {
+		return c.chat, nil
 	}
-	root := env["CLAUDE_CONFIG_DIR"]
-	if agent == "codex" {
-		root = env["CODEX_HOME"]
-	}
-	if root == "" {
-		if agent == "claude" {
-			root = filepath.Join(home, ".claude")
-		} else {
-			root = filepath.Join(home, ".codex")
-		}
-	}
-	var pattern string
-	if agent == "claude" {
-		pattern = filepath.Join(root, "projects", "*", name)
+	chat, err := ReadBound(info, path)
+	if err == nil && statErr == nil {
+		c.stat, c.chat = stat, chat
 	} else {
-		pattern = filepath.Join(root, "sessions", "*", "*", "*", name)
+		c.stat = nil
 	}
+	return chat, err
+}
+
+// logPaths lists an agent's logs whose file name matches the glob name.
+func logPaths(a *Agent, env map[string]string, name string) ([]string, error) {
+	root := env[a.rootEnv]
+	if root == "" {
+		home := env["HOME"]
+		if home == "" {
+			home, _ = os.UserHomeDir()
+		}
+		root = filepath.Join(home, a.homeDir)
+	}
+	pattern := filepath.Join(append(append([]string{root}, a.logDirs...), name)...)
 	return filepath.Glob(pattern)
 }
 
 // Locate finds a known native ID without depending on a rollout filename.
 func Locate(ctx context.Context, info protocol.SessionInfo, env map[string]string) (string, error) {
+	a, ok := Lookup(info.Agent)
 	// The ID goes into the glob, so only a valid one may.
-	if !validID.MatchString(info.ConversationID) {
+	if !ok || !validID.MatchString(info.ConversationID) {
 		return "", nil
 	}
-	paths, err := logPaths(info.Agent, env, "*"+info.ConversationID+"*.jsonl")
+	paths, err := logPaths(a, env, "*"+info.ConversationID+"*.jsonl")
 	if err != nil {
 		return "", err
 	}
@@ -491,7 +495,7 @@ func Locate(ctx context.Context, info protocol.SessionInfo, env map[string]strin
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
-		id, _ := metadata(path, info.Agent)
+		id, _ := metadata(path, a)
 		if id == info.ConversationID {
 			return path, nil
 		}
@@ -503,7 +507,11 @@ func Locate(ctx context.Context, info protocol.SessionInfo, env map[string]strin
 // recorded. Only one unclaimed log created during that launch can be adopted;
 // ambiguous history is never replaced with a fresh conversation.
 func Recover(ctx context.Context, info protocol.SessionInfo, env map[string]string, claimed map[string]bool) (string, string, error) {
-	paths, err := logPaths(info.Agent, env, "*.jsonl")
+	a, ok := Lookup(info.Agent)
+	if !ok {
+		return "", "", errUnsupported
+	}
+	paths, err := logPaths(a, env, "*.jsonl")
 	if err != nil {
 		return "", "", err
 	}
@@ -513,7 +521,7 @@ func Recover(ctx context.Context, info protocol.SessionInfo, env map[string]stri
 		if err := ctx.Err(); err != nil {
 			return "", "", err
 		}
-		id, cwd, created := scanLog(path, info.Agent)
+		id, cwd, created := scanLog(path, a)
 		if id == "" || !validID.MatchString(id) || claimed[id] || !samePath(cwd, info.Project) {
 			continue
 		}

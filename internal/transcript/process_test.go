@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"encoding/json"
+	"maps"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -11,14 +12,13 @@ import (
 )
 
 func TestWritablePathsAndDescendants(t *testing.T) {
-	got := writablePaths("p12\nf3\nar\nn/read.jsonl\nf4\naw\nn/write.jsonl\nf5\nau\nn/update.jsonl\nf6\na \nn/not-a-writer.jsonl\n")
-	if !slices.Equal(got, []string{"/write.jsonl", "/update.jsonl"}) {
-		t.Fatalf("paths=%q", got)
+	got := writablePaths("p12\nf3\nar\nn/read.jsonl\nf4\naw\nn/write.jsonl\np13\nf5\nau\nn/update.jsonl\nf6\na \nn/not-a-writer.jsonl\n")
+	if !maps.EqualFunc(got, map[int][]string{12: {"/write.jsonl"}, 13: {"/update.jsonl"}}, slices.Equal) {
+		t.Fatalf("paths=%v", got)
 	}
-	pids := descendants(10, "1 0\n10 1\n11 10\n12 11\n20 1\n21 20\n")
-	slices.Sort(pids)
-	if !slices.Equal(pids, []int{10, 11, 12}) {
-		t.Fatalf("pids=%v", pids)
+	tree := descendants([]int{10, 20}, "1 0\n10 1\n11 10\n12 11\n20 1\n21 20\n30 1\n")
+	if !maps.Equal(tree, map[int]int{10: 10, 11: 10, 12: 10, 20: 20, 21: 20}) {
+		t.Fatalf("tree=%v", tree)
 	}
 }
 
@@ -51,10 +51,11 @@ func TestRecoverOldSessionRequiresOneUnclaimedConversation(t *testing.T) {
 }
 
 func TestForkDoesNotBindSourceConversation(t *testing.T) {
-	if got := ArgumentID("claude", []string{"claude", "--resume", "source", "--fork-session"}); got != "" {
+	claude, _ := Lookup("claude")
+	if got := claude.ArgumentID([]string{"claude", "--resume", "source", "--fork-session"}); got != "" {
 		t.Fatalf("fork bound source %q", got)
 	}
-	if got := ArgumentID("claude", []string{"claude", "--resume", "source", "--fork-session", "--session-id", "destination"}); got != "destination" {
+	if got := claude.ArgumentID([]string{"claude", "--resume", "source", "--fork-session", "--session-id", "destination"}); got != "destination" {
 		t.Fatalf("fork ID=%q", got)
 	}
 }

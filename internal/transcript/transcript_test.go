@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -73,7 +74,8 @@ func TestArgumentID(t *testing.T) {
 		{"codex", []string{"codex", "--model", "x"}, ""},
 	}
 	for _, c := range cases {
-		if got := ArgumentID(c.agent, c.args); got != c.want {
+		a, _ := Lookup(c.agent)
+		if got := a.ArgumentID(c.args); got != c.want {
 			t.Errorf("%s %q: got %q, want %q", c.agent, c.args, got, c.want)
 		}
 	}
@@ -108,12 +110,13 @@ func TestTailLimitsAndIncompleteAppend(t *testing.T) {
 		return string(data) + "\n"
 	}
 	writeLog(t, path, message(strings.Repeat("x", maxRead))+message(strings.Repeat("한", 20000))+message("last"))
-	messages, truncated, err := readMessages(path, "claude")
+	claude, _ := Lookup("claude")
+	messages, truncated, err := readMessages(path, claude)
 	if err != nil || !truncated || len(messages) != 2 || messages[1].Text != "last" || !utf8.ValidString(messages[0].Text) {
 		t.Fatalf("tail: count %d, truncated %v, err %v", len(messages), truncated, err)
 	}
 	writeLog(t, path, message("first")+strings.TrimSuffix(message("next"), "\n"))
-	messages, _, err = readMessages(path, "claude")
+	messages, _, err = readMessages(path, claude)
 	if err != nil || len(messages) != 1 {
 		t.Fatalf("partial append: %+v, %v", messages, err)
 	}
@@ -123,7 +126,7 @@ func TestTailLimitsAndIncompleteAppend(t *testing.T) {
 	}
 	_, _ = f.WriteString("\n")
 	_ = f.Close()
-	messages, _, err = readMessages(path, "claude")
+	messages, _, err = readMessages(path, claude)
 	if err != nil || len(messages) != 2 {
 		t.Fatalf("completed append: %+v, %v", messages, err)
 	}
@@ -140,5 +143,79 @@ func TestUnsupportedAndCancelled(t *testing.T) {
 	cancel()
 	if _, err := Read(ctx, protocol.SessionInfo{Agent: "claude", ConversationID: "id"}, map[string]string{"CLAUDE_CONFIG_DIR": root}); err == nil {
 		t.Fatal("ignored cancellation")
+	}
+}
+
+func TestResumeKeepsSettingsNotPromptOrFork(t *testing.T) {
+	for _, tc := range []struct {
+		agent      string
+		args, want []string
+	}{
+		{"claude", []string{"claude", "--model", "opus", "--settings", "settings.json", "--session-id", "old", "--fork-session", "prompt"}, []string{"claude", "--resume", "new", "--model", "opus", "--settings", "settings.json"}},
+		{"codex", []string{"codex", "-c", "mcp_servers.test.command=tool", "--model", "test", "resume", "--last", "old", "prompt", "--image", "image.png"}, []string{"codex", "resume", "new", "-c", "mcp_servers.test.command=tool", "--model", "test"}},
+	} {
+		a, _ := Lookup(tc.agent)
+		if got := a.Resume(tc.args, "new"); !slices.Equal(got, tc.want) {
+			t.Fatalf("%s: %q want %q", tc.agent, got, tc.want)
+		}
+	}
+}
+
+func TestPinOnlyWhenNothingPicksAConversation(t *testing.T) {
+	claude, _ := Lookup("claude")
+	if !claude.Picks([]string{"claude", "--continue"}) || !claude.Picks([]string{"claude", "--resume=x"}) || claude.Picks([]string{"claude", "--model", "opus"}) {
+		t.Fatal("claude pickers")
+	}
+	if got, ok := claude.Pin([]string{"claude"}, "id"); !ok || !slices.Equal(got, []string{"claude", "--session-id", "id"}) {
+		t.Fatalf("pin=%q %v", got, ok)
+	}
+	codex, _ := Lookup("codex")
+	if _, ok := codex.Pin([]string{"codex"}, "id"); ok {
+		t.Fatal("codex picks its own ID")
+	}
+	if !EnvKey("CODEX_HOME") || !EnvKey("HOME") || EnvKey("OPENAI_API_KEY") {
+		t.Fatal("env keys")
+	}
+}
+
+func TestUpgradeStructuresOlderToolMessages(t *testing.T) {
+	chat := protocol.Chat{Messages: []protocol.ChatMessage{
+		{Role: "assistant", Text: "Running it."},
+		{Role: "tool", Text: "Bash\n{\"command\":\"go test ./...\"}"},
+		{Role: "tool", Text: "ok  \tpkg\t0.1s"},
+		{Role: "tool", ID: "t1", Tool: "Read", Text: "{}"},
+	}}
+	Upgrade(&chat)
+	m := chat.Messages
+	if m[0].Role != "assistant" || m[1].Tool != "Bash" || m[1].Detail != "go test ./..." ||
+		!m[2].Output || m[2].Text != "ok  \tpkg\t0.1s" || m[3].Tool != "Read" || m[3].ID != "t1" {
+		t.Fatalf("upgraded=%+v", m)
+	}
+}
+
+func TestCacheRereadsOnlyAChangedLog(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "projects", "p", "c.jsonl")
+	line := func(text string) string {
+		return `{"type":"user","sessionId":"c","cwd":"/p","message":{"role":"user","content":"` + text + `"}}` + "\n"
+	}
+	writeLog(t, path, line("first"))
+	info := protocol.SessionInfo{Agent: "claude", ConversationID: "c"}
+	var cache Cache
+	chat, err := cache.ReadBound(info, path)
+	if err != nil || len(chat.Messages) != 1 {
+		t.Fatalf("chat=%+v %v", chat, err)
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString(line("second"))
+	f.Close()
+	if chat, err = cache.ReadBound(info, path); err != nil || len(chat.Messages) != 2 {
+		t.Fatalf("appended chat=%+v %v", chat, err)
+	}
+	info.ConversationID = "other"
+	if _, err := cache.ReadBound(info, path); err == nil {
+		t.Fatal("a cached read skipped the identity check")
 	}
 }

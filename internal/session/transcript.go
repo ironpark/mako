@@ -3,6 +3,8 @@ package session
 import (
 	"os"
 	"strings"
+
+	"github.com/ironpark/sanbo/internal/transcript"
 )
 
 // TranscriptEnv returns only the paths needed to find this process's native
@@ -14,7 +16,7 @@ func (s *Session) TranscriptEnv() map[string]string { return transcriptEnv(s.cmd
 func TranscriptEnvFrom(overrides map[string]string) map[string]string {
 	out := transcriptEnv(os.Environ())
 	for key, value := range overrides {
-		if transcriptEnvKey(key) {
+		if transcript.EnvKey(key) {
 			out[key] = value
 		}
 	}
@@ -25,19 +27,19 @@ func transcriptEnv(entries []string) map[string]string {
 	out := map[string]string{}
 	for _, entry := range entries {
 		key, value, ok := strings.Cut(entry, "=")
-		if ok && transcriptEnvKey(key) {
+		if ok && transcript.EnvKey(key) {
 			out[key] = value
 		}
 	}
 	return out
 }
 
-func transcriptEnvKey(key string) bool {
-	return key == "HOME" || key == "CLAUDE_CONFIG_DIR" || key == "CODEX_HOME"
-}
-
 // PID identifies the launched process while its session is alive.
 func (s *Session) PID() int { return s.cmd.Process.Pid }
+
+// Outputs counts the program's writes to the terminal, so a watcher can tell
+// a session that did something since it last looked from an idle one.
+func (s *Session) Outputs() uint64 { return s.outputs.Load() }
 
 func (s *Session) SetConversation(id, path string) {
 	s.mu.Lock()
