@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/ui/icons"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 
 	"github.com/ironpark/sanbo/internal/protocol"
@@ -142,9 +143,13 @@ func sidebar(m *model) ggui.Widget {
 	).Stretch()).Width(sidebarWidth).Fill(tokSidebar)
 }
 
+// grouping is a way the sidebar groups sessions, and how its header shows
+// it.
+type grouping struct{ By, Icon, Label string }
+
 // groupings are the sidebar's ways of grouping sessions, as its header
 // offers them.
-var groupings = []struct{ By, Icon, Label string }{
+var groupings = []grouping{
 	{groupProject, "folder", "Group by project"},
 	{groupHost, "server", "Group by host"},
 	{groupFlat, "list", "Show as a list"},
@@ -152,33 +157,17 @@ var groupings = []struct{ By, Icon, Label string }{
 
 // groupPicker switches how the sidebar groups its sessions.
 func groupPicker(m *model) ggui.Widget {
-	return ggui.View(ggui.Map(m.Prefs, func(p prefs) string { return p.SidebarGroup }), func(by string) ggui.Widget {
-		cells := make([]ggui.Widget, len(groupings))
-		for i, g := range groupings {
-			cells[i] = ui.Tooltip(segment(g.Icon, T(g.Label), false, g.By == by, func() { m.setSidebarGroup(g.By) }), T(g.Label))
-		}
-		return ggui.Row(cells...).Gap(2)
-	})
-}
-
-// segment is one of a row of buttons choosing between ways to show
-// something, the chosen one raised: an icon, with its label or named by it.
-func segment(glyph, label string, withLabel, selected bool, onTap func()) ggui.Widget {
-	fg := tokMuted
-	if selected {
-		fg = tokFg
+	by := make([]string, len(groupings))
+	for i, g := range groupings {
+		by[i] = g.By
 	}
-	var content ggui.Widget = icon(glyph).Size(14).Color(fg)
-	pad := []float64{5}
-	if withLabel {
-		content = ggui.Row(icon(glyph).Size(13).Color(fg), ggui.Text(label).Size(12).Color(fg).NoWrap()).Gap(5)
-		pad = []float64{2, 8}
+	find := func(v string) grouping {
+		return groupings[max(slices.IndexFunc(groupings, func(g grouping) bool { return g.By == v }), 0)]
 	}
-	btn := ui.ButtonOf(content, onTap).Ghost().Pad(pad...).Radius(5).Name(label)
-	if selected {
-		return ggui.Box(btn).Fill(tokSurface2).Radius(5)
-	}
-	return btn
+	return ui.ToggleGroup(prefField(m, func(p *prefs) *string { return &p.SidebarGroup })).Options(by).
+		Format(func(v string) string { return T(find(v).Label) }).
+		Icon(func(v string) *icons.Widget { return icon(find(v).Icon).Size(14) }).
+		IconOnly().Name(T("Group sessions"))
 }
 
 // setSidebarGroup changes how the sidebar groups its sessions.

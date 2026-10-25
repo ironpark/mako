@@ -31,7 +31,6 @@ type codeEditor struct {
 	colors    func(text string, pal palette) []styleSpan // may be nil
 	onPress   func()
 	autoFocus bool
-	fit       bool // as tall as its lines, without a gutter or a fill: a code block
 	tabSize   int
 	comment   string // the line comment ⌘/ toggles, as "// "
 	prefs     func() prefs
@@ -139,10 +138,6 @@ func (e *codeEditor) OnChange(fn func(string)) *codeEditor { e.input.OnChange(fn
 // OnPress runs fn when the editor is pressed.
 func (e *codeEditor) OnPress(fn func()) *codeEditor { e.onPress = fn; return e }
 
-// Fit makes the editor a block of code in a page: as tall as its text,
-// with no line numbers or background, scrolling only sideways.
-func (e *codeEditor) Fit() *codeEditor { e.fit = true; return e }
-
 // AutoFocus takes the keyboard on the first paint.
 func (e *codeEditor) AutoFocus(v bool) *codeEditor { e.autoFocus = v; return e }
 
@@ -153,12 +148,6 @@ func (e *codeEditor) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	e.input.Style(ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: e.prefs().FontSize})
 	// Painted only through PaintCustom, which wants it laid out first.
 	e.input.Layout(ggui.Loose(c.Max()), env)
-	if e.fit {
-		p := e.prefs()
-		lines := len(e.lineStarts(e.input.EditingState().Text))
-		h := float64(lines)*lineHeight(p) + 2*editorPad
-		return c.Constrain(ggui.Sz(c.MaxW, h))
-	}
 	return c.Max()
 }
 
@@ -250,9 +239,7 @@ func (e *codeEditor) offsetAtColumn(line string, col int) int {
 func (e *codeEditor) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	p := e.prefs()
 	e.rect = r
-	if !e.fit {
-		dst.FillRect(r, e.pal.Surface0)
-	}
+	dst.FillRect(r, e.pal.Surface0)
 	dst.HitKey(r, e)
 	dst.HitPointer(r, e)
 	dst.HitCursor(r, ggui.CursorShapeText)
@@ -272,9 +259,6 @@ func (e *codeEditor) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	starts := e.lineStarts(text)
 	digits := max(len(strconv.Itoa(len(starts))), 3)
 	gutterW := editorPad + float64(digits)*e.cellW + gutterGap
-	if e.fit {
-		gutterW = editorPad + 4
-	}
 	e.textX = r.Origin.X + gutterW
 	view := ggui.Sz(r.Size.W-gutterW-editorPad, r.Size.H-editorPad)
 
@@ -301,7 +285,7 @@ func (e *codeEditor) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	if st.Composing {
 		lo, hi = st.Caret, st.Caret
 	}
-	if e.focused && lo == hi && !e.fit {
+	if e.focused && lo == hi {
 		body.FillRect(ggui.Rct(ggui.Pt(e.textX, lineY(caretLine)), ggui.Sz(r.Size.W, e.lineH)), e.pal.Surface1)
 	}
 	var spans []styleSpan
@@ -322,9 +306,6 @@ func (e *codeEditor) Paint(dst *ggui.Canvas, r ggui.Rect) {
 			body.FillRect(ggui.Rct(ggui.Pt(colX(a), y), ggui.Sz(float64(b-a)*e.cellW, e.lineH)), e.pal.Selection)
 		}
 		e.paintLine(body, line, start, spans, x0, y+textTop)
-		if e.fit {
-			continue
-		}
 		num := strconv.Itoa(i + 1)
 		fg := e.pal.ExtraMuted
 		if i == caretLine {
@@ -447,9 +428,6 @@ func (e *codeEditor) reveal(line, col int, view ggui.Size) {
 // caret where tabs put it further.
 func (e *codeEditor) clampScroll(lines, caretCol int, view ggui.Size) {
 	e.scrollY = min(max(e.scrollY, 0), max(float64(lines-1)*e.lineH, 0))
-	if e.fit {
-		e.scrollY = 0
-	}
 	right := float64(max(e.widest+e.tabSize, caretCol+4))*e.cellW - view.W
 	e.scrollX = min(max(e.scrollX, 0), max(right, 0))
 }
@@ -812,13 +790,6 @@ func (e *codeEditor) HandlePointer(ev ggui.PointerEvent) bool {
 		}
 		if ev.Mods.Shift && dx == 0 {
 			dx, dy = dy, 0
-		}
-		if e.fit {
-			// The page around a code block scrolls it up and down.
-			if math.Abs(dx) <= math.Abs(dy) {
-				return false
-			}
-			dy = 0
 		}
 		e.scrollX -= dx
 		e.scrollY -= dy

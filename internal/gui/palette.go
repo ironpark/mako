@@ -12,32 +12,27 @@ import (
 // things stand now.
 func (m *model) openPalette() {
 	m.PaletteQuery.Set("")
-	m.paletteGen.Set(ggui.Peek(m.paletteGen) + 1)
+	if m.palette != nil {
+		m.palette.Entries(m.commands()...)
+	}
 	m.PaletteOpen.Set(true)
 }
 
-// paletteDialog is the palette over the window.
+// paletteDialog is the palette over the window, which closes as it runs
+// what was chosen.
 func paletteDialog(m *model) ggui.Widget {
-	list := ggui.Key(m.paletteGen, func(int) ggui.Widget {
-		return ui.Command(m.PaletteQuery, m.commands()...).
-			Placeholder(T("Type a command or a tab's name…")).Name(T("Search commands")).
-			Borderless().InsetSearch().Hints().Height(340)
-	})
-	return ui.Dialog(m.PaletteOpen, list).Compact().Name(T("Commands")).Width(540)
+	m.palette = ui.Command(m.PaletteQuery).
+		Placeholder(T("Type a command or a tab's name…")).Name(T("Search commands")).
+		Hints().HintLabels(T("Navigate"), T("Select")).Empty(T("No results")).Height(340)
+	return ui.CommandDialog(m.PaletteOpen, m.palette).Name(T("Commands")).Width(540)
 }
 
 // commands are the palette's entries.
 func (m *model) commands() []ui.CommandEntry {
-	run := func(fn func()) func() {
-		return func() {
-			m.PaletteOpen.Set(false)
-			fn()
-		}
-	}
 	// item is a command labelled in the window's language and found by
 	// its English name as well.
 	item := func(label string, fn func(), keys ...string) ui.CommandEntry {
-		return ui.CommandItem(T(label), run(fn)).Keywords(append([]string{label}, keys...)...)
+		return ui.CommandItem(T(label), fn).Keywords(append([]string{label}, keys...)...)
 	}
 	selected := ggui.Peek(m.Selected)
 	docs := ggui.Peek(m.Docs)
@@ -60,13 +55,13 @@ func (m *model) commands() []ui.CommandEntry {
 		item("Toggle details panel", func() { ggui.Toggle(m.DetailsOpen) }, "files", "changes").Shortcut("cmd+shift+d"),
 	)
 	for _, g := range groupings {
-		cmds = append(cmds, ui.CommandItem(T("Sidebar: ")+T(g.Label), run(func() { m.setSidebarGroup(g.By) })).
+		cmds = append(cmds, ui.CommandItem(T("Sidebar: ")+T(g.Label), func() { m.setSidebarGroup(g.By) }).
 			Keywords("sidebar", g.Label, "sessions"))
 	}
 	for _, t := range []string{"system", "dark", "light"} {
-		cmds = append(cmds, ui.CommandItem(T("Theme: ")+T(themeLabels[t]), run(func() {
+		cmds = append(cmds, ui.CommandItem(T("Theme: ")+T(themeLabels[t]), func() {
 			m.Prefs.Update(func(p prefs) prefs { p.Theme = t; return p })
-		})).Keywords("theme", themeLabels[t], "appearance"))
+		}).Keywords("theme", themeLabels[t], "appearance"))
 	}
 	for i := range cmds {
 		cmds[i] = cmds[i].Group(group)
@@ -86,7 +81,7 @@ func (m *model) commands() []ui.CommandEntry {
 		} else {
 			continue
 		}
-		cmds = append(cmds, ui.CommandItem(label, run(func() { m.showTab(id) })).Keywords(keys...).Group(T("Open tabs")))
+		cmds = append(cmds, ui.CommandItem(label, func() { m.showTab(id) }).Keywords(keys...).Group(T("Open tabs")))
 	}
 	nodes := ggui.Peek(m.Nodes)
 	for _, s := range ggui.Peek(m.Sessions) {
@@ -95,7 +90,7 @@ func (m *model) commands() []ui.CommandEntry {
 		}
 		id := s.ID
 		label := sessionTitle(s, titles[id]) + " · " + nodeName(nodes, s.NodeID) + ":" + projectName(s.Project)
-		cmds = append(cmds, ui.CommandItem(label, run(func() { m.selectSession(id) })).Keywords(s.Project, s.Agent).Group(T("Sessions")))
+		cmds = append(cmds, ui.CommandItem(label, func() { m.selectSession(id) }).Keywords(s.Project, s.Agent).Group(T("Sessions")))
 	}
 	return cmds
 }

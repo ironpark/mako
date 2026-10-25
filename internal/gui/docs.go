@@ -11,6 +11,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/ui/icons"
 
 	"github.com/ironpark/sanbo/internal/client"
 	"github.com/ironpark/sanbo/internal/protocol"
@@ -391,12 +392,10 @@ func docStatus(m *model, id string, info ggui.Readable[docInfo], state ggui.Read
 	}, "text")
 	row := &statusRow{gap: 14, split: 2, items: []ggui.Widget{size, lines, lang, ending, caret}, drop: []int{3, 2, 1, 0, 4}}
 	if isMarkdown(ggui.Peek(m.Docs)[id].Name()) {
-		row.items = append(row.items, ggui.View(doc.preview, func(on bool) ggui.Widget {
-			return ggui.Box(ggui.Row(
-				segment("pencil", T("Edit"), true, !on, func() { doc.preview.Set(false) }),
-				segment("eye", T("Preview"), true, on, func() { doc.preview.Set(true) }),
-			).Gap(2)).Pad(2).Border(1, tokBorder).Radius(7)
-		}))
+		row.items = append(row.items, ui.ToggleGroup[bool](doc.preview).Options([]bool{false, true}).
+			Format(func(on bool) string { return T(pick(on, "Preview", "Edit")) }).
+			Icon(func(on bool) *icons.Widget { return icon(pick(on, "eye", "pencil")).Size(13) }).
+			Name(T("Markdown view")))
 	}
 	return ggui.Box(row).Pad(0, 8, 0, 14).Height(statusHeight).Fill(tokSurface0)
 }

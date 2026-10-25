@@ -398,17 +398,80 @@ func (r *mdRenderer) beside(rel string) string {
 	return path.Join(path.Dir(r.doc.Path), rel)
 }
 
-// code is a code block, highlighted in its language when there is one.
+// code is a code block, highlighted in its language when there is one,
+// selectable, and scrolling sideways rather than wrapping.
 func (r *mdRenderer) code(n ast.Node, lang string) ggui.Widget {
-	src := strings.TrimSuffix(r.segmentsText(n.Lines()), "\n")
-	e := newCodeEditor(ggui.State(src), func() prefs { return ggui.Peek(r.m.Prefs) }).ReadOnly(true).Fit()
+	m := r.m
+	p := ggui.Peek(m.Prefs)
+	tab := defaultTab
+	var hl *docSyntax
+	ready := ggui.State(0) // counts the highlights the worker has found
 	if lang = strings.Fields(lang + " ")[0]; lang != "" {
-		if l, ok := r.m.hl.languageNamed(lang); ok {
-			ds := r.m.syntaxFor(l)
-			e.Colors(ds.colors).TabSize(l.TabSize)
+		if l, ok := m.hl.languageNamed(lang); ok {
+			hl = m.syntaxFor(l)
+			hl.wake = func() { m.post(func() { ready.Set(ggui.Peek(ready) + 1) }) }
+			tab = pick(l.TabSize > 0, l.TabSize, tab)
 		}
 	}
-	return ggui.Box(ggui.Padding(e, 4, 4)).Fill(tokSurface1).Border(1, tokBorder).Radius(8)
+	// Tabs stop as in the editor; the text has them as spaces.
+	src := strings.TrimSuffix(expandTabs(r.segmentsText(n.Lines()), tab), "\n")
+	spans := ggui.Derived(func() []ggui.TextSpan {
+		ready.Get()
+		if hl == nil {
+			return []ggui.TextSpan{ggui.Span(src)}
+		}
+		return colorSpans(src, hl.colors(src, paletteFor(m.Prefs.Get().Theme, ggui.SystemDark().Get())))
+	})
+	text := ggui.RichText().BindSpans(spans).NoWrap().Selectable().
+		Font(ggui.DefaultMonoFont()).Size(p.FontSize).LineHeight(max(p.LineHeight, 1.2))
+	return ggui.Box(ggui.Scroll(ggui.Padding(text, 12, 14)).Horizontal().Bar(tokSurface3)).
+		Fill(tokSurface1).Border(1, tokBorder).Radius(8)
+}
+
+// colorSpans is src as spans coloured by styles, in order, and the text
+// between them in the paragraph's colour.
+func colorSpans(src string, styles []styleSpan) []ggui.TextSpan {
+	var out []ggui.TextSpan
+	at := 0
+	for _, s := range styles {
+		start, end := max(s.Start, at), min(s.End, len(src))
+		if start >= end {
+			continue
+		}
+		if start > at {
+			out = append(out, ggui.Span(src[at:start]))
+		}
+		out = append(out, ggui.Span(src[start:end]).Color(s.Color))
+		at = end
+	}
+	if at < len(src) {
+		out = append(out, ggui.Span(src[at:]))
+	}
+	return out
+}
+
+// expandTabs puts spaces in place of tabs, stopping every tab columns.
+func expandTabs(s string, tab int) string {
+	if !strings.Contains(s, "\t") {
+		return s
+	}
+	var b strings.Builder
+	col := 0
+	for _, r := range s {
+		switch r {
+		case '\t':
+			n := tab - col%tab
+			b.WriteString(strings.Repeat(" ", n))
+			col += n
+		case '\n':
+			b.WriteRune(r)
+			col = 0
+		default:
+			b.WriteRune(r)
+			col += runeCells(r)
+		}
+	}
+	return b.String()
 }
 
 func (r *mdRenderer) list(n *ast.List) ggui.Widget {

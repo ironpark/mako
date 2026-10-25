@@ -63,6 +63,8 @@ github.com/ironpark/ggui v0.0.0-20261025130005-ac34654f3767 h1:b7b+nZcjh7GnWbATL
 github.com/ironpark/ggui v0.0.0-20261025130005-ac34654f3767/go.mod h1:MufB5vOXkkmxWtVkwwhhuuiLcjz0pOrjZBUvXuP+ghE=
 github.com/ironpark/ggui v0.0.0-20261025131247-884daaf50882 h1:OfTKmj+6fjv1KDaRQrc6WbzyULUhsbC2luRRWyaqL9Q=
 github.com/ironpark/ggui v0.0.0-20261025131247-884daaf50882/go.mod h1:MufB5vOXkkmxWtVkwwhhuuiLcjz0pOrjZBUvXuP+ghE=
+github.com/ironpark/ggui v0.0.0-20261025145903-7b68fc4fb687 h1:5DGMgL9qop6aJGwGbEjr+saK0b1uchy9sVQmDZib2CM=
+github.com/ironpark/ggui v0.0.0-20261025145903-7b68fc4fb687/go.mod h1:MufB5vOXkkmxWtVkwwhhuuiLcjz0pOrjZBUvXuP+ghE=
 github.com/ironpark/gostty v0.0.0-20260914092046-29dc0d68e78f h1:vom1N/5ueuBuESuyq25wZE6Nn0zPoXyKtNmT30q3WQc=
 github.com/ironpark/gostty v0.0.0-20260914092046-29dc0d68e78f/go.mod h1:htMJDApfeCwo3cVH8Bv9FyVnlhvwrnDkn4DDxSKtjE8=
 github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 h1:BQSFePA1RWJOlocH6Fxy8MmwDt+yVQYULKfN0RoTN8A=

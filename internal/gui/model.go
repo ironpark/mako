@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/sanbo/internal/agentspec"
 	"github.com/ironpark/sanbo/internal/client"
@@ -62,11 +63,11 @@ type model struct {
 	quitting       bool
 
 	// The command palette, and the extensions it opens over the window;
-	// see palette.go. paletteGen counts its openings, each with the
-	// commands of the moment.
+	// see palette.go. Each opening gives palette the commands of the
+	// moment.
 	PaletteOpen    *ggui.StateValue[bool]
 	PaletteQuery   *ggui.StateValue[string]
-	paletteGen     *ggui.StateValue[int]
+	palette        *ui.CommandWidget
 	ExtensionsOpen *ggui.StateValue[bool]
 
 	DaemonState *ggui.StateValue[daemonState]
@@ -164,7 +165,6 @@ func newModel(cfg *config.Config, addr string) *model {
 		QuitOpen:       ggui.State(false),
 		PaletteOpen:    ggui.State(false),
 		PaletteQuery:   ggui.State(""),
-		paletteGen:     ggui.State(0),
 		ExtensionsOpen: ggui.State(false),
 		Docs:           ggui.State(map[string]docInfo{}).WithEqual(maps.Equal),
 		docs:           map[string]*document{},

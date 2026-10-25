@@ -338,4 +338,9 @@ var catalogKo = map[string]string{
 	"Important":                       "중요",
 	"Warning":                         "경고",
 	"Caution":                         "주의",
+	"Navigate":                        "이동",
+	"Select":                          "선택",
+	"No results":                      "결과 없음",
+	"Group sessions":                  "세션 묶기",
+	"Markdown view":                   "마크다운 보기",
 }
