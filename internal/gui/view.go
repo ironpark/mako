@@ -51,8 +51,14 @@ func window(m *model) ggui.Widget {
 			Else(func() ggui.Widget { return main }),
 		newSessionDialog(m),
 		imageViewer(m),
+		paletteDialog(m),
+		extensionsDialog(m),
 		ui.AlertDialog(m.ConfirmOpen, T("Kill this session?"), T("The program is stopped on its node. Its output is lost.")).
 			Confirm(T("Kill session"), m.confirmedKill).Destructive(),
+		ui.AlertDialog(m.DiscardOpen, T("Close without saving?"), T("Your changes to this file are lost.")).
+			Confirm(T("Discard changes"), m.confirmedDiscard).Destructive(),
+		ui.AlertDialog(m.QuitOpen, T("Quit without saving?"), T("Files you edited have unsaved changes, which are lost.")).
+			Confirm(T("Quit"), func() { m.quitting = true; ggui.UseHost().Close() }).Destructive(),
 		ui.AlertDialog(m.StopOpen, T("Stop the app's daemon?"), T("The sessions running in it end with it.")).
 			Confirm(T("Stop daemon"), m.confirmedStop).Destructive(),
 	).Expand()
@@ -106,19 +112,23 @@ func sidebar(m *model) ggui.Widget {
 	header := ggui.Box(ggui.Row(
 		icon("messages-square").Size(17),
 		ggui.Text(T("Sessions")).Size(14).Weight(ggui.WeightMedium),
-	).Gap(10)).Pad(14, 16).Height(headerHeight)
+		ggui.Spacer(),
+		groupPicker(m),
+	).Gap(10)).Pad(0, 10, 0, 16).Height(headerHeight)
 
+	grouping := ggui.Map(m.Prefs, func(p prefs) string { return p.SidebarGroup })
 	list := ggui.Reactive(func() ggui.Widget {
-		groups := groupSessions(m.Sessions.Get())
-		selected := m.Selected.Get()
+		by := grouping.Get()
 		nodes := m.Nodes.Get()
+		groups := groupSessions(m.Sessions.Get(), by, nodes)
+		selected := m.Selected.Get()
 		titles := m.Titles.Get()
 		if len(groups) == 0 {
 			return ggui.Box(muted(ggui.Text(T("No sessions yet. Start one with +.")).Size(12))).Pad(16)
 		}
 		children := make([]ggui.Widget, 0, len(groups))
 		for _, g := range groups {
-			children = append(children, projectSection(m, g, selected, nodes, titles))
+			children = append(children, sessionSection(m, by, g, selected, nodes, titles))
 		}
 		return ggui.Column(children...).Gap(6).Stretch()
 	})
@@ -132,30 +142,117 @@ func sidebar(m *model) ggui.Widget {
 	).Stretch()).Width(sidebarWidth).Fill(tokSidebar)
 }
 
-func projectSection(m *model, g projectGroup, selected string, nodes []protocol.Node, titles map[string]string) ggui.Widget {
-	nodeID, project := g.NodeID, g.Project
-	head := ggui.Box(ggui.Row(
-		icon("folder").Size(15),
-		ggui.Text(projectName(project)).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis(),
-		ggui.Spacer(),
-		ui.Tooltip(ui.ButtonOf(icon("plus").Size(14), func() { m.openNew(nodeID, project) }).
-			Ghost().Pad(3).Radius(5).Name(Tf("New session in %s", projectName(project))), T("New session here")),
-	).Gap(10)).Pad(4, 4, 4, 10)
+// groupings are the sidebar's ways of grouping sessions, as its header
+// offers them.
+var groupings = []struct{ By, Icon, Label string }{
+	{groupProject, "folder", "Group by project"},
+	{groupHost, "server", "Group by host"},
+	{groupFlat, "list", "Show as a list"},
+}
 
-	rows := []ggui.Widget{head}
+// groupPicker switches how the sidebar groups its sessions.
+func groupPicker(m *model) ggui.Widget {
+	return ggui.View(ggui.Map(m.Prefs, func(p prefs) string { return p.SidebarGroup }), func(by string) ggui.Widget {
+		cells := make([]ggui.Widget, len(groupings))
+		for i, g := range groupings {
+			cells[i] = ui.Tooltip(segment(g.Icon, T(g.Label), false, g.By == by, func() { m.setSidebarGroup(g.By) }), T(g.Label))
+		}
+		return ggui.Row(cells...).Gap(2)
+	})
+}
+
+// segment is one of a row of buttons choosing between ways to show
+// something, the chosen one raised: an icon, with its label or named by it.
+func segment(glyph, label string, withLabel, selected bool, onTap func()) ggui.Widget {
+	fg := tokMuted
+	if selected {
+		fg = tokFg
+	}
+	var content ggui.Widget = icon(glyph).Size(14).Color(fg)
+	pad := []float64{5}
+	if withLabel {
+		content = ggui.Row(icon(glyph).Size(13).Color(fg), ggui.Text(label).Size(12).Color(fg).NoWrap()).Gap(5)
+		pad = []float64{2, 8}
+	}
+	btn := ui.ButtonOf(content, onTap).Ghost().Pad(pad...).Radius(5).Name(label)
+	if selected {
+		return ggui.Box(btn).Fill(tokSurface2).Radius(5)
+	}
+	return btn
+}
+
+// setSidebarGroup changes how the sidebar groups its sessions.
+func (m *model) setSidebarGroup(by string) {
+	m.Prefs.Update(func(p prefs) prefs { p.SidebarGroup = by; return p })
+}
+
+// sessionSection is one of the sidebar's groups: a heading for its project
+// or host with a button to start another session there, over its sessions.
+// The list's one group has no heading.
+func sessionSection(m *model, by string, g sessionGroup, selected string, nodes []protocol.Node, titles map[string]string) ggui.Widget {
+	nodeID, project := g.NodeID, g.Project
+	var rows []ggui.Widget
+	indent := by != groupFlat
+	if indent {
+		name, glyph := projectName(project), "folder"
+		var status ggui.Widget = ggui.Box()
+		if by == groupHost {
+			// A node the mesh no longer lists has gone; its sessions stay
+			// until it is back.
+			n, up := nodeIn(nodes, nodeID)
+			name, glyph = n.Name, "monitor"
+			if !up {
+				name = short(nodeID)
+			}
+			if n.Source == "self" {
+				glyph = "laptop"
+			}
+			status = linkDot(up)
+		}
+		rows = append(rows, ggui.Box(ggui.Row(
+			icon(glyph).Size(15),
+			ggui.Box(ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).MaxWidth(sidebarWidth-90),
+			status,
+			ggui.Spacer(),
+			ui.Tooltip(ui.ButtonOf(icon("plus").Size(14), func() { m.openNew(nodeID, project) }).
+				Ghost().Pad(3).Radius(5).Name(Tf("New session in %s", name)), T("New session here")),
+		).Gap(10)).Pad(4, 4, 4, 10))
+	}
 	for _, s := range g.Sessions {
-		rows = append(rows, sessionRow(m, s, s.ID == selected, nodes, titles[s.ID]))
+		var where []string
+		switch by {
+		case groupProject:
+			if rel := subfolder(s.Project, project); rel != "" {
+				where = append(where, rel)
+			}
+			if len(nodes) > 1 {
+				where = append(where, nodeName(nodes, s.NodeID))
+			}
+		case groupHost:
+			where = append(where, projectName(s.Project))
+		default:
+			if len(nodes) > 1 {
+				where = append(where, nodeName(nodes, s.NodeID))
+			}
+			where = append(where, projectName(s.Project))
+		}
+		where = append(where, short(s.ID))
+		rows = append(rows, sessionRow(m, s, s.ID == selected, titles[s.ID], strings.Join(where, " · "), indent))
 	}
 	return ggui.Column(rows...).Gap(2).Stretch()
 }
 
-func sessionRow(m *model, s protocol.SessionInfo, selected bool, nodes []protocol.Node, title string) ggui.Widget {
-	id := s.ID
-	label := sessionLabel(s)
-	if title != "" {
-		label = title
+// subfolder is where dir is inside root, or "" for root itself.
+func subfolder(dir, root string) string {
+	if dir == root || !within(dir, root) {
+		return ""
 	}
-	sub := fmt.Sprintf("%s · %s", nodeName(nodes, s.NodeID), short(s.ID))
+	return strings.TrimLeft(dir[len(root):], `/\`)
+}
+
+func sessionRow(m *model, s protocol.SessionInfo, selected bool, title, sub string, indent bool) ggui.Widget {
+	id := s.ID
+	label := sessionTitle(s, title)
 	content := ggui.Row(
 		&busyGlyph{icon: agentGlyph(s.Agent, tokMuted).Size(15), busy: func() bool { return m.busy(id) }},
 		ggui.Expanded(ggui.Column(
@@ -170,7 +267,11 @@ func sessionRow(m *model, s protocol.SessionInfo, selected bool, nodes []protoco
 	if selected {
 		w = ggui.Box(btn).Fill(tokSidebarSel).Radius(7)
 	}
-	return ggui.Padding(sessionDrag(m, w, id), 0, 0, 0, 14)
+	w = sessionDrag(m, w, id)
+	if indent {
+		w = ggui.Padding(w, 0, 0, 0, 14)
+	}
+	return w
 }
 
 func sidebarFooter(m *model) ggui.Widget {
@@ -207,6 +308,9 @@ func workspace(m *model) ggui.Widget {
 
 func workspaceHeader(m *model) ggui.Widget {
 	title := ggui.Reactive(func() ggui.Widget {
+		if id := m.Selected.Get(); isDocTab(id) {
+			return docHeader(m, id, m.Docs.Get()[id])
+		}
 		s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get())
 		if !ok {
 			return ggui.Text("sanbo").Size(14).Weight(ggui.WeightMedium)
@@ -244,10 +348,7 @@ func sessionIn(sessions []protocol.SessionInfo, id string) (protocol.SessionInfo
 // underlined, in the accent in the current pane.
 func tab(m *model, s protocol.SessionInfo, selected, focused bool, title string) ggui.Widget {
 	id := s.ID
-	label := sessionLabel(s)
-	if title != "" {
-		label = title
-	}
+	label := sessionTitle(s, title)
 	fg := tokMuted
 	if selected {
 		fg = tokFg
@@ -260,6 +361,12 @@ func tab(m *model, s protocol.SessionInfo, selected, focused bool, title string)
 		ui.ButtonOf(icon("x").Size(13), func() { m.askKill(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", label)),
 	).Gap(8)).Height(tabBarHeight)
 	btn := ui.ButtonOf(content, func() { m.selectSession(id) }).Ghost().Pad(0, 8, 0, 12).Radius(0).Name(label)
+	return tabCell(btn, selected, focused)
+}
+
+// tabCell is a tab's flat cell around its button: raised and underlined
+// when the pane shows it, in the accent in the current pane.
+func tabCell(btn ggui.Widget, selected, focused bool) ggui.Widget {
 	underline := tokSurface0
 	fill := tokSurface0
 	switch {

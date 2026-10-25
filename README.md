@@ -14,7 +14,9 @@ computers and drive them from one place.
     internal/session   PTY process plus gostty terminal state
     internal/daemon    session registry, peer table, gossip, relaying
     internal/client    front-end connection and attach loop
-    internal/gui       the desktop window: sidebar, tabs, terminal view
+    internal/gui       the desktop window: sidebar, tabs, terminal view, editor
+    internal/syntax    tree-sitter in wasm under wazero: grammars and highlight queries
+    internal/zed       Zed extensions: the store, their manifests and languages
     internal/config    node identity and configuration
 
 ## Design
@@ -64,7 +66,10 @@ instead of a blank window.
 [Paseo](https://github.com/getpaseo/paseo): projects and their sessions in a
 sidebar, open sessions as tabs, a composer that types a line into the
 selected session, and a panel on the right with the project's files, the
-session's details and the nodes.
+session's details and the nodes. The sidebar groups its sessions by project
+(a session started in a folder inside another's project, as a worktree or a
+package is, goes under that project), by host, or lists them flat, as the
+buttons in its header choose.
 
 Closing a tab ends its session, asking first while it runs (Settings ▸
 General can turn the question off); "Detach tab" in the header's menu closes
@@ -76,9 +81,9 @@ the same way, dividers between panes resize them, and a pane closes with its
 last tab. The Files tab browses the project of the session shown, on
 whichever node it runs, through that node's daemon: folders open as they are
 read, dotfiles show or hide with the eye button, what .gitignore leaves out
-is dimmed, and a file chosen is previewed under the tree, an image shown and
-enlarged with a click, with buttons to copy its path or type it into the
-composer. Files and folders dragged from the Files tab or the desktop onto
+is dimmed, and a text file chosen opens in a tab of its own, beside the
+terminals and arranged into panes as they are, while an image is previewed
+under the tree and enlarged with a click. Files and folders dragged from the Files tab or the desktop onto
 a terminal are typed as shell-quoted paths, onto the composer inserted, and
 a folder dropped anywhere else opens a new session in it. The Changes tab
 shows the project's git changes against HEAD, read by the daemon of the node
@@ -87,6 +92,39 @@ the changed files, each folder adding up its files' lines added and removed,
 refreshed every few seconds while shown, and the diff of a file chosen
 under it. A tab dragged over a tab bar opens the gap it would drop into, and
 the side panels slide open and closed.
+
+A file's tab is an editor over the whole file (up to 4 MB; a larger one
+shows its start, read-only), read and saved (⌘S) through the daemon of its
+node: lines numbered and coloured by their language, Enter keeping the
+line's indent, Tab and Shift-Tab indenting the lines selected, ⌘/ toggling
+their comment, the platform IME for typing Korean and the like, and undo.
+A save of a file changed on disk since it was read is refused, and the
+banner offers to overwrite it or read it again; closing a file, or quitting,
+with unsaved changes asks first. A line under the tab gives the file's size
+and lines, its language, line endings and the caret's line and column,
+leaving out what a narrow pane has no room for. A Markdown file switches
+there between its source and its page (⌘⇧V), rendered from its syntax tree
+as GitHub shows one: headings, emphasis, code and links, lists and task
+lists, quotes and alerts, tables, code blocks highlighted in their
+language, and the images beside the file, read through its node; a link to
+another file opens it in a tab.
+
+The command palette (⌘K or ⌘⇧P) searches the window's actions, the open
+tabs and the sessions; its Extensions… opens Settings ▸ Extensions in a
+dialog over the window.
+
+The languages come from [Zed](https://zed.dev)'s extensions, which
+Settings ▸ Extensions finds in Zed's store and installs (under
+`extensions/` beside `config.json`): sanbo reads an extension as Zed does,
+its languages' `config.toml` for their file names, comment and tab size,
+and parses with the tree-sitter grammar it carries, compiled to wasm, run
+by the tree-sitter runtime itself compiled to wasm under
+[wazero](https://wazero.io) (`internal/syntax`), and colours by the
+language's `highlights.scm`. The languages Zed builds in rather than
+taking from extensions -- Go, Rust, Python, JavaScript, TypeScript and the
+like -- come with sanbo, built from their grammars' own repositories
+(`internal/syntax/builtin`). An extension's language servers, which its
+own wasm starts, are not run yet.
 
 Each pane's tab bar ends in a launcher for every agent the session's node
 can start, drawn with the agent's icon: a click starts it in the project of
@@ -106,8 +144,9 @@ program set: colours, bold and italic, wide characters, the IME's
 composition at the cursor, drag/double/triple-click selection, and the mouse
 for programs that ask for it (Shift takes it back for selecting). The
 terminal keeps Tab and the Ctrl and Alt chords for the program; ⌘ chords stay
-with the app (⌘T new session, ⌘W close the tab and its session, ⌘B sidebar, ⌘, settings, and
-⌘C/⌘V/⌘A for the terminal's clipboard).
+with the app (⌘T new session, ⌘W close the tab and its session, ⌘S save
+the file shown, ⌘K command palette, ⌘B sidebar, ⌘, settings, and ⌘C/⌘V/⌘A for the terminal's
+clipboard).
 
 Settings (⌘,) cover the app -- language (English or Korean, or the
 system's), theme (system, light, dark), terminal font

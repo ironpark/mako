@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/ironpark/sanbo/internal/protocol"
 )
 
 func TestListDirPutsDirectoriesFirst(t *testing.T) {
@@ -100,5 +103,40 @@ func TestListDirMarksWhatGitIgnores(t *testing.T) {
 	}
 	if got, _ := listDir(plain); got.Entries[0].Ignored {
 		t.Error("a file outside a repository is ignored")
+	}
+}
+
+func TestWriteFileKeepsModeAndRefusesAStaleWrite(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "run.sh")
+	if err := os.WriteFile(path, []byte("old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	read, err := readFile(path, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := writeFile(path, []byte("new"), read.ModTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, _ := os.Stat(path)
+	if got, _ := os.ReadFile(path); string(got) != "new" || info.Mode().Perm() != 0o755 || f.Size != 3 {
+		t.Fatalf("after write: %q, mode %v, reply %+v", got, info.Mode(), f)
+	}
+	// Written with the time from before the last write, it is refused.
+	if _, err := writeFile(path, []byte("stale"), read.ModTime.Add(-time.Second)); !protocol.HasCode(err, protocol.CodeChanged) {
+		t.Fatalf("stale write: %v, want CodeChanged", err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != "new" {
+		t.Fatalf("a refused write changed the file to %q", got)
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 {
+		t.Fatalf("left behind: %v", entries)
+	}
+	// A new file is created.
+	if _, err := writeFile(filepath.Join(dir, "fresh.txt"), []byte("x"), time.Time{}); err != nil {
+		t.Fatal(err)
 	}
 }

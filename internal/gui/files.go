@@ -9,6 +9,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"maps"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -91,9 +92,6 @@ type decodedImage struct {
 	Img  image.Image
 }
 
-// previewMax is how much of a file the preview reads.
-const previewMax = 256 << 10
-
 // fetch makes a daemon call off the window's goroutine and hands done its
 // result back on it.
 func fetch[T any](m *model, timeout time.Duration, call func(context.Context, *client.Client) (T, error), done func(T, error)) {
@@ -118,8 +116,12 @@ func (m *model) remoteID(node string) string {
 	return node
 }
 
-// filesRoot is the selected session's project.
+// filesRoot is the selected session's project, or the one the selected
+// file was opened from.
 func (m *model) filesRoot() fileRoot {
+	if id := m.Selected.Get(); isDocTab(id) {
+		return m.Docs.Get()[id].Root
+	}
 	s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get())
 	if !ok {
 		return fileRoot{}
@@ -200,12 +202,21 @@ func (m *model) children(it fileItem) []fileItem {
 // joinPath joins a name onto a directory of the node it is on, which may
 // not share this machine's separator.
 func joinPath(dir, name string) string {
-	sep := "/"
-	if strings.Contains(dir, `\`) && !strings.Contains(dir, "/") {
-		sep = `\`
-	}
+	sep := pathSep(dir)
 	return strings.TrimSuffix(dir, sep) + sep + name
 }
+
+// pathSep is the separator of a path on a node: a backslash for a
+// Windows path, which has no slashes.
+func pathSep(p string) string {
+	if strings.Contains(p, `\`) && !strings.Contains(p, "/") {
+		return `\`
+	}
+	return "/"
+}
+
+// baseName is a path's last element, by either separator.
+func baseName(p string) string { return path.Base(strings.ReplaceAll(p, `\`, "/")) }
 
 // toggleHidden shows or hides dotfiles in the Files tab.
 func (m *model) toggleHidden() {
@@ -222,31 +233,10 @@ func (m *model) toggleDir(it fileItem) {
 	m.FilesOpen.Set(open)
 }
 
-// openPreview reads the start of a file into the preview, or an image
-// whole.
-func (m *model) openPreview(it fileItem) {
-	m.Preview.Set(filePreview{fileItem: it, Loading: true})
-	if isImage(it.Name) {
-		m.openImage(it)
-		return
-	}
-	req := protocol.ReadFile{NodeID: m.remoteID(it.Node), Path: it.Path, Max: previewMax}
-	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (protocol.File, error) {
-		return c.ReadFile(ctx, m.key(), req)
-	}, func(f protocol.File, err error) {
-		if ggui.Peek(m.Preview).Key != it.Key {
-			return // another file was chosen meanwhile
-		}
-		p := filePreview{fileItem: it, File: f}
-		if err != nil {
-			p.Err = err.Error()
-		}
-		m.Preview.Set(p)
-	})
-}
-
-func (m *model) openImage(it fileItem) {
-	req := protocol.ReadFile{NodeID: m.remoteID(it.Node), Path: it.Path, Image: true}
+// fetchImage reads an image file from its node and decodes it, off the
+// window's goroutine; one too large to send comes without an image.
+func fetchImage(m *model, node, path string, done func(decodedImage, error)) {
+	req := protocol.ReadFile{NodeID: m.remoteID(node), Path: path, Image: true}
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (decodedImage, error) {
 		f, err := c.ReadFile(ctx, m.key(), req)
 		if err != nil || f.Data == nil {
@@ -255,7 +245,14 @@ func (m *model) openImage(it fileItem) {
 		img, _, err := image.Decode(bytes.NewReader(f.Data))
 		f.Data = nil
 		return decodedImage{File: f, Img: img}, err
-	}, func(d decodedImage, err error) {
+	}, done)
+}
+
+// openPreview reads an image into the preview under the tree; any other
+// file opens in a tab.
+func (m *model) openPreview(it fileItem) {
+	m.Preview.Set(filePreview{fileItem: it, Loading: true})
+	fetchImage(m, it.Node, it.Path, func(d decodedImage, err error) {
 		if ggui.Peek(m.Preview).Key != it.Key {
 			return // another file was chosen meanwhile
 		}
@@ -274,8 +271,8 @@ func (m *model) openImage(it fileItem) {
 func (m *model) insertPath(path string) {
 	root := ggui.Untrack(m.filesRoot)
 	rel := path
-	if r := strings.TrimPrefix(path, root.Path); r != path && r != "" {
-		rel = strings.TrimLeft(r, `/\`)
+	if r := subfolder(path, root.Path); r != "" {
+		rel = r
 	}
 	text := ggui.Peek(m.Composer)
 	if text != "" && !strings.HasSuffix(text, " ") {
@@ -346,8 +343,10 @@ func filesView(m *model, r fileRoot) ggui.Widget {
 			case it.Stub:
 			case it.Dir:
 				m.toggleDir(it)
-			default:
+			case isImage(it.Name):
 				m.openPreview(it)
+			default:
+				m.openFile(it)
 			}
 		}).
 		Name(T("Files"))
@@ -415,22 +414,12 @@ func previewPane(m *model) ggui.Widget {
 			// Clicked, it shows as large as the window allows.
 			img := ggui.Pointer(ggui.Image(p.Img).Alt(p.Name)).OnTap(func() { m.ImageOpen.Set(true) })
 			return ggui.Padding(ggui.Center(img), 12)
-		case isImage(p.Name) && p.File.Truncated:
+		case p.File.Truncated:
 			note = Tf("An image of %s, too large to show.", byteSize(p.File.Size))
-		case p.File.Binary:
-			note = Tf("A binary file, %s.", byteSize(p.File.Size))
-		case len(p.File.Data) == 0:
-			note = T("Empty.")
+		default:
+			note = T("Not an image this can show.")
 		}
-		if note != "" {
-			return paneNote(note)
-		}
-		text := strings.ReplaceAll(string(p.File.Data), "\t", "    ")
-		rows := []ggui.Widget{ggui.Text(text).Style(ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: 11.5}).Selectable()}
-		if p.File.Truncated {
-			rows = append(rows, muted(ggui.Text(Tf("Showing the first %s of %s.", byteSize(int64(len(p.File.Data))), byteSize(p.File.Size))).Size(11.5)))
-		}
-		return ggui.Scroll(ggui.Padding(ggui.Column(rows...).Gap(10).Stretch(), 10, 12)).Bar(tokSurface3)
+		return paneNote(note)
 	})
 	return lowerPane(head, content)
 }

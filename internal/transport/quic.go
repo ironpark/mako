@@ -106,6 +106,9 @@ func (s *Stream) Request(t protocol.Type, payload any, out any) error {
 		if err := protocol.Decode(env, &e); err != nil {
 			return err
 		}
+		if e.Code != "" {
+			return &protocol.CodedError{Code: e.Code, Message: "remote: " + e.Message}
+		}
 		return fmt.Errorf("remote: %s", e.Message)
 	}
 	if out == nil {

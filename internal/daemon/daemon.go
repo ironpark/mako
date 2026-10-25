@@ -227,6 +227,9 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 	case protocol.TypeReadFile:
 		return d.handleReadFile(ctx, stream, env)
 
+	case protocol.TypeWriteFile:
+		return d.handleWriteFile(ctx, stream, env)
+
 	case protocol.TypeGitStatus:
 		return d.handleGitStatus(ctx, stream, env)
 

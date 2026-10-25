@@ -134,6 +134,13 @@ func (c *Client) ReadFile(ctx context.Context, psk string, req protocol.ReadFile
 	return f, err
 }
 
+// WriteFile replaces a file's contents on a node.
+func (c *Client) WriteFile(ctx context.Context, psk string, req protocol.WriteFile) (protocol.File, error) {
+	var f protocol.File
+	err := c.request(ctx, psk, protocol.TypeWriteFile, req, &f)
+	return f, err
+}
+
 // GitStatus reports the changes of the work tree a directory on a node is in.
 func (c *Client) GitStatus(ctx context.Context, psk string, req protocol.GitStatus) (protocol.GitChanges, error) {
 	var out protocol.GitChanges

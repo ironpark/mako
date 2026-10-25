@@ -43,6 +43,7 @@ const (
 	TypeDir         Type = "dir"
 	TypeReadFile    Type = "read_file"
 	TypeFile        Type = "file"
+	TypeWriteFile   Type = "write_file"
 	TypeGitStatus   Type = "git_status"
 	TypeGitChanges  Type = "git_changes"
 	TypeGitDiff     Type = "git_diff"
@@ -255,9 +256,30 @@ func ReadFrame(r io.Reader) (*Envelope, error) {
 	return &env, nil
 }
 
+// CodedError is a failure a requester may act on by its Code, which
+// crosses the wire in Error.Code: from a handler's error to the requester,
+// through any daemon relaying it.
+type CodedError struct {
+	Code    string
+	Message string
+}
+
+func (e *CodedError) Error() string { return e.Message }
+
+// HasCode reports whether err is a CodedError with code.
+func HasCode(err error, code string) bool {
+	var ce *CodedError
+	return errors.As(err, &ce) && ce.Code == code
+}
+
 // WriteError is a shorthand for sending a TypeError frame.
 func WriteError(w io.Writer, id string, err error) error {
-	env, encErr := Encode(TypeError, id, Error{Message: err.Error()})
+	e := Error{Message: err.Error()}
+	var ce *CodedError
+	if errors.As(err, &ce) {
+		e.Code = ce.Code
+	}
+	env, encErr := Encode(TypeError, id, e)
 	if encErr != nil {
 		return encErr
 	}
@@ -304,7 +326,25 @@ type File struct {
 	Data      []byte `json:"data,omitempty"`
 	Truncated bool   `json:"truncated,omitempty"` // Data is only the start
 	Binary    bool   `json:"binary,omitempty"`    // not text; Data is omitted
+	// ModTime is when the file last changed, which a WriteFile hands back
+	// so the write fails if it changed again since.
+	ModTime time.Time `json:"mod_time"`
 }
+
+// WriteFile asks a node to replace a file's contents, keeping its mode. The
+// reply is a File with the new size and ModTime and no Data.
+type WriteFile struct {
+	NodeID string `json:"node_id,omitempty"`
+	Path   string `json:"path"` // absolute
+	Data   []byte `json:"data"`
+	// ModTime, unless zero, is when the file changed as the writer last
+	// read it: the write fails with CodeChanged if it has changed since.
+	ModTime time.Time `json:"mod_time"`
+}
+
+// CodeChanged is the Error code of a WriteFile refused because the file
+// changed since it was read.
+const CodeChanged = "changed"
 
 // GitStatus asks a node for the changes in the repository a directory is in.
 type GitStatus struct {

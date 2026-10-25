@@ -22,8 +22,9 @@ import (
 // through its node's daemon. Whoever can reach a daemon can already start a shell on it, so
 // reading its files opens nothing new.
 
-// maxRead caps what ReadFile returns of a file.
-const maxRead = 1 << 20
+// maxRead caps what ReadFile returns of a file: what an editor opens
+// whole, its base64 well inside a frame.
+const maxRead = 4 << 20
 
 // maxImage caps the image ReadFile returns whole: a frame carries the bytes
 // in base64, a third more.
@@ -42,6 +43,11 @@ func (d *Daemon) handleReadFile(ctx context.Context, stream *transport.Stream, e
 			}
 			return readFile(r.Path, r.Max)
 		})
+}
+
+func (d *Daemon) handleWriteFile(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeFile, func(r *protocol.WriteFile) *string { return &r.NodeID },
+		func(r protocol.WriteFile) (protocol.File, error) { return writeFile(r.Path, r.Data, r.ModTime) })
 }
 
 func (d *Daemon) handleGitStatus(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
@@ -182,13 +188,64 @@ func readFile(path string, limit int) (protocol.File, error) {
 	if err != nil {
 		return protocol.File{}, err
 	}
-	out := protocol.File{Path: path, Size: info.Size(), Truncated: info.Size() > int64(len(data))}
+	out := protocol.File{Path: path, Size: info.Size(), ModTime: info.ModTime(), Truncated: info.Size() > int64(len(data))}
 	if isBinary(data, out.Truncated) {
 		out.Binary = true
 		return out, nil
 	}
 	out.Data = data
 	return out, nil
+}
+
+// writeFile replaces a file's contents, or creates it. The data goes to a
+// file beside it first, renamed over it once whole, so a failed write
+// leaves the old contents; the file keeps its mode. A link is written
+// through to its target. Unless was is zero, a file changed since then is
+// left alone.
+func writeFile(path string, data []byte, was time.Time) (protocol.File, error) {
+	if err := absolute(path); err != nil {
+		return protocol.File{}, err
+	}
+	asked := path
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
+	mode := os.FileMode(0o644)
+	switch info, err := os.Stat(path); {
+	case err == nil && info.IsDir():
+		return protocol.File{}, errors.New("a directory is not a file")
+	case err == nil:
+		mode = info.Mode().Perm()
+		if !was.IsZero() && !info.ModTime().Equal(was) {
+			return protocol.File{}, &protocol.CodedError{Code: protocol.CodeChanged, Message: "the file changed on disk since it was read"}
+		}
+	case !errors.Is(err, os.ErrNotExist):
+		return protocol.File{}, err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".sanbo-*")
+	if err != nil {
+		return protocol.File{}, err
+	}
+	defer os.Remove(tmp.Name()) // gone already once renamed
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return protocol.File{}, err
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		tmp.Close()
+		return protocol.File{}, err
+	}
+	if err := tmp.Close(); err != nil {
+		return protocol.File{}, err
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return protocol.File{}, err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return protocol.File{}, err
+	}
+	return protocol.File{Path: asked, Size: info.Size(), ModTime: info.ModTime()}, nil
 }
 
 // readImage reads an image file whole, or only its size when it is larger

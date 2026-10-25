@@ -137,6 +137,21 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				}),
 				until("the preview", func() bool { return !ggui.Peek(m.Preview).Loading }),
 				frames(5), shot("03-files"),
+				// README.md opened in a tab of its own.
+				do(func() {
+					r := ggui.Untrack(m.filesRoot)
+					readme := joinPath(r.Path, "README.md")
+					m.openFile(fileItem{Key: dirKey(r.Node, readme), Node: r.Node, Path: readme, Name: "README.md"})
+				}),
+				until("the file", func() bool { d, ok := m.doc(ggui.Peek(m.Selected)); return ok && !d.Loading }),
+				frames(60), shot("03-file-tab"),
+				do(m.toggleSelectedPreview), frames(30), shot("03-markdown-preview"),
+				do(m.toggleSelectedPreview), do(m.openPalette), frames(10), shot("03-palette"),
+				do(func() { m.PaletteQuery.Set("side") }), frames(4), shot("03-palette-search"),
+				do(func() { m.PaletteOpen.Set(false); m.ExtensionsOpen.Set(true) }), frames(40), shot("03-extensions"),
+				do(func() { m.ExtensionsOpen.Set(false); m.setSidebarGroup(groupHost) }), frames(10), shot("03-sidebar-host"),
+				do(func() { m.setSidebarGroup(groupFlat) }), frames(4), shot("03-sidebar-flat"),
+				do(func() { m.setSidebarGroup(groupProject) }), frames(2),
 				// The right pane's tab dragged over the bottom of the left
 				// pane, then let go where nothing takes it.
 				do(func() {
@@ -165,6 +180,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(func() { m.Section.Set("host") }), frames(2), shot("08-settings-host"),
 				do(func() { m.Section.Set("agents") }), frames(2), shot("08-settings-agents"),
 				do(func() { m.Section.Set("shortcuts") }), frames(2), shot("09-settings-shortcuts"),
+				do(func() { m.Section.Set("extensions") }), frames(5), shot("09-settings-extensions"),
 				do(setTheme("light")), frames(2), shot("10-light-settings"),
 				do(func() { m.Page.Set("workspace") }), frames(10), shot("11-light-session"),
 				do(func() { m.Prefs.Set(saved) }), frames(2),

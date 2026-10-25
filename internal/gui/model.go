@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/ironpark/sanbo/internal/client"
 	"github.com/ironpark/sanbo/internal/config"
 	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/sanbo/internal/zed"
 )
 
 // pollInterval is how often the mesh's nodes and sessions are refreshed.
@@ -44,16 +46,28 @@ type model struct {
 	addr string // the -daemon flag; Prefs.Daemon overrides it
 	post func(func())
 
-	Prefs       *ggui.StateValue[prefs]
-	Page        *ggui.StateValue[string] // "workspace" or "settings"
-	Section     *ggui.StateValue[string] // the settings page shown
-	Host        *ggui.StateValue[hostDraft]
-	AgentDraft  *ggui.StateValue[[]agentDraft]
-	HostNote    *ggui.StateValue[string]
-	ConfirmOpen *ggui.StateValue[bool]
-	confirmKill string // the session ConfirmOpen asks about
-	StopOpen    *ggui.StateValue[bool]
-	pendingStop func() // what StopOpen confirms
+	Prefs          *ggui.StateValue[prefs]
+	Page           *ggui.StateValue[string] // "workspace" or "settings"
+	Section        *ggui.StateValue[string] // the settings page shown
+	Host           *ggui.StateValue[hostDraft]
+	AgentDraft     *ggui.StateValue[[]agentDraft]
+	HostNote       *ggui.StateValue[string]
+	ConfirmOpen    *ggui.StateValue[bool]
+	confirmKill    string // the session ConfirmOpen asks about
+	StopOpen       *ggui.StateValue[bool]
+	pendingStop    func() // what StopOpen confirms
+	DiscardOpen    *ggui.StateValue[bool]
+	confirmDiscard string                 // the file tab DiscardOpen asks about
+	QuitOpen       *ggui.StateValue[bool] // asks before quitting with unsaved files
+	quitting       bool
+
+	// The command palette, and the extensions it opens over the window;
+	// see palette.go. paletteGen counts its openings, each with the
+	// commands of the moment.
+	PaletteOpen    *ggui.StateValue[bool]
+	PaletteQuery   *ggui.StateValue[string]
+	paletteGen     *ggui.StateValue[int]
+	ExtensionsOpen *ggui.StateValue[bool]
 
 	DaemonState *ggui.StateValue[daemonState]
 	DaemonLog   *ggui.StateValue[[]string]
@@ -80,6 +94,22 @@ type model struct {
 	FilesOpen *ggui.StateValue[map[string]bool]
 	FileSel   *ggui.StateValue[string]
 	Preview   *ggui.StateValue[filePreview]
+
+	// The files open in tabs, by tab ID; see docs.go.
+	Docs *ggui.StateValue[map[string]docInfo]
+	docs map[string]*document // UI goroutine only
+
+	// Highlighting, and the Zed extensions it takes languages from; see
+	// highlight.go. langGen counts the changes to the languages.
+	hl         *highlighter
+	Extensions *ggui.StateValue[[]zed.Extension]
+	// extLanguages names each extension's languages, by its ID, as read
+	// with Extensions.
+	extLanguages map[string][]string
+	langGen      int
+	ExtResults   *ggui.StateValue[extSearch]
+	ExtBusy      *ggui.StateValue[map[string]bool] // extensions being installed
+	ExtErr       *ggui.StateValue[string]
 
 	// The Changes tab: the project's changes, the folders closed in their
 	// tree, the row chosen, and the diff shown.
@@ -120,53 +150,66 @@ func newModel(cfg *config.Config, addr string) *model {
 	deep := func(a, b []protocol.Node) bool { return reflect.DeepEqual(a, b) }
 	p := loadPrefs()
 	m := &model{
-		cfg:         cfg,
-		addr:        addr,
-		Prefs:       ggui.State(p),
-		Page:        ggui.State("workspace"),
-		Section:     ggui.State("general"),
-		Host:        ggui.State(draftFrom(cfg)),
-		AgentDraft:  ggui.State(draftAgents(cfg.Agents)).WithEqual(slices.Equal),
-		HostNote:    ggui.State(""),
-		ConfirmOpen: ggui.State(false),
-		StopOpen:    ggui.State(false),
-		DaemonState: ggui.State(daemonState{}),
-		DaemonLog:   ggui.State([]string(nil)).WithEqual(slices.Equal),
-		embedded:    newEmbeddedDaemon(),
-		kick:        make(chan struct{}, 1),
-		Conn:        ggui.State(connState{}),
-		Nodes:       ggui.State([]protocol.Node(nil)).WithEqual(deep),
-		Sessions:    ggui.State([]protocol.SessionInfo(nil)).WithEqual(func(a, b []protocol.SessionInfo) bool { return reflect.DeepEqual(a, b) }),
-		Agents:      ggui.State(agentspec.Targets(cfg.Agents)).WithEqual(slices.Equal),
-		Selected:    ggui.State(""),
-		Tabs:        ggui.State([]string(nil)).WithEqual(slices.Equal),
-		Layout:      ggui.State(newLayout()).WithEqual(func(a, b *layoutNode) bool { return reflect.DeepEqual(a, b) }),
-		FocusGroup:  ggui.State(1),
-		Dragging:    ggui.State(false),
-		TabHint:     ggui.State(tabHint{}),
-		Attached:    ggui.State([]string(nil)).WithEqual(slices.Equal),
-		Titles:      ggui.State(map[string]string{}).WithEqual(func(a, b map[string]string) bool { return reflect.DeepEqual(a, b) }),
-		Dirs:        ggui.State(map[string]dirListing{}).WithEqual(func(a, b map[string]dirListing) bool { return reflect.DeepEqual(a, b) }),
-		FilesOpen:   ggui.State(map[string]bool{}).WithEqual(maps.Equal),
-		FileSel:     ggui.State(""),
-		Preview:     ggui.State(filePreview{}).WithEqual(filePreview.same),
-		Git:         ggui.State(gitView{}).WithEqual(func(a, b gitView) bool { return reflect.DeepEqual(a, b) }),
-		GitClosed:   ggui.State(map[string]bool{}).WithEqual(maps.Equal),
-		GitSel:      ggui.State(""),
-		GitDiff:     ggui.State(diffView{}).WithEqual(func(a, b diffView) bool { return reflect.DeepEqual(a, b) }),
-		SidebarOpen: ggui.State(true),
-		DetailsOpen: ggui.State(true),
-		DetailTab:   ggui.State(0),
-		ImageOpen:   ggui.State(false),
-		NewOpen:     ggui.State(false),
-		Form:        ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),
-		FormErr:     ggui.State(""),
-		Composer:    ggui.State(""),
-		conns:       map[string]*termConn{},
-		revealedTab: map[int]string{},
-		dialing:     map[string]bool{},
-		daemon:      p.Daemon,
-		psk:         cfg.PSK,
+		cfg:            cfg,
+		addr:           addr,
+		Prefs:          ggui.State(p),
+		Page:           ggui.State("workspace"),
+		Section:        ggui.State("general"),
+		Host:           ggui.State(draftFrom(cfg)),
+		AgentDraft:     ggui.State(draftAgents(cfg.Agents)).WithEqual(slices.Equal),
+		HostNote:       ggui.State(""),
+		ConfirmOpen:    ggui.State(false),
+		StopOpen:       ggui.State(false),
+		DiscardOpen:    ggui.State(false),
+		QuitOpen:       ggui.State(false),
+		PaletteOpen:    ggui.State(false),
+		PaletteQuery:   ggui.State(""),
+		paletteGen:     ggui.State(0),
+		ExtensionsOpen: ggui.State(false),
+		Docs:           ggui.State(map[string]docInfo{}).WithEqual(maps.Equal),
+		docs:           map[string]*document{},
+		hl:             newHighlighter(),
+		ExtResults:     ggui.State(extSearch{}).WithEqual(func(a, b extSearch) bool { return reflect.DeepEqual(a, b) }),
+		ExtBusy:        ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		ExtErr:         ggui.State(""),
+		Extensions:     ggui.State([]zed.Extension(nil)).WithEqual(func(a, b []zed.Extension) bool { return reflect.DeepEqual(a, b) }),
+		DaemonState:    ggui.State(daemonState{}),
+		DaemonLog:      ggui.State([]string(nil)).WithEqual(slices.Equal),
+		embedded:       newEmbeddedDaemon(),
+		kick:           make(chan struct{}, 1),
+		Conn:           ggui.State(connState{}),
+		Nodes:          ggui.State([]protocol.Node(nil)).WithEqual(deep),
+		Sessions:       ggui.State([]protocol.SessionInfo(nil)).WithEqual(func(a, b []protocol.SessionInfo) bool { return reflect.DeepEqual(a, b) }),
+		Agents:         ggui.State(agentspec.Targets(cfg.Agents)).WithEqual(slices.Equal),
+		Selected:       ggui.State(""),
+		Tabs:           ggui.State([]string(nil)).WithEqual(slices.Equal),
+		Layout:         ggui.State(newLayout()).WithEqual(func(a, b *layoutNode) bool { return reflect.DeepEqual(a, b) }),
+		FocusGroup:     ggui.State(1),
+		Dragging:       ggui.State(false),
+		TabHint:        ggui.State(tabHint{}),
+		Attached:       ggui.State([]string(nil)).WithEqual(slices.Equal),
+		Titles:         ggui.State(map[string]string{}).WithEqual(func(a, b map[string]string) bool { return reflect.DeepEqual(a, b) }),
+		Dirs:           ggui.State(map[string]dirListing{}).WithEqual(func(a, b map[string]dirListing) bool { return reflect.DeepEqual(a, b) }),
+		FilesOpen:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		FileSel:        ggui.State(""),
+		Preview:        ggui.State(filePreview{}).WithEqual(filePreview.same),
+		Git:            ggui.State(gitView{}).WithEqual(func(a, b gitView) bool { return reflect.DeepEqual(a, b) }),
+		GitClosed:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		GitSel:         ggui.State(""),
+		GitDiff:        ggui.State(diffView{}).WithEqual(func(a, b diffView) bool { return reflect.DeepEqual(a, b) }),
+		SidebarOpen:    ggui.State(true),
+		DetailsOpen:    ggui.State(true),
+		DetailTab:      ggui.State(0),
+		ImageOpen:      ggui.State(false),
+		NewOpen:        ggui.State(false),
+		Form:           ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),
+		FormErr:        ggui.State(""),
+		Composer:       ggui.State(""),
+		conns:          map[string]*termConn{},
+		revealedTab:    map[int]string{},
+		dialing:        map[string]bool{},
+		daemon:         p.Daemon,
+		psk:            cfg.PSK,
 	}
 	return m
 }
@@ -175,6 +218,7 @@ func newModel(cfg *config.Config, addr string) *model {
 func (m *model) start(ctx context.Context, post func(func())) {
 	m.post = post
 	m.applyDaemonMode()
+	m.loadExtensions()
 	go func() {
 		for {
 			m.poll(ctx)
@@ -363,12 +407,19 @@ func (m *model) session(id string) (protocol.SessionInfo, bool) {
 }
 
 func nodeName(nodes []protocol.Node, id string) string {
-	for _, n := range nodes {
-		if n.ID == id {
-			return n.Name
-		}
+	if n, ok := nodeIn(nodes, id); ok {
+		return n.Name
 	}
 	return short(id)
+}
+
+func nodeIn(nodes []protocol.Node, id string) (protocol.Node, bool) {
+	for _, n := range nodes {
+		if n.ID == id {
+			return n, true
+		}
+	}
+	return protocol.Node{}, false
 }
 
 func short(id string) string {
@@ -400,32 +451,91 @@ func prettyPath(dir string) string {
 	return dir
 }
 
-// projectGroup is one sidebar section: the sessions sharing a node and a
-// working directory, the way Paseo groups workspaces under a repository.
-type projectGroup struct {
+// The ways the sidebar groups its sessions.
+const (
+	groupProject = "project" // by node and working directory
+	groupHost    = "host"    // by node
+	groupFlat    = "flat"    // one list
+)
+
+// sessionGroup is one sidebar section: the sessions sharing a node and a
+// project, the way Paseo groups workspaces under a repository, or only a
+// node. Project is empty for a node's section.
+type sessionGroup struct {
 	Key      string
 	NodeID   string
 	Project  string
 	Sessions []protocol.SessionInfo
 }
 
-func groupSessions(sessions []protocol.SessionInfo) []projectGroup {
-	var groups []projectGroup
-	index := map[string]int{}
-	for _, s := range sessions {
-		key := s.NodeID + "\x00" + s.Project
-		i, ok := index[key]
-		if !ok {
-			i = len(groups)
-			index[key] = i
-			groups = append(groups, projectGroup{Key: key, NodeID: s.NodeID, Project: s.Project})
+// groupSessions sorts sessions into the sidebar's sections for a grouping.
+// By project, a session started in a folder inside another session's
+// project, as a worktree or a package of its repository is, goes in that
+// project's section.
+func groupSessions(sessions []protocol.SessionInfo, by string, nodes []protocol.Node) []sessionGroup {
+	switch by {
+	case groupFlat:
+		if len(sessions) == 0 {
+			return nil
 		}
-		groups[i].Sessions = append(groups[i].Sessions, s)
+		return []sessionGroup{{Key: "", Sessions: sessions}}
+	case groupHost:
+		groups := bucket(sessions, func(s protocol.SessionInfo) (string, string) { return s.NodeID, "" })
+		sort.SliceStable(groups, func(a, b int) bool {
+			return nodeName(nodes, groups[a].NodeID) < nodeName(nodes, groups[b].NodeID)
+		})
+		return groups
 	}
+	roots := map[string][]string{} // each node's projects, shortest first
+	for _, s := range sessions {
+		roots[s.NodeID] = append(roots[s.NodeID], s.Project)
+	}
+	for _, ps := range roots {
+		sort.Slice(ps, func(a, b int) bool { return len(ps[a]) < len(ps[b]) })
+	}
+	groups := bucket(sessions, func(s protocol.SessionInfo) (string, string) {
+		for _, root := range roots[s.NodeID] {
+			if within(s.Project, root) {
+				return s.NodeID, root
+			}
+		}
+		return s.NodeID, s.Project
+	})
 	sort.SliceStable(groups, func(a, b int) bool {
 		return projectName(groups[a].Project) < projectName(groups[b].Project)
 	})
 	return groups
+}
+
+// bucket groups sessions by the node and project key gives them, in the
+// order each first appears.
+func bucket(sessions []protocol.SessionInfo, key func(protocol.SessionInfo) (string, string)) []sessionGroup {
+	var groups []sessionGroup
+	index := map[string]int{}
+	for _, s := range sessions {
+		node, project := key(s)
+		k := dirKey(node, project)
+		i, ok := index[k]
+		if !ok {
+			i = len(groups)
+			index[k] = i
+			groups = append(groups, sessionGroup{Key: k, NodeID: node, Project: project})
+		}
+		groups[i].Sessions = append(groups[i].Sessions, s)
+	}
+	return groups
+}
+
+// within reports whether dir is root or a folder inside it.
+func within(dir, root string) bool {
+	if dir == root {
+		return true
+	}
+	if root == "" {
+		return false
+	}
+	sep := pathSep(root)
+	return strings.HasPrefix(dir, strings.TrimSuffix(root, sep)+sep)
 }
 
 // Actions -------------------------------------------------------------------
@@ -440,7 +550,7 @@ func (m *model) selectSession(id string) {
 
 // attach dials a session's terminal on a worker.
 func (m *model) attach(id string) {
-	if m.conns[id] != nil || m.dialing[id] {
+	if m.conns[id] != nil || m.dialing[id] || isDocTab(id) {
 		return
 	}
 	info, ok := m.session(id)
@@ -547,6 +657,10 @@ func (m *model) submitNew() {
 // to ask or its program has already exited. Closing a tab does this: the
 // tab and its session go together, and "Detach tab" keeps one running.
 func (m *model) askKill(id string) {
+	if isDocTab(id) {
+		m.askCloseDoc(id)
+		return
+	}
 	if s, ok := m.session(id); !ggui.Peek(m.Prefs).ConfirmKill || (ok && s.State == protocol.StateExited) {
 		m.kill(id)
 		return
@@ -621,6 +735,7 @@ func (m *model) openSettings(section string) {
 // with the sessions it runs.
 func (m *model) shutdown() {
 	defer m.embedded.stop()
+	defer m.hl.close()
 	for id, conn := range m.conns {
 		conn.close()
 		delete(m.conns, id)

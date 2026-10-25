@@ -146,6 +146,14 @@ func targetLabel(target string) string {
 	return agent + " · " + profile
 }
 
+// sessionTitle is the title a session's program set, or its label.
+func sessionTitle(s protocol.SessionInfo, title string) string {
+	if title != "" {
+		return title
+	}
+	return sessionLabel(s)
+}
+
 func sessionLabel(s protocol.SessionInfo) string {
 	return targetLabel(agentspec.Target(s.Agent, s.Profile))
 }

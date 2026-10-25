@@ -82,13 +82,20 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		titles := m.Titles.Get()
 		focused := m.FocusGroup.Get() == id
 		var children []ggui.Widget
+		docs := m.Docs.Get()
 		for i, tabID := range g.Tabs {
-			s, ok := sessionIn(sessions, tabID)
-			if !ok {
-				s = protocol.SessionInfo{ID: tabID, Agent: "shell"}
+			var face ggui.Widget
+			if d, ok := docs[tabID]; ok {
+				face = docTab(m, tabID, d, tabID == g.Active, focused)
+			} else {
+				s, ok := sessionIn(sessions, tabID)
+				if !ok {
+					s = protocol.SessionInfo{ID: tabID, Agent: "shell"}
+				}
+				face = tab(m, s, tabID == g.Active, focused, titles[tabID])
 			}
 			at := i
-			w := sessionDrag(m, tab(m, s, tabID == g.Active, focused, titles[tabID]), tabID)
+			w := sessionDrag(m, face, tabID)
 			var cell ggui.Widget = w
 			if tabID == g.Active && m.revealedTab[id] != tabID {
 				cell = &revealOnce{child: w, done: func() { m.revealedTab[id] = tabID }}
@@ -118,6 +125,8 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		project := m.launchProject(nodeID)
 		if cur, ok := sessionIn(sessions, g.Active); ok {
 			nodeID, project = cur.NodeID, cur.Project
+		} else if d, ok := docs[g.Active]; ok && d.Root.Path != "" {
+			nodeID, project = d.Root.Node, d.Root.Path
 		}
 		targets := nodeTargets(m.Nodes.Get(), nodeID, m.Agents.Get())
 		focus := func() { m.focusGroup(id) }
@@ -139,12 +148,17 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 	current := ggui.Derived(func() pane {
 		tab := group.Get().Active
-		return pane{ID: tab, Ready: slices.Contains(m.Attached.Get(), tab)}
+		return pane{ID: tab, Ready: isDocTab(tab) || slices.Contains(m.Attached.Get(), tab)}
 	})
 	content := ggui.Key(current, func(p pane) ggui.Widget {
 		switch {
 		case p.ID == "":
 			return emptyState(m)
+		case isDocTab(p.ID):
+			if m.docs[p.ID] == nil {
+				return ggui.Box()
+			}
+			return docView(m, p.ID, ggui.Peek(m.FocusGroup) == id, func() { m.focusGroup(id) })
 		case !p.Ready:
 			// Without a daemon there is nothing to attach to; say why.
 			return ggui.View(m.Conn, func(c connState) ggui.Widget {

@@ -34,6 +34,9 @@ type prefs struct {
 
 	// Files
 	ShowHidden bool `json:"show_hidden"` // list dotfiles in the Files tab
+
+	// The sidebar's sessions: by project, by host, or in one list.
+	SidebarGroup string `json:"sidebar_group"`
 }
 
 func defaultPrefs() prefs {
@@ -52,6 +55,7 @@ func defaultPrefs() prefs {
 		ShowComposer:   true,
 		ConfirmKill:    true,
 		DaemonMode:     "auto",
+		SidebarGroup:   groupProject,
 	}
 }
 
@@ -76,6 +80,11 @@ func (p prefs) normalized() prefs {
 	case "auto", "embedded", "external":
 	default:
 		p.DaemonMode = d.DaemonMode
+	}
+	switch p.SidebarGroup {
+	case groupProject, groupHost, groupFlat:
+	default:
+		p.SidebarGroup = d.SidebarGroup
 	}
 	switch p.CursorStyle {
 	case "block", "bar", "underline":

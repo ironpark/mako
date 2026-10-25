@@ -36,6 +36,14 @@ func Run(cfg *config.Config, addr string) error {
 	})
 	shortcuts(app, m)
 	app.OnDrop(m.dropFolder)
+	// Files with unsaved changes ask before the window goes.
+	app.OnCloseRequest(func() bool {
+		if len(m.dirtyDocs()) == 0 || m.quitting {
+			return true
+		}
+		m.QuitOpen.Set(true)
+		return false
+	})
 	return app.Run()
 }
 
@@ -70,6 +78,10 @@ func shortcuts(host ggui.Host, m *model) {
 			m.askKill(id)
 		}
 	})
+	host.Shortcut("cmd+s", m.saveSelected)
+	host.Shortcut("cmd+k", m.openPalette)
+	host.Shortcut("cmd+shift+p", m.openPalette)
+	host.Shortcut("cmd+shift+v", m.toggleSelectedPreview)
 	host.Shortcut("cmd+b", func() { ggui.Toggle(m.SidebarOpen) })
 	host.Shortcut("cmd+shift+d", func() { ggui.Toggle(m.DetailsOpen) })
 	host.Shortcut("cmd+,", func() { m.openSettings("") })
@@ -80,6 +92,9 @@ func shortcuts(host ggui.Host, m *model) {
 var shortcutList = []struct{ Chord, Action string }{
 	{"cmd+t", "New session"},
 	{"cmd+w", "Close tab and session"},
+	{"cmd+s", "Save file"},
+	{"cmd+k", "Command palette"},
+	{"cmd+shift+v", "Toggle Markdown preview"},
 	{"cmd+b", "Toggle sidebar"},
 	{"cmd+shift+d", "Toggle details panel"},
 	{"cmd+,", "Open settings"},

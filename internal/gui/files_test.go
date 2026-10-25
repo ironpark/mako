@@ -7,7 +7,6 @@ import (
 	pngenc "image/png"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/ironpark/ggui"
@@ -16,7 +15,8 @@ import (
 )
 
 // The Files tab lists the session's project through its daemon, reads a
-// folder as it opens and previews a file chosen.
+// folder as it opens, opens a text file chosen in a tab and previews an
+// image.
 func TestFilesTabBrowsesTheProject(t *testing.T) {
 	t.Setenv("SANBO_HOME", t.TempDir())
 	project := t.TempDir()
@@ -56,6 +56,7 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 	probeUntil(t, p, "the window to reach the app's daemon", func() bool { return ggui.Peek(m.Conn).OK })
 	m.launch("shell", "", project)
 	probeUntil(t, p, "the session", func() bool { return ggui.Peek(m.Selected) != "" })
+	session := ggui.Peek(m.Selected)
 
 	found := func(label string) func() bool {
 		return func() bool { _, ok := p.Find(label); return ok }
@@ -66,19 +67,39 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 	probeUntil(t, p, "src to open", found("main.go"))
 	f, _ := p.Find("main.go")
 	p.Click(f.Center())
-	probeUntil(t, p, "the preview", func() bool {
-		pv := ggui.Peek(m.Preview)
-		return !pv.Loading && strings.HasPrefix(string(pv.File.Data), "package main")
-	})
+	// A text file opens in a tab, whole, to edit and save.
+	path := filepath.Join(project, "src", "main.go")
+	id := docTabID(ggui.Peek(m.Conn).Self.ID, path)
+	probeUntil(t, p, "the file's tab", func() bool { d, ok := m.doc(id); return ok && !d.Loading })
+	if ggui.Peek(m.Selected) != id || ggui.Peek(m.docs[id].text) != "package main\n" {
+		t.Fatalf("tab %q shows %q", ggui.Peek(m.Selected), ggui.Peek(m.docs[id].text))
+	}
+	p.Frame()
+	p.Text("x")
+	p.Frame()
+	if d, _ := m.doc(id); !d.Dirty || ggui.Peek(m.docs[id].text) != "xpackage main\n" {
+		t.Fatalf("after typing: dirty %v, %q", d.Dirty, ggui.Peek(m.docs[id].text))
+	}
+	m.saveSelected()
+	probeUntil(t, p, "the save", func() bool { d, _ := m.doc(id); return !d.Saving && !d.Dirty })
+	if got, _ := os.ReadFile(path); string(got) != "xpackage main\n" {
+		t.Fatalf("saved %q", got)
+	}
+	// The Files tab still shows the project the file is in.
+	if _, ok := p.Find("README.md"); !ok {
+		t.Fatal("the Files tab left the project for the file's tab")
+	}
 
-	m.insertPath(ggui.Peek(m.Preview).Path)
+	m.insertPath(path)
 	if got := ggui.Peek(m.Composer); got != filepath.Join("src", "main.go") {
 		t.Fatalf("composer %q, want the path from the project", got)
 	}
 
 	// Dragged onto the message box, a file is inserted as its path.
+	m.showTab(session)
+	p.Frame()
 	m.Composer.Set("")
-	f, _ = p.Find("main.go")
+	f, _ = p.FindRole(ggui.RoleTreeItem, "main.go")
 	box, ok := p.Find(T("Message"))
 	if !ok {
 		t.Fatal("no message box")
