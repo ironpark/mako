@@ -6,11 +6,12 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/grandcat/zeroconf v1.0.0
-	github.com/ironpark/ggfx v0.0.0-20261025073821-baa791aebac7
-	github.com/ironpark/ggui v0.0.0-20261025085802-3baae7e1be38
+	github.com/ironpark/ggfx v0.0.0-20261025102939-e853318a2f66
+	github.com/ironpark/ggui v0.0.0-20261025104441-2637f0e929f3
 	github.com/ironpark/gostty v0.0.0-20260914092046-29dc0d68e78f
 	github.com/quic-go/quic-go v0.62.0
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
+	golang.org/x/image v0.46.0
 	golang.org/x/term v0.46.0
 )
 
@@ -37,7 +38,6 @@ require (
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/crypto v0.56.0 // indirect
-	golang.org/x/image v0.46.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect

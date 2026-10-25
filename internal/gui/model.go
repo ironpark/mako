@@ -91,6 +91,7 @@ type model struct {
 	SidebarOpen *ggui.StateValue[bool]
 	DetailsOpen *ggui.StateValue[bool]
 	DetailTab   *ggui.StateValue[int]
+	ImageOpen   *ggui.StateValue[bool] // the previewed image is shown enlarged
 	NewOpen     *ggui.StateValue[bool]
 	Form        *ggui.StateValue[newSession]
 	FormErr     *ggui.StateValue[string]
@@ -148,7 +149,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Dirs:        ggui.State(map[string]dirListing{}).WithEqual(func(a, b map[string]dirListing) bool { return reflect.DeepEqual(a, b) }),
 		FilesOpen:   ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		FileSel:     ggui.State(""),
-		Preview:     ggui.State(filePreview{}).WithEqual(func(a, b filePreview) bool { return reflect.DeepEqual(a, b) }),
+		Preview:     ggui.State(filePreview{}).WithEqual(filePreview.same),
 		Git:         ggui.State(gitView{}).WithEqual(func(a, b gitView) bool { return reflect.DeepEqual(a, b) }),
 		GitClosed:   ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		GitSel:      ggui.State(""),
@@ -156,6 +157,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		SidebarOpen: ggui.State(true),
 		DetailsOpen: ggui.State(true),
 		DetailTab:   ggui.State(0),
+		ImageOpen:   ggui.State(false),
 		NewOpen:     ggui.State(false),
 		Form:        ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),
 		FormErr:     ggui.State(""),

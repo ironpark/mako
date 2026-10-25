@@ -72,10 +72,14 @@ tab into it, along a tab bar to reorder. A session in the sidebar drags in
 the same way, dividers between panes resize them, and a pane closes with its
 last tab. The Files tab browses the project of the session shown, on
 whichever node it runs, through that node's daemon: folders open as they are
-read, dotfiles show or hide with the eye button, and a file chosen is
-previewed under the tree, with buttons to copy its path or type it into the
-composer. The Changes tab shows the project's git changes against HEAD,
-read with go-git by the daemon of the node the session runs on: a tree of
+read, dotfiles show or hide with the eye button, what .gitignore leaves out
+is dimmed, and a file chosen is previewed under the tree, an image shown and
+enlarged with a click, with buttons to copy its path or type it into the
+composer. Files and folders dragged from the Files tab or the desktop onto
+a terminal are typed as shell-quoted paths, onto the composer inserted, and
+a folder dropped anywhere else opens a new session in it. The Changes tab
+shows the project's git changes against HEAD, read by the daemon of the node
+the session runs on (git status when git is installed, go-git otherwise): a tree of
 the changed files, each folder adding up its files' lines added and removed,
 refreshed every few seconds while shown, and the diff of a file chosen
 under it. A tab dragged over a tab bar opens the gap it would drop into, and

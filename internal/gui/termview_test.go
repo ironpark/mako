@@ -123,13 +123,19 @@ func TestTypingReachesThePTY(t *testing.T) {
 		t.Fatalf("Up sent %q", got)
 	}
 
+	// Where the IME may rewrite the last syllable, it is held until the
+	// next key, which sends it first.
 	p.Text("안녕")
-	if got := link.typed(); got != "안녕" {
-		t.Fatalf("Hangul sent %q", got)
+	want, held := "안녕", ""
+	if holdsSyllables {
+		want, held = "안", "녕"
+	}
+	if got := link.typed(); got != want {
+		t.Fatalf("Hangul sent %q, want %q", got, want)
 	}
 
 	p.Type(ggui.Mods{}, ggui.KeyEscape)
-	if got := link.typed(); got != "\x1b" {
+	if got := link.typed(); got != held+"\x1b" {
 		t.Fatalf("Escape sent %q", got)
 	}
 }
@@ -272,4 +278,19 @@ func screenText(c *termConn) string {
 	defer c.mu.Unlock()
 	s, _ := c.vt.PlainText()
 	return s
+}
+
+// A Hangul syllable held for the IME to rewrite is taken back by
+// Backspace, which the program does not see.
+func TestBackspaceTakesAHeldSyllableBack(t *testing.T) {
+	if !holdsSyllables {
+		t.Skip("syllables are not held here")
+	}
+	link, _, p := newTestTerminal(t)
+	p.Text("가나")
+	p.Type(ggui.Mods{}, ggui.KeyBackspace)
+	p.Type(ggui.Mods{}, ggui.KeyEnter)
+	if got := link.typed(); got != "가\r" {
+		t.Fatalf("typed %q, want %q", got, "가\r")
+	}
 }

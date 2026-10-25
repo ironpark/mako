@@ -35,6 +35,7 @@ func Run(cfg *config.Config, addr string) error {
 		m.start(ctx, app.Post)
 	})
 	shortcuts(app, m)
+	app.OnDrop(m.dropFolder)
 	return app.Run()
 }
 

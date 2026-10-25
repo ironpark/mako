@@ -1,13 +1,16 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/ironpark/sanbo/internal/gitstat"
@@ -22,6 +25,10 @@ import (
 // maxRead caps what ReadFile returns of a file.
 const maxRead = 1 << 20
 
+// maxImage caps the image ReadFile returns whole: a frame carries the bytes
+// in base64, a third more.
+const maxImage = 5 << 20
+
 func (d *Daemon) handleListDir(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeDir, func(r *protocol.ListDir) *string { return &r.NodeID },
 		func(r protocol.ListDir) (protocol.Dir, error) { return listDir(r.Path) })
@@ -29,7 +36,12 @@ func (d *Daemon) handleListDir(ctx context.Context, stream *transport.Stream, en
 
 func (d *Daemon) handleReadFile(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeFile, func(r *protocol.ReadFile) *string { return &r.NodeID },
-		func(r protocol.ReadFile) (protocol.File, error) { return readFile(r.Path, r.Max) })
+		func(r protocol.ReadFile) (protocol.File, error) {
+			if r.Image {
+				return readImage(r.Path)
+			}
+			return readFile(r.Path, r.Max)
+		})
 }
 
 func (d *Daemon) handleGitStatus(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
@@ -105,6 +117,7 @@ func listDir(path string) (protocol.Dir, error) {
 		}
 		out.Entries = append(out.Entries, de)
 	}
+	markIgnored(path, out.Entries)
 	slices.SortFunc(out.Entries, func(a, b protocol.DirEntry) int {
 		if a.Dir != b.Dir {
 			if a.Dir {
@@ -115,6 +128,35 @@ func listDir(path string) (protocol.Dir, error) {
 		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
 	})
 	return out, nil
+}
+
+// markIgnored marks the entries of a directory that git leaves out of its
+// repository, as .gitignore and the like say; outside a repository, or
+// without git, none are.
+func markIgnored(dir string, entries []protocol.DirEntry) {
+	if len(entries) == 0 {
+		return
+	}
+	var in bytes.Buffer
+	for _, e := range entries {
+		in.WriteString(e.Name)
+		if e.Dir {
+			in.WriteByte('/') // so a pattern for directories matches
+		}
+		in.WriteByte(0)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "check-ignore", "-z", "--stdin")
+	cmd.Stdin = &in
+	out, _ := cmd.Output() // it exits 1 when none is ignored, 128 outside a repository
+	ignored := map[string]bool{}
+	for _, name := range strings.Split(string(out), "\x00") {
+		ignored[strings.TrimSuffix(name, "/")] = true
+	}
+	for i := range entries {
+		entries[i].Ignored = ignored[entries[i].Name]
+	}
 }
 
 func readFile(path string, limit int) (protocol.File, error) {
@@ -146,6 +188,30 @@ func readFile(path string, limit int) (protocol.File, error) {
 		return out, nil
 	}
 	out.Data = data
+	return out, nil
+}
+
+// readImage reads an image file whole, or only its size when it is larger
+// than maxImage.
+func readImage(path string) (protocol.File, error) {
+	if err := absolute(path); err != nil {
+		return protocol.File{}, err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return protocol.File{}, err
+	}
+	if info.IsDir() {
+		return protocol.File{}, errors.New("a directory is not a file")
+	}
+	out := protocol.File{Path: path, Size: info.Size(), Binary: true}
+	if info.Size() > maxImage {
+		out.Truncated = true
+		return out, nil
+	}
+	if out.Data, err = os.ReadFile(path); err != nil {
+		return protocol.File{}, err
+	}
 	return out, nil
 }
 

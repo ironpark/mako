@@ -1,14 +1,24 @@
 package gui
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"image"
+	_ "image/gif" // the formats the preview shows
+	_ "image/jpeg"
+	_ "image/png"
 	"maps"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
+	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	_ "golang.org/x/image/bmp"
+	_ "golang.org/x/image/webp"
 
 	"github.com/ironpark/sanbo/internal/client"
 	"github.com/ironpark/sanbo/internal/protocol"
@@ -42,14 +52,43 @@ type dirListing struct {
 type fileItem struct {
 	Key, Node, Path, Name string
 	Dir, Stub             bool
+	Ignored               bool // left out of the repository, and shown dimmed
 }
 
 // filePreview is the file shown under the tree.
 type filePreview struct {
 	fileItem
 	File    protocol.File
+	Img     *ggfx.Image // an image file, decoded; its bytes are not kept
 	Err     string
 	Loading bool
+}
+
+// same reports whether two previews show the same, telling images apart by
+// identity rather than by their pixels.
+func (p filePreview) same(o filePreview) bool {
+	if p.Img != o.Img {
+		return false
+	}
+	p.Img, o.Img = nil, nil
+	return reflect.DeepEqual(p, o)
+}
+
+// isImage reports whether a file's name says it is an image the preview
+// decodes.
+func isImage(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp":
+		return true
+	}
+	return false
+}
+
+// decodedImage is an image file as read, and decoded off the window's
+// goroutine.
+type decodedImage struct {
+	File protocol.File
+	Img  image.Image
 }
 
 // previewMax is how much of a file the preview reads.
@@ -153,7 +192,7 @@ func (m *model) children(it fileItem) []fileItem {
 			continue
 		}
 		path := joinPath(it.Path, e.Name)
-		items = append(items, fileItem{Key: dirKey(it.Node, path), Node: it.Node, Path: path, Name: e.Name, Dir: e.Dir})
+		items = append(items, fileItem{Key: dirKey(it.Node, path), Node: it.Node, Path: path, Name: e.Name, Dir: e.Dir, Ignored: e.Ignored})
 	}
 	return items
 }
@@ -173,28 +212,24 @@ func (m *model) toggleHidden() {
 	m.Prefs.Update(func(p prefs) prefs { p.ShowHidden = !p.ShowHidden; return p })
 }
 
-// toggleDir opens a closed folder and closes an open one.
+// toggleDir opens a closed folder, reading it, and closes an open one.
 func (m *model) toggleDir(it fileItem) {
 	open := maps.Clone(ggui.Peek(m.FilesOpen))
 	open[it.Key] = !open[it.Key]
-	m.setFilesOpen(open)
-}
-
-// setFilesOpen sets the folders open in the tree, reading those opening.
-func (m *model) setFilesOpen(open map[string]bool) {
-	was := ggui.Peek(m.FilesOpen)
-	for key, isOpen := range open {
-		if isOpen && !was[key] {
-			node, path := splitKey(key)
-			m.loadDir(node, path, false)
-		}
+	if open[it.Key] {
+		m.loadDir(it.Node, it.Path, false)
 	}
 	m.FilesOpen.Set(open)
 }
 
-// openPreview reads the start of a file into the preview.
+// openPreview reads the start of a file into the preview, or an image
+// whole.
 func (m *model) openPreview(it fileItem) {
 	m.Preview.Set(filePreview{fileItem: it, Loading: true})
+	if isImage(it.Name) {
+		m.openImage(it)
+		return
+	}
 	req := protocol.ReadFile{NodeID: m.remoteID(it.Node), Path: it.Path, Max: previewMax}
 	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (protocol.File, error) {
 		return c.ReadFile(ctx, m.key(), req)
@@ -205,6 +240,31 @@ func (m *model) openPreview(it fileItem) {
 		p := filePreview{fileItem: it, File: f}
 		if err != nil {
 			p.Err = err.Error()
+		}
+		m.Preview.Set(p)
+	})
+}
+
+func (m *model) openImage(it fileItem) {
+	req := protocol.ReadFile{NodeID: m.remoteID(it.Node), Path: it.Path, Image: true}
+	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (decodedImage, error) {
+		f, err := c.ReadFile(ctx, m.key(), req)
+		if err != nil || f.Data == nil {
+			return decodedImage{File: f}, err
+		}
+		img, _, err := image.Decode(bytes.NewReader(f.Data))
+		f.Data = nil
+		return decodedImage{File: f, Img: img}, err
+	}, func(d decodedImage, err error) {
+		if ggui.Peek(m.Preview).Key != it.Key {
+			return // another file was chosen meanwhile
+		}
+		p := filePreview{fileItem: it, File: d.File}
+		switch {
+		case err != nil:
+			p.Err = err.Error()
+		case d.Img != nil:
+			p.Img = ggfx.NewImageFromImage(d.Img)
 		}
 		m.Preview.Set(p)
 	})
@@ -252,7 +312,6 @@ func filesPanel(m *model) ggui.Widget {
 func filesView(m *model, r fileRoot) ggui.Widget {
 	rootItem := fileItem{Key: dirKey(r.Node, r.Path), Node: r.Node, Path: r.Path, Dir: true}
 	roots := ggui.Derived(func() []fileItem { return m.children(rootItem) })
-	expanded := ggui.Bind(m.FilesOpen.Get, m.setFilesOpen)
 	tree := ui.Tree(roots, func(it fileItem) string { return it.Key }, m.children,
 		func(item ggui.Readable[fileItem]) ggui.Widget {
 			it := ggui.Untrack(item.Get)
@@ -263,14 +322,24 @@ func filesView(m *model, r fileRoot) ggui.Widget {
 			if it.Dir {
 				name = "folder"
 			}
-			return ggui.Row(
-				icon(name).Size(14),
-				ggui.Text(it.Name).Size(12.5).NoWrap().Ellipsis(),
-			).Gap(7)
+			label := ggui.Text(it.Name).Size(12.5).NoWrap().Ellipsis()
+			lead := icon(name).Size(14)
+			if it.Ignored {
+				label, lead = label.Color(tokExtraMuted), lead.Color(tokExtraMuted)
+			}
+			row := ggui.Row(lead, ggui.Expanded(label)).Gap(7)
+			// Dragged to a terminal or the message box, it is typed as
+			// its path.
+			return ggui.DragSource(row, pathDrag{Path: it.Path})
 		}).
 		RowName(func(it fileItem) string { return it.Name }).
 		RowHeight(26).Indent(14).
-		BindExpanded(expanded).
+		BindExpanded(m.FilesOpen).
+		OnToggle(func(it fileItem, open bool) {
+			if open {
+				m.loadDir(it.Node, it.Path, false)
+			}
+		}).
 		BindSelected(m.FileSel).
 		OnSelect(func(it fileItem) {
 			switch {
@@ -311,8 +380,15 @@ func previewPane(m *model) ggui.Widget {
 		switch {
 		case p.Loading:
 			info = T("Reading…")
+		case p.Img != nil:
+			b := p.Img.Bounds()
+			info = fmt.Sprintf("%d × %d · %s", b.Dx(), b.Dy(), byteSize(p.File.Size))
 		case p.Err == "":
 			info = byteSize(p.File.Size)
+		}
+		var enlarge ggui.Widget = ggui.Box()
+		if p.Img != nil {
+			enlarge = iconButton("maximize-2", T("Enlarge"), func() { m.ImageOpen.Set(true) })
 		}
 		return panelHeader(
 			icon("file").Size(14),
@@ -321,6 +397,7 @@ func previewPane(m *model) ggui.Widget {
 				ggui.Text(info).Size(11.5).Color(tokExtraMuted).NoWrap(),
 			).Gap(8).Align(ggui.AlignBaseline)),
 			ggui.Row(
+				enlarge,
 				iconButton("terminal", T("Insert path in the message"), func() { m.insertPath(path) }),
 				iconButton("copy", T("Copy path"), func() { ggui.CurrentClipboard().Write(path) }),
 				iconButton("x", T("Close preview"), func() { m.Preview.Set(filePreview{}); m.FileSel.Set("") }),
@@ -334,6 +411,12 @@ func previewPane(m *model) ggui.Widget {
 			return ggui.Center(ui.Spinner())
 		case p.Err != "":
 			note = p.Err
+		case p.Img != nil:
+			// Clicked, it shows as large as the window allows.
+			img := ggui.Pointer(ggui.Image(p.Img).Alt(p.Name)).OnTap(func() { m.ImageOpen.Set(true) })
+			return ggui.Padding(ggui.Center(img), 12)
+		case isImage(p.Name) && p.File.Truncated:
+			note = Tf("An image of %s, too large to show.", byteSize(p.File.Size))
 		case p.File.Binary:
 			note = Tf("A binary file, %s.", byteSize(p.File.Size))
 		case len(p.File.Data) == 0:
@@ -350,6 +433,25 @@ func previewPane(m *model) ggui.Widget {
 		return ggui.Scroll(ggui.Padding(ggui.Column(rows...).Gap(10).Stretch(), 10, 12)).Bar(tokSurface3)
 	})
 	return lowerPane(head, content)
+}
+
+// imageViewer shows the previewed image as large as the window allows,
+// at most its own size, until a click on it or Escape closes it.
+func imageViewer(m *model) ggui.Widget {
+	img := ggui.Map(m.Preview, func(p filePreview) *ggfx.Image { return p.Img })
+	return ggui.View(img, func(*ggfx.Image) ggui.Widget {
+		p := ggui.Peek(m.Preview)
+		if p.Img == nil {
+			return ggui.Box()
+		}
+		b := p.Img.Bounds()
+		content := ggui.Column(
+			ggui.Pointer(ggui.Image(p.Img).Alt(p.Name)).OnTap(func() { m.ImageOpen.Set(false) }),
+			muted(ggui.Text(fmt.Sprintf("%s · %d × %d", p.Name, b.Dx(), b.Dy())).Size(12)),
+		).Gap(10).Align(ggui.AlignCenter)
+		// The panel hugs the image, which shrinks to fit the window.
+		return ui.Dialog(m.ImageOpen, ggui.Padding(content, 12)).Name(T("Image")).Compact().Width(float64(max(b.Dx(), 240) + 24))
+	})
 }
 
 // panelHeader is a side panel's top line, as tall as the panes' tab bars

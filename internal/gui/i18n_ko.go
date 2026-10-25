@@ -273,8 +273,11 @@ var catalogKo = map[string]string{
 	// Settings: nodes and about
 	"Daemons this window can reach. Sessions can start on any of them.":                   "이 창이 닿을 수 있는 데몬. 어느 데몬에서든 세션을 시작할 수 있습니다.",
 	"sanbo runs terminal agents on any of your computers and drives them from one place.": "sanbo는 내 모든 컴퓨터에서 터미널 에이전트를 실행하고 한곳에서 다룹니다.",
-	"Build":         "빌드",
-	"Version":       "버전",
-	"Daemon config": "데몬 설정 파일",
-	"App settings":  "앱 설정 파일",
+	"Build":                              "빌드",
+	"Version":                            "버전",
+	"Daemon config":                      "데몬 설정 파일",
+	"App settings":                       "앱 설정 파일",
+	"Enlarge":                            "크게 보기",
+	"Image":                              "이미지",
+	"An image of %s, too large to show.": "%s 크기의 이미지라 너무 커서 표시할 수 없습니다.",
 }

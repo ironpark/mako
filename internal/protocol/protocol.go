@@ -276,6 +276,7 @@ type DirEntry struct {
 	Link    bool      `json:"link,omitempty"`
 	Size    int64     `json:"size"`
 	ModTime time.Time `json:"mod_time"`
+	Ignored bool      `json:"ignored,omitempty"` // left out of the repository by .gitignore
 }
 
 // Dir is the reply to ListDir: the entries, directories first, then by name.
@@ -289,6 +290,10 @@ type ReadFile struct {
 	NodeID string `json:"node_id,omitempty"`
 	Path   string `json:"path"`
 	Max    int    `json:"max,omitempty"` // bytes; capped by the daemon
+	// Image reads the file whole, as the bytes of an image to show, binary
+	// or not, unless it is larger than a frame carries; then Truncated is
+	// set and Data left out.
+	Image bool `json:"image,omitempty"`
 }
 
 // File is the reply to ReadFile.

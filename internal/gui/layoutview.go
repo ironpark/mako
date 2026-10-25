@@ -158,8 +158,13 @@ func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			// Only the current pane's terminal takes the keyboard as it
 			// appears, so a split does not move it.
 			focus := ggui.Peek(m.FocusGroup) == id
-			return newTerminalView(m.conns[p.ID], func() prefs { return ggui.Peek(m.Prefs) }, focus).
+			term := newTerminalView(m.conns[p.ID], func() prefs { return ggui.Peek(m.Prefs) }, focus).
 				OnPress(func() { m.focusGroup(id) })
+			// A file dragged from the Files tab is typed as its path.
+			return ggui.DropZone(term, func(d ggui.Dropped[pathDrag]) {
+				term.setDropOver(false)
+				term.typePaths([]string{d.Value.Path})
+			}).OnHover(term.setDropOver)
 		}
 	})
 	return ggui.Stack(
@@ -284,9 +289,9 @@ func dropSlot(m *model, group, i int) ggui.Widget {
 		if h.Group == group && h.Index == i {
 			return slotWidth
 		}
-		return 0.01 // AnimatedBox lands a width of zero at once; this eases closed
+		return 0
 	})
-	gap := ggui.AnimatedBox().BindWidth(width).Height(tabBarHeight).
+	gap := ggui.AnimatedBox().BindWidth(width).Collapsible().Height(tabBarHeight).
 		Fill(tokSurface2).Duration(150 * time.Millisecond).Easing(ggui.EaseOut)
 	// An open gap is where the pointer is once the tabs moved aside, so it
 	// keeps itself open, and takes the tab dropped in it.

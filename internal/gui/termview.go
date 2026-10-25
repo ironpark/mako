@@ -5,6 +5,7 @@ import (
 	"math"
 	"runtime"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ironpark/ggui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
@@ -17,8 +18,11 @@ import (
 // a shell completes and Ctrl+C interrupts; ⌘ chords stay with the app.
 //
 // Text reaches it through a hidden TextInput, which drives the platform
-// IME: a Hangul syllable is shown at the cursor while it is composed and
-// sent once committed.
+// IME: a syllable is shown at the cursor while it is composed and sent
+// once committed. The macOS Korean IME composes without marked text: it
+// commits each jamo and rewrites the syllable before the caret as the next
+// joins it, so the last Hangul syllable committed is held, shown as it is
+// composed, until the next key shows it is done; see overHeldSyllable.
 type terminalView struct {
 	conn      *termConn
 	prefs     func() prefs
@@ -34,6 +38,15 @@ type terminalView struct {
 	// held are keys pressed while the IME composes, which it may take for
 	// itself; see settleHeld.
 	held []input.KeyEvent
+	// tickText is the editor's text before this frame's IME edits.
+	tickText string
+	// dropOver is whether files are dragged over the terminal, which
+	// outlines itself to say it takes them.
+	dropOver bool
+	// sent is how much of the editor's text has gone to the program. What
+	// was sent stays until nothing can be rewritten, as the IME finds the
+	// syllable it rewrites by its place in the text.
+	sent int
 
 	// Mouse reporting: a press the program took owns the drag and the
 	// release that follow it.
@@ -124,13 +137,18 @@ func (t *terminalView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 		t.paintCursor(clip, g, f, p)
 	}
 	t.ime.PaintCustom(clip, r, func(dst *ggui.Canvas, _ ggui.Rect, st ggui.TextInputState) ggui.Rect {
-		if st.Composing && st.Text != "" {
-			g.paintPreedit(dst, caret.Origin, st.Text)
+		// A composition, or a syllable held for one; what was sent already
+		// shows on the screen.
+		if unsent := st.Text[min(t.sent, len(st.Text)):]; unsent != "" {
+			g.paintPreedit(dst, caret.Origin, unsent)
 		}
 		return caret
 	})
 	if f.exited || f.err != nil {
 		t.paintBanner(clip, r, f)
+	}
+	if t.dropOver {
+		dst.StrokeRoundRect(ggui.Rct(r.Origin.Add(ggui.Pt(3, 3)), ggui.Sz(r.Size.W-6, r.Size.H-6)), 6, 2, t.pal.Ring)
 	}
 }
 
@@ -204,14 +222,14 @@ func (t *terminalView) HandleKey(ev ggui.KeyEvent) {
 		t.focused = ev.Kind == ggui.KeyFocus
 		t.blink = time.Time{}
 		t.ime.HandleKey(ev)
-		t.flushText()
+		t.flushText(true)
 		t.conn.requestPaint()
 	case ggui.KeyText:
 		// The editor commits typed text itself where there is no platform
 		// IME, and leaves it to the IME where there is, so text is sent from
 		// one place either way.
 		t.ime.HandleKey(ev)
-		t.flushText()
+		t.flushText(false)
 	case ggui.KeyPress:
 		t.blink = time.Time{}
 		if t.chord(ev) {
@@ -241,6 +259,9 @@ func (t *terminalView) HandleKey(ev ggui.KeyEvent) {
 			t.held = append(t.held, key)
 			return
 		}
+		if t.overHeldSyllable(key) {
+			return
+		}
 		t.conn.clearSelection()
 		t.conn.key(key, "")
 	}
@@ -253,26 +274,52 @@ func (t *terminalView) HandleKey(ev ggui.KeyEvent) {
 // composing through, or that took the composition back to nothing, as
 // Backspace does, was the IME's own and goes nowhere.
 func (t *terminalView) settleHeld() {
+	defer func() { t.held = t.held[:0] }()
 	if len(t.held) == 0 || t.ime.EditingState().Composing {
-		t.held = t.held[:0]
 		return
 	}
 	committed := ggui.Peek(t.imeText) != ""
-	t.flushText()
+	t.flushText(true)
 	if committed {
-		for _, key := range t.held {
-			t.conn.key(key, "")
-		}
+		t.sendKeys(t.held)
 	}
-	t.held = t.held[:0]
+}
+
+// overHeldSyllable handles a key pressed over a syllable held for the IME,
+// and reports whether there was one. The key reaches here only when the
+// IME passed it on. Backspace takes the syllable back, unless the IME
+// rewrote it in the same keystroke; any other key sends the syllable
+// first, so Enter runs the line it ends.
+func (t *terminalView) overHeldSyllable(key input.KeyEvent) bool {
+	rw := t.rewritable()
+	if rw == "" {
+		return false
+	}
+	if key.Key == input.KeyBackspace {
+		if text := ggui.Peek(t.imeText); text == t.tickText {
+			t.imeText.Set(text[:len(text)-len(rw)])
+		}
+		return true
+	}
+	t.flushText(true)
+	t.sendKeys([]input.KeyEvent{key})
+	return true
+}
+
+func (t *terminalView) sendKeys(keys []input.KeyEvent) {
+	for _, key := range keys {
+		t.conn.clearSelection()
+		t.conn.key(key, "")
+	}
 }
 
 // HandleTick implements ggui.TickHandler: it runs the platform IME while
 // focused, and sends whatever the IME committed.
 func (t *terminalView) HandleTick() bool {
+	t.tickText = ggui.Peek(t.imeText)
 	handled := t.ime.HandleTick()
 	t.settleHeld()
-	t.flushText()
+	t.flushText(false)
 	t.autoscroll()
 	return handled
 }
@@ -297,15 +344,78 @@ func (t *terminalView) autoscroll() {
 	ggui.WakeAt(t.scrolled.Add(autoscrollRate))
 }
 
-// flushText sends text the editor holds once nothing is being composed.
-func (t *terminalView) flushText() {
+// flushText sends text the editor holds once nothing is being composed,
+// but for a syllable the IME may still rewrite unless all is set, and
+// clears the editor once all of it is sent.
+func (t *terminalView) flushText(all bool) {
 	text := ggui.Peek(t.imeText)
-	if text == "" || t.ime.EditingState().Composing {
+	if t.ime.EditingState().Composing {
 		return
 	}
-	t.imeText.Set("")
+	t.sent = min(t.sent, len(text))
+	end := len(text)
+	if !all {
+		end -= len(t.rewritable())
+	}
+	if end > t.sent {
+		t.conn.clearSelection()
+		t.conn.key(input.KeyEvent{Action: input.KeyActionPress, Key: input.KeyUnidentified}, text[t.sent:end])
+		t.sent = end
+	}
+	if t.sent == len(text) && text != "" {
+		t.imeText.Set("")
+		t.sent = 0
+	}
+}
+
+// holdsSyllables is whether the IME rewrites syllables it committed, as
+// the macOS Korean one does; elsewhere they are composed in marked text.
+var holdsSyllables = runtime.GOOS == "darwin"
+
+// rewritable is the Hangul syllable or jamo the editor's text ends in,
+// which the Korean IME may still rewrite as the next jamo joins it, or "".
+func (t *terminalView) rewritable() string {
+	if !holdsSyllables {
+		return ""
+	}
+	text := ggui.Peek(t.imeText)
+	r, n := utf8.DecodeLastRuneInString(text)
+	if (r >= 0x1100 && r <= 0x11ff) || (r >= 0x3131 && r <= 0x318e) || (r >= 0xac00 && r <= 0xd7a3) {
+		return text[len(text)-n:]
+	}
+	return ""
+}
+
+// HandleDrop implements ggui.DropHandler: files dropped on the terminal
+// are typed as their paths, quoted for a shell, as a terminal does.
+func (t *terminalView) HandleDrop(ev ggui.DropEvent) bool {
+	t.setDropOver(false)
+	paths := ev.Paths()
+	if len(paths) == 0 {
+		return false
+	}
+	t.typePaths(paths)
+	return true
+}
+
+// HandleDrag implements ggui.DragHandler.
+func (t *terminalView) HandleDrag(ev ggui.DragEvent) bool {
+	t.setDropOver(ev.Kind == ggui.DragOver)
+	return true
+}
+
+func (t *terminalView) setDropOver(over bool) {
+	if t.dropOver != over {
+		t.dropOver = over
+		t.conn.requestPaint()
+	}
+}
+
+// typePaths types paths at the prompt, after what the IME still holds.
+func (t *terminalView) typePaths(paths []string) {
+	t.flushText(true)
 	t.conn.clearSelection()
-	t.conn.key(input.KeyEvent{Action: input.KeyActionPress, Key: input.KeyUnidentified}, text)
+	t.conn.paste(shellPaths(paths))
 }
 
 // chord runs the terminal's own chords -- paste, copy, select all -- and

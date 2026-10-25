@@ -50,6 +50,7 @@ func window(m *model) ggui.Widget {
 		ggui.If(inSettings, func() ggui.Widget { return settingsPage(m) }).
 			Else(func() ggui.Widget { return main }),
 		newSessionDialog(m),
+		imageViewer(m),
 		ui.AlertDialog(m.ConfirmOpen, T("Kill this session?"), T("The program is stopped on its node. Its output is lost.")).
 			Confirm(T("Kill session"), m.confirmedKill).Destructive(),
 		ui.AlertDialog(m.StopOpen, T("Stop the app's daemon?"), T("The sessions running in it end with it.")).
@@ -337,11 +338,30 @@ func composer(m *model) ggui.Widget {
 	})
 	send := ui.ButtonOf(iconColored("arrow-up", uitheme.PrimaryFg).Size(15), m.sendComposer).
 		Pad(6).Radius(14).Name(T("Send")).BindDisabled(disabled)
-	box := ggui.Box(ggui.Column(
+	// Files dropped on the box, from the desktop or the Files tab, are
+	// inserted as paths.
+	over := ggui.State(false)
+	content := ggui.Column(
 		inlineField(field),
 		ggui.Row(pills, ggui.Spacer(), send).Gap(8),
-	).Gap(8).Stretch()).Fill(tokSurface1).Border(1, tokBorderAccent).Radius(12).Pad(10, 12)
-	return ggui.Box(box).Pad(10, 16, 14, 16)
+	).Gap(8).Stretch()
+	box := ggui.View(over, func(o bool) ggui.Widget {
+		var border ggui.Widget = ggui.Box(content).Fill(tokSurface1).Border(1, tokBorderAccent).Radius(12).Pad(10, 12)
+		if o {
+			border = ggui.Box(content).Fill(tokSurface1).Border(1, uitheme.Ring).Radius(12).Pad(10, 12)
+		}
+		return border
+	})
+	desktop := ggui.Pointer(box).OnDropHover(over.Set).OnDrop(func(ev ggui.DropEvent) {
+		for _, p := range ev.Paths() {
+			m.insertPath(p)
+		}
+	})
+	files := ggui.DropZone(desktop, func(d ggui.Dropped[pathDrag]) {
+		over.Set(false)
+		m.insertPath(d.Value.Path)
+	}).OnHover(over.Set)
+	return ggui.Box(files).Pad(10, 16, 14, 16)
 }
 
 // inlineField drops a text field's own chrome inside the composer box, so

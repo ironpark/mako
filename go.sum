@@ -51,10 +51,10 @@ github.com/grandcat/zeroconf v1.0.0 h1:uHhahLBKqwWBV6WZUDAT71044vwOTL+McW0mBJvo6
 github.com/grandcat/zeroconf v1.0.0/go.mod h1:lTKmG1zh86XyCoUeIHSA4FJMBwCJiQmGfcP2PdzytEs=
 github.com/hajimehoshi/bitmapfont/v4 v4.2.0 h1:bpeN2ph7aHSuX7yoWFkLPo4ado9K+E+Dq7t6MoFcJAU=
 github.com/hajimehoshi/bitmapfont/v4 v4.2.0/go.mod h1:AIeoQek1nxUmDczXNtFEYWTQ4ArINijutPD729q/NeE=
-github.com/ironpark/ggfx v0.0.0-20261025073821-baa791aebac7 h1:pQuJqX0v++duQAGNr6LS/6zS4sCj3j5N/YhBx+8oQ1M=
-github.com/ironpark/ggfx v0.0.0-20261025073821-baa791aebac7/go.mod h1:yL9HaMaOBmTbgvcwEFGopn4B4+ZEJx2V3mCnDTW0x/E=
-github.com/ironpark/ggui v0.0.0-20261025085802-3baae7e1be38 h1:6WCoclWLnPSFQjiydKhzMO8ekxNo51LrVXvVldDV5JI=
-github.com/ironpark/ggui v0.0.0-20261025085802-3baae7e1be38/go.mod h1:v9auKcsCWt3Eubwrhz2YiItcKvCgDB/jivd+Qp2TiKM=
+github.com/ironpark/ggfx v0.0.0-20261025102939-e853318a2f66 h1:ThumvYr0ferBvkGGo6W8HIPacudM/tphNZMtRkmCbmQ=
+github.com/ironpark/ggfx v0.0.0-20261025102939-e853318a2f66/go.mod h1:yL9HaMaOBmTbgvcwEFGopn4B4+ZEJx2V3mCnDTW0x/E=
+github.com/ironpark/ggui v0.0.0-20261025104441-2637f0e929f3 h1:aJtWjmIN9Eb9S4yAOsA9RcDqutJ6aT47IVU2Njx0/xQ=
+github.com/ironpark/ggui v0.0.0-20261025104441-2637f0e929f3/go.mod h1:twMLATk+d2EtcS/kNe+qcdClwfWI3RfY1q27n/q7ALg=
 github.com/ironpark/gostty v0.0.0-20260914092046-29dc0d68e78f h1:vom1N/5ueuBuESuyq25wZE6Nn0zPoXyKtNmT30q3WQc=
 github.com/ironpark/gostty v0.0.0-20260914092046-29dc0d68e78f/go.mod h1:htMJDApfeCwo3cVH8Bv9FyVnlhvwrnDkn4DDxSKtjE8=
 github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 h1:BQSFePA1RWJOlocH6Fxy8MmwDt+yVQYULKfN0RoTN8A=

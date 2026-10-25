@@ -1,7 +1,10 @@
 package gui
 
 import (
+	"bytes"
 	"context"
+	"image"
+	pngenc "image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,10 +28,18 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	logo := image.NewRGBA(image.Rect(0, 0, 3, 2))
+	var png bytes.Buffer
+	if err := pngenc.Encode(&png, logo); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "logo.png"), png.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	cfg := config.Default()
 	cfg.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
-	if err := savePrefs(prefs{DaemonMode: "embedded"}.normalized()); err != nil {
+	if err := savePrefs(prefs{DaemonMode: "embedded", ShowComposer: true}.normalized()); err != nil {
 		t.Fatal(err)
 	}
 	m := newModel(cfg, "")
@@ -63,5 +74,52 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 	m.insertPath(ggui.Peek(m.Preview).Path)
 	if got := ggui.Peek(m.Composer); got != filepath.Join("src", "main.go") {
 		t.Fatalf("composer %q, want the path from the project", got)
+	}
+
+	// Dragged onto the message box, a file is inserted as its path.
+	m.Composer.Set("")
+	f, _ = p.Find("main.go")
+	box, ok := p.Find(T("Message"))
+	if !ok {
+		t.Fatal("no message box")
+	}
+	p.Press(f.Center())
+	p.Move(f.Center().Add(ggui.Pt(-12, 6)))
+	p.Move(box.Center())
+	p.Move(box.Center())
+	p.Release(box.Center())
+	p.Frame()
+	if got := ggui.Peek(m.Composer); got != filepath.Join("src", "main.go") {
+		t.Fatalf("composer %q after the drag, want the file's path", got)
+	}
+
+	// An image is shown, and enlarged.
+	logoRow, _ := p.FindRole(ggui.RoleTreeItem, "logo.png")
+	p.Click(logoRow.Center())
+	probeUntil(t, p, "the image", func() bool { return ggui.Peek(m.Preview).Img != nil })
+	if b := ggui.Peek(m.Preview).Img.Bounds(); b.Dx() != 3 || b.Dy() != 2 {
+		t.Fatalf("image of %v, want 3×2", b)
+	}
+	p.Tap(T("Enlarge"))
+	if !ggui.Peek(m.ImageOpen) {
+		t.Fatal("the image did not open enlarged")
+	}
+	m.ImageOpen.Set(false)
+
+	// A folder dropped from the desktop where nothing takes it opens a new
+	// session in it.
+	p.OnDrop(m.dropFolder)
+	p.DropPaths(ggui.Pt(120, 500), filepath.Join(project, "src"))
+	p.Frame()
+	if !ggui.Peek(m.NewOpen) || ggui.Peek(m.Form).Project != filepath.Join(project, "src") {
+		t.Fatalf("dialog open %v on %q", ggui.Peek(m.NewOpen), ggui.Peek(m.Form).Project)
+	}
+}
+
+func TestShellPathsQuote(t *testing.T) {
+	got := shellPaths([]string{"/tmp/a.txt", "/Users/me/My Files", "it's", "/한글/파일"})
+	want := `/tmp/a.txt '/Users/me/My Files' 'it'\''s' /한글/파일 `
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }

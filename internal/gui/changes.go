@@ -166,16 +166,6 @@ func gitTree(files []protocol.GitFile) []gitItem {
 	return build(root)
 }
 
-// gitDirs lists the keys of every folder in a tree.
-func gitDirs(items []gitItem, into map[string]bool) {
-	for _, it := range items {
-		if it.Dir {
-			into[it.Key] = true
-			gitDirs(it.Children, into)
-		}
-	}
-}
-
 // lineCount writes a count of lines as the changes tree shows it: 2.7k
 // from a thousand up.
 func lineCount(n int) string {
@@ -245,29 +235,6 @@ func changesView(m *model) ggui.Widget {
 	// A refresh that changes nothing, as most do, leaves the tree be.
 	files := ggui.Map(m.Git, func(v gitView) []protocol.GitFile { return v.Changes.Files }).WithEqual(slices.Equal)
 	roots := ggui.Map(files, gitTree)
-	dirs := ggui.Map(roots, func(items []gitItem) map[string]bool {
-		all := map[string]bool{}
-		gitDirs(items, all)
-		return all
-	})
-	// Folders start open: the closed ones are kept, and the rest are open.
-	expanded := ggui.Bind(func() map[string]bool {
-		open := maps.Clone(dirs.Get())
-		for k := range m.GitClosed.Get() {
-			delete(open, k)
-		}
-		return open
-	}, func(open map[string]bool) {
-		closed := maps.Clone(ggui.Peek(m.GitClosed))
-		for k := range ggui.Peek(dirs) {
-			if open[k] {
-				delete(closed, k)
-			} else {
-				closed[k] = true
-			}
-		}
-		m.GitClosed.Set(closed)
-	})
 	tree := ui.Tree(roots, func(it gitItem) string { return it.Key }, func(it gitItem) []gitItem { return it.Children },
 		func(item ggui.Readable[gitItem]) ggui.Widget {
 			return ggui.Reactive(func() ggui.Widget {
@@ -292,13 +259,13 @@ func changesView(m *model) ggui.Widget {
 		}).
 		RowName(func(it gitItem) string { return it.Name }).
 		RowHeight(26).Indent(14).
-		BindExpanded(expanded).
+		BindCollapsed(m.GitClosed). // folders start open
 		BindSelected(m.GitSel).
 		OnSelect(func(it gitItem) {
 			if it.Dir {
-				open := maps.Clone(expanded.Get())
-				open[it.Key] = !open[it.Key]
-				expanded.Set(open)
+				closed := maps.Clone(ggui.Peek(m.GitClosed))
+				closed[it.Key] = !closed[it.Key]
+				m.GitClosed.Set(closed)
 				return
 			}
 			m.openDiff(it.File)
