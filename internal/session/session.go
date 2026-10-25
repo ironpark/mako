@@ -46,6 +46,10 @@ type Session struct {
 	exitCode *int
 	subs     map[int]chan []byte
 	nextSub  int
+	// final is the screen as the agent left it, plain and styled, kept
+	// when the terminal is released so an exited session can still be
+	// attached to and read.
+	finalPlain, finalStyled protocol.Snapshot
 
 	started time.Time
 	done    chan struct{}
@@ -130,6 +134,9 @@ func (s *Session) Resize(cols, rows uint16) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.state == protocol.StateExited {
+		return nil // its screen is kept as it was left
+	}
 	s.spec.Cols, s.spec.Rows = cols, rows
 	return s.term.Terminal().Resize(cols, rows)
 }
@@ -139,7 +146,16 @@ func (s *Session) Resize(cols, rows uint16) error {
 func (s *Session) Snapshot(styled bool) (protocol.Snapshot, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.state == protocol.StateExited {
+		if styled {
+			return s.finalStyled, nil
+		}
+		return s.finalPlain, nil
+	}
+	return s.snapshotLocked(styled)
+}
 
+func (s *Session) snapshotLocked(styled bool) (protocol.Snapshot, error) {
 	opts := gostty.FormatOptions{Format: gostty.FormatterFormatPlain}
 	if styled {
 		opts.Format = gostty.FormatterFormatVt
@@ -232,6 +248,8 @@ func (s *Session) pump() {
 		delete(s.subs, id)
 		close(sub)
 	}
+	s.finalPlain, _ = s.snapshotLocked(false)
+	s.finalStyled, _ = s.snapshotLocked(true)
 	s.term.Close()
 	s.mu.Unlock()
 }

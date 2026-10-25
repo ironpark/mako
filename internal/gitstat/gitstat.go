@@ -1,0 +1,303 @@
+// Package gitstat reads a work tree's changes, for the daemon to report to
+// front-ends: which files differ from HEAD, by how many lines, and how.
+package gitstat
+
+import (
+	"cmp"
+	"errors"
+	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"slices"
+	"strings"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/utils/diff"
+	"github.com/sergi/go-diff/diffmatchpatch"
+
+	"github.com/ironpark/sanbo/internal/protocol"
+)
+
+// maxCounted is the size past which a file's lines are not counted or
+// diffed: it is shown as changed, as a binary file is.
+const maxCounted = 4 << 20
+
+// maxDiffLines caps a diff's lines; the rest is left out as truncated.
+const maxDiffLines = 5000
+
+// context is how many unchanged lines a hunk keeps around its changes.
+const context = 3
+
+// Status reports the changes of the work tree dir is in, against HEAD,
+// staged or not. A dir in no repository reports NotRepo.
+func Status(dir string) (protocol.GitChanges, error) {
+	repo, err := git.PlainOpenWithOptions(dir, &git.PlainOpenOptions{DetectDotGit: true, EnableDotGitCommonDir: true})
+	if errors.Is(err, git.ErrRepositoryNotExists) {
+		return protocol.GitChanges{NotRepo: true}, nil
+	}
+	if err != nil {
+		return protocol.GitChanges{}, err
+	}
+	wt, err := repo.Worktree()
+	if err != nil {
+		return protocol.GitChanges{}, err
+	}
+	out := protocol.GitChanges{Root: wt.Filesystem.Root(), Branch: branch(repo)}
+	st, err := wt.Status()
+	if err != nil {
+		return protocol.GitChanges{}, err
+	}
+	tree := headTree(repo)
+	for p, fs := range st {
+		f, ok := change(p, fs)
+		if !ok {
+			continue
+		}
+		old, oldOK := headContent(tree, cmp.Or(f.From, f.Path))
+		cur, curOK := diskContent(out.Root, f.Path)
+		if f.Status == protocol.GitAdded && !curOK {
+			continue // added to the index and gone from the disk: nothing to show
+		}
+		if Binary(old) || Binary(cur) || (!oldOK && !curOK) {
+			f.Binary = true
+		} else {
+			f.Added, f.Removed = count(old, cur)
+		}
+		out.Files = append(out.Files, f)
+	}
+	slices.SortFunc(out.Files, func(a, b protocol.GitFile) int { return strings.Compare(a.Path, b.Path) })
+	return out, nil
+}
+
+// change reads a file's status codes as one change, or reports none.
+func change(p string, fs *git.FileStatus) (protocol.GitFile, bool) {
+	f := protocol.GitFile{Path: p}
+	switch {
+	case fs.Staging == git.Unmodified && fs.Worktree == git.Unmodified:
+		return f, false
+	case fs.Worktree == git.Untracked || fs.Staging == git.Added:
+		f.Status = protocol.GitAdded
+	case fs.Staging == git.Deleted || fs.Worktree == git.Deleted:
+		f.Status = protocol.GitDeleted
+	case fs.Staging == git.Renamed:
+		f.Status, f.From = protocol.GitRenamed, fs.Extra
+	default:
+		f.Status = protocol.GitModified
+	}
+	return f, true
+}
+
+// branch names what HEAD is on: a branch, unborn or not, or the commit.
+func branch(repo *git.Repository) string {
+	head, err := repo.Reference(plumbing.HEAD, false)
+	if err != nil {
+		return ""
+	}
+	if head.Type() == plumbing.SymbolicReference {
+		return head.Target().Short()
+	}
+	return head.Hash().String()[:7]
+}
+
+func headTree(repo *git.Repository) *object.Tree {
+	ref, err := repo.Head()
+	if err != nil {
+		return nil // no commit yet
+	}
+	commit, err := repo.CommitObject(ref.Hash())
+	if err != nil {
+		return nil
+	}
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil
+	}
+	return tree
+}
+
+// headContent is a file as HEAD has it, and whether it has it.
+func headContent(tree *object.Tree, p string) (string, bool) {
+	if tree == nil {
+		return "", false
+	}
+	f, err := tree.File(p)
+	if err != nil || f.Size > maxCounted {
+		return "", err == nil
+	}
+	s, err := f.Contents()
+	return s, err == nil
+}
+
+// diskContent is a file as the work tree has it, and whether it has it.
+func diskContent(root, p string) (string, bool) {
+	full := filepath.Join(root, filepath.FromSlash(p))
+	info, err := os.Stat(full)
+	if err != nil || info.IsDir() {
+		return "", false
+	}
+	if info.Size() > maxCounted {
+		return "\x00", true // too large to count: shown as binary
+	}
+	b, err := os.ReadFile(full)
+	return string(b), err == nil
+}
+
+// Binary reports a NUL in a file's first 8000 bytes, as git decides.
+func Binary[T string | []byte](s T) bool {
+	for _, c := range []byte(s[:min(len(s), 8000)]) {
+		if c == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// count is the lines added and removed between two texts.
+func count(old, cur string) (added, removed int) {
+	for _, d := range diff.Do(old, cur) {
+		switch d.Type {
+		case diffmatchpatch.DiffInsert:
+			added += lineCount(d.Text)
+		case diffmatchpatch.DiffDelete:
+			removed += lineCount(d.Text)
+		}
+	}
+	return added, removed
+}
+
+func lineCount(s string) int {
+	if s == "" {
+		return 0
+	}
+	n := strings.Count(s, "\n")
+	if !strings.HasSuffix(s, "\n") {
+		n++
+	}
+	return n
+}
+
+// Diff is one file's changes against HEAD as unified diff hunks. from is
+// the path HEAD has it at, for a rename, or "".
+func Diff(root, p, from string) (protocol.Diff, error) {
+	for _, q := range []string{p, from} {
+		if q != "" && (path.IsAbs(q) || strings.HasPrefix(path.Clean(q), "..")) {
+			return protocol.Diff{}, fmt.Errorf("%q is not in the work tree", q)
+		}
+	}
+	repo, err := git.PlainOpenWithOptions(root, &git.PlainOpenOptions{EnableDotGitCommonDir: true})
+	if err != nil {
+		return protocol.Diff{}, err
+	}
+	old, _ := headContent(headTree(repo), cmp.Or(from, p))
+	cur, _ := diskContent(root, p)
+	out := protocol.Diff{Path: p}
+	if Binary(old) || Binary(cur) {
+		out.Binary = true
+		return out, nil
+	}
+	out.Lines, out.Truncated = unified(old, cur)
+	return out, nil
+}
+
+// line is one line of a diff before it is cut into hunks.
+type line struct {
+	op       byte
+	text     string
+	old, cur int // its numbers on each side, 0 where it has none
+}
+
+// unified cuts the line diff of two texts into hunks with context lines
+// around each change, as git diff writes them.
+func unified(old, cur string) ([]protocol.DiffLine, bool) {
+	var lines []line
+	o, n := 1, 1
+	for _, d := range diff.Do(old, cur) {
+		for _, t := range splitLines(d.Text) {
+			switch d.Type {
+			case diffmatchpatch.DiffEqual:
+				lines = append(lines, line{' ', t, o, n})
+				o, n = o+1, n+1
+			case diffmatchpatch.DiffDelete:
+				lines = append(lines, line{'-', t, o, 0})
+				o++
+			case diffmatchpatch.DiffInsert:
+				lines = append(lines, line{'+', t, 0, n})
+				n++
+			}
+		}
+	}
+	var out []protocol.DiffLine
+	var at, oldBefore, newBefore int // the lines ahead of a hunk, on each side
+	for i := 0; i < len(lines); {
+		// The next change, and the run of changes no more than two
+		// contexts apart that it starts.
+		first := i
+		for first < len(lines) && lines[first].op == ' ' {
+			first++
+		}
+		if first == len(lines) {
+			break
+		}
+		last := first
+		for j := first; j < len(lines) && j-last <= 2*context; j++ {
+			if lines[j].op != ' ' {
+				last = j
+			}
+		}
+		start, end := max(first-context, i), min(last+context+1, len(lines))
+		for _, l := range lines[at:start] {
+			if l.op != '+' {
+				oldBefore = l.old
+			}
+			if l.op != '-' {
+				newBefore = l.cur
+			}
+		}
+		at = start
+		out = append(out, header(lines[start:end], oldBefore, newBefore))
+		for _, l := range lines[start:end] {
+			out = append(out, protocol.DiffLine{Op: string(l.op), Text: l.text, Old: l.old, New: l.cur})
+		}
+		if len(out) > maxDiffLines {
+			return out[:maxDiffLines], true
+		}
+		i = end
+	}
+	return out, false
+}
+
+// header is a hunk's @@ line: where it starts on each side and how many
+// lines it spans there. oldStart and newStart number the last line ahead
+// of the hunk on each side.
+func header(hunk []line, oldStart, newStart int) protocol.DiffLine {
+	var oldN, newN int
+	for _, l := range hunk {
+		if l.op != '+' {
+			oldN++
+		}
+		if l.op != '-' {
+			newN++
+		}
+	}
+	// A side the hunk has lines on starts at its first; one it has none on
+	// is named by the line before, as git does.
+	if oldN > 0 {
+		oldStart++
+	}
+	if newN > 0 {
+		newStart++
+	}
+	return protocol.DiffLine{Op: "@", Text: fmt.Sprintf("@@ -%d,%d +%d,%d @@", oldStart, oldN, newStart, newN)}
+}
+
+// splitLines splits text at its line breaks, without them.
+func splitLines(s string) []string {
+	s = strings.TrimSuffix(s, "\n")
+	if s == "" {
+		return []string{""}
+	}
+	return strings.Split(s, "\n")
+}

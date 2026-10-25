@@ -14,6 +14,7 @@ import (
 	"github.com/ironpark/ggui/fonts/gofont"
 
 	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/sanbo/internal/protocol"
 )
 
 // Preview renders the window against a live daemon into PNGs in dir,
@@ -117,8 +118,46 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				until("a terminal", func() bool { return slices.Contains(ggui.Peek(m.Attached), ggui.Peek(m.Selected)) }),
 				frames(30), // the resize reaches the program and its redraw comes back
 				shot("02-session"),
-				do(func() { m.DetailsOpen.Set(true) }), frames(2), shot("03-details"),
-				do(func() { m.DetailsOpen.Set(false); m.openNew("", "") }), frames(2), shot("04-new-session"),
+				// A second session, dragged to the right of the first.
+				do(func() {
+					s, _ := m.session(ggui.Peek(m.Selected))
+					m.launch("shell", s.NodeID, s.Project)
+				}),
+				until("a second tab", func() bool { return len(ggui.Peek(m.Tabs)) > 1 }),
+				do(func() { m.splitTab(ggui.Peek(m.Selected), ggui.Peek(m.FocusGroup), dropRight) }),
+				until("its terminal", func() bool { return slices.Contains(ggui.Peek(m.Attached), ggui.Peek(m.Selected)) }),
+				frames(30), shot("03-split"),
+				// The project's files, a folder open and a file previewed.
+				do(func() {
+					r := ggui.Untrack(m.filesRoot)
+					dir := joinPath(r.Path, "internal")
+					m.toggleDir(fileItem{Key: dirKey(r.Node, dir), Node: r.Node, Path: dir, Dir: true})
+					readme := joinPath(r.Path, "README.md")
+					m.openPreview(fileItem{Key: dirKey(r.Node, readme), Node: r.Node, Path: readme, Name: "README.md"})
+				}),
+				until("the preview", func() bool { return !ggui.Peek(m.Preview).Loading }),
+				frames(5), shot("03-files"),
+				// The right pane's tab dragged over the bottom of the left
+				// pane, then let go where nothing takes it.
+				do(func() {
+					var tab ggui.Found
+					for _, f := range p.FindAll(ggui.RoleButton) {
+						if f.Label == sessionLabel(protocol.SessionInfo{Agent: "shell"}) && f.Rect.Origin.Y < headerHeight+tabBarHeight {
+							tab = f // the last is the right pane's
+						}
+					}
+					at := tab.Center()
+					p.Press(at)
+					p.Move(ggui.Pt(at.X-12, at.Y+6))
+					to := ggui.Pt(float64(width)*0.33, float64(height)*0.75)
+					p.Move(to)
+					p.Move(to)
+				}),
+				frames(2), shot("03-drag"),
+				do(func() { p.Release(ggui.Pt(float64(width)/2, headerHeight/2)) }),
+				do(func() { m.DetailTab.Set(1) }), frames(30), shot("03-changes"),
+				do(func() { m.DetailTab.Set(2) }), frames(2), shot("03-details"),
+				do(func() { m.DetailTab.Set(0); m.openNew("", "") }), frames(2), shot("04-new-session"),
 				do(func() { m.NewOpen.Set(false); m.openSettings("general") }), frames(2), shot("05-settings-general"),
 				do(func() { m.Section.Set("appearance") }), frames(2), shot("06-settings-appearance"),
 				do(func() { m.Section.Set("terminal") }), frames(2), shot("07-settings-terminal"),

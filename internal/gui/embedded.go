@@ -227,7 +227,7 @@ func (m *model) stopEmbedded() {
 	}
 	m.daemonGen++
 	m.embedded.stop()
-	m.unlink("The app's daemon is stopped.")
+	m.unlink(T("The app's daemon is stopped."))
 	m.setDaemonState(func(s *daemonState) { s.Running, s.Starting, s.Addr = false, false, "" })
 }
 

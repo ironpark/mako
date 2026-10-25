@@ -63,7 +63,23 @@ instead of a blank window.
 [ggui](https://github.com/ironpark/ggui) and laid out after
 [Paseo](https://github.com/getpaseo/paseo): projects and their sessions in a
 sidebar, open sessions as tabs, a composer that types a line into the
-selected session, and a details panel for the session and the nodes.
+selected session, and a panel on the right with the project's files, the
+session's details and the nodes.
+
+Tabs arrange into panes by dragging: onto a pane's left, right, top or
+bottom edge to split it there, onto its middle or its tab bar to move the
+tab into it, along a tab bar to reorder. A session in the sidebar drags in
+the same way, dividers between panes resize them, and a pane closes with its
+last tab. The Files tab browses the project of the session shown, on
+whichever node it runs, through that node's daemon: folders open as they are
+read, dotfiles show or hide with the eye button, and a file chosen is
+previewed under the tree, with buttons to copy its path or type it into the
+composer. The Changes tab shows the project's git changes against HEAD,
+read with go-git by the daemon of the node the session runs on: a tree of
+the changed files, each folder adding up its files' lines added and removed,
+refreshed every few seconds while shown, and the diff of a file chosen
+under it. A tab dragged over a tab bar opens the gap it would drop into, and
+the side panels slide open and closed.
 
 Each tab runs its own terminal on the GUI side, fed from the daemon's stream,
 so the screen is drawn and keys are encoded locally under the modes the
@@ -74,7 +90,8 @@ terminal keeps Tab and the Ctrl and Alt chords for the program; ⌘ chords stay
 with the app (⌘T new session, ⌘W close tab, ⌘B sidebar, ⌘, settings, and
 ⌘C/⌘V/⌘A for the terminal's clipboard).
 
-Settings (⌘,) cover the app -- theme (system, light, dark), terminal font
+Settings (⌘,) cover the app -- language (English or Korean, or the
+system's), theme (system, light, dark), terminal font
 size, line height, cursor, scrollback, copy-on-select, the composer and the
 daemon address -- kept in `gui.json` beside `config.json`, and this node's
 daemon configuration: name, listen address, key, discovery and agents,

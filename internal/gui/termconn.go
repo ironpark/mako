@@ -42,6 +42,13 @@ type termConn struct {
 	gesture  *gostty.Gesture // click counting and drag selection
 	dragging bool
 
+	// The daemon is told of a size once a burst of them settles, as a
+	// sliding panel resizes the terminal every frame, so the program is
+	// not made to redraw for each one. sentAt is when it was last told;
+	// settle sends the latest size later.
+	sentAt time.Time
+	settle *time.Timer
+
 	// wake asks the UI for a frame. Output arrives in bursts, so requests
 	// are coalesced until the frame that drew them has run.
 	wake    func()
@@ -309,6 +316,30 @@ func (t *termConn) resize(cols, rows uint16) {
 	t.cols, t.rows = cols, rows
 	_ = t.vt.Terminal().Resize(cols, rows)
 	live := !t.exited && t.err == nil
+	now := time.Now()
+	send := live && t.settle == nil && now.Sub(t.sentAt) >= resizeSettle
+	if send {
+		t.sentAt = now
+	} else if live && t.settle == nil {
+		t.settle = time.AfterFunc(resizeSettle, t.sendSize)
+	}
+	t.mu.Unlock()
+	if send {
+		_ = t.att.Resize(cols, rows)
+	}
+}
+
+// resizeSettle is how long the size must hold before the daemon hears of
+// it again.
+const resizeSettle = 120 * time.Millisecond
+
+// sendSize tells the daemon the size the terminal settled on.
+func (t *termConn) sendSize() {
+	t.mu.Lock()
+	t.settle = nil
+	t.sentAt = time.Now()
+	cols, rows := t.cols, t.rows
+	live := !t.closed && !t.exited && t.err == nil
 	t.mu.Unlock()
 	if live {
 		_ = t.att.Resize(cols, rows)
@@ -601,6 +632,9 @@ func (t *termConn) close() {
 		return
 	}
 	t.closed = true
+	if t.settle != nil {
+		t.settle.Stop()
+	}
 	_ = t.state.Close()
 	_ = t.vt.Close()
 }

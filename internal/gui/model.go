@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -64,10 +65,28 @@ type model struct {
 	Sessions *ggui.StateValue[[]protocol.SessionInfo]
 	Agents   *ggui.StateValue[[]string] // what this node can launch, as agent:profile targets
 
-	Selected *ggui.StateValue[string]   // the session in the main pane
-	Tabs     *ggui.StateValue[[]string] // sessions opened as tabs, in order
-	Attached *ggui.StateValue[[]string] // tabs whose terminal is connected
-	Titles   *ggui.StateValue[map[string]string]
+	Selected   *ggui.StateValue[string]      // the tab the current pane shows
+	Tabs       *ggui.StateValue[[]string]    // every pane's tabs, in order
+	Layout     *ggui.StateValue[*layoutNode] // the panes; see layout.go
+	FocusGroup *ggui.StateValue[int]         // the current pane
+	Dragging   *ggui.StateValue[bool]        // a tab is being dragged
+	TabHint    *ggui.StateValue[tabHint]     // where in a tab bar it would drop
+	Attached   *ggui.StateValue[[]string]    // tabs whose terminal is connected
+	Titles     *ggui.StateValue[map[string]string]
+
+	// The Files tab: folders read, by dirKey; those open; the row chosen;
+	// and the file shown.
+	Dirs      *ggui.StateValue[map[string]dirListing]
+	FilesOpen *ggui.StateValue[map[string]bool]
+	FileSel   *ggui.StateValue[string]
+	Preview   *ggui.StateValue[filePreview]
+
+	// The Changes tab: the project's changes, the folders closed in their
+	// tree, the row chosen, and the diff shown.
+	Git       *ggui.StateValue[gitView]
+	GitClosed *ggui.StateValue[map[string]bool]
+	GitSel    *ggui.StateValue[string]
+	GitDiff   *ggui.StateValue[diffView]
 
 	SidebarOpen *ggui.StateValue[bool]
 	DetailsOpen *ggui.StateValue[bool]
@@ -77,8 +96,11 @@ type model struct {
 	FormErr     *ggui.StateValue[string]
 	Composer    *ggui.StateValue[string]
 
-	conns   map[string]*termConn // UI goroutine only
-	dialing map[string]bool
+	conns map[string]*termConn // UI goroutine only
+	// revealedTab is the tab each pane last scrolled its tab bar to, so it
+	// does so once per tab it comes to show.
+	revealedTab map[int]string
+	dialing     map[string]bool
 
 	mu        sync.Mutex // guards the link fields below, which workers read
 	cli       *client.Client
@@ -93,6 +115,7 @@ type model struct {
 }
 
 func newModel(cfg *config.Config, addr string) *model {
+	go systemLanguage() // asks the platform, so not on the first frame
 	deep := func(a, b []protocol.Node) bool { return reflect.DeepEqual(a, b) }
 	p := loadPrefs()
 	m := &model{
@@ -116,16 +139,29 @@ func newModel(cfg *config.Config, addr string) *model {
 		Agents:      ggui.State(agentspec.Targets(cfg.Agents)).WithEqual(slices.Equal),
 		Selected:    ggui.State(""),
 		Tabs:        ggui.State([]string(nil)).WithEqual(slices.Equal),
+		Layout:      ggui.State(newLayout()).WithEqual(func(a, b *layoutNode) bool { return reflect.DeepEqual(a, b) }),
+		FocusGroup:  ggui.State(1),
+		Dragging:    ggui.State(false),
+		TabHint:     ggui.State(tabHint{}),
 		Attached:    ggui.State([]string(nil)).WithEqual(slices.Equal),
 		Titles:      ggui.State(map[string]string{}).WithEqual(func(a, b map[string]string) bool { return reflect.DeepEqual(a, b) }),
+		Dirs:        ggui.State(map[string]dirListing{}).WithEqual(func(a, b map[string]dirListing) bool { return reflect.DeepEqual(a, b) }),
+		FilesOpen:   ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		FileSel:     ggui.State(""),
+		Preview:     ggui.State(filePreview{}).WithEqual(func(a, b filePreview) bool { return reflect.DeepEqual(a, b) }),
+		Git:         ggui.State(gitView{}).WithEqual(func(a, b gitView) bool { return reflect.DeepEqual(a, b) }),
+		GitClosed:   ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		GitSel:      ggui.State(""),
+		GitDiff:     ggui.State(diffView{}).WithEqual(func(a, b diffView) bool { return reflect.DeepEqual(a, b) }),
 		SidebarOpen: ggui.State(true),
-		DetailsOpen: ggui.State(false),
+		DetailsOpen: ggui.State(true),
 		DetailTab:   ggui.State(0),
 		NewOpen:     ggui.State(false),
 		Form:        ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),
 		FormErr:     ggui.State(""),
 		Composer:    ggui.State(""),
 		conns:       map[string]*termConn{},
+		revealedTab: map[int]string{},
 		dialing:     map[string]bool{},
 		daemon:      p.Daemon,
 		psk:         cfg.PSK,
@@ -381,19 +417,12 @@ func groupSessions(sessions []protocol.SessionInfo) []projectGroup {
 
 // Actions -------------------------------------------------------------------
 
-// selectSession shows a session, opening it as a tab and attaching its
-// terminal if it is not already.
+// selectSession shows a session: in the pane that has it as a tab, or as a
+// new tab of the current pane, attaching its terminal if it is not already.
 func (m *model) selectSession(id string) {
-	if id == "" {
-		m.Selected.Set("")
-		return
+	if id != "" {
+		m.showTab(id)
 	}
-	tabs := ggui.Peek(m.Tabs)
-	if !slices.Contains(tabs, id) {
-		m.Tabs.Set(append(slices.Clone(tabs), id))
-	}
-	m.Selected.Set(id)
-	m.attach(id)
 }
 
 // attach dials a session's terminal on a worker.
@@ -432,27 +461,21 @@ func (m *model) attach(id string) {
 	}()
 }
 
-// closeTab detaches a session's tab; the session keeps running.
+// closeTab detaches a session's tab, closing its pane if it was the last
+// there; the session keeps running.
 func (m *model) closeTab(id string) {
-	tabs := ggui.Peek(m.Tabs)
-	i := slices.Index(tabs, id)
-	if i < 0 {
+	if !slices.Contains(ggui.Peek(m.Tabs), id) {
 		return
 	}
-	tabs = slices.Delete(slices.Clone(tabs), i, i+1)
-	m.Tabs.Set(tabs)
+	m.editLayout(func(root *layoutNode) int {
+		root.remove(id)
+		return 0
+	})
 	if conn := m.conns[id]; conn != nil {
 		conn.close()
 		delete(m.conns, id)
 	}
 	m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(s string) bool { return s == id }))
-	if ggui.Peek(m.Selected) == id {
-		next := ""
-		if len(tabs) > 0 {
-			next = tabs[min(i, len(tabs)-1)]
-		}
-		m.Selected.Set(next)
-	}
 }
 
 // openNew shows the new-session dialog, prefilled for a node and project.
@@ -483,13 +506,10 @@ func (m *model) launch(agent, nodeID, project string) {
 func (m *model) submitNew() {
 	f := ggui.Peek(m.Form)
 	if f.Project == "" {
-		m.FormErr.Set("Choose a working directory.")
+		m.FormErr.Set(T("Choose a working directory."))
 		return
 	}
-	nodeID := f.NodeID
-	if nodeID == ggui.Peek(m.Conn).Self.ID {
-		nodeID = "" // the local daemon
-	}
+	nodeID := m.remoteID(f.NodeID)
 	agent, profile := agentspec.SplitTarget(f.Agent)
 	req := protocol.OpenSession{NodeID: nodeID, Agent: agent, Profile: profile, Project: f.Project, Cols: 120, Rows: 36}
 	ggui.Async(func() (protocol.SessionInfo, error) {

@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"fmt"
 	"image/color"
 	"math"
 	"runtime"
@@ -23,7 +22,8 @@ import (
 type terminalView struct {
 	conn      *termConn
 	prefs     func() prefs
-	autoFocus bool // take the keyboard on first paint, as a new tab does
+	autoFocus bool   // take the keyboard on first paint, as a new tab does
+	onPress   func() // a press anywhere in it, which makes its pane current
 
 	focused  bool
 	wheelAcc float64
@@ -31,6 +31,9 @@ type terminalView struct {
 
 	ime     *ggui.TextInputWidget
 	imeText *ggui.StateValue[string]
+	// held are keys pressed while the IME composes, which it may take for
+	// itself; see settleHeld.
+	held []input.KeyEvent
 
 	// Mouse reporting: a press the program took owns the drag and the
 	// release that follow it.
@@ -39,6 +42,8 @@ type terminalView struct {
 	lastCell  [2]int
 	dragMods  ggui.Mods
 	selecting bool
+	lastDrag  pointerCell // where a selecting drag last was
+	scrolled  time.Time   // when a held drag last scrolled the view
 
 	// From the last layout and paint, in logical pixels.
 	pal          palette
@@ -62,6 +67,9 @@ func newTerminalView(conn *termConn, prefs func() prefs, autoFocus bool) *termin
 		pal: darkPalette, lastCell: [2]int{-1, -1},
 	}
 }
+
+// OnPress runs fn when the terminal is pressed.
+func (t *terminalView) OnPress(fn func()) *terminalView { t.onPress = fn; return t }
 
 func (t *terminalView) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	if p, ok := uitheme.From(env).Get(paletteKey); ok {
@@ -176,9 +184,9 @@ func (t *terminalView) paintCursor(dst *ggui.Canvas, g grid, f frameSnapshot, p 
 
 // paintBanner states why the screen has stopped changing.
 func (t *terminalView) paintBanner(dst *ggui.Canvas, r ggui.Rect, f frameSnapshot) {
-	msg := fmt.Sprintf("Process exited with code %d", f.exitCode)
+	msg := Tf("Process exited with code %d", f.exitCode)
 	if !f.exited && f.err != nil {
-		msg = "Disconnected: " + f.err.Error()
+		msg = Tf("Disconnected: %v", f.err)
 	}
 	h := t.cellH + 12
 	band := ggui.Rect{Origin: ggui.Pt(r.Origin.X, r.Origin.Y+r.Size.H-h), Size: ggui.Sz(r.Size.W, h)}
@@ -223,22 +231,70 @@ func (t *terminalView) HandleKey(ev ggui.KeyEvent) {
 			return
 		}
 		unshifted, _ := code.Codepoint()
-		t.conn.clearSelection()
-		t.conn.key(input.KeyEvent{
+		key := input.KeyEvent{
 			Action:             input.KeyActionPress,
 			Key:                code,
 			Mods:               keyMods(ev.Mods),
 			UnshiftedCodepoint: unshifted,
-		}, "")
+		}
+		if t.ime.EditingState().Composing {
+			t.held = append(t.held, key)
+			return
+		}
+		t.conn.clearSelection()
+		t.conn.key(key, "")
 	}
+}
+
+// settleHeld decides the keys pressed while the IME composed, once it has
+// seen them. One that ended the composition with a commit, as Enter or an
+// arrow does, goes to the program after the committed text, so the last
+// syllable is not typed after the Enter that ended it. One the IME kept
+// composing through, or that took the composition back to nothing, as
+// Backspace does, was the IME's own and goes nowhere.
+func (t *terminalView) settleHeld() {
+	if len(t.held) == 0 || t.ime.EditingState().Composing {
+		t.held = t.held[:0]
+		return
+	}
+	committed := ggui.Peek(t.imeText) != ""
+	t.flushText()
+	if committed {
+		for _, key := range t.held {
+			t.conn.key(key, "")
+		}
+	}
+	t.held = t.held[:0]
 }
 
 // HandleTick implements ggui.TickHandler: it runs the platform IME while
 // focused, and sends whatever the IME committed.
 func (t *terminalView) HandleTick() bool {
 	handled := t.ime.HandleTick()
+	t.settleHeld()
 	t.flushText()
+	t.autoscroll()
 	return handled
+}
+
+// autoscrollRate is how often a drag held above or below the grid scrolls
+// the view by a row.
+const autoscrollRate = 50 * time.Millisecond
+
+// autoscroll keeps a selecting drag held past the top or bottom of the grid
+// scrolling, as it would were the pointer moving.
+func (t *terminalView) autoscroll() {
+	pc := t.lastDrag
+	if !t.selecting || (pc.ypos >= 0 && pc.ypos < pc.height) {
+		return
+	}
+	now := ggui.FrameTime()
+	if now.Sub(t.scrolled) >= autoscrollRate {
+		t.scrolled = now
+		t.conn.selectDrag(pc, t.dragMods.Alt)
+		t.conn.requestPaint()
+	}
+	ggui.WakeAt(t.scrolled.Add(autoscrollRate))
 }
 
 // flushText sends text the editor holds once nothing is being composed.
@@ -303,6 +359,9 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 	pc := t.cellAt(ev.Pos)
 	switch ev.Kind {
 	case ggui.PointerDown:
+		if t.onPress != nil {
+			t.onPress()
+		}
 		t.dragMods = ev.Mods
 		if !ev.Mods.Shift && t.conn.mouseReported() {
 			btn := mouseButton(ev.Button)
@@ -325,6 +384,7 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 			return true
 		}
 		if t.selecting {
+			t.lastDrag = pc
 			t.conn.selectDrag(pc, t.dragMods.Alt)
 			t.conn.requestPaint()
 		}

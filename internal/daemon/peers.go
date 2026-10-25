@@ -110,20 +110,10 @@ func (d *Daemon) peerSessions(ctx context.Context, node protocol.Node) ([]protoc
 
 // forwardOpen starts a session on a remote node.
 func (d *Daemon) forwardOpen(ctx context.Context, req protocol.OpenSession) (protocol.SessionInfo, error) {
-	node, err := d.node(req.NodeID)
-	if err != nil {
-		return protocol.SessionInfo{}, err
-	}
-	stream, err := d.peerStream(ctx, node)
-	if err != nil {
-		return protocol.SessionInfo{}, err
-	}
-	defer stream.Close()
-
 	remote := req
 	remote.NodeID = "" // the peer runs it locally
 	var info protocol.SessionInfo
-	if err := stream.Request(protocol.TypeOpenSession, remote, &info); err != nil {
+	if err := d.forward(ctx, req.NodeID, protocol.TypeOpenSession, remote, &info); err != nil {
 		return protocol.SessionInfo{}, err
 	}
 	return info, nil
@@ -131,20 +121,10 @@ func (d *Daemon) forwardOpen(ctx context.Context, req protocol.OpenSession) (pro
 
 // forwardClose closes a session on a remote node.
 func (d *Daemon) forwardClose(ctx context.Context, req protocol.CloseSession, out *transport.Stream, env *protocol.Envelope) error {
-	node, err := d.node(req.NodeID)
-	if err != nil {
-		return err
-	}
-	stream, err := d.peerStream(ctx, node)
-	if err != nil {
-		return err
-	}
-	defer stream.Close()
-
 	remote := req
 	remote.NodeID = ""
 	var exited protocol.Exited
-	if err := stream.Request(protocol.TypeCloseSess, remote, &exited); err != nil {
+	if err := d.forward(ctx, req.NodeID, protocol.TypeCloseSess, remote, &exited); err != nil {
 		return err
 	}
 	return out.Send(protocol.TypeExited, env.ID, exited)

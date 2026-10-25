@@ -39,6 +39,14 @@ const (
 	TypeSnapshot    Type = "snapshot"
 	TypeExited      Type = "exited"
 	TypeGossip      Type = "gossip"
+	TypeListDir     Type = "list_dir"
+	TypeDir         Type = "dir"
+	TypeReadFile    Type = "read_file"
+	TypeFile        Type = "file"
+	TypeGitStatus   Type = "git_status"
+	TypeGitChanges  Type = "git_changes"
+	TypeGitDiff     Type = "git_diff"
+	TypeDiff        Type = "diff"
 )
 
 // Envelope wraps every message. Payload is the JSON body for Type.
@@ -253,4 +261,100 @@ func WriteError(w io.Writer, id string, err error) error {
 		return encErr
 	}
 	return WriteFrame(w, env)
+}
+
+// ListDir asks a node for a directory's entries.
+type ListDir struct {
+	NodeID string `json:"node_id,omitempty"` // empty means the local daemon
+	Path   string `json:"path"`              // absolute
+}
+
+// DirEntry is one entry of a directory.
+type DirEntry struct {
+	Name    string    `json:"name"`
+	Dir     bool      `json:"dir,omitempty"` // a directory, or a link to one
+	Link    bool      `json:"link,omitempty"`
+	Size    int64     `json:"size"`
+	ModTime time.Time `json:"mod_time"`
+}
+
+// Dir is the reply to ListDir: the entries, directories first, then by name.
+type Dir struct {
+	Path    string     `json:"path"`
+	Entries []DirEntry `json:"entries"`
+}
+
+// ReadFile asks a node for the start of a file.
+type ReadFile struct {
+	NodeID string `json:"node_id,omitempty"`
+	Path   string `json:"path"`
+	Max    int    `json:"max,omitempty"` // bytes; capped by the daemon
+}
+
+// File is the reply to ReadFile.
+type File struct {
+	Path      string `json:"path"`
+	Size      int64  `json:"size"`
+	Data      []byte `json:"data,omitempty"`
+	Truncated bool   `json:"truncated,omitempty"` // Data is only the start
+	Binary    bool   `json:"binary,omitempty"`    // not text; Data is omitted
+}
+
+// GitStatus asks a node for the changes in the repository a directory is in.
+type GitStatus struct {
+	NodeID string `json:"node_id,omitempty"`
+	Path   string `json:"path"` // absolute, anywhere inside the work tree
+}
+
+// Change kinds of a GitFile.
+const (
+	GitAdded    = "added" // new to the index or untracked
+	GitModified = "modified"
+	GitDeleted  = "deleted"
+	GitRenamed  = "renamed"
+)
+
+// GitChanges is the reply to GitStatus: the work tree's changes against
+// HEAD, staged or not, with their lines added and removed.
+type GitChanges struct {
+	Root    string    `json:"root"`               // the work tree, absolute
+	Branch  string    `json:"branch,omitempty"`   // or the commit, detached
+	NotRepo bool      `json:"not_repo,omitempty"` // Path is in no repository
+	Files   []GitFile `json:"files"`
+}
+
+// GitFile is one changed file.
+type GitFile struct {
+	Path    string `json:"path"` // slash-separated, from Root
+	From    string `json:"from,omitempty"`
+	Status  string `json:"status"` // a Git* change kind
+	Added   int    `json:"added"`
+	Removed int    `json:"removed"`
+	Binary  bool   `json:"binary,omitempty"` // no lines to count
+}
+
+// GitDiff asks a node for one file's changes against HEAD.
+type GitDiff struct {
+	NodeID string `json:"node_id,omitempty"`
+	Root   string `json:"root"`
+	Path   string `json:"path"`           // as GitFile.Path
+	From   string `json:"from,omitempty"` // where HEAD has a renamed file
+}
+
+// Diff is the reply to GitDiff: the file's hunks, as unified diff lines.
+type Diff struct {
+	Path      string     `json:"path"`
+	Binary    bool       `json:"binary,omitempty"`
+	Lines     []DiffLine `json:"lines,omitempty"`
+	Truncated bool       `json:"truncated,omitempty"` // only the first hunks
+}
+
+// DiffLine is one line of a diff. Op is '+' added, '-' removed, ' ' kept
+// around a change, or '@' a hunk's header; Old and New are its line
+// numbers on each side, 0 where it has none.
+type DiffLine struct {
+	Op   string `json:"op"`
+	Text string `json:"text"`
+	Old  int    `json:"old,omitempty"`
+	New  int    `json:"new,omitempty"`
 }

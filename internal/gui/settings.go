@@ -51,6 +51,13 @@ var settingsNav = []settingsGroup{
 	}},
 }
 
+// The choices of the settings' toggles, by value, in English for T.
+var (
+	themeLabels      = map[string]string{"system": "System", "light": "Light", "dark": "Dark"}
+	cursorLabels     = map[string]string{"block": "Block", "bar": "Bar", "underline": "Underline"}
+	daemonModeLabels = map[string]string{"auto": "Auto", "embedded": "In this app", "external": "External"}
+)
+
 func settingsPage(m *model) ggui.Widget {
 	content := ggui.Key(m.Section, func(id string) ggui.Widget {
 		return ggui.Scroll(ggui.Align(ggui.Box(ggui.Padding(settingsContent(m, id), 32, 40)).MaxWidth(760)).Top()).
@@ -64,14 +71,14 @@ func settingsPage(m *model) ggui.Widget {
 }
 
 func settingsSidebar(m *model) ggui.Widget {
-	back := ui.ButtonOf(ggui.Row(icon("arrow-left").Size(16), ggui.Text("Back to sessions").Size(13)).Gap(10),
-		func() { m.Page.Set("workspace") }).Ghost().Pad(7, 10).Radius(7).Name("Back to sessions")
+	back := ui.ButtonOf(ggui.Row(icon("arrow-left").Size(16), ggui.Text(T("Back to sessions")).Size(13)).Gap(10),
+		func() { m.Page.Set("workspace") }).Ghost().Pad(7, 10).Radius(7).Name(T("Back to sessions"))
 	header := ggui.Box(ggui.Row(back)).Pad(8, 8).Height(headerHeight)
 
 	nav := ggui.View(m.Section, func(current string) ggui.Widget {
 		var rows []ggui.Widget
 		for _, g := range settingsNav {
-			rows = append(rows, ggui.Box(ggui.Text(g.title).Size(11.5).Color(tokExtraMuted)).Pad(14, 10, 4, 10))
+			rows = append(rows, ggui.Box(ggui.Text(T(g.title)).Size(11.5).Color(tokExtraMuted)).Pad(14, 10, 4, 10))
 			for _, s := range g.sections {
 				id := s.id
 				fg := tokMuted
@@ -80,8 +87,8 @@ func settingsSidebar(m *model) ggui.Widget {
 				}
 				item := ui.ButtonOf(ggui.Row(
 					iconColored(s.icon, fg).Size(15),
-					ggui.Text(s.label).Size(13).Color(fg),
-				).Gap(10), func() { m.Section.Set(id) }).Ghost().Pad(7, 10).Radius(7).Name(s.label)
+					ggui.Text(T(s.label)).Size(13).Color(fg),
+				).Gap(10), func() { m.Section.Set(id) }).Ghost().Pad(7, 10).Radius(7).Name(T(s.label))
 				if id == current {
 					rows = append(rows, ggui.Box(item).Fill(tokSidebarSel).Radius(7))
 				} else {
@@ -184,11 +191,11 @@ func prefField[T any](m *model, f func(*prefs) *T) ggui.Binding[T] {
 func generalSettings(m *model) ggui.Widget {
 	agent := prefField(m, func(p *prefs) *string { return &p.DefaultAgent })
 	project := prefField(m, func(p *prefs) *string { return &p.DefaultProject })
-	browse := ui.Button("Browse…", func() {
+	browse := ui.Button(T("Browse…"), func() {
 		host := ggui.UseHost()
 		start := ggui.Peek(project)
 		ggui.Async(func() (string, error) {
-			return host.Dialogs().PickFolder(runtime.FileDialog{Title: "Default working directory", Directory: start})
+			return host.Dialogs().PickFolder(runtime.FileDialog{Title: T("Default working directory"), Directory: start})
 		}, func(dir string, err error) {
 			if err == nil && dir != "" {
 				project.Set(dir)
@@ -198,36 +205,52 @@ func generalSettings(m *model) ggui.Widget {
 	daemon := prefField(m, func(p *prefs) *string { return &p.Daemon })
 	status := ggui.View(m.Conn, func(c connState) ggui.Widget {
 		if !c.OK {
-			msg := "Not connected"
+			msg := T("Not connected")
 			if c.Err != "" {
 				msg = c.Err
 			}
 			return ggui.Row(linkDot(false), muted(ggui.Text(msg).Size(12.5).NoWrap().Ellipsis())).Gap(8)
 		}
-		return ggui.Row(linkDot(true), muted(ggui.Text("Connected to "+c.Self.Name).Size(12.5))).Gap(8)
+		return ggui.Row(linkDot(true), muted(ggui.Text(Tf("Connected to %s", c.Self.Name)).Size(12.5))).Gap(8)
 	})
 
-	return page("General", "How new sessions start and which daemon this window talks to.",
-		section("Sessions",
+	codes := make([]string, 0, len(languages)+1)
+	codes = append(codes, "system")
+	names := map[string]string{"system": T("System")}
+	for _, l := range languages {
+		codes = append(codes, l.Code)
+		names[l.Code] = l.Name
+	}
+	language := ui.Select(prefField(m, func(p *prefs) *string { return &p.Language })).
+		Options(codes).Format(func(code string) string { return names[code] }).Name(T("Language"))
+
+	return page(T("General"), T("How new sessions start and which daemon this window talks to."),
+		section(T("Language"),
 			card(
-				row("Default agent", "Chosen first in the new-session dialog.",
-					ggui.Box(ui.Select(agent).BindOptions(m.Agents).Format(targetLabel).Name("Default agent")).Width(200)),
-				stackedRow("Default working directory", "Where a new session starts unless you pick another.",
-					ggui.Row(ggui.Expanded(ui.TextField(project).Name("Default working directory")), browse).Gap(8)),
-				row("Confirm before killing", "Ask before a session is stopped from the window.",
-					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.ConfirmKill }), "").Name("Confirm before killing")),
+				row(T("Language"), T("The language the window is written in. System follows the desktop's."),
+					ggui.Box(language).Width(200)),
 			),
 		),
-		section("Workspace",
+		section(T("Sessions"),
 			card(
-				row("Composer", "The message box under the terminal, which types a line into the session.",
-					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.ShowComposer }), "").Name("Show composer")),
+				row(T("Default agent"), T("Chosen first in the new-session dialog."),
+					ggui.Box(ui.Select(agent).BindOptions(m.Agents).Format(targetLabel).Name(T("Default agent"))).Width(200)),
+				stackedRow(T("Default working directory"), T("Where a new session starts unless you pick another."),
+					ggui.Row(ggui.Expanded(ui.TextField(project).Name(T("Default working directory"))), browse).Gap(8)),
+				row(T("Confirm before killing"), T("Ask before a session is stopped from the window."),
+					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.ConfirmKill }), "").Name(T("Confirm before killing"))),
 			),
 		),
-		section("Connection",
+		section(T("Workspace"),
 			card(
-				row("External daemon", "The sanbod to use when the daemon does not run in the app. Empty is the one on this machine; it relays to the rest of the mesh.",
-					ggui.Box(ui.TextField(daemon).Placeholder("127.0.0.1:4242").Name("External daemon").
+				row(T("Composer"), T("The message box under the terminal, which types a line into the session."),
+					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.ShowComposer }), "").Name(T("Show composer"))),
+			),
+		),
+		section(T("Connection"),
+			card(
+				row(T("External daemon"), T("The sanbod to use when the daemon does not run in the app. Empty is the one on this machine; it relays to the rest of the mesh."),
+					ggui.Box(ui.TextField(daemon).Placeholder("127.0.0.1:4242").Name(T("External daemon")).
 						BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return p.DaemonMode == "embedded" }))).Width(220)),
 				ggui.Box(status).Pad(12, 16),
 			),
@@ -236,14 +259,13 @@ func generalSettings(m *model) ggui.Widget {
 }
 
 func appearanceSettings(m *model) ggui.Widget {
-	labels := map[string]string{"system": "System", "light": "Light", "dark": "Dark"}
 	theme := ui.ToggleGroup(prefField(m, func(p *prefs) *string { return &p.Theme })).
 		Options([]string{"system", "light", "dark"}).
-		Format(func(s string) string { return labels[s] }).Name("Theme")
-	return page("Appearance", "The window's colours, after Paseo's palettes.",
-		section("Theme",
+		Format(func(s string) string { return T(themeLabels[s]) }).Name(T("Theme"))
+	return page(T("Appearance"), T("The window's colours, after Paseo's palettes."),
+		section(T("Theme"),
 			card(
-				row("Theme", "System follows the desktop's light or dark appearance.", theme),
+				row(T("Theme"), T("System follows the desktop's light or dark appearance."), theme),
 			),
 			themePreview(),
 		),
@@ -268,8 +290,8 @@ func themePreview() ggui.Widget {
 		return ggui.Row(cells...).Gap(4)
 	})
 	return card(
-		row("Surfaces", "Sidebar, workspace and the raised steps above it.", ggui.Row(surfaces...).Gap(6)),
-		row("Terminal colours", "", ansi),
+		row(T("Surfaces"), T("Sidebar, workspace and the raised steps above it."), ggui.Row(surfaces...).Gap(6)),
+		row(T("Terminal colours"), "", ansi),
 	)
 }
 
@@ -280,35 +302,34 @@ func terminalSettings(m *model) ggui.Widget {
 		func() float64 { return float64(m.Prefs.Get().Scrollback) },
 		func(v float64) { m.Prefs.Update(func(p prefs) prefs { p.Scrollback = int(v); return p.normalized() }) },
 	)
-	cursorLabels := map[string]string{"block": "Block", "bar": "Bar", "underline": "Underline"}
 	cursor := ui.Select(prefField(m, func(p *prefs) *string { return &p.CursorStyle })).
 		Options([]string{"block", "bar", "underline"}).
-		Format(func(s string) string { return cursorLabels[s] }).Name("Cursor style")
+		Format(func(s string) string { return T(cursorLabels[s]) }).Name(T("Cursor style"))
 
-	return page("Terminal", "How session terminals look and behave in this window.",
-		section("Text",
+	return page(T("Terminal"), T("How session terminals look and behave in this window."),
+		section(T("Text"),
 			card(
-				row("Font size", "In points, for every terminal.",
-					ggui.Box(ui.NumberInput(size).Range(minFontSize, maxFontSize).Step(1).Name("Font size")).Width(120)),
-				row("Line height", "Space between rows, as a multiple of the font size.",
+				row(T("Font size"), T("In points, for every terminal."),
+					ggui.Box(ui.NumberInput(size).Range(minFontSize, maxFontSize).Step(1).Name(T("Font size"))).Width(120)),
+				row(T("Line height"), T("Space between rows, as a multiple of the font size."),
 					ggui.Row(
-						ggui.Box(ui.Slider(lineHeight, minLineHeight, maxLineHeight).Step(0.05).Name("Line height")).Width(160),
+						ggui.Box(ui.Slider(lineHeight, minLineHeight, maxLineHeight).Step(0.05).Name(T("Line height"))).Width(160),
 						ggui.Box(ggui.Textf("%.2f×", lineHeight).Size(12.5).Color(tokMuted)).Width(44),
 					).Gap(10)),
 			),
 		),
-		section("Cursor",
+		section(T("Cursor"),
 			card(
-				row("Style", "The shape shown until a program asks for its own.", ggui.Box(cursor).Width(160)),
-				row("Blink", "", ui.Switch(prefField(m, func(p *prefs) *bool { return &p.CursorBlink }), "").Name("Cursor blink")),
+				row(T("Style"), T("The shape shown until a program asks for its own."), ggui.Box(cursor).Width(160)),
+				row(T("Blink"), "", ui.Switch(prefField(m, func(p *prefs) *bool { return &p.CursorBlink }), "").Name(T("Cursor blink"))),
 			),
 		),
-		section("Behaviour",
+		section(T("Behaviour"),
 			card(
-				row("Scrollback", "Lines each terminal keeps above the screen.",
-					ggui.Box(ui.NumberInput(scrollback).Range(minScrollback, maxScrollback).Step(1000).Name("Scrollback")).Width(140)),
-				row("Copy on select", "Put selected text on the clipboard as soon as the drag ends.",
-					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.CopyOnSelect }), "").Name("Copy on select")),
+				row(T("Scrollback"), T("Lines each terminal keeps above the screen."),
+					ggui.Box(ui.NumberInput(scrollback).Range(minScrollback, maxScrollback).Step(1000).Name(T("Scrollback"))).Width(140)),
+				row(T("Copy on select"), T("Put selected text on the clipboard as soon as the drag ends."),
+					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.CopyOnSelect }), "").Name(T("Copy on select"))),
 			),
 		),
 	)
@@ -325,18 +346,18 @@ func shortcutSettings() ggui.Widget {
 	}
 	var app []ggui.Widget
 	for _, s := range shortcutList {
-		app = append(app, row(s.Action, "", chord(s.Chord)))
+		app = append(app, row(T(s.Action), "", chord(s.Chord)))
 	}
 	term := []ggui.Widget{
-		row("Copy selection", "", chord(termChord("c"))),
-		row("Paste", "Bracketed when the program asks for it.", chord(termChord("v"))),
-		row("Select all", "The whole scrollback.", chord(termChord("a"))),
-		row("Select a word, a line", "Double-click, triple-click. Alt+drag selects a block.", ui.Kbd("2× / 3×")),
-		row("Select in a mouse program", "Hold Shift to select where the program has the mouse.", ui.Kbd("⇧ drag")),
+		row(T("Copy selection"), "", chord(termChord("c"))),
+		row(T("Paste"), T("Bracketed when the program asks for it."), chord(termChord("v"))),
+		row(T("Select all"), T("The whole scrollback."), chord(termChord("a"))),
+		row(T("Select a word, a line"), T("Double-click, triple-click. Alt+drag selects a block."), ui.Kbd("2× / 3×")),
+		row(T("Select in a mouse program"), T("Hold Shift to select where the program has the mouse."), ui.Kbd("⇧ drag")),
 	}
-	return page("Shortcuts", "Keys the window keeps. Every other key, Tab and the Ctrl chords included, goes to the terminal.",
-		section("Window", card(app...)),
-		section("Terminal", card(term...)),
+	return page(T("Shortcuts"), T("Keys the window keeps. Every other key, Tab and the Ctrl chords included, goes to the terminal."),
+		section(T("Window"), card(app...)),
+		section(T("Terminal"), card(term...)),
 	)
 }
 
@@ -363,7 +384,7 @@ func saveBar(m *model) ggui.Widget {
 	})
 	note := ggui.View(m.HostNote, func(s string) ggui.Widget {
 		if s == "" {
-			return muted(ggui.Text("Saved to config.json. The daemon reads agents as they change and the rest when it starts.").Size(12))
+			return muted(ggui.Text(T("Saved to config.json. The daemon reads agents as they change and the rest when it starts.")).Size(12))
 		}
 		return ggui.Text(s).Size(12).Color(tokAccentBright)
 	})
@@ -371,45 +392,44 @@ func saveBar(m *model) ggui.Widget {
 	return ggui.Row(
 		ggui.Expanded(note),
 		ggui.If(embedded, func() ggui.Widget {
-			return ui.Button("Restart daemon", func() { m.guardStop(m.restartEmbedded) }).Outline()
+			return ui.Button(T("Restart daemon"), func() { m.guardStop(m.restartEmbedded) }).Outline()
 		}),
-		ui.Button("Revert", m.revertHost).Outline().BindDisabled(ggui.Not(dirty)),
-		ui.Button("Save", m.saveHost).BindDisabled(ggui.Not(dirty)),
+		ui.Button(T("Revert"), m.revertHost).Outline().BindDisabled(ggui.Not(dirty)),
+		ui.Button(T("Save"), m.saveHost).BindDisabled(ggui.Not(dirty)),
 	).Gap(8)
 }
 
 // daemonSettings chooses where the daemon runs and shows how it is doing.
 func daemonSettings(m *model) ggui.Widget {
-	labels := map[string]string{"auto": "Auto", "embedded": "In this app", "external": "External"}
 	mode := ui.ToggleGroup(ggui.Bind(
 		func() string { return m.Prefs.Get().DaemonMode },
 		m.setDaemonMode,
 	)).Options([]string{"auto", "embedded", "external"}).
-		Format(func(s string) string { return labels[s] }).Name("Daemon mode")
+		Format(func(s string) string { return T(daemonModeLabels[s]) }).Name(T("Daemon mode"))
 
 	status := ggui.View(m.DaemonState, func(s daemonState) ggui.Widget {
 		var title, hint string
 		ok := true
 		switch {
 		case s.Running:
-			title = "Running in this app"
-			hint = "Listening on " + s.Addr + ". Its sessions end when it stops or the app quits."
+			title = T("Running in this app")
+			hint = Tf("Listening on %s. Its sessions end when it stops or the app quits.", s.Addr)
 		case s.Starting:
-			title, hint = "Starting…", ""
+			title, hint = T("Starting…"), ""
 		case s.Mode == "external":
-			title = "Using an external daemon"
-			hint = s.Addr + ". Sessions keep running after the app quits."
+			title = T("Using an external daemon")
+			hint = Tf("%s. Sessions keep running after the app quits.", s.Addr)
 		case s.Mode == "embedded":
-			title, ok = "Stopped", false
-			hint = "The app's daemon is not running."
+			title, ok = T("Stopped"), false
+			hint = T("The app's daemon is not running.")
 		default:
-			title, hint = "Looking for a daemon…", ""
+			title, hint = T("Looking for a daemon…"), ""
 		}
 		if s.Err != "" {
 			ok = false
 			hint = s.Err
 			if strings.Contains(s.Err, "address already in use") {
-				hint += ". Another sanbod is listening there; choose External, or change the listen address under Host."
+				hint += T(". Another sanbod is listening there; choose External, or change the listen address under Host.")
 			}
 		}
 		text := []ggui.Widget{ggui.Row(linkDot(ok), ggui.Text(title).Size(13.5)).Gap(8)}
@@ -420,11 +440,11 @@ func daemonSettings(m *model) ggui.Widget {
 		if s.Mode == "embedded" {
 			if s.Running {
 				actions = ggui.Row(
-					ui.Button("Restart", func() { m.guardStop(m.restartEmbedded) }).Outline(),
-					ui.Button("Stop", func() { m.guardStop(m.stopEmbedded) }).Outline(),
+					ui.Button(T("Restart"), func() { m.guardStop(m.restartEmbedded) }).Outline(),
+					ui.Button(T("Stop"), func() { m.guardStop(m.stopEmbedded) }).Outline(),
 				).Gap(8)
 			} else if !s.Starting {
-				actions = ui.Button("Start", m.startEmbedded)
+				actions = ui.Button(T("Start"), m.startEmbedded)
 			}
 		}
 		return ggui.Box(ggui.Row(ggui.Expanded(ggui.Column(text...).Gap(4).Stretch()), actions).Gap(16)).Pad(14, 16)
@@ -432,22 +452,22 @@ func daemonSettings(m *model) ggui.Widget {
 
 	logs := ggui.View(m.DaemonLog, func(lines []string) ggui.Widget {
 		if len(lines) == 0 {
-			return muted(ggui.Text("Nothing logged yet.").Size(12))
+			return muted(ggui.Text(T("Nothing logged yet.")).Size(12))
 		}
 		mono := ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: 11.5}
 		return ggui.Text(strings.Join(lines, "\n")).Style(mono).Color(tokMuted).Selectable()
 	})
 	inApp := ggui.Map(m.DaemonState, func(s daemonState) bool { return s.Mode == "embedded" })
 
-	return page("Daemon", "Where this machine's daemon runs. The app can run it itself, so nothing else needs installing.",
-		section("Mode",
+	return page(T("Daemon"), T("Where this machine's daemon runs. The app can run it itself, so nothing else needs installing."),
+		section(T("Mode"),
 			card(
-				row("Run the daemon", "Auto uses a sanbod that is already running and otherwise starts one in the app.", mode),
+				row(T("Run the daemon"), T("Auto uses a sanbod that is already running and otherwise starts one in the app."), mode),
 			),
 		),
-		section("Status", card(status)),
+		section(T("Status"), card(status)),
 		ggui.If(inApp, func() ggui.Widget {
-			return section("Log",
+			return section(T("Log"),
 				ggui.Box(ggui.Scroll(ggui.Padding(logs, 12, 14)).FollowEnd().Bar(tokSurface3)).
 					Height(260).Fill(tokSurface1).Border(1, tokBorder).Radius(10),
 			)
@@ -456,21 +476,21 @@ func daemonSettings(m *model) ggui.Widget {
 }
 
 func hostSettings(m *model) ggui.Widget {
-	return page("Host", "This machine's daemon: how it is named and where it listens.",
-		section("Identity",
+	return page(T("Host"), T("This machine's daemon: how it is named and where it listens."),
+		section(T("Identity"),
 			card(
-				row("Node name", "How this machine appears to the others.",
-					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Name })).Name("Node name")).Width(240)),
-				row("Node ID", "Generated once; the mesh tells nodes apart by it.",
+				row(T("Node name"), T("How this machine appears to the others."),
+					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Name })).Name(T("Node name"))).Width(240)),
+				row(T("Node ID"), T("Generated once; the mesh tells nodes apart by it."),
 					ggui.Text(m.cfg.NodeID).Size(12).Color(tokMuted).Selectable()),
 			),
 		),
-		section("Network",
+		section(T("Network"),
 			card(
-				row("Listen address", "UDP address for QUIC, such as :4242.",
-					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Listen })).Name("Listen address")).Width(240)),
-				row("Pre-shared key", "Every daemon and front-end on the mesh must share it. Empty accepts anyone who can reach the port.",
-					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.PSK })).Password().Name("Pre-shared key")).Width(240)),
+				row(T("Listen address"), T("UDP address for QUIC, such as :4242."),
+					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Listen })).Name(T("Listen address"))).Width(240)),
+				row(T("Pre-shared key"), T("Every daemon and front-end on the mesh must share it. Empty accepts anyone who can reach the port."),
+					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.PSK })).Password().Name(T("Pre-shared key"))).Width(240)),
 			),
 		),
 		saveBar(m),
@@ -480,19 +500,19 @@ func hostSettings(m *model) ggui.Widget {
 func discoverySettings(m *model) ggui.Widget {
 	mdns := m.Host.Field(func(d *hostDraft) *bool { return &d.MDNS })
 	tailscale := m.Host.Field(func(d *hostDraft) *bool { return &d.Tailscale })
-	return page("Discovery", "How this daemon finds the others. Nodes found either way are gossiped to the whole mesh.",
-		section("Automatic",
+	return page(T("Discovery"), T("How this daemon finds the others. Nodes found either way are gossiped to the whole mesh."),
+		section(T("Automatic"),
 			card(
-				row("Bonjour (mDNS)", "Find daemons on the same local network.", ui.Switch(mdns, "").Name("Bonjour")),
-				row("Tailscale", "Probe the machines on your tailnet by their MagicDNS names.", ui.Switch(tailscale, "").Name("Tailscale")),
-				stackedRow("Tailnet hosts", "MagicDNS names to probe, one per line. Empty asks the tailscale CLI.",
-					ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.TailnetHosts })).Multiline().Lines(3).Name("Tailnet hosts")),
+				row(T("Bonjour (mDNS)"), T("Find daemons on the same local network."), ui.Switch(mdns, "").Name(T("Bonjour"))),
+				row(T("Tailscale"), T("Probe the machines on your tailnet by their MagicDNS names."), ui.Switch(tailscale, "").Name(T("Tailscale"))),
+				stackedRow(T("Tailnet hosts"), T("MagicDNS names to probe, one per line. Empty asks the tailscale CLI."),
+					ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.TailnetHosts })).Multiline().Lines(3).Name(T("Tailnet hosts"))),
 			),
 		),
-		section("Static",
+		section(T("Static"),
 			card(
-				stackedRow("Peers", "Addresses always dialed, one per line: host or host:port.",
-					ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Peers })).Multiline().Lines(3).Name("Peers")),
+				stackedRow(T("Peers"), T("Addresses always dialed, one per line: host or host:port."),
+					ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Peers })).Multiline().Lines(3).Name(T("Peers"))),
 			),
 		),
 		saveBar(m),
@@ -503,19 +523,19 @@ func discoverySettings(m *model) ggui.Widget {
 
 func nodeSettings(m *model) ggui.Widget {
 	nodes := ggui.View(m.Nodes, func(nodes []protocol.Node) ggui.Widget { return nodeList(nodes) })
-	return page("Nodes", "Daemons this window can reach. Sessions can start on any of them.",
-		section("Mesh", nodes),
+	return page(T("Nodes"), T("Daemons this window can reach. Sessions can start on any of them."),
+		section(T("Mesh"), nodes),
 	)
 }
 
 func aboutSettings(m *model) ggui.Widget {
 	dir, _ := config.Dir()
-	return page("About", "sanbo runs terminal agents on any of your computers and drives them from one place.",
-		section("Build",
+	return page(T("About"), "sanbo runs terminal agents on any of your computers and drives them from one place.",
+		section(T("Build"),
 			card(
-				row("Version", "", ggui.Text(config.Version).Size(13).Color(tokMuted).Selectable()),
-				row("Daemon config", "", ggui.Text(filepath.Join(dir, "config.json")).Size(12).Color(tokMuted).Selectable()),
-				row("App settings", "", ggui.Text(filepath.Join(dir, "gui.json")).Size(12).Color(tokMuted).Selectable()),
+				row(T("Version"), "", ggui.Text(config.Version).Size(13).Color(tokMuted).Selectable()),
+				row(T("Daemon config"), "", ggui.Text(filepath.Join(dir, "config.json")).Size(12).Color(tokMuted).Selectable()),
+				row(T("App settings"), "", ggui.Text(filepath.Join(dir, "gui.json")).Size(12).Color(tokMuted).Selectable()),
 			),
 		),
 	)

@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -33,10 +34,10 @@ func draftFrom(cfg *config.Config) hostDraft {
 // draft cannot be read from.
 func (d hostDraft) apply(cfg config.Config) (config.Config, error) {
 	if strings.TrimSpace(d.Name) == "" {
-		return cfg, fmt.Errorf("the node needs a name")
+		return cfg, errors.New(T("the node needs a name"))
 	}
 	if strings.TrimSpace(d.Listen) == "" {
-		return cfg, fmt.Errorf("the node needs a listen address, such as :%d", config.DefaultPort)
+		return cfg, fmt.Errorf(T("the node needs a listen address, such as :%d"), config.DefaultPort)
 	}
 	cfg.Name = strings.TrimSpace(d.Name)
 	cfg.Listen = strings.TrimSpace(d.Listen)
@@ -73,7 +74,7 @@ func (m *model) saveHost() {
 		return
 	}
 	if err := config.Save(&next); err != nil {
-		m.HostNote.Set("Could not save: " + err.Error())
+		m.HostNote.Set(Tf("Could not save: %v", err))
 		return
 	}
 	keyChanged := next.PSK != m.cfg.PSK
@@ -82,19 +83,19 @@ func (m *model) saveHost() {
 	m.Agents.Set(agentspec.Targets(next.Agents))
 	m.AgentDraft.Set(draftAgents(next.Agents))
 	if agentsOnly {
-		m.HostNote.Set("Saved. Sessions started from now on use it.")
+		m.HostNote.Set(T("Saved. Sessions started from now on use it."))
 		return
 	}
 	if ggui.Peek(m.DaemonState).Running {
 		// The app's daemon still has the old key until it restarts, which
 		// is when the window changes to the new one.
-		m.HostNote.Set("Saved. Restart the app's daemon to use it.")
+		m.HostNote.Set(T("Saved. Restart the app's daemon to use it."))
 		return
 	}
 	if keyChanged {
 		m.reconnect(ggui.Peek(m.Prefs).Daemon, next.PSK)
 	}
-	m.HostNote.Set("Saved. Restart sanbod for the daemon to use it.")
+	m.HostNote.Set(T("Saved. Restart sanbod for the daemon to use it."))
 }
 
 // revertHost drops the draft's edits.

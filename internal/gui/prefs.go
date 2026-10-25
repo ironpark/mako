@@ -13,7 +13,8 @@ import (
 // holding it notifies only on a real change.
 type prefs struct {
 	// Appearance
-	Theme string `json:"theme"` // system, dark or light
+	Theme    string `json:"theme"`    // system, dark or light
+	Language string `json:"language"` // system, en or ko; see i18n.go
 
 	// Terminal
 	FontSize     float64 `json:"font_size"`
@@ -30,12 +31,16 @@ type prefs struct {
 	ConfirmKill    bool   `json:"confirm_kill"`
 	Daemon         string `json:"daemon"`      // address of an external daemon; empty is the local one
 	DaemonMode     string `json:"daemon_mode"` // auto, embedded or external; see embedded.go
+
+	// Files
+	ShowHidden bool `json:"show_hidden"` // list dotfiles in the Files tab
 }
 
 func defaultPrefs() prefs {
 	home, _ := os.UserHomeDir()
 	return prefs{
 		Theme:          "system",
+		Language:       "system",
 		FontSize:       13,
 		LineHeight:     1.4,
 		CursorStyle:    "block",
@@ -63,6 +68,9 @@ func (p prefs) normalized() prefs {
 	case "system", "dark", "light":
 	default:
 		p.Theme = d.Theme
+	}
+	if _, ok := catalog(p.Language); !ok && p.Language != "system" {
+		p.Language = d.Language
 	}
 	switch p.DaemonMode {
 	case "auto", "embedded", "external":

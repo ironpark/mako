@@ -110,6 +110,44 @@ func (c *Client) Open(ctx context.Context, psk string, req protocol.OpenSession)
 	return info, nil
 }
 
+// request makes one request on a stream of its own.
+func (c *Client) request(ctx context.Context, psk string, typ protocol.Type, req, reply any) error {
+	s, err := c.stream(ctx, psk)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	return s.Request(typ, req, reply)
+}
+
+// ListDir lists a directory on a node.
+func (c *Client) ListDir(ctx context.Context, psk string, req protocol.ListDir) (protocol.Dir, error) {
+	var dir protocol.Dir
+	err := c.request(ctx, psk, protocol.TypeListDir, req, &dir)
+	return dir, err
+}
+
+// ReadFile reads the start of a file on a node.
+func (c *Client) ReadFile(ctx context.Context, psk string, req protocol.ReadFile) (protocol.File, error) {
+	var f protocol.File
+	err := c.request(ctx, psk, protocol.TypeReadFile, req, &f)
+	return f, err
+}
+
+// GitStatus reports the changes of the work tree a directory on a node is in.
+func (c *Client) GitStatus(ctx context.Context, psk string, req protocol.GitStatus) (protocol.GitChanges, error) {
+	var out protocol.GitChanges
+	err := c.request(ctx, psk, protocol.TypeGitStatus, req, &out)
+	return out, err
+}
+
+// GitDiff reads one changed file's hunks on a node.
+func (c *Client) GitDiff(ctx context.Context, psk string, req protocol.GitDiff) (protocol.Diff, error) {
+	var out protocol.Diff
+	err := c.request(ctx, psk, protocol.TypeGitDiff, req, &out)
+	return out, err
+}
+
 // Kill terminates a session.
 func (c *Client) Kill(ctx context.Context, psk string, req protocol.CloseSession) error {
 	s, err := c.stream(ctx, psk)

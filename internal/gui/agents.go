@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -60,22 +61,22 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 			continue
 		}
 		if !agentspec.ValidName(r.Agent) {
-			return nil, fmt.Errorf("agent %q: a name has no spaces or colons", r.Agent)
+			return nil, fmt.Errorf(T("agent %q: a name has no spaces or colons"), r.Agent)
 		}
 		command, err := agentspec.SplitArgs(r.Command)
 		if err != nil {
-			return nil, fmt.Errorf("%s, command: %v", r.Agent, err)
+			return nil, fmt.Errorf(T("%s, command: %v"), r.Agent, err)
 		}
 		if _, builtin := agentspec.Builtin[r.Agent]; len(command) == 0 && !builtin {
-			return nil, fmt.Errorf("%s needs a command", r.Agent)
+			return nil, fmt.Errorf(T("%s needs a command"), r.Agent)
 		}
 		args, err := agentspec.SplitArgs(r.Args)
 		if err != nil {
-			return nil, fmt.Errorf("%s, flags: %v", r.Agent, err)
+			return nil, fmt.Errorf(T("%s, flags: %v"), r.Agent, err)
 		}
 		env, err := parseEnv(r.Env)
 		if err != nil {
-			return nil, fmt.Errorf("%s, environment: %v", r.Agent, err)
+			return nil, fmt.Errorf(T("%s, environment: %v"), r.Agent, err)
 		}
 		out[r.Agent] = agentspec.Agent{Command: command, Args: args, Env: env}
 		order = append(order, r.Agent)
@@ -86,19 +87,19 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 		}
 		where := r.Agent + ":" + r.Profile
 		if !agentspec.ValidName(r.Profile) {
-			return nil, fmt.Errorf("%s has a profile named %q: a name has no spaces or colons", r.Agent, r.Profile)
+			return nil, fmt.Errorf(T("%s has a profile named %q: a name has no spaces or colons"), r.Agent, r.Profile)
 		}
 		a := out[r.Agent]
 		if _, dup := a.Profile(r.Profile); dup {
-			return nil, fmt.Errorf("%s has two profiles named %s", r.Agent, r.Profile)
+			return nil, fmt.Errorf(T("%s has two profiles named %s"), r.Agent, r.Profile)
 		}
 		args, err := agentspec.SplitArgs(r.Args)
 		if err != nil {
-			return nil, fmt.Errorf("%s, flags: %v", where, err)
+			return nil, fmt.Errorf(T("%s, flags: %v"), where, err)
 		}
 		env, err := parseEnv(r.Env)
 		if err != nil {
-			return nil, fmt.Errorf("%s, environment: %v", where, err)
+			return nil, fmt.Errorf(T("%s, environment: %v"), where, err)
 		}
 		a.Profiles = append(a.Profiles, agentspec.Profile{Name: r.Profile, Args: args, Env: env})
 		out[r.Agent] = a
@@ -126,7 +127,7 @@ func parseEnv(s string) (map[string]string, error) {
 		k, v, ok := strings.Cut(line, "=")
 		k = strings.TrimSpace(k)
 		if !ok || k == "" || strings.ContainsAny(k, " \t") {
-			return nil, fmt.Errorf("line %d: write it as NAME=value", i+1)
+			return nil, fmt.Errorf(T("line %d: write it as NAME=value"), i+1)
 		}
 		if env == nil {
 			env = map[string]string{}
@@ -221,11 +222,11 @@ func (m *model) addProfile(agent string) {
 func (m *model) addAgent(name string) error {
 	name = strings.TrimSpace(name)
 	if !agentspec.ValidName(name) {
-		return fmt.Errorf("an agent's name has no spaces or colons")
+		return errors.New(T("an agent's name has no spaces or colons"))
 	}
 	rows := ggui.Peek(m.AgentDraft)
 	if slices.ContainsFunc(rows, func(r agentDraft) bool { return r.Agent == name }) {
-		return fmt.Errorf("there is already an agent named %s", name)
+		return fmt.Errorf(T("there is already an agent named %s"), name)
 	}
 	m.AgentDraft.Set(append(slices.Clone(rows), agentDraft{ID: m.nextAgentID(), Agent: name, Command: name}))
 	return nil
@@ -282,19 +283,19 @@ func agentSettings(m *model) ggui.Widget {
 	}
 	hasNote := ggui.Map(note, func(s string) bool { return s != "" })
 	addCard := card(
-		row("Add an agent", "Any program that runs in a terminal, by a name sessions start it with.",
+		row(T("Add an agent"), T("Any program that runs in a terminal, by a name sessions start it with."),
 			ggui.Row(
-				ggui.Box(ui.TextField(name).Placeholder("name").Name("New agent name").OnSubmit(func(string) { add() })).Width(160),
-				ui.Button("Add", add).Outline(),
+				ggui.Box(ui.TextField(name).Placeholder("name").Name(T("New agent name")).OnSubmit(func(string) { add() })).Width(160),
+				ui.Button(T("Add"), add).Outline(),
 			).Gap(8)),
 		ggui.If(hasNote, func() ggui.Widget {
 			return ggui.Box(ggui.TextOf(note).Size(12).Color(tokDotDown)).Pad(0, 16, 12, 16)
 		}),
 	)
 
-	return page("Agents", "The programs a session can start on this node, the flags and environment each starts with, and profiles: named variations of an agent, such as claude on another model or account. A session picks one as agent:profile. Changes apply to the next session started.",
+	return page(T("Agents"), T("The programs a session can start on this node, the flags and environment each starts with, and profiles: named variations of an agent, such as claude on another model or account. A session picks one as agent:profile. Changes apply to the next session started."),
 		agents,
-		section("Other programs", addCard),
+		section(T("Other programs"), addCard),
 		saveBar(m),
 	)
 }
@@ -302,35 +303,35 @@ func agentSettings(m *model) ggui.Widget {
 // agentSection is an agent's card, followed by a card for each profile.
 func agentSection(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 	_, builtin := agentspec.Builtin[a.Agent]
-	commandHint := "The program and any arguments it always needs."
+	commandHint := T("The program and any arguments it always needs.")
 	if builtin {
-		commandHint = "The program and any arguments it always needs; empty runs " + strings.Join(agentspec.Builtin[a.Agent], " ") + "."
+		commandHint = Tf("The program and any arguments it always needs; empty runs %s.", strings.Join(agentspec.Builtin[a.Agent], " "))
 	}
 	mono := ggui.TextStyle{Font: ggui.DefaultMonoFont()}
 	children := []ggui.Widget{
 		card(
-			row("Command", commandHint,
+			row(T("Command"), commandHint,
 				ggui.Box(ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Command })).
-					Style(mono).Name(a.Agent+" command")).Width(300)),
-			row("Flags", "Added to every session of it, before a profile's. Quote as in a shell.",
+					Style(mono).Name(Tf("%s command", a.Agent))).Width(300)),
+			row(T("Flags"), T("Added to every session of it, before a profile's. Quote as in a shell."),
 				ggui.Box(ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Args })).
-					Style(mono).Placeholder("--flag value").Name(a.Agent+" flags")).Width(300)),
-			stackedRow("Environment", "One per line as NAME=value, added to the daemon's. $NAME, ${NAME} and a leading ~ expand when a session starts; $$ is a $.",
+					Style(mono).Placeholder("--flag value").Name(Tf("%s flags", a.Agent))).Width(300)),
+			stackedRow(T("Environment"), T("One per line as NAME=value, added to the daemon's. $NAME, ${NAME} and a leading ~ expand when a session starts; $$ is a $."),
 				ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Env })).
-					Multiline().Lines(3).Style(mono).Name(a.Agent+" environment")),
+					Multiline().Lines(3).Style(mono).Name(Tf("%s environment", a.Agent))),
 		),
 	}
 	for _, p := range profiles {
 		children = append(children, profileCard(m, p, mono))
 	}
 	actions := []ggui.Widget{
-		ui.ButtonOf(ggui.Row(icon("plus").Size(14), ggui.Text("Add profile").Size(13)).Gap(6),
-			func() { m.addProfile(a.Agent) }).Ghost().Pad(6, 10).Radius(7).Name("Add " + a.Agent + " profile"),
+		ui.ButtonOf(ggui.Row(icon("plus").Size(14), ggui.Text(T("Add profile")).Size(13)).Gap(6),
+			func() { m.addProfile(a.Agent) }).Ghost().Pad(6, 10).Radius(7).Name(Tf("Add %s profile", a.Agent)),
 		ggui.Spacer(),
 	}
 	if !builtin {
 		id := a.ID
-		actions = append(actions, ui.Button("Remove agent", func() { m.removeAgentRow(id) }).Ghost().Name("Remove "+a.Agent))
+		actions = append(actions, ui.Button(T("Remove agent"), func() { m.removeAgentRow(id) }).Ghost().Name(Tf("Remove %s", a.Agent)))
 	}
 	children = append(children, ggui.Row(actions...).Gap(8))
 	return section(a.Agent, children...)
@@ -339,22 +340,22 @@ func agentSection(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 	id := p.ID
 	nameField := ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Profile })).
-		Style(mono).Name(p.Agent + " profile name")
+		Style(mono).Name(Tf("%s profile name", p.Agent))
 	head := ggui.Box(ggui.Row(
 		icon("layers").Size(15),
 		muted(ggui.Text(p.Agent+":").Size(13).Style(mono)),
 		ggui.Box(nameField).Width(180),
 		ggui.Spacer(),
 		ui.ButtonOf(icon("trash-2").Size(14), func() { m.removeAgentRow(id) }).Ghost().Pad(6).Radius(6).
-			Name("Remove "+p.Agent+":"+p.Profile),
+			Name(Tf("Remove %s", p.Agent+":"+p.Profile)),
 	).Gap(8)).Pad(10, 16)
 	return card(
 		head,
-		row("Flags", "Added after the agent's own.",
+		row(T("Flags"), T("Added after the agent's own."),
 			ggui.Box(ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Args })).
-				Style(mono).Placeholder("--model opus").Name(p.Agent+":"+p.Profile+" flags")).Width(300)),
-		stackedRow("Environment", "NAME=value lines over the agent's own, which $NAME reads.",
+				Style(mono).Placeholder("--model opus").Name(Tf("%s flags", p.Agent+":"+p.Profile))).Width(300)),
+		stackedRow(T("Environment"), T("NAME=value lines over the agent's own, which $NAME reads."),
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Env })).
-				Multiline().Lines(3).Style(mono).Name(p.Agent+":"+p.Profile+" environment")),
+				Multiline().Lines(3).Style(mono).Name(Tf("%s environment", p.Agent+":"+p.Profile))),
 	)
 }

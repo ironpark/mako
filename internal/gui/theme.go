@@ -24,6 +24,9 @@ type palette struct {
 	Destructive, Ring              color.RGBA
 	DotRunning, DotExited, DotDown color.RGBA
 	Selection                      color.RGBA // selected terminal text
+	DiffAdded, DiffRemoved         color.RGBA // changed lines' counts and boxes
+	DiffModified                   color.RGBA
+	DiffAddedBg, DiffRemovedBg     color.RGBA // added and removed lines' tint
 	ANSI                           [16]uint32
 }
 
@@ -38,6 +41,8 @@ var darkPalette = palette{
 	Destructive: hex(0xC64F43), Ring: hex(0xD4D4D8),
 	DotRunning: hex(0x35C264), DotExited: hex(0x717574), DotDown: hex(0xF7796D),
 	Selection: hex(0x3A5A48),
+	DiffAdded: hex(0x6CC08A), DiffRemoved: hex(0xE57E7E), DiffModified: hex(0xE2C06A),
+	DiffAddedBg: hex(0x1D3326), DiffRemovedBg: hex(0x3A2224),
 	ANSI: [16]uint32{
 		0x141716, 0xE07070, 0x5DBA80, 0xD4A44A, 0x6A9DE0, 0xB07AD0, 0x4AABB8, 0xD4D4D8,
 		0x434645, 0xE89090, 0x7ECF9A, 0xE0BE6E, 0x8AB4E8, 0xC49AE0, 0x6EC2CC, 0xF0F0F2,
@@ -55,6 +60,8 @@ var lightPalette = palette{
 	Destructive: hex(0xB04138), Ring: hex(0x18181B),
 	DotRunning: hex(0x299F51), DotExited: hex(0xA1A1AA), DotDown: hex(0xF12E2F),
 	Selection: hex(0xC8E6D2),
+	DiffAdded: hex(0x16A34A), DiffRemoved: hex(0xDC2626), DiffModified: hex(0xCA8A04),
+	DiffAddedBg: hex(0xE6F4EA), DiffRemovedBg: hex(0xFBE9E9),
 	ANSI: [16]uint32{
 		0x1A1A1E, 0xDC2626, 0x16A34A, 0xCA8A04, 0x2563EB, 0x9333EA, 0x0891B2, 0xD4D4D8,
 		0x3F3F46, 0xEF4444, 0x22C55E, 0xF59E0B, 0x3B82F6, 0xA855F7, 0x06B6D4, 0xFAFAFA,
@@ -84,6 +91,12 @@ var (
 	tokDotRunning   = uitheme.Var("dot-running")
 	tokDotExited    = uitheme.Var("dot-exited")
 	tokDotDown      = uitheme.Var("dot-down")
+
+	tokDiffAdded     = uitheme.Var("diff-added")
+	tokDiffRemoved   = uitheme.Var("diff-removed")
+	tokDiffModified  = uitheme.Var("diff-modified")
+	tokDiffAddedBg   = uitheme.Var("diff-added-bg")
+	tokDiffRemovedBg = uitheme.Var("diff-removed-bg")
 )
 
 // paletteKey carries the palette on the theme, for the terminal, which
@@ -127,6 +140,11 @@ func themeFor(p palette) uitheme.Theme {
 	set("dot-running", p.DotRunning)
 	set("dot-exited", p.DotExited)
 	set("dot-down", p.DotDown)
+	set("diff-added", p.DiffAdded)
+	set("diff-removed", p.DiffRemoved)
+	set("diff-modified", p.DiffModified)
+	set("diff-added-bg", p.DiffAddedBg)
+	set("diff-removed-bg", p.DiffRemovedBg)
 	return t.Set(paletteKey, p)
 }
 

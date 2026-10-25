@@ -1,0 +1,95 @@
+package gui
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/ironpark/ggui"
+
+	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/sanbo/internal/protocol"
+)
+
+func TestGitTreeAddsUpFolders(t *testing.T) {
+	tree := gitTree([]protocol.GitFile{
+		{Path: "internal/gui/agents.go", Added: 35, Removed: 34, Status: protocol.GitModified},
+		{Path: "internal/gui/icons/copy.svg", Added: 16, Status: protocol.GitAdded},
+		{Path: "internal/client/client.go", Added: 24, Status: protocol.GitModified},
+		{Path: "README.md", Added: 1, Removed: 1, Status: protocol.GitModified},
+	})
+	if len(tree) != 2 || tree[0].Name != "internal" || tree[1].Name != "README.md" {
+		t.Fatalf("top level %+v", tree)
+	}
+	internal := tree[0]
+	if internal.Added != 75 || internal.Removed != 34 {
+		t.Fatalf("internal adds up to +%d -%d", internal.Added, internal.Removed)
+	}
+	gui := internal.Children[1]
+	if gui.Name != "gui" || gui.Children[0].Name != "icons" || gui.Children[1].Name != "agents.go" {
+		t.Fatalf("gui %+v: want folders first", gui)
+	}
+	if lineCount(2712) != "2.7k" || lineCount(2000) != "2k" || lineCount(320) != "320" {
+		t.Fatal("counts are not written as the tree shows them")
+	}
+}
+
+// The Changes tab reads the project's work tree through its daemon and
+// shows the diff of a file chosen.
+func TestChangesTabShowsTheWorkTree(t *testing.T) {
+	t.Setenv("SANBO_HOME", t.TempDir())
+	project := t.TempDir()
+	r, err := git.PlainInit(project, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "main.go"), []byte("package main\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	wt, _ := r.Worktree()
+	_, _ = wt.Add("main.go")
+	if _, err := wt.Commit("init", &git.CommitOptions{Author: &object.Signature{Name: "t", Email: "t@t", When: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.Default()
+	cfg.Listen = "127.0.0.1:0"
+	cfg.Discovery = config.Discovery{}
+	if err := savePrefs(prefs{DaemonMode: "embedded", Language: "en"}.normalized()); err != nil {
+		t.Fatal(err)
+	}
+	m := newModel(cfg, "")
+	m.DetailTab.Set(1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1200, 800))
+	p.Setup(func() {
+		setup(m)
+		m.start(ctx, p.Post)
+	})
+	defer p.Close()
+	defer m.shutdown()
+
+	probeUntil(t, p, "the app's daemon", func() bool { return ggui.Peek(m.Conn).OK })
+	m.launch("shell", "", project)
+	probeUntil(t, p, "the changes", func() bool { _, ok := p.Find("main.go"); return ok })
+	if f := ggui.Peek(m.Git).Changes.Files; len(f) != 1 || f[0].Added != 2 || f[0].Removed != 0 {
+		t.Fatalf("changes %+v", f)
+	}
+	row, _ := p.Find("main.go")
+	p.Click(row.Center())
+	probeUntil(t, p, "the diff", func() bool {
+		d := ggui.Peek(m.GitDiff)
+		return !d.Loading && len(d.Diff.Lines) > 0
+	})
+	if l := ggui.Peek(m.GitDiff).Diff.Lines[0]; l.Op != "@" {
+		t.Fatalf("diff starts %+v, want its hunk's header", l)
+	}
+}

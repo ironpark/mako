@@ -221,6 +221,18 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 	case protocol.TypeAttach:
 		return d.handleAttach(ctx, stream, env)
 
+	case protocol.TypeListDir:
+		return d.handleListDir(ctx, stream, env)
+
+	case protocol.TypeReadFile:
+		return d.handleReadFile(ctx, stream, env)
+
+	case protocol.TypeGitStatus:
+		return d.handleGitStatus(ctx, stream, env)
+
+	case protocol.TypeGitDiff:
+		return d.handleGitDiff(ctx, stream, env)
+
 	case protocol.TypeResize:
 		var payload protocol.Resize
 		if err := protocol.Decode(env, &payload); err != nil {
