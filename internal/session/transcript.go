@@ -1,38 +1,10 @@
 package session
 
-import (
-	"os"
-	"strings"
-
-	"github.com/ironpark/sanbo/internal/transcript"
-)
+import "github.com/ironpark/sanbo/internal/transcript"
 
 // TranscriptEnv returns only the paths needed to find this process's native
-// conversation logs, including profile overrides. Credentials stay private.
-func (s *Session) TranscriptEnv() map[string]string { return transcriptEnv(s.cmd.Env) }
-
-// TranscriptEnvFrom is TranscriptEnv for a launch that has not started yet:
-// the daemon's environment with the launch's overrides.
-func TranscriptEnvFrom(overrides map[string]string) map[string]string {
-	out := transcriptEnv(os.Environ())
-	for key, value := range overrides {
-		if transcript.EnvKey(key) {
-			out[key] = value
-		}
-	}
-	return out
-}
-
-func transcriptEnv(entries []string) map[string]string {
-	out := map[string]string{}
-	for _, entry := range entries {
-		key, value, ok := strings.Cut(entry, "=")
-		if ok && transcript.EnvKey(key) {
-			out[key] = value
-		}
-	}
-	return out
-}
+// conversation logs, including profile overrides.
+func (s *Session) TranscriptEnv() map[string]string { return transcript.Env(s.cmd.Env, nil) }
 
 // PID identifies the launched process while its session is alive.
 func (s *Session) PID() int { return s.cmd.Process.Pid }

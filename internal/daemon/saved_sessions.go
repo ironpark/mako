@@ -216,7 +216,8 @@ func (d *Daemon) conversationFor(ctx context.Context, req protocol.OpenSession, 
 	if !ok {
 		return conversationID, transcriptPath, nil
 	}
-	env := session.TranscriptEnvFrom(launch.Env)
+	// The launch has not started: the daemon's environment with its overrides.
+	env := transcript.Env(os.Environ(), launch.Env)
 	if conversationID == "" {
 		conversationID = native.ArgumentID(launch.Command)
 	}

@@ -76,9 +76,24 @@ func Supported(agent string) bool {
 	return ok
 }
 
-// EnvKey reports whether an environment variable moves where an agent's logs
-// are.
-func EnvKey(key string) bool {
+// Env is the part of a process's environment that says where agents' logs
+// are: environ with overrides applied. Credentials stay out.
+func Env(environ []string, overrides map[string]string) map[string]string {
+	out := map[string]string{}
+	for _, entry := range environ {
+		if key, value, ok := strings.Cut(entry, "="); ok && envKey(key) {
+			out[key] = value
+		}
+	}
+	for key, value := range overrides {
+		if envKey(key) {
+			out[key] = value
+		}
+	}
+	return out
+}
+
+func envKey(key string) bool {
 	return key == "HOME" || slices.ContainsFunc(agents, func(a *Agent) bool { return a.rootEnv == key })
 }
 

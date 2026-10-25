@@ -86,9 +86,51 @@ func metadata(path string, a *Agent) (string, string) {
 	return id, cwd
 }
 
-// scanLog reads a log's identity record: its native ID, working directory
-// and creation time.
-func scanLog(path string, a *Agent) (id, cwd string, created time.Time) {
+// identities remembers the identity records already read. A log only grows,
+// so its identity holds while it is the same file and has not shrunk, and
+// the tracker asks about the same logs every few seconds.
+var identities struct {
+	sync.Mutex
+	logs map[string]identity // agent and path to the log's identity
+}
+
+type identity struct {
+	stat    os.FileInfo
+	id, cwd string
+	created time.Time
+}
+
+// scanLog is a log's identity record: its native ID, working directory and
+// creation time.
+func scanLog(path string, a *Agent) (string, string, time.Time) {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return "", "", time.Time{}
+	}
+	key := a.Name + "\x00" + path
+	identities.Lock()
+	known, ok := identities.logs[key]
+	identities.Unlock()
+	if ok && os.SameFile(known.stat, stat) && stat.Size() >= known.stat.Size() {
+		return known.id, known.cwd, known.created
+	}
+	id, cwd, created := readIdentity(path, a)
+	if id != "" {
+		identities.Lock()
+		// Bounded: a history scan may pass over every log there is.
+		if len(identities.logs) >= 1024 {
+			identities.logs = nil
+		}
+		if identities.logs == nil {
+			identities.logs = map[string]identity{}
+		}
+		identities.logs[key] = identity{stat, id, cwd, created}
+		identities.Unlock()
+	}
+	return id, cwd, created
+}
+
+func readIdentity(path string, a *Agent) (id, cwd string, created time.Time) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", "", time.Time{}

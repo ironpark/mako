@@ -173,8 +173,9 @@ func TestPinOnlyWhenNothingPicksAConversation(t *testing.T) {
 	if _, ok := codex.Pin([]string{"codex"}, "id"); ok {
 		t.Fatal("codex picks its own ID")
 	}
-	if !EnvKey("CODEX_HOME") || !EnvKey("HOME") || EnvKey("OPENAI_API_KEY") {
-		t.Fatal("env keys")
+	env := Env([]string{"HOME=/h", "OPENAI_API_KEY=secret", "PATH=/bin"}, map[string]string{"CODEX_HOME": "/c", "TOKEN": "t"})
+	if len(env) != 2 || env["HOME"] != "/h" || env["CODEX_HOME"] != "/c" {
+		t.Fatalf("env=%v", env)
 	}
 }
 
