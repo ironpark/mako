@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/ironpark/sanbo/internal/agentspec"
+	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/sanbo/internal/transcript"
 )
 
 // hookArg, as a program's first argument, runs it as an agent's hook.
@@ -25,7 +27,7 @@ var hookProgram string
 // without it they only watch the agents' open files.
 func HookMain() bool {
 	if len(os.Args) > 1 && os.Args[1] == hookArg {
-		runHook(os.Args[2:], os.Stdin)
+		runHook(os.Args[2:], os.Stdin, os.Stdout)
 		return true
 	}
 	if exe, err := os.Executable(); err == nil {
@@ -45,12 +47,20 @@ type hookMessage struct {
 	Input   json.RawMessage `json:"input"`
 }
 
-// runHook is an agent's SessionStart hook, run by the daemon's own program
-// with the daemon's hook socket as args[0]. It passes the agent's input on
-// for the session in SANBO_SESSION. The agent waits on it, so it gives up
-// quickly, and it never fails: the daemon falls back to watching the
-// agent's open files.
-func runHook(args []string, stdin io.Reader) {
+// hookReply answers a hook that asks for an approval: allow or deny, or ""
+// to leave the question to the agent's own prompt.
+type hookReply struct {
+	Decision string `json:"decision,omitempty"`
+	Message  string `json:"message,omitempty"`
+}
+
+// runHook is an agent's hook, run by the daemon's own program with the
+// daemon's hook socket as args[0]. It passes the agent's input on for the
+// session in SANBO_SESSION. The agent waits on it, so it gives up quickly,
+// and it never fails: the daemon falls back to watching the agent's open
+// files. An approval waits for the daemon's answer, which it writes to out
+// as the agent's decision.
+func runHook(args []string, stdin io.Reader, out io.Writer) {
 	seq := time.Now().UnixNano() // when the agent ran it, not when it arrives
 	session := os.Getenv("SANBO_SESSION")
 	if len(args) != 1 || session == "" {
@@ -60,13 +70,33 @@ func runHook(args []string, stdin io.Reader) {
 	if err != nil || !json.Valid(input) {
 		return
 	}
+	var ev struct {
+		Event string `json:"hook_event_name"`
+	}
+	_ = json.Unmarshal(input, &ev)
 	conn, err := net.DialTimeout("unix", args[0], time.Second)
 	if err != nil {
 		return
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
-	_ = json.NewEncoder(conn).Encode(hookMessage{Session: session, Seq: seq, Input: input})
+	if json.NewEncoder(conn).Encode(hookMessage{Session: session, Seq: seq, Input: input}) != nil || ev.Event != "PermissionRequest" {
+		return
+	}
+	// The agent's own timeout bounds the wait.
+	_ = conn.SetDeadline(time.Time{})
+	var reply hookReply
+	if json.NewDecoder(conn).Decode(&reply) != nil || reply.Decision == "" {
+		return
+	}
+	decision := map[string]any{"behavior": reply.Decision}
+	if reply.Decision == protocol.DecisionDeny {
+		decision["message"] = reply.Message
+	}
+	_ = json.NewEncoder(out).Encode(map[string]any{"hookSpecificOutput": map[string]any{
+		"hookEventName": "PermissionRequest",
+		"decision":      decision,
+	}})
 }
 
 // listenHooks serves the hook socket in dir until ctx ends, setting
@@ -96,19 +126,54 @@ func (d *Daemon) listenHooks(ctx context.Context, dir string) {
 			if err != nil {
 				return
 			}
-			go d.serveHook(conn)
+			go d.serveHook(ctx, conn)
 		}
 	}()
 }
 
-func (d *Daemon) serveHook(conn net.Conn) {
+func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
 	var msg hookMessage
 	if err := json.NewDecoder(io.LimitReader(conn, hookLimit+4096)).Decode(&msg); err != nil {
 		return
 	}
-	if err := d.reportConversation(msg); err != nil {
-		d.log.Warn("hooks: report dropped", "session", msg.Session, "err", err)
+	d.sessionMu.Lock()
+	s, ok := d.sessions.get(msg.Session)
+	d.sessionMu.Unlock()
+	if !ok {
+		return
+	}
+	native, ok := transcript.Lookup(s.Info().Agent)
+	if !ok {
+		return
+	}
+	ev, ok := native.ParseHook(msg.Input)
+	if !ok {
+		return
+	}
+	switch ev.Event {
+	case "SessionStart":
+		s.SetStatus(protocol.AgentIdle)
+		if err := d.reportConversation(s, msg.Seq, ev); err != nil {
+			d.log.Warn("hooks: report dropped", "session", msg.Session, "err", err)
+		}
+	case "UserPromptSubmit", "PostToolUse":
+		s.SetStatus(protocol.AgentWorking)
+	case "Notification":
+		// Claude asks something of the user; a permission it asks through
+		// sanbo is already an approval.
+		if ev.NotificationType == "permission_prompt" || ev.NotificationType == "elicitation_dialog" {
+			s.SetStatus(protocol.AgentWaiting)
+		}
+	case "Stop":
+		s.SetStatus(protocol.AgentDone)
+	case "SessionEnd":
+		s.SetStatus(protocol.AgentIdle)
+	case "PermissionRequest":
+		_ = conn.SetDeadline(time.Time{})
+		reply := d.approvals.ask(ctx, s, ev)
+		_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+		_ = json.NewEncoder(conn).Encode(reply)
 	}
 }

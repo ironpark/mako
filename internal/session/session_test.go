@@ -87,3 +87,31 @@ func TestPTYProgressIsIncludedInReplayAndClearedOnExit(t *testing.T) {
 		t.Fatalf("exited progress=%+v err=%v", snap.Progress, err)
 	}
 }
+
+// A shell at its prompt is idle; while a command it started runs in front
+// of it, it is not.
+func TestAShellIsIdleOnlyAtItsPrompt(t *testing.T) {
+	s, err := Start(Spec{ID: "idle", Command: []string{"/bin/sh", "-i"}, Cols: 40, Rows: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	until := func(what string, idle bool) {
+		t.Helper()
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+			if s.Info().Idle == idle {
+				return
+			}
+		}
+		t.Fatalf("%s: idle stayed %v", what, !idle)
+	}
+	until("at the prompt", true)
+	if _, err := s.Write([]byte("sleep 30\n")); err != nil {
+		t.Fatal(err)
+	}
+	until("running sleep", false)
+	if _, err := s.Write([]byte{3}); err != nil { // ^C
+		t.Fatal(err)
+	}
+	until("back at the prompt", true)
+}

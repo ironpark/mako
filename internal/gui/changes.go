@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -24,16 +25,8 @@ import (
 // gitView is what is known of the project's changes.
 type gitView struct {
 	Root    fileRoot // the project they were read for
+	Base    string   // the branch they are read since, "" for HEAD
 	Changes protocol.GitChanges
-	Err     string
-	Loading bool
-}
-
-// diffView is the diff shown under the tree.
-type diffView struct {
-	Key     string // dirKey of the work tree and the file
-	File    protocol.GitFile
-	Diff    protocol.Diff
 	Err     string
 	Loading bool
 }
@@ -51,66 +44,44 @@ func (m *model) loadGit(root fileRoot) {
 	if v.Loading && v.Root == root {
 		return
 	}
+	base := ggui.Peek(m.GitBase)
 	if v.Root != root {
-		// A commit drafted for another project is not this one's.
+		// A commit drafted for another project is not this one's, nor is
+		// the base it was compared with.
 		v = gitView{Root: root}
 		m.GitSkip.Set(map[string]bool{})
 		m.GitMessage.Set("")
 		m.GitAmend.Set(false)
+		m.GitBase.Set("")
+		base = ""
+	}
+	if v.Base != base {
+		v = gitView{Root: root, Base: base}
 	}
 	v.Loading = true
 	m.Git.Set(v)
-	req := protocol.GitStatus{NodeID: m.remoteID(root.Node), Path: root.Path}
+	req := protocol.GitStatus{NodeID: m.remoteID(root.Node), Path: root.Path, Base: base}
 	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (protocol.GitChanges, error) {
 		return c.GitStatus(ctx, m.key(), req)
 	}, func(ch protocol.GitChanges, err error) {
-		if ggui.Peek(m.Git).Root != root {
-			return // another project is shown now
+		if cur := ggui.Peek(m.Git); cur.Root != root || cur.Base != base {
+			return // another project, or base, is shown now
 		}
-		next := gitView{Root: root, Changes: ch}
+		next := gitView{Root: root, Base: base, Changes: ch}
 		if err != nil {
 			next.Changes, next.Err = ggui.Peek(m.Git).Changes, err.Error()
 		}
 		m.Git.Set(next)
-		if d := ggui.Peek(m.GitDiff); d.Key != "" && !d.Loading {
-			m.reloadDiff() // the file may have changed with the rest
+		if err == nil {
+			m.followChanges(next)
 		}
 	})
 }
 
-// openDiff reads a changed file's diff into the pane under the tree.
+// openDiff shows a changed file's diff in a tab.
 func (m *model) openDiff(f protocol.GitFile) {
 	v := ggui.Peek(m.Git)
-	key := dirKey(v.Root.Node, joinPath(v.Changes.Root, f.Path))
-	m.GitDiff.Set(diffView{Key: key, File: f, Loading: true})
-	m.fetchDiff(v, key, f)
-}
-
-func (m *model) reloadDiff() {
-	d := ggui.Peek(m.GitDiff)
-	v := ggui.Peek(m.Git)
-	i := slices.IndexFunc(v.Changes.Files, func(f protocol.GitFile) bool { return f.Path == d.File.Path })
-	if i < 0 {
-		m.GitDiff.Set(diffView{}) // no longer changed
-		return
-	}
-	m.fetchDiff(v, d.Key, v.Changes.Files[i])
-}
-
-func (m *model) fetchDiff(v gitView, key string, f protocol.GitFile) {
-	req := protocol.GitDiff{NodeID: m.remoteID(v.Root.Node), Root: v.Changes.Root, Path: f.Path, From: f.From}
-	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (protocol.Diff, error) {
-		return c.GitDiff(ctx, m.key(), req)
-	}, func(d protocol.Diff, err error) {
-		if ggui.Peek(m.GitDiff).Key != key {
-			return // another file was chosen meanwhile
-		}
-		next := diffView{Key: key, File: f, Diff: d}
-		if err != nil {
-			next.Err = err.Error()
-		}
-		m.GitDiff.Set(next)
-	})
+	m.openDiffTab(v.Root, v.Changes.Root, "", v.Base, f, true)
 }
 
 // gitItem is a row of the changes tree: a changed file, or a folder
@@ -264,6 +235,10 @@ func changesView(m *model) ggui.Widget {
 				if !it.Dir && it.File.Status == protocol.GitDeleted {
 					name = name.Color(tokMuted)
 				}
+				if ggui.Peek(m.GitBase) != "" {
+					// Since a base, the files are the branch's work, not a commit's pick.
+					return ggui.Row(lead, ggui.Expanded(name), numbers, tail).Gap(7)
+				}
 				return ggui.Row(pickBox(m, it), lead, ggui.Expanded(name), numbers, tail).Gap(7)
 			})
 		}).
@@ -289,14 +264,18 @@ func changesView(m *model) ggui.Widget {
 		Repo             bool
 		Ahead, Behind    int
 		Branches         []string
+		Base             string             // compared since, "" for HEAD
+		Worktree         *protocol.Worktree // the session's own, for its actions
 	}
-	head := ggui.Map(m.Git, func(v gitView) headed {
+	head := ggui.Derived(func() headed {
+		v := m.Git.Get()
 		c := v.Changes
 		return headed{v.Root, cmp.Or(c.Branch, projectName(v.Root.Path)), c.Upstream,
-			c.Root != "" && !c.NotRepo, c.Ahead, c.Behind, c.Branches}
+			c.Root != "" && !c.NotRepo, c.Ahead, c.Behind, c.Branches, v.Base, m.worktreeAt(v.Root)}
 	}).WithEqual(func(a, b headed) bool {
 		return a.Root == b.Root && a.Branch == b.Branch && a.Upstream == b.Upstream && a.Repo == b.Repo &&
-			a.Ahead == b.Ahead && a.Behind == b.Behind && slices.Equal(a.Branches, b.Branches)
+			a.Ahead == b.Ahead && a.Behind == b.Behind && slices.Equal(a.Branches, b.Branches) &&
+			a.Base == b.Base && reflect.DeepEqual(a.Worktree, b.Worktree)
 	})
 	header := ggui.View(head, func(h headed) ggui.Widget {
 		if !h.Repo {
@@ -311,15 +290,32 @@ func changesView(m *model) ggui.Widget {
 		run := func(op, label string) func() {
 			return func() { m.gitRun(protocol.GitRun{Op: op}, label, nil) }
 		}
-		more := borderless(ui.MenuOf(icon("ellipsis"),
+		items := []ggui.Widget{
 			ui.MenuItem(T("Fetch"), run(protocol.GitOpFetch, T("Fetching…"))),
 			ui.MenuItem(T("Pull"), run(protocol.GitOpPull, T("Pulling…"))),
 			ui.MenuItem(T("Push"), run(protocol.GitOpPush, T("Pushing…"))),
-			ui.MenuDivider(),
-			ui.MenuItem(T("Refresh"), func() { m.loadGit(h.Root) }),
-		).Name(T("Git actions")))
+		}
+		if h.Worktree != nil {
+			items = append(append(items, ui.MenuDivider()), worktreeItems(m, *h.Worktree)...)
+		}
+		items = append(items, ui.MenuDivider(), ui.MenuItem(T("Refresh"), func() { m.loadGit(h.Root) }))
+		more := borderless(ui.MenuOf(icon("ellipsis"), items...).Width(220).Name(T("Git actions")))
+		// A session's worktree compares with HEAD or with the branch it
+		// started from.
+		var against ggui.Widget = ggui.Box()
+		if h.Worktree != nil && h.Worktree.Base != "" {
+			base := h.Worktree.Base
+			label := T("vs HEAD")
+			if h.Base != "" {
+				label = Tf("since %s", base)
+			}
+			against = ui.Tooltip(ui.Button(label, func() {
+				m.GitBase.Set(pick(h.Base == "", base, ""))
+				m.loadGit(h.Root)
+			}).Ghost(), T("Compare with HEAD, or with the branch the worktree started from"))
+		}
 		return panelHeader(
-			ggui.Expanded(ggui.Row(branchMenu(m, h.Branch, h.Branches), ggui.Spacer()).Stretch()),
+			ggui.Expanded(ggui.Row(branchMenu(m, h.Branch, h.Branches), against, ggui.Spacer()).Gap(4).Stretch()),
 			ggui.Row(
 				syncButton("arrow-down", pull, h.Behind, run(protocol.GitOpPull, T("Pulling…"))),
 				syncButton("arrow-up", push, h.Ahead, run(protocol.GitOpPush, T("Pushing…"))),
@@ -346,22 +342,17 @@ func changesView(m *model) ggui.Widget {
 		}
 		return ggui.Padding(tree, 4, 4)
 	})
-	hasDiff := ggui.Map(m.GitDiff, func(d diffView) bool { return d.Key != "" })
-	list := ggui.Column(gitStatusLine(m), ggui.Expanded(ggui.Scroll(body).Bar(tokSurface3)), commitBox(m)).Stretch()
-	return treeOverPane(header, list,
-		hasDiff, 0.45, func() ggui.Widget { return diffPane(m) }, T("Diff divider"))
+	return ggui.Column(
+		header,
+		hline(),
+		gitStatusLine(m),
+		ggui.Expanded(ggui.Scroll(body).Bar(tokSurface3)),
+		commitBox(m),
+	).Stretch()
 }
 
 // maxShownDiffLines caps the lines the pane draws of a diff.
 const maxShownDiffLines = 2000
-
-func diffPane(m *model) ggui.Widget {
-	head := ggui.View(m.GitDiff, func(d diffView) ggui.Widget {
-		return diffHeader(d.File, iconButton("x", T("Close diff"), func() { m.GitDiff.Set(diffView{}); m.GitSel.Set("") }))
-	})
-	content := ggui.View(m.GitDiff, func(d diffView) ggui.Widget { return diffBody(d.Loading, d.Err, d.Diff) })
-	return lowerPane(head, content)
-}
 
 // diffHeader names a changed file over its diff: how it changed, where a
 // rename moved it from, and its lines; lead and tail go before and after.
@@ -378,71 +369,12 @@ func diffHeader(f protocol.GitFile, tail ggui.Widget, lead ...ggui.Widget) ggui.
 	)...)
 }
 
-// diffBody is a diff as read so far: a spinner, why it failed, a note
-// for one without lines, or its lines.
-func diffBody(loading bool, err string, d protocol.Diff) ggui.Widget {
-	var note string
-	switch {
-	case loading:
-		return ggui.Center(ui.Spinner())
-	case err != "":
-		note = err
-	case d.Binary:
-		note = T("A binary file; no lines to show.")
-	case len(d.Lines) == 0:
-		note = T("No changes in its lines.")
-	}
-	if note != "" {
-		return paneNote(note)
-	}
-	return diffLines(d)
-}
-
 // fileCounts is a changed file's +added -removed, or that it is binary.
 func fileCounts(f protocol.GitFile) ggui.Widget {
 	if f.Binary {
 		return muted(ggui.Text(T("binary")).Size(12))
 	}
 	return counts(f.Added, f.Removed)
-}
-
-// diffLines draws a diff's lines, as many as the pane shows.
-func diffLines(d protocol.Diff) ggui.Widget {
-	mono := ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: 11.5}
-	lines := d.Lines[:min(len(d.Lines), maxShownDiffLines)]
-	rows := make([]ggui.Widget, 0, len(lines)+1)
-	for _, l := range lines {
-		rows = append(rows, diffRow(l, mono))
-	}
-	if len(lines) < len(d.Lines) || d.Truncated {
-		rows = append(rows, ggui.Box(muted(ggui.Text(T("The rest of the diff is not shown.")).Size(11.5))).Pad(8, 12))
-	}
-	return ggui.Scroll(ggui.Column(rows...).Stretch()).Bar(tokSurface3)
-}
-
-// diffRow is one line of a diff: its numbers on each side, and the line,
-// tinted green where added and red where removed.
-func diffRow(l protocol.DiffLine, mono ggui.TextStyle) ggui.Widget {
-	if l.Op == "@" {
-		return ggui.Box(ggui.Text(l.Text).Style(mono).Color(tokMuted).NoWrap().Ellipsis()).
-			Pad(4, 10).Fill(tokSurface2)
-	}
-	num := func(n int) ggui.Widget {
-		s := ""
-		if n > 0 {
-			s = fmt.Sprint(n)
-		}
-		return ggui.Box(ggui.Text(s).Style(mono).Color(tokExtraMuted).NoWrap()).Width(34)
-	}
-	text := ggui.Text(l.Op + " " + strings.ReplaceAll(l.Text, "\t", "    ")).Style(mono).NoWrap()
-	row := ggui.Box(ggui.Row(num(l.Old), num(l.New), ggui.Expanded(text)).Gap(4)).Pad(1, 8)
-	switch l.Op {
-	case "+":
-		return row.Fill(tokDiffAddedBg)
-	case "-":
-		return row.Fill(tokDiffRemovedBg)
-	}
-	return row
 }
 
 // pickBox is a changes row's box: whether the next commit takes the file,
@@ -470,7 +402,7 @@ func pickBox(m *model, it gitItem) ggui.Widget {
 
 // commitBox is the message and the button that commits the files picked.
 func commitBox(m *model) ggui.Widget {
-	hidden := ggui.Map(m.Git, func(v gitView) bool { return v.Changes.Root == "" || v.Changes.NotRepo })
+	hidden := ggui.Map(m.Git, func(v gitView) bool { return v.Changes.Root == "" || v.Changes.NotRepo || v.Base != "" })
 	field := ui.TextField(m.GitMessage).Multiline().Lines(3).Placeholder(T("Commit message")).Name(T("Commit message"))
 	// The button changes with what a commit would take, not each key typed.
 	type ready struct {

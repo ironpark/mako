@@ -34,6 +34,8 @@ type Spec struct {
 	Env     map[string]string
 	Cols    uint16
 	Rows    uint16
+	// Worktree is the git worktree made for the session, which Project is.
+	Worktree *protocol.Worktree
 }
 
 // Session is a running agent process with its terminal state.
@@ -62,7 +64,19 @@ type Session struct {
 	done           chan struct{}
 	progress       activity.Progress // guarded by mu
 	outputs        atomic.Uint64
+	lastOutput     atomic.Int64 // unix nanoseconds
+
+	// What the agent's hooks last reported, and the approval it waits
+	// for; guarded by mu.
+	status   protocol.AgentStatus
+	statusAt time.Time
+	approval *protocol.Approval
 }
+
+// staleWork is how long an agent said to be working may print nothing
+// before it is taken to have stopped: one at work redraws its spinner, and
+// an interrupted turn reports no end.
+const staleWork = time.Minute
 
 // Start launches the agent on a PTY.
 func Start(spec Spec) (*Session, error) {
@@ -131,7 +145,53 @@ func (s *Session) Info() protocol.SessionInfo {
 		StartedAt:      s.started,
 		ExitCode:       s.exitCode,
 		Busy:           s.state != protocol.StateExited && s.progress.Busy(time.Now()),
+		Idle:           s.state == protocol.StateRunning && foregroundIsSelf(s.tty, s.cmd.Process.Pid),
+		Status:         s.statusLocked(),
+		StatusAt:       s.statusAt,
+		LastOutput:     s.LastOutput(),
+		Approval:       s.approval,
+		Worktree:       s.spec.Worktree,
 	}
+}
+
+// statusLocked is what the agent is doing, as far as its hooks said.
+func (s *Session) statusLocked() protocol.AgentStatus {
+	switch {
+	case s.state == protocol.StateExited:
+		return ""
+	case s.approval != nil:
+		return protocol.AgentWaiting
+	case s.status == protocol.AgentWorking && time.Since(s.LastOutput()) > staleWork && time.Since(s.statusAt) > staleWork:
+		return protocol.AgentIdle
+	}
+	return s.status
+}
+
+// SetStatus records what the agent's hooks report it is doing.
+func (s *Session) SetStatus(status protocol.AgentStatus) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.status != status {
+		s.status, s.statusAt = status, time.Now()
+	}
+}
+
+// SetApproval records the approval the agent waits for, nil for none.
+func (s *Session) SetApproval(a *protocol.Approval) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.approval = a
+	if a != nil {
+		s.status, s.statusAt = protocol.AgentWaiting, time.Now()
+	}
+}
+
+// LastOutput is when the program last printed; zero before it has.
+func (s *Session) LastOutput() time.Time {
+	if ns := s.lastOutput.Load(); ns != 0 {
+		return time.Unix(0, ns)
+	}
+	return time.Time{}
 }
 
 // SetName names the session, "" for none.
@@ -269,6 +329,7 @@ func (s *Session) pump() {
 
 func (s *Session) feed(chunk []byte) {
 	s.outputs.Add(1)
+	s.lastOutput.Store(time.Now().UnixNano())
 	s.mu.Lock()
 	if _, err := s.term.Write(chunk); err != nil && !errors.Is(err, io.ErrClosedPipe) {
 		// A parse failure must not kill the session; the raw bytes still reach

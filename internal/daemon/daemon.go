@@ -33,6 +33,7 @@ type Daemon struct {
 
 	sessions      *registry
 	conversations conversations
+	approvals     approvals
 	peers         *peerTable
 
 	ln    *transport.Listener
@@ -90,6 +91,7 @@ func (d *Daemon) Self() protocol.Node {
 		Source:   "self",
 		LastSeen: time.Now(),
 		Features: []string{protocol.FeatureAttachBinary},
+		Revision: protocol.Revision,
 		Agents:   agentInfo(d.agents()),
 	}
 }
@@ -274,6 +276,12 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeReadChat:
 		return d.handleReadChat(ctx, stream, env)
+
+	case protocol.TypeAnswerApproval:
+		return d.handleAnswerApproval(ctx, stream, env)
+
+	case protocol.TypeSearch:
+		return d.handleSearch(ctx, stream, env)
 
 	case protocol.TypeResize:
 		var payload protocol.Resize

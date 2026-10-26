@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"cmp"
 	"fmt"
 	"image/color"
 	"slices"
@@ -22,9 +23,13 @@ import (
 // the session's details.
 const (
 	sidebarWidth = 272
-	detailsWidth = 320
+	detailsWidth = 320 // the right panel's, until dragged
 	headerHeight = 48
 	tabBarHeight = 38
+
+	minDetailsWidth, maxDetailsWidth = 260, 900
+	// panelEdgeWidth is the right panel's draggable edge.
+	panelEdgeWidth = 4
 )
 
 // build draws the window in the language the settings choose, again from
@@ -41,9 +46,10 @@ func window(m *model) ggui.Widget {
 	inSettings := ggui.Map(m.Page, func(p string) bool { return p == "settings" })
 	// The side panels slide open and closed beside the workspace.
 	main := ggui.Row(
-		newDrawer(ggui.Row(sidebar(m), vline()).Stretch(), m.SidebarOpen, sidebarWidth+1, false),
+		newDrawer(ggui.Row(sidebar(m), vline()).Stretch(), m.SidebarOpen, ggui.State[float64](sidebarWidth+1), false),
 		ggui.Expanded(workspace(m)),
-		newDrawer(ggui.Row(vline(), details(m)).Stretch(), m.DetailsOpen, detailsWidth+1, true),
+		newDrawer(ggui.Row(panelEdge(m), ggui.Expanded(details(m))).Stretch(), m.DetailsOpen,
+			ggui.Map(m.DetailsWidth, func(w float64) float64 { return w + panelEdgeWidth }), true),
 	).Stretch()
 	return ggui.Stack(
 		// The settings page takes the whole window, as Paseo's does; the
@@ -56,11 +62,19 @@ func window(m *model) ggui.Widget {
 		branchDialog(m),
 		imageViewer(m),
 		paletteDialog(m),
+		quickOpenDialog(m),
 		extensionsDialog(m),
 		ui.AlertDialog(m.ConfirmOpen, T("Kill this session?"), T("The program is stopped on its node. Its output is lost.")).
 			Confirm(T("Kill session"), m.confirmedKill).Destructive(),
 		ui.AlertDialog(m.DiscardOpen, T("Close without saving?"), T("Your changes to this file are lost.")).
 			Confirm(T("Discard changes"), m.confirmedDiscard).Destructive(),
+		ui.AlertDialog(m.HunkOpen, T("Discard this hunk?"), T("Its lines go back to what the last commit has. The change is lost.")).
+			Confirm(T("Discard hunk"), func() {
+				if fn := m.pendingHunk; fn != nil {
+					m.pendingHunk = nil
+					fn()
+				}
+			}).Destructive(),
 		ui.AlertDialog(m.QuitOpen, T("Quit without saving?"), T("Files you edited have unsaved changes, which are lost.")).
 			Confirm(T("Quit"), func() { m.quitting = true; ggui.UseHost().Close() }).Destructive(),
 		ui.AlertDialog(m.StopOpen, T("Stop the app's daemon?"), T("The sessions running in it end with it.")).
@@ -77,6 +91,21 @@ func vline() ggui.Widget { return ui.Divider().Vertical() }
 // iconButton is a borderless square button around an icon, with a tooltip.
 func iconButton(name, label string, onTap func()) ggui.Widget {
 	return ui.Tooltip(ui.ButtonOf(icon(name), onTap).Ghost().Pad(6).Radius(6).Name(label), label)
+}
+
+// statusLabel names what a session's agent is doing, as its hooks said.
+func statusLabel(s protocol.SessionInfo) string {
+	switch {
+	case s.Approval != nil:
+		return Tf("Waiting for approval: %s", s.Approval.Tool)
+	case s.Status == protocol.AgentWorking:
+		return T("Working")
+	case s.Status == protocol.AgentWaiting:
+		return T("Waiting for you")
+	case s.Status == protocol.AgentDone:
+		return T("Finished its turn")
+	}
+	return T("At its prompt")
 }
 
 // stateLabel names a session's state as the window shows it.
@@ -111,23 +140,62 @@ func sidebar(m *model) ggui.Widget {
 		icon("messages-square").Size(17),
 		ggui.Text(T("Sessions")).Size(14).Weight(ggui.WeightMedium),
 		ggui.Spacer(),
+		iconButton("search", T("Filter sessions"), func() {
+			if ggui.Peek(m.FilterOpen) {
+				m.SidebarFilter.Set("")
+			}
+			ggui.Toggle(m.FilterOpen)
+		}),
 		groupPicker(m),
-	).Gap(10)).Pad(0, 10, 0, 16).Height(headerHeight)
+	).Gap(6)).Pad(0, 10, 0, 16).Height(headerHeight)
+	filter := ggui.If(m.FilterOpen, func() ggui.Widget {
+		field := ui.TextField(m.SidebarFilter).Placeholder(T("Filter by title, project, branch or host")).Name(T("Filter sessions")).
+			OnSubmit(func(string) {})
+		return ggui.Box(field).Pad(8, 10, 0, 10)
+	})
 
 	grouping := ggui.Map(m.Prefs, func(p prefs) string { return p.SidebarGroup })
 	projects := ggui.Map(m.Prefs, func(p prefs) []fileRoot { return p.Projects }).WithEqual(slices.Equal)
+	pinned := ggui.Map(m.Prefs, func(p prefs) []string { return p.Pinned }).WithEqual(slices.Equal)
 	list := ggui.Reactive(func() ggui.Widget {
 		by := grouping.Get()
 		nodes := m.Nodes.Get()
-		groups := groupSessions(m.Sessions.Get(), by, nodes, projects.Get())
-		selected := m.Selected.Get()
 		titles := m.Titles.Get()
-		if len(groups) == 0 {
+		selected := m.Selected.Get()
+		m.Unread.Get() // the dots show what is unread
+		query := strings.TrimSpace(m.SidebarFilter.Get())
+		sessions := filterSessions(m.Sessions.Get(), query, nodes, titles)
+		// Pinned sessions come first, in a section of their own.
+		pins := pinned.Get()
+		var top []protocol.SessionInfo
+		rest := sessions[:0:0]
+		for _, s := range sessions {
+			if slices.Contains(pins, s.ID) {
+				top = append(top, s)
+			} else {
+				rest = append(rest, s)
+			}
+		}
+		var groups []sessionGroup
+		if query != "" {
+			// Filtered, the folders kept without sessions are left out.
+			groups = groupSessions(rest, by, nodes, nil)
+		} else {
+			groups = groupSessions(rest, by, nodes, projects.Get())
+		}
+		if len(groups) == 0 && len(top) == 0 {
+			if query != "" {
+				return ggui.Box(muted(ggui.Text(T("No sessions match.")).Size(12))).Pad(16)
+			}
 			return ggui.Box(muted(ggui.Text(T("No sessions yet. Start one with +.")).Size(12))).Pad(16)
 		}
-		children := make([]ggui.Widget, 0, len(groups))
+		names := projectLabels(groups, nodes)
+		children := make([]ggui.Widget, 0, len(groups)+1)
+		if len(top) > 0 {
+			children = append(children, pinnedSection(m, top, selected, nodes, titles))
+		}
 		for _, g := range groups {
-			children = append(children, sessionSection(m, by, g, selected, nodes, titles))
+			children = append(children, sessionSection(m, by, g, selected, nodes, titles, names[g.Key]))
 		}
 		return ggui.Column(children...).Gap(6).Stretch()
 	})
@@ -135,6 +203,7 @@ func sidebar(m *model) ggui.Widget {
 	return ggui.Box(ggui.Column(
 		header,
 		hline(),
+		filter,
 		ggui.Expanded(ggui.Scroll(ggui.Padding(list, 8, 8)).Bar(tokSurface3)),
 		hline(),
 		sidebarFooter(m),
@@ -176,12 +245,12 @@ func (m *model) setSidebarGroup(by string) {
 // sessionSection is one of the sidebar's groups: a heading for its project
 // or host with a button to start another session there, over its sessions.
 // The list's one group has no heading.
-func sessionSection(m *model, by string, g sessionGroup, selected string, nodes []protocol.Node, titles map[string]string) ggui.Widget {
+func sessionSection(m *model, by string, g sessionGroup, selected string, nodes []protocol.Node, titles map[string]string, label string) ggui.Widget {
 	nodeID, project := g.NodeID, g.Project
 	var rows []ggui.Widget
 	indent := by != groupFlat
 	if indent {
-		name, glyph := projectName(project), "folder"
+		name, glyph := cmp.Or(label, projectName(project)), "folder"
 		var status ggui.Widget = ggui.Box()
 		if by == groupHost {
 			// A node the mesh no longer lists has gone; its sessions stay
@@ -198,9 +267,10 @@ func sessionSection(m *model, by string, g sessionGroup, selected string, nodes 
 		}
 		row := []ggui.Widget{
 			icon(glyph).Size(15),
-			ggui.Box(ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).MaxWidth(sidebarWidth - 90),
-			status,
-			ggui.Spacer(),
+			ggui.Expanded(ggui.Row(
+				ggui.Flex(ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis(), 1),
+				status,
+			).Gap(10).Align(ggui.AlignCenter)),
 		}
 		// A folder kept with no sessions has nothing to bring it back once
 		// it leaves, so its menu can drop it.
@@ -212,7 +282,9 @@ func sessionSection(m *model, by string, g sessionGroup, selected string, nodes 
 		}
 		row = append(row, ui.Tooltip(ui.ButtonOf(icon("plus").Size(14), func() { m.openNew(nodeID, project) }).
 			Ghost().Pad(3).Radius(5).Name(Tf("New session in %s", name)), T("New session here")))
-		rows = append(rows, ggui.Box(ggui.Row(row...).Gap(10)).Pad(4, 4, 4, 10))
+		// A session dropped on the heading starts again there: its agent
+		// in this folder, or on this host in its own folder.
+		rows = append(rows, sectionDrop(m, ggui.Box(ggui.Row(row...).Gap(10)).Pad(4, 4, 4, 10), nodeID, project))
 		if len(g.Sessions) == 0 {
 			rows = append(rows, ggui.Padding(ggui.Box(muted(ggui.Text(T("No sessions")).Size(11.5))).Pad(3, 4), 0, 0, 0, 14))
 		}
@@ -221,19 +293,14 @@ func sessionSection(m *model, by string, g sessionGroup, selected string, nodes 
 		var where []string
 		switch by {
 		case groupProject:
+			where = append(where, nodeName(nodes, s.NodeID))
 			if rel := subfolder(s.Project, project); rel != "" {
 				where = append(where, rel)
-			}
-			if len(nodes) > 1 {
-				where = append(where, nodeName(nodes, s.NodeID))
 			}
 		case groupHost:
 			where = append(where, projectName(s.Project))
 		default:
-			if len(nodes) > 1 {
-				where = append(where, nodeName(nodes, s.NodeID))
-			}
-			where = append(where, projectName(s.Project))
+			where = append(where, nodeName(nodes, s.NodeID), projectName(s.Project))
 		}
 		where = append(where, short(s.ID))
 		rows = append(rows, sessionRow(m, s, s.ID == selected, titles[s.ID], strings.Join(where, " · "), indent))
@@ -249,16 +316,44 @@ func subfolder(dir, root string) string {
 	return strings.TrimLeft(dir[len(root):], `/\`)
 }
 
+// sessionRow is a session in the sidebar: its title, where it runs and
+// the branch checked out there, and on hover a button that closes it as
+// its tab's does.
 func sessionRow(m *model, s protocol.SessionInfo, selected bool, title, sub string, indent bool) ggui.Widget {
 	id := s.ID
 	label := sessionTitle(s, title)
+	line := []ggui.Widget{ggui.Expanded(ggui.Text(sub).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis())}
+	if s.Branch != "" {
+		line = append(line, ggui.Row(
+			icon("git-branch").Size(11).Color(tokExtraMuted),
+			ggui.Box(ggui.Text(s.Branch).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis()).MaxWidth(110),
+		).Gap(3))
+	}
+	// The title's line ends with when the program last printed.
+	head := []ggui.Widget{ggui.Expanded(ggui.Text(label).Size(13).NoWrap().Ellipsis())}
+	if s.State == protocol.StateRunning {
+		head = append(head, ggui.Reactive(func() ggui.Widget {
+			m.Minute.Get()
+			t := m.Printed.Get()[id]
+			if t.IsZero() {
+				return ggui.Box()
+			}
+			return ggui.Text(ago(t)).Size(11).Color(tokExtraMuted).NoWrap()
+		}))
+	}
+	hover := ggui.State(false)
+	end := ggui.If(hover, func() ggui.Widget {
+		return ui.ButtonOf(icon("x").Size(13), func() { m.askKill(id) }).Ghost().Pad(2).Radius(4).Name(Tf("Close %s", label))
+	}).Else(func() ggui.Widget {
+		return &activityDot{state: m.dotFor(id)}
+	})
 	content := ggui.Row(
 		&busyGlyph{icon: agentGlyph(s.Agent, tokMuted).Size(15), busy: func() bool { return m.busy(id) }},
 		ggui.Expanded(ggui.Column(
-			ggui.Text(label).Size(13).NoWrap().Ellipsis(),
-			ggui.Text(sub).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis(),
+			ggui.Row(head...).Gap(8).Align(ggui.AlignCenter),
+			ggui.Row(line...).Gap(8).Align(ggui.AlignCenter),
 		).Gap(2).Stretch()),
-		&activityDot{busy: func() bool { return s.State != protocol.StateExited && m.busy(id) }},
+		end,
 	).Gap(10)
 	btn := ui.ButtonOf(content, func() { m.selectSession(id) }).Ghost().Pad(7, 10).Radius(7).Name(label)
 	// A row drags into a pane, or to a pane's edge, as a tab does.
@@ -266,7 +361,7 @@ func sessionRow(m *model, s protocol.SessionInfo, selected bool, title, sub stri
 	if selected {
 		w = ggui.Box(btn).Fill(tokSidebarSel).Radius(7)
 	}
-	w = sessionDrag(m, w, id)
+	w = sessionDrag(m, ggui.Pointer(w).OnHover(hover.Set), id)
 	if indent {
 		w = ggui.Padding(w, 0, 0, 0, 14)
 	}
@@ -285,7 +380,15 @@ func sidebarFooter(m *model) ggui.Widget {
 		case d.Running:
 			name += " · in app"
 		}
-		return ggui.Row(linkDot(c.OK), muted(ggui.Text(name).Size(13).NoWrap().Ellipsis())).Gap(10)
+		row := ggui.Row(linkDot(c.OK), muted(ggui.Text(name).Size(13).NoWrap().Ellipsis())).Gap(10)
+		if c.OK && outdated(c.Self) {
+			// A daemon from an older build leaves agents' state and
+			// approvals out; say so rather than show them blank.
+			warn := ui.Tooltip(icon("info").Size(14).Color(tokDotWaiting),
+				T("This daemon is from an older sanbo. Restart it with this build to see agents' state and approve in the window."))
+			row = ggui.Row(linkDot(c.OK), ggui.Expanded(muted(ggui.Text(name).Size(13).NoWrap().Ellipsis())), warn).Gap(10)
+		}
+		return row
 	})
 	return ggui.Box(ggui.Row(
 		ggui.Expanded(host),
@@ -306,8 +409,11 @@ func workspace(m *model) ggui.Widget {
 
 func workspaceHeader(m *model) ggui.Widget {
 	title := ggui.Reactive(func() ggui.Widget {
-		if id := m.Selected.Get(); isDocTab(id) {
+		switch id := m.Selected.Get(); {
+		case isDocTab(id):
 			return docHeader(m, id, m.Docs.Get()[id])
+		case isDiffTab(id):
+			return diffHeaderBar(m, id, m.Diffs.Get()[id])
 		}
 		s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get())
 		if !ok {
@@ -496,6 +602,7 @@ const (
 	filesTab = iota
 	changesTab
 	historyTab
+	searchTab
 	sessionTab
 	nodesTab
 )
@@ -510,10 +617,19 @@ func details(m *model) ggui.Widget {
 		if s.ExitCode != nil {
 			code = fmt.Sprint(*s.ExitCode)
 		}
-		return ggui.Column(
+		props := []ggui.Widget{
 			prop(T("Agent"), sessionLabel(s)),
+		}
+		if s.Status != "" {
+			props = append(props, prop(T("Doing"), statusLabel(s)))
+		}
+		props = append(props,
 			prop(T("Node"), nodeName(m.Nodes.Get(), s.NodeID)),
-			prop(T("Project"), prettyPath(s.Project)),
+			prop(T("Project"), prettyPath(s.Project)))
+		if w := s.Worktree; w != nil {
+			props = append(props, prop(T("Worktree"), Tf("%s, from %s, of %s", w.Branch, cmp.Or(w.Base, "HEAD"), prettyPath(w.Repo))))
+		}
+		return ggui.Column(append(props,
 			prop(T("Command"), strings.Join(s.Command, " ")),
 			prop(T("State"), stateLabel(s.State)),
 			prop(T("Exit code"), code),
@@ -521,7 +637,7 @@ func details(m *model) ggui.Widget {
 			prop(T("Started"), s.StartedAt.Local().Format("Jan 2 15:04:05")),
 			prop(T("Uptime"), time.Since(s.StartedAt).Truncate(time.Second).String()),
 			prop(T("Session"), s.ID),
-		).Gap(14).Stretch()
+		)...).Gap(14).Stretch()
 	})
 	nodes := ggui.View(m.Nodes, func(nodes []protocol.Node) ggui.Widget {
 		return nodeList(nodes)
@@ -531,14 +647,31 @@ func details(m *model) ggui.Widget {
 		filesPanel(m),
 		changesPanel(m),
 		historyPanel(m),
+		searchPanel(m),
 		ggui.Scroll(ggui.Padding(session, 16)),
 		ggui.Scroll(ggui.Padding(nodes, 12)),
 	}
 	return ggui.Box(ggui.Column(
-		panelTabs(m.DetailTab, T("Files"), T("Changes"), T("History"), T("Session"), T("Nodes")),
+		panelTabs(m.DetailTab, T("Files"), T("Changes"), T("History"), T("Search"), T("Session"), T("Nodes")),
 		hline(),
 		ggui.Expanded(ggui.Key(m.DetailTab, func(i int) ggui.Widget { return pages[min(max(i, 0), len(pages)-1)] })),
-	).Stretch()).Width(detailsWidth).Fill(tokSurface0)
+	).Stretch()).Fill(tokSurface0)
+}
+
+// panelEdge is the right panel's left edge, which drags to resize the
+// panel; the width is kept when the drag ends.
+func panelEdge(m *model) ggui.Widget {
+	var from, start float64
+	edge := ggui.Box(ggui.Row(vline(), ggui.Spacer()).Stretch()).Width(panelEdgeWidth).Fill(tokSurface0)
+	return ggui.Pointer(edge).Cursor(ggui.CursorShapeEWResize).
+		OnDown(func(ev ggui.PointerEvent) { from, start = ev.Pos.X, ggui.Peek(m.DetailsWidth) }).
+		OnDrag(func(ev ggui.PointerEvent) {
+			m.DetailsWidth.Set(min(max(start+from-ev.Pos.X, minDetailsWidth), maxDetailsWidth))
+		}).
+		OnUp(func(ggui.PointerEvent) {
+			w := ggui.Peek(m.DetailsWidth)
+			m.Prefs.Update(func(p prefs) prefs { p.DetailsWidth = w; return p })
+		})
 }
 
 // panelTabs is the right panel's strip of tabs: as tall as the workspace
@@ -552,11 +685,12 @@ func panelTabs(chosen *ggui.StateValue[int], labels ...string) ggui.Widget {
 			if i == current {
 				fg, line = tokFg, tokAccentBright
 			}
-			btn := ui.ButtonOf(ggui.Box(ggui.Row(ggui.Text(label).Size(13).Color(fg))).Height(headerHeight),
-				func() { chosen.Set(i) }).Ghost().Pad(0, 12).Radius(0).Name(label)
+			btn := ui.ButtonOf(ggui.Box(ggui.Row(ggui.Text(label).Size(13).Color(fg).NoWrap())).Height(headerHeight),
+				func() { chosen.Set(i) }).Ghost().Pad(0, 9).Radius(0).Name(label)
 			cells[i] = &underlined{child: btn, color: line}
 		}
-		return ggui.Box(ggui.Row(cells...)).Height(headerHeight).Pad(0, 4)
+		// Too narrow for them all, the tabs scroll sideways.
+		return ggui.Box(ggui.Scroll(ggui.Row(cells...)).Horizontal().Bar(color.Transparent)).Height(headerHeight).Pad(0, 4)
 	})
 }
 
@@ -580,12 +714,23 @@ func nodeList(nodes []protocol.Node) ggui.Widget {
 		rows = append(rows, ggui.Box(ggui.Row(
 			icon(kind).Size(16),
 			ggui.Expanded(ggui.Column(
-				ggui.Row(ggui.Text(n.Name).Size(13).Weight(ggui.WeightMedium), linkDot(true)).Gap(8),
+				ggui.Row(ggui.Text(n.Name).Size(13).Weight(ggui.WeightMedium), linkDot(true), outdatedBadge(n)).Gap(8),
 				ggui.Text(fmt.Sprintf("%s · %s/%s · %s", n.Addr, n.OS, n.Arch, n.Source)).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis(),
 			).Gap(3).Stretch()),
 		).Gap(12)).Pad(10).Radius(8).Fill(tokSurface1))
 	}
 	return ggui.Column(rows...).Gap(8).Stretch()
+}
+
+// outdated reports whether a node's daemon is from an older build than
+// the window's, which leaves newer parts of its replies out.
+func outdated(n protocol.Node) bool { return n.Revision < protocol.Revision }
+
+func outdatedBadge(n protocol.Node) ggui.Widget {
+	if !outdated(n) {
+		return ggui.Box()
+	}
+	return ggui.Box(ggui.Text(T("out of date")).Size(11).Color(tokDotWaiting)).Pad(1, 6).Radius(4).Border(1, tokDotWaiting)
 }
 
 // Dialogs --------------------------------------------------------------------
@@ -594,6 +739,8 @@ func newSessionDialog(m *model) ggui.Widget {
 	agent := m.Form.Field(func(f *newSession) *string { return &f.Agent })
 	node := m.Form.Field(func(f *newSession) *string { return &f.NodeID })
 	project := m.Form.Field(func(f *newSession) *string { return &f.Project })
+	worktree := m.Form.Field(func(f *newSession) *bool { return &f.Worktree })
+	branch := m.Form.Field(func(f *newSession) *string { return &f.Branch })
 	nodeIDs := ggui.Map(m.Nodes, func(nodes []protocol.Node) []string {
 		ids := make([]string, len(nodes))
 		for i, n := range nodes {
@@ -629,6 +776,14 @@ func newSessionDialog(m *model) ggui.Widget {
 			ggui.Expanded(ui.TextField(project).Placeholder(T("The node's home folder")).Name(T("Working directory")).OnSubmit(func(string) { m.submitNew() })),
 			ggui.If(local, func() ggui.Widget { return browse }),
 		).Gap(8)),
+		ui.Field(T("Git"), ggui.Column(
+			ui.Checkbox(worktree, T("Work in a new worktree")),
+			ggui.If(worktree, func() ggui.Widget {
+				return ui.TextField(branch).Placeholder(T("Branch, such as agent/fix-login")).Name(T("Branch")).
+					OnSubmit(func(string) { m.submitNew() })
+			}),
+			muted(ggui.Text(T("A worktree of the folder's repository, beside it, on a new branch: agents in one repository then keep out of each other's files.")).Size(11.5)),
+		).Gap(8).Stretch()),
 		ggui.If(hasErr, func() ggui.Widget {
 			return ggui.TextOf(m.FormErr).Size(12).Color(tokDotDown)
 		}),

@@ -7,6 +7,7 @@ import (
 	"maps"
 	"math"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -65,7 +66,7 @@ func (s *chatState) toolOpen(key string, openByDefault bool) ggui.Binding[bool] 
 }
 
 func (m *model) setChatMode(id string, chat bool) {
-	if id == "" || isDocTab(id) {
+	if !isSessionTab(id) {
 		return
 	}
 	m.ChatModes.Update(func(v map[string]bool) map[string]bool { v = maps.Clone(v); v[id] = chat; return v })
@@ -114,34 +115,33 @@ func (m *model) chatCapable(id string) bool {
 
 // sessionView switches only presentation. The attachment and terminal parser
 // stay alive when chat is shown, so switching back has the current screen.
+// The switch between them is in the pane's tab bar; see viewSwitch.
 func sessionView(m *model, id string, group int) ggui.Widget {
-	mode := ggui.Bind(func() bool { return m.ChatModes.Get()[id] }, func(chat bool) { m.focusGroup(group); m.setChatMode(id, chat) })
-	// A switch at the right end, between the two views it chooses, the
-	// one in view in the foreground colour.
-	sw := ui.Switch(mode, "")
-	sw.SetName(T("Session view"))
-	side := func(label string, chat bool) ggui.Widget {
-		text := ggui.Reactive(func() ggui.Widget {
-			return ggui.Text(label).Size(12.5).Color(pick(mode.Get() == chat, tokFg, tokMuted)).NoWrap()
-		})
-		return ui.ButtonOf(text, func() { mode.Set(chat) }).Ghost().Pad(2, 4).Radius(4).Name(label)
-	}
-	bar := ggui.Box(ggui.Row(ggui.Spacer(), side(T("Terminal"), false), sw, side(T("Chat"), true)).Gap(8)).
-		Pad(6, 12).Fill(tokSurface0)
-	body := ggui.Key(ggui.Map(m.ChatModes, func(v map[string]bool) bool { return v[id] }), func(chat bool) ggui.Widget {
+	return ggui.Key(ggui.Map(m.ChatModes, func(v map[string]bool) bool { return v[id] }), func(chat bool) ggui.Widget {
 		if chat {
 			return chatView(m, id, group)
 		}
 		focus := ggui.Peek(m.FocusGroup) == group
 		term := newTerminalView(m.conns[id], func() prefs { return ggui.Peek(m.Prefs) }, focus).OnPress(func() { m.focusGroup(group) })
-		return ggui.DropZone(term, func(d ggui.Dropped[pathDrag]) { term.setDropOver(false); term.typePaths([]string{d.Value.Path}) }).OnHover(term.setDropOver)
+		body := ggui.DropZone(term, func(d ggui.Dropped[pathDrag]) { term.setDropOver(false); term.typePaths([]string{d.Value.Path}) }).OnHover(term.setDropOver)
+		return ggui.Column(approvalBar(m, id), ggui.Expanded(body)).Stretch()
 	})
-	// A plain shell has no conversation to show, so it keeps its terminal
-	// alone, without the switch.
-	if !m.chatCapable(id) {
-		return body
+}
+
+// viewSwitch switches a session between its terminal and its chat: a
+// switch between the two glyphs, the one in view in the foreground colour.
+// A plain shell has no conversation, so it has none.
+func viewSwitch(m *model, id string, group int) ggui.Widget {
+	mode := ggui.Bind(func() bool { return m.ChatModes.Get()[id] }, func(chat bool) { m.focusGroup(group); m.setChatMode(id, chat) })
+	sw := ui.Switch(mode, "")
+	sw.SetName(T("Session view"))
+	side := func(glyph, label string, chat bool) ggui.Widget {
+		g := ggui.Reactive(func() ggui.Widget {
+			return icon(glyph).Size(14).Color(pick(mode.Get() == chat, tokFg, tokExtraMuted))
+		})
+		return ui.Tooltip(ui.ButtonOf(g, func() { mode.Set(chat) }).Ghost().Pad(3).Radius(4).Name(label), label)
 	}
-	return ggui.Column(bar, hline(), ggui.Expanded(body)).Stretch()
+	return ggui.Row(side("square-terminal", T("Terminal"), false), sw, side("messages-square", T("Chat"), true)).Gap(4).Align(ggui.AlignCenter)
 }
 
 func chatView(m *model, id string, group int) ggui.Widget {
@@ -197,30 +197,56 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		return ggui.Box(ggui.Column(rows...).Gap(14).Stretch()).Pad(18, 24).MaxWidth(chatLaneWidth)
 	})
 	feed := ggui.Scroll(ggui.Align(content).Top()).Controller(scroll).Bar(tokSurface3)
+	usage := ggui.View(ggui.Map(state.result, func(v chatResult) protocol.Usage {
+		if v.Chat.Usage == nil {
+			return protocol.Usage{}
+		}
+		return *v.Chat.Usage
+	}), func(u protocol.Usage) ggui.Widget {
+		if u == (protocol.Usage{}) {
+			return ggui.Box()
+		}
+		return ui.Tooltip(muted(ggui.Text(usageLine(u)).Size(12).NoWrap()), usageDetail(u))
+	})
 	footer := ggui.Box(ggui.Row(
-		ggui.Expanded(muted(ggui.Text(T("Messages go to the live session. Use Terminal for approvals and special keys.")).Size(12))),
+		ggui.Expanded(muted(ggui.Text(T("Messages go to the live session. Use Terminal for special keys.")).Size(12).NoWrap().Ellipsis())),
+		usage,
 		iconButton("refresh-cw", T("Refresh"), func() { m.loadChat(id, state) }),
 		ui.Button(T("Latest"), func() { scroll.ScrollTo(scroll.MaxOffset()) }).Ghost(),
 	).Gap(8)).Pad(6, 12)
 	// The composer belongs to Chat alone, as in ovis: Terminal mode's grid
 	// is its own input surface, and a file view has no session to type into.
-	return ggui.Pointer(ggui.Column(ggui.Expanded(feed), footer, composer(m, id, state.draft)).Stretch()).
+	return ggui.Pointer(ggui.Column(ggui.Expanded(feed), footer, approvalCard(m, id), composer(m, id, state.draft)).Stretch()).
 		OnDown(func(ggui.PointerEvent) { m.focusGroup(group) })
 }
 
 // chatTurns draws the conversation: the user on the right, the agent's prose
-// as a page, and each run of tools as one quiet card whose rows fold.
+// as a page, and each run of tools as one quiet card whose rows fold. A
+// long run folds into one line naming its tools, all but the last run,
+// which is the agent's work in hand.
 func chatTurns(m *model, id string, info protocol.SessionInfo, state *chatState, messages []protocol.ChatMessage) []ggui.Widget {
 	var rows []ggui.Widget
+	lastRun := -1
+	for i := range messages {
+		if messages[i].Role == "tool" && (i == 0 || messages[i-1].Role != "tool") {
+			lastRun = i
+		}
+	}
 	for i := 0; i < len(messages); {
 		if messages[i].Role == "tool" {
+			start := i
 			var tools []ggui.Widget
+			var names []string
 			for i < len(messages) && messages[i].Role == "tool" {
 				tools = append(tools, toolRow(state, messages[i]))
+				names = append(names, toolName(messages[i]))
 				i++
 			}
-			rows = append(rows, ggui.Box(ggui.Column(tools...).Gap(2).Stretch()).
-				Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(6, 8))
+			var body ggui.Widget = ggui.Column(tools...).Gap(2).Stretch()
+			if len(tools) >= foldRun {
+				body = toolRun(state, chatMessageKey(messages[start]), names, start != lastRun, body)
+			}
+			rows = append(rows, ggui.Box(body).Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(6, 8))
 			continue
 		}
 		rows = append(rows, chatTurn(m, id, info, messages[i]))
@@ -229,19 +255,59 @@ func chatTurns(m *model, id string, info protocol.SessionInfo, state *chatState,
 	return rows
 }
 
+// foldRun is how many tool calls in a row fold into one line.
+const foldRun = 3
+
+// toolRun is a long run of tool calls, folded to a line that counts them
+// and names their tools.
+func toolRun(state *chatState, key string, names []string, folded bool, body ggui.Widget) ggui.Widget {
+	open := state.toolOpen("run:"+key, !folded)
+	var distinct []string
+	for _, n := range names {
+		if !slices.Contains(distinct, n) {
+			distinct = append(distinct, n)
+		}
+	}
+	header := ui.ButtonOf(ggui.Row(
+		icon("layers").Size(14).Color(tokMuted),
+		ggui.Text(Tf("%d tool calls", len(names))).Size(12.5).NoWrap(),
+		ggui.Expanded(muted(ggui.Text(strings.Join(distinct, ", ")).Size(12).NoWrap().Ellipsis())),
+		ggui.View(open, func(o bool) ggui.Widget {
+			return icon("chevron-down").Size(13).Color(tokExtraMuted).Rotate(pick(o, 0.0, -math.Pi/2))
+		}),
+	).Gap(8).Stretch(), func() { open.Set(!ggui.Untrack(open.Get)) }).Ghost().Pad(4, 6).Radius(6).Name(Tf("%d tool calls", len(names)))
+	return ggui.Column(header, ggui.If(open, func() ggui.Widget { return body })).Gap(2).Stretch()
+}
+
+// toolName is the name a tool row shows.
+func toolName(msg protocol.ChatMessage) string {
+	name, _, _, _, _ := toolParts(msg)
+	return name
+}
+
 func chatTurn(m *model, id string, info protocol.SessionInfo, msg protocol.ChatMessage) ggui.Widget {
+	// A message's copy button shows while the pointer is over it.
+	hover := ggui.State(false)
+	copyRow := func(right bool) ggui.Widget {
+		btn := ggui.If(hover, func() ggui.Widget { return copyButton(m, msg.Text) })
+		row := ggui.Row(btn, ggui.Spacer())
+		if right {
+			row = ggui.Row(ggui.Spacer(), btn)
+		}
+		return ggui.Box(row.Stretch()).Height(28)
+	}
 	if msg.Role == "user" {
 		bubble := ggui.Box(ggui.Text(msg.Text).Size(14).Selectable()).
 			Fill(tokSurface2).Radius(12).Pad(10, 14).MaxWidth(680)
-		return ggui.Column(
+		return ggui.Pointer(ggui.Column(
 			ggui.Row(ggui.Spacer(), bubble).Stretch(),
-			ggui.Row(ggui.Spacer(), copyButton(m, msg.Text)).Stretch(),
-		).Gap(2).Stretch()
+			copyRow(true),
+		).Gap(2).Stretch()).OnHover(hover.Set)
 	}
 	r := &mdRenderer{m: m, id: id, doc: docInfo{Node: info.NodeID, Path: joinPath(info.Project, "conversation.md")}, src: []byte(msg.Text)}
 	root := markdown.Parser().Parse(text.NewReader(r.src))
-	blocks := append(r.blocks(root), ggui.Row(copyButton(m, msg.Text), ggui.Spacer()).Stretch())
-	return ggui.Column(blocks...).Gap(10).Stretch()
+	blocks := append(r.blocks(root), copyRow(false))
+	return ggui.Pointer(ggui.Column(blocks...).Gap(10).Stretch()).OnHover(hover.Set)
 }
 
 // copyButton copies a message as the agent wrote it, Markdown and all, and

@@ -179,7 +179,7 @@ func TestPinOnlyWhenNothingPicksAConversation(t *testing.T) {
 	}
 }
 
-func TestHookAddsSettingsOnlyWhereTheAgentTakesThem(t *testing.T) {
+func TestClaudeHooksAreSettings(t *testing.T) {
 	claude, _ := Lookup("claude")
 	got, ok := claude.Hook([]string{"claude", "--model", "opus"}, "'/bin/sanbod' hook '/run/h.sock'")
 	if !ok || len(got) != 5 || got[3] != "--settings" {
@@ -200,17 +200,54 @@ func TestHookAddsSettingsOnlyWhereTheAgentTakesThem(t *testing.T) {
 	if _, ok := claude.Hook([]string{"claude", "--settings=/mine.json"}, "h"); ok {
 		t.Fatal("hook replaced the user's own settings")
 	}
-	codex, _ := Lookup("codex")
-	if _, ok := codex.Hook([]string{"codex"}, "h"); ok {
-		t.Fatal("codex takes no hook settings")
+	if h := settings.Hooks["PermissionRequest"]; len(h) != 1 || h[0].Hooks[0].Command != "'/bin/sanbod' hook '/run/h.sock'" {
+		t.Fatalf("no approval hook: %s", got[4])
 	}
-	if id, path, ok := claude.ParseHook([]byte(`{"hook_event_name":"SessionStart","session_id":"s","transcript_path":"/p"}`)); !ok || id != "s" || path != "/p" {
-		t.Fatalf("parse=%q %q %v", id, path, ok)
+	if ev, ok := claude.ParseHook([]byte(`{"hook_event_name":"SessionStart","session_id":"s","transcript_path":"/p"}`)); !ok || ev.SessionID != "s" || ev.TranscriptPath != "/p" {
+		t.Fatalf("parse=%+v %v", ev, ok)
 	}
-	for _, other := range []string{`{"hook_event_name":"Stop","session_id":"s"}`, `{"hook_event_name":"SessionStart","session_id":"s","agent_id":"sub"}`, `not json`} {
-		if _, _, ok := claude.ParseHook([]byte(other)); ok {
+	if ev, ok := claude.ParseHook([]byte(`{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"ls"}}`)); !ok || ev.Tool != "Bash" || string(ev.ToolInput) != `{"command":"ls"}` {
+		t.Fatalf("parse=%+v %v", ev, ok)
+	}
+	for _, other := range []string{`{"hook_event_name":"SessionStart","session_id":"s","agent_id":"sub"}`, `not json`, `{}`} {
+		if _, ok := claude.ParseHook([]byte(other)); ok {
 			t.Errorf("%s taken", other)
 		}
+	}
+}
+
+// Codex takes its hooks as config overrides, which it runs only when
+// trusted by the hash it computes of each; these are hashes Codex itself
+// recorded on trusting the same hooks.
+func TestCodexHooksAreTrustedOverrides(t *testing.T) {
+	cmd := "if [ -f '/Users/ironpark/.orca/agent-hooks/codex-hook.sh' ] && [ -r '/Users/ironpark/.orca/agent-hooks/codex-hook.sh' ] && [ -x '/Users/ironpark/.orca/agent-hooks/codex-hook.sh' ]; then /bin/sh '/Users/ironpark/.orca/agent-hooks/codex-hook.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi"
+	for name, want := range map[string]string{
+		"SessionStart":      "sha256:9a0e1518079e2e24e2cf7d47a4deecd885a9089d5eed8522d16ca7334925b4b9",
+		"Stop":              "sha256:062e403078366fd27b0501522dcdd66a9ce9488df3c009329e1de067bfbbfa14",
+		"PermissionRequest": "sha256:bf384f5375f7e816fb8d77e977f5b09a37135ae9c136b8908693762f102fe69e",
+	} {
+		if got := codexHookHash(hookEvent{Name: name, Timeout: 10}, cmd); got != want {
+			t.Errorf("%s: %s, want %s", name, got, want)
+		}
+	}
+
+	codex, _ := Lookup("codex")
+	got, ok := codex.Hook([]string{"codex", "resume", "abc"}, `'/bin/san"bo' hook '/run/h.sock'`)
+	if !ok || got[0] != "codex" || !slices.Equal(got[len(got)-2:], []string{"resume", "abc"}) {
+		t.Fatalf("hook=%q %v", got, ok)
+	}
+	joined := strings.Join(got, "\n")
+	for _, want := range []string{
+		`hooks.Stop=[{hooks=[{type="command",command="'/bin/san\"bo' hook '/run/h.sock'",timeout=10}]}]`,
+		`hooks.PermissionRequest=[{hooks=[{type="command",command="'/bin/san\"bo' hook '/run/h.sock'",timeout=86400}]}]`,
+		`"/<session-flags>/config.toml:permission_request:0:0"={trusted_hash="sha256:`,
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("no %s in %q", want, got)
+		}
+	}
+	if ev, ok := codex.ParseHook([]byte(`{"hook_event_name":"Stop","session_id":"s","transcript_path":null}`)); !ok || ev.Event != "Stop" {
+		t.Fatalf("parse=%+v %v", ev, ok)
 	}
 }
 

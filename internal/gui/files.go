@@ -121,10 +121,13 @@ func (m *model) remoteID(node string) string {
 }
 
 // filesRoot is the selected session's project, or the one the selected
-// file was opened from.
+// file or diff was opened from.
 func (m *model) filesRoot() fileRoot {
-	if id := m.Selected.Get(); isDocTab(id) {
+	switch id := m.Selected.Get(); {
+	case isDocTab(id):
 		return m.Docs.Get()[id].Root
+	case isDiffTab(id):
+		return m.Diffs.Get()[id].Root
 	}
 	s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get())
 	if !ok {

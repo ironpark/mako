@@ -72,12 +72,47 @@ the session, and a panel on the right with the project's files, the session's
 details and the nodes. The sidebar groups its sessions by project (a session
 started in a folder inside another's project, as a worktree or a package is,
 goes under that project), by host, or lists them flat, as the buttons in its
-header choose. A project folder outlives its last session: killing the
+header choose. Each session there shows its host and project, the branch
+checked out when the project is in a git repository, how long ago its program
+last printed, and on hover a button that closes it as its tab's does. Two
+project folders of the same name are told apart by the end of their paths, or
+by their hosts when the paths are the same. Sessions pinned from their menu
+come first, and the header's search button filters the list by title,
+project, branch, agent or host. A session dropped on a section's heading
+starts again there: its agent in that folder, or on that host in its own
+folder. A project folder outlives its last session: killing the
 sessions leaves the folder, with its button to start another, and the folder's
 menu removes it from the sidebar.
 
+Each session's dot says what its agent is doing, as the agent's own hooks
+report it: green while it works, amber while it waits for the user (an
+approval, or a question), blue once it finished a turn the user has not seen,
+and grey at rest. A session that finishes or asks while it is not in view is
+marked unread until it is looked at; the Dock's icon counts them, the window
+asks for attention when an approval comes in behind it, and, unless Settings ▸
+General turns it off, the desktop gets a notification (through `osascript`
+on macOS, `notify-send` on Linux). Claude takes the hooks through
+`--settings`, alongside the user's own. Codex takes them as `-c hooks.…`
+overrides with their trust (`-c hooks.state=…`, the hash Codex itself records
+on trusting a hook), so they run without the user trusting them in `/hooks`,
+on Codex versions whose `codex features list` has hooks. An agent said to be
+working that prints nothing for a minute is taken to have stopped, as an
+interrupted turn reports no end. Terminal titles lose the spinner glyphs
+agents lead them with; the dot says the agent is at work.
+
+While the window is open (Settings ▸ General ▸ Approve in the window), an
+approval Claude or Codex asks for waits for an answer in the window: a card at
+the foot of Chat, and a bar over the terminal, with **Allow**, **Deny** and
+**In terminal**, which hands the question back to the agent's own prompt.
+The agent's `PermissionRequest` hook holds the request in the daemon while a
+window that shows approvals is polling; with none, or once the windows stop,
+the agent asks in its terminal as it would without sanbo. A daemon from an
+older build than the window's (`protocol.Revision`) leaves agents' state and
+approvals out of what it reports; the sidebar's footer and the Nodes tab mark
+it out of date, to be restarted with the new build.
+
 Each Claude and Codex session has a **Terminal / Chat** switch at the right of
-its bar (⌘⇧J, also in the command palette); a plain shell, or an agent without a native
+its pane's tab bar (⌘⇧J, also in the command palette); a plain shell, or an agent without a native
 conversation, keeps its terminal alone and draws no switch. Switching keeps
 the same live PTY connection and remembers the mode per tab, including when it
 moves between panes. Chat reads Claude and Codex's native JSONL conversation
@@ -85,15 +120,18 @@ logs on the session's node, refreshes every two
 seconds, and renders the user's turns as bubbles, the agent's replies as
 Markdown, and each tool call as a compact row naming the tool and its command
 or path, with its arguments and output folded away; a failed tool opens to
-show its error. Text in the conversation can be selected by dragging and
-copied, and each message has a button that copies it as written. The daemon
+show its error. A run of three tool calls or more folds into one line counting
+them and naming their tools, all but the last run. Text in the conversation
+can be selected by dragging and copied, and a message's copy button shows
+while the pointer is over it. Under the conversation, the tokens it has spent
+and how full its context is, read from the whole log. The daemon
 binds each session to its native conversation automatically and
-persists that identity with the launch. Claude receives a fixed session ID and,
-through `--settings`, a `SessionStart` hook added to the user's own hooks: the
-daemon's program runs as the hook and reports each new, resumed, cleared or
-forked conversation over a private Unix socket. Reports carry when the hook
-ran, so a late one never replaces a newer one. Until the first report, and for
-Codex, the agent's own writable log identifies its conversation. On macOS this uses
+persists that identity with the launch. Claude receives a fixed session ID;
+its `SessionStart` hook, and Codex's, run the daemon's program, which reports
+each new, resumed, cleared or forked conversation over a private Unix socket.
+Reports carry when the hook ran, so a late one never replaces a newer one.
+Until the first report, the agent's own writable log identifies its
+conversation. On macOS this uses
 `lsof`, and on Linux `/proc`; launcher children are included. Modern Codex
 versions are launched with `--no-daemon` so the conversation's writer belongs
 to the session rather than a shared app server. The process's
@@ -103,7 +141,7 @@ no history picker: it always shows the conversation belonging to the live PTY.
 The composer belongs to Chat alone and sends to the same live terminal
 session, even when viewing history; Terminal mode has no second box because
 the terminal itself takes the keys, and each pane keeps its own draft. Use
-Terminal for approvals, interactive menus and special keys; shell and other
+Terminal for interactive menus and special keys; shell and other
 agents keep their terminal view. Logs update when the agent saves them,
 rather than token by token. Chat shows the recent 2 MB of a log (up to 200
 messages, with long content capped), marks omitted content, follows new
@@ -112,7 +150,8 @@ a **Latest** button to return there. A daemon upgrade is required for chat on
 remote nodes as well.
 
 Closing a tab ends its session, asking first while it runs (Settings ▸
-General can turn the question off); "Detach tab" in the header's menu closes
+General can turn the question off), except a shell at its prompt, with no
+command running in front of it, which closes at once; "Detach tab" in the header's menu closes
 the tab and leaves the session running in the sidebar. Tabs arrange into
 panes by dragging: onto a pane's left, right, top or
 bottom edge to split it there, onto its middle or its tab bar to move the
@@ -135,18 +174,47 @@ a folder dropped anywhere else opens a new session in it. The Changes tab
 shows the project's git changes against HEAD, read by the daemon of the node
 the session runs on (git status when git is installed, go-git otherwise): a tree of
 the changed files, each folder adding up its files' lines added and removed,
-refreshed every few seconds while shown, and the diff of a file chosen
-under it. Its header switches branches or makes a new one, and pulls
+refreshed every few seconds while shown; a file chosen opens its diff in a
+tab of its own, as a file does, read again as the changes are. A diff opened
+with a click is a preview, dimmed, whose tab the next file clicked takes,
+until it is kept with a double click on its tab or its menu. A diff shows in
+one column or side by side, its long lines scrolling sideways or wrapped; the
+words that differ between a removed line and the line replacing it are
+marked. ⌥⌘↓ and ⌥⌘↑ step to the next and previous changed file. Lines picked
+with a click, Shift extending the pick, or a hunk's send button, go to an
+agent of the project with a note: into its chat's composer as `path:lines`
+and the lines as a diff, for the user to finish and send. A hunk of the work
+tree's changes can be undone from its header, once confirmed; the file must
+still read as the diff says, or nothing is written. Its header switches branches or makes a new one, and pulls
 (fast-forward only), pushes and fetches, showing the commits ahead and behind
 the upstream; a branch without an upstream is pushed to its only remote, or
 `origin`, and tracks it. Each changed file has a box: the commit box under the
 tree commits the files ticked with the message typed, or amends the last
 commit. The History tab lists the newest 500 commits of the branches, remote
 branches and tags, with their graph, branches and tags; the commit chosen shows
-its message, author and files, and a file's diff in turn. Git operations run
+its message, author and files, each file's diff opening in a tab. Git operations run
 the git program on the node, with the user's hooks and credentials, and never
 wait on a password prompt. A tab dragged over a tab bar opens the gap it would drop into, and
-the side panels slide open and closed.
+the side panels slide open and closed; the right panel's left edge drags to
+resize it, and its width is kept. Tabs that do not fit a pane scroll
+sideways, and the pane's tab list menu names them all; a narrow pane folds
+its launchers into its **+** menu.
+
+The new-session dialog can start a session in a git worktree of its own: a
+new branch, made from the branch checked out, in a folder beside the
+repository (`../<repo>.worktrees/<branch>`), so agents working on one
+repository do not write over each other's files. The Changes tab of such a
+session compares its work with HEAD, or since the branch it started from,
+its commits included; its menu merges the branch into that branch in the
+main work tree, pushes it and opens a pull request (with the GitHub CLI where
+the node has it), or removes the worktree once it has no changes left.
+
+⌘P finds a file of the project shown by the letters of its path, in order,
+and opens it; ⌘⇧F searches the project's files for a text in the right
+panel's Search tab, a capital letter matching the case, and opens a file at
+the line found. Both run on the project's node, with ripgrep or `git grep`
+where it has them and walking the folder otherwise, leaving out what
+`.gitignore` does.
 
 A file's tab is an editor over the whole file (up to 4 MB; a larger one
 shows its start, read-only), read and saved (⌘S) through the daemon of its
@@ -165,7 +233,7 @@ language, and the images beside the file, read through its node; a link to
 another file opens it in a tab.
 
 The command palette (⌘K or ⌘⇧P) searches the window's actions, the open
-tabs and the sessions; its Extensions… opens Settings ▸ Extensions in a
+tabs and the sessions, and pins sessions; its Extensions… opens Settings ▸ Extensions in a
 dialog over the window.
 
 The languages come from [Zed](https://zed.dev)'s extensions, which
@@ -207,7 +275,7 @@ the home folder on another node; an agent with profiles opens a menu of them
 first. The new-session dialog takes a working directory too, but it can be
 left empty for the node's home. A session's icon, on its tab and in the sidebar, hops
 while its program reports progress (OSC 9;4), as claude does while it works,
-and its dot in the sidebar, grey at rest, glows a soft green the while.
+and its dot in the sidebar glows a soft green the while.
 Progress is restored on attach; live clear, error and pause reports take
 precedence over older session listings. Like Ghostty, reports expire after
 15 seconds without a refresh, so programs must send keep-alives during long
@@ -224,8 +292,8 @@ composition at the cursor, drag/double/triple-click selection, and the mouse
 for programs that ask for it (Shift takes it back for selecting). The
 terminal keeps Tab and the Ctrl and Alt chords for the program; ⌘ chords stay
 with the app (⌘T new session, ⌘W close the tab and its session, ⌘S save
-the file shown, ⌘K command palette, ⌘B sidebar, ⌘, settings, and ⌘C/⌘V/⌘A for the terminal's
-clipboard).
+the file shown, ⌘K command palette, ⌘P go to file, ⌘⇧F search, ⌘B sidebar,
+⌘, settings, and ⌘C/⌘V/⌘A for the terminal's clipboard).
 
 Settings (⌘,) cover the app -- language (English or Korean, or the
 system's), theme (system, light, dark), terminal font

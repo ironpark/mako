@@ -29,14 +29,28 @@ type prefs struct {
 	DefaultAgent   string `json:"default_agent"`
 	DefaultProject string `json:"default_project"`
 	ConfirmKill    bool   `json:"confirm_kill"`
-	Daemon         string `json:"daemon"`      // address of an external daemon; empty is the local one
-	DaemonMode     string `json:"daemon_mode"` // auto, embedded or external; see embedded.go
+	// ApproveInApp has agents ask for approvals in the window rather than
+	// their terminals while it is open.
+	ApproveInApp bool `json:"approve_in_app"`
+	// Notify tells the desktop when an agent out of view finishes or asks.
+	Notify     bool   `json:"notify"`
+	Daemon     string `json:"daemon"`      // address of an external daemon; empty is the local one
+	DaemonMode string `json:"daemon_mode"` // auto, embedded or external; see embedded.go
 
 	// Files
 	ShowHidden bool `json:"show_hidden"` // list dotfiles in the Files tab
 
 	// The sidebar's sessions: by project, by host, or in one list.
 	SidebarGroup string `json:"sidebar_group"`
+	// DetailsWidth is the right panel's width, as last dragged.
+	DetailsWidth float64 `json:"details_width,omitempty"`
+
+	// How diffs are drawn: side by side, and with long lines wrapped.
+	DiffSplit bool `json:"diff_split,omitempty"`
+	DiffWrap  bool `json:"diff_wrap,omitempty"`
+
+	// Pinned are the sessions the sidebar lists first.
+	Pinned []string `json:"pinned,omitempty"`
 
 	// Projects are the folders the sidebar keeps, so one outlives its last
 	// session. A folder leaves the list from its own menu.
@@ -61,6 +75,8 @@ func defaultPrefs() prefs {
 		DefaultAgent:   "claude",
 		DefaultProject: home,
 		ConfirmKill:    true,
+		ApproveInApp:   true,
+		Notify:         true,
 		DaemonMode:     "auto",
 		SidebarGroup:   groupProject,
 	}
@@ -107,6 +123,10 @@ func (p prefs) normalized() prefs {
 	}
 	p.LineHeight = min(max(p.LineHeight, minLineHeight), maxLineHeight)
 	p.Scrollback = min(max(p.Scrollback, minScrollback), maxScrollback)
+	if p.DetailsWidth == 0 {
+		p.DetailsWidth = detailsWidth
+	}
+	p.DetailsWidth = min(max(p.DetailsWidth, minDetailsWidth), maxDetailsWidth)
 	if p.DefaultAgent == "" {
 		p.DefaultAgent = d.DefaultAgent
 	}

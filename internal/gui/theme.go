@@ -24,6 +24,7 @@ type palette struct {
 	Primary, PrimaryFg             color.RGBA
 	Destructive, Ring              color.RGBA
 	DotRunning, DotExited, DotDown color.RGBA
+	DotWaiting, DotDone            color.RGBA // an agent asking the user; one that finished unseen
 	Selection                      color.RGBA // selected terminal text
 	DiffAdded, DiffRemoved         color.RGBA // changed lines' counts and boxes
 	DiffModified                   color.RGBA
@@ -41,6 +42,7 @@ var darkPalette = palette{
 	Primary: hex(0xFAFAFA), PrimaryFg: hex(0x181B1A),
 	Destructive: hex(0xC64F43), Ring: hex(0xD4D4D8),
 	DotRunning: hex(0x35C264), DotExited: hex(0x717574), DotDown: hex(0xF7796D),
+	DotWaiting: hex(0xE2B04A), DotDone: hex(0x6A9DE0),
 	Selection: hex(0x3A5A48),
 	DiffAdded: hex(0x6CC08A), DiffRemoved: hex(0xE57E7E), DiffModified: hex(0xE2C06A),
 	DiffAddedBg: hex(0x1D3326), DiffRemovedBg: hex(0x3A2224),
@@ -60,6 +62,7 @@ var lightPalette = palette{
 	Primary: hex(0x18181B), PrimaryFg: hex(0xFAFAFA),
 	Destructive: hex(0xB04138), Ring: hex(0x18181B),
 	DotRunning: hex(0x299F51), DotExited: hex(0xA1A1AA), DotDown: hex(0xF12E2F),
+	DotWaiting: hex(0xD97706), DotDone: hex(0x2563EB),
 	Selection: hex(0xC8E6D2),
 	DiffAdded: hex(0x16A34A), DiffRemoved: hex(0xDC2626), DiffModified: hex(0xCA8A04),
 	DiffAddedBg: hex(0xE6F4EA), DiffRemovedBg: hex(0xFBE9E9),
@@ -92,6 +95,8 @@ var (
 	tokDotRunning   = uitheme.Var("dot-running")
 	tokDotExited    = uitheme.Var("dot-exited")
 	tokDotDown      = uitheme.Var("dot-down")
+	tokDotWaiting   = uitheme.Var("dot-waiting")
+	tokDotDone      = uitheme.Var("dot-done")
 
 	tokDiffAdded     = uitheme.Var("diff-added")
 	tokDiffRemoved   = uitheme.Var("diff-removed")
@@ -143,6 +148,8 @@ func themeFor(p palette) uitheme.Theme {
 	set("dot-running", p.DotRunning)
 	set("dot-exited", p.DotExited)
 	set("dot-down", p.DotDown)
+	set("dot-waiting", p.DotWaiting)
+	set("dot-done", p.DotDone)
 	set("diff-added", p.DiffAdded)
 	set("diff-removed", p.DiffRemoved)
 	set("diff-modified", p.DiffModified)

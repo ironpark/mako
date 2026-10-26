@@ -9,6 +9,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui/icons"
+	uitheme "github.com/ironpark/ggui/ui/theme"
 )
 
 // Lucide icons (ISC, see icons/LICENSE), the set Paseo draws with, and the
@@ -99,11 +100,23 @@ func (g *busyGlyph) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	dst.Paint(g.icon, r)
 }
 
-// activityDot is a session's status in the sidebar: grey at rest, and a
-// soft green that breathes, its halo swelling and fading, while busy
-// reports its program at work. With motion reduced it is a steady green.
+// dotState is what a session's dot says of it.
+type dotState int
+
+const (
+	dotRest    dotState = iota // nothing to say
+	dotWorking                 // its program at work
+	dotWaiting                 // its agent asks the user something
+	dotDone                    // its agent finished a turn the user has not seen
+)
+
+// activityDot is a session's status in the sidebar: grey at rest; a soft
+// green that breathes, its halo swelling and fading, while its program is
+// at work; amber, breathing, while its agent waits on the user; and blue
+// once it finished a turn not yet looked at. With motion reduced it does
+// not breathe.
 type activityDot struct {
-	busy    func() bool
+	state   func() dotState
 	reduced bool
 }
 
@@ -120,7 +133,16 @@ func (d *activityDot) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 
 func (d *activityDot) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	center := ggui.Pt(r.Origin.X+r.Size.W/2, r.Origin.Y+r.Size.H/2)
-	if !d.busy() {
+	var c uitheme.Color
+	switch d.state() {
+	case dotWorking:
+		c = tokDotRunning
+	case dotWaiting:
+		c = tokDotWaiting
+	case dotDone:
+		dst.FillCircle(center, dotSize/2+1, tokDotDone)
+		return
+	default:
 		dst.FillCircle(center, dotSize/2, tokDotExited)
 		return
 	}
@@ -130,6 +152,6 @@ func (d *activityDot) Paint(dst *ggui.Canvas, r ggui.Rect) {
 		phase := float64(ggui.Now().UnixNano()%int64(glowPeriod)) / float64(glowPeriod)
 		glow = (1 - math.Cos(phase*2*math.Pi)) / 2
 	}
-	dst.FillCircle(center, dotSize/2+1.5+2*glow, tokDotRunning.Alpha(0.12+0.18*glow))
-	dst.FillCircle(center, dotSize/2, tokDotRunning.Alpha(0.7+0.3*glow))
+	dst.FillCircle(center, dotSize/2+1.5+2*glow, c.Alpha(0.12+0.18*glow))
+	dst.FillCircle(center, dotSize/2, c.Alpha(0.7+0.3*glow))
 }

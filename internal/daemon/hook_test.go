@@ -1,7 +1,9 @@
 package daemon
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,6 +14,8 @@ import (
 	"github.com/ironpark/sanbo/internal/agentspec"
 	"github.com/ironpark/sanbo/internal/config"
 	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/sanbo/internal/session"
+	"github.com/ironpark/sanbo/internal/transcript"
 )
 
 func TestHookReportsFollowTheConversation(t *testing.T) {
@@ -58,7 +62,7 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	path := filepath.Join(root, "projects", "project", cleared+".jsonl")
 	t.Setenv("SANBO_SESSION", s.ID())
 	input, _ := json.Marshal(map[string]string{"hook_event_name": "SessionStart", "source": "clear", "session_id": cleared, "transcript_path": path})
-	runHook([]string{socket}, strings.NewReader(string(input)))
+	runHook([]string{socket}, strings.NewReader(string(input)), io.Discard)
 	deadline := time.Now().Add(5 * time.Second)
 	for s.Info().ConversationID != cleared {
 		if time.Now().After(deadline) {
@@ -72,8 +76,7 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 
 	// A report that ran earlier but arrives late changes nothing.
 	report := func(seq int64, id, path string) error {
-		input, _ := json.Marshal(map[string]string{"hook_event_name": "SessionStart", "session_id": id, "transcript_path": path})
-		return d.reportConversation(hookMessage{Session: s.ID(), Seq: seq, Input: input})
+		return d.reportConversation(s, seq, transcript.HookEvent{Event: "SessionStart", SessionID: id, TranscriptPath: path})
 	}
 	if err := report(1, first, firstPath); err != nil {
 		t.Fatal(err)
@@ -101,5 +104,106 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	d.sessionMu.Unlock()
 	if saved.Info.ConversationID != cleared || saved.TranscriptPath != path {
 		t.Fatalf("saved %+v", saved)
+	}
+}
+
+// hookedDaemon is a daemon serving hooks, with a Claude session started in
+// it, and the hook socket.
+func hookedDaemon(t *testing.T) (*Daemon, *session.Session, string) {
+	t.Helper()
+	command, root := fakeAgent(t, "claude")
+	cfg := &config.Config{NodeID: "node", Agents: map[string]agentspec.Agent{"claude": {Command: []string{command}, Env: map[string]string{"SANBO_FAKE_AGENT": "claude", "SANBO_FAKE_ROOT": root, "CLAUDE_CONFIG_DIR": root}}}}
+	d := New(cfg, nil)
+	d.mcp = nil
+	if err := d.loadSessions(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(d.sessions.closeAll)
+	run, err := os.MkdirTemp("", "sanbo-hooks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(run) })
+	d.hookBinary = "/bin/sanbod"
+	d.listenHooks(t.Context(), run)
+	s, err := d.openSession(t.Context(), protocol.OpenSession{Agent: "claude", Project: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SANBO_SESSION", s.ID())
+	return d, s, filepath.Join(run, "hooks-0.sock")
+}
+
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatal(what)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestHooksReportWhatTheAgentDoes(t *testing.T) {
+	_, s, socket := hookedDaemon(t)
+	for _, step := range []struct {
+		input string
+		want  protocol.AgentStatus
+	}{
+		{`{"hook_event_name":"UserPromptSubmit","prompt":"hi"}`, protocol.AgentWorking},
+		{`{"hook_event_name":"Notification","notification_type":"permission_prompt"}`, protocol.AgentWaiting},
+		{`{"hook_event_name":"PostToolUse","tool_name":"Bash"}`, protocol.AgentWorking},
+		{`{"hook_event_name":"Notification","notification_type":"idle_prompt"}`, protocol.AgentWorking},
+		{`{"hook_event_name":"Stop"}`, protocol.AgentDone},
+	} {
+		runHook([]string{socket}, strings.NewReader(step.input), io.Discard)
+		waitFor(t, step.input+" not reported", func() bool { return s.Info().Status == step.want })
+	}
+}
+
+func TestApprovalsWaitForTheWindow(t *testing.T) {
+	d, s, socket := hookedDaemon(t)
+	ask := func() <-chan []byte {
+		out := make(chan []byte, 1)
+		go func() {
+			var buf bytes.Buffer
+			runHook([]string{socket}, strings.NewReader(`{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"rm -rf build"}}`), &buf)
+			out <- buf.Bytes()
+		}()
+		return out
+	}
+
+	// With no window watching, the agent asks in its terminal at once.
+	if got := <-ask(); len(got) != 0 {
+		t.Fatalf("decided unwatched: %s", got)
+	}
+	if s.Info().Status != protocol.AgentWaiting {
+		t.Fatalf("status %q", s.Info().Status)
+	}
+
+	d.approvals.watch()
+	for _, c := range []struct{ decision, want string }{
+		{protocol.DecisionAllow, `"behavior":"allow"`},
+		{protocol.DecisionDeny, `"behavior":"deny","message":"not now"`},
+		{protocol.DecisionTerminal, ""},
+	} {
+		out := ask()
+		waitFor(t, "no approval shown", func() bool { return s.Info().Approval != nil })
+		a := s.Info().Approval
+		if a.Tool != "Bash" || a.Detail != "rm -rf build" || !strings.Contains(a.Input, `"command": "rm -rf build"`) {
+			t.Fatalf("approval %+v", a)
+		}
+		if err := d.approvals.answer("other", protocol.AnswerApproval{ApprovalID: a.ID, Decision: c.decision}); err == nil {
+			t.Fatal("answered for another session")
+		}
+		if err := d.approvals.answer(s.ID(), protocol.AnswerApproval{ApprovalID: a.ID, Decision: c.decision, Message: "not now"}); err != nil {
+			t.Fatal(err)
+		}
+		got := string(<-out)
+		if c.want == "" && got != "" || !strings.Contains(got, c.want) || c.want != "" && !strings.Contains(got, `"hookEventName":"PermissionRequest"`) {
+			t.Fatalf("%s: hook printed %q", c.decision, got)
+		}
+		waitFor(t, "approval kept", func() bool { return s.Info().Approval == nil })
 	}
 }

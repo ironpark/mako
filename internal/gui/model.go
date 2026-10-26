@@ -39,6 +39,9 @@ type newSession struct {
 	Agent   string // a target: agent, or agent:profile
 	NodeID  string
 	Project string
+	// Worktree starts the session in a new git worktree, on Branch.
+	Worktree bool
+	Branch   string
 }
 
 // model is the GUI's state. Signals are touched on the UI goroutine only;
@@ -63,6 +66,8 @@ type model struct {
 	StopOpen       *ggui.StateValue[bool]
 	pendingStop    func() // what StopOpen confirms
 	DiscardOpen    *ggui.StateValue[bool]
+	HunkOpen       *ggui.StateValue[bool] // asks before a diff's hunk is undone
+	pendingHunk    func()                 // what HunkOpen confirms
 	confirmDiscard string                 // the file tab DiscardOpen asks about
 	QuitOpen       *ggui.StateValue[bool] // asks before quitting with unsaved files
 	quitting       bool
@@ -74,6 +79,16 @@ type model struct {
 	PaletteQuery   *ggui.StateValue[string]
 	palette        *ui.CommandWidget
 	ExtensionsOpen *ggui.StateValue[bool]
+	// Quick open, and the files it last read; see search.go.
+	QuickOpen  *ggui.StateValue[bool]
+	QuickQuery *ggui.StateValue[string]
+	quick      *ui.CommandWidget
+	quickFiles quickFiles
+	// The Search tab: what is typed, what was found, and whether its field
+	// is to take the keys when it next shows.
+	SearchQuery *ggui.StateValue[string]
+	Search      *ggui.StateValue[searchView]
+	searchFocus bool
 
 	DaemonState *ggui.StateValue[daemonState]
 	DaemonLog   *ggui.StateValue[[]string]
@@ -93,8 +108,17 @@ type model struct {
 	TabHint    *ggui.StateValue[tabHint]     // where in a tab bar it would drop
 	Attached   *ggui.StateValue[[]string]    // tabs whose terminal is connected
 	Titles     *ggui.StateValue[map[string]string]
-	ChatModes  *ggui.StateValue[map[string]bool] // true shows chat; terminal stays attached
-	chats      map[string]*chatState
+	// Unread are the sessions that finished or asked out of view; see
+	// attention.go.
+	Unread *ggui.StateValue[map[string]bool]
+	// Printed is when each session last printed, to the minute, kept apart
+	// from Sessions so a busy program does not redraw every list of them;
+	// Minute moves on each minute, so the times shown age.
+	Printed   *ggui.StateValue[map[string]time.Time]
+	Minute    *ggui.StateValue[time.Time]
+	window    *ggui.Window                      // nil under a probe
+	ChatModes *ggui.StateValue[map[string]bool] // true shows chat; terminal stays attached
+	chats     map[string]*chatState
 
 	// The Files tab: folders read, by dirKey; those open; the row chosen;
 	// and the file shown.
@@ -114,7 +138,9 @@ type model struct {
 
 	// The files open in tabs, by tab ID; see docs.go.
 	Docs *ggui.StateValue[map[string]docInfo]
-	docs map[string]*document // UI goroutine only
+	// Diffs are the diffs open in tabs, by tab.
+	Diffs *ggui.StateValue[map[string]diffTab]
+	docs  map[string]*document // UI goroutine only
 
 	// Highlighting, and the Zed extensions it takes languages from; see
 	// highlight.go. langGen counts the changes to the languages.
@@ -135,17 +161,17 @@ type model struct {
 	mcpTexts   map[string]*ggui.StateValue[string]
 
 	// The Changes tab: the project's changes, the folders closed in their
-	// tree, the row chosen, and the diff shown.
+	// tree, and the row chosen.
 	Git       *ggui.StateValue[gitView]
 	GitClosed *ggui.StateValue[map[string]bool]
 	GitSel    *ggui.StateValue[string]
-	GitDiff   *ggui.StateValue[diffView]
 	// The files left out of the next commit, its message, and whether it
 	// amends the last; the operation under way and what the last said.
 	GitSkip    *ggui.StateValue[map[string]bool]
 	GitMessage *ggui.StateValue[string]
 	GitAmend   *ggui.StateValue[bool]
 	GitBusy    *ggui.StateValue[string]
+	GitBase    *ggui.StateValue[string] // the branch the changes are read since, "" for HEAD
 	GitNote    *ggui.StateValue[gitNote]
 	BranchOpen *ggui.StateValue[bool]
 	BranchName *ggui.StateValue[string]
@@ -158,14 +184,24 @@ type model struct {
 	historyReading bool
 
 	SidebarOpen *ggui.StateValue[bool]
-	DetailsOpen *ggui.StateValue[bool]
-	DetailTab   *ggui.StateValue[int]
-	ImageOpen   *ggui.StateValue[bool] // the previewed image is shown enlarged
-	NewOpen     *ggui.StateValue[bool]
-	Form        *ggui.StateValue[newSession]
-	FormErr     *ggui.StateValue[string]
+	// The sidebar's filter, and whether its field shows.
+	FilterOpen    *ggui.StateValue[bool]
+	SidebarFilter *ggui.StateValue[string]
+	DetailsOpen   *ggui.StateValue[bool]
+	// DetailsWidth is the right panel's width, following a drag of its
+	// edge; the settings keep it when the drag ends.
+	DetailsWidth *ggui.StateValue[float64]
+	DetailTab    *ggui.StateValue[int]
+	ImageOpen    *ggui.StateValue[bool] // the previewed image is shown enlarged
+	NewOpen      *ggui.StateValue[bool]
+	Form         *ggui.StateValue[newSession]
+	FormErr      *ggui.StateValue[string]
 
 	conns map[string]*termConn // UI goroutine only
+	// lastSession is the session tab shown last, which a note from a diff
+	// goes to first.
+	lastSession string
+	lastTap     tabTap // the last tap on a diff's tab, which a second keeps
 	// revealedTab is the tab each pane last scrolled its tab bar to, so it
 	// does so once per tab it comes to show.
 	revealedTab map[int]string
@@ -181,6 +217,8 @@ type model struct {
 	// poll would dial an address nothing may answer and wait out its timeout.
 	linked atomic.Bool
 	kick   chan struct{} // polls now rather than at the next tick
+	// approveInApp mirrors the setting for the polling worker.
+	approveInApp atomic.Bool
 }
 
 func newModel(cfg *config.Config, addr string) *model {
@@ -202,12 +240,18 @@ func newModel(cfg *config.Config, addr string) *model {
 		RenameErr:      ggui.State(""),
 		StopOpen:       ggui.State(false),
 		DiscardOpen:    ggui.State(false),
+		HunkOpen:       ggui.State(false),
 		QuitOpen:       ggui.State(false),
 		PaletteOpen:    ggui.State(false),
 		PaletteQuery:   ggui.State(""),
 		ExtensionsOpen: ggui.State(false),
+		QuickOpen:      ggui.State(false),
+		QuickQuery:     ggui.State(""),
+		SearchQuery:    ggui.State(""),
+		Search:         ggui.State(searchView{}).WithEqual(func(a, b searchView) bool { return reflect.DeepEqual(a, b) }),
 		Docs:           ggui.State(map[string]docInfo{}).WithEqual(maps.Equal),
 		docs:           map[string]*document{},
+		Diffs:          ggui.State(map[string]diffTab{}).WithEqual(func(a, b map[string]diffTab) bool { return reflect.DeepEqual(a, b) }),
 		hl:             newHighlighter(),
 		ExtResults:     ggui.State(extSearch{}).WithEqual(func(a, b extSearch) bool { return reflect.DeepEqual(a, b) }),
 		ExtBusy:        ggui.State(map[string]bool{}).WithEqual(maps.Equal),
@@ -232,6 +276,9 @@ func newModel(cfg *config.Config, addr string) *model {
 		TabHint:        ggui.State(tabHint{}),
 		Attached:       ggui.State([]string(nil)).WithEqual(slices.Equal),
 		Titles:         ggui.State(map[string]string{}).WithEqual(func(a, b map[string]string) bool { return reflect.DeepEqual(a, b) }),
+		Unread:         ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		Printed:        ggui.State(map[string]time.Time{}).WithEqual(func(a, b map[string]time.Time) bool { return reflect.DeepEqual(a, b) }),
+		Minute:         ggui.State(time.Now().Truncate(time.Minute)),
 		ChatModes:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		chats:          map[string]*chatState{},
 		Dirs:           ggui.State(map[string]dirListing{}).WithEqual(func(a, b map[string]dirListing) bool { return reflect.DeepEqual(a, b) }),
@@ -247,11 +294,11 @@ func newModel(cfg *config.Config, addr string) *model {
 		Git:            ggui.State(gitView{}).WithEqual(func(a, b gitView) bool { return reflect.DeepEqual(a, b) }),
 		GitClosed:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		GitSel:         ggui.State(""),
-		GitDiff:        ggui.State(diffView{}).WithEqual(func(a, b diffView) bool { return reflect.DeepEqual(a, b) }),
 		GitSkip:        ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		GitMessage:     ggui.State(""),
 		GitAmend:       ggui.State(false),
 		GitBusy:        ggui.State(""),
+		GitBase:        ggui.State(""),
 		GitNote:        ggui.State(gitNote{}),
 		BranchOpen:     ggui.State(false),
 		BranchName:     ggui.State(""),
@@ -259,7 +306,10 @@ func newModel(cfg *config.Config, addr string) *model {
 		GitHistory:     ggui.State(historyView{}).WithEqual(func(a, b historyView) bool { return reflect.DeepEqual(a, b) }),
 		GitCommit:      ggui.State(commitView{}).WithEqual(func(a, b commitView) bool { return reflect.DeepEqual(a, b) }),
 		SidebarOpen:    ggui.State(true),
+		FilterOpen:     ggui.State(false),
+		SidebarFilter:  ggui.State(""),
 		DetailsOpen:    ggui.State(true),
+		DetailsWidth:   ggui.State(p.DetailsWidth),
 		DetailTab:      ggui.State(0),
 		ImageOpen:      ggui.State(false),
 		NewOpen:        ggui.State(false),
@@ -271,6 +321,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		daemon:         p.Daemon,
 		psk:            cfg.PSK,
 	}
+	m.approveInApp.Store(p.ApproveInApp)
 	return m
 }
 
@@ -421,7 +472,9 @@ func (m *model) poll(ctx context.Context) {
 		fail(err)
 		return
 	}
-	sessions, err := c.Sessions(reqCtx, m.key())
+	// Approvals wait for this window's answer only while it offers one.
+	approvals := m.approveInApp.Load()
+	sessions, err := c.ListSessions(reqCtx, m.key(), protocol.ListSessions{Approvals: approvals})
 	if err != nil {
 		m.dropClient(c)
 		fail(err)
@@ -434,6 +487,13 @@ func (m *model) poll(ctx context.Context) {
 	}
 	self := c.Node()
 	self.LastSeen = time.Time{}
+	printed := make(map[string]time.Time, len(sessions))
+	for i := range sessions {
+		if t := sessions[i].LastOutput; !t.IsZero() {
+			printed[sessions[i].ID] = t.Truncate(time.Minute)
+		}
+		sessions[i].LastOutput = time.Time{}
+	}
 	m.post(func() {
 		m.Conn.Set(connState{OK: true, Self: self})
 		m.Nodes.Set(nodes)
@@ -453,7 +513,12 @@ func (m *model) poll(ctx context.Context) {
 				}
 			}
 		}
+		m.noteStatus(sessions)
 		m.Sessions.Set(sessions)
+		m.Printed.Set(printed)
+		if now := time.Now().Truncate(time.Minute); !now.Equal(ggui.Peek(m.Minute)) {
+			m.Minute.Set(now)
+		}
 		m.attachVisible()
 		m.syncTitles()
 	})
@@ -708,7 +773,7 @@ func (m *model) attachVisible() {
 
 // attach dials a session's terminal on a worker.
 func (m *model) attach(id string) {
-	if m.dialing[id] || isDocTab(id) {
+	if m.dialing[id] || !isSessionTab(id) {
 		return
 	}
 	if conn := m.conns[id]; conn != nil {
@@ -804,6 +869,14 @@ func (m *model) submitNew() {
 	nodeID := m.remoteID(f.NodeID)
 	agent, profile := agentspec.SplitTarget(f.Agent)
 	req := protocol.OpenSession{NodeID: nodeID, Agent: agent, Profile: profile, Project: f.Project, Cols: 120, Rows: 36}
+	if f.Worktree {
+		branch := strings.TrimSpace(f.Branch)
+		if branch == "" {
+			m.FormErr.Set(T("Name the branch the worktree is made on."))
+			return
+		}
+		req.Worktree = &protocol.Worktree{Branch: branch}
+	}
 	ggui.Async(func() (protocol.SessionInfo, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -826,19 +899,43 @@ func (m *model) submitNew() {
 }
 
 // askKill confirms before killing a session, unless the settings say not
-// to ask or its program has already exited. Closing a tab does this: the
+// to ask, its program has already exited, or it is a shell with nothing
+// running. Closing a tab does this: the
 // tab and its session go together, and "Detach tab" keeps one running.
 func (m *model) askKill(id string) {
-	if isDocTab(id) {
+	switch {
+	case isDocTab(id):
 		m.askCloseDoc(id)
 		return
+	case isDiffTab(id):
+		m.closeDiff(id)
+		return
 	}
-	if s, ok := m.session(id); !ggui.Peek(m.Prefs).ConfirmKill || (ok && (s.State == protocol.StateExited || s.State == protocol.StateStopped)) {
+	s, ok := m.session(id)
+	if !ggui.Peek(m.Prefs).ConfirmKill || (ok && (s.State == protocol.StateExited || s.State == protocol.StateStopped)) {
 		m.kill(id)
 		return
 	}
-	m.confirmKill = id
-	m.ConfirmOpen.Set(true)
+	confirm := func() {
+		m.confirmKill = id
+		m.ConfirmOpen.Set(true)
+	}
+	if !ok || s.Agent != "shell" {
+		confirm()
+		return
+	}
+	// A shell at its prompt loses nothing; whether one is, is asked now
+	// rather than taken from the last poll, as a command may have started
+	// since.
+	fetch(m, 5*time.Second, func(ctx context.Context, c *client.Client) ([]protocol.SessionInfo, error) {
+		return c.Sessions(ctx, m.key())
+	}, func(list []protocol.SessionInfo, err error) {
+		if now, ok := sessionIn(list, id); err == nil && ok && now.Idle {
+			m.kill(id)
+			return
+		}
+		confirm()
+	})
 }
 
 func (m *model) confirmedKill() {
@@ -879,11 +976,11 @@ func (m *model) setComposerDraft(id, text string) { m.chatState(id).draft.Set(te
 // chatTarget is the session a message would go to: the focused one while it
 // shows Chat, else a pane that does.
 func (m *model) chatTarget() string {
-	if id := m.Selected.Get(); id != "" && !isDocTab(id) && m.ChatModes.Get()[id] {
+	if id := m.Selected.Get(); isSessionTab(id) && m.ChatModes.Get()[id] {
 		return id
 	}
 	for _, g := range m.Layout.Get().groups() {
-		if id := g.Active; id != "" && !isDocTab(id) && m.ChatModes.Get()[id] {
+		if id := g.Active; isSessionTab(id) && m.ChatModes.Get()[id] {
 			return id
 		}
 	}
@@ -905,12 +1002,13 @@ func (m *model) sendComposer(id string) {
 func (m *model) syncTitles() {
 	titles := map[string]string{}
 	for _, info := range ggui.Peek(m.Sessions) {
-		if info.Title != "" {
-			titles[info.ID] = info.Title
+		if title := cleanTitle(info.Title); title != "" {
+			titles[info.ID] = title
 		}
 	}
 	for id, conn := range m.conns {
 		if title, known := conn.windowTitle(); known {
+			title = cleanTitle(title)
 			// Even an empty live title overrides an older polling result.
 			if title == "" {
 				delete(titles, id)

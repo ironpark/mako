@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/sanbo/internal/agentspec"
 	"github.com/ironpark/sanbo/internal/protocol"
 )
 
@@ -82,11 +83,13 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		titles := m.Titles.Get()
 		focused := m.FocusGroup.Get() == id
 		var children []ggui.Widget
-		docs := m.Docs.Get()
+		docs, diffs := m.Docs.Get(), m.Diffs.Get()
 		for i, tabID := range g.Tabs {
 			var face ggui.Widget
 			if d, ok := docs[tabID]; ok {
 				face = docTab(m, tabID, d, tabID == g.Active, focused)
+			} else if d, ok := diffs[tabID]; ok {
+				face = diffTabFace(m, tabID, d, tabID == g.Active, focused)
 			} else {
 				s, ok := sessionIn(sessions, tabID)
 				if !ok {
@@ -127,20 +130,105 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			nodeID, project = cur.NodeID, cur.Project
 		} else if d, ok := docs[g.Active]; ok && d.Root.Path != "" {
 			nodeID, project = d.Root.Node, d.Root.Path
+		} else if d, ok := diffs[g.Active]; ok && d.Root.Path != "" {
+			nodeID, project = d.Root.Node, d.Root.Path
 		}
 		targets := nodeTargets(m.Nodes.Get(), nodeID, m.Agents.Get())
 		focus := func() { m.focusGroup(id) }
+		newSession := func() { focus(); m.openNew(nodeID, project) }
 		launch := ggui.Row(
 			quickLaunchers(m, nodeID, project, targets, focus),
-			iconButton("plus", T("New session…"), func() { focus(); m.openNew(nodeID, project) }),
+			iconButton("plus", T("New session…"), newSession),
 		).Gap(2)
-		return ggui.Row(
-			ggui.Expanded(bar),
+		// A narrow pane folds the launchers into the + menu.
+		launchMenu := borderless(ui.MenuOf(icon("plus"), launchItems(m, nodeID, project, targets, focus, newSession)...).
+			Width(200).Name(T("New session…")))
+		launchWidth := float64(len(launchables(targets))*30 + 34)
+		var view ggui.Widget = ggui.Box()
+		if isSessionTab(g.Active) && m.chatCapable(g.Active) {
+			view = ggui.Row(viewSwitch(m, g.Active, id), ggui.Box().Size(1, 18).Fill(tokBorder)).Gap(10).Align(ggui.AlignCenter)
+			launchWidth += 100
+		}
+		trail := func(launch ggui.Widget) ggui.Widget {
 			// Centred in the bar's height, level with the tabs' labels.
-			ggui.Box(launch).Height(tabBarHeight).Pad(0, 8),
-		).Stretch()
+			return ggui.Box(ggui.Row(view, launch).Gap(10).Align(ggui.AlignCenter)).Height(tabBarHeight).Pad(0, 8)
+		}
+		// Tabs that do not fit scroll, and a menu lists them all.
+		overflow := tabList(m, g, sessions, titles, docs, diffs)
+		need := tabsWidth(g.Tabs, sessions, titles, docs, diffs) + launchWidth + 16
+		return ggui.Responsive(need,
+			ggui.Row(ggui.Expanded(bar), trail(launch)).Stretch(),
+			ggui.Responsive(narrowPane,
+				ggui.Row(ggui.Expanded(bar), overflow, trail(launch)).Stretch(),
+				ggui.Row(ggui.Expanded(bar), overflow, trail(launchMenu)).Stretch()),
+		)
 	})
 	return ggui.Box(tabs).Height(tabBarHeight)
+}
+
+// narrowPane is the width below which a pane's launchers fold into its +
+// menu.
+const narrowPane = 560
+
+// launchItems are the launchers as a menu's items, for a narrow pane.
+func launchItems(m *model, nodeID, project string, targets []string, before func(), more func()) []ggui.Widget {
+	var items []ggui.Widget
+	for _, l := range launchables(targets) {
+		targets := []string{l.Agent}
+		for _, p := range l.Profiles {
+			targets = append(targets, agentspec.Target(l.Agent, p))
+		}
+		for _, target := range targets {
+			label := Tf("New %s session", targetLabel(target))
+			if target == "shell" {
+				label = T("New terminal")
+			}
+			items = append(items, ui.MenuItem(label, func() { before(); m.launch(target, nodeID, project) }))
+		}
+	}
+	if len(items) > 0 {
+		items = append(items, ui.MenuDivider())
+	}
+	return append(items, ui.MenuItem(T("New session…"), more))
+}
+
+// tabWidth estimates how wide a tab is drawn: its label, capped as the tab
+// caps it, and its glyph, close button and padding.
+func tabWidth(label string) float64 { return min(float64(len([]rune(label)))*7.2, 150) + 74 }
+
+// tabsWidth estimates a pane's tabs' width together.
+func tabsWidth(tabs []string, sessions []protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) float64 {
+	w := 0.0
+	for _, id := range tabs {
+		w += tabWidth(tabLabel(id, sessions, titles, docs, diffs))
+	}
+	return w
+}
+
+// tabLabel is what a tab is called.
+func tabLabel(id string, sessions []protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) string {
+	if d, ok := docs[id]; ok {
+		return d.Name()
+	}
+	if d, ok := diffs[id]; ok {
+		return d.Name()
+	}
+	s, _ := sessionIn(sessions, id)
+	return sessionTitle(s, titles[id])
+}
+
+// tabList is a menu of a pane's tabs, for when they do not all fit.
+func tabList(m *model, g tabGroup, sessions []protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) ggui.Widget {
+	items := make([]ggui.Widget, 0, len(g.Tabs))
+	for _, id := range g.Tabs {
+		label := tabLabel(id, sessions, titles, docs, diffs)
+		if id == g.Active {
+			label = "✓ " + label
+		}
+		items = append(items, ui.MenuItem(label, func() { m.showTab(id) }))
+	}
+	return ggui.Box(borderless(ui.MenuOf(icon("chevrons-up-down").Size(14), items...).Width(260).Name(T("All tabs")))).
+		Height(tabBarHeight)
 }
 
 // paneBody is the terminal of the tab a pane shows, and while a tab is
@@ -148,7 +236,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 	current := ggui.Derived(func() pane {
 		tab := group.Get().Active
-		return pane{ID: tab, Ready: isDocTab(tab) || slices.Contains(m.Attached.Get(), tab)}
+		return pane{ID: tab, Ready: !isSessionTab(tab) || slices.Contains(m.Attached.Get(), tab)}
 	})
 	content := ggui.Key(current, func(p pane) ggui.Widget {
 		switch {
@@ -159,6 +247,8 @@ func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				return ggui.Box()
 			}
 			return docView(m, p.ID, ggui.Peek(m.FocusGroup) == id, func() { m.focusGroup(id) })
+		case isDiffTab(p.ID):
+			return diffTabView(m, p.ID)
 		case !p.Ready:
 			// Without a daemon there is nothing to attach to; say why.
 			return ggui.View(m.Conn, func(c connState) ggui.Widget {

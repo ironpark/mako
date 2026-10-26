@@ -43,6 +43,8 @@ func (m *model) commands() []ui.CommandEntry {
 	cmds := []ui.CommandEntry{
 		item("New session…", func() { m.openNew("", "") }, "terminal", "agent").Shortcut("cmd+t"),
 		item("Save file", m.saveSelected).Shortcut("cmd+s").Disabled(!onDoc || d.ReadOnly()),
+		item("Go to file…", m.openQuickOpen, "open", "find", "quick").Shortcut("cmd+p"),
+		item("Search the project…", m.openSearch, "find", "grep", "text").Shortcut("cmd+shift+f"),
 	}
 	if markdown {
 		cmds = append(cmds, item(previewLabel(m.docs[selected]), m.toggleSelectedPreview, "markdown", "preview").Shortcut("cmd+shift+v"))
@@ -50,7 +52,9 @@ func (m *model) commands() []ui.CommandEntry {
 	cmds = append(cmds,
 		item("Toggle chat and terminal", m.toggleChat, "conversation").Shortcut("cmd+shift+j").Disabled(selected == "" || onDoc || !m.chatCapable(selected)),
 		item("Close tab", func() { m.askKill(selected) }).Shortcut("cmd+w").Disabled(selected == ""),
-		item("Rename session…", func() { m.askRename(selected) }, "name", "title").Disabled(selected == "" || onDoc),
+		item("Rename session…", func() { m.askRename(selected) }, "name", "title").Disabled(!isSessionTab(selected)),
+		item(pick(m.pinned(selected), "Unpin session", "Pin session to the top"), func() { m.togglePin(selected) }, "pin", "favorite").Disabled(!isSessionTab(selected)),
+		item("Filter sessions…", func() { m.FilterOpen.Set(true); m.SidebarOpen.Set(true) }, "find", "search", "sidebar"),
 		item("Extensions…", func() { m.ExtensionsOpen.Set(true) }, "zed", "language", "grammar", "highlight"),
 		item("Settings", func() { m.openSettings("") }, "preferences").Shortcut("cmd+,"),
 		item("Toggle sidebar", func() { ggui.Toggle(m.SidebarOpen) }).Shortcut("cmd+b"),

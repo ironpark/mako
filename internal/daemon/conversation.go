@@ -45,6 +45,37 @@ func withOptionalFlag(ctx context.Context, command []string, flag string) []stri
 	return command
 }
 
+// hasFeature reports whether the agent command runs takes hooks: not every
+// version of every agent does. What its binary says is remembered.
+func hasFeature(ctx context.Context, command []string, native *transcript.Agent) bool {
+	args, feature := native.HookFeature()
+	if feature == "" {
+		return native.HasHooks()
+	}
+	key := command[0] + "\x00" + strings.Join(args, " ")
+	value, ok := optionalFlags.Load(key)
+	if !ok {
+		check, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		out, err := exec.CommandContext(check, command[0], args...).Output()
+		value = err == nil && featureOn(string(out), feature)
+		optionalFlags.Store(key, value)
+	}
+	return value.(bool)
+}
+
+// featureOn reads a features listing, a line a feature: its name, its
+// stage, and whether it is on.
+func featureOn(listing, feature string) bool {
+	for line := range strings.Lines(listing) {
+		f := strings.Fields(line)
+		if len(f) >= 2 && f[0] == feature {
+			return f[len(f)-1] == "true"
+		}
+	}
+	return false
+}
+
 // conversations follows the native conversation of every running agent
 // session, including while the GUI is closed or in Terminal mode, and
 // notices /new and /resume in the agent. One loop serves every session, so
@@ -219,23 +250,14 @@ func (d *Daemon) checkConversations(sessions []*session.Session) {
 }
 
 // reportConversation binds a session to the conversation its agent's hook
-// reported. The log may not be written yet, after a fresh start or /clear:
-// then the ID is bound now, and the log once the agent writes it.
-func (d *Daemon) reportConversation(msg hookMessage) error {
-	d.sessionMu.Lock()
-	s, ok := d.sessions.get(msg.Session)
-	d.sessionMu.Unlock()
-	if !ok {
-		return fmt.Errorf("unknown session %q", msg.Session)
-	}
+// reported, in a report numbered seq. The log may not be written yet,
+// after a fresh start or /clear: then the ID is bound now, and the log once
+// the agent writes it.
+func (d *Daemon) reportConversation(s *session.Session, seq int64, ev transcript.HookEvent) error {
 	info := s.Info()
-	native, ok := transcript.Lookup(info.Agent)
-	if !ok {
-		return nil
-	}
-	id, path, ok := native.ParseHook(msg.Input)
-	if !ok {
-		return nil
+	id, path := ev.SessionID, ev.TranscriptPath
+	if id == "" || path == "" {
+		return nil // nothing to bind yet; the listing finds it
 	}
 	if !transcript.LogOf(info.Agent, s.TranscriptEnv(), id, path) {
 		return fmt.Errorf("%s is not where %s keeps conversation %q", path, info.Agent, id)
@@ -244,7 +266,7 @@ func (d *Daemon) reportConversation(msg hookMessage) error {
 	written := transcript.Verify(info, path) == nil
 	d.conversations.binding.Lock()
 	defer d.conversations.binding.Unlock()
-	bind, ok := d.conversations.report(s, msg.Seq, path, written)
+	bind, ok := d.conversations.report(s, seq, path, written)
 	if !ok {
 		return nil
 	}

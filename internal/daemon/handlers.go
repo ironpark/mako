@@ -17,6 +17,11 @@ func (d *Daemon) local(nodeID string) bool {
 }
 
 func (d *Daemon) handleListSessions(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
+	var req protocol.ListSessions
+	_ = protocol.Decode(env, &req) // older front-ends send nothing
+	if req.Approvals {
+		d.approvals.watch()
+	}
 	sessions := d.listSessions()
 	// A peer asking is already fanning out itself; answering with local
 	// sessions only keeps a mesh cycle from recursing.
@@ -26,7 +31,7 @@ func (d *Daemon) handleListSessions(ctx context.Context, stream *transport.Strea
 	// A front-end asking a single daemon for sessions expects the whole mesh,
 	// so fold in what each known peer reports.
 	for _, node := range d.peers.list() {
-		remote, err := d.peerSessions(ctx, node)
+		remote, err := d.peerSessions(ctx, node, req)
 		if err != nil {
 			d.log.Debug("peer session list failed", "node", node.Name, "err", err)
 			continue
@@ -69,6 +74,30 @@ func (d *Daemon) handleCloseSession(ctx context.Context, stream *transport.Strea
 		return err
 	}
 	return stream.Send(protocol.TypeExited, env.ID, protocol.Exited{SessionID: req.SessionID})
+}
+
+func (d *Daemon) handleAnswerApproval(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	var req protocol.AnswerApproval
+	if err := protocol.Decode(env, &req); err != nil {
+		return err
+	}
+	var info protocol.SessionInfo
+	if !d.local(req.NodeID) {
+		remote := req
+		remote.NodeID = ""
+		if err := d.forward(ctx, req.NodeID, protocol.TypeAnswerApproval, remote, &info); err != nil {
+			return err
+		}
+		return stream.Send(protocol.TypeSessionInfo, env.ID, info)
+	}
+	s, ok := d.sessions.get(req.SessionID)
+	if !ok {
+		return fmt.Errorf("unknown session %q", req.SessionID)
+	}
+	if err := d.approvals.answer(req.SessionID, req); err != nil {
+		return err
+	}
+	return stream.Send(protocol.TypeSessionInfo, env.ID, s.Info())
 }
 
 // maxSessionName caps a session's name, which every listing carries.

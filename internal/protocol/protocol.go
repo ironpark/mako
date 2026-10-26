@@ -102,6 +102,9 @@ type Node struct {
 	// Agents are what the node can launch, with their profiles' names; its
 	// flags and environment stay on the node.
 	Agents []AgentInfo `json:"agents,omitempty"`
+	// Revision is the protocol.Revision the daemon was built with; 0 from
+	// one older than revisions.
+	Revision int `json:"revision,omitempty"`
 }
 
 // FeatureAttachBinary is a daemon that frames attach streams as
@@ -134,6 +137,18 @@ type OpenSession struct {
 	Env     map[string]string `json:"env,omitempty"`
 	Cols    uint16            `json:"cols"`
 	Rows    uint16            `json:"rows"`
+	// Worktree, when set, starts the session in a new git worktree of the
+	// repository Project is in, on a new branch.
+	Worktree *Worktree `json:"worktree,omitempty"`
+}
+
+// Worktree is a git worktree made for one session: Path, on the new
+// Branch, started from Base in the repository at Repo.
+type Worktree struct {
+	Repo   string `json:"repo"`           // the main work tree
+	Path   string `json:"path,omitempty"` // the session's, once made
+	Branch string `json:"branch"`         // made for the session
+	Base   string `json:"base,omitempty"` // the branch or commit it started from; "" for HEAD
 }
 
 // SessionState is the lifecycle stage of a session.
@@ -165,6 +180,22 @@ type SessionInfo struct {
 	StartedAt time.Time    `json:"started_at"`
 	ExitCode  *int         `json:"exit_code,omitempty"`
 	Busy      bool         `json:"busy,omitempty"` // printing on its own, as an agent at work does
+	// Idle is set while nothing runs in front of the session's program, as
+	// a shell at its prompt: closing it loses no work.
+	Idle bool `json:"idle,omitempty"`
+	// Branch is the git branch checked out in the project, "" outside a
+	// repository.
+	Branch string `json:"branch,omitempty"`
+	// Status is what the agent's hooks last reported, at StatusAt; "" when
+	// its agent has no hooks.
+	Status   AgentStatus `json:"status,omitempty"`
+	StatusAt time.Time   `json:"status_at,omitempty"`
+	// LastOutput is when the program last printed.
+	LastOutput time.Time `json:"last_output,omitempty"`
+	// Approval is the tool call the agent waits for the user to approve.
+	Approval *Approval `json:"approval,omitempty"`
+	// Worktree is the session's own git worktree, made for it on Base.
+	Worktree *Worktree `json:"worktree,omitempty"`
 }
 
 // Sessions is the reply to ListSessions.
@@ -420,6 +451,9 @@ const (
 type GitStatus struct {
 	NodeID string `json:"node_id,omitempty"`
 	Path   string `json:"path"` // absolute, anywhere inside the work tree
+	// Base, when set, asks for the changes since the work tree left this
+	// branch, its commits included, rather than against HEAD.
+	Base string `json:"base,omitempty"`
 }
 
 // Change kinds of a GitFile.
@@ -463,6 +497,7 @@ type GitDiff struct {
 	Path   string `json:"path"`             // as GitFile.Path
 	From   string `json:"from,omitempty"`   // where HEAD has a renamed file
 	Commit string `json:"commit,omitempty"` // a commit's hash
+	Base   string `json:"base,omitempty"`   // the changes since the work tree left this branch
 }
 
 // GitLog asks a node for a repository's recent commits: those of its
@@ -522,6 +557,11 @@ type GitRun struct {
 	Paths   []string `json:"paths,omitempty"`
 	Amend   bool     `json:"amend,omitempty"`
 	Branch  string   `json:"branch,omitempty"` // a checkout's or new branch's name
+	// Hunk is the hunk a discard undoes, in Paths[0], as the diff read it.
+	Hunk []DiffLine `json:"hunk,omitempty"`
+	// Worktree is the session worktree a merge, pull request or removal
+	// is of.
+	Worktree *Worktree `json:"worktree,omitempty"`
 }
 
 // Operations of a GitRun.
@@ -532,6 +572,10 @@ const (
 	GitOpFetch    = "fetch"
 	GitOpCheckout = "checkout"
 	GitOpBranch   = "branch" // creates Branch at HEAD and checks it out
+	GitOpDiscard  = "discard_hunk"
+	GitOpMerge    = "merge"           // a worktree's branch into its base, in the main work tree
+	GitOpPR       = "pull_request"    // pushes a worktree's branch and opens a pull request of it
+	GitOpRemoveWT = "remove_worktree" // a worktree with no changes left, and its merged branch
 )
 
 // GitResult is the reply to GitRun: what git printed.

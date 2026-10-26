@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ironpark/ggui"
 
@@ -94,22 +95,48 @@ func TestSessionWithoutADirectoryStartsAtHome(t *testing.T) {
 	}
 }
 
-// Closing a tab ends its session, after asking while it runs.
+// Closing a tab ends its session, after asking while a command runs in
+// it; a shell at its prompt closes at once.
 func TestClosingATabEndsItsSession(t *testing.T) {
 	m, p := launcherApp(t, prefs{DefaultProject: t.TempDir(), ConfirmKill: true})
+	idle := func(want bool) func() bool {
+		return func() bool {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			c, err := m.client(ctx)
+			if err != nil {
+				return false
+			}
+			list, err := c.Sessions(ctx, m.key())
+			s, ok := sessionIn(list, ggui.Peek(m.Selected))
+			return err == nil && ok && s.Idle == want
+		}
+	}
 	m.launch("shell", "", "")
-	probeUntil(t, p, "the session", func() bool { return len(ggui.Peek(m.Tabs)) == 1 })
+	probeUntil(t, p, "the session", func() bool { return len(ggui.Peek(m.Tabs)) == 1 && m.conns[ggui.Peek(m.Selected)] != nil })
+	probeUntil(t, p, "its prompt", idle(true))
+	m.conns[ggui.Peek(m.Selected)].sendText("sleep 30")
+	probeUntil(t, p, "the command", idle(false))
 	x, ok := p.Find("Close shell")
 	if !ok {
 		t.Fatal("no close button on the tab")
 	}
 	p.Click(x.Center())
-	p.Frame()
-	if !ggui.Peek(m.ConfirmOpen) {
-		t.Fatal("closing a running session's tab did not ask")
-	}
+	probeUntil(t, p, "the question", func() bool { return ggui.Peek(m.ConfirmOpen) })
+	m.ConfirmOpen.Set(false) // as the dialog's button closes it
 	m.confirmedKill()
 	probeUntil(t, p, "the session to end", func() bool {
 		return len(ggui.Peek(m.Tabs)) == 0 && len(ggui.Peek(m.Sessions)) == 0
 	})
+
+	m.launch("shell", "", "")
+	probeUntil(t, p, "another session", func() bool { return len(ggui.Peek(m.Tabs)) == 1 })
+	probeUntil(t, p, "its prompt", idle(true))
+	m.askKill(ggui.Peek(m.Selected))
+	probeUntil(t, p, "the idle shell to end", func() bool {
+		return len(ggui.Peek(m.Tabs)) == 0 && len(ggui.Peek(m.Sessions)) == 0
+	})
+	if ggui.Peek(m.ConfirmOpen) {
+		t.Fatal("asked before closing a shell at its prompt")
+	}
 }

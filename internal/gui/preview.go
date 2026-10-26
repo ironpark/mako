@@ -136,9 +136,32 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					m.setChatMode(id, true)
 				}),
 				frames(5), shot("02-chat"),
+				// An agent asking for an approval, and a long run of tools.
+				do(func() {
+					id := ggui.Peek(m.Selected)
+					chat := m.chatState(id)
+					v := ggui.Peek(chat.result)
+					for _, cmd := range []string{"ls internal", "go vet ./...", "go test ./internal/gui", "git status --short"} {
+						v.Chat.Messages = append(v.Chat.Messages, protocol.ChatMessage{Role: "tool", Tool: "Bash", Detail: cmd, Text: cmd})
+					}
+					v.Chat.Usage = &protocol.Usage{Input: 41200, CachedInput: 380000, Output: 9800, Context: 96000, Window: 258400}
+					chat.result.Set(v)
+					m.Sessions.Set(previewStatus(ggui.Peek(m.Sessions), id))
+					unread := map[string]bool{}
+					for _, s := range ggui.Peek(m.Sessions) {
+						unread[s.ID] = s.Status == protocol.AgentDone
+					}
+					m.Unread.Set(unread)
+				}),
+				frames(5), shot("02-chat-approval"),
 				do(func() {
 					id := ggui.Peek(m.Selected)
 					m.setChatMode(id, false)
+					m.Sessions.Set(previewStatus(ggui.Peek(m.Sessions), id))
+				}),
+				frames(5), shot("02-terminal-approval"),
+				do(func() {
+					id := ggui.Peek(m.Selected)
 					delete(m.chats, id)
 				}),
 				// A second session, dragged to the right of the first.
@@ -185,6 +208,16 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(func() { m.ExtensionsOpen.Set(false); m.setSidebarGroup(groupHost) }), frames(10), shot("03-sidebar-host"),
 				do(func() { m.setSidebarGroup(groupFlat) }), frames(4), shot("03-sidebar-flat"),
 				do(func() { m.setSidebarGroup(groupProject) }), frames(2),
+				do(func() {
+					m.togglePin(ggui.Peek(m.Sessions)[0].ID)
+					m.FilterOpen.Set(true)
+					m.SidebarFilter.Set("shell")
+				}), frames(4), shot("03-sidebar-filter"),
+				do(func() {
+					m.togglePin(ggui.Peek(m.Sessions)[0].ID)
+					m.SidebarFilter.Set("")
+					m.FilterOpen.Set(false)
+				}), frames(2),
 				// The right pane's tab dragged over the bottom of the left
 				// pane, then let go where nothing takes it.
 				do(func() {
@@ -224,6 +257,28 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				}),
 				until("the commit", func() bool { return !ggui.Peek(m.GitCommit).Loading }),
 				frames(5), shot("03-commit"),
+				// A file of it, its diff in a tab, beside a wider panel.
+				do(func() {
+					if fs := ggui.Peek(m.GitCommit).Info.Files; len(fs) > 0 {
+						m.openCommitFile(fs[0])
+					}
+					m.DetailsWidth.Set(440)
+				}),
+				until("the diff", func() bool { d, ok := ggui.Peek(m.Diffs)[ggui.Peek(m.Selected)]; return !ok || !d.Loading }),
+				frames(30), shot("03-diff-tab"),
+				do(func() { m.Prefs.Update(func(p prefs) prefs { p.DiffSplit = true; return p }) }),
+				frames(10), shot("03-diff-split"),
+				do(func() { m.Prefs.Update(func(p prefs) prefs { p.DiffSplit = false; return p }) }),
+				do(func() {
+					m.SearchQuery.Set("func")
+					m.openSearch()
+					m.runSearch()
+				}),
+				until("the search", func() bool { return !ggui.Peek(m.Search).Loading }),
+				frames(5), shot("03-search"),
+				do(m.openQuickOpen), do(func() { m.QuickQuery.Set("view") }), frames(30), shot("03-quick-open"),
+				do(func() { m.QuickOpen.Set(false); m.DetailTab.Set(historyTab) }),
+				do(func() { m.DetailsWidth.Set(ggui.Peek(m.Prefs).DetailsWidth) }),
 				do(func() { m.DetailTab.Set(sessionTab) }), frames(2), shot("03-details"),
 				do(func() { m.DetailTab.Set(filesTab); m.openNew("", "") }), frames(2), shot("04-new-session"),
 				do(func() { m.NewOpen.Set(false); m.openSettings("general") }), frames(2), shot("05-settings-general"),
@@ -258,6 +313,26 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 		}
 		return nil
 	}), nil)
+}
+
+// previewStatus has the session id ask for an approval, and the others
+// show the states their agents can be in, for the preview.
+func previewStatus(sessions []protocol.SessionInfo, id string) []protocol.SessionInfo {
+	out := slices.Clone(sessions)
+	states := []protocol.AgentStatus{protocol.AgentWorking, protocol.AgentDone, protocol.AgentIdle}
+	n := 0
+	for i := range out {
+		out[i].State = protocol.StateRunning
+		if out[i].ID == id {
+			out[i].Status = protocol.AgentWaiting
+			out[i].Approval = &protocol.Approval{ID: "preview", Tool: "Bash", Detail: "rm -rf build && go build ./...",
+				Input: "{\n  \"command\": \"rm -rf build && go build ./...\"\n}"}
+			continue
+		}
+		out[i].Status = states[n%len(states)]
+		n++
+	}
+	return out
 }
 
 // previewStep runs on a frame and reports whether it is finished.

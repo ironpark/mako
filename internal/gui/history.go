@@ -147,17 +147,12 @@ func (g *graphCell) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	}
 }
 
-// commitView is the commit chosen in the History tab, and the file of it
-// whose diff is shown.
+// commitView is the commit chosen in the History tab.
 type commitView struct {
 	Hash    string
 	Info    protocol.GitCommitInfo
 	Err     string
 	Loading bool
-	File    protocol.GitFile // Path "" while the commit's files are listed
-	Diff    protocol.Diff
-	DiffErr string
-	Reading bool
 }
 
 func (m *model) openCommit(hash string) {
@@ -181,25 +176,10 @@ func (m *model) openCommit(hash string) {
 	})
 }
 
+// openCommitFile shows what the chosen commit changed in a file, in a tab.
 func (m *model) openCommitFile(f protocol.GitFile) {
-	cv := ggui.Peek(m.GitCommit)
 	root := ggui.Peek(m.GitHistory).Root
-	cv.File, cv.Diff, cv.DiffErr, cv.Reading = f, protocol.Diff{}, "", true
-	m.GitCommit.Set(cv)
-	req := protocol.GitDiff{NodeID: m.remoteID(root.Node), Root: root.Path, Path: f.Path, From: f.From, Commit: cv.Hash}
-	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (protocol.Diff, error) {
-		return c.GitDiff(ctx, m.key(), req)
-	}, func(d protocol.Diff, err error) {
-		now := ggui.Peek(m.GitCommit)
-		if now.Hash != cv.Hash || now.File.Path != f.Path {
-			return
-		}
-		now.Diff, now.Reading = d, false
-		if err != nil {
-			now.DiffErr = nodeErr(err)
-		}
-		m.GitCommit.Set(now)
-	})
+	m.openDiffTab(root, root.Path, ggui.Peek(m.GitCommit).Hash, "", f, true)
 }
 
 // shortHash is a commit's hash as people quote it.
@@ -349,17 +329,10 @@ func commitRow(m *model, c protocol.GitCommit, g graphRow) ggui.Widget {
 	).Name(Tf("%s actions", shortHash(c.Hash)))
 }
 
-// commitPane is what the chosen commit changed: its message and files, or
-// the diff of one of them.
+// commitPane is what the chosen commit changed: its message and its files,
+// each opening its diff in a tab.
 func commitPane(m *model) ggui.Widget {
 	head := ggui.View(m.GitCommit, func(cv commitView) ggui.Widget {
-		if cv.File.Path != "" {
-			return diffHeader(cv.File, ggui.Box(), iconButton("arrow-left", T("Back to the commit"), func() {
-				now := ggui.Peek(m.GitCommit)
-				now.File, now.Diff, now.DiffErr = protocol.GitFile{}, protocol.Diff{}, ""
-				m.GitCommit.Set(now)
-			}))
-		}
 		return panelHeader(
 			icon("git-commit-horizontal").Size(15),
 			ggui.Expanded(ggui.Text(shortHash(cv.Hash)).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap()),
@@ -373,8 +346,6 @@ func commitPane(m *model) ggui.Widget {
 			return ggui.Center(ui.Spinner())
 		case cv.Err != "":
 			return paneNote(cv.Err)
-		case cv.File.Path != "":
-			return diffBody(cv.Reading, cv.DiffErr, cv.Diff)
 		}
 		info := cv.Info
 		rows := []ggui.Widget{

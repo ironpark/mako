@@ -84,16 +84,31 @@ func (c *Client) Nodes(ctx context.Context, psk string) ([]protocol.Node, error)
 
 // Sessions lists agent sessions across the mesh.
 func (c *Client) Sessions(ctx context.Context, psk string) ([]protocol.SessionInfo, error) {
-	s, err := c.stream(ctx, psk)
-	if err != nil {
-		return nil, err
-	}
-	defer s.Close()
+	return c.ListSessions(ctx, psk, protocol.ListSessions{})
+}
+
+// ListSessions lists agent sessions across the mesh, saying what the
+// asker shows of them.
+func (c *Client) ListSessions(ctx context.Context, psk string, req protocol.ListSessions) ([]protocol.SessionInfo, error) {
 	var reply protocol.Sessions
-	if err := s.Request(protocol.TypeListSess, struct{}{}, &reply); err != nil {
+	if err := c.request(ctx, psk, protocol.TypeListSess, req, &reply); err != nil {
 		return nil, err
 	}
 	return reply.Sessions, nil
+}
+
+// Search lists a project's files on a node, or finds a text in them.
+func (c *Client) Search(ctx context.Context, psk string, req protocol.Search) (protocol.SearchResult, error) {
+	var out protocol.SearchResult
+	err := c.request(ctx, psk, protocol.TypeSearch, req, &out)
+	return out, err
+}
+
+// AnswerApproval answers an approval a session's agent waits for.
+func (c *Client) AnswerApproval(ctx context.Context, psk string, req protocol.AnswerApproval) (protocol.SessionInfo, error) {
+	var out protocol.SessionInfo
+	err := c.request(ctx, psk, protocol.TypeAnswerApproval, req, &out)
+	return out, err
 }
 
 // Open starts an agent session, on this daemon or on a peer.

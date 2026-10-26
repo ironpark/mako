@@ -366,7 +366,7 @@ func toolCall(id, name string, input json.RawMessage) protocol.ChatMessage {
 			args = string(input)
 		}
 	}
-	return protocol.ChatMessage{Role: "tool", ID: id, Tool: name, Detail: toolDetail(input), Text: args}
+	return protocol.ChatMessage{Role: "tool", ID: id, Tool: name, Detail: ToolDetail(input), Text: args}
 }
 
 // Upgrade structures the tool messages of an older daemon, which sent a call
@@ -403,9 +403,9 @@ func argumentsJSON(s string) json.RawMessage {
 	return json.RawMessage(s)
 }
 
-// toolDetail is what a tool row shows beside its name: a command, a path, a
+// ToolDetail is what a tool row shows beside its name: a command, a path, a
 // pattern, or the first string the arguments carry.
-func toolDetail(input json.RawMessage) string {
+func ToolDetail(input json.RawMessage) string {
 	var m map[string]any
 	if len(input) == 0 || json.Unmarshal(input, &m) != nil {
 		return ""
@@ -479,15 +479,28 @@ func ReadBound(info protocol.SessionInfo, path string) (protocol.Chat, error) {
 	}
 	var err error
 	out.Messages, out.Truncated, err = readMessages(path, a)
+	if err == nil {
+		var scan usageScan
+		out.Usage = usageOf(scan.read(path, a))
+	}
 	return out, err
+}
+
+// usageOf is u as a chat carries it: none when nothing was counted.
+func usageOf(u protocol.Usage) *protocol.Usage {
+	if u == (protocol.Usage{}) {
+		return nil
+	}
+	return &u
 }
 
 // Cache keeps the last read of a bound log, so polling a log that has not
 // changed costs one stat.
 type Cache struct {
-	mu   sync.Mutex
-	stat os.FileInfo
-	chat protocol.Chat
+	mu    sync.Mutex
+	stat  os.FileInfo
+	chat  protocol.Chat
+	usage usageScan
 }
 
 // ReadBound is ReadBound, answered from the cache while the log is the same
@@ -500,7 +513,15 @@ func (c *Cache) ReadBound(info protocol.SessionInfo, path string) (protocol.Chat
 		c.stat.Size() == stat.Size() && c.stat.ModTime().Equal(stat.ModTime()) {
 		return c.chat, nil
 	}
-	chat, err := ReadBound(info, path)
+	a, ok := Lookup(info.Agent)
+	chat := protocol.Chat{Supported: ok, Conversation: info.ConversationID}
+	err := Verify(info, path)
+	if err == nil {
+		chat.Messages, chat.Truncated, err = readMessages(path, a)
+	}
+	if err == nil {
+		chat.Usage = usageOf(c.usage.read(path, a))
+	}
 	if err == nil && statErr == nil {
 		c.stat, c.chat = stat, chat
 	} else {

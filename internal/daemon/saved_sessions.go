@@ -7,8 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/ironpark/sanbo/internal/agentspec"
+	"github.com/ironpark/sanbo/internal/gitstat"
 	"github.com/ironpark/sanbo/internal/mcp"
 	"github.com/ironpark/sanbo/internal/protocol"
 	"github.com/ironpark/sanbo/internal/session"
@@ -99,6 +101,15 @@ func (d *Daemon) listSessions() []protocol.SessionInfo {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].StartedAt.Before(out[j].StartedAt) })
+	branches := map[string]string{}
+	for i, info := range out {
+		b, ok := branches[info.Project]
+		if !ok {
+			b = gitstat.Branch(info.Project)
+			branches[info.Project] = b
+		}
+		out[i].Branch = b
+	}
 	return out
 }
 
@@ -141,6 +152,21 @@ func (d *Daemon) startSession(ctx context.Context, id string, req protocol.OpenS
 		return nil, err
 	}
 	req.Project = project
+	// A session of its own worktree gets it made once, when it first
+	// starts; the saved request then names it.
+	if w := req.Worktree; w != nil && w.Path == "" {
+		made := *w
+		if made.Base == "" {
+			made.Base = gitstat.Branch(project)
+		}
+		wtCtx, cancel := context.WithTimeout(ctx, time.Minute)
+		made.Repo, made.Path, err = gitstat.AddWorktree(wtCtx, project, made.Branch, made.Base)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+		req.Worktree, req.Project = &made, made.Path
+	}
 
 	d.sessionMu.Lock()
 	previous, existed := d.saved[id]
@@ -170,7 +196,7 @@ func (d *Daemon) startSession(ctx context.Context, id string, req protocol.OpenS
 	}
 	command, cleanup := d.withContextServers(ctx, launch, id)
 	s, err := session.Start(session.Spec{ID: id, NodeID: d.cfg.NodeID, Agent: req.Agent, Profile: req.Profile,
-		Project: req.Project, Command: command, Env: launch.Env, Cols: req.Cols, Rows: req.Rows})
+		Project: req.Project, Command: command, Env: launch.Env, Cols: req.Cols, Rows: req.Rows, Worktree: req.Worktree})
 	if err != nil {
 		cleanup()
 		return nil, err
@@ -259,7 +285,7 @@ func (d *Daemon) conversationFor(ctx context.Context, req protocol.OpenSession, 
 	if native.Isolate != "" {
 		launch.Command = withOptionalFlag(ctx, launch.Command, native.Isolate)
 	}
-	if d.hookCommand != "" {
+	if d.hookCommand != "" && hasFeature(ctx, launch.Command, native) {
 		launch.Command, _ = native.Hook(launch.Command, d.hookCommand)
 	}
 	return conversationID, transcriptPath, nil

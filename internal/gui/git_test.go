@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -91,8 +92,8 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 	// Commit main.go and made.txt, leaving notes.txt out.
 	p.Tap(Tf("Commit %s", "notes.txt"))
 	p.Frame()
-	if !ggui.Peek(m.GitSkip)["notes.txt"] || ggui.Peek(m.GitDiff).Key != "" {
-		t.Fatalf("the box: skipped %v, diff %q", ggui.Peek(m.GitSkip), ggui.Peek(m.GitDiff).Key)
+	if !ggui.Peek(m.GitSkip)["notes.txt"] || len(ggui.Peek(m.Diffs)) != 0 {
+		t.Fatalf("the box: skipped %v, diffs %v", ggui.Peek(m.GitSkip), ggui.Peek(m.Diffs))
 	}
 	m.GitMessage.Set("Fill in main")
 	p.Frame()
@@ -118,9 +119,18 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 	m.openCommit(h.Commits[1].Hash)
 	probeUntil(t, p, "the merge", func() bool { c := ggui.Peek(m.GitCommit); return !c.Loading && c.Info.Commit.Hash != "" })
 	m.openCommitFile(ggui.Peek(m.GitCommit).Info.Files[0])
-	probeUntil(t, p, "its diff", func() bool { return !ggui.Peek(m.GitCommit).Reading })
-	if d := ggui.Peek(m.GitCommit); d.DiffErr != "" || len(d.Diff.Lines) == 0 {
+	diff := ggui.Peek(m.Selected)
+	probeUntil(t, p, "its diff", func() bool { d, ok := ggui.Peek(m.Diffs)[diff]; return ok && !d.Loading })
+	if d := ggui.Peek(m.Diffs)[diff]; d.Err != "" || len(d.Diff.Lines) == 0 || d.Commit != h.Commits[1].Hash {
 		t.Fatalf("commit diff %+v", d)
+	}
+	// The project's panels stay on while the diff's tab shows.
+	if r := ggui.Untrack(m.filesRoot); r.Path != project {
+		t.Fatalf("panels show %+v", r)
+	}
+	m.askKill(diff)
+	if _, ok := ggui.Peek(m.Diffs)[diff]; ok || slices.Contains(ggui.Peek(m.Tabs), diff) {
+		t.Fatal("the diff's tab stayed open")
 	}
 
 	// A new branch from the header's menu, switched to.

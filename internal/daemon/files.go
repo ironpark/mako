@@ -57,6 +57,11 @@ func (d *Daemon) handleGitStatus(ctx context.Context, stream *transport.Stream, 
 			if err := absolute(r.Path); err != nil {
 				return protocol.GitChanges{}, err
 			}
+			if r.Base != "" {
+				return inRepo(ctx, r.Path, func(ctx context.Context) (protocol.GitChanges, error) {
+					return gitstat.BaseStatus(ctx, r.Path, r.Base)
+				})
+			}
 			return gitstat.Status(r.Path)
 		})
 }
@@ -67,6 +72,9 @@ func (d *Daemon) handleGitDiff(ctx context.Context, stream *transport.Stream, en
 			return inRepo(ctx, r.Root, func(ctx context.Context) (protocol.Diff, error) {
 				if r.Commit != "" {
 					return gitstat.CommitDiff(ctx, r.Root, r.Commit, r.Path, r.From)
+				}
+				if r.Base != "" {
+					return gitstat.BaseDiff(ctx, r.Root, r.Base, r.Path, r.From)
 				}
 				return gitstat.Diff(r.Root, r.Path, r.From)
 			})

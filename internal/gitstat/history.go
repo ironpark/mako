@@ -302,6 +302,22 @@ func Run(ctx context.Context, r protocol.GitRun) (string, error) {
 			return run(ctx, r.Root, nil, "switch", "-c", r.Branch)
 		}
 		return run(ctx, r.Root, nil, "switch", r.Branch)
+	case protocol.GitOpDiscard:
+		if len(r.Paths) != 1 {
+			return "", errors.New("a discard is of one file")
+		}
+		return "", DiscardHunk(r.Root, r.Paths[0], r.Hunk)
+	case protocol.GitOpMerge, protocol.GitOpPR, protocol.GitOpRemoveWT:
+		if r.Worktree == nil {
+			return "", errors.New("no worktree named")
+		}
+		switch r.Op {
+		case protocol.GitOpMerge:
+			return Merge(ctx, *r.Worktree)
+		case protocol.GitOpPR:
+			return PullRequest(ctx, *r.Worktree)
+		}
+		return RemoveWorktree(ctx, *r.Worktree)
 	}
 	return "", fmt.Errorf("unknown git operation %q", r.Op)
 }

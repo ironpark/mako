@@ -234,7 +234,25 @@ func (m *model) showTab(id string) {
 		g.Active = id
 		return g.ID
 	})
+	if isSessionTab(id) {
+		m.lastSession = id
+	}
 	m.attach(id)
+}
+
+// replaceTab puts tab in old's place, in its pane and at its index, as a
+// preview's tab takes the next preview.
+func (m *model) replaceTab(old, tab string) {
+	m.editLayout(func(root *layoutNode) int {
+		g := root.groupOf(old)
+		if g == nil {
+			return 0
+		}
+		i := slices.Index(g.Tabs, old)
+		g.Tabs[i] = tab
+		g.Active = tab
+		return g.ID
+	})
 }
 
 // moveTab puts a tab into pane group before index i of its tabs as they

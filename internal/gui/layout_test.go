@@ -164,9 +164,10 @@ func TestDraggingATabOpensItsDropGap(t *testing.T) {
 // A side panel slides: part way open between the frames of its motion.
 func TestSidePanelsSlide(t *testing.T) {
 	open := ggui.State(false)
+	width := ggui.State[float64](300)
 	var d *drawer
 	p := ggui.ProbeBuilder(func() ggui.Widget {
-		d = newDrawer(ggui.Box().Fill(tokSurface1), open, 300, false)
+		d = newDrawer(ggui.Box().Fill(tokSurface1), open, width, false)
 		return ggui.Row(d, ggui.Expanded(ggui.Box())).Stretch()
 	}, ggui.Sz(800, 400))
 	defer p.Close()
@@ -182,5 +183,11 @@ func TestSidePanelsSlide(t *testing.T) {
 	}
 	if !partly || d.w != 300 {
 		t.Fatalf("the panel opened to %v without a frame part way open: %v", d.w, partly)
+	}
+	// Dragged wider, it follows.
+	width.Set(420)
+	p.Frame()
+	if d.w != 420 {
+		t.Fatalf("the panel is %v wide after a resize to 420", d.w)
 	}
 }

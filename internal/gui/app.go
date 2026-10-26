@@ -50,6 +50,8 @@ func Run(cfg *config.Config, addr string) error {
 // setup wires the settings to what follows them: the theme, the saved file
 // and the daemon link. It runs under the app's (or a probe's) owner.
 func setup(m *model) {
+	m.window = ggui.UseWindow()
+	followAttention(m)
 	ggui.Effect(func() ggui.Cleanup {
 		pal := paletteFor(m.Prefs.Get().Theme, ggui.SystemDark().Get())
 		uitheme.Set(themeFor(pal))
@@ -62,6 +64,7 @@ func setup(m *model) {
 		}
 		prev := last
 		last = p
+		m.approveInApp.Store(p.ApproveInApp)
 		if p.Daemon != prev.Daemon {
 			m.reconnect(p.Daemon, m.key())
 		}
@@ -86,6 +89,10 @@ func shortcuts(host ggui.Host, m *model) {
 	host.Shortcut("cmd+b", func() { ggui.Toggle(m.SidebarOpen) })
 	host.Shortcut("cmd+shift+d", func() { ggui.Toggle(m.DetailsOpen) })
 	host.Shortcut("cmd+,", func() { m.openSettings("") })
+	host.Shortcut("cmd+p", m.openQuickOpen)
+	host.Shortcut("cmd+shift+f", m.openSearch)
+	host.Shortcut("alt+cmd+down", func() { m.stepDiff(1) })
+	host.Shortcut("alt+cmd+up", func() { m.stepDiff(-1) })
 }
 
 // shortcutList is what the settings page shows under Shortcuts, written as
@@ -100,4 +107,8 @@ var shortcutList = []struct{ Chord, Action string }{
 	{"cmd+b", "Toggle sidebar"},
 	{"cmd+shift+d", "Toggle details panel"},
 	{"cmd+,", "Open settings"},
+	{"cmd+p", "Go to file"},
+	{"cmd+shift+f", "Search the project"},
+	{"alt+cmd+down", "Next changed file"},
+	{"alt+cmd+up", "Previous changed file"},
 }

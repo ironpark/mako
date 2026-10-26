@@ -92,7 +92,7 @@ func (d *Daemon) node(nodeID string) (protocol.Node, error) {
 }
 
 // peerSessions asks one peer for its sessions.
-func (d *Daemon) peerSessions(ctx context.Context, node protocol.Node) ([]protocol.SessionInfo, error) {
+func (d *Daemon) peerSessions(ctx context.Context, node protocol.Node, req protocol.ListSessions) ([]protocol.SessionInfo, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -104,7 +104,7 @@ func (d *Daemon) peerSessions(ctx context.Context, node protocol.Node) ([]protoc
 
 	var reply protocol.Sessions
 	// The peer sees a peer hello and answers with its own sessions only.
-	if err := stream.Request(protocol.TypeListSess, struct{}{}, &reply); err != nil {
+	if err := stream.Request(protocol.TypeListSess, req, &reply); err != nil {
 		return nil, err
 	}
 	out := reply.Sessions[:0:0]

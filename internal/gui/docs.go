@@ -69,6 +69,7 @@ type document struct {
 	// preview shows a Markdown file rendered rather than its source.
 	preview *ggui.StateValue[bool]
 	images  map[string]*ggui.StateValue[mdImage] // what its preview shows, by path
+	line    int                                  // the line to put the caret on once read, 0 for none
 }
 
 func (m *model) doc(id string) (docInfo, bool) {
@@ -105,6 +106,26 @@ func (m *model) openFile(it fileItem) {
 	m.readDoc(id)
 }
 
+// openFileAt opens a file with its caret at a line, from 1.
+func (m *model) openFileAt(it fileItem, line int) {
+	m.openFile(it)
+	if doc := m.docs[docTabID(it.Node, it.Path)]; doc != nil {
+		doc.line = line
+		m.goToLine(docTabID(it.Node, it.Path))
+	}
+}
+
+// goToLine moves a file's caret to the line asked for, once its text is
+// read and its editor made.
+func (m *model) goToLine(id string) {
+	doc := m.docs[id]
+	if doc == nil || doc.line == 0 || doc.editor == nil || ggui.Peek(m.Docs)[id].Loading {
+		return
+	}
+	doc.editor.goToLine(doc.line)
+	doc.line = 0
+}
+
 // readDoc reads an open file from its node, replacing what the editor
 // holds.
 func (m *model) readDoc(id string) {
@@ -134,6 +155,7 @@ func (m *model) readDoc(id string) {
 				d.Err = err.Error()
 			}
 		})
+		m.goToLine(id)
 	})
 }
 
@@ -318,6 +340,7 @@ func (m *model) docEditor(id string) *codeEditor {
 			Colors(m.docColors(id)).
 			OnChange(func(text string) { m.docEdited(id, text) })
 		m.syncEditor(id)
+		m.goToLine(id)
 	}
 	return doc.editor
 }

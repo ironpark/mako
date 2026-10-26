@@ -85,11 +85,12 @@ func TestChangesTabShowsTheWorkTree(t *testing.T) {
 	}
 	row, _ := p.Find("main.go")
 	p.Click(row.Center())
+	// The diff opens in a tab of its own.
 	probeUntil(t, p, "the diff", func() bool {
-		d := ggui.Peek(m.GitDiff)
+		d := ggui.Peek(m.Diffs)[ggui.Peek(m.Selected)]
 		return !d.Loading && len(d.Diff.Lines) > 0
 	})
-	if l := ggui.Peek(m.GitDiff).Diff.Lines[0]; l.Op != "@" {
+	if l := ggui.Peek(m.Diffs)[ggui.Peek(m.Selected)].Diff.Lines[0]; l.Op != "@" {
 		t.Fatalf("diff starts %+v, want its hunk's header", l)
 	}
 }

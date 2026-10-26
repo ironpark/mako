@@ -103,7 +103,11 @@ func nameDialog(a nameAsk) ggui.Widget {
 // sessionMenu gives a session's tab or sidebar row a context menu; a tab's
 // has Detach tab too.
 func sessionMenu(m *model, w ggui.Widget, id, label string, isTab bool) ggui.Widget {
-	items := []ggui.Widget{ui.MenuItem(T("Rename…"), func() { m.askRename(id) })}
+	pin := T("Pin to top")
+	if m.pinned(id) {
+		pin = T("Unpin")
+	}
+	items := []ggui.Widget{ui.MenuItem(T("Rename…"), func() { m.askRename(id) }), ui.MenuItem(pin, func() { m.togglePin(id) })}
 	if isTab {
 		items = append(items, ui.MenuItem(T("Detach tab"), func() { m.closeTab(id) }))
 	}

@@ -93,6 +93,16 @@ func newCodeEditor(text *ggui.StateValue[string], prefs func() prefs) *codeEdito
 	return e
 }
 
+// goToLine puts the caret at the start of a line, from 1; the view
+// follows it there.
+func (e *codeEditor) goToLine(line int) {
+	starts := e.lineStarts(e.input.EditingState().Text)
+	at := starts[min(max(line-1, 0), len(starts)-1)]
+	e.input.Select(at, at)
+	e.autoFocus = true
+	e.publish()
+}
+
 // lineHeight is how far apart the editor's lines are.
 func lineHeight(p prefs) float64 { return math.Ceil(p.FontSize * max(p.LineHeight, 1.2)) }
 

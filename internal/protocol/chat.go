@@ -30,4 +30,5 @@ type Chat struct {
 	Conversation string        `json:"conversation,omitempty"`
 	Messages     []ChatMessage `json:"messages,omitempty"`
 	Truncated    bool          `json:"truncated,omitempty"`
+	Usage        *Usage        `json:"usage,omitempty"` // the whole conversation's, the omitted part's included
 }
