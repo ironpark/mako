@@ -56,15 +56,25 @@ func launcherApp(t *testing.T, pr prefs) (*model, *ggui.Probe) {
 	return m, p
 }
 
-// The tab bar starts an agent with a click, without asking where: an agent
-// with profiles first offers them in a menu.
+// The + fans out launchers that start an agent with a click, without
+// asking where: an agent with profiles first offers them in a menu.
 func TestQuickLauncherStartsAProfileWithoutAsking(t *testing.T) {
 	home := t.TempDir()
 	m, p := launcherApp(t, prefs{DefaultProject: home})
 
+	if _, ok := p.Find("New claude session"); ok {
+		t.Fatal("the launchers show before the pointer comes to the +")
+	}
+	plus, ok := p.Find("New session…")
+	if !ok {
+		t.Fatal("no + after the tabs")
+	}
+	p.Move(plus.Center())
+	p.Frame()
+	p.Advance(time.Second)
 	menu, ok := p.Find("New claude session")
 	if !ok {
-		t.Fatal("no launcher for claude")
+		t.Fatal("the + fans out no launcher for claude")
 	}
 	p.Click(menu.Center())
 	p.Frame()
@@ -80,6 +90,38 @@ func TestQuickLauncherStartsAProfileWithoutAsking(t *testing.T) {
 	}
 	if ggui.Peek(m.NewOpen) {
 		t.Fatal("the launcher opened the new-session dialog")
+	}
+}
+
+// A click on the + opens the new-session dialog, as it always has; the
+// launchers it fans out go back in once the pointer leaves.
+func TestPlusOpensTheDialogAndFoldsItsLaunchers(t *testing.T) {
+	m, p := launcherApp(t, prefs{DefaultProject: t.TempDir()})
+	plus, ok := p.Find("New session…")
+	if !ok {
+		t.Fatal("no + after the tabs")
+	}
+	p.Move(plus.Center())
+	p.Frame()
+	p.Advance(time.Second)
+	launcher, ok := p.Find("New terminal")
+	if !ok {
+		t.Fatal("the + fans out no terminal launcher")
+	}
+	if launcher.Rect.Origin.X <= plus.Rect.Origin.X {
+		t.Fatalf("launcher at %v, want right of the + at %v", launcher.Rect, plus.Rect)
+	}
+	p.Move(ggui.Pt(600, 600))
+	p.Frame()
+	p.Advance(time.Second)
+	p.Frame()
+	if _, ok := p.Find("New terminal"); ok {
+		t.Fatal("the launchers stay out after the pointer left")
+	}
+	p.Click(plus.Center())
+	p.Frame()
+	if !ggui.Peek(m.NewOpen) {
+		t.Fatal("a click on the + did not open the new-session dialog")
 	}
 }
 

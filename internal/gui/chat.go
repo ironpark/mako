@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"hash/fnv"
+	"image/color"
 	"maps"
 	"math"
 	"reflect"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/sanbo/internal/client"
 	"github.com/ironpark/sanbo/internal/protocol"
 	"github.com/ironpark/sanbo/internal/transcript"
@@ -129,19 +131,69 @@ func sessionView(m *model, id string, group int) ggui.Widget {
 }
 
 // viewSwitch switches a session between its terminal and its chat: a
-// switch between the two glyphs, the one in view in the foreground colour.
-// A plain shell has no conversation, so it has none.
+// pill whose track holds the two glyphs, a thumb sliding behind the one in
+// view. A plain shell has no conversation, so it has none.
 func viewSwitch(m *model, id string, group int) ggui.Widget {
 	mode := ggui.Bind(func() bool { return m.ChatModes.Get()[id] }, func(chat bool) { m.focusGroup(group); m.setChatMode(id, chat) })
-	sw := ui.Switch(mode, "")
-	sw.SetName(T("Session view"))
 	side := func(glyph, label string, chat bool) ggui.Widget {
 		g := ggui.Reactive(func() ggui.Widget {
 			return icon(glyph).Size(14).Color(pick(mode.Get() == chat, tokFg, tokExtraMuted))
 		})
-		return ui.Tooltip(ui.ButtonOf(g, func() { mode.Set(chat) }).Ghost().Pad(3).Radius(4).Name(label), label)
+		cell := ggui.Box(ggui.Center(g)).Size(viewSideWidth, 20)
+		return ui.Tooltip(ui.ButtonOf(cell, func() { mode.Set(chat) }).Variant(viewSideButton).Pad(0).Radius(10).Name(label), label)
 	}
-	return ggui.Row(side("square-terminal", T("Terminal"), false), sw, side("messages-square", T("Chat"), true)).Gap(4).Align(ggui.AlignCenter)
+	sides := ggui.Row(side("square-terminal", T("Terminal"), false), side("messages-square", T("Chat"), true))
+	return &viewToggle{right: mode, child: sides}
+}
+
+// viewSideWidth is the width of each side of the view switch.
+const viewSideWidth = 26
+
+// viewSideButton is a side of the view switch: the glyph alone, as the
+// thumb behind it shows which is in view.
+var viewSideButton = ui.NewVariant("view-side", func(t uitheme.Theme) ui.ButtonStyle {
+	return ui.ButtonStyle{Label: t.Fg}
+})
+
+// viewToggle draws a two-sided switch's track and its thumb, which slides
+// to the right side while right holds, behind its sides of equal width.
+type viewToggle struct {
+	right ggui.Readable[bool]
+	child ggui.Widget
+
+	track, thumb, border color.Color
+	motion               time.Duration
+	childSize            ggui.Size
+}
+
+// viewToggleInset is the track's margin around the thumb.
+const viewToggleInset = 2
+
+var viewThumbSlot = ggui.NewSlot[*ggui.Motion]("view switch thumb")
+
+func (v *viewToggle) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	theme := uitheme.From(env)
+	v.track, v.border = theme.Muted, theme.Border
+	// The thumb stands out from the track: the page's own colour on a
+	// light page, a step up on a dark one.
+	v.thumb = theme.Bg
+	if pal, ok := theme.Get(paletteKey); ok && pal.Dark {
+		v.thumb = pal.Surface3
+	}
+	v.motion = env.Motion(theme.MotionFast)
+	v.childSize = v.child.Layout(c.Loosen(), env)
+	return c.Constrain(ggui.Sz(v.childSize.W+2*viewToggleInset, v.childSize.H+2*viewToggleInset))
+}
+
+func (v *viewToggle) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	right := ggui.Untrack(v.right.Get)
+	k := dst.Ease(ggui.Anchor{Rect: r}, viewThumbSlot, pick(right, 1.0, 0.0), v.motion)
+	dst.FillRoundRect(r, r.Size.H/2, v.track)
+	half := v.childSize.W / 2
+	thumb := ggui.Rct(r.Origin.Add(ggui.Pt(viewToggleInset+k*half, viewToggleInset)), ggui.Sz(half, v.childSize.H))
+	dst.FillRoundRect(thumb, thumb.Size.H/2, v.thumb)
+	dst.StrokeRoundRect(thumb, thumb.Size.H/2, 1, v.border)
+	dst.Paint(v.child, ggui.Rct(r.Origin.Add(ggui.Pt(viewToggleInset, viewToggleInset)), v.childSize))
 }
 
 func chatView(m *model, id string, group int) ggui.Widget {

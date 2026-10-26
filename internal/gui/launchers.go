@@ -2,6 +2,7 @@ package gui
 
 import (
 	"slices"
+	"time"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
@@ -46,15 +47,15 @@ func launchables(targets []string) []launchable {
 
 // quickLaunchers are a button for each agent the node can start, which
 // starts it in project right away; an agent with profiles opens a menu of
-// them instead. before runs ahead of the launch, as a pane taking focus.
-func quickLaunchers(m *model, nodeID, project string, targets []string, before func()) ggui.Widget {
+// them instead, and those menus come back apart as well. before runs ahead
+// of the launch, as a pane taking focus.
+func quickLaunchers(m *model, nodeID, project string, targets []string, before func()) (buttons []ggui.Widget, menus []*ui.MenuWidget) {
 	start := func(target string) func() {
 		return func() {
 			before()
 			m.launch(target, nodeID, project)
 		}
 	}
-	var buttons []ggui.Widget
 	for _, l := range launchables(targets) {
 		label := Tf("New %s session", l.Agent)
 		if l.Agent == "shell" {
@@ -71,12 +72,109 @@ func quickLaunchers(m *model, nodeID, project string, targets []string, before f
 			items = append(items, ui.MenuItem(targetLabel(target), start(target)))
 		}
 		face := ggui.Row(glyph, icon("chevron-down").Size(10)).Gap(1)
+		menu := ui.MenuOf(ggui.Box(face).Pad(6, 3, 6, 6), items...).Width(180).Name(label)
+		menus = append(menus, menu)
 		// The face pads itself, so the trigger sits level with the buttons.
-		menu := uitheme.Override(func(t *uitheme.Theme) { t.ButtonPad = ggui.Insets(0) },
-			ui.MenuOf(ggui.Box(face).Pad(6, 3, 6, 6), items...).Width(180).Name(label))
-		buttons = append(buttons, ui.Tooltip(borderless(menu), label))
+		buttons = append(buttons, ui.Tooltip(borderless(uitheme.Override(func(t *uitheme.Theme) { t.ButtonPad = ggui.Insets(0) }, menu)), label))
 	}
-	return ggui.Row(buttons...).Gap(2)
+	return buttons, menus
+}
+
+// launchButton is the + after a pane's tabs. A click runs more, the
+// new-session dialog; the pointer resting on it fans the quick launchers
+// out beside it, over the bar, so they take no room of their own.
+func launchButton(m *model, nodeID, project string, targets []string, before, more func()) ggui.Widget {
+	plus := iconButton("plus", T("New session…"), more)
+	buttons, menus := quickLaunchers(m, nodeID, project, targets, before)
+	if len(buttons) == 0 {
+		return plus
+	}
+	f := &launchFan{plus: plus, menus: menus}
+	cells := make([]ggui.Widget, len(buttons))
+	for i, b := range buttons {
+		// Each comes out from under the +, the farther ones from farther.
+		t := ggui.Transition(b).Fade().Slide(-float64(i+1)*14, 0).Easing(ggui.EaseLinear)
+		f.items = append(f.items, t)
+		cells[i] = t
+	}
+	pill := ggui.Reactive(func() ggui.Widget {
+		return ggui.Box(ggui.Row(cells...).Gap(2)).Pad(2).
+			Fill(tokSurface0).Border(1, tokBorder).Radius(8).Shadow(uitheme.Use().PanelShadow)
+	})
+	f.pill = ggui.Transition(pill).Fade().Slide(-8, 0).Easing(ggui.EaseLinear)
+	return f
+}
+
+// launchFan is a + with the quick launchers it fans out while the pointer
+// or the keyboard is on it or on them, or one of their menus is open. They
+// paint as an overlay, beside the + and over whatever is there.
+type launchFan struct {
+	plus  ggui.Widget
+	pill  *ggui.TransitionWidget
+	items []*ggui.TransitionWidget
+	menus []*ui.MenuWidget
+
+	plusSize, pillSize ggui.Size
+	motion             time.Duration
+}
+
+// fanGrace is how long the launchers stay out after the pointer leaves, so
+// it can cross from the + to them.
+const fanGrace = 250 * time.Millisecond
+
+// fanState is whether the launchers are out, and since when nothing has
+// held them there.
+type fanState struct {
+	open bool
+	left time.Time
+}
+
+var (
+	fanSlot       = ggui.NewSlot[fanState]("launch fan")
+	fanMotionSlot = ggui.NewSlot[*ggui.Motion]("launch fan motion")
+)
+
+func (f *launchFan) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	f.motion = env.Motion(uitheme.From(env).MotionSlow)
+	f.pillSize = f.pill.Layout(ggui.Loose(ggui.Sz(ggui.Unbounded, ggui.Unbounded)), env)
+	f.plusSize = f.plus.Layout(c, env)
+	return f.plusSize
+}
+
+func (f *launchFan) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.Paint(f.plus, r)
+	at := ggui.Rct(ggui.Pt(r.Origin.X+r.Size.W+2, r.Origin.Y+(r.Size.H-f.pillSize.H)/2), f.pillSize)
+	anchor := ggui.Anchor{Rect: r}
+	state, _ := dst.Retained(anchor, fanSlot)
+	now := ggui.FrameTime()
+	p, ok := dst.Pointer()
+	// The gap between the + and the launchers counts as theirs.
+	reach := ggui.Rct(r.Origin, ggui.Sz(at.Origin.X+at.Size.W-r.Origin.X, r.Size.H))
+	held := ok && (r.Contains(p) || state.open && (reach.Contains(p) || at.Contains(p))) ||
+		dst.FocusVisibleWithin(r) || state.open && dst.FocusWithin(at) ||
+		slices.ContainsFunc(f.menus, func(m *ui.MenuWidget) bool { return m.Popup().IsOpen() })
+	switch {
+	case held:
+		state.open, state.left = true, time.Time{}
+	case state.open && state.left.IsZero():
+		state.left = now
+		ggui.WakeAt(now.Add(fanGrace))
+	case state.open && now.Sub(state.left) >= fanGrace:
+		state.open = false
+	}
+	dst.Retain(anchor, fanSlot, state)
+	k := dst.Ease(anchor, fanMotionSlot, pick(state.open, 1.0, 0.0), f.motion)
+	if k <= 0 {
+		return
+	}
+	// The launchers follow one another out, a step behind each.
+	step := min(.15, .6/float64(max(len(f.items)-1, 1)))
+	span := 1 - step*float64(len(f.items)-1)
+	for i, item := range f.items {
+		item.Progress((k-step*float64(i))/span, !state.open)
+	}
+	f.pill.Progress(k, !state.open)
+	dst.Overlay(func(dst *ggui.Canvas) { dst.Paint(f.pill, at) })
 }
 
 // launchProject is where a quick launcher starts a session on nodeID

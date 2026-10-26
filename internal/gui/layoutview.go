@@ -10,7 +10,6 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
 	"github.com/ironpark/sanbo/internal/protocol"
 )
 
@@ -75,7 +74,8 @@ func paneView(m *model, id int) ggui.Widget {
 }
 
 // paneTabBar is a pane's tabs, which drag to reorder, to another pane or to
-// a pane's edge, with quick launchers for the project of the tab shown.
+// a pane's edge, and after them a + whose quick launchers start in the
+// project of the tab shown.
 func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 	tabs := ggui.Reactive(func() ggui.Widget {
 		g := group.Get()
@@ -113,15 +113,6 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			children = append(children, dropSlot(m, id, i), tabDrop(m, cell, id, slot).
 				OnHover(func(bool) { m.leaveHint(id) }))
 		}
-		children = append(children, dropSlot(m, id, len(g.Tabs)))
-		// The tabs scroll sideways rather than squeeze when the pane is
-		// narrow. The bar under them takes a tab dropped past the last one;
-		// each tab's own zone, painted over it, takes one dropped on a tab.
-		end := len(g.Tabs)
-		bar := tabDrop(m, ggui.Scroll(ggui.Row(children...)).Horizontal().Bar(color.Transparent), id,
-			func(ggui.Dropped[tabDrag]) int { return end }).
-			OnHover(func(bool) { m.leaveHint(id) })
-
 		// The launchers start in the project of the tab shown, or without
 		// one, in the default place on this node.
 		nodeID := m.Conn.Get().Self.ID
@@ -136,14 +127,19 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		targets := nodeTargets(m.Nodes.Get(), nodeID, m.Agents.Get())
 		focus := func() { m.focusGroup(id) }
 		newSession := func() { focus(); m.openNew(nodeID, project) }
-		launch := ggui.Row(
-			quickLaunchers(m, nodeID, project, targets, focus),
-			iconButton("plus", T("New session…"), newSession),
-		).Gap(2)
-		// A narrow pane folds the launchers into the + menu.
-		launchMenu := borderless(ui.MenuOf(icon("plus"), launchItems(m, nodeID, project, targets, focus, newSession)...).
-			Width(200).Name(T("New session…")))
-		launchWidth := float64(len(launchables(targets))*30 + 34)
+		// The + follows the last tab.
+		children = append(children, dropSlot(m, id, len(g.Tabs)),
+			ggui.Box(ggui.Align(launchButton(m, nodeID, project, targets, focus, newSession))).Height(tabBarHeight).Pad(0, 4))
+		// The tabs scroll sideways rather than squeeze when the pane is
+		// narrow. The bar under them takes a tab dropped past the last one;
+		// each tab's own zone, painted over it, takes one dropped on a tab.
+		end := len(g.Tabs)
+		bar := tabDrop(m, ggui.Scroll(ggui.Row(children...)).Horizontal().Bar(color.Transparent), id,
+			func(ggui.Dropped[tabDrag]) int { return end }).
+			OnHover(func(bool) { m.leaveHint(id) })
+
+		// Beside the tabs: the + and what trails the bar.
+		extra := float64(34)
 		// The eraser closes the pane's tabs that lose nothing by closing,
 		// shown while there are some.
 		var tidy ggui.Widget = ggui.Box()
@@ -153,54 +149,22 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				iconButton("eraser", T("Close files, diffs and idle shells"), func() { m.tidyTabs(ids) }),
 				ggui.Box().Size(1, 18).Fill(tokBorder),
 			).Gap(10).Align(ggui.AlignCenter)
-			launchWidth += 40
+			extra += 40
 		}
 		var view ggui.Widget = ggui.Box()
 		if isSessionTab(g.Active) && m.chatCapable(g.Active) {
 			view = ggui.Row(viewSwitch(m, g.Active, id), ggui.Box().Size(1, 18).Fill(tokBorder)).Gap(10).Align(ggui.AlignCenter)
-			launchWidth += 100
+			extra += 2*viewSideWidth + 2*viewToggleInset + 21
 		}
-		trail := func(launch ggui.Widget) ggui.Widget {
-			// Centred in the bar's height, level with the tabs' labels.
-			return ggui.Box(ggui.Row(tidy, view, launch).Gap(10).Align(ggui.AlignCenter)).Height(tabBarHeight).Pad(0, 8)
-		}
+		trail := ggui.Box(ggui.Row(tidy, view).Gap(10).Align(ggui.AlignCenter)).Height(tabBarHeight).Pad(0, 8)
 		// Tabs that do not fit scroll, and a menu lists them all.
-		overflow := tabList(m, g, sessions, titles, docs, diffs)
-		need := tabsWidth(g.Tabs, sessions, titles, docs, diffs) + launchWidth + 16
+		need := tabsWidth(g.Tabs, sessions, titles, docs, diffs) + extra + 16
 		return ggui.Responsive(need,
-			ggui.Row(ggui.Expanded(bar), trail(launch)).Stretch(),
-			ggui.Responsive(narrowPane,
-				ggui.Row(ggui.Expanded(bar), overflow, trail(launch)).Stretch(),
-				ggui.Row(ggui.Expanded(bar), overflow, trail(launchMenu)).Stretch()),
+			ggui.Row(ggui.Expanded(bar), trail).Stretch(),
+			ggui.Row(ggui.Expanded(bar), tabList(m, g, sessions, titles, docs, diffs), trail).Stretch(),
 		)
 	})
 	return ggui.Box(tabs).Height(tabBarHeight)
-}
-
-// narrowPane is the width below which a pane's launchers fold into its +
-// menu.
-const narrowPane = 560
-
-// launchItems are the launchers as a menu's items, for a narrow pane.
-func launchItems(m *model, nodeID, project string, targets []string, before func(), more func()) []ggui.Widget {
-	var items []ggui.Widget
-	for _, l := range launchables(targets) {
-		targets := []string{l.Agent}
-		for _, p := range l.Profiles {
-			targets = append(targets, agentspec.Target(l.Agent, p))
-		}
-		for _, target := range targets {
-			label := Tf("New %s session", targetLabel(target))
-			if target == "shell" {
-				label = T("New terminal")
-			}
-			items = append(items, ui.MenuItem(label, func() { before(); m.launch(target, nodeID, project) }))
-		}
-	}
-	if len(items) > 0 {
-		items = append(items, ui.MenuDivider())
-	}
-	return append(items, ui.MenuItem(T("New session…"), more))
 }
 
 // tabWidth estimates how wide a tab is drawn: its label, capped as the tab
