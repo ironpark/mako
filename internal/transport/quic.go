@@ -18,6 +18,11 @@ func quicConfig() *quic.Config {
 	return &quic.Config{
 		MaxIdleTimeout:  60 * time.Second,
 		KeepAlivePeriod: 15 * time.Second,
+		// quic-go starts at 1280-byte datagrams, which with their headers
+		// overflow a 1280 MTU, as Tailscale's interface has, and are dropped
+		// before the handshake. 1200, QUIC's minimum, fits; path MTU
+		// discovery grows it where the path allows.
+		InitialPacketSize: 1200,
 	}
 }
 
