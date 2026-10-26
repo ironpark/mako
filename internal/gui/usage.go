@@ -11,6 +11,7 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/sanbo/internal/client"
 	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/sanbo/internal/transcript"
 )
 
 // tokens writes a token count as the chat footer does: 950, 12.3k, 1.2M.
@@ -118,10 +119,14 @@ func (m *model) loadUsage(id string, state *usageState) {
 // nil has the overlay ask for it alone. A plain shell has no conversation,
 // so it has none.
 func usageOverlay(m *model, id string, src ggui.Readable[protocol.Usage]) ggui.Widget {
-	if !m.chatCapable(id) {
-		return ggui.Box()
-	}
-	shown := ggui.Map(m.Prefs, func(p prefs) bool { return p.UsageOverlay })
+	// The session may not be listed yet when its view is built.
+	shown := ggui.Derived(func() bool {
+		if !m.Prefs.Get().UsageOverlay {
+			return false
+		}
+		s, ok := sessionIn(m.Sessions.Get(), id)
+		return ok && transcript.Supported(s.Agent)
+	})
 	return ggui.If(shown, func() ggui.Widget {
 		if src == nil {
 			state := m.usageState(id)

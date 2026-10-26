@@ -131,69 +131,87 @@ func sessionView(m *model, id string, group int) ggui.Widget {
 }
 
 // viewSwitch switches a session between its terminal and its chat: a
-// pill whose track holds the two glyphs, a thumb sliding behind the one in
-// view. A plain shell has no conversation, so it has none.
+// pill whose track holds the two glyphs, a light thumb sliding behind the
+// one in view. A click anywhere on it switches to the other, which is what
+// it is named for. A plain shell has no conversation, so it has none.
 func viewSwitch(m *model, id string, group int) ggui.Widget {
 	mode := ggui.Bind(func() bool { return m.ChatModes.Get()[id] }, func(chat bool) { m.focusGroup(group); m.setChatMode(id, chat) })
-	side := func(glyph, label string, chat bool) ggui.Widget {
+	side := func(glyph string, chat bool) ggui.Widget {
 		g := ggui.Reactive(func() ggui.Widget {
-			return icon(glyph).Size(14).Color(pick(mode.Get() == chat, tokFg, tokExtraMuted))
+			// Black on the light thumb in view; the other quiet on the track.
+			var c color.Color = tokExtraMuted
+			if mode.Get() == chat {
+				c = viewThumbInk()
+			}
+			return icon(glyph).Size(14).Color(c)
 		})
-		cell := ggui.Box(ggui.Center(g)).Size(viewSideWidth, 20)
-		return ui.Tooltip(ui.ButtonOf(cell, func() { mode.Set(chat) }).Variant(viewSideButton).Pad(0).Radius(10).Name(label), label)
+		return ggui.Box(ggui.Center(g)).Size(viewSideWidth+viewToggleInset, viewSideHeight+2*viewToggleInset)
 	}
-	sides := ggui.Row(side("square-terminal", T("Terminal"), false), side("messages-square", T("Chat"), true))
-	return &viewToggle{right: mode, child: sides}
+	toggle := &viewToggle{right: mode, child: ggui.Row(side("square-terminal", false), side("messages-square", true))}
+	button := ui.ButtonOf(toggle, func() { mode.Set(!ggui.Untrack(mode.Get)) }).Variant(viewSideButton).Pad(0).
+		Radius((viewSideHeight + 2*viewToggleInset) / 2).
+		BindName(ggui.Map(mode, func(chat bool) string { return pick(chat, T("Terminal"), T("Chat")) }))
+	return ui.Tooltip(button, T("Toggle chat and terminal"))
 }
 
-// viewSideWidth is the width of each side of the view switch.
-const viewSideWidth = 26
+// The view switch's measures: each side, and the track's margin around
+// the thumb.
+const (
+	viewSideWidth   = 26
+	viewSideHeight  = 20
+	viewToggleInset = 2
+)
 
-// viewSideButton is a side of the view switch: the glyph alone, as the
-// thumb behind it shows which is in view.
-var viewSideButton = ui.NewVariant("view-side", func(t uitheme.Theme) ui.ButtonStyle {
+// viewSideButton is the view switch as a button: its own drawing alone,
+// with no fill of the button's over it.
+var viewSideButton = ui.NewVariant("view-switch", func(t uitheme.Theme) ui.ButtonStyle {
 	return ui.ButtonStyle{Label: t.Fg}
 })
 
+// viewThumb is the colour of the view switch's thumb, near white in either
+// theme, and viewThumbInk the glyph's on it.
+func viewThumb() color.Color {
+	if pal, ok := uitheme.Use().Get(paletteKey); ok && pal.Dark {
+		return pal.Fg
+	}
+	return tokSurface0
+}
+
+func viewThumbInk() color.Color {
+	if pal, ok := uitheme.Use().Get(paletteKey); ok && pal.Dark {
+		return pal.Surface0
+	}
+	return tokFg
+}
+
 // viewToggle draws a two-sided switch's track and its thumb, which slides
-// to the right side while right holds, behind its sides of equal width.
+// to the right side while right holds, under its sides of equal width.
 type viewToggle struct {
 	right ggui.Readable[bool]
 	child ggui.Widget
 
 	track, thumb, border color.Color
 	motion               time.Duration
-	childSize            ggui.Size
 }
-
-// viewToggleInset is the track's margin around the thumb.
-const viewToggleInset = 2
 
 var viewThumbSlot = ggui.NewSlot[*ggui.Motion]("view switch thumb")
 
 func (v *viewToggle) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	theme := uitheme.From(env)
 	v.track, v.border = theme.Muted, theme.Border
-	// The thumb stands out from the track: the page's own colour on a
-	// light page, a step up on a dark one.
-	v.thumb = theme.Bg
-	if pal, ok := theme.Get(paletteKey); ok && pal.Dark {
-		v.thumb = pal.Surface3
-	}
+	v.thumb = ggui.ResolveColor(viewThumb(), env)
 	v.motion = env.Motion(theme.MotionFast)
-	v.childSize = v.child.Layout(c.Loosen(), env)
-	return c.Constrain(ggui.Sz(v.childSize.W+2*viewToggleInset, v.childSize.H+2*viewToggleInset))
+	return v.child.Layout(c, env)
 }
 
 func (v *viewToggle) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	right := ggui.Untrack(v.right.Get)
 	k := dst.Ease(ggui.Anchor{Rect: r}, viewThumbSlot, pick(right, 1.0, 0.0), v.motion)
 	dst.FillRoundRect(r, r.Size.H/2, v.track)
-	half := v.childSize.W / 2
-	thumb := ggui.Rct(r.Origin.Add(ggui.Pt(viewToggleInset+k*half, viewToggleInset)), ggui.Sz(half, v.childSize.H))
+	thumb := ggui.Rct(r.Origin.Add(ggui.Pt(viewToggleInset+k*viewSideWidth, viewToggleInset)), ggui.Sz(viewSideWidth, viewSideHeight))
 	dst.FillRoundRect(thumb, thumb.Size.H/2, v.thumb)
 	dst.StrokeRoundRect(thumb, thumb.Size.H/2, 1, v.border)
-	dst.Paint(v.child, ggui.Rct(r.Origin.Add(ggui.Pt(viewToggleInset, viewToggleInset)), v.childSize))
+	dst.Paint(v.child, r)
 }
 
 func chatView(m *model, id string, group int) ggui.Widget {

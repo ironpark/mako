@@ -185,3 +185,32 @@ func TestShellHasNoChat(t *testing.T) {
 		t.Fatal("a claude session does not count as chat-capable")
 	}
 }
+
+// A click anywhere on the view switch switches to the other view, on the
+// side in view as much as on the other.
+func TestViewSwitchTogglesWhereverClicked(t *testing.T) {
+	t.Setenv("SANBO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]protocol.SessionInfo{{ID: "s", Agent: "claude", Project: "/tmp"}})
+	p := ggui.ProbeBuilder(func() ggui.Widget { return ggui.Center(viewSwitch(m, "s", 0)) }, ggui.Sz(200, 60))
+	defer p.Close()
+	p.Frame()
+	sw, ok := p.Find(T("Chat"))
+	if !ok {
+		t.Fatal("the switch is not named for the view it goes to")
+	}
+	r := sw.Rect
+	for i, at := range []ggui.Point{
+		{X: r.Origin.X + r.Size.W/4, Y: r.Origin.Y + r.Size.H/2},   // the terminal's side, in view
+		{X: r.Origin.X + r.Size.W/4, Y: r.Origin.Y + r.Size.H/2},   // again, now the other side
+		{X: r.Origin.X + r.Size.W*3/4, Y: r.Origin.Y + r.Size.H/2}, // the chat's side, not in view
+		{X: r.Origin.X + r.Size.W/2, Y: r.Origin.Y + 1},            // the track's edge
+	} {
+		before := ggui.Peek(m.ChatModes)["s"]
+		p.Click(at)
+		p.Frame()
+		if ggui.Peek(m.ChatModes)["s"] == before {
+			t.Fatalf("click %d at %v did not switch the view", i, at)
+		}
+	}
+}

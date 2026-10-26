@@ -10,6 +10,7 @@ import (
 
 	"github.com/ironpark/sanbo/internal/agentspec"
 	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/sanbo/internal/protocol"
 )
 
 func TestLaunchablesGroupProfilesUnderTheirAgent(t *testing.T) {
@@ -180,5 +181,38 @@ func TestClosingATabEndsItsSession(t *testing.T) {
 	})
 	if ggui.Peek(m.ConfirmOpen) {
 		t.Fatal("asked before closing a shell at its prompt")
+	}
+}
+
+// The usage card over a live terminal, which holds the keyboard, opens its
+// detail on hover alone, wherever the layout puts the card.
+func TestUsageDetailOverTheTerminalOpensOnHoverAlone(t *testing.T) {
+	m, p := launcherApp(t, prefs{DefaultProject: t.TempDir(), UsageOverlay: true})
+	m.launch("claude", "", "")
+	probeUntil(t, p, "the session", func() bool {
+		id := ggui.Peek(m.Selected)
+		_, listed := m.session(id)
+		return listed && m.conns[id] != nil
+	})
+	state := m.usageState(ggui.Peek(m.Selected))
+	state.loading = true
+	u := protocol.Usage{Input: 1000, Output: 500, Context: 50000, Window: 200000}
+	state.usage.Set(u)
+	p.Frame()
+	p.Advance(2 * time.Second)
+	p.Frame()
+	card, ok := p.Semantics().Find(ggui.RoleText, Tf("%s / %s · %d%%", "50k", "200k", 25))
+	if !ok {
+		t.Fatal("no usage card over the terminal")
+	}
+	detail := func() bool { _, ok := p.Semantics().Find(ggui.RoleText, usageDetail(u)); return ok }
+	if detail() {
+		t.Fatal("the terminal's focus opened the card's detail")
+	}
+	p.Move(card.Rect.Origin.Add(ggui.Pt(card.Rect.Size.W/2, card.Rect.Size.H/2)))
+	p.Frame()
+	p.Advance(time.Second)
+	if !detail() {
+		t.Fatal("hover does not open the card's detail")
 	}
 }
