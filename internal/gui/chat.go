@@ -124,7 +124,7 @@ func sessionView(m *model, id string, group int) ggui.Widget {
 		focus := ggui.Peek(m.FocusGroup) == group
 		term := newTerminalView(m.conns[id], func() prefs { return ggui.Peek(m.Prefs) }, focus).OnPress(func() { m.focusGroup(group) })
 		body := ggui.DropZone(term, func(d ggui.Dropped[pathDrag]) { term.setDropOver(false); term.typePaths([]string{d.Value.Path}) }).OnHover(term.setDropOver)
-		return ggui.Column(approvalBar(m, id), ggui.Expanded(body)).Stretch()
+		return ggui.Column(approvalBar(m, id), ggui.Expanded(ggui.Stack(body, usageOverlay(m, id, nil)).Expand())).Stretch()
 	})
 }
 
@@ -148,24 +148,11 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	state := m.chatState(id)
 	ggui.Effect(func() ggui.Cleanup {
 		m.loadChat(id, state)
-		stop := make(chan struct{})
-		go func() {
-			ticker := time.NewTicker(2 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-stop:
-					return
-				case <-ticker.C:
-					m.post(func() {
-						if ggui.Peek(m.ChatModes)[id] {
-							m.loadChat(id, state)
-						}
-					})
-				}
+		return m.every(2*time.Second, func() {
+			if ggui.Peek(m.ChatModes)[id] {
+				m.loadChat(id, state)
 			}
-		}()
-		return func() { close(stop) }
+		})
 	})
 
 	scroll := &ggui.ScrollController{}
@@ -197,12 +184,13 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		return ggui.Box(ggui.Column(rows...).Gap(14).Stretch()).Pad(18, 24).MaxWidth(chatLaneWidth)
 	})
 	feed := ggui.Scroll(ggui.Align(content).Top()).Controller(scroll).Bar(tokSurface3)
-	usage := ggui.View(ggui.Map(state.result, func(v chatResult) protocol.Usage {
+	chatUsage := ggui.Map(state.result, func(v chatResult) protocol.Usage {
 		if v.Chat.Usage == nil {
 			return protocol.Usage{}
 		}
 		return *v.Chat.Usage
-	}), func(u protocol.Usage) ggui.Widget {
+	})
+	usage := ggui.View(chatUsage, func(u protocol.Usage) ggui.Widget {
 		if u == (protocol.Usage{}) {
 			return ggui.Box()
 		}
@@ -216,7 +204,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	).Gap(8)).Pad(6, 12)
 	// The composer belongs to Chat alone, as in ovis: Terminal mode's grid
 	// is its own input surface, and a file view has no session to type into.
-	return ggui.Pointer(ggui.Column(ggui.Expanded(feed), footer, approvalCard(m, id), composer(m, id, state.draft)).Stretch()).
+	return ggui.Pointer(ggui.Column(ggui.Expanded(ggui.Stack(feed, usageOverlay(m, id, chatUsage)).Expand()), footer, approvalCard(m, id), composer(m, id, state.draft)).Stretch()).
 		OnDown(func(ggui.PointerEvent) { m.focusGroup(group) })
 }
 

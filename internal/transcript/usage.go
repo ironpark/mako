@@ -97,6 +97,11 @@ func (u *usageScan) codex(line []byte) {
 		Cached int64 `json:"cached_input_tokens"`
 		Output int64 `json:"output_tokens"`
 	}
+	type limit struct {
+		Used    float64 `json:"used_percent"`
+		Minutes int64   `json:"window_minutes"`
+		Resets  int64   `json:"resets_at"`
+	}
 	var r struct {
 		Type    string `json:"type"`
 		Payload struct {
@@ -106,12 +111,34 @@ func (u *usageScan) codex(line []byte) {
 				Last   tokens `json:"last_token_usage"`
 				Window int64  `json:"model_context_window"`
 			} `json:"info"`
+			Limits *struct {
+				Primary   *limit `json:"primary"`
+				Secondary *limit `json:"secondary"`
+			} `json:"rate_limits"`
 		} `json:"payload"`
 	}
-	if json.Unmarshal(line, &r) != nil || r.Payload.Type != "token_count" || r.Payload.Info == nil {
+	if json.Unmarshal(line, &r) != nil || r.Payload.Type != "token_count" {
 		return
 	}
 	// Codex records its running totals.
-	t := r.Payload.Info.Total
-	u.usage = protocol.Usage{Input: t.Input - t.Cached, CachedInput: t.Cached, Output: t.Output, Context: r.Payload.Info.Last.Input, Window: r.Payload.Info.Window}
+	if info := r.Payload.Info; info != nil {
+		t := info.Total
+		u.usage.Input, u.usage.CachedInput, u.usage.Output = t.Input-t.Cached, t.Cached, t.Output
+		u.usage.Context, u.usage.Window = info.Last.Input, info.Window
+	}
+	// Its limits name their windows; a day or less is the session's, as
+	// Claude's five hours, and longer the week's.
+	if l := r.Payload.Limits; l != nil {
+		for _, w := range []*limit{l.Primary, l.Secondary} {
+			if w == nil || w.Minutes == 0 {
+				continue
+			}
+			rl := protocol.RateLimit{Used: w.Used, Resets: w.Resets}
+			if w.Minutes <= 24*60 {
+				u.usage.FiveHour = rl
+			} else {
+				u.usage.Week = rl
+			}
+		}
+	}
 }

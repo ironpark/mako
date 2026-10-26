@@ -181,7 +181,7 @@ func TestPinOnlyWhenNothingPicksAConversation(t *testing.T) {
 
 func TestClaudeHooksAreSettings(t *testing.T) {
 	claude, _ := Lookup("claude")
-	got, ok := claude.Hook([]string{"claude", "--model", "opus"}, "'/bin/sanbod' hook '/run/h.sock'")
+	got, ok := claude.Hook([]string{"claude", "--model", "opus"}, "'/bin/sanbod' hook '/run/h.sock'", "'/bin/sanbod' statusline '/run/h.sock'")
 	if !ok || len(got) != 5 || got[3] != "--settings" {
 		t.Fatalf("hook=%q %v", got, ok)
 	}
@@ -189,6 +189,7 @@ func TestClaudeHooksAreSettings(t *testing.T) {
 		Hooks map[string][]struct {
 			Hooks []struct{ Type, Command string }
 		}
+		StatusLine struct{ Type, Command string }
 	}
 	if err := json.Unmarshal([]byte(got[4]), &settings); err != nil {
 		t.Fatal(err)
@@ -196,8 +197,11 @@ func TestClaudeHooksAreSettings(t *testing.T) {
 	if h := settings.Hooks["SessionStart"]; len(h) != 1 || len(h[0].Hooks) != 1 || h[0].Hooks[0].Type != "command" || h[0].Hooks[0].Command != "'/bin/sanbod' hook '/run/h.sock'" {
 		t.Fatalf("settings=%s", got[4])
 	}
+	if sl := settings.StatusLine; sl.Type != "command" || sl.Command != "'/bin/sanbod' statusline '/run/h.sock'" {
+		t.Fatalf("no status line: %s", got[4])
+	}
 	// Claude's handling of a second --settings is undocumented.
-	if _, ok := claude.Hook([]string{"claude", "--settings=/mine.json"}, "h"); ok {
+	if _, ok := claude.Hook([]string{"claude", "--settings=/mine.json"}, "h", "s"); ok {
 		t.Fatal("hook replaced the user's own settings")
 	}
 	if h := settings.Hooks["PermissionRequest"]; len(h) != 1 || h[0].Hooks[0].Command != "'/bin/sanbod' hook '/run/h.sock'" {
@@ -232,7 +236,7 @@ func TestCodexHooksAreTrustedOverrides(t *testing.T) {
 	}
 
 	codex, _ := Lookup("codex")
-	got, ok := codex.Hook([]string{"codex", "resume", "abc"}, `'/bin/san"bo' hook '/run/h.sock'`)
+	got, ok := codex.Hook([]string{"codex", "resume", "abc"}, `'/bin/san"bo' hook '/run/h.sock'`, "")
 	if !ok || got[0] != "codex" || !slices.Equal(got[len(got)-2:], []string{"resume", "abc"}) {
 		t.Fatalf("hook=%q %v", got, ok)
 	}

@@ -61,5 +61,33 @@ type Usage struct {
 	// Context is the latest turn's whole prompt, as much of the model's
 	// window as the conversation fills.
 	Context int64 `json:"context,omitempty"`
-	Window  int64 `json:"window,omitempty"` // the model's context window, when the log says
+	Window  int64 `json:"window,omitempty"` // the model's context window, when the agent says
+	// FiveHour and Week are how much of the account's subscription limits
+	// is spent, when the agent says: its rolling five-hour session and its
+	// week.
+	FiveHour RateLimit `json:"five_hour,omitzero"`
+	Week     RateLimit `json:"week,omitzero"`
 }
+
+// RateLimit is how much of one of an account's usage limits is spent.
+type RateLimit struct {
+	Used   float64 `json:"used"`             // percent, 0 to 100
+	Resets int64   `json:"resets,omitempty"` // when the window starts over, in Unix seconds
+}
+
+// Merge takes what r says over what u says: the window and each limit r
+// names.
+func (u *Usage) Merge(r Usage) {
+	if r.Window != 0 {
+		u.Window = r.Window
+	}
+	if !r.FiveHour.IsZero() {
+		u.FiveHour = r.FiveHour
+	}
+	if !r.Week.IsZero() {
+		u.Week = r.Week
+	}
+}
+
+// IsZero reports whether the limit is unknown.
+func (r RateLimit) IsZero() bool { return r == RateLimit{} }

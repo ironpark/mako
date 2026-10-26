@@ -71,9 +71,12 @@ func (a *Agent) HookFeature() (args []string, feature string) {
 
 // Hook makes command run the shell command hook on the events sanbo
 // follows, alongside the user's own hooks. The hook reads the event, as
-// JSON, on stdin. It reports false for an agent without hooks, or a
-// command that brings its own settings.
-func (a *Agent) Hook(command []string, hook string) ([]string, bool) {
+// JSON, on stdin. An agent with a status line runs the shell command status
+// as its status line, unless status is "": it reads the session's state,
+// the account's limits among it, and prints the user's own. It reports
+// false for an agent without hooks, or a command that brings its own
+// settings.
+func (a *Agent) Hook(command []string, hook, status string) ([]string, bool) {
 	switch a.hooks {
 	case settingsHooks:
 		if slices.ContainsFunc(command[1:], func(arg string) bool {
@@ -98,7 +101,11 @@ func (a *Agent) Hook(command []string, hook string) ([]string, bool) {
 			}
 			hooks[e.Name] = []matcher{{Hooks: []handler{h}}}
 		}
-		settings, err := json.Marshal(map[string]any{"hooks": hooks})
+		doc := map[string]any{"hooks": hooks}
+		if status != "" {
+			doc["statusLine"] = map[string]any{"type": "command", "command": status}
+		}
+		settings, err := json.Marshal(doc)
 		if err != nil {
 			return command, false
 		}

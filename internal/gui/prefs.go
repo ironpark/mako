@@ -16,6 +16,11 @@ type prefs struct {
 	// Appearance
 	Theme    string `json:"theme"`    // system, dark or light
 	Language string `json:"language"` // system, en or ko; see i18n.go
+	// UsageOverlay shows an agent's token usage over its session, in the
+	// corner UsageCorner names: top-left, top-right, bottom-left or
+	// bottom-right.
+	UsageOverlay bool   `json:"usage_overlay"`
+	UsageCorner  string `json:"usage_corner"`
 
 	// Terminal
 	FontSize     float64 `json:"font_size"`
@@ -66,6 +71,8 @@ func defaultPrefs() prefs {
 	return prefs{
 		Theme:          "system",
 		Language:       "system",
+		UsageOverlay:   true,
+		UsageCorner:    "top-right",
 		FontSize:       13,
 		LineHeight:     1.4,
 		CursorStyle:    "block",
@@ -98,6 +105,9 @@ func (p prefs) normalized() prefs {
 	}
 	if _, ok := catalog(p.Language); !ok && p.Language != "system" {
 		p.Language = d.Language
+	}
+	if _, ok := usageCornerLabels[p.UsageCorner]; !ok {
+		p.UsageCorner = d.UsageCorner
 	}
 	switch p.DaemonMode {
 	case "auto", "embedded", "external":

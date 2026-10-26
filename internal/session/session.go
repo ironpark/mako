@@ -71,6 +71,9 @@ type Session struct {
 	status   protocol.AgentStatus
 	statusAt time.Time
 	approval *protocol.Approval
+	// reported is what the agent's status line last said of its tokens:
+	// the context window and the account's limits; guarded by mu.
+	reported protocol.Usage
 }
 
 // staleWork is how long an agent said to be working may print nothing
@@ -174,6 +177,22 @@ func (s *Session) SetStatus(status protocol.AgentStatus) {
 	if s.status != status {
 		s.status, s.statusAt = status, time.Now()
 	}
+}
+
+// Report records what the agent's status line says of its tokens. What a
+// report leaves out, such as limits before the first reply, stays as the
+// last one said.
+func (s *Session) Report(u protocol.Usage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reported.Merge(u)
+}
+
+// Reported is what the agent's status line has said of its tokens.
+func (s *Session) Reported() protocol.Usage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.reported
 }
 
 // SetApproval records the approval the agent waits for, nil for none.

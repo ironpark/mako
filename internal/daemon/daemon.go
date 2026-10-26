@@ -48,6 +48,9 @@ type Daemon struct {
 
 	hookBinary  string // the program agents run as their hook; see HookMain
 	hookCommand string // the shell command agents run as their hook; "" for none
+	// statusCommand is the one Claude runs as its status line, which
+	// reports the account's limits; "" for none.
+	statusCommand string
 }
 
 // New builds a daemon from configuration.

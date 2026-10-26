@@ -530,6 +530,31 @@ func (c *Cache) ReadBound(info protocol.SessionInfo, path string) (protocol.Chat
 	return chat, err
 }
 
+// ReadUsage is a daemon-verified log's usage alone, read on from where the
+// cache's last read of it stopped.
+func (c *Cache) ReadUsage(info protocol.SessionInfo, path string) (*protocol.Usage, error) {
+	a, ok := Lookup(info.Agent)
+	if !ok {
+		return nil, errUnsupported
+	}
+	if err := Verify(info, path); err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return usageOf(c.usage.read(path, a)), nil
+}
+
+// ConfigRoot is the directory agent keeps its settings and logs under,
+// given env; "" for an agent sanbo does not know.
+func ConfigRoot(agent string, env map[string]string) string {
+	a, ok := Lookup(agent)
+	if !ok {
+		return ""
+	}
+	return logRoot(a, env)
+}
+
 // logPaths lists an agent's logs whose file name matches the glob name.
 func logPaths(a *Agent, env map[string]string, name string) ([]string, error) {
 	return filepath.Glob(logPattern(a, logRoot(a, env), name))

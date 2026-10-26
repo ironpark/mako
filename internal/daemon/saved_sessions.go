@@ -286,7 +286,7 @@ func (d *Daemon) conversationFor(ctx context.Context, req protocol.OpenSession, 
 		launch.Command = withOptionalFlag(ctx, launch.Command, native.Isolate)
 	}
 	if d.hookCommand != "" && hasFeature(ctx, launch.Command, native) {
-		launch.Command, _ = native.Hook(launch.Command, d.hookCommand)
+		launch.Command, _ = native.Hook(launch.Command, d.hookCommand, d.statusCommand)
 	}
 	return conversationID, transcriptPath, nil
 }

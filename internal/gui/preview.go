@@ -146,6 +146,9 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					}
 					v.Chat.Usage = &protocol.Usage{Input: 41200, CachedInput: 380000, Output: 9800, Context: 96000, Window: 258400}
 					chat.result.Set(v)
+					usage := m.usageState(id)
+					usage.loading = true
+					usage.usage.Set(*v.Chat.Usage)
 					m.Sessions.Set(previewStatus(ggui.Peek(m.Sessions), id))
 					unread := map[string]bool{}
 					for _, s := range ggui.Peek(m.Sessions) {

@@ -338,6 +338,20 @@ func (d *Daemon) chatForSession(ctx context.Context, s *session.Session) (protoc
 	return transcript.Read(ctx, info, s.TranscriptEnv())
 }
 
+// usageForSession reads only the tokens of the conversation bound to s,
+// without its messages; none before one is bound.
+func (d *Daemon) usageForSession(s *session.Session) (*protocol.Usage, error) {
+	path := s.TranscriptPath()
+	if path == "" {
+		return nil, nil
+	}
+	if cache := d.conversations.chatCache(s); cache != nil {
+		return cache.ReadUsage(s.Info(), path)
+	}
+	chat, err := transcript.ReadBound(s.Info(), path)
+	return chat.Usage, err
+}
+
 // claimedLocked is the conversations saved sessions other than id hold.
 func (d *Daemon) claimedLocked(id string) map[string]bool {
 	claimed := map[string]bool{}

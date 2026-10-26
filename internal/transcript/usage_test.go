@@ -43,10 +43,12 @@ func TestUsageAddsUpAsTheLogGrows(t *testing.T) {
 	codex, _ := Lookup("codex")
 	rollout := filepath.Join(t.TempDir(), "rollout.jsonl")
 	_ = os.WriteFile(rollout, []byte(`{"type":"event_msg","payload":{"type":"token_count","info":null}}
-{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":17110,"cached_input_tokens":13184,"output_tokens":5},"last_token_usage":{"input_tokens":9000,"cached_input_tokens":8000,"output_tokens":5},"model_context_window":258400}}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":17110,"cached_input_tokens":13184,"output_tokens":5},"last_token_usage":{"input_tokens":9000,"cached_input_tokens":8000,"output_tokens":5},"model_context_window":258400},"rate_limits":{"primary":{"used_percent":7.0,"window_minutes":10080,"resets_at":1793528251},"secondary":null}}}
+{"type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"primary":{"used_percent":12.5,"window_minutes":300,"resets_at":1793500000},"secondary":{"used_percent":8.0,"window_minutes":10080,"resets_at":1793528251}}}}
 `), 0o600)
 	var cs usageScan
-	if got := cs.read(rollout, codex); got != (protocol.Usage{Input: 3926, CachedInput: 13184, Output: 5, Context: 9000, Window: 258400}) {
+	if got := cs.read(rollout, codex); got != (protocol.Usage{Input: 3926, CachedInput: 13184, Output: 5, Context: 9000, Window: 258400,
+		FiveHour: protocol.RateLimit{Used: 12.5, Resets: 1793500000}, Week: protocol.RateLimit{Used: 8, Resets: 1793528251}}) {
 		t.Fatalf("codex %+v", got)
 	}
 }

@@ -270,12 +270,22 @@ func appearanceSettings(m *model) ggui.Widget {
 	theme := ui.ToggleGroup(prefField(m, func(p *prefs) *string { return &p.Theme })).
 		Options([]string{"system", "light", "dark"}).
 		Format(func(s string) string { return T(themeLabels[s]) }).Name(T("Theme"))
+	corner := ui.Select(prefField(m, func(p *prefs) *string { return &p.UsageCorner })).
+		Options(usageCorners).Format(func(s string) string { return T(usageCornerLabels[s]) }).Name(T("Overlay position")).
+		BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return !p.UsageOverlay }))
 	return page(T("Appearance"), T("The window's colours, after Paseo's palettes."),
 		section(T("Theme"),
 			card(
 				row(T("Theme"), T("System follows the desktop's light or dark appearance."), theme),
 			),
 			themePreview(),
+		),
+		section(T("Agent usage"),
+			card(
+				row(T("Show usage overlay"), T("Float a Claude or Codex session's context and its account's 5-hour and weekly limits over its terminal and chat."),
+					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.UsageOverlay }), "").Name(T("Show usage overlay"))),
+				row(T("Overlay position"), T("The corner of the session the overlay sits in."), ggui.Box(corner).Width(160)),
+			),
 		),
 	)
 }

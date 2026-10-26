@@ -10,6 +10,10 @@ const (
 type ReadChat struct {
 	NodeID    string `json:"node_id,omitempty"`
 	SessionID string `json:"session_id"`
+	// UsageOnly asks for the conversation's usage without its messages,
+	// for a front-end that only counts tokens. A daemon that predates it
+	// sends the messages too.
+	UsageOnly bool `json:"usage_only,omitempty"`
 }
 
 type ChatMessage struct {

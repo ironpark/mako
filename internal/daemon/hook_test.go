@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -48,13 +49,36 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	data, _ := os.ReadFile(filepath.Join(root, "args.json"))
 	_ = json.Unmarshal(data, &args)
 	var settings struct {
-		Hooks map[string][]struct{ Hooks []struct{ Command string } }
+		Hooks      map[string][]struct{ Hooks []struct{ Command string } }
+		StatusLine struct{ Command string }
 	}
 	if i := slices.Index(args, "--settings"); i < 0 || json.Unmarshal([]byte(args[i+1]), &settings) != nil {
 		t.Fatalf("launch has no hook: %q", args)
 	}
 	if h := settings.Hooks["SessionStart"]; len(h) != 1 || h[0].Hooks[0].Command != `'/opt/sanbo'\''s/sanbod' hook `+socket {
 		t.Fatalf("hook %+v", settings)
+	}
+	if settings.StatusLine.Command != `'/opt/sanbo'\''s/sanbod' statusline `+socket {
+		t.Fatalf("status line %+v", settings)
+	}
+
+	// The status line reports the window and the account's limits.
+	t.Setenv("SANBO_SESSION", s.ID())
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	status := `{"context_window":{"context_window_size":1000000},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":1738425600},"seven_day":{"used_percentage":41.2,"resets_at":1738857600}}}`
+	runStatusLine([]string{socket}, strings.NewReader(status), io.Discard)
+	want := protocol.Usage{Window: 1000000, FiveHour: protocol.RateLimit{Used: 23.5, Resets: 1738425600}, Week: protocol.RateLimit{Used: 41.2, Resets: 1738857600}}
+	for deadline := time.Now().Add(5 * time.Second); s.Reported() != want; {
+		if time.Now().After(deadline) {
+			t.Fatalf("reported %+v", s.Reported())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// One before the first reply has no limits, and keeps the last.
+	runStatusLine([]string{socket}, strings.NewReader(`{"context_window":{"context_window_size":1000000}}`), io.Discard)
+	time.Sleep(50 * time.Millisecond)
+	if s.Reported() != want {
+		t.Fatalf("limits lost: %+v", s.Reported())
 	}
 
 	// /clear: a new conversation, whose log the agent writes only later.
@@ -205,5 +229,39 @@ func TestApprovalsWaitForTheWindow(t *testing.T) {
 			t.Fatalf("%s: hook printed %q", c.decision, got)
 		}
 		waitFor(t, "approval kept", func() bool { return s.Info().Approval == nil })
+	}
+}
+
+// sanbo's status line takes the place of the user's, so it prints theirs:
+// the project's local settings first, then its shared ones, then the
+// user's.
+func TestStatusLinePrintsTheUsersOwn(t *testing.T) {
+	config, project := t.TempDir(), t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", config)
+	t.Setenv("SANBO_SESSION", "")
+	write := func(path, command string) {
+		_ = os.MkdirAll(filepath.Dir(path), 0o700)
+		body, _ := json.Marshal(map[string]any{"statusLine": map[string]string{"type": "command", "command": command}})
+		if err := os.WriteFile(path, body, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	input := `{"cwd":"/elsewhere","workspace":{"project_dir":` + strconv.Quote(project) + `},"model":{"display_name":"Opus"}}`
+	run := func() string {
+		var out bytes.Buffer
+		runStatusLine([]string{"/nowhere.sock"}, strings.NewReader(input), &out)
+		return out.String()
+	}
+	if got := run(); got != "" {
+		t.Fatalf("no status line printed %q", got)
+	}
+	write(filepath.Join(config, "settings.json"), `printf user`)
+	if got := run(); got != "user" {
+		t.Fatalf("user's: %q", got)
+	}
+	write(filepath.Join(project, ".claude", "settings.json"), `printf project`)
+	write(filepath.Join(project, ".claude", "settings.local.json"), `sed -n 's/.*"display_name":"\([^"]*\)".*/\1/p'`)
+	if got := strings.TrimSpace(run()); got != "Opus" {
+		t.Fatalf("local's, reading the input: %q", got)
 	}
 }

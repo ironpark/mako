@@ -119,6 +119,7 @@ type model struct {
 	window    *ggui.Window                      // nil under a probe
 	ChatModes *ggui.StateValue[map[string]bool] // true shows chat; terminal stays attached
 	chats     map[string]*chatState
+	usages    map[string]*usageState // for the usage overlay
 
 	// The Files tab: folders read, by dirKey; those open; the row chosen;
 	// and the file shown.
@@ -281,6 +282,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Minute:         ggui.State(time.Now().Truncate(time.Minute)),
 		ChatModes:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		chats:          map[string]*chatState{},
+		usages:         map[string]*usageState{},
 		Dirs:           ggui.State(map[string]dirListing{}).WithEqual(func(a, b map[string]dirListing) bool { return reflect.DeepEqual(a, b) }),
 		FilesOpen:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		FileSel:        ggui.State(""),
@@ -834,6 +836,7 @@ func (m *model) closeTab(id string) {
 		delete(m.conns, id)
 	}
 	delete(m.chats, id)
+	delete(m.usages, id)
 	m.ChatModes.Update(func(v map[string]bool) map[string]bool { v = maps.Clone(v); delete(v, id); return v })
 	m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(s string) bool { return s == id }))
 }

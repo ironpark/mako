@@ -183,21 +183,27 @@ func pollWhileShown(m *model, root ggui.Readable[fileRoot], tab int, every time.
 			return nil // nothing shows it
 		}
 		load(r)
-		stop := make(chan struct{})
-		go func() {
-			t := time.NewTicker(every)
-			defer t.Stop()
-			for {
-				select {
-				case <-stop:
-					return
-				case <-t.C:
-					m.post(func() { load(r) })
-				}
-			}
-		}()
-		return func() { close(stop) }
+		return m.every(every, func() { load(r) })
 	})
+}
+
+// every runs fn on the UI goroutine each period until the cleanup it
+// returns is called.
+func (m *model) every(period time.Duration, fn func()) ggui.Cleanup {
+	stop := make(chan struct{})
+	go func() {
+		t := time.NewTicker(period)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				m.post(fn)
+			}
+		}
+	}()
+	return func() { close(stop) }
 }
 
 func changesPanel(m *model) ggui.Widget {

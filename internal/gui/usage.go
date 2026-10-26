@@ -1,8 +1,15 @@
 package gui
 
 import (
+	"context"
 	"fmt"
+	"strings"
+	"time"
 
+	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/ui"
+	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/sanbo/internal/client"
 	"github.com/ironpark/sanbo/internal/protocol"
 )
 
@@ -47,5 +54,181 @@ func usageDetail(u protocol.Usage) string {
 			s += Tf(" of %s", tokens(u.Window))
 		}
 	}
+	for _, l := range usageLimits(u) {
+		s += "\n" + Tf("%s %d%% used", l.long, int(l.limit.Used+0.5))
+		if l.limit.Resets > 0 {
+			s += Tf(", resets %s", time.Unix(l.limit.Resets, 0).Format("01-02 15:04"))
+		}
+	}
 	return s
+}
+
+// usageCornerLabels are the corners the usage overlay can sit in, by value,
+// in English for T.
+var usageCornerLabels = map[string]string{
+	"top-left":     "Top left",
+	"top-right":    "Top right",
+	"bottom-left":  "Bottom left",
+	"bottom-right": "Bottom right",
+}
+
+var usageCorners = []string{"top-left", "top-right", "bottom-left", "bottom-right"}
+
+type usageState struct {
+	usage   *ggui.StateValue[protocol.Usage]
+	loading bool
+}
+
+func (m *model) usageState(id string) *usageState {
+	if state := m.usages[id]; state != nil {
+		return state
+	}
+	state := &usageState{usage: ggui.State(protocol.Usage{})}
+	m.usages[id] = state
+	return state
+}
+
+// loadUsage asks for a session's usage alone, without its messages.
+func (m *model) loadUsage(id string, state *usageState) {
+	if state.loading || m.usages[id] != state {
+		return
+	}
+	info, ok := m.session(id)
+	if !ok {
+		return
+	}
+	state.loading = true
+	req := protocol.ReadChat{NodeID: m.remoteID(info.NodeID), SessionID: id, UsageOnly: true}
+	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (protocol.Chat, error) {
+		return c.ReadChat(ctx, m.key(), req)
+	}, func(chat protocol.Chat, err error) {
+		if m.usages[id] != state {
+			return
+		}
+		state.loading = false
+		if err == nil && chat.Usage != nil {
+			state.usage.Set(*chat.Usage)
+		}
+	})
+}
+
+// usageOverlay floats a session's tokens over its view, in the corner the
+// settings choose: how full its context is and how much of the account's
+// limits is spent. src is the usage the view already reads, such as Chat's;
+// nil has the overlay ask for it alone. A plain shell has no conversation,
+// so it has none.
+func usageOverlay(m *model, id string, src ggui.Readable[protocol.Usage]) ggui.Widget {
+	if !m.chatCapable(id) {
+		return ggui.Box()
+	}
+	shown := ggui.Map(m.Prefs, func(p prefs) bool { return p.UsageOverlay })
+	return ggui.If(shown, func() ggui.Widget {
+		if src == nil {
+			state := m.usageState(id)
+			ggui.Effect(func() ggui.Cleanup {
+				m.loadUsage(id, state)
+				return m.every(3*time.Second, func() { m.loadUsage(id, state) })
+			})
+			src = state.usage
+		}
+		corner := ggui.Map(m.Prefs, func(p prefs) string { return p.UsageCorner })
+		return ggui.View(corner, func(c string) ggui.Widget {
+			x := pick(strings.HasSuffix(c, "left"), 0.0, 1.0)
+			y := pick(strings.HasPrefix(c, "top"), 0.0, 1.0)
+			return ggui.Padding(ggui.Align(ggui.View(src, func(u protocol.Usage) ggui.Widget { return usageCard(m, u) })).At(x, y), 10, 18)
+		})
+	})
+}
+
+// usageLimit is one of the account's limits, with its names: short for the
+// overlay, long for its tooltip.
+type usageLimit struct {
+	short, long string
+	limit       protocol.RateLimit
+}
+
+// usageLimits are the account's limits the agent has said.
+func usageLimits(u protocol.Usage) []usageLimit {
+	var out []usageLimit
+	for _, l := range []usageLimit{{T("5h"), T("5-hour limit"), u.FiveHour}, {T("Week"), T("Weekly limit"), u.Week}} {
+		if !l.limit.IsZero() {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// usageCard is the overlay itself: the context filled, as a share of the
+// window with a bar when the agent names the window, and the account's
+// five-hour and weekly limits with when each starts over. An account the
+// agent reports no limits for, such as one on an API key, shows the tokens
+// spent instead.
+func usageCard(m *model, u protocol.Usage) ggui.Widget {
+	if u == (protocol.Usage{}) {
+		return ggui.Box()
+	}
+	label := func(s string) ggui.Widget {
+		return ggui.Box(ggui.Text(s).Size(11).Color(tokExtraMuted).NoWrap()).Width(52)
+	}
+	line := func(name, v string) ggui.Widget {
+		return ggui.Row(label(name), ggui.Text(v).Size(11.5).Color(tokFg).NoWrap()).Gap(6).Align(ggui.AlignCenter)
+	}
+	bar := func(share float64) ggui.Widget { return ggui.Box(ui.Progress(ggui.Const(share)).Height(3)).Width(200) }
+	var rows []ggui.Widget
+	switch {
+	case u.Context > 0 && u.Window > 0:
+		rows = append(rows, line(T("Context"), Tf("%s / %s · %d%%", tokens(u.Context), tokens(u.Window), u.Context*100/u.Window)),
+			bar(float64(u.Context)/float64(u.Window)))
+	case u.Context > 0:
+		rows = append(rows, line(T("Context"), tokens(u.Context)))
+	}
+	if limits := usageLimits(u); len(limits) > 0 {
+		// Only the limits age, as their resets come nearer.
+		rows = append(rows, ggui.View(m.Minute, func(now time.Time) ggui.Widget {
+			var rows []ggui.Widget
+			for _, l := range limits {
+				used, resets := limitNow(l.limit, now)
+				v := Tf("%d%%", int(used+0.5))
+				if resets > 0 {
+					v += " · " + Tf("resets in %s", untilText(resets))
+				}
+				rows = append(rows, line(l.short, v), bar(used/100))
+			}
+			return ggui.Column(rows...).Gap(5)
+		}))
+	} else {
+		rows = append(rows, line(T("Total"), Tf("%s in · %s out", tokens(u.Input+u.CachedInput), tokens(u.Output))))
+	}
+	card := ggui.Reactive(func() ggui.Widget {
+		return ggui.Box(ggui.Column(rows...).Gap(5)).
+			Fill(tokSurface1).Border(1, tokBorder).Radius(8).Pad(7, 10).Shadow(uitheme.Use().PanelShadow)
+	})
+	return ui.Tooltip(card, usageDetail(u))
+}
+
+// limitNow is a limit as it stands at now: what is spent, and how long
+// until its window starts over. A window past its reset has started over,
+// though the agent has not said so yet.
+func limitNow(l protocol.RateLimit, now time.Time) (used float64, resets time.Duration) {
+	if l.Resets == 0 {
+		return l.Used, 0
+	}
+	resets = time.Unix(l.Resets, 0).Sub(now)
+	if resets <= 0 {
+		return 0, 0
+	}
+	return l.Used, resets
+}
+
+// untilText writes a wait in its two largest units: 3d 4h, 2h 10m, 7m.
+func untilText(d time.Duration) string {
+	d = d.Round(time.Minute)
+	days, hours, minutes := int(d/(24*time.Hour)), int(d%(24*time.Hour)/time.Hour), int(d%time.Hour/time.Minute)
+	switch {
+	case days > 0:
+		return Tf("%dd %dh", days, hours)
+	case hours > 0:
+		return Tf("%dh %dm", hours, minutes)
+	}
+	return Tf("%dm", max(minutes, 1))
 }
