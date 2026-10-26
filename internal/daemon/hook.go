@@ -218,13 +218,13 @@ func statusUsage(input []byte) protocol.Usage {
 	if json.Unmarshal(input, &state) != nil {
 		return protocol.Usage{}
 	}
-	rate := func(l *limit) protocol.RateLimit {
-		if l == nil {
-			return protocol.RateLimit{}
+	u := protocol.Usage{Window: state.Context.Size}
+	for minutes, l := range map[int64]*limit{protocol.FiveHours: state.Limits.FiveHour, protocol.Week: state.Limits.SevenDay} {
+		if l != nil {
+			u.SetLimit(protocol.RateLimit{Minutes: minutes, Used: l.Used, Resets: l.Resets})
 		}
-		return protocol.RateLimit{Used: l.Used, Resets: l.Resets}
 	}
-	return protocol.Usage{Window: state.Context.Size, FiveHour: rate(state.Limits.FiveHour), Week: rate(state.Limits.SevenDay)}
+	return u
 }
 
 // listenHooks serves the hook socket in dir until ctx ends, setting

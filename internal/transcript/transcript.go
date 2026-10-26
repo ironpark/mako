@@ -488,7 +488,7 @@ func ReadBound(info protocol.SessionInfo, path string) (protocol.Chat, error) {
 
 // usageOf is u as a chat carries it: none when nothing was counted.
 func usageOf(u protocol.Usage) *protocol.Usage {
-	if u == (protocol.Usage{}) {
+	if u.IsZero() {
 		return nil
 	}
 	return &u

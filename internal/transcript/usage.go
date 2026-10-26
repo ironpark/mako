@@ -126,18 +126,10 @@ func (u *usageScan) codex(line []byte) {
 		u.usage.Input, u.usage.CachedInput, u.usage.Output = t.Input-t.Cached, t.Cached, t.Output
 		u.usage.Context, u.usage.Window = info.Last.Input, info.Window
 	}
-	// Its limits name their windows; a day or less is the session's, as
-	// Claude's five hours, and longer the week's.
 	if l := r.Payload.Limits; l != nil {
 		for _, w := range []*limit{l.Primary, l.Secondary} {
-			if w == nil || w.Minutes == 0 {
-				continue
-			}
-			rl := protocol.RateLimit{Used: w.Used, Resets: w.Resets}
-			if w.Minutes <= 24*60 {
-				u.usage.FiveHour = rl
-			} else {
-				u.usage.Week = rl
+			if w != nil && w.Minutes != 0 {
+				u.usage.SetLimit(protocol.RateLimit{Minutes: w.Minutes, Used: w.Used, Resets: w.Resets})
 			}
 		}
 	}

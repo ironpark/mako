@@ -191,7 +191,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		return *v.Chat.Usage
 	})
 	usage := ggui.View(chatUsage, func(u protocol.Usage) ggui.Widget {
-		if u == (protocol.Usage{}) {
+		if u.IsZero() {
 			return ggui.Box()
 		}
 		return ui.Tooltip(muted(ggui.Text(usageLine(u)).Size(12).NoWrap()), usageDetail(u))

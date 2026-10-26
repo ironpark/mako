@@ -54,10 +54,10 @@ func usageDetail(u protocol.Usage) string {
 			s += Tf(" of %s", tokens(u.Window))
 		}
 	}
-	for _, l := range usageLimits(u) {
-		s += "\n" + Tf("%s %d%% used", l.long, int(l.limit.Used+0.5))
-		if l.limit.Resets > 0 {
-			s += Tf(", resets %s", time.Unix(l.limit.Resets, 0).Format("01-02 15:04"))
+	for _, l := range u.Limits {
+		s += "\n" + Tf("%s limit %d%% used", limitName(l.Minutes), int(l.Used+0.5))
+		if l.Resets > 0 {
+			s += Tf(", resets %s", time.Unix(l.Resets, 0).Format("01-02 15:04"))
 		}
 	}
 	return s
@@ -140,31 +140,27 @@ func usageOverlay(m *model, id string, src ggui.Readable[protocol.Usage]) ggui.W
 	})
 }
 
-// usageLimit is one of the account's limits, with its names: short for the
-// overlay, long for its tooltip.
-type usageLimit struct {
-	short, long string
-	limit       protocol.RateLimit
-}
-
-// usageLimits are the account's limits the agent has said.
-func usageLimits(u protocol.Usage) []usageLimit {
-	var out []usageLimit
-	for _, l := range []usageLimit{{T("5h"), T("5-hour limit"), u.FiveHour}, {T("Week"), T("Weekly limit"), u.Week}} {
-		if !l.limit.IsZero() {
-			out = append(out, l)
-		}
+// limitName names a limit by its window: 5h, Week, 30d.
+func limitName(minutes int64) string {
+	switch {
+	case minutes == protocol.Week:
+		return T("Week")
+	case minutes%(24*60) == 0:
+		return Tf("%dd", minutes/(24*60))
+	case minutes%60 == 0:
+		return Tf("%dh", minutes/60)
 	}
-	return out
+	return Tf("%dm", minutes)
 }
 
 // usageCard is the overlay itself: the context filled, as a share of the
-// window with a bar when the agent names the window, and the account's
-// five-hour and weekly limits with when each starts over. An account the
+// window with a bar when the agent names the window, and each of the
+// account's limits, such as Claude's five hours and week, with when it
+// starts over. An account the
 // agent reports no limits for, such as one on an API key, shows the tokens
 // spent instead.
 func usageCard(m *model, u protocol.Usage) ggui.Widget {
-	if u == (protocol.Usage{}) {
+	if u.IsZero() {
 		return ggui.Box()
 	}
 	label := func(s string) ggui.Widget {
@@ -182,17 +178,17 @@ func usageCard(m *model, u protocol.Usage) ggui.Widget {
 	case u.Context > 0:
 		rows = append(rows, line(T("Context"), tokens(u.Context)))
 	}
-	if limits := usageLimits(u); len(limits) > 0 {
+	if limits := u.Limits; len(limits) > 0 {
 		// Only the limits age, as their resets come nearer.
 		rows = append(rows, ggui.View(m.Minute, func(now time.Time) ggui.Widget {
 			var rows []ggui.Widget
 			for _, l := range limits {
-				used, resets := limitNow(l.limit, now)
+				used, resets := limitNow(l, now)
 				v := Tf("%d%%", int(used+0.5))
 				if resets > 0 {
 					v += " · " + Tf("resets in %s", untilText(resets))
 				}
-				rows = append(rows, line(l.short, v), bar(used/100))
+				rows = append(rows, line(limitName(l.Minutes), v), bar(used/100))
 			}
 			return ggui.Column(rows...).Gap(5)
 		}))

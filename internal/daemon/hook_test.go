@@ -67,8 +67,8 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	status := `{"context_window":{"context_window_size":1000000},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":1738425600},"seven_day":{"used_percentage":41.2,"resets_at":1738857600}}}`
 	runStatusLine([]string{socket}, strings.NewReader(status), io.Discard)
-	want := protocol.Usage{Window: 1000000, FiveHour: protocol.RateLimit{Used: 23.5, Resets: 1738425600}, Week: protocol.RateLimit{Used: 41.2, Resets: 1738857600}}
-	for deadline := time.Now().Add(5 * time.Second); s.Reported() != want; {
+	want := protocol.Usage{Window: 1000000, Limits: []protocol.RateLimit{{Minutes: 300, Used: 23.5, Resets: 1738425600}, {Minutes: 10080, Used: 41.2, Resets: 1738857600}}}
+	for deadline := time.Now().Add(5 * time.Second); !s.Reported().Equal(want); {
 		if time.Now().After(deadline) {
 			t.Fatalf("reported %+v", s.Reported())
 		}
@@ -77,7 +77,7 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	// One before the first reply has no limits, and keeps the last.
 	runStatusLine([]string{socket}, strings.NewReader(`{"context_window":{"context_window_size":1000000}}`), io.Discard)
 	time.Sleep(50 * time.Millisecond)
-	if s.Reported() != want {
+	if !s.Reported().Equal(want) {
 		t.Fatalf("limits lost: %+v", s.Reported())
 	}
 

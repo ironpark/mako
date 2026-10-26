@@ -69,13 +69,15 @@ func TestUsageOverlayShowsTheAccountsLimits(t *testing.T) {
 	state := m.usageState("s")
 	state.loading = true
 	state.usage.Set(protocol.Usage{Input: 1000, Output: 500, Context: 50000, Window: 1000000,
-		FiveHour: protocol.RateLimit{Used: 23.5, Resets: now.Add(2*time.Hour + 10*time.Minute).Unix()},
-		Week:     protocol.RateLimit{Used: 41.2, Resets: now.Add(3*24*time.Hour + 4*time.Hour).Unix()}})
+		Limits: []protocol.RateLimit{
+			{Minutes: protocol.FiveHours, Used: 23.5, Resets: now.Add(2*time.Hour + 10*time.Minute).Unix()},
+			{Minutes: protocol.Week, Used: 41.2, Resets: now.Add(3*24*time.Hour + 4*time.Hour).Unix()},
+		}})
 	p := ggui.ProbeBuilder(func() ggui.Widget { return usageOverlay(m, "s", nil) }, ggui.Sz(800, 600))
 	defer p.Close()
 	p.Frame()
 	for _, want := range []string{
-		T("5h"), Tf("%d%%", 24) + " · " + Tf("resets in %s", Tf("%dh %dm", 2, 10)),
+		Tf("%dh", 5), Tf("%d%%", 24) + " · " + Tf("resets in %s", Tf("%dh %dm", 2, 10)),
 		T("Week"), Tf("%d%%", 41) + " · " + Tf("resets in %s", Tf("%dd %dh", 3, 4)),
 	} {
 		if _, ok := p.Semantics().Find(ggui.RoleText, want); !ok {

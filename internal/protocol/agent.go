@@ -1,6 +1,10 @@
 package protocol
 
-import "time"
+import (
+	"cmp"
+	"slices"
+	"time"
+)
 
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
@@ -62,18 +66,32 @@ type Usage struct {
 	// window as the conversation fills.
 	Context int64 `json:"context,omitempty"`
 	Window  int64 `json:"window,omitempty"` // the model's context window, when the agent says
-	// FiveHour and Week are how much of the account's subscription limits
-	// is spent, when the agent says: its rolling five-hour session and its
-	// week.
-	FiveHour RateLimit `json:"five_hour,omitzero"`
-	Week     RateLimit `json:"week,omitzero"`
+	// Limits are how much of the account's subscription limits is spent,
+	// when the agent says, the shortest window first.
+	Limits []RateLimit `json:"limits,omitempty"`
 }
+
+// The windows of the limits agents name, in minutes.
+const (
+	FiveHours = 5 * 60
+	Week      = 7 * 24 * 60
+)
 
 // RateLimit is how much of one of an account's usage limits is spent.
 type RateLimit struct {
-	Used   float64 `json:"used"`             // percent, 0 to 100
-	Resets int64   `json:"resets,omitempty"` // when the window starts over, in Unix seconds
+	Minutes int64   `json:"minutes"`          // the window the limit spans
+	Used    float64 `json:"used"`             // percent, 0 to 100
+	Resets  int64   `json:"resets,omitempty"` // when the window starts over, in Unix seconds
 }
+
+// Equal compares usage by value, limits included.
+func (u Usage) Equal(o Usage) bool {
+	return u.Input == o.Input && u.CachedInput == o.CachedInput && u.Output == o.Output &&
+		u.Context == o.Context && u.Window == o.Window && slices.Equal(u.Limits, o.Limits)
+}
+
+// IsZero reports whether nothing is counted.
+func (u Usage) IsZero() bool { return u.Equal(Usage{}) }
 
 // Merge takes what r says over what u says: the window and each limit r
 // names.
@@ -81,13 +99,15 @@ func (u *Usage) Merge(r Usage) {
 	if r.Window != 0 {
 		u.Window = r.Window
 	}
-	if !r.FiveHour.IsZero() {
-		u.FiveHour = r.FiveHour
-	}
-	if !r.Week.IsZero() {
-		u.Week = r.Week
+	for _, l := range r.Limits {
+		u.SetLimit(l)
 	}
 }
 
-// IsZero reports whether the limit is unknown.
-func (r RateLimit) IsZero() bool { return r == RateLimit{} }
+// SetLimit records l in place of the limit of the same window. It copies
+// the limits first, as u may share them with a cached read.
+func (u *Usage) SetLimit(l RateLimit) {
+	limits := slices.DeleteFunc(slices.Clone(u.Limits), func(o RateLimit) bool { return o.Minutes == l.Minutes })
+	i, _ := slices.BinarySearchFunc(limits, l.Minutes, func(o RateLimit, m int64) int { return cmp.Compare(o.Minutes, m) })
+	u.Limits = slices.Insert(limits, i, l)
+}

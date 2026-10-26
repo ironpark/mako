@@ -42,7 +42,7 @@ func (d *Daemon) handleReadChat(ctx context.Context, stream *transport.Stream, e
 // withReported is a conversation's usage with what its status line said
 // over it. It copies, since u may be a cached read's.
 func withReported(u *protocol.Usage, r protocol.Usage) *protocol.Usage {
-	if r == (protocol.Usage{}) {
+	if r.IsZero() {
 		return u
 	}
 	var out protocol.Usage
