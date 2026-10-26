@@ -10,7 +10,7 @@ require (
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/ironpark/ggfx v0.0.0-20261025124736-3c3d65b81c58
 	github.com/ironpark/ggui v0.0.0-20261025145903-7b68fc4fb687
-	github.com/ironpark/gostty v0.0.0-20260914092046-29dc0d68e78f
+	github.com/ironpark/gostty v0.0.0-20261026051858-4b9bf93132f4
 	github.com/quic-go/quic-go v0.62.0
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
 	github.com/yuin/goldmark v1.8.6

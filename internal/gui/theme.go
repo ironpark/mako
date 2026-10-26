@@ -179,9 +179,9 @@ func applyPalette(vt *gostty.Terminal, p palette) {
 	for i, c := range p.ANSI {
 		_ = vt.SetDefaultPaletteColor(uint8(i), gostty.RGBFromUint32(c))
 	}
-	_ = vt.ResetPalette()
-	_ = vt.SetDefaultBackgroundColor(rgb(p.Surface0))
-	_ = vt.SetDefaultForegroundColor(rgb(p.Fg))
+	vt.ResetPalette()
+	vt.SetDefaultBackgroundColor(rgb(p.Surface0))
+	vt.SetDefaultForegroundColor(rgb(p.Fg))
 }
 
-func rgb(c color.RGBA) gostty.RGB { return gostty.RGB{R: c.R, G: c.G, B: c.B} }
+func rgb(c color.RGBA) gostty.RGB { return gostty.NewRGB(c.R, c.G, c.B) }

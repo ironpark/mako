@@ -94,17 +94,12 @@ func newTermConn(id string, link sessionLink, cols, rows uint16, wake func(), ti
 		vt.Close()
 		return nil, err
 	}
-	gesture, err := vt.Terminal().NewGesture()
-	if err != nil {
-		state.Close()
-		vt.Close()
-		return nil, err
-	}
+	gesture := vt.Terminal().NewGesture()
 	vt.AddGesture(gesture) // closed with the terminal, and before it
 	_ = gesture.SetWordBoundaries(wordBoundaries)
 	// One click places the anchor a drag grows from, two select a word,
 	// three the line.
-	_ = gesture.SetBehaviors(gostty.GestureBehaviorCell, gostty.GestureBehaviorWord, gostty.GestureBehaviorLine)
+	gesture.SetBehaviors(gostty.GestureBehaviorCell, gostty.GestureBehaviorWord, gostty.GestureBehaviorLine)
 	t := &termConn{id: id, att: link, vt: vt, state: state, gesture: gesture, cols: cols, rows: rows, wake: wake}
 	if len(titleChanged) > 0 {
 		t.titleChanged = titleChanged[0]
@@ -112,7 +107,7 @@ func newTermConn(id string, link sessionLink, cols, rows uint16, wake func(), ti
 	// A program that selects text itself, as claude does with the mouse,
 	// copies it with OSC 52. The request is served on the UI thread, where
 	// the clipboard is; one asking to read the clipboard is refused.
-	_ = vt.Stream().OnClipboardWriteRequest(func(req *gostty.ClipboardRequest) {
+	vt.Stream().OnClipboardWriteRequest(func(req *gostty.ClipboardRequest) {
 		if text, ok := clipboardText(req); ok {
 			t.copied = &text // under mu, which feeding holds
 		}
@@ -174,9 +169,9 @@ func (t *termConn) applyOptionsLocked(o termOptions) {
 			t.hasFrame = false
 		}
 	}
-	_ = vt.SetScrollbackMaxLines(uint(o.scrollback))
-	_ = vt.SetDefaultCursorStyle(o.cursorStyle)
-	_ = vt.SetDefaultCursorBlink(o.cursorBlink)
+	vt.SetScrollbackMaxLines(uint(o.scrollback))
+	vt.SetDefaultCursorStyle(o.cursorStyle)
+	vt.SetDefaultCursorBlink(o.cursorBlink)
 	t.opts = o
 }
 
@@ -211,7 +206,7 @@ func (t *termConn) read() {
 			// A snapshot replaces whatever this terminal held; it is the
 			// daemon's screen at the moment of attach. The screen text
 			// follows as output frames.
-			_ = t.vt.Terminal().FullReset()
+			t.vt.Terminal().FullReset()
 			opts := t.opts
 			t.opts = termOptions{}
 			t.applyOptionsLocked(opts)
@@ -302,10 +297,7 @@ func (t *termConn) frame() (frameSnapshot, error) {
 	// Only what changed since the last paint is copied out of the native
 	// state: a frame drawn for a cursor blink or an animation need not touch
 	// it at all.
-	dirty, err := t.state.Dirty()
-	if err != nil {
-		return frameSnapshot{}, err
-	}
+	dirty := t.state.Dirty()
 	full := !t.hasFrame || dirty == gostty.RenderDirtyFull
 	if !full && dirty == gostty.RenderDirtyPartial {
 		if cap(t.dirtyRows) < rows {
@@ -339,16 +331,8 @@ func (t *termConn) frame() (frameSnapshot, error) {
 		t.refreshClustersLocked(0, rows, cols)
 	}
 	t.hasFrame = true
-	_ = t.state.Clean()
-
-	colors, err := t.state.Colors()
-	if err != nil {
-		return frameSnapshot{}, err
-	}
-	cursor, err := t.state.Cursor()
-	if err != nil {
-		return frameSnapshot{}, err
-	}
+	t.state.Clean()
+	colors, cursor := t.state.Colors(), t.state.Cursor()
 	return frameSnapshot{
 		cells:    t.cells,
 		clusters: t.clusters,
@@ -438,7 +422,7 @@ func (t *termConn) key(ev input.KeyEvent, text string) {
 	err := input.EncodeKey(&buf, t.vt.Terminal(), ev, text)
 	if err == nil && len(buf) > 0 {
 		// Typing snaps the viewport back to the bottom, as every terminal does.
-		_ = t.vt.Terminal().ScrollViewport(gostty.ScrollViewportBottom())
+		t.vt.Terminal().ScrollViewport(gostty.ScrollViewportBottom())
 	}
 	t.mu.Unlock()
 	if err == nil && len(buf) > 0 {
@@ -483,7 +467,7 @@ func (t *termConn) wheel(lines int) {
 	}
 	alt := t.vt.Terminal().ActiveScreenKey() == gostty.ScreenKeyAlternate
 	if !alt {
-		_ = t.vt.Terminal().ScrollViewport(gostty.ScrollViewportDelta(-lines))
+		t.vt.Terminal().ScrollViewport(gostty.ScrollViewportDelta(-lines))
 	}
 	t.mu.Unlock()
 	if !alt {
@@ -551,7 +535,7 @@ func (t *termConn) selectPress(p pointerCell) {
 	if t.closed {
 		return
 	}
-	_ = t.gesture.SetGeometry(gostty.GestureGeometry{
+	t.gesture.SetGeometry(gostty.GestureGeometry{
 		Columns: uint32(p.cols), CellWidth: uint32(p.cellW), ScreenHeight: uint32(p.height),
 	})
 	sel, ok, err := t.gesture.Press(gostty.GesturePressEvent{
@@ -575,22 +559,16 @@ func (t *termConn) selectDrag(p pointerCell, rectangle bool) {
 		return
 	}
 	ev := gostty.GestureDragEvent{X: uint16(p.col), Y: uint16(p.row), Xpos: p.xpos, Ypos: p.ypos, Rectangle: rectangle}
-	sel, ok, err := t.gesture.Drag(ev)
-	if err != nil {
-		return
-	}
-	t.applySelectionLocked(sel, ok)
+	t.applySelectionLocked(t.gesture.Drag(ev))
 	// Held past the top or bottom, the view scrolls and the selection grows
 	// with it, a row a frame.
-	if dir, err := t.gesture.Autoscroll(); err == nil && dir != gostty.GestureAutoscrollDirectionNone {
+	if dir := t.gesture.Autoscroll(); dir != gostty.GestureAutoscrollDirectionNone {
 		delta := 1
 		if dir == gostty.GestureAutoscrollDirectionUp {
 			delta = -1
 		}
-		_ = t.vt.Terminal().ScrollViewport(gostty.ScrollViewportDelta(delta))
-		if sel, ok, err := t.gesture.AutoscrollTick(ev); err == nil {
-			t.applySelectionLocked(sel, ok)
-		}
+		t.vt.Terminal().ScrollViewport(gostty.ScrollViewportDelta(delta))
+		t.applySelectionLocked(t.gesture.AutoscrollTick(ev))
 	}
 }
 
@@ -603,17 +581,14 @@ func (t *termConn) selectRelease(p pointerCell) string {
 		return ""
 	}
 	t.dragging = false
-	_ = t.gesture.Release(uint16(p.col), uint16(p.row))
+	t.gesture.Release(uint16(p.col), uint16(p.row))
 	return t.selectionLocked()
 }
 
 func (t *termConn) applySelectionLocked(sel gostty.Selection, ok bool) {
-	screen, err := t.vt.Terminal().ActiveScreen()
-	if err != nil {
-		return
-	}
+	screen := t.vt.Terminal().ActiveScreen()
 	if !ok {
-		_ = screen.ClearSelection()
+		screen.ClearSelection()
 		return
 	}
 	_, _ = screen.SetSelection(sel)
@@ -630,11 +605,7 @@ func (t *termConn) selection() string {
 }
 
 func (t *termConn) selectionLocked() string {
-	screen, err := t.vt.Terminal().ActiveScreen()
-	if err != nil {
-		return ""
-	}
-	text, ok, err := screen.SelectionString()
+	text, ok, err := t.vt.Terminal().ActiveScreen().SelectionString()
 	if err != nil || !ok {
 		return ""
 	}
@@ -647,10 +618,8 @@ func (t *termConn) clearSelection() {
 	if t.closed {
 		return
 	}
-	if screen, err := t.vt.Terminal().ActiveScreen(); err == nil {
-		_ = screen.ClearSelection()
-	}
-	_ = t.gesture.Reset()
+	t.vt.Terminal().ActiveScreen().ClearSelection()
+	t.gesture.Reset()
 	t.dragging = false
 }
 
@@ -661,9 +630,7 @@ func (t *termConn) selectAll() {
 	if t.closed {
 		return
 	}
-	if screen, err := t.vt.Terminal().ActiveScreen(); err == nil {
-		_, _ = screen.SelectAll()
-	}
+	_, _ = t.vt.Terminal().ActiveScreen().SelectAll()
 }
 
 // Mouse reporting -------------------------------------------------------------
@@ -676,8 +643,7 @@ func (t *termConn) mouseReported() bool {
 	if t.closed {
 		return false
 	}
-	mt, err := t.vt.Terminal().MouseTracking()
-	return err == nil && mt != gostty.MouseTrackingNone
+	return t.vt.Terminal().MouseTracking() != gostty.MouseTrackingNone
 }
 
 // mouse encodes one mouse event under the program's modes and sends it,

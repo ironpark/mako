@@ -725,13 +725,13 @@ func (g grid) background(c gostty.RenderCell, colors gostty.RenderColors) (color
 	if c.Bg == colors.Background {
 		return g.pal.Surface0, true
 	}
-	return color.RGBA{R: c.Bg.R, G: c.Bg.G, B: c.Bg.B, A: 0xff}, false
+	return color.RGBA{R: c.Bg.R(), G: c.Bg.G(), B: c.Bg.B(), A: 0xff}, false
 }
 
 func (g grid) foreground(c gostty.RenderCell, colors gostty.RenderColors) color.RGBA {
 	fg := g.pal.Fg
 	if c.Fg != colors.Foreground {
-		fg = color.RGBA{R: c.Fg.R, G: c.Fg.G, B: c.Fg.B, A: 0xff}
+		fg = color.RGBA{R: c.Fg.R(), G: c.Fg.G(), B: c.Fg.B(), A: 0xff}
 	}
 	if c.Flags.Faint {
 		bg := g.pal.Surface0
