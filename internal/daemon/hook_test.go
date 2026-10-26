@@ -17,6 +17,7 @@ import (
 	"github.com/ironpark/sanbo/internal/protocol"
 	"github.com/ironpark/sanbo/internal/session"
 	"github.com/ironpark/sanbo/internal/transcript"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestHookReportsFollowTheConversation(t *testing.T) {
@@ -39,12 +40,12 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	socket := filepath.Join(run, "hooks-0.sock")
 
 	project := t.TempDir()
-	s, err := d.openSession(t.Context(), protocol.OpenSession{Agent: "claude", Project: project})
+	s, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: project})
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitConversation(t, s) // found from its open log before any report
-	first, firstPath := s.Info().ConversationID, s.TranscriptPath()
+	first, firstPath := s.Info().GetConversationId(), s.TranscriptPath()
 	var args []string
 	data, _ := os.ReadFile(filepath.Join(root, "args.json"))
 	_ = json.Unmarshal(data, &args)
@@ -67,8 +68,8 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	status := `{"context_window":{"context_window_size":1000000},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":1738425600},"seven_day":{"used_percentage":41.2,"resets_at":1738857600}}}`
 	runStatusLine([]string{socket}, strings.NewReader(status), io.Discard)
-	want := protocol.Usage{Window: 1000000, Limits: []protocol.RateLimit{{Minutes: 300, Used: 23.5, Resets: 1738425600}, {Minutes: 10080, Used: 41.2, Resets: 1738857600}}}
-	for deadline := time.Now().Add(5 * time.Second); !s.Reported().Equal(want); {
+	want := &protocol.Usage{Window: 1000000, Limits: []*protocol.RateLimit{{Minutes: 300, Used: 23.5, Resets: 1738425600}, {Minutes: 10080, Used: 41.2, Resets: 1738857600}}}
+	for deadline := time.Now().Add(5 * time.Second); !proto.Equal(s.Reported(), want); {
 		if time.Now().After(deadline) {
 			t.Fatalf("reported %+v", s.Reported())
 		}
@@ -77,7 +78,7 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	// One before the first reply has no limits, and keeps the last.
 	runStatusLine([]string{socket}, strings.NewReader(`{"context_window":{"context_window_size":1000000}}`), io.Discard)
 	time.Sleep(50 * time.Millisecond)
-	if !s.Reported().Equal(want) {
+	if !proto.Equal(s.Reported(), want) {
 		t.Fatalf("limits lost: %+v", s.Reported())
 	}
 
@@ -88,7 +89,7 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	input, _ := json.Marshal(map[string]string{"hook_event_name": "SessionStart", "source": "clear", "session_id": cleared, "transcript_path": path})
 	runHook([]string{socket}, strings.NewReader(string(input)), io.Discard)
 	deadline := time.Now().Add(5 * time.Second)
-	for s.Info().ConversationID != cleared {
+	for s.Info().GetConversationId() != cleared {
 		if time.Now().After(deadline) {
 			t.Fatal("hook report not bound")
 		}
@@ -105,7 +106,7 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	if err := report(1, first, firstPath); err != nil {
 		t.Fatal(err)
 	}
-	if s.Info().ConversationID != cleared {
+	if s.Info().GetConversationId() != cleared {
 		t.Fatal("a late report replaced a newer one")
 	}
 	// Nor does a log outside the agent's own place.
@@ -120,13 +121,13 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitConversation(t, s)
-	if s.TranscriptPath() != path || s.Info().ConversationID != cleared {
-		t.Fatalf("bound %s %s", s.Info().ConversationID, s.TranscriptPath())
+	if s.TranscriptPath() != path || s.Info().GetConversationId() != cleared {
+		t.Fatalf("bound %s %s", s.Info().GetConversationId(), s.TranscriptPath())
 	}
 	d.sessionMu.Lock()
 	saved := d.saved[s.ID()]
 	d.sessionMu.Unlock()
-	if saved.Info.ConversationID != cleared || saved.TranscriptPath != path {
+	if saved.Info.GetConversationId() != cleared || saved.TranscriptPath != path {
 		t.Fatalf("saved %+v", saved)
 	}
 }
@@ -150,7 +151,7 @@ func hookedDaemon(t *testing.T) (*Daemon, *session.Session, string) {
 	t.Cleanup(func() { os.RemoveAll(run) })
 	d.hookBinary = "/bin/sanbod"
 	d.listenHooks(t.Context(), run)
-	s, err := d.openSession(t.Context(), protocol.OpenSession{Agent: "claude", Project: t.TempDir()})
+	s, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +183,7 @@ func TestHooksReportWhatTheAgentDoes(t *testing.T) {
 		{`{"hook_event_name":"Stop"}`, protocol.AgentDone},
 	} {
 		runHook([]string{socket}, strings.NewReader(step.input), io.Discard)
-		waitFor(t, step.input+" not reported", func() bool { return s.Info().Status == step.want })
+		waitFor(t, step.input+" not reported", func() bool { return s.Info().GetStatus() == step.want })
 	}
 }
 
@@ -202,8 +203,8 @@ func TestApprovalsWaitForTheWindow(t *testing.T) {
 	if got := <-ask(); len(got) != 0 {
 		t.Fatalf("decided unwatched: %s", got)
 	}
-	if s.Info().Status != protocol.AgentWaiting {
-		t.Fatalf("status %q", s.Info().Status)
+	if s.Info().GetStatus() != protocol.AgentWaiting {
+		t.Fatalf("status %q", s.Info().GetStatus())
 	}
 
 	d.approvals.watch()
@@ -213,22 +214,22 @@ func TestApprovalsWaitForTheWindow(t *testing.T) {
 		{protocol.DecisionTerminal, ""},
 	} {
 		out := ask()
-		waitFor(t, "no approval shown", func() bool { return s.Info().Approval != nil })
-		a := s.Info().Approval
-		if a.Tool != "Bash" || a.Detail != "rm -rf build" || !strings.Contains(a.Input, `"command": "rm -rf build"`) {
+		waitFor(t, "no approval shown", func() bool { return s.Info().GetApproval() != nil })
+		a := s.Info().GetApproval()
+		if a.GetTool() != "Bash" || a.GetDetail() != "rm -rf build" || !strings.Contains(a.GetInput(), `"command": "rm -rf build"`) {
 			t.Fatalf("approval %+v", a)
 		}
-		if err := d.approvals.answer("other", protocol.AnswerApproval{ApprovalID: a.ID, Decision: c.decision}); err == nil {
+		if err := d.approvals.answer("other", &protocol.AnswerApproval{ApprovalId: a.GetId(), Decision: c.decision}); err == nil {
 			t.Fatal("answered for another session")
 		}
-		if err := d.approvals.answer(s.ID(), protocol.AnswerApproval{ApprovalID: a.ID, Decision: c.decision, Message: "not now"}); err != nil {
+		if err := d.approvals.answer(s.ID(), &protocol.AnswerApproval{ApprovalId: a.GetId(), Decision: c.decision, Message: "not now"}); err != nil {
 			t.Fatal(err)
 		}
 		got := string(<-out)
 		if c.want == "" && got != "" || !strings.Contains(got, c.want) || c.want != "" && !strings.Contains(got, `"hookEventName":"PermissionRequest"`) {
 			t.Fatalf("%s: hook printed %q", c.decision, got)
 		}
-		waitFor(t, "approval kept", func() bool { return s.Info().Approval == nil })
+		waitFor(t, "approval kept", func() bool { return s.Info().GetApproval() == nil })
 	}
 }
 

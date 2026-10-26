@@ -10,9 +10,11 @@ import (
 // ReadChat reads a session's conversation. The daemon answering, local or a
 // peer, may be older than this front-end, so its reply is brought to the
 // current form.
-func (c *Client) ReadChat(ctx context.Context, psk string, req protocol.ReadChat) (protocol.Chat, error) {
-	var out protocol.Chat
-	err := c.request(ctx, psk, protocol.TypeReadChat, req, &out)
-	transcript.Upgrade(&out)
-	return out, err
+func (c *Client) ReadChat(ctx context.Context, psk string, req *protocol.ReadChat) (*protocol.Chat, error) {
+	out, err := request[*protocol.Chat](ctx, c, psk, protocol.TypeReadChat, req)
+	if err != nil {
+		return nil, err
+	}
+	transcript.Upgrade(out)
+	return out, nil
 }

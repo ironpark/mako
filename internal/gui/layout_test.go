@@ -196,12 +196,12 @@ func TestSidePanelsSlide(t *testing.T) {
 // Tidying keeps agents, shells running a command and files with unsaved
 // changes, and takes the rest.
 func TestTidyable(t *testing.T) {
-	sessions := []protocol.SessionInfo{
-		{ID: "agent", Agent: "claude", State: protocol.StateRunning, Idle: true},
-		{ID: "busy", Agent: "shell", State: protocol.StateRunning},
-		{ID: "idle", Agent: "shell", State: protocol.StateRunning, Idle: true},
-		{ID: "exited", Agent: "shell", State: protocol.StateExited},
-		{ID: "dead-agent", Agent: "codex", State: protocol.StateExited},
+	sessions := []*protocol.SessionInfo{
+		{Id: "agent", Agent: "claude", State: protocol.StateRunning, Idle: true},
+		{Id: "busy", Agent: "shell", State: protocol.StateRunning},
+		{Id: "idle", Agent: "shell", State: protocol.StateRunning, Idle: true},
+		{Id: "exited", Agent: "shell", State: protocol.StateExited},
+		{Id: "dead-agent", Agent: "codex", State: protocol.StateExited},
 	}
 	clean, dirty := docTabID("n", "/a"), docTabID("n", "/b")
 	docs := map[string]docInfo{clean: {}, dirty: {Dirty: true}}

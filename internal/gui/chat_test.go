@@ -47,9 +47,9 @@ func TestChatSwitchKeepsLiveSessionAndComposer(t *testing.T) {
 	m.setComposerDraft(id, "draft survives switching")
 	p.Frame()
 	p.Tap(T("Chat"))
-	probeUntil(t, p, "conversations", func() bool { return m.chats[id] != nil && len(ggui.Peek(m.chats[id].result).Chat.Messages) == 1 })
+	probeUntil(t, p, "conversations", func() bool { return m.chats[id] != nil && len(ggui.Peek(m.chats[id].result).Chat.GetMessages()) == 1 })
 	result := ggui.Peek(m.chats[id].result)
-	if result.Err != "" || result.Chat.Conversation != "conversation" {
+	if result.Err != "" || result.Chat.GetConversation() != "conversation" {
 		t.Fatalf("discovery: %+v", result)
 	}
 	if _, ok := p.Find(T("Message")); !ok {
@@ -79,7 +79,7 @@ func TestChatSwitchKeepsLiveSessionAndComposer(t *testing.T) {
 	}
 	m.setChatMode(id, true)
 	p.Frame()
-	if got := ggui.Peek(m.chats[id].result).Chat.Conversation; got != "conversation" {
+	if got := ggui.Peek(m.chats[id].result).Chat.GetConversation(); got != "conversation" {
 		t.Fatalf("lost conversation: %q", got)
 	}
 	// A document cannot be changed into a session view by the shortcut.
@@ -110,7 +110,7 @@ func TestChatModesArePerSession(t *testing.T) {
 func TestChatComposerLeavesRoomForTheFeed(t *testing.T) {
 	t.Setenv("SANBO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
-	m.Sessions.Set([]protocol.SessionInfo{{ID: "s", Agent: "claude", Project: "/tmp"}})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	m.Selected.Set("s")
 	p := ggui.ProbeBuilder(func() ggui.Widget {
 		return ggui.Column(ggui.Expanded(ggui.Text("FEEDMARKER")), composer(m, "s", ggui.State(""))).Stretch()
@@ -131,15 +131,15 @@ func TestChatComposerLeavesRoomForTheFeed(t *testing.T) {
 func TestChatToolRowsFold(t *testing.T) {
 	t.Setenv("SANBO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
-	m.Sessions.Set([]protocol.SessionInfo{{ID: "s", Agent: "claude", Project: "/tmp"}})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	m.Selected.Set("s")
 	state := m.chatState("s")
 	state.loading = true
-	state.result.Set(chatResult{Loaded: true, Chat: protocol.Chat{Supported: true, Conversation: "c",
-		Messages: []protocol.ChatMessage{
+	state.result.Set(chatResult{Loaded: true, Chat: &protocol.Chat{Supported: true, Conversation: "c",
+		Messages: []*protocol.ChatMessage{
 			{Role: "assistant", Text: "Running the tool."},
-			{Role: "tool", ID: "t1", Tool: "Bash", Detail: "go test ./...", Text: `{"command":"go test ./..."}`, Result: "OUTPUT_MARKER"},
-			{Role: "tool", ID: "t2", Tool: "Read", Detail: "main.go", Text: `{"file_path":"main.go"}`, Result: "SECOND_MARKER"},
+			{Role: "tool", Id: "t1", Tool: "Bash", Detail: "go test ./...", Text: `{"command":"go test ./..."}`, Result: "OUTPUT_MARKER"},
+			{Role: "tool", Id: "t2", Tool: "Read", Detail: "main.go", Text: `{"file_path":"main.go"}`, Result: "SECOND_MARKER"},
 			{Role: "user", Text: "thanks"},
 		}}})
 	p := ggui.ProbeBuilder(func() ggui.Widget { return chatView(m, "s", 1) }, ggui.Sz(900, 700))
@@ -171,7 +171,7 @@ func TestChatToolRowsFold(t *testing.T) {
 func TestShellHasNoChat(t *testing.T) {
 	t.Setenv("SANBO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
-	m.Sessions.Set([]protocol.SessionInfo{{ID: "s", Agent: "shell"}})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "shell"}})
 	m.Selected.Set("s")
 	if m.chatCapable("s") {
 		t.Fatal("a shell counts as chat-capable")
@@ -180,7 +180,7 @@ func TestShellHasNoChat(t *testing.T) {
 	if ggui.Peek(m.ChatModes)["s"] {
 		t.Fatal("the shortcut switched a shell to chat")
 	}
-	m.Sessions.Set([]protocol.SessionInfo{{ID: "c", Agent: "claude"}})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "c", Agent: "claude"}})
 	if !m.chatCapable("c") {
 		t.Fatal("a claude session does not count as chat-capable")
 	}
@@ -191,7 +191,7 @@ func TestShellHasNoChat(t *testing.T) {
 func TestViewSwitchTogglesWhereverClicked(t *testing.T) {
 	t.Setenv("SANBO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
-	m.Sessions.Set([]protocol.SessionInfo{{ID: "s", Agent: "claude", Project: "/tmp"}})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	p := ggui.ProbeBuilder(func() ggui.Widget { return ggui.Center(viewSwitch(m, "s", 0)) }, ggui.Sz(200, 60))
 	defer p.Close()
 	p.Frame()

@@ -14,10 +14,10 @@ import (
 func TestUsageOverlayFollowsItsSetting(t *testing.T) {
 	t.Setenv("SANBO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
-	m.Sessions.Set([]protocol.SessionInfo{{ID: "s", Agent: "claude", Project: "/tmp"}})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	state := m.usageState("s")
 	state.loading = true
-	state.usage.Set(protocol.Usage{Input: 1000, CachedInput: 2000, Output: 500, Context: 50000, Window: 200000})
+	state.usage.Set(&protocol.Usage{Input: 1000, CachedInput: 2000, Output: 500, Context: 50000, Window: 200000})
 	p := ggui.ProbeBuilder(func() ggui.Widget { return usageOverlay(m, "s", nil) }, ggui.Sz(800, 600))
 	defer p.Close()
 	p.Frame()
@@ -51,7 +51,7 @@ func TestUsageOverlayFollowsItsSetting(t *testing.T) {
 func TestShellHasNoUsageOverlay(t *testing.T) {
 	t.Setenv("SANBO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
-	m.Sessions.Set([]protocol.SessionInfo{{ID: "s", Agent: "shell", Project: "/tmp"}})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "shell", Project: "/tmp"}})
 	usageOverlay(m, "s", nil)
 	if m.usages["s"] != nil {
 		t.Fatal("a shell polls for usage")
@@ -63,13 +63,13 @@ func TestShellHasNoUsageOverlay(t *testing.T) {
 func TestUsageOverlayShowsTheAccountsLimits(t *testing.T) {
 	t.Setenv("SANBO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
-	m.Sessions.Set([]protocol.SessionInfo{{ID: "s", Agent: "claude", Project: "/tmp"}})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	now := time.Unix(1_800_000_000, 0)
 	m.Minute.Set(now)
 	state := m.usageState("s")
 	state.loading = true
-	state.usage.Set(protocol.Usage{Input: 1000, Output: 500, Context: 50000, Window: 1000000,
-		Limits: []protocol.RateLimit{
+	state.usage.Set(&protocol.Usage{Input: 1000, Output: 500, Context: 50000, Window: 1000000,
+		Limits: []*protocol.RateLimit{
 			{Minutes: protocol.FiveHours, Used: 23.5, Resets: now.Add(2*time.Hour + 10*time.Minute).Unix()},
 			{Minutes: protocol.Week, Used: 41.2, Resets: now.Add(3*24*time.Hour + 4*time.Hour).Unix()},
 		}})
@@ -100,10 +100,10 @@ func TestUsageOverlayShowsTheAccountsLimits(t *testing.T) {
 func TestUsageDetailOpensOnHoverAlone(t *testing.T) {
 	t.Setenv("SANBO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
-	m.Sessions.Set([]protocol.SessionInfo{{ID: "s", Agent: "claude", Project: "/tmp"}})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	state := m.usageState("s")
 	state.loading = true
-	u := protocol.Usage{Input: 1000, Output: 500, Context: 50000, Window: 200000}
+	u := &protocol.Usage{Input: 1000, Output: 500, Context: 50000, Window: 200000}
 	state.usage.Set(u)
 	terminal := ggui.Focus(ggui.Box().Size(800, 600))
 	p := ggui.ProbeBuilder(func() ggui.Widget { return ggui.Stack(terminal, usageOverlay(m, "s", nil)).Expand() }, ggui.Sz(800, 600))

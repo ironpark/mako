@@ -11,23 +11,23 @@ import (
 )
 
 func TestGroupSessions(t *testing.T) {
-	s := func(id, node, project string) protocol.SessionInfo {
-		return protocol.SessionInfo{ID: id, NodeID: node, Project: project, Repo: project}
+	s := func(id, node, project string) *protocol.SessionInfo {
+		return &protocol.SessionInfo{Id: id, NodeId: node, Project: project, Repo: project}
 	}
-	sessions := []protocol.SessionInfo{
+	sessions := []*protocol.SessionInfo{
 		s("a", "n1", "/src/sanbo/internal"),
 		s("b", "n1", "/src/sanbo"),
 		s("c", "n2", "/src/sanbo"),
 		s("d", "n1", "/src/sanbox"),
 	}
 	sessions[0].Repo = "/src/sanbo" // a folder of the repository
-	nodes := []protocol.Node{{ID: "n1", Name: "mac"}, {ID: "n2", Name: "box"}}
+	nodes := []*protocol.Node{{Id: "n1", Name: "mac"}, {Id: "n2", Name: "box"}}
 
 	byProject := groupSessions(sessions, groupProject, nodes, nil)
 	got := map[string][]string{}
 	for _, g := range byProject {
 		for _, x := range g.Sessions {
-			got[g.NodeID+":"+g.Project] = append(got[g.NodeID+":"+g.Project], x.ID)
+			got[g.NodeID+":"+g.Project] = append(got[g.NodeID+":"+g.Project], x.GetId())
 		}
 	}
 	// A folder of a repository joins its section, on its node only, and a

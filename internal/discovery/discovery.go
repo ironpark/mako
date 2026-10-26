@@ -7,9 +7,9 @@ package discovery
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/ironpark/sanbo/internal/protocol"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Found reports one discovered daemon.
@@ -21,13 +21,13 @@ type Found struct {
 }
 
 // Node converts a Found into a protocol node record.
-func (f Found) Node() protocol.Node {
-	return protocol.Node{
-		ID:       f.NodeID,
+func (f Found) Node() *protocol.Node {
+	return &protocol.Node{
+		Id:       f.NodeID,
 		Name:     f.Name,
 		Addr:     f.Addr,
 		Source:   f.Source,
-		LastSeen: time.Now(),
+		LastSeen: timestamppb.Now(),
 	}
 }
 

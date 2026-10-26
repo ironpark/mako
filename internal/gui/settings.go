@@ -221,7 +221,7 @@ func generalSettings(m *model) ggui.Widget {
 			}
 			return ggui.Row(linkDot(false), muted(ggui.Text(msg).Size(12.5).NoWrap().Ellipsis())).Gap(8)
 		}
-		return ggui.Row(linkDot(true), muted(ggui.Text(Tf("Connected to %s", c.Self.Name)).Size(12.5))).Gap(8)
+		return ggui.Row(linkDot(true), muted(ggui.Text(Tf("Connected to %s", c.Self.GetName())).Size(12.5))).Gap(8)
 	})
 
 	codes := make([]string, 0, len(languages)+1)
@@ -540,7 +540,7 @@ func discoverySettings(m *model) ggui.Widget {
 // Mesh ------------------------------------------------------------------------
 
 func nodeSettings(m *model) ggui.Widget {
-	nodes := ggui.View(m.Nodes, func(nodes []protocol.Node) ggui.Widget { return nodeList(nodes) })
+	nodes := ggui.View(m.Nodes, func(nodes []*protocol.Node) ggui.Widget { return nodeList(nodes) })
 	return page(T("Nodes"), T("Daemons this window can reach. Sessions can start on any of them."),
 		section(T("Mesh"), nodes),
 	)

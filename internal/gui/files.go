@@ -11,7 +11,6 @@ import (
 	"maps"
 	"path"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"time"
 
@@ -47,7 +46,7 @@ func splitKey(key string) (node, path string) {
 // dirListing is what is known of a directory: its entries once read, and
 // while it is read again, the ones from before.
 type dirListing struct {
-	Entries []protocol.DirEntry
+	Entries []*protocol.DirEntry
 	Err     string
 	Loading bool
 }
@@ -63,7 +62,7 @@ type fileItem struct {
 // filePreview is the file shown under the tree.
 type filePreview struct {
 	fileItem
-	File    protocol.File
+	File    *protocol.File
 	Img     *ggfx.Image // an image file, decoded; its bytes are not kept
 	Err     string
 	Loading bool
@@ -76,7 +75,7 @@ func (p filePreview) same(o filePreview) bool {
 		return false
 	}
 	p.Img, o.Img = nil, nil
-	return reflect.DeepEqual(p, o)
+	return deepEqual(p, o)
 }
 
 // isImage reports whether a file's name says it is an image the preview
@@ -92,7 +91,7 @@ func isImage(name string) bool {
 // decodedImage is an image file as read, and decoded off the window's
 // goroutine.
 type decodedImage struct {
-	File protocol.File
+	File *protocol.File
 	Img  image.Image
 }
 
@@ -114,7 +113,7 @@ func fetch[T any](m *model, timeout time.Duration, call func(context.Context, *c
 // remoteID is the node a request names: "" for the daemon the window talks
 // through, which serves its own node.
 func (m *model) remoteID(node string) string {
-	if node == ggui.Peek(m.Conn).Self.ID {
+	if node == ggui.Peek(m.Conn).Self.GetId() {
 		return ""
 	}
 	return node
@@ -133,7 +132,7 @@ func (m *model) filesRoot() fileRoot {
 	if !ok {
 		return fileRoot{}
 	}
-	return fileRoot{Node: s.NodeID, Path: s.Project}
+	return fileRoot{Node: s.GetNodeId(), Path: s.GetProject()}
 }
 
 // loadDir reads a directory unless it has been, or always when force is
@@ -150,15 +149,15 @@ func (m *model) loadDir(node, path string, force bool) {
 	next[key] = l
 	m.Dirs.Set(next)
 
-	req := protocol.ListDir{NodeID: m.remoteID(node), Path: path}
-	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (protocol.Dir, error) {
+	req := &protocol.ListDir{NodeId: m.remoteID(node), Path: path}
+	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Dir, error) {
 		return c.ListDir(ctx, m.key(), req)
-	}, func(dir protocol.Dir, err error) {
+	}, func(dir *protocol.Dir, err error) {
 		next := maps.Clone(ggui.Peek(m.Dirs))
 		if err != nil {
 			next[key] = dirListing{Err: err.Error()}
 		} else {
-			next[key] = dirListing{Entries: dir.Entries}
+			next[key] = dirListing{Entries: dir.GetEntries()}
 		}
 		m.Dirs.Set(next)
 	})
@@ -197,11 +196,11 @@ func (m *model) children(it fileItem) []fileItem {
 	hidden := m.Prefs.Get().ShowHidden
 	items := make([]fileItem, 0, len(l.Entries))
 	for _, e := range l.Entries {
-		if !hidden && strings.HasPrefix(e.Name, ".") {
+		if !hidden && strings.HasPrefix(e.GetName(), ".") {
 			continue
 		}
-		path := joinPath(it.Path, e.Name)
-		items = append(items, fileItem{Key: dirKey(it.Node, path), Node: it.Node, Path: path, Name: e.Name, Dir: e.Dir, Ignored: e.Ignored})
+		path := joinPath(it.Path, e.GetName())
+		items = append(items, fileItem{Key: dirKey(it.Node, path), Node: it.Node, Path: path, Name: e.GetName(), Dir: e.GetDir(), Ignored: e.GetIgnored()})
 	}
 	return items
 }
@@ -243,13 +242,13 @@ func (m *model) toggleDir(it fileItem) {
 // fetchImage reads an image file from its node and decodes it, off the
 // window's goroutine; one too large to send comes without an image.
 func fetchImage(m *model, node, path string, done func(decodedImage, error)) {
-	req := protocol.ReadFile{NodeID: m.remoteID(node), Path: path, Image: true}
+	req := &protocol.ReadFile{NodeId: m.remoteID(node), Path: path, Image: true}
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (decodedImage, error) {
 		f, err := c.ReadFile(ctx, m.key(), req)
-		if err != nil || f.Data == nil {
+		if err != nil || f.GetData() == nil {
 			return decodedImage{File: f}, err
 		}
-		img, _, err := image.Decode(bytes.NewReader(f.Data))
+		img, _, err := image.Decode(bytes.NewReader(f.GetData()))
 		f.Data = nil
 		return decodedImage{File: f, Img: img}, err
 	}, done)
@@ -409,9 +408,9 @@ func previewPane(m *model) ggui.Widget {
 			info = T("Reading…")
 		case p.Img != nil:
 			b := p.Img.Bounds()
-			info = fmt.Sprintf("%d × %d · %s", b.Dx(), b.Dy(), byteSize(p.File.Size))
+			info = fmt.Sprintf("%d × %d · %s", b.Dx(), b.Dy(), byteSize(p.File.GetSize()))
 		case p.Err == "":
-			info = byteSize(p.File.Size)
+			info = byteSize(p.File.GetSize())
 		}
 		var enlarge ggui.Widget = ggui.Box()
 		if p.Img != nil {
@@ -442,8 +441,8 @@ func previewPane(m *model) ggui.Widget {
 			// Clicked, it shows as large as the window allows.
 			img := ggui.Pointer(ggui.Image(p.Img).Alt(p.Name)).OnTap(func() { m.ImageOpen.Set(true) })
 			return ggui.Padding(ggui.Center(img), 12)
-		case p.File.Truncated:
-			note = Tf("An image of %s, too large to show.", byteSize(p.File.Size))
+		case p.File.GetTruncated():
+			note = Tf("An image of %s, too large to show.", byteSize(p.File.GetSize()))
 		default:
 			note = T("Not an image this can show.")
 		}

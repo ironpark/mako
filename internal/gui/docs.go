@@ -133,16 +133,16 @@ func (m *model) readDoc(id string) {
 	if !ok {
 		return
 	}
-	req := protocol.ReadFile{NodeID: m.remoteID(d.Node), Path: d.Path, Max: docEditMax}
-	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (protocol.File, error) {
+	req := &protocol.ReadFile{NodeId: m.remoteID(d.Node), Path: d.Path, Max: docEditMax}
+	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.File, error) {
 		return c.ReadFile(ctx, m.key(), req)
-	}, func(f protocol.File, err error) {
+	}, func(f *protocol.File, err error) {
 		doc := m.docs[id]
 		if doc == nil {
 			return // closed meanwhile
 		}
-		if err == nil && !f.Binary {
-			doc.saved, doc.mod = string(f.Data), f.ModTime
+		if err == nil && !f.GetBinary() {
+			doc.saved, doc.mod = string(f.GetData()), protocol.TimeOf(f.GetModTime())
 			doc.crlf = strings.Contains(doc.saved, "\r\n")
 			doc.text.Set(doc.saved)
 			if doc.editor != nil {
@@ -150,7 +150,7 @@ func (m *model) readDoc(id string) {
 			}
 		}
 		m.updateDoc(id, func(d *docInfo) {
-			*d = docInfo{Node: d.Node, Path: d.Path, Root: d.Root, Binary: f.Binary, Truncated: f.Truncated, Size: f.Size}
+			*d = docInfo{Node: d.Node, Path: d.Path, Root: d.Root, Binary: f.GetBinary(), Truncated: f.GetTruncated(), Size: f.GetSize()}
 			if err != nil {
 				d.Err = err.Error()
 			}
@@ -181,25 +181,25 @@ func (m *model) saveDoc(id string, force bool) {
 		return
 	}
 	text := ggui.Peek(doc.text)
-	req := protocol.WriteFile{NodeID: m.remoteID(d.Node), Path: d.Path, Data: []byte(text), ModTime: doc.mod}
+	req := &protocol.WriteFile{NodeId: m.remoteID(d.Node), Path: d.Path, Data: []byte(text), ModTime: protocol.Time(doc.mod)}
 	if force {
-		req.ModTime = time.Time{}
+		req.ModTime = nil
 	}
 	m.updateDoc(id, func(d *docInfo) { d.Saving = true })
-	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (protocol.File, error) {
+	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.File, error) {
 		return c.WriteFile(ctx, m.key(), req)
-	}, func(f protocol.File, err error) {
+	}, func(f *protocol.File, err error) {
 		doc := m.docs[id]
 		if doc == nil {
 			return
 		}
 		if err == nil {
-			doc.saved, doc.mod = text, f.ModTime
+			doc.saved, doc.mod = text, protocol.TimeOf(f.GetModTime())
 		}
 		dirty := ggui.Peek(doc.text) != doc.saved
 		m.updateDoc(id, func(d *docInfo) {
 			d.Saving, d.Dirty, d.SaveErr, d.Changed = false, dirty, "", false
-			d.Size = f.Size
+			d.Size = f.GetSize()
 			switch {
 			case protocol.HasCode(err, protocol.CodeChanged):
 				d.Changed = true

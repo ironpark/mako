@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ironpark/sanbo/internal/protocol"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestWritablePathsAndDescendants(t *testing.T) {
@@ -25,7 +26,7 @@ func TestWritablePathsAndDescendants(t *testing.T) {
 func TestRecoverOldSessionRequiresOneUnclaimedConversation(t *testing.T) {
 	root := t.TempDir()
 	now := time.Now().UTC()
-	info := protocol.SessionInfo{Agent: "codex", Project: "/project", StartedAt: now}
+	info := &protocol.SessionInfo{Agent: "codex", Project: "/project", StartedAt: timestamppb.New(now)}
 	env := map[string]string{"CODEX_HOME": root}
 	add := func(id string, created time.Time) {
 		line, _ := json.Marshal(map[string]any{"type": "session_meta", "payload": map[string]any{"id": id, "cwd": "/project", "timestamp": created}})

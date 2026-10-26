@@ -31,32 +31,32 @@ const (
 )
 
 func (d *Daemon) handleSearch(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeSearchResult, func(r *protocol.Search) *string { return &r.NodeID },
-		func(r protocol.Search) (protocol.SearchResult, error) {
-			if err := absolute(r.Root); err != nil {
-				return protocol.SearchResult{}, err
+	return serve(d, ctx, stream, env, protocol.TypeSearchResult,
+		func(r *protocol.Search) (*protocol.SearchResult, error) {
+			if err := absolute(r.GetRoot()); err != nil {
+				return nil, err
 			}
 			ctx, cancel := context.WithTimeout(ctx, searchTimeout)
 			defer cancel()
-			if r.Files {
-				return listFiles(ctx, r.Root)
+			if r.GetFiles() {
+				return listFiles(ctx, r.GetRoot())
 			}
-			if strings.TrimSpace(r.Query) == "" {
-				return protocol.SearchResult{}, errors.New("nothing to search for")
+			if strings.TrimSpace(r.GetQuery()) == "" {
+				return nil, errors.New("nothing to search for")
 			}
-			return searchText(ctx, r.Root, r.Query)
+			return searchText(ctx, r.GetRoot(), r.GetQuery())
 		})
 }
 
 // listFiles lists a project's files, slash-separated from root.
-func listFiles(ctx context.Context, root string) (protocol.SearchResult, error) {
-	var out protocol.SearchResult
+func listFiles(ctx context.Context, root string) (*protocol.SearchResult, error) {
+	out := &protocol.SearchResult{}
 	if git, err := exec.CommandContext(ctx, "git", "-C", root, "ls-files", "-co", "--exclude-standard", "-z").Output(); err == nil {
 		for _, p := range strings.Split(string(git), "\x00") {
 			if p == "" {
 				continue
 			}
-			if len(out.Files) == maxSearchFiles {
+			if len(out.GetFiles()) == maxSearchFiles {
 				out.Truncated = true
 				break
 			}
@@ -65,7 +65,7 @@ func listFiles(ctx context.Context, root string) (protocol.SearchResult, error) 
 		return out, nil
 	}
 	err := walkProject(ctx, root, func(rel string, _ fs.DirEntry) bool {
-		if len(out.Files) == maxSearchFiles {
+		if len(out.GetFiles()) == maxSearchFiles {
 			out.Truncated = true
 			return false
 		}
@@ -112,7 +112,7 @@ func walkProject(ctx context.Context, root string, visit func(rel string, e fs.D
 func smartCase(q string) bool { return strings.IndexFunc(q, unicode.IsUpper) >= 0 }
 
 // searchText finds the lines holding query in a project's files.
-func searchText(ctx context.Context, root, query string) (protocol.SearchResult, error) {
+func searchText(ctx context.Context, root, query string) (*protocol.SearchResult, error) {
 	if rg, err := exec.LookPath("rg"); err == nil {
 		cmd := exec.CommandContext(ctx, rg, "--null", "--no-heading", "--line-number", "--column", "--color", "never",
 			"--fixed-strings", "--smart-case", "--no-require-git", "--glob", "!node_modules/", "--max-count", "100", "--max-columns", strconv.Itoa(maxMatchText),
@@ -133,8 +133,8 @@ func searchText(ctx context.Context, root, query string) (protocol.SearchResult,
 // grepOutput reads matches as ripgrep and git grep print them with
 // --null: the path, a NUL, then line:column:text. A search that found
 // nothing exits 1, which is no failure.
-func grepOutput(cmd *exec.Cmd) (protocol.SearchResult, error) {
-	var out protocol.SearchResult
+func grepOutput(cmd *exec.Cmd) (*protocol.SearchResult, error) {
+	out := &protocol.SearchResult{}
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return out, err
@@ -155,24 +155,24 @@ func grepOutput(cmd *exec.Cmd) (protocol.SearchResult, error) {
 		}
 		line, _ := strconv.Atoi(f[0])
 		col, _ := strconv.Atoi(f[1])
-		if len(out.Matches) == maxSearchMatches {
+		if len(out.GetMatches()) == maxSearchMatches {
 			out.Truncated = true
 			_ = cmd.Process.Kill()
 			break
 		}
-		out.Matches = append(out.Matches, protocol.SearchMatch{Path: strings.TrimPrefix(path, "./"), Line: line, Col: col, Text: clip(f[2])})
+		out.Matches = append(out.Matches, &protocol.SearchMatch{Path: strings.TrimPrefix(path, "./"), Line: int64(line), Col: int64(col), Text: clip(f[2])})
 	}
 	err = cmd.Wait()
 	var exit *exec.ExitError
-	if err != nil && (out.Truncated || errors.As(err, &exit) && exit.ExitCode() == 1) {
+	if err != nil && (out.GetTruncated() || errors.As(err, &exit) && exit.ExitCode() == 1) {
 		err = nil
 	}
 	return out, err
 }
 
 // walkSearch searches a folder without a search program to do it.
-func walkSearch(ctx context.Context, root, query string) (protocol.SearchResult, error) {
-	var out protocol.SearchResult
+func walkSearch(ctx context.Context, root, query string) (*protocol.SearchResult, error) {
+	out := &protocol.SearchResult{}
 	fold := !smartCase(query)
 	needle := []byte(query)
 	if fold {
@@ -192,11 +192,11 @@ func walkSearch(ctx context.Context, root, query string) (protocol.SearchResult,
 				hay = bytes.ToLower(line)
 			}
 			if i := bytes.Index(hay, needle); i >= 0 {
-				if len(out.Matches) == maxSearchMatches {
+				if len(out.GetMatches()) == maxSearchMatches {
 					out.Truncated = true
 					return false
 				}
-				out.Matches = append(out.Matches, protocol.SearchMatch{Path: rel, Line: n + 1, Col: i + 1, Text: clip(string(line))})
+				out.Matches = append(out.Matches, &protocol.SearchMatch{Path: rel, Line: int64(n + 1), Col: int64(i + 1), Text: clip(string(line))})
 			}
 		}
 		return true

@@ -31,21 +31,21 @@ var errUnsupported = errors.New("agent has no native conversation")
 
 // Read reads the conversation bound to info's ID. A log the agent has not
 // written yet yields the ID without messages.
-func Read(ctx context.Context, info protocol.SessionInfo, env map[string]string) (protocol.Chat, error) {
-	a, ok := Lookup(info.Agent)
-	out := protocol.Chat{Supported: ok}
-	if !ok || info.ConversationID == "" {
+func Read(ctx context.Context, info *protocol.SessionInfo, env map[string]string) (*protocol.Chat, error) {
+	a, ok := Lookup(info.GetAgent())
+	out := &protocol.Chat{Supported: ok}
+	if !ok || info.GetConversationId() == "" {
 		return out, nil
 	}
-	if !validID.MatchString(info.ConversationID) {
+	if !validID.MatchString(info.GetConversationId()) {
 		return out, errors.New("invalid conversation ID")
 	}
-	out.Conversation = info.ConversationID
+	out.Conversation = info.GetConversationId()
 	path, err := Locate(ctx, info, env)
 	if err != nil || path == "" {
 		return out, err
 	}
-	if _, ok := logProject(path, a, info.Project); !ok {
+	if _, ok := logProject(path, a, info.GetProject()); !ok {
 		return out, nil
 	}
 	out.Messages, out.Truncated, err = readMessages(path, a)
@@ -177,7 +177,7 @@ func readIdentity(path string, a *Agent) (id, cwd string, created time.Time) {
 	return "", "", time.Time{}
 }
 
-func readMessages(path string, a *Agent) ([]protocol.ChatMessage, bool, error) {
+func readMessages(path string, a *Agent) ([]*protocol.ChatMessage, bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, false, err
@@ -197,7 +197,7 @@ func readMessages(path string, a *Agent) ([]protocol.ChatMessage, bool, error) {
 	if truncated {
 		_, _ = reader.ReadBytes('\n')
 	} // discard a partial first record
-	var messages []protocol.ChatMessage
+	var messages []*protocol.ChatMessage
 	// A tool call's ID to its place in messages, counting the dropped ones,
 	// so dropping never has to move the places.
 	calls := map[string]int{}
@@ -208,7 +208,7 @@ func readMessages(path string, a *Agent) ([]protocol.ChatMessage, bool, error) {
 	// messages.
 	trim := func() {
 		for len(messages) > 200 || size > 512<<10 {
-			size -= len(messages[0].Text) + len(messages[0].Result)
+			size -= len(messages[0].GetText()) + len(messages[0].GetResult())
 			messages = messages[1:]
 			dropped++
 			truncated = true
@@ -246,26 +246,26 @@ func readMessages(path string, a *Agent) ([]protocol.ChatMessage, bool, error) {
 			continue
 		}
 		for _, m := range parseMessage(raw) {
-			if len(m.Text) > 32<<10 {
-				m.Text = trimUTF8(m.Text, 32<<10) + "\n…"
+			if len(m.GetText()) > 32<<10 {
+				m.Text = trimUTF8(m.GetText(), 32<<10) + "\n…"
 				truncated = true
 			}
 			// A result belongs to the call it answers: one row in the chat
 			// rather than a second line of loose output.
-			if m.Role == "tool" && m.Output && m.ID != "" {
-				if i, ok := calls[m.ID]; ok && i >= dropped {
-					messages[i-dropped].Result = m.Text
-					messages[i-dropped].Error = m.Error
-					size += len(m.Text)
+			if m.GetRole() == "tool" && m.GetOutput() && m.GetId() != "" {
+				if i, ok := calls[m.GetId()]; ok && i >= dropped {
+					messages[i-dropped].Result = m.GetText()
+					messages[i-dropped].Error = m.GetError()
+					size += len(m.GetText())
 					trim()
 					continue
 				}
 			}
-			if m.Role == "tool" && !m.Output && m.ID != "" {
-				calls[m.ID] = dropped + len(messages)
+			if m.GetRole() == "tool" && !m.GetOutput() && m.GetId() != "" {
+				calls[m.GetId()] = dropped + len(messages)
 			}
 			messages = append(messages, m)
-			size += len(m.Text)
+			size += len(m.GetText())
 			trim()
 		}
 	}
@@ -279,7 +279,7 @@ func trimUTF8(s string, n int) string {
 	return s[:n]
 }
 
-func parseMessage(raw json.RawMessage) []protocol.ChatMessage {
+func parseMessage(raw json.RawMessage) []*protocol.ChatMessage {
 	var m struct {
 		Type      string          `json:"type"`
 		Role      string          `json:"role"`
@@ -301,10 +301,10 @@ func parseMessage(raw json.RawMessage) []protocol.ChatMessage {
 		if len(input) == 0 {
 			input = argumentsJSON(m.Arguments)
 		}
-		return []protocol.ChatMessage{toolCall(cmp.Or(m.ID, m.CallID), m.Name, input)}
+		return []*protocol.ChatMessage{toolCall(cmp.Or(m.ID, m.CallID), m.Name, input)}
 	case "function_call_output", "custom_tool_call_output":
-		return []protocol.ChatMessage{{
-			Role: "tool", ID: m.CallID, Text: contentText(m.Output), Output: true,
+		return []*protocol.ChatMessage{{
+			Role: "tool", Id: m.CallID, Text: contentText(m.Output), Output: true,
 			Error: m.Success != nil && !*m.Success,
 		}}
 	}
@@ -323,30 +323,30 @@ func parseMessage(raw json.RawMessage) []protocol.ChatMessage {
 	}
 	if json.Unmarshal(m.Content, &blocks) != nil {
 		if text := contentText(m.Content); strings.TrimSpace(text) != "" {
-			return []protocol.ChatMessage{{Role: m.Role, Text: text}}
+			return []*protocol.ChatMessage{{Role: m.Role, Text: text}}
 		}
 		return nil
 	}
-	var out []protocol.ChatMessage
+	var out []*protocol.ChatMessage
 	for _, b := range blocks {
-		msg := protocol.ChatMessage{Role: m.Role, Text: b.Text}
+		msg := &protocol.ChatMessage{Role: m.Role, Text: b.Text}
 		switch b.Type {
 		case "text", "input_text", "output_text":
 		case "tool_use":
 			msg = toolCall(b.ID, b.Name, b.Input)
 		case "tool_result":
-			msg = protocol.ChatMessage{Role: "tool", ID: b.ToolUseID, Text: contentText(b.Content), Output: true, Error: b.IsError}
+			msg = &protocol.ChatMessage{Role: "tool", Id: b.ToolUseID, Text: contentText(b.Content), Output: true, Error: b.IsError}
 		case "image", "input_image":
 			msg.Text = "[image]"
 		default:
 			continue
 		}
-		if strings.TrimSpace(msg.Text) == "" && msg.Tool == "" && !msg.Output {
+		if strings.TrimSpace(msg.GetText()) == "" && msg.GetTool() == "" && !msg.GetOutput() {
 			continue
 		}
 		// Tool rows stay apart; prose of one speaker folds together.
-		if len(out) > 0 && out[len(out)-1].Role == msg.Role && msg.Role != "tool" {
-			out[len(out)-1].Text += "\n\n" + msg.Text
+		if len(out) > 0 && out[len(out)-1].GetRole() == msg.GetRole() && msg.GetRole() != "tool" {
+			out[len(out)-1].Text += "\n\n" + msg.GetText()
 		} else {
 			out = append(out, msg)
 		}
@@ -356,7 +356,7 @@ func parseMessage(raw json.RawMessage) []protocol.ChatMessage {
 
 // toolCall is a tool message from its call: the name, a one-line detail for
 // the chat's header, and the arguments as pretty JSON.
-func toolCall(id, name string, input json.RawMessage) protocol.ChatMessage {
+func toolCall(id, name string, input json.RawMessage) *protocol.ChatMessage {
 	args := ""
 	if len(input) > 0 {
 		var b bytes.Buffer
@@ -366,18 +366,18 @@ func toolCall(id, name string, input json.RawMessage) protocol.ChatMessage {
 			args = string(input)
 		}
 	}
-	return protocol.ChatMessage{Role: "tool", ID: id, Tool: name, Detail: ToolDetail(input), Text: args}
+	return &protocol.ChatMessage{Role: "tool", Id: id, Tool: name, Detail: ToolDetail(input), Text: args}
 }
 
 // Upgrade structures the tool messages of an older daemon, which sent a call
 // as "Name\n<arguments>" and its result as loose text, so a front-end only
 // ever reads one form.
 func Upgrade(chat *protocol.Chat) {
-	for i, m := range chat.Messages {
-		if m.Role != "tool" || m.Tool != "" || m.Output || m.Result != "" {
+	for i, m := range chat.GetMessages() {
+		if m.GetRole() != "tool" || m.GetTool() != "" || m.GetOutput() || m.GetResult() != "" {
 			continue
 		}
-		if head, rest, ok := strings.Cut(m.Text, "\n"); ok && head != "" && !strings.ContainsAny(head, " \t{}[]\"'") {
+		if head, rest, ok := strings.Cut(m.GetText(), "\n"); ok && head != "" && !strings.ContainsAny(head, " \t{}[]\"'") {
 			rest = strings.TrimSpace(rest)
 			var raw json.RawMessage
 			if rest == "" || json.Unmarshal([]byte(rest), &raw) == nil {
@@ -385,7 +385,7 @@ func Upgrade(chat *protocol.Chat) {
 				continue
 			}
 		}
-		chat.Messages[i] = protocol.ChatMessage{Role: "tool", Text: m.Text, Output: true}
+		chat.Messages[i] = &protocol.ChatMessage{Role: "tool", Text: m.GetText(), Output: true}
 	}
 }
 
@@ -458,12 +458,12 @@ func contentText(raw json.RawMessage) string {
 
 // Verify reports whether a bound log is present and carries the session's
 // conversation ID, without reading its messages.
-func Verify(info protocol.SessionInfo, path string) error {
-	a, ok := Lookup(info.Agent)
+func Verify(info *protocol.SessionInfo, path string) error {
+	a, ok := Lookup(info.GetAgent())
 	if !ok {
 		return errUnsupported
 	}
-	if id, _ := metadata(path, a); id != info.ConversationID {
+	if id, _ := metadata(path, a); id != info.GetConversationId() {
 		return fmt.Errorf("conversation log identity does not match session")
 	}
 	return nil
@@ -471,9 +471,9 @@ func Verify(info protocol.SessionInfo, path string) error {
 
 // ReadBound reads a daemon-verified path, including rollout names that carry
 // a separate file ID. A missing or replaced bound log is an error.
-func ReadBound(info protocol.SessionInfo, path string) (protocol.Chat, error) {
-	a, ok := Lookup(info.Agent)
-	out := protocol.Chat{Supported: ok, Conversation: info.ConversationID}
+func ReadBound(info *protocol.SessionInfo, path string) (*protocol.Chat, error) {
+	a, ok := Lookup(info.GetAgent())
+	out := &protocol.Chat{Supported: ok, Conversation: info.GetConversationId()}
 	if err := Verify(info, path); err != nil {
 		return out, err
 	}
@@ -481,17 +481,9 @@ func ReadBound(info protocol.SessionInfo, path string) (protocol.Chat, error) {
 	out.Messages, out.Truncated, err = readMessages(path, a)
 	if err == nil {
 		var scan usageScan
-		out.Usage = usageOf(scan.read(path, a))
+		out.Usage = scan.read(path, a)
 	}
 	return out, err
-}
-
-// usageOf is u as a chat carries it: none when nothing was counted.
-func usageOf(u protocol.Usage) *protocol.Usage {
-	if u.IsZero() {
-		return nil
-	}
-	return &u
 }
 
 // Cache keeps the last read of a bound log, so polling a log that has not
@@ -499,28 +491,28 @@ func usageOf(u protocol.Usage) *protocol.Usage {
 type Cache struct {
 	mu    sync.Mutex
 	stat  os.FileInfo
-	chat  protocol.Chat
+	chat  *protocol.Chat // shared with every caller, which must not change it
 	usage usageScan
 }
 
 // ReadBound is ReadBound, answered from the cache while the log is the same
 // file, unchanged, and still bound to the same conversation.
-func (c *Cache) ReadBound(info protocol.SessionInfo, path string) (protocol.Chat, error) {
+func (c *Cache) ReadBound(info *protocol.SessionInfo, path string) (*protocol.Chat, error) {
 	stat, statErr := os.Stat(path)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if statErr == nil && c.stat != nil && c.chat.Conversation == info.ConversationID && os.SameFile(c.stat, stat) &&
+	if statErr == nil && c.stat != nil && c.chat.GetConversation() == info.GetConversationId() && os.SameFile(c.stat, stat) &&
 		c.stat.Size() == stat.Size() && c.stat.ModTime().Equal(stat.ModTime()) {
 		return c.chat, nil
 	}
-	a, ok := Lookup(info.Agent)
-	chat := protocol.Chat{Supported: ok, Conversation: info.ConversationID}
+	a, ok := Lookup(info.GetAgent())
+	chat := &protocol.Chat{Supported: ok, Conversation: info.GetConversationId()}
 	err := Verify(info, path)
 	if err == nil {
 		chat.Messages, chat.Truncated, err = readMessages(path, a)
 	}
 	if err == nil {
-		chat.Usage = usageOf(c.usage.read(path, a))
+		chat.Usage = c.usage.read(path, a)
 	}
 	if err == nil && statErr == nil {
 		c.stat, c.chat = stat, chat
@@ -532,8 +524,8 @@ func (c *Cache) ReadBound(info protocol.SessionInfo, path string) (protocol.Chat
 
 // ReadUsage is a daemon-verified log's usage alone, read on from where the
 // cache's last read of it stopped.
-func (c *Cache) ReadUsage(info protocol.SessionInfo, path string) (*protocol.Usage, error) {
-	a, ok := Lookup(info.Agent)
+func (c *Cache) ReadUsage(info *protocol.SessionInfo, path string) (*protocol.Usage, error) {
+	a, ok := Lookup(info.GetAgent())
 	if !ok {
 		return nil, errUnsupported
 	}
@@ -542,7 +534,7 @@ func (c *Cache) ReadUsage(info protocol.SessionInfo, path string) (*protocol.Usa
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return usageOf(c.usage.read(path, a)), nil
+	return c.usage.read(path, a), nil
 }
 
 // ConfigRoot is the directory agent keeps its settings and logs under,
@@ -599,13 +591,13 @@ func LogOf(agent string, env map[string]string, id, path string) bool {
 }
 
 // Locate finds a known native ID without depending on a rollout filename.
-func Locate(ctx context.Context, info protocol.SessionInfo, env map[string]string) (string, error) {
-	a, ok := Lookup(info.Agent)
+func Locate(ctx context.Context, info *protocol.SessionInfo, env map[string]string) (string, error) {
+	a, ok := Lookup(info.GetAgent())
 	// The ID goes into the glob, so only a valid one may.
-	if !ok || !validID.MatchString(info.ConversationID) {
+	if !ok || !validID.MatchString(info.GetConversationId()) {
 		return "", nil
 	}
-	paths, err := logPaths(a, env, "*"+info.ConversationID+"*.jsonl")
+	paths, err := logPaths(a, env, "*"+info.GetConversationId()+"*.jsonl")
 	if err != nil {
 		return "", err
 	}
@@ -614,7 +606,7 @@ func Locate(ctx context.Context, info protocol.SessionInfo, env map[string]strin
 			return "", err
 		}
 		id, _ := metadata(path, a)
-		if id == info.ConversationID {
+		if id == info.GetConversationId() {
 			return path, nil
 		}
 	}
@@ -624,8 +616,8 @@ func Locate(ctx context.Context, info protocol.SessionInfo, env map[string]strin
 // Recover is a one-time migration for launches saved before native IDs were
 // recorded. Only one unclaimed log created during that launch can be adopted;
 // ambiguous history is never replaced with a fresh conversation.
-func Recover(ctx context.Context, info protocol.SessionInfo, env map[string]string, claimed map[string]bool) (string, string, error) {
-	a, ok := Lookup(info.Agent)
+func Recover(ctx context.Context, info *protocol.SessionInfo, env map[string]string, claimed map[string]bool) (string, string, error) {
+	a, ok := Lookup(info.GetAgent())
 	if !ok {
 		return "", "", errUnsupported
 	}
@@ -640,11 +632,11 @@ func Recover(ctx context.Context, info protocol.SessionInfo, env map[string]stri
 			return "", "", err
 		}
 		id, cwd, created := scanLog(path, a)
-		if id == "" || !validID.MatchString(id) || claimed[id] || !samePath(cwd, info.Project) {
+		if id == "" || !validID.MatchString(id) || claimed[id] || !samePath(cwd, info.GetProject()) {
 			continue
 		}
 		projectLogs = true
-		if created.IsZero() || created.Before(info.StartedAt.Add(-2*time.Second)) {
+		if created.IsZero() || created.Before(protocol.TimeOf(info.GetStartedAt()).Add(-2*time.Second)) {
 			continue
 		}
 		if foundID != "" && foundID != id {

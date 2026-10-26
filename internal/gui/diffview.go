@@ -43,23 +43,23 @@ type wordSpan struct{ Lo, Hi int }
 // changedWords pairs each removed line with the added line in its place,
 // a run of removals followed by a run of additions taken in order, and
 // marks where each differs from the other.
-func changedWords(lines []protocol.DiffLine) map[int]wordSpan {
+func changedWords(lines []*protocol.DiffLine) map[int]wordSpan {
 	out := map[int]wordSpan{}
 	for i := 0; i < len(lines); {
-		if lines[i].Op != "-" {
+		if lines[i].GetOp() != "-" {
 			i++
 			continue
 		}
 		start := i
-		for i < len(lines) && lines[i].Op == "-" {
+		for i < len(lines) && lines[i].GetOp() == "-" {
 			i++
 		}
 		mid := i
-		for i < len(lines) && lines[i].Op == "+" {
+		for i < len(lines) && lines[i].GetOp() == "+" {
 			i++
 		}
 		for k := 0; start+k < mid && mid+k < i; k++ {
-			a, b := untab(lines[start+k].Text), untab(lines[mid+k].Text)
+			a, b := untab(lines[start+k].GetText()), untab(lines[mid+k].GetText())
 			sa, sb := differing(a, b)
 			out[start+k], out[mid+k] = sa, sb
 		}
@@ -103,8 +103,8 @@ func isWord(c byte) bool {
 }
 
 // diffText is a line's text, the differing words in its side's colour.
-func diffText(l protocol.DiffLine, span wordSpan, mode diffMode, mono ggui.TextStyle, prefix string) ggui.Widget {
-	text := untab(l.Text)
+func diffText(l *protocol.DiffLine, span wordSpan, mode diffMode, mono ggui.TextStyle, prefix string) ggui.Widget {
+	text := untab(l.GetText())
 	// Side by side, a long line is cut at its half; in one column it runs
 	// on, and the diff scrolls sideways.
 	cut := mode.Split && !mode.Wrap
@@ -119,7 +119,7 @@ func diffText(l protocol.DiffLine, span wordSpan, mode diffMode, mono ggui.TextS
 		return t
 	}
 	mark := tokDiffAdded
-	if l.Op == "-" {
+	if l.GetOp() == "-" {
 		mark = tokDiffRemoved
 	}
 	t := ggui.RichText(
@@ -139,9 +139,9 @@ func diffText(l protocol.DiffLine, span wordSpan, mode diffMode, mono ggui.TextS
 // diffRows draws a diff's lines, as many as the pane shows, in one column
 // or side by side. pick is called with a line clicked and whether Shift
 // was held; hunk with a hunk header's index, for its actions.
-func diffRows(d protocol.Diff, mode diffMode, sel lineSel, pick func(i int, extend bool), hunk func(i int) ggui.Widget) ggui.Widget {
+func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, extend bool), hunk func(i int) ggui.Widget) ggui.Widget {
 	mono := ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: 11.5}
-	lines := d.Lines[:min(len(d.Lines), maxShownDiffLines)]
+	lines := d.GetLines()[:min(len(d.GetLines()), maxShownDiffLines)]
 	words := changedWords(lines)
 	num := func(n int) ggui.Widget {
 		s := ""
@@ -167,12 +167,12 @@ func diffRows(d protocol.Diff, mode diffMode, sel lineSel, pick func(i int, exte
 	var rows []ggui.Widget
 	if !mode.Split {
 		for i, l := range lines {
-			if l.Op == "@" {
+			if l.GetOp() == "@" {
 				rows = append(rows, hunkRow(l, mono, hunk(i)))
 				continue
 			}
-			row := ggui.Box(ggui.Row(num(l.Old), num(l.New), ggui.Expanded(diffText(l, words[i], mode, mono, l.Op+" "))).Gap(4)).Pad(1, 8)
-			rows = append(rows, clickable(tint(l.Op, sel.has(i), row), i))
+			row := ggui.Box(ggui.Row(num(int(l.GetOld())), num(int(l.GetNew())), ggui.Expanded(diffText(l, words[i], mode, mono, l.GetOp()+" "))).Gap(4)).Pad(1, 8)
+			rows = append(rows, clickable(tint(l.GetOp(), sel.has(i), row), i))
 		}
 	} else {
 		// A side of a split row: the line's number and text, or an empty
@@ -182,16 +182,16 @@ func diffRows(d protocol.Diff, mode diffMode, sel lineSel, pick func(i int, exte
 				return ggui.Box(ggui.Row(num(0))).Pad(1, 8).Fill(tokSurface2)
 			}
 			l := lines[i]
-			n := l.Old
+			n := l.GetOld()
 			if newSide {
-				n = l.New
+				n = l.GetNew()
 			}
-			cell := ggui.Box(ggui.Row(num(n), ggui.Expanded(diffText(l, words[i], mode, mono, ""))).Gap(4)).Pad(1, 8)
-			return clickable(tint(l.Op, sel.has(i), cell), i)
+			cell := ggui.Box(ggui.Row(num(int(n)), ggui.Expanded(diffText(l, words[i], mode, mono, ""))).Gap(4)).Pad(1, 8)
+			return clickable(tint(l.GetOp(), sel.has(i), cell), i)
 		}
 		for i := 0; i < len(lines); {
 			l := lines[i]
-			switch l.Op {
+			switch l.GetOp() {
 			case "@":
 				rows = append(rows, hunkRow(l, mono, hunk(i)))
 				i++
@@ -200,11 +200,11 @@ func diffRows(d protocol.Diff, mode diffMode, sel lineSel, pick func(i int, exte
 				i++
 			default:
 				var removed, added []int
-				for i < len(lines) && lines[i].Op == "-" {
+				for i < len(lines) && lines[i].GetOp() == "-" {
 					removed = append(removed, i)
 					i++
 				}
-				for i < len(lines) && lines[i].Op == "+" {
+				for i < len(lines) && lines[i].GetOp() == "+" {
 					added = append(added, i)
 					i++
 				}
@@ -221,7 +221,7 @@ func diffRows(d protocol.Diff, mode diffMode, sel lineSel, pick func(i int, exte
 			}
 		}
 	}
-	if len(lines) < len(d.Lines) || d.Truncated {
+	if len(lines) < len(d.GetLines()) || d.GetTruncated() {
 		rows = append(rows, ggui.Box(muted(ggui.Text(T("The rest of the diff is not shown.")).Size(11.5))).Pad(8, 12))
 	}
 	col := ggui.Column(rows...).Stretch()
@@ -233,10 +233,10 @@ func diffRows(d protocol.Diff, mode diffMode, sel lineSel, pick func(i int, exte
 }
 
 // hunkRow is a hunk's header line, with its actions on hover.
-func hunkRow(l protocol.DiffLine, mono ggui.TextStyle, actions ggui.Widget) ggui.Widget {
+func hunkRow(l *protocol.DiffLine, mono ggui.TextStyle, actions ggui.Widget) ggui.Widget {
 	hover := ggui.State(false)
 	row := ggui.Box(ggui.Row(
-		ggui.Expanded(ggui.Text(l.Text).Style(mono).Color(tokMuted).NoWrap().Ellipsis()),
+		ggui.Expanded(ggui.Text(l.GetText()).Style(mono).Color(tokMuted).NoWrap().Ellipsis()),
 		ggui.Box(ggui.If(hover, func() ggui.Widget { return actions })).Height(22),
 	).Gap(8).Align(ggui.AlignCenter)).Pad(2, 8, 2, 10).Fill(tokSurface2)
 	return ggui.Pointer(row).OnHover(hover.Set)
@@ -244,13 +244,13 @@ func hunkRow(l protocol.DiffLine, mono ggui.TextStyle, actions ggui.Widget) ggui
 
 // hunkAt is the hunk line i is in: its header's index and the lines after
 // it, up to the next.
-func hunkAt(lines []protocol.DiffLine, i int) (int, []protocol.DiffLine) {
+func hunkAt(lines []*protocol.DiffLine, i int) (int, []*protocol.DiffLine) {
 	start := i
-	for start > 0 && lines[start].Op != "@" {
+	for start > 0 && lines[start].GetOp() != "@" {
 		start--
 	}
 	end := start + 1
-	for end < len(lines) && lines[end].Op != "@" {
+	for end < len(lines) && lines[end].GetOp() != "@" {
 		end++
 	}
 	return start, lines[start+1 : end]
@@ -258,20 +258,20 @@ func hunkAt(lines []protocol.DiffLine, i int) (int, []protocol.DiffLine) {
 
 // lineRef names lines of a file as an agent reads them: path:from-to, by
 // their new numbers, or old ones for lines only the old side has.
-func lineRef(path string, lines []protocol.DiffLine) string {
+func lineRef(path string, lines []*protocol.DiffLine) string {
 	first, last := 0, 0
 	for _, l := range lines {
-		n := l.New
+		n := l.GetNew()
 		if n == 0 {
-			n = l.Old
+			n = l.GetOld()
 		}
 		if n == 0 {
 			continue
 		}
 		if first == 0 {
-			first = n
+			first = int(n)
 		}
-		last = n
+		last = int(n)
 	}
 	switch {
 	case first == 0:
@@ -284,16 +284,16 @@ func lineRef(path string, lines []protocol.DiffLine) string {
 
 // agentNote is what picked lines send an agent: where they are, the lines
 // as a diff, and the user's note on them.
-func agentNote(path string, lines []protocol.DiffLine, note string) string {
+func agentNote(path string, lines []*protocol.DiffLine, note string) string {
 	var b strings.Builder
 	b.WriteString(lineRef(path, lines))
 	b.WriteString("\n```diff\n")
 	for _, l := range lines {
-		if l.Op == "@" {
+		if l.GetOp() == "@" {
 			continue
 		}
-		b.WriteString(l.Op)
-		b.WriteString(l.Text)
+		b.WriteString(l.GetOp())
+		b.WriteString(l.GetText())
 		b.WriteByte('\n')
 	}
 	b.WriteString("```")
@@ -306,14 +306,14 @@ func agentNote(path string, lines []protocol.DiffLine, note string) string {
 
 // agentsFor are the sessions in a project an agent's chat can take a note
 // in, the one shown last first.
-func (m *model) agentsFor(root fileRoot) []protocol.SessionInfo {
-	var out []protocol.SessionInfo
+func (m *model) agentsFor(root fileRoot) []*protocol.SessionInfo {
+	var out []*protocol.SessionInfo
 	for _, s := range ggui.Peek(m.Sessions) {
-		if s.NodeID != root.Node || !(within(s.Project, root.Path) || within(root.Path, s.Project)) || !m.chatCapable(s.ID) {
+		if s.GetNodeId() != root.Node || !(within(s.GetProject(), root.Path) || within(root.Path, s.GetProject())) || !m.chatCapable(s.GetId()) {
 			continue
 		}
-		if s.ID == m.lastSession {
-			out = append([]protocol.SessionInfo{s}, out...)
+		if s.GetId() == m.lastSession {
+			out = append([]*protocol.SessionInfo{s}, out...)
 		} else {
 			out = append(out, s)
 		}
@@ -335,7 +335,7 @@ func (m *model) askAgent(id, text string) {
 
 // selectionBar is the bar under a diff while lines are picked: how many,
 // a note, and the agents to send them to.
-func selectionBar(m *model, root fileRoot, path string, lines []protocol.DiffLine, sel *ggui.StateValue[lineSel]) ggui.Widget {
+func selectionBar(m *model, root fileRoot, path string, lines []*protocol.DiffLine, sel *ggui.StateValue[lineSel]) ggui.Widget {
 	note := ggui.State("")
 	agents := m.agentsFor(root)
 	send := func(id string) func() {
@@ -350,11 +350,11 @@ func selectionBar(m *model, root fileRoot, path string, lines []protocol.DiffLin
 	case 0:
 		target = ui.Button(T("Ask agent"), func() {}).Disabled(true).Name(T("No agent runs in this project"))
 	case 1:
-		target = ui.Button(Tf("Ask %s", sessionTitle(agents[0], ggui.Peek(m.Titles)[agents[0].ID])), send(agents[0].ID))
+		target = ui.Button(Tf("Ask %s", sessionTitle(agents[0], ggui.Peek(m.Titles)[agents[0].GetId()])), send(agents[0].GetId()))
 	default:
 		items := make([]ggui.Widget, len(agents))
 		for i, s := range agents {
-			items[i] = ui.MenuItem(sessionTitle(s, ggui.Peek(m.Titles)[s.ID]), send(s.ID))
+			items[i] = ui.MenuItem(sessionTitle(s, ggui.Peek(m.Titles)[s.GetId()]), send(s.GetId()))
 		}
 		target = ui.MenuOf(ggui.Text(T("Ask agent")), items...).Width(240).Name(T("Ask agent"))
 	}
@@ -367,7 +367,7 @@ func selectionBar(m *model, root fileRoot, path string, lines []protocol.DiffLin
 		ggui.Expanded(ui.TextField(note).Placeholder(T("Note for the agent (optional)")).Name(T("Note for the agent")).
 			OnSubmit(func(string) {
 				if len(agents) > 0 {
-					send(agents[0].ID)()
+					send(agents[0].GetId())()
 				}
 			})),
 		target,

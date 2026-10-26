@@ -69,7 +69,7 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 	p.Click(f.Center())
 	// A text file opens in a tab, whole, to edit and save.
 	path := filepath.Join(project, "src", "main.go")
-	id := docTabID(ggui.Peek(m.Conn).Self.ID, path)
+	id := docTabID(ggui.Peek(m.Conn).Self.GetId(), path)
 	probeUntil(t, p, "the file's tab", func() bool { d, ok := m.doc(id); return ok && !d.Loading })
 	if ggui.Peek(m.Selected) != id || ggui.Peek(m.docs[id].text) != "package main\n" {
 		t.Fatalf("tab %q shows %q", ggui.Peek(m.Selected), ggui.Peek(m.docs[id].text))

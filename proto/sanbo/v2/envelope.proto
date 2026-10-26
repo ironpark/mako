@@ -1,11 +1,9 @@
 // The frames of the sanbo protocol: every frame on a stream is one
 // Envelope, preceded by its length. See docs/protocol.md.
 //
-// The messages mirror the Go types of internal/protocol, field for field:
-// a field is named as the Go field's JSON name, and internal/protocol
-// converts between the two by those names. A field added to a Go type is
-// added here too, with a new number; the round-trip test in
-// internal/protocol fails until it is.
+// The messages are generated into internal/protocol (`make proto`), and
+// sanbo uses them as they are. A field is added with a new number, never
+// one reused.
 syntax = "proto3";
 
 package sanbo.v2;
@@ -16,7 +14,7 @@ import "sanbo/v2/git.proto";
 import "sanbo/v2/mesh.proto";
 import "sanbo/v2/session.proto";
 
-option go_package = "github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2";
+option go_package = "github.com/ironpark/sanbo/internal/protocol";
 
 // Envelope wraps every message. The body's field name is the message's
 // protocol.Type.

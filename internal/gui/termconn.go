@@ -66,12 +66,12 @@ type termConn struct {
 }
 
 // dialTerm attaches to a session and starts reading its stream.
-func dialTerm(ctx context.Context, c *client.Client, psk string, info protocol.SessionInfo, wake func(), titleChanged func()) (*termConn, error) {
-	att, err := c.AttachStream(ctx, psk, protocol.Attach{SessionID: info.ID, NodeID: info.NodeID, Replay: true})
+func dialTerm(ctx context.Context, c *client.Client, psk string, info *protocol.SessionInfo, wake func(), titleChanged func()) (*termConn, error) {
+	att, err := c.AttachStream(ctx, psk, &protocol.Attach{SessionId: info.GetId(), NodeId: info.GetNodeId(), Replay: true})
 	if err != nil {
 		return nil, err
 	}
-	t, err := newTermConn(info.ID, att, info.Cols, info.Rows, wake, titleChanged)
+	t, err := newTermConn(info.GetId(), att, uint16(info.GetCols()), uint16(info.GetRows()), wake, titleChanged)
 	if err != nil {
 		_ = att.Close()
 		return nil, err
@@ -210,10 +210,11 @@ func (t *termConn) read() {
 			opts := t.opts
 			t.opts = termOptions{}
 			t.applyOptionsLocked(opts)
-			_ = t.vt.Terminal().Resize(max(snap.Cols, 2), max(snap.Rows, 2))
-			t.cols, t.rows = max(snap.Cols, 2), max(snap.Rows, 2)
-			t.setTitleLocked(snap.Title)
-			t.progress.Restore(snap.Progress, time.Now())
+			cols, rows := uint16(max(snap.GetCols(), 2)), uint16(max(snap.GetRows(), 2))
+			_ = t.vt.Terminal().Resize(cols, rows)
+			t.cols, t.rows = cols, rows
+			t.setTitleLocked(snap.GetTitle())
+			t.progress.Restore(snap.GetProgress(), time.Now())
 			t.hasFrame = false
 			t.mu.Unlock()
 			t.wake()

@@ -82,12 +82,12 @@ func (d *Daemon) followed() (map[string]agentspec.Agent, map[string]mcp.Server) 
 
 // agentInfo lists the agents for this node's record: names only, since
 // flags and environment, keys among them, stay here.
-func agentInfo(agents map[string]agentspec.Agent) []protocol.AgentInfo {
+func agentInfo(agents map[string]agentspec.Agent) []*protocol.AgentInfo {
 	names := agentspec.Names(agents)
-	out := make([]protocol.AgentInfo, len(names))
+	out := make([]*protocol.AgentInfo, len(names))
 	for i, name := range names {
 		a, _ := agentspec.Lookup(name, agents)
-		out[i] = protocol.AgentInfo{Name: name, Profiles: a.ProfileNames()}
+		out[i] = &protocol.AgentInfo{Name: name, Profiles: a.ProfileNames()}
 	}
 	return out
 }

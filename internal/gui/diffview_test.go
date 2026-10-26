@@ -11,7 +11,7 @@ import (
 )
 
 func TestChangedWordsMarkWhatDiffers(t *testing.T) {
-	lines := []protocol.DiffLine{
+	lines := []*protocol.DiffLine{
 		{Op: "@", Text: "@@ -1,3 +1,3 @@"},
 		{Op: " ", Text: "keep"},
 		{Op: "-", Text: "return fooBar(x, y)", Old: 2},
@@ -20,11 +20,11 @@ func TestChangedWordsMarkWhatDiffers(t *testing.T) {
 		{Op: "+", Text: "nothing alike here", New: 3},
 	}
 	w := changedWords(lines)
-	if s := w[2]; lines[2].Text[s.Lo:s.Hi] != "fooBar" {
-		t.Fatalf("removed span %q", lines[2].Text[s.Lo:s.Hi])
+	if s := w[2]; lines[2].GetText()[s.Lo:s.Hi] != "fooBar" {
+		t.Fatalf("removed span %q", lines[2].GetText()[s.Lo:s.Hi])
 	}
-	if s := w[3]; lines[3].Text[s.Lo:s.Hi] != "fooBaz" {
-		t.Fatalf("added span %q", lines[3].Text[s.Lo:s.Hi])
+	if s := w[3]; lines[3].GetText()[s.Lo:s.Hi] != "fooBaz" {
+		t.Fatalf("added span %q", lines[3].GetText()[s.Lo:s.Hi])
 	}
 	if w[4] != (wordSpan{}) || w[5] != (wordSpan{}) {
 		t.Fatal("a line changed throughout marked")
@@ -35,7 +35,7 @@ func TestChangedWordsMarkWhatDiffers(t *testing.T) {
 }
 
 func TestAgentNoteNamesTheLines(t *testing.T) {
-	lines := []protocol.DiffLine{
+	lines := []*protocol.DiffLine{
 		{Op: " ", Text: "a", Old: 9, New: 10},
 		{Op: "-", Text: "b", Old: 10},
 		{Op: "+", Text: "B", New: 11},
@@ -48,11 +48,11 @@ func TestAgentNoteNamesTheLines(t *testing.T) {
 	if lineRef("x", lines[1:2]) != "x:10" {
 		t.Fatalf("ref %q", lineRef("x", lines[1:2]))
 	}
-	all := []protocol.DiffLine{{Op: "@"}, {Op: " "}, {Op: "+"}, {Op: "@"}, {Op: "-"}}
+	all := []*protocol.DiffLine{{Op: "@"}, {Op: " "}, {Op: "+"}, {Op: "@"}, {Op: "-"}}
 	if start, h := hunkAt(all, 2); start != 0 || len(h) != 2 {
 		t.Fatalf("hunk %d %d", start, len(h))
 	}
-	if start, h := hunkAt(all, 4); start != 3 || len(h) != 1 || !strings.Contains(h[0].Op, "-") {
+	if start, h := hunkAt(all, 4); start != 3 || len(h) != 1 || !strings.Contains(h[0].GetOp(), "-") {
 		t.Fatalf("hunk %d %+v", start, h)
 	}
 }
@@ -62,7 +62,7 @@ func TestPreviewDiffTabsGiveWayUntilKept(t *testing.T) {
 	m := newModel(config.Default(), "127.0.0.1:1") // no daemon answers there
 	m.post = func(func()) {}
 	root := fileRoot{Node: "n", Path: "/p"}
-	a, b, c := protocol.GitFile{Path: "a.go"}, protocol.GitFile{Path: "b.go"}, protocol.GitFile{Path: "c.go"}
+	a, b, c := &protocol.GitFile{Path: "a.go"}, &protocol.GitFile{Path: "b.go"}, &protocol.GitFile{Path: "c.go"}
 	m.openDiffTab(root, "/p", "", "", a, true)
 	m.openDiffTab(root, "/p", "", "", b, true)
 	tabs := ggui.Peek(m.Tabs)

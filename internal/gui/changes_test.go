@@ -16,7 +16,7 @@ import (
 )
 
 func TestGitTreeAddsUpFolders(t *testing.T) {
-	tree := gitTree([]protocol.GitFile{
+	tree := gitTree([]*protocol.GitFile{
 		{Path: "internal/gui/agents.go", Added: 35, Removed: 34, Status: protocol.GitModified},
 		{Path: "internal/gui/icons/copy.svg", Added: 16, Status: protocol.GitAdded},
 		{Path: "internal/client/client.go", Added: 24, Status: protocol.GitModified},
@@ -80,7 +80,7 @@ func TestChangesTabShowsTheWorkTree(t *testing.T) {
 	probeUntil(t, p, "the app's daemon", func() bool { return ggui.Peek(m.Conn).OK })
 	m.launch("shell", "", project)
 	probeUntil(t, p, "the changes", func() bool { _, ok := p.Find("main.go"); return ok })
-	if f := ggui.Peek(m.Git).Changes.Files; len(f) != 1 || f[0].Added != 2 || f[0].Removed != 0 {
+	if f := ggui.Peek(m.Git).Changes.GetFiles(); len(f) != 1 || f[0].GetAdded() != 2 || f[0].GetRemoved() != 0 {
 		t.Fatalf("changes %+v", f)
 	}
 	row, _ := p.Find("main.go")
@@ -88,9 +88,9 @@ func TestChangesTabShowsTheWorkTree(t *testing.T) {
 	// The diff opens in a tab of its own.
 	probeUntil(t, p, "the diff", func() bool {
 		d := ggui.Peek(m.Diffs)[ggui.Peek(m.Selected)]
-		return !d.Loading && len(d.Diff.Lines) > 0
+		return !d.Loading && len(d.Diff.GetLines()) > 0
 	})
-	if l := ggui.Peek(m.Diffs)[ggui.Peek(m.Selected)].Diff.Lines[0]; l.Op != "@" {
+	if l := ggui.Peek(m.Diffs)[ggui.Peek(m.Selected)].Diff.GetLines()[0]; l.GetOp() != "@" {
 		t.Fatalf("diff starts %+v, want its hunk's header", l)
 	}
 }

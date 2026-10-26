@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: sanbo/v2/mesh.proto
 
-package sanbov2
+package protocol
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -435,7 +435,7 @@ const file_sanbo_v2_mesh_proto_rawDesc = "" +
 	"\bprofiles\x18\x02 \x03(\tR\bprofiles\"\v\n" +
 	"\tListNodes\"-\n" +
 	"\x05Nodes\x12$\n" +
-	"\x05nodes\x18\x01 \x03(\v2\x0e.sanbo.v2.NodeR\x05nodesBAZ?github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2b\x06proto3"
+	"\x05nodes\x18\x01 \x03(\v2\x0e.sanbo.v2.NodeR\x05nodesB-Z+github.com/ironpark/sanbo/internal/protocolb\x06proto3"
 
 var (
 	file_sanbo_v2_mesh_proto_rawDescOnce sync.Once

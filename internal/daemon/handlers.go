@@ -17,133 +17,90 @@ func (d *Daemon) local(nodeID string) bool {
 }
 
 func (d *Daemon) handleListSessions(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
-	var req protocol.ListSessions
-	_ = protocol.Decode(env, &req) // older front-ends send nothing
-	if req.Approvals {
+	req, _ := protocol.Body[*protocol.ListSessions](env) // older front-ends send nothing
+	if req.GetApprovals() {
 		d.approvals.watch()
 	}
 	sessions := d.listSessions()
 	// A peer asking is already fanning out itself; answering with local
 	// sessions only keeps a mesh cycle from recursing.
 	if fromPeer {
-		return stream.Send(protocol.TypeSessions, env.ID, protocol.Sessions{Sessions: sessions})
+		return stream.Send(protocol.TypeSessions, env.GetId(), &protocol.Sessions{Sessions: sessions})
 	}
 	// A front-end asking a single daemon for sessions expects the whole mesh,
 	// so fold in what each known peer reports.
 	for _, node := range d.peers.list() {
 		remote, err := d.peerSessions(ctx, node, req)
 		if err != nil {
-			d.log.Debug("peer session list failed", "node", node.Name, "err", err)
+			d.log.Debug("peer session list failed", "node", node.GetName(), "err", err)
 			continue
 		}
 		sessions = append(sessions, remote...)
 	}
-	return stream.Send(protocol.TypeSessions, env.ID, protocol.Sessions{Sessions: sessions})
+	return stream.Send(protocol.TypeSessions, env.GetId(), &protocol.Sessions{Sessions: sessions})
 }
 
 func (d *Daemon) handleOpenSession(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	var req protocol.OpenSession
-	if err := protocol.Decode(env, &req); err != nil {
-		return err
-	}
-	if !d.local(req.NodeID) {
-		info, err := d.forwardOpen(ctx, req)
+	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.OpenSession) (*protocol.SessionInfo, error) {
+		s, err := d.openSession(ctx, r)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		return stream.Send(protocol.TypeSessionInfo, env.ID, info)
-	}
-
-	s, err := d.openSession(ctx, req)
-	if err != nil {
-		return err
-	}
-
-	return stream.Send(protocol.TypeSessionInfo, env.ID, s.Info())
+		return s.Info(), nil
+	})
 }
 
 func (d *Daemon) handleCloseSession(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	var req protocol.CloseSession
-	if err := protocol.Decode(env, &req); err != nil {
-		return err
-	}
-	if !d.local(req.NodeID) {
-		return d.forwardClose(ctx, req, stream, env)
-	}
-	if err := d.closeSession(req.SessionID); err != nil {
-		return err
-	}
-	return stream.Send(protocol.TypeExited, env.ID, protocol.Exited{SessionID: req.SessionID})
+	return serve(d, ctx, stream, env, protocol.TypeExited, func(r *protocol.CloseSession) (*protocol.Exited, error) {
+		if err := d.closeSession(r.GetSessionId()); err != nil {
+			return nil, err
+		}
+		return &protocol.Exited{SessionId: r.GetSessionId()}, nil
+	})
 }
 
 func (d *Daemon) handleAnswerApproval(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	var req protocol.AnswerApproval
-	if err := protocol.Decode(env, &req); err != nil {
-		return err
-	}
-	var info protocol.SessionInfo
-	if !d.local(req.NodeID) {
-		remote := req
-		remote.NodeID = ""
-		if err := d.forward(ctx, req.NodeID, protocol.TypeAnswerApproval, remote, &info); err != nil {
-			return err
+	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.AnswerApproval) (*protocol.SessionInfo, error) {
+		s, ok := d.sessions.get(r.GetSessionId())
+		if !ok {
+			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
 		}
-		return stream.Send(protocol.TypeSessionInfo, env.ID, info)
-	}
-	s, ok := d.sessions.get(req.SessionID)
-	if !ok {
-		return fmt.Errorf("unknown session %q", req.SessionID)
-	}
-	if err := d.approvals.answer(req.SessionID, req); err != nil {
-		return err
-	}
-	return stream.Send(protocol.TypeSessionInfo, env.ID, s.Info())
+		if err := d.approvals.answer(r.GetSessionId(), r); err != nil {
+			return nil, err
+		}
+		return s.Info(), nil
+	})
 }
 
 // maxSessionName caps a session's name, which every listing carries.
 const maxSessionName = 200
 
 func (d *Daemon) handleRenameSession(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	var req protocol.RenameSession
-	if err := protocol.Decode(env, &req); err != nil {
-		return err
-	}
-	if !d.local(req.NodeID) {
-		remote := req
-		remote.NodeID = ""
-		var info protocol.SessionInfo
-		if err := d.forward(ctx, req.NodeID, protocol.TypeRenameSess, remote, &info); err != nil {
-			return err
+	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.RenameSession) (*protocol.SessionInfo, error) {
+		name := strings.Join(strings.Fields(r.GetName()), " ") // one line
+		if len(name) > maxSessionName {
+			return nil, fmt.Errorf("a session name is at most %d bytes", maxSessionName)
 		}
-		return stream.Send(protocol.TypeSessionInfo, env.ID, info)
-	}
-	name := strings.Join(strings.Fields(req.Name), " ") // one line
-	if len(name) > maxSessionName {
-		return fmt.Errorf("a session name is at most %d bytes", maxSessionName)
-	}
-	info, err := d.renameSession(req.SessionID, name)
-	if err != nil {
-		return err
-	}
-	return stream.Send(protocol.TypeSessionInfo, env.ID, info)
+		return d.renameSession(r.GetSessionId(), name)
+	})
 }
 
 // handleAttach turns the stream into a live session pipe: session output flows
 // out, and input frames from the front-end flow into the PTY.
 func (d *Daemon) handleAttach(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	var req protocol.Attach
-	if err := protocol.Decode(env, &req); err != nil {
+	req, err := protocol.Body[*protocol.Attach](env)
+	if err != nil {
 		return err
 	}
-	if !d.local(req.NodeID) {
+	if !d.local(req.GetNodeId()) {
 		return d.forwardAttach(ctx, req, stream)
 	}
-	return d.attachLocal(ctx, &req, attachWire{stream: stream, id: env.ID, sessionID: req.SessionID})
+	return d.attachLocal(ctx, req, attachWire{stream: stream, id: env.GetId(), sessionID: req.GetSessionId()})
 }
 
 // attachLocal pipes a session of this daemon through w.
 func (d *Daemon) attachLocal(ctx context.Context, req *protocol.Attach, w attachWire) error {
-	s, err := d.attachSession(ctx, req.SessionID)
+	s, err := d.attachSession(ctx, req.GetSessionId())
 	if err != nil {
 		return err
 	}
@@ -157,7 +114,7 @@ func (d *Daemon) attachLocal(ctx context.Context, req *protocol.Attach, w attach
 		}
 		return sendSnapshot(w, snap)
 	}
-	if req.Replay {
+	if req.GetReplay() {
 		if err := resync(); err != nil {
 			return err
 		}
@@ -179,7 +136,7 @@ func (d *Daemon) attachLocal(ctx context.Context, req *protocol.Attach, w attach
 				return ctx.Err()
 			}
 			info := s.Info()
-			if info.State != protocol.StateExited {
+			if info.GetState() != protocol.StateExited {
 				// The session dropped us for falling behind. Resubscribe
 				// and resync from the current screen instead of
 				// reporting an exit.
@@ -190,11 +147,7 @@ func (d *Daemon) attachLocal(ctx context.Context, req *protocol.Attach, w attach
 				}
 				continue
 			}
-			code := 0
-			if info.ExitCode != nil {
-				code = *info.ExitCode
-			}
-			return w.exited(protocol.Exited{SessionID: req.SessionID, ExitCode: code})
+			return w.exited(&protocol.Exited{SessionId: req.GetSessionId(), ExitCode: info.GetExitCode()})
 		}
 		if err := w.output(chunk); err != nil {
 			if err == io.EOF || isClosed(err) {
@@ -212,8 +165,8 @@ const snapshotChunk = 256 << 10
 
 // sendSnapshot sends snap without its text, then the screen as output the
 // front-end feeds to its terminal like live output.
-func sendSnapshot(w attachWire, snap protocol.Snapshot) error {
-	text := snap.Text
+func sendSnapshot(w attachWire, snap *protocol.Snapshot) error {
+	text := snap.GetText()
 	snap.Text = ""
 	if err := w.snapshot(snap); err != nil {
 		return err
@@ -236,15 +189,15 @@ type attachWire struct {
 	sessionID string
 }
 
-func (w attachWire) snapshot(snap protocol.Snapshot) error {
+func (w attachWire) snapshot(snap *protocol.Snapshot) error {
 	return w.stream.Send(protocol.TypeSnapshot, w.id, snap)
 }
 
 func (w attachWire) output(p []byte) error {
-	return w.stream.Send(protocol.TypeOutput, w.id, protocol.Output{SessionID: w.sessionID, Data: p})
+	return w.stream.Send(protocol.TypeOutput, w.id, &protocol.Output{SessionId: w.sessionID, Data: p})
 }
 
-func (w attachWire) exited(ex protocol.Exited) error {
+func (w attachWire) exited(ex *protocol.Exited) error {
 	return w.stream.Send(protocol.TypeExited, w.id, ex)
 }
 
@@ -256,17 +209,12 @@ func (w attachWire) readInput(s *session.Session) {
 		if err != nil {
 			return
 		}
-		switch in.Type {
+		switch in.Type() {
 		case protocol.TypeInput:
-			var payload protocol.Input
-			if protocol.Decode(in, &payload) == nil {
-				_, _ = s.Write(payload.Data)
-			}
+			_, _ = s.Write(in.GetInput().GetData())
 		case protocol.TypeResize:
-			var payload protocol.Resize
-			if protocol.Decode(in, &payload) == nil {
-				_ = s.Resize(payload.Cols, payload.Rows)
-			}
+			r := in.GetResize()
+			_ = s.Resize(uint16(r.GetCols()), uint16(r.GetRows()))
 		}
 	}
 }

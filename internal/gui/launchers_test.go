@@ -86,8 +86,8 @@ func TestQuickLauncherStartsAProfileWithoutAsking(t *testing.T) {
 	p.Click(item.Center())
 	probeUntil(t, p, "the session", func() bool { return ggui.Peek(m.Selected) != "" })
 	s, _ := m.session(ggui.Peek(m.Selected))
-	if s.Agent != "claude" || s.Profile != "opus" || s.Project != home {
-		t.Fatalf("started %s:%s in %q, want claude:opus in %q", s.Agent, s.Profile, s.Project, home)
+	if s.GetAgent() != "claude" || s.GetProfile() != "opus" || s.GetProject() != home {
+		t.Fatalf("started %s:%s in %q, want claude:opus in %q", s.GetAgent(), s.GetProfile(), s.GetProject(), home)
 	}
 	if ggui.Peek(m.NewOpen) {
 		t.Fatal("the launcher opened the new-session dialog")
@@ -133,8 +133,8 @@ func TestSessionWithoutADirectoryStartsAtHome(t *testing.T) {
 	m, p := launcherApp(t, prefs{})
 	m.launch("shell", "", "")
 	probeUntil(t, p, "the session", func() bool { return ggui.Peek(m.Selected) != "" })
-	if s, _ := m.session(ggui.Peek(m.Selected)); s.Project != home {
-		t.Fatalf("started in %q, want the home folder %q", s.Project, home)
+	if s, _ := m.session(ggui.Peek(m.Selected)); s.GetProject() != home {
+		t.Fatalf("started in %q, want the home folder %q", s.GetProject(), home)
 	}
 }
 
@@ -152,7 +152,7 @@ func TestClosingATabEndsItsSession(t *testing.T) {
 			}
 			list, err := c.Sessions(ctx, m.key())
 			s, ok := sessionIn(list, ggui.Peek(m.Selected))
-			return err == nil && ok && s.Idle == want
+			return err == nil && ok && s.GetIdle() == want
 		}
 	}
 	m.launch("shell", "", "")
@@ -196,7 +196,7 @@ func TestUsageDetailOverTheTerminalOpensOnHoverAlone(t *testing.T) {
 	})
 	state := m.usageState(ggui.Peek(m.Selected))
 	state.loading = true
-	u := protocol.Usage{Input: 1000, Output: 500, Context: 50000, Window: 200000}
+	u := &protocol.Usage{Input: 1000, Output: 500, Context: 50000, Window: 200000}
 	state.usage.Set(u)
 	p.Frame()
 	p.Advance(2 * time.Second)

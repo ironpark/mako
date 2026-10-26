@@ -18,6 +18,7 @@ import (
 
 	"github.com/creack/pty"
 	"github.com/ironpark/gostty"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/sanbo/internal/activity"
 	"github.com/ironpark/sanbo/internal/protocol"
@@ -48,13 +49,13 @@ type Session struct {
 	mu       sync.Mutex
 	term     *gostty.Session
 	state    protocol.SessionState
-	exitCode *int
+	exitCode *int64
 	subs     map[int]*Subscription
 	nextSub  int
 	// final is the screen as the agent left it, plain and styled, kept
 	// when the terminal is released so an exited session can still be
 	// attached to and read.
-	finalPlain, finalStyled protocol.Snapshot
+	finalPlain, finalStyled *protocol.Snapshot
 
 	conversationID string // guarded by mu
 	transcriptPath string // guarded by mu
@@ -73,7 +74,7 @@ type Session struct {
 	approval *protocol.Approval
 	// reported is what the agent's status line last said of its tokens:
 	// the context window and the account's limits; guarded by mu.
-	reported protocol.Usage
+	reported *protocol.Usage
 }
 
 // staleWork is how long an agent said to be working may print nothing
@@ -129,29 +130,29 @@ func Start(spec Spec) (*Session, error) {
 func (s *Session) ID() string { return s.spec.ID }
 
 // Info snapshots the session metadata.
-func (s *Session) Info() protocol.SessionInfo {
+func (s *Session) Info() *protocol.SessionInfo {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return protocol.SessionInfo{
-		ID:             s.spec.ID,
-		NodeID:         s.spec.NodeID,
+	return &protocol.SessionInfo{
+		Id:             s.spec.ID,
+		NodeId:         s.spec.NodeID,
 		Agent:          s.spec.Agent,
 		Profile:        s.spec.Profile,
 		Name:           s.name,
-		ConversationID: s.conversationID,
+		ConversationId: s.conversationID,
 		Title:          s.title,
 		Project:        s.spec.Project,
 		Command:        s.spec.Command,
 		State:          s.state,
-		Cols:           s.spec.Cols,
-		Rows:           s.spec.Rows,
-		StartedAt:      s.started,
+		Cols:           uint32(s.spec.Cols),
+		Rows:           uint32(s.spec.Rows),
+		StartedAt:      protocol.Time(s.started),
 		ExitCode:       s.exitCode,
 		Busy:           s.state != protocol.StateExited && s.progress.Busy(time.Now()),
 		Idle:           s.state == protocol.StateRunning && foregroundIsSelf(s.tty, s.cmd.Process.Pid),
 		Status:         s.statusLocked(),
-		StatusAt:       s.statusAt,
-		LastOutput:     s.LastOutput(),
+		StatusAt:       protocol.Time(s.statusAt),
+		LastOutput:     protocol.Time(s.LastOutput()),
 		Approval:       s.approval,
 		Worktree:       s.spec.Worktree,
 	}
@@ -182,17 +183,21 @@ func (s *Session) SetStatus(status protocol.AgentStatus) {
 // Report records what the agent's status line says of its tokens. What a
 // report leaves out, such as limits before the first reply, stays as the
 // last one said.
-func (s *Session) Report(u protocol.Usage) {
+func (s *Session) Report(u *protocol.Usage) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.reported == nil {
+		s.reported = &protocol.Usage{}
+	}
 	s.reported.Merge(u)
 }
 
-// Reported is what the agent's status line has said of its tokens.
-func (s *Session) Reported() protocol.Usage {
+// Reported is a copy of what the agent's status line has said of its
+// tokens, nil for nothing.
+func (s *Session) Reported() *protocol.Usage {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.reported
+	return proto.CloneOf(s.reported)
 }
 
 // SetApproval records the approval the agent waits for, nil for none.
@@ -242,7 +247,7 @@ func (s *Session) Resize(cols, rows uint16) error {
 
 // Snapshot renders the current screen. Styled output replays colors and
 // styles; plain output is the text only.
-func (s *Session) Snapshot(styled bool) (protocol.Snapshot, error) {
+func (s *Session) Snapshot(styled bool) (*protocol.Snapshot, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.state == protocol.StateExited {
@@ -254,7 +259,7 @@ func (s *Session) Snapshot(styled bool) (protocol.Snapshot, error) {
 	return s.snapshotLocked(styled)
 }
 
-func (s *Session) snapshotLocked(styled bool) (protocol.Snapshot, error) {
+func (s *Session) snapshotLocked(styled bool) (*protocol.Snapshot, error) {
 	opts := gostty.FormatOptions{Format: gostty.FormatterFormatPlain}
 	if styled {
 		opts.Format = gostty.FormatterFormatVt
@@ -262,12 +267,12 @@ func (s *Session) snapshotLocked(styled bool) (protocol.Snapshot, error) {
 	}
 	text, err := s.term.FormatString(opts)
 	if err != nil {
-		return protocol.Snapshot{}, err
+		return nil, err
 	}
-	return protocol.Snapshot{
-		SessionID: s.spec.ID,
-		Cols:      s.spec.Cols,
-		Rows:      s.spec.Rows,
+	return &protocol.Snapshot{
+		SessionId: s.spec.ID,
+		Cols:      uint32(s.spec.Cols),
+		Rows:      uint32(s.spec.Rows),
 		Text:      text,
 		Styled:    styled,
 		Title:     s.title,
@@ -322,11 +327,11 @@ func (s *Session) pump() {
 		}
 	}
 
-	exitCode := 0
+	exitCode := int64(0)
 	if err := s.cmd.Wait(); err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			exitCode = exitErr.ExitCode()
+			exitCode = int64(exitErr.ExitCode())
 		} else {
 			exitCode = -1
 		}

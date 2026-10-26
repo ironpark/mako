@@ -5,7 +5,7 @@ package sanbo.v2;
 import "google/protobuf/timestamp.proto";
 import "sanbo/v2/session.proto";
 
-option go_package = "github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2";
+option go_package = "github.com/ironpark/sanbo/internal/protocol";
 
 // GitStatus asks for the changes of the repository a directory is in.
 message GitStatus {

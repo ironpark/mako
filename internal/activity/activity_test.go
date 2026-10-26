@@ -45,7 +45,7 @@ func TestSnapshotPreservesExpiryAndInactiveReports(t *testing.T) {
 	local := at.Add(24 * time.Hour)
 	report := source.Snapshot(at.Add(14 * time.Second))
 	restored.Restore(report, local)
-	if !restored.Known() || !restored.Busy(local) || restored.Busy(local.Add(time.Second)) || report.Value != 42 {
+	if !restored.Known() || !restored.Busy(local) || restored.Busy(local.Add(time.Second)) || report.GetValue() != 42 {
 		t.Fatalf("restored: %+v", restored)
 	}
 	for _, state := range []gostty.ProgressState{gostty.ProgressStateRemove, gostty.ProgressStatePause, gostty.ProgressStateError} {

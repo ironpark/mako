@@ -27,7 +27,7 @@ func TestClaudeConversationIdentityAndContent(t *testing.T) {
 	home := t.TempDir()
 	root := filepath.Join(home, "custom-claude")
 	env := map[string]string{"HOME": home, "CLAUDE_CONFIG_DIR": root}
-	info := protocol.SessionInfo{Agent: "claude", Project: "/project"}
+	info := &protocol.SessionInfo{Agent: "claude", Project: "/project"}
 	first := `{"type":"user","cwd":"/project","sessionId":"first","uuid":"u1","message":{"role":"user","content":"안녕"}}` + "\n"
 	reply := `{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[{"type":"text","text":"**hello**"},{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"main.go"}}]}}` + "\n"
 	result := `{"type":"user","uuid":"u2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":[{"type":"text","text":"package main"}]}]}}` + "\n"
@@ -35,24 +35,24 @@ func TestClaudeConversationIdentityAndContent(t *testing.T) {
 	writeLog(t, path, first+reply+reply+result+`{"type":"assistant"`)
 	writeLog(t, filepath.Join(root, "projects", "-project", "second.jsonl"), strings.ReplaceAll(first, "first", "second"))
 	writeLog(t, filepath.Join(root, "projects", "-other", "other.jsonl"), strings.ReplaceAll(strings.ReplaceAll(first, "first", "other"), "/project", "/other"))
-	info.ConversationID = "first"
+	info.ConversationId = "first"
 	chat, err := Read(t.Context(), info, env)
-	if err != nil || len(chat.Messages) != 3 || chat.Messages[0].Text != "안녕" || chat.Messages[1].Role != "assistant" {
+	if err != nil || len(chat.GetMessages()) != 3 || chat.GetMessages()[0].GetText() != "안녕" || chat.GetMessages()[1].GetRole() != "assistant" {
 		t.Fatalf("chat=%+v err=%v", chat, err)
 	}
 	// The tool's output belongs to its call, named and summarised for the
 	// chat's tool row.
-	tool := chat.Messages[2]
-	if tool.Role != "tool" || tool.Tool != "Read" || tool.Detail != "main.go" || tool.Result != "package main" || tool.Output {
+	tool := chat.GetMessages()[2]
+	if tool.GetRole() != "tool" || tool.GetTool() != "Read" || tool.GetDetail() != "main.go" || tool.GetResult() != "package main" || tool.GetOutput() {
 		t.Fatalf("tool message: %+v", tool)
 	}
 	// A bound ID from another project has no log here: it waits rather than
 	// reading that project's history.
-	info.ConversationID = "other"
-	if chat, err = Read(t.Context(), info, env); err != nil || len(chat.Messages) != 0 {
+	info.ConversationId = "other"
+	if chat, err = Read(t.Context(), info, env); err != nil || len(chat.GetMessages()) != 0 {
 		t.Fatalf("read another project's conversation: %+v, %v", chat, err)
 	}
-	info.ConversationID = "../first"
+	info.ConversationId = "../first"
 	if _, err = Read(t.Context(), info, env); err == nil {
 		t.Fatal("accepted a path as a conversation ID")
 	}
@@ -92,13 +92,13 @@ func TestCodexUsesResponseItemsWithoutDuplicateEvents(t *testing.T) {
 		`{"type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"main.go"}}` + "\n"
 	path := filepath.Join(home, "sessions", "2026", "10", "26", "rollout-thread.jsonl")
 	writeLog(t, path, body)
-	info := protocol.SessionInfo{Agent: "codex", Project: "/project", ConversationID: "thread"}
+	info := &protocol.SessionInfo{Agent: "codex", Project: "/project", ConversationId: "thread"}
 	chat, err := Read(t.Context(), info, map[string]string{"CODEX_HOME": home})
-	if err != nil || len(chat.Messages) != 3 || chat.Messages[0].Text != "question" || chat.Messages[1].Text != "answer" {
+	if err != nil || len(chat.GetMessages()) != 3 || chat.GetMessages()[0].GetText() != "question" || chat.GetMessages()[1].GetText() != "answer" {
 		t.Fatalf("chat=%+v err=%v", chat, err)
 	}
-	tool := chat.Messages[2]
-	if tool.Role != "tool" || tool.Tool != "exec_command" || tool.Result != "main.go" {
+	tool := chat.GetMessages()[2]
+	if tool.GetRole() != "tool" || tool.GetTool() != "exec_command" || tool.GetResult() != "main.go" {
 		t.Fatalf("tool message: %+v", tool)
 	}
 }
@@ -112,7 +112,7 @@ func TestTailLimitsAndIncompleteAppend(t *testing.T) {
 	writeLog(t, path, message(strings.Repeat("x", maxRead))+message(strings.Repeat("한", 20000))+message("last"))
 	claude, _ := Lookup("claude")
 	messages, truncated, err := readMessages(path, claude)
-	if err != nil || !truncated || len(messages) != 2 || messages[1].Text != "last" || !utf8.ValidString(messages[0].Text) {
+	if err != nil || !truncated || len(messages) != 2 || messages[1].GetText() != "last" || !utf8.ValidString(messages[0].GetText()) {
 		t.Fatalf("tail: count %d, truncated %v, err %v", len(messages), truncated, err)
 	}
 	writeLog(t, path, message("first")+strings.TrimSuffix(message("next"), "\n"))
@@ -133,15 +133,15 @@ func TestTailLimitsAndIncompleteAppend(t *testing.T) {
 }
 
 func TestUnsupportedAndCancelled(t *testing.T) {
-	chat, err := Read(t.Context(), protocol.SessionInfo{Agent: "shell"}, nil)
-	if err != nil || chat.Supported {
+	chat, err := Read(t.Context(), &protocol.SessionInfo{Agent: "shell"}, nil)
+	if err != nil || chat.GetSupported() {
 		t.Fatalf("shell: %+v %v", chat, err)
 	}
 	root := t.TempDir()
 	writeLog(t, filepath.Join(root, "projects", "p", "id.jsonl"), "{}\n")
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := Read(ctx, protocol.SessionInfo{Agent: "claude", ConversationID: "id"}, map[string]string{"CLAUDE_CONFIG_DIR": root}); err == nil {
+	if _, err := Read(ctx, &protocol.SessionInfo{Agent: "claude", ConversationId: "id"}, map[string]string{"CLAUDE_CONFIG_DIR": root}); err == nil {
 		t.Fatal("ignored cancellation")
 	}
 }
@@ -276,16 +276,16 @@ func TestLogOfTrustsOnlyTheAgentsOwnPlace(t *testing.T) {
 }
 
 func TestUpgradeStructuresOlderToolMessages(t *testing.T) {
-	chat := protocol.Chat{Messages: []protocol.ChatMessage{
+	chat := protocol.Chat{Messages: []*protocol.ChatMessage{
 		{Role: "assistant", Text: "Running it."},
 		{Role: "tool", Text: "Bash\n{\"command\":\"go test ./...\"}"},
 		{Role: "tool", Text: "ok  \tpkg\t0.1s"},
-		{Role: "tool", ID: "t1", Tool: "Read", Text: "{}"},
+		{Role: "tool", Id: "t1", Tool: "Read", Text: "{}"},
 	}}
 	Upgrade(&chat)
-	m := chat.Messages
-	if m[0].Role != "assistant" || m[1].Tool != "Bash" || m[1].Detail != "go test ./..." ||
-		!m[2].Output || m[2].Text != "ok  \tpkg\t0.1s" || m[3].Tool != "Read" || m[3].ID != "t1" {
+	m := chat.GetMessages()
+	if m[0].GetRole() != "assistant" || m[1].GetTool() != "Bash" || m[1].GetDetail() != "go test ./..." ||
+		!m[2].GetOutput() || m[2].GetText() != "ok  \tpkg\t0.1s" || m[3].GetTool() != "Read" || m[3].GetId() != "t1" {
 		t.Fatalf("upgraded=%+v", m)
 	}
 }
@@ -296,10 +296,10 @@ func TestCacheRereadsOnlyAChangedLog(t *testing.T) {
 		return `{"type":"user","sessionId":"c","cwd":"/p","message":{"role":"user","content":"` + text + `"}}` + "\n"
 	}
 	writeLog(t, path, line("first"))
-	info := protocol.SessionInfo{Agent: "claude", ConversationID: "c"}
+	info := &protocol.SessionInfo{Agent: "claude", ConversationId: "c"}
 	var cache Cache
 	chat, err := cache.ReadBound(info, path)
-	if err != nil || len(chat.Messages) != 1 {
+	if err != nil || len(chat.GetMessages()) != 1 {
 		t.Fatalf("chat=%+v %v", chat, err)
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
@@ -308,10 +308,10 @@ func TestCacheRereadsOnlyAChangedLog(t *testing.T) {
 	}
 	_, _ = f.WriteString(line("second"))
 	f.Close()
-	if chat, err = cache.ReadBound(info, path); err != nil || len(chat.Messages) != 2 {
+	if chat, err = cache.ReadBound(info, path); err != nil || len(chat.GetMessages()) != 2 {
 		t.Fatalf("appended chat=%+v %v", chat, err)
 	}
-	info.ConversationID = "other"
+	info.ConversationId = "other"
 	if _, err := cache.ReadBound(info, path); err == nil {
 		t.Fatal("a cached read skipped the identity check")
 	}

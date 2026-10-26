@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/ironpark/sanbo/internal/protocol"
 )
 
@@ -15,24 +17,25 @@ import (
 type usageScan struct {
 	path   string
 	offset int64
-	usage  protocol.Usage
+	usage  *protocol.Usage // nil until a record counts
 	// seen is the Claude messages counted: a reply written in several
 	// records repeats its usage in each.
 	seen map[string]bool
 }
 
-// read brings the scan up to the end of path's complete records.
-func (u *usageScan) read(path string, a *Agent) protocol.Usage {
+// read brings the scan up to the end of path's complete records, and
+// returns a copy of the usage, nil while nothing was counted.
+func (u *usageScan) read(path string, a *Agent) *protocol.Usage {
 	f, err := os.Open(path)
 	if err != nil {
-		return u.usage
+		return u.result()
 	}
 	defer f.Close()
 	if stat, err := f.Stat(); err != nil || u.path != path || stat.Size() < u.offset {
 		*u = usageScan{path: path} // another log, or this one rewritten
 	}
 	if _, err := f.Seek(u.offset, io.SeekStart); err != nil {
-		return u.usage
+		return u.result()
 	}
 	reader := bufio.NewReaderSize(f, 64<<10)
 	for {
@@ -46,6 +49,23 @@ func (u *usageScan) read(path string, a *Agent) protocol.Usage {
 		} else {
 			u.claude(line)
 		}
+	}
+	return u.result()
+}
+
+// result is a copy of the usage counted, for the caller to keep; nil for
+// none.
+func (u *usageScan) result() *protocol.Usage {
+	if u.usage.IsZero() {
+		return nil
+	}
+	return proto.CloneOf(u.usage)
+}
+
+// counted is the usage to add a record to.
+func (u *usageScan) counted() *protocol.Usage {
+	if u.usage == nil {
+		u.usage = &protocol.Usage{}
 	}
 	return u.usage
 }
@@ -80,11 +100,12 @@ func (u *usageScan) claude(line []byte) {
 		u.seen[r.Message.ID] = true
 	}
 	t := r.Message.Usage
-	u.usage.Input += t.Input + t.CacheCreation
-	u.usage.CachedInput += t.CacheRead
-	u.usage.Output += t.Output
+	usage := u.counted()
+	usage.Input += t.Input + t.CacheCreation
+	usage.CachedInput += t.CacheRead
+	usage.Output += t.Output
 	if !r.Sidechain {
-		u.usage.Context = t.Input + t.CacheCreation + t.CacheRead
+		usage.Context = t.Input + t.CacheCreation + t.CacheRead
 	}
 }
 
@@ -123,13 +144,14 @@ func (u *usageScan) codex(line []byte) {
 	// Codex records its running totals.
 	if info := r.Payload.Info; info != nil {
 		t := info.Total
-		u.usage.Input, u.usage.CachedInput, u.usage.Output = t.Input-t.Cached, t.Cached, t.Output
-		u.usage.Context, u.usage.Window = info.Last.Input, info.Window
+		usage := u.counted()
+		usage.Input, usage.CachedInput, usage.Output = t.Input-t.Cached, t.Cached, t.Output
+		usage.Context, usage.Window = info.Last.Input, info.Window
 	}
 	if l := r.Payload.Limits; l != nil {
 		for _, w := range []*limit{l.Primary, l.Secondary} {
 			if w != nil && w.Minutes != 0 {
-				u.usage.SetLimit(protocol.RateLimit{Minutes: w.Minutes, Used: w.Used, Resets: w.Resets})
+				u.counted().SetLimit(&protocol.RateLimit{Minutes: w.Minutes, Used: w.Used, Resets: w.Resets})
 			}
 		}
 	}

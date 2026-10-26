@@ -12,6 +12,7 @@ import (
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/fonts/gofont"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/sanbo/internal/config"
 	"github.com/ironpark/sanbo/internal/protocol"
@@ -112,7 +113,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(func() {
 					sessions := ggui.Peek(m.Sessions)
 					for i := len(sessions) - 1; i >= 0; i-- {
-						m.selectSession(sessions[i].ID)
+						m.selectSession(sessions[i].GetId())
 					}
 				}),
 				until("a terminal", func() bool { return slices.Contains(ggui.Peek(m.Attached), ggui.Peek(m.Selected)) }),
@@ -124,9 +125,9 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					id := ggui.Peek(m.Selected)
 					chat := m.chatState(id)
 					chat.loading = true
-					chat.result.Set(chatResult{Loaded: true, Chat: protocol.Chat{
+					chat.result.Set(chatResult{Loaded: true, Chat: &protocol.Chat{
 						Supported: true, Conversation: "preview",
-						Messages: []protocol.ChatMessage{
+						Messages: []*protocol.ChatMessage{
 							{Role: "user", Text: "Add a chat view while keeping the terminal session running."},
 							{Role: "assistant", Text: "The session now has **Chat** and **Terminal** views.\n\n- Switch views without restarting the agent.\n- Read the conversation and send a reply here.\n- Use the terminal for approvals and interactive commands."},
 							{Role: "tool", Text: "go test ./internal/transcript\nok   github.com/ironpark/sanbo/internal/transcript"},
@@ -141,18 +142,19 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					id := ggui.Peek(m.Selected)
 					chat := m.chatState(id)
 					v := ggui.Peek(chat.result)
+					v.Chat = proto.CloneOf(v.Chat) // the result held is shared
 					for _, cmd := range []string{"ls internal", "go vet ./...", "go test ./internal/gui", "git status --short"} {
-						v.Chat.Messages = append(v.Chat.Messages, protocol.ChatMessage{Role: "tool", Tool: "Bash", Detail: cmd, Text: cmd})
+						v.Chat.Messages = append(v.Chat.Messages, &protocol.ChatMessage{Role: "tool", Tool: "Bash", Detail: cmd, Text: cmd})
 					}
 					v.Chat.Usage = &protocol.Usage{Input: 41200, CachedInput: 380000, Output: 9800, Context: 96000, Window: 258400}
 					chat.result.Set(v)
 					usage := m.usageState(id)
 					usage.loading = true
-					usage.usage.Set(*v.Chat.Usage)
+					usage.usage.Set(v.Chat.GetUsage())
 					m.Sessions.Set(previewStatus(ggui.Peek(m.Sessions), id))
 					unread := map[string]bool{}
 					for _, s := range ggui.Peek(m.Sessions) {
-						unread[s.ID] = s.Status == protocol.AgentDone
+						unread[s.GetId()] = s.GetStatus() == protocol.AgentDone
 					}
 					m.Unread.Set(unread)
 				}),
@@ -170,7 +172,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				// A second session, dragged to the right of the first.
 				do(func() {
 					s, _ := m.session(ggui.Peek(m.Selected))
-					m.launch("shell", s.NodeID, s.Project)
+					m.launch("shell", s.GetNodeId(), s.GetProject())
 				}),
 				until("a second tab", func() bool { return len(ggui.Peek(m.Tabs)) > 1 }),
 				do(func() { m.splitTab(ggui.Peek(m.Selected), ggui.Peek(m.FocusGroup), dropRight) }),
@@ -212,12 +214,12 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(func() { m.setSidebarGroup(groupFlat) }), frames(4), shot("03-sidebar-flat"),
 				do(func() { m.setSidebarGroup(groupProject) }), frames(2),
 				do(func() {
-					m.togglePin(ggui.Peek(m.Sessions)[0].ID)
+					m.togglePin(ggui.Peek(m.Sessions)[0].GetId())
 					m.FilterOpen.Set(true)
 					m.SidebarFilter.Set("shell")
 				}), frames(4), shot("03-sidebar-filter"),
 				do(func() {
-					m.togglePin(ggui.Peek(m.Sessions)[0].ID)
+					m.togglePin(ggui.Peek(m.Sessions)[0].GetId())
 					m.SidebarFilter.Set("")
 					m.FilterOpen.Set(false)
 				}), frames(2),
@@ -226,7 +228,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(func() {
 					var tab ggui.Found
 					for _, f := range p.FindAll(ggui.RoleButton) {
-						if f.Label == sessionLabel(protocol.SessionInfo{Agent: "shell"}) && f.Rect.Origin.Y < headerHeight+tabBarHeight {
+						if f.Label == sessionLabel(&protocol.SessionInfo{Agent: "shell"}) && f.Rect.Origin.Y < headerHeight+tabBarHeight {
 							tab = f // the last is the right pane's
 						}
 					}
@@ -244,25 +246,25 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				// another on the mesh may predate.
 				do(func() {
 					wd, _ := os.Getwd()
-					m.launch("shell", ggui.Peek(m.Conn).Self.ID, wd)
+					m.launch("shell", ggui.Peek(m.Conn).Self.GetId(), wd)
 					m.DetailTab.Set(historyTab)
 				}),
 				until("its session", func() bool {
 					s, ok := m.session(ggui.Peek(m.Selected))
-					return ok && s.NodeID == ggui.Peek(m.Conn).Self.ID
+					return ok && s.GetNodeId() == ggui.Peek(m.Conn).Self.GetId()
 				}),
 				until("the history", func() bool { v := ggui.Peek(m.GitHistory); return v.Root.Path != "" && !v.Loading }),
 				frames(5), shot("03-history"),
 				do(func() {
-					if cs := ggui.Peek(m.GitHistory).History.Commits; len(cs) > 0 {
-						m.openCommit(cs[0].Hash)
+					if cs := ggui.Peek(m.GitHistory).History.GetCommits(); len(cs) > 0 {
+						m.openCommit(cs[0].GetHash())
 					}
 				}),
 				until("the commit", func() bool { return !ggui.Peek(m.GitCommit).Loading }),
 				frames(5), shot("03-commit"),
 				// A file of it, its diff in a tab, beside a wider panel.
 				do(func() {
-					if fs := ggui.Peek(m.GitCommit).Info.Files; len(fs) > 0 {
+					if fs := ggui.Peek(m.GitCommit).Info.GetFiles(); len(fs) > 0 {
 						m.openCommitFile(fs[0])
 					}
 					m.DetailsWidth.Set(440)
@@ -320,15 +322,18 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 
 // previewStatus has the session id ask for an approval, and the others
 // show the states their agents can be in, for the preview.
-func previewStatus(sessions []protocol.SessionInfo, id string) []protocol.SessionInfo {
-	out := slices.Clone(sessions)
+func previewStatus(sessions []*protocol.SessionInfo, id string) []*protocol.SessionInfo {
+	out := make([]*protocol.SessionInfo, len(sessions))
+	for i, s := range sessions {
+		out[i] = proto.CloneOf(s) // the listing held is shared
+	}
 	states := []protocol.AgentStatus{protocol.AgentWorking, protocol.AgentDone, protocol.AgentIdle}
 	n := 0
 	for i := range out {
 		out[i].State = protocol.StateRunning
-		if out[i].ID == id {
+		if out[i].GetId() == id {
 			out[i].Status = protocol.AgentWaiting
-			out[i].Approval = &protocol.Approval{ID: "preview", Tool: "Bash", Detail: "rm -rf build && go build ./...",
+			out[i].Approval = &protocol.Approval{Id: "preview", Tool: "Bash", Detail: "rm -rf build && go build ./...",
 				Input: "{\n  \"command\": \"rm -rf build && go build ./...\"\n}"}
 			continue
 		}

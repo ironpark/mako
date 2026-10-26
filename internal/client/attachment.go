@@ -20,7 +20,7 @@ type Attachment struct {
 
 // AttachStream binds a new stream to a session and returns it unread: the
 // caller receives its snapshot, output and exit with Recv.
-func (c *Client) AttachStream(ctx context.Context, psk string, req protocol.Attach) (*Attachment, error) {
+func (c *Client) AttachStream(ctx context.Context, psk string, req *protocol.Attach) (*Attachment, error) {
 	s, err := c.stream(ctx, psk)
 	if err != nil {
 		return nil, err
@@ -29,7 +29,7 @@ func (c *Client) AttachStream(ctx context.Context, psk string, req protocol.Atta
 		s.Close()
 		return nil, err
 	}
-	return &Attachment{s: s, sessionID: req.SessionID}, nil
+	return &Attachment{s: s, sessionID: req.GetSessionId()}, nil
 }
 
 // Recv reads the next event from the session.
@@ -39,13 +39,8 @@ func (a *Attachment) Recv() (*protocol.StreamEvent, error) {
 		if err != nil {
 			return nil, err
 		}
-		var ev protocol.StreamEvent
-		ok, err := protocol.StreamEventOf(env, &ev)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			return &ev, nil
+		if ev, ok := protocol.StreamEventOf(env); ok {
+			return ev, nil
 		}
 	}
 }
@@ -54,14 +49,14 @@ func (a *Attachment) Recv() (*protocol.StreamEvent, error) {
 func (a *Attachment) Input(p []byte) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.s.Send(protocol.TypeInput, "", protocol.Input{SessionID: a.sessionID, Data: p})
+	return a.s.Send(protocol.TypeInput, "", &protocol.Input{SessionId: a.sessionID, Data: p})
 }
 
 // Resize changes the session window size.
 func (a *Attachment) Resize(cols, rows uint16) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.s.Send(protocol.TypeResize, "", protocol.Resize{SessionID: a.sessionID, Cols: cols, Rows: rows})
+	return a.s.Send(protocol.TypeResize, "", &protocol.Resize{SessionId: a.sessionID, Cols: uint32(cols), Rows: uint32(rows)})
 }
 
 // Close detaches; the session keeps running.

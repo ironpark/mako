@@ -13,6 +13,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/ui/icons"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/sanbo/internal/protocol"
 )
@@ -94,15 +95,15 @@ func iconButton(name, label string, onTap func()) ggui.Widget {
 }
 
 // statusLabel names what a session's agent is doing, as its hooks said.
-func statusLabel(s protocol.SessionInfo) string {
+func statusLabel(s *protocol.SessionInfo) string {
 	switch {
-	case s.Approval != nil:
-		return Tf("Waiting for approval: %s", s.Approval.Tool)
-	case s.Status == protocol.AgentWorking:
+	case s.GetApproval() != nil:
+		return Tf("Waiting for approval: %s", s.GetApproval().GetTool())
+	case s.GetStatus() == protocol.AgentWorking:
 		return T("Working")
-	case s.Status == protocol.AgentWaiting:
+	case s.GetStatus() == protocol.AgentWaiting:
 		return T("Waiting for you")
-	case s.Status == protocol.AgentDone:
+	case s.GetStatus() == protocol.AgentDone:
 		return T("Finished its turn")
 	}
 	return T("At its prompt")
@@ -167,10 +168,10 @@ func sidebar(m *model) ggui.Widget {
 		sessions := filterSessions(m.Sessions.Get(), query, nodes, titles)
 		// Pinned sessions come first, in a section of their own.
 		pins := pinned.Get()
-		var top []protocol.SessionInfo
+		var top []*protocol.SessionInfo
 		rest := sessions[:0:0]
 		for _, s := range sessions {
-			if slices.Contains(pins, s.ID) {
+			if slices.Contains(pins, s.GetId()) {
 				top = append(top, s)
 			} else {
 				rest = append(rest, s)
@@ -245,7 +246,7 @@ func (m *model) setSidebarGroup(by string) {
 // sessionSection is one of the sidebar's groups: a heading for its project
 // or host with a button to start another session there, over its sessions.
 // The list's one group has no heading.
-func sessionSection(m *model, by string, g sessionGroup, selected string, nodes []protocol.Node, titles map[string]string, label string) ggui.Widget {
+func sessionSection(m *model, by string, g sessionGroup, selected string, nodes []*protocol.Node, titles map[string]string, label string) ggui.Widget {
 	nodeID, project := g.NodeID, g.Project
 	var rows []ggui.Widget
 	indent := by != groupFlat
@@ -256,11 +257,11 @@ func sessionSection(m *model, by string, g sessionGroup, selected string, nodes 
 			// A node the mesh no longer lists has gone; its sessions stay
 			// until it is back.
 			n, up := nodeIn(nodes, nodeID)
-			name, glyph = n.Name, "monitor"
+			name, glyph = n.GetName(), "monitor"
 			if !up {
 				name = short(nodeID)
 			}
-			if n.Source == "self" {
+			if n.GetSource() == "self" {
 				glyph = "laptop"
 			}
 			status = linkDot(up)
@@ -293,21 +294,21 @@ func sessionSection(m *model, by string, g sessionGroup, selected string, nodes 
 		var where []string
 		switch by {
 		case groupProject:
-			where = append(where, nodeName(nodes, s.NodeID))
+			where = append(where, nodeName(nodes, s.GetNodeId()))
 			// A subfolder by its path in the project; a worktree elsewhere
 			// by its own name.
-			if rel := subfolder(s.Project, project); rel != "" {
+			if rel := subfolder(s.GetProject(), project); rel != "" {
 				where = append(where, rel)
-			} else if s.Project != project {
-				where = append(where, projectName(s.Project))
+			} else if s.GetProject() != project {
+				where = append(where, projectName(s.GetProject()))
 			}
 		case groupHost:
-			where = append(where, projectName(s.Project))
+			where = append(where, projectName(s.GetProject()))
 		default:
-			where = append(where, nodeName(nodes, s.NodeID), projectName(s.Project))
+			where = append(where, nodeName(nodes, s.GetNodeId()), projectName(s.GetProject()))
 		}
-		where = append(where, short(s.ID))
-		rows = append(rows, sessionRow(m, s, s.ID == selected, titles[s.ID], strings.Join(where, " · "), indent))
+		where = append(where, short(s.GetId()))
+		rows = append(rows, sessionRow(m, s, s.GetId() == selected, titles[s.GetId()], strings.Join(where, " · "), indent))
 	}
 	return ggui.Column(rows...).Gap(2).Stretch()
 }
@@ -323,19 +324,19 @@ func subfolder(dir, root string) string {
 // sessionRow is a session in the sidebar: its title, where it runs and
 // the branch checked out there, and on hover a button that closes it as
 // its tab's does.
-func sessionRow(m *model, s protocol.SessionInfo, selected bool, title, sub string, indent bool) ggui.Widget {
-	id := s.ID
+func sessionRow(m *model, s *protocol.SessionInfo, selected bool, title, sub string, indent bool) ggui.Widget {
+	id := s.GetId()
 	label := sessionTitle(s, title)
 	line := []ggui.Widget{ggui.Expanded(ggui.Text(sub).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis())}
-	if s.Branch != "" {
+	if s.GetBranch() != "" {
 		line = append(line, ggui.Row(
 			icon("git-branch").Size(11).Color(tokExtraMuted),
-			ggui.Box(ggui.Text(s.Branch).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis()).MaxWidth(110),
+			ggui.Box(ggui.Text(s.GetBranch()).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis()).MaxWidth(110),
 		).Gap(3))
 	}
 	// The title's line ends with when the program last printed.
 	head := []ggui.Widget{ggui.Expanded(ggui.Text(label).Size(13).NoWrap().Ellipsis())}
-	if s.State == protocol.StateRunning {
+	if s.GetState() == protocol.StateRunning {
 		head = append(head, ggui.Reactive(func() ggui.Widget {
 			m.Minute.Get()
 			t := m.Printed.Get()[id]
@@ -352,7 +353,7 @@ func sessionRow(m *model, s protocol.SessionInfo, selected bool, title, sub stri
 		return &activityDot{state: m.dotFor(id)}
 	})
 	content := ggui.Row(
-		&busyGlyph{icon: agentGlyph(s.Agent, tokMuted).Size(15), busy: func() bool { return m.busy(id) }},
+		&busyGlyph{icon: agentGlyph(s.GetAgent(), tokMuted).Size(15), busy: func() bool { return m.busy(id) }},
 		ggui.Expanded(ggui.Column(
 			ggui.Row(head...).Gap(8).Align(ggui.AlignCenter),
 			ggui.Row(line...).Gap(8).Align(ggui.AlignCenter),
@@ -375,7 +376,7 @@ func sessionRow(m *model, s protocol.SessionInfo, selected bool, title, sub stri
 func sidebarFooter(m *model) ggui.Widget {
 	host := ggui.Reactive(func() ggui.Widget {
 		c, d := m.Conn.Get(), m.DaemonState.Get()
-		name := c.Self.Name
+		name := c.Self.GetName()
 		switch {
 		case d.Starting:
 			name = T("Starting daemon…")
@@ -423,10 +424,10 @@ func workspaceHeader(m *model) ggui.Widget {
 		if !ok {
 			return ggui.Text("sanbo").Size(14).Weight(ggui.WeightMedium)
 		}
-		where := fmt.Sprintf("%s:%s", nodeName(m.Nodes.Get(), s.NodeID), prettyPath(s.Project))
-		id := s.ID
+		where := fmt.Sprintf("%s:%s", nodeName(m.Nodes.Get(), s.GetNodeId()), prettyPath(s.GetProject()))
+		id := s.GetId()
 		return ggui.Row(
-			ggui.Text(projectName(s.Project)).Size(14).Weight(ggui.WeightMedium).NoWrap(),
+			ggui.Text(projectName(s.GetProject())).Size(14).Weight(ggui.WeightMedium).NoWrap(),
 			muted(ggui.Text(where).Size(13).NoWrap().Ellipsis()),
 			borderless(ui.MenuOf(icon("ellipsis"),
 				ui.MenuItem(T("Rename…"), func() { m.askRename(id) }),
@@ -444,19 +445,32 @@ func workspaceHeader(m *model) ggui.Widget {
 	).Gap(8)).Pad(0, 10).Height(headerHeight)
 }
 
-func sessionIn(sessions []protocol.SessionInfo, id string) (protocol.SessionInfo, bool) {
+func sessionIn(sessions []*protocol.SessionInfo, id string) (*protocol.SessionInfo, bool) {
 	for _, s := range sessions {
-		if s.ID == id {
+		if s.GetId() == id {
 			return s, true
 		}
 	}
-	return protocol.SessionInfo{}, false
+	return &protocol.SessionInfo{}, false
+}
+
+// editSession changes the listed session id through edit, on a copy: the
+// listing held is shared, and must not change under it.
+func (m *model) editSession(id string, edit func(*protocol.SessionInfo)) {
+	sessions := slices.Clone(ggui.Peek(m.Sessions))
+	for i, s := range sessions {
+		if s.GetId() == id {
+			sessions[i] = proto.CloneOf(s)
+			edit(sessions[i])
+		}
+	}
+	m.Sessions.Set(sessions)
 }
 
 // tab is one of a pane's tabs. The tab a pane shows is raised and
 // underlined, in the accent in the current pane.
-func tab(m *model, s protocol.SessionInfo, selected, focused bool, title string) ggui.Widget {
-	id := s.ID
+func tab(m *model, s *protocol.SessionInfo, selected, focused bool, title string) ggui.Widget {
+	id := s.GetId()
 	label := sessionTitle(s, title)
 	fg := tokMuted
 	if selected {
@@ -465,7 +479,7 @@ func tab(m *model, s protocol.SessionInfo, selected, focused bool, title string)
 	// The tab is one flat cell: its hover, its fill and its underline share
 	// the cell's edges, with the content centred in its height.
 	content := ggui.Box(ggui.Row(
-		&busyGlyph{icon: agentGlyph(s.Agent, fg).Size(14), busy: func() bool { return m.busy(id) }},
+		&busyGlyph{icon: agentGlyph(s.GetAgent(), fg).Size(14), busy: func() bool { return m.busy(id) }},
 		ggui.Box(ggui.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(150),
 		ui.ButtonOf(icon("x").Size(13), func() { m.askKill(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", label)),
 	).Gap(8)).Height(tabBarHeight)
@@ -548,9 +562,9 @@ func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
 			return ggui.Box()
 		}
 		return ggui.Row(
-			pill(agentIcon(s.Agent), sessionLabel(s)),
-			pill("server", nodeName(m.Nodes.Get(), s.NodeID)),
-			pill("circle-dot", stateLabel(s.State)),
+			pill(agentIcon(s.GetAgent()), sessionLabel(s)),
+			pill("server", nodeName(m.Nodes.Get(), s.GetNodeId())),
+			pill("circle-dot", stateLabel(s.GetState())),
 		).Gap(6)
 	})
 	send := ui.ButtonOf(iconColored("arrow-up", uitheme.PrimaryFg).Size(15), func() { m.sendComposer(id) }).
@@ -624,26 +638,26 @@ func details(m *model) ggui.Widget {
 		props := []ggui.Widget{
 			prop(T("Agent"), sessionLabel(s)),
 		}
-		if s.Status != "" {
+		if s.GetStatus() != "" {
 			props = append(props, prop(T("Doing"), statusLabel(s)))
 		}
 		props = append(props,
-			prop(T("Node"), nodeName(m.Nodes.Get(), s.NodeID)),
-			prop(T("Project"), prettyPath(s.Project)))
-		if w := s.Worktree; w != nil {
-			props = append(props, prop(T("Worktree"), Tf("%s, from %s, of %s", w.Branch, cmp.Or(w.Base, "HEAD"), prettyPath(w.Repo))))
+			prop(T("Node"), nodeName(m.Nodes.Get(), s.GetNodeId())),
+			prop(T("Project"), prettyPath(s.GetProject())))
+		if w := s.GetWorktree(); w != nil {
+			props = append(props, prop(T("Worktree"), Tf("%s, from %s, of %s", w.GetBranch(), cmp.Or(w.GetBase(), "HEAD"), prettyPath(w.GetRepo()))))
 		}
 		return ggui.Column(append(props,
-			prop(T("Command"), strings.Join(s.Command, " ")),
-			prop(T("State"), stateLabel(s.State)),
+			prop(T("Command"), strings.Join(s.GetCommand(), " ")),
+			prop(T("State"), stateLabel(s.GetState())),
 			prop(T("Exit code"), code),
-			prop(T("Size"), fmt.Sprintf("%d × %d", s.Cols, s.Rows)),
-			prop(T("Started"), s.StartedAt.Local().Format("Jan 2 15:04:05")),
-			prop(T("Uptime"), time.Since(s.StartedAt).Truncate(time.Second).String()),
-			prop(T("Session"), s.ID),
+			prop(T("Size"), fmt.Sprintf("%d × %d", s.GetCols(), s.GetRows())),
+			prop(T("Started"), protocol.TimeOf(s.GetStartedAt()).Local().Format("Jan 2 15:04:05")),
+			prop(T("Uptime"), time.Since(protocol.TimeOf(s.GetStartedAt())).Truncate(time.Second).String()),
+			prop(T("Session"), s.GetId()),
 		)...).Gap(14).Stretch()
 	})
-	nodes := ggui.View(m.Nodes, func(nodes []protocol.Node) ggui.Widget {
+	nodes := ggui.View(m.Nodes, func(nodes []*protocol.Node) ggui.Widget {
 		return nodeList(nodes)
 	})
 	// Built once, so each keeps its scroll and open folders across tabs.
@@ -705,21 +719,21 @@ func prop(label, value string) ggui.Widget {
 	).Gap(3).Stretch()
 }
 
-func nodeList(nodes []protocol.Node) ggui.Widget {
+func nodeList(nodes []*protocol.Node) ggui.Widget {
 	if len(nodes) == 0 {
 		return muted(ggui.Text(T("No nodes.")).Size(13))
 	}
 	rows := make([]ggui.Widget, 0, len(nodes))
 	for _, n := range nodes {
 		kind := "laptop"
-		if n.Source != "self" {
+		if n.GetSource() != "self" {
 			kind = "monitor"
 		}
 		rows = append(rows, ggui.Box(ggui.Row(
 			icon(kind).Size(16),
 			ggui.Expanded(ggui.Column(
-				ggui.Row(ggui.Text(n.Name).Size(13).Weight(ggui.WeightMedium), linkDot(true), outdatedBadge(n)).Gap(8),
-				ggui.Text(fmt.Sprintf("%s · %s/%s · %s", n.Addr, n.OS, n.Arch, n.Source)).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis(),
+				ggui.Row(ggui.Text(n.GetName()).Size(13).Weight(ggui.WeightMedium), linkDot(true), outdatedBadge(n)).Gap(8),
+				ggui.Text(fmt.Sprintf("%s · %s/%s · %s", n.GetAddr(), n.GetOs(), n.GetArch(), n.GetSource())).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis(),
 			).Gap(3).Stretch()),
 		).Gap(12)).Pad(10).Radius(8).Fill(tokSurface1))
 	}
@@ -728,9 +742,9 @@ func nodeList(nodes []protocol.Node) ggui.Widget {
 
 // outdated reports whether a node's daemon is from an older build than
 // the window's, which leaves newer parts of its replies out.
-func outdated(n protocol.Node) bool { return n.Revision < protocol.Revision }
+func outdated(n *protocol.Node) bool { return n.GetRevision() < protocol.Revision }
 
-func outdatedBadge(n protocol.Node) ggui.Widget {
+func outdatedBadge(n *protocol.Node) ggui.Widget {
 	if !outdated(n) {
 		return ggui.Box()
 	}
@@ -745,10 +759,10 @@ func newSessionDialog(m *model) ggui.Widget {
 	project := m.Form.Field(func(f *newSession) *string { return &f.Project })
 	worktree := m.Form.Field(func(f *newSession) *bool { return &f.Worktree })
 	branch := m.Form.Field(func(f *newSession) *string { return &f.Branch })
-	nodeIDs := ggui.Map(m.Nodes, func(nodes []protocol.Node) []string {
+	nodeIDs := ggui.Map(m.Nodes, func(nodes []*protocol.Node) []string {
 		ids := make([]string, len(nodes))
 		for i, n := range nodes {
-			ids[i] = n.ID
+			ids[i] = n.GetId()
 		}
 		return ids
 	})
@@ -765,7 +779,7 @@ func newSessionDialog(m *model) ggui.Widget {
 	}).Outline()
 	// The native picker browses this machine, so it is offered only when
 	// the session will run here.
-	local := ggui.Derived(func() bool { return m.Form.Get().NodeID == m.Conn.Get().Self.ID })
+	local := ggui.Derived(func() bool { return m.Form.Get().NodeID == m.Conn.Get().Self.GetId() })
 	hasErr := ggui.Map(m.FormErr, func(s string) bool { return s != "" })
 	// What the chosen node can launch, profiles included.
 	targets := ggui.Derived(func() []string {

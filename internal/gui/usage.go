@@ -34,31 +34,31 @@ func trimZero(s string) string {
 
 // usageLine is a conversation's tokens in brief: how full its context is,
 // and what it has spent.
-func usageLine(u protocol.Usage) string {
+func usageLine(u *protocol.Usage) string {
 	ctx := ""
-	if u.Context > 0 {
-		ctx = Tf("context %s", tokens(u.Context))
-		if u.Window > 0 {
-			ctx = Tf("context %d%%", u.Context*100/u.Window)
+	if u.GetContext() > 0 {
+		ctx = Tf("context %s", tokens(u.GetContext()))
+		if u.GetWindow() > 0 {
+			ctx = Tf("context %d%%", u.GetContext()*100/u.GetWindow())
 		}
 		ctx += " · "
 	}
-	return ctx + Tf("%s in · %s out", tokens(u.Input+u.CachedInput), tokens(u.Output))
+	return ctx + Tf("%s in · %s out", tokens(u.GetInput()+u.GetCachedInput()), tokens(u.GetOutput()))
 }
 
 // usageDetail is a conversation's tokens in full.
-func usageDetail(u protocol.Usage) string {
-	s := Tf("Input %s (cached %s) · output %s", tokens(u.Input+u.CachedInput), tokens(u.CachedInput), tokens(u.Output))
-	if u.Context > 0 {
-		s += "\n" + Tf("Latest prompt %s tokens", tokens(u.Context))
-		if u.Window > 0 {
-			s += Tf(" of %s", tokens(u.Window))
+func usageDetail(u *protocol.Usage) string {
+	s := Tf("Input %s (cached %s) · output %s", tokens(u.GetInput()+u.GetCachedInput()), tokens(u.GetCachedInput()), tokens(u.GetOutput()))
+	if u.GetContext() > 0 {
+		s += "\n" + Tf("Latest prompt %s tokens", tokens(u.GetContext()))
+		if u.GetWindow() > 0 {
+			s += Tf(" of %s", tokens(u.GetWindow()))
 		}
 	}
-	for _, l := range u.Limits {
-		s += "\n" + Tf("%s limit %d%% used", limitName(l.Minutes), int(l.Used+0.5))
-		if l.Resets > 0 {
-			s += Tf(", resets %s", time.Unix(l.Resets, 0).Format("01-02 15:04"))
+	for _, l := range u.GetLimits() {
+		s += "\n" + Tf("%s limit %d%% used", limitName(l.GetMinutes()), int(l.GetUsed()+0.5))
+		if l.GetResets() > 0 {
+			s += Tf(", resets %s", time.Unix(l.GetResets(), 0).Format("01-02 15:04"))
 		}
 	}
 	return s
@@ -76,7 +76,7 @@ var usageCornerLabels = map[string]string{
 var usageCorners = []string{"top-left", "top-right", "bottom-left", "bottom-right"}
 
 type usageState struct {
-	usage   *ggui.StateValue[protocol.Usage]
+	usage   *ggui.StateValue[*protocol.Usage]
 	loading bool
 }
 
@@ -84,7 +84,7 @@ func (m *model) usageState(id string) *usageState {
 	if state := m.usages[id]; state != nil {
 		return state
 	}
-	state := &usageState{usage: ggui.State(protocol.Usage{})}
+	state := &usageState{usage: ggui.State(&protocol.Usage{}).WithEqual(protocol.Same)}
 	m.usages[id] = state
 	return state
 }
@@ -99,16 +99,16 @@ func (m *model) loadUsage(id string, state *usageState) {
 		return
 	}
 	state.loading = true
-	req := protocol.ReadChat{NodeID: m.remoteID(info.NodeID), SessionID: id, UsageOnly: true}
-	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (protocol.Chat, error) {
+	req := &protocol.ReadChat{NodeId: m.remoteID(info.GetNodeId()), SessionId: id, UsageOnly: true}
+	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Chat, error) {
 		return c.ReadChat(ctx, m.key(), req)
-	}, func(chat protocol.Chat, err error) {
+	}, func(chat *protocol.Chat, err error) {
 		if m.usages[id] != state {
 			return
 		}
 		state.loading = false
-		if err == nil && chat.Usage != nil {
-			state.usage.Set(*chat.Usage)
+		if err == nil && chat.GetUsage() != nil {
+			state.usage.Set(chat.GetUsage())
 		}
 	})
 }
@@ -118,14 +118,14 @@ func (m *model) loadUsage(id string, state *usageState) {
 // limits is spent. src is the usage the view already reads, such as Chat's;
 // nil has the overlay ask for it alone. A plain shell has no conversation,
 // so it has none.
-func usageOverlay(m *model, id string, src ggui.Readable[protocol.Usage]) ggui.Widget {
+func usageOverlay(m *model, id string, src ggui.Readable[*protocol.Usage]) ggui.Widget {
 	// The session may not be listed yet when its view is built.
 	shown := ggui.Derived(func() bool {
 		if !m.Prefs.Get().UsageOverlay {
 			return false
 		}
 		s, ok := sessionIn(m.Sessions.Get(), id)
-		return ok && transcript.Supported(s.Agent)
+		return ok && transcript.Supported(s.GetAgent())
 	})
 	return ggui.If(shown, func() ggui.Widget {
 		if src == nil {
@@ -140,7 +140,7 @@ func usageOverlay(m *model, id string, src ggui.Readable[protocol.Usage]) ggui.W
 		return ggui.View(corner, func(c string) ggui.Widget {
 			x := pick(strings.HasSuffix(c, "left"), 0.0, 1.0)
 			y := pick(strings.HasPrefix(c, "top"), 0.0, 1.0)
-			return ggui.Padding(ggui.Align(ggui.View(src, func(u protocol.Usage) ggui.Widget { return usageCard(m, u) })).At(x, y), 10, 18)
+			return ggui.Padding(ggui.Align(ggui.View(src, func(u *protocol.Usage) ggui.Widget { return usageCard(m, u) })).At(x, y), 10, 18)
 		})
 	})
 }
@@ -163,7 +163,7 @@ func limitName(minutes int64) string {
 // account's limits, such as Claude's five hours and week, with when it
 // starts over. An account the agent reports no limits for, such as one on
 // an API key, shows the tokens spent instead.
-func usageCard(m *model, u protocol.Usage) ggui.Widget {
+func usageCard(m *model, u *protocol.Usage) ggui.Widget {
 	if u.IsZero() {
 		return ggui.Box()
 	}
@@ -176,13 +176,13 @@ func usageCard(m *model, u protocol.Usage) ggui.Widget {
 	bar := func(share float64) ggui.Widget { return ggui.Box(ui.Progress(ggui.Const(share)).Height(3)).Width(200) }
 	var rows []ggui.Widget
 	switch {
-	case u.Context > 0 && u.Window > 0:
-		rows = append(rows, line(T("Context"), Tf("%s / %s · %d%%", tokens(u.Context), tokens(u.Window), u.Context*100/u.Window)),
-			bar(float64(u.Context)/float64(u.Window)))
-	case u.Context > 0:
-		rows = append(rows, line(T("Context"), tokens(u.Context)))
+	case u.GetContext() > 0 && u.GetWindow() > 0:
+		rows = append(rows, line(T("Context"), Tf("%s / %s · %d%%", tokens(u.GetContext()), tokens(u.GetWindow()), u.GetContext()*100/u.GetWindow())),
+			bar(float64(u.GetContext())/float64(u.GetWindow())))
+	case u.GetContext() > 0:
+		rows = append(rows, line(T("Context"), tokens(u.GetContext())))
 	}
-	if limits := u.Limits; len(limits) > 0 {
+	if limits := u.GetLimits(); len(limits) > 0 {
 		// Only the limits age, as their resets come nearer.
 		rows = append(rows, ggui.View(m.Minute, func(now time.Time) ggui.Widget {
 			var rows []ggui.Widget
@@ -192,12 +192,12 @@ func usageCard(m *model, u protocol.Usage) ggui.Widget {
 				if resets > 0 {
 					v += " · " + Tf("resets in %s", untilText(resets))
 				}
-				rows = append(rows, line(limitName(l.Minutes), v), bar(used/100))
+				rows = append(rows, line(limitName(l.GetMinutes()), v), bar(used/100))
 			}
 			return ggui.Column(rows...).Gap(5)
 		}))
 	} else {
-		rows = append(rows, line(T("Total"), Tf("%s in · %s out", tokens(u.Input+u.CachedInput), tokens(u.Output))))
+		rows = append(rows, line(T("Total"), Tf("%s in · %s out", tokens(u.GetInput()+u.GetCachedInput()), tokens(u.GetOutput()))))
 	}
 	card := ggui.Reactive(func() ggui.Widget {
 		return ggui.Box(ggui.Column(rows...).Gap(5)).
@@ -209,15 +209,15 @@ func usageCard(m *model, u protocol.Usage) ggui.Widget {
 // limitNow is a limit as it stands at now: what is spent, and how long
 // until its window starts over. A window past its reset has started over,
 // though the agent has not said so yet.
-func limitNow(l protocol.RateLimit, now time.Time) (used float64, resets time.Duration) {
-	if l.Resets == 0 {
-		return l.Used, 0
+func limitNow(l *protocol.RateLimit, now time.Time) (used float64, resets time.Duration) {
+	if l.GetResets() == 0 {
+		return l.GetUsed(), 0
 	}
-	resets = time.Unix(l.Resets, 0).Sub(now)
+	resets = time.Unix(l.GetResets(), 0).Sub(now)
 	if resets <= 0 {
 		return 0, 0
 	}
-	return l.Used, resets
+	return l.GetUsed(), resets
 }
 
 // untilText writes a wait in its two largest units: 3d 4h, 2h 10m, 7m.

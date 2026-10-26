@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: sanbo/v2/chat.proto
 
-package sanbov2
+package protocol
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -442,7 +442,7 @@ const file_sanbo_v2_chat_proto_rawDesc = "" +
 	"\tRateLimit\x12\x18\n" +
 	"\aminutes\x18\x01 \x01(\x03R\aminutes\x12\x12\n" +
 	"\x04used\x18\x02 \x01(\x01R\x04used\x12\x16\n" +
-	"\x06resets\x18\x03 \x01(\x03R\x06resetsBAZ?github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2b\x06proto3"
+	"\x06resets\x18\x03 \x01(\x03R\x06resetsB-Z+github.com/ironpark/sanbo/internal/protocolb\x06proto3"
 
 var (
 	file_sanbo_v2_chat_proto_rawDescOnce sync.Once

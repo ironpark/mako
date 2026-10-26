@@ -9,6 +9,7 @@ import (
 	"github.com/ironpark/sanbo/internal/config"
 	"github.com/ironpark/sanbo/internal/discovery"
 	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/sanbo/internal/transport"
 )
 
 // discover advertises this daemon and folds discovered nodes into the peer
@@ -69,10 +70,10 @@ func (d *Daemon) probeStatic(ctx context.Context, addr string) {
 	}
 	for {
 		node, err := transportProbe(ctx, addr, d.hello(true))
-		if err == nil && node.ID != d.cfg.NodeID {
+		if err == nil && node.GetId() != d.cfg.NodeID {
 			node.Source = "static"
 			if d.peers.upsert(node) {
-				d.log.Info("static peer reachable", "node", node.Name, "addr", addr)
+				d.log.Info("static peer reachable", "node", node.GetName(), "addr", addr)
 			}
 		}
 		select {
@@ -101,9 +102,9 @@ func (d *Daemon) maintain(ctx context.Context) {
 // gossip pushes the local node view to every known peer and merges what comes
 // back, so a node discovered on one link becomes visible across the mesh.
 func (d *Daemon) gossip(ctx context.Context) {
-	view := protocol.Nodes{Nodes: append([]protocol.Node{d.Self()}, d.peers.list()...)}
+	view := &protocol.Nodes{Nodes: append([]*protocol.Node{d.Self()}, d.peers.list()...)}
 	for _, node := range d.peers.list() {
-		go func(node protocol.Node) {
+		go func(node *protocol.Node) {
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 
@@ -113,12 +114,12 @@ func (d *Daemon) gossip(ctx context.Context) {
 			}
 			defer stream.Close()
 
-			var reply protocol.Nodes
-			if err := stream.Request(protocol.TypeGossip, view, &reply); err != nil {
+			reply, err := transport.Call[*protocol.Nodes](stream, protocol.TypeGossip, view)
+			if err != nil {
 				return
 			}
-			for _, remote := range reply.Nodes {
-				if remote.ID != d.cfg.NodeID {
+			for _, remote := range reply.GetNodes() {
+				if remote.GetId() != d.cfg.NodeID {
 					d.peers.merge(remote)
 				}
 			}

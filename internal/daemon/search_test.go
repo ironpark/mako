@@ -46,11 +46,11 @@ func TestSearchFindsTextAndLeavesOutIgnored(t *testing.T) {
 			t.Fatal(err)
 		}
 		slices.Sort(files.Files)
-		if !slices.Contains(files.Files, "main.go") || !slices.Contains(files.Files, "sub/notes.txt") || slices.Contains(files.Files, "node_modules/x.js") {
-			t.Fatalf("git=%v files %q", git, files.Files)
+		if !slices.Contains(files.GetFiles(), "main.go") || !slices.Contains(files.GetFiles(), "sub/notes.txt") || slices.Contains(files.GetFiles(), "node_modules/x.js") {
+			t.Fatalf("git=%v files %q", git, files.GetFiles())
 		}
-		if git && slices.Contains(files.Files, "ignored.txt") {
-			t.Fatalf("ignored listed: %q", files.Files)
+		if git && slices.Contains(files.GetFiles(), "ignored.txt") {
+			t.Fatalf("ignored listed: %q", files.GetFiles())
 		}
 
 		res, err := searchText(ctx, root, "hello")
@@ -58,10 +58,10 @@ func TestSearchFindsTextAndLeavesOutIgnored(t *testing.T) {
 			t.Fatal(err)
 		}
 		var got []string
-		for _, m := range res.Matches {
-			got = append(got, m.Path)
-			if m.Path == "main.go" && m.Line == 3 && m.Col != 6 {
-				t.Errorf("column %d", m.Col)
+		for _, m := range res.GetMatches() {
+			got = append(got, m.GetPath())
+			if m.GetPath() == "main.go" && m.GetLine() == 3 && m.GetCol() != 6 {
+				t.Errorf("column %d", m.GetCol())
 			}
 		}
 		slices.Sort(got)
@@ -76,8 +76,8 @@ func TestSearchFindsTextAndLeavesOutIgnored(t *testing.T) {
 			t.Fatalf("git=%v: ignored found: %q", git, got)
 		}
 		// A capital matches the case.
-		if res, _ := searchText(ctx, root, "HELLO"); len(res.Matches) != 1 || res.Matches[0].Path != "sub/notes.txt" {
-			t.Fatalf("git=%v: case %+v", git, res.Matches)
+		if res, _ := searchText(ctx, root, "HELLO"); len(res.GetMatches()) != 1 || res.GetMatches()[0].GetPath() != "sub/notes.txt" {
+			t.Fatalf("git=%v: case %+v", git, res.GetMatches())
 		}
 	}
 }
@@ -89,8 +89,8 @@ func TestWalkSearchWithoutTools(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got []string
-	for _, m := range res.Matches {
-		got = append(got, m.Path)
+	for _, m := range res.GetMatches() {
+		got = append(got, m.GetPath())
 	}
 	slices.Sort(got)
 	if !slices.Equal(got, []string{"ignored.txt", "main.go", "main.go", "sub/notes.txt"}) {

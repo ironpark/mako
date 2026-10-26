@@ -20,8 +20,8 @@ func TestAnExitedSessionKeepsItsScreen(t *testing.T) {
 	}
 	for _, styled := range []bool{false, true} {
 		snap, err := s.Snapshot(styled)
-		if err != nil || !strings.Contains(snap.Text, "goodbye") {
-			t.Fatalf("snapshot (styled %v) = %q, %v", styled, snap.Text, err)
+		if err != nil || !strings.Contains(snap.GetText(), "goodbye") {
+			t.Fatalf("snapshot (styled %v) = %q, %v", styled, snap.GetText(), err)
 		}
 	}
 	if err := s.Resize(80, 24); err != nil {
@@ -43,13 +43,13 @@ func TestSnapshotAndInfoKeepTerminalTitle(t *testing.T) {
 		t.Fatal("timeout")
 	}
 	s.SetName("custom name")
-	if info := s.Info(); info.Title != "작업 제목" || info.Name != "custom name" {
+	if info := s.Info(); info.GetTitle() != "작업 제목" || info.GetName() != "custom name" {
 		t.Fatalf("info: %+v", info)
 	}
 	for _, styled := range []bool{false, true} {
 		snap, err := s.Snapshot(styled)
-		if err != nil || snap.Title != "작업 제목" || !strings.Contains(snap.Text, "body") {
-			t.Fatalf("snapshot styled=%v title=%q, text=%q, err=%v", styled, snap.Title, snap.Text, err)
+		if err != nil || snap.GetTitle() != "작업 제목" || !strings.Contains(snap.GetText(), "body") {
+			t.Fatalf("snapshot styled=%v title=%q, text=%q, err=%v", styled, snap.GetTitle(), snap.GetText(), err)
 		}
 	}
 }
@@ -61,15 +61,15 @@ func TestPTYProgressIsIncludedInReplayAndClearedOnExit(t *testing.T) {
 	}
 	defer s.Close()
 	deadline := time.Now().Add(2 * time.Second)
-	for !s.Info().Busy {
+	for !s.Info().GetBusy() {
 		if time.Now().After(deadline) {
 			t.Fatal("PTY progress was not received")
 		}
 		time.Sleep(time.Millisecond)
 	}
 	snap, err := s.Snapshot(true)
-	if err != nil || snap.Progress == nil || snap.Progress.State != 3 || snap.Progress.RemainingMS <= 0 {
-		t.Fatalf("snapshot progress=%+v err=%v", snap.Progress, err)
+	if err != nil || snap.GetProgress() == nil || snap.GetProgress().GetState() != 3 || snap.GetProgress().GetRemainingMs() <= 0 {
+		t.Fatalf("snapshot progress=%+v err=%v", snap.GetProgress(), err)
 	}
 	if _, err := s.Write([]byte("done\n")); err != nil {
 		t.Fatal(err)
@@ -79,12 +79,12 @@ func TestPTYProgressIsIncludedInReplayAndClearedOnExit(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("process did not exit")
 	}
-	if s.Info().Busy {
+	if s.Info().GetBusy() {
 		t.Fatal("exited process still busy")
 	}
 	snap, err = s.Snapshot(true)
-	if err != nil || snap.Progress != nil {
-		t.Fatalf("exited progress=%+v err=%v", snap.Progress, err)
+	if err != nil || snap.GetProgress() != nil {
+		t.Fatalf("exited progress=%+v err=%v", snap.GetProgress(), err)
 	}
 }
 
@@ -99,7 +99,7 @@ func TestAShellIsIdleOnlyAtItsPrompt(t *testing.T) {
 	until := func(what string, idle bool) {
 		t.Helper()
 		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
-			if s.Info().Idle == idle {
+			if s.Info().GetIdle() == idle {
 				return
 			}
 		}

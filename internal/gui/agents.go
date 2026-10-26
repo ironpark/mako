@@ -163,9 +163,9 @@ func targetLabel(target string) string {
 }
 
 // sessionTitle is the title a session's program set, or its label.
-func sessionTitle(s protocol.SessionInfo, title string) string {
-	if s.Name != "" {
-		return s.Name
+func sessionTitle(s *protocol.SessionInfo, title string) string {
+	if s.GetName() != "" {
+		return s.GetName()
 	}
 	if title != "" {
 		return title
@@ -173,22 +173,22 @@ func sessionTitle(s protocol.SessionInfo, title string) string {
 	return sessionLabel(s)
 }
 
-func sessionLabel(s protocol.SessionInfo) string {
-	return targetLabel(agentspec.Target(s.Agent, s.Profile))
+func sessionLabel(s *protocol.SessionInfo) string {
+	return targetLabel(agentspec.Target(s.GetAgent(), s.GetProfile()))
 }
 
 // nodeTargets are what can be launched on a node: what it advertises, or,
 // for a daemon too old to, this node's own agents.
-func nodeTargets(nodes []protocol.Node, nodeID string, local []string) []string {
+func nodeTargets(nodes []*protocol.Node, nodeID string, local []string) []string {
 	for _, n := range nodes {
-		if n.ID != nodeID || len(n.Agents) == 0 {
+		if n.GetId() != nodeID || len(n.GetAgents()) == 0 {
 			continue
 		}
 		var out []string
-		for _, a := range n.Agents {
-			out = append(out, a.Name)
-			for _, p := range a.Profiles {
-				out = append(out, agentspec.Target(a.Name, p))
+		for _, a := range n.GetAgents() {
+			out = append(out, a.GetName())
+			for _, p := range a.GetProfiles() {
+				out = append(out, agentspec.Target(a.GetName(), p))
 			}
 		}
 		return out

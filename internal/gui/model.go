@@ -31,7 +31,7 @@ const pollInterval = 2 * time.Second
 type connState struct {
 	OK   bool
 	Err  string
-	Self protocol.Node
+	Self *protocol.Node
 }
 
 // newSession is the new-session dialog's form.
@@ -96,8 +96,8 @@ type model struct {
 	daemonGen   int // UI goroutine only; see startEmbedded
 
 	Conn     *ggui.StateValue[connState]
-	Nodes    *ggui.StateValue[[]protocol.Node]
-	Sessions *ggui.StateValue[[]protocol.SessionInfo]
+	Nodes    *ggui.StateValue[[]*protocol.Node]
+	Sessions *ggui.StateValue[[]*protocol.SessionInfo]
 	Agents   *ggui.StateValue[[]string] // what this node can launch, as agent:profile targets
 
 	Selected   *ggui.StateValue[string]      // the tab the current pane shows
@@ -224,7 +224,6 @@ type model struct {
 
 func newModel(cfg *config.Config, addr string) *model {
 	go systemLanguage() // asks the platform, so not on the first frame
-	deep := func(a, b []protocol.Node) bool { return reflect.DeepEqual(a, b) }
 	p := loadPrefs()
 	m := &model{
 		cfg:            cfg,
@@ -249,10 +248,10 @@ func newModel(cfg *config.Config, addr string) *model {
 		QuickOpen:      ggui.State(false),
 		QuickQuery:     ggui.State(""),
 		SearchQuery:    ggui.State(""),
-		Search:         ggui.State(searchView{}).WithEqual(func(a, b searchView) bool { return reflect.DeepEqual(a, b) }),
+		Search:         ggui.State(searchView{}).WithEqual(deepEqual),
 		Docs:           ggui.State(map[string]docInfo{}).WithEqual(maps.Equal),
 		docs:           map[string]*document{},
-		Diffs:          ggui.State(map[string]diffTab{}).WithEqual(func(a, b map[string]diffTab) bool { return reflect.DeepEqual(a, b) }),
+		Diffs:          ggui.State(map[string]diffTab{}).WithEqual(deepEqual),
 		hl:             newHighlighter(),
 		ExtResults:     ggui.State(extSearch{}).WithEqual(func(a, b extSearch) bool { return reflect.DeepEqual(a, b) }),
 		ExtBusy:        ggui.State(map[string]bool{}).WithEqual(maps.Equal),
@@ -265,9 +264,9 @@ func newModel(cfg *config.Config, addr string) *model {
 		DaemonLog:      ggui.State([]string(nil)).WithEqual(slices.Equal),
 		embedded:       newEmbeddedDaemon(),
 		kick:           make(chan struct{}, 1),
-		Conn:           ggui.State(connState{}),
-		Nodes:          ggui.State([]protocol.Node(nil)).WithEqual(deep),
-		Sessions:       ggui.State([]protocol.SessionInfo(nil)).WithEqual(func(a, b []protocol.SessionInfo) bool { return reflect.DeepEqual(a, b) }),
+		Conn:           ggui.State(connState{}).WithEqual(deepEqual),
+		Nodes:          ggui.State([]*protocol.Node(nil)).WithEqual(protocol.Equal),
+		Sessions:       ggui.State([]*protocol.SessionInfo(nil)).WithEqual(protocol.Equal),
 		Agents:         ggui.State(agentspec.Targets(cfg.Agents)).WithEqual(slices.Equal),
 		Selected:       ggui.State(""),
 		Tabs:           ggui.State([]string(nil)).WithEqual(slices.Equal),
@@ -283,7 +282,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		ChatModes:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		chats:          map[string]*chatState{},
 		usages:         map[string]*usageState{},
-		Dirs:           ggui.State(map[string]dirListing{}).WithEqual(func(a, b map[string]dirListing) bool { return reflect.DeepEqual(a, b) }),
+		Dirs:           ggui.State(map[string]dirListing{}).WithEqual(deepEqual),
 		FilesOpen:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		FileSel:        ggui.State(""),
 		Preview:        ggui.State(filePreview{}).WithEqual(filePreview.same),
@@ -293,7 +292,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		FileNote:       ggui.State(""),
 		FileNameOpen:   ggui.State(false),
 		FileDeleteOpen: ggui.State(false),
-		Git:            ggui.State(gitView{}).WithEqual(func(a, b gitView) bool { return reflect.DeepEqual(a, b) }),
+		Git:            ggui.State(gitView{}).WithEqual(deepEqual),
 		GitClosed:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		GitSel:         ggui.State(""),
 		GitSkip:        ggui.State(map[string]bool{}).WithEqual(maps.Equal),
@@ -305,8 +304,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		BranchOpen:     ggui.State(false),
 		BranchName:     ggui.State(""),
 		BranchErr:      ggui.State(""),
-		GitHistory:     ggui.State(historyView{}).WithEqual(func(a, b historyView) bool { return reflect.DeepEqual(a, b) }),
-		GitCommit:      ggui.State(commitView{}).WithEqual(func(a, b commitView) bool { return reflect.DeepEqual(a, b) }),
+		GitHistory:     ggui.State(historyView{}).WithEqual(deepEqual),
+		GitCommit:      ggui.State(commitView{}).WithEqual(deepEqual),
 		SidebarOpen:    ggui.State(true),
 		FilterOpen:     ggui.State(false),
 		SidebarFilter:  ggui.State(""),
@@ -476,7 +475,7 @@ func (m *model) poll(ctx context.Context) {
 	}
 	// Approvals wait for this window's answer only while it offers one.
 	approvals := m.approveInApp.Load()
-	sessions, err := c.ListSessions(reqCtx, m.key(), protocol.ListSessions{Approvals: approvals})
+	sessions, err := c.ListSessions(reqCtx, m.key(), &protocol.ListSessions{Approvals: approvals})
 	if err != nil {
 		m.dropClient(c)
 		fail(err)
@@ -485,16 +484,16 @@ func (m *model) poll(ctx context.Context) {
 	// LastSeen moves on every poll; leaving it out keeps an unchanged mesh
 	// from rebuilding the sidebar.
 	for i := range nodes {
-		nodes[i].LastSeen = time.Time{}
+		nodes[i].LastSeen = nil
 	}
 	self := c.Node()
-	self.LastSeen = time.Time{}
+	self.LastSeen = nil
 	printed := make(map[string]time.Time, len(sessions))
 	for i := range sessions {
-		if t := sessions[i].LastOutput; !t.IsZero() {
-			printed[sessions[i].ID] = t.Truncate(time.Minute)
+		if t := protocol.TimeOf(sessions[i].GetLastOutput()); !t.IsZero() {
+			printed[sessions[i].GetId()] = t.Truncate(time.Minute)
 		}
-		sessions[i].LastOutput = time.Time{}
+		sessions[i].LastOutput = nil
 	}
 	m.post(func() {
 		m.Conn.Set(connState{OK: true, Self: self})
@@ -506,12 +505,12 @@ func (m *model) poll(ctx context.Context) {
 		// A restarted daemon restores IDs as stopped. Discard their old
 		// terminal links, including hidden tabs, before displaying them again.
 		for _, info := range sessions {
-			previous, known := m.session(info.ID)
-			if info.State == protocol.StateStopped && known && previous.State != protocol.StateStopped {
-				if conn := m.conns[info.ID]; conn != nil {
+			previous, known := m.session(info.GetId())
+			if info.GetState() == protocol.StateStopped && known && previous.GetState() != protocol.StateStopped {
+				if conn := m.conns[info.GetId()]; conn != nil {
 					conn.close()
-					delete(m.conns, info.ID)
-					m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(id string) bool { return id == info.ID }))
+					delete(m.conns, info.GetId())
+					m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(id string) bool { return id == info.GetId() }))
 				}
 			}
 		}
@@ -538,32 +537,32 @@ func (m *model) busy(id string) bool {
 		}
 	}
 	s, ok := m.session(id)
-	return ok && s.Busy && s.State != protocol.StateExited
+	return ok && s.GetBusy() && s.GetState() != protocol.StateExited
 }
 
-func (m *model) session(id string) (protocol.SessionInfo, bool) {
+func (m *model) session(id string) (*protocol.SessionInfo, bool) {
 	for _, s := range ggui.Peek(m.Sessions) {
-		if s.ID == id {
+		if s.GetId() == id {
 			return s, true
 		}
 	}
-	return protocol.SessionInfo{}, false
+	return &protocol.SessionInfo{}, false
 }
 
-func nodeName(nodes []protocol.Node, id string) string {
+func nodeName(nodes []*protocol.Node, id string) string {
 	if n, ok := nodeIn(nodes, id); ok {
-		return n.Name
+		return n.GetName()
 	}
 	return short(id)
 }
 
-func nodeIn(nodes []protocol.Node, id string) (protocol.Node, bool) {
+func nodeIn(nodes []*protocol.Node, id string) (*protocol.Node, bool) {
 	for _, n := range nodes {
-		if n.ID == id {
+		if n.GetId() == id {
 			return n, true
 		}
 	}
-	return protocol.Node{}, false
+	return &protocol.Node{}, false
 }
 
 func short(id string) string {
@@ -609,12 +608,12 @@ type sessionGroup struct {
 	Key      string
 	NodeID   string
 	Project  string
-	Sessions []protocol.SessionInfo
+	Sessions []*protocol.SessionInfo
 }
 
 // keepProjects remembers the folders the sidebar groups sessions into. A
 // folder with nothing in it says nothing here, so the list only grows.
-func (m *model) keepProjects(sessions []protocol.SessionInfo) {
+func (m *model) keepProjects(sessions []*protocol.SessionInfo) {
 	projects := ggui.Peek(m.Prefs).Projects
 	known := make(map[fileRoot]bool, len(projects))
 	for _, r := range projects {
@@ -622,7 +621,7 @@ func (m *model) keepProjects(sessions []protocol.SessionInfo) {
 	}
 	var added []fileRoot
 	for _, s := range sessions {
-		r := fileRoot{Node: s.NodeID, Path: projectOf(s)}
+		r := fileRoot{Node: s.GetNodeId(), Path: projectOf(s)}
 		if r.Path == "" || known[r] {
 			continue
 		}
@@ -648,17 +647,17 @@ func (m *model) forgetProject(r fileRoot) {
 // of its repository, so a repository's subfolders and worktrees share one,
 // and outside a repository its own folder. One folder inside another is
 // not otherwise the other's: a home folder holds every project.
-func projectOf(s protocol.SessionInfo) string {
-	if s.Repo != "" {
-		return s.Repo
+func projectOf(s *protocol.SessionInfo) string {
+	if s.GetRepo() != "" {
+		return s.GetRepo()
 	}
-	return s.Project
+	return s.GetProject()
 }
 
 // groupSessions sorts sessions into the sidebar's sections for a grouping.
 // By project, a session goes in its repository's section, as projectOf
 // says. Remembered projects keep a section when they have no sessions.
-func groupSessions(sessions []protocol.SessionInfo, by string, nodes []protocol.Node, projects []fileRoot) []sessionGroup {
+func groupSessions(sessions []*protocol.SessionInfo, by string, nodes []*protocol.Node, projects []fileRoot) []sessionGroup {
 	switch by {
 	case groupFlat:
 		if len(sessions) == 0 {
@@ -666,13 +665,13 @@ func groupSessions(sessions []protocol.SessionInfo, by string, nodes []protocol.
 		}
 		return []sessionGroup{{Key: "", Sessions: sessions}}
 	case groupHost:
-		groups := bucket(sessions, func(s protocol.SessionInfo) (string, string) { return s.NodeID, "" })
+		groups := bucket(sessions, func(s *protocol.SessionInfo) (string, string) { return s.GetNodeId(), "" })
 		sort.SliceStable(groups, func(a, b int) bool {
 			return nodeName(nodes, groups[a].NodeID) < nodeName(nodes, groups[b].NodeID)
 		})
 		return groups
 	}
-	groups := bucket(sessions, func(s protocol.SessionInfo) (string, string) { return s.NodeID, projectOf(s) })
+	groups := bucket(sessions, func(s *protocol.SessionInfo) (string, string) { return s.GetNodeId(), projectOf(s) })
 	present := make(map[string]bool, len(groups))
 	for _, g := range groups {
 		present[g.Key] = true
@@ -692,7 +691,7 @@ func groupSessions(sessions []protocol.SessionInfo, by string, nodes []protocol.
 
 // bucket groups sessions by the node and project key gives them, in the
 // order each first appears.
-func bucket(sessions []protocol.SessionInfo, key func(protocol.SessionInfo) (string, string)) []sessionGroup {
+func bucket(sessions []*protocol.SessionInfo, key func(*protocol.SessionInfo) (string, string)) []sessionGroup {
 	var groups []sessionGroup
 	index := map[string]int{}
 	for _, s := range sessions {
@@ -816,7 +815,7 @@ func (m *model) openNew(nodeID, project string) {
 		f.Agent = prev.Agent // the last choice, within one run
 	}
 	if f.NodeID == "" {
-		f.NodeID = ggui.Peek(m.Conn).Self.ID
+		f.NodeID = ggui.Peek(m.Conn).Self.GetId()
 	}
 	if f.Project == "" {
 		f.Project = m.launchProject(f.NodeID)
@@ -838,7 +837,7 @@ func (m *model) submitNew() {
 	f := ggui.Peek(m.Form)
 	nodeID := m.remoteID(f.NodeID)
 	agent, profile := agentspec.SplitTarget(f.Agent)
-	req := protocol.OpenSession{NodeID: nodeID, Agent: agent, Profile: profile, Project: f.Project, Cols: 120, Rows: 36}
+	req := &protocol.OpenSession{NodeId: nodeID, Agent: agent, Profile: profile, Project: f.Project, Cols: 120, Rows: 36}
 	if f.Worktree {
 		branch := strings.TrimSpace(f.Branch)
 		if branch == "" {
@@ -847,15 +846,15 @@ func (m *model) submitNew() {
 		}
 		req.Worktree = &protocol.Worktree{Branch: branch}
 	}
-	ggui.Async(func() (protocol.SessionInfo, error) {
+	ggui.Async(func() (*protocol.SessionInfo, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		c, err := m.client(ctx)
 		if err != nil {
-			return protocol.SessionInfo{}, err
+			return nil, err
 		}
 		return c.Open(ctx, m.key(), req)
-	}, func(info protocol.SessionInfo, err error) {
+	}, func(info *protocol.SessionInfo, err error) {
 		if err != nil {
 			m.FormErr.Set(err.Error())
 			m.NewOpen.Set(true)
@@ -864,7 +863,7 @@ func (m *model) submitNew() {
 		m.NewOpen.Set(false)
 		sessions := slices.Clone(ggui.Peek(m.Sessions))
 		m.Sessions.Set(append(sessions, info))
-		m.selectSession(info.ID)
+		m.selectSession(info.GetId())
 	})
 }
 
@@ -882,7 +881,7 @@ func (m *model) askKill(id string) {
 		return
 	}
 	s, ok := m.session(id)
-	if !ggui.Peek(m.Prefs).ConfirmKill || (ok && (s.State == protocol.StateExited || s.State == protocol.StateStopped)) {
+	if !ggui.Peek(m.Prefs).ConfirmKill || (ok && (s.GetState() == protocol.StateExited || s.GetState() == protocol.StateStopped)) {
 		m.kill(id)
 		return
 	}
@@ -890,17 +889,17 @@ func (m *model) askKill(id string) {
 		m.confirmKill = id
 		m.ConfirmOpen.Set(true)
 	}
-	if !ok || s.Agent != "shell" {
+	if !ok || s.GetAgent() != "shell" {
 		confirm()
 		return
 	}
 	// A shell at its prompt loses nothing; whether one is, is asked now
 	// rather than taken from the last poll, as a command may have started
 	// since.
-	fetch(m, 5*time.Second, func(ctx context.Context, c *client.Client) ([]protocol.SessionInfo, error) {
+	fetch(m, 5*time.Second, func(ctx context.Context, c *client.Client) ([]*protocol.SessionInfo, error) {
 		return c.Sessions(ctx, m.key())
-	}, func(list []protocol.SessionInfo, err error) {
-		if now, ok := sessionIn(list, id); err == nil && ok && now.Idle {
+	}, func(list []*protocol.SessionInfo, err error) {
+		if now, ok := sessionIn(list, id); err == nil && ok && now.GetIdle() {
 			m.kill(id)
 			return
 		}
@@ -929,10 +928,10 @@ func (m *model) kill(id string) {
 		if err != nil {
 			return struct{}{}, err
 		}
-		return struct{}{}, c.Kill(ctx, m.key(), protocol.CloseSession{SessionID: id, NodeID: info.NodeID})
+		return struct{}{}, c.Kill(ctx, m.key(), &protocol.CloseSession{SessionId: id, NodeId: info.GetNodeId()})
 	}, func(_ struct{}, err error) {
 		if err == nil {
-			m.Sessions.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Sessions)), func(s protocol.SessionInfo) bool { return s.ID == id }))
+			m.Sessions.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Sessions)), func(s *protocol.SessionInfo) bool { return s.GetId() == id }))
 		}
 	})
 }
@@ -940,7 +939,7 @@ func (m *model) kill(id string) {
 // tidyable tells whether closing a tab loses nothing, as the sessions'
 // last poll has it: a file without unsaved changes, a diff, or a shell at
 // its prompt or exited. Agents' tabs are never tidied away.
-func tidyable(id string, sessions []protocol.SessionInfo, docs map[string]docInfo) bool {
+func tidyable(id string, sessions []*protocol.SessionInfo, docs map[string]docInfo) bool {
 	switch {
 	case isDocTab(id):
 		return !docs[id].Dirty
@@ -948,7 +947,7 @@ func tidyable(id string, sessions []protocol.SessionInfo, docs map[string]docInf
 		return true
 	}
 	s, ok := sessionIn(sessions, id)
-	return ok && s.Agent == "shell" && (s.Idle || s.State == protocol.StateExited || s.State == protocol.StateStopped)
+	return ok && s.GetAgent() == "shell" && (s.GetIdle() || s.GetState() == protocol.StateExited || s.GetState() == protocol.StateStopped)
 }
 
 // anyTidyable tells whether any open tab is tidyable.
@@ -972,7 +971,7 @@ func (m *model) tidyTabs(ids []string) {
 		case isDiffTab(id):
 			m.closeDiff(id)
 		default:
-			if s, ok := m.session(id); ok && s.Agent == "shell" {
+			if s, ok := m.session(id); ok && s.GetAgent() == "shell" {
 				shells = append(shells, id)
 			}
 		}
@@ -980,9 +979,9 @@ func (m *model) tidyTabs(ids []string) {
 	if len(shells) == 0 {
 		return
 	}
-	fetch(m, 5*time.Second, func(ctx context.Context, c *client.Client) ([]protocol.SessionInfo, error) {
+	fetch(m, 5*time.Second, func(ctx context.Context, c *client.Client) ([]*protocol.SessionInfo, error) {
 		return c.Sessions(ctx, m.key())
-	}, func(list []protocol.SessionInfo, err error) {
+	}, func(list []*protocol.SessionInfo, err error) {
 		if err != nil {
 			return
 		}
@@ -1029,8 +1028,8 @@ func (m *model) sendComposer(id string) {
 func (m *model) syncTitles() {
 	titles := map[string]string{}
 	for _, info := range ggui.Peek(m.Sessions) {
-		if title := cleanTitle(info.Title); title != "" {
-			titles[info.ID] = title
+		if title := cleanTitle(info.GetTitle()); title != "" {
+			titles[info.GetId()] = title
 		}
 	}
 	for id, conn := range m.conns {

@@ -181,7 +181,7 @@ func (f *launchFan) Paint(dst *ggui.Canvas, r ggui.Rect) {
 // without a tab to take the project from: the default working directory on
 // this node, and on another the node's own choice, its home.
 func (m *model) launchProject(nodeID string) string {
-	if nodeID == "" || nodeID == ggui.Peek(m.Conn).Self.ID {
+	if nodeID == "" || nodeID == ggui.Peek(m.Conn).Self.GetId() {
 		return ggui.Peek(m.Prefs).DefaultProject
 	}
 	return ""

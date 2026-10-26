@@ -84,7 +84,7 @@ func (m *model) commands() []ui.CommandEntry {
 		if d, ok := docs[id]; ok {
 			label, keys = d.Name(), []string{d.Path}
 		} else if s, ok := m.session(id); ok {
-			label, keys = sessionTitle(s, titles[id]), []string{s.Project, s.Agent}
+			label, keys = sessionTitle(s, titles[id]), []string{s.GetProject(), s.GetAgent()}
 		} else {
 			continue
 		}
@@ -92,12 +92,12 @@ func (m *model) commands() []ui.CommandEntry {
 	}
 	nodes := ggui.Peek(m.Nodes)
 	for _, s := range ggui.Peek(m.Sessions) {
-		if open[s.ID] {
+		if open[s.GetId()] {
 			continue
 		}
-		id := s.ID
-		label := sessionTitle(s, titles[id]) + " · " + nodeName(nodes, s.NodeID) + ":" + projectName(s.Project)
-		cmds = append(cmds, ui.CommandItem(label, func() { m.selectSession(id) }).Keywords(s.Project, s.Agent).Group(T("Sessions")))
+		id := s.GetId()
+		label := sessionTitle(s, titles[id]) + " · " + nodeName(nodes, s.GetNodeId()) + ":" + projectName(s.GetProject())
+		cmds = append(cmds, ui.CommandItem(label, func() { m.selectSession(id) }).Keywords(s.GetProject(), s.GetAgent()).Group(T("Sessions")))
 	}
 	return cmds
 }

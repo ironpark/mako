@@ -15,7 +15,7 @@ import (
 // worktreeAt is the worktree a session was made, whose folder root is.
 func (m *model) worktreeAt(root fileRoot) *protocol.Worktree {
 	for _, s := range m.Sessions.Get() {
-		if w := s.Worktree; w != nil && s.NodeID == root.Node && w.Path == root.Path {
+		if w := s.GetWorktree(); w != nil && s.GetNodeId() == root.Node && w.GetPath() == root.Path {
 			return w
 		}
 	}
@@ -23,13 +23,13 @@ func (m *model) worktreeAt(root fileRoot) *protocol.Worktree {
 }
 
 // worktreeItems are a worktree's actions, for a menu.
-func worktreeItems(m *model, w protocol.Worktree) []ggui.Widget {
+func worktreeItems(m *model, w *protocol.Worktree) []ggui.Widget {
 	run := func(op, label string) func() {
-		return func() { m.gitRun(protocol.GitRun{Op: op, Worktree: &w}, label, nil) }
+		return func() { m.gitRun(&protocol.GitRun{Op: op, Worktree: w}, label, nil) }
 	}
 	merge := T("Merge into the base branch")
-	if w.Base != "" {
-		merge = Tf("Merge into %s", w.Base)
+	if w.GetBase() != "" {
+		merge = Tf("Merge into %s", w.GetBase())
 	}
 	return []ggui.Widget{
 		ui.MenuItem(merge, run(protocol.GitOpMerge, T("Merging…"))),

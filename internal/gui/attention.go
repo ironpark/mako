@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/ironpark/ggui"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/sanbo/internal/protocol"
 )
@@ -17,15 +18,15 @@ import (
 // unread, and the desktop is told unless the settings say not to.
 
 // dotOf is what a session's dot shows.
-func (m *model) dotOf(s protocol.SessionInfo) dotState {
+func (m *model) dotOf(s *protocol.SessionInfo) dotState {
 	switch {
-	case s.State == protocol.StateExited || s.State == protocol.StateStopped:
+	case s.GetState() == protocol.StateExited || s.GetState() == protocol.StateStopped:
 		return dotRest
-	case s.Approval != nil || s.Status == protocol.AgentWaiting:
+	case s.GetApproval() != nil || s.GetStatus() == protocol.AgentWaiting:
 		return dotWaiting
-	case m.Unread.Get()[s.ID]:
+	case m.Unread.Get()[s.GetId()]:
 		return dotDone
-	case s.Status == protocol.AgentWorking || m.busy(s.ID):
+	case s.GetStatus() == protocol.AgentWorking || m.busy(s.GetId()):
 		return dotWorking
 	}
 	return dotRest
@@ -58,24 +59,24 @@ func (m *model) inView(id string) bool {
 
 // noteStatus marks what the next poll's sessions did out of view: run
 // before they replace the last, which it compares them with.
-func (m *model) noteStatus(next []protocol.SessionInfo) {
+func (m *model) noteStatus(next []*protocol.SessionInfo) {
 	prev := ggui.Peek(m.Sessions)
 	unread := ggui.Peek(m.Unread)
 	changed := false
 	for _, s := range next {
-		old, known := sessionIn(prev, s.ID)
-		if !known || !attends(s) || (old.Status == s.Status && old.StatusAt.Equal(s.StatusAt) && approvalID(old.Approval) == approvalID(s.Approval)) {
+		old, known := sessionIn(prev, s.GetId())
+		if !known || !attends(s) || (old.GetStatus() == s.GetStatus() && proto.Equal(old.GetStatusAt(), s.GetStatusAt()) && old.GetApproval().GetId() == s.GetApproval().GetId()) {
 			continue
 		}
-		if m.inView(s.ID) {
+		if m.inView(s.GetId()) {
 			continue
 		}
-		if !unread[s.ID] {
+		if !unread[s.GetId()] {
 			if !changed {
 				unread = maps.Clone(unread)
 				changed = true
 			}
-			unread[s.ID] = true
+			unread[s.GetId()] = true
 		}
 		m.announce(s)
 	}
@@ -95,8 +96,8 @@ func (m *model) noteStatus(next []protocol.SessionInfo) {
 }
 
 // attends reports whether a session's state asks for the user.
-func attends(s protocol.SessionInfo) bool {
-	return s.Approval != nil || s.Status == protocol.AgentWaiting || s.Status == protocol.AgentDone
+func attends(s *protocol.SessionInfo) bool {
+	return s.GetApproval() != nil || s.GetStatus() == protocol.AgentWaiting || s.GetStatus() == protocol.AgentDone
 }
 
 // seen clears the marks of the sessions in view.
@@ -119,24 +120,24 @@ func (m *model) seen() {
 }
 
 // announce tells the desktop what a session out of view did.
-func (m *model) announce(s protocol.SessionInfo) {
-	if (s.Approval != nil || s.Status == protocol.AgentWaiting) && m.window != nil && !ggui.Peek(m.window.Focused()) {
+func (m *model) announce(s *protocol.SessionInfo) {
+	if (s.GetApproval() != nil || s.GetStatus() == protocol.AgentWaiting) && m.window != nil && !ggui.Peek(m.window.Focused()) {
 		m.window.RequestAttention()
 	}
 	if !ggui.Peek(m.Prefs).Notify {
 		return
 	}
-	title := sessionTitle(s, ggui.Peek(m.Titles)[s.ID])
+	title := sessionTitle(s, ggui.Peek(m.Titles)[s.GetId()])
 	var body string
 	switch {
-	case s.Approval != nil:
-		body = Tf("Asks to run %s", strings.TrimSpace(s.Approval.Tool+" "+s.Approval.Detail))
-	case s.Status == protocol.AgentWaiting:
+	case s.GetApproval() != nil:
+		body = Tf("Asks to run %s", strings.TrimSpace(s.GetApproval().GetTool()+" "+s.GetApproval().GetDetail()))
+	case s.GetStatus() == protocol.AgentWaiting:
 		body = T("Waiting for your answer")
 	default:
 		body = T("Finished its turn")
 	}
-	go notify(title, projectName(s.Project)+" · "+body)
+	go notify(title, projectName(s.GetProject())+" · "+body)
 }
 
 // followAttention keeps the Dock's count and the marks in step with what is
@@ -155,7 +156,7 @@ func followAttention(m *model) {
 	ggui.Effect(func() ggui.Cleanup {
 		n := 0
 		for _, s := range m.Sessions.Get() {
-			if m.Unread.Get()[s.ID] || s.Approval != nil {
+			if m.Unread.Get()[s.GetId()] || s.GetApproval() != nil {
 				n++
 			}
 		}

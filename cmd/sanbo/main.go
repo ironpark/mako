@@ -96,7 +96,7 @@ func run(args []string, daemonAddr, nodeID, project string) error {
 		if nodeID, err = sessionNode(ctx, c, cfg.PSK, nodeID, args[1]); err != nil {
 			return err
 		}
-		return c.Attach(ctx, cfg.PSK, protocol.Attach{SessionID: args[1], NodeID: nodeID, Replay: true})
+		return c.Attach(ctx, cfg.PSK, &protocol.Attach{SessionId: args[1], NodeId: nodeID, Replay: true})
 	case "kill":
 		if len(args) < 2 {
 			return fmt.Errorf("kill needs a session ID")
@@ -104,7 +104,7 @@ func run(args []string, daemonAddr, nodeID, project string) error {
 		if nodeID, err = sessionNode(ctx, c, cfg.PSK, nodeID, args[1]); err != nil {
 			return err
 		}
-		return c.Kill(ctx, cfg.PSK, protocol.CloseSession{SessionID: args[1], NodeID: nodeID})
+		return c.Kill(ctx, cfg.PSK, &protocol.CloseSession{SessionId: args[1], NodeId: nodeID})
 	case "rename":
 		if len(args) < 2 {
 			return fmt.Errorf("rename needs a session ID")
@@ -112,7 +112,7 @@ func run(args []string, daemonAddr, nodeID, project string) error {
 		if nodeID, err = sessionNode(ctx, c, cfg.PSK, nodeID, args[1]); err != nil {
 			return err
 		}
-		_, err := c.Rename(ctx, cfg.PSK, protocol.RenameSession{SessionID: args[1], NodeID: nodeID, Name: strings.Join(args[2:], " ")})
+		_, err := c.Rename(ctx, cfg.PSK, &protocol.RenameSession{SessionId: args[1], NodeId: nodeID, Name: strings.Join(args[2:], " ")})
 		return err
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
@@ -130,8 +130,8 @@ func sessionNode(ctx context.Context, c *client.Client, psk, nodeID, sessionID s
 		return "", err
 	}
 	for _, s := range sessions {
-		if s.ID == sessionID {
-			return s.NodeID, nil
+		if s.GetId() == sessionID {
+			return s.GetNodeId(), nil
 		}
 	}
 	return "", fmt.Errorf("unknown session %q", sessionID)
@@ -145,7 +145,7 @@ func listNodes(ctx context.Context, c *client.Client, psk string) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "ID\tNAME\tADDRESS\tVIA\tLAST SEEN")
 	for _, n := range nodes {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", short(n.ID), n.Name, n.Addr, n.Source, ago(n.LastSeen))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", short(n.GetId()), n.GetName(), n.GetAddr(), n.GetSource(), ago(protocol.TimeOf(n.GetLastSeen())))
 	}
 	return w.Flush()
 }
@@ -162,12 +162,12 @@ func listSessions(ctx context.Context, c *client.Client, psk string) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "SESSION\tNODE\tAGENT\tNAME\tPROJECT\tSTATE\tUPTIME")
 	for _, s := range sessions {
-		name := s.Name
+		name := s.GetName()
 		if name == "" {
 			name = "-"
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			s.ID, short(s.NodeID), agentspec.Target(s.Agent, s.Profile), name, s.Project, s.State, ago(s.StartedAt))
+			s.GetId(), short(s.GetNodeId()), agentspec.Target(s.GetAgent(), s.GetProfile()), name, s.GetProject(), s.GetState(), ago(protocol.TimeOf(s.GetStartedAt())))
 	}
 	return w.Flush()
 }
@@ -192,20 +192,20 @@ func runAgent(ctx context.Context, c *client.Client, psk, nodeID, project, targe
 	}
 	cols, rows := client.WindowSize()
 
-	info, err := c.Open(ctx, psk, protocol.OpenSession{
-		NodeID:  nodeID,
+	info, err := c.Open(ctx, psk, &protocol.OpenSession{
+		NodeId:  nodeID,
 		Agent:   agent,
 		Profile: profile,
 		Project: abs,
 		Args:    extra,
-		Cols:    cols,
-		Rows:    rows,
+		Cols:    uint32(cols),
+		Rows:    uint32(rows),
 	})
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "[sanbo] session %s on %s\r\n", info.ID, short(info.NodeID))
-	return c.Attach(ctx, psk, protocol.Attach{SessionID: info.ID, NodeID: nodeID, Replay: false})
+	fmt.Fprintf(os.Stderr, "[sanbo] session %s on %s\r\n", info.GetId(), short(info.GetNodeId()))
+	return c.Attach(ctx, psk, &protocol.Attach{SessionId: info.GetId(), NodeId: nodeID, Replay: false})
 }
 
 func short(id string) string {

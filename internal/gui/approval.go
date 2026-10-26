@@ -2,7 +2,6 @@ package gui
 
 import (
 	"context"
-	"slices"
 	"time"
 
 	"github.com/ironpark/ggui"
@@ -20,15 +19,8 @@ import (
 func (m *model) approvalOfSession(id string) ggui.Readable[*protocol.Approval] {
 	return ggui.Derived(func() *protocol.Approval {
 		s, _ := sessionIn(m.Sessions.Get(), id)
-		return s.Approval
-	}).WithEqual(func(a, b *protocol.Approval) bool { return approvalID(a) == approvalID(b) })
-}
-
-func approvalID(a *protocol.Approval) string {
-	if a == nil {
-		return ""
-	}
-	return a.ID
+		return s.GetApproval()
+	}).WithEqual(func(a, b *protocol.Approval) bool { return a.GetId() == b.GetId() })
 }
 
 // answerApproval passes the user's decision to the agent.
@@ -37,21 +29,16 @@ func (m *model) answerApproval(id, approval, decision string) {
 	if !ok {
 		return
 	}
-	req := protocol.AnswerApproval{NodeID: m.remoteID(info.NodeID), SessionID: id, ApprovalID: approval, Decision: decision}
+	req := &protocol.AnswerApproval{NodeId: m.remoteID(info.GetNodeId()), SessionId: id, ApprovalId: approval, Decision: decision}
 	// Answered, the approval leaves at once rather than at the next poll.
-	m.Sessions.Set(slices.Collect(func(yield func(protocol.SessionInfo) bool) {
-		for _, s := range ggui.Peek(m.Sessions) {
-			if s.ID == id && approvalID(s.Approval) == approval {
-				s.Approval = nil
-			}
-			if !yield(s) {
-				return
-			}
+	m.editSession(id, func(s *protocol.SessionInfo) {
+		if s.GetApproval().GetId() == approval {
+			s.Approval = nil
 		}
-	}))
-	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (protocol.SessionInfo, error) {
+	})
+	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SessionInfo, error) {
 		return c.AnswerApproval(ctx, m.key(), req)
-	}, func(_ protocol.SessionInfo, err error) {
+	}, func(_ *protocol.SessionInfo, err error) {
 		if err != nil {
 			m.Conn.Set(connState{OK: ggui.Peek(m.Conn).OK, Self: ggui.Peek(m.Conn).Self, Err: err.Error()})
 		}
@@ -69,7 +56,7 @@ func (m *model) pollNow() {
 
 // approvalButtons are an approval's answers.
 func approvalButtons(m *model, id string, a *protocol.Approval) []ggui.Widget {
-	answer := func(decision string) func() { return func() { m.answerApproval(id, a.ID, decision) } }
+	answer := func(decision string) func() { return func() { m.answerApproval(id, a.GetId(), decision) } }
 	return []ggui.Widget{
 		ui.Button(T("In terminal"), answer(protocol.DecisionTerminal)).Ghost().Name(T("Answer in the terminal")),
 		ui.Button(T("Deny"), answer(protocol.DecisionDeny)).Outline(),
@@ -87,18 +74,18 @@ func approvalCard(m *model, id string) ggui.Widget {
 		open := ggui.State(false)
 		head := ggui.Row(
 			icon("shield-alert").Size(16).Color(tokDotWaiting),
-			ggui.Text(Tf("Allow %s?", a.Tool)).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
+			ggui.Text(Tf("Allow %s?", a.GetTool())).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
 			ggui.Spacer(),
-			ggui.If(ggui.Const(a.Input != ""), func() ggui.Widget {
+			ggui.If(ggui.Const(a.GetInput() != ""), func() ggui.Widget {
 				return ui.Button(T("Arguments"), func() { open.Set(!ggui.Peek(open)) }).Ghost()
 			}),
 		).Gap(8).Align(ggui.AlignCenter)
 		rows := []ggui.Widget{head}
-		if a.Detail != "" {
-			rows = append(rows, toolBlock(a.Detail, false))
+		if a.GetDetail() != "" {
+			rows = append(rows, toolBlock(a.GetDetail(), false))
 		}
 		rows = append(rows,
-			ggui.If(open, func() ggui.Widget { return ggui.Box(toolBlock(a.Input, false)).MaxHeight(260) }),
+			ggui.If(open, func() ggui.Widget { return ggui.Box(toolBlock(a.GetInput(), false)).MaxHeight(260) }),
 			ggui.Row(append([]ggui.Widget{ggui.Spacer()}, approvalButtons(m, id, a)...)...).Gap(8),
 		)
 		card := ggui.Box(ggui.Column(rows...).Gap(10).Stretch()).
@@ -113,9 +100,9 @@ func approvalBar(m *model, id string) ggui.Widget {
 		if a == nil {
 			return ggui.Box()
 		}
-		what := a.Tool
-		if a.Detail != "" {
-			what += "  " + a.Detail
+		what := a.GetTool()
+		if a.GetDetail() != "" {
+			what += "  " + a.GetDetail()
 		}
 		row := append([]ggui.Widget{
 			icon("shield-alert").Size(15).Color(tokDotWaiting),

@@ -80,7 +80,7 @@ func validName(name string) string {
 func (m *model) submitFile() {
 	a := ggui.Peek(m.FileAsk)
 	it := a.Item
-	req := protocol.FileOp{NodeID: m.remoteID(it.Node), Op: a.Op, Path: it.Path}
+	req := &protocol.FileOp{NodeId: m.remoteID(it.Node), Op: a.Op, Path: it.Path}
 	if a.Op != protocol.FileDelete {
 		name := strings.TrimSpace(ggui.Peek(m.FileName))
 		if why := validName(name); why != "" {
@@ -98,9 +98,9 @@ func (m *model) submitFile() {
 			req.Path = joinPath(it.Path, name)
 		}
 	}
-	fetch(m, 15*time.Second, func(ctx context.Context, c *client.Client) (protocol.File, error) {
+	fetch(m, 15*time.Second, func(ctx context.Context, c *client.Client) (*protocol.File, error) {
 		return c.FileOp(ctx, m.key(), req)
-	}, func(f protocol.File, err error) {
+	}, func(f *protocol.File, err error) {
 		if err != nil {
 			m.FileErr.Set(nodeErr(err))
 			if a.Op == protocol.FileDelete {
@@ -117,7 +117,7 @@ func (m *model) submitFile() {
 		m.loadDir(it.Node, folder, true)
 		switch a.Op {
 		case protocol.FileCreate:
-			m.openFile(fileItem{Key: dirKey(it.Node, f.Path), Node: it.Node, Path: f.Path, Name: baseName(f.Path)})
+			m.openFile(fileItem{Key: dirKey(it.Node, f.GetPath()), Node: it.Node, Path: f.GetPath(), Name: baseName(f.GetPath())})
 		case protocol.FileMkdir:
 			m.FilesOpen.Update(func(v map[string]bool) map[string]bool {
 				v = maps.Clone(v)

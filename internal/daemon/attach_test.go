@@ -82,21 +82,21 @@ func TestAttachCarriesSnapshotOutputAndExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = stream.SetReadDeadline(time.Now().Add(5 * time.Second))
-	if err := stream.Send(protocol.TypeAttach, "", protocol.Attach{SessionID: "s", Replay: true}); err != nil {
+	if err := stream.Send(protocol.TypeAttach, "", &protocol.Attach{SessionId: "s", Replay: true}); err != nil {
 		t.Fatal(err)
 	}
 
-	var snap protocol.Snapshot
+	snap := &protocol.Snapshot{}
 	var output strings.Builder
 	exitCode, exited := 0, false
-	var ev protocol.StreamEvent
 	for !exited {
 		env, err := stream.Recv()
 		if err != nil {
 			t.Fatalf("read frame: %v", err)
 		}
-		if ok, err := protocol.StreamEventOf(env, &ev); err != nil || !ok {
-			t.Fatalf("frame %q: %v", env.Type, err)
+		ev, ok := protocol.StreamEventOf(env)
+		if !ok {
+			t.Fatalf("frame %q", env.Type())
 		}
 		switch ev.Kind {
 		case protocol.EventSnapshot:
@@ -109,8 +109,8 @@ func TestAttachCarriesSnapshotOutputAndExit(t *testing.T) {
 			t.Fatalf("attach failed: %s", ev.Err)
 		}
 	}
-	if snap.Cols != 40 || snap.Rows != 6 {
-		t.Fatalf("snapshot %dx%d, want 40x6", snap.Cols, snap.Rows)
+	if snap.GetCols() != 40 || snap.GetRows() != 6 {
+		t.Fatalf("snapshot %dx%d, want 40x6", snap.GetCols(), snap.GetRows())
 	}
 	if !strings.Contains(output.String(), "hello") {
 		t.Fatalf("output %q missing hello", output.String())

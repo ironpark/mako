@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/ironpark/sanbo/internal/config"
 	"github.com/ironpark/sanbo/internal/mcp"
@@ -79,20 +80,20 @@ func (d *Daemon) Ready() <-chan struct{} { return d.ready }
 func (d *Daemon) Addr() net.Addr { return d.ln.Addr() }
 
 // Self describes this daemon as a node record.
-func (d *Daemon) Self() protocol.Node {
+func (d *Daemon) Self() *protocol.Node {
 	addr := d.cfg.Listen
 	if d.ln != nil {
 		addr = d.ln.Addr().String()
 	}
-	return protocol.Node{
-		ID:       d.cfg.NodeID,
+	return &protocol.Node{
+		Id:       d.cfg.NodeID,
 		Name:     d.cfg.Name,
 		Addr:     addr,
-		OS:       runtime.GOOS,
+		Os:       runtime.GOOS,
 		Arch:     runtime.GOARCH,
 		Version:  config.Version,
 		Source:   "self",
-		LastSeen: time.Now(),
+		LastSeen: timestamppb.Now(),
 		Revision: protocol.Revision,
 		Agents:   agentInfo(d.agents()),
 	}
@@ -177,23 +178,23 @@ func (d *Daemon) serveStream(ctx context.Context, conn *quic.Conn, stream *trans
 	if err != nil {
 		return err
 	}
-	if env.Type != protocol.TypeHello {
-		return protocol.WriteError(stream, env.ID, errors.New("expected hello"))
+	if env.Type() != protocol.TypeHello {
+		return protocol.WriteError(stream, env.GetId(), errors.New("expected hello"))
 	}
-	var hello protocol.Hello
-	if err := protocol.Decode(env, &hello); err != nil {
-		return protocol.WriteError(stream, env.ID, err)
+	hello, err := protocol.Body[*protocol.Hello](env)
+	if err != nil {
+		return protocol.WriteError(stream, env.GetId(), err)
 	}
-	if d.cfg.PSK != "" && hello.AuthTag != d.cfg.PSK {
-		return protocol.WriteError(stream, env.ID, errors.New("authentication failed"))
+	if d.cfg.PSK != "" && hello.GetAuthTag() != d.cfg.PSK {
+		return protocol.WriteError(stream, env.GetId(), errors.New("authentication failed"))
 	}
-	if err := stream.Send(protocol.TypeWelcome, env.ID, protocol.Welcome{Node: d.Self()}); err != nil {
+	if err := stream.Send(protocol.TypeWelcome, env.GetId(), &protocol.Welcome{Node: d.Self()}); err != nil {
 		return err
 	}
-	if hello.IsPeer && hello.NodeID != "" && hello.NodeID != d.cfg.NodeID {
-		d.peers.upsert(protocol.Node{
-			ID:     hello.NodeID,
-			Name:   hello.Name,
+	if hello.GetIsPeer() && hello.GetNodeId() != "" && hello.GetNodeId() != d.cfg.NodeID {
+		d.peers.upsert(&protocol.Node{
+			Id:     hello.GetNodeId(),
+			Name:   hello.GetName(),
 			Addr:   remoteAddr(conn, d.port),
 			Source: "inbound",
 		})
@@ -204,11 +205,11 @@ func (d *Daemon) serveStream(ctx context.Context, conn *quic.Conn, stream *trans
 		if err != nil {
 			return err
 		}
-		if err := d.dispatch(ctx, stream, env, hello.IsPeer); err != nil {
+		if err := d.dispatch(ctx, stream, env, hello.GetIsPeer()); err != nil {
 			if isClosed(err) {
 				return err
 			}
-			if writeErr := protocol.WriteError(stream, env.ID, err); writeErr != nil {
+			if writeErr := protocol.WriteError(stream, env.GetId(), err); writeErr != nil {
 				return writeErr
 			}
 		}
@@ -217,22 +218,22 @@ func (d *Daemon) serveStream(ctx context.Context, conn *quic.Conn, stream *trans
 
 // fromPeer marks a stream greeted by another daemon rather than a front-end.
 func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
-	switch env.Type {
+	switch env.Type() {
 	case protocol.TypeListNodes:
-		nodes := append([]protocol.Node{d.Self()}, d.peers.list()...)
-		return stream.Send(protocol.TypeNodes, env.ID, protocol.Nodes{Nodes: nodes})
+		nodes := append([]*protocol.Node{d.Self()}, d.peers.list()...)
+		return stream.Send(protocol.TypeNodes, env.GetId(), &protocol.Nodes{Nodes: nodes})
 
 	case protocol.TypeGossip:
-		var payload protocol.Nodes
-		if err := protocol.Decode(env, &payload); err != nil {
+		payload, err := protocol.Body[*protocol.Nodes](env)
+		if err != nil {
 			return err
 		}
-		for _, node := range payload.Nodes {
-			if node.ID != d.cfg.NodeID {
+		for _, node := range payload.GetNodes() {
+			if node.GetId() != d.cfg.NodeID {
 				d.peers.merge(node)
 			}
 		}
-		return stream.Send(protocol.TypeNodes, env.ID, protocol.Nodes{Nodes: d.peers.list()})
+		return stream.Send(protocol.TypeNodes, env.GetId(), &protocol.Nodes{Nodes: d.peers.list()})
 
 	case protocol.TypeListSess:
 		return d.handleListSessions(ctx, stream, env, fromPeer)
@@ -286,33 +287,33 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleSearch(ctx, stream, env)
 
 	case protocol.TypeResize:
-		var payload protocol.Resize
-		if err := protocol.Decode(env, &payload); err != nil {
+		payload, err := protocol.Body[*protocol.Resize](env)
+		if err != nil {
 			return err
 		}
-		s, ok := d.sessions.get(payload.SessionID)
+		s, ok := d.sessions.get(payload.GetSessionId())
 		if !ok {
-			return fmt.Errorf("unknown session %q", payload.SessionID)
+			return fmt.Errorf("unknown session %q", payload.GetSessionId())
 		}
-		if err := s.Resize(payload.Cols, payload.Rows); err != nil {
+		if err := s.Resize(uint16(payload.GetCols()), uint16(payload.GetRows())); err != nil {
 			return err
 		}
-		return stream.Send(protocol.TypeSessionInfo, env.ID, s.Info())
+		return stream.Send(protocol.TypeSessionInfo, env.GetId(), s.Info())
 
 	case protocol.TypeInput:
-		var payload protocol.Input
-		if err := protocol.Decode(env, &payload); err != nil {
+		payload, err := protocol.Body[*protocol.Input](env)
+		if err != nil {
 			return err
 		}
-		s, ok := d.sessions.get(payload.SessionID)
+		s, ok := d.sessions.get(payload.GetSessionId())
 		if !ok {
-			return fmt.Errorf("unknown session %q", payload.SessionID)
+			return fmt.Errorf("unknown session %q", payload.GetSessionId())
 		}
-		_, err := s.Write(payload.Data)
+		_, err = s.Write(payload.GetData())
 		return err
 
 	default:
-		return &protocol.CodedError{Code: protocol.CodeUnsupported, Message: fmt.Sprintf("unsupported message %q", env.Type)}
+		return &protocol.CodedError{Code: protocol.CodeUnsupported, Message: fmt.Sprintf("unsupported message %q", env.Type())}
 	}
 }
 

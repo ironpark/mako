@@ -41,15 +41,15 @@ type diffTab struct {
 	Repo    string   // the work tree on the node
 	Commit  string   // the commit whose change it is, "" for the work tree's
 	Base    string   // the branch the work tree's changes are read since, "" for HEAD
-	File    protocol.GitFile
-	Diff    protocol.Diff
+	File    *protocol.GitFile
+	Diff    *protocol.Diff
 	Err     string
 	Loading bool
 	Preview bool // the next file opened takes this tab
 }
 
 // Name is the file's name.
-func (d diffTab) Name() string { return baseName(d.File.Path) }
+func (d diffTab) Name() string { return baseName(d.File.GetPath()) }
 
 // workTree reports whether the diff is of the work tree against HEAD, the
 // changes a hunk can be undone in.
@@ -61,8 +61,8 @@ func diffTabID(node, repo, against, path string) string {
 
 // openDiffTab shows a file's diff in a tab, reading it again when the tab
 // is already open. A preview takes the tab of the last preview, if any.
-func (m *model) openDiffTab(root fileRoot, repo, commit, base string, f protocol.GitFile, preview bool) {
-	id := diffTabID(root.Node, repo, commit+base, f.Path)
+func (m *model) openDiffTab(root fileRoot, repo, commit, base string, f *protocol.GitFile, preview bool) {
+	id := diffTabID(root.Node, repo, commit+base, f.GetPath())
 	var replaced string
 	if _, open := ggui.Peek(m.Diffs)[id]; !open && preview {
 		for other, d := range ggui.Peek(m.Diffs) {
@@ -116,10 +116,10 @@ func (m *model) readDiff(id string) {
 	if !ok {
 		return
 	}
-	req := protocol.GitDiff{NodeID: m.remoteID(d.Root.Node), Root: d.Repo, Path: d.File.Path, From: d.File.From, Commit: d.Commit, Base: d.Base}
-	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (protocol.Diff, error) {
+	req := &protocol.GitDiff{NodeId: m.remoteID(d.Root.Node), Root: d.Repo, Path: d.File.GetPath(), From: d.File.GetFrom(), Commit: d.Commit, Base: d.Base}
+	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Diff, error) {
 		return c.GitDiff(ctx, m.key(), req)
-	}, func(diff protocol.Diff, err error) {
+	}, func(diff *protocol.Diff, err error) {
 		m.updateDiff(id, func(d *diffTab) {
 			d.Diff, d.Err, d.Loading = diff, "", false
 			if err != nil {
@@ -147,15 +147,15 @@ func (m *model) updateDiff(id string, fn func(*diffTab)) {
 // have none left.
 func (m *model) followChanges(v gitView) {
 	for id, d := range ggui.Peek(m.Diffs) {
-		if d.Commit != "" || d.Base != v.Base || d.Root != v.Root || d.Repo != v.Changes.Root {
+		if d.Commit != "" || d.Base != v.Base || d.Root != v.Root || d.Repo != v.Changes.GetRoot() {
 			continue
 		}
-		i := slices.IndexFunc(v.Changes.Files, func(f protocol.GitFile) bool { return f.Path == d.File.Path })
+		i := slices.IndexFunc(v.Changes.GetFiles(), func(f *protocol.GitFile) bool { return f.GetPath() == d.File.GetPath() })
 		if i < 0 {
-			m.updateDiff(id, func(d *diffTab) { d.Diff, d.Err = protocol.Diff{}, "" })
+			m.updateDiff(id, func(d *diffTab) { d.Diff, d.Err = &protocol.Diff{}, "" })
 			continue
 		}
-		m.updateDiff(id, func(d *diffTab) { d.File = v.Changes.Files[i] })
+		m.updateDiff(id, func(d *diffTab) { d.File = v.Changes.GetFiles()[i] })
 		m.readDiff(id)
 	}
 }
@@ -172,15 +172,15 @@ func (m *model) closeDiff(id string) {
 
 // siblings are the files a diff steps through: the changes it is one of,
 // or the commit's files.
-func (m *model) siblings(d diffTab) []protocol.GitFile {
+func (m *model) siblings(d diffTab) []*protocol.GitFile {
 	if d.Commit != "" {
 		if c := ggui.Peek(m.GitCommit); c.Hash == d.Commit {
-			return c.Info.Files
+			return c.Info.GetFiles()
 		}
 		return nil
 	}
-	if v := ggui.Peek(m.Git); v.Root == d.Root && v.Base == d.Base && v.Changes.Root == d.Repo {
-		return v.Changes.Files
+	if v := ggui.Peek(m.Git); v.Root == d.Root && v.Base == d.Base && v.Changes.GetRoot() == d.Repo {
+		return v.Changes.GetFiles()
 	}
 	return nil
 }
@@ -194,7 +194,7 @@ func (m *model) stepDiff(dir int) {
 		return
 	}
 	files := m.siblings(d)
-	i := slices.IndexFunc(files, func(f protocol.GitFile) bool { return f.Path == d.File.Path })
+	i := slices.IndexFunc(files, func(f *protocol.GitFile) bool { return f.GetPath() == d.File.GetPath() })
 	if i < 0 || i+dir < 0 || i+dir >= len(files) {
 		return
 	}
@@ -202,17 +202,17 @@ func (m *model) stepDiff(dir int) {
 }
 
 // discardHunk undoes a hunk of a work tree's diff, once confirmed.
-func (m *model) askDiscardHunk(id string, hunk []protocol.DiffLine) {
+func (m *model) askDiscardHunk(id string, hunk []*protocol.DiffLine) {
 	m.pendingHunk = func() {
 		d, ok := ggui.Peek(m.Diffs)[id]
 		if !ok {
 			return
 		}
 		m.keepDiff(id)
-		req := protocol.GitRun{NodeID: m.remoteID(d.Root.Node), Root: d.Repo, Op: protocol.GitOpDiscard, Paths: []string{d.File.Path}, Hunk: hunk}
-		fetch(m, gitOpTimeout, func(ctx context.Context, c *client.Client) (protocol.GitResult, error) {
+		req := &protocol.GitRun{NodeId: m.remoteID(d.Root.Node), Root: d.Repo, Op: protocol.GitOpDiscard, Paths: []string{d.File.GetPath()}, Hunk: hunk}
+		fetch(m, gitOpTimeout, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
 			return c.GitRun(ctx, m.key(), req)
-		}, func(_ protocol.GitResult, err error) {
+		}, func(_ *protocol.GitResult, err error) {
 			if err != nil {
 				m.updateDiff(id, func(d *diffTab) { d.Err = nodeErr(err) })
 				return
@@ -242,7 +242,7 @@ func diffTabFace(m *model, id string, d diffTab, selected, focused bool) ggui.Wi
 		label += " ← " + d.Base
 	}
 	content := ggui.Box(ggui.Row(
-		statusIcon(d.File.Status),
+		statusIcon(d.File.GetStatus()),
 		ggui.Box(ggui.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(190),
 		ui.ButtonOf(icon("x").Size(13), func() { m.closeDiff(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", label)),
 	).Gap(8)).Height(tabBarHeight)
@@ -262,8 +262,7 @@ func diffTabFace(m *model, id string, d diffTab, selected, focused bool) ggui.Wi
 // tools over its lines, and while lines are picked, what to do with them.
 func diffTabView(m *model, id string) ggui.Widget {
 	d := ggui.Map(m.Diffs, func(v map[string]diffTab) diffTab { return v[id] }).WithEqual(func(a, b diffTab) bool {
-		return a.File == b.File && a.Err == b.Err && a.Loading == b.Loading && a.Diff.Binary == b.Diff.Binary &&
-			a.Diff.Truncated == b.Diff.Truncated && slices.Equal(a.Diff.Lines, b.Diff.Lines)
+		return a.Err == b.Err && a.Loading == b.Loading && protocol.Same(a.File, b.File) && protocol.Same(a.Diff, b.Diff)
 	})
 	mode := ggui.Map(m.Prefs, func(p prefs) diffMode { return diffMode{Split: p.DiffSplit, Wrap: p.DiffWrap} })
 	sel := ggui.State(noSel)
@@ -275,13 +274,13 @@ func diffTabView(m *model, id string) ggui.Widget {
 	state := ggui.Derived(func() shown {
 		cur := d.Get()
 		s := sel.Get()
-		if s.To >= len(cur.Diff.Lines) {
+		if s.To >= len(cur.Diff.GetLines()) {
 			s = noSel // the diff was read again, shorter
 		}
 		return shown{cur, mode.Get(), s}
 	}).WithEqual(func(a, b shown) bool {
-		return a.Mode == b.Mode && a.Sel == b.Sel && a.D.File == b.D.File && a.D.Err == b.D.Err && a.D.Loading == b.D.Loading &&
-			slices.Equal(a.D.Diff.Lines, b.D.Diff.Lines)
+		return a.Mode == b.Mode && a.Sel == b.Sel && a.D.Err == b.D.Err && a.D.Loading == b.D.Loading &&
+			protocol.Same(a.D.File, b.D.File) && protocol.Same(a.D.Diff, b.D.Diff)
 	})
 	return ggui.View(state, func(v shown) ggui.Widget {
 		dt := v.D
@@ -297,11 +296,11 @@ func diffTabView(m *model, id string) ggui.Widget {
 			}
 		}
 		hunk := func(i int) ggui.Widget {
-			start, lines := hunkAt(dt.Diff.Lines, i)
+			start, lines := hunkAt(dt.Diff.GetLines(), i)
 			actions := []ggui.Widget{
 				iconButton("send-horizontal", T("Ask an agent about this hunk"), func() { sel.Set(lineSel{start + 1, start + len(lines)}) }),
 			}
-			if dt.workTree() && (dt.File.Status == protocol.GitModified || dt.File.Status == protocol.GitRenamed) {
+			if dt.workTree() && (dt.File.GetStatus() == protocol.GitModified || dt.File.GetStatus() == protocol.GitRenamed) {
 				actions = append(actions, iconButton("undo-2", T("Discard this hunk"), func() { m.askDiscardHunk(id, lines) }))
 			}
 			return ggui.Row(actions...).Gap(2)
@@ -318,7 +317,7 @@ func diffTabView(m *model, id string) ggui.Widget {
 			ggui.Expanded(ggui.Box(body).Fill(tokSurface1)),
 		}
 		if !v.Sel.empty() {
-			rows = append(rows, selectionBar(m, dt.Root, joinPath(subfolder(dt.Repo, dt.Root.Path), dt.File.Path), dt.Diff.Lines, sel))
+			rows = append(rows, selectionBar(m, dt.Root, joinPath(subfolder(dt.Repo, dt.Root.Path), dt.File.GetPath()), dt.Diff.GetLines(), sel))
 		}
 		return ggui.Column(rows...).Stretch()
 	})
@@ -326,15 +325,15 @@ func diffTabView(m *model, id string) ggui.Widget {
 
 // diffNote is what a diff shows in place of its lines, nil when it has
 // lines to show.
-func diffNote(loading bool, err string, d protocol.Diff) ggui.Widget {
+func diffNote(loading bool, err string, d *protocol.Diff) ggui.Widget {
 	switch {
 	case loading:
 		return ggui.Center(ui.Spinner())
 	case err != "":
 		return paneNote(err)
-	case d.Binary:
+	case d.GetBinary():
 		return paneNote(T("A binary file; no lines to show."))
-	case len(d.Lines) == 0:
+	case len(d.GetLines()) == 0:
 		return paneNote(T("No changes in its lines."))
 	}
 	return nil
@@ -369,7 +368,7 @@ func diffTools(m *model, id string, d diffTab, mode diffMode) ggui.Widget {
 // diffHeaderBar is the workspace header over a diff tab: the file, where
 // it is, and in a commit, which.
 func diffHeaderBar(m *model, id string, d diffTab) ggui.Widget {
-	where := nodeName(ggui.Peek(m.Nodes), d.Root.Node) + ":" + prettyPath(joinPath(d.Repo, d.File.Path))
+	where := nodeName(ggui.Peek(m.Nodes), d.Root.Node) + ":" + prettyPath(joinPath(d.Repo, d.File.GetPath()))
 	what := T("Changes")
 	switch {
 	case d.Commit != "":
@@ -377,7 +376,7 @@ func diffHeaderBar(m *model, id string, d diffTab) ggui.Widget {
 	case d.Base != "":
 		what = Tf("Since %s", d.Base)
 	}
-	path := joinPath(d.Repo, d.File.Path)
+	path := joinPath(d.Repo, d.File.GetPath())
 	items := []ggui.Widget{
 		ui.MenuItem(T("Open file"), func() {
 			m.openFile(fileItem{Key: dirKey(d.Root.Node, path), Node: d.Root.Node, Path: path, Name: d.Name()})

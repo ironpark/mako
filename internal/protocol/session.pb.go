@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: sanbo/v2/session.proto
 
-package sanbov2
+package protocol
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -1339,7 +1339,7 @@ const file_sanbo_v2_session_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
 	"\texit_code\x18\x02 \x01(\x03R\bexitCode\x12\x10\n" +
-	"\x03err\x18\x03 \x01(\tR\x03errBAZ?github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2b\x06proto3"
+	"\x03err\x18\x03 \x01(\tR\x03errB-Z+github.com/ironpark/sanbo/internal/protocolb\x06proto3"
 
 var (
 	file_sanbo_v2_session_proto_rawDescOnce sync.Once

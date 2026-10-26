@@ -87,7 +87,7 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 	})
 
 	m.DetailTab.Set(changesTab)
-	probeUntil(t, p, "changes", func() bool { return len(ggui.Peek(m.Git).Changes.Files) == 3 })
+	probeUntil(t, p, "changes", func() bool { return len(ggui.Peek(m.Git).Changes.GetFiles()) == 3 })
 
 	// Commit main.go and made.txt, leaving notes.txt out.
 	p.Tap(Tf("Commit %s", "notes.txt"))
@@ -110,18 +110,18 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 	}
 
 	m.DetailTab.Set(historyTab)
-	probeUntil(t, p, "history", func() bool { return len(ggui.Peek(m.GitHistory).History.Commits) == 5 })
+	probeUntil(t, p, "history", func() bool { return len(ggui.Peek(m.GitHistory).History.GetCommits()) == 5 })
 	p.Frame()
 	h := ggui.Peek(m.GitHistory).History
-	if h.Current != "main" || h.Commits[0].Subject != "Fill in main" || len(h.Commits[1].Parents) != 2 {
+	if h.GetCurrent() != "main" || h.GetCommits()[0].GetSubject() != "Fill in main" || len(h.GetCommits()[1].GetParents()) != 2 {
 		t.Fatalf("history %+v", h)
 	}
-	m.openCommit(h.Commits[1].Hash)
-	probeUntil(t, p, "the merge", func() bool { c := ggui.Peek(m.GitCommit); return !c.Loading && c.Info.Commit.Hash != "" })
-	m.openCommitFile(ggui.Peek(m.GitCommit).Info.Files[0])
+	m.openCommit(h.GetCommits()[1].GetHash())
+	probeUntil(t, p, "the merge", func() bool { c := ggui.Peek(m.GitCommit); return !c.Loading && c.Info.GetCommit().GetHash() != "" })
+	m.openCommitFile(ggui.Peek(m.GitCommit).Info.GetFiles()[0])
 	diff := ggui.Peek(m.Selected)
 	probeUntil(t, p, "its diff", func() bool { d, ok := ggui.Peek(m.Diffs)[diff]; return ok && !d.Loading })
-	if d := ggui.Peek(m.Diffs)[diff]; d.Err != "" || len(d.Diff.Lines) == 0 || d.Commit != h.Commits[1].Hash {
+	if d := ggui.Peek(m.Diffs)[diff]; d.Err != "" || len(d.Diff.GetLines()) == 0 || d.Commit != h.GetCommits()[1].GetHash() {
 		t.Fatalf("commit diff %+v", d)
 	}
 	// The project's panels stay on while the diff's tab shows.
@@ -136,5 +136,5 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 	// A new branch from the header's menu, switched to.
 	m.BranchName.Set("next")
 	m.submitBranch()
-	probeUntil(t, p, "the branch", func() bool { return ggui.Peek(m.GitHistory).History.Current == "next" })
+	probeUntil(t, p, "the branch", func() bool { return ggui.Peek(m.GitHistory).History.GetCurrent() == "next" })
 }

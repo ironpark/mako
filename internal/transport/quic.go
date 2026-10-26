@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/sanbo/internal/protocol"
 )
@@ -83,9 +84,9 @@ func AcceptStream(ctx context.Context, conn *quic.Conn) (*Stream, error) {
 	return &Stream{Stream: s}, nil
 }
 
-// Send writes one frame.
-func (s *Stream) Send(t protocol.Type, id string, payload any) error {
-	env, err := protocol.Encode(t, id, payload)
+// Send writes one frame: msg as a message of type t.
+func (s *Stream) Send(t protocol.Type, id string, msg proto.Message) error {
+	env, err := protocol.Encode(t, id, msg)
 	if err != nil {
 		return err
 	}
@@ -97,29 +98,24 @@ func (s *Stream) Recv() (*protocol.Envelope, error) {
 	return protocol.ReadFrame(s)
 }
 
-// Request sends a frame and waits for the reply, failing on TypeError.
-func (s *Stream) Request(t protocol.Type, payload any, out any) error {
-	if err := s.Send(t, "", payload); err != nil {
-		return err
+// Call sends req as a message of type t and returns the reply's message as
+// R, failing on an Error.
+func Call[R proto.Message](s *Stream, t protocol.Type, req proto.Message) (R, error) {
+	var zero R
+	if err := s.Send(t, "", req); err != nil {
+		return zero, err
 	}
 	env, err := s.Recv()
 	if err != nil {
-		return err
+		return zero, err
 	}
-	if env.Type == protocol.TypeError {
-		var e protocol.Error
-		if err := protocol.Decode(env, &e); err != nil {
-			return err
+	if e := env.GetError(); e != nil {
+		if e.GetCode() != "" {
+			return zero, &protocol.CodedError{Code: e.GetCode(), Message: "remote: " + e.GetMessage()}
 		}
-		if e.Code != "" {
-			return &protocol.CodedError{Code: e.Code, Message: "remote: " + e.Message}
-		}
-		return fmt.Errorf("remote: %s", e.Message)
+		return zero, fmt.Errorf("remote: %s", e.GetMessage())
 	}
-	if out == nil {
-		return nil
-	}
-	return protocol.Decode(env, out)
+	return protocol.Body[R](env)
 }
 
 // quicConn names the QUIC connection type used across this package.

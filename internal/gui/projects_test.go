@@ -16,7 +16,7 @@ import (
 func TestProjectsOutliveTheirSessions(t *testing.T) {
 	t.Setenv("SANBO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
-	sessions := []protocol.SessionInfo{{ID: "a", NodeID: "n1", Project: "/src/sanbo", Repo: "/src/sanbo"}}
+	sessions := []*protocol.SessionInfo{{Id: "a", NodeId: "n1", Project: "/src/sanbo", Repo: "/src/sanbo"}}
 	m.keepProjects(sessions)
 
 	projects := ggui.Peek(m.Prefs).Projects
@@ -31,7 +31,7 @@ func TestProjectsOutliveTheirSessions(t *testing.T) {
 	}
 	// A kept repository is still the section a session in its subfolder
 	// joins.
-	sub := []protocol.SessionInfo{{ID: "b", NodeID: "n1", Project: "/src/sanbo/internal", Repo: "/src/sanbo"}}
+	sub := []*protocol.SessionInfo{{Id: "b", NodeId: "n1", Project: "/src/sanbo/internal", Repo: "/src/sanbo"}}
 	groups = groupSessions(sub, groupProject, nil, projects)
 	if len(groups) != 1 || groups[0].Project != want.Path || len(groups[0].Sessions) != 1 {
 		t.Fatalf("groups with a subfolder session = %+v", groups)
@@ -46,19 +46,19 @@ func TestProjectsOutliveTheirSessions(t *testing.T) {
 // sessions: each repository keeps its own section, its worktrees with it,
 // and a session in the home folder itself has the home's.
 func TestAHomeFolderDoesNotSwallowItsProjects(t *testing.T) {
-	sessions := []protocol.SessionInfo{
-		{ID: "home", NodeID: "n1", Project: "/home/me"},
-		{ID: "sanbo", NodeID: "n1", Project: "/home/me/src/sanbo", Repo: "/home/me/src/sanbo"},
-		{ID: "tree", NodeID: "n1", Project: "/home/me/src/sanbo/.claude/worktrees/x", Repo: "/home/me/src/sanbo"},
-		{ID: "away", NodeID: "n1", Project: "/tmp/sanbo-fix", Repo: "/home/me/src/sanbo"},
-		{ID: "toy", NodeID: "n1", Project: "/home/me/toys/rabbithole", Repo: "/home/me/toys/rabbithole"},
-		{ID: "notes", NodeID: "n1", Project: "/home/me/notes"},
+	sessions := []*protocol.SessionInfo{
+		{Id: "home", NodeId: "n1", Project: "/home/me"},
+		{Id: "sanbo", NodeId: "n1", Project: "/home/me/src/sanbo", Repo: "/home/me/src/sanbo"},
+		{Id: "tree", NodeId: "n1", Project: "/home/me/src/sanbo/.claude/worktrees/x", Repo: "/home/me/src/sanbo"},
+		{Id: "away", NodeId: "n1", Project: "/tmp/sanbo-fix", Repo: "/home/me/src/sanbo"},
+		{Id: "toy", NodeId: "n1", Project: "/home/me/toys/rabbithole", Repo: "/home/me/toys/rabbithole"},
+		{Id: "notes", NodeId: "n1", Project: "/home/me/notes"},
 	}
 	kept := []fileRoot{{Node: "n1", Path: "/home/me"}}
 	got := map[string][]string{}
 	for _, g := range groupSessions(sessions, groupProject, nil, kept) {
 		for _, s := range g.Sessions {
-			got[g.Project] = append(got[g.Project], s.ID)
+			got[g.Project] = append(got[g.Project], s.GetId())
 		}
 	}
 	want := map[string][]string{

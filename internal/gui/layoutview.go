@@ -93,7 +93,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			} else {
 				s, ok := sessionIn(sessions, tabID)
 				if !ok {
-					s = protocol.SessionInfo{ID: tabID, Agent: "shell"}
+					s = &protocol.SessionInfo{Id: tabID, Agent: "shell"}
 				}
 				face = tab(m, s, tabID == g.Active, focused, titles[tabID])
 			}
@@ -115,10 +115,10 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		}
 		// The launchers start in the project of the tab shown, or without
 		// one, in the default place on this node.
-		nodeID := m.Conn.Get().Self.ID
+		nodeID := m.Conn.Get().Self.GetId()
 		project := m.launchProject(nodeID)
 		if cur, ok := sessionIn(sessions, g.Active); ok {
-			nodeID, project = cur.NodeID, cur.Project
+			nodeID, project = cur.GetNodeId(), cur.GetProject()
 		} else if d, ok := docs[g.Active]; ok && d.Root.Path != "" {
 			nodeID, project = d.Root.Node, d.Root.Path
 		} else if d, ok := diffs[g.Active]; ok && d.Root.Path != "" {
@@ -172,7 +172,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 func tabWidth(label string) float64 { return min(float64(len([]rune(label)))*7.2, 150) + 74 }
 
 // tabsWidth estimates a pane's tabs' width together.
-func tabsWidth(tabs []string, sessions []protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) float64 {
+func tabsWidth(tabs []string, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) float64 {
 	w := 0.0
 	for _, id := range tabs {
 		w += tabWidth(tabLabel(id, sessions, titles, docs, diffs))
@@ -181,7 +181,7 @@ func tabsWidth(tabs []string, sessions []protocol.SessionInfo, titles map[string
 }
 
 // tabLabel is what a tab is called.
-func tabLabel(id string, sessions []protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) string {
+func tabLabel(id string, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) string {
 	if d, ok := docs[id]; ok {
 		return d.Name()
 	}
@@ -193,7 +193,7 @@ func tabLabel(id string, sessions []protocol.SessionInfo, titles map[string]stri
 }
 
 // tabList is a menu of a pane's tabs, for when they do not all fit.
-func tabList(m *model, g tabGroup, sessions []protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) ggui.Widget {
+func tabList(m *model, g tabGroup, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) ggui.Widget {
 	items := make([]ggui.Widget, 0, len(g.Tabs))
 	for _, id := range g.Tabs {
 		label := tabLabel(id, sessions, titles, docs, diffs)

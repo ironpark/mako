@@ -24,7 +24,7 @@ type Tailscale struct {
 	// NodeID is the local node, used to skip our own address.
 	NodeID string
 	// Hello is sent when probing a candidate.
-	Hello protocol.Hello
+	Hello *protocol.Hello
 	// Hosts are MagicDNS names to probe. Empty means ask the tailscale CLI.
 	Hosts []string
 	// Port is the sanbo QUIC port on remote daemons.
@@ -81,11 +81,11 @@ func (t *Tailscale) scan(ctx context.Context, out chan<- Found) {
 		go func(addr string) {
 			defer wg.Done()
 			node, err := transport.Probe(ctx, addr, t.Hello, timeout)
-			if err != nil || node.ID == "" || node.ID == t.NodeID {
+			if err != nil || node.GetId() == "" || node.GetId() == t.NodeID {
 				return
 			}
 			select {
-			case out <- Found{NodeID: node.ID, Name: node.Name, Addr: addr, Source: "tailscale"}:
+			case out <- Found{NodeID: node.GetId(), Name: node.GetName(), Addr: addr, Source: "tailscale"}:
 			case <-ctx.Done():
 			}
 		}(addr)

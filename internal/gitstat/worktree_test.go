@@ -42,19 +42,19 @@ func TestWorktreeLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []protocol.GitFile{
+	want := []*protocol.GitFile{
 		{Path: "a.txt", Status: protocol.GitModified, Added: 1, Removed: 1},
 		{Path: "b.txt", Status: protocol.GitAdded, Added: 1},
 	}
-	if !slices.Equal(ch.Files, want) || ch.Branch != "feat/x" {
+	if !protocol.Equal(ch.GetFiles(), want) || ch.GetBranch() != "feat/x" {
 		t.Fatalf("changes %+v", ch)
 	}
 	d, err := BaseDiff(ctx, path, "main", "a.txt", "")
-	if err != nil || len(d.Lines) != 4 || d.Lines[2].Text != "two" || d.Lines[3].Text != "TWO" {
+	if err != nil || len(d.GetLines()) != 4 || d.GetLines()[2].GetText() != "two" || d.GetLines()[3].GetText() != "TWO" {
 		t.Fatalf("diff %+v %v", d, err)
 	}
 
-	w := protocol.Worktree{Repo: repo, Path: path, Branch: "feat/x", Base: "main"}
+	w := &protocol.Worktree{Repo: repo, Path: path, Branch: "feat/x", Base: "main"}
 	if _, err := RemoveWorktree(ctx, w); err == nil {
 		t.Fatal("removed a worktree with changes")
 	}
@@ -100,16 +100,16 @@ func TestDiscardHunkUndoesOnlyThatHunk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var hunks [][]protocol.DiffLine
-	for _, l := range d.Lines {
-		if l.Op == "@" {
+	var hunks [][]*protocol.DiffLine
+	for _, l := range d.GetLines() {
+		if l.GetOp() == "@" {
 			hunks = append(hunks, nil)
 			continue
 		}
 		hunks[len(hunks)-1] = append(hunks[len(hunks)-1], l)
 	}
 	if len(hunks) != 2 {
-		t.Fatalf("hunks %+v", d.Lines)
+		t.Fatalf("hunks %+v", d.GetLines())
 	}
 	if err := DiscardHunk(root, "f.txt", hunks[1]); err != nil {
 		t.Fatal(err)

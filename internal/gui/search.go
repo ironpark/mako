@@ -43,14 +43,14 @@ func (m *model) openQuickOpen() {
 	m.quickFiles = cur
 	m.refreshQuick()
 	m.QuickOpen.Set(true)
-	req := protocol.Search{NodeID: m.remoteID(root.Node), Root: root.Path, Files: true}
-	fetch(m, 25*time.Second, func(ctx context.Context, c *client.Client) (protocol.SearchResult, error) {
+	req := &protocol.Search{NodeId: m.remoteID(root.Node), Root: root.Path, Files: true}
+	fetch(m, 25*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SearchResult, error) {
 		return c.Search(ctx, m.key(), req)
-	}, func(r protocol.SearchResult, err error) {
+	}, func(r *protocol.SearchResult, err error) {
 		if m.quickFiles.Root != root {
 			return
 		}
-		next := quickFiles{Root: root, Files: r.Files}
+		next := quickFiles{Root: root, Files: r.GetFiles()}
 		if err != nil {
 			next.Files, next.Err = m.quickFiles.Files, nodeErr(err)
 		}
@@ -158,7 +158,7 @@ func quickOpenDialog(m *model) ggui.Widget {
 type searchView struct {
 	Root    fileRoot
 	Query   string
-	Result  protocol.SearchResult
+	Result  *protocol.SearchResult
 	Err     string
 	Loading bool
 }
@@ -178,10 +178,10 @@ func (m *model) runSearch() {
 		return
 	}
 	m.Search.Set(searchView{Root: root, Query: q, Loading: true})
-	req := protocol.Search{NodeID: m.remoteID(root.Node), Root: root.Path, Query: q}
-	fetch(m, 25*time.Second, func(ctx context.Context, c *client.Client) (protocol.SearchResult, error) {
+	req := &protocol.Search{NodeId: m.remoteID(root.Node), Root: root.Path, Query: q}
+	fetch(m, 25*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SearchResult, error) {
 		return c.Search(ctx, m.key(), req)
-	}, func(r protocol.SearchResult, err error) {
+	}, func(r *protocol.SearchResult, err error) {
 		if cur := ggui.Peek(m.Search); cur.Root != root || cur.Query != q {
 			return // another search since
 		}
@@ -212,7 +212,7 @@ func searchPanel(m *model) ggui.Widget {
 			return ggui.Box(muted(ggui.Text(v.Err).Size(12.5))).Pad(14, 16)
 		case v.Query == "":
 			return ggui.Box(muted(ggui.Text(T("Type a text and press Enter. A capital letter matches the case.")).Size(12.5))).Pad(14, 16)
-		case len(v.Result.Matches) == 0:
+		case len(v.Result.GetMatches()) == 0:
 			return ggui.Box(muted(ggui.Text(T("Nothing found.")).Size(12.5))).Pad(14, 16)
 		}
 		return searchResults(m, v)
@@ -230,35 +230,35 @@ func searchResults(m *model, v searchView) ggui.Widget {
 	fold := strings.IndexFunc(v.Query, unicode.IsUpper) < 0
 	var rows []ggui.Widget
 	files := 0
-	for i, match := range v.Result.Matches {
-		if i == 0 || v.Result.Matches[i-1].Path != match.Path {
+	for i, match := range v.Result.GetMatches() {
+		if i == 0 || v.Result.GetMatches()[i-1].GetPath() != match.GetPath() {
 			files++
 			n := 0
-			for _, o := range v.Result.Matches[i:] {
-				if o.Path != match.Path {
+			for _, o := range v.Result.GetMatches()[i:] {
+				if o.GetPath() != match.GetPath() {
 					break
 				}
 				n++
 			}
 			rows = append(rows, ggui.Box(ggui.Row(
-				icon(fileIconName(baseName(match.Path))).Size(14),
-				ggui.Expanded(ggui.Text(match.Path).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
+				icon(fileIconName(baseName(match.GetPath()))).Size(14),
+				ggui.Expanded(ggui.Text(match.GetPath()).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
 				muted(ggui.Text(fmt.Sprint(n)).Size(11.5)),
 			).Gap(7)).Pad(6, 12, 2, 12))
 		}
-		it := fileItem{Key: dirKey(v.Root.Node, joinPath(v.Root.Path, match.Path)), Node: v.Root.Node, Path: joinPath(v.Root.Path, match.Path), Name: baseName(match.Path)}
-		line := match.Line
-		text := strings.TrimLeft(untab(match.Text), " ")
+		it := fileItem{Key: dirKey(v.Root.Node, joinPath(v.Root.Path, match.GetPath())), Node: v.Root.Node, Path: joinPath(v.Root.Path, match.GetPath()), Name: baseName(match.GetPath())}
+		line := match.GetLine()
+		text := strings.TrimLeft(untab(match.GetText()), " ")
 		row := ggui.Row(
-			ggui.Box(ggui.Text(fmt.Sprint(match.Line)).Style(mono).Color(tokExtraMuted).NoWrap()).Width(36),
+			ggui.Box(ggui.Text(fmt.Sprint(match.GetLine())).Style(mono).Color(tokExtraMuted).NoWrap()).Width(36),
 			ggui.Expanded(markQuery(text, v.Query, fold, mono)),
 		).Gap(4)
-		rows = append(rows, ui.ButtonOf(row, func() { m.openFileAt(it, line) }).Ghost().Pad(2, 12, 2, 18).Radius(0).
-			Name(fmt.Sprintf("%s:%d", match.Path, match.Line)))
+		rows = append(rows, ui.ButtonOf(row, func() { m.openFileAt(it, int(line)) }).Ghost().Pad(2, 12, 2, 18).Radius(0).
+			Name(fmt.Sprintf("%s:%d", match.GetPath(), match.GetLine())))
 	}
-	note := Tf("%d results in %d files", len(v.Result.Matches), files)
-	if v.Result.Truncated {
-		note = Tf("The first %d results, in %d files", len(v.Result.Matches), files)
+	note := Tf("%d results in %d files", len(v.Result.GetMatches()), files)
+	if v.Result.GetTruncated() {
+		note = Tf("The first %d results, in %d files", len(v.Result.GetMatches()), files)
 	}
 	head := ggui.Box(muted(ggui.Text(note).Size(11.5))).Pad(8, 12, 2, 12)
 	return ggui.Column(append([]ggui.Widget{head}, rows...)...).Stretch()

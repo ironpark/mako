@@ -12,6 +12,8 @@ import (
 
 	"github.com/ironpark/sanbo/internal/protocol"
 	"github.com/ironpark/sanbo/internal/session"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // registry holds the daemon's local sessions.
@@ -43,15 +45,22 @@ func (r *registry) remove(id string) {
 	r.mu.Unlock()
 }
 
-func (r *registry) list() []protocol.SessionInfo {
+func (r *registry) list() []*protocol.SessionInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := make([]protocol.SessionInfo, 0, len(r.sessions))
+	out := make([]*protocol.SessionInfo, 0, len(r.sessions))
 	for _, s := range r.sessions {
 		out = append(out, s.Info())
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].StartedAt.Before(out[j].StartedAt) })
+	sortByStart(out)
 	return out
+}
+
+// sortByStart orders sessions by when they started.
+func sortByStart(sessions []*protocol.SessionInfo) {
+	sort.Slice(sessions, func(i, j int) bool {
+		return protocol.TimeOf(sessions[i].GetStartedAt()).Before(protocol.TimeOf(sessions[j].GetStartedAt()))
+	})
 }
 
 func (r *registry) closeAll() {
@@ -67,87 +76,89 @@ func (r *registry) closeAll() {
 	}
 }
 
-// peerTable tracks daemons discovered on the mesh.
+// peerTable tracks daemons discovered on the mesh. It keeps nodes of its own,
+// copying what it is given and what it hands out, so no caller shares one.
 type peerTable struct {
 	mu    sync.RWMutex
-	nodes map[string]protocol.Node
+	nodes map[string]*protocol.Node
 }
 
 func newPeerTable() *peerTable {
-	return &peerTable{nodes: map[string]protocol.Node{}}
+	return &peerTable{nodes: map[string]*protocol.Node{}}
 }
 
 // upsert records a node this daemon observed directly (discovery, a probe, an
 // inbound hello) and stamps it as seen now. It reports whether the node was
 // new or moved.
-func (p *peerTable) upsert(node protocol.Node) bool {
-	if node.ID == "" {
+func (p *peerTable) upsert(node *protocol.Node) bool {
+	if node.GetId() == "" {
 		return false
 	}
-	node.LastSeen = time.Now()
+	node = proto.CloneOf(node)
+	node.LastSeen = timestamppb.Now()
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	prev, existed := p.nodes[node.ID]
+	prev, existed := p.nodes[node.GetId()]
 	if existed {
 		// A configured peer stays static however else it is seen, so prune
 		// never drops it; details the new sighting lacks are kept.
-		if prev.Source == "static" {
+		if prev.GetSource() == "static" {
 			node.Source = "static"
 		}
-		if node.OS == "" {
-			node.OS, node.Arch, node.Version = prev.OS, prev.Arch, prev.Version
+		if node.GetOs() == "" {
+			node.Os, node.Arch, node.Version = prev.GetOs(), prev.GetArch(), prev.GetVersion()
 		}
-		if node.Agents == nil {
-			node.Agents = prev.Agents
+		if node.GetAgents() == nil {
+			node.Agents = prev.GetAgents()
 		}
 	}
-	p.nodes[node.ID] = node
-	return !existed || prev.Addr != node.Addr
+	p.nodes[node.GetId()] = node
+	return !existed || prev.GetAddr() != node.GetAddr()
 }
 
 // merge folds in a node learned second-hand through gossip. The sender's
 // LastSeen is kept rather than refreshed, so peers relaying a dead node to
 // each other cannot keep it alive past peerTTL. A node already known keeps
 // its address and source and only advances its LastSeen.
-func (p *peerTable) merge(node protocol.Node) {
-	if node.ID == "" || node.LastSeen.IsZero() {
+func (p *peerTable) merge(node *protocol.Node) {
+	if node.GetId() == "" || node.GetLastSeen() == nil {
 		return
 	}
-	if now := time.Now(); node.LastSeen.After(now) {
-		node.LastSeen = now // do not trust a peer clock running ahead
+	node = proto.CloneOf(node)
+	if now := time.Now(); protocol.TimeOf(node.GetLastSeen()).After(now) {
+		node.LastSeen = timestamppb.New(now) // do not trust a peer clock running ahead
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	prev, existed := p.nodes[node.ID]
+	prev, existed := p.nodes[node.GetId()]
 	if !existed {
 		node.Source = "gossip"
-		p.nodes[node.ID] = node
+		p.nodes[node.GetId()] = node
 		return
 	}
-	if node.LastSeen.After(prev.LastSeen) {
-		prev.LastSeen = node.LastSeen
-		if node.Agents != nil {
-			prev.Agents = node.Agents // what it launches, as of that sighting
+	if protocol.TimeOf(node.GetLastSeen()).After(protocol.TimeOf(prev.GetLastSeen())) {
+		prev.LastSeen = node.GetLastSeen()
+		if node.GetAgents() != nil {
+			prev.Agents = node.GetAgents() // what it launches, as of that sighting
 		}
-		p.nodes[node.ID] = prev
 	}
 }
 
-func (p *peerTable) get(id string) (protocol.Node, bool) {
+func (p *peerTable) get(id string) (*protocol.Node, bool) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	node, ok := p.nodes[id]
-	return node, ok
+	return proto.CloneOf(node), ok
 }
 
-func (p *peerTable) list() []protocol.Node {
+func (p *peerTable) list() []*protocol.Node {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	out := make([]protocol.Node, 0, len(p.nodes))
+	out := make([]*protocol.Node, 0, len(p.nodes))
 	for _, node := range p.nodes {
-		out = append(out, node)
+		out = append(out, proto.CloneOf(node))
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	sort.Slice(out, func(i, j int) bool { return out[i].GetName() < out[j].GetName() })
 	return out
 }
 
@@ -157,7 +168,7 @@ func (p *peerTable) prune(ttl time.Duration) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for id, node := range p.nodes {
-		if node.Source != "self" && node.Source != "static" && node.LastSeen.Before(cutoff) {
+		if node.GetSource() != "self" && node.GetSource() != "static" && protocol.TimeOf(node.GetLastSeen()).Before(cutoff) {
 			delete(p.nodes, id)
 		}
 	}

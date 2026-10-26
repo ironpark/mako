@@ -19,7 +19,7 @@ func TestTitlesUpdateWithoutPollingOrPainting(t *testing.T) {
 	defer conn.close()
 	defer close(link.in)
 	m := newModel(config.Default(), "")
-	m.Sessions.Set([]protocol.SessionInfo{{ID: "s", Agent: "shell", Title: "stale"}, {ID: "unattached", Title: "daemon title"}})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "shell", Title: "stale"}, {Id: "unattached", Title: "daemon title"}})
 	m.conns["s"] = conn
 	update := func(want string) {
 		t.Helper()
@@ -39,7 +39,7 @@ func TestTitlesUpdateWithoutPollingOrPainting(t *testing.T) {
 	// Snapshot metadata restores a title without needing a new OSC from the agent.
 	link.in <- &protocol.StreamEvent{
 		Kind:     protocol.EventSnapshot,
-		Snapshot: protocol.Snapshot{SessionID: "s", Cols: 80, Rows: 24, Title: "before attach"},
+		Snapshot: &protocol.Snapshot{SessionId: "s", Cols: 80, Rows: 24, Title: "before attach"},
 	}
 	link.output(t, "body")
 	update("before attach")

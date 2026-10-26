@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: sanbo/v2/files.proto
 
-package sanbov2
+package protocol
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -758,7 +758,7 @@ const file_sanbo_v2_files_proto_rawDesc = "" +
 	"\fSearchResult\x12\x14\n" +
 	"\x05files\x18\x01 \x03(\tR\x05files\x12/\n" +
 	"\amatches\x18\x02 \x03(\v2\x15.sanbo.v2.SearchMatchR\amatches\x12\x1c\n" +
-	"\ttruncated\x18\x03 \x01(\bR\ttruncatedBAZ?github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2b\x06proto3"
+	"\ttruncated\x18\x03 \x01(\bR\ttruncatedB-Z+github.com/ironpark/sanbo/internal/protocolb\x06proto3"
 
 var (
 	file_sanbo_v2_files_proto_rawDescOnce sync.Once

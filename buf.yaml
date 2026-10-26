@@ -1,5 +1,5 @@
 # The protocol's schema; see docs/protocol.md. `make proto` lints it and
-# generates internal/protocol/pb.
+# generates its messages into internal/protocol.
 version: v2
 modules:
   - path: proto

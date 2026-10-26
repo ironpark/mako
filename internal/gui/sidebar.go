@@ -14,15 +14,15 @@ import (
 
 // filterSessions keeps the sessions whose title, name, project, branch,
 // agent or host has every word of query in it.
-func filterSessions(sessions []protocol.SessionInfo, query string, nodes []protocol.Node, titles map[string]string) []protocol.SessionInfo {
+func filterSessions(sessions []*protocol.SessionInfo, query string, nodes []*protocol.Node, titles map[string]string) []*protocol.SessionInfo {
 	words := strings.Fields(strings.ToLower(query))
 	if len(words) == 0 {
 		return sessions
 	}
-	var out []protocol.SessionInfo
+	var out []*protocol.SessionInfo
 	for _, s := range sessions {
 		hay := strings.ToLower(strings.Join([]string{
-			sessionTitle(s, titles[s.ID]), s.Project, s.Branch, sessionLabel(s), nodeName(nodes, s.NodeID),
+			sessionTitle(s, titles[s.GetId()]), s.GetProject(), s.GetBranch(), sessionLabel(s), nodeName(nodes, s.GetNodeId()),
 		}, "\x00"))
 		if !slices.ContainsFunc(words, func(w string) bool { return !strings.Contains(hay, w) }) {
 			out = append(out, s)
@@ -35,7 +35,7 @@ func filterSessions(sessions []protocol.SessionInfo, query string, nodes []proto
 // as much of their paths as tells them apart, "work/api" and "oss/api", or
 // where the paths are the same, on hosts of their own, by their hosts. The
 // rest go by their names, and are left out.
-func projectLabels(groups []sessionGroup, nodes []protocol.Node) map[string]string {
+func projectLabels(groups []sessionGroup, nodes []*protocol.Node) map[string]string {
 	byName := map[string][]sessionGroup{}
 	for _, g := range groups {
 		if g.Project != "" {
@@ -78,14 +78,14 @@ func tail(path string, n int) string {
 }
 
 // pinnedSection is the sidebar's pinned sessions, above the groups.
-func pinnedSection(m *model, sessions []protocol.SessionInfo, selected string, nodes []protocol.Node, titles map[string]string) ggui.Widget {
+func pinnedSection(m *model, sessions []*protocol.SessionInfo, selected string, nodes []*protocol.Node, titles map[string]string) ggui.Widget {
 	rows := []ggui.Widget{ggui.Box(ggui.Row(
 		icon("pin").Size(14),
 		ggui.Text(T("Pinned")).Size(13).Weight(ggui.WeightMedium),
 	).Gap(10)).Pad(4, 4, 4, 10)}
 	for _, s := range sessions {
-		where := strings.Join([]string{nodeName(nodes, s.NodeID), projectName(s.Project), short(s.ID)}, " · ")
-		rows = append(rows, sessionRow(m, s, s.ID == selected, titles[s.ID], where, true))
+		where := strings.Join([]string{nodeName(nodes, s.GetNodeId()), projectName(s.GetProject()), short(s.GetId())}, " · ")
+		rows = append(rows, sessionRow(m, s, s.GetId() == selected, titles[s.GetId()], where, true))
 	}
 	return ggui.Column(rows...).Gap(2).Stretch()
 }
@@ -124,11 +124,11 @@ func sectionDrop(m *model, w ggui.Widget, nodeID, project string) ggui.Widget {
 		}
 		dir := project
 		if dir == "" {
-			dir = s.Project
+			dir = s.GetProject()
 		}
-		if s.NodeID == nodeID && s.Project == dir {
+		if s.GetNodeId() == nodeID && s.GetProject() == dir {
 			return // where it already is
 		}
-		m.launch(agentspec.Target(s.Agent, s.Profile), nodeID, dir)
+		m.launch(agentspec.Target(s.GetAgent(), s.GetProfile()), nodeID, dir)
 	}).OnHover(over.Set)
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/ironpark/sanbo/internal/protocol"
 	"github.com/ironpark/sanbo/internal/session"
 	"github.com/ironpark/sanbo/internal/transcript"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // An agent about to ask for an approval runs its PermissionRequest hook
@@ -70,8 +71,8 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, ev transcript.H
 	a.pending[id] = p
 	a.mu.Unlock()
 	s.SetApproval(&protocol.Approval{
-		ID: id, Tool: ev.Tool, Detail: transcript.ToolDetail(ev.ToolInput),
-		Input: indentInput(ev.ToolInput), Since: time.Now(),
+		Id: id, Tool: ev.Tool, Detail: transcript.ToolDetail(ev.ToolInput),
+		Input: indentInput(ev.ToolInput), Since: timestamppb.Now(),
 	})
 	defer func() {
 		a.mu.Lock()
@@ -106,24 +107,24 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, ev transcript.H
 
 // answer passes the user's decision to the approval sessionID's agent waits
 // for.
-func (a *approvals) answer(sessionID string, req protocol.AnswerApproval) error {
-	switch req.Decision {
+func (a *approvals) answer(sessionID string, req *protocol.AnswerApproval) error {
+	switch req.GetDecision() {
 	case protocol.DecisionAllow, protocol.DecisionDeny, protocol.DecisionTerminal:
 	default:
-		return fmt.Errorf("unknown decision %q", req.Decision)
+		return fmt.Errorf("unknown decision %q", req.GetDecision())
 	}
 	a.mu.Lock()
-	p, ok := a.pending[req.ApprovalID]
+	p, ok := a.pending[req.GetApprovalId()]
 	a.mu.Unlock()
 	if !ok || p.session.ID() != sessionID {
 		return fmt.Errorf("the approval was answered or withdrawn")
 	}
-	message := req.Message
-	if req.Decision == protocol.DecisionDeny && message == "" {
+	message := req.GetMessage()
+	if req.GetDecision() == protocol.DecisionDeny && message == "" {
 		message = "The user denied this in sanbo."
 	}
 	select {
-	case p.reply <- hookReply{Decision: req.Decision, Message: message}:
+	case p.reply <- hookReply{Decision: req.GetDecision(), Message: message}:
 	default: // answered twice at once; the first stands
 	}
 	return nil

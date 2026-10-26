@@ -39,7 +39,7 @@ type graphLine struct {
 // commitGraph lays commits out in lanes, children before their parents as
 // git log lists them: each lane carries the commit it waits for, a commit
 // takes the lane that waited for it, and hands it to its first parent.
-func commitGraph(commits []protocol.GitCommit) []graphRow {
+func commitGraph(commits []*protocol.GitCommit) []graphRow {
 	rows := make([]graphRow, len(commits))
 	var lanes []string
 	free := func(ls []string, not int) int {
@@ -59,18 +59,18 @@ func commitGraph(commits []protocol.GitCommit) []graphRow {
 	}
 	for n, c := range commits {
 		row := &rows[n]
-		col := slices.Index(lanes, c.Hash)
+		col := slices.Index(lanes, c.GetHash())
 		incoming := col >= 0
 		if !incoming {
 			col = free(lanes, -1)
-			lanes = put(lanes, col, c.Hash)
+			lanes = put(lanes, col, c.GetHash())
 		}
 		row.Col = col
 		next := slices.Clone(lanes)
 		for i, h := range lanes {
 			switch {
 			case h == "":
-			case h == c.Hash:
+			case h == c.GetHash():
 				if i != col || incoming {
 					row.Lines = append(row.Lines, graphLine{From: i, To: col})
 				}
@@ -79,7 +79,7 @@ func commitGraph(commits []protocol.GitCommit) []graphRow {
 				row.Lines = append(row.Lines, graphLine{From: i, To: i}, graphLine{From: i, To: i, Lower: true})
 			}
 		}
-		for k, p := range c.Parents {
+		for k, p := range c.GetParents() {
 			j := slices.Index(next, p)
 			if j < 0 {
 				j = col
@@ -150,7 +150,7 @@ func (g *graphCell) Paint(dst *ggui.Canvas, r ggui.Rect) {
 // commitView is the commit chosen in the History tab.
 type commitView struct {
 	Hash    string
-	Info    protocol.GitCommitInfo
+	Info    *protocol.GitCommitInfo
 	Err     string
 	Loading bool
 }
@@ -161,10 +161,10 @@ func (m *model) openCommit(hash string) {
 		return
 	}
 	m.GitCommit.Set(commitView{Hash: hash, Loading: true})
-	req := protocol.GitShow{NodeID: m.remoteID(root.Node), Root: root.Path, Hash: hash}
-	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (protocol.GitCommitInfo, error) {
+	req := &protocol.GitShow{NodeId: m.remoteID(root.Node), Root: root.Path, Hash: hash}
+	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitCommitInfo, error) {
 		return c.GitShow(ctx, m.key(), req)
-	}, func(info protocol.GitCommitInfo, err error) {
+	}, func(info *protocol.GitCommitInfo, err error) {
 		if ggui.Peek(m.GitCommit).Hash != hash {
 			return
 		}
@@ -177,7 +177,7 @@ func (m *model) openCommit(hash string) {
 }
 
 // openCommitFile shows what the chosen commit changed in a file, in a tab.
-func (m *model) openCommitFile(f protocol.GitFile) {
+func (m *model) openCommitFile(f *protocol.GitFile) {
 	root := ggui.Peek(m.GitHistory).Root
 	m.openDiffTab(root, root.Path, ggui.Peek(m.GitCommit).Hash, "", f, true)
 }
@@ -247,14 +247,14 @@ func historyList(m *model) ggui.Widget {
 		Branch string
 	}
 	head := ggui.Map(m.GitHistory, func(v historyView) headed {
-		return headed{v.Root, cmp.Or(v.History.Current, projectName(v.Root.Path))}
+		return headed{v.Root, cmp.Or(v.History.GetCurrent(), projectName(v.Root.Path))}
 	})
 	header := ggui.View(head, func(h headed) ggui.Widget {
 		return panelHeader(
 			icon("history").Size(15),
 			ggui.Expanded(ggui.Text(h.Branch).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
 			iconButton("cloud-download", T("Fetch"), func() {
-				m.gitRun(protocol.GitRun{Op: protocol.GitOpFetch}, T("Fetching…"), nil)
+				m.gitRun(&protocol.GitRun{Op: protocol.GitOpFetch}, T("Fetching…"), nil)
 			}),
 			iconButton("refresh-cw", T("Refresh"), func() { m.loadHistory(h.Root) }),
 		)
@@ -262,16 +262,16 @@ func historyList(m *model) ggui.Widget {
 	// The list is rebuilt when the commits, or what stands in for them,
 	// change; a refresh that finds the same commits leaves it be.
 	type listed struct {
-		Commits       []protocol.GitCommit
+		Commits       []*protocol.GitCommit
 		Err           string
 		Loading, More bool
 	}
 	shown := ggui.Map(m.GitHistory, func(v historyView) listed {
-		return listed{v.History.Commits, v.Err, v.Loading && v.History.Commits == nil, v.History.More}
+		return listed{v.History.GetCommits(), v.Err, v.Loading && v.History.GetCommits() == nil, v.History.GetMore()}
 	}).WithEqual(func(a, b listed) bool {
 		return a.Err == b.Err && a.Loading == b.Loading && a.More == b.More &&
-			slices.EqualFunc(a.Commits, b.Commits, func(x, y protocol.GitCommit) bool {
-				return x.Hash == y.Hash && slices.Equal(x.Refs, y.Refs)
+			slices.EqualFunc(a.Commits, b.Commits, func(x, y *protocol.GitCommit) bool {
+				return x.GetHash() == y.GetHash() && slices.Equal(x.GetRefs(), y.GetRefs())
 			})
 	})
 	list := ggui.View(shown, func(v listed) ggui.Widget {
@@ -305,16 +305,16 @@ func historyList(m *model) ggui.Widget {
 
 // commitRow is a commit in the list: its slice of the graph, its subject
 // and refs, and who made it when.
-func commitRow(m *model, c protocol.GitCommit, g graphRow) ggui.Widget {
-	head := slices.ContainsFunc(c.Refs, func(r string) bool { return r == "HEAD" || strings.HasPrefix(r, "HEAD -> ") })
-	top := append([]ggui.Widget{ggui.Expanded(ggui.Text(c.Subject).Size(12.5).NoWrap().Ellipsis())}, refBadges(c.Refs)...)
+func commitRow(m *model, c *protocol.GitCommit, g graphRow) ggui.Widget {
+	head := slices.ContainsFunc(c.GetRefs(), func(r string) bool { return r == "HEAD" || strings.HasPrefix(r, "HEAD -> ") })
+	top := append([]ggui.Widget{ggui.Expanded(ggui.Text(c.GetSubject()).Size(12.5).NoWrap().Ellipsis())}, refBadges(c.GetRefs())...)
 	text := ggui.Column(
 		ggui.Row(top...).Gap(5).Align(ggui.AlignCenter),
-		ggui.Text(c.Author+" · "+ago(c.Time)+" · "+shortHash(c.Hash)).Size(11).Color(tokExtraMuted).NoWrap().Ellipsis(),
+		ggui.Text(c.GetAuthor()+" · "+ago(protocol.TimeOf(c.GetTime()))+" · "+shortHash(c.GetHash())).Size(11).Color(tokExtraMuted).NoWrap().Ellipsis(),
 	).Gap(2).Stretch()
 	content := ggui.Row(&graphCell{row: g, head: head}, ggui.Expanded(text)).Gap(6).Align(ggui.AlignCenter)
 	// Only the rows chosen and no longer chosen redraw as the choice moves.
-	chosen := ggui.Map(m.GitCommit, func(cv commitView) bool { return cv.Hash == c.Hash })
+	chosen := ggui.Map(m.GitCommit, func(cv commitView) bool { return cv.Hash == c.GetHash() })
 	row := ggui.View(chosen, func(on bool) ggui.Widget {
 		box := ggui.Box(content).Height(historyRow).Pad(0, 10, 0, 6)
 		if on {
@@ -322,11 +322,11 @@ func commitRow(m *model, c protocol.GitCommit, g graphRow) ggui.Widget {
 		}
 		return box
 	})
-	tap := ui.ButtonOf(row, func() { m.openCommit(c.Hash) }).Ghost().Pad(0).Radius(0).Name(c.Subject)
+	tap := ui.ButtonOf(row, func() { m.openCommit(c.GetHash()) }).Ghost().Pad(0).Radius(0).Name(c.GetSubject())
 	return ui.ContextMenu(tap,
-		ui.MenuItem(T("Copy hash"), func() { ggui.CurrentClipboard().Write(c.Hash) }),
-		ui.MenuItem(T("Copy subject"), func() { ggui.CurrentClipboard().Write(c.Subject) }),
-	).Name(Tf("%s actions", shortHash(c.Hash)))
+		ui.MenuItem(T("Copy hash"), func() { ggui.CurrentClipboard().Write(c.GetHash()) }),
+		ui.MenuItem(T("Copy subject"), func() { ggui.CurrentClipboard().Write(c.GetSubject()) }),
+	).Name(Tf("%s actions", shortHash(c.GetHash())))
 }
 
 // commitPane is what the chosen commit changed: its message and its files,
@@ -349,21 +349,21 @@ func commitPane(m *model) ggui.Widget {
 		}
 		info := cv.Info
 		rows := []ggui.Widget{
-			ggui.Text(info.Commit.Subject).Size(13).Weight(ggui.WeightSemibold).Selectable(),
+			ggui.Text(info.GetCommit().GetSubject()).Size(13).Weight(ggui.WeightSemibold).Selectable(),
 		}
-		if info.Body != "" {
-			rows = append(rows, ggui.Text(info.Body).Size(12).Color(tokMuted).Selectable())
+		if info.GetBody() != "" {
+			rows = append(rows, ggui.Text(info.GetBody()).Size(12).Color(tokMuted).Selectable())
 		}
-		who := info.Commit.Author
-		if info.Email != "" {
-			who += " <" + info.Email + ">"
+		who := info.GetCommit().GetAuthor()
+		if info.GetEmail() != "" {
+			who += " <" + info.GetEmail() + ">"
 		}
-		rows = append(rows, ggui.Text(who+"\n"+info.Commit.Time.Local().Format("2006-01-02 15:04")).Size(11.5).Color(tokExtraMuted).Selectable())
+		rows = append(rows, ggui.Text(who+"\n"+protocol.TimeOf(info.GetCommit().GetTime()).Local().Format("2006-01-02 15:04")).Size(11.5).Color(tokExtraMuted).Selectable())
 		meta := ggui.Box(ggui.Column(rows...).Gap(6).Stretch()).Pad(10, 12)
-		files := make([]ggui.Widget, 0, len(info.Files))
-		for _, f := range info.Files {
-			row := ggui.Row(statusIcon(f.Status), ggui.Expanded(ggui.Text(f.Path).Size(12).NoWrap().Ellipsis()), fileCounts(f)).Gap(7)
-			files = append(files, ui.ButtonOf(row, func() { m.openCommitFile(f) }).Ghost().Pad(4, 12).Radius(0).Name(f.Path))
+		files := make([]ggui.Widget, 0, len(info.GetFiles()))
+		for _, f := range info.GetFiles() {
+			row := ggui.Row(statusIcon(f.GetStatus()), ggui.Expanded(ggui.Text(f.GetPath()).Size(12).NoWrap().Ellipsis()), fileCounts(f)).Gap(7)
+			files = append(files, ui.ButtonOf(row, func() { m.openCommitFile(f) }).Ghost().Pad(4, 12).Radius(0).Name(f.GetPath()))
 		}
 		if len(files) == 0 {
 			files = append(files, paneNote(T("No files changed.")))

@@ -3,151 +3,83 @@ package protocol
 import (
 	"bytes"
 	"encoding/binary"
-	"reflect"
-	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// wireTypes is the Go type each message type carries.
-var wireTypes = map[Type]any{
-	TypeHello: Hello{}, TypeWelcome: Welcome{}, TypeError: Error{},
-	TypeListNodes: struct{}{}, TypeNodes: Nodes{}, TypeGossip: Nodes{},
-	TypeListSess: ListSessions{}, TypeSessions: Sessions{}, TypeOpenSession: OpenSession{},
-	TypeSessionInfo: SessionInfo{}, TypeCloseSess: CloseSession{}, TypeRenameSess: RenameSession{},
-	TypeAnswerApproval: AnswerApproval{},
-	TypeAttach:         Attach{}, TypeInput: Input{}, TypeOutput: Output{}, TypeResize: Resize{},
-	TypeSnapshot: Snapshot{}, TypeExited: Exited{},
-	TypeListDir: ListDir{}, TypeDir: Dir{}, TypeReadFile: ReadFile{}, TypeFile: File{},
-	TypeWriteFile: WriteFile{}, TypeFileOp: FileOp{}, TypeSearch: Search{}, TypeSearchResult: SearchResult{},
-	TypeGitStatus: GitStatus{}, TypeGitChanges: GitChanges{}, TypeGitDiff: GitDiff{}, TypeDiff: Diff{},
-	TypeGitLog: GitLog{}, TypeGitHistory: GitHistory{}, TypeGitShow: GitShow{},
-	TypeGitCommitInfo: GitCommitInfo{}, TypeGitRun: GitRun{}, TypeGitResult: GitResult{},
-	TypeReadChat: ReadChat{}, TypeChat: Chat{},
-}
-
-// The schema has a message for every type, and nothing else.
-func TestEveryTypeHasAMessage(t *testing.T) {
-	var missing, extra []string
-	for typ := range wireTypes {
+// Every Type constant names a body field, and every body field has one.
+func TestEveryTypeHasABody(t *testing.T) {
+	types := []Type{
+		TypeHello, TypeWelcome, TypeError, TypeListNodes, TypeNodes, TypeGossip,
+		TypeListSess, TypeSessions, TypeOpenSession, TypeSessionInfo, TypeCloseSess, TypeRenameSess, TypeAnswerApproval,
+		TypeAttach, TypeInput, TypeOutput, TypeResize, TypeSnapshot, TypeExited,
+		TypeListDir, TypeDir, TypeReadFile, TypeFile, TypeWriteFile, TypeFileOp, TypeSearch, TypeSearchResult,
+		TypeGitStatus, TypeGitChanges, TypeGitDiff, TypeDiff, TypeGitLog, TypeGitHistory, TypeGitShow,
+		TypeGitCommitInfo, TypeGitRun, TypeGitResult, TypeReadChat, TypeChat,
+	}
+	for _, typ := range types {
 		if _, ok := bodyFields[typ]; !ok {
-			missing = append(missing, string(typ))
+			t.Errorf("no body field for %q", typ)
 		}
 	}
-	for typ := range bodyFields {
-		if _, ok := wireTypes[typ]; !ok {
-			extra = append(extra, string(typ))
-		}
-	}
-	if len(missing)+len(extra) > 0 {
-		t.Fatalf("types without a message %v; messages without a type here %v", missing, extra)
+	if len(bodyFields) != len(types) {
+		t.Errorf("%d body fields for %d types", len(bodyFields), len(types))
 	}
 }
 
-// Every message crosses the wire with every field of its Go type intact: a
-// field the schema lacks fails here.
-func TestEveryMessageRoundTrips(t *testing.T) {
-	for typ, zero := range wireTypes {
-		v := reflect.New(reflect.TypeOf(zero))
-		fill(v.Elem(), 1)
-		var wire bytes.Buffer
-		env, err := Encode(typ, "req-1", v.Interface())
-		if err != nil {
-			t.Errorf("%s: %v", typ, err)
-			continue
-		}
-		if err := WriteFrame(&wire, env); err != nil {
-			t.Errorf("%s: write: %v", typ, err)
-			continue
-		}
-		got, err := ReadFrame(&wire)
-		if err != nil {
-			t.Errorf("%s: read: %v", typ, err)
-			continue
-		}
-		if got.Type != typ || got.ID != "req-1" {
-			t.Errorf("%s: read back as %q, id %q", typ, got.Type, got.ID)
-			continue
-		}
-		out := reflect.New(reflect.TypeOf(zero))
-		if err := Decode(got, out.Interface()); err != nil {
-			t.Errorf("%s: decode: %v", typ, err)
-			continue
-		}
-		if !reflect.DeepEqual(out.Elem().Interface(), v.Elem().Interface()) {
-			t.Errorf("%s changed on the wire:\n sent %+v\n got  %+v", typ, v.Elem().Interface(), out.Elem().Interface())
-		}
+// A message crosses the wire whole, and comes back as the type's message.
+func TestAMessageRoundTrips(t *testing.T) {
+	code := int64(3)
+	sent := &SessionInfo{
+		Id: "s", NodeId: "n", Agent: "claude", Command: []string{"claude", "-c"}, State: StateExited,
+		Cols: 80, Rows: 24, StartedAt: timestamppb.Now(), ExitCode: &code,
+		Approval: &Approval{Id: "a", Tool: "Bash", Since: timestamppb.Now()},
+		Worktree: &Worktree{Repo: "/r", Branch: "b"},
+	}
+	env, err := Encode(TypeSessionInfo, "req-1", sent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire bytes.Buffer
+	if err := WriteFrame(&wire, env); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadFrame(&wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Type() != TypeSessionInfo || got.GetId() != "req-1" {
+		t.Fatalf("read back as %q, id %q", got.Type(), got.GetId())
+	}
+	info, err := Body[*SessionInfo](got)
+	if err != nil || !proto.Equal(info, sent) {
+		t.Fatalf("got %v, %v; want %v", info, err, sent)
+	}
+	if _, err := Body[*Node](got); err == nil {
+		t.Fatal("a session's info read as a node")
+	}
+	// Gossip and Nodes share a message, and keep their types apart.
+	env, _ = Encode(TypeGossip, "", &Nodes{Nodes: []*Node{{Id: "x"}}})
+	if env.Type() != TypeGossip {
+		t.Fatalf("gossip encoded as %q", env.Type())
 	}
 }
 
-// fill sets every field of v to a value that is not its zero, so a field
-// the wire drops shows.
-func fill(v reflect.Value, seed int) {
-	switch {
-	case v.Type() == timeType:
-		v.Set(reflect.ValueOf(time.Unix(1_700_000_000+int64(seed), 123_456_789)))
-		return
-	case v.Type() == reflect.TypeFor[[]byte]():
-		v.SetBytes([]byte{0, 1, 0xff, byte(seed)})
-		return
-	}
-	switch v.Kind() {
-	case reflect.Struct:
-		for i := range v.NumField() {
-			if v.Type().Field(i).IsExported() {
-				fill(v.Field(i), seed+i)
-			}
-		}
-	case reflect.Pointer:
-		v.Set(reflect.New(v.Type().Elem()))
-		fill(v.Elem(), seed)
-	case reflect.Slice:
-		s := reflect.MakeSlice(v.Type(), 2, 2)
-		for i := range 2 {
-			fill(s.Index(i), seed+i+1)
-		}
-		v.Set(s)
-	case reflect.Map:
-		m := reflect.MakeMap(v.Type())
-		k, e := reflect.New(v.Type().Key()).Elem(), reflect.New(v.Type().Elem()).Elem()
-		fill(k, seed)
-		fill(e, seed+1)
-		m.SetMapIndex(k, e)
-		v.Set(m)
-	case reflect.String:
-		v.SetString("s" + strings.Repeat("x", seed%5) + "é")
-	case reflect.Bool:
-		v.SetBool(true)
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		v.SetInt(int64(-seed - 1))
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		v.SetUint(uint64(seed + 1))
-	case reflect.Float64:
-		v.SetFloat(float64(seed) + .25)
-	}
-}
-
-// A Go field the message lacks is an error, not a silent drop, and so is a
-// message field the Go type lacks.
-func TestAFieldTheSchemaLacksFails(t *testing.T) {
-	type helloPlus struct {
-		Name  string `json:"name"`
-		Extra string `json:"extra"`
-	}
-	if _, err := Encode(TypeHello, "", helloPlus{Name: "a", Extra: "b"}); err == nil || !strings.Contains(err.Error(), "extra") {
-		t.Fatalf("encode with an unknown field: %v", err)
-	}
-	type helloLess struct {
-		Name string `json:"name"`
-	}
-	if _, err := Encode(TypeHello, "", helloLess{Name: "a"}); err == nil || !strings.Contains(err.Error(), "node_id") {
-		t.Fatalf("encode with a field missing: %v", err)
+// A message that is not the type's is refused, and nil sends it empty.
+func TestEncodeChecksTheMessage(t *testing.T) {
+	if _, err := Encode(TypeHello, "", &Welcome{}); err == nil || !strings.Contains(err.Error(), "Hello") {
+		t.Fatalf("encode a welcome as a hello: %v", err)
 	}
 	if _, err := Encode("no_such_type", "", nil); err == nil {
 		t.Fatal("encoded a type with no message")
+	}
+	env, err := Encode(TypeListNodes, "", nil)
+	if err != nil || env.Type() != TypeListNodes {
+		t.Fatalf("empty list_nodes: %v %q", err, env.Type())
 	}
 }
 
@@ -158,8 +90,8 @@ func TestAnUnknownBodyReadsAsNoType(t *testing.T) {
 	body = protowire.AppendBytes(body, []byte("future"))
 	frame := binary.BigEndian.AppendUint32(nil, uint32(len(body)))
 	env, err := ReadFrame(bytes.NewReader(append(frame, body...)))
-	if err != nil || env.Type != "" {
-		t.Fatalf("unknown body read as %q, %v", env.Type, err)
+	if err != nil || env.Type() != "" {
+		t.Fatalf("unknown body read as %q, %v", env.Type(), err)
 	}
 }
 
@@ -169,7 +101,7 @@ func TestAnOversizeFrameIsRefused(t *testing.T) {
 	if _, err := ReadFrame(bytes.NewReader(frame)); err == nil || !strings.Contains(err.Error(), "too large") {
 		t.Fatalf("oversize frame: %v", err)
 	}
-	env, _ := Encode(TypeOutput, "", Output{Data: make([]byte, MaxFrameSize)})
+	env, _ := Encode(TypeOutput, "", &Output{Data: make([]byte, MaxFrameSize)})
 	if err := WriteFrame(&bytes.Buffer{}, env); err == nil {
 		t.Fatal("wrote an oversize frame")
 	}
@@ -178,7 +110,7 @@ func TestAnOversizeFrameIsRefused(t *testing.T) {
 // Output's bytes are carried as they are, without a JSON or base64 layer.
 func TestOutputIsCarriedRaw(t *testing.T) {
 	data := bytes.Repeat([]byte("\x1b[31mhello\r\n"), 1000)
-	env, _ := Encode(TypeOutput, "", Output{SessionID: "s", Data: data})
+	env, _ := Encode(TypeOutput, "", &Output{SessionId: "s", Data: data})
 	var wire bytes.Buffer
 	if err := WriteFrame(&wire, env); err != nil {
 		t.Fatal(err)
@@ -187,11 +119,8 @@ func TestOutputIsCarriedRaw(t *testing.T) {
 		t.Fatalf("%d bytes of output took %d on the wire", len(data), wire.Len())
 	}
 	got, _ := ReadFrame(&wire)
-	var ev StreamEvent
-	if ok, err := StreamEventOf(got, &ev); !ok || err != nil || ev.Kind != EventOutput || !bytes.Equal(ev.Data, data) {
-		t.Fatalf("output event %v %v %d", ok, err, len(ev.Data))
-	}
-	if !slices.Equal(ev.Data[:5], data[:5]) {
-		t.Fatal("output changed")
+	ev, ok := StreamEventOf(got)
+	if !ok || ev.Kind != EventOutput || !bytes.Equal(ev.Data, data) {
+		t.Fatalf("output event %v %v", ok, ev)
 	}
 }

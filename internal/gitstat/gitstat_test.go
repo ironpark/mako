@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/sanbo/internal/protocol"
 )
@@ -63,25 +64,25 @@ func TestStatusCountsEachChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.NotRepo || got.Branch != "master" {
-		t.Fatalf("root %q branch %q not repo %v", got.Root, got.Branch, got.NotRepo)
+	if got.GetNotRepo() || got.GetBranch() != "master" {
+		t.Fatalf("root %q branch %q not repo %v", got.GetRoot(), got.GetBranch(), got.GetNotRepo())
 	}
-	want := map[string]protocol.GitFile{
+	want := map[string]*protocol.GitFile{
 		"bin.dat":         {Path: "bin.dat", Status: protocol.GitAdded, Binary: true},
 		"gone.txt":        {Path: "gone.txt", Status: protocol.GitDeleted, Removed: 2},
 		"internal/new.go": {Path: "internal/new.go", Status: protocol.GitAdded, Added: 3},
 		"main.go":         {Path: "main.go", Status: protocol.GitModified, Added: 3, Removed: 1},
 	}
-	if len(got.Files) != len(want) {
-		t.Fatalf("files %+v", got.Files)
+	if len(got.GetFiles()) != len(want) {
+		t.Fatalf("files %+v", got.GetFiles())
 	}
-	for _, f := range got.Files {
-		if f != want[f.Path] {
-			t.Errorf("%s: %+v, want %+v", f.Path, f, want[f.Path])
+	for _, f := range got.GetFiles() {
+		if !proto.Equal(f, want[f.GetPath()]) {
+			t.Errorf("%s: %+v, want %+v", f.GetPath(), f, want[f.GetPath()])
 		}
 	}
 
-	if out, err := Status(t.TempDir()); err != nil || !out.NotRepo {
+	if out, err := Status(t.TempDir()); err != nil || !out.GetNotRepo() {
 		t.Fatalf("outside a repository: %+v, %v", out, err)
 	}
 }
@@ -102,16 +103,16 @@ func TestDiffWritesHunks(t *testing.T) {
 		t.Fatal(err)
 	}
 	var headers []string
-	for _, l := range d.Lines {
-		if l.Op == "@" {
-			headers = append(headers, l.Text)
+	for _, l := range d.GetLines() {
+		if l.GetOp() == "@" {
+			headers = append(headers, l.GetText())
 		}
 	}
 	if strings.Join(headers, " | ") != "@@ -1,5 +1,5 @@ | @@ -13,6 +13,7 @@" {
 		t.Fatalf("hunks %q", headers)
 	}
-	if d.Lines[1].Op != " " || d.Lines[1].Old != 1 || d.Lines[1].New != 1 {
-		t.Fatalf("first line %+v", d.Lines[1])
+	if d.GetLines()[1].GetOp() != " " || d.GetLines()[1].GetOld() != 1 || d.GetLines()[1].GetNew() != 1 {
+		t.Fatalf("first line %+v", d.GetLines()[1])
 	}
 	if _, err := Diff(root, "../outside", ""); err == nil {
 		t.Fatal("a path out of the tree was diffed")
@@ -168,8 +169,8 @@ func TestStatusMatchesGoGit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	changes := func(st git.Status) map[string]protocol.GitFile {
-		out := map[string]protocol.GitFile{}
+	changes := func(st git.Status) map[string]*protocol.GitFile {
+		out := map[string]*protocol.GitFile{}
 		for p, fs := range st {
 			if f, ok := change(p, fs); ok {
 				out[p] = f
@@ -182,7 +183,7 @@ func TestStatusMatchesGoGit(t *testing.T) {
 		t.Fatalf("git %v, go-git %v", a, b)
 	}
 	for p, f := range a {
-		if b[p] != f {
+		if !proto.Equal(b[p], f) {
 			t.Errorf("%s: git %+v, go-git %+v", p, f, b[p])
 		}
 	}

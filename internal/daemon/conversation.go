@@ -12,6 +12,7 @@ import (
 	"github.com/ironpark/sanbo/internal/protocol"
 	"github.com/ironpark/sanbo/internal/session"
 	"github.com/ironpark/sanbo/internal/transcript"
+	"google.golang.org/protobuf/proto"
 )
 
 func conversationUUID() string {
@@ -102,7 +103,7 @@ type conversation struct {
 
 // trackConversation follows s's conversation for as long as it runs.
 func (d *Daemon) trackConversation(s *session.Session) {
-	if !transcript.Supported(s.Info().Agent) {
+	if !transcript.Supported(s.Info().GetAgent()) {
 		return
 	}
 	c := &d.conversations
@@ -230,20 +231,20 @@ func (d *Daemon) checkConversations(sessions []*session.Session) {
 	logs, _ := transcript.OpenLogs(ctx, pids)
 	for _, s := range sessions {
 		info := s.Info()
-		id, path, err := transcript.Identify(info.Agent, info.Project, logs[s.PID()])
+		id, path, err := transcript.Identify(info.GetAgent(), info.GetProject(), logs[s.PID()])
 		if id == "" {
 			// No writer found: keep the bound log while it is still the same
 			// conversation, and only search the tree when it is not.
 			if bound := s.TranscriptPath(); bound != "" && transcript.Verify(info, bound) == nil {
 				continue
 			}
-			if info.ConversationID == "" {
+			if info.GetConversationId() == "" {
 				continue
 			}
 			path, err = transcript.Locate(ctx, info, s.TranscriptEnv())
-			id = info.ConversationID
+			id = info.GetConversationId()
 		}
-		if err == nil && path != "" && (id != info.ConversationID || path != s.TranscriptPath()) {
+		if err == nil && path != "" && (id != info.GetConversationId() || path != s.TranscriptPath()) {
 			d.bindPolled(s, id, path)
 		}
 	}
@@ -259,10 +260,10 @@ func (d *Daemon) reportConversation(s *session.Session, seq int64, ev transcript
 	if id == "" || path == "" {
 		return nil // nothing to bind yet; the listing finds it
 	}
-	if !transcript.LogOf(info.Agent, s.TranscriptEnv(), id, path) {
-		return fmt.Errorf("%s is not where %s keeps conversation %q", path, info.Agent, id)
+	if !transcript.LogOf(info.GetAgent(), s.TranscriptEnv(), id, path) {
+		return fmt.Errorf("%s is not where %s keeps conversation %q", path, info.GetAgent(), id)
 	}
-	info.ConversationID = id
+	info.ConversationId = id
 	written := transcript.Verify(info, path) == nil
 	d.conversations.binding.Lock()
 	defer d.conversations.binding.Unlock()
@@ -295,7 +296,7 @@ func (d *Daemon) checkReported(s *session.Session) {
 	if path == "" || transcript.Verify(info, path) != nil {
 		return
 	}
-	if err := d.bindConversation(s, info.ConversationID, path); err != nil {
+	if err := d.bindConversation(s, info.GetConversationId(), path); err != nil {
 		d.log.Warn("save conversation", "session", s.ID(), "err", err)
 		return
 	}
@@ -314,7 +315,8 @@ func (d *Daemon) bindConversation(s *session.Session, id, path string) error {
 		return nil
 	}
 	next := previous
-	next.Info.ConversationID = id
+	next.Info = proto.CloneOf(previous.Info)
+	next.Info.ConversationId = id
 	next.TranscriptPath = path
 	d.saved[s.ID()] = next
 	if err := d.saveSessionsLocked(); err != nil {
@@ -327,7 +329,7 @@ func (d *Daemon) bindConversation(s *session.Session, id, path string) error {
 
 // chatForSession always reads the attached process's conversation. A client
 // cannot silently select unrelated history while typing into this PTY.
-func (d *Daemon) chatForSession(ctx context.Context, s *session.Session) (protocol.Chat, error) {
+func (d *Daemon) chatForSession(ctx context.Context, s *session.Session) (*protocol.Chat, error) {
 	info := s.Info()
 	if path := s.TranscriptPath(); path != "" {
 		if cache := d.conversations.chatCache(s); cache != nil {
@@ -349,15 +351,15 @@ func (d *Daemon) usageForSession(s *session.Session) (*protocol.Usage, error) {
 		return cache.ReadUsage(s.Info(), path)
 	}
 	chat, err := transcript.ReadBound(s.Info(), path)
-	return chat.Usage, err
+	return chat.GetUsage(), err
 }
 
 // claimedLocked is the conversations saved sessions other than id hold.
 func (d *Daemon) claimedLocked(id string) map[string]bool {
 	claimed := map[string]bool{}
 	for other, entry := range d.saved {
-		if other != id && entry.Info.ConversationID != "" {
-			claimed[entry.Info.ConversationID] = true
+		if other != id && entry.Info.GetConversationId() != "" {
+			claimed[entry.Info.GetConversationId()] = true
 		}
 	}
 	return claimed

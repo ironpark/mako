@@ -4,7 +4,7 @@ package sanbo.v2;
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2";
+option go_package = "github.com/ironpark/sanbo/internal/protocol";
 
 // Hello opens every stream and says who is calling.
 message Hello {

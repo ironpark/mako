@@ -201,7 +201,7 @@ func userStatusLine(input []byte) string {
 
 // statusUsage reads what a status line's input says of the session's
 // tokens: the model's context window, and the account's limits.
-func statusUsage(input []byte) protocol.Usage {
+func statusUsage(input []byte) *protocol.Usage {
 	type limit struct {
 		Used   float64 `json:"used_percentage"`
 		Resets int64   `json:"resets_at"`
@@ -216,12 +216,12 @@ func statusUsage(input []byte) protocol.Usage {
 		} `json:"rate_limits"`
 	}
 	if json.Unmarshal(input, &state) != nil {
-		return protocol.Usage{}
+		return &protocol.Usage{}
 	}
-	u := protocol.Usage{Window: state.Context.Size}
+	u := &protocol.Usage{Window: state.Context.Size}
 	for minutes, l := range map[int64]*limit{protocol.FiveHours: state.Limits.FiveHour, protocol.Week: state.Limits.SevenDay} {
 		if l != nil {
-			u.SetLimit(protocol.RateLimit{Minutes: minutes, Used: l.Used, Resets: l.Resets})
+			u.SetLimit(&protocol.RateLimit{Minutes: minutes, Used: l.Used, Resets: l.Resets})
 		}
 	}
 	return u
@@ -277,7 +277,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		s.Report(statusUsage(msg.Input))
 		return
 	}
-	native, ok := transcript.Lookup(s.Info().Agent)
+	native, ok := transcript.Lookup(s.Info().GetAgent())
 	if !ok {
 		return
 	}

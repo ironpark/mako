@@ -21,7 +21,7 @@ func TestLiveProgressOverridesPollingAndWakesHiddenTabs(t *testing.T) {
 	// Simulate an unpainted hidden terminal whose ordinary output wake is pending.
 	conn.pending.Store(true)
 	m := newModel(config.Default(), "")
-	m.Sessions.Set([]protocol.SessionInfo{{ID: "s", State: protocol.StateRunning, Busy: true}})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", State: protocol.StateRunning, Busy: true}})
 	m.conns["s"] = conn
 	if !m.busy("s") {
 		t.Fatal("missing metadata fallback before the first report")
@@ -47,7 +47,7 @@ func TestLiveProgressOverridesPollingAndWakesHiddenTabs(t *testing.T) {
 			t.Fatalf("no wake for %q", tc.seq)
 		}
 		if got := m.busy("s"); got != tc.busy {
-			t.Fatalf("busy=%v after %q; stale poll=%v", got, tc.seq, ggui.Peek(m.Sessions)[0].Busy)
+			t.Fatalf("busy=%v after %q; stale poll=%v", got, tc.seq, ggui.Peek(m.Sessions)[0].GetBusy())
 		}
 	}
 }
@@ -65,7 +65,7 @@ func TestSnapshotRestoresProgressWithoutNewOSC(t *testing.T) {
 	for _, state := range []uint8{3, 0} {
 		link.in <- &protocol.StreamEvent{
 			Kind:     protocol.EventSnapshot,
-			Snapshot: protocol.Snapshot{SessionID: "s", Cols: 80, Rows: 24, Progress: &protocol.ProgressReport{State: state, Value: -1, RemainingMS: 1000}},
+			Snapshot: &protocol.Snapshot{SessionId: "s", Cols: 80, Rows: 24, Progress: &protocol.ProgressReport{State: uint32(state), Value: -1, RemainingMs: 1000}},
 		}
 		select {
 		case <-woke:

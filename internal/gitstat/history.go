@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/ironpark/sanbo/internal/protocol"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // The history, a commit's changes, and the operations that change the
@@ -100,12 +101,12 @@ func inWorkTree(p string) error {
 const logFormat = "%H%x1f%P%x1f%an%x1f%at%x1f%D%x1f%s"
 
 // parseCommit reads a commit's fields as logFormat writes them.
-func parseCommit(f []string) (protocol.GitCommit, bool) {
+func parseCommit(f []string) (*protocol.GitCommit, bool) {
 	if len(f) < 6 {
-		return protocol.GitCommit{}, false
+		return &protocol.GitCommit{}, false
 	}
 	at, _ := strconv.ParseInt(f[3], 10, 64)
-	c := protocol.GitCommit{Hash: f[0], Parents: strings.Fields(f[1]), Author: f[2], Time: time.Unix(at, 0), Subject: f[5]}
+	c := &protocol.GitCommit{Hash: f[0], Parents: strings.Fields(f[1]), Author: f[2], Time: timestamppb.New(time.Unix(at, 0)), Subject: f[5]}
 	for _, ref := range strings.Split(f[4], ", ") {
 		if ref != "" {
 			c.Refs = append(c.Refs, ref)
@@ -118,19 +119,19 @@ func parseCommit(f []string) (protocol.GitCommit, bool) {
 // branches, remote branches and tags, children before their parents. The
 // history is fingerprinted by its refs and HEAD: when it matches known, the
 // commits are not read again and Unchanged is set.
-func Log(ctx context.Context, root string, max int, known string) (protocol.GitHistory, error) {
+func Log(ctx context.Context, root string, max int, known string) (*protocol.GitHistory, error) {
 	if max <= 0 || max > maxLog {
 		max = maxLog
 	}
-	var out protocol.GitHistory
+	out := &protocol.GitHistory{}
 	if cur, err := gitOut(ctx, root, nil, "symbolic-ref", "--quiet", "--short", "HEAD"); err == nil {
 		out.Current = strings.TrimSpace(string(cur))
 	}
 	// show-ref fails, printing nothing, before the first commit.
 	refs, _ := gitOut(ctx, root, nil, "show-ref", "--head")
-	sum := sha256.Sum256(append(refs, out.Current...))
+	sum := sha256.Sum256(append(refs, out.GetCurrent()...))
 	out.Fingerprint = hex.EncodeToString(sum[:8])
-	if out.Fingerprint == known {
+	if out.GetFingerprint() == known {
 		out.Unchanged = true
 		return out, nil
 	}
@@ -147,15 +148,15 @@ func Log(ctx context.Context, root string, max int, known string) (protocol.GitH
 			out.Commits = append(out.Commits, c)
 		}
 	}
-	if len(out.Commits) > max {
-		out.Commits, out.More = out.Commits[:max], true
+	if len(out.GetCommits()) > max {
+		out.Commits, out.More = out.GetCommits()[:max], true
 	}
 	return out, nil
 }
 
 // Show is what one commit changed against its first parent.
-func Show(ctx context.Context, root, hash string) (protocol.GitCommitInfo, error) {
-	var out protocol.GitCommitInfo
+func Show(ctx context.Context, root, hash string) (*protocol.GitCommitInfo, error) {
+	out := &protocol.GitCommitInfo{}
 	if err := checkHash(hash); err != nil {
 		return out, err
 	}
@@ -170,13 +171,13 @@ func Show(ctx context.Context, root, hash string) (protocol.GitCommitInfo, error
 	}
 	out.Commit, out.Email, out.Body = c, fields[6], strings.TrimSpace(fields[7])
 	base := emptyTree
-	if len(c.Parents) > 0 {
-		base = c.Parents[0]
+	if len(c.GetParents()) > 0 {
+		base = c.GetParents()[0]
 	}
 	// The kinds of change and the lines changed come from two listings of
 	// the same trees, read side by side.
 	diffTree := func(format string) ([]byte, error) {
-		return gitOut(ctx, root, nil, "diff-tree", "-r", "-M", "-z", format, base, c.Hash)
+		return gitOut(ctx, root, nil, "diff-tree", "-r", "-M", "-z", format, base, c.GetHash())
 	}
 	var nums []byte
 	var numsErr error
@@ -193,12 +194,12 @@ func Show(ctx context.Context, root, hash string) (protocol.GitCommitInfo, error
 
 // treeChanges reads diff-tree's -z --name-status and --numstat of the same
 // two trees as their changed files.
-func treeChanges(names, nums string) []protocol.GitFile {
-	var files []protocol.GitFile
+func treeChanges(names, nums string) []*protocol.GitFile {
+	var files []*protocol.GitFile
 	at := map[string]int{}
 	f := strings.Split(names, "\x00")
 	for i := 0; i+1 < len(f); i += 2 {
-		file := protocol.GitFile{Path: f[i+1]}
+		file := &protocol.GitFile{Path: f[i+1]}
 		switch f[i][0] {
 		case 'A':
 			file.Status = protocol.GitAdded
@@ -216,7 +217,7 @@ func treeChanges(names, nums string) []protocol.GitFile {
 		default:
 			file.Status = protocol.GitModified
 		}
-		at[file.Path] = len(files)
+		at[file.GetPath()] = len(files)
 		files = append(files, file)
 	}
 	// numstat: "added\tremoved\tpath", or for a rename "added\tremoved\t"
@@ -240,23 +241,23 @@ func treeChanges(names, nums string) []protocol.GitFile {
 			files[j].Binary = true
 			continue
 		}
-		files[j].Added, _ = strconv.Atoi(parts[0])
-		files[j].Removed, _ = strconv.Atoi(parts[1])
+		files[j].Added, _ = strconv.ParseInt(parts[0], 10, 64)
+		files[j].Removed, _ = strconv.ParseInt(parts[1], 10, 64)
 	}
-	slices.SortFunc(files, func(a, b protocol.GitFile) int { return strings.Compare(a.Path, b.Path) })
+	slices.SortFunc(files, func(a, b *protocol.GitFile) int { return strings.Compare(a.GetPath(), b.GetPath()) })
 	return files
 }
 
 // CommitDiff is one file's changes in a commit, against its first parent.
 // from is the path the parent has it at, for a rename, or "".
-func CommitDiff(ctx context.Context, root, hash, p, from string) (protocol.Diff, error) {
+func CommitDiff(ctx context.Context, root, hash, p, from string) (*protocol.Diff, error) {
 	if err := cmp.Or(checkHash(hash), inWorkTree(p), inWorkTree(from)); err != nil {
-		return protocol.Diff{}, err
+		return nil, err
 	}
 	// A root commit has no parent, whose blob then reads as none.
 	old := blob(ctx, root, hash+"^", cmp.Or(from, p))
 	cur := blob(ctx, root, hash, p)
-	out := protocol.Diff{Path: p}
+	out := &protocol.Diff{Path: p}
 	if Binary(old) || Binary(cur) {
 		out.Binary = true
 		return out, nil
@@ -284,58 +285,58 @@ func blob(ctx context.Context, root, rev, p string) string {
 
 // Run runs a git operation on the work tree at root and returns what git
 // printed.
-func Run(ctx context.Context, r protocol.GitRun) (string, error) {
-	switch r.Op {
+func Run(ctx context.Context, r *protocol.GitRun) (string, error) {
+	switch r.GetOp() {
 	case protocol.GitOpCommit:
 		return commit(ctx, r)
 	case protocol.GitOpPush:
-		return push(ctx, r.Root)
+		return push(ctx, r.GetRoot())
 	case protocol.GitOpPull:
-		return run(ctx, r.Root, nil, "pull", "--ff-only")
+		return run(ctx, r.GetRoot(), nil, "pull", "--ff-only")
 	case protocol.GitOpFetch:
-		return run(ctx, r.Root, nil, "fetch", "--all", "--prune")
+		return run(ctx, r.GetRoot(), nil, "fetch", "--all", "--prune")
 	case protocol.GitOpCheckout, protocol.GitOpBranch:
-		if _, err := gitOut(ctx, r.Root, nil, "check-ref-format", "--branch", r.Branch); err != nil || strings.HasPrefix(r.Branch, "-") {
-			return "", fmt.Errorf("%q is not a branch name", r.Branch)
+		if _, err := gitOut(ctx, r.GetRoot(), nil, "check-ref-format", "--branch", r.GetBranch()); err != nil || strings.HasPrefix(r.GetBranch(), "-") {
+			return "", fmt.Errorf("%q is not a branch name", r.GetBranch())
 		}
-		if r.Op == protocol.GitOpBranch {
-			return run(ctx, r.Root, nil, "switch", "-c", r.Branch)
+		if r.GetOp() == protocol.GitOpBranch {
+			return run(ctx, r.GetRoot(), nil, "switch", "-c", r.GetBranch())
 		}
-		return run(ctx, r.Root, nil, "switch", r.Branch)
+		return run(ctx, r.GetRoot(), nil, "switch", r.GetBranch())
 	case protocol.GitOpDiscard:
-		if len(r.Paths) != 1 {
+		if len(r.GetPaths()) != 1 {
 			return "", errors.New("a discard is of one file")
 		}
-		return "", DiscardHunk(r.Root, r.Paths[0], r.Hunk)
+		return "", DiscardHunk(r.GetRoot(), r.GetPaths()[0], r.GetHunk())
 	case protocol.GitOpMerge, protocol.GitOpPR, protocol.GitOpRemoveWT:
-		if r.Worktree == nil {
+		if r.GetWorktree() == nil {
 			return "", errors.New("no worktree named")
 		}
-		switch r.Op {
+		switch r.GetOp() {
 		case protocol.GitOpMerge:
-			return Merge(ctx, *r.Worktree)
+			return Merge(ctx, r.GetWorktree())
 		case protocol.GitOpPR:
-			return PullRequest(ctx, *r.Worktree)
+			return PullRequest(ctx, r.GetWorktree())
 		}
-		return RemoveWorktree(ctx, *r.Worktree)
+		return RemoveWorktree(ctx, r.GetWorktree())
 	}
-	return "", fmt.Errorf("unknown git operation %q", r.Op)
+	return "", fmt.Errorf("unknown git operation %q", r.GetOp())
 }
 
 // commit commits the paths named, or every change, with the message.
-func commit(ctx context.Context, r protocol.GitRun) (string, error) {
-	msg := strings.TrimSpace(r.Message)
-	if msg == "" && !r.Amend {
+func commit(ctx context.Context, r *protocol.GitRun) (string, error) {
+	msg := strings.TrimSpace(r.GetMessage())
+	if msg == "" && !r.GetAmend() {
 		return "", errors.New("a commit needs a message")
 	}
-	for _, p := range r.Paths {
+	for _, p := range r.GetPaths() {
 		if err := inWorkTree(p); err != nil || p == "" {
 			return "", cmp.Or(err, errors.New("an empty path"))
 		}
 	}
 	add := []string{"add", "-A"}
 	args := []string{"commit"}
-	if r.Amend {
+	if r.GetAmend() {
 		args = append(args, "--amend")
 	}
 	var stdin []byte
@@ -344,14 +345,14 @@ func commit(ctx context.Context, r protocol.GitRun) (string, error) {
 	} else {
 		args = append(args, "--no-edit")
 	}
-	if len(r.Paths) > 0 {
-		add = append(append(add, "--"), r.Paths...)
-		args = append(append(args, "--"), r.Paths...)
+	if len(r.GetPaths()) > 0 {
+		add = append(append(add, "--"), r.GetPaths()...)
+		args = append(append(args, "--"), r.GetPaths()...)
 	}
-	if _, err := gitOut(ctx, r.Root, nil, add...); err != nil {
+	if _, err := gitOut(ctx, r.GetRoot(), nil, add...); err != nil {
 		return "", err
 	}
-	return run(ctx, r.Root, stdin, args...)
+	return run(ctx, r.GetRoot(), stdin, args...)
 }
 
 // push pushes the branch to its upstream, setting one on the remote first

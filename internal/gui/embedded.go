@@ -242,10 +242,10 @@ func (m *model) embeddedSessions() int {
 	if !ggui.Peek(m.DaemonState).Running {
 		return 0
 	}
-	self := ggui.Peek(m.Conn).Self.ID
+	self := ggui.Peek(m.Conn).Self.GetId()
 	n := 0
 	for _, s := range ggui.Peek(m.Sessions) {
-		if s.NodeID == self && (s.State == protocol.StateRunning || s.State == protocol.StateStarting) {
+		if s.GetNodeId() == self && (s.GetState() == protocol.StateRunning || s.GetState() == protocol.StateStarting) {
 			n++
 		}
 	}

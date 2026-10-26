@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: sanbo/v2/git.proto
 
-package sanbov2
+package protocol
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -1090,7 +1090,7 @@ const file_sanbo_v2_git_proto_rawDesc = "" +
 	"\x04hunk\x18\b \x03(\v2\x12.sanbo.v2.DiffLineR\x04hunk\x12.\n" +
 	"\bworktree\x18\t \x01(\v2\x12.sanbo.v2.WorktreeR\bworktree\"#\n" +
 	"\tGitResult\x12\x16\n" +
-	"\x06output\x18\x01 \x01(\tR\x06outputBAZ?github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2b\x06proto3"
+	"\x06output\x18\x01 \x01(\tR\x06outputB-Z+github.com/ironpark/sanbo/internal/protocolb\x06proto3"
 
 var (
 	file_sanbo_v2_git_proto_rawDescOnce sync.Once

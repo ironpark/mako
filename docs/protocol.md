@@ -100,19 +100,30 @@ which a daemon answers as `unsupported`.
 
 [`proto/sanbo/v2`](../proto/sanbo/v2) holds the schema, in files by area:
 `envelope.proto`, `mesh.proto`, `session.proto`, `files.proto`, `git.proto`
-and `chat.proto`. [buf](https://buf.build) lints it and generates
-`internal/protocol/pb` (`make proto`); the generated code is committed.
+and `chat.proto`. [buf](https://buf.build) lints it and generates the Go
+messages into `internal/protocol` itself (`make proto`); the generated code
+is committed. The schema is the only definition of the messages: sanbo uses
+the generated types throughout, the daemon and the window alike, with no
+types of its own to convert to.
 
-The rest of sanbo does not use the generated types. It uses the plain Go
-types of `internal/protocol`, and `protocol.Encode` and `protocol.Decode`
-convert at the wire, matching each Go field to the message field named as the
-Go field's JSON name. A field of either that the other lacks is an error,
-never a silent drop, and a test round-trips every message with every field
-set, so a field added to a Go type and not to the schema, or the other way
-round, fails before it ships. Times
-are `google.protobuf.Timestamp`; a pointer to a scalar, as `SessionInfo`'s
-`exit_code`, is an `optional` field. Enumerations such as a session's `state`
-stay strings, as the Go constants are.
+Hand-written files beside the generated ones add what the schema cannot:
+the framing (`Encode`, `Body`, `WriteFrame`, `ReadFrame`), the constants the
+string fields take (`StateRunning`, `AgentWaiting`, `GitOpCommit`, …),
+`Time` and `TimeOf` for timestamps, and methods such as `Usage.Merge`.
+`protocol.Encode(t, id, msg)` places a message in the envelope as it is,
+and `protocol.Body[*T](env)` hands it back, not copied.
+
+Being protobuf messages, they are used by pointer and read through their
+getters, which are nil-safe: copying one or comparing two with `==` is
+wrong, and `go vet` reports a copy. `proto.Equal` compares them
+(`protocol.Equal` a list of them), and code that changes a message it does
+not own changes a `proto.CloneOf` it. Times are
+`google.protobuf.Timestamp`; `SessionInfo`'s `exit_code` is an `optional`
+field. Enumerations such as a session's `state` stay strings, matching the
+constants.
+
+The daemon keeps its saved sessions (`sessions.json`) in protojson with the
+proto field names, which reads the files the JSON era wrote.
 
 ## Handshake
 

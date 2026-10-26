@@ -32,9 +32,9 @@ func TestAgentsFollowTheConfigFile(t *testing.T) {
 		t.Fatalf("claude after the edit = %+v", d.agents()["claude"])
 	}
 	var profiles []string
-	for _, a := range d.Self().Agents {
-		if a.Name == "claude" {
-			profiles = a.Profiles
+	for _, a := range d.Self().GetAgents() {
+		if a.GetName() == "claude" {
+			profiles = a.GetProfiles()
 		}
 	}
 	if len(profiles) != 1 || profiles[0] != "opus" {

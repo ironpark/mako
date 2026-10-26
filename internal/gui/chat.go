@@ -7,7 +7,6 @@ import (
 	"image/color"
 	"maps"
 	"math"
-	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -26,7 +25,7 @@ import (
 const chatLaneWidth = 900
 
 type chatResult struct {
-	Chat   protocol.Chat
+	Chat   *protocol.Chat
 	Err    string
 	Loaded bool
 }
@@ -42,7 +41,7 @@ func (m *model) chatState(id string) *chatState {
 		return state
 	}
 	state := &chatState{
-		result: ggui.State(chatResult{}).WithEqual(func(a, b chatResult) bool { return reflect.DeepEqual(a, b) }),
+		result: ggui.State(chatResult{}).WithEqual(deepEqual),
 		draft:  ggui.State(""),
 		tools:  ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 	}
@@ -91,10 +90,10 @@ func (m *model) loadChat(id string, state *chatState) {
 		return
 	}
 	state.loading = true
-	req := protocol.ReadChat{NodeID: m.remoteID(info.NodeID), SessionID: id}
-	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (protocol.Chat, error) {
+	req := &protocol.ReadChat{NodeId: m.remoteID(info.GetNodeId()), SessionId: id}
+	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Chat, error) {
 		return c.ReadChat(ctx, m.key(), req)
-	}, func(chat protocol.Chat, err error) {
+	}, func(chat *protocol.Chat, err error) {
 		if m.chats[id] != state {
 			return
 		}
@@ -112,7 +111,7 @@ func (m *model) loadChat(id string, state *chatState) {
 // show. A plain shell has none, so it keeps its terminal alone.
 func (m *model) chatCapable(id string) bool {
 	s, ok := m.session(id)
-	return ok && transcript.Supported(s.Agent)
+	return ok && transcript.Supported(s.GetAgent())
 }
 
 // sessionView switches only presentation. The attachment and terminal parser
@@ -235,32 +234,29 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		case !v.Loaded:
 			rows = append(rows, muted(ggui.Text(T("Loading conversation…"))))
 		case v.Err != "":
-		case !v.Chat.Supported:
+		case !v.Chat.GetSupported():
 			rows = append(rows, muted(ggui.Text(T("Chat is available for Claude and Codex. Use Terminal for this agent."))))
-		case v.Chat.Conversation == "":
+		case v.Chat.GetConversation() == "":
 			rows = append(rows, muted(ggui.Text(T("Waiting for this agent to save its conversation. It will connect automatically."))))
-		case len(v.Chat.Messages) == 0:
+		case len(v.Chat.GetMessages()) == 0:
 			rows = append(rows, muted(ggui.Text(T("No messages yet. The conversation updates as the agent saves it."))))
 		}
-		if v.Chat.Truncated {
+		if v.Chat.GetTruncated() {
 			rows = append(rows, ggui.Box(muted(ggui.Text(T("Showing recent messages; older or long content is omitted.")).Size(11.5))).
 				Fill(tokSurface1).Radius(6).Pad(4, 8))
 		}
 		info, _ := m.session(id)
-		rows = append(rows, chatTurns(m, id, info, state, v.Chat.Messages)...)
-		if len(v.Chat.Messages) > 0 && scroll.MaxOffset()-scroll.Offset() < 32 {
+		rows = append(rows, chatTurns(m, id, info, state, v.Chat.GetMessages())...)
+		if len(v.Chat.GetMessages()) > 0 && scroll.MaxOffset()-scroll.Offset() < 32 {
 			rows = append(rows, &revealOnce{child: ggui.Box().Height(1), done: func() {}})
 		}
 		return ggui.Box(ggui.Column(rows...).Gap(14).Stretch()).Pad(18, 24).MaxWidth(chatLaneWidth)
 	})
 	feed := ggui.Scroll(ggui.Align(content).Top()).Controller(scroll).Bar(tokSurface3)
-	chatUsage := ggui.Map(state.result, func(v chatResult) protocol.Usage {
-		if v.Chat.Usage == nil {
-			return protocol.Usage{}
-		}
-		return *v.Chat.Usage
-	})
-	usage := ggui.View(chatUsage, func(u protocol.Usage) ggui.Widget {
+	chatUsage := ggui.Map(state.result, func(v chatResult) *protocol.Usage {
+		return v.Chat.GetUsage()
+	}).WithEqual(protocol.Same)
+	usage := ggui.View(chatUsage, func(u *protocol.Usage) ggui.Widget {
 		if u.IsZero() {
 			return ggui.Box()
 		}
@@ -282,20 +278,20 @@ func chatView(m *model, id string, group int) ggui.Widget {
 // as a page, and each run of tools as one quiet card whose rows fold. A
 // long run folds into one line naming its tools, all but the last run,
 // which is the agent's work in hand.
-func chatTurns(m *model, id string, info protocol.SessionInfo, state *chatState, messages []protocol.ChatMessage) []ggui.Widget {
+func chatTurns(m *model, id string, info *protocol.SessionInfo, state *chatState, messages []*protocol.ChatMessage) []ggui.Widget {
 	var rows []ggui.Widget
 	lastRun := -1
 	for i := range messages {
-		if messages[i].Role == "tool" && (i == 0 || messages[i-1].Role != "tool") {
+		if messages[i].GetRole() == "tool" && (i == 0 || messages[i-1].GetRole() != "tool") {
 			lastRun = i
 		}
 	}
 	for i := 0; i < len(messages); {
-		if messages[i].Role == "tool" {
+		if messages[i].GetRole() == "tool" {
 			start := i
 			var tools []ggui.Widget
 			var names []string
-			for i < len(messages) && messages[i].Role == "tool" {
+			for i < len(messages) && messages[i].GetRole() == "tool" {
 				tools = append(tools, toolRow(state, messages[i]))
 				names = append(names, toolName(messages[i]))
 				i++
@@ -338,31 +334,31 @@ func toolRun(state *chatState, key string, names []string, folded bool, body ggu
 }
 
 // toolName is the name a tool row shows.
-func toolName(msg protocol.ChatMessage) string {
+func toolName(msg *protocol.ChatMessage) string {
 	name, _, _, _, _ := toolParts(msg)
 	return name
 }
 
-func chatTurn(m *model, id string, info protocol.SessionInfo, msg protocol.ChatMessage) ggui.Widget {
+func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage) ggui.Widget {
 	// A message's copy button shows while the pointer is over it.
 	hover := ggui.State(false)
 	copyRow := func(right bool) ggui.Widget {
-		btn := ggui.If(hover, func() ggui.Widget { return copyButton(m, msg.Text) })
+		btn := ggui.If(hover, func() ggui.Widget { return copyButton(m, msg.GetText()) })
 		row := ggui.Row(btn, ggui.Spacer())
 		if right {
 			row = ggui.Row(ggui.Spacer(), btn)
 		}
 		return ggui.Box(row.Stretch()).Height(28)
 	}
-	if msg.Role == "user" {
-		bubble := ggui.Box(ggui.Text(msg.Text).Size(14).Selectable()).
+	if msg.GetRole() == "user" {
+		bubble := ggui.Box(ggui.Text(msg.GetText()).Size(14).Selectable()).
 			Fill(tokSurface2).Radius(12).Pad(10, 14).MaxWidth(680)
 		return ggui.Pointer(ggui.Column(
 			ggui.Row(ggui.Spacer(), bubble).Stretch(),
 			copyRow(true),
 		).Gap(2).Stretch()).OnHover(hover.Set)
 	}
-	r := &mdRenderer{m: m, id: id, doc: docInfo{Node: info.NodeID, Path: joinPath(info.Project, "conversation.md")}, src: []byte(msg.Text)}
+	r := &mdRenderer{m: m, id: id, doc: docInfo{Node: info.GetNodeId(), Path: joinPath(info.GetProject(), "conversation.md")}, src: []byte(msg.GetText())}
 	root := markdown.Parser().Parse(text.NewReader(r.src))
 	blocks := append(r.blocks(root), copyRow(false))
 	return ggui.Pointer(ggui.Column(blocks...).Gap(10).Stretch()).OnHover(hover.Set)
@@ -383,7 +379,7 @@ func copyButton(m *model, text string) ggui.Widget {
 
 // toolRow is one tool call: a glyph, its name and argument summary, and a
 // fold with the arguments and what it printed.
-func toolRow(state *chatState, msg protocol.ChatMessage) ggui.Widget {
+func toolRow(state *chatState, msg *protocol.ChatMessage) ggui.Widget {
 	name, detail, args, result, failed := toolParts(msg)
 	open := state.toolOpen(chatMessageKey(msg), failed)
 	glyph := icon(toolGlyph(name)).Size(14).Color(tokMuted)
@@ -443,21 +439,21 @@ func toolBlock(text string, failed bool) ggui.Widget {
 
 // toolParts reads a tool message: a call with its result, or output whose
 // call is not in the window.
-func toolParts(msg protocol.ChatMessage) (name, detail, args, result string, failed bool) {
-	if msg.Output {
-		return cmp.Or(msg.Tool, T("Output")), cmp.Or(msg.Detail, transcript.OneLine(msg.Text, 120)), "", msg.Text, msg.Error
+func toolParts(msg *protocol.ChatMessage) (name, detail, args, result string, failed bool) {
+	if msg.GetOutput() {
+		return cmp.Or(msg.GetTool(), T("Output")), cmp.Or(msg.GetDetail(), transcript.OneLine(msg.GetText(), 120)), "", msg.GetText(), msg.GetError()
 	}
-	return cmp.Or(msg.Tool, T("Tool")), msg.Detail, msg.Text, msg.Result, msg.Error
+	return cmp.Or(msg.GetTool(), T("Tool")), msg.GetDetail(), msg.GetText(), msg.GetResult(), msg.GetError()
 }
 
 // chatMessageKey keeps a tool row's fold across refreshes: the log's own ID,
 // or a hash of a message without one.
-func chatMessageKey(msg protocol.ChatMessage) string {
-	if msg.ID != "" {
-		return msg.ID
+func chatMessageKey(msg *protocol.ChatMessage) string {
+	if msg.GetId() != "" {
+		return msg.GetId()
 	}
 	h := fnv.New64a()
-	for _, s := range []string{msg.Role, msg.Tool, msg.Text} {
+	for _, s := range []string{msg.GetRole(), msg.GetTool(), msg.GetText()} {
 		_, _ = h.Write([]byte(s))
 		_, _ = h.Write([]byte{0})
 	}

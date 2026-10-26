@@ -29,11 +29,11 @@ func TestListDirPutsDirectoriesFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 	var names []string
-	for _, e := range got.Entries {
-		names = append(names, e.Name)
+	for _, e := range got.GetEntries() {
+		names = append(names, e.GetName())
 	}
-	if strings.Join(names, ",") != "link,z,A.txt,b.txt" || !got.Entries[0].Link || !got.Entries[0].Dir {
-		t.Fatalf("entries = %+v", got.Entries)
+	if strings.Join(names, ",") != "link,z,A.txt,b.txt" || !got.GetEntries()[0].GetLink() || !got.GetEntries()[0].GetDir() {
+		t.Fatalf("entries = %+v", got.GetEntries())
 	}
 	if _, err := listDir("relative"); err == nil {
 		t.Fatal("a relative path was listed")
@@ -50,14 +50,14 @@ func TestReadFileTellsTextFromBinary(t *testing.T) {
 		return p
 	}
 	text := write("t.txt", []byte("한글 text\n"))
-	if f, err := readFile(text, 0); err != nil || f.Binary || string(f.Data) != "한글 text\n" || f.Truncated {
+	if f, err := readFile(text, 0); err != nil || f.GetBinary() || string(f.GetData()) != "한글 text\n" || f.GetTruncated() {
 		t.Fatalf("text = %+v, %v", f, err)
 	}
 	// Cut inside a rune, it is still text.
-	if f, err := readFile(text, 2); err != nil || f.Binary || !f.Truncated {
+	if f, err := readFile(text, 2); err != nil || f.GetBinary() || !f.GetTruncated() {
 		t.Fatalf("cut text = %+v, %v", f, err)
 	}
-	if f, err := readFile(write("b.bin", []byte{1, 0, 2}), 0); err != nil || !f.Binary || f.Data != nil {
+	if f, err := readFile(write("b.bin", []byte{1, 0, 2}), 0); err != nil || !f.GetBinary() || f.GetData() != nil {
 		t.Fatalf("binary = %+v, %v", f, err)
 	}
 	if _, err := readFile(dir, 0); err == nil {
@@ -87,8 +87,8 @@ func TestListDirMarksWhatGitIgnores(t *testing.T) {
 		t.Fatal(err)
 	}
 	ignored := map[string]bool{}
-	for _, e := range got.Entries {
-		ignored[e.Name] = e.Ignored
+	for _, e := range got.GetEntries() {
+		ignored[e.GetName()] = e.GetIgnored()
 	}
 	want := map[string]bool{".git": false, ".gitignore": false, "build": true, "main.go": false, "run.log": true}
 	for name, w := range want {
@@ -101,7 +101,7 @@ func TestListDirMarksWhatGitIgnores(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(plain, "run.log"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := listDir(plain); got.Entries[0].Ignored {
+	if got, _ := listDir(plain); got.GetEntries()[0].GetIgnored() {
 		t.Error("a file outside a repository is ignored")
 	}
 }
@@ -116,16 +116,16 @@ func TestWriteFileKeepsModeAndRefusesAStaleWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f, err := writeFile(path, []byte("new"), read.ModTime)
+	f, err := writeFile(path, []byte("new"), protocol.TimeOf(read.GetModTime()))
 	if err != nil {
 		t.Fatal(err)
 	}
 	info, _ := os.Stat(path)
-	if got, _ := os.ReadFile(path); string(got) != "new" || info.Mode().Perm() != 0o755 || f.Size != 3 {
+	if got, _ := os.ReadFile(path); string(got) != "new" || info.Mode().Perm() != 0o755 || f.GetSize() != 3 {
 		t.Fatalf("after write: %q, mode %v, reply %+v", got, info.Mode(), f)
 	}
 	// Written with the time from before the last write, it is refused.
-	if _, err := writeFile(path, []byte("stale"), read.ModTime.Add(-time.Second)); !protocol.HasCode(err, protocol.CodeChanged) {
+	if _, err := writeFile(path, []byte("stale"), protocol.TimeOf(read.GetModTime()).Add(-time.Second)); !protocol.HasCode(err, protocol.CodeChanged) {
 		t.Fatalf("stale write: %v, want CodeChanged", err)
 	}
 	if got, _ := os.ReadFile(path); string(got) != "new" {
@@ -145,7 +145,7 @@ func TestFileOpNeverReplaces(t *testing.T) {
 	dir := t.TempDir()
 	at := func(name string) string { return filepath.Join(dir, name) }
 	op := func(kind, path, to string) error {
-		_, err := fileOp(protocol.FileOp{Op: kind, Path: path, To: to})
+		_, err := fileOp(&protocol.FileOp{Op: kind, Path: path, To: to})
 		return err
 	}
 	if err := op(protocol.FileCreate, at("a.txt"), ""); err != nil {
@@ -173,9 +173,17 @@ func TestFileOpNeverReplaces(t *testing.T) {
 	if len(entries) != 1 || entries[0].Name() != "c.txt" {
 		t.Fatalf("left %v", entries)
 	}
-	for _, bad := range []protocol.FileOp{{Op: protocol.FileDelete, Path: "/"}, {Op: protocol.FileDelete, Path: "relative"}, {Op: "chmod", Path: at("c.txt")}} {
+	for _, bad := range []*protocol.FileOp{{Op: protocol.FileDelete, Path: "/"}, {Op: protocol.FileDelete, Path: "relative"}, {Op: "chmod", Path: at("c.txt")}} {
 		if _, err := fileOp(bad); err == nil {
 			t.Errorf("%+v allowed", bad)
 		}
+	}
+}
+
+func TestForPeerClearsTheNodeOfACopy(t *testing.T) {
+	req := &protocol.ReadFile{NodeId: "far", Path: "/a"}
+	sent := forPeer(req).(*protocol.ReadFile)
+	if sent.GetNodeId() != "" || sent.GetPath() != "/a" || req.GetNodeId() != "far" {
+		t.Fatalf("sent %v, kept %v", sent, req)
 	}
 }

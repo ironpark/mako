@@ -60,7 +60,7 @@ func TestSnapshotTextFollowsAsOutput(t *testing.T) {
 
 	link.in <- &protocol.StreamEvent{
 		Kind:     protocol.EventSnapshot,
-		Snapshot: protocol.Snapshot{SessionID: "s", Cols: 80, Rows: 24, Title: "t", Styled: true},
+		Snapshot: &protocol.Snapshot{SessionId: "s", Cols: 80, Rows: 24, Title: "t", Styled: true},
 	}
 	link.output(t, "restored")
 	waitFor(t, func() bool {

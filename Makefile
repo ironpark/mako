@@ -17,8 +17,9 @@ fmt:
 vet:
 	go vet ./...
 
-# proto lints the protocol's schema and generates internal/protocol/pb from
-# it; the generated code is committed, so only a schema change needs buf.
+# proto lints the protocol's schema and generates its messages into
+# internal/protocol; the generated code is committed, so only a schema
+# change needs buf.
 proto:
 	buf lint
 	buf generate

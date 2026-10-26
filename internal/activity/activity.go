@@ -54,16 +54,16 @@ func (p *Progress) Snapshot(now time.Time) *protocol.ProgressReport {
 		return nil
 	}
 	remaining := max(time.Duration(0), p.at.Add(Stale).Sub(now))
-	return &protocol.ProgressReport{State: uint8(p.state), Value: p.value, RemainingMS: remaining.Milliseconds()}
+	return &protocol.ProgressReport{State: uint32(p.state), Value: int32(p.value), RemainingMs: remaining.Milliseconds()}
 }
 
 // Restore replaces local progress when attaching or resynchronizing a screen.
 func (p *Progress) Restore(report *protocol.ProgressReport, now time.Time) {
 	*p = Progress{}
-	if report == nil || report.State > uint8(gostty.ProgressStatePause) {
+	if report == nil || report.GetState() > uint32(gostty.ProgressStatePause) {
 		return
 	}
-	remaining := time.Duration(min(max(report.RemainingMS, 0), Stale.Milliseconds())) * time.Millisecond
-	p.state, p.value, p.known = gostty.ProgressState(report.State), report.Value, true
+	remaining := time.Duration(min(max(report.GetRemainingMs(), 0), Stale.Milliseconds())) * time.Millisecond
+	p.state, p.value, p.known = gostty.ProgressState(report.GetState()), int16(report.GetValue()), true
 	p.at = now.Add(remaining - Stale)
 }

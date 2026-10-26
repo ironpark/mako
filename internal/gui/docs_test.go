@@ -45,7 +45,7 @@ func docAppNamed(t *testing.T, name, body string) (*model, *ggui.Probe, string, 
 		p.Close()
 	})
 	probeUntil(t, p, "the app's daemon", func() bool { return ggui.Peek(m.Conn).OK })
-	self := ggui.Peek(m.Conn).Self.ID
+	self := ggui.Peek(m.Conn).Self.GetId()
 	m.openFile(fileItem{Key: dirKey(self, path), Node: self, Path: path, Name: name})
 	id := docTabID(self, path)
 	probeUntil(t, p, "the file", func() bool { d, ok := m.doc(id); return ok && !d.Loading })

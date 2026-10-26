@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package sanbo.v2;
 
-option go_package = "github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2";
+option go_package = "github.com/ironpark/sanbo/internal/protocol";
 
 // ReadChat reads the conversation of a session's agent.
 message ReadChat {

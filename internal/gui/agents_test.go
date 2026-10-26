@@ -35,8 +35,8 @@ func TestProfileServersRoundTrip(t *testing.T) {
 }
 
 func TestSessionTitleUsesCustomName(t *testing.T) {
-	s := protocol.SessionInfo{Agent: "claude", Profile: "work", Name: "API 작업"}
-	if got := sessionTitle(s, "program title"); got != s.Name {
+	s := &protocol.SessionInfo{Agent: "claude", Profile: "work", Name: "API 작업"}
+	if got := sessionTitle(s, "program title"); got != s.GetName() {
 		t.Fatalf("custom title = %q", got)
 	}
 	s.Name = ""

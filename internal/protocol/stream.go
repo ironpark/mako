@@ -24,40 +24,24 @@ const (
 // StreamEvent is one thing an attached session's stream delivered.
 type StreamEvent struct {
 	Kind     EventKind
-	Data     []byte   // EventOutput
-	Snapshot Snapshot // EventSnapshot
-	ExitCode int      // EventExited
-	Err      string   // EventExited's Err, or EventError's message
+	Data     []byte    // EventOutput
+	Snapshot *Snapshot // EventSnapshot
+	ExitCode int       // EventExited
+	Err      string    // EventExited's Err, or EventError's message
 }
 
-// StreamEventOf reads an envelope from an attached session's stream into
-// ev, reporting false for one that is none of the events.
-func StreamEventOf(env *Envelope, ev *StreamEvent) (bool, error) {
-	*ev = StreamEvent{}
-	switch env.Type {
-	case TypeSnapshot:
-		ev.Kind = EventSnapshot
-		return true, Decode(env, &ev.Snapshot)
-	case TypeOutput:
-		var out Output
-		if err := Decode(env, &out); err != nil {
-			return false, err
-		}
-		ev.Kind, ev.Data = EventOutput, out.Data
-	case TypeExited:
-		var ex Exited
-		if err := Decode(env, &ex); err != nil {
-			return false, err
-		}
-		ev.Kind, ev.ExitCode, ev.Err = EventExited, ex.ExitCode, ex.Err
-	case TypeError:
-		var e Error
-		if err := Decode(env, &e); err != nil {
-			return false, err
-		}
-		ev.Kind, ev.Err = EventError, e.Message
-	default:
-		return false, nil
+// StreamEventOf reads an envelope from an attached session's stream,
+// reporting false for one that is none of the events.
+func StreamEventOf(env *Envelope) (*StreamEvent, bool) {
+	switch b := env.GetBody().(type) {
+	case *Envelope_Snapshot:
+		return &StreamEvent{Kind: EventSnapshot, Snapshot: b.Snapshot}, true
+	case *Envelope_Output:
+		return &StreamEvent{Kind: EventOutput, Data: b.Output.GetData()}, true
+	case *Envelope_Exited:
+		return &StreamEvent{Kind: EventExited, ExitCode: int(b.Exited.GetExitCode()), Err: b.Exited.GetErr()}, true
+	case *Envelope_Error:
+		return &StreamEvent{Kind: EventError, Err: b.Error.GetMessage()}, true
 	}
-	return true, nil
+	return nil, false
 }

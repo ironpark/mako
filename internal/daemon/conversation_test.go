@@ -105,18 +105,18 @@ func TestNativeConversationSurvivesDaemonRestartWithoutOpeningChat(t *testing.T)
 				return d
 			}
 			first := daemon()
-			s, err := first.openSession(t.Context(), protocol.OpenSession{Agent: agent, Project: project, Args: []string{"initial prompt"}})
+			s, err := first.openSession(t.Context(), &protocol.OpenSession{Agent: agent, Project: project, Args: []string{"initial prompt"}})
 			if err != nil {
 				t.Fatal(err)
 			}
 			waitConversation(t, s)
-			nativeID := s.Info().ConversationID
+			nativeID := s.Info().GetConversationId()
 			if nativeID == "" {
 				t.Fatal("missing native ID")
 			}
 			first.sessions.closeAll()
 			next := daemon()
-			if got := next.listSessions()[0].ConversationID; got != nativeID {
+			if got := next.listSessions()[0].GetConversationId(); got != nativeID {
 				t.Fatalf("saved ID=%q want %q", got, nativeID)
 			}
 			resumed, err := next.attachSession(t.Context(), s.ID())
@@ -140,7 +140,7 @@ func TestNativeConversationSurvivesDaemonRestartWithoutOpeningChat(t *testing.T)
 				t.Fatalf("resume flags: %q", args)
 			}
 			chat, err := next.chatForSession(t.Context(), resumed)
-			if err != nil || chat.Conversation != nativeID {
+			if err != nil || chat.GetConversation() != nativeID {
 				t.Fatalf("automatic chat=%+v, %v", chat, err)
 			}
 			// A missing saved log must not silently become an empty, new conversation.
@@ -165,22 +165,22 @@ func TestConcurrentAgentsInSameProjectBindTheirOwnLogs(t *testing.T) {
 	}
 	defer d.sessions.closeAll()
 	project := t.TempDir()
-	a, err := d.openSession(t.Context(), protocol.OpenSession{Agent: "codex", Project: project})
+	a, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "codex", Project: project})
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := d.openSession(t.Context(), protocol.OpenSession{Agent: "codex", Project: project})
+	b, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "codex", Project: project})
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitConversation(t, a)
 	waitConversation(t, b)
-	if a.Info().ConversationID == b.Info().ConversationID || a.TranscriptPath() == b.TranscriptPath() {
+	if a.Info().GetConversationId() == b.Info().GetConversationId() || a.TranscriptPath() == b.TranscriptPath() {
 		t.Fatal("concurrent sessions share a conversation")
 	}
 	for _, s := range []*session.Session{a, b} {
 		chat, err := d.chatForSession(t.Context(), s)
-		if err != nil || chat.Conversation != s.Info().ConversationID {
+		if err != nil || chat.GetConversation() != s.Info().GetConversationId() {
 			t.Fatalf("wrong chat: %+v %v", chat, err)
 		}
 	}

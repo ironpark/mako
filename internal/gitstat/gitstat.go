@@ -33,24 +33,24 @@ const contextLines = 3
 
 // Status reports the changes of the work tree dir is in, against HEAD,
 // staged or not. A dir in no repository reports NotRepo.
-func Status(dir string) (protocol.GitChanges, error) {
+func Status(dir string) (*protocol.GitChanges, error) {
 	repo, err := git.PlainOpenWithOptions(dir, &git.PlainOpenOptions{DetectDotGit: true, EnableDotGitCommonDir: true})
 	if errors.Is(err, git.ErrRepositoryNotExists) {
-		return protocol.GitChanges{NotRepo: true}, nil
+		return &protocol.GitChanges{NotRepo: true}, nil
 	}
 	if err != nil {
-		return protocol.GitChanges{}, err
+		return nil, err
 	}
 	wt, err := repo.Worktree()
 	if err != nil {
-		return protocol.GitChanges{}, err
+		return nil, err
 	}
-	out := protocol.GitChanges{Root: wt.Filesystem.Root(), Branch: branch(repo)}
-	st, track, err := status(wt, out.Root)
+	out := &protocol.GitChanges{Root: wt.Filesystem.Root(), Branch: branch(repo)}
+	st, track, err := status(wt, out.GetRoot())
 	if err != nil {
-		return protocol.GitChanges{}, err
+		return nil, err
 	}
-	out.Upstream, out.Ahead, out.Behind = track.upstream, track.ahead, track.behind
+	out.Upstream, out.Ahead, out.Behind = track.upstream, int64(track.ahead), int64(track.behind)
 	if refs, err := repo.Branches(); err == nil {
 		_ = refs.ForEach(func(r *plumbing.Reference) error {
 			out.Branches = append(out.Branches, r.Name().Short())
@@ -64,19 +64,20 @@ func Status(dir string) (protocol.GitChanges, error) {
 		if !ok {
 			continue
 		}
-		old, oldOK := headContent(tree, cmp.Or(f.From, f.Path))
-		cur, curOK := diskContent(out.Root, f.Path)
-		if f.Status == protocol.GitAdded && !curOK {
+		old, oldOK := headContent(tree, cmp.Or(f.GetFrom(), f.GetPath()))
+		cur, curOK := diskContent(out.GetRoot(), f.GetPath())
+		if f.GetStatus() == protocol.GitAdded && !curOK {
 			continue // added to the index and gone from the disk: nothing to show
 		}
 		if Binary(old) || Binary(cur) || (!oldOK && !curOK) {
 			f.Binary = true
 		} else {
-			f.Added, f.Removed = count(old, cur)
+			added, removed := count(old, cur)
+			f.Added, f.Removed = int64(added), int64(removed)
 		}
 		out.Files = append(out.Files, f)
 	}
-	slices.SortFunc(out.Files, func(a, b protocol.GitFile) int { return strings.Compare(a.Path, b.Path) })
+	slices.SortFunc(out.Files, func(a, b *protocol.GitFile) int { return strings.Compare(a.GetPath(), b.GetPath()) })
 	return out, nil
 }
 
@@ -153,8 +154,8 @@ func parsePorcelain(out []byte) (git.Status, tracking) {
 }
 
 // change reads a file's status codes as one change, or reports none.
-func change(p string, fs *git.FileStatus) (protocol.GitFile, bool) {
-	f := protocol.GitFile{Path: p}
+func change(p string, fs *git.FileStatus) (*protocol.GitFile, bool) {
+	f := &protocol.GitFile{Path: p}
 	switch {
 	case fs.Staging == git.Unmodified && fs.Worktree == git.Unmodified:
 		return f, false
@@ -261,17 +262,17 @@ func lineCount(s string) int {
 
 // Diff is one file's changes against HEAD as unified diff hunks. from is
 // the path HEAD has it at, for a rename, or "".
-func Diff(root, p, from string) (protocol.Diff, error) {
+func Diff(root, p, from string) (*protocol.Diff, error) {
 	if err := cmp.Or(inWorkTree(p), inWorkTree(from)); err != nil {
-		return protocol.Diff{}, err
+		return nil, err
 	}
 	repo, err := git.PlainOpenWithOptions(root, &git.PlainOpenOptions{EnableDotGitCommonDir: true})
 	if err != nil {
-		return protocol.Diff{}, err
+		return nil, err
 	}
 	old, _ := headContent(headTree(repo), cmp.Or(from, p))
 	cur, _ := diskContent(root, p)
-	out := protocol.Diff{Path: p}
+	out := &protocol.Diff{Path: p}
 	if Binary(old) || Binary(cur) {
 		out.Binary = true
 		return out, nil
@@ -289,7 +290,7 @@ type line struct {
 
 // unified cuts the line diff of two texts into hunks with context lines
 // around each change, as git diff writes them.
-func unified(old, cur string) ([]protocol.DiffLine, bool) {
+func unified(old, cur string) ([]*protocol.DiffLine, bool) {
 	var lines []line
 	o, n := 1, 1
 	for _, d := range diff.Do(old, cur) {
@@ -307,7 +308,7 @@ func unified(old, cur string) ([]protocol.DiffLine, bool) {
 			}
 		}
 	}
-	var out []protocol.DiffLine
+	var out []*protocol.DiffLine
 	var at, oldBefore, newBefore int // the lines ahead of a hunk, on each side
 	for i := 0; i < len(lines); {
 		// The next change, and the run of changes no more than two
@@ -337,7 +338,7 @@ func unified(old, cur string) ([]protocol.DiffLine, bool) {
 		at = start
 		out = append(out, header(lines[start:end], oldBefore, newBefore))
 		for _, l := range lines[start:end] {
-			out = append(out, protocol.DiffLine{Op: string(l.op), Text: l.text, Old: l.old, New: l.cur})
+			out = append(out, &protocol.DiffLine{Op: string(l.op), Text: l.text, Old: int64(l.old), New: int64(l.cur)})
 		}
 		if len(out) > maxDiffLines {
 			return out[:maxDiffLines], true
@@ -350,7 +351,7 @@ func unified(old, cur string) ([]protocol.DiffLine, bool) {
 // header is a hunk's @@ line: where it starts on each side and how many
 // lines it spans there. oldStart and newStart number the last line ahead
 // of the hunk on each side.
-func header(hunk []line, oldStart, newStart int) protocol.DiffLine {
+func header(hunk []line, oldStart, newStart int) *protocol.DiffLine {
 	var oldN, newN int
 	for _, l := range hunk {
 		if l.op != '+' {
@@ -368,7 +369,7 @@ func header(hunk []line, oldStart, newStart int) protocol.DiffLine {
 	if newN > 0 {
 		newStart++
 	}
-	return protocol.DiffLine{Op: "@", Text: fmt.Sprintf("@@ -%d,%d +%d,%d @@", oldStart, oldN, newStart, newN)}
+	return &protocol.DiffLine{Op: "@", Text: fmt.Sprintf("@@ -%d,%d +%d,%d @@", oldStart, oldN, newStart, newN)}
 }
 
 // splitLines splits text at its line breaks, without them.

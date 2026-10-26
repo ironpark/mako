@@ -32,7 +32,7 @@ type gitNote struct {
 // historyView is what is known of the project's commits.
 type historyView struct {
 	Root    fileRoot
-	History protocol.GitHistory
+	History *protocol.GitHistory
 	Err     string
 	Loading bool
 }
@@ -40,30 +40,30 @@ type historyView struct {
 // gitRoot is the work tree of the project the Changes tab shows, once read.
 func (m *model) gitRoot() (fileRoot, bool) {
 	v := ggui.Peek(m.Git)
-	if v.Changes.Root == "" || v.Changes.NotRepo {
+	if v.Changes.GetRoot() == "" || v.Changes.GetNotRepo() {
 		return fileRoot{}, false
 	}
-	return fileRoot{Node: v.Root.Node, Path: v.Changes.Root}, true
+	return fileRoot{Node: v.Root.Node, Path: v.Changes.GetRoot()}, true
 }
 
 // gitRun runs an operation on the project's repository, then reads its
 // changes and history again. done runs after it succeeds.
-func (m *model) gitRun(req protocol.GitRun, label string, done func()) {
+func (m *model) gitRun(req *protocol.GitRun, label string, done func()) {
 	root, ok := m.gitRoot()
 	if !ok || ggui.Peek(m.GitBusy) != "" {
 		return
 	}
-	req.NodeID, req.Root = m.remoteID(root.Node), root.Path
+	req.NodeId, req.Root = m.remoteID(root.Node), root.Path
 	m.GitBusy.Set(label)
 	m.GitNote.Set(gitNote{})
-	fetch(m, gitOpTimeout, func(ctx context.Context, c *client.Client) (protocol.GitResult, error) {
+	fetch(m, gitOpTimeout, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
 		return c.GitRun(ctx, m.key(), req)
-	}, func(r protocol.GitResult, err error) {
+	}, func(r *protocol.GitResult, err error) {
 		m.GitBusy.Set("")
 		if err != nil {
 			m.GitNote.Set(gitNote{Text: nodeErr(err), Err: true})
 		} else {
-			m.GitNote.Set(gitNote{Text: lastLines(r.Output, 4)})
+			m.GitNote.Set(gitNote{Text: lastLines(r.GetOutput(), 4)})
 			if done != nil {
 				done()
 			}
@@ -77,10 +77,9 @@ func (m *model) gitRun(req protocol.GitRun, label string, done func()) {
 }
 
 // nodeErr says why a request to a node failed, in words for one whose
-// daemon predates the request. A daemon from before CodeUnsupported says
-// so only in its message.
+// daemon predates the request.
 func nodeErr(err error) string {
-	if protocol.HasCode(err, protocol.CodeUnsupported) || strings.Contains(err.Error(), "unsupported message") {
+	if protocol.HasCode(err, protocol.CodeUnsupported) {
 		return T("The sanbo on this node is older and cannot do this. Update it there.")
 	}
 	return err.Error()
@@ -106,10 +105,10 @@ func (m *model) loadHistory(root fileRoot) {
 		m.GitCommit.Set(commitView{})
 	}
 	m.historyReading = true
-	req := protocol.GitLog{NodeID: m.remoteID(root.Node), Root: root.Path, Known: v.History.Fingerprint}
-	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (protocol.GitHistory, error) {
+	req := &protocol.GitLog{NodeId: m.remoteID(root.Node), Root: root.Path, Known: v.History.GetFingerprint()}
+	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitHistory, error) {
 		return c.GitLog(ctx, m.key(), req)
-	}, func(h protocol.GitHistory, err error) {
+	}, func(h *protocol.GitHistory, err error) {
 		m.historyReading = false
 		v := ggui.Peek(m.GitHistory)
 		switch {
@@ -117,8 +116,8 @@ func (m *model) loadHistory(root fileRoot) {
 		case err != nil:
 			v.Err, v.Loading = nodeErr(err), false
 			m.GitHistory.Set(v)
-		case !h.Unchanged || v.Err != "" || v.Loading:
-			if h.Unchanged {
+		case !h.GetUnchanged() || v.Err != "" || v.Loading:
+			if h.GetUnchanged() {
 				h = v.History
 			}
 			m.GitHistory.Set(historyView{Root: root, History: h})
@@ -128,28 +127,28 @@ func (m *model) loadHistory(root fileRoot) {
 
 // commitPaths are the paths a commit of the picked files names: every
 // change's, and where a rename moved from; nil when every file is picked.
-func commitPaths(files []protocol.GitFile, skipped map[string]bool) []string {
+func commitPaths(files []*protocol.GitFile, skipped map[string]bool) []string {
 	if picked(files, skipped) == len(files) {
 		return nil
 	}
 	var paths []string
 	for _, f := range files {
-		if skipped[f.Path] {
+		if skipped[f.GetPath()] {
 			continue
 		}
-		paths = append(paths, f.Path)
-		if f.From != "" {
-			paths = append(paths, f.From)
+		paths = append(paths, f.GetPath())
+		if f.GetFrom() != "" {
+			paths = append(paths, f.GetFrom())
 		}
 	}
 	return paths
 }
 
 // picked counts the changed files a commit takes.
-func picked(files []protocol.GitFile, skipped map[string]bool) int {
+func picked(files []*protocol.GitFile, skipped map[string]bool) int {
 	n := 0
 	for _, f := range files {
-		if !skipped[f.Path] {
+		if !skipped[f.GetPath()] {
 			n++
 		}
 	}
@@ -158,14 +157,14 @@ func picked(files []protocol.GitFile, skipped map[string]bool) int {
 
 // commit commits the picked files with the message typed.
 func (m *model) commit() {
-	files := ggui.Peek(m.Git).Changes.Files
+	files := ggui.Peek(m.Git).Changes.GetFiles()
 	skipped := ggui.Peek(m.GitSkip)
 	amend := ggui.Peek(m.GitAmend)
 	msg := strings.TrimSpace(ggui.Peek(m.GitMessage))
 	if !canCommit(picked(files, skipped), msg, amend) {
 		return
 	}
-	req := protocol.GitRun{Op: protocol.GitOpCommit, Message: msg, Paths: commitPaths(files, skipped), Amend: amend}
+	req := &protocol.GitRun{Op: protocol.GitOpCommit, Message: msg, Paths: commitPaths(files, skipped), Amend: amend}
 	m.gitRun(req, T("Committing…"), func() {
 		m.GitMessage.Set("")
 		m.GitAmend.Set(false)
@@ -197,7 +196,7 @@ func (m *model) skipFiles(paths []string, skip bool) {
 // itemPaths adds the changed files under a row of the changes tree to out.
 func itemPaths(it gitItem, out []string) []string {
 	if !it.Dir {
-		return append(out, it.File.Path)
+		return append(out, it.File.GetPath())
 	}
 	for _, c := range it.Children {
 		out = itemPaths(c, out)
@@ -216,7 +215,7 @@ func branchMenu(m *model, branch string, branches []string) ggui.Widget {
 		}
 		items = append(items, ui.MenuItem(label, func() {
 			if b != branch {
-				m.gitRun(protocol.GitRun{Op: protocol.GitOpCheckout, Branch: b}, T("Switching branch…"), nil)
+				m.gitRun(&protocol.GitRun{Op: protocol.GitOpCheckout, Branch: b}, T("Switching branch…"), nil)
 			}
 		}))
 	}
@@ -247,12 +246,12 @@ func (m *model) submitBranch() {
 	case name == "":
 		m.BranchErr.Set(T("Enter a name."))
 		return
-	case slices.Contains(ggui.Peek(m.Git).Changes.Branches, name):
+	case slices.Contains(ggui.Peek(m.Git).Changes.GetBranches(), name):
 		m.BranchErr.Set(T("That branch already exists."))
 		return
 	}
 	m.BranchOpen.Set(false)
-	m.gitRun(protocol.GitRun{Op: protocol.GitOpBranch, Branch: name}, T("Making branch…"), nil)
+	m.gitRun(&protocol.GitRun{Op: protocol.GitOpBranch, Branch: name}, T("Making branch…"), nil)
 }
 
 func branchDialog(m *model) ggui.Widget {

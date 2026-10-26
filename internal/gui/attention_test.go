@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/ironpark/sanbo/internal/config"
 	"github.com/ironpark/sanbo/internal/protocol"
@@ -31,9 +33,9 @@ func TestStatusOutOfViewIsUnread(t *testing.T) {
 	m := newModel(config.Default(), "")
 	m.Prefs.Update(func(p prefs) prefs { p.Notify = false; return p })
 	at := time.Now()
-	shown := protocol.SessionInfo{ID: "a", State: protocol.StateRunning, Status: protocol.AgentWorking, StatusAt: at}
-	hidden := protocol.SessionInfo{ID: "b", State: protocol.StateRunning, Status: protocol.AgentWorking, StatusAt: at}
-	m.Sessions.Set([]protocol.SessionInfo{shown, hidden})
+	shown := &protocol.SessionInfo{Id: "a", State: protocol.StateRunning, Status: protocol.AgentWorking, StatusAt: timestamppb.New(at)}
+	hidden := &protocol.SessionInfo{Id: "b", State: protocol.StateRunning, Status: protocol.AgentWorking, StatusAt: timestamppb.New(at)}
+	m.Sessions.Set([]*protocol.SessionInfo{shown, hidden})
 	// show puts a tab in view without a daemon to attach it to.
 	show := func(id string) {
 		m.editLayout(func(root *layoutNode) int {
@@ -47,9 +49,11 @@ func TestStatusOutOfViewIsUnread(t *testing.T) {
 	}
 	show("a")
 
-	shown.Status, shown.StatusAt = protocol.AgentDone, at.Add(time.Second)
-	hidden.Status, hidden.StatusAt = protocol.AgentDone, at.Add(time.Second)
-	next := []protocol.SessionInfo{shown, hidden}
+	// The next listing, as a poll brings it: new messages.
+	shown, hidden = proto.CloneOf(shown), proto.CloneOf(hidden)
+	shown.Status, shown.StatusAt = protocol.AgentDone, timestamppb.New(at.Add(time.Second))
+	hidden.Status, hidden.StatusAt = protocol.AgentDone, timestamppb.New(at.Add(time.Second))
+	next := []*protocol.SessionInfo{shown, hidden}
 	m.noteStatus(next)
 	m.Sessions.Set(next)
 	if u := ggui.Peek(m.Unread); u["a"] || !u["b"] {
@@ -59,7 +63,7 @@ func TestStatusOutOfViewIsUnread(t *testing.T) {
 		t.Fatalf("dots %v %v", m.dotOf(hidden), m.dotOf(shown))
 	}
 	// An approval shows amber, whether or not it was seen.
-	shown.Approval = &protocol.Approval{ID: "x", Tool: "Bash"}
+	shown.Approval = &protocol.Approval{Id: "x", Tool: "Bash"}
 	if m.dotOf(shown) != dotWaiting {
 		t.Fatal("approval not shown")
 	}
@@ -78,13 +82,13 @@ func TestStatusOutOfViewIsUnread(t *testing.T) {
 }
 
 func TestSidebarFilterAndLabels(t *testing.T) {
-	sessions := []protocol.SessionInfo{
-		{ID: "1", Agent: "claude", Project: "/w/api", Branch: "feat/login"},
-		{ID: "2", Agent: "shell", Project: "/oss/api"},
-		{ID: "3", Agent: "codex", Project: "/w/web"},
+	sessions := []*protocol.SessionInfo{
+		{Id: "1", Agent: "claude", Project: "/w/api", Branch: "feat/login"},
+		{Id: "2", Agent: "shell", Project: "/oss/api"},
+		{Id: "3", Agent: "codex", Project: "/w/web"},
 	}
 	got := filterSessions(sessions, "API login", nil, nil)
-	if len(got) != 1 || got[0].ID != "1" {
+	if len(got) != 1 || got[0].GetId() != "1" {
 		t.Fatalf("filtered %+v", got)
 	}
 	if len(filterSessions(sessions, "", nil, nil)) != 3 {
@@ -101,8 +105,8 @@ func TestSidebarFilterAndLabels(t *testing.T) {
 		t.Fatalf("labels %q", names)
 	}
 	// The same folder on two hosts goes by its host.
-	twin := groupSessions([]protocol.SessionInfo{{ID: "1", NodeID: "a", Project: "/w/api"}, {ID: "2", NodeID: "b", Project: "/w/api"}}, groupProject, []protocol.Node{{ID: "a", Name: "mac"}, {ID: "b", Name: "box"}}, nil)
-	labels = projectLabels(twin, []protocol.Node{{ID: "a", Name: "mac"}, {ID: "b", Name: "box"}})
+	twin := groupSessions([]*protocol.SessionInfo{{Id: "1", NodeId: "a", Project: "/w/api"}, {Id: "2", NodeId: "b", Project: "/w/api"}}, groupProject, []*protocol.Node{{Id: "a", Name: "mac"}, {Id: "b", Name: "box"}}, nil)
+	labels = projectLabels(twin, []*protocol.Node{{Id: "a", Name: "mac"}, {Id: "b", Name: "box"}})
 	if labels[twin[0].Key] != "api · mac" && labels[twin[0].Key] != "api · box" || labels[twin[0].Key] == labels[twin[1].Key] {
 		t.Fatalf("twin labels %v", labels)
 	}

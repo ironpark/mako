@@ -8,11 +8,11 @@ import (
 )
 
 func TestCommitGraphBranchesAndMerges(t *testing.T) {
-	c := func(hash string, parents ...string) protocol.GitCommit {
-		return protocol.GitCommit{Hash: hash, Parents: parents}
+	c := func(hash string, parents ...string) *protocol.GitCommit {
+		return &protocol.GitCommit{Hash: hash, Parents: parents}
 	}
 	// m merges b into a line from a; d is a second root's tip.
-	rows := commitGraph([]protocol.GitCommit{c("m", "a", "b"), c("d", "x"), c("b", "a"), c("a"), c("x")})
+	rows := commitGraph([]*protocol.GitCommit{c("m", "a", "b"), c("d", "x"), c("b", "a"), c("a"), c("x")})
 	want := []graphRow{
 		{Col: 0, Lanes: 2, Lines: []graphLine{{0, 0, true}, {0, 1, true}}},
 		{Col: 2, Lanes: 3, Lines: []graphLine{{0, 0, false}, {0, 0, true}, {1, 1, false}, {1, 1, true}, {2, 2, true}}},
@@ -28,7 +28,7 @@ func TestCommitGraphBranchesAndMerges(t *testing.T) {
 }
 
 func TestCommitPathsNamesRenamesOnlyWhenPicking(t *testing.T) {
-	files := []protocol.GitFile{{Path: "a"}, {Path: "new", From: "old"}, {Path: "c"}}
+	files := []*protocol.GitFile{{Path: "a"}, {Path: "new", From: "old"}, {Path: "c"}}
 	if got := commitPaths(files, nil); got != nil {
 		t.Fatalf("all picked: %q", got)
 	}

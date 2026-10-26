@@ -6,49 +6,57 @@ import (
 
 	"github.com/ironpark/sanbo/internal/protocol"
 	"github.com/ironpark/sanbo/internal/transport"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 func (d *Daemon) handleReadChat(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	var req protocol.ReadChat
-	if err := protocol.Decode(env, &req); err != nil {
-		return err
-	}
-	var chat protocol.Chat
-	if !d.local(req.NodeID) {
-		node := req.NodeID
-		req.NodeID = ""
-		if err := d.forward(ctx, node, protocol.TypeReadChat, req, &chat); err != nil {
-			return err
-		}
-	} else {
-		s, ok := d.sessions.get(req.SessionID)
+	return serve(d, ctx, stream, env, protocol.TypeChat, func(r *protocol.ReadChat) (*protocol.Chat, error) {
+		s, ok := d.sessions.get(r.GetSessionId())
 		if !ok {
-			return fmt.Errorf("unknown session %s", req.SessionID)
+			return nil, fmt.Errorf("unknown session %s", r.GetSessionId())
 		}
-		var err error
-		if req.UsageOnly {
-			chat.Usage, err = d.usageForSession(s)
-		} else {
-			chat, err = d.chatForSession(ctx, s)
+		if r.GetUsageOnly() {
+			u, err := d.usageForSession(s)
+			if err != nil {
+				return nil, err
+			}
+			return &protocol.Chat{Usage: withReported(u, s.Reported())}, nil
 		}
+		chat, err := d.chatForSession(ctx, s)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		chat.Usage = withReported(chat.Usage, s.Reported())
-	}
-	return stream.Send(protocol.TypeChat, env.ID, chat)
+		// The conversation is the cache's, shared: a shallow copy carries
+		// the usage reported over it.
+		reply := shallow(chat)
+		reply.Usage = withReported(chat.GetUsage(), s.Reported())
+		return reply, nil
+	})
+}
+
+// shallow copies m's fields, not what they hold: a repeated field's
+// copy shares its elements.
+func shallow[M proto.Message](m M) M {
+	src := m.ProtoReflect()
+	out := src.Type().New()
+	src.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		out.Set(fd, v)
+		return true
+	})
+	return out.Interface().(M)
 }
 
 // withReported is a conversation's usage with what its status line said
 // over it. It copies, since u may be a cached read's.
-func withReported(u *protocol.Usage, r protocol.Usage) *protocol.Usage {
+func withReported(u *protocol.Usage, r *protocol.Usage) *protocol.Usage {
 	if r.IsZero() {
 		return u
 	}
-	var out protocol.Usage
+	out := &protocol.Usage{}
 	if u != nil {
-		out = *u
+		out = proto.CloneOf(u)
 	}
 	out.Merge(r)
-	return &out
+	return out
 }

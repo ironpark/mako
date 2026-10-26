@@ -2,7 +2,6 @@ package gui
 
 import (
 	"context"
-	"slices"
 	"strings"
 	"time"
 
@@ -23,7 +22,7 @@ func (m *model) askRename(id string) {
 		return
 	}
 	m.renaming = id
-	m.RenameText.Set(s.Name)
+	m.RenameText.Set(s.GetName())
 	m.RenameErr.Set("")
 	m.RenameOpen.Set(true)
 }
@@ -38,27 +37,21 @@ func (m *model) submitRename() {
 		return
 	}
 	name := strings.TrimSpace(ggui.Peek(m.RenameText))
-	ggui.Async(func() (protocol.SessionInfo, error) {
+	ggui.Async(func() (*protocol.SessionInfo, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		c, err := m.client(ctx)
 		if err != nil {
-			return protocol.SessionInfo{}, err
+			return nil, err
 		}
-		return c.Rename(ctx, m.key(), protocol.RenameSession{SessionID: id, NodeID: s.NodeID, Name: name})
-	}, func(info protocol.SessionInfo, err error) {
+		return c.Rename(ctx, m.key(), &protocol.RenameSession{SessionId: id, NodeId: s.GetNodeId(), Name: name})
+	}, func(info *protocol.SessionInfo, err error) {
 		if err != nil {
 			m.RenameErr.Set(err.Error())
 			return
 		}
 		m.RenameOpen.Set(false)
-		sessions := slices.Clone(ggui.Peek(m.Sessions))
-		for i := range sessions {
-			if sessions[i].ID == id {
-				sessions[i].Name = info.Name
-			}
-		}
-		m.Sessions.Set(sessions)
+		m.editSession(id, func(s *protocol.SessionInfo) { s.Name = info.GetName() })
 	})
 }
 
