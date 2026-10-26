@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package sanbo.v2;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2";
+
+// Hello opens every stream and says who is calling.
+message Hello {
+  string node_id = 1; // empty from a front-end
+  string name = 2;
+  string version = 3;
+  bool is_peer = 4; // from another daemon
+  string auth_tag = 5; // the mesh's pre-shared key
+}
+
+// Welcome answers a Hello: the daemon describing itself.
+message Welcome {
+  Node node = 1;
+}
+
+// Node is a daemon on the mesh.
+message Node {
+  string id = 1;
+  string name = 2;
+  string addr = 3;
+  string os = 4;
+  string arch = 5;
+  string version = 6;
+  string source = 7; // mdns, tailscale, static, inbound, gossip, self
+  google.protobuf.Timestamp last_seen = 8;
+  repeated string features = 9; // protocol extensions it speaks
+  repeated AgentInfo agents = 10; // what it can launch
+  int64 revision = 11; // protocol.Revision of its build
+}
+
+// AgentInfo names an agent a node can launch and its profiles.
+message AgentInfo {
+  string name = 1;
+  repeated string profiles = 2;
+}
+
+// ListNodes asks for the daemon and its peers.
+message ListNodes {}
+
+// Nodes answers ListNodes, and is a Gossip's body and reply.
+message Nodes {
+  repeated Node nodes = 1;
+}

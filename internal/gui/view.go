@@ -294,8 +294,12 @@ func sessionSection(m *model, by string, g sessionGroup, selected string, nodes 
 		switch by {
 		case groupProject:
 			where = append(where, nodeName(nodes, s.NodeID))
+			// A subfolder by its path in the project; a worktree elsewhere
+			// by its own name.
 			if rel := subfolder(s.Project, project); rel != "" {
 				where = append(where, rel)
+			} else if s.Project != project {
+				where = append(where, projectName(s.Project))
 			}
 		case groupHost:
 			where = append(where, projectName(s.Project))

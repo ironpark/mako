@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+package sanbo.v2;
+
+import "google/protobuf/timestamp.proto";
+import "sanbo/v2/session.proto";
+
+option go_package = "github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2";
+
+// GitStatus asks for the changes of the repository a directory is in.
+message GitStatus {
+  string node_id = 1;
+  string path = 2; // anywhere inside the work tree
+  string base = 3; // the changes since leaving this branch
+}
+
+// GitChanges answers GitStatus.
+message GitChanges {
+  string root = 1;
+  string branch = 2;
+  bool not_repo = 3;
+  repeated GitFile files = 4;
+  string upstream = 5;
+  int64 ahead = 6;
+  int64 behind = 7;
+  repeated string branches = 8;
+}
+
+// GitFile is one changed file.
+message GitFile {
+  string path = 1; // slash-separated, from the root
+  string from = 2; // a rename's old path
+  string status = 3; // added, modified, deleted, renamed
+  int64 added = 4;
+  int64 removed = 5;
+  bool binary = 6;
+}
+
+// GitDiff asks for one file's hunks.
+message GitDiff {
+  string node_id = 1;
+  string root = 2;
+  string path = 3;
+  string from = 4;
+  string commit = 5;
+  string base = 6;
+}
+
+// Diff answers GitDiff.
+message Diff {
+  string path = 1;
+  bool binary = 2;
+  repeated DiffLine lines = 3;
+  bool truncated = 4;
+}
+
+// DiffLine is one line of a diff: op is "+", "-", " " or "@" for a hunk's
+// header; old and new are its line numbers, 0 where it has none.
+message DiffLine {
+  string op = 1;
+  string text = 2;
+  int64 old = 3;
+  int64 new = 4;
+}
+
+// GitLog asks for a repository's recent commits.
+message GitLog {
+  string node_id = 1;
+  string root = 2;
+  int64 max = 3;
+  string known = 4; // the fingerprint the asker has
+}
+
+// GitHistory answers GitLog.
+message GitHistory {
+  repeated GitCommit commits = 1;
+  string current = 2;
+  bool more = 3;
+  string fingerprint = 4;
+  bool unchanged = 5; // as known; commits are left out
+}
+
+// GitCommit is one commit as a history lists it.
+message GitCommit {
+  string hash = 1;
+  repeated string parents = 2;
+  string author = 3;
+  google.protobuf.Timestamp time = 4;
+  string subject = 5;
+  repeated string refs = 6;
+}
+
+// GitShow asks what one commit changed.
+message GitShow {
+  string node_id = 1;
+  string root = 2;
+  string hash = 3;
+}
+
+// GitCommitInfo answers GitShow.
+message GitCommitInfo {
+  GitCommit commit = 1;
+  string email = 2;
+  string body = 3;
+  repeated GitFile files = 4;
+}
+
+// GitRun runs a git operation on a work tree.
+message GitRun {
+  string node_id = 1;
+  string root = 2;
+  string op = 3;
+  string message = 4;
+  repeated string paths = 5;
+  bool amend = 6;
+  string branch = 7;
+  repeated DiffLine hunk = 8;
+  Worktree worktree = 9;
+}
+
+// GitResult answers GitRun: what git printed.
+message GitResult {
+  string output = 1;
+}

@@ -196,7 +196,7 @@ func (t *termConn) read() {
 			return
 		}
 		switch ev.Kind {
-		case protocol.FrameSnapshot:
+		case protocol.EventSnapshot:
 			snap := ev.Snapshot
 			t.mu.Lock()
 			if t.closed {
@@ -217,16 +217,16 @@ func (t *termConn) read() {
 			t.hasFrame = false
 			t.mu.Unlock()
 			t.wake()
-		case protocol.FrameOutput:
+		case protocol.EventOutput:
 			t.mu.Lock()
 			t.feedLocked(ev.Data)
 			t.mu.Unlock()
-		case protocol.FrameExited:
+		case protocol.EventExited:
 			t.mu.Lock()
 			t.exited, t.exitCode = true, ev.ExitCode
 			t.mu.Unlock()
 			return
-		case protocol.FrameError:
+		case protocol.EventError:
 			t.mu.Lock()
 			t.err = errors.New(ev.Err)
 			t.mu.Unlock()

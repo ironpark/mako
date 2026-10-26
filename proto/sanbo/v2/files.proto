@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package sanbo.v2;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2";
+
+// ListDir asks for a directory's entries.
+message ListDir {
+  string node_id = 1;
+  string path = 2; // absolute
+}
+
+// DirEntry is one entry of a directory.
+message DirEntry {
+  string name = 1;
+  bool dir = 2;
+  bool link = 3;
+  int64 size = 4;
+  google.protobuf.Timestamp mod_time = 5;
+  bool ignored = 6; // left out of the repository by .gitignore
+}
+
+// Dir answers ListDir: directories first, then by name.
+message Dir {
+  string path = 1;
+  repeated DirEntry entries = 2;
+}
+
+// ReadFile asks for the start of a file, or the whole of an image.
+message ReadFile {
+  string node_id = 1;
+  string path = 2;
+  int64 max = 3; // bytes; capped by the daemon
+  bool image = 4;
+}
+
+// File answers ReadFile, WriteFile and FileOp.
+message File {
+  string path = 1;
+  int64 size = 2;
+  bytes data = 3;
+  bool truncated = 4; // data is only the start
+  bool binary = 5; // not text; data is left out
+  google.protobuf.Timestamp mod_time = 6;
+}
+
+// WriteFile replaces a file's contents. A set mod_time fails the write,
+// with code "changed", if the file changed since.
+message WriteFile {
+  string node_id = 1;
+  string path = 2;
+  bytes data = 3;
+  google.protobuf.Timestamp mod_time = 4;
+}
+
+// FileOp makes, renames or deletes a file or folder.
+message FileOp {
+  string node_id = 1;
+  string op = 2; // create, mkdir, rename, delete
+  string path = 3;
+  string to = 4; // where a rename moves path
+}
+
+// Search lists a project's files, or the lines holding query.
+message Search {
+  string node_id = 1;
+  string root = 2;
+  string query = 3;
+  bool files = 4;
+}
+
+// SearchMatch is a line holding the query.
+message SearchMatch {
+  string path = 1;
+  int64 line = 2;
+  int64 col = 3;
+  string text = 4;
+}
+
+// SearchResult answers Search.
+message SearchResult {
+  repeated string files = 1;
+  repeated SearchMatch matches = 2;
+  bool truncated = 3;
+}

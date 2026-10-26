@@ -8,7 +8,8 @@ computers and drive them from one place.
     cmd/sanbod        daemon: owns PTYs, joins the mesh
     cmd/sanbo         front-end CLI: nodes, sessions, attach
     cmd/sanbo-gui     desktop front-end (ggui), laid out after Paseo
-    internal/protocol wire format (length-prefixed JSON over QUIC)
+    internal/protocol messages, and their wire format (length-prefixed protobuf over QUIC)
+    proto/sanbo/v2    the protocol's protobuf schema (buf: make proto)
     internal/transport QUIC listener/dialer, self-signed node certificate
     internal/discovery Bonjour (mDNS) + Tailscale MagicDNS ping search
     internal/session   PTY process plus gostty terminal state
@@ -20,6 +21,9 @@ computers and drive them from one place.
     internal/zedhost   Zed extensions' own wasm components, run under wasmtime's C API
     internal/mcp       MCP servers for the agents: resolved from extensions, passed on the command line
     internal/config    node identity and configuration
+
+The protocol between front-ends and daemons is described in
+[docs/protocol.md](docs/protocol.md).
 
 ## Design
 

@@ -1,0 +1,11 @@
+# The protocol's schema; see docs/protocol.md. `make proto` lints it and
+# generates internal/protocol/pb.
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE

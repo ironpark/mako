@@ -1,20 +1,28 @@
-// Package protocol defines the wire format spoken between sanbo front-ends,
-// daemons, and peer daemons. Every message is a length-prefixed JSON frame on a
-// QUIC stream.
+// Package protocol defines the messages spoken between sanbo front-ends,
+// daemons, and peer daemons. On the wire every message is a length-prefixed
+// protobuf Envelope on a QUIC stream, as proto/sanbo/v2 defines it; the rest
+// of sanbo uses the Go types here, which convert to and from it by name.
+// See docs/protocol.md.
 package protocol
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"slices"
 	"time"
+
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+
+	pb "github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2"
 )
 
-// ALPN is the QUIC application protocol identifier for sanbo.
-const ALPN = "sanbo/1"
+// ALPN is the QUIC application protocol identifier for sanbo: sanbo/2 is
+// the protobuf framing, which a sanbo/1 (JSON) peer cannot speak.
+const ALPN = "sanbo/2"
 
 // MaxFrameSize caps a single frame so a peer cannot force an allocation storm.
 const MaxFrameSize = 8 << 20
@@ -59,11 +67,12 @@ const (
 	TypeGitResult     Type = "git_result"
 )
 
-// Envelope wraps every message. Payload is the JSON body for Type.
+// Envelope is one frame: a message of a Type, and the ID a reply carries
+// back. Encode makes one, and Decode reads its message into a Go type.
 type Envelope struct {
-	Type    Type            `json:"type"`
-	ID      string          `json:"id,omitempty"`
-	Payload json.RawMessage `json:"payload,omitempty"`
+	Type Type
+	ID   string
+	msg  *pb.Envelope
 }
 
 // Hello opens a connection and states who is calling.
@@ -106,10 +115,6 @@ type Node struct {
 	// one older than revisions.
 	Revision int `json:"revision,omitempty"`
 }
-
-// FeatureAttachBinary is a daemon that frames attach streams as
-// protocol.StreamFrame after the Attach request.
-const FeatureAttachBinary = "attach_binary"
 
 // HasFeature reports whether a node speaks a protocol extension.
 func (n Node) HasFeature(feature string) bool {
@@ -186,6 +191,9 @@ type SessionInfo struct {
 	// Branch is the git branch checked out in the project, "" outside a
 	// repository.
 	Branch string `json:"branch,omitempty"`
+	// Repo is the main work tree of the repository the project is in, the
+	// same for its subfolders and its linked work trees; "" outside one.
+	Repo string `json:"repo,omitempty"`
 	// Status is what the agent's hooks last reported, at StatusAt; "" when
 	// its agent has no hooks.
 	Status   AgentStatus `json:"status,omitempty"`
@@ -209,10 +217,6 @@ type Attach struct {
 	NodeID    string `json:"node_id,omitempty"`
 	// Replay asks the daemon to send the current screen before live output.
 	Replay bool `json:"replay"`
-	// Binary asks for framed binary messages after this request instead of
-	// JSON envelopes. Output is the hot path, and carrying it as base64
-	// inside JSON costs a third more bytes and a decode per frame.
-	Binary bool `json:"binary,omitempty"`
 }
 
 // Input carries keystrokes toward the session PTY.
@@ -276,46 +280,83 @@ type Exited struct {
 	Err       string `json:"err,omitempty"`
 }
 
-// Encode marshals payload into an Envelope of the given type.
-func Encode(t Type, id string, payload any) (*Envelope, error) {
-	env := &Envelope{Type: t, ID: id}
-	if payload != nil {
-		body, err := json.Marshal(payload)
-		if err != nil {
-			return nil, fmt.Errorf("marshal %s: %w", t, err)
+// body is the Envelope's oneof, whose field names are the Types, and
+// bodyFields its fields by the Type they carry.
+var (
+	body       = (&pb.Envelope{}).ProtoReflect().Descriptor().Oneofs().ByName("body")
+	bodyFields = func() map[Type]protoreflect.FieldDescriptor {
+		out := make(map[Type]protoreflect.FieldDescriptor, body.Fields().Len())
+		for i := range body.Fields().Len() {
+			fd := body.Fields().Get(i)
+			out[Type(fd.Name())] = fd
 		}
-		env.Payload = body
+		return out
+	}()
+)
+
+// envelopeOf is msg as an Envelope: its ID, and its Type by the body set,
+// empty for a body this build does not know.
+func envelopeOf(msg *pb.Envelope) *Envelope {
+	env := &Envelope{ID: msg.GetId(), msg: msg}
+	if fd := msg.ProtoReflect().WhichOneof(body); fd != nil {
+		env.Type = Type(fd.Name())
 	}
-	return env, nil
+	return env
 }
 
-// Decode unmarshals an envelope payload into out.
+// Encode makes an Envelope of type t carrying payload, a struct (or a
+// pointer to one) whose fields the type's message has; nil sends the
+// message empty.
+func Encode(t Type, id string, payload any) (*Envelope, error) {
+	fd, ok := bodyFields[t]
+	if !ok {
+		return nil, fmt.Errorf("protocol: no message type %q", t)
+	}
+	msg := &pb.Envelope{Id: id}
+	m := msg.ProtoReflect()
+	b := m.NewField(fd)
+	if payload != nil {
+		if err := toProto(reflect.ValueOf(payload), b.Message()); err != nil {
+			return nil, fmt.Errorf("encode %s: %w", t, err)
+		}
+	}
+	m.Set(fd, b)
+	return envelopeOf(msg), nil
+}
+
+// Decode reads an envelope's message into out, a pointer to a struct whose
+// fields the message has.
 func Decode(env *Envelope, out any) error {
-	if len(env.Payload) == 0 {
-		return errors.New("empty payload")
+	fd, ok := bodyFields[env.Type]
+	if !ok || env.msg == nil {
+		return fmt.Errorf("protocol: no %q message to decode", env.Type)
 	}
-	return json.Unmarshal(env.Payload, out)
+	if err := fromProto(env.msg.ProtoReflect().Get(fd).Message(), reflect.ValueOf(out)); err != nil {
+		return fmt.Errorf("decode %s: %w", env.Type, err)
+	}
+	return nil
 }
 
-// WriteFrame writes one length-prefixed JSON frame.
+// WriteFrame writes one frame: the envelope's length, as a big-endian
+// uint32, then the envelope.
 func WriteFrame(w io.Writer, env *Envelope) error {
-	body, err := json.Marshal(env)
+	size := proto.Size(env.msg)
+	if size > MaxFrameSize {
+		return fmt.Errorf("frame too large: %d bytes", size)
+	}
+	frame := binary.BigEndian.AppendUint32(make([]byte, 0, 4+size), uint32(size))
+	// The size was just computed, so marshalling need not again.
+	frame, err := proto.MarshalOptions{UseCachedSize: true}.MarshalAppend(frame, env.msg)
 	if err != nil {
 		return err
 	}
-	if len(body) > MaxFrameSize {
-		return fmt.Errorf("frame too large: %d bytes", len(body))
-	}
-	var hdr [4]byte
-	binary.BigEndian.PutUint32(hdr[:], uint32(len(body)))
-	if _, err := w.Write(hdr[:]); err != nil {
-		return err
-	}
-	_, err = w.Write(body)
+	_, err = w.Write(frame)
 	return err
 }
 
-// ReadFrame reads one length-prefixed JSON frame.
+// ReadFrame reads one frame. An envelope whose body this build does not
+// know, from a newer peer, comes back with an empty Type, which a daemon
+// answers as unsupported.
 func ReadFrame(r io.Reader) (*Envelope, error) {
 	var hdr [4]byte
 	if _, err := io.ReadFull(r, hdr[:]); err != nil {
@@ -325,15 +366,15 @@ func ReadFrame(r io.Reader) (*Envelope, error) {
 	if n > MaxFrameSize {
 		return nil, fmt.Errorf("frame too large: %d bytes", n)
 	}
-	body := make([]byte, n)
-	if _, err := io.ReadFull(r, body); err != nil {
+	buf := make([]byte, n)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return nil, err
 	}
-	var env Envelope
-	if err := json.Unmarshal(body, &env); err != nil {
+	msg := &pb.Envelope{}
+	if err := proto.Unmarshal(buf, msg); err != nil {
 		return nil, err
 	}
-	return &env, nil
+	return envelopeOf(msg), nil
 }
 
 // CodedError is a failure a requester may act on by its Code, which

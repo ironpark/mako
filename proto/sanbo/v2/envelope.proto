@@ -1,0 +1,88 @@
+// The frames of the sanbo protocol: every frame on a stream is one
+// Envelope, preceded by its length. See docs/protocol.md.
+//
+// The messages mirror the Go types of internal/protocol, field for field:
+// a field is named as the Go field's JSON name, and internal/protocol
+// converts between the two by those names. A field added to a Go type is
+// added here too, with a new number; the round-trip test in
+// internal/protocol fails until it is.
+syntax = "proto3";
+
+package sanbo.v2;
+
+import "sanbo/v2/chat.proto";
+import "sanbo/v2/files.proto";
+import "sanbo/v2/git.proto";
+import "sanbo/v2/mesh.proto";
+import "sanbo/v2/session.proto";
+
+option go_package = "github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2";
+
+// Envelope wraps every message. The body's field name is the message's
+// protocol.Type.
+message Envelope {
+  // id, when a request sets it, comes back on its reply.
+  string id = 1;
+
+  oneof body {
+    // The handshake, which opens every stream.
+    Hello hello = 10;
+    Welcome welcome = 11;
+    Error error = 12;
+
+    // The mesh.
+    ListNodes list_nodes = 20;
+    Nodes nodes = 21;
+    Nodes gossip = 22;
+
+    // Sessions.
+    ListSessions list_sessions = 30;
+    Sessions sessions = 31;
+    OpenSession open_session = 32;
+    SessionInfo session_info = 33;
+    CloseSession close_session = 34;
+    RenameSession rename_session = 35;
+    AnswerApproval answer_approval = 36;
+
+    // An attached session's stream.
+    Attach attach = 40;
+    Input input = 41;
+    Output output = 42;
+    Resize resize = 43;
+    Snapshot snapshot = 44;
+    Exited exited = 45;
+
+    // Files.
+    ListDir list_dir = 50;
+    Dir dir = 51;
+    ReadFile read_file = 52;
+    File file = 53;
+    WriteFile write_file = 54;
+    FileOp file_op = 55;
+    Search search = 56;
+    SearchResult search_result = 57;
+
+    // Git.
+    GitStatus git_status = 60;
+    GitChanges git_changes = 61;
+    GitDiff git_diff = 62;
+    Diff diff = 63;
+    GitLog git_log = 64;
+    GitHistory git_history = 65;
+    GitShow git_show = 66;
+    GitCommitInfo git_commit_info = 67;
+    GitRun git_run = 68;
+    GitResult git_result = 69;
+
+    // An agent's conversation.
+    ReadChat read_chat = 70;
+    Chat chat = 71;
+  }
+}
+
+// Error reports a failed request, in place of its reply.
+message Error {
+  string message = 1;
+  // code is for programs: "changed", "unsupported".
+  string code = 2;
+}

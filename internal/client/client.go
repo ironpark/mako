@@ -246,16 +246,16 @@ func (c *Client) Attach(ctx context.Context, psk string, req protocol.Attach) er
 			return err
 		}
 		switch ev.Kind {
-		case protocol.FrameSnapshot:
+		case protocol.EventSnapshot:
 			fmt.Fprint(os.Stdout, "\x1b[2J\x1b[H")
-		case protocol.FrameOutput:
+		case protocol.EventOutput:
 			if _, err := os.Stdout.Write(ev.Data); err != nil {
 				return err
 			}
-		case protocol.FrameExited:
+		case protocol.EventExited:
 			fmt.Fprintf(os.Stderr, "\r\n[sanbo] session %s exited (%d)\r\n", req.SessionID, ev.ExitCode)
 			return nil
-		case protocol.FrameError:
+		case protocol.EventError:
 			return fmt.Errorf("remote: %s", ev.Err)
 		}
 	}

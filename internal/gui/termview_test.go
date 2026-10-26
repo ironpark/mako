@@ -61,7 +61,7 @@ func (f *fakeLink) typed() string {
 
 func (f *fakeLink) output(t *testing.T, s string) {
 	t.Helper()
-	f.in <- &protocol.StreamEvent{Kind: protocol.FrameOutput, Data: []byte(s)}
+	f.in <- &protocol.StreamEvent{Kind: protocol.EventOutput, Data: []byte(s)}
 }
 
 func newTestTerminal(t *testing.T) (*fakeLink, *termConn, *ggui.Probe) {

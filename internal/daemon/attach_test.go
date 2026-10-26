@@ -14,9 +14,9 @@ import (
 	"github.com/ironpark/sanbo/internal/transport"
 )
 
-// A binary attach replays the screen, streams live output, and ends with the
-// exit code, all in framed messages rather than JSON envelopes.
-func TestBinaryAttachCarriesSnapshotOutputAndExit(t *testing.T) {
+// An attach replays the screen, streams live output, and ends with the exit
+// code.
+func TestAttachCarriesSnapshotOutputAndExit(t *testing.T) {
 	tlsConf, err := transport.ServerTLS(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -82,32 +82,30 @@ func TestBinaryAttachCarriesSnapshotOutputAndExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = stream.SetReadDeadline(time.Now().Add(5 * time.Second))
-	if err := stream.Send(protocol.TypeAttach, "", protocol.Attach{SessionID: "s", Replay: true, Binary: true}); err != nil {
+	if err := stream.Send(protocol.TypeAttach, "", protocol.Attach{SessionID: "s", Replay: true}); err != nil {
 		t.Fatal(err)
 	}
 
 	var snap protocol.Snapshot
 	var output strings.Builder
 	exitCode, exited := 0, false
-	var buf []byte
+	var ev protocol.StreamEvent
 	for !exited {
-		kind, payload, err := protocol.ReadStreamFrame(stream, buf)
+		env, err := stream.Recv()
 		if err != nil {
 			t.Fatalf("read frame: %v", err)
 		}
-		buf = payload
-		ev := protocol.StreamEvent{Kind: kind, Data: payload}
-		if err := protocol.DecodeStreamEvent(&ev); err != nil {
-			t.Fatal(err)
+		if ok, err := protocol.StreamEventOf(env, &ev); err != nil || !ok {
+			t.Fatalf("frame %q: %v", env.Type, err)
 		}
-		switch kind {
-		case protocol.FrameSnapshot:
+		switch ev.Kind {
+		case protocol.EventSnapshot:
 			snap = ev.Snapshot
-		case protocol.FrameOutput:
-			output.Write(payload)
-		case protocol.FrameExited:
+		case protocol.EventOutput:
+			output.Write(ev.Data)
+		case protocol.EventExited:
 			exitCode, exited = ev.ExitCode, true
-		case protocol.FrameError:
+		case protocol.EventError:
 			t.Fatalf("attach failed: %s", ev.Err)
 		}
 	}

@@ -10,59 +10,58 @@ import (
 
 // Attachment is a live session stream for a front-end that renders the
 // terminal itself, as the GUI does, rather than handing it to the local tty.
-// It speaks the compact framing of protocol.StreamFrame; Recv is for one
-// reader goroutine, and the senders may be called from any.
+// Recv is for one reader goroutine, and the senders may be called from any.
 type Attachment struct {
-	s *transport.Stream
+	s         *transport.Stream
+	sessionID string
 
 	mu sync.Mutex // serializes frames written by Input and Resize
-
-	buf []byte
-	ev  protocol.StreamEvent
 }
 
 // AttachStream binds a new stream to a session and returns it unread: the
-// caller receives Snapshot, Output and Exited frames with Recv.
+// caller receives its snapshot, output and exit with Recv.
 func (c *Client) AttachStream(ctx context.Context, psk string, req protocol.Attach) (*Attachment, error) {
 	s, err := c.stream(ctx, psk)
 	if err != nil {
 		return nil, err
 	}
-	req.Binary = true
 	if err := s.Send(protocol.TypeAttach, "", req); err != nil {
 		s.Close()
 		return nil, err
 	}
-	return &Attachment{s: s}, nil
+	return &Attachment{s: s, sessionID: req.SessionID}, nil
 }
 
-// Recv reads the next frame from the session. The returned event and its Data
-// are valid only until the next call.
+// Recv reads the next event from the session.
 func (a *Attachment) Recv() (*protocol.StreamEvent, error) {
-	kind, payload, err := protocol.ReadStreamFrame(a.s, a.buf)
-	if err != nil {
-		return nil, err
+	for {
+		env, err := a.s.Recv()
+		if err != nil {
+			return nil, err
+		}
+		var ev protocol.StreamEvent
+		ok, err := protocol.StreamEventOf(env, &ev)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return &ev, nil
+		}
 	}
-	a.buf = payload
-	a.ev = protocol.StreamEvent{Kind: kind, Data: payload}
-	if err := protocol.DecodeStreamEvent(&a.ev); err != nil {
-		return nil, err
-	}
-	return &a.ev, nil
 }
 
 // Input sends keystrokes to the session PTY.
 func (a *Attachment) Input(p []byte) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return protocol.WriteStreamFrame(a.s, protocol.FrameInput, p)
+	return a.s.Send(protocol.TypeInput, "", protocol.Input{SessionID: a.sessionID, Data: p})
 }
 
 // Resize changes the session window size.
 func (a *Attachment) Resize(cols, rows uint16) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return protocol.WriteStreamResize(a.s, cols, rows)
+	return a.s.Send(protocol.TypeResize, "", protocol.Resize{SessionID: a.sessionID, Cols: cols, Rows: rows})
 }
 
 // Close detaches; the session keeps running.

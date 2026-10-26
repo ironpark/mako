@@ -36,3 +36,29 @@ func TestBranchReadsHEAD(t *testing.T) {
 		t.Fatalf("outside a repository %q", b)
 	}
 }
+
+// Repo names one folder for a repository's subfolders and its linked work
+// trees: the main work tree.
+func TestRepoIsTheMainWorkTree(t *testing.T) {
+	root, run := cliRepo(t)
+	write(t, root, "a.txt", "a\n")
+	run("add", "-A")
+	run("commit", "-q", "-m", "first")
+	sub := filepath.Join(root, "sub", "deep")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	linked := filepath.Join(t.TempDir(), "linked")
+	run("worktree", "add", "-q", "-b", "other", linked)
+	inside := filepath.Join(root, ".claude", "worktrees", "x")
+	run("worktree", "add", "-q", "-b", "inside", inside)
+	want, _ := filepath.EvalSymlinks(root) // as git records it for the linked ones
+	for _, dir := range []string{root, sub, linked, filepath.Join(linked, "."), inside} {
+		if got := Repo(dir); got != want {
+			t.Errorf("Repo(%s) = %q, want %q", dir, got, want)
+		}
+	}
+	if got := Repo(t.TempDir()); got != "" {
+		t.Errorf("outside a repository %q", got)
+	}
+}

@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package sanbo.v2;
+
+option go_package = "github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2";
+
+// ReadChat reads the conversation of a session's agent.
+message ReadChat {
+  string node_id = 1;
+  string session_id = 2;
+  bool usage_only = 3; // the usage alone, without the messages
+}
+
+// ChatMessage is one turn of a conversation.
+message ChatMessage {
+  string role = 1; // user, assistant or tool
+  string text = 2;
+  string id = 3;
+  string tool = 4;
+  string detail = 5;
+  string result = 6;
+  bool output = 7;
+  bool error = 8;
+}
+
+// Chat answers ReadChat.
+message Chat {
+  bool supported = 1;
+  string conversation = 2;
+  repeated ChatMessage messages = 3;
+  bool truncated = 4;
+  Usage usage = 5;
+}
+
+// Usage is the tokens a conversation has spent.
+message Usage {
+  int64 input = 1;
+  int64 cached_input = 2;
+  int64 output = 3;
+  int64 context = 4;
+  int64 window = 5;
+  repeated RateLimit limits = 6; // the shortest window first
+}
+
+// RateLimit is how much of one of an account's limits is spent.
+message RateLimit {
+  int64 minutes = 1; // the window it spans
+  double used = 2; // percent
+  int64 resets = 3; // Unix seconds
+}

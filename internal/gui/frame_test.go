@@ -59,7 +59,7 @@ func TestSnapshotTextFollowsAsOutput(t *testing.T) {
 	defer func() { close(link.in); conn.close() }()
 
 	link.in <- &protocol.StreamEvent{
-		Kind:     protocol.FrameSnapshot,
+		Kind:     protocol.EventSnapshot,
 		Snapshot: protocol.Snapshot{SessionID: "s", Cols: 80, Rows: 24, Title: "t", Styled: true},
 	}
 	link.output(t, "restored")

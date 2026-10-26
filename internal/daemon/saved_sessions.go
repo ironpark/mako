@@ -89,7 +89,6 @@ func (d *Daemon) saveSessionsLocked() error {
 
 func (d *Daemon) listSessions() []protocol.SessionInfo {
 	d.sessionMu.Lock()
-	defer d.sessionMu.Unlock()
 	out := d.sessions.list()
 	live := map[string]bool{}
 	for _, info := range out {
@@ -100,15 +99,18 @@ func (d *Daemon) listSessions() []protocol.SessionInfo {
 			out = append(out, entry.Info)
 		}
 	}
+	d.sessionMu.Unlock()
 	sort.Slice(out, func(i, j int) bool { return out[i].StartedAt.Before(out[j].StartedAt) })
-	branches := map[string]string{}
+	// The repositories are read from disk, outside the lock, once a project.
+	type head struct{ branch, repo string }
+	heads := map[string]head{}
 	for i, info := range out {
-		b, ok := branches[info.Project]
+		h, ok := heads[info.Project]
 		if !ok {
-			b = gitstat.Branch(info.Project)
-			branches[info.Project] = b
+			h.branch, h.repo = gitstat.Head(info.Project)
+			heads[info.Project] = h
 		}
-		out[i].Branch = b
+		out[i].Branch, out[i].Repo = h.branch, h.repo
 	}
 	return out
 }

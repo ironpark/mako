@@ -1,0 +1,150 @@
+syntax = "proto3";
+
+package sanbo.v2;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/ironpark/sanbo/internal/protocol/pb/sanbo/v2;sanbov2";
+
+// ListSessions asks for the mesh's sessions.
+message ListSessions {
+  // approvals says the asker shows approvals, so an agent asking for one
+  // may wait for its answer.
+  bool approvals = 1;
+}
+
+// Sessions answers ListSessions.
+message Sessions {
+  repeated SessionInfo sessions = 1;
+}
+
+// OpenSession starts an agent session.
+message OpenSession {
+  string node_id = 1; // empty for the daemon asked
+  string agent = 2;
+  string profile = 3;
+  string project = 4; // the working directory; empty for the node's home
+  repeated string args = 5;
+  map<string, string> env = 6;
+  uint32 cols = 7;
+  uint32 rows = 8;
+  Worktree worktree = 9; // start in a new worktree of project's repository
+}
+
+// Worktree is a git worktree made for one session.
+message Worktree {
+  string repo = 1; // the main work tree
+  string path = 2; // the session's, once made
+  string branch = 3; // made for the session
+  string base = 4; // what it started from; empty for HEAD
+}
+
+// SessionInfo describes one session.
+message SessionInfo {
+  string id = 1;
+  string node_id = 2;
+  string agent = 3;
+  string profile = 4;
+  string conversation_id = 5;
+  string name = 6;
+  string title = 7;
+  string project = 8;
+  repeated string command = 9;
+  string state = 10; // stopped, starting, running, exited
+  uint32 cols = 11;
+  uint32 rows = 12;
+  google.protobuf.Timestamp started_at = 13;
+  optional int64 exit_code = 14;
+  bool busy = 15;
+  bool idle = 16;
+  string branch = 17;
+  string repo = 18;
+  string status = 19; // idle, working, waiting, done
+  google.protobuf.Timestamp status_at = 20;
+  google.protobuf.Timestamp last_output = 21;
+  Approval approval = 22;
+  Worktree worktree = 23;
+}
+
+// Approval is a tool call an agent waits for the user to approve.
+message Approval {
+  string id = 1;
+  string tool = 2;
+  string detail = 3;
+  string input = 4; // the call's arguments, as indented JSON
+  google.protobuf.Timestamp since = 5;
+}
+
+// CloseSession stops a session; the reply is an Exited.
+message CloseSession {
+  string session_id = 1;
+  string node_id = 2;
+}
+
+// RenameSession names a session; the reply is its SessionInfo.
+message RenameSession {
+  string session_id = 1;
+  string node_id = 2;
+  string name = 3;
+}
+
+// AnswerApproval answers the approval a session's agent waits for.
+message AnswerApproval {
+  string node_id = 1;
+  string session_id = 2;
+  string approval_id = 3;
+  string decision = 4; // allow, deny, terminal
+  string message = 5; // why, for a denial
+}
+
+// Attach turns its stream into a pipe to a session.
+message Attach {
+  string session_id = 1;
+  string node_id = 2;
+  bool replay = 3; // send the current screen first
+}
+
+// Input is bytes for a session's PTY.
+message Input {
+  string session_id = 1;
+  bytes data = 2;
+}
+
+// Output is bytes a session's PTY printed.
+message Output {
+  string session_id = 1;
+  bytes data = 2;
+}
+
+// Resize changes a session's window.
+message Resize {
+  string session_id = 1;
+  uint32 cols = 2;
+  uint32 rows = 3;
+}
+
+// ProgressReport is a terminal's latest OSC 9;4 state.
+message ProgressReport {
+  uint32 state = 1;
+  int32 value = 2;
+  int64 remaining_ms = 3; // relative, so peers need no common clock
+}
+
+// Snapshot is a session's screen. On an attach stream its text is left
+// out and follows as Output.
+message Snapshot {
+  ProgressReport progress = 1;
+  string session_id = 2;
+  uint32 cols = 3;
+  uint32 rows = 4;
+  string title = 5;
+  string text = 6; // VT when styled, plain otherwise
+  bool styled = 7;
+}
+
+// Exited reports that a session's program ended.
+message Exited {
+  string session_id = 1;
+  int64 exit_code = 2;
+  string err = 3;
+}

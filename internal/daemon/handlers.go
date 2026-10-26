@@ -135,30 +135,10 @@ func (d *Daemon) handleAttach(ctx context.Context, stream *transport.Stream, env
 	if err := protocol.Decode(env, &req); err != nil {
 		return err
 	}
-	if req.Binary {
-		// The stream speaks framed binary from here on, errors included, so
-		// the front-end's next read is never a JSON envelope it cannot
-		// expect.
-		if err := d.attachBinary(ctx, stream, &req); err != nil && !isClosed(err) {
-			_ = protocol.WriteStreamJSON(stream, protocol.FrameError, protocol.Error{Message: err.Error()})
-		}
-		return nil
-	}
 	if !d.local(req.NodeID) {
 		return d.forwardAttach(ctx, req, stream)
 	}
-	return d.attachLocal(ctx, &req, envelopeWire{stream: stream, id: env.ID, sessionID: req.SessionID})
-}
-
-// attachWire is how an attach stream is encoded: JSON envelopes, or the
-// binary framing newer front-ends ask for.
-type attachWire interface {
-	snapshot(protocol.Snapshot) error
-	output([]byte) error
-	exited(protocol.Exited) error
-	// readInput feeds the front-end's input and resizes to s until the
-	// stream ends.
-	readInput(s *session.Session)
+	return d.attachLocal(ctx, &req, attachWire{stream: stream, id: env.ID, sessionID: req.SessionID})
 }
 
 // attachLocal pipes a session of this daemon through w.
@@ -248,26 +228,29 @@ func sendSnapshot(w attachWire, snap protocol.Snapshot) error {
 	return nil
 }
 
-// envelopeWire is the JSON envelope encoding of an attach stream.
-type envelopeWire struct {
+// attachWire is an attached stream's messages: the session's screen,
+// output and end toward the front-end, its input and resizes back.
+type attachWire struct {
 	stream    *transport.Stream
 	id        string
 	sessionID string
 }
 
-func (w envelopeWire) snapshot(snap protocol.Snapshot) error {
+func (w attachWire) snapshot(snap protocol.Snapshot) error {
 	return w.stream.Send(protocol.TypeSnapshot, w.id, snap)
 }
 
-func (w envelopeWire) output(p []byte) error {
+func (w attachWire) output(p []byte) error {
 	return w.stream.Send(protocol.TypeOutput, w.id, protocol.Output{SessionID: w.sessionID, Data: p})
 }
 
-func (w envelopeWire) exited(ex protocol.Exited) error {
+func (w attachWire) exited(ex protocol.Exited) error {
 	return w.stream.Send(protocol.TypeExited, w.id, ex)
 }
 
-func (w envelopeWire) readInput(s *session.Session) {
+// readInput feeds the front-end's input and resizes to s until the stream
+// ends.
+func (w attachWire) readInput(s *session.Session) {
 	for {
 		in, err := w.stream.Recv()
 		if err != nil {

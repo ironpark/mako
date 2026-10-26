@@ -38,7 +38,7 @@ func TestTitlesUpdateWithoutPollingOrPainting(t *testing.T) {
 	}
 	// Snapshot metadata restores a title without needing a new OSC from the agent.
 	link.in <- &protocol.StreamEvent{
-		Kind:     protocol.FrameSnapshot,
+		Kind:     protocol.EventSnapshot,
 		Snapshot: protocol.Snapshot{SessionID: "s", Cols: 80, Rows: 24, Title: "before attach"},
 	}
 	link.output(t, "body")

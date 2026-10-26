@@ -9,7 +9,7 @@ import (
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 2
+const Revision = 3
 
 // AgentStatus is what an agent's own hooks last said it is doing.
 type AgentStatus string

@@ -616,16 +616,14 @@ type sessionGroup struct {
 // folder with nothing in it says nothing here, so the list only grows.
 func (m *model) keepProjects(sessions []protocol.SessionInfo) {
 	projects := ggui.Peek(m.Prefs).Projects
-	roots := projectRoots(sessions, projects)
 	known := make(map[fileRoot]bool, len(projects))
 	for _, r := range projects {
 		known[r] = true
 	}
 	var added []fileRoot
 	for _, s := range sessions {
-		root := rootOf(roots, s.NodeID, s.Project)
-		r := fileRoot{Node: s.NodeID, Path: root}
-		if root == "" || known[r] {
+		r := fileRoot{Node: s.NodeID, Path: projectOf(s)}
+		if r.Path == "" || known[r] {
 			continue
 		}
 		known[r] = true
@@ -646,43 +644,20 @@ func (m *model) forgetProject(r fileRoot) {
 	})
 }
 
-// projectRoots are each node's project folders, shortest first: the
-// sessions' projects and the ones kept without sessions.
-func projectRoots(sessions []protocol.SessionInfo, projects []fileRoot) map[string][]string {
-	roots := map[string][]string{}
-	add := func(node, path string) {
-		if path != "" {
-			roots[node] = append(roots[node], path)
-		}
+// projectOf is the folder a session's section is for: the main work tree
+// of its repository, so a repository's subfolders and worktrees share one,
+// and outside a repository its own folder. One folder inside another is
+// not otherwise the other's: a home folder holds every project.
+func projectOf(s protocol.SessionInfo) string {
+	if s.Repo != "" {
+		return s.Repo
 	}
-	for _, s := range sessions {
-		add(s.NodeID, s.Project)
-	}
-	for _, r := range projects {
-		add(r.Node, r.Path)
-	}
-	for _, ps := range roots {
-		sort.Slice(ps, func(a, b int) bool { return len(ps[a]) < len(ps[b]) })
-	}
-	return roots
-}
-
-// rootOf is the shortest root of a node that contains path, or "".
-func rootOf(roots map[string][]string, node, path string) string {
-	for _, root := range roots[node] {
-		if within(path, root) {
-			return root
-		}
-	}
-	return ""
+	return s.Project
 }
 
 // groupSessions sorts sessions into the sidebar's sections for a grouping.
-// By project, a session started in a folder inside another session's
-// project, as a worktree or a package of its repository is, goes in that
-// project's section. Remembered projects are roots too: a folder keeps the
-// sessions started in it after it had none, and keeps a section when it has
-// none.
+// By project, a session goes in its repository's section, as projectOf
+// says. Remembered projects keep a section when they have no sessions.
 func groupSessions(sessions []protocol.SessionInfo, by string, nodes []protocol.Node, projects []fileRoot) []sessionGroup {
 	switch by {
 	case groupFlat:
@@ -697,21 +672,13 @@ func groupSessions(sessions []protocol.SessionInfo, by string, nodes []protocol.
 		})
 		return groups
 	}
-	roots := projectRoots(sessions, projects)
-	groups := bucket(sessions, func(s protocol.SessionInfo) (string, string) {
-		return s.NodeID, rootOf(roots, s.NodeID, s.Project)
-	})
-	// A remembered folder with no sessions keeps a section of its own,
-	// unless a shorter root covers it.
+	groups := bucket(sessions, func(s protocol.SessionInfo) (string, string) { return s.NodeID, projectOf(s) })
 	present := make(map[string]bool, len(groups))
 	for _, g := range groups {
 		present[g.Key] = true
 	}
 	for _, r := range projects {
 		if r.Path == "" || present[dirKey(r.Node, r.Path)] {
-			continue
-		}
-		if root := rootOf(roots, r.Node, r.Path); root != "" && root != r.Path {
 			continue
 		}
 		present[dirKey(r.Node, r.Path)] = true
