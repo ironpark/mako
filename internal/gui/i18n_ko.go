@@ -525,4 +525,8 @@ var catalogKo = map[string]string{
 	"Unpin session":          "세션 고정 해제",
 	"Pin session to the top": "세션을 맨 위에 고정",
 	"Filter sessions…":       "세션 거르기…",
+
+	// Tidying the tabs
+	"Tidy tabs":                          "탭 정리",
+	"Close files, diffs and idle shells": "파일, diff, 유휴 쉘 탭 닫기",
 }

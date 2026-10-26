@@ -967,6 +967,63 @@ func (m *model) kill(id string) {
 	})
 }
 
+// tidyable tells whether closing a tab loses nothing, as the sessions'
+// last poll has it: a file without unsaved changes, a diff, or a shell at
+// its prompt or exited. Agents' tabs are never tidied away.
+func tidyable(id string, sessions []protocol.SessionInfo, docs map[string]docInfo) bool {
+	switch {
+	case isDocTab(id):
+		return !docs[id].Dirty
+	case isDiffTab(id):
+		return true
+	}
+	s, ok := sessionIn(sessions, id)
+	return ok && s.Agent == "shell" && (s.Idle || s.State == protocol.StateExited || s.State == protocol.StateStopped)
+}
+
+// anyTidyable tells whether any open tab is tidyable.
+func (m *model) anyTidyable() bool {
+	sessions, docs := ggui.Peek(m.Sessions), ggui.Peek(m.Docs)
+	return slices.ContainsFunc(ggui.Peek(m.Tabs), func(id string) bool { return tidyable(id, sessions, docs) })
+}
+
+// tidyTabs closes the tabs among ids that lose nothing by closing, killing
+// the shells among them. Whether a shell is at its prompt is asked now
+// rather than taken from the last poll, as askKill does.
+func (m *model) tidyTabs(ids []string) {
+	docs := ggui.Peek(m.Docs)
+	var shells []string
+	for _, id := range ids {
+		switch {
+		case isDocTab(id):
+			if tidyable(id, nil, docs) {
+				m.closeDoc(id)
+			}
+		case isDiffTab(id):
+			m.closeDiff(id)
+		default:
+			if s, ok := m.session(id); ok && s.Agent == "shell" {
+				shells = append(shells, id)
+			}
+		}
+	}
+	if len(shells) == 0 {
+		return
+	}
+	fetch(m, 5*time.Second, func(ctx context.Context, c *client.Client) ([]protocol.SessionInfo, error) {
+		return c.Sessions(ctx, m.key())
+	}, func(list []protocol.SessionInfo, err error) {
+		if err != nil {
+			return
+		}
+		for _, id := range shells {
+			if tidyable(id, list, nil) {
+				m.kill(id)
+			}
+		}
+	})
+}
+
 // composerDraft is a session's message draft, kept with its chat state so
 // closing the tab drops it.
 func (m *model) composerDraft(id string) string { return ggui.Peek(m.chatState(id).draft) }

@@ -7,6 +7,7 @@ import (
 	"github.com/ironpark/ggui"
 
 	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/sanbo/internal/protocol"
 )
 
 func paneTabs(m *model) [][]string {
@@ -189,5 +190,27 @@ func TestSidePanelsSlide(t *testing.T) {
 	p.Frame()
 	if d.w != 420 {
 		t.Fatalf("the panel is %v wide after a resize to 420", d.w)
+	}
+}
+
+// Tidying keeps agents, shells running a command and files with unsaved
+// changes, and takes the rest.
+func TestTidyable(t *testing.T) {
+	sessions := []protocol.SessionInfo{
+		{ID: "agent", Agent: "claude", State: protocol.StateRunning, Idle: true},
+		{ID: "busy", Agent: "shell", State: protocol.StateRunning},
+		{ID: "idle", Agent: "shell", State: protocol.StateRunning, Idle: true},
+		{ID: "exited", Agent: "shell", State: protocol.StateExited},
+		{ID: "dead-agent", Agent: "codex", State: protocol.StateExited},
+	}
+	clean, dirty := docTabID("n", "/a"), docTabID("n", "/b")
+	docs := map[string]docInfo{clean: {}, dirty: {Dirty: true}}
+	for id, want := range map[string]bool{
+		"agent": false, "busy": false, "idle": true, "exited": true, "dead-agent": false, "unknown": false,
+		clean: true, dirty: false, diffPrefix + "x": true,
+	} {
+		if got := tidyable(id, sessions, docs); got != want {
+			t.Errorf("tidyable(%q) = %v, want %v", id, got, want)
+		}
 	}
 }

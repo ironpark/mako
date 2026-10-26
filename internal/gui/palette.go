@@ -52,6 +52,7 @@ func (m *model) commands() []ui.CommandEntry {
 	cmds = append(cmds,
 		item("Toggle chat and terminal", m.toggleChat, "conversation").Shortcut("cmd+shift+j").Disabled(selected == "" || onDoc || !m.chatCapable(selected)),
 		item("Close tab", func() { m.askKill(selected) }).Shortcut("cmd+w").Disabled(selected == ""),
+		item("Tidy tabs", func() { m.tidyTabs(ggui.Peek(m.Tabs)) }, "close", "clean", "idle", "shell").Disabled(!m.anyTidyable()),
 		item("Rename session…", func() { m.askRename(selected) }, "name", "title").Disabled(!isSessionTab(selected)),
 		item(pick(m.pinned(selected), "Unpin session", "Pin session to the top"), func() { m.togglePin(selected) }, "pin", "favorite").Disabled(!isSessionTab(selected)),
 		item("Filter sessions…", func() { m.FilterOpen.Set(true); m.SidebarOpen.Set(true) }, "find", "search", "sidebar"),

@@ -144,6 +144,17 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		launchMenu := borderless(ui.MenuOf(icon("plus"), launchItems(m, nodeID, project, targets, focus, newSession)...).
 			Width(200).Name(T("New session…")))
 		launchWidth := float64(len(launchables(targets))*30 + 34)
+		// The eraser closes the pane's tabs that lose nothing by closing,
+		// shown while there are some.
+		var tidy ggui.Widget = ggui.Box()
+		if slices.ContainsFunc(g.Tabs, func(t string) bool { return tidyable(t, sessions, docs) }) {
+			ids := g.Tabs
+			tidy = ggui.Row(
+				iconButton("eraser", T("Close files, diffs and idle shells"), func() { m.tidyTabs(ids) }),
+				ggui.Box().Size(1, 18).Fill(tokBorder),
+			).Gap(10).Align(ggui.AlignCenter)
+			launchWidth += 40
+		}
 		var view ggui.Widget = ggui.Box()
 		if isSessionTab(g.Active) && m.chatCapable(g.Active) {
 			view = ggui.Row(viewSwitch(m, g.Active, id), ggui.Box().Size(1, 18).Fill(tokBorder)).Gap(10).Align(ggui.AlignCenter)
@@ -151,7 +162,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		}
 		trail := func(launch ggui.Widget) ggui.Widget {
 			// Centred in the bar's height, level with the tabs' labels.
-			return ggui.Box(ggui.Row(view, launch).Gap(10).Align(ggui.AlignCenter)).Height(tabBarHeight).Pad(0, 8)
+			return ggui.Box(ggui.Row(tidy, view, launch).Gap(10).Align(ggui.AlignCenter)).Height(tabBarHeight).Pad(0, 8)
 		}
 		// Tabs that do not fit scroll, and a menu lists them all.
 		overflow := tabList(m, g, sessions, titles, docs, diffs)
