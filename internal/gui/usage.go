@@ -156,9 +156,8 @@ func limitName(minutes int64) string {
 // usageCard is the overlay itself: the context filled, as a share of the
 // window with a bar when the agent names the window, and each of the
 // account's limits, such as Claude's five hours and week, with when it
-// starts over. An account the
-// agent reports no limits for, such as one on an API key, shows the tokens
-// spent instead.
+// starts over. An account the agent reports no limits for, such as one on
+// an API key, shows the tokens spent instead.
 func usageCard(m *model, u protocol.Usage) ggui.Widget {
 	if u.IsZero() {
 		return ggui.Box()

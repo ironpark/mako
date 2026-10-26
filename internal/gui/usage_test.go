@@ -94,3 +94,36 @@ func TestUsageOverlayShowsTheAccountsLimits(t *testing.T) {
 		t.Errorf("five hours past their reset:\n%s", p.Semantics().String())
 	}
 }
+
+// The detail opens over the card while the pointer rests on it, and not
+// for the terminal under it holding the keyboard.
+func TestUsageDetailOpensOnHoverAlone(t *testing.T) {
+	t.Setenv("SANBO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]protocol.SessionInfo{{ID: "s", Agent: "claude", Project: "/tmp"}})
+	state := m.usageState("s")
+	state.loading = true
+	u := protocol.Usage{Input: 1000, Output: 500, Context: 50000, Window: 200000}
+	state.usage.Set(u)
+	terminal := ggui.Focus(ggui.Box().Size(800, 600))
+	p := ggui.ProbeBuilder(func() ggui.Widget { return ggui.Stack(terminal, usageOverlay(m, "s", nil)).Expand() }, ggui.Sz(800, 600))
+	defer p.Close()
+	p.Advance(0)
+	p.Type(ggui.Mods{}, ggui.KeyTab) // the terminal takes the keyboard
+	p.Frame()
+	p.Advance(time.Second)
+	detail := func() bool { _, ok := p.Semantics().Find(ggui.RoleText, usageDetail(u)); return ok }
+	if detail() {
+		t.Fatal("the terminal's focus opened the detail")
+	}
+	ctx, ok := p.Semantics().Find(ggui.RoleText, Tf("%s / %s · %d%%", "50k", "200k", 25))
+	if !ok {
+		t.Fatal("no card")
+	}
+	p.Move(ctx.Rect.Origin.Add(ggui.Pt(ctx.Rect.Size.W/2, ctx.Rect.Size.H/2)))
+	p.Frame()
+	p.Advance(time.Second)
+	if !detail() {
+		t.Fatalf("detail not open under the pointer:\n%s", p.Semantics().String())
+	}
+}
