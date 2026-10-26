@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"log"
 	"maps"
-	"slices"
 	"strings"
 	"time"
 
@@ -105,86 +104,63 @@ func settingsText(settings json.RawMessage) string {
 	return b.String()
 }
 
-// mcpSection lists the servers of the extensions installed, or nothing
-// when none has any.
-func mcpSection(m *model) ggui.Widget {
+// mcpServerCard is an extension's MCP server: whether sessions get it,
+// how it starts, and its settings.
+func mcpServerCard(m *model, id, ext string) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
-		exts := m.Extensions.Get()
-		info := m.MCPInfo.Get()
-		servers := m.MCPServers.Get()
-		type server struct{ id, ext string }
-		var list []server
-		for _, e := range exts {
-			for _, id := range e.ContextServerIDs() {
-				list = append(list, server{id, e.Name})
-			}
-		}
-		if len(list) == 0 {
-			return ggui.Box()
-		}
-		slices.SortFunc(list, func(a, b server) int { return strings.Compare(a.id, b.id) })
 		mono := ggui.TextStyle{Font: ggui.DefaultMonoFont()}
-		cards := []ggui.Widget{}
-		for _, s := range list {
-			id := s.id
-			conf := servers[id]
-			i := info[id]
-			on := ggui.Bind(func() bool { return ggui.Peek(m.MCPServers)[id].On() }, func(v bool) {
-				next := ggui.Peek(m.MCPServers)[id]
-				next.Enabled = nil
-				if !v {
-					next.Enabled = &v
-				}
-				m.saveMCPServer(id, next)
-			})
-			rows := []ggui.Widget{row(id, s.ext, ui.Switch(on, "").Name(Tf("%s enabled", id)))}
-			if conf.Command != nil {
-				rows = append(rows, row(T("Command"), strings.Join(append([]string{conf.Command.Path}, conf.Command.Args...), " "), ggui.Box()))
+		conf := m.MCPServers.Get()[id]
+		i := m.MCPInfo.Get()[id]
+		on := ggui.Bind(func() bool { return ggui.Peek(m.MCPServers)[id].On() }, func(v bool) {
+			next := ggui.Peek(m.MCPServers)[id]
+			next.Enabled = nil
+			if !v {
+				next.Enabled = &v
 			}
-			text := m.mcpText(id)
-			defaults, placeholder, hint := "", "", ""
-			if i.Config != nil {
-				defaults = strings.TrimSpace(i.Config.DefaultSettings)
-				hint = strings.TrimSpace(i.Config.InstallationInstructions)
-				// A placeholder is one line: the defaults without their
-				// comments, which the button fills in whole.
-				if d, err := mcp.ParseSettings(defaults); err == nil {
-					placeholder = string(d)
-				}
-			}
-			if i.Err != "" {
-				hint = i.Err
-			}
-			field := ui.TextField(text).Multiline().Lines(5).Style(mono).Placeholder(placeholder).Name(Tf("%s settings", id))
-			buttons := []ggui.Widget{
-				ui.Button(T("Save settings"), func() {
-					settings, err := mcp.ParseSettings(ggui.Peek(text))
-					if err != nil {
-						m.MCPNote.Set(Tf("%s: the settings are not JSON: %v", id, err))
-						return
-					}
-					next := ggui.Peek(m.MCPServers)[id]
-					next.Settings = settings
-					m.saveMCPServer(id, next)
-				}).Outline(),
-			}
-			if defaults != "" {
-				buttons = append(buttons, ui.Button(T("Fill in defaults"), func() { text.Set(defaults) }).Ghost())
-			}
-			rows = append(rows, stackedRow(T("Settings"), hint,
-				ggui.Column(field, ggui.Row(buttons...).Gap(8)).Gap(8).Stretch()))
-			cards = append(cards, card(rows...))
+			m.saveMCPServer(id, next)
+		})
+		rows := []ggui.Widget{row(id, ext, ui.Switch(on, "").Name(Tf("%s enabled", id)))}
+		if conf.Command != nil {
+			rows = append(rows, row(T("Command"), strings.Join(append([]string{conf.Command.Path}, conf.Command.Args...), " "), ggui.Box()))
 		}
+		text := m.mcpText(id)
+		defaults, placeholder, hint := "", "", ""
+		if i.Config != nil {
+			defaults = strings.TrimSpace(i.Config.DefaultSettings)
+			hint = strings.TrimSpace(i.Config.InstallationInstructions)
+			// A placeholder is one line: the defaults without their
+			// comments, which the button fills in whole.
+			if d, err := mcp.ParseSettings(defaults); err == nil {
+				placeholder = string(d)
+			}
+		}
+		if i.Err != "" {
+			hint = i.Err
+		}
+		field := ui.TextField(text).Multiline().Lines(5).Style(mono).Placeholder(placeholder).Name(Tf("%s settings", id))
+		buttons := []ggui.Widget{
+			ui.Button(T("Save settings"), func() {
+				settings, err := mcp.ParseSettings(ggui.Peek(text))
+				if err != nil {
+					m.MCPNote.Set(Tf("%s: the settings are not JSON: %v", id, err))
+					return
+				}
+				next := ggui.Peek(m.MCPServers)[id]
+				next.Settings = settings
+				m.saveMCPServer(id, next)
+			}).Outline(),
+		}
+		if defaults != "" {
+			buttons = append(buttons, ui.Button(T("Fill in defaults"), func() { text.Set(defaults) }).Ghost())
+		}
+		rows = append(rows, stackedRow(T("Settings"), hint,
+			ggui.Column(field, ggui.Row(buttons...).Gap(8)).Gap(8).Stretch()))
 		note := ggui.View(m.MCPNote, func(s string) ggui.Widget {
 			if s == "" {
 				return ggui.Box()
 			}
 			return muted(ggui.Text(s).Size(12.5))
 		})
-		children := append([]ggui.Widget{
-			muted(ggui.Text(T("Claude Code and Codex sessions on this node get these servers. Their settings, such as keys, stay in this node's config.json.")).Size(12.5)),
-		}, cards...)
-		children = append(children, note)
-		return section(T("MCP servers"), children...)
+		return ggui.Column(card(rows...), note).Gap(6).Stretch()
 	})
 }

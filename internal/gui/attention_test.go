@@ -114,14 +114,43 @@ func TestSidebarFilterAndLabels(t *testing.T) {
 
 func TestRankFilesPrefersNamesAndRuns(t *testing.T) {
 	paths := []string{"internal/gui/view.go", "internal/gui/viewer_test.go", "docs/overview.md", "cmd/sanbo/main.go", "vendor/x/very/long/path/view.go"}
-	got := rankFiles(paths, "view", 10)
+	ranked := func(q string) []string {
+		var out []string
+		for _, f := range rankFiles(paths, q, 10) {
+			out = append(out, f.Path)
+		}
+		return out
+	}
+	got := ranked("view")
 	if len(got) != 4 || got[0] != "internal/gui/view.go" {
 		t.Fatalf("ranked %q", got)
 	}
-	if got := rankFiles(paths, "sanbomain", 10); len(got) != 1 || got[0] != "cmd/sanbo/main.go" {
+	if got := ranked("sanbomain"); len(got) != 1 || got[0] != "cmd/sanbo/main.go" {
 		t.Fatalf("ranked %q", got)
 	}
-	if got := rankFiles(paths, "zzz", 10); len(got) != 0 {
+	if got := ranked("zzz"); len(got) != 0 {
 		t.Fatalf("ranked %q", got)
+	}
+}
+
+func TestSidebarGroupsFoldAndWidthsStayInBounds(t *testing.T) {
+	t.Setenv("SANBO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	g := sessionGroup{Key: dirKey("n", "/w/api")}
+	key := foldKey(groupProject, g)
+	m.toggleFold(key)
+	if !slices.Contains(ggui.Peek(m.Prefs).Collapsed, key) {
+		t.Fatal("the group did not fold")
+	}
+	if foldKey(groupHost, g) == key {
+		t.Fatal("a host's fold is a project's")
+	}
+	m.toggleFold(key)
+	if len(ggui.Peek(m.Prefs).Collapsed) != 0 {
+		t.Fatal("the group did not open")
+	}
+	p := prefs{SidebarWidth: 5000}.normalized()
+	if p.SidebarWidth != maxSidebarWidth {
+		t.Fatalf("sidebar width %v", p.SidebarWidth)
 	}
 }

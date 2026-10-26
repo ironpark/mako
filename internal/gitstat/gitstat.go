@@ -281,6 +281,13 @@ func Diff(root, p, from string) (*protocol.Diff, error) {
 	return out, nil
 }
 
+// TextDiff is the change from old to cur as unified diff hunks, as Diff
+// gives a file's: for texts that are not files, such as an agent's edit.
+func TextDiff(old, cur string) []*protocol.DiffLine {
+	lines, _ := unified(old, cur)
+	return lines
+}
+
 // line is one line of a diff before it is cut into hunks.
 type line struct {
 	op       byte

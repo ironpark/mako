@@ -354,14 +354,7 @@ func terminalSettings(m *model) ggui.Widget {
 }
 
 func shortcutSettings() ggui.Widget {
-	chord := func(c string) ggui.Widget {
-		ch, err := ggui.ParseChord(c)
-		label := c
-		if err == nil {
-			label = ch.Label()
-		}
-		return ui.Kbd(label)
-	}
+	chord := func(c string) ggui.Widget { return ui.Kbd(chordLabel(c)) }
 	var app []ggui.Widget
 	for _, s := range shortcutList {
 		app = append(app, row(T(s.Action), "", chord(s.Chord)))

@@ -1,19 +1,37 @@
 package gui
 
 import (
+	"image/color"
+	"slices"
+
 	"github.com/ironpark/ggui"
-	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/sanbo/internal/protocol"
 )
 
-// The command palette, on ⌘K or ⌘⇧P, searches what the window does: its
-// actions, the open tabs to switch to, and the sessions to show.
+// The command palette, on ⌘K or ⌘⇧P, searches what the window does, as
+// Zed's does: its commands, named "category: action", those run lately
+// first, then the open tabs to switch to and the sessions to show.
+
+// command is one of the palette's commands. Its ID, the English label,
+// is what the recent list keeps.
+type command struct {
+	ID, Category string
+	Keys         []string
+	Shortcut     string
+	Disabled     bool
+	Run          func()
+}
+
+// maxRecent is how many commands the palette keeps as run lately.
+const maxRecent = 12
 
 // openPalette shows the palette with an empty search and the commands as
 // things stand now.
 func (m *model) openPalette() {
 	m.PaletteQuery.Set("")
+	m.paletteCommands, m.paletteTabs = nil, nil
 	if m.palette != nil {
-		m.palette.Entries(m.commands()...)
+		m.palette.refresh()
 	}
 	m.PaletteOpen.Set(true)
 }
@@ -21,93 +39,168 @@ func (m *model) openPalette() {
 // paletteDialog is the palette over the window, which closes as it runs
 // what was chosen.
 func paletteDialog(m *model) ggui.Widget {
-	m.palette = ui.Command(m.PaletteQuery).
-		Placeholder(T("Type a command or a tab's name…")).Name(T("Search commands")).
-		Hints().HintLabels(T("Navigate"), T("Select")).Empty(T("No results")).Height(340)
-	return ui.CommandDialog(m.PaletteOpen, m.palette).Name(T("Commands")).Width(540)
+	m.palette = newPicker(m.PaletteOpen, m.PaletteQuery, m.paletteRows)
+	m.palette.Placeholder = T("Execute a command…")
+	m.palette.Name = T("Search commands")
+	m.palette.Empty = T("No results")
+	m.palette.Action = T("Run")
+	return m.palette.dialog()
 }
 
-// commands are the palette's entries.
-func (m *model) commands() []ui.CommandEntry {
-	// item is a command labelled in the window's language and found by
-	// its English name as well.
-	item := func(label string, fn func(), keys ...string) ui.CommandEntry {
-		return ui.CommandItem(T(label), fn).Keywords(append([]string{label}, keys...)...)
+// ran puts a command first in the recent list.
+func (m *model) ran(id string) {
+	m.Prefs.Update(func(p prefs) prefs {
+		recent := append([]string{id}, slices.DeleteFunc(slices.Clone(p.RecentCommands), func(o string) bool { return o == id })...)
+		p.RecentCommands = recent[:min(len(recent), maxRecent)]
+		return p
+	})
+}
+
+// paletteRows are the palette's rows for what is typed: with nothing,
+// the commands run lately, then the others as listed; with a search,
+// those that match, best first.
+func (m *model) paletteRows(q string) []pickRow {
+	// What the palette lists is read once as it opens, and searched as
+	// the query changes.
+	if m.paletteCommands == nil {
+		m.paletteCommands, m.paletteTabs = m.commands(), m.tabRows()
 	}
+	recent := ggui.Peek(m.Prefs).RecentCommands
+	type ranked struct {
+		row   pickRow
+		score int
+	}
+	var out []ranked
+	for _, c := range m.paletteCommands {
+		label := T(c.Category) + ": " + T(c.ID)
+		at := slices.Index(recent, c.ID)
+		score, hits, ok := fuzzyMatch(label, q)
+		if !ok {
+			// A command is found by its English name and its keywords
+			// as well, without marks, the name first.
+			for i, k := range append([]string{c.ID}, c.Keys...) {
+				if score, _, ok = fuzzyMatch(k, q); ok {
+					score -= pick(i == 0, 20, 30)
+					break
+				}
+			}
+			if !ok {
+				continue
+			}
+		}
+		switch {
+		case q == "" && at >= 0:
+			score = 1000 - at
+		case at >= 0:
+			score += 3
+		}
+		id, run := c.ID, c.Run
+		out = append(out, ranked{pickRow{Label: label, Hits: hits, Shortcut: c.Shortcut, Recent: at >= 0, Disabled: c.Disabled,
+			Run: func() { m.ran(id); run() }}, score})
+	}
+	for _, r := range m.paletteTabs {
+		score, hits, ok := fuzzyMatch(r.Label, q)
+		if !ok {
+			if score, _, ok = fuzzyMatch(r.Detail, q); !ok {
+				continue
+			}
+			score -= 10
+		}
+		r.Hits = hits
+		out = append(out, ranked{r, score - 1})
+	}
+	slices.SortStableFunc(out, func(a, b ranked) int {
+		if a.row.Disabled != b.row.Disabled {
+			return pick(a.row.Disabled, 1, -1)
+		}
+		return b.score - a.score
+	})
+	rows := make([]pickRow, len(out))
+	for i, r := range out {
+		rows[i] = r.row
+	}
+	return rows
+}
+
+// commands are the palette's commands as things stand now.
+func (m *model) commands() []command {
 	selected := ggui.Peek(m.Selected)
 	docs := ggui.Peek(m.Docs)
 	d, onDoc := docs[selected]
-	markdown := onDoc && isMarkdown(d.Name())
-
-	group := T("Commands")
-	cmds := []ui.CommandEntry{
-		item("New session…", func() { m.openNew("", "") }, "terminal", "agent").Shortcut("cmd+t"),
-		item("Save file", m.saveSelected).Shortcut("cmd+s").Disabled(!onDoc || d.ReadOnly()),
-		item("Go to file…", m.openQuickOpen, "open", "find", "quick").Shortcut("cmd+p"),
-		item("Search the project…", m.openSearch, "find", "grep", "text").Shortcut("cmd+shift+f"),
+	cmds := []command{
+		{ID: "New session…", Category: "Session", Keys: []string{"terminal", "agent"}, Shortcut: "cmd+t", Run: func() { m.openNew("", "") }},
+		{ID: "Rename session…", Category: "Session", Keys: []string{"name", "title"}, Disabled: !isSessionTab(selected), Run: func() { m.askRename(selected) }},
+		{ID: pick(m.pinned(selected), "Unpin session", "Pin session to the top"), Category: "Session", Keys: []string{"pin", "favorite"},
+			Disabled: !isSessionTab(selected), Run: func() { m.togglePin(selected) }},
+		{ID: "Filter sessions…", Category: "Session", Keys: []string{"find", "search", "sidebar"}, Run: func() { m.FilterOpen.Set(true); m.SidebarOpen.Set(true) }},
+		{ID: "Toggle chat and terminal", Category: "Session", Keys: []string{"conversation"}, Shortcut: "cmd+shift+j",
+			Disabled: selected == "" || onDoc || !m.chatCapable(selected), Run: m.toggleChat},
+		{ID: "Go to file…", Category: "File", Keys: []string{"open", "find", "quick"}, Shortcut: "cmd+p", Run: m.openQuickOpen},
+		{ID: "Save file", Category: "File", Shortcut: "cmd+s", Disabled: !onDoc || d.ReadOnly(), Run: m.saveSelected},
+		{ID: "Search the project…", Category: "File", Keys: []string{"find", "grep", "text"}, Shortcut: "cmd+shift+f", Run: m.openSearch},
 	}
-	if markdown {
-		cmds = append(cmds, item(previewLabel(m.docs[selected]), m.toggleSelectedPreview, "markdown", "preview").Shortcut("cmd+shift+v"))
+	if onDoc && isMarkdown(d.Name()) {
+		cmds = append(cmds, command{ID: previewLabel(m.docs[selected]), Category: "File", Keys: []string{"markdown", "preview"},
+			Shortcut: "cmd+shift+v", Run: m.toggleSelectedPreview})
 	}
 	cmds = append(cmds,
-		item("Toggle chat and terminal", m.toggleChat, "conversation").Shortcut("cmd+shift+j").Disabled(selected == "" || onDoc || !m.chatCapable(selected)),
-		item("Close tab", func() { m.askKill(selected) }).Shortcut("cmd+w").Disabled(selected == ""),
-		item("Tidy tabs", func() { m.tidyTabs(ggui.Peek(m.Tabs)) }, "close", "clean", "idle", "shell").Disabled(!m.anyTidyable()),
-		item("Rename session…", func() { m.askRename(selected) }, "name", "title").Disabled(!isSessionTab(selected)),
-		item(pick(m.pinned(selected), "Unpin session", "Pin session to the top"), func() { m.togglePin(selected) }, "pin", "favorite").Disabled(!isSessionTab(selected)),
-		item("Filter sessions…", func() { m.FilterOpen.Set(true); m.SidebarOpen.Set(true) }, "find", "search", "sidebar"),
-		item("Extensions…", func() { m.ExtensionsOpen.Set(true) }, "zed", "language", "grammar", "highlight"),
-		item("Settings", func() { m.openSettings("") }, "preferences").Shortcut("cmd+,"),
-		item("Toggle sidebar", func() { ggui.Toggle(m.SidebarOpen) }).Shortcut("cmd+b"),
-		item("Toggle details panel", func() { ggui.Toggle(m.DetailsOpen) }, "files", "changes").Shortcut("cmd+shift+d"),
+		command{ID: "Close tab", Category: "Tab", Shortcut: "cmd+w", Disabled: selected == "", Run: func() { m.askKill(selected) }},
+		command{ID: "Tidy tabs", Category: "Tab", Keys: []string{"close", "clean", "idle", "shell"}, Disabled: !m.anyTidyable(),
+			Run: func() { m.tidyTabs(ggui.Peek(m.Tabs)) }},
+		command{ID: "Toggle sidebar", Category: "View", Shortcut: "cmd+b", Run: func() { ggui.Toggle(m.SidebarOpen) }},
+		command{ID: "Toggle details panel", Category: "View", Keys: []string{"files", "changes"}, Shortcut: "cmd+shift+d",
+			Run: func() { ggui.Toggle(m.DetailsOpen) }},
+		command{ID: "Extensions…", Category: "App", Keys: []string{"zed", "language", "grammar", "highlight", "mcp"},
+			Run: func() { m.ExtensionsOpen.Set(true) }},
+		command{ID: "Settings", Category: "App", Keys: []string{"preferences"}, Shortcut: "cmd+,", Run: func() { m.openSettings("") }},
 	)
 	for _, g := range groupings {
-		cmds = append(cmds, ui.CommandItem(T("Sidebar: ")+T(g.Label), func() { m.setSidebarGroup(g.By) }).
-			Keywords("sidebar", g.Label, "sessions"))
+		cmds = append(cmds, command{ID: g.Label, Category: "Sidebar", Keys: []string{"group", "sessions"}, Run: func() { m.setSidebarGroup(g.By) }})
 	}
 	for _, t := range []string{"system", "dark", "light"} {
-		cmds = append(cmds, ui.CommandItem(T("Theme: ")+T(themeLabels[t]), func() {
+		cmds = append(cmds, command{ID: themeLabels[t], Category: "Theme", Keys: []string{"appearance"}, Run: func() {
 			m.Prefs.Update(func(p prefs) prefs { p.Theme = t; return p })
-		}).Keywords("theme", themeLabels[t], "appearance"))
+		}})
 	}
-	for i := range cmds {
-		cmds[i] = cmds[i].Group(group)
-	}
+	return cmds
+}
 
-	// The tabs open, then the sessions not in one.
+// tabRows are the open tabs, then the sessions not in one, each with
+// where it is.
+func (m *model) tabRows() []pickRow {
 	titles := ggui.Peek(m.Titles)
+	docs := ggui.Peek(m.Docs)
+	nodes := ggui.Peek(m.Nodes)
 	open := map[string]bool{}
+	var rows []pickRow
 	for _, id := range ggui.Peek(m.Tabs) {
 		open[id] = true
-		var label string
-		var keys []string
+		var r pickRow
 		if d, ok := docs[id]; ok {
-			label, keys = d.Name(), []string{d.Path}
+			r = pickRow{Label: d.Name(), Detail: d.Path, Icon: icon(fileIconName(d.Name())).Size(15).Color(tokMuted)}
 		} else if s, ok := m.session(id); ok {
-			label, keys = sessionTitle(s, titles[id]), []string{s.GetProject(), s.GetAgent()}
+			r = sessionPick(s, titles[id], nodes, tokMuted)
 		} else {
 			continue
 		}
-		cmds = append(cmds, ui.CommandItem(label, func() { m.showTab(id) }).Keywords(keys...).Group(T("Open tabs")))
+		r.Run = func() { m.showTab(id) }
+		rows = append(rows, r)
 	}
-	nodes := ggui.Peek(m.Nodes)
 	for _, s := range ggui.Peek(m.Sessions) {
 		if open[s.GetId()] {
 			continue
 		}
 		id := s.GetId()
-		label := sessionTitle(s, titles[id]) + " · " + nodeName(nodes, s.GetNodeId()) + ":" + projectName(s.GetProject())
-		cmds = append(cmds, ui.CommandItem(label, func() { m.selectSession(id) }).Keywords(s.GetProject(), s.GetAgent()).Group(T("Sessions")))
+		r := sessionPick(s, titles[id], nodes, tokExtraMuted)
+		r.Run = func() { m.selectSession(id) }
+		rows = append(rows, r)
 	}
-	return cmds
+	return rows
 }
 
-// extensionsDialog is Settings ▸ Extensions in a window of its own, as
-// the palette opens it.
-func extensionsDialog(m *model) ggui.Widget {
-	content := ggui.If(m.ExtensionsOpen, func() ggui.Widget {
-		body := ggui.Column(append([]ggui.Widget{muted(ggui.Text(extensionsAbout()).Size(13))}, extensionSections(m)...)...).Gap(22).Stretch()
-		return ggui.Box(ggui.Scroll(ggui.Padding(body, 0, 12, 0, 0)).Bar(tokSurface3)).Height(560)
-	})
-	return ui.Dialog(m.ExtensionsOpen, content).Title(T("Extensions")).Width(720)
+// sessionPick is a session as the palette lists it: its title, where it
+// runs, and its agent's glyph in c.
+func sessionPick(s *protocol.SessionInfo, title string, nodes []*protocol.Node, c color.Color) pickRow {
+	return pickRow{Label: sessionTitle(s, title), Detail: nodeName(nodes, s.GetNodeId()) + ":" + projectName(s.GetProject()),
+		Icon: agentGlyph(s.GetAgent(), c).Size(15)}
 }

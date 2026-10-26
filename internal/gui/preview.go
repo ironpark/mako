@@ -159,6 +159,21 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					m.Unread.Set(unread)
 				}),
 				frames(5), shot("02-chat-approval"),
+				// Tool calls as each tool's view reads them, their folds open.
+				do(func() {
+					id := ggui.Peek(m.Selected)
+					chat := m.chatState(id)
+					v := ggui.Peek(chat.result)
+					v.Chat = proto.CloneOf(v.Chat)
+					v.Chat.Messages = append(v.Chat.Messages[:4], previewTools()...)
+					chat.result.Set(v)
+					open := map[string]bool{}
+					for _, msg := range v.Chat.Messages {
+						open[chatMessageKey(msg)] = msg.GetRole() == "tool"
+					}
+					chat.tools.Set(open)
+				}),
+				frames(30), shot("02-chat-tools"),
 				do(func() {
 					id := ggui.Peek(m.Selected)
 					m.setChatMode(id, false)
@@ -209,7 +224,9 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(m.toggleSelectedPreview), frames(30), shot("03-markdown-preview"),
 				do(m.toggleSelectedPreview), do(m.openPalette), frames(10), shot("03-palette"),
 				do(func() { m.PaletteQuery.Set("side") }), frames(4), shot("03-palette-search"),
-				do(func() { m.PaletteOpen.Set(false); m.ExtensionsOpen.Set(true) }), frames(40), shot("03-extensions"),
+				do(func() { m.PaletteOpen.Set(false); m.ExtensionsOpen.Set(true) }),
+				until("the extension store", func() bool { r := ggui.Peek(m.ExtResults); return r.Listings != nil || r.Err != "" }),
+				frames(10), shot("03-extensions"),
 				do(func() { m.ExtensionsOpen.Set(false); m.setSidebarGroup(groupHost) }), frames(10), shot("03-sidebar-host"),
 				do(func() { m.setSidebarGroup(groupFlat) }), frames(4), shot("03-sidebar-flat"),
 				do(func() { m.setSidebarGroup(groupProject) }), frames(2),
@@ -345,3 +362,17 @@ func previewStatus(sessions []*protocol.SessionInfo, id string) []*protocol.Sess
 
 // previewStep runs on a frame and reports whether it is finished.
 type previewStep func() (done bool, err error)
+
+// previewTools are tool calls of the kinds the chat reads, as Claude Code
+// and Codex write them.
+func previewTools() []*protocol.ChatMessage {
+	return []*protocol.ChatMessage{
+		{Role: "tool", Id: "t1", Tool: "Bash", Detail: "go test ./internal/gui", Text: `{"command": "go test ./internal/gui", "description": "Run the GUI tests"}`,
+			Result: "ok  \tgithub.com/ironpark/sanbo/internal/gui\t7.450s\n"},
+		{Role: "tool", Id: "t2", Tool: "Edit", Detail: "internal/gui/view.go", Text: `{"file_path": "internal/gui/view.go", "old_string": "\tsidebarWidth = 272\n\tdetailsWidth = 320", "new_string": "\tsidebarWidth = 272 // until dragged\n\tdetailsWidth = 320"}`},
+		{Role: "tool", Id: "t3", Tool: "TodoWrite", Text: `{"todos": [{"content": "Resize the sidebar", "status": "completed"}, {"content": "Fold sidebar groups", "status": "in_progress"}, {"content": "Render tool calls", "status": "pending"}]}`},
+		{Role: "tool", Id: "t4", Tool: "exec_command", Detail: "git status --short", Text: `{"cmd": "git status --short", "workdir": "/Users/me/sanbo"}`,
+			Result: "Chunk ID: 1\nWall time: 0.1 seconds\nProcess exited with code 0\nOutput:\n M internal/gui/view.go\n?? internal/gui/toolview.go\n"},
+		{Role: "tool", Id: "t5", Tool: "apply_patch", Text: "*** Begin Patch\n*** Update File: internal/gui/prefs.go\n@@ type prefs struct {\n-\tDetailsWidth float64\n+\tSidebarWidth float64\n+\tDetailsWidth float64\n*** End Patch"},
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
@@ -62,96 +63,83 @@ func (m *model) openQuickOpen() {
 // maxQuick is how many files quick open lists for a search.
 const maxQuick = 80
 
-// refreshQuick lists the files that match what is typed, best first.
+// refreshQuick lists the files that match what is typed again.
 func (m *model) refreshQuick() {
-	if m.quick == nil {
-		return
+	if m.quick != nil {
+		m.quick.refresh()
 	}
-	q := ggui.Peek(m.QuickQuery)
+}
+
+// quickRows are the files that match q, best first: the name and the
+// folder it is in, their letters typed marked.
+func (m *model) quickRows(q string) []pickRow {
 	qf := m.quickFiles
-	var entries []ui.CommandEntry
-	for _, p := range rankFiles(qf.Files, q, maxQuick) {
+	var rows []pickRow
+	for _, f := range rankFiles(qf.Files, q, maxQuick) {
+		p := f.Path
 		it := fileItem{Key: dirKey(qf.Root.Node, joinPath(qf.Root.Path, p)), Node: qf.Root.Node, Path: joinPath(qf.Root.Path, p), Name: baseName(p)}
-		label := baseName(p)
-		if dir := strings.TrimSuffix(p, baseName(p)); dir != "" {
-			label += "  ·  " + strings.TrimSuffix(dir, "/")
-		}
-		// The palette keeps entries holding the query; these are already
-		// matched, by their letters in order.
-		entries = append(entries, ui.CommandItem(label, func() { m.openFile(it) }).Keywords(q))
+		dir := strings.TrimSuffix(strings.TrimSuffix(p, it.Name), "/")
+		inDir, inName := splitHits(f.Hits, utf8.RuneCountInString(p)-utf8.RuneCountInString(it.Name))
+		rows = append(rows, pickRow{Label: it.Name, Hits: inName, Detail: dir, DetailHits: inDir,
+			Icon: icon(fileIconName(it.Name)).Size(15).Color(tokMuted), Run: func() { m.openFile(it) }})
 	}
-	m.quick.Entries(entries...)
+	return rows
+}
+
+// rankedFile is a path that matched, and the runes of it that did.
+type rankedFile struct {
+	Path string
+	Hits []int
 }
 
 // rankFiles is the paths holding q's letters in order, best first: the
 // letters together, at the starts of words, and in the file's name score
 // higher, and shorter paths before longer.
-func rankFiles(paths []string, q string, n int) []string {
-	q = strings.ToLower(strings.ReplaceAll(q, " ", ""))
-	if q == "" {
-		return paths[:min(len(paths), n)]
-	}
+func rankFiles(paths []string, q string, n int) []rankedFile {
 	type scored struct {
-		path  string
+		rankedFile
 		score int
 	}
 	var hits []scored
 	for _, p := range paths {
-		if s, ok := fuzzyScore(p, q); ok {
-			hits = append(hits, scored{p, s})
+		score, at, ok := fuzzyMatch(p, q)
+		if !ok {
+			continue
+		}
+		name := utf8.RuneCountInString(p[:strings.LastIndexByte(p, '/')+1])
+		for _, i := range at {
+			if i >= name {
+				score += 2 // in the file's name
+			}
+		}
+		hits = append(hits, scored{rankedFile{p, at}, score - len(p)/16})
+		if q == "" && len(hits) == n {
+			break
 		}
 	}
-	slices.SortStableFunc(hits, func(a, b scored) int {
-		if a.score != b.score {
-			return b.score - a.score
-		}
-		return len(a.path) - len(b.path)
-	})
-	out := make([]string, 0, min(len(hits), n))
+	if q != "" {
+		slices.SortStableFunc(hits, func(a, b scored) int {
+			if a.score != b.score {
+				return b.score - a.score
+			}
+			return len(a.Path) - len(b.Path)
+		})
+	}
+	out := make([]rankedFile, 0, min(len(hits), n))
 	for _, h := range hits[:min(len(hits), n)] {
-		out = append(out, h.path)
+		out = append(out, h.rankedFile)
 	}
 	return out
 }
 
-// fuzzyScore scores a path holding the lowercase letters q in order, and
-// reports whether it does.
-func fuzzyScore(path, q string) (int, bool) {
-	lower := strings.ToLower(path)
-	name := strings.LastIndexByte(path, '/') + 1
-	score, at, prev := 0, 0, -2
-	for _, r := range q {
-		i := strings.IndexRune(lower[at:], r)
-		if i < 0 {
-			return 0, false
-		}
-		i += at
-		switch {
-		case i == prev+1:
-			score += 6 // together
-		case i == 0 || strings.ContainsRune("/_-. ", rune(path[i-1])) || unicode.IsUpper(rune(path[i])) && !unicode.IsUpper(rune(path[i-1])):
-			score += 4 // a word's start
-		}
-		if i >= name {
-			score += 2
-		}
-		prev = i
-		at = i + len(string(r))
-	}
-	return score - len(path)/16, true
-}
-
 // quickOpenDialog is quick open over the window.
 func quickOpenDialog(m *model) ggui.Widget {
-	m.quick = ui.Command(m.QuickQuery).
-		Placeholder(T("Go to a file by its name…")).Name(T("Go to file")).
-		Hints().HintLabels(T("Navigate"), T("Open")).Empty(T("No files match")).Height(360)
-	ggui.Effect(func() ggui.Cleanup {
-		m.QuickQuery.Get()
-		ggui.Untrack(func() struct{} { m.refreshQuick(); return struct{}{} })
-		return nil
-	})
-	return ui.CommandDialog(m.QuickOpen, m.quick).Name(T("Go to file")).Width(580)
+	m.quick = newPicker(m.QuickOpen, m.QuickQuery, m.quickRows)
+	m.quick.Placeholder = T("Go to a file by its name…")
+	m.quick.Name = T("Go to file")
+	m.quick.Empty = T("No files match")
+	m.quick.Action = T("Open")
+	return m.quick.dialog()
 }
 
 // searchView is what the Search tab last found.

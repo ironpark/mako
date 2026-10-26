@@ -618,12 +618,7 @@ func (m *model) loadExtensions() {
 		}
 		langs := zed.Languages(exts)
 		m.hl.setLanguages(langs)
-		names := map[string][]string{}
-		for _, l := range langs {
-			names[l.Extension] = append(names[l.Extension], l.Config.Name)
-		}
 		m.post(func() {
-			m.extLanguages = names
 			m.Extensions.Set(exts)
 			m.langGen++
 		})

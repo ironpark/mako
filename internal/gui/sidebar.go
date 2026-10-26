@@ -95,14 +95,16 @@ func (m *model) pinned(id string) bool { return slices.Contains(ggui.Peek(m.Pref
 
 // togglePin pins a session to the top of the sidebar, or unpins it.
 func (m *model) togglePin(id string) {
-	m.Prefs.Update(func(p prefs) prefs {
-		if slices.Contains(p.Pinned, id) {
-			p.Pinned = slices.DeleteFunc(slices.Clone(p.Pinned), func(o string) bool { return o == id })
-		} else {
-			p.Pinned = append(slices.Clone(p.Pinned), id)
-		}
-		return p
-	})
+	m.Prefs.Update(func(p prefs) prefs { p.Pinned = toggled(p.Pinned, id); return p })
+}
+
+// toggled is list with v taken out, or put at its end when it is not in
+// it: a copy, so the list a setting held stays as it was.
+func toggled(list []string, v string) []string {
+	if slices.Contains(list, v) {
+		return slices.DeleteFunc(slices.Clone(list), func(o string) bool { return o == v })
+	}
+	return append(slices.Clone(list), v)
 }
 
 // sectionDrop starts a session dropped on a section's heading again

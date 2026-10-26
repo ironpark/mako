@@ -402,25 +402,33 @@ func (r *mdRenderer) beside(rel string) string {
 // code is a code block, highlighted in its language when there is one,
 // selectable, and scrolling sideways rather than wrapping.
 func (r *mdRenderer) code(n ast.Node, lang string) ggui.Widget {
-	m := r.m
-	p := ggui.Peek(m.Prefs)
-	tab := defaultTab
-	var hl *docSyntax
-	ready := ggui.State(0) // counts the highlights the worker has found
 	if f := strings.Fields(lang); len(f) > 0 {
 		lang = f[0] // the info string's first word
 	} else {
 		lang = ""
 	}
+	var l language
+	ok := false
 	if lang != "" {
-		if l, ok := m.hl.languageNamed(lang); ok {
-			hl = m.syntaxFor(l)
-			hl.wake = func() { m.post(func() { ready.Set(ggui.Peek(ready) + 1) }) }
-			tab = pick(l.TabSize > 0, l.TabSize, tab)
-		}
+		l, ok = r.m.hl.languageNamed(lang)
 	}
-	// Tabs stop as in the editor; the text has them as spaces.
-	src := strings.TrimSuffix(expandTabs(r.segmentsText(n.Lines()), tab), "\n")
+	text := codeText(r.m, r.segmentsText(n.Lines()), l, ok, ggui.Peek(r.m.Prefs).FontSize)
+	return ggui.Box(ggui.Scroll(ggui.Padding(text, 12, 14)).Horizontal().Bar(tokSurface3)).
+		Fill(tokSurface1).Border(1, tokBorder).Radius(8)
+}
+
+// codeText is src as selectable lines of code, highlighted in l when has
+// is true, its tabs stopping as in the editor.
+func codeText(m *model, src string, l language, has bool, size float64) *ggui.RichTextWidget {
+	tab := defaultTab
+	var hl *docSyntax
+	ready := ggui.State(0) // counts the highlights the worker has found
+	if has {
+		hl = m.syntaxFor(l)
+		hl.wake = func() { m.post(func() { ready.Set(ggui.Peek(ready) + 1) }) }
+		tab = pick(l.TabSize > 0, l.TabSize, tab)
+	}
+	src = strings.TrimSuffix(expandTabs(src, tab), "\n")
 	spans := ggui.Derived(func() []ggui.TextSpan {
 		ready.Get()
 		if hl == nil {
@@ -428,10 +436,8 @@ func (r *mdRenderer) code(n ast.Node, lang string) ggui.Widget {
 		}
 		return colorSpans(src, hl.colors(src, paletteFor(m.Prefs.Get().Theme, ggui.SystemDark().Get())))
 	})
-	text := ggui.RichText().BindSpans(spans).NoWrap().Selectable().
-		Font(ggui.DefaultMonoFont()).Size(p.FontSize).LineHeight(max(p.LineHeight, 1.2))
-	return ggui.Box(ggui.Scroll(ggui.Padding(text, 12, 14)).Horizontal().Bar(tokSurface3)).
-		Fill(tokSurface1).Border(1, tokBorder).Radius(8)
+	return ggui.RichText().BindSpans(spans).NoWrap().Selectable().
+		Font(ggui.DefaultMonoFont()).Size(size).LineHeight(max(ggui.Peek(m.Prefs).LineHeight, 1.2))
 }
 
 // colorSpans is src as spans coloured by styles, in order, and the text

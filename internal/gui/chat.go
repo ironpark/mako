@@ -292,8 +292,9 @@ func chatTurns(m *model, id string, info *protocol.SessionInfo, state *chatState
 			var tools []ggui.Widget
 			var names []string
 			for i < len(messages) && messages[i].GetRole() == "tool" {
-				tools = append(tools, toolRow(state, messages[i]))
-				names = append(names, toolName(messages[i]))
+				tools = append(tools, toolRow(m, state, messages[i]))
+				name, _, _, _, _ := toolParts(messages[i])
+				names = append(names, name)
 				i++
 			}
 			var body ggui.Widget = ggui.Column(tools...).Gap(2).Stretch()
@@ -322,21 +323,22 @@ func toolRun(state *chatState, key string, names []string, folded bool, body ggu
 			distinct = append(distinct, n)
 		}
 	}
-	header := ui.ButtonOf(ggui.Row(
-		icon("layers").Size(14).Color(tokMuted),
-		ggui.Text(Tf("%d tool calls", len(names))).Size(12.5).NoWrap(),
-		ggui.Expanded(muted(ggui.Text(strings.Join(distinct, ", ")).Size(12).NoWrap().Ellipsis())),
-		ggui.View(open, func(o bool) ggui.Widget {
-			return icon("chevron-down").Size(13).Color(tokExtraMuted).Rotate(pick(o, 0.0, -math.Pi/2))
-		}),
-	).Gap(8).Stretch(), func() { open.Set(!ggui.Untrack(open.Get)) }).Ghost().Pad(4, 6).Radius(6).Name(Tf("%d tool calls", len(names)))
+	title := Tf("%d tool calls", len(names))
+	header := foldHeader(open, icon("layers").Size(14).Color(tokMuted), ggui.Text(title).Size(12.5).NoWrap(), strings.Join(distinct, ", "), title)
 	return ggui.Column(header, ggui.If(open, func() ggui.Widget { return body })).Gap(2).Stretch()
 }
 
-// toolName is the name a tool row shows.
-func toolName(msg *protocol.ChatMessage) string {
-	name, _, _, _, _ := toolParts(msg)
-	return name
+// foldHeader is the line a fold opens and closes from: a glyph, a title,
+// a muted detail, and a chevron that turns as it opens.
+func foldHeader(open ggui.Binding[bool], glyph, title ggui.Widget, detail, name string) ggui.Widget {
+	return ui.ButtonOf(ggui.Row(
+		glyph,
+		title,
+		ggui.Expanded(muted(ggui.Text(detail).Size(12).NoWrap().Ellipsis())),
+		ggui.View(open, func(o bool) ggui.Widget {
+			return icon("chevron-down").Size(13).Color(tokExtraMuted).Rotate(pick(o, 0.0, -math.Pi/2))
+		}),
+	).Gap(8).Stretch(), func() { open.Set(!ggui.Untrack(open.Get)) }).Ghost().Pad(4, 6).Radius(6).Name(name)
 }
 
 func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage) ggui.Widget {
@@ -379,8 +381,8 @@ func copyButton(m *model, text string) ggui.Widget {
 
 // toolRow is one tool call: a glyph, its name and argument summary, and a
 // fold with the arguments and what it printed.
-func toolRow(state *chatState, msg *protocol.ChatMessage) ggui.Widget {
-	name, detail, args, result, failed := toolParts(msg)
+func toolRow(m *model, state *chatState, msg *protocol.ChatMessage) ggui.Widget {
+	name, detail, _, _, failed := toolParts(msg)
 	open := state.toolOpen(chatMessageKey(msg), failed)
 	glyph := icon(toolGlyph(name)).Size(14).Color(tokMuted)
 	if failed {
@@ -390,40 +392,13 @@ func toolRow(state *chatState, msg *protocol.ChatMessage) ggui.Widget {
 	if detail != "" {
 		label += "  " + detail
 	}
-	header := ui.ButtonOf(ggui.Row(
-		glyph,
-		ggui.Text(name).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap(),
-		ggui.Expanded(muted(ggui.Text(detail).Size(12).NoWrap().Ellipsis())),
-		ggui.View(open, func(o bool) ggui.Widget {
-			rotation := -math.Pi / 2
-			if o {
-				rotation = 0
-			}
-			return icon("chevron-down").Size(13).Color(tokExtraMuted).Rotate(rotation)
-		}),
-	).Gap(8).Stretch(), func() { open.Set(!ggui.Untrack(open.Get)) }).Ghost().Pad(4, 6).Radius(6).Name(label)
-	return ggui.Column(header, ggui.If(open, func() ggui.Widget { return toolBody(args, result, failed) })).Gap(2).Stretch()
+	header := foldHeader(open, glyph, ggui.Text(name).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap(), detail, label)
+	return ggui.Column(header, ggui.If(open, func() ggui.Widget { return toolBody(m, msg) })).Gap(2).Stretch()
 }
 
-func toolBody(args, result string, failed bool) ggui.Widget {
-	if failed && result == "" {
-		result = T("The tool failed without output.")
-	}
-	var rows []ggui.Widget
-	if args != "" {
-		rows = append(rows, toolLabel(T("Arguments")), toolBlock(args, false))
-	}
-	if result != "" {
-		label := T("Output")
-		if failed {
-			label = T("Error")
-		}
-		rows = append(rows, toolLabel(label), toolBlock(result, failed))
-	}
-	if len(rows) == 0 {
-		return ggui.Padding(muted(ggui.Text(T("No output")).Size(12)), 4, 6, 6, 6)
-	}
-	return ggui.Padding(ggui.Column(rows...).Gap(4).Stretch(), 4, 6, 6, 18)
+// toolFrame is the frame of a tool's code, output or command.
+func toolFrame(w ggui.Widget) *ggui.BoxWidget {
+	return ggui.Box(w).Fill(tokSurface0).Border(1, tokBorder).Radius(6)
 }
 
 func toolLabel(s string) ggui.Widget { return ggui.Text(s).Size(11).Color(tokExtraMuted) }
@@ -434,7 +409,7 @@ func toolBlock(text string, failed bool) ggui.Widget {
 	if failed {
 		t = t.Color(tokDotDown)
 	}
-	return ggui.Box(t).Fill(tokSurface0).Border(1, tokBorder).Radius(6).Pad(8, 10)
+	return toolFrame(t).Pad(8, 10)
 }
 
 // toolParts reads a tool message: a call with its result, or output whose
@@ -458,20 +433,4 @@ func chatMessageKey(msg *protocol.ChatMessage) string {
 		_, _ = h.Write([]byte{0})
 	}
 	return strconv.FormatUint(h.Sum64(), 16)
-}
-
-func toolGlyph(name string) string {
-	switch strings.ToLower(name) {
-	case "bash", "shell", "exec_command", "exec", "write_stdin":
-		return "square-terminal"
-	case "read", "write", "edit", "multiedit", "notebookedit", "apply_patch":
-		return "file-text"
-	case "grep", "glob", "search":
-		return "radar"
-	case "webfetch", "websearch", "fetch":
-		return "network"
-	case "task", "agent":
-		return "list"
-	}
-	return "square-dot"
 }

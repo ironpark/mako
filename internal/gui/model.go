@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
-	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/sanbo/internal/agentspec"
 	"github.com/ironpark/sanbo/internal/client"
@@ -75,14 +74,18 @@ type model struct {
 	// The command palette, and the extensions it opens over the window;
 	// see palette.go. Each opening gives palette the commands of the
 	// moment.
-	PaletteOpen    *ggui.StateValue[bool]
-	PaletteQuery   *ggui.StateValue[string]
-	palette        *ui.CommandWidget
-	ExtensionsOpen *ggui.StateValue[bool]
+	PaletteOpen  *ggui.StateValue[bool]
+	PaletteQuery *ggui.StateValue[string]
+	palette      *picker
+	// What the palette lists while it is open: its commands and the tabs
+	// and sessions, read as it opens.
+	paletteCommands []command
+	paletteTabs     []pickRow
+	ExtensionsOpen  *ggui.StateValue[bool]
 	// Quick open, and the files it last read; see search.go.
 	QuickOpen  *ggui.StateValue[bool]
 	QuickQuery *ggui.StateValue[string]
-	quick      *ui.CommandWidget
+	quick      *picker
 	quickFiles quickFiles
 	// The Search tab: what is typed, what was found, and whether its field
 	// is to take the keys when it next shows.
@@ -147,13 +150,14 @@ type model struct {
 	// highlight.go. langGen counts the changes to the languages.
 	hl         *highlighter
 	Extensions *ggui.StateValue[[]zed.Extension]
-	// extLanguages names each extension's languages, by its ID, as read
-	// with Extensions.
-	extLanguages map[string][]string
-	langGen      int
-	ExtResults   *ggui.StateValue[extSearch]
-	ExtBusy      *ggui.StateValue[map[string]bool] // extensions being installed
-	ExtErr       *ggui.StateValue[string]
+	langGen    int
+	ExtResults *ggui.StateValue[extSearch]
+	ExtBusy    *ggui.StateValue[map[string]bool] // extensions being installed
+	ExtErr     *ggui.StateValue[string]
+	// What the extensions list is searched for and narrowed to.
+	ExtQuery *ggui.StateValue[string]
+	ExtShow  *ggui.StateValue[string]
+	ExtKind  *ggui.StateValue[string]
 	// MCPServers mirrors cfg.ContextServers for the settings page, and
 	// MCPInfo is what the extensions say about setting each up.
 	MCPServers *ggui.StateValue[map[string]mcp.Server]
@@ -192,6 +196,7 @@ type model struct {
 	// DetailsWidth is the right panel's width, following a drag of its
 	// edge; the settings keep it when the drag ends.
 	DetailsWidth *ggui.StateValue[float64]
+	SidebarWidth *ggui.StateValue[float64] // the sidebar's, as DetailsWidth
 	DetailTab    *ggui.StateValue[int]
 	ImageOpen    *ggui.StateValue[bool] // the previewed image is shown enlarged
 	NewOpen      *ggui.StateValue[bool]
@@ -256,6 +261,9 @@ func newModel(cfg *config.Config, addr string) *model {
 		ExtResults:     ggui.State(extSearch{}).WithEqual(func(a, b extSearch) bool { return reflect.DeepEqual(a, b) }),
 		ExtBusy:        ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		ExtErr:         ggui.State(""),
+		ExtQuery:       ggui.State(""),
+		ExtShow:        ggui.State(extShowAll),
+		ExtKind:        ggui.State(""),
 		MCPServers:     ggui.State(maps.Clone(cfg.ContextServers)).WithEqual(func(a, b map[string]mcp.Server) bool { return reflect.DeepEqual(a, b) }),
 		MCPInfo:        ggui.State(map[string]mcpInfo(nil)).WithEqual(func(a, b map[string]mcpInfo) bool { return reflect.DeepEqual(a, b) }),
 		MCPNote:        ggui.State(""),
@@ -311,6 +319,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		SidebarFilter:  ggui.State(""),
 		DetailsOpen:    ggui.State(true),
 		DetailsWidth:   ggui.State(p.DetailsWidth),
+		SidebarWidth:   ggui.State(p.SidebarWidth),
 		DetailTab:      ggui.State(0),
 		ImageOpen:      ggui.State(false),
 		NewOpen:        ggui.State(false),

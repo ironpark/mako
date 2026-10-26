@@ -23,13 +23,14 @@ import (
 // carries the composer, and a panel on the right of the project's files and
 // the session's details.
 const (
-	sidebarWidth = 272
+	sidebarWidth = 272 // the sidebar's, until dragged, and the settings page's
 	detailsWidth = 320 // the right panel's, until dragged
 	headerHeight = 48
 	tabBarHeight = 38
 
+	minSidebarWidth, maxSidebarWidth = 200, 520
 	minDetailsWidth, maxDetailsWidth = 260, 900
-	// panelEdgeWidth is the right panel's draggable edge.
+	// panelEdgeWidth is a side panel's draggable edge.
 	panelEdgeWidth = 4
 )
 
@@ -47,7 +48,8 @@ func window(m *model) ggui.Widget {
 	inSettings := ggui.Map(m.Page, func(p string) bool { return p == "settings" })
 	// The side panels slide open and closed beside the workspace.
 	main := ggui.Row(
-		newDrawer(ggui.Row(sidebar(m), vline()).Stretch(), m.SidebarOpen, ggui.State[float64](sidebarWidth+1), false),
+		newDrawer(ggui.Row(ggui.Expanded(sidebar(m)), sidebarEdge(m)).Stretch(), m.SidebarOpen,
+			ggui.Map(m.SidebarWidth, func(w float64) float64 { return w + panelEdgeWidth }), false),
 		ggui.Expanded(workspace(m)),
 		newDrawer(ggui.Row(panelEdge(m), ggui.Expanded(details(m))).Stretch(), m.DetailsOpen,
 			ggui.Map(m.DetailsWidth, func(w float64) float64 { return w + panelEdgeWidth }), true),
@@ -158,6 +160,7 @@ func sidebar(m *model) ggui.Widget {
 	grouping := ggui.Map(m.Prefs, func(p prefs) string { return p.SidebarGroup })
 	projects := ggui.Map(m.Prefs, func(p prefs) []fileRoot { return p.Projects }).WithEqual(slices.Equal)
 	pinned := ggui.Map(m.Prefs, func(p prefs) []string { return p.Pinned }).WithEqual(slices.Equal)
+	collapsed := ggui.Map(m.Prefs, func(p prefs) []string { return p.Collapsed }).WithEqual(slices.Equal)
 	list := ggui.Reactive(func() ggui.Widget {
 		by := grouping.Get()
 		nodes := m.Nodes.Get()
@@ -195,8 +198,11 @@ func sidebar(m *model) ggui.Widget {
 		if len(top) > 0 {
 			children = append(children, pinnedSection(m, top, selected, nodes, titles))
 		}
+		folded := collapsed.Get()
 		for _, g := range groups {
-			children = append(children, sessionSection(m, by, g, selected, nodes, titles, names[g.Key]))
+			// A filter shows what it finds in folded groups too.
+			fold := query == "" && slices.Contains(folded, foldKey(by, g))
+			children = append(children, sessionSection(m, by, g, fold, selected, nodes, titles, names[g.Key]))
 		}
 		return ggui.Column(children...).Gap(6).Stretch()
 	})
@@ -208,7 +214,7 @@ func sidebar(m *model) ggui.Widget {
 		ggui.Expanded(ggui.Scroll(ggui.Padding(list, 8, 8)).Bar(tokSurface3)),
 		hline(),
 		sidebarFooter(m),
-	).Stretch()).Width(sidebarWidth).Fill(tokSidebar)
+	).Stretch()).Fill(tokSidebar)
 }
 
 // grouping is a way the sidebar groups sessions, and how its header shows
@@ -243,10 +249,20 @@ func (m *model) setSidebarGroup(by string) {
 	m.Prefs.Update(func(p prefs) prefs { p.SidebarGroup = by; return p })
 }
 
+// foldKey names a sidebar group in the folded list: how the sidebar
+// groups, and the group.
+func foldKey(by string, g sessionGroup) string { return by + ":" + g.Key }
+
+// toggleFold folds a sidebar group to its heading, or opens it.
+func (m *model) toggleFold(key string) {
+	m.Prefs.Update(func(p prefs) prefs { p.Collapsed = toggled(p.Collapsed, key); return p })
+}
+
 // sessionSection is one of the sidebar's groups: a heading for its project
 // or host with a button to start another session there, over its sessions.
-// The list's one group has no heading.
-func sessionSection(m *model, by string, g sessionGroup, selected string, nodes []*protocol.Node, titles map[string]string, label string) ggui.Widget {
+// A tap on the heading folds the group to it, its sessions counted. The
+// list's one group has no heading.
+func sessionSection(m *model, by string, g sessionGroup, folded bool, selected string, nodes []*protocol.Node, titles map[string]string, label string) ggui.Widget {
 	nodeID, project := g.NodeID, g.Project
 	var rows []ggui.Widget
 	indent := by != groupFlat
@@ -266,13 +282,18 @@ func sessionSection(m *model, by string, g sessionGroup, selected string, nodes 
 			}
 			status = linkDot(up)
 		}
-		row := []ggui.Widget{
+		title := []ggui.Widget{
+			icon(pick(folded, "chevron-right", "chevron-down")).Size(13).Color(tokExtraMuted),
 			icon(glyph).Size(15),
-			ggui.Expanded(ggui.Row(
-				ggui.Flex(ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis(), 1),
-				status,
-			).Gap(10).Align(ggui.AlignCenter)),
+			ggui.Flex(ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis(), 1),
 		}
+		if folded && len(g.Sessions) > 0 {
+			title = append(title, ggui.Text(fmt.Sprint(len(g.Sessions))).Size(11.5).Color(tokExtraMuted).NoWrap())
+		}
+		key := foldKey(by, g)
+		toggle := ui.ButtonOf(ggui.Row(append(title, ggui.Spacer(), status)...).Gap(6).Align(ggui.AlignCenter),
+			func() { m.toggleFold(key) }).Ghost().Pad(2, 4).Radius(5).Name(pick(folded, Tf("Expand %s", name), Tf("Collapse %s", name)))
+		row := []ggui.Widget{ggui.Expanded(toggle)}
 		// A folder kept with no sessions has nothing to bring it back once
 		// it leaves, so its menu can drop it.
 		if len(g.Sessions) == 0 {
@@ -285,7 +306,10 @@ func sessionSection(m *model, by string, g sessionGroup, selected string, nodes 
 			Ghost().Pad(3).Radius(5).Name(Tf("New session in %s", name)), T("New session here")))
 		// A session dropped on the heading starts again there: its agent
 		// in this folder, or on this host in its own folder.
-		rows = append(rows, sectionDrop(m, ggui.Box(ggui.Row(row...).Gap(10)).Pad(4, 4, 4, 10), nodeID, project))
+		rows = append(rows, sectionDrop(m, ggui.Box(ggui.Row(row...).Gap(6).Align(ggui.AlignCenter)).Pad(2, 4, 2, 2), nodeID, project))
+		if folded {
+			return ggui.Column(rows...).Gap(2).Stretch()
+		}
 		if len(g.Sessions) == 0 {
 			rows = append(rows, ggui.Padding(ggui.Box(muted(ggui.Text(T("No sessions")).Size(11.5))).Pad(3, 4), 0, 0, 0, 14))
 		}
@@ -679,16 +703,30 @@ func details(m *model) ggui.Widget {
 // panelEdge is the right panel's left edge, which drags to resize the
 // panel; the width is kept when the drag ends.
 func panelEdge(m *model) ggui.Widget {
-	var from, start float64
 	edge := ggui.Box(ggui.Row(vline(), ggui.Spacer()).Stretch()).Width(panelEdgeWidth).Fill(tokSurface0)
+	return resizeEdge(m, edge, m.DetailsWidth, -1, minDetailsWidth, maxDetailsWidth,
+		func(p *prefs) *float64 { return &p.DetailsWidth })
+}
+
+// sidebarEdge is the sidebar's right edge, which drags to resize it as
+// panelEdge does the right panel.
+func sidebarEdge(m *model) ggui.Widget {
+	edge := ggui.Box(ggui.Row(ggui.Spacer(), vline()).Stretch()).Width(panelEdgeWidth).Fill(tokSidebar)
+	return resizeEdge(m, edge, m.SidebarWidth, 1, minSidebarWidth, maxSidebarWidth,
+		func(p *prefs) *float64 { return &p.SidebarWidth })
+}
+
+// resizeEdge has edge drag width within [lo, hi]: wider as it moves the
+// way dir says, 1 for right, and kept in the setting field gives when the
+// drag ends.
+func resizeEdge(m *model, edge ggui.Widget, width *ggui.StateValue[float64], dir, lo, hi float64, field func(*prefs) *float64) ggui.Widget {
+	var from, start float64
 	return ggui.Pointer(edge).Cursor(ggui.CursorShapeEWResize).
-		OnDown(func(ev ggui.PointerEvent) { from, start = ev.Pos.X, ggui.Peek(m.DetailsWidth) }).
-		OnDrag(func(ev ggui.PointerEvent) {
-			m.DetailsWidth.Set(min(max(start+from-ev.Pos.X, minDetailsWidth), maxDetailsWidth))
-		}).
+		OnDown(func(ev ggui.PointerEvent) { from, start = ev.Pos.X, ggui.Peek(width) }).
+		OnDrag(func(ev ggui.PointerEvent) { width.Set(min(max(start+dir*(ev.Pos.X-from), lo), hi)) }).
 		OnUp(func(ggui.PointerEvent) {
-			w := ggui.Peek(m.DetailsWidth)
-			m.Prefs.Update(func(p prefs) prefs { p.DetailsWidth = w; return p })
+			w := ggui.Peek(width)
+			m.Prefs.Update(func(p prefs) prefs { *field(&p) = w; return p })
 		})
 }
 

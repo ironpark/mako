@@ -47,8 +47,12 @@ type prefs struct {
 
 	// The sidebar's sessions: by project, by host, or in one list.
 	SidebarGroup string `json:"sidebar_group"`
-	// DetailsWidth is the right panel's width, as last dragged.
+	// The side panels' widths, as last dragged.
+	SidebarWidth float64 `json:"sidebar_width,omitempty"`
 	DetailsWidth float64 `json:"details_width,omitempty"`
+	// Collapsed are the sidebar's groups folded to their headings, by how
+	// it groups and the group: "project:<node>:<path>", "host:<node>".
+	Collapsed []string `json:"collapsed,omitempty"`
 
 	// How diffs are drawn: side by side, and with long lines wrapped.
 	DiffSplit bool `json:"diff_split,omitempty"`
@@ -56,6 +60,10 @@ type prefs struct {
 
 	// Pinned are the sessions the sidebar lists first.
 	Pinned []string `json:"pinned,omitempty"`
+
+	// RecentCommands are the palette's commands run lately, the latest
+	// first, by their English labels.
+	RecentCommands []string `json:"recent_commands,omitempty"`
 
 	// Projects are the folders the sidebar keeps, so one outlives its last
 	// session. A folder leaves the list from its own menu.
@@ -133,6 +141,10 @@ func (p prefs) normalized() prefs {
 	}
 	p.LineHeight = min(max(p.LineHeight, minLineHeight), maxLineHeight)
 	p.Scrollback = min(max(p.Scrollback, minScrollback), maxScrollback)
+	if p.SidebarWidth == 0 {
+		p.SidebarWidth = sidebarWidth
+	}
+	p.SidebarWidth = min(max(p.SidebarWidth, minSidebarWidth), maxSidebarWidth)
 	if p.DetailsWidth == 0 {
 		p.DetailsWidth = detailsWidth
 	}
