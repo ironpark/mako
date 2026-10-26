@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -32,7 +33,8 @@ type Tailscale struct {
 	Interval time.Duration
 	// Timeout bounds a single probe.
 	Timeout time.Duration
-	// Binary is the tailscale CLI to consult; defaults to "tailscale".
+	// Binary is the tailscale CLI to consult; defaults to "tailscale" on
+	// the PATH, else the CLI inside the macOS app.
 	Binary string
 }
 
@@ -95,7 +97,7 @@ func (t *Tailscale) scan(ctx context.Context, out chan<- Found) {
 func (t *Tailscale) tailnetHosts(ctx context.Context) ([]string, error) {
 	bin := t.Binary
 	if bin == "" {
-		bin = "tailscale"
+		bin = tailscaleCLI()
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -122,6 +124,21 @@ func (t *Tailscale) tailnetHosts(ctx context.Context) ([]string, error) {
 		hosts = append(hosts, trimDot(peer.DNSName))
 	}
 	return hosts, nil
+}
+
+// macTailscale is the CLI the macOS app carries, which is not on the PATH
+// unless the user linked it there.
+const macTailscale = "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+
+// tailscaleCLI finds the tailscale CLI: on the PATH, else in the macOS app.
+func tailscaleCLI() string {
+	if path, err := exec.LookPath("tailscale"); err == nil {
+		return path
+	}
+	if _, err := os.Stat(macTailscale); err == nil {
+		return macTailscale
+	}
+	return "tailscale"
 }
 
 func (t *Tailscale) port() int {
