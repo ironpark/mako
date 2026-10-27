@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transcript"
 	"github.com/ironpark/mako/internal/transport"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -23,7 +24,8 @@ func (d *Daemon) handleReadChat(ctx context.Context, stream *transport.Stream, e
 			}
 			return &protocol.Chat{Usage: withReported(u, s.Reported())}, nil
 		}
-		chat, err := d.chatForSession(ctx, s)
+		span := transcript.Span{After: max(r.GetAfter(), 0), Before: max(r.GetBefore(), 0)}
+		chat, err := d.chatForSession(ctx, s, span)
 		if err != nil {
 			return nil, err
 		}

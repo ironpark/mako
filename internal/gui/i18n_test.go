@@ -54,6 +54,10 @@ func TestEveryStringIsTranslated(t *testing.T) {
 			want[l] = "settings labels"
 		}
 	}
+	for _, c := range paletteColors {
+		want[c.label] = "paletteColors"
+		want[c.group] = "paletteColors"
+	}
 	if len(want) < 100 {
 		t.Fatalf("found only %d strings to translate; is the scan broken?", len(want))
 	}

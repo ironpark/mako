@@ -19,6 +19,7 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transcript"
 	"github.com/yuin/goldmark/text"
+	"google.golang.org/protobuf/proto"
 )
 
 // chatLaneWidth is the width the transcript and the composer share.
@@ -29,11 +30,27 @@ type chatResult struct {
 	Err    string
 	Loaded bool
 }
+
+// chatPages are messages read from further back than the latest, oldest
+// first: from Start in the log up to End, where the latest messages began
+// when they were last joined on.
+type chatPages struct {
+	Messages   []*protocol.ChatMessage
+	Start, End int64
+}
+
 type chatState struct {
 	result  *ggui.StateValue[chatResult]
 	draft   *ggui.StateValue[string]
 	tools   *ggui.StateValue[map[string]bool] // open tool rows, by message key
 	loading bool
+	// older are the messages read from before the latest, for a reader who
+	// scrolled back; paging while a read of them is out.
+	older  *ggui.StateValue[chatPages]
+	paging bool
+	// grew is how tall the feed's content was before older messages came
+	// in above it, to keep what is in view where it was; 0 for none.
+	grew float64
 	// sent is what the composer sent, oldest first, for ↑ and ↓ to bring
 	// back; recall is the one shown, len(sent) for none.
 	sent   []string
@@ -46,6 +63,7 @@ func (m *model) chatState(id string) *chatState {
 	}
 	state := &chatState{
 		result: ggui.State(chatResult{}).WithEqual(deepEqual),
+		older:  ggui.State(chatPages{}).WithEqual(deepEqual),
 		draft:  ggui.State(""),
 		tools:  ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 	}
@@ -108,7 +126,89 @@ func (m *model) loadChat(id string, state *chatState) {
 			next.Err = err.Error()
 		}
 		state.result.Set(next)
+		// The latest moved on past the older pages: what came between
+		// joins them.
+		if older := ggui.Peek(state.older); older.End > 0 && chat.GetStart() > older.End {
+			m.readOlder(id, state, transcript.Span{After: older.End, Before: chat.GetStart()})
+		}
 	})
+}
+
+// loadOlder reads the page before what is loaded, for a reader near the
+// top, keeping what is in view in place.
+func (m *model) loadOlder(id string, state *chatState, scroll *ggui.ScrollController) {
+	before := ggui.Peek(state.result).Chat.GetStart()
+	if older := ggui.Peek(state.older); older.End > 0 {
+		before = older.Start
+	}
+	if before <= 0 || state.paging {
+		return
+	}
+	state.grew = scroll.MaxOffset()
+	m.readOlder(id, state, transcript.Span{Before: before})
+}
+
+// readOlder reads a span of the log older than the latest, and puts it
+// with the older pages: before them, or between them and the latest.
+func (m *model) readOlder(id string, state *chatState, span transcript.Span) {
+	info, ok := m.session(id)
+	if !ok || state.paging {
+		return
+	}
+	state.paging = true
+	req := &protocol.ReadChat{NodeId: m.remoteID(info.GetNodeId()), SessionId: id, Before: span.Before, After: span.After}
+	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Chat, error) {
+		return c.ReadChat(ctx, req)
+	}, func(chat *protocol.Chat, err error) {
+		if m.chats[id] != state {
+			return
+		}
+		state.paging = false
+		older := ggui.Peek(state.older)
+		switch {
+		case err != nil:
+			state.grew = 0
+		case span.After == 0: // a page before the rest
+			if older.End == 0 {
+				older.End = span.Before
+			}
+			older.Messages, older.Start = joinChat(chat.GetMessages(), older.Messages), chat.GetStart()
+			state.older.Set(older)
+		case chat.GetStart() == span.After: // the gap, whole
+			older.Messages, older.End = joinChat(older.Messages, chat.GetMessages()), span.Before
+			state.older.Set(older)
+		default: // more came between than one read holds: start over
+			state.older.Set(chatPages{})
+		}
+	})
+}
+
+// toLatest goes back to the latest messages alone, at the bottom.
+func (m *model) toLatest(state *chatState, scroll *ggui.ScrollController) {
+	scroll.ScrollTo(scroll.MaxOffset())
+	state.older.Set(chatPages{})
+}
+
+// joinChat is older then newer, a result newer begins with put on the call
+// in older it answers, as one read would have.
+func joinChat(older, newer []*protocol.ChatMessage) []*protocol.ChatMessage {
+	out := slices.Clone(older)
+	calls := map[string]int{}
+	for i, msg := range out {
+		if msg.GetRole() == "tool" && !msg.GetOutput() && msg.GetId() != "" {
+			calls[msg.GetId()] = i
+		}
+	}
+	for _, msg := range newer {
+		if i, ok := calls[msg.GetId()]; ok && msg.GetRole() == "tool" && msg.GetOutput() {
+			call := proto.CloneOf(out[i])
+			call.Result, call.Error, call.Pending = msg.GetText(), msg.GetError(), false
+			out[i] = call
+			continue
+		}
+		out = append(out, msg)
+	}
+	return out
 }
 
 // chatCapable reports whether a session's agent has a native conversation to
@@ -180,7 +280,7 @@ func viewThumb() color.Color {
 	if pal, ok := uitheme.Use().Get(paletteKey); ok && pal.Dark {
 		return pal.Fg
 	}
-	return tokSurface0
+	return tokSolidBg
 }
 
 func viewThumbInk() color.Color {
@@ -232,8 +332,22 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	})
 
 	scroll := &ggui.ScrollController{}
-	content := ggui.View(state.result, func(v chatResult) ggui.Widget {
+	offset := ggui.State(0.0)
+	content := ggui.Reactive(func() ggui.Widget {
+		v, older := state.result.Get(), state.older.Get()
+		messages, start := v.Chat.GetMessages(), v.Chat.GetStart()
+		if older.End > 0 {
+			messages, start = joinChat(older.Messages, messages), older.Start
+		}
 		var rows []ggui.Widget
+		if grew := state.grew; grew > 0 && !state.paging {
+			// Older messages came in above: what was in view moves down by
+			// as much as the feed grew.
+			state.grew = 0
+			rows = append(rows, &onPaint{child: ggui.Box(), fn: func(*ggui.Canvas, ggui.Rect) {
+				scroll.JumpTo(scroll.Offset() + scroll.MaxOffset() - grew)
+			}})
+		}
 		if v.Err != "" {
 			rows = append(rows, ggui.Text(v.Err).Size(13).Color(tokMuted).Selectable())
 		}
@@ -245,40 +359,129 @@ func chatView(m *model, id string, group int) ggui.Widget {
 			rows = append(rows, muted(ggui.Text(T("Chat is available for Claude and Codex. Use Terminal for this agent."))))
 		case v.Chat.GetConversation() == "":
 			rows = append(rows, muted(ggui.Text(T("Waiting for this agent to save its conversation. It will connect automatically."))))
-		case len(v.Chat.GetMessages()) == 0:
+		case len(messages) == 0:
 			rows = append(rows, muted(ggui.Text(T("No messages yet. The conversation updates as the agent saves it."))))
 		}
-		if v.Chat.GetTruncated() {
-			rows = append(rows, ggui.Box(muted(ggui.Text(T("Showing recent messages; older or long content is omitted.")).Size(11.5))).
-				Fill(tokSurface1).Radius(6).Pad(4, 8))
+		if start > 0 {
+			// More is further back. A feed too short to scroll reads it at
+			// once, once it is laid out and its extent known.
+			rows = append(rows, &onPaint{child: ggui.Center(ui.Spinner().Size(14)), fn: func(*ggui.Canvas, ggui.Rect) {
+				if scroll.MaxOffset() == 0 {
+					m.loadOlder(id, state, scroll)
+				}
+			}})
 		}
 		info, _ := m.session(id)
-		rows = append(rows, chatTurns(m, id, info, state, v.Chat.GetMessages(), agentsByCall(v.Chat.GetAgents()))...)
-		if len(v.Chat.GetMessages()) > 0 && scroll.MaxOffset()-scroll.Offset() < 32 {
-			rows = append(rows, &revealOnce{child: ggui.Box().Height(1), done: func() {}})
+		rows = append(rows, chatTurns(m, id, info, state, messages, agentsByCall(v.Chat.GetAgents()))...)
+		if len(messages) > 0 && scroll.MaxOffset()-scroll.Offset() < 32 {
+			rows = append(rows, &onPaint{child: ggui.Box().Height(1), fn: revealPainted})
 		}
-		return ggui.Box(ggui.Column(rows...).Gap(14).Stretch()).Pad(18, 24).MaxWidth(chatLaneWidth)
+		return &lane{child: ggui.Box(ggui.Column(rows...).Gap(14).Stretch()).Pad(18, 0)}
 	})
-	feed := ggui.Scroll(ggui.Align(content).Top()).Controller(scroll).Bar(tokSurface3)
+	feed := ggui.Scroll(content).Controller(scroll).BindOffset(offset).Bar(tokSurface3)
+	// Scrolling up near the top of what is loaded reads the log from
+	// further back. Only up: the feed opens at the top before it shows the
+	// latest at the bottom.
+	last := 0.0
+	ggui.Watch(offset, func(off float64) {
+		if off < last && off < olderNear {
+			m.loadOlder(id, state, scroll)
+		}
+		last = off
+	})
 	chatUsage := ggui.Map(state.result, func(v chatResult) *protocol.Usage {
 		return v.Chat.GetUsage()
 	}).WithEqual(protocol.Same)
-	usage := ggui.View(chatUsage, func(u *protocol.Usage) ggui.Widget {
-		if u.IsZero() {
-			return ggui.Box()
-		}
-		return usageTip(m, u, muted(ggui.Text(usageLine(u)).Size(12).NoWrap()))
-	})
-	footer := ggui.Box(ggui.Row(
-		ggui.Expanded(muted(ggui.Text(T("Messages go to the live session. Use Terminal for special keys.")).Size(12).NoWrap().Ellipsis())),
-		usage,
-		iconButton("refresh-cw", T("Refresh"), func() { m.loadChat(id, state) }),
-		ui.Button(T("Latest"), func() { scroll.ScrollTo(scroll.MaxOffset()) }).Ghost(),
-	).Gap(8)).Pad(6, 12)
 	// The composer belongs to Chat alone, as in ovis: Terminal mode's grid
 	// is its own input surface, and a file view has no session to type into.
-	return ggui.Pointer(ggui.Column(ggui.Expanded(ggui.Stack(feed, usageOverlay(m, id, chatUsage)).Expand()), footer, approvalCard(m, id), runningAgents(m, id, state), composer(m, id, state.draft)).Stretch()).
-		OnDown(func(ggui.PointerEvent) { m.focusGroup(group) })
+	return ggui.Pointer(ggui.Column(
+		ggui.Expanded(ggui.Stack(feed, hostBadge(m, id), toLatestButton(m, state, scroll, offset), usageOverlay(m, id, chatUsage)).Expand()),
+		approvalCard(m, id), runningAgents(m, id, state), composer(m, id, state.draft),
+	).Stretch()).OnDown(func(ggui.PointerEvent) { m.focusGroup(group) })
+}
+
+// olderNear is how near the top of the feed the reader comes before older
+// messages are read, and toLatestFar how far from the bottom before the
+// way back to the latest shows.
+const (
+	olderNear   = 400
+	toLatestFar = 240
+)
+
+// hostBadge names the node the session runs on, over the feed's top-left
+// corner.
+func hostBadge(m *model, id string) ggui.Widget {
+	name := ggui.Derived(func() string {
+		s, ok := sessionIn(m.Sessions.Get(), id)
+		if !ok {
+			return ""
+		}
+		return nodeName(m.Nodes.Get(), s.GetNodeId())
+	})
+	return ggui.View(name, func(n string) ggui.Widget {
+		if n == "" {
+			return ggui.Box()
+		}
+		return ggui.Padding(overlayChip(icon("server").Size(13), muted(ggui.Text(n).Size(12).NoWrap())), 10, 0, 0, 14)
+	})
+}
+
+// toLatestButton floats over the feed's foot while the reader is up the
+// conversation, and takes them back down to the latest.
+func toLatestButton(m *model, state *chatState, scroll *ggui.ScrollController, offset ggui.Readable[float64]) ggui.Widget {
+	// A Map, so the button is built as the reader crosses the line, not on
+	// every step of the scroll.
+	far := ggui.Map(offset, func(o float64) bool { return ggui.Untrack(scroll.MaxOffset)-o >= toLatestFar })
+	return ggui.View(far, func(far bool) ggui.Widget {
+		if !far {
+			return ggui.Box()
+		}
+		btn := ui.ButtonOf(icon("arrow-down").Size(16).Color(tokFg), func() { m.toLatest(state, scroll) }).
+			Outline().Pad(8).Radius(18).Name(T("Latest"))
+		return ggui.Padding(ggui.Align(ggui.Box(btn).Radius(18).Shadow(uitheme.Use().PanelShadow)).At(0.5, 1), 0, 0, 14, 0)
+	})
+}
+
+// onPaint runs fn once, the first time it is painted: after the layout it
+// is part of, which has the scroll's new extent.
+type onPaint struct {
+	child ggui.Widget
+	fn    func(dst *ggui.Canvas, r ggui.Rect)
+}
+
+// revealPainted scrolls what was painted into view.
+func revealPainted(dst *ggui.Canvas, r ggui.Rect) { dst.RequestReveal(r) }
+
+func (o *onPaint) Layout(c ggui.Constraints, env ggui.Env) ggui.Size { return o.child.Layout(c, env) }
+
+func (o *onPaint) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.Paint(o.child, r)
+	if o.fn != nil {
+		o.fn(dst, r)
+		o.fn = nil
+	}
+}
+
+// lane centres its child in the width it is given, at most chatLaneWidth
+// wide with laneGutter on each side: the transcript's column, which the
+// composer and the cards under the feed share. Unlike Align it takes its
+// child's height, as it must under a Scroll and in a Column.
+type lane struct {
+	child ggui.Widget
+	size  ggui.Size
+}
+
+// laneGutter is the room on each side of the lane.
+const laneGutter = 24
+
+func (l *lane) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	w := max(min(c.MaxW, chatLaneWidth)-2*laneGutter, 0)
+	l.size = l.child.Layout(ggui.Constraints{MinW: w, MaxW: w, MaxH: c.MaxH}, env)
+	return c.Constrain(ggui.Sz(c.MaxW, l.size.H))
+}
+
+func (l *lane) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.Paint(l.child, ggui.Rct(ggui.Pt(r.Origin.X+(r.Size.W-l.size.W)/2, r.Origin.Y), l.size))
 }
 
 // chatTurns draws the conversation: the user on the right, the agent's prose
@@ -512,8 +715,8 @@ func runningAgents(m *model, id string, state *chatState) ggui.Widget {
 				}),
 			).Gap(8).Align(ggui.AlignCenter)
 		}
-		return ggui.Box(ggui.Box(ggui.Column(rows...).Gap(6).Stretch()).
-			Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(8, 12)).Pad(0, 16)
+		return &lane{child: ggui.Box(ggui.Column(rows...).Gap(6).Stretch()).
+			Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(8, 12)}
 	})
 }
 

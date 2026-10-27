@@ -99,7 +99,7 @@ func launchButton(m *model, nodeID, project string, targets []string, before, mo
 	}
 	pill := ggui.Reactive(func() ggui.Widget {
 		return ggui.Box(ggui.Row(cells...).Gap(2)).Pad(2).
-			Fill(tokSurface0).Border(1, tokBorder).Radius(8).Shadow(uitheme.Use().PanelShadow)
+			Fill(tokSolidBg).Border(1, tokBorder).Radius(8).Shadow(uitheme.Use().PanelShadow)
 	})
 	f.pill = ggui.Transition(pill).Fade().Slide(-8, 0).Easing(ggui.EaseLinear)
 	return f

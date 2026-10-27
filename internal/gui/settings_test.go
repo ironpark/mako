@@ -11,7 +11,7 @@ import (
 )
 
 func TestPrefsNormalizeOutOfRangeValues(t *testing.T) {
-	p := prefs{Theme: "neon", FontSize: 80, LineHeight: 0.2, CursorStyle: "beam", Scrollback: -5}.normalized()
+	p := prefs{Theme: "", FontSize: 80, LineHeight: 0.2, CursorStyle: "beam", Scrollback: -5}.normalized()
 	if p.Theme != "system" || p.FontSize != maxFontSize || p.LineHeight != minLineHeight ||
 		p.CursorStyle != "block" || p.Scrollback != 0 || p.DefaultAgent == "" {
 		t.Fatalf("normalized = %+v", p)

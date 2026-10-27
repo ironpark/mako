@@ -73,8 +73,9 @@ type terminalView struct {
 
 	// From the last layout and paint, in logical pixels.
 	pal          palette
-	origin       ggui.Point // the grid's top-left
-	rect         ggui.Rect  // the whole widget
+	ground       color.Color // the fill under the cells: the theme's, clear over a background image
+	origin       ggui.Point  // the grid's top-left
+	rect         ggui.Rect   // the whole widget
 	cellW, cellH float64
 	cols, rows   int
 	runBuf       []byte // the text of a run of cells, kept between paints
@@ -122,6 +123,7 @@ func (t *terminalView) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	if p, ok := uitheme.From(env).Get(paletteKey); ok {
 		t.pal = p
 	}
+	t.ground = ggui.ResolveColor(tokSurface0, env)
 	// The editor is never painted as itself, but PaintCustom wants it laid
 	// out first.
 	t.ime.Layout(ggui.Loose(c.Max()), env)
@@ -132,7 +134,7 @@ func (t *terminalView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	p := t.prefs()
 	t.conn.configure(termOptionsFor(p, t.pal))
 	t.rect = r
-	dst.FillRect(r, t.pal.Surface0)
+	fillGround(dst, r, t.ground)
 	dst.HitKey(r, t)
 	dst.HitPointer(r, t)
 	dst.HitCursor(r, ggui.CursorShapeText)
@@ -693,7 +695,8 @@ type grid struct {
 	size         float64
 	font, italic *ggui.Font // italic is nil where there is none
 	pal          palette
-	scale        float64 // device pixels per logical pixel
+	ground       color.Color // the fill under the cells: the theme's, clear over a background image
+	scale        float64     // device pixels per logical pixel
 	runBuf       *[]byte
 }
 

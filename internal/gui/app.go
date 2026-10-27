@@ -55,7 +55,7 @@ func setup(m *model) {
 	m.window = ggui.UseWindow()
 	followAttention(m)
 	ggui.Effect(func() ggui.Cleanup {
-		pal := paletteFor(m.Prefs.Get().Theme, ggui.SystemDark().Get())
+		pal := m.themePalette()
 		uitheme.Set(themeFor(pal))
 		return nil
 	})

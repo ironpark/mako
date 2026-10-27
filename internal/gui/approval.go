@@ -90,7 +90,7 @@ func approvalCard(m *model, id string) ggui.Widget {
 		)
 		card := ggui.Box(ggui.Column(rows...).Gap(10).Stretch()).
 			Fill(tokSurface1).Border(1, tokDotWaiting).Radius(12).Pad(12, 14)
-		return ggui.Box(card).Pad(0, 16, 8, 16).MaxWidth(chatLaneWidth)
+		return &lane{child: ggui.Box(card).Pad(0, 0, 8, 0)}
 	})
 }
 

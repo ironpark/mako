@@ -426,7 +426,7 @@ func codeText(m *model, src string, l language, has bool, size float64) *ggui.Ri
 		if hl == nil {
 			return []ggui.TextSpan{ggui.Span(src)}
 		}
-		return colorSpans(src, hl.colors(src, paletteFor(m.Prefs.Get().Theme, ggui.SystemDark().Get())))
+		return colorSpans(src, hl.colors(src, m.themePalette()))
 	})
 	return ggui.RichText().BindSpans(spans).NoWrap().Selectable().
 		Font(ggui.DefaultMonoFont()).Size(size).LineHeight(max(ggui.Peek(m.Prefs).LineHeight, 1.2))

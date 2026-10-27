@@ -101,7 +101,10 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			w := sessionDrag(m, face, tabID)
 			var cell ggui.Widget = w
 			if tabID == g.Active && m.revealedTab[id] != tabID {
-				cell = &revealOnce{child: w, done: func() { m.revealedTab[id] = tabID }}
+				cell = &onPaint{child: w, fn: func(dst *ggui.Canvas, r ggui.Rect) {
+					dst.RequestReveal(r)
+					m.revealedTab[id] = tabID
+				}}
 			}
 			// Before the tab or after it, by the half it is over.
 			slot := func(d ggui.Dropped[tabDrag]) int {
@@ -237,7 +240,7 @@ func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				return ggui.Center(ggui.Column(ui.Spinner(), muted(ggui.Text(T("Attaching…")).Size(13))).Gap(12).Align(ggui.AlignCenter))
 			})
 		default:
-			return sessionView(m, p.ID, id)
+			return backdropped(m, sessionBackdrop, sessionView(m, p.ID, id))
 		}
 	})
 	return ggui.Stack(
@@ -391,24 +394,4 @@ func (m *model) leaveHint(group int) {
 func (m *model) endDrag() {
 	m.Dragging.Set(false)
 	m.TabHint.Set(tabHint{})
-}
-
-// revealOnce scrolls its child into view the first time it is painted, as
-// a pane's tab bar does for the tab it comes to show.
-type revealOnce struct {
-	child ggui.Widget
-	done  func()
-}
-
-func (r *revealOnce) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	return r.child.Layout(c, env)
-}
-
-func (r *revealOnce) Paint(dst *ggui.Canvas, rect ggui.Rect) {
-	dst.Paint(r.child, rect)
-	if r.done != nil {
-		dst.RequestReveal(rect)
-		r.done()
-		r.done = nil
-	}
 }

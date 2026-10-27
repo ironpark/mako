@@ -23,10 +23,17 @@ const (
 
 // ReadChat reads the conversation of a session's agent.
 type ReadChat struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	UsageOnly     bool                   `protobuf:"varint,3,opt,name=usage_only,json=usageOnly,proto3" json:"usage_only,omitempty"` // the usage alone, without the messages
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	NodeId    string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	SessionId string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	UsageOnly bool                   `protobuf:"varint,3,opt,name=usage_only,json=usageOnly,proto3" json:"usage_only,omitempty"` // the usage alone, without the messages
+	// before and after page through the log: the messages of the records
+	// after one byte offset and before another, both a Chat's start, as a
+	// reader scrolling back asks. 0 leaves an end open; with both 0, the
+	// latest messages. A read keeps the latest of what it finds, as many as
+	// the latest messages alone.
+	Before        int64 `protobuf:"varint,4,opt,name=before,proto3" json:"before,omitempty"`
+	After         int64 `protobuf:"varint,5,opt,name=after,proto3" json:"after,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -80,6 +87,20 @@ func (x *ReadChat) GetUsageOnly() bool {
 		return x.UsageOnly
 	}
 	return false
+}
+
+func (x *ReadChat) GetBefore() int64 {
+	if x != nil {
+		return x.Before
+	}
+	return 0
+}
+
+func (x *ReadChat) GetAfter() int64 {
+	if x != nil {
+		return x.After
+	}
+	return 0
 }
 
 // ChatMessage is one turn of a conversation.
@@ -193,13 +214,16 @@ func (x *ChatMessage) GetPending() bool {
 
 // Chat answers ReadChat.
 type Chat struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Supported     bool                   `protobuf:"varint,1,opt,name=supported,proto3" json:"supported,omitempty"`
-	Conversation  string                 `protobuf:"bytes,2,opt,name=conversation,proto3" json:"conversation,omitempty"`
-	Messages      []*ChatMessage         `protobuf:"bytes,3,rep,name=messages,proto3" json:"messages,omitempty"`
-	Truncated     bool                   `protobuf:"varint,4,opt,name=truncated,proto3" json:"truncated,omitempty"`
-	Usage         *Usage                 `protobuf:"bytes,5,opt,name=usage,proto3" json:"usage,omitempty"`
-	Agents        []*SubAgent            `protobuf:"bytes,6,rep,name=agents,proto3" json:"agents,omitempty"` // the subagents its calls started, oldest first
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Supported    bool                   `protobuf:"varint,1,opt,name=supported,proto3" json:"supported,omitempty"`
+	Conversation string                 `protobuf:"bytes,2,opt,name=conversation,proto3" json:"conversation,omitempty"`
+	Messages     []*ChatMessage         `protobuf:"bytes,3,rep,name=messages,proto3" json:"messages,omitempty"`
+	Truncated    bool                   `protobuf:"varint,4,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	Usage        *Usage                 `protobuf:"bytes,5,opt,name=usage,proto3" json:"usage,omitempty"`
+	Agents       []*SubAgent            `protobuf:"bytes,6,rep,name=agents,proto3" json:"agents,omitempty"` // the subagents its calls started, oldest first
+	// start is the byte offset in the log the messages start at: 0 when
+	// nothing comes before them, else the before of a read that finds more.
+	Start         int64 `protobuf:"varint,7,opt,name=start,proto3" json:"start,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -274,6 +298,13 @@ func (x *Chat) GetAgents() []*SubAgent {
 		return x.Agents
 	}
 	return nil
+}
+
+func (x *Chat) GetStart() int64 {
+	if x != nil {
+		return x.Start
+	}
+	return 0
 }
 
 // SubAgent is an agent a call of the conversation's started, such as
@@ -544,13 +575,15 @@ var File_mako_v2_chat_proto protoreflect.FileDescriptor
 
 const file_mako_v2_chat_proto_rawDesc = "" +
 	"\n" +
-	"\x12mako/v2/chat.proto\x12\amako.v2\"a\n" +
+	"\x12mako/v2/chat.proto\x12\amako.v2\"\x8f\x01\n" +
 	"\bReadChat\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1d\n" +
 	"\n" +
-	"usage_only\x18\x03 \x01(\bR\tusageOnly\"\xd1\x01\n" +
+	"usage_only\x18\x03 \x01(\bR\tusageOnly\x12\x16\n" +
+	"\x06before\x18\x04 \x01(\x03R\x06before\x12\x14\n" +
+	"\x05after\x18\x05 \x01(\x03R\x05after\"\xd1\x01\n" +
 	"\vChatMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x0e\n" +
@@ -560,14 +593,15 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\x06result\x18\x06 \x01(\tR\x06result\x12\x16\n" +
 	"\x06output\x18\a \x01(\bR\x06output\x12\x14\n" +
 	"\x05error\x18\b \x01(\bR\x05error\x12\x18\n" +
-	"\apending\x18\t \x01(\bR\apending\"\xe9\x01\n" +
+	"\apending\x18\t \x01(\bR\apending\"\xff\x01\n" +
 	"\x04Chat\x12\x1c\n" +
 	"\tsupported\x18\x01 \x01(\bR\tsupported\x12\"\n" +
 	"\fconversation\x18\x02 \x01(\tR\fconversation\x120\n" +
 	"\bmessages\x18\x03 \x03(\v2\x14.mako.v2.ChatMessageR\bmessages\x12\x1c\n" +
 	"\ttruncated\x18\x04 \x01(\bR\ttruncated\x12$\n" +
 	"\x05usage\x18\x05 \x01(\v2\x0e.mako.v2.UsageR\x05usage\x12)\n" +
-	"\x06agents\x18\x06 \x03(\v2\x11.mako.v2.SubAgentR\x06agents\"\x82\x02\n" +
+	"\x06agents\x18\x06 \x03(\v2\x11.mako.v2.SubAgentR\x06agents\x12\x14\n" +
+	"\x05start\x18\a \x01(\x03R\x05start\"\x82\x02\n" +
 	"\bSubAgent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\acall_id\x18\x02 \x01(\tR\x06callId\x12\x12\n" +

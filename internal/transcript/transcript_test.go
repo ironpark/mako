@@ -3,6 +3,7 @@ package transcript
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -298,7 +299,7 @@ func TestCacheRereadsOnlyAChangedLog(t *testing.T) {
 	writeLog(t, path, line("first"))
 	info := &protocol.SessionInfo{Agent: "claude", ConversationId: "c"}
 	var cache Cache
-	chat, err := cache.ReadBound(info, path)
+	chat, err := cache.ReadBound(info, path, Span{})
 	if err != nil || len(chat.GetMessages()) != 1 {
 		t.Fatalf("chat=%+v %v", chat, err)
 	}
@@ -308,11 +309,47 @@ func TestCacheRereadsOnlyAChangedLog(t *testing.T) {
 	}
 	_, _ = f.WriteString(line("second"))
 	f.Close()
-	if chat, err = cache.ReadBound(info, path); err != nil || len(chat.GetMessages()) != 2 {
+	if chat, err = cache.ReadBound(info, path, Span{}); err != nil || len(chat.GetMessages()) != 2 {
 		t.Fatalf("appended chat=%+v %v", chat, err)
 	}
 	info.ConversationId = "other"
-	if _, err := cache.ReadBound(info, path); err == nil {
+	if _, err := cache.ReadBound(info, path, Span{}); err == nil {
 		t.Fatal("a cached read skipped the identity check")
+	}
+}
+
+// readMessages is the latest messages of a log, as most tests want them.
+func readMessages(path string, a *Agent) ([]*protocol.ChatMessage, bool, error) {
+	w, err := readWindow(path, a, Span{})
+	return w.messages, w.truncated, err
+}
+
+// The latest window says where it starts in the log, and a read before
+// there pages back from it, a window at a time, to the beginning.
+func TestWindowsPageBackFromWhereTheyStart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "log.jsonl")
+	var body strings.Builder
+	offsets := []int64{}
+	for i := range 300 {
+		offsets = append(offsets, int64(body.Len()))
+		fmt.Fprintf(&body, `{"type":"user","uuid":"u%d","message":{"role":"user","content":"m%d"}}`+"\n", i, i)
+	}
+	writeLog(t, path, body.String())
+
+	latest, err := readWindow(path, &Agent{}, Span{})
+	if err != nil || len(latest.messages) != 200 || !latest.truncated {
+		t.Fatalf("latest: %d messages, truncated %v, %v", len(latest.messages), latest.truncated, err)
+	}
+	if latest.start != offsets[100] || latest.messages[0].GetText() != "m100" {
+		t.Fatalf("latest starts at %d with %q, want %d", latest.start, latest.messages[0].GetText(), offsets[100])
+	}
+	older, err := readWindow(path, &Agent{}, Span{Before: latest.start})
+	if err != nil || older.start != 0 || len(older.messages) != 100 || older.messages[99].GetText() != "m99" {
+		t.Fatalf("before the latest: start %d, %d messages, %v", older.start, len(older.messages), err)
+	}
+	// A gap between two reads, from inside a record: the next record on.
+	gap, err := readWindow(path, &Agent{}, Span{After: offsets[40] + 3, Before: offsets[45]})
+	if err != nil || gap.start != offsets[41] || len(gap.messages) != 4 || gap.messages[0].GetText() != "m41" {
+		t.Fatalf("gap: start %d, %d messages, %v", gap.start, len(gap.messages), err)
 	}
 }

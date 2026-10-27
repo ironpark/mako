@@ -336,7 +336,14 @@ mako.
 session from the agent's log (Claude and Codex). `chat.supported` is false for
 an agent mako cannot read; `conversation` is empty until the agent has saved
 one. `messages` are `user`, `assistant` and `tool` turns, with the oldest left
-out past a size limit (`truncated`). `usage` is the whole conversation's tokens:
+out past a size limit (`truncated`). `start` is the byte offset in the log the
+messages begin at, 0 when nothing comes before them. A reader that scrolls
+back pages with it: `before` set to a `start` reads the messages before it,
+and `after` with `before` the ones between, which joins older pages to the
+latest as the latest move on. Each read keeps the latest of what it finds,
+within the same limits as the latest messages. A daemon that predates them
+answers with the latest messages and `start` 0.
+`usage` is the whole conversation's tokens:
 
 | `Usage` field | |
 |---|---|
@@ -619,7 +626,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
 | `read_file`, text | 4 MiB, or `max` if smaller |
 | `read_file`, image | 5 MiB |
 | Replay screen piece | 256 KiB |
-| Conversation log read for `read_chat` | the last 2 MiB, at most 200 messages |
+| Conversation log read for `read_chat` | 2 MiB before `before` (or the end), at most 200 messages |
 | `stage_file` | 512 MiB a file |
 | `search`, files listed | 50 000 |
 | `search`, matches | 1 000, 100 per file, 300 bytes of each line |

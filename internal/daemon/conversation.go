@@ -329,13 +329,13 @@ func (d *Daemon) bindConversation(s *session.Session, id, path string) error {
 
 // chatForSession always reads the attached process's conversation. A client
 // cannot silently select unrelated history while typing into this PTY.
-func (d *Daemon) chatForSession(ctx context.Context, s *session.Session) (*protocol.Chat, error) {
+func (d *Daemon) chatForSession(ctx context.Context, s *session.Session, span transcript.Span) (*protocol.Chat, error) {
 	info := s.Info()
 	if path := s.TranscriptPath(); path != "" {
 		if cache := d.conversations.chatCache(s); cache != nil {
-			return cache.ReadBound(info, path)
+			return cache.ReadBound(info, path, span)
 		}
-		return transcript.ReadBound(info, path)
+		return transcript.ReadBound(info, path, span)
 	}
 	return transcript.Read(ctx, info, s.TranscriptEnv())
 }

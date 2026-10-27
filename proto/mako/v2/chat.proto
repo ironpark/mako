@@ -9,6 +9,13 @@ message ReadChat {
   string node_id = 1;
   string session_id = 2;
   bool usage_only = 3; // the usage alone, without the messages
+  // before and after page through the log: the messages of the records
+  // after one byte offset and before another, both a Chat's start, as a
+  // reader scrolling back asks. 0 leaves an end open; with both 0, the
+  // latest messages. A read keeps the latest of what it finds, as many as
+  // the latest messages alone.
+  int64 before = 4;
+  int64 after = 5;
 }
 
 // ChatMessage is one turn of a conversation.
@@ -32,6 +39,9 @@ message Chat {
   bool truncated = 4;
   Usage usage = 5;
   repeated SubAgent agents = 6; // the subagents its calls started, oldest first
+  // start is the byte offset in the log the messages start at: 0 when
+  // nothing comes before them, else the before of a read that finds more.
+  int64 start = 7;
 }
 
 // SubAgent is an agent a call of the conversation's started, such as

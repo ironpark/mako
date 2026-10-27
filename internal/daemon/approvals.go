@@ -68,10 +68,10 @@ func (a *approvals) watching() bool {
 }
 
 // ask holds an approval s's agent asks for until it is answered, the
-// front-ends stop watching, or the session ends, and returns the hook's
-// reply: "" leaves it to the agent's prompt.
+// front-ends stop watching, the session ends or ctx does, and returns the
+// hook's reply: "" leaves it to the agent's prompt, as it does a question.
 func (a *approvals) ask(ctx context.Context, s *session.Session, ev transcript.HookEvent) hookReply {
-	if !a.watching() {
+	if native, ok := transcript.Lookup(s.Info().GetAgent()); ok && native.Asks(ev.Tool) || !a.watching() {
 		s.SetStatus(protocol.AgentWaiting)
 		return hookReply{}
 	}

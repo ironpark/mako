@@ -79,12 +79,17 @@ func hex(v uint32) color.RGBA {
 // Colours are given to widgets as theme tokens, which resolve when the
 // widget is laid out, so switching the theme recolours the window without
 // rebuilding it. Paseo's extra steps ride on the theme as variables.
+//
+// The workspace's and the sidebar's fills are variables of their own, which
+// a background image clears (backdrop.go); tokSolidBg is the workspace's
+// colour that stays, for what must cover what is under it.
 var (
-	tokSurface0     = uitheme.Bg
+	tokSurface0     = uitheme.Var("surface-0")
 	tokSurface1     = uitheme.Card
 	tokSurface2     = uitheme.Muted
 	tokSurface3     = uitheme.Var("surface-3")
-	tokSidebar      = uitheme.Sidebar
+	tokSidebar      = uitheme.Var("sidebar-fill")
+	tokSolidBg      = uitheme.Bg
 	tokSidebarSel   = uitheme.Var("sidebar-selected")
 	tokFg           = uitheme.Fg
 	tokMuted        = uitheme.MutedFg
@@ -141,6 +146,8 @@ func themeFor(p palette) uitheme.Theme {
 	t.Text.Size = 13
 	t.Caption.Size = 12
 	set := func(name string, c color.Color) { t = t.Set(uitheme.CSSColor(name), c) }
+	set("surface-0", p.Surface0)
+	set("sidebar-fill", p.Sidebar)
 	set("surface-3", p.Surface3)
 	set("sidebar-selected", p.SidebarSelected)
 	set("extra-muted", p.ExtraMuted)
@@ -158,14 +165,18 @@ func themeFor(p palette) uitheme.Theme {
 	return t.Set(paletteKey, p)
 }
 
-// paletteFor picks the palette a theme preference names; "system" follows
-// the desktop's appearance.
-func paletteFor(pref string, systemDark bool) palette {
+// paletteFor picks the palette a theme preference names: one of the
+// user's themes, light, dark, or the one that follows the desktop's
+// appearance for "system" and a theme that is gone.
+func paletteFor(pref string, systemDark bool, custom map[string]palette) palette {
 	switch pref {
 	case "light":
 		return lightPalette
 	case "dark":
 		return darkPalette
+	}
+	if p, ok := custom[pref]; ok {
+		return p
 	}
 	if systemDark {
 		return darkPalette

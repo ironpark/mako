@@ -232,7 +232,14 @@ before anything else (`internal/shellenv`): it runs `$SHELL -l -i` once,
 with `MAKO_SHELL_ENV=1` set for a profile that wants to tell, so it finds
 the agents on the user's `PATH`.
 
-Its settings are kept in `gui.json` beside `config.json`. Sessions run with
+Its settings are kept in `gui.json` beside `config.json`, and the user's
+themes in `themes/` beside them, a JSON file each (`internal/gui/themes.go`):
+a base, light or dark, and the colours that differ, by name. Settings ▸
+Appearance makes one by duplicating the theme in use, and edits its
+colours in place. A background image goes under the whole window, under
+each session, or both (`internal/gui/backdrop.go`): the image, the theme's
+colour over it at what of it the image leaves, and the workspace's and the
+sidebar's fills cleared above, so the image shows through them once. Sessions run with
 `TERM_PROGRAM=ghostty`, since the terminal under them is Ghostty's core.
 
 ## Changing the protocol

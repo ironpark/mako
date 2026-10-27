@@ -233,6 +233,36 @@ func TestApprovalsWaitForTheWindow(t *testing.T) {
 	}
 }
 
+// A question is the agent's to ask, watched or not: no approval is shown
+// for it, and the hook leaves it to the agent's prompt.
+func TestQuestionsAreNotApprovals(t *testing.T) {
+	d, s, socket := hookedDaemon(t)
+	d.approvals.watch(true)
+	var out bytes.Buffer
+	runHook([]string{socket}, strings.NewReader(`{"hook_event_name":"PermissionRequest","tool_name":"AskUserQuestion","tool_input":{"questions":[]}}`), &out)
+	if out.Len() != 0 || s.Info().GetApproval() != nil {
+		t.Fatalf("decided a question: %q, approval %+v", out.String(), s.Info().GetApproval())
+	}
+	if s.Info().GetStatus() != protocol.AgentWaiting {
+		t.Fatalf("status %q", s.Info().GetStatus())
+	}
+}
+
+// An agent that gives up on its hook -- answered in its terminal,
+// interrupted, timed out -- takes its approval out of the window.
+func TestAnApprovalTheAgentAbandonsIsWithdrawn(t *testing.T) {
+	d, s, socket := hookedDaemon(t)
+	d.approvals.watch(true)
+	conn, err := sendHook(socket, hookMessage{Session: s.ID(), Seq: 1,
+		Input: json.RawMessage(`{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"ls"}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "no approval shown", func() bool { return s.Info().GetApproval() != nil })
+	conn.Close()
+	waitFor(t, "abandoned approval kept", func() bool { return s.Info().GetApproval() == nil })
+}
+
 // mako's status line takes the place of the user's, so it prints theirs:
 // the project's local settings first, then its shared ones, then the
 // user's.

@@ -48,7 +48,8 @@ func Read(ctx context.Context, info *protocol.SessionInfo, env map[string]string
 	if _, ok := logProject(path, a, info.GetProject()); !ok {
 		return out, nil
 	}
-	out.Messages, out.Truncated, err = readMessages(path, a)
+	w, err := readWindow(path, a, Span{})
+	w.fill(out)
 	if err == nil {
 		out.Agents = new(agentScans).read(a, path, out.Messages)
 	}
@@ -184,27 +185,60 @@ func readIdentity(path string, a *Agent) (id, cwd string, created time.Time) {
 	return "", "", time.Time{}
 }
 
-func readMessages(path string, a *Agent) ([]*protocol.ChatMessage, bool, error) {
+// Span is the part of a log a read takes its messages from: the records
+// from After up to Before, byte offsets at records' starts. Before 0 is the
+// log's end and After 0 its beginning, so the zero Span is the latest
+// messages. A read keeps the latest of what it finds, as many as a poll can
+// send.
+type Span struct{ After, Before int64 }
+
+// window is a read of a log's messages: from start, the byte offset of the
+// first message's record, or of the read itself when nothing it read was
+// left out, so a read up to start finds what comes before.
+type window struct {
+	messages  []*protocol.ChatMessage
+	start     int64
+	truncated bool // older messages or long content left out
+}
+
+// fill gives chat the window's messages.
+func (w window) fill(chat *protocol.Chat) {
+	chat.Messages, chat.Start, chat.Truncated = w.messages, w.start, w.truncated
+}
+
+func readWindow(path string, a *Agent, span Span) (window, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, false, err
+		return window{}, err
 	}
 	defer f.Close()
 	stat, err := f.Stat()
 	if err != nil {
-		return nil, false, err
+		return window{}, err
 	}
-	truncated := stat.Size() > maxRead
-	if truncated {
-		if _, err = f.Seek(stat.Size()-maxRead, io.SeekStart); err != nil {
-			return nil, false, err
-		}
+	end := stat.Size()
+	if span.Before > 0 {
+		end = min(span.Before, end)
 	}
-	reader := bufio.NewReader(io.LimitReader(f, maxRead))
-	if truncated {
-		_, _ = reader.ReadBytes('\n')
-	} // discard a partial first record
+	begin := max(end-maxRead, span.After, 0)
+	truncated := begin > span.After
+	pos := begin // where the next record starts
+	if begin > 0 {
+		// The read may begin inside a record, and then the next one is the
+		// first. It begins a byte early, to see the end of the one before.
+		pos--
+	}
+	if _, err = f.Seek(pos, io.SeekStart); err != nil {
+		return window{}, err
+	}
+	reader := bufio.NewReader(io.LimitReader(f, end-pos))
+	if pos > 0 {
+		skipped, _ := reader.ReadBytes('\n')
+		pos += int64(len(skipped))
+	}
+	start := pos
 	var messages []*protocol.ChatMessage
+	var offsets []int64 // the start of each message's record
 	// A tool call's ID to its place in messages, counting the dropped ones,
 	// so dropping never has to move the places.
 	calls := map[string]int{}
@@ -213,13 +247,16 @@ func readMessages(path string, a *Agent) ([]*protocol.ChatMessage, bool, error) 
 	size := 0
 	command := "" // the last slash command typed, whose output follows it
 	// trim keeps the window small enough to send, dropping the oldest
-	// messages.
+	// messages. The messages of one record go together, so the window
+	// starts at a record and a read up to there ends at it.
 	trim := func() {
-		for len(messages) > 200 || size > 512<<10 {
-			size -= len(messages[0].GetText()) + len(messages[0].GetResult())
-			messages = messages[1:]
-			dropped++
-			truncated = true
+		for len(messages) > 0 && (len(messages) > 200 || size > 512<<10) {
+			gone := offsets[0]
+			for len(messages) > 0 && offsets[0] == gone {
+				size -= len(messages[0].GetText()) + len(messages[0].GetResult())
+				messages, offsets = messages[1:], offsets[1:]
+				dropped++
+			}
 		}
 	}
 	for {
@@ -229,8 +266,10 @@ func readMessages(path string, a *Agent) ([]*protocol.ChatMessage, bool, error) 
 			break
 		}
 		if err != nil {
-			return nil, truncated, err
+			return window{truncated: truncated}, err
 		}
+		at := pos
+		pos += int64(len(line))
 		var r record
 		if json.Unmarshal(line, &r) != nil {
 			continue
@@ -283,11 +322,18 @@ func readMessages(path string, a *Agent) ([]*protocol.ChatMessage, bool, error) 
 				m.Pending = true
 			}
 			messages = append(messages, m)
+			offsets = append(offsets, at)
 			size += len(m.GetText())
 			trim()
 		}
 	}
-	return messages, truncated, nil
+	if dropped > 0 {
+		truncated, start = true, pos
+		if len(offsets) > 0 {
+			start = offsets[0]
+		}
+	}
+	return window{messages: messages, start: start, truncated: truncated}, nil
 }
 
 func trimUTF8(s string, n int) string {
@@ -487,16 +533,17 @@ func Verify(info *protocol.SessionInfo, path string) error {
 	return nil
 }
 
-// ReadBound reads a daemon-verified path, including rollout names that carry
-// a separate file ID. A missing or replaced bound log is an error.
-func ReadBound(info *protocol.SessionInfo, path string) (*protocol.Chat, error) {
+// ReadBound reads span of a daemon-verified path, including rollout names
+// that carry a separate file ID. A missing or replaced bound log is an
+// error.
+func ReadBound(info *protocol.SessionInfo, path string, span Span) (*protocol.Chat, error) {
 	a, ok := Lookup(info.GetAgent())
 	out := &protocol.Chat{Supported: ok, Conversation: info.GetConversationId()}
 	if err := Verify(info, path); err != nil {
 		return out, err
 	}
-	var err error
-	out.Messages, out.Truncated, err = readMessages(path, a)
+	w, err := readWindow(path, a, span)
+	w.fill(out)
 	if err == nil {
 		var scan usageScan
 		out.Usage = scan.read(path, a)
@@ -515,9 +562,13 @@ type Cache struct {
 	agents agentScans
 }
 
-// ReadBound is ReadBound, answered from the cache while the log is the same
-// file, unchanged, and still bound to the same conversation.
-func (c *Cache) ReadBound(info *protocol.SessionInfo, path string) (*protocol.Chat, error) {
+// ReadBound is ReadBound of the latest messages, answered from the cache
+// while the log is the same file, unchanged, and still bound to the same
+// conversation. An earlier span does not change, so it is read as asked.
+func (c *Cache) ReadBound(info *protocol.SessionInfo, path string, span Span) (*protocol.Chat, error) {
+	if span != (Span{}) {
+		return ReadBound(info, path, span)
+	}
 	stat, statErr := os.Stat(path)
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -539,7 +590,9 @@ func (c *Cache) ReadBound(info *protocol.SessionInfo, path string) (*protocol.Ch
 	chat := &protocol.Chat{Supported: ok, Conversation: info.GetConversationId()}
 	err := Verify(info, path)
 	if err == nil {
-		chat.Messages, chat.Truncated, err = readMessages(path, a)
+		var w window
+		w, err = readWindow(path, a, Span{})
+		w.fill(chat)
 	}
 	if err == nil {
 		chat.Usage = c.usage.read(path, a)
@@ -558,7 +611,7 @@ func (c *Cache) ReadBound(info *protocol.SessionInfo, path string) (*protocol.Ch
 func withAgents(chat *protocol.Chat, agents []*protocol.SubAgent) *protocol.Chat {
 	return &protocol.Chat{
 		Supported: chat.GetSupported(), Conversation: chat.GetConversation(), Messages: chat.GetMessages(),
-		Truncated: chat.GetTruncated(), Usage: chat.GetUsage(), Agents: agents,
+		Truncated: chat.GetTruncated(), Start: chat.GetStart(), Usage: chat.GetUsage(), Agents: agents,
 	}
 }
 

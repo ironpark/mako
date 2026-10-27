@@ -15,6 +15,7 @@ import (
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
+	"github.com/ironpark/mako/internal/transcript"
 )
 
 // This subprocess emulates a native agent, holding its own log open. No API
@@ -139,7 +140,7 @@ func TestNativeConversationSurvivesDaemonRestartWithoutOpeningChat(t *testing.T)
 			if slices.Contains(args, "initial prompt") || !slices.Contains(args, "test-model") {
 				t.Fatalf("resume flags: %q", args)
 			}
-			chat, err := next.chatForSession(t.Context(), resumed)
+			chat, err := next.chatForSession(t.Context(), resumed, transcript.Span{})
 			if err != nil || chat.GetConversation() != nativeID {
 				t.Fatalf("automatic chat=%+v, %v", chat, err)
 			}
@@ -179,7 +180,7 @@ func TestConcurrentAgentsInSameProjectBindTheirOwnLogs(t *testing.T) {
 		t.Fatal("concurrent sessions share a conversation")
 	}
 	for _, s := range []*session.Session{a, b} {
-		chat, err := d.chatForSession(t.Context(), s)
+		chat, err := d.chatForSession(t.Context(), s, transcript.Span{})
 		if err != nil || chat.GetConversation() != s.Info().GetConversationId() {
 			t.Fatalf("wrong chat: %+v %v", chat, err)
 		}

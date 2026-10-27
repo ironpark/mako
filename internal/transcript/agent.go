@@ -37,6 +37,11 @@ type Agent struct {
 	// values and variadic are options a resumed launch keeps along with the
 	// value, or the values, that follow them.
 	values, variadic []string
+	// questions are the tools whose prompt asks the user something rather
+	// than for leave: the agent runs its approval hook for them too, but
+	// only its own prompt can take the answer, and allowing one would skip
+	// it.
+	questions []string
 	// settings takes settings for one launch, among them hooks; "" when
 	// the agent takes none.
 	settings string
@@ -53,6 +58,7 @@ var agents = []*Agent{
 	{
 		Name: "claude", rootEnv: "CLAUDE_CONFIG_DIR", homeDir: ".claude", logDirs: []string{"projects", "*"},
 		pin: "--session-id", resume: []string{"--resume", "-r"}, fork: "--fork-session", settings: "--settings", hooks: settingsHooks,
+		questions:    []string{"AskUserQuestion"},
 		pickerValues: []string{"--from-pr"}, pickerFlags: []string{"--continue", "-c"},
 		values:   strings.Fields("--model --effort --settings --setting-sources --system-prompt --system-prompt-file --append-system-prompt --append-system-prompt-file --permission-mode --permission-prompts --permission-prompt-tool --plugin-dir --plugin-url --agent --agents --name -n --debug-file --input-format --output-format --json-schema --max-budget-usd --max-turns --fallback-model --system-prompt-snapshot --remote-control-session-name-prefix"),
 		variadic: strings.Fields("--add-dir --allowedTools --allowed-tools --disallowedTools --disallowed-tools --tools --mcp-config --betas --file"),
@@ -207,3 +213,7 @@ func (a *Agent) Resume(command []string, id string) []string {
 	}
 	return args
 }
+
+// Asks reports whether the agent's tool asks the user a question rather
+// than for an approval.
+func (a *Agent) Asks(tool string) bool { return slices.Contains(a.questions, tool) }

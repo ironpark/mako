@@ -52,7 +52,11 @@ type model struct {
 	addr string // the -daemon flag; Prefs.Daemon overrides it
 	post func(func())
 
-	Prefs          *ggui.StateValue[prefs]
+	Prefs *ggui.StateValue[prefs]
+	// Themes are the user's themes, by name; ThemesRead counts their
+	// readings from disk, so the editor starts again on what was read.
+	Themes         *ggui.StateValue[map[string]palette]
+	ThemesRead     *ggui.StateValue[int]
 	Page           *ggui.StateValue[string] // "workspace" or "settings"
 	Section        *ggui.StateValue[string] // the settings page shown
 	Host           *ggui.StateValue[hostDraft]
@@ -258,6 +262,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		cfg:            cfg,
 		addr:           addr,
 		Prefs:          ggui.State(p),
+		Themes:         ggui.State(loadThemes()).WithEqual(maps.Equal),
+		ThemesRead:     ggui.State(0),
 		Page:           ggui.State("workspace"),
 		Section:        ggui.State("general"),
 		Host:           ggui.State(draftFrom(cfg)),
@@ -1172,6 +1178,23 @@ func (m *model) syncTitles() {
 	m.Titles.Set(titles)
 }
 
+// themePalette is the palette the theme preference picks; it subscribes
+// the caller.
+func (m *model) themePalette() palette {
+	return paletteFor(m.Prefs.Get().Theme, ggui.SystemDark().Get(), m.Themes.Get())
+}
+
+// reloadThemes reads the user's themes from disk again, and starts the
+// editor again on them if they changed.
+func (m *model) reloadThemes() {
+	themes := loadThemes()
+	if maps.Equal(themes, ggui.Peek(m.Themes)) {
+		return
+	}
+	m.Themes.Set(themes)
+	m.ThemesRead.Update(func(n int) int { return n + 1 })
+}
+
 // openSettings shows the settings page, at a section when one is named.
 func (m *model) openSettings(section string) {
 	if section != "" {
@@ -1179,6 +1202,7 @@ func (m *model) openSettings(section string) {
 	}
 	m.Host.Set(draftFrom(m.cfg))
 	m.HostNote.Set("")
+	m.reloadThemes()
 	m.Page.Set("settings")
 }
 

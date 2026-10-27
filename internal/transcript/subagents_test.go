@@ -43,7 +43,7 @@ func TestSubagentsAreFollowedInTheirOwnLogs(t *testing.T) {
 
 	info := &protocol.SessionInfo{Agent: "claude", ConversationId: "c"}
 	var cache Cache
-	chat, err := cache.ReadBound(info, path)
+	chat, err := cache.ReadBound(info, path, Span{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestSubagentsAreFollowedInTheirOwnLogs(t *testing.T) {
 	_, _ = f.WriteString(agentLog("", "go vet ./...")[len(agentLog("")):])
 	f.Close()
 	writeLog(t, filepath.Join(sub, "agent-b1.meta.json"), `{"toolUseId":"bg","requestShape":"background","finished":true}`)
-	if chat, err = cache.ReadBound(info, path); err != nil {
+	if chat, err = cache.ReadBound(info, path, Span{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, a := range chat.GetAgents() {

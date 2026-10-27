@@ -117,7 +117,7 @@ type graphCell struct {
 }
 
 func (g *graphCell) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	g.hole = ggui.ResolveColor(tokSurface0, env)
+	g.hole = ggui.ResolveColor(tokSolidBg, env)
 	return c.Constrain(ggui.Sz(float64(min(g.row.Lanes, maxLanes))*laneWidth+4, historyRow))
 }
 

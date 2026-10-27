@@ -3,6 +3,8 @@ package gui
 import (
 	"context"
 	"fmt"
+	"image"
+	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -17,6 +19,30 @@ import (
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 )
+
+// writeGradient writes a diagonal gradient from a to b as a PNG, a
+// stand-in background image for the preview.
+func writeGradient(path string, a, b color.RGBA) error {
+	const w, h = 640, 400
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := range h {
+		for x := range w {
+			t := float64(x+y) / float64(w+h)
+			mix := func(p, q uint8) uint8 { return uint8(float64(p)*(1-t) + float64(q)*t) }
+			img.SetRGBA(x, y, color.RGBA{mix(a.R, b.R), mix(a.G, b.G), mix(a.B, b.B), 0xff})
+		}
+	}
+	return writePNG(path, img)
+}
+
+func writePNG(path string, img image.Image) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return png.Encode(f, img)
+}
 
 // Preview renders the window against a live daemon into PNGs in dir,
 // without showing it, for reviewing layout: the workspace with a session
@@ -42,12 +68,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 		return func() (bool, error) {
 			img.Clear()
 			p.Draw(img)
-			f, err := os.Create(filepath.Join(dir, name+".png"))
-			if err != nil {
-				return false, err
-			}
-			defer f.Close()
-			return true, png.Encode(f, img)
+			return true, writePNG(filepath.Join(dir, name+".png"), img)
 		}
 	}
 	do := func(fn func()) previewStep { return func() (bool, error) { fn(); return true, nil } }
@@ -91,6 +112,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			ggui.SetDefaultMonoFont(gofont.Mono())
 			m = newModel(cfg, addr)
 			saved := ggui.Peek(m.Prefs)
+			window, session := filepath.Join(dir, "backdrop-window.png"), filepath.Join(dir, "backdrop-session.png")
 			p = ggui.ProbeBuilder(func() ggui.Widget { return ggui.Provide(ggui.ReducedMotionKey, true, build(m)) },
 				ggui.Sz(float64(width), float64(height)))
 			p.Setup(func() {
@@ -329,7 +351,37 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(func() { m.Section.Set("extensions") }), frames(5), shot("09-settings-extensions"),
 				do(setTheme("light")), frames(2), shot("10-light-settings"),
 				do(func() { m.Page.Set("workspace") }), frames(10), shot("11-light-session"),
-				do(func() { m.Prefs.Set(saved) }), frames(2),
+				// Background images under the window and the sessions,
+				// then a theme of the user's in its editor, both kept in
+				// memory: the themes folder is not touched.
+				do(func() {
+					_ = writeGradient(window, hex(0x2563EB), hex(0xE07070))
+					_ = writeGradient(session, hex(0x35C264), hex(0xE2B04A))
+					m.Prefs.Update(func(p prefs) prefs {
+						p.Theme = "dark"
+						p.WindowBackdrop = backdrop{Image: window, Opacity: 0.35}
+						p.SessionBackdrop = backdrop{Image: session, Opacity: 0.2}
+						return p
+					})
+				}), frames(40), shot("12-backdrop"),
+				do(func() {
+					pal := darkPalette
+					pal.Name, pal.AccentBright, pal.Sidebar = "Preview", hex(0xE2B04A), hex(0x101826)
+					m.Themes.Set(map[string]palette{"Preview": pal})
+					m.Prefs.Update(func(p prefs) prefs {
+						p.Theme, p.WindowBackdrop, p.SessionBackdrop = "Preview", backdrop{}, backdrop{}
+						return p
+					})
+					m.Page.Set("settings")
+					m.Section.Set("appearance")
+				}), frames(10), shot("13-theme-editor"),
+				do(func() {
+					m.Prefs.Update(func(p prefs) prefs {
+						p.Theme, p.WindowBackdrop = "dark", backdrop{Image: window, Opacity: 0.35}
+						return p
+					})
+				}), frames(40), shot("14-appearance-backdrop"),
+				do(func() { m.Prefs.Set(saved); m.reloadThemes() }), frames(2),
 			}
 		case ggfx.FrameEvent:
 			p.Frame()

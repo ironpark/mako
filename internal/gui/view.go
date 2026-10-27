@@ -57,8 +57,9 @@ func window(m *model) ggui.Widget {
 	return ggui.Stack(
 		// The settings page takes the whole window, as Paseo's does; the
 		// sessions stay attached while it shows.
-		ggui.If(inSettings, func() ggui.Widget { return settingsPage(m) }).
-			Else(func() ggui.Widget { return main }),
+		backdropped(m, windowBackdrop,
+			ggui.If(inSettings, func() ggui.Widget { return settingsPage(m) }).
+				Else(func() ggui.Widget { return main })),
 		newSessionDialog(m),
 		renameDialog(m),
 		fileDialogs(m),
@@ -644,17 +645,6 @@ func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
 			return false
 		}).
 		OnPasteImage(func(png []byte) bool { m.pasteImage(id, png, insert); return true })
-	pills := ggui.Reactive(func() ggui.Widget {
-		s, ok := sessionIn(m.Sessions.Get(), id)
-		if !ok {
-			return ggui.Box()
-		}
-		return ggui.Row(
-			pill(agentIcon(s.GetAgent()), sessionLabel(s)),
-			pill("server", nodeName(m.Nodes.Get(), s.GetNodeId())),
-			pill("circle-dot", stateLabel(s.GetState())),
-		).Gap(6)
-	})
 	send := ui.ButtonOf(iconColored("arrow-up", uitheme.PrimaryFg).Size(15), func() { m.sendComposer(id) }).
 		Pad(6).Radius(14).Name(T("Send")).BindDisabled(disabled)
 	// Files dropped on the box, from the desktop or the Files tab, are
@@ -662,7 +652,7 @@ func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
 	over := ggui.State(false)
 	content := ggui.Column(
 		ggui.Box(inlineField(field)).MaxHeight(composerMaxHeight),
-		ggui.Row(pills, ggui.Spacer(), send).Gap(8),
+		ggui.Row(ggui.Spacer(), send).Gap(8),
 	).Gap(8).Stretch()
 	box := ggui.View(over, func(o bool) ggui.Widget {
 		var border ggui.Widget = ggui.Box(content).Fill(tokSurface1).Border(1, tokBorderAccent).Radius(12).Pad(10, 12)
@@ -678,9 +668,8 @@ func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
 		over.Set(false)
 		m.insertPath(id, d.Value.Path)
 	}).OnHover(over.Set)
-	// Align fills the height it is given, which would leave the feed above
-	// none: the box keeps its own height and the whole pane's width.
-	return ggui.Box(files).Pad(10, 16, 14, 16)
+	// In the transcript's lane, as wide as its text.
+	return &lane{child: ggui.Box(files).Pad(10, 0, 14, 0)}
 }
 
 // composerMaxHeight is as tall as the composer's text grows, about ten
@@ -696,11 +685,6 @@ func inlineField(w ggui.Widget) ggui.Widget {
 		t.Ring = color.Transparent
 		t.FieldPad = ggui.Insets(4, 2)
 	}, w)
-}
-
-func pill(iconName, label string) ggui.Widget {
-	return ggui.Box(ggui.Row(icon(iconName).Size(13), muted(ggui.Text(label).Size(12))).Gap(6)).
-		Pad(3, 8).Radius(6).Fill(tokSurface2)
 }
 
 // Details panel --------------------------------------------------------------
@@ -889,17 +873,9 @@ func newSessionDialog(m *model) ggui.Widget {
 		}
 		return ids
 	})
-	browse := ui.Button(T("Browse…"), func() {
-		host := ggui.UseHost()
-		start := ggui.Peek(project)
-		ggui.Async(func() (string, error) {
-			return host.Dialogs().PickFolder(runtime.FileDialog{Title: T("Working directory"), Directory: start})
-		}, func(dir string, err error) {
-			if err == nil && dir != "" {
-				project.Set(dir)
-			}
-		})
-	}).Outline()
+	browse := browseButton(project, func(d runtime.Dialogs) (string, error) {
+		return d.PickFolder(runtime.FileDialog{Title: T("Working directory"), Directory: ggui.Peek(project)})
+	})
 	// The native picker browses this machine, so it is offered only when
 	// the session will run here.
 	local := ggui.Derived(func() bool { return m.Form.Get().NodeID == m.Conn.Get().Self.GetId() })

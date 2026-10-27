@@ -33,20 +33,6 @@ func trimZero(s string) string {
 	return s
 }
 
-// usageLine is a conversation's tokens in brief: how full its context is,
-// and what it has spent.
-func usageLine(u *protocol.Usage) string {
-	ctx := ""
-	if u.GetContext() > 0 {
-		ctx = Tf("context %s", tokens(u.GetContext()))
-		if u.GetWindow() > 0 {
-			ctx = Tf("context %d%%", u.GetContext()*100/u.GetWindow())
-		}
-		ctx += " · "
-	}
-	return ctx + Tf("%s in · %s out", tokens(u.GetInput()+u.GetCachedInput()), tokens(u.GetOutput()))
-}
-
 // usageDetail is a conversation's tokens in full, and the account's limits
 // as they stand at now, with when each starts over.
 func usageDetail(u *protocol.Usage, now time.Time) string {
@@ -195,8 +181,7 @@ func usageCard(m *model, u *protocol.Usage) ggui.Widget {
 	}
 	card := func(items []ggui.Widget) ggui.Widget {
 		return usageTip(m, u, ggui.Reactive(func() ggui.Widget {
-			return ggui.Box(ggui.Row(items...).Gap(8).Align(ggui.AlignCenter)).
-				Fill(tokSurface1).Border(1, tokBorder).Radius(7).Pad(4, 8).Shadow(uitheme.Use().PanelShadow)
+			return overlayChip(items...)
 		}))
 	}
 	if len(u.GetLimits()) == 0 {
@@ -250,4 +235,11 @@ func untilText(d time.Duration) string {
 		return Tf("%dh %dm", hours, minutes)
 	}
 	return Tf("%dm", max(minutes, 1))
+}
+
+// overlayChip is a small raised label floating over a session: its usage,
+// the host it runs on.
+func overlayChip(items ...ggui.Widget) ggui.Widget {
+	return ggui.Box(ggui.Row(items...).Gap(8).Align(ggui.AlignCenter)).
+		Fill(tokSurface1).Border(1, tokBorder).Radius(7).Pad(4, 8).Shadow(uitheme.Use().PanelShadow)
 }

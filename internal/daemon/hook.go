@@ -304,7 +304,17 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		s.SetStatus(protocol.AgentIdle)
 	case "PermissionRequest":
 		_ = conn.SetDeadline(time.Time{})
-		reply := d.approvals.ask(ctx, s, ev)
+		// The agent gives up on its hook when the approval is answered in
+		// its terminal, it is interrupted or the hook times out: the hook
+		// exits, its end of the connection closes, and the approval is
+		// withdrawn from the window with it.
+		asking, withdraw := context.WithCancel(ctx)
+		defer withdraw()
+		go func() {
+			_, _ = conn.Read(make([]byte, 1))
+			withdraw()
+		}()
+		reply := d.approvals.ask(asking, s, ev)
 		_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
 		_ = json.NewEncoder(conn).Encode(reply)
 	}

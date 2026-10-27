@@ -57,6 +57,7 @@ type codeEditor struct {
 
 	// From the last paint, in logical pixels.
 	pal          palette
+	ground       color.Color // the fill under the text, as termview's
 	rect         ggui.Rect
 	textX        float64 // where column 0 is, before scrolling
 	cellW, lineH float64
@@ -155,6 +156,7 @@ func (e *codeEditor) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	if p, ok := uitheme.From(env).Get(paletteKey); ok {
 		e.pal = p
 	}
+	e.ground = ggui.ResolveColor(tokSurface0, env)
 	e.input.Style(ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: e.prefs().FontSize})
 	// Painted only through PaintCustom, which wants it laid out first.
 	e.input.Layout(ggui.Loose(c.Max()), env)
@@ -249,7 +251,7 @@ func (e *codeEditor) offsetAtColumn(line string, col int) int {
 func (e *codeEditor) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	p := e.prefs()
 	e.rect = r
-	dst.FillRect(r, e.pal.Surface0)
+	fillGround(dst, r, e.ground)
 	dst.HitKey(r, e)
 	dst.HitPointer(r, e)
 	dst.HitCursor(r, ggui.CursorShapeText)

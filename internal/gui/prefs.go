@@ -14,13 +14,16 @@ import (
 // notifying on a write that changes nothing.
 type prefs struct {
 	// Appearance
-	Theme    string `json:"theme"`    // system, dark or light
+	Theme    string `json:"theme"`    // system, dark, light, or one of the user's themes (themes.go)
 	Language string `json:"language"` // system, en or ko; see i18n.go
 	// UsageOverlay shows an agent's token usage over its session, in the
 	// corner UsageCorner names: top-left, top-right, bottom-left or
 	// bottom-right.
 	UsageOverlay bool   `json:"usage_overlay"`
 	UsageCorner  string `json:"usage_corner"`
+	// Background images, under the window and under each session.
+	WindowBackdrop  backdrop `json:"window_backdrop"`
+	SessionBackdrop backdrop `json:"session_backdrop"`
 
 	// Terminal
 	FontSize     float64 `json:"font_size"`
@@ -77,23 +80,25 @@ func (p prefs) Equal(o prefs) bool { return reflect.DeepEqual(p, o) }
 func defaultPrefs() prefs {
 	home, _ := os.UserHomeDir()
 	return prefs{
-		Theme:          "system",
-		Language:       "system",
-		UsageOverlay:   true,
-		UsageCorner:    "top-right",
-		FontSize:       13,
-		LineHeight:     1.4,
-		CursorStyle:    "block",
-		CursorBlink:    true,
-		Scrollback:     10000,
-		CopyOnSelect:   false,
-		DefaultAgent:   "claude",
-		DefaultProject: home,
-		ConfirmKill:    true,
-		ApproveInApp:   true,
-		Notify:         true,
-		DaemonMode:     "auto",
-		SidebarGroup:   groupProject,
+		Theme:           "system",
+		Language:        "system",
+		UsageOverlay:    true,
+		UsageCorner:     "top-right",
+		WindowBackdrop:  backdrop{Opacity: defaultBackdropOpacity},
+		SessionBackdrop: backdrop{Opacity: defaultBackdropOpacity},
+		FontSize:        13,
+		LineHeight:      1.4,
+		CursorStyle:     "block",
+		CursorBlink:     true,
+		Scrollback:      10000,
+		CopyOnSelect:    false,
+		DefaultAgent:    "claude",
+		DefaultProject:  home,
+		ConfirmKill:     true,
+		ApproveInApp:    true,
+		Notify:          true,
+		DaemonMode:      "auto",
+		SidebarGroup:    groupProject,
 	}
 }
 
@@ -102,14 +107,18 @@ const (
 	minFontSize, maxFontSize     = 9, 24
 	minLineHeight, maxLineHeight = 1.0, 2.0
 	minScrollback, maxScrollback = 0, 100000
+	defaultBackdropOpacity       = 0.25
 )
 
 func (p prefs) normalized() prefs {
 	d := defaultPrefs()
-	switch p.Theme {
-	case "system", "dark", "light":
-	default:
+	// A theme of the user's is checked when the window paints: paletteFor
+	// takes one that is gone for the system's.
+	if p.Theme == "" {
 		p.Theme = d.Theme
+	}
+	for _, b := range []*backdrop{&p.WindowBackdrop, &p.SessionBackdrop} {
+		b.Opacity = min(max(b.Opacity, 0), 1)
 	}
 	if _, ok := catalog(p.Language); !ok && p.Language != "system" {
 		p.Language = d.Language

@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"image/color"
 	"path/filepath"
 	goruntime "runtime"
 	"strings"
@@ -9,7 +8,6 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
-	uitheme "github.com/ironpark/ggui/ui/theme"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
@@ -195,6 +193,19 @@ func page(title, description string, sections ...ggui.Widget) ggui.Widget {
 	return ggui.Column(append([]ggui.Widget{pageTitle(title, description)}, sections...)...).Gap(28).Stretch()
 }
 
+// browseButton is a Browse… button that sets b to what pick chooses in the
+// platform's dialog, unless the dialog is cancelled.
+func browseButton(b ggui.Binding[string], pick func(runtime.Dialogs) (string, error)) *ui.ButtonWidget {
+	return ui.Button(T("Browse…"), func() {
+		dialogs := ggui.UseHost().Dialogs()
+		ggui.Async(func() (string, error) { return pick(dialogs) }, func(v string, err error) {
+			if err == nil && v != "" {
+				b.Set(v)
+			}
+		})
+	}).Outline()
+}
+
 func prefField[T any](m *model, f func(*prefs) *T) ggui.Binding[T] {
 	return m.Prefs.Field(f)
 }
@@ -204,17 +215,9 @@ func prefField[T any](m *model, f func(*prefs) *T) ggui.Binding[T] {
 func generalSettings(m *model) ggui.Widget {
 	agent := prefField(m, func(p *prefs) *string { return &p.DefaultAgent })
 	project := prefField(m, func(p *prefs) *string { return &p.DefaultProject })
-	browse := ui.Button(T("Browse…"), func() {
-		host := ggui.UseHost()
-		start := ggui.Peek(project)
-		ggui.Async(func() (string, error) {
-			return host.Dialogs().PickFolder(runtime.FileDialog{Title: T("Default working directory"), Directory: start})
-		}, func(dir string, err error) {
-			if err == nil && dir != "" {
-				project.Set(dir)
-			}
-		})
-	}).Outline()
+	browse := browseButton(project, func(d runtime.Dialogs) (string, error) {
+		return d.PickFolder(runtime.FileDialog{Title: T("Default working directory"), Directory: ggui.Peek(project)})
+	})
 	daemon := prefField(m, func(p *prefs) *string { return &p.Daemon })
 	status := ggui.View(m.Conn, func(c connState) ggui.Widget {
 		if !c.OK {
@@ -266,53 +269,6 @@ func generalSettings(m *model) ggui.Widget {
 				ggui.Box(status).Pad(12, 16),
 			),
 		),
-	)
-}
-
-func appearanceSettings(m *model) ggui.Widget {
-	theme := ui.ToggleGroup(prefField(m, func(p *prefs) *string { return &p.Theme })).
-		Options([]string{"system", "light", "dark"}).
-		Format(func(s string) string { return T(themeLabels[s]) }).Name(T("Theme"))
-	corner := ui.Select(prefField(m, func(p *prefs) *string { return &p.UsageCorner })).
-		Options(usageCorners).Format(func(s string) string { return T(usageCornerLabels[s]) }).Name(T("Overlay position")).
-		BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return !p.UsageOverlay }))
-	return page(T("Appearance"), T("The window's colours, after Paseo's palettes."),
-		section(T("Theme"),
-			card(
-				row(T("Theme"), T("System follows the desktop's light or dark appearance."), theme),
-			),
-			themePreview(),
-		),
-		section(T("Agent usage"),
-			card(
-				row(T("Show usage overlay"), T("Float a Claude or Codex session's context and its account's 5-hour and weekly limits over its terminal and chat."),
-					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.UsageOverlay }), "").Name(T("Show usage overlay"))),
-				row(T("Overlay position"), T("The corner of the session the overlay sits in."), ggui.Box(corner).Width(160)),
-			),
-		),
-	)
-}
-
-// themePreview is a swatch of the active palette: the surfaces in order,
-// then the terminal's sixteen ANSI colours.
-func themePreview() ggui.Widget {
-	var surfaces []ggui.Widget
-	for _, c := range []color.Color{tokSidebar, tokSurface0, tokSurface1, tokSurface2, tokSurface3} {
-		surfaces = append(surfaces, ggui.Box().Size(40, 26).Radius(6).Fill(c).Border(1, tokBorder))
-	}
-	// The ANSI colours are values, not tokens, so this part follows the
-	// theme by rebuilding.
-	ansi := ggui.Reactive(func() ggui.Widget {
-		pal, _ := uitheme.Use().Get(paletteKey)
-		var cells []ggui.Widget
-		for _, c := range pal.ANSI {
-			cells = append(cells, ggui.Box().Size(20, 20).Radius(4).Fill(hex(c)))
-		}
-		return ggui.Row(cells...).Gap(4)
-	})
-	return card(
-		row(T("Surfaces"), T("Sidebar, workspace and the raised steps above it."), ggui.Row(surfaces...).Gap(6)),
-		row(T("Terminal colours"), "", ansi),
 	)
 }
 
