@@ -57,6 +57,15 @@ func markdownView(m *model, id string, src string) ggui.Widget {
 	return ggui.Box(ggui.Scroll(ggui.Align(ggui.Padding(page, 28, 36, 48, 36)).Top()).Bar(tokSurface3)).Fill(tokSurface0)
 }
 
+// markdownText is Markdown written somewhere other than a file, as on
+// GitHub: its blocks, to set in a column of their own. Its relative links
+// lead nowhere.
+func markdownText(m *model, src string) ggui.Widget {
+	r := &mdRenderer{m: m, src: []byte(src)}
+	root := markdown.Parser().Parse(text.NewReader(r.src))
+	return ggui.Column(r.blocks(root)...).Gap(10).Stretch()
+}
+
 // blocks renders the block children of n.
 func (r *mdRenderer) blocks(n ast.Node) []ggui.Widget {
 	var out []ggui.Widget
@@ -375,6 +384,9 @@ func (r *mdRenderer) open(dest string) {
 	case strings.Contains(dest, "://") || strings.HasPrefix(dest, "mailto:"):
 		_ = runtime.OpenURL(dest)
 		return
+	}
+	if r.doc.Path == "" {
+		return // not a file's, with nothing beside it
 	}
 	if i := strings.IndexAny(dest, "#?"); i >= 0 {
 		dest = dest[:i]

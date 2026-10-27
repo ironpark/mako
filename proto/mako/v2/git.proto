@@ -54,6 +54,7 @@ message GitDiff {
   string from = 4;
   string commit = 5;
   string base = 6;
+  int64 pull = 7; // the pull request whose change it is, read from GitHub
 }
 
 // Diff answers GitDiff.

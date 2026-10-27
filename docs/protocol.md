@@ -316,8 +316,10 @@ instead, which is routed.
 `codex`, `agy`, `shell`, …) and `profile` one of its profiles there. `project`
 is the working directory; empty starts in the node's home. `args` and `env` add
 to the node's own. `cols` and `rows` size the PTY. With `worktree` set, the
-daemon first makes a git worktree on a new `branch` from `base` in the
-repository `project` is in, and starts there.
+daemon first makes a git worktree on a new `branch` from `base` (the
+branch checked out when empty), or from the commit `start` when set, in the
+repository `project` is in, and starts there. `base` stays the branch the
+worktree merges and opens its pull request into.
 
 **`SessionInfo`** is what listings and most replies describe a session with.
 The fields a front-end usually needs:
@@ -449,6 +451,34 @@ leaves the commits out.
 Diff lines are `{op, text, old, new}`, where `op` is `+`, `-`, a space for
 context, or `@` for a hunk header, and `old`/`new` are line numbers on each
 side, 0 where a line has none.
+
+A `git_diff` with `pull` set is a file of that pull request's change, read
+from GitHub as the GitHub section says; `commit` is then the pull request's
+head as the asker saw it.
+
+### GitHub
+
+The node runs its GitHub CLI, `gh`, in `root`, with the login its user gave
+it; a node without gh, or a repository gh cannot place, answers with gh's
+error. When no remote fetches from github.com but one pushes there, the
+daemon names that repository to gh.
+
+| Request | Payload | Reply | |
+|---|---|---|---|
+| `github_list` | `GitHubList` | `github_items` | Pull requests, issues or Actions runs (`kind`: `pr`, `issue`, `run`), `state` `open`, `closed` or `all`; of `branch`, or with `current` of the branch checked out. |
+| `github_view` | `GitHubView` | `github_detail` | One in full: its body, comments, reviews and line comments oldest first, a pull request's files and checks, a run's jobs. Pull request 0 is the branch's, `none` when it has none. |
+| `github_run` | `GitHubRun` | `git_result` | An operation, and what gh printed. |
+
+A run's `number` is its ID. `github_run` operations (`op`):
+
+| Op | |
+|---|---|
+| `pr_create` | Push the branch checked out, its upstream set if it has none, and open a pull request of it into `base`: titled `title` with `body`, or filled from its commits without a title; a draft with `draft`. |
+| `pr_checkout`, `pr_fetch` | Check pull request `number` out, or fetch its head and reply with the commit, for a worktree to start at. |
+| `comment` | Comment `body` on the pull request or issue (`kind`) `number`. |
+| `review` | Review pull request `number`: `review` `approve`, `request_changes` or `comment`, with `body`. |
+| `run_rerun`, `run_cancel` | Run `number` again, only its failed jobs with `failed`; or cancel it. |
+| `run_log` | Reply with the logs of run `number`'s failed steps, their last 256 KiB. |
 
 ## Attach streams
 

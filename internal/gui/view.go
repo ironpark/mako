@@ -63,6 +63,7 @@ func window(m *model) ggui.Widget {
 		newSessionDialog(m),
 		renameDialog(m),
 		fileDialogs(m),
+		ghDialogs(m),
 		gitAskDialog(m),
 		confirmDialog(m),
 		imageViewer(m),
@@ -800,6 +801,7 @@ func inlineField(w ggui.Widget) ggui.Widget {
 const (
 	filesTab = iota
 	gitTab
+	githubTab
 	searchTab
 	sessionTab
 )
@@ -836,15 +838,17 @@ func details(m *model) ggui.Widget {
 			prop(T("Session"), s.GetId()),
 		)...).Gap(14).Stretch()
 	})
+	watchGH(m)
 	// Built once, so each keeps its scroll and open folders across tabs.
 	pages := []ggui.Widget{
 		filesPanel(m),
 		gitPanel(m),
+		githubPanel(m),
 		searchPanel(m),
 		ggui.Scroll(ggui.Padding(session, 16)),
 	}
 	return ggui.Box(ggui.Column(
-		panelTabs(m.DetailTab, T("Files"), T("Git"), T("Search"), T("Session")),
+		panelTabs(m.DetailTab, T("Files"), T("Git"), T("GitHub"), T("Search"), T("Session")),
 		hline(),
 		ggui.Expanded(ggui.Key(m.DetailTab, func(i int) ggui.Widget { return pages[min(max(i, 0), len(pages)-1)] })),
 	).Stretch()).Fill(tokSurface0)

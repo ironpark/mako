@@ -55,6 +55,7 @@ func gitTabView(m *model) ggui.Widget {
 	return ggui.Column(
 		gitHeader(m),
 		hline(),
+		ghBranchLine(m),
 		gitStatusLine(m),
 		operationBanner(m),
 		ggui.Expanded(body),

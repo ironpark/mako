@@ -77,6 +77,11 @@ const (
 	TypeGitResult      Type = "git_result"
 	TypeReadChat       Type = "read_chat"
 	TypeChat           Type = "chat"
+	TypeGitHubList     Type = "github_list"
+	TypeGitHubItems    Type = "github_items"
+	TypeGitHubView     Type = "github_view"
+	TypeGitHubDetail   Type = "github_detail"
+	TypeGitHubRun      Type = "github_run"
 )
 
 // Newer reports whether the edit made at version v on node is newer than
@@ -292,6 +297,25 @@ const (
 	GitOpTag          = "tag"           // Tag at Commit, annotated with Message if any
 	GitOpContinue     = "continue"      // the operation under way, its conflicts resolved
 	GitOpAbort        = "abort"         // the operation under way
+)
+
+// What a GitHubList and a GitHubView are of.
+const (
+	GitHubPR      = "pr"
+	GitHubIssue   = "issue"
+	GitHubActions = "run" // a workflow run of GitHub Actions
+)
+
+// Operations of a GitHubRun.
+const (
+	GitHubOpCreatePR   = "pr_create"   // pushes the branch checked out and opens a pull request of it into Base
+	GitHubOpCheckout   = "pr_checkout" // checks out pull request Number's branch
+	GitHubOpFetchPR    = "pr_fetch"    // fetches pull request Number's head; replies with its commit
+	GitHubOpComment    = "comment"     // Body on pull request or issue Number, as Kind says
+	GitHubOpReview     = "review"      // reviews pull request Number as Review says, with Body
+	GitHubOpRerun      = "run_rerun"   // runs run Number again, only its failed jobs with Failed
+	GitHubOpCancel     = "run_cancel"  // cancels run Number
+	GitHubOpFailedLogs = "run_log"     // replies with the logs of run Number's failed steps
 )
 
 // Same reports whether a and b are equal messages: proto.Equal, typed, for

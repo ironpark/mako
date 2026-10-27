@@ -11,6 +11,7 @@ package mako.v2;
 import "mako/v2/chat.proto";
 import "mako/v2/files.proto";
 import "mako/v2/git.proto";
+import "mako/v2/github.proto";
 import "mako/v2/mesh.proto";
 import "mako/v2/session.proto";
 
@@ -84,6 +85,13 @@ message Envelope {
     // An agent's conversation.
     ReadChat read_chat = 70;
     Chat chat = 71;
+
+    // GitHub.
+    GitHubList github_list = 80;
+    GitHubItems github_items = 81;
+    GitHubView github_view = 82;
+    GitHubDetail github_detail = 83;
+    GitHubRun github_run = 84;
   }
 }
 

@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -63,6 +64,7 @@ type diffTab struct {
 	Repo    string   // the work tree on the node
 	Commit  string   // the commit whose change it is, "" for the work tree's
 	Base    string   // the branch the work tree's changes are read since, "" for HEAD
+	Pull    int64    // the pull request whose change it is, read from GitHub at Commit, its head
 	File    *protocol.GitFile
 	Diff    *protocol.Diff
 	Err     string
@@ -77,6 +79,14 @@ func (d diffTab) Name() string { return baseName(d.File.GetPath()) }
 // changes a hunk can be undone in.
 func (d diffTab) workTree() bool { return d.Commit == "" && d.Base == "" }
 
+// against is what the diff is read against, as its tab's ID has it.
+func (d diffTab) against() string {
+	if d.Pull > 0 {
+		return fmt.Sprintf("#%d@%s", d.Pull, d.Commit)
+	}
+	return d.Commit + d.Base
+}
+
 func diffTabID(node, repo, against, path string) string {
 	return diffPrefix + against + "\x00" + dirKey(node, joinPath(repo, path))
 }
@@ -84,7 +94,14 @@ func diffTabID(node, repo, against, path string) string {
 // openDiffTab shows a file's diff in a tab, reading it again when the tab
 // is already open. A preview takes the tab of the last preview, if any.
 func (m *model) openDiffTab(root fileRoot, repo, commit, base string, f *protocol.GitFile, preview bool) {
-	id := diffTabID(root.Node, repo, commit+base, f.GetPath())
+	m.openDiffFrom(diffTab{Root: root, Repo: repo, Commit: commit, Base: base}, f, preview)
+}
+
+// openDiffFrom shows a file's diff in a tab, read as from says: from what
+// project and repository, and against what.
+func (m *model) openDiffFrom(from diffTab, f *protocol.GitFile, preview bool) {
+	root, repo := from.Root, from.Repo
+	id := diffTabID(root.Node, repo, from.against(), f.GetPath())
 	var replaced string
 	if _, open := ggui.Peek(m.Diffs)[id]; !open && preview {
 		for other, d := range ggui.Peek(m.Diffs) {
@@ -97,7 +114,7 @@ func (m *model) openDiffTab(root fileRoot, repo, commit, base string, f *protoco
 		v = maps.Clone(v)
 		d, ok := v[id]
 		if !ok {
-			d = diffTab{Root: root, Repo: repo, Commit: commit, Base: base, Loading: true, Preview: preview}
+			d = diffTab{Root: root, Repo: repo, Commit: from.Commit, Base: from.Base, Pull: from.Pull, Loading: true, Preview: preview}
 		} else if !preview {
 			d.Preview = false
 		}
@@ -138,7 +155,7 @@ func (m *model) readDiff(id string) {
 	if !ok {
 		return
 	}
-	req := &protocol.GitDiff{NodeId: m.remoteID(d.Root.Node), Root: d.Repo, Path: d.File.GetPath(), From: d.File.GetFrom(), Commit: d.Commit, Base: d.Base}
+	req := &protocol.GitDiff{NodeId: m.remoteID(d.Root.Node), Root: d.Repo, Path: d.File.GetPath(), From: d.File.GetFrom(), Commit: d.Commit, Base: d.Base, Pull: d.Pull}
 	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Diff, error) {
 		return c.GitDiff(ctx, req)
 	}, func(diff *protocol.Diff, err error) {
@@ -195,6 +212,12 @@ func (m *model) closeDiff(id string) {
 // siblings are the files a diff steps through: the changes it is one of,
 // or the commit's files.
 func (m *model) siblings(d diffTab) []*protocol.GitFile {
+	if d.Pull > 0 {
+		if o := ggui.Peek(m.GH.Open); o.Root == d.Root && o.Number == d.Pull {
+			return o.Detail.GetFiles()
+		}
+		return nil
+	}
 	if d.Commit != "" {
 		if c := ggui.Peek(m.GitCommit); c.Hash == d.Commit {
 			return c.Info.GetFiles()
@@ -220,7 +243,7 @@ func (m *model) stepDiff(dir int) {
 	if i < 0 || i+dir < 0 || i+dir >= len(files) {
 		return
 	}
-	m.openDiffTab(d.Root, d.Repo, d.Commit, d.Base, files[i+dir], d.Preview)
+	m.openDiffFrom(d, files[i+dir], d.Preview)
 }
 
 // discardHunk undoes a hunk of a work tree's diff, once confirmed.
@@ -258,6 +281,8 @@ func diffTabFace(m *model, id string, d diffTab, selected, focused bool) ggui.Wi
 	name := d.Name()
 	label := name
 	switch {
+	case d.Pull > 0:
+		label += fmt.Sprintf(" · #%d", d.Pull)
 	case d.Commit != "":
 		label += " @ " + shortHash(d.Commit)
 	case d.Base != "":

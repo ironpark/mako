@@ -363,6 +363,7 @@ type GitDiff struct {
 	From          string                 `protobuf:"bytes,4,opt,name=from,proto3" json:"from,omitempty"`
 	Commit        string                 `protobuf:"bytes,5,opt,name=commit,proto3" json:"commit,omitempty"`
 	Base          string                 `protobuf:"bytes,6,opt,name=base,proto3" json:"base,omitempty"`
+	Pull          int64                  `protobuf:"varint,7,opt,name=pull,proto3" json:"pull,omitempty"` // the pull request whose change it is, read from GitHub
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -437,6 +438,13 @@ func (x *GitDiff) GetBase() string {
 		return x.Base
 	}
 	return ""
+}
+
+func (x *GitDiff) GetPull() int64 {
+	if x != nil {
+		return x.Pull
+	}
+	return 0
 }
 
 // Diff answers GitDiff.
@@ -1166,14 +1174,15 @@ const file_mako_v2_git_proto_rawDesc = "" +
 	"\x06status\x18\x03 \x01(\tR\x06status\x12\x14\n" +
 	"\x05added\x18\x04 \x01(\x03R\x05added\x12\x18\n" +
 	"\aremoved\x18\x05 \x01(\x03R\aremoved\x12\x16\n" +
-	"\x06binary\x18\x06 \x01(\bR\x06binary\"\x8a\x01\n" +
+	"\x06binary\x18\x06 \x01(\bR\x06binary\"\x9e\x01\n" +
 	"\aGitDiff\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04root\x18\x02 \x01(\tR\x04root\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\x12\x12\n" +
 	"\x04from\x18\x04 \x01(\tR\x04from\x12\x16\n" +
 	"\x06commit\x18\x05 \x01(\tR\x06commit\x12\x12\n" +
-	"\x04base\x18\x06 \x01(\tR\x04base\"y\n" +
+	"\x04base\x18\x06 \x01(\tR\x04base\x12\x12\n" +
+	"\x04pull\x18\a \x01(\x03R\x04pull\"y\n" +
 	"\x04Diff\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
 	"\x06binary\x18\x02 \x01(\bR\x06binary\x12'\n" +

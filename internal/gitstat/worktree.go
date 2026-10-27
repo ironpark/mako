@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -87,33 +86,6 @@ func Merge(ctx context.Context, w *protocol.Worktree) (string, error) {
 		return "", fmt.Errorf("the repository has %s checked out, not %s; check out %s there to merge into it", cur, w.GetBase(), w.GetBase())
 	}
 	return run(ctx, w.GetRepo(), nil, "merge", "--no-ff", "--no-edit", w.GetBranch())
-}
-
-// PullRequest pushes a session's branch and opens a pull request of it into
-// its base, through the GitHub CLI when the node has it; without it, it
-// reports where to open one.
-func PullRequest(ctx context.Context, w *protocol.Worktree) (string, error) {
-	pushed, err := push(ctx, w.GetPath())
-	if err != nil {
-		return pushed, err
-	}
-	gh, err := exec.LookPath("gh")
-	if err != nil {
-		return strings.TrimSpace(pushed + "\nPushed. Open a pull request of " + w.GetBranch() + " on its remote; the GitHub CLI (gh) is not installed here."), nil
-	}
-	args := []string{"pr", "create", "--fill", "--head", w.GetBranch()}
-	if w.GetBase() != "" {
-		args = append(args, "--base", w.GetBase())
-	}
-	cmd := exec.CommandContext(ctx, gh, args...)
-	cmd.Dir = w.GetPath()
-	cmd.Env = append(os.Environ(), "GH_PROMPT_DISABLED=1", "GIT_TERMINAL_PROMPT=0")
-	out, err := cmd.CombinedOutput()
-	text := strings.TrimSpace(string(out))
-	if err != nil {
-		return text, cmp.Or(errors.New(text), err)
-	}
-	return text, nil
 }
 
 // mergeBase is where the work tree at root left base.

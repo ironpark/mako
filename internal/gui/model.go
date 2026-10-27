@@ -44,6 +44,11 @@ type newSession struct {
 	// Worktree starts the session in a new git worktree, on Branch.
 	Worktree bool
 	Branch   string
+	Base     string // the branch the worktree merges into, "" for the one checked out
+	Start    string // the commit it starts at, when not Base
+	// Prompt is put in the new session's message box, to send once its
+	// agent is ready.
+	Prompt string
 }
 
 // model is the GUI's state. Signals are touched on the UI goroutine only;
@@ -247,6 +252,7 @@ type model struct {
 	DetailsWidth *ggui.StateValue[float64]
 	SidebarWidth *ggui.StateValue[float64] // the sidebar's, as DetailsWidth
 	DetailTab    *ggui.StateValue[int]
+	GH           ghState                // the GitHub tab, and the watch on the branch
 	ImageOpen    *ggui.StateValue[bool] // the previewed image is shown enlarged
 	NewOpen      *ggui.StateValue[bool]
 	Form         *ggui.StateValue[newSession]
@@ -388,6 +394,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		DetailsWidth:   ggui.State(p.DetailsWidth),
 		SidebarWidth:   ggui.State(p.SidebarWidth),
 		DetailTab:      ggui.State(0),
+		GH:             newGHState(),
 		ImageOpen:      ggui.State(false),
 		NewOpen:        ggui.State(false),
 		Form:           ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),
@@ -1066,7 +1073,7 @@ func (m *model) submitNew() {
 			m.FormErr.Set(T("Name the branch the worktree is made on."))
 			return
 		}
-		req.Worktree = &protocol.Worktree{Branch: branch}
+		req.Worktree = &protocol.Worktree{Branch: branch, Base: f.Base, Start: f.Start}
 	}
 	ggui.Async(func() (*protocol.SessionInfo, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1086,6 +1093,10 @@ func (m *model) submitNew() {
 		sessions := slices.Clone(ggui.Peek(m.Sessions))
 		m.Sessions.Set(append(sessions, info))
 		m.selectSession(info.GetId())
+		if f.Prompt != "" {
+			m.setChatMode(info.GetId(), true)
+			m.setComposerDraft(info.GetId(), f.Prompt)
+		}
 	})
 }
 

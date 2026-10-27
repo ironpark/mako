@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -249,7 +250,7 @@ func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.Open
 			w.Base = gitstat.Branch(project)
 		}
 		wtCtx, cancel := context.WithTimeout(ctx, time.Minute)
-		w.Repo, w.Path, err = gitstat.AddWorktree(wtCtx, project, w.GetBranch(), w.GetBase())
+		w.Repo, w.Path, err = gitstat.AddWorktree(wtCtx, project, w.GetBranch(), cmp.Or(w.GetStart(), w.GetBase()))
 		cancel()
 		if err != nil {
 			return nil, err

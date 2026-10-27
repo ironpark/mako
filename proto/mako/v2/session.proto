@@ -36,7 +36,8 @@ message Worktree {
   string repo = 1; // the main work tree
   string path = 2; // the session's, once made
   string branch = 3; // made for the session
-  string base = 4; // what it started from; empty for HEAD
+  string base = 4; // the branch it merges into, or opens a pull request into; empty for HEAD's
+  string start = 5; // the commit it starts at, when not base, as a pull request's head
 }
 
 // SessionInfo describes one session.

@@ -123,6 +123,14 @@ mako allow <node>             # let in a machine that asked
   on its node. Review changes as a tree with per-file diffs, then commit,
   push, pull, stash or switch branches. Look through the commit graph, and
   search the project's text with ⌘⇧F.
+- **GitHub.** Through the GitHub CLI (`gh`) of the node the project is
+  on, logged in there: list the repository's pull requests, issues and
+  Actions runs; read one in full, with its checks, files and diffs, and
+  its conversation; comment, review, check out, open a pull request of
+  the branch, or run a workflow again. Hand an issue, a review or a failed
+  run's logs to an agent, or start a session on a pull request in a
+  worktree of its own. The Git tab shows the branch's pull request and
+  checks, and a desktop notification says when its runs finish.
 - **Command palette** (⌘K), **go to file** (⌘P), and English and Korean
   interfaces with light and dark themes.
 

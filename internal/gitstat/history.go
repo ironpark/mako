@@ -315,15 +315,12 @@ func Run(ctx context.Context, r *protocol.GitRun) (string, error) {
 			return "", errors.New("a discard is of one file")
 		}
 		return "", DiscardHunk(r.GetRoot(), r.GetPaths()[0], r.GetHunk())
-	case protocol.GitOpMerge, protocol.GitOpPR, protocol.GitOpRemoveWT:
+	case protocol.GitOpMerge, protocol.GitOpRemoveWT:
 		if r.GetWorktree() == nil {
 			return "", errors.New("no worktree named")
 		}
-		switch r.GetOp() {
-		case protocol.GitOpMerge:
+		if r.GetOp() == protocol.GitOpMerge {
 			return Merge(ctx, r.GetWorktree())
-		case protocol.GitOpPR:
-			return PullRequest(ctx, r.GetWorktree())
 		}
 		return RemoveWorktree(ctx, r.GetWorktree())
 	}

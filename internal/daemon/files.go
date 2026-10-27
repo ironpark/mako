@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/ironpark/mako/internal/github"
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/protocol"
@@ -75,6 +76,9 @@ func (d *Daemon) handleGitDiff(ctx context.Context, stream *transport.Stream, en
 	return serve(d, ctx, stream, env, protocol.TypeDiff,
 		func(r *protocol.GitDiff) (*protocol.Diff, error) {
 			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.Diff, error) {
+				if r.GetPull() > 0 {
+					return github.PullDiff(ctx, r.GetRoot(), r.GetPull(), r.GetCommit(), r.GetPath())
+				}
 				if r.GetCommit() != "" {
 					return gitstat.CommitDiff(ctx, r.GetRoot(), r.GetCommit(), r.GetPath(), r.GetFrom())
 				}
@@ -128,7 +132,41 @@ func (d *Daemon) handleGitRun(ctx context.Context, stream *transport.Stream, env
 	return serve(d, ctx, stream, env, protocol.TypeGitResult,
 		func(r *protocol.GitRun) (*protocol.GitResult, error) {
 			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitResult, error) {
-				out, err := gitstat.Run(ctx, r)
+				run := gitstat.Run
+				if r.GetOp() == protocol.GitOpPR {
+					// A pull request is opened through GitHub's CLI.
+					if r.GetWorktree() == nil {
+						return nil, errors.New("no worktree named")
+					}
+					run = func(ctx context.Context, r *protocol.GitRun) (string, error) {
+						return github.WorktreePR(ctx, r.GetWorktree())
+					}
+				}
+				out, err := run(ctx, r)
+				return &protocol.GitResult{Output: out}, err
+			})
+		})
+}
+
+func (d *Daemon) handleGitHubList(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeGitHubItems,
+		func(r *protocol.GitHubList) (*protocol.GitHubItems, error) {
+			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitHubItems, error) { return github.List(ctx, r) })
+		})
+}
+
+func (d *Daemon) handleGitHubView(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeGitHubDetail,
+		func(r *protocol.GitHubView) (*protocol.GitHubDetail, error) {
+			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitHubDetail, error) { return github.View(ctx, r) })
+		})
+}
+
+func (d *Daemon) handleGitHubRun(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeGitResult,
+		func(r *protocol.GitHubRun) (*protocol.GitResult, error) {
+			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitResult, error) {
+				out, err := github.Run(ctx, r)
 				return &protocol.GitResult{Output: out}, err
 			})
 		})

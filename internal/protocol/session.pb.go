@@ -229,7 +229,8 @@ type Worktree struct {
 	Repo          string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`     // the main work tree
 	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`     // the session's, once made
 	Branch        string                 `protobuf:"bytes,3,opt,name=branch,proto3" json:"branch,omitempty"` // made for the session
-	Base          string                 `protobuf:"bytes,4,opt,name=base,proto3" json:"base,omitempty"`     // what it started from; empty for HEAD
+	Base          string                 `protobuf:"bytes,4,opt,name=base,proto3" json:"base,omitempty"`     // the branch it merges into, or opens a pull request into; empty for HEAD's
+	Start         string                 `protobuf:"bytes,5,opt,name=start,proto3" json:"start,omitempty"`   // the commit it starts at, when not base, as a pull request's head
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -288,6 +289,13 @@ func (x *Worktree) GetBranch() string {
 func (x *Worktree) GetBase() string {
 	if x != nil {
 		return x.Base
+	}
+	return ""
+}
+
+func (x *Worktree) GetStart() string {
+	if x != nil {
+		return x.Start
 	}
 	return ""
 }
@@ -1266,12 +1274,13 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\bworktree\x18\t \x01(\v2\x11.mako.v2.WorktreeR\bworktree\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"^\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"t\n" +
 	"\bWorktree\x12\x12\n" +
 	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04base\x18\x04 \x01(\tR\x04base\"\x80\x06\n" +
+	"\x04base\x18\x04 \x01(\tR\x04base\x12\x14\n" +
+	"\x05start\x18\x05 \x01(\tR\x05start\"\x80\x06\n" +
 	"\vSessionInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x14\n" +

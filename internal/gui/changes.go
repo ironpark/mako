@@ -320,6 +320,7 @@ func gitHeader(m *model) ggui.Widget {
 				m.gitRun(&protocol.GitRun{Op: protocol.GitOpPull, Rebase: true}, T("Pulling…"), nil)
 			}),
 			ui.MenuItem(T("Push"), run(protocol.GitOpPush, T("Pushing…"))),
+			ui.MenuItem(T("Create pull request…"), m.askPR),
 			ui.MenuDivider(),
 			ui.MenuItem(T("Stash changes…"), m.askStash),
 			ui.MenuItem(T("Discard all changes…"), func() {

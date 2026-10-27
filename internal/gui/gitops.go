@@ -237,18 +237,22 @@ func syncButton(name, label string, count int, onTap func()) ggui.Widget {
 
 // gitStatusLine is the operation under way, or what the last one said,
 // under a git tab's header.
-func gitStatusLine(m *model) ggui.Widget {
+func gitStatusLine(m *model) ggui.Widget { return statusLine(m.GitBusy, m.GitNote) }
+
+// statusLine is the operation under way, busy, or what the last one said,
+// note, under a panel's header.
+func statusLine(busy *ggui.StateValue[string], note *ggui.StateValue[gitNote]) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
-		if busy := m.GitBusy.Get(); busy != "" {
-			return ggui.Box(ggui.Row(ui.Spinner(), muted(ggui.Text(busy).Size(12))).Gap(8)).Pad(6, 12)
+		if b := busy.Get(); b != "" {
+			return ggui.Box(ggui.Row(ui.Spinner(), muted(ggui.Text(b).Size(12))).Gap(8)).Pad(6, 12)
 		}
-		n := m.GitNote.Get()
+		n := note.Get()
 		if n.Text == "" {
 			return ggui.Box()
 		}
 		return ggui.Column(ggui.Box(ggui.Row(
 			ggui.Expanded(ggui.Text(n.Text).Size(11.5).Color(pick[color.Color](n.Err, tokDotDown, tokMuted)).Font(ggui.DefaultMonoFont()).Selectable()),
-			iconButton("x", T("Dismiss"), func() { m.GitNote.Set(gitNote{}) }),
+			iconButton("x", T("Dismiss"), func() { note.Set(gitNote{}) }),
 		).Gap(6).Align(ggui.AlignStart)).Pad(6, 6, 6, 12), hline()).Stretch()
 	})
 }

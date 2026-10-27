@@ -301,6 +301,15 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 	case protocol.TypeGitRun:
 		return d.handleGitRun(ctx, stream, env)
 
+	case protocol.TypeGitHubList:
+		return d.handleGitHubList(ctx, stream, env)
+
+	case protocol.TypeGitHubView:
+		return d.handleGitHubView(ctx, stream, env)
+
+	case protocol.TypeGitHubRun:
+		return d.handleGitHubRun(ctx, stream, env)
+
 	case protocol.TypeReadChat:
 		return d.handleReadChat(ctx, stream, env)
 

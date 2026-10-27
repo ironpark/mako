@@ -27,8 +27,8 @@ import (
 // diffed: it is shown as changed, as a binary file is.
 const maxCounted = 4 << 20
 
-// maxDiffLines caps a diff's lines; the rest is left out as truncated.
-const maxDiffLines = 5000
+// MaxDiffLines caps a diff's lines; the rest is left out as truncated.
+const MaxDiffLines = 5000
 
 // contextLines is how many unchanged lines a hunk keeps around its changes.
 const contextLines = 3
@@ -370,8 +370,8 @@ func unified(old, cur string) ([]*protocol.DiffLine, bool) {
 		for _, l := range lines[start:end] {
 			out = append(out, &protocol.DiffLine{Op: string(l.op), Text: l.text, Old: int64(l.old), New: int64(l.cur)})
 		}
-		if len(out) > maxDiffLines {
-			return out[:maxDiffLines], true
+		if len(out) > MaxDiffLines {
+			return out[:MaxDiffLines], true
 		}
 		i = end
 	}
