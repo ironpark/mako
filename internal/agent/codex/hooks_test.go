@@ -24,7 +24,9 @@ func TestCodexHooksAreTrustedOverrides(t *testing.T) {
 	}
 
 	codex := New()
-	got, ok := codex.WithHooks([]string{"codex", "resume", "abc"}, `'/bin/san"bo' hook '/run/h.sock'`, "")
+	l := agent.Launch{Command: []string{"codex", "resume", "abc"}}
+	ok := codex.WithHooks(&l, `'/bin/san"bo' hook '/run/h.sock'`, "", "")
+	got := l.Command
 	if !ok || got[0] != "codex" || !slices.Equal(got[len(got)-2:], []string{"resume", "abc"}) {
 		t.Fatalf("hook=%q %v", got, ok)
 	}

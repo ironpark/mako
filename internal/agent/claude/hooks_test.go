@@ -10,7 +10,9 @@ import (
 
 func TestClaudeHooksAreSettings(t *testing.T) {
 	claude := New()
-	got, ok := claude.WithHooks([]string{"claude", "--model", "opus"}, "'/bin/makod' hook '/run/h.sock'", "'/bin/makod' statusline '/run/h.sock'")
+	l := agent.Launch{Command: []string{"claude", "--model", "opus"}}
+	ok := claude.WithHooks(&l, "'/bin/makod' hook '/run/h.sock'", "'/bin/makod' statusline '/run/h.sock'", "")
+	got := l.Command
 	if !ok || len(got) != 5 || got[3] != "--settings" {
 		t.Fatalf("hook=%q %v", got, ok)
 	}
@@ -30,7 +32,7 @@ func TestClaudeHooksAreSettings(t *testing.T) {
 		t.Fatalf("no status line: %s", got[4])
 	}
 	// Claude's handling of a second --settings is undocumented.
-	if _, ok := claude.WithHooks([]string{"claude", "--settings=/mine.json"}, "h", "s"); ok {
+	if claude.WithHooks(&agent.Launch{Command: []string{"claude", "--settings=/mine.json"}}, "h", "s", "") {
 		t.Fatal("hook replaced the user's own settings")
 	}
 	if h := settings.Hooks["PermissionRequest"]; len(h) != 1 || h[0].Hooks[0].Command != "'/bin/makod' hook '/run/h.sock'" {

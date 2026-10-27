@@ -41,8 +41,8 @@ func (*Agent) Info() agent.Info {
 
 // WithServers gives the servers as -c overrides of Codex's mcp_servers
 // table, each value TOML, which a JSON string or array of strings also is.
-func (*Agent) WithServers(command []string, servers []agent.Server, _, _ string) ([]string, func(), error) {
-	flags := []string{command[0]}
+func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, _, _ string) (func(), error) {
+	flags := []string{l.Command[0]}
 	for _, s := range servers {
 		key := "mcp_servers." + tomlKey(s.ID)
 		flags = append(flags, "-c", key+".command="+jsonString(s.Command))
@@ -55,7 +55,8 @@ func (*Agent) WithServers(command []string, servers []agent.Server, _, _ string)
 			flags = append(flags, "-c", key+".env={"+strings.Join(kv, ",")+"}")
 		}
 	}
-	return append(flags, command[1:]...), func() {}, nil
+	l.Command = append(flags, l.Command[1:]...)
+	return func() {}, nil
 }
 
 // tomlKey is id as a TOML key, bare when it can be.

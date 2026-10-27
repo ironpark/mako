@@ -13,10 +13,12 @@ import (
 func TestServersAreAConfigFile(t *testing.T) {
 	dir := t.TempDir()
 	servers := []agent.Server{{ID: "gh", Command: "/bin/gh-mcp", Args: []string{"stdio"}, Env: map[string]string{"TOKEN": "x"}}}
-	cmd, cleanup, err := New().WithServers([]string{"/usr/local/bin/claude", "--verbose", "hello"}, servers, dir, "s1")
+	l := agent.Launch{Command: []string{"/usr/local/bin/claude", "--verbose", "hello"}}
+	cleanup, err := New().WithServers(&l, servers, dir, "s1")
 	if err != nil {
 		t.Fatal(err)
 	}
+	cmd := l.Command
 	path := filepath.Join(dir, "mcp-s1.json")
 	want := []string{"/usr/local/bin/claude", "--mcp-config=" + path, "--verbose", "hello"}
 	if !slices.Equal(cmd, want) {

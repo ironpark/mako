@@ -12,6 +12,7 @@ import (
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
@@ -282,9 +283,9 @@ func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.Open
 	if existed && previous.Info.GetConversationId() == "" && d.claimedLocked(id)[conversationID] {
 		return nil, fmt.Errorf("conversation %s already belongs to another session", conversationID)
 	}
-	command, cleanup := d.withContextServers(ctx, launch, id)
+	cleanup := d.withContextServers(ctx, &launch, id)
 	s, err := session.Start(session.Spec{ID: id, NodeID: d.cfg.NodeID, Agent: req.GetAgent(), Profile: req.GetProfile(),
-		Project: req.GetProject(), Command: command, Env: launch.Env, Cols: uint16(req.GetCols()), Rows: uint16(req.GetRows()), Worktree: req.GetWorktree()})
+		Project: req.GetProject(), Command: launch.Command, Env: launch.Env, Cols: uint16(req.GetCols()), Rows: uint16(req.GetRows()), Worktree: req.GetWorktree()})
 	if err != nil {
 		cleanup()
 		return nil, err
@@ -385,7 +386,11 @@ func (d *Daemon) conversationFor(ctx context.Context, req *protocol.OpenSession,
 		if _, ok := driver.(agent.StatusLine); ok && d.statusCommand != "" {
 			status = d.statusCommand + " " + agentspec.JoinArgs([]string{req.GetAgent()})
 		}
-		launch.Command, _ = hooks.WithHooks(launch.Command, d.hookCommand, status)
+		run, err := config.RunDir(d.dir)
+		if err != nil {
+			d.log.Warn("hooks: no directory for the agent's files", "err", err)
+		}
+		hooks.WithHooks(&launch.Launch, d.hookCommand, status, run)
 	}
 	return conversationID, transcriptPath, nil
 }

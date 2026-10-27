@@ -105,10 +105,10 @@ func Lookup(name string, agents map[string]Agent) (Agent, bool) {
 }
 
 // Launch is what starts a session: the command with its path resolved,
-// and the environment it adds to the daemon's.
+// and the environment it adds to the daemon's, as the agent's driver
+// readies it.
 type Launch struct {
-	Command []string
-	Env     map[string]string
+	agent.Launch
 	// ContextServers are the MCP servers its profile picks, nil for the
 	// node's enabled ones.
 	ContextServers *[]string
@@ -173,7 +173,7 @@ func Resolve(name, profile string, args []string, env map[string]string, agents 
 		command = append(command, expand(arg, lookup))
 	}
 	command = append(command, args...)
-	return Launch{Command: command, Env: merged, ContextServers: p.ContextServers}, nil
+	return Launch{Launch: agent.Launch{Command: command, Env: merged}, ContextServers: p.ContextServers}, nil
 }
 
 // expand writes $NAME, ${NAME} and a leading ~ out, and $$ as $.

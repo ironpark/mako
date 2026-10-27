@@ -1,0 +1,5 @@
+<!-- mako: omo (OmO's edition), a ring over a bar -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <path fill="currentColor" fill-rule="evenodd" d="M12 2.5C16.4 2.5 20 6.1 20 10.5S16.4 18.5 12 18.5 4 14.9 4 10.5 7.6 2.5 12 2.5ZM12 5.2C9.1 5.2 6.7 7.6 6.7 10.5S9.1 15.8 12 15.8 17.3 13.4 17.3 10.5 14.9 5.2 12 5.2Z" />
+  <path fill="currentColor" d="M5.3 19.6H18.7C19.4 19.6 20 20.2 20 20.9S19.4 22.2 18.7 22.2H5.3C4.6 22.2 4 21.6 4 20.9S4.6 19.6 5.3 19.6Z" />
+</svg>

@@ -26,12 +26,12 @@ const settingsFlag = "--settings"
 
 // WithHooks gives the hooks, and the status line, as a --settings
 // document; a command with settings of its own keeps them, without mako's.
-func (*Agent) WithHooks(command []string, hook, status string) ([]string, bool) {
-	if slices.ContainsFunc(command[1:], func(arg string) bool {
+func (*Agent) WithHooks(l *agent.Launch, hook, status, _ string) bool {
+	if slices.ContainsFunc(l.Command[1:], func(arg string) bool {
 		name, _, _ := strings.Cut(arg, "=")
 		return name == settingsFlag
 	}) {
-		return command, false
+		return false
 	}
 	type handler struct {
 		Type    string `json:"type"`
@@ -55,9 +55,10 @@ func (*Agent) WithHooks(command []string, hook, status string) ([]string, bool) 
 	}
 	settings, err := json.Marshal(doc)
 	if err != nil {
-		return command, false
+		return false
 	}
-	return append(command, settingsFlag, string(settings)), true
+	l.Command = append(l.Command, settingsFlag, string(settings))
+	return true
 }
 
 // Event also reads a Notification, by which Claude says it asks the user

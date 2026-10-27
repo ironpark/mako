@@ -51,7 +51,7 @@ func TestABuiltinNeedsNoCommandOfItsOwn(t *testing.T) {
 func TestTargets(t *testing.T) {
 	agents := map[string]Agent{"claude": {Profiles: []Profile{{Name: "opus"}, {Name: "work"}}}}
 	got := Targets(agents)
-	want := []string{"agy", "claude", "claude:opus", "claude:work", "codex", "shell"}
+	want := []string{"agy", "claude", "claude:opus", "claude:work", "codex", "omo", "omp", "opencode", "pi", "shell"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("targets = %q, want %q", got, want)
 	}

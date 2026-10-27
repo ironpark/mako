@@ -35,12 +35,9 @@ func hooksFile() (string, error) {
 // leaves the command as it is. Each hook command has an entry of its own,
 // so the daemons of several nodes on one machine each hear their own
 // sessions. The status line is Claude's alone.
-func (*Agent) WithHooks(command []string, hook, _ string) ([]string, bool) {
+func (*Agent) WithHooks(_ *agent.Launch, hook, _, _ string) bool {
 	path, err := hooksFile()
-	if err != nil {
-		return command, false
-	}
-	return command, writeHooks(path, hook) == nil
+	return err == nil && writeHooks(path, hook) == nil
 }
 
 // writeHooks writes mako's entry for hook into the hooks.json at path,

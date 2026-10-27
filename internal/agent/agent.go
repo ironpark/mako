@@ -54,6 +54,21 @@ type Launcher interface {
 	Isolate() string
 }
 
+// Launch is how mako starts an agent: its command line, and the variables
+// it adds to the agent's environment. Readying a launch changes both.
+type Launch struct {
+	Command []string
+	Env     map[string]string
+}
+
+// SetEnv sets an environment variable of the launch.
+func (l *Launch) SetEnv(key, value string) {
+	if l.Env == nil {
+		l.Env = map[string]string{}
+	}
+	l.Env[key] = value
+}
+
 // Server is an MCP server, as a launch gives it to an agent.
 type Server struct {
 	ID      string
@@ -71,20 +86,20 @@ func (s Server) ArgList() []string {
 	return s.Args
 }
 
-// Servers gives an agent MCP servers on its command line.
+// Servers gives an agent MCP servers as it starts.
 type Servers interface {
-	// WithServers is command with servers, and what to clean up after the
+	// WithServers gives l servers, and returns what to clean up after the
 	// session. Any file it writes goes in dir, named for session.
-	WithServers(command []string, servers []Server, dir, session string) ([]string, func(), error)
+	WithServers(l *Launch, servers []Server, dir, session string) (func(), error)
 }
 
 // Hooks has the agent run mako's hook on the events mako follows it by.
 type Hooks interface {
-	// WithHooks is command running the shell command hook on the agent's
-	// events, alongside the user's own hooks, and status as its status line
-	// unless status is "" or the agent has none. false when command brings
-	// settings of its own that mako's would replace.
-	WithHooks(command []string, hook, status string) ([]string, bool)
+	// WithHooks has l run the shell command hook on the agent's events,
+	// alongside the user's own hooks, and status as its status line unless
+	// status is "" or the agent has none. false when l brings settings of
+	// its own that mako's would replace. Any file it writes goes in dir.
+	WithHooks(l *Launch, hook, status, dir string) bool
 	// Event reads what the agent hands the hook. false for input it cannot
 	// read, an event mako does not follow, or a subagent's.
 	Event(input []byte) (Event, bool)

@@ -31,8 +31,8 @@ func (*Agent) HookFeature() ([]string, string) { return []string{"features", "li
 // WithHooks gives the hooks as overrides, before any subcommand, as the
 // program's own options, with the trust each needs. The status line is
 // Claude's alone.
-func (*Agent) WithHooks(command []string, hook, _ string) ([]string, bool) {
-	args := []string{command[0]}
+func (*Agent) WithHooks(l *agent.Launch, hook, _, _ string) bool {
+	args := []string{l.Command[0]}
 	var trust []string
 	for _, e := range hookEvents {
 		args = append(args, "-c", fmt.Sprintf("hooks.%s=[{hooks=[{type=%s,command=%s,timeout=%d}]}]",
@@ -43,7 +43,8 @@ func (*Agent) WithHooks(command []string, hook, _ string) ([]string, bool) {
 	// The hooks come from this command line, which Codex trusts only by
 	// each one's hash, as /hooks would record it.
 	args = append(args, "-c", "hooks.state={"+strings.Join(trust, ",")+"}")
-	return append(args, command[1:]...), true
+	l.Command = append(args, l.Command[1:]...)
+	return true
 }
 
 // sessionFlagsSource is where Codex says hooks from -c come from, as the

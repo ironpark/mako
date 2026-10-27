@@ -42,7 +42,7 @@ func (*Agent) Info() agent.Info {
 // WithServers writes the servers as Claude Code's .mcp.json reads them, in
 // dir and named for session, and names the file on the command line;
 // cleanup removes it. It holds the servers' keys, so only the user reads it.
-func (*Agent) WithServers(command []string, servers []agent.Server, dir, session string) ([]string, func(), error) {
+func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, dir, session string) (func(), error) {
 	type server struct {
 		Type    string            `json:"type"`
 		Command string            `json:"command"`
@@ -57,17 +57,17 @@ func (*Agent) WithServers(command []string, servers []agent.Server, dir, session
 	}
 	b, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		return command, func() {}, err
+		return nil, err
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return command, func() {}, err
+		return nil, err
 	}
 	path := filepath.Join(dir, "mcp-"+session+".json")
 	if err := os.WriteFile(path, b, 0o600); err != nil {
-		return command, func() {}, err
+		return nil, err
 	}
 	// The = form, as the flag takes any number of values otherwise and
 	// would swallow the arguments after it.
-	out := append([]string{command[0], "--mcp-config=" + path}, command[1:]...)
-	return out, func() { os.Remove(path) }, nil
+	l.Command = append([]string{l.Command[0], "--mcp-config=" + path}, l.Command[1:]...)
+	return func() { os.Remove(path) }, nil
 }

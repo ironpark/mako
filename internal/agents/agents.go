@@ -7,12 +7,18 @@ import (
 	"github.com/ironpark/mako/internal/agent/agy"
 	"github.com/ironpark/mako/internal/agent/claude"
 	"github.com/ironpark/mako/internal/agent/codex"
+	"github.com/ironpark/mako/internal/agent/opencode"
+	"github.com/ironpark/mako/internal/agent/pi"
 )
 
 var all = []agent.Driver{
 	claude.New(),
 	codex.New(),
 	agy.New(),
+	pi.New(),
+	pi.NewOMP(),
+	pi.NewOMO(),
+	opencode.New(),
 }
 
 // Entry is a driver with what it says of itself, read once.

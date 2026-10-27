@@ -39,17 +39,16 @@ func (d *Daemon) warmContextServers(ctx context.Context) {
 }
 
 // withContextServers gives an agent that takes MCP servers those this node
-// has, or those its profile picks, returning the command to start and what to clean up after the
-// session. Any other command comes back as it is.
-func (d *Daemon) withContextServers(ctx context.Context, launch agentspec.Launch, session string) ([]string, func()) {
-	command := launch.Command
+// has, or those its profile picks, in its launch, and returns what to clean
+// up after the session. Any other launch stays as it is.
+func (d *Daemon) withContextServers(ctx context.Context, launch *agentspec.Launch, session string) func() {
 	var takes agent.Servers
-	if len(command) > 0 {
-		driver, _ := agents.ByProgram(command[0])
+	if len(launch.Command) > 0 {
+		driver, _ := agents.ByProgram(launch.Command[0])
 		takes, _ = driver.Driver.(agent.Servers)
 	}
 	if d.mcp == nil || takes == nil {
-		return command, func() {}
+		return func() {}
 	}
 	ctx, cancel := context.WithTimeout(ctx, resolveTimeout)
 	defer cancel()
@@ -60,22 +59,22 @@ func (d *Daemon) withContextServers(ctx context.Context, launch agentspec.Launch
 		servers = d.mcp.Resolve(ctx, d.contextServers())
 	}
 	if len(servers) == 0 {
-		return command, func() {}
+		return func() {}
 	}
 	run, err := config.RunDir(d.dir)
 	if err != nil {
 		d.log.Warn("mcp: no directory for the agent's configuration", "err", err)
-		return command, func() {}
+		return func() {}
 	}
-	out, cleanup, err := takes.WithServers(command, servers, run, session)
+	cleanup, err := takes.WithServers(&launch.Launch, servers, run, session)
 	if err != nil {
 		d.log.Warn("mcp: servers not given to the session", "session", session, "err", err)
-		return command, func() {}
+		return func() {}
 	}
 	ids := make([]string, len(servers))
 	for i, s := range servers {
 		ids[i] = s.ID
 	}
 	d.log.Info("mcp: servers given to the session", "session", session, "servers", ids)
-	return out, cleanup
+	return cleanup
 }

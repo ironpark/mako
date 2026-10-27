@@ -9,10 +9,11 @@ import (
 
 func TestServersAreOverrides(t *testing.T) {
 	servers := []agent.Server{{ID: "my.server", Command: "node", Args: nil, Env: map[string]string{"B": "2", "A": `q"`}}}
-	cmd, _, err := New().WithServers([]string{"codex", "exec"}, servers, t.TempDir(), "s1")
-	if err != nil {
+	l := agent.Launch{Command: []string{"codex", "exec"}}
+	if _, err := New().WithServers(&l, servers, t.TempDir(), "s1"); err != nil {
 		t.Fatal(err)
 	}
+	cmd := l.Command
 	want := []string{"codex",
 		"-c", `mcp_servers."my.server".command="node"`,
 		"-c", `mcp_servers."my.server".args=[]`,
