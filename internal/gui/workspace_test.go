@@ -114,7 +114,7 @@ func TestTabsKeptByProject(t *testing.T) {
 		{Id: "b1", NodeId: "n", Project: "/w/b"},
 	})
 	m.showTab("whole")
-	m.Spaces.Update(func(l spaceList) spaceList { l.AllLayoutBy = layoutByProject; return l })
+	m.Spaces.Update(func(l spaceList) spaceList { l.LayoutBy = layoutByProject; return l })
 	p.Frame()
 	m.selectSession("a1")
 	m.selectSession("a2")
@@ -126,7 +126,7 @@ func TestTabsKeptByProject(t *testing.T) {
 	if tabs := ggui.Peek(m.Tabs); !slices.Equal(tabs, []string{"a1", "a2"}) {
 		t.Fatalf("project a shows %v", tabs)
 	}
-	m.Spaces.Update(func(l spaceList) spaceList { l.AllLayoutBy = layoutBySpace; return l })
+	m.Spaces.Update(func(l spaceList) spaceList { l.LayoutBy = layoutBySpace; return l })
 	p.Frame()
 	if tabs := ggui.Peek(m.Tabs); !slices.Equal(tabs, []string{"whole"}) {
 		t.Fatalf("the whole space shows %v", tabs)
@@ -152,7 +152,7 @@ func TestOldLayoutsAreTheWholeSpaces(t *testing.T) {
 func TestContextsAndOldSpacesCarryOver(t *testing.T) {
 	m, p := workspaceModel(t)
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "b1", NodeId: "n", Project: "/w/b"}})
-	m.Spaces.Update(func(l spaceList) spaceList { l.AllLayoutBy = layoutByProject; return l })
+	m.Spaces.Update(func(l spaceList) spaceList { l.LayoutBy = layoutByProject; return l })
 	p.Frame()
 	m.selectSession("b1")
 	m.writeWorkspace()

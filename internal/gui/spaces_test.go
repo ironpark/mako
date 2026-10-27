@@ -71,6 +71,32 @@ func TestMovingBetweenSpaces(t *testing.T) {
 	}
 }
 
+// With every session's space left out, the first space is shown in its
+// place and nothing moves before it; with no space, it stays.
+func TestTheSpaceOfEverySessionLeftOut(t *testing.T) {
+	list := spaceList{Spaces: []space{{ID: "w"}, {ID: "h"}}, NoAll: true}
+	p := spaceSetOf(list, allSpaceID)
+	if p.Space != 1 || p.hasSpace(0) || !p.hasSpace(2) {
+		t.Fatalf("shown %d", p.Space)
+	}
+	if p := spaceSetOf(spaceList{NoAll: true}, allSpaceID); p.Space != 0 || !p.hasSpace(0) {
+		t.Fatalf("with no spaces shown %d", p.Space)
+	}
+}
+
+// Each space's way of keeping tabs, from before one way held for all,
+// becomes the one: every session's space's first.
+func TestOneWayOfKeepingTabs(t *testing.T) {
+	got := spaceList{Spaces: []space{{ID: "w", OldLayoutBy: layoutByProject}}}.upgraded()
+	if got.LayoutBy != layoutByProject || got.Spaces[0].OldLayoutBy != "" {
+		t.Fatalf("%+v", got)
+	}
+	got = spaceList{Spaces: []space{{ID: "w", OldLayoutBy: layoutByProject}}, OldAllLayoutBy: layoutByOwner}.upgraded()
+	if got.LayoutBy != layoutByOwner || got.OldAllLayoutBy != "" {
+		t.Fatalf("%+v", got)
+	}
+}
+
 // The list follows the fingers across, and moves to the space that way
 // only when they lift far enough along; short of it, or with no space
 // there, it goes back. A gesture begun down the list scrolls it.

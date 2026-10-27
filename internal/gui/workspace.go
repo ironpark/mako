@@ -96,9 +96,9 @@ func fits(by, context string) bool {
 // that way.
 func (m *model) shownKey() string {
 	p := m.spacesNow()
-	id, by := p.spaceID(p.Space), p.layoutBy(p.Space)
+	id := p.spaceID(p.Space)
 	context := m.contexts[id]
-	if !fits(by, context) {
+	if !fits(p.LayoutBy, context) {
 		context = ""
 	}
 	return layoutKey(id, context)
@@ -137,13 +137,13 @@ func setupWorkspace(m *model) {
 			}
 		}
 	}
-	m.Spaces.Set(f.Doc.spaceList)
+	m.Spaces.Set(f.Doc.spaceList.upgraded())
 	moveOldSpaces(m)
 	m.layoutKey = m.shownKey()
 	m.setLayout(m.takeLayout(m.layoutKey))
 	m.wsLast, _ = json.Marshal(m.workspaceDocNow())
 	// Another space, or another way of keeping its tabs, shows its own.
-	shown := ggui.Derived(func() string { p := m.spaces(); return layoutKey(p.spaceID(p.Space), p.layoutBy(p.Space)) })
+	shown := ggui.Derived(func() string { p := m.spaces(); return layoutKey(p.spaceID(p.Space), p.LayoutBy) })
 	ggui.Watch(shown, func(string) { m.showLayout(m.shownKey()) })
 	ggui.Watch(m.Spaces, func(spaceList) { m.workspaceChanged() })
 	ggui.Watch(m.Layout, func(*layoutNode) { m.workspaceChanged() })
@@ -171,7 +171,7 @@ func moveOldSpaces(m *model) {
 				old[i].ID = newSpaceID()
 			}
 		}
-		m.Spaces.Set(spaceList{Spaces: old, AllLayoutBy: p.OldAllLayoutBy})
+		m.Spaces.Set(spaceList{Spaces: old, OldAllLayoutBy: p.OldAllLayoutBy}.upgraded())
 		if p.OldSpace > 0 && p.OldSpace <= len(old) {
 			p.ShownSpace = old[p.OldSpace-1].ID
 		}
@@ -203,7 +203,7 @@ func keyedLayouts(layouts map[string]*layoutNode) map[string]*layoutNode {
 // project of session s, when the space keeps them that way.
 func (m *model) showContext(s *protocol.SessionInfo) {
 	p := m.spacesNow()
-	by := p.layoutBy(p.Space)
+	by := p.LayoutBy
 	if by == layoutBySpace {
 		return
 	}
@@ -358,7 +358,7 @@ func (m *model) takeWorkspace(ws *protocol.Workspace) {
 	m.wsVersion, m.wsNode = ws.GetVersion(), ws.GetNodeId()
 	// The space shown is kept by its ID, and stays shown if the other node
 	// kept it.
-	m.Spaces.Set(f.Doc.spaceList)
+	m.Spaces.Set(f.Doc.spaceList.upgraded())
 	m.layouts = keyedLayouts(f.Doc.Layouts)
 	m.layoutKey = m.shownKey()
 	root := m.takeLayout(m.layoutKey)
