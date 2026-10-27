@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ironpark/gostty"
 )
 
 // An exited session keeps the screen its agent left, so it can still be
@@ -114,4 +116,46 @@ func TestAShellIsIdleOnlyAtItsPrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 	until("back at the prompt", true)
+}
+
+// A terminal fed a snapshot is in the modes its program set: a TUI on the
+// alternate screen that asked for the mouse keeps the wheel when another
+// window attaches to it.
+func TestASnapshotCarriesTheProgramsModes(t *testing.T) {
+	src, err := gostty.New(40, 6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer src.Close()
+	_, _ = src.WriteString("prompt\r\n\x1b[?1049h\x1b[?1000h\x1b[?1006h\x1b[?2004h\x1b[?1h\x1b[?25ltui screen")
+	text, err := src.FormatString(gostty.FormatOptions{Format: gostty.FormatterFormatVt, Cursor: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst, err := gostty.New(40, 6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dst.Close()
+	_, _ = dst.WriteString(modesAround(src.Terminal(), text))
+	term := dst.Terminal()
+	if term.ActiveScreenKey() != gostty.ScreenKeyAlternate {
+		t.Fatal("not on the alternate screen")
+	}
+	if term.MouseTracking() == gostty.MouseTrackingNone || !term.ModeEnabled(gostty.ModeMouseFormatSgr) {
+		t.Fatal("the mouse is not reported")
+	}
+	if !term.ModeEnabled(gostty.ModeBracketedPaste) || !term.ModeEnabled(gostty.ModeCursorKeys) || term.ModeEnabled(gostty.ModeCursorVisible) {
+		t.Fatal("modes lost")
+	}
+	plain, _ := dst.FormatString(gostty.FormatOptions{})
+	if !strings.Contains(plain, "tui screen") {
+		t.Fatalf("screen %q", plain)
+	}
+	// A shell's prompt sets nothing.
+	plainSrc, _ := gostty.New(40, 6)
+	defer plainSrc.Close()
+	if got := modesAround(plainSrc.Terminal(), "x"); got != "x" {
+		t.Fatalf("a plain screen got %q", got)
+	}
 }

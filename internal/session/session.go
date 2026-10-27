@@ -269,6 +269,9 @@ func (s *Session) snapshotLocked(styled bool) (*protocol.Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
+	if styled {
+		text = modesAround(s.term.Terminal(), text)
+	}
 	return &protocol.Snapshot{
 		SessionId: s.spec.ID,
 		Cols:      uint32(s.spec.Cols),
@@ -278,6 +281,53 @@ func (s *Session) snapshotLocked(styled bool) (*protocol.Snapshot, error) {
 		Title:     s.title,
 		Progress:  s.progress.Snapshot(time.Now()),
 	}, nil
+}
+
+// replayedModes are the DEC private modes a program sets that a terminal
+// fed its screen must have too: how its keys and the mouse are encoded,
+// and what it is told of. A TUI that asked for the mouse otherwise gets
+// none, and its wheel scrolls the attaching terminal's scrollback instead.
+// Each is true where a new terminal has it on.
+var replayedModes = []struct {
+	mode gostty.Mode
+	on   bool
+}{
+	{gostty.ModeCursorKeys, false},
+	{gostty.ModeCursorVisible, true},
+	{gostty.ModeMouseEventX10, false},
+	{gostty.ModeMouseEventNormal, false},
+	{gostty.ModeMouseEventButton, false},
+	{gostty.ModeMouseEventAny, false},
+	{gostty.ModeMouseFormatUTF8, false},
+	{gostty.ModeMouseFormatSgr, false},
+	{gostty.ModeMouseFormatUrxvt, false},
+	{gostty.ModeMouseFormatSgrPixels, false},
+	{gostty.ModeMouseAlternateScroll, true},
+	{gostty.ModeFocusEvent, false},
+	{gostty.ModeBracketedPaste, false},
+	{gostty.ModeReportColorScheme, false},
+	{gostty.ModeInBandSizeReports, false},
+}
+
+// modesAround is a screen's text as a terminal must be fed it to be in the
+// program's modes: on the alternate screen, where the program is on it,
+// and after it each mode the program changed, set as it left it.
+func modesAround(term *gostty.Terminal, text string) string {
+	var b strings.Builder
+	if term.ActiveScreenKey() == gostty.ScreenKeyAlternate {
+		b.WriteString("\x1b[?1049h")
+	}
+	b.WriteString(text)
+	for _, m := range replayedModes {
+		if on := term.ModeEnabled(m.mode); on != m.on {
+			set := byte('l')
+			if on {
+				set = 'h'
+			}
+			fmt.Fprintf(&b, "\x1b[?%d%c", int(m.mode), set)
+		}
+	}
+	return b.String()
 }
 
 // Subscribe returns a view of the session's live PTY output. Subscribing to
