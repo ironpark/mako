@@ -140,6 +140,9 @@ func scanLog(path string, a agent.Logs) (string, string, time.Time) {
 }
 
 func readIdentity(path string, a agent.Logs) (id, cwd string, created time.Time) {
+	if f, ok := a.(agent.Folders); ok {
+		return f.Whose(path)
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return "", "", time.Time{}
@@ -470,9 +473,23 @@ func (c *Cache) ReadUsage(info *protocol.SessionInfo, path string) (*protocol.Us
 	return c.usage.read(path, a), nil
 }
 
-// logPaths lists an agent's logs whose file name matches the glob name.
-func logPaths(a agent.Logs, env map[string]string, name string) ([]string, error) {
-	return filepath.Glob(a.Place().Pattern(a.Place().Root(env), name))
+// logPaths lists an agent's logs that may be conversation id's, every
+// one for id "".
+func logPaths(a agent.Logs, env map[string]string, id string) ([]string, error) {
+	name := "*.jsonl"
+	if id != "" {
+		name = "*" + id + name
+	}
+	return filepath.Glob(logGlob(a, a.Place().Root(env), cmp.Or(id, "*"), name))
+}
+
+// logGlob is the glob of conversation id's logs under root: in its folder,
+// for an agent that keeps one, else those named name.
+func logGlob(a agent.Logs, root, id, name string) string {
+	if f, ok := a.(agent.Folders); ok {
+		return f.LogPath(root, id)
+	}
+	return a.Place().Pattern(root, name)
 }
 
 // LogOf reports whether path is where agent writes conversation id's log
@@ -480,7 +497,10 @@ func logPaths(a agent.Logs, env map[string]string, name string) ([]string, error
 // is trusted no further than that. The root may be named through a link.
 func LogOf(name string, env map[string]string, id, path string) bool {
 	a, ok := logsOf(name)
-	if !ok || !agent.ValidID.MatchString(id) || a.LogName(id) == "" || !filepath.IsAbs(path) {
+	if !ok || !agent.ValidID.MatchString(id) || !filepath.IsAbs(path) {
+		return false
+	}
+	if _, folders := a.(agent.Folders); !folders && a.LogName(id) == "" {
 		return false
 	}
 	path = filepath.Clean(path)
@@ -490,7 +510,7 @@ func LogOf(name string, env map[string]string, id, path string) bool {
 		roots = append(roots, resolved)
 	}
 	return slices.ContainsFunc(roots, func(root string) bool {
-		match, err := filepath.Match(a.Place().Pattern(root, a.LogName(id)), path)
+		match, err := filepath.Match(logGlob(a, root, id, a.LogName(id)), path)
 		return err == nil && match
 	})
 }
@@ -502,7 +522,7 @@ func Locate(ctx context.Context, info *protocol.SessionInfo, env map[string]stri
 	if !ok || !agent.ValidID.MatchString(info.GetConversationId()) {
 		return "", nil
 	}
-	paths, err := logPaths(a, env, "*"+info.GetConversationId()+"*.jsonl")
+	paths, err := logPaths(a, env, info.GetConversationId())
 	if err != nil {
 		return "", err
 	}
@@ -526,7 +546,7 @@ func Recover(ctx context.Context, info *protocol.SessionInfo, env map[string]str
 	if !ok {
 		return "", "", errUnsupported
 	}
-	paths, err := logPaths(a, env, "*.jsonl")
+	paths, err := logPaths(a, env, "")
 	if err != nil {
 		return "", "", err
 	}

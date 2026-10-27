@@ -3,11 +3,8 @@
 package agents
 
 import (
-	"image/color"
-	"path/filepath"
-	"strings"
-
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agent/agy"
 	"github.com/ironpark/mako/internal/agent/claude"
 	"github.com/ironpark/mako/internal/agent/codex"
 )
@@ -15,7 +12,7 @@ import (
 var all = []agent.Driver{
 	claude.New(),
 	codex.New(),
-	terminal{agent.Info{Name: "agy", Programs: []string{"agy"}, Command: []string{"agy"}, Icon: "agent-agy", Color: color.NRGBA{0x3e, 0x8b, 0xff, 0xff}}},
+	agy.New(),
 }
 
 // Entry is a driver with what it says of itself, read once.
@@ -38,12 +35,6 @@ var byName, byProgram = func() (map[string]Entry, map[string]Entry) {
 	return names, programs
 }()
 
-// terminal is an agent mako knows only by name: it runs in its terminal,
-// and mako follows nothing more of it.
-type terminal struct{ info agent.Info }
-
-func (t terminal) Info() agent.Info { return t.info }
-
 // All are the drivers, in order.
 func All() []agent.Driver { return all }
 
@@ -61,7 +52,7 @@ func As[T any](name string) (T, bool) {
 
 // ByProgram is the agent the program runs, by its file name.
 func ByProgram(program string) (Entry, bool) {
-	e, ok := byProgram[strings.TrimSuffix(filepath.Base(program), ".exe")]
+	e, ok := byProgram[agent.ProgramName(program)]
 	return e, ok
 }
 

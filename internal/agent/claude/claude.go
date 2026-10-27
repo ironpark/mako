@@ -32,6 +32,9 @@ func New() *Agent {
 func (*Agent) Info() agent.Info {
 	return agent.Info{
 		Name: "claude", Programs: []string{"claude"}, Command: []string{"claude"},
+		// The local install it made before its native installer, whose
+		// ~/.local/bin every agent's search takes in.
+		Dirs: []string{filepath.Join(".claude", "local")},
 		Icon: "agent-claude", Color: color.NRGBA{0xd9, 0x77, 0x57, 0xff},
 	}
 }

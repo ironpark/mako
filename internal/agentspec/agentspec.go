@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"os/exec"
 	"runtime"
 	"slices"
 	"strings"
 
+	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
 )
 
@@ -142,7 +142,7 @@ func Resolve(name, profile string, args []string, env map[string]string, agents 
 			return Launch{}, fmt.Errorf("agent %q has no profile %q", name, profile)
 		}
 	}
-	path, err := exec.LookPath(a.Command[0])
+	path, err := findProgram(a.Command[0])
 	if err != nil {
 		return Launch{}, fmt.Errorf("agent %q: %w", name, err)
 	}
@@ -250,4 +250,14 @@ func defaultShell() string {
 		return sh
 	}
 	return "/bin/sh"
+}
+
+// findProgram is where program is, as the agent it runs is installed when
+// mako knows it.
+func findProgram(program string) (string, error) {
+	var dirs []string
+	if e, ok := agents.ByProgram(program); ok {
+		dirs = e.Info.Dirs
+	}
+	return agent.Find(program, dirs...)
 }

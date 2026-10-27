@@ -27,8 +27,11 @@ type Info struct {
 	// Windows .exe: a launch runs the agent when it runs one of them.
 	Programs []string
 	Command  []string // the command line a fresh configuration launches it with
-	Icon     string   // the GUI's glyph for it
-	Color    color.NRGBA
+	// Dirs are the folders, under the home folder, its own installer puts
+	// it in, as well as the ones installers share (Find).
+	Dirs  []string
+	Icon  string // the GUI's glyph for it
+	Color color.NRGBA
 }
 
 // Launcher reads and writes the command-line options that pick the
@@ -123,6 +126,17 @@ type Logs interface {
 	NewDecoder() Decoder
 	// NewUsage counts one log's tokens, line by line.
 	NewUsage() Usage
+}
+
+// Folders is a Logs that keeps each conversation's log in a folder named
+// by its ID, whose lines do not say whose it is.
+type Folders interface {
+	// LogPath is the path of conversation id's log under root; id "*"
+	// globs every conversation's.
+	LogPath(root, id string) string
+	// Whose is whose the log at path is, as Identity reads it from a
+	// line; no ID for a path that is not one of the agent's logs.
+	Whose(path string) (id, cwd string, created time.Time)
 }
 
 // Decoder reads a log's lines, in order, into the chat's messages. It keeps

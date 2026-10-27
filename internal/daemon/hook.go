@@ -74,16 +74,25 @@ type hookReply struct {
 // session in MAKO_SESSION. The agent waits on it, so it gives up quickly,
 // and it never fails: the daemon falls back to watching the agent's open
 // files. An approval waits for the daemon's answer, which it writes to out
-// as the agent's decision.
+// as the agent's decision. An agent whose input does not name its event,
+// as agy's does not, names it in args[1].
 func runHook(args []string, stdin io.Reader, out io.Writer) {
 	seq := time.Now().UnixNano() // when the agent ran it, not when it arrives
 	session := os.Getenv("MAKO_SESSION")
-	if len(args) != 1 || session == "" {
+	if len(args) < 1 || len(args) > 2 || session == "" {
+		// An agent that hooks mako for good runs it outside sessions too,
+		// and may not like its input left unread.
+		_, _ = io.Copy(io.Discard, io.LimitReader(stdin, hookLimit))
 		return
 	}
 	input, err := io.ReadAll(io.LimitReader(stdin, hookLimit))
 	if err != nil || !json.Valid(input) {
 		return
+	}
+	if len(args) == 2 {
+		if input, err = namedEvent(input, args[1]); err != nil {
+			return
+		}
 	}
 	var ev struct {
 		Event string `json:"hook_event_name"`
@@ -107,6 +116,20 @@ func runHook(args []string, stdin io.Reader, out io.Writer) {
 		reply.Output = agent.PermissionReply(reply.Decision, reply.Message)
 	}
 	_, _ = out.Write(reply.Output)
+}
+
+// namedEvent is input with the event named in it, as the agents that name
+// it themselves do.
+func namedEvent(input []byte, event string) ([]byte, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(input, &fields); err != nil {
+		return nil, err
+	}
+	if fields == nil {
+		fields = map[string]json.RawMessage{}
+	}
+	fields["hook_event_name"], _ = json.Marshal(event)
+	return json.Marshal(fields)
 }
 
 // sendHook passes msg on to the daemon at socket, giving up quickly, and
@@ -237,6 +260,13 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		}
 	case agent.Prompted, agent.ToolDone:
 		s.SetStatus(protocol.AgentWorking)
+		// A conversation whose start went unheard, as a resumed one's may,
+		// is told by its prompts.
+		if ev.Kind == agent.Prompted && ev.SessionID != "" && ev.SessionID != s.Info().GetConversationId() {
+			if err := d.reportConversation(s, msg.Seq, ev); err != nil {
+				d.log.Warn("hooks: report dropped", "session", msg.Session, "err", err)
+			}
+		}
 	case agent.Compacting:
 		s.SetStatus(protocol.AgentCompacting)
 	case agent.Waiting:

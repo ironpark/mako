@@ -297,3 +297,15 @@ func TestStatusLinePrintsTheUsersOwn(t *testing.T) {
 		t.Fatalf("local's, reading the input: %q", got)
 	}
 }
+
+// An agent that names its event on the hook's command line has it named
+// in the input passed on, as the others name it themselves.
+func TestNamedEvent(t *testing.T) {
+	got, err := namedEvent([]byte(`{"conversationId":"c1"}`), "Stop")
+	if err != nil || string(got) != `{"conversationId":"c1","hook_event_name":"Stop"}` {
+		t.Fatalf("%s %v", got, err)
+	}
+	if _, err := namedEvent([]byte(`[1]`), "Stop"); err == nil {
+		t.Fatal("named an event in what is no object")
+	}
+}

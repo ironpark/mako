@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // launcher is the agent called name's Launcher.
@@ -78,7 +79,7 @@ func TestProgramsAreTheirAgents(t *testing.T) {
 			t.Errorf("%s: %q, want %q", program, got, want)
 		}
 	}
-	if Caps("claude") == 0 || Caps("shell") != 0 || Caps("agy") != 0 {
+	if Caps("claude") == 0 || Caps("shell") != 0 || Caps("agy")&protocol.CapSubAgents != 0 {
 		t.Error("caps")
 	}
 }

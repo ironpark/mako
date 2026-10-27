@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"image/color"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -32,6 +33,8 @@ func New() *Agent {
 func (*Agent) Info() agent.Info {
 	return agent.Info{
 		Name: "codex", Programs: []string{"codex"}, Command: []string{"codex"},
+		// Its standalone installer's.
+		Dirs: []string{filepath.Join(".codex", "packages", "standalone", "current", "bin")},
 		Icon: "agent-codex", Color: color.NRGBA{0x7b, 0x6c, 0xf0, 0xff},
 	}
 }

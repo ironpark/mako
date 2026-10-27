@@ -148,7 +148,7 @@ type Task struct {
 
 // Question is a question tool's arguments in the question kind's form:
 // the first of its questions, read from the first of keys it has, and its
-// options' labels.
+// options' labels, or the options themselves when they are strings.
 func Question(in map[string]any, keys ...string) map[string]any {
 	var question string
 	var options []any
@@ -156,8 +156,11 @@ func Question(in map[string]any, keys ...string) map[string]any {
 		q, _ := qs[0].(map[string]any)
 		question = Str(q, keys...)
 		for _, o := range List(q, "options") {
-			if o, ok := o.(map[string]any); ok {
+			switch o := o.(type) {
+			case map[string]any:
 				options = append(options, Str(o, "label"))
+			case string: // an option that is its label
+				options = append(options, o)
 			}
 		}
 	}
