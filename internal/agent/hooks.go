@@ -13,13 +13,14 @@ type EventKind int
 const (
 	// Started: a conversation began or was switched to, Event.SessionID
 	// logged at Event.Transcript.
-	Started  EventKind = iota + 1
-	Prompted           // the user gave it a turn
-	ToolDone           // a tool it ran finished
-	Approval           // it asks leave to run Event.Tool with Event.Input
-	Waiting            // it waits on the user
-	Stopped            // it finished its turn
-	Ended              // its session ended
+	Started    EventKind = iota + 1
+	Prompted             // the user gave it a turn
+	ToolDone             // a tool it ran finished
+	Approval             // it asks leave to run Event.Tool with Event.Input
+	Compacting           // it compacts the conversation
+	Waiting              // it waits on the user
+	Stopped              // it finished its turn
+	Ended                // its session ended
 )
 
 // Event is what a hook reports.
@@ -29,9 +30,6 @@ type Event struct {
 	Transcript string
 	Tool       string
 	Input      json.RawMessage
-	// Question is an Approval for a tool that asks the user something
-	// rather than for leave: only the agent's own prompt takes the answer.
-	Question bool
 }
 
 // ApprovalTimeout is how long an agent waits on the hook for an approval:
@@ -86,6 +84,8 @@ func (in HookInput) Base() (Event, bool) {
 		ev.Kind = ToolDone
 	case "PermissionRequest":
 		ev.Kind = Approval
+	case "PreCompact":
+		ev.Kind = Compacting
 	case "Stop":
 		ev.Kind = Stopped
 	case "SessionEnd":

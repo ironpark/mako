@@ -354,7 +354,7 @@ func extensionCard(m *model, c extCard) ggui.Widget {
 	if len(c.ContextServers) > 0 {
 		servers := c.ContextServers
 		rows = append(rows, ggui.If(open, func() ggui.Widget {
-			cards := []ggui.Widget{muted(ggui.Text(T("Claude Code and Codex sessions on this node get these servers. Their settings, such as keys, stay in this node's config.json.")).Size(12.5))}
+			cards := []ggui.Widget{muted(ggui.Text(T("Sessions on this node of agents that take MCP servers get these servers. Their settings, such as keys, stay in this node's config.json.")).Size(12.5))}
 			for _, s := range servers {
 				cards = append(cards, mcpServerCard(m, s, c.Name))
 			}

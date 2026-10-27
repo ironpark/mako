@@ -75,7 +75,7 @@ func (m *model) saveMCPServer(id string, s mcp.Server) {
 	}
 	*m.cfg = next
 	m.MCPServers.Set(maps.Clone(next.ContextServers))
-	m.MCPNote.Set(T("Saved. Claude Code and Codex sessions started from now on use it."))
+	m.MCPNote.Set(T("Saved. Sessions of agents that take MCP servers use it from now on."))
 }
 
 // mcpText is the settings field of a server, kept across the section's

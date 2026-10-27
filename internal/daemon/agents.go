@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/protocol"
@@ -80,14 +81,19 @@ func (d *Daemon) followed() (map[string]agentspec.Agent, map[string]mcp.Server) 
 	return f.agents, f.servers
 }
 
-// agentInfo lists the agents for this node's record: names only, since
-// flags and environment, keys among them, stay here.
-func agentInfo(agents map[string]agentspec.Agent) []*protocol.AgentInfo {
-	names := agentspec.Names(agents)
+// agentInfo lists the agents for this node's record: names and what their
+// drivers say of them, since flags and environment, keys among them, stay
+// here.
+func agentInfo(configured map[string]agentspec.Agent) []*protocol.AgentInfo {
+	names := agentspec.Names(configured)
 	out := make([]*protocol.AgentInfo, len(names))
 	for i, name := range names {
-		a, _ := agentspec.Lookup(name, agents)
+		a, _ := agentspec.Lookup(name, configured)
 		out[i] = &protocol.AgentInfo{Name: name, Profiles: a.ProfileNames()}
+		if e, ok := agents.Lookup(name); ok {
+			c := e.Info.Color
+			out[i].Icon, out[i].Caps, out[i].Color = e.Info.Icon, e.Caps, protocol.RGBA(c.R, c.G, c.B, c.A)
+		}
 	}
 	return out
 }

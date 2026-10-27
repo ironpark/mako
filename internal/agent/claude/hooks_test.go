@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 func TestClaudeHooksAreSettings(t *testing.T) {
@@ -38,11 +39,11 @@ func TestClaudeHooksAreSettings(t *testing.T) {
 	if ev, ok := claude.Event([]byte(`{"hook_event_name":"SessionStart","session_id":"s","transcript_path":"/p"}`)); !ok || ev.Kind != agent.Started || ev.SessionID != "s" || ev.Transcript != "/p" {
 		t.Fatalf("parse=%+v %v", ev, ok)
 	}
-	if ev, ok := claude.Event([]byte(`{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"ls"}}`)); !ok || ev.Kind != agent.Approval || ev.Question || ev.Tool != "Bash" || string(ev.Input) != `{"command":"ls"}` {
+	if ev, ok := claude.Event([]byte(`{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"ls"}}`)); !ok || ev.Kind != agent.Approval || ev.Tool != "Bash" || string(ev.Input) != `{"command":"ls"}` {
 		t.Fatalf("parse=%+v %v", ev, ok)
 	}
-	if ev, ok := claude.Event([]byte(`{"hook_event_name":"PermissionRequest","tool_name":"AskUserQuestion"}`)); !ok || !ev.Question {
-		t.Fatalf("a question taken for an approval: %+v", ev)
+	if kind, _ := claude.Tool("AskUserQuestion", nil); kind != protocol.ToolQuestion {
+		t.Fatalf("AskUserQuestion is a %q", kind)
 	}
 	if ev, ok := claude.Event([]byte(`{"hook_event_name":"Notification","notification_type":"elicitation_dialog"}`)); !ok || ev.Kind != agent.Waiting {
 		t.Fatalf("notification=%+v %v", ev, ok)

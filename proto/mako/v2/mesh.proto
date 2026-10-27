@@ -52,10 +52,16 @@ message Node {
   string owner = 17;
 }
 
-// AgentInfo names an agent a node can launch and its profiles.
+// AgentInfo names an agent a node can launch and its profiles, and what
+// the node's driver for it says of it, so a front-end that has no driver
+// for the agent still shows it: none of those for an agent the node knows
+// only by its command.
 message AgentInfo {
   string name = 1;
   repeated string profiles = 2;
+  string icon = 3; // the glyph's name
+  uint32 color = 4; // 0xRRGGBBAA, 0 for none
+  uint32 caps = 5; // protocol's Cap bits
 }
 
 // ListNodes asks for the daemon and its peers.

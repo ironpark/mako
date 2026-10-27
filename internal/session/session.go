@@ -170,7 +170,7 @@ func (s *Session) statusLocked() protocol.AgentStatus {
 		return ""
 	case s.approval != nil:
 		return protocol.AgentWaiting
-	case s.status == protocol.AgentWorking && time.Since(s.LastOutput()) > staleWork && time.Since(s.statusAt) > staleWork:
+	case protocol.AtWork(s.status) && time.Since(s.LastOutput()) > staleWork && time.Since(s.statusAt) > staleWork:
 		return protocol.AgentIdle
 	}
 	return s.status

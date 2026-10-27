@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/ironpark/mako/internal/agent"
-	"github.com/ironpark/mako/internal/protocol"
 )
 
 // Agent is Claude Code.
@@ -69,21 +68,3 @@ func (*Agent) WithServers(command []string, servers []agent.Server, dir, session
 	out := append([]string{command[0], "--mcp-config=" + path}, command[1:]...)
 	return out, func() { os.Remove(path) }, nil
 }
-
-// tools are Claude Code's tools, by their names in lower case.
-var tools = map[string]string{
-	"bash": protocol.ToolShell,
-	"edit": protocol.ToolEdit, "str_replace_based_edit_tool": protocol.ToolEdit, "str_replace": protocol.ToolEdit,
-	"multiedit": protocol.ToolMultiEdit,
-	"write":     protocol.ToolWrite, "create": protocol.ToolWrite, "notebookedit": protocol.ToolWrite,
-	"read": protocol.ToolRead, "view": protocol.ToolRead,
-	"grep": protocol.ToolSearch, "glob": protocol.ToolSearch, "ls": protocol.ToolSearch,
-	"todowrite": protocol.ToolTodo,
-	"webfetch":  protocol.ToolFetch,
-	"websearch": protocol.ToolWebSearch,
-	"task":      protocol.ToolTask, "agent": protocol.ToolTask,
-}
-
-func (*Agent) ToolKind(name string) string { return toolKind(name) }
-
-func toolKind(name string) string { return tools[strings.ToLower(name)] }

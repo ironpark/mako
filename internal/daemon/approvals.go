@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -67,11 +68,21 @@ func (a *approvals) watching() bool {
 	return time.Since(a.watched) < approvalWatch
 }
 
-// ask holds an approval s's agent asks for until it is answered, the
-// front-ends stop watching, the session ends or ctx does, and returns the
-// hook's reply: "" leaves it to the agent's prompt, as it does a question.
-func (a *approvals) ask(ctx context.Context, s *session.Session, ev agent.Event) hookReply {
-	if ev.Question || !a.watching() {
+// ask holds an approval s's agent, the one called name, asks for until it
+// is answered, the front-ends stop watching, the session ends or ctx does,
+// and returns the hook's reply: "" leaves it to the agent's prompt, as it
+// does a question, which only the agent's own prompt can take.
+func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev agent.Event) hookReply {
+	// The call reads as its kind does.
+	kind, canon := "", agent.Fields(ev.Input)
+	if tools, ok := agents.As[agent.Tools](name); ok {
+		var read map[string]any
+		if kind, read = tools.Tool(ev.Tool, ev.Input); read != nil {
+			canon = read
+			ev.Input, _ = json.Marshal(read)
+		}
+	}
+	if kind == protocol.ToolQuestion || !a.watching() {
 		s.SetStatus(protocol.AgentWaiting)
 		return hookReply{}
 	}
@@ -84,7 +95,7 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, ev agent.Event)
 	a.pending[id] = p
 	a.mu.Unlock()
 	s.SetApproval(&protocol.Approval{
-		Id: id, Tool: ev.Tool, Detail: agent.ToolDetail(ev.Input),
+		Id: id, Tool: ev.Tool, Detail: agent.Detail(kind, canon),
 		Input: indentInput(ev.Input), Since: timestamppb.Now(),
 	})
 	defer func() {

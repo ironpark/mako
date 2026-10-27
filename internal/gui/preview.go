@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/ironpark/ggfx"
@@ -168,14 +169,14 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					v := ggui.Peek(chat.result)
 					v.Chat = proto.CloneOf(v.Chat) // the result held is shared
 					for _, cmd := range []string{"ls internal", "go vet ./...", "go test ./internal/gui", "git status --short"} {
-						v.Chat.Messages = append(v.Chat.Messages, &protocol.ChatMessage{Role: "tool", Tool: "Bash", Kind: protocol.ToolShell, Detail: cmd, Text: cmd})
+						v.Chat.Messages = append(v.Chat.Messages, &protocol.ChatMessage{Role: "tool", Tool: "Bash", Kind: protocol.ToolShell, Detail: cmd, Text: `{"command": ` + strconv.Quote(cmd) + `}`})
 					}
 					// A subagent at work, and the call still waiting on it.
 					v.Chat.Messages = append(v.Chat.Messages,
 						&protocol.ChatMessage{Role: "tool", Id: "agent", Tool: "Agent", Kind: protocol.ToolTask, Detail: "Find the flaky tests", Pending: true},
-						&protocol.ChatMessage{Role: "tool", Id: "build", Tool: "Bash", Kind: protocol.ToolShell, Detail: "go build ./...", Text: "go build ./...", Pending: true})
+						&protocol.ChatMessage{Role: "tool", Id: "build", Tool: "Bash", Kind: protocol.ToolShell, Detail: "go build ./...", Text: `{"command": "go build ./..."}`, Pending: true})
 					v.Chat.Agents = []*protocol.SubAgent{{Id: "a1", CallId: "agent", Kind: "Explore", Description: "Find the flaky tests",
-						Running: true, ToolCalls: 7, Tool: "Grep", Detail: "probeUntil", Started: time.Now().Add(-3 * time.Minute).Unix()}}
+						Running: true, ToolCalls: 7, Tool: "Grep", ToolKind: protocol.ToolSearch, Detail: "probeUntil", Started: time.Now().Add(-3 * time.Minute).Unix()}}
 					v.Chat.Usage = &protocol.Usage{Input: 41200, CachedInput: 380000, Output: 9800, Context: 96000, Window: 258400,
 						Limits: []*protocol.RateLimit{
 							{Minutes: protocol.FiveHours, Used: 23, Resets: time.Now().Add(2*time.Hour + 10*time.Minute).Unix()},

@@ -3,6 +3,7 @@ package codex
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strings"
 	"time"
 
@@ -52,29 +53,67 @@ func (*Agent) Identity(line []byte) (string, string, time.Time, bool) {
 	return meta.ID, meta.Cwd, meta.Timestamp, true
 }
 
-func (*Agent) NewDecoder() agent.Decoder { return decoder{} }
+func (a *Agent) NewDecoder() agent.Decoder {
+	return &decoder{tools: a, calls: map[string]bool{}, plumbing: map[string]bool{}}
+}
 
-// decoder reads the response items; the events beside them repeat them.
-type decoder struct{}
+// decoder reads the response items, and the items Codex says it completed:
+// a call of code mode is a script that runs the tools it calls, which only
+// the completed items say. The other events repeat what the response items
+// say.
+type decoder struct {
+	tools agent.Tools
+	// calls are the calls read, by ID: an item that completes one is its
+	// result.
+	calls map[string]bool
+	// plumbing are the calls of code mode, by ID, left out with their
+	// results.
+	plumbing map[string]bool
+}
+
+// codeMode are the tools that run the other tools in code mode.
+var codeMode = []string{"exec", "js", "wait"}
 
 // hidden are the tags Codex wraps what it tells the model in, within a
 // user's turn.
 var hidden = []string{"environment_context", "user_instructions"}
 
-func (decoder) Line(line []byte) []*protocol.ChatMessage {
+func (d *decoder) Line(line []byte) []*protocol.ChatMessage {
 	var r record
-	if json.Unmarshal(line, &r) != nil || r.Type != "response_item" {
+	if json.Unmarshal(line, &r) != nil {
 		return nil
 	}
-	parsed := agent.ParseMessage(r.Payload, toolKind)
-	out := parsed[:0]
-	for _, m := range parsed {
-		if m.GetRole() == "user" {
-			if m.Text = strings.TrimSpace(agent.DropTags(m.GetText(), hidden...)); m.Text == "" {
+	var out []*protocol.ChatMessage
+	switch r.Type {
+	case "response_item":
+		for _, m := range agent.ParseMessage(r.Payload, d.tools) {
+			switch {
+			case m.GetRole() == "tool" && !m.GetOutput() && slices.Contains(codeMode, m.GetTool()):
+				d.plumbing[m.GetId()] = true
 				continue
+			case m.GetOutput() && d.plumbing[m.GetId()]:
+				delete(d.plumbing, m.GetId())
+				continue
+			case m.GetRole() == "user":
+				if m.Text = strings.TrimSpace(agent.DropTags(m.GetText(), hidden...)); m.Text == "" {
+					continue
+				}
 			}
+			if m.GetRole() == "tool" && !m.GetOutput() && m.GetId() != "" {
+				d.calls[m.GetId()] = true
+			}
+			out = append(out, m)
 		}
-		out = append(out, m)
+	case "event_msg":
+		if bytes.Contains(r.Payload, []byte(`"item_completed"`)) {
+			out = d.item(r.Payload)
+		}
+	case "compacted":
+		var c struct {
+			Message string `json:"message"`
+		}
+		_ = json.Unmarshal(r.Payload, &c)
+		out = []*protocol.ChatMessage{agent.Summary(c.Message)}
 	}
 	return out
 }

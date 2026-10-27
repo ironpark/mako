@@ -1,13 +1,10 @@
 package claude
 
 import (
-	"bufio"
 	"cmp"
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -22,13 +19,6 @@ import (
 // finished. One in the foreground holds its call open until it is done,
 // and is found by the prompt the call gave it.
 
-// staleAgent is how long a subagent can go without writing before it is
-// taken to have stopped, as when its session was killed under it.
-const staleAgent = 15 * time.Minute
-
-// startsAgent reports whether a call of tool starts a subagent.
-func startsAgent(tool string) bool { return toolKind(tool) == protocol.ToolTask }
-
 type agentMeta struct {
 	AgentType    string `json:"agentType"`
 	Description  string `json:"description"`
@@ -37,20 +27,12 @@ type agentMeta struct {
 	Finished     *bool  `json:"finished"`
 }
 
-// agentCall is what a call that starts an agent asks of it.
-type agentCall struct {
-	Prompt       string `json:"prompt"`
-	Description  string `json:"description"`
-	SubagentType string `json:"subagent_type"`
-}
-
 // agentScan is one subagent's log, read as far as it was written.
 type agentScan struct {
-	offset           int64
-	prompt           string // what its first message asked
-	calls            int32
-	tool, detail     string // its latest call
-	started, updated time.Time
+	agent.Tail
+	prompt             string // what its first message asked
+	calls              int32
+	tool, kind, detail string // its latest call
 }
 
 // agentScans keeps what was read of a conversation's subagents, to read
@@ -75,53 +57,27 @@ type metaRead struct {
 
 // read brings the scan up to the end of path's complete records.
 func (s *agentScan) read(path string) {
-	stat, err := os.Stat(path)
-	if err != nil || stat.Size() == s.offset {
-		return
-	}
-	if stat.Size() < s.offset {
-		*s = agentScan{} // rewritten
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	if _, err := f.Seek(s.offset, io.SeekStart); err != nil {
-		return
-	}
-	reader := bufio.NewReaderSize(f, 64<<10)
-	for {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			return // the writer may be in the middle of a record
-		}
-		s.offset += int64(len(line))
+	s.Tail.Read(path, func() { *s = agentScan{} }, func(line []byte) {
 		var r struct {
-			Type      string          `json:"type"`
-			Timestamp time.Time       `json:"timestamp"`
-			Message   json.RawMessage `json:"message"`
+			Message json.RawMessage `json:"message"`
 		}
 		if json.Unmarshal(line, &r) != nil {
-			continue
+			return
 		}
-		if !r.Timestamp.IsZero() {
-			if s.started.IsZero() {
-				s.started = r.Timestamp
-			}
-			s.updated = r.Timestamp
-		}
-		for _, m := range agent.ParseMessage(r.Message, toolKind) {
+		for _, m := range agent.ParseMessage(r.Message, claudeTools) {
 			switch {
 			case m.GetRole() == "user" && s.prompt == "":
 				s.prompt = strings.TrimSpace(m.GetText())
 			case m.GetRole() == "tool" && !m.GetOutput():
 				s.calls++
-				s.tool, s.detail = m.GetTool(), m.GetDetail()
+				s.tool, s.kind, s.detail = m.GetTool(), m.GetKind(), m.GetDetail()
 			}
 		}
-	}
+	})
 }
+
+// claudeTools reads the subagents' calls.
+var claudeTools = &Agent{}
 
 func (*Agent) NewSubAgents() agent.SubAgentScan { return &agentScans{} }
 
@@ -130,15 +86,15 @@ func (*Agent) NewSubAgents() agent.SubAgentScan { return &agentScans{} }
 func (scans *agentScans) Read(path string, messages []*protocol.ChatMessage) []*protocol.SubAgent {
 	type started struct {
 		msg *protocol.ChatMessage
-		in  agentCall
+		in  agent.Task
 	}
 	calls := map[string]started{}
 	byPrompt := map[string]string{}
 	for _, m := range messages {
-		if m.GetRole() != "tool" || m.GetOutput() || !startsAgent(m.GetTool()) || m.GetId() == "" {
+		if m.GetRole() != "tool" || m.GetOutput() || m.GetKind() != protocol.ToolTask || m.GetId() == "" {
 			continue
 		}
-		var in agentCall
+		var in agent.Task
 		_ = json.Unmarshal([]byte(m.GetText()), &in)
 		calls[m.GetId()] = started{m, in}
 		if p := strings.TrimSpace(in.Prompt); p != "" {
@@ -177,22 +133,22 @@ func (scans *agentScans) Read(path string, messages []*protocol.ChatMessage) []*
 		if meta.RequestShape == "background" {
 			running = meta.Finished == nil || !*meta.Finished
 		}
-		if running && now.Sub(scan.updated) > staleAgent {
+		if running && now.Sub(scan.Updated) > agent.StaleAgent {
 			running = false
 		}
-		agent := &protocol.SubAgent{
+		sub := &protocol.SubAgent{
 			Id:     strings.TrimPrefix(filepath.Base(strings.TrimSuffix(logPath, ".jsonl")), "agent-"),
 			CallId: callID, Running: running,
-			Kind:        cmp.Or(meta.AgentType, call.in.SubagentType),
+			Kind:        cmp.Or(meta.AgentType, call.in.Agent),
 			Description: cmp.Or(meta.Description, call.in.Description),
-			ToolCalls:   scan.calls, Tool: scan.tool, ToolKind: toolKind(scan.tool), Detail: scan.detail,
+			ToolCalls:   scan.calls, Tool: scan.tool, ToolKind: scan.kind, Detail: scan.detail,
 		}
-		if !scan.started.IsZero() {
-			agent.Started, agent.Updated = scan.started.Unix(), scan.updated.Unix()
+		if !scan.Started.IsZero() {
+			sub.Started, sub.Updated = scan.Started.Unix(), scan.Updated.Unix()
 		}
-		out = append(out, agent)
+		out = append(out, sub)
 	}
-	slices.SortStableFunc(out, func(a, b *protocol.SubAgent) int { return int(a.GetStarted() - b.GetStarted()) })
+	agent.SortAgents(out)
 	return out
 }
 

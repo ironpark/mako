@@ -118,6 +118,7 @@ type ChatMessage struct {
 	// kind is what the tool does, whatever its agent calls it: one of
 	// protocol's Tool kinds, "" for a tool the agent's driver does not know.
 	Kind          string `protobuf:"bytes,10,opt,name=kind,proto3" json:"kind,omitempty"`
+	ExitCode      *int32 `protobuf:"varint,11,opt,name=exit_code,json=exitCode,proto3,oneof" json:"exit_code,omitempty"` // a command's, when its agent says
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -220,6 +221,13 @@ func (x *ChatMessage) GetKind() string {
 		return x.Kind
 	}
 	return ""
+}
+
+func (x *ChatMessage) GetExitCode() int32 {
+	if x != nil && x.ExitCode != nil {
+		return *x.ExitCode
+	}
+	return 0
 }
 
 // Chat answers ReadChat.
@@ -601,7 +609,7 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\n" +
 	"usage_only\x18\x03 \x01(\bR\tusageOnly\x12\x16\n" +
 	"\x06before\x18\x04 \x01(\x03R\x06before\x12\x14\n" +
-	"\x05after\x18\x05 \x01(\x03R\x05after\"\xe5\x01\n" +
+	"\x05after\x18\x05 \x01(\x03R\x05after\"\x95\x02\n" +
 	"\vChatMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x0e\n" +
@@ -613,7 +621,10 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\x05error\x18\b \x01(\bR\x05error\x12\x18\n" +
 	"\apending\x18\t \x01(\bR\apending\x12\x12\n" +
 	"\x04kind\x18\n" +
-	" \x01(\tR\x04kind\"\xff\x01\n" +
+	" \x01(\tR\x04kind\x12 \n" +
+	"\texit_code\x18\v \x01(\x05H\x00R\bexitCode\x88\x01\x01B\f\n" +
+	"\n" +
+	"_exit_code\"\xff\x01\n" +
 	"\x04Chat\x12\x1c\n" +
 	"\tsupported\x18\x01 \x01(\bR\tsupported\x12\"\n" +
 	"\fconversation\x18\x02 \x01(\tR\fconversation\x120\n" +
@@ -686,6 +697,7 @@ func file_mako_v2_chat_proto_init() {
 	if File_mako_v2_chat_proto != nil {
 		return
 	}
+	file_mako_v2_chat_proto_msgTypes[1].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

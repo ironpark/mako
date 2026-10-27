@@ -32,6 +32,7 @@ message ChatMessage {
   // kind is what the tool does, whatever its agent calls it: one of
   // protocol's Tool kinds, "" for a tool the agent's driver does not know.
   string kind = 10;
+  optional int32 exit_code = 11; // a command's, when its agent says
 }
 
 // Chat answers ReadChat.

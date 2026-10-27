@@ -106,6 +106,8 @@ func statusLabel(s *protocol.SessionInfo) string {
 		return Tf("Waiting for approval: %s", s.GetApproval().GetTool())
 	case s.GetStatus() == protocol.AgentWorking:
 		return T("Working")
+	case s.GetStatus() == protocol.AgentCompacting:
+		return T("Compacting conversation…")
 	case s.GetStatus() == protocol.AgentWaiting:
 		return T("Waiting for you")
 	case s.GetStatus() == protocol.AgentDone:

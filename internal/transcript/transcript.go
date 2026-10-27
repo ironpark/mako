@@ -4,6 +4,7 @@ package transcript
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -20,9 +21,13 @@ import (
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/protocol"
+	"google.golang.org/protobuf/proto"
 )
 
 const maxRead = 2 << 20
+
+// maxText caps a message's text and a call's result, each.
+const maxText = 32 << 10
 
 var errUnsupported = errors.New("agent has no native conversation")
 
@@ -210,6 +215,7 @@ func readWindow(path string, a agent.Logs, span Span) (window, error) {
 	dropped := 0
 	size := 0
 	dec := a.NewDecoder()
+	tools, _ := a.(agent.Tools)
 	// trim keeps the window small enough to send, dropping the oldest
 	// messages. The messages of one record go together, so the window
 	// starts at a record and a read up to there ends at it.
@@ -236,17 +242,28 @@ func readWindow(path string, a agent.Logs, span Span) (window, error) {
 		pos += int64(len(line))
 		parsed := dec.Line(line)
 		for _, m := range parsed {
-			if len(m.GetText()) > 32<<10 {
-				m.Text = trimUTF8(m.GetText(), 32<<10) + "\n…"
-				truncated = true
+			for _, s := range []*string{&m.Text, &m.Result} {
+				if len(*s) > maxText {
+					*s = trimUTF8(*s, maxText) + "\n…"
+					truncated = true
+				}
 			}
 			// A result belongs to the call it answers: one row in the chat
 			// rather than a second line of loose output.
 			if m.GetRole() == "tool" && m.GetOutput() && m.GetId() != "" {
 				if i, ok := calls[m.GetId()]; ok && i >= dropped {
-					messages[i-dropped].Result = m.GetText()
-					messages[i-dropped].Error = m.GetError()
-					messages[i-dropped].Pending = false
+					call := messages[i-dropped]
+					call.Result, call.Error, call.ExitCode, call.Pending = m.GetText(), m.GetError(), m.ExitCode, false
+					call.Detail = cmp.Or(call.GetDetail(), m.GetDetail())
+					if tools != nil {
+						// What the call's tool gave back, out of what the
+						// agent wrapped it in.
+						result, exit := tools.Output(call.GetKind(), call.GetResult())
+						call.Result = result
+						if exit >= 0 {
+							call.ExitCode = proto.Int32(int32(exit))
+						}
+					}
 					size += len(m.GetText())
 					trim()
 					continue
@@ -254,11 +271,11 @@ func readWindow(path string, a agent.Logs, span Span) (window, error) {
 			}
 			if m.GetRole() == "tool" && !m.GetOutput() && m.GetId() != "" {
 				calls[m.GetId()] = dropped + len(messages)
-				m.Pending = true
+				m.Pending = m.GetResult() == "" // a call read with its result is done
 			}
 			messages = append(messages, m)
 			offsets = append(offsets, at)
-			size += len(m.GetText())
+			size += len(m.GetText()) + len(m.GetResult())
 			trim()
 		}
 	}
@@ -297,35 +314,48 @@ func Upgrade(chat *protocol.Chat) {
 		}
 		chat.Messages[i] = &protocol.ChatMessage{Role: "tool", Text: m.GetText(), Output: true}
 	}
+	// A daemon before drivers sent the tools' arguments and results as its
+	// agent wrote them: they are read here as the first driver that knows
+	// the tool reads them.
 	for _, m := range chat.GetMessages() {
-		if m.GetRole() == "tool" && m.GetTool() != "" && m.GetKind() == "" {
-			m.Kind = anyToolKind(m.GetTool())
+		if m.GetRole() != "tool" || m.GetTool() == "" || m.GetKind() != "" || m.GetOutput() {
+			continue
+		}
+		tools, kind := anyTools(m.GetTool())
+		if tools == nil {
+			continue
+		}
+		raw := json.RawMessage(m.GetText())
+		if !json.Valid(raw) {
+			raw, _ = json.Marshal(m.GetText())
+		}
+		read := agent.Call(tools, m.GetId(), m.GetTool(), raw)
+		m.Kind, m.Text, m.Detail = cmp.Or(read.GetKind(), kind), read.GetText(), read.GetDetail()
+		if m.GetResult() != "" {
+			var exit int
+			if m.Result, exit = tools.Output(m.GetKind(), m.GetResult()); exit >= 0 {
+				m.ExitCode = proto.Int32(int32(exit))
+			}
 		}
 	}
 	for _, a := range chat.GetAgents() {
 		if a.GetTool() != "" && a.GetToolKind() == "" {
-			a.ToolKind = anyToolKind(a.GetTool())
+			_, a.ToolKind = anyTools(a.GetTool())
 		}
 	}
 }
 
-// anyToolKind is what the tool name does to the first agent that knows it,
-// or the rows Claude's logs make of a command's output and a compaction.
-func anyToolKind(name string) string {
-	switch {
-	case name == "Summary":
-		return protocol.ToolSummary
-	case strings.HasPrefix(name, "/"):
-		return protocol.ToolCommand
-	}
+// anyTools is the tools of the first agent that knows the tool name, and
+// what the tool does.
+func anyTools(name string) (agent.Tools, string) {
 	for _, d := range agents.All() {
 		if t, ok := d.(agent.Tools); ok {
-			if kind := t.ToolKind(name); kind != "" {
-				return kind
+			if kind, _ := t.Tool(name, nil); kind != "" {
+				return t, kind
 			}
 		}
 	}
-	return ""
+	return nil, ""
 }
 
 // Verify reports whether a bound log is present and carries the session's

@@ -302,11 +302,17 @@ func (x *Node) GetOwner() string {
 	return ""
 }
 
-// AgentInfo names an agent a node can launch and its profiles.
+// AgentInfo names an agent a node can launch and its profiles, and what
+// the node's driver for it says of it, so a front-end that has no driver
+// for the agent still shows it: none of those for an agent the node knows
+// only by its command.
 type AgentInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Profiles      []string               `protobuf:"bytes,2,rep,name=profiles,proto3" json:"profiles,omitempty"`
+	Icon          string                 `protobuf:"bytes,3,opt,name=icon,proto3" json:"icon,omitempty"`    // the glyph's name
+	Color         uint32                 `protobuf:"varint,4,opt,name=color,proto3" json:"color,omitempty"` // 0xRRGGBBAA, 0 for none
+	Caps          uint32                 `protobuf:"varint,5,opt,name=caps,proto3" json:"caps,omitempty"`   // protocol's Cap bits
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -353,6 +359,27 @@ func (x *AgentInfo) GetProfiles() []string {
 		return x.Profiles
 	}
 	return nil
+}
+
+func (x *AgentInfo) GetIcon() string {
+	if x != nil {
+		return x.Icon
+	}
+	return ""
+}
+
+func (x *AgentInfo) GetColor() uint32 {
+	if x != nil {
+		return x.Color
+	}
+	return 0
+}
+
+func (x *AgentInfo) GetCaps() uint32 {
+	if x != nil {
+		return x.Caps
+	}
+	return 0
 }
 
 // ListNodes asks for the daemon and its peers.
@@ -1058,10 +1085,13 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\atrusted\x18\x0e \x01(\bR\atrusted\x12\x1b\n" +
 	"\ttrusts_us\x18\x0f \x01(\bR\btrustsUs\x12\x10\n" +
 	"\x03key\x18\x10 \x01(\tR\x03key\x12\x14\n" +
-	"\x05owner\x18\x11 \x01(\tR\x05owner\";\n" +
+	"\x05owner\x18\x11 \x01(\tR\x05owner\"y\n" +
 	"\tAgentInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
-	"\bprofiles\x18\x02 \x03(\tR\bprofiles\"\v\n" +
+	"\bprofiles\x18\x02 \x03(\tR\bprofiles\x12\x12\n" +
+	"\x04icon\x18\x03 \x01(\tR\x04icon\x12\x14\n" +
+	"\x05color\x18\x04 \x01(\rR\x05color\x12\x12\n" +
+	"\x04caps\x18\x05 \x01(\rR\x04caps\"\v\n" +
 	"\tListNodes\",\n" +
 	"\x05Nodes\x12#\n" +
 	"\x05nodes\x18\x01 \x03(\v2\r.mako.v2.NodeR\x05nodes\"\xe6\x01\n" +

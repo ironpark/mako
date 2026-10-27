@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/ironpark/mako/internal/agent"
-	"github.com/ironpark/mako/internal/protocol"
 )
 
 // Agent is Codex.
@@ -70,19 +69,3 @@ func jsonString(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
-
-// tools are Codex's tools, by their names in lower case.
-var tools = map[string]string{
-	"shell": protocol.ToolShell, "exec_command": protocol.ToolShell, "exec": protocol.ToolShell,
-	"local_shell": protocol.ToolShell, "container.exec": protocol.ToolShell, "write_stdin": protocol.ToolShell,
-	"apply_patch": protocol.ToolPatch,
-	"read":        protocol.ToolRead, "view": protocol.ToolRead,
-	"search": protocol.ToolSearch, "list_dir": protocol.ToolSearch,
-	"update_plan": protocol.ToolPlan,
-	"fetch":       protocol.ToolFetch,
-	"web_search":  protocol.ToolWebSearch,
-}
-
-func (*Agent) ToolKind(name string) string { return toolKind(name) }
-
-func toolKind(name string) string { return tools[strings.ToLower(name)] }

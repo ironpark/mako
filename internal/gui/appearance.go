@@ -41,7 +41,7 @@ func appearanceSettings(m *model) ggui.Widget {
 		),
 		section(T("Agent usage"),
 			card(
-				row(T("Show usage overlay"), T("Float a Claude or Codex session's context and its account's 5-hour and weekly limits over its terminal and chat."),
+				row(T("Show usage overlay"), T("Float an agent session's context and its account's 5-hour and weekly limits over its terminal and chat, for agents that report them."),
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.UsageOverlay }), "").Name(T("Show usage overlay"))),
 				row(T("Overlay position"), T("The corner of the session the overlay sits in."), ggui.Box(corner).Width(160)),
 			),

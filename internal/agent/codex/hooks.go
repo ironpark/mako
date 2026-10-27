@@ -21,7 +21,8 @@ import (
 var hookEvents = []agent.HookEvent{
 	{Name: "SessionStart", Timeout: agent.HookTimeout}, {Name: "UserPromptSubmit", Timeout: agent.HookTimeout},
 	{Name: "PostToolUse", Timeout: agent.HookTimeout}, {Name: "PermissionRequest", Timeout: agent.ApprovalTimeout},
-	{Name: "Stop", Timeout: agent.HookTimeout}, {Name: "SessionEnd", Timeout: 3},
+	{Name: "PreCompact", Timeout: agent.HookTimeout}, {Name: "Stop", Timeout: agent.HookTimeout},
+	{Name: "SessionEnd", Timeout: 3},
 }
 
 // HookFeature is the listing that says whether this version has hooks.

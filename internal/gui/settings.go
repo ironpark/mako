@@ -260,7 +260,7 @@ func generalSettings(m *model) ggui.Widget {
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.SyncWorkspace }), "").Name(T("Follow other nodes"))),
 				row(T("Confirm before killing"), T("Ask before a session is stopped from the window."),
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.ConfirmKill }), "").Name(T("Confirm before killing"))),
-				row(T("Approve in the window"), T("While the window is open, Claude and Codex ask for approvals here, in Chat and over the terminal. Otherwise they ask in their terminals."),
+				row(T("Approve in the window"), T("While the window is open, agents that ask through mako ask for approvals here, in Chat and over the terminal. Otherwise they ask in their terminals."),
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.ApproveInApp }), "").Name(T("Approve in the window"))),
 				row(T("Notifications"), T("Tell the desktop when an agent you are not looking at finishes or asks for you."),
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.Notify }), "").Name(T("Notifications"))),

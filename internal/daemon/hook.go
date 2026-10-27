@@ -237,6 +237,8 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		}
 	case agent.Prompted, agent.ToolDone:
 		s.SetStatus(protocol.AgentWorking)
+	case agent.Compacting:
+		s.SetStatus(protocol.AgentCompacting)
 	case agent.Waiting:
 		s.SetStatus(protocol.AgentWaiting)
 	case agent.Stopped:
@@ -255,7 +257,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 			_, _ = conn.Read(make([]byte, 1))
 			withdraw()
 		}()
-		reply := d.approvals.ask(asking, s, ev)
+		reply := d.approvals.ask(asking, s, name, ev)
 		if reply.Decision != "" {
 			reply.Output = hooks.Reply(reply.Decision, reply.Message)
 		}

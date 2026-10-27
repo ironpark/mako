@@ -27,7 +27,7 @@ func (m *model) dotOf(s *protocol.SessionInfo) dotState {
 		return dotWaiting
 	case m.Unread.Get()[s.GetId()]:
 		return dotDone
-	case s.GetStatus() == protocol.AgentWorking || m.busy(s.GetId()):
+	case protocol.AtWork(s.GetStatus()) || m.busy(s.GetId()):
 		return dotWorking
 	}
 	return dotRest

@@ -16,18 +16,13 @@ import (
 var hookEvents = []agent.HookEvent{
 	{Name: "SessionStart", Timeout: agent.HookTimeout}, {Name: "UserPromptSubmit", Timeout: agent.HookTimeout},
 	{Name: "PostToolUse", Timeout: agent.HookTimeout}, {Name: "PermissionRequest", Timeout: agent.ApprovalTimeout},
-	{Name: "Notification", Timeout: agent.HookTimeout}, {Name: "Stop", Timeout: agent.HookTimeout},
+	{Name: "Notification", Timeout: agent.HookTimeout}, {Name: "PreCompact", Timeout: agent.HookTimeout}, {Name: "Stop", Timeout: agent.HookTimeout},
 	{Name: "SessionEnd", Timeout: agent.HookTimeout},
 }
 
 // settingsFlag takes settings for one launch, hooks and a status line among
 // them, alongside the user's own.
 const settingsFlag = "--settings"
-
-// questions are the tools whose prompt asks the user something rather
-// than for leave: Claude runs its approval hook for them too, but only its
-// own prompt can take the answer, and allowing one would skip it.
-var questions = []string{"AskUserQuestion"}
 
 // WithHooks gives the hooks, and the status line, as a --settings
 // document; a command with settings of its own keeps them, without mako's.
@@ -79,9 +74,7 @@ func (*Agent) Event(input []byte) (agent.Event, bool) {
 		}
 		return agent.Event{Kind: agent.Waiting, SessionID: in.SessionID}, true
 	}
-	ev, ok := in.Base()
-	ev.Question = ev.Kind == agent.Approval && slices.Contains(questions, ev.Tool)
-	return ev, ok
+	return in.Base()
 }
 
 // Status reads what the status line's input says of the session's tokens:

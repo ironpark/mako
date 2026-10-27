@@ -41,11 +41,12 @@ func (*Agent) Identity(line []byte) (string, string, time.Time, bool) {
 	return r.SessionID, r.Cwd, r.Timestamp, true
 }
 
-func (*Agent) NewDecoder() agent.Decoder { return &decoder{seen: map[string]bool{}} }
+func (a *Agent) NewDecoder() agent.Decoder { return &decoder{tools: a, seen: map[string]bool{}} }
 
 // decoder reads Claude's records. A record may be written again, as a
 // resumed conversation copies its history, so each is read once.
 type decoder struct {
+	tools   agent.Tools
 	seen    map[string]bool
 	command string // the last slash command typed, whose output follows it
 	// last is the latest message read, a summary aside: a command
@@ -64,10 +65,10 @@ func (d *decoder) Line(line []byte) []*protocol.ChatMessage {
 		}
 		d.seen[r.UUID] = true
 	}
-	parsed := agent.ParseMessage(r.Message, toolKind)
+	parsed := agent.ParseMessage(r.Message, d.tools)
 	if r.Summary {
 		for i, m := range parsed {
-			parsed[i] = &protocol.ChatMessage{Role: "tool", Tool: "Summary", Kind: protocol.ToolSummary, Detail: agent.OneLine(m.GetText(), 120), Text: m.GetText(), Output: true}
+			parsed[i] = agent.Summary(m.GetText())
 		}
 		return parsed
 	}

@@ -40,7 +40,13 @@ const (
 	AgentWorking AgentStatus = "working" // on a turn the user gave it
 	AgentWaiting AgentStatus = "waiting" // asking the user, an approval or a question
 	AgentDone    AgentStatus = "done"    // finished its turn
+	// AgentCompacting is at work compacting its conversation.
+	AgentCompacting AgentStatus = "compacting"
 )
+
+// AtWork reports whether an agent of status is at work: on a turn, or
+// compacting.
+func AtWork(status AgentStatus) bool { return status == AgentWorking || status == AgentCompacting }
 
 // Decisions of an AnswerApproval.
 const (
@@ -48,6 +54,17 @@ const (
 	DecisionDeny     = "deny"
 	DecisionTerminal = "terminal" // ask in the terminal, as without mako
 )
+
+// RGBA packs a colour as AgentInfo.Color holds it, 0xRRGGBBAA.
+func RGBA(r, g, b, a uint8) uint32 {
+	return uint32(r)<<24 | uint32(g)<<16 | uint32(b)<<8 | uint32(a)
+}
+
+// Channels unpacks AgentInfo.Color.
+func (a *AgentInfo) Channels() (r, g, b, alpha uint8) {
+	c := a.GetColor()
+	return uint8(c >> 24), uint8(c >> 16), uint8(c >> 8), uint8(c)
+}
 
 // Caps are what mako follows of an agent, SessionInfo.Caps: each bit is a
 // capability the agent's driver has.
@@ -58,7 +75,26 @@ const (
 )
 
 // The kinds of tool, ChatMessage.Kind: what a tool does, whatever its agent
-// calls it.
+// calls it. A call of a known kind carries its arguments in one form for
+// the kind, whatever its agent writes, as a JSON object of these fields,
+// each optional:
+//
+//	shell      command, cwd, description
+//	patch      patch: files changed, in Codex's patch format
+//	edit       path, old, new
+//	multiedit  path, edits: [{old, new}]
+//	write      path, content
+//	read       path, offset (its first line, from 1), limit
+//	search     pattern, path, glob, type, mode
+//	todo, plan explanation, items: [{text, status: pending, in_progress, completed}]
+//	fetch      url, prompt
+//	websearch  query, allowed_domains, blocked_domains
+//	task       description, prompt, agent (the sort of agent)
+//	question   question, options: [string]
+//
+// and what it gave back as the tool's own output, without what the agent
+// wraps it in: a read's text without line numbers, a command's output
+// without a header and its exit code apart, in ChatMessage.ExitCode.
 const (
 	ToolShell     = "shell"
 	ToolPatch     = "patch" // a patch in its own format, as Codex's apply_patch
@@ -71,9 +107,10 @@ const (
 	ToolPlan      = "plan" // a plan's steps, as Codex's update_plan
 	ToolFetch     = "fetch"
 	ToolWebSearch = "websearch"
-	ToolTask      = "task"    // starts a subagent
-	ToolCommand   = "command" // what a slash command the user typed printed
-	ToolSummary   = "summary" // the summary a compaction leaves
+	ToolTask      = "task"     // starts a subagent
+	ToolQuestion  = "question" // asks the user
+	ToolCommand   = "command"  // what a slash command the user typed printed
+	ToolSummary   = "summary"  // the summary a compaction leaves
 )
 
 // The windows of the limits agents name, in minutes.

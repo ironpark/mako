@@ -8,6 +8,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"image/color"
 	"time"
 
@@ -151,9 +152,13 @@ type SubAgentScan interface {
 
 // Tools names what an agent's tools do.
 type Tools interface {
-	// ToolKind is one of protocol's Tool kinds, "" for a tool it does not
-	// know.
-	ToolKind(name string) string
+	// Tool is what a call of the tool name does, one of protocol's Tool
+	// kinds, and its arguments in the form protocol gives that kind; nil
+	// arguments for a tool whose arguments stay as they are.
+	Tool(name string, args json.RawMessage) (kind string, canon map[string]any)
+	// Output is what a call of kind gave back without what the agent wraps
+	// it in, and the exit code it reports, -1 for none.
+	Output(kind, text string) (out string, exit int)
 }
 
 // Caps are the protocol's Cap bits for what d has.

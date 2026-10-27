@@ -11,6 +11,7 @@ import (
 	"github.com/ironpark/ggui/ui/icons"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/mako/internal/agents"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // Lucide icons (ISC, see icons/LICENSE), the set Paseo draws with, and the
@@ -43,24 +44,82 @@ func icon(name string) *icons.Widget {
 
 func iconColored(name string, c color.Color) *icons.Widget { return icon(name).Color(c) }
 
-// agentIcon is the glyph a session row and tab show for an agent.
-func agentIcon(name string) string {
-	if name == "shell" || name == "" {
-		return "square-terminal"
+// nodeAgents is what the nodes' drivers say of the agents they launch, by
+// name, so an agent this build has no driver for shows as its node says.
+var nodeAgents sync.Map // name → *protocol.AgentInfo
+
+// noteAgents takes what the nodes say of their agents.
+func noteAgents(nodes []*protocol.Node) {
+	for _, n := range nodes {
+		for _, a := range n.GetAgents() {
+			if a.GetIcon() != "" || a.GetColor() != 0 || a.GetCaps() != 0 {
+				nodeAgents.Store(a.GetName(), a)
+			}
+		}
 	}
-	if e, ok := agents.Lookup(name); ok && e.Info.Icon != "" {
-		return e.Info.Icon
+}
+
+// agentLook is what is known of the agent called name: its glyph, its
+// colour (nil for none) and protocol's Cap bits, as a node's driver says
+// or else as this build's does.
+func agentLook(name string) (glyph string, c color.Color, caps uint32) {
+	if v, ok := nodeAgents.Load(name); ok {
+		a := v.(*protocol.AgentInfo)
+		if a.GetColor() != 0 {
+			r, g, b, alpha := a.Channels()
+			c = color.NRGBA{r, g, b, alpha}
+		}
+		return a.GetIcon(), c, a.GetCaps()
+	}
+	if e, ok := agents.Lookup(name); ok {
+		if e.Info.Color.A != 0 {
+			c = e.Info.Color
+		}
+		return e.Info.Icon, c, e.Caps
+	}
+	return "", nil, 0
+}
+
+// agentIcon is the glyph a session row and tab show for an agent: its
+// own, if this build has it.
+func agentIcon(name string) string {
+	glyph, _, _ := agentLook(name)
+	return iconOf(name, glyph)
+}
+
+// iconOf is the icon bundled for the agent called name whose glyph is
+// glyph: the shell's, the agent's own, or a generic one.
+func iconOf(name, glyph string) string {
+	switch {
+	case name == "shell" || name == "":
+		return "square-terminal"
+	case glyph != "" && hasIcon(glyph):
+		return glyph
 	}
 	return "bot"
+}
+
+// bundled remembers which icons are bundled, by name.
+var bundled sync.Map
+
+// hasIcon reports whether the icon called name is bundled.
+func hasIcon(name string) bool {
+	if ok, seen := bundled.Load(name); seen {
+		return ok.(bool)
+	}
+	_, err := iconFiles.Open("icons/" + name + ".svg")
+	bundled.Store(name, err == nil)
+	return err == nil
 }
 
 // agentGlyph is an agent's icon in its own colour, or in c for an agent
 // without one.
 func agentGlyph(name string, c color.Color) *icons.Widget {
-	if e, ok := agents.Lookup(name); ok && e.Info.Color.A != 0 {
-		c = e.Info.Color
+	glyph, own, _ := agentLook(name)
+	if own != nil {
+		c = own
 	}
-	return iconColored(agentIcon(name), c)
+	return iconColored(iconOf(name, glyph), c)
 }
 
 // busyGlyph hops an agent's icon while busy reports its program at work, as

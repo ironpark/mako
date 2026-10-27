@@ -625,6 +625,7 @@ func (m *model) poll(ctx context.Context) {
 	}
 	m.post(func() {
 		m.Conn.Set(connState{OK: true, Self: self})
+		noteAgents(nodes)
 		m.Nodes.Set(nodes)
 		if fetchAccess {
 			m.Access.Set(access)

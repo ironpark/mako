@@ -1,24 +1,23 @@
 package gui
 
 import (
-	"cmp"
 	"encoding/json"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/ironpark/ggui"
 
+	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// A tool call's fold shows what the call did, read from its arguments as
-// each agent's tools write them: a command and what it printed, an edit
-// as a diff, a file read or written as code, a plan as a checklist. A tool
-// it does not know shows its arguments field by field, and what it cannot
-// read as they are.
+// A tool call's fold shows what the call did, read from its arguments in
+// the form protocol gives its kind, which the agent's driver put them in: a
+// command and what it printed, an edit as a diff, a file read or written as
+// code, a plan as a checklist. A tool of no kind shows its arguments field
+// by field, and what it cannot read as they are.
 
 // maxToolLines caps the lines of code or diff a tool's fold shows.
 const maxToolLines = 400
@@ -40,7 +39,7 @@ func toolBody(m *model, msg *protocol.ChatMessage) ggui.Widget {
 		rows = toolInput(m, kind, args, in)
 	}
 	if result != "" {
-		rows = append(rows, toolOutput(m, kind, in, result, failed))
+		rows = append(rows, toolOutput(m, msg, in, result, failed))
 	}
 	if len(rows) == 0 {
 		return ggui.Padding(muted(ggui.Text(T("No output")).Size(12)), 4, 6, 6, 6)
@@ -48,97 +47,99 @@ func toolBody(m *model, msg *protocol.ChatMessage) ggui.Widget {
 	return ggui.Padding(ggui.Column(rows...).Gap(6).Stretch(), 4, 6, 6, 18)
 }
 
-// toolInput is what a call asked for, as its tool reads.
+// toolInput is what a call asked for, as its kind reads.
 func toolInput(m *model, kind string, args string, in map[string]any) []ggui.Widget {
-	switch {
-	case kind == protocol.ToolPatch:
-		// Codex writes the patch itself, or JSON holding it.
-		return patchView(cmp.Or(str(in, "input", "patch"), args))
-	case in == nil:
+	if in == nil {
 		if args == "" {
 			return nil
 		}
 		return []ggui.Widget{toolLabel(T("Arguments")), toolBlock(args, false)}
 	}
-	path := str(in, "file_path", "path", "notebook_path")
+	path := agent.Str(in, "path")
 	switch kind {
 	case protocol.ToolShell:
-		cmd := shellCommand(in)
+		cmd := agent.Str(in, "command")
 		if cmd == "" {
 			break
 		}
 		var rows []ggui.Widget
-		if d := str(in, "description"); d != "" {
+		if d := agent.Str(in, "description"); d != "" {
 			rows = append(rows, muted(ggui.Text(d).Size(12.5)))
 		}
-		return append(rows, commandBlock(cmd, str(in, "workdir", "cwd")))
+		return append(rows, commandBlock(cmd, agent.Str(in, "cwd")))
+	case protocol.ToolPatch:
+		return patchView(agent.Str(in, "patch"))
 	case protocol.ToolEdit:
-		return []ggui.Widget{pathLine(path, ""), editDiff(str(in, "old_string", "old_str"), str(in, "new_string", "new_str"))}
+		return []ggui.Widget{pathLine(path, ""), editDiff(agent.Str(in, "old"), agent.Str(in, "new"))}
 	case protocol.ToolMultiEdit:
-		edits := list(in, "edits")
+		edits := agent.List(in, "edits")
 		rows := []ggui.Widget{pathLine(path, Tf("%d edits", len(edits)))}
 		for _, e := range edits {
 			if e, ok := e.(map[string]any); ok {
-				rows = append(rows, editDiff(str(e, "old_string"), str(e, "new_string")))
+				rows = append(rows, editDiff(agent.Str(e, "old"), agent.Str(e, "new")))
 			}
 		}
 		return rows
 	case protocol.ToolWrite:
-		content := str(in, "content", "file_text", "new_source")
+		content := agent.Str(in, "content")
 		return []ggui.Widget{pathLine(path, Tf("%d lines", textLines(content))), codeView(m, path, content)}
 	case protocol.ToolRead:
 		return []ggui.Widget{pathLine(path, readRange(in))}
 	case protocol.ToolSearch:
-		return []ggui.Widget{fieldChips(in, "pattern", "query", "path", "glob", "type", "output_mode")}
-	case protocol.ToolTodo:
-		return []ggui.Widget{checklist(list(in, "todos"), "content", "status")}
-	case protocol.ToolPlan:
+		return []ggui.Widget{fieldChips(in, "pattern", "path", "glob", "type", "mode")}
+	case protocol.ToolTodo, protocol.ToolPlan:
 		var rows []ggui.Widget
-		if e := str(in, "explanation"); e != "" {
+		if e := agent.Str(in, "explanation"); e != "" {
 			rows = append(rows, ggui.Text(e).Size(12.5))
 		}
-		return append(rows, checklist(list(in, "plan"), "step", "status"))
+		return append(rows, checklist(agent.List(in, "items")))
 	case protocol.ToolFetch:
-		return []ggui.Widget{fieldChips(in, "url"), proseBlock(str(in, "prompt"))}
+		return []ggui.Widget{fieldChips(in, "url"), proseBlock(agent.Str(in, "prompt"))}
 	case protocol.ToolWebSearch:
 		return []ggui.Widget{fieldChips(in, "query", "allowed_domains", "blocked_domains")}
 	case protocol.ToolTask:
 		var rows []ggui.Widget
-		if d := str(in, "description"); d != "" {
+		if d := agent.Str(in, "description"); d != "" {
 			rows = append(rows, ggui.Text(d).Size(13).Weight(ggui.WeightMedium))
 		}
-		if a := str(in, "subagent_type"); a != "" {
+		if a := agent.Str(in, "agent"); a != "" {
 			rows = append(rows, fieldChips(map[string]any{"agent": a}, "agent"))
 		}
-		return append(rows, proseBlock(str(in, "prompt")))
+		return append(rows, proseBlock(agent.Str(in, "prompt")))
+	case protocol.ToolQuestion:
+		rows := []ggui.Widget{proseBlock(agent.Str(in, "question"))}
+		if options := agent.List(in, "options"); len(options) > 0 {
+			rows = append(rows, fieldChips(map[string]any{"options": options}, "options"))
+		}
+		return rows
 	}
 	return fieldRows(in)
 }
 
-// toolOutput is what a call gave back, as its tool reads.
-func toolOutput(m *model, kind string, in map[string]any, result string, failed bool) ggui.Widget {
+// toolOutput is what a call gave back, as its kind reads.
+func toolOutput(m *model, msg *protocol.ChatMessage, in map[string]any, result string, failed bool) ggui.Widget {
 	label := pick(failed, T("Error"), T("Output"))
 	if failed {
 		return ggui.Column(toolLabel(label), scrolled(toolBlock(result, true))).Gap(4).Stretch()
 	}
-	switch kind {
+	switch msg.GetKind() {
 	case protocol.ToolShell:
-		code, out := shellOutput(result)
 		head := []ggui.Widget{toolLabel(label)}
-		if code >= 0 {
+		code := -1
+		if msg.ExitCode != nil {
+			code = int(msg.GetExitCode())
 			head = append(head, exitBadge(code))
 		}
 		block := ggui.Widget(muted(ggui.Text(T("No output")).Size(12)))
-		if strings.TrimSpace(out) != "" {
-			block = scrolled(toolBlock(out, code > 0))
+		if strings.TrimSpace(result) != "" {
+			block = scrolled(toolBlock(result, code > 0))
 		}
 		return ggui.Column(ggui.Row(head...).Gap(8).Align(ggui.AlignCenter), block).Gap(4).Stretch()
 	case protocol.ToolRead:
-		if text, first, ok := numberedLines(result); ok {
-			return ggui.Column(toolLabel(Tf("From line %d", first)), codeView(m, str(in, "file_path", "path"), text)).Gap(4).Stretch()
-		}
+		first, _ := in["offset"].(float64)
+		return ggui.Column(toolLabel(Tf("From line %d", max(int(first), 1))), codeView(m, agent.Str(in, "path"), result)).Gap(4).Stretch()
 	}
-	return ggui.Column(toolLabel(label), scrolled(toolBlock(stripReminders(result), false))).Gap(4).Stretch()
+	return ggui.Column(toolLabel(label), scrolled(toolBlock(result, false))).Gap(4).Stretch()
 }
 
 // toolGlyph is the icon a tool row shows for its kind, one of protocol's
@@ -162,90 +163,6 @@ func toolGlyph(kind string) string {
 	}
 	return "square-dot"
 }
-
-// str is the first of keys in holding a string, or "".
-func str(in map[string]any, keys ...string) string {
-	for _, k := range keys {
-		if s, ok := in[k].(string); ok && s != "" {
-			return s
-		}
-	}
-	return ""
-}
-
-// list is in[key] as a list, or nil.
-func list(in map[string]any, key string) []any {
-	l, _ := in[key].([]any)
-	return l
-}
-
-// shellCommand is the command a shell tool runs: Claude's command, Codex's
-// cmd, or the script of an argv such as ["bash", "-lc", "…"].
-func shellCommand(in map[string]any) string {
-	if s := str(in, "command", "cmd"); s != "" {
-		return s
-	}
-	argv := list(in, "command")
-	if argv == nil {
-		argv = list(in, "cmd")
-	}
-	var words []string
-	for _, a := range argv {
-		if s, ok := a.(string); ok {
-			words = append(words, s)
-		}
-	}
-	if len(words) == 3 && (words[1] == "-lc" || words[1] == "-c") {
-		return words[2]
-	}
-	return strings.Join(words, " ")
-}
-
-// codexExit finds the exit code in the header Codex writes over a
-// command's output.
-var codexExit = regexp.MustCompile(`(?m)^(?:Process exited with code|Exit code:) (-?\d+)`)
-
-// shellOutput is a command's output without the header Codex writes over
-// it, and its exit code, -1 where it does not say.
-func shellOutput(result string) (int, string) {
-	code := -1
-	head, out, ok := strings.Cut(result, "\nOutput:\n")
-	if !ok {
-		return code, result
-	}
-	if mm := codexExit.FindStringSubmatch(head); mm != nil {
-		code, _ = strconv.Atoi(mm[1])
-	}
-	return code, out
-}
-
-// numberedLines is a file Claude's Read gave back, without the number it
-// puts before each line ("   12→text"), and the first line's number. ok
-// is false for output that is not numbered so. Lines past what a fold
-// shows are left as they are.
-func numberedLines(result string) (text string, first int, ok bool) {
-	lines := strings.Split(strings.TrimRight(stripReminders(result), "\n"), "\n")
-	for i, l := range lines[:min(len(lines), maxToolLines)] {
-		num, rest, found := strings.Cut(l, "→")
-		if !found {
-			num, rest, found = strings.Cut(l, "\t")
-		}
-		n, err := strconv.Atoi(strings.TrimSpace(num))
-		if !found || err != nil {
-			return "", 0, false
-		}
-		if i == 0 {
-			first = n
-		}
-		lines[i] = rest
-	}
-	return strings.Join(lines, "\n"), first, true
-}
-
-// reminder is a note Claude Code adds to a tool's result for the model.
-var reminder = regexp.MustCompile(`(?s)\s*<system-reminder>.*?</system-reminder>\s*`)
-
-func stripReminders(s string) string { return reminder.ReplaceAllString(s, "\n") }
 
 // readRange is the lines a Read asked for, "" for the whole file.
 func readRange(in map[string]any) string {
@@ -438,17 +355,18 @@ func patchView(patch string) []ggui.Widget {
 	return rows
 }
 
-// checklist is a plan's steps, each marked done, under way or not yet.
-func checklist(items []any, textKey, statusKey string) ggui.Widget {
+// checklist is a plan's steps, {text, status}, each marked done, under way
+// or not yet.
+func checklist(items []any) ggui.Widget {
 	var rows []ggui.Widget
 	for _, it := range items {
 		step, ok := it.(map[string]any)
 		if !ok {
 			continue
 		}
-		status := str(step, statusKey)
+		status := agent.Str(step, "status")
 		glyph := icon("circle").Size(14).Color(tokExtraMuted)
-		text := ggui.Text(str(step, textKey)).Size(12.5)
+		text := ggui.Text(agent.Str(step, "text")).Size(12.5)
 		switch status {
 		case "completed", "done":
 			glyph = icon("circle-check").Size(14).Color(tokDiffAdded)

@@ -16,7 +16,6 @@ import (
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/mako/internal/agent"
-	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transcript"
@@ -221,12 +220,12 @@ func (m *model) chatCapable(id string) bool {
 }
 
 // hasCap reports whether mako follows what c says of s's agent: as the
-// session's daemon says, or as this build knows the agent, from a daemon
-// older than caps.
+// session's daemon says, or as a node or this build knows the agent, from
+// a daemon older than caps.
 func hasCap(s *protocol.SessionInfo, c uint32) bool {
 	caps := s.GetCaps()
 	if caps == 0 {
-		caps = agents.Caps(s.GetAgent())
+		_, _, caps = agentLook(s.GetAgent())
 	}
 	return caps&c != 0
 }
@@ -378,7 +377,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 			rows = append(rows, muted(ggui.Text(T("Loading conversation…"))))
 		case v.Err != "":
 		case !v.Chat.GetSupported():
-			rows = append(rows, muted(ggui.Text(T("Chat is available for Claude and Codex. Use Terminal for this agent."))))
+			rows = append(rows, muted(ggui.Text(T("This agent keeps no conversation mako can read. Use Terminal for it."))))
 		case v.Chat.GetConversation() == "":
 			rows = append(rows, muted(ggui.Text(T("Waiting for this agent to save its conversation. It will connect automatically."))))
 		case len(messages) == 0:
@@ -418,7 +417,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	// is its own input surface, and a file view has no session to type into.
 	return ggui.Pointer(ggui.Column(
 		ggui.Expanded(ggui.Stack(feed, hostBadge(m, id), toLatestButton(m, state, scroll, offset), usageOverlay(m, id, chatUsage, viewChip(m, id, group))).Expand()),
-		approvalCard(m, id), runningAgents(m, id, state), composer(m, id, state.draft),
+		approvalCard(m, id), compactingRow(m, id), runningAgents(m, id, state), composer(m, id, state.draft),
 	).Stretch()).OnDown(func(ggui.PointerEvent) { m.focusGroup(group) })
 }
 
@@ -539,31 +538,7 @@ func chatTurns(m *model, id string, info *protocol.SessionInfo, state *chatState
 		rows = append(rows, chatTurn(m, id, info, messages[i]))
 		i++
 	}
-	if n := len(messages); n > 0 && compacting(messages[n-1]) {
-		rows = append(rows, compactingRow(m, id))
-	}
 	return rows
-}
-
-// compacting reports whether the conversation ends on a /compact its
-// summary has not followed yet.
-func compacting(last *protocol.ChatMessage) bool {
-	text := last.GetText()
-	return last.GetRole() == "user" && (text == "/compact" || strings.HasPrefix(text, "/compact "))
-}
-
-// compactingRow says the agent is compacting the conversation, while its
-// session runs.
-func compactingRow(m *model, id string) ggui.Widget {
-	return ggui.Reactive(func() ggui.Widget {
-		if s, ok := sessionIn(m.Sessions.Get(), id); !ok || s.GetState() != protocol.StateRunning {
-			return ggui.Box()
-		}
-		return ggui.Box(ggui.Row(
-			ui.Spinner().Size(14),
-			muted(ggui.Text(T("Compacting conversation…")).Size(12.5).NoWrap()),
-		).Gap(8).Align(ggui.AlignCenter)).Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(10, 14)
-	})
 }
 
 // foldRun is how many tool calls in a row fold into one line.
@@ -723,6 +698,24 @@ func agentProgress(a *protocol.SubAgent) ggui.Widget {
 			ggui.Expanded(ggui.Text(strings.TrimSpace(a.GetTool()+"  "+a.GetDetail())).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis()))
 	}
 	return ggui.Row(line...).Gap(6).Align(ggui.AlignCenter)
+}
+
+// compactingRow says, over the composer, that session id's agent is
+// compacting its conversation, while it does.
+func compactingRow(m *model, id string) ggui.Widget {
+	compacting := ggui.Derived(func() bool {
+		s, ok := sessionIn(m.Sessions.Get(), id)
+		return ok && s.GetState() == protocol.StateRunning && s.GetStatus() == protocol.AgentCompacting
+	})
+	return ggui.View(compacting, func(on bool) ggui.Widget {
+		if !on {
+			return ggui.Box()
+		}
+		return &lane{child: ggui.Box(ggui.Row(
+			ui.Spinner().Size(13),
+			muted(ggui.Text(T("Compacting conversation…")).Size(12.5).NoWrap()),
+		).Gap(8).Align(ggui.AlignCenter)).Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(8, 12)}
+	})
 }
 
 // runningAgents lists, over the composer, the subagents of session id
