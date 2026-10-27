@@ -34,6 +34,7 @@ var settingsNav = []settingsGroup{
 	{"App", []settingsSection{
 		{"general", "General", "settings"},
 		{"appearance", "Appearance", "palette"},
+		{"spaces", "Spaces", "layout-grid"},
 		{"terminal", "Terminal", "square-terminal"},
 		{"shortcuts", "Shortcuts", "keyboard"},
 		{"extensions", "Extensions", "layers"},
@@ -110,6 +111,8 @@ func settingsContent(m *model, id string) ggui.Widget {
 	switch id {
 	case "appearance":
 		return appearanceSettings(m)
+	case "spaces":
+		return spacesSettings(m)
 	case "terminal":
 		return terminalSettings(m)
 	case "shortcuts":

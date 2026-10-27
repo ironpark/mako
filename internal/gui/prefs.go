@@ -71,6 +71,10 @@ type prefs struct {
 	// Projects are the folders the sidebar keeps, so one outlives its last
 	// session. A folder leaves the list from its own menu.
 	Projects []keptProject `json:"projects,omitempty"`
+	// Spaces divide the sidebar's sessions by their repositories' owners;
+	// Space is the one shown, 0 for every session. See spaces.go.
+	Spaces []space `json:"spaces,omitempty"`
+	Space  int     `json:"space,omitempty"`
 }
 
 // Equal compares settings by value, projects included, so the prefs signal
@@ -159,6 +163,7 @@ func (p prefs) normalized() prefs {
 	if p.DefaultAgent == "" {
 		p.DefaultAgent = d.DefaultAgent
 	}
+	p.Space = min(max(p.Space, allSpace), len(p.Spaces))
 	if len(p.Projects) > 0 {
 		seen := make(map[fileRoot]bool, len(p.Projects))
 		projects := make([]keptProject, 0, len(p.Projects))

@@ -144,8 +144,7 @@ func dot(c color.Color) ggui.Widget { return ggui.Box().Size(7, 7).Radius(3.5).F
 func sidebar(m *model) ggui.Widget {
 	header := ggui.Box(ggui.Row(
 		icon("messages-square").Size(17),
-		ggui.Text(T("Sessions")).Size(14).Weight(ggui.WeightMedium),
-		ggui.Spacer(),
+		ggui.Expanded(ggui.Align(spaceSwitcher(m)).Left()),
 		iconButton("search", T("Filter sessions"), func() {
 			if ggui.Peek(m.FilterOpen) {
 				m.SidebarFilter.Set("")
@@ -164,6 +163,13 @@ func sidebar(m *model) ggui.Widget {
 	projects := ggui.Map(m.Prefs, func(p prefs) []keptProject { return p.Projects }).WithEqual(slices.Equal)
 	pinned := ggui.Map(m.Prefs, func(p prefs) []string { return p.Pinned }).WithEqual(slices.Equal)
 	collapsed := ggui.Map(m.Prefs, func(p prefs) []string { return p.Collapsed }).WithEqual(slices.Equal)
+	// The space shown, by the owners it holds; "" for every session.
+	shown := ggui.Map(m.Prefs, func(p prefs) string {
+		if sp, ok := p.spaceOf(p.Space); ok {
+			return "\x00" + strings.Join(sp.Owners, "\x00")
+		}
+		return ""
+	})
 	list := ggui.Reactive(func() ggui.Widget {
 		by := grouping.Get()
 		nodes := m.Nodes.Get()
@@ -171,7 +177,9 @@ func sidebar(m *model) ggui.Widget {
 		selected := m.Selected.Get()
 		m.Unread.Get() // the dots show what is unread
 		query := strings.TrimSpace(m.SidebarFilter.Get())
-		sessions := filterSessions(m.Sessions.Get(), query, nodes, titles)
+		shown.Get()
+		p := ggui.Peek(m.Prefs)
+		sessions := filterSessions(p.spaceSessions(p.Space, m.Sessions.Get()), query, nodes, titles)
 		// Pinned sessions come first, in a section of their own.
 		pins := pinned.Get()
 		var top []*protocol.SessionInfo
@@ -188,7 +196,7 @@ func sidebar(m *model) ggui.Widget {
 			// Filtered, the folders kept without sessions are left out.
 			groups = groupSessions(rest, by, nodes, nil)
 		} else {
-			groups = groupSessions(rest, by, nodes, projects.Get())
+			groups = groupSessions(rest, by, nodes, p.spaceProjects(p.Space, projects.Get()))
 			if by == groupHost {
 				groups = withHosts(groups, nodes)
 			}
@@ -229,14 +237,16 @@ func sidebar(m *model) ggui.Widget {
 		return ggui.Column(children...).Gap(6).Stretch()
 	})
 
-	return ggui.Box(ggui.Column(
+	// Two fingers across anywhere on it move the list to the space beside.
+	swipe := newSpaceSwipe(m)
+	return swipe.area(ggui.Box(ggui.Column(
 		header,
 		hline(),
 		filter,
-		ggui.Expanded(ggui.Scroll(ggui.Padding(list, 8, 8)).Bar(tokSurface3)),
+		ggui.Expanded(swipe.slide(ggui.Scroll(ggui.Padding(list, 8, 8)).Bar(tokSurface3))),
 		hline(),
 		sidebarFooter(m),
-	).Stretch()).Fill(tokSidebar)
+	).Stretch()).Fill(tokSidebar))
 }
 
 // grouping is a way the sidebar groups sessions, and how its header shows
@@ -312,7 +322,7 @@ func ownerGroup(m *model, o ownerSection, folded bool, section func(sessionGroup
 		service = ggui.Text(host).Size(11.5).Color(tokExtraMuted).NoWrap()
 	}
 	var heading ggui.Widget = ggui.Box(groupToggle(m, "users", name, sessions, folded, ownerKey(o.Owner), service)).Pad(2, 4, 2, 2)
-	heading = ui.ContextMenu(heading, ownerMenu(m, o, name)...).Name(Tf("%s actions", name))
+	heading = ui.ContextMenu(heading, append(ownerMenu(m, o, name), ownerSpaceItems(m, o.Owner, name)...)...).Name(Tf("%s actions", name))
 	if folded {
 		return heading
 	}

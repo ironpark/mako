@@ -767,4 +767,18 @@ var catalogKo = map[string]string{
 	"Magenta":               "자홍",
 	"Cyan":                  "청록",
 	"White":                 "흰색",
+
+	// Spaces
+	"All sessions":              "모든 세션",
+	"Space %d":                  "스페이스 %d",
+	"Edit spaces…":              "스페이스 편집…",
+	"Spaces":                    "스페이스",
+	"In %s":                     "%s에 포함",
+	"New space with this owner": "이 소유자로 새 스페이스",
+	"Add space":                 "스페이스 추가",
+	"Delete space":              "스페이스 삭제",
+	"Space name":                "스페이스 이름",
+	"Spaces divide the sidebar's sessions by whose repositories they are in. Swipe across the sidebar with two fingers, or pick one from its title, to move between them.": "스페이스는 사이드바의 세션을 저장소 소유자별로 나눕니다. 사이드바에서 두 손가락으로 좌우로 쓸거나 제목에서 골라 스페이스를 오갑니다.",
+	"No spaces yet. Add one, or pick New space with this owner from an owner's menu in the sidebar.":                                                                       "아직 스페이스가 없습니다. 추가하거나, 사이드바에서 소유자 메뉴의 '이 소유자로 새 스페이스'를 고르세요.",
+	"No owners yet: they come from the origin remotes of the sessions' repositories.":                                                                                      "아직 소유자가 없습니다. 소유자는 세션 저장소의 origin 리모트에서 읽습니다.",
 }
