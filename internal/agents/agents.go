@@ -1,0 +1,70 @@
+// Package agents lists the agents mako knows, each by its driver, in the
+// order a launcher shows them.
+package agents
+
+import (
+	"image/color"
+	"path/filepath"
+	"strings"
+
+	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agent/claude"
+	"github.com/ironpark/mako/internal/agent/codex"
+)
+
+var all = []agent.Driver{
+	claude.New(),
+	codex.New(),
+	terminal{agent.Info{Name: "agy", Programs: []string{"agy"}, Command: []string{"agy"}, Icon: "agent-agy", Color: color.NRGBA{0x3e, 0x8b, 0xff, 0xff}}},
+}
+
+// Entry is a driver with what it says of itself, read once.
+type Entry struct {
+	Driver agent.Driver
+	Info   agent.Info
+	Caps   uint32 // protocol's Cap bits
+}
+
+// byName and byProgram index the drivers.
+var byName, byProgram = func() (map[string]Entry, map[string]Entry) {
+	names, programs := map[string]Entry{}, map[string]Entry{}
+	for _, d := range all {
+		e := Entry{Driver: d, Info: d.Info(), Caps: agent.Caps(d)}
+		names[e.Info.Name] = e
+		for _, p := range e.Info.Programs {
+			programs[p] = e
+		}
+	}
+	return names, programs
+}()
+
+// terminal is an agent mako knows only by name: it runs in its terminal,
+// and mako follows nothing more of it.
+type terminal struct{ info agent.Info }
+
+func (t terminal) Info() agent.Info { return t.info }
+
+// All are the drivers, in order.
+func All() []agent.Driver { return all }
+
+// Lookup is the agent called name.
+func Lookup(name string) (Entry, bool) {
+	e, ok := byName[name]
+	return e, ok
+}
+
+// As is the driver of the agent called name, when it has the capability T.
+func As[T any](name string) (T, bool) {
+	t, ok := byName[name].Driver.(T)
+	return t, ok
+}
+
+// ByProgram is the agent the program runs, by its file name.
+func ByProgram(program string) (Entry, bool) {
+	e, ok := byProgram[strings.TrimSuffix(filepath.Base(program), ".exe")]
+	return e, ok
+}
+
+// Caps are the protocol's Cap bits for the agent called name, 0 for one
+// mako does not know.
+func Caps(name string) uint32 { return byName[name].Caps }

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transcript"
@@ -48,11 +49,12 @@ func withOptionalFlag(ctx context.Context, command []string, flag string) []stri
 
 // hasFeature reports whether the agent command runs takes hooks: not every
 // version of every agent does. What its binary says is remembered.
-func hasFeature(ctx context.Context, command []string, native *transcript.Agent) bool {
-	args, feature := native.HookFeature()
-	if feature == "" {
-		return native.HasHooks()
+func hasFeature(ctx context.Context, command []string, driver agent.Driver) bool {
+	gate, ok := driver.(agent.HookGate)
+	if !ok {
+		return true
 	}
+	args, feature := gate.HookFeature()
 	key := command[0] + "\x00" + strings.Join(args, " ")
 	value, ok := optionalFlags.Load(key)
 	if !ok {
@@ -103,7 +105,7 @@ type conversation struct {
 
 // trackConversation follows s's conversation for as long as it runs.
 func (d *Daemon) trackConversation(s *session.Session) {
-	if !transcript.Supported(s.Info().GetAgent()) {
+	if !transcript.Supported(s.Agent()) {
 		return
 	}
 	c := &d.conversations
@@ -254,9 +256,9 @@ func (d *Daemon) checkConversations(sessions []*session.Session) {
 // reported, in a report numbered seq. The log may not be written yet,
 // after a fresh start or /clear: then the ID is bound now, and the log once
 // the agent writes it.
-func (d *Daemon) reportConversation(s *session.Session, seq int64, ev transcript.HookEvent) error {
+func (d *Daemon) reportConversation(s *session.Session, seq int64, ev agent.Event) error {
 	info := s.Info()
-	id, path := ev.SessionID, ev.TranscriptPath
+	id, path := ev.SessionID, ev.Transcript
 	if id == "" || path == "" {
 		return nil // nothing to bind yet; the listing finds it
 	}

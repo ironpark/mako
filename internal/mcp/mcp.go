@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/zed"
 	"github.com/ironpark/mako/internal/zedhost"
 )
@@ -46,13 +47,9 @@ type Command struct {
 	Env  map[string]string `json:"env,omitempty"`
 }
 
-// Launch is a server resolved to the command that starts it.
-type Launch struct {
-	ID      string
-	Command string
-	Args    []string
-	Env     map[string]string
-}
+// Launch is a server resolved to the command that starts it, as an
+// agent's driver gives it to the agent.
+type Launch = agent.Server
 
 // Resolver turns the servers configured into commands, running the wasm
 // of the extensions that have them. What an extension answered is kept
@@ -279,128 +276,6 @@ func ExpandHome(p string) string {
 		}
 	}
 	return p
-}
-
-// Agents ------------------------------------------------------------------
-
-// Takes reports whether the program command[0] is an agent that takes MCP
-// servers on its command line.
-func Takes(command []string) bool {
-	return len(command) > 0 && Kind(command[0]) != ""
-}
-
-// Kind names the agent program a command runs: claude, codex, or "" for
-// another program.
-func Kind(program string) string {
-	switch strings.TrimSuffix(filepath.Base(program), ".exe") {
-	case "claude":
-		return "claude"
-	case "codex":
-		return "codex"
-	}
-	return ""
-}
-
-// Apply gives the agent command starts the servers: claude a config file
-// written in dir, named for the session, which cleanup removes; codex its
-// -c overrides. A command for another program comes back as it is.
-func Apply(command []string, servers []Launch, dir, session string) (out []string, cleanup func(), err error) {
-	cleanup = func() {}
-	if len(servers) == 0 || len(command) == 0 {
-		return command, cleanup, nil
-	}
-	var flags []string
-	switch Kind(command[0]) {
-	case "claude":
-		path, err := writeClaudeConfig(servers, dir, session)
-		if err != nil {
-			return command, cleanup, err
-		}
-		cleanup = func() { os.Remove(path) }
-		// The = form, as the flag takes any number of values otherwise and
-		// would swallow the arguments after it.
-		flags = []string{"--mcp-config=" + path}
-	case "codex":
-		flags = codexFlags(servers)
-	default:
-		return command, cleanup, nil
-	}
-	return slices.Concat(command[:1], flags, command[1:]), cleanup, nil
-}
-
-// writeClaudeConfig writes the servers as Claude Code's .mcp.json reads
-// them. It holds their keys, so only the user reads it.
-func writeClaudeConfig(servers []Launch, dir, session string) (string, error) {
-	type server struct {
-		Type    string            `json:"type"`
-		Command string            `json:"command"`
-		Args    []string          `json:"args"`
-		Env     map[string]string `json:"env,omitempty"`
-	}
-	cfg := struct {
-		Servers map[string]server `json:"mcpServers"`
-	}{map[string]server{}}
-	for _, s := range servers {
-		cfg.Servers[s.ID] = server{Type: "stdio", Command: s.Command, Args: nonNil(s.Args), Env: s.Env}
-	}
-	b, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	path := filepath.Join(dir, "mcp-"+session+".json")
-	if err := os.WriteFile(path, b, 0o600); err != nil {
-		return "", err
-	}
-	return path, nil
-}
-
-// codexFlags are -c overrides of Codex's mcp_servers table, each value
-// TOML, which a JSON string or array of strings also is.
-func codexFlags(servers []Launch) []string {
-	var out []string
-	for _, s := range servers {
-		key := "mcp_servers." + tomlKey(s.ID)
-		out = append(out, "-c", key+".command="+jsonString(s.Command))
-		out = append(out, "-c", key+".args="+jsonStrings(nonNil(s.Args)))
-		if len(s.Env) > 0 {
-			var kv []string
-			for _, k := range slices.Sorted(maps.Keys(s.Env)) {
-				kv = append(kv, jsonString(k)+"="+jsonString(s.Env[k]))
-			}
-			out = append(out, "-c", key+".env={"+strings.Join(kv, ",")+"}")
-		}
-	}
-	return out
-}
-
-// tomlKey is id as a TOML key, bare when it can be.
-func tomlKey(id string) string {
-	for _, c := range id {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
-			return jsonString(id)
-		}
-	}
-	return id
-}
-
-func jsonString(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
-}
-
-func jsonStrings(s []string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
-}
-
-func nonNil(s []string) []string {
-	if s == nil {
-		return []string{}
-	}
-	return s
 }
 
 // ErrNoServer is returned for a server no extension installed has.

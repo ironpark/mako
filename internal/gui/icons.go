@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui/icons"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/mako/internal/agents"
 )
 
 // Lucide icons (ISC, see icons/LICENSE), the set Paseo draws with, and the
@@ -43,31 +44,23 @@ func icon(name string) *icons.Widget {
 func iconColored(name string, c color.Color) *icons.Widget { return icon(name).Color(c) }
 
 // agentIcon is the glyph a session row and tab show for an agent.
-func agentIcon(agent string) string {
-	switch agent {
-	case "shell", "":
+func agentIcon(name string) string {
+	if name == "shell" || name == "" {
 		return "square-terminal"
-	case "claude", "codex", "agy":
-		return "agent-" + agent
-	default:
-		return "bot"
 	}
-}
-
-// agentColors tint the agents that have a colour of their own.
-var agentColors = map[string]color.Color{
-	"claude": color.NRGBA{0xd9, 0x77, 0x57, 0xff},
-	"codex":  color.NRGBA{0x7b, 0x6c, 0xf0, 0xff},
-	"agy":    color.NRGBA{0x3e, 0x8b, 0xff, 0xff},
+	if e, ok := agents.Lookup(name); ok && e.Info.Icon != "" {
+		return e.Info.Icon
+	}
+	return "bot"
 }
 
 // agentGlyph is an agent's icon in its own colour, or in c for an agent
 // without one.
-func agentGlyph(agent string, c color.Color) *icons.Widget {
-	if own, ok := agentColors[agent]; ok {
-		c = own
+func agentGlyph(name string, c color.Color) *icons.Widget {
+	if e, ok := agents.Lookup(name); ok && e.Info.Color.A != 0 {
+		c = e.Info.Color
 	}
-	return iconColored(agentIcon(agent), c)
+	return iconColored(agentIcon(name), c)
 }
 
 // busyGlyph hops an agent's icon while busy reports its program at work, as

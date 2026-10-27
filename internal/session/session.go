@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/activity"
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -129,6 +130,9 @@ func Start(spec Spec) (*Session, error) {
 // ID reports the session identifier.
 func (s *Session) ID() string { return s.spec.ID }
 
+// Agent is the agent the session runs, as its launch named it.
+func (s *Session) Agent() string { return s.spec.Agent }
+
 // Info snapshots the session metadata.
 func (s *Session) Info() *protocol.SessionInfo {
 	s.mu.Lock()
@@ -137,6 +141,7 @@ func (s *Session) Info() *protocol.SessionInfo {
 		Id:             s.spec.ID,
 		NodeId:         s.spec.NodeID,
 		Agent:          s.spec.Agent,
+		Caps:           agents.Caps(s.spec.Agent),
 		Profile:        s.spec.Profile,
 		Name:           s.name,
 		ConversationId: s.conversationID,

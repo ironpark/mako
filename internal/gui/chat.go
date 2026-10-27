@@ -15,6 +15,8 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transcript"
@@ -215,7 +217,18 @@ func joinChat(older, newer []*protocol.ChatMessage) []*protocol.ChatMessage {
 // show. A plain shell has none, so it keeps its terminal alone.
 func (m *model) chatCapable(id string) bool {
 	s, ok := m.session(id)
-	return ok && transcript.Supported(s.GetAgent())
+	return ok && hasCap(s, protocol.CapChat)
+}
+
+// hasCap reports whether mako follows what c says of s's agent: as the
+// session's daemon says, or as this build knows the agent, from a daemon
+// older than caps.
+func hasCap(s *protocol.SessionInfo, c uint32) bool {
+	caps := s.GetCaps()
+	if caps == 0 {
+		caps = agents.Caps(s.GetAgent())
+	}
+	return caps&c != 0
 }
 
 // sessionView switches only presentation. The attachment and terminal parser
@@ -642,7 +655,7 @@ func copyButton(m *model, text string) ggui.Widget {
 func toolRow(m *model, id string, state *chatState, msg *protocol.ChatMessage, agent *protocol.SubAgent) ggui.Widget {
 	name, detail, _, _, failed := toolParts(msg)
 	open := state.toolOpen(chatMessageKey(msg), failed)
-	var glyph ggui.Widget = icon(toolGlyph(name)).Size(14).Color(pick(failed, tokDotDown, tokMuted))
+	var glyph ggui.Widget = icon(toolGlyph(msg.GetKind())).Size(14).Color(pick(failed, tokDotDown, tokMuted))
 	if msg.GetPending() || agent.GetRunning() {
 		still := glyph
 		glyph = ggui.Reactive(func() ggui.Widget {
@@ -706,7 +719,7 @@ func agentProgress(a *protocol.SubAgent) ggui.Widget {
 	line := []ggui.Widget{muted(ggui.Text(strings.Join(parts, " · ")).Size(11.5).NoWrap())}
 	if a.GetTool() != "" {
 		line = append(line,
-			icon(toolGlyph(a.GetTool())).Size(12).Color(tokExtraMuted),
+			icon(toolGlyph(a.GetToolKind())).Size(12).Color(tokExtraMuted),
 			ggui.Expanded(ggui.Text(strings.TrimSpace(a.GetTool()+"  "+a.GetDetail())).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis()))
 	}
 	return ggui.Row(line...).Gap(6).Align(ggui.AlignCenter)
@@ -773,7 +786,7 @@ func toolBlock(text string, failed bool) ggui.Widget {
 // call is not in the window.
 func toolParts(msg *protocol.ChatMessage) (name, detail, args, result string, failed bool) {
 	if msg.GetOutput() {
-		return cmp.Or(msg.GetTool(), T("Output")), cmp.Or(msg.GetDetail(), transcript.OneLine(msg.GetText(), 120)), "", msg.GetText(), msg.GetError()
+		return cmp.Or(msg.GetTool(), T("Output")), cmp.Or(msg.GetDetail(), agent.OneLine(msg.GetText(), 120)), "", msg.GetText(), msg.GetError()
 	}
 	return cmp.Or(msg.GetTool(), T("Tool")), msg.GetDetail(), msg.GetText(), msg.GetResult(), msg.GetError()
 }

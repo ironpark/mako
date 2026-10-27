@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/mcp"
@@ -41,7 +43,12 @@ func (d *Daemon) warmContextServers(ctx context.Context) {
 // session. Any other command comes back as it is.
 func (d *Daemon) withContextServers(ctx context.Context, launch agentspec.Launch, session string) ([]string, func()) {
 	command := launch.Command
-	if d.mcp == nil || !mcp.Takes(command) {
+	var takes agent.Servers
+	if len(command) > 0 {
+		driver, _ := agents.ByProgram(command[0])
+		takes, _ = driver.Driver.(agent.Servers)
+	}
+	if d.mcp == nil || takes == nil {
 		return command, func() {}
 	}
 	ctx, cancel := context.WithTimeout(ctx, resolveTimeout)
@@ -60,7 +67,7 @@ func (d *Daemon) withContextServers(ctx context.Context, launch agentspec.Launch
 		d.log.Warn("mcp: no directory for the agent's configuration", "err", err)
 		return command, func() {}
 	}
-	out, cleanup, err := mcp.Apply(command, servers, run, session)
+	out, cleanup, err := takes.WithServers(command, servers, run, session)
 	if err != nil {
 		d.log.Warn("mcp: servers not given to the session", "session", session, "err", err)
 		return command, func() {}

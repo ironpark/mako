@@ -50,13 +50,3 @@ func TestRecoverOldSessionRequiresOneUnclaimedConversation(t *testing.T) {
 		t.Fatalf("claimed: %q %v", id, err)
 	}
 }
-
-func TestForkDoesNotBindSourceConversation(t *testing.T) {
-	claude, _ := Lookup("claude")
-	if got := claude.ArgumentID([]string{"claude", "--resume", "source", "--fork-session"}); got != "" {
-		t.Fatalf("fork bound source %q", got)
-	}
-	if got := claude.ArgumentID([]string{"claude", "--resume", "source", "--fork-session", "--session-id", "destination"}); got != "destination" {
-		t.Fatalf("fork ID=%q", got)
-	}
-}

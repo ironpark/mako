@@ -29,6 +29,9 @@ message ChatMessage {
   bool output = 7;
   bool error = 8;
   bool pending = 9; // a call not answered yet
+  // kind is what the tool does, whatever its agent calls it: one of
+  // protocol's Tool kinds, "" for a tool the agent's driver does not know.
+  string kind = 10;
 }
 
 // Chat answers ReadChat.
@@ -57,6 +60,7 @@ message SubAgent {
   string detail = 8;
   int64 started = 9; // Unix seconds
   int64 updated = 10; // Unix seconds, when it last wrote
+  string tool_kind = 11; // what its latest call does, as ChatMessage.kind
 }
 
 // Usage is the tokens a conversation has spent.

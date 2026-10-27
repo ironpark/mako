@@ -105,16 +105,19 @@ func (x *ReadChat) GetAfter() int64 {
 
 // ChatMessage is one turn of a conversation.
 type ChatMessage struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Role          string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"` // user, assistant or tool
-	Text          string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
-	Id            string                 `protobuf:"bytes,3,opt,name=id,proto3" json:"id,omitempty"`
-	Tool          string                 `protobuf:"bytes,4,opt,name=tool,proto3" json:"tool,omitempty"`
-	Detail        string                 `protobuf:"bytes,5,opt,name=detail,proto3" json:"detail,omitempty"`
-	Result        string                 `protobuf:"bytes,6,opt,name=result,proto3" json:"result,omitempty"`
-	Output        bool                   `protobuf:"varint,7,opt,name=output,proto3" json:"output,omitempty"`
-	Error         bool                   `protobuf:"varint,8,opt,name=error,proto3" json:"error,omitempty"`
-	Pending       bool                   `protobuf:"varint,9,opt,name=pending,proto3" json:"pending,omitempty"` // a call not answered yet
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Role    string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"` // user, assistant or tool
+	Text    string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
+	Id      string                 `protobuf:"bytes,3,opt,name=id,proto3" json:"id,omitempty"`
+	Tool    string                 `protobuf:"bytes,4,opt,name=tool,proto3" json:"tool,omitempty"`
+	Detail  string                 `protobuf:"bytes,5,opt,name=detail,proto3" json:"detail,omitempty"`
+	Result  string                 `protobuf:"bytes,6,opt,name=result,proto3" json:"result,omitempty"`
+	Output  bool                   `protobuf:"varint,7,opt,name=output,proto3" json:"output,omitempty"`
+	Error   bool                   `protobuf:"varint,8,opt,name=error,proto3" json:"error,omitempty"`
+	Pending bool                   `protobuf:"varint,9,opt,name=pending,proto3" json:"pending,omitempty"` // a call not answered yet
+	// kind is what the tool does, whatever its agent calls it: one of
+	// protocol's Tool kinds, "" for a tool the agent's driver does not know.
+	Kind          string `protobuf:"bytes,10,opt,name=kind,proto3" json:"kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -210,6 +213,13 @@ func (x *ChatMessage) GetPending() bool {
 		return x.Pending
 	}
 	return false
+}
+
+func (x *ChatMessage) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
 }
 
 // Chat answers ReadChat.
@@ -319,8 +329,9 @@ type SubAgent struct {
 	ToolCalls     int32                  `protobuf:"varint,6,opt,name=tool_calls,json=toolCalls,proto3" json:"tool_calls,omitempty"` // how many calls it has made
 	Tool          string                 `protobuf:"bytes,7,opt,name=tool,proto3" json:"tool,omitempty"`                             // its latest call
 	Detail        string                 `protobuf:"bytes,8,opt,name=detail,proto3" json:"detail,omitempty"`
-	Started       int64                  `protobuf:"varint,9,opt,name=started,proto3" json:"started,omitempty"`  // Unix seconds
-	Updated       int64                  `protobuf:"varint,10,opt,name=updated,proto3" json:"updated,omitempty"` // Unix seconds, when it last wrote
+	Started       int64                  `protobuf:"varint,9,opt,name=started,proto3" json:"started,omitempty"`                   // Unix seconds
+	Updated       int64                  `protobuf:"varint,10,opt,name=updated,proto3" json:"updated,omitempty"`                  // Unix seconds, when it last wrote
+	ToolKind      string                 `protobuf:"bytes,11,opt,name=tool_kind,json=toolKind,proto3" json:"tool_kind,omitempty"` // what its latest call does, as ChatMessage.kind
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -423,6 +434,13 @@ func (x *SubAgent) GetUpdated() int64 {
 		return x.Updated
 	}
 	return 0
+}
+
+func (x *SubAgent) GetToolKind() string {
+	if x != nil {
+		return x.ToolKind
+	}
+	return ""
 }
 
 // Usage is the tokens a conversation has spent.
@@ -583,7 +601,7 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\n" +
 	"usage_only\x18\x03 \x01(\bR\tusageOnly\x12\x16\n" +
 	"\x06before\x18\x04 \x01(\x03R\x06before\x12\x14\n" +
-	"\x05after\x18\x05 \x01(\x03R\x05after\"\xd1\x01\n" +
+	"\x05after\x18\x05 \x01(\x03R\x05after\"\xe5\x01\n" +
 	"\vChatMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x0e\n" +
@@ -593,7 +611,9 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\x06result\x18\x06 \x01(\tR\x06result\x12\x16\n" +
 	"\x06output\x18\a \x01(\bR\x06output\x12\x14\n" +
 	"\x05error\x18\b \x01(\bR\x05error\x12\x18\n" +
-	"\apending\x18\t \x01(\bR\apending\"\xff\x01\n" +
+	"\apending\x18\t \x01(\bR\apending\x12\x12\n" +
+	"\x04kind\x18\n" +
+	" \x01(\tR\x04kind\"\xff\x01\n" +
 	"\x04Chat\x12\x1c\n" +
 	"\tsupported\x18\x01 \x01(\bR\tsupported\x12\"\n" +
 	"\fconversation\x18\x02 \x01(\tR\fconversation\x120\n" +
@@ -601,7 +621,7 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\ttruncated\x18\x04 \x01(\bR\ttruncated\x12$\n" +
 	"\x05usage\x18\x05 \x01(\v2\x0e.mako.v2.UsageR\x05usage\x12)\n" +
 	"\x06agents\x18\x06 \x03(\v2\x11.mako.v2.SubAgentR\x06agents\x12\x14\n" +
-	"\x05start\x18\a \x01(\x03R\x05start\"\x82\x02\n" +
+	"\x05start\x18\a \x01(\x03R\x05start\"\x9f\x02\n" +
 	"\bSubAgent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\acall_id\x18\x02 \x01(\tR\x06callId\x12\x12\n" +
@@ -614,7 +634,8 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\x06detail\x18\b \x01(\tR\x06detail\x12\x18\n" +
 	"\astarted\x18\t \x01(\x03R\astarted\x12\x18\n" +
 	"\aupdated\x18\n" +
-	" \x01(\x03R\aupdated\"\xb6\x01\n" +
+	" \x01(\x03R\aupdated\x12\x1b\n" +
+	"\ttool_kind\x18\v \x01(\tR\btoolKind\"\xb6\x01\n" +
 	"\x05Usage\x12\x14\n" +
 	"\x05input\x18\x01 \x01(\x03R\x05input\x12!\n" +
 	"\fcached_input\x18\x02 \x01(\x03R\vcachedInput\x12\x16\n" +

@@ -12,7 +12,6 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/protocol"
-	"github.com/ironpark/mako/internal/transcript"
 )
 
 // tokens writes a token count as the chat footer does: 950, 12.3k, 1.2M.
@@ -121,7 +120,7 @@ func usageOverlay(m *model, id string, src ggui.Readable[*protocol.Usage], topRi
 			return false
 		}
 		s, ok := sessionIn(m.Sessions.Get(), id)
-		return ok && transcript.Supported(s.GetAgent())
+		return ok && hasCap(s, protocol.CapChat)
 	})
 	chip := func() ggui.Widget {
 		return ggui.If(shown, func() ggui.Widget {

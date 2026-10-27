@@ -26,49 +26,10 @@ const maxToolLines = 400
 // maxToolHeight caps a fold's code, diff or output, which scrolls inside.
 const maxToolHeight = 360
 
-// toolKind is what a tool does, whatever its agent calls it.
-type toolKind int
-
-const (
-	toolOther toolKind = iota
-	toolShell
-	toolPatch // Codex's apply_patch
-	toolEdit
-	toolMultiEdit
-	toolWrite
-	toolRead
-	toolSearch
-	toolTodo // Claude's TodoWrite
-	toolPlan // Codex's update_plan
-	toolFetch
-	toolWebSearch
-	toolTask
-)
-
-// toolKinds are the tools of Claude Code and Codex, by their names in
-// lower case.
-var toolKinds = map[string]toolKind{
-	"bash": toolShell, "shell": toolShell, "exec_command": toolShell, "exec": toolShell,
-	"local_shell": toolShell, "container.exec": toolShell, "write_stdin": toolShell,
-	"apply_patch": toolPatch,
-	"edit":        toolEdit, "str_replace_based_edit_tool": toolEdit, "str_replace": toolEdit,
-	"multiedit": toolMultiEdit,
-	"write":     toolWrite, "create": toolWrite, "notebookedit": toolWrite,
-	"read": toolRead, "view": toolRead,
-	"grep": toolSearch, "glob": toolSearch, "search": toolSearch, "ls": toolSearch, "list_dir": toolSearch,
-	"todowrite":   toolTodo,
-	"update_plan": toolPlan,
-	"webfetch":    toolFetch, "fetch": toolFetch,
-	"websearch": toolWebSearch, "web_search": toolWebSearch,
-	"task": toolTask, "agent": toolTask,
-}
-
-func kindOf(name string) toolKind { return toolKinds[strings.ToLower(name)] }
-
 // toolBody is a tool call's fold.
 func toolBody(m *model, msg *protocol.ChatMessage) ggui.Widget {
-	name, _, args, result, failed := toolParts(msg)
-	kind := kindOf(name)
+	_, _, args, result, failed := toolParts(msg)
+	kind := msg.GetKind()
 	if failed && result == "" {
 		result = T("The tool failed without output.")
 	}
@@ -88,9 +49,9 @@ func toolBody(m *model, msg *protocol.ChatMessage) ggui.Widget {
 }
 
 // toolInput is what a call asked for, as its tool reads.
-func toolInput(m *model, kind toolKind, args string, in map[string]any) []ggui.Widget {
+func toolInput(m *model, kind string, args string, in map[string]any) []ggui.Widget {
 	switch {
-	case kind == toolPatch:
+	case kind == protocol.ToolPatch:
 		// Codex writes the patch itself, or JSON holding it.
 		return patchView(cmp.Or(str(in, "input", "patch"), args))
 	case in == nil:
@@ -101,7 +62,7 @@ func toolInput(m *model, kind toolKind, args string, in map[string]any) []ggui.W
 	}
 	path := str(in, "file_path", "path", "notebook_path")
 	switch kind {
-	case toolShell:
+	case protocol.ToolShell:
 		cmd := shellCommand(in)
 		if cmd == "" {
 			break
@@ -111,9 +72,9 @@ func toolInput(m *model, kind toolKind, args string, in map[string]any) []ggui.W
 			rows = append(rows, muted(ggui.Text(d).Size(12.5)))
 		}
 		return append(rows, commandBlock(cmd, str(in, "workdir", "cwd")))
-	case toolEdit:
+	case protocol.ToolEdit:
 		return []ggui.Widget{pathLine(path, ""), editDiff(str(in, "old_string", "old_str"), str(in, "new_string", "new_str"))}
-	case toolMultiEdit:
+	case protocol.ToolMultiEdit:
 		edits := list(in, "edits")
 		rows := []ggui.Widget{pathLine(path, Tf("%d edits", len(edits)))}
 		for _, e := range edits {
@@ -122,26 +83,26 @@ func toolInput(m *model, kind toolKind, args string, in map[string]any) []ggui.W
 			}
 		}
 		return rows
-	case toolWrite:
+	case protocol.ToolWrite:
 		content := str(in, "content", "file_text", "new_source")
 		return []ggui.Widget{pathLine(path, Tf("%d lines", textLines(content))), codeView(m, path, content)}
-	case toolRead:
+	case protocol.ToolRead:
 		return []ggui.Widget{pathLine(path, readRange(in))}
-	case toolSearch:
+	case protocol.ToolSearch:
 		return []ggui.Widget{fieldChips(in, "pattern", "query", "path", "glob", "type", "output_mode")}
-	case toolTodo:
+	case protocol.ToolTodo:
 		return []ggui.Widget{checklist(list(in, "todos"), "content", "status")}
-	case toolPlan:
+	case protocol.ToolPlan:
 		var rows []ggui.Widget
 		if e := str(in, "explanation"); e != "" {
 			rows = append(rows, ggui.Text(e).Size(12.5))
 		}
 		return append(rows, checklist(list(in, "plan"), "step", "status"))
-	case toolFetch:
+	case protocol.ToolFetch:
 		return []ggui.Widget{fieldChips(in, "url"), proseBlock(str(in, "prompt"))}
-	case toolWebSearch:
+	case protocol.ToolWebSearch:
 		return []ggui.Widget{fieldChips(in, "query", "allowed_domains", "blocked_domains")}
-	case toolTask:
+	case protocol.ToolTask:
 		var rows []ggui.Widget
 		if d := str(in, "description"); d != "" {
 			rows = append(rows, ggui.Text(d).Size(13).Weight(ggui.WeightMedium))
@@ -155,13 +116,13 @@ func toolInput(m *model, kind toolKind, args string, in map[string]any) []ggui.W
 }
 
 // toolOutput is what a call gave back, as its tool reads.
-func toolOutput(m *model, kind toolKind, in map[string]any, result string, failed bool) ggui.Widget {
+func toolOutput(m *model, kind string, in map[string]any, result string, failed bool) ggui.Widget {
 	label := pick(failed, T("Error"), T("Output"))
 	if failed {
 		return ggui.Column(toolLabel(label), scrolled(toolBlock(result, true))).Gap(4).Stretch()
 	}
 	switch kind {
-	case toolShell:
+	case protocol.ToolShell:
 		code, out := shellOutput(result)
 		head := []ggui.Widget{toolLabel(label)}
 		if code >= 0 {
@@ -172,7 +133,7 @@ func toolOutput(m *model, kind toolKind, in map[string]any, result string, faile
 			block = scrolled(toolBlock(out, code > 0))
 		}
 		return ggui.Column(ggui.Row(head...).Gap(8).Align(ggui.AlignCenter), block).Gap(4).Stretch()
-	case toolRead:
+	case protocol.ToolRead:
 		if text, first, ok := numberedLines(result); ok {
 			return ggui.Column(toolLabel(Tf("From line %d", first)), codeView(m, str(in, "file_path", "path"), text)).Gap(4).Stretch()
 		}
@@ -180,25 +141,23 @@ func toolOutput(m *model, kind toolKind, in map[string]any, result string, faile
 	return ggui.Column(toolLabel(label), scrolled(toolBlock(stripReminders(result), false))).Gap(4).Stretch()
 }
 
-// toolGlyph is the icon a tool row shows for its kind: a slash command's
-// output and a compaction's summary have their own.
-func toolGlyph(name string) string {
-	switch {
-	case strings.HasPrefix(name, "/"):
+// toolGlyph is the icon a tool row shows for its kind, one of protocol's
+// Tool kinds.
+func toolGlyph(kind string) string {
+	switch kind {
+	case protocol.ToolCommand:
 		return "terminal"
-	case name == "Summary":
+	case protocol.ToolSummary:
 		return "history"
-	}
-	switch kindOf(name) {
-	case toolShell:
+	case protocol.ToolShell:
 		return "square-terminal"
-	case toolPatch, toolEdit, toolMultiEdit, toolWrite, toolRead:
+	case protocol.ToolPatch, protocol.ToolEdit, protocol.ToolMultiEdit, protocol.ToolWrite, protocol.ToolRead:
 		return "file-text"
-	case toolSearch:
+	case protocol.ToolSearch:
 		return "radar"
-	case toolFetch, toolWebSearch:
+	case protocol.ToolFetch, protocol.ToolWebSearch:
 		return "network"
-	case toolTask, toolTodo, toolPlan:
+	case protocol.ToolTask, protocol.ToolTodo, protocol.ToolPlan:
 		return "list"
 	}
 	return "square-dot"

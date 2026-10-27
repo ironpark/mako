@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
-	"github.com/ironpark/mako/internal/transcript"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -59,7 +59,7 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	if h := settings.Hooks["SessionStart"]; len(h) != 1 || h[0].Hooks[0].Command != `'/opt/mako'\''s/makod' hook `+socket {
 		t.Fatalf("hook %+v", settings)
 	}
-	if settings.StatusLine.Command != `'/opt/mako'\''s/makod' statusline `+socket {
+	if settings.StatusLine.Command != `'/opt/mako'\''s/makod' statusline `+socket+" claude" {
 		t.Fatalf("status line %+v", settings)
 	}
 
@@ -67,7 +67,7 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	t.Setenv("MAKO_SESSION", s.ID())
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	status := `{"context_window":{"context_window_size":1000000},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":1738425600},"seven_day":{"used_percentage":41.2,"resets_at":1738857600}}}`
-	runStatusLine([]string{socket}, strings.NewReader(status), io.Discard)
+	runStatusLine([]string{socket, "claude"}, strings.NewReader(status), io.Discard)
 	want := &protocol.Usage{Window: 1000000, Limits: []*protocol.RateLimit{{Minutes: 300, Used: 23.5, Resets: 1738425600}, {Minutes: 10080, Used: 41.2, Resets: 1738857600}}}
 	for deadline := time.Now().Add(5 * time.Second); !proto.Equal(s.Reported(), want); {
 		if time.Now().After(deadline) {
@@ -75,7 +75,8 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	// One before the first reply has no limits, and keeps the last.
+	// One before the first reply has no limits, and keeps the last; a
+	// launch before drivers named no agent, which was Claude.
 	runStatusLine([]string{socket}, strings.NewReader(`{"context_window":{"context_window_size":1000000}}`), io.Discard)
 	time.Sleep(50 * time.Millisecond)
 	if !proto.Equal(s.Reported(), want) {
@@ -101,7 +102,7 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 
 	// A report that ran earlier but arrives late changes nothing.
 	report := func(seq int64, id, path string) error {
-		return d.reportConversation(s, seq, transcript.HookEvent{Event: "SessionStart", SessionID: id, TranscriptPath: path})
+		return d.reportConversation(s, seq, agent.Event{Kind: agent.Started, SessionID: id, Transcript: path})
 	}
 	if err := report(1, first, firstPath); err != nil {
 		t.Fatal(err)

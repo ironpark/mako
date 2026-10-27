@@ -72,7 +72,7 @@ func procLogs(pid int) []string {
 // Identify picks, among the logs a process tree has open for writing, the one
 // conversation of project. It never guesses from a project's newest file.
 func Identify(agent, project string, paths []string) (string, string, error) {
-	a, ok := Lookup(agent)
+	a, ok := logsOf(agent)
 	if !ok {
 		return "", "", errUnsupported
 	}

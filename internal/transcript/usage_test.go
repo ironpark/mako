@@ -10,7 +10,7 @@ import (
 )
 
 func TestUsageAddsUpAsTheLogGrows(t *testing.T) {
-	claude, _ := Lookup("claude")
+	claude, _ := logsOf("claude")
 	path := filepath.Join(t.TempDir(), "log.jsonl")
 	write := func(lines ...string) {
 		f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
@@ -41,7 +41,7 @@ func TestUsageAddsUpAsTheLogGrows(t *testing.T) {
 		t.Fatalf("second read %+v", got)
 	}
 
-	codex, _ := Lookup("codex")
+	codex, _ := logsOf("codex")
 	rollout := filepath.Join(t.TempDir(), "rollout.jsonl")
 	_ = os.WriteFile(rollout, []byte(`{"type":"event_msg","payload":{"type":"token_count","info":null}}
 {"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":17110,"cached_input_tokens":13184,"output_tokens":5},"last_token_usage":{"input_tokens":9000,"cached_input_tokens":8000,"output_tokens":5},"model_context_window":258400},"rate_limits":{"primary":{"used_percent":7.0,"window_minutes":10080,"resets_at":1793528251},"secondary":null}}}

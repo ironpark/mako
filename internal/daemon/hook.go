@@ -11,15 +11,16 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/protocol"
-	"github.com/ironpark/mako/internal/transcript"
 )
 
 // hookArg, as a program's first argument, runs it as an agent's hook.
 const hookArg = "hook"
 
-// statusArg, as a program's first argument, runs it as Claude's status
+// statusArg, as a program's first argument, runs it as an agent's status
 // line.
 const statusArg = "statusline"
 
@@ -63,6 +64,9 @@ type hookMessage struct {
 type hookReply struct {
 	Decision string `json:"decision,omitempty"`
 	Message  string `json:"message,omitempty"`
+	// Output is the decision as the agent reads it, which the hook prints;
+	// a daemon before drivers sent the decision alone.
+	Output json.RawMessage `json:"output,omitempty"`
 }
 
 // runHook is an agent's hook, run by the daemon's own program with the
@@ -99,14 +103,10 @@ func runHook(args []string, stdin io.Reader, out io.Writer) {
 	if json.NewDecoder(conn).Decode(&reply) != nil || reply.Decision == "" {
 		return
 	}
-	decision := map[string]any{"behavior": reply.Decision}
-	if reply.Decision == protocol.DecisionDeny {
-		decision["message"] = reply.Message
+	if len(reply.Output) == 0 {
+		reply.Output = agent.PermissionReply(reply.Decision, reply.Message)
 	}
-	_ = json.NewEncoder(out).Encode(map[string]any{"hookSpecificOutput": map[string]any{
-		"hookEventName": "PermissionRequest",
-		"decision":      decision,
-	}})
+	_, _ = out.Write(reply.Output)
 }
 
 // sendHook passes msg on to the daemon at socket, giving up quickly, and
@@ -124,12 +124,17 @@ func sendHook(socket string, msg hookMessage) (net.Conn, error) {
 	return conn, nil
 }
 
-// runStatusLine is Claude's status line, run by the daemon's own program
-// with the daemon's hook socket as args[0]. It passes Claude's state on for
-// the session in MAKO_SESSION, without waiting for an answer, and prints
-// the status line the user set in Claude's own settings, which mako's
-// takes the place of.
+// runStatusLine is an agent's status line, run by the daemon's own program
+// with the daemon's hook socket as args[0] and the agent as args[1], Claude
+// when a launch before drivers left it out. It passes the agent's state on
+// for the session in MAKO_SESSION, without waiting for an answer, and
+// prints the status line the user set in the agent's own settings, which
+// mako's takes the place of.
 func runStatusLine(args []string, stdin io.Reader, out io.Writer) {
+	name := "claude"
+	if len(args) > 1 {
+		name, args = args[1], args[:1]
+	}
 	input, err := io.ReadAll(io.LimitReader(stdin, hookLimit))
 	if err != nil {
 		return
@@ -145,7 +150,7 @@ func runStatusLine(args []string, stdin io.Reader, out io.Writer) {
 			_ = conn.Close()
 		}
 	}()
-	if command := userStatusLine(input); command != "" {
+	if command := userStatusLine(name, input); command != "" {
 		cmd := exec.Command("sh", "-c", command)
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = bytes.NewReader(input), out, os.Stderr
 		_ = cmd.Run()
@@ -153,77 +158,14 @@ func runStatusLine(args []string, stdin io.Reader, out io.Writer) {
 	<-sent
 }
 
-// userStatusLine is the status line command Claude's own settings name,
-// "" for none: the project's local settings, then its shared ones, then
-// the user's, as Claude ranks them.
-func userStatusLine(input []byte) string {
-	var state struct {
-		Cwd       string `json:"cwd"`
-		Workspace struct {
-			ProjectDir string `json:"project_dir"`
-		} `json:"workspace"`
+// userStatusLine is the status line the user set in the agent's own
+// settings, "" for none.
+func userStatusLine(agentName string, input []byte) string {
+	line, ok := agents.As[agent.StatusLine](agentName)
+	if !ok {
+		return ""
 	}
-	_ = json.Unmarshal(input, &state)
-	project := state.Workspace.ProjectDir
-	if project == "" {
-		project = state.Cwd
-	}
-	config := transcript.ConfigRoot("claude", map[string]string{"CLAUDE_CONFIG_DIR": os.Getenv("CLAUDE_CONFIG_DIR"), "HOME": os.Getenv("HOME")})
-	var files []string
-	if project != "" {
-		files = append(files, filepath.Join(project, ".claude", "settings.local.json"), filepath.Join(project, ".claude", "settings.json"))
-	}
-	if config != "" {
-		files = append(files, filepath.Join(config, "settings.json"))
-	}
-	for _, path := range files {
-		body, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		var settings struct {
-			StatusLine *struct {
-				Type    string `json:"type"`
-				Command string `json:"command"`
-			} `json:"statusLine"`
-		}
-		if json.Unmarshal(body, &settings) != nil || settings.StatusLine == nil {
-			continue
-		}
-		if settings.StatusLine.Type != "command" {
-			return ""
-		}
-		return settings.StatusLine.Command
-	}
-	return ""
-}
-
-// statusUsage reads what a status line's input says of the session's
-// tokens: the model's context window, and the account's limits.
-func statusUsage(input []byte) *protocol.Usage {
-	type limit struct {
-		Used   float64 `json:"used_percentage"`
-		Resets int64   `json:"resets_at"`
-	}
-	var state struct {
-		Context struct {
-			Size int64 `json:"context_window_size"`
-		} `json:"context_window"`
-		Limits struct {
-			FiveHour *limit `json:"five_hour"`
-			SevenDay *limit `json:"seven_day"`
-		} `json:"rate_limits"`
-	}
-	if json.Unmarshal(input, &state) != nil {
-		return &protocol.Usage{}
-	}
-	u := &protocol.Usage{Window: state.Context.Size}
-	for minutes, l := range map[int64]*limit{protocol.FiveHours: state.Limits.FiveHour, protocol.Week: state.Limits.SevenDay} {
-		if l != nil {
-			u.SetLimit(&protocol.RateLimit{Minutes: minutes, Used: l.Used, Resets: l.Resets})
-		}
-	}
-	return u
+	return line.UserStatusLine(input)
 }
 
 // listenHooks serves the hook socket in dir until ctx ends, setting
@@ -272,37 +214,36 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	if !ok {
 		return
 	}
+	name := s.Agent()
 	if msg.Kind == statusArg {
-		s.Report(statusUsage(msg.Input))
+		if line, ok := agents.As[agent.StatusLine](name); ok {
+			s.Report(line.Status(msg.Input))
+		}
 		return
 	}
-	native, ok := transcript.Lookup(s.Info().GetAgent())
+	hooks, ok := agents.As[agent.Hooks](name)
 	if !ok {
 		return
 	}
-	ev, ok := native.ParseHook(msg.Input)
+	ev, ok := hooks.Event(msg.Input)
 	if !ok {
 		return
 	}
-	switch ev.Event {
-	case "SessionStart":
+	switch ev.Kind {
+	case agent.Started:
 		s.SetStatus(protocol.AgentIdle)
 		if err := d.reportConversation(s, msg.Seq, ev); err != nil {
 			d.log.Warn("hooks: report dropped", "session", msg.Session, "err", err)
 		}
-	case "UserPromptSubmit", "PostToolUse":
+	case agent.Prompted, agent.ToolDone:
 		s.SetStatus(protocol.AgentWorking)
-	case "Notification":
-		// Claude asks something of the user; a permission it asks through
-		// mako is already an approval.
-		if ev.NotificationType == "permission_prompt" || ev.NotificationType == "elicitation_dialog" {
-			s.SetStatus(protocol.AgentWaiting)
-		}
-	case "Stop":
+	case agent.Waiting:
+		s.SetStatus(protocol.AgentWaiting)
+	case agent.Stopped:
 		s.SetStatus(protocol.AgentDone)
-	case "SessionEnd":
+	case agent.Ended:
 		s.SetStatus(protocol.AgentIdle)
-	case "PermissionRequest":
+	case agent.Approval:
 		_ = conn.SetDeadline(time.Time{})
 		// The agent gives up on its hook when the approval is answered in
 		// its terminal, it is interrupted or the hook times out: the hook
@@ -315,6 +256,9 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 			withdraw()
 		}()
 		reply := d.approvals.ask(asking, s, ev)
+		if reply.Decision != "" {
+			reply.Output = hooks.Reply(reply.Decision, reply.Message)
+		}
 		_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
 		_ = json.NewEncoder(conn).Encode(reply)
 	}

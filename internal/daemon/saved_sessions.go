@@ -9,9 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/gitstat"
-	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transcript"
@@ -102,6 +103,7 @@ func (d *Daemon) loadSessions(dir string) error {
 	for id, entry := range saved.Sessions {
 		entry.Info.Id, entry.Info.NodeId = id, d.cfg.NodeID
 		entry.Info.State, entry.Info.Busy, entry.Info.ExitCode = protocol.StateStopped, false, nil
+		entry.Info.Caps = agents.Caps(entry.Info.GetAgent())
 		saved.Sessions[id] = entry
 	}
 	d.saved, d.sessionPath = saved.Sessions, path
@@ -320,8 +322,15 @@ func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.Open
 // is the conversations other sessions hold.
 func (d *Daemon) conversationFor(ctx context.Context, req *protocol.OpenSession, launch *agentspec.Launch, previous savedSession, existed bool, claimed map[string]bool) (string, string, error) {
 	conversationID, transcriptPath := previous.Info.GetConversationId(), previous.TranscriptPath
-	native, ok := transcript.Lookup(req.GetAgent())
-	ok = ok && len(launch.Command) > 0 && mcp.Kind(launch.Command[0]) == req.GetAgent()
+	entry, ok := agents.Lookup(req.GetAgent())
+	driver := entry.Driver
+	native, launches := driver.(agent.Launcher)
+	_, logs := driver.(agent.Logs)
+	ok = ok && launches && logs && len(launch.Command) > 0
+	if ok {
+		runs, _ := agents.ByProgram(launch.Command[0])
+		ok = runs.Info.Name == entry.Info.Name
+	}
 	if existed && conversationID != "" && !ok {
 		return "", "", fmt.Errorf("cannot resume %s through a custom wrapper; configure the native %s command", conversationID, req.GetAgent())
 	}
@@ -368,11 +377,15 @@ func (d *Daemon) conversationFor(ctx context.Context, req *protocol.OpenSession,
 			conversationID, launch.Command = id, command
 		}
 	}
-	if native.Isolate != "" {
-		launch.Command = withOptionalFlag(ctx, launch.Command, native.Isolate)
+	if flag := native.Isolate(); flag != "" {
+		launch.Command = withOptionalFlag(ctx, launch.Command, flag)
 	}
-	if d.hookCommand != "" && hasFeature(ctx, launch.Command, native) {
-		launch.Command, _ = native.Hook(launch.Command, d.hookCommand, d.statusCommand)
+	if hooks, ok := driver.(agent.Hooks); ok && d.hookCommand != "" && hasFeature(ctx, launch.Command, driver) {
+		status := ""
+		if _, ok := driver.(agent.StatusLine); ok && d.statusCommand != "" {
+			status = d.statusCommand + " " + agentspec.JoinArgs([]string{req.GetAgent()})
+		}
+		launch.Command, _ = hooks.WithHooks(launch.Command, d.hookCommand, status)
 	}
 	return conversationID, transcriptPath, nil
 }

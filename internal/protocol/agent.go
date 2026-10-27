@@ -29,7 +29,7 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 5
+const Revision = 6
 
 // AgentStatus is what an agent's own hooks last said it is doing,
 // SessionInfo.Status.
@@ -47,6 +47,33 @@ const (
 	DecisionAllow    = "allow"
 	DecisionDeny     = "deny"
 	DecisionTerminal = "terminal" // ask in the terminal, as without mako
+)
+
+// Caps are what mako follows of an agent, SessionInfo.Caps: each bit is a
+// capability the agent's driver has.
+const (
+	CapChat      uint32 = 1 << iota // its conversation reads from a log: chat, usage
+	CapHooks                        // its hooks report: status, approvals
+	CapSubAgents                    // the subagents its calls start are followed
+)
+
+// The kinds of tool, ChatMessage.Kind: what a tool does, whatever its agent
+// calls it.
+const (
+	ToolShell     = "shell"
+	ToolPatch     = "patch" // a patch in its own format, as Codex's apply_patch
+	ToolEdit      = "edit"
+	ToolMultiEdit = "multiedit"
+	ToolWrite     = "write"
+	ToolRead      = "read"
+	ToolSearch    = "search"
+	ToolTodo      = "todo" // a todo list, as Claude's TodoWrite
+	ToolPlan      = "plan" // a plan's steps, as Codex's update_plan
+	ToolFetch     = "fetch"
+	ToolWebSearch = "websearch"
+	ToolTask      = "task"    // starts a subagent
+	ToolCommand   = "command" // what a slash command the user typed printed
+	ToolSummary   = "summary" // the summary a compaction leaves
 )
 
 // The windows of the limits agents name, in minutes.

@@ -67,6 +67,9 @@ message SessionInfo {
   // owner is the user or organization the repository's origin remote is
   // under, "" outside a repository or without a remote.
   string owner = 24;
+  // caps is what mako follows of the session's agent, protocol's Cap
+  // bits; 0 from a daemon older than them.
+  uint32 caps = 25;
 }
 
 // Approval is a tool call an agent waits for the user to approve.

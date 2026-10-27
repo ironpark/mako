@@ -1,10 +1,11 @@
-package transcript
+package claude
 
 import (
 	"cmp"
 	"regexp"
 	"strings"
 
+	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -15,7 +16,7 @@ import (
 // output and the notice as rows of their own, and the notes not at all.
 
 // hidden are the tags whose content is for the model alone.
-var hidden = []string{"system-reminder", "local-command-caveat", "environment_context", "user_instructions"}
+var hidden = []string{"system-reminder", "local-command-caveat"}
 
 // midTurn opens the reminder that carries a message the user sent while
 // the agent worked, and midTurnEnd the explanation after the message.
@@ -38,22 +39,6 @@ func inner(s, name string) (string, bool) {
 	}
 	body, _, _ := strings.Cut(rest, "</"+name+">")
 	return strings.TrimSpace(body), true
-}
-
-// drop is s without its <name> tags and their content.
-func drop(s, name string) string {
-	open, end := "<"+name+">", "</"+name+">"
-	for {
-		i := strings.Index(s, open)
-		if i < 0 {
-			return s
-		}
-		j := strings.Index(s[i:], end)
-		if j < 0 {
-			return s[:i]
-		}
-		s = s[:i] + s[i+j+len(end):]
-	}
 }
 
 // midTurnMessages are the messages the user sent while the agent worked,
@@ -100,9 +85,7 @@ func unwrap(messages []*protocol.ChatMessage, command *string) []*protocol.ChatM
 // userTurn is a user's turn as the user saw it.
 func userTurn(text string, command *string) []*protocol.ChatMessage {
 	out := midTurnMessages(text)
-	for _, name := range hidden {
-		text = drop(text, name)
-	}
+	text = agent.DropTags(text, hidden...)
 	text = strings.TrimSpace(pasted.ReplaceAllString(text, ""))
 	// A turn is a command, its output or a notice only when it opens with
 	// the tag: the same tags pasted into a message are the message.
@@ -115,9 +98,9 @@ func userTurn(text string, command *string) []*protocol.ChatMessage {
 		return false
 	}
 	user := func(s string) *protocol.ChatMessage { return &protocol.ChatMessage{Role: "user", Text: s} }
-	output := func(tool, s string, failed bool) *protocol.ChatMessage {
+	output := func(tool, kind, s string, failed bool) *protocol.ChatMessage {
 		s = strings.TrimSpace(ansi.ReplaceAllString(s, ""))
-		return &protocol.ChatMessage{Role: "tool", Tool: tool, Detail: OneLine(s, 120), Text: s, Output: true, Error: failed}
+		return &protocol.ChatMessage{Role: "tool", Tool: tool, Kind: kind, Detail: agent.OneLine(s, 120), Text: s, Output: true, Error: failed}
 	}
 	if name, ok := inner(text, "command-name"); ok && leads("command-name", "command-message") {
 		if !strings.HasPrefix(name, "/") {
@@ -132,7 +115,7 @@ func userTurn(text string, command *string) []*protocol.ChatMessage {
 	if leads("local-command-stdout", "local-command-stderr") {
 		stdout, _ := inner(text, "local-command-stdout")
 		stderr, _ := inner(text, "local-command-stderr")
-		return append(out, output(cmp.Or(*command, "Command"), strings.TrimSpace(stdout+"\n"+stderr), stderr != ""))
+		return append(out, output(cmp.Or(*command, "Command"), protocol.ToolCommand, strings.TrimSpace(stdout+"\n"+stderr), stderr != ""))
 	}
 	if cmd, ok := inner(text, "bash-input"); ok && leads("bash-input") {
 		*command = "Bash"
@@ -141,13 +124,13 @@ func userTurn(text string, command *string) []*protocol.ChatMessage {
 	if leads("bash-stdout", "bash-stderr") {
 		stdout, _ := inner(text, "bash-stdout")
 		stderr, _ := inner(text, "bash-stderr")
-		return append(out, output("Bash", strings.TrimSpace(stdout+"\n"+stderr), stderr != ""))
+		return append(out, output("Bash", protocol.ToolShell, strings.TrimSpace(stdout+"\n"+stderr), stderr != ""))
 	}
 	if body, ok := inner(text, "task-notification"); ok && leads("task-notification") {
 		summary, _ := inner(body, "summary")
 		result, _ := inner(body, "result")
 		status, _ := inner(body, "status")
-		m := output("Task", cmp.Or(result, summary), status == "failed" || status == "killed")
+		m := output("Task", protocol.ToolTask, cmp.Or(result, summary), status == "failed" || status == "killed")
 		m.Detail = cmp.Or(summary, m.GetDetail())
 		return append(out, m)
 	}

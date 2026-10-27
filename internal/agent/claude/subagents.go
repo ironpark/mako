@@ -1,4 +1,4 @@
-package transcript
+package claude
 
 import (
 	"bufio"
@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -26,7 +27,7 @@ import (
 const staleAgent = 15 * time.Minute
 
 // startsAgent reports whether a call of tool starts a subagent.
-func startsAgent(tool string) bool { return tool == "Agent" || tool == "Task" }
+func startsAgent(tool string) bool { return toolKind(tool) == protocol.ToolTask }
 
 type agentMeta struct {
 	AgentType    string `json:"agentType"`
@@ -110,7 +111,7 @@ func (s *agentScan) read(path string) {
 			}
 			s.updated = r.Timestamp
 		}
-		for _, m := range parseMessage(r.Message) {
+		for _, m := range agent.ParseMessage(r.Message, toolKind) {
 			switch {
 			case m.GetRole() == "user" && s.prompt == "":
 				s.prompt = strings.TrimSpace(m.GetText())
@@ -122,13 +123,11 @@ func (s *agentScan) read(path string) {
 	}
 }
 
-// read is the subagents the calls in messages started, from the
-// conversation logged at path, oldest first; none for an agent that keeps
-// no subagent logs.
-func (scans *agentScans) read(a *Agent, path string, messages []*protocol.ChatMessage) []*protocol.SubAgent {
-	if a.rollout {
-		return nil
-	}
+func (*Agent) NewSubAgents() agent.SubAgentScan { return &agentScans{} }
+
+// Read is the subagents the calls in messages started, from the
+// conversation logged at path, oldest first.
+func (scans *agentScans) Read(path string, messages []*protocol.ChatMessage) []*protocol.SubAgent {
 	type started struct {
 		msg *protocol.ChatMessage
 		in  agentCall
@@ -186,7 +185,7 @@ func (scans *agentScans) read(a *Agent, path string, messages []*protocol.ChatMe
 			CallId: callID, Running: running,
 			Kind:        cmp.Or(meta.AgentType, call.in.SubagentType),
 			Description: cmp.Or(meta.Description, call.in.Description),
-			ToolCalls:   scan.calls, Tool: scan.tool, Detail: scan.detail,
+			ToolCalls:   scan.calls, Tool: scan.tool, ToolKind: toolKind(scan.tool), Detail: scan.detail,
 		}
 		if !scan.started.IsZero() {
 			agent.Started, agent.Updated = scan.started.Unix(), scan.updated.Unix()

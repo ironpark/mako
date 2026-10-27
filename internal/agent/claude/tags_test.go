@@ -1,9 +1,11 @@
-package transcript
+package claude
 
 import (
 	"encoding/json"
-	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 func TestTaggedTurnsReadAsTheUserSawThem(t *testing.T) {
@@ -34,12 +36,7 @@ func TestTaggedTurnsReadAsTheUserSawThem(t *testing.T) {
 			{"type": "text", "text": "<system-reminder>\nnote\n</system-reminder>\nfix the tests"},
 		}) +
 		user("10", "look:\n<pasted_content id=\"1\">\n<command-name>/simplify</command-name>\n</pasted_content id=\"1\">")
-	path := filepath.Join(t.TempDir(), "log.jsonl")
-	writeLog(t, path, body)
-	messages, _, err := readMessages(path, &Agent{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	messages := decode(body)
 	type row struct{ role, tool, detail, text string }
 	want := []row{
 		{"user", "", "", "/simplify"},
@@ -67,4 +64,14 @@ func TestTaggedTurnsReadAsTheUserSawThem(t *testing.T) {
 	if !messages[3].GetOutput() || !messages[4].GetOutput() {
 		t.Error("command output and task notice are not output rows")
 	}
+}
+
+// decode is what Claude's decoder reads of the lines of body.
+func decode(body string) []*protocol.ChatMessage {
+	dec := New().NewDecoder()
+	var out []*protocol.ChatMessage
+	for line := range strings.Lines(body) {
+		out = append(out, dec.Line([]byte(line))...)
+	}
+	return out
 }

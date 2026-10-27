@@ -93,13 +93,13 @@ func TestSubagentsStartedLaterAreFound(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	writeLog(t, path, `{"type":"user","sessionId":"c","cwd":"/p","message":{"role":"user","content":"go"}}`+"\n"+
 		`{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[{"type":"tool_use","id":"bg","name":"Agent","input":{"description":"Review","prompt":"Review it.","run_in_background":true}}]}}`+"\n")
-	a, _ := Lookup("claude")
-	var scans agentScans
+	a := claudeLogs(t)
+	scans := newSubAgents(a)
 	messages, _, err := readMessages(path, a)
 	if err != nil {
 		t.Fatal(err)
 	}
-	read := func() []*protocol.SubAgent { return scans.read(a, path, messages) }
+	read := func() []*protocol.SubAgent { return scans.Read(path, messages) }
 	if agents := read(); len(agents) != 0 {
 		t.Fatalf("agents %v before any started", agents)
 	}

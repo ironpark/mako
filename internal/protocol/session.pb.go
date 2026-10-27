@@ -320,7 +320,10 @@ type SessionInfo struct {
 	Worktree       *Worktree              `protobuf:"bytes,23,opt,name=worktree,proto3" json:"worktree,omitempty"`
 	// owner is the user or organization the repository's origin remote is
 	// under, "" outside a repository or without a remote.
-	Owner         string `protobuf:"bytes,24,opt,name=owner,proto3" json:"owner,omitempty"`
+	Owner string `protobuf:"bytes,24,opt,name=owner,proto3" json:"owner,omitempty"`
+	// caps is what mako follows of the session's agent, protocol's Cap
+	// bits; 0 from a daemon older than them.
+	Caps          uint32 `protobuf:"varint,25,opt,name=caps,proto3" json:"caps,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -521,6 +524,13 @@ func (x *SessionInfo) GetOwner() string {
 		return x.Owner
 	}
 	return ""
+}
+
+func (x *SessionInfo) GetCaps() uint32 {
+	if x != nil {
+		return x.Caps
+	}
+	return 0
 }
 
 // Approval is a tool call an agent waits for the user to approve.
@@ -1261,7 +1271,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04base\x18\x04 \x01(\tR\x04base\"\xec\x05\n" +
+	"\x04base\x18\x04 \x01(\tR\x04base\"\x80\x06\n" +
 	"\vSessionInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x14\n" +
@@ -1289,7 +1299,8 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"lastOutput\x12-\n" +
 	"\bapproval\x18\x16 \x01(\v2\x11.mako.v2.ApprovalR\bapproval\x12-\n" +
 	"\bworktree\x18\x17 \x01(\v2\x11.mako.v2.WorktreeR\bworktree\x12\x14\n" +
-	"\x05owner\x18\x18 \x01(\tR\x05ownerB\f\n" +
+	"\x05owner\x18\x18 \x01(\tR\x05owner\x12\x12\n" +
+	"\x04caps\x18\x19 \x01(\rR\x04capsB\f\n" +
 	"\n" +
 	"_exit_code\"\x8e\x01\n" +
 	"\bApproval\x12\x0e\n" +

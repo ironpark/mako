@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+
+	"github.com/ironpark/mako/internal/agents"
 )
 
 // Agent is how a node launches one agent: its command, the flags and
@@ -65,12 +67,16 @@ func (a Agent) ProfileNames() []string {
 	return names
 }
 
-// Builtin holds the default command line for each known terminal agent.
-var Builtin = map[string][]string{
-	"claude": {"claude"},
-	"codex":  {"codex"},
-	"agy":    {"agy"},
-	"shell":  {defaultShell()},
+// Builtin holds the default command line for each known terminal agent,
+// and for the shell.
+var Builtin = builtin()
+
+func builtin() map[string][]string {
+	out := map[string][]string{"shell": {defaultShell()}}
+	for _, d := range agents.All() {
+		out[d.Info().Name] = d.Info().Command
+	}
+	return out
 }
 
 // Defaults is an agent for each built-in, as a fresh configuration has.

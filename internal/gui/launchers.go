@@ -8,6 +8,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 )
 
@@ -17,8 +18,15 @@ type launchable struct {
 	Profiles []string
 }
 
-// launchOrder puts the built-ins first, in the order the bar shows them.
-var launchOrder = []string{"shell", "claude", "codex", "agy"}
+// launchOrder puts the shell and the agents mako knows first, in the
+// order the bar shows them.
+var launchOrder = func() []string {
+	out := []string{"shell"}
+	for _, d := range agents.All() {
+		out = append(out, d.Info().Name)
+	}
+	return out
+}()
 
 // launchables groups launch targets by agent: the built-ins first, then
 // the rest as the node lists them.

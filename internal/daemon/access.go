@@ -11,9 +11,9 @@ import (
 	"golang.org/x/crypto/ssh"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/p2p"
 	"github.com/ironpark/mako/internal/protocol"
-	"github.com/ironpark/mako/internal/transcript"
 	"github.com/ironpark/mako/internal/transport"
 )
 
@@ -94,7 +94,7 @@ func (d *Daemon) takeAccessRequest(from p2p.Peer, note string) {
 	if from.Trusts || from.Node == "" || from.Node == d.cfg.NodeID {
 		return
 	}
-	note = transcript.OneLine(note, maxNote)
+	note = agent.OneLine(note, maxNote)
 	node, ok := d.peers.get(from.Node)
 	if !ok {
 		node = &protocol.Node{Id: from.Node, Name: from.Name, PeerId: from.ID.String()}
