@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"cmp"
 	"context"
 	"maps"
 	"os"
@@ -116,7 +117,7 @@ type model struct {
 	Access     *ggui.StateValue[*protocol.AccessInfo]
 	AccessNote *ggui.StateValue[string] // the last access change's outcome
 	AccessKey  *ggui.StateValue[string] // a key being let in, as typed
-	asked      map[string]bool          // requests already told of; UI goroutine only
+	asked      map[string]ui.ToastID    // requests told of, by their toasts; UI goroutine only
 	// accessStale says the next poll asks for Access again: at first, and
 	// when the daemon says it changed.
 	accessStale atomic.Bool
@@ -198,13 +199,13 @@ type model struct {
 	GitBusy    *ggui.StateValue[string]
 	GitBase    *ggui.StateValue[string] // the branch the changes are read since, "" for HEAD
 	GitNote    *ggui.StateValue[gitNote]
-	// A name a git operation asks for, and one it asks to be sure of; see
-	// gitactions.go.
+	// A name a git operation asks for; see gitactions.go.
 	GitAsk     *ggui.StateValue[gitAsk]
 	GitAskOpen *ggui.StateValue[bool]
 	GitAskText *ggui.StateValue[string]
 	GitAskErr  *ggui.StateValue[string]
-	GitConfirm *ggui.StateValue[gitConfirm]
+	// An operation that loses work, asking to be sure; see confirm.go.
+	Confirmation *ggui.StateValue[confirmation]
 	// The Git tab's sections, open or folded, and how its height is split.
 	GitChangesOpen *ggui.StateValue[bool]
 	GitHistoryOpen *ggui.StateValue[bool]
@@ -312,7 +313,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Access:         ggui.State((*protocol.AccessInfo)(nil)).WithEqual(func(a, b *protocol.AccessInfo) bool { return proto.Equal(a, b) }),
 		AccessNote:     ggui.State(""),
 		AccessKey:      ggui.State(""),
-		asked:          map[string]bool{},
+		asked:          map[string]ui.ToastID{},
 		Sessions:       ggui.State([]*protocol.SessionInfo(nil)).WithEqual(protocol.Equal),
 		Agents:         ggui.State(agentspec.Targets(cfg.Agents)).WithEqual(slices.Equal),
 		Selected:       ggui.State(""),
@@ -353,7 +354,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		GitAskOpen:     ggui.State(false),
 		GitAskText:     ggui.State(""),
 		GitAskErr:      ggui.State(""),
-		GitConfirm:     ggui.State(gitConfirm{}).WithEqual(func(a, b gitConfirm) bool { return false }),
+		Confirmation:   ggui.State(confirmation{}).WithEqual(func(a, b confirmation) bool { return false }),
 		GitChangesOpen: ggui.State(true),
 		GitHistoryOpen: ggui.State(true),
 		GitStashOpen:   ggui.State(false),
@@ -705,37 +706,60 @@ type sessionGroup struct {
 	Key      string
 	NodeID   string
 	Project  string
+	Owner    string // the owner of the project's repository, host/name
 	Sessions []*protocol.SessionInfo
 }
 
-// keepProjects remembers the folders the sidebar groups sessions into. A
-// folder with nothing in it says nothing here, so the list only grows.
+// keptProject is a folder the sidebar keeps, with the owner of its
+// repository as its sessions last said, so the folder stays in its
+// owner's group once they are gone.
+type keptProject struct {
+	fileRoot
+	Owner string `json:"owner,omitempty"`
+}
+
+// keepProjects remembers the folders the sidebar groups sessions into,
+// and whose repositories they are. A folder with nothing in it says
+// nothing here, so the list only grows.
 func (m *model) keepProjects(sessions []*protocol.SessionInfo) {
 	projects := ggui.Peek(m.Prefs).Projects
-	known := make(map[fileRoot]bool, len(projects))
-	for _, r := range projects {
-		known[r] = true
+	index := make(map[fileRoot]int, len(projects))
+	for i, r := range projects {
+		index[r.fileRoot] = i
 	}
-	var added []fileRoot
+	var changed []keptProject // a copy, made at the first change
 	for _, s := range sessions {
-		r := fileRoot{Node: s.GetNodeId(), Path: projectOf(s)}
-		if r.Path == "" || known[r] {
+		r := keptProject{fileRoot{Node: s.GetNodeId(), Path: projectOf(s)}, s.GetOwner()}
+		if r.Path == "" {
 			continue
 		}
-		known[r] = true
-		added = append(added, r)
+		i, ok := index[r.fileRoot]
+		if ok && (changed == nil && projects[i] == r || changed != nil && changed[i] == r) {
+			continue
+		}
+		if changed == nil {
+			changed = slices.Clone(projects)
+		}
+		if ok {
+			changed[i] = r
+		} else {
+			index[r.fileRoot] = len(changed)
+			changed = append(changed, r)
+		}
 	}
-	if len(added) == 0 {
-		return
+	if changed != nil {
+		m.Prefs.Update(func(p prefs) prefs { p.Projects = changed; return p })
 	}
-	m.Prefs.Update(func(p prefs) prefs { p.Projects = append(slices.Clone(p.Projects), added...); return p })
 }
 
 // forgetProject drops a folder from the sidebar. It is offered for a folder
 // with no sessions, whose groups would not bring it back.
-func (m *model) forgetProject(r fileRoot) {
+func (m *model) forgetProject(r fileRoot) { m.forgetProjects([]fileRoot{r}) }
+
+// forgetProjects drops folders from the sidebar.
+func (m *model) forgetProjects(roots []fileRoot) {
 	m.Prefs.Update(func(p prefs) prefs {
-		p.Projects = slices.DeleteFunc(slices.Clone(p.Projects), func(o fileRoot) bool { return o == r })
+		p.Projects = slices.DeleteFunc(slices.Clone(p.Projects), func(o keptProject) bool { return slices.Contains(roots, o.fileRoot) })
 		return p
 	})
 }
@@ -754,7 +778,7 @@ func projectOf(s *protocol.SessionInfo) string {
 // groupSessions sorts sessions into the sidebar's sections for a grouping.
 // By project, a session goes in its repository's section, as projectOf
 // says. Remembered projects keep a section when they have no sessions.
-func groupSessions(sessions []*protocol.SessionInfo, by string, nodes []*protocol.Node, projects []fileRoot) []sessionGroup {
+func groupSessions(sessions []*protocol.SessionInfo, by string, nodes []*protocol.Node, projects []keptProject) []sessionGroup {
 	switch by {
 	case groupFlat:
 		if len(sessions) == 0 {
@@ -770,20 +794,78 @@ func groupSessions(sessions []*protocol.SessionInfo, by string, nodes []*protoco
 	}
 	groups := bucket(sessions, func(s *protocol.SessionInfo) (string, string) { return s.GetNodeId(), projectOf(s) })
 	present := make(map[string]bool, len(groups))
-	for _, g := range groups {
+	for i, g := range groups {
 		present[g.Key] = true
+		groups[i].Owner = g.Sessions[0].GetOwner()
 	}
 	for _, r := range projects {
 		if r.Path == "" || present[dirKey(r.Node, r.Path)] {
 			continue
 		}
 		present[dirKey(r.Node, r.Path)] = true
-		groups = append(groups, sessionGroup{Key: dirKey(r.Node, r.Path), NodeID: r.Node, Project: r.Path})
+		groups = append(groups, sessionGroup{Key: dirKey(r.Node, r.Path), NodeID: r.Node, Project: r.Path, Owner: r.Owner})
 	}
 	sort.SliceStable(groups, func(a, b int) bool {
 		return projectName(groups[a].Project) < projectName(groups[b].Project)
 	})
 	return groups
+}
+
+// withHosts adds a section for each node that has no sessions, so the
+// sidebar grouped by host lists every host there is to start one on.
+func withHosts(groups []sessionGroup, nodes []*protocol.Node) []sessionGroup {
+	present := make(map[string]bool, len(groups))
+	for _, g := range groups {
+		present[g.NodeID] = true
+	}
+	for _, n := range nodes {
+		if !present[n.GetId()] {
+			present[n.GetId()] = true
+			groups = append(groups, sessionGroup{Key: dirKey(n.GetId(), ""), NodeID: n.GetId()})
+		}
+	}
+	sort.SliceStable(groups, func(a, b int) bool {
+		return nodeName(nodes, groups[a].NodeID) < nodeName(nodes, groups[b].NodeID)
+	})
+	return groups
+}
+
+// ownerSection is the project sections whose repositories one user or
+// organization owns on one service, Owner being host/name as the daemon
+// gives it; it is "" for those that no one does.
+type ownerSection struct {
+	Owner  string
+	Groups []sessionGroup
+}
+
+// byOwner gathers project sections under their repositories' owners.
+// Folders no one owns come last, outside any owner's. It is nil when no
+// folder has an owner, so the sidebar groups only by project.
+func byOwner(groups []sessionGroup) []ownerSection {
+	var out []ownerSection
+	index := map[string]int{}
+	for _, g := range groups {
+		i, ok := index[g.Owner]
+		if !ok {
+			i = len(out)
+			index[g.Owner] = i
+			out = append(out, ownerSection{Owner: g.Owner})
+		}
+		out[i].Groups = append(out[i].Groups, g)
+	}
+	if len(out) == 0 || len(out) == 1 && out[0].Owner == "" {
+		return nil
+	}
+	sort.SliceStable(out, func(a, b int) bool {
+		if (out[a].Owner == "") != (out[b].Owner == "") {
+			return out[b].Owner == ""
+		}
+		// By name, and one name's services by host.
+		na, ha := ownerName(out[a].Owner)
+		nb, hb := ownerName(out[b].Owner)
+		return cmp.Or(cmp.Compare(strings.ToLower(na), strings.ToLower(nb)), cmp.Compare(ha, hb)) < 0
+	})
+	return out
 }
 
 // bucket groups sessions by the node and project key gives them, in the
@@ -1012,9 +1094,32 @@ func (m *model) confirmedKill() {
 }
 
 // kill terminates a session and closes its tab.
-func (m *model) kill(id string) {
+func (m *model) kill(id string) { m.killThen(id, nil) }
+
+// killAll kills sessions without asking, and once every kill has gone
+// through, or failed, calls done if it is not nil. UI goroutine.
+func (m *model) killAll(ids []string, done func()) {
+	left := len(ids)
+	if left == 0 && done != nil {
+		done()
+	}
+	for _, id := range ids {
+		m.killThen(id, func() {
+			if left--; left == 0 && done != nil {
+				done()
+			}
+		})
+	}
+}
+
+// killThen is kill, calling then, if not nil, once it has gone through
+// or failed.
+func (m *model) killThen(id string, then func()) {
 	info, ok := m.session(id)
 	if !ok {
+		if then != nil {
+			then()
+		}
 		return
 	}
 	m.closeTab(id)
@@ -1029,6 +1134,9 @@ func (m *model) kill(id string) {
 	}, func(_ struct{}, err error) {
 		if err == nil {
 			m.Sessions.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Sessions)), func(s *protocol.SessionInfo) bool { return s.GetId() == id }))
+		}
+		if then != nil {
+			then()
 		}
 	})
 }

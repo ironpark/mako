@@ -64,7 +64,7 @@ func window(m *model) ggui.Widget {
 		renameDialog(m),
 		fileDialogs(m),
 		gitAskDialog(m),
-		gitConfirmDialog(m),
+		confirmDialog(m),
 		imageViewer(m),
 		paletteDialog(m),
 		m.toaster,
@@ -161,7 +161,7 @@ func sidebar(m *model) ggui.Widget {
 	})
 
 	grouping := ggui.Map(m.Prefs, func(p prefs) string { return p.SidebarGroup })
-	projects := ggui.Map(m.Prefs, func(p prefs) []fileRoot { return p.Projects }).WithEqual(slices.Equal)
+	projects := ggui.Map(m.Prefs, func(p prefs) []keptProject { return p.Projects }).WithEqual(slices.Equal)
 	pinned := ggui.Map(m.Prefs, func(p prefs) []string { return p.Pinned }).WithEqual(slices.Equal)
 	collapsed := ggui.Map(m.Prefs, func(p prefs) []string { return p.Collapsed }).WithEqual(slices.Equal)
 	list := ggui.Reactive(func() ggui.Widget {
@@ -189,6 +189,9 @@ func sidebar(m *model) ggui.Widget {
 			groups = groupSessions(rest, by, nodes, nil)
 		} else {
 			groups = groupSessions(rest, by, nodes, projects.Get())
+			if by == groupHost {
+				groups = withHosts(groups, nodes)
+			}
 		}
 		if len(groups) == 0 && len(top) == 0 {
 			if query != "" {
@@ -202,10 +205,26 @@ func sidebar(m *model) ggui.Widget {
 			children = append(children, pinnedSection(m, top, selected, nodes, titles))
 		}
 		folded := collapsed.Get()
-		for _, g := range groups {
-			// A filter shows what it finds in folded groups too.
-			fold := query == "" && slices.Contains(folded, foldKey(by, g))
-			children = append(children, sessionSection(m, by, g, fold, selected, nodes, titles, names[g.Key]))
+		// A filter shows what it finds in folded groups too.
+		isFolded := func(key string) bool { return query == "" && slices.Contains(folded, key) }
+		section := func(g sessionGroup, depth int) ggui.Widget {
+			return sessionSection(m, by, g, isFolded(foldKey(by, g)), selected, nodes, titles, names[g.Key], depth)
+		}
+		var sections []ownerSection
+		if by == groupProject {
+			sections = byOwner(groups)
+		}
+		if sections == nil {
+			sections = []ownerSection{{Groups: groups}}
+		}
+		for _, o := range sections {
+			if o.Owner == "" {
+				for _, g := range o.Groups {
+					children = append(children, section(g, 0))
+				}
+				continue
+			}
+			children = append(children, ownerGroup(m, o, isFolded(ownerKey(o.Owner)), section))
 		}
 		return ggui.Column(children...).Gap(6).Stretch()
 	})
@@ -261,15 +280,85 @@ func (m *model) toggleFold(key string) {
 	m.Prefs.Update(func(p prefs) prefs { p.Collapsed = toggled(p.Collapsed, key); return p })
 }
 
+// depthIndent is how far the sidebar sets in each level of its tree.
+const depthIndent = 10
+
+// indented sets w in by depth levels of the sidebar's tree.
+func indented(w ggui.Widget, depth int) ggui.Widget {
+	if depth == 0 {
+		return w
+	}
+	return ggui.Padding(w, 0, 0, 0, float64(depth*depthIndent))
+}
+
+// ownerKey names an owner's group in the folded list.
+func ownerKey(owner string) string { return "owner:" + owner }
+
+// ownerGroup is the projects of one user or organization, under a heading
+// that folds them as a project's folds its sessions.
+func ownerGroup(m *model, o ownerSection, folded bool, section func(sessionGroup, int) ggui.Widget) ggui.Widget {
+	// Folded, the heading counts the sessions under it.
+	var sessions []*protocol.SessionInfo
+	if folded {
+		for _, g := range o.Groups {
+			sessions = append(sessions, g.Sessions...)
+		}
+	}
+	// The name leads; the service it is on, which tells apart the same
+	// name on two, follows it quietly.
+	name, host := ownerName(o.Owner)
+	var service ggui.Widget = ggui.Box()
+	if host != "" {
+		service = ggui.Text(host).Size(11.5).Color(tokExtraMuted).NoWrap()
+	}
+	var heading ggui.Widget = ggui.Box(groupToggle(m, "users", name, sessions, folded, ownerKey(o.Owner), service)).Pad(2, 4, 2, 2)
+	heading = ui.ContextMenu(heading, ownerMenu(m, o, name)...).Name(Tf("%s actions", name))
+	if folded {
+		return heading
+	}
+	rows := []ggui.Widget{heading}
+	for _, g := range o.Groups {
+		rows = append(rows, section(g, 1))
+	}
+	return ggui.Column(rows...).Gap(6).Stretch()
+}
+
+// ownerName splits an owner as the daemon gives it, host/name, into the
+// name and the host serving it; a local remote's owner has no host.
+func ownerName(owner string) (name, host string) {
+	if i := strings.LastIndex(owner, "/"); i >= 0 {
+		return owner[i+1:], owner[:i]
+	}
+	return owner, ""
+}
+
+// groupToggle is a sidebar heading's button: its icon and name, its
+// sessions counted by kind while folded, and status at the end. A tap
+// folds the group to it, or opens it.
+func groupToggle(m *model, glyph, name string, sessions []*protocol.SessionInfo, folded bool, key string, status ggui.Widget) ggui.Widget {
+	title := []ggui.Widget{
+		icon(glyph).Size(15),
+		ggui.Expanded(ggui.Align(ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).Left()),
+	}
+	if folded && len(sessions) > 0 {
+		title = append(title, kindBadges(sessions))
+	}
+	// The name takes the room the row has, so it is cut only when it
+	// must be.
+	return ui.ButtonOf(ggui.Row(append(title, status)...).Gap(6).Align(ggui.AlignCenter),
+		func() { m.toggleFold(key) }).Ghost().Pad(2, 4).Radius(5).Name(pick(folded, Tf("Expand %s", name), Tf("Collapse %s", name)))
+}
+
 // sessionSection is one of the sidebar's groups: a heading for its project
-// or host with a button to start another session there, over its sessions.
-// A tap on the heading folds the group to it, its sessions counted. The
-// list's one group has no heading.
-func sessionSection(m *model, by string, g sessionGroup, folded bool, selected string, nodes []*protocol.Node, titles map[string]string, label string) ggui.Widget {
+// or host with a button to start another session there, over its sessions,
+// depth levels into the tree. A tap on the heading folds the group to it,
+// its sessions counted. The list's one group has no heading.
+func sessionSection(m *model, by string, g sessionGroup, folded bool, selected string, nodes []*protocol.Node, titles map[string]string, label string, depth int) ggui.Widget {
 	nodeID, project := g.NodeID, g.Project
 	var rows []ggui.Widget
-	indent := by != groupFlat
-	if indent {
+	rowDepth := depth
+	if by != groupFlat {
+		rowDepth++
 		// A folder's icon opens with it, as the file tree's does.
 		name, glyph := cmp.Or(label, projectName(project)), pick(folded, "folder", "folder-open")
 		var status ggui.Widget = ggui.Box()
@@ -286,22 +375,11 @@ func sessionSection(m *model, by string, g sessionGroup, folded bool, selected s
 			}
 			status = linkDot(up)
 		}
-		title := []ggui.Widget{
-			icon(glyph).Size(15),
-			ggui.Expanded(ggui.Align(ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).Left()),
-		}
-		if folded && len(g.Sessions) > 0 {
-			title = append(title, kindBadges(g.Sessions))
-		}
-		key := foldKey(by, g)
-		// The name takes the room the row has, so it is cut only when it
-		// must be.
-		toggle := ui.ButtonOf(ggui.Row(append(title, status)...).Gap(6).Align(ggui.AlignCenter),
-			func() { m.toggleFold(key) }).Ghost().Pad(2, 4).Radius(5).Name(pick(folded, Tf("Expand %s", name), Tf("Collapse %s", name)))
+		toggle := groupToggle(m, glyph, name, g.Sessions, folded, foldKey(by, g), status)
 		row := []ggui.Widget{ggui.Expanded(toggle)}
 		// A folder kept with no sessions has nothing to bring it back once
-		// it leaves, so its menu can drop it.
-		if len(g.Sessions) == 0 {
+		// it leaves, so its menu can drop it. A host is the mesh's to list.
+		if len(g.Sessions) == 0 && by == groupProject {
 			ref := fileRoot{Node: nodeID, Path: project}
 			row = append(row, iconMenu(ui.MenuOf(icon("ellipsis").Size(14),
 				ui.MenuItem(T("Remove from sidebar"), func() { m.forgetProject(ref) }),
@@ -311,12 +389,12 @@ func sessionSection(m *model, by string, g sessionGroup, folded bool, selected s
 			Ghost().Pad(3).Radius(5).Name(Tf("New session in %s", name)), T("New session here")))
 		// A session dropped on the heading starts again there: its agent
 		// in this folder, or on this host in its own folder.
-		rows = append(rows, sectionDrop(m, ggui.Box(ggui.Row(row...).Gap(6).Align(ggui.AlignCenter)).Pad(2, 4, 2, 2), nodeID, project))
+		rows = append(rows, indented(sectionDrop(m, ggui.Box(ggui.Row(row...).Gap(6).Align(ggui.AlignCenter)).Pad(2, 4, 2, 2), nodeID, project), depth))
 		if folded {
 			return ggui.Column(rows...).Gap(2).Stretch()
 		}
 		if len(g.Sessions) == 0 {
-			rows = append(rows, ggui.Padding(ggui.Box(muted(ggui.Text(T("No sessions")).Size(11.5))).Pad(3, 4), 0, 0, 0, 14))
+			rows = append(rows, indented(ggui.Box(muted(ggui.Text(T("No sessions")).Size(11.5))).Pad(3, 4), rowDepth))
 		}
 	}
 	for _, s := range g.Sessions {
@@ -337,7 +415,7 @@ func sessionSection(m *model, by string, g sessionGroup, folded bool, selected s
 			where = append(where, nodeName(nodes, s.GetNodeId()), projectName(s.GetProject()))
 		}
 		where = append(where, short(s.GetId()))
-		rows = append(rows, sessionRow(m, s, s.GetId() == selected, titles[s.GetId()], strings.Join(where, " · "), indent))
+		rows = append(rows, sessionRow(m, s, s.GetId() == selected, titles[s.GetId()], strings.Join(where, " · "), rowDepth))
 	}
 	return ggui.Column(rows...).Gap(2).Stretch()
 }
@@ -379,7 +457,7 @@ func subfolder(dir, root string) string {
 // sessionRow is a session in the sidebar: its title, where it runs and
 // the branch checked out there, and on hover a button that closes it as
 // its tab's does.
-func sessionRow(m *model, s *protocol.SessionInfo, selected bool, title, sub string, indent bool) ggui.Widget {
+func sessionRow(m *model, s *protocol.SessionInfo, selected bool, title, sub string, depth int) ggui.Widget {
 	id := s.GetId()
 	label := sessionTitle(s, title)
 	line := []ggui.Widget{ggui.Expanded(ggui.Text(sub).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis())}
@@ -421,11 +499,7 @@ func sessionRow(m *model, s *protocol.SessionInfo, selected bool, title, sub str
 	if selected {
 		w = ggui.Box(btn).Fill(tokSidebarSel).Radius(7)
 	}
-	w = sessionDrag(m, ggui.Pointer(w).OnHover(hover.Set), id)
-	if indent {
-		w = ggui.Padding(w, 0, 0, 0, 14)
-	}
-	return w
+	return indented(sessionDrag(m, ggui.Pointer(w).OnHover(hover.Set), id), depth)
 }
 
 func sidebarFooter(m *model) ggui.Widget {

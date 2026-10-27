@@ -16,9 +16,15 @@ import (
 // that lets this one in can be driven from here, and one this node lets
 // in can drive it.
 
-// changeAccess sends the daemon an access change, and shows how it went:
-// done, or the error.
+// changeAccess sends the daemon an access change, and shows how it went
+// on the Access page: done, or the error.
 func (m *model) changeAccess(req *protocol.Access, done string) {
+	m.answerAccess(req, done, nil)
+}
+
+// answerAccess is changeAccess, telling failed of an error as well, for
+// an answer given away from the Access page.
+func (m *model) answerAccess(req *protocol.Access, done string, failed func(error)) {
 	m.AccessNote.Set("")
 	ggui.Async(func() (*protocol.AccessInfo, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -31,6 +37,9 @@ func (m *model) changeAccess(req *protocol.Access, done string) {
 	}, func(info *protocol.AccessInfo, err error) {
 		if err != nil {
 			m.AccessNote.Set(err.Error())
+			if failed != nil {
+				failed(err)
+			}
 			return
 		}
 		m.Access.Set(info)
@@ -39,19 +48,32 @@ func (m *model) changeAccess(req *protocol.Access, done string) {
 }
 
 // noteRequests tells the user of each request new since the last poll,
-// as a toast and, unless turned off, on the desktop. UI goroutine.
+// as a toast and, unless turned off, on the desktop. The toast stays until
+// the request is answered, and lets the node in from its button; one
+// answered elsewhere takes its toast with it. UI goroutine.
 func (m *model) noteRequests(info *protocol.AccessInfo) {
-	waiting := map[string]bool{}
+	waiting := map[string]ui.ToastID{}
 	for _, r := range info.GetRequests() {
 		id := r.GetNode().GetId() + " " + r.GetKey().GetFingerprint()
-		waiting[id] = true
-		if m.asked[id] {
+		if toast, ok := m.asked[id]; ok {
+			waiting[id] = toast
 			continue
 		}
-		body := Tf("%s asks to be let in. Settings ▸ Access answers it.", r.GetNode().GetName())
-		m.toaster.Push(ui.Toast(T("Access requested"), body))
+		node := r.GetNode()
+		body := Tf("%s asks to be let in. Settings ▸ Access answers it.", node.GetName())
+		ask := Tf("%s asks to be let in. Allow it here, or answer in Settings ▸ Access.", node.GetName())
+		waiting[id] = m.toaster.Push(ui.Toast(T("Access requested"), ask).Duration(0).Action(T("Allow"), func() {
+			m.answerAccess(&protocol.Access{Op: "allow", NodeId: node.GetId()}, Tf("%s is let in.", node.GetName()), func(err error) {
+				m.toaster.Push(ui.Toast(T("Could not change access"), err.Error()).Destructive())
+			})
+		}))
 		if ggui.Peek(m.Prefs).Notify {
 			go notify.Post(T("Access requested"), body, settingsTarget("access"))
+		}
+	}
+	for id, toast := range m.asked {
+		if _, ok := waiting[id]; !ok {
+			m.toaster.Dismiss(toast)
 		}
 	}
 	m.asked = waiting

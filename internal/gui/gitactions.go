@@ -59,29 +59,6 @@ func gitAskDialog(m *model) ggui.Widget {
 	})
 }
 
-// gitConfirm is an operation that loses work, asking to be sure.
-type gitConfirm struct {
-	Title, Body, Action string
-	Run                 func()
-}
-
-func (m *model) confirmGit(c gitConfirm) { m.GitConfirm.Set(c) }
-
-func gitConfirmDialog(m *model) ggui.Widget {
-	open := ggui.Bind(func() bool { return m.GitConfirm.Get().Title != "" }, func(v bool) {
-		if !v {
-			m.GitConfirm.Set(gitConfirm{})
-		}
-	})
-	return ggui.View(m.GitConfirm, func(c gitConfirm) ggui.Widget {
-		return ui.AlertDialog(open, c.Title, c.Body).Confirm(c.Action, func() {
-			if c.Run != nil {
-				c.Run()
-			}
-		}).Destructive()
-	})
-}
-
 // askBranch asks for a new branch's name and makes it, at commit or at
 // HEAD for "", and switches to it. The node's git judges the name.
 func (m *model) askBranch(commit string) {
@@ -127,7 +104,7 @@ func (m *model) askTag(commit string) {
 
 // discardFiles throws away the changes of paths, once sure.
 func (m *model) discardFiles(paths []string, what string) {
-	m.confirmGit(gitConfirm{
+	m.askConfirm(confirmation{
 		Title: Tf("Discard changes to %s?", what), Body: T("The changes are lost, and new files deleted. This cannot be undone."),
 		Action: T("Discard"),
 		Run: func() {
@@ -186,7 +163,7 @@ func commitMenu(m *model, c *protocol.GitCommit) []ggui.Widget {
 	}
 	return []ggui.Widget{
 		ui.MenuItem(T("Check out"), func() {
-			m.confirmGit(gitConfirm{
+			m.askConfirm(confirmation{
 				Title: Tf("Check out %s?", shortHash(hash)), Body: T("The work tree leaves its branch for this commit, on no branch. Changes that conflict stop it."),
 				Action: T("Check out"), Run: run(protocol.GitOpDetach, T("Checking out…")),
 			})
@@ -237,7 +214,7 @@ func stashSection(m *model, open *ggui.StateValue[bool]) ggui.Widget {
 					return func() { m.gitRun(&protocol.GitRun{Op: op, Stash: idx}, label, nil) }
 				}
 				drop := func() {
-					m.confirmGit(gitConfirm{Title: T("Drop this stash?"), Body: T("Its changes are lost."), Action: T("Drop"),
+					m.askConfirm(confirmation{Title: T("Drop this stash?"), Body: T("Its changes are lost."), Action: T("Drop"),
 						Run: run(protocol.GitOpStashDrop, T("Dropping…"))})
 				}
 				out[i] = ggui.Box(ggui.Row(
@@ -310,7 +287,7 @@ func localBranchRow(m *model, name, current string) ggui.Widget {
 			if force {
 				body = T("Its commits are lost unless another branch has them.")
 			}
-			m.confirmGit(gitConfirm{Title: Tf("Delete branch %s?", name), Body: body, Action: T("Delete"), Run: func() {
+			m.askConfirm(confirmation{Title: Tf("Delete branch %s?", name), Body: body, Action: T("Delete"), Run: func() {
 				m.gitRun(&protocol.GitRun{Op: protocol.GitOpDeleteBranch, Branch: name, Force: force}, T("Deleting branch…"), nil)
 			}})
 		}
@@ -382,7 +359,7 @@ func operationBanner(m *model) ggui.Widget {
 		}
 		run := func(op, label string) func() { return func() { m.gitRun(&protocol.GitRun{Op: op}, label, nil) } }
 		abort := func() {
-			m.confirmGit(gitConfirm{Title: T("Abort the operation?"), Body: T("The work tree goes back to where it was before it began."),
+			m.askConfirm(confirmation{Title: T("Abort the operation?"), Body: T("The work tree goes back to where it was before it began."),
 				Action: T("Abort"), Run: run(protocol.GitOpAbort, T("Aborting…"))})
 		}
 		return ggui.Column(ggui.Box(ggui.Column(
@@ -397,7 +374,7 @@ func operationBanner(m *model) ggui.Widget {
 					// git marks a file resolved once it is added, which
 					// continuing does: a file still in conflict goes in
 					// with its markers.
-					m.confirmGit(gitConfirm{Title: T("Mark the conflicts resolved?"),
+					m.askConfirm(confirmation{Title: T("Mark the conflicts resolved?"),
 						Body:   Tf("%d files are still marked as conflicted. Continuing takes them as they are now.", s.Conflicts),
 						Action: T("Continue"), Run: run(protocol.GitOpContinue, T("Continuing…"))})
 				}),

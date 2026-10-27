@@ -11,6 +11,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	uitheme "github.com/ironpark/ggui/ui/theme"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/protocol"
@@ -220,7 +221,8 @@ func changesTree(m *model) ggui.Widget {
 				lead := icon("file").Size(14)
 				var tail ggui.Widget = ggui.Box().Width(14)
 				if it.Dir {
-					lead = icon("folder").Size(14)
+					// A folder says it is open by its icon, as the file tree's does.
+					lead = icon(pick(m.GitClosed.Get()[it.Key], "folder", "folder-open")).Size(14)
 				} else {
 					tail = statusIcon(it.File.GetStatus())
 				}
@@ -241,7 +243,7 @@ func changesTree(m *model) ggui.Widget {
 			})
 		}).
 		RowName(func(it gitItem) string { return it.Name }).
-		RowHeight(26).Indent(14).
+		RowHeight(26).Indent(14).Chevrons(false).
 		BindCollapsed(m.GitClosed). // folders start open
 		BindSelected(m.GitSel).
 		OnSelect(func(it gitItem) {
@@ -404,7 +406,20 @@ func pickBox(m *model, it gitItem) ggui.Widget {
 		return -1
 	})
 	on := ggui.Bind(func() bool { return state.Get() != 0 }, func(take bool) { m.skipFiles(paths, !take) })
-	return ui.Checkbox(on, "").BindIndeterminate(ggui.Map(state, func(s int) bool { return s < 0 })).Name(Tf("Commit %s", it.Name))
+	box := ui.Checkbox(on, "").BindIndeterminate(ggui.Map(state, func(s int) bool { return s < 0 })).Name(Tf("Commit %s", it.Name))
+	return quietBox(box)
+}
+
+// quietBox draws the checkboxes of a list, one on every row, smaller and
+// ticked in the raised surface rather than the primary colour, which in a
+// dark theme is a white block on every line.
+func quietBox(box ggui.Widget) ggui.Widget {
+	return uitheme.Override(func(t *uitheme.Theme) {
+		if raised, ok := t.Get(uitheme.CSSColor("surface-3")); ok {
+			t.Primary, t.PrimaryFg = raised, t.Fg
+		}
+		t.ControlSize = min(t.ControlSize, 14)
+	}, box)
 }
 
 // commitBox is the message and the button that commits the files picked.

@@ -318,8 +318,11 @@ type SessionInfo struct {
 	LastOutput     *timestamppb.Timestamp `protobuf:"bytes,21,opt,name=last_output,json=lastOutput,proto3" json:"last_output,omitempty"`
 	Approval       *Approval              `protobuf:"bytes,22,opt,name=approval,proto3" json:"approval,omitempty"`
 	Worktree       *Worktree              `protobuf:"bytes,23,opt,name=worktree,proto3" json:"worktree,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// owner is the user or organization the repository's origin remote is
+	// under, "" outside a repository or without a remote.
+	Owner         string `protobuf:"bytes,24,opt,name=owner,proto3" json:"owner,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SessionInfo) Reset() {
@@ -511,6 +514,13 @@ func (x *SessionInfo) GetWorktree() *Worktree {
 		return x.Worktree
 	}
 	return nil
+}
+
+func (x *SessionInfo) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
 }
 
 // Approval is a tool call an agent waits for the user to approve.
@@ -1251,7 +1261,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04base\x18\x04 \x01(\tR\x04base\"\xd6\x05\n" +
+	"\x04base\x18\x04 \x01(\tR\x04base\"\xec\x05\n" +
 	"\vSessionInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x14\n" +
@@ -1278,7 +1288,8 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\vlast_output\x18\x15 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"lastOutput\x12-\n" +
 	"\bapproval\x18\x16 \x01(\v2\x11.mako.v2.ApprovalR\bapproval\x12-\n" +
-	"\bworktree\x18\x17 \x01(\v2\x11.mako.v2.WorktreeR\bworktreeB\f\n" +
+	"\bworktree\x18\x17 \x01(\v2\x11.mako.v2.WorktreeR\bworktree\x12\x14\n" +
+	"\x05owner\x18\x18 \x01(\tR\x05ownerB\f\n" +
 	"\n" +
 	"_exit_code\"\x8e\x01\n" +
 	"\bApproval\x12\x0e\n" +

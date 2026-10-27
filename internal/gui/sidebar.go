@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/protocol"
@@ -77,6 +78,66 @@ func tail(path string, n int) string {
 	return strings.Join(parts, "/")
 }
 
+// ownerMenu is what an owner's heading offers: ending the sessions in its
+// folders, or taking the folders off the sidebar, their sessions ended
+// too, as they would bring the folders back. Either names the sessions it
+// ends and asks first.
+func ownerMenu(m *model, o ownerSection, name string) []ggui.Widget {
+	var ids []string
+	roots := make([]fileRoot, len(o.Groups))
+	for i, g := range o.Groups {
+		roots[i] = fileRoot{Node: g.NodeID, Path: g.Project}
+		for _, s := range g.Sessions {
+			ids = append(ids, s.GetId())
+		}
+	}
+	remove := func() {
+		m.forgetProjects(roots)
+		// A poll before the sessions are gone keeps their folders again.
+		m.killAll(ids, func() { m.forgetProjects(roots) })
+	}
+	items := []ggui.Widget{ui.MenuItem(T("Remove from sidebar"), func() {
+		if len(ids) == 0 {
+			remove()
+			return
+		}
+		m.askConfirm(confirmation{
+			Title:  Tf("Remove %s from the sidebar?", name),
+			Body:   T("Its folders leave the sidebar, and these sessions end, their output lost:") + "\n" + sessionList(m, ids),
+			Action: T("Remove"), Run: remove,
+		})
+	})}
+	if len(ids) > 0 {
+		items = append(items, ui.MenuItem(T("End all sessions…"), func() {
+			m.askConfirm(confirmation{
+				Title:  Tf("End %d sessions of %s?", len(ids), name),
+				Body:   T("These sessions end, their output lost:") + "\n" + sessionList(m, ids),
+				Action: T("End sessions"), Run: func() { m.killAll(ids, nil) },
+			})
+		}))
+	}
+	return items
+}
+
+// sessionList names sessions a line each, by title and where they run,
+// as many as a dialog has room for.
+func sessionList(m *model, ids []string) string {
+	const most = 12
+	nodes, titles := ggui.Peek(m.Nodes), ggui.Peek(m.Titles)
+	var lines []string
+	for _, id := range ids[:min(len(ids), most)] {
+		s, ok := m.session(id)
+		if !ok {
+			continue
+		}
+		lines = append(lines, "• "+sessionTitle(s, titles[id])+" — "+nodeName(nodes, s.GetNodeId())+" · "+projectName(s.GetProject()))
+	}
+	if len(ids) > most {
+		lines = append(lines, Tf("and %d more", len(ids)-most))
+	}
+	return strings.Join(lines, "\n")
+}
+
 // pinnedSection is the sidebar's pinned sessions, above the groups.
 func pinnedSection(m *model, sessions []*protocol.SessionInfo, selected string, nodes []*protocol.Node, titles map[string]string) ggui.Widget {
 	rows := []ggui.Widget{ggui.Box(ggui.Row(
@@ -85,7 +146,7 @@ func pinnedSection(m *model, sessions []*protocol.SessionInfo, selected string, 
 	).Gap(10)).Pad(4, 4, 4, 10)}
 	for _, s := range sessions {
 		where := strings.Join([]string{nodeName(nodes, s.GetNodeId()), projectName(s.GetProject()), short(s.GetId())}, " · ")
-		rows = append(rows, sessionRow(m, s, s.GetId() == selected, titles[s.GetId()], where, true))
+		rows = append(rows, sessionRow(m, s, s.GetId() == selected, titles[s.GetId()], where, 1))
 	}
 	return ggui.Column(rows...).Gap(2).Stretch()
 }

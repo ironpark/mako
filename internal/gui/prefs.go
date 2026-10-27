@@ -70,7 +70,7 @@ type prefs struct {
 
 	// Projects are the folders the sidebar keeps, so one outlives its last
 	// session. A folder leaves the list from its own menu.
-	Projects []fileRoot `json:"projects,omitempty"`
+	Projects []keptProject `json:"projects,omitempty"`
 }
 
 // Equal compares settings by value, projects included, so the prefs signal
@@ -161,12 +161,12 @@ func (p prefs) normalized() prefs {
 	}
 	if len(p.Projects) > 0 {
 		seen := make(map[fileRoot]bool, len(p.Projects))
-		projects := make([]fileRoot, 0, len(p.Projects))
+		projects := make([]keptProject, 0, len(p.Projects))
 		for _, r := range p.Projects {
-			if r.Path == "" || seen[r] {
+			if r.Path == "" || seen[r.fileRoot] {
 				continue
 			}
-			seen[r] = true
+			seen[r.fileRoot] = true
 			projects = append(projects, r)
 		}
 		p.Projects = projects

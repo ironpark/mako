@@ -1,9 +1,14 @@
 package gitstat
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+
+	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 )
 
 // Branch is the branch checked out in the work tree dir is in, read from
@@ -14,10 +19,17 @@ func Branch(dir string) string {
 	return branchOf(gitDir)
 }
 
-// Head is Branch and Repo of dir together, finding its repository once.
-func Head(dir string) (branch, repo string) {
+// Head is the branch checked out where dir is, as Branch says, its
+// repository, as Repo says, and the owner of that repository's origin
+// remote, "github.com/ironpark" for git@github.com:ironpark/mako.git,
+// finding the repository once. All are "" outside a repository.
+func Head(dir string) (branch, repo, owner string) {
 	gitDir, top := findGitDir(dir)
-	return branchOf(gitDir), repoOf(gitDir, top)
+	if gitDir == "" {
+		return "", "", ""
+	}
+	common := commonDir(gitDir)
+	return branchOf(gitDir), repoOf(gitDir, common, top), ownerOf(common)
 }
 
 // branchOf is Branch for the git directory gitDir, "" for none.
@@ -42,29 +54,90 @@ func branchOf(gitDir string) string {
 // repository. Links in it are resolved, as git resolves the paths it
 // records for a linked work tree. Like Branch it reads files alone.
 func Repo(dir string) string {
-	return repoOf(findGitDir(dir))
-}
-
-// repoOf is Repo for the git directory gitDir of the work tree at top.
-func repoOf(gitDir, top string) string {
+	gitDir, top := findGitDir(dir)
 	if gitDir == "" {
 		return ""
 	}
-	if b, err := os.ReadFile(filepath.Join(gitDir, "commondir")); err == nil {
-		common := strings.TrimSpace(string(b))
-		if !filepath.IsAbs(common) {
-			common = filepath.Join(gitDir, common)
+	return repoOf(gitDir, commonDir(gitDir), top)
+}
+
+// ownerOf is the user or organization whose repository the origin remote
+// in the config of the git directory common is, or of its first remote by
+// name without an origin: "github.com/ironpark" for
+// git@github.com:ironpark/mako.git. "" without a remote.
+func ownerOf(common string) string {
+	f, err := os.Open(filepath.Join(common, "config"))
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	cfg, err := config.ReadConfig(f)
+	if err != nil {
+		return ""
+	}
+	remote := cfg.Remotes["origin"]
+	if remote == nil {
+		for _, name := range slices.Sorted(maps.Keys(cfg.Remotes)) {
+			remote = cfg.Remotes[name]
+			break
 		}
-		// One added to a bare repository, which has no work tree of its
-		// own, stays its own.
-		if common = filepath.Clean(common); filepath.Base(common) == ".git" {
-			top = filepath.Dir(common)
-		}
+	}
+	if remote == nil || len(remote.URLs) == 0 {
+		return ""
+	}
+	return urlOwner(remote.URLs[0])
+}
+
+// urlOwner is the user or organization a remote URL's repository is
+// under, with the host that serves it: "github.com/ironpark" for an
+// scp-like git@github.com:ironpark/mako.git, as for a URL's on any host,
+// GitHub's, a Forgejo's or GitLab's, and the folder alone for a local
+// path's. The host tells apart the same name on two services.
+func urlOwner(url string) string {
+	if url == "" {
+		return "" // which go-git takes for the folder it runs in
+	}
+	ep, err := transport.NewEndpoint(url)
+	if err != nil {
+		return ""
+	}
+	parts := strings.FieldsFunc(ep.Path, func(r rune) bool { return r == '/' || r == '\\' })
+	if len(parts) < 2 {
+		return ""
+	}
+	owner := parts[len(parts)-2]
+	if ep.Host == "" {
+		return owner
+	}
+	return strings.ToLower(ep.Host) + "/" + owner
+}
+
+// repoOf is Repo for the git directory gitDir of the work tree at top,
+// whose common git directory is common.
+func repoOf(gitDir, common, top string) string {
+	// One added to a bare repository, which has no work tree of its own,
+	// stays its own.
+	if common != gitDir && filepath.Base(common) == ".git" {
+		top = filepath.Dir(common)
 	}
 	if real, err := filepath.EvalSymlinks(top); err == nil {
 		return real
 	}
 	return top
+}
+
+// commonDir is the git directory a linked work tree's gitDir shares with
+// the repository it was added to, or gitDir itself.
+func commonDir(gitDir string) string {
+	b, err := os.ReadFile(filepath.Join(gitDir, "commondir"))
+	if err != nil {
+		return gitDir
+	}
+	common := strings.TrimSpace(string(b))
+	if !filepath.IsAbs(common) {
+		common = filepath.Join(gitDir, common)
+	}
+	return filepath.Clean(common)
 }
 
 // findGitDir is the git directory of the work tree dir is in, a .git

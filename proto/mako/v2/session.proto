@@ -64,6 +64,9 @@ message SessionInfo {
   google.protobuf.Timestamp last_output = 21;
   Approval approval = 22;
   Worktree worktree = 23;
+  // owner is the user or organization the repository's origin remote is
+  // under, "" outside a repository or without a remote.
+  string owner = 24;
 }
 
 // Approval is a tool call an agent waits for the user to approve.

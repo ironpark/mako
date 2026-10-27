@@ -62,3 +62,48 @@ func TestRepoIsTheMainWorkTree(t *testing.T) {
 		t.Errorf("outside a repository %q", got)
 	}
 }
+
+func TestOwnerOfTheOriginRemote(t *testing.T) {
+	for url, want := range map[string]string{
+		"git@github.com:ironpark/mako.git":                 "github.com/ironpark",
+		"ssh://git@git.ironpark.dev/ironpark/mako.git":     "git.ironpark.dev/ironpark",
+		"ssh://git@Codeberg.org:2222/forgejo/forgejo.git":  "codeberg.org/forgejo",
+		"https://user:token@git.example.com:3000/team/app": "git.example.com/team",
+		"https://github.com/golang/go":                     "github.com/golang",
+		"https://gitlab.com/group/sub/project.git":         "gitlab.com/sub",
+		"file:///srv/git/team/app.git":                     "team",
+		"/srv/git/team/app.git":                            "team",
+		`C:\repos\team\app`:                                "team",
+		"https://example.com/lonely.git":                   "",
+		"":                                                 "",
+	} {
+		if got := urlOwner(url); got != want {
+			t.Errorf("urlOwner(%q) = %q, want %q", url, got, want)
+		}
+	}
+	// The origin, or without one the first remote by name.
+	for config, want := range map[string]string{
+		"[core]\n\tbare = false\n[remote \"upstream\"]\n\turl = git@github.com:golang/go.git\n[remote \"origin\"]\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n\turl = git@github.com:ironpark/go.git\n": "github.com/ironpark",
+		"[remote \"upstream\"]\n\turl = https://h/b/c\n[remote \"fork\"]\n\turl = https://h/a/c\n":                                                                                                          "h/a",
+		"[core]\n\tbare = false\n": "",
+	} {
+		dir := t.TempDir()
+		write(t, dir, "config", config)
+		if got := ownerOf(dir); got != want {
+			t.Errorf("ownerOf(%q) = %q, want %q", config, got, want)
+		}
+	}
+
+	root, run := cliRepo(t)
+	run("remote", "add", "origin", "git@github.com:ironpark/mako.git")
+	write(t, root, "a.txt", "a\n")
+	run("add", "-A")
+	run("commit", "-q", "-m", "first")
+	linked := filepath.Join(t.TempDir(), "linked")
+	run("worktree", "add", "-q", "-b", "other", linked)
+	for _, dir := range []string{root, linked} {
+		if _, _, got := Head(dir); got != "github.com/ironpark" {
+			t.Errorf("Owner(%s) = %q", dir, got)
+		}
+	}
+}

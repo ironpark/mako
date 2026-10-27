@@ -2,6 +2,7 @@ package gui
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -21,7 +22,7 @@ func TestProjectsOutliveTheirSessions(t *testing.T) {
 
 	projects := ggui.Peek(m.Prefs).Projects
 	want := fileRoot{Node: "n1", Path: "/src/mako"}
-	if len(projects) != 1 || projects[0] != want {
+	if len(projects) != 1 || projects[0].fileRoot != want {
 		t.Fatalf("projects = %+v, want %+v", projects, want)
 	}
 	// The session is killed; the folder keeps a section of its own.
@@ -54,7 +55,7 @@ func TestAHomeFolderDoesNotSwallowItsProjects(t *testing.T) {
 		{Id: "toy", NodeId: "n1", Project: "/home/me/toys/rabbithole", Repo: "/home/me/toys/rabbithole"},
 		{Id: "notes", NodeId: "n1", Project: "/home/me/notes"},
 	}
-	kept := []fileRoot{{Node: "n1", Path: "/home/me"}}
+	kept := []keptProject{{fileRoot: fileRoot{Node: "n1", Path: "/home/me"}}}
 	got := map[string][]string{}
 	for _, g := range groupSessions(sessions, groupProject, nil, kept) {
 		for _, s := range g.Sessions {
@@ -78,7 +79,7 @@ func TestSidebarShowsKeptFolders(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Prefs.Update(func(p prefs) prefs {
-		p.Projects = []fileRoot{{Node: "n1", Path: "/src/mako"}}
+		p.Projects = []keptProject{{fileRoot: fileRoot{Node: "n1", Path: "/src/mako"}}}
 		return p
 	})
 	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))
@@ -105,5 +106,55 @@ func TestComposerDraftsArePerSession(t *testing.T) {
 	m.setComposerDraft("a", "")
 	if m.composerDraft("a") != "" || m.composerDraft("b") != "two" {
 		t.Fatalf("drafts after clearing a = %q, %q", m.composerDraft("a"), m.composerDraft("b"))
+	}
+}
+
+// A kept folder remembers whose repository it is, as its sessions said.
+func TestKeptProjectsRememberOwners(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	s := &protocol.SessionInfo{Id: "a", NodeId: "n1", Project: "/src/mako", Repo: "/src/mako", Owner: "github.com/ironpark"}
+	m.keepProjects([]*protocol.SessionInfo{s})
+	s.Owner = "git.ironpark.dev/ironpark"
+	m.keepProjects([]*protocol.SessionInfo{s, s})
+	want := []keptProject{{fileRoot{Node: "n1", Path: "/src/mako"}, "git.ironpark.dev/ironpark"}}
+	if got := ggui.Peek(m.Prefs).Projects; !slices.Equal(got, want) {
+		t.Fatalf("projects %+v, want %+v", got, want)
+	}
+}
+
+// Project sections gather under their repositories' owners, a kept folder
+// by the owner remembered for it, and folders no one owns come last.
+func TestProjectsGroupByOwner(t *testing.T) {
+	sessions := []*protocol.SessionInfo{
+		{Id: "1", NodeId: "a", Project: "/w/mako", Owner: "github.com/ironpark"},
+		{Id: "2", NodeId: "a", Project: "/w/go", Owner: "github.com/golang"},
+		{Id: "4", NodeId: "a", Project: "/w/homescale", Owner: "git.ironpark.dev/ironpark"},
+		{Id: "3", NodeId: "a", Project: "/tmp/scratch"},
+	}
+	kept := []keptProject{{fileRoot{Node: "a", Path: "/w/ggui"}, "github.com/ironpark"}}
+	groups := groupSessions(sessions, groupProject, nil, kept)
+	sections := byOwner(groups)
+	var got []string
+	for _, o := range sections {
+		var names []string
+		for _, g := range o.Groups {
+			names = append(names, projectName(g.Project))
+		}
+		got = append(got, o.Owner+":"+strings.Join(names, ","))
+	}
+	if want := []string{"github.com/golang:go", "git.ironpark.dev/ironpark:homescale", "github.com/ironpark:ggui,mako", ":scratch"}; !slices.Equal(got, want) {
+		t.Fatalf("sections %q, want %q", got, want)
+	}
+	if byOwner(groupSessions(sessions[3:], groupProject, nil, nil)) != nil {
+		t.Fatal("folders no one owns are grouped by owner")
+	}
+}
+
+func TestHostsWithoutSessionsAreListed(t *testing.T) {
+	nodes := []*protocol.Node{{Id: "a", Name: "mac"}, {Id: "b", Name: "box"}}
+	groups := withHosts(groupSessions([]*protocol.SessionInfo{{Id: "1", NodeId: "a"}}, groupHost, nodes, nil), nodes)
+	if len(groups) != 2 || groups[0].NodeID != "b" || len(groups[0].Sessions) != 0 || groups[1].NodeID != "a" {
+		t.Fatalf("groups %+v", groups)
 	}
 }

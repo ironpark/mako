@@ -153,10 +153,10 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 	})
 	// Discarding asks first, then removes the new file.
 	m.discardFiles([]string{"notes.txt"}, "notes.txt")
-	if ggui.Peek(m.GitConfirm).Title == "" {
+	if ggui.Peek(m.Confirmation).Title == "" {
 		t.Fatal("discarding did not ask")
 	}
-	ggui.Peek(m.GitConfirm).Run()
+	ggui.Peek(m.Confirmation).Run()
 	probeUntil(t, p, "the discard", func() bool { return len(ggui.Peek(m.Git).Changes.GetFiles()) == 0 })
 	if _, err := os.Stat(filepath.Join(project, "notes.txt")); !os.IsNotExist(err) {
 		t.Fatal("notes.txt is still there")
