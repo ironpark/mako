@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 
-	"github.com/creack/pty"
+	"golang.org/x/term"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/config"
@@ -263,35 +261,38 @@ func (c *Client) forwardInput(ctx context.Context, a *Attachment, cancel func())
 
 // forwardWinch keeps the remote PTY the same size as the local window.
 func (c *Client) forwardWinch(ctx context.Context, a *Attachment) {
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGWINCH)
-	defer signal.Stop(ch)
-
 	send := func() {
-		size, err := pty.GetsizeFull(os.Stdin)
-		if err != nil {
-			return
+		if cols, rows, ok := localSize(); ok {
+			_ = a.Resize(cols, rows)
 		}
-		_ = a.Resize(size.Cols, size.Rows)
 	}
 	send()
+	resized := watchResize(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ch:
+		case <-resized:
 			send()
 		}
 	}
 }
 
+// localSize is the local terminal's size, if stdin is one.
+func localSize() (cols, rows uint16, ok bool) {
+	w, h, err := term.GetSize(int(os.Stdin.Fd()))
+	if err != nil || w <= 0 || h <= 0 {
+		return 0, 0, false
+	}
+	return uint16(w), uint16(h), true
+}
+
 // WindowSize reports the local terminal size, falling back to 80x24.
 func WindowSize() (cols, rows uint16) {
-	size, err := pty.GetsizeFull(os.Stdin)
-	if err != nil || size.Cols == 0 {
-		return 80, 24
+	if cols, rows, ok := localSize(); ok {
+		return cols, rows
 	}
-	return size.Cols, size.Rows
+	return 80, 24
 }
 
 // Watch follows the mesh's changes: fn is called with each Changed the

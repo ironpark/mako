@@ -1,12 +1,15 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/ironpark/mako/internal/config.Version=$(VERSION)
 
+# EXE is the binaries' suffix: .exe on Windows.
+EXE := $(if $(filter Windows_NT,$(OS)),.exe,)
+
 .PHONY: build app test fmt vet proto clean
 
 build:
-	go build -ldflags "$(LDFLAGS)" -o bin/mako ./cmd/mako
-	go build -ldflags "$(LDFLAGS)" -o bin/makod ./cmd/makod
-	go build -ldflags "$(LDFLAGS)" -o bin/mako-gui ./cmd/mako-gui
+	go build -ldflags "$(LDFLAGS)" -o bin/mako$(EXE) ./cmd/mako
+	go build -ldflags "$(LDFLAGS)" -o bin/makod$(EXE) ./cmd/makod
+	go build -ldflags "$(LDFLAGS)" -o bin/mako-gui$(EXE) ./cmd/mako-gui
 
 # app bundles the desktop app for macOS, signed ad hoc: posting native
 # notifications takes an app with a bundle identifier.
