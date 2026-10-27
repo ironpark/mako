@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -239,7 +238,7 @@ func (d *Daemon) listenHooks(ctx context.Context, dir string) {
 		d.log.Warn("hooks: no run directory", "err", err)
 		return
 	}
-	path := filepath.Join(dir, fmt.Sprintf("hooks-%d.sock", d.port))
+	path := filepath.Join(dir, "hooks.sock")
 	_ = os.Remove(path) // left by a daemon that did not stop cleanly
 	ln, err := net.Listen("unix", path)
 	if err != nil {

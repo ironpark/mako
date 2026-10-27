@@ -2,26 +2,24 @@ package daemon
 
 import (
 	"context"
-	"net"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/discovery"
+	"github.com/ironpark/mako/internal/p2p"
 	"github.com/ironpark/mako/internal/protocol"
-	"github.com/ironpark/mako/internal/transport"
 )
 
-// discover advertises this daemon and folds discovered nodes into the peer
-// table, including the statically configured peers.
+// discover advertises this daemon and links to the nodes discovery finds,
+// and to the configured peers, all over libp2p.
 func (d *Daemon) discover(ctx context.Context) {
+	if d.p2p == nil {
+		<-ctx.Done()
+		return
+	}
 	for _, addr := range d.cfg.Peers {
-		if strings.HasPrefix(addr, "/") {
-			go d.linkStatic(ctx, addr)
-			continue
-		}
-		go d.probeStatic(ctx, addr)
+		go d.keepStatic(ctx, addr)
 	}
 
 	var backends []discovery.Backend
@@ -29,11 +27,9 @@ func (d *Daemon) discover(ctx context.Context) {
 		mdns := &discovery.MDNS{
 			NodeID: d.cfg.NodeID,
 			Name:   d.cfg.Name,
-			Port:   d.port,
 			Domain: d.cfg.Domain,
-		}
-		if d.p2p != nil {
-			mdns.PeerID, mdns.P2PPort = d.p2p.ID().String(), d.p2p.Port()
+			PeerID: d.peerID(),
+			Port:   d.p2p.Port(),
 		}
 		shutdown, err := mdns.Advertise()
 		if err != nil {
@@ -45,10 +41,10 @@ func (d *Daemon) discover(ctx context.Context) {
 	}
 	if d.cfg.Discovery.Tailscale {
 		backends = append(backends, &discovery.Tailscale{
-			NodeID:   d.cfg.NodeID,
-			Hello:    d.hello(),
+			Self:     d.peerID(),
+			Linked:   d.p2p.Connected,
 			Hosts:    d.cfg.Discovery.TailnetHosts,
-			Port:     d.port,
+			Port:     d.p2p.Port(),
 			Interval: time.Minute,
 		})
 	}
@@ -61,55 +57,50 @@ func (d *Daemon) discover(ctx context.Context) {
 		d.log.Warn("discovery backend failed", "backend", b.Kind(), "err", err)
 	})
 	for f := range found {
-		if f.NodeID == d.cfg.NodeID {
-			continue
-		}
-		if d.notePeer(f.Node()) {
+		switch {
+		case f.NodeID == d.cfg.NodeID || f.PeerID == d.peerID():
+		case f.NodeID == "":
+			d.link(f.Node()) // its record comes as the two introduce themselves
+		case d.notePeer(f.Node()):
 			d.log.Info("peer discovered", "node", f.Name, "addr", f.Addr, "via", f.Source)
 		}
 	}
 }
 
-// probeStatic keeps a configured peer address in the table, retrying until the
-// far side answers.
-func (d *Daemon) probeStatic(ctx context.Context, addr string) {
-	if _, _, err := net.SplitHostPort(addr); err != nil {
-		addr = net.JoinHostPort(addr, strconv.Itoa(config.DefaultPort))
-	}
+// keepStatic keeps a link to a configured peer: a multiaddr ending in its
+// /p2p/ ID, or a host with its libp2p port, probed for its peer ID until
+// it is linked. The node's record comes as the two introduce themselves.
+func (d *Daemon) keepStatic(ctx context.Context, addr string) {
+	var id string // the probed peer's, once known
 	for {
-		node, err := transport.Probe(ctx, addr, d.hello(), 5*time.Second)
-		if err == nil && node.GetId() != d.cfg.NodeID {
-			node.Source = "static"
-			if d.notePeer(node) {
-				d.log.Info("static peer reachable", "node", node.GetName(), "addr", addr)
+		if id == "" || !d.p2p.Connected(id) {
+			got, err := d.linkStatic(ctx, addr)
+			if err != nil && ctx.Err() == nil {
+				d.log.Debug("static peer unreachable", "peer", addr, "err", err)
 			}
+			id = got
 		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(30 * time.Second):
+		case <-time.After(relinkAfter):
 		}
 	}
 }
 
-// linkStatic keeps a link to a peer configured by its multiaddr, which
-// ends in its /p2p/ ID; the node's record comes as the two introduce
-// themselves.
-func (d *Daemon) linkStatic(ctx context.Context, addr string) {
-	if d.p2p == nil {
-		d.log.Warn("a peer given by multiaddr needs libp2p, which is off", "peer", addr)
-		return
+// linkStatic links to the configured peer at addr, and returns the peer
+// ID a probe found it at.
+func (d *Daemon) linkStatic(ctx context.Context, addr string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, linkTimeout)
+	defer cancel()
+	if strings.HasPrefix(addr, "/") {
+		return "", d.p2p.EnsureAddr(ctx, addr)
 	}
-	for {
-		if err := d.p2p.EnsureAddr(ctx, addr); err != nil && ctx.Err() == nil {
-			d.log.Debug("static peer unreachable", "peer", addr, "err", err)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(30 * time.Second):
-		}
+	id, addrs, err := p2p.Resolve(ctx, config.WithP2PPort(addr))
+	if err != nil {
+		return "", err
 	}
+	return id.String(), d.p2p.Ensure(ctx, id.String(), addrs)
 }
 
 // maintain expires stale peers, keeping those still linked, and links

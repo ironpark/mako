@@ -2,18 +2,19 @@ package daemon
 
 import (
 	"context"
-	"crypto/subtle"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
+	"os"
+	"path/filepath"
 	"runtime"
-	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/quic-go/quic-go"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/ironpark/mako/internal/config"
@@ -26,7 +27,7 @@ import (
 // peerTTL drops a discovered node that has not been seen for this long.
 const peerTTL = 5 * time.Minute
 
-// Daemon serves front-ends over QUIC, and peers over libp2p.
+// Daemon serves front-ends on its Unix socket, and peers over libp2p.
 type Daemon struct {
 	cfg *config.Config
 	log *slog.Logger
@@ -41,12 +42,11 @@ type Daemon struct {
 	approvals     approvals
 	peers         *peerTable
 
-	ln    *transport.Listener
-	port  int
-	ready chan struct{} // closed once the listener is up; see Ready
-	// token is what a front-end shows in its hello: config.Token, which
-	// front-ends on this machine read.
-	token string
+	// ln is the socket front-ends reach the daemon on, at socket; only
+	// this user can.
+	ln     net.Listener
+	socket string
+	ready  chan struct{} // closed once the listener is up; see Ready
 
 	mu sync.Mutex
 
@@ -96,19 +96,15 @@ func New(cfg *config.Config, log *slog.Logger) *Daemon {
 // that fails to listen returns its error without closing it.
 func (d *Daemon) Ready() <-chan struct{} { return d.ready }
 
-// Addr is the address the daemon listens on. Valid after Ready.
-func (d *Daemon) Addr() net.Addr { return d.ln.Addr() }
+// Socket is the socket the daemon listens on. Valid after Ready.
+func (d *Daemon) Socket() string { return d.socket }
 
 // Self describes this daemon as a node record.
 func (d *Daemon) Self() *protocol.Node {
-	addr := d.cfg.Listen
-	if d.ln != nil {
-		addr = d.ln.Addr().String()
-	}
 	return &protocol.Node{
 		Id:         d.cfg.NodeID,
 		Name:       d.cfg.Name,
-		Addr:       addr,
+		Addr:       d.addr(),
 		Os:         runtime.GOOS,
 		Arch:       runtime.GOARCH,
 		Version:    config.Version,
@@ -131,9 +127,6 @@ func (d *Daemon) publicSelf() *protocol.Node {
 	return self
 }
 
-// Token is what a front-end shows this daemon. Valid after Ready.
-func (d *Daemon) Token() string { return d.token }
-
 // Run serves until ctx is cancelled.
 func (d *Daemon) Run(ctx context.Context) error {
 	dir := d.dir
@@ -143,32 +136,27 @@ func (d *Daemon) Run(ctx context.Context) error {
 			return err
 		}
 	}
-	token, err := config.Token(dir)
+	run, err := config.RunDir(dir)
 	if err != nil {
 		return err
 	}
-	d.token = token
-	tlsConf, err := transport.ServerTLS(dir)
+	socket := filepath.Join(run, "daemon.sock")
+	d.ln, err = transport.Listen(socket)
 	if err != nil {
 		return err
 	}
-	d.ln, err = transport.Listen(d.cfg.Listen, tlsConf)
-	if err != nil {
-		return err
-	}
+	d.socket = socket
 	defer d.ln.Close()
+	defer os.Remove(socket)
 	if err := d.loadSessions(dir); err != nil {
 		return err
 	}
 	defer d.sessions.closeAll()
 
-	d.port = portOf(d.ln.Addr())
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	d.ctx = ctx
-	if run, err := config.RunDir(); err == nil {
-		d.listenHooks(ctx, run)
-	}
+	d.listenHooks(ctx, run)
 	if !d.cfg.P2P.Disabled {
 		if err := d.startP2P(ctx, dir); err != nil {
 			d.log.Warn("libp2p did not start; this daemon has no peers", "err", err)
@@ -176,7 +164,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 			defer d.p2p.Close()
 		}
 	}
-	d.log.Info("daemon listening", "addr", d.ln.Addr().String(), "node", d.cfg.NodeID, "name", d.cfg.Name)
+	d.log.Info("daemon listening", "socket", socket, "node", d.cfg.NodeID, "name", d.cfg.Name)
 	close(d.ready)
 
 	go d.warmContextServers(ctx)
@@ -194,44 +182,32 @@ func (d *Daemon) Run(ctx context.Context) error {
 	return nil
 }
 
+// serve takes front-ends' connections on the socket, one request stream
+// to a connection.
 func (d *Daemon) serve(ctx context.Context) {
 	for {
-		conn, err := d.ln.Accept(ctx)
+		conn, err := d.ln.Accept()
 		if err != nil {
-			if ctx.Err() != nil {
+			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
 				return
 			}
 			d.log.Warn("accept failed", "err", err)
 			continue
 		}
-		go d.serveConn(ctx, conn)
-	}
-}
-
-func (d *Daemon) serveConn(ctx context.Context, conn *quic.Conn) {
-	defer conn.CloseWithError(0, "bye")
-	for {
-		stream, err := transport.AcceptStream(ctx, conn)
-		if err != nil {
-			return
-		}
 		go func() {
+			stream := transport.NewStream(conn)
 			defer stream.Close()
-			from := &protocol.Node{Addr: remoteAddr(conn, d.port)}
-			if err := d.serveStream(ctx, stream, from); err != nil && !isClosed(err) {
+			if err := d.serveStream(ctx, stream, false); err != nil && !isClosed(err) {
 				d.log.Debug("stream ended", "err", err)
 			}
 		}()
 	}
 }
 
-// serveStream handles one request stream, from where the node from says:
-// its address on QUIC, or its peer ID on libp2p. The first frame must be
-// a hello, which on QUIC carries the front-end's token; a libp2p stream
-// comes from a peer this daemon lets in. A daemon probing on QUIC without
-// a token is told who this one is, and nothing more.
-func (d *Daemon) serveStream(ctx context.Context, stream *transport.Stream, from *protocol.Node) error {
-	trusted := from.GetPeerId() != ""
+// serveStream handles one request stream: from a front-end on the socket,
+// which only this user can reach, or from a peer this daemon lets in, on
+// libp2p. The first frame must be a hello.
+func (d *Daemon) serveStream(ctx context.Context, stream *transport.Stream, fromPeer bool) error {
 	env, err := stream.Recv()
 	if err != nil {
 		return err
@@ -239,16 +215,8 @@ func (d *Daemon) serveStream(ctx context.Context, stream *transport.Stream, from
 	if env.Type() != protocol.TypeHello {
 		return protocol.WriteError(stream, env.GetId(), errors.New("expected hello"))
 	}
-	hello, err := protocol.Body[*protocol.Hello](env)
-	if err != nil {
+	if _, err := protocol.Body[*protocol.Hello](env); err != nil {
 		return protocol.WriteError(stream, env.GetId(), err)
-	}
-	if !trusted && subtle.ConstantTimeCompare([]byte(hello.GetToken()), []byte(d.token)) != 1 {
-		if hello.GetIsPeer() {
-			// A daemon probing: who answers, and nothing more.
-			return stream.Send(protocol.TypeWelcome, env.GetId(), &protocol.Welcome{Node: d.publicSelf()})
-		}
-		return protocol.WriteError(stream, env.GetId(), errors.New("authentication failed: the front-end token is wrong"))
 	}
 	if err := stream.Send(protocol.TypeWelcome, env.GetId(), &protocol.Welcome{Node: d.Self()}); err != nil {
 		return err
@@ -259,7 +227,7 @@ func (d *Daemon) serveStream(ctx context.Context, stream *transport.Stream, from
 		if err != nil {
 			return err
 		}
-		if err := d.dispatch(ctx, stream, env, trusted); err != nil {
+		if err := d.dispatch(ctx, stream, env, fromPeer); err != nil {
 			if isClosed(err) {
 				return err
 			}
@@ -368,37 +336,14 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 	}
 }
 
-func portOf(addr net.Addr) int {
-	_, port, err := net.SplitHostPort(addr.String())
-	if err != nil {
-		return config.DefaultPort
-	}
-	n, err := strconv.Atoi(port)
-	if err != nil {
-		return config.DefaultPort
-	}
-	return n
-}
-
-// remoteAddr rewrites a peer's ephemeral source port to the mako service port,
-// which is where that daemon can be dialed back.
-func remoteAddr(conn *quic.Conn, fallbackPort int) string {
-	host, _, err := net.SplitHostPort(conn.RemoteAddr().String())
-	if err != nil {
-		return conn.RemoteAddr().String()
-	}
-	return net.JoinHostPort(host, strconv.Itoa(fallbackPort))
-}
-
 func isClosed(err error) bool {
 	if err == nil {
 		return false
 	}
-	var appErr *quic.ApplicationError
-	var idleErr *quic.IdleTimeoutError
 	return errors.Is(err, context.Canceled) ||
 		errors.Is(err, net.ErrClosed) ||
-		errors.Is(err, network.ErrReset) ||
-		errors.As(err, &appErr) ||
-		errors.As(err, &idleErr)
+		errors.Is(err, io.EOF) ||
+		errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, network.ErrReset)
 }

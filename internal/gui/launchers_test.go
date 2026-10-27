@@ -33,7 +33,7 @@ func launcherApp(t *testing.T, pr prefs) (*model, *ggui.Probe) {
 	t.Helper()
 	t.Setenv("MAKO_HOME", t.TempDir())
 	cfg := config.Default()
-	cfg.Listen = "127.0.0.1:0"
+	cfg.P2P.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
 	cfg.Agents = map[string]agentspec.Agent{
 		"claude": {Command: []string{"sh"}, Profiles: []agentspec.Profile{{Name: "opus"}}},

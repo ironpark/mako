@@ -37,14 +37,12 @@ const (
 
 // startP2P starts the libp2p host and serves the mako protocol on it.
 func (d *Daemon) startP2P(ctx context.Context, dir string) error {
-	host, listenPort, _ := net.SplitHostPort(d.cfg.Listen)
-	port := d.cfg.P2P.Port
-	if port == 0 && listenPort != "0" {
-		port = config.DefaultP2PPort // a daemon on any free port, as in tests, takes any here too
+	host, port, err := d.cfg.P2P.HostPort()
+	if err != nil {
+		return err
 	}
 	var owner ssh.Signer
 	if d.cfg.SSHKey != "" {
-		var err error
 		if owner, err = p2p.LoadSigner(mcp.ExpandHome(d.cfg.SSHKey)); err != nil {
 			d.log.Warn("the SSH key cannot vouch for this node; it is let in by its own key alone", "key", d.cfg.SSHKey, "err", err)
 		}
@@ -70,8 +68,7 @@ func (d *Daemon) startP2P(ctx context.Context, dir string) error {
 	d.keyPrint, d.ownerPrint = fingerprint(h.Key()), fingerprint(h.Owner())
 	h.HandleStreams(func(s network.Stream) {
 		defer s.Close()
-		from := &protocol.Node{PeerId: s.Conn().RemotePeer().String(), Multiaddrs: []string{s.Conn().RemoteMultiaddr().String()}}
-		if err := d.serveStream(ctx, transport.NewStream(s), from); err != nil && !isClosed(err) {
+		if err := d.serveStream(ctx, transport.NewStream(s), true); err != nil && !isClosed(err) {
 			d.log.Debug("peer stream ended", "err", err)
 		}
 	})
@@ -93,6 +90,15 @@ func (d *Daemon) multiaddrs() []string {
 		return nil
 	}
 	return d.p2p.Addrs()
+}
+
+// addr is where this daemon is on libp2p, as host and TCP port, for
+// people to read; "" without libp2p.
+func (d *Daemon) addr() string {
+	if d.p2p == nil {
+		return ""
+	}
+	return d.p2p.HostPort()
 }
 
 // linkedPeer is how this daemon stands with node on libp2p, if they are
@@ -166,8 +172,12 @@ func (d *Daemon) onPeer(p p2p.Peer) {
 	go d.sendState(d.ctx, p, full, public)
 }
 
-// relinkAfter is how long a failed link to a peer waits to be tried again.
-const relinkAfter = 30 * time.Second
+// relinkAfter is how long a failed link to a peer waits to be tried again,
+// and linkTimeout how long one is tried.
+const (
+	relinkAfter = 30 * time.Second
+	linkTimeout = 15 * time.Second
+)
 
 // link connects to node over libp2p, if it has an identity there and is
 // not linked already. One attempt at a time goes to a peer, and one that
@@ -185,7 +195,7 @@ func (d *Daemon) link(node *protocol.Node) {
 	d.linking[id] = time.Now()
 	d.mu.Unlock()
 	go func() {
-		ctx, cancel := context.WithTimeout(d.ctx, 15*time.Second)
+		ctx, cancel := context.WithTimeout(d.ctx, linkTimeout)
 		defer cancel()
 		err := d.p2p.Ensure(ctx, id, node.GetMultiaddrs())
 		if err != nil {

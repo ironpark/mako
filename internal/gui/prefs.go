@@ -39,7 +39,7 @@ type prefs struct {
 	ApproveInApp bool `json:"approve_in_app"`
 	// Notify tells the desktop when an agent out of view finishes or asks.
 	Notify     bool   `json:"notify"`
-	Daemon     string `json:"daemon"`      // address of an external daemon; empty is the local one
+	Daemon     string `json:"daemon"`      // socket of an external daemon; empty is the local one
 	DaemonMode string `json:"daemon_mode"` // auto, embedded or external; see embedded.go
 
 	// Files

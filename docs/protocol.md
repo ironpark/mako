@@ -10,9 +10,9 @@ and this document describes how the messages are used.
 
 | | Front-end ↔ its daemon | Daemon ↔ daemon |
 |---|---|---|
-| Transport | QUIC, UDP `4242` | libp2p (QUIC or TCP), port `4243`, maybe relayed |
-| Stream protocol | ALPN `mako/2` | `/mako/2` |
-| Access | the daemon's token in `hello` | keys, one way: `/mako/trust/1` |
+| Transport | the daemon's Unix socket | libp2p (QUIC or TCP), port `4243`, maybe relayed |
+| Stream | a connection to a request | `/mako/2`, a libp2p stream to a request |
+| Access | the socket's file mode: this user alone | keys, one way: `/mako/trust/1` |
 | Frames | length-prefixed protobuf `Envelope`s | the same |
 | Pushed state | `watch` → `changed` | `NodeState` on `/mako/state/2` |
 
@@ -38,8 +38,8 @@ and this document describes how the messages are used.
 ## Roles
 
 ```
- front-end ──QUIC──▶ daemon A ──libp2p──▶ daemon B
- (CLI, app)          (local)              (peer)
+ front-end ──socket──▶ daemon A ──libp2p──▶ daemon B
+ (CLI, app)            (local)              (peer)
 ```
 
 - A **front-end** connects to one daemon, the one on its own machine, and
@@ -54,31 +54,30 @@ and this document describes how the messages are used.
 
 ## Transport
 
-| | |
-|---|---|
-| Protocol | QUIC over UDP |
-| Default port | `4242` (`config.DefaultPort`) |
-| ALPN | `mako/2` (`protocol.ALPN`) |
-| TLS | 1.3, with a self-signed certificate per node |
-| Idle timeout | 60 s, with keep-alives every 15 s |
-| Initial packet size | 1200 bytes |
+A daemon listens for its front-ends on a Unix socket, `daemon.sock` in its
+run directory, with mode `0600`: only its user can reach it, which is all
+the access check a front-end gets. The run directory (`config.RunDir`) is
+`run` in the configuration directory, made `0700`, or where that is too
+long for a socket's path (some 100 bytes), `mako-<uid>-<hash of the
+configuration directory>` in the temporary directory. It holds the hook
+socket and the sessions' MCP configurations too. A socket left
+behind by a daemon that is gone is replaced when the next starts; one a
+daemon still answers on is not, so two daemons cannot share a
+configuration directory.
 
-Each daemon mints an ECDSA P-256 certificate on its first run and keeps it in
-its config directory (`node.crt`, `node.key`). Dialers do not verify it:
-identity comes from the [handshake](#handshake), and access from the
-daemon's token. The initial packet size is QUIC's minimum so that the
-handshake fits a 1280-byte MTU, as Tailscale's interface has; path MTU
-discovery grows it where the path allows.
+Each request is a connection of its own; closing it ends the request, or
+the attach or watch it turned into. A front-end on another machine reaches
+a daemon only through the mesh, by way of its own daemon, or with the
+socket forwarded, as `ssh -L` can.
 
-A front-end keeps one QUIC connection to its daemon. Daemons link to each
-other over libp2p alone (see [The mesh over libp2p](#the-mesh-over-libp2p));
-their QUIC listener answers another daemon's probe, which learns from it
-where the daemon is on libp2p.
+Daemons link to each other over libp2p (see
+[The mesh over libp2p](#the-mesh-over-libp2p)).
 
 ## Streams and framing
 
 Every exchange happens on a bidirectional stream that the caller opens: a
-QUIC stream, or a libp2p stream of `/mako/2` between daemons.
+connection to the daemon's socket, or a libp2p stream of `/mako/2` between
+daemons.
 A stream carries **frames**, each one protobuf `Envelope` with a length
 prefix:
 
@@ -147,28 +146,22 @@ The first frame on every stream is a `hello`, and the daemon answers with a
 `welcome` before anything else:
 
 ```
-hello   { node_id: "", name: "mako-cli", version: "v0.3.0", is_peer: false, token: "…" }
+hello   { name: "mako-cli", version: "v0.3.0" }
 welcome { node: { ...the daemon's Node... } }
 ```
 
 | `Hello` field | |
 |---|---|
-| `node_id` | The caller's node ID. Empty from a front-end. |
 | `name` | The caller's name: a daemon's node name, or `mako-cli` from the CLI and the app alike. |
 | `version` | The caller's build. |
-| `is_peer` | Set by a daemon. On QUIC without the token, it asks for the welcome alone. A stream on libp2p is a peer's whatever it says: it gets only its own sessions from `list_sessions`, and may not send `access`. |
-| `token` | On QUIC, the daemon's token. Left empty on a libp2p stream, which only a peer the daemon lets in can open. |
 
-**The token.** Each daemon keeps a random token in `token` in its
-configuration directory, readable by its user alone, and made the first
-time a daemon or a front-end asks for it (`config.Token`). A front-end on
-the same machine reads it from there; one elsewhere is given it in
-`MAKO_TOKEN`. On QUIC, a `hello` whose token differs is answered with an
-`error` ("authentication failed"), except one from a daemon (`is_peer`),
-which is answered with a `welcome` and nothing more: its node record without
-its agents, so a daemon probing an address learns where the other is on
-libp2p. A first frame that is not a `hello` gets an `error` too. In each
-case the stream is then done.
+A stream is a peer's or a front-end's by where it comes from, not by what
+its hello says: one on libp2p is a peer's, which gets only the daemon's own
+sessions from `list_sessions` and may not send `access`, and one on the
+socket a front-end's.
+
+A first frame that is not a `hello` gets an `error`, and the stream is then
+done.
 
 The `welcome`'s `Node` is the daemon describing itself. Its `features` and
 `revision` are what a caller checks before using newer parts of the protocol;
@@ -255,7 +248,7 @@ message Node {
   string os = 4;
   string arch = 5;
   string version = 6;
-  string source = 7; // mdns, tailscale, static, mesh, self
+  string source = 7; // mdns, tailscale, mesh, self
   google.protobuf.Timestamp last_seen = 8;
   repeated string features = 9; // protocol extensions it speaks
   repeated AgentInfo agents = 10; // what it can launch: {name, profiles}
@@ -476,14 +469,16 @@ A daemon learns of its peers these ways, recorded as the node's `source`:
 
 | Source | |
 |---|---|
-| `mdns` | Bonjour on the local network: service `_mako._udp`, with TXT records `id=`, `name=`, `version=`, `peer=` (its peer ID) and `p2p=` (its libp2p port). |
-| `tailscale` | The machines on the tailnet, by MagicDNS name (or the names configured), probed with a peer handshake on QUIC. |
-| `static` | The config's `peers`: an address probed on QUIC every 30 seconds until it answers, or a multiaddr ending in its `/p2p/` ID, linked to on libp2p. |
-| `mesh` | A node that linked to this one, or that a peer letting this one in knows of. |
+| `mdns` | Bonjour on the local network: service `_mako._udp`, with TXT records `id=`, `name=`, `version=` and `peer=` (its peer ID); the service's port is its libp2p port. |
+| `tailscale` | The machines on the tailnet, by MagicDNS name (or the names configured), probed on the libp2p port. |
+| `mesh` | A node that linked to this one, or that a peer letting this one in knows of. The config's `peers` are linked to, and recorded, this way: a host, with its libp2p port or `4243`, probed, or a multiaddr ending in its `/p2p/` ID, linked to again every 30 seconds while the link is down. |
 
-Probing a candidate is a peer handshake on QUIC: dial, `hello` as a peer,
-and take the `welcome`'s node, with its `peer_id` and `multiaddrs`. A node
-found any of these ways is linked to over libp2p.
+**Probing.** An address without a peer ID, from Tailscale or the config, is
+probed on its libp2p TCP port: the prober opens libp2p's own TLS handshake
+(`/tls/1.0.0`) with a key of the moment, which shows the daemon's peer ID
+and proves it, and hangs up. The daemon is then linked to at that peer ID,
+which holds it to it, and its node record comes as the two introduce
+themselves. A node found any of these ways is linked to over libp2p.
 
 A node not seen for five minutes is dropped, unless it is still linked or
 configured. A node learned from a peer keeps the `last_seen` that peer sent,
@@ -502,7 +497,7 @@ lets the other in.
 | Protocol | |
 |---|---|
 | `/mako/trust/1` | The two introduce themselves, and each says whether it lets the other in. |
-| `/mako/2` | The protocol's frames, one request stream to a libp2p stream, as on QUIC. Open to the peers a daemon lets in. |
+| `/mako/2` | The protocol's frames, one request to a libp2p stream, as on the socket. Open to the peers a daemon lets in. |
 | `/mako/state/2` | A daemon's `NodeState`, one message to a stream. |
 | `/mako/access/1` | A daemon asking a peer to let it in. |
 
@@ -579,7 +574,7 @@ hours.
 
 ## Compatibility
 
-The ALPN and the libp2p protocol IDs name the framing. Nodes whose names
+The libp2p protocol IDs name the framing. Nodes whose names
 differ fail the handshake and do not see each other, so every machine of a
 mesh moves to a new name together. That has happened three times:
 
@@ -590,11 +585,12 @@ mesh moves to a new name together. That has happened three times:
   protocol under mako's names, and does not see them. Its daemon moves an
   existing `sanbo` configuration directory to `mako` on its first run,
   keeping its node ID, key and identity.
-- **A shared key to keys of their own.** The first mako builds proved a
+- **A shared key to keys of their own, and a socket.** The first mako builds proved a
   mesh-wide pre-shared key on `/mako/auth/1` and published their state on
   a gossipsub topic. Builds since speak `/mako/trust/1` and
   `/mako/state/2` instead: the two link, but never introduce themselves,
-  and are hung up on.
+  and are hung up on. Front-ends reached their daemon on QUIC, UDP port
+  `4242`, with ALPN `mako/2` and a token; they now use its socket.
 
 The names change again only for a break that no addition can bridge.
 
@@ -644,7 +640,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
 ## The local hook socket
 
 Separate from the mesh, a daemon listens on a Unix socket in its private run
-directory, `hooks-<port>.sock`, for the agents it runs. It gives each Claude
+directory, `hooks.sock`, for the agents it runs. It gives each Claude
 and Codex session hooks that run the daemon's own program as
 `<program> hook <socket>`, and gives Claude a status line that runs as
 `<program> statusline <socket>`. Each run makes one connection and sends one
@@ -721,17 +717,14 @@ the keys let in.
 
 ## Security
 
+A front-end reaches its daemon on the daemon's socket, which only its user
+can open: anything running as that user can drive the daemon, and so the
+mesh as far as the daemon is let in.
+
 Between daemons on libp2p, each side is held to its peer ID, and a peer is
 let in by its key alone: a host whose key is not let in gets nothing from
 a daemon, no requests, no sessions, no relay. Keys are let in one way, and
-taken out at once.
-
-The QUIC listener is weaker. Its certificates are self-signed and not
-verified, and a front-end's token travels in the `hello`, so a host that can
-pose as a daemon's address can learn the token. A front-end talks to its
-daemon over it, normally on the same machine, where the token comes from the
-daemon's configuration directory. Keep the QUIC port on loopback, a LAN or a
-tailnet; the libp2p port may face the internet.
+taken out at once. The libp2p port may face the internet.
 
 Letting a key in hands its holder the machine: anyone it lets in can start
 programs and read and write files there. Let in the keys of your own

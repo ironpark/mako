@@ -135,7 +135,7 @@ the first run, and most of it can be edited in the app's Settings.
 {
   "name": "desktop",
   "ssh_key": "~/.ssh/id_ed25519.pub",
-  "peers": ["build-box.example.com:4242"],
+  "peers": ["build-box.example.com"],
   "discovery": {"mdns": true, "tailscale": true},
   "p2p": {"relays": ["/ip4/203.0.113.7/udp/4243/quic-v1/p2p/12D3KooW..."]},
   "agents": {
@@ -176,8 +176,9 @@ list under `context_servers`. A profile can choose a subset of them.
 `mako access` prints, and SSH keys. Edit it by hand or with `mako access`,
 `allow`, `deny`, `trust` and `revoke`; a change holds at once.
 
-**Networking.** The CLI and the app talk to their daemon on UDP port 4242,
-and daemons talk to each other on port 4243 (UDP and TCP). When a machine
+**Networking.** The CLI and the app talk to their daemon on a Unix socket
+in the configuration folder, and daemons talk to each other on port 4243
+(UDP and TCP), which `p2p.listen` can change. When a machine
 is behind NAT that no hole can be punched through, run a relay on a node
 with a public address: set `"p2p": {"relay": true}` there, run `mako addrs`
 on it, and add the address it prints to the other nodes' `p2p.relays`.
@@ -191,9 +192,8 @@ letting the laptop's in on the server.
 
 Between daemons, each side is held to its own key, and one whose key is not
 let in gets nothing: no requests, no sessions, no relay. The CLI and the app
-talk to their own daemon over QUIC with a token from the configuration
-folder, readable by your user alone, so keep port 4242 on loopback, the LAN
-or a tailnet. Port 4243 can face the internet.
+talk to their own daemon on a socket only your user can open, so nothing
+but port 4243 faces the network, and it can face the internet.
 
 ## Learn more
 

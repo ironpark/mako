@@ -61,7 +61,7 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	project, git := gitProject(t)
 	cfg := config.Default()
-	cfg.Listen = "127.0.0.1:0"
+	cfg.P2P.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
 	if err := savePrefs(prefs{DaemonMode: "embedded", Language: "en"}.normalized()); err != nil {
 		t.Fatal(err)

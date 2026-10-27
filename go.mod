@@ -13,7 +13,7 @@ require (
 	github.com/ironpark/gostty v0.0.0-20261026051858-4b9bf93132f4
 	github.com/libp2p/go-libp2p v0.51.0
 	github.com/multiformats/go-multiaddr v0.16.1
-	github.com/quic-go/quic-go v0.64.1
+	github.com/multiformats/go-multistream v0.6.1
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
 	github.com/yuin/goldmark v1.8.6
 	golang.org/x/crypto v0.56.0
@@ -81,7 +81,6 @@ require (
 	github.com/multiformats/go-multibase v0.3.0 // indirect
 	github.com/multiformats/go-multicodec v0.10.0 // indirect
 	github.com/multiformats/go-multihash v0.2.3 // indirect
-	github.com/multiformats/go-multistream v0.6.1 // indirect
 	github.com/multiformats/go-varint v0.1.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
@@ -108,6 +107,7 @@ require (
 	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
+	github.com/quic-go/quic-go v0.64.1 // indirect
 	github.com/quic-go/webtransport-go v0.13.0 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect

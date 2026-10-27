@@ -10,24 +10,25 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ironpark/mako/internal/protocol"
-	"github.com/ironpark/mako/internal/transport"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/p2p"
 )
 
 // Tailscale discovers daemons across a tailnet. Peers are enumerated from
 // MagicDNS names -- either the configured list, or whatever the local
-// tailscale CLI reports -- and each one is probed on the mako QUIC port.
+// tailscale CLI reports -- and each one is probed on the libp2p port.
 //
-// This is the "ping search" path: a name is only reported as a node once a
-// handshake against it succeeds.
+// This is the "ping search" path: a name is only reported once a probe
+// learns the peer ID of the daemon there.
 type Tailscale struct {
-	// NodeID is the local node, used to skip our own address.
-	NodeID string
-	// Hello is sent when probing a candidate.
-	Hello *protocol.Hello
+	// Self is this daemon's peer ID, to skip its own address.
+	Self string
+	// Linked reports whether the daemon is linked to a peer ID, whose
+	// host is then not probed again.
+	Linked func(peerID string) bool
 	// Hosts are MagicDNS names to probe. Empty means ask the tailscale CLI.
 	Hosts []string
-	// Port is the mako QUIC port on remote daemons.
+	// Port is the libp2p port on remote daemons.
 	Port int
 	// Interval is how often the tailnet is re-scanned.
 	Interval time.Duration
@@ -36,6 +37,27 @@ type Tailscale struct {
 	// Binary is the tailscale CLI to consult; defaults to "tailscale" on
 	// the PATH, else the CLI inside the macOS app.
 	Binary string
+
+	mu    sync.Mutex
+	known map[string]string // host -> the peer ID a probe found there
+}
+
+// skip reports whether host need not be probed: the peer last found there
+// is linked.
+func (t *Tailscale) skip(host string) bool {
+	t.mu.Lock()
+	id := t.known[host]
+	t.mu.Unlock()
+	return id != "" && t.Linked != nil && t.Linked(id)
+}
+
+func (t *Tailscale) found(host, id string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.known == nil {
+		t.known = map[string]string{}
+	}
+	t.known[host] = id
 }
 
 // Kind identifies the backend.
@@ -76,19 +98,25 @@ func (t *Tailscale) scan(ctx context.Context, out chan<- Found) {
 
 	var wg sync.WaitGroup
 	for _, host := range hosts {
+		if t.skip(host) {
+			continue
+		}
 		addr := net.JoinHostPort(host, fmt.Sprint(t.port()))
 		wg.Add(1)
-		go func(addr string) {
+		go func(host, addr string) {
 			defer wg.Done()
-			node, err := transport.Probe(ctx, addr, t.Hello, timeout)
-			if err != nil || node.GetId() == "" || node.GetId() == t.NodeID {
+			probeCtx, cancel := context.WithTimeout(ctx, timeout)
+			id, addrs, err := p2p.Resolve(probeCtx, addr)
+			cancel()
+			if err != nil || id.String() == t.Self {
 				return
 			}
+			t.found(host, id.String())
 			select {
-			case out <- Found{NodeID: node.GetId(), Name: node.GetName(), Addr: addr, Source: "tailscale", PeerID: node.GetPeerId(), Multiaddrs: node.GetMultiaddrs()}:
+			case out <- Found{Addr: addr, Source: "tailscale", PeerID: id.String(), Multiaddrs: addrs}:
 			case <-ctx.Done():
 			}
-		}(addr)
+		}(host, addr)
 	}
 	wg.Wait()
 }
@@ -143,7 +171,7 @@ func tailscaleCLI() string {
 
 func (t *Tailscale) port() int {
 	if t.Port == 0 {
-		return 4242
+		return config.DefaultP2PPort
 	}
 	return t.Port
 }

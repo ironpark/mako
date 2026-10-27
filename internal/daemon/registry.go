@@ -1,6 +1,6 @@
 // Package daemon implements the mako background service: it owns local agent
-// sessions, tracks peer daemons, and serves front-ends over QUIC and peers
-// over libp2p.
+// sessions, tracks peer daemons, and serves front-ends on its socket and
+// peers over libp2p.
 package daemon
 
 import (
@@ -101,11 +101,7 @@ func (p *peerTable) upsert(node *protocol.Node) bool {
 	defer p.mu.Unlock()
 	prev, existed := p.nodes[node.GetId()]
 	if existed {
-		// A configured peer stays static however else it is seen, so prune
-		// never drops it; details the new sighting lacks are kept.
-		if prev.GetSource() == "static" {
-			node.Source = "static"
-		}
+		// Details the new sighting lacks are kept.
 		if node.GetOs() == "" {
 			node.Os, node.Arch, node.Version = prev.GetOs(), prev.GetArch(), prev.GetVersion()
 		}
@@ -172,15 +168,15 @@ func (p *peerTable) list() []*protocol.Node {
 	return out
 }
 
-// prune drops nodes not seen within ttl, but those configured and those
-// linked says are still linked, and reports whether it did.
+// prune drops nodes not seen within ttl, but those linked says are still
+// linked, and reports whether it did.
 func (p *peerTable) prune(ttl time.Duration, linked func(*protocol.Node) bool) bool {
 	cutoff := time.Now().Add(-ttl)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	dropped := false
 	for id, node := range p.nodes {
-		if node.GetSource() != "self" && node.GetSource() != "static" && protocol.TimeOf(node.GetLastSeen()).Before(cutoff) && !linked(node) {
+		if node.GetSource() != "self" && protocol.TimeOf(node.GetLastSeen()).Before(cutoff) && !linked(node) {
 			delete(p.nodes, id)
 			dropped = true
 		}

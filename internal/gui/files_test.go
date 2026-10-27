@@ -37,7 +37,7 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := config.Default()
-	cfg.Listen = "127.0.0.1:0"
+	cfg.P2P.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
 	if err := savePrefs(prefs{DaemonMode: "embedded"}.normalized()); err != nil {
 		t.Fatal(err)

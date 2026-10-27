@@ -26,7 +26,7 @@ type hostDraft struct {
 
 func draftFrom(cfg *config.Config) hostDraft {
 	return hostDraft{
-		Name: cfg.Name, Listen: cfg.Listen, SSHKey: cfg.SSHKey,
+		Name: cfg.Name, Listen: cfg.P2P.Listen, SSHKey: cfg.SSHKey,
 		MDNS: cfg.Discovery.MDNS, Tailscale: cfg.Discovery.Tailscale,
 		TailnetHosts: strings.Join(cfg.Discovery.TailnetHosts, "\n"),
 		Peers:        strings.Join(cfg.Peers, "\n"),
@@ -42,11 +42,11 @@ func (d hostDraft) apply(cfg config.Config) (config.Config, error) {
 	if strings.TrimSpace(d.Name) == "" {
 		return cfg, errors.New(T("the node needs a name"))
 	}
-	if strings.TrimSpace(d.Listen) == "" {
-		return cfg, fmt.Errorf(T("the node needs a listen address, such as :%d"), config.DefaultPort)
+	if _, _, err := (config.P2P{Listen: strings.TrimSpace(d.Listen)}).HostPort(); err != nil {
+		return cfg, fmt.Errorf(T("the listen address is a host and a port, such as :%d"), config.DefaultP2PPort)
 	}
 	cfg.Name = strings.TrimSpace(d.Name)
-	cfg.Listen = strings.TrimSpace(d.Listen)
+	cfg.P2P.Listen = strings.TrimSpace(d.Listen)
 	cfg.SSHKey = strings.TrimSpace(d.SSHKey)
 	cfg.Discovery.MDNS = d.MDNS
 	cfg.Discovery.Tailscale = d.Tailscale

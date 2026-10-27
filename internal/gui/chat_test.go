@@ -28,7 +28,7 @@ func TestChatSwitchKeepsLiveSessionAndComposer(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := config.Default()
-	cfg.Listen = "127.0.0.1:0"
+	cfg.P2P.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
 	cfg.Agents = map[string]agentspec.Agent{"claude": {Command: []string{"/bin/sh", "-c", `exec 3>>"$TEST_LOG_PATH"; exec cat`}, Env: map[string]string{"CLAUDE_CONFIG_DIR": logs, "TEST_LOG_PATH": path}}}
 	if err := savePrefs(prefs{DaemonMode: "embedded", Language: "en"}.normalized()); err != nil {

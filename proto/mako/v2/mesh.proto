@@ -7,15 +7,15 @@ import "mako/v2/session.proto";
 
 option go_package = "github.com/ironpark/mako/internal/protocol";
 
-// Hello opens every stream and says who is calling.
+// Hello opens every stream and says who is calling, for the log: whether
+// the caller is a front-end or a peer is where the stream comes from.
 message Hello {
-  string node_id = 1; // empty from a front-end
   string name = 2;
   string version = 3;
-  bool is_peer = 4; // from another daemon
-  // token is the daemon's front-end token, kept in its configuration
-  // directory, which a front-end on its machine reads.
-  string token = 5;
+  // node_id and is_peer said who called; auth_tag and token carried the
+  // mesh's key, then a front-end's token, before the socket.
+  reserved 1, 4, 5;
+  reserved "node_id", "is_peer", "auth_tag", "token";
 }
 
 // Welcome answers a Hello: the daemon describing itself.
@@ -31,7 +31,7 @@ message Node {
   string os = 4;
   string arch = 5;
   string version = 6;
-  string source = 7; // mdns, tailscale, static, mesh, self
+  string source = 7; // mdns, tailscale, mesh, self
   google.protobuf.Timestamp last_seen = 8;
   repeated string features = 9; // protocol extensions it speaks
   repeated AgentInfo agents = 10; // what it can launch

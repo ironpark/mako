@@ -28,7 +28,7 @@ func TestAppRunsItsOwnDaemon(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	cfg := config.Default()
 	cfg.Name = "inside"
-	cfg.Listen = "127.0.0.1:0"
+	cfg.P2P.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
 	if err := savePrefs(prefs{DaemonMode: "embedded"}.normalized()); err != nil {
 		t.Fatal(err)
@@ -73,7 +73,7 @@ func TestAppRunsItsOwnDaemon(t *testing.T) {
 func TestAutoPrefersARunningDaemon(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	cfg := config.Default()
-	cfg.Listen = "127.0.0.1:0"
+	cfg.P2P.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
 
 	// Another daemon is already up: an app in auto mode uses it.
@@ -110,7 +110,7 @@ func TestAutoPrefersARunningDaemon(t *testing.T) {
 func TestRestartResumesOnlyVisibleSession(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	cfg := config.Default()
-	cfg.Listen = "127.0.0.1:0"
+	cfg.P2P.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
 	if err := savePrefs(prefs{DaemonMode: "embedded"}.normalized()); err != nil {
 		t.Fatal(err)

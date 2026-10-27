@@ -15,10 +15,8 @@ import (
 // hello is the greeting this daemon sends when it dials someone.
 func (d *Daemon) hello() *protocol.Hello {
 	return &protocol.Hello{
-		NodeId:  d.cfg.NodeID,
 		Name:    d.cfg.Name,
 		Version: config.Version,
-		IsPeer:  true,
 	}
 }
 

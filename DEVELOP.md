@@ -54,7 +54,7 @@ take it out before you commit.
     proto/mako/v2        the protocol's protobuf schema
 
     internal/protocol    the generated messages, their framing and constants
-    internal/transport   QUIC listener and dialer, the node's self-signed certificate
+    internal/transport   frames on a stream; the daemon's Unix socket
     internal/p2p         the libp2p host: identity, keys and one-way trust, relays
     internal/discovery   Bonjour (mDNS) and Tailscale peer search
     internal/daemon      sessions, the peer table, mesh state, request routing, hooks
@@ -74,9 +74,9 @@ take it out before you commit.
 ## Architecture
 
 ```
- mako, mako-gui ──QUIC──▶ makod (this machine) ──libp2p──▶ makod (another)
-                                │                                │
-                           PTY sessions                     PTY sessions
+ mako, mako-gui ──socket──▶ makod (this machine) ──libp2p──▶ makod (another)
+                                  │                                │
+                             PTY sessions                     PTY sessions
 ```
 
 **The daemon owns the sessions.** `makod` runs on every machine and owns
@@ -98,14 +98,16 @@ by a mako node with a public address. Each daemon pushes its state to its
 peers directly, not over gossip, which could not keep it from a peer it
 does not let in.
 
-**Front-ends show a token.** The daemon keeps a random token in its
-configuration folder; the CLI and the app on the same machine read it and
-show it in their `hello`.
+**Front-ends reach their daemon on its socket.** The daemon listens on a
+Unix socket in its configuration folder that only its user can open, one
+connection to a request. The socket stands for a token: there is none.
 
 **Discovery feeds one peer table.** Bonjour finds daemons on the same
 link, Tailscale's peer list finds those on the tailnet, and `peers` in the
-config names the rest. A node found any of these ways is linked over
-libp2p, and a daemon tells the peers it lets in of the nodes it knows.
+config names the rest. An address without a peer ID is probed on its
+libp2p port, whose TLS handshake shows the ID. A node found any of these
+ways is linked over libp2p, and a daemon tells the peers it lets in of the
+nodes it knows.
 
 **Terminal state lives on both ends.** Every session feeds its PTY output
 into a [gostty](https://github.com/ironpark/gostty) terminal as well as to
@@ -251,5 +253,5 @@ configuration.
 | `makod -v` | Debug logging |
 | `mako-gui -render-dir <dir>` | Renders the window against the running daemon to PNGs, without showing it, then exits: for reviewing layout changes |
 | `mako-gui -pprof 127.0.0.1:6060`, or `MAKO_PPROF` | Serves Go's profiles |
-| `mako-gui -daemon <addr>` | Talks to another daemon |
+| `mako-gui -daemon <socket>` | Talks to another daemon, as one forwarded with `ssh -L` |
 | `MAKO_HOME` | Uses another configuration directory, for a second daemon on one machine |

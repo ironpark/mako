@@ -241,7 +241,6 @@ var catalogKo = map[string]string{
 	"Ask before a session is stopped from the window.":    "창에서 세션을 중지하기 전에 묻습니다.",
 	"Connection":      "연결",
 	"External daemon": "외부 데몬",
-	"The makod to use when the daemon does not run in the app. Empty is the one on this machine; it relays to the rest of the mesh.": "데몬을 앱 안에서 실행하지 않을 때 쓸 makod. 비워 두면 이 기기의 데몬을 쓰며, 나머지 메시로 중계합니다.",
 	"Not connected":   "연결되지 않음",
 	"Connected to %s": "%s에 연결됨",
 
@@ -310,7 +309,6 @@ var catalogKo = map[string]string{
 	"Saved. Restart makod for the daemon to use it.": "저장했습니다. 적용하려면 makod를 재시작하세요.",
 	"Could not save: %v":                             "저장하지 못했습니다: %v",
 	"the node needs a name":                          "노드 이름이 필요합니다",
-	"the node needs a listen address, such as :%d":   ":%d 같은 수신 주소가 필요합니다",
 
 	// Settings: daemon
 	"Where this machine's daemon runs. The app can run it itself, so nothing else needs installing.": "이 기기의 데몬이 실행되는 곳. 앱이 직접 실행할 수 있어 따로 설치할 것이 없습니다.",
@@ -332,12 +330,11 @@ var catalogKo = map[string]string{
 	"The app's daemon is not running.": "앱의 데몬이 실행 중이 아닙니다.",
 	"The app's daemon is stopped.":     "앱의 데몬이 중지되었습니다.",
 	"Looking for a daemon…":            "데몬을 찾는 중…",
-	". Another makod is listening there; choose External, or change the listen address under Host.": ". 다른 makod가 이미 그 주소를 쓰고 있습니다. 외부를 선택하거나 호스트에서 수신 주소를 바꾸세요.",
-	"saved":               "대기 중",
-	"Restart":             "재시작",
-	"Stop":                "중지",
-	"Start":               "시작",
-	"Nothing logged yet.": "아직 기록된 로그가 없습니다.",
+	"saved":                            "대기 중",
+	"Restart":                          "재시작",
+	"Stop":                             "중지",
+	"Start":                            "시작",
+	"Nothing logged yet.":              "아직 기록된 로그가 없습니다.",
 
 	// Settings: host
 	"This machine's daemon: how it is named and where it listens.": "이 기기의 데몬: 이름과 수신 주소.",
@@ -686,8 +683,11 @@ var catalogKo = map[string]string{
 	"The key is let in.": "키를 허용했습니다.",
 	"The public key of an SSH key of yours, such as ~/.ssh/id_ed25519.pub, its private half in the SSH agent or beside it without a passphrase. Nodes that let the key in let this node in, and the nodes it vouches for let each other in.": "내 SSH 키의 공개 키(예: ~/.ssh/id_ed25519.pub). 개인 키는 SSH 에이전트에 있거나, 암호 없이 같은 위치에 있어야 합니다. 이 키를 허용한 노드는 이 노드를 허용하고, 이 키가 보증하는 노드끼리는 서로 허용합니다.",
 	"The SSH key that vouches for this node.": "이 노드를 보증하는 SSH 키.",
-	"UDP address for QUIC, such as :4242, where front-ends reach the daemon with the token in its configuration folder.": "QUIC용 UDP 주소(예: :4242). 앱과 CLI는 설정 폴더의 토큰으로 이 주소의 데몬에 접속합니다.",
-	"Vouch with an SSH key": "SSH 키로 보증",
-	"Vouched for by":        "보증하는 키",
+	"Vouch with an SSH key":                   "SSH 키로 보증",
+	"Vouched for by":                          "보증하는 키",
 	"Who this node lets in. A node it lets in can start programs and read and write files here; trust runs one way, so that node must let this one in for the reverse.": "이 노드가 허용하는 노드. 허용된 노드는 여기서 프로그램을 실행하고 파일을 읽고 쓸 수 있습니다. 신뢰는 한 방향이라, 반대 방향은 그 노드가 이 노드를 허용해야 합니다.",
+	"Where other daemons reach this one over libp2p, as host:port. Empty is every interface on port 4243.":                                                              "다른 데몬이 libp2p로 이 데몬에 접속하는 주소(host:port). 비워 두면 모든 인터페이스의 4243 포트입니다.",
+	"the listen address is a host and a port, such as :%d":                                                                                                              "수신 주소는 호스트와 포트여야 합니다. 예: :%d",
+	"The socket of the makod to use when the daemon does not run in the app. Empty is this machine's; it relays to the rest of the mesh.":                               "데몬을 앱 안에서 실행하지 않을 때 사용할 makod의 소켓. 비워 두면 이 기기의 데몬이며, 메시의 나머지로 중계합니다.",
+	". Another makod runs on this configuration; choose External or Auto.":                                                                                              ". 이 설정으로 다른 makod가 이미 실행 중입니다. 외부 또는 자동을 선택하세요.",
 }

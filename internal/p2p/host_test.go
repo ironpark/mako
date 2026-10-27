@@ -275,3 +275,20 @@ func TestAuthorizedKeysKeepTheirFile(t *testing.T) {
 		t.Fatal("a key bound to a command was let in")
 	}
 }
+
+// A probe of a host's TCP port learns its peer ID.
+func TestAProbeLearnsThePeerID(t *testing.T) {
+	h := newHost(t)
+	var tcp string
+	for _, a := range h.h.Addrs() {
+		if ip, err := a.ValueForProtocol(4); err == nil { // ip4
+			if port, err := a.ValueForProtocol(6); err == nil { // tcp
+				tcp = ip + ":" + port
+			}
+		}
+	}
+	id, err := Probe(context.Background(), tcp)
+	if err != nil || id != h.ID() {
+		t.Fatalf("probe of %s: %v %v, want %v", tcp, id, err, h.ID())
+	}
+}

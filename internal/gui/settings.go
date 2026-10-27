@@ -260,8 +260,8 @@ func generalSettings(m *model) ggui.Widget {
 		),
 		section(T("Connection"),
 			card(
-				row(T("External daemon"), T("The makod to use when the daemon does not run in the app. Empty is the one on this machine; it relays to the rest of the mesh."),
-					ggui.Box(ui.TextField(daemon).Placeholder("127.0.0.1:4242").Name(T("External daemon")).
+				row(T("External daemon"), T("The socket of the makod to use when the daemon does not run in the app. Empty is this machine's; it relays to the rest of the mesh."),
+					ggui.Box(ui.TextField(daemon).Placeholder("daemon.sock").Name(T("External daemon")).
 						BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return p.DaemonMode == "embedded" }))).Width(220)),
 				ggui.Box(status).Pad(12, 16),
 			),
@@ -442,8 +442,8 @@ func daemonSettings(m *model) ggui.Widget {
 		if s.Err != "" {
 			ok = false
 			hint = s.Err
-			if strings.Contains(s.Err, "address already in use") {
-				hint += T(". Another makod is listening there; choose External, or change the listen address under Host.")
+			if s.InUse {
+				hint += T(". Another makod runs on this configuration; choose External or Auto.")
 			}
 		}
 		text := []ggui.Widget{ggui.Row(linkDot(ok), ggui.Text(title).Size(13.5)).Gap(8)}
@@ -501,8 +501,8 @@ func hostSettings(m *model) ggui.Widget {
 		),
 		section(T("Network"),
 			card(
-				row(T("Listen address"), T("UDP address for QUIC, such as :4242, where front-ends reach the daemon with the token in its configuration folder."),
-					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Listen })).Name(T("Listen address"))).Width(240)),
+				row(T("Listen address"), T("Where other daemons reach this one over libp2p, as host:port. Empty is every interface on port 4243."),
+					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Listen })).Placeholder(":4243").Name(T("Listen address"))).Width(240)),
 			),
 		),
 		section(T("libp2p"),

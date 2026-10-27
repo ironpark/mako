@@ -507,7 +507,7 @@ func (m *model) client(ctx context.Context) (*client.Client, error) {
 	}
 	dialCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	c, err := client.Dial(dialCtx, addr, "")
+	c, err := client.Dial(dialCtx, addr)
 	if err != nil {
 		return nil, err
 	}

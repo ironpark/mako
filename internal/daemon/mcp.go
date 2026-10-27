@@ -55,7 +55,7 @@ func (d *Daemon) withContextServers(ctx context.Context, launch agentspec.Launch
 	if len(servers) == 0 {
 		return command, func() {}
 	}
-	run, err := config.RunDir()
+	run, err := config.RunDir(d.dir)
 	if err != nil {
 		d.log.Warn("mcp: no directory for the agent's configuration", "err", err)
 		return command, func() {}

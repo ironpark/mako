@@ -18,7 +18,7 @@ func main() {
 	if daemon.HookMain() {
 		return
 	}
-	daemonAddr := flag.String("daemon", "", "daemon address (default 127.0.0.1:4242)")
+	daemonAddr := flag.String("daemon", "", "the daemon's socket (default: the configuration directory's)")
 	renderDir := flag.String("render-dir", "", "render the window to PNGs in this directory, then exit (development)")
 	pprofAddr := flag.String("pprof", os.Getenv("MAKO_PPROF"), "serve Go's profiles on this address, as 127.0.0.1:6060 (development)")
 	flag.Parse()

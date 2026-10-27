@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -17,15 +18,9 @@ import (
 // An attach replays the screen, streams live output, and ends with the exit
 // code.
 func TestAttachCarriesSnapshotOutputAndExit(t *testing.T) {
-	tlsConf, err := transport.ServerTLS(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ln, err := transport.Listen("127.0.0.1:0", tlsConf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ln.Close()
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
 
 	s, err := session.Start(session.Spec{
 		ID:      "s",
@@ -49,38 +44,16 @@ func TestAttachCarriesSnapshotOutputAndExit(t *testing.T) {
 
 	serveErr := make(chan error, 1)
 	go func() {
-		conn, err := ln.Accept(ctx)
+		served := transport.NewStream(b)
+		env, err := served.Recv()
 		if err != nil {
 			serveErr <- err
 			return
 		}
-		stream, err := transport.AcceptStream(ctx, conn)
-		if err != nil {
-			serveErr <- err
-			conn.CloseWithError(0, "done")
-			return
-		}
-		env, err := stream.Recv()
-		if err != nil {
-			serveErr <- err
-			conn.CloseWithError(0, "done")
-			return
-		}
-		serveErr <- d.handleAttach(ctx, stream, env)
-		// Keep the connection up until the test has read what was written.
-		<-ctx.Done()
-		conn.CloseWithError(0, "done")
+		serveErr <- d.handleAttach(ctx, served, env)
 	}()
 
-	conn, err := transport.Dial(ctx, ln.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.CloseWithError(0, "done")
-	stream, err := transport.OpenStream(ctx, conn)
-	if err != nil {
-		t.Fatal(err)
-	}
+	stream := transport.NewStream(a)
 	_ = stream.SetReadDeadline(time.Now().Add(5 * time.Second))
 	if err := stream.Send(protocol.TypeAttach, "", &protocol.Attach{SessionId: "s", Replay: true}); err != nil {
 		t.Fatal(err)

@@ -14,6 +14,8 @@ import (
 
 // Found reports one discovered daemon.
 type Found struct {
+	// NodeID is the node's, if the backend learns it; one found by its
+	// peer ID alone is known by its node ID once linked.
 	NodeID string
 	Name   string
 	Addr   string

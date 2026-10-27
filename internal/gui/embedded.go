@@ -3,10 +3,9 @@ package gui
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"maps"
-	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/daemon"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // The app can run the daemon itself, in its own process, so a machine needs
@@ -36,6 +36,7 @@ type daemonState struct {
 	Starting bool
 	Addr     string // the address the window talks through
 	Err      string
+	InUse    bool // another makod runs on this configuration
 	Since    time.Time
 }
 
@@ -86,7 +87,7 @@ func (e *embeddedDaemon) start(cfg config.Config, ready func(addr string), exite
 	go func() {
 		select {
 		case <-d.Ready():
-			ready(dialable(d.Addr()))
+			ready(d.Socket())
 		case <-done:
 		}
 	}()
@@ -111,21 +112,9 @@ func (e *embeddedDaemon) running() bool {
 	return e.cancel != nil
 }
 
-// dialable turns a listen address into one a client on this machine can
-// dial: an unspecified host, as ":4242" listens on, becomes loopback.
-func dialable(a net.Addr) string {
-	host, port, err := net.SplitHostPort(a.String())
-	if err != nil {
-		return a.String()
-	}
-	if ip := net.ParseIP(host); host == "" || (ip != nil && ip.IsUnspecified()) {
-		host = "127.0.0.1"
-	}
-	return net.JoinHostPort(host, port)
-}
-
-// externalAddr is the makod the window looks for: the settings' address,
-// else the -daemon flag, else the local default.
+// externalAddr is the socket of the makod the window looks for: the
+// settings', else the -daemon flag's, else the one of this machine's
+// configuration directory.
 func (m *model) externalAddr() string {
 	if d := ggui.Peek(m.Prefs).Daemon; d != "" {
 		return d
@@ -133,7 +122,8 @@ func (m *model) externalAddr() string {
 	if m.addr != "" {
 		return m.addr
 	}
-	return net.JoinHostPort("127.0.0.1", strconv.Itoa(config.DefaultPort))
+	path, _ := config.SocketPath("")
+	return path
 }
 
 // applyDaemonMode brings the daemon in line with the mode setting. It runs
@@ -147,7 +137,7 @@ func (m *model) applyDaemonMode() {
 		m.useExternal()
 	default: // auto
 		if m.embedded.running() {
-			return // already ours; probing the same port would find it
+			return // already ours; probing its socket would find it
 		}
 		addr := m.externalAddr()
 		m.linked.Store(false)
@@ -155,7 +145,7 @@ func (m *model) applyDaemonMode() {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 			defer cancel()
-			c, err := client.Dial(ctx, addr, "")
+			c, err := client.Dial(ctx, addr)
 			if err == nil {
 				_ = c.Close()
 			}
@@ -214,6 +204,7 @@ func (m *model) startEmbedded() {
 					s.Running, s.Starting = false, false
 					if err != nil {
 						s.Err = err.Error()
+						s.InUse = errors.Is(err, transport.ErrInUse)
 					}
 				})
 			})

@@ -23,10 +23,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// ALPN is the QUIC application protocol identifier for mako: mako/2 is
-// the protobuf framing, which a mako/1 (JSON) peer cannot speak.
-const ALPN = "mako/2"
-
 // MaxFrameSize caps a single frame so a peer cannot force an allocation storm.
 const MaxFrameSize = 8 << 20
 

@@ -22,16 +22,12 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Hello opens every stream and says who is calling.
+// Hello opens every stream and says who is calling, for the log: whether
+// the caller is a front-end or a peer is where the stream comes from.
 type Hello struct {
-	state   protoimpl.MessageState `protogen:"open.v1"`
-	NodeId  string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // empty from a front-end
-	Name    string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Version string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
-	IsPeer  bool                   `protobuf:"varint,4,opt,name=is_peer,json=isPeer,proto3" json:"is_peer,omitempty"` // from another daemon
-	// token is the daemon's front-end token, kept in its configuration
-	// directory, which a front-end on its machine reads.
-	Token         string `protobuf:"bytes,5,opt,name=token,proto3" json:"token,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Version       string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -66,13 +62,6 @@ func (*Hello) Descriptor() ([]byte, []int) {
 	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *Hello) GetNodeId() string {
-	if x != nil {
-		return x.NodeId
-	}
-	return ""
-}
-
 func (x *Hello) GetName() string {
 	if x != nil {
 		return x.Name
@@ -83,20 +72,6 @@ func (x *Hello) GetName() string {
 func (x *Hello) GetVersion() string {
 	if x != nil {
 		return x.Version
-	}
-	return ""
-}
-
-func (x *Hello) GetIsPeer() bool {
-	if x != nil {
-		return x.IsPeer
-	}
-	return false
-}
-
-func (x *Hello) GetToken() string {
-	if x != nil {
-		return x.Token
 	}
 	return ""
 }
@@ -155,7 +130,7 @@ type Node struct {
 	Os       string                 `protobuf:"bytes,4,opt,name=os,proto3" json:"os,omitempty"`
 	Arch     string                 `protobuf:"bytes,5,opt,name=arch,proto3" json:"arch,omitempty"`
 	Version  string                 `protobuf:"bytes,6,opt,name=version,proto3" json:"version,omitempty"`
-	Source   string                 `protobuf:"bytes,7,opt,name=source,proto3" json:"source,omitempty"` // mdns, tailscale, static, mesh, self
+	Source   string                 `protobuf:"bytes,7,opt,name=source,proto3" json:"source,omitempty"` // mdns, tailscale, mesh, self
 	LastSeen *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
 	Features []string               `protobuf:"bytes,9,rep,name=features,proto3" json:"features,omitempty"`   // protocol extensions it speaks
 	Agents   []*AgentInfo           `protobuf:"bytes,10,rep,name=agents,proto3" json:"agents,omitempty"`      // what it can launch
@@ -936,13 +911,10 @@ var File_mako_v2_mesh_proto protoreflect.FileDescriptor
 
 const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\n" +
-	"\x12mako/v2/mesh.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x15mako/v2/session.proto\"}\n" +
-	"\x05Hello\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
+	"\x12mako/v2/mesh.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x15mako/v2/session.proto\"j\n" +
+	"\x05Hello\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
-	"\aversion\x18\x03 \x01(\tR\aversion\x12\x17\n" +
-	"\ais_peer\x18\x04 \x01(\bR\x06isPeer\x12\x14\n" +
-	"\x05token\x18\x05 \x01(\tR\x05token\",\n" +
+	"\aversion\x18\x03 \x01(\tR\aversionJ\x04\b\x01\x10\x02J\x04\b\x04\x10\x05J\x04\b\x05\x10\x06R\anode_idR\ais_peerR\bauth_tagR\x05token\",\n" +
 	"\aWelcome\x12!\n" +
 	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\"\xc9\x03\n" +
 	"\x04Node\x12\x0e\n" +

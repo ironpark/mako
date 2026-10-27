@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"time"
@@ -28,19 +27,10 @@ const stageChunk = 4 << 20
 const stageTimeout = 5 * time.Minute
 
 // onThisMachine reports whether node runs on the machine the window does,
-// and so reads the same disk: the window's own daemon, reached at a
-// loopback address.
+// and so reads the same disk: the window's own daemon, whose socket is
+// here.
 func (m *model) onThisMachine(node string) bool {
-	if node != "" && node != ggui.Peek(m.Conn).Self.GetId() {
-		return false
-	}
-	addr := m.daemonAddr()
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		host = addr
-	}
-	ip := net.ParseIP(host)
-	return host == "" || host == "localhost" || ip != nil && ip.IsLoopback()
+	return node == "" || node == ggui.Peek(m.Conn).Self.GetId()
 }
 
 // handOver gives session id the files at paths on this machine: the paths

@@ -7,11 +7,10 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strconv"
+	"sync"
 	"syscall"
 
 	"github.com/creack/pty"
-	"github.com/quic-go/quic-go"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/config"
@@ -19,63 +18,66 @@ import (
 	"github.com/ironpark/mako/internal/transport"
 )
 
-// Client is a front-end connection to one daemon, which relays to the rest of
-// the mesh on its behalf.
+// Client is a front-end's link to the daemon of its machine, which relays
+// to the rest of the mesh on its behalf. Each request is a connection of
+// its own to the daemon's socket, which Close hangs up.
 type Client struct {
-	conn  *quic.Conn
-	node  *protocol.Node
-	token string
+	path   string
+	ctx    context.Context // done once the client is closed
+	cancel context.CancelFunc
+
+	mu   sync.Mutex
+	node *protocol.Node
 }
 
-// Dial connects to a daemon, showing it token. An empty addr means the
-// local daemon, and an empty token the one of this machine's
-// configuration (config.Token).
-func Dial(ctx context.Context, addr, token string) (*Client, error) {
-	if token == "" {
+// Dial reaches the daemon on the socket at path; empty path is the socket
+// of this machine's configuration (config.SocketPath).
+func Dial(ctx context.Context, path string) (*Client, error) {
+	if path == "" {
 		var err error
-		if token, err = config.Token(""); err != nil {
+		if path, err = config.SocketPath(""); err != nil {
 			return nil, err
 		}
 	}
-	if addr == "" {
-		addr = net.JoinHostPort("127.0.0.1", strconv.Itoa(config.DefaultPort))
-	} else if _, _, err := net.SplitHostPort(addr); err != nil {
-		addr = net.JoinHostPort(addr, strconv.Itoa(config.DefaultPort))
-	}
-	conn, err := transport.Dial(ctx, addr)
+	c := &Client{path: path}
+	c.ctx, c.cancel = context.WithCancel(context.Background())
+	s, err := c.stream(ctx)
 	if err != nil {
+		c.cancel()
 		return nil, err
 	}
-	c := &Client{conn: conn, token: token}
-
-	stream, node, err := transport.Handshake(ctx, conn, &protocol.Hello{
-		Name:    "mako-cli",
-		Version: config.Version,
-		Token:   token,
-	})
-	if err != nil {
-		conn.CloseWithError(0, "handshake")
-		return nil, err
-	}
-	stream.Close()
-	c.node = node
+	s.Close()
 	return c, nil
 }
 
 // Node reports the daemon this client is attached to, a copy of its own.
-func (c *Client) Node() *protocol.Node { return proto.CloneOf(c.node) }
+func (c *Client) Node() *protocol.Node {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return proto.CloneOf(c.node)
+}
 
-// Close hangs up.
-func (c *Client) Close() error { return c.conn.CloseWithError(0, "bye") }
+// Close hangs up every connection the client has open.
+func (c *Client) Close() error {
+	c.cancel()
+	return nil
+}
 
-// stream opens a greeted request stream.
+// stream opens a greeted request stream: a connection of its own, hung up
+// when the client closes.
 func (c *Client) stream(ctx context.Context) (*transport.Stream, error) {
-	s, _, err := transport.Handshake(ctx, c.conn, &protocol.Hello{
-		Name:    "mako-cli",
-		Version: config.Version,
-		Token:   c.token,
-	})
-	return s, err
+	if err := c.ctx.Err(); err != nil {
+		return nil, net.ErrClosed
+	}
+	s, node, err := transport.Dial(ctx, c.path, &protocol.Hello{Name: "mako-cli", Version: config.Version})
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	c.node = node
+	c.mu.Unlock()
+	transport.CloseWith(s, c.ctx)
+	return s, nil
 }
 
 // Nodes lists the daemons the mesh knows about.

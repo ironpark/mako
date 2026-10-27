@@ -20,7 +20,7 @@ func main() {
 		return
 	}
 	var (
-		listen  = flag.String("listen", "", "QUIC listen address (default from config)")
+		listen  = flag.String("listen", "", "libp2p listen address, host:port (default from config)")
 		name    = flag.String("name", "", "node name (default from config)")
 		verbose = flag.Bool("v", false, "verbose logging")
 		version = flag.Bool("version", false, "print version and exit")
@@ -44,7 +44,7 @@ func main() {
 		os.Exit(1)
 	}
 	if *listen != "" {
-		cfg.Listen = *listen
+		cfg.P2P.Listen = *listen
 	}
 	if *name != "" {
 		cfg.Name = *name

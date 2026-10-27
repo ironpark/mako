@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -22,7 +23,7 @@ func meshDaemon(t *testing.T, name string, peers ...string) *Daemon {
 	t.Helper()
 	cfg := config.Default()
 	cfg.Name = name
-	cfg.Listen = "127.0.0.1:0"
+	cfg.P2P.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
 	cfg.Peers = peers
 	d := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -73,7 +74,7 @@ func dialDaemon(t *testing.T, d *Daemon) *client.Client {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	c, err := client.Dial(ctx, d.Addr().String(), d.Token())
+	c, err := client.Dial(ctx, d.Socket())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,31 +221,24 @@ func TestANodeAsksToBeLetIn(t *testing.T) {
 	waitFor(t, "the laptop to be let out", func() bool { return !lists(ctx, fromLaptop, "on-server") })
 }
 
-// A front-end must show the daemon's token; a daemon probing without one
-// learns who answers and nothing more, and a peer may not change who is
-// let in.
-func TestAFrontEndShowsTheToken(t *testing.T) {
+// Only this user reaches the daemon's socket; a daemon given another's
+// host and port finds it there by a probe of its libp2p port; and a peer
+// may not change who is let in.
+func TestTheSocketIsTheUsersAndPeersAreFoundByProbe(t *testing.T) {
 	d := meshDaemon(t, "d")
-	addSession(t, d, "on-d")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if _, err := client.Dial(ctx, d.Addr().String(), "wrong"); err == nil {
-		t.Fatal("a front-end with the wrong token got in")
-	}
-	node, err := transport.Probe(ctx, d.Addr().String(), &protocol.Hello{NodeId: "x", IsPeer: true}, 5*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if node.GetPeerId() != d.p2p.ID().String() || len(node.GetAgents()) != 0 {
-		t.Fatalf("a probe learned %v", node)
+	info, err := os.Stat(d.Socket())
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("the socket: %v %v", info.Mode(), err)
 	}
 
-	other := meshDaemon(t, "other", p2pAddr(d))
+	other := meshDaemon(t, "other", d.p2p.HostPort())
 	letIn(t, d, other)
-	waitFor(t, "d to let other in", func() bool {
+	waitFor(t, "other to find d by its host and port", func() bool {
 		p, ok := other.linkedPeer(&protocol.Node{PeerId: d.peerID()})
 		return ok && p.TrustedBy
 	})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	stream, err := other.peerStream(ctx, &protocol.Node{Name: "d", PeerId: d.peerID(), Multiaddrs: d.multiaddrs()})
 	if err != nil {
 		t.Fatal(err)

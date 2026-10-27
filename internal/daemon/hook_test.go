@@ -37,7 +37,7 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	defer os.RemoveAll(run)
 	d.hookBinary = "/opt/mako's/makod"
 	d.listenHooks(t.Context(), run)
-	socket := filepath.Join(run, "hooks-0.sock")
+	socket := filepath.Join(run, "hooks.sock")
 
 	project := t.TempDir()
 	s, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: project})
@@ -156,7 +156,7 @@ func hookedDaemon(t *testing.T) (*Daemon, *session.Session, string) {
 		t.Fatal(err)
 	}
 	t.Setenv("MAKO_SESSION", s.ID())
-	return d, s, filepath.Join(run, "hooks-0.sock")
+	return d, s, filepath.Join(run, "hooks.sock")
 }
 
 func waitFor(t *testing.T, what string, cond func() bool) {

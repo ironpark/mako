@@ -43,13 +43,13 @@ Access (trust runs one way: a node you let in can drive this one):
   mako revoke <fingerprint>         take a key out
 
 Flags:
-  -daemon <addr>   daemon to talk to (default 127.0.0.1:4242)
+  -daemon <path>   the daemon's socket (default: the configuration directory's)
   -node <id>       run on / target this node instead of the local one
   -project <dir>   working directory for a new session (default: cwd)
 `
 
 func main() {
-	daemonAddr := flag.String("daemon", "", "daemon address")
+	daemonAddr := flag.String("daemon", "", "the daemon's socket")
 	nodeID := flag.String("node", "", "target node ID")
 	project := flag.String("project", "", "project directory")
 	flag.Usage = func() { fmt.Fprint(os.Stderr, usage) }
@@ -85,7 +85,7 @@ func run(args []string, daemonAddr, nodeID, project string) error {
 
 	dialCtx, dialCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer dialCancel()
-	c, err := client.Dial(dialCtx, daemonAddr, "")
+	c, err := client.Dial(dialCtx, daemonAddr)
 	if err != nil {
 		return fmt.Errorf("cannot reach daemon (is makod running?): %w", err)
 	}

@@ -3,12 +3,16 @@ package config
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/mcp"
@@ -16,9 +20,6 @@ import (
 
 // Version is the build version, overridable at link time.
 var Version = "0.1.0-dev"
-
-// DefaultPort is the UDP port the daemon listens on for QUIC.
-const DefaultPort = 4242
 
 // ServiceType is the Bonjour/mDNS service advertised by every daemon.
 const ServiceType = "_mako._udp"
@@ -29,8 +30,6 @@ type Config struct {
 	NodeID string `json:"node_id"`
 	// Name is the human-readable node name, defaulting to the hostname.
 	Name string `json:"name"`
-	// Listen is the QUIC listen address.
-	Listen string `json:"listen"`
 	// Domain is the mDNS domain to advertise and browse in.
 	Domain string `json:"domain"`
 	// Peers are statically configured peer addresses, always dialed.
@@ -56,11 +55,13 @@ type Config struct {
 
 // P2P configures the daemon's libp2p host, which its peers reach it on.
 type P2P struct {
-	// Disabled leaves the daemon to the older QUIC links alone.
+	// Disabled leaves the daemon without peers.
 	Disabled bool `json:"disabled,omitempty"`
-	// Port is the UDP (QUIC) and TCP port; 0 is DefaultP2PPort, or any
-	// free port when Listen's port is 0.
-	Port int `json:"port,omitempty"`
+	// Listen is the address libp2p listens on, as host:port: QUIC on the
+	// UDP port and TCP on the TCP one. An empty host is every interface,
+	// and port 0 any free port; empty Listen is every interface on
+	// DefaultP2PPort.
+	Listen string `json:"listen,omitempty"`
 	// Relay makes this daemon a relay for the mesh's other nodes. Turn it
 	// on for a node with a public address.
 	Relay bool `json:"relay,omitempty"`
@@ -71,6 +72,32 @@ type P2P struct {
 
 // DefaultP2PPort is the port the daemon listens on for libp2p.
 const DefaultP2PPort = 4243
+
+// HostPort is where libp2p listens: Listen's host and port, or every
+// interface on DefaultP2PPort when it is empty.
+func (p P2P) HostPort() (string, int, error) {
+	if p.Listen == "" {
+		return "", DefaultP2PPort, nil
+	}
+	host, port, err := net.SplitHostPort(p.Listen)
+	if err != nil {
+		return "", 0, fmt.Errorf("p2p.listen %q: %w", p.Listen, err)
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 0 || n > 65535 {
+		return "", 0, fmt.Errorf("p2p.listen %q: the port is not a port", p.Listen)
+	}
+	return host, n, nil
+}
+
+// WithP2PPort is addr, a host with or without its port, with
+// DefaultP2PPort where it has none.
+func WithP2PPort(addr string) string {
+	if _, _, err := net.SplitHostPort(addr); err != nil {
+		return net.JoinHostPort(addr, strconv.Itoa(DefaultP2PPort))
+	}
+	return addr
+}
 
 // Discovery selects which peer discovery backends run.
 type Discovery struct {
@@ -115,10 +142,6 @@ func Path() (string, error) {
 func ExtensionsDir() (string, error)     { return subdir("extensions") }
 func ExtensionsWorkDir() (string, error) { return subdir("extension-work") }
 
-// RunDir holds files that live as long as a session, as an agent's MCP
-// configuration.
-func RunDir() (string, error) { return subdir("run") }
-
 func subdir(name string) (string, error) {
 	dir, err := Dir()
 	if err != nil {
@@ -127,47 +150,49 @@ func subdir(name string) (string, error) {
 	return filepath.Join(dir, name), nil
 }
 
-// tokenFile holds the token front-ends show the daemon of their machine.
-const tokenFile = "token"
+// maxSocketPath is the longest socket path every platform takes (macOS's
+// sun_path holds 104 bytes), with room for a socket's name.
+const maxSocketPath = 100 - len("/daemon.sock")
 
-// Token is the token front-ends show the daemon whose configuration
-// directory is dir, made the first time it is asked for; MAKO_TOKEN
-// overrides it, for a daemon on another machine.
-func Token(dir string) (string, error) {
-	if t := os.Getenv("MAKO_TOKEN"); t != "" {
-		return t, nil
-	}
+// RunDir is where the daemon whose configuration directory is dir keeps
+// what lives as long as it runs: its sockets and its sessions' MCP
+// configurations. It is run in dir, or where that is too long for a
+// socket's path, a folder of this user's named after dir in the temporary
+// directory. Only this user may enter it. Empty dir is Dir.
+func RunDir(dir string) (string, error) {
 	if dir == "" {
 		var err error
 		if dir, err = Dir(); err != nil {
 			return "", err
 		}
 	}
-	path := filepath.Join(dir, tokenFile)
-	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
-		return string(data), nil
+	run := filepath.Join(dir, "run")
+	if len(run) > maxSocketPath {
+		sum := sha256.Sum256([]byte(dir))
+		name := fmt.Sprintf("mako-%d-%s", os.Getuid(), hex.EncodeToString(sum[:6]))
+		run = filepath.Join(os.TempDir(), name)
+		if len(run) > maxSocketPath && runtime.GOOS != "windows" {
+			run = filepath.Join("/tmp", name)
+		}
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := os.MkdirAll(run, 0o700); err != nil {
 		return "", err
 	}
-	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err != nil {
+	// One that someone else made first is refused here.
+	if err := os.Chmod(run, 0o700); err != nil {
 		return "", err
 	}
-	token := hex.EncodeToString(buf)
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, os.ErrExist) {
-		// Another made it first.
-		data, err := os.ReadFile(path)
-		return string(data), err
-	} else if err != nil {
+	return run, nil
+}
+
+// SocketPath is the socket the daemon whose configuration directory is
+// dir listens on for its front-ends, in its RunDir.
+func SocketPath(dir string) (string, error) {
+	run, err := RunDir(dir)
+	if err != nil {
 		return "", err
 	}
-	_, err = f.WriteString(token)
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	return token, err
+	return filepath.Join(run, "daemon.sock"), nil
 }
 
 // Default builds a configuration for a fresh install.
@@ -179,7 +204,6 @@ func Default() *Config {
 	return &Config{
 		NodeID: newNodeID(),
 		Name:   host,
-		Listen: fmt.Sprintf(":%d", DefaultPort),
 		Domain: "local.",
 		Discovery: Discovery{
 			MDNS:      true,

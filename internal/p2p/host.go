@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -231,18 +232,36 @@ func (h *Host) Addrs() []string {
 	return out
 }
 
-// Port is the port the host listens on, 0 if it cannot tell.
+// Port is the TCP port the host listens on, which a probe reaches, 0 if
+// it cannot tell.
 func (h *Host) Port() int {
+	_, port := h.tcp()
+	return port
+}
+
+// tcp is the host's first TCP address that is not loopback, or else a
+// loopback one: its IP and port.
+func (h *Host) tcp() (net.IP, int) {
+	var ip net.IP
+	port := 0
 	for _, a := range h.h.Addrs() {
-		for _, proto := range []int{ma.P_UDP, ma.P_TCP} {
-			if v, err := a.ValueForProtocol(proto); err == nil {
-				if n, err := strconv.Atoi(v); err == nil {
-					return n
-				}
-			}
+		v, err := a.ValueForProtocol(ma.P_TCP)
+		if err != nil {
+			continue
+		}
+		at, err := manet.ToIP(a)
+		if err != nil {
+			continue
+		}
+		n, _ := strconv.Atoi(v)
+		if !at.IsLoopback() {
+			return at, n
+		}
+		if ip == nil {
+			ip, port = at, n
 		}
 	}
-	return 0
+	return ip, port
 }
 
 // HandleStreams serves the mako protocol's streams with fn, from the hosts
@@ -397,9 +416,15 @@ func AddrsAt(ip string, port int) []string {
 	if strings.Contains(ip, ":") {
 		family = "ip6"
 	}
+	return addrs(family, ip, port)
+}
+
+// addrs are a host's QUIC and TCP addresses, at host of the multiaddr
+// protocol family.
+func addrs(family, host string, port int) []string {
 	return []string{
-		fmt.Sprintf("/%s/%s/udp/%d/quic-v1", family, ip, port),
-		fmt.Sprintf("/%s/%s/tcp/%d", family, ip, port),
+		fmt.Sprintf("/%s/%s/udp/%d/quic-v1", family, host, port),
+		fmt.Sprintf("/%s/%s/tcp/%d", family, host, port),
 	}
 }
 
@@ -449,3 +474,30 @@ func ParseRelays(addrs []string) ([]peer.AddrInfo, error) {
 // trustTimeout bounds how long a host waits for another to introduce
 // itself, and for a message on the small protocols beside it.
 const trustTimeout = 10 * time.Second
+
+// HostPort is where the host listens for TCP, as host:port, for people to
+// read: its first address that is not loopback, or a loopback one.
+func (h *Host) HostPort() string {
+	ip, port := h.tcp()
+	if ip == nil {
+		return ""
+	}
+	return net.JoinHostPort(ip.String(), strconv.Itoa(port))
+}
+
+// AddrsOf are the addresses of a host at addr, a host name or IP with a
+// port, as discovery or the config gives one: QUIC and TCP.
+func AddrsOf(addr string) ([]string, error) {
+	host, p, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	port, err := strconv.Atoi(p)
+	if err != nil {
+		return nil, err
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return AddrsAt(ip.String(), port), nil
+	}
+	return addrs("dns", host, port), nil
+}

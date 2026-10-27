@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 
 	"github.com/grandcat/zeroconf"
@@ -18,11 +17,9 @@ type MDNS struct {
 	// NodeID and Name identify the local daemon in the TXT record.
 	NodeID string
 	Name   string
-	// Port is the local QUIC port to advertise.
-	Port int
-	// PeerID and P2PPort say where the daemon is on libp2p, if it is.
-	PeerID  string
-	P2PPort int
+	// PeerID and Port are where the daemon is on libp2p.
+	PeerID string
+	Port   int
 	// Domain is the mDNS domain, normally "local.".
 	Domain string
 }
@@ -37,9 +34,7 @@ func (m *MDNS) Advertise() (func(), error) {
 		"id=" + m.NodeID,
 		"name=" + m.Name,
 		"version=" + config.Version,
-	}
-	if m.PeerID != "" {
-		txt = append(txt, "peer="+m.PeerID, fmt.Sprintf("p2p=%d", m.P2PPort))
+		"peer=" + m.PeerID,
 	}
 	server, err := zeroconf.Register(m.instance(), config.ServiceType, m.domain(), m.Port, txt, nil)
 	if err != nil {
@@ -100,11 +95,10 @@ func (m *MDNS) convert(entry *zeroconf.ServiceEntry) (Found, bool) {
 		Addr:   net.JoinHostPort(host, fmt.Sprint(entry.Port)),
 		Source: "mdns",
 	}
-	if peer, port := txtLookup(entry.Text, "peer"), txtLookup(entry.Text, "p2p"); peer != "" && port != "" {
+	if peer := txtLookup(entry.Text, "peer"); peer != "" {
 		f.PeerID = peer
-		n, _ := strconv.Atoi(port)
 		for _, ip := range append(entry.AddrIPv4, entry.AddrIPv6...) {
-			f.Multiaddrs = append(f.Multiaddrs, p2p.AddrsAt(ip.String(), n)...)
+			f.Multiaddrs = append(f.Multiaddrs, p2p.AddrsAt(ip.String(), entry.Port)...)
 		}
 	}
 	return f, true

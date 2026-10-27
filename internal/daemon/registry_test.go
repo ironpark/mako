@@ -28,7 +28,7 @@ func TestMergeKeepsASecondHandLastSeen(t *testing.T) {
 
 func TestMergeKeepsKnownAddrAndSource(t *testing.T) {
 	p := newPeerTable()
-	p.upsert(&protocol.Node{Id: "b", Addr: "10.0.0.2:4242", Source: "static"})
+	p.upsert(&protocol.Node{Id: "b", Addr: "10.0.0.2:4242", Source: "mdns"})
 	before, _ := p.get("b")
 
 	time.Sleep(time.Millisecond)
@@ -36,18 +36,18 @@ func TestMergeKeepsKnownAddrAndSource(t *testing.T) {
 	p.merge(&protocol.Node{Id: "b", Addr: "[::]:4242", Source: "self", LastSeen: timestamppb.New(later)})
 
 	got, _ := p.get("b")
-	if got.GetAddr() != "10.0.0.2:4242" || got.GetSource() != "static" || !got.GetLastSeen().AsTime().Equal(later) || !later.After(before.GetLastSeen().AsTime()) {
+	if got.GetAddr() != "10.0.0.2:4242" || got.GetSource() != "mdns" || !got.GetLastSeen().AsTime().Equal(later) || !later.After(before.GetLastSeen().AsTime()) {
 		t.Fatalf("merge known node = %+v", got)
 	}
 }
 
-func TestUpsertKeepsStaticSource(t *testing.T) {
+func TestUpsertKeepsWhatASightingLacks(t *testing.T) {
 	p := newPeerTable()
-	p.upsert(&protocol.Node{Id: "b", Addr: "10.0.0.2:4242", Source: "static", Os: "linux"})
-	p.upsert(&protocol.Node{Id: "b", Addr: "10.0.0.2:4242", Source: "inbound"})
+	p.upsert(&protocol.Node{Id: "b", Addr: "10.0.0.2:4243", Source: "mdns", Os: "linux"})
+	p.upsert(&protocol.Node{Id: "b", Addr: "10.0.0.2:4243", Source: "mesh"})
 
 	got, _ := p.get("b")
-	if got.GetSource() != "static" || got.GetOs() != "linux" {
-		t.Fatalf("upsert over static = %+v", got)
+	if got.GetSource() != "mesh" || got.GetOs() != "linux" {
+		t.Fatalf("upsert over a sighting = %+v", got)
 	}
 }

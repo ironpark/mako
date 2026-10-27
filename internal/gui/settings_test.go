@@ -20,7 +20,7 @@ func TestPrefsNormalizeOutOfRangeValues(t *testing.T) {
 
 func TestHostDraftRoundTrips(t *testing.T) {
 	cfg := config.Config{
-		NodeID: "n1", Name: "mbp", Listen: ":4242", SSHKey: "~/.ssh/id_ed25519.pub",
+		NodeID: "n1", Name: "mbp", P2P: config.P2P{Listen: ":4243"}, SSHKey: "~/.ssh/id_ed25519.pub",
 		Peers:     []string{"10.0.0.2", "10.0.0.3:5000"},
 		Discovery: config.Discovery{MDNS: true, TailnetHosts: []string{"box"}},
 	}
