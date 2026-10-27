@@ -27,11 +27,33 @@ import (
 // wherever the window is, and is followed there: an image to the preview,
 // any other file to a tab of its own, at the line it names.
 
-// termLink is a link on a row of the viewport.
+// termLink is a link in the viewport. A long one wraps onto the rows
+// after the first, so it runs from a cell on one row to a cell on another.
 type termLink struct {
 	target     string // the URI, or the path as written
-	row        int
-	col0, col1 int // the cells it covers, col1 excluded
+	row0, col0 int    // its first cell
+	row1, col1 int    // the cell after its last, col1 up to the columns
+}
+
+// spans calls fn with the cells the link covers on each of its rows.
+func (l termLink) spans(cols int, fn func(row, col0, col1 int)) {
+	for row := l.row0; row <= l.row1; row++ {
+		c0, c1 := 0, cols
+		if row == l.row0 {
+			c0 = l.col0
+		}
+		if row == l.row1 {
+			c1 = l.col1
+		}
+		if c1 > c0 {
+			fn(row, c0, c1)
+		}
+	}
+}
+
+// covers reports whether the link covers the cell at col, row.
+func (l termLink) covers(col, row int) bool {
+	return (row > l.row0 || row == l.row0 && col >= l.col0) && (row < l.row1 || row == l.row1 && col < l.col1)
 }
 
 // linkMods reports whether mods are those that follow a link.
@@ -42,7 +64,12 @@ func linkMods(mods ggui.Mods) bool {
 	return mods.Ctrl && !mods.Meta
 }
 
-// linkAt is the link at a cell of the viewport, if any.
+// wrapRows is how many rows a link is followed across, either way.
+const wrapRows = 8
+
+// linkAt is the link at a cell of the viewport, if any. A row that is full
+// to its last column is read as running on into the next, as a long path
+// or address does when the terminal wraps it.
 func (t *termConn) linkAt(col, row int) (termLink, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -50,51 +77,74 @@ func (t *termConn) linkAt(col, row int) (termLink, bool) {
 		return termLink{}, false
 	}
 	vt := t.vt.Terminal()
-	cols := int(t.cols)
-	hyperlink := func(x int) string {
-		uri, ok, err := vt.HyperlinkAt(gostty.PointTagViewport, uint16(x), uint32(row))
+	cols, rows := int(t.cols), int(t.rows)
+	// Cells are counted across rows, i = row*cols + col.
+	hyperlink := func(i int) string {
+		uri, ok, err := vt.HyperlinkAt(gostty.PointTagViewport, uint16(i%cols), uint32(i/cols))
 		if err != nil || !ok {
 			return ""
 		}
 		return uri
 	}
-	if uri := hyperlink(col); uri != "" {
-		l := termLink{target: uri, row: row, col0: col, col1: col + 1}
-		for l.col0 > 0 && hyperlink(l.col0-1) == uri {
-			l.col0--
+	here := row*cols + col
+	if uri := hyperlink(here); uri != "" {
+		lo, hi := max(0, here-wrapRows*cols), min(rows*cols, here+wrapRows*cols)
+		i0, i1 := here, here+1
+		for i0 > lo && hyperlink(i0-1) == uri {
+			i0--
 		}
-		for l.col1 < cols && hyperlink(l.col1) == uri {
-			l.col1++
+		for i1 < hi && hyperlink(i1) == uri {
+			i1++
 		}
-		return l, true
+		return linkBetween(uri, i0, i1, cols), true
 	}
-	// The row as painted, with the cell each rune starts at; a wide
+	// The rows as painted, with the cell each rune starts at; a wide
 	// rune's spacer is no rune of its own.
-	if !t.hasFrame || len(t.cells) < (row+1)*cols {
+	if !t.hasFrame || len(t.cells) < rows*cols {
 		return termLink{}, false
+	}
+	runsOn := func(y int) bool { // row y wraps into the next
+		c := t.cells[(y+1)*cols-1]
+		return c.Flags.Wide == gostty.CellWidthSpacerHead || c.Codepoint != 0 && c.Codepoint != ' '
+	}
+	r0, r1 := row, row
+	for r0 > 0 && row-r0 < wrapRows && runsOn(r0-1) {
+		r0--
+	}
+	for r1 < rows-1 && r1-row < wrapRows && runsOn(r1) {
+		r1++
 	}
 	var line []rune
 	var at []int
 	i := -1
-	for x, c := range t.cells[row*cols : (row+1)*cols] {
+	for k, c := range t.cells[r0*cols : (r1+1)*cols] {
 		if c.Flags.Wide == gostty.CellWidthSpacerTail || c.Flags.Wide == gostty.CellWidthSpacerHead {
 			continue
 		}
-		if x <= col {
+		k += r0 * cols
+		if k <= here {
 			i = len(line)
 		}
 		line = append(line, max(c.Codepoint, ' '))
-		at = append(at, x)
+		at = append(at, k)
 	}
 	start, end, ok := linkIn(line, i)
 	if !ok {
 		return termLink{}, false
 	}
-	col1 := cols
+	i1 := (r1 + 1) * cols
 	if end < len(at) {
-		col1 = at[end]
+		i1 = at[end]
 	}
-	return termLink{target: string(line[start:end]), row: row, col0: at[start], col1: col1}, true
+	return linkBetween(string(line[start:end]), at[start], i1, cols), true
+}
+
+// linkBetween is the link to target from cell i0 to before cell i1,
+// counted across rows of cols cells.
+func linkBetween(target string, i0, i1, cols int) termLink {
+	// The cell after a row's last is that row's end, not the next's start.
+	last := i1 - 1
+	return termLink{target: target, row0: i0 / cols, col0: i0 % cols, row1: last / cols, col1: last%cols + 1}
 }
 
 // pwd is where the program says it is, by OSC 7, or "".

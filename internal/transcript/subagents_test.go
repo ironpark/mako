@@ -83,3 +83,34 @@ func TestSubagentsAreFollowedInTheirOwnLogs(t *testing.T) {
 		}
 	}
 }
+
+// A subagent started after the conversation was first read, its folder
+// not there yet, is found on a later read, and one whose meta changes is
+// read again.
+func TestSubagentsStartedLaterAreFound(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "projects", "p")
+	path := filepath.Join(dir, "c.jsonl")
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	writeLog(t, path, `{"type":"user","sessionId":"c","cwd":"/p","message":{"role":"user","content":"go"}}`+"\n"+
+		`{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[{"type":"tool_use","id":"bg","name":"Agent","input":{"description":"Review","prompt":"Review it.","run_in_background":true}}]}}`+"\n")
+	a, _ := Lookup("claude")
+	var scans agentScans
+	messages, _, err := readMessages(path, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func() []*protocol.SubAgent { return scans.read(a, path, messages) }
+	if agents := read(); len(agents) != 0 {
+		t.Fatalf("agents %v before any started", agents)
+	}
+	sub := filepath.Join(dir, "c", "subagents")
+	writeLog(t, filepath.Join(sub, "agent-b1.jsonl"), `{"type":"user","isSidechain":true,"timestamp":"`+now+`","message":{"role":"user","content":"Review it."}}`+"\n")
+	writeLog(t, filepath.Join(sub, "agent-b1.meta.json"), `{"toolUseId":"bg","requestShape":"background"}`)
+	if agents := read(); len(agents) != 1 || !agents[0].GetRunning() {
+		t.Fatalf("agents %v, want the one started", agents)
+	}
+	writeLog(t, filepath.Join(sub, "agent-b1.meta.json"), `{"toolUseId":"bg","requestShape":"background","finished":true}`)
+	if agents := read(); len(agents) != 1 || agents[0].GetRunning() {
+		t.Fatalf("agents %v, want the one finished", agents)
+	}
+}

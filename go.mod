@@ -9,7 +9,7 @@ require (
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/ironpark/ggfx v0.0.0-20261027060057-9bb27905be69
-	github.com/ironpark/ggui v0.0.0-20261027080826-7a0d0ca5ae55
+	github.com/ironpark/ggui v0.0.0-20261027091340-b7ce1e0a1f8c
 	github.com/ironpark/gostty v0.0.0-20261026051858-4b9bf93132f4
 	github.com/quic-go/quic-go v0.62.0
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3

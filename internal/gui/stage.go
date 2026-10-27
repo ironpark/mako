@@ -140,3 +140,58 @@ func stageFile(ctx context.Context, c *client.Client, psk, node, name string, r 
 
 // nodeErrOf is err as nodeErr words it, as an error.
 func nodeErrOf(err error) error { return errors.New(nodeErr(err)) }
+
+// Images pasted from the clipboard are files to an agent: one is written
+// to a folder of the window's own, then handed over as a dropped file is.
+// A day on, the next paste clears it away.
+
+// clipboardFor is how long a pasted image is kept.
+const clipboardFor = 24 * time.Hour
+
+// clipboardDir is where pasted images are written on this machine.
+func clipboardDir() string { return filepath.Join(os.TempDir(), "sanbo-clipboard") }
+
+// saveImage writes png, an image pasted, to a file of its own and returns
+// its path, clearing away those from before clipboardFor.
+func saveImage(png []byte) (string, error) {
+	dir := clipboardDir()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	before := time.Now().Add(-clipboardFor)
+	if entries, err := os.ReadDir(dir); err == nil {
+		for _, e := range entries {
+			if info, err := e.Info(); err == nil && info.ModTime().Before(before) {
+				_ = os.Remove(filepath.Join(dir, e.Name()))
+			}
+		}
+	}
+	f, err := os.CreateTemp(dir, time.Now().Format("clipboard-20060102-150405-*.png"))
+	if err != nil {
+		return "", err
+	}
+	_, err = f.Write(png)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
+}
+
+// pasteImage hands session id png, an image pasted, as a file, and gives
+// done its path there. The file is written off the UI goroutine.
+func (m *model) pasteImage(id string, png []byte, done func([]string)) {
+	go func() {
+		path, err := saveImage(png)
+		m.post(func() {
+			if err != nil {
+				m.toaster.Push(ui.Toast(T("Could not paste the image"), err.Error()).Destructive())
+				return
+			}
+			m.handOver(id, []string{path}, done)
+		})
+	}()
+}

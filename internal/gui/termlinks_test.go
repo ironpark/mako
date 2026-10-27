@@ -93,6 +93,37 @@ func TestTerminalFindsLinksUnderThePointer(t *testing.T) {
 	}
 }
 
+// A path too long for its row wraps onto the next, and is the one link
+// from either row; the word after it on the second row is not part of it.
+func TestWrappedLinksSpanTheirRows(t *testing.T) {
+	link := newFakeLink()
+	conn, err := newTermConn("s", link, 20, 6, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { close(link.in); conn.close() }()
+	const path = "/tmp/sanbo-drops/abc/shot.png" // 29 cells, from the fourth
+	link.output(t, "at "+path+" ok\r\nnext")
+	waitFor(t, func() bool { _, _ = conn.frame(); return strings.Contains(screenText(conn), "next") })
+	want := termLink{target: path, row0: 0, col0: 3, row1: 1, col1: 12}
+	for _, at := range [][2]int{{10, 0}, {19, 0}, {0, 1}, {11, 1}} {
+		if l, ok := conn.linkAt(at[0], at[1]); !ok || l != want {
+			t.Fatalf("at %v: link %+v %v, want %+v", at, l, ok, want)
+		}
+	}
+	if _, ok := conn.linkAt(13, 1); ok {
+		t.Fatal("the word after the path is part of it")
+	}
+	if _, ok := conn.linkAt(1, 2); ok {
+		t.Fatal("the row after an unwrapped one joined it")
+	}
+	var spans [][3]int
+	want.spans(20, func(row, c0, c1 int) { spans = append(spans, [3]int{row, c0, c1}) })
+	if len(spans) != 2 || spans[0] != [3]int{0, 3, 20} || spans[1] != [3]int{1, 0, 12} {
+		t.Fatalf("spans %v", spans)
+	}
+}
+
 // A path followed from a session opens on its node: an image in the
 // preview, another file in a tab at its line, one relative to where the
 // program is; one that is not there says so.
@@ -153,7 +184,6 @@ func TestCommandClickFollowsALink(t *testing.T) {
 	if view.link == nil || view.link.col0 != 6 || view.link.col1 != 18 {
 		t.Fatalf("hover link %+v, want cells 6 to 18", view.link)
 	}
-	p.MoveWith(gridPoint(p, view, 10, 0), follow) // the cursor follows the regions of the frame before
 	if p.Cursor() != ggui.CursorShapePointer {
 		t.Fatalf("cursor %v over a link, want the pointing hand", p.Cursor())
 	}

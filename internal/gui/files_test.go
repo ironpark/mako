@@ -98,7 +98,7 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 	m.setChatMode(session, true)
 	p.Frame()
 	m.insertPath("", path)
-	if got := m.composerDraft(session); got != filepath.Join("src", "main.go") {
+	if got := m.composerDraft(session); got != filepath.Join("src", "main.go")+" " {
 		t.Fatalf("composer %q, want the path from the project", got)
 	}
 
@@ -115,7 +115,7 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 	p.Move(box.Center())
 	p.Release(box.Center())
 	p.Frame()
-	if got := m.composerDraft(session); got != filepath.Join("src", "main.go") {
+	if got := m.composerDraft(session); got != filepath.Join("src", "main.go")+" " {
 		t.Fatalf("composer %q after the drag, want the file's path", got)
 	}
 

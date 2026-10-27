@@ -52,20 +52,40 @@ type agentScan struct {
 	started, updated time.Time
 }
 
-// agentScans keeps the subagent logs read, by path, to read on from where
-// each stopped.
-type agentScans map[string]*agentScan
+// agentScans keeps what was read of a conversation's subagents, to read
+// again only what changed: the list of them while their folder is the
+// same, each meta while its file is, and each log on from where it was.
+// A read while one runs then costs a stat of each file.
+type agentScans struct {
+	dir        string    // the subagents folder listed
+	dirMod     time.Time // its time when it was
+	metaPaths  []string
+	metaByPath map[string]*metaRead  // by path
+	scans      map[string]*agentScan // by log path
+}
+
+// metaRead is a meta file as last read.
+type metaRead struct {
+	size int64
+	mod  time.Time
+	meta agentMeta
+	ok   bool
+}
 
 // read brings the scan up to the end of path's complete records.
 func (s *agentScan) read(path string) {
+	stat, err := os.Stat(path)
+	if err != nil || stat.Size() == s.offset {
+		return
+	}
+	if stat.Size() < s.offset {
+		*s = agentScan{} // rewritten
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return
 	}
 	defer f.Close()
-	if stat, err := f.Stat(); err != nil || stat.Size() < s.offset {
-		*s = agentScan{} // rewritten
-	}
 	if _, err := f.Seek(s.offset, io.SeekStart); err != nil {
 		return
 	}
@@ -129,25 +149,24 @@ func (scans *agentScans) read(a *Agent, path string, messages []*protocol.ChatMe
 	if len(calls) == 0 {
 		return nil
 	}
-	if *scans == nil {
-		*scans = agentScans{}
+	if scans.scans == nil {
+		scans.metaByPath, scans.scans = map[string]*metaRead{}, map[string]*agentScan{}
 	}
 	now := time.Now()
-	metas, _ := filepath.Glob(filepath.Join(strings.TrimSuffix(path, filepath.Ext(path)), "subagents", "agent-*.meta.json"))
 	var out []*protocol.SubAgent
-	for _, metaPath := range metas {
-		var meta agentMeta
-		if data, err := os.ReadFile(metaPath); err != nil || json.Unmarshal(data, &meta) != nil {
+	for _, metaPath := range scans.list(filepath.Join(strings.TrimSuffix(path, filepath.Ext(path)), "subagents")) {
+		meta, ok := scans.readMeta(metaPath)
+		if !ok {
 			continue
 		}
 		if meta.ToolUseID != "" && calls[meta.ToolUseID].msg == nil {
 			continue // started by a call out of the window
 		}
 		logPath := strings.TrimSuffix(metaPath, ".meta.json") + ".jsonl"
-		scan := (*scans)[logPath]
+		scan := scans.scans[logPath]
 		if scan == nil {
 			scan = &agentScan{}
-			(*scans)[logPath] = scan
+			scans.scans[logPath] = scan
 		}
 		scan.read(logPath)
 		callID := cmp.Or(meta.ToolUseID, byPrompt[scan.prompt])
@@ -176,4 +195,35 @@ func (scans *agentScans) read(a *Agent, path string, messages []*protocol.ChatMe
 	}
 	slices.SortStableFunc(out, func(a, b *protocol.SubAgent) int { return int(a.GetStarted() - b.GetStarted()) })
 	return out
+}
+
+// list is the meta files in dir, listed again only once dir has changed.
+func (scans *agentScans) list(dir string) []string {
+	stat, err := os.Stat(dir)
+	if err != nil {
+		scans.dir, scans.metaPaths = "", nil
+		return nil
+	}
+	if dir != scans.dir || !stat.ModTime().Equal(scans.dirMod) {
+		scans.metaPaths, _ = filepath.Glob(filepath.Join(dir, "agent-*.meta.json"))
+		scans.dir, scans.dirMod = dir, stat.ModTime()
+	}
+	return scans.metaPaths
+}
+
+// readMeta is the meta file at path, read again only once it has changed.
+func (scans *agentScans) readMeta(path string) (agentMeta, bool) {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return agentMeta{}, false
+	}
+	m := scans.metaByPath[path]
+	if m == nil || m.size != stat.Size() || !m.mod.Equal(stat.ModTime()) {
+		m = &metaRead{size: stat.Size(), mod: stat.ModTime()}
+		if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &m.meta) == nil {
+			m.ok = true
+		}
+		scans.metaByPath[path] = m
+	}
+	return m.meta, m.ok
 }

@@ -617,19 +617,33 @@ func emptyState(m *model) ggui.Widget {
 // the terminal itself takes the keys, as ovis does.
 func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
 	disabled := ggui.Derived(func() bool { return !slices.Contains(m.Attached.Get(), id) })
+	// Files dropped or an image pasted go in by their paths.
+	insert := func(paths []string) {
+		for _, p := range paths {
+			m.insertPath(id, p)
+		}
+	}
 	// Enter sends at once; Shift+Enter breaks the line, and the box grows
-	// with the lines to a few before it scrolls.
+	// with the lines to a few before it scrolls. ↑ and ↓ over an empty box
+	// bring back what was sent.
 	field := ui.TextField(draft).Lines(1).
 		Placeholder(T("Message the agent. Enter sends, Shift+Enter adds a line")).
 		Name(T("Message")).
 		BindDisabled(disabled).
 		OnKey(func(ev ggui.KeyEvent) bool {
-			if (ev.Key == ggui.KeyEnter || ev.Key == ggui.KeyNumpadEnter) && !ev.Mods.Shift && !ev.Mods.Alt {
+			plain := !ev.Mods.Shift && !ev.Mods.Alt && !ev.Mods.Ctrl && !ev.Mods.Meta
+			switch {
+			case (ev.Key == ggui.KeyEnter || ev.Key == ggui.KeyNumpadEnter) && !ev.Mods.Shift && !ev.Mods.Alt:
 				m.sendComposer(id)
 				return true
+			case ev.Key == ggui.KeyArrowUp && plain:
+				return m.recallComposer(id, -1)
+			case ev.Key == ggui.KeyArrowDown && plain:
+				return m.recallComposer(id, 1)
 			}
 			return false
-		})
+		}).
+		OnPasteImage(func(png []byte) bool { m.pasteImage(id, png, insert); return true })
 	pills := ggui.Reactive(func() ggui.Widget {
 		s, ok := sessionIn(m.Sessions.Get(), id)
 		if !ok {
@@ -658,11 +672,7 @@ func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
 		return border
 	})
 	desktop := ggui.Pointer(box).OnDropHover(over.Set).OnDrop(func(ev ggui.DropEvent) {
-		m.handOver(id, ev.Paths(), func(paths []string) {
-			for _, p := range paths {
-				m.insertPath(id, p)
-			}
-		})
+		m.handOver(id, ev.Paths(), insert)
 	})
 	files := ggui.DropZone(desktop, func(d ggui.Dropped[pathDrag]) {
 		over.Set(false)

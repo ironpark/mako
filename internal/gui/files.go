@@ -316,7 +316,7 @@ func (m *model) insertPath(id, path string) {
 	if text != "" && !strings.HasSuffix(text, " ") {
 		text += " "
 	}
-	m.setComposerDraft(id, text+rel)
+	m.setComposerDraft(id, text+rel+" ") // to write on after it
 }
 
 // Panel -------------------------------------------------------------------------

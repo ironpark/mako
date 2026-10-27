@@ -1050,8 +1050,47 @@ func (m *model) sendComposer(id string) {
 	if conn == nil {
 		return
 	}
-	conn.sendText(m.composerDraft(id))
+	text := m.composerDraft(id)
+	conn.sendText(text)
+	state := m.chatState(id)
+	if strings.TrimSpace(text) != "" && (len(state.sent) == 0 || state.sent[len(state.sent)-1] != text) {
+		state.sent = append(state.sent, text)
+		if len(state.sent) > composerHistory {
+			state.sent = slices.Delete(state.sent, 0, len(state.sent)-composerHistory)
+		}
+	}
 	m.setComposerDraft(id, "")
+}
+
+// composerHistory is how many sent messages a session's composer keeps.
+const composerHistory = 100
+
+// recallComposer brings back the message sent before the one shown, or
+// after it for a step of 1, and past the latest an empty box again. It
+// does so only over an empty draft or one recalled and left unedited, so
+// the arrows still move through text being written, and reports whether
+// it did.
+func (m *model) recallComposer(id string, step int) bool {
+	state := m.chatState(id)
+	draft := m.composerDraft(id)
+	browsing := state.recall < len(state.sent) && draft == state.sent[state.recall]
+	if !browsing {
+		if draft != "" || step > 0 {
+			return false
+		}
+		state.recall = len(state.sent)
+	}
+	next := state.recall + step
+	if next < 0 || next > len(state.sent) {
+		return browsing // at the oldest, the arrow stays with the history
+	}
+	state.recall = next
+	if next == len(state.sent) {
+		m.setComposerDraft(id, "")
+	} else {
+		m.setComposerDraft(id, state.sent[next])
+	}
+	return true
 }
 
 // syncTitles publishes the titles programs set on their terminals.

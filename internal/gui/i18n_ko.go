@@ -521,6 +521,7 @@ var catalogKo = map[string]string{
 	"Drop…":                                  "버리기…",
 	"Sending to %s…":                         "%s(으)로 보내는 중…",
 	"Could not send to %s":                   "%s(으)로 보내지 못했습니다",
+	"Could not paste the image":              "이미지를 붙여넣지 못했습니다",
 	"Could not open %s":                      "%s을(를) 열지 못했습니다",
 	"Subagent":                               "서브에이전트",
 	"%s is a folder; only files can be sent": "%s은(는) 폴더입니다. 파일만 보낼 수 있습니다",

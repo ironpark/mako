@@ -3,6 +3,7 @@ package gui
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,6 +37,9 @@ func launcherApp(t *testing.T, pr prefs) (*model, *ggui.Probe) {
 	cfg.Discovery = config.Discovery{}
 	cfg.Agents = map[string]agentspec.Agent{
 		"claude": {Command: []string{"sh"}, Profiles: []agentspec.Profile{{Name: "opus"}}},
+		// A plain sh, not the login shell, whose startup may run commands
+		// in the foreground and so seem busy at random.
+		"shell": {Command: []string{"/bin/sh"}},
 	}
 	pr.DaemonMode, pr.Language = "embedded", "en"
 	if err := savePrefs(pr.normalized()); err != nil {
@@ -155,9 +159,19 @@ func TestClosingATabEndsItsSession(t *testing.T) {
 			return err == nil && ok && s.GetIdle() == want
 		}
 	}
+	// At its prompt, drawn: a shell still starting is idle too, and a
+	// command typed then may be lost.
+	prompt := func() bool {
+		conn := m.conns[ggui.Peek(m.Selected)]
+		if conn == nil {
+			return false
+		}
+		_, _ = conn.frame()
+		return strings.TrimSpace(screenText(conn)) != "" && idle(true)()
+	}
 	m.launch("shell", "", "")
 	probeUntil(t, p, "the session", func() bool { return len(ggui.Peek(m.Tabs)) == 1 && m.conns[ggui.Peek(m.Selected)] != nil })
-	probeUntil(t, p, "its prompt", idle(true))
+	probeUntil(t, p, "its prompt", prompt)
 	m.conns[ggui.Peek(m.Selected)].sendText("sleep 30")
 	probeUntil(t, p, "the command", idle(false))
 	x, ok := p.Find("Close shell")
@@ -174,7 +188,7 @@ func TestClosingATabEndsItsSession(t *testing.T) {
 
 	m.launch("shell", "", "")
 	probeUntil(t, p, "another session", func() bool { return len(ggui.Peek(m.Tabs)) == 1 })
-	probeUntil(t, p, "its prompt", idle(true))
+	probeUntil(t, p, "its prompt", prompt)
 	m.askKill(ggui.Peek(m.Selected))
 	probeUntil(t, p, "the idle shell to end", func() bool {
 		return len(ggui.Peek(m.Tabs)) == 0 && len(ggui.Peek(m.Sessions)) == 0

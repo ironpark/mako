@@ -34,6 +34,10 @@ type chatState struct {
 	draft   *ggui.StateValue[string]
 	tools   *ggui.StateValue[map[string]bool] // open tool rows, by message key
 	loading bool
+	// sent is what the composer sent, oldest first, for ↑ and ↓ to bring
+	// back; recall is the one shown, len(sent) for none.
+	sent   []string
+	recall int
 }
 
 func (m *model) chatState(id string) *chatState {
@@ -125,6 +129,7 @@ func sessionView(m *model, id string, group int) ggui.Widget {
 		focus := ggui.Peek(m.FocusGroup) == group
 		term := newTerminalView(m.conns[id], func() prefs { return ggui.Peek(m.Prefs) }, focus).OnPress(func() { m.focusGroup(group) }).
 			OnDrop(func(paths []string, typed func([]string)) { m.handOver(id, paths, typed) }).
+			OnPasteImage(func(png []byte, typed func([]string)) { m.pasteImage(id, png, typed) }).
 			OnLink(func(target, cwd string) { m.followLink(id, target, cwd) })
 		body := ggui.DropZone(term, func(d ggui.Dropped[pathDrag]) { term.setDropOver(false); term.typePaths([]string{d.Value.Path}) }).OnHover(term.setDropOver)
 		return ggui.Column(approvalBar(m, id), ggui.Expanded(ggui.Stack(body, usageOverlay(m, id, nil)).Expand())).Stretch()

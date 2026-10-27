@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ironpark/ggui"
+	ggruntime "github.com/ironpark/ggui/runtime"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/gostty"
 	"github.com/ironpark/gostty/input"
@@ -31,6 +32,8 @@ type terminalView struct {
 	// onDrop hands over files dropped from the desktop, by their paths
 	// here, and types what it gives back; nil types the paths as they are.
 	onDrop func(paths []string, typed func([]string))
+	// onPasteImage hands over an image pasted, as a file to type the path of
+	onPasteImage func(png []byte, typed func([]string))
 	// onLink follows a link ⌘-clicked, as written, with where the program
 	// said it was.
 	onLink func(target, cwd string)
@@ -93,6 +96,13 @@ func newTerminalView(conn *termConn, prefs func() prefs, autoFocus bool) *termin
 
 // OnPress runs fn when the terminal is pressed.
 func (t *terminalView) OnPress(fn func()) *terminalView { t.onPress = fn; return t }
+
+// OnPasteImage takes a paste of a clipboard holding an image and no text:
+// fn hands the image over and calls typed with the path to type.
+func (t *terminalView) OnPasteImage(fn func(png []byte, typed func([]string))) *terminalView {
+	t.onPasteImage = fn
+	return t
+}
 
 // OnDrop hands over the files dropped on the terminal from the desktop
 // before their paths are typed, as to a session that cannot read them
@@ -179,9 +189,11 @@ func (t *terminalView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 		if pt, ok := dst.Pointer(); !ok || !r.Contains(pt) {
 			t.link = nil
 		} else {
-			at := g.cellRect(t.link.col0, t.link.row, t.link.col1-t.link.col0)
-			clip.FillRect(ggui.Rct(ggui.Pt(at.Origin.X, at.Origin.Y+at.Size.H-1), ggui.Sz(at.Size.W, 1)), t.pal.AccentBright)
-			dst.HitCursor(at, ggui.CursorShapePointer)
+			t.link.spans(f.cols, func(row, col0, col1 int) {
+				at := g.cellRect(col0, row, col1-col0)
+				clip.FillRect(ggui.Rct(ggui.Pt(at.Origin.X, at.Origin.Y+at.Size.H-1), ggui.Sz(at.Size.W, 1)), t.pal.AccentBright)
+				dst.HitCursor(at, ggui.CursorShapePointer)
+			})
 		}
 	}
 	if t.dropOver {
@@ -465,7 +477,13 @@ func (t *terminalView) chord(ev ggui.KeyEvent) bool {
 	switch {
 	case isPaste(ev):
 		t.conn.clearSelection()
-		t.conn.paste(ggui.CurrentClipboard().Read())
+		clip := ggui.CurrentClipboard()
+		text := clip.Read()
+		if png, ok := ggruntime.ReadImage(clip); text == "" && ok && t.onPasteImage != nil {
+			t.onPasteImage(png, t.typePaths)
+		} else {
+			t.conn.paste(text)
+		}
 	case isCopy(ev):
 		if text := t.conn.selection(); text != "" {
 			ggui.CurrentClipboard().Write(text)
@@ -607,7 +625,7 @@ func (t *terminalView) hoverLink(pc pointerCell, mods ggui.Mods) {
 	switch {
 	case t.onLink == nil || !linkMods(mods):
 		t.link, t.probed = nil, [2]int{-1, -1}
-	case was != nil && pc.row == was.row && pc.col >= was.col0 && pc.col < was.col1:
+	case was != nil && was.covers(pc.col, pc.row):
 	case t.probed != [2]int{pc.col, pc.row}:
 		t.probed = [2]int{pc.col, pc.row}
 		t.link = nil

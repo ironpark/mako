@@ -1,9 +1,14 @@
 package gui
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/ironpark/ggui"
+	ggruntime "github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/gostty"
 	"github.com/ironpark/sanbo/internal/config"
 	"github.com/ironpark/sanbo/internal/protocol"
@@ -54,6 +59,41 @@ func TestComposerSendsSeveralLinesOnEnter(t *testing.T) {
 	}
 	if ggui.Peek(draft) != "" {
 		t.Fatal("the draft stayed after sending")
+	}
+
+	// ↑ and ↓ over the empty box walk back through what was sent and
+	// forward to the empty box again; over text being written, or a recalled
+	// message edited, they are the editor's.
+	p.Text("three")
+	p.Type(ggui.Mods{}, ggui.KeyEnter)
+	_ = link.typed()
+	for _, step := range []struct {
+		key  ggui.KeyboardKey
+		want string
+	}{
+		{ggui.KeyArrowUp, "three"},
+		{ggui.KeyArrowUp, "one\ntwo"},
+		{ggui.KeyArrowUp, "one\ntwo"},
+		{ggui.KeyArrowDown, "three"},
+		{ggui.KeyArrowDown, ""},
+		{ggui.KeyArrowDown, ""},
+		{ggui.KeyArrowUp, "three"},
+	} {
+		p.Type(ggui.Mods{}, step.key)
+		if got := ggui.Peek(draft); got != step.want {
+			t.Fatalf("after %v the draft is %q, want %q", step.key, got, step.want)
+		}
+	}
+	p.Text("!") // the caret came back at the end
+	if got := ggui.Peek(draft); got != "three!" {
+		t.Fatalf("typed after a recall: %q", got)
+	}
+	p.Type(ggui.Mods{}, ggui.KeyArrowUp)
+	if got := ggui.Peek(draft); got != "three!" {
+		t.Fatalf("↑ over an edited message recalled %q", got)
+	}
+	if got := link.typed(); got != "" {
+		t.Fatalf("browsing the history sent %q", got)
 	}
 }
 
@@ -112,5 +152,46 @@ func TestRunningSubagentsShowOverTheComposer(t *testing.T) {
 	p.Frame()
 	if _, ok := p.Semantics().Find(ggui.RoleText, "Find the tests"); ok {
 		t.Error("a finished subagent still shows as running")
+	}
+}
+
+// An image pasted into the composer goes in as a file, by its path; text
+// pastes as text.
+func TestComposerPastesAnImageAsAFile(t *testing.T) {
+	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("TMPDIR", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Attached.Set([]string{"s"})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
+	draft := m.chatState("s").draft
+	p := ggui.ProbeBuilder(func() ggui.Widget { return composer(m, "s", draft) }, ggui.Sz(600, 300))
+	defer p.Close()
+	m.post = p.Post
+	png := []byte("\x89PNG\r\n\x1a\nimage")
+	var clip *ggruntime.MemoryClipboard
+	p.OnFrame(func() { clip, _ = ggui.CurrentClipboard().(*ggruntime.MemoryClipboard) })
+	p.Frame()
+	field, ok := p.Semantics().Find(ggui.RoleTextField, T("Message"))
+	if !ok || clip == nil {
+		t.Fatalf("no composer field or no memory clipboard:\n%s", p.Semantics().String())
+	}
+	p.Click(field.Rect.Origin.Add(ggui.Pt(10, field.Rect.Size.H/2)))
+	paste := ggui.Mods{Meta: runtime.GOOS == "darwin", Ctrl: runtime.GOOS != "darwin"}
+
+	clip.WriteImage(png)
+	p.Type(paste, ggui.KeyV)
+	probeUntil(t, p, "the image's path", func() bool { return ggui.Peek(draft) != "" })
+	path := strings.TrimSuffix(ggui.Peek(draft), " ")
+	if filepath.Dir(path) != clipboardDir() || filepath.Ext(path) != ".png" {
+		t.Fatalf("draft %q, want the path of the pasted image", path)
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != string(png) {
+		t.Fatalf("pasted file holds %q, %v", data, err)
+	}
+
+	clip.Write("words")
+	p.Type(paste, ggui.KeyV)
+	if got := ggui.Peek(draft); got != path+" words" {
+		t.Fatalf("draft %q after pasting text", got)
 	}
 }
