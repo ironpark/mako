@@ -10,13 +10,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/creack/pty"
 	"github.com/ironpark/gostty"
 	"google.golang.org/protobuf/proto"
 
@@ -44,8 +42,8 @@ type Spec struct {
 type Session struct {
 	spec Spec
 
-	cmd *exec.Cmd
-	tty *os.File
+	proc *proc    // the agent's process, on its terminal
+	env  []string // the process's environment
 
 	mu       sync.Mutex
 	term     *gostty.Session
@@ -100,14 +98,12 @@ func Start(spec Spec) (*Session, error) {
 		return nil, fmt.Errorf("session: terminal: %w", err)
 	}
 
-	cmd := exec.Command(spec.Command[0], spec.Command[1:]...)
-	cmd.Dir = spec.Project
-	cmd.Env = append(terminalEnv(os.Environ()), "MAKO_SESSION="+spec.ID)
+	env := append(terminalEnv(os.Environ()), "MAKO_SESSION="+spec.ID)
 	for k, v := range spec.Env {
-		cmd.Env = append(cmd.Env, k+"="+v)
+		env = append(env, k+"="+v)
 	}
 
-	tty, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: spec.Cols, Rows: spec.Rows})
+	p, err := startProc(spec.Command, spec.Project, env, spec.Cols, spec.Rows)
 	if err != nil {
 		term.Close()
 		return nil, fmt.Errorf("session: start %s: %w", spec.Command[0], err)
@@ -115,8 +111,8 @@ func Start(spec Spec) (*Session, error) {
 
 	s := &Session{
 		spec:    spec,
-		cmd:     cmd,
-		tty:     tty,
+		proc:    p,
+		env:     env,
 		term:    term,
 		state:   protocol.StateRunning,
 		subs:    map[int]*Subscription{},
@@ -154,7 +150,7 @@ func (s *Session) Info() *protocol.SessionInfo {
 		StartedAt:      protocol.Time(s.started),
 		ExitCode:       s.exitCode,
 		Busy:           s.state != protocol.StateExited && s.progress.Busy(time.Now()),
-		Idle:           s.state == protocol.StateRunning && foregroundIsSelf(s.tty, s.cmd.Process.Pid),
+		Idle:           s.state == protocol.StateRunning && s.proc.idle(),
 		Status:         s.statusLocked(),
 		StatusAt:       protocol.Time(s.statusAt),
 		LastOutput:     protocol.Time(s.LastOutput()),
@@ -231,14 +227,14 @@ func (s *Session) SetName(name string) {
 }
 
 // Write sends input to the agent.
-func (s *Session) Write(p []byte) (int, error) { return s.tty.Write(p) }
+func (s *Session) Write(p []byte) (int, error) { return s.proc.Write(p) }
 
 // Resize changes the PTY and terminal dimensions together.
 func (s *Session) Resize(cols, rows uint16) error {
 	if cols == 0 || rows == 0 {
 		return errors.New("session: zero window size")
 	}
-	if err := pty.Setsize(s.tty, &pty.Winsize{Cols: cols, Rows: rows}); err != nil {
+	if err := s.proc.resize(cols, rows); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -357,10 +353,8 @@ func (s *Session) Done() <-chan struct{} { return s.done }
 
 // Close terminates the agent and releases the terminal.
 func (s *Session) Close() error {
-	if s.cmd.Process != nil {
-		_ = s.cmd.Process.Kill()
-	}
-	err := s.tty.Close()
+	s.proc.kill()
+	err := s.proc.Close()
 	<-s.done
 	return err
 }
@@ -371,7 +365,7 @@ func (s *Session) pump() {
 
 	buf := make([]byte, 32*1024)
 	for {
-		n, err := s.tty.Read(buf)
+		n, err := s.proc.Read(buf)
 		if n > 0 {
 			chunk := make([]byte, n)
 			copy(chunk, buf[:n])
@@ -382,15 +376,7 @@ func (s *Session) pump() {
 		}
 	}
 
-	exitCode := int64(0)
-	if err := s.cmd.Wait(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			exitCode = int64(exitErr.ExitCode())
-		} else {
-			exitCode = -1
-		}
-	}
+	exitCode := s.proc.wait()
 
 	s.mu.Lock()
 	s.state = protocol.StateExited
@@ -421,7 +407,7 @@ func (s *Session) feed(chunk []byte) {
 	// exactly once. Keep titles and progress for metadata and replay;
 	// draining the rest keeps the queue from growing.
 	stream := s.term.Stream()
-	_ = stream.WriteReplies(s.tty)
+	_ = stream.WriteReplies(s.proc)
 	now := time.Now()
 	for ev, err := range stream.EventValues() {
 		if err != nil {

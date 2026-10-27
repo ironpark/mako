@@ -16,6 +16,10 @@ import (
 // the pid at the tree's root. One listing covers every tree, so watching many
 // sessions spawns no more processes than watching one.
 func OpenLogs(ctx context.Context, roots []int) (map[int][]string, error) {
+	if runtime.GOOS == "windows" {
+		// Neither ps nor lsof; the agents' hooks say where their logs are.
+		return nil, errors.ErrUnsupported
+	}
 	tree := map[int]int{} // a pid to the root of its tree
 	for _, root := range roots {
 		tree[root] = root

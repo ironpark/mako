@@ -4,10 +4,10 @@ import "github.com/ironpark/mako/internal/transcript"
 
 // TranscriptEnv returns only the paths needed to find this process's native
 // conversation logs, including profile overrides.
-func (s *Session) TranscriptEnv() map[string]string { return transcript.Env(s.cmd.Env, nil) }
+func (s *Session) TranscriptEnv() map[string]string { return transcript.Env(s.env, nil) }
 
 // PID identifies the launched process while its session is alive.
-func (s *Session) PID() int { return s.cmd.Process.Pid }
+func (s *Session) PID() int { return s.proc.pid() }
 
 // Outputs counts the program's writes to the terminal, so a watcher can tell
 // a session that did something since it last looked from an idle one.
