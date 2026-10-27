@@ -137,6 +137,8 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					m.setChatMode(id, true)
 				}),
 				frames(5), shot("02-chat"),
+				// The pointer over the agent's first reply shows its copy button.
+				do(func() { p.Move(ggui.Pt(600, 200)) }), frames(3), do(func() { p.Move(ggui.Pt(620, 210)) }), frames(5), shot("02-chat-hover"),
 				// An agent asking for an approval, and a long run of tools.
 				do(func() {
 					id := ggui.Peek(m.Selected)

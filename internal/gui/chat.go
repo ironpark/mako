@@ -342,28 +342,42 @@ func foldHeader(open ggui.Binding[bool], glyph, title ggui.Widget, detail, name 
 }
 
 func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage) ggui.Widget {
-	// A message's copy button shows while the pointer is over it.
+	// A message's copy button shows in its top-right corner while the
+	// pointer is over it; its place is kept, so the text does not move.
 	hover := ggui.State(false)
-	copyRow := func(right bool) ggui.Widget {
+	withCopy := func(content ggui.Widget) ggui.Widget {
 		btn := ggui.If(hover, func() ggui.Widget { return copyButton(m, msg.GetText()) })
-		row := ggui.Row(btn, ggui.Spacer())
-		if right {
-			row = ggui.Row(ggui.Spacer(), btn)
-		}
-		return ggui.Box(row.Stretch()).Height(28)
+		return &cornered{content: ggui.Padding(content, 0, copySlot+6, 0, 0), corner: btn}
 	}
 	if msg.GetRole() == "user" {
-		bubble := ggui.Box(ggui.Text(msg.GetText()).Size(14).Selectable()).
-			Fill(tokSurface2).Radius(12).Pad(10, 14).MaxWidth(680)
-		return ggui.Pointer(ggui.Column(
-			ggui.Row(ggui.Spacer(), bubble).Stretch(),
-			copyRow(true),
-		).Gap(2).Stretch()).OnHover(hover.Set)
+		bubble := ggui.Box(withCopy(ggui.Text(msg.GetText()).Size(14).Selectable())).
+			Fill(tokSurface2).Radius(12).Pad(10, 8, 10, 14).MaxWidth(680)
+		return ggui.Pointer(ggui.Row(ggui.Spacer(), bubble).Stretch()).OnHover(hover.Set)
 	}
 	r := &mdRenderer{m: m, id: id, doc: docInfo{Node: info.GetNodeId(), Path: joinPath(info.GetProject(), "conversation.md")}, src: []byte(msg.GetText())}
 	root := markdown.Parser().Parse(text.NewReader(r.src))
-	blocks := append(r.blocks(root), copyRow(false))
-	return ggui.Pointer(ggui.Column(blocks...).Gap(10).Stretch()).OnHover(hover.Set)
+	return ggui.Pointer(withCopy(ggui.Column(r.blocks(root)...).Gap(10).Stretch())).OnHover(hover.Set)
+}
+
+// copySlot is the room a message keeps for its copy button.
+const copySlot = 28
+
+// cornered is content with corner drawn over its top-right corner, the
+// size of content alone.
+type cornered struct {
+	content, corner ggui.Widget
+	cornerSize      ggui.Size
+}
+
+func (c *cornered) Layout(cs ggui.Constraints, env ggui.Env) ggui.Size {
+	size := c.content.Layout(cs, env)
+	c.cornerSize = c.corner.Layout(ggui.Loose(size), env)
+	return size
+}
+
+func (c *cornered) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.Paint(c.content, r)
+	dst.Paint(c.corner, ggui.Rct(ggui.Pt(r.Origin.X+r.Size.W-c.cornerSize.W, r.Origin.Y), c.cornerSize))
 }
 
 // copyButton copies a message as the agent wrote it, Markdown and all, and
