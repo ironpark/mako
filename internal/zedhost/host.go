@@ -3,10 +3,9 @@
 // extension what Zed would: chiefly the command that starts each of its
 // context servers (MCP servers).
 //
-// Components run under wasmtime, through its C API: the libwasmtime that
-// wasmtime-go bundles, whose own Go bindings don't reach far enough into
-// the component model to call an export or define a host function. The
-// headers under include/ are that library's (include/sync.sh copies them).
+// Components run under wasmtime, through wasmtime-pure-go: its C API
+// called without cgo, from the shared library it embeds, so mako builds
+// and cross-compiles with no C toolchain.
 //
 // The host imports are Zed's (crates/extension_api/wit): settings,
 // downloads, Node.js and npm, GitHub releases, the platform, processes
@@ -14,13 +13,6 @@
 // directory. Imports a context server has no use for, such as the
 // language server and debugger ones, trap if called.
 package zedhost
-
-/*
-#cgo CFLAGS: -I${SRCDIR}/include
-#include <stdlib.h>
-#include "shim.h"
-*/
-import "C"
 
 import (
 	"context"
@@ -31,13 +23,10 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime/cgo"
 	"strings"
 	"sync"
-	"unsafe"
 
-	// It links libwasmtime.a, whose C API this package calls.
-	_ "github.com/bytecodealliance/wasmtime-go/v50"
+	wasmtime "github.com/ironpark/wasmtime-pure-go"
 
 	"github.com/ironpark/mako/internal/zed"
 )
@@ -49,16 +38,16 @@ const (
 	resKeyValueStore
 )
 
-var (
-	engineOnce sync.Once
-	engine     *C.wasm_engine_t
-)
-
-// sharedEngine is the process's one engine, for compiling and running.
-func sharedEngine() *C.wasm_engine_t {
-	engineOnce.Do(func() { engine = C.sb_engine_new() })
-	return engine
-}
+// sharedEngine is the process's one engine, for compiling and running;
+// it fails when wasmtime's library cannot be loaded.
+var sharedEngine = sync.OnceValues(func() (*wasmtime.Engine, error) {
+	if err := wasmtime.LoadError(); err != nil {
+		return nil, err
+	}
+	cfg := wasmtime.NewConfig()
+	cfg.SetWasmComponentModel(true)
+	return wasmtime.NewEngineWithConfig(cfg), nil
+})
 
 // Host runs extensions. Its fields are read when an extension loads.
 type Host struct {
@@ -98,16 +87,14 @@ type Extension struct {
 	host     *Host
 	log      *slog.Logger
 
-	mu      sync.Mutex
-	ctx     context.Context // the call in progress, for host imports
-	store   *C.wasmtime_store_t
-	cctx    *C.wasmtime_context_t
-	linker  *C.wasmtime_component_linker_t
-	comp    *C.wasmtime_component_t
-	inst    C.wasmtime_component_instance_t
-	handles []cgo.Handle
-	err     error // sticky: a trap leaves the guest's state unknown
-	closed  bool
+	mu     sync.Mutex
+	ctx    context.Context // the call in progress, for host imports
+	store  *wasmtime.Store
+	linker *wasmtime.ComponentLinker
+	comp   *wasmtime.Component
+	inst   *wasmtime.ComponentInstance
+	err    error // sticky: a trap leaves the guest's state unknown
+	closed bool
 }
 
 // Load compiles and instantiates an installed extension's wasm and runs
@@ -155,22 +142,23 @@ func (h *Host) Load(ctx context.Context, ext zed.Extension) (*Extension, error) 
 // compile compiles a component, or reads the machine code a compile
 // before left in the work directory; wasmtime refuses code from another
 // version of itself, which then compiles again.
-func compile(work string, bin []byte) (*C.wasmtime_component_t, error) {
+func compile(work string, bin []byte) (*wasmtime.Component, error) {
+	engine, err := sharedEngine()
+	if err != nil {
+		return nil, err
+	}
 	sum := sha256.Sum256(bin)
 	cache := filepath.Join(work, ".mako-"+hex.EncodeToString(sum[:8])+".cwasm")
-	var comp *C.wasmtime_component_t
 	if code, err := os.ReadFile(cache); err == nil && len(code) > 0 {
-		if C.wasmtime_component_deserialize(sharedEngine(), (*C.uint8_t)(unsafe.Pointer(&code[0])), C.size_t(len(code)), &comp) == nil {
+		if comp, err := wasmtime.NewComponentDeserialize(engine, code); err == nil {
 			return comp, nil
 		}
 	}
-	if err := takeError(C.wasmtime_component_new(sharedEngine(), (*C.uint8_t)(unsafe.Pointer(&bin[0])), C.size_t(len(bin)), &comp)); err != nil {
+	comp, err := wasmtime.NewComponent(engine, bin)
+	if err != nil {
 		return nil, err
 	}
-	var out C.wasm_byte_vec_t
-	if C.wasmtime_component_serialize(comp, &out) == nil {
-		code := C.GoBytes(unsafe.Pointer(out.data), C.int(out.size))
-		C.wasm_byte_vec_delete(&out)
+	if code, err := comp.Serialize(); err == nil {
 		old, _ := filepath.Glob(filepath.Join(work, ".mako-*.cwasm"))
 		for _, o := range old {
 			os.Remove(o)
@@ -181,46 +169,35 @@ func compile(work string, bin []byte) (*C.wasmtime_component_t, error) {
 }
 
 func (e *Extension) instantiate() error {
-	e.store = C.wasmtime_store_new(sharedEngine(), nil, nil)
-	e.cctx = C.wasmtime_store_context(e.store)
+	engine, err := sharedEngine()
+	if err != nil {
+		return err
+	}
+	e.store = wasmtime.NewStore(engine)
 	if err := e.setWASI(); err != nil {
 		return err
 	}
-	e.linker = C.wasmtime_component_linker_new(sharedEngine())
-	if err := takeError(C.wasmtime_component_linker_add_wasip2(e.linker)); err != nil {
+	e.linker = wasmtime.NewComponentLinker(engine)
+	if err := e.linker.AddWasip2(); err != nil {
 		return err
 	}
 	if err := e.defineImports(); err != nil {
 		return err
 	}
-	return takeError(C.wasmtime_component_linker_instantiate(e.linker, e.cctx, e.comp, &e.inst))
+	e.inst, err = e.linker.Instantiate(e.store, e.comp)
+	return err
 }
 
 // setWASI gives the guest its work directory, as "." and as PWD, which
 // std::env::current_dir reads, as Zed does.
 func (e *Extension) setWASI() error {
-	env := [][2]string{{"PWD", e.work}, {"RUST_BACKTRACE", "full"}}
-	names := make([]*C.char, len(env))
-	values := make([]*C.char, len(env))
-	for i, kv := range env {
-		names[i], values[i] = C.CString(kv[0]), C.CString(kv[1])
+	wasi := wasmtime.NewWasiConfig()
+	wasi.SetEnv([]string{"PWD", "RUST_BACKTRACE"}, []string{e.work, "full"})
+	if err := wasi.PreopenDir(e.work, ".", true); err != nil {
+		return fmt.Errorf("wasi: cannot open the extension's work directory: %w", err)
 	}
-	defer func() {
-		for i := range env {
-			C.free(unsafe.Pointer(names[i]))
-			C.free(unsafe.Pointer(values[i]))
-		}
-	}()
-	// The arrays hold C pointers only, so C may keep reading them.
-	cn := (**C.char)(C.malloc(C.size_t(len(env)) * C.size_t(unsafe.Sizeof(names[0]))))
-	cv := (**C.char)(C.malloc(C.size_t(len(env)) * C.size_t(unsafe.Sizeof(values[0]))))
-	defer C.free(unsafe.Pointer(cn))
-	defer C.free(unsafe.Pointer(cv))
-	copy(unsafe.Slice(cn, len(env)), names)
-	copy(unsafe.Slice(cv, len(env)), values)
-	dir := C.CString(e.work)
-	defer C.free(unsafe.Pointer(dir))
-	return takeError(C.sb_set_wasi(e.cctx, dir, C.size_t(len(env)), cn, cv))
+	e.store.SetWasi(wasi)
+	return nil
 }
 
 // Close frees the instance. It is safe to call more than once.
@@ -232,13 +209,13 @@ func (e *Extension) Close() {
 	}
 	e.closed = true
 	if e.linker != nil {
-		C.wasmtime_component_linker_delete(e.linker)
+		e.linker.Close()
 	}
 	if e.store != nil {
-		C.wasmtime_store_delete(e.store)
+		e.store.Close()
 	}
 	if e.comp != nil {
-		C.wasmtime_component_delete(e.comp)
+		e.comp.Close()
 	}
 }
 
@@ -249,20 +226,16 @@ func (e *Extension) HasExport(name string) bool {
 	if e.closed {
 		return false
 	}
-	_, ok := e.export(name)
-	return ok
+	return e.export(name) != nil
 }
 
-func (e *Extension) export(name string) (C.wasmtime_component_func_t, bool) {
-	var f C.wasmtime_component_func_t
-	cs := C.CString(name)
-	defer C.free(unsafe.Pointer(cs))
-	idx := C.wasmtime_component_instance_get_export_index(&e.inst, e.cctx, nil, cs, C.size_t(len(name)))
+func (e *Extension) export(name string) *wasmtime.ComponentFunc {
+	idx := e.inst.GetExportIndex(e.store, nil, name)
 	if idx == nil {
-		return f, false
+		return nil
 	}
-	defer C.wasmtime_component_export_index_delete(idx)
-	return f, bool(C.wasmtime_component_instance_get_func(&e.inst, e.cctx, idx, &f))
+	defer idx.Close()
+	return e.inst.GetFunc(e.store, idx)
 }
 
 // errNoExport is a call of a function the extension does not export, as
@@ -280,47 +253,16 @@ func (e *Extension) call(ctx context.Context, name string, nresults int, args ..
 	if e.err != nil {
 		return nil, e.err
 	}
-	f, ok := e.export(name)
-	if !ok {
+	f := e.export(name)
+	if f == nil {
 		return nil, errNoExport
 	}
 	e.ctx = ctx
 	defer func() { e.ctx = nil }()
-
-	n := max(len(args), 1)
-	cargs := cval(C.calloc(C.size_t(n), C.size_t(unsafe.Sizeof(C.wasmtime_component_val_t{}))))
-	defer C.free(unsafe.Pointer(cargs))
-	written := 0
-	defer func() {
-		for i := range written {
-			// A host resource lent for the call is dropped after it.
-			if a := at(cargs, i); a.kind == C.WASMTIME_COMPONENT_RESOURCE {
-				if err := C.wasmtime_component_resource_any_drop(e.cctx, *of[*C.wasmtime_component_resource_any_t](a)); err != nil {
-					C.wasmtime_error_delete(err)
-				}
-			}
-			C.wasmtime_component_val_delete(at(cargs, i))
-		}
-	}()
-	for i, a := range args {
-		err := write(e.cctx, at(cargs, i), a)
-		written = i + 1
-		if err != nil {
-			return nil, err
-		}
-	}
-	m := max(nresults, 1)
-	cres := cval(C.calloc(C.size_t(m), C.size_t(unsafe.Sizeof(C.wasmtime_component_val_t{}))))
-	defer C.free(unsafe.Pointer(cres))
-	// calloc leaves each a false bool, as wasmtime asks results to be.
-	if err := takeError(C.wasmtime_component_func_call(&f, e.cctx, cargs, C.size_t(len(args)), cres, C.size_t(nresults))); err != nil {
+	out, err := f.Call(e.store, args, nresults)
+	if err != nil {
 		e.err = fmt.Errorf("zedhost: %s trapped in %s: %w", e.Manifest.ID, name, err)
 		return nil, e.err
-	}
-	out := make([]Val, nresults)
-	for i := range out {
-		out[i] = read(at(cres, i))
-		C.wasmtime_component_val_delete(at(cres, i))
 	}
 	return out, nil
 }
@@ -358,10 +300,10 @@ func (e *Extension) ContextServerCommand(ctx context.Context, id string) (Comman
 	if pl == nil {
 		return Command{}, errors.New("zedhost: no command")
 	}
-	cmd, _ := pl.Field("command")
-	args, _ := pl.Field("args")
-	env, _ := pl.Field("env")
-	c := Command{Command: cmd.Str, Args: args.Strings(), Env: env.Pairs()}
+	cmd, _ := field(*pl, "command")
+	args, _ := field(*pl, "args")
+	env, _ := field(*pl, "env")
+	c := Command{Command: cmd.Str, Args: strs(args), Env: pairsOf(env)}
 	if c.Command == "" {
 		return Command{}, errors.New("zedhost: an empty command")
 	}
@@ -386,7 +328,7 @@ func (e *Extension) ContextServerConfiguration(ctx context.Context, id string) (
 		return nil, nil
 	}
 	c := *pl.Payload
-	get := func(name string) string { v, _ := c.Field(name); return v.Str }
+	get := func(name string) string { v, _ := field(c, name); return v.Str }
 	return &ContextServerConfiguration{
 		InstallationInstructions: get("installation-instructions"),
 		SettingsSchema:           get("settings-schema"),

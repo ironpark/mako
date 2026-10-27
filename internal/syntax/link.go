@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/bytecodealliance/wasmtime-go/v50"
+	wasmtime "github.com/ironpark/wasmtime-pure-go"
 )
 
 // Grammars import their glue globals and stub functions from these

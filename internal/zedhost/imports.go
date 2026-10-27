@@ -1,11 +1,5 @@
 package zedhost
 
-/*
-#include <stdlib.h>
-#include "shim.h"
-*/
-import "C"
-
 import (
 	"bytes"
 	"context"
@@ -18,66 +12,15 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"runtime/cgo"
 	"strings"
-	"unsafe"
+
+	wasmtime "github.com/ironpark/wasmtime-pure-go"
 )
 
 // hostFunc implements one import: it takes the call's arguments and
 // returns its results. An error traps the guest; an import that fails as
 // WIT says, with result<_, string>, returns Err instead.
 type hostFunc func(e *Extension, args []Val) ([]Val, error)
-
-type hostEntry struct {
-	e    *Extension
-	name string
-	fn   hostFunc
-}
-
-//export sbHostCall
-func sbHostCall(h C.uintptr_t, ctx *C.wasmtime_context_t, args *C.wasmtime_component_val_t, nargs C.size_t, res *C.wasmtime_component_val_t, nres C.size_t) (out *C.wasmtime_error_t) {
-	entry := cgo.Handle(h).Value().(*hostEntry)
-	defer func() {
-		if r := recover(); r != nil {
-			out = newError(fmt.Sprintf("%s: %v", entry.name, r))
-		}
-	}()
-	in := make([]Val, int(nargs))
-	for i := range in {
-		in[i] = read(at(args, i))
-	}
-	// A borrow lent to the host, as a method's self is, has to be given
-	// back before the call returns.
-	defer func() {
-		for _, a := range in {
-			if a.Kind == KResource && a.Resource.any != nil && !bool(C.wasmtime_component_resource_any_owned(a.Resource.any)) {
-				if err := C.wasmtime_component_resource_any_drop(ctx, a.Resource.any); err != nil && out == nil {
-					out = err
-				} else if err != nil {
-					C.wasmtime_error_delete(err)
-				}
-			}
-		}
-	}()
-	results, err := entry.fn(entry.e, in)
-	if err != nil {
-		entry.e.log.Debug("import failed", "import", entry.name, "err", err)
-		return newError(fmt.Sprintf("%s: %v", entry.name, err))
-	}
-	if len(results) != int(nres) {
-		return newError(fmt.Sprintf("%s: %d results, the guest expects %d", entry.name, len(results), nres))
-	}
-	for i, r := range results {
-		// wasmtime filled each with a bool, which owns nothing.
-		if err := write(ctx, at(res, i), r); err != nil {
-			return newError(fmt.Sprintf("%s: %v", entry.name, err))
-		}
-	}
-	return nil
-}
-
-//export sbHostFree
-func sbHostFree(h C.uintptr_t) { cgo.Handle(h).Delete() }
 
 // importSet is the functions and resources of one instance a component
 // imports, or of the root.
@@ -123,49 +66,38 @@ func imports() map[string]importSet {
 
 // componentImports lists the functions a component imports by instance,
 // "" for its own, leaving out WASI's.
-func componentImports(comp *C.wasmtime_component_t) map[string][]string {
+func componentImports(comp *wasmtime.Component) map[string][]string {
 	out := map[string][]string{}
-	ty := C.wasmtime_component_type(comp)
-	defer C.wasmtime_component_type_delete(ty)
-	eng := sharedEngine()
-	for i := range int(C.wasmtime_component_type_import_count(ty, eng)) {
-		var name *C.char
-		var n C.size_t
-		var ext *C.wasmtime_component_extern_t
-		if !C.wasmtime_component_type_import_nth(ty, eng, C.size_t(i), &name, &n, &ext) {
+	ty := comp.Type()
+	defer ty.Close()
+	for i := range ty.ImportCount() {
+		iname, item := ty.ImportNth(i)
+		if item == nil {
 			continue
 		}
-		iname := C.GoStringN(name, C.int(n))
-		var item C.wasmtime_component_item_t
-		C.wasmtime_component_extern_type(ext, &item)
-		switch item.kind {
-		case C.WASMTIME_COMPONENT_ITEM_COMPONENT_FUNC:
+		switch item.Kind() {
+		case wasmtime.ComponentItemKindComponentFunc:
 			out[""] = append(out[""], iname)
-		case C.WASMTIME_COMPONENT_ITEM_COMPONENT_INSTANCE:
+		case wasmtime.ComponentItemKindComponentInstance:
 			if strings.HasPrefix(iname, "wasi:") {
 				break
 			}
-			it := *(**C.wasmtime_component_instance_type_t)(unsafe.Pointer(&item.of))
-			funcs := []string{}
-			for j := range int(C.wasmtime_component_instance_type_export_count(it, eng)) {
-				var en *C.char
-				var el C.size_t
-				var ee *C.wasmtime_component_extern_t
-				if !C.wasmtime_component_instance_type_export_nth(it, eng, C.size_t(j), &en, &el, &ee) {
+			it := item.InstanceType()
+			var funcs []string
+			for j := range it.ExportCount() {
+				ename, ei := it.ExportNth(j)
+				if ei == nil {
 					continue
 				}
-				var ei C.wasmtime_component_item_t
-				C.wasmtime_component_extern_type(ee, &ei)
-				if ei.kind == C.WASMTIME_COMPONENT_ITEM_COMPONENT_FUNC {
-					funcs = append(funcs, C.GoStringN(en, C.int(el)))
+				if ei.Kind() == wasmtime.ComponentItemKindComponentFunc {
+					funcs = append(funcs, ename)
 				}
-				C.wasmtime_component_item_delete(&ei)
-				C.wasmtime_component_extern_delete(ee)
+				ei.Close()
 			}
+			it.Close()
 			out[iname] = funcs
 		}
-		C.wasmtime_component_item_delete(&item)
-		C.wasmtime_component_extern_delete(ext)
+		item.Close()
 	}
 	return out
 }
@@ -196,21 +128,19 @@ func (e *Extension) defineImports() error {
 			}
 		}
 	}
-	root := C.wasmtime_component_linker_root(e.linker)
-	defer C.wasmtime_component_linker_instance_delete(root)
+	root := e.linker.Root()
+	defer root.Close()
 	for name, set := range sets {
 		li := root
 		if name != "" {
-			cs := C.CString(name)
-			err := takeError(C.wasmtime_component_linker_instance_add_instance(root, cs, C.size_t(len(name)), &li))
-			C.free(unsafe.Pointer(cs))
-			if err != nil {
+			var err error
+			if li, err = root.AddInstance(name); err != nil {
 				return fmt.Errorf("%s: %w", name, err)
 			}
 		}
 		err := e.defineSet(li, set)
 		if name != "" {
-			C.wasmtime_component_linker_instance_delete(li)
+			li.Close()
 		}
 		if err != nil {
 			return fmt.Errorf("%s: %w", name, err)
@@ -219,20 +149,20 @@ func (e *Extension) defineImports() error {
 	return nil
 }
 
-func (e *Extension) defineSet(li *C.wasmtime_component_linker_instance_t, set importSet) error {
+func (e *Extension) defineSet(li *wasmtime.ComponentLinkerInstance, set importSet) error {
 	for name, ty := range set.resources {
-		cs := C.CString(name)
-		err := takeError(C.sb_add_resource(li, cs, C.size_t(len(name)), C.uint32_t(ty)))
-		C.free(unsafe.Pointer(cs))
-		if err != nil {
+		if err := li.AddResource(name, ty); err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}
 	}
 	for name, fn := range set.funcs {
-		h := cgo.NewHandle(&hostEntry{e: e, name: name, fn: fn})
-		cs := C.CString(name)
-		err := takeError(C.sb_add_func(li, cs, C.size_t(len(name)), C.uintptr_t(h)))
-		C.free(unsafe.Pointer(cs))
+		err := li.AddFunc(name, func(_ *wasmtime.ComponentCaller, args []Val) ([]Val, error) {
+			res, err := fn(e, args)
+			if err != nil {
+				e.log.Debug("import failed", "import", name, "err", err)
+			}
+			return res, err
+		})
 		if err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}
@@ -435,16 +365,16 @@ func (e *Extension) npmInstall(args []Val) ([]Val, error) {
 
 func (e *Extension) runCommand(args []Val) ([]Val, error) {
 	c := arg(args, 0)
-	name, _ := c.Field("command")
-	argv, _ := c.Field("args")
-	env, _ := c.Field("env")
-	if !e.Manifest.AllowsExec(name.Str, argv.Strings()) {
+	name, _ := field(c, "command")
+	argv, _ := field(c, "args")
+	env, _ := field(c, "env")
+	if !e.Manifest.AllowsExec(name.Str, strs(argv)) {
 		return []Val{Errf("the extension may not run %s: its manifest does not ask to", name.Str)}, nil
 	}
-	cmd := exec.CommandContext(e.context(), name.Str, argv.Strings()...)
+	cmd := exec.CommandContext(e.context(), name.Str, strs(argv)...)
 	cmd.Dir = e.work
 	cmd.Env = os.Environ()
-	for _, kv := range env.Pairs() {
+	for _, kv := range pairsOf(env) {
 		cmd.Env = append(cmd.Env, kv[0]+"="+kv[1])
 	}
 	var stdout, stderr bytes.Buffer
@@ -476,21 +406,21 @@ const maxFetch = 64 << 20
 
 func (e *Extension) fetch(args []Val) ([]Val, error) {
 	req := arg(args, 0)
-	method, _ := req.Field("method")
-	url, _ := req.Field("url")
-	headers, _ := req.Field("headers")
-	body, _ := req.Field("body")
-	policy, _ := req.Field("redirect-policy")
+	method, _ := field(req, "method")
+	url, _ := field(req, "url")
+	headers, _ := field(req, "headers")
+	body, _ := field(req, "body")
+	policy, _ := field(req, "redirect-policy")
 
 	var rb io.Reader
 	if body.Payload != nil {
-		rb = bytes.NewReader(body.Payload.ByteSlice())
+		rb = bytes.NewReader(byteSlice(*body.Payload))
 	}
 	r, err := http.NewRequestWithContext(e.context(), strings.ToUpper(method.Str), url.Str, rb)
 	if err != nil {
 		return []Val{Err(err.Error())}, nil
 	}
-	for _, kv := range headers.Pairs() {
+	for _, kv := range pairsOf(headers) {
 		r.Header.Add(kv[0], kv[1])
 	}
 	client := &http.Client{}

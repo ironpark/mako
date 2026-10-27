@@ -24,12 +24,11 @@ mako is Go with cgo. You need:
 - [buf](https://buf.build) and `protoc-gen-go`, only to change the protocol's
   schema
 
-wasmtime comes as the static library
-[wasmtime-go](https://github.com/bytecodealliance/wasmtime-go) carries for
-macOS, Linux and Windows on x86-64 and arm64. `internal/zedhost` calls its C
-API directly, with the headers of the same release in
-`internal/zedhost/include`; `include/sync.sh` copies them again after
-wasmtime-go moves.
+wasmtime comes through
+[wasmtime-pure-go](https://github.com/ironpark/wasmtime-pure-go), which calls
+its C API without cgo: it embeds the shared library for macOS, Linux and
+Windows on x86-64 and arm64, and unpacks it into the user cache on first use.
+The C toolchain is for the windowing and the terminal, not for wasmtime.
 
 | Target | |
 |---|---|

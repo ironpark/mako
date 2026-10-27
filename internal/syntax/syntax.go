@@ -20,7 +20,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bytecodealliance/wasmtime-go/v50"
+	wasmtime "github.com/ironpark/wasmtime-pure-go"
 )
 
 //go:embed runtime/tree-sitter.wasm
@@ -54,12 +54,18 @@ const (
 )
 
 // engine is shared by every Runtime in the process; compiled modules
-// belong to an engine, so sharing it lets them share compiled code.
-var engine = wasmtime.NewEngine()
+// belong to an engine, so sharing it lets them share compiled code. It is
+// made with the runtime module, which loads wasmtime's library, and which
+// whatever uses it reaches first.
+var engine *wasmtime.Engine
 
 // runtimeMod is the compiled tree-sitter runtime, with its table grown by
 // tableReserve. It is compiled once, by the first NewRuntime.
 var runtimeMod = sync.OnceValues(func() (*runtimeModuleInfo, error) {
+	if err := wasmtime.LoadError(); err != nil {
+		return nil, err
+	}
+	engine = wasmtime.NewEngine()
 	secs, err := readSections(runtimeWasm)
 	if err != nil {
 		return nil, err

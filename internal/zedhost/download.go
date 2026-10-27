@@ -226,8 +226,8 @@ func validRepo(repo string) bool {
 func (e *Extension) latestGitHubRelease(args []Val) ([]Val, error) {
 	repo := arg(args, 0).Str
 	opts := arg(args, 1)
-	requireAssets, _ := opts.Field("require-assets")
-	pre, _ := opts.Field("pre-release")
+	requireAssets, _ := field(opts, "require-assets")
+	pre, _ := field(opts, "pre-release")
 	if !validRepo(repo) {
 		return []Val{Errf("%q is not a GitHub repository", repo)}, nil
 	}
