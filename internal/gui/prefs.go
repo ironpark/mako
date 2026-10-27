@@ -84,8 +84,8 @@ func defaultPrefs() prefs {
 		Language:        "system",
 		UsageOverlay:    true,
 		UsageCorner:     "top-right",
-		WindowBackdrop:  backdrop{Opacity: defaultBackdropOpacity},
-		SessionBackdrop: backdrop{Opacity: defaultBackdropOpacity},
+		WindowBackdrop:  defaultBackdrop(),
+		SessionBackdrop: defaultBackdrop(),
 		FontSize:        13,
 		LineHeight:      1.4,
 		CursorStyle:     "block",
@@ -117,9 +117,7 @@ func (p prefs) normalized() prefs {
 	if p.Theme == "" {
 		p.Theme = d.Theme
 	}
-	for _, b := range []*backdrop{&p.WindowBackdrop, &p.SessionBackdrop} {
-		b.Opacity = min(max(b.Opacity, 0), 1)
-	}
+	p.WindowBackdrop, p.SessionBackdrop = p.WindowBackdrop.normalized(), p.SessionBackdrop.normalized()
 	if _, ok := catalog(p.Language); !ok && p.Language != "system" {
 		p.Language = d.Language
 	}

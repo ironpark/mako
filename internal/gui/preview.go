@@ -377,7 +377,8 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				}), frames(10), shot("13-theme-editor"),
 				do(func() {
 					m.Prefs.Update(func(p prefs) prefs {
-						p.Theme, p.WindowBackdrop = "dark", backdrop{Image: window, Opacity: 0.35}
+						p.Theme = "dark"
+						p.WindowBackdrop = backdrop{Image: window, Opacity: 0.6, Fit: "contain", Position: "bottom-right", Width: 420, MarginX: 24, MarginY: 24}
 						return p
 					})
 				}), frames(40), shot("14-appearance-backdrop"),

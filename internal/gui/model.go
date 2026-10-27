@@ -53,6 +53,10 @@ type model struct {
 	post func(func())
 
 	Prefs *ggui.StateValue[prefs]
+	// backdropSeen is the size each background image was last laid out
+	// at, which the settings' preview of it takes the shape of; for the
+	// sessions', the pane laid out last.
+	backdropSeen [2]ggui.Size
 	// Themes are the user's themes, by name; ThemesRead counts their
 	// readings from disk, so the editor starts again on what was read.
 	Themes         *ggui.StateValue[map[string]palette]
