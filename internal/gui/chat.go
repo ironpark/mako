@@ -250,7 +250,8 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		if len(v.Chat.GetMessages()) > 0 && scroll.MaxOffset()-scroll.Offset() < 32 {
 			rows = append(rows, &revealOnce{child: ggui.Box().Height(1), done: func() {}})
 		}
-		return ggui.Box(ggui.Column(rows...).Gap(14).Stretch()).Pad(18, 24).MaxWidth(chatLaneWidth)
+		// The gap between turns holds a message's copy button.
+		return ggui.Box(ggui.Column(rows...).Gap(26).Stretch()).Pad(18, 24).MaxWidth(chatLaneWidth)
 	})
 	feed := ggui.Scroll(ggui.Align(content).Top()).Controller(scroll).Bar(tokSurface3)
 	chatUsage := ggui.Map(state.result, func(v chatResult) *protocol.Usage {
@@ -342,42 +343,37 @@ func foldHeader(open ggui.Binding[bool], glyph, title ggui.Widget, detail, name 
 }
 
 func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage) ggui.Widget {
-	// A message's copy button shows in its top-right corner while the
-	// pointer is over it; its place is kept, so the text does not move.
-	hover := ggui.State(false)
-	withCopy := func(content ggui.Widget) ggui.Widget {
-		btn := ggui.If(hover, func() ggui.Widget { return copyButton(m, msg.GetText()) })
-		return &cornered{content: ggui.Padding(content, 0, copySlot+6, 0, 0), corner: btn}
-	}
 	if msg.GetRole() == "user" {
-		bubble := ggui.Box(withCopy(ggui.Text(msg.GetText()).Size(14).Selectable())).
-			Fill(tokSurface2).Radius(12).Pad(10, 8, 10, 14).MaxWidth(680)
-		return ggui.Pointer(ggui.Row(ggui.Spacer(), bubble).Stretch()).OnHover(hover.Set)
+		bubble := ggui.Box(ggui.Text(msg.GetText()).Size(14).Selectable()).
+			Fill(tokSurface2).Radius(12).Pad(10, 14).MaxWidth(680)
+		return ggui.Row(ggui.Spacer(), &withCopy{content: bubble, button: copyButton(m, msg.GetText())}).Stretch()
 	}
 	r := &mdRenderer{m: m, id: id, doc: docInfo{Node: info.GetNodeId(), Path: joinPath(info.GetProject(), "conversation.md")}, src: []byte(msg.GetText())}
 	root := markdown.Parser().Parse(text.NewReader(r.src))
-	return ggui.Pointer(withCopy(ggui.Column(r.blocks(root)...).Gap(10).Stretch())).OnHover(hover.Set)
+	return &withCopy{content: ggui.Column(r.blocks(root)...).Gap(10).Stretch(), button: copyButton(m, msg.GetText())}
 }
 
-// copySlot is the room a message keeps for its copy button.
-const copySlot = 28
-
-// cornered is content with corner drawn over its top-right corner, the
-// size of content alone.
-type cornered struct {
-	content, corner ggui.Widget
-	cornerSize      ggui.Size
+// withCopy is a message with its copy button under its bottom-right
+// corner, in the gap before the next, while the pointer is over the
+// message or the button. Where the pointer is decides it, not hover:
+// selectable text over the message takes the hover for itself.
+type withCopy struct {
+	content, button ggui.Widget
+	buttonSize      ggui.Size
 }
 
-func (c *cornered) Layout(cs ggui.Constraints, env ggui.Env) ggui.Size {
-	size := c.content.Layout(cs, env)
-	c.cornerSize = c.corner.Layout(ggui.Loose(size), env)
+func (w *withCopy) Layout(cs ggui.Constraints, env ggui.Env) ggui.Size {
+	size := w.content.Layout(cs, env)
+	w.buttonSize = w.button.Layout(ggui.Loose(ggui.Sz(size.W, ggui.Unbounded)), env)
 	return size
 }
 
-func (c *cornered) Paint(dst *ggui.Canvas, r ggui.Rect) {
-	dst.Paint(c.content, r)
-	dst.Paint(c.corner, ggui.Rct(ggui.Pt(r.Origin.X+r.Size.W-c.cornerSize.W, r.Origin.Y), c.cornerSize))
+func (w *withCopy) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.Paint(w.content, r)
+	at := ggui.Rct(ggui.Pt(r.Origin.X+r.Size.W-w.buttonSize.W, r.Origin.Y+r.Size.H+2), w.buttonSize)
+	if p, ok := dst.Pointer(); ok && (r.Contains(p) || at.Contains(p)) {
+		dst.Paint(w.button, at)
+	}
 }
 
 // copyButton copies a message as the agent wrote it, Markdown and all, and
@@ -385,11 +381,12 @@ func (c *cornered) Paint(dst *ggui.Canvas, r ggui.Rect) {
 func copyButton(m *model, text string) ggui.Widget {
 	copied := ggui.State(false)
 	return ggui.View(copied, func(done bool) ggui.Widget {
-		return iconButton(pick(done, "check", "copy"), T("Copy"), func() {
+		glyph := icon(pick(done, "check", "copy")).Size(13).Color(tokMuted)
+		return ui.Tooltip(ui.ButtonOf(glyph, func() {
 			ggui.CurrentClipboard().Write(text)
 			copied.Set(true)
 			time.AfterFunc(1500*time.Millisecond, func() { m.post(func() { copied.Set(false) }) })
-		})
+		}).Ghost().Pad(3).Radius(5).Name(T("Copy")), T("Copy"))
 	})
 }
 

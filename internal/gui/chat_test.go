@@ -214,3 +214,38 @@ func TestViewSwitchTogglesWhereverClicked(t *testing.T) {
 		}
 	}
 }
+
+// A message's copy button shows under it while the pointer is over the
+// message, its selectable text too, or over the button; it takes no room.
+func TestCopyButtonShowsUnderTheMessageHovered(t *testing.T) {
+	msg := &protocol.ChatMessage{Role: "user", Text: "copy me please"}
+	w := &withCopy{content: ggui.Box(ggui.Text(msg.GetText()).Size(14).Selectable()).Pad(10, 14), button: copyButton(nil, msg.GetText())}
+	p := ggui.NewProbe(ggui.Column(w, ggui.Box().Height(60)).Stretch(), ggui.Sz(400, 200))
+	defer p.Close()
+	p.Frame()
+	// The text sits inside the box's padding, at its top-left.
+	text := ggui.Found{Rect: ggui.Rct(ggui.Pt(14, 10), ggui.Sz(60, 18))}
+	if _, ok := p.Find(T("Copy")); ok {
+		t.Fatal("the button shows with the pointer away")
+	}
+	p.Move(text.Center())
+	p.Frame()
+	btn, ok := p.Find(T("Copy"))
+	if !ok {
+		t.Fatal("the button is hidden with the pointer over the text")
+	}
+	if btn.Rect.Origin.Y < text.Rect.Origin.Y+text.Rect.Size.H {
+		t.Fatalf("the button %v is not under the message %v", btn.Rect, text.Rect)
+	}
+	// Onto the button, out of the message, it stays.
+	p.Move(btn.Center())
+	p.Frame()
+	if _, ok := p.Find(T("Copy")); !ok {
+		t.Fatal("the button went as the pointer reached it")
+	}
+	p.Move(ggui.Pt(390, 190))
+	p.Frame()
+	if _, ok := p.Find(T("Copy")); ok {
+		t.Fatal("the button stays with the pointer away")
+	}
+}
