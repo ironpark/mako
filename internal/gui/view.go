@@ -62,7 +62,8 @@ func window(m *model) ggui.Widget {
 		newSessionDialog(m),
 		renameDialog(m),
 		fileDialogs(m),
-		branchDialog(m),
+		gitAskDialog(m),
+		gitConfirmDialog(m),
 		imageViewer(m),
 		paletteDialog(m),
 		quickOpenDialog(m),
@@ -642,11 +643,9 @@ func pill(iconName, label string) ggui.Widget {
 // The details panel's tabs, in order.
 const (
 	filesTab = iota
-	changesTab
-	historyTab
+	gitTab
 	searchTab
 	sessionTab
-	nodesTab
 )
 
 func details(m *model) ggui.Widget {
@@ -681,20 +680,15 @@ func details(m *model) ggui.Widget {
 			prop(T("Session"), s.GetId()),
 		)...).Gap(14).Stretch()
 	})
-	nodes := ggui.View(m.Nodes, func(nodes []*protocol.Node) ggui.Widget {
-		return nodeList(nodes)
-	})
 	// Built once, so each keeps its scroll and open folders across tabs.
 	pages := []ggui.Widget{
 		filesPanel(m),
-		changesPanel(m),
-		historyPanel(m),
+		gitPanel(m),
 		searchPanel(m),
 		ggui.Scroll(ggui.Padding(session, 16)),
-		ggui.Scroll(ggui.Padding(nodes, 12)),
 	}
 	return ggui.Box(ggui.Column(
-		panelTabs(m.DetailTab, T("Files"), T("Changes"), T("History"), T("Search"), T("Session"), T("Nodes")),
+		panelTabs(m.DetailTab, T("Files"), T("Git"), T("Search"), T("Session")),
 		hline(),
 		ggui.Expanded(ggui.Key(m.DetailTab, func(i int) ggui.Widget { return pages[min(max(i, 0), len(pages)-1)] })),
 	).Stretch()).Fill(tokSurface0)

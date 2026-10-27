@@ -292,7 +292,7 @@ func Run(ctx context.Context, r *protocol.GitRun) (string, error) {
 	case protocol.GitOpPush:
 		return push(ctx, r.GetRoot())
 	case protocol.GitOpPull:
-		return run(ctx, r.GetRoot(), nil, "pull", "--ff-only")
+		return run(ctx, r.GetRoot(), nil, "pull", pick(r.GetRebase(), "--rebase", "--ff-only"))
 	case protocol.GitOpFetch:
 		return run(ctx, r.GetRoot(), nil, "fetch", "--all", "--prune")
 	case protocol.GitOpCheckout, protocol.GitOpBranch:
@@ -300,7 +300,14 @@ func Run(ctx context.Context, r *protocol.GitRun) (string, error) {
 			return "", fmt.Errorf("%q is not a branch name", r.GetBranch())
 		}
 		if r.GetOp() == protocol.GitOpBranch {
-			return run(ctx, r.GetRoot(), nil, "switch", "-c", r.GetBranch())
+			if r.GetCommit() == "" {
+				return run(ctx, r.GetRoot(), nil, "switch", "-c", r.GetBranch())
+			}
+			c, err := commitArg(r.GetCommit())
+			if err != nil {
+				return "", err
+			}
+			return run(ctx, r.GetRoot(), nil, "switch", "-c", r.GetBranch(), c)
 		}
 		return run(ctx, r.GetRoot(), nil, "switch", r.GetBranch())
 	case protocol.GitOpDiscard:
@@ -319,6 +326,9 @@ func Run(ctx context.Context, r *protocol.GitRun) (string, error) {
 			return PullRequest(ctx, r.GetWorktree())
 		}
 		return RemoveWorktree(ctx, r.GetWorktree())
+	}
+	if out, ok, err := runOp(ctx, r); ok {
+		return out, err
 	}
 	return "", fmt.Errorf("unknown git operation %q", r.GetOp())
 }

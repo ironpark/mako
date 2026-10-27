@@ -330,7 +330,7 @@ Search matching is case-insensitive unless `query` has a capital.
 
 | Request | Payload | Reply | |
 |---|---|---|---|
-| `git_status` | `GitStatus` | `git_changes` | The work tree's changes against HEAD, or with `base` since it left that branch. Also branch, upstream, ahead and behind. |
+| `git_status` | `GitStatus` | `git_changes` | The work tree's changes against HEAD, or with `base` since it left that branch. Also branch, upstream, ahead and behind, the local and remote branches, the stashes, and a merge, rebase, cherry-pick or revert under way (`operation`), whose unmerged files have status `conflicted`. |
 | `git_diff` | `GitDiff` | `diff` | One file's hunks: against HEAD, against `base`, or as `commit` changed it. |
 | `git_log` | `GitLog` | `git_history` | Recent commits of every branch and tag, newest first. |
 | `git_show` | `GitShow` | `git_commit_info` | One commit's message and changed files. |
@@ -345,9 +345,16 @@ leaves the commits out.
 | Op | |
 |---|---|
 | `commit` | `message`, optionally only `paths`, optionally `amend`. |
-| `push`, `pull`, `fetch` | `pull` fast-forwards only. |
-| `checkout`, `branch` | Check out `branch`, or create it at HEAD and check it out. |
+| `push`, `pull`, `fetch` | `pull` fast-forwards only, or rebases with `rebase`. |
+| `checkout`, `branch` | Check out `branch`, or create it at `commit` (HEAD when empty) and check it out. |
+| `track` | Check out the remote `branch` (`origin/name`) as a local branch tracking it. |
+| `delete_branch`, `merge_branch`, `rebase` | Delete `branch` (unmerged too with `force`), merge it into the branch checked out, or rebase that branch onto it. |
 | `discard_hunk` | Undo `hunk` in `paths[0]`, as the diff showed it. |
+| `discard_files` | Put `paths` back as HEAD has them; files HEAD lacks are deleted. |
+| `ignore` | Add `paths` to the root's `.gitignore`, anchored. |
+| `stash`, `stash_apply`, `stash_pop`, `stash_drop` | Stash every change, untracked files too, as `message`; or apply, pop or drop stash `stash`. |
+| `detach`, `cherry_pick`, `revert`, `tag` | Of `commit`: check it out on no branch, apply it, undo it as a new commit, or tag it `tag` (annotated with `message`). |
+| `continue`, `abort` | Go on with the `operation` under way, adding what was resolved, or abandon it. |
 | `merge`, `pull_request`, `remove_worktree` | Of a session's `worktree`: merge its branch into its base, push it and open a pull request, or remove it once nothing is left in it. |
 
 Diff lines are `{op, text, old, new}`, where `op` is `+`, `-`, a space for

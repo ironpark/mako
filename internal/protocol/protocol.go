@@ -248,20 +248,40 @@ const (
 	GitModified = "modified"
 	GitDeleted  = "deleted"
 	GitRenamed  = "renamed"
+	// GitConflicted is a file a merge, rebase, cherry-pick or revert left
+	// with conflicts to resolve.
+	GitConflicted = "conflicted"
 )
 
 // Operations of a GitRun.
 const (
 	GitOpCommit   = "commit"
 	GitOpPush     = "push"
-	GitOpPull     = "pull" // fast-forward only
+	GitOpPull     = "pull" // fast-forward only, or rebasing with Rebase
 	GitOpFetch    = "fetch"
 	GitOpCheckout = "checkout"
-	GitOpBranch   = "branch" // creates Branch at HEAD and checks it out
+	GitOpBranch   = "branch" // creates Branch at Commit, or HEAD, and checks it out
 	GitOpDiscard  = "discard_hunk"
 	GitOpMerge    = "merge"           // a worktree's branch into its base, in the main work tree
 	GitOpPR       = "pull_request"    // pushes a worktree's branch and opens a pull request of it
 	GitOpRemoveWT = "remove_worktree" // a worktree with no changes left, and its merged branch
+
+	GitOpDiscardFiles = "discard_files" // Paths' changes, and untracked files themselves
+	GitOpIgnore       = "ignore"        // adds Paths to the root's .gitignore
+	GitOpStash        = "stash"         // every change, untracked files too, as Message
+	GitOpStashApply   = "stash_apply"   // Stash, kept
+	GitOpStashPop     = "stash_pop"     // Stash, dropped once applied
+	GitOpStashDrop    = "stash_drop"    // Stash
+	GitOpTrack        = "track"         // checks out a remote branch, Branch as "origin/name", tracking it
+	GitOpDeleteBranch = "delete_branch" // Branch, unmerged too with Force
+	GitOpMergeBranch  = "merge_branch"  // Branch into the one checked out
+	GitOpRebase       = "rebase"        // the branch checked out onto Branch
+	GitOpDetach       = "detach"        // checks out Commit, on no branch
+	GitOpCherryPick   = "cherry_pick"   // Commit onto the branch checked out
+	GitOpRevert       = "revert"        // Commit, as a new commit
+	GitOpTag          = "tag"           // Tag at Commit, annotated with Message if any
+	GitOpContinue     = "continue"      // the operation under way, its conflicts resolved
+	GitOpAbort        = "abort"         // the operation under way
 )
 
 // Same reports whether a and b are equal messages: proto.Equal, typed, for

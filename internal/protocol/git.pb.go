@@ -85,17 +85,20 @@ func (x *GitStatus) GetBase() string {
 
 // GitChanges answers GitStatus.
 type GitChanges struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Root          string                 `protobuf:"bytes,1,opt,name=root,proto3" json:"root,omitempty"`
-	Branch        string                 `protobuf:"bytes,2,opt,name=branch,proto3" json:"branch,omitempty"`
-	NotRepo       bool                   `protobuf:"varint,3,opt,name=not_repo,json=notRepo,proto3" json:"not_repo,omitempty"`
-	Files         []*GitFile             `protobuf:"bytes,4,rep,name=files,proto3" json:"files,omitempty"`
-	Upstream      string                 `protobuf:"bytes,5,opt,name=upstream,proto3" json:"upstream,omitempty"`
-	Ahead         int64                  `protobuf:"varint,6,opt,name=ahead,proto3" json:"ahead,omitempty"`
-	Behind        int64                  `protobuf:"varint,7,opt,name=behind,proto3" json:"behind,omitempty"`
-	Branches      []string               `protobuf:"bytes,8,rep,name=branches,proto3" json:"branches,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Root           string                 `protobuf:"bytes,1,opt,name=root,proto3" json:"root,omitempty"`
+	Branch         string                 `protobuf:"bytes,2,opt,name=branch,proto3" json:"branch,omitempty"`
+	NotRepo        bool                   `protobuf:"varint,3,opt,name=not_repo,json=notRepo,proto3" json:"not_repo,omitempty"`
+	Files          []*GitFile             `protobuf:"bytes,4,rep,name=files,proto3" json:"files,omitempty"`
+	Upstream       string                 `protobuf:"bytes,5,opt,name=upstream,proto3" json:"upstream,omitempty"`
+	Ahead          int64                  `protobuf:"varint,6,opt,name=ahead,proto3" json:"ahead,omitempty"`
+	Behind         int64                  `protobuf:"varint,7,opt,name=behind,proto3" json:"behind,omitempty"`
+	Branches       []string               `protobuf:"bytes,8,rep,name=branches,proto3" json:"branches,omitempty"`
+	Stashes        []*GitStash            `protobuf:"bytes,9,rep,name=stashes,proto3" json:"stashes,omitempty"`
+	RemoteBranches []string               `protobuf:"bytes,10,rep,name=remote_branches,json=remoteBranches,proto3" json:"remote_branches,omitempty"` // as "origin/name"
+	Operation      string                 `protobuf:"bytes,11,opt,name=operation,proto3" json:"operation,omitempty"`                                 // one under way: merge, rebase, cherry-pick or revert
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GitChanges) Reset() {
@@ -184,12 +187,94 @@ func (x *GitChanges) GetBranches() []string {
 	return nil
 }
 
+func (x *GitChanges) GetStashes() []*GitStash {
+	if x != nil {
+		return x.Stashes
+	}
+	return nil
+}
+
+func (x *GitChanges) GetRemoteBranches() []string {
+	if x != nil {
+		return x.RemoteBranches
+	}
+	return nil
+}
+
+func (x *GitChanges) GetOperation() string {
+	if x != nil {
+		return x.Operation
+	}
+	return ""
+}
+
+// GitStash is one stashed change.
+type GitStash struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Index         int64                  `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"` // stash@{index}
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Time          *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=time,proto3" json:"time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GitStash) Reset() {
+	*x = GitStash{}
+	mi := &file_sanbo_v2_git_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GitStash) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GitStash) ProtoMessage() {}
+
+func (x *GitStash) ProtoReflect() protoreflect.Message {
+	mi := &file_sanbo_v2_git_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GitStash.ProtoReflect.Descriptor instead.
+func (*GitStash) Descriptor() ([]byte, []int) {
+	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *GitStash) GetIndex() int64 {
+	if x != nil {
+		return x.Index
+	}
+	return 0
+}
+
+func (x *GitStash) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *GitStash) GetTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Time
+	}
+	return nil
+}
+
 // GitFile is one changed file.
 type GitFile struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`     // slash-separated, from the root
 	From          string                 `protobuf:"bytes,2,opt,name=from,proto3" json:"from,omitempty"`     // a rename's old path
-	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"` // added, modified, deleted, renamed
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"` // added, modified, deleted, renamed or conflicted
 	Added         int64                  `protobuf:"varint,4,opt,name=added,proto3" json:"added,omitempty"`
 	Removed       int64                  `protobuf:"varint,5,opt,name=removed,proto3" json:"removed,omitempty"`
 	Binary        bool                   `protobuf:"varint,6,opt,name=binary,proto3" json:"binary,omitempty"`
@@ -199,7 +284,7 @@ type GitFile struct {
 
 func (x *GitFile) Reset() {
 	*x = GitFile{}
-	mi := &file_sanbo_v2_git_proto_msgTypes[2]
+	mi := &file_sanbo_v2_git_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -211,7 +296,7 @@ func (x *GitFile) String() string {
 func (*GitFile) ProtoMessage() {}
 
 func (x *GitFile) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_git_proto_msgTypes[2]
+	mi := &file_sanbo_v2_git_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -224,7 +309,7 @@ func (x *GitFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitFile.ProtoReflect.Descriptor instead.
 func (*GitFile) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{2}
+	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GitFile) GetPath() string {
@@ -284,7 +369,7 @@ type GitDiff struct {
 
 func (x *GitDiff) Reset() {
 	*x = GitDiff{}
-	mi := &file_sanbo_v2_git_proto_msgTypes[3]
+	mi := &file_sanbo_v2_git_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -296,7 +381,7 @@ func (x *GitDiff) String() string {
 func (*GitDiff) ProtoMessage() {}
 
 func (x *GitDiff) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_git_proto_msgTypes[3]
+	mi := &file_sanbo_v2_git_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -309,7 +394,7 @@ func (x *GitDiff) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitDiff.ProtoReflect.Descriptor instead.
 func (*GitDiff) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{3}
+	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GitDiff) GetNodeId() string {
@@ -367,7 +452,7 @@ type Diff struct {
 
 func (x *Diff) Reset() {
 	*x = Diff{}
-	mi := &file_sanbo_v2_git_proto_msgTypes[4]
+	mi := &file_sanbo_v2_git_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -379,7 +464,7 @@ func (x *Diff) String() string {
 func (*Diff) ProtoMessage() {}
 
 func (x *Diff) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_git_proto_msgTypes[4]
+	mi := &file_sanbo_v2_git_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -392,7 +477,7 @@ func (x *Diff) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Diff.ProtoReflect.Descriptor instead.
 func (*Diff) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{4}
+	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Diff) GetPath() string {
@@ -437,7 +522,7 @@ type DiffLine struct {
 
 func (x *DiffLine) Reset() {
 	*x = DiffLine{}
-	mi := &file_sanbo_v2_git_proto_msgTypes[5]
+	mi := &file_sanbo_v2_git_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -449,7 +534,7 @@ func (x *DiffLine) String() string {
 func (*DiffLine) ProtoMessage() {}
 
 func (x *DiffLine) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_git_proto_msgTypes[5]
+	mi := &file_sanbo_v2_git_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -462,7 +547,7 @@ func (x *DiffLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiffLine.ProtoReflect.Descriptor instead.
 func (*DiffLine) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{5}
+	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *DiffLine) GetOp() string {
@@ -506,7 +591,7 @@ type GitLog struct {
 
 func (x *GitLog) Reset() {
 	*x = GitLog{}
-	mi := &file_sanbo_v2_git_proto_msgTypes[6]
+	mi := &file_sanbo_v2_git_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -518,7 +603,7 @@ func (x *GitLog) String() string {
 func (*GitLog) ProtoMessage() {}
 
 func (x *GitLog) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_git_proto_msgTypes[6]
+	mi := &file_sanbo_v2_git_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -531,7 +616,7 @@ func (x *GitLog) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitLog.ProtoReflect.Descriptor instead.
 func (*GitLog) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{6}
+	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GitLog) GetNodeId() string {
@@ -576,7 +661,7 @@ type GitHistory struct {
 
 func (x *GitHistory) Reset() {
 	*x = GitHistory{}
-	mi := &file_sanbo_v2_git_proto_msgTypes[7]
+	mi := &file_sanbo_v2_git_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -588,7 +673,7 @@ func (x *GitHistory) String() string {
 func (*GitHistory) ProtoMessage() {}
 
 func (x *GitHistory) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_git_proto_msgTypes[7]
+	mi := &file_sanbo_v2_git_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -601,7 +686,7 @@ func (x *GitHistory) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitHistory.ProtoReflect.Descriptor instead.
 func (*GitHistory) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{7}
+	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GitHistory) GetCommits() []*GitCommit {
@@ -654,7 +739,7 @@ type GitCommit struct {
 
 func (x *GitCommit) Reset() {
 	*x = GitCommit{}
-	mi := &file_sanbo_v2_git_proto_msgTypes[8]
+	mi := &file_sanbo_v2_git_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -666,7 +751,7 @@ func (x *GitCommit) String() string {
 func (*GitCommit) ProtoMessage() {}
 
 func (x *GitCommit) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_git_proto_msgTypes[8]
+	mi := &file_sanbo_v2_git_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -679,7 +764,7 @@ func (x *GitCommit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitCommit.ProtoReflect.Descriptor instead.
 func (*GitCommit) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{8}
+	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *GitCommit) GetHash() string {
@@ -736,7 +821,7 @@ type GitShow struct {
 
 func (x *GitShow) Reset() {
 	*x = GitShow{}
-	mi := &file_sanbo_v2_git_proto_msgTypes[9]
+	mi := &file_sanbo_v2_git_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -748,7 +833,7 @@ func (x *GitShow) String() string {
 func (*GitShow) ProtoMessage() {}
 
 func (x *GitShow) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_git_proto_msgTypes[9]
+	mi := &file_sanbo_v2_git_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -761,7 +846,7 @@ func (x *GitShow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitShow.ProtoReflect.Descriptor instead.
 func (*GitShow) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{9}
+	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GitShow) GetNodeId() string {
@@ -798,7 +883,7 @@ type GitCommitInfo struct {
 
 func (x *GitCommitInfo) Reset() {
 	*x = GitCommitInfo{}
-	mi := &file_sanbo_v2_git_proto_msgTypes[10]
+	mi := &file_sanbo_v2_git_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -810,7 +895,7 @@ func (x *GitCommitInfo) String() string {
 func (*GitCommitInfo) ProtoMessage() {}
 
 func (x *GitCommitInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_git_proto_msgTypes[10]
+	mi := &file_sanbo_v2_git_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -823,7 +908,7 @@ func (x *GitCommitInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitCommitInfo.ProtoReflect.Descriptor instead.
 func (*GitCommitInfo) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{10}
+	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GitCommitInfo) GetCommit() *GitCommit {
@@ -866,13 +951,18 @@ type GitRun struct {
 	Branch        string                 `protobuf:"bytes,7,opt,name=branch,proto3" json:"branch,omitempty"`
 	Hunk          []*DiffLine            `protobuf:"bytes,8,rep,name=hunk,proto3" json:"hunk,omitempty"`
 	Worktree      *Worktree              `protobuf:"bytes,9,opt,name=worktree,proto3" json:"worktree,omitempty"`
+	Commit        string                 `protobuf:"bytes,10,opt,name=commit,proto3" json:"commit,omitempty"`  // the commit an operation is of, or a branch starts at
+	Stash         int64                  `protobuf:"varint,11,opt,name=stash,proto3" json:"stash,omitempty"`   // the stash an operation is of
+	Rebase        bool                   `protobuf:"varint,12,opt,name=rebase,proto3" json:"rebase,omitempty"` // a pull rebases rather than fast-forwards
+	Force         bool                   `protobuf:"varint,13,opt,name=force,proto3" json:"force,omitempty"`   // a branch is deleted though not merged
+	Tag           string                 `protobuf:"bytes,14,opt,name=tag,proto3" json:"tag,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GitRun) Reset() {
 	*x = GitRun{}
-	mi := &file_sanbo_v2_git_proto_msgTypes[11]
+	mi := &file_sanbo_v2_git_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -884,7 +974,7 @@ func (x *GitRun) String() string {
 func (*GitRun) ProtoMessage() {}
 
 func (x *GitRun) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_git_proto_msgTypes[11]
+	mi := &file_sanbo_v2_git_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -897,7 +987,7 @@ func (x *GitRun) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitRun.ProtoReflect.Descriptor instead.
 func (*GitRun) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{11}
+	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GitRun) GetNodeId() string {
@@ -963,6 +1053,41 @@ func (x *GitRun) GetWorktree() *Worktree {
 	return nil
 }
 
+func (x *GitRun) GetCommit() string {
+	if x != nil {
+		return x.Commit
+	}
+	return ""
+}
+
+func (x *GitRun) GetStash() int64 {
+	if x != nil {
+		return x.Stash
+	}
+	return 0
+}
+
+func (x *GitRun) GetRebase() bool {
+	if x != nil {
+		return x.Rebase
+	}
+	return false
+}
+
+func (x *GitRun) GetForce() bool {
+	if x != nil {
+		return x.Force
+	}
+	return false
+}
+
+func (x *GitRun) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
 // GitResult answers GitRun: what git printed.
 type GitResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -973,7 +1098,7 @@ type GitResult struct {
 
 func (x *GitResult) Reset() {
 	*x = GitResult{}
-	mi := &file_sanbo_v2_git_proto_msgTypes[12]
+	mi := &file_sanbo_v2_git_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -985,7 +1110,7 @@ func (x *GitResult) String() string {
 func (*GitResult) ProtoMessage() {}
 
 func (x *GitResult) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_git_proto_msgTypes[12]
+	mi := &file_sanbo_v2_git_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -998,7 +1123,7 @@ func (x *GitResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitResult.ProtoReflect.Descriptor instead.
 func (*GitResult) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{12}
+	return file_sanbo_v2_git_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *GitResult) GetOutput() string {
@@ -1016,7 +1141,7 @@ const file_sanbo_v2_git_proto_rawDesc = "" +
 	"\tGitStatus\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x12\n" +
-	"\x04base\x18\x03 \x01(\tR\x04base\"\xe2\x01\n" +
+	"\x04base\x18\x03 \x01(\tR\x04base\"\xd7\x02\n" +
 	"\n" +
 	"GitChanges\x12\x12\n" +
 	"\x04root\x18\x01 \x01(\tR\x04root\x12\x16\n" +
@@ -1026,7 +1151,15 @@ const file_sanbo_v2_git_proto_rawDesc = "" +
 	"\bupstream\x18\x05 \x01(\tR\bupstream\x12\x14\n" +
 	"\x05ahead\x18\x06 \x01(\x03R\x05ahead\x12\x16\n" +
 	"\x06behind\x18\a \x01(\x03R\x06behind\x12\x1a\n" +
-	"\bbranches\x18\b \x03(\tR\bbranches\"\x91\x01\n" +
+	"\bbranches\x18\b \x03(\tR\bbranches\x12,\n" +
+	"\astashes\x18\t \x03(\v2\x12.sanbo.v2.GitStashR\astashes\x12'\n" +
+	"\x0fremote_branches\x18\n" +
+	" \x03(\tR\x0eremoteBranches\x12\x1c\n" +
+	"\toperation\x18\v \x01(\tR\toperation\"j\n" +
+	"\bGitStash\x12\x14\n" +
+	"\x05index\x18\x01 \x01(\x03R\x05index\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12.\n" +
+	"\x04time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\"\x91\x01\n" +
 	"\aGitFile\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
 	"\x04from\x18\x02 \x01(\tR\x04from\x12\x16\n" +
@@ -1078,7 +1211,7 @@ const file_sanbo_v2_git_proto_rawDesc = "" +
 	"\x06commit\x18\x01 \x01(\v2\x13.sanbo.v2.GitCommitR\x06commit\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12\x12\n" +
 	"\x04body\x18\x03 \x01(\tR\x04body\x12'\n" +
-	"\x05files\x18\x04 \x03(\v2\x11.sanbo.v2.GitFileR\x05files\"\xfb\x01\n" +
+	"\x05files\x18\x04 \x03(\v2\x11.sanbo.v2.GitFileR\x05files\"\xe9\x02\n" +
 	"\x06GitRun\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04root\x18\x02 \x01(\tR\x04root\x12\x0e\n" +
@@ -1088,7 +1221,13 @@ const file_sanbo_v2_git_proto_rawDesc = "" +
 	"\x05amend\x18\x06 \x01(\bR\x05amend\x12\x16\n" +
 	"\x06branch\x18\a \x01(\tR\x06branch\x12&\n" +
 	"\x04hunk\x18\b \x03(\v2\x12.sanbo.v2.DiffLineR\x04hunk\x12.\n" +
-	"\bworktree\x18\t \x01(\v2\x12.sanbo.v2.WorktreeR\bworktree\"#\n" +
+	"\bworktree\x18\t \x01(\v2\x12.sanbo.v2.WorktreeR\bworktree\x12\x16\n" +
+	"\x06commit\x18\n" +
+	" \x01(\tR\x06commit\x12\x14\n" +
+	"\x05stash\x18\v \x01(\x03R\x05stash\x12\x16\n" +
+	"\x06rebase\x18\f \x01(\bR\x06rebase\x12\x14\n" +
+	"\x05force\x18\r \x01(\bR\x05force\x12\x10\n" +
+	"\x03tag\x18\x0e \x01(\tR\x03tag\"#\n" +
 	"\tGitResult\x12\x16\n" +
 	"\x06output\x18\x01 \x01(\tR\x06outputB-Z+github.com/ironpark/sanbo/internal/protocolb\x06proto3"
 
@@ -1104,38 +1243,41 @@ func file_sanbo_v2_git_proto_rawDescGZIP() []byte {
 	return file_sanbo_v2_git_proto_rawDescData
 }
 
-var file_sanbo_v2_git_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_sanbo_v2_git_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_sanbo_v2_git_proto_goTypes = []any{
 	(*GitStatus)(nil),             // 0: sanbo.v2.GitStatus
 	(*GitChanges)(nil),            // 1: sanbo.v2.GitChanges
-	(*GitFile)(nil),               // 2: sanbo.v2.GitFile
-	(*GitDiff)(nil),               // 3: sanbo.v2.GitDiff
-	(*Diff)(nil),                  // 4: sanbo.v2.Diff
-	(*DiffLine)(nil),              // 5: sanbo.v2.DiffLine
-	(*GitLog)(nil),                // 6: sanbo.v2.GitLog
-	(*GitHistory)(nil),            // 7: sanbo.v2.GitHistory
-	(*GitCommit)(nil),             // 8: sanbo.v2.GitCommit
-	(*GitShow)(nil),               // 9: sanbo.v2.GitShow
-	(*GitCommitInfo)(nil),         // 10: sanbo.v2.GitCommitInfo
-	(*GitRun)(nil),                // 11: sanbo.v2.GitRun
-	(*GitResult)(nil),             // 12: sanbo.v2.GitResult
-	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
-	(*Worktree)(nil),              // 14: sanbo.v2.Worktree
+	(*GitStash)(nil),              // 2: sanbo.v2.GitStash
+	(*GitFile)(nil),               // 3: sanbo.v2.GitFile
+	(*GitDiff)(nil),               // 4: sanbo.v2.GitDiff
+	(*Diff)(nil),                  // 5: sanbo.v2.Diff
+	(*DiffLine)(nil),              // 6: sanbo.v2.DiffLine
+	(*GitLog)(nil),                // 7: sanbo.v2.GitLog
+	(*GitHistory)(nil),            // 8: sanbo.v2.GitHistory
+	(*GitCommit)(nil),             // 9: sanbo.v2.GitCommit
+	(*GitShow)(nil),               // 10: sanbo.v2.GitShow
+	(*GitCommitInfo)(nil),         // 11: sanbo.v2.GitCommitInfo
+	(*GitRun)(nil),                // 12: sanbo.v2.GitRun
+	(*GitResult)(nil),             // 13: sanbo.v2.GitResult
+	(*timestamppb.Timestamp)(nil), // 14: google.protobuf.Timestamp
+	(*Worktree)(nil),              // 15: sanbo.v2.Worktree
 }
 var file_sanbo_v2_git_proto_depIdxs = []int32{
-	2,  // 0: sanbo.v2.GitChanges.files:type_name -> sanbo.v2.GitFile
-	5,  // 1: sanbo.v2.Diff.lines:type_name -> sanbo.v2.DiffLine
-	8,  // 2: sanbo.v2.GitHistory.commits:type_name -> sanbo.v2.GitCommit
-	13, // 3: sanbo.v2.GitCommit.time:type_name -> google.protobuf.Timestamp
-	8,  // 4: sanbo.v2.GitCommitInfo.commit:type_name -> sanbo.v2.GitCommit
-	2,  // 5: sanbo.v2.GitCommitInfo.files:type_name -> sanbo.v2.GitFile
-	5,  // 6: sanbo.v2.GitRun.hunk:type_name -> sanbo.v2.DiffLine
-	14, // 7: sanbo.v2.GitRun.worktree:type_name -> sanbo.v2.Worktree
-	8,  // [8:8] is the sub-list for method output_type
-	8,  // [8:8] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	3,  // 0: sanbo.v2.GitChanges.files:type_name -> sanbo.v2.GitFile
+	2,  // 1: sanbo.v2.GitChanges.stashes:type_name -> sanbo.v2.GitStash
+	14, // 2: sanbo.v2.GitStash.time:type_name -> google.protobuf.Timestamp
+	6,  // 3: sanbo.v2.Diff.lines:type_name -> sanbo.v2.DiffLine
+	9,  // 4: sanbo.v2.GitHistory.commits:type_name -> sanbo.v2.GitCommit
+	14, // 5: sanbo.v2.GitCommit.time:type_name -> google.protobuf.Timestamp
+	9,  // 6: sanbo.v2.GitCommitInfo.commit:type_name -> sanbo.v2.GitCommit
+	3,  // 7: sanbo.v2.GitCommitInfo.files:type_name -> sanbo.v2.GitFile
+	6,  // 8: sanbo.v2.GitRun.hunk:type_name -> sanbo.v2.DiffLine
+	15, // 9: sanbo.v2.GitRun.worktree:type_name -> sanbo.v2.Worktree
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_sanbo_v2_git_proto_init() }
@@ -1150,7 +1292,7 @@ func file_sanbo_v2_git_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sanbo_v2_git_proto_rawDesc), len(file_sanbo_v2_git_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

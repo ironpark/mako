@@ -159,6 +159,8 @@ func statusIcon(status string) ggui.Widget {
 		return iconColored("square-minus", tokDiffRemoved).Size(14)
 	case protocol.GitRenamed:
 		return iconColored("square-arrow-right", tokDiffModified).Size(14)
+	case protocol.GitConflicted:
+		return iconColored("shield-alert", tokDotDown).Size(14)
 	}
 	return iconColored("square-dot", tokDiffModified).Size(14)
 }
@@ -205,19 +207,9 @@ func (m *model) every(period time.Duration, fn func()) ggui.Cleanup {
 	return func() { close(stop) }
 }
 
-func changesPanel(m *model) ggui.Widget {
-	root := ggui.Derived(m.filesRoot)
-	// Read again every few seconds while shown, as agents change files.
-	pollWhileShown(m, root, changesTab, gitRefresh, m.loadGit)
-	return ggui.Key(root, func(r fileRoot) ggui.Widget {
-		if r.Path == "" {
-			return ggui.Box(muted(ggui.Text(T("Open a session to see its changes.")).Size(13))).Pad(16)
-		}
-		return changesView(m)
-	})
-}
-
-func changesView(m *model) ggui.Widget {
+// changesTree is the changed files under their folders, each to pick for
+// the next commit, its diff a click away and more in its menu.
+func changesTree(m *model) ggui.Widget {
 	// A refresh that changes nothing, as most do, leaves the tree be.
 	files := ggui.Map(m.Git, func(v gitView) []*protocol.GitFile { return v.Changes.GetFiles() }).WithEqual(protocol.Equal)
 	roots := ggui.Map(files, gitTree)
@@ -244,7 +236,8 @@ func changesView(m *model) ggui.Widget {
 					// Since a base, the files are the branch's work, not a commit's pick.
 					return ggui.Row(lead, ggui.Expanded(name), numbers, tail).Gap(7)
 				}
-				return ggui.Row(pickBox(m, it), lead, ggui.Expanded(name), numbers, tail).Gap(7)
+				row := ggui.Row(pickBox(m, it), lead, ggui.Expanded(name), numbers, tail).Gap(7)
+				return ui.ContextMenu(row, changeMenu(m, it)...).Name(Tf("%s actions", it.Name))
 			})
 		}).
 		RowName(func(it gitItem) string { return it.Name }).
@@ -261,7 +254,29 @@ func changesView(m *model) ggui.Widget {
 			m.openDiff(it.File)
 		}).
 		Name(T("Changes"))
+	return ggui.Reactive(func() ggui.Widget {
+		v := m.Git.Get()
+		var note string
+		switch {
+		case v.Changes.GetNotRepo():
+			note = T("Not a git repository.")
+		case v.Err != "" && len(v.Changes.GetFiles()) == 0:
+			note = v.Err
+		case v.Loading && v.Changes.GetRoot() == "":
+			return ggui.Box(ggui.Center(ui.Spinner())).Height(80)
+		case len(v.Changes.GetFiles()) == 0:
+			note = T("No changes.")
+		}
+		if note != "" {
+			return ggui.Box(muted(ggui.Text(note).Size(12.5))).Pad(6, 12, 10, 30)
+		}
+		return ggui.Padding(tree, 0, 4)
+	})
+}
 
+// gitHeader is the Git tab's head line: the branch to switch, push and
+// pull with what they would move, and the rest of git in a menu.
+func gitHeader(m *model) ggui.Widget {
 	// The header is rebuilt when what it shows changes, not on each read.
 	type headed struct {
 		Root             fileRoot
@@ -295,10 +310,21 @@ func changesView(m *model) ggui.Widget {
 		run := func(op, label string) func() {
 			return func() { m.gitRun(&protocol.GitRun{Op: op}, label, nil) }
 		}
+		files := func() []*protocol.GitFile { return ggui.Peek(m.Git).Changes.GetFiles() }
 		items := []ggui.Widget{
 			ui.MenuItem(T("Fetch"), run(protocol.GitOpFetch, T("Fetching…"))),
 			ui.MenuItem(T("Pull"), run(protocol.GitOpPull, T("Pulling…"))),
+			ui.MenuItem(T("Pull (rebase)"), func() {
+				m.gitRun(&protocol.GitRun{Op: protocol.GitOpPull, Rebase: true}, T("Pulling…"), nil)
+			}),
 			ui.MenuItem(T("Push"), run(protocol.GitOpPush, T("Pushing…"))),
+			ui.MenuDivider(),
+			ui.MenuItem(T("Stash changes…"), m.askStash),
+			ui.MenuItem(T("Discard all changes…"), func() {
+				if fs := files(); len(fs) > 0 {
+					m.discardFiles(changedPaths(fs), Tf("%d files", len(fs)))
+				}
+			}),
 		}
 		if h.Worktree != nil {
 			items = append(append(items, ui.MenuDivider()), worktreeItems(m, h.Worktree)...)
@@ -329,31 +355,7 @@ func changesView(m *model) ggui.Widget {
 		)
 	})
 
-	body := ggui.Reactive(func() ggui.Widget {
-		v := m.Git.Get()
-		var note string
-		switch {
-		case v.Changes.GetNotRepo():
-			note = T("Not a git repository.")
-		case v.Err != "" && len(v.Changes.GetFiles()) == 0:
-			note = v.Err
-		case v.Loading && v.Changes.GetRoot() == "":
-			return ggui.Box(ggui.Center(ui.Spinner())).Height(80)
-		case len(v.Changes.GetFiles()) == 0:
-			note = T("No changes.")
-		}
-		if note != "" {
-			return ggui.Box(muted(ggui.Text(note).Size(12.5))).Pad(14, 16)
-		}
-		return ggui.Padding(tree, 4, 4)
-	})
-	return ggui.Column(
-		header,
-		hline(),
-		gitStatusLine(m),
-		ggui.Expanded(ggui.Scroll(body).Bar(tokSurface3)),
-		commitBox(m),
-	).Stretch()
+	return header
 }
 
 // maxShownDiffLines caps the lines the pane draws of a diff.
@@ -407,7 +409,10 @@ func pickBox(m *model, it gitItem) ggui.Widget {
 
 // commitBox is the message and the button that commits the files picked.
 func commitBox(m *model) ggui.Widget {
-	hidden := ggui.Map(m.Git, func(v gitView) bool { return v.Changes.GetRoot() == "" || v.Changes.GetNotRepo() || v.Base != "" })
+	// Under a merge or rebase, the banner over the tab goes on with it.
+	hidden := ggui.Map(m.Git, func(v gitView) bool {
+		return v.Changes.GetRoot() == "" || v.Changes.GetNotRepo() || v.Base != "" || v.Changes.GetOperation() != ""
+	})
 	field := ui.TextField(m.GitMessage).Multiline().Lines(3).Placeholder(T("Commit message")).Name(T("Commit message"))
 	// The button changes with what a commit would take, not each key typed.
 	type ready struct {

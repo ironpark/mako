@@ -24,13 +24,23 @@ message GitChanges {
   int64 ahead = 6;
   int64 behind = 7;
   repeated string branches = 8;
+  repeated GitStash stashes = 9;
+  repeated string remote_branches = 10; // as "origin/name"
+  string operation = 11; // one under way: merge, rebase, cherry-pick or revert
+}
+
+// GitStash is one stashed change.
+message GitStash {
+  int64 index = 1; // stash@{index}
+  string message = 2;
+  google.protobuf.Timestamp time = 3;
 }
 
 // GitFile is one changed file.
 message GitFile {
   string path = 1; // slash-separated, from the root
   string from = 2; // a rename's old path
-  string status = 3; // added, modified, deleted, renamed
+  string status = 3; // added, modified, deleted, renamed or conflicted
   int64 added = 4;
   int64 removed = 5;
   bool binary = 6;
@@ -116,6 +126,11 @@ message GitRun {
   string branch = 7;
   repeated DiffLine hunk = 8;
   Worktree worktree = 9;
+  string commit = 10; // the commit an operation is of, or a branch starts at
+  int64 stash = 11; // the stash an operation is of
+  bool rebase = 12; // a pull rebases rather than fast-forwards
+  bool force = 13; // a branch is deleted though not merged
+  string tag = 14;
 }
 
 // GitResult answers GitRun: what git printed.

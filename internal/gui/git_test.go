@@ -86,7 +86,7 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 		return err == nil && !ggui.Peek(m.FileNameOpen)
 	})
 
-	m.DetailTab.Set(changesTab)
+	m.DetailTab.Set(gitTab)
 	probeUntil(t, p, "changes", func() bool { return len(ggui.Peek(m.Git).Changes.GetFiles()) == 3 })
 
 	// Commit main.go and made.txt, leaving notes.txt out.
@@ -109,7 +109,6 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 		t.Fatalf("last commit %q", log)
 	}
 
-	m.DetailTab.Set(historyTab)
 	probeUntil(t, p, "history", func() bool { return len(ggui.Peek(m.GitHistory).History.GetCommits()) == 5 })
 	p.Frame()
 	h := ggui.Peek(m.GitHistory).History
@@ -134,7 +133,32 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 	}
 
 	// A new branch from the header's menu, switched to.
-	m.BranchName.Set("next")
-	m.submitBranch()
+	m.askBranch("")
+	m.GitAskText.Set("next")
+	m.submitAsk()
 	probeUntil(t, p, "the branch", func() bool { return ggui.Peek(m.GitHistory).History.GetCurrent() == "next" })
+
+	// notes.txt stashed under a message, then popped back.
+	m.askStash()
+	m.GitAskText.Set("notes for later")
+	m.submitAsk()
+	probeUntil(t, p, "the stash", func() bool {
+		c := ggui.Peek(m.Git).Changes
+		return len(c.GetStashes()) == 1 && len(c.GetFiles()) == 0
+	})
+	m.gitRun(&protocol.GitRun{Op: protocol.GitOpStashPop, Stash: 0}, "", nil)
+	probeUntil(t, p, "the pop", func() bool {
+		c := ggui.Peek(m.Git).Changes
+		return len(c.GetStashes()) == 0 && len(c.GetFiles()) == 1
+	})
+	// Discarding asks first, then removes the new file.
+	m.discardFiles([]string{"notes.txt"}, "notes.txt")
+	if ggui.Peek(m.GitConfirm).Title == "" {
+		t.Fatal("discarding did not ask")
+	}
+	ggui.Peek(m.GitConfirm).Run()
+	probeUntil(t, p, "the discard", func() bool { return len(ggui.Peek(m.Git).Changes.GetFiles()) == 0 })
+	if _, err := os.Stat(filepath.Join(project, "notes.txt")); !os.IsNotExist(err) {
+		t.Fatal("notes.txt is still there")
+	}
 }

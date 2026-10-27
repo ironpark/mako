@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"image/color"
@@ -16,8 +15,8 @@ import (
 	"github.com/ironpark/sanbo/internal/protocol"
 )
 
-// The right panel's History tab lists the project's commits with the graph
-// of their branches beside them, over what the commit chosen changed.
+// The Git tab's history lists the project's commits with the graph of
+// their branches beside them, over what the commit chosen changed.
 
 // historyRefresh is how often the shown history is read again.
 const historyRefresh = 15 * time.Second
@@ -230,35 +229,9 @@ func refBadges(refs []string) []ggui.Widget {
 
 // Panel ---------------------------------------------------------------------------
 
-func historyPanel(m *model) ggui.Widget {
-	root := ggui.Derived(m.filesRoot)
-	pollWhileShown(m, root, historyTab, historyRefresh, m.loadHistory)
-	return ggui.Key(root, func(r fileRoot) ggui.Widget {
-		if r.Path == "" {
-			return ggui.Box(muted(ggui.Text(T("Open a session to see its history.")).Size(13))).Pad(16)
-		}
-		return historyList(m)
-	})
-}
-
-func historyList(m *model) ggui.Widget {
-	type headed struct {
-		Root   fileRoot
-		Branch string
-	}
-	head := ggui.Map(m.GitHistory, func(v historyView) headed {
-		return headed{v.Root, cmp.Or(v.History.GetCurrent(), projectName(v.Root.Path))}
-	})
-	header := ggui.View(head, func(h headed) ggui.Widget {
-		return panelHeader(
-			icon("history").Size(15),
-			ggui.Expanded(ggui.Text(h.Branch).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
-			iconButton("cloud-download", T("Fetch"), func() {
-				m.gitRun(&protocol.GitRun{Op: protocol.GitOpFetch}, T("Fetching…"), nil)
-			}),
-			iconButton("refresh-cw", T("Refresh"), func() { m.loadHistory(h.Root) }),
-		)
-	})
+// historyBody is the project's commits with their graph, and once one is
+// chosen, what it changed under them.
+func historyBody(m *model) ggui.Widget {
 	// The list is rebuilt when the commits, or what stands in for them,
 	// change; a refresh that finds the same commits leaves it be.
 	type listed struct {
@@ -299,8 +272,11 @@ func historyList(m *model) ggui.Widget {
 		return ggui.Column(rows...).Stretch()
 	})
 	open := ggui.Map(m.GitCommit, func(c commitView) bool { return c.Hash != "" })
-	body := ggui.Column(gitStatusLine(m), ggui.Expanded(ggui.Scroll(ggui.Padding(list, 4, 0)).Bar(tokSurface3))).Stretch()
-	return treeOverPane(header, body, open, 0.5, func() ggui.Widget { return commitPane(m) }, T("Commit divider"))
+	body := ggui.Scroll(ggui.Padding(list, 0, 0, 4, 0)).Bar(tokSurface3)
+	split := ggui.State(0.5)
+	return ggui.If(open, func() ggui.Widget {
+		return ui.Resizable(split, body, commitPane(m)).Vertical().MinSizes(80, 80).Name(T("Commit divider"))
+	}).Else(func() ggui.Widget { return body })
 }
 
 // commitRow is a commit in the list: its slice of the graph, its subject
@@ -323,10 +299,7 @@ func commitRow(m *model, c *protocol.GitCommit, g graphRow) ggui.Widget {
 		return box
 	})
 	tap := ui.ButtonOf(row, func() { m.openCommit(c.GetHash()) }).Ghost().Pad(0).Radius(0).Name(c.GetSubject())
-	return ui.ContextMenu(tap,
-		ui.MenuItem(T("Copy hash"), func() { ggui.CurrentClipboard().Write(c.GetHash()) }),
-		ui.MenuItem(T("Copy subject"), func() { ggui.CurrentClipboard().Write(c.GetSubject()) }),
-	).Name(Tf("%s actions", shortHash(c.GetHash())))
+	return ui.ContextMenu(tap, commitMenu(m, c)...).Name(Tf("%s actions", shortHash(c.GetHash())))
 }
 
 // commitPane is what the chosen commit changed: its message and its files,

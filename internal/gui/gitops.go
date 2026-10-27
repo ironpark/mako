@@ -4,7 +4,6 @@ import (
 	"context"
 	"image/color"
 	"maps"
-	"slices"
 	"strings"
 	"time"
 
@@ -68,11 +67,7 @@ func (m *model) gitRun(req *protocol.GitRun, label string, done func()) {
 				done()
 			}
 		}
-		root := ggui.Peek(m.Git).Root
-		m.loadGit(root)
-		if ggui.Peek(m.DetailTab) == historyTab {
-			m.loadHistory(root)
-		}
+		m.gitTabRefresh()
 	})
 }
 
@@ -222,45 +217,13 @@ func branchMenu(m *model, branch string, branches []string) ggui.Widget {
 	if len(items) > 0 {
 		items = append(items, ui.MenuDivider())
 	}
-	items = append(items, ui.MenuItem(T("New branch…"), m.askBranch))
+	items = append(items, ui.MenuItem(T("New branch…"), func() { m.askBranch("") }))
 	label := ggui.Row(
 		icon("git-branch").Size(15),
 		ggui.Box(ggui.Text(branch).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).MaxWidth(130),
 		icon("chevron-down").Size(12).Color(tokExtraMuted),
 	).Gap(6)
 	return borderless(ui.MenuOf(label, items...).Name(T("Branch")))
-}
-
-// askBranch asks for the name of a new branch.
-func (m *model) askBranch() {
-	m.BranchName.Set("")
-	m.BranchErr.Set("")
-	m.BranchOpen.Set(true)
-}
-
-// submitBranch makes the branch named at HEAD and switches to it. The node's
-// git judges the name.
-func (m *model) submitBranch() {
-	name := strings.TrimSpace(ggui.Peek(m.BranchName))
-	switch {
-	case name == "":
-		m.BranchErr.Set(T("Enter a name."))
-		return
-	case slices.Contains(ggui.Peek(m.Git).Changes.GetBranches(), name):
-		m.BranchErr.Set(T("That branch already exists."))
-		return
-	}
-	m.BranchOpen.Set(false)
-	m.gitRun(&protocol.GitRun{Op: protocol.GitOpBranch, Branch: name}, T("Making branch…"), nil)
-}
-
-func branchDialog(m *model) ggui.Widget {
-	return nameDialog(nameAsk{
-		Open: m.BranchOpen, Text: m.BranchName, Err: m.BranchErr,
-		Title: T("New branch"), Field: T("Branch name"), Action: T("Create branch"),
-		Placeholder: "feature/name", Submit: m.submitBranch,
-		Note: T("The branch starts at the current commit, and your changes come along."),
-	})
 }
 
 // syncButton is a push or pull button, with the commits it would move.

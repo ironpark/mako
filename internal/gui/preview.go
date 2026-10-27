@@ -260,13 +260,13 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				}),
 				frames(2), shot("03-drag"),
 				do(func() { p.Release(ggui.Pt(float64(width)/2, headerHeight/2)) }),
-				do(func() { m.DetailTab.Set(changesTab) }), frames(30), shot("03-changes"),
+				do(func() { m.DetailTab.Set(gitTab) }), frames(30), shot("03-changes"),
 				// The history of a project on this node's own daemon, which
 				// another on the mesh may predate.
 				do(func() {
 					wd, _ := os.Getwd()
 					m.launch("shell", ggui.Peek(m.Conn).Self.GetId(), wd)
-					m.DetailTab.Set(historyTab)
+					m.DetailTab.Set(gitTab)
 				}),
 				until("its session", func() bool {
 					s, ok := m.session(ggui.Peek(m.Selected))
@@ -274,6 +274,10 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				}),
 				until("the history", func() bool { v := ggui.Peek(m.GitHistory); return v.Root.Path != "" && !v.Loading }),
 				frames(5), shot("03-history"),
+				// The changes folded, the stashes and branches open.
+				do(func() { m.GitChangesOpen.Set(false); m.GitStashOpen.Set(true); m.GitBranchOpen.Set(true) }),
+				frames(5), shot("03-git-sections"),
+				do(func() { m.GitChangesOpen.Set(true); m.GitStashOpen.Set(false); m.GitBranchOpen.Set(false) }),
 				do(func() {
 					if cs := ggui.Peek(m.GitHistory).History.GetCommits(); len(cs) > 0 {
 						m.openCommit(cs[0].GetHash())
@@ -301,7 +305,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				until("the search", func() bool { return !ggui.Peek(m.Search).Loading }),
 				frames(5), shot("03-search"),
 				do(m.openQuickOpen), do(func() { m.QuickQuery.Set("view") }), frames(30), shot("03-quick-open"),
-				do(func() { m.QuickOpen.Set(false); m.DetailTab.Set(historyTab) }),
+				do(func() { m.QuickOpen.Set(false); m.DetailTab.Set(gitTab) }),
 				do(func() { m.DetailsWidth.Set(ggui.Peek(m.Prefs).DetailsWidth) }),
 				do(func() { m.DetailTab.Set(sessionTab) }), frames(2), shot("03-details"),
 				do(func() { m.DetailTab.Set(filesTab); m.openNew("", "") }), frames(2), shot("04-new-session"),

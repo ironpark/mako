@@ -178,9 +178,19 @@ type model struct {
 	GitBusy    *ggui.StateValue[string]
 	GitBase    *ggui.StateValue[string] // the branch the changes are read since, "" for HEAD
 	GitNote    *ggui.StateValue[gitNote]
-	BranchOpen *ggui.StateValue[bool]
-	BranchName *ggui.StateValue[string]
-	BranchErr  *ggui.StateValue[string]
+	// A name a git operation asks for, and one it asks to be sure of; see
+	// gitactions.go.
+	GitAsk     *ggui.StateValue[gitAsk]
+	GitAskOpen *ggui.StateValue[bool]
+	GitAskText *ggui.StateValue[string]
+	GitAskErr  *ggui.StateValue[string]
+	GitConfirm *ggui.StateValue[gitConfirm]
+	// The Git tab's sections, open or folded, and how its height is split.
+	GitChangesOpen *ggui.StateValue[bool]
+	GitHistoryOpen *ggui.StateValue[bool]
+	GitStashOpen   *ggui.StateValue[bool]
+	GitBranchOpen  *ggui.StateValue[bool]
+	GitSplit       *ggui.StateValue[float64]
 	// The History tab: the commits, and the one chosen.
 	GitHistory *ggui.StateValue[historyView]
 	GitCommit  *ggui.StateValue[commitView]
@@ -309,9 +319,17 @@ func newModel(cfg *config.Config, addr string) *model {
 		GitBusy:        ggui.State(""),
 		GitBase:        ggui.State(""),
 		GitNote:        ggui.State(gitNote{}),
-		BranchOpen:     ggui.State(false),
-		BranchName:     ggui.State(""),
-		BranchErr:      ggui.State(""),
+		// Their functions do not compare: each asking is new.
+		GitAsk:         ggui.State(gitAsk{}).WithEqual(func(a, b gitAsk) bool { return false }),
+		GitAskOpen:     ggui.State(false),
+		GitAskText:     ggui.State(""),
+		GitAskErr:      ggui.State(""),
+		GitConfirm:     ggui.State(gitConfirm{}).WithEqual(func(a, b gitConfirm) bool { return false }),
+		GitChangesOpen: ggui.State(true),
+		GitHistoryOpen: ggui.State(true),
+		GitStashOpen:   ggui.State(false),
+		GitBranchOpen:  ggui.State(false),
+		GitSplit:       ggui.State(0.55),
 		GitHistory:     ggui.State(historyView{}).WithEqual(deepEqual),
 		GitCommit:      ggui.State(commitView{}).WithEqual(deepEqual),
 		SidebarOpen:    ggui.State(true),

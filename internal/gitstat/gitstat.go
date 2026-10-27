@@ -4,6 +4,7 @@ package gitstat
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -58,6 +60,24 @@ func Status(dir string) (*protocol.GitChanges, error) {
 		})
 		slices.Sort(out.Branches)
 	}
+	if refs, err := repo.References(); err == nil {
+		_ = refs.ForEach(func(r *plumbing.Reference) error {
+			if r.Name().IsRemote() && !strings.HasSuffix(r.Name().String(), "/HEAD") {
+				out.RemoteBranches = append(out.RemoteBranches, r.Name().Short())
+			}
+			return nil
+		})
+		slices.Sort(out.RemoteBranches)
+	}
+	// What go-git does not read, git is asked: stashes, and a merge or
+	// rebase under way with the files it left in conflict.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out.Stashes = stashes(ctx, out.GetRoot())
+	var unmerged map[string]bool
+	if out.Operation = Operation(ctx, out.GetRoot()); out.Operation != "" {
+		unmerged = conflicted(ctx, out.GetRoot())
+	}
 	tree := headTree(repo)
 	for p, fs := range st {
 		f, ok := change(p, fs)
@@ -68,6 +88,9 @@ func Status(dir string) (*protocol.GitChanges, error) {
 		cur, curOK := diskContent(out.GetRoot(), f.GetPath())
 		if f.GetStatus() == protocol.GitAdded && !curOK {
 			continue // added to the index and gone from the disk: nothing to show
+		}
+		if unmerged[f.GetPath()] {
+			f.Status = protocol.GitConflicted
 		}
 		if Binary(old) || Binary(cur) || (!oldOK && !curOK) {
 			f.Binary = true
