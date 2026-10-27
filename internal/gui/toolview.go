@@ -180,8 +180,15 @@ func toolOutput(m *model, kind toolKind, in map[string]any, result string, faile
 	return ggui.Column(toolLabel(label), scrolled(toolBlock(stripReminders(result), false))).Gap(4).Stretch()
 }
 
-// toolGlyph is the icon a tool row shows for its kind.
+// toolGlyph is the icon a tool row shows for its kind: a slash command's
+// output and a compaction's summary have their own.
 func toolGlyph(name string) string {
+	switch {
+	case strings.HasPrefix(name, "/"):
+		return "terminal"
+	case name == "Summary":
+		return "history"
+	}
 	switch kindOf(name) {
 	case toolShell:
 		return "square-terminal"

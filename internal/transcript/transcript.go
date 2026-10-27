@@ -76,13 +76,17 @@ func samePath(a, b string) bool {
 }
 
 type record struct {
-	Type      string          `json:"type"`
-	Cwd       string          `json:"cwd"`
-	SessionID string          `json:"sessionId"`
-	Sidechain bool            `json:"isSidechain"`
-	UUID      string          `json:"uuid"`
-	Message   json.RawMessage `json:"message"`
-	Payload   json.RawMessage `json:"payload"`
+	Type      string `json:"type"`
+	Cwd       string `json:"cwd"`
+	SessionID string `json:"sessionId"`
+	Sidechain bool   `json:"isSidechain"`
+	// Meta is a turn Claude Code adds for the model, such as the prompt a
+	// slash command expands to; Summary is the summary a compaction leaves.
+	Meta    bool            `json:"isMeta"`
+	Summary bool            `json:"isCompactSummary"`
+	UUID    string          `json:"uuid"`
+	Message json.RawMessage `json:"message"`
+	Payload json.RawMessage `json:"payload"`
 }
 
 func metadata(path string, a *Agent) (string, string) {
@@ -207,6 +211,7 @@ func readMessages(path string, a *Agent) ([]*protocol.ChatMessage, bool, error) 
 	dropped := 0
 	seen := map[string]bool{}
 	size := 0
+	command := "" // the last slash command typed, whose output follows it
 	// trim keeps the window small enough to send, dropping the oldest
 	// messages.
 	trim := func() {
@@ -230,7 +235,7 @@ func readMessages(path string, a *Agent) ([]*protocol.ChatMessage, bool, error) 
 		if json.Unmarshal(line, &r) != nil {
 			continue
 		}
-		if r.Sidechain {
+		if r.Sidechain || r.Meta {
 			continue
 		}
 		if r.UUID != "" {
@@ -248,7 +253,15 @@ func readMessages(path string, a *Agent) ([]*protocol.ChatMessage, bool, error) 
 		} else if r.Type != "user" && r.Type != "assistant" {
 			continue
 		}
-		for _, m := range parseMessage(raw) {
+		parsed := parseMessage(raw)
+		if r.Summary {
+			for i, m := range parsed {
+				parsed[i] = &protocol.ChatMessage{Role: "tool", Tool: "Summary", Detail: OneLine(m.GetText(), 120), Text: m.GetText(), Output: true}
+			}
+		} else {
+			parsed = unwrap(parsed, &command)
+		}
+		for _, m := range parsed {
 			if len(m.GetText()) > 32<<10 {
 				m.Text = trimUTF8(m.GetText(), 32<<10) + "\n…"
 				truncated = true
