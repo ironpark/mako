@@ -6,12 +6,13 @@ require (
 	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3
 	github.com/BurntSushi/toml v1.6.0
 	github.com/creack/pty v1.1.24
+	github.com/ebitengine/purego v0.11.2
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/ironpark/ggfx v0.0.0-20261027060057-9bb27905be69
 	github.com/ironpark/ggui v0.0.0-20261027130039-7c4797efd021
-	github.com/ironpark/gostty v0.0.0-20261026051858-4b9bf93132f4
+	github.com/ironpark/gostty v0.0.0-20261027142811-dd03466f18c8
 	github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202
 	github.com/libp2p/go-libp2p v0.51.0
 	github.com/multiformats/go-multiaddr v0.16.1
@@ -42,7 +43,6 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/dunglas/httpsfv v1.1.1 // indirect
 	github.com/ebitengine/hideconsole v1.0.0 // indirect
-	github.com/ebitengine/purego v0.11.2 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/filecoin-project/go-clock v0.1.0 // indirect
 	github.com/flynn/noise v1.1.0 // indirect

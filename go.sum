@@ -99,8 +99,8 @@ github.com/ironpark/ggip/ggfxinput v0.0.0-20261025124834-79651b13b701 h1:THRfMg2
 github.com/ironpark/ggip/ggfxinput v0.0.0-20261025124834-79651b13b701/go.mod h1:iG9aL/h3qzRYyvE0X14Fmok82A+I1AEXlT8S3UPrOQg=
 github.com/ironpark/ggui v0.0.0-20261027130039-7c4797efd021 h1:Bcu9Xe1+Rjbb/i5KtjgZnSVdgiXmOnfp+jVHG4Cdous=
 github.com/ironpark/ggui v0.0.0-20261027130039-7c4797efd021/go.mod h1:ko24fXDmpxXWvDP94OLHMBGvnsjUMLEGCgBapOZTUyQ=
-github.com/ironpark/gostty v0.0.0-20261026051858-4b9bf93132f4 h1:VnKbyt8JeO/tbdowFEsobDrHFtf94HfSuhUIzyawNjU=
-github.com/ironpark/gostty v0.0.0-20261026051858-4b9bf93132f4/go.mod h1:htMJDApfeCwo3cVH8Bv9FyVnlhvwrnDkn4DDxSKtjE8=
+github.com/ironpark/gostty v0.0.0-20261027142811-dd03466f18c8 h1:M/uELn81ZD/y/g5XrGc9RblBMZ5Xz1Pooo/fyt7jyCc=
+github.com/ironpark/gostty v0.0.0-20261027142811-dd03466f18c8/go.mod h1:YqbXLZjWWzx5yGHHff9Cwp1IXHMnTy4Ef2Pu+IO6hpo=
 github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202 h1:EPKxFHWVF3pUIGFz/Z5I/CsgVyJrGXv2LFQ/uZQHvYQ=
 github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202/go.mod h1:5iGSPmbCOj6b1t/7NbS1JnMP8pYcK8pZuwHIRVd4OwM=
 github.com/jackpal/go-nat-pmp v1.0.2 h1:KzKSgb7qkJvOUTqYl9/Hg/me3pWgBmERKrTGD7BdWus=

@@ -18,17 +18,20 @@ is in [docs/protocol.md](docs/protocol.md).
 
 ## Building
 
-mako is Go with cgo. You need:
+mako is Go without cgo: it builds with `CGO_ENABLED=0` and cross-compiles
+for every platform from any other. You need:
 
-- Go (the version in `go.mod`) and a C toolchain
+- Go (the version in `go.mod`)
 - [buf](https://buf.build) and `protoc-gen-go`, only to change the protocol's
   schema
 
-wasmtime comes through
-[wasmtime-pure-go](https://github.com/ironpark/wasmtime-pure-go), which calls
-its C API without cgo: it embeds the shared library for macOS, Linux and
-Windows on x86-64 and arm64, and unpacks it into the user cache on first use.
-The C toolchain is for the windowing and the terminal, not for wasmtime.
+The native code mako uses is called through
+[purego](https://github.com/ebitengine/purego): the terminal,
+[gostty](https://github.com/ironpark/gostty), and wasmtime, through
+[wasmtime-pure-go](https://github.com/ironpark/wasmtime-pure-go), each embed
+their shared library for macOS, Linux and Windows on x86-64 and arm64 and
+unpack it into the user cache on first use; macOS's notifications and Dock
+badge go through the Objective-C runtime.
 
 | Target | |
 |---|---|
