@@ -206,6 +206,12 @@ func writeConfigFile(name string, body []byte) error {
 	if err != nil {
 		return err
 	}
+	return writeWindowFile(path, body)
+}
+
+// writeWindowFile writes a file of the window's at path, making its folder if
+// need be.
+func writeWindowFile(path string, body []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}

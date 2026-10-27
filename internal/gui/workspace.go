@@ -312,8 +312,14 @@ func (m *model) writeWorkspace() []byte {
 	if err != nil {
 		return nil
 	}
+	// The file is found now, not in the goroutine writing it: MAKO_HOME
+	// may have changed by then, as it does when a test ends.
+	path, err := configFile("workspace.json")
+	if err != nil {
+		return body
+	}
 	go func() {
-		if err := writeConfigFile("workspace.json", body); err != nil {
+		if err := writeWindowFile(path, body); err != nil {
 			log.Printf("mako: save workspace: %v", err)
 		}
 	}()

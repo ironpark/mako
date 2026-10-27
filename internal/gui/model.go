@@ -286,6 +286,12 @@ type model struct {
 
 func newModel(cfg *config.Config, addr string) *model {
 	go systemLanguage() // asks the platform, so not on the first frame
+	if addr == "" {
+		// The configuration's socket, found now: requests dial it from
+		// goroutines, which must not find another should MAKO_HOME change,
+		// as it does when a test ends.
+		addr, _ = config.SocketPath("")
+	}
 	p := loadPrefs()
 	m := &model{
 		cfg:            cfg,
