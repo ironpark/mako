@@ -37,6 +37,10 @@ func (p prefs) spaceOf(i int) (sp space, ok bool) {
 	return p.Spaces[i-1], true
 }
 
+// hasSpace reports whether there is a space at index i: 0, every
+// session, through the last.
+func (p prefs) hasSpace(i int) bool { return i >= allSpace && i <= len(p.Spaces) }
+
 // spaceName is the name the sidebar shows for space i.
 func (p prefs) spaceName(i int) string {
 	sp, ok := p.spaceOf(i)
@@ -196,25 +200,31 @@ type spaceSwipe struct {
 	width    float64   // the list's, as last painted
 	commit   int       // a move made, for the list to come in at the next paint
 	settle   ggui.Motion
+	// moving is set while the list is off its place, so the lists beside
+	// it are made only then.
+	moving *ggui.StateValue[bool]
 }
 
 func newSpaceSwipe(m *model) *spaceSwipe {
 	return &spaceSwipe{
 		can: func(by int) bool {
 			p := ggui.Peek(m.Prefs)
-			i := p.Space + by
-			return i >= allSpace && i <= len(p.Spaces)
+			return p.hasSpace(p.Space + by)
 		},
-		move: m.moveSpace,
-		post: m.post,
+		move:   m.moveSpace,
+		post:   m.post,
+		moving: ggui.State(false),
 	}
 }
 
 // area lays the swipe's input over child.
 func (s *spaceSwipe) area(child ggui.Widget) ggui.Widget { return &swipeArea{s, child} }
 
-// slide is child moved as the swipe has it.
-func (s *spaceSwipe) slide(child ggui.Widget) ggui.Widget { return &swipeSlide{s, child} }
+// slide is the list of the space shown, moved as the swipe has it, with
+// the list of the space it moves toward, prev or next, beside it.
+func (s *spaceSwipe) slide(prev, cur, next ggui.Widget) ggui.Widget {
+	return &swipeSlide{s: s, prev: prev, cur: cur, next: next}
+}
 
 // scroll takes a scroll of the fingers across, until they lift, and
 // leaves the rest.
@@ -245,6 +255,7 @@ func (s *spaceSwipe) scroll(d ggui.Point, phase ggui.ScrollPhase) bool {
 	}
 	if !s.active {
 		s.active = true
+		s.moving.Set(true)
 		s.drag = s.settle.Value(ggui.Now())
 		if phase == ggui.ScrollPhaseNone {
 			s.watchEnd()
@@ -302,7 +313,15 @@ func (s *spaceSwipe) offset(now time.Time) float64 {
 		s.settle.MoveTo(0, now, swipeSettle)
 	}
 	s.drag = 0
-	return s.settle.Value(now)
+	x := s.settle.Value(now)
+	if x == 0 && ggui.Peek(s.moving) {
+		s.post(func() {
+			if !s.active {
+				s.moving.Set(false)
+			}
+		})
+	}
+	return x
 }
 
 // swipeArea is a spaceSwipe's input over its child.
@@ -324,27 +343,38 @@ func (a *swipeArea) HandlePointer(ev ggui.PointerEvent) bool {
 	return ev.Kind == ggui.PointerScroll && a.s.scroll(ev.Scroll, ev.ScrollPhase)
 }
 
-// swipeSlide is the list a spaceSwipe moves, fading as it goes.
+// swipeSlide is the lists a spaceSwipe moves: the space shown, and the
+// one beside it the fingers bring in, edge to edge.
 type swipeSlide struct {
-	s     *spaceSwipe
-	child ggui.Widget
+	s               *spaceSwipe
+	prev, cur, next ggui.Widget
 }
 
+// Layout lays out the lists beside too, which are there only while the
+// list moves.
 func (l *swipeSlide) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	return l.child.Layout(c, env)
+	size := l.cur.Layout(c, env)
+	l.prev.Layout(c, env)
+	l.next.Layout(c, env)
+	return size
 }
 
 func (l *swipeSlide) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	l.s.width = r.Size.W
 	x := l.s.offset(ggui.Now())
 	if x == 0 || r.Size.W <= 0 {
-		dst.Paint(l.child, r)
+		dst.Paint(l.cur, r)
 		return
 	}
-	fade := min(math.Abs(x)/r.Size.W, 1) * 0.6
-	dst.Clip(r).Layer(ggui.LayerOptions{Fade: fade}, func(layer *ggui.Canvas) {
-		layer.Transform(ggui.Affine{}.Translate(x, 0), func(c *ggui.Canvas) { c.Paint(l.child, r) })
-	})
+	// Moved left, the next space follows on its right; moved right, the
+	// one before comes in on its left.
+	beside, at := l.next, x+r.Size.W
+	if x > 0 {
+		beside, at = l.prev, x-r.Size.W
+	}
+	clip := dst.Clip(r)
+	clip.Transform(ggui.Affine{}.Translate(x, 0), func(c *ggui.Canvas) { c.Paint(l.cur, r) })
+	clip.Transform(ggui.Affine{}.Translate(at, 0), func(c *ggui.Canvas) { c.Paint(beside, r) })
 }
 
 // ownerSpaceItems are an owner heading's menu entries for the spaces: one

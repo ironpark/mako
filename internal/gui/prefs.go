@@ -163,7 +163,7 @@ func (p prefs) normalized() prefs {
 	if p.DefaultAgent == "" {
 		p.DefaultAgent = d.DefaultAgent
 	}
-	p.Space = min(max(p.Space, allSpace), len(p.Spaces))
+	p.Space = min(max(p.Space, allSpace), len(p.Spaces)) // as hasSpace allows
 	if len(p.Projects) > 0 {
 		seen := make(map[fileRoot]bool, len(p.Projects))
 		projects := make([]keptProject, 0, len(p.Projects))

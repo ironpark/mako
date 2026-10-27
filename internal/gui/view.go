@@ -159,94 +159,122 @@ func sidebar(m *model) ggui.Widget {
 		return ggui.Box(field).Pad(8, 10, 0, 10)
 	})
 
-	grouping := ggui.Map(m.Prefs, func(p prefs) string { return p.SidebarGroup })
-	projects := ggui.Map(m.Prefs, func(p prefs) []keptProject { return p.Projects }).WithEqual(slices.Equal)
-	pinned := ggui.Map(m.Prefs, func(p prefs) []string { return p.Pinned }).WithEqual(slices.Equal)
-	collapsed := ggui.Map(m.Prefs, func(p prefs) []string { return p.Collapsed }).WithEqual(slices.Equal)
-	// The space shown, by the owners it holds; "" for every session.
-	shown := ggui.Map(m.Prefs, func(p prefs) string {
-		if sp, ok := p.spaceOf(p.Space); ok {
-			return "\x00" + strings.Join(sp.Owners, "\x00")
-		}
-		return ""
-	})
-	list := ggui.Reactive(func() ggui.Widget {
-		by := grouping.Get()
-		nodes := m.Nodes.Get()
-		titles := m.Titles.Get()
-		selected := m.Selected.Get()
-		m.Unread.Get() // the dots show what is unread
-		query := strings.TrimSpace(m.SidebarFilter.Get())
-		shown.Get()
-		p := ggui.Peek(m.Prefs)
-		sessions := filterSessions(p.spaceSessions(p.Space, m.Sessions.Get()), query, nodes, titles)
-		// Pinned sessions come first, in a section of their own.
-		pins := pinned.Get()
-		var top []*protocol.SessionInfo
-		rest := sessions[:0:0]
-		for _, s := range sessions {
-			if slices.Contains(pins, s.GetId()) {
-				top = append(top, s)
-			} else {
-				rest = append(rest, s)
-			}
-		}
-		var groups []sessionGroup
-		if query != "" {
-			// Filtered, the folders kept without sessions are left out.
-			groups = groupSessions(rest, by, nodes, nil)
-		} else {
-			groups = groupSessions(rest, by, nodes, p.spaceProjects(p.Space, projects.Get()))
-			if by == groupHost {
-				groups = withHosts(groups, nodes)
-			}
-		}
-		if len(groups) == 0 && len(top) == 0 {
-			if query != "" {
-				return ggui.Box(muted(ggui.Text(T("No sessions match.")).Size(12))).Pad(16)
-			}
-			return ggui.Box(muted(ggui.Text(T("No sessions yet. Start one with +.")).Size(12))).Pad(16)
-		}
-		names := projectLabels(groups, nodes)
-		children := make([]ggui.Widget, 0, len(groups)+1)
-		if len(top) > 0 {
-			children = append(children, pinnedSection(m, top, selected, nodes, titles))
-		}
-		folded := collapsed.Get()
-		// A filter shows what it finds in folded groups too.
-		isFolded := func(key string) bool { return query == "" && slices.Contains(folded, key) }
-		section := func(g sessionGroup, depth int) ggui.Widget {
-			return sessionSection(m, by, g, isFolded(foldKey(by, g)), selected, nodes, titles, names[g.Key], depth)
-		}
-		var sections []ownerSection
-		if by == groupProject {
-			sections = byOwner(groups)
-		}
-		if sections == nil {
-			sections = []ownerSection{{Groups: groups}}
-		}
-		for _, o := range sections {
-			if o.Owner == "" {
-				for _, g := range o.Groups {
-					children = append(children, section(g, 0))
-				}
-				continue
-			}
-			children = append(children, ownerGroup(m, o, isFolded(ownerKey(o.Owner)), section))
-		}
-		return ggui.Column(children...).Gap(6).Stretch()
-	})
-
+	st := sidebarState{
+		grouping:  ggui.Map(m.Prefs, func(p prefs) string { return p.SidebarGroup }),
+		projects:  ggui.Map(m.Prefs, func(p prefs) []keptProject { return p.Projects }).WithEqual(slices.Equal),
+		pinned:    ggui.Map(m.Prefs, func(p prefs) []string { return p.Pinned }).WithEqual(slices.Equal),
+		collapsed: ggui.Map(m.Prefs, func(p prefs) []string { return p.Collapsed }).WithEqual(slices.Equal),
+	}
 	// Two fingers across anywhere on it move the list to the space beside.
 	swipe := newSpaceSwipe(m)
+	// list is the sessions of the space by from the one shown: 0 that one,
+	// and -1 and 1 those beside, there only while a swipe moves the list.
+	// Each is made for a space, so its scroll is that space's.
+	list := func(by int) ggui.Widget {
+		space := ggui.Derived(func() int {
+			p := m.Prefs.Get()
+			if i := p.Space + by; p.hasSpace(i) && (by == 0 || swipe.moving.Get()) {
+				return i
+			}
+			return -1
+		})
+		return ggui.Key(space, func(i int) ggui.Widget {
+			if i < 0 {
+				return ggui.Box()
+			}
+			owners := ggui.Map(m.Prefs, func(p prefs) string {
+				sp, _ := p.spaceOf(i)
+				return strings.Join(sp.Owners, "\x00")
+			})
+			return ggui.Scroll(ggui.Padding(ggui.Reactive(func() ggui.Widget {
+				owners.Get()
+				return spaceList(m, st, i)
+			}), 8, 8)).Bar(tokSurface3)
+		})
+	}
 	return swipe.area(ggui.Box(ggui.Column(
 		header,
 		hline(),
 		filter,
-		ggui.Expanded(swipe.slide(ggui.Scroll(ggui.Padding(list, 8, 8)).Bar(tokSurface3))),
+		ggui.Expanded(swipe.slide(list(-1), list(0), list(1))),
 		hline(),
 		sidebarFooter(m),
 	).Stretch()).Fill(tokSidebar))
+}
+
+// sidebarState is what of the settings the sidebar's lists follow.
+type sidebarState struct {
+	grouping          ggui.Readable[string]
+	projects          ggui.Readable[[]keptProject]
+	pinned, collapsed ggui.Readable[[]string]
+}
+
+// spaceList is the sidebar's list of the sessions of space i, as it groups
+// them, pinned ones first.
+func spaceList(m *model, st sidebarState, i int) ggui.Widget {
+	by := st.grouping.Get()
+	nodes := m.Nodes.Get()
+	titles := m.Titles.Get()
+	selected := m.Selected.Get()
+	m.Unread.Get() // the dots show what is unread
+	query := strings.TrimSpace(m.SidebarFilter.Get())
+	p := ggui.Peek(m.Prefs)
+	sessions := filterSessions(p.spaceSessions(i, m.Sessions.Get()), query, nodes, titles)
+	// Pinned sessions come first, in a section of their own.
+	pins := st.pinned.Get()
+	var top []*protocol.SessionInfo
+	rest := sessions[:0:0]
+	for _, s := range sessions {
+		if slices.Contains(pins, s.GetId()) {
+			top = append(top, s)
+		} else {
+			rest = append(rest, s)
+		}
+	}
+	var groups []sessionGroup
+	if query != "" {
+		// Filtered, the folders kept without sessions are left out.
+		groups = groupSessions(rest, by, nodes, nil)
+	} else {
+		groups = groupSessions(rest, by, nodes, p.spaceProjects(i, st.projects.Get()))
+		if by == groupHost {
+			groups = withHosts(groups, nodes)
+		}
+	}
+	if len(groups) == 0 && len(top) == 0 {
+		if query != "" {
+			return ggui.Box(muted(ggui.Text(T("No sessions match.")).Size(12))).Pad(16)
+		}
+		return ggui.Box(muted(ggui.Text(T("No sessions yet. Start one with +.")).Size(12))).Pad(16)
+	}
+	names := projectLabels(groups, nodes)
+	children := make([]ggui.Widget, 0, len(groups)+1)
+	if len(top) > 0 {
+		children = append(children, pinnedSection(m, top, selected, nodes, titles))
+	}
+	folded := st.collapsed.Get()
+	// A filter shows what it finds in folded groups too.
+	isFolded := func(key string) bool { return query == "" && slices.Contains(folded, key) }
+	section := func(g sessionGroup, depth int) ggui.Widget {
+		return sessionSection(m, by, g, isFolded(foldKey(by, g)), selected, nodes, titles, names[g.Key], depth)
+	}
+	var sections []ownerSection
+	if by == groupProject {
+		sections = byOwner(groups)
+	}
+	if sections == nil {
+		sections = []ownerSection{{Groups: groups}}
+	}
+	for _, o := range sections {
+		if o.Owner == "" {
+			for _, g := range o.Groups {
+				children = append(children, section(g, 0))
+			}
+			continue
+		}
+		children = append(children, ownerGroup(m, o, isFolded(ownerKey(o.Owner)), section))
+	}
+	return ggui.Column(children...).Gap(6).Stretch()
 }
 
 // grouping is a way the sidebar groups sessions, and how its header shows

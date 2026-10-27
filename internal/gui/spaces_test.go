@@ -74,7 +74,7 @@ func TestSwipeMovesWhenTheFingersLift(t *testing.T) {
 	s := &spaceSwipe{
 		can:  func(by int) bool { return at+by >= 0 && at+by <= 2 },
 		move: func(by int) { at += by; moves = append(moves, by) },
-		post: func(fn func()) {},
+		post: func(fn func()) {}, moving: ggui.State(false),
 	}
 	s.width = 200
 	gesture := func(steps ...ggui.Point) {
