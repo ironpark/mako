@@ -112,8 +112,9 @@ func (m *model) loadUsage(id string, state *usageState) {
 // settings choose: how full its context is and how much of the account's
 // limits is spent. src is the usage the view already reads, such as Chat's;
 // nil has the overlay ask for it alone. A plain shell has no conversation,
-// so it has none.
-func usageOverlay(m *model, id string, src ggui.Readable[*protocol.Usage]) ggui.Widget {
+// so it has none. topRight, if not nil, holds the top-right corner, and the
+// usage sits to its left when it is put there too.
+func usageOverlay(m *model, id string, src ggui.Readable[*protocol.Usage], topRight ggui.Widget) ggui.Widget {
 	// The session may not be listed yet when its view is built.
 	shown := ggui.Derived(func() bool {
 		if !m.Prefs.Get().UsageOverlay {
@@ -122,21 +123,33 @@ func usageOverlay(m *model, id string, src ggui.Readable[*protocol.Usage]) ggui.
 		s, ok := sessionIn(m.Sessions.Get(), id)
 		return ok && transcript.Supported(s.GetAgent())
 	})
-	return ggui.If(shown, func() ggui.Widget {
-		if src == nil {
-			state := m.usageState(id)
-			ggui.Effect(func() ggui.Cleanup {
-				m.loadUsage(id, state)
-				return m.every(3*time.Second, func() { m.loadUsage(id, state) })
-			})
-			src = state.usage
-		}
-		corner := ggui.Map(m.Prefs, func(p prefs) string { return p.UsageCorner })
-		return ggui.View(corner, func(c string) ggui.Widget {
-			x := pick(strings.HasSuffix(c, "left"), 0.0, 1.0)
-			y := pick(strings.HasPrefix(c, "top"), 0.0, 1.0)
-			return ggui.Padding(ggui.Align(ggui.View(src, func(u *protocol.Usage) ggui.Widget { return usageCard(m, u) })).At(x, y), 10, 18)
+	chip := func() ggui.Widget {
+		return ggui.If(shown, func() ggui.Widget {
+			usage := src
+			if usage == nil {
+				state := m.usageState(id)
+				ggui.Effect(func() ggui.Cleanup {
+					m.loadUsage(id, state)
+					return m.every(3*time.Second, func() { m.loadUsage(id, state) })
+				})
+				usage = state.usage
+			}
+			return ggui.View(usage, func(u *protocol.Usage) ggui.Widget { return usageCard(m, u) })
 		})
+	}
+	corner := ggui.Map(m.Prefs, func(p prefs) string { return p.UsageCorner })
+	return ggui.View(corner, func(c string) ggui.Widget {
+		at := func(w ggui.Widget, x, y float64) ggui.Widget { return ggui.Padding(ggui.Align(w).At(x, y), 10, 18) }
+		if topRight == nil {
+			return at(chip(), pick(strings.HasSuffix(c, "left"), 0.0, 1.0), pick(strings.HasPrefix(c, "top"), 0.0, 1.0))
+		}
+		if c == "top-right" {
+			return at(ggui.Row(chip(), topRight).Gap(8).Align(ggui.AlignCenter), 1, 0)
+		}
+		return ggui.Stack(
+			at(chip(), pick(strings.HasSuffix(c, "left"), 0.0, 1.0), pick(strings.HasPrefix(c, "top"), 0.0, 1.0)),
+			at(topRight, 1, 0),
+		).Expand()
 	})
 }
 

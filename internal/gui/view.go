@@ -270,7 +270,8 @@ func sessionSection(m *model, by string, g sessionGroup, folded bool, selected s
 	var rows []ggui.Widget
 	indent := by != groupFlat
 	if indent {
-		name, glyph := cmp.Or(label, projectName(project)), "folder"
+		// A folder's icon opens with it, as the file tree's does.
+		name, glyph := cmp.Or(label, projectName(project)), pick(folded, "folder", "folder-open")
 		var status ggui.Widget = ggui.Box()
 		if by == groupHost {
 			// A node the mesh no longer lists has gone; its sessions stay
@@ -286,7 +287,6 @@ func sessionSection(m *model, by string, g sessionGroup, folded bool, selected s
 			status = linkDot(up)
 		}
 		title := []ggui.Widget{
-			icon(pick(folded, "chevron-right", "chevron-down")).Size(13).Color(tokExtraMuted),
 			icon(glyph).Size(15),
 			ggui.Expanded(ggui.Align(ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).Left()),
 		}

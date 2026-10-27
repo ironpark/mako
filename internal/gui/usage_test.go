@@ -19,7 +19,7 @@ func TestUsageOverlayFollowsItsSetting(t *testing.T) {
 	state := m.usageState("s")
 	state.loading = true
 	state.usage.Set(&protocol.Usage{Input: 1000, CachedInput: 2000, Output: 500, Context: 50000, Window: 200000})
-	p := ggui.ProbeBuilder(func() ggui.Widget { return usageOverlay(m, "s", nil) }, ggui.Sz(800, 600))
+	p := ggui.ProbeBuilder(func() ggui.Widget { return usageOverlay(m, "s", nil, nil) }, ggui.Sz(800, 600))
 	defer p.Close()
 	p.Frame()
 	find := func() (ggui.Rect, bool) {
@@ -48,12 +48,43 @@ func TestUsageOverlayFollowsItsSetting(t *testing.T) {
 	}
 }
 
+// The view switch holds the top-right corner, with the usage to its left
+// while the settings put the usage there, and alone once they move it.
+func TestViewSwitchFloatsTopRightBesideTheUsage(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
+	state := m.usageState("s")
+	state.loading = true
+	state.usage.Set(&protocol.Usage{Context: 50000, Window: 200000})
+	p := ggui.ProbeBuilder(func() ggui.Widget { return usageOverlay(m, "s", nil, viewChip(m, "s", 0)) }, ggui.Sz(800, 600))
+	defer p.Close()
+	p.Frame()
+	find := func(role ggui.Role, name string) ggui.Rect {
+		t.Helper()
+		n, ok := p.Semantics().Find(role, name)
+		if !ok {
+			t.Fatalf("no %q:\n%s", name, p.Semantics().String())
+		}
+		return n.Rect
+	}
+	sw, usage := find(ggui.RoleButton, T("Chat")), find(ggui.RoleText, Tf("%d%%", 25))
+	if sw.Origin.X < 700 || sw.Origin.Y > 60 || usage.Origin.X+usage.Size.W > sw.Origin.X || usage.Origin.Y > 60 {
+		t.Fatalf("switch at %v, usage at %v: want the switch top right, the usage left of it", sw, usage)
+	}
+	m.Prefs.Update(func(v prefs) prefs { v.UsageCorner = "bottom-left"; return v })
+	p.Frame()
+	if sw, usage = find(ggui.RoleButton, T("Chat")), find(ggui.RoleText, Tf("%d%%", 25)); sw.Origin.X < 700 || usage.Origin.Y < 400 {
+		t.Fatalf("switch at %v, usage at %v: want the switch top right, the usage bottom left", sw, usage)
+	}
+}
+
 // A shell has no conversation, so no overlay.
 func TestShellHasNoUsageOverlay(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "shell", Project: "/tmp"}})
-	usageOverlay(m, "s", nil)
+	usageOverlay(m, "s", nil, nil)
 	if m.usages["s"] != nil {
 		t.Fatal("a shell polls for usage")
 	}
@@ -74,7 +105,7 @@ func TestUsageOverlayShowsTheAccountsLimits(t *testing.T) {
 			{Minutes: protocol.FiveHours, Used: 23.5, Resets: now.Add(2*time.Hour + 10*time.Minute).Unix()},
 			{Minutes: protocol.Week, Used: 41.2, Resets: now.Add(3*24*time.Hour + 4*time.Hour).Unix()},
 		}})
-	p := ggui.ProbeBuilder(func() ggui.Widget { return usageOverlay(m, "s", nil) }, ggui.Sz(800, 600))
+	p := ggui.ProbeBuilder(func() ggui.Widget { return usageOverlay(m, "s", nil, nil) }, ggui.Sz(800, 600))
 	defer p.Close()
 	p.Frame()
 	for _, want := range []string{Tf("%d%%", 5), Tf("%dh", 5), Tf("%d%%", 24), T("Week"), Tf("%d%%", 41)} {
@@ -111,7 +142,7 @@ func TestUsageDetailOpensOnHoverAlone(t *testing.T) {
 	u := &protocol.Usage{Input: 1000, Output: 500, Context: 50000, Window: 200000}
 	state.usage.Set(u)
 	terminal := ggui.Focus(ggui.Box().Size(800, 600))
-	p := ggui.ProbeBuilder(func() ggui.Widget { return ggui.Stack(terminal, usageOverlay(m, "s", nil)).Expand() }, ggui.Sz(800, 600))
+	p := ggui.ProbeBuilder(func() ggui.Widget { return ggui.Stack(terminal, usageOverlay(m, "s", nil, nil)).Expand() }, ggui.Sz(800, 600))
 	defer p.Close()
 	p.Advance(0)
 	p.Type(ggui.Mods{}, ggui.KeyTab) // the terminal takes the keyboard

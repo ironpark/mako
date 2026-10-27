@@ -148,18 +148,10 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		var tidy ggui.Widget = ggui.Box()
 		if slices.ContainsFunc(g.Tabs, func(t string) bool { return tidyable(t, sessions, docs) }) {
 			ids := g.Tabs
-			tidy = ggui.Row(
-				iconButton("eraser", T("Close files, diffs and idle shells"), func() { m.tidyTabs(ids) }),
-				ggui.Box().Size(1, 18).Fill(tokBorder),
-			).Gap(10).Align(ggui.AlignCenter)
-			extra += 40
+			tidy = iconButton("eraser", T("Close files, diffs and idle shells"), func() { m.tidyTabs(ids) })
+			extra += 30
 		}
-		var view ggui.Widget = ggui.Box()
-		if isSessionTab(g.Active) && m.chatCapable(g.Active) {
-			view = ggui.Row(viewSwitch(m, g.Active, id), ggui.Box().Size(1, 18).Fill(tokBorder)).Gap(10).Align(ggui.AlignCenter)
-			extra += 2*viewSideWidth + 2*viewToggleInset + 21
-		}
-		trail := ggui.Box(ggui.Row(tidy, view).Gap(10).Align(ggui.AlignCenter)).Height(tabBarHeight).Pad(0, 8)
+		trail := ggui.Box(tidy).Height(tabBarHeight).Pad(0, 8)
 		// Tabs that do not fit scroll, and a menu lists them all.
 		need := tabsWidth(g.Tabs, sessions, titles, docs, diffs) + extra + 16
 		return ggui.Responsive(need,

@@ -232,7 +232,7 @@ func sessionView(m *model, id string, group int) ggui.Widget {
 			OnPasteImage(func(png []byte, typed func([]string)) { m.pasteImage(id, png, typed) }).
 			OnLink(func(target, cwd string) { m.followLink(id, target, cwd) })
 		body := ggui.DropZone(term, func(d ggui.Dropped[pathDrag]) { term.setDropOver(false); term.typePaths([]string{d.Value.Path}) }).OnHover(term.setDropOver)
-		return ggui.Column(approvalBar(m, id), ggui.Expanded(ggui.Stack(body, usageOverlay(m, id, nil)).Expand())).Stretch()
+		return ggui.Column(approvalBar(m, id), ggui.Expanded(ggui.Stack(body, usageOverlay(m, id, nil, viewChip(m, id, group))).Expand())).Stretch()
 	})
 }
 
@@ -258,6 +258,16 @@ func viewSwitch(m *model, id string, group int) ggui.Widget {
 		Radius((viewSideHeight + 2*viewToggleInset) / 2).
 		BindName(ggui.Map(mode, func(chat bool) string { return pick(chat, T("Terminal"), T("Chat")) }))
 	return ui.Tooltip(button, T("Toggle chat and terminal"))
+}
+
+// viewChip floats the view switch over a session's top-right corner, for a
+// session that has a chat; nil for one that has none.
+func viewChip(m *model, id string, group int) ggui.Widget {
+	if !m.chatCapable(id) {
+		return nil
+	}
+	return ggui.Box(viewSwitch(m, id, group)).Fill(tokSurface1).Border(1, tokBorder).
+		Radius((viewSideHeight+2*viewToggleInset)/2 + 3).Pad(3).Shadow(uitheme.Use().PanelShadow)
 }
 
 // The view switch's measures: each side, and the track's margin around
@@ -395,7 +405,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	// The composer belongs to Chat alone, as in ovis: Terminal mode's grid
 	// is its own input surface, and a file view has no session to type into.
 	return ggui.Pointer(ggui.Column(
-		ggui.Expanded(ggui.Stack(feed, hostBadge(m, id), toLatestButton(m, state, scroll, offset), usageOverlay(m, id, chatUsage)).Expand()),
+		ggui.Expanded(ggui.Stack(feed, hostBadge(m, id), toLatestButton(m, state, scroll, offset), usageOverlay(m, id, chatUsage, viewChip(m, id, group))).Expand()),
 		approvalCard(m, id), runningAgents(m, id, state), composer(m, id, state.draft),
 	).Stretch()).OnDown(func(ggui.PointerEvent) { m.focusGroup(group) })
 }

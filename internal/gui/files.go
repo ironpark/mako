@@ -374,7 +374,8 @@ func filesView(m *model, r fileRoot) ggui.Widget {
 			return fileMenu(m, ggui.DragSource(row, pathDrag{Path: it.Path}), it)
 		}).
 		RowName(func(it fileItem) string { return it.Name }).
-		RowHeight(26).Indent(14).
+		// A folder says it is open by its icon, and opens on a press.
+		RowHeight(26).Indent(14).Chevrons(false).
 		BindExpanded(m.FilesOpen).
 		OnToggle(func(it fileItem, open bool) {
 			if open {
