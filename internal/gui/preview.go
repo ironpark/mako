@@ -264,16 +264,8 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(func() { m.ExtensionsOpen.Set(false); m.setSidebarGroup(groupHost) }), frames(10), shot("03-sidebar-host"),
 				do(func() { m.setSidebarGroup(groupFlat) }), frames(4), shot("03-sidebar-flat"),
 				do(func() { m.setSidebarGroup(groupProject) }), frames(2),
-				do(func() {
-					m.togglePin(ggui.Peek(m.Sessions)[0].GetId())
-					m.FilterOpen.Set(true)
-					m.SidebarFilter.Set("shell")
-				}), frames(4), shot("03-sidebar-filter"),
-				do(func() {
-					m.togglePin(ggui.Peek(m.Sessions)[0].GetId())
-					m.SidebarFilter.Set("")
-					m.FilterOpen.Set(false)
-				}), frames(2),
+				do(func() { m.togglePin(ggui.Peek(m.Sessions)[0].GetId()) }), frames(4), shot("03-sidebar-pinned"),
+				do(func() { m.togglePin(ggui.Peek(m.Sessions)[0].GetId()) }), frames(2),
 				// The right pane's tab dragged over the bottom of the left
 				// pane, then let go where nothing takes it.
 				do(func() {

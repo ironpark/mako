@@ -105,6 +105,8 @@ github.com/ironpark/ggui v0.0.0-20261027152336-93daa904b6eb h1:VKQkhoxoWVbhRpvNc
 github.com/ironpark/ggui v0.0.0-20261027152336-93daa904b6eb/go.mod h1:ko24fXDmpxXWvDP94OLHMBGvnsjUMLEGCgBapOZTUyQ=
 github.com/ironpark/ggui v0.0.0-20261027154938-7f8a7eba69cc h1:2/CVon7SdNZ5u5/UqBZzTDQ5z+EdzDHyX2mTSTl7ZoU=
 github.com/ironpark/ggui v0.0.0-20261027154938-7f8a7eba69cc/go.mod h1:5dUqHRgmZbPedAQUUp00CUItUESn691hYr8gowOTiow=
+github.com/ironpark/ggui v0.0.0-20261027175914-c9f04d8a0ed8 h1:X2eu+y5bOeGzpKc02Z1ub+oQ2LmmfxTO4JSssasl8Sk=
+github.com/ironpark/ggui v0.0.0-20261027175914-c9f04d8a0ed8/go.mod h1:5dUqHRgmZbPedAQUUp00CUItUESn691hYr8gowOTiow=
 github.com/ironpark/gostty v0.0.0-20261027142811-dd03466f18c8 h1:M/uELn81ZD/y/g5XrGc9RblBMZ5Xz1Pooo/fyt7jyCc=
 github.com/ironpark/gostty v0.0.0-20261027142811-dd03466f18c8/go.mod h1:YqbXLZjWWzx5yGHHff9Cwp1IXHMnTy4Ef2Pu+IO6hpo=
 github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202 h1:EPKxFHWVF3pUIGFz/Z5I/CsgVyJrGXv2LFQ/uZQHvYQ=

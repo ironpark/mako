@@ -82,8 +82,26 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		sessions := m.Sessions.Get()
 		titles := m.Titles.Get()
 		focused := m.FocusGroup.Get() == id
-		var children []ggui.Widget
 		docs, diffs := m.Docs.Get(), m.Diffs.Get()
+		// The launchers start in the project of the tab shown, or without
+		// one, in the default place on this node.
+		nodeID := m.Conn.Get().Self.GetId()
+		project := m.launchProject(nodeID)
+		if cur, ok := sessionIn(sessions, g.Active); ok {
+			nodeID, project = cur.GetNodeId(), cur.GetProject()
+		} else if d, ok := docs[g.Active]; ok && d.Root.Path != "" {
+			nodeID, project = d.Root.Node, d.Root.Path
+		} else if d, ok := diffs[g.Active]; ok && d.Root.Path != "" {
+			nodeID, project = d.Root.Node, d.Root.Path
+		}
+		targets := nodeTargets(m.Nodes.Get(), nodeID, m.Agents.Get())
+		focus := func() { m.focusGroup(id) }
+		newSession := func() { focus(); m.openNew(nodeID, project) }
+		// The tabs scroll sideways rather than squeeze when the pane is
+		// narrow. The bar under them and the + takes a tab dropped past
+		// the last one; each tab's own zone, painted over it, takes one
+		// dropped on a tab.
+		var children []ggui.Widget
 		for i, tabID := range g.Tabs {
 			var face ggui.Widget
 			if d, ok := docs[tabID]; ok {
@@ -116,30 +134,11 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			children = append(children, dropSlot(m, id, i), tabDrop(m, cell, id, slot).
 				OnHover(func(bool) { m.leaveHint(id) }))
 		}
-		// The launchers start in the project of the tab shown, or without
-		// one, in the default place on this node.
-		nodeID := m.Conn.Get().Self.GetId()
-		project := m.launchProject(nodeID)
-		if cur, ok := sessionIn(sessions, g.Active); ok {
-			nodeID, project = cur.GetNodeId(), cur.GetProject()
-		} else if d, ok := docs[g.Active]; ok && d.Root.Path != "" {
-			nodeID, project = d.Root.Node, d.Root.Path
-		} else if d, ok := diffs[g.Active]; ok && d.Root.Path != "" {
-			nodeID, project = d.Root.Node, d.Root.Path
-		}
-		targets := nodeTargets(m.Nodes.Get(), nodeID, m.Agents.Get())
-		focus := func() { m.focusGroup(id) }
-		newSession := func() { focus(); m.openNew(nodeID, project) }
-		// The + follows the last tab.
-		children = append(children, dropSlot(m, id, len(g.Tabs)),
-			ggui.Box(ggui.Align(launchButton(m, nodeID, project, targets, focus, newSession))).Height(tabBarHeight).Pad(0, 4))
-		// The tabs scroll sideways rather than squeeze when the pane is
-		// narrow. The bar under them takes a tab dropped past the last one;
-		// each tab's own zone, painted over it, takes one dropped on a tab.
-		end := len(g.Tabs)
-		bar := tabDrop(m, ggui.Scroll(ggui.Row(children...)).Horizontal().Bar(color.Transparent), id,
-			func(ggui.Dropped[tabDrag]) int { return end }).
-			OnHover(func(bool) { m.leaveHint(id) })
+		children = append(children, dropSlot(m, id, len(g.Tabs)))
+		bar := ggui.Scroll(ggui.Row(children...)).Horizontal().Shrink().Bar(color.Transparent)
+		// Centred down the bar only: across, it is as wide as itself.
+		plus := ggui.Box(ggui.Column(launchButton(m, nodeID, project, targets, focus, newSession)).Justify(ggui.JustifyCenter)).
+			Height(tabBarHeight).Pad(0, 4)
 
 		// Beside the tabs: the + and what trails the bar.
 		extra := float64(34)
@@ -152,12 +151,19 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			extra += 30
 		}
 		trail := ggui.Box(tidy).Height(tabBarHeight).Pad(0, 8)
-		// Tabs that do not fit scroll, and a menu lists them all.
+		// The + follows the last tab, as far as the bar's end, where it
+		// stays in sight as the tabs scroll; and when they do, a menu
+		// lists them all.
 		need := tabsWidth(g.Tabs, sessions, titles, docs, diffs) + extra + 16
-		return ggui.Responsive(need,
-			ggui.Row(ggui.Expanded(bar), trail).Stretch(),
-			ggui.Row(ggui.Expanded(bar), tabList(m, g, sessions, titles, docs, diffs), trail).Stretch(),
-		)
+		end := len(g.Tabs)
+		tabsAndPlus := tabDrop(m, ggui.Row(ggui.Flexible(bar), plus).Stretch(), id,
+			func(ggui.Dropped[tabDrag]) int { return end }).
+			OnHover(func(bool) { m.leaveHint(id) })
+		return ggui.Row(
+			ggui.Expanded(tabsAndPlus),
+			ggui.Responsive(need, ggui.Box().Size(0, 0), tabList(m, g, sessions, titles, docs, diffs)),
+			trail,
+		).Stretch()
 	})
 	return ggui.Box(tabs).Height(tabBarHeight)
 }

@@ -241,10 +241,7 @@ type model struct {
 	historyReading bool
 
 	SidebarOpen *ggui.StateValue[bool]
-	// The sidebar's filter, and whether its field shows.
-	FilterOpen    *ggui.StateValue[bool]
-	SidebarFilter *ggui.StateValue[string]
-	DetailsOpen   *ggui.StateValue[bool]
+	DetailsOpen *ggui.StateValue[bool]
 	// DetailsWidth is the right panel's width, following a drag of its
 	// edge; the settings keep it when the drag ends.
 	DetailsWidth *ggui.StateValue[float64]
@@ -387,8 +384,6 @@ func newModel(cfg *config.Config, addr string) *model {
 		GitHistory:     ggui.State(historyView{}).WithEqual(deepEqual),
 		GitCommit:      ggui.State(commitView{}).WithEqual(deepEqual),
 		SidebarOpen:    ggui.State(true),
-		FilterOpen:     ggui.State(false),
-		SidebarFilter:  ggui.State(""),
 		DetailsOpen:    ggui.State(true),
 		DetailsWidth:   ggui.State(p.DetailsWidth),
 		SidebarWidth:   ggui.State(p.SidebarWidth),

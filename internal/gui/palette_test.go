@@ -71,3 +71,32 @@ func TestEditorPublishesTheCaret(t *testing.T) {
 		t.Fatalf("selected %+v", c)
 	}
 }
+
+// Hangul matches as it is typed: the last syllable by the start of what
+// it may become, its final perhaps the next syllable's initial, and a lone
+// consonant as a syllable's initial.
+func TestFuzzyMatchHangulAsTyped(t *testing.T) {
+	for _, tc := range []struct {
+		s, q string
+		ok   bool
+		hits []int
+	}{
+		{"세션: 새 세션", "셋", true, []int{0, 1}},  // 세션, a key before the end
+		{"세션: 새 세션", "세셔", true, []int{0, 1}}, // its vowel, not its final, yet
+		{"세션: 새 세션", "ㅅㅅ", true, []int{0, 1}}, // initials
+		{"설정 열기", "ㅅㅈ", true, []int{0, 1}},
+		{"설정 열기", "설저", true, []int{0, 1}},
+		{"설정 열기", "설정ㅇ", true, []int{0, 1, 3}},
+		{"과제", "고", true, []int{0}},    // ㅘ typed from ㅗ
+		{"닭갈비", "달", true, []int{0}},   // ㄺ typed from ㄹ
+		{"달걀", "닭", true, []int{0, 1}}, // ㄹ, then ㄱ beginning 걀
+		{"세션", "셋션", false, nil},       // a whole syllable before the last is itself
+		{"세션", "ㅅㅂ", false, nil},
+		{"Settings", "ㅅ", false, nil},
+	} {
+		_, hits, ok := fuzzyMatch(tc.s, tc.q)
+		if ok != tc.ok || ok && !slices.Equal(hits, tc.hits) {
+			t.Errorf("fuzzyMatch(%q, %q) = %v %v, want %v %v", tc.s, tc.q, hits, ok, tc.hits, tc.ok)
+		}
+	}
+}

@@ -266,8 +266,7 @@ func viewChip(m *model, id string, group int) ggui.Widget {
 	if !m.chatCapable(id) {
 		return nil
 	}
-	return ggui.Box(viewSwitch(m, id, group)).Fill(tokSurface1).Border(1, tokBorder).
-		Radius((viewSideHeight+2*viewToggleInset)/2 + 3).Pad(3).Shadow(uitheme.Use().PanelShadow)
+	return raisedChip(viewSwitch(m, id, group)).Radius((viewSideHeight+2*viewToggleInset)/2 + 3).Pad(3)
 }
 
 // The view switch's measures: each side, and the track's margin around

@@ -81,18 +81,11 @@ func TestStatusOutOfViewIsUnread(t *testing.T) {
 	}
 }
 
-func TestSidebarFilterAndLabels(t *testing.T) {
+func TestSidebarLabels(t *testing.T) {
 	sessions := []*protocol.SessionInfo{
 		{Id: "1", Agent: "claude", Project: "/w/api", Branch: "feat/login"},
 		{Id: "2", Agent: "shell", Project: "/oss/api"},
 		{Id: "3", Agent: "codex", Project: "/w/web"},
-	}
-	got := filterSessions(sessions, "API login", nil, nil)
-	if len(got) != 1 || got[0].GetId() != "1" {
-		t.Fatalf("filtered %+v", got)
-	}
-	if len(filterSessions(sessions, "", nil, nil)) != 3 {
-		t.Fatal("an empty filter left sessions out")
 	}
 	groups := groupSessions(sessions, groupProject, nil, nil)
 	labels := projectLabels(groups, nil)

@@ -248,10 +248,10 @@ func keyCaps(label string) ggui.Widget {
 	return ggui.Row(keys...).Gap(3).Align(ggui.AlignCenter)
 }
 
-// fuzzyMatch reports whether s holds q's runes in order, ignoring case,
-// with a score that is higher for runes together and at the starts of
-// words, and the runes of s matched. Each rune of q takes the first of s
-// it can, after the last.
+// fuzzyMatch reports whether s holds q's runes in order, ignoring case
+// and matching Hangul as it is typed (matchHangul), with a score that is
+// higher for runes together and at the starts of words, and the runes of s
+// matched. Each rune of q takes the first of s it can, after the last.
 func fuzzyMatch(s, q string) (score int, hits []int, ok bool) {
 	q = strings.ToLower(strings.ReplaceAll(q, " ", ""))
 	if q == "" {
@@ -259,13 +259,16 @@ func fuzzyMatch(s, q string) (score int, hits []int, ok bool) {
 	}
 	runes := []rune(s)
 	want := []rune(q)
+	// The last rune, maybe still being typed, matches by its keys.
+	lastKeys := keys([]rune{}, want[len(want)-1])
 	prev := -2
 	j := 0
-	for i, r := range runes {
-		if j == len(want) {
-			break
+	for i := 0; i < len(runes) && j < len(want); i++ {
+		take := 1
+		if unicode.ToLower(runes[i]) != want[j] {
+			take = matchHangul(runes, i, want[j], pick(j == len(want)-1, lastKeys, nil))
 		}
-		if unicode.ToLower(r) != want[j] {
+		if take == 0 {
 			continue
 		}
 		switch {
@@ -274,7 +277,10 @@ func fuzzyMatch(s, q string) (score int, hits []int, ok bool) {
 		case i == 0 || wordStart(runes, i):
 			score += 4
 		}
-		hits = append(hits, i)
+		for k := range take {
+			hits = append(hits, i+k)
+		}
+		i += take - 1
 		prev = i
 		j++
 	}

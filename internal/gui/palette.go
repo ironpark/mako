@@ -132,7 +132,6 @@ func (m *model) commands() []command {
 		{ID: "Rename session…", Category: "Session", Keys: []string{"name", "title"}, Disabled: !isSessionTab(selected), Run: func() { m.askRename(selected) }},
 		{ID: pick(m.pinned(selected), "Unpin session", "Pin session to the top"), Category: "Session", Keys: []string{"pin", "favorite"},
 			Disabled: !isSessionTab(selected), Run: func() { m.togglePin(selected) }},
-		{ID: "Filter sessions…", Category: "Session", Keys: []string{"find", "search", "sidebar"}, Run: func() { m.FilterOpen.Set(true); m.SidebarOpen.Set(true) }},
 		{ID: "Toggle chat and terminal", Category: "Session", Keys: []string{"conversation"}, Shortcut: "cmd+shift+j",
 			Disabled: selected == "" || onDoc || !m.chatCapable(selected), Run: m.toggleChat},
 		{ID: "Go to file…", Category: "File", Keys: []string{"open", "find", "quick"}, Shortcut: "cmd+p", Run: m.openQuickOpen},

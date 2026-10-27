@@ -253,6 +253,11 @@ func untilText(d time.Duration) string {
 // overlayChip is a small raised label floating over a session: its usage,
 // the host it runs on.
 func overlayChip(items ...ggui.Widget) ggui.Widget {
-	return ggui.Box(ggui.Row(items...).Gap(8).Align(ggui.AlignCenter)).
-		Fill(tokSurface1).Border(1, tokBorder).Radius(7).Pad(4, 8).Shadow(uitheme.Use().PanelShadow)
+	return raisedChip(ggui.Row(items...).Gap(8).Align(ggui.AlignCenter)).Radius(7).Pad(4, 8)
+}
+
+// raisedChip is the surface the window's floating chips share, raised
+// over what is under them; each sets its own radius and padding.
+func raisedChip(w ggui.Widget) *ggui.BoxWidget {
+	return ggui.Box(w).Fill(tokSurface1).Border(1, tokBorder).Shadow(uitheme.Use().PanelShadow)
 }

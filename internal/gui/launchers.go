@@ -82,7 +82,8 @@ func quickLaunchers(m *model, nodeID, project string, targets []string, before f
 
 // launchButton is the + after a pane's tabs. A click runs more, the
 // new-session dialog; the pointer resting on it fans the quick launchers
-// out beside it, over the bar, so they take no room of their own.
+// out beside it, over the bar, so they take no room of their own: to its
+// right, or where the window has no room there, to its left.
 func launchButton(m *model, nodeID, project string, targets []string, before, more func()) ggui.Widget {
 	plus := iconButton("plus", T("New session…"), more)
 	buttons, menus := quickLaunchers(m, nodeID, project, targets, before)
@@ -92,8 +93,7 @@ func launchButton(m *model, nodeID, project string, targets []string, before, mo
 	f := &launchFan{plus: plus, menus: menus}
 	cells := make([]ggui.Widget, len(buttons))
 	for i, b := range buttons {
-		// Each comes out from under the +, the farther ones from farther.
-		t := ggui.Transition(b).Fade().Slide(-float64(i+1)*14, 0).Easing(ggui.EaseLinear)
+		t := ggui.Transition(b).Fade().Easing(ggui.EaseLinear)
 		f.items = append(f.items, t)
 		cells[i] = t
 	}
@@ -101,7 +101,7 @@ func launchButton(m *model, nodeID, project string, targets []string, before, mo
 		return ggui.Box(ggui.Row(cells...).Gap(2)).Pad(2).
 			Fill(tokSolidBg).Border(1, tokBorder).Radius(8).Shadow(uitheme.Use().PanelShadow)
 	})
-	f.pill = ggui.Transition(pill).Fade().Slide(-8, 0).Easing(ggui.EaseLinear)
+	f.pill = ggui.Transition(pill).Fade().Easing(ggui.EaseLinear)
 	return f
 }
 
@@ -143,14 +143,18 @@ func (f *launchFan) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 
 func (f *launchFan) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	dst.Paint(f.plus, r)
-	at := ggui.Rct(ggui.Pt(r.Origin.X+r.Size.W+2, r.Origin.Y+(r.Size.H-f.pillSize.H)/2), f.pillSize)
+	// Out to the right, or where the window ends first, to the left.
+	right := r.Origin.X + r.Size.W + 2
+	w := dst.Size().W
+	left := w > 0 && right+f.pillSize.W > w
+	x := pick(left, r.Origin.X-2-f.pillSize.W, right)
+	at := ggui.Rct(ggui.Pt(x, r.Origin.Y+(r.Size.H-f.pillSize.H)/2), f.pillSize)
 	anchor := ggui.Anchor{Rect: r}
 	state, _ := dst.Retained(anchor, fanSlot)
 	now := ggui.FrameTime()
 	p, ok := dst.Pointer()
 	// The gap between the + and the launchers counts as theirs.
-	reach := ggui.Rct(r.Origin, ggui.Sz(at.Origin.X+at.Size.W-r.Origin.X, r.Size.H))
-	held := ok && (r.Contains(p) || state.open && (reach.Contains(p) || at.Contains(p))) ||
+	held := ok && (r.Contains(p) || state.open && r.Union(at).Contains(p)) ||
 		dst.FocusVisibleWithin(r) || state.open && dst.FocusWithin(at) ||
 		slices.ContainsFunc(f.menus, func(m *ui.MenuWidget) bool { return m.Popup().IsOpen() })
 	switch {
@@ -167,13 +171,18 @@ func (f *launchFan) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	if k <= 0 {
 		return
 	}
-	// The launchers follow one another out, a step behind each.
-	step := min(.15, .6/float64(max(len(f.items)-1, 1)))
-	span := 1 - step*float64(len(f.items)-1)
+	// The launchers follow one another out from under the +, a step
+	// behind each, the farther from farther: to the left the nearest is
+	// the last.
+	n := len(f.items)
+	dir := pick(left, 1.0, -1.0)
+	step := min(.15, .6/float64(max(n-1, 1)))
+	span := 1 - step*float64(n-1)
 	for i, item := range f.items {
-		item.Progress((k-step*float64(i))/span, !state.open)
+		order := pick(left, n-1-i, i)
+		item.Slide(dir*float64(order+1)*14, 0).Progress((k-step*float64(order))/span, !state.open)
 	}
-	f.pill.Progress(k, !state.open)
+	f.pill.Slide(dir*8, 0).Progress(k, !state.open)
 	dst.Overlay(func(dst *ggui.Canvas) { dst.Paint(f.pill, at) })
 }
 

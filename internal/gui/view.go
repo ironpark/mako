@@ -145,19 +145,7 @@ func sidebar(m *model) ggui.Widget {
 	header := ggui.Box(ggui.Row(
 		icon("messages-square").Size(17),
 		ggui.Expanded(ggui.Align(spaceSwitcher(m)).Left()),
-		iconButton("search", T("Filter sessions"), func() {
-			if ggui.Peek(m.FilterOpen) {
-				m.SidebarFilter.Set("")
-			}
-			ggui.Toggle(m.FilterOpen)
-		}),
-		groupPicker(m),
 	).Gap(6)).Pad(0, 10, 0, 16).Height(headerHeight)
-	filter := ggui.If(m.FilterOpen, func() ggui.Widget {
-		field := ui.TextField(m.SidebarFilter).Placeholder(T("Filter by title, project, branch or host")).Name(T("Filter sessions")).
-			OnSubmit(func(string) {})
-		return ggui.Box(field).Pad(8, 10, 0, 10)
-	})
 
 	st := sidebarState{
 		grouping:  ggui.Map(m.Prefs, func(p prefs) string { return p.SidebarGroup }),
@@ -186,17 +174,18 @@ func sidebar(m *model) ggui.Widget {
 				sp, _ := spaceSet{spaceList: l}.spaceOf(i)
 				return strings.Join(sp.Owners, "\x00")
 			})
+			// The foot leaves room to scroll the last row out from under
+			// the grouping's chip.
 			return ggui.Scroll(ggui.Padding(ggui.Reactive(func() ggui.Widget {
 				owners.Get()
 				return spaceSessionList(m, st, i)
-			}), 8, 8)).Bar(tokSurface3)
+			}), 8, 8, groupChipRoom, 8)).Bar(tokSurface3)
 		})
 	}
 	return swipe.area(ggui.Box(ggui.Column(
 		header,
 		hline(),
-		filter,
-		ggui.Expanded(swipe.slide(list(-1), list(0), list(1))),
+		ggui.Expanded(ggui.Stack(swipe.slide(list(-1), list(0), list(1)), groupChip(m)).Expand()),
 		hline(),
 		sidebarFooter(m),
 	).Stretch()).Fill(tokSidebar))
@@ -217,9 +206,8 @@ func spaceSessionList(m *model, st sidebarState, i int) ggui.Widget {
 	titles := m.Titles.Get()
 	selected := m.Selected.Get()
 	m.Unread.Get() // the dots show what is unread
-	query := strings.TrimSpace(m.SidebarFilter.Get())
 	p := m.spacesNow()
-	sessions := filterSessions(p.spaceSessions(i, m.Sessions.Get()), query, nodes, titles)
+	sessions := p.spaceSessions(i, m.Sessions.Get())
 	// Pinned sessions come first, in a section of their own.
 	pins := st.pinned.Get()
 	var top []*protocol.SessionInfo
@@ -231,20 +219,11 @@ func spaceSessionList(m *model, st sidebarState, i int) ggui.Widget {
 			rest = append(rest, s)
 		}
 	}
-	var groups []sessionGroup
-	if query != "" {
-		// Filtered, the folders kept without sessions are left out.
-		groups = groupSessions(rest, by, nodes, nil)
-	} else {
-		groups = groupSessions(rest, by, nodes, p.spaceProjects(i, st.projects.Get()))
-		if by == groupHost {
-			groups = withHosts(groups, nodes)
-		}
+	groups := groupSessions(rest, by, nodes, p.spaceProjects(i, st.projects.Get()))
+	if by == groupHost {
+		groups = withHosts(groups, nodes)
 	}
 	if len(groups) == 0 && len(top) == 0 {
-		if query != "" {
-			return ggui.Box(muted(ggui.Text(T("No sessions match.")).Size(12))).Pad(16)
-		}
 		return ggui.Box(muted(ggui.Text(T("No sessions yet. Start one with +.")).Size(12))).Pad(16)
 	}
 	names := projectLabels(groups, nodes)
@@ -253,10 +232,8 @@ func spaceSessionList(m *model, st sidebarState, i int) ggui.Widget {
 		children = append(children, pinnedSection(m, top, selected, nodes, titles))
 	}
 	folded := st.collapsed.Get()
-	// A filter shows what it finds in folded groups too.
-	isFolded := func(key string) bool { return query == "" && slices.Contains(folded, key) }
 	section := func(g sessionGroup, depth int) ggui.Widget {
-		return sessionSection(m, by, g, isFolded(foldKey(by, g)), selected, nodes, titles, names[g.Key], depth)
+		return sessionSection(m, by, g, slices.Contains(folded, foldKey(by, g)), selected, nodes, titles, names[g.Key], depth)
 	}
 	var sections []ownerSection
 	if by == groupProject {
@@ -272,7 +249,7 @@ func spaceSessionList(m *model, st sidebarState, i int) ggui.Widget {
 			}
 			continue
 		}
-		children = append(children, ownerGroup(m, o, isFolded(ownerKey(o.Owner)), section))
+		children = append(children, ownerGroup(m, o, slices.Contains(folded, ownerKey(o.Owner)), section))
 	}
 	return ggui.Column(children...).Gap(6).Stretch()
 }
@@ -287,6 +264,22 @@ var groupings = []grouping{
 	{groupProject, "folder", "Group by project"},
 	{groupHost, "server", "Group by host"},
 	{groupFlat, "list", "Show as a list"},
+}
+
+// The grouping's chip sits groupChipInset from the sidebar list's
+// bottom-right corner, and the foot of the list leaves groupChipRoom for
+// it: its inset and its height, the picker's 32 in 3 of padding and a
+// border.
+const (
+	groupChipInset = 12
+	groupChipRoom  = groupChipInset + 32 + 2*3 + 2
+)
+
+// groupChip floats the grouping's picker over the sidebar list's
+// bottom-right corner, raised as the session's view switch is.
+func groupChip(m *model) ggui.Widget {
+	chip := raisedChip(groupPicker(m)).Radius(9).Pad(3)
+	return ggui.Padding(ggui.Align(chip).At(1, 1), 0, groupChipInset, groupChipInset, 0)
 }
 
 // groupPicker switches how the sidebar groups its sessions.

@@ -13,25 +13,6 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// filterSessions keeps the sessions whose title, name, project, branch,
-// agent or host has every word of query in it.
-func filterSessions(sessions []*protocol.SessionInfo, query string, nodes []*protocol.Node, titles map[string]string) []*protocol.SessionInfo {
-	words := strings.Fields(strings.ToLower(query))
-	if len(words) == 0 {
-		return sessions
-	}
-	var out []*protocol.SessionInfo
-	for _, s := range sessions {
-		hay := strings.ToLower(strings.Join([]string{
-			sessionTitle(s, titles[s.GetId()]), s.GetProject(), s.GetBranch(), sessionLabel(s), nodeName(nodes, s.GetNodeId()),
-		}, "\x00"))
-		if !slices.ContainsFunc(words, func(w string) bool { return !strings.Contains(hay, w) }) {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
 // projectLabels names the project sections whose folders share a name by
 // as much of their paths as tells them apart, "work/api" and "oss/api", or
 // where the paths are the same, on hosts of their own, by their hosts. The
