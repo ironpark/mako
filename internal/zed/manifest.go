@@ -1,5 +1,5 @@
 // Package zed reads and installs extensions made for the Zed editor, so
-// sanbo's editor takes its languages from them: the tree-sitter grammars
+// mako's editor takes its languages from them: the tree-sitter grammars
 // they carry, compiled to wasm, and the queries and settings of each
 // language. An extension is the directory Zed's store hands out, unpacked
 // as it is.
@@ -15,7 +15,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Manifest is an extension's extension.toml, as far as sanbo reads it.
+// Manifest is an extension's extension.toml, as far as mako reads it.
 type Manifest struct {
 	ID            string   `toml:"id"`
 	Name          string   `toml:"name"`
@@ -40,7 +40,7 @@ type Manifest struct {
 	} `toml:"lib"`
 }
 
-// Capability is a thing an extension's wasm may do. Of Zed's kinds, sanbo
+// Capability is a thing an extension's wasm may do. Of Zed's kinds, mako
 // reads "process:exec": a command, or "*" for any, and its arguments,
 // each a value or "*" for any one, the last "**" for any rest.
 type Capability struct {

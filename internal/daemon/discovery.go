@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/discovery"
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/transport"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/discovery"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // discover advertises this daemon and folds discovered nodes into the peer

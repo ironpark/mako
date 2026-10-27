@@ -9,8 +9,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 func TestTitlesLoseTheirSpinner(t *testing.T) {
@@ -29,7 +29,7 @@ func TestTitlesLoseTheirSpinner(t *testing.T) {
 }
 
 func TestStatusOutOfViewIsUnread(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Prefs.Update(func(p prefs) prefs { p.Notify = false; return p })
 	at := time.Now()
@@ -113,7 +113,7 @@ func TestSidebarFilterAndLabels(t *testing.T) {
 }
 
 func TestRankFilesPrefersNamesAndRuns(t *testing.T) {
-	paths := []string{"internal/gui/view.go", "internal/gui/viewer_test.go", "docs/overview.md", "cmd/sanbo/main.go", "vendor/x/very/long/path/view.go"}
+	paths := []string{"internal/gui/view.go", "internal/gui/viewer_test.go", "docs/overview.md", "cmd/mako/main.go", "vendor/x/very/long/path/view.go"}
 	ranked := func(q string) []string {
 		var out []string
 		for _, f := range rankFiles(paths, q, 10) {
@@ -125,7 +125,7 @@ func TestRankFilesPrefersNamesAndRuns(t *testing.T) {
 	if len(got) != 4 || got[0] != "internal/gui/view.go" {
 		t.Fatalf("ranked %q", got)
 	}
-	if got := ranked("sanbomain"); len(got) != 1 || got[0] != "cmd/sanbo/main.go" {
+	if got := ranked("makomain"); len(got) != 1 || got[0] != "cmd/mako/main.go" {
 		t.Fatalf("ranked %q", got)
 	}
 	if got := ranked("zzz"); len(got) != 0 {
@@ -134,7 +134,7 @@ func TestRankFilesPrefersNamesAndRuns(t *testing.T) {
 }
 
 func TestSidebarGroupsFoldAndWidthsStayInBounds(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	g := sessionGroup{Key: dirKey("n", "/w/api")}
 	key := foldKey(groupProject, g)

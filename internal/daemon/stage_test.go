@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 func TestStagedFilesArriveInPieces(t *testing.T) {

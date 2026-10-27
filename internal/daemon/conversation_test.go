@@ -11,16 +11,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/session"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/session"
 )
 
 // This subprocess emulates a native agent, holding its own log open. No API
 // calls or installed agent binaries are used by the lifecycle tests.
 func TestConversationAgentProcess(t *testing.T) {
-	agent := os.Getenv("SANBO_FAKE_AGENT")
+	agent := os.Getenv("MAKO_FAKE_AGENT")
 	if agent == "" {
 		return
 	}
@@ -39,7 +39,7 @@ func TestConversationAgentProcess(t *testing.T) {
 	if id == "" {
 		id = conversationUUID()
 	}
-	root := os.Getenv("SANBO_FAKE_ROOT")
+	root := os.Getenv("MAKO_FAKE_ROOT")
 	path := filepath.Join(root, "projects", "project", id+".jsonl")
 	if agent == "codex" {
 		path = filepath.Join(root, "sessions", "2026", "10", "26", "rollout-"+id+".jsonl")
@@ -93,7 +93,7 @@ func TestNativeConversationSurvivesDaemonRestartWithoutOpeningChat(t *testing.T)
 	for _, agent := range []string{"claude", "codex"} {
 		t.Run(agent, func(t *testing.T) {
 			command, root := fakeAgent(t, agent)
-			cfg := &config.Config{NodeID: "node", Agents: map[string]agentspec.Agent{agent: {Command: []string{command}, Args: []string{"--model", "test-model"}, Env: map[string]string{"SANBO_FAKE_AGENT": agent, "SANBO_FAKE_ROOT": root, "CLAUDE_CONFIG_DIR": root, "CODEX_HOME": root}}}}
+			cfg := &config.Config{NodeID: "node", Agents: map[string]agentspec.Agent{agent: {Command: []string{command}, Args: []string{"--model", "test-model"}, Env: map[string]string{"MAKO_FAKE_AGENT": agent, "MAKO_FAKE_ROOT": root, "CLAUDE_CONFIG_DIR": root, "CODEX_HOME": root}}}}
 			saved, project := t.TempDir(), t.TempDir()
 			daemon := func() *Daemon {
 				d := New(cfg, nil)
@@ -157,7 +157,7 @@ func TestNativeConversationSurvivesDaemonRestartWithoutOpeningChat(t *testing.T)
 
 func TestConcurrentAgentsInSameProjectBindTheirOwnLogs(t *testing.T) {
 	command, root := fakeAgent(t, "codex")
-	cfg := &config.Config{NodeID: "node", Agents: map[string]agentspec.Agent{"codex": {Command: []string{command}, Env: map[string]string{"SANBO_FAKE_AGENT": "codex", "SANBO_FAKE_ROOT": root, "CODEX_HOME": root}}}}
+	cfg := &config.Config{NodeID: "node", Agents: map[string]agentspec.Agent{"codex": {Command: []string{command}, Env: map[string]string{"MAKO_FAKE_AGENT": "codex", "MAKO_FAKE_ROOT": root, "CODEX_HOME": root}}}}
 	d := New(cfg, nil)
 	d.mcp = nil
 	if err := d.loadSessions(t.TempDir()); err != nil {

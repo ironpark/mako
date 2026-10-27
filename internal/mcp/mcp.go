@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/zed"
-	"github.com/ironpark/sanbo/internal/zedhost"
+	"github.com/ironpark/mako/internal/zed"
+	"github.com/ironpark/mako/internal/zedhost"
 )
 
 // Server configures one MCP server, by its ID: a context server of a Zed

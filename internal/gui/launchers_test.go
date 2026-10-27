@@ -9,9 +9,9 @@ import (
 
 	"github.com/ironpark/ggui"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 func TestLaunchablesGroupProfilesUnderTheirAgent(t *testing.T) {
@@ -31,7 +31,7 @@ func TestLaunchablesGroupProfilesUnderTheirAgent(t *testing.T) {
 // shell with an opus profile, and waits for it to connect.
 func launcherApp(t *testing.T, pr prefs) (*model, *ggui.Probe) {
 	t.Helper()
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	cfg := config.Default()
 	cfg.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}

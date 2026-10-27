@@ -12,7 +12,7 @@ import (
 	"unicode"
 )
 
-// An agent's hooks tell sanbo what its conversation is and what the agent
+// An agent's hooks tell mako what its conversation is and what the agent
 // is doing: which conversation it started or switched to, when it takes a
 // turn, asks for an approval, and finishes. Claude takes them as settings
 // for one launch, and Codex as config overrides it trusts by their hash.
@@ -69,7 +69,7 @@ func (a *Agent) HookFeature() (args []string, feature string) {
 	return nil, ""
 }
 
-// Hook makes command run the shell command hook on the events sanbo
+// Hook makes command run the shell command hook on the events mako
 // follows, alongside the user's own hooks. The hook reads the event, as
 // JSON, on stdin. An agent with a status line runs the shell command status
 // as its status line, unless status is "": it reads the session's state,

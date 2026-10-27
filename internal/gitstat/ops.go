@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // The operations a front-end runs on a work tree beyond committing and

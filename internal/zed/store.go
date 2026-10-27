@@ -21,7 +21,7 @@ import (
 // API is Zed's extension store.
 const API = "https://api.zed.dev"
 
-// The extension API versions sanbo takes extensions for. Their grammars
+// The extension API versions mako takes extensions for. Their grammars
 // and languages read the same in every version; their wasm is run only
 // for their context servers (internal/zedhost).
 const (

@@ -6,8 +6,8 @@ import (
 
 	"github.com/ironpark/ggui"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 func paneTabs(m *model) [][]string {

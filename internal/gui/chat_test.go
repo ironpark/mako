@@ -10,13 +10,13 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/gostty"
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 func TestChatSwitchKeepsLiveSessionAndComposer(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	project, logs := t.TempDir(), t.TempDir()
 	dir := filepath.Join(logs, "projects", "project")
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -108,7 +108,7 @@ func TestChatModesArePerSession(t *testing.T) {
 // The composer keeps its own height; the feed above it gets the rest of the
 // pane instead of collapsing to nothing.
 func TestChatComposerLeavesRoomForTheFeed(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	m.Selected.Set("s")
@@ -129,7 +129,7 @@ func TestChatComposerLeavesRoomForTheFeed(t *testing.T) {
 // Tool rows name the tool and its argument, fold their output away, and
 // fold independently of one another.
 func TestChatToolRowsFold(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	m.Selected.Set("s")
@@ -169,7 +169,7 @@ func TestChatToolRowsFold(t *testing.T) {
 
 // A plain shell has no conversation, so the shortcut leaves it in Terminal.
 func TestShellHasNoChat(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "shell"}})
 	m.Selected.Set("s")
@@ -189,7 +189,7 @@ func TestShellHasNoChat(t *testing.T) {
 // A click anywhere on the view switch switches to the other view, on the
 // side in view as much as on the other.
 func TestViewSwitchTogglesWhereverClicked(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	p := ggui.ProbeBuilder(func() ggui.Widget { return ggui.Center(viewSwitch(m, "s", 0)) }, ggui.Sz(200, 60))

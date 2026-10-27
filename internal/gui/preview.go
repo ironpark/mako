@@ -14,8 +14,8 @@ import (
 	"github.com/ironpark/ggui/fonts/gofont"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // Preview renders the window against a live daemon into PNGs in dir,
@@ -81,7 +81,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 	return ggfx.Run(ggfx.HandlerFunc(func(ev ggfx.Event) error {
 		switch ev.(type) {
 		case ggfx.StartEvent:
-			w, err := ggfx.NewWindow(&ggfx.WindowOptions{Title: "sanbo preview", Width: 64, Height: 64, Hidden: true})
+			w, err := ggfx.NewWindow(&ggfx.WindowOptions{Title: "mako preview", Width: 64, Height: 64, Hidden: true})
 			if err != nil {
 				return err
 			}
@@ -130,7 +130,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 						Messages: []*protocol.ChatMessage{
 							{Role: "user", Text: "Add a chat view while keeping the terminal session running."},
 							{Role: "assistant", Text: "The session now has **Chat** and **Terminal** views.\n\n- Switch views without restarting the agent.\n- Read the conversation and send a reply here.\n- Use the terminal for approvals and interactive commands."},
-							{Role: "tool", Text: "go test ./internal/transcript\nok   github.com/ironpark/sanbo/internal/transcript"},
+							{Role: "tool", Text: "go test ./internal/transcript\nok   github.com/ironpark/mako/internal/transcript"},
 							{Role: "assistant", Text: "Ready to try. Use **⌘⇧J** to switch views."},
 						},
 					}})
@@ -384,10 +384,10 @@ type previewStep func() (done bool, err error)
 func previewTools() []*protocol.ChatMessage {
 	return []*protocol.ChatMessage{
 		{Role: "tool", Id: "t1", Tool: "Bash", Detail: "go test ./internal/gui", Text: `{"command": "go test ./internal/gui", "description": "Run the GUI tests"}`,
-			Result: "ok  \tgithub.com/ironpark/sanbo/internal/gui\t7.450s\n"},
+			Result: "ok  \tgithub.com/ironpark/mako/internal/gui\t7.450s\n"},
 		{Role: "tool", Id: "t2", Tool: "Edit", Detail: "internal/gui/view.go", Text: `{"file_path": "internal/gui/view.go", "old_string": "\tsidebarWidth = 272\n\tdetailsWidth = 320", "new_string": "\tsidebarWidth = 272 // until dragged\n\tdetailsWidth = 320"}`},
 		{Role: "tool", Id: "t3", Tool: "TodoWrite", Text: `{"todos": [{"content": "Resize the sidebar", "status": "completed"}, {"content": "Fold sidebar groups", "status": "in_progress"}, {"content": "Render tool calls", "status": "pending"}]}`},
-		{Role: "tool", Id: "t4", Tool: "exec_command", Detail: "git status --short", Text: `{"cmd": "git status --short", "workdir": "/Users/me/sanbo"}`,
+		{Role: "tool", Id: "t4", Tool: "exec_command", Detail: "git status --short", Text: `{"cmd": "git status --short", "workdir": "/Users/me/mako"}`,
 			Result: "Chunk ID: 1\nWall time: 0.1 seconds\nProcess exited with code 0\nOutput:\n M internal/gui/view.go\n?? internal/gui/toolview.go\n"},
 		{Role: "tool", Id: "t5", Tool: "apply_patch", Text: "*** Begin Patch\n*** Update File: internal/gui/prefs.go\n@@ type prefs struct {\n-\tDetailsWidth float64\n+\tSidebarWidth float64\n+\tDetailsWidth float64\n*** End Patch"},
 	}

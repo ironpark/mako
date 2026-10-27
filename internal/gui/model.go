@@ -16,12 +16,12 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/client"
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/mcp"
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/zed"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/mcp"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/zed"
 )
 
 // pollInterval is how often the mesh's nodes and sessions are refreshed.

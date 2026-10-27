@@ -46,7 +46,7 @@ const (
 const (
 	DecisionAllow    = "allow"
 	DecisionDeny     = "deny"
-	DecisionTerminal = "terminal" // ask in the terminal, as without sanbo
+	DecisionTerminal = "terminal" // ask in the terminal, as without mako
 )
 
 // The windows of the limits agents name, in minutes.

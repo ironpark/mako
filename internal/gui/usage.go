@@ -10,9 +10,9 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
-	"github.com/ironpark/sanbo/internal/client"
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/transcript"
+	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transcript"
 )
 
 // tokens writes a token count as the chat footer does: 950, 12.3k, 1.2M.

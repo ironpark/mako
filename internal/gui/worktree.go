@@ -4,7 +4,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // A session can start in a git worktree of its own, on a new branch, so

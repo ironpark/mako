@@ -15,7 +15,7 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // The window follows Paseo's desktop layout: a sidebar of projects and their
@@ -444,7 +444,7 @@ func sidebarFooter(m *model) ggui.Widget {
 			// A daemon from an older build leaves agents' state and
 			// approvals out; say so rather than show them blank.
 			warn := ui.Tooltip(icon("info").Size(14).Color(tokDotWaiting),
-				T("This daemon is from an older sanbo. Restart it with this build to see agents' state and approve in the window."))
+				T("This daemon is from an older mako. Restart it with this build to see agents' state and approve in the window."))
 			row = ggui.Row(linkDot(c.OK), ggui.Expanded(muted(ggui.Text(name).Size(13).NoWrap().Ellipsis())), warn).Gap(10)
 		}
 		return row
@@ -476,7 +476,7 @@ func workspaceHeader(m *model) ggui.Widget {
 		}
 		s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get())
 		if !ok {
-			return ggui.Text("sanbo").Size(14).Weight(ggui.WeightMedium)
+			return ggui.Text("mako").Size(14).Weight(ggui.WeightMedium)
 		}
 		where := fmt.Sprintf("%s:%s", nodeName(m.Nodes.Get(), s.GetNodeId()), prettyPath(s.GetProject()))
 		id := s.GetId()

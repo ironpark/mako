@@ -15,8 +15,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/transport"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // A project's files are listed for quick open, and searched for a text,

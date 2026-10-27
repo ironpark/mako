@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/mcp"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/mcp"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // agentFile follows the agents and MCP servers of the config file the

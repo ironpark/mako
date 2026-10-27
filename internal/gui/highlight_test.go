@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/zed"
+	"github.com/ironpark/mako/internal/zed"
 )
 
 // installTOML installs a Zed extension for TOML into dir, from the grammar
@@ -62,7 +62,7 @@ func TestHighlightsWithAZedExtension(t *testing.T) {
 
 	woke := make(chan struct{}, 8)
 	d := &docSyntax{h: h, lang: l, wake: func() { woke <- struct{}{} }}
-	text := "name = \"sanbo\" # hi\n"
+	text := "name = \"mako\" # hi\n"
 	d.colors(text, darkPalette)
 	select {
 	case <-woke:
@@ -80,7 +80,7 @@ func TestHighlightsWithAZedExtension(t *testing.T) {
 		t.Fatalf("nothing colours %q in %+v", sub, spans)
 		return styleSpan{}
 	}
-	if c := at("sanbo").Color; c != captureColor("string", darkPalette) {
+	if c := at("mako").Color; c != captureColor("string", darkPalette) {
 		t.Fatalf("string coloured %v", c)
 	}
 	if c := at("# hi").Color; c != captureColor("comment", darkPalette) {

@@ -15,11 +15,11 @@ import (
 	"github.com/quic-go/quic-go"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/mcp"
-	"github.com/ironpark/sanbo/internal/p2p"
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/transport"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/mcp"
+	"github.com/ironpark/mako/internal/p2p"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // peerTTL drops a discovered node that has not been seen for this long.
@@ -364,7 +364,7 @@ func portOf(addr net.Addr) int {
 	return n
 }
 
-// remoteAddr rewrites a peer's ephemeral source port to the sanbo service port,
+// remoteAddr rewrites a peer's ephemeral source port to the mako service port,
 // which is where that daemon can be dialed back.
 func remoteAddr(conn *quic.Conn, fallbackPort int) string {
 	host, _, err := net.SplitHostPort(conn.RemoteAddr().String())

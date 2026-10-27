@@ -11,8 +11,8 @@ import (
 
 	"github.com/ironpark/ggui"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // gitProject is a repository with a merged branch and changes not yet
@@ -58,7 +58,7 @@ func gitProject(t *testing.T) (string, func(args ...string) string) {
 }
 
 func TestGitPanelsCommitAndShowHistory(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	project, git := gitProject(t)
 	cfg := config.Default()
 	cfg.Listen = "127.0.0.1:0"

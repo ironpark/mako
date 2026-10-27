@@ -174,7 +174,7 @@ func componentImports(comp *C.wasmtime_component_t) map[string][]string {
 // context server should never reach.
 func unsupported(name string) hostFunc {
 	return func(*Extension, []Val) ([]Val, error) {
-		return nil, fmt.Errorf("sanbo does not support %s", name)
+		return nil, fmt.Errorf("mako does not support %s", name)
 	}
 }
 

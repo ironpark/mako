@@ -10,8 +10,8 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
-	"github.com/ironpark/sanbo/internal/client"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // A changed file's diff, chosen in the Changes tab or in a commit of the

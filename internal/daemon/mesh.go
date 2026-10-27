@@ -12,10 +12,10 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/p2p"
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/transport"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/p2p"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // The mesh over libp2p. Daemons link to each other on libp2p, where each
@@ -32,7 +32,7 @@ import (
 // sessions are asked for as before.
 
 // stateTopic is the topic daemons publish their state on.
-const stateTopic = "sanbo/state/1"
+const stateTopic = "mako/state/1"
 
 // stateEvery is how often a daemon publishes its state though nothing
 // changed, and stateFresh how long one published is taken for current.
@@ -41,7 +41,7 @@ const (
 	stateFresh = 4 * stateEvery
 )
 
-// startP2P starts the libp2p host and serves the sanbo protocol on it.
+// startP2P starts the libp2p host and serves the mako protocol on it.
 func (d *Daemon) startP2P(ctx context.Context, dir string) error {
 	host, listenPort, _ := net.SplitHostPort(d.cfg.Listen)
 	port := d.cfg.P2P.Port
@@ -55,7 +55,7 @@ func (d *Daemon) startP2P(ctx context.Context, dir string) error {
 		PSK:          d.cfg.PSK,
 		Relays:       d.cfg.P2P.Relays,
 		RelayService: d.cfg.P2P.Relay,
-		UserAgent:    "sanbo/" + config.Version,
+		UserAgent:    "mako/" + config.Version,
 		NoNAT:        host != "" && net.ParseIP(host).IsLoopback(),
 		Log:          d.log,
 	})

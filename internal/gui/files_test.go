@@ -11,14 +11,14 @@ import (
 
 	"github.com/ironpark/ggui"
 
-	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/mako/internal/config"
 )
 
 // The Files tab lists the session's project through its daemon, reads a
 // folder as it opens, opens a text file chosen in a tab and previews an
 // image.
 func TestFilesTabBrowsesTheProject(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	project := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(project, "src"), 0o700); err != nil {
 		t.Fatal(err)

@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/gitstat"
-	"github.com/ironpark/sanbo/internal/mcp"
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/session"
-	"github.com/ironpark/sanbo/internal/transcript"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/gitstat"
+	"github.com/ironpark/mako/internal/mcp"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/session"
+	"github.com/ironpark/mako/internal/transcript"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )

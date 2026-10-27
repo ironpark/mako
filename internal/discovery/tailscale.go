@@ -10,13 +10,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/transport"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // Tailscale discovers daemons across a tailnet. Peers are enumerated from
 // MagicDNS names -- either the configured list, or whatever the local
-// tailscale CLI reports -- and each one is probed on the sanbo QUIC port.
+// tailscale CLI reports -- and each one is probed on the mako QUIC port.
 //
 // This is the "ping search" path: a name is only reported as a node once a
 // handshake against it succeeds.
@@ -27,7 +27,7 @@ type Tailscale struct {
 	Hello *protocol.Hello
 	// Hosts are MagicDNS names to probe. Empty means ask the tailscale CLI.
 	Hosts []string
-	// Port is the sanbo QUIC port on remote daemons.
+	// Port is the mako QUIC port on remote daemons.
 	Port int
 	// Interval is how often the tailnet is re-scanned.
 	Interval time.Duration

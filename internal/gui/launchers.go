@@ -8,7 +8,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
+	"github.com/ironpark/mako/internal/agentspec"
 )
 
 // launchable is an agent a node can start and its profiles.

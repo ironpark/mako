@@ -1,4 +1,4 @@
-module github.com/ironpark/sanbo
+module github.com/ironpark/mako
 
 go 1.27.1
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// Agent is what sanbo knows of one agent's native conversations: where its
+// Agent is what mako knows of one agent's native conversations: where its
 // logs live and how they are written, and the command-line flags that pick
 // a conversation. Every conversation rule lives here; launching an agent,
 // and which binary is which agent, belong to agentspec and mcp.
@@ -23,7 +23,7 @@ type Agent struct {
 	// pin sets a new conversation's ID, so a launch knows it before the
 	// agent writes anything; "" when the agent always picks its own.
 	pin string
-	// resume continues the ID that follows it, and the first is how sanbo
+	// resume continues the ID that follows it, and the first is how mako
 	// resumes. A name without a dash is a subcommand.
 	resume []string
 	// fork makes a resumed conversation into a new one.
@@ -40,7 +40,7 @@ type Agent struct {
 	// settings takes settings for one launch, among them hooks; "" when
 	// the agent takes none.
 	settings string
-	// hooks is how the agent takes the hooks sanbo follows it by; see
+	// hooks is how the agent takes the hooks mako follows it by; see
 	// hooks.go.
 	hooks hookStyle
 	// Isolate is a flag that keeps the log's writer in the session's process
@@ -67,7 +67,7 @@ var agents = []*Agent{
 	},
 }
 
-// Lookup finds the agent named name, when sanbo reads its conversations.
+// Lookup finds the agent named name, when mako reads its conversations.
 func Lookup(name string) (*Agent, bool) {
 	i := slices.IndexFunc(agents, func(a *Agent) bool { return a.Name == name })
 	if i < 0 {

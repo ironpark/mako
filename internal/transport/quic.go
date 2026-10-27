@@ -12,7 +12,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // quicConfig is shared by listeners and dialers. Keep-alives hold NAT and
@@ -29,7 +29,7 @@ func quicConfig() *quic.Config {
 	}
 }
 
-// Listener accepts sanbo QUIC connections.
+// Listener accepts mako QUIC connections.
 type Listener struct {
 	ln *quic.Listener
 }
@@ -54,7 +54,7 @@ func (l *Listener) Addr() net.Addr { return l.ln.Addr() }
 // Close stops the listener.
 func (l *Listener) Close() error { return l.ln.Close() }
 
-// Dial opens a QUIC connection to a sanbo daemon.
+// Dial opens a QUIC connection to a mako daemon.
 func Dial(ctx context.Context, addr string) (*quic.Conn, error) {
 	conn, err := quic.DialAddr(ctx, addr, ClientTLS(), quicConfig())
 	if err != nil {

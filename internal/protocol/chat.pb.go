@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.6
 // 	protoc        (unknown)
-// source: sanbo/v2/chat.proto
+// source: mako/v2/chat.proto
 
 package protocol
 
@@ -33,7 +33,7 @@ type ReadChat struct {
 
 func (x *ReadChat) Reset() {
 	*x = ReadChat{}
-	mi := &file_sanbo_v2_chat_proto_msgTypes[0]
+	mi := &file_mako_v2_chat_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -45,7 +45,7 @@ func (x *ReadChat) String() string {
 func (*ReadChat) ProtoMessage() {}
 
 func (x *ReadChat) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_chat_proto_msgTypes[0]
+	mi := &file_mako_v2_chat_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58,7 +58,7 @@ func (x *ReadChat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadChat.ProtoReflect.Descriptor instead.
 func (*ReadChat) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_chat_proto_rawDescGZIP(), []int{0}
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *ReadChat) GetNodeId() string {
@@ -100,7 +100,7 @@ type ChatMessage struct {
 
 func (x *ChatMessage) Reset() {
 	*x = ChatMessage{}
-	mi := &file_sanbo_v2_chat_proto_msgTypes[1]
+	mi := &file_mako_v2_chat_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -112,7 +112,7 @@ func (x *ChatMessage) String() string {
 func (*ChatMessage) ProtoMessage() {}
 
 func (x *ChatMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_chat_proto_msgTypes[1]
+	mi := &file_mako_v2_chat_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -125,7 +125,7 @@ func (x *ChatMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatMessage.ProtoReflect.Descriptor instead.
 func (*ChatMessage) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_chat_proto_rawDescGZIP(), []int{1}
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ChatMessage) GetRole() string {
@@ -206,7 +206,7 @@ type Chat struct {
 
 func (x *Chat) Reset() {
 	*x = Chat{}
-	mi := &file_sanbo_v2_chat_proto_msgTypes[2]
+	mi := &file_mako_v2_chat_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -218,7 +218,7 @@ func (x *Chat) String() string {
 func (*Chat) ProtoMessage() {}
 
 func (x *Chat) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_chat_proto_msgTypes[2]
+	mi := &file_mako_v2_chat_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -231,7 +231,7 @@ func (x *Chat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Chat.ProtoReflect.Descriptor instead.
 func (*Chat) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_chat_proto_rawDescGZIP(), []int{2}
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Chat) GetSupported() bool {
@@ -296,7 +296,7 @@ type SubAgent struct {
 
 func (x *SubAgent) Reset() {
 	*x = SubAgent{}
-	mi := &file_sanbo_v2_chat_proto_msgTypes[3]
+	mi := &file_mako_v2_chat_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -308,7 +308,7 @@ func (x *SubAgent) String() string {
 func (*SubAgent) ProtoMessage() {}
 
 func (x *SubAgent) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_chat_proto_msgTypes[3]
+	mi := &file_mako_v2_chat_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -321,7 +321,7 @@ func (x *SubAgent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubAgent.ProtoReflect.Descriptor instead.
 func (*SubAgent) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_chat_proto_rawDescGZIP(), []int{3}
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SubAgent) GetId() string {
@@ -409,7 +409,7 @@ type Usage struct {
 
 func (x *Usage) Reset() {
 	*x = Usage{}
-	mi := &file_sanbo_v2_chat_proto_msgTypes[4]
+	mi := &file_mako_v2_chat_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -421,7 +421,7 @@ func (x *Usage) String() string {
 func (*Usage) ProtoMessage() {}
 
 func (x *Usage) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_chat_proto_msgTypes[4]
+	mi := &file_mako_v2_chat_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -434,7 +434,7 @@ func (x *Usage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Usage.ProtoReflect.Descriptor instead.
 func (*Usage) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_chat_proto_rawDescGZIP(), []int{4}
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Usage) GetInput() int64 {
@@ -491,7 +491,7 @@ type RateLimit struct {
 
 func (x *RateLimit) Reset() {
 	*x = RateLimit{}
-	mi := &file_sanbo_v2_chat_proto_msgTypes[5]
+	mi := &file_mako_v2_chat_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -503,7 +503,7 @@ func (x *RateLimit) String() string {
 func (*RateLimit) ProtoMessage() {}
 
 func (x *RateLimit) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_chat_proto_msgTypes[5]
+	mi := &file_mako_v2_chat_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -516,7 +516,7 @@ func (x *RateLimit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RateLimit.ProtoReflect.Descriptor instead.
 func (*RateLimit) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_chat_proto_rawDescGZIP(), []int{5}
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RateLimit) GetMinutes() int64 {
@@ -540,11 +540,11 @@ func (x *RateLimit) GetResets() int64 {
 	return 0
 }
 
-var File_sanbo_v2_chat_proto protoreflect.FileDescriptor
+var File_mako_v2_chat_proto protoreflect.FileDescriptor
 
-const file_sanbo_v2_chat_proto_rawDesc = "" +
+const file_mako_v2_chat_proto_rawDesc = "" +
 	"\n" +
-	"\x13sanbo/v2/chat.proto\x12\bsanbo.v2\"a\n" +
+	"\x12mako/v2/chat.proto\x12\amako.v2\"a\n" +
 	"\bReadChat\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
@@ -560,14 +560,14 @@ const file_sanbo_v2_chat_proto_rawDesc = "" +
 	"\x06result\x18\x06 \x01(\tR\x06result\x12\x16\n" +
 	"\x06output\x18\a \x01(\bR\x06output\x12\x14\n" +
 	"\x05error\x18\b \x01(\bR\x05error\x12\x18\n" +
-	"\apending\x18\t \x01(\bR\apending\"\xec\x01\n" +
+	"\apending\x18\t \x01(\bR\apending\"\xe9\x01\n" +
 	"\x04Chat\x12\x1c\n" +
 	"\tsupported\x18\x01 \x01(\bR\tsupported\x12\"\n" +
-	"\fconversation\x18\x02 \x01(\tR\fconversation\x121\n" +
-	"\bmessages\x18\x03 \x03(\v2\x15.sanbo.v2.ChatMessageR\bmessages\x12\x1c\n" +
-	"\ttruncated\x18\x04 \x01(\bR\ttruncated\x12%\n" +
-	"\x05usage\x18\x05 \x01(\v2\x0f.sanbo.v2.UsageR\x05usage\x12*\n" +
-	"\x06agents\x18\x06 \x03(\v2\x12.sanbo.v2.SubAgentR\x06agents\"\x82\x02\n" +
+	"\fconversation\x18\x02 \x01(\tR\fconversation\x120\n" +
+	"\bmessages\x18\x03 \x03(\v2\x14.mako.v2.ChatMessageR\bmessages\x12\x1c\n" +
+	"\ttruncated\x18\x04 \x01(\bR\ttruncated\x12$\n" +
+	"\x05usage\x18\x05 \x01(\v2\x0e.mako.v2.UsageR\x05usage\x12)\n" +
+	"\x06agents\x18\x06 \x03(\v2\x11.mako.v2.SubAgentR\x06agents\"\x82\x02\n" +
 	"\bSubAgent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\acall_id\x18\x02 \x01(\tR\x06callId\x12\x12\n" +
@@ -580,45 +580,45 @@ const file_sanbo_v2_chat_proto_rawDesc = "" +
 	"\x06detail\x18\b \x01(\tR\x06detail\x12\x18\n" +
 	"\astarted\x18\t \x01(\x03R\astarted\x12\x18\n" +
 	"\aupdated\x18\n" +
-	" \x01(\x03R\aupdated\"\xb7\x01\n" +
+	" \x01(\x03R\aupdated\"\xb6\x01\n" +
 	"\x05Usage\x12\x14\n" +
 	"\x05input\x18\x01 \x01(\x03R\x05input\x12!\n" +
 	"\fcached_input\x18\x02 \x01(\x03R\vcachedInput\x12\x16\n" +
 	"\x06output\x18\x03 \x01(\x03R\x06output\x12\x18\n" +
 	"\acontext\x18\x04 \x01(\x03R\acontext\x12\x16\n" +
-	"\x06window\x18\x05 \x01(\x03R\x06window\x12+\n" +
-	"\x06limits\x18\x06 \x03(\v2\x13.sanbo.v2.RateLimitR\x06limits\"Q\n" +
+	"\x06window\x18\x05 \x01(\x03R\x06window\x12*\n" +
+	"\x06limits\x18\x06 \x03(\v2\x12.mako.v2.RateLimitR\x06limits\"Q\n" +
 	"\tRateLimit\x12\x18\n" +
 	"\aminutes\x18\x01 \x01(\x03R\aminutes\x12\x12\n" +
 	"\x04used\x18\x02 \x01(\x01R\x04used\x12\x16\n" +
-	"\x06resets\x18\x03 \x01(\x03R\x06resetsB-Z+github.com/ironpark/sanbo/internal/protocolb\x06proto3"
+	"\x06resets\x18\x03 \x01(\x03R\x06resetsB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
-	file_sanbo_v2_chat_proto_rawDescOnce sync.Once
-	file_sanbo_v2_chat_proto_rawDescData []byte
+	file_mako_v2_chat_proto_rawDescOnce sync.Once
+	file_mako_v2_chat_proto_rawDescData []byte
 )
 
-func file_sanbo_v2_chat_proto_rawDescGZIP() []byte {
-	file_sanbo_v2_chat_proto_rawDescOnce.Do(func() {
-		file_sanbo_v2_chat_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_sanbo_v2_chat_proto_rawDesc), len(file_sanbo_v2_chat_proto_rawDesc)))
+func file_mako_v2_chat_proto_rawDescGZIP() []byte {
+	file_mako_v2_chat_proto_rawDescOnce.Do(func() {
+		file_mako_v2_chat_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_mako_v2_chat_proto_rawDesc), len(file_mako_v2_chat_proto_rawDesc)))
 	})
-	return file_sanbo_v2_chat_proto_rawDescData
+	return file_mako_v2_chat_proto_rawDescData
 }
 
-var file_sanbo_v2_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
-var file_sanbo_v2_chat_proto_goTypes = []any{
-	(*ReadChat)(nil),    // 0: sanbo.v2.ReadChat
-	(*ChatMessage)(nil), // 1: sanbo.v2.ChatMessage
-	(*Chat)(nil),        // 2: sanbo.v2.Chat
-	(*SubAgent)(nil),    // 3: sanbo.v2.SubAgent
-	(*Usage)(nil),       // 4: sanbo.v2.Usage
-	(*RateLimit)(nil),   // 5: sanbo.v2.RateLimit
+var file_mako_v2_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_mako_v2_chat_proto_goTypes = []any{
+	(*ReadChat)(nil),    // 0: mako.v2.ReadChat
+	(*ChatMessage)(nil), // 1: mako.v2.ChatMessage
+	(*Chat)(nil),        // 2: mako.v2.Chat
+	(*SubAgent)(nil),    // 3: mako.v2.SubAgent
+	(*Usage)(nil),       // 4: mako.v2.Usage
+	(*RateLimit)(nil),   // 5: mako.v2.RateLimit
 }
-var file_sanbo_v2_chat_proto_depIdxs = []int32{
-	1, // 0: sanbo.v2.Chat.messages:type_name -> sanbo.v2.ChatMessage
-	4, // 1: sanbo.v2.Chat.usage:type_name -> sanbo.v2.Usage
-	3, // 2: sanbo.v2.Chat.agents:type_name -> sanbo.v2.SubAgent
-	5, // 3: sanbo.v2.Usage.limits:type_name -> sanbo.v2.RateLimit
+var file_mako_v2_chat_proto_depIdxs = []int32{
+	1, // 0: mako.v2.Chat.messages:type_name -> mako.v2.ChatMessage
+	4, // 1: mako.v2.Chat.usage:type_name -> mako.v2.Usage
+	3, // 2: mako.v2.Chat.agents:type_name -> mako.v2.SubAgent
+	5, // 3: mako.v2.Usage.limits:type_name -> mako.v2.RateLimit
 	4, // [4:4] is the sub-list for method output_type
 	4, // [4:4] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
@@ -626,26 +626,26 @@ var file_sanbo_v2_chat_proto_depIdxs = []int32{
 	0, // [0:4] is the sub-list for field type_name
 }
 
-func init() { file_sanbo_v2_chat_proto_init() }
-func file_sanbo_v2_chat_proto_init() {
-	if File_sanbo_v2_chat_proto != nil {
+func init() { file_mako_v2_chat_proto_init() }
+func file_mako_v2_chat_proto_init() {
+	if File_mako_v2_chat_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sanbo_v2_chat_proto_rawDesc), len(file_sanbo_v2_chat_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_chat_proto_rawDesc), len(file_mako_v2_chat_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_sanbo_v2_chat_proto_goTypes,
-		DependencyIndexes: file_sanbo_v2_chat_proto_depIdxs,
-		MessageInfos:      file_sanbo_v2_chat_proto_msgTypes,
+		GoTypes:           file_mako_v2_chat_proto_goTypes,
+		DependencyIndexes: file_mako_v2_chat_proto_depIdxs,
+		MessageInfos:      file_mako_v2_chat_proto_msgTypes,
 	}.Build()
-	File_sanbo_v2_chat_proto = out.File
-	file_sanbo_v2_chat_proto_goTypes = nil
-	file_sanbo_v2_chat_proto_depIdxs = nil
+	File_mako_v2_chat_proto = out.File
+	file_mako_v2_chat_proto_goTypes = nil
+	file_mako_v2_chat_proto_depIdxs = nil
 }

@@ -1,4 +1,4 @@
-// Command sanbo is the front-end for the sanbo daemon mesh: it lists nodes,
+// Command mako is the front-end for the mako daemon mesh: it lists nodes,
 // starts terminal agents per project, and attaches to their sessions.
 package main
 
@@ -12,25 +12,25 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/client"
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
-const usage = `sanbo - manage terminal agents across your computers
+const usage = `mako - manage terminal agents across your computers
 
 Usage:
-  sanbo nodes                        list daemons on the mesh
-  sanbo addrs                        print this daemon's libp2p addresses, to list
+  mako nodes                        list daemons on the mesh
+  mako addrs                        print this daemon's libp2p addresses, to list
                                      as another's peer or relay
-  sanbo ls                           list agent sessions
-  sanbo run <agent>[:<profile>] [-- args...]
+  mako ls                           list agent sessions
+  mako run <agent>[:<profile>] [-- args...]
                                      start an agent, or one of its profiles, and attach
-  sanbo attach <session-id>          attach to a running session
-  sanbo kill <session-id>            terminate a session
-  sanbo rename <session-id> [name]   name a session (no name clears it)
-  sanbo agents                       list agents and profiles this node can launch
+  mako attach <session-id>          attach to a running session
+  mako kill <session-id>            terminate a session
+  mako rename <session-id> [name]   name a session (no name clears it)
+  mako agents                       list agents and profiles this node can launch
 
 Flags:
   -daemon <addr>   daemon to talk to (default 127.0.0.1:4242)
@@ -52,7 +52,7 @@ func main() {
 	}
 
 	if err := run(args, *daemonAddr, *nodeID, *project); err != nil {
-		fmt.Fprintln(os.Stderr, "sanbo:", err)
+		fmt.Fprintln(os.Stderr, "mako:", err)
 		os.Exit(1)
 	}
 }
@@ -77,7 +77,7 @@ func run(args []string, daemonAddr, nodeID, project string) error {
 	defer dialCancel()
 	c, err := client.Dial(dialCtx, daemonAddr, cfg.PSK)
 	if err != nil {
-		return fmt.Errorf("cannot reach daemon (is sanbod running?): %w", err)
+		return fmt.Errorf("cannot reach daemon (is makod running?): %w", err)
 	}
 	defer c.Close()
 
@@ -190,7 +190,7 @@ func listSessions(ctx context.Context, c *client.Client, psk string) error {
 
 func runAgent(ctx context.Context, c *client.Client, psk, nodeID, project, target string, extra []string) error {
 	agent, profile := agentspec.SplitTarget(target)
-	// "sanbo run <agent> -- args" separates agent arguments; the separator
+	// "mako run <agent> -- args" separates agent arguments; the separator
 	// itself is not one of them.
 	if len(extra) > 0 && extra[0] == "--" {
 		extra = extra[1:]
@@ -220,7 +220,7 @@ func runAgent(ctx context.Context, c *client.Client, psk, nodeID, project, targe
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "[sanbo] session %s on %s\r\n", info.GetId(), short(info.GetNodeId()))
+	fmt.Fprintf(os.Stderr, "[mako] session %s on %s\r\n", info.GetId(), short(info.GetNodeId()))
 	return c.Attach(ctx, psk, &protocol.Attach{SessionId: info.GetId(), NodeId: nodeID, Replay: false})
 }
 

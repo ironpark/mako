@@ -11,8 +11,8 @@ import (
 // Grammars import their glue globals and stub functions from these
 // linker modules. Each LoadLanguage redefines them before instantiating.
 const (
-	glueModule = "sanbo_glue"
-	stubModule = "sanbo_stub"
+	glueModule = "mako_glue"
+	stubModule = "mako_stub"
 )
 
 // grammarCache holds compiled grammar modules by the SHA-256 of the

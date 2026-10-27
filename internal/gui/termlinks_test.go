@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/ironpark/ggui"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // What reads as a link around a place in a line, and what does not.
@@ -18,13 +18,13 @@ func TestLinksAreFoundInText(t *testing.T) {
 	}{
 		{"see https://example.com/a?b=1.", "example", "https://example.com/a?b=1"},
 		{"(url=https://x.dev/p)", "x.dev", "https://x.dev/p"},
-		{"wrote /tmp/sanbo-drops/a/shot.png", "shot", "/tmp/sanbo-drops/a/shot.png"},
+		{"wrote /tmp/mako-drops/a/shot.png", "shot", "/tmp/mako-drops/a/shot.png"},
 		{"⏺ Updated internal/gui/view.go:120:4 and", "view", "internal/gui/view.go:120:4"},
 		{"Read README.md, then", "README", "README.md"},
 		{"open ~/notes/todo.md", "todo", "~/notes/todo.md"},
 		{"│ ./run.sh │", "run", "./run.sh"},
 		{"file:///Users/me/a%20b.png", "Users", "file:///Users/me/a%20b.png"},
-		{"[Image: source: /var/T/sanbo-drops/x/스크린샷 2026-10-27 오후 4.41.22.png]", "오후", "/var/T/sanbo-drops/x/스크린샷 2026-10-27 오후 4.41.22.png"},
+		{"[Image: source: /var/T/mako-drops/x/스크린샷 2026-10-27 오후 4.41.22.png]", "오후", "/var/T/mako-drops/x/스크린샷 2026-10-27 오후 4.41.22.png"},
 		{"[Image: source: /var/T/스크린샷 2026-10-27 오후 4.41.22.png]", "source", ""},
 		{"cat '/tmp/my notes/a b.txt' | less", "notes", "/tmp/my notes/a b.txt"},
 		{`open /tmp/a\ b.png now`, "b.png", `/tmp/a\ b.png`},
@@ -102,7 +102,7 @@ func TestWrappedLinksSpanTheirRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { close(link.in); conn.close() }()
-	const path = "/tmp/sanbo-drops/abc/shot.png" // 29 cells, from the fourth
+	const path = "/tmp/mako-drops/abcd/shot.png" // 29 cells, from the fourth
 	link.output(t, "at "+path+" ok\r\nnext")
 	waitFor(t, func() bool { _, _ = conn.frame(); return strings.Contains(screenText(conn), "next") })
 	want := termLink{target: path, row0: 0, col0: 3, row1: 1, col1: 12}

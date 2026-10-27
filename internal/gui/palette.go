@@ -5,7 +5,7 @@ import (
 	"slices"
 
 	"github.com/ironpark/ggui"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // The command palette, on ⌘K or ⌘⇧P, searches what the window does, as

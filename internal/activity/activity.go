@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ironpark/gostty"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // Stale is how long a report holds without another, as Ghostty clears its

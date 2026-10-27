@@ -20,7 +20,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 const maxRead = 2 << 20
@@ -565,7 +565,7 @@ func (c *Cache) ReadUsage(info *protocol.SessionInfo, path string) (*protocol.Us
 }
 
 // ConfigRoot is the directory agent keeps its settings and logs under,
-// given env; "" for an agent sanbo does not know.
+// given env; "" for an agent mako does not know.
 func ConfigRoot(agent string, env map[string]string) string {
 	a, ok := Lookup(agent)
 	if !ok {

@@ -185,7 +185,7 @@ func gitHub(ctx context.Context, path string, v any) error {
 		return err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "sanbo")
+	req.Header.Set("User-Agent", "mako")
 	if tok := os.Getenv("GITHUB_TOKEN"); tok != "" {
 		req.Header.Set("Authorization", "Bearer "+tok)
 	}

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

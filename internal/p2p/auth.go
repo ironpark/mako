@@ -29,7 +29,7 @@ import (
 // A host that fails is hung up on; one that has passed is let in until it
 // has no connection left.
 
-const authProtocol protocol.ID = "/sanbo/auth/1"
+const authProtocol protocol.ID = "/mako/auth/1"
 
 const nonceSize = 32
 
@@ -156,7 +156,7 @@ func (a *auth) begin(p peer.ID) {
 func (a *auth) ask(p peer.ID) error {
 	ctx, cancel := context.WithTimeout(context.Background(), authTimeout)
 	defer cancel()
-	s, err := a.h.NewStream(network.WithAllowLimitedConn(ctx, "sanbo-auth"), p, authProtocol)
+	s, err := a.h.NewStream(network.WithAllowLimitedConn(ctx, "mako-auth"), p, authProtocol)
 	if err != nil {
 		return err
 	}
@@ -219,7 +219,7 @@ func (a *auth) answer(s network.Stream) {
 // mac is the MAC of role, by the host from, for the host to, over nonce.
 func (a *auth) mac(role string, from, to peer.ID, nonce []byte) []byte {
 	m := hmac.New(sha256.New, a.key)
-	m.Write([]byte("sanbo/auth/1 " + role + "\x00"))
+	m.Write([]byte("mako/auth/1 " + role + "\x00"))
 	m.Write([]byte(from))
 	m.Write([]byte{0})
 	m.Write([]byte(to))

@@ -2,4 +2,4 @@ version: v2
 plugins:
   - local: protoc-gen-go
     out: .
-    opt: module=github.com/ironpark/sanbo
+    opt: module=github.com/ironpark/mako

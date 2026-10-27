@@ -14,7 +14,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 
-	"github.com/ironpark/sanbo/internal/zed"
+	"github.com/ironpark/mako/internal/zed"
 )
 
 // Settings ▸ Extensions installs Zed extensions from Zed's store, for the
@@ -192,7 +192,7 @@ func extensionSettings(m *model) ggui.Widget {
 }
 
 func extensionsAbout() string {
-	return T("Languages for the editor and MCP servers for the agents, from Zed's extensions. Go, Rust, Python, TypeScript and the other languages Zed builds in come with sanbo.")
+	return T("Languages for the editor and MCP servers for the agents, from Zed's extensions. Go, Rust, Python, TypeScript and the other languages Zed builds in come with mako.")
 }
 
 // extSearchDelay is how long typing pauses before the store is asked.

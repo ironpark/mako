@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/client"
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/session"
+	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/session"
 )
 
 // meshDaemon runs a daemon on loopback with its own configuration folder,

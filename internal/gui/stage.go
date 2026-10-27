@@ -12,8 +12,8 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
-	"github.com/ironpark/sanbo/internal/client"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // Files dropped on a session from the desktop are handed to it by path.
@@ -149,7 +149,7 @@ func nodeErrOf(err error) error { return errors.New(nodeErr(err)) }
 const clipboardFor = 24 * time.Hour
 
 // clipboardDir is where pasted images are written on this machine.
-func clipboardDir() string { return filepath.Join(os.TempDir(), "sanbo-clipboard") }
+func clipboardDir() string { return filepath.Join(os.TempDir(), "mako-clipboard") }
 
 // saveImage writes png, an image pasted, to a file of its own and returns
 // its path, clearing away those from before clipboardFor.

@@ -6,8 +6,8 @@ import (
 
 	"github.com/ironpark/ggui"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 func TestChangedWordsMarkWhatDiffers(t *testing.T) {
@@ -58,7 +58,7 @@ func TestAgentNoteNamesTheLines(t *testing.T) {
 }
 
 func TestPreviewDiffTabsGiveWayUntilKept(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "127.0.0.1:1") // no daemon answers there
 	m.post = func(func()) {}
 	root := fileRoot{Node: "n", Path: "/p"}

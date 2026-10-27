@@ -1,5 +1,5 @@
 // Package zedhost runs the wasm of Zed extensions, the components their
-// Rust is compiled to against Zed's extension API, so sanbo can ask an
+// Rust is compiled to against Zed's extension API, so mako can ask an
 // extension what Zed would: chiefly the command that starts each of its
 // context servers (MCP servers).
 //
@@ -39,7 +39,7 @@ import (
 	// It links libwasmtime.a, whose C API this package calls.
 	_ "github.com/bytecodealliance/wasmtime-go/v50"
 
-	"github.com/ironpark/sanbo/internal/zed"
+	"github.com/ironpark/mako/internal/zed"
 )
 
 // Resource types the host defines; any values do, being the host's own.
@@ -157,7 +157,7 @@ func (h *Host) Load(ctx context.Context, ext zed.Extension) (*Extension, error) 
 // version of itself, which then compiles again.
 func compile(work string, bin []byte) (*C.wasmtime_component_t, error) {
 	sum := sha256.Sum256(bin)
-	cache := filepath.Join(work, ".sanbo-"+hex.EncodeToString(sum[:8])+".cwasm")
+	cache := filepath.Join(work, ".mako-"+hex.EncodeToString(sum[:8])+".cwasm")
 	var comp *C.wasmtime_component_t
 	if code, err := os.ReadFile(cache); err == nil && len(code) > 0 {
 		if C.wasmtime_component_deserialize(sharedEngine(), (*C.uint8_t)(unsafe.Pointer(&code[0])), C.size_t(len(code)), &comp) == nil {
@@ -171,7 +171,7 @@ func compile(work string, bin []byte) (*C.wasmtime_component_t, error) {
 	if C.wasmtime_component_serialize(comp, &out) == nil {
 		code := C.GoBytes(unsafe.Pointer(out.data), C.int(out.size))
 		C.wasm_byte_vec_delete(&out)
-		old, _ := filepath.Glob(filepath.Join(work, ".sanbo-*.cwasm"))
+		old, _ := filepath.Glob(filepath.Join(work, ".mako-*.cwasm"))
 		for _, o := range old {
 			os.Remove(o)
 		}
@@ -343,7 +343,7 @@ func result(v []Val, err error) (*Val, error) {
 	return v[0].Payload, nil
 }
 
-// project is the one project the host hands extensions: sanbo resolves
+// project is the one project the host hands extensions: mako resolves
 // a context server for the node, not for one of its folders.
 const projectRep = 1
 

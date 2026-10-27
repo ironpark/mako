@@ -199,7 +199,7 @@ func Names(agents map[string]Agent) []string {
 }
 
 // A target names what to launch: an agent, or one of its profiles as
-// agent:profile, as `sanbo run claude:opus` and the GUI's picker write it.
+// agent:profile, as `mako run claude:opus` and the GUI's picker write it.
 
 // Target joins an agent and a profile into a target.
 func Target(agent, profile string) string {

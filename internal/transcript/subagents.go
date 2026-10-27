@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // Claude keeps the conversation of each agent its Agent tool starts in a

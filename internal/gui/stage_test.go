@@ -30,7 +30,7 @@ func TestDroppedFilesReachTheSessionsNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if remote == src || filepath.Base(remote) != "shot.png" || !strings.Contains(remote, "sanbo-drops") {
+	if remote == src || filepath.Base(remote) != "shot.png" || !strings.Contains(remote, "mako-drops") {
 		t.Fatalf("staged at %s", remote)
 	}
 	if got, err := os.ReadFile(remote); err != nil || !bytes.Equal(got, data) {

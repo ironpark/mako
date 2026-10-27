@@ -1,6 +1,6 @@
-// Package protocol is the messages spoken between sanbo front-ends, daemons,
+// Package protocol is the messages spoken between mako front-ends, daemons,
 // and peer daemons, and their framing. The messages are generated from
-// proto/sanbo/v2 (`make proto`), into this package: sanbo uses them as they
+// proto/mako/v2 (`make proto`), into this package: mako uses them as they
 // are, on the wire and off it. This file and its neighbours add the framing,
 // the constants the messages' string fields take, and helpers. See
 // docs/protocol.md.
@@ -23,9 +23,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// ALPN is the QUIC application protocol identifier for sanbo: sanbo/2 is
-// the protobuf framing, which a sanbo/1 (JSON) peer cannot speak.
-const ALPN = "sanbo/2"
+// ALPN is the QUIC application protocol identifier for mako: mako/2 is
+// the protobuf framing, which a mako/1 (JSON) peer cannot speak.
+const ALPN = "mako/2"
 
 // MaxFrameSize caps a single frame so a peer cannot force an allocation storm.
 const MaxFrameSize = 8 << 20
@@ -85,7 +85,7 @@ const (
 // functions run, so body asks for the descriptors to be built first.
 var (
 	body = func() protoreflect.OneofDescriptor {
-		file_sanbo_v2_envelope_proto_init()
+		file_mako_v2_envelope_proto_init()
 		return (&Envelope{}).ProtoReflect().Descriptor().Oneofs().ByName("body")
 	}()
 	bodyFields = func() map[Type]protoreflect.FieldDescriptor {

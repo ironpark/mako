@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/transport"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // A file dropped on a window goes to the node of the session it was
@@ -28,7 +28,7 @@ const maxStaged = 512 << 20
 const stagedFor = 24 * time.Hour
 
 // stageRoot is where staged files are kept on this node.
-func stageRoot() string { return filepath.Join(os.TempDir(), "sanbo-drops") }
+func stageRoot() string { return filepath.Join(os.TempDir(), "mako-drops") }
 
 func (d *Daemon) handleStageFile(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeStaged, func(r *protocol.StageFile) (*protocol.Staged, error) {

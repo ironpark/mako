@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // Handshake opens a stream on conn, sends hello, and returns the peer's node
@@ -32,7 +32,7 @@ func Greet(stream *Stream, hello *protocol.Hello) (*protocol.Node, error) {
 	return welcome.GetNode(), nil
 }
 
-// Probe dials addr, completes the sanbo handshake, and reports the peer node.
+// Probe dials addr, completes the mako handshake, and reports the peer node.
 // It is how discovery backends turn a reachable address into an identity.
 func Probe(ctx context.Context, addr string, hello *protocol.Hello, timeout time.Duration) (*protocol.Node, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)

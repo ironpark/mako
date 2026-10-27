@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/transport"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // Attachment is a live session stream for a front-end that renders the

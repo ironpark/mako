@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/config"
 )
 
 // An agent edited in the config file is launched as edited, and the node

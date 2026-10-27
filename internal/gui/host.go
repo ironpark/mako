@@ -7,9 +7,9 @@ import (
 
 	"github.com/ironpark/ggui"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/p2p"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/p2p"
 )
 
 // hostDraft is the settings page's copy of this node's daemon configuration
@@ -108,7 +108,7 @@ func (m *model) saveHost() {
 	if keyChanged {
 		m.reconnect(ggui.Peek(m.Prefs).Daemon, next.PSK)
 	}
-	m.HostNote.Set(T("Saved. Restart sanbod for the daemon to use it."))
+	m.HostNote.Set(T("Saved. Restart makod for the daemon to use it."))
 }
 
 // revertHost drops the draft's edits.

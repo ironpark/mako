@@ -81,11 +81,11 @@ func TestSplitArgsReadsWhatJoinArgsWrites(t *testing.T) {
 }
 
 func TestResolveExpandsLikeAShell(t *testing.T) {
-	t.Setenv("SANBO_TEST_BASE", "/opt")
+	t.Setenv("MAKO_TEST_BASE", "/opt")
 	home, _ := os.UserHomeDir()
 	agents := map[string]Agent{"sh": {Command: []string{"sh"},
 		Args:     []string{"--config", "~/.sh", "--cost", "$$5"},
-		Env:      map[string]string{"DIR": "$SANBO_TEST_BASE/sh", "SAME": "${DIR}"},
+		Env:      map[string]string{"DIR": "$MAKO_TEST_BASE/sh", "SAME": "${DIR}"},
 		Profiles: []Profile{{Name: "work", Env: map[string]string{"CLAUDE_CONFIG_DIR": "~/.claude-work", "BIN": "${DIR}/bin"}}}}}
 	l, err := Resolve("sh", "work", []string{"$HOME"}, nil, agents)
 	if err != nil {

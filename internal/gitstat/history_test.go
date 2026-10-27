@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // cliRepo makes an empty repository with the git program, which the

@@ -10,8 +10,8 @@ import (
 
 	"github.com/ironpark/ggui"
 
-	"github.com/ironpark/sanbo/internal/gitstat"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/gitstat"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // A tool call's fold shows what the call did, read from its arguments as

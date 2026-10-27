@@ -11,8 +11,8 @@ import (
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // The settings page follows Paseo's: it takes the window, a sidebar lists
@@ -257,7 +257,7 @@ func generalSettings(m *model) ggui.Widget {
 		),
 		section(T("Connection"),
 			card(
-				row(T("External daemon"), T("The sanbod to use when the daemon does not run in the app. Empty is the one on this machine; it relays to the rest of the mesh."),
+				row(T("External daemon"), T("The makod to use when the daemon does not run in the app. Empty is the one on this machine; it relays to the rest of the mesh."),
 					ggui.Box(ui.TextField(daemon).Placeholder("127.0.0.1:4242").Name(T("External daemon")).
 						BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return p.DaemonMode == "embedded" }))).Width(220)),
 				ggui.Box(status).Pad(12, 16),
@@ -440,7 +440,7 @@ func daemonSettings(m *model) ggui.Widget {
 			ok = false
 			hint = s.Err
 			if strings.Contains(s.Err, "address already in use") {
-				hint += T(". Another sanbod is listening there; choose External, or change the listen address under Host.")
+				hint += T(". Another makod is listening there; choose External, or change the listen address under Host.")
 			}
 		}
 		text := []ggui.Widget{ggui.Row(linkDot(ok), ggui.Text(title).Size(13.5)).Gap(8)}
@@ -473,7 +473,7 @@ func daemonSettings(m *model) ggui.Widget {
 	return page(T("Daemon"), T("Where this machine's daemon runs. The app can run it itself, so nothing else needs installing."),
 		section(T("Mode"),
 			card(
-				row(T("Run the daemon"), T("Auto uses a sanbod that is already running and otherwise starts one in the app."), mode),
+				row(T("Run the daemon"), T("Auto uses a makod that is already running and otherwise starts one in the app."), mode),
 			),
 		),
 		section(T("Status"), card(status)),
@@ -559,7 +559,7 @@ func nodeSettings(m *model) ggui.Widget {
 
 func aboutSettings(m *model) ggui.Widget {
 	dir, _ := config.Dir()
-	return page(T("About"), "sanbo runs terminal agents on any of your computers and drives them from one place.",
+	return page(T("About"), "mako runs terminal agents on any of your computers and drives them from one place.",
 		section(T("Build"),
 			card(
 				row(T("Version"), "", ggui.Text(config.Version).Size(13).Color(tokMuted).Selectable()),

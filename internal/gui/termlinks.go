@@ -17,8 +17,8 @@ import (
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/gostty"
 
-	"github.com/ironpark/sanbo/internal/client"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // Links in a terminal follow with ⌘-click, Ctrl-click off macOS. A program

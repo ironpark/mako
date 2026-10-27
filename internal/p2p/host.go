@@ -1,12 +1,12 @@
-// Package p2p links sanbo daemons to each other over libp2p.
+// Package p2p links mako daemons to each other over libp2p.
 //
 // Each daemon is a libp2p host with an identity of its own, kept in its
 // configuration directory, and listens on QUIC and TCP. Peers reach each
-// other directly where they can, through a relay run by a sanbo node with
+// other directly where they can, through a relay run by a mako node with
 // a public address where they cannot, and then try to punch through to a
 // direct connection. A connection is of no use until both sides have shown
 // they know the mesh's pre-shared key (see auth.go); only then are the
-// sanbo protocol's streams and the mesh's state topic open to it.
+// mako protocol's streams and the mesh's state topic open to it.
 package p2p
 
 import (
@@ -32,9 +32,9 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
-// Protocol is the libp2p protocol the sanbo protocol's frames travel on,
+// Protocol is the libp2p protocol the mako protocol's frames travel on,
 // one request stream to a libp2p stream, as on QUIC.
-const Protocol protocol.ID = "/sanbo/2"
+const Protocol protocol.ID = "/mako/2"
 
 // keyFile holds the host's identity in the configuration directory.
 const keyFile = "peer.key"
@@ -47,7 +47,7 @@ type Config struct {
 	Host string
 	// Port is the UDP and TCP port; 0 picks one.
 	Port int
-	// PSK is the mesh's pre-shared key; empty lets in any sanbo daemon.
+	// PSK is the mesh's pre-shared key; empty lets in any mako daemon.
 	PSK string
 	// Relays are relay nodes' multiaddrs, each with its /p2p/ ID, that
 	// this host reserves a slot on to be reachable behind NAT.
@@ -178,7 +178,7 @@ func (h *Host) Port() int {
 	return 0
 }
 
-// HandleStreams serves the sanbo protocol's streams with fn, from hosts
+// HandleStreams serves the mako protocol's streams with fn, from hosts
 // that have shown they know the key; another's are reset.
 func (h *Host) HandleStreams(fn func(s network.Stream)) {
 	h.h.SetStreamHandler(Protocol, func(s network.Stream) {
@@ -190,14 +190,14 @@ func (h *Host) HandleStreams(fn func(s network.Stream)) {
 	})
 }
 
-// Open opens a sanbo protocol stream to the peer id, reached at addrs if
+// Open opens a mako protocol stream to the peer id, reached at addrs if
 // it is not connected already. It may go through a relay.
 func (h *Host) Open(ctx context.Context, id string, addrs []string) (network.Stream, error) {
 	info, err := addrInfo(id, addrs)
 	if err != nil {
 		return nil, err
 	}
-	ctx = network.WithAllowLimitedConn(ctx, "sanbo")
+	ctx = network.WithAllowLimitedConn(ctx, "mako")
 	if err := h.link(ctx, info); err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func (h *Host) link(ctx context.Context, info peer.AddrInfo) error {
 	if info.ID == h.h.ID() {
 		return errors.New("p2p: a link to itself")
 	}
-	if err := h.h.Connect(network.WithAllowLimitedConn(ctx, "sanbo"), info); err != nil {
+	if err := h.h.Connect(network.WithAllowLimitedConn(ctx, "mako"), info); err != nil {
 		return err
 	}
 	h.auth.begin(info.ID)

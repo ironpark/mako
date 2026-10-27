@@ -107,7 +107,7 @@ var (
 
 // paletteKey carries the palette on the theme, for the terminal, which
 // paints with concrete colours.
-var paletteKey = ggui.NewEnvKey[palette]("sanbo palette")
+var paletteKey = ggui.NewEnvKey[palette]("mako palette")
 
 // themeFor maps a palette onto ggui's semantic tokens, so the stock
 // controls (buttons, selects, dialogs, fields) match the custom chrome.

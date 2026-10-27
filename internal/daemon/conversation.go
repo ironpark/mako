@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/session"
-	"github.com/ironpark/sanbo/internal/transcript"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/session"
+	"github.com/ironpark/mako/internal/transcript"
 	"google.golang.org/protobuf/proto"
 )
 

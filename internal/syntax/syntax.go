@@ -42,7 +42,7 @@ const (
 )
 
 const (
-	runtimeModule = "sanbo_tree_sitter"
+	runtimeModule = "mako_tree_sitter"
 	// tableReserve is how many function table slots are set aside for
 	// grammars. A grammar uses a handful (its lexers and scanner hooks).
 	tableReserve = 4096

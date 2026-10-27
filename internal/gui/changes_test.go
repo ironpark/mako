@@ -11,8 +11,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/ironpark/ggui"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 func TestGitTreeAddsUpFolders(t *testing.T) {
@@ -41,7 +41,7 @@ func TestGitTreeAddsUpFolders(t *testing.T) {
 // The Changes tab reads the project's work tree through its daemon and
 // shows the diff of a file chosen.
 func TestChangesTabShowsTheWorkTree(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	project := t.TempDir()
 	r, err := git.PlainInit(project, false)
 	if err != nil {

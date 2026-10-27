@@ -14,9 +14,9 @@ import (
 	"github.com/ironpark/gostty"
 	"github.com/ironpark/gostty/input"
 
-	"github.com/ironpark/sanbo/internal/activity"
-	"github.com/ironpark/sanbo/internal/client"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/activity"
+	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // termConn is one attached session as the GUI sees it. The daemon streams
@@ -84,7 +84,7 @@ func newTermConn(id string, link sessionLink, cols, rows uint16, wake func(), ti
 	cols, rows = max(cols, 2), max(rows, 2)
 	vt, err := gostty.New(cols, rows,
 		gostty.WithTerminalOptions(gostty.WithScrollbackMaxLines(10000)),
-		gostty.WithStreamOptions(gostty.WithVersionReport("sanbo", "gui")),
+		gostty.WithStreamOptions(gostty.WithVersionReport("mako", "gui")),
 	)
 	if err != nil {
 		return nil, err

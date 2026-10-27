@@ -20,8 +20,8 @@ import (
 	"github.com/ironpark/gostty"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ironpark/sanbo/internal/activity"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/activity"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // Spec describes a session to start.
@@ -101,7 +101,7 @@ func Start(spec Spec) (*Session, error) {
 
 	cmd := exec.Command(spec.Command[0], spec.Command[1:]...)
 	cmd.Dir = spec.Project
-	cmd.Env = append(terminalEnv(os.Environ()), "SANBO_SESSION="+spec.ID)
+	cmd.Env = append(terminalEnv(os.Environ()), "MAKO_SESSION="+spec.ID)
 	for k, v := range spec.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}

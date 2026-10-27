@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ironpark/sanbo/internal/zed"
+	"github.com/ironpark/mako/internal/zed"
 )
 
 func TestExtensionCardsFollowTheFilters(t *testing.T) {

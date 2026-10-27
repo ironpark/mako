@@ -1,10 +1,20 @@
-# sanbo protocol
+# mako protocol
 
-This is the wire protocol spoken between sanbo front-ends (the `sanbo` CLI and
-the desktop app), the daemon they connect to (`sanbod`, or the one the app
+This is the wire protocol spoken between mako front-ends (the `mako` CLI and
+the desktop app), the daemon they connect to (`makod`, or the one the app
 runs itself), and the daemons of the other machines on the mesh. Its messages
-are protocol buffers: the schema is [`proto/sanbo/v2`](../proto/sanbo/v2),
+are protocol buffers: the schema is [`proto/mako/v2`](../proto/mako/v2),
 and this document describes how the messages are used.
+
+## At a glance
+
+| | Front-end ↔ daemon | Daemon ↔ daemon | Daemon ↔ older daemon |
+|---|---|---|---|
+| Transport | QUIC, UDP `4242` | libp2p (QUIC or TCP), port `4243`, maybe relayed | QUIC, UDP `4242` |
+| Stream protocol | ALPN `mako/2` | `/mako/2` | ALPN `mako/2` |
+| Access | the key in `hello` | the key proved on `/mako/auth/1` | the key in `hello` |
+| Frames | length-prefixed protobuf `Envelope`s | the same | the same |
+| Pushed state | `watch` → `changed` | the `mako/state/1` topic | `gossip`, every 30 s |
 
 ## Contents
 
@@ -28,9 +38,10 @@ and this document describes how the messages are used.
 
 ```
  front-end ──QUIC──▶ daemon A ──libp2p──▶ daemon B
- (CLI, app)          (local)    (QUIC to   (peer)
-                                 an older
-                                 peer)
+ (CLI, app)          (local)   (QUIC to a  (peer)
+                                peer from
+                                an older
+                                build)
 ```
 
 - A **front-end** connects to one daemon, normally the one on its own machine,
@@ -48,7 +59,7 @@ and this document describes how the messages are used.
 |---|---|
 | Protocol | QUIC over UDP |
 | Default port | `4242` (`config.DefaultPort`) |
-| ALPN | `sanbo/2` (`protocol.ALPN`) |
+| ALPN | `mako/2` (`protocol.ALPN`) |
 | TLS | 1.3, with a self-signed certificate per node |
 | Idle timeout | 60 s, with keep-alives every 15 s |
 | Initial packet size | 1200 bytes |
@@ -67,7 +78,8 @@ dialed on demand and reused.
 
 ## Streams and framing
 
-Every exchange happens on a bidirectional QUIC stream that the caller opens.
+Every exchange happens on a bidirectional stream that the caller opens: a
+QUIC stream, or a libp2p stream of `/mako/2` between daemons.
 A stream carries **frames**, each one protobuf `Envelope` with a length
 prefix:
 
@@ -103,11 +115,11 @@ which a daemon answers as `unsupported`.
 
 ### The schema and the Go types
 
-[`proto/sanbo/v2`](../proto/sanbo/v2) holds the schema, in files by area:
+[`proto/mako/v2`](../proto/mako/v2) holds the schema, in files by area:
 `envelope.proto`, `mesh.proto`, `session.proto`, `files.proto`, `git.proto`
 and `chat.proto`. [buf](https://buf.build) lints it and generates the Go
 messages into `internal/protocol` itself (`make proto`); the generated code
-is committed. The schema is the only definition of the messages: sanbo uses
+is committed. The schema is the only definition of the messages: mako uses
 the generated types throughout, the daemon and the window alike, with no
 types of its own to convert to.
 
@@ -136,14 +148,14 @@ The first frame on every stream is a `hello`, and the daemon answers with a
 `welcome` before anything else:
 
 ```
-hello   { node_id: "", name: "sanbo-cli", version: "v0.3.0", is_peer: false, auth_tag: "the-psk" }
+hello   { node_id: "", name: "mako-cli", version: "v0.3.0", is_peer: false, auth_tag: "the-psk" }
 welcome { node: { ...the daemon's Node... } }
 ```
 
 | `Hello` field | |
 |---|---|
 | `node_id` | The caller's node ID. Empty from a front-end. |
-| `name` | The caller's name, as a node name or `sanbo-cli`. |
+| `name` | The caller's name: a daemon's node name, or `mako-cli` from the CLI and the app alike. |
 | `version` | The caller's build. |
 | `is_peer` | Set by a daemon. It changes how the daemon answers `list_sessions`, and records the caller as an inbound peer. |
 | `auth_tag` | The mesh's pre-shared key, when one is configured. Left empty on a libp2p stream, whose link has proved the key already. |
@@ -170,8 +182,15 @@ reading the next request, except where the reference says otherwise. A
 caller may keep a stream for many requests or open a new one for each; the
 clients in this repository open a greeted stream per request.
 
-Two requests never answer: `input` sent on an ordinary stream, and `attach`,
-which turns the stream into a session pipe.
+Three requests break that rule:
+
+| Request | |
+|---|---|
+| `input` | Sent on an ordinary stream, it is not answered. |
+| `attach` | Turns the stream into a session pipe; see [Attach streams](#attach-streams). |
+| `watch` | Turns the stream into a feed of `changed` frames, until the caller closes it. |
+
+A stream that has become a pipe or a feed carries no more requests.
 
 ## Errors
 
@@ -206,12 +225,14 @@ Forwarding is one hop. A daemon only forwards to nodes in its own peer table,
 which [gossip](#discovery-and-gossip) fills with the whole mesh.
 
 `list_sessions` is not routed by node. A daemon asked by a front-end answers
-with its own sessions and those of every known peer, asked in turn with a
-peer hello. A daemon asked by a peer answers with its own sessions only, so
-the fan-out never recurses around a cycle. Sessions a peer reports for any
-node other than itself are dropped.
+with its own sessions and those of every known peer. For a peer on libp2p
+it uses the sessions the peer [published](#the-mesh-over-libp2p) in the last
+20 seconds. Any other peer is asked in turn, with a peer hello. A daemon
+asked by a peer answers with its own sessions only, so the fan-out never
+recurses around a cycle. Sessions a peer reports for any node other than
+itself are dropped.
 
-`list_nodes` and `gossip` are answered by the daemon itself.
+`list_nodes`, `gossip` and `watch` are answered by the daemon itself.
 
 ## Message reference
 
@@ -311,11 +332,11 @@ gives a `decision`:
 | `terminal` | The question goes back to the agent's own prompt in its terminal. |
 
 When nobody is watching, the agent asks in its terminal, as it would without
-sanbo.
+mako.
 
 **`ReadChat` and `Chat`.** The daemon reads the conversation bound to the
 session from the agent's log (Claude and Codex). `chat.supported` is false for
-an agent sanbo cannot read; `conversation` is empty until the agent has saved
+an agent mako cannot read; `conversation` is empty until the agent has saved
 one. `messages` are `user`, `assistant` and `tool` turns, with the oldest left
 out past a size limit (`truncated`). `usage` is the whole conversation's tokens:
 
@@ -362,7 +383,7 @@ Search matching is case-insensitive unless `query` has a capital.
 
 `stage_file` sends a file in pieces of a few megabytes, each a request of its
 own. The first gives the file's `name` and no `path`; the node keeps it under
-a folder of its own in its temporary directory, as `sanbo-drops/<time>-<id>/<name>`,
+a folder of its own in its temporary directory, as `mako-drops/<time>-<id>/<name>`,
 and answers with the `path`. The rest give that `path` and the `offset` their
 `data` goes at. A staged file is at most 512 MB, and the first piece staged a
 day later removes the folders older than that.
@@ -435,9 +456,10 @@ From the front-end: **`input`** (bytes for the PTY) and **`resize`** (columns
 and rows), each naming the `session_id`. Anything else is ignored.
 
 `output` and `input` carry their bytes as protobuf `bytes`, as they are,
-which is why the attach stream needs no framing of its own: sanbo/1 had a
-separate binary framing for it, since JSON carried the bytes in base64. A
-4 KiB piece of output costs its session ID and a few bytes more on the wire.
+which is why the attach stream needs no framing of its own. (The first
+version of the protocol, in JSON, needed a separate binary framing for
+it, since JSON carried the bytes in base64.) A 4 KiB piece of output costs
+its session ID and a few bytes more on the wire.
 
 A daemon attaching a front-end to a peer's session opens an attach stream to
 the peer, then copies the bytes between the two streams in both directions
@@ -449,7 +471,7 @@ A daemon learns of its peers these ways, recorded as the node's `source`:
 
 | Source | |
 |---|---|
-| `mdns` | Bonjour on the local network: service `_sanbo._udp`, with TXT records `id=`, `name=` and `version=`. |
+| `mdns` | Bonjour on the local network: service `_mako._udp`, with TXT records `id=`, `name=` and `version=`. |
 | `tailscale` | The machines on the tailnet, by MagicDNS name (or the names configured), probed with a peer handshake. |
 | `static` | The addresses in the config's `peers`, probed every 30 seconds until they answer. |
 | `inbound` | A peer that greeted this daemon. |
@@ -480,19 +502,19 @@ directory, which its peer ID names. It listens on QUIC and TCP, on port
 
 | Protocol | |
 |---|---|
-| `/sanbo/auth/1` | Each side proves to the other it knows the mesh's key, before anything else. |
-| `/sanbo/2` | The protocol's frames, one request stream to a libp2p stream, as on QUIC. |
-| `sanbo/state/1` | The gossipsub topic each daemon publishes its state on. |
+| `/mako/auth/1` | Each side proves to the other it knows the mesh's key, before anything else. |
+| `/mako/2` | The protocol's frames, one request stream to a libp2p stream, as on QUIC. |
+| `mako/state/1` | The gossipsub topic each daemon publishes its state on. |
 
 **Proving the key.** libp2p's own handshake proves each side holds its
-peer ID's key. The host that dialed then opens `/sanbo/auth/1` and sends a
+peer ID's key. The host that dialed then opens `/mako/auth/1` and sends a
 32-byte nonce; the other answers with a nonce of its own and an
 HMAC-SHA256, keyed with the pre-shared key, over its peer ID, the dialer's,
 and the dialer's nonce; the dialer checks it and answers with a MAC over the
 same the other way round, and the other says whether it passed. The key
 itself never crosses the wire, and neither MAC proves anything to another
 host or on another connection. A host that fails is hung up on. Until a host
-has passed, its `/sanbo/2` streams are reset, and it takes no part in the
+has passed, its `/mako/2` streams are reset, and it takes no part in the
 state topic or in relaying. A mesh without a key runs the same exchange
 with an empty one.
 
@@ -501,8 +523,10 @@ dialing its `multiaddrs` if they are not linked, and does not fall back to
 QUIC, which would hand its key to whoever answers there. A peer without one,
 an older build, is reached over QUIC as before.
 
-**State.** Each daemon publishes a `NodeState` on `sanbo/state/1` whenever it
-changes, and every 5 seconds besides:
+**State.** Each daemon publishes a `NodeState` on `mako/state/1`. It checks
+every second and publishes when its state has changed, or when more peers
+have joined the topic since it last published, which a newcomer would
+otherwise wait for. It also publishes every 5 seconds regardless:
 
 ```proto
 message NodeState {
@@ -516,11 +540,15 @@ A state is taken only as signed by the peer its node names. A daemon keeps
 each peer's latest, and answers a front-end's `list_sessions` with the
 sessions a peer published in the last 20 seconds, asking only a peer that
 has not. A peer's `watching_approvals` counts as a front-end watching here,
-so an approval waits for an answer in a window on any node. A sessions'
-`last_output` alone changing does not publish at once; the next regular
+so an approval waits for an answer in a window on any node. A change to
+sessions' `last_output` alone does not publish at once; the next regular
 state carries it.
 
-**Relays.** A node behind NAT is reached through a relay: a sanbo daemon
+A daemon tells its watching front-ends (`watch`) when a peer's state
+changes its nodes or sessions, so a window hears of a session started on
+another machine within a second or two.
+
+**Relays.** A node behind NAT is reached through a relay: a mako daemon
 with a public address and `p2p.relay` set, whose multiaddr the others list
 in `p2p.relays`. A node reserves a slot on each of its relays and gives the
 relayed address in its `multiaddrs`; once linked through a relay, the two
@@ -540,12 +568,21 @@ circuit's length or data, as a session may run over one for hours.
 
 ## Compatibility
 
-The ALPN names the framing: a sanbo/2 node and a sanbo/1 node (JSON
-envelopes) fail the QUIC handshake and do not see each other, so every
-machine of a mesh moves to sanbo/2 together. The ALPN changes again only for
-a break that no addition can bridge.
+The ALPN and the libp2p protocol IDs name the framing. Nodes whose names
+differ fail the handshake and do not see each other, so every machine of a
+mesh moves to a new name together. That has happened twice:
 
-Within sanbo/2, the protocol changes by addition, as protobuf allows:
+- **JSON to protobuf.** The first version framed JSON envelopes. Version 2
+  frames protobuf.
+- **sanbo to mako.** The project was called sanbo, and its builds speak
+  `sanbo/2`, `/sanbo/auth/1` and `_sanbo._udp`. A mako build speaks the same
+  protocol under mako's names, and does not see them. Its daemon moves an
+  existing `sanbo` configuration directory to `mako` on its first run,
+  keeping its node ID, key and identity.
+
+The names change again only for a break that no addition can bridge.
+
+Within version 2, the protocol changes by addition, as protobuf allows:
 
 - **Fields** are added with new numbers, never reusing or renumbering one.
   A reader skips fields it does not know, and a missing field reads as its
@@ -555,7 +592,7 @@ Within sanbo/2, the protocol changes by addition, as protobuf allows:
 - **Message types** are added as new fields of the envelope's `body`. A
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
-  they are used on it. None are defined in sanbo/2 yet.
+  they are used on it. None are defined in version 2 yet.
 - **Revision** (`Node.revision`, `protocol.Revision`, currently 4) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
@@ -570,13 +607,20 @@ Within sanbo/2, the protocol changes by addition, as protobuf allows:
 | `read_file`, text | 4 MiB, or `max` if smaller |
 | `read_file`, image | 5 MiB |
 | Replay screen piece | 256 KiB |
-| Conversation log read for `read_chat` | the last 2 MiB |
+| Conversation log read for `read_chat` | the last 2 MiB, at most 200 messages |
+| `stage_file` | 512 MiB a file |
 | `search`, files listed | 50 000 |
 | `search`, matches | 1 000, 100 per file, 300 bytes of each line |
+| `search`, time | 20 s |
 | Session name | 200 bytes |
 | Git operations | 2 minutes |
 | Forwarded peer requests | 5 s to dial; `list_sessions` and gossip 5 s each |
+| Approval watch | 15 s after the last `list_sessions` with `approvals` |
+| Key proof on libp2p | 10 s |
+| Published state | taken as current for 20 s |
+| Relinking a peer on libp2p | at most every 30 s |
 | Peer expiry | 5 minutes unseen |
+| Hook report | 1 MiB |
 
 ## The local hook socket
 
@@ -588,7 +632,7 @@ and Codex session hooks that run the daemon's own program as
 JSON object:
 
 ```json
-{"session": "<SANBO_SESSION>", "seq": 1761475200000000000, "kind": "", "input": { ...the agent's own hook input... }}
+{"session": "<MAKO_SESSION>", "seq": 1761475200000000000, "kind": "", "input": { ...the agent's own hook input... }}
 ```
 
 `seq` is when the hook ran, in Unix nanoseconds, so a report that arrives
@@ -603,7 +647,7 @@ same connection, once the user decides:
 
 An empty decision leaves the question to the agent's own prompt. The status
 line forwards its input and then prints the user's own status line, so
-sanbo's does not take its place on screen.
+mako's does not take its place on screen.
 
 The socket is reachable by the user's own processes only and is not part of
 the network protocol.

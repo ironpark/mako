@@ -1,4 +1,4 @@
-// Package client talks to a sanbo daemon from a front-end.
+// Package client talks to a mako daemon from a front-end.
 package client
 
 import (
@@ -14,9 +14,9 @@ import (
 	"github.com/quic-go/quic-go"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/transport"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // Client is a front-end connection to one daemon, which relays to the rest of
@@ -40,7 +40,7 @@ func Dial(ctx context.Context, addr, psk string) (*Client, error) {
 	c := &Client{conn: conn}
 
 	stream, node, err := transport.Handshake(ctx, conn, &protocol.Hello{
-		Name:    "sanbo-cli",
+		Name:    "mako-cli",
 		Version: config.Version,
 		AuthTag: psk,
 	})
@@ -62,7 +62,7 @@ func (c *Client) Close() error { return c.conn.CloseWithError(0, "bye") }
 // stream opens a greeted request stream.
 func (c *Client) stream(ctx context.Context, psk string) (*transport.Stream, error) {
 	s, _, err := transport.Handshake(ctx, c.conn, &protocol.Hello{
-		Name:    "sanbo-cli",
+		Name:    "mako-cli",
 		Version: config.Version,
 		AuthTag: psk,
 	})
@@ -219,7 +219,7 @@ func (c *Client) Attach(ctx context.Context, psk string, req *protocol.Attach) e
 				return err
 			}
 		case protocol.EventExited:
-			fmt.Fprintf(os.Stderr, "\r\n[sanbo] session %s exited (%d)\r\n", req.GetSessionId(), ev.ExitCode)
+			fmt.Fprintf(os.Stderr, "\r\n[mako] session %s exited (%d)\r\n", req.GetSessionId(), ev.ExitCode)
 			return nil
 		case protocol.EventError:
 			return fmt.Errorf("remote: %s", ev.Err)

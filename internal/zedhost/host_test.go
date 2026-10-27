@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/zed"
+	"github.com/ironpark/mako/internal/zed"
 )
 
 func TestAPIVersion(t *testing.T) {
@@ -48,12 +48,12 @@ func TestPath(t *testing.T) {
 }
 
 // TestContextServer runs the extensions installed under
-// $SANBO_ZED_EXTENSIONS that have context servers, as Zed's store hands
+// $MAKO_ZED_EXTENSIONS that have context servers, as Zed's store hands
 // them out, asking each for its configuration and its command.
 func TestContextServer(t *testing.T) {
-	dir := os.Getenv("SANBO_ZED_EXTENSIONS")
+	dir := os.Getenv("MAKO_ZED_EXTENSIONS")
 	if dir == "" {
-		t.Skip("SANBO_ZED_EXTENSIONS names no directory of extensions")
+		t.Skip("MAKO_ZED_EXTENSIONS names no directory of extensions")
 	}
 	exts, err := (&zed.Store{Dir: dir}).Installed()
 	if err != nil {

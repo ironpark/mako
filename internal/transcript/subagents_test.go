@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // The agents a conversation's calls started are read from their own logs:

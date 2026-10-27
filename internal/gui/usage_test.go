@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // The overlay shows the context filled and the tokens spent, in the corner
 // the settings choose, and goes when they turn it off.
 func TestUsageOverlayFollowsItsSetting(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	state := m.usageState("s")
@@ -50,7 +50,7 @@ func TestUsageOverlayFollowsItsSetting(t *testing.T) {
 
 // A shell has no conversation, so no overlay.
 func TestShellHasNoUsageOverlay(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "shell", Project: "/tmp"}})
 	usageOverlay(m, "s", nil)
@@ -62,7 +62,7 @@ func TestShellHasNoUsageOverlay(t *testing.T) {
 // With the account's limits known, the overlay shows them, each with when
 // it starts over, in place of the tokens spent.
 func TestUsageOverlayShowsTheAccountsLimits(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	now := time.Unix(1_800_000_000, 0)
@@ -103,7 +103,7 @@ func TestUsageOverlayShowsTheAccountsLimits(t *testing.T) {
 // The detail opens over the card while the pointer rests on it, and not
 // for the terminal under it holding the keyboard.
 func TestUsageDetailOpensOnHoverAlone(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	state := m.usageState("s")

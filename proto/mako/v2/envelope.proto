@@ -1,20 +1,20 @@
-// The frames of the sanbo protocol: every frame on a stream is one
+// The frames of the mako protocol: every frame on a stream is one
 // Envelope, preceded by its length. See docs/protocol.md.
 //
 // The messages are generated into internal/protocol (`make proto`), and
-// sanbo uses them as they are. A field is added with a new number, never
+// mako uses them as they are. A field is added with a new number, never
 // one reused.
 syntax = "proto3";
 
-package sanbo.v2;
+package mako.v2;
 
-import "sanbo/v2/chat.proto";
-import "sanbo/v2/files.proto";
-import "sanbo/v2/git.proto";
-import "sanbo/v2/mesh.proto";
-import "sanbo/v2/session.proto";
+import "mako/v2/chat.proto";
+import "mako/v2/files.proto";
+import "mako/v2/git.proto";
+import "mako/v2/mesh.proto";
+import "mako/v2/session.proto";
 
-option go_package = "github.com/ironpark/sanbo/internal/protocol";
+option go_package = "github.com/ironpark/mako/internal/protocol";
 
 // Envelope wraps every message. The body's field name is the message's
 // protocol.Type.

@@ -9,7 +9,7 @@ import (
 	"github.com/ironpark/ggui"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // An agent's hooks say when it works, waits on the user, and finishes. A

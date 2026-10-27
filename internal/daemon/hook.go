@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/transcript"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transcript"
 )
 
 // hookArg, as a program's first argument, runs it as an agent's hook.
@@ -68,13 +68,13 @@ type hookReply struct {
 
 // runHook is an agent's hook, run by the daemon's own program with the
 // daemon's hook socket as args[0]. It passes the agent's input on for the
-// session in SANBO_SESSION. The agent waits on it, so it gives up quickly,
+// session in MAKO_SESSION. The agent waits on it, so it gives up quickly,
 // and it never fails: the daemon falls back to watching the agent's open
 // files. An approval waits for the daemon's answer, which it writes to out
 // as the agent's decision.
 func runHook(args []string, stdin io.Reader, out io.Writer) {
 	seq := time.Now().UnixNano() // when the agent ran it, not when it arrives
-	session := os.Getenv("SANBO_SESSION")
+	session := os.Getenv("MAKO_SESSION")
 	if len(args) != 1 || session == "" {
 		return
 	}
@@ -127,8 +127,8 @@ func sendHook(socket string, msg hookMessage) (net.Conn, error) {
 
 // runStatusLine is Claude's status line, run by the daemon's own program
 // with the daemon's hook socket as args[0]. It passes Claude's state on for
-// the session in SANBO_SESSION, without waiting for an answer, and prints
-// the status line the user set in Claude's own settings, which sanbo's
+// the session in MAKO_SESSION, without waiting for an answer, and prints
+// the status line the user set in Claude's own settings, which mako's
 // takes the place of.
 func runStatusLine(args []string, stdin io.Reader, out io.Writer) {
 	input, err := io.ReadAll(io.LimitReader(stdin, hookLimit))
@@ -138,7 +138,7 @@ func runStatusLine(args []string, stdin io.Reader, out io.Writer) {
 	sent := make(chan struct{})
 	go func() {
 		defer close(sent)
-		session := os.Getenv("SANBO_SESSION")
+		session := os.Getenv("MAKO_SESSION")
 		if len(args) != 1 || session == "" || !json.Valid(input) {
 			return
 		}
@@ -295,7 +295,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		s.SetStatus(protocol.AgentWorking)
 	case "Notification":
 		// Claude asks something of the user; a permission it asks through
-		// sanbo is already an approval.
+		// mako is already an approval.
 		if ev.NotificationType == "permission_prompt" || ev.NotificationType == "elicitation_dialog" {
 			s.SetStatus(protocol.AgentWaiting)
 		}

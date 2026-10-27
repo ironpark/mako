@@ -10,14 +10,14 @@ import (
 	"github.com/ironpark/ggui"
 	ggruntime "github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/gostty"
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // Enter sends what is written at once; Shift+Enter breaks the line, and
 // the lines reach the agent as one paste, then Enter.
 func TestComposerSendsSeveralLinesOnEnter(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	link := newFakeLink()
 	conn, err := newTermConn("s", link, 80, 24, func() {})
@@ -101,7 +101,7 @@ func TestComposerSendsSeveralLinesOnEnter(t *testing.T) {
 // works, or with a subagent it started still running; one left open by an
 // agent that has stopped does not.
 func TestToolsAtWorkAreTold(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	session := func(state, status string) {
 		m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", State: state, Status: status}})
@@ -133,7 +133,7 @@ func TestToolsAtWorkAreTold(t *testing.T) {
 // The subagents at work show over the composer, each with what it was
 // asked and how far it has got, and go once they finish.
 func TestRunningSubagentsShowOverTheComposer(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", State: protocol.StateRunning}})
 	state := m.chatState("s")
@@ -158,7 +158,7 @@ func TestRunningSubagentsShowOverTheComposer(t *testing.T) {
 // An image pasted into the composer goes in as a file, by its path; text
 // pastes as text.
 func TestComposerPastesAnImageAsAFile(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	t.Setenv("TMPDIR", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Attached.Set([]string{"s"})

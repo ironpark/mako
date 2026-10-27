@@ -7,7 +7,7 @@ import (
 
 	"github.com/ironpark/ggui"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 func TestGroupSessions(t *testing.T) {
@@ -15,12 +15,12 @@ func TestGroupSessions(t *testing.T) {
 		return &protocol.SessionInfo{Id: id, NodeId: node, Project: project, Repo: project}
 	}
 	sessions := []*protocol.SessionInfo{
-		s("a", "n1", "/src/sanbo/internal"),
-		s("b", "n1", "/src/sanbo"),
-		s("c", "n2", "/src/sanbo"),
-		s("d", "n1", "/src/sanbox"),
+		s("a", "n1", "/src/mako/internal"),
+		s("b", "n1", "/src/mako"),
+		s("c", "n2", "/src/mako"),
+		s("d", "n1", "/src/makox"),
 	}
-	sessions[0].Repo = "/src/sanbo" // a folder of the repository
+	sessions[0].Repo = "/src/mako" // a folder of the repository
 	nodes := []*protocol.Node{{Id: "n1", Name: "mac"}, {Id: "n2", Name: "box"}}
 
 	byProject := groupSessions(sessions, groupProject, nodes, nil)
@@ -32,10 +32,10 @@ func TestGroupSessions(t *testing.T) {
 	}
 	// A folder of a repository joins its section, on its node only, and a
 	// sibling sharing a prefix does not.
-	if len(byProject) != 3 || len(got["n1:/src/sanbo"]) != 2 || len(got["n2:/src/sanbo"]) != 1 || len(got["n1:/src/sanbox"]) != 1 {
+	if len(byProject) != 3 || len(got["n1:/src/mako"]) != 2 || len(got["n2:/src/mako"]) != 1 || len(got["n1:/src/makox"]) != 1 {
 		t.Fatalf("by project: %v", got)
 	}
-	if rel := subfolder("/src/sanbo/internal", "/src/sanbo"); rel != "internal" {
+	if rel := subfolder("/src/mako/internal", "/src/mako"); rel != "internal" {
 		t.Fatalf("subfolder %q", rel)
 	}
 

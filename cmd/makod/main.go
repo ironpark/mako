@@ -1,4 +1,4 @@
-// Command sanbod is the sanbo daemon: it runs terminal agents on this machine
+// Command makod is the mako daemon: it runs terminal agents on this machine
 // and joins the mesh of daemons on the user's other computers.
 package main
 
@@ -11,8 +11,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/daemon"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/daemon"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 	flag.Parse()
 
 	if *version {
-		fmt.Println("sanbod", config.Version)
+		fmt.Println("makod", config.Version)
 		return
 	}
 

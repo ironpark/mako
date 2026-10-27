@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ironpark/sanbo/internal/syntax"
+	"github.com/ironpark/mako/internal/syntax"
 )
 
 // samples is a small, valid program per grammar, with one capture name

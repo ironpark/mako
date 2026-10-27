@@ -12,21 +12,21 @@ import (
 
 	"github.com/ironpark/ggui"
 
-	"github.com/ironpark/sanbo/internal/client"
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/daemon"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/daemon"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // The app can run the daemon itself, in its own process, so a machine needs
 // nothing but the app: the daemon mode setting chooses.
 //
-//	auto      use a sanbod that is already running, else run one in the app
+//	auto      use a makod that is already running, else run one in the app
 //	embedded  always run the daemon in the app
-//	external  only talk to a sanbod started some other way
+//	external  only talk to a makod started some other way
 //
 // A daemon in the app owns its sessions' processes, so they end when it
-// stops or the app quits; a separate sanbod keeps them running.
+// stops or the app quits; a separate makod keeps them running.
 
 // daemonState is what the settings page and the sidebar say about where the
 // daemon is. It is comparable, so an unchanged state does not notify.
@@ -124,7 +124,7 @@ func dialable(a net.Addr) string {
 	return net.JoinHostPort(host, port)
 }
 
-// externalAddr is the sanbod the window looks for: the settings' address,
+// externalAddr is the makod the window looks for: the settings' address,
 // else the -daemon flag, else the local default.
 func (m *model) externalAddr() string {
 	if d := ggui.Peek(m.Prefs).Daemon; d != "" {

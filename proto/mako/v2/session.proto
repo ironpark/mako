@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-package sanbo.v2;
+package mako.v2;
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/ironpark/sanbo/internal/protocol";
+option go_package = "github.com/ironpark/mako/internal/protocol";
 
 // ListSessions asks for the mesh's sessions.
 message ListSessions {

@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/session"
-	"github.com/ironpark/sanbo/internal/transport"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/session"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // An attach replays the screen, streams live output, and ends with the exit

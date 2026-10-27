@@ -1,4 +1,4 @@
-// Package builtin is the grammar pack sanbo ships for languages Zed builds
+// Package builtin is the grammar pack mako ships for languages Zed builds
 // in and so has no store extensions for: tree-sitter grammars compiled to
 // wasm side modules (the format syntax.Runtime.LoadLanguage loads), with
 // the highlight and injection queries from each grammar's own repository.

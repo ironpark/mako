@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/syntax"
-	"github.com/ironpark/sanbo/internal/syntax/builtin"
-	"github.com/ironpark/sanbo/internal/zed"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/syntax"
+	"github.com/ironpark/mako/internal/syntax/builtin"
+	"github.com/ironpark/mako/internal/zed"
 )
 
 // Highlighting: a file is parsed with the tree-sitter grammar of its
@@ -21,7 +21,7 @@ import (
 // in another language, as a fenced code block or a script in HTML, by
 // that one's, as its injection query finds them. The languages come from
 // the Zed extensions installed, which carry their grammars as wasm, and
-// from the ones sanbo ships for the languages Zed builds in. Parsing runs
+// from the ones mako ships for the languages Zed builds in. Parsing runs
 // on a worker, again after each edit from the tree before it; until it is
 // done the editor shows the colours from before, moved along with the
 // edit.
@@ -55,7 +55,7 @@ func zedLanguage(l zed.Language) language {
 	}
 }
 
-// builtinLanguages are the languages sanbo ships, for the ones Zed builds
+// builtinLanguages are the languages mako ships, for the ones Zed builds
 // in rather than taking from extensions. One without file names, as
 // markdown's inline grammar, is reached only from another's injections.
 func builtinLanguages() []language {
@@ -207,12 +207,12 @@ func (h *highlighter) load(l language) (*loadedLanguage, error) {
 		// compile, as when they name a node its grammar lacks.
 		if inj, ierr := l.injections(); ierr == nil && strings.TrimSpace(inj) != "" {
 			if ll.injections, ierr = ll.lang.NewQuery(inj); ierr != nil {
-				log.Printf("sanbo: injections of %s: %v", l.Name, ierr)
+				log.Printf("mako: injections of %s: %v", l.Name, ierr)
 			}
 		}
 	}
 	if err != nil {
-		log.Printf("sanbo: highlighting %s: %v", l.Name, err)
+		log.Printf("mako: highlighting %s: %v", l.Name, err)
 		ll.err = err
 	}
 	return ll, ll.err
@@ -614,7 +614,7 @@ func (m *model) loadExtensions() {
 	go func() {
 		exts, err := extensionStore().Installed()
 		if err != nil {
-			log.Printf("sanbo: extensions: %v", err)
+			log.Printf("mako: extensions: %v", err)
 		}
 		langs := zed.Languages(exts)
 		m.hl.setLanguages(langs)

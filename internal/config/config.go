@@ -1,16 +1,17 @@
-// Package config loads and persists sanbo's node configuration.
+// Package config loads and persists mako's node configuration.
 package config
 
 import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/mcp"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/mcp"
 )
 
 // Version is the build version, overridable at link time.
@@ -20,7 +21,7 @@ var Version = "0.1.0-dev"
 const DefaultPort = 4242
 
 // ServiceType is the Bonjour/mDNS service advertised by every daemon.
-const ServiceType = "_sanbo._udp"
+const ServiceType = "_mako._udp"
 
 // Config is the on-disk daemon configuration.
 type Config struct {
@@ -79,16 +80,22 @@ type Discovery struct {
 	TailnetHosts []string `json:"tailnet_hosts,omitempty"`
 }
 
-// Dir returns the sanbo configuration directory, honoring SANBO_HOME.
+// Dir returns the mako configuration directory, honoring MAKO_HOME.
 func Dir() (string, error) {
-	if custom := os.Getenv("SANBO_HOME"); custom != "" {
+	if custom := os.Getenv("MAKO_HOME"); custom != "" {
 		return custom, nil
 	}
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "sanbo"), nil
+	dir := filepath.Join(base, "mako")
+	// The project was called sanbo before; its configuration, identity and
+	// saved state move over the first time.
+	if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
+		_ = os.Rename(filepath.Join(base, "sanbo"), dir)
+	}
+	return dir, nil
 }
 
 // Path returns the path of the config file.
@@ -121,7 +128,7 @@ func subdir(name string) (string, error) {
 func Default() *Config {
 	host, err := os.Hostname()
 	if err != nil || host == "" {
-		host = "sanbo-node"
+		host = "mako-node"
 	}
 	return &Config{
 		NodeID: newNodeID(),
@@ -182,7 +189,7 @@ func Save(cfg *Config) error {
 func newNodeID() string {
 	var buf [16]byte
 	if _, err := rand.Read(buf[:]); err != nil {
-		panic(fmt.Sprintf("sanbo: no entropy for node id: %v", err))
+		panic(fmt.Sprintf("mako: no entropy for node id: %v", err))
 	}
 	return hex.EncodeToString(buf[:])
 }

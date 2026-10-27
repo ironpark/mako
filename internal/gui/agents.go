@@ -11,8 +11,8 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // agentDraft is one row of the agents page's draft: an agent's own

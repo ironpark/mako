@@ -10,8 +10,8 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
-	"github.com/ironpark/sanbo/internal/client"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // What the Changes and History tabs do to a repository: commit, push,
@@ -75,7 +75,7 @@ func (m *model) gitRun(req *protocol.GitRun, label string, done func()) {
 // daemon predates the request.
 func nodeErr(err error) string {
 	if protocol.HasCode(err, protocol.CodeUnsupported) {
-		return T("The sanbo on this node is older and cannot do this. Update it there.")
+		return T("The mako on this node is older and cannot do this. Update it there.")
 	}
 	return err.Error()
 }

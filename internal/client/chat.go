@@ -3,8 +3,8 @@ package client
 import (
 	"context"
 
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/transcript"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transcript"
 )
 
 // ReadChat reads a session's conversation. The daemon answering, local or a

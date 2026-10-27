@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 func TestProfileServersRoundTrip(t *testing.T) {

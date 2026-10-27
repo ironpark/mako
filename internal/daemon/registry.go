@@ -1,5 +1,6 @@
-// Package daemon implements the sanbo background service: it owns local agent
-// sessions, tracks peer daemons, and serves front-ends and peers over QUIC.
+// Package daemon implements the mako background service: it owns local agent
+// sessions, tracks peer daemons, and serves front-ends over QUIC and peers
+// over libp2p.
 package daemon
 
 import (
@@ -10,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/session"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/session"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -189,7 +190,7 @@ func (p *peerTable) prune(ttl time.Duration) bool {
 func newSessionID() string {
 	var buf [8]byte
 	if _, err := rand.Read(buf[:]); err != nil {
-		panic(fmt.Sprintf("sanbo: no entropy for session id: %v", err))
+		panic(fmt.Sprintf("mako: no entropy for session id: %v", err))
 	}
 	return hex.EncodeToString(buf[:])
 }

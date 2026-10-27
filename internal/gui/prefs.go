@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/mako/internal/config"
 )
 
 // prefs are the desktop app's own settings, kept apart from the daemon's

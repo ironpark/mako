@@ -9,8 +9,8 @@ import (
 
 	"github.com/grandcat/zeroconf"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/p2p"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/p2p"
 )
 
 // MDNS advertises this daemon over Bonjour and browses for others.
@@ -114,7 +114,7 @@ func (m *MDNS) instance() string {
 	if m.Name != "" {
 		return fmt.Sprintf("%s-%s", m.Name, shortID(m.NodeID))
 	}
-	return "sanbo-" + shortID(m.NodeID)
+	return "mako-" + shortID(m.NodeID)
 }
 
 func (m *MDNS) domain() string {

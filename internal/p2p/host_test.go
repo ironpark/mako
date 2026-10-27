@@ -25,7 +25,7 @@ func newHost(t *testing.T, psk string, mod ...func(*Config)) *Host {
 	return h
 }
 
-// echo serves the sanbo protocol on h by sending back what it reads.
+// echo serves the mako protocol on h by sending back what it reads.
 func echo(h *Host) {
 	h.HandleStreams(func(s network.Stream) {
 		defer s.Close()
@@ -53,7 +53,7 @@ func roundTrip(ctx context.Context, a, b *Host, addrs []string) error {
 	return nil
 }
 
-// Hosts that know the same key reach each other's sanbo streams; one that
+// Hosts that know the same key reach each other's mako streams; one that
 // does not is hung up on, and its streams go nowhere either way.
 func TestHostsWithTheKeyAloneTalk(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)

@@ -12,7 +12,7 @@ import (
 
 	"github.com/ironpark/ggui"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // fakeLink stands in for a daemon attachment: frames pushed into in are

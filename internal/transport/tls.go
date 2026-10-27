@@ -1,4 +1,4 @@
-// Package transport carries sanbo's protocol frames over QUIC.
+// Package transport carries mako's protocol frames over QUIC.
 package transport
 
 import (
@@ -16,7 +16,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // ServerTLS returns a TLS config for the daemon listener, loading a persisted
@@ -45,7 +45,7 @@ func ServerTLS(dir string) (*tls.Config, error) {
 // ClientTLS returns the dialing TLS config.
 func ClientTLS() *tls.Config {
 	return &tls.Config{
-		InsecureSkipVerify: true, // identity comes from the sanbo handshake
+		InsecureSkipVerify: true, // identity comes from the mako handshake
 		NextProtos:         []string{protocol.ALPN},
 		MinVersion:         tls.VersionTLS13,
 	}
@@ -63,7 +63,7 @@ func mintSelfSigned(certPath, keyPath string) (tls.Certificate, error) {
 	host, _ := os.Hostname()
 	tmpl := x509.Certificate{
 		SerialNumber:          serial,
-		Subject:               pkix.Name{CommonName: "sanbo/" + host},
+		Subject:               pkix.Name{CommonName: "mako/" + host},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().AddDate(10, 0, 0),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,

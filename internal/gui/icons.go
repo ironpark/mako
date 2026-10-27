@@ -13,7 +13,7 @@ import (
 )
 
 // Lucide icons (ISC, see icons/LICENSE), the set Paseo draws with, and the
-// agents' own (icons/agent-*.svg, drawn for sanbo). Only the ones the window
+// agents' own (icons/agent-*.svg, drawn for mako). Only the ones the window
 // uses are bundled.
 //
 //go:embed icons/*.svg
@@ -32,7 +32,7 @@ func icon(name string) *icons.Widget {
 		var err error
 		svg, err = icons.Load(iconFiles, "icons/"+name+".svg")
 		if err != nil {
-			panic("sanbo: missing icon " + name + ": " + err.Error())
+			panic("mako: missing icon " + name + ": " + err.Error())
 		}
 		iconCache[name] = svg
 	}

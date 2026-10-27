@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // A paint with no new output reuses the screen it copied; new output refreshes

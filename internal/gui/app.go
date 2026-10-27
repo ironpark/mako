@@ -1,4 +1,4 @@
-// Package gui is sanbo's desktop front-end, built with ggui: a window onto
+// Package gui is mako's desktop front-end, built with ggui: a window onto
 // the daemon mesh laid out after Paseo, with every session's terminal drawn
 // in place.
 package gui
@@ -10,7 +10,7 @@ import (
 	"github.com/ironpark/ggui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 
-	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/mako/internal/config"
 )
 
 // Run opens the window and blocks until it closes. addr is the daemon to
@@ -23,7 +23,7 @@ func Run(cfg *config.Config, addr string) error {
 	defer m.shutdown()
 
 	app := ggui.New(ggui.Config{
-		Title:     "sanbo",
+		Title:     "mako",
 		Width:     1280,
 		Height:    800,
 		MinWidth:  720,
@@ -60,7 +60,7 @@ func setup(m *model) {
 	last := ggui.Peek(m.Prefs)
 	ggui.Watch(m.Prefs, func(p prefs) {
 		if err := savePrefs(p); err != nil {
-			log.Printf("sanbo: save settings: %v", err)
+			log.Printf("mako: save settings: %v", err)
 		}
 		prev := last
 		last = p

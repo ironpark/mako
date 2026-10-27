@@ -12,10 +12,10 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/mcp"
-	"github.com/ironpark/sanbo/internal/zed"
-	"github.com/ironpark/sanbo/internal/zedhost"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/mcp"
+	"github.com/ironpark/mako/internal/zed"
+	"github.com/ironpark/mako/internal/zedhost"
 )
 
 // Settings ▸ Extensions also lists the MCP servers (Zed's context
@@ -46,7 +46,7 @@ func (m *model) loadMCPInfo(exts []zed.Extension) {
 				cancel()
 				i := mcpInfo{Extension: e.Name, Config: cfg}
 				if err != nil {
-					log.Printf("sanbo: %s: %v", id, err)
+					log.Printf("mako: %s: %v", id, err)
 					i.Err = err.Error()
 				}
 				info[id] = i

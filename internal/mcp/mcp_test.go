@@ -103,11 +103,11 @@ func TestSettingsFor(t *testing.T) {
 }
 
 // TestResolveExtensions resolves the servers of the extensions under
-// $SANBO_ZED_EXTENSIONS, twice, the second from the cache.
+// $MAKO_ZED_EXTENSIONS, twice, the second from the cache.
 func TestResolveExtensions(t *testing.T) {
-	dir := os.Getenv("SANBO_ZED_EXTENSIONS")
+	dir := os.Getenv("MAKO_ZED_EXTENSIONS")
 	if dir == "" {
-		t.Skip("SANBO_ZED_EXTENSIONS names no directory of extensions")
+		t.Skip("MAKO_ZED_EXTENSIONS names no directory of extensions")
 	}
 	r := &Resolver{Extensions: dir, Work: t.TempDir()}
 	servers := map[string]Server{

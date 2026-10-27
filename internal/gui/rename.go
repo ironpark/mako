@@ -8,12 +8,12 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // A session can be named, from its tab's or its sidebar row's context
 // menu, the header's menu or the palette. The name is kept by the daemon
-// of the session's node, so every window and `sanbo ls` show it.
+// of the session's node, so every window and `mako ls` show it.
 
 // askRename opens the rename dialog over a session.
 func (m *model) askRename(id string) {

@@ -1,11 +1,11 @@
 syntax = "proto3";
 
-package sanbo.v2;
+package mako.v2;
 
 import "google/protobuf/timestamp.proto";
-import "sanbo/v2/session.proto";
+import "mako/v2/session.proto";
 
-option go_package = "github.com/ironpark/sanbo/internal/protocol";
+option go_package = "github.com/ironpark/mako/internal/protocol";
 
 // GitStatus asks for the changes of the repository a directory is in.
 message GitStatus {

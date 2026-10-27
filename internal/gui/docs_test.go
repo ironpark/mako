@@ -9,7 +9,7 @@ import (
 
 	"github.com/ironpark/ggui"
 
-	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/mako/internal/config"
 )
 
 // docApp is a window on the app's own daemon, with a file open in a tab.
@@ -21,7 +21,7 @@ func docApp(t *testing.T, body string) (*model, *ggui.Probe, string, string) {
 // docAppNamed is docApp with a file of that name.
 func docAppNamed(t *testing.T, name, body string) (*model, *ggui.Probe, string, string) {
 	t.Helper()
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	path := filepath.Join(t.TempDir(), name)
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)

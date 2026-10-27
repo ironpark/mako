@@ -286,7 +286,7 @@ func TestMultipleLanguages(t *testing.T) {
 	toml := load(t, r, "toml")
 	lua := load(t, r, "lua")
 
-	tomlSrc := "# c\n[server]\nname = \"sanbo\"\nport = 8080\nlist = [1, 2.5]\n\"quoted\" = true\n"
+	tomlSrc := "# c\n[server]\nname = \"mako\"\nport = 8080\nlist = [1, 2.5]\n\"quoted\" = true\n"
 	tt := parse(t, toml, tomlSrc)
 	if s := tt.RootSExpr(); !strings.HasPrefix(s, "(document (comment) (table (bare_key) (pair (bare_key) (string))") {
 		t.Errorf("toml sexpr %s", s)
@@ -298,7 +298,7 @@ func TestMultipleLanguages(t *testing.T) {
 	}
 	tn := named(tq, tomlSrc, tc)
 	for text, name := range map[string]string{
-		"server": "property", `"sanbo"`: "string", "8080": "number",
+		"server": "property", `"mako"`: "string", "8080": "number",
 		"2.5": "number", "true": "constant", "# c": "comment", `"quoted"`: "property",
 	} {
 		if !slices.Contains(tn[text], name) {

@@ -1,4 +1,4 @@
-// Package discovery finds sanbo daemons on other computers.
+// Package discovery finds mako daemons on other computers.
 //
 // Two backends run side by side: Bonjour/mDNS for machines on the same link,
 // and Tailscale MagicDNS probing for machines that only share a tailnet.
@@ -8,7 +8,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/protocol"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

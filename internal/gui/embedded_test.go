@@ -7,8 +7,8 @@ import (
 
 	"github.com/ironpark/ggui"
 
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // probeUntil runs frames until cond holds, so work the model posts lands.
@@ -25,7 +25,7 @@ func probeUntil(t *testing.T, p *ggui.Probe, what string, cond func() bool) {
 }
 
 func TestAppRunsItsOwnDaemon(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	cfg := config.Default()
 	cfg.Name = "inside"
 	cfg.Listen = "127.0.0.1:0"
@@ -71,7 +71,7 @@ func TestAppRunsItsOwnDaemon(t *testing.T) {
 }
 
 func TestAutoPrefersARunningDaemon(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	cfg := config.Default()
 	cfg.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
@@ -108,7 +108,7 @@ func TestAutoPrefersARunningDaemon(t *testing.T) {
 
 // Restart restores both tabs, but only the visible one starts its process.
 func TestRestartResumesOnlyVisibleSession(t *testing.T) {
-	t.Setenv("SANBO_HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", t.TempDir())
 	cfg := config.Default()
 	cfg.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}

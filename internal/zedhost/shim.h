@@ -1,8 +1,8 @@
 // The few helpers the Go side needs around wasmtime's component C API:
 // trampolines for host functions and resources, which call back into Go,
 // and engine and store setup.
-#ifndef SANBO_ZEDHOST_SHIM_H
-#define SANBO_ZEDHOST_SHIM_H
+#ifndef MAKO_ZEDHOST_SHIM_H
+#define MAKO_ZEDHOST_SHIM_H
 
 #include <stdint.h>
 #include <wasmtime.h>

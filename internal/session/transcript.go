@@ -1,6 +1,6 @@
 package session
 
-import "github.com/ironpark/sanbo/internal/transcript"
+import "github.com/ironpark/mako/internal/transcript"
 
 // TranscriptEnv returns only the paths needed to find this process's native
 // conversation logs, including profile overrides.

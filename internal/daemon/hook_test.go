@@ -12,17 +12,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ironpark/sanbo/internal/agentspec"
-	"github.com/ironpark/sanbo/internal/config"
-	"github.com/ironpark/sanbo/internal/protocol"
-	"github.com/ironpark/sanbo/internal/session"
-	"github.com/ironpark/sanbo/internal/transcript"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/session"
+	"github.com/ironpark/mako/internal/transcript"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestHookReportsFollowTheConversation(t *testing.T) {
 	command, root := fakeAgent(t, "claude")
-	cfg := &config.Config{NodeID: "node", Agents: map[string]agentspec.Agent{"claude": {Command: []string{command}, Env: map[string]string{"SANBO_FAKE_AGENT": "claude", "SANBO_FAKE_ROOT": root, "CLAUDE_CONFIG_DIR": root}}}}
+	cfg := &config.Config{NodeID: "node", Agents: map[string]agentspec.Agent{"claude": {Command: []string{command}, Env: map[string]string{"MAKO_FAKE_AGENT": "claude", "MAKO_FAKE_ROOT": root, "CLAUDE_CONFIG_DIR": root}}}}
 	d := New(cfg, nil)
 	d.mcp = nil
 	if err := d.loadSessions(t.TempDir()); err != nil {
@@ -30,12 +30,12 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	}
 	defer d.sessions.closeAll()
 	// A socket's path is short, which a test's temporary directory is not.
-	run, err := os.MkdirTemp("", "sanbo-hooks")
+	run, err := os.MkdirTemp("", "mako-hooks")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(run)
-	d.hookBinary = "/opt/sanbo's/sanbod"
+	d.hookBinary = "/opt/mako's/makod"
 	d.listenHooks(t.Context(), run)
 	socket := filepath.Join(run, "hooks-0.sock")
 
@@ -56,15 +56,15 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	if i := slices.Index(args, "--settings"); i < 0 || json.Unmarshal([]byte(args[i+1]), &settings) != nil {
 		t.Fatalf("launch has no hook: %q", args)
 	}
-	if h := settings.Hooks["SessionStart"]; len(h) != 1 || h[0].Hooks[0].Command != `'/opt/sanbo'\''s/sanbod' hook `+socket {
+	if h := settings.Hooks["SessionStart"]; len(h) != 1 || h[0].Hooks[0].Command != `'/opt/mako'\''s/makod' hook `+socket {
 		t.Fatalf("hook %+v", settings)
 	}
-	if settings.StatusLine.Command != `'/opt/sanbo'\''s/sanbod' statusline `+socket {
+	if settings.StatusLine.Command != `'/opt/mako'\''s/makod' statusline `+socket {
 		t.Fatalf("status line %+v", settings)
 	}
 
 	// The status line reports the window and the account's limits.
-	t.Setenv("SANBO_SESSION", s.ID())
+	t.Setenv("MAKO_SESSION", s.ID())
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	status := `{"context_window":{"context_window_size":1000000},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":1738425600},"seven_day":{"used_percentage":41.2,"resets_at":1738857600}}}`
 	runStatusLine([]string{socket}, strings.NewReader(status), io.Discard)
@@ -85,7 +85,7 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	// /clear: a new conversation, whose log the agent writes only later.
 	cleared := conversationUUID()
 	path := filepath.Join(root, "projects", "project", cleared+".jsonl")
-	t.Setenv("SANBO_SESSION", s.ID())
+	t.Setenv("MAKO_SESSION", s.ID())
 	input, _ := json.Marshal(map[string]string{"hook_event_name": "SessionStart", "source": "clear", "session_id": cleared, "transcript_path": path})
 	runHook([]string{socket}, strings.NewReader(string(input)), io.Discard)
 	deadline := time.Now().Add(5 * time.Second)
@@ -137,25 +137,25 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 func hookedDaemon(t *testing.T) (*Daemon, *session.Session, string) {
 	t.Helper()
 	command, root := fakeAgent(t, "claude")
-	cfg := &config.Config{NodeID: "node", Agents: map[string]agentspec.Agent{"claude": {Command: []string{command}, Env: map[string]string{"SANBO_FAKE_AGENT": "claude", "SANBO_FAKE_ROOT": root, "CLAUDE_CONFIG_DIR": root}}}}
+	cfg := &config.Config{NodeID: "node", Agents: map[string]agentspec.Agent{"claude": {Command: []string{command}, Env: map[string]string{"MAKO_FAKE_AGENT": "claude", "MAKO_FAKE_ROOT": root, "CLAUDE_CONFIG_DIR": root}}}}
 	d := New(cfg, nil)
 	d.mcp = nil
 	if err := d.loadSessions(t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(d.sessions.closeAll)
-	run, err := os.MkdirTemp("", "sanbo-hooks")
+	run, err := os.MkdirTemp("", "mako-hooks")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(run) })
-	d.hookBinary = "/bin/sanbod"
+	d.hookBinary = "/bin/makod"
 	d.listenHooks(t.Context(), run)
 	s, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("SANBO_SESSION", s.ID())
+	t.Setenv("MAKO_SESSION", s.ID())
 	return d, s, filepath.Join(run, "hooks-0.sock")
 }
 
@@ -233,13 +233,13 @@ func TestApprovalsWaitForTheWindow(t *testing.T) {
 	}
 }
 
-// sanbo's status line takes the place of the user's, so it prints theirs:
+// mako's status line takes the place of the user's, so it prints theirs:
 // the project's local settings first, then its shared ones, then the
 // user's.
 func TestStatusLinePrintsTheUsersOwn(t *testing.T) {
 	config, project := t.TempDir(), t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", config)
-	t.Setenv("SANBO_SESSION", "")
+	t.Setenv("MAKO_SESSION", "")
 	write := func(path, command string) {
 		_ = os.MkdirAll(filepath.Dir(path), 0o700)
 		body, _ := json.Marshal(map[string]any{"statusLine": map[string]string{"type": "command", "command": command}})
