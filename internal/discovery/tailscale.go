@@ -85,7 +85,7 @@ func (t *Tailscale) scan(ctx context.Context, out chan<- Found) {
 				return
 			}
 			select {
-			case out <- Found{NodeID: node.GetId(), Name: node.GetName(), Addr: addr, Source: "tailscale"}:
+			case out <- Found{NodeID: node.GetId(), Name: node.GetName(), Addr: addr, Source: "tailscale", PeerID: node.GetPeerId(), Multiaddrs: node.GetMultiaddrs()}:
 			case <-ctx.Done():
 			}
 		}(addr)

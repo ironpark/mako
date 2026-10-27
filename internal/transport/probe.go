@@ -14,12 +14,22 @@ func Handshake(ctx context.Context, conn *quicConn, hello *protocol.Hello) (*Str
 	if err != nil {
 		return nil, nil, err
 	}
-	welcome, err := Call[*protocol.Welcome](stream, protocol.TypeHello, hello)
+	node, err := Greet(stream, hello)
 	if err != nil {
 		stream.Close()
 		return nil, nil, err
 	}
-	return stream, welcome.GetNode(), nil
+	return stream, node, nil
+}
+
+// Greet sends hello on a fresh stream and returns the node that welcomes
+// it.
+func Greet(stream *Stream, hello *protocol.Hello) (*protocol.Node, error) {
+	welcome, err := Call[*protocol.Welcome](stream, protocol.TypeHello, hello)
+	if err != nil {
+		return nil, err
+	}
+	return welcome.GetNode(), nil
 }
 
 // Probe dials addr, completes the sanbo handshake, and reports the peer node.

@@ -235,6 +235,9 @@ type model struct {
 	// poll would dial an address nothing may answer and wait out its timeout.
 	linked atomic.Bool
 	kick   chan struct{} // polls now rather than at the next tick
+	// watching is set while the daemon tells the GUI of changes, which
+	// then polls seldom.
+	watching atomic.Bool
 	// approveInApp mirrors the setting for the polling worker.
 	approveInApp atomic.Bool
 }
@@ -364,14 +367,45 @@ func (m *model) start(ctx context.Context, post func(func())) {
 	go func() {
 		for {
 			m.poll(ctx)
+			every := pollInterval
+			if m.watching.Load() {
+				every = watchedPollInterval
+			}
 			select {
 			case <-ctx.Done():
 				return
 			case <-m.kick:
-			case <-time.After(pollInterval):
+			case <-time.After(every):
 			}
 		}
 	}()
+	go m.watch(ctx)
+}
+
+// watchedPollInterval is how often the GUI polls while its daemon tells
+// it of changes, as a check on a change it missed.
+const watchedPollInterval = 15 * time.Second
+
+// watch follows the daemon's changes, polling as soon as one comes, for as
+// long as the daemon offers them; an older daemon does not, and is polled.
+func (m *model) watch(ctx context.Context) {
+	for ctx.Err() == nil {
+		wait := time.Second
+		if c, err := m.client(ctx); err == nil && m.linked.Load() {
+			err = c.Watch(ctx, m.key(), func(*protocol.Changed) {
+				m.watching.Store(true)
+				m.pollNow()
+			})
+			if protocol.HasCode(err, protocol.CodeUnsupported) {
+				wait = time.Minute // an older daemon, which may be updated
+			}
+		}
+		m.watching.Store(false)
+		select {
+		case <-ctx.Done():
+		case <-time.After(wait):
+		}
+	}
 }
 
 // daemonAddr is the daemon the GUI talks through: the app's own when it

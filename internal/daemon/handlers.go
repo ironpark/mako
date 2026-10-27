@@ -19,7 +19,7 @@ func (d *Daemon) local(nodeID string) bool {
 func (d *Daemon) handleListSessions(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
 	req, _ := protocol.Body[*protocol.ListSessions](env) // older front-ends send nothing
 	if req.GetApprovals() {
-		d.approvals.watch()
+		d.approvals.watch(!fromPeer)
 	}
 	sessions := d.listSessions()
 	// A peer asking is already fanning out itself; answering with local
@@ -28,8 +28,13 @@ func (d *Daemon) handleListSessions(ctx context.Context, stream *transport.Strea
 		return stream.Send(protocol.TypeSessions, env.GetId(), &protocol.Sessions{Sessions: sessions})
 	}
 	// A front-end asking a single daemon for sessions expects the whole mesh,
-	// so fold in what each known peer reports.
+	// so fold in what each known peer published, or asked of one that has
+	// not, as an older peer.
 	for _, node := range d.peers.list() {
+		if published, ok := d.remote.get(node.GetId()); ok {
+			sessions = append(sessions, published...)
+			continue
+		}
 		remote, err := d.peerSessions(ctx, node, req)
 		if err != nil {
 			d.log.Debug("peer session list failed", "node", node.GetName(), "err", err)

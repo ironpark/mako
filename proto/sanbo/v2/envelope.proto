@@ -32,6 +32,8 @@ message Envelope {
     ListNodes list_nodes = 20;
     Nodes nodes = 21;
     Nodes gossip = 22;
+    Watch watch = 23;
+    Changed changed = 24;
 
     // Sessions.
     ListSessions list_sessions = 30;

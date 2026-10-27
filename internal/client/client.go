@@ -277,3 +277,33 @@ func WindowSize() (cols, rows uint16) {
 	}
 	return size.Cols, size.Rows
 }
+
+// Watch follows the mesh's changes: fn is called with each Changed the
+// daemon sends, the first at once, until ctx ends or the stream breaks,
+// whose error Watch returns. A daemon too old to watch fails at once.
+func (c *Client) Watch(ctx context.Context, psk string, fn func(*protocol.Changed)) error {
+	s, err := c.stream(ctx, psk)
+	if err != nil {
+		return err
+	}
+	defer s.Hangup()
+	stop := context.AfterFunc(ctx, func() { _ = s.Hangup() })
+	defer stop()
+	if err := s.Send(protocol.TypeWatch, "", &protocol.Watch{}); err != nil {
+		return err
+	}
+	for {
+		env, err := s.Recv()
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return err
+		}
+		changed, err := transport.Reply[*protocol.Changed](env)
+		if err != nil {
+			return err
+		}
+		fn(changed)
+	}
+}

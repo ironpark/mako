@@ -22,6 +22,8 @@ const usage = `sanbo - manage terminal agents across your computers
 
 Usage:
   sanbo nodes                        list daemons on the mesh
+  sanbo addrs                        print this daemon's libp2p addresses, to list
+                                     as another's peer or relay
   sanbo ls                           list agent sessions
   sanbo run <agent>[:<profile>] [-- args...]
                                      start an agent, or one of its profiles, and attach
@@ -82,6 +84,8 @@ func run(args []string, daemonAddr, nodeID, project string) error {
 	switch args[0] {
 	case "nodes":
 		return listNodes(ctx, c, cfg.PSK)
+	case "addrs":
+		return printAddrs(c.Node())
 	case "ls":
 		return listSessions(ctx, c, cfg.PSK)
 	case "run":
@@ -148,6 +152,18 @@ func listNodes(ctx context.Context, c *client.Client, psk string) error {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", short(n.GetId()), n.GetName(), n.GetAddr(), n.GetSource(), ago(protocol.TimeOf(n.GetLastSeen())))
 	}
 	return w.Flush()
+}
+
+// printAddrs prints where node is on libp2p, each address ending in its
+// peer ID, as a peer or relay entry of another daemon's config takes it.
+func printAddrs(node *protocol.Node) error {
+	if node.GetPeerId() == "" {
+		return fmt.Errorf("%s does not run libp2p", node.GetName())
+	}
+	for _, a := range node.DialAddrs() {
+		fmt.Println(a)
+	}
+	return nil
 }
 
 func listSessions(ctx context.Context, c *client.Client, psk string) error {

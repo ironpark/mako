@@ -11,11 +11,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/quic-go/quic-go"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/ironpark/sanbo/internal/config"
 	"github.com/ironpark/sanbo/internal/mcp"
+	"github.com/ironpark/sanbo/internal/p2p"
 	"github.com/ironpark/sanbo/internal/protocol"
 	"github.com/ironpark/sanbo/internal/transport"
 )
@@ -27,6 +29,7 @@ const peerTTL = 5 * time.Minute
 type Daemon struct {
 	cfg *config.Config
 	log *slog.Logger
+	dir string // the configuration directory, config.Dir() when empty
 
 	sessionMu   sync.Mutex // protects saved launches and activation
 	saved       map[string]savedSession
@@ -42,7 +45,16 @@ type Daemon struct {
 	ready chan struct{} // closed once the listener is up; see Ready
 
 	mu       sync.Mutex
-	outbound map[string]*quic.Conn // node ID -> peer connection
+	outbound map[string]*quic.Conn // node ID -> peer connection, for older peers
+
+	// p2p links this daemon to its peers over libp2p; nil when it is off
+	// or could not start, leaving the QUIC links alone.
+	p2p     *p2p.Host
+	heads   heads                // the projects' branches
+	remote  remoteSessions       // the sessions peers publish
+	changes notifier             // tells watching front-ends what changed
+	linking map[string]time.Time // peer ID -> the last link tried, until one holds
+	ctx     context.Context      // Run's, for work that outlasts a request
 
 	agentFile agentFile
 	mcp       *mcp.Resolver // nil without a configuration directory
@@ -65,6 +77,8 @@ func New(cfg *config.Config, log *slog.Logger) *Daemon {
 		sessions: newRegistry(),
 		peers:    newPeerTable(),
 		outbound: map[string]*quic.Conn{},
+		linking:  map[string]time.Time{},
+		ctx:      context.Background(),
 		ready:    make(chan struct{}),
 		mcp:      newResolver(log),
 
@@ -86,24 +100,29 @@ func (d *Daemon) Self() *protocol.Node {
 		addr = d.ln.Addr().String()
 	}
 	return &protocol.Node{
-		Id:       d.cfg.NodeID,
-		Name:     d.cfg.Name,
-		Addr:     addr,
-		Os:       runtime.GOOS,
-		Arch:     runtime.GOARCH,
-		Version:  config.Version,
-		Source:   "self",
-		LastSeen: timestamppb.Now(),
-		Revision: protocol.Revision,
-		Agents:   agentInfo(d.agents()),
+		Id:         d.cfg.NodeID,
+		Name:       d.cfg.Name,
+		Addr:       addr,
+		Os:         runtime.GOOS,
+		Arch:       runtime.GOARCH,
+		Version:    config.Version,
+		Source:     "self",
+		LastSeen:   timestamppb.Now(),
+		Revision:   protocol.Revision,
+		Agents:     agentInfo(d.agents()),
+		PeerId:     d.peerID(),
+		Multiaddrs: d.multiaddrs(),
 	}
 }
 
 // Run serves until ctx is cancelled.
 func (d *Daemon) Run(ctx context.Context) error {
-	dir, err := config.Dir()
-	if err != nil {
-		return err
+	dir := d.dir
+	if dir == "" {
+		var err error
+		if dir, err = config.Dir(); err != nil {
+			return err
+		}
 	}
 	tlsConf, err := transport.ServerTLS(dir)
 	if err != nil {
@@ -122,8 +141,16 @@ func (d *Daemon) Run(ctx context.Context) error {
 	d.port = portOf(d.ln.Addr())
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	d.ctx = ctx
 	if run, err := config.RunDir(); err == nil {
 		d.listenHooks(ctx, run)
+	}
+	if !d.cfg.P2P.Disabled {
+		if err := d.startP2P(ctx, dir); err != nil {
+			d.log.Warn("libp2p did not start; peers are reached over QUIC alone", "err", err)
+		} else {
+			defer d.p2p.Close()
+		}
 	}
 	d.log.Info("daemon listening", "addr", d.ln.Addr().String(), "node", d.cfg.NodeID, "name", d.cfg.Name)
 	close(d.ready)
@@ -131,10 +158,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go d.warmContextServers(ctx)
 
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(4)
 	go func() { defer wg.Done(); d.serve(ctx) }()
 	go func() { defer wg.Done(); d.discover(ctx) }()
 	go func() { defer wg.Done(); d.maintain(ctx) }()
+	go func() { defer wg.Done(); d.watchState(ctx) }()
 
 	<-ctx.Done()
 	_ = d.ln.Close()
@@ -165,15 +193,20 @@ func (d *Daemon) serveConn(ctx context.Context, conn *quic.Conn) {
 		}
 		go func() {
 			defer stream.Close()
-			if err := d.serveStream(ctx, conn, stream); err != nil && !isClosed(err) {
+			from := &protocol.Node{Addr: remoteAddr(conn, d.port)}
+			if err := d.serveStream(ctx, stream, from); err != nil && !isClosed(err) {
 				d.log.Debug("stream ended", "err", err)
 			}
 		}()
 	}
 }
 
-// serveStream handles one request stream. The first frame must be a hello.
-func (d *Daemon) serveStream(ctx context.Context, conn *quic.Conn, stream *transport.Stream) error {
+// serveStream handles one request stream, from where the node from says:
+// its address on QUIC, or its peer ID on libp2p. The first frame must be
+// a hello, which on QUIC carries the mesh's key; a libp2p stream comes
+// from a host that has shown it knows the key already.
+func (d *Daemon) serveStream(ctx context.Context, stream *transport.Stream, from *protocol.Node) error {
+	trusted := from.GetPeerId() != ""
 	env, err := stream.Recv()
 	if err != nil {
 		return err
@@ -185,19 +218,15 @@ func (d *Daemon) serveStream(ctx context.Context, conn *quic.Conn, stream *trans
 	if err != nil {
 		return protocol.WriteError(stream, env.GetId(), err)
 	}
-	if d.cfg.PSK != "" && hello.GetAuthTag() != d.cfg.PSK {
+	if !trusted && d.cfg.PSK != "" && hello.GetAuthTag() != d.cfg.PSK {
 		return protocol.WriteError(stream, env.GetId(), errors.New("authentication failed"))
 	}
 	if err := stream.Send(protocol.TypeWelcome, env.GetId(), &protocol.Welcome{Node: d.Self()}); err != nil {
 		return err
 	}
 	if hello.GetIsPeer() && hello.GetNodeId() != "" && hello.GetNodeId() != d.cfg.NodeID {
-		d.peers.upsert(&protocol.Node{
-			Id:     hello.GetNodeId(),
-			Name:   hello.GetName(),
-			Addr:   remoteAddr(conn, d.port),
-			Source: "inbound",
-		})
+		from.Id, from.Name, from.Source = hello.GetNodeId(), hello.GetName(), "inbound"
+		d.notePeer(from)
 	}
 
 	for {
@@ -237,6 +266,9 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeListSess:
 		return d.handleListSessions(ctx, stream, env, fromPeer)
+
+	case protocol.TypeWatch:
+		return d.handleWatch(ctx, stream, env)
 
 	case protocol.TypeOpenSession:
 		return d.handleOpenSession(ctx, stream, env)
@@ -350,6 +382,7 @@ func isClosed(err error) bool {
 	var idleErr *quic.IdleTimeoutError
 	return errors.Is(err, context.Canceled) ||
 		errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, network.ErrReset) ||
 		errors.As(err, &appErr) ||
 		errors.As(err, &idleErr)
 }

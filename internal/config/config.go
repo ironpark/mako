@@ -38,6 +38,8 @@ type Config struct {
 	Discovery Discovery `json:"discovery"`
 	// PSK authenticates peers with each other. Empty disables the check.
 	PSK string `json:"psk,omitempty"`
+	// P2P is how the daemon links to its peers over libp2p.
+	P2P P2P `json:"p2p"`
 	// Agents are how this node launches each agent by name: its command,
 	// default flags and environment, and its profiles. A built-in left out
 	// launches with its default command.
@@ -47,6 +49,24 @@ type Config struct {
 	// installed, which are on unless turned off here, and the user's own.
 	ContextServers map[string]mcp.Server `json:"context_servers,omitempty"`
 }
+
+// P2P configures the daemon's libp2p host, which its peers reach it on.
+type P2P struct {
+	// Disabled leaves the daemon to the older QUIC links alone.
+	Disabled bool `json:"disabled,omitempty"`
+	// Port is the UDP (QUIC) and TCP port; 0 is DefaultP2PPort, or any
+	// free port when Listen's port is 0.
+	Port int `json:"port,omitempty"`
+	// Relay makes this daemon a relay for the mesh's other nodes. Turn it
+	// on for a node with a public address.
+	Relay bool `json:"relay,omitempty"`
+	// Relays are the multiaddrs of the mesh's relay nodes, each ending in
+	// its /p2p/ ID, which this daemon is reachable through from behind NAT.
+	Relays []string `json:"relays,omitempty"`
+}
+
+// DefaultP2PPort is the port the daemon listens on for libp2p.
+const DefaultP2PPort = 4243
 
 // Discovery selects which peer discovery backends run.
 type Discovery struct {

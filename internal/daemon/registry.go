@@ -111,9 +111,15 @@ func (p *peerTable) upsert(node *protocol.Node) bool {
 		if node.GetAgents() == nil {
 			node.Agents = prev.GetAgents()
 		}
+		if node.GetPeerId() == "" {
+			node.PeerId, node.Multiaddrs = prev.GetPeerId(), prev.GetMultiaddrs()
+		}
+		if node.GetAddr() == "" {
+			node.Addr = prev.GetAddr()
+		}
 	}
 	p.nodes[node.GetId()] = node
-	return !existed || prev.GetAddr() != node.GetAddr()
+	return !existed || prev.GetAddr() != node.GetAddr() || prev.GetName() != node.GetName()
 }
 
 // merge folds in a node learned second-hand through gossip. The sender's
@@ -141,6 +147,9 @@ func (p *peerTable) merge(node *protocol.Node) {
 		if node.GetAgents() != nil {
 			prev.Agents = node.GetAgents() // what it launches, as of that sighting
 		}
+		if node.GetPeerId() != "" {
+			prev.PeerId, prev.Multiaddrs = node.GetPeerId(), node.GetMultiaddrs()
+		}
 	}
 }
 
@@ -162,16 +171,19 @@ func (p *peerTable) list() []*protocol.Node {
 	return out
 }
 
-// prune drops nodes not seen within ttl.
-func (p *peerTable) prune(ttl time.Duration) {
+// prune drops nodes not seen within ttl, and reports whether it did.
+func (p *peerTable) prune(ttl time.Duration) bool {
 	cutoff := time.Now().Add(-ttl)
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	dropped := false
 	for id, node := range p.nodes {
 		if node.GetSource() != "self" && node.GetSource() != "static" && protocol.TimeOf(node.GetLastSeen()).Before(cutoff) {
 			delete(p.nodes, id)
+			dropped = true
 		}
 	}
+	return dropped
 }
 
 func newSessionID() string {

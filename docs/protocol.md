@@ -18,6 +18,7 @@ and this document describes how the messages are used.
 - [Message reference](#message-reference)
 - [Attach streams](#attach-streams)
 - [Discovery and gossip](#discovery-and-gossip)
+- [The mesh over libp2p](#the-mesh-over-libp2p)
 - [Compatibility](#compatibility)
 - [Limits](#limits)
 - [The local hook socket](#the-local-hook-socket)
@@ -26,8 +27,10 @@ and this document describes how the messages are used.
 ## Roles
 
 ```
- front-end ──QUIC──▶ daemon A ──QUIC──▶ daemon B
- (CLI, app)          (local)            (peer)
+ front-end ──QUIC──▶ daemon A ──libp2p──▶ daemon B
+ (CLI, app)          (local)    (QUIC to   (peer)
+                                 an older
+                                 peer)
 ```
 
 - A **front-end** connects to one daemon, normally the one on its own machine,
@@ -57,8 +60,10 @@ pre-shared key. The initial packet size is QUIC's minimum so that the
 handshake fits a 1280-byte MTU, as Tailscale's interface has; path MTU
 discovery grows it where the path allows.
 
-A front-end keeps one QUIC connection to its daemon. A daemon keeps one
-outbound connection per peer, dialed on demand and reused.
+A front-end keeps one QUIC connection to its daemon. Daemons link to each
+other over libp2p (see [The mesh over libp2p](#the-mesh-over-libp2p)); a
+daemon keeps one QUIC connection to a peer without libp2p, an older build,
+dialed on demand and reused.
 
 ## Streams and framing
 
@@ -141,15 +146,17 @@ welcome { node: { ...the daemon's Node... } }
 | `name` | The caller's name, as a node name or `sanbo-cli`. |
 | `version` | The caller's build. |
 | `is_peer` | Set by a daemon. It changes how the daemon answers `list_sessions`, and records the caller as an inbound peer. |
-| `auth_tag` | The mesh's pre-shared key, when one is configured. |
+| `auth_tag` | The mesh's pre-shared key, when one is configured. Left empty on a libp2p stream, whose link has proved the key already. |
 
 If the daemon has a pre-shared key and `auth_tag` differs, it answers with an
-`error` ("authentication failed") instead. A first frame that is not a
+`error` ("authentication failed") instead; a libp2p stream is not checked
+here, as only a host that proved the key can open one. A first frame that is not a
 `hello` gets an `error` too. In either case the stream is then done.
 
 When the hello is from a peer (`is_peer` with a `node_id` other than the
 daemon's own), the daemon adds that node to its peer table with source
-`inbound`, at the caller's IP and the daemon's own service port.
+`inbound`: over QUIC at the caller's IP and the daemon's own service port,
+over libp2p at the caller's peer ID and address.
 
 The `welcome`'s `Node` is the daemon describing itself. Its `features` and
 `revision` are what a caller checks before using newer parts of the protocol;
@@ -216,7 +223,8 @@ that answers on success.
 | Request | Payload | Reply | |
 |---|---|---|---|
 | `list_nodes` | `{}` | `nodes` | The daemon itself, then its peers. |
-| `gossip` | `Nodes` | `nodes` | A peer's view of the mesh; the reply is the daemon's peers. Sent between daemons. |
+| `gossip` | `Nodes` | `nodes` | A peer's view of the mesh; the reply is the daemon's peers. Sent between daemons, to a peer without libp2p. |
+| `watch` | `{}` | `changed`, then more | Turns the stream into a feed: a `changed` at once, then one whenever the mesh's nodes or sessions change, until the front-end closes the stream. |
 
 ```proto
 message Node {
@@ -231,8 +239,19 @@ message Node {
   repeated string features = 9; // protocol extensions it speaks
   repeated AgentInfo agents = 10; // what it can launch: {name, profiles}
   int64 revision = 11; // protocol.Revision of its build
+  string peer_id = 12; // its libp2p identity; empty without libp2p
+  repeated string multiaddrs = 13; // where it is on libp2p, relayed addresses included
+}
+
+message Changed {
+  bool nodes = 1;    // the nodes changed: ask list_nodes again
+  bool sessions = 2; // the sessions changed: ask list_sessions again
 }
 ```
+
+A front-end that watches still polls now and then, as a check on a change
+it missed; a daemon too old to watch answers `watch` with `unsupported`, and
+is polled as before.
 
 ### Sessions
 
@@ -426,7 +445,7 @@ without reading them: both speak the same frames.
 
 ## Discovery and gossip
 
-A daemon learns of its peers four ways, recorded as the node's `source`:
+A daemon learns of its peers these ways, recorded as the node's `source`:
 
 | Source | |
 |---|---|
@@ -435,15 +454,89 @@ A daemon learns of its peers four ways, recorded as the node's `source`:
 | `static` | The addresses in the config's `peers`, probed every 30 seconds until they answer. |
 | `inbound` | A peer that greeted this daemon. |
 | `gossip` | A node another daemon knows of. |
+| `mesh` | A node's own state on the libp2p state topic. |
+
+A daemon with libp2p adds `peer=` (its peer ID) and `p2p=` (its libp2p
+port) to its Bonjour TXT record, and its `welcome` carries its `peer_id` and
+`multiaddrs`, so a node found by any of the ways above is linked to over
+libp2p. A static peer may also be given as a multiaddr ending in its
+`/p2p/` ID, which is linked to over libp2p alone.
 
 Probing a candidate is a full handshake: dial, `hello` as a peer, and take the
 `welcome`'s node as its identity.
 
-Every 30 seconds a daemon sends `gossip` to each peer, with itself and its
+Every 30 seconds a daemon sends `gossip` to each peer without libp2p, with itself and its
 whole peer table, and merges the peer's reply. A merge keeps the record with
 the later `last_seen`, which is clamped to the receiver's clock so a peer
 whose clock runs ahead cannot keep a node alive. A node not seen for five
 minutes is dropped. A daemon never adds itself.
+
+## The mesh over libp2p
+
+Daemons link to each other over [libp2p](https://libp2p.io). Each has a
+libp2p identity, an Ed25519 key kept as `peer.key` in its configuration
+directory, which its peer ID names. It listens on QUIC and TCP, on port
+`4243` (`config.DefaultP2PPort`) unless `p2p.port` says otherwise.
+
+| Protocol | |
+|---|---|
+| `/sanbo/auth/1` | Each side proves to the other it knows the mesh's key, before anything else. |
+| `/sanbo/2` | The protocol's frames, one request stream to a libp2p stream, as on QUIC. |
+| `sanbo/state/1` | The gossipsub topic each daemon publishes its state on. |
+
+**Proving the key.** libp2p's own handshake proves each side holds its
+peer ID's key. The host that dialed then opens `/sanbo/auth/1` and sends a
+32-byte nonce; the other answers with a nonce of its own and an
+HMAC-SHA256, keyed with the pre-shared key, over its peer ID, the dialer's,
+and the dialer's nonce; the dialer checks it and answers with a MAC over the
+same the other way round, and the other says whether it passed. The key
+itself never crosses the wire, and neither MAC proves anything to another
+host or on another connection. A host that fails is hung up on. Until a host
+has passed, its `/sanbo/2` streams are reset, and it takes no part in the
+state topic or in relaying. A mesh without a key runs the same exchange
+with an empty one.
+
+**Requests.** A daemon reaches a peer with a `peer_id` on libp2p alone,
+dialing its `multiaddrs` if they are not linked, and does not fall back to
+QUIC, which would hand its key to whoever answers there. A peer without one,
+an older build, is reached over QUIC as before.
+
+**State.** Each daemon publishes a `NodeState` on `sanbo/state/1` whenever it
+changes, and every 5 seconds besides:
+
+```proto
+message NodeState {
+  Node node = 1;                     // the daemon itself
+  repeated SessionInfo sessions = 2; // its own sessions
+  bool watching_approvals = 3;       // a front-end of its answers approvals
+}
+```
+
+A state is taken only as signed by the peer its node names. A daemon keeps
+each peer's latest, and answers a front-end's `list_sessions` with the
+sessions a peer published in the last 20 seconds, asking only a peer that
+has not. A peer's `watching_approvals` counts as a front-end watching here,
+so an approval waits for an answer in a window on any node. A sessions'
+`last_output` alone changing does not publish at once; the next regular
+state carries it.
+
+**Relays.** A node behind NAT is reached through a relay: a sanbo daemon
+with a public address and `p2p.relay` set, whose multiaddr the others list
+in `p2p.relays`. A node reserves a slot on each of its relays and gives the
+relayed address in its `multiaddrs`; once linked through a relay, the two
+try to punch through to a direct connection. A mesh relay keeps slots and
+circuits for hosts that proved the key alone, and does not limit a
+circuit's length or data, as a session may run over one for hours.
+
+```json
+"p2p": {
+  "port": 4243,
+  "relay": false,
+  "relays": ["/ip4/203.0.113.7/udp/4243/quic-v1/p2p/12D3KooW..."]
+}
+```
+
+`p2p.disabled` leaves a daemon to QUIC alone, as an older build.
 
 ## Compatibility
 
@@ -463,7 +556,7 @@ Within sanbo/2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in sanbo/2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 3) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 4) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
@@ -517,8 +610,17 @@ the network protocol.
 
 ## Security
 
-QUIC carries everything in TLS 1.3, but certificates are self-signed and not
-verified, and the pre-shared key travels in the `hello`. Anyone who can reach
-a daemon's port and knows the key can start programs and read and write files
-on that machine, and on every machine of the mesh through it. Keep the port
-on a LAN or a tailnet, never on an untrusted network, and set a `psk`.
+Between daemons on libp2p, each side is held to its peer ID, and each proves
+it knows the mesh's key without sending it (see
+[The mesh over libp2p](#the-mesh-over-libp2p)). A host that does not know the
+key gets nothing from the mesh: no requests, no state, no relay.
+
+The QUIC listener is weaker. Its certificates are self-signed and not
+verified, and the pre-shared key travels in the `hello`, so a host that can
+pose as a daemon's address learns the key. A front-end talks to its daemon
+over it, normally on the same machine, and a daemon talks over it to a peer
+without libp2p alone. Keep the QUIC port on a LAN, a tailnet or loopback;
+the libp2p port may face the internet, with a `psk` set.
+
+Anyone who knows the key can start programs and read and write files on
+every machine of the mesh. Set a long, random `psk`.

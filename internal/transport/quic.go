@@ -3,7 +3,9 @@ package transport
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"time"
 
@@ -61,10 +63,15 @@ func Dial(ctx context.Context, addr string) (*quic.Conn, error) {
 	return conn, nil
 }
 
-// Stream is a bidirectional QUIC stream carrying protocol frames.
+// Stream is a bidirectional stream carrying protocol frames: a QUIC
+// stream from a front-end or an older peer, or a libp2p stream from a
+// peer on the mesh.
 type Stream struct {
-	*quic.Stream
+	io.ReadWriteCloser
 }
+
+// NewStream carries frames over rw.
+func NewStream(rw io.ReadWriteCloser) *Stream { return &Stream{ReadWriteCloser: rw} }
 
 // OpenStream opens a new outbound stream on conn.
 func OpenStream(ctx context.Context, conn *quic.Conn) (*Stream, error) {
@@ -72,7 +79,7 @@ func OpenStream(ctx context.Context, conn *quic.Conn) (*Stream, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Stream{Stream: s}, nil
+	return NewStream(s), nil
 }
 
 // AcceptStream waits for the peer to open a stream.
@@ -81,7 +88,19 @@ func AcceptStream(ctx context.Context, conn *quic.Conn) (*Stream, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Stream{Stream: s}, nil
+	return NewStream(s), nil
+}
+
+// Hangup stops reading the stream as well as writing it, so a reader
+// blocked on it returns at once.
+func (s *Stream) Hangup() error {
+	switch rw := s.ReadWriteCloser.(type) {
+	case *quic.Stream:
+		rw.CancelRead(0)
+	case interface{ Reset() error }:
+		return rw.Reset()
+	}
+	return s.Close()
 }
 
 // Send writes one frame: msg as a message of type t.
@@ -109,6 +128,12 @@ func Call[R proto.Message](s *Stream, t protocol.Type, req proto.Message) (R, er
 	if err != nil {
 		return zero, err
 	}
+	return Reply[R](env)
+}
+
+// Reply is the message env carries as R, or the Error it carries.
+func Reply[R proto.Message](env *protocol.Envelope) (R, error) {
+	var zero R
 	if e := env.GetError(); e != nil {
 		if e.GetCode() != "" {
 			return zero, &protocol.CodedError{Code: e.GetCode(), Message: "remote: " + e.GetMessage()}
@@ -120,3 +145,12 @@ func Call[R proto.Message](s *Stream, t protocol.Type, req proto.Message) (R, er
 
 // quicConn names the QUIC connection type used across this package.
 type quicConn = quic.Conn
+
+// SetReadDeadline bounds the next reads, where the stream can be bounded,
+// as QUIC and libp2p streams can.
+func (s *Stream) SetReadDeadline(t time.Time) error {
+	if rw, ok := s.ReadWriteCloser.(interface{ SetReadDeadline(time.Time) error }); ok {
+		return rw.SetReadDeadline(t)
+	}
+	return errors.ErrUnsupported
+}

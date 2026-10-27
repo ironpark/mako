@@ -41,6 +41,8 @@ const (
 	TypeListNodes      Type = "list_nodes"
 	TypeNodes          Type = "nodes"
 	TypeGossip         Type = "gossip"
+	TypeWatch          Type = "watch"
+	TypeChanged        Type = "changed"
 	TypeListSess       Type = "list_sessions"
 	TypeSessions       Type = "sessions"
 	TypeOpenSession    Type = "open_session"

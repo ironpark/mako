@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ironpark/sanbo/internal/config"
@@ -16,6 +17,10 @@ import (
 // table, including the statically configured peers.
 func (d *Daemon) discover(ctx context.Context) {
 	for _, addr := range d.cfg.Peers {
+		if strings.HasPrefix(addr, "/") {
+			go d.linkStatic(ctx, addr)
+			continue
+		}
 		go d.probeStatic(ctx, addr)
 	}
 
@@ -26,6 +31,9 @@ func (d *Daemon) discover(ctx context.Context) {
 			Name:   d.cfg.Name,
 			Port:   d.port,
 			Domain: d.cfg.Domain,
+		}
+		if d.p2p != nil {
+			mdns.PeerID, mdns.P2PPort = d.p2p.ID().String(), d.p2p.Port()
 		}
 		shutdown, err := mdns.Advertise()
 		if err != nil {
@@ -56,7 +64,7 @@ func (d *Daemon) discover(ctx context.Context) {
 		if f.NodeID == d.cfg.NodeID {
 			continue
 		}
-		if d.peers.upsert(f.Node()) {
+		if d.notePeer(f.Node()) {
 			d.log.Info("peer discovered", "node", f.Name, "addr", f.Addr, "via", f.Source)
 		}
 	}
@@ -72,9 +80,28 @@ func (d *Daemon) probeStatic(ctx context.Context, addr string) {
 		node, err := transportProbe(ctx, addr, d.hello(true))
 		if err == nil && node.GetId() != d.cfg.NodeID {
 			node.Source = "static"
-			if d.peers.upsert(node) {
+			if d.notePeer(node) {
 				d.log.Info("static peer reachable", "node", node.GetName(), "addr", addr)
 			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(30 * time.Second):
+		}
+	}
+}
+
+// linkStatic keeps a link to a peer configured by its multiaddr, which
+// ends in its /p2p/ ID; the node's record comes on the state topic.
+func (d *Daemon) linkStatic(ctx context.Context, addr string) {
+	if d.p2p == nil {
+		d.log.Warn("a peer given by multiaddr needs libp2p, which is off", "peer", addr)
+		return
+	}
+	for {
+		if err := d.p2p.EnsureAddr(ctx, addr); err != nil && ctx.Err() == nil {
+			d.log.Debug("static peer unreachable", "peer", addr, "err", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -93,7 +120,12 @@ func (d *Daemon) maintain(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			d.peers.prune(peerTTL)
+			if d.peers.prune(peerTTL) {
+				d.changes.fire(true, false)
+			}
+			for _, node := range d.peers.list() {
+				d.link(node) // a link dropped is made again
+			}
 			d.gossip(ctx)
 		}
 	}
@@ -104,6 +136,9 @@ func (d *Daemon) maintain(ctx context.Context) {
 func (d *Daemon) gossip(ctx context.Context) {
 	view := &protocol.Nodes{Nodes: append([]*protocol.Node{d.Self()}, d.peers.list()...)}
 	for _, node := range d.peers.list() {
+		if node.GetPeerId() != "" {
+			continue // a peer on libp2p hears of the mesh on its state topic
+		}
 		go func(node *protocol.Node) {
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()

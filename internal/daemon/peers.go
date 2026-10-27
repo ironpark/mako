@@ -51,8 +51,27 @@ func (d *Daemon) peerConn(ctx context.Context, node *protocol.Node) (*quic.Conn,
 	return conn, nil
 }
 
-// peerStream opens a greeted stream to node.
+// peerStream opens a greeted stream to node: over libp2p to a node with an
+// identity there, which is held to it, and over QUIC to an older one.
 func (d *Daemon) peerStream(ctx context.Context, node *protocol.Node) (*transport.Stream, error) {
+	if node.GetPeerId() != "" {
+		if d.p2p == nil {
+			return nil, fmt.Errorf("%s is reached over libp2p, which is off here", node.GetName())
+		}
+		s, err := d.p2p.Open(ctx, node.GetPeerId(), node.GetMultiaddrs())
+		if err != nil {
+			return nil, err
+		}
+		stream := transport.NewStream(s)
+		// The link has shown the key already; the hello does not carry it.
+		hello := d.hello(true)
+		hello.AuthTag = ""
+		if _, err := transport.Greet(stream, hello); err != nil {
+			_ = s.Reset()
+			return nil, err
+		}
+		return stream, nil
+	}
 	conn, err := d.peerConn(ctx, node)
 	if err != nil {
 		return nil, err

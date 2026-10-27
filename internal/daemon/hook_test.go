@@ -207,7 +207,7 @@ func TestApprovalsWaitForTheWindow(t *testing.T) {
 		t.Fatalf("status %q", s.Info().GetStatus())
 	}
 
-	d.approvals.watch()
+	d.approvals.watch(true)
 	for _, c := range []struct{ decision, want string }{
 		{protocol.DecisionAllow, `"behavior":"allow"`},
 		{protocol.DecisionDeny, `"behavior":"deny","message":"not now"`},

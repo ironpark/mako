@@ -61,6 +61,5 @@ func (a *Attachment) Resize(cols, rows uint16) error {
 
 // Close detaches; the session keeps running.
 func (a *Attachment) Close() error {
-	a.s.CancelRead(0)
-	return a.s.Close()
+	return a.s.Hangup()
 }

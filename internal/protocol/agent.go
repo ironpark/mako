@@ -3,14 +3,33 @@ package protocol
 import (
 	"cmp"
 	"slices"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 )
 
+// DialAddrs are where the node is on libp2p, each address ending in its
+// peer ID, as another node's peer or relay entry takes them; a relayed one
+// names its relay's ID before. None without libp2p.
+func (n *Node) DialAddrs() []string {
+	if n.GetPeerId() == "" {
+		return nil
+	}
+	own := "/p2p/" + n.GetPeerId()
+	out := make([]string, 0, len(n.GetMultiaddrs()))
+	for _, a := range n.GetMultiaddrs() {
+		if !strings.HasSuffix(a, own) {
+			a += own
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 3
+const Revision = 4
 
 // AgentStatus is what an agent's own hooks last said it is doing,
 // SessionInfo.Status.

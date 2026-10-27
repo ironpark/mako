@@ -3,6 +3,7 @@ syntax = "proto3";
 package sanbo.v2;
 
 import "google/protobuf/timestamp.proto";
+import "sanbo/v2/session.proto";
 
 option go_package = "github.com/ironpark/sanbo/internal/protocol";
 
@@ -33,6 +34,10 @@ message Node {
   repeated string features = 9; // protocol extensions it speaks
   repeated AgentInfo agents = 10; // what it can launch
   int64 revision = 11; // protocol.Revision of its build
+  // peer_id is its libp2p identity, and multiaddrs where it listens for
+  // libp2p, relayed addresses included; empty from a daemon without it.
+  string peer_id = 12;
+  repeated string multiaddrs = 13;
 }
 
 // AgentInfo names an agent a node can launch and its profiles.
@@ -47,4 +52,23 @@ message ListNodes {}
 // Nodes answers ListNodes, and is a Gossip's body and reply.
 message Nodes {
   repeated Node nodes = 1;
+}
+
+// NodeState is what a daemon publishes of itself on the mesh's state
+// topic: its record, its own sessions, and whether a front-end of its is
+// offering to answer approvals.
+message NodeState {
+  Node node = 1;
+  repeated SessionInfo sessions = 2;
+  bool watching_approvals = 3;
+}
+
+// Watch turns a front-end's stream into a feed of changes: the daemon
+// answers with a Changed whenever the mesh's nodes or sessions change.
+message Watch {}
+
+// Changed says what changed, for the front-end to ask for again.
+message Changed {
+  bool nodes = 1;
+  bool sessions = 2;
 }

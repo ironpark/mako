@@ -9,6 +9,7 @@ import (
 
 	"github.com/ironpark/sanbo/internal/agentspec"
 	"github.com/ironpark/sanbo/internal/config"
+	"github.com/ironpark/sanbo/internal/p2p"
 )
 
 // hostDraft is the settings page's copy of this node's daemon configuration
@@ -19,6 +20,8 @@ type hostDraft struct {
 	Name, Listen, PSK   string
 	MDNS, Tailscale     bool
 	TailnetHosts, Peers string // one per line
+	P2P, Relay          bool
+	Relays              string // one per line
 }
 
 func draftFrom(cfg *config.Config) hostDraft {
@@ -27,6 +30,9 @@ func draftFrom(cfg *config.Config) hostDraft {
 		MDNS: cfg.Discovery.MDNS, Tailscale: cfg.Discovery.Tailscale,
 		TailnetHosts: strings.Join(cfg.Discovery.TailnetHosts, "\n"),
 		Peers:        strings.Join(cfg.Peers, "\n"),
+		P2P:          !cfg.P2P.Disabled,
+		Relay:        cfg.P2P.Relay,
+		Relays:       strings.Join(cfg.P2P.Relays, "\n"),
 	}
 }
 
@@ -46,6 +52,13 @@ func (d hostDraft) apply(cfg config.Config) (config.Config, error) {
 	cfg.Discovery.Tailscale = d.Tailscale
 	cfg.Discovery.TailnetHosts = lines(d.TailnetHosts)
 	cfg.Peers = lines(d.Peers)
+	cfg.P2P.Disabled, cfg.P2P.Relay = !d.P2P, d.Relay
+	cfg.P2P.Relays = lines(d.Relays)
+	for _, r := range cfg.P2P.Relays {
+		if _, err := p2p.ParseRelays([]string{r}); err != nil {
+			return cfg, fmt.Errorf(T("a relay is a multiaddr ending in /p2p/ and its ID: %s"), r)
+		}
+	}
 	return cfg, nil
 }
 

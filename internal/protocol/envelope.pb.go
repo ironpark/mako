@@ -42,6 +42,8 @@ type Envelope struct {
 	//	*Envelope_ListNodes
 	//	*Envelope_Nodes
 	//	*Envelope_Gossip
+	//	*Envelope_Watch
+	//	*Envelope_Changed
 	//	*Envelope_ListSessions
 	//	*Envelope_Sessions
 	//	*Envelope_OpenSession
@@ -175,6 +177,24 @@ func (x *Envelope) GetGossip() *Nodes {
 	if x != nil {
 		if x, ok := x.Body.(*Envelope_Gossip); ok {
 			return x.Gossip
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetWatch() *Watch {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Watch); ok {
+			return x.Watch
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetChanged() *Changed {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Changed); ok {
+			return x.Changed
 		}
 	}
 	return nil
@@ -525,6 +545,14 @@ type Envelope_Gossip struct {
 	Gossip *Nodes `protobuf:"bytes,22,opt,name=gossip,proto3,oneof"`
 }
 
+type Envelope_Watch struct {
+	Watch *Watch `protobuf:"bytes,23,opt,name=watch,proto3,oneof"`
+}
+
+type Envelope_Changed struct {
+	Changed *Changed `protobuf:"bytes,24,opt,name=changed,proto3,oneof"`
+}
+
 type Envelope_ListSessions struct {
 	// Sessions.
 	ListSessions *ListSessions `protobuf:"bytes,30,opt,name=list_sessions,json=listSessions,proto3,oneof"`
@@ -682,6 +710,10 @@ func (*Envelope_Nodes) isEnvelope_Body() {}
 
 func (*Envelope_Gossip) isEnvelope_Body() {}
 
+func (*Envelope_Watch) isEnvelope_Body() {}
+
+func (*Envelope_Changed) isEnvelope_Body() {}
+
 func (*Envelope_ListSessions) isEnvelope_Body() {}
 
 func (*Envelope_Sessions) isEnvelope_Body() {}
@@ -810,7 +842,7 @@ var File_sanbo_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_sanbo_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x17sanbo/v2/envelope.proto\x12\bsanbo.v2\x1a\x13sanbo/v2/chat.proto\x1a\x14sanbo/v2/files.proto\x1a\x12sanbo/v2/git.proto\x1a\x13sanbo/v2/mesh.proto\x1a\x16sanbo/v2/session.proto\"\x9d\x10\n" +
+	"\x17sanbo/v2/envelope.proto\x12\bsanbo.v2\x1a\x13sanbo/v2/chat.proto\x1a\x14sanbo/v2/files.proto\x1a\x12sanbo/v2/git.proto\x1a\x13sanbo/v2/mesh.proto\x1a\x16sanbo/v2/session.proto\"\xf5\x10\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12'\n" +
 	"\x05hello\x18\n" +
@@ -820,7 +852,9 @@ const file_sanbo_v2_envelope_proto_rawDesc = "" +
 	"\n" +
 	"list_nodes\x18\x14 \x01(\v2\x13.sanbo.v2.ListNodesH\x00R\tlistNodes\x12'\n" +
 	"\x05nodes\x18\x15 \x01(\v2\x0f.sanbo.v2.NodesH\x00R\x05nodes\x12)\n" +
-	"\x06gossip\x18\x16 \x01(\v2\x0f.sanbo.v2.NodesH\x00R\x06gossip\x12=\n" +
+	"\x06gossip\x18\x16 \x01(\v2\x0f.sanbo.v2.NodesH\x00R\x06gossip\x12'\n" +
+	"\x05watch\x18\x17 \x01(\v2\x0f.sanbo.v2.WatchH\x00R\x05watch\x12-\n" +
+	"\achanged\x18\x18 \x01(\v2\x11.sanbo.v2.ChangedH\x00R\achanged\x12=\n" +
 	"\rlist_sessions\x18\x1e \x01(\v2\x16.sanbo.v2.ListSessionsH\x00R\flistSessions\x120\n" +
 	"\bsessions\x18\x1f \x01(\v2\x12.sanbo.v2.SessionsH\x00R\bsessions\x12:\n" +
 	"\fopen_session\x18  \x01(\v2\x15.sanbo.v2.OpenSessionH\x00R\vopenSession\x12:\n" +
@@ -887,41 +921,43 @@ var file_sanbo_v2_envelope_proto_goTypes = []any{
 	(*Welcome)(nil),        // 3: sanbo.v2.Welcome
 	(*ListNodes)(nil),      // 4: sanbo.v2.ListNodes
 	(*Nodes)(nil),          // 5: sanbo.v2.Nodes
-	(*ListSessions)(nil),   // 6: sanbo.v2.ListSessions
-	(*Sessions)(nil),       // 7: sanbo.v2.Sessions
-	(*OpenSession)(nil),    // 8: sanbo.v2.OpenSession
-	(*SessionInfo)(nil),    // 9: sanbo.v2.SessionInfo
-	(*CloseSession)(nil),   // 10: sanbo.v2.CloseSession
-	(*RenameSession)(nil),  // 11: sanbo.v2.RenameSession
-	(*AnswerApproval)(nil), // 12: sanbo.v2.AnswerApproval
-	(*Attach)(nil),         // 13: sanbo.v2.Attach
-	(*Input)(nil),          // 14: sanbo.v2.Input
-	(*Output)(nil),         // 15: sanbo.v2.Output
-	(*Resize)(nil),         // 16: sanbo.v2.Resize
-	(*Snapshot)(nil),       // 17: sanbo.v2.Snapshot
-	(*Exited)(nil),         // 18: sanbo.v2.Exited
-	(*ListDir)(nil),        // 19: sanbo.v2.ListDir
-	(*Dir)(nil),            // 20: sanbo.v2.Dir
-	(*ReadFile)(nil),       // 21: sanbo.v2.ReadFile
-	(*File)(nil),           // 22: sanbo.v2.File
-	(*WriteFile)(nil),      // 23: sanbo.v2.WriteFile
-	(*FileOp)(nil),         // 24: sanbo.v2.FileOp
-	(*Search)(nil),         // 25: sanbo.v2.Search
-	(*SearchResult)(nil),   // 26: sanbo.v2.SearchResult
-	(*StageFile)(nil),      // 27: sanbo.v2.StageFile
-	(*Staged)(nil),         // 28: sanbo.v2.Staged
-	(*GitStatus)(nil),      // 29: sanbo.v2.GitStatus
-	(*GitChanges)(nil),     // 30: sanbo.v2.GitChanges
-	(*GitDiff)(nil),        // 31: sanbo.v2.GitDiff
-	(*Diff)(nil),           // 32: sanbo.v2.Diff
-	(*GitLog)(nil),         // 33: sanbo.v2.GitLog
-	(*GitHistory)(nil),     // 34: sanbo.v2.GitHistory
-	(*GitShow)(nil),        // 35: sanbo.v2.GitShow
-	(*GitCommitInfo)(nil),  // 36: sanbo.v2.GitCommitInfo
-	(*GitRun)(nil),         // 37: sanbo.v2.GitRun
-	(*GitResult)(nil),      // 38: sanbo.v2.GitResult
-	(*ReadChat)(nil),       // 39: sanbo.v2.ReadChat
-	(*Chat)(nil),           // 40: sanbo.v2.Chat
+	(*Watch)(nil),          // 6: sanbo.v2.Watch
+	(*Changed)(nil),        // 7: sanbo.v2.Changed
+	(*ListSessions)(nil),   // 8: sanbo.v2.ListSessions
+	(*Sessions)(nil),       // 9: sanbo.v2.Sessions
+	(*OpenSession)(nil),    // 10: sanbo.v2.OpenSession
+	(*SessionInfo)(nil),    // 11: sanbo.v2.SessionInfo
+	(*CloseSession)(nil),   // 12: sanbo.v2.CloseSession
+	(*RenameSession)(nil),  // 13: sanbo.v2.RenameSession
+	(*AnswerApproval)(nil), // 14: sanbo.v2.AnswerApproval
+	(*Attach)(nil),         // 15: sanbo.v2.Attach
+	(*Input)(nil),          // 16: sanbo.v2.Input
+	(*Output)(nil),         // 17: sanbo.v2.Output
+	(*Resize)(nil),         // 18: sanbo.v2.Resize
+	(*Snapshot)(nil),       // 19: sanbo.v2.Snapshot
+	(*Exited)(nil),         // 20: sanbo.v2.Exited
+	(*ListDir)(nil),        // 21: sanbo.v2.ListDir
+	(*Dir)(nil),            // 22: sanbo.v2.Dir
+	(*ReadFile)(nil),       // 23: sanbo.v2.ReadFile
+	(*File)(nil),           // 24: sanbo.v2.File
+	(*WriteFile)(nil),      // 25: sanbo.v2.WriteFile
+	(*FileOp)(nil),         // 26: sanbo.v2.FileOp
+	(*Search)(nil),         // 27: sanbo.v2.Search
+	(*SearchResult)(nil),   // 28: sanbo.v2.SearchResult
+	(*StageFile)(nil),      // 29: sanbo.v2.StageFile
+	(*Staged)(nil),         // 30: sanbo.v2.Staged
+	(*GitStatus)(nil),      // 31: sanbo.v2.GitStatus
+	(*GitChanges)(nil),     // 32: sanbo.v2.GitChanges
+	(*GitDiff)(nil),        // 33: sanbo.v2.GitDiff
+	(*Diff)(nil),           // 34: sanbo.v2.Diff
+	(*GitLog)(nil),         // 35: sanbo.v2.GitLog
+	(*GitHistory)(nil),     // 36: sanbo.v2.GitHistory
+	(*GitShow)(nil),        // 37: sanbo.v2.GitShow
+	(*GitCommitInfo)(nil),  // 38: sanbo.v2.GitCommitInfo
+	(*GitRun)(nil),         // 39: sanbo.v2.GitRun
+	(*GitResult)(nil),      // 40: sanbo.v2.GitResult
+	(*ReadChat)(nil),       // 41: sanbo.v2.ReadChat
+	(*Chat)(nil),           // 42: sanbo.v2.Chat
 }
 var file_sanbo_v2_envelope_proto_depIdxs = []int32{
 	2,  // 0: sanbo.v2.Envelope.hello:type_name -> sanbo.v2.Hello
@@ -930,46 +966,48 @@ var file_sanbo_v2_envelope_proto_depIdxs = []int32{
 	4,  // 3: sanbo.v2.Envelope.list_nodes:type_name -> sanbo.v2.ListNodes
 	5,  // 4: sanbo.v2.Envelope.nodes:type_name -> sanbo.v2.Nodes
 	5,  // 5: sanbo.v2.Envelope.gossip:type_name -> sanbo.v2.Nodes
-	6,  // 6: sanbo.v2.Envelope.list_sessions:type_name -> sanbo.v2.ListSessions
-	7,  // 7: sanbo.v2.Envelope.sessions:type_name -> sanbo.v2.Sessions
-	8,  // 8: sanbo.v2.Envelope.open_session:type_name -> sanbo.v2.OpenSession
-	9,  // 9: sanbo.v2.Envelope.session_info:type_name -> sanbo.v2.SessionInfo
-	10, // 10: sanbo.v2.Envelope.close_session:type_name -> sanbo.v2.CloseSession
-	11, // 11: sanbo.v2.Envelope.rename_session:type_name -> sanbo.v2.RenameSession
-	12, // 12: sanbo.v2.Envelope.answer_approval:type_name -> sanbo.v2.AnswerApproval
-	13, // 13: sanbo.v2.Envelope.attach:type_name -> sanbo.v2.Attach
-	14, // 14: sanbo.v2.Envelope.input:type_name -> sanbo.v2.Input
-	15, // 15: sanbo.v2.Envelope.output:type_name -> sanbo.v2.Output
-	16, // 16: sanbo.v2.Envelope.resize:type_name -> sanbo.v2.Resize
-	17, // 17: sanbo.v2.Envelope.snapshot:type_name -> sanbo.v2.Snapshot
-	18, // 18: sanbo.v2.Envelope.exited:type_name -> sanbo.v2.Exited
-	19, // 19: sanbo.v2.Envelope.list_dir:type_name -> sanbo.v2.ListDir
-	20, // 20: sanbo.v2.Envelope.dir:type_name -> sanbo.v2.Dir
-	21, // 21: sanbo.v2.Envelope.read_file:type_name -> sanbo.v2.ReadFile
-	22, // 22: sanbo.v2.Envelope.file:type_name -> sanbo.v2.File
-	23, // 23: sanbo.v2.Envelope.write_file:type_name -> sanbo.v2.WriteFile
-	24, // 24: sanbo.v2.Envelope.file_op:type_name -> sanbo.v2.FileOp
-	25, // 25: sanbo.v2.Envelope.search:type_name -> sanbo.v2.Search
-	26, // 26: sanbo.v2.Envelope.search_result:type_name -> sanbo.v2.SearchResult
-	27, // 27: sanbo.v2.Envelope.stage_file:type_name -> sanbo.v2.StageFile
-	28, // 28: sanbo.v2.Envelope.staged:type_name -> sanbo.v2.Staged
-	29, // 29: sanbo.v2.Envelope.git_status:type_name -> sanbo.v2.GitStatus
-	30, // 30: sanbo.v2.Envelope.git_changes:type_name -> sanbo.v2.GitChanges
-	31, // 31: sanbo.v2.Envelope.git_diff:type_name -> sanbo.v2.GitDiff
-	32, // 32: sanbo.v2.Envelope.diff:type_name -> sanbo.v2.Diff
-	33, // 33: sanbo.v2.Envelope.git_log:type_name -> sanbo.v2.GitLog
-	34, // 34: sanbo.v2.Envelope.git_history:type_name -> sanbo.v2.GitHistory
-	35, // 35: sanbo.v2.Envelope.git_show:type_name -> sanbo.v2.GitShow
-	36, // 36: sanbo.v2.Envelope.git_commit_info:type_name -> sanbo.v2.GitCommitInfo
-	37, // 37: sanbo.v2.Envelope.git_run:type_name -> sanbo.v2.GitRun
-	38, // 38: sanbo.v2.Envelope.git_result:type_name -> sanbo.v2.GitResult
-	39, // 39: sanbo.v2.Envelope.read_chat:type_name -> sanbo.v2.ReadChat
-	40, // 40: sanbo.v2.Envelope.chat:type_name -> sanbo.v2.Chat
-	41, // [41:41] is the sub-list for method output_type
-	41, // [41:41] is the sub-list for method input_type
-	41, // [41:41] is the sub-list for extension type_name
-	41, // [41:41] is the sub-list for extension extendee
-	0,  // [0:41] is the sub-list for field type_name
+	6,  // 6: sanbo.v2.Envelope.watch:type_name -> sanbo.v2.Watch
+	7,  // 7: sanbo.v2.Envelope.changed:type_name -> sanbo.v2.Changed
+	8,  // 8: sanbo.v2.Envelope.list_sessions:type_name -> sanbo.v2.ListSessions
+	9,  // 9: sanbo.v2.Envelope.sessions:type_name -> sanbo.v2.Sessions
+	10, // 10: sanbo.v2.Envelope.open_session:type_name -> sanbo.v2.OpenSession
+	11, // 11: sanbo.v2.Envelope.session_info:type_name -> sanbo.v2.SessionInfo
+	12, // 12: sanbo.v2.Envelope.close_session:type_name -> sanbo.v2.CloseSession
+	13, // 13: sanbo.v2.Envelope.rename_session:type_name -> sanbo.v2.RenameSession
+	14, // 14: sanbo.v2.Envelope.answer_approval:type_name -> sanbo.v2.AnswerApproval
+	15, // 15: sanbo.v2.Envelope.attach:type_name -> sanbo.v2.Attach
+	16, // 16: sanbo.v2.Envelope.input:type_name -> sanbo.v2.Input
+	17, // 17: sanbo.v2.Envelope.output:type_name -> sanbo.v2.Output
+	18, // 18: sanbo.v2.Envelope.resize:type_name -> sanbo.v2.Resize
+	19, // 19: sanbo.v2.Envelope.snapshot:type_name -> sanbo.v2.Snapshot
+	20, // 20: sanbo.v2.Envelope.exited:type_name -> sanbo.v2.Exited
+	21, // 21: sanbo.v2.Envelope.list_dir:type_name -> sanbo.v2.ListDir
+	22, // 22: sanbo.v2.Envelope.dir:type_name -> sanbo.v2.Dir
+	23, // 23: sanbo.v2.Envelope.read_file:type_name -> sanbo.v2.ReadFile
+	24, // 24: sanbo.v2.Envelope.file:type_name -> sanbo.v2.File
+	25, // 25: sanbo.v2.Envelope.write_file:type_name -> sanbo.v2.WriteFile
+	26, // 26: sanbo.v2.Envelope.file_op:type_name -> sanbo.v2.FileOp
+	27, // 27: sanbo.v2.Envelope.search:type_name -> sanbo.v2.Search
+	28, // 28: sanbo.v2.Envelope.search_result:type_name -> sanbo.v2.SearchResult
+	29, // 29: sanbo.v2.Envelope.stage_file:type_name -> sanbo.v2.StageFile
+	30, // 30: sanbo.v2.Envelope.staged:type_name -> sanbo.v2.Staged
+	31, // 31: sanbo.v2.Envelope.git_status:type_name -> sanbo.v2.GitStatus
+	32, // 32: sanbo.v2.Envelope.git_changes:type_name -> sanbo.v2.GitChanges
+	33, // 33: sanbo.v2.Envelope.git_diff:type_name -> sanbo.v2.GitDiff
+	34, // 34: sanbo.v2.Envelope.diff:type_name -> sanbo.v2.Diff
+	35, // 35: sanbo.v2.Envelope.git_log:type_name -> sanbo.v2.GitLog
+	36, // 36: sanbo.v2.Envelope.git_history:type_name -> sanbo.v2.GitHistory
+	37, // 37: sanbo.v2.Envelope.git_show:type_name -> sanbo.v2.GitShow
+	38, // 38: sanbo.v2.Envelope.git_commit_info:type_name -> sanbo.v2.GitCommitInfo
+	39, // 39: sanbo.v2.Envelope.git_run:type_name -> sanbo.v2.GitRun
+	40, // 40: sanbo.v2.Envelope.git_result:type_name -> sanbo.v2.GitResult
+	41, // 41: sanbo.v2.Envelope.read_chat:type_name -> sanbo.v2.ReadChat
+	42, // 42: sanbo.v2.Envelope.chat:type_name -> sanbo.v2.Chat
+	43, // [43:43] is the sub-list for method output_type
+	43, // [43:43] is the sub-list for method input_type
+	43, // [43:43] is the sub-list for extension type_name
+	43, // [43:43] is the sub-list for extension extendee
+	0,  // [0:43] is the sub-list for field type_name
 }
 
 func init() { file_sanbo_v2_envelope_proto_init() }
@@ -989,6 +1027,8 @@ func file_sanbo_v2_envelope_proto_init() {
 		(*Envelope_ListNodes)(nil),
 		(*Envelope_Nodes)(nil),
 		(*Envelope_Gossip)(nil),
+		(*Envelope_Watch)(nil),
+		(*Envelope_Changed)(nil),
 		(*Envelope_ListSessions)(nil),
 		(*Envelope_Sessions)(nil),
 		(*Envelope_OpenSession)(nil),

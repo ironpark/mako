@@ -504,6 +504,24 @@ func hostSettings(m *model) ggui.Widget {
 					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.PSK })).Password().Name(T("Pre-shared key"))).Width(240)),
 			),
 		),
+		section(T("libp2p"),
+			card(
+				row(T("Link over libp2p"), T("Daemons prove the key to each other without sending it, and reach each other through a relay from behind NAT. Off, peers are reached over QUIC alone."),
+					ui.Switch(m.Host.Field(func(d *hostDraft) *bool { return &d.P2P }), "").Name(T("Link over libp2p"))),
+				row(T("Relay for the mesh"), T("For a node with a public address: the others reach each other through it when they cannot directly."),
+					ui.Switch(m.Host.Field(func(d *hostDraft) *bool { return &d.Relay }), "").Name(T("Relay for the mesh"))),
+				stackedRow(T("Relays"), T("The mesh's relay nodes, one per line, as each one's address below shows it."),
+					ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Relays })).Multiline().Lines(2).Name(T("Relays"))),
+				stackedRow(T("This node's addresses"), T("To list as another node's peer or relay."),
+					ggui.View(m.Conn, func(c connState) ggui.Widget {
+						text := T("Not on libp2p")
+						if addrs := c.Self.DialAddrs(); len(addrs) > 0 {
+							text = strings.Join(addrs, "\n")
+						}
+						return ggui.Text(text).Size(12).Color(tokMuted).Selectable()
+					})),
+			),
+		),
 		saveBar(m),
 	)
 }
@@ -522,7 +540,7 @@ func discoverySettings(m *model) ggui.Widget {
 		),
 		section(T("Static"),
 			card(
-				stackedRow(T("Peers"), T("Addresses always dialed, one per line: host or host:port."),
+				stackedRow(T("Peers"), T("Addresses always dialed, one per line: host, host:port, or a libp2p address ending in /p2p/ and its ID."),
 					ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Peers })).Multiline().Lines(3).Name(T("Peers"))),
 			),
 		),

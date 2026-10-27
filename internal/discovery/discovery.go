@@ -18,16 +18,21 @@ type Found struct {
 	Name   string
 	Addr   string
 	Source string
+	// PeerID and Multiaddrs are where it is on libp2p, if it says.
+	PeerID     string
+	Multiaddrs []string
 }
 
 // Node converts a Found into a protocol node record.
 func (f Found) Node() *protocol.Node {
 	return &protocol.Node{
-		Id:       f.NodeID,
-		Name:     f.Name,
-		Addr:     f.Addr,
-		Source:   f.Source,
-		LastSeen: timestamppb.Now(),
+		Id:         f.NodeID,
+		Name:       f.Name,
+		Addr:       f.Addr,
+		Source:     f.Source,
+		LastSeen:   timestamppb.Now(),
+		PeerId:     f.PeerID,
+		Multiaddrs: f.Multiaddrs,
 	}
 }
 

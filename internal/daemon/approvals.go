@@ -32,7 +32,8 @@ const maxApprovalInput = 16 << 10
 
 type approvals struct {
 	mu      sync.Mutex
-	watched time.Time                   // the last listing by a front-end showing approvals
+	watched time.Time                   // the last listing by a front-end showing approvals, here or on a peer
+	here    time.Time                   // the last such listing by a front-end of this daemon
 	pending map[string]*pendingApproval // by approval ID
 }
 
@@ -41,11 +42,23 @@ type pendingApproval struct {
 	reply   chan hookReply
 }
 
-// watch notes a listing by a front-end that shows approvals.
-func (a *approvals) watch() {
+// watch notes a listing by a front-end that shows approvals: one of this
+// daemon's own when here is set, which the daemon passes on to its peers,
+// else a peer's.
+func (a *approvals) watch(here bool) {
 	a.mu.Lock()
 	a.watched = time.Now()
+	if here {
+		a.here = a.watched
+	}
 	a.mu.Unlock()
+}
+
+// watchedHere reports whether a front-end of this daemon's is watching.
+func (a *approvals) watchedHere() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return time.Since(a.here) < approvalWatch
 }
 
 func (a *approvals) watching() bool {

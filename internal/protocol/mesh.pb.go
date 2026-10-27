@@ -146,18 +146,22 @@ func (x *Welcome) GetNode() *Node {
 
 // Node is a daemon on the mesh.
 type Node struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Addr          string                 `protobuf:"bytes,3,opt,name=addr,proto3" json:"addr,omitempty"`
-	Os            string                 `protobuf:"bytes,4,opt,name=os,proto3" json:"os,omitempty"`
-	Arch          string                 `protobuf:"bytes,5,opt,name=arch,proto3" json:"arch,omitempty"`
-	Version       string                 `protobuf:"bytes,6,opt,name=version,proto3" json:"version,omitempty"`
-	Source        string                 `protobuf:"bytes,7,opt,name=source,proto3" json:"source,omitempty"` // mdns, tailscale, static, inbound, gossip, self
-	LastSeen      *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
-	Features      []string               `protobuf:"bytes,9,rep,name=features,proto3" json:"features,omitempty"`   // protocol extensions it speaks
-	Agents        []*AgentInfo           `protobuf:"bytes,10,rep,name=agents,proto3" json:"agents,omitempty"`      // what it can launch
-	Revision      int64                  `protobuf:"varint,11,opt,name=revision,proto3" json:"revision,omitempty"` // protocol.Revision of its build
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Id       string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name     string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Addr     string                 `protobuf:"bytes,3,opt,name=addr,proto3" json:"addr,omitempty"`
+	Os       string                 `protobuf:"bytes,4,opt,name=os,proto3" json:"os,omitempty"`
+	Arch     string                 `protobuf:"bytes,5,opt,name=arch,proto3" json:"arch,omitempty"`
+	Version  string                 `protobuf:"bytes,6,opt,name=version,proto3" json:"version,omitempty"`
+	Source   string                 `protobuf:"bytes,7,opt,name=source,proto3" json:"source,omitempty"` // mdns, tailscale, static, inbound, gossip, self
+	LastSeen *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
+	Features []string               `protobuf:"bytes,9,rep,name=features,proto3" json:"features,omitempty"`   // protocol extensions it speaks
+	Agents   []*AgentInfo           `protobuf:"bytes,10,rep,name=agents,proto3" json:"agents,omitempty"`      // what it can launch
+	Revision int64                  `protobuf:"varint,11,opt,name=revision,proto3" json:"revision,omitempty"` // protocol.Revision of its build
+	// peer_id is its libp2p identity, and multiaddrs where it listens for
+	// libp2p, relayed addresses included; empty from a daemon without it.
+	PeerId        string   `protobuf:"bytes,12,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
+	Multiaddrs    []string `protobuf:"bytes,13,rep,name=multiaddrs,proto3" json:"multiaddrs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -267,6 +271,20 @@ func (x *Node) GetRevision() int64 {
 		return x.Revision
 	}
 	return 0
+}
+
+func (x *Node) GetPeerId() string {
+	if x != nil {
+		return x.PeerId
+	}
+	return ""
+}
+
+func (x *Node) GetMultiaddrs() []string {
+	if x != nil {
+		return x.Multiaddrs
+	}
+	return nil
 }
 
 // AgentInfo names an agent a node can launch and its profiles.
@@ -404,11 +422,165 @@ func (x *Nodes) GetNodes() []*Node {
 	return nil
 }
 
+// NodeState is what a daemon publishes of itself on the mesh's state
+// topic: its record, its own sessions, and whether a front-end of its is
+// offering to answer approvals.
+type NodeState struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Node              *Node                  `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	Sessions          []*SessionInfo         `protobuf:"bytes,2,rep,name=sessions,proto3" json:"sessions,omitempty"`
+	WatchingApprovals bool                   `protobuf:"varint,3,opt,name=watching_approvals,json=watchingApprovals,proto3" json:"watching_approvals,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *NodeState) Reset() {
+	*x = NodeState{}
+	mi := &file_sanbo_v2_mesh_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeState) ProtoMessage() {}
+
+func (x *NodeState) ProtoReflect() protoreflect.Message {
+	mi := &file_sanbo_v2_mesh_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeState.ProtoReflect.Descriptor instead.
+func (*NodeState) Descriptor() ([]byte, []int) {
+	return file_sanbo_v2_mesh_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *NodeState) GetNode() *Node {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+func (x *NodeState) GetSessions() []*SessionInfo {
+	if x != nil {
+		return x.Sessions
+	}
+	return nil
+}
+
+func (x *NodeState) GetWatchingApprovals() bool {
+	if x != nil {
+		return x.WatchingApprovals
+	}
+	return false
+}
+
+// Watch turns a front-end's stream into a feed of changes: the daemon
+// answers with a Changed whenever the mesh's nodes or sessions change.
+type Watch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Watch) Reset() {
+	*x = Watch{}
+	mi := &file_sanbo_v2_mesh_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Watch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Watch) ProtoMessage() {}
+
+func (x *Watch) ProtoReflect() protoreflect.Message {
+	mi := &file_sanbo_v2_mesh_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Watch.ProtoReflect.Descriptor instead.
+func (*Watch) Descriptor() ([]byte, []int) {
+	return file_sanbo_v2_mesh_proto_rawDescGZIP(), []int{7}
+}
+
+// Changed says what changed, for the front-end to ask for again.
+type Changed struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Nodes         bool                   `protobuf:"varint,1,opt,name=nodes,proto3" json:"nodes,omitempty"`
+	Sessions      bool                   `protobuf:"varint,2,opt,name=sessions,proto3" json:"sessions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Changed) Reset() {
+	*x = Changed{}
+	mi := &file_sanbo_v2_mesh_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Changed) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Changed) ProtoMessage() {}
+
+func (x *Changed) ProtoReflect() protoreflect.Message {
+	mi := &file_sanbo_v2_mesh_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Changed.ProtoReflect.Descriptor instead.
+func (*Changed) Descriptor() ([]byte, []int) {
+	return file_sanbo_v2_mesh_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *Changed) GetNodes() bool {
+	if x != nil {
+		return x.Nodes
+	}
+	return false
+}
+
+func (x *Changed) GetSessions() bool {
+	if x != nil {
+		return x.Sessions
+	}
+	return false
+}
+
 var File_sanbo_v2_mesh_proto protoreflect.FileDescriptor
 
 const file_sanbo_v2_mesh_proto_rawDesc = "" +
 	"\n" +
-	"\x13sanbo/v2/mesh.proto\x12\bsanbo.v2\x1a\x1fgoogle/protobuf/timestamp.proto\"\x82\x01\n" +
+	"\x13sanbo/v2/mesh.proto\x12\bsanbo.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x16sanbo/v2/session.proto\"\x82\x01\n" +
 	"\x05Hello\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
@@ -416,7 +588,7 @@ const file_sanbo_v2_mesh_proto_rawDesc = "" +
 	"\ais_peer\x18\x04 \x01(\bR\x06isPeer\x12\x19\n" +
 	"\bauth_tag\x18\x05 \x01(\tR\aauthTag\"-\n" +
 	"\aWelcome\x12\"\n" +
-	"\x04node\x18\x01 \x01(\v2\x0e.sanbo.v2.NodeR\x04node\"\xb2\x02\n" +
+	"\x04node\x18\x01 \x01(\v2\x0e.sanbo.v2.NodeR\x04node\"\xeb\x02\n" +
 	"\x04Node\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -429,13 +601,25 @@ const file_sanbo_v2_mesh_proto_rawDesc = "" +
 	"\bfeatures\x18\t \x03(\tR\bfeatures\x12+\n" +
 	"\x06agents\x18\n" +
 	" \x03(\v2\x13.sanbo.v2.AgentInfoR\x06agents\x12\x1a\n" +
-	"\brevision\x18\v \x01(\x03R\brevision\";\n" +
+	"\brevision\x18\v \x01(\x03R\brevision\x12\x17\n" +
+	"\apeer_id\x18\f \x01(\tR\x06peerId\x12\x1e\n" +
+	"\n" +
+	"multiaddrs\x18\r \x03(\tR\n" +
+	"multiaddrs\";\n" +
 	"\tAgentInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bprofiles\x18\x02 \x03(\tR\bprofiles\"\v\n" +
 	"\tListNodes\"-\n" +
 	"\x05Nodes\x12$\n" +
-	"\x05nodes\x18\x01 \x03(\v2\x0e.sanbo.v2.NodeR\x05nodesB-Z+github.com/ironpark/sanbo/internal/protocolb\x06proto3"
+	"\x05nodes\x18\x01 \x03(\v2\x0e.sanbo.v2.NodeR\x05nodes\"\x91\x01\n" +
+	"\tNodeState\x12\"\n" +
+	"\x04node\x18\x01 \x01(\v2\x0e.sanbo.v2.NodeR\x04node\x121\n" +
+	"\bsessions\x18\x02 \x03(\v2\x15.sanbo.v2.SessionInfoR\bsessions\x12-\n" +
+	"\x12watching_approvals\x18\x03 \x01(\bR\x11watchingApprovals\"\a\n" +
+	"\x05Watch\";\n" +
+	"\aChanged\x12\x14\n" +
+	"\x05nodes\x18\x01 \x01(\bR\x05nodes\x12\x1a\n" +
+	"\bsessions\x18\x02 \x01(\bR\bsessionsB-Z+github.com/ironpark/sanbo/internal/protocolb\x06proto3"
 
 var (
 	file_sanbo_v2_mesh_proto_rawDescOnce sync.Once
@@ -449,7 +633,7 @@ func file_sanbo_v2_mesh_proto_rawDescGZIP() []byte {
 	return file_sanbo_v2_mesh_proto_rawDescData
 }
 
-var file_sanbo_v2_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_sanbo_v2_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_sanbo_v2_mesh_proto_goTypes = []any{
 	(*Hello)(nil),                 // 0: sanbo.v2.Hello
 	(*Welcome)(nil),               // 1: sanbo.v2.Welcome
@@ -457,18 +641,24 @@ var file_sanbo_v2_mesh_proto_goTypes = []any{
 	(*AgentInfo)(nil),             // 3: sanbo.v2.AgentInfo
 	(*ListNodes)(nil),             // 4: sanbo.v2.ListNodes
 	(*Nodes)(nil),                 // 5: sanbo.v2.Nodes
-	(*timestamppb.Timestamp)(nil), // 6: google.protobuf.Timestamp
+	(*NodeState)(nil),             // 6: sanbo.v2.NodeState
+	(*Watch)(nil),                 // 7: sanbo.v2.Watch
+	(*Changed)(nil),               // 8: sanbo.v2.Changed
+	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
+	(*SessionInfo)(nil),           // 10: sanbo.v2.SessionInfo
 }
 var file_sanbo_v2_mesh_proto_depIdxs = []int32{
-	2, // 0: sanbo.v2.Welcome.node:type_name -> sanbo.v2.Node
-	6, // 1: sanbo.v2.Node.last_seen:type_name -> google.protobuf.Timestamp
-	3, // 2: sanbo.v2.Node.agents:type_name -> sanbo.v2.AgentInfo
-	2, // 3: sanbo.v2.Nodes.nodes:type_name -> sanbo.v2.Node
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	2,  // 0: sanbo.v2.Welcome.node:type_name -> sanbo.v2.Node
+	9,  // 1: sanbo.v2.Node.last_seen:type_name -> google.protobuf.Timestamp
+	3,  // 2: sanbo.v2.Node.agents:type_name -> sanbo.v2.AgentInfo
+	2,  // 3: sanbo.v2.Nodes.nodes:type_name -> sanbo.v2.Node
+	2,  // 4: sanbo.v2.NodeState.node:type_name -> sanbo.v2.Node
+	10, // 5: sanbo.v2.NodeState.sessions:type_name -> sanbo.v2.SessionInfo
+	6,  // [6:6] is the sub-list for method output_type
+	6,  // [6:6] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_sanbo_v2_mesh_proto_init() }
@@ -476,13 +666,14 @@ func file_sanbo_v2_mesh_proto_init() {
 	if File_sanbo_v2_mesh_proto != nil {
 		return
 	}
+	file_sanbo_v2_session_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sanbo_v2_mesh_proto_rawDesc), len(file_sanbo_v2_mesh_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

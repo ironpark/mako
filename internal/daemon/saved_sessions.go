@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/ironpark/sanbo/internal/agentspec"
@@ -148,18 +149,46 @@ func (d *Daemon) listSessions() []*protocol.SessionInfo {
 	}
 	d.sessionMu.Unlock()
 	sortByStart(out)
-	// The repositories are read from disk, outside the lock, once a project.
-	type head struct{ branch, repo string }
-	heads := map[string]head{}
+	// The repositories are read from disk, outside the lock, once a project
+	// in a while: the mesh's state is listed every second.
 	for i, info := range out {
-		h, ok := heads[info.GetProject()]
-		if !ok {
-			h.branch, h.repo = gitstat.Head(info.GetProject())
-			heads[info.GetProject()] = h
-		}
-		out[i].Branch, out[i].Repo = h.branch, h.repo
+		out[i].Branch, out[i].Repo = d.heads.of(info.GetProject())
 	}
 	return out
+}
+
+// headsFor is how long a project's branch is taken as read.
+const headsFor = 3 * time.Second
+
+// heads keeps each project's branch and repository as last read.
+type heads struct {
+	mu    sync.Mutex
+	known map[string]projectHead
+}
+
+type projectHead struct {
+	branch, repo string
+	at           time.Time
+}
+
+// of is project's branch and repository, read again once headsFor has
+// passed.
+func (h *heads) of(project string) (branch, repo string) {
+	h.mu.Lock()
+	p, ok := h.known[project]
+	h.mu.Unlock()
+	if ok && time.Since(p.at) < headsFor {
+		return p.branch, p.repo
+	}
+	p.branch, p.repo = gitstat.Head(project)
+	p.at = time.Now()
+	h.mu.Lock()
+	if h.known == nil {
+		h.known = map[string]projectHead{}
+	}
+	h.known[project] = p
+	h.mu.Unlock()
+	return p.branch, p.repo
 }
 
 func (d *Daemon) openSession(ctx context.Context, req *protocol.OpenSession) (*session.Session, error) {
