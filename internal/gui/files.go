@@ -212,6 +212,31 @@ func joinPath(dir, name string) string {
 	return strings.TrimSuffix(dir, sep) + sep + name
 }
 
+// resolvePath is rel from dir on a node, cleaned, or rel itself when it is
+// absolute there.
+func resolvePath(dir, rel string) string {
+	if strings.HasPrefix(rel, "/") || filepath.IsAbs(rel) {
+		return rel
+	}
+	if pathSep(dir) == `\` {
+		return filepath.Join(dir, rel)
+	}
+	return path.Join(dir, rel)
+}
+
+// openItem opens a file in what shows it: an image in the preview, any
+// other file in a tab, at line when it is not 0.
+func (m *model) openItem(it fileItem, line int) {
+	switch {
+	case isImage(it.Name):
+		m.openPreview(it)
+	case line > 0:
+		m.openFileAt(it, line)
+	default:
+		m.openFile(it)
+	}
+}
+
 // pathSep is the separator of a path on a node: a backslash for a
 // Windows path, which has no slashes.
 func pathSep(p string) string {

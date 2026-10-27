@@ -201,11 +201,14 @@ func TestUsageDetailOverTheTerminalOpensOnHoverAlone(t *testing.T) {
 	p.Frame()
 	p.Advance(2 * time.Second)
 	p.Frame()
-	card, ok := p.Semantics().Find(ggui.RoleText, Tf("%s / %s · %d%%", "50k", "200k", 25))
+	card, ok := p.Semantics().Find(ggui.RoleText, Tf("%d%%", 25))
 	if !ok {
 		t.Fatal("no usage card over the terminal")
 	}
-	detail := func() bool { _, ok := p.Semantics().Find(ggui.RoleText, usageDetail(u)); return ok }
+	detail := func() bool {
+		_, ok := p.Semantics().Find(ggui.RoleText, usageDetail(u, ggui.Peek(m.Minute)))
+		return ok
+	}
 	if detail() {
 		t.Fatal("the terminal's focus opened the card's detail")
 	}

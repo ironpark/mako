@@ -380,23 +380,15 @@ func (r *mdRenderer) open(dest string) {
 		dest = dest[:i]
 	}
 	p := r.beside(dest)
-	it := fileItem{Key: dirKey(r.doc.Node, p), Node: r.doc.Node, Path: p, Name: baseName(p)}
-	if isImage(it.Name) {
-		r.m.openPreview(it)
-		return
-	}
-	r.m.openFile(it)
+	r.m.openItem(fileItem{Key: dirKey(r.doc.Node, p), Node: r.doc.Node, Path: p, Name: baseName(p)}, 0)
 }
 
 // beside is a relative path from the file's folder, on its node.
 func (r *mdRenderer) beside(rel string) string {
-	if strings.HasPrefix(rel, "/") {
-		return rel
-	}
 	if pathSep(r.doc.Path) == `\` {
-		return filepath.Join(filepath.Dir(r.doc.Path), rel)
+		return resolvePath(filepath.Dir(r.doc.Path), rel)
 	}
-	return path.Join(path.Dir(r.doc.Path), rel)
+	return resolvePath(path.Dir(r.doc.Path), rel)
 }
 
 // code is a code block, highlighted in its language when there is one,

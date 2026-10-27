@@ -31,6 +31,13 @@ type terminalView struct {
 	// onDrop hands over files dropped from the desktop, by their paths
 	// here, and types what it gives back; nil types the paths as they are.
 	onDrop func(paths []string, typed func([]string))
+	// onLink follows a link ⌘-clicked, as written, with where the program
+	// said it was.
+	onLink func(target, cwd string)
+	// link is the link under the pointer while ⌘ is held, underlined;
+	// probed is the cell it was last looked for at.
+	link   *termLink
+	probed [2]int
 
 	focused  bool
 	wheelAcc float64
@@ -80,7 +87,7 @@ func newTerminalView(conn *termConn, prefs func() prefs, autoFocus bool) *termin
 	return &terminalView{
 		conn: conn, prefs: prefs, autoFocus: autoFocus,
 		ime: ggui.TextInput(text), imeText: text,
-		pal: darkPalette, lastCell: [2]int{-1, -1},
+		pal: darkPalette, lastCell: [2]int{-1, -1}, probed: [2]int{-1, -1},
 	}
 }
 
@@ -92,6 +99,12 @@ func (t *terminalView) OnPress(fn func()) *terminalView { t.onPress = fn; return
 // where they are.
 func (t *terminalView) OnDrop(fn func(paths []string, typed func([]string))) *terminalView {
 	t.onDrop = fn
+	return t
+}
+
+// OnLink follows the links ⌘-clicked in the terminal.
+func (t *terminalView) OnLink(fn func(target, cwd string)) *terminalView {
+	t.onLink = fn
 	return t
 }
 
@@ -161,6 +174,15 @@ func (t *terminalView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	})
 	if f.exited || f.err != nil {
 		t.paintBanner(clip, r, f)
+	}
+	if t.link != nil {
+		if pt, ok := dst.Pointer(); !ok || !r.Contains(pt) {
+			t.link = nil
+		} else {
+			at := g.cellRect(t.link.col0, t.link.row, t.link.col1-t.link.col0)
+			clip.FillRect(ggui.Rct(ggui.Pt(at.Origin.X, at.Origin.Y+at.Size.H-1), ggui.Sz(at.Size.W, 1)), t.pal.AccentBright)
+			dst.HitCursor(at, ggui.CursorShapePointer)
+		}
 	}
 	if t.dropOver {
 		dst.StrokeRoundRect(ggui.Rct(r.Origin.Add(ggui.Pt(3, 3)), ggui.Sz(r.Size.W-6, r.Size.H-6)), 6, 2, t.pal.Ring)
@@ -492,6 +514,13 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 			t.onPress()
 		}
 		t.dragMods = ev.Mods
+		// A link is followed before the program hears of the click.
+		if ev.Button == ggui.MouseButtonLeft && linkMods(ev.Mods) && t.onLink != nil {
+			if l, ok := t.conn.linkAt(pc.col, pc.row); ok {
+				t.onLink(l.target, t.conn.pwd())
+				return true
+			}
+		}
 		if !ev.Mods.Shift && t.conn.mouseReported() {
 			btn := mouseButton(ev.Button)
 			if t.reportMouse(input.MouseActionPress, btn, true, ev.Pos, ev.Mods, true) {
@@ -532,6 +561,7 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 		}
 		return true
 	case ggui.PointerMove:
+		t.hoverLink(pc, ev.Mods)
 		// Motion without a button is reported only in any-event mode, which
 		// the encoder decides from the program's modes. A drag's moves come
 		// as PointerDrag too, which reports them with the button held, so
@@ -568,6 +598,26 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 		return true
 	}
 	return false
+}
+
+// hoverLink underlines the link under the pointer while the keys that
+// follow it are held.
+func (t *terminalView) hoverLink(pc pointerCell, mods ggui.Mods) {
+	was := t.link
+	switch {
+	case t.onLink == nil || !linkMods(mods):
+		t.link, t.probed = nil, [2]int{-1, -1}
+	case was != nil && pc.row == was.row && pc.col >= was.col0 && pc.col < was.col1:
+	case t.probed != [2]int{pc.col, pc.row}:
+		t.probed = [2]int{pc.col, pc.row}
+		t.link = nil
+		if l, ok := t.conn.linkAt(pc.col, pc.row); ok {
+			t.link = &l
+		}
+	}
+	if (was == nil) != (t.link == nil) || was != nil && t.link != nil && *was != *t.link {
+		t.conn.requestPaint()
+	}
 }
 
 // moved reports whether the pointer entered another cell since the last

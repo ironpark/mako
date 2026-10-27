@@ -49,6 +49,9 @@ func Read(ctx context.Context, info *protocol.SessionInfo, env map[string]string
 		return out, nil
 	}
 	out.Messages, out.Truncated, err = readMessages(path, a)
+	if err == nil {
+		out.Agents = new(agentScans).read(a, path, out.Messages)
+	}
 	return out, err
 }
 
@@ -256,6 +259,7 @@ func readMessages(path string, a *Agent) ([]*protocol.ChatMessage, bool, error) 
 				if i, ok := calls[m.GetId()]; ok && i >= dropped {
 					messages[i-dropped].Result = m.GetText()
 					messages[i-dropped].Error = m.GetError()
+					messages[i-dropped].Pending = false
 					size += len(m.GetText())
 					trim()
 					continue
@@ -263,6 +267,7 @@ func readMessages(path string, a *Agent) ([]*protocol.ChatMessage, bool, error) 
 			}
 			if m.GetRole() == "tool" && !m.GetOutput() && m.GetId() != "" {
 				calls[m.GetId()] = dropped + len(messages)
+				m.Pending = true
 			}
 			messages = append(messages, m)
 			size += len(m.GetText())
@@ -482,6 +487,7 @@ func ReadBound(info *protocol.SessionInfo, path string) (*protocol.Chat, error) 
 	if err == nil {
 		var scan usageScan
 		out.Usage = scan.read(path, a)
+		out.Agents = new(agentScans).read(a, path, out.Messages)
 	}
 	return out, err
 }
@@ -489,10 +495,11 @@ func ReadBound(info *protocol.SessionInfo, path string) (*protocol.Chat, error) 
 // Cache keeps the last read of a bound log, so polling a log that has not
 // changed costs one stat.
 type Cache struct {
-	mu    sync.Mutex
-	stat  os.FileInfo
-	chat  *protocol.Chat // shared with every caller, which must not change it
-	usage usageScan
+	mu     sync.Mutex
+	stat   os.FileInfo
+	chat   *protocol.Chat // shared with every caller, which must not change it
+	usage  usageScan
+	agents agentScans
 }
 
 // ReadBound is ReadBound, answered from the cache while the log is the same
@@ -501,11 +508,21 @@ func (c *Cache) ReadBound(info *protocol.SessionInfo, path string) (*protocol.Ch
 	stat, statErr := os.Stat(path)
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	a, ok := Lookup(info.GetAgent())
 	if statErr == nil && c.stat != nil && c.chat.GetConversation() == info.GetConversationId() && os.SameFile(c.stat, stat) &&
 		c.stat.Size() == stat.Size() && c.stat.ModTime().Equal(stat.ModTime()) {
+		// A subagent works in a log of its own while the session's is
+		// quiet: the agents are read again while one is running.
+		if slices.ContainsFunc(c.chat.GetAgents(), (*protocol.SubAgent).GetRunning) {
+			if agents := c.agents.read(a, path, c.chat.GetMessages()); !slices.EqualFunc(agents, c.chat.GetAgents(), protocol.Same) {
+				c.chat = withAgents(c.chat, agents)
+			}
+		}
 		return c.chat, nil
 	}
-	a, ok := Lookup(info.GetAgent())
+	if c.chat.GetConversation() != info.GetConversationId() {
+		c.agents = agentScans{} // another conversation's
+	}
 	chat := &protocol.Chat{Supported: ok, Conversation: info.GetConversationId()}
 	err := Verify(info, path)
 	if err == nil {
@@ -513,6 +530,7 @@ func (c *Cache) ReadBound(info *protocol.SessionInfo, path string) (*protocol.Ch
 	}
 	if err == nil {
 		chat.Usage = c.usage.read(path, a)
+		chat.Agents = c.agents.read(a, path, chat.Messages)
 	}
 	if err == nil && statErr == nil {
 		c.stat, c.chat = stat, chat
@@ -520,6 +538,15 @@ func (c *Cache) ReadBound(info *protocol.SessionInfo, path string) (*protocol.Ch
 		c.stat = nil
 	}
 	return chat, err
+}
+
+// withAgents is chat with other agents. chat is shared, so it is copied,
+// all but the agents; a field Chat gains is copied here too.
+func withAgents(chat *protocol.Chat, agents []*protocol.SubAgent) *protocol.Chat {
+	return &protocol.Chat{
+		Supported: chat.GetSupported(), Conversation: chat.GetConversation(), Messages: chat.GetMessages(),
+		Truncated: chat.GetTruncated(), Usage: chat.GetUsage(), Agents: agents,
+	}
 }
 
 // ReadUsage is a daemon-verified log's usage alone, read on from where the

@@ -21,6 +21,7 @@ message ChatMessage {
   string result = 6;
   bool output = 7;
   bool error = 8;
+  bool pending = 9; // a call not answered yet
 }
 
 // Chat answers ReadChat.
@@ -30,6 +31,22 @@ message Chat {
   repeated ChatMessage messages = 3;
   bool truncated = 4;
   Usage usage = 5;
+  repeated SubAgent agents = 6; // the subagents its calls started, oldest first
+}
+
+// SubAgent is an agent a call of the conversation's started, such as
+// Claude's Agent tool does, and how far it has got.
+message SubAgent {
+  string id = 1;
+  string call_id = 2; // the call that started it, if it is known
+  string kind = 3; // the sort of agent, as Explore
+  string description = 4;
+  bool running = 5;
+  int32 tool_calls = 6; // how many calls it has made
+  string tool = 7; // its latest call
+  string detail = 8;
+  int64 started = 9; // Unix seconds
+  int64 updated = 10; // Unix seconds, when it last wrote
 }
 
 // Usage is the tokens a conversation has spent.

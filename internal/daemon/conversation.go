@@ -350,8 +350,8 @@ func (d *Daemon) usageForSession(s *session.Session) (*protocol.Usage, error) {
 	if cache := d.conversations.chatCache(s); cache != nil {
 		return cache.ReadUsage(s.Info(), path)
 	}
-	chat, err := transcript.ReadBound(s.Info(), path)
-	return chat.GetUsage(), err
+	var once transcript.Cache // the usage alone, without the messages
+	return once.ReadUsage(s.Info(), path)
 }
 
 // claimedLocked is the conversations saved sessions other than id hold.

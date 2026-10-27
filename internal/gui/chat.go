@@ -124,7 +124,8 @@ func sessionView(m *model, id string, group int) ggui.Widget {
 		}
 		focus := ggui.Peek(m.FocusGroup) == group
 		term := newTerminalView(m.conns[id], func() prefs { return ggui.Peek(m.Prefs) }, focus).OnPress(func() { m.focusGroup(group) }).
-			OnDrop(func(paths []string, typed func([]string)) { m.handOver(id, paths, typed) })
+			OnDrop(func(paths []string, typed func([]string)) { m.handOver(id, paths, typed) }).
+			OnLink(func(target, cwd string) { m.followLink(id, target, cwd) })
 		body := ggui.DropZone(term, func(d ggui.Dropped[pathDrag]) { term.setDropOver(false); term.typePaths([]string{d.Value.Path}) }).OnHover(term.setDropOver)
 		return ggui.Column(approvalBar(m, id), ggui.Expanded(ggui.Stack(body, usageOverlay(m, id, nil)).Expand())).Stretch()
 	})
@@ -247,7 +248,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 				Fill(tokSurface1).Radius(6).Pad(4, 8))
 		}
 		info, _ := m.session(id)
-		rows = append(rows, chatTurns(m, id, info, state, v.Chat.GetMessages())...)
+		rows = append(rows, chatTurns(m, id, info, state, v.Chat.GetMessages(), agentsByCall(v.Chat.GetAgents()))...)
 		if len(v.Chat.GetMessages()) > 0 && scroll.MaxOffset()-scroll.Offset() < 32 {
 			rows = append(rows, &revealOnce{child: ggui.Box().Height(1), done: func() {}})
 		}
@@ -261,7 +262,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		if u.IsZero() {
 			return ggui.Box()
 		}
-		return ui.Tooltip(muted(ggui.Text(usageLine(u)).Size(12).NoWrap()), usageDetail(u))
+		return usageTip(m, u, muted(ggui.Text(usageLine(u)).Size(12).NoWrap()))
 	})
 	footer := ggui.Box(ggui.Row(
 		ggui.Expanded(muted(ggui.Text(T("Messages go to the live session. Use Terminal for special keys.")).Size(12).NoWrap().Ellipsis())),
@@ -271,7 +272,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	).Gap(8)).Pad(6, 12)
 	// The composer belongs to Chat alone, as in ovis: Terminal mode's grid
 	// is its own input surface, and a file view has no session to type into.
-	return ggui.Pointer(ggui.Column(ggui.Expanded(ggui.Stack(feed, usageOverlay(m, id, chatUsage)).Expand()), footer, approvalCard(m, id), composer(m, id, state.draft)).Stretch()).
+	return ggui.Pointer(ggui.Column(ggui.Expanded(ggui.Stack(feed, usageOverlay(m, id, chatUsage)).Expand()), footer, approvalCard(m, id), runningAgents(m, id, state), composer(m, id, state.draft)).Stretch()).
 		OnDown(func(ggui.PointerEvent) { m.focusGroup(group) })
 }
 
@@ -279,7 +280,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 // as a page, and each run of tools as one quiet card whose rows fold. A
 // long run folds into one line naming its tools, all but the last run,
 // which is the agent's work in hand.
-func chatTurns(m *model, id string, info *protocol.SessionInfo, state *chatState, messages []*protocol.ChatMessage) []ggui.Widget {
+func chatTurns(m *model, id string, info *protocol.SessionInfo, state *chatState, messages []*protocol.ChatMessage, agents map[string]*protocol.SubAgent) []ggui.Widget {
 	var rows []ggui.Widget
 	lastRun := -1
 	for i := range messages {
@@ -293,7 +294,7 @@ func chatTurns(m *model, id string, info *protocol.SessionInfo, state *chatState
 			var tools []ggui.Widget
 			var names []string
 			for i < len(messages) && messages[i].GetRole() == "tool" {
-				tools = append(tools, toolRow(m, state, messages[i]))
+				tools = append(tools, toolRow(m, id, state, messages[i], agents[messages[i].GetId()]))
 				name, _, _, _, _ := toolParts(messages[i])
 				names = append(names, name)
 				i++
@@ -394,20 +395,121 @@ func copyButton(m *model, text string) ggui.Widget {
 }
 
 // toolRow is one tool call: a glyph, its name and argument summary, and a
-// fold with the arguments and what it printed.
-func toolRow(m *model, state *chatState, msg *protocol.ChatMessage) ggui.Widget {
+// fold with the arguments and what it printed. A call at work turns a
+// spinner in place of its glyph; one that started a subagent says under
+// it how far the agent has got.
+func toolRow(m *model, id string, state *chatState, msg *protocol.ChatMessage, agent *protocol.SubAgent) ggui.Widget {
 	name, detail, _, _, failed := toolParts(msg)
 	open := state.toolOpen(chatMessageKey(msg), failed)
-	glyph := icon(toolGlyph(name)).Size(14).Color(tokMuted)
-	if failed {
-		glyph = glyph.Color(tokDotDown)
+	var glyph ggui.Widget = icon(toolGlyph(name)).Size(14).Color(pick(failed, tokDotDown, tokMuted))
+	if msg.GetPending() || agent.GetRunning() {
+		still := glyph
+		glyph = ggui.Reactive(func() ggui.Widget {
+			if toolLive(m, id, msg, agent) {
+				return ui.Spinner().Size(14)
+			}
+			return still
+		})
 	}
 	label := name
 	if detail != "" {
 		label += "  " + detail
 	}
 	header := foldHeader(open, glyph, ggui.Text(name).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap(), detail, label)
-	return ggui.Column(header, ggui.If(open, func() ggui.Widget { return toolBody(m, msg) })).Gap(2).Stretch()
+	rows := []ggui.Widget{header}
+	if agent != nil {
+		rows = append(rows, ggui.Padding(agentProgress(agent), 0, 6, 2, 28))
+	}
+	rows = append(rows, ggui.If(open, func() ggui.Widget { return toolBody(m, msg) }))
+	return ggui.Column(rows...).Gap(2).Stretch()
+}
+
+// toolLive reports whether a call is at work: a subagent it started still
+// running, or no answer yet while its session's agent works. A call left
+// unanswered by an agent stopped under it is not.
+func toolLive(m *model, id string, msg *protocol.ChatMessage, agent *protocol.SubAgent) bool {
+	s, ok := sessionIn(m.Sessions.Get(), id)
+	switch {
+	case !ok || s.GetState() != protocol.StateRunning:
+		return false
+	case agent.GetRunning():
+		return true
+	case !msg.GetPending():
+		return false
+	}
+	switch s.GetStatus() {
+	case protocol.AgentIdle, protocol.AgentDone:
+		return false
+	}
+	return true
+}
+
+func agentsByCall(agents []*protocol.SubAgent) map[string]*protocol.SubAgent {
+	out := make(map[string]*protocol.SubAgent, len(agents))
+	for _, a := range agents {
+		if a.GetCallId() != "" {
+			out[a.GetCallId()] = a
+		}
+	}
+	return out
+}
+
+// agentProgress is how far a subagent has got: its sort, the calls it has
+// made and its latest.
+func agentProgress(a *protocol.SubAgent) ggui.Widget {
+	var parts []string
+	if a.GetKind() != "" {
+		parts = append(parts, a.GetKind())
+	}
+	parts = append(parts, Tf("%d tool calls", a.GetToolCalls()))
+	line := []ggui.Widget{muted(ggui.Text(strings.Join(parts, " · ")).Size(11.5).NoWrap())}
+	if a.GetTool() != "" {
+		line = append(line,
+			icon(toolGlyph(a.GetTool())).Size(12).Color(tokExtraMuted),
+			ggui.Expanded(ggui.Text(strings.TrimSpace(a.GetTool()+"  "+a.GetDetail())).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis()))
+	}
+	return ggui.Row(line...).Gap(6).Align(ggui.AlignCenter)
+}
+
+// runningAgents lists, over the composer, the subagents of session id
+// still at work: what each was asked, how many calls it has made, its
+// latest, and how long it has run. Nothing shows while none runs, nor once
+// the session has ended.
+func runningAgents(m *model, id string, state *chatState) ggui.Widget {
+	running := ggui.Derived(func() []*protocol.SubAgent {
+		if s, ok := sessionIn(m.Sessions.Get(), id); !ok || s.GetState() != protocol.StateRunning {
+			return nil
+		}
+		var out []*protocol.SubAgent
+		for _, a := range state.result.Get().Chat.GetAgents() {
+			if a.GetRunning() {
+				out = append(out, a)
+			}
+		}
+		return out
+	}).WithEqual(func(a, b []*protocol.SubAgent) bool { return slices.EqualFunc(a, b, protocol.Same[*protocol.SubAgent]) })
+	return ggui.View(running, func(agents []*protocol.SubAgent) ggui.Widget {
+		if len(agents) == 0 {
+			return ggui.Box()
+		}
+		rows := make([]ggui.Widget, len(agents))
+		for i, a := range agents {
+			title := cmp.Or(a.GetDescription(), a.GetKind(), T("Subagent"))
+			rows[i] = ggui.Row(
+				ui.Spinner().Size(13),
+				ggui.Text(title).Size(12.5).Weight(ggui.WeightMedium).NoWrap(),
+				ggui.Expanded(agentProgress(a)),
+				ggui.View(m.Minute, func(now time.Time) ggui.Widget {
+					if a.GetStarted() == 0 {
+						return ggui.Box()
+					}
+					return muted(ggui.Text(untilText(now.Sub(time.Unix(a.GetStarted(), 0)))).Size(11.5).NoWrap())
+				}),
+			).Gap(8).Align(ggui.AlignCenter)
+		}
+		return ggui.Box(ggui.Box(ggui.Column(rows...).Gap(6).Stretch()).
+			Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(8, 12)).Pad(0, 16)
+	})
 }
 
 // toolFrame is the frame of a tool's code, output or command.

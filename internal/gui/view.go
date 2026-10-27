@@ -617,11 +617,19 @@ func emptyState(m *model) ggui.Widget {
 // the terminal itself takes the keys, as ovis does.
 func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
 	disabled := ggui.Derived(func() bool { return !slices.Contains(m.Attached.Get(), id) })
-	field := ui.TextField(draft).
-		Placeholder(T("Message the agent, or type a command and press Enter")).
+	// Enter sends at once; Shift+Enter breaks the line, and the box grows
+	// with the lines to a few before it scrolls.
+	field := ui.TextField(draft).Lines(1).
+		Placeholder(T("Message the agent. Enter sends, Shift+Enter adds a line")).
 		Name(T("Message")).
 		BindDisabled(disabled).
-		OnSubmit(func(string) { m.sendComposer(id) })
+		OnKey(func(ev ggui.KeyEvent) bool {
+			if (ev.Key == ggui.KeyEnter || ev.Key == ggui.KeyNumpadEnter) && !ev.Mods.Shift && !ev.Mods.Alt {
+				m.sendComposer(id)
+				return true
+			}
+			return false
+		})
 	pills := ggui.Reactive(func() ggui.Widget {
 		s, ok := sessionIn(m.Sessions.Get(), id)
 		if !ok {
@@ -639,7 +647,7 @@ func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
 	// inserted as paths.
 	over := ggui.State(false)
 	content := ggui.Column(
-		inlineField(field),
+		ggui.Box(inlineField(field)).MaxHeight(composerMaxHeight),
 		ggui.Row(pills, ggui.Spacer(), send).Gap(8),
 	).Gap(8).Stretch()
 	box := ggui.View(over, func(o bool) ggui.Widget {
@@ -664,6 +672,10 @@ func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
 	// none: the box keeps its own height and the whole pane's width.
 	return ggui.Box(files).Pad(10, 16, 14, 16)
 }
+
+// composerMaxHeight is as tall as the composer's text grows, about ten
+// lines, before it scrolls.
+const composerMaxHeight = 220
 
 // inlineField drops a text field's own chrome inside the composer box, so
 // the box is the one surface, as in Paseo.

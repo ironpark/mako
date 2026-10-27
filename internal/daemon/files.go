@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ironpark/sanbo/internal/gitstat"
+	"github.com/ironpark/sanbo/internal/mcp"
 	"github.com/ironpark/sanbo/internal/protocol"
 	"github.com/ironpark/sanbo/internal/transport"
 	"google.golang.org/protobuf/proto"
@@ -40,10 +41,11 @@ func (d *Daemon) handleListDir(ctx context.Context, stream *transport.Stream, en
 func (d *Daemon) handleReadFile(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeFile,
 		func(r *protocol.ReadFile) (*protocol.File, error) {
+			path := mcp.ExpandHome(r.GetPath()) // as a terminal may write it
 			if r.GetImage() {
-				return readImage(r.GetPath())
+				return readImage(path)
 			}
-			return readFile(r.GetPath(), int(r.GetMax()))
+			return readFile(path, int(r.GetMax()))
 		})
 }
 

@@ -148,7 +148,17 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					for _, cmd := range []string{"ls internal", "go vet ./...", "go test ./internal/gui", "git status --short"} {
 						v.Chat.Messages = append(v.Chat.Messages, &protocol.ChatMessage{Role: "tool", Tool: "Bash", Detail: cmd, Text: cmd})
 					}
-					v.Chat.Usage = &protocol.Usage{Input: 41200, CachedInput: 380000, Output: 9800, Context: 96000, Window: 258400}
+					// A subagent at work, and the call still waiting on it.
+					v.Chat.Messages = append(v.Chat.Messages,
+						&protocol.ChatMessage{Role: "tool", Id: "agent", Tool: "Agent", Detail: "Find the flaky tests", Pending: true},
+						&protocol.ChatMessage{Role: "tool", Id: "build", Tool: "Bash", Detail: "go build ./...", Text: "go build ./...", Pending: true})
+					v.Chat.Agents = []*protocol.SubAgent{{Id: "a1", CallId: "agent", Kind: "Explore", Description: "Find the flaky tests",
+						Running: true, ToolCalls: 7, Tool: "Grep", Detail: "probeUntil", Started: time.Now().Add(-3 * time.Minute).Unix()}}
+					v.Chat.Usage = &protocol.Usage{Input: 41200, CachedInput: 380000, Output: 9800, Context: 96000, Window: 258400,
+						Limits: []*protocol.RateLimit{
+							{Minutes: protocol.FiveHours, Used: 23, Resets: time.Now().Add(2*time.Hour + 10*time.Minute).Unix()},
+							{Minutes: protocol.Week, Used: 84, Resets: time.Now().Add(76 * time.Hour).Unix()},
+						}}
 					chat.result.Set(v)
 					usage := m.usageState(id)
 					usage.loading = true

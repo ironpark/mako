@@ -3,6 +3,7 @@ package gui
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -46,8 +47,9 @@ func usageLine(u *protocol.Usage) string {
 	return ctx + Tf("%s in · %s out", tokens(u.GetInput()+u.GetCachedInput()), tokens(u.GetOutput()))
 }
 
-// usageDetail is a conversation's tokens in full.
-func usageDetail(u *protocol.Usage) string {
+// usageDetail is a conversation's tokens in full, and the account's limits
+// as they stand at now, with when each starts over.
+func usageDetail(u *protocol.Usage, now time.Time) string {
 	s := Tf("Input %s (cached %s) · output %s", tokens(u.GetInput()+u.GetCachedInput()), tokens(u.GetCachedInput()), tokens(u.GetOutput()))
 	if u.GetContext() > 0 {
 		s += "\n" + Tf("Latest prompt %s tokens", tokens(u.GetContext()))
@@ -56,12 +58,19 @@ func usageDetail(u *protocol.Usage) string {
 		}
 	}
 	for _, l := range u.GetLimits() {
-		s += "\n" + Tf("%s limit %d%% used", limitName(l.GetMinutes()), int(l.GetUsed()+0.5))
-		if l.GetResets() > 0 {
-			s += Tf(", resets %s", time.Unix(l.GetResets(), 0).Format("01-02 15:04"))
+		used, resets := limitNow(l, now)
+		s += "\n" + Tf("%s limit %d%% used", limitName(l.GetMinutes()), int(used+0.5))
+		if resets > 0 {
+			s += Tf(", resets in %s (%s)", untilText(resets), time.Unix(l.GetResets(), 0).Format("01-02 15:04"))
 		}
 	}
 	return s
+}
+
+// usageTip shows the usage's detail under the pointer over w, written as
+// it opens, so its waits are never stale.
+func usageTip(m *model, u *protocol.Usage, w ggui.Widget) ggui.Widget {
+	return ui.TooltipText(w, func() string { return usageDetail(u, ggui.Peek(m.Minute)) })
 }
 
 // usageCornerLabels are the corners the usage overlay can sit in, by value,
@@ -158,52 +167,62 @@ func limitName(minutes int64) string {
 	return Tf("%dm", minutes)
 }
 
-// usageCard is the overlay itself: the context filled, as a share of the
-// window with a bar when the agent names the window, and each of the
-// account's limits, such as Claude's five hours and week, with when it
-// starts over. An account the agent reports no limits for, such as one on
-// an API key, shows the tokens spent instead.
+// usageCard is the overlay itself, one short line: how full the context
+// is, on a ring when the agent names the window, then each of the
+// account's limits, such as Claude's five hours and week, as spent so far.
+// An account the agent reports no limits for, such as one on an API key,
+// shows the tokens spent instead. When the limits start over, and the
+// rest, open under the pointer.
 func usageCard(m *model, u *protocol.Usage) ggui.Widget {
 	if u.IsZero() {
 		return ggui.Box()
 	}
-	label := func(s string) ggui.Widget {
-		return ggui.Box(ggui.Text(s).Size(11).Color(tokExtraMuted).NoWrap()).Width(52)
+	label := func(s string) ggui.Widget { return ggui.Text(s).Size(11).Color(tokExtraMuted).NoWrap() }
+	pair := func(lead ggui.Widget, v string, share float64) ggui.Widget {
+		return ggui.Row(lead, ggui.Text(v).Size(11.5).Color(shareColor(share, tokFg)).NoWrap()).Gap(4).Align(ggui.AlignCenter)
 	}
-	line := func(name, v string) ggui.Widget {
-		return ggui.Row(label(name), ggui.Text(v).Size(11.5).Color(tokFg).NoWrap()).Gap(6).Align(ggui.AlignCenter)
-	}
-	bar := func(share float64) ggui.Widget { return ggui.Box(ui.Progress(ggui.Const(share)).Height(3)).Width(200) }
-	var rows []ggui.Widget
+	var head []ggui.Widget
 	switch {
 	case u.GetContext() > 0 && u.GetWindow() > 0:
-		rows = append(rows, line(T("Context"), Tf("%s / %s · %d%%", tokens(u.GetContext()), tokens(u.GetWindow()), u.GetContext()*100/u.GetWindow())),
-			bar(float64(u.GetContext())/float64(u.GetWindow())))
+		share := float64(u.GetContext()) / float64(u.GetWindow())
+		ring := ui.ProgressRing(ggui.Const(share)).Size(12).Color(shareColor(share, tokFg)).Track(tokSurface3)
+		head = append(head, pair(ring, Tf("%d%%", u.GetContext()*100/u.GetWindow()), share))
 	case u.GetContext() > 0:
-		rows = append(rows, line(T("Context"), tokens(u.GetContext())))
+		head = append(head, pair(label(T("Context")), tokens(u.GetContext()), 0))
 	}
-	if limits := u.GetLimits(); len(limits) > 0 {
-		// Only the limits age, as their resets come nearer.
-		rows = append(rows, ggui.View(m.Minute, func(now time.Time) ggui.Widget {
-			var rows []ggui.Widget
-			for _, l := range limits {
-				used, resets := limitNow(l, now)
-				v := Tf("%d%%", int(used+0.5))
-				if resets > 0 {
-					v += " · " + Tf("resets in %s", untilText(resets))
-				}
-				rows = append(rows, line(limitName(l.GetMinutes()), v), bar(used/100))
-			}
-			return ggui.Column(rows...).Gap(5)
+	if len(head) > 0 {
+		head = append(head, ggui.Box(vline()).Height(10))
+	}
+	card := func(items []ggui.Widget) ggui.Widget {
+		return usageTip(m, u, ggui.Reactive(func() ggui.Widget {
+			return ggui.Box(ggui.Row(items...).Gap(8).Align(ggui.AlignCenter)).
+				Fill(tokSurface1).Border(1, tokBorder).Radius(7).Pad(4, 8).Shadow(uitheme.Use().PanelShadow)
 		}))
-	} else {
-		rows = append(rows, line(T("Total"), Tf("%s in · %s out", tokens(u.GetInput()+u.GetCachedInput()), tokens(u.GetOutput()))))
 	}
-	card := ggui.Reactive(func() ggui.Widget {
-		return ggui.Box(ggui.Column(rows...).Gap(5)).
-			Fill(tokSurface1).Border(1, tokBorder).Radius(8).Pad(7, 10).Shadow(uitheme.Use().PanelShadow)
+	if len(u.GetLimits()) == 0 {
+		return card(append(head, label(Tf("%s in · %s out", tokens(u.GetInput()+u.GetCachedInput()), tokens(u.GetOutput())))))
+	}
+	// Only the limits age, as their resets come nearer.
+	return ggui.View(m.Minute, func(now time.Time) ggui.Widget {
+		items := slices.Clone(head)
+		for _, l := range u.GetLimits() {
+			used, _ := limitNow(l, now)
+			items = append(items, pair(label(limitName(l.GetMinutes())), Tf("%d%%", int(used+0.5)), used/100))
+		}
+		return card(items)
 	})
-	return ui.Tooltip(card, usageDetail(u))
+}
+
+// shareColor is the colour for a share spent: c, then amber from 80% on
+// and red from 95%.
+func shareColor(share float64, c uitheme.Color) uitheme.Color {
+	switch {
+	case share >= .95:
+		return tokDiffRemoved
+	case share >= .8:
+		return tokDotWaiting
+	}
+	return c
 }
 
 // limitNow is a limit as it stands at now: what is spent, and how long

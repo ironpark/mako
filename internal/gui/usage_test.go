@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -22,7 +23,7 @@ func TestUsageOverlayFollowsItsSetting(t *testing.T) {
 	defer p.Close()
 	p.Frame()
 	find := func() (ggui.Rect, bool) {
-		n, ok := p.Semantics().Find(ggui.RoleText, Tf("%s / %s · %d%%", "50k", "200k", 25))
+		n, ok := p.Semantics().Find(ggui.RoleText, Tf("%d%%", 25))
 		return n.Rect, ok
 	}
 	r, ok := find()
@@ -76,16 +77,20 @@ func TestUsageOverlayShowsTheAccountsLimits(t *testing.T) {
 	p := ggui.ProbeBuilder(func() ggui.Widget { return usageOverlay(m, "s", nil) }, ggui.Sz(800, 600))
 	defer p.Close()
 	p.Frame()
-	for _, want := range []string{
-		Tf("%dh", 5), Tf("%d%%", 24) + " · " + Tf("resets in %s", Tf("%dh %dm", 2, 10)),
-		T("Week"), Tf("%d%%", 41) + " · " + Tf("resets in %s", Tf("%dd %dh", 3, 4)),
-	} {
+	for _, want := range []string{Tf("%d%%", 5), Tf("%dh", 5), Tf("%d%%", 24), T("Week"), Tf("%d%%", 41)} {
 		if _, ok := p.Semantics().Find(ggui.RoleText, want); !ok {
 			t.Errorf("no %q:\n%s", want, p.Semantics().String())
 		}
 	}
-	if _, ok := p.Semantics().Find(ggui.RoleText, T("Total")); ok {
+	if _, ok := p.Semantics().Find(ggui.RoleText, Tf("%s in · %s out", "1k", "500")); ok {
 		t.Error("tokens shown beside the limits")
+	}
+	// When they start over is told under the pointer.
+	detail := usageDetail(ggui.Peek(state.usage), now)
+	for _, want := range []string{Tf("%dh %dm", 2, 10), Tf("%dd %dh", 3, 4)} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("detail %q has no %q", detail, want)
+		}
 	}
 	// Past its reset, a window has started over.
 	m.Minute.Set(now.Add(3 * time.Hour))
@@ -112,11 +117,14 @@ func TestUsageDetailOpensOnHoverAlone(t *testing.T) {
 	p.Type(ggui.Mods{}, ggui.KeyTab) // the terminal takes the keyboard
 	p.Frame()
 	p.Advance(time.Second)
-	detail := func() bool { _, ok := p.Semantics().Find(ggui.RoleText, usageDetail(u)); return ok }
+	detail := func() bool {
+		_, ok := p.Semantics().Find(ggui.RoleText, usageDetail(u, ggui.Peek(m.Minute)))
+		return ok
+	}
 	if detail() {
 		t.Fatal("the terminal's focus opened the detail")
 	}
-	ctx, ok := p.Semantics().Find(ggui.RoleText, Tf("%s / %s · %d%%", "50k", "200k", 25))
+	ctx, ok := p.Semantics().Find(ggui.RoleText, Tf("%d%%", 25))
 	if !ok {
 		t.Fatal("no card")
 	}

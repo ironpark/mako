@@ -434,7 +434,16 @@ func (t *termConn) key(ev input.KeyEvent, text string) {
 // paste sends text the way the program asked for it: bracketed when it
 // enabled bracketed paste, plain otherwise.
 func (t *termConn) paste(text string) {
-	if text == "" || !input.IsSafePaste([]byte(text)) {
+	if input.IsSafePaste([]byte(text)) {
+		t.pasteLines(text)
+	}
+}
+
+// pasteLines pastes text whose line breaks are meant, as the composer's
+// are. Only a paste's own end marker, which would let the rest run as if
+// typed, is refused.
+func (t *termConn) pasteLines(text string) {
+	if text == "" || strings.Contains(text, "\x1b[201~") {
 		return
 	}
 	var buf frameBuffer
@@ -450,11 +459,10 @@ func (t *termConn) paste(text string) {
 	}
 }
 
-// sendText writes text followed by Enter, as the composer does.
+// sendText writes text followed by Enter, as the composer does, its line
+// breaks in it.
 func (t *termConn) sendText(text string) {
-	if text != "" {
-		t.paste(text)
-	}
+	t.pasteLines(text)
 	t.key(input.KeyEvent{Action: input.KeyActionPress, Key: input.KeyEnter}, "")
 }
 

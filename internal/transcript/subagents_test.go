@@ -1,0 +1,85 @@
+package transcript
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/ironpark/sanbo/internal/protocol"
+)
+
+// The agents a conversation's calls started are read from their own logs:
+// one in the foreground, found by its prompt, runs while its call is open;
+// one in the background, by its call, until its meta says it finished.
+// Each says how many calls it has made and its latest, and a read of an
+// unchanged session log still follows them while one runs.
+func TestSubagentsAreFollowedInTheirOwnLogs(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "projects", "p")
+	path := filepath.Join(dir, "c.jsonl")
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	head := `{"type":"user","sessionId":"c","cwd":"/p","message":{"role":"user","content":"look around"}}` + "\n"
+	calls := `{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[` +
+		`{"type":"tool_use","id":"fg","name":"Agent","input":{"description":"Find the tests","prompt":"Find the tests.","subagent_type":"Explore"}},` +
+		`{"type":"tool_use","id":"bg","name":"Agent","input":{"description":"Review","prompt":"Review it.","run_in_background":true}}]}}` + "\n"
+	launched := `{"type":"user","uuid":"u2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"bg","content":"launched"}]}}` + "\n"
+	writeLog(t, path, head+calls+launched)
+
+	sub := filepath.Join(dir, "c", "subagents")
+	agentLog := func(prompt string, tools ...string) string {
+		s := `{"type":"user","isSidechain":true,"timestamp":"` + now + `","message":{"role":"user","content":"` + prompt + `"}}` + "\n"
+		for _, cmd := range tools {
+			s += `{"type":"assistant","isSidechain":true,"timestamp":"` + now + `","message":{"role":"assistant","content":[{"type":"tool_use","id":"x","name":"Bash","input":{"command":"` + cmd + `"}}]}}` + "\n"
+		}
+		return s
+	}
+	writeLog(t, filepath.Join(sub, "agent-f1.jsonl"), agentLog("Find the tests.", "ls", "go test ./..."))
+	writeLog(t, filepath.Join(sub, "agent-f1.meta.json"), `{"agentType":"Explore","requestShape":"foreground"}`)
+	writeLog(t, filepath.Join(sub, "agent-b1.jsonl"), agentLog("Review it.", "git diff"))
+	writeLog(t, filepath.Join(sub, "agent-b1.meta.json"), `{"agentType":"general-purpose","description":"Review","toolUseId":"bg","requestShape":"background"}`)
+	// An agent of another call, gone from the window, is left out.
+	writeLog(t, filepath.Join(sub, "agent-old.jsonl"), agentLog("Old work."))
+	writeLog(t, filepath.Join(sub, "agent-old.meta.json"), `{"toolUseId":"gone","requestShape":"background"}`)
+
+	info := &protocol.SessionInfo{Agent: "claude", ConversationId: "c"}
+	var cache Cache
+	chat, err := cache.ReadBound(info, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fg := chat.GetMessages()[1]; !fg.GetPending() || chat.GetMessages()[2].GetPending() {
+		t.Fatalf("pending: the open call %v, the answered one %v", fg.GetPending(), chat.GetMessages()[2].GetPending())
+	}
+	agents := map[string]*protocol.SubAgent{}
+	for _, a := range chat.GetAgents() {
+		agents[a.GetId()] = a
+	}
+	if len(agents) != 2 {
+		t.Fatalf("agents %v, want the two this window's calls started", chat.GetAgents())
+	}
+	f1, b1 := agents["f1"], agents["b1"]
+	if f1.GetCallId() != "fg" || !f1.GetRunning() || f1.GetToolCalls() != 2 || f1.GetTool() != "Bash" || f1.GetDetail() != "go test ./..." || f1.GetKind() != "Explore" || f1.GetDescription() != "Find the tests" {
+		t.Fatalf("foreground agent %+v", f1)
+	}
+	if b1.GetCallId() != "bg" || !b1.GetRunning() || b1.GetToolCalls() != 1 || f1.GetStarted() == 0 {
+		t.Fatalf("background agent %+v", b1)
+	}
+
+	// The background agent works on and finishes while the session's log
+	// is still.
+	f, err := os.OpenFile(filepath.Join(sub, "agent-b1.jsonl"), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString(agentLog("", "go vet ./...")[len(agentLog("")):])
+	f.Close()
+	writeLog(t, filepath.Join(sub, "agent-b1.meta.json"), `{"toolUseId":"bg","requestShape":"background","finished":true}`)
+	if chat, err = cache.ReadBound(info, path); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range chat.GetAgents() {
+		if a.GetId() == "b1" && (a.GetRunning() || a.GetToolCalls() != 2 || a.GetDetail() != "go vet ./...") {
+			t.Fatalf("finished background agent %+v", a)
+		}
+	}
+}

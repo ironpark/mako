@@ -145,7 +145,7 @@ func (r *Resolver) resolveAll(ctx context.Context, servers map[string]Server, on
 			continue
 		}
 		if s.Command != nil && s.Command.Path != "" {
-			out = append(out, Launch{ID: id, Command: expandHome(s.Command.Path), Args: s.Command.Args, Env: s.Command.Env})
+			out = append(out, Launch{ID: id, Command: ExpandHome(s.Command.Path), Args: s.Command.Args, Env: s.Command.Env})
 			continue
 		}
 		ext, ok := byServer[id]
@@ -271,7 +271,8 @@ func stable(command string) string {
 	return command
 }
 
-func expandHome(p string) string {
+// ExpandHome is p with a leading ~ in the home directory.
+func ExpandHome(p string) string {
 	if p == "~" || strings.HasPrefix(p, "~/") {
 		if home, err := os.UserHomeDir(); err == nil {
 			return home + p[1:]

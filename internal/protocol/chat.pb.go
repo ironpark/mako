@@ -93,6 +93,7 @@ type ChatMessage struct {
 	Result        string                 `protobuf:"bytes,6,opt,name=result,proto3" json:"result,omitempty"`
 	Output        bool                   `protobuf:"varint,7,opt,name=output,proto3" json:"output,omitempty"`
 	Error         bool                   `protobuf:"varint,8,opt,name=error,proto3" json:"error,omitempty"`
+	Pending       bool                   `protobuf:"varint,9,opt,name=pending,proto3" json:"pending,omitempty"` // a call not answered yet
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -183,6 +184,13 @@ func (x *ChatMessage) GetError() bool {
 	return false
 }
 
+func (x *ChatMessage) GetPending() bool {
+	if x != nil {
+		return x.Pending
+	}
+	return false
+}
+
 // Chat answers ReadChat.
 type Chat struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -191,6 +199,7 @@ type Chat struct {
 	Messages      []*ChatMessage         `protobuf:"bytes,3,rep,name=messages,proto3" json:"messages,omitempty"`
 	Truncated     bool                   `protobuf:"varint,4,opt,name=truncated,proto3" json:"truncated,omitempty"`
 	Usage         *Usage                 `protobuf:"bytes,5,opt,name=usage,proto3" json:"usage,omitempty"`
+	Agents        []*SubAgent            `protobuf:"bytes,6,rep,name=agents,proto3" json:"agents,omitempty"` // the subagents its calls started, oldest first
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -260,6 +269,131 @@ func (x *Chat) GetUsage() *Usage {
 	return nil
 }
 
+func (x *Chat) GetAgents() []*SubAgent {
+	if x != nil {
+		return x.Agents
+	}
+	return nil
+}
+
+// SubAgent is an agent a call of the conversation's started, such as
+// Claude's Agent tool does, and how far it has got.
+type SubAgent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	CallId        string                 `protobuf:"bytes,2,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"` // the call that started it, if it is known
+	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`                   // the sort of agent, as Explore
+	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	Running       bool                   `protobuf:"varint,5,opt,name=running,proto3" json:"running,omitempty"`
+	ToolCalls     int32                  `protobuf:"varint,6,opt,name=tool_calls,json=toolCalls,proto3" json:"tool_calls,omitempty"` // how many calls it has made
+	Tool          string                 `protobuf:"bytes,7,opt,name=tool,proto3" json:"tool,omitempty"`                             // its latest call
+	Detail        string                 `protobuf:"bytes,8,opt,name=detail,proto3" json:"detail,omitempty"`
+	Started       int64                  `protobuf:"varint,9,opt,name=started,proto3" json:"started,omitempty"`  // Unix seconds
+	Updated       int64                  `protobuf:"varint,10,opt,name=updated,proto3" json:"updated,omitempty"` // Unix seconds, when it last wrote
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubAgent) Reset() {
+	*x = SubAgent{}
+	mi := &file_sanbo_v2_chat_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubAgent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubAgent) ProtoMessage() {}
+
+func (x *SubAgent) ProtoReflect() protoreflect.Message {
+	mi := &file_sanbo_v2_chat_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubAgent.ProtoReflect.Descriptor instead.
+func (*SubAgent) Descriptor() ([]byte, []int) {
+	return file_sanbo_v2_chat_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *SubAgent) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SubAgent) GetCallId() string {
+	if x != nil {
+		return x.CallId
+	}
+	return ""
+}
+
+func (x *SubAgent) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *SubAgent) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *SubAgent) GetRunning() bool {
+	if x != nil {
+		return x.Running
+	}
+	return false
+}
+
+func (x *SubAgent) GetToolCalls() int32 {
+	if x != nil {
+		return x.ToolCalls
+	}
+	return 0
+}
+
+func (x *SubAgent) GetTool() string {
+	if x != nil {
+		return x.Tool
+	}
+	return ""
+}
+
+func (x *SubAgent) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *SubAgent) GetStarted() int64 {
+	if x != nil {
+		return x.Started
+	}
+	return 0
+}
+
+func (x *SubAgent) GetUpdated() int64 {
+	if x != nil {
+		return x.Updated
+	}
+	return 0
+}
+
 // Usage is the tokens a conversation has spent.
 type Usage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -275,7 +409,7 @@ type Usage struct {
 
 func (x *Usage) Reset() {
 	*x = Usage{}
-	mi := &file_sanbo_v2_chat_proto_msgTypes[3]
+	mi := &file_sanbo_v2_chat_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -287,7 +421,7 @@ func (x *Usage) String() string {
 func (*Usage) ProtoMessage() {}
 
 func (x *Usage) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_chat_proto_msgTypes[3]
+	mi := &file_sanbo_v2_chat_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -300,7 +434,7 @@ func (x *Usage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Usage.ProtoReflect.Descriptor instead.
 func (*Usage) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_chat_proto_rawDescGZIP(), []int{3}
+	return file_sanbo_v2_chat_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Usage) GetInput() int64 {
@@ -357,7 +491,7 @@ type RateLimit struct {
 
 func (x *RateLimit) Reset() {
 	*x = RateLimit{}
-	mi := &file_sanbo_v2_chat_proto_msgTypes[4]
+	mi := &file_sanbo_v2_chat_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -369,7 +503,7 @@ func (x *RateLimit) String() string {
 func (*RateLimit) ProtoMessage() {}
 
 func (x *RateLimit) ProtoReflect() protoreflect.Message {
-	mi := &file_sanbo_v2_chat_proto_msgTypes[4]
+	mi := &file_sanbo_v2_chat_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -382,7 +516,7 @@ func (x *RateLimit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RateLimit.ProtoReflect.Descriptor instead.
 func (*RateLimit) Descriptor() ([]byte, []int) {
-	return file_sanbo_v2_chat_proto_rawDescGZIP(), []int{4}
+	return file_sanbo_v2_chat_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RateLimit) GetMinutes() int64 {
@@ -416,7 +550,7 @@ const file_sanbo_v2_chat_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1d\n" +
 	"\n" +
-	"usage_only\x18\x03 \x01(\bR\tusageOnly\"\xb7\x01\n" +
+	"usage_only\x18\x03 \x01(\bR\tusageOnly\"\xd1\x01\n" +
 	"\vChatMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x0e\n" +
@@ -425,13 +559,28 @@ const file_sanbo_v2_chat_proto_rawDesc = "" +
 	"\x06detail\x18\x05 \x01(\tR\x06detail\x12\x16\n" +
 	"\x06result\x18\x06 \x01(\tR\x06result\x12\x16\n" +
 	"\x06output\x18\a \x01(\bR\x06output\x12\x14\n" +
-	"\x05error\x18\b \x01(\bR\x05error\"\xc0\x01\n" +
+	"\x05error\x18\b \x01(\bR\x05error\x12\x18\n" +
+	"\apending\x18\t \x01(\bR\apending\"\xec\x01\n" +
 	"\x04Chat\x12\x1c\n" +
 	"\tsupported\x18\x01 \x01(\bR\tsupported\x12\"\n" +
 	"\fconversation\x18\x02 \x01(\tR\fconversation\x121\n" +
 	"\bmessages\x18\x03 \x03(\v2\x15.sanbo.v2.ChatMessageR\bmessages\x12\x1c\n" +
 	"\ttruncated\x18\x04 \x01(\bR\ttruncated\x12%\n" +
-	"\x05usage\x18\x05 \x01(\v2\x0f.sanbo.v2.UsageR\x05usage\"\xb7\x01\n" +
+	"\x05usage\x18\x05 \x01(\v2\x0f.sanbo.v2.UsageR\x05usage\x12*\n" +
+	"\x06agents\x18\x06 \x03(\v2\x12.sanbo.v2.SubAgentR\x06agents\"\x82\x02\n" +
+	"\bSubAgent\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\acall_id\x18\x02 \x01(\tR\x06callId\x12\x12\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kind\x12 \n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\x12\x18\n" +
+	"\arunning\x18\x05 \x01(\bR\arunning\x12\x1d\n" +
+	"\n" +
+	"tool_calls\x18\x06 \x01(\x05R\ttoolCalls\x12\x12\n" +
+	"\x04tool\x18\a \x01(\tR\x04tool\x12\x16\n" +
+	"\x06detail\x18\b \x01(\tR\x06detail\x12\x18\n" +
+	"\astarted\x18\t \x01(\x03R\astarted\x12\x18\n" +
+	"\aupdated\x18\n" +
+	" \x01(\x03R\aupdated\"\xb7\x01\n" +
 	"\x05Usage\x12\x14\n" +
 	"\x05input\x18\x01 \x01(\x03R\x05input\x12!\n" +
 	"\fcached_input\x18\x02 \x01(\x03R\vcachedInput\x12\x16\n" +
@@ -456,23 +605,25 @@ func file_sanbo_v2_chat_proto_rawDescGZIP() []byte {
 	return file_sanbo_v2_chat_proto_rawDescData
 }
 
-var file_sanbo_v2_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_sanbo_v2_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_sanbo_v2_chat_proto_goTypes = []any{
 	(*ReadChat)(nil),    // 0: sanbo.v2.ReadChat
 	(*ChatMessage)(nil), // 1: sanbo.v2.ChatMessage
 	(*Chat)(nil),        // 2: sanbo.v2.Chat
-	(*Usage)(nil),       // 3: sanbo.v2.Usage
-	(*RateLimit)(nil),   // 4: sanbo.v2.RateLimit
+	(*SubAgent)(nil),    // 3: sanbo.v2.SubAgent
+	(*Usage)(nil),       // 4: sanbo.v2.Usage
+	(*RateLimit)(nil),   // 5: sanbo.v2.RateLimit
 }
 var file_sanbo_v2_chat_proto_depIdxs = []int32{
 	1, // 0: sanbo.v2.Chat.messages:type_name -> sanbo.v2.ChatMessage
-	3, // 1: sanbo.v2.Chat.usage:type_name -> sanbo.v2.Usage
-	4, // 2: sanbo.v2.Usage.limits:type_name -> sanbo.v2.RateLimit
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	4, // 1: sanbo.v2.Chat.usage:type_name -> sanbo.v2.Usage
+	3, // 2: sanbo.v2.Chat.agents:type_name -> sanbo.v2.SubAgent
+	5, // 3: sanbo.v2.Usage.limits:type_name -> sanbo.v2.RateLimit
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_sanbo_v2_chat_proto_init() }
@@ -486,7 +637,7 @@ func file_sanbo_v2_chat_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sanbo_v2_chat_proto_rawDesc), len(file_sanbo_v2_chat_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -306,6 +306,19 @@ out past a size limit (`truncated`). `usage` is the whole conversation's tokens:
 | `context`, `window` | The latest prompt's size, and the model's context window when the agent says. |
 | `limits` | The account's subscription limits, shortest window first: `{minutes, used, resets}`, where `used` is a percentage and `resets` Unix seconds. Claude's are its five-hour and weekly windows (300 and 10080 minutes). |
 
+A `tool` turn that calls a tool carries its answer in `result`; one not
+answered yet is `pending`. `agents` are the subagents the calls in
+`messages` started, as Claude's Agent tool does, oldest first, each read from
+the log the agent keeps of its own:
+
+| `SubAgent` field | |
+|---|---|
+| `id`, `call_id` | The agent's ID, and the call in `messages` that started it. |
+| `kind`, `description` | The sort of agent, as `Explore`, and what it was asked to do, in brief. |
+| `running` | Whether it is still at work: its call is unanswered, or for one run in the background, it has not said it finished. One that has written nothing for 15 minutes is taken to have stopped. |
+| `tool_calls`, `tool`, `detail` | How many calls it has made, and its latest. |
+| `started`, `updated` | When it began and last wrote, in Unix seconds. |
+
 With `"usage_only": true`, the reply carries `usage` alone, read without
 parsing the messages: what a front-end that only counts tokens should ask
 for. A daemon that predates the flag ignores it and sends the messages too.
@@ -321,9 +334,10 @@ for. A daemon that predates the flag ignores it and sends the messages too.
 | `search` | `Search` | `search_result` | A project's files, or the lines holding `query`. Both leave out what `.gitignore` does. |
 | `stage_file` | `StageFile` | `staged` | A piece of a file the front-end has, such as one dropped on a window, kept on the node so a session there can read it. |
 
-Paths are absolute, on the node named. `read_file` sets `binary` and leaves
-`data` out for a file that is not text, and `truncated` when `data` is only the
-start. Its `mod_time` is what a `write_file` hands back: a non-zero `mod_time`
+Paths are absolute, on the node named, except that `read_file` also takes
+one in the node's home written `~/…`, and answers with the path it read.
+`read_file` sets `binary` and leaves `data` out for a file that is not text,
+and `truncated` when `data` is only the start. Its `mod_time` is what a `write_file` hands back: a non-zero `mod_time`
 in the write makes it fail with code `changed` if the file changed since.
 Search matching is case-insensitive unless `query` has a capital.
 
