@@ -7,6 +7,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/notify"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -50,7 +51,7 @@ func (m *model) noteRequests(info *protocol.AccessInfo) {
 		body := Tf("%s asks to be let in. Settings ▸ Access answers it.", r.GetNode().GetName())
 		m.toaster.Push(ui.Toast(T("Access requested"), body))
 		if ggui.Peek(m.Prefs).Notify {
-			go notify(T("Access requested"), body)
+			go notify.Post(T("Access requested"), body, settingsTarget("access"))
 		}
 	}
 	m.asked = waiting

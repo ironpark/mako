@@ -11,6 +11,7 @@ import (
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/daemon"
 	"github.com/ironpark/mako/internal/gui"
+	"github.com/ironpark/mako/internal/shellenv"
 )
 
 func main() {
@@ -18,6 +19,9 @@ func main() {
 	if daemon.HookMain() {
 		return
 	}
+	// Opened from the Finder or a desktop's menu, the app and the daemon
+	// in it take the login shell's PATH, to find the agents it runs.
+	shellenv.Load()
 	daemonAddr := flag.String("daemon", "", "the daemon's socket (default: the configuration directory's)")
 	renderDir := flag.String("render-dir", "", "render the window to PNGs in this directory, then exit (development)")
 	pprofAddr := flag.String("pprof", os.Getenv("MAKO_PPROF"), "serve Go's profiles on this address, as 127.0.0.1:6060 (development)")

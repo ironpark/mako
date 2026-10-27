@@ -34,6 +34,7 @@ wasmtime-go moves.
 | Target | |
 |---|---|
 | `make build` | `bin/mako`, `bin/makod` and `bin/mako-gui`, stamped with `git describe` as their version |
+| `make app` | `bin/mako.app`, the desktop app bundled for macOS and signed ad hoc |
 | `make test` | `go test ./...` |
 | `make vet` | `go vet ./...` |
 | `make fmt` | `gofmt` over the tree |
@@ -65,6 +66,8 @@ take it out before you commit.
     internal/transcript  Claude's and Codex's native conversation logs
     internal/gitstat     git status, diffs, history and operations
     internal/gui         the window: sidebar, panes and tabs, terminal, chat, editor
+    internal/notify      desktop notifications, each platform's own way
+    internal/shellenv    the login shell's environment, for an app the desktop started
     internal/syntax      tree-sitter compiled to wasm, under wasmtime
     internal/zed         Zed extensions: the store, manifests and languages
     internal/zedhost     Zed extensions' own wasm components, under wasmtime's C API
@@ -214,6 +217,20 @@ Daemon chooses: **Auto** uses a `makod` already running and otherwise starts
 one in the app, **In this app** always does, and **External** only talks to
 a `makod` started some other way. A daemon in the app listens like any
 other, but its sessions end when the app quits.
+
+It notifies the desktop through `internal/notify`, and a click on a
+notification opens the session it is about, or Settings ▸ Access for a
+request to be let in. On macOS that takes the bundle (`make app`):
+UserNotifications posts only for an app with a bundle identifier, and a
+bare `mako-gui` falls back to `osascript`, whose notifications come from
+Script Editor and open nothing. Linux and the BSDs use the freedesktop
+notification service over D-Bus, and Windows toasts.
+
+Opened from the Finder or a desktop's menu, without `TERM`, the app (and
+`makod`, under launchd or systemd) takes the login shell's environment
+before anything else (`internal/shellenv`): it runs `$SHELL -l -i` once,
+with `MAKO_SHELL_ENV=1` set for a profile that wants to tell, so it finds
+the agents on the user's `PATH`.
 
 Its settings are kept in `gui.json` beside `config.json`. Sessions run with
 `TERM_PROGRAM=ghostty`, since the terminal under them is Ghostty's core.

@@ -11,6 +11,7 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/notify"
 )
 
 // Run opens the window and blocks until it closes. addr is the daemon to
@@ -33,6 +34,7 @@ func Run(cfg *config.Config, addr string) error {
 	app.Setup(func() {
 		setup(m)
 		m.start(ctx, app.Post)
+		notify.Init(func(target string) { app.Post(func() { m.reveal(target) }) })
 	})
 	shortcuts(app, m)
 	app.OnDrop(m.dropFolder)

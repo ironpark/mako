@@ -3,10 +3,12 @@ module github.com/ironpark/mako
 go 1.27.1
 
 require (
+	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3
 	github.com/BurntSushi/toml v1.6.0
 	github.com/bytecodealliance/wasmtime-go/v50 v50.0.0
 	github.com/creack/pty v1.1.24
 	github.com/go-git/go-git/v5 v5.19.3
+	github.com/godbus/dbus/v5 v5.2.2
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/ironpark/ggfx v0.0.0-20261027060057-9bb27905be69
 	github.com/ironpark/ggui v0.0.0-20261027091340-b7ce1e0a1f8c
@@ -46,6 +48,7 @@ require (
 	github.com/flynn/noise v1.1.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.9.2 // indirect
+	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/gogpu/naga v0.19.0 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect

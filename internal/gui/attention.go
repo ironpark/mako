@@ -9,6 +9,7 @@ import (
 	"github.com/ironpark/ggui"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ironpark/mako/internal/notify"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -137,7 +138,27 @@ func (m *model) announce(s *protocol.SessionInfo) {
 	default:
 		body = T("Finished its turn")
 	}
-	go notify(title, projectName(s.GetProject())+" · "+body)
+	go notify.Post(title, projectName(s.GetProject())+" · "+body, sessionTarget(s.GetId()))
+}
+
+// sessionTarget and settingsTarget name what a notification is about, for
+// reveal to show when it is clicked.
+func sessionTarget(id string) string       { return "session:" + id }
+func settingsTarget(section string) string { return "settings:" + section }
+
+// reveal brings the window forward onto what a notification the user
+// clicked was about: a session, or a section of the settings.
+func (m *model) reveal(target string) {
+	if m.window != nil {
+		m.window.Show()
+		m.window.Focus()
+	}
+	if section, ok := strings.CutPrefix(target, "settings:"); ok {
+		m.openSettings(section)
+	} else if id, ok := strings.CutPrefix(target, "session:"); ok {
+		m.Page.Set("workspace")
+		m.selectSession(id)
+	}
 }
 
 // followAttention keeps the Dock's count and the marks in step with what is

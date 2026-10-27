@@ -13,12 +13,16 @@ import (
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/daemon"
+	"github.com/ironpark/mako/internal/shellenv"
 )
 
 func main() {
 	if daemon.HookMain() {
 		return
 	}
+	// Started by launchd or systemd rather than a terminal, it takes the
+	// login shell's PATH, to find the agents it runs.
+	shellenv.Load()
 	var (
 		listen  = flag.String("listen", "", "libp2p listen address, host:port (default from config)")
 		name    = flag.String("name", "", "node name (default from config)")
