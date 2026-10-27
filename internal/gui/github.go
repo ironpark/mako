@@ -540,27 +540,32 @@ func githubPanel(m *model) ggui.Widget {
 }
 
 func ghListView(m *model, root ggui.Readable[fileRoot]) ggui.Widget {
-	kinds := ui.ToggleGroup[string](m.GH.Kind).Options([]string{protocol.GitHubPR, protocol.GitHubIssue, protocol.GitHubActions}).
-		Format(func(k string) string {
-			return map[string]string{protocol.GitHubPR: T("Pull requests"), protocol.GitHubIssue: T("Issues"), protocol.GitHubActions: T("Actions")}[k]
-		}).Name(T("What to list"))
-	header := panelHeader(
-		icon("github").Size(15),
-		ggui.Expanded(ggui.Scroll(kinds).Horizontal().Bar(color.Transparent)),
-		iconButton("refresh-cw", T("Refresh"), func() { m.loadGHList(ggui.Peek(root)) }),
-	)
-	filter := ui.Select(m.GH.Filter).Options([]string{"open", "closed", "all"}).Format(func(s string) string {
-		return map[string]string{"open": T("Open"), "closed": T("Closed"), "all": T("All")}[s]
-	}).Name(T("Which to list"))
-	tools := ggui.View(m.GH.Kind, func(k string) ggui.Widget {
-		if k == protocol.GitHubActions {
-			return ggui.Box()
+	// One line: what is listed, as flat chips; which of it, as a menu; and
+	// making a pull request and reading the list again.
+	header := ggui.Reactive(func() ggui.Widget {
+		kind, filter := m.GH.Kind.Get(), m.GH.Filter.Get()
+		row := []ggui.Widget{ggui.Box(icon("github").Size(15)).Pad(0, 6, 0, 0)}
+		for _, k := range []string{protocol.GitHubPR, protocol.GitHubIssue, protocol.GitHubActions} {
+			row = append(row, kindChip(ghKindLabel(k), k == kind, func() { m.GH.Kind.Set(k) }))
 		}
-		row := []ggui.Widget{ggui.Box(filter).Width(120), ggui.Spacer()}
-		if k == protocol.GitHubPR {
-			row = append(row, ui.Button(T("New pull request…"), m.askPR).Ghost())
+		row = append(row, ggui.Spacer())
+		if kind != protocol.GitHubActions {
+			var items []ggui.Widget
+			for _, f := range []string{"open", "closed", "all"} {
+				label := ghFilterLabel(f)
+				if f == filter {
+					label = "✓ " + label
+				}
+				items = append(items, ui.MenuItem(label, func() { m.GH.Filter.Set(f) }))
+			}
+			face := ggui.Row(muted(ggui.Text(ghFilterLabel(filter)).Size(12.5).NoWrap()), icon("chevron-down").Size(12).Color(tokExtraMuted)).Gap(3)
+			row = append(row, borderless(ui.MenuOf(face, items...).Name(T("Which to list"))))
 		}
-		return ggui.Column(ggui.Box(ggui.Row(row...).Gap(8).Align(ggui.AlignCenter)).Pad(6, 8, 6, 12), hline()).Stretch()
+		if kind == protocol.GitHubPR {
+			row = append(row, iconButton("plus", T("New pull request…"), m.askPR))
+		}
+		row = append(row, iconButton("refresh-cw", T("Refresh"), func() { m.loadGHList(ggui.Peek(root)) }))
+		return ggui.Box(ggui.Row(row...).Gap(2).Align(ggui.AlignCenter)).Height(tabBarHeight).Pad(0, 6, 0, 12)
 	})
 	body := ggui.View(m.GH.List, func(v ghList) ggui.Widget {
 		switch {
@@ -580,7 +585,27 @@ func ghListView(m *model, root ggui.Readable[fileRoot]) ggui.Widget {
 		}
 		return ggui.Scroll(ggui.Column(rows...).Stretch()).Bar(tokSurface3)
 	})
-	return ggui.Column(header, hline(), statusLine(m.GH.Busy, m.GH.Note), tools, ggui.Expanded(body)).Stretch()
+	return ggui.Column(header, hline(), statusLine(m.GH.Busy, m.GH.Note), ggui.Expanded(body)).Stretch()
+}
+
+// ghKindLabel names what the GitHub tab lists.
+func ghKindLabel(kind string) string {
+	return map[string]string{protocol.GitHubPR: T("Pull requests"), protocol.GitHubIssue: T("Issues"), protocol.GitHubActions: T("Actions")}[kind]
+}
+
+// ghFilterLabel names which of it the tab lists.
+func ghFilterLabel(filter string) string {
+	return map[string]string{"open": T("Open"), "closed": T("Closed"), "all": T("All")}[filter]
+}
+
+// kindChip is a flat choice in a panel's header, filled while chosen.
+func kindChip(label string, on bool, onTap func()) ggui.Widget {
+	text := ggui.Text(label).Size(12.5).NoWrap().Color(pick[color.Color](on, tokFg, tokMuted))
+	face := ggui.Box(text).Pad(4, 8).Radius(6)
+	if on {
+		face = face.Fill(tokSurface2)
+	}
+	return ui.ButtonOf(face, onTap).Ghost().Pad(0).Radius(6).Name(label)
 }
 
 // ghIcon is an item's kind and state as an icon in its colour.
@@ -637,7 +662,10 @@ func rollupIcon(checks string) ggui.Widget {
 func ghMeta(it *protocol.GitHubItem) string {
 	var parts []string
 	if it.GetKind() == protocol.GitHubActions {
-		parts = append(parts, it.GetWorkflow(), it.GetHead(), it.GetEvent())
+		if it.GetWorkflow() != it.GetTitle() { // a scheduled run is titled by its workflow
+			parts = append(parts, it.GetWorkflow())
+		}
+		parts = append(parts, it.GetHead(), it.GetEvent())
 	} else {
 		parts = append(parts, fmt.Sprintf("#%d", it.GetNumber()), it.GetAuthor())
 	}
