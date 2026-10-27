@@ -4,6 +4,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	"github.com/ironpark/sanbo/internal/config"
@@ -18,7 +20,11 @@ func main() {
 	}
 	daemonAddr := flag.String("daemon", "", "daemon address (default 127.0.0.1:4242)")
 	renderDir := flag.String("render-dir", "", "render the window to PNGs in this directory, then exit (development)")
+	pprofAddr := flag.String("pprof", os.Getenv("SANBO_PPROF"), "serve Go's profiles on this address, as 127.0.0.1:6060 (development)")
 	flag.Parse()
+	if *pprofAddr != "" {
+		go func() { fmt.Fprintln(os.Stderr, "sanbo-gui: pprof:", http.ListenAndServe(*pprofAddr, nil)) }()
+	}
 
 	cfg, err := config.Load()
 	if err != nil {

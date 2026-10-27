@@ -57,6 +57,8 @@ github.com/hajimehoshi/bitmapfont/v4 v4.2.0 h1:bpeN2ph7aHSuX7yoWFkLPo4ado9K+E+Dq
 github.com/hajimehoshi/bitmapfont/v4 v4.2.0/go.mod h1:AIeoQek1nxUmDczXNtFEYWTQ4ArINijutPD729q/NeE=
 github.com/ironpark/ggfx v0.0.0-20261025124736-3c3d65b81c58 h1:lglEkybqZyCCLWJhhFtD1znKBNNvBjHab2tmeYZn3jU=
 github.com/ironpark/ggfx v0.0.0-20261025124736-3c3d65b81c58/go.mod h1:yL9HaMaOBmTbgvcwEFGopn4B4+ZEJx2V3mCnDTW0x/E=
+github.com/ironpark/ggfx v0.0.0-20261027060057-9bb27905be69 h1:q3ELS2E794WFj/wbFkF1kGfrUZe6U1vRfO3rDfurMZs=
+github.com/ironpark/ggfx v0.0.0-20261027060057-9bb27905be69/go.mod h1:yL9HaMaOBmTbgvcwEFGopn4B4+ZEJx2V3mCnDTW0x/E=
 github.com/ironpark/ggip v0.0.0-20261025124749-3c7a3f9bb4d9 h1:GDDJtfFGmLQyQGMUslaTwbFuVS95i++3rp+L42mJgFU=
 github.com/ironpark/ggip v0.0.0-20261025124749-3c7a3f9bb4d9/go.mod h1:lyP3BN581yb2c3Cb2hliQ0JJ/ky67KuB816JEc5jj9M=
 github.com/ironpark/ggip/ggfxinput v0.0.0-20261025124834-79651b13b701 h1:THRfMg2Ao6r9x+3Ai/ZbJgSrZ3fLX1WKrmILLkqt2Kg=
@@ -65,6 +67,8 @@ github.com/ironpark/ggui v0.0.0-20261026115949-63bb6f5915d3 h1:taZw9BVpZO0zb6XRp
 github.com/ironpark/ggui v0.0.0-20261026115949-63bb6f5915d3/go.mod h1:MufB5vOXkkmxWtVkwwhhuuiLcjz0pOrjZBUvXuP+ghE=
 github.com/ironpark/ggui v0.0.0-20261026133436-dc5f7baaa139 h1:Hij7J3ppxeta8/Id+vBzmBM3YXKKlsDWQDOiaFP7usE=
 github.com/ironpark/ggui v0.0.0-20261026133436-dc5f7baaa139/go.mod h1:MufB5vOXkkmxWtVkwwhhuuiLcjz0pOrjZBUvXuP+ghE=
+github.com/ironpark/ggui v0.0.0-20261027060136-a3e4367158a9 h1:2D8YMvhK+IgO7zXqM+0gFkT2rzXQCDa31w9F/AuT68I=
+github.com/ironpark/ggui v0.0.0-20261027060136-a3e4367158a9/go.mod h1:ko24fXDmpxXWvDP94OLHMBGvnsjUMLEGCgBapOZTUyQ=
 github.com/ironpark/gostty v0.0.0-20261026051858-4b9bf93132f4 h1:VnKbyt8JeO/tbdowFEsobDrHFtf94HfSuhUIzyawNjU=
 github.com/ironpark/gostty v0.0.0-20261026051858-4b9bf93132f4/go.mod h1:htMJDApfeCwo3cVH8Bv9FyVnlhvwrnDkn4DDxSKtjE8=
 github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 h1:BQSFePA1RWJOlocH6Fxy8MmwDt+yVQYULKfN0RoTN8A=
