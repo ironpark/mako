@@ -215,29 +215,32 @@ func TestViewSwitchTogglesWhereverClicked(t *testing.T) {
 	}
 }
 
-// A message's copy button shows under it while the pointer is over the
-// message, its selectable text too, or over the button; it takes no room.
-func TestCopyButtonShowsUnderTheMessageHovered(t *testing.T) {
+// A message's copy button shows in its bottom-right corner, inside it,
+// while the pointer is over the message, its selectable text too; it
+// takes no room.
+func TestCopyButtonShowsInTheMessageHovered(t *testing.T) {
 	msg := &protocol.ChatMessage{Role: "user", Text: "copy me please"}
-	w := &withCopy{content: ggui.Box(ggui.Text(msg.GetText()).Size(14).Selectable()).Pad(10, 14), button: copyButton(nil, msg.GetText())}
+	content := ggui.Box(ggui.Text(msg.GetText()).Size(14).Selectable()).Pad(10, 14)
+	w := &withCopy{content: content, button: copyButton(nil, msg.GetText())}
 	p := ggui.NewProbe(ggui.Column(w, ggui.Box().Height(60)).Stretch(), ggui.Sz(400, 200))
 	defer p.Close()
 	p.Frame()
-	// The text sits inside the box's padding, at its top-left.
-	text := ggui.Found{Rect: ggui.Rct(ggui.Pt(14, 10), ggui.Sz(60, 18))}
 	if _, ok := p.Find(T("Copy")); ok {
 		t.Fatal("the button shows with the pointer away")
 	}
-	p.Move(text.Center())
+	// The text sits inside the box's padding, at its top-left.
+	p.Move(ggui.Pt(30, 18))
 	p.Frame()
 	btn, ok := p.Find(T("Copy"))
 	if !ok {
 		t.Fatal("the button is hidden with the pointer over the text")
 	}
-	if btn.Rect.Origin.Y < text.Rect.Origin.Y+text.Rect.Size.H {
-		t.Fatalf("the button %v is not under the message %v", btn.Rect, text.Rect)
+	// The column stretches the message across the probe; its height is
+	// the text's and padding's.
+	msgH := content.Layout(ggui.Loose(ggui.Sz(400, 200)), ggui.Env{}).H
+	if b := btn.Rect; b.Origin.Y < 0 || b.Origin.Y+b.Size.H > msgH || b.Origin.X+b.Size.W > 400 {
+		t.Fatalf("the button %v is outside the message, %v tall", b, msgH)
 	}
-	// Onto the button, out of the message, it stays.
 	p.Move(btn.Center())
 	p.Frame()
 	if _, ok := p.Find(T("Copy")); !ok {

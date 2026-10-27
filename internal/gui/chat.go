@@ -250,8 +250,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		if len(v.Chat.GetMessages()) > 0 && scroll.MaxOffset()-scroll.Offset() < 32 {
 			rows = append(rows, &revealOnce{child: ggui.Box().Height(1), done: func() {}})
 		}
-		// The gap between turns holds a message's copy button.
-		return ggui.Box(ggui.Column(rows...).Gap(26).Stretch()).Pad(18, 24).MaxWidth(chatLaneWidth)
+		return ggui.Box(ggui.Column(rows...).Gap(14).Stretch()).Pad(18, 24).MaxWidth(chatLaneWidth)
 	})
 	feed := ggui.Scroll(ggui.Align(content).Top()).Controller(scroll).Bar(tokSurface3)
 	chatUsage := ggui.Map(state.result, func(v chatResult) *protocol.Usage {
@@ -353,10 +352,13 @@ func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.Cha
 	return &withCopy{content: ggui.Column(r.blocks(root)...).Gap(10).Stretch(), button: copyButton(m, msg.GetText())}
 }
 
-// withCopy is a message with its copy button under its bottom-right
-// corner, in the gap before the next, while the pointer is over the
-// message or the button. Where the pointer is decides it, not hover:
-// selectable text over the message takes the hover for itself.
+// withCopy is a message with its copy button over its bottom-right
+// corner, inside it and taking no room of its own, while the pointer is
+// over the message. Where the pointer is decides it, not hover: selectable
+// text over the message takes the hover for itself.
+// copyInset is how far the copy button sits in from the message's edges.
+const copyInset = 4
+
 type withCopy struct {
 	content, button ggui.Widget
 	buttonSize      ggui.Size
@@ -370,8 +372,8 @@ func (w *withCopy) Layout(cs ggui.Constraints, env ggui.Env) ggui.Size {
 
 func (w *withCopy) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	dst.Paint(w.content, r)
-	at := ggui.Rct(ggui.Pt(r.Origin.X+r.Size.W-w.buttonSize.W, r.Origin.Y+r.Size.H+2), w.buttonSize)
-	if p, ok := dst.Pointer(); ok && (r.Contains(p) || at.Contains(p)) {
+	at := ggui.Rct(ggui.Pt(r.Origin.X+r.Size.W-w.buttonSize.W-copyInset, r.Origin.Y+r.Size.H-w.buttonSize.H-copyInset), w.buttonSize)
+	if p, ok := dst.Pointer(); ok && r.Contains(p) {
 		dst.Paint(w.button, at)
 	}
 }
