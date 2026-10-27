@@ -21,9 +21,12 @@ func TestTaggedTurnsReadAsTheUserSawThem(t *testing.T) {
 	body := user("1", "<local-command-caveat>Caveat: run directly.</local-command-caveat>", "isMeta") +
 		user("2", "<command-message>simplify</command-message>\n<command-name>/simplify</command-name>") +
 		user("3", []map[string]any{{"type": "text", "text": "skill prompt"}}, "isMeta") +
-		user("4", "<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n            <command-args>keep it short</command-args>") +
-		user("5", "<local-command-stdout>\x1b[2mCompacted (ctrl+o to see full summary)\x1b[22m</local-command-stdout>") +
-		user("6", "This session is being continued from a previous conversation.\n\nSummary.", "isCompactSummary") +
+		// /compact as typed, then the summary, then the command again.
+		user("4", "/compact keep it short") +
+		user("5", "This session is being continued from a previous conversation.\n\nSummary.", "isCompactSummary") +
+		user("5a", "<local-command-caveat>Caveat: run directly.</local-command-caveat>", "isMeta") +
+		user("5b", "<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n            <command-args>keep it short</command-args>") +
+		user("6", "<local-command-stdout>\x1b[2mCompacted (ctrl+o to see full summary)\x1b[22m</local-command-stdout>") +
 		user("7", "<task-notification>\n<task-id>a1</task-id>\n<tool-use-id>toolu_1</tool-use-id>\n<status>completed</status>\n<summary>Agent \"Reuse review\" finished</summary>\n<result>Five findings.</result>\n</task-notification>") +
 		user("8", "<system-reminder>\nToday's date is 2026-10-27.\n</system-reminder>") +
 		user("9", []map[string]any{
@@ -41,8 +44,8 @@ func TestTaggedTurnsReadAsTheUserSawThem(t *testing.T) {
 	want := []row{
 		{"user", "", "", "/simplify"},
 		{"user", "", "", "/compact keep it short"},
-		{"tool", "/compact", "Compacted (ctrl+o to see full summary)", "Compacted (ctrl+o to see full summary)"},
 		{"tool", "Summary", "This session is being continued from a previous conversation.", "This session is being continued from a previous conversation.\n\nSummary."},
+		{"tool", "/compact", "Compacted (ctrl+o to see full summary)", "Compacted (ctrl+o to see full summary)"},
 		{"tool", "Task", `Agent "Reuse review" finished`, "Five findings."},
 		{"tool", "", "", "ok\n<system-reminder>\n" + midTurn + "also this\n\nThis is how Claude Code surfaces messages.\n</system-reminder>"},
 		{"user", "", "", "also this"},
@@ -61,7 +64,7 @@ func TestTaggedTurnsReadAsTheUserSawThem(t *testing.T) {
 			t.Errorf("message %d: got %q, want %q", i, got[i], want[i])
 		}
 	}
-	if !messages[2].GetOutput() || !messages[4].GetOutput() {
+	if !messages[3].GetOutput() || !messages[4].GetOutput() {
 		t.Error("command output and task notice are not output rows")
 	}
 }

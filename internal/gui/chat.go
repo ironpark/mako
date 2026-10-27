@@ -526,7 +526,31 @@ func chatTurns(m *model, id string, info *protocol.SessionInfo, state *chatState
 		rows = append(rows, chatTurn(m, id, info, messages[i]))
 		i++
 	}
+	if n := len(messages); n > 0 && compacting(messages[n-1]) {
+		rows = append(rows, compactingRow(m, id))
+	}
 	return rows
+}
+
+// compacting reports whether the conversation ends on a /compact its
+// summary has not followed yet.
+func compacting(last *protocol.ChatMessage) bool {
+	text := last.GetText()
+	return last.GetRole() == "user" && (text == "/compact" || strings.HasPrefix(text, "/compact "))
+}
+
+// compactingRow says the agent is compacting the conversation, while its
+// session runs.
+func compactingRow(m *model, id string) ggui.Widget {
+	return ggui.Reactive(func() ggui.Widget {
+		if s, ok := sessionIn(m.Sessions.Get(), id); !ok || s.GetState() != protocol.StateRunning {
+			return ggui.Box()
+		}
+		return ggui.Box(ggui.Row(
+			ui.Spinner().Size(14),
+			muted(ggui.Text(T("Compacting conversation…")).Size(12.5).NoWrap()),
+		).Gap(8).Align(ggui.AlignCenter)).Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(10, 14)
+	})
 }
 
 // foldRun is how many tool calls in a row fold into one line.

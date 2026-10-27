@@ -301,6 +301,9 @@ func readWindow(path string, a *Agent, span Span) (window, error) {
 			parsed = unwrap(parsed, &command)
 		}
 		for _, m := range parsed {
+			if retyped(messages, m) {
+				continue
+			}
 			if len(m.GetText()) > 32<<10 {
 				m.Text = trimUTF8(m.GetText(), 32<<10) + "\n…"
 				truncated = true
@@ -334,6 +337,21 @@ func readWindow(path string, a *Agent, span Span) (window, error) {
 		}
 	}
 	return window{messages: messages, start: start, truncated: truncated}, nil
+}
+
+// retyped reports whether m is a slash command the log already holds as
+// typed: Claude Code writes /compact down as the user typed it, then again
+// as a command after the summary, or after the error that ended it.
+func retyped(messages []*protocol.ChatMessage, m *protocol.ChatMessage) bool {
+	if m.GetRole() != "user" || !strings.HasPrefix(m.GetText(), "/") {
+		return false
+	}
+	for i := len(messages) - 1; i >= 0; i-- {
+		if p := messages[i]; p.GetTool() != "Summary" {
+			return p.GetRole() == "user" && p.GetText() == m.GetText()
+		}
+	}
+	return false
 }
 
 func trimUTF8(s string, n int) string {

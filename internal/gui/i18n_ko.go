@@ -4,8 +4,9 @@ package gui
 // complete.
 var catalogKo = map[string]string{
 	"Waiting for this agent to save its conversation. It will connect automatically.": "에이전트가 대화 기록을 저장하면 자동으로 연결됩니다.",
-	"Chat":                  "챗",
-	"Loading conversation…": "대화 기록을 불러오는 중…",
+	"Chat":                     "챗",
+	"Loading conversation…":    "대화 기록을 불러오는 중…",
+	"Compacting conversation…": "대화를 압축하는 중…",
 	"Chat is available for Claude and Codex. Use Terminal for this agent.": "챗은 Claude와 Codex를 지원합니다. 이 에이전트는 터미널에서 사용하세요.",
 	"No messages yet. The conversation updates as the agent saves it.":     "아직 메시지가 없습니다. 에이전트가 기록을 저장하면 갱신됩니다.",
 	"Assistant":                       "어시스턴트",
