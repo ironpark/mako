@@ -54,6 +54,10 @@ type model struct {
 	post func(func())
 
 	Prefs *ggui.StateValue[prefs]
+	// Spaces are the spaces, the workspace's, and spaceSet them with the
+	// one shown; see spaces.go.
+	Spaces   *ggui.StateValue[spaceList]
+	spaceSet *ggui.DerivedValue[spaceSet]
 	// backdropSeen is the size each background image was last laid out
 	// at, which the settings' preview of it takes the shape of; for the
 	// sessions', the pane laid out last.
@@ -118,6 +122,23 @@ type model struct {
 	AccessNote *ggui.StateValue[string] // the last access change's outcome
 	AccessKey  *ggui.StateValue[string] // a key being let in, as typed
 	asked      map[string]ui.ToastID    // requests told of, by their toasts; UI goroutine only
+	// The workspace (see workspace.go), on the UI goroutine: the panes of
+	// the spaces not shown, the space whose panes are, the edit the
+	// workspace is and when it was last written out, and the pause after
+	// an edit before it is written down. wsStale says the next poll asks
+	// the daemon for its workspace.
+	layouts   map[string]*layoutNode
+	layoutKey string            // what the panes shown are kept by; see layoutKey
+	contexts  map[string]string // by space, the owner or project last shown in it
+	wsVersion int64
+	wsNode    string
+	wsLast    []byte
+	wsTimer   *time.Timer
+	wsStale   atomic.Bool
+	syncing   atomic.Bool // the window follows the other nodes; for the poll
+	// contextsMoved says the window showed another owner's or project's
+	// tabs since the workspace was written down.
+	contextsMoved bool
 	// accessStale says the next poll asks for Access again: at first, and
 	// when the daemon says it changed.
 	accessStale atomic.Bool
@@ -267,6 +288,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		cfg:            cfg,
 		addr:           addr,
 		Prefs:          ggui.State(p),
+		Spaces:         ggui.State(spaceList{}).WithEqual(func(a, b spaceList) bool { return reflect.DeepEqual(a, b) }),
 		Themes:         ggui.State(loadThemes()).WithEqual(maps.Equal),
 		ThemesRead:     ggui.State(0),
 		Page:           ggui.State("workspace"),
@@ -307,6 +329,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		DaemonLog:      ggui.State([]string(nil)).WithEqual(slices.Equal),
 		embedded:       newEmbeddedDaemon(),
 		toaster:        ui.NewToaster(),
+		layouts:        map[string]*layoutNode{},
+		contexts:       map[string]string{},
 		kick:           make(chan struct{}, 1),
 		Conn:           ggui.State(connState{}).WithEqual(deepEqual),
 		Nodes:          ggui.State([]*protocol.Node(nil)).WithEqual(protocol.Equal),
@@ -380,6 +404,9 @@ func newModel(cfg *config.Config, addr string) *model {
 	}
 	m.approveInApp.Store(p.ApproveInApp)
 	m.accessStale.Store(true)
+	m.wsStale.Store(true)
+	m.spaceSet = ggui.Combine(m.Spaces, ggui.Map(m.Prefs, func(p prefs) string { return p.ShownSpace }), spaceSetOf).
+		WithEqual(func(a, b spaceSet) bool { return reflect.DeepEqual(a, b) })
 	return m
 }
 
@@ -420,6 +447,9 @@ func (m *model) watch(ctx context.Context) {
 				if ch.GetAccess() {
 					m.accessStale.Store(true)
 				}
+				if ch.GetWorkspace() {
+					m.wsStale.Store(true)
+				}
 				m.watching.Store(true)
 				m.pollNow()
 			})
@@ -458,6 +488,7 @@ func (m *model) reconnect(daemon string) {
 	m.cli, m.daemon = nil, daemon
 	m.mu.Unlock()
 	m.accessStale.Store(true)
+	m.wsStale.Store(true)
 	if c != nil {
 		_ = c.Close()
 	}
@@ -489,6 +520,7 @@ func (m *model) setLink(embedAddr string) {
 	m.cli, m.embedAddr = nil, embedAddr
 	m.mu.Unlock()
 	m.accessStale.Store(true)
+	m.wsStale.Store(true)
 	m.linked.Store(true)
 	select {
 	case m.kick <- struct{}{}:
@@ -569,6 +601,13 @@ func (m *model) poll(ctx context.Context) {
 	// Access is asked for when it changed, or on every poll while the
 	// daemon is not watched.
 	fetchAccess := m.accessStale.Swap(false) || !m.watching.Load()
+	// The workspace too: at first, and when the daemon has a newer one.
+	var ws *protocol.Workspace
+	if m.syncing.Load() && (m.wsStale.Swap(false) || !m.watching.Load()) {
+		if ws, err = c.Workspace(reqCtx); err != nil {
+			ws = nil // an older daemon
+		}
+	}
 	var access *protocol.AccessInfo
 	if fetchAccess {
 		if access, err = c.Access(reqCtx, &protocol.Access{}); err != nil {
@@ -620,6 +659,9 @@ func (m *model) poll(ctx context.Context) {
 		}
 		m.attachVisible()
 		m.syncTitles()
+		if ws != nil {
+			m.takeWorkspace(ws)
+		}
 	})
 }
 
@@ -904,9 +946,14 @@ func within(dir, root string) bool {
 // selectSession shows a session: in the pane that has it as a tab, or as a
 // new tab of the current pane, attaching its terminal if it is not already.
 func (m *model) selectSession(id string) {
-	if id != "" {
-		m.showTab(id)
+	if id == "" {
+		return
 	}
+	// A space that keeps tabs by owner or project shows the session's.
+	if s, ok := m.session(id); ok {
+		m.showContext(s)
+	}
+	m.showTab(id)
 }
 
 // attachVisible resumes only the active tab of each visible pane.

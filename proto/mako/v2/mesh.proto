@@ -75,7 +75,25 @@ message NodeState {
   repeated SessionInfo sessions = 2;
   bool watching_approvals = 3;
   repeated Node peers = 4;
+  // workspace is the latest of the windows' workspaces the daemon holds,
+  // for the peers it lets in and that let it in to take up.
+  Workspace workspace = 5;
 }
+
+// Workspace is what a window shows: its tabs and panes, in each of its
+// spaces, as the front-end writes them down. The daemon keeps the latest
+// a front-end gave it or a peer it trusts both ways sent, and shares it
+// with those peers, so the windows of one person's nodes show the same.
+message Workspace {
+  bytes doc = 1; // the front-end's, opaque to the daemon
+  int64 version = 2; // when it was made, in Unix nanoseconds: the later wins
+  string node_id = 3; // where it was made, which breaks a tie
+}
+
+// GetWorkspace asks the daemon for the workspace it holds; it answers with
+// a Workspace, empty when it holds none. A front-end sends a Workspace to
+// give the daemon its own, and hears back the one the daemon holds after.
+message GetWorkspace {}
 
 // Watch turns a front-end's stream into a feed of changes: the daemon
 // answers with a Changed whenever the mesh's nodes or sessions change.
@@ -86,6 +104,7 @@ message Changed {
   bool nodes = 1;
   bool sessions = 2;
   bool access = 3; // an access request came, or the keys changed
+  bool workspace = 4; // a newer workspace came from a peer, or a window
 }
 
 // Access asks the daemon about who it lets in, or changes it. Only a

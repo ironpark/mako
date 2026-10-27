@@ -54,6 +54,7 @@ func Run(cfg *config.Config, addr string) error {
 func setup(m *model) {
 	m.window = ggui.UseWindow()
 	followAttention(m)
+	setupWorkspace(m)
 	ggui.Effect(func() ggui.Cleanup {
 		pal := m.themePalette()
 		uitheme.Set(themeFor(pal))

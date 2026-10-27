@@ -40,6 +40,8 @@ const (
 	TypeChanged        Type = "changed"
 	TypeAccess         Type = "access"
 	TypeAccessInfo     Type = "access_info"
+	TypeGetWorkspace   Type = "get_workspace"
+	TypeWorkspace      Type = "workspace"
 	TypeListSess       Type = "list_sessions"
 	TypeSessions       Type = "sessions"
 	TypeOpenSession    Type = "open_session"
@@ -76,6 +78,13 @@ const (
 	TypeReadChat       Type = "read_chat"
 	TypeChat           Type = "chat"
 )
+
+// Newer reports whether the edit made at version v on node is newer than
+// the one at version w on other: the later wins, and of two at once, the
+// greater node's.
+func Newer(v int64, node string, w int64, other string) bool {
+	return v > w || v == w && node > other
+}
 
 // body is the Envelope's oneof, and bodyFields its fields by the Type they
 // carry. Package variables are set before the generated files' init

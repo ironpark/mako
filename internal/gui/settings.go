@@ -256,6 +256,8 @@ func generalSettings(m *model) ggui.Widget {
 					ggui.Box(ui.Select(agent).BindOptions(m.Agents).Format(targetLabel).Name(T("Default agent"))).Width(200)),
 				stackedRow(T("Default working directory"), T("Where a new session starts unless you pick another."),
 					ggui.Row(ggui.Expanded(ui.TextField(project).Name(T("Default working directory"))), browse).Gap(8)),
+				row(T("Follow other nodes"), T("Keep the tabs, panes and spaces the same as in the windows of the nodes this one trusts both ways."),
+					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.SyncWorkspace }), "").Name(T("Follow other nodes"))),
 				row(T("Confirm before killing"), T("Ask before a session is stopped from the window."),
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.ConfirmKill }), "").Name(T("Confirm before killing"))),
 				row(T("Approve in the window"), T("While the window is open, Claude and Codex ask for approvals here, in Chat and over the terminal. Otherwise they ask in their terminals."),

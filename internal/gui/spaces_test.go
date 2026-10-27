@@ -14,7 +14,7 @@ import (
 // A space shows the sessions and kept folders of its owners; the first
 // shows every one, those of no owner too.
 func TestSpacesDivideSessionsByOwner(t *testing.T) {
-	p := prefs{Spaces: []space{{Name: "work", Owners: []string{"github.com/acme"}}}}
+	p := spaceSet{spaceList: spaceList{Spaces: []space{{Name: "work", Owners: []string{"github.com/acme"}}}}}
 	sessions := []*protocol.SessionInfo{{Id: "1", Owner: "github.com/acme"}, {Id: "2", Owner: "github.com/me"}, {Id: "3"}}
 	ids := func(ss []*protocol.SessionInfo) (out []string) {
 		for _, s := range ss {
@@ -43,25 +43,31 @@ func TestMovingBetweenSpaces(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.moveSpace(-1)
-	if got := ggui.Peek(m.Prefs).Space; got != 0 {
+	if got := m.spacesNow().Space; got != 0 {
 		t.Fatalf("before the first: %d", got)
 	}
 	m.newSpace("work", "github.com/acme")
 	m.newSpace("home")
-	if got := ggui.Peek(m.Prefs).Space; got != 2 {
+	if got := m.spacesNow().Space; got != 2 {
 		t.Fatalf("a new space is not shown: %d", got)
 	}
 	m.moveSpace(1)
-	if got := ggui.Peek(m.Prefs).Space; got != 2 {
+	if got := m.spacesNow().Space; got != 2 {
 		t.Fatalf("past the last: %d", got)
 	}
 	m.toggleOwner(1, "github.com/me")
-	if got := ggui.Peek(m.Prefs).Spaces[1].Owners; !slices.Equal(got, []string{"github.com/me"}) {
+	if got := ggui.Peek(m.Spaces).Spaces[1].Owners; !slices.Equal(got, []string{"github.com/me"}) {
 		t.Fatalf("owners %v", got)
 	}
 	m.updateSpaces(func(s []space) []space { return s[:1] })
-	if got := ggui.Peek(m.Prefs).Space; got != 1 {
-		t.Fatalf("after deleting the space shown: %d", got)
+	if got := m.spacesNow().Space; got != 0 {
+		t.Fatalf("after deleting the space shown: %d, not every session's", got)
+	}
+	// Kept by its ID, the space shown stays shown as others come before it.
+	m.setSpace(1)
+	m.updateSpaces(func(s []space) []space { return append([]space{{ID: "first"}}, s...) })
+	if got := m.spacesNow().Space; got != 2 {
+		t.Fatalf("after a space came before the one shown: %d", got)
 	}
 }
 

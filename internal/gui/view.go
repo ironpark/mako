@@ -172,7 +172,7 @@ func sidebar(m *model) ggui.Widget {
 	// Each is made for a space, so its scroll is that space's.
 	list := func(by int) ggui.Widget {
 		space := ggui.Derived(func() int {
-			p := m.Prefs.Get()
+			p := m.spaces()
 			if i := p.Space + by; p.hasSpace(i) && (by == 0 || swipe.moving.Get()) {
 				return i
 			}
@@ -182,13 +182,13 @@ func sidebar(m *model) ggui.Widget {
 			if i < 0 {
 				return ggui.Box()
 			}
-			owners := ggui.Map(m.Prefs, func(p prefs) string {
-				sp, _ := p.spaceOf(i)
+			owners := ggui.Map(m.Spaces, func(l spaceList) string {
+				sp, _ := spaceSet{spaceList: l}.spaceOf(i)
 				return strings.Join(sp.Owners, "\x00")
 			})
 			return ggui.Scroll(ggui.Padding(ggui.Reactive(func() ggui.Widget {
 				owners.Get()
-				return spaceList(m, st, i)
+				return spaceSessionList(m, st, i)
 			}), 8, 8)).Bar(tokSurface3)
 		})
 	}
@@ -209,16 +209,16 @@ type sidebarState struct {
 	pinned, collapsed ggui.Readable[[]string]
 }
 
-// spaceList is the sidebar's list of the sessions of space i, as it groups
-// them, pinned ones first.
-func spaceList(m *model, st sidebarState, i int) ggui.Widget {
+// spaceSessionList is the sidebar's list of the sessions of space i, as it
+// groups them, pinned ones first.
+func spaceSessionList(m *model, st sidebarState, i int) ggui.Widget {
 	by := st.grouping.Get()
 	nodes := m.Nodes.Get()
 	titles := m.Titles.Get()
 	selected := m.Selected.Get()
 	m.Unread.Get() // the dots show what is unread
 	query := strings.TrimSpace(m.SidebarFilter.Get())
-	p := ggui.Peek(m.Prefs)
+	p := m.spacesNow()
 	sessions := filterSessions(p.spaceSessions(i, m.Sessions.Get()), query, nodes, titles)
 	// Pinned sessions come first, in a section of their own.
 	pins := st.pinned.Get()

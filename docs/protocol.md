@@ -239,6 +239,8 @@ that answers on success.
 | `list_nodes` | `{}` | `nodes` | The daemon itself, then its peers, each with how the daemon stands with it. |
 | `watch` | `{}` | `changed`, then more | Turns the stream into a feed: a `changed` at once, then one whenever the mesh's nodes or sessions, or the daemon's access, change, until the front-end closes the stream. |
 | `access` | `Access` | `access_info` | Who the daemon lets in, and changes to it; see [Access](#access). From a front-end only. |
+| `get_workspace` | `{}` | `workspace` | The workspace the daemon holds, empty for none; see [Workspaces](#workspaces). From a front-end only. |
+| `workspace` | `Workspace` | `workspace` | Gives the daemon a window's workspace, kept if it is newer than the one held; the reply is the one held after. From a front-end only. |
 
 ```proto
 message Node {
@@ -265,8 +267,28 @@ message Changed {
   bool nodes = 1;    // the nodes changed: ask list_nodes again
   bool sessions = 2; // the sessions changed: ask list_sessions again
   bool access = 3;   // a request came, or the keys changed: ask access again
+  bool workspace = 4; // a newer workspace came: ask get_workspace again
+}
+
+message Workspace {
+  bytes doc = 1;      // the front-end's, opaque to the daemon
+  int64 version = 2;  // when it was made, in Unix nanoseconds: the later wins
+  string node_id = 3; // where it was made, which breaks a tie
 }
 ```
+
+#### Workspaces
+
+A workspace is what a window shows: its tabs and panes in each space, and
+the spaces, written down by the front-end in `doc` as it likes. The daemon
+keeps the latest it was given or sent, the later `version` winning and the
+greater `node_id` breaking a tie, in `workspace.pb` in its folder. It goes
+out in the daemon's `NodeState` to the peers it lets in, and a daemon takes
+up a peer's only when the two let each other in: one person's nodes, whose
+windows then show the same. A daemon that takes up a newer one tells its
+watching front-ends with `changed.workspace`. A front-end that does not
+follow the other nodes neither gives the daemon its workspace nor takes
+the daemon's up.
 
 A front-end that watches still polls now and then, as a check on a change
 it missed; a daemon too old to watch answers `watch` with `unsupported`, and
@@ -542,12 +564,14 @@ message NodeState {
   repeated SessionInfo sessions = 2; // its own sessions
   bool watching_approvals = 3;       // a front-end of its answers approvals
   repeated Node peers = 4;           // the other nodes it knows of
+  Workspace workspace = 5;           // the windows' latest; see Workspaces
 }
 ```
 
 What a peer is sent depends on how the two stand. A peer the daemon lets in
 gets it all; a peer that lets the daemon in gets the node, without its
-agents, and `watching_approvals`; a peer with neither gets nothing. A state
+agents, and `watching_approvals`, without the workspace; a peer with
+neither gets nothing. A state
 is taken only as its own node's: its record must name the peer that sent
 it. A daemon keeps each peer's latest sessions, and answers a front-end's
 `list_sessions` with those sent in the last 20 seconds. A peer's `watching_approvals` counts

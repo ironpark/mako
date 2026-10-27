@@ -117,7 +117,13 @@ func (d *Daemon) saveSessionsLocked() error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(d.sessionPath), ".sessions-*")
+	return writeAtomic(d.sessionPath, data)
+}
+
+// writeAtomic replaces the file at path with data, so a crash leaves the
+// old file or the new, never half of one.
+func writeAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
 	if err != nil {
 		return err
 	}
@@ -132,7 +138,7 @@ func (d *Daemon) saveSessionsLocked() error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), d.sessionPath)
+	return os.Rename(tmp.Name(), path)
 }
 
 func (d *Daemon) listSessions() []*protocol.SessionInfo {

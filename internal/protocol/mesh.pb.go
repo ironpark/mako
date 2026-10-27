@@ -447,8 +447,11 @@ type NodeState struct {
 	Sessions          []*SessionInfo         `protobuf:"bytes,2,rep,name=sessions,proto3" json:"sessions,omitempty"`
 	WatchingApprovals bool                   `protobuf:"varint,3,opt,name=watching_approvals,json=watchingApprovals,proto3" json:"watching_approvals,omitempty"`
 	Peers             []*Node                `protobuf:"bytes,4,rep,name=peers,proto3" json:"peers,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// workspace is the latest of the windows' workspaces the daemon holds,
+	// for the peers it lets in and that let it in to take up.
+	Workspace     *Workspace `protobuf:"bytes,5,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NodeState) Reset() {
@@ -509,6 +512,116 @@ func (x *NodeState) GetPeers() []*Node {
 	return nil
 }
 
+func (x *NodeState) GetWorkspace() *Workspace {
+	if x != nil {
+		return x.Workspace
+	}
+	return nil
+}
+
+// Workspace is what a window shows: its tabs and panes, in each of its
+// spaces, as the front-end writes them down. The daemon keeps the latest
+// a front-end gave it or a peer it trusts both ways sent, and shares it
+// with those peers, so the windows of one person's nodes show the same.
+type Workspace struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Doc           []byte                 `protobuf:"bytes,1,opt,name=doc,proto3" json:"doc,omitempty"`                     // the front-end's, opaque to the daemon
+	Version       int64                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`            // when it was made, in Unix nanoseconds: the later wins
+	NodeId        string                 `protobuf:"bytes,3,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // where it was made, which breaks a tie
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Workspace) Reset() {
+	*x = Workspace{}
+	mi := &file_mako_v2_mesh_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Workspace) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Workspace) ProtoMessage() {}
+
+func (x *Workspace) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_mesh_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Workspace.ProtoReflect.Descriptor instead.
+func (*Workspace) Descriptor() ([]byte, []int) {
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *Workspace) GetDoc() []byte {
+	if x != nil {
+		return x.Doc
+	}
+	return nil
+}
+
+func (x *Workspace) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *Workspace) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+// GetWorkspace asks the daemon for the workspace it holds; it answers with
+// a Workspace, empty when it holds none. A front-end sends a Workspace to
+// give the daemon its own, and hears back the one the daemon holds after.
+type GetWorkspace struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWorkspace) Reset() {
+	*x = GetWorkspace{}
+	mi := &file_mako_v2_mesh_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWorkspace) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWorkspace) ProtoMessage() {}
+
+func (x *GetWorkspace) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_mesh_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWorkspace.ProtoReflect.Descriptor instead.
+func (*GetWorkspace) Descriptor() ([]byte, []int) {
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{8}
+}
+
 // Watch turns a front-end's stream into a feed of changes: the daemon
 // answers with a Changed whenever the mesh's nodes or sessions change.
 type Watch struct {
@@ -519,7 +632,7 @@ type Watch struct {
 
 func (x *Watch) Reset() {
 	*x = Watch{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[7]
+	mi := &file_mako_v2_mesh_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -531,7 +644,7 @@ func (x *Watch) String() string {
 func (*Watch) ProtoMessage() {}
 
 func (x *Watch) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[7]
+	mi := &file_mako_v2_mesh_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -544,7 +657,7 @@ func (x *Watch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Watch.ProtoReflect.Descriptor instead.
 func (*Watch) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{7}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{9}
 }
 
 // Changed says what changed, for the front-end to ask for again.
@@ -552,14 +665,15 @@ type Changed struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Nodes         bool                   `protobuf:"varint,1,opt,name=nodes,proto3" json:"nodes,omitempty"`
 	Sessions      bool                   `protobuf:"varint,2,opt,name=sessions,proto3" json:"sessions,omitempty"`
-	Access        bool                   `protobuf:"varint,3,opt,name=access,proto3" json:"access,omitempty"` // an access request came, or the keys changed
+	Access        bool                   `protobuf:"varint,3,opt,name=access,proto3" json:"access,omitempty"`       // an access request came, or the keys changed
+	Workspace     bool                   `protobuf:"varint,4,opt,name=workspace,proto3" json:"workspace,omitempty"` // a newer workspace came from a peer, or a window
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Changed) Reset() {
 	*x = Changed{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[8]
+	mi := &file_mako_v2_mesh_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -571,7 +685,7 @@ func (x *Changed) String() string {
 func (*Changed) ProtoMessage() {}
 
 func (x *Changed) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[8]
+	mi := &file_mako_v2_mesh_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -584,7 +698,7 @@ func (x *Changed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Changed.ProtoReflect.Descriptor instead.
 func (*Changed) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{8}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Changed) GetNodes() bool {
@@ -604,6 +718,13 @@ func (x *Changed) GetSessions() bool {
 func (x *Changed) GetAccess() bool {
 	if x != nil {
 		return x.Access
+	}
+	return false
+}
+
+func (x *Changed) GetWorkspace() bool {
+	if x != nil {
+		return x.Workspace
 	}
 	return false
 }
@@ -628,7 +749,7 @@ type Access struct {
 
 func (x *Access) Reset() {
 	*x = Access{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[9]
+	mi := &file_mako_v2_mesh_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -640,7 +761,7 @@ func (x *Access) String() string {
 func (*Access) ProtoMessage() {}
 
 func (x *Access) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[9]
+	mi := &file_mako_v2_mesh_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -653,7 +774,7 @@ func (x *Access) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Access.ProtoReflect.Descriptor instead.
 func (*Access) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{9}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Access) GetOp() string {
@@ -705,7 +826,7 @@ type AccessInfo struct {
 
 func (x *AccessInfo) Reset() {
 	*x = AccessInfo{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[10]
+	mi := &file_mako_v2_mesh_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -717,7 +838,7 @@ func (x *AccessInfo) String() string {
 func (*AccessInfo) ProtoMessage() {}
 
 func (x *AccessInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[10]
+	mi := &file_mako_v2_mesh_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -730,7 +851,7 @@ func (x *AccessInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessInfo.ProtoReflect.Descriptor instead.
 func (*AccessInfo) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{10}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *AccessInfo) GetKey() *AccessKey {
@@ -774,7 +895,7 @@ type AccessKey struct {
 
 func (x *AccessKey) Reset() {
 	*x = AccessKey{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[11]
+	mi := &file_mako_v2_mesh_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -786,7 +907,7 @@ func (x *AccessKey) String() string {
 func (*AccessKey) ProtoMessage() {}
 
 func (x *AccessKey) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[11]
+	mi := &file_mako_v2_mesh_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -799,7 +920,7 @@ func (x *AccessKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessKey.ProtoReflect.Descriptor instead.
 func (*AccessKey) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{11}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *AccessKey) GetFingerprint() string {
@@ -844,7 +965,7 @@ type AccessRequest struct {
 
 func (x *AccessRequest) Reset() {
 	*x = AccessRequest{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[12]
+	mi := &file_mako_v2_mesh_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -856,7 +977,7 @@ func (x *AccessRequest) String() string {
 func (*AccessRequest) ProtoMessage() {}
 
 func (x *AccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[12]
+	mi := &file_mako_v2_mesh_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -869,7 +990,7 @@ func (x *AccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessRequest.ProtoReflect.Descriptor instead.
 func (*AccessRequest) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{12}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *AccessRequest) GetNode() *Node {
@@ -943,17 +1064,24 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\bprofiles\x18\x02 \x03(\tR\bprofiles\"\v\n" +
 	"\tListNodes\",\n" +
 	"\x05Nodes\x12#\n" +
-	"\x05nodes\x18\x01 \x03(\v2\r.mako.v2.NodeR\x05nodes\"\xb4\x01\n" +
+	"\x05nodes\x18\x01 \x03(\v2\r.mako.v2.NodeR\x05nodes\"\xe6\x01\n" +
 	"\tNodeState\x12!\n" +
 	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\x120\n" +
 	"\bsessions\x18\x02 \x03(\v2\x14.mako.v2.SessionInfoR\bsessions\x12-\n" +
 	"\x12watching_approvals\x18\x03 \x01(\bR\x11watchingApprovals\x12#\n" +
-	"\x05peers\x18\x04 \x03(\v2\r.mako.v2.NodeR\x05peers\"\a\n" +
-	"\x05Watch\"S\n" +
+	"\x05peers\x18\x04 \x03(\v2\r.mako.v2.NodeR\x05peers\x120\n" +
+	"\tworkspace\x18\x05 \x01(\v2\x12.mako.v2.WorkspaceR\tworkspace\"P\n" +
+	"\tWorkspace\x12\x10\n" +
+	"\x03doc\x18\x01 \x01(\fR\x03doc\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x17\n" +
+	"\anode_id\x18\x03 \x01(\tR\x06nodeId\"\x0e\n" +
+	"\fGetWorkspace\"\a\n" +
+	"\x05Watch\"q\n" +
 	"\aChanged\x12\x14\n" +
 	"\x05nodes\x18\x01 \x01(\bR\x05nodes\x12\x1a\n" +
 	"\bsessions\x18\x02 \x01(\bR\bsessions\x12\x16\n" +
-	"\x06access\x18\x03 \x01(\bR\x06access\"m\n" +
+	"\x06access\x18\x03 \x01(\bR\x06access\x12\x1c\n" +
+	"\tworkspace\x18\x04 \x01(\bR\tworkspace\"m\n" +
 	"\x06Access\x12\x0e\n" +
 	"\x02op\x18\x01 \x01(\tR\x02op\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x10\n" +
@@ -990,7 +1118,7 @@ func file_mako_v2_mesh_proto_rawDescGZIP() []byte {
 	return file_mako_v2_mesh_proto_rawDescData
 }
 
-var file_mako_v2_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_mako_v2_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_mako_v2_mesh_proto_goTypes = []any{
 	(*Hello)(nil),                 // 0: mako.v2.Hello
 	(*Welcome)(nil),               // 1: mako.v2.Welcome
@@ -999,36 +1127,39 @@ var file_mako_v2_mesh_proto_goTypes = []any{
 	(*ListNodes)(nil),             // 4: mako.v2.ListNodes
 	(*Nodes)(nil),                 // 5: mako.v2.Nodes
 	(*NodeState)(nil),             // 6: mako.v2.NodeState
-	(*Watch)(nil),                 // 7: mako.v2.Watch
-	(*Changed)(nil),               // 8: mako.v2.Changed
-	(*Access)(nil),                // 9: mako.v2.Access
-	(*AccessInfo)(nil),            // 10: mako.v2.AccessInfo
-	(*AccessKey)(nil),             // 11: mako.v2.AccessKey
-	(*AccessRequest)(nil),         // 12: mako.v2.AccessRequest
-	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
-	(*SessionInfo)(nil),           // 14: mako.v2.SessionInfo
+	(*Workspace)(nil),             // 7: mako.v2.Workspace
+	(*GetWorkspace)(nil),          // 8: mako.v2.GetWorkspace
+	(*Watch)(nil),                 // 9: mako.v2.Watch
+	(*Changed)(nil),               // 10: mako.v2.Changed
+	(*Access)(nil),                // 11: mako.v2.Access
+	(*AccessInfo)(nil),            // 12: mako.v2.AccessInfo
+	(*AccessKey)(nil),             // 13: mako.v2.AccessKey
+	(*AccessRequest)(nil),         // 14: mako.v2.AccessRequest
+	(*timestamppb.Timestamp)(nil), // 15: google.protobuf.Timestamp
+	(*SessionInfo)(nil),           // 16: mako.v2.SessionInfo
 }
 var file_mako_v2_mesh_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Welcome.node:type_name -> mako.v2.Node
-	13, // 1: mako.v2.Node.last_seen:type_name -> google.protobuf.Timestamp
+	15, // 1: mako.v2.Node.last_seen:type_name -> google.protobuf.Timestamp
 	3,  // 2: mako.v2.Node.agents:type_name -> mako.v2.AgentInfo
 	2,  // 3: mako.v2.Nodes.nodes:type_name -> mako.v2.Node
 	2,  // 4: mako.v2.NodeState.node:type_name -> mako.v2.Node
-	14, // 5: mako.v2.NodeState.sessions:type_name -> mako.v2.SessionInfo
+	16, // 5: mako.v2.NodeState.sessions:type_name -> mako.v2.SessionInfo
 	2,  // 6: mako.v2.NodeState.peers:type_name -> mako.v2.Node
-	11, // 7: mako.v2.AccessInfo.key:type_name -> mako.v2.AccessKey
-	11, // 8: mako.v2.AccessInfo.owner:type_name -> mako.v2.AccessKey
-	12, // 9: mako.v2.AccessInfo.requests:type_name -> mako.v2.AccessRequest
-	11, // 10: mako.v2.AccessInfo.keys:type_name -> mako.v2.AccessKey
-	2,  // 11: mako.v2.AccessRequest.node:type_name -> mako.v2.Node
-	11, // 12: mako.v2.AccessRequest.key:type_name -> mako.v2.AccessKey
-	11, // 13: mako.v2.AccessRequest.owner:type_name -> mako.v2.AccessKey
-	13, // 14: mako.v2.AccessRequest.at:type_name -> google.protobuf.Timestamp
-	15, // [15:15] is the sub-list for method output_type
-	15, // [15:15] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	7,  // 7: mako.v2.NodeState.workspace:type_name -> mako.v2.Workspace
+	13, // 8: mako.v2.AccessInfo.key:type_name -> mako.v2.AccessKey
+	13, // 9: mako.v2.AccessInfo.owner:type_name -> mako.v2.AccessKey
+	14, // 10: mako.v2.AccessInfo.requests:type_name -> mako.v2.AccessRequest
+	13, // 11: mako.v2.AccessInfo.keys:type_name -> mako.v2.AccessKey
+	2,  // 12: mako.v2.AccessRequest.node:type_name -> mako.v2.Node
+	13, // 13: mako.v2.AccessRequest.key:type_name -> mako.v2.AccessKey
+	13, // 14: mako.v2.AccessRequest.owner:type_name -> mako.v2.AccessKey
+	15, // 15: mako.v2.AccessRequest.at:type_name -> google.protobuf.Timestamp
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_mesh_proto_init() }
@@ -1043,7 +1174,7 @@ func file_mako_v2_mesh_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_mesh_proto_rawDesc), len(file_mako_v2_mesh_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

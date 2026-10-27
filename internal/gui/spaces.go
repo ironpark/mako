@@ -21,16 +21,47 @@ import (
 
 // space is a named set of repository owners.
 type space struct {
-	Name   string   `json:"name"`
-	Owners []string `json:"owners,omitempty"`
+	ID       string   `json:"id"` // what it is shown by, and its tabs and panes kept by
+	Name     string   `json:"name"`
+	Owners   []string `json:"owners,omitempty"`
+	LayoutBy string   `json:"layout_by,omitempty"` // whole space, by owner or by project; see layoutBys
 }
+
+// spaceList is the spaces, and how the space of every session keeps its
+// tabs and panes: part of the workspace (workspace.go), which writes them
+// down and shares them with the other nodes.
+type spaceList struct {
+	Spaces      []space `json:"spaces,omitempty"`
+	AllLayoutBy string  `json:"all_layout_by,omitempty"`
+}
+
+// spaceSet is the spaces with the one the window shows, by index: 0 for
+// every session, then the spaces in order. The window keeps the one shown
+// by its ID, so the spaces changing on another node shows the same space
+// still, or every session once it is gone.
+type spaceSet struct {
+	spaceList
+	Space int
+}
+
+// spaceSetOf is list with the space whose ID is shown.
+func spaceSetOf(list spaceList, shown string) spaceSet {
+	i := slices.IndexFunc(list.Spaces, func(sp space) bool { return sp.ID == shown })
+	return spaceSet{spaceList: list, Space: i + 1}
+}
+
+// spacesNow is the spaces, and the one shown, as they are.
+func (m *model) spacesNow() spaceSet { return ggui.Peek(m.spaceSet) }
+
+// spaces is spacesNow, followed by the reactive context reading it.
+func (m *model) spaces() spaceSet { return m.spaceSet.Get() }
 
 // allSpace is the index of the space of every session.
 const allSpace = 0
 
 // spaceOf is the space at index i, 0 for every session; ok is false for
 // that one, which holds no owners of its own.
-func (p prefs) spaceOf(i int) (sp space, ok bool) {
+func (p spaceSet) spaceOf(i int) (sp space, ok bool) {
 	if i <= allSpace || i > len(p.Spaces) {
 		return space{}, false
 	}
@@ -39,10 +70,18 @@ func (p prefs) spaceOf(i int) (sp space, ok bool) {
 
 // hasSpace reports whether there is a space at index i: 0, every
 // session, through the last.
-func (p prefs) hasSpace(i int) bool { return i >= allSpace && i <= len(p.Spaces) }
+func (p spaceSet) hasSpace(i int) bool { return i >= allSpace && i <= len(p.Spaces) }
+
+// layoutBy is how space i keeps its tabs and panes.
+func (p spaceSet) layoutBy(i int) string {
+	if sp, ok := p.spaceOf(i); ok {
+		return sp.LayoutBy
+	}
+	return p.AllLayoutBy
+}
 
 // spaceName is the name the sidebar shows for space i.
-func (p prefs) spaceName(i int) string {
+func (p spaceSet) spaceName(i int) string {
 	sp, ok := p.spaceOf(i)
 	if !ok {
 		return T("All sessions")
@@ -51,13 +90,13 @@ func (p prefs) spaceName(i int) string {
 }
 
 // inSpace reports whether a session or folder of owner shows in space i.
-func (p prefs) inSpace(i int, owner string) bool {
+func (p spaceSet) inSpace(i int, owner string) bool {
 	sp, ok := p.spaceOf(i)
 	return !ok || slices.Contains(sp.Owners, owner)
 }
 
 // spaceSessions keeps the sessions space i shows.
-func (p prefs) spaceSessions(i int, sessions []*protocol.SessionInfo) []*protocol.SessionInfo {
+func (p spaceSet) spaceSessions(i int, sessions []*protocol.SessionInfo) []*protocol.SessionInfo {
 	if _, ok := p.spaceOf(i); !ok {
 		return sessions
 	}
@@ -65,33 +104,34 @@ func (p prefs) spaceSessions(i int, sessions []*protocol.SessionInfo) []*protoco
 }
 
 // spaceProjects keeps the kept folders space i shows.
-func (p prefs) spaceProjects(i int, projects []keptProject) []keptProject {
+func (p spaceSet) spaceProjects(i int, projects []keptProject) []keptProject {
 	if _, ok := p.spaceOf(i); !ok {
 		return projects
 	}
 	return slices.DeleteFunc(slices.Clone(projects), func(r keptProject) bool { return !p.inSpace(i, r.Owner) })
 }
 
-// setSpace shows space i in the sidebar.
+// setSpace shows space i in the sidebar, as far as there is one.
 func (m *model) setSpace(i int) {
-	m.Prefs.Update(func(p prefs) prefs { p.Space = min(max(i, allSpace), len(p.Spaces)); return p })
+	set := m.spacesNow()
+	id := set.spaceID(min(max(i, allSpace), len(set.Spaces)))
+	m.Prefs.Update(func(p prefs) prefs { p.ShownSpace = id; return p })
 }
 
 // moveSpace shows the space by beside the one shown, as far as there is
 // one: 1 the next, -1 the one before.
-func (m *model) moveSpace(by int) { m.setSpace(ggui.Peek(m.Prefs).Space + by) }
+func (m *model) moveSpace(by int) { m.setSpace(m.spacesNow().Space + by) }
 
-// updateSpaces changes the spaces, on a copy so the setting they were
-// stays as it was, and keeps the one shown in range.
+// updateSpaces changes the spaces, on a copy so the list they were stays
+// as it was.
 func (m *model) updateSpaces(fn func([]space) []space) {
-	m.Prefs.Update(func(p prefs) prefs {
-		spaces := make([]space, len(p.Spaces))
-		for i, sp := range p.Spaces {
-			spaces[i] = space{Name: sp.Name, Owners: slices.Clone(sp.Owners)}
+	m.Spaces.Update(func(l spaceList) spaceList {
+		spaces := slices.Clone(l.Spaces)
+		for i := range spaces {
+			spaces[i].Owners = slices.Clone(spaces[i].Owners)
 		}
-		p.Spaces = fn(spaces)
-		p.Space = min(p.Space, len(p.Spaces))
-		return p
+		l.Spaces = fn(spaces)
+		return l
 	})
 }
 
@@ -106,8 +146,10 @@ func (m *model) toggleOwner(i int, owner string) {
 
 // newSpace adds a space holding owners and shows it.
 func (m *model) newSpace(name string, owners ...string) {
-	m.updateSpaces(func(spaces []space) []space { return append(spaces, space{Name: name, Owners: owners}) })
-	m.setSpace(len(ggui.Peek(m.Prefs).Spaces))
+	m.updateSpaces(func(spaces []space) []space {
+		return append(spaces, space{ID: newSpaceID(), Name: name, Owners: owners})
+	})
+	m.setSpace(len(ggui.Peek(m.Spaces).Spaces))
 }
 
 // knownOwners are the owners the sidebar's sessions and kept folders say
@@ -135,11 +177,9 @@ func compareOwners(a, b string) int {
 // spaceSwitcher is the sidebar heading's title: the space shown, a menu
 // of the others, and a dot for each space when there is more than one.
 func spaceSwitcher(m *model) ggui.Widget {
-	return ggui.View(ggui.Map(m.Prefs, func(p prefs) [2]any { return [2]any{p.Space, slices.Clone(p.Spaces)} }).WithEqual(func(a, b [2]any) bool {
-		return a[0] == b[0] && slices.EqualFunc(a[1].([]space), b[1].([]space), func(x, y space) bool { return x.Name == y.Name && slices.Equal(x.Owners, y.Owners) })
-	}), func(v [2]any) ggui.Widget {
-		p := ggui.Peek(m.Prefs)
-		current := v[0].(int)
+	return ggui.Reactive(func() ggui.Widget {
+		p := m.spaces()
+		current := p.Space
 		items := make([]ggui.Widget, 0, len(p.Spaces)+3)
 		for i := range len(p.Spaces) + 1 {
 			items = append(items, ui.MenuItem(p.spaceName(i), func() { m.setSpace(i) }).Checked(i == current))
@@ -166,7 +206,7 @@ func spaceDots(m *model, n, current int) ggui.Widget {
 			c = tokMuted
 		}
 		dots[i] = ui.ButtonOf(ggui.Box().Size(6, 6).Radius(3).Fill(c), func() { m.setSpace(i) }).
-			Ghost().Pad(2).Radius(4).Name(ggui.Peek(m.Prefs).spaceName(i))
+			Ghost().Pad(2).Radius(4).Name(m.spacesNow().spaceName(i))
 	}
 	return ggui.Row(dots...).Gap(0).Align(ggui.AlignCenter)
 }
@@ -208,7 +248,7 @@ type spaceSwipe struct {
 func newSpaceSwipe(m *model) *spaceSwipe {
 	return &spaceSwipe{
 		can: func(by int) bool {
-			p := ggui.Peek(m.Prefs)
+			p := m.spacesNow()
 			return p.hasSpace(p.Space + by)
 		},
 		move:   m.moveSpace,
@@ -380,7 +420,7 @@ func (l *swipeSlide) Paint(dst *ggui.Canvas, r ggui.Rect) {
 // ownerSpaceItems are an owner heading's menu entries for the spaces: one
 // to put it in each space or take it out, and one for a new space of it.
 func ownerSpaceItems(m *model, owner, name string) []ggui.Widget {
-	spaces := ggui.Peek(m.Prefs).Spaces
+	spaces := ggui.Peek(m.Spaces).Spaces
 	items := []ggui.Widget{ui.MenuDivider()}
 	for i, sp := range spaces {
 		label := cmp.Or(sp.Name, Tf("Space %d", i+1))
@@ -392,12 +432,15 @@ func ownerSpaceItems(m *model, owner, name string) []ggui.Widget {
 // spacesSettings edits the spaces: each one's name and owners, picked
 // from the owners the sidebar knows.
 func spacesSettings(m *model) ggui.Widget {
-	spaces := ggui.Map(m.Prefs, func(p prefs) int { return len(p.Spaces) })
+	spaces := ggui.Map(m.Spaces, func(l spaceList) int { return len(l.Spaces) })
 	owners := ggui.Map(m.Sessions, func(s []*protocol.SessionInfo) []string {
 		return knownOwners(s, ggui.Peek(m.Prefs).Projects)
 	}).WithEqual(slices.Equal)
 	add := ui.Button(T("Add space"), func() { m.newSpace("") }).Outline()
+	all := card(row(T("All sessions"), T("How the space of every session keeps its tabs and panes."),
+		layoutByToggle(m.Spaces.Field(func(l *spaceList) *string { return &l.AllLayoutBy }))))
 	return page(T("Spaces"), T("Spaces divide the sidebar's sessions by whose repositories they are in. Swipe across the sidebar with two fingers, or pick one from its title, to move between them."),
+		section(T("Tabs and panes"), muted(ggui.Text(T("Each space keeps tabs and panes of its own: one set for the whole space, or one for each owner or project, shown as you pick one of its sessions in the sidebar.")).Size(12.5)), all),
 		ggui.View(spaces, func(n int) ggui.Widget {
 			if n == 0 {
 				return section(T("Spaces"), muted(ggui.Text(T("No spaces yet. Add one, or pick New space with this owner from an owner's menu in the sidebar.")).Size(13)), ggui.Align(add).Left())
@@ -413,25 +456,12 @@ func spacesSettings(m *model) ggui.Widget {
 
 // spaceCard is one space's name, owners and delete button.
 func spaceCard(m *model, i int, owners ggui.Readable[[]string]) ggui.Widget {
-	name := ggui.Bind(func() string {
-		p := m.Prefs.Get()
-		if i < len(p.Spaces) {
-			return p.Spaces[i].Name
-		}
-		return ""
-	}, func(v string) {
-		m.updateSpaces(func(spaces []space) []space {
-			if i < len(spaces) {
-				spaces[i].Name = v
-			}
-			return spaces
-		})
-	})
+	name := spaceField(m, i, func(sp *space) *string { return &sp.Name })
 	remove := ui.Tooltip(ui.ButtonOf(icon("trash-2").Size(14), func() {
 		m.updateSpaces(func(spaces []space) []space { return slices.Delete(spaces, i, i+1) })
 	}).Ghost().Pad(6).Radius(6).Name(T("Delete space")), T("Delete space"))
 	chips := ggui.Reactive(func() ggui.Widget {
-		p := m.Prefs.Get()
+		p := m.Spaces.Get()
 		if i >= len(p.Spaces) {
 			return ggui.Box()
 		}
@@ -462,5 +492,30 @@ func spaceCard(m *model, i int, owners ggui.Readable[[]string]) ggui.Widget {
 		ggui.Expanded(ui.TextField(name).Placeholder(Tf("Space %d", i+1)).Name(T("Space name"))),
 		remove,
 	).Gap(8).Align(ggui.AlignCenter)
-	return card(ggui.Box(ggui.Column(head, chips).Gap(12).Stretch()).Pad(14, 16))
+	by := spaceField(m, i, func(sp *space) *string { return &sp.LayoutBy })
+	tabs := ggui.Row(muted(ggui.Text(T("Tabs and panes")).Size(12.5)), ggui.Spacer(), layoutByToggle(by)).Gap(12).Align(ggui.AlignCenter)
+	return card(ggui.Box(ggui.Column(head, chips, tabs).Gap(12).Stretch()).Pad(14, 16))
+}
+
+// spaceField binds a field of space i, as prefField does a setting's.
+func spaceField(m *model, i int, field func(*space) *string) ggui.Binding[string] {
+	return ggui.Bind(func() string {
+		p := m.Spaces.Get()
+		if i < len(p.Spaces) {
+			return *field(&p.Spaces[i])
+		}
+		return ""
+	}, func(v string) {
+		m.updateSpaces(func(spaces []space) []space {
+			if i < len(spaces) {
+				*field(&spaces[i]) = v
+			}
+			return spaces
+		})
+	})
+}
+
+// layoutByToggle picks how a space keeps its tabs and panes.
+func layoutByToggle(b ggui.Binding[string]) ggui.Widget {
+	return ui.ToggleGroup(b).Options(layoutBys).Format(func(s string) string { return T(layoutByLabels[s]) }).Name(T("Tabs and panes"))
 }

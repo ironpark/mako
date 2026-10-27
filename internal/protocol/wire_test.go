@@ -14,7 +14,7 @@ import (
 // Every Type constant names a body field, and every body field has one.
 func TestEveryTypeHasABody(t *testing.T) {
 	types := []Type{
-		TypeHello, TypeWelcome, TypeError, TypeListNodes, TypeNodes, TypeWatch, TypeChanged, TypeAccess, TypeAccessInfo,
+		TypeHello, TypeWelcome, TypeError, TypeListNodes, TypeNodes, TypeWatch, TypeChanged, TypeAccess, TypeAccessInfo, TypeGetWorkspace, TypeWorkspace,
 		TypeListSess, TypeSessions, TypeOpenSession, TypeSessionInfo, TypeCloseSess, TypeRenameSess, TypeAnswerApproval,
 		TypeAttach, TypeInput, TypeOutput, TypeResize, TypeSnapshot, TypeExited,
 		TypeListDir, TypeDir, TypeReadFile, TypeFile, TypeWriteFile, TypeFileOp, TypeSearch, TypeSearchResult, TypeStageFile, TypeStaged,

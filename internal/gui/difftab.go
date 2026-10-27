@@ -35,6 +35,28 @@ func isDiffTab(id string) bool { return strings.HasPrefix(id, diffPrefix) }
 // or a diff.
 func isSessionTab(id string) bool { return id != "" && !isDocTab(id) && !isDiffTab(id) }
 
+// How each kind of tab goes with the workspace (workspace.go): whether it
+// is written down, and how it comes back.
+
+// keptTab reports whether a tab is written down with the workspace: a
+// session's and a file's are; a diff's, read as it opens, is not.
+func keptTab(id string) bool { return !isDiffTab(id) }
+
+// bringBack makes ready what a tab of a layout brought back shows, and
+// reports whether it can show it: a file is read again, unless it is open
+// already; a diff comes back only while it is still open.
+func (m *model) bringBack(id string) bool {
+	switch {
+	case isDiffTab(id):
+		_, open := ggui.Peek(m.Diffs)[id]
+		return open
+	case isDocTab(id):
+		node, path := splitKey(strings.TrimPrefix(id, docPrefix))
+		m.ensureDoc(fileItem{Node: node, Path: path, Name: baseName(path)}, fileRoot{Node: node, Path: parentDir(path)})
+	}
+	return true
+}
+
 // diffTab is what a diff tab shows.
 type diffTab struct {
 	Root    fileRoot // the project it was opened from, which the panels keep showing

@@ -168,8 +168,8 @@ func (d *Daemon) onPeer(p p2p.Peer) {
 	}
 	dropped := !p.TrustedBy && d.remote.drop(p.Node)
 	d.changes.fire(true, dropped)
-	full, public := d.encodeState(d.state())
-	go d.sendState(d.ctx, p, full, public)
+	shared, full, public := d.encodeState(d.state())
+	go d.sendState(d.ctx, p, shared, full, public)
 }
 
 // relinkAfter is how long a failed link to a peer waits to be tried again,
@@ -212,7 +212,7 @@ func (d *Daemon) link(node *protocol.Node) {
 func (d *Daemon) state() *protocol.NodeState {
 	node := d.Self()
 	node.LastSeen = nil
-	return &protocol.NodeState{Node: node, Sessions: d.listSessions(), WatchingApprovals: d.approvals.watchedHere()}
+	return &protocol.NodeState{Node: node, Sessions: d.listSessions(), WatchingApprovals: d.approvals.watchedHere(), Workspace: d.workspace.get()}
 }
 
 // watchState sends this daemon's state to its peers, and tells watching
@@ -230,11 +230,12 @@ func (d *Daemon) watchState(ctx context.Context) {
 			if sessionsChanged {
 				d.changes.fire(false, true)
 			}
-			changed := last == nil || sessionsChanged || st.GetWatchingApprovals() != last.GetWatchingApprovals() || !proto.Equal(st.GetNode(), last.GetNode())
+			changed := last == nil || sessionsChanged || st.GetWatchingApprovals() != last.GetWatchingApprovals() || !proto.Equal(st.GetNode(), last.GetNode()) ||
+				st.GetWorkspace().GetVersion() != last.GetWorkspace().GetVersion()
 			if d.p2p != nil && (changed || time.Since(sent) >= stateEvery) {
-				full, public := d.encodeState(st)
+				shared, full, public := d.encodeState(st)
 				for _, p := range d.p2p.Peers() {
-					go d.sendState(ctx, p, full, public)
+					go d.sendState(ctx, p, shared, full, public)
 				}
 				sent = time.Now()
 			}
@@ -249,9 +250,9 @@ func (d *Daemon) watchState(ctx context.Context) {
 }
 
 // encodeState is st stamped now, as sent to a peer this daemon lets in,
-// with its sessions and the nodes it knows of, and as sent to one that
-// only lets it in, without.
-func (d *Daemon) encodeState(st *protocol.NodeState) (full, public []byte) {
+// with its sessions and the nodes it knows of, and the workspace for one
+// that lets it in too; and as sent to one that only lets it in, without.
+func (d *Daemon) encodeState(st *protocol.NodeState) (shared, full, public []byte) {
 	node := proto.CloneOf(st.GetNode())
 	node.LastSeen = timestamppb.Now()
 	out := &protocol.NodeState{Node: node, Sessions: st.GetSessions(), WatchingApprovals: st.GetWatchingApprovals()}
@@ -261,17 +262,22 @@ func (d *Daemon) encodeState(st *protocol.NodeState) (full, public []byte) {
 		}
 	}
 	full, _ = proto.Marshal(out)
+	out.Workspace = st.GetWorkspace()
+	shared, _ = proto.Marshal(out)
 	node = d.publicSelf()
 	node.LastSeen = out.Node.LastSeen
 	public, _ = proto.Marshal(&protocol.NodeState{Node: node, WatchingApprovals: st.GetWatchingApprovals()})
-	return full, public
+	return shared, full, public
 }
 
-// sendState sends p as much of this daemon's state as it may have: full
-// to a peer this daemon lets in, public to one that only lets it in.
-func (d *Daemon) sendState(ctx context.Context, p p2p.Peer, full, public []byte) {
+// sendState sends p as much of this daemon's state as it may have: shared,
+// with the workspace, to a peer the two let each other in; full to a peer
+// this daemon lets in; public to one that only lets it in.
+func (d *Daemon) sendState(ctx context.Context, p p2p.Peer, shared, full, public []byte) {
 	data := public
 	switch {
+	case p.Trusts && p.TrustedBy:
+		data = shared
 	case p.Trusts:
 		data = full
 	case !p.TrustedBy:
@@ -321,6 +327,11 @@ func (d *Daemon) takeState(from p2p.Peer, data []byte) {
 	}
 	node.Source = "mesh"
 	d.notePeer(node)
+	// A workspace is taken up from a peer trusted both ways: one person's
+	// nodes, whose windows show each other's sessions.
+	if from.TrustedBy && from.Trusts && d.workspace.put(st.GetWorkspace()) {
+		d.changes.fireWorkspace()
+	}
 	if from.TrustedBy {
 		var own []*protocol.SessionInfo
 		for _, info := range st.GetSessions() {
@@ -402,6 +413,10 @@ func (n *notifier) fire(nodes, sessions bool) {
 // changed.
 func (n *notifier) fireAccess() { n.send(&protocol.Changed{Access: true}) }
 
+// fireWorkspace tells every watcher that the daemon holds a newer
+// workspace.
+func (n *notifier) fireWorkspace() { n.send(&protocol.Changed{Workspace: true}) }
+
 // send gives every watcher c, merged into what it has not taken yet.
 func (n *notifier) send(c *protocol.Changed) {
 	n.mu.Lock()
@@ -413,6 +428,7 @@ func (n *notifier) send(c *protocol.Changed) {
 			next.Nodes = next.Nodes || pending.GetNodes()
 			next.Sessions = next.Sessions || pending.GetSessions()
 			next.Access = next.Access || pending.GetAccess()
+			next.Workspace = next.Workspace || pending.GetWorkspace()
 		default:
 		}
 		ch <- next

@@ -91,19 +91,22 @@ func (m *model) updateDoc(id string, fn func(*docInfo)) {
 
 // openFile shows a file in a tab, reading it the first time.
 func (m *model) openFile(it fileItem) {
+	m.showTab(m.ensureDoc(it, ggui.Untrack(m.filesRoot)))
+}
+
+// ensureDoc opens a file for a tab, under the project root, reading it
+// unless it is open already, edits and all, and returns the tab's ID.
+func (m *model) ensureDoc(it fileItem, root fileRoot) string {
 	id := docTabID(it.Node, it.Path)
 	if _, ok := m.doc(id); ok {
-		m.showTab(id)
-		return
+		return id
 	}
-	root := ggui.Untrack(m.filesRoot)
 	next := maps.Clone(ggui.Peek(m.Docs))
 	next[id] = docInfo{Node: it.Node, Path: it.Path, Root: root, Loading: true}
 	m.Docs.Set(next)
-	text := ggui.State("")
-	m.docs[id] = &document{text: text, preview: ggui.State(false)}
-	m.showTab(id)
+	m.docs[id] = &document{text: ggui.State(""), preview: ggui.State(false)}
 	m.readDoc(id)
+	return id
 }
 
 // openFileAt opens a file with its caret at a line, from 1.

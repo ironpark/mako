@@ -73,8 +73,17 @@ type prefs struct {
 	Projects []keptProject `json:"projects,omitempty"`
 	// Spaces divide the sidebar's sessions by their repositories' owners;
 	// Space is the one shown, 0 for every session. See spaces.go.
-	Spaces []space `json:"spaces,omitempty"`
-	Space  int     `json:"space,omitempty"`
+	// ShownSpace is the ID of the space the sidebar shows, "" for every
+	// session. The spaces themselves are the workspace's (workspace.go).
+	ShownSpace string `json:"shown_space,omitempty"`
+	// The spaces as they were kept here before the workspace kept them,
+	// read once to be moved there.
+	OldSpaces      []space `json:"spaces,omitempty"`
+	OldSpace       int     `json:"space,omitempty"`
+	OldAllLayoutBy string  `json:"all_layout_by,omitempty"`
+	// SyncWorkspace has the window follow, and be followed by, the
+	// windows of the nodes it trusts both ways: tabs, panes and spaces.
+	SyncWorkspace bool `json:"sync_workspace"`
 }
 
 // Equal compares settings by value, projects included, so the prefs signal
@@ -99,6 +108,7 @@ func defaultPrefs() prefs {
 		DefaultAgent:    "claude",
 		DefaultProject:  home,
 		ConfirmKill:     true,
+		SyncWorkspace:   true,
 		ApproveInApp:    true,
 		Notify:          true,
 		DaemonMode:      "auto",
@@ -163,7 +173,6 @@ func (p prefs) normalized() prefs {
 	if p.DefaultAgent == "" {
 		p.DefaultAgent = d.DefaultAgent
 	}
-	p.Space = min(max(p.Space, allSpace), len(p.Spaces)) // as hasSpace allows
 	if len(p.Projects) > 0 {
 		seen := make(map[fileRoot]bool, len(p.Projects))
 		projects := make([]keptProject, 0, len(p.Projects))
@@ -179,12 +188,28 @@ func (p prefs) normalized() prefs {
 	return p
 }
 
-func prefsPath() (string, error) {
+func prefsPath() (string, error) { return configFile("gui.json") }
+
+// configFile is the path of a file of the window's in mako's folder.
+func configFile(name string) (string, error) {
 	dir, err := config.Dir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "gui.json"), nil
+	return filepath.Join(dir, name), nil
+}
+
+// writeConfigFile writes a file of the window's in mako's folder, making
+// the folder if need be.
+func writeConfigFile(name string, body []byte) error {
+	path, err := configFile(name)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(path, body, 0o600)
 }
 
 // loadPrefs reads gui.json, falling back to the defaults for a missing file
@@ -202,16 +227,9 @@ func loadPrefs() prefs {
 }
 
 func savePrefs(p prefs) error {
-	path, err := prefsPath()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
 	body, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(body, '\n'), 0o600)
+	return writeConfigFile("gui.json", append(body, '\n'))
 }

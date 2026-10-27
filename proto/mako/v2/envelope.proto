@@ -37,6 +37,8 @@ message Envelope {
     Changed changed = 24;
     Access access = 25;
     AccessInfo access_info = 26;
+    GetWorkspace get_workspace = 27;
+    Workspace workspace = 28;
 
     // Sessions.
     ListSessions list_sessions = 30;

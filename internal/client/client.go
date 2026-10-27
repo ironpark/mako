@@ -92,6 +92,17 @@ func (c *Client) Access(ctx context.Context, req *protocol.Access) (*protocol.Ac
 	return request[*protocol.AccessInfo](ctx, c, protocol.TypeAccess, req)
 }
 
+// Workspace is the workspace the daemon holds, empty for none.
+func (c *Client) Workspace(ctx context.Context) (*protocol.Workspace, error) {
+	return request[*protocol.Workspace](ctx, c, protocol.TypeGetWorkspace, &protocol.GetWorkspace{})
+}
+
+// SetWorkspace gives the daemon a window's workspace, and returns the one
+// it holds after: ws, or a newer one.
+func (c *Client) SetWorkspace(ctx context.Context, ws *protocol.Workspace) (*protocol.Workspace, error) {
+	return request[*protocol.Workspace](ctx, c, protocol.TypeWorkspace, ws)
+}
+
 // Sessions lists agent sessions across the mesh.
 func (c *Client) Sessions(ctx context.Context) ([]*protocol.SessionInfo, error) {
 	return c.ListSessions(ctx, &protocol.ListSessions{})

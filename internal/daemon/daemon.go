@@ -60,6 +60,7 @@ type Daemon struct {
 	heads                heads                // the projects' branches
 	remote               remoteSessions       // the sessions peers send
 	changes              notifier             // tells watching front-ends what changed
+	workspace            workspaces           // the windows' tabs and panes; see workspace.go
 	linking              map[string]time.Time // peer ID -> the last link tried, until one holds
 	ctx                  context.Context      // Run's, for work that outlasts a request
 
@@ -151,6 +152,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if err := d.loadSessions(dir); err != nil {
 		return err
 	}
+	d.workspace.load(dir)
 	defer d.sessions.closeAll()
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -247,6 +249,9 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeAccess:
 		return d.handleAccess(ctx, stream, env, fromPeer)
+
+	case protocol.TypeGetWorkspace, protocol.TypeWorkspace:
+		return d.handleWorkspace(ctx, stream, env, fromPeer)
 
 	case protocol.TypeListSess:
 		return d.handleListSessions(ctx, stream, env, fromPeer)

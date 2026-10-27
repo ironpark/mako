@@ -152,6 +152,20 @@ func (n *layoutNode) remove(tab string) {
 }
 
 // insert puts tab into pane g at index i, clamped, and shows it.
+// removeTabs takes out the tabs drop says, leaving panes without tabs for
+// prune.
+func (n *layoutNode) removeTabs(drop func(id string) bool) {
+	for _, g := range n.groups() {
+		g.Tabs = slices.DeleteFunc(g.Tabs, drop)
+		if !slices.Contains(g.Tabs, g.Active) {
+			g.Active = ""
+			if len(g.Tabs) > 0 {
+				g.Active = g.Tabs[0]
+			}
+		}
+	}
+}
+
 func (g *tabGroup) insert(tab string, i int) {
 	i = min(max(i, 0), len(g.Tabs))
 	g.Tabs = slices.Insert(g.Tabs, i, tab)

@@ -769,6 +769,14 @@ var catalogKo = map[string]string{
 	"White":                 "흰색",
 
 	// Spaces
+	"Whole space":    "스페이스 전체",
+	"By owner":       "소유자별",
+	"By project":     "프로젝트별",
+	"Tabs and panes": "탭과 레이아웃",
+	"How the space of every session keeps its tabs and panes.": "'모든 세션' 스페이스가 탭과 레이아웃을 나누는 방식입니다.",
+	"Each space keeps tabs and panes of its own: one set for the whole space, or one for each owner or project, shown as you pick one of its sessions in the sidebar.": "스페이스마다 탭과 레이아웃을 따로 둡니다. 스페이스 전체에 하나를 두거나, 소유자나 프로젝트마다 하나씩 두고 사이드바에서 세션을 고를 때 그 세션의 것을 보여 줍니다.",
+	"Follow other nodes": "다른 노드와 동기화",
+	"Keep the tabs, panes and spaces the same as in the windows of the nodes this one trusts both ways.": "서로 신뢰하는 노드의 창과 탭, 분할 화면, 스페이스를 같게 유지합니다.",
 	"All sessions":              "모든 세션",
 	"Space %d":                  "스페이스 %d",
 	"Edit spaces…":              "스페이스 편집…",
