@@ -3,10 +3,12 @@ package gui
 import (
 	"context"
 	"maps"
+	goruntime "runtime"
 	"strings"
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/client"
@@ -14,7 +16,8 @@ import (
 )
 
 // The Files tab's context menu: open a file, put its path in a message or
-// on the clipboard, start a session in a folder, and make, rename or delete
+// on the clipboard, show it in the desktop's file manager when it is on
+// this machine, start a session in a folder, and make, rename or delete
 // files and folders on the node, each after asking.
 
 // fileAsk is a file operation waiting on the user: a name for a new file
@@ -152,6 +155,10 @@ func fileMenu(m *model, w ggui.Widget, it fileItem) ggui.Widget {
 	if rel := subfolder(it.Path, root.Path); rel != "" {
 		items = append(items, ui.MenuItem(T("Copy relative path"), func() { ggui.CurrentClipboard().Write(rel) }))
 	}
+	// The daemon is on this machine, so its own node's files are too.
+	if m.remoteID(it.Node) == "" {
+		items = append(items, ui.MenuItem(fileManagerLabel(), func() { m.showInFileManager(it) }))
+	}
 	folder := folderOf(it)
 	items = append(items,
 		ui.MenuDivider(),
@@ -162,6 +169,29 @@ func fileMenu(m *model, w ggui.Widget, it fileItem) ggui.Widget {
 		ui.MenuItem(T("Delete…"), func() { m.askFile(protocol.FileDelete, it) }),
 	)
 	return ui.ContextMenu(w, items...).Name(Tf("%s actions", it.Name))
+}
+
+// fileManagerLabel names the desktop's file manager in its menu item.
+func fileManagerLabel() string {
+	switch goruntime.GOOS {
+	case "darwin":
+		return T("Show in Finder")
+	case "windows":
+		return T("Show in Explorer")
+	}
+	return T("Show in file manager")
+}
+
+// showInFileManager opens a folder in the desktop's file manager, or shows
+// a file selected in the folder it is in.
+func (m *model) showInFileManager(it fileItem) {
+	open := runtime.Reveal
+	if it.Dir {
+		open = runtime.OpenURL
+	}
+	if err := open(it.Path); err != nil {
+		m.FileNote.Set(err.Error())
+	}
 }
 
 // newInRoot is the Files header's menu of what to make in the project.
