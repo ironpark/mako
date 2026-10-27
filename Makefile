@@ -1,6 +1,13 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/ironpark/mako/internal/config.Version=$(VERSION)
 
+# Nothing mako builds needs cgo (DEVELOP.md); building without it keeps the
+# standard library's and the dependencies' optional cgo out too, so the
+# binaries are the same wherever they are built. Override with
+# `make CGO_ENABLED=1`.
+CGO_ENABLED ?= 0
+export CGO_ENABLED
+
 # EXE is the binaries' suffix: .exe on Windows.
 EXE := $(if $(filter Windows_NT,$(OS)),.exe,)
 
