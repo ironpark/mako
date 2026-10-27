@@ -1,8 +1,10 @@
 package zedhost
 
 import (
+	"bytes"
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -99,5 +101,33 @@ func TestContextServer(t *testing.T) {
 	}
 	if ran == 0 {
 		t.Skip("no extension with a context server")
+	}
+}
+
+// Compiled code comes back only exactly as it was written: one cut short,
+// or written over in the middle, as by another process compiling the same
+// extension, is not handed to wasmtime, which would run it and crash.
+func TestCompiledCodeComesBackWholeOrNotAtAll(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "x.cwasm")
+	code := bytes.Repeat([]byte("machine code "), 1000)
+	if err := writeCompiled(path, code); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := readCompiled(path); !ok || !bytes.Equal(got, code) {
+		t.Fatal("what was written does not come back")
+	}
+	data, _ := os.ReadFile(path)
+	for name, bad := range map[string][]byte{
+		"cut short": data[:len(data)/2],
+		"zeroed":    append(append(append([]byte(nil), data[:100]...), make([]byte, 100)...), data[200:]...),
+		"empty":     nil,
+	} {
+		os.WriteFile(path, bad, 0o644)
+		if _, ok := readCompiled(path); ok {
+			t.Errorf("%s: read back", name)
+		}
+	}
+	if matches, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".compiling-*")); len(matches) != 0 {
+		t.Errorf("left behind %v", matches)
 	}
 }

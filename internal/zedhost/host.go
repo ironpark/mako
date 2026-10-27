@@ -15,6 +15,7 @@
 package zedhost
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -23,6 +24,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -149,7 +151,7 @@ func compile(work string, bin []byte) (*wasmtime.Component, error) {
 	}
 	sum := sha256.Sum256(bin)
 	cache := filepath.Join(work, ".mako-"+hex.EncodeToString(sum[:8])+".cwasm")
-	if code, err := os.ReadFile(cache); err == nil && len(code) > 0 {
+	if code, ok := readCompiled(cache); ok {
 		if comp, err := wasmtime.NewComponentDeserialize(engine, code); err == nil {
 			return comp, nil
 		}
@@ -161,11 +163,53 @@ func compile(work string, bin []byte) (*wasmtime.Component, error) {
 	if code, err := comp.Serialize(); err == nil {
 		old, _ := filepath.Glob(filepath.Join(work, ".mako-*.cwasm"))
 		for _, o := range old {
-			os.Remove(o)
+			if o != cache {
+				os.Remove(o)
+			}
 		}
-		_ = os.WriteFile(cache, code, 0o644)
+		_ = writeCompiled(cache, code)
 	}
 	return comp, nil
+}
+
+// Wasmtime runs compiled code as it finds it, so a compiled component
+// read back must be exactly what was written: one cut short or half
+// written over by another process compiling the same extension would
+// crash it. The cache is written whole, under a temporary name renamed
+// into place, and ends with the SHA-256 of what comes before, which is
+// checked before wasmtime sees it.
+
+// readCompiled reads compiled code written by writeCompiled, reporting
+// false for none or for any that is not whole.
+func readCompiled(path string) ([]byte, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) <= sha256.Size {
+		return nil, false
+	}
+	code, sum := data[:len(data)-sha256.Size], data[len(data)-sha256.Size:]
+	if got := sha256.Sum256(code); !bytes.Equal(got[:], sum) {
+		return nil, false
+	}
+	return code, true
+}
+
+// writeCompiled writes compiled code with its checksum, replacing what is
+// at path all at once.
+func writeCompiled(path string, code []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".compiling-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	sum := sha256.Sum256(code)
+	if _, err := tmp.Write(append(slices.Clip(code), sum[:]...)); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 func (e *Extension) instantiate() error {
