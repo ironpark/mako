@@ -350,3 +350,35 @@ func TestProgramCopiesToTheClipboard(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 }
+
+// The wheel over a TUI that asked for the mouse, as Claude Code and Codex
+// do, is the program's: live, and after attaching to it again, when the
+// daemon's screen brings the modes along.
+func TestTheWheelGoesToATUIThatAsked(t *testing.T) {
+	for _, replay := range []bool{false, true} {
+		link := newFakeLink()
+		conn, err := newTermConn("s1", link, 80, 24, func() {})
+		if err != nil {
+			t.Fatal(err)
+		}
+		view := newTerminalView(conn, defaultPrefs, false)
+		p := ggui.NewProbe(view, ggui.Sz(800, 400))
+		if replay {
+			// A snapshot resets the terminal, then its text follows.
+			link.in <- &protocol.StreamEvent{Kind: protocol.EventSnapshot, Snapshot: &protocol.Snapshot{Cols: 80, Rows: 24}}
+			link.output(t, "\x1b[?1049hthe agent's screen\x1b[?1003h\x1b[?1006h")
+		} else {
+			link.output(t, "\x1b[?1049h\x1b[?1003h\x1b[?1006hthe agent's screen")
+		}
+		waitFor(t, func() bool { return conn.mouseReported() })
+		p.Frame()
+		link.typed()
+		p.Scroll(gridPoint(p, view, 2, 3), ggui.Pt(0, 1))
+		if got := link.typed(); !strings.Contains(got, "\x1b[<64;3;4M") {
+			t.Fatalf("replay %v: the wheel sent %q, want SGR wheel-up presses", replay, got)
+		}
+		p.Close()
+		close(link.in)
+		conn.close()
+	}
+}
