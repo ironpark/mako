@@ -28,6 +28,9 @@ type terminalView struct {
 	prefs     func() prefs
 	autoFocus bool   // take the keyboard on first paint, as a new tab does
 	onPress   func() // a press anywhere in it, which makes its pane current
+	// onDrop hands over files dropped from the desktop, by their paths
+	// here, and types what it gives back; nil types the paths as they are.
+	onDrop func(paths []string, typed func([]string))
 
 	focused  bool
 	wheelAcc float64
@@ -83,6 +86,14 @@ func newTerminalView(conn *termConn, prefs func() prefs, autoFocus bool) *termin
 
 // OnPress runs fn when the terminal is pressed.
 func (t *terminalView) OnPress(fn func()) *terminalView { t.onPress = fn; return t }
+
+// OnDrop hands over the files dropped on the terminal from the desktop
+// before their paths are typed, as to a session that cannot read them
+// where they are.
+func (t *terminalView) OnDrop(fn func(paths []string, typed func([]string))) *terminalView {
+	t.onDrop = fn
+	return t
+}
 
 func (t *terminalView) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	if p, ok := uitheme.From(env).Get(paletteKey); ok {
@@ -397,6 +408,10 @@ func (t *terminalView) HandleDrop(ev ggui.DropEvent) bool {
 	paths := ev.Paths()
 	if len(paths) == 0 {
 		return false
+	}
+	if t.onDrop != nil {
+		t.onDrop(paths, t.typePaths)
+		return true
 	}
 	t.typePaths(paths)
 	return true

@@ -123,7 +123,8 @@ func sessionView(m *model, id string, group int) ggui.Widget {
 			return chatView(m, id, group)
 		}
 		focus := ggui.Peek(m.FocusGroup) == group
-		term := newTerminalView(m.conns[id], func() prefs { return ggui.Peek(m.Prefs) }, focus).OnPress(func() { m.focusGroup(group) })
+		term := newTerminalView(m.conns[id], func() prefs { return ggui.Peek(m.Prefs) }, focus).OnPress(func() { m.focusGroup(group) }).
+			OnDrop(func(paths []string, typed func([]string)) { m.handOver(id, paths, typed) })
 		body := ggui.DropZone(term, func(d ggui.Dropped[pathDrag]) { term.setDropOver(false); term.typePaths([]string{d.Value.Path}) }).OnHover(term.setDropOver)
 		return ggui.Column(approvalBar(m, id), ggui.Expanded(ggui.Stack(body, usageOverlay(m, id, nil)).Expand())).Stretch()
 	})

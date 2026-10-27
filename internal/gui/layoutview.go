@@ -202,7 +202,7 @@ func tabList(m *model, g tabGroup, sessions []*protocol.SessionInfo, titles map[
 		}
 		items = append(items, ui.MenuItem(label, func() { m.showTab(id) }))
 	}
-	return ggui.Box(borderless(ui.MenuOf(icon("chevrons-up-down").Size(14), items...).Width(260).Name(T("All tabs")))).
+	return ggui.Box(iconMenu(ui.MenuOf(icon("chevrons-up-down").Size(14), items...).Width(260).Name(T("All tabs")), 6)).
 		Height(tabBarHeight)
 }
 

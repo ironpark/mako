@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/sanbo/internal/agentspec"
 	"github.com/ironpark/sanbo/internal/client"
@@ -77,6 +78,7 @@ type model struct {
 	PaletteOpen  *ggui.StateValue[bool]
 	PaletteQuery *ggui.StateValue[string]
 	palette      *picker
+	toaster      *ui.ToasterWidget // notices over the window, such as a dropped file sent
 	// What the palette lists while it is open: its commands and the tabs
 	// and sessions, read as it opens.
 	paletteCommands []command
@@ -281,6 +283,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		DaemonState:    ggui.State(daemonState{}),
 		DaemonLog:      ggui.State([]string(nil)).WithEqual(slices.Equal),
 		embedded:       newEmbeddedDaemon(),
+		toaster:        ui.NewToaster(),
 		kick:           make(chan struct{}, 1),
 		Conn:           ggui.State(connState{}).WithEqual(deepEqual),
 		Nodes:          ggui.State([]*protocol.Node(nil)).WithEqual(protocol.Equal),

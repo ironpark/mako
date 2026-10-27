@@ -705,6 +705,139 @@ func (x *SearchResult) GetTruncated() bool {
 	return false
 }
 
+// StageFile puts a file a front-end has, one dropped on it, on the node,
+// so a session there can be handed its path. A file goes in pieces of at
+// most a few megabytes: the first names it and gets back where it is
+// kept; the rest give that path and where in the file they go.
+type StageFile struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`      // the file's base name, which it keeps
+	Path          string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`      // empty for the first piece, then what Staged said
+	Offset        int64                  `protobuf:"varint,4,opt,name=offset,proto3" json:"offset,omitempty"` // where data goes in the file
+	Data          []byte                 `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StageFile) Reset() {
+	*x = StageFile{}
+	mi := &file_sanbo_v2_files_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StageFile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StageFile) ProtoMessage() {}
+
+func (x *StageFile) ProtoReflect() protoreflect.Message {
+	mi := &file_sanbo_v2_files_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StageFile.ProtoReflect.Descriptor instead.
+func (*StageFile) Descriptor() ([]byte, []int) {
+	return file_sanbo_v2_files_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *StageFile) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *StageFile) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *StageFile) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *StageFile) GetOffset() int64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *StageFile) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+// Staged answers StageFile: where the file is kept, and how long it is.
+type Staged struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Size          int64                  `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Staged) Reset() {
+	*x = Staged{}
+	mi := &file_sanbo_v2_files_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Staged) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Staged) ProtoMessage() {}
+
+func (x *Staged) ProtoReflect() protoreflect.Message {
+	mi := &file_sanbo_v2_files_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Staged.ProtoReflect.Descriptor instead.
+func (*Staged) Descriptor() ([]byte, []int) {
+	return file_sanbo_v2_files_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *Staged) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *Staged) GetSize() int64 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
 var File_sanbo_v2_files_proto protoreflect.FileDescriptor
 
 const file_sanbo_v2_files_proto_rawDesc = "" +
@@ -758,7 +891,16 @@ const file_sanbo_v2_files_proto_rawDesc = "" +
 	"\fSearchResult\x12\x14\n" +
 	"\x05files\x18\x01 \x03(\tR\x05files\x12/\n" +
 	"\amatches\x18\x02 \x03(\v2\x15.sanbo.v2.SearchMatchR\amatches\x12\x1c\n" +
-	"\ttruncated\x18\x03 \x01(\bR\ttruncatedB-Z+github.com/ironpark/sanbo/internal/protocolb\x06proto3"
+	"\ttruncated\x18\x03 \x01(\bR\ttruncated\"x\n" +
+	"\tStageFile\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\x12\x16\n" +
+	"\x06offset\x18\x04 \x01(\x03R\x06offset\x12\x12\n" +
+	"\x04data\x18\x05 \x01(\fR\x04data\"0\n" +
+	"\x06Staged\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
+	"\x04size\x18\x02 \x01(\x03R\x04sizeB-Z+github.com/ironpark/sanbo/internal/protocolb\x06proto3"
 
 var (
 	file_sanbo_v2_files_proto_rawDescOnce sync.Once
@@ -772,7 +914,7 @@ func file_sanbo_v2_files_proto_rawDescGZIP() []byte {
 	return file_sanbo_v2_files_proto_rawDescData
 }
 
-var file_sanbo_v2_files_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_sanbo_v2_files_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_sanbo_v2_files_proto_goTypes = []any{
 	(*ListDir)(nil),               // 0: sanbo.v2.ListDir
 	(*DirEntry)(nil),              // 1: sanbo.v2.DirEntry
@@ -784,13 +926,15 @@ var file_sanbo_v2_files_proto_goTypes = []any{
 	(*Search)(nil),                // 7: sanbo.v2.Search
 	(*SearchMatch)(nil),           // 8: sanbo.v2.SearchMatch
 	(*SearchResult)(nil),          // 9: sanbo.v2.SearchResult
-	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
+	(*StageFile)(nil),             // 10: sanbo.v2.StageFile
+	(*Staged)(nil),                // 11: sanbo.v2.Staged
+	(*timestamppb.Timestamp)(nil), // 12: google.protobuf.Timestamp
 }
 var file_sanbo_v2_files_proto_depIdxs = []int32{
-	10, // 0: sanbo.v2.DirEntry.mod_time:type_name -> google.protobuf.Timestamp
+	12, // 0: sanbo.v2.DirEntry.mod_time:type_name -> google.protobuf.Timestamp
 	1,  // 1: sanbo.v2.Dir.entries:type_name -> sanbo.v2.DirEntry
-	10, // 2: sanbo.v2.File.mod_time:type_name -> google.protobuf.Timestamp
-	10, // 3: sanbo.v2.WriteFile.mod_time:type_name -> google.protobuf.Timestamp
+	12, // 2: sanbo.v2.File.mod_time:type_name -> google.protobuf.Timestamp
+	12, // 3: sanbo.v2.WriteFile.mod_time:type_name -> google.protobuf.Timestamp
 	8,  // 4: sanbo.v2.SearchResult.matches:type_name -> sanbo.v2.SearchMatch
 	5,  // [5:5] is the sub-list for method output_type
 	5,  // [5:5] is the sub-list for method input_type
@@ -810,7 +954,7 @@ func file_sanbo_v2_files_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sanbo_v2_files_proto_rawDesc), len(file_sanbo_v2_files_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

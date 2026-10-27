@@ -167,10 +167,10 @@ func fileMenu(m *model, w ggui.Widget, it fileItem) ggui.Widget {
 // newInRoot is the Files header's menu of what to make in the project.
 func newInRoot(m *model, r fileRoot) ggui.Widget {
 	root := dirItem(r.Node, r.Path)
-	return borderless(ui.MenuOf(icon("plus"),
+	return iconMenu(ui.MenuOf(icon("plus"),
 		ui.MenuItem(T("New file…"), func() { m.askFile(protocol.FileCreate, root) }),
 		ui.MenuItem(T("New folder…"), func() { m.askFile(protocol.FileMkdir, root) }),
-	).Name(T("New in project")))
+	).Name(T("New in project")), 6)
 }
 
 // fileDialogs are the name prompt and the delete confirmation.

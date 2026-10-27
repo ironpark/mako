@@ -521,13 +521,13 @@ func docHeader(m *model, id string, d docInfo) ggui.Widget {
 		ggui.Text(d.Name()).Size(14).Weight(ggui.WeightMedium).NoWrap(),
 		ggui.Expanded(muted(ggui.Text(where).Size(13).NoWrap().Ellipsis())),
 		muted(ggui.Text(state).Size(12.5).NoWrap()),
-		borderless(ui.MenuOf(icon("ellipsis"), append(items,
+		iconMenu(ui.MenuOf(icon("ellipsis"), append(items,
 			ui.MenuItem(T("Reload from disk"), func() { m.readDoc(id) }),
 			ui.MenuItem(T("Copy path"), func() { ggui.CurrentClipboard().Write(d.Path) }),
 			ui.MenuItem(T("Insert path in the message"), func() { m.insertPath("", d.Path) }),
 			ui.MenuDivider(),
 			ui.MenuItem(T("Close file"), func() { m.askCloseDoc(id) }),
-		)...).Name(T("File actions"))),
+		)...).Name(T("File actions")), 6),
 	).Gap(10)
 }
 

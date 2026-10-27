@@ -66,6 +66,7 @@ func window(m *model) ggui.Widget {
 		gitConfirmDialog(m),
 		imageViewer(m),
 		paletteDialog(m),
+		m.toaster,
 		quickOpenDialog(m),
 		extensionsDialog(m),
 		ui.AlertDialog(m.ConfirmOpen, T("Kill this session?"), T("The program is stopped on its node. Its output is lost.")).
@@ -286,22 +287,24 @@ func sessionSection(m *model, by string, g sessionGroup, folded bool, selected s
 		title := []ggui.Widget{
 			icon(pick(folded, "chevron-right", "chevron-down")).Size(13).Color(tokExtraMuted),
 			icon(glyph).Size(15),
-			ggui.Flex(ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis(), 1),
+			ggui.Expanded(ggui.Align(ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).Left()),
 		}
 		if folded && len(g.Sessions) > 0 {
-			title = append(title, ggui.Text(fmt.Sprint(len(g.Sessions))).Size(11.5).Color(tokExtraMuted).NoWrap())
+			title = append(title, kindBadges(g.Sessions))
 		}
 		key := foldKey(by, g)
-		toggle := ui.ButtonOf(ggui.Row(append(title, ggui.Spacer(), status)...).Gap(6).Align(ggui.AlignCenter),
+		// The name takes the room the row has, so it is cut only when it
+		// must be.
+		toggle := ui.ButtonOf(ggui.Row(append(title, status)...).Gap(6).Align(ggui.AlignCenter),
 			func() { m.toggleFold(key) }).Ghost().Pad(2, 4).Radius(5).Name(pick(folded, Tf("Expand %s", name), Tf("Collapse %s", name)))
 		row := []ggui.Widget{ggui.Expanded(toggle)}
 		// A folder kept with no sessions has nothing to bring it back once
 		// it leaves, so its menu can drop it.
 		if len(g.Sessions) == 0 {
 			ref := fileRoot{Node: nodeID, Path: project}
-			row = append(row, borderless(ui.MenuOf(icon("ellipsis").Size(14),
+			row = append(row, iconMenu(ui.MenuOf(icon("ellipsis").Size(14),
 				ui.MenuItem(T("Remove from sidebar"), func() { m.forgetProject(ref) }),
-			).Name(T("Folder actions"))))
+			).Name(T("Folder actions")), 3))
 		}
 		row = append(row, ui.Tooltip(ui.ButtonOf(icon("plus").Size(14), func() { m.openNew(nodeID, project) }).
 			Ghost().Pad(3).Radius(5).Name(Tf("New session in %s", name)), T("New session here")))
@@ -336,6 +339,32 @@ func sessionSection(m *model, by string, g sessionGroup, folded bool, selected s
 		rows = append(rows, sessionRow(m, s, s.GetId() == selected, titles[s.GetId()], strings.Join(where, " · "), indent))
 	}
 	return ggui.Column(rows...).Gap(2).Stretch()
+}
+
+// kindBadges counts a folded group's sessions by kind, a badge for each
+// with the kind's icon: shells first, then agents as they first appear.
+func kindBadges(sessions []*protocol.SessionInfo) ggui.Widget {
+	var kinds []string
+	count := map[string]int{}
+	for _, s := range sessions {
+		k := s.GetAgent()
+		if agentIcon(k) == agentIcon("shell") {
+			k = "shell"
+		}
+		if count[k] == 0 {
+			kinds = append(kinds, k)
+		}
+		count[k]++
+	}
+	slices.SortStableFunc(kinds, func(a, b string) int { return cmp.Compare(pick(a == "shell", 0, 1), pick(b == "shell", 0, 1)) })
+	badges := make([]ggui.Widget, len(kinds))
+	for i, k := range kinds {
+		badges[i] = ggui.Box(ggui.Row(
+			agentGlyph(k, tokMuted).Size(11),
+			ggui.Text(fmt.Sprint(count[k])).Size(11).Color(tokMuted).NoWrap(),
+		).Gap(2).Align(ggui.AlignCenter)).Pad(1, 4).Radius(4).Fill(tokSurface2)
+	}
+	return ggui.Row(badges...).Gap(2).Align(ggui.AlignCenter)
 }
 
 // subfolder is where dir is inside root, or "" for root itself.
@@ -454,13 +483,13 @@ func workspaceHeader(m *model) ggui.Widget {
 		return ggui.Row(
 			ggui.Text(projectName(s.GetProject())).Size(14).Weight(ggui.WeightMedium).NoWrap(),
 			muted(ggui.Text(where).Size(13).NoWrap().Ellipsis()),
-			borderless(ui.MenuOf(icon("ellipsis"),
+			iconMenu(ui.MenuOf(icon("ellipsis"),
 				ui.MenuItem(T("Rename…"), func() { m.askRename(id) }),
 				ui.MenuItem(T("Detach tab"), func() { m.closeTab(id) }),
 				ui.MenuItem(T("Show details"), func() { m.DetailsOpen.Set(true) }),
 				ui.MenuDivider(),
 				ui.MenuItem(T("Kill session"), func() { m.askKill(id) }),
-			).Name(T("Session actions"))),
+			).Name(T("Session actions")), 6),
 		).Gap(10)
 	})
 	return ggui.Box(ggui.Row(
@@ -547,6 +576,18 @@ func (u *underlined) Paint(dst *ggui.Canvas, r ggui.Rect) {
 
 // borderless drops the outline a stock control draws, for the icon
 // triggers in the header.
+// iconMenu is a menu whose button is an icon alone, padded by pad as the
+// icon buttons beside it are, and drawn as they are, without a border. A
+// menu's button is otherwise padded as one with a label.
+func iconMenu(menu *ui.MenuWidget, pad float64) ggui.Widget {
+	return uitheme.Override(func(t *uitheme.Theme) {
+		t.Border = color.Transparent
+		t.InputBorder = color.Transparent
+		t.CardShadow = ggui.ShadowStyle{}
+		t.ButtonPad = ggui.Insets(pad)
+	}, menu)
+}
+
 func borderless(w ggui.Widget) ggui.Widget {
 	return uitheme.Override(func(t *uitheme.Theme) {
 		t.Border = color.Transparent
@@ -609,9 +650,11 @@ func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
 		return border
 	})
 	desktop := ggui.Pointer(box).OnDropHover(over.Set).OnDrop(func(ev ggui.DropEvent) {
-		for _, p := range ev.Paths() {
-			m.insertPath(id, p)
-		}
+		m.handOver(id, ev.Paths(), func(paths []string) {
+			for _, p := range paths {
+				m.insertPath(id, p)
+			}
+		})
 	})
 	files := ggui.DropZone(desktop, func(d ggui.Dropped[pathDrag]) {
 		over.Set(false)

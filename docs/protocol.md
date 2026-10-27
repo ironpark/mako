@@ -319,12 +319,20 @@ for. A daemon that predates the flag ignores it and sends the messages too.
 | `write_file` | `WriteFile` | `file` | Replaces a file's contents, keeping its mode. |
 | `file_op` | `FileOp` | `file` | `create`, `mkdir`, `rename` (to `to`) or `delete`. None replaces what exists. |
 | `search` | `Search` | `search_result` | A project's files, or the lines holding `query`. Both leave out what `.gitignore` does. |
+| `stage_file` | `StageFile` | `staged` | A piece of a file the front-end has, such as one dropped on a window, kept on the node so a session there can read it. |
 
 Paths are absolute, on the node named. `read_file` sets `binary` and leaves
 `data` out for a file that is not text, and `truncated` when `data` is only the
 start. Its `mod_time` is what a `write_file` hands back: a non-zero `mod_time`
 in the write makes it fail with code `changed` if the file changed since.
 Search matching is case-insensitive unless `query` has a capital.
+
+`stage_file` sends a file in pieces of a few megabytes, each a request of its
+own. The first gives the file's `name` and no `path`; the node keeps it under
+a folder of its own in its temporary directory, as `sanbo-drops/<time>-<id>/<name>`,
+and answers with the `path`. The rest give that `path` and the `offset` their
+`data` goes at. A staged file is at most 512 MB, and the first piece staged a
+day later removes the folders older than that.
 
 ### Git
 

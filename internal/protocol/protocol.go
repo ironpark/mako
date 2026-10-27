@@ -62,6 +62,8 @@ const (
 	TypeFileOp         Type = "file_op"
 	TypeSearch         Type = "search"
 	TypeSearchResult   Type = "search_result"
+	TypeStageFile      Type = "stage_file"
+	TypeStaged         Type = "staged"
 	TypeGitStatus      Type = "git_status"
 	TypeGitChanges     Type = "git_changes"
 	TypeGitDiff        Type = "git_diff"

@@ -85,3 +85,21 @@ message SearchResult {
   repeated SearchMatch matches = 2;
   bool truncated = 3;
 }
+
+// StageFile puts a file a front-end has, one dropped on it, on the node,
+// so a session there can be handed its path. A file goes in pieces of at
+// most a few megabytes: the first names it and gets back where it is
+// kept; the rest give that path and where in the file they go.
+message StageFile {
+  string node_id = 1;
+  string name = 2; // the file's base name, which it keeps
+  string path = 3; // empty for the first piece, then what Staged said
+  int64 offset = 4; // where data goes in the file
+  bytes data = 5;
+}
+
+// Staged answers StageFile: where the file is kept, and how long it is.
+message Staged {
+  string path = 1;
+  int64 size = 2;
+}

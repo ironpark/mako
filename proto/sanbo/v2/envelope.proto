@@ -59,6 +59,8 @@ message Envelope {
     FileOp file_op = 55;
     Search search = 56;
     SearchResult search_result = 57;
+    StageFile stage_file = 58;
+    Staged staged = 59;
 
     // Git.
     GitStatus git_status = 60;

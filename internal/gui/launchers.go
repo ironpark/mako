@@ -75,7 +75,7 @@ func quickLaunchers(m *model, nodeID, project string, targets []string, before f
 		menu := ui.MenuOf(ggui.Box(face).Pad(6, 3, 6, 6), items...).Width(180).Name(label)
 		menus = append(menus, menu)
 		// The face pads itself, so the trigger sits level with the buttons.
-		buttons = append(buttons, ui.Tooltip(borderless(uitheme.Override(func(t *uitheme.Theme) { t.ButtonPad = ggui.Insets(0) }, menu)), label))
+		buttons = append(buttons, ui.Tooltip(iconMenu(menu, 0), label))
 	}
 	return buttons, menus
 }

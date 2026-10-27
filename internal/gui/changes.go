@@ -330,7 +330,7 @@ func gitHeader(m *model) ggui.Widget {
 			items = append(append(items, ui.MenuDivider()), worktreeItems(m, h.Worktree)...)
 		}
 		items = append(items, ui.MenuDivider(), ui.MenuItem(T("Refresh"), func() { m.loadGit(h.Root) }))
-		more := borderless(ui.MenuOf(icon("ellipsis"), items...).Width(220).Name(T("Git actions")))
+		more := iconMenu(ui.MenuOf(icon("ellipsis"), items...).Width(220).Name(T("Git actions")), 6)
 		// A session's worktree compares with HEAD or with the branch it
 		// started from.
 		var against ggui.Widget = ggui.Box()

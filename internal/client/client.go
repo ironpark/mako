@@ -135,6 +135,12 @@ func (c *Client) WriteFile(ctx context.Context, psk string, req *protocol.WriteF
 	return request[*protocol.File](ctx, c, psk, protocol.TypeWriteFile, req)
 }
 
+// StageFile puts a piece of a file on a node, for a session there to read;
+// see protocol.StageFile.
+func (c *Client) StageFile(ctx context.Context, psk string, req *protocol.StageFile) (*protocol.Staged, error) {
+	return request[*protocol.Staged](ctx, c, psk, protocol.TypeStageFile, req)
+}
+
 // GitStatus reports the changes of the work tree a directory on a node is in.
 func (c *Client) GitStatus(ctx context.Context, psk string, req *protocol.GitStatus) (*protocol.GitChanges, error) {
 	return request[*protocol.GitChanges](ctx, c, psk, protocol.TypeGitStatus, req)

@@ -392,6 +392,6 @@ func diffHeaderBar(m *model, id string, d diffTab) ggui.Widget {
 		ggui.Text(d.Name()).Size(14).Weight(ggui.WeightMedium).NoWrap(),
 		ggui.Expanded(muted(ggui.Text(where).Size(13).NoWrap().Ellipsis())),
 		muted(ggui.Text(what).Size(12.5).NoWrap()),
-		borderless(ui.MenuOf(icon("ellipsis"), items...).Name(T("Diff actions"))),
+		iconMenu(ui.MenuOf(icon("ellipsis"), items...).Name(T("Diff actions")), 6),
 	).Gap(10)
 }

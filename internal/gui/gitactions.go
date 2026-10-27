@@ -245,10 +245,10 @@ func stashSection(m *model, open *ggui.StateValue[bool]) ggui.Widget {
 					ggui.Expanded(ggui.Text(s.GetMessage()).Size(12.5).NoWrap().Ellipsis()),
 					ggui.Text(ago(protocol.TimeOf(s.GetTime()))).Size(11).Color(tokExtraMuted).NoWrap(),
 					ui.Tooltip(ui.Button(T("Pop"), run(protocol.GitOpStashPop, T("Popping…"))).Ghost(), T("Apply the stash and drop it")),
-					borderless(ui.MenuOf(icon("ellipsis").Size(14),
+					iconMenu(ui.MenuOf(icon("ellipsis").Size(14),
 						ui.MenuItem(T("Apply"), run(protocol.GitOpStashApply, T("Applying…"))),
 						ui.MenuItem(T("Drop…"), drop),
-					).Name(T("Stash actions"))),
+					).Name(T("Stash actions")), 3),
 				).Gap(6).Align(ggui.AlignCenter)).Pad(1, 6, 1, 30)
 			}
 			return ggui.Column(out...).Stretch()

@@ -341,9 +341,9 @@ func extensionCard(m *model, c extCard) ggui.Widget {
 	// Uninstall is the action of one that is up to date; one with an
 	// update offers it here.
 	if c.Installed != "" && c.Version != "" && c.Installed != c.Version {
-		third = append(third, borderless(ui.MenuOf(icon("ellipsis").Size(15).Color(tokMuted),
+		third = append(third, iconMenu(ui.MenuOf(icon("ellipsis").Size(15).Color(tokMuted),
 			ui.MenuItem(T("Uninstall"), func() { m.uninstallExtension(id) }),
-		).Name(Tf("%s actions", c.Name))))
+		).Name(Tf("%s actions", c.Name)), 5))
 	}
 
 	rows := []ggui.Widget{

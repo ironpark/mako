@@ -63,6 +63,8 @@ type Envelope struct {
 	//	*Envelope_FileOp
 	//	*Envelope_Search
 	//	*Envelope_SearchResult
+	//	*Envelope_StageFile
+	//	*Envelope_Staged
 	//	*Envelope_GitStatus
 	//	*Envelope_GitChanges
 	//	*Envelope_GitDiff
@@ -367,6 +369,24 @@ func (x *Envelope) GetSearchResult() *SearchResult {
 	return nil
 }
 
+func (x *Envelope) GetStageFile() *StageFile {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_StageFile); ok {
+			return x.StageFile
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetStaged() *Staged {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Staged); ok {
+			return x.Staged
+		}
+	}
+	return nil
+}
+
 func (x *Envelope) GetGitStatus() *GitStatus {
 	if x != nil {
 		if x, ok := x.Body.(*Envelope_GitStatus); ok {
@@ -592,6 +612,14 @@ type Envelope_SearchResult struct {
 	SearchResult *SearchResult `protobuf:"bytes,57,opt,name=search_result,json=searchResult,proto3,oneof"`
 }
 
+type Envelope_StageFile struct {
+	StageFile *StageFile `protobuf:"bytes,58,opt,name=stage_file,json=stageFile,proto3,oneof"`
+}
+
+type Envelope_Staged struct {
+	Staged *Staged `protobuf:"bytes,59,opt,name=staged,proto3,oneof"`
+}
+
 type Envelope_GitStatus struct {
 	// Git.
 	GitStatus *GitStatus `protobuf:"bytes,60,opt,name=git_status,json=gitStatus,proto3,oneof"`
@@ -696,6 +724,10 @@ func (*Envelope_Search) isEnvelope_Body() {}
 
 func (*Envelope_SearchResult) isEnvelope_Body() {}
 
+func (*Envelope_StageFile) isEnvelope_Body() {}
+
+func (*Envelope_Staged) isEnvelope_Body() {}
+
 func (*Envelope_GitStatus) isEnvelope_Body() {}
 
 func (*Envelope_GitChanges) isEnvelope_Body() {}
@@ -778,7 +810,7 @@ var File_sanbo_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_sanbo_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x17sanbo/v2/envelope.proto\x12\bsanbo.v2\x1a\x13sanbo/v2/chat.proto\x1a\x14sanbo/v2/files.proto\x1a\x12sanbo/v2/git.proto\x1a\x13sanbo/v2/mesh.proto\x1a\x16sanbo/v2/session.proto\"\xbb\x0f\n" +
+	"\x17sanbo/v2/envelope.proto\x12\bsanbo.v2\x1a\x13sanbo/v2/chat.proto\x1a\x14sanbo/v2/files.proto\x1a\x12sanbo/v2/git.proto\x1a\x13sanbo/v2/mesh.proto\x1a\x16sanbo/v2/session.proto\"\x9d\x10\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12'\n" +
 	"\x05hello\x18\n" +
@@ -811,6 +843,9 @@ const file_sanbo_v2_envelope_proto_rawDesc = "" +
 	"\afile_op\x187 \x01(\v2\x10.sanbo.v2.FileOpH\x00R\x06fileOp\x12*\n" +
 	"\x06search\x188 \x01(\v2\x10.sanbo.v2.SearchH\x00R\x06search\x12=\n" +
 	"\rsearch_result\x189 \x01(\v2\x16.sanbo.v2.SearchResultH\x00R\fsearchResult\x124\n" +
+	"\n" +
+	"stage_file\x18: \x01(\v2\x13.sanbo.v2.StageFileH\x00R\tstageFile\x12*\n" +
+	"\x06staged\x18; \x01(\v2\x10.sanbo.v2.StagedH\x00R\x06staged\x124\n" +
 	"\n" +
 	"git_status\x18< \x01(\v2\x13.sanbo.v2.GitStatusH\x00R\tgitStatus\x127\n" +
 	"\vgit_changes\x18= \x01(\v2\x14.sanbo.v2.GitChangesH\x00R\n" +
@@ -873,18 +908,20 @@ var file_sanbo_v2_envelope_proto_goTypes = []any{
 	(*FileOp)(nil),         // 24: sanbo.v2.FileOp
 	(*Search)(nil),         // 25: sanbo.v2.Search
 	(*SearchResult)(nil),   // 26: sanbo.v2.SearchResult
-	(*GitStatus)(nil),      // 27: sanbo.v2.GitStatus
-	(*GitChanges)(nil),     // 28: sanbo.v2.GitChanges
-	(*GitDiff)(nil),        // 29: sanbo.v2.GitDiff
-	(*Diff)(nil),           // 30: sanbo.v2.Diff
-	(*GitLog)(nil),         // 31: sanbo.v2.GitLog
-	(*GitHistory)(nil),     // 32: sanbo.v2.GitHistory
-	(*GitShow)(nil),        // 33: sanbo.v2.GitShow
-	(*GitCommitInfo)(nil),  // 34: sanbo.v2.GitCommitInfo
-	(*GitRun)(nil),         // 35: sanbo.v2.GitRun
-	(*GitResult)(nil),      // 36: sanbo.v2.GitResult
-	(*ReadChat)(nil),       // 37: sanbo.v2.ReadChat
-	(*Chat)(nil),           // 38: sanbo.v2.Chat
+	(*StageFile)(nil),      // 27: sanbo.v2.StageFile
+	(*Staged)(nil),         // 28: sanbo.v2.Staged
+	(*GitStatus)(nil),      // 29: sanbo.v2.GitStatus
+	(*GitChanges)(nil),     // 30: sanbo.v2.GitChanges
+	(*GitDiff)(nil),        // 31: sanbo.v2.GitDiff
+	(*Diff)(nil),           // 32: sanbo.v2.Diff
+	(*GitLog)(nil),         // 33: sanbo.v2.GitLog
+	(*GitHistory)(nil),     // 34: sanbo.v2.GitHistory
+	(*GitShow)(nil),        // 35: sanbo.v2.GitShow
+	(*GitCommitInfo)(nil),  // 36: sanbo.v2.GitCommitInfo
+	(*GitRun)(nil),         // 37: sanbo.v2.GitRun
+	(*GitResult)(nil),      // 38: sanbo.v2.GitResult
+	(*ReadChat)(nil),       // 39: sanbo.v2.ReadChat
+	(*Chat)(nil),           // 40: sanbo.v2.Chat
 }
 var file_sanbo_v2_envelope_proto_depIdxs = []int32{
 	2,  // 0: sanbo.v2.Envelope.hello:type_name -> sanbo.v2.Hello
@@ -914,23 +951,25 @@ var file_sanbo_v2_envelope_proto_depIdxs = []int32{
 	24, // 24: sanbo.v2.Envelope.file_op:type_name -> sanbo.v2.FileOp
 	25, // 25: sanbo.v2.Envelope.search:type_name -> sanbo.v2.Search
 	26, // 26: sanbo.v2.Envelope.search_result:type_name -> sanbo.v2.SearchResult
-	27, // 27: sanbo.v2.Envelope.git_status:type_name -> sanbo.v2.GitStatus
-	28, // 28: sanbo.v2.Envelope.git_changes:type_name -> sanbo.v2.GitChanges
-	29, // 29: sanbo.v2.Envelope.git_diff:type_name -> sanbo.v2.GitDiff
-	30, // 30: sanbo.v2.Envelope.diff:type_name -> sanbo.v2.Diff
-	31, // 31: sanbo.v2.Envelope.git_log:type_name -> sanbo.v2.GitLog
-	32, // 32: sanbo.v2.Envelope.git_history:type_name -> sanbo.v2.GitHistory
-	33, // 33: sanbo.v2.Envelope.git_show:type_name -> sanbo.v2.GitShow
-	34, // 34: sanbo.v2.Envelope.git_commit_info:type_name -> sanbo.v2.GitCommitInfo
-	35, // 35: sanbo.v2.Envelope.git_run:type_name -> sanbo.v2.GitRun
-	36, // 36: sanbo.v2.Envelope.git_result:type_name -> sanbo.v2.GitResult
-	37, // 37: sanbo.v2.Envelope.read_chat:type_name -> sanbo.v2.ReadChat
-	38, // 38: sanbo.v2.Envelope.chat:type_name -> sanbo.v2.Chat
-	39, // [39:39] is the sub-list for method output_type
-	39, // [39:39] is the sub-list for method input_type
-	39, // [39:39] is the sub-list for extension type_name
-	39, // [39:39] is the sub-list for extension extendee
-	0,  // [0:39] is the sub-list for field type_name
+	27, // 27: sanbo.v2.Envelope.stage_file:type_name -> sanbo.v2.StageFile
+	28, // 28: sanbo.v2.Envelope.staged:type_name -> sanbo.v2.Staged
+	29, // 29: sanbo.v2.Envelope.git_status:type_name -> sanbo.v2.GitStatus
+	30, // 30: sanbo.v2.Envelope.git_changes:type_name -> sanbo.v2.GitChanges
+	31, // 31: sanbo.v2.Envelope.git_diff:type_name -> sanbo.v2.GitDiff
+	32, // 32: sanbo.v2.Envelope.diff:type_name -> sanbo.v2.Diff
+	33, // 33: sanbo.v2.Envelope.git_log:type_name -> sanbo.v2.GitLog
+	34, // 34: sanbo.v2.Envelope.git_history:type_name -> sanbo.v2.GitHistory
+	35, // 35: sanbo.v2.Envelope.git_show:type_name -> sanbo.v2.GitShow
+	36, // 36: sanbo.v2.Envelope.git_commit_info:type_name -> sanbo.v2.GitCommitInfo
+	37, // 37: sanbo.v2.Envelope.git_run:type_name -> sanbo.v2.GitRun
+	38, // 38: sanbo.v2.Envelope.git_result:type_name -> sanbo.v2.GitResult
+	39, // 39: sanbo.v2.Envelope.read_chat:type_name -> sanbo.v2.ReadChat
+	40, // 40: sanbo.v2.Envelope.chat:type_name -> sanbo.v2.Chat
+	41, // [41:41] is the sub-list for method output_type
+	41, // [41:41] is the sub-list for method input_type
+	41, // [41:41] is the sub-list for extension type_name
+	41, // [41:41] is the sub-list for extension extendee
+	0,  // [0:41] is the sub-list for field type_name
 }
 
 func init() { file_sanbo_v2_envelope_proto_init() }
@@ -971,6 +1010,8 @@ func file_sanbo_v2_envelope_proto_init() {
 		(*Envelope_FileOp)(nil),
 		(*Envelope_Search)(nil),
 		(*Envelope_SearchResult)(nil),
+		(*Envelope_StageFile)(nil),
+		(*Envelope_Staged)(nil),
 		(*Envelope_GitStatus)(nil),
 		(*Envelope_GitChanges)(nil),
 		(*Envelope_GitDiff)(nil),
