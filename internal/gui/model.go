@@ -15,6 +15,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/client"
@@ -100,10 +101,19 @@ type model struct {
 	embedded    *embeddedDaemon
 	daemonGen   int // UI goroutine only; see startEmbedded
 
-	Conn     *ggui.StateValue[connState]
-	Nodes    *ggui.StateValue[[]*protocol.Node]
-	Sessions *ggui.StateValue[[]*protocol.SessionInfo]
-	Agents   *ggui.StateValue[[]string] // what this node can launch, as agent:profile targets
+	Conn  *ggui.StateValue[connState]
+	Nodes *ggui.StateValue[[]*protocol.Node]
+	// Access is who the daemon lets in and the requests waiting; nil while
+	// unknown, or with the mesh off.
+	Access     *ggui.StateValue[*protocol.AccessInfo]
+	AccessNote *ggui.StateValue[string] // the last access change's outcome
+	AccessKey  *ggui.StateValue[string] // a key being let in, as typed
+	asked      map[string]bool          // requests already told of; UI goroutine only
+	// accessStale says the next poll asks for Access again: at first, and
+	// when the daemon says it changed.
+	accessStale atomic.Bool
+	Sessions    *ggui.StateValue[[]*protocol.SessionInfo]
+	Agents      *ggui.StateValue[[]string] // what this node can launch, as agent:profile targets
 
 	Selected   *ggui.StateValue[string]      // the tab the current pane shows
 	Tabs       *ggui.StateValue[[]string]    // every pane's tabs, in order
@@ -229,7 +239,6 @@ type model struct {
 	cli       *client.Client
 	daemon    string // the external daemon's address from the settings
 	embedAddr string // the app's own daemon, while it runs
-	psk       string
 
 	// linked says the window knows which daemon to talk to; until then a
 	// poll would dial an address nothing may answer and wait out its timeout.
@@ -290,6 +299,10 @@ func newModel(cfg *config.Config, addr string) *model {
 		kick:           make(chan struct{}, 1),
 		Conn:           ggui.State(connState{}).WithEqual(deepEqual),
 		Nodes:          ggui.State([]*protocol.Node(nil)).WithEqual(protocol.Equal),
+		Access:         ggui.State((*protocol.AccessInfo)(nil)).WithEqual(func(a, b *protocol.AccessInfo) bool { return proto.Equal(a, b) }),
+		AccessNote:     ggui.State(""),
+		AccessKey:      ggui.State(""),
+		asked:          map[string]bool{},
 		Sessions:       ggui.State([]*protocol.SessionInfo(nil)).WithEqual(protocol.Equal),
 		Agents:         ggui.State(agentspec.Targets(cfg.Agents)).WithEqual(slices.Equal),
 		Selected:       ggui.State(""),
@@ -353,9 +366,9 @@ func newModel(cfg *config.Config, addr string) *model {
 		revealedTab:    map[int]string{},
 		dialing:        map[string]bool{},
 		daemon:         p.Daemon,
-		psk:            cfg.PSK,
 	}
 	m.approveInApp.Store(p.ApproveInApp)
+	m.accessStale.Store(true)
 	return m
 }
 
@@ -392,7 +405,10 @@ func (m *model) watch(ctx context.Context) {
 	for ctx.Err() == nil {
 		wait := time.Second
 		if c, err := m.client(ctx); err == nil && m.linked.Load() {
-			err = c.Watch(ctx, m.key(), func(*protocol.Changed) {
+			err = c.Watch(ctx, func(ch *protocol.Changed) {
+				if ch.GetAccess() {
+					m.accessStale.Store(true)
+				}
 				m.watching.Store(true)
 				m.pollNow()
 			})
@@ -424,12 +440,13 @@ func (m *model) daemonAddr() string {
 }
 
 // reconnect drops the daemon link so the next request dials again, as after
-// the external address or the key changed.
-func (m *model) reconnect(daemon, psk string) {
+// the external address changed.
+func (m *model) reconnect(daemon string) {
 	m.mu.Lock()
 	c := m.cli
-	m.cli, m.daemon, m.psk = nil, daemon, psk
+	m.cli, m.daemon = nil, daemon
 	m.mu.Unlock()
+	m.accessStale.Store(true)
 	if c != nil {
 		_ = c.Close()
 	}
@@ -460,6 +477,7 @@ func (m *model) setLink(embedAddr string) {
 	c := m.cli
 	m.cli, m.embedAddr = nil, embedAddr
 	m.mu.Unlock()
+	m.accessStale.Store(true)
 	m.linked.Store(true)
 	select {
 	case m.kick <- struct{}{}:
@@ -479,17 +497,9 @@ func (m *model) setLink(embedAddr string) {
 	m.attachVisible()
 }
 
-// key is the pre-shared key requests carry.
-func (m *model) key() string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.psk
-}
-
 // client returns a connected client, dialing on first use or after a failure.
 func (m *model) client(ctx context.Context) (*client.Client, error) {
 	addr := m.daemonAddr()
-	psk := m.key()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.cli != nil {
@@ -497,7 +507,7 @@ func (m *model) client(ctx context.Context) (*client.Client, error) {
 	}
 	dialCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	c, err := client.Dial(dialCtx, addr, psk)
+	c, err := client.Dial(dialCtx, addr, "")
 	if err != nil {
 		return nil, err
 	}
@@ -531,7 +541,7 @@ func (m *model) poll(ctx context.Context) {
 	}
 	reqCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	nodes, err := c.Nodes(reqCtx, m.key())
+	nodes, err := c.Nodes(reqCtx)
 	if err != nil {
 		m.dropClient(c)
 		fail(err)
@@ -539,11 +549,20 @@ func (m *model) poll(ctx context.Context) {
 	}
 	// Approvals wait for this window's answer only while it offers one.
 	approvals := m.approveInApp.Load()
-	sessions, err := c.ListSessions(reqCtx, m.key(), &protocol.ListSessions{Approvals: approvals})
+	sessions, err := c.ListSessions(reqCtx, &protocol.ListSessions{Approvals: approvals})
 	if err != nil {
 		m.dropClient(c)
 		fail(err)
 		return
+	}
+	// Access is asked for when it changed, or on every poll while the
+	// daemon is not watched.
+	fetchAccess := m.accessStale.Swap(false) || !m.watching.Load()
+	var access *protocol.AccessInfo
+	if fetchAccess {
+		if access, err = c.Access(reqCtx, &protocol.Access{}); err != nil {
+			access = nil // the mesh is off on the daemon
+		}
 	}
 	// LastSeen moves on every poll; leaving it out keeps an unchanged mesh
 	// from rebuilding the sidebar.
@@ -562,6 +581,10 @@ func (m *model) poll(ctx context.Context) {
 	m.post(func() {
 		m.Conn.Set(connState{OK: true, Self: self})
 		m.Nodes.Set(nodes)
+		if fetchAccess {
+			m.Access.Set(access)
+			m.noteRequests(access)
+		}
 		// The sidebar keeps the folders it groups, so a folder outlives its
 		// last session: killing that session leaves the folder to start
 		// another in.
@@ -832,7 +855,7 @@ func (m *model) attach(id string) {
 		c, err := m.client(ctx)
 		var conn *termConn
 		if err == nil {
-			conn, err = dialTerm(context.Background(), c, m.key(), info, wake, func() { post(m.syncTitles) })
+			conn, err = dialTerm(context.Background(), c, info, wake, func() { post(m.syncTitles) })
 		}
 		post(func() {
 			delete(m.dialing, id)
@@ -917,7 +940,7 @@ func (m *model) submitNew() {
 		if err != nil {
 			return nil, err
 		}
-		return c.Open(ctx, m.key(), req)
+		return c.Open(ctx, req)
 	}, func(info *protocol.SessionInfo, err error) {
 		if err != nil {
 			m.FormErr.Set(err.Error())
@@ -961,7 +984,7 @@ func (m *model) askKill(id string) {
 	// rather than taken from the last poll, as a command may have started
 	// since.
 	fetch(m, 5*time.Second, func(ctx context.Context, c *client.Client) ([]*protocol.SessionInfo, error) {
-		return c.Sessions(ctx, m.key())
+		return c.Sessions(ctx)
 	}, func(list []*protocol.SessionInfo, err error) {
 		if now, ok := sessionIn(list, id); err == nil && ok && now.GetIdle() {
 			m.kill(id)
@@ -992,7 +1015,7 @@ func (m *model) kill(id string) {
 		if err != nil {
 			return struct{}{}, err
 		}
-		return struct{}{}, c.Kill(ctx, m.key(), &protocol.CloseSession{SessionId: id, NodeId: info.GetNodeId()})
+		return struct{}{}, c.Kill(ctx, &protocol.CloseSession{SessionId: id, NodeId: info.GetNodeId()})
 	}, func(_ struct{}, err error) {
 		if err == nil {
 			m.Sessions.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Sessions)), func(s *protocol.SessionInfo) bool { return s.GetId() == id }))
@@ -1044,7 +1067,7 @@ func (m *model) tidyTabs(ids []string) {
 		return
 	}
 	fetch(m, 5*time.Second, func(ctx context.Context, c *client.Client) ([]*protocol.SessionInfo, error) {
-		return c.Sessions(ctx, m.key())
+		return c.Sessions(ctx)
 	}, func(list []*protocol.SessionInfo, err error) {
 		if err != nil {
 			return

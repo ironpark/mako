@@ -66,7 +66,7 @@ func setup(m *model) {
 		last = p
 		m.approveInApp.Store(p.ApproveInApp)
 		if p.Daemon != prev.Daemon {
-			m.reconnect(p.Daemon, m.key())
+			m.reconnect(p.Daemon)
 		}
 		if p.DaemonMode != prev.DaemonMode || (p.Daemon != prev.Daemon && p.DaemonMode != "embedded") {
 			m.applyDaemonMode()

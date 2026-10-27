@@ -135,7 +135,7 @@ func (m *model) readDoc(id string) {
 	}
 	req := &protocol.ReadFile{NodeId: m.remoteID(d.Node), Path: d.Path, Max: docEditMax}
 	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.File, error) {
-		return c.ReadFile(ctx, m.key(), req)
+		return c.ReadFile(ctx, req)
 	}, func(f *protocol.File, err error) {
 		doc := m.docs[id]
 		if doc == nil {
@@ -187,7 +187,7 @@ func (m *model) saveDoc(id string, force bool) {
 	}
 	m.updateDoc(id, func(d *docInfo) { d.Saving = true })
 	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.File, error) {
-		return c.WriteFile(ctx, m.key(), req)
+		return c.WriteFile(ctx, req)
 	}, func(f *protocol.File, err error) {
 		doc := m.docs[id]
 		if doc == nil {

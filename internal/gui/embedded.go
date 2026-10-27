@@ -149,13 +149,13 @@ func (m *model) applyDaemonMode() {
 		if m.embedded.running() {
 			return // already ours; probing the same port would find it
 		}
-		addr, psk := m.externalAddr(), m.key()
+		addr := m.externalAddr()
 		m.linked.Store(false)
 		m.setDaemonState(func(s *daemonState) { s.Mode, s.Err = "", "" })
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 			defer cancel()
-			c, err := client.Dial(ctx, addr, psk)
+			c, err := client.Dial(ctx, addr, "")
 			if err == nil {
 				_ = c.Close()
 			}
@@ -187,7 +187,7 @@ func (m *model) startEmbedded() {
 	}
 	m.linked.Store(false)
 	m.setDaemonState(func(s *daemonState) { *s = daemonState{Mode: "embedded", Starting: true} })
-	m.reconnect(ggui.Peek(m.Prefs).Daemon, m.cfg.PSK) // the key it starts with
+	m.reconnect(ggui.Peek(m.Prefs).Daemon)
 	// A daemon stopped for a restart reports its exit after the next one
 	// has started; the generation tells the two apart.
 	m.daemonGen++

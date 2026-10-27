@@ -55,7 +55,7 @@ take it out before you commit.
 
     internal/protocol    the generated messages, their framing and constants
     internal/transport   QUIC listener and dialer, the node's self-signed certificate
-    internal/p2p         the libp2p host: identity, key proof, relays, gossipsub
+    internal/p2p         the libp2p host: identity, keys and one-way trust, relays
     internal/discovery   Bonjour (mDNS) and Tailscale peer search
     internal/daemon      sessions, the peer table, mesh state, request routing, hooks
     internal/client      a front-end's connection to its daemon, and attach
@@ -88,19 +88,24 @@ daemon alone. A request that names another node is forwarded by that
 daemon, and an attach to a remote session is spliced stream to stream, so a
 front-end never dials a remote machine.
 
-**Daemons link over libp2p.** Each daemon is a libp2p host with its own
-identity (`internal/p2p`). Two hosts prove to each other that they know the
-mesh's pre-shared key before either serves the other. A host behind NAT is
-reached through a relay run by a mako node with a public address. Each
-daemon publishes its node and sessions on a gossipsub topic, so a peer's
-sessions are known without asking for them. A peer from a build without
-libp2p is still reached over QUIC.
+**Daemons link over libp2p, and trust one way.** Each daemon is a libp2p
+host with its own Ed25519 identity (`internal/p2p`). Two hosts that link
+introduce themselves and each decides, from its `authorized_keys`, whether
+it lets the other in: by the other's own key, or by the SSH key that signed
+a certificate for it. A daemon serves only the peers it lets in, and sends
+its sessions only to them. A host behind NAT is reached through a relay run
+by a mako node with a public address. Each daemon pushes its state to its
+peers directly, not over gossip, which could not keep it from a peer it
+does not let in.
+
+**Front-ends show a token.** The daemon keeps a random token in its
+configuration folder; the CLI and the app on the same machine read it and
+show it in their `hello`.
 
 **Discovery feeds one peer table.** Bonjour finds daemons on the same
 link, Tailscale's peer list finds those on the tailnet, and `peers` in the
 config names the rest. A node found any of these ways is linked over
-libp2p, and nodes are passed on between daemons, so a machine one node
-sees is seen by all of them.
+libp2p, and a daemon tells the peers it lets in of the nodes it knows.
 
 **Terminal state lives on both ends.** Every session feeds its PTY output
 into a [gostty](https://github.com/ironpark/gostty) terminal as well as to
@@ -129,9 +134,9 @@ Reports expire after 15 seconds without a refresh, as Ghostty's do.
 ### Approvals
 
 An agent's `PermissionRequest` hook holds its request in the daemon while a
-front-end that answers approvals is watching, here or on a peer (a peer's
-published state says whether it has one). The window shows the request as
-a card in Chat and a bar over the terminal. With no watcher, or once the
+front-end that answers approvals is watching, here or on a peer this daemon
+lets in (a peer's state says whether it has one). The window shows the
+request as a card in Chat and a bar over the terminal. With no watcher, or once the
 windows stop, the hook gives the question back to the agent's own prompt.
 
 ### Chat and conversations

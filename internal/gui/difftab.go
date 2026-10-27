@@ -118,7 +118,7 @@ func (m *model) readDiff(id string) {
 	}
 	req := &protocol.GitDiff{NodeId: m.remoteID(d.Root.Node), Root: d.Repo, Path: d.File.GetPath(), From: d.File.GetFrom(), Commit: d.Commit, Base: d.Base}
 	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Diff, error) {
-		return c.GitDiff(ctx, m.key(), req)
+		return c.GitDiff(ctx, req)
 	}, func(diff *protocol.Diff, err error) {
 		m.updateDiff(id, func(d *diffTab) {
 			d.Diff, d.Err, d.Loading = diff, "", false
@@ -211,7 +211,7 @@ func (m *model) askDiscardHunk(id string, hunk []*protocol.DiffLine) {
 		m.keepDiff(id)
 		req := &protocol.GitRun{NodeId: m.remoteID(d.Root.Node), Root: d.Repo, Op: protocol.GitOpDiscard, Paths: []string{d.File.GetPath()}, Hunk: hunk}
 		fetch(m, gitOpTimeout, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
-			return c.GitRun(ctx, m.key(), req)
+			return c.GitRun(ctx, req)
 		}, func(_ *protocol.GitResult, err error) {
 			if err != nil {
 				m.updateDiff(id, func(d *diffTab) { d.Err = nodeErr(err) })

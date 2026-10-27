@@ -37,8 +37,11 @@ type Config struct {
 	Peers []string `json:"peers"`
 	// Discovery toggles the automatic peer discovery backends.
 	Discovery Discovery `json:"discovery"`
-	// PSK authenticates peers with each other. Empty disables the check.
-	PSK string `json:"psk,omitempty"`
+	// SSHKey is an SSH public key whose owner vouches for this node: its
+	// private half in the SSH agent, or beside it without a passphrase.
+	// Nodes that let the key in let this node in, as do the other nodes
+	// it vouches for. Empty for none.
+	SSHKey string `json:"ssh_key,omitempty"`
 	// P2P is how the daemon links to its peers over libp2p.
 	P2P P2P `json:"p2p"`
 	// Agents are how this node launches each agent by name: its command,
@@ -122,6 +125,49 @@ func subdir(name string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, name), nil
+}
+
+// tokenFile holds the token front-ends show the daemon of their machine.
+const tokenFile = "token"
+
+// Token is the token front-ends show the daemon whose configuration
+// directory is dir, made the first time it is asked for; MAKO_TOKEN
+// overrides it, for a daemon on another machine.
+func Token(dir string) (string, error) {
+	if t := os.Getenv("MAKO_TOKEN"); t != "" {
+		return t, nil
+	}
+	if dir == "" {
+		var err error
+		if dir, err = Dir(); err != nil {
+			return "", err
+		}
+	}
+	path := filepath.Join(dir, tokenFile)
+	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
+		return string(data), nil
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	token := hex.EncodeToString(buf)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if errors.Is(err, os.ErrExist) {
+		// Another made it first.
+		data, err := os.ReadFile(path)
+		return string(data), err
+	} else if err != nil {
+		return "", err
+	}
+	_, err = f.WriteString(token)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	return token, err
 }
 
 // Default builds a configuration for a fresh install.

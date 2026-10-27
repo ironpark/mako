@@ -46,7 +46,7 @@ func (m *model) openQuickOpen() {
 	m.QuickOpen.Set(true)
 	req := &protocol.Search{NodeId: m.remoteID(root.Node), Root: root.Path, Files: true}
 	fetch(m, 25*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SearchResult, error) {
-		return c.Search(ctx, m.key(), req)
+		return c.Search(ctx, req)
 	}, func(r *protocol.SearchResult, err error) {
 		if m.quickFiles.Root != root {
 			return
@@ -168,7 +168,7 @@ func (m *model) runSearch() {
 	m.Search.Set(searchView{Root: root, Query: q, Loading: true})
 	req := &protocol.Search{NodeId: m.remoteID(root.Node), Root: root.Path, Query: q}
 	fetch(m, 25*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SearchResult, error) {
-		return c.Search(ctx, m.key(), req)
+		return c.Search(ctx, req)
 	}, func(r *protocol.SearchResult, err error) {
 		if cur := ggui.Peek(m.Search); cur.Root != root || cur.Query != q {
 			return // another search since

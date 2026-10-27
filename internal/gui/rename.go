@@ -44,7 +44,7 @@ func (m *model) submitRename() {
 		if err != nil {
 			return nil, err
 		}
-		return c.Rename(ctx, m.key(), &protocol.RenameSession{SessionId: id, NodeId: s.GetNodeId(), Name: name})
+		return c.Rename(ctx, &protocol.RenameSession{SessionId: id, NodeId: s.GetNodeId(), Name: name})
 	}, func(info *protocol.SessionInfo, err error) {
 		if err != nil {
 			m.RenameErr.Set(err.Error())

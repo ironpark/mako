@@ -28,19 +28,11 @@ func (d *Daemon) handleListSessions(ctx context.Context, stream *transport.Strea
 		return stream.Send(protocol.TypeSessions, env.GetId(), &protocol.Sessions{Sessions: sessions})
 	}
 	// A front-end asking a single daemon for sessions expects the whole mesh,
-	// so fold in what each known peer published, or asked of one that has
-	// not, as an older peer.
+	// so fold in what each peer that lets this daemon in sent of its own.
 	for _, node := range d.peers.list() {
-		if published, ok := d.remote.get(node.GetId()); ok {
-			sessions = append(sessions, published...)
-			continue
+		if sent, ok := d.remote.get(node.GetId()); ok {
+			sessions = append(sessions, sent...)
 		}
-		remote, err := d.peerSessions(ctx, node, req)
-		if err != nil {
-			d.log.Debug("peer session list failed", "node", node.GetName(), "err", err)
-			continue
-		}
-		sessions = append(sessions, remote...)
 	}
 	return stream.Send(protocol.TypeSessions, env.GetId(), &protocol.Sessions{Sessions: sessions})
 }

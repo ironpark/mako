@@ -110,7 +110,7 @@ func (m *model) loadUsage(id string, state *usageState) {
 	state.loading = true
 	req := &protocol.ReadChat{NodeId: m.remoteID(info.GetNodeId()), SessionId: id, UsageOnly: true}
 	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Chat, error) {
-		return c.ReadChat(ctx, m.key(), req)
+		return c.ReadChat(ctx, req)
 	}, func(chat *protocol.Chat, err error) {
 		if m.usages[id] != state {
 			return

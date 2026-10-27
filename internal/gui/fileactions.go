@@ -99,7 +99,7 @@ func (m *model) submitFile() {
 		}
 	}
 	fetch(m, 15*time.Second, func(ctx context.Context, c *client.Client) (*protocol.File, error) {
-		return c.FileOp(ctx, m.key(), req)
+		return c.FileOp(ctx, req)
 	}, func(f *protocol.File, err error) {
 		if err != nil {
 			m.FileErr.Set(nodeErr(err))

@@ -8,19 +8,19 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func TestMergeKeepsGossipLastSeen(t *testing.T) {
+func TestMergeKeepsASecondHandLastSeen(t *testing.T) {
 	p := newPeerTable()
 	stale := time.Now().Add(-2 * peerTTL)
 	p.merge(&protocol.Node{Id: "c", Addr: "10.0.0.3:4242", LastSeen: timestamppb.New(stale)})
 
 	got, ok := p.get("c")
-	if !ok || !got.GetLastSeen().AsTime().Equal(stale) || got.GetSource() != "gossip" {
+	if !ok || !got.GetLastSeen().AsTime().Equal(stale) || got.GetSource() != "mesh" {
 		t.Fatalf("merge new node = %+v, %v", got, ok)
 	}
 
 	// Relaying the same stale record again must not refresh it.
 	p.merge(&protocol.Node{Id: "c", LastSeen: timestamppb.New(stale)})
-	p.prune(peerTTL)
+	p.prune(peerTTL, func(*protocol.Node) bool { return false })
 	if _, ok := p.get("c"); ok {
 		t.Fatal("stale gossiped node survived prune")
 	}

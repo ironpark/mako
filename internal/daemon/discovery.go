@@ -46,7 +46,7 @@ func (d *Daemon) discover(ctx context.Context) {
 	if d.cfg.Discovery.Tailscale {
 		backends = append(backends, &discovery.Tailscale{
 			NodeID:   d.cfg.NodeID,
-			Hello:    d.hello(true),
+			Hello:    d.hello(),
 			Hosts:    d.cfg.Discovery.TailnetHosts,
 			Port:     d.port,
 			Interval: time.Minute,
@@ -77,7 +77,7 @@ func (d *Daemon) probeStatic(ctx context.Context, addr string) {
 		addr = net.JoinHostPort(addr, strconv.Itoa(config.DefaultPort))
 	}
 	for {
-		node, err := transportProbe(ctx, addr, d.hello(true))
+		node, err := transport.Probe(ctx, addr, d.hello(), 5*time.Second)
 		if err == nil && node.GetId() != d.cfg.NodeID {
 			node.Source = "static"
 			if d.notePeer(node) {
@@ -93,7 +93,8 @@ func (d *Daemon) probeStatic(ctx context.Context, addr string) {
 }
 
 // linkStatic keeps a link to a peer configured by its multiaddr, which
-// ends in its /p2p/ ID; the node's record comes on the state topic.
+// ends in its /p2p/ ID; the node's record comes as the two introduce
+// themselves.
 func (d *Daemon) linkStatic(ctx context.Context, addr string) {
 	if d.p2p == nil {
 		d.log.Warn("a peer given by multiaddr needs libp2p, which is off", "peer", addr)
@@ -111,7 +112,8 @@ func (d *Daemon) linkStatic(ctx context.Context, addr string) {
 	}
 }
 
-// maintain expires stale peers and gossips the local view to the mesh.
+// maintain expires stale peers, keeping those still linked, and links
+// again to those whose link dropped.
 func (d *Daemon) maintain(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -120,44 +122,12 @@ func (d *Daemon) maintain(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if d.peers.prune(peerTTL) {
+			if d.peers.prune(peerTTL, func(n *protocol.Node) bool { return d.p2p != nil && d.p2p.Connected(n.GetPeerId()) }) {
 				d.changes.fire(true, false)
 			}
 			for _, node := range d.peers.list() {
 				d.link(node) // a link dropped is made again
 			}
-			d.gossip(ctx)
 		}
-	}
-}
-
-// gossip pushes the local node view to every known peer and merges what comes
-// back, so a node discovered on one link becomes visible across the mesh.
-func (d *Daemon) gossip(ctx context.Context) {
-	view := &protocol.Nodes{Nodes: append([]*protocol.Node{d.Self()}, d.peers.list()...)}
-	for _, node := range d.peers.list() {
-		if node.GetPeerId() != "" {
-			continue // a peer on libp2p hears of the mesh on its state topic
-		}
-		go func(node *protocol.Node) {
-			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
-
-			stream, err := d.peerStream(ctx, node)
-			if err != nil {
-				return
-			}
-			defer stream.Close()
-
-			reply, err := transport.Call[*protocol.Nodes](stream, protocol.TypeGossip, view)
-			if err != nil {
-				return
-			}
-			for _, remote := range reply.GetNodes() {
-				if remote.GetId() != d.cfg.NodeID {
-					d.peers.merge(remote)
-				}
-			}
-		}(node)
 	}
 }

@@ -123,7 +123,7 @@ func (p *peerTable) upsert(node *protocol.Node) bool {
 	return !existed || prev.GetAddr() != node.GetAddr() || prev.GetName() != node.GetName()
 }
 
-// merge folds in a node learned second-hand through gossip. The sender's
+// merge folds in a node learned second-hand, from a peer's state. The sender's
 // LastSeen is kept rather than refreshed, so peers relaying a dead node to
 // each other cannot keep it alive past peerTTL. A node already known keeps
 // its address and source and only advances its LastSeen.
@@ -139,7 +139,7 @@ func (p *peerTable) merge(node *protocol.Node) {
 	defer p.mu.Unlock()
 	prev, existed := p.nodes[node.GetId()]
 	if !existed {
-		node.Source = "gossip"
+		node.Source = "mesh"
 		p.nodes[node.GetId()] = node
 		return
 	}
@@ -172,14 +172,15 @@ func (p *peerTable) list() []*protocol.Node {
 	return out
 }
 
-// prune drops nodes not seen within ttl, and reports whether it did.
-func (p *peerTable) prune(ttl time.Duration) bool {
+// prune drops nodes not seen within ttl, but those configured and those
+// linked says are still linked, and reports whether it did.
+func (p *peerTable) prune(ttl time.Duration, linked func(*protocol.Node) bool) bool {
 	cutoff := time.Now().Add(-ttl)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	dropped := false
 	for id, node := range p.nodes {
-		if node.GetSource() != "self" && node.GetSource() != "static" && protocol.TimeOf(node.GetLastSeen()).Before(cutoff) {
+		if node.GetSource() != "self" && node.GetSource() != "static" && protocol.TimeOf(node.GetLastSeen()).Before(cutoff) && !linked(node) {
 			delete(p.nodes, id)
 			dropped = true
 		}

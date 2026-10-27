@@ -32,6 +32,16 @@ Usage:
   mako rename <session-id> [name]   name a session (no name clears it)
   mako agents                       list agents and profiles this node can launch
 
+Access (trust runs one way: a node you let in can drive this one):
+  mako access                       this node's keys, the nodes asking to be
+                                     let in, and the keys let in
+  mako request <node> [note]        ask another node to let this one in
+  mako allow <node> [-owner]        let in a node that asked, by its own key,
+                                     or with -owner by the SSH key vouching for it
+  mako deny <node>                  drop a node's request
+  mako trust <public key line>      let a key in, as authorized_keys writes it
+  mako revoke <fingerprint>         take a key out
+
 Flags:
   -daemon <addr>   daemon to talk to (default 127.0.0.1:4242)
   -node <id>       run on / target this node instead of the local one
@@ -75,7 +85,7 @@ func run(args []string, daemonAddr, nodeID, project string) error {
 
 	dialCtx, dialCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer dialCancel()
-	c, err := client.Dial(dialCtx, daemonAddr, cfg.PSK)
+	c, err := client.Dial(dialCtx, daemonAddr, "")
 	if err != nil {
 		return fmt.Errorf("cannot reach daemon (is makod running?): %w", err)
 	}
@@ -83,40 +93,67 @@ func run(args []string, daemonAddr, nodeID, project string) error {
 
 	switch args[0] {
 	case "nodes":
-		return listNodes(ctx, c, cfg.PSK)
+		return listNodes(ctx, c)
 	case "addrs":
 		return printAddrs(c.Node())
 	case "ls":
-		return listSessions(ctx, c, cfg.PSK)
+		return listSessions(ctx, c)
 	case "run":
 		if len(args) < 2 {
 			return fmt.Errorf("run needs an agent name")
 		}
-		return runAgent(ctx, c, cfg.PSK, nodeID, project, args[1], args[2:])
+		return runAgent(ctx, c, nodeID, project, args[1], args[2:])
 	case "attach":
 		if len(args) < 2 {
 			return fmt.Errorf("attach needs a session ID")
 		}
-		if nodeID, err = sessionNode(ctx, c, cfg.PSK, nodeID, args[1]); err != nil {
+		if nodeID, err = sessionNode(ctx, c, nodeID, args[1]); err != nil {
 			return err
 		}
-		return c.Attach(ctx, cfg.PSK, &protocol.Attach{SessionId: args[1], NodeId: nodeID, Replay: true})
+		return c.Attach(ctx, &protocol.Attach{SessionId: args[1], NodeId: nodeID, Replay: true})
 	case "kill":
 		if len(args) < 2 {
 			return fmt.Errorf("kill needs a session ID")
 		}
-		if nodeID, err = sessionNode(ctx, c, cfg.PSK, nodeID, args[1]); err != nil {
+		if nodeID, err = sessionNode(ctx, c, nodeID, args[1]); err != nil {
 			return err
 		}
-		return c.Kill(ctx, cfg.PSK, &protocol.CloseSession{SessionId: args[1], NodeId: nodeID})
+		return c.Kill(ctx, &protocol.CloseSession{SessionId: args[1], NodeId: nodeID})
+	case "access":
+		return access(ctx, c, &protocol.Access{})
+	case "request", "allow", "deny":
+		if len(args) < 2 {
+			return fmt.Errorf("%s needs a node", args[0])
+		}
+		node, err := findNode(ctx, c, args[1])
+		if err != nil {
+			return err
+		}
+		req := &protocol.Access{Op: args[0], NodeId: node}
+		rest := args[2:]
+		if args[0] == "allow" && len(rest) > 0 && rest[0] == "-owner" {
+			req.Owner, rest = true, rest[1:]
+		}
+		req.Note = strings.Join(rest, " ")
+		return access(ctx, c, req)
+	case "trust":
+		if len(args) < 2 {
+			return fmt.Errorf("trust needs a public key")
+		}
+		return access(ctx, c, &protocol.Access{Op: "add", Key: strings.Join(args[1:], " ")})
+	case "revoke":
+		if len(args) < 2 {
+			return fmt.Errorf("revoke needs a key's fingerprint")
+		}
+		return access(ctx, c, &protocol.Access{Op: "revoke", Key: args[1]})
 	case "rename":
 		if len(args) < 2 {
 			return fmt.Errorf("rename needs a session ID")
 		}
-		if nodeID, err = sessionNode(ctx, c, cfg.PSK, nodeID, args[1]); err != nil {
+		if nodeID, err = sessionNode(ctx, c, nodeID, args[1]); err != nil {
 			return err
 		}
-		_, err := c.Rename(ctx, cfg.PSK, &protocol.RenameSession{SessionId: args[1], NodeId: nodeID, Name: strings.Join(args[2:], " ")})
+		_, err := c.Rename(ctx, &protocol.RenameSession{SessionId: args[1], NodeId: nodeID, Name: strings.Join(args[2:], " ")})
 		return err
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
@@ -125,11 +162,11 @@ func run(args []string, daemonAddr, nodeID, project string) error {
 
 // sessionNode finds the node that owns sessionID when -node was not given, so
 // any session shown by ls can be attached or killed by ID alone.
-func sessionNode(ctx context.Context, c *client.Client, psk, nodeID, sessionID string) (string, error) {
+func sessionNode(ctx context.Context, c *client.Client, nodeID, sessionID string) (string, error) {
 	if nodeID != "" {
 		return nodeID, nil
 	}
-	sessions, err := c.Sessions(ctx, psk)
+	sessions, err := c.Sessions(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -141,17 +178,83 @@ func sessionNode(ctx context.Context, c *client.Client, psk, nodeID, sessionID s
 	return "", fmt.Errorf("unknown session %q", sessionID)
 }
 
-func listNodes(ctx context.Context, c *client.Client, psk string) error {
-	nodes, err := c.Nodes(ctx, psk)
+func listNodes(ctx context.Context, c *client.Client) error {
+	nodes, err := c.Nodes(ctx)
 	if err != nil {
 		return err
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tADDRESS\tVIA\tLAST SEEN")
+	fmt.Fprintln(w, "ID\tNAME\tADDRESS\tVIA\tACCESS\tLAST SEEN")
 	for _, n := range nodes {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", short(n.GetId()), n.GetName(), n.GetAddr(), n.GetSource(), ago(protocol.TimeOf(n.GetLastSeen())))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", short(n.GetId()), n.GetName(), n.GetAddr(), n.GetSource(), trustLabel(n), ago(protocol.TimeOf(n.GetLastSeen())))
 	}
 	return w.Flush()
+}
+
+// trustLabel says how the daemon and n stand.
+func trustLabel(n *protocol.Node) string {
+	return map[string]string{
+		protocol.StandingSelf: "-",
+		protocol.StandingBoth: "both ways",
+		protocol.StandingUs:   "lets us in",
+		protocol.StandingThem: "let in here",
+		protocol.StandingNone: "none",
+	}[n.Standing()]
+}
+
+// findNode resolves a node by its ID, the start of it, or its name.
+func findNode(ctx context.Context, c *client.Client, ref string) (string, error) {
+	nodes, err := c.Nodes(ctx)
+	if err != nil {
+		return "", err
+	}
+	var found []string
+	for _, n := range nodes {
+		if n.GetId() == ref || n.GetName() == ref {
+			return n.GetId(), nil
+		}
+		if strings.HasPrefix(n.GetId(), ref) {
+			found = append(found, n.GetId())
+		}
+	}
+	if len(found) == 1 {
+		return found[0], nil
+	}
+	return "", fmt.Errorf("no single node %q", ref)
+}
+
+// access makes an access change, or none, and prints where things stand.
+func access(ctx context.Context, c *client.Client, req *protocol.Access) error {
+	info, err := c.Access(ctx, req)
+	if err != nil {
+		return err
+	}
+	if req.GetOp() == "request" {
+		fmt.Println("asked; the node's own front-end answers")
+		return nil
+	}
+	fmt.Println("This node's key (another node lets it in with this line):")
+	fmt.Println("  " + info.GetKey().GetLine())
+	if o := info.GetOwner(); o != nil {
+		fmt.Println("Vouched for by the SSH key", o.GetFingerprint())
+	}
+	if len(info.GetRequests()) > 0 {
+		fmt.Println("\nAsking to be let in:")
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "  NODE\tNAME\tKEY\tSSH KEY\tNOTE")
+		for _, r := range info.GetRequests() {
+			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", short(r.GetNode().GetId()), r.GetNode().GetName(), r.GetKey().GetFingerprint(), r.GetOwner().GetFingerprint(), r.GetNote())
+		}
+		w.Flush()
+	}
+	fmt.Println("\nLet in:")
+	if len(info.GetKeys()) == 0 {
+		fmt.Println("  no key yet")
+	}
+	for _, k := range info.GetKeys() {
+		fmt.Printf("  %s  %s\n", k.GetFingerprint(), k.GetComment())
+	}
+	return nil
 }
 
 // printAddrs prints where node is on libp2p, each address ending in its
@@ -166,8 +269,8 @@ func printAddrs(node *protocol.Node) error {
 	return nil
 }
 
-func listSessions(ctx context.Context, c *client.Client, psk string) error {
-	sessions, err := c.Sessions(ctx, psk)
+func listSessions(ctx context.Context, c *client.Client) error {
+	sessions, err := c.Sessions(ctx)
 	if err != nil {
 		return err
 	}
@@ -188,7 +291,7 @@ func listSessions(ctx context.Context, c *client.Client, psk string) error {
 	return w.Flush()
 }
 
-func runAgent(ctx context.Context, c *client.Client, psk, nodeID, project, target string, extra []string) error {
+func runAgent(ctx context.Context, c *client.Client, nodeID, project, target string, extra []string) error {
 	agent, profile := agentspec.SplitTarget(target)
 	// "mako run <agent> -- args" separates agent arguments; the separator
 	// itself is not one of them.
@@ -208,7 +311,7 @@ func runAgent(ctx context.Context, c *client.Client, psk, nodeID, project, targe
 	}
 	cols, rows := client.WindowSize()
 
-	info, err := c.Open(ctx, psk, &protocol.OpenSession{
+	info, err := c.Open(ctx, &protocol.OpenSession{
 		NodeId:  nodeID,
 		Agent:   agent,
 		Profile: profile,
@@ -221,7 +324,7 @@ func runAgent(ctx context.Context, c *client.Client, psk, nodeID, project, targe
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "[mako] session %s on %s\r\n", info.GetId(), short(info.GetNodeId()))
-	return c.Attach(ctx, psk, &protocol.Attach{SessionId: info.GetId(), NodeId: nodeID, Replay: false})
+	return c.Attach(ctx, &protocol.Attach{SessionId: info.GetId(), NodeId: nodeID, Replay: false})
 }
 
 func short(id string) string {

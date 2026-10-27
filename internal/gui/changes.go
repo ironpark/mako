@@ -61,7 +61,7 @@ func (m *model) loadGit(root fileRoot) {
 	m.Git.Set(v)
 	req := &protocol.GitStatus{NodeId: m.remoteID(root.Node), Path: root.Path, Base: base}
 	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitChanges, error) {
-		return c.GitStatus(ctx, m.key(), req)
+		return c.GitStatus(ctx, req)
 	}, func(ch *protocol.GitChanges, err error) {
 		if cur := ggui.Peek(m.Git); cur.Root != root || cur.Base != base {
 			return // another project, or base, is shown now

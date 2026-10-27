@@ -4,9 +4,9 @@
 // configuration directory, and listens on QUIC and TCP. Peers reach each
 // other directly where they can, through a relay run by a mako node with
 // a public address where they cannot, and then try to punch through to a
-// direct connection. A connection is of no use until both sides have shown
-// they know the mesh's pre-shared key (see auth.go); only then are the
-// mako protocol's streams and the mesh's state topic open to it.
+// direct connection. Who may ask what of whom is a matter of keys, and
+// runs one way (see trust.go): a host serves the mako protocol's streams,
+// and sends its state, to the peers it lets in.
 package p2p
 
 import (
@@ -18,10 +18,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -30,11 +30,19 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+	"golang.org/x/crypto/ssh"
 )
 
 // Protocol is the libp2p protocol the mako protocol's frames travel on,
 // one request stream to a libp2p stream, as on QUIC.
 const Protocol protocol.ID = "/mako/2"
+
+// stateProtocol carries a host's state to a peer, one message a stream,
+// and accessProtocol a host's asking a peer to let it in.
+const (
+	stateProtocol  protocol.ID = "/mako/state/2"
+	accessProtocol protocol.ID = "/mako/access/1"
+)
 
 // keyFile holds the host's identity in the configuration directory.
 const keyFile = "peer.key"
@@ -47,8 +55,14 @@ type Config struct {
 	Host string
 	// Port is the UDP and TCP port; 0 picks one.
 	Port int
-	// PSK is the mesh's pre-shared key; empty lets in any mako daemon.
-	PSK string
+	// Node and Name are the daemon's node ID and name, which the host
+	// introduces itself to its peers with.
+	Node, Name string
+	// Owner is the SSH key that vouches for the host, nil for none.
+	Owner ssh.Signer
+	// OnPeer is told how the host stands with a peer each time the two
+	// introduce themselves.
+	OnPeer func(Peer)
 	// Relays are relay nodes' multiaddrs, each with its /p2p/ ID, that
 	// this host reserves a slot on to be reachable behind NAT.
 	Relays []string
@@ -63,12 +77,14 @@ type Config struct {
 }
 
 // Host is a daemon's libp2p host. Its libp2p host is kept to itself, so
-// every way in, a stream, a topic, a relay circuit, goes through the
-// check that the other side knows the key.
+// every way in, a stream, a state, a relay circuit, goes through the
+// check that it lets the other side in.
 type Host struct {
-	h    host.Host
-	auth *auth
-	ps   *pubsub.PubSub
+	h     host.Host
+	trust *trust
+	log   *slog.Logger
+	done  chan struct{}
+	once  sync.Once
 }
 
 // New starts a host. It runs until Close.
@@ -85,7 +101,9 @@ func New(ctx context.Context, cfg Config) (*Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	h := &Host{auth: newAuth(cfg.PSK, log)}
+	h := &Host{log: log, done: make(chan struct{}),
+		trust: newTrust(NewKeys(cfg.Dir), intro{Node: cfg.Node, Name: cfg.Name}, cfg.Owner, log)}
+	h.trust.changed = cfg.OnPeer
 	hosts := []string{"0.0.0.0", "::"}
 	if cfg.Host != "" {
 		hosts = []string{cfg.Host}
@@ -110,36 +128,85 @@ func New(ctx context.Context, cfg Config) (*Host, error) {
 		opts = append(opts, libp2p.EnableAutoRelayWithStaticRelays(relays))
 	}
 	if cfg.RelayService {
-		// The mesh's own relay: its circuits are for the mesh's nodes
+		// The mesh's own relay: its circuits are for the nodes it lets in
 		// alone, and are not cut short, as a public relay's are, since a
 		// session may run over one for hours where no hole could be
 		// punched.
 		opts = append(opts,
-			libp2p.EnableRelayService(relay.WithInfiniteLimits(), relay.WithACL(h.auth)),
+			libp2p.EnableRelayService(relay.WithInfiniteLimits(), relay.WithACL(h.trust)),
 			libp2p.ForceReachabilityPublic())
 	}
 	h.h, err = libp2p.New(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("libp2p: %w", err)
 	}
-	h.auth.attach(h.h)
-	h.ps, err = pubsub.NewGossipSub(ctx, h.h,
-		// Only hosts that proved they know the key take part in the mesh's
-		// topics, as senders and as receivers.
-		pubsub.WithPeerFilter(func(p peer.ID, _ string) bool { return h.auth.ok(p) }),
-	)
-	if err != nil {
+	if _, err := h.trust.vouch(h.h.ID()); err != nil {
 		h.h.Close()
-		return nil, fmt.Errorf("pubsub: %w", err)
+		return nil, fmt.Errorf("vouching with the SSH key: %w", err)
 	}
+	h.trust.attach(h.h)
+	go h.watch()
 	return h, nil
+}
+
+// watch introduces the host to its peers again when its keys change, and
+// renews its certificate before it runs out, until Close.
+func (h *Host) watch() {
+	tick := time.NewTicker(2 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-h.done:
+			return
+		case <-tick.C:
+		}
+		renewed, err := h.trust.vouch(h.h.ID())
+		if err != nil {
+			h.log.Warn("could not renew the SSH key's certificate", "err", err)
+		}
+		if h.trust.keys.reload() || renewed {
+			h.trust.reconsider()
+		}
+	}
 }
 
 // ID is the host's peer ID.
 func (h *Host) ID() peer.ID { return h.h.ID() }
 
 // Close stops the host.
-func (h *Host) Close() error { return h.h.Close() }
+func (h *Host) Close() error {
+	h.once.Do(func() { close(h.done) })
+	return h.h.Close()
+}
+
+// Keys are the keys the host lets in. After changing them, Reconsider.
+func (h *Host) Keys() *Keys { return h.trust.keys }
+
+// Reconsider introduces the host to its peers again, so a key let in or
+// taken out holds at once.
+func (h *Host) Reconsider() { h.trust.reconsider() }
+
+// Key is the host's own key, as SSH writes it.
+func (h *Host) Key() ssh.PublicKey {
+	key, _ := PeerKey(h.h.ID())
+	return key
+}
+
+// Owner is the SSH key that vouches for the host, nil for none.
+func (h *Host) Owner() ssh.PublicKey { return h.trust.own }
+
+// Peer is how the host stands with the peer id, once the two have
+// introduced themselves.
+func (h *Host) Peer(id string) (Peer, bool) {
+	pid, err := peer.Decode(id)
+	if err != nil {
+		return Peer{}, false
+	}
+	return h.trust.get(pid)
+}
+
+// Peers is how the host stands with each peer linked to it.
+func (h *Host) Peers() []Peer { return h.trust.list() }
 
 // Connected reports whether the host has a link to the peer id.
 func (h *Host) Connected(id string) bool {
@@ -178,11 +245,11 @@ func (h *Host) Port() int {
 	return 0
 }
 
-// HandleStreams serves the mako protocol's streams with fn, from hosts
-// that have shown they know the key; another's are reset.
+// HandleStreams serves the mako protocol's streams with fn, from the hosts
+// it lets in; another's are reset.
 func (h *Host) HandleStreams(fn func(s network.Stream)) {
 	h.h.SetStreamHandler(Protocol, func(s network.Stream) {
-		if !h.auth.passes(s.Conn().RemotePeer()) {
+		if p, ok := h.trust.arrived(s.Conn().RemotePeer()); !ok || !p.Trusts {
 			_ = s.Reset()
 			return
 		}
@@ -191,27 +258,24 @@ func (h *Host) HandleStreams(fn func(s network.Stream)) {
 }
 
 // Open opens a mako protocol stream to the peer id, reached at addrs if
-// it is not connected already. It may go through a relay.
+// it is not connected already. It may go through a relay. A peer that
+// does not let this host in is ErrNotTrusted.
 func (h *Host) Open(ctx context.Context, id string, addrs []string) (network.Stream, error) {
-	info, err := addrInfo(id, addrs)
+	p, err := h.linkTo(ctx, id, addrs)
 	if err != nil {
 		return nil, err
 	}
-	ctx = network.WithAllowLimitedConn(ctx, "mako")
-	if err := h.link(ctx, info); err != nil {
-		return nil, err
+	if !p.TrustedBy {
+		return nil, ErrNotTrusted
 	}
-	return h.h.NewStream(ctx, info.ID, Protocol)
+	return h.h.NewStream(network.WithAllowLimitedConn(ctx, "mako"), p.ID, Protocol)
 }
 
 // Ensure links to the peer id, at addrs if it is not connected already,
-// and waits for both sides to show they know the key.
+// and waits for the two to introduce themselves.
 func (h *Host) Ensure(ctx context.Context, id string, addrs []string) error {
-	info, err := addrInfo(id, addrs)
-	if err != nil {
-		return err
-	}
-	return h.link(ctx, info)
+	_, err := h.linkTo(ctx, id, addrs)
+	return err
 }
 
 // EnsureAddr is Ensure for a multiaddr ending in the peer's /p2p/ ID.
@@ -220,27 +284,102 @@ func (h *Host) EnsureAddr(ctx context.Context, addr string) error {
 	if err != nil {
 		return err
 	}
-	return h.link(ctx, *info)
+	_, err = h.link(ctx, *info)
+	return err
 }
 
 // link connects to info, which libp2p does at once when it is connected
-// already, and waits for both sides to show they know the key.
-func (h *Host) link(ctx context.Context, info peer.AddrInfo) error {
+// already, and waits for the two to introduce themselves.
+func (h *Host) link(ctx context.Context, info peer.AddrInfo) (Peer, error) {
 	if info.ID == h.h.ID() {
-		return errors.New("p2p: a link to itself")
+		return Peer{}, errors.New("p2p: a link to itself")
 	}
 	if err := h.h.Connect(network.WithAllowLimitedConn(ctx, "mako"), info); err != nil {
-		return err
+		return Peer{}, err
 	}
-	h.auth.begin(info.ID)
-	return h.auth.wait(ctx, info.ID)
+	h.trust.begin(info.ID)
+	return h.trust.wait(ctx, info.ID)
 }
 
-// addrInfo is the peer id at addrs, those of them that parse.
-func addrInfo(id string, addrs []string) (peer.AddrInfo, error) {
+// HandleState takes in the states peers send with fn: from a peer that
+// lets this host in, or that this host lets in.
+func (h *Host) HandleState(fn func(from Peer, data []byte)) {
+	h.h.SetStreamHandler(stateProtocol, func(s network.Stream) {
+		defer s.Close()
+		p, ok := h.trust.get(s.Conn().RemotePeer())
+		if !ok || !(p.Trusts || p.TrustedBy) {
+			_ = s.Reset()
+			return
+		}
+		_ = s.SetReadDeadline(time.Now().Add(trustTimeout))
+		data, err := readMessage(s)
+		if err != nil {
+			_ = s.Reset()
+			return
+		}
+		fn(p, data)
+	})
+}
+
+// SendState sends data, a state, to the peer id, which must be linked.
+func (h *Host) SendState(ctx context.Context, id peer.ID, data []byte) error {
+	s, err := h.h.NewStream(network.WithAllowLimitedConn(ctx, "mako-state"), id, stateProtocol)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	_ = s.SetWriteDeadline(time.Now().Add(trustTimeout))
+	return writeMessage(s, data)
+}
+
+// HandleAccess takes in with fn the peers' asking this host to let them
+// in, and what they say with it.
+func (h *Host) HandleAccess(fn func(from Peer, note string)) {
+	h.h.SetStreamHandler(accessProtocol, func(s network.Stream) {
+		defer s.Close()
+		p, ok := h.trust.arrived(s.Conn().RemotePeer())
+		if !ok {
+			_ = s.Reset()
+			return
+		}
+		_ = s.SetReadDeadline(time.Now().Add(trustTimeout))
+		var req struct {
+			Note string `json:"note"`
+		}
+		if err := readJSON(s, &req); err != nil {
+			_ = s.Reset()
+			return
+		}
+		fn(p, req.Note)
+		_ = writeMessage(s, nil)
+	})
+}
+
+// RequestAccess asks the peer id, reached at addrs if it is not linked
+// already, to let this host in, saying note.
+func (h *Host) RequestAccess(ctx context.Context, id string, addrs []string, note string) error {
+	p, err := h.linkTo(ctx, id, addrs)
+	if err != nil {
+		return err
+	}
+	s, err := h.h.NewStream(network.WithAllowLimitedConn(ctx, "mako-access"), p.ID, accessProtocol)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	_ = s.SetDeadline(time.Now().Add(trustTimeout))
+	if err := writeJSON(s, map[string]string{"note": note}); err != nil {
+		return err
+	}
+	_, err = readMessage(s)
+	return err
+}
+
+// linkTo links to the peer id, at those of addrs that parse.
+func (h *Host) linkTo(ctx context.Context, id string, addrs []string) (Peer, error) {
 	pid, err := peer.Decode(id)
 	if err != nil {
-		return peer.AddrInfo{}, err
+		return Peer{}, err
 	}
 	info := peer.AddrInfo{ID: pid}
 	for _, a := range addrs {
@@ -248,34 +387,7 @@ func addrInfo(id string, addrs []string) (peer.AddrInfo, error) {
 			info.Addrs = append(info.Addrs, m)
 		}
 	}
-	return info, nil
-}
-
-// Topic joins the mesh topic name. Messages are taken only as relayed by a
-// host that showed it knows the key, and valid when decode makes something
-// of them, which a subscriber finds in the message's ValidatorData.
-func (h *Host) Topic(name string, decode func(from peer.ID, data []byte) (any, bool)) (*pubsub.Topic, *pubsub.Subscription, error) {
-	err := h.ps.RegisterTopicValidator(name, func(_ context.Context, from peer.ID, msg *pubsub.Message) bool {
-		if from != h.h.ID() && !h.auth.ok(from) {
-			return false
-		}
-		v, ok := decode(msg.GetFrom(), msg.GetData())
-		msg.ValidatorData = v
-		return ok
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	topic, err := h.ps.Join(name)
-	if err != nil {
-		return nil, nil, err
-	}
-	sub, err := topic.Subscribe()
-	if err != nil {
-		topic.Close()
-		return nil, nil, err
-	}
-	return topic, sub, nil
+	return h.link(ctx, info)
 }
 
 // AddrsAt are the addresses a host at ip listens on with port: QUIC and
@@ -334,6 +446,6 @@ func ParseRelays(addrs []string) ([]peer.AddrInfo, error) {
 	return out, nil
 }
 
-// authTimeout bounds how long a host waits for another to show it knows
-// the key.
-const authTimeout = 10 * time.Second
+// trustTimeout bounds how long a host waits for another to introduce
+// itself, and for a message on the small protocols beside it.
+const trustTimeout = 10 * time.Second

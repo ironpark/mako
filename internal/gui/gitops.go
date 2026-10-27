@@ -56,7 +56,7 @@ func (m *model) gitRun(req *protocol.GitRun, label string, done func()) {
 	m.GitBusy.Set(label)
 	m.GitNote.Set(gitNote{})
 	fetch(m, gitOpTimeout, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
-		return c.GitRun(ctx, m.key(), req)
+		return c.GitRun(ctx, req)
 	}, func(r *protocol.GitResult, err error) {
 		m.GitBusy.Set("")
 		if err != nil {
@@ -102,7 +102,7 @@ func (m *model) loadHistory(root fileRoot) {
 	m.historyReading = true
 	req := &protocol.GitLog{NodeId: m.remoteID(root.Node), Root: root.Path, Known: v.History.GetFingerprint()}
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitHistory, error) {
-		return c.GitLog(ctx, m.key(), req)
+		return c.GitLog(ctx, req)
 	}, func(h *protocol.GitHistory, err error) {
 		m.historyReading = false
 		v := ggui.Peek(m.GitHistory)

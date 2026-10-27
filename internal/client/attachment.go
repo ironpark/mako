@@ -20,8 +20,8 @@ type Attachment struct {
 
 // AttachStream binds a new stream to a session and returns it unread: the
 // caller receives its snapshot, output and exit with Recv.
-func (c *Client) AttachStream(ctx context.Context, psk string, req *protocol.Attach) (*Attachment, error) {
-	s, err := c.stream(ctx, psk)
+func (c *Client) AttachStream(ctx context.Context, req *protocol.Attach) (*Attachment, error) {
+	s, err := c.stream(ctx)
 	if err != nil {
 		return nil, err
 	}

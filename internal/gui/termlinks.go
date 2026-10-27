@@ -362,7 +362,7 @@ func (m *model) followLink(id, target, cwd string) {
 	// A byte of it says the file is there, and where ~ is on its node.
 	req := &protocol.ReadFile{NodeId: m.remoteID(node), Path: p, Max: 1}
 	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.File, error) {
-		return c.ReadFile(ctx, m.key(), req)
+		return c.ReadFile(ctx, req)
 	}, func(f *protocol.File, err error) {
 		if err != nil {
 			m.toaster.Push(ui.Toast(Tf("Could not open %s", baseName(p)), nodeErr(err)).Destructive())

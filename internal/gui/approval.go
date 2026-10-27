@@ -37,7 +37,7 @@ func (m *model) answerApproval(id, approval, decision string) {
 		}
 	})
 	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SessionInfo, error) {
-		return c.AnswerApproval(ctx, m.key(), req)
+		return c.AnswerApproval(ctx, req)
 	}, func(_ *protocol.SessionInfo, err error) {
 		if err != nil {
 			m.Conn.Set(connState{OK: ggui.Peek(m.Conn).OK, Self: ggui.Peek(m.Conn).Self, Err: err.Error()})

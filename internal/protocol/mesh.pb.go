@@ -24,12 +24,14 @@ const (
 
 // Hello opens every stream and says who is calling.
 type Hello struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // empty from a front-end
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Version       string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
-	IsPeer        bool                   `protobuf:"varint,4,opt,name=is_peer,json=isPeer,proto3" json:"is_peer,omitempty"`   // from another daemon
-	AuthTag       string                 `protobuf:"bytes,5,opt,name=auth_tag,json=authTag,proto3" json:"auth_tag,omitempty"` // the mesh's pre-shared key
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	NodeId  string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // empty from a front-end
+	Name    string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Version string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
+	IsPeer  bool                   `protobuf:"varint,4,opt,name=is_peer,json=isPeer,proto3" json:"is_peer,omitempty"` // from another daemon
+	// token is the daemon's front-end token, kept in its configuration
+	// directory, which a front-end on its machine reads.
+	Token         string `protobuf:"bytes,5,opt,name=token,proto3" json:"token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -92,9 +94,9 @@ func (x *Hello) GetIsPeer() bool {
 	return false
 }
 
-func (x *Hello) GetAuthTag() string {
+func (x *Hello) GetToken() string {
 	if x != nil {
-		return x.AuthTag
+		return x.Token
 	}
 	return ""
 }
@@ -153,15 +155,25 @@ type Node struct {
 	Os       string                 `protobuf:"bytes,4,opt,name=os,proto3" json:"os,omitempty"`
 	Arch     string                 `protobuf:"bytes,5,opt,name=arch,proto3" json:"arch,omitempty"`
 	Version  string                 `protobuf:"bytes,6,opt,name=version,proto3" json:"version,omitempty"`
-	Source   string                 `protobuf:"bytes,7,opt,name=source,proto3" json:"source,omitempty"` // mdns, tailscale, static, inbound, gossip, self
+	Source   string                 `protobuf:"bytes,7,opt,name=source,proto3" json:"source,omitempty"` // mdns, tailscale, static, mesh, self
 	LastSeen *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
 	Features []string               `protobuf:"bytes,9,rep,name=features,proto3" json:"features,omitempty"`   // protocol extensions it speaks
 	Agents   []*AgentInfo           `protobuf:"bytes,10,rep,name=agents,proto3" json:"agents,omitempty"`      // what it can launch
 	Revision int64                  `protobuf:"varint,11,opt,name=revision,proto3" json:"revision,omitempty"` // protocol.Revision of its build
 	// peer_id is its libp2p identity, and multiaddrs where it listens for
 	// libp2p, relayed addresses included; empty from a daemon without it.
-	PeerId        string   `protobuf:"bytes,12,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
-	Multiaddrs    []string `protobuf:"bytes,13,rep,name=multiaddrs,proto3" json:"multiaddrs,omitempty"`
+	PeerId     string   `protobuf:"bytes,12,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
+	Multiaddrs []string `protobuf:"bytes,13,rep,name=multiaddrs,proto3" json:"multiaddrs,omitempty"`
+	// How the daemon answering stands with this node, which only that
+	// daemon can say: whether it lets the node in (trusted), and whether the
+	// node lets it in (trusts_us), so that requests reach the node through
+	// it. Both are false for a node it has no link to.
+	Trusted  bool `protobuf:"varint,14,opt,name=trusted,proto3" json:"trusted,omitempty"`
+	TrustsUs bool `protobuf:"varint,15,opt,name=trusts_us,json=trustsUs,proto3" json:"trusts_us,omitempty"`
+	// key is the fingerprint of the node's own key, and owner that of the
+	// SSH key that vouches for it, if one does.
+	Key           string `protobuf:"bytes,16,opt,name=key,proto3" json:"key,omitempty"`
+	Owner         string `protobuf:"bytes,17,opt,name=owner,proto3" json:"owner,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -287,6 +299,34 @@ func (x *Node) GetMultiaddrs() []string {
 	return nil
 }
 
+func (x *Node) GetTrusted() bool {
+	if x != nil {
+		return x.Trusted
+	}
+	return false
+}
+
+func (x *Node) GetTrustsUs() bool {
+	if x != nil {
+		return x.TrustsUs
+	}
+	return false
+}
+
+func (x *Node) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *Node) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
 // AgentInfo names an agent a node can launch and its profiles.
 type AgentInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -377,7 +417,7 @@ func (*ListNodes) Descriptor() ([]byte, []int) {
 	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{4}
 }
 
-// Nodes answers ListNodes, and is a Gossip's body and reply.
+// Nodes answers ListNodes.
 type Nodes struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Nodes         []*Node                `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
@@ -422,14 +462,16 @@ func (x *Nodes) GetNodes() []*Node {
 	return nil
 }
 
-// NodeState is what a daemon publishes of itself on the mesh's state
-// topic: its record, its own sessions, and whether a front-end of its is
-// offering to answer approvals.
+// NodeState is what a daemon sends of itself to the peers it is linked
+// with: its record, and whether a front-end of its is offering to answer
+// approvals; and to the peers it lets in, its own sessions and the other
+// nodes it knows of too.
 type NodeState struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Node              *Node                  `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
 	Sessions          []*SessionInfo         `protobuf:"bytes,2,rep,name=sessions,proto3" json:"sessions,omitempty"`
 	WatchingApprovals bool                   `protobuf:"varint,3,opt,name=watching_approvals,json=watchingApprovals,proto3" json:"watching_approvals,omitempty"`
+	Peers             []*Node                `protobuf:"bytes,4,rep,name=peers,proto3" json:"peers,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -485,6 +527,13 @@ func (x *NodeState) GetWatchingApprovals() bool {
 	return false
 }
 
+func (x *NodeState) GetPeers() []*Node {
+	if x != nil {
+		return x.Peers
+	}
+	return nil
+}
+
 // Watch turns a front-end's stream into a feed of changes: the daemon
 // answers with a Changed whenever the mesh's nodes or sessions change.
 type Watch struct {
@@ -528,6 +577,7 @@ type Changed struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Nodes         bool                   `protobuf:"varint,1,opt,name=nodes,proto3" json:"nodes,omitempty"`
 	Sessions      bool                   `protobuf:"varint,2,opt,name=sessions,proto3" json:"sessions,omitempty"`
+	Access        bool                   `protobuf:"varint,3,opt,name=access,proto3" json:"access,omitempty"` // an access request came, or the keys changed
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -576,19 +626,325 @@ func (x *Changed) GetSessions() bool {
 	return false
 }
 
+func (x *Changed) GetAccess() bool {
+	if x != nil {
+		return x.Access
+	}
+	return false
+}
+
+// Access asks the daemon about who it lets in, or changes it. Only a
+// front-end of the daemon's own may send it.
+type Access struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// op is what to do: "" lists; "request" asks node_id to let this node
+	// in, with note; "allow" lets in the node node_id that asked, by its own
+	// key or with owner by the SSH key that vouches for it; "deny" drops its
+	// request; "add" lets in the authorized_keys line key; "revoke" removes
+	// the key whose fingerprint is key.
+	Op            string `protobuf:"bytes,1,opt,name=op,proto3" json:"op,omitempty"`
+	NodeId        string `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Key           string `protobuf:"bytes,3,opt,name=key,proto3" json:"key,omitempty"`
+	Owner         bool   `protobuf:"varint,4,opt,name=owner,proto3" json:"owner,omitempty"`
+	Note          string `protobuf:"bytes,5,opt,name=note,proto3" json:"note,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Access) Reset() {
+	*x = Access{}
+	mi := &file_mako_v2_mesh_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Access) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Access) ProtoMessage() {}
+
+func (x *Access) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_mesh_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Access.ProtoReflect.Descriptor instead.
+func (*Access) Descriptor() ([]byte, []int) {
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *Access) GetOp() string {
+	if x != nil {
+		return x.Op
+	}
+	return ""
+}
+
+func (x *Access) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *Access) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *Access) GetOwner() bool {
+	if x != nil {
+		return x.Owner
+	}
+	return false
+}
+
+func (x *Access) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+// AccessInfo answers Access: this node's keys, the requests waiting, and
+// the keys it lets in.
+type AccessInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           *AccessKey             `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`     // this node's own
+	Owner         *AccessKey             `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"` // the SSH key vouching for it, if one does
+	Requests      []*AccessRequest       `protobuf:"bytes,3,rep,name=requests,proto3" json:"requests,omitempty"`
+	Keys          []*AccessKey           `protobuf:"bytes,4,rep,name=keys,proto3" json:"keys,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccessInfo) Reset() {
+	*x = AccessInfo{}
+	mi := &file_mako_v2_mesh_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccessInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccessInfo) ProtoMessage() {}
+
+func (x *AccessInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_mesh_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccessInfo.ProtoReflect.Descriptor instead.
+func (*AccessInfo) Descriptor() ([]byte, []int) {
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *AccessInfo) GetKey() *AccessKey {
+	if x != nil {
+		return x.Key
+	}
+	return nil
+}
+
+func (x *AccessInfo) GetOwner() *AccessKey {
+	if x != nil {
+		return x.Owner
+	}
+	return nil
+}
+
+func (x *AccessInfo) GetRequests() []*AccessRequest {
+	if x != nil {
+		return x.Requests
+	}
+	return nil
+}
+
+func (x *AccessInfo) GetKeys() []*AccessKey {
+	if x != nil {
+		return x.Keys
+	}
+	return nil
+}
+
+// AccessKey is a public key.
+type AccessKey struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Fingerprint   string                 `protobuf:"bytes,1,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"` // SHA256:…
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`               // ssh-ed25519, …
+	Comment       string                 `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`
+	Line          string                 `protobuf:"bytes,4,opt,name=line,proto3" json:"line,omitempty"` // as authorized_keys has it
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccessKey) Reset() {
+	*x = AccessKey{}
+	mi := &file_mako_v2_mesh_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccessKey) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccessKey) ProtoMessage() {}
+
+func (x *AccessKey) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_mesh_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccessKey.ProtoReflect.Descriptor instead.
+func (*AccessKey) Descriptor() ([]byte, []int) {
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *AccessKey) GetFingerprint() string {
+	if x != nil {
+		return x.Fingerprint
+	}
+	return ""
+}
+
+func (x *AccessKey) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *AccessKey) GetComment() string {
+	if x != nil {
+		return x.Comment
+	}
+	return ""
+}
+
+func (x *AccessKey) GetLine() string {
+	if x != nil {
+		return x.Line
+	}
+	return ""
+}
+
+// AccessRequest is a node asking to be let in.
+type AccessRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Node          *Node                  `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	Key           *AccessKey             `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`     // its own
+	Owner         *AccessKey             `protobuf:"bytes,3,opt,name=owner,proto3" json:"owner,omitempty"` // the SSH key vouching for it, if one does
+	Note          string                 `protobuf:"bytes,4,opt,name=note,proto3" json:"note,omitempty"`
+	At            *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=at,proto3" json:"at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccessRequest) Reset() {
+	*x = AccessRequest{}
+	mi := &file_mako_v2_mesh_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccessRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccessRequest) ProtoMessage() {}
+
+func (x *AccessRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_mesh_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccessRequest.ProtoReflect.Descriptor instead.
+func (*AccessRequest) Descriptor() ([]byte, []int) {
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *AccessRequest) GetNode() *Node {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+func (x *AccessRequest) GetKey() *AccessKey {
+	if x != nil {
+		return x.Key
+	}
+	return nil
+}
+
+func (x *AccessRequest) GetOwner() *AccessKey {
+	if x != nil {
+		return x.Owner
+	}
+	return nil
+}
+
+func (x *AccessRequest) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+func (x *AccessRequest) GetAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.At
+	}
+	return nil
+}
+
 var File_mako_v2_mesh_proto protoreflect.FileDescriptor
 
 const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\n" +
-	"\x12mako/v2/mesh.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x15mako/v2/session.proto\"\x82\x01\n" +
+	"\x12mako/v2/mesh.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x15mako/v2/session.proto\"}\n" +
 	"\x05Hello\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x03 \x01(\tR\aversion\x12\x17\n" +
-	"\ais_peer\x18\x04 \x01(\bR\x06isPeer\x12\x19\n" +
-	"\bauth_tag\x18\x05 \x01(\tR\aauthTag\",\n" +
+	"\ais_peer\x18\x04 \x01(\bR\x06isPeer\x12\x14\n" +
+	"\x05token\x18\x05 \x01(\tR\x05token\",\n" +
 	"\aWelcome\x12!\n" +
-	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\"\xea\x02\n" +
+	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\"\xc9\x03\n" +
 	"\x04Node\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -605,21 +961,50 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\apeer_id\x18\f \x01(\tR\x06peerId\x12\x1e\n" +
 	"\n" +
 	"multiaddrs\x18\r \x03(\tR\n" +
-	"multiaddrs\";\n" +
+	"multiaddrs\x12\x18\n" +
+	"\atrusted\x18\x0e \x01(\bR\atrusted\x12\x1b\n" +
+	"\ttrusts_us\x18\x0f \x01(\bR\btrustsUs\x12\x10\n" +
+	"\x03key\x18\x10 \x01(\tR\x03key\x12\x14\n" +
+	"\x05owner\x18\x11 \x01(\tR\x05owner\";\n" +
 	"\tAgentInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bprofiles\x18\x02 \x03(\tR\bprofiles\"\v\n" +
 	"\tListNodes\",\n" +
 	"\x05Nodes\x12#\n" +
-	"\x05nodes\x18\x01 \x03(\v2\r.mako.v2.NodeR\x05nodes\"\x8f\x01\n" +
+	"\x05nodes\x18\x01 \x03(\v2\r.mako.v2.NodeR\x05nodes\"\xb4\x01\n" +
 	"\tNodeState\x12!\n" +
 	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\x120\n" +
 	"\bsessions\x18\x02 \x03(\v2\x14.mako.v2.SessionInfoR\bsessions\x12-\n" +
-	"\x12watching_approvals\x18\x03 \x01(\bR\x11watchingApprovals\"\a\n" +
-	"\x05Watch\";\n" +
+	"\x12watching_approvals\x18\x03 \x01(\bR\x11watchingApprovals\x12#\n" +
+	"\x05peers\x18\x04 \x03(\v2\r.mako.v2.NodeR\x05peers\"\a\n" +
+	"\x05Watch\"S\n" +
 	"\aChanged\x12\x14\n" +
 	"\x05nodes\x18\x01 \x01(\bR\x05nodes\x12\x1a\n" +
-	"\bsessions\x18\x02 \x01(\bR\bsessionsB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
+	"\bsessions\x18\x02 \x01(\bR\bsessions\x12\x16\n" +
+	"\x06access\x18\x03 \x01(\bR\x06access\"m\n" +
+	"\x06Access\x12\x0e\n" +
+	"\x02op\x18\x01 \x01(\tR\x02op\x12\x17\n" +
+	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x10\n" +
+	"\x03key\x18\x03 \x01(\tR\x03key\x12\x14\n" +
+	"\x05owner\x18\x04 \x01(\bR\x05owner\x12\x12\n" +
+	"\x04note\x18\x05 \x01(\tR\x04note\"\xb8\x01\n" +
+	"\n" +
+	"AccessInfo\x12$\n" +
+	"\x03key\x18\x01 \x01(\v2\x12.mako.v2.AccessKeyR\x03key\x12(\n" +
+	"\x05owner\x18\x02 \x01(\v2\x12.mako.v2.AccessKeyR\x05owner\x122\n" +
+	"\brequests\x18\x03 \x03(\v2\x16.mako.v2.AccessRequestR\brequests\x12&\n" +
+	"\x04keys\x18\x04 \x03(\v2\x12.mako.v2.AccessKeyR\x04keys\"o\n" +
+	"\tAccessKey\x12 \n" +
+	"\vfingerprint\x18\x01 \x01(\tR\vfingerprint\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x18\n" +
+	"\acomment\x18\x03 \x01(\tR\acomment\x12\x12\n" +
+	"\x04line\x18\x04 \x01(\tR\x04line\"\xc2\x01\n" +
+	"\rAccessRequest\x12!\n" +
+	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\x12$\n" +
+	"\x03key\x18\x02 \x01(\v2\x12.mako.v2.AccessKeyR\x03key\x12(\n" +
+	"\x05owner\x18\x03 \x01(\v2\x12.mako.v2.AccessKeyR\x05owner\x12\x12\n" +
+	"\x04note\x18\x04 \x01(\tR\x04note\x12*\n" +
+	"\x02at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x02atB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
 	file_mako_v2_mesh_proto_rawDescOnce sync.Once
@@ -633,7 +1018,7 @@ func file_mako_v2_mesh_proto_rawDescGZIP() []byte {
 	return file_mako_v2_mesh_proto_rawDescData
 }
 
-var file_mako_v2_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_mako_v2_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_mako_v2_mesh_proto_goTypes = []any{
 	(*Hello)(nil),                 // 0: mako.v2.Hello
 	(*Welcome)(nil),               // 1: mako.v2.Welcome
@@ -644,21 +1029,34 @@ var file_mako_v2_mesh_proto_goTypes = []any{
 	(*NodeState)(nil),             // 6: mako.v2.NodeState
 	(*Watch)(nil),                 // 7: mako.v2.Watch
 	(*Changed)(nil),               // 8: mako.v2.Changed
-	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
-	(*SessionInfo)(nil),           // 10: mako.v2.SessionInfo
+	(*Access)(nil),                // 9: mako.v2.Access
+	(*AccessInfo)(nil),            // 10: mako.v2.AccessInfo
+	(*AccessKey)(nil),             // 11: mako.v2.AccessKey
+	(*AccessRequest)(nil),         // 12: mako.v2.AccessRequest
+	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
+	(*SessionInfo)(nil),           // 14: mako.v2.SessionInfo
 }
 var file_mako_v2_mesh_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Welcome.node:type_name -> mako.v2.Node
-	9,  // 1: mako.v2.Node.last_seen:type_name -> google.protobuf.Timestamp
+	13, // 1: mako.v2.Node.last_seen:type_name -> google.protobuf.Timestamp
 	3,  // 2: mako.v2.Node.agents:type_name -> mako.v2.AgentInfo
 	2,  // 3: mako.v2.Nodes.nodes:type_name -> mako.v2.Node
 	2,  // 4: mako.v2.NodeState.node:type_name -> mako.v2.Node
-	10, // 5: mako.v2.NodeState.sessions:type_name -> mako.v2.SessionInfo
-	6,  // [6:6] is the sub-list for method output_type
-	6,  // [6:6] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	14, // 5: mako.v2.NodeState.sessions:type_name -> mako.v2.SessionInfo
+	2,  // 6: mako.v2.NodeState.peers:type_name -> mako.v2.Node
+	11, // 7: mako.v2.AccessInfo.key:type_name -> mako.v2.AccessKey
+	11, // 8: mako.v2.AccessInfo.owner:type_name -> mako.v2.AccessKey
+	12, // 9: mako.v2.AccessInfo.requests:type_name -> mako.v2.AccessRequest
+	11, // 10: mako.v2.AccessInfo.keys:type_name -> mako.v2.AccessKey
+	2,  // 11: mako.v2.AccessRequest.node:type_name -> mako.v2.Node
+	11, // 12: mako.v2.AccessRequest.key:type_name -> mako.v2.AccessKey
+	11, // 13: mako.v2.AccessRequest.owner:type_name -> mako.v2.AccessKey
+	13, // 14: mako.v2.AccessRequest.at:type_name -> google.protobuf.Timestamp
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_mesh_proto_init() }
@@ -673,7 +1071,7 @@ func file_mako_v2_mesh_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_mesh_proto_rawDesc), len(file_mako_v2_mesh_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

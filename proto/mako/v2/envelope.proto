@@ -22,6 +22,8 @@ message Envelope {
   // id, when a request sets it, comes back on its reply.
   string id = 1;
 
+  reserved 22; // gossip, between daemons before libp2p
+  reserved "gossip";
   oneof body {
     // The handshake, which opens every stream.
     Hello hello = 10;
@@ -31,9 +33,10 @@ message Envelope {
     // The mesh.
     ListNodes list_nodes = 20;
     Nodes nodes = 21;
-    Nodes gossip = 22;
     Watch watch = 23;
     Changed changed = 24;
+    Access access = 25;
+    AccessInfo access_info = 26;
 
     // Sessions.
     ListSessions list_sessions = 30;

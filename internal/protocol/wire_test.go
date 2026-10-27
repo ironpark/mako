@@ -14,7 +14,7 @@ import (
 // Every Type constant names a body field, and every body field has one.
 func TestEveryTypeHasABody(t *testing.T) {
 	types := []Type{
-		TypeHello, TypeWelcome, TypeError, TypeListNodes, TypeNodes, TypeGossip, TypeWatch, TypeChanged,
+		TypeHello, TypeWelcome, TypeError, TypeListNodes, TypeNodes, TypeWatch, TypeChanged, TypeAccess, TypeAccessInfo,
 		TypeListSess, TypeSessions, TypeOpenSession, TypeSessionInfo, TypeCloseSess, TypeRenameSess, TypeAnswerApproval,
 		TypeAttach, TypeInput, TypeOutput, TypeResize, TypeSnapshot, TypeExited,
 		TypeListDir, TypeDir, TypeReadFile, TypeFile, TypeWriteFile, TypeFileOp, TypeSearch, TypeSearchResult, TypeStageFile, TypeStaged,
@@ -61,11 +61,6 @@ func TestAMessageRoundTrips(t *testing.T) {
 	}
 	if _, err := Body[*Node](got); err == nil {
 		t.Fatal("a session's info read as a node")
-	}
-	// Gossip and Nodes share a message, and keep their types apart.
-	env, _ = Encode(TypeGossip, "", &Nodes{Nodes: []*Node{{Id: "x"}}})
-	if env.Type() != TypeGossip {
-		t.Fatalf("gossip encoded as %q", env.Type())
 	}
 }
 

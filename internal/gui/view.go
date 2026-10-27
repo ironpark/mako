@@ -816,7 +816,7 @@ func prop(label, value string) ggui.Widget {
 	).Gap(3).Stretch()
 }
 
-func nodeList(nodes []*protocol.Node) ggui.Widget {
+func nodeList(m *model, nodes []*protocol.Node) ggui.Widget {
 	if len(nodes) == 0 {
 		return muted(ggui.Text(T("No nodes.")).Size(13))
 	}
@@ -826,15 +826,39 @@ func nodeList(nodes []*protocol.Node) ggui.Widget {
 		if n.GetSource() != "self" {
 			kind = "monitor"
 		}
+		var ask ggui.Widget = ggui.Box()
+		if !reachable(n) && n.GetPeerId() != "" {
+			ask = ui.Button(T("Ask to be let in"), func() { m.requestAccess(n) }).Outline()
+		}
 		rows = append(rows, ggui.Box(ggui.Row(
 			icon(kind).Size(16),
 			ggui.Expanded(ggui.Column(
-				ggui.Row(ggui.Text(n.GetName()).Size(13).Weight(ggui.WeightMedium), linkDot(true), outdatedBadge(n)).Gap(8),
+				ggui.Row(ggui.Text(n.GetName()).Size(13).Weight(ggui.WeightMedium), linkDot(reachable(n)), outdatedBadge(n), trustBadge(n)).Gap(8),
 				ggui.Text(fmt.Sprintf("%s · %s/%s · %s", n.GetAddr(), n.GetOs(), n.GetArch(), n.GetSource())).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis(),
 			).Gap(3).Stretch()),
+			ask,
 		).Gap(12)).Pad(10).Radius(8).Fill(tokSurface1))
 	}
 	return ggui.Column(rows...).Gap(8).Stretch()
+}
+
+// trustBadge says how this node and n stand: whether each lets the other
+// in.
+func trustBadge(n *protocol.Node) ggui.Widget {
+	var label string
+	switch n.Standing() {
+	case protocol.StandingSelf:
+		return ggui.Box()
+	case protocol.StandingBoth:
+		label = T("both ways")
+	case protocol.StandingUs:
+		label = T("lets this node in")
+	case protocol.StandingThem:
+		label = T("let in here")
+	default:
+		label = T("no access")
+	}
+	return ggui.Box(ggui.Text(label).Size(11).Color(tokMuted)).Pad(1, 6).Radius(4).Border(1, tokBorder)
 }
 
 // outdated reports whether a node's daemon is from an older build than
@@ -857,9 +881,11 @@ func newSessionDialog(m *model) ggui.Widget {
 	worktree := m.Form.Field(func(f *newSession) *bool { return &f.Worktree })
 	branch := m.Form.Field(func(f *newSession) *string { return &f.Branch })
 	nodeIDs := ggui.Map(m.Nodes, func(nodes []*protocol.Node) []string {
-		ids := make([]string, len(nodes))
-		for i, n := range nodes {
-			ids[i] = n.GetId()
+		var ids []string
+		for _, n := range nodes {
+			if reachable(n) {
+				ids = append(ids, n.GetId())
+			}
 		}
 		return ids
 	})

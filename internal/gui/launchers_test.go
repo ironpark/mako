@@ -154,7 +154,7 @@ func TestClosingATabEndsItsSession(t *testing.T) {
 			if err != nil {
 				return false
 			}
-			list, err := c.Sessions(ctx, m.key())
+			list, err := c.Sessions(ctx)
 			s, ok := sessionIn(list, ggui.Peek(m.Selected))
 			return err == nil && ok && s.GetIdle() == want
 		}

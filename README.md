@@ -45,8 +45,13 @@ you are, and come back to it later with its screen intact.
 - **A private mesh, wherever the machines are.** Daemons find each other on
   the local network and on your tailnet, or through addresses you list.
   They connect over [libp2p](https://libp2p.io) directly where they can,
-  and through a relay you run where NAT is in the way. Every node proves
-  it knows the mesh's key before it is let in.
+  and through a relay you run where NAT is in the way.
+- **Trust you give, one way, by key.** Each machine has its own key, and
+  lets in only the keys you allow, as SSH does with `authorized_keys`. Let
+  your laptop drive a server without the server driving your laptop. A
+  machine can ask another to let it in, and you allow it with a click. Or
+  vouch for all your machines with one SSH key, and they trust each other
+  at once.
 
 ## Getting started
 
@@ -65,9 +70,17 @@ makod &
 mako-gui
 ```
 
-Then set the same key on every machine, in Settings ▸ Host or in the
-configuration file, so their daemons let each other in. Daemons on the same
-network or tailnet find each other on their own.
+Daemons on the same network or tailnet find each other on their own, but
+let nothing in until you say so. Either:
+
+- **Ask and allow.** In Settings ▸ Nodes, click **Ask to be let in** next to
+  the other machine (or run `mako request <node>`). On that machine,
+  Settings ▸ Access shows the request: **Allow** it (or run `mako allow
+  <node>`).
+- **Vouch with your SSH key.** Set the same SSH public key, such as
+  `~/.ssh/id_ed25519.pub`, under Settings ▸ Access on each machine (its
+  private half in the SSH agent). Machines vouched for by one key let each
+  other in, and a machine that lets the key in lets them all in.
 
 ### From the command line
 
@@ -82,6 +95,9 @@ mako attach <session-id>      # pick a session up again
 mako rename <session-id> api  # name it
 mako kill <session-id>        # end it
 mako addrs                    # this daemon's addresses, to give other nodes
+mako access                   # this machine's key, requests, and the keys let in
+mako request <node> [note]    # ask another machine to let this one in
+mako allow <node>             # let in a machine that asked
 ```
 
 ## The desktop app
@@ -118,7 +134,7 @@ the first run, and most of it can be edited in the app's Settings.
 ```json
 {
   "name": "desktop",
-  "psk": "a long random key shared by every node",
+  "ssh_key": "~/.ssh/id_ed25519.pub",
   "peers": ["build-box.example.com:4242"],
   "discovery": {"mdns": true, "tailscale": true},
   "p2p": {"relays": ["/ip4/203.0.113.7/udp/4243/quic-v1/p2p/12D3KooW..."]},
@@ -155,6 +171,11 @@ list under `context_servers`. A profile can choose a subset of them.
 }
 ```
 
+**Access.** The keys a machine lets in are in `authorized_keys` beside
+`config.json`, in OpenSSH's format: other machines' own keys, which
+`mako access` prints, and SSH keys. Edit it by hand or with `mako access`,
+`allow`, `deny`, `trust` and `revoke`; a change holds at once.
+
 **Networking.** The CLI and the app talk to their daemon on UDP port 4242,
 and daemons talk to each other on port 4243 (UDP and TCP). When a machine
 is behind NAT that no hole can be punched through, run a relay on a node
@@ -163,15 +184,16 @@ on it, and add the address it prints to the other nodes' `p2p.relays`.
 
 ## Security
 
-Set a long, random `psk`: anyone who knows it can start programs and read
-and write files on every machine in the mesh.
+Letting a key in hands its holder the machine: a machine you let in can
+start programs and read and write files on yours. Trust runs one way, so
+letting a server's key in on your laptop is a separate decision from
+letting the laptop's in on the server.
 
-Between daemons, each side proves it knows the key without sending it,
-and a node that cannot prove it is refused: it gets no requests, no state
-and no relay. The connection from the CLI or the app to its daemon is
-plain QUIC with a self-signed certificate, and it carries the key, so keep
-port 4242 on loopback, the LAN or a tailnet. Port 4243 can face the
-internet.
+Between daemons, each side is held to its own key, and one whose key is not
+let in gets nothing: no requests, no sessions, no relay. The CLI and the app
+talk to their own daemon over QUIC with a token from the configuration
+folder, readable by your user alone, so keep port 4242 on loopback, the LAN
+or a tailnet. Port 4243 can face the internet.
 
 ## Learn more
 

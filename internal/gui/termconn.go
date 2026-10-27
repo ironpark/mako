@@ -66,8 +66,8 @@ type termConn struct {
 }
 
 // dialTerm attaches to a session and starts reading its stream.
-func dialTerm(ctx context.Context, c *client.Client, psk string, info *protocol.SessionInfo, wake func(), titleChanged func()) (*termConn, error) {
-	att, err := c.AttachStream(ctx, psk, &protocol.Attach{SessionId: info.GetId(), NodeId: info.GetNodeId(), Replay: true})
+func dialTerm(ctx context.Context, c *client.Client, info *protocol.SessionInfo, wake func(), titleChanged func()) (*termConn, error) {
+	att, err := c.AttachStream(ctx, &protocol.Attach{SessionId: info.GetId(), NodeId: info.GetNodeId(), Replay: true})
 	if err != nil {
 		return nil, err
 	}

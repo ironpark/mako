@@ -17,16 +17,16 @@ import (
 // stays comparable and a field edit is one signal write. The agents have a
 // draft of their own, agentDraft rows.
 type hostDraft struct {
-	Name, Listen, PSK   string
-	MDNS, Tailscale     bool
-	TailnetHosts, Peers string // one per line
-	P2P, Relay          bool
-	Relays              string // one per line
+	Name, Listen, SSHKey string
+	MDNS, Tailscale      bool
+	TailnetHosts, Peers  string // one per line
+	P2P, Relay           bool
+	Relays               string // one per line
 }
 
 func draftFrom(cfg *config.Config) hostDraft {
 	return hostDraft{
-		Name: cfg.Name, Listen: cfg.Listen, PSK: cfg.PSK,
+		Name: cfg.Name, Listen: cfg.Listen, SSHKey: cfg.SSHKey,
 		MDNS: cfg.Discovery.MDNS, Tailscale: cfg.Discovery.Tailscale,
 		TailnetHosts: strings.Join(cfg.Discovery.TailnetHosts, "\n"),
 		Peers:        strings.Join(cfg.Peers, "\n"),
@@ -47,7 +47,7 @@ func (d hostDraft) apply(cfg config.Config) (config.Config, error) {
 	}
 	cfg.Name = strings.TrimSpace(d.Name)
 	cfg.Listen = strings.TrimSpace(d.Listen)
-	cfg.PSK = d.PSK
+	cfg.SSHKey = strings.TrimSpace(d.SSHKey)
 	cfg.Discovery.MDNS = d.MDNS
 	cfg.Discovery.Tailscale = d.Tailscale
 	cfg.Discovery.TailnetHosts = lines(d.TailnetHosts)
@@ -75,7 +75,7 @@ func lines(s string) []string {
 
 // saveHost writes the drafts to config.json. The daemon follows the agents
 // in it as they change but reads the rest when it starts, so the note says
-// which; the GUI's own link picks up a new key now.
+// which.
 func (m *model) saveHost() {
 	next, err := ggui.Peek(m.Host).apply(*m.cfg)
 	if err != nil {
@@ -90,7 +90,6 @@ func (m *model) saveHost() {
 		m.HostNote.Set(Tf("Could not save: %v", err))
 		return
 	}
-	keyChanged := next.PSK != m.cfg.PSK
 	agentsOnly := ggui.Peek(m.Host) == draftFrom(m.cfg)
 	*m.cfg = next
 	m.Agents.Set(agentspec.Targets(next.Agents))
@@ -100,13 +99,8 @@ func (m *model) saveHost() {
 		return
 	}
 	if ggui.Peek(m.DaemonState).Running {
-		// The app's daemon still has the old key until it restarts, which
-		// is when the window changes to the new one.
 		m.HostNote.Set(T("Saved. Restart the app's daemon to use it."))
 		return
-	}
-	if keyChanged {
-		m.reconnect(ggui.Peek(m.Prefs).Daemon, next.PSK)
 	}
 	m.HostNote.Set(T("Saved. Restart makod for the daemon to use it."))
 }

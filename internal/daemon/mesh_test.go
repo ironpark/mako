@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,25 +13,17 @@ import (
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
+	"github.com/ironpark/mako/internal/transport"
 )
 
-// meshDaemon runs a daemon on loopback with its own configuration folder,
-// the mesh's key psk and the peers given, until the test ends.
-func meshDaemon(t *testing.T, name, psk string, peers ...string) *Daemon {
-	t.Helper()
-	return runDaemon(t, name, psk, false, peers...)
-}
-
-// runDaemon is meshDaemon, without libp2p when legacy is set, as an older
-// build is.
-func runDaemon(t *testing.T, name, psk string, legacy bool, peers ...string) *Daemon {
+// meshDaemon runs a daemon on loopback with its own configuration folder
+// and the peers given, until the test ends.
+func meshDaemon(t *testing.T, name string, peers ...string) *Daemon {
 	t.Helper()
 	cfg := config.Default()
-	cfg.P2P.Disabled = legacy
 	cfg.Name = name
 	cfg.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
-	cfg.PSK = psk
 	cfg.Peers = peers
 	d := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	d.dir = t.TempDir()
@@ -44,10 +37,19 @@ func runDaemon(t *testing.T, name, psk string, legacy bool, peers ...string) *Da
 	case err := <-done:
 		t.Fatal(err)
 	}
-	if d.p2p == nil && !legacy {
+	if d.p2p == nil {
 		t.Fatal("no libp2p host")
 	}
 	return d
+}
+
+// letIn has a let b in, by b's own key.
+func letIn(t *testing.T, a, b *Daemon) {
+	t.Helper()
+	if err := a.p2p.Keys().Add(b.p2p.Key(), b.cfg.Name); err != nil {
+		t.Fatal(err)
+	}
+	a.p2p.Reconsider()
 }
 
 // p2pAddr is where d is on libp2p, to give a peer.
@@ -71,7 +73,7 @@ func dialDaemon(t *testing.T, d *Daemon) *client.Client {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	c, err := client.Dial(ctx, d.Addr().String(), d.cfg.PSK)
+	c, err := client.Dial(ctx, d.Addr().String(), d.Token())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,36 +81,56 @@ func dialDaemon(t *testing.T, d *Daemon) *client.Client {
 	return c
 }
 
-// Two daemons that know the key link over libp2p: each learns the other
-// from its state, lists its sessions from what it published, forwards
-// requests to it there, and tells a watching front-end at once of a
-// session started on the other.
-func TestDaemonsShareTheirStateOverLibp2p(t *testing.T) {
-	a := meshDaemon(t, "a", "key")
-	b := meshDaemon(t, "b", "key", p2pAddr(a))
+// lists reports whether the front-end c lists session id.
+func lists(ctx context.Context, c *client.Client, id string) bool {
+	list, err := c.Sessions(ctx)
+	return err == nil && slices.ContainsFunc(list, func(s *protocol.SessionInfo) bool { return s.GetId() == id })
+}
+
+// nodeOf is c's daemon's record of the node id.
+func nodeOf(ctx context.Context, t *testing.T, c *client.Client, id string) *protocol.Node {
+	t.Helper()
+	nodes, err := c.Nodes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range nodes {
+		if n.GetId() == id {
+			return n
+		}
+	}
+	return nil
+}
+
+// Two daemons that let each other in share their state: each lists the
+// other's sessions from what it sent, forwards requests to it, and tells
+// a watching front-end at once of a session started on the other.
+func TestDaemonsThatLetEachOtherInShareTheirState(t *testing.T) {
+	a := meshDaemon(t, "a")
+	b := meshDaemon(t, "b", p2pAddr(a))
+	letIn(t, a, b)
+	letIn(t, b, a)
 	addSession(t, b, "on-b")
 	c := dialDaemon(t, a)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	waitFor(t, "b's session on a", func() bool {
-		_, published := a.remote.get(b.cfg.NodeID)
-		list, err := c.Sessions(ctx, "key")
-		return err == nil && published && slices.ContainsFunc(list, func(s *protocol.SessionInfo) bool { return s.GetId() == "on-b" })
+		_, sent := a.remote.get(b.cfg.NodeID)
+		return sent && lists(ctx, c, "on-b")
 	})
-	node, ok := a.peers.get(b.cfg.NodeID)
-	if !ok || node.GetPeerId() != b.p2p.ID().String() || node.GetName() != "b" {
+	node := nodeOf(ctx, t, c, b.cfg.NodeID)
+	if node.GetPeerId() != b.p2p.ID().String() || node.GetName() != "b" || !node.GetTrusted() || !node.GetTrustsUs() || node.GetKey() == "" {
 		t.Fatalf("a's record of b: %v", node)
 	}
-	dir := t.TempDir()
-	if _, err := c.ListDir(ctx, "key", &protocol.ListDir{NodeId: b.cfg.NodeID, Path: dir}); err != nil {
+	if _, err := c.ListDir(ctx, &protocol.ListDir{NodeId: b.cfg.NodeID, Path: t.TempDir()}); err != nil {
 		t.Fatalf("a request forwarded to b: %v", err)
 	}
 
 	changes := make(chan *protocol.Changed, 16)
 	watchCtx, stopWatch := context.WithCancel(ctx)
 	defer stopWatch()
-	go func() { _ = c.Watch(watchCtx, "key", func(ch *protocol.Changed) { changes <- ch }) }()
+	go func() { _ = c.Watch(watchCtx, func(ch *protocol.Changed) { changes <- ch }) }()
 	select {
 	case <-changes: // the first, at once
 	case <-ctx.Done():
@@ -118,10 +140,8 @@ func TestDaemonsShareTheirStateOverLibp2p(t *testing.T) {
 	for {
 		select {
 		case ch := <-changes:
-			if ch.GetSessions() {
-				if _, ok := a.remote.get(b.cfg.NodeID); ok {
-					return
-				}
+			if ch.GetSessions() && lists(ctx, c, "later-on-b") {
+				return
 			}
 		case <-ctx.Done():
 			t.Fatal("the watching front-end did not hear of b's new session")
@@ -129,38 +149,108 @@ func TestDaemonsShareTheirStateOverLibp2p(t *testing.T) {
 	}
 }
 
-// A daemon with another key is refused: the mesh does not take it in, and
-// it hears nothing of the mesh's sessions.
-func TestADaemonWithAnotherKeyStaysOut(t *testing.T) {
-	a := meshDaemon(t, "a", "key")
-	addSession(t, a, "on-a")
-	stranger := meshDaemon(t, "stranger", "other", p2pAddr(a))
-	time.Sleep(3 * time.Second) // a few rounds of linking and publishing
-	if _, ok := a.peers.get(stranger.cfg.NodeID); ok {
-		t.Fatal("a took in a daemon with another key")
+// Trust runs one way: a server that lets a laptop in is driven from the
+// laptop, and the server's front-end sees nothing of the laptop's.
+func TestTrustRunsOneWayAcrossTheMesh(t *testing.T) {
+	server := meshDaemon(t, "server")
+	laptop := meshDaemon(t, "laptop", p2pAddr(server))
+	letIn(t, server, laptop)
+	addSession(t, server, "on-server")
+	addSession(t, laptop, "on-laptop")
+	fromLaptop, fromServer := dialDaemon(t, laptop), dialDaemon(t, server)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	waitFor(t, "the server's session on the laptop", func() bool { return lists(ctx, fromLaptop, "on-server") })
+	if _, err := fromLaptop.ListDir(ctx, &protocol.ListDir{NodeId: server.cfg.NodeID, Path: t.TempDir()}); err != nil {
+		t.Fatalf("the laptop asking the server: %v", err)
 	}
-	if _, ok := stranger.peers.get(a.cfg.NodeID); ok {
-		t.Fatal("the stranger learned of a")
+	if lists(ctx, fromServer, "on-laptop") {
+		t.Fatal("the server lists the laptop's session")
 	}
-	if _, ok := stranger.remote.get(a.cfg.NodeID); ok {
-		t.Fatal("the stranger heard a's sessions")
+	_, err := fromServer.ListDir(ctx, &protocol.ListDir{NodeId: laptop.cfg.NodeID, Path: t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), "has not let this node in") {
+		t.Fatalf("the server asking the laptop: %v", err)
+	}
+	if n := nodeOf(ctx, t, fromServer, laptop.cfg.NodeID); n == nil || !n.GetTrusted() || n.GetTrustsUs() {
+		t.Fatalf("the server's record of the laptop: %v", n)
 	}
 }
 
-// A peer without libp2p, as an older build, is still reached over QUIC:
-// its sessions are asked for as before.
-func TestAnOlderPeerIsReachedOverQUIC(t *testing.T) {
-	old := runDaemon(t, "old", "key", true)
-	addSession(t, old, "on-old")
-	a := meshDaemon(t, "a", "key", old.Addr().String())
-	c := dialDaemon(t, a)
+// A node that is not let in asks to be; the other's front-end sees the
+// request and allows it, after which the first drives the second.
+func TestANodeAsksToBeLetIn(t *testing.T) {
+	server := meshDaemon(t, "server")
+	laptop := meshDaemon(t, "laptop", p2pAddr(server))
+	addSession(t, server, "on-server")
+	fromLaptop, fromServer := dialDaemon(t, laptop), dialDaemon(t, server)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	waitFor(t, "the old peer's session", func() bool {
-		list, err := c.Sessions(ctx, "key")
-		return err == nil && slices.ContainsFunc(list, func(s *protocol.SessionInfo) bool { return s.GetId() == "on-old" })
+
+	waitFor(t, "the laptop to know the server", func() bool { return nodeOf(ctx, t, fromLaptop, server.cfg.NodeID) != nil })
+	if lists(ctx, fromLaptop, "on-server") {
+		t.Fatal("the laptop lists a session of a server that has not let it in")
+	}
+	if _, err := fromLaptop.Access(ctx, &protocol.Access{Op: "request", NodeId: server.cfg.NodeID, Note: "my laptop"}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := fromServer.Access(ctx, &protocol.Access{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(info.GetRequests()) != 1 || info.GetRequests()[0].GetNode().GetId() != laptop.cfg.NodeID || info.GetRequests()[0].GetNote() != "my laptop" {
+		t.Fatalf("requests on the server: %v", info.GetRequests())
+	}
+	if got, want := info.GetRequests()[0].GetKey().GetFingerprint(), laptop.keyPrint; got != want {
+		t.Fatalf("the request's key %s, want the laptop's %s", got, want)
+	}
+	info, err = fromServer.Access(ctx, &protocol.Access{Op: "allow", NodeId: laptop.cfg.NodeID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(info.GetRequests()) != 0 || len(info.GetKeys()) != 1 {
+		t.Fatalf("after allowing: %v", info)
+	}
+	waitFor(t, "the server's session on the laptop", func() bool { return lists(ctx, fromLaptop, "on-server") })
+
+	// Revoked, the laptop is out again.
+	if _, err := fromServer.Access(ctx, &protocol.Access{Op: "revoke", Key: laptop.keyPrint}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the laptop to be let out", func() bool { return !lists(ctx, fromLaptop, "on-server") })
+}
+
+// A front-end must show the daemon's token; a daemon probing without one
+// learns who answers and nothing more, and a peer may not change who is
+// let in.
+func TestAFrontEndShowsTheToken(t *testing.T) {
+	d := meshDaemon(t, "d")
+	addSession(t, d, "on-d")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := client.Dial(ctx, d.Addr().String(), "wrong"); err == nil {
+		t.Fatal("a front-end with the wrong token got in")
+	}
+	node, err := transport.Probe(ctx, d.Addr().String(), &protocol.Hello{NodeId: "x", IsPeer: true}, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if node.GetPeerId() != d.p2p.ID().String() || len(node.GetAgents()) != 0 {
+		t.Fatalf("a probe learned %v", node)
+	}
+
+	other := meshDaemon(t, "other", p2pAddr(d))
+	letIn(t, d, other)
+	waitFor(t, "d to let other in", func() bool {
+		p, ok := other.linkedPeer(&protocol.Node{PeerId: d.peerID()})
+		return ok && p.TrustedBy
 	})
-	if node, _ := a.peers.get(old.cfg.NodeID); node.GetPeerId() != "" {
-		t.Fatalf("the old peer has a libp2p identity: %v", node)
+	stream, err := other.peerStream(ctx, &protocol.Node{Name: "d", PeerId: d.peerID(), Multiaddrs: d.multiaddrs()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	if _, err := transport.Call[*protocol.AccessInfo](stream, protocol.TypeAccess, &protocol.Access{Op: "add", Key: other.accessInfo().GetKey().GetLine()}); err == nil {
+		t.Fatal("a peer changed who is let in")
 	}
 }

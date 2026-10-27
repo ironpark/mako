@@ -151,7 +151,7 @@ func (m *model) loadDir(node, path string, force bool) {
 
 	req := &protocol.ListDir{NodeId: m.remoteID(node), Path: path}
 	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Dir, error) {
-		return c.ListDir(ctx, m.key(), req)
+		return c.ListDir(ctx, req)
 	}, func(dir *protocol.Dir, err error) {
 		next := maps.Clone(ggui.Peek(m.Dirs))
 		if err != nil {
@@ -269,7 +269,7 @@ func (m *model) toggleDir(it fileItem) {
 func fetchImage(m *model, node, path string, done func(decodedImage, error)) {
 	req := &protocol.ReadFile{NodeId: m.remoteID(node), Path: path, Image: true}
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (decodedImage, error) {
-		f, err := c.ReadFile(ctx, m.key(), req)
+		f, err := c.ReadFile(ctx, req)
 		if err != nil || f.GetData() == nil {
 			return decodedImage{File: f}, err
 		}

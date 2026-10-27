@@ -162,7 +162,7 @@ func (m *model) openCommit(hash string) {
 	m.GitCommit.Set(commitView{Hash: hash, Loading: true})
 	req := &protocol.GitShow{NodeId: m.remoteID(root.Node), Root: root.Path, Hash: hash}
 	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitCommitInfo, error) {
-		return c.GitShow(ctx, m.key(), req)
+		return c.GitShow(ctx, req)
 	}, func(info *protocol.GitCommitInfo, err error) {
 		if ggui.Peek(m.GitCommit).Hash != hash {
 			return

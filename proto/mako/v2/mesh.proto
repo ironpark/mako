@@ -13,7 +13,9 @@ message Hello {
   string name = 2;
   string version = 3;
   bool is_peer = 4; // from another daemon
-  string auth_tag = 5; // the mesh's pre-shared key
+  // token is the daemon's front-end token, kept in its configuration
+  // directory, which a front-end on its machine reads.
+  string token = 5;
 }
 
 // Welcome answers a Hello: the daemon describing itself.
@@ -29,7 +31,7 @@ message Node {
   string os = 4;
   string arch = 5;
   string version = 6;
-  string source = 7; // mdns, tailscale, static, inbound, gossip, self
+  string source = 7; // mdns, tailscale, static, mesh, self
   google.protobuf.Timestamp last_seen = 8;
   repeated string features = 9; // protocol extensions it speaks
   repeated AgentInfo agents = 10; // what it can launch
@@ -38,6 +40,16 @@ message Node {
   // libp2p, relayed addresses included; empty from a daemon without it.
   string peer_id = 12;
   repeated string multiaddrs = 13;
+  // How the daemon answering stands with this node, which only that
+  // daemon can say: whether it lets the node in (trusted), and whether the
+  // node lets it in (trusts_us), so that requests reach the node through
+  // it. Both are false for a node it has no link to.
+  bool trusted = 14;
+  bool trusts_us = 15;
+  // key is the fingerprint of the node's own key, and owner that of the
+  // SSH key that vouches for it, if one does.
+  string key = 16;
+  string owner = 17;
 }
 
 // AgentInfo names an agent a node can launch and its profiles.
@@ -49,18 +61,20 @@ message AgentInfo {
 // ListNodes asks for the daemon and its peers.
 message ListNodes {}
 
-// Nodes answers ListNodes, and is a Gossip's body and reply.
+// Nodes answers ListNodes.
 message Nodes {
   repeated Node nodes = 1;
 }
 
-// NodeState is what a daemon publishes of itself on the mesh's state
-// topic: its record, its own sessions, and whether a front-end of its is
-// offering to answer approvals.
+// NodeState is what a daemon sends of itself to the peers it is linked
+// with: its record, and whether a front-end of its is offering to answer
+// approvals; and to the peers it lets in, its own sessions and the other
+// nodes it knows of too.
 message NodeState {
   Node node = 1;
   repeated SessionInfo sessions = 2;
   bool watching_approvals = 3;
+  repeated Node peers = 4;
 }
 
 // Watch turns a front-end's stream into a feed of changes: the daemon
@@ -71,4 +85,46 @@ message Watch {}
 message Changed {
   bool nodes = 1;
   bool sessions = 2;
+  bool access = 3; // an access request came, or the keys changed
+}
+
+// Access asks the daemon about who it lets in, or changes it. Only a
+// front-end of the daemon's own may send it.
+message Access {
+  // op is what to do: "" lists; "request" asks node_id to let this node
+  // in, with note; "allow" lets in the node node_id that asked, by its own
+  // key or with owner by the SSH key that vouches for it; "deny" drops its
+  // request; "add" lets in the authorized_keys line key; "revoke" removes
+  // the key whose fingerprint is key.
+  string op = 1;
+  string node_id = 2;
+  string key = 3;
+  bool owner = 4;
+  string note = 5;
+}
+
+// AccessInfo answers Access: this node's keys, the requests waiting, and
+// the keys it lets in.
+message AccessInfo {
+  AccessKey key = 1; // this node's own
+  AccessKey owner = 2; // the SSH key vouching for it, if one does
+  repeated AccessRequest requests = 3;
+  repeated AccessKey keys = 4;
+}
+
+// AccessKey is a public key.
+message AccessKey {
+  string fingerprint = 1; // SHA256:…
+  string type = 2; // ssh-ed25519, …
+  string comment = 3;
+  string line = 4; // as authorized_keys has it
+}
+
+// AccessRequest is a node asking to be let in.
+message AccessRequest {
+  Node node = 1;
+  AccessKey key = 2; // its own
+  AccessKey owner = 3; // the SSH key vouching for it, if one does
+  string note = 4;
+  google.protobuf.Timestamp at = 5;
 }

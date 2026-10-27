@@ -29,7 +29,7 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 4
+const Revision = 5
 
 // AgentStatus is what an agent's own hooks last said it is doing,
 // SessionInfo.Status.
@@ -75,4 +75,29 @@ func (u *Usage) SetLimit(l *RateLimit) {
 	limits := slices.DeleteFunc(slices.Clone(u.Limits), func(o *RateLimit) bool { return o.GetMinutes() == l.GetMinutes() })
 	i, _ := slices.BinarySearchFunc(limits, l.GetMinutes(), func(o *RateLimit, m int64) int { return cmp.Compare(o.GetMinutes(), m) })
 	u.Limits = slices.Insert(limits, i, l)
+}
+
+// How a daemon and a node stand, as Standing says from the node's record
+// in the daemon's list_nodes.
+const (
+	StandingSelf = "self" // the daemon itself
+	StandingBoth = "both" // each lets the other in
+	StandingUs   = "us"   // the node lets the daemon in
+	StandingThem = "them" // the daemon lets the node in
+	StandingNone = "none"
+)
+
+// Standing is how the daemon that listed n stands with it.
+func (n *Node) Standing() string {
+	switch {
+	case n.GetSource() == "self":
+		return StandingSelf
+	case n.GetTrusted() && n.GetTrustsUs():
+		return StandingBoth
+	case n.GetTrustsUs():
+		return StandingUs
+	case n.GetTrusted():
+		return StandingThem
+	}
+	return StandingNone
 }

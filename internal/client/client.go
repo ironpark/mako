@@ -22,12 +22,21 @@ import (
 // Client is a front-end connection to one daemon, which relays to the rest of
 // the mesh on its behalf.
 type Client struct {
-	conn *quic.Conn
-	node *protocol.Node
+	conn  *quic.Conn
+	node  *protocol.Node
+	token string
 }
 
-// Dial connects to a daemon. An empty addr means the local daemon.
-func Dial(ctx context.Context, addr, psk string) (*Client, error) {
+// Dial connects to a daemon, showing it token. An empty addr means the
+// local daemon, and an empty token the one of this machine's
+// configuration (config.Token).
+func Dial(ctx context.Context, addr, token string) (*Client, error) {
+	if token == "" {
+		var err error
+		if token, err = config.Token(""); err != nil {
+			return nil, err
+		}
+	}
 	if addr == "" {
 		addr = net.JoinHostPort("127.0.0.1", strconv.Itoa(config.DefaultPort))
 	} else if _, _, err := net.SplitHostPort(addr); err != nil {
@@ -37,12 +46,12 @@ func Dial(ctx context.Context, addr, psk string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &Client{conn: conn}
+	c := &Client{conn: conn, token: token}
 
 	stream, node, err := transport.Handshake(ctx, conn, &protocol.Hello{
 		Name:    "mako-cli",
 		Version: config.Version,
-		AuthTag: psk,
+		Token:   token,
 	})
 	if err != nil {
 		conn.CloseWithError(0, "handshake")
@@ -60,33 +69,38 @@ func (c *Client) Node() *protocol.Node { return proto.CloneOf(c.node) }
 func (c *Client) Close() error { return c.conn.CloseWithError(0, "bye") }
 
 // stream opens a greeted request stream.
-func (c *Client) stream(ctx context.Context, psk string) (*transport.Stream, error) {
+func (c *Client) stream(ctx context.Context) (*transport.Stream, error) {
 	s, _, err := transport.Handshake(ctx, c.conn, &protocol.Hello{
 		Name:    "mako-cli",
 		Version: config.Version,
-		AuthTag: psk,
+		Token:   c.token,
 	})
 	return s, err
 }
 
 // Nodes lists the daemons the mesh knows about.
-func (c *Client) Nodes(ctx context.Context, psk string) ([]*protocol.Node, error) {
-	reply, err := request[*protocol.Nodes](ctx, c, psk, protocol.TypeListNodes, nil)
+func (c *Client) Nodes(ctx context.Context) ([]*protocol.Node, error) {
+	reply, err := request[*protocol.Nodes](ctx, c, protocol.TypeListNodes, nil)
 	if err != nil {
 		return nil, err
 	}
 	return reply.GetNodes(), nil
 }
 
+// Access lists or changes who the daemon lets in; see protocol.Access.
+func (c *Client) Access(ctx context.Context, req *protocol.Access) (*protocol.AccessInfo, error) {
+	return request[*protocol.AccessInfo](ctx, c, protocol.TypeAccess, req)
+}
+
 // Sessions lists agent sessions across the mesh.
-func (c *Client) Sessions(ctx context.Context, psk string) ([]*protocol.SessionInfo, error) {
-	return c.ListSessions(ctx, psk, &protocol.ListSessions{})
+func (c *Client) Sessions(ctx context.Context) ([]*protocol.SessionInfo, error) {
+	return c.ListSessions(ctx, &protocol.ListSessions{})
 }
 
 // ListSessions lists agent sessions across the mesh, saying what the
 // asker shows of them.
-func (c *Client) ListSessions(ctx context.Context, psk string, req *protocol.ListSessions) ([]*protocol.SessionInfo, error) {
-	reply, err := request[*protocol.Sessions](ctx, c, psk, protocol.TypeListSess, req)
+func (c *Client) ListSessions(ctx context.Context, req *protocol.ListSessions) ([]*protocol.SessionInfo, error) {
+	reply, err := request[*protocol.Sessions](ctx, c, protocol.TypeListSess, req)
 	if err != nil {
 		return nil, err
 	}
@@ -94,24 +108,24 @@ func (c *Client) ListSessions(ctx context.Context, psk string, req *protocol.Lis
 }
 
 // Search lists a project's files on a node, or finds a text in them.
-func (c *Client) Search(ctx context.Context, psk string, req *protocol.Search) (*protocol.SearchResult, error) {
-	return request[*protocol.SearchResult](ctx, c, psk, protocol.TypeSearch, req)
+func (c *Client) Search(ctx context.Context, req *protocol.Search) (*protocol.SearchResult, error) {
+	return request[*protocol.SearchResult](ctx, c, protocol.TypeSearch, req)
 }
 
 // AnswerApproval answers an approval a session's agent waits for.
-func (c *Client) AnswerApproval(ctx context.Context, psk string, req *protocol.AnswerApproval) (*protocol.SessionInfo, error) {
-	return request[*protocol.SessionInfo](ctx, c, psk, protocol.TypeAnswerApproval, req)
+func (c *Client) AnswerApproval(ctx context.Context, req *protocol.AnswerApproval) (*protocol.SessionInfo, error) {
+	return request[*protocol.SessionInfo](ctx, c, protocol.TypeAnswerApproval, req)
 }
 
 // Open starts an agent session, on this daemon or on a peer.
-func (c *Client) Open(ctx context.Context, psk string, req *protocol.OpenSession) (*protocol.SessionInfo, error) {
-	return request[*protocol.SessionInfo](ctx, c, psk, protocol.TypeOpenSession, req)
+func (c *Client) Open(ctx context.Context, req *protocol.OpenSession) (*protocol.SessionInfo, error) {
+	return request[*protocol.SessionInfo](ctx, c, protocol.TypeOpenSession, req)
 }
 
 // request makes one request on a stream of its own, and returns the reply
 // as R.
-func request[R proto.Message](ctx context.Context, c *Client, psk string, typ protocol.Type, req proto.Message) (R, error) {
-	s, err := c.stream(ctx, psk)
+func request[R proto.Message](ctx context.Context, c *Client, typ protocol.Type, req proto.Message) (R, error) {
+	s, err := c.stream(ctx)
 	if err != nil {
 		var zero R
 		return zero, err
@@ -121,71 +135,71 @@ func request[R proto.Message](ctx context.Context, c *Client, psk string, typ pr
 }
 
 // ListDir lists a directory on a node.
-func (c *Client) ListDir(ctx context.Context, psk string, req *protocol.ListDir) (*protocol.Dir, error) {
-	return request[*protocol.Dir](ctx, c, psk, protocol.TypeListDir, req)
+func (c *Client) ListDir(ctx context.Context, req *protocol.ListDir) (*protocol.Dir, error) {
+	return request[*protocol.Dir](ctx, c, protocol.TypeListDir, req)
 }
 
 // ReadFile reads the start of a file on a node.
-func (c *Client) ReadFile(ctx context.Context, psk string, req *protocol.ReadFile) (*protocol.File, error) {
-	return request[*protocol.File](ctx, c, psk, protocol.TypeReadFile, req)
+func (c *Client) ReadFile(ctx context.Context, req *protocol.ReadFile) (*protocol.File, error) {
+	return request[*protocol.File](ctx, c, protocol.TypeReadFile, req)
 }
 
 // WriteFile replaces a file's contents on a node.
-func (c *Client) WriteFile(ctx context.Context, psk string, req *protocol.WriteFile) (*protocol.File, error) {
-	return request[*protocol.File](ctx, c, psk, protocol.TypeWriteFile, req)
+func (c *Client) WriteFile(ctx context.Context, req *protocol.WriteFile) (*protocol.File, error) {
+	return request[*protocol.File](ctx, c, protocol.TypeWriteFile, req)
 }
 
 // StageFile puts a piece of a file on a node, for a session there to read;
 // see protocol.StageFile.
-func (c *Client) StageFile(ctx context.Context, psk string, req *protocol.StageFile) (*protocol.Staged, error) {
-	return request[*protocol.Staged](ctx, c, psk, protocol.TypeStageFile, req)
+func (c *Client) StageFile(ctx context.Context, req *protocol.StageFile) (*protocol.Staged, error) {
+	return request[*protocol.Staged](ctx, c, protocol.TypeStageFile, req)
 }
 
 // GitStatus reports the changes of the work tree a directory on a node is in.
-func (c *Client) GitStatus(ctx context.Context, psk string, req *protocol.GitStatus) (*protocol.GitChanges, error) {
-	return request[*protocol.GitChanges](ctx, c, psk, protocol.TypeGitStatus, req)
+func (c *Client) GitStatus(ctx context.Context, req *protocol.GitStatus) (*protocol.GitChanges, error) {
+	return request[*protocol.GitChanges](ctx, c, protocol.TypeGitStatus, req)
 }
 
 // GitDiff reads one changed file's hunks on a node.
-func (c *Client) GitDiff(ctx context.Context, psk string, req *protocol.GitDiff) (*protocol.Diff, error) {
-	return request[*protocol.Diff](ctx, c, psk, protocol.TypeGitDiff, req)
+func (c *Client) GitDiff(ctx context.Context, req *protocol.GitDiff) (*protocol.Diff, error) {
+	return request[*protocol.Diff](ctx, c, protocol.TypeGitDiff, req)
 }
 
 // FileOp makes, renames or deletes a file or folder on a node.
-func (c *Client) FileOp(ctx context.Context, psk string, req *protocol.FileOp) (*protocol.File, error) {
-	return request[*protocol.File](ctx, c, psk, protocol.TypeFileOp, req)
+func (c *Client) FileOp(ctx context.Context, req *protocol.FileOp) (*protocol.File, error) {
+	return request[*protocol.File](ctx, c, protocol.TypeFileOp, req)
 }
 
 // GitLog lists a repository's recent commits on a node.
-func (c *Client) GitLog(ctx context.Context, psk string, req *protocol.GitLog) (*protocol.GitHistory, error) {
-	return request[*protocol.GitHistory](ctx, c, psk, protocol.TypeGitLog, req)
+func (c *Client) GitLog(ctx context.Context, req *protocol.GitLog) (*protocol.GitHistory, error) {
+	return request[*protocol.GitHistory](ctx, c, protocol.TypeGitLog, req)
 }
 
 // GitShow reads what one commit changed on a node.
-func (c *Client) GitShow(ctx context.Context, psk string, req *protocol.GitShow) (*protocol.GitCommitInfo, error) {
-	return request[*protocol.GitCommitInfo](ctx, c, psk, protocol.TypeGitShow, req)
+func (c *Client) GitShow(ctx context.Context, req *protocol.GitShow) (*protocol.GitCommitInfo, error) {
+	return request[*protocol.GitCommitInfo](ctx, c, protocol.TypeGitShow, req)
 }
 
 // GitRun runs a git operation, a commit or a push and the like, on a node.
-func (c *Client) GitRun(ctx context.Context, psk string, req *protocol.GitRun) (*protocol.GitResult, error) {
-	return request[*protocol.GitResult](ctx, c, psk, protocol.TypeGitRun, req)
+func (c *Client) GitRun(ctx context.Context, req *protocol.GitRun) (*protocol.GitResult, error) {
+	return request[*protocol.GitResult](ctx, c, protocol.TypeGitRun, req)
 }
 
 // Rename names a session, "" for none, and returns it as it is now.
-func (c *Client) Rename(ctx context.Context, psk string, req *protocol.RenameSession) (*protocol.SessionInfo, error) {
-	return request[*protocol.SessionInfo](ctx, c, psk, protocol.TypeRenameSess, req)
+func (c *Client) Rename(ctx context.Context, req *protocol.RenameSession) (*protocol.SessionInfo, error) {
+	return request[*protocol.SessionInfo](ctx, c, protocol.TypeRenameSess, req)
 }
 
 // Kill terminates a session.
-func (c *Client) Kill(ctx context.Context, psk string, req *protocol.CloseSession) error {
-	_, err := request[*protocol.Exited](ctx, c, psk, protocol.TypeCloseSess, req)
+func (c *Client) Kill(ctx context.Context, req *protocol.CloseSession) error {
+	_, err := request[*protocol.Exited](ctx, c, protocol.TypeCloseSess, req)
 	return err
 }
 
 // Attach connects the local terminal to a session until it ends or the user
 // detaches. The terminal is put in raw mode for the duration.
-func (c *Client) Attach(ctx context.Context, psk string, req *protocol.Attach) error {
-	a, err := c.AttachStream(ctx, psk, req)
+func (c *Client) Attach(ctx context.Context, req *protocol.Attach) error {
+	a, err := c.AttachStream(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -281,8 +295,8 @@ func WindowSize() (cols, rows uint16) {
 // Watch follows the mesh's changes: fn is called with each Changed the
 // daemon sends, the first at once, until ctx ends or the stream breaks,
 // whose error Watch returns. A daemon too old to watch fails at once.
-func (c *Client) Watch(ctx context.Context, psk string, fn func(*protocol.Changed)) error {
-	s, err := c.stream(ctx, psk)
+func (c *Client) Watch(ctx context.Context, fn func(*protocol.Changed)) error {
+	s, err := c.stream(ctx)
 	if err != nil {
 		return err
 	}

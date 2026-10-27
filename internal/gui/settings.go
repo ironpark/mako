@@ -48,6 +48,7 @@ var settingsNav = []settingsGroup{
 	}},
 	{"Mesh", []settingsSection{
 		{"nodes", "Nodes", "network"},
+		{"access", "Access", "key-round"},
 		{"about", "About", "info"},
 	}},
 }
@@ -127,6 +128,8 @@ func settingsContent(m *model, id string) ggui.Widget {
 		return agentSettings(m)
 	case "nodes":
 		return nodeSettings(m)
+	case "access":
+		return accessSettings(m)
 	case "about":
 		return aboutSettings(m)
 	}
@@ -498,15 +501,13 @@ func hostSettings(m *model) ggui.Widget {
 		),
 		section(T("Network"),
 			card(
-				row(T("Listen address"), T("UDP address for QUIC, such as :4242."),
+				row(T("Listen address"), T("UDP address for QUIC, such as :4242, where front-ends reach the daemon with the token in its configuration folder."),
 					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Listen })).Name(T("Listen address"))).Width(240)),
-				row(T("Pre-shared key"), T("Every daemon and front-end on the mesh must share it. Empty accepts anyone who can reach the port."),
-					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.PSK })).Password().Name(T("Pre-shared key"))).Width(240)),
 			),
 		),
 		section(T("libp2p"),
 			card(
-				row(T("Link over libp2p"), T("Daemons prove the key to each other without sending it, and reach each other through a relay from behind NAT. Off, peers are reached over QUIC alone."),
+				row(T("Link over libp2p"), T("Daemons link to each other over libp2p, through a relay from behind NAT, and let in those whose keys they have (Settings ▸ Access). Off, this node has no peers."),
 					ui.Switch(m.Host.Field(func(d *hostDraft) *bool { return &d.P2P }), "").Name(T("Link over libp2p"))),
 				row(T("Relay for the mesh"), T("For a node with a public address: the others reach each other through it when they cannot directly."),
 					ui.Switch(m.Host.Field(func(d *hostDraft) *bool { return &d.Relay }), "").Name(T("Relay for the mesh"))),
@@ -529,7 +530,7 @@ func hostSettings(m *model) ggui.Widget {
 func discoverySettings(m *model) ggui.Widget {
 	mdns := m.Host.Field(func(d *hostDraft) *bool { return &d.MDNS })
 	tailscale := m.Host.Field(func(d *hostDraft) *bool { return &d.Tailscale })
-	return page(T("Discovery"), T("How this daemon finds the others. Nodes found either way are gossiped to the whole mesh."),
+	return page(T("Discovery"), T("How this daemon finds the others. A node that lets this one in tells it of the nodes it knows, too."),
 		section(T("Automatic"),
 			card(
 				row(T("Bonjour (mDNS)"), T("Find daemons on the same local network."), ui.Switch(mdns, "").Name(T("Bonjour"))),
@@ -551,8 +552,8 @@ func discoverySettings(m *model) ggui.Widget {
 // Mesh ------------------------------------------------------------------------
 
 func nodeSettings(m *model) ggui.Widget {
-	nodes := ggui.View(m.Nodes, func(nodes []*protocol.Node) ggui.Widget { return nodeList(nodes) })
-	return page(T("Nodes"), T("Daemons this window can reach. Sessions can start on any of them."),
+	nodes := ggui.View(m.Nodes, func(nodes []*protocol.Node) ggui.Widget { return nodeList(m, nodes) })
+	return page(T("Nodes"), T("Daemons this one knows of. Sessions start on those that let it in; ask the others to."),
 		section(T("Mesh"), nodes),
 	)
 }

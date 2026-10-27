@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -25,7 +26,7 @@ import (
 // peerTTL drops a discovered node that has not been seen for this long.
 const peerTTL = 5 * time.Minute
 
-// Daemon serves front-ends and peers over QUIC.
+// Daemon serves front-ends over QUIC, and peers over libp2p.
 type Daemon struct {
 	cfg *config.Config
 	log *slog.Logger
@@ -43,18 +44,24 @@ type Daemon struct {
 	ln    *transport.Listener
 	port  int
 	ready chan struct{} // closed once the listener is up; see Ready
+	// token is what a front-end shows in its hello: config.Token, which
+	// front-ends on this machine read.
+	token string
 
-	mu       sync.Mutex
-	outbound map[string]*quic.Conn // node ID -> peer connection, for older peers
+	mu sync.Mutex
 
 	// p2p links this daemon to its peers over libp2p; nil when it is off
-	// or could not start, leaving the QUIC links alone.
-	p2p     *p2p.Host
-	heads   heads                // the projects' branches
-	remote  remoteSessions       // the sessions peers publish
-	changes notifier             // tells watching front-ends what changed
-	linking map[string]time.Time // peer ID -> the last link tried, until one holds
-	ctx     context.Context      // Run's, for work that outlasts a request
+	// or could not start, leaving the daemon to itself.
+	p2p *p2p.Host
+	// keyPrint and ownerPrint are the fingerprints of the host's own key
+	// and of the SSH key vouching for it.
+	keyPrint, ownerPrint string
+	access               accessRequests       // the peers asking to be let in
+	heads                heads                // the projects' branches
+	remote               remoteSessions       // the sessions peers send
+	changes              notifier             // tells watching front-ends what changed
+	linking              map[string]time.Time // peer ID -> the last link tried, until one holds
+	ctx                  context.Context      // Run's, for work that outlasts a request
 
 	agentFile agentFile
 	mcp       *mcp.Resolver // nil without a configuration directory
@@ -76,7 +83,6 @@ func New(cfg *config.Config, log *slog.Logger) *Daemon {
 		log:      log,
 		sessions: newRegistry(),
 		peers:    newPeerTable(),
-		outbound: map[string]*quic.Conn{},
 		linking:  map[string]time.Time{},
 		ctx:      context.Background(),
 		ready:    make(chan struct{}),
@@ -112,8 +118,21 @@ func (d *Daemon) Self() *protocol.Node {
 		Agents:     agentInfo(d.agents()),
 		PeerId:     d.peerID(),
 		Multiaddrs: d.multiaddrs(),
+		Key:        d.keyPrint,
+		Owner:      d.ownerPrint,
 	}
 }
+
+// publicSelf is this daemon as it shows itself to a node it does not let
+// in: without the agents it can launch.
+func (d *Daemon) publicSelf() *protocol.Node {
+	self := d.Self()
+	self.Agents = nil
+	return self
+}
+
+// Token is what a front-end shows this daemon. Valid after Ready.
+func (d *Daemon) Token() string { return d.token }
 
 // Run serves until ctx is cancelled.
 func (d *Daemon) Run(ctx context.Context) error {
@@ -124,6 +143,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 			return err
 		}
 	}
+	token, err := config.Token(dir)
+	if err != nil {
+		return err
+	}
+	d.token = token
 	tlsConf, err := transport.ServerTLS(dir)
 	if err != nil {
 		return err
@@ -147,7 +171,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	}
 	if !d.cfg.P2P.Disabled {
 		if err := d.startP2P(ctx, dir); err != nil {
-			d.log.Warn("libp2p did not start; peers are reached over QUIC alone", "err", err)
+			d.log.Warn("libp2p did not start; this daemon has no peers", "err", err)
 		} else {
 			defer d.p2p.Close()
 		}
@@ -203,8 +227,9 @@ func (d *Daemon) serveConn(ctx context.Context, conn *quic.Conn) {
 
 // serveStream handles one request stream, from where the node from says:
 // its address on QUIC, or its peer ID on libp2p. The first frame must be
-// a hello, which on QUIC carries the mesh's key; a libp2p stream comes
-// from a host that has shown it knows the key already.
+// a hello, which on QUIC carries the front-end's token; a libp2p stream
+// comes from a peer this daemon lets in. A daemon probing on QUIC without
+// a token is told who this one is, and nothing more.
 func (d *Daemon) serveStream(ctx context.Context, stream *transport.Stream, from *protocol.Node) error {
 	trusted := from.GetPeerId() != ""
 	env, err := stream.Recv()
@@ -218,15 +243,15 @@ func (d *Daemon) serveStream(ctx context.Context, stream *transport.Stream, from
 	if err != nil {
 		return protocol.WriteError(stream, env.GetId(), err)
 	}
-	if !trusted && d.cfg.PSK != "" && hello.GetAuthTag() != d.cfg.PSK {
-		return protocol.WriteError(stream, env.GetId(), errors.New("authentication failed"))
+	if !trusted && subtle.ConstantTimeCompare([]byte(hello.GetToken()), []byte(d.token)) != 1 {
+		if hello.GetIsPeer() {
+			// A daemon probing: who answers, and nothing more.
+			return stream.Send(protocol.TypeWelcome, env.GetId(), &protocol.Welcome{Node: d.publicSelf()})
+		}
+		return protocol.WriteError(stream, env.GetId(), errors.New("authentication failed: the front-end token is wrong"))
 	}
 	if err := stream.Send(protocol.TypeWelcome, env.GetId(), &protocol.Welcome{Node: d.Self()}); err != nil {
 		return err
-	}
-	if hello.GetIsPeer() && hello.GetNodeId() != "" && hello.GetNodeId() != d.cfg.NodeID {
-		from.Id, from.Name, from.Source = hello.GetNodeId(), hello.GetName(), "inbound"
-		d.notePeer(from)
 	}
 
 	for {
@@ -234,7 +259,7 @@ func (d *Daemon) serveStream(ctx context.Context, stream *transport.Stream, from
 		if err != nil {
 			return err
 		}
-		if err := d.dispatch(ctx, stream, env, hello.GetIsPeer()); err != nil {
+		if err := d.dispatch(ctx, stream, env, trusted); err != nil {
 			if isClosed(err) {
 				return err
 			}
@@ -245,24 +270,15 @@ func (d *Daemon) serveStream(ctx context.Context, stream *transport.Stream, from
 	}
 }
 
-// fromPeer marks a stream greeted by another daemon rather than a front-end.
+// fromPeer marks a stream from another daemon, on libp2p, rather than from
+// a front-end.
 func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
 	switch env.Type() {
 	case protocol.TypeListNodes:
-		nodes := append([]*protocol.Node{d.Self()}, d.peers.list()...)
-		return stream.Send(protocol.TypeNodes, env.GetId(), &protocol.Nodes{Nodes: nodes})
+		return stream.Send(protocol.TypeNodes, env.GetId(), &protocol.Nodes{Nodes: d.nodes()})
 
-	case protocol.TypeGossip:
-		payload, err := protocol.Body[*protocol.Nodes](env)
-		if err != nil {
-			return err
-		}
-		for _, node := range payload.GetNodes() {
-			if node.GetId() != d.cfg.NodeID {
-				d.peers.merge(node)
-			}
-		}
-		return stream.Send(protocol.TypeNodes, env.GetId(), &protocol.Nodes{Nodes: d.peers.list()})
+	case protocol.TypeAccess:
+		return d.handleAccess(ctx, stream, env, fromPeer)
 
 	case protocol.TypeListSess:
 		return d.handleListSessions(ctx, stream, env, fromPeer)

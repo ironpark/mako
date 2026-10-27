@@ -111,18 +111,18 @@ func (m *model) stage(node, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return stageFile(ctx, c, m.key(), m.remoteID(node), info.Name(), f)
+	return stageFile(ctx, c, m.remoteID(node), info.Name(), f)
 }
 
 // stageFile sends what r holds to node as a staged file named name.
-func stageFile(ctx context.Context, c *client.Client, psk, node, name string, r io.Reader) (string, error) {
+func stageFile(ctx context.Context, c *client.Client, node, name string, r io.Reader) (string, error) {
 	buf := make([]byte, stageChunk)
 	var path string
 	var off int64
 	for {
 		n, err := io.ReadFull(r, buf)
 		if n > 0 || path == "" {
-			st, serr := c.StageFile(ctx, psk, &protocol.StageFile{NodeId: node, Name: name, Path: path, Offset: off, Data: buf[:n]})
+			st, serr := c.StageFile(ctx, &protocol.StageFile{NodeId: node, Name: name, Path: path, Offset: off, Data: buf[:n]})
 			if serr != nil {
 				return "", nodeErrOf(serr)
 			}
