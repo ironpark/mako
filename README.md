@@ -132,6 +132,25 @@ mako knows each agent through a driver: how its command line picks a
 conversation, how it is told mako's hooks and MCP servers, and how its
 logs read. Any other program runs as a plain terminal session.
 
+### Support status
+
+| Agent | Status | How far it has been tried |
+|---|---|---|
+| Claude Code | Stable | Used daily: chat, subagents, hooks, approvals, status line, compaction |
+| Codex | Stable | Used daily; its subagents' display is read from Codex's source, not yet from a live run |
+| Antigravity (`agy`) | Beta | Hooks checked on a live run; chat read back from real transcripts |
+| pi, omp, omo | Experimental | Written from their published formats; the extension runs under Node in tests, not yet in the agents |
+| OpenCode, OmO on it | Experimental | Written from OpenCode's source; the plugin runs under Node in tests, not yet in OpenCode |
+| Shell | Stable | A terminal, nothing more to follow |
+
+| Platform | Status |
+|---|---|
+| macOS | Stable: where mako is used day to day |
+| Linux | Supported: built and tested, less used |
+| Windows | Experimental: sessions run on ConPTY, built and its tests compiled, not yet run on Windows |
+
+### What each agent gets
+
 | Agent | Command | Chat view | Status | Approvals in the app | MCP servers | Resumes with | Conversation ID |
 |---|---|---|---|---|---|---|---|
 | Claude Code | `claude` | ✓, with subagents | hooks, through `--settings`; status line for context and limits | ✓ | `--mcp-config` | `--resume` | set by mako (`--session-id`) |
