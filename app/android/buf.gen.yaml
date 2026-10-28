@@ -1,0 +1,15 @@
+# The protocol's messages for the app, generated from proto/ into its
+# sources as Java lite (`make proto` in app/). The schema says nothing of
+# Java, so managed mode names the package here.
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: java_package_prefix
+      value: dev.ironpark
+    - file_option: java_multiple_files
+      value: true
+plugins:
+  - protoc_builtin: java
+    out: app/android/app/src/gen/java
+    opt: lite

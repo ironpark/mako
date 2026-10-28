@@ -1,0 +1,8 @@
+.gradle/
+.kotlin/
+build/
+local.properties
+*.iml
+.idea/
+# Built from app/mobile by `make android`.
+app/libs/

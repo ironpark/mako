@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">mako</string>
+
+    <string name="back">Back</string>
+    <string name="cancel">Cancel</string>
+    <string name="add">Add</string>
+    <string name="remove">Remove</string>
+    <string name="rename">Rename</string>
+    <string name="copy">Copy</string>
+    <string name="share">Share</string>
+    <string name="retry">Try again</string>
+    <string name="send">Send</string>
+    <string name="start">Start</string>
+    <string name="allow">Allow</string>
+    <string name="deny">Deny</string>
+    <string name="details">Details</string>
+    <string name="less">Less</string>
+
+    <string name="computers">Computers</string>
+    <string name="computer">Computer</string>
+    <string name="new_session">New session</string>
+    <string name="node_failed">This device\'s node did not start</string>
+    <string name="connect_title">Connect your computers</string>
+    <string name="connect_body">Your computers running mako appear here once they let this device in. Ask them from the list of computers.</string>
+    <string name="no_sessions_body">Start an agent on one of your computers.</string>
+
+    <string name="status_approval">Needs approval</string>
+    <string name="status_exited">Exited</string>
+    <string name="status_stopped">Stopped</string>
+    <string name="status_starting">Starting</string>
+    <string name="status_working">Working</string>
+    <string name="status_waiting">Waiting</string>
+    <string name="status_done">Done</string>
+    <string name="status_idle">Idle</string>
+
+    <string name="tab_chat">Chat</string>
+    <string name="tab_terminal">Terminal</string>
+    <string name="fit_screen">Fit to this screen</string>
+    <string name="stop_session">Stop session</string>
+    <string name="approval_title">Allow %1$s?</string>
+    <string name="composer_hint">Message the agent</string>
+    <string name="keyboard">Keyboard</string>
+    <string name="attach_failed">Not attached: %1$s</string>
+    <string name="exited_code">The program exited with %1$d.</string>
+    <string name="chat_unsupported">No conversation to show</string>
+    <string name="chat_unsupported_body">mako does not read this agent\'s conversation. Its terminal shows it.</string>
+    <string name="chat_failed">The conversation could not be read</string>
+    <string name="load_earlier">Load earlier messages</string>
+
+    <string name="this_device">This device</string>
+    <string name="device_name_note">The name your computers show for it</string>
+    <string name="device_key">Key</string>
+    <string name="key_copied">The key\'s line for authorized_keys is copied.</string>
+    <string name="no_computers">No computers found yet. Those on this Wi-Fi appear by themselves; add the address of others below.</string>
+    <string name="lets_in">Connected</string>
+    <string name="ask_to_join">Ask to join</string>
+    <string name="asked">Allow it in mako on %1$s</string>
+    <string name="ask_note">%1$s, the mako app</string>
+    <string name="addresses">Addresses</string>
+    <string name="addresses_note">Computers this device always links to: a host name or IP, such as a Tailscale name, or a libp2p multiaddr.</string>
+    <string name="add_address">Add address</string>
+    <string name="address_hint">mac.tailnet.ts.net</string>
+
+    <string name="no_computers_to_run">No computer to run on</string>
+    <string name="no_computers_to_run_body">A computer that lets this device in, with an agent installed, can start sessions from here.</string>
+    <string name="agent">Agent</string>
+    <string name="profile">Profile</string>
+    <string name="profile_default">Default</string>
+    <string name="folder">Folder</string>
+    <string name="folder_hint">~ (the home folder)</string>
+
+    <string name="channel_link">Connection</string>
+    <string name="channel_agents">Agents</string>
+    <string name="notice_approval">%1$s asks to run %2$s</string>
+    <string name="notice_waiting">%1$s is waiting for you</string>
+    <string name="notice_done">%1$s has finished</string>
+    <string name="disconnect">Disconnect</string>
+    <plurals name="linked_computers">
+        <item quantity="one">Connected to %d computer</item>
+        <item quantity="other">Connected to %d computers</item>
+    </plurals>
+    <string name="filter_all">All %1$d</string>
+    <string name="filter_needs_you">Needs you %1$d</string>
+    <string name="filter_working">Working %1$d</string>
+    <string name="just_now">just now</string>
+    <string name="needs_you">Needs you</string>
+    <string name="nothing_here">No sessions here.</string>
+    <string name="reply">Reply</string>
+    <string name="in_terminal">In terminal</string>
+    <string name="interrupt">Interrupt</string>
+    <string name="paste">Paste</string>
+    <string name="chat_empty">No messages yet</string>
+    <string name="chat_empty_body">What the agent and you write shows here.</string>
+    <string name="to_latest">Latest</string>
+    <string name="usage_context">Context</string>
+    <string name="usage_5h">5h</string>
+    <string name="usage_week">Week</string>
+    <string name="working_with">Working, with %1$d subagents</string>
+    <plurals name="linked_summary">
+        <item quantity="one">%1$d computers · %2$d session</item>
+        <item quantity="other">%1$d computers · %2$d sessions</item>
+    </plurals>
+</resources>

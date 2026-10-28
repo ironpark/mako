@@ -39,11 +39,12 @@ vet:
 	go vet ./...
 
 # proto lints the protocol's schema and generates its messages into
-# internal/protocol; the generated code is committed, so only a schema
-# change needs buf.
+# internal/protocol, and the Android app's; the generated code is
+# committed, so only a schema change needs buf.
 proto:
 	buf lint
 	buf generate
+	buf generate --template app/android/buf.gen.yaml
 
 clean:
 	rm -rf bin

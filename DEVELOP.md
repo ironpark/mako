@@ -55,6 +55,7 @@ take it out before you commit.
     cmd/mako             the CLI front-end
     cmd/mako-gui         the desktop front-end
     proto/mako/v2        the protocol's protobuf schema
+    app                  the Android app: the node by gomobile, and Kotlin around it
 
     internal/protocol    the generated messages, their framing and constants
     internal/transport   frames on a stream; the daemon's Unix socket

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="back">뒤로</string>
+    <string name="cancel">취소</string>
+    <string name="add">추가</string>
+    <string name="remove">제거</string>
+    <string name="rename">이름 변경</string>
+    <string name="copy">복사</string>
+    <string name="share">공유</string>
+    <string name="retry">다시 시도</string>
+    <string name="send">보내기</string>
+    <string name="start">시작</string>
+    <string name="allow">허용</string>
+    <string name="deny">거부</string>
+    <string name="details">자세히</string>
+    <string name="less">간단히</string>
+
+    <string name="computers">컴퓨터</string>
+    <string name="computer">컴퓨터</string>
+    <string name="new_session">새 세션</string>
+    <string name="node_failed">이 기기의 노드를 시작하지 못했습니다</string>
+    <string name="connect_title">컴퓨터를 연결하세요</string>
+    <string name="connect_body">mako가 실행 중인 컴퓨터가 이 기기를 허용하면 여기에 나타납니다. 컴퓨터 목록에서 요청하세요.</string>
+    <string name="no_sessions_body">컴퓨터에서 에이전트를 시작해 보세요.</string>
+
+    <string name="status_approval">승인 필요</string>
+    <string name="status_exited">종료됨</string>
+    <string name="status_stopped">중지됨</string>
+    <string name="status_starting">시작 중</string>
+    <string name="status_working">작업 중</string>
+    <string name="status_waiting">대기 중</string>
+    <string name="status_done">완료</string>
+    <string name="status_idle">유휴</string>
+
+    <string name="tab_chat">채팅</string>
+    <string name="tab_terminal">터미널</string>
+    <string name="fit_screen">이 화면에 맞추기</string>
+    <string name="stop_session">세션 중지</string>
+    <string name="approval_title">%1$s 허용할까요?</string>
+    <string name="composer_hint">에이전트에게 메시지</string>
+    <string name="keyboard">키보드</string>
+    <string name="attach_failed">연결 안 됨: %1$s</string>
+    <string name="exited_code">프로그램이 %1$d(으)로 종료했습니다.</string>
+    <string name="chat_unsupported">표시할 대화 없음</string>
+    <string name="chat_unsupported_body">mako가 이 에이전트의 대화는 읽지 못합니다. 터미널에서 보세요.</string>
+    <string name="chat_failed">대화를 읽지 못했습니다</string>
+    <string name="load_earlier">이전 메시지 불러오기</string>
+
+    <string name="this_device">이 기기</string>
+    <string name="device_name_note">컴퓨터에 표시되는 이름</string>
+    <string name="device_key">키</string>
+    <string name="key_copied">authorized_keys용 키 줄을 복사했습니다.</string>
+    <string name="no_computers">아직 찾은 컴퓨터가 없습니다. 같은 Wi-Fi의 컴퓨터는 자동으로 나타나고, 다른 컴퓨터는 아래에 주소를 추가하세요.</string>
+    <string name="lets_in">연결됨</string>
+    <string name="ask_to_join">참여 요청</string>
+    <string name="asked">%1$s의 mako에서 허용하세요</string>
+    <string name="ask_note">%1$s의 mako 앱</string>
+    <string name="addresses">주소</string>
+    <string name="addresses_note">이 기기가 항상 연결할 컴퓨터: 호스트 이름이나 IP(Tailscale 이름 등), 또는 libp2p multiaddr.</string>
+    <string name="add_address">주소 추가</string>
+    <string name="address_hint">mac.tailnet.ts.net</string>
+
+    <string name="no_computers_to_run">실행할 컴퓨터 없음</string>
+    <string name="no_computers_to_run_body">이 기기를 허용하고 에이전트가 설치된 컴퓨터에서 세션을 시작할 수 있습니다.</string>
+    <string name="agent">에이전트</string>
+    <string name="profile">프로필</string>
+    <string name="profile_default">기본</string>
+    <string name="folder">폴더</string>
+    <string name="folder_hint">~ (홈 폴더)</string>
+
+    <string name="channel_link">연결</string>
+    <string name="channel_agents">에이전트</string>
+    <string name="notice_approval">%1$s: %2$s 실행 승인 요청</string>
+    <string name="notice_waiting">%1$s: 입력을 기다립니다</string>
+    <string name="notice_done">%1$s: 완료했습니다</string>
+    <string name="disconnect">연결 끊기</string>
+    <plurals name="linked_computers">
+        <item quantity="other">컴퓨터 %d대에 연결됨</item>
+    </plurals>
+    <string name="filter_all">전체 %1$d</string>
+    <string name="filter_needs_you">응답 필요 %1$d</string>
+    <string name="filter_working">작업 중 %1$d</string>
+    <string name="just_now">방금</string>
+    <string name="needs_you">응답 필요</string>
+    <string name="nothing_here">여기에는 세션이 없습니다.</string>
+    <string name="reply">답하기</string>
+    <string name="in_terminal">터미널에서</string>
+    <string name="interrupt">중단</string>
+    <string name="paste">붙여넣기</string>
+    <string name="chat_empty">아직 메시지 없음</string>
+    <string name="chat_empty_body">에이전트와 주고받은 내용이 여기에 표시됩니다.</string>
+    <string name="to_latest">최신</string>
+    <string name="usage_context">컨텍스트</string>
+    <string name="usage_5h">5시간</string>
+    <string name="usage_week">주간</string>
+    <string name="working_with">작업 중, 서브에이전트 %1$d개</string>
+    <plurals name="linked_summary">
+        <item quantity="other">컴퓨터 %1$d대 · 세션 %2$d개</item>
+    </plurals>
+</resources>

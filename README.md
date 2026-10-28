@@ -150,6 +150,17 @@ mako allow <node>             # let in a machine that asked
 - **Command palette** (⌘K), **go to file** (⌘P), and English and Korean
   interfaces with light and dark themes.
 
+## The Android app
+
+[`app`](app) is mako for Android: a node of the mesh in your pocket. It
+lists the sessions of every computer that lets the phone in, notifies you
+when an agent waits for an approval, which you can allow from the
+notification, or has finished a turn, and opens a session's chat, with a
+composer, and its terminal. It starts agents on your computers too. The
+phone joins the mesh as any machine does, with a key of its own, found on
+the same Wi-Fi or linked by an address; **Ask to join** asks a computer to
+let it in. See [app/README.md](app/README.md) to build it.
+
 ## Agents
 
 mako knows each agent through a driver: how its command line picks a
