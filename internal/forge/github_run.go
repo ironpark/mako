@@ -1,9 +1,8 @@
-package github
+package forge
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,51 +11,29 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// maxLog caps the failed steps' logs a run_log replies with: their end,
-// where a failure says why.
-const maxLog = 256 << 10
-
-// Run acts on GitHub as r says, and returns what gh printed.
-func Run(ctx context.Context, r *protocol.GitHubRun) (string, error) {
+// run acts through gh, which prints what it did.
+func (github) run(ctx context.Context, r *protocol.ForgeRun) (string, error) {
 	root := r.GetRoot()
 	n := strconv.FormatInt(r.GetNumber(), 10)
-	if r.GetOp() != protocol.GitHubOpCreatePR && r.GetNumber() <= 0 {
-		return "", errors.New("no pull request, issue or run named")
-	}
 	switch r.GetOp() {
-	case protocol.GitHubOpCreatePR:
-		return createPR(ctx, r)
-	case protocol.GitHubOpCheckout:
+	case protocol.ForgeOpCheckout:
 		return printed(gh(ctx, root, nil, "pr", "checkout", n))
-	case protocol.GitHubOpFetchPR:
-		return fetchPR(ctx, root, r.GetNumber())
-	case protocol.GitHubOpComment:
-		kind := r.GetKind()
-		if kind != protocol.GitHubPR && kind != protocol.GitHubIssue {
-			return "", fmt.Errorf("%q is not a pull request or an issue", kind)
-		}
-		if strings.TrimSpace(r.GetBody()) == "" {
-			return "", errors.New("a comment needs a body")
-		}
-		return printed(gh(ctx, root, []byte(r.GetBody()), kind, "comment", n, "--body-file", "-"))
-	case protocol.GitHubOpReview:
+	case protocol.ForgeOpFetchPR:
+		return ghFetchPR(ctx, root, r.GetNumber())
+	case protocol.ForgeOpComment:
+		return printed(gh(ctx, root, []byte(r.GetBody()), r.GetKind(), "comment", n, "--body-file", "-"))
+	case protocol.ForgeOpReview:
 		flag := map[string]string{"approve": "--approve", "request_changes": "--request-changes", "comment": "--comment"}[r.GetReview()]
-		if flag == "" {
-			return "", fmt.Errorf("%q is not a review", r.GetReview())
-		}
-		if flag != "--approve" && strings.TrimSpace(r.GetBody()) == "" {
-			return "", errors.New("this review needs a body")
-		}
 		return printed(gh(ctx, root, []byte(r.GetBody()), "pr", "review", n, flag, "--body-file", "-"))
-	case protocol.GitHubOpRerun:
+	case protocol.ForgeOpRerun:
 		args := []string{"run", "rerun", n}
 		if r.GetFailed() {
 			args = append(args, "--failed")
 		}
 		return printed(gh(ctx, root, nil, args...))
-	case protocol.GitHubOpCancel:
+	case protocol.ForgeOpCancel:
 		return printed(gh(ctx, root, nil, "run", "cancel", n))
-	case protocol.GitHubOpFailedLogs:
+	case protocol.ForgeOpFailedLogs:
 		out, err := gh(ctx, root, nil, "run", "view", n, "--log-failed")
 		if err != nil {
 			return "", err
@@ -69,7 +46,7 @@ func Run(ctx context.Context, r *protocol.GitHubRun) (string, error) {
 		}
 		return string(out), nil
 	}
-	return "", fmt.Errorf("unknown GitHub operation %q", r.GetOp())
+	return "", fmt.Errorf("unknown forge operation %q", r.GetOp())
 }
 
 // printed is what gh printed, trimmed.
@@ -77,33 +54,11 @@ func printed(out []byte, err error) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
-// createPR pushes the branch checked out, setting its upstream when it has
-// none, and opens a pull request of it: titled and described as asked, or
-// from its commits when no title is given.
-func createPR(ctx context.Context, r *protocol.GitHubRun) (string, error) {
-	branch := gitstat.Branch(r.GetRoot())
-	if branch == "" {
-		return "", errors.New("no branch is checked out to open a pull request of")
-	}
-	return openPR(ctx, r.GetRoot(), branch, r.GetBase(), r.GetTitle(), r.GetBody(), r.GetDraft())
-}
-
-// WorktreePR pushes a session's branch and opens a pull request of it into
-// the branch it started from, filled from its commits.
-func WorktreePR(ctx context.Context, w *protocol.Worktree) (string, error) {
-	return openPR(ctx, w.GetPath(), w.GetBranch(), w.GetBase(), "", "", false)
-}
-
-// openPR pushes branch, checked out at root, and opens a pull request of it
-// into base, the repository's default branch when "".
-func openPR(ctx context.Context, root, branch, base, title, body string, draft bool) (string, error) {
-	if strings.HasPrefix(base, "-") || strings.HasPrefix(branch, "-") {
-		return "", fmt.Errorf("%q into %q is not a pull request of branches", branch, base)
-	}
-	if _, err := Path(); err != nil {
+func (github) openPR(ctx context.Context, root, branch, base, title, body string, draft bool) (string, error) {
+	if _, err := ghPath(); err != nil {
 		return "", err // before the push, which would be left without its pull request
 	}
-	if pushed, err := gitstat.Run(ctx, &protocol.GitRun{Root: root, Op: protocol.GitOpPush}); err != nil {
+	if pushed, err := push(ctx, root); err != nil {
 		return pushed, err
 	}
 	args := []string{"pr", "create", "--head", branch}
@@ -125,7 +80,7 @@ func openPR(ctx context.Context, root, branch, base, title, body string, draft b
 
 // fetchPR fetches a pull request's head from the repository it is of, and
 // replies with its commit, for a worktree to start at.
-func fetchPR(ctx context.Context, root string, n int64) (string, error) {
+func ghFetchPR(ctx context.Context, root string, n int64) (string, error) {
 	out, err := gh(ctx, root, nil, "pr", "view", strconv.FormatInt(n, 10), "--json", "headRefOid,url")
 	if err != nil {
 		return "", err

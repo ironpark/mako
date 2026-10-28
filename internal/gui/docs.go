@@ -520,18 +520,28 @@ func docHeader(m *model, id string, d docInfo) ggui.Widget {
 	if doc := m.docs[id]; doc != nil && isMarkdown(d.Name()) {
 		items = append(items, ui.MenuItem(T(previewLabel(doc)), func() { m.togglePreview(id) }).Shortcut("cmd+shift+v"))
 	}
+	items = append(items,
+		ui.MenuItem(T("Reload from disk"), func() { m.readDoc(id) }),
+		ui.MenuItem(T("Copy path"), func() { ggui.CurrentClipboard().Write(d.Path) }),
+		ui.MenuItem(T("Insert path in the message"), func() { m.insertPath("", d.Path) }),
+	)
+	items = append(items, m.editorItems(d.Node, d.Path, func() int { return m.docLine(id) }, nil)...)
+	items = append(items, ui.MenuDivider(), ui.MenuItem(T("Close file"), func() { m.askCloseDoc(id) }))
 	return ggui.Row(
 		ggui.Text(d.Name()).Size(14).Weight(ggui.WeightMedium).NoWrap(),
 		ggui.Expanded(muted(ggui.Text(where).Size(13).NoWrap().Ellipsis())),
 		muted(ggui.Text(state).Size(12.5).NoWrap()),
-		iconMenu(ui.MenuOf(icon("ellipsis"), append(items,
-			ui.MenuItem(T("Reload from disk"), func() { m.readDoc(id) }),
-			ui.MenuItem(T("Copy path"), func() { ggui.CurrentClipboard().Write(d.Path) }),
-			ui.MenuItem(T("Insert path in the message"), func() { m.insertPath("", d.Path) }),
-			ui.MenuDivider(),
-			ui.MenuItem(T("Close file"), func() { m.askCloseDoc(id) }),
-		)...).Name(T("File actions")), 6),
+		iconMenu(ui.MenuOf(icon("ellipsis"), items...).Name(T("File actions")), 6),
 	).Gap(10)
+}
+
+// docLine is the line the caret is on in a file's tab, 0 before its
+// editor is made.
+func (m *model) docLine(id string) int {
+	if doc := m.docs[id]; doc != nil && doc.editor != nil {
+		return ggui.Peek(doc.editor.Caret).Line
+	}
+	return 0
 }
 
 // docColors is what colours a file's text: its language's highlighting,

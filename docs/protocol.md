@@ -453,23 +453,28 @@ context, or `@` for a hunk header, and `old`/`new` are line numbers on each
 side, 0 where a line has none.
 
 A `git_diff` with `pull` set is a file of that pull request's change, read
-from GitHub as the GitHub section says; `commit` is then the pull request's
+from its forge as the Forges section says; `commit` is then the pull request's
 head as the asker saw it.
 
-### GitHub
+### Forges
 
-The node runs its GitHub CLI, `gh`, in `root`, with the login its user gave
-it; a node without gh, or a repository gh cannot place, answers with gh's
-error. When no remote fetches from github.com but one pushes there, the
-daemon names that repository to gh.
+The node answers for the forge of the repository at `root`: the host its
+origin fetches from, else its first remote's, when that is GitHub or a
+Forgejo or Gitea; else GitHub, when a remote pushes there. GitHub is asked
+through the node's GitHub CLI, `gh`, with the login its user gave it, the
+repository named to it as `GH_REPO` when gh would not find it. A Forgejo or
+Gitea is asked through its API at https on the host, with the credentials
+git keeps for it (`git credential fill`), or none, for what is public.
+`forge_items` and `forge_detail` say which answered in `forge`: `github`,
+`forgejo` or `gitea`.
 
 | Request | Payload | Reply | |
 |---|---|---|---|
-| `github_list` | `GitHubList` | `github_items` | Pull requests, issues or Actions runs (`kind`: `pr`, `issue`, `run`), `state` `open`, `closed` or `all`; of `branch`, or with `current` of the branch checked out. |
-| `github_view` | `GitHubView` | `github_detail` | One in full: its body, comments, reviews and line comments oldest first, a pull request's files and checks, a run's jobs. Pull request 0 is the branch's, `none` when it has none. |
-| `github_run` | `GitHubRun` | `git_result` | An operation, and what gh printed. |
+| `forge_list` | `ForgeList` | `forge_items` | Pull requests, issues or Actions runs (`kind`: `pr`, `issue`, `run`), `state` `open`, `closed` or `all`; of `branch`, or with `current` of the branch checked out. |
+| `forge_view` | `ForgeView` | `forge_detail` | One in full: its body, comments, reviews and line comments oldest first, a pull request's files and checks, a run's jobs. Pull request 0 is the branch's, `none` when it has none. |
+| `forge_run` | `ForgeRun` | `git_result` | An operation, and what the forge said: gh's output, or the address of what was made. |
 
-A run's `number` is its ID. `github_run` operations (`op`):
+A run's `number` is its ID. `forge_run` operations (`op`):
 
 | Op | |
 |---|---|
@@ -477,8 +482,11 @@ A run's `number` is its ID. `github_run` operations (`op`):
 | `pr_checkout`, `pr_fetch` | Check pull request `number` out, or fetch its head and reply with the commit, for a worktree to start at. |
 | `comment` | Comment `body` on the pull request or issue (`kind`) `number`. |
 | `review` | Review pull request `number`: `review` `approve`, `request_changes` or `comment`, with `body`. |
-| `run_rerun`, `run_cancel` | Run `number` again, only its failed jobs with `failed`; or cancel it. |
-| `run_log` | Reply with the logs of run `number`'s failed steps, their last 256 KiB. |
+| `run_rerun`, `run_cancel` | Run `number` again, only its failed jobs with `failed`; or cancel it. GitHub only. |
+| `run_log` | Reply with the logs of run `number`'s failed steps, their last 256 KiB. GitHub only. |
+
+On a Forgejo or Gitea a run has no jobs, a pull request in a list no
+checks, and a draft is one titled `WIP:`.
 
 ## Attach streams
 

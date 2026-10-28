@@ -155,8 +155,8 @@ func (m *model) reveal(target string) {
 	}
 	if section, ok := strings.CutPrefix(target, "settings:"); ok {
 		m.openSettings(section)
-	} else if run, ok := strings.CutPrefix(target, "github:"); ok {
-		m.revealGH(run)
+	} else if run, ok := strings.CutPrefix(target, "forge:"); ok {
+		m.revealForge(run)
 	} else if id, ok := strings.CutPrefix(target, "session:"); ok {
 		m.Page.Set("workspace")
 		m.selectSession(id)

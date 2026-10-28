@@ -252,7 +252,7 @@ type model struct {
 	DetailsWidth *ggui.StateValue[float64]
 	SidebarWidth *ggui.StateValue[float64] // the sidebar's, as DetailsWidth
 	DetailTab    *ggui.StateValue[int]
-	GH           ghState                // the GitHub tab, and the watch on the branch
+	Forge        forgeState             // the GitHub tab, and the watch on the branch
 	ImageOpen    *ggui.StateValue[bool] // the previewed image is shown enlarged
 	NewOpen      *ggui.StateValue[bool]
 	Form         *ggui.StateValue[newSession]
@@ -400,7 +400,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		DetailsWidth:   ggui.State(p.DetailsWidth),
 		SidebarWidth:   ggui.State(p.SidebarWidth),
 		DetailTab:      ggui.State(0),
-		GH:             newGHState(),
+		Forge:          newForgeState(),
 		ImageOpen:      ggui.State(false),
 		NewOpen:        ggui.State(false),
 		Form:           ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),

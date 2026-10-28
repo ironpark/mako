@@ -155,10 +155,10 @@ func fileMenu(m *model, w ggui.Widget, it fileItem) ggui.Widget {
 	if rel := subfolder(it.Path, root.Path); rel != "" {
 		items = append(items, ui.MenuItem(T("Copy relative path"), func() { ggui.CurrentClipboard().Write(rel) }))
 	}
-	// The daemon is on this machine, so its own node's files are too.
-	if m.remoteID(it.Node) == "" {
+	if m.onThisMachine(it.Node) {
 		items = append(items, ui.MenuItem(fileManagerLabel(), func() { m.showInFileManager(it) }))
 	}
+	items = append(items, m.editorItems(it.Node, it.Path, nil, m.FileNote.Set)...)
 	folder := folderOf(it)
 	items = append(items,
 		ui.MenuDivider(),

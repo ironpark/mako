@@ -1,4 +1,4 @@
-package github
+package forge
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// A pull request's change is read from GitHub whole, as gh pr diff gives
-// it, and kept: a front-end asks for it a file at a time. It is kept by
+// A pull request's change is read from its forge whole, as a unified diff,
+// and kept: a front-end asks for it a file at a time. It is kept by
 // the head it was read at, so it never goes stale; a push to the pull
 // request reads it again.
 
@@ -42,11 +42,15 @@ func PullDiff(ctx context.Context, root string, n int64, head, path string) (*pr
 	}
 	diffs.Unlock()
 	if files == nil {
-		out, err := gh(ctx, root, nil, "pr", "diff", strconv.FormatInt(n, 10), "--color", "never")
+		b, err := of(ctx, root)
 		if err != nil {
 			return nil, err
 		}
-		files = ParseDiff(string(out))
+		text, err := b.diff(ctx, root, n)
+		if err != nil {
+			return nil, err
+		}
+		files = ParseDiff(text)
 		diffs.Lock()
 		diffs.kept = append(diffs.kept, keptDiff{key, files})
 		if len(diffs.kept) > keptDiffs {
@@ -58,6 +62,11 @@ func PullDiff(ctx context.Context, root string, n int64, head, path string) (*pr
 		return d, nil
 	}
 	return nil, fmt.Errorf("pull request #%d does not change %s", n, path)
+}
+
+func (github) diff(ctx context.Context, root string, n int64) (string, error) {
+	out, err := gh(ctx, root, nil, "pr", "diff", strconv.FormatInt(n, 10), "--color", "never")
+	return string(out), err
 }
 
 // ParseDiff reads a unified diff of many files, as git diff writes it,

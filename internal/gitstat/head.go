@@ -75,6 +75,13 @@ func ownerOf(common string) string {
 	if err != nil {
 		return ""
 	}
+	return urlOwner(fetchURL(cfg))
+}
+
+// fetchURL is the URL a repository's config has it fetch from: its
+// origin's, or without an origin its first remote's by name; "" without
+// a remote.
+func fetchURL(cfg *config.Config) string {
 	remote := cfg.Remotes["origin"]
 	if remote == nil {
 		for _, name := range slices.Sorted(maps.Keys(cfg.Remotes)) {
@@ -85,7 +92,7 @@ func ownerOf(common string) string {
 	if remote == nil || len(remote.URLs) == 0 {
 		return ""
 	}
-	return urlOwner(remote.URLs[0])
+	return remote.URLs[0] // its url, ahead of any pushurl
 }
 
 // urlOwner is the user or organization a remote URL's repository is

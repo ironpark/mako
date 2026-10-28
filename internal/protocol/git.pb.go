@@ -363,7 +363,7 @@ type GitDiff struct {
 	From          string                 `protobuf:"bytes,4,opt,name=from,proto3" json:"from,omitempty"`
 	Commit        string                 `protobuf:"bytes,5,opt,name=commit,proto3" json:"commit,omitempty"`
 	Base          string                 `protobuf:"bytes,6,opt,name=base,proto3" json:"base,omitempty"`
-	Pull          int64                  `protobuf:"varint,7,opt,name=pull,proto3" json:"pull,omitempty"` // the pull request whose change it is, read from GitHub
+	Pull          int64                  `protobuf:"varint,7,opt,name=pull,proto3" json:"pull,omitempty"` // the pull request whose change it is, read from its forge
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

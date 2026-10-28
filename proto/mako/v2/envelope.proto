@@ -11,7 +11,7 @@ package mako.v2;
 import "mako/v2/chat.proto";
 import "mako/v2/files.proto";
 import "mako/v2/git.proto";
-import "mako/v2/github.proto";
+import "mako/v2/forge.proto";
 import "mako/v2/mesh.proto";
 import "mako/v2/session.proto";
 
@@ -87,11 +87,11 @@ message Envelope {
     Chat chat = 71;
 
     // GitHub.
-    GitHubList github_list = 80;
-    GitHubItems github_items = 81;
-    GitHubView github_view = 82;
-    GitHubDetail github_detail = 83;
-    GitHubRun github_run = 84;
+    ForgeList forge_list = 80;
+    ForgeItems forge_items = 81;
+    ForgeView forge_view = 82;
+    ForgeDetail forge_detail = 83;
+    ForgeRun forge_run = 84;
   }
 }
 

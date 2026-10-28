@@ -64,7 +64,7 @@ type diffTab struct {
 	Repo    string   // the work tree on the node
 	Commit  string   // the commit whose change it is, "" for the work tree's
 	Base    string   // the branch the work tree's changes are read since, "" for HEAD
-	Pull    int64    // the pull request whose change it is, read from GitHub at Commit, its head
+	Pull    int64    // the pull request whose change it is, read from its forge at Commit, its head
 	File    *protocol.GitFile
 	Diff    *protocol.Diff
 	Err     string
@@ -213,7 +213,7 @@ func (m *model) closeDiff(id string) {
 // or the commit's files.
 func (m *model) siblings(d diffTab) []*protocol.GitFile {
 	if d.Pull > 0 {
-		if o := ggui.Peek(m.GH.Open); o.Root == d.Root && o.Number == d.Pull {
+		if o := ggui.Peek(m.Forge.Open); o.Root == d.Root && o.Number == d.Pull {
 			return o.Detail.GetFiles()
 		}
 		return nil
@@ -270,6 +270,17 @@ func (m *model) askDiscardHunk(id string, hunk []*protocol.DiffLine) {
 }
 
 // View --------------------------------------------------------------------------
+
+// firstChange is the line of a diff's first change in the file as it is
+// now, 0 for none.
+func firstChange(d *protocol.Diff) int {
+	for _, l := range d.GetLines() {
+		if l.GetOp() == "+" || l.GetOp() == "-" {
+			return int(max(l.GetNew(), 1))
+		}
+	}
+	return 0
+}
 
 // diffTabFace is a diff's tab: how the file changed, its name, and in a
 // commit, which. A preview's name is dimmed, and a double click keeps it.
@@ -431,6 +442,7 @@ func diffHeaderBar(m *model, id string, d diffTab) ggui.Widget {
 		ui.MenuItem(T("Copy path"), func() { ggui.CurrentClipboard().Write(path) }),
 		ui.MenuItem(T("Refresh"), func() { m.readDiff(id) }),
 	}
+	items = append(items, m.editorItems(d.Root.Node, path, func() int { return firstChange(d.Diff) }, nil)...)
 	if d.Preview {
 		items = append(items, ui.MenuItem(T("Keep open"), func() { m.keepDiff(id) }))
 	}

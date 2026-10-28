@@ -377,10 +377,10 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				}), frames(40), shot("14-appearance-backdrop"),
 				do(func() { m.Prefs.Set(saved); m.reloadThemes() }), frames(2),
 			}
-			// MAKO_PREVIEW_GITHUB names a clone of a repository on GitHub,
-			// whose GitHub tab is rendered in place of the rest.
-			if dir := os.Getenv("MAKO_PREVIEW_GITHUB"); dir != "" {
-				steps = githubPreview(m, dir, do, until, frames, shot)
+			// MAKO_PREVIEW_FORGE names a clone of a repository on a forge,
+			// whose forge tab is rendered in place of the rest.
+			if dir := os.Getenv("MAKO_PREVIEW_FORGE"); dir != "" {
+				steps = forgePreview(m, dir, do, until, frames, shot)
 			}
 		case ggfx.FrameEvent:
 			p.Frame()
@@ -404,25 +404,25 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 	}), nil)
 }
 
-// githubPreview renders the GitHub tab of the repository cloned in dir:
+// forgePreview renders the forge tab of the repository cloned in dir:
 // its lists, a pull request, issue and run in full, a pull request's
 // diff, the Git tab's line for the branch, and the new pull request
 // dialog.
-func githubPreview(m *model, dir string, do func(func()) previewStep, until func(string, func() bool) previewStep,
+func forgePreview(m *model, dir string, do func(func()) previewStep, until func(string, func() bool) previewStep,
 	frames func(int) previewStep, shot func(string) previewStep) []previewStep {
 	listed := func() bool {
-		v := ggui.Peek(m.GH.List)
-		return v.Root.Path == dir && v.Kind == ggui.Peek(m.GH.Kind) && !v.Loading
+		v := ggui.Peek(m.Forge.List)
+		return v.Root.Path == dir && v.Kind == ggui.Peek(m.Forge.Kind) && !v.Loading
 	}
-	opened := func() bool { o := ggui.Peek(m.GH.Open); return o.Kind != "" && !o.Loading }
+	opened := func() bool { o := ggui.Peek(m.Forge.Open); return o.Kind != "" && !o.Loading }
 	openFirst := func() {
-		if items := ggui.Peek(m.GH.List).Items; len(items) > 0 {
-			m.openGH(ggui.Peek(m.GH.List).Root, items[0].GetKind(), items[0].GetNumber())
+		if items := ggui.Peek(m.Forge.List).Items; len(items) > 0 {
+			m.openForge(ggui.Peek(m.Forge.List).Root, items[0].GetKind(), items[0].GetNumber())
 		}
 	}
 	list := func(kind, name string) []previewStep {
 		return []previewStep{
-			do(func() { m.GH.Open.Set(ghOpen{}); m.GH.Kind.Set(kind) }),
+			do(func() { m.Forge.Open.Set(forgeOpen{}); m.Forge.Kind.Set(kind) }),
 			until("the "+kind+" list", listed), frames(5), shot("20-github-" + name + "s"),
 			do(openFirst), until("the "+kind, opened), frames(20), shot("21-github-" + name),
 		}
@@ -433,28 +433,28 @@ func githubPreview(m *model, dir string, do func(func()) previewStep, until func
 		do(func() {
 			m.launch("shell", ggui.Peek(m.Conn).Self.GetId(), dir)
 			m.DetailsWidth.Set(420)
-			m.DetailTab.Set(githubTab)
+			m.DetailTab.Set(forgeTab)
 		}),
 		until("its session", func() bool { s, ok := m.session(ggui.Peek(m.Selected)); return ok && s.GetProject() == dir }),
 	}
-	steps = append(steps, list(protocol.GitHubPR, "pr")...)
+	steps = append(steps, list(protocol.ForgePR, "pr")...)
 	steps = append(steps,
 		do(func() {
-			if o := ggui.Peek(m.GH.Open); len(o.Detail.GetFiles()) > 0 {
+			if o := ggui.Peek(m.Forge.Open); len(o.Detail.GetFiles()) > 0 {
 				m.openDiffFrom(o.diffFrom(), o.Detail.GetFiles()[0], true)
 			}
 		}),
 		until("the diff", func() bool { d, ok := ggui.Peek(m.Diffs)[ggui.Peek(m.Selected)]; return !ok || !d.Loading }),
 		frames(20), shot("22-github-pr-diff"),
 	)
-	steps = append(steps, list(protocol.GitHubIssue, "issue")...)
-	steps = append(steps, list(protocol.GitHubActions, "run")...)
+	steps = append(steps, list(protocol.ForgeIssue, "issue")...)
+	steps = append(steps, list(protocol.ForgeRuns, "run")...)
 	return append(steps,
 		do(func() { m.DetailTab.Set(gitTab) }),
-		until("the branch", func() bool { return ggui.Peek(m.GH.Branch).Root.Path == dir }),
+		until("the branch", func() bool { return ggui.Peek(m.Forge.Branch).Root.Path == dir }),
 		frames(30), shot("23-github-branch"),
 		do(m.askPR), frames(5), shot("24-github-new-pr"),
-		do(func() { m.GH.PROpen.Set(false) }),
+		do(func() { m.Forge.PROpen.Set(false) }),
 	)
 }
 

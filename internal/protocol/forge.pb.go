@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.6
 // 	protoc        (unknown)
-// source: mako/v2/github.proto
+// source: mako/v2/forge.proto
 
 package protocol
 
@@ -22,8 +22,8 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// GitHubList asks for a repository's pull requests, issues or runs.
-type GitHubList struct {
+// ForgeList asks for a repository's pull requests, issues or runs.
+type ForgeList struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	NodeId string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	Root   string                 `protobuf:"bytes,2,opt,name=root,proto3" json:"root,omitempty"`     // anywhere inside the work tree
@@ -38,21 +38,21 @@ type GitHubList struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GitHubList) Reset() {
-	*x = GitHubList{}
-	mi := &file_mako_v2_github_proto_msgTypes[0]
+func (x *ForgeList) Reset() {
+	*x = ForgeList{}
+	mi := &file_mako_v2_forge_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GitHubList) String() string {
+func (x *ForgeList) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GitHubList) ProtoMessage() {}
+func (*ForgeList) ProtoMessage() {}
 
-func (x *GitHubList) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_github_proto_msgTypes[0]
+func (x *ForgeList) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_forge_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63,83 +63,85 @@ func (x *GitHubList) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GitHubList.ProtoReflect.Descriptor instead.
-func (*GitHubList) Descriptor() ([]byte, []int) {
-	return file_mako_v2_github_proto_rawDescGZIP(), []int{0}
+// Deprecated: Use ForgeList.ProtoReflect.Descriptor instead.
+func (*ForgeList) Descriptor() ([]byte, []int) {
+	return file_mako_v2_forge_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *GitHubList) GetNodeId() string {
+func (x *ForgeList) GetNodeId() string {
 	if x != nil {
 		return x.NodeId
 	}
 	return ""
 }
 
-func (x *GitHubList) GetRoot() string {
+func (x *ForgeList) GetRoot() string {
 	if x != nil {
 		return x.Root
 	}
 	return ""
 }
 
-func (x *GitHubList) GetKind() string {
+func (x *ForgeList) GetKind() string {
 	if x != nil {
 		return x.Kind
 	}
 	return ""
 }
 
-func (x *GitHubList) GetState() string {
+func (x *ForgeList) GetState() string {
 	if x != nil {
 		return x.State
 	}
 	return ""
 }
 
-func (x *GitHubList) GetBranch() string {
+func (x *ForgeList) GetBranch() string {
 	if x != nil {
 		return x.Branch
 	}
 	return ""
 }
 
-func (x *GitHubList) GetMax() int64 {
+func (x *ForgeList) GetMax() int64 {
 	if x != nil {
 		return x.Max
 	}
 	return 0
 }
 
-func (x *GitHubList) GetCurrent() bool {
+func (x *ForgeList) GetCurrent() bool {
 	if x != nil {
 		return x.Current
 	}
 	return false
 }
 
-// GitHubItems answers GitHubList.
-type GitHubItems struct {
+// ForgeItems answers ForgeList.
+type ForgeItems struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Items         []*GitHubItem          `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	Items         []*ForgeItem           `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	Forge         string                 `protobuf:"bytes,2,opt,name=forge,proto3" json:"forge,omitempty"` // which answered: github, forgejo or gitea
+	Ops           []string               `protobuf:"bytes,3,rep,name=ops,proto3" json:"ops,omitempty"`     // the forge_run operations it can do
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GitHubItems) Reset() {
-	*x = GitHubItems{}
-	mi := &file_mako_v2_github_proto_msgTypes[1]
+func (x *ForgeItems) Reset() {
+	*x = ForgeItems{}
+	mi := &file_mako_v2_forge_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GitHubItems) String() string {
+func (x *ForgeItems) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GitHubItems) ProtoMessage() {}
+func (*ForgeItems) ProtoMessage() {}
 
-func (x *GitHubItems) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_github_proto_msgTypes[1]
+func (x *ForgeItems) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_forge_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -150,21 +152,35 @@ func (x *GitHubItems) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GitHubItems.ProtoReflect.Descriptor instead.
-func (*GitHubItems) Descriptor() ([]byte, []int) {
-	return file_mako_v2_github_proto_rawDescGZIP(), []int{1}
+// Deprecated: Use ForgeItems.ProtoReflect.Descriptor instead.
+func (*ForgeItems) Descriptor() ([]byte, []int) {
+	return file_mako_v2_forge_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *GitHubItems) GetItems() []*GitHubItem {
+func (x *ForgeItems) GetItems() []*ForgeItem {
 	if x != nil {
 		return x.Items
 	}
 	return nil
 }
 
-// GitHubItem is a pull request, an issue or a workflow run as a list shows
+func (x *ForgeItems) GetForge() string {
+	if x != nil {
+		return x.Forge
+	}
+	return ""
+}
+
+func (x *ForgeItems) GetOps() []string {
+	if x != nil {
+		return x.Ops
+	}
+	return nil
+}
+
+// ForgeItem is a pull request, an issue or a workflow run as a list shows
 // it.
-type GitHubItem struct {
+type ForgeItem struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Kind   string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
 	Number int64                  `protobuf:"varint,2,opt,name=number,proto3" json:"number,omitempty"` // a run's ID
@@ -189,21 +205,21 @@ type GitHubItem struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GitHubItem) Reset() {
-	*x = GitHubItem{}
-	mi := &file_mako_v2_github_proto_msgTypes[2]
+func (x *ForgeItem) Reset() {
+	*x = ForgeItem{}
+	mi := &file_mako_v2_forge_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GitHubItem) String() string {
+func (x *ForgeItem) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GitHubItem) ProtoMessage() {}
+func (*ForgeItem) ProtoMessage() {}
 
-func (x *GitHubItem) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_github_proto_msgTypes[2]
+func (x *ForgeItem) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_forge_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -214,119 +230,119 @@ func (x *GitHubItem) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GitHubItem.ProtoReflect.Descriptor instead.
-func (*GitHubItem) Descriptor() ([]byte, []int) {
-	return file_mako_v2_github_proto_rawDescGZIP(), []int{2}
+// Deprecated: Use ForgeItem.ProtoReflect.Descriptor instead.
+func (*ForgeItem) Descriptor() ([]byte, []int) {
+	return file_mako_v2_forge_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *GitHubItem) GetKind() string {
+func (x *ForgeItem) GetKind() string {
 	if x != nil {
 		return x.Kind
 	}
 	return ""
 }
 
-func (x *GitHubItem) GetNumber() int64 {
+func (x *ForgeItem) GetNumber() int64 {
 	if x != nil {
 		return x.Number
 	}
 	return 0
 }
 
-func (x *GitHubItem) GetTitle() string {
+func (x *ForgeItem) GetTitle() string {
 	if x != nil {
 		return x.Title
 	}
 	return ""
 }
 
-func (x *GitHubItem) GetAuthor() string {
+func (x *ForgeItem) GetAuthor() string {
 	if x != nil {
 		return x.Author
 	}
 	return ""
 }
 
-func (x *GitHubItem) GetState() string {
+func (x *ForgeItem) GetState() string {
 	if x != nil {
 		return x.State
 	}
 	return ""
 }
 
-func (x *GitHubItem) GetUrl() string {
+func (x *ForgeItem) GetUrl() string {
 	if x != nil {
 		return x.Url
 	}
 	return ""
 }
 
-func (x *GitHubItem) GetUpdated() *timestamppb.Timestamp {
+func (x *ForgeItem) GetUpdated() *timestamppb.Timestamp {
 	if x != nil {
 		return x.Updated
 	}
 	return nil
 }
 
-func (x *GitHubItem) GetDraft() bool {
+func (x *ForgeItem) GetDraft() bool {
 	if x != nil {
 		return x.Draft
 	}
 	return false
 }
 
-func (x *GitHubItem) GetHead() string {
+func (x *ForgeItem) GetHead() string {
 	if x != nil {
 		return x.Head
 	}
 	return ""
 }
 
-func (x *GitHubItem) GetBase() string {
+func (x *ForgeItem) GetBase() string {
 	if x != nil {
 		return x.Base
 	}
 	return ""
 }
 
-func (x *GitHubItem) GetHeadOid() string {
+func (x *ForgeItem) GetHeadOid() string {
 	if x != nil {
 		return x.HeadOid
 	}
 	return ""
 }
 
-func (x *GitHubItem) GetChecks() string {
+func (x *ForgeItem) GetChecks() string {
 	if x != nil {
 		return x.Checks
 	}
 	return ""
 }
 
-func (x *GitHubItem) GetLabels() []string {
+func (x *ForgeItem) GetLabels() []string {
 	if x != nil {
 		return x.Labels
 	}
 	return nil
 }
 
-func (x *GitHubItem) GetWorkflow() string {
+func (x *ForgeItem) GetWorkflow() string {
 	if x != nil {
 		return x.Workflow
 	}
 	return ""
 }
 
-func (x *GitHubItem) GetEvent() string {
+func (x *ForgeItem) GetEvent() string {
 	if x != nil {
 		return x.Event
 	}
 	return ""
 }
 
-// GitHubView asks for one pull request, issue or run in full. A pull
+// ForgeView asks for one pull request, issue or run in full. A pull
 // request numbered 0 is the one of the branch checked out.
-type GitHubView struct {
+type ForgeView struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	Root          string                 `protobuf:"bytes,2,opt,name=root,proto3" json:"root,omitempty"`
@@ -336,21 +352,21 @@ type GitHubView struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GitHubView) Reset() {
-	*x = GitHubView{}
-	mi := &file_mako_v2_github_proto_msgTypes[3]
+func (x *ForgeView) Reset() {
+	*x = ForgeView{}
+	mi := &file_mako_v2_forge_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GitHubView) String() string {
+func (x *ForgeView) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GitHubView) ProtoMessage() {}
+func (*ForgeView) ProtoMessage() {}
 
-func (x *GitHubView) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_github_proto_msgTypes[3]
+func (x *ForgeView) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_forge_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -361,67 +377,69 @@ func (x *GitHubView) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GitHubView.ProtoReflect.Descriptor instead.
-func (*GitHubView) Descriptor() ([]byte, []int) {
-	return file_mako_v2_github_proto_rawDescGZIP(), []int{3}
+// Deprecated: Use ForgeView.ProtoReflect.Descriptor instead.
+func (*ForgeView) Descriptor() ([]byte, []int) {
+	return file_mako_v2_forge_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *GitHubView) GetNodeId() string {
+func (x *ForgeView) GetNodeId() string {
 	if x != nil {
 		return x.NodeId
 	}
 	return ""
 }
 
-func (x *GitHubView) GetRoot() string {
+func (x *ForgeView) GetRoot() string {
 	if x != nil {
 		return x.Root
 	}
 	return ""
 }
 
-func (x *GitHubView) GetKind() string {
+func (x *ForgeView) GetKind() string {
 	if x != nil {
 		return x.Kind
 	}
 	return ""
 }
 
-func (x *GitHubView) GetNumber() int64 {
+func (x *ForgeView) GetNumber() int64 {
 	if x != nil {
 		return x.Number
 	}
 	return 0
 }
 
-// GitHubDetail answers GitHubView.
-type GitHubDetail struct {
+// ForgeDetail answers ForgeView.
+type ForgeDetail struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Item          *GitHubItem            `protobuf:"bytes,1,opt,name=item,proto3" json:"item,omitempty"`
+	Item          *ForgeItem             `protobuf:"bytes,1,opt,name=item,proto3" json:"item,omitempty"`
 	Body          string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
-	Comments      []*GitHubComment       `protobuf:"bytes,3,rep,name=comments,proto3" json:"comments,omitempty"` // oldest first
+	Comments      []*ForgeComment        `protobuf:"bytes,3,rep,name=comments,proto3" json:"comments,omitempty"` // oldest first
 	Files         []*GitFile             `protobuf:"bytes,4,rep,name=files,proto3" json:"files,omitempty"`       // a pull request's
-	Checks        []*GitHubCheck         `protobuf:"bytes,5,rep,name=checks,proto3" json:"checks,omitempty"`     // a pull request's checks, or a run's jobs
+	Checks        []*ForgeCheck          `protobuf:"bytes,5,rep,name=checks,proto3" json:"checks,omitempty"`     // a pull request's checks, or a run's jobs
 	None          bool                   `protobuf:"varint,6,opt,name=none,proto3" json:"none,omitempty"`        // the branch checked out has no pull request
+	Forge         string                 `protobuf:"bytes,7,opt,name=forge,proto3" json:"forge,omitempty"`       // which answered: github, forgejo or gitea
+	Ops           []string               `protobuf:"bytes,8,rep,name=ops,proto3" json:"ops,omitempty"`           // the forge_run operations it can do
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GitHubDetail) Reset() {
-	*x = GitHubDetail{}
-	mi := &file_mako_v2_github_proto_msgTypes[4]
+func (x *ForgeDetail) Reset() {
+	*x = ForgeDetail{}
+	mi := &file_mako_v2_forge_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GitHubDetail) String() string {
+func (x *ForgeDetail) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GitHubDetail) ProtoMessage() {}
+func (*ForgeDetail) ProtoMessage() {}
 
-func (x *GitHubDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_github_proto_msgTypes[4]
+func (x *ForgeDetail) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_forge_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -432,56 +450,70 @@ func (x *GitHubDetail) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GitHubDetail.ProtoReflect.Descriptor instead.
-func (*GitHubDetail) Descriptor() ([]byte, []int) {
-	return file_mako_v2_github_proto_rawDescGZIP(), []int{4}
+// Deprecated: Use ForgeDetail.ProtoReflect.Descriptor instead.
+func (*ForgeDetail) Descriptor() ([]byte, []int) {
+	return file_mako_v2_forge_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *GitHubDetail) GetItem() *GitHubItem {
+func (x *ForgeDetail) GetItem() *ForgeItem {
 	if x != nil {
 		return x.Item
 	}
 	return nil
 }
 
-func (x *GitHubDetail) GetBody() string {
+func (x *ForgeDetail) GetBody() string {
 	if x != nil {
 		return x.Body
 	}
 	return ""
 }
 
-func (x *GitHubDetail) GetComments() []*GitHubComment {
+func (x *ForgeDetail) GetComments() []*ForgeComment {
 	if x != nil {
 		return x.Comments
 	}
 	return nil
 }
 
-func (x *GitHubDetail) GetFiles() []*GitFile {
+func (x *ForgeDetail) GetFiles() []*GitFile {
 	if x != nil {
 		return x.Files
 	}
 	return nil
 }
 
-func (x *GitHubDetail) GetChecks() []*GitHubCheck {
+func (x *ForgeDetail) GetChecks() []*ForgeCheck {
 	if x != nil {
 		return x.Checks
 	}
 	return nil
 }
 
-func (x *GitHubDetail) GetNone() bool {
+func (x *ForgeDetail) GetNone() bool {
 	if x != nil {
 		return x.None
 	}
 	return false
 }
 
-// GitHubComment is a comment of an issue or pull request, a review, or a
+func (x *ForgeDetail) GetForge() string {
+	if x != nil {
+		return x.Forge
+	}
+	return ""
+}
+
+func (x *ForgeDetail) GetOps() []string {
+	if x != nil {
+		return x.Ops
+	}
+	return nil
+}
+
+// ForgeComment is a comment of an issue or pull request, a review, or a
 // review's comment on a line.
-type GitHubComment struct {
+type ForgeComment struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Author        string                 `protobuf:"bytes,1,opt,name=author,proto3" json:"author,omitempty"`
 	Body          string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
@@ -493,21 +525,21 @@ type GitHubComment struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GitHubComment) Reset() {
-	*x = GitHubComment{}
-	mi := &file_mako_v2_github_proto_msgTypes[5]
+func (x *ForgeComment) Reset() {
+	*x = ForgeComment{}
+	mi := &file_mako_v2_forge_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GitHubComment) String() string {
+func (x *ForgeComment) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GitHubComment) ProtoMessage() {}
+func (*ForgeComment) ProtoMessage() {}
 
-func (x *GitHubComment) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_github_proto_msgTypes[5]
+func (x *ForgeComment) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_forge_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -518,55 +550,55 @@ func (x *GitHubComment) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GitHubComment.ProtoReflect.Descriptor instead.
-func (*GitHubComment) Descriptor() ([]byte, []int) {
-	return file_mako_v2_github_proto_rawDescGZIP(), []int{5}
+// Deprecated: Use ForgeComment.ProtoReflect.Descriptor instead.
+func (*ForgeComment) Descriptor() ([]byte, []int) {
+	return file_mako_v2_forge_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *GitHubComment) GetAuthor() string {
+func (x *ForgeComment) GetAuthor() string {
 	if x != nil {
 		return x.Author
 	}
 	return ""
 }
 
-func (x *GitHubComment) GetBody() string {
+func (x *ForgeComment) GetBody() string {
 	if x != nil {
 		return x.Body
 	}
 	return ""
 }
 
-func (x *GitHubComment) GetTime() *timestamppb.Timestamp {
+func (x *ForgeComment) GetTime() *timestamppb.Timestamp {
 	if x != nil {
 		return x.Time
 	}
 	return nil
 }
 
-func (x *GitHubComment) GetReview() string {
+func (x *ForgeComment) GetReview() string {
 	if x != nil {
 		return x.Review
 	}
 	return ""
 }
 
-func (x *GitHubComment) GetPath() string {
+func (x *ForgeComment) GetPath() string {
 	if x != nil {
 		return x.Path
 	}
 	return ""
 }
 
-func (x *GitHubComment) GetLine() int64 {
+func (x *ForgeComment) GetLine() int64 {
 	if x != nil {
 		return x.Line
 	}
 	return 0
 }
 
-// GitHubCheck is one check of a pull request, or one job of a run.
-type GitHubCheck struct {
+// ForgeCheck is one check of a pull request, or one job of a run.
+type ForgeCheck struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Workflow      string                 `protobuf:"bytes,2,opt,name=workflow,proto3" json:"workflow,omitempty"`
@@ -577,21 +609,21 @@ type GitHubCheck struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GitHubCheck) Reset() {
-	*x = GitHubCheck{}
-	mi := &file_mako_v2_github_proto_msgTypes[6]
+func (x *ForgeCheck) Reset() {
+	*x = ForgeCheck{}
+	mi := &file_mako_v2_forge_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GitHubCheck) String() string {
+func (x *ForgeCheck) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GitHubCheck) ProtoMessage() {}
+func (*ForgeCheck) ProtoMessage() {}
 
-func (x *GitHubCheck) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_github_proto_msgTypes[6]
+func (x *ForgeCheck) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_forge_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -602,49 +634,49 @@ func (x *GitHubCheck) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GitHubCheck.ProtoReflect.Descriptor instead.
-func (*GitHubCheck) Descriptor() ([]byte, []int) {
-	return file_mako_v2_github_proto_rawDescGZIP(), []int{6}
+// Deprecated: Use ForgeCheck.ProtoReflect.Descriptor instead.
+func (*ForgeCheck) Descriptor() ([]byte, []int) {
+	return file_mako_v2_forge_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *GitHubCheck) GetName() string {
+func (x *ForgeCheck) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *GitHubCheck) GetWorkflow() string {
+func (x *ForgeCheck) GetWorkflow() string {
 	if x != nil {
 		return x.Workflow
 	}
 	return ""
 }
 
-func (x *GitHubCheck) GetStatus() string {
+func (x *ForgeCheck) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *GitHubCheck) GetConclusion() string {
+func (x *ForgeCheck) GetConclusion() string {
 	if x != nil {
 		return x.Conclusion
 	}
 	return ""
 }
 
-func (x *GitHubCheck) GetUrl() string {
+func (x *ForgeCheck) GetUrl() string {
 	if x != nil {
 		return x.Url
 	}
 	return ""
 }
 
-// GitHubRun acts on a repository on GitHub. The reply is a git_result,
-// what gh printed.
-type GitHubRun struct {
+// ForgeRun acts on a repository on its forge. The reply is a git_result,
+// what the forge said.
+type ForgeRun struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	Root          string                 `protobuf:"bytes,2,opt,name=root,proto3" json:"root,omitempty"`
@@ -661,21 +693,21 @@ type GitHubRun struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GitHubRun) Reset() {
-	*x = GitHubRun{}
-	mi := &file_mako_v2_github_proto_msgTypes[7]
+func (x *ForgeRun) Reset() {
+	*x = ForgeRun{}
+	mi := &file_mako_v2_forge_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GitHubRun) String() string {
+func (x *ForgeRun) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GitHubRun) ProtoMessage() {}
+func (*ForgeRun) ProtoMessage() {}
 
-func (x *GitHubRun) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_github_proto_msgTypes[7]
+func (x *ForgeRun) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_forge_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -686,106 +718,107 @@ func (x *GitHubRun) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GitHubRun.ProtoReflect.Descriptor instead.
-func (*GitHubRun) Descriptor() ([]byte, []int) {
-	return file_mako_v2_github_proto_rawDescGZIP(), []int{7}
+// Deprecated: Use ForgeRun.ProtoReflect.Descriptor instead.
+func (*ForgeRun) Descriptor() ([]byte, []int) {
+	return file_mako_v2_forge_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *GitHubRun) GetNodeId() string {
+func (x *ForgeRun) GetNodeId() string {
 	if x != nil {
 		return x.NodeId
 	}
 	return ""
 }
 
-func (x *GitHubRun) GetRoot() string {
+func (x *ForgeRun) GetRoot() string {
 	if x != nil {
 		return x.Root
 	}
 	return ""
 }
 
-func (x *GitHubRun) GetOp() string {
+func (x *ForgeRun) GetOp() string {
 	if x != nil {
 		return x.Op
 	}
 	return ""
 }
 
-func (x *GitHubRun) GetNumber() int64 {
+func (x *ForgeRun) GetNumber() int64 {
 	if x != nil {
 		return x.Number
 	}
 	return 0
 }
 
-func (x *GitHubRun) GetTitle() string {
+func (x *ForgeRun) GetTitle() string {
 	if x != nil {
 		return x.Title
 	}
 	return ""
 }
 
-func (x *GitHubRun) GetBody() string {
+func (x *ForgeRun) GetBody() string {
 	if x != nil {
 		return x.Body
 	}
 	return ""
 }
 
-func (x *GitHubRun) GetBase() string {
+func (x *ForgeRun) GetBase() string {
 	if x != nil {
 		return x.Base
 	}
 	return ""
 }
 
-func (x *GitHubRun) GetDraft() bool {
+func (x *ForgeRun) GetDraft() bool {
 	if x != nil {
 		return x.Draft
 	}
 	return false
 }
 
-func (x *GitHubRun) GetReview() string {
+func (x *ForgeRun) GetReview() string {
 	if x != nil {
 		return x.Review
 	}
 	return ""
 }
 
-func (x *GitHubRun) GetKind() string {
+func (x *ForgeRun) GetKind() string {
 	if x != nil {
 		return x.Kind
 	}
 	return ""
 }
 
-func (x *GitHubRun) GetFailed() bool {
+func (x *ForgeRun) GetFailed() bool {
 	if x != nil {
 		return x.Failed
 	}
 	return false
 }
 
-var File_mako_v2_github_proto protoreflect.FileDescriptor
+var File_mako_v2_forge_proto protoreflect.FileDescriptor
 
-const file_mako_v2_github_proto_rawDesc = "" +
+const file_mako_v2_forge_proto_rawDesc = "" +
 	"\n" +
-	"\x14mako/v2/github.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x11mako/v2/git.proto\"\xa7\x01\n" +
-	"\n" +
-	"GitHubList\x12\x17\n" +
+	"\x13mako/v2/forge.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x11mako/v2/git.proto\"\xa6\x01\n" +
+	"\tForgeList\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04root\x18\x02 \x01(\tR\x04root\x12\x12\n" +
 	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x14\n" +
 	"\x05state\x18\x04 \x01(\tR\x05state\x12\x16\n" +
 	"\x06branch\x18\x05 \x01(\tR\x06branch\x12\x10\n" +
 	"\x03max\x18\x06 \x01(\x03R\x03max\x12\x18\n" +
-	"\acurrent\x18\a \x01(\bR\acurrent\"8\n" +
-	"\vGitHubItems\x12)\n" +
-	"\x05items\x18\x01 \x03(\v2\x13.mako.v2.GitHubItemR\x05items\"\xff\x02\n" +
+	"\acurrent\x18\a \x01(\bR\acurrent\"^\n" +
 	"\n" +
-	"GitHubItem\x12\x12\n" +
+	"ForgeItems\x12(\n" +
+	"\x05items\x18\x01 \x03(\v2\x12.mako.v2.ForgeItemR\x05items\x12\x14\n" +
+	"\x05forge\x18\x02 \x01(\tR\x05forge\x12\x10\n" +
+	"\x03ops\x18\x03 \x03(\tR\x03ops\"\xfe\x02\n" +
+	"\tForgeItem\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x16\n" +
 	"\x06number\x18\x02 \x01(\x03R\x06number\x12\x14\n" +
 	"\x05title\x18\x03 \x01(\tR\x05title\x12\x16\n" +
@@ -801,36 +834,38 @@ const file_mako_v2_github_proto_rawDesc = "" +
 	"\x06checks\x18\f \x01(\tR\x06checks\x12\x16\n" +
 	"\x06labels\x18\x0e \x03(\tR\x06labels\x12\x1a\n" +
 	"\bworkflow\x18\x12 \x01(\tR\bworkflow\x12\x14\n" +
-	"\x05event\x18\x13 \x01(\tR\x05event\"e\n" +
-	"\n" +
-	"GitHubView\x12\x17\n" +
+	"\x05event\x18\x13 \x01(\tR\x05event\"d\n" +
+	"\tForgeView\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04root\x18\x02 \x01(\tR\x04root\x12\x12\n" +
 	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x16\n" +
-	"\x06number\x18\x04 \x01(\x03R\x06number\"\xe9\x01\n" +
-	"\fGitHubDetail\x12'\n" +
-	"\x04item\x18\x01 \x01(\v2\x13.mako.v2.GitHubItemR\x04item\x12\x12\n" +
-	"\x04body\x18\x02 \x01(\tR\x04body\x122\n" +
-	"\bcomments\x18\x03 \x03(\v2\x16.mako.v2.GitHubCommentR\bcomments\x12&\n" +
-	"\x05files\x18\x04 \x03(\v2\x10.mako.v2.GitFileR\x05files\x12,\n" +
-	"\x06checks\x18\x05 \x03(\v2\x14.mako.v2.GitHubCheckR\x06checks\x12\x12\n" +
-	"\x04none\x18\x06 \x01(\bR\x04none\"\xab\x01\n" +
-	"\rGitHubComment\x12\x16\n" +
+	"\x06number\x18\x04 \x01(\x03R\x06number\"\x8d\x02\n" +
+	"\vForgeDetail\x12&\n" +
+	"\x04item\x18\x01 \x01(\v2\x12.mako.v2.ForgeItemR\x04item\x12\x12\n" +
+	"\x04body\x18\x02 \x01(\tR\x04body\x121\n" +
+	"\bcomments\x18\x03 \x03(\v2\x15.mako.v2.ForgeCommentR\bcomments\x12&\n" +
+	"\x05files\x18\x04 \x03(\v2\x10.mako.v2.GitFileR\x05files\x12+\n" +
+	"\x06checks\x18\x05 \x03(\v2\x13.mako.v2.ForgeCheckR\x06checks\x12\x12\n" +
+	"\x04none\x18\x06 \x01(\bR\x04none\x12\x14\n" +
+	"\x05forge\x18\a \x01(\tR\x05forge\x12\x10\n" +
+	"\x03ops\x18\b \x03(\tR\x03ops\"\xaa\x01\n" +
+	"\fForgeComment\x12\x16\n" +
 	"\x06author\x18\x01 \x01(\tR\x06author\x12\x12\n" +
 	"\x04body\x18\x02 \x01(\tR\x04body\x12.\n" +
 	"\x04time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x16\n" +
 	"\x06review\x18\x04 \x01(\tR\x06review\x12\x12\n" +
 	"\x04path\x18\x05 \x01(\tR\x04path\x12\x12\n" +
-	"\x04line\x18\x06 \x01(\x03R\x04line\"\x87\x01\n" +
-	"\vGitHubCheck\x12\x12\n" +
+	"\x04line\x18\x06 \x01(\x03R\x04line\"\x86\x01\n" +
+	"\n" +
+	"ForgeCheck\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bworkflow\x18\x02 \x01(\tR\bworkflow\x12\x16\n" +
 	"\x06status\x18\x03 \x01(\tR\x06status\x12\x1e\n" +
 	"\n" +
 	"conclusion\x18\x04 \x01(\tR\n" +
 	"conclusion\x12\x10\n" +
-	"\x03url\x18\x05 \x01(\tR\x03url\"\xf8\x01\n" +
-	"\tGitHubRun\x12\x17\n" +
+	"\x03url\x18\x05 \x01(\tR\x03url\"\xf7\x01\n" +
+	"\bForgeRun\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04root\x18\x02 \x01(\tR\x04root\x12\x0e\n" +
 	"\x02op\x18\x03 \x01(\tR\x02op\x12\x16\n" +
@@ -845,38 +880,38 @@ const file_mako_v2_github_proto_rawDesc = "" +
 	"\x06failed\x18\v \x01(\bR\x06failedB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
-	file_mako_v2_github_proto_rawDescOnce sync.Once
-	file_mako_v2_github_proto_rawDescData []byte
+	file_mako_v2_forge_proto_rawDescOnce sync.Once
+	file_mako_v2_forge_proto_rawDescData []byte
 )
 
-func file_mako_v2_github_proto_rawDescGZIP() []byte {
-	file_mako_v2_github_proto_rawDescOnce.Do(func() {
-		file_mako_v2_github_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_mako_v2_github_proto_rawDesc), len(file_mako_v2_github_proto_rawDesc)))
+func file_mako_v2_forge_proto_rawDescGZIP() []byte {
+	file_mako_v2_forge_proto_rawDescOnce.Do(func() {
+		file_mako_v2_forge_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_mako_v2_forge_proto_rawDesc), len(file_mako_v2_forge_proto_rawDesc)))
 	})
-	return file_mako_v2_github_proto_rawDescData
+	return file_mako_v2_forge_proto_rawDescData
 }
 
-var file_mako_v2_github_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
-var file_mako_v2_github_proto_goTypes = []any{
-	(*GitHubList)(nil),            // 0: mako.v2.GitHubList
-	(*GitHubItems)(nil),           // 1: mako.v2.GitHubItems
-	(*GitHubItem)(nil),            // 2: mako.v2.GitHubItem
-	(*GitHubView)(nil),            // 3: mako.v2.GitHubView
-	(*GitHubDetail)(nil),          // 4: mako.v2.GitHubDetail
-	(*GitHubComment)(nil),         // 5: mako.v2.GitHubComment
-	(*GitHubCheck)(nil),           // 6: mako.v2.GitHubCheck
-	(*GitHubRun)(nil),             // 7: mako.v2.GitHubRun
+var file_mako_v2_forge_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_mako_v2_forge_proto_goTypes = []any{
+	(*ForgeList)(nil),             // 0: mako.v2.ForgeList
+	(*ForgeItems)(nil),            // 1: mako.v2.ForgeItems
+	(*ForgeItem)(nil),             // 2: mako.v2.ForgeItem
+	(*ForgeView)(nil),             // 3: mako.v2.ForgeView
+	(*ForgeDetail)(nil),           // 4: mako.v2.ForgeDetail
+	(*ForgeComment)(nil),          // 5: mako.v2.ForgeComment
+	(*ForgeCheck)(nil),            // 6: mako.v2.ForgeCheck
+	(*ForgeRun)(nil),              // 7: mako.v2.ForgeRun
 	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
 	(*GitFile)(nil),               // 9: mako.v2.GitFile
 }
-var file_mako_v2_github_proto_depIdxs = []int32{
-	2, // 0: mako.v2.GitHubItems.items:type_name -> mako.v2.GitHubItem
-	8, // 1: mako.v2.GitHubItem.updated:type_name -> google.protobuf.Timestamp
-	2, // 2: mako.v2.GitHubDetail.item:type_name -> mako.v2.GitHubItem
-	5, // 3: mako.v2.GitHubDetail.comments:type_name -> mako.v2.GitHubComment
-	9, // 4: mako.v2.GitHubDetail.files:type_name -> mako.v2.GitFile
-	6, // 5: mako.v2.GitHubDetail.checks:type_name -> mako.v2.GitHubCheck
-	8, // 6: mako.v2.GitHubComment.time:type_name -> google.protobuf.Timestamp
+var file_mako_v2_forge_proto_depIdxs = []int32{
+	2, // 0: mako.v2.ForgeItems.items:type_name -> mako.v2.ForgeItem
+	8, // 1: mako.v2.ForgeItem.updated:type_name -> google.protobuf.Timestamp
+	2, // 2: mako.v2.ForgeDetail.item:type_name -> mako.v2.ForgeItem
+	5, // 3: mako.v2.ForgeDetail.comments:type_name -> mako.v2.ForgeComment
+	9, // 4: mako.v2.ForgeDetail.files:type_name -> mako.v2.GitFile
+	6, // 5: mako.v2.ForgeDetail.checks:type_name -> mako.v2.ForgeCheck
+	8, // 6: mako.v2.ForgeComment.time:type_name -> google.protobuf.Timestamp
 	7, // [7:7] is the sub-list for method output_type
 	7, // [7:7] is the sub-list for method input_type
 	7, // [7:7] is the sub-list for extension type_name
@@ -884,9 +919,9 @@ var file_mako_v2_github_proto_depIdxs = []int32{
 	0, // [0:7] is the sub-list for field type_name
 }
 
-func init() { file_mako_v2_github_proto_init() }
-func file_mako_v2_github_proto_init() {
-	if File_mako_v2_github_proto != nil {
+func init() { file_mako_v2_forge_proto_init() }
+func file_mako_v2_forge_proto_init() {
+	if File_mako_v2_forge_proto != nil {
 		return
 	}
 	file_mako_v2_git_proto_init()
@@ -894,17 +929,17 @@ func file_mako_v2_github_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_github_proto_rawDesc), len(file_mako_v2_github_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_forge_proto_rawDesc), len(file_mako_v2_forge_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_mako_v2_github_proto_goTypes,
-		DependencyIndexes: file_mako_v2_github_proto_depIdxs,
-		MessageInfos:      file_mako_v2_github_proto_msgTypes,
+		GoTypes:           file_mako_v2_forge_proto_goTypes,
+		DependencyIndexes: file_mako_v2_forge_proto_depIdxs,
+		MessageInfos:      file_mako_v2_forge_proto_msgTypes,
 	}.Build()
-	File_mako_v2_github_proto = out.File
-	file_mako_v2_github_proto_goTypes = nil
-	file_mako_v2_github_proto_depIdxs = nil
+	File_mako_v2_forge_proto = out.File
+	file_mako_v2_forge_proto_goTypes = nil
+	file_mako_v2_forge_proto_depIdxs = nil
 }

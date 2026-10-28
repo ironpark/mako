@@ -191,21 +191,21 @@ func (c *Client) GitShow(ctx context.Context, req *protocol.GitShow) (*protocol.
 	return request[*protocol.GitCommitInfo](ctx, c, protocol.TypeGitShow, req)
 }
 
-// GitHubList lists a repository's pull requests, issues or Actions runs,
+// ForgeList lists a repository's pull requests, issues or Actions runs,
 // through the GitHub CLI of the node it is on.
-func (c *Client) GitHubList(ctx context.Context, req *protocol.GitHubList) (*protocol.GitHubItems, error) {
-	return request[*protocol.GitHubItems](ctx, c, protocol.TypeGitHubList, req)
+func (c *Client) ForgeList(ctx context.Context, req *protocol.ForgeList) (*protocol.ForgeItems, error) {
+	return request[*protocol.ForgeItems](ctx, c, protocol.TypeForgeList, req)
 }
 
-// GitHubView reads one pull request, issue or run in full.
-func (c *Client) GitHubView(ctx context.Context, req *protocol.GitHubView) (*protocol.GitHubDetail, error) {
-	return request[*protocol.GitHubDetail](ctx, c, protocol.TypeGitHubView, req)
+// ForgeView reads one pull request, issue or run in full.
+func (c *Client) ForgeView(ctx context.Context, req *protocol.ForgeView) (*protocol.ForgeDetail, error) {
+	return request[*protocol.ForgeDetail](ctx, c, protocol.TypeForgeView, req)
 }
 
-// GitHubRun acts on a repository's GitHub: opens a pull request, comments,
+// ForgeRun acts on a repository's GitHub: opens a pull request, comments,
 // reviews, runs a workflow again and the like.
-func (c *Client) GitHubRun(ctx context.Context, req *protocol.GitHubRun) (*protocol.GitResult, error) {
-	return request[*protocol.GitResult](ctx, c, protocol.TypeGitHubRun, req)
+func (c *Client) ForgeRun(ctx context.Context, req *protocol.ForgeRun) (*protocol.GitResult, error) {
+	return request[*protocol.GitResult](ctx, c, protocol.TypeForgeRun, req)
 }
 
 // GitRun runs a git operation, a commit or a push and the like, on a node.

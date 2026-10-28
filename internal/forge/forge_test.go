@@ -1,4 +1,4 @@
-package github
+package forge
 
 import "testing"
 
@@ -72,5 +72,25 @@ func TestRollup(t *testing.T) {
 	}
 	if p := (check{Context: "ci/x", State: "FAILURE", TargetURL: "u"}).proto(); p.GetName() != "ci/x" || p.GetStatus() != "completed" || p.GetConclusion() != "failure" || p.GetUrl() != "u" {
 		t.Errorf("status %v", p)
+	}
+}
+
+// A Forgejo or Gitea run's one status reads as GitHub's status and
+// conclusion, and a pull request's state as GitHub's.
+func TestGiteaReadsAsGitHub(t *testing.T) {
+	for status, want := range map[string][2]string{
+		"running": {"in_progress", ""}, "waiting": {"queued", ""}, "success": {"completed", "success"}, "failure": {"completed", "failure"},
+	} {
+		it := gTask{ID: 3, Name: "ci", Status: status}.proto()
+		if it.GetState() != want[0] || it.GetChecks() != want[1] || it.GetTitle() != "ci" {
+			t.Errorf("%s: %v", status, it)
+		}
+	}
+	merged := gPR{Number: 1, State: "closed", Merged: true, Draft: true}.proto("pr")
+	if merged.GetState() != "MERGED" || !merged.GetDraft() {
+		t.Errorf("pull request %v", merged)
+	}
+	if reviewState("REQUEST_CHANGES") != "CHANGES_REQUESTED" || reviewState("COMMENT") != "COMMENTED" {
+		t.Error("review states")
 	}
 }

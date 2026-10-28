@@ -82,11 +82,11 @@ type Envelope struct {
 	//	*Envelope_GitResult
 	//	*Envelope_ReadChat
 	//	*Envelope_Chat
-	//	*Envelope_GithubList
-	//	*Envelope_GithubItems
-	//	*Envelope_GithubView
-	//	*Envelope_GithubDetail
-	//	*Envelope_GithubRun
+	//	*Envelope_ForgeList
+	//	*Envelope_ForgeItems
+	//	*Envelope_ForgeView
+	//	*Envelope_ForgeDetail
+	//	*Envelope_ForgeRun
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -550,46 +550,46 @@ func (x *Envelope) GetChat() *Chat {
 	return nil
 }
 
-func (x *Envelope) GetGithubList() *GitHubList {
+func (x *Envelope) GetForgeList() *ForgeList {
 	if x != nil {
-		if x, ok := x.Body.(*Envelope_GithubList); ok {
-			return x.GithubList
+		if x, ok := x.Body.(*Envelope_ForgeList); ok {
+			return x.ForgeList
 		}
 	}
 	return nil
 }
 
-func (x *Envelope) GetGithubItems() *GitHubItems {
+func (x *Envelope) GetForgeItems() *ForgeItems {
 	if x != nil {
-		if x, ok := x.Body.(*Envelope_GithubItems); ok {
-			return x.GithubItems
+		if x, ok := x.Body.(*Envelope_ForgeItems); ok {
+			return x.ForgeItems
 		}
 	}
 	return nil
 }
 
-func (x *Envelope) GetGithubView() *GitHubView {
+func (x *Envelope) GetForgeView() *ForgeView {
 	if x != nil {
-		if x, ok := x.Body.(*Envelope_GithubView); ok {
-			return x.GithubView
+		if x, ok := x.Body.(*Envelope_ForgeView); ok {
+			return x.ForgeView
 		}
 	}
 	return nil
 }
 
-func (x *Envelope) GetGithubDetail() *GitHubDetail {
+func (x *Envelope) GetForgeDetail() *ForgeDetail {
 	if x != nil {
-		if x, ok := x.Body.(*Envelope_GithubDetail); ok {
-			return x.GithubDetail
+		if x, ok := x.Body.(*Envelope_ForgeDetail); ok {
+			return x.ForgeDetail
 		}
 	}
 	return nil
 }
 
-func (x *Envelope) GetGithubRun() *GitHubRun {
+func (x *Envelope) GetForgeRun() *ForgeRun {
 	if x != nil {
-		if x, ok := x.Body.(*Envelope_GithubRun); ok {
-			return x.GithubRun
+		if x, ok := x.Body.(*Envelope_ForgeRun); ok {
+			return x.ForgeRun
 		}
 	}
 	return nil
@@ -790,25 +790,25 @@ type Envelope_Chat struct {
 	Chat *Chat `protobuf:"bytes,71,opt,name=chat,proto3,oneof"`
 }
 
-type Envelope_GithubList struct {
+type Envelope_ForgeList struct {
 	// GitHub.
-	GithubList *GitHubList `protobuf:"bytes,80,opt,name=github_list,json=githubList,proto3,oneof"`
+	ForgeList *ForgeList `protobuf:"bytes,80,opt,name=forge_list,json=forgeList,proto3,oneof"`
 }
 
-type Envelope_GithubItems struct {
-	GithubItems *GitHubItems `protobuf:"bytes,81,opt,name=github_items,json=githubItems,proto3,oneof"`
+type Envelope_ForgeItems struct {
+	ForgeItems *ForgeItems `protobuf:"bytes,81,opt,name=forge_items,json=forgeItems,proto3,oneof"`
 }
 
-type Envelope_GithubView struct {
-	GithubView *GitHubView `protobuf:"bytes,82,opt,name=github_view,json=githubView,proto3,oneof"`
+type Envelope_ForgeView struct {
+	ForgeView *ForgeView `protobuf:"bytes,82,opt,name=forge_view,json=forgeView,proto3,oneof"`
 }
 
-type Envelope_GithubDetail struct {
-	GithubDetail *GitHubDetail `protobuf:"bytes,83,opt,name=github_detail,json=githubDetail,proto3,oneof"`
+type Envelope_ForgeDetail struct {
+	ForgeDetail *ForgeDetail `protobuf:"bytes,83,opt,name=forge_detail,json=forgeDetail,proto3,oneof"`
 }
 
-type Envelope_GithubRun struct {
-	GithubRun *GitHubRun `protobuf:"bytes,84,opt,name=github_run,json=githubRun,proto3,oneof"`
+type Envelope_ForgeRun struct {
+	ForgeRun *ForgeRun `protobuf:"bytes,84,opt,name=forge_run,json=forgeRun,proto3,oneof"`
 }
 
 func (*Envelope_Hello) isEnvelope_Body() {}
@@ -903,15 +903,15 @@ func (*Envelope_ReadChat) isEnvelope_Body() {}
 
 func (*Envelope_Chat) isEnvelope_Body() {}
 
-func (*Envelope_GithubList) isEnvelope_Body() {}
+func (*Envelope_ForgeList) isEnvelope_Body() {}
 
-func (*Envelope_GithubItems) isEnvelope_Body() {}
+func (*Envelope_ForgeItems) isEnvelope_Body() {}
 
-func (*Envelope_GithubView) isEnvelope_Body() {}
+func (*Envelope_ForgeView) isEnvelope_Body() {}
 
-func (*Envelope_GithubDetail) isEnvelope_Body() {}
+func (*Envelope_ForgeDetail) isEnvelope_Body() {}
 
-func (*Envelope_GithubRun) isEnvelope_Body() {}
+func (*Envelope_ForgeRun) isEnvelope_Body() {}
 
 // Error reports a failed request, in place of its reply.
 type Error struct {
@@ -971,7 +971,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x14mako/v2/github.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\"\xa1\x14\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\"\x92\x14\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12&\n" +
 	"\x05hello\x18\n" +
@@ -1028,15 +1028,15 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
 	"git_result\x18E \x01(\v2\x12.mako.v2.GitResultH\x00R\tgitResult\x120\n" +
 	"\tread_chat\x18F \x01(\v2\x11.mako.v2.ReadChatH\x00R\breadChat\x12#\n" +
-	"\x04chat\x18G \x01(\v2\r.mako.v2.ChatH\x00R\x04chat\x126\n" +
-	"\vgithub_list\x18P \x01(\v2\x13.mako.v2.GitHubListH\x00R\n" +
-	"githubList\x129\n" +
-	"\fgithub_items\x18Q \x01(\v2\x14.mako.v2.GitHubItemsH\x00R\vgithubItems\x126\n" +
-	"\vgithub_view\x18R \x01(\v2\x13.mako.v2.GitHubViewH\x00R\n" +
-	"githubView\x12<\n" +
-	"\rgithub_detail\x18S \x01(\v2\x15.mako.v2.GitHubDetailH\x00R\fgithubDetail\x123\n" +
+	"\x04chat\x18G \x01(\v2\r.mako.v2.ChatH\x00R\x04chat\x123\n" +
 	"\n" +
-	"github_run\x18T \x01(\v2\x12.mako.v2.GitHubRunH\x00R\tgithubRunB\x06\n" +
+	"forge_list\x18P \x01(\v2\x12.mako.v2.ForgeListH\x00R\tforgeList\x126\n" +
+	"\vforge_items\x18Q \x01(\v2\x13.mako.v2.ForgeItemsH\x00R\n" +
+	"forgeItems\x123\n" +
+	"\n" +
+	"forge_view\x18R \x01(\v2\x12.mako.v2.ForgeViewH\x00R\tforgeView\x129\n" +
+	"\fforge_detail\x18S \x01(\v2\x14.mako.v2.ForgeDetailH\x00R\vforgeDetail\x120\n" +
+	"\tforge_run\x18T \x01(\v2\x11.mako.v2.ForgeRunH\x00R\bforgeRunB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"5\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -1103,11 +1103,11 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*GitResult)(nil),      // 44: mako.v2.GitResult
 	(*ReadChat)(nil),       // 45: mako.v2.ReadChat
 	(*Chat)(nil),           // 46: mako.v2.Chat
-	(*GitHubList)(nil),     // 47: mako.v2.GitHubList
-	(*GitHubItems)(nil),    // 48: mako.v2.GitHubItems
-	(*GitHubView)(nil),     // 49: mako.v2.GitHubView
-	(*GitHubDetail)(nil),   // 50: mako.v2.GitHubDetail
-	(*GitHubRun)(nil),      // 51: mako.v2.GitHubRun
+	(*ForgeList)(nil),      // 47: mako.v2.ForgeList
+	(*ForgeItems)(nil),     // 48: mako.v2.ForgeItems
+	(*ForgeView)(nil),      // 49: mako.v2.ForgeView
+	(*ForgeDetail)(nil),    // 50: mako.v2.ForgeDetail
+	(*ForgeRun)(nil),       // 51: mako.v2.ForgeRun
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -1156,11 +1156,11 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	44, // 43: mako.v2.Envelope.git_result:type_name -> mako.v2.GitResult
 	45, // 44: mako.v2.Envelope.read_chat:type_name -> mako.v2.ReadChat
 	46, // 45: mako.v2.Envelope.chat:type_name -> mako.v2.Chat
-	47, // 46: mako.v2.Envelope.github_list:type_name -> mako.v2.GitHubList
-	48, // 47: mako.v2.Envelope.github_items:type_name -> mako.v2.GitHubItems
-	49, // 48: mako.v2.Envelope.github_view:type_name -> mako.v2.GitHubView
-	50, // 49: mako.v2.Envelope.github_detail:type_name -> mako.v2.GitHubDetail
-	51, // 50: mako.v2.Envelope.github_run:type_name -> mako.v2.GitHubRun
+	47, // 46: mako.v2.Envelope.forge_list:type_name -> mako.v2.ForgeList
+	48, // 47: mako.v2.Envelope.forge_items:type_name -> mako.v2.ForgeItems
+	49, // 48: mako.v2.Envelope.forge_view:type_name -> mako.v2.ForgeView
+	50, // 49: mako.v2.Envelope.forge_detail:type_name -> mako.v2.ForgeDetail
+	51, // 50: mako.v2.Envelope.forge_run:type_name -> mako.v2.ForgeRun
 	51, // [51:51] is the sub-list for method output_type
 	51, // [51:51] is the sub-list for method input_type
 	51, // [51:51] is the sub-list for extension type_name
@@ -1176,7 +1176,7 @@ func file_mako_v2_envelope_proto_init() {
 	file_mako_v2_chat_proto_init()
 	file_mako_v2_files_proto_init()
 	file_mako_v2_git_proto_init()
-	file_mako_v2_github_proto_init()
+	file_mako_v2_forge_proto_init()
 	file_mako_v2_mesh_proto_init()
 	file_mako_v2_session_proto_init()
 	file_mako_v2_envelope_proto_msgTypes[0].OneofWrappers = []any{
@@ -1226,11 +1226,11 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_GitResult)(nil),
 		(*Envelope_ReadChat)(nil),
 		(*Envelope_Chat)(nil),
-		(*Envelope_GithubList)(nil),
-		(*Envelope_GithubItems)(nil),
-		(*Envelope_GithubView)(nil),
-		(*Envelope_GithubDetail)(nil),
-		(*Envelope_GithubRun)(nil),
+		(*Envelope_ForgeList)(nil),
+		(*Envelope_ForgeItems)(nil),
+		(*Envelope_ForgeView)(nil),
+		(*Envelope_ForgeDetail)(nil),
+		(*Envelope_ForgeRun)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

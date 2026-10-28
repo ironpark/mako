@@ -7,12 +7,12 @@ import "mako/v2/git.proto";
 
 option go_package = "github.com/ironpark/mako/internal/protocol";
 
-// GitHub, as the node's GitHub CLI (gh) sees the repository a directory is
-// in: its pull requests, issues and Actions runs, read and acted on with
-// the node's own login.
+// The forge of the repository a directory is in, GitHub, or a Forgejo or
+// Gitea: its pull requests, issues and Actions runs, read and acted on
+// with the login the node already has there.
 
-// GitHubList asks for a repository's pull requests, issues or runs.
-message GitHubList {
+// ForgeList asks for a repository's pull requests, issues or runs.
+message ForgeList {
   string node_id = 1;
   string root = 2; // anywhere inside the work tree
   string kind = 3; // pr, issue or run
@@ -24,14 +24,16 @@ message GitHubList {
   bool current = 7;
 }
 
-// GitHubItems answers GitHubList.
-message GitHubItems {
-  repeated GitHubItem items = 1;
+// ForgeItems answers ForgeList.
+message ForgeItems {
+  repeated ForgeItem items = 1;
+  string forge = 2; // which answered: github, forgejo or gitea
+  repeated string ops = 3; // the forge_run operations it can do
 }
 
-// GitHubItem is a pull request, an issue or a workflow run as a list shows
+// ForgeItem is a pull request, an issue or a workflow run as a list shows
 // it.
-message GitHubItem {
+message ForgeItem {
   string kind = 1;
   int64 number = 2; // a run's ID
   string title = 3;
@@ -53,28 +55,30 @@ message GitHubItem {
   string event = 19; // what started a run: push, pull_request and the like
 }
 
-// GitHubView asks for one pull request, issue or run in full. A pull
+// ForgeView asks for one pull request, issue or run in full. A pull
 // request numbered 0 is the one of the branch checked out.
-message GitHubView {
+message ForgeView {
   string node_id = 1;
   string root = 2;
   string kind = 3;
   int64 number = 4;
 }
 
-// GitHubDetail answers GitHubView.
-message GitHubDetail {
-  GitHubItem item = 1;
+// ForgeDetail answers ForgeView.
+message ForgeDetail {
+  ForgeItem item = 1;
   string body = 2;
-  repeated GitHubComment comments = 3; // oldest first
+  repeated ForgeComment comments = 3; // oldest first
   repeated GitFile files = 4; // a pull request's
-  repeated GitHubCheck checks = 5; // a pull request's checks, or a run's jobs
+  repeated ForgeCheck checks = 5; // a pull request's checks, or a run's jobs
   bool none = 6; // the branch checked out has no pull request
+  string forge = 7; // which answered: github, forgejo or gitea
+  repeated string ops = 8; // the forge_run operations it can do
 }
 
-// GitHubComment is a comment of an issue or pull request, a review, or a
+// ForgeComment is a comment of an issue or pull request, a review, or a
 // review's comment on a line.
-message GitHubComment {
+message ForgeComment {
   string author = 1;
   string body = 2;
   google.protobuf.Timestamp time = 3;
@@ -83,8 +87,8 @@ message GitHubComment {
   int64 line = 6; // and its line, 0 for an outdated one
 }
 
-// GitHubCheck is one check of a pull request, or one job of a run.
-message GitHubCheck {
+// ForgeCheck is one check of a pull request, or one job of a run.
+message ForgeCheck {
   string name = 1;
   string workflow = 2;
   string status = 3; // queued, in_progress or completed
@@ -92,9 +96,9 @@ message GitHubCheck {
   string url = 5;
 }
 
-// GitHubRun acts on a repository on GitHub. The reply is a git_result,
-// what gh printed.
-message GitHubRun {
+// ForgeRun acts on a repository on its forge. The reply is a git_result,
+// what the forge said.
+message ForgeRun {
   string node_id = 1;
   string root = 2;
   string op = 3;

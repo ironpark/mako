@@ -1,8 +1,4 @@
-// Package github reads and acts on the GitHub of a repository on this
-// node through the GitHub CLI, gh, with the login the node's user gave it:
-// the pull requests, issues and Actions runs, a pull request's change, and
-// the comments, reviews and runs a front-end asks for.
-package github
+package forge
 
 import (
 	"bytes"
@@ -15,10 +11,24 @@ import (
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/gitstat"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
-// ErrNoGH is a request of a node that has no gh.
-var ErrNoGH = errors.New("the GitHub CLI (gh) is not installed on this node: install it, then run gh auth login there")
+// GitHub is read and acted on through its CLI, gh, with the login the
+// node's user gave it.
+
+// github is the GitHub backend.
+type github struct{}
+
+func (github) name() string { return "github" }
+
+func (github) ops() []string {
+	return []string{protocol.ForgeOpCheckout, protocol.ForgeOpFetchPR, protocol.ForgeOpComment, protocol.ForgeOpReview,
+		protocol.ForgeOpRerun, protocol.ForgeOpCancel, protocol.ForgeOpFailedLogs}
+}
+
+// errNoGH is a request of a node that has no gh.
+var errNoGH = errors.New("the GitHub CLI (gh) is not installed on this node: install it, then run gh auth login there")
 
 // found is where gh was found, once it has been.
 var found struct {
@@ -26,15 +36,15 @@ var found struct {
 	path string
 }
 
-// Path is where gh is: on the PATH, or where installers put it. Once
+// ghPath is where gh is: on the PATH, or where installers put it. Once
 // found it is not looked for again.
-func Path() (string, error) {
+func ghPath() (string, error) {
 	found.Lock()
 	defer found.Unlock()
 	if found.path == "" {
 		path, err := agent.Find("gh")
 		if err != nil {
-			return "", ErrNoGH
+			return "", errNoGH
 		}
 		found.path = path
 	}
@@ -45,7 +55,7 @@ func Path() (string, error) {
 // says what it wrote to stderr. gh never asks, as there is no one to
 // answer. A repository gh would not find itself is named to it.
 func gh(ctx context.Context, root string, stdin []byte, args ...string) ([]byte, error) {
-	path, err := Path()
+	path, err := ghPath()
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +107,7 @@ func repoOf(root string) string {
 // gitHubRepo is owner/name of a github.com remote URL, "" for another's.
 func gitHubRepo(url string) string {
 	host, path := gitstat.RepoPath(url)
-	if host != "github.com" || strings.Count(path, "/") != 1 {
+	if _, _, ok := ownerRepo(path); host != "github.com" || !ok {
 		return ""
 	}
 	return path

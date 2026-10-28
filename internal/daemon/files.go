@@ -14,7 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/ironpark/mako/internal/github"
+	"github.com/ironpark/mako/internal/forge"
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/protocol"
@@ -77,7 +77,7 @@ func (d *Daemon) handleGitDiff(ctx context.Context, stream *transport.Stream, en
 		func(r *protocol.GitDiff) (*protocol.Diff, error) {
 			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.Diff, error) {
 				if r.GetPull() > 0 {
-					return github.PullDiff(ctx, r.GetRoot(), r.GetPull(), r.GetCommit(), r.GetPath())
+					return forge.PullDiff(ctx, r.GetRoot(), r.GetPull(), r.GetCommit(), r.GetPath())
 				}
 				if r.GetCommit() != "" {
 					return gitstat.CommitDiff(ctx, r.GetRoot(), r.GetCommit(), r.GetPath(), r.GetFrom())
@@ -139,7 +139,7 @@ func (d *Daemon) handleGitRun(ctx context.Context, stream *transport.Stream, env
 						return nil, errors.New("no worktree named")
 					}
 					run = func(ctx context.Context, r *protocol.GitRun) (string, error) {
-						return github.WorktreePR(ctx, r.GetWorktree())
+						return forge.WorktreePR(ctx, r.GetWorktree())
 					}
 				}
 				out, err := run(ctx, r)
@@ -149,24 +149,24 @@ func (d *Daemon) handleGitRun(ctx context.Context, stream *transport.Stream, env
 }
 
 func (d *Daemon) handleGitHubList(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeGitHubItems,
-		func(r *protocol.GitHubList) (*protocol.GitHubItems, error) {
-			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitHubItems, error) { return github.List(ctx, r) })
+	return serve(d, ctx, stream, env, protocol.TypeForgeItems,
+		func(r *protocol.ForgeList) (*protocol.ForgeItems, error) {
+			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.ForgeItems, error) { return forge.List(ctx, r) })
 		})
 }
 
 func (d *Daemon) handleGitHubView(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeGitHubDetail,
-		func(r *protocol.GitHubView) (*protocol.GitHubDetail, error) {
-			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitHubDetail, error) { return github.View(ctx, r) })
+	return serve(d, ctx, stream, env, protocol.TypeForgeDetail,
+		func(r *protocol.ForgeView) (*protocol.ForgeDetail, error) {
+			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.ForgeDetail, error) { return forge.View(ctx, r) })
 		})
 }
 
 func (d *Daemon) handleGitHubRun(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeGitResult,
-		func(r *protocol.GitHubRun) (*protocol.GitResult, error) {
+		func(r *protocol.ForgeRun) (*protocol.GitResult, error) {
 			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitResult, error) {
-				out, err := github.Run(ctx, r)
+				out, err := forge.Run(ctx, r)
 				return &protocol.GitResult{Output: out}, err
 			})
 		})

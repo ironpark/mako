@@ -32,6 +32,7 @@ func Run(cfg *config.Config, addr string) error {
 		Resizable: true,
 	}, func() ggui.Widget { return build(m) })
 	app.Setup(func() {
+		go findEditors()
 		setup(m)
 		m.start(ctx, app.Post)
 		notify.Init(func(target string) { app.Post(func() { m.reveal(target) }) })

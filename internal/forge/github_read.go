@@ -1,4 +1,4 @@
-package github
+package forge
 
 import (
 	"cmp"
@@ -92,41 +92,28 @@ type item struct {
 // The fields each kind is read with: a list's, and the more a view adds.
 var (
 	listFields = map[string]string{
-		protocol.GitHubPR:      "number,title,author,state,url,updatedAt,isDraft,headRefName,baseRefName,headRefOid,statusCheckRollup,labels",
-		protocol.GitHubIssue:   "number,title,author,state,url,updatedAt,labels",
-		protocol.GitHubActions: "databaseId,displayTitle,status,conclusion,url,updatedAt,headBranch,headSha,workflowName,event",
+		protocol.ForgePR:    "number,title,author,state,url,updatedAt,isDraft,headRefName,baseRefName,headRefOid,statusCheckRollup,labels",
+		protocol.ForgeIssue: "number,title,author,state,url,updatedAt,labels",
+		protocol.ForgeRuns:  "databaseId,displayTitle,status,conclusion,url,updatedAt,headBranch,headSha,workflowName,event",
 	}
 	viewFields = map[string]string{
-		protocol.GitHubPR:      ",body,comments,reviews,files",
-		protocol.GitHubIssue:   ",body,comments",
-		protocol.GitHubActions: ",jobs",
+		protocol.ForgePR:    ",body,comments,reviews,files",
+		protocol.ForgeIssue: ",body,comments",
+		protocol.ForgeRuns:  ",jobs",
 	}
 )
 
-// checkKind refuses what is not gh's command for a kind: pr, issue or run.
-func checkKind(kind string) error {
-	if _, ok := listFields[kind]; !ok {
-		return fmt.Errorf("%q is not a pull request, an issue or a run", kind)
-	}
-	return nil
-}
-
-// List lists a repository's pull requests, issues or runs, the most
-// recently active first.
-func List(ctx context.Context, r *protocol.GitHubList) (*protocol.GitHubItems, error) {
+func (github) list(ctx context.Context, r *protocol.ForgeList) (*protocol.ForgeItems, error) {
 	kind := r.GetKind()
-	if err := checkKind(kind); err != nil {
-		return nil, err
-	}
 	limit := cmp.Or(r.GetMax(), 50)
 	args := []string{kind, "list", "--limit", strconv.FormatInt(min(limit, 200), 10), "--json", listFields[kind]}
 	branch := r.GetBranch()
 	if r.GetCurrent() {
-		if kind == protocol.GitHubPR {
+		if kind == protocol.ForgePR {
 			return currentPR(ctx, r.GetRoot())
 		}
 		if branch = gitstat.Branch(r.GetRoot()); branch == "" {
-			return &protocol.GitHubItems{}, nil // not a repository
+			return &protocol.ForgeItems{}, nil // not a repository
 		}
 	}
 	if strings.HasPrefix(branch, "-") {
@@ -134,12 +121,12 @@ func List(ctx context.Context, r *protocol.GitHubList) (*protocol.GitHubItems, e
 	}
 	switch {
 	case branch == "":
-	case kind == protocol.GitHubActions:
+	case kind == protocol.ForgeRuns:
 		args = append(args, "--branch", branch)
-	case kind == protocol.GitHubPR:
+	case kind == protocol.ForgePR:
 		args = append(args, "--head", branch)
 	}
-	if kind != protocol.GitHubActions {
+	if kind != protocol.ForgeRuns {
 		state := cmp.Or(r.GetState(), "open")
 		if !slices.Contains([]string{"open", "closed", "merged", "all"}, state) {
 			return nil, fmt.Errorf("%q is not a state to list", state)
@@ -154,23 +141,15 @@ func List(ctx context.Context, r *protocol.GitHubList) (*protocol.GitHubItems, e
 	if err := json.Unmarshal(out, &items); err != nil {
 		return nil, fmt.Errorf("cannot read what gh listed: %w", err)
 	}
-	reply := &protocol.GitHubItems{}
+	reply := &protocol.ForgeItems{}
 	for _, it := range items {
 		reply.Items = append(reply.Items, it.proto(kind))
 	}
 	return reply, nil
 }
 
-// View reads one pull request, issue or run, with its body, comments,
-// reviews, files and checks. A pull request numbered 0 is the branch's.
-func View(ctx context.Context, r *protocol.GitHubView) (*protocol.GitHubDetail, error) {
+func (github) view(ctx context.Context, r *protocol.ForgeView) (*protocol.ForgeDetail, error) {
 	kind := r.GetKind()
-	if err := checkKind(kind); err != nil {
-		return nil, err
-	}
-	if r.GetNumber() < 0 || r.GetNumber() == 0 && kind != protocol.GitHubPR {
-		return nil, fmt.Errorf("no %s numbered %d", kind, r.GetNumber())
-	}
 	args := []string{kind, "view"}
 	if r.GetNumber() > 0 {
 		args = append(args, strconv.FormatInt(r.GetNumber(), 10))
@@ -180,10 +159,10 @@ func View(ctx context.Context, r *protocol.GitHubView) (*protocol.GitHubDetail, 
 	args = append(args, "--json", listFields[kind]+viewFields[kind])
 
 	// A pull request's comments on lines are only in the API's.
-	var lines []*protocol.GitHubComment
+	var lines []*protocol.ForgeComment
 	var linesErr error
 	done := make(chan struct{})
-	if kind == protocol.GitHubPR && r.GetNumber() > 0 {
+	if kind == protocol.ForgePR && r.GetNumber() > 0 {
 		go func() { defer close(done); lines, linesErr = lineComments(ctx, r.GetRoot(), r.GetNumber()) }()
 	} else {
 		close(done)
@@ -192,7 +171,7 @@ func View(ctx context.Context, r *protocol.GitHubView) (*protocol.GitHubDetail, 
 	<-done
 	if err != nil {
 		if r.GetNumber() == 0 && noPR(err) {
-			return &protocol.GitHubDetail{None: true}, nil
+			return &protocol.ForgeDetail{None: true}, nil
 		}
 		return nil, err
 	}
@@ -200,25 +179,25 @@ func View(ctx context.Context, r *protocol.GitHubView) (*protocol.GitHubDetail, 
 	if err := json.Unmarshal(out, &it); err != nil {
 		return nil, fmt.Errorf("cannot read what gh gave: %w", err)
 	}
-	if kind == protocol.GitHubPR && r.GetNumber() == 0 {
+	if kind == protocol.ForgePR && r.GetNumber() == 0 {
 		// The branch's own, whose line comments are read now its number is
 		// known.
 		lines, linesErr = lineComments(ctx, r.GetRoot(), it.Number)
 	}
-	d := &protocol.GitHubDetail{Item: it.proto(kind), Body: it.Body}
+	d := &protocol.ForgeDetail{Item: it.proto(kind), Body: it.Body}
 	for _, c := range it.Comments {
-		d.Comments = append(d.Comments, &protocol.GitHubComment{Author: c.Author.Login, Body: c.Body, Time: protocol.Time(c.CreatedAt)})
+		d.Comments = append(d.Comments, &protocol.ForgeComment{Author: c.Author.Login, Body: c.Body, Time: protocol.Time(c.CreatedAt)})
 	}
 	for _, rv := range it.Reviews {
 		if rv.Body == "" && rv.State == "COMMENTED" {
 			continue // only the line comments it carried, listed on their own
 		}
-		d.Comments = append(d.Comments, &protocol.GitHubComment{Author: rv.Author.Login, Body: rv.Body, Time: protocol.Time(rv.SubmittedAt), Review: rv.State})
+		d.Comments = append(d.Comments, &protocol.ForgeComment{Author: rv.Author.Login, Body: rv.Body, Time: protocol.Time(rv.SubmittedAt), Review: rv.State})
 	}
 	if linesErr == nil {
 		d.Comments = append(d.Comments, lines...)
 	}
-	slices.SortStableFunc(d.Comments, func(a, b *protocol.GitHubComment) int {
+	slices.SortStableFunc(d.Comments, func(a, b *protocol.ForgeComment) int {
 		return protocol.TimeOf(a.GetTime()).Compare(protocol.TimeOf(b.GetTime()))
 	})
 	for _, f := range it.Files {
@@ -233,12 +212,12 @@ func View(ctx context.Context, r *protocol.GitHubView) (*protocol.GitHubDetail, 
 // currentPR lists the pull request of the branch checked out, as gh finds
 // it: by the branch's upstream, and not one of a fork's that has a branch
 // of the same name.
-func currentPR(ctx context.Context, root string) (*protocol.GitHubItems, error) {
+func currentPR(ctx context.Context, root string) (*protocol.ForgeItems, error) {
 	args := append([]string{"pr", "view"}, currentBranch(root)...)
-	out, err := gh(ctx, root, nil, append(args, "--json", listFields[protocol.GitHubPR])...)
+	out, err := gh(ctx, root, nil, append(args, "--json", listFields[protocol.ForgePR])...)
 	if err != nil {
 		if noPR(err) {
-			return &protocol.GitHubItems{}, nil
+			return &protocol.ForgeItems{}, nil
 		}
 		return nil, err
 	}
@@ -246,7 +225,7 @@ func currentPR(ctx context.Context, root string) (*protocol.GitHubItems, error) 
 	if err := json.Unmarshal(out, &it); err != nil {
 		return nil, fmt.Errorf("cannot read what gh gave: %w", err)
 	}
-	return &protocol.GitHubItems{Items: []*protocol.GitHubItem{it.proto(protocol.GitHubPR)}}, nil
+	return &protocol.ForgeItems{Items: []*protocol.ForgeItem{it.proto(protocol.ForgePR)}}, nil
 }
 
 // currentBranch is what gh pr view is told of the branch checked out:
@@ -269,7 +248,7 @@ func noPR(err error) bool {
 
 // lineComments are a pull request's review comments on lines of its
 // change, as many as one page of the API's holds.
-func lineComments(ctx context.Context, root string, n int64) ([]*protocol.GitHubComment, error) {
+func lineComments(ctx context.Context, root string, n int64) ([]*protocol.ForgeComment, error) {
 	out, err := gh(ctx, root, nil, "api", fmt.Sprintf("repos/{owner}/{repo}/pulls/%d/comments?per_page=100", n))
 	if err != nil {
 		return nil, err
@@ -284,16 +263,16 @@ func lineComments(ctx context.Context, root string, n int64) ([]*protocol.GitHub
 	if err := json.Unmarshal(out, &list); err != nil {
 		return nil, err
 	}
-	var cs []*protocol.GitHubComment
+	var cs []*protocol.ForgeComment
 	for _, c := range list {
-		cs = append(cs, &protocol.GitHubComment{Author: c.User.Login, Body: c.Body, Time: protocol.Time(c.CreatedAt), Path: c.Path, Line: c.Line})
+		cs = append(cs, &protocol.ForgeComment{Author: c.User.Login, Body: c.Body, Time: protocol.Time(c.CreatedAt), Path: c.Path, Line: c.Line})
 	}
 	return cs, nil
 }
 
 // proto is an item as a list shows it.
-func (it item) proto(kind string) *protocol.GitHubItem {
-	p := &protocol.GitHubItem{
+func (it item) proto(kind string) *protocol.ForgeItem {
+	p := &protocol.ForgeItem{
 		Kind: kind, Number: it.Number, Title: it.Title, Author: it.Author.Login, State: it.State, Url: it.URL,
 		Updated: protocol.Time(it.UpdatedAt), Draft: it.IsDraft, Head: it.HeadRefName, Base: it.BaseRefName, HeadOid: it.HeadRefOid,
 		Checks: rollup(it.Rollup),
@@ -301,7 +280,7 @@ func (it item) proto(kind string) *protocol.GitHubItem {
 	for _, l := range it.Labels {
 		p.Labels = append(p.Labels, l.Name)
 	}
-	if kind == protocol.GitHubActions {
+	if kind == protocol.ForgeRuns {
 		p.Number, p.Title, p.State, p.Checks = it.DatabaseID, it.DisplayName, it.Status, it.Conclusion
 		p.Head, p.HeadOid, p.Workflow, p.Event = it.HeadBranch, it.HeadSha, it.Workflow, it.Event
 	}
@@ -321,9 +300,9 @@ func (c check) state() (status, conclusion string) {
 }
 
 // proto is a check, or a job, as a front-end shows it.
-func (c check) proto() *protocol.GitHubCheck {
+func (c check) proto() *protocol.ForgeCheck {
 	status, conclusion := c.state()
-	return &protocol.GitHubCheck{
+	return &protocol.ForgeCheck{
 		Name: cmp.Or(c.Name, c.Context), Workflow: c.Workflow, Status: status, Conclusion: conclusion,
 		Url: cmp.Or(c.DetailsURL, c.TargetURL, c.URL),
 	}
@@ -338,7 +317,7 @@ func rollup(checks []check) string {
 	out := "success"
 	for _, c := range checks {
 		switch status, conclusion := c.state(); {
-		case Failed(conclusion):
+		case protocol.Failed(conclusion):
 			return "failure"
 		case status != "completed":
 			out = "pending"
@@ -347,18 +326,10 @@ func rollup(checks []check) string {
 	return out
 }
 
-// Failed reports whether a check or run's conclusion is a failure.
-func Failed(conclusion string) bool {
-	switch strings.ToLower(conclusion) {
-	case "failure", "error", "cancelled", "timed_out", "action_required", "startup_failure":
-		return true
-	}
-	return false
-}
-
-// changeStatus is a pull request file's change type as a GitFile's status.
+// changeStatus is a pull request file's change type as a GitFile's status:
+// GitHub's, ADDED, or Gitea's, added.
 func changeStatus(t string) string {
-	switch t {
+	switch strings.ToUpper(t) {
 	case "ADDED":
 		return protocol.GitAdded
 	case "DELETED":

@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -77,11 +78,11 @@ const (
 	TypeGitResult      Type = "git_result"
 	TypeReadChat       Type = "read_chat"
 	TypeChat           Type = "chat"
-	TypeGitHubList     Type = "github_list"
-	TypeGitHubItems    Type = "github_items"
-	TypeGitHubView     Type = "github_view"
-	TypeGitHubDetail   Type = "github_detail"
-	TypeGitHubRun      Type = "github_run"
+	TypeForgeList      Type = "forge_list"
+	TypeForgeItems     Type = "forge_items"
+	TypeForgeView      Type = "forge_view"
+	TypeForgeDetail    Type = "forge_detail"
+	TypeForgeRun       Type = "forge_run"
 )
 
 // Newer reports whether the edit made at version v on node is newer than
@@ -299,24 +300,33 @@ const (
 	GitOpAbort        = "abort"         // the operation under way
 )
 
-// What a GitHubList and a GitHubView are of.
+// What a ForgeList and a ForgeView are of.
 const (
-	GitHubPR      = "pr"
-	GitHubIssue   = "issue"
-	GitHubActions = "run" // a workflow run of GitHub Actions
+	ForgePR    = "pr"
+	ForgeIssue = "issue"
+	ForgeRuns  = "run" // a workflow run of the forge's Actions
 )
 
-// Operations of a GitHubRun.
+// Operations of a ForgeRun.
 const (
-	GitHubOpCreatePR   = "pr_create"   // pushes the branch checked out and opens a pull request of it into Base
-	GitHubOpCheckout   = "pr_checkout" // checks out pull request Number's branch
-	GitHubOpFetchPR    = "pr_fetch"    // fetches pull request Number's head; replies with its commit
-	GitHubOpComment    = "comment"     // Body on pull request or issue Number, as Kind says
-	GitHubOpReview     = "review"      // reviews pull request Number as Review says, with Body
-	GitHubOpRerun      = "run_rerun"   // runs run Number again, only its failed jobs with Failed
-	GitHubOpCancel     = "run_cancel"  // cancels run Number
-	GitHubOpFailedLogs = "run_log"     // replies with the logs of run Number's failed steps
+	ForgeOpCreatePR   = "pr_create"   // pushes the branch checked out and opens a pull request of it into Base
+	ForgeOpCheckout   = "pr_checkout" // checks out pull request Number's branch
+	ForgeOpFetchPR    = "pr_fetch"    // fetches pull request Number's head; replies with its commit
+	ForgeOpComment    = "comment"     // Body on pull request or issue Number, as Kind says
+	ForgeOpReview     = "review"      // reviews pull request Number as Review says, with Body
+	ForgeOpRerun      = "run_rerun"   // runs run Number again, only its failed jobs with Failed
+	ForgeOpCancel     = "run_cancel"  // cancels run Number
+	ForgeOpFailedLogs = "run_log"     // replies with the logs of run Number's failed steps
 )
+
+// Failed reports whether a forge check or run's conclusion is a failure.
+func Failed(conclusion string) bool {
+	switch strings.ToLower(conclusion) {
+	case "failure", "error", "cancelled", "timed_out", "action_required", "startup_failure":
+		return true
+	}
+	return false
+}
 
 // Same reports whether a and b are equal messages: proto.Equal, typed, for
 // a signal's equality, and a message is itself without a look at its fields.
