@@ -395,6 +395,16 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			if browse != "" {
 				steps = browserPreview(m, func() *browser { return b }, do, until, frames, shot)
 			}
+			// MAKO_PREVIEW_PICK names a folder the New session dialog's
+			// picker starts in.
+			if dir := os.Getenv("MAKO_PREVIEW_PICK"); dir != "" {
+				steps = []previewStep{
+					do(setTheme("dark")),
+					until("the daemon", func() bool { return ggui.Peek(m.Conn).OK }),
+					do(func() { m.openNew("", dir) }), frames(20), shot("40-new-session"),
+					do(m.pickFolder), until("the picker", func() bool { return ggui.Peek(m.Pick.On) }), frames(20), shot("41-pick-folder"),
+				}
+			}
 		case ggfx.FrameEvent:
 			p.Frame()
 			if len(steps) == 0 {

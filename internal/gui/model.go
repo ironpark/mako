@@ -249,6 +249,7 @@ type model struct {
 	DetailTab    *ggui.StateValue[int]
 	Forge        forgeState             // the GitHub tab, and the watch on the branch
 	Tunnels      *tunnelState           // ports of other nodes forwarded here
+	Pick         *folderPick            // the New session dialog's folder picker
 	ImageOpen    *ggui.StateValue[bool] // the previewed image is shown enlarged
 	NewOpen      *ggui.StateValue[bool]
 	Form         *ggui.StateValue[newSession]
@@ -408,6 +409,7 @@ func newModel(cfg *config.Config, addr string) *model {
 	m.wsStale.Store(true)
 	m.spaceSet = ggui.Combine(m.Spaces, ggui.Map(m.Prefs, func(p prefs) string { return p.ShownSpace }), spaceSetOf).
 		WithEqual(func(a, b spaceSet) bool { return reflect.DeepEqual(a, b) })
+	m.Pick = newFolderPick(m)
 	return m
 }
 

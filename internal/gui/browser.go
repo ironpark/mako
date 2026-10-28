@@ -28,10 +28,9 @@ type browser struct {
 	m    *model
 	node string
 
-	Path    *ggui.StateValue[string]          // the folder shown
-	History *ggui.StateValue[history]         // the folders to go back and forward to
-	Open    *ggui.StateValue[map[string]bool] // folders open in the list, by key
-	Sel     *ggui.StateValue[string]          // the row chosen, by key
+	*navigator
+	Open *ggui.StateValue[map[string]bool] // folders open in the list, by key
+	Sel  *ggui.StateValue[string]          // the row chosen, by key
 
 	Status   *ggui.StateValue[browserNote]
 	Busy     *ggui.StateValue[string] // a copy under way, as it stands
@@ -40,12 +39,8 @@ type browser struct {
 
 	Ops fileOps // the name prompt and the delete confirmation
 
-	tapped string // the row tapped last, and when: a second tap opens it
-	tapAt  time.Time
+	taps taps // a second tap on a row opens it
 }
-
-// history is where a browser has been, and where it went back from.
-type history struct{ Back, Ahead []string }
 
 // browserNote is what the status bar says of the last copy or operation:
 // a failure, or where a download went, with that to show in Finder.
@@ -108,8 +103,6 @@ func (m *model) resolveHome(node, path string, done, fail func(string)) {
 func newBrowser(m *model, node, path string) *browser {
 	b := &browser{
 		m: m, node: node,
-		Path:     ggui.State(path),
-		History:  ggui.State(history{}),
 		Open:     ggui.State(map[string]bool{}),
 		Sel:      ggui.State(""),
 		Status:   ggui.State(browserNote{}),
@@ -117,6 +110,10 @@ func newBrowser(m *model, node, path string) *browser {
 		DropOver: ggui.State(false),
 		Ops:      newFileOps(),
 	}
+	b.navigator = newNavigator(path, func(p string) {
+		b.Sel.Set("")
+		m.loadDir(node, p, true)
+	})
 	m.loadDir(node, path, true)
 	return b
 }
@@ -124,48 +121,6 @@ func newBrowser(m *model, node, path string) *browser {
 // title is the window's title at path: the folder, and the node.
 func (b *browser) title(path string) string {
 	return baseName(path) + " — " + nodeName(ggui.Peek(b.m.Nodes), b.node)
-}
-
-// goTo shows the folder path, remembering the one before to go back to.
-func (b *browser) goTo(path string) {
-	cur := ggui.Peek(b.Path)
-	if path == cur {
-		return
-	}
-	h := ggui.Peek(b.History)
-	b.show(path, history{Back: append(h.Back, cur)})
-}
-
-// show shows the folder path, read afresh, with where it has been.
-func (b *browser) show(path string, h history) {
-	b.History.Set(h)
-	b.Path.Set(path)
-	b.Sel.Set("")
-	b.m.loadDir(b.node, path, true)
-}
-
-// goBack goes back to the folder before, or forward to the one gone back
-// from, when there is one.
-func (b *browser) goBack(forward bool) {
-	h := ggui.Peek(b.History)
-	from, to := &h.Back, &h.Ahead
-	if forward {
-		from, to = to, from
-	}
-	if len(*from) == 0 {
-		return
-	}
-	next := (*from)[len(*from)-1]
-	*from = (*from)[:len(*from)-1]
-	*to = append(*to, ggui.Peek(b.Path))
-	b.show(next, h)
-}
-
-func (b *browser) goUp() {
-	cur := ggui.Peek(b.Path)
-	if up := parentDir(cur); up != "" && up != cur {
-		b.goTo(up)
-	}
 }
 
 func (b *browser) goHome() {
@@ -193,13 +148,28 @@ func (b *browser) tap(it fileItem) {
 	if it.Stub {
 		return
 	}
-	now := time.Now()
-	if b.tapped == it.Key && now.Sub(b.tapAt) < doubleTap {
-		b.tapped = ""
+	if b.taps.again(it.Key) {
 		b.activate(it)
-		return
 	}
-	b.tapped, b.tapAt = it.Key, now
+}
+
+// taps tells a second tap on a row from a first: the row tapped last, and
+// when.
+type taps struct {
+	key string
+	at  time.Time
+}
+
+// again records a tap on the row key, and reports whether it was the
+// second of a double tap.
+func (t *taps) again(key string) bool {
+	now := time.Now()
+	if t.key == key && now.Sub(t.at) < doubleTap {
+		t.key = ""
+		return true
+	}
+	t.key, t.at = key, now
+	return false
 }
 
 // say shows a note in the status bar, with a download to show by it.
@@ -496,12 +466,8 @@ func browserMenu(b *browser, w ggui.Widget, it fileItem) ggui.Widget {
 
 func browserToolbar(b *browser) ggui.Widget {
 	m := b.m
-	nav := ggui.View(b.History, func(h history) ggui.Widget {
-		back := ui.ButtonOf(icon("arrow-left").Size(15), func() { b.goBack(false) }).Ghost().Pad(5).Radius(6).Name(T("Back")).Disabled(len(h.Back) == 0)
-		ahead := ui.ButtonOf(icon("arrow-right").Size(15), func() { b.goBack(true) }).Ghost().Pad(5).Radius(6).Name(T("Forward")).Disabled(len(h.Ahead) == 0)
-		return ggui.Row(back, ahead).Gap(2)
-	})
-	crumbs := ggui.View(b.Path, func(p string) ggui.Widget { return pathCrumbs(b, p) })
+	nav := navButtons(b.navigator)
+	crumbs := ggui.View(b.Path, func(p string) ggui.Widget { return pathCrumbs(p, b.goTo) })
 	hidden := ggui.View(ggui.Map(m.Prefs, func(p prefs) bool { return p.ShowHidden }), func(shown bool) ggui.Widget {
 		if shown {
 			return iconButton("eye", T("Hide hidden files"), m.toggleHidden)
@@ -512,7 +478,6 @@ func browserToolbar(b *browser) ggui.Widget {
 		muted(ggui.Text(nodeName(ggui.Peek(m.Nodes), b.node)).Size(12.5).NoWrap())).Gap(6)
 	return ggui.Box(ggui.Row(
 		nav,
-		iconButton("arrow-up-to-line", T("Enclosing folder"), b.goUp),
 		iconButton("house", T("Home"), b.goHome),
 		ggui.Expanded(crumbs),
 		where,
@@ -523,9 +488,9 @@ func browserToolbar(b *browser) ggui.Widget {
 	).Gap(4)).Pad(8, 12).Height(48)
 }
 
-// pathCrumbs is the path of the folder shown, each folder of it a button
+// pathCrumbs is the path of a folder shown, each folder of it a button
 // that goes there.
-func pathCrumbs(b *browser, p string) ggui.Widget {
+func pathCrumbs(p string, goTo func(string)) ggui.Widget {
 	sep := pathSep(p)
 	var parts []ggui.Widget
 	at := ""
@@ -535,7 +500,9 @@ func pathCrumbs(b *browser, p string) ggui.Widget {
 		case i == 0 && seg == "": // the root of a Unix path
 			at = sep
 			seg = sep
-		case at == "" || at == sep:
+		case i == 0 && strings.HasSuffix(seg, ":"): // a Windows drive, whose root has the separator
+			at = seg + sep
+		case at == "" || strings.HasSuffix(at, sep):
 			at += seg
 		default:
 			at += sep + seg
@@ -550,7 +517,7 @@ func pathCrumbs(b *browser, p string) ggui.Widget {
 		} else {
 			text = text.Color(tokMuted)
 		}
-		parts = append(parts, ui.ButtonOf(text, func() { b.goTo(target) }).Ghost().Pad(3, 5).Radius(5).Name(target))
+		parts = append(parts, ui.ButtonOf(text, func() { goTo(target) }).Ghost().Pad(3, 5).Radius(5).Name(target))
 	}
 	return ggui.Scroll(ggui.Row(parts...).Gap(1)).Horizontal().Bar(color.Transparent).FollowEnd()
 }

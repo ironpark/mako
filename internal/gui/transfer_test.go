@@ -150,3 +150,56 @@ func TestFreeName(t *testing.T) {
 		}
 	}
 }
+
+// The New session dialog's picker browses a node's folders, folders only,
+// and puts the one chosen in the form; the folders sessions ran in are
+// offered.
+func TestThePickerChoosesAFolderOnTheNode(t *testing.T) {
+	m, p := daemonApp(t)
+	dir := t.TempDir()
+	for _, sub := range []string{"app", "lib"} {
+		if err := os.Mkdir(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	self := ggui.Peek(m.Conn).Self.GetId()
+	m.Prefs.Update(func(pr prefs) prefs {
+		pr.Projects = append(pr.Projects, keptProject{fileRoot: fileRoot{Node: self, Path: dir}})
+		return pr
+	})
+	m.openNew(self, dir)
+	m.pickFolder()
+	listed := func() []string {
+		var names []string
+		for _, it := range m.children(dirItem(self, ggui.Peek(m.Pick.Path))) {
+			if it.Dir {
+				names = append(names, it.Name)
+			}
+		}
+		return names
+	}
+	probeUntil(t, p, "the picker", func() bool { return ggui.Peek(m.Pick.On) && len(listed()) == 2 })
+	if got := listed(); got[0] != "app" || got[1] != "lib" {
+		t.Fatalf("folders = %v", got)
+	}
+	if ggui.Peek(m.NewOpen) {
+		t.Fatal("the form shows under the picker")
+	}
+	m.Pick.goTo(filepath.Join(dir, "app"))
+	m.Pick.goBack(false)
+	if ggui.Peek(m.Pick.Path) != dir || len(ggui.Peek(m.Pick.History).Ahead) != 1 {
+		t.Fatalf("back at %q", ggui.Peek(m.Pick.Path))
+	}
+	m.Pick.Sel.Set(dirKey(self, filepath.Join(dir, "lib")))
+	m.closePicker(ggui.Untrack(m.Pick.picked))
+	p.Frame()
+	if f := ggui.Peek(m.Form); f.Project != filepath.Join(dir, "lib") || ggui.Peek(m.Pick.On) || !ggui.Peek(m.NewOpen) {
+		t.Fatalf("form = %+v", f)
+	}
+	if got := m.recentFolders(self, 6); len(got) == 0 || got[0] != dir {
+		t.Fatalf("recent = %v", got)
+	}
+}

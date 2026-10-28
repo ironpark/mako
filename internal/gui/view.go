@@ -61,6 +61,7 @@ func window(m *model) ggui.Widget {
 			ggui.If(inSettings, func() ggui.Widget { return settingsPage(m) }).
 				Else(func() ggui.Widget { return main })),
 		newSessionDialog(m),
+		folderPickerDialog(m),
 		renameDialog(m),
 		fileDialogs(m),
 		tunnelDialog(m),
@@ -995,26 +996,28 @@ func newSessionDialog(m *model) ggui.Widget {
 		}
 		return ids
 	})
+	// This machine's folders are picked in its own dialog; another node's
+	// in the dialog, through the daemons.
 	browse := browseButton(project, func(d runtime.Dialogs) (string, error) {
 		return d.PickFolder(runtime.FileDialog{Title: T("Working directory"), Directory: ggui.Peek(project)})
 	})
-	// The native picker browses this machine, so it is offered only when
-	// the session will run here.
+	browseRemote := ui.Button(T("Browse…"), m.pickFolder).Outline()
 	local := ggui.Derived(func() bool { return m.Form.Get().NodeID == m.Conn.Get().Self.GetId() })
 	hasErr := ggui.Map(m.FormErr, func(s string) bool { return s != "" })
 	// What the chosen node can launch, profiles included.
 	targets := ggui.Derived(func() []string {
 		return nodeTargets(m.Nodes.Get(), m.Form.Get().NodeID, m.Agents.Get())
 	}).WithEqual(slices.Equal)
-	return ui.Dialog(m.NewOpen, ggui.Column(
+	form := ggui.Column(
 		ui.Field(T("Agent"), ui.Select(agent).BindOptions(targets).Format(targetLabel).Name(T("Agent"))),
 		ui.Field(T("Node"), ui.Select(node).BindOptions(nodeIDs).Format(func(id string) string {
 			return nodeName(ggui.Peek(m.Nodes), id)
 		}).Name(T("Node"))),
 		ui.Field(T("Working directory"), ggui.Row(
 			ggui.Expanded(ui.TextField(project).Placeholder(T("The node's home folder")).Name(T("Working directory")).OnSubmit(func(string) { m.submitNew() })),
-			ggui.If(local, func() ggui.Widget { return browse }),
+			ggui.If(local, func() ggui.Widget { return browse }).Else(func() ggui.Widget { return browseRemote }),
 		).Gap(8)),
+		recentChips(m),
 		ui.Field(T("Git"), ggui.Column(
 			ui.Checkbox(worktree, T("Work in a new worktree")),
 			ggui.If(worktree, func() ggui.Widget {
@@ -1030,5 +1033,6 @@ func newSessionDialog(m *model) ggui.Widget {
 			ui.Button(T("Cancel"), func() { m.NewOpen.Set(false) }).Outline(),
 			ui.Button(T("Start session"), m.submitNew),
 		).Gap(8).Justify(ggui.JustifyEnd),
-	).Gap(16).Stretch()).Title(T("New session")).Width(460)
+	).Gap(16).Stretch()
+	return ui.Dialog(m.NewOpen, form).Title(T("New session")).Width(460)
 }

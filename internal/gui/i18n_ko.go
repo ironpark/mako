@@ -887,4 +887,13 @@ var catalogKo = map[string]string{
 	"Uploaded %s.":                                    "%s을(를) 업로드했습니다.",
 	"Uploading %s":                                    "%s 업로드 중",
 	"Wait for the copy under way, or cancel it.":      "진행 중인 복사가 끝나기를 기다리거나 취소하세요.",
+	"Choose a folder on %s":                           "%s에서 폴더 선택",
+	"Choose":                                          "선택",
+	"Folders":                                         "폴더",
+	"Choose %s":                                       "%s 선택",
+	"Favorites":                                       "즐겨찾기",
+	"Folder name":                                     "폴더 이름",
+	"Folder":                                          "폴더",
+	"Locations":                                       "위치",
+	"Recent":                                          "최근 항목",
 }
