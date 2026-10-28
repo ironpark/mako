@@ -180,10 +180,10 @@ func TestFileOpNeverReplaces(t *testing.T) {
 	}
 }
 
-func TestForPeerClearsTheNodeOfACopy(t *testing.T) {
+func TestForPeerClearsTheNode(t *testing.T) {
 	req := &protocol.ReadFile{NodeId: "far", Path: "/a"}
 	sent := forPeer(req).(*protocol.ReadFile)
-	if sent.GetNodeId() != "" || sent.GetPath() != "/a" || req.GetNodeId() != "far" {
-		t.Fatalf("sent %v, kept %v", sent, req)
+	if sent.GetNodeId() != "" || sent.GetPath() != "/a" {
+		t.Fatalf("sent %v", sent)
 	}
 }

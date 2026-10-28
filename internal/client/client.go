@@ -4,9 +4,11 @@ package client
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sync"
+	"time"
 
 	"golang.org/x/term"
 	"google.golang.org/protobuf/proto"
@@ -351,4 +353,22 @@ func (c *Client) Watch(ctx context.Context, fn func(*protocol.Changed)) error {
 		}
 		fn(changed)
 	}
+}
+
+// Tunnel connects to a TCP port on a node's loopback; see
+// protocol.Tunnel. What it returns carries the connection's bytes.
+func (c *Client) Tunnel(ctx context.Context, req *protocol.Tunnel) (io.ReadWriteCloser, error) {
+	s, err := c.stream(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = s.SetReadDeadline(deadline)
+	}
+	if _, err := transport.Call[*protocol.Tunneled](s, protocol.TypeTunnel, req); err != nil {
+		s.Close()
+		return nil, err
+	}
+	_ = s.SetReadDeadline(time.Time{})
+	return s, nil
 }

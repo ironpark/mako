@@ -13,7 +13,6 @@ import (
 	"unicode"
 
 	"github.com/ironpark/ggui"
-	ggruntime "github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/gostty"
 
@@ -340,7 +339,7 @@ func (m *model) followLink(id, target, cwd string) {
 		return
 	}
 	if isURL(target) && !strings.HasPrefix(target, "file://") {
-		_ = ggruntime.OpenURL(target)
+		m.openWeb(s.GetNodeId(), target)
 		return
 	}
 	p, line := linkPath(target)
@@ -369,10 +368,6 @@ func (m *model) followLink(id, target, cwd string) {
 			return
 		}
 		it := fileItem{Key: dirKey(node, f.GetPath()), Node: node, Path: f.GetPath(), Name: baseName(f.GetPath())}
-		if isImage(it.Name) { // the preview is in the Files tab
-			m.DetailsOpen.Set(true)
-			m.DetailTab.Set(filesTab)
-		}
 		m.openItem(it, line)
 	})
 }

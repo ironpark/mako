@@ -114,7 +114,17 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			m = newModel(cfg, addr)
 			saved := ggui.Peek(m.Prefs)
 			window, session := filepath.Join(dir, "backdrop-window.png"), filepath.Join(dir, "backdrop-session.png")
-			p = ggui.ProbeBuilder(func() ggui.Widget { return ggui.Provide(ggui.ReducedMotionKey, true, build(m)) },
+			// MAKO_PREVIEW_BROWSER names a folder of this machine, which a
+			// node's file browser shows in place of the window.
+			browse := os.Getenv("MAKO_PREVIEW_BROWSER")
+			var b *browser
+			p = ggui.ProbeBuilder(func() ggui.Widget {
+				if browse != "" {
+					b = newBrowser(m, "", browse)
+					return ggui.Provide(ggui.ReducedMotionKey, true, browserWindow(b))
+				}
+				return ggui.Provide(ggui.ReducedMotionKey, true, build(m))
+			},
 				ggui.Sz(float64(width), float64(height)))
 			p.Setup(func() {
 				setup(m)
@@ -382,6 +392,9 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			if dir := os.Getenv("MAKO_PREVIEW_FORGE"); dir != "" {
 				steps = forgePreview(m, dir, do, until, frames, shot)
 			}
+			if browse != "" {
+				steps = browserPreview(m, func() *browser { return b }, do, until, frames, shot)
+			}
 		case ggfx.FrameEvent:
 			p.Frame()
 			if len(steps) == 0 {
@@ -456,6 +469,41 @@ func forgePreview(m *model, dir string, do func(func()) previewStep, until func(
 		do(m.askPR), frames(5), shot("24-github-new-pr"),
 		do(func() { m.Forge.PROpen.Set(false) }),
 	)
+}
+
+// browserPreview renders a node's file browser: a folder, one open in it,
+// a copy under way and done, and the rename prompt.
+func browserPreview(m *model, b func() *browser, do func(func()) previewStep, until func(string, func() bool) previewStep,
+	frames func(int) previewStep, shot func(string) previewStep) []previewStep {
+	rows := func() []fileItem { return m.children(dirItem("", ggui.Peek(b().Path))) }
+	read := func() bool { r := rows(); return len(r) > 0 && !r[0].Stub }
+	firstDir := func() (fileItem, bool) {
+		for _, it := range rows() {
+			if it.Dir {
+				return it, true
+			}
+		}
+		return fileItem{}, false
+	}
+	return []previewStep{
+		do(func() { m.Prefs.Update(func(p prefs) prefs { p.Theme = "dark"; return p }) }),
+		until("the folder", read), frames(5), shot("30-browser"),
+		do(func() {
+			if it, ok := firstDir(); ok {
+				b().Open.Set(map[string]bool{it.Key: true})
+				m.loadDir(it.Node, it.Path, false)
+				b().Sel.Set(it.Key)
+			}
+		}),
+		frames(30), shot("31-browser-open"),
+		do(func() { b().Busy.Set(Tf("Uploading %s", "build.zip") + " · 12.4 MB / 48.0 MB") }), frames(3), shot("32-browser-busy"),
+		do(func() { b().Busy.Set(""); b().say(Tf("Downloaded to %s.", "~/Downloads/build.zip"), "/tmp") }), frames(3), shot("33-browser-done"),
+		do(func() {
+			if r := rows(); len(r) > 0 {
+				b().askFile(protocol.FileRename, r[len(r)-1])
+			}
+		}), frames(10), shot("34-browser-rename"),
+	}
 }
 
 // previewStatus has the session id ask for an approval, and the others

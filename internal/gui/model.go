@@ -177,15 +177,10 @@ type model struct {
 	FilesOpen *ggui.StateValue[map[string]bool]
 	FileSel   *ggui.StateValue[string]
 	Preview   *ggui.StateValue[filePreview]
-	// A file operation asked of the user, the name typed for it, why it
-	// failed, and the dialogs asking; FileNote shows a failure under the
-	// Files header once its dialog has closed.
-	FileAsk        *ggui.StateValue[fileAsk]
-	FileName       *ggui.StateValue[string]
-	FileErr        *ggui.StateValue[string]
-	FileNote       *ggui.StateValue[string]
-	FileNameOpen   *ggui.StateValue[bool]
-	FileDeleteOpen *ggui.StateValue[bool]
+	// A file operation asked of the user; FileNote shows a failure under
+	// the Files header once its dialog has closed.
+	FileOps  fileOps
+	FileNote *ggui.StateValue[string]
 
 	// The files open in tabs, by tab ID; see docs.go.
 	Docs *ggui.StateValue[map[string]docInfo]
@@ -253,6 +248,7 @@ type model struct {
 	SidebarWidth *ggui.StateValue[float64] // the sidebar's, as DetailsWidth
 	DetailTab    *ggui.StateValue[int]
 	Forge        forgeState             // the GitHub tab, and the watch on the branch
+	Tunnels      *tunnelState           // ports of other nodes forwarded here
 	ImageOpen    *ggui.StateValue[bool] // the previewed image is shown enlarged
 	NewOpen      *ggui.StateValue[bool]
 	Form         *ggui.StateValue[newSession]
@@ -367,12 +363,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		FilesOpen:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		FileSel:        ggui.State(""),
 		Preview:        ggui.State(filePreview{}).WithEqual(filePreview.same),
-		FileAsk:        ggui.State(fileAsk{}),
-		FileName:       ggui.State(""),
-		FileErr:        ggui.State(""),
+		FileOps:        newFileOps(),
 		FileNote:       ggui.State(""),
-		FileNameOpen:   ggui.State(false),
-		FileDeleteOpen: ggui.State(false),
 		Git:            ggui.State(gitView{}).WithEqual(deepEqual),
 		GitClosed:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		GitSel:         ggui.State(""),
@@ -401,6 +393,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		SidebarWidth:   ggui.State(p.SidebarWidth),
 		DetailTab:      ggui.State(0),
 		Forge:          newForgeState(),
+		Tunnels:        newTunnelState(),
 		ImageOpen:      ggui.State(false),
 		NewOpen:        ggui.State(false),
 		Form:           ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),
@@ -1383,6 +1376,7 @@ func (m *model) openSettings(section string) {
 func (m *model) shutdown() {
 	defer m.embedded.stop()
 	defer m.hl.close()
+	defer m.closeTunnels()
 	for id, conn := range m.conns {
 		conn.close()
 		delete(m.conns, id)

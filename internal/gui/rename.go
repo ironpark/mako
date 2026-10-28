@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"cmp"
 	"context"
 	"strings"
 	"time"
@@ -69,6 +70,7 @@ type nameAsk struct {
 	Open                                    *ggui.StateValue[bool]
 	Text, Err                               *ggui.StateValue[string]
 	Title, Field, Action, Placeholder, Note string
+	Label                                   string // over the field; "Name" when empty
 	Submit                                  func()
 }
 
@@ -79,7 +81,7 @@ func nameDialog(a nameAsk) ggui.Widget {
 	if a.Placeholder != "" {
 		field = field.Placeholder(a.Placeholder)
 	}
-	rows := []ggui.Widget{ui.Field(T("Name"), field)}
+	rows := []ggui.Widget{ui.Field(cmp.Or(a.Label, T("Name")), field)}
 	if a.Note != "" {
 		rows = append(rows, muted(ggui.Text(a.Note).Size(12)))
 	}
@@ -103,6 +105,12 @@ func sessionMenu(m *model, w ggui.Widget, id, label string, isTab bool) ggui.Wid
 	items := []ggui.Widget{ui.MenuItem(T("Rename…"), func() { m.askRename(id) }), ui.MenuItem(pin, func() { m.togglePin(id) })}
 	if isTab {
 		items = append(items, ui.MenuItem(T("Detach tab"), func() { m.closeTab(id) }))
+	}
+	if s, ok := m.session(id); ok && !m.onThisMachine(s.GetNodeId()) {
+		node, project := s.GetNodeId(), s.GetProject()
+		items = append(items,
+			ui.MenuItem(T("Browse files"), func() { m.openBrowser(node, cmp.Or(project, "~"), "") }),
+			ui.MenuItem(T("Forward a port…"), func() { m.askTunnel(node) }))
 	}
 	items = append(items, ui.MenuDivider(), ui.MenuItem(T("Kill session"), func() { m.askKill(id) }))
 	return ui.ContextMenu(w, items...).Name(Tf("%s actions", label))

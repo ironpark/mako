@@ -63,6 +63,7 @@ func window(m *model) ggui.Widget {
 		newSessionDialog(m),
 		renameDialog(m),
 		fileDialogs(m),
+		tunnelDialog(m),
 		forgeDialogs(m),
 		gitAskDialog(m),
 		confirmDialog(m),
@@ -560,6 +561,7 @@ func sidebarFooter(m *model) ggui.Widget {
 	})
 	return ggui.Box(ggui.Row(
 		ggui.Expanded(host),
+		tunnelsMenu(m),
 		iconButton("plus", T("New session"), func() { m.openNew("", "") }),
 		iconButton("settings", T("Settings"), func() { m.openSettings("") }),
 	).Gap(4)).Pad(8, 10, 8, 16).Height(52)
@@ -924,8 +926,15 @@ func nodeList(m *model, nodes []*protocol.Node) ggui.Widget {
 			kind = "monitor"
 		}
 		var ask ggui.Widget = ggui.Box()
-		if !reachable(n) && n.GetPeerId() != "" {
+		switch {
+		case !reachable(n) && n.GetPeerId() != "":
 			ask = ui.Button(T("Ask to be let in"), func() { m.requestAccess(n) }).Outline()
+		case reachable(n) && n.GetSource() != "self":
+			id := n.GetId()
+			ask = ggui.Row(
+				iconButton("hard-drive", T("Browse files"), func() { m.openBrowser(id, "~", "") }),
+				iconButton("arrow-right-left", T("Forward a port…"), func() { m.askTunnel(id) }),
+			).Gap(2)
 		}
 		rows = append(rows, ggui.Box(ggui.Row(
 			icon(kind).Size(16),

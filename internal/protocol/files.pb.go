@@ -215,11 +215,15 @@ func (x *Dir) GetEntries() []*DirEntry {
 
 // ReadFile asks for the start of a file, or the whole of an image.
 type ReadFile struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
-	Max           int64                  `protobuf:"varint,3,opt,name=max,proto3" json:"max,omitempty"` // bytes; capped by the daemon
-	Image         bool                   `protobuf:"varint,4,opt,name=image,proto3" json:"image,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	NodeId string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Path   string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	Max    int64                  `protobuf:"varint,3,opt,name=max,proto3" json:"max,omitempty"` // bytes; capped by the daemon
+	Image  bool                   `protobuf:"varint,4,opt,name=image,proto3" json:"image,omitempty"`
+	// A file read in pieces, as a download reads one: raw replies with the
+	// bytes from offset on, text or not.
+	Offset        int64 `protobuf:"varint,5,opt,name=offset,proto3" json:"offset,omitempty"`
+	Raw           bool  `protobuf:"varint,6,opt,name=raw,proto3" json:"raw,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -278,6 +282,20 @@ func (x *ReadFile) GetMax() int64 {
 func (x *ReadFile) GetImage() bool {
 	if x != nil {
 		return x.Image
+	}
+	return false
+}
+
+func (x *ReadFile) GetOffset() int64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *ReadFile) GetRaw() bool {
+	if x != nil {
+		return x.Raw
 	}
 	return false
 }
@@ -368,13 +386,17 @@ func (x *File) GetModTime() *timestamppb.Timestamp {
 }
 
 // WriteFile replaces a file's contents. A set mod_time fails the write,
-// with code "changed", if the file changed since.
+// with code "changed", if the file changed since. A file sent in pieces,
+// as an upload sends one, is written whole by its first piece and grown by
+// the rest: each of those gives the offset it goes at, which must be the
+// file's length.
 type WriteFile struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
 	Data          []byte                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
 	ModTime       *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=mod_time,json=modTime,proto3" json:"mod_time,omitempty"`
+	Offset        int64                  `protobuf:"varint,5,opt,name=offset,proto3" json:"offset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -437,6 +459,114 @@ func (x *WriteFile) GetModTime() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *WriteFile) GetOffset() int64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+// Tunnel connects to a TCP port on the node's loopback, where a program
+// there serves only that machine, as a web server in development does.
+// Once Tunneled answers, the stream carries that connection's bytes, both
+// ways, and no more frames.
+type Tunnel struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Port          int32                  `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Tunnel) Reset() {
+	*x = Tunnel{}
+	mi := &file_mako_v2_files_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Tunnel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Tunnel) ProtoMessage() {}
+
+func (x *Tunnel) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_files_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Tunnel.ProtoReflect.Descriptor instead.
+func (*Tunnel) Descriptor() ([]byte, []int) {
+	return file_mako_v2_files_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *Tunnel) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *Tunnel) GetPort() int32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+// Tunneled answers Tunnel: the address connected to.
+type Tunneled struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Addr          string                 `protobuf:"bytes,1,opt,name=addr,proto3" json:"addr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Tunneled) Reset() {
+	*x = Tunneled{}
+	mi := &file_mako_v2_files_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Tunneled) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Tunneled) ProtoMessage() {}
+
+func (x *Tunneled) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_files_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Tunneled.ProtoReflect.Descriptor instead.
+func (*Tunneled) Descriptor() ([]byte, []int) {
+	return file_mako_v2_files_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *Tunneled) GetAddr() string {
+	if x != nil {
+		return x.Addr
+	}
+	return ""
+}
+
 // FileOp makes, renames or deletes a file or folder.
 type FileOp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -450,7 +580,7 @@ type FileOp struct {
 
 func (x *FileOp) Reset() {
 	*x = FileOp{}
-	mi := &file_mako_v2_files_proto_msgTypes[6]
+	mi := &file_mako_v2_files_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -462,7 +592,7 @@ func (x *FileOp) String() string {
 func (*FileOp) ProtoMessage() {}
 
 func (x *FileOp) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_files_proto_msgTypes[6]
+	mi := &file_mako_v2_files_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -475,7 +605,7 @@ func (x *FileOp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileOp.ProtoReflect.Descriptor instead.
 func (*FileOp) Descriptor() ([]byte, []int) {
-	return file_mako_v2_files_proto_rawDescGZIP(), []int{6}
+	return file_mako_v2_files_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *FileOp) GetNodeId() string {
@@ -519,7 +649,7 @@ type Search struct {
 
 func (x *Search) Reset() {
 	*x = Search{}
-	mi := &file_mako_v2_files_proto_msgTypes[7]
+	mi := &file_mako_v2_files_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -531,7 +661,7 @@ func (x *Search) String() string {
 func (*Search) ProtoMessage() {}
 
 func (x *Search) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_files_proto_msgTypes[7]
+	mi := &file_mako_v2_files_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -544,7 +674,7 @@ func (x *Search) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Search.ProtoReflect.Descriptor instead.
 func (*Search) Descriptor() ([]byte, []int) {
-	return file_mako_v2_files_proto_rawDescGZIP(), []int{7}
+	return file_mako_v2_files_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Search) GetNodeId() string {
@@ -588,7 +718,7 @@ type SearchMatch struct {
 
 func (x *SearchMatch) Reset() {
 	*x = SearchMatch{}
-	mi := &file_mako_v2_files_proto_msgTypes[8]
+	mi := &file_mako_v2_files_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -600,7 +730,7 @@ func (x *SearchMatch) String() string {
 func (*SearchMatch) ProtoMessage() {}
 
 func (x *SearchMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_files_proto_msgTypes[8]
+	mi := &file_mako_v2_files_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -613,7 +743,7 @@ func (x *SearchMatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchMatch.ProtoReflect.Descriptor instead.
 func (*SearchMatch) Descriptor() ([]byte, []int) {
-	return file_mako_v2_files_proto_rawDescGZIP(), []int{8}
+	return file_mako_v2_files_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SearchMatch) GetPath() string {
@@ -656,7 +786,7 @@ type SearchResult struct {
 
 func (x *SearchResult) Reset() {
 	*x = SearchResult{}
-	mi := &file_mako_v2_files_proto_msgTypes[9]
+	mi := &file_mako_v2_files_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -668,7 +798,7 @@ func (x *SearchResult) String() string {
 func (*SearchResult) ProtoMessage() {}
 
 func (x *SearchResult) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_files_proto_msgTypes[9]
+	mi := &file_mako_v2_files_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -681,7 +811,7 @@ func (x *SearchResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchResult.ProtoReflect.Descriptor instead.
 func (*SearchResult) Descriptor() ([]byte, []int) {
-	return file_mako_v2_files_proto_rawDescGZIP(), []int{9}
+	return file_mako_v2_files_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SearchResult) GetFiles() []string {
@@ -722,7 +852,7 @@ type StageFile struct {
 
 func (x *StageFile) Reset() {
 	*x = StageFile{}
-	mi := &file_mako_v2_files_proto_msgTypes[10]
+	mi := &file_mako_v2_files_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -734,7 +864,7 @@ func (x *StageFile) String() string {
 func (*StageFile) ProtoMessage() {}
 
 func (x *StageFile) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_files_proto_msgTypes[10]
+	mi := &file_mako_v2_files_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -747,7 +877,7 @@ func (x *StageFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StageFile.ProtoReflect.Descriptor instead.
 func (*StageFile) Descriptor() ([]byte, []int) {
-	return file_mako_v2_files_proto_rawDescGZIP(), []int{10}
+	return file_mako_v2_files_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *StageFile) GetNodeId() string {
@@ -796,7 +926,7 @@ type Staged struct {
 
 func (x *Staged) Reset() {
 	*x = Staged{}
-	mi := &file_mako_v2_files_proto_msgTypes[11]
+	mi := &file_mako_v2_files_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -808,7 +938,7 @@ func (x *Staged) String() string {
 func (*Staged) ProtoMessage() {}
 
 func (x *Staged) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_files_proto_msgTypes[11]
+	mi := &file_mako_v2_files_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -821,7 +951,7 @@ func (x *Staged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Staged.ProtoReflect.Descriptor instead.
 func (*Staged) Descriptor() ([]byte, []int) {
-	return file_mako_v2_files_proto_rawDescGZIP(), []int{11}
+	return file_mako_v2_files_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Staged) GetPath() string {
@@ -855,24 +985,32 @@ const file_mako_v2_files_proto_rawDesc = "" +
 	"\aignored\x18\x06 \x01(\bR\aignored\"F\n" +
 	"\x03Dir\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12+\n" +
-	"\aentries\x18\x02 \x03(\v2\x11.mako.v2.DirEntryR\aentries\"_\n" +
+	"\aentries\x18\x02 \x03(\v2\x11.mako.v2.DirEntryR\aentries\"\x89\x01\n" +
 	"\bReadFile\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x10\n" +
 	"\x03max\x18\x03 \x01(\x03R\x03max\x12\x14\n" +
-	"\x05image\x18\x04 \x01(\bR\x05image\"\xaf\x01\n" +
+	"\x05image\x18\x04 \x01(\bR\x05image\x12\x16\n" +
+	"\x06offset\x18\x05 \x01(\x03R\x06offset\x12\x10\n" +
+	"\x03raw\x18\x06 \x01(\bR\x03raw\"\xaf\x01\n" +
 	"\x04File\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
 	"\x04size\x18\x02 \x01(\x03R\x04size\x12\x12\n" +
 	"\x04data\x18\x03 \x01(\fR\x04data\x12\x1c\n" +
 	"\ttruncated\x18\x04 \x01(\bR\ttruncated\x12\x16\n" +
 	"\x06binary\x18\x05 \x01(\bR\x06binary\x125\n" +
-	"\bmod_time\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\amodTime\"\x83\x01\n" +
+	"\bmod_time\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\amodTime\"\x9b\x01\n" +
 	"\tWriteFile\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x12\n" +
 	"\x04data\x18\x03 \x01(\fR\x04data\x125\n" +
-	"\bmod_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\amodTime\"U\n" +
+	"\bmod_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\amodTime\x12\x16\n" +
+	"\x06offset\x18\x05 \x01(\x03R\x06offset\"5\n" +
+	"\x06Tunnel\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
+	"\x04port\x18\x02 \x01(\x05R\x04port\"\x1e\n" +
+	"\bTunneled\x12\x12\n" +
+	"\x04addr\x18\x01 \x01(\tR\x04addr\"U\n" +
 	"\x06FileOp\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x0e\n" +
 	"\x02op\x18\x02 \x01(\tR\x02op\x12\x12\n" +
@@ -914,7 +1052,7 @@ func file_mako_v2_files_proto_rawDescGZIP() []byte {
 	return file_mako_v2_files_proto_rawDescData
 }
 
-var file_mako_v2_files_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_mako_v2_files_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_mako_v2_files_proto_goTypes = []any{
 	(*ListDir)(nil),               // 0: mako.v2.ListDir
 	(*DirEntry)(nil),              // 1: mako.v2.DirEntry
@@ -922,20 +1060,22 @@ var file_mako_v2_files_proto_goTypes = []any{
 	(*ReadFile)(nil),              // 3: mako.v2.ReadFile
 	(*File)(nil),                  // 4: mako.v2.File
 	(*WriteFile)(nil),             // 5: mako.v2.WriteFile
-	(*FileOp)(nil),                // 6: mako.v2.FileOp
-	(*Search)(nil),                // 7: mako.v2.Search
-	(*SearchMatch)(nil),           // 8: mako.v2.SearchMatch
-	(*SearchResult)(nil),          // 9: mako.v2.SearchResult
-	(*StageFile)(nil),             // 10: mako.v2.StageFile
-	(*Staged)(nil),                // 11: mako.v2.Staged
-	(*timestamppb.Timestamp)(nil), // 12: google.protobuf.Timestamp
+	(*Tunnel)(nil),                // 6: mako.v2.Tunnel
+	(*Tunneled)(nil),              // 7: mako.v2.Tunneled
+	(*FileOp)(nil),                // 8: mako.v2.FileOp
+	(*Search)(nil),                // 9: mako.v2.Search
+	(*SearchMatch)(nil),           // 10: mako.v2.SearchMatch
+	(*SearchResult)(nil),          // 11: mako.v2.SearchResult
+	(*StageFile)(nil),             // 12: mako.v2.StageFile
+	(*Staged)(nil),                // 13: mako.v2.Staged
+	(*timestamppb.Timestamp)(nil), // 14: google.protobuf.Timestamp
 }
 var file_mako_v2_files_proto_depIdxs = []int32{
-	12, // 0: mako.v2.DirEntry.mod_time:type_name -> google.protobuf.Timestamp
+	14, // 0: mako.v2.DirEntry.mod_time:type_name -> google.protobuf.Timestamp
 	1,  // 1: mako.v2.Dir.entries:type_name -> mako.v2.DirEntry
-	12, // 2: mako.v2.File.mod_time:type_name -> google.protobuf.Timestamp
-	12, // 3: mako.v2.WriteFile.mod_time:type_name -> google.protobuf.Timestamp
-	8,  // 4: mako.v2.SearchResult.matches:type_name -> mako.v2.SearchMatch
+	14, // 2: mako.v2.File.mod_time:type_name -> google.protobuf.Timestamp
+	14, // 3: mako.v2.WriteFile.mod_time:type_name -> google.protobuf.Timestamp
+	10, // 4: mako.v2.SearchResult.matches:type_name -> mako.v2.SearchMatch
 	5,  // [5:5] is the sub-list for method output_type
 	5,  // [5:5] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name
@@ -954,7 +1094,7 @@ func file_mako_v2_files_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_files_proto_rawDesc), len(file_mako_v2_files_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

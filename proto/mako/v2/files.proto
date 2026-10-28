@@ -34,6 +34,10 @@ message ReadFile {
   string path = 2;
   int64 max = 3; // bytes; capped by the daemon
   bool image = 4;
+  // A file read in pieces, as a download reads one: raw replies with the
+  // bytes from offset on, text or not.
+  int64 offset = 5;
+  bool raw = 6;
 }
 
 // File answers ReadFile, WriteFile and FileOp.
@@ -47,12 +51,30 @@ message File {
 }
 
 // WriteFile replaces a file's contents. A set mod_time fails the write,
-// with code "changed", if the file changed since.
+// with code "changed", if the file changed since. A file sent in pieces,
+// as an upload sends one, is written whole by its first piece and grown by
+// the rest: each of those gives the offset it goes at, which must be the
+// file's length.
 message WriteFile {
   string node_id = 1;
   string path = 2;
   bytes data = 3;
   google.protobuf.Timestamp mod_time = 4;
+  int64 offset = 5;
+}
+
+// Tunnel connects to a TCP port on the node's loopback, where a program
+// there serves only that machine, as a web server in development does.
+// Once Tunneled answers, the stream carries that connection's bytes, both
+// ways, and no more frames.
+message Tunnel {
+  string node_id = 1;
+  int32 port = 2;
+}
+
+// Tunneled answers Tunnel: the address connected to.
+message Tunneled {
+  string addr = 1;
 }
 
 // FileOp makes, renames or deletes a file or folder.

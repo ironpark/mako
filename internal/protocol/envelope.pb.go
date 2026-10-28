@@ -70,6 +70,8 @@ type Envelope struct {
 	//	*Envelope_SearchResult
 	//	*Envelope_StageFile
 	//	*Envelope_Staged
+	//	*Envelope_Tunnel
+	//	*Envelope_Tunneled
 	//	*Envelope_GitStatus
 	//	*Envelope_GitChanges
 	//	*Envelope_GitDiff
@@ -442,6 +444,24 @@ func (x *Envelope) GetStaged() *Staged {
 	return nil
 }
 
+func (x *Envelope) GetTunnel() *Tunnel {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Tunnel); ok {
+			return x.Tunnel
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetTunneled() *Tunneled {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Tunneled); ok {
+			return x.Tunneled
+		}
+	}
+	return nil
+}
+
 func (x *Envelope) GetGitStatus() *GitStatus {
 	if x != nil {
 		if x, ok := x.Body.(*Envelope_GitStatus); ok {
@@ -740,6 +760,14 @@ type Envelope_Staged struct {
 	Staged *Staged `protobuf:"bytes,59,opt,name=staged,proto3,oneof"`
 }
 
+type Envelope_Tunnel struct {
+	Tunnel *Tunnel `protobuf:"bytes,90,opt,name=tunnel,proto3,oneof"`
+}
+
+type Envelope_Tunneled struct {
+	Tunneled *Tunneled `protobuf:"bytes,91,opt,name=tunneled,proto3,oneof"`
+}
+
 type Envelope_GitStatus struct {
 	// Git.
 	GitStatus *GitStatus `protobuf:"bytes,60,opt,name=git_status,json=gitStatus,proto3,oneof"`
@@ -791,7 +819,7 @@ type Envelope_Chat struct {
 }
 
 type Envelope_ForgeList struct {
-	// GitHub.
+	// A forge: GitHub, Forgejo or Gitea.
 	ForgeList *ForgeList `protobuf:"bytes,80,opt,name=forge_list,json=forgeList,proto3,oneof"`
 }
 
@@ -878,6 +906,10 @@ func (*Envelope_SearchResult) isEnvelope_Body() {}
 func (*Envelope_StageFile) isEnvelope_Body() {}
 
 func (*Envelope_Staged) isEnvelope_Body() {}
+
+func (*Envelope_Tunnel) isEnvelope_Body() {}
+
+func (*Envelope_Tunneled) isEnvelope_Body() {}
 
 func (*Envelope_GitStatus) isEnvelope_Body() {}
 
@@ -971,7 +1003,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\"\x92\x14\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\"\xee\x14\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12&\n" +
 	"\x05hello\x18\n" +
@@ -1012,7 +1044,9 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\rsearch_result\x189 \x01(\v2\x15.mako.v2.SearchResultH\x00R\fsearchResult\x123\n" +
 	"\n" +
 	"stage_file\x18: \x01(\v2\x12.mako.v2.StageFileH\x00R\tstageFile\x12)\n" +
-	"\x06staged\x18; \x01(\v2\x0f.mako.v2.StagedH\x00R\x06staged\x123\n" +
+	"\x06staged\x18; \x01(\v2\x0f.mako.v2.StagedH\x00R\x06staged\x12)\n" +
+	"\x06tunnel\x18Z \x01(\v2\x0f.mako.v2.TunnelH\x00R\x06tunnel\x12/\n" +
+	"\btunneled\x18[ \x01(\v2\x11.mako.v2.TunneledH\x00R\btunneled\x123\n" +
 	"\n" +
 	"git_status\x18< \x01(\v2\x12.mako.v2.GitStatusH\x00R\tgitStatus\x126\n" +
 	"\vgit_changes\x18= \x01(\v2\x13.mako.v2.GitChangesH\x00R\n" +
@@ -1091,23 +1125,25 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*SearchResult)(nil),   // 32: mako.v2.SearchResult
 	(*StageFile)(nil),      // 33: mako.v2.StageFile
 	(*Staged)(nil),         // 34: mako.v2.Staged
-	(*GitStatus)(nil),      // 35: mako.v2.GitStatus
-	(*GitChanges)(nil),     // 36: mako.v2.GitChanges
-	(*GitDiff)(nil),        // 37: mako.v2.GitDiff
-	(*Diff)(nil),           // 38: mako.v2.Diff
-	(*GitLog)(nil),         // 39: mako.v2.GitLog
-	(*GitHistory)(nil),     // 40: mako.v2.GitHistory
-	(*GitShow)(nil),        // 41: mako.v2.GitShow
-	(*GitCommitInfo)(nil),  // 42: mako.v2.GitCommitInfo
-	(*GitRun)(nil),         // 43: mako.v2.GitRun
-	(*GitResult)(nil),      // 44: mako.v2.GitResult
-	(*ReadChat)(nil),       // 45: mako.v2.ReadChat
-	(*Chat)(nil),           // 46: mako.v2.Chat
-	(*ForgeList)(nil),      // 47: mako.v2.ForgeList
-	(*ForgeItems)(nil),     // 48: mako.v2.ForgeItems
-	(*ForgeView)(nil),      // 49: mako.v2.ForgeView
-	(*ForgeDetail)(nil),    // 50: mako.v2.ForgeDetail
-	(*ForgeRun)(nil),       // 51: mako.v2.ForgeRun
+	(*Tunnel)(nil),         // 35: mako.v2.Tunnel
+	(*Tunneled)(nil),       // 36: mako.v2.Tunneled
+	(*GitStatus)(nil),      // 37: mako.v2.GitStatus
+	(*GitChanges)(nil),     // 38: mako.v2.GitChanges
+	(*GitDiff)(nil),        // 39: mako.v2.GitDiff
+	(*Diff)(nil),           // 40: mako.v2.Diff
+	(*GitLog)(nil),         // 41: mako.v2.GitLog
+	(*GitHistory)(nil),     // 42: mako.v2.GitHistory
+	(*GitShow)(nil),        // 43: mako.v2.GitShow
+	(*GitCommitInfo)(nil),  // 44: mako.v2.GitCommitInfo
+	(*GitRun)(nil),         // 45: mako.v2.GitRun
+	(*GitResult)(nil),      // 46: mako.v2.GitResult
+	(*ReadChat)(nil),       // 47: mako.v2.ReadChat
+	(*Chat)(nil),           // 48: mako.v2.Chat
+	(*ForgeList)(nil),      // 49: mako.v2.ForgeList
+	(*ForgeItems)(nil),     // 50: mako.v2.ForgeItems
+	(*ForgeView)(nil),      // 51: mako.v2.ForgeView
+	(*ForgeDetail)(nil),    // 52: mako.v2.ForgeDetail
+	(*ForgeRun)(nil),       // 53: mako.v2.ForgeRun
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -1144,28 +1180,30 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	32, // 31: mako.v2.Envelope.search_result:type_name -> mako.v2.SearchResult
 	33, // 32: mako.v2.Envelope.stage_file:type_name -> mako.v2.StageFile
 	34, // 33: mako.v2.Envelope.staged:type_name -> mako.v2.Staged
-	35, // 34: mako.v2.Envelope.git_status:type_name -> mako.v2.GitStatus
-	36, // 35: mako.v2.Envelope.git_changes:type_name -> mako.v2.GitChanges
-	37, // 36: mako.v2.Envelope.git_diff:type_name -> mako.v2.GitDiff
-	38, // 37: mako.v2.Envelope.diff:type_name -> mako.v2.Diff
-	39, // 38: mako.v2.Envelope.git_log:type_name -> mako.v2.GitLog
-	40, // 39: mako.v2.Envelope.git_history:type_name -> mako.v2.GitHistory
-	41, // 40: mako.v2.Envelope.git_show:type_name -> mako.v2.GitShow
-	42, // 41: mako.v2.Envelope.git_commit_info:type_name -> mako.v2.GitCommitInfo
-	43, // 42: mako.v2.Envelope.git_run:type_name -> mako.v2.GitRun
-	44, // 43: mako.v2.Envelope.git_result:type_name -> mako.v2.GitResult
-	45, // 44: mako.v2.Envelope.read_chat:type_name -> mako.v2.ReadChat
-	46, // 45: mako.v2.Envelope.chat:type_name -> mako.v2.Chat
-	47, // 46: mako.v2.Envelope.forge_list:type_name -> mako.v2.ForgeList
-	48, // 47: mako.v2.Envelope.forge_items:type_name -> mako.v2.ForgeItems
-	49, // 48: mako.v2.Envelope.forge_view:type_name -> mako.v2.ForgeView
-	50, // 49: mako.v2.Envelope.forge_detail:type_name -> mako.v2.ForgeDetail
-	51, // 50: mako.v2.Envelope.forge_run:type_name -> mako.v2.ForgeRun
-	51, // [51:51] is the sub-list for method output_type
-	51, // [51:51] is the sub-list for method input_type
-	51, // [51:51] is the sub-list for extension type_name
-	51, // [51:51] is the sub-list for extension extendee
-	0,  // [0:51] is the sub-list for field type_name
+	35, // 34: mako.v2.Envelope.tunnel:type_name -> mako.v2.Tunnel
+	36, // 35: mako.v2.Envelope.tunneled:type_name -> mako.v2.Tunneled
+	37, // 36: mako.v2.Envelope.git_status:type_name -> mako.v2.GitStatus
+	38, // 37: mako.v2.Envelope.git_changes:type_name -> mako.v2.GitChanges
+	39, // 38: mako.v2.Envelope.git_diff:type_name -> mako.v2.GitDiff
+	40, // 39: mako.v2.Envelope.diff:type_name -> mako.v2.Diff
+	41, // 40: mako.v2.Envelope.git_log:type_name -> mako.v2.GitLog
+	42, // 41: mako.v2.Envelope.git_history:type_name -> mako.v2.GitHistory
+	43, // 42: mako.v2.Envelope.git_show:type_name -> mako.v2.GitShow
+	44, // 43: mako.v2.Envelope.git_commit_info:type_name -> mako.v2.GitCommitInfo
+	45, // 44: mako.v2.Envelope.git_run:type_name -> mako.v2.GitRun
+	46, // 45: mako.v2.Envelope.git_result:type_name -> mako.v2.GitResult
+	47, // 46: mako.v2.Envelope.read_chat:type_name -> mako.v2.ReadChat
+	48, // 47: mako.v2.Envelope.chat:type_name -> mako.v2.Chat
+	49, // 48: mako.v2.Envelope.forge_list:type_name -> mako.v2.ForgeList
+	50, // 49: mako.v2.Envelope.forge_items:type_name -> mako.v2.ForgeItems
+	51, // 50: mako.v2.Envelope.forge_view:type_name -> mako.v2.ForgeView
+	52, // 51: mako.v2.Envelope.forge_detail:type_name -> mako.v2.ForgeDetail
+	53, // 52: mako.v2.Envelope.forge_run:type_name -> mako.v2.ForgeRun
+	53, // [53:53] is the sub-list for method output_type
+	53, // [53:53] is the sub-list for method input_type
+	53, // [53:53] is the sub-list for extension type_name
+	53, // [53:53] is the sub-list for extension extendee
+	0,  // [0:53] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -1214,6 +1252,8 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_SearchResult)(nil),
 		(*Envelope_StageFile)(nil),
 		(*Envelope_Staged)(nil),
+		(*Envelope_Tunnel)(nil),
+		(*Envelope_Tunneled)(nil),
 		(*Envelope_GitStatus)(nil),
 		(*Envelope_GitChanges)(nil),
 		(*Envelope_GitDiff)(nil),

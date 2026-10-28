@@ -69,6 +69,8 @@ message Envelope {
     SearchResult search_result = 57;
     StageFile stage_file = 58;
     Staged staged = 59;
+    Tunnel tunnel = 90;
+    Tunneled tunneled = 91;
 
     // Git.
     GitStatus git_status = 60;
@@ -86,7 +88,7 @@ message Envelope {
     ReadChat read_chat = 70;
     Chat chat = 71;
 
-    // GitHub.
+    // A forge: GitHub, Forgejo or Gitea.
     ForgeList forge_list = 80;
     ForgeItems forge_items = 81;
     ForgeView forge_view = 82;

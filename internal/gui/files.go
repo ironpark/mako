@@ -57,6 +57,8 @@ type fileItem struct {
 	Key, Node, Path, Name string
 	Dir, Stub             bool
 	Ignored               bool // left out of the repository, and shown dimmed
+	Size                  int64
+	Mod                   time.Time
 }
 
 // filePreview is the file shown under the tree.
@@ -169,14 +171,20 @@ func (m *model) refreshFiles() {
 	if root.Path == "" {
 		return
 	}
-	m.loadDir(root.Node, root.Path, true)
-	for key, open := range ggui.Peek(m.FilesOpen) {
-		if node, path := splitKey(key); open && node == root.Node && strings.HasPrefix(path, root.Path) {
-			m.loadDir(node, path, true)
-		}
-	}
+	m.reloadOpen(root.Node, root.Path, ggui.Peek(m.FilesOpen))
 	if p := ggui.Peek(m.Preview); p.Key != "" {
 		m.openPreview(p.fileItem)
+	}
+}
+
+// reloadOpen reads the folder dir of node again, and every folder open in
+// it, by the keys of open.
+func (m *model) reloadOpen(node, dir string, open map[string]bool) {
+	m.loadDir(node, dir, true)
+	for key, o := range open {
+		if n, p := splitKey(key); o && n == node && strings.HasPrefix(p, dir) {
+			m.loadDir(n, p, true)
+		}
 	}
 }
 
@@ -200,7 +208,8 @@ func (m *model) children(it fileItem) []fileItem {
 			continue
 		}
 		path := joinPath(it.Path, e.GetName())
-		items = append(items, fileItem{Key: dirKey(it.Node, path), Node: it.Node, Path: path, Name: e.GetName(), Dir: e.GetDir(), Ignored: e.GetIgnored()})
+		items = append(items, fileItem{Key: dirKey(it.Node, path), Node: it.Node, Path: path, Name: e.GetName(), Dir: e.GetDir(), Ignored: e.GetIgnored(),
+			Size: e.GetSize(), Mod: protocol.TimeOf(e.GetModTime())})
 	}
 	return items
 }
@@ -224,11 +233,14 @@ func resolvePath(dir, rel string) string {
 	return path.Join(dir, rel)
 }
 
-// openItem opens a file in what shows it: an image in the preview, any
-// other file in a tab, at line when it is not 0.
+// openItem opens a file in what shows it: an image in the Files tab's
+// preview, which it brings out, any other file in a tab, at line when it
+// is not 0.
 func (m *model) openItem(it fileItem, line int) {
 	switch {
 	case isImage(it.Name):
+		m.DetailsOpen.Set(true)
+		m.DetailTab.Set(filesTab)
 		m.openPreview(it)
 	case line > 0:
 		m.openFileAt(it, line)
@@ -368,10 +380,13 @@ func filesView(m *model, r fileRoot) ggui.Widget {
 			if it.Dir { // a folder's icon opens with it
 				lead = ggui.View(ggui.Map(m.FilesOpen, func(o map[string]bool) bool { return o[it.Key] }), leadIcon)
 			}
-			row := ggui.Row(lead, ggui.Expanded(label)).Gap(7)
+			var row ggui.Widget = ggui.Row(lead, ggui.Expanded(label)).Gap(7)
+			if it.Dir {
+				row = folderDrop(m, row, it)
+			}
 			// Dragged to a terminal or the message box, it is typed as
-			// its path.
-			return fileMenu(m, ggui.DragSource(row, pathDrag{Path: it.Path}), it)
+			// its path; to a folder, it moves there.
+			return fileMenu(m, ggui.DragSource(row, pathDrag{Node: it.Node, Path: it.Path}), it)
 		}).
 		RowName(func(it fileItem) string { return it.Name }).
 		// A folder says it is open by its icon, and opens on a press.
@@ -421,7 +436,11 @@ func filesView(m *model, r fileRoot) ggui.Widget {
 		).Gap(6)).Pad(4, 6, 4, 12)
 	})).Stretch()
 	hasPreview := ggui.Map(m.Preview, func(p filePreview) bool { return p.Key != "" })
-	return treeOverPane(header, ggui.Scroll(ggui.Padding(tree, 4, 4)).Bar(tokSurface3),
+	// Files dropped from the desktop below the folders go into the project.
+	list := ggui.Pointer(ggui.Scroll(ggui.Padding(tree, 4, 4)).Bar(tokSurface3)).OnDrop(func(ev ggui.DropEvent) {
+		m.copyInto(r.Node, r.Path, ev.Paths())
+	})
+	return treeOverPane(header, list,
 		hasPreview, 0.55, func() ggui.Widget { return previewPane(m) }, T("Preview divider"))
 }
 

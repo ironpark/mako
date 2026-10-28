@@ -51,20 +51,35 @@ func folderOf(it fileItem) fileItem {
 	return dirItem(it.Node, parentDir(it.Path))
 }
 
-// askFile asks for what op needs: a name, or a yes.
-func (m *model) askFile(op string, it fileItem) {
-	m.FileAsk.Set(fileAsk{Op: op, Item: it})
-	m.FileErr.Set("")
+// fileOps is a file operation waiting on the user in a window, the Files
+// tab's or a node's file browser: the operation, the name typed for it,
+// why it failed, and the dialogs asking.
+type fileOps struct {
+	Ask        *ggui.StateValue[fileAsk]
+	Name, Err  *ggui.StateValue[string]
+	NameOpen   *ggui.StateValue[bool]
+	DeleteOpen *ggui.StateValue[bool]
+}
+
+func newFileOps() fileOps {
+	return fileOps{Ask: ggui.State(fileAsk{}), Name: ggui.State(""), Err: ggui.State(""),
+		NameOpen: ggui.State(false), DeleteOpen: ggui.State(false)}
+}
+
+// ask asks for what op needs: a name, or a yes.
+func (o fileOps) ask(op string, it fileItem) {
+	o.Ask.Set(fileAsk{Op: op, Item: it})
+	o.Err.Set("")
 	switch op {
 	case protocol.FileDelete:
-		m.FileDeleteOpen.Set(true)
+		o.DeleteOpen.Set(true)
 		return
 	case protocol.FileRename:
-		m.FileName.Set(it.Name)
+		o.Name.Set(it.Name)
 	default:
-		m.FileName.Set("")
+		o.Name.Set("")
 	}
-	m.FileNameOpen.Set(true)
+	o.NameOpen.Set(true)
 }
 
 // validName reports why a name cannot be a file's, or "" when it can.
@@ -78,22 +93,23 @@ func validName(name string) string {
 	return ""
 }
 
-// submitFile carries out the operation asked, on the node the item is on,
-// and reads its folder again.
-func (m *model) submitFile() {
-	a := ggui.Peek(m.FileAsk)
+// submit carries out the operation asked, on the node the item is on,
+// reads its folder again, and hands done what it made. A failed delete,
+// whose confirmation has closed, says why to note.
+func (o fileOps) submit(m *model, note func(string), done func(fileAsk, *protocol.File)) {
+	a := ggui.Peek(o.Ask)
 	it := a.Item
 	req := &protocol.FileOp{NodeId: m.remoteID(it.Node), Op: a.Op, Path: it.Path}
 	if a.Op != protocol.FileDelete {
-		name := strings.TrimSpace(ggui.Peek(m.FileName))
+		name := strings.TrimSpace(ggui.Peek(o.Name))
 		if why := validName(name); why != "" {
-			m.FileErr.Set(why)
+			o.Err.Set(why)
 			return
 		}
 		switch a.Op {
 		case protocol.FileRename:
 			if name == it.Name {
-				m.FileNameOpen.Set(false)
+				o.NameOpen.Set(false)
 				return
 			}
 			req.To = joinPath(parentDir(it.Path), name)
@@ -105,19 +121,54 @@ func (m *model) submitFile() {
 		return c.FileOp(ctx, req)
 	}, func(f *protocol.File, err error) {
 		if err != nil {
-			m.FileErr.Set(nodeErr(err))
+			o.Err.Set(nodeErr(err))
 			if a.Op == protocol.FileDelete {
-				m.FileNote.Set(nodeErr(err)) // the confirmation has closed
+				note(nodeErr(err))
 			}
 			return
 		}
-		m.FileNameOpen.Set(false)
-		m.FileNote.Set("")
+		o.NameOpen.Set(false)
 		folder := it.Path
 		if a.Op != protocol.FileCreate && a.Op != protocol.FileMkdir {
 			folder = parentDir(it.Path)
 		}
 		m.loadDir(it.Node, folder, true)
+		done(a, f)
+	})
+}
+
+// dialogs are the name prompt and the delete confirmation, which submit.
+func (o fileOps) dialogs(submit func()) ggui.Widget {
+	return ggui.View(o.Ask, func(a fileAsk) ggui.Widget {
+		title, action := T("New file"), T("Create")
+		switch a.Op {
+		case protocol.FileMkdir:
+			title = T("New folder")
+		case protocol.FileRename:
+			title, action = T("Rename"), T("Rename")
+		}
+		what := T("This file is deleted from its node. It cannot be undone.")
+		if a.Item.Dir {
+			what = T("This folder and everything in it are deleted from its node. It cannot be undone.")
+		}
+		return ggui.Stack(
+			nameDialog(nameAsk{Open: o.NameOpen, Text: o.Name, Err: o.Err,
+				Title: title, Field: T("File name"), Action: action, Submit: submit}),
+			ui.AlertDialog(o.DeleteOpen, Tf("Delete %s?", a.Item.Name), what).
+				Confirm(T("Delete"), submit).Destructive(),
+		)
+	})
+}
+
+// askFile asks, in the Files tab, for what op needs.
+func (m *model) askFile(op string, it fileItem) { m.FileOps.ask(op, it) }
+
+// submitFile carries out the operation the Files tab asked, then shows
+// what it made: a new file in a tab, a new folder open.
+func (m *model) submitFile() {
+	m.FileOps.submit(m, m.FileNote.Set, func(a fileAsk, f *protocol.File) {
+		it := a.Item
+		m.FileNote.Set("")
 		switch a.Op {
 		case protocol.FileCreate:
 			m.openFile(fileItem{Key: dirKey(it.Node, f.GetPath()), Node: it.Node, Path: f.GetPath(), Name: baseName(f.GetPath())})
@@ -157,6 +208,15 @@ func fileMenu(m *model, w ggui.Widget, it fileItem) ggui.Widget {
 	}
 	if m.onThisMachine(it.Node) {
 		items = append(items, ui.MenuItem(fileManagerLabel(), func() { m.showInFileManager(it) }))
+	} else {
+		// Another node's files show in a window of mako's own.
+		sel := it.Path // a file is chosen in its folder
+		if it.Dir {
+			sel = ""
+		}
+		items = append(items, ui.MenuItem(Tf("Show in %s's files", nodeName(ggui.Peek(m.Nodes), it.Node)), func() {
+			m.openBrowser(it.Node, folderOf(it).Path, sel)
+		}))
 	}
 	items = append(items, m.editorItems(it.Node, it.Path, nil, m.FileNote.Set)...)
 	folder := folderOf(it)
@@ -203,25 +263,5 @@ func newInRoot(m *model, r fileRoot) ggui.Widget {
 	).Name(T("New in project")), 6)
 }
 
-// fileDialogs are the name prompt and the delete confirmation.
-func fileDialogs(m *model) ggui.Widget {
-	return ggui.View(m.FileAsk, func(a fileAsk) ggui.Widget {
-		title, action := T("New file"), T("Create")
-		switch a.Op {
-		case protocol.FileMkdir:
-			title = T("New folder")
-		case protocol.FileRename:
-			title, action = T("Rename"), T("Rename")
-		}
-		what := T("This file is deleted from its node. It cannot be undone.")
-		if a.Item.Dir {
-			what = T("This folder and everything in it are deleted from its node. It cannot be undone.")
-		}
-		return ggui.Stack(
-			nameDialog(nameAsk{Open: m.FileNameOpen, Text: m.FileName, Err: m.FileErr,
-				Title: title, Field: T("File name"), Action: action, Submit: m.submitFile}),
-			ui.AlertDialog(m.FileDeleteOpen, Tf("Delete %s?", a.Item.Name), what).
-				Confirm(T("Delete"), m.submitFile).Destructive(),
-		)
-	})
-}
+// fileDialogs are the Files tab's name prompt and delete confirmation.
+func fileDialogs(m *model) ggui.Widget { return m.FileOps.dialogs(m.submitFile) }

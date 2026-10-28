@@ -397,14 +397,15 @@ for. A daemon that predates the flag ignores it and sends the messages too.
 | Request | Payload | Reply | |
 |---|---|---|---|
 | `list_dir` | `ListDir` | `dir` | A directory's entries, directories first, then by name. |
-| `read_file` | `ReadFile` | `file` | The start of a file, or with `image` the whole of an image. |
-| `write_file` | `WriteFile` | `file` | Replaces a file's contents, keeping its mode. |
+| `read_file` | `ReadFile` | `file` | The start of a file, or with `image` the whole of an image, or with `raw` a piece of any file from `offset`. |
+| `write_file` | `WriteFile` | `file` | Replaces a file's contents, keeping its mode, or with an `offset` adds a piece to its end. |
 | `file_op` | `FileOp` | `file` | `create`, `mkdir`, `rename` (to `to`) or `delete`. None replaces what exists. |
 | `search` | `Search` | `search_result` | A project's files, or the lines holding `query`. Both leave out what `.gitignore` does. |
 | `stage_file` | `StageFile` | `staged` | A piece of a file the front-end has, such as one dropped on a window, kept on the node so a session there can read it. |
 
-Paths are absolute, on the node named, except that `read_file` also takes
-one in the node's home written `~/…`, and answers with the path it read.
+Paths are absolute, on the node named, except that `read_file` and
+`list_dir` also take one in the node's home written `~` or `~/…`, and answer
+with the path they read.
 `read_file` sets `binary` and leaves `data` out for a file that is not text,
 and `truncated` when `data` is only the start. Its `mod_time` is what a `write_file` hands back: a non-zero `mod_time`
 in the write makes it fail with code `changed` if the file changed since.
@@ -416,6 +417,37 @@ a folder of its own in its temporary directory, as `mako-drops/<time>-<id>/<name
 and answers with the `path`. The rest give that `path` and the `offset` their
 `data` goes at. A staged file is at most 512 MB, and the first piece staged a
 day later removes the folders older than that.
+
+A front-end copying a file to a node, rather than handing it to a session,
+makes it with `file_op` `create`, which refuses a name taken, then writes it
+in pieces: the first `write_file` with no `offset` writes it whole, and each
+of the rest gives the `offset` it goes at, which must be the file's length,
+so a piece sent twice or lost fails. A copy back reads it with `read_file`
+`raw`, a piece at a time from each `offset`, until `truncated` is unset.
+A daemon from before these fields answers a piece as it would a whole
+write or read, so a front-end asks only a node whose `revision` is 7 or
+later, as it does before opening a tunnel.
+
+### Tunnels
+
+| Request | Payload | Reply | |
+|---|---|---|---|
+| `tunnel` | `Tunnel` | `tunneled` | Connects to a TCP `port` on the node's loopback; the stream then carries the connection. |
+
+A tunnel reaches a server that listens only on its own machine, as a web
+server in development does, from a front-end on another. The node dials
+`127.0.0.1`, then `::1`, at `port`, and answers `tunneled` with the address
+it reached, or an error when nothing answers there within 5 s. After
+`tunneled` the stream carries the TCP connection's bytes as they are, in
+both directions, with no more frames. Either side ending what it sends
+closes only the other's writing half, where the connection allows, so a
+program that reads to the end of a request still hears it; the stream
+closes when both have ended.
+
+A daemon relaying a tunnel to a peer opens a tunnel stream to it and copies
+the bytes both ways without reading them, as it does an attach. The
+desktop app listens on the same port of its own loopback when it is free,
+else on any, and opens one tunnel for each connection made to it.
 
 ### Git
 
@@ -687,6 +719,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
 | Frame | 8 MiB |
 | `read_file`, text | 4 MiB, or `max` if smaller |
 | `read_file`, image | 5 MiB |
+| `read_file`, `raw` piece | 4 MiB, or `max` if smaller |
 | Replay screen piece | 256 KiB |
 | Conversation log read for `read_chat` | 2 MiB before `before` (or the end), at most 200 messages |
 | `stage_file` | 512 MiB a file |
@@ -696,6 +729,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
 | Session name | 200 bytes |
 | Git operations | 2 minutes |
 | Forwarded peer requests | 5 s to dial |
+| `tunnel` | 5 s to reach the port |
 | Approval watch | 15 s after the last `list_sessions` with `approvals` |
 | Introductions on libp2p | 10 s |
 | A message on `/mako/trust/1`, `/mako/state/2`, `/mako/access/1` | 1 MiB |
@@ -796,5 +830,7 @@ a daemon, no requests, no sessions, no relay. Keys are let in one way, and
 taken out at once. The libp2p port may face the internet.
 
 Letting a key in hands its holder the machine: anyone it lets in can start
-programs and read and write files there. Let in the keys of your own
+programs and read and write files there, and reach any port of its
+loopback through a tunnel, even one a server there keeps from the network.
+Let in the keys of your own
 machines, and an SSH key only when its private half is kept safe.

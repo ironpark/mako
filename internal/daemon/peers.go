@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/p2p"
@@ -50,9 +49,11 @@ func (d *Daemon) node(nodeID string) (*protocol.Node, error) {
 	return node, nil
 }
 
-// forwardAttach splices a front-end stream onto a peer's session, so the
-// daemon a user is connected to acts as a relay for the whole mesh.
-func (d *Daemon) forwardAttach(ctx context.Context, req *protocol.Attach, client *transport.Stream) error {
+// relayToPeer hands a front-end's stream to the daemon of the node req
+// names, as a request of type typ whose stream then carries what that
+// daemon says: an attached session, or a tunnel. The relay copies the
+// bytes both ways without reading them, as both legs speak the same.
+func (d *Daemon) relayToPeer(ctx context.Context, typ protocol.Type, req routed, client *transport.Stream) error {
 	node, err := d.node(req.GetNodeId())
 	if err != nil {
 		return err
@@ -61,31 +62,12 @@ func (d *Daemon) forwardAttach(ctx context.Context, req *protocol.Attach, client
 	if err != nil {
 		return err
 	}
-	defer peer.Close()
-
-	if err := peer.Send(protocol.TypeAttach, "", forPeer(req)); err != nil {
+	if err := peer.Send(typ, "", forPeer(req)); err != nil {
+		peer.Close()
 		return err
 	}
-	// Both legs speak the same frames from here on, which the relay need
-	// not read: the bytes are copied through.
-	return relayBoth(ctx,
-		func() error { _, err := io.Copy(client, peer); return err }, // output to the front-end
-		func() error { _, err := io.Copy(peer, client); return err }, // input to the peer
-	)
-}
-
-// relayBoth runs both directions of a relay until either ends.
-func relayBoth(ctx context.Context, a, b func() error) error {
-	errs := make(chan error, 2)
-	go func() { errs <- a() }()
-	go func() { errs <- b() }()
-	select {
-	case err := <-errs:
-		if isClosed(err) {
-			return nil
-		}
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
+	if err := transport.Splice(ctx, client, peer); err != nil && !isClosed(err) {
+		d.log.Debug("relay ended", "node", node.GetName(), "type", typ, "err", err)
 	}
+	return nil
 }

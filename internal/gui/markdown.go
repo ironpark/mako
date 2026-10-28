@@ -11,7 +11,6 @@ import (
 
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
-	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -382,7 +381,7 @@ func (r *mdRenderer) open(dest string) {
 	case dest == "" || strings.HasPrefix(dest, "#"):
 		return
 	case strings.Contains(dest, "://") || strings.HasPrefix(dest, "mailto:"):
-		_ = runtime.OpenURL(dest)
+		r.m.openWeb(r.doc.Node, dest) // a server a file on another node names, as a README's
 		return
 	}
 	if r.doc.Path == "" {

@@ -115,7 +115,10 @@ mako allow <node>             # let in a machine that asked
   node can start.
 - **Terminal.** Colours, wide characters, the IME, the mouse, links that
   open with ⌘-click, image previews, pasted screenshots, and files dropped
-  in as paths, even to a session on another machine.
+  in as paths, even to a session on another machine. A link to a server
+  on another machine's `localhost` opens here through a tunnel, on the same
+  port when it is free; the sidebar lists the ports forwarded, and any
+  port of a node can be forwarded by hand.
 - **Chat.** The conversation as the agent logged it, and a composer that
   types into the live session (Enter sends; Shift-Enter starts a new line;
   ↑ recalls what you sent).
@@ -134,6 +137,13 @@ mako allow <node>             # let in a machine that asked
   request in a worktree of its own. The Git tab shows the branch's pull
   request and checks, and a desktop notification says when its runs
   finish.
+- **Files on other machines.** A node other than this one has a file
+  browser window of mako's own, as Finder or Explorer is for this one:
+  browse its folders, open a file in a tab, rename, delete, and upload by
+  dropping files on the window or download to this machine. Files dropped
+  from the desktop onto a folder of the Files tab are copied into it,
+  folders and all, and a file dragged within the tab moves. A file dropped
+  anywhere else opens in a tab.
 - **Editors.** Open a file or folder of this machine in VS Code, Cursor,
   Windsurf, Zed, Sublime Text or a JetBrains IDE, from the Files tab, or
   from a file's or a diff's tab at its line.

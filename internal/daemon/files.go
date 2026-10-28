@@ -36,15 +36,18 @@ const maxImage = 5 << 20
 
 func (d *Daemon) handleListDir(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeDir,
-		func(r *protocol.ListDir) (*protocol.Dir, error) { return listDir(r.GetPath()) })
+		func(r *protocol.ListDir) (*protocol.Dir, error) { return listDir(mcp.ExpandHome(r.GetPath())) })
 }
 
 func (d *Daemon) handleReadFile(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeFile,
 		func(r *protocol.ReadFile) (*protocol.File, error) {
 			path := mcp.ExpandHome(r.GetPath()) // as a terminal may write it
-			if r.GetImage() {
+			switch {
+			case r.GetImage():
 				return readImage(path)
+			case r.GetRaw():
+				return readPiece(path, r.GetOffset(), int(r.GetMax()))
 			}
 			return readFile(path, int(r.GetMax()))
 		})
@@ -53,6 +56,9 @@ func (d *Daemon) handleReadFile(ctx context.Context, stream *transport.Stream, e
 func (d *Daemon) handleWriteFile(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeFile,
 		func(r *protocol.WriteFile) (*protocol.File, error) {
+			if r.GetOffset() > 0 {
+				return writePiece(r.GetPath(), r.GetOffset(), r.GetData())
+			}
 			return writeFile(r.GetPath(), r.GetData(), protocol.TimeOf(r.GetModTime()))
 		})
 }
@@ -264,25 +270,36 @@ func markIgnored(dir string, entries []*protocol.DirEntry) {
 	}
 }
 
-func readFile(path string, limit int) (*protocol.File, error) {
+// openToRead opens the file at path, not a directory, for a read of at
+// most limit bytes, capped at maxRead.
+func openToRead(path string, limit int) (*os.File, os.FileInfo, int, error) {
 	if err := absolute(path); err != nil {
-		return nil, err
+		return nil, nil, 0, err
 	}
 	if limit <= 0 || limit > maxRead {
 		limit = maxRead
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, 0, err
 	}
-	defer f.Close()
 	info, err := f.Stat()
+	if err == nil && info.IsDir() {
+		err = errors.New("a directory is not a file")
+	}
+	if err != nil {
+		f.Close()
+		return nil, nil, 0, err
+	}
+	return f, info, limit, nil
+}
+
+func readFile(path string, limit int) (*protocol.File, error) {
+	f, info, limit, err := openToRead(path, limit)
 	if err != nil {
 		return nil, err
 	}
-	if info.IsDir() {
-		return nil, errors.New("a directory is not a file")
-	}
+	defer f.Close()
 	data, err := io.ReadAll(io.LimitReader(f, int64(limit)))
 	if err != nil {
 		return nil, err
@@ -294,6 +311,51 @@ func readFile(path string, limit int) (*protocol.File, error) {
 	}
 	out.Data = data
 	return out, nil
+}
+
+// readPiece reads a file from offset on, at most limit bytes of it,
+// whatever they are: a piece of a download.
+func readPiece(path string, offset int64, limit int) (*protocol.File, error) {
+	f, info, limit, err := openToRead(path, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data := make([]byte, max(0, min(int64(limit), info.Size()-offset)))
+	n, err := f.ReadAt(data, offset)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	return &protocol.File{Path: path, Size: info.Size(), ModTime: protocol.Time(info.ModTime()), Data: data[:n],
+		Truncated: offset+int64(n) < info.Size()}, nil
+}
+
+// writePiece adds a later piece of an upload to the end of the file the
+// first one wrote, which must be offset long: a piece sent twice, or one
+// gone missing, fails rather than leaving the file wrong.
+func writePiece(path string, offset int64, data []byte) (*protocol.File, error) {
+	if err := absolute(path); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() != offset {
+		return nil, fmt.Errorf("%s is %d bytes long, not %d", filepath.Base(path), info.Size(), offset)
+	}
+	if _, err := f.WriteAt(data, offset); err != nil {
+		return nil, err
+	}
+	if info, err = f.Stat(); err != nil {
+		return nil, err
+	}
+	return &protocol.File{Path: path, Size: info.Size(), ModTime: protocol.Time(info.ModTime())}, f.Close()
 }
 
 // writeFile replaces a file's contents, or creates it. The data goes to a
@@ -404,12 +466,14 @@ func forward[R proto.Message](ctx context.Context, d *Daemon, typ protocol.Type,
 	return transport.Call[R](stream, typ, forPeer(req))
 }
 
-// forPeer is a request as it goes on to its node's daemon: a copy, its
-// node cleared, so the peer serves it locally.
+// forPeer is a request as it goes on to its node's daemon: its node
+// cleared, so the peer serves it locally. The request is the relay's own,
+// decoded for it, and cleared in place rather than copied with the file
+// a write carries.
 func forPeer(req routed) proto.Message {
-	c := proto.Clone(req).ProtoReflect()
-	c.Clear(c.Descriptor().Fields().ByName("node_id"))
-	return c.Interface()
+	r := req.ProtoReflect()
+	r.Clear(r.Descriptor().Fields().ByName("node_id"))
+	return req
 }
 
 // fileOp makes, renames or deletes a file or folder. None of them replaces

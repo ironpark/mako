@@ -90,7 +90,7 @@ func (d *Daemon) handleAttach(ctx context.Context, stream *transport.Stream, env
 		return err
 	}
 	if !d.local(req.GetNodeId()) {
-		return d.forwardAttach(ctx, req, stream)
+		return d.relayToPeer(ctx, protocol.TypeAttach, req, stream)
 	}
 	return d.attachLocal(ctx, req, attachWire{stream: stream, id: env.GetId(), sessionID: req.GetSessionId()})
 }

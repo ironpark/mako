@@ -106,24 +106,36 @@ func (m *model) stage(node, path string) (string, error) {
 
 // stageFile sends what r holds to node as a staged file named name.
 func stageFile(ctx context.Context, c *client.Client, node, name string, r io.Reader) (string, error) {
-	buf := make([]byte, stageChunk)
 	var path string
+	err := sendPieces(r, make([]byte, stageChunk), func(off int64, p []byte) error {
+		st, err := c.StageFile(ctx, &protocol.StageFile{NodeId: node, Name: name, Path: path, Offset: off, Data: p})
+		if err != nil {
+			return nodeErrOf(err)
+		}
+		path = st.GetPath()
+		return nil
+	})
+	return path, err
+}
+
+// sendPieces reads r into buf a piece at a time and hands send each piece
+// with where it goes in the file, until r ends; an empty r is one empty
+// piece, so the file is still made.
+func sendPieces(r io.Reader, buf []byte, send func(off int64, p []byte) error) error {
 	var off int64
 	for {
 		n, err := io.ReadFull(r, buf)
-		if n > 0 || path == "" {
-			st, serr := c.StageFile(ctx, &protocol.StageFile{NodeId: node, Name: name, Path: path, Offset: off, Data: buf[:n]})
-			if serr != nil {
-				return "", nodeErrOf(serr)
+		if n > 0 || off == 0 {
+			if serr := send(off, buf[:n]); serr != nil {
+				return serr
 			}
-			path = st.GetPath()
 			off += int64(n)
 		}
 		switch {
 		case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
-			return path, nil
+			return nil
 		case err != nil:
-			return "", err
+			return err
 		}
 	}
 }

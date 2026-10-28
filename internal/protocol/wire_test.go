@@ -17,7 +17,7 @@ func TestEveryTypeHasABody(t *testing.T) {
 		TypeHello, TypeWelcome, TypeError, TypeListNodes, TypeNodes, TypeWatch, TypeChanged, TypeAccess, TypeAccessInfo, TypeGetWorkspace, TypeWorkspace,
 		TypeListSess, TypeSessions, TypeOpenSession, TypeSessionInfo, TypeCloseSess, TypeRenameSess, TypeAnswerApproval,
 		TypeAttach, TypeInput, TypeOutput, TypeResize, TypeSnapshot, TypeExited,
-		TypeListDir, TypeDir, TypeReadFile, TypeFile, TypeWriteFile, TypeFileOp, TypeSearch, TypeSearchResult, TypeStageFile, TypeStaged,
+		TypeListDir, TypeDir, TypeReadFile, TypeFile, TypeWriteFile, TypeFileOp, TypeSearch, TypeSearchResult, TypeStageFile, TypeStaged, TypeTunnel, TypeTunneled,
 		TypeGitStatus, TypeGitChanges, TypeGitDiff, TypeDiff, TypeGitLog, TypeGitHistory, TypeGitShow,
 		TypeGitCommitInfo, TypeGitRun, TypeGitResult, TypeReadChat, TypeChat,
 		TypeForgeList, TypeForgeItems, TypeForgeView, TypeForgeDetail, TypeForgeRun,

@@ -66,6 +66,8 @@ const (
 	TypeSearchResult   Type = "search_result"
 	TypeStageFile      Type = "stage_file"
 	TypeStaged         Type = "staged"
+	TypeTunnel         Type = "tunnel"
+	TypeTunneled       Type = "tunneled"
 	TypeGitStatus      Type = "git_status"
 	TypeGitChanges     Type = "git_changes"
 	TypeGitDiff        Type = "git_diff"

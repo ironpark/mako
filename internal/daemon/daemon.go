@@ -283,6 +283,9 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 	case protocol.TypeStageFile:
 		return d.handleStageFile(ctx, stream, env)
 
+	case protocol.TypeTunnel:
+		return d.handleTunnel(ctx, stream, env)
+
 	case protocol.TypeGitStatus:
 		return d.handleGitStatus(ctx, stream, env)
 
