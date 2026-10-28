@@ -652,7 +652,10 @@ func (*GetWorkspace) Descriptor() ([]byte, []int) {
 // Watch turns a front-end's stream into a feed of changes: the daemon
 // answers with a Changed whenever the mesh's nodes or sessions change.
 type Watch struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// approvals watches for approvals too, for as long as the stream stays
+	// open, as a listing with approvals does for a while.
+	Approvals     bool `protobuf:"varint,1,opt,name=approvals,proto3" json:"approvals,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -685,6 +688,13 @@ func (x *Watch) ProtoReflect() protoreflect.Message {
 // Deprecated: Use Watch.ProtoReflect.Descriptor instead.
 func (*Watch) Descriptor() ([]byte, []int) {
 	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *Watch) GetApprovals() bool {
+	if x != nil {
+		return x.Approvals
+	}
+	return false
 }
 
 // Changed says what changed, for the front-end to ask for again.
@@ -1105,8 +1115,9 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\x03doc\x18\x01 \x01(\fR\x03doc\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x17\n" +
 	"\anode_id\x18\x03 \x01(\tR\x06nodeId\"\x0e\n" +
-	"\fGetWorkspace\"\a\n" +
-	"\x05Watch\"q\n" +
+	"\fGetWorkspace\"%\n" +
+	"\x05Watch\x12\x1c\n" +
+	"\tapprovals\x18\x01 \x01(\bR\tapprovals\"q\n" +
 	"\aChanged\x12\x14\n" +
 	"\x05nodes\x18\x01 \x01(\bR\x05nodes\x12\x1a\n" +
 	"\bsessions\x18\x02 \x01(\bR\bsessions\x12\x16\n" +

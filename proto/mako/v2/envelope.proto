@@ -49,6 +49,7 @@ message Envelope {
     CloseSession close_session = 34;
     RenameSession rename_session = 35;
     AnswerApproval answer_approval = 36;
+    Send send = 37;
 
     // An attached session's stream.
     Attach attach = 40;

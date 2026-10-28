@@ -253,6 +253,17 @@ public interface EnvelopeOrBuilder extends
   dev.ironpark.mako.v2.AnswerApproval getAnswerApproval();
 
   /**
+   * <code>.mako.v2.Send send = 37 [json_name = "send"];</code>
+   * @return Whether the send field is set.
+   */
+  boolean hasSend();
+  /**
+   * <code>.mako.v2.Send send = 37 [json_name = "send"];</code>
+   * @return The send.
+   */
+  dev.ironpark.mako.v2.Send getSend();
+
+  /**
    * <pre>
    * An attached session's stream.
    * </pre>

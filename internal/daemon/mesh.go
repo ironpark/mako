@@ -459,8 +459,13 @@ func (n *notifier) watch() (feed <-chan *protocol.Changed, stop func()) {
 }
 
 // handleWatch sends a front-end a Changed whenever the mesh's nodes or
-// sessions change, until it hangs up.
-func (d *Daemon) handleWatch(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+// sessions change, until it hangs up, and counts it as watching for
+// approvals meanwhile if it asks.
+func (d *Daemon) handleWatch(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
+	req, _ := protocol.Body[*protocol.Watch](env) // older front-ends send nothing
+	if req.GetApprovals() && !fromPeer {
+		defer d.approvals.hold()()
+	}
 	feed, stop := d.changes.watch()
 	defer stop()
 	// The first says the daemon watches, and that everything is new to

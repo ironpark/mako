@@ -44,6 +44,7 @@ public  final class Envelope extends
     CLOSE_SESSION(34),
     RENAME_SESSION(35),
     ANSWER_APPROVAL(36),
+    SEND(37),
     ATTACH(40),
     INPUT(41),
     OUTPUT(42),
@@ -112,6 +113,7 @@ public  final class Envelope extends
         case 34: return CLOSE_SESSION;
         case 35: return RENAME_SESSION;
         case 36: return ANSWER_APPROVAL;
+        case 37: return SEND;
         case 40: return ATTACH;
         case 41: return INPUT;
         case 42: return OUTPUT;
@@ -1190,6 +1192,56 @@ public  final class Envelope extends
    */
   private void clearAnswerApproval() {
     if (bodyCase_ == 36) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SEND_FIELD_NUMBER = 37;
+  /**
+   * <code>.mako.v2.Send send = 37 [json_name = "send"];</code>
+   */
+  @java.lang.Override
+  public boolean hasSend() {
+    return bodyCase_ == 37;
+  }
+  /**
+   * <code>.mako.v2.Send send = 37 [json_name = "send"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Send getSend() {
+    if (bodyCase_ == 37) {
+       return (dev.ironpark.mako.v2.Send) body_;
+    }
+    return dev.ironpark.mako.v2.Send.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.Send send = 37 [json_name = "send"];</code>
+   */
+  private void setSend(dev.ironpark.mako.v2.Send value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 37;
+  }
+  /**
+   * <code>.mako.v2.Send send = 37 [json_name = "send"];</code>
+   */
+  private void mergeSend(dev.ironpark.mako.v2.Send value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 37 &&
+        body_ != dev.ironpark.mako.v2.Send.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Send.newBuilder((dev.ironpark.mako.v2.Send) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 37;
+  }
+  /**
+   * <code>.mako.v2.Send send = 37 [json_name = "send"];</code>
+   */
+  private void clearSend() {
+    if (bodyCase_ == 37) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -4165,6 +4217,54 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.mako.v2.Send send = 37 [json_name = "send"];</code>
+     */
+    @java.lang.Override
+    public boolean hasSend() {
+      return instance.hasSend();
+    }
+    /**
+     * <code>.mako.v2.Send send = 37 [json_name = "send"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Send getSend() {
+      return instance.getSend();
+    }
+    /**
+     * <code>.mako.v2.Send send = 37 [json_name = "send"];</code>
+     */
+    public Builder setSend(dev.ironpark.mako.v2.Send value) {
+      copyOnWrite();
+      instance.setSend(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Send send = 37 [json_name = "send"];</code>
+     */
+    public Builder setSend(
+        dev.ironpark.mako.v2.Send.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSend(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Send send = 37 [json_name = "send"];</code>
+     */
+    public Builder mergeSend(dev.ironpark.mako.v2.Send value) {
+      copyOnWrite();
+      instance.mergeSend(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Send send = 37 [json_name = "send"];</code>
+     */
+    public Builder clearSend() {
+      copyOnWrite();
+      instance.clearSend();
+      return this;
+    }
+
+    /**
      * <pre>
      * An attached session's stream.
      * </pre>
@@ -6001,6 +6101,7 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.CloseSession.class,
             dev.ironpark.mako.v2.RenameSession.class,
             dev.ironpark.mako.v2.AnswerApproval.class,
+            dev.ironpark.mako.v2.Send.class,
             dev.ironpark.mako.v2.Attach.class,
             dev.ironpark.mako.v2.Input.class,
             dev.ironpark.mako.v2.Output.class,
@@ -6038,13 +6139,13 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.Tunneled.class,
           };
           java.lang.String info =
-              "\u00006\u0001\u0000\u0001[6\u0000\u0000\u0000\u0001\u0208\n<\u0000\u000b<\u0000\f" +
+              "\u00007\u0001\u0000\u0001[7\u0000\u0000\u0000\u0001\u0208\n<\u0000\u000b<\u0000\f" +
               "<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000\u001a<\u0000" +
               "\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000\"<\u0000#<\u0000" +
-              "$<\u0000(<\u0000)<\u0000*<\u0000+<\u0000,<\u0000-<\u00002<\u00003<\u00004<\u0000" +
-              "5<\u00006<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000<<\u0000=<\u0000><\u0000" +
-              "?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000P<\u0000" +
-              "Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000";
+              "$<\u0000%<\u0000(<\u0000)<\u0000*<\u0000+<\u0000,<\u0000-<\u00002<\u00003<\u0000" +
+              "4<\u00005<\u00006<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000<<\u0000=<\u0000" +
+              "><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000" +
+              "P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -104,6 +104,16 @@ message AnswerApproval {
   string message = 5; // why, for a denial
 }
 
+// Send types into a session without attaching to it: text pasted as its
+// program asked for pastes, bracketed or not, then keys as they are, as
+// "\r" submits it or "\x1b" interrupts. The reply is its SessionInfo.
+message Send {
+  string node_id = 1;
+  string session_id = 2;
+  string text = 3;
+  bytes keys = 4;
+}
+
 // Attach turns its stream into a pipe to a session.
 message Attach {
   string session_id = 1;

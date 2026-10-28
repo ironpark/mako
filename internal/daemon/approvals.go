@@ -35,6 +35,7 @@ type approvals struct {
 	mu      sync.Mutex
 	watched time.Time                   // the last listing by a front-end showing approvals, here or on a peer
 	here    time.Time                   // the last such listing by a front-end of this daemon
+	held    int                         // the front-ends of this daemon's watching for approvals on a watch stream
 	pending map[string]*pendingApproval // by approval ID
 }
 
@@ -55,17 +56,32 @@ func (a *approvals) watch(here bool) {
 	a.mu.Unlock()
 }
 
+// hold counts a front-end of this daemon's as watching until it calls
+// release, as its watch stream asks.
+func (a *approvals) hold() (release func()) {
+	a.mu.Lock()
+	a.held++
+	a.mu.Unlock()
+	return func() {
+		a.mu.Lock()
+		a.held--
+		// Its going counts as a last listing, as a poll's would.
+		a.watched, a.here = time.Now(), time.Now()
+		a.mu.Unlock()
+	}
+}
+
 // watchedHere reports whether a front-end of this daemon's is watching.
 func (a *approvals) watchedHere() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return time.Since(a.here) < approvalWatch
+	return a.held > 0 || time.Since(a.here) < approvalWatch
 }
 
 func (a *approvals) watching() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return time.Since(a.watched) < approvalWatch
+	return a.held > 0 || time.Since(a.watched) < approvalWatch
 }
 
 // ask holds an approval s's agent, the one called name, asks for until it

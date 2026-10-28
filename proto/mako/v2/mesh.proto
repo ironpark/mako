@@ -103,7 +103,11 @@ message GetWorkspace {}
 
 // Watch turns a front-end's stream into a feed of changes: the daemon
 // answers with a Changed whenever the mesh's nodes or sessions change.
-message Watch {}
+message Watch {
+  // approvals watches for approvals too, for as long as the stream stays
+  // open, as a listing with approvals does for a while.
+  bool approvals = 1;
+}
 
 // Changed says what changed, for the front-end to ask for again.
 message Changed {

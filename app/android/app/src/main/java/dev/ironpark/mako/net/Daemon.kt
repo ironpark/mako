@@ -1,5 +1,6 @@
 package dev.ironpark.mako.net
 
+import com.google.protobuf.ByteString
 import dev.ironpark.mako.v2.Access
 import dev.ironpark.mako.v2.AccessInfo
 import dev.ironpark.mako.v2.AnswerApproval
@@ -13,6 +14,7 @@ import dev.ironpark.mako.v2.Node
 import dev.ironpark.mako.v2.OpenSession
 import dev.ironpark.mako.v2.ReadChat
 import dev.ironpark.mako.v2.RenameSession
+import dev.ironpark.mako.v2.Send
 import dev.ironpark.mako.v2.SessionInfo
 import dev.ironpark.mako.v2.Watch
 import kotlinx.coroutines.Dispatchers
@@ -44,12 +46,8 @@ class Daemon(private val socket: () -> String?) {
     suspend fun nodes(): List<Node> =
         call(envelope { listNodes = ListNodes.getDefaultInstance() }).nodes.nodesList
 
-    /**
-     * The mesh's sessions. Asking says this device answers approvals, so
-     * an agent asking for one waits for it while the app keeps asking.
-     */
     suspend fun sessions(): List<SessionInfo> =
-        call(envelope { listSessions = ListSessions.newBuilder().setApprovals(true).build() }).sessions.sessionsList
+        call(envelope { listSessions = ListSessions.getDefaultInstance() }).sessions.sessionsList
 
     suspend fun access(op: Access): AccessInfo = call(envelope { access = op }).accessInfo
 
@@ -68,15 +66,28 @@ class Daemon(private val socket: () -> String?) {
         call(envelope { answerApproval = req })
     }
 
+    /**
+     * Types into a session without attaching: text pasted as its program
+     * asked for pastes, then keys as they are. Nodes from
+     * [dev.ironpark.mako.Mesh.REVISION_SEND] on take it.
+     */
+    suspend fun send(node: String, id: String, text: String, keys: String) {
+        call(envelope {
+            send = Send.newBuilder().setNodeId(node).setSessionId(id).setText(text)
+                .setKeys(ByteString.copyFromUtf8(keys)).build()
+        })
+    }
+
     suspend fun chat(req: ReadChat): Chat = call(envelope { readChat = req }).chat
 
     /**
      * What changes on the mesh, until the flow is cancelled; a stream that
-     * breaks ends it with the error.
+     * breaks ends it with the error. While it is collected, this device
+     * answers approvals: an agent asking for one waits for its answer.
      */
     fun watch(): Flow<Changed> = callbackFlow {
         val s = open()
-        s.send(envelope { watch = Watch.getDefaultInstance() })
+        s.send(envelope { watch = Watch.newBuilder().setApprovals(true).build() })
         val reader = Thread {
             try {
                 while (true) trySend(s.recv().changed)

@@ -67,6 +67,7 @@ class TermSession(
 
     fun start() {
         if (job != null) return
+        _status.value = Status.Connecting
         job = scope.launch(Dispatchers.IO) {
             launch { pump() }
             while (isActive) {

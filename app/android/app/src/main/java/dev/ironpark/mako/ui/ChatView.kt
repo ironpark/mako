@@ -78,7 +78,7 @@ import kotlinx.coroutines.launch
 
 /**
  * ChatView is a session's conversation, as its agent's log has it: read
- * again whenever the session prints, and every few seconds while its agent
+ * again as its agent's turn changes, and every few seconds while its agent
  * works; scrolling to the top reads further back. Above it, how much of
  * the context window and of the account's limits it has spent.
  */

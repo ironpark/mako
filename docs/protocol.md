@@ -237,7 +237,7 @@ that answers on success.
 | Request | Payload | Reply | |
 |---|---|---|---|
 | `list_nodes` | `{}` | `nodes` | The daemon itself, then its peers, each with how the daemon stands with it. |
-| `watch` | `{}` | `changed`, then more | Turns the stream into a feed: a `changed` at once, then one whenever the mesh's nodes or sessions, or the daemon's access, change, until the front-end closes the stream. |
+| `watch` | `Watch` | `changed`, then more | Turns the stream into a feed: a `changed` at once, then one whenever the mesh's nodes or sessions, or the daemon's access, change, until the front-end closes the stream. With `approvals`, the front-end watches for [approvals](#sessions) meanwhile too. |
 | `access` | `Access` | `access_info` | Who the daemon lets in, and changes to it; see [Access](#access). From a front-end only. |
 | `get_workspace` | `{}` | `workspace` | The workspace the daemon holds, empty for none; see [Workspaces](#workspaces). From a front-end only. |
 | `workspace` | `Workspace` | `workspace` | Gives the daemon a window's workspace, kept if it is newer than the one held; the reply is the one held after. From a front-end only. |
@@ -303,6 +303,7 @@ is polled as before.
 | `close_session` | `CloseSession` | `exited` | Stops the session and forgets it. |
 | `rename_session` | `RenameSession` | `session_info` | An empty name gives the session its own back. At most 200 bytes, folded to one line. |
 | `answer_approval` | `AnswerApproval` | `session_info` | Answers the tool call the session's agent waits on. |
+| `send` | `Send` | `session_info` | Types into the session without attaching: `text` pasted, bracketed when its program asked for that, then `keys` as they are, such as `\r` to submit. A `text` holding a paste's end marker is refused. |
 | `read_chat` | `ReadChat` | `chat` | The agent's native conversation, read from its log. |
 | `attach` | `Attach` | — | Turns the stream into a session pipe; see [Attach streams](#attach-streams). |
 | `resize` | `Resize` | `session_info` | Resizes a local session's window. |
@@ -343,8 +344,9 @@ The fields a front-end usually needs:
 
 **Approvals.** An agent's `PermissionRequest` hook holds its request in the
 daemon only while some front-end is watching for approvals. A front-end
-watches by sending `list_sessions` with `"approvals": true`, at least every
-15 seconds. While a session waits, its `approval` is set. `answer_approval`
+watches by keeping a `watch` with `approvals` open, or by sending
+`list_sessions` with `"approvals": true` at least every 15 seconds; either
+counts for 15 seconds after it stops. While a session waits, its `approval` is set. `answer_approval`
 gives a `decision`:
 
 | Decision | |
@@ -706,7 +708,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 5) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 8) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end

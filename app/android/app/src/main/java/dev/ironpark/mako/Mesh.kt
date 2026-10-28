@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -28,11 +29,16 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * Mesh is what the app knows of the mesh, through the node it runs: the
  * nodes, their sessions, and who lets this device in. It starts the node,
- * then follows the node's watch, asking again for what changed, and asks
- * for the sessions every few seconds regardless, which also keeps the
- * daemons waiting for this device's answers to approvals.
+ * then follows the node's watch, asking again for what changed; the watch
+ * also keeps the daemons waiting for this device's answers to approvals.
+ * While the app is on screen, the sessions are asked for now and then
+ * besides, for when each last printed, which the watch does not report.
  */
-class Mesh(private val context: Context, private val scope: CoroutineScope) {
+class Mesh(
+    private val context: Context,
+    private val scope: CoroutineScope,
+    private val foreground: StateFlow<Boolean>,
+) {
     sealed interface State {
         data object Starting : State
         data object Running : State
@@ -67,10 +73,6 @@ class Mesh(private val context: Context, private val scope: CoroutineScope) {
     val daemon = Daemon { Mobile.socket().ifEmpty { null } }
 
     private var job: Job? = null
-    private var started = 0L
-
-    /** When the sessions were last asked for, which the poll waits out. */
-    @Volatile private var asked = 0L
 
     /** Starts the node, unless it runs, and follows it. */
     fun start() {
@@ -85,14 +87,19 @@ class Mesh(private val context: Context, private val scope: CoroutineScope) {
                 return@launch
             }
             _state.value = State.Running
-            started = System.currentTimeMillis()
             refreshPeers()
+            // Peers' sessions come with their state, a moment after they
+            // link: until then, none may yet mean some.
+            launch {
+                delay(SETTLE)
+                _loaded.value = true
+            }
             launch { follow() }
-            // The poll fills the quiet between the watch's changes, which
-            // also ask for the sessions.
-            while (true) {
-                val wait = asked + POLL - System.currentTimeMillis()
-                if (wait > 0) delay(wait) else refreshSessions()
+            foreground.collectLatest { shown ->
+                while (shown) {
+                    refreshSessions()
+                    delay(POLL)
+                }
             }
         }
     }
@@ -160,11 +167,9 @@ class Mesh(private val context: Context, private val scope: CoroutineScope) {
     }
 
     suspend fun refreshSessions() {
-        asked = System.currentTimeMillis()
         quietly {
             _sessions.value = daemon.sessions()
-            // Peers' sessions come with their state, a moment after they link.
-            if (!_loaded.value && (_sessions.value.isNotEmpty() || asked - started > SETTLE)) _loaded.value = true
+            if (_sessions.value.isNotEmpty()) _loaded.value = true
         }
     }
 
@@ -212,6 +217,13 @@ class Mesh(private val context: Context, private val scope: CoroutineScope) {
         refreshSessions()
     }
 
+    /** Whether node takes send, typing into its sessions without an attach. */
+    fun canSend(node: String): Boolean =
+        node == _self.value?.id || (_nodes.value.firstOrNull { it.id == node }?.revision ?: 0) >= REVISION_SEND
+
+    /** Types into a session: text pasted as its program asked for pastes, then keys as they are. */
+    suspend fun send(s: SessionInfo, text: String = "", keys: String = "") = daemon.send(s.nodeId, s.id, text, keys)
+
     /** Names a session; an empty name gives it back its title. */
     suspend fun renameSession(s: SessionInfo, name: String) {
         daemon.renameSession(s.nodeId, s.id, name)
@@ -242,8 +254,11 @@ class Mesh(private val context: Context, private val scope: CoroutineScope) {
     companion object {
         private const val TAG = "mako"
 
-        /** How often the sessions are asked for: under the 15 s an approval watch lasts. */
-        private const val POLL = 5_000L
+        /** How often the sessions are asked for while the app is on screen. */
+        private const val POLL = 30_000L
+
+        /** The first protocol revision whose daemon takes send (protocol.RevisionSend). */
+        const val REVISION_SEND = 8L
 
         /** How long the sessions may take to come, before none is taken to mean none. */
         private const val SETTLE = 8_000L

@@ -21,6 +21,47 @@ public  final class Watch extends
     WatchOrBuilder {
   private Watch() {
   }
+  public static final int APPROVALS_FIELD_NUMBER = 1;
+  private boolean approvals_;
+  /**
+   * <pre>
+   * approvals watches for approvals too, for as long as the stream stays
+   * open, as a listing with approvals does for a while.
+   * </pre>
+   *
+   * <code>bool approvals = 1 [json_name = "approvals"];</code>
+   * @return The approvals.
+   */
+  @java.lang.Override
+  public boolean getApprovals() {
+    return approvals_;
+  }
+  /**
+   * <pre>
+   * approvals watches for approvals too, for as long as the stream stays
+   * open, as a listing with approvals does for a while.
+   * </pre>
+   *
+   * <code>bool approvals = 1 [json_name = "approvals"];</code>
+   * @param value The approvals to set.
+   */
+  private void setApprovals(boolean value) {
+    
+    approvals_ = value;
+  }
+  /**
+   * <pre>
+   * approvals watches for approvals too, for as long as the stream stays
+   * open, as a listing with approvals does for a while.
+   * </pre>
+   *
+   * <code>bool approvals = 1 [json_name = "approvals"];</code>
+   */
+  private void clearApprovals() {
+
+    approvals_ = false;
+  }
+
   public static dev.ironpark.mako.v2.Watch parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -123,6 +164,49 @@ public  final class Watch extends
     }
 
 
+    /**
+     * <pre>
+     * approvals watches for approvals too, for as long as the stream stays
+     * open, as a listing with approvals does for a while.
+     * </pre>
+     *
+     * <code>bool approvals = 1 [json_name = "approvals"];</code>
+     * @return The approvals.
+     */
+    @java.lang.Override
+    public boolean getApprovals() {
+      return instance.getApprovals();
+    }
+    /**
+     * <pre>
+     * approvals watches for approvals too, for as long as the stream stays
+     * open, as a listing with approvals does for a while.
+     * </pre>
+     *
+     * <code>bool approvals = 1 [json_name = "approvals"];</code>
+     * @param value The approvals to set.
+     * @return This builder for chaining.
+     */
+    public Builder setApprovals(boolean value) {
+      copyOnWrite();
+      instance.setApprovals(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * approvals watches for approvals too, for as long as the stream stays
+     * open, as a listing with approvals does for a while.
+     * </pre>
+     *
+     * <code>bool approvals = 1 [json_name = "approvals"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearApprovals() {
+      copyOnWrite();
+      instance.clearApprovals();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Watch)
   }
   @java.lang.Override
@@ -138,9 +222,11 @@ public  final class Watch extends
         return new Builder();
       }
       case BUILD_MESSAGE_INFO: {
-          java.lang.Object[] objects = null;
+          java.lang.Object[] objects = new java.lang.Object[] {
+            "approvals_",
+          };
           java.lang.String info =
-              "\u0000\u0000";
+              "\u0000\u0001\u0000\u0000\u0001\u0001\u0001\u0000\u0000\u0000\u0001\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

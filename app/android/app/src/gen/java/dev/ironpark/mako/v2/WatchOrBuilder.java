@@ -9,4 +9,15 @@ package dev.ironpark.mako.v2;
 public interface WatchOrBuilder extends
     // @@protoc_insertion_point(interface_extends:mako.v2.Watch)
     com.google.protobuf.MessageLiteOrBuilder {
+
+  /**
+   * <pre>
+   * approvals watches for approvals too, for as long as the stream stays
+   * open, as a listing with approvals does for a while.
+   * </pre>
+   *
+   * <code>bool approvals = 1 [json_name = "approvals"];</code>
+   * @return The approvals.
+   */
+  boolean getApprovals();
 }

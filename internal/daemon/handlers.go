@@ -69,6 +69,26 @@ func (d *Daemon) handleAnswerApproval(ctx context.Context, stream *transport.Str
 	})
 }
 
+func (d *Daemon) handleSend(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.Send) (*protocol.SessionInfo, error) {
+		s, ok := d.sessions.get(r.GetSessionId())
+		if !ok {
+			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
+		}
+		if r.GetText() != "" {
+			if err := s.Paste(r.GetText()); err != nil {
+				return nil, err
+			}
+		}
+		if len(r.GetKeys()) > 0 {
+			if _, err := s.Write(r.GetKeys()); err != nil {
+				return nil, err
+			}
+		}
+		return s.Info(), nil
+	})
+}
+
 // maxSessionName caps a session's name, which every listing carries.
 const maxSessionName = 200
 

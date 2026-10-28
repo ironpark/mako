@@ -6,6 +6,7 @@
 package session
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ironpark/gostty"
+	"github.com/ironpark/gostty/input"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/activity"
@@ -228,6 +230,29 @@ func (s *Session) SetName(name string) {
 
 // Write sends input to the agent.
 func (s *Session) Write(p []byte) (int, error) { return s.proc.Write(p) }
+
+// Paste sends text to the agent as a paste: bracketed when its program
+// enabled bracketed paste, plain otherwise, its line breaks meant. A
+// paste's own end marker, which would let the rest run as if typed, is
+// refused.
+func (s *Session) Paste(text string) error {
+	if strings.Contains(text, "\x1b[201~") {
+		return errors.New("session: the text ends a paste")
+	}
+	var buf bytes.Buffer
+	s.mu.Lock()
+	if s.state == protocol.StateExited {
+		s.mu.Unlock()
+		return errors.New("session: exited")
+	}
+	err := input.EncodePaste(&buf, s.term.Terminal(), []byte(text))
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	_, err = s.Write(buf.Bytes())
+	return err
+}
 
 // Resize changes the PTY and terminal dimensions together.
 func (s *Session) Resize(cols, rows uint16) error {

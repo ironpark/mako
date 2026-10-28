@@ -23,7 +23,7 @@ class MakoApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        mesh = Mesh(this, scope)
+        mesh = Mesh(this, scope, foreground)
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 _foreground.value = true

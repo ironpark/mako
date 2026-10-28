@@ -74,8 +74,9 @@ import dev.ironpark.mako.v2.SessionInfo
 
 /**
  * SessionScreen is one session: its conversation, where its agent's driver
- * reads one, and its terminal, attached for as long as the screen shows,
- * with the approval its agent waits for above both.
+ * reads one, and its terminal, attached while it shows, with the approval
+ * its agent waits for above both. The conversation's composer types into
+ * the session without the terminal, on a node that can.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,17 +86,21 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit) {
     val session = sessions.firstOrNull { it.id == id }
     val scope = rememberCoroutineScope()
     val term = remember(id) { TermSession(mesh.daemon, id, node, scope) }
-    DisposableEffect(term) {
-        term.start()
+    val chat = session == null || session.caps and CAP_CHAT != 0
+    // An agent whose conversation is not read shows its terminal alone.
+    var picked by rememberSaveable { mutableIntStateOf(0) }
+    val tab = if (chat) picked else 1
+    // An older node takes typing only on an attach, which the composer then
+    // needs as well.
+    val canSend = mesh.canSend(node)
+    val attached = tab == 1 || !canSend
+    DisposableEffect(term, attached) {
+        if (attached) term.start()
         onDispose { term.stop() }
     }
     LaunchedEffect(session?.cols, session?.rows) {
         if (session != null) term.follow(session.cols, session.rows)
     }
-    val chat = session == null || session.caps and CAP_CHAT != 0
-    // An agent whose conversation is not read shows its terminal alone.
-    var picked by rememberSaveable { mutableIntStateOf(0) }
-    val tab = if (chat) picked else 1
     var renaming by remember { mutableStateOf(false) }
     var fits by remember { mutableIntStateOf(0) } // asked to fit the session to the pane, so many times
     val act = actor()
@@ -167,11 +172,11 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit) {
                 if (tab == 0 && session != null) ChatView(mesh, session, Modifier.fillMaxSize())
                 else TerminalTab(term, fits, Modifier.fillMaxSize())
             }
-            if (tab == 0) {
+            if (tab == 0 && session != null) {
                 Composer(
-                    working = session?.working() == true,
-                    onSend = term::submit,
-                    onInterrupt = { term.send("\u001b") },
+                    working = session.working(),
+                    onSend = { text -> if (canSend) act { mesh.send(session, text, keys = "\r") } else term.submit(text) },
+                    onInterrupt = { if (canSend) act { mesh.send(session, keys = "\u001b") } else term.send("\u001b") },
                 )
             }
         }

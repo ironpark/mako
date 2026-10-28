@@ -257,7 +257,7 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleListSessions(ctx, stream, env, fromPeer)
 
 	case protocol.TypeWatch:
-		return d.handleWatch(ctx, stream, env)
+		return d.handleWatch(ctx, stream, env, fromPeer)
 
 	case protocol.TypeOpenSession:
 		return d.handleOpenSession(ctx, stream, env)
@@ -318,6 +318,9 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeAnswerApproval:
 		return d.handleAnswerApproval(ctx, stream, env)
+
+	case protocol.TypeSend:
+		return d.handleSend(ctx, stream, env)
 
 	case protocol.TypeSearch:
 		return d.handleSearch(ctx, stream, env)
