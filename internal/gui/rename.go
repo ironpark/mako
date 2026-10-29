@@ -96,22 +96,24 @@ func nameDialog(a nameAsk) ggui.Widget {
 }
 
 // sessionMenu gives a session's tab or sidebar row a context menu; a tab's
-// has Detach tab too.
+// has Detach tab too. The rows are rebuilt whenever any session's title
+// changes, so the items are made only when the menu opens.
 func sessionMenu(m *model, w ggui.Widget, id, label string, isTab bool) ggui.Widget {
-	pin := T("Pin to top")
-	if m.pinned(id) {
-		pin = T("Unpin")
-	}
-	items := []ggui.Widget{ui.MenuItem(T("Rename…"), func() { m.askRename(id) }), ui.MenuItem(pin, func() { m.togglePin(id) })}
-	if isTab {
-		items = append(items, ui.MenuItem(T("Detach tab"), func() { m.closeTab(id) }))
-	}
-	if s, ok := m.session(id); ok && !m.onThisMachine(s.GetNodeId()) {
-		node, project := s.GetNodeId(), s.GetProject()
-		items = append(items,
-			ui.MenuItem(T("Browse files"), func() { m.openBrowser(node, cmp.Or(project, "~"), "") }),
-			ui.MenuItem(T("Forward a port…"), func() { m.askTunnel(node) }))
-	}
-	items = append(items, ui.MenuDivider(), ui.MenuItem(T("Kill session"), func() { m.askKill(id) }))
-	return ui.ContextMenu(w, items...).Name(Tf("%s actions", label))
+	return ui.ContextMenuFunc(w, func() []ggui.Widget {
+		pin := T("Pin to top")
+		if m.pinned(id) {
+			pin = T("Unpin")
+		}
+		items := []ggui.Widget{ui.MenuItem(T("Rename…"), func() { m.askRename(id) }), ui.MenuItem(pin, func() { m.togglePin(id) })}
+		if isTab {
+			items = append(items, ui.MenuItem(T("Detach tab"), func() { m.closeTab(id) }))
+		}
+		if s, ok := m.session(id); ok && !m.onThisMachine(s.GetNodeId()) {
+			node, project := s.GetNodeId(), s.GetProject()
+			items = append(items,
+				ui.MenuItem(T("Browse files"), func() { m.openBrowser(node, cmp.Or(project, "~"), "") }),
+				ui.MenuItem(T("Forward a port…"), func() { m.askTunnel(node) }))
+		}
+		return append(items, ui.MenuDivider(), ui.MenuItem(T("Kill session"), func() { m.askKill(id) }))
+	}).Name(Tf("%s actions", label))
 }
