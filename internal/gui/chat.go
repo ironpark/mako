@@ -457,7 +457,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	// is its own input surface, and a file view has no session to type into.
 	session := ggui.Pointer(ggui.Column(
 		ggui.Expanded(ggui.Stack(feed, hostBadge(m, id), toLatestButton(m, state, scroll, offset), usageOverlay(m, id, chatUsage, viewChip(m, id, group))).Expand()),
-		approvalCard(m, id), compactingRow(m, id), runningAgents(m, id, state), composer(m, id, state),
+		approvalCard(m, id), compactingRow(m, id), runningAgents(m, id, state), chatInput(m, id, group, state),
 	).Stretch()).OnDown(func(ggui.PointerEvent) { m.focusGroup(group) })
 	// A subagent opened shows its conversation in place of the session's,
 	// which is built once and kept, scroll and draft and all, to come back

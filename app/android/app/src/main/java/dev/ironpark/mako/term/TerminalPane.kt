@@ -1,5 +1,7 @@
 package dev.ironpark.mako.term
 
+import android.graphics.Typeface
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -32,17 +34,19 @@ import kotlin.math.roundToInt
 fun TerminalPane(term: TermSession, modifier: Modifier = Modifier, onTap: () -> Unit = {}) {
     val frame by term.frame.collectAsState()
     val density = LocalDensity.current
-    var zoom by remember { mutableFloatStateOf(1f) }
-    var panX by remember { mutableFloatStateOf(0f) }
-    var scroll by remember { mutableFloatStateOf(0f) } // rows back into the scrollback
+    val context = LocalContext.current
+    val font = remember(context) { terminalTypeface(context) }
+    var zoom by remember(term) { mutableFloatStateOf(1f) }
+    var panX by remember(term) { mutableFloatStateOf(0f) }
+    var scroll by remember(term) { mutableFloatStateOf(0f) } // rows back into the scrollback
 
     BoxWithConstraints(modifier) {
         val width = constraints.maxWidth.toFloat()
         val height = constraints.maxHeight.toFloat()
         val columns = synchronized(term.lock) { term.emulator.mColumns }
-        val fit = remember(columns, width) { fitTextSize(width, columns, with(density) { 7.dp.toPx() }) }
+        val fit = remember(columns, width, density, font) { fitTextSize(width, columns, with(density) { 7.dp.toPx() }, font) }
         val size = (fit * zoom).roundToInt().coerceIn(4, 96)
-        val renderer = remember(size) { TerminalRenderer(size, TerminalTypeface) }
+        val renderer = remember(size, font) { TerminalRenderer(size, font) }
         val maxPan = (renderer.fontWidth * columns - width).coerceAtLeast(0f)
         // The gestures go on through a pinch, as the renderer changes under them.
         val current by rememberUpdatedState(renderer)
@@ -51,8 +55,13 @@ fun TerminalPane(term: TermSession, modifier: Modifier = Modifier, onTap: () -> 
         Canvas(
             Modifier
                 .fillMaxSize()
-                .pointerInput(Unit) { detectTapGestures { onTap() } }
-                .pointerInput(Unit) {
+                .pointerInput(term) {
+                    detectTapGestures(
+                        onTap = { onTap() },
+                        onDoubleTap = { zoom = 1f; panX = 0f; scroll = 0f },
+                    )
+                }
+                .pointerInput(term) {
                     detectTransformGestures { _, pan, gesture, _ ->
                         zoom = (zoom * gesture).coerceIn(0.5f, 4f)
                         panX = (panX - pan.x).coerceIn(0f, bound)
@@ -82,7 +91,7 @@ fun TerminalPane(term: TermSession, modifier: Modifier = Modifier, onTap: () -> 
 }
 
 /** The text size whose cells lay columns across width, no smaller than min. */
-private fun fitTextSize(width: Float, columns: Int, min: Float): Int {
-    val perPixel = cell(100f).width / 100f
+private fun fitTextSize(width: Float, columns: Int, min: Float, font: Typeface): Int {
+    val perPixel = cell(100f, font).width / 100f
     return floor(width / columns / perPixel).toInt().coerceAtLeast(min.roundToInt())
 }

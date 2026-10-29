@@ -1,6 +1,16 @@
 package dev.ironpark.mako.ui
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,9 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -31,15 +39,10 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -56,6 +59,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -85,15 +89,25 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit) {
     val nodes by mesh.nodes.collectAsState()
     val session = sessions.firstOrNull { it.id == id }
     val scope = rememberCoroutineScope()
-    val term = remember(id) { TermSession(mesh.daemon, id, node, scope) }
+    val term = remember(node, id) { TermSession(mesh.daemon, id, node, scope) }
     val chat = session == null || session.caps and CAP_CHAT != 0
     // An agent whose conversation is not read shows its terminal alone.
-    var picked by rememberSaveable { mutableIntStateOf(0) }
+    var picked by rememberSaveable(node, id) { mutableIntStateOf(0) }
     val tab = if (chat) picked else 1
     // An older node takes typing only on an attach, which the composer then
     // needs as well.
     val canSend = mesh.canSend(node)
-    val attached = tab == 1 || !canSend
+    var draft by rememberSaveable(node, id) { mutableStateOf("") }
+    var question by rememberSaveable(node, id) { mutableStateOf(false) }
+    var request by remember(node, id) { mutableStateOf("") }
+    val attached = tab == 1 || question || !canSend
+    LaunchedEffect(request) { if (request.isNotEmpty() && tab == 0) question = true }
+    LaunchedEffect(session?.state, session?.status) {
+        if (session?.ended() == true || session?.status == "done" || session?.status == "idle") question = false
+    }
+    val density = LocalDensity.current
+    val swipeThreshold = with(density) { 48.dp.toPx() }
+    val swipeHint = stringResource(R.string.swipe_tabs)
     DisposableEffect(term, attached) {
         if (attached) term.start()
         onDispose { term.stop() }
@@ -104,6 +118,7 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit) {
     var renaming by remember { mutableStateOf(false) }
     var fits by remember { mutableIntStateOf(0) } // asked to fit the session to the pane, so many times
     val act = actor()
+    val tabState = rememberSaveableStateHolder()
 
     // The insets beneath are the panes' own: the keyboard's, or the
     // navigation bar's under the bar at the bottom.
@@ -136,8 +151,10 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit) {
                 },
                 actions = {
                     var menu by remember { mutableStateOf(false) }
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, null) }
+                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.session_actions)) }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.answer_agent)) },
+                            enabled = session?.state == "running", onClick = { menu = false; question = true })
                         DropdownMenuItem(text = { Text(stringResource(R.string.rename)) }, onClick = {
                             menu = false
                             renaming = true
@@ -158,26 +175,58 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit) {
     ) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).consumeWindowInsets(pad).imePadding()) {
             if (chat) {
-                PrimaryTabRow(selectedTabIndex = tab) {
+                PrimaryTabRow(selectedTabIndex = tab, modifier = Modifier
+                    .semantics { contentDescription = swipeHint }
+                    .pointerInput(swipeThreshold) {
+                        var distance = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { distance = 0f },
+                            onDragCancel = { distance = 0f },
+                            onDragEnd = {
+                                if (distance < -swipeThreshold) picked = 1
+                                if (distance > swipeThreshold) picked = 0
+                            },
+                        ) { change, amount -> change.consume(); distance += amount }
+                    }) {
                     Tab(selected = tab == 0, onClick = { picked = 0 }, text = { Text(stringResource(R.string.tab_chat)) })
                     Tab(selected = tab == 1, onClick = { picked = 1 }, text = { Text(stringResource(R.string.tab_terminal)) })
                 }
             }
             AnimatedVisibility(session != null && session.hasApproval()) {
                 if (session != null && session.hasApproval()) {
-                    ApprovalCard(session, onAnswer = { decision -> act { mesh.answer(session, decision) } })
+                    ApprovalCard(session, onAnswer = { decision -> act { mesh.answer(session, decision); if (decision == "terminal") question = true } })
                 }
             }
             Box(Modifier.weight(1f)) {
-                if (tab == 0 && session != null) ChatView(mesh, session, Modifier.fillMaxSize())
-                else TerminalTab(term, fits, Modifier.fillMaxSize())
+                tabState.SaveableStateProvider(tab) {
+                    if (tab == 0 && session != null) ChatView(mesh, session, Modifier.fillMaxSize(), onQuestion = { request = it }, onAnswer = { question = true })
+                    else TerminalTab(term, fits, Modifier.fillMaxSize())
+                }
             }
             if (tab == 0 && session != null) {
                 Composer(
-                    working = session.working(),
-                    onSend = { text -> if (canSend) act { mesh.send(session, text, keys = "\r") } else term.submit(text) },
+                    mesh = mesh, session = session, text = draft, onText = { draft = it },
+                    onSend = { text -> if (canSend) mesh.send(session, text, keys = "\r") else term.submit(text) },
                     onInterrupt = { if (canSend) act { mesh.send(session, keys = "\u001b") } else term.send("\u001b") },
                 )
+            }
+        }
+    }
+
+    if (question && session != null) {
+        ModalBottomSheet(
+            onDismissRequest = { question = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            sheetGesturesEnabled = false,
+        ) {
+            Column(Modifier.fillMaxHeight(0.85f).imePadding()) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.answer_agent), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    TextButton(onClick = { question = false }) { Text(stringResource(R.string.close)) }
+                }
+                Text(stringResource(R.string.answer_hint), Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TerminalTab(term, 0, Modifier.weight(1f))
             }
         }
     }
@@ -189,6 +238,7 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit) {
  * ApprovalCard is the tool call an agent waits for you to allow: allowed,
  * denied, or left to the agent's own question in its terminal.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ApprovalCard(s: SessionInfo, onAnswer: (String) -> Unit) {
     val a = s.approval
@@ -235,59 +285,17 @@ private fun ApprovalCard(s: SessionInfo, onAnswer: (String) -> Unit) {
                     )
                 }
             }
-            Row(
+            FlowRow(
                 Modifier.fillMaxWidth().padding(top = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(onClick = { expanded = !expanded }) {
                     Text(stringResource(if (expanded) R.string.less else R.string.details))
                 }
                 TextButton(onClick = { onAnswer("terminal") }) { Text(stringResource(R.string.in_terminal)) }
-                Box(Modifier.weight(1f))
                 OutlinedButton(onClick = { onAnswer("deny") }) { Text(stringResource(R.string.deny)) }
                 Button(onClick = { onAnswer("allow") }) { Text(stringResource(R.string.allow)) }
             }
-        }
-    }
-}
-
-/**
- * Composer writes to the session's agent: the text is pasted, then Enter
- * pressed. While the agent works, a button beside it interrupts it, as
- * Esc does in its terminal.
- */
-@Composable
-private fun Composer(working: Boolean, onSend: (String) -> Unit, onInterrupt: () -> Unit) {
-    var text by rememberSaveable { mutableStateOf("") }
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
-        Row(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (working) {
-                FilledTonalIconButton(onClick = onInterrupt) { Icon(Icons.Filled.Stop, stringResource(R.string.interrupt)) }
-            }
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text(stringResource(R.string.composer_hint)) },
-                modifier = Modifier.weight(1f).heightIn(max = 160.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
-            FilledIconButton(
-                enabled = text.isNotBlank(),
-                onClick = {
-                    onSend(text)
-                    text = ""
-                },
-                colors = IconButtonDefaults.filledIconButtonColors(),
-            ) { Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.send)) }
         }
     }
 }

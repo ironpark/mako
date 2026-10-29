@@ -94,7 +94,7 @@ fun NewSessionScreen(mesh: Mesh, onBack: () -> Unit, onStarted: (SessionInfo) ->
                         selected = a.name == agent,
                         onClick = { agent = a.name },
                         label = { Text(a.name) },
-                        leadingIcon = a.tint()?.let { c -> { Dot(c) } },
+                        leadingIcon = { AgentAvatar(a.name, agentColor(nodes, node.id, a.name), null, size = 24.dp) },
                     )
                 }
             }

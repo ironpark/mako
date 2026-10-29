@@ -1,5 +1,16 @@
 package dev.ironpark.mako.ui
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import dev.ironpark.mako.v2.SubAgent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -65,6 +76,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.ironpark.mako.Mesh
 import dev.ironpark.mako.R
 import dev.ironpark.mako.v2.Chat
@@ -83,13 +97,19 @@ import kotlinx.coroutines.launch
  * the context window and of the account's limits it has spent.
  */
 @Composable
-fun ChatView(mesh: Mesh, session: SessionInfo, modifier: Modifier = Modifier) {
-    var chat by remember(session.id) { mutableStateOf<Chat?>(null) } // the latest messages
-    var older by remember(session.id) { mutableStateOf<List<ChatMessage>>(emptyList()) }
-    var start by remember(session.id) { mutableLongStateOf(0L) } // of what has been read, the earliest
-    var error by remember(session.id) { mutableStateOf<String?>(null) }
-    var paging by remember(session.id) { mutableStateOf(false) }
+fun ChatView(
+    mesh: Mesh, session: SessionInfo, modifier: Modifier = Modifier,
+    agent: String = "", onQuestion: (String) -> Unit = {}, onAnswer: () -> Unit = {},
+) {
+    var selectedAgent by rememberSaveable(session.id, agent) { mutableStateOf("") }
+    val questionChanged by rememberUpdatedState(onQuestion)
+    var chat by remember(session.id, agent) { mutableStateOf<Chat?>(null) } // the latest messages
+    var older by remember(session.id, agent) { mutableStateOf<List<ChatMessage>>(emptyList()) }
+    var start by remember(session.id, agent) { mutableLongStateOf(0L) } // of what has been read, the earliest
+    var error by remember(session.id, agent) { mutableStateOf<String?>(null) }
+    var paging by remember(session.id, agent) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val lifecycle = LocalLifecycleOwner.current
 
     /**
      * Reads the messages before the offset before, or with 0 the latest;
@@ -98,7 +118,7 @@ fun ChatView(mesh: Mesh, session: SessionInfo, modifier: Modifier = Modifier) {
      */
     suspend fun fetch(before: Long = 0, seen: Long = 0): Chat? = try {
         mesh.daemon.chat(
-            ReadChat.newBuilder().setNodeId(session.nodeId).setSessionId(session.id).setBefore(before).setSeen(seen).build()
+            ReadChat.newBuilder().setNodeId(session.nodeId).setSessionId(session.id).setAgent(agent).setBefore(before).setSeen(seen).build()
         ).also { error = null }
     } catch (e: CancellationException) {
         throw e
@@ -110,24 +130,33 @@ fun ChatView(mesh: Mesh, session: SessionInfo, modifier: Modifier = Modifier) {
     suspend fun read() {
         val c = fetch(seen = chat?.digest ?: 0) ?: return
         if (c.unchanged) return
+        // Do not silently skip records when the latest window moves forward.
+        val previous = chat
+        if (older.isNotEmpty() && previous != null && c.start > previous.start) {
+            older = emptyList()
+        }
         chat = c
         if (older.isEmpty()) start = c.start
     }
 
-    // Read again as the agent's turn changes, and every few seconds while it works.
-    LaunchedEffect(session.id, session.status, session.approval.id) {
-        read()
-        while (session.status == "working") {
-            delay(3000)
+    // Keep questions and subagents fresh while visible; pause network polling in the background.
+    LaunchedEffect(lifecycle, session.id, agent, session.state, session.status, session.approval.id) {
+        lifecycle.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             read()
+            while (session.state == "running") {
+                delay(3000)
+                read()
+            }
         }
     }
 
     val latest = chat?.messagesList.orEmpty()
-    val messages = remember(older, latest) { older + latest }
+    val messages = remember(older, latest) { joinMessages(older, latest) }
+    val request = if (agent.isEmpty()) questionRequest(session, latest) else ""
+    LaunchedEffect(request) { if (agent.isEmpty()) questionChanged(request) }
     val list = rememberLazyListState()
     val atEnd by remember { derivedStateOf { !list.canScrollForward } }
-    var follow by remember(session.id) { mutableStateOf(true) }
+    var follow by remember(session.id, agent) { mutableStateOf(true) }
     LaunchedEffect(atEnd) { follow = atEnd }
     LaunchedEffect(messages.size, messages.lastOrNull()?.pending) {
         // Follows the end as it grows, unless the reader scrolled away from it.
@@ -136,6 +165,16 @@ fun ChatView(mesh: Mesh, session: SessionInfo, modifier: Modifier = Modifier) {
 
     Column(modifier) {
         chat?.takeIf { it.hasUsage() }?.let { UsageStrip(it.usage) }
+        if (error != null) Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(error.orEmpty(), Modifier.weight(1f), color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            IconButton(onClick = { scope.launch { read() } }) {
+                Icon(Icons.Outlined.Refresh, stringResource(R.string.retry))
+            }
+        }
+        if (request.isNotEmpty()) TextButton(onClick = onAnswer, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.answer_agent))
+        }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             val c = chat
             when {
@@ -157,7 +196,7 @@ fun ChatView(mesh: Mesh, session: SessionInfo, modifier: Modifier = Modifier) {
                                         paging = true
                                         scope.launch {
                                             fetch(start)?.let {
-                                                older = it.messagesList + older
+                                                older = joinMessages(it.messagesList, older)
                                                 start = it.start
                                             }
                                             paging = false
@@ -168,7 +207,12 @@ fun ChatView(mesh: Mesh, session: SessionInfo, modifier: Modifier = Modifier) {
                             }
                         }
                         items(messages) { m -> MessageItem(m) }
-                        if (session.working()) {
+                        if (agent.isEmpty()) {
+                            items(c?.agentsList.orEmpty(), key = { "agent:" + it.id }) { sub ->
+                                SubagentRow(sub, session.state == "running", onClick = { selectedAgent = sub.id })
+                            }
+                        }
+                        if (agent.isEmpty() && session.working()) {
                             item(key = "working") { Working(c?.agentsList.orEmpty().count { it.running }) }
                         }
                     }
@@ -183,6 +227,29 @@ fun ChatView(mesh: Mesh, session: SessionInfo, modifier: Modifier = Modifier) {
                 SmallFloatingActionButton(onClick = {
                     scope.launch { list.animateScrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1) }
                 }) { Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.to_latest)) }
+            }
+        }
+    }
+    if (selectedAgent.isNotEmpty()) {
+        val sub = chat?.agentsList?.firstOrNull { it.id == selectedAgent }
+        Dialog(onDismissRequest = { selectedAgent = "" }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Surface(Modifier.fillMaxSize()) {
+                Column(Modifier.safeDrawingPadding()) {
+                    Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { selectedAgent = "" }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(sub?.description?.ifEmpty { sub.kind } ?: stringResource(R.string.subagent),
+                                style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(stringResource(R.string.subagent_read_only), style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    androidx.compose.runtime.key(selectedAgent) {
+                        ChatView(mesh, session, Modifier.weight(1f), agent = selectedAgent)
+                    }
+                }
             }
         }
     }
@@ -268,7 +335,7 @@ private fun MessageItem(m: ChatMessage) {
 
 @Composable
 private fun ToolItem(m: ChatMessage) {
-    var open by remember { mutableStateOf(false) }
+    var open by remember(m.id, m.text) { mutableStateOf(m.error) }
     val tint = if (m.error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -276,7 +343,7 @@ private fun ToolItem(m: ChatMessage) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            Modifier.animateContentSize().clickable(enabled = m.result.isNotEmpty()) { open = !open }
+            Modifier.animateContentSize().clickable(enabled = m.result.isNotEmpty() || m.text.isNotEmpty()) { open = !open }
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -301,7 +368,7 @@ private fun ToolItem(m: ChatMessage) {
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(max = 320.dp),
                 ) {
                     Text(
-                        m.result, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                        listOf(m.text, m.result).filter { it.isNotBlank() }.joinToString("\n\n"), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
                         modifier = Modifier.padding(8.dp).verticalScroll(rememberScrollState()),
                     )
                 }
@@ -427,5 +494,24 @@ private fun AnnotatedString.Builder.inline(line: String, codeBackground: Color) 
             withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(line.substring(bold + 2, end)) }
             i = end + 2
         }
+    }
+}
+
+@Composable
+private fun SubagentRow(sub: SubAgent, sessionRunning: Boolean, onClick: () -> Unit) {
+    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        ListItem(
+            modifier = Modifier.clickable(onClick = onClick),
+            leadingContent = {
+                if (sub.running && sessionRunning) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                else Icon(Icons.Outlined.SmartToy, null)
+            },
+            headlineContent = { Text(sub.description.ifEmpty { sub.kind }.ifEmpty { stringResource(R.string.subagent) },
+                maxLines = 2, overflow = TextOverflow.Ellipsis) },
+            supportingContent = {
+                Text(dotted(sub.kind, stringResource(R.string.tool_calls, sub.toolCalls), sub.tool, sub.detail),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+            },
+        )
     }
 }

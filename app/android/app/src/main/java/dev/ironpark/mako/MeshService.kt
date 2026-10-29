@@ -54,7 +54,7 @@ class MeshService : Service() {
         job = app.scope.launch {
             launch {
                 app.mesh.nodes.map { nodes -> nodes.count { it.trustsUs } }.distinctUntilChanged().collect {
-                    NotificationManagerCompat.from(this@MeshService).notify(ONGOING, ongoing(it))
+                    notify(NotificationManagerCompat.from(this@MeshService), ONGOING, ongoing(it))
                 }
             }
             combine(app.mesh.sessions, app.foreground, ::Pair).collect { (sessions, fg) -> notice(sessions, fg) }

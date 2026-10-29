@@ -42,6 +42,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
+import androidx.compose.material3.Icon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -157,7 +159,7 @@ fun Dot(color: Color, modifier: Modifier = Modifier, size: Dp = 10.dp) {
 }
 
 /**
- * AgentAvatar is an agent's initial in its colour, with the session's
+ * AgentAvatar is an agent's desktop glyph in its colour, with the session's
  * status as a dot on its corner.
  */
 @Composable
@@ -167,12 +169,10 @@ fun AgentAvatar(agent: String, color: Color, status: Color?, modifier: Modifier 
             Modifier.size(size).clip(CircleShape).background(color.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                agent.take(1).uppercase(),
-                color = color,
-                fontWeight = FontWeight.Bold,
-                fontSize = (size.value * 0.42f).sp,
-            )
+            val glyph = agentDrawable(agent)
+            if (glyph != null) Icon(painterResource(glyph), agent, Modifier.size(size * 0.62f), tint = color)
+            else Text(agent.take(1).uppercase(), color = color, fontWeight = FontWeight.Bold,
+                fontSize = (size.value * 0.42f).sp)
         }
         if (status != null) {
             Box(
@@ -258,4 +258,15 @@ fun RenameDialog(mesh: Mesh, s: SessionInfo, onDismiss: () -> Unit) {
             act { mesh.renameSession(s, name) }
         },
     )
+}
+
+internal fun agentDrawable(agent: String): Int? = when (agent.lowercase()) {
+    "claude" -> R.drawable.ic_agent_claude
+    "codex" -> R.drawable.ic_agent_codex
+    "agy", "antigravity" -> R.drawable.ic_agent_agy
+    "opencode" -> R.drawable.ic_agent_opencode
+    "omo" -> R.drawable.ic_agent_omo
+    "omp" -> R.drawable.ic_agent_omp
+    "pi" -> R.drawable.ic_agent_pi
+    else -> null
 }

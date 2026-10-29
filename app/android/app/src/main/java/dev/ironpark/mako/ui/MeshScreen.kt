@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -67,6 +68,7 @@ fun MeshScreen(mesh: Mesh, onBack: () -> Unit, onScan: () -> Unit) {
     val peers by mesh.peers.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val resources = LocalResources.current
     val clipboard = LocalClipboard.current
     var adding by remember { mutableStateOf(false) }
     var naming by remember { mutableStateOf(false) }
@@ -141,7 +143,7 @@ fun MeshScreen(mesh: Mesh, onBack: () -> Unit, onScan: () -> Unit) {
                         if (i > 0) HorizontalDivider()
                         NodeItem(n, asked = n.id in asked, onAsk = {
                             act {
-                                mesh.askToJoin(n.id, context.getString(R.string.ask_note, Mesh.deviceName()))
+                                mesh.askToJoin(n.id, resources.getString(R.string.ask_note, Mesh.deviceName()))
                                 asked = asked + n.id
                             }
                         })

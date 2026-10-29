@@ -78,6 +78,11 @@ class Daemon(private val socket: () -> String?) {
         })
     }
 
+    suspend fun commands(node: String, id: String): List<dev.ironpark.mako.v2.Command> =
+        call(envelope {
+            listCommands = dev.ironpark.mako.v2.ListCommands.newBuilder().setNodeId(node).setSessionId(id).build()
+        }).commands.commandsList
+
     suspend fun chat(req: ReadChat): Chat = call(envelope { readChat = req }).chat
 
     /**

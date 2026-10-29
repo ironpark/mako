@@ -44,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -146,12 +147,13 @@ fun ScanScreen(mesh: Mesh, onBack: () -> Unit) {
 fun rememberJoin(mesh: Mesh): (String, (Boolean) -> Unit) -> Unit {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    return remember(mesh) {
+    val resources = LocalResources.current
+    return remember(mesh, resources) {
         { link, done ->
             scope.launch {
                 val ok = try {
-                    val name = mesh.join(link, context.getString(R.string.ask_note, Mesh.deviceName()))
-                    Toast.makeText(context, context.getString(R.string.joined, name), Toast.LENGTH_SHORT).show()
+                    val name = mesh.join(link, resources.getString(R.string.ask_note, Mesh.deviceName()))
+                    Toast.makeText(context, resources.getString(R.string.joined, name), Toast.LENGTH_SHORT).show()
                     true
                 } catch (e: CancellationException) {
                     throw e

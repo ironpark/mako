@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">mako</string>
+    <string name="app_name" translatable="false">mako</string>
 
     <string name="back">Back</string>
     <string name="cancel">Cancel</string>
@@ -108,4 +108,15 @@
     <string name="joined">%1$s lets this device in.</string>
     <string name="camera_needed">Reading a pairing code takes the camera.</string>
     <string name="allow_camera">Allow the camera</string>
+    <string name="close">Close</string>
+    <string name="answer_agent">Answer the agent</string>
+    <string name="answer_hint">Tap to type. Use arrows, Space and Enter to answer. Pinch to zoom; double-tap to reset.</string>
+    <string name="swipe_tabs">Swipe left for Terminal, right for Chat</string>
+    <string name="subagent">Subagent</string>
+    <string name="subagent_read_only">Subagent conversation · read only</string>
+    <string name="tool_calls">%1$d tool calls</string>
+    <string name="commands_retry">Could not load commands. Tap to retry.</string>
+    <string name="commands_empty">No matching commands. You can still type a command.</string>
+    <string name="space_key">Space</string>
+    <string name="session_actions">Session actions</string>
 </resources>

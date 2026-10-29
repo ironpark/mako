@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
@@ -50,6 +51,7 @@ import dev.ironpark.mako.term.KeyboardView
 import dev.ironpark.mako.term.TermSession
 import dev.ironpark.mako.term.TerminalPane
 import dev.ironpark.mako.term.cell
+import dev.ironpark.mako.term.terminalTypeface
 import kotlinx.coroutines.launch
 
 /**
@@ -63,6 +65,8 @@ fun TerminalTab(term: TermSession, fits: Int, modifier: Modifier = Modifier) {
     val status by term.status.collectAsState()
     var keyboard by remember { mutableStateOf<KeyboardView?>(null) }
     val density = LocalDensity.current
+    val context = LocalContext.current
+    val font = remember(context) { terminalTypeface(context) }
 
     Column(modifier) {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
@@ -70,7 +74,7 @@ fun TerminalTab(term: TermSession, fits: Int, modifier: Modifier = Modifier) {
             val h = constraints.maxHeight
             LaunchedEffect(fits) {
                 if (fits == 0) return@LaunchedEffect
-                val c = cell(with(density) { 12.sp.toPx() })
+                val c = cell(with(density) { 12.sp.toPx() }, font)
                 term.resize((w / c.width).toInt().coerceAtLeast(20), (h / c.height).coerceAtLeast(5))
             }
             TerminalPane(term, Modifier.matchParentSize(), onTap = { keyboard?.showKeyboard() })
@@ -121,8 +125,9 @@ private fun KeyBar(term: TermSession, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val keys = listOf(
+        "↵" to KeyEvent.KEYCODE_ENTER, "↑" to KeyEvent.KEYCODE_DPAD_UP,
+        "↓" to KeyEvent.KEYCODE_DPAD_DOWN, stringResource(R.string.space_key) to KeyEvent.KEYCODE_SPACE,
         "Esc" to KeyEvent.KEYCODE_ESCAPE, "Tab" to KeyEvent.KEYCODE_TAB,
-        "↑" to KeyEvent.KEYCODE_DPAD_UP, "↓" to KeyEvent.KEYCODE_DPAD_DOWN,
         "←" to KeyEvent.KEYCODE_DPAD_LEFT, "→" to KeyEvent.KEYCODE_DPAD_RIGHT,
         "Home" to KeyEvent.KEYCODE_MOVE_HOME, "End" to KeyEvent.KEYCODE_MOVE_END,
         "PgUp" to KeyEvent.KEYCODE_PAGE_UP, "PgDn" to KeyEvent.KEYCODE_PAGE_DOWN,
@@ -136,7 +141,7 @@ private fun KeyBar(term: TermSession, modifier: Modifier = Modifier) {
         for ((label, code) in keys) {
             Key(label) {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                term.key(code)
+                if (code == KeyEvent.KEYCODE_SPACE) term.type(" ") else term.key(code)
             }
         }
         Key("^C") { term.send("\u0003") }
@@ -160,7 +165,7 @@ private fun Key(label: String, selected: Boolean = false, onClick: () -> Unit) {
     ) {
         Text(
             label, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.defaultMinSize(minWidth = 40.dp).padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp).padding(horizontal = 10.dp, vertical = 8.dp),
             textAlign = TextAlign.Center,
         )
     }

@@ -3,6 +3,10 @@ package gui
 // catalogKo is the window in Korean. TestEveryStringIsTranslated keeps it
 // complete.
 var catalogKo = map[string]string{
+	"Answer the agent": "에이전트 질문에 답변",
+	"Back to message":  "메시지 입력으로 돌아가기",
+	"Click below to select options or type your answer.": "아래 화면을 클릭하여 선택지를 고르거나 답변을 입력하세요.",
+
 	"Waiting for this agent to save its conversation. It will connect automatically.": "에이전트가 대화 기록을 저장하면 자동으로 연결됩니다.",
 	"Chat":                     "챗",
 	"Loading conversation…":    "대화 기록을 불러오는 중…",

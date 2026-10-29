@@ -30,7 +30,24 @@ and opens a session's conversation and its terminal.
   Settings ▸ Access ▸ Pairing (or `mako pair` prints): the computer lets
   the phone in at once, and the phone keeps its address.
   The phone lets no one in: nothing on the mesh can run anything on it.
-- **The terminal** is Termux's emulator and renderer, fed the session's
+- **Chat on the phone.** Open a subagent card to read its conversation and
+  tool activity, then go back to the main conversation. Type `/` to browse
+  the session's slash commands; tapping one inserts it for you to send.
+  Drafts survive tab switches, and a failed send keeps the text.
+- **Answer questions.** A pending question opens the agent's live input in
+  a panel over Chat. Tap to type, or use Enter, arrows and Space in the key
+  bar for choices and multiple selections. The session menu's **Answer the
+  agent** opens the panel when automatic detection is unavailable. Close
+  the panel to return to the conversation without discarding the draft.
+- **Touch controls.** Swipe across the Chat/Terminal tab strip to switch
+  views. Terminal gestures remain local to the terminal: pinch to zoom,
+  drag to pan or scroll back, and double-tap to reset zoom and return to
+  the live screen. Agent icons match the desktop throughout the app.
+- **The terminal** bundles D2Coding 1.4.0 (the standard, non-ligature
+  build) for rendering and measuring character cells, including Korean.
+  The original font is from [NAVER's release](https://github.com/naver/d2-coding-font/releases/tag/VER1.4.0);
+  its [SIL Open Font License](android/app/src/main/assets/licenses/D2Coding-OFL.txt)
+  ships in the APK. Termux's emulator and renderer are fed the session's
   attach stream. It draws the session at the size its desktop window gave
   it, fitted to the phone's width, with pinch to zoom and drag to scroll
   back; **Fit to this screen** resizes the session itself.
@@ -69,3 +86,16 @@ app, tap **Ask to join**, and allow it:
 MAKO_HOME=/tmp/mako-dev makod -listen :4300 &
 MAKO_HOME=/tmp/mako-dev mako allow <the phone's node>
 ```
+
+## CI releases
+
+The Android workflow tests and builds pushes to `main` and pull requests.
+Pushing an `android-vX.Y.Z` tag also builds the signed release APK and publishes
+it with SHA-256 checksums to GitHub Releases. Update `app/RELEASE.md` before
+tagging. The tag sets `versionName`; the workflow run number sets `versionCode`.
+
+Release signing uses repository secrets `ANDROID_KEYSTORE_BASE64` (a base64
+PKCS12 keystore containing alias `mako`) and `ANDROID_KEYSTORE_PASSWORD`.
+Keep a secure backup of this key: subsequent APKs need the same signature.
+Local release builds remain unsigned unless `ANDROID_KEYSTORE_PATH` and
+`ANDROID_KEYSTORE_PASSWORD` are set; debug builds use Android's debug key.

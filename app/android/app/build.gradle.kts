@@ -11,18 +11,28 @@ android {
         applicationId = "dev.ironpark.mako"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = providers.gradleProperty("makoVersionCode").orElse("1").get().toInt()
+        versionName = providers.gradleProperty("makoVersionName").orElse("0.1.0").get()
         // The node is built for these alone (app/Makefile).
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+    }
+
+    val releaseKeystore = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
+    if (releaseKeystore != null) {
+        signingConfigs.create("release") {
+            storeFile = file(releaseKeystore)
+            storePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").get()
+            keyAlias = "mako"
+            keyPassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").get()
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the debug key until there is a release key.
-            signingConfig = signingConfigs.getByName("debug")
+            // Without a release key, local release builds stay unsigned.
+            if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -43,6 +53,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation(files("libs/makocore.aar"))
 
     implementation(libs.androidx.core.ktx)
