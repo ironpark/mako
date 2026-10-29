@@ -131,8 +131,9 @@ func searchText(ctx context.Context, root, query string) (*protocol.SearchResult
 }
 
 // grepOutput reads matches as ripgrep and git grep print them with
-// --null: the path, a NUL, then line:column:text. A search that found
-// nothing exits 1, which is no failure.
+// --null: the path, a NUL, then the line, the column and the text, which
+// ripgrep separates with colons and git grep with NULs. A search that
+// found nothing exits 1, which is no failure.
 func grepOutput(cmd *exec.Cmd) (*protocol.SearchResult, error) {
 	out := &protocol.SearchResult{}
 	pipe, err := cmd.StdoutPipe()
@@ -149,18 +150,20 @@ func grepOutput(cmd *exec.Cmd) (*protocol.SearchResult, error) {
 		if !ok {
 			continue
 		}
-		f := strings.SplitN(rest, ":", 3)
-		if len(f) != 3 {
+		line, rest, ok := cutNumber(rest)
+		if !ok {
 			continue
 		}
-		line, _ := strconv.Atoi(f[0])
-		col, _ := strconv.Atoi(f[1])
+		col, text, ok := cutNumber(rest)
+		if !ok {
+			continue
+		}
 		if len(out.GetMatches()) == maxSearchMatches {
 			out.Truncated = true
 			_ = cmd.Process.Kill()
 			break
 		}
-		out.Matches = append(out.Matches, &protocol.SearchMatch{Path: strings.TrimPrefix(path, "./"), Line: int64(line), Col: int64(col), Text: clip(f[2])})
+		out.Matches = append(out.Matches, &protocol.SearchMatch{Path: strings.TrimPrefix(path, "./"), Line: int64(line), Col: int64(col), Text: clip(text)})
 	}
 	err = cmd.Wait()
 	var exit *exec.ExitError
@@ -168,6 +171,17 @@ func grepOutput(cmd *exec.Cmd) (*protocol.SearchResult, error) {
 		err = nil
 	}
 	return out, err
+}
+
+// cutNumber cuts the number at the start of s and the colon or NUL after
+// it.
+func cutNumber(s string) (int, string, bool) {
+	i := strings.IndexAny(s, ":\x00")
+	if i < 0 {
+		return 0, s, false
+	}
+	n, err := strconv.Atoi(s[:i])
+	return n, s[i+1:], err == nil
 }
 
 // walkSearch searches a folder without a search program to do it.

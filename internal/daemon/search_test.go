@@ -97,3 +97,21 @@ func TestWalkSearchWithoutTools(t *testing.T) {
 		t.Fatalf("matches %q", got)
 	}
 }
+
+func TestGrepOutputReadsRipgrepAndGitGrep(t *testing.T) {
+	if _, err := exec.LookPath("printf"); err != nil {
+		t.Skip("printf is not installed")
+	}
+	for name, out := range map[string]string{
+		"rg":       `main.go\0003:6:a: b\n`,
+		"git grep": `main.go\0003\0006\000a: b\n`,
+	} {
+		res, err := grepOutput(exec.Command("printf", out))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := res.GetMatches(); len(m) != 1 || m[0].GetPath() != "main.go" || m[0].GetLine() != 3 || m[0].GetCol() != 6 || m[0].GetText() != "a: b" {
+			t.Fatalf("%s: %+v", name, m)
+		}
+	}
+}
