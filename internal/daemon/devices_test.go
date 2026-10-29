@@ -266,7 +266,7 @@ func TestALeaseFollowsItsDevice(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	waitFor(t, "a linked to b", func() bool { n := nodeOf(ctx, t, c, b.cfg.NodeID); return n != nil && n.GetTrustsUs() })
-	if _, err := c.Borrow(ctx, &protocol.Borrow{Device: "S1"}); err != nil {
+	if _, err := c.Borrow(ctx, &protocol.Borrow{DeviceNodeId: b.cfg.NodeID, Kind: protocol.DeviceADB, Serial: "S1"}); err != nil {
 		t.Fatal(err)
 	}
 	state := func() string {

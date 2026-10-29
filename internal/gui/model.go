@@ -143,6 +143,7 @@ type model struct {
 	wsNode    string
 	wsLast    []byte
 	wsTimer   *time.Timer
+	wsWrites  sync.WaitGroup // workspace writes still reaching disk
 	wsStale   atomic.Bool
 	syncing   atomic.Bool // the window follows the other nodes; for the poll
 	// contextsMoved says the window showed another owner's or project's
@@ -1450,6 +1451,10 @@ func (m *model) openSettings(section string) {
 // shutdown detaches every terminal, hangs up, and stops the app's daemon
 // with the sessions it runs.
 func (m *model) shutdown() {
+	if m.wsTimer != nil {
+		m.wsTimer.Stop()
+	}
+	m.wsWrites.Wait()
 	defer m.embedded.stop()
 	defer m.hl.close()
 	defer m.closeTunnels()

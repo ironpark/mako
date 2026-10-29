@@ -21,7 +21,7 @@ func workspaceModel(t *testing.T) (*model, *ggui.Probe) {
 	m.post = func(func()) {} // no daemon: what it would answer is dropped
 	p := ggui.ProbeBuilder(func() ggui.Widget { return ggui.Box() }, ggui.Sz(100, 100))
 	p.Setup(func() { setupWorkspace(m) })
-	t.Cleanup(p.Close)
+	t.Cleanup(func() { p.Close(); m.shutdown() })
 	p.Frame()
 	return m, p
 }
@@ -156,7 +156,7 @@ func TestContextsAndOldSpacesCarryOver(t *testing.T) {
 	p.Frame()
 	m.selectSession("b1")
 	m.writeWorkspace()
-	time.Sleep(100 * time.Millisecond) // the write is on its own goroutine
+	m.wsWrites.Wait() // all queued writes have reached disk
 
 	restart := func(prep func(*model)) *model {
 		again := newModel(config.Default(), "")

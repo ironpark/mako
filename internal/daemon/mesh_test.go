@@ -509,12 +509,13 @@ func TestAnAttachPacksAsOneStreamWhenAsked(t *testing.T) {
 	checkLoud(t, out)
 }
 
-// loudSession starts a session on d that prints a line over and over.
+// loudSession keeps printing after attachment, even if peer discovery takes
+// longer than the first burst of output and the replay only holds its tail.
 func loudSession(t *testing.T, d *Daemon) {
 	t.Helper()
 	s, err := session.Start(session.Spec{
 		ID: "loud", NodeID: d.cfg.NodeID, Agent: "shell", Project: t.TempDir(),
-		Command: []string{"sh", "-c", "i=0; while [ $i -lt 3000 ]; do echo a line the session printed; i=$((i+1)); done; sleep 30"}, Cols: 80, Rows: 24,
+		Command: []string{"sh", "-c", "while :; do i=0; while [ $i -lt 3000 ]; do echo a line the session printed; i=$((i+1)); done; sleep 1; done"}, Cols: 80, Rows: 24,
 	})
 	if err != nil {
 		t.Fatal(err)
