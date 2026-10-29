@@ -39,8 +39,8 @@ type Config struct {
 	// SSHKey is an SSH public key whose owner vouches for this node: its
 	// private half in the SSH agent, or beside it without a passphrase.
 	// Nodes that let the key in let this node in, as do the other nodes
-	// it vouches for. Empty for none.
-	SSHKey string `json:"ssh_key,omitempty"`
+	// it vouches for. Left out, it is DefaultSSHKey; empty for none.
+	SSHKey string `json:"ssh_key"`
 	// P2P is how the daemon links to its peers over libp2p.
 	P2P P2P `json:"p2p"`
 	// Agents are how this node launches each agent by name: its command,
@@ -213,6 +213,25 @@ func Default() *Config {
 	}
 }
 
+// defaultSSHKeys are the public keys ssh-keygen makes by default, in the
+// order ssh tries them.
+var defaultSSHKeys = []string{"id_ed25519.pub", "id_ecdsa.pub", "id_rsa.pub"}
+
+// DefaultSSHKey is the first of this user's default SSH public keys in
+// ~/.ssh, written from ~, or empty when there is none.
+func DefaultSSHKey() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	for _, name := range defaultSSHKeys {
+		if _, err := os.Stat(filepath.Join(home, ".ssh", name)); err == nil {
+			return "~/.ssh/" + name
+		}
+	}
+	return ""
+}
+
 // Load reads the config file, creating it with defaults when absent.
 func Load() (*Config, error) {
 	path, err := Path()
@@ -222,6 +241,7 @@ func Load() (*Config, error) {
 	body, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		cfg := Default()
+		cfg.SSHKey = DefaultSSHKey()
 		if err := Save(cfg); err != nil {
 			return nil, err
 		}
@@ -231,6 +251,7 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	cfg := Default()
+	cfg.SSHKey = DefaultSSHKey()
 	if err := json.Unmarshal(body, cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}

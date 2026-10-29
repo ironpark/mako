@@ -781,7 +781,8 @@ requests of the peers it lets in, so a peer it lets in can start programs and
 read and write files on its machine; that peer must let it in for the
 reverse.
 
-**Vouching with an SSH key.** With `ssh_key` set to an SSH public key, a
+**Vouching with an SSH key.** With `ssh_key` set to an SSH public key (left
+out, the first of `~/.ssh/id_ed25519.pub`, `id_ecdsa.pub` and `id_rsa.pub`), a
 daemon has the key's private half, in the SSH agent or beside it without a
 passphrase, sign a certificate that its peer ID is the key owner's:
 

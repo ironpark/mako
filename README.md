@@ -79,10 +79,11 @@ let nothing in until you say so. Either:
   the other machine (or run `mako request <node>`). On that machine,
   Settings ▸ Access shows the request: **Allow** it (or run `mako allow
   <node>`).
-- **Vouch with your SSH key.** Set the same SSH public key, such as
-  `~/.ssh/id_ed25519.pub`, under Settings ▸ Access on each machine (its
-  private half in the SSH agent). Machines vouched for by one key let each
-  other in, and a machine that lets the key in lets them all in.
+- **Vouch with your SSH key.** Each machine vouches with its SSH key,
+  `~/.ssh/id_ed25519.pub` (or `id_ecdsa`, `id_rsa`), unless Settings ▸
+  Access names another or none; its private half must be in the SSH agent
+  or beside it without a passphrase. Machines vouched for by one key let
+  each other in, and a machine that lets the key in lets them all in.
 
 ### From the command line
 
@@ -259,6 +260,9 @@ the first run, and most of it can be edited in the app's Settings.
   }
 }
 ```
+
+**SSH key.** `ssh_key` left out is the first of `~/.ssh/id_ed25519.pub`,
+`id_ecdsa.pub` and `id_rsa.pub` there is; set it to `""` to vouch with none.
 
 **Agents.** Each agent has a `command`, default `args` and `env`, and named
 `profiles` that add to them. `claude:work` runs the command with the
