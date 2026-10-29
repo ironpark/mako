@@ -103,10 +103,13 @@ func backdropped(m *model, slot backdropSlot, child ggui.Widget) ggui.Widget {
 }
 
 // backdropScrim is the theme over the slot's image: its colour, at what of
-// it the image leaves.
+// it the image leaves. The fill carries that alpha itself, where an
+// Opacity would paint it into a layer the size of the window every frame.
 func backdropScrim(m *model, slot backdropSlot) ggui.Widget {
-	return ggui.Opacity(ggui.Box().Fill(tokSolidBg), 1).
-		BindOpacity(ggui.Map(m.Prefs, func(p prefs) float64 { return 1 - slot.of(&p).Opacity }))
+	alpha := ggui.Map(m.Prefs, func(p prefs) float64 { return 1 - slot.of(&p).Opacity })
+	return ggui.Reactive(func() ggui.Widget {
+		return ggui.Box().Fill(tokSolidBg.Alpha(alpha.Get()))
+	})
 }
 
 // backdropLayer is the slot's image, placed as its settings say, with its
