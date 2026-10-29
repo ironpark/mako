@@ -11,7 +11,7 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/ironpark/ggfx v0.0.0-20261029083606-672845c5647d
-	github.com/ironpark/ggui v0.0.0-20261029083859-e2c851b172b8
+	github.com/ironpark/ggui v0.0.0-20261029123040-ba4d1705a4c4
 	github.com/ironpark/ggwd v0.0.0-20261029083627-1c8f30b85ef7
 	github.com/ironpark/gostty v0.0.0-20261027142811-dd03466f18c8
 	github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202
@@ -51,8 +51,6 @@ require (
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.9.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/go-text/render v0.2.1 // indirect
-	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/gogpu/naga v0.19.0 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
