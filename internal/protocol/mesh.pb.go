@@ -893,11 +893,16 @@ func (x *Access) GetNote() string {
 // AccessInfo answers Access: this node's keys, the requests waiting, and
 // the keys it lets in.
 type AccessInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Key           *AccessKey             `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`     // this node's own
-	Owner         *AccessKey             `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"` // the SSH key vouching for it, if one does
-	Requests      []*AccessRequest       `protobuf:"bytes,3,rep,name=requests,proto3" json:"requests,omitempty"`
-	Keys          []*AccessKey           `protobuf:"bytes,4,rep,name=keys,proto3" json:"keys,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Key      *AccessKey             `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`     // this node's own
+	Owner    *AccessKey             `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"` // the SSH key vouching for it, if one does
+	Requests []*AccessRequest       `protobuf:"bytes,3,rep,name=requests,proto3" json:"requests,omitempty"`
+	Keys     []*AccessKey           `protobuf:"bytes,4,rep,name=keys,proto3" json:"keys,omitempty"`
+	// pairing is the pairing code that lets a node in at once, while one
+	// is waiting to be read.
+	Pairing *Pairing `protobuf:"bytes,5,opt,name=pairing,proto3" json:"pairing,omitempty"`
+	// joined answers "join": the name of the node asked.
+	Joined        string `protobuf:"bytes,6,opt,name=joined,proto3" json:"joined,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -960,6 +965,75 @@ func (x *AccessInfo) GetKeys() []*AccessKey {
 	return nil
 }
 
+func (x *AccessInfo) GetPairing() *Pairing {
+	if x != nil {
+		return x.Pairing
+	}
+	return nil
+}
+
+func (x *AccessInfo) GetJoined() string {
+	if x != nil {
+		return x.Joined
+	}
+	return ""
+}
+
+// Pairing is a pairing code: a link, shown as a QR code, that says where
+// this node is and carries a token. A node that asks to be let in with
+// the token is let in at once, and the code is then used up.
+type Pairing struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Link          string                 `protobuf:"bytes,1,opt,name=link,proto3" json:"link,omitempty"` // mako://pair?id=…&n=…&t=…&a=…
+	Expires       *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=expires,proto3" json:"expires,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Pairing) Reset() {
+	*x = Pairing{}
+	mi := &file_mako_v2_mesh_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Pairing) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Pairing) ProtoMessage() {}
+
+func (x *Pairing) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_mesh_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Pairing.ProtoReflect.Descriptor instead.
+func (*Pairing) Descriptor() ([]byte, []int) {
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *Pairing) GetLink() string {
+	if x != nil {
+		return x.Link
+	}
+	return ""
+}
+
+func (x *Pairing) GetExpires() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Expires
+	}
+	return nil
+}
+
 // AccessKey is a public key.
 type AccessKey struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
@@ -977,7 +1051,7 @@ type AccessKey struct {
 
 func (x *AccessKey) Reset() {
 	*x = AccessKey{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[13]
+	mi := &file_mako_v2_mesh_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -989,7 +1063,7 @@ func (x *AccessKey) String() string {
 func (*AccessKey) ProtoMessage() {}
 
 func (x *AccessKey) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[13]
+	mi := &file_mako_v2_mesh_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1002,7 +1076,7 @@ func (x *AccessKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessKey.ProtoReflect.Descriptor instead.
 func (*AccessKey) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{13}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *AccessKey) GetFingerprint() string {
@@ -1054,7 +1128,7 @@ type AccessRequest struct {
 
 func (x *AccessRequest) Reset() {
 	*x = AccessRequest{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[14]
+	mi := &file_mako_v2_mesh_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1066,7 +1140,7 @@ func (x *AccessRequest) String() string {
 func (*AccessRequest) ProtoMessage() {}
 
 func (x *AccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[14]
+	mi := &file_mako_v2_mesh_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1079,7 +1153,7 @@ func (x *AccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessRequest.ProtoReflect.Descriptor instead.
 func (*AccessRequest) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{14}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *AccessRequest) GetNode() *Node {
@@ -1184,13 +1258,18 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x10\n" +
 	"\x03key\x18\x03 \x01(\tR\x03key\x12\x14\n" +
 	"\x05owner\x18\x04 \x01(\bR\x05owner\x12\x12\n" +
-	"\x04note\x18\x05 \x01(\tR\x04note\"\xb8\x01\n" +
+	"\x04note\x18\x05 \x01(\tR\x04note\"\xfc\x01\n" +
 	"\n" +
 	"AccessInfo\x12$\n" +
 	"\x03key\x18\x01 \x01(\v2\x12.mako.v2.AccessKeyR\x03key\x12(\n" +
 	"\x05owner\x18\x02 \x01(\v2\x12.mako.v2.AccessKeyR\x05owner\x122\n" +
 	"\brequests\x18\x03 \x03(\v2\x16.mako.v2.AccessRequestR\brequests\x12&\n" +
-	"\x04keys\x18\x04 \x03(\v2\x12.mako.v2.AccessKeyR\x04keys\"\x87\x01\n" +
+	"\x04keys\x18\x04 \x03(\v2\x12.mako.v2.AccessKeyR\x04keys\x12*\n" +
+	"\apairing\x18\x05 \x01(\v2\x10.mako.v2.PairingR\apairing\x12\x16\n" +
+	"\x06joined\x18\x06 \x01(\tR\x06joined\"S\n" +
+	"\aPairing\x12\x12\n" +
+	"\x04link\x18\x01 \x01(\tR\x04link\x124\n" +
+	"\aexpires\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\aexpires\"\x87\x01\n" +
 	"\tAccessKey\x12 \n" +
 	"\vfingerprint\x18\x01 \x01(\tR\vfingerprint\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x18\n" +
@@ -1216,7 +1295,7 @@ func file_mako_v2_mesh_proto_rawDescGZIP() []byte {
 	return file_mako_v2_mesh_proto_rawDescData
 }
 
-var file_mako_v2_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_mako_v2_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_mako_v2_mesh_proto_goTypes = []any{
 	(*Hello)(nil),                 // 0: mako.v2.Hello
 	(*Welcome)(nil),               // 1: mako.v2.Welcome
@@ -1231,33 +1310,36 @@ var file_mako_v2_mesh_proto_goTypes = []any{
 	(*Changed)(nil),               // 10: mako.v2.Changed
 	(*Access)(nil),                // 11: mako.v2.Access
 	(*AccessInfo)(nil),            // 12: mako.v2.AccessInfo
-	(*AccessKey)(nil),             // 13: mako.v2.AccessKey
-	(*AccessRequest)(nil),         // 14: mako.v2.AccessRequest
-	(*timestamppb.Timestamp)(nil), // 15: google.protobuf.Timestamp
-	(*SessionInfo)(nil),           // 16: mako.v2.SessionInfo
+	(*Pairing)(nil),               // 13: mako.v2.Pairing
+	(*AccessKey)(nil),             // 14: mako.v2.AccessKey
+	(*AccessRequest)(nil),         // 15: mako.v2.AccessRequest
+	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
+	(*SessionInfo)(nil),           // 17: mako.v2.SessionInfo
 }
 var file_mako_v2_mesh_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Welcome.node:type_name -> mako.v2.Node
-	15, // 1: mako.v2.Node.last_seen:type_name -> google.protobuf.Timestamp
+	16, // 1: mako.v2.Node.last_seen:type_name -> google.protobuf.Timestamp
 	3,  // 2: mako.v2.Node.agents:type_name -> mako.v2.AgentInfo
 	2,  // 3: mako.v2.Nodes.nodes:type_name -> mako.v2.Node
 	2,  // 4: mako.v2.NodeState.node:type_name -> mako.v2.Node
-	16, // 5: mako.v2.NodeState.sessions:type_name -> mako.v2.SessionInfo
+	17, // 5: mako.v2.NodeState.sessions:type_name -> mako.v2.SessionInfo
 	2,  // 6: mako.v2.NodeState.peers:type_name -> mako.v2.Node
 	7,  // 7: mako.v2.NodeState.workspace:type_name -> mako.v2.Workspace
-	13, // 8: mako.v2.AccessInfo.key:type_name -> mako.v2.AccessKey
-	13, // 9: mako.v2.AccessInfo.owner:type_name -> mako.v2.AccessKey
-	14, // 10: mako.v2.AccessInfo.requests:type_name -> mako.v2.AccessRequest
-	13, // 11: mako.v2.AccessInfo.keys:type_name -> mako.v2.AccessKey
-	2,  // 12: mako.v2.AccessRequest.node:type_name -> mako.v2.Node
-	13, // 13: mako.v2.AccessRequest.key:type_name -> mako.v2.AccessKey
-	13, // 14: mako.v2.AccessRequest.owner:type_name -> mako.v2.AccessKey
-	15, // 15: mako.v2.AccessRequest.at:type_name -> google.protobuf.Timestamp
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	14, // 8: mako.v2.AccessInfo.key:type_name -> mako.v2.AccessKey
+	14, // 9: mako.v2.AccessInfo.owner:type_name -> mako.v2.AccessKey
+	15, // 10: mako.v2.AccessInfo.requests:type_name -> mako.v2.AccessRequest
+	14, // 11: mako.v2.AccessInfo.keys:type_name -> mako.v2.AccessKey
+	13, // 12: mako.v2.AccessInfo.pairing:type_name -> mako.v2.Pairing
+	16, // 13: mako.v2.Pairing.expires:type_name -> google.protobuf.Timestamp
+	2,  // 14: mako.v2.AccessRequest.node:type_name -> mako.v2.Node
+	14, // 15: mako.v2.AccessRequest.key:type_name -> mako.v2.AccessKey
+	14, // 16: mako.v2.AccessRequest.owner:type_name -> mako.v2.AccessKey
+	16, // 17: mako.v2.AccessRequest.at:type_name -> google.protobuf.Timestamp
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_mesh_proto_init() }
@@ -1272,7 +1354,7 @@ func file_mako_v2_mesh_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_mesh_proto_rawDesc), len(file_mako_v2_mesh_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -19,6 +19,9 @@ class MainActivity : ComponentActivity() {
     /** The session a notification asked to open, for the navigation to take. */
     private val target = MutableStateFlow<SessionRef?>(null)
 
+    /** The pairing code's link another app opened this with, for the navigation to join. */
+    private val pairing = MutableStateFlow<String?>(null)
+
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,7 +31,7 @@ class MainActivity : ComponentActivity() {
         MeshService.start(this)
         take(intent)
         setContent {
-            MakoTheme { MakoNav(mako.mesh, target) }
+            MakoTheme { MakoNav(mako.mesh, target, pairing) }
         }
     }
 
@@ -38,6 +41,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun take(intent: Intent?) {
+        val link = intent?.dataString
+        if (intent?.action == Intent.ACTION_VIEW && link != null && Mesh.isPairing(link)) {
+            pairing.value = link
+            return
+        }
         val id = intent?.getStringExtra(SESSION) ?: return
         target.value = SessionRef(intent.getStringExtra(NODE).orEmpty(), id)
     }

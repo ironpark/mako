@@ -202,6 +202,19 @@ class Mesh(
         _access.value = daemon.access(Access.newBuilder().setOp("request").setNodeId(node).setNote(note).build())
     }
 
+    /**
+     * Joins the computer whose pairing code's link is link: asks it, with
+     * the code's token, to let this device in, which it does at once, and
+     * links to it from then on. Returns the computer's name.
+     */
+    suspend fun join(link: String, note: String): String {
+        val info = daemon.access(Access.newBuilder().setOp("join").setKey(link).setNote(note).build())
+        _access.value = info
+        withContext(Dispatchers.IO) { refreshPeers() }
+        refreshNodes()
+        return info.joined
+    }
+
     suspend fun answer(s: SessionInfo, decision: String) = answer(s.nodeId, s.id, s.approval.id, decision)
 
     /** Answers the approval of a session; the node refuses one answered or withdrawn. */
@@ -256,6 +269,9 @@ class Mesh(
 
         /** How often the sessions are asked for while the app is on screen. */
         private const val POLL = 30_000L
+
+        /** Whether text is a computer's pairing code, as its QR code holds it. */
+        fun isPairing(text: String): Boolean = text.startsWith("mako://pair?")
 
         /** The first protocol revision whose daemon takes send (protocol.RevisionSend). */
         const val REVISION_SEND = 8L

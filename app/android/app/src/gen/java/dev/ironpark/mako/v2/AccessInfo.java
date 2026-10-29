@@ -22,6 +22,7 @@ public  final class AccessInfo extends
   private AccessInfo() {
     requests_ = emptyProtobufList();
     keys_ = emptyProtobufList();
+    joined_ = "";
   }
   private int bitField0_;
   public static final int KEY_FIELD_NUMBER = 1;
@@ -344,6 +345,145 @@ public  final class AccessInfo extends
   private void removeKeys(int index) {
     ensureKeysIsMutable();
     keys_.remove(index);
+  }
+
+  public static final int PAIRING_FIELD_NUMBER = 5;
+  private dev.ironpark.mako.v2.Pairing pairing_;
+  /**
+   * <pre>
+   * pairing is the pairing code that lets a node in at once, while one
+   * is waiting to be read.
+   * </pre>
+   *
+   * <code>.mako.v2.Pairing pairing = 5 [json_name = "pairing"];</code>
+   */
+  @java.lang.Override
+  public boolean hasPairing() {
+    return ((bitField0_ & 0x00000004) != 0);
+  }
+  /**
+   * <pre>
+   * pairing is the pairing code that lets a node in at once, while one
+   * is waiting to be read.
+   * </pre>
+   *
+   * <code>.mako.v2.Pairing pairing = 5 [json_name = "pairing"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Pairing getPairing() {
+    return pairing_ == null ? dev.ironpark.mako.v2.Pairing.getDefaultInstance() : pairing_;
+  }
+  /**
+   * <pre>
+   * pairing is the pairing code that lets a node in at once, while one
+   * is waiting to be read.
+   * </pre>
+   *
+   * <code>.mako.v2.Pairing pairing = 5 [json_name = "pairing"];</code>
+   */
+  private void setPairing(dev.ironpark.mako.v2.Pairing value) {
+    java.util.Objects.requireNonNull(value);
+    pairing_ = value;
+    bitField0_ |= 0x00000004;
+  }
+  /**
+   * <pre>
+   * pairing is the pairing code that lets a node in at once, while one
+   * is waiting to be read.
+   * </pre>
+   *
+   * <code>.mako.v2.Pairing pairing = 5 [json_name = "pairing"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergePairing(dev.ironpark.mako.v2.Pairing value) {
+    java.util.Objects.requireNonNull(value);
+    if (pairing_ != null &&
+        pairing_ != dev.ironpark.mako.v2.Pairing.getDefaultInstance()) {
+      pairing_ =
+        dev.ironpark.mako.v2.Pairing.newBuilder(pairing_).mergeFrom(value).buildPartial();
+    } else {
+      pairing_ = value;
+    }
+    bitField0_ |= 0x00000004;
+  }
+  /**
+   * <pre>
+   * pairing is the pairing code that lets a node in at once, while one
+   * is waiting to be read.
+   * </pre>
+   *
+   * <code>.mako.v2.Pairing pairing = 5 [json_name = "pairing"];</code>
+   */
+  private void clearPairing() {
+    pairing_ = null;
+    bitField0_ = (bitField0_ & ~0x00000004);
+  }
+
+  public static final int JOINED_FIELD_NUMBER = 6;
+  private java.lang.String joined_;
+  /**
+   * <pre>
+   * joined answers "join": the name of the node asked.
+   * </pre>
+   *
+   * <code>string joined = 6 [json_name = "joined"];</code>
+   * @return The joined.
+   */
+  @java.lang.Override
+  public java.lang.String getJoined() {
+    return joined_;
+  }
+  /**
+   * <pre>
+   * joined answers "join": the name of the node asked.
+   * </pre>
+   *
+   * <code>string joined = 6 [json_name = "joined"];</code>
+   * @return The bytes for joined.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getJoinedBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(joined_);
+  }
+  /**
+   * <pre>
+   * joined answers "join": the name of the node asked.
+   * </pre>
+   *
+   * <code>string joined = 6 [json_name = "joined"];</code>
+   * @param value The joined to set.
+   */
+  private void setJoined(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    joined_ = value;
+  }
+  /**
+   * <pre>
+   * joined answers "join": the name of the node asked.
+   * </pre>
+   *
+   * <code>string joined = 6 [json_name = "joined"];</code>
+   */
+  private void clearJoined() {
+
+    joined_ = getDefaultInstance().getJoined();
+  }
+  /**
+   * <pre>
+   * joined answers "join": the name of the node asked.
+   * </pre>
+   *
+   * <code>string joined = 6 [json_name = "joined"];</code>
+   * @param value The bytes for joined to set.
+   */
+  private void setJoinedBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    joined_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.AccessInfo parseFrom(
@@ -794,6 +934,152 @@ public  final class AccessInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * pairing is the pairing code that lets a node in at once, while one
+     * is waiting to be read.
+     * </pre>
+     *
+     * <code>.mako.v2.Pairing pairing = 5 [json_name = "pairing"];</code>
+     */
+    @java.lang.Override
+    public boolean hasPairing() {
+      return instance.hasPairing();
+    }
+    /**
+     * <pre>
+     * pairing is the pairing code that lets a node in at once, while one
+     * is waiting to be read.
+     * </pre>
+     *
+     * <code>.mako.v2.Pairing pairing = 5 [json_name = "pairing"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Pairing getPairing() {
+      return instance.getPairing();
+    }
+    /**
+     * <pre>
+     * pairing is the pairing code that lets a node in at once, while one
+     * is waiting to be read.
+     * </pre>
+     *
+     * <code>.mako.v2.Pairing pairing = 5 [json_name = "pairing"];</code>
+     */
+    public Builder setPairing(dev.ironpark.mako.v2.Pairing value) {
+      copyOnWrite();
+      instance.setPairing(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * pairing is the pairing code that lets a node in at once, while one
+     * is waiting to be read.
+     * </pre>
+     *
+     * <code>.mako.v2.Pairing pairing = 5 [json_name = "pairing"];</code>
+     */
+    public Builder setPairing(
+        dev.ironpark.mako.v2.Pairing.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPairing(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * pairing is the pairing code that lets a node in at once, while one
+     * is waiting to be read.
+     * </pre>
+     *
+     * <code>.mako.v2.Pairing pairing = 5 [json_name = "pairing"];</code>
+     */
+    public Builder mergePairing(dev.ironpark.mako.v2.Pairing value) {
+      copyOnWrite();
+      instance.mergePairing(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * pairing is the pairing code that lets a node in at once, while one
+     * is waiting to be read.
+     * </pre>
+     *
+     * <code>.mako.v2.Pairing pairing = 5 [json_name = "pairing"];</code>
+     */
+    public Builder clearPairing() {  copyOnWrite();
+      instance.clearPairing();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * joined answers "join": the name of the node asked.
+     * </pre>
+     *
+     * <code>string joined = 6 [json_name = "joined"];</code>
+     * @return The joined.
+     */
+    @java.lang.Override
+    public java.lang.String getJoined() {
+      return instance.getJoined();
+    }
+    /**
+     * <pre>
+     * joined answers "join": the name of the node asked.
+     * </pre>
+     *
+     * <code>string joined = 6 [json_name = "joined"];</code>
+     * @return The bytes for joined.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getJoinedBytes() {
+      return instance.getJoinedBytes();
+    }
+    /**
+     * <pre>
+     * joined answers "join": the name of the node asked.
+     * </pre>
+     *
+     * <code>string joined = 6 [json_name = "joined"];</code>
+     * @param value The joined to set.
+     * @return This builder for chaining.
+     */
+    public Builder setJoined(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setJoined(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * joined answers "join": the name of the node asked.
+     * </pre>
+     *
+     * <code>string joined = 6 [json_name = "joined"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearJoined() {
+      copyOnWrite();
+      instance.clearJoined();
+      return this;
+    }
+    /**
+     * <pre>
+     * joined answers "join": the name of the node asked.
+     * </pre>
+     *
+     * <code>string joined = 6 [json_name = "joined"];</code>
+     * @param value The bytes for joined to set.
+     * @return This builder for chaining.
+     */
+    public Builder setJoinedBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setJoinedBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.AccessInfo)
   }
   @java.lang.Override
@@ -817,10 +1103,12 @@ public  final class AccessInfo extends
             dev.ironpark.mako.v2.AccessRequest.class,
             "keys_",
             dev.ironpark.mako.v2.AccessKey.class,
+            "pairing_",
+            "joined_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0001\u0001\u0004\u0004\u0000\u0002\u0000\u0001\u1009\u0000\u0002" +
-              "\u1009\u0001\u0003\u001b\u0004\u001b";
+              "\u0000\u0006\u0000\u0001\u0001\u0006\u0006\u0000\u0002\u0000\u0001\u1009\u0000\u0002" +
+              "\u1009\u0001\u0003\u001b\u0004\u001b\u0005\u1009\u0002\u0006\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

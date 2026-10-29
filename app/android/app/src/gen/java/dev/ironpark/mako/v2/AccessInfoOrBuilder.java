@@ -75,4 +75,45 @@ public interface AccessInfoOrBuilder extends
    * <code>repeated .mako.v2.AccessKey keys = 4 [json_name = "keys"];</code>
    */
   int getKeysCount();
+
+  /**
+   * <pre>
+   * pairing is the pairing code that lets a node in at once, while one
+   * is waiting to be read.
+   * </pre>
+   *
+   * <code>.mako.v2.Pairing pairing = 5 [json_name = "pairing"];</code>
+   * @return Whether the pairing field is set.
+   */
+  boolean hasPairing();
+  /**
+   * <pre>
+   * pairing is the pairing code that lets a node in at once, while one
+   * is waiting to be read.
+   * </pre>
+   *
+   * <code>.mako.v2.Pairing pairing = 5 [json_name = "pairing"];</code>
+   * @return The pairing.
+   */
+  dev.ironpark.mako.v2.Pairing getPairing();
+
+  /**
+   * <pre>
+   * joined answers "join": the name of the node asked.
+   * </pre>
+   *
+   * <code>string joined = 6 [json_name = "joined"];</code>
+   * @return The joined.
+   */
+  java.lang.String getJoined();
+  /**
+   * <pre>
+   * joined answers "join": the name of the node asked.
+   * </pre>
+   *
+   * <code>string joined = 6 [json_name = "joined"];</code>
+   * @return The bytes for joined.
+   */
+  com.google.protobuf.ByteString
+      getJoinedBytes();
 }

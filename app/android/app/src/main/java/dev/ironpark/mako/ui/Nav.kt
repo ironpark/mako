@@ -11,12 +11,29 @@ import androidx.navigation.compose.rememberNavController
 import dev.ironpark.mako.Mesh
 import dev.ironpark.mako.SessionRef
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 
-/** MakoNav is the app's screens: the sessions, one session, the mesh, a new session. */
+/**
+ * MakoNav is the app's screens: the sessions, one session, the mesh,
+ * reading a pairing code, a new session. A pairing code another app read
+ * comes as pairing, which joins its computer.
+ */
 @Composable
-fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>) {
+fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableStateFlow<String?>) {
     val nav = rememberNavController()
     val open by target.collectAsState()
+    val pair by pairing.collectAsState()
+    val join = rememberJoin(mesh)
+
+    LaunchedEffect(pair) {
+        val link = pair ?: return@LaunchedEffect
+        pairing.value = null
+        nav.popBackStack("home", inclusive = false)
+        nav.navigate("mesh")
+        // Opened by the link, the app may not have its node running yet.
+        mesh.state.first { it == Mesh.State.Running }
+        join(link) {}
+    }
 
     fun openSession(node: String, id: String) = nav.navigate("session/${Uri.encode(node)}/${Uri.encode(id)}")
 
@@ -45,7 +62,8 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>) {
                 onBack = { nav.popBackStack() },
             )
         }
-        composable("mesh") { MeshScreen(mesh, onBack = { nav.popBackStack() }) }
+        composable("mesh") { MeshScreen(mesh, onBack = { nav.popBackStack() }, onScan = { nav.navigate("scan") }) }
+        composable("scan") { ScanScreen(mesh, onBack = { nav.popBackStack() }) }
         composable("new") {
             NewSessionScreen(mesh, onBack = { nav.popBackStack() }, onStarted = {
                 nav.popBackStack()

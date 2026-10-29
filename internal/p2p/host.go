@@ -362,8 +362,9 @@ func (h *Host) SendState(ctx context.Context, id peer.ID, data []byte) error {
 }
 
 // HandleAccess takes in with fn the peers' asking this host to let them
-// in, and what they say with it.
-func (h *Host) HandleAccess(fn func(from Peer, note string)) {
+// in, what they say with it, and the token of a pairing code they read,
+// if they did.
+func (h *Host) HandleAccess(fn func(from Peer, note, token string)) {
 	h.h.SetStreamHandler(accessProtocol, func(s network.Stream) {
 		defer s.Close()
 		p, ok := h.trust.arrived(s.Conn().RemotePeer())
@@ -373,35 +374,47 @@ func (h *Host) HandleAccess(fn func(from Peer, note string)) {
 		}
 		_ = s.SetReadDeadline(time.Now().Add(trustTimeout))
 		var req struct {
-			Note string `json:"note"`
+			Note  string `json:"note"`
+			Token string `json:"token"`
 		}
 		if err := readJSON(s, &req); err != nil {
 			_ = s.Reset()
 			return
 		}
-		fn(p, req.Note)
+		fn(p, req.Note, req.Token)
 		_ = writeMessage(s, nil)
 	})
 }
 
 // RequestAccess asks the peer id, reached at addrs if it is not linked
-// already, to let this host in, saying note.
-func (h *Host) RequestAccess(ctx context.Context, id string, addrs []string, note string) error {
+// already, to let this host in, saying note, with the token of the
+// peer's pairing code, if one was read. It returns how the two stand
+// after.
+func (h *Host) RequestAccess(ctx context.Context, id string, addrs []string, note, token string) (Peer, error) {
 	p, err := h.linkTo(ctx, id, addrs)
 	if err != nil {
-		return err
+		return Peer{}, err
 	}
 	s, err := h.h.NewStream(network.WithAllowLimitedConn(ctx, "mako-access"), p.ID, accessProtocol)
 	if err != nil {
-		return err
+		return Peer{}, err
 	}
 	defer s.Close()
 	_ = s.SetDeadline(time.Now().Add(trustTimeout))
-	if err := writeJSON(s, map[string]string{"note": note}); err != nil {
-		return err
+	req := map[string]string{"note": note}
+	if token != "" {
+		req["token"] = token
 	}
-	_, err = readMessage(s)
-	return err
+	if err := writeJSON(s, req); err != nil {
+		return Peer{}, err
+	}
+	if _, err := readMessage(s); err != nil {
+		return Peer{}, err
+	}
+	if st, ok := h.trust.get(p.ID); ok {
+		p = st
+	}
+	return p, nil
 }
 
 // linkTo links to the peer id, at those of addrs that parse.

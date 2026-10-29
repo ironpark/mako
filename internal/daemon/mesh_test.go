@@ -322,6 +322,70 @@ func TestANodeAsksToBeLetIn(t *testing.T) {
 	waitFor(t, "the laptop to be let out", func() bool { return !lists(ctx, fromLaptop, "on-server") })
 }
 
+// A node that reads another's pairing code is let in at once, keeps the
+// address it reached it at, and the code is used up.
+func TestANodeJoinsByPairingCode(t *testing.T) {
+	server, phone := meshDaemon(t, "server"), meshDaemon(t, "phone")
+	addSession(t, server, "on-server")
+	fromPhone, fromServer := dialDaemon(t, phone), dialDaemon(t, server)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	info, err := fromServer.Access(ctx, &protocol.Access{Op: "pair"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := info.GetPairing().GetLink()
+	if link == "" {
+		t.Fatalf("no pairing code: %v", info)
+	}
+	if _, err := fromPhone.Access(ctx, &protocol.Access{Op: "join", Key: strings.Replace(link, "t=", "t=x", 1)}); err != nil {
+		t.Fatal(err)
+	}
+	info, err = fromServer.Access(ctx, &protocol.Access{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ownKeys(info) != 0 || len(info.GetRequests()) != 1 {
+		t.Fatalf("a wrong token let the phone in, or was not kept as a request: %v", info)
+	}
+
+	joined, err := fromPhone.Access(ctx, &protocol.Access{Op: "join", Key: link})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if joined.GetJoined() != "server" {
+		t.Fatalf("joined %q", joined.GetJoined())
+	}
+	waitFor(t, "the server's session on the phone", func() bool { return lists(ctx, fromPhone, "on-server") })
+	info, err = fromServer.Access(ctx, &protocol.Access{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.GetPairing() != nil || len(info.GetRequests()) != 0 {
+		t.Fatalf("after the phone joined: %v", info)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Peers) != 1 || !strings.HasSuffix(cfg.Peers[0], "/p2p/"+server.peerID()) {
+		t.Fatalf("kept peers %v", cfg.Peers)
+	}
+}
+
+// ownKeys counts the keys mako's own file lets in, not the user's SSH
+// one's.
+func ownKeys(info *protocol.AccessInfo) int {
+	n := 0
+	for _, k := range info.GetKeys() {
+		if k.GetSource() == "" {
+			n++
+		}
+	}
+	return n
+}
+
 // Only this user reaches the daemon's socket; a daemon given another's
 // host and port finds it there by a probe of its libp2p port; and a peer
 // may not change who is let in.

@@ -60,4 +60,9 @@ dependencies {
     implementation(libs.protobuf.javalite)
     implementation(libs.termux.emulator)
     implementation(libs.termux.view)
+    // Reading a computer's pairing code with the camera.
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+    implementation(libs.zxing.core)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
+	"rsc.io/qr"
 )
 
 const usage = `mako - manage terminal agents across your computers
@@ -47,6 +48,11 @@ Access (trust runs one way: a node you let in can drive this one):
   mako allow <node> [-owner]        let in a node that asked, by its own key,
                                      or with -owner by the SSH key vouching for it
   mako deny <node>                  drop a node's request
+  mako pair                         show a pairing code, a QR code mako's
+                                     Android app scans: the phone that reads
+                                     it is let in at once
+  mako join <link>                  join the node whose pairing code's link
+                                     this is
   mako trust <public key line>      let a key in, as authorized_keys writes it
   mako revoke <fingerprint>         take a key out
 
@@ -148,6 +154,22 @@ func run(args []string, daemonAddr, nodeID, project string, devices []string) er
 		}
 		req.Note = strings.Join(rest, " ")
 		return access(ctx, c, req)
+	case "pair":
+		info, err := c.Access(ctx, &protocol.Access{Op: "pair"})
+		if err != nil {
+			return err
+		}
+		return printPairing(info.GetPairing())
+	case "join":
+		if len(args) < 2 {
+			return fmt.Errorf("join needs a pairing code's link")
+		}
+		info, err := c.Access(ctx, &protocol.Access{Op: "join", Key: args[1], Note: strings.Join(args[2:], " ")})
+		if err != nil {
+			return err
+		}
+		fmt.Printf("asked %s with its pairing code\n", info.GetJoined())
+		return nil
 	case "trust":
 		if len(args) < 2 {
 			return fmt.Errorf("trust needs a public key")
@@ -294,6 +316,41 @@ func access(ctx context.Context, c *client.Client, req *protocol.Access) error {
 		}
 		fmt.Printf("  %s  %s\n", k.GetFingerprint(), k.GetComment())
 	}
+	return nil
+}
+
+// printPairing prints a pairing code as a QR code a camera reads off the
+// terminal, two modules a character, with its link and when it runs out.
+func printPairing(p *protocol.Pairing) error {
+	code, err := qr.Encode(p.GetLink(), qr.M)
+	if err != nil {
+		return err
+	}
+	// Black on white whatever the terminal's theme, as cameras read it
+	// best, with a quiet zone of white around it.
+	const quiet = 2
+	var b strings.Builder
+	for y := -quiet; y < code.Size+quiet; y += 2 {
+		b.WriteString("\x1b[38;5;16;48;5;231m")
+		for x := -quiet; x < code.Size+quiet; x++ {
+			top, bottom := code.Black(x, y), code.Black(x, y+1)
+			switch {
+			case top && bottom:
+				b.WriteString("█")
+			case top:
+				b.WriteString("▀")
+			case bottom:
+				b.WriteString("▄")
+			default:
+				b.WriteString(" ")
+			}
+		}
+		b.WriteString("\x1b[0m\n")
+	}
+	fmt.Print(b.String())
+	fmt.Println("\nScan it in mako's Android app: Computers ▸ Scan QR code. Or, on another node:")
+	fmt.Println("  mako join '" + p.GetLink() + "'")
+	fmt.Println("Valid until", protocol.TimeOf(p.GetExpires()).Local().Format("15:04"), "and for one node.")
 	return nil
 }
 

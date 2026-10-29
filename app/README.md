@@ -26,6 +26,9 @@ and opens a session's conversation and its terminal.
 - **Trust, one way.** A computer serves the phone once it lets the phone's
   key in. **Ask to join** in the app's list of computers sends the request,
   which mako's window on that computer, or `mako allow <node>`, allows.
+  Or **Scan QR code** reads the pairing code the computer shows in
+  Settings ▸ Access ▸ Pairing (or `mako pair` prints): the computer lets
+  the phone in at once, and the phone keeps its address.
   The phone lets no one in: nothing on the mesh can run anything on it.
 - **The terminal** is Termux's emulator and renderer, fed the session's
   attach stream. It draws the session at the size its desktop window gave

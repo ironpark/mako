@@ -97,4 +97,11 @@
     <plurals name="linked_summary">
         <item quantity="other">컴퓨터 %1$d대 · 세션 %2$d개</item>
     </plurals>
+    <string name="scan_qr">QR 코드 스캔</string>
+    <string name="scan_qr_hint">컴퓨터의 mako에서 설정 ▸ 접근 ▸ 페어링에 표시되는 코드로 연결합니다. 이 기기가 바로 허용됩니다.</string>
+    <string name="scan_qr_note">컴퓨터의 mako에서 설정 ▸ 접근 ▸ 페어링의 QR 코드에 카메라를 맞추세요.</string>
+    <string name="joining">연결하는 중…</string>
+    <string name="joined">%1$s에 연결되었습니다.</string>
+    <string name="camera_needed">페어링 코드를 읽으려면 카메라가 필요합니다.</string>
+    <string name="allow_camera">카메라 허용</string>
 </resources>

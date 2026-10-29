@@ -27,6 +27,7 @@ require (
 	golang.org/x/term v0.46.0
 	golang.org/x/text v0.42.0
 	google.golang.org/protobuf v1.36.11
+	rsc.io/qr v0.2.0
 )
 
 require (

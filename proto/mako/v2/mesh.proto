@@ -152,6 +152,19 @@ message AccessInfo {
   AccessKey owner = 2; // the SSH key vouching for it, if one does
   repeated AccessRequest requests = 3;
   repeated AccessKey keys = 4;
+  // pairing is the pairing code that lets a node in at once, while one
+  // is waiting to be read.
+  Pairing pairing = 5;
+  // joined answers "join": the name of the node asked.
+  string joined = 6;
+}
+
+// Pairing is a pairing code: a link, shown as a QR code, that says where
+// this node is and carries a token. A node that asks to be let in with
+// the token is let in at once, and the code is then used up.
+message Pairing {
+  string link = 1; // mako://pair?id=…&n=…&t=…&a=…
+  google.protobuf.Timestamp expires = 2;
 }
 
 // AccessKey is a public key.

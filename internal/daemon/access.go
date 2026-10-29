@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/p2p"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transport"
@@ -88,10 +90,67 @@ func (a *accessRequests) list() []*protocol.AccessRequest {
 	return out
 }
 
+// pairTTL is how long a pairing code lasts unread.
+const pairTTL = 10 * time.Minute
+
+// pairing is the pairing code waiting to be read, if one is: its token,
+// and when it runs out.
+type pairing struct {
+	mu      sync.Mutex
+	token   string
+	expires time.Time
+}
+
+// renew makes a new code, in place of the one there was.
+func (p *pairing) renew() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.token, p.expires = p2p.NewPairToken(), time.Now().Add(pairTTL)
+}
+
+func (p *pairing) drop() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.token = ""
+}
+
+// current is the code's token and when it runs out, "" for none.
+func (p *pairing) current() (string, time.Time) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.token != "" && time.Now().After(p.expires) {
+		p.token = ""
+	}
+	return p.token, p.expires
+}
+
+// use reports whether token is the code's, which it then uses up.
+func (p *pairing) use(token string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p2p.SameToken(token, p.token) || time.Now().After(p.expires) {
+		return false
+	}
+	p.token = ""
+	return true
+}
+
 // takeAccessRequest keeps a peer's asking to be let in, for a front-end to
-// answer, and tells the watching ones.
-func (d *Daemon) takeAccessRequest(from p2p.Peer, note string) {
+// answer, and tells the watching ones. A peer asking with the token of
+// this node's pairing code is let in at once.
+func (d *Daemon) takeAccessRequest(from p2p.Peer, note, token string) {
 	if from.Trusts || from.Node == "" || from.Node == d.cfg.NodeID {
+		return
+	}
+	if token != "" && d.pairing.use(token) {
+		if err := d.p2p.Keys().Add(from.Key, nodeComment(from.Name)); err != nil {
+			d.log.Warn("could not let in a node that read the pairing code", "node", from.Name, "err", err)
+			return
+		}
+		d.log.Info("a node that read the pairing code is let in", "node", from.Name, "key", fingerprint(from.Key))
+		d.access.drop(from.Node)
+		d.p2p.Reconsider()
+		d.changes.fireAccess()
 		return
 	}
 	note = agent.OneLine(note, maxNote)
@@ -129,6 +188,10 @@ func (d *Daemon) accessInfo() *protocol.AccessInfo {
 		Owner:    accessKey(d.p2p.Owner(), ""),
 		Requests: d.access.list(),
 	}
+	if token, expires := d.pairing.current(); token != "" {
+		code := p2p.Pairing{ID: d.peerID(), Name: d.cfg.Name, Token: token, Addrs: d.multiaddrs()}
+		info.Pairing = &protocol.Pairing{Link: code.Link(), Expires: timestamppb.New(expires)}
+	}
 	for _, keys := range []*p2p.Keys{d.p2p.Keys(), d.p2p.SSHKeys()} {
 		for _, k := range keys.List() {
 			key := accessKey(k.Key, k.Comment)
@@ -154,16 +217,36 @@ func (d *Daemon) handleAccess(ctx context.Context, stream *transport.Stream, env
 	if err != nil {
 		return err
 	}
-	if err := d.changeAccess(ctx, r); err != nil {
+	joined, err := d.changeAccess(ctx, r)
+	if err != nil {
 		return err
 	}
-	return stream.Send(protocol.TypeAccessInfo, env.GetId(), d.accessInfo())
+	info := d.accessInfo()
+	info.Joined = joined
+	return stream.Send(protocol.TypeAccessInfo, env.GetId(), info)
 }
 
-func (d *Daemon) changeAccess(ctx context.Context, r *protocol.Access) error {
+// changeAccess makes the change r asks for, and returns the name of the
+// node a join asked.
+func (d *Daemon) changeAccess(ctx context.Context, r *protocol.Access) (string, error) {
+	if r.GetOp() == "join" {
+		return d.join(ctx, r.GetKey(), r.GetNote())
+	}
+	return "", d.changeKeys(ctx, r)
+}
+
+func (d *Daemon) changeKeys(ctx context.Context, r *protocol.Access) error {
 	keys := d.p2p.Keys()
 	switch r.GetOp() {
 	case "":
+		return nil
+	case "pair":
+		d.pairing.renew()
+		d.changes.fireAccess()
+		return nil
+	case "unpair":
+		d.pairing.drop()
+		d.changes.fireAccess()
 		return nil
 	case "request":
 		node, err := d.node(r.GetNodeId())
@@ -175,7 +258,8 @@ func (d *Daemon) changeAccess(ctx context.Context, r *protocol.Access) error {
 		}
 		ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
-		return d.p2p.RequestAccess(ctx, node.GetPeerId(), node.GetMultiaddrs(), r.GetNote())
+		_, err = d.p2p.RequestAccess(ctx, node.GetPeerId(), node.GetMultiaddrs(), r.GetNote(), "")
+		return err
 	case "allow":
 		w, ok := d.access.get(r.GetNodeId())
 		if !ok {
@@ -221,4 +305,54 @@ func (d *Daemon) changeAccess(ctx context.Context, r *protocol.Access) error {
 	d.p2p.Reconsider()
 	d.changes.fireAccess()
 	return nil
+}
+
+// join asks the node whose pairing code's link is link to let this one
+// in, with the code's token, and keeps the address it was reached at, so
+// this node links to it again when it starts, wherever discovery does not
+// find it. It returns the node's name.
+func (d *Daemon) join(ctx context.Context, link, note string) (string, error) {
+	code, err := p2p.ParsePairing(link)
+	if err != nil {
+		return "", err
+	}
+	if code.ID == d.peerID() {
+		return "", errors.New("this is this node's own pairing code")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	peer, err := d.p2p.RequestAccess(ctx, code.ID, code.Addrs, note, code.Token)
+	if err != nil {
+		return "", fmt.Errorf("could not reach %s: %w", code.Name, err)
+	}
+	if peer.Addr != nil {
+		d.keepAddr(peer.Addr.String() + "/p2p/" + code.ID)
+	}
+	if peer.Name != "" {
+		return peer.Name, nil
+	}
+	return code.Name, nil
+}
+
+// keepAddr adds addr to the peers config.json has this node always link
+// to, unless one there already names its peer, and links to it from now
+// on.
+func (d *Daemon) keepAddr(addr string) {
+	cfg, err := config.Load()
+	if err != nil {
+		d.log.Warn("could not keep a joined node's address", "addr", addr, "err", err)
+		return
+	}
+	id := addr[strings.LastIndex(addr, "/p2p/"):]
+	if slices.ContainsFunc(cfg.Peers, func(p string) bool { return strings.HasSuffix(p, id) }) {
+		return
+	}
+	cfg.Peers = append(cfg.Peers, addr)
+	if err := config.Save(cfg); err != nil {
+		d.log.Warn("could not keep a joined node's address", "addr", addr, "err", err)
+		return
+	}
+	if d.ctx != nil {
+		go d.keepStatic(d.ctx, addr)
+	}
 }

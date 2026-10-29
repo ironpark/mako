@@ -58,6 +58,7 @@ type Daemon struct {
 	// and of the SSH key vouching for it.
 	keyPrint, ownerPrint string
 	access               accessRequests       // the peers asking to be let in
+	pairing              pairing              // the pairing code waiting to be read
 	heads                heads                // the projects' branches
 	remote               peerReports          // what peers say of their sessions and routes; see routes.go
 	changes              notifier             // tells watching front-ends what changed

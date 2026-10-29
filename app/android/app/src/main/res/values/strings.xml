@@ -101,4 +101,11 @@
         <item quantity="one">%1$d computers · %2$d session</item>
         <item quantity="other">%1$d computers · %2$d sessions</item>
     </plurals>
+    <string name="scan_qr">Scan QR code</string>
+    <string name="scan_qr_hint">Join a computer by its pairing code, in Settings ▸ Access ▸ Pairing in mako on it. It lets this device in at once.</string>
+    <string name="scan_qr_note">Point the camera at the QR code in mako on the computer: Settings ▸ Access ▸ Pairing.</string>
+    <string name="joining">Joining…</string>
+    <string name="joined">%1$s lets this device in.</string>
+    <string name="camera_needed">Reading a pairing code takes the camera.</string>
+    <string name="allow_camera">Allow the camera</string>
 </resources>

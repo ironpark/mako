@@ -3,6 +3,7 @@ package dev.ironpark.mako.ui
 import android.content.ClipData
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -58,7 +60,7 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MeshScreen(mesh: Mesh, onBack: () -> Unit) {
+fun MeshScreen(mesh: Mesh, onBack: () -> Unit, onScan: () -> Unit) {
     val self by mesh.self.collectAsState()
     val nodes by mesh.nodes.collectAsState()
     val access by mesh.access.collectAsState()
@@ -121,6 +123,14 @@ fun MeshScreen(mesh: Mesh, onBack: () -> Unit) {
 
             Section(stringResource(R.string.computers)) {
                 Column {
+                    ListItem(
+                        leadingContent = { Icon(Icons.Outlined.QrCodeScanner, null, tint = MaterialTheme.colorScheme.primary) },
+                        headlineContent = { Text(stringResource(R.string.scan_qr)) },
+                        supportingContent = { Text(stringResource(R.string.scan_qr_hint), style = MaterialTheme.typography.bodySmall) },
+                        modifier = Modifier.clickable(onClick = onScan),
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    )
+                    HorizontalDivider()
                     if (nodes.isEmpty()) {
                         Text(
                             stringResource(R.string.no_computers), style = MaterialTheme.typography.bodyMedium,

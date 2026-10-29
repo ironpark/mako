@@ -93,6 +93,7 @@ func accessSettings(m *model) ggui.Widget {
 			}
 			return ggui.Column(
 				section(T("Requests"), requestList(m, info.GetRequests())),
+				section(T("Pairing"), pairingSettings(m, info.GetPairing())),
 				section(T("This node"), card(
 					keyRow(m, T("Node key"), T("Another node lets this one in by this key, or by the SSH key below."), info.GetKey()),
 					ownerRow(m, info.GetOwner()),

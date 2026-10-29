@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -214,14 +215,14 @@ func TestAHostAsksToBeLetIn(t *testing.T) {
 	defer cancel()
 	a, b := newHost(t), newHost(t)
 	asked := make(chan Peer, 1)
-	var note string
-	a.HandleAccess(func(from Peer, n string) { note = n; asked <- from })
-	if err := b.RequestAccess(ctx, a.ID().String(), a.Addrs(), "it's me"); err != nil {
+	var note, token string
+	a.HandleAccess(func(from Peer, n, tok string) { note, token = n, tok; asked <- from })
+	if _, err := b.RequestAccess(ctx, a.ID().String(), a.Addrs(), "it's me", "secret"); err != nil {
 		t.Fatal(err)
 	}
 	from := <-asked
-	if from.ID != b.ID() || note != "it's me" || from.Trusts {
-		t.Fatalf("asked by %+v, %q", from, note)
+	if from.ID != b.ID() || note != "it's me" || token != "secret" || from.Trusts {
+		t.Fatalf("asked by %+v, %q %q", from, note, token)
 	}
 	if err := a.Keys().Add(from.Key, from.Name); err != nil {
 		t.Fatal(err)
@@ -336,5 +337,29 @@ func TestAProbeLearnsThePeerID(t *testing.T) {
 	id, err := Probe(context.Background(), tcp)
 	if err != nil || id != h.ID() {
 		t.Fatalf("probe of %s: %v %v, want %v", tcp, id, err, h.ID())
+	}
+}
+
+// A pairing code's link reads back as it was made, its addresses those
+// another device reaches, IPv4 first.
+func TestPairingLink(t *testing.T) {
+	p := Pairing{ID: newHost(t).ID().String(), Name: "my mac", Token: NewPairToken(), Addrs: []string{
+		"/ip4/127.0.0.1/tcp/4243",
+		"/ip6/fe80::1/tcp/4243",
+		"/ip6/2001:db8::1/udp/4243/quic-v1",
+		"/ip4/192.168.0.7/tcp/4243",
+	}}
+	got, err := ParsePairing(p.Link())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"/ip4/192.168.0.7/tcp/4243", "/ip6/2001:db8::1/udp/4243/quic-v1"}
+	if got.ID != p.ID || got.Name != p.Name || got.Token != p.Token || !slices.Equal(got.Addrs, want) {
+		t.Fatalf("read back %+v from %s", got, p.Link())
+	}
+	for _, bad := range []string{"", "https://pair?id=x", "mako://pair?n=x&t=y&a=/ip4/1.2.3.4/tcp/1"} {
+		if _, err := ParsePairing(bad); err == nil {
+			t.Errorf("%q read as a pairing code", bad)
+		}
 	}
 }
