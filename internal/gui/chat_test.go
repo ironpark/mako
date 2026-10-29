@@ -3,6 +3,7 @@ package gui
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -250,5 +251,33 @@ func TestCopyButtonShowsInTheMessageHovered(t *testing.T) {
 	p.Frame()
 	if _, ok := p.Find(T("Copy")); ok {
 		t.Fatal("the button stays with the pointer away")
+	}
+}
+
+func TestALongChatDrawsOnlyTheTurnsInView(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
+	m.Selected.Set("s")
+	state := m.chatState("s")
+	state.loading = true
+	var messages []*protocol.ChatMessage
+	for i := range 2000 {
+		messages = append(messages, &protocol.ChatMessage{Role: "user", Text: fmt.Sprintf("turn %d", i)})
+	}
+	// The same words twice, with no ID to tell them apart, are two turns.
+	messages = append(messages, &protocol.ChatMessage{Role: "user", Text: "again"}, &protocol.ChatMessage{Role: "user", Text: "again"})
+	state.result.Set(chatResult{Loaded: true, Chat: &protocol.Chat{Supported: true, Conversation: "c", Messages: messages}})
+	p := ggui.ProbeBuilder(func() ggui.Widget { return chatView(m, "s", 1) }, ggui.Sz(900, 700))
+	defer p.Close()
+	for range 3 {
+		p.Frame()
+	}
+	page := p.Semantics().String()
+	if n := strings.Count(page, "turn "); n == 0 || n > 60 {
+		t.Fatalf("%d of 2000 turns drawn, want only those near the window:\n%s", n, page)
+	}
+	if strings.Count(page, "again") != 2 {
+		t.Fatalf("the latest turns, said alike, are not both at the foot of the feed:\n%s", page)
 	}
 }

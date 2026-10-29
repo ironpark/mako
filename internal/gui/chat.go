@@ -49,9 +49,6 @@ type chatState struct {
 	// scrolled back; paging while a read of them is out.
 	older  *ggui.StateValue[chatPages]
 	paging bool
-	// grew is how tall the feed's content was before older messages came
-	// in above it, to keep what is in view where it was; 0 for none.
-	grew float64
 	// sent is what the composer sent, oldest first, for ↑ and ↓ to bring
 	// back; recall is the one shown, len(sent) for none.
 	sent   []string
@@ -154,7 +151,6 @@ func (m *model) loadOlder(id string, state *chatState, scroll *ggui.ScrollContro
 	if before <= 0 || state.paging {
 		return
 	}
-	state.grew = scroll.MaxOffset()
 	m.readOlder(id, state, transcript.Span{Before: before})
 }
 
@@ -177,7 +173,6 @@ func (m *model) readOlder(id string, state *chatState, span transcript.Span) {
 		older := ggui.Peek(state.older)
 		switch {
 		case err != nil:
-			state.grew = 0
 		case span.After == 0: // a page before the rest
 			if older.End == 0 {
 				older.End = span.Before
@@ -364,21 +359,25 @@ func chatView(m *model, id string, group int) ggui.Widget {
 
 	scroll := &ggui.ScrollController{}
 	offset := ggui.State(0.0)
-	content := ggui.Reactive(func() ggui.Widget {
+	loaded := ggui.Derived(func() []*protocol.ChatMessage {
 		v, older := state.result.Get(), state.older.Get()
-		messages, start := v.Chat.GetMessages(), v.Chat.GetStart()
 		if older.End > 0 {
-			messages, start = joinChat(older.Messages, messages), older.Start
+			return joinChat(older.Messages, v.Chat.GetMessages())
+		}
+		return v.Chat.GetMessages()
+	})
+	turns := ggui.Derived(func() []chatTurnItem {
+		return chatTurns(loaded.Get(), agentsByCall(state.result.Get().Chat.GetAgents()))
+	}).WithEqual(deepEqual)
+	// What stands over the conversation: why it cannot be read, that it is
+	// on its way, or that more of it is further back.
+	head := ggui.Reactive(func() ggui.Widget {
+		v, older := state.result.Get(), state.older.Get()
+		start := v.Chat.GetStart()
+		if older.End > 0 {
+			start = older.Start
 		}
 		var rows []ggui.Widget
-		if grew := state.grew; grew > 0 && !state.paging {
-			// Older messages came in above: what was in view moves down by
-			// as much as the feed grew.
-			state.grew = 0
-			rows = append(rows, &onPaint{child: ggui.Box(), fn: func(*ggui.Canvas, ggui.Rect) {
-				scroll.JumpTo(scroll.Offset() + scroll.MaxOffset() - grew)
-			}})
-		}
 		if v.Err != "" {
 			rows = append(rows, ggui.Text(v.Err).Size(13).Color(tokMuted).Selectable())
 		}
@@ -390,7 +389,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 			rows = append(rows, muted(ggui.Text(T("This agent keeps no conversation mako can read. Use Terminal for it."))))
 		case v.Chat.GetConversation() == "":
 			rows = append(rows, muted(ggui.Text(T("Waiting for this agent to save its conversation. It will connect automatically."))))
-		case len(messages) == 0:
+		case len(loaded.Get()) == 0:
 			rows = append(rows, muted(ggui.Text(T("No messages yet. The conversation updates as the agent saves it."))))
 		}
 		if start > 0 {
@@ -402,14 +401,27 @@ func chatView(m *model, id string, group int) ggui.Widget {
 				}
 			}})
 		}
-		info, _ := m.session(id)
-		rows = append(rows, chatTurns(m, id, info, state, messages, agentsByCall(v.Chat.GetAgents()))...)
-		if len(messages) > 0 && scroll.MaxOffset()-scroll.Offset() < 32 {
-			rows = append(rows, &onPaint{child: ggui.Box().Height(1), fn: revealPainted})
+		if len(rows) == 0 {
+			return ggui.Box()
 		}
-		return &lane{child: ggui.Box(ggui.Column(rows...).Gap(14).Stretch()).Pad(18, 0)}
+		return ggui.Padding(ggui.Column(rows...).Gap(chatGap).Stretch(), 0, 0, chatGap, 0)
 	})
-	feed := ggui.Scroll(content).Controller(scroll).BindOffset(offset).Bar(tokSurface3)
+	// A long conversation has thousands of turns: only those near the
+	// window are built and laid out, each drawn again only when it changes.
+	// Older ones coming in above keep what is in view in place.
+	list := ggui.EachKeyed(turns, func(t chatTurnItem) string { return t.Key }, func(row ggui.EachItem[chatTurnItem]) ggui.Widget {
+		// A read of the conversation brings every message anew: a turn is
+		// drawn again only when what it holds changed.
+		turn := ggui.Map(row.Value, func(t chatTurnItem) chatTurnItem { return t }).WithEqual(deepEqual)
+		return ggui.View(turn, func(t chatTurnItem) ggui.Widget {
+			info, _ := m.session(id)
+			return chatTurnRow(m, id, info, state, t)
+		})
+	}).Gap(chatGap).Stretch().EstimatedExtent(chatTurnEstimate)
+	content := &lane{child: ggui.Box(ggui.Column(head, list).Stretch()).Pad(18, 0)}
+	// At the latest it stays there as the agent writes on; scrolled back,
+	// it stays where the reader is.
+	feed := ggui.Scroll(content).Controller(scroll).BindOffset(offset).FollowEnd().Bar(tokSurface3)
 	// Scrolling up near the top of what is loaded reads the log from
 	// further back. Only up: the feed opens at the top before it shows the
 	// latest at the bottom.
@@ -480,9 +492,6 @@ type onPaint struct {
 	fn    func(dst *ggui.Canvas, r ggui.Rect)
 }
 
-// revealPainted scrolls what was painted into view.
-func revealPainted(dst *ggui.Canvas, r ggui.Rect) { dst.RequestReveal(r) }
-
 func (o *onPaint) Layout(c ggui.Constraints, env ggui.Env) ggui.Size { return o.child.Layout(c, env) }
 
 func (o *onPaint) Paint(dst *ggui.Canvas, r ggui.Rect) {
@@ -519,36 +528,80 @@ func (l *lane) Paint(dst *ggui.Canvas, r ggui.Rect) {
 // as a page, and each run of tools as one quiet card whose rows fold. A
 // long run folds into one line naming its tools, all but the last run,
 // which is the agent's work in hand.
-func chatTurns(m *model, id string, info *protocol.SessionInfo, state *chatState, messages []*protocol.ChatMessage, agents map[string]*protocol.SubAgent) []ggui.Widget {
-	var rows []ggui.Widget
+func chatTurns(messages []*protocol.ChatMessage, agents map[string]*protocol.SubAgent) []chatTurnItem {
+	var turns []chatTurnItem
 	lastRun := -1
 	for i := range messages {
 		if messages[i].GetRole() == "tool" && (i == 0 || messages[i-1].GetRole() != "tool") {
 			lastRun = i
 		}
 	}
+	seen := map[string]int{}
 	for i := 0; i < len(messages); {
+		start := i
+		t := chatTurnItem{Key: chatMessageKey(messages[i])}
 		if messages[i].GetRole() == "tool" {
-			start := i
-			var tools []ggui.Widget
-			var names []string
+			t.Key = "run:" + t.Key
+			t.Folded = start != lastRun
 			for i < len(messages) && messages[i].GetRole() == "tool" {
-				tools = append(tools, toolRow(m, id, state, messages[i], agents[messages[i].GetId()]))
-				name, _, _, _, _ := toolParts(messages[i])
-				names = append(names, name)
+				t.Messages = append(t.Messages, messages[i])
+				t.Agents = append(t.Agents, agents[messages[i].GetId()])
 				i++
 			}
-			var body ggui.Widget = ggui.Column(tools...).Gap(2).Stretch()
-			if len(tools) >= foldRun {
-				body = toolRun(state, chatMessageKey(messages[start]), names, start != lastRun, body)
-			}
-			rows = append(rows, ggui.Box(body).Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(6, 8))
-			continue
+		} else {
+			t.Messages = messages[i : i+1]
+			i++
 		}
-		rows = append(rows, chatTurn(m, id, info, messages[i]))
-		i++
+		// The same words said twice, with no ID to tell them apart, are
+		// two turns.
+		if n := seen[t.Key]; n > 0 {
+			seen[t.Key]++
+			t.Key += "#" + strconv.Itoa(n)
+		} else {
+			seen[t.Key] = 1
+		}
+		turns = append(turns, t)
 	}
-	return rows
+	return turns
+}
+
+// chatTurnItem is one turn of the feed: a message, or a run of tool calls
+// with the sub-agent each started, if any.
+type chatTurnItem struct {
+	Key      string
+	Messages []*protocol.ChatMessage
+	Agents   []*protocol.SubAgent
+	Folded   bool // a long run folded to a line
+}
+
+// chatGap is the room between the feed's turns, and chatTurnEstimate how
+// tall one is taken to be until it is laid out.
+const (
+	chatGap          = 14
+	chatTurnEstimate = 120
+)
+
+// chatTurnRow draws a turn: the user's on the right, the agent's prose as
+// a page, a run of tools as one quiet card whose rows fold.
+func chatTurnRow(m *model, id string, info *protocol.SessionInfo, state *chatState, t chatTurnItem) ggui.Widget {
+	if len(t.Messages) == 0 {
+		return ggui.Box()
+	}
+	if t.Messages[0].GetRole() != "tool" {
+		return chatTurn(m, id, info, t.Messages[0])
+	}
+	var tools []ggui.Widget
+	var names []string
+	for i, msg := range t.Messages {
+		tools = append(tools, toolRow(m, id, state, msg, t.Agents[i]))
+		name, _, _, _, _ := toolParts(msg)
+		names = append(names, name)
+	}
+	var body ggui.Widget = ggui.Column(tools...).Gap(2).Stretch()
+	if len(tools) >= foldRun {
+		body = toolRun(state, chatMessageKey(t.Messages[0]), names, t.Folded, body)
+	}
+	return ggui.Box(body).Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(6, 8)
 }
 
 // foldRun is how many tool calls in a row fold into one line.
