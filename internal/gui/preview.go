@@ -15,6 +15,7 @@ import (
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/fonts/gofont"
+	"github.com/ironpark/ggwd"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/config"
@@ -61,7 +62,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 		m      *model
 		p      *ggui.Probe
 		img    *ggfx.Image
-		window *ggfx.Window
+		window *ggwd.Window
 		steps  []previewStep
 		since  time.Time
 	)
@@ -100,10 +101,10 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 		return func() { m.Prefs.Update(func(p prefs) prefs { p.Theme = theme; return p }) }
 	}
 
-	return ggfx.Run(ggfx.HandlerFunc(func(ev ggfx.Event) error {
+	return ggwd.Run(ggwd.HandlerFunc(func(ev ggwd.Event) error {
 		switch ev.(type) {
-		case ggfx.StartEvent:
-			w, err := ggfx.NewWindow(&ggfx.WindowOptions{Title: "mako preview", Width: 64, Height: 64, Hidden: true})
+		case ggwd.StartEvent:
+			w, err := ggwd.NewWindow(&ggwd.WindowOptions{Title: "mako preview", Width: 64, Height: 64, Hidden: true})
 			if err != nil {
 				return err
 			}
@@ -405,12 +406,12 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					do(m.pickFolder), until("the picker", func() bool { return ggui.Peek(m.Pick.On) }), frames(20), shot("41-pick-folder"),
 				}
 			}
-		case ggfx.FrameEvent:
+		case ggwd.FrameEvent:
 			p.Frame()
 			if len(steps) == 0 {
 				m.shutdown()
 				p.Close()
-				return ggfx.Termination
+				return ggwd.Termination
 			}
 			done, err := steps[0]()
 			if err != nil {

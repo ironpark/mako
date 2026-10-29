@@ -10,8 +10,9 @@ require (
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/grandcat/zeroconf v1.0.0
-	github.com/ironpark/ggfx v0.0.0-20261027154914-b81ea24a622c
-	github.com/ironpark/ggui v0.0.0-20261027175914-c9f04d8a0ed8
+	github.com/ironpark/ggfx v0.0.0-20261029024010-526533cb4feb
+	github.com/ironpark/ggui v0.0.0-20261029032356-51cd95c226ff
+	github.com/ironpark/ggwd v0.0.0-20261029030452-6ae849704191
 	github.com/ironpark/gostty v0.0.0-20261027142811-dd03466f18c8
 	github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202
 	github.com/libp2p/go-libp2p v0.51.0
@@ -56,8 +57,6 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/ipfs/go-cid v0.6.2 // indirect
-	github.com/ironpark/ggip v0.0.0-20261025124749-3c7a3f9bb4d9 // indirect
-	github.com/ironpark/ggip/ggfxinput v0.0.0-20261025124834-79651b13b701 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect

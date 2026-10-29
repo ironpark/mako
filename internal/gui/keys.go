@@ -3,8 +3,8 @@ package gui
 import (
 	"runtime"
 
-	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggwd"
 	"github.com/ironpark/gostty/input"
 )
 
@@ -20,8 +20,8 @@ func terminalKey(k ggui.KeyboardKey) (input.Key, bool) {
 }
 
 var keyTable = func() []input.Key {
-	table := make([]input.Key, ggfx.KeyMax+1)
-	for k := ggfx.Key(0); k <= ggfx.KeyMax; k++ {
+	table := make([]input.Key, ggwd.KeyMax+1)
+	for k := ggwd.Key(0); k <= ggwd.KeyMax; k++ {
 		name := k.String()
 		if len(name) == 1 && name[0] >= 'A' && name[0] <= 'Z' {
 			name = "Key" + name
