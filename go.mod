@@ -10,9 +10,9 @@ require (
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/grandcat/zeroconf v1.0.0
-	github.com/ironpark/ggfx v0.0.0-20261029024010-526533cb4feb
-	github.com/ironpark/ggui v0.0.0-20261029032356-51cd95c226ff
-	github.com/ironpark/ggwd v0.0.0-20261029030452-6ae849704191
+	github.com/ironpark/ggfx v0.0.0-20261029065937-dadaab3b47ff
+	github.com/ironpark/ggui v0.0.0-20261029073851-6ddd7bf8a8b8
+	github.com/ironpark/ggwd v0.0.0-20261029062320-cb062001b1bb
 	github.com/ironpark/gostty v0.0.0-20261027142811-dd03466f18c8
 	github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202
 	github.com/klauspost/compress v1.20.3
@@ -51,6 +51,7 @@ require (
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.9.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
+	github.com/go-text/render v0.2.1 // indirect
 	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/gogpu/naga v0.19.0 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
@@ -114,6 +115,7 @@ require (
 	github.com/quic-go/webtransport-go v0.13.0 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
+	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
