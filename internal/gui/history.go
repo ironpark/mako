@@ -104,46 +104,90 @@ var laneColors = []color.Color{
 }
 
 const (
-	laneWidth  = 12
+	laneWidth  = 14
 	historyRow = 40
 	maxLanes   = 8 // lanes beyond are left out
+	lineWidth  = 2 // the lines' width
+	dotRadius  = 4.5
 )
+
+// graphWidth is how many lanes the graph of rows is wide: its widest
+// row's, so every row's text starts at one place.
+func graphWidth(rows []graphRow) int {
+	w := 1
+	for _, r := range rows {
+		w = max(w, r.Lanes)
+	}
+	return min(w, maxLanes)
+}
 
 // graphCell paints one row of the graph.
 type graphCell struct {
-	row  graphRow
-	head bool        // the commit checked out, drawn as a ring
-	hole color.Color // the ring's middle: the page, as laid out
+	row   graphRow
+	lanes int         // how many lanes wide the graph is
+	head  bool        // the commit checked out, drawn as a ring
+	hole  color.Color // the page behind, as laid out: the ring's middle, and the gap round a dot
 }
 
 func (g *graphCell) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	g.hole = ggui.ResolveColor(tokSolidBg, env)
-	return c.Constrain(ggui.Sz(float64(min(g.row.Lanes, maxLanes))*laneWidth+4, historyRow))
+	return c.Constrain(ggui.Sz(float64(max(g.lanes, 1))*laneWidth+4, historyRow))
 }
 
 func (g *graphCell) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	x := func(lane int) float64 { return r.Origin.X + 2 + float64(lane)*laneWidth + laneWidth/2 }
 	top, mid, bottom := r.Origin.Y, r.Origin.Y+r.Size.H/2, r.Origin.Y+r.Size.H
+	// A lane that runs through the row, down both halves, is one line, so
+	// no seam shows where the halves would meet.
+	through := map[int]bool{}
+	for _, l := range g.row.Lines {
+		if l.Lower && l.From == l.To && slices.Contains(g.row.Lines, graphLine{From: l.From, To: l.To}) {
+			through[l.From] = true
+		}
+	}
 	for _, l := range g.row.Lines {
 		if l.From >= maxLanes || l.To >= maxLanes {
 			continue
 		}
 		lane := l.From
 		a, b := ggui.Pt(x(l.From), top), ggui.Pt(x(l.To), mid)
-		if l.Lower {
+		switch {
+		case l.From == l.To && through[l.From]:
+			if l.Lower {
+				continue // drawn with the upper half
+			}
+			b = ggui.Pt(x(l.To), bottom)
+		case l.Lower:
 			lane = l.To
 			a, b = ggui.Pt(x(l.From), mid), ggui.Pt(x(l.To), bottom)
 		}
-		dst.StrokeLine(a, b, 1.6, laneColors[lane%len(laneColors)])
+		strokeLane(dst, a, b, laneColors[lane%len(laneColors)])
 	}
 	if g.row.Col >= maxLanes {
 		return
 	}
-	dot := ggui.Pt(x(g.row.Col), mid)
-	dst.FillCircle(dot, 4, laneColors[g.row.Col%len(laneColors)])
+	dot, col := ggui.Pt(x(g.row.Col), mid), laneColors[g.row.Col%len(laneColors)]
+	// A gap of the page round the dot sets it off the lines it joins.
+	dst.FillCircle(dot, dotRadius+1.5, g.hole)
+	dst.FillCircle(dot, dotRadius, col)
 	if g.head {
-		dst.FillCircle(dot, 2, g.hole)
+		dst.FillCircle(dot, dotRadius-2, g.hole)
 	}
+}
+
+// strokeLane draws a lane's line from a to b: straight down within a lane,
+// and from one lane to another as a curve that leaves a and meets b
+// going straight down, as the lanes run.
+func strokeLane(dst *ggui.Canvas, a, b ggui.Point, col color.Color) {
+	if a.X == b.X {
+		dst.StrokeLine(a, b, lineWidth, col)
+		return
+	}
+	var p ggui.Path
+	p.MoveTo(a.X, a.Y)
+	m := (a.Y + b.Y) / 2
+	p.CubicTo(a.X, m, b.X, m, b.X, b.Y)
+	dst.StrokePath(&p, lineWidth, col)
 }
 
 // commitView is the commit chosen in the History tab.
@@ -262,9 +306,10 @@ func historyBody(m *model) ggui.Widget {
 			return ggui.Box(muted(ggui.Text(note).Size(12.5))).Pad(14, 16)
 		}
 		graph := commitGraph(cs)
+		lanes := graphWidth(graph)
 		rows := make([]ggui.Widget, 0, len(cs)+1)
 		for i, c := range cs {
-			rows = append(rows, commitRow(m, c, graph[i]))
+			rows = append(rows, commitRow(m, c, graph[i], lanes))
 		}
 		if v.More {
 			rows = append(rows, ggui.Box(muted(ggui.Text(Tf("Showing the newest %d commits.", len(cs))).Size(11.5))).Pad(8, 12))
@@ -281,14 +326,14 @@ func historyBody(m *model) ggui.Widget {
 
 // commitRow is a commit in the list: its slice of the graph, its subject
 // and refs, and who made it when.
-func commitRow(m *model, c *protocol.GitCommit, g graphRow) ggui.Widget {
+func commitRow(m *model, c *protocol.GitCommit, g graphRow, lanes int) ggui.Widget {
 	head := slices.ContainsFunc(c.GetRefs(), func(r string) bool { return r == "HEAD" || strings.HasPrefix(r, "HEAD -> ") })
 	top := append([]ggui.Widget{ggui.Expanded(ggui.Text(c.GetSubject()).Size(12.5).NoWrap().Ellipsis())}, refBadges(c.GetRefs())...)
 	text := ggui.Column(
 		ggui.Row(top...).Gap(5).Align(ggui.AlignCenter),
 		ggui.Text(c.GetAuthor()+" · "+ago(protocol.TimeOf(c.GetTime()))+" · "+shortHash(c.GetHash())).Size(11).Color(tokExtraMuted).NoWrap().Ellipsis(),
 	).Gap(2).Stretch()
-	content := ggui.Row(&graphCell{row: g, head: head}, ggui.Expanded(text)).Gap(6).Align(ggui.AlignCenter)
+	content := ggui.Row(&graphCell{row: g, lanes: lanes, head: head}, ggui.Expanded(text)).Gap(6).Align(ggui.AlignCenter)
 	// Only the rows chosen and no longer chosen redraw as the choice moves.
 	chosen := ggui.Map(m.GitCommit, func(cv commitView) bool { return cv.Hash == c.GetHash() })
 	row := ggui.View(chosen, func(on bool) ggui.Widget {
