@@ -96,6 +96,8 @@ const (
 	TypeClaim          Type = "claim"
 	TypeClaimed        Type = "claimed"
 	TypeDeviceConn     Type = "device_conn"
+	TypeDeviceListen   Type = "device_listen"
+	TypeDeviceAccept   Type = "device_accept"
 )
 
 // Newer reports whether the edit made at version v on node is newer than
@@ -372,9 +374,14 @@ const (
 	DeviceADB = "adb" // an Android device or emulator, through adb
 )
 
+// DeviceDetached is the state of a device lent that is no longer attached
+// to its node.
+const DeviceDetached = "detached"
+
 // States of a Lease.
 const (
 	LeaseHeld         = "held"
+	LeaseDetached     = "detached"     // its device is not attached to its node, for now
 	LeaseReconnecting = "reconnecting" // its device's node cannot be reached, for now
 	LeaseReturned     = "returned"
 )
@@ -384,6 +391,32 @@ func (d *Device) Ref() string { return DeviceRef(d.GetNodeId(), d.GetKind(), d.G
 
 // DeviceRef is the ref of the device of kind and serial on node.
 func DeviceRef(node, kind, serial string) string { return node + "/" + kind + "/" + serial }
+
+// MatchDevice finds the device of devices name names: by its ref, its
+// node's name and its serial ("node/serial"), its serial, or its name.
+// nodeName names a node by its ID.
+func MatchDevice(devices []*Device, nodeName func(id string) string, name string) (*Device, error) {
+	var found []*Device
+	for _, d := range devices {
+		switch {
+		case d.Ref() == name:
+			return d, nil
+		case name == nodeName(d.GetNodeId())+"/"+d.GetSerial(), name == d.GetSerial(), strings.EqualFold(name, d.GetName()):
+			found = append(found, d)
+		}
+	}
+	switch len(found) {
+	case 1:
+		return found[0], nil
+	case 0:
+		return nil, fmt.Errorf("no device %q", name)
+	}
+	var names []string
+	for _, d := range found {
+		names = append(names, nodeName(d.GetNodeId())+"/"+d.GetSerial())
+	}
+	return nil, fmt.Errorf("%q could be %s", name, strings.Join(names, " or "))
+}
 
 // ParseDeviceRef splits a ref into its node, kind and serial.
 func ParseDeviceRef(ref string) (node, kind, serial string, err error) {

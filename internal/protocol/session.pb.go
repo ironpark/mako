@@ -126,9 +126,10 @@ type OpenSession struct {
 	Cols     uint32                 `protobuf:"varint,7,opt,name=cols,proto3" json:"cols,omitempty"`
 	Rows     uint32                 `protobuf:"varint,8,opt,name=rows,proto3" json:"rows,omitempty"`
 	Worktree *Worktree              `protobuf:"bytes,9,opt,name=worktree,proto3" json:"worktree,omitempty"` // start in a new worktree of project's repository
-	// devices are devices the session's node borrows for it, as
-	// "node/kind/serial": the session starts with the environment that
-	// lends each to its programs, borrowed again when it starts again.
+	// devices are devices the session's node borrows for it, named as
+	// Borrow.device names one: the session starts with the environment that
+	// lends each to its programs, holds them until it ends, and borrows
+	// them again when it starts again.
 	Devices       []string `protobuf:"bytes,10,rep,name=devices,proto3" json:"devices,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

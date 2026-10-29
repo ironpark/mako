@@ -77,64 +77,14 @@ func listDevices(ctx context.Context, c *client.Client) error {
 	return w.Flush()
 }
 
-// findDevices resolves devices on the mesh, each by its ref
-// (node/kind/serial), its node's name and its serial (node/serial), its
-// serial, or its name, from one listing of the mesh.
-func findDevices(ctx context.Context, c *client.Client, refs []string) ([]*protocol.Device, error) {
-	if len(refs) == 0 {
-		return nil, nil
-	}
-	list, err := c.Devices(ctx, &protocol.ListDevices{Mesh: true})
-	if err != nil {
-		return nil, err
-	}
-	names := nodeNames(ctx, c)
-	out := make([]*protocol.Device, 0, len(refs))
-	for _, ref := range refs {
-		d, err := matchDevice(list.GetDevices(), names, ref)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, d)
-	}
-	return out, nil
-}
-
-func matchDevice(devices []*protocol.Device, names map[string]string, ref string) (*protocol.Device, error) {
-	var found []*protocol.Device
-	for _, d := range devices {
-		switch {
-		case d.Ref() == ref:
-			return d, nil
-		case ref == names[d.GetNodeId()]+"/"+d.GetSerial(), ref == d.GetSerial(), strings.EqualFold(ref, d.GetName()):
-			found = append(found, d)
-		}
-	}
-	switch len(found) {
-	case 1:
-		return found[0], nil
-	case 0:
-		return nil, fmt.Errorf("no device %q; mako devices lists them", ref)
-	}
-	var refs []string
-	for _, d := range found {
-		refs = append(refs, nodeName(names, d.GetNodeId())+"/"+d.GetSerial())
-	}
-	return nil, fmt.Errorf("%q could be %s", ref, strings.Join(refs, " or "))
-}
-
 // borrow borrows a device for nodeID, and prints the environment that
 // reaches it as a POSIX shell sets it, the rest to standard error.
 func borrow(ctx context.Context, c *client.Client, nodeID, ref string) error {
-	found, err := findDevices(ctx, c, []string{ref})
+	lease, err := c.Borrow(ctx, &protocol.Borrow{NodeId: nodeID, Device: ref})
 	if err != nil {
 		return err
 	}
-	dev := found[0]
-	lease, err := c.Borrow(ctx, &protocol.Borrow{NodeId: nodeID, DeviceNodeId: dev.GetNodeId(), Kind: dev.GetKind(), Serial: dev.GetSerial()})
-	if err != nil {
-		return err
-	}
+	dev := lease.GetDevice()
 	fmt.Fprintf(os.Stderr, "mako: %s %s lent at %s\n", dev.GetName(), dev.GetSerial(), lease.GetAddr())
 	for _, w := range lease.GetWarnings() {
 		fmt.Fprintln(os.Stderr, "mako: warning:", w)
@@ -151,33 +101,15 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// findLease resolves a device nodeID borrows by its lease's ID, its ref,
-// its serial or its name.
-func findLease(ctx context.Context, c *client.Client, nodeID, ref string) (*protocol.Lease, error) {
-	list, err := c.Leases(ctx, &protocol.ListLeases{NodeId: nodeID})
-	if err != nil {
-		return nil, err
-	}
-	var found []*protocol.Lease
-	for _, l := range list.GetLeases() {
-		d := l.GetDevice()
-		if l.GetId() == ref || d.Ref() == ref || d.GetSerial() == ref || strings.EqualFold(d.GetName(), ref) {
-			found = append(found, l)
-		}
-	}
-	if len(found) != 1 {
-		return nil, fmt.Errorf("no single device borrowed as %q; mako leases lists them", ref)
-	}
-	return found[0], nil
-}
-
 func giveBack(ctx context.Context, c *client.Client, nodeID, ref string) error {
-	l, err := findLease(ctx, c, nodeID, ref)
+	l, err := c.GiveBack(ctx, &protocol.GiveBack{NodeId: nodeID, Ref: ref})
 	if err != nil {
 		return err
 	}
-	_, err = c.GiveBack(ctx, &protocol.GiveBack{NodeId: nodeID, LeaseId: l.GetId()})
-	return err
+	if l.GetState() != protocol.LeaseReturned {
+		fmt.Fprintf(os.Stderr, "mako: %s stays borrowed for sessions %s, until they end\n", l.GetDevice().GetSerial(), strings.Join(l.GetSessions(), ", "))
+	}
+	return nil
 }
 
 func listLeases(ctx context.Context, c *client.Client, nodeID string) error {
@@ -191,10 +123,17 @@ func listLeases(ctx context.Context, c *client.Client, nodeID string) error {
 	}
 	names := nodeNames(ctx, c)
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "LEASE\tFROM\tKIND\tSERIAL\tNAME\tADDRESS\tSTATE")
+	fmt.Fprintln(w, "LEASE\tFROM\tKIND\tSERIAL\tNAME\tADDRESS\tSTATE\tHELD BY")
 	for _, l := range list.GetLeases() {
 		d := l.GetDevice()
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", l.GetId(), nodeName(names, d.GetNodeId()), d.GetKind(), d.GetSerial(), d.GetName(), l.GetAddr(), l.GetState())
+		var by []string
+		if l.GetBorrowed() {
+			by = append(by, "hand")
+		}
+		for _, s := range l.GetSessions() {
+			by = append(by, "session "+s)
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", l.GetId(), nodeName(names, d.GetNodeId()), d.GetKind(), d.GetSerial(), d.GetName(), l.GetAddr(), l.GetState(), strings.Join(by, ", "))
 	}
 	return w.Flush()
 }

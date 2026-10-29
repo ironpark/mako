@@ -24,6 +24,7 @@ public  final class Lease extends
     addr_ = "";
     state_ = "";
     warnings_ = emptyProtobufList();
+    sessions_ = emptyProtobufList();
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -360,8 +361,9 @@ java.lang.String defaultValue) {
   private java.lang.String state_;
   /**
    * <pre>
-   * state is "held", or "reconnecting" while the device's node cannot be
-   * reached, or "returned" in GiveBack's answer.
+   * state is "held"; "detached" while the device is not attached to its
+   * node; "reconnecting" while its node cannot be reached; or "returned"
+   * once no one holds it.
    * </pre>
    *
    * <code>string state = 6 [json_name = "state"];</code>
@@ -373,8 +375,9 @@ java.lang.String defaultValue) {
   }
   /**
    * <pre>
-   * state is "held", or "reconnecting" while the device's node cannot be
-   * reached, or "returned" in GiveBack's answer.
+   * state is "held"; "detached" while the device is not attached to its
+   * node; "reconnecting" while its node cannot be reached; or "returned"
+   * once no one holds it.
    * </pre>
    *
    * <code>string state = 6 [json_name = "state"];</code>
@@ -387,8 +390,9 @@ java.lang.String defaultValue) {
   }
   /**
    * <pre>
-   * state is "held", or "reconnecting" while the device's node cannot be
-   * reached, or "returned" in GiveBack's answer.
+   * state is "held"; "detached" while the device is not attached to its
+   * node; "reconnecting" while its node cannot be reached; or "returned"
+   * once no one holds it.
    * </pre>
    *
    * <code>string state = 6 [json_name = "state"];</code>
@@ -402,8 +406,9 @@ java.lang.String defaultValue) {
   }
   /**
    * <pre>
-   * state is "held", or "reconnecting" while the device's node cannot be
-   * reached, or "returned" in GiveBack's answer.
+   * state is "held"; "detached" while the device is not attached to its
+   * node; "reconnecting" while its node cannot be reached; or "returned"
+   * once no one holds it.
    * </pre>
    *
    * <code>string state = 6 [json_name = "state"];</code>
@@ -414,8 +419,9 @@ java.lang.String defaultValue) {
   }
   /**
    * <pre>
-   * state is "held", or "reconnecting" while the device's node cannot be
-   * reached, or "returned" in GiveBack's answer.
+   * state is "held"; "detached" while the device is not attached to its
+   * node; "reconnecting" while its node cannot be reached; or "returned"
+   * once no one holds it.
    * </pre>
    *
    * <code>string state = 6 [json_name = "state"];</code>
@@ -555,6 +561,170 @@ java.lang.String defaultValue) {
     checkByteStringIsUtf8(value);
     ensureWarningsIsMutable();
     warnings_.add(value.toStringUtf8());
+  }
+
+  public static final int SESSIONS_FIELD_NUMBER = 8;
+  private com.google.protobuf.Internal.ProtobufList<java.lang.String> sessions_;
+  /**
+   * <pre>
+   * Who holds it: the sessions of node_id started with it, and whether it
+   * was borrowed by hand. It is given back once none does.
+   * </pre>
+   *
+   * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+   * @return A list containing the sessions.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.String> getSessionsList() {
+    return sessions_;
+  }
+  /**
+   * <pre>
+   * Who holds it: the sessions of node_id started with it, and whether it
+   * was borrowed by hand. It is given back once none does.
+   * </pre>
+   *
+   * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+   * @return The count of sessions.
+   */
+  @java.lang.Override
+  public int getSessionsCount() {
+    return sessions_.size();
+  }
+  /**
+   * <pre>
+   * Who holds it: the sessions of node_id started with it, and whether it
+   * was borrowed by hand. It is given back once none does.
+   * </pre>
+   *
+   * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+   * @param index The index of the element to return.
+   * @return The sessions at the given index.
+   */
+  @java.lang.Override
+  public java.lang.String getSessions(int index) {
+    return sessions_.get(index);
+  }
+  /**
+   * <pre>
+   * Who holds it: the sessions of node_id started with it, and whether it
+   * was borrowed by hand. It is given back once none does.
+   * </pre>
+   *
+   * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+   * @param index The index of the value to return.
+   * @return The bytes of the sessions at the given index.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getSessionsBytes(int index) {
+    return com.google.protobuf.ByteString.copyFromUtf8(
+        sessions_.get(index));
+  }
+  private void ensureSessionsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<java.lang.String> tmp =
+        sessions_;  if (!tmp.isModifiable()) {
+      sessions_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+  /**
+   * <pre>
+   * Who holds it: the sessions of node_id started with it, and whether it
+   * was borrowed by hand. It is given back once none does.
+   * </pre>
+   *
+   * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+   * @param index The index to set the value at.
+   * @param value The sessions to set.
+   */
+  private void setSessions(
+      int index, java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureSessionsIsMutable();
+    sessions_.set(index, value);
+  }
+  /**
+   * <pre>
+   * Who holds it: the sessions of node_id started with it, and whether it
+   * was borrowed by hand. It is given back once none does.
+   * </pre>
+   *
+   * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+   * @param value The sessions to add.
+   */
+  private void addSessions(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureSessionsIsMutable();
+    sessions_.add(value);
+  }
+  /**
+   * <pre>
+   * Who holds it: the sessions of node_id started with it, and whether it
+   * was borrowed by hand. It is given back once none does.
+   * </pre>
+   *
+   * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+   * @param values The sessions to add.
+   */
+  private void addAllSessions(
+      java.lang.Iterable<java.lang.String> values) {
+    ensureSessionsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, sessions_);
+  }
+  /**
+   * <pre>
+   * Who holds it: the sessions of node_id started with it, and whether it
+   * was borrowed by hand. It is given back once none does.
+   * </pre>
+   *
+   * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+   */
+  private void clearSessions() {
+    sessions_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * Who holds it: the sessions of node_id started with it, and whether it
+   * was borrowed by hand. It is given back once none does.
+   * </pre>
+   *
+   * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+   * @param value The bytes of the sessions to add.
+   */
+  private void addSessionsBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    ensureSessionsIsMutable();
+    sessions_.add(value.toStringUtf8());
+  }
+
+  public static final int BORROWED_FIELD_NUMBER = 9;
+  private boolean borrowed_;
+  /**
+   * <code>bool borrowed = 9 [json_name = "borrowed"];</code>
+   * @return The borrowed.
+   */
+  @java.lang.Override
+  public boolean getBorrowed() {
+    return borrowed_;
+  }
+  /**
+   * <code>bool borrowed = 9 [json_name = "borrowed"];</code>
+   * @param value The borrowed to set.
+   */
+  private void setBorrowed(boolean value) {
+    
+    borrowed_ = value;
+  }
+  /**
+   * <code>bool borrowed = 9 [json_name = "borrowed"];</code>
+   */
+  private void clearBorrowed() {
+
+    borrowed_ = false;
   }
 
   public static dev.ironpark.mako.v2.Lease parseFrom(
@@ -999,8 +1169,9 @@ java.lang.String defaultValue) {
 
     /**
      * <pre>
-     * state is "held", or "reconnecting" while the device's node cannot be
-     * reached, or "returned" in GiveBack's answer.
+     * state is "held"; "detached" while the device is not attached to its
+     * node; "reconnecting" while its node cannot be reached; or "returned"
+     * once no one holds it.
      * </pre>
      *
      * <code>string state = 6 [json_name = "state"];</code>
@@ -1012,8 +1183,9 @@ java.lang.String defaultValue) {
     }
     /**
      * <pre>
-     * state is "held", or "reconnecting" while the device's node cannot be
-     * reached, or "returned" in GiveBack's answer.
+     * state is "held"; "detached" while the device is not attached to its
+     * node; "reconnecting" while its node cannot be reached; or "returned"
+     * once no one holds it.
      * </pre>
      *
      * <code>string state = 6 [json_name = "state"];</code>
@@ -1026,8 +1198,9 @@ java.lang.String defaultValue) {
     }
     /**
      * <pre>
-     * state is "held", or "reconnecting" while the device's node cannot be
-     * reached, or "returned" in GiveBack's answer.
+     * state is "held"; "detached" while the device is not attached to its
+     * node; "reconnecting" while its node cannot be reached; or "returned"
+     * once no one holds it.
      * </pre>
      *
      * <code>string state = 6 [json_name = "state"];</code>
@@ -1042,8 +1215,9 @@ java.lang.String defaultValue) {
     }
     /**
      * <pre>
-     * state is "held", or "reconnecting" while the device's node cannot be
-     * reached, or "returned" in GiveBack's answer.
+     * state is "held"; "detached" while the device is not attached to its
+     * node; "reconnecting" while its node cannot be reached; or "returned"
+     * once no one holds it.
      * </pre>
      *
      * <code>string state = 6 [json_name = "state"];</code>
@@ -1056,8 +1230,9 @@ java.lang.String defaultValue) {
     }
     /**
      * <pre>
-     * state is "held", or "reconnecting" while the device's node cannot be
-     * reached, or "returned" in GiveBack's answer.
+     * state is "held"; "detached" while the device is not attached to its
+     * node; "reconnecting" while its node cannot be reached; or "returned"
+     * once no one holds it.
      * </pre>
      *
      * <code>string state = 6 [json_name = "state"];</code>
@@ -1199,6 +1374,171 @@ java.lang.String defaultValue) {
       return this;
     }
 
+    /**
+     * <pre>
+     * Who holds it: the sessions of node_id started with it, and whether it
+     * was borrowed by hand. It is given back once none does.
+     * </pre>
+     *
+     * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+     * @return A list containing the sessions.
+     */
+    @java.lang.Override
+    public java.util.List<java.lang.String>
+        getSessionsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getSessionsList());
+    }
+    /**
+     * <pre>
+     * Who holds it: the sessions of node_id started with it, and whether it
+     * was borrowed by hand. It is given back once none does.
+     * </pre>
+     *
+     * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+     * @return The count of sessions.
+     */
+    @java.lang.Override
+    public int getSessionsCount() {
+      return instance.getSessionsCount();
+    }
+    /**
+     * <pre>
+     * Who holds it: the sessions of node_id started with it, and whether it
+     * was borrowed by hand. It is given back once none does.
+     * </pre>
+     *
+     * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+     * @param index The index of the element to return.
+     * @return The sessions at the given index.
+     */
+    @java.lang.Override
+    public java.lang.String getSessions(int index) {
+      return instance.getSessions(index);
+    }
+    /**
+     * <pre>
+     * Who holds it: the sessions of node_id started with it, and whether it
+     * was borrowed by hand. It is given back once none does.
+     * </pre>
+     *
+     * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the sessions at the given index.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getSessionsBytes(int index) {
+      return instance.getSessionsBytes(index);
+    }
+    /**
+     * <pre>
+     * Who holds it: the sessions of node_id started with it, and whether it
+     * was borrowed by hand. It is given back once none does.
+     * </pre>
+     *
+     * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+     * @param index The index to set the value at.
+     * @param value The sessions to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSessions(
+        int index, java.lang.String value) {
+      copyOnWrite();
+      instance.setSessions(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Who holds it: the sessions of node_id started with it, and whether it
+     * was borrowed by hand. It is given back once none does.
+     * </pre>
+     *
+     * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+     * @param value The sessions to add.
+     * @return This builder for chaining.
+     */
+    public Builder addSessions(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.addSessions(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Who holds it: the sessions of node_id started with it, and whether it
+     * was borrowed by hand. It is given back once none does.
+     * </pre>
+     *
+     * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+     * @param values The sessions to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllSessions(
+        java.lang.Iterable<java.lang.String> values) {
+      copyOnWrite();
+      instance.addAllSessions(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * Who holds it: the sessions of node_id started with it, and whether it
+     * was borrowed by hand. It is given back once none does.
+     * </pre>
+     *
+     * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSessions() {
+      copyOnWrite();
+      instance.clearSessions();
+      return this;
+    }
+    /**
+     * <pre>
+     * Who holds it: the sessions of node_id started with it, and whether it
+     * was borrowed by hand. It is given back once none does.
+     * </pre>
+     *
+     * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+     * @param value The bytes of the sessions to add.
+     * @return This builder for chaining.
+     */
+    public Builder addSessionsBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.addSessionsBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>bool borrowed = 9 [json_name = "borrowed"];</code>
+     * @return The borrowed.
+     */
+    @java.lang.Override
+    public boolean getBorrowed() {
+      return instance.getBorrowed();
+    }
+    /**
+     * <code>bool borrowed = 9 [json_name = "borrowed"];</code>
+     * @param value The borrowed to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBorrowed(boolean value) {
+      copyOnWrite();
+      instance.setBorrowed(value);
+      return this;
+    }
+    /**
+     * <code>bool borrowed = 9 [json_name = "borrowed"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBorrowed() {
+      copyOnWrite();
+      instance.clearBorrowed();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Lease)
   }
   @java.lang.Override
@@ -1224,10 +1564,12 @@ java.lang.String defaultValue) {
             EnvDefaultEntryHolder.defaultEntry,
             "state_",
             "warnings_",
+            "sessions_",
+            "borrowed_",
           };
           java.lang.String info =
-              "\u0000\u0007\u0000\u0001\u0001\u0007\u0007\u0001\u0001\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u1009\u0000\u0004\u0208\u00052\u0006\u0208\u0007\u021a";
+              "\u0000\t\u0000\u0001\u0001\t\t\u0001\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u1009" +
+              "\u0000\u0004\u0208\u00052\u0006\u0208\u0007\u021a\b\u021a\t\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -7,8 +7,9 @@ package dev.ironpark.mako.v2;
 
 /**
  * <pre>
- * GiveBack ends node_id's lease lease_id, or the lease of the device ref
- * names ("node/kind/serial").
+ * GiveBack gives back what node_id borrowed by hand: lease lease_id, or
+ * the lease of the device ref names, by its ref, serial or name. A lease a
+ * session holds stays until the session ends.
  * </pre>
  *
  * Protobuf type {@code mako.v2.GiveBack}
@@ -250,8 +251,9 @@ public  final class GiveBack extends
 
   /**
    * <pre>
-   * GiveBack ends node_id's lease lease_id, or the lease of the device ref
-   * names ("node/kind/serial").
+   * GiveBack gives back what node_id borrowed by hand: lease lease_id, or
+   * the lease of the device ref names, by its ref, serial or name. A lease a
+   * session holds stays until the session ends.
    * </pre>
    *
    * Protobuf type {@code mako.v2.GiveBack}

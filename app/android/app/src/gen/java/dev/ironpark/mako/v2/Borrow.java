@@ -9,7 +9,10 @@ package dev.ironpark.mako.v2;
  * <pre>
  * Borrow asks node_id to borrow a device, for its own programs: the one
  * of kind and serial attached to device_node_id, which may be node_id
- * itself. A device already borrowed there answers its lease again.
+ * itself, or with no serial the one device names, as node_id resolves it
+ * among the devices it reaches: by its ref, "node/kind/serial", its
+ * node's name and its serial, "node/serial", its serial, or its name. A
+ * device already borrowed there answers its lease again.
  * </pre>
  *
  * Protobuf type {@code mako.v2.Borrow}
@@ -25,6 +28,7 @@ public  final class Borrow extends
     deviceNodeId_ = "";
     kind_ = "";
     serial_ = "";
+    device_ = "";
   }
   public static final int NODE_ID_FIELD_NUMBER = 1;
   private java.lang.String nodeId_;
@@ -214,6 +218,53 @@ public  final class Borrow extends
 
   }
 
+  public static final int DEVICE_FIELD_NUMBER = 5;
+  private java.lang.String device_;
+  /**
+   * <code>string device = 5 [json_name = "device"];</code>
+   * @return The device.
+   */
+  @java.lang.Override
+  public java.lang.String getDevice() {
+    return device_;
+  }
+  /**
+   * <code>string device = 5 [json_name = "device"];</code>
+   * @return The bytes for device.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getDeviceBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(device_);
+  }
+  /**
+   * <code>string device = 5 [json_name = "device"];</code>
+   * @param value The device to set.
+   */
+  private void setDevice(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    device_ = value;
+  }
+  /**
+   * <code>string device = 5 [json_name = "device"];</code>
+   */
+  private void clearDevice() {
+
+    device_ = getDefaultInstance().getDevice();
+  }
+  /**
+   * <code>string device = 5 [json_name = "device"];</code>
+   * @param value The bytes for device to set.
+   */
+  private void setDeviceBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    device_ = value.toStringUtf8();
+
+  }
+
   public static dev.ironpark.mako.v2.Borrow parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -301,7 +352,10 @@ public  final class Borrow extends
    * <pre>
    * Borrow asks node_id to borrow a device, for its own programs: the one
    * of kind and serial attached to device_node_id, which may be node_id
-   * itself. A device already borrowed there answers its lease again.
+   * itself, or with no serial the one device names, as node_id resolves it
+   * among the devices it reaches: by its ref, "node/kind/serial", its
+   * node's name and its serial, "node/serial", its serial, or its name. A
+   * device already borrowed there answers its lease again.
    * </pre>
    *
    * Protobuf type {@code mako.v2.Borrow}
@@ -513,6 +567,55 @@ public  final class Borrow extends
       return this;
     }
 
+    /**
+     * <code>string device = 5 [json_name = "device"];</code>
+     * @return The device.
+     */
+    @java.lang.Override
+    public java.lang.String getDevice() {
+      return instance.getDevice();
+    }
+    /**
+     * <code>string device = 5 [json_name = "device"];</code>
+     * @return The bytes for device.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getDeviceBytes() {
+      return instance.getDeviceBytes();
+    }
+    /**
+     * <code>string device = 5 [json_name = "device"];</code>
+     * @param value The device to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDevice(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setDevice(value);
+      return this;
+    }
+    /**
+     * <code>string device = 5 [json_name = "device"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDevice() {
+      copyOnWrite();
+      instance.clearDevice();
+      return this;
+    }
+    /**
+     * <code>string device = 5 [json_name = "device"];</code>
+     * @param value The bytes for device to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDeviceBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setDeviceBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Borrow)
   }
   @java.lang.Override
@@ -533,10 +636,11 @@ public  final class Borrow extends
             "deviceNodeId_",
             "kind_",
             "serial_",
+            "device_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -288,13 +288,17 @@ func (x *Devices) GetErrors() []string {
 
 // Borrow asks node_id to borrow a device, for its own programs: the one
 // of kind and serial attached to device_node_id, which may be node_id
-// itself. A device already borrowed there answers its lease again.
+// itself, or with no serial the one device names, as node_id resolves it
+// among the devices it reaches: by its ref, "node/kind/serial", its
+// node's name and its serial, "node/serial", its serial, or its name. A
+// device already borrowed there answers its lease again.
 type Borrow struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	DeviceNodeId  string                 `protobuf:"bytes,2,opt,name=device_node_id,json=deviceNodeId,proto3" json:"device_node_id,omitempty"`
 	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
 	Serial        string                 `protobuf:"bytes,4,opt,name=serial,proto3" json:"serial,omitempty"`
+	Device        string                 `protobuf:"bytes,5,opt,name=device,proto3" json:"device,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -357,6 +361,13 @@ func (x *Borrow) GetSerial() string {
 	return ""
 }
 
+func (x *Borrow) GetDevice() string {
+	if x != nil {
+		return x.Device
+	}
+	return ""
+}
+
 // Lease is a device a node borrows, and where its programs reach it.
 type Lease struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
@@ -367,10 +378,15 @@ type Lease struct {
 	// env is what tells the kind's tools so, to set for a program.
 	Addr string            `protobuf:"bytes,4,opt,name=addr,proto3" json:"addr,omitempty"`
 	Env  map[string]string `protobuf:"bytes,5,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// state is "held", or "reconnecting" while the device's node cannot be
-	// reached, or "returned" in GiveBack's answer.
-	State         string   `protobuf:"bytes,6,opt,name=state,proto3" json:"state,omitempty"`
-	Warnings      []string `protobuf:"bytes,7,rep,name=warnings,proto3" json:"warnings,omitempty"` // what may keep the tools from working
+	// state is "held"; "detached" while the device is not attached to its
+	// node; "reconnecting" while its node cannot be reached; or "returned"
+	// once no one holds it.
+	State    string   `protobuf:"bytes,6,opt,name=state,proto3" json:"state,omitempty"`
+	Warnings []string `protobuf:"bytes,7,rep,name=warnings,proto3" json:"warnings,omitempty"` // what may keep the tools from working
+	// Who holds it: the sessions of node_id started with it, and whether it
+	// was borrowed by hand. It is given back once none does.
+	Sessions      []string `protobuf:"bytes,8,rep,name=sessions,proto3" json:"sessions,omitempty"`
+	Borrowed      bool     `protobuf:"varint,9,opt,name=borrowed,proto3" json:"borrowed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -454,8 +470,23 @@ func (x *Lease) GetWarnings() []string {
 	return nil
 }
 
-// GiveBack ends node_id's lease lease_id, or the lease of the device ref
-// names ("node/kind/serial").
+func (x *Lease) GetSessions() []string {
+	if x != nil {
+		return x.Sessions
+	}
+	return nil
+}
+
+func (x *Lease) GetBorrowed() bool {
+	if x != nil {
+		return x.Borrowed
+	}
+	return false
+}
+
+// GiveBack gives back what node_id borrowed by hand: lease lease_id, or
+// the lease of the device ref names, by its ref, serial or name. A lease a
+// session holds stays until the session ends.
 type GiveBack struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
@@ -696,7 +727,8 @@ func (x *Claim) GetHolderName() string {
 	return ""
 }
 
-// Claimed answers Claim.
+// Claimed answers Claim, and after it, on the claim's stream, says the
+// device changed: its state, or "detached" when it is no longer attached.
 type Claimed struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Device        *Device                `protobuf:"bytes,1,opt,name=device,proto3" json:"device,omitempty"`
@@ -797,6 +829,125 @@ func (x *DeviceConn) GetClaimId() string {
 	return ""
 }
 
+// DeviceListen listens on a port of the device's node's loopback for a
+// borrower under claim claim_id, as adb reverse needs: the device reaches
+// the borrower through it. Tunneled answers with the address; the
+// listener lasts as long as the stream stays open.
+type DeviceListen struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ClaimId       string                 `protobuf:"bytes,2,opt,name=claim_id,json=claimId,proto3" json:"claim_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeviceListen) Reset() {
+	*x = DeviceListen{}
+	mi := &file_mako_v2_devices_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeviceListen) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeviceListen) ProtoMessage() {}
+
+func (x *DeviceListen) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_devices_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeviceListen.ProtoReflect.Descriptor instead.
+func (*DeviceListen) Descriptor() ([]byte, []int) {
+	return file_mako_v2_devices_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *DeviceListen) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *DeviceListen) GetClaimId() string {
+	if x != nil {
+		return x.ClaimId
+	}
+	return ""
+}
+
+// DeviceAccept waits for a connection to the port at addr that a
+// DeviceListen of claim claim_id made. Once Tunneled answers, the stream
+// carries that connection's bytes, both ways.
+type DeviceAccept struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ClaimId       string                 `protobuf:"bytes,2,opt,name=claim_id,json=claimId,proto3" json:"claim_id,omitempty"`
+	Addr          string                 `protobuf:"bytes,3,opt,name=addr,proto3" json:"addr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeviceAccept) Reset() {
+	*x = DeviceAccept{}
+	mi := &file_mako_v2_devices_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeviceAccept) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeviceAccept) ProtoMessage() {}
+
+func (x *DeviceAccept) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_devices_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeviceAccept.ProtoReflect.Descriptor instead.
+func (*DeviceAccept) Descriptor() ([]byte, []int) {
+	return file_mako_v2_devices_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *DeviceAccept) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *DeviceAccept) GetClaimId() string {
+	if x != nil {
+		return x.ClaimId
+	}
+	return ""
+}
+
+func (x *DeviceAccept) GetAddr() string {
+	if x != nil {
+		return x.Addr
+	}
+	return ""
+}
+
 var File_mako_v2_devices_proto protoreflect.FileDescriptor
 
 const file_mako_v2_devices_proto_rawDesc = "" +
@@ -823,12 +974,13 @@ const file_mako_v2_devices_proto_rawDesc = "" +
 	"\x04mesh\x18\x02 \x01(\bR\x04mesh\"L\n" +
 	"\aDevices\x12)\n" +
 	"\adevices\x18\x01 \x03(\v2\x0f.mako.v2.DeviceR\adevices\x12\x16\n" +
-	"\x06errors\x18\x02 \x03(\tR\x06errors\"s\n" +
+	"\x06errors\x18\x02 \x03(\tR\x06errors\"\x8b\x01\n" +
 	"\x06Borrow\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12$\n" +
 	"\x0edevice_node_id\x18\x02 \x01(\tR\fdeviceNodeId\x12\x12\n" +
 	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x16\n" +
-	"\x06serial\x18\x04 \x01(\tR\x06serial\"\x82\x02\n" +
+	"\x06serial\x18\x04 \x01(\tR\x06serial\x12\x16\n" +
+	"\x06device\x18\x05 \x01(\tR\x06device\"\xba\x02\n" +
 	"\x05Lease\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12'\n" +
@@ -836,7 +988,9 @@ const file_mako_v2_devices_proto_rawDesc = "" +
 	"\x04addr\x18\x04 \x01(\tR\x04addr\x12)\n" +
 	"\x03env\x18\x05 \x03(\v2\x17.mako.v2.Lease.EnvEntryR\x03env\x12\x14\n" +
 	"\x05state\x18\x06 \x01(\tR\x05state\x12\x1a\n" +
-	"\bwarnings\x18\a \x03(\tR\bwarnings\x1a6\n" +
+	"\bwarnings\x18\a \x03(\tR\bwarnings\x12\x1a\n" +
+	"\bsessions\x18\b \x03(\tR\bsessions\x12\x1a\n" +
+	"\bborrowed\x18\t \x01(\bR\bborrowed\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"P\n" +
@@ -862,7 +1016,14 @@ const file_mako_v2_devices_proto_rawDesc = "" +
 	"\n" +
 	"DeviceConn\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x19\n" +
-	"\bclaim_id\x18\x02 \x01(\tR\aclaimIdB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
+	"\bclaim_id\x18\x02 \x01(\tR\aclaimId\"B\n" +
+	"\fDeviceListen\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x19\n" +
+	"\bclaim_id\x18\x02 \x01(\tR\aclaimId\"V\n" +
+	"\fDeviceAccept\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x19\n" +
+	"\bclaim_id\x18\x02 \x01(\tR\aclaimId\x12\x12\n" +
+	"\x04addr\x18\x03 \x01(\tR\x04addrB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
 	file_mako_v2_devices_proto_rawDescOnce sync.Once
@@ -876,29 +1037,31 @@ func file_mako_v2_devices_proto_rawDescGZIP() []byte {
 	return file_mako_v2_devices_proto_rawDescData
 }
 
-var file_mako_v2_devices_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_mako_v2_devices_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_mako_v2_devices_proto_goTypes = []any{
-	(*Device)(nil),      // 0: mako.v2.Device
-	(*Holder)(nil),      // 1: mako.v2.Holder
-	(*ListDevices)(nil), // 2: mako.v2.ListDevices
-	(*Devices)(nil),     // 3: mako.v2.Devices
-	(*Borrow)(nil),      // 4: mako.v2.Borrow
-	(*Lease)(nil),       // 5: mako.v2.Lease
-	(*GiveBack)(nil),    // 6: mako.v2.GiveBack
-	(*ListLeases)(nil),  // 7: mako.v2.ListLeases
-	(*Leases)(nil),      // 8: mako.v2.Leases
-	(*Claim)(nil),       // 9: mako.v2.Claim
-	(*Claimed)(nil),     // 10: mako.v2.Claimed
-	(*DeviceConn)(nil),  // 11: mako.v2.DeviceConn
-	nil,                 // 12: mako.v2.Device.AttrsEntry
-	nil,                 // 13: mako.v2.Lease.EnvEntry
+	(*Device)(nil),       // 0: mako.v2.Device
+	(*Holder)(nil),       // 1: mako.v2.Holder
+	(*ListDevices)(nil),  // 2: mako.v2.ListDevices
+	(*Devices)(nil),      // 3: mako.v2.Devices
+	(*Borrow)(nil),       // 4: mako.v2.Borrow
+	(*Lease)(nil),        // 5: mako.v2.Lease
+	(*GiveBack)(nil),     // 6: mako.v2.GiveBack
+	(*ListLeases)(nil),   // 7: mako.v2.ListLeases
+	(*Leases)(nil),       // 8: mako.v2.Leases
+	(*Claim)(nil),        // 9: mako.v2.Claim
+	(*Claimed)(nil),      // 10: mako.v2.Claimed
+	(*DeviceConn)(nil),   // 11: mako.v2.DeviceConn
+	(*DeviceListen)(nil), // 12: mako.v2.DeviceListen
+	(*DeviceAccept)(nil), // 13: mako.v2.DeviceAccept
+	nil,                  // 14: mako.v2.Device.AttrsEntry
+	nil,                  // 15: mako.v2.Lease.EnvEntry
 }
 var file_mako_v2_devices_proto_depIdxs = []int32{
-	12, // 0: mako.v2.Device.attrs:type_name -> mako.v2.Device.AttrsEntry
+	14, // 0: mako.v2.Device.attrs:type_name -> mako.v2.Device.AttrsEntry
 	1,  // 1: mako.v2.Device.holders:type_name -> mako.v2.Holder
 	0,  // 2: mako.v2.Devices.devices:type_name -> mako.v2.Device
 	0,  // 3: mako.v2.Lease.device:type_name -> mako.v2.Device
-	13, // 4: mako.v2.Lease.env:type_name -> mako.v2.Lease.EnvEntry
+	15, // 4: mako.v2.Lease.env:type_name -> mako.v2.Lease.EnvEntry
 	5,  // 5: mako.v2.Leases.leases:type_name -> mako.v2.Lease
 	0,  // 6: mako.v2.Claimed.device:type_name -> mako.v2.Device
 	7,  // [7:7] is the sub-list for method output_type
@@ -919,7 +1082,7 @@ func file_mako_v2_devices_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_devices_proto_rawDesc), len(file_mako_v2_devices_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

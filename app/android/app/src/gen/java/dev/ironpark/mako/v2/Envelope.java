@@ -90,6 +90,8 @@ public  final class Envelope extends
     CLAIM(107),
     CLAIMED(108),
     DEVICE_CONN(109),
+    DEVICE_LISTEN(110),
+    DEVICE_ACCEPT(111),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -169,6 +171,8 @@ public  final class Envelope extends
         case 107: return CLAIM;
         case 108: return CLAIMED;
         case 109: return DEVICE_CONN;
+        case 110: return DEVICE_LISTEN;
+        case 111: return DEVICE_ACCEPT;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -3632,6 +3636,106 @@ public  final class Envelope extends
    */
   private void clearDeviceConn() {
     if (bodyCase_ == 109) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int DEVICE_LISTEN_FIELD_NUMBER = 110;
+  /**
+   * <code>.mako.v2.DeviceListen device_listen = 110 [json_name = "deviceListen"];</code>
+   */
+  @java.lang.Override
+  public boolean hasDeviceListen() {
+    return bodyCase_ == 110;
+  }
+  /**
+   * <code>.mako.v2.DeviceListen device_listen = 110 [json_name = "deviceListen"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.DeviceListen getDeviceListen() {
+    if (bodyCase_ == 110) {
+       return (dev.ironpark.mako.v2.DeviceListen) body_;
+    }
+    return dev.ironpark.mako.v2.DeviceListen.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.DeviceListen device_listen = 110 [json_name = "deviceListen"];</code>
+   */
+  private void setDeviceListen(dev.ironpark.mako.v2.DeviceListen value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 110;
+  }
+  /**
+   * <code>.mako.v2.DeviceListen device_listen = 110 [json_name = "deviceListen"];</code>
+   */
+  private void mergeDeviceListen(dev.ironpark.mako.v2.DeviceListen value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 110 &&
+        body_ != dev.ironpark.mako.v2.DeviceListen.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.DeviceListen.newBuilder((dev.ironpark.mako.v2.DeviceListen) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 110;
+  }
+  /**
+   * <code>.mako.v2.DeviceListen device_listen = 110 [json_name = "deviceListen"];</code>
+   */
+  private void clearDeviceListen() {
+    if (bodyCase_ == 110) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int DEVICE_ACCEPT_FIELD_NUMBER = 111;
+  /**
+   * <code>.mako.v2.DeviceAccept device_accept = 111 [json_name = "deviceAccept"];</code>
+   */
+  @java.lang.Override
+  public boolean hasDeviceAccept() {
+    return bodyCase_ == 111;
+  }
+  /**
+   * <code>.mako.v2.DeviceAccept device_accept = 111 [json_name = "deviceAccept"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.DeviceAccept getDeviceAccept() {
+    if (bodyCase_ == 111) {
+       return (dev.ironpark.mako.v2.DeviceAccept) body_;
+    }
+    return dev.ironpark.mako.v2.DeviceAccept.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.DeviceAccept device_accept = 111 [json_name = "deviceAccept"];</code>
+   */
+  private void setDeviceAccept(dev.ironpark.mako.v2.DeviceAccept value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 111;
+  }
+  /**
+   * <code>.mako.v2.DeviceAccept device_accept = 111 [json_name = "deviceAccept"];</code>
+   */
+  private void mergeDeviceAccept(dev.ironpark.mako.v2.DeviceAccept value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 111 &&
+        body_ != dev.ironpark.mako.v2.DeviceAccept.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.DeviceAccept.newBuilder((dev.ironpark.mako.v2.DeviceAccept) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 111;
+  }
+  /**
+   * <code>.mako.v2.DeviceAccept device_accept = 111 [json_name = "deviceAccept"];</code>
+   */
+  private void clearDeviceAccept() {
+    if (bodyCase_ == 111) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -7108,6 +7212,102 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.mako.v2.DeviceListen device_listen = 110 [json_name = "deviceListen"];</code>
+     */
+    @java.lang.Override
+    public boolean hasDeviceListen() {
+      return instance.hasDeviceListen();
+    }
+    /**
+     * <code>.mako.v2.DeviceListen device_listen = 110 [json_name = "deviceListen"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.DeviceListen getDeviceListen() {
+      return instance.getDeviceListen();
+    }
+    /**
+     * <code>.mako.v2.DeviceListen device_listen = 110 [json_name = "deviceListen"];</code>
+     */
+    public Builder setDeviceListen(dev.ironpark.mako.v2.DeviceListen value) {
+      copyOnWrite();
+      instance.setDeviceListen(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.DeviceListen device_listen = 110 [json_name = "deviceListen"];</code>
+     */
+    public Builder setDeviceListen(
+        dev.ironpark.mako.v2.DeviceListen.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDeviceListen(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.DeviceListen device_listen = 110 [json_name = "deviceListen"];</code>
+     */
+    public Builder mergeDeviceListen(dev.ironpark.mako.v2.DeviceListen value) {
+      copyOnWrite();
+      instance.mergeDeviceListen(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.DeviceListen device_listen = 110 [json_name = "deviceListen"];</code>
+     */
+    public Builder clearDeviceListen() {
+      copyOnWrite();
+      instance.clearDeviceListen();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.DeviceAccept device_accept = 111 [json_name = "deviceAccept"];</code>
+     */
+    @java.lang.Override
+    public boolean hasDeviceAccept() {
+      return instance.hasDeviceAccept();
+    }
+    /**
+     * <code>.mako.v2.DeviceAccept device_accept = 111 [json_name = "deviceAccept"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.DeviceAccept getDeviceAccept() {
+      return instance.getDeviceAccept();
+    }
+    /**
+     * <code>.mako.v2.DeviceAccept device_accept = 111 [json_name = "deviceAccept"];</code>
+     */
+    public Builder setDeviceAccept(dev.ironpark.mako.v2.DeviceAccept value) {
+      copyOnWrite();
+      instance.setDeviceAccept(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.DeviceAccept device_accept = 111 [json_name = "deviceAccept"];</code>
+     */
+    public Builder setDeviceAccept(
+        dev.ironpark.mako.v2.DeviceAccept.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDeviceAccept(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.DeviceAccept device_accept = 111 [json_name = "deviceAccept"];</code>
+     */
+    public Builder mergeDeviceAccept(dev.ironpark.mako.v2.DeviceAccept value) {
+      copyOnWrite();
+      instance.mergeDeviceAccept(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.DeviceAccept device_accept = 111 [json_name = "deviceAccept"];</code>
+     */
+    public Builder clearDeviceAccept() {
+      copyOnWrite();
+      instance.clearDeviceAccept();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -7191,16 +7391,18 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.Claim.class,
             dev.ironpark.mako.v2.Claimed.class,
             dev.ironpark.mako.v2.DeviceConn.class,
+            dev.ironpark.mako.v2.DeviceListen.class,
+            dev.ironpark.mako.v2.DeviceAccept.class,
           };
           java.lang.String info =
-              "\u0000A\u0001\u0000\u0001mA\u0000\u0000\u0000\u0001\u0208\n<\u0000\u000b<\u0000\f" +
+              "\u0000C\u0001\u0000\u0001oC\u0000\u0000\u0000\u0001\u0208\n<\u0000\u000b<\u0000\f" +
               "<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000\u001a<\u0000" +
               "\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000\"<\u0000#<\u0000" +
               "$<\u0000%<\u0000(<\u0000)<\u0000*<\u0000+<\u0000,<\u0000-<\u00002<\u00003<\u0000" +
               "4<\u00005<\u00006<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000<<\u0000=<\u0000" +
               "><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000" +
               "P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000" +
-              "g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000";
+              "g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

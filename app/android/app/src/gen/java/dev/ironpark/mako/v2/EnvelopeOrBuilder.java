@@ -806,5 +806,27 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.DeviceConn getDeviceConn();
 
+  /**
+   * <code>.mako.v2.DeviceListen device_listen = 110 [json_name = "deviceListen"];</code>
+   * @return Whether the deviceListen field is set.
+   */
+  boolean hasDeviceListen();
+  /**
+   * <code>.mako.v2.DeviceListen device_listen = 110 [json_name = "deviceListen"];</code>
+   * @return The deviceListen.
+   */
+  dev.ironpark.mako.v2.DeviceListen getDeviceListen();
+
+  /**
+   * <code>.mako.v2.DeviceAccept device_accept = 111 [json_name = "deviceAccept"];</code>
+   * @return Whether the deviceAccept field is set.
+   */
+  boolean hasDeviceAccept();
+  /**
+   * <code>.mako.v2.DeviceAccept device_accept = 111 [json_name = "deviceAccept"];</code>
+   * @return The deviceAccept.
+   */
+  dev.ironpark.mako.v2.DeviceAccept getDeviceAccept();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

@@ -737,6 +737,7 @@ type Changed struct {
 	Sessions      bool                   `protobuf:"varint,2,opt,name=sessions,proto3" json:"sessions,omitempty"`
 	Access        bool                   `protobuf:"varint,3,opt,name=access,proto3" json:"access,omitempty"`       // an access request came, or the keys changed
 	Workspace     bool                   `protobuf:"varint,4,opt,name=workspace,proto3" json:"workspace,omitempty"` // a newer workspace came from a peer, or a window
+	Devices       bool                   `protobuf:"varint,5,opt,name=devices,proto3" json:"devices,omitempty"`     // a device lent or borrowed here changed
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -795,6 +796,13 @@ func (x *Changed) GetAccess() bool {
 func (x *Changed) GetWorkspace() bool {
 	if x != nil {
 		return x.Workspace
+	}
+	return false
+}
+
+func (x *Changed) GetDevices() bool {
+	if x != nil {
+		return x.Devices
 	}
 	return false
 }
@@ -1164,12 +1172,13 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\anode_id\x18\x03 \x01(\tR\x06nodeId\"\x0e\n" +
 	"\fGetWorkspace\"%\n" +
 	"\x05Watch\x12\x1c\n" +
-	"\tapprovals\x18\x01 \x01(\bR\tapprovals\"q\n" +
+	"\tapprovals\x18\x01 \x01(\bR\tapprovals\"\x8b\x01\n" +
 	"\aChanged\x12\x14\n" +
 	"\x05nodes\x18\x01 \x01(\bR\x05nodes\x12\x1a\n" +
 	"\bsessions\x18\x02 \x01(\bR\bsessions\x12\x16\n" +
 	"\x06access\x18\x03 \x01(\bR\x06access\x12\x1c\n" +
-	"\tworkspace\x18\x04 \x01(\bR\tworkspace\"m\n" +
+	"\tworkspace\x18\x04 \x01(\bR\tworkspace\x12\x18\n" +
+	"\adevices\x18\x05 \x01(\bR\adevices\"m\n" +
 	"\x06Access\x12\x0e\n" +
 	"\x02op\x18\x01 \x01(\tR\x02op\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x10\n" +

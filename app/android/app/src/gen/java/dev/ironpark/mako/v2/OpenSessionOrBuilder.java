@@ -168,9 +168,10 @@ java.lang.String defaultValue);
 
   /**
    * <pre>
-   * devices are devices the session's node borrows for it, as
-   * "node/kind/serial": the session starts with the environment that
-   * lends each to its programs, borrowed again when it starts again.
+   * devices are devices the session's node borrows for it, named as
+   * Borrow.device names one: the session starts with the environment that
+   * lends each to its programs, holds them until it ends, and borrows
+   * them again when it starts again.
    * </pre>
    *
    * <code>repeated string devices = 10 [json_name = "devices"];</code>
@@ -180,9 +181,10 @@ java.lang.String defaultValue);
       getDevicesList();
   /**
    * <pre>
-   * devices are devices the session's node borrows for it, as
-   * "node/kind/serial": the session starts with the environment that
-   * lends each to its programs, borrowed again when it starts again.
+   * devices are devices the session's node borrows for it, named as
+   * Borrow.device names one: the session starts with the environment that
+   * lends each to its programs, holds them until it ends, and borrows
+   * them again when it starts again.
    * </pre>
    *
    * <code>repeated string devices = 10 [json_name = "devices"];</code>
@@ -191,9 +193,10 @@ java.lang.String defaultValue);
   int getDevicesCount();
   /**
    * <pre>
-   * devices are devices the session's node borrows for it, as
-   * "node/kind/serial": the session starts with the environment that
-   * lends each to its programs, borrowed again when it starts again.
+   * devices are devices the session's node borrows for it, named as
+   * Borrow.device names one: the session starts with the environment that
+   * lends each to its programs, holds them until it ends, and borrows
+   * them again when it starts again.
    * </pre>
    *
    * <code>repeated string devices = 10 [json_name = "devices"];</code>
@@ -203,9 +206,10 @@ java.lang.String defaultValue);
   java.lang.String getDevices(int index);
   /**
    * <pre>
-   * devices are devices the session's node borrows for it, as
-   * "node/kind/serial": the session starts with the environment that
-   * lends each to its programs, borrowed again when it starts again.
+   * devices are devices the session's node borrows for it, named as
+   * Borrow.device names one: the session starts with the environment that
+   * lends each to its programs, holds them until it ends, and borrows
+   * them again when it starts again.
    * </pre>
    *
    * <code>repeated string devices = 10 [json_name = "devices"];</code>

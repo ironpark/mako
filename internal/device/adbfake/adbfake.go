@@ -3,6 +3,7 @@
 package adbfake
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"net"
@@ -13,14 +14,18 @@ import (
 	"testing"
 )
 
-// Server is an adb server listening on the loopback, with Devices.
+// Server is an adb server listening on the loopback, with devices. A
+// device's "tcp:" services echo what they are sent, and its reverses are
+// tried once each: the server connects to the host's port, says "ping",
+// and keeps the line it hears back (Reversed).
 type Server struct {
-	Addr    string
-	Devices []string // their serials, each attached and authorized
+	Addr string
 
-	mu     sync.Mutex
-	got    []string
-	killed bool
+	mu       sync.Mutex
+	devices  []string // their serials, each attached and authorized
+	got      []string
+	killed   bool
+	reversed chan string
 }
 
 // Start runs a server with devices for the test.
@@ -30,7 +35,7 @@ func Start(t *testing.T, devices ...string) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &Server{Addr: ln.Addr().String(), Devices: devices}
+	s := &Server{Addr: ln.Addr().String(), devices: devices, reversed: make(chan string, 8)}
 	t.Cleanup(func() { ln.Close() })
 	go func() {
 		for {
@@ -43,6 +48,22 @@ func Start(t *testing.T, devices ...string) *Server {
 	}()
 	return s
 }
+
+// SetDevices attaches devices in place of those the server had.
+func (s *Server) SetDevices(devices ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.devices = devices
+}
+
+func (s *Server) list() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.devices)
+}
+
+// Reversed is the next line a reverse's host port answered "ping" with.
+func (s *Server) Reversed() <-chan string { return s.reversed }
 
 // Requests are the requests the server was sent, in order.
 func (s *Server) Requests() []string {
@@ -77,7 +98,7 @@ func (s *Server) serve(conn net.Conn) {
 			return
 		case req == "host:devices", req == "host:devices-l", req == "host:track-devices":
 			var b strings.Builder
-			for i, d := range s.Devices {
+			for i, d := range s.list() {
 				if req == "host:devices-l" {
 					fmt.Fprintf(&b, "%-22s device product:p%d model:Model_%d transport_id:%d\n", d, i, i, i+1)
 				} else {
@@ -102,6 +123,24 @@ func (s *Server) serve(conn net.Conn) {
 			}
 			transport = d
 			io.WriteString(conn, "OKAY")
+		case strings.HasPrefix(req, "host:tport:serial:"):
+			d := strings.TrimPrefix(req, "host:tport:serial:")
+			if !s.has(d) {
+				fail("device '" + d + "' not found")
+				return
+			}
+			transport = d
+			io.WriteString(conn, "OKAY\x01\x00\x00\x00\x00\x00\x00\x00")
+		case transport != "" && strings.HasPrefix(req, "tcp:"):
+			io.WriteString(conn, "OKAY")
+			_, _ = io.Copy(conn, conn)
+			return
+		case transport != "" && strings.HasPrefix(req, "reverse:forward:"):
+			dev, host, _ := strings.Cut(strings.TrimPrefix(req, "reverse:forward:"), ";")
+			io.WriteString(conn, "OKAYOKAY")
+			reply(conn, "", strings.TrimPrefix(dev, "tcp:"))
+			go s.reverse(strings.TrimPrefix(host, "tcp:"))
+			return
 		case strings.HasPrefix(req, "host:transport:"):
 			d := strings.TrimPrefix(req, "host:transport:")
 			if !s.has(d) {
@@ -112,7 +151,7 @@ func (s *Server) serve(conn net.Conn) {
 			io.WriteString(conn, "OKAY")
 		case strings.HasPrefix(req, "host-serial:"):
 			rest := strings.TrimPrefix(req, "host-serial:")
-			for _, d := range s.Devices {
+			for _, d := range s.list() {
 				if cmd, ok := strings.CutPrefix(rest, d+":"); ok && cmd == "get-state" {
 					okay("device")
 					return
@@ -143,16 +182,34 @@ func (s *Server) serve(conn net.Conn) {
 	}
 }
 
-func (s *Server) has(serial string) bool { return slices.Contains(s.Devices, serial) }
+func (s *Server) has(serial string) bool { return slices.Contains(s.list(), serial) }
+
+// reverse connects to port on the loopback, as a device's reverse makes
+// its server do, and keeps what it answers "ping" with.
+func (s *Server) reverse(port string) {
+	c, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", port))
+	if err != nil {
+		s.reversed <- "dial: " + err.Error()
+		return
+	}
+	defer c.Close()
+	io.WriteString(c, "ping\n")
+	line, err := bufio.NewReader(c).ReadString('\n')
+	if err != nil {
+		line = "read: " + err.Error()
+	}
+	s.reversed <- line
+}
 
 // only is the server's one device, which a request for any device goes
 // to; with more than one, it fails the request.
 func (s *Server) only(conn net.Conn) (string, bool) {
-	if len(s.Devices) != 1 {
+	devices := s.list()
+	if len(devices) != 1 {
 		reply(conn, "FAIL", "more than one device/emulator")
 		return "", false
 	}
-	return s.Devices[0], true
+	return devices[0], true
 }
 
 func reply(w io.Writer, status, msg string) { fmt.Fprintf(w, "%s%04x%s", status, len(msg), msg) }

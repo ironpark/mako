@@ -248,10 +248,12 @@ also says when it waits on you.
 An Android device or emulator attached to one machine can be used from
 another, by adb and by agents: the machine it is attached to lends it,
 once its `config.json` shares adb devices (`"devices": {"share":
-["adb"]}`), and the other borrows it, with `mako borrow`, or for a session
-with `mako -device`. adb on the borrowing machine sees that one device, as
-if it were attached there. See [docs/devices.md](docs/devices.md) for how
-it works, what to know, and the kinds of device to come.
+["adb"]}`), and the other borrows it, with `mako borrow` or the window's
+devices menu, or for a session with `mako -device`. adb on the borrowing
+machine sees that one device, as if it were attached there, and its
+`adb forward` and `adb reverse` listen and reach there too. See
+[docs/devices.md](docs/devices.md) for how it works, what to know, and the
+kinds of device to come.
 
 ## Configuration
 

@@ -28,4 +28,35 @@ type Kind interface {
 	Check(ctx context.Context, dev *protocol.Device) []string
 	// Exclusive reports whether one node at a time borrows a device.
 	Exclusive() bool
+	// Lend lends dev on a borrowing node, which reaches the device's node
+	// through link, until the Lent is closed.
+	Lend(ctx context.Context, dev *protocol.Device, link Link) Lent
+}
+
+// Lent is a device lent on a borrowing node.
+type Lent interface {
+	// Serve serves one connection a program there made to the lease's
+	// port, until it ends.
+	Serve(ctx context.Context, conn io.ReadWriteCloser) error
+	// Close ends what the lending made, as ports forwarded.
+	Close()
+}
+
+// Link is a borrowing node's way to the device's node, under its claim.
+type Link interface {
+	// Dial opens a connection to the device, which its node serves as
+	// Kind.Serve does.
+	Dial(ctx context.Context) (io.ReadWriteCloser, error)
+	// Listen listens on a port of the device's node's loopback, for the
+	// device to reach the borrowing node through.
+	Listen(ctx context.Context) (Listener, error)
+}
+
+// Listener is a port of the device's node, listened on for a borrower.
+type Listener interface {
+	// Addr is where it listens on the device's node, as host:port.
+	Addr() string
+	// Accept waits for a connection to it.
+	Accept(ctx context.Context) (io.ReadWriteCloser, error)
+	Close() error
 }

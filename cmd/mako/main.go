@@ -350,17 +350,9 @@ func runAgent(ctx context.Context, c *client.Client, nodeID, project, target str
 		return err
 	}
 	cols, rows := client.WindowSize()
-	found, err := findDevices(ctx, c, devices)
-	if err != nil {
-		return err
-	}
-	refs := make([]string, 0, len(found))
-	for _, dev := range found {
-		refs = append(refs, dev.Ref())
-	}
 
 	info, err := c.Open(ctx, &protocol.OpenSession{
-		Devices: refs,
+		Devices: devices,
 		NodeId:  nodeID,
 		Agent:   agent,
 		Profile: profile,

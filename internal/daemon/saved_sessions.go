@@ -226,12 +226,18 @@ func (d *Daemon) attachSession(ctx context.Context, id string) (*session.Session
 // or asking its binary for help. Activation itself is serialized, so
 // simultaneous windows cannot launch a restored session twice; the later one
 // gets the session the first started. Failed starts retain the saved entry.
-func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.OpenSession) (*session.Session, error) {
+func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.OpenSession) (_ *session.Session, err error) {
 	// The request may be a saved entry's, which this must not change.
 	req = proto.CloneOf(req)
 	env := req.GetEnv()
 	if len(req.GetDevices()) > 0 {
-		lent, err := d.deviceEnv(ctx, req.GetDevices())
+		// The session holds its devices until it ends, or fails to start.
+		defer func() {
+			if err != nil {
+				d.releaseSession(id)
+			}
+		}()
+		lent, err := d.deviceEnv(ctx, id, req.GetDevices())
 		if err != nil {
 			return nil, err
 		}
@@ -328,7 +334,7 @@ func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.Open
 	d.sessions.add(s)
 	d.trackConversation(s)
 	d.log.Info("session started", "id", id, "agent", req.GetAgent(), "project", req.GetProject())
-	go func() { <-s.Done(); cleanup() }()
+	go func() { <-s.Done(); cleanup(); d.releaseSession(id) }()
 	return s, nil
 }
 

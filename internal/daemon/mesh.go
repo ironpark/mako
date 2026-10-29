@@ -395,6 +395,10 @@ func (n *notifier) fireAccess() { n.send(&protocol.Changed{Access: true}) }
 // workspace.
 func (n *notifier) fireWorkspace() { n.send(&protocol.Changed{Workspace: true}) }
 
+// fireDevices tells every watcher that a device lent or borrowed here
+// changed.
+func (n *notifier) fireDevices() { n.send(&protocol.Changed{Devices: true}) }
+
 // send gives every watcher c, merged into what it has not taken yet.
 func (n *notifier) send(c *protocol.Changed) {
 	n.mu.Lock()
@@ -407,6 +411,7 @@ func (n *notifier) send(c *protocol.Changed) {
 			next.Sessions = next.Sessions || pending.GetSessions()
 			next.Access = next.Access || pending.GetAccess()
 			next.Workspace = next.Workspace || pending.GetWorkspace()
+			next.Devices = next.Devices || pending.GetDevices()
 		default:
 		}
 		ch <- next

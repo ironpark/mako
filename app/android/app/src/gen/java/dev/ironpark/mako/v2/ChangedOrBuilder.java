@@ -41,4 +41,14 @@ public interface ChangedOrBuilder extends
    * @return The workspace.
    */
   boolean getWorkspace();
+
+  /**
+   * <pre>
+   * a device lent or borrowed here changed
+   * </pre>
+   *
+   * <code>bool devices = 5 [json_name = "devices"];</code>
+   * @return The devices.
+   */
+  boolean getDevices();
 }

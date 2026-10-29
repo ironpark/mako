@@ -29,7 +29,7 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 10
+const Revision = 11
 
 // RevisionTransfers is the first revision whose daemon moves files in
 // pieces (ReadFile.raw, WriteFile.offset) and opens tunnels.
@@ -47,6 +47,10 @@ const RevisionRoutes = 9
 // RevisionDevices is the first revision whose daemon lists the devices
 // attached to it, lends them, and borrows others' (docs/devices.md).
 const RevisionDevices = 10
+
+// RevisionDeviceListen is the first revision whose daemon listens on its
+// loopback for a device's borrower (device_listen), as adb reverse needs.
+const RevisionDeviceListen = 11
 
 // AgentStatus is what an agent's own hooks last said it is doing,
 // SessionInfo.Status.

@@ -314,6 +314,12 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 	case protocol.TypeDeviceConn:
 		return d.handleDeviceConn(ctx, stream, env)
 
+	case protocol.TypeDeviceListen:
+		return d.handleDeviceListen(ctx, stream, env)
+
+	case protocol.TypeDeviceAccept:
+		return d.handleDeviceAccept(ctx, stream, env)
+
 	case protocol.TypeGitStatus:
 		return d.handleGitStatus(ctx, stream, env)
 

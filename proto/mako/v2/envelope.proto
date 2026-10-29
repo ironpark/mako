@@ -108,6 +108,8 @@ message Envelope {
     Claim claim = 107;
     Claimed claimed = 108;
     DeviceConn device_conn = 109;
+    DeviceListen device_listen = 110;
+    DeviceAccept device_accept = 111;
   }
 }
 

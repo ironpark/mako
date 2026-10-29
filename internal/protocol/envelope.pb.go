@@ -100,6 +100,8 @@ type Envelope struct {
 	//	*Envelope_Claim
 	//	*Envelope_Claimed
 	//	*Envelope_DeviceConn
+	//	*Envelope_DeviceListen
+	//	*Envelope_DeviceAccept
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -725,6 +727,24 @@ func (x *Envelope) GetDeviceConn() *DeviceConn {
 	return nil
 }
 
+func (x *Envelope) GetDeviceListen() *DeviceListen {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_DeviceListen); ok {
+			return x.DeviceListen
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetDeviceAccept() *DeviceAccept {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_DeviceAccept); ok {
+			return x.DeviceAccept
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -994,6 +1014,14 @@ type Envelope_DeviceConn struct {
 	DeviceConn *DeviceConn `protobuf:"bytes,109,opt,name=device_conn,json=deviceConn,proto3,oneof"`
 }
 
+type Envelope_DeviceListen struct {
+	DeviceListen *DeviceListen `protobuf:"bytes,110,opt,name=device_listen,json=deviceListen,proto3,oneof"`
+}
+
+type Envelope_DeviceAccept struct {
+	DeviceAccept *DeviceAccept `protobuf:"bytes,111,opt,name=device_accept,json=deviceAccept,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -1122,6 +1150,10 @@ func (*Envelope_Claimed) isEnvelope_Body() {}
 
 func (*Envelope_DeviceConn) isEnvelope_Body() {}
 
+func (*Envelope_DeviceListen) isEnvelope_Body() {}
+
+func (*Envelope_DeviceAccept) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -1180,7 +1212,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\"\xf2\x18\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\"\xee\x19\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12&\n" +
 	"\x05hello\x18\n" +
@@ -1260,7 +1292,9 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\x05claim\x18k \x01(\v2\x0e.mako.v2.ClaimH\x00R\x05claim\x12,\n" +
 	"\aclaimed\x18l \x01(\v2\x10.mako.v2.ClaimedH\x00R\aclaimed\x126\n" +
 	"\vdevice_conn\x18m \x01(\v2\x13.mako.v2.DeviceConnH\x00R\n" +
-	"deviceConnB\x06\n" +
+	"deviceConn\x12<\n" +
+	"\rdevice_listen\x18n \x01(\v2\x15.mako.v2.DeviceListenH\x00R\fdeviceListen\x12<\n" +
+	"\rdevice_accept\x18o \x01(\v2\x15.mako.v2.DeviceAcceptH\x00R\fdeviceAcceptB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"5\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -1345,6 +1379,8 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*Claim)(nil),          // 62: mako.v2.Claim
 	(*Claimed)(nil),        // 63: mako.v2.Claimed
 	(*DeviceConn)(nil),     // 64: mako.v2.DeviceConn
+	(*DeviceListen)(nil),   // 65: mako.v2.DeviceListen
+	(*DeviceAccept)(nil),   // 66: mako.v2.DeviceAccept
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -1411,11 +1447,13 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	62, // 61: mako.v2.Envelope.claim:type_name -> mako.v2.Claim
 	63, // 62: mako.v2.Envelope.claimed:type_name -> mako.v2.Claimed
 	64, // 63: mako.v2.Envelope.device_conn:type_name -> mako.v2.DeviceConn
-	64, // [64:64] is the sub-list for method output_type
-	64, // [64:64] is the sub-list for method input_type
-	64, // [64:64] is the sub-list for extension type_name
-	64, // [64:64] is the sub-list for extension extendee
-	0,  // [0:64] is the sub-list for field type_name
+	65, // 64: mako.v2.Envelope.device_listen:type_name -> mako.v2.DeviceListen
+	66, // 65: mako.v2.Envelope.device_accept:type_name -> mako.v2.DeviceAccept
+	66, // [66:66] is the sub-list for method output_type
+	66, // [66:66] is the sub-list for method input_type
+	66, // [66:66] is the sub-list for extension type_name
+	66, // [66:66] is the sub-list for extension extendee
+	0,  // [0:66] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -1495,6 +1533,8 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_Claim)(nil),
 		(*Envelope_Claimed)(nil),
 		(*Envelope_DeviceConn)(nil),
+		(*Envelope_DeviceListen)(nil),
+		(*Envelope_DeviceAccept)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

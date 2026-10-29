@@ -47,12 +47,16 @@ message Devices {
 
 // Borrow asks node_id to borrow a device, for its own programs: the one
 // of kind and serial attached to device_node_id, which may be node_id
-// itself. A device already borrowed there answers its lease again.
+// itself, or with no serial the one device names, as node_id resolves it
+// among the devices it reaches: by its ref, "node/kind/serial", its
+// node's name and its serial, "node/serial", its serial, or its name. A
+// device already borrowed there answers its lease again.
 message Borrow {
   string node_id = 1;
   string device_node_id = 2;
   string kind = 3;
   string serial = 4;
+  string device = 5;
 }
 
 // Lease is a device a node borrows, and where its programs reach it.
@@ -64,14 +68,20 @@ message Lease {
   // env is what tells the kind's tools so, to set for a program.
   string addr = 4;
   map<string, string> env = 5;
-  // state is "held", or "reconnecting" while the device's node cannot be
-  // reached, or "returned" in GiveBack's answer.
+  // state is "held"; "detached" while the device is not attached to its
+  // node; "reconnecting" while its node cannot be reached; or "returned"
+  // once no one holds it.
   string state = 6;
   repeated string warnings = 7; // what may keep the tools from working
+  // Who holds it: the sessions of node_id started with it, and whether it
+  // was borrowed by hand. It is given back once none does.
+  repeated string sessions = 8;
+  bool borrowed = 9;
 }
 
-// GiveBack ends node_id's lease lease_id, or the lease of the device ref
-// names ("node/kind/serial").
+// GiveBack gives back what node_id borrowed by hand: lease lease_id, or
+// the lease of the device ref names, by its ref, serial or name. A lease a
+// session holds stays until the session ends.
 message GiveBack {
   string node_id = 1;
   string lease_id = 2;
@@ -103,7 +113,8 @@ message Claim {
   string holder_name = 6;
 }
 
-// Claimed answers Claim.
+// Claimed answers Claim, and after it, on the claim's stream, says the
+// device changed: its state, or "detached" when it is no longer attached.
 message Claimed {
   Device device = 1;
 }
@@ -115,4 +126,22 @@ message Claimed {
 message DeviceConn {
   string node_id = 1;
   string claim_id = 2;
+}
+
+// DeviceListen listens on a port of the device's node's loopback for a
+// borrower under claim claim_id, as adb reverse needs: the device reaches
+// the borrower through it. Tunneled answers with the address; the
+// listener lasts as long as the stream stays open.
+message DeviceListen {
+  string node_id = 1;
+  string claim_id = 2;
+}
+
+// DeviceAccept waits for a connection to the port at addr that a
+// DeviceListen of claim claim_id made. Once Tunneled answers, the stream
+// carries that connection's bytes, both ways.
+message DeviceAccept {
+  string node_id = 1;
+  string claim_id = 2;
+  string addr = 3;
 }

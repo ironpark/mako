@@ -148,6 +148,44 @@ public  final class Changed extends
     workspace_ = false;
   }
 
+  public static final int DEVICES_FIELD_NUMBER = 5;
+  private boolean devices_;
+  /**
+   * <pre>
+   * a device lent or borrowed here changed
+   * </pre>
+   *
+   * <code>bool devices = 5 [json_name = "devices"];</code>
+   * @return The devices.
+   */
+  @java.lang.Override
+  public boolean getDevices() {
+    return devices_;
+  }
+  /**
+   * <pre>
+   * a device lent or borrowed here changed
+   * </pre>
+   *
+   * <code>bool devices = 5 [json_name = "devices"];</code>
+   * @param value The devices to set.
+   */
+  private void setDevices(boolean value) {
+    
+    devices_ = value;
+  }
+  /**
+   * <pre>
+   * a device lent or borrowed here changed
+   * </pre>
+   *
+   * <code>bool devices = 5 [json_name = "devices"];</code>
+   */
+  private void clearDevices() {
+
+    devices_ = false;
+  }
+
   public static dev.ironpark.mako.v2.Changed parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -385,6 +423,46 @@ public  final class Changed extends
       return this;
     }
 
+    /**
+     * <pre>
+     * a device lent or borrowed here changed
+     * </pre>
+     *
+     * <code>bool devices = 5 [json_name = "devices"];</code>
+     * @return The devices.
+     */
+    @java.lang.Override
+    public boolean getDevices() {
+      return instance.getDevices();
+    }
+    /**
+     * <pre>
+     * a device lent or borrowed here changed
+     * </pre>
+     *
+     * <code>bool devices = 5 [json_name = "devices"];</code>
+     * @param value The devices to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDevices(boolean value) {
+      copyOnWrite();
+      instance.setDevices(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * a device lent or borrowed here changed
+     * </pre>
+     *
+     * <code>bool devices = 5 [json_name = "devices"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDevices() {
+      copyOnWrite();
+      instance.clearDevices();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Changed)
   }
   @java.lang.Override
@@ -405,10 +483,11 @@ public  final class Changed extends
             "sessions_",
             "access_",
             "workspace_",
+            "devices_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0007\u0002\u0007" +
-              "\u0003\u0007\u0004\u0007";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0007\u0002\u0007" +
+              "\u0003\u0007\u0004\u0007\u0005\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

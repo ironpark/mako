@@ -7,7 +7,8 @@ package dev.ironpark.mako.v2;
 
 /**
  * <pre>
- * Claimed answers Claim.
+ * Claimed answers Claim, and after it, on the claim's stream, says the
+ * device changed: its state, or "detached" when it is no longer attached.
  * </pre>
  *
  * Protobuf type {@code mako.v2.Claimed}
@@ -153,7 +154,8 @@ public  final class Claimed extends
 
   /**
    * <pre>
-   * Claimed answers Claim.
+   * Claimed answers Claim, and after it, on the claim's stream, says the
+   * device changed: its state, or "detached" when it is no longer attached.
    * </pre>
    *
    * Protobuf type {@code mako.v2.Claimed}

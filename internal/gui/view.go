@@ -562,6 +562,7 @@ func sidebarFooter(m *model) ggui.Widget {
 	})
 	return ggui.Box(ggui.Row(
 		ggui.Expanded(host),
+		devicesMenu(m),
 		tunnelsMenu(m),
 		iconButton("plus", T("New session"), func() { m.openNew("", "") }),
 		iconButton("settings", T("Settings"), func() { m.openSettings("") }),

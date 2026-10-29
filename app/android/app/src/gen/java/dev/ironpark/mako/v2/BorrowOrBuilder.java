@@ -57,4 +57,16 @@ public interface BorrowOrBuilder extends
    */
   com.google.protobuf.ByteString
       getSerialBytes();
+
+  /**
+   * <code>string device = 5 [json_name = "device"];</code>
+   * @return The device.
+   */
+  java.lang.String getDevice();
+  /**
+   * <code>string device = 5 [json_name = "device"];</code>
+   * @return The bytes for device.
+   */
+  com.google.protobuf.ByteString
+      getDeviceBytes();
 }

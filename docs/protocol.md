@@ -472,11 +472,13 @@ else on any, and opens one tunnel for each connection made to it.
 | Request | Payload | Reply | |
 |---|---|---|---|
 | `list_devices` | `ListDevices` | `devices` | The devices attached to the node, of every kind, shared or not, with the nodes borrowing each. With `mesh`, from a front-end, also those of every node the daemon reaches at revision 10 or later, asked at once; `errors` names those that did not answer. |
-| `borrow` | `Borrow` | `lease` | Has `node_id` borrow a device: `kind` and `serial` attached to `device_node_id`, which may be `node_id` itself. A device it borrows already answers its lease again. |
-| `give_back` | `GiveBack` | `lease` | Ends a lease, by `lease_id` or the device's `ref`; the lease's `state` is then `returned`. |
+| `borrow` | `Borrow` | `lease` | Has `node_id` borrow a device, held by hand: `kind` and `serial` attached to `device_node_id`, which may be `node_id` itself, or with no `serial` the one `device` names, which `node_id` resolves among the devices it reaches. A device it borrows already answers its lease again, held by hand too. |
+| `give_back` | `GiveBack` | `lease` | Gives back what was borrowed by hand, by `lease_id` or `ref` (the device's ref, serial or name). The lease ends, `state` `returned`, unless sessions hold it, which it is left to; one only sessions hold is refused. |
 | `list_leases` | `ListLeases` | `leases` | The devices `node_id` borrows. |
 | `claim` | `Claim` | `claimed` | Between daemons: holds a device for a borrower while the stream stays open, and 30 s after. |
 | `device_conn` | `DeviceConn` | `tunneled` | Between daemons: one connection to a claimed device; the stream then carries the kind's own bytes. |
+| `device_listen` | `DeviceListen` | `tunneled` | Between daemons, revision 11: listens on a port of the device's node's loopback for a claim's borrower, for as long as the stream stays open; `addr` is where. |
+| `device_accept` | `DeviceAccept` | `tunneled` | Between daemons, revision 11: waits for the next connection to the port at `addr`; the stream then carries it. |
 
 A device is named across the mesh by its ref, `node/kind/serial`. The only
 kind so far is `adb`.
@@ -485,19 +487,35 @@ A daemon borrowing a device sends `claim` to the device's node, with a
 `claim_id` of its own making, and keeps the stream open: the stream is the
 claim. The node refuses a kind its configuration does not share (its
 `devices.share`), a device not attached, and a device of an exclusive kind
-lent to another. When the stream ends the node keeps the claim for 30 s,
-and a `claim` with the same `claim_id` resumes it. The borrower then lends
-the device on a port of its own loopback (`Lease.addr`), with the
-environment its tools find it by (`Lease.env`), and sends each connection
-made to the port as a `device_conn` under the claim. After `tunneled` the
-stream carries the connection's bytes as a tunnel's does. For adb, those
-are adb's protocol between a client and its server, which the device's
-node filters to the device lent; see [devices.md](devices.md#android-through-adb).
-Both `claim` and `device_conn` are routed to `node_id` as an attach is.
+lent to another. It looks at the device every 5 s, and sends another
+`claimed` on the stream when its state changes, with `state` `detached`
+when it is no longer attached. When the stream ends the node keeps the
+claim for 30 s, and a `claim` with the same `claim_id` resumes it. The
+borrower then lends the device on a port of its own loopback
+(`Lease.addr`), with the environment its tools find it by (`Lease.env`),
+and sends each connection made to the port as a `device_conn` under the
+claim, unless its side of the kind answers the connection itself. After
+`tunneled` the stream carries the connection's bytes as a tunnel's does.
+For adb, those are adb's protocol between a client and its server, which
+the device's node filters to the device lent; see
+[devices.md](devices.md#android-through-adb).
 
-`OpenSession.devices` lists refs the session's node borrows before the
-session starts; the leases' environments are added to the session's, over
-`env`. Two devices whose environments set one variable apart, as two adb devices do, are refused.
+`device_listen` and `device_accept` let the device reach the borrower,
+which the device's node cannot open a stream to, as adb reverse needs: the
+borrower listens on the device's node with one, and waits on another for
+each connection made there, opening the next as one comes. A connection
+that comes with no borrower waiting waits for one, up to 16.
+
+Every one of these is routed to `node_id` as an attach is.
+
+A lease is held by hand, `borrowed`, and by the `sessions` of its node
+started with the device; it ends when none holds it. `OpenSession.devices`
+names devices, as `Borrow.device` does, that the session's node borrows
+for the session before it starts; the leases' environments are added to
+the session's, over `env`, and the session holds them until it ends. Two
+devices whose environments set one variable apart, as two adb devices do,
+are refused. `Changed.devices` tells a watching front-end that a lease or
+claim of its daemon changed.
 
 ### Git
 
@@ -757,7 +775,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 10) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 11) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end

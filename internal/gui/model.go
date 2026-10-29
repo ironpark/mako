@@ -147,8 +147,14 @@ type model struct {
 	// accessStale says the next poll asks for Access again: at first, and
 	// when the daemon says it changed.
 	accessStale atomic.Bool
-	Sessions    *ggui.StateValue[[]*protocol.SessionInfo]
-	Agents      *ggui.StateValue[[]string] // what this node can launch, as agent:profile targets
+	// Devices are the mesh's devices, and those the daemon borrows;
+	// devicesStale says the next poll asks for them again, and devicesAt
+	// is when it last did, on the poll's goroutine.
+	Devices      *ggui.StateValue[deviceList]
+	devicesStale atomic.Bool
+	devicesAt    time.Time
+	Sessions     *ggui.StateValue[[]*protocol.SessionInfo]
+	Agents       *ggui.StateValue[[]string] // what this node can launch, as agent:profile targets
 
 	Selected   *ggui.StateValue[string]      // the tab the current pane shows
 	Tabs       *ggui.StateValue[[]string]    // every pane's tabs, in order
@@ -341,6 +347,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Conn:           ggui.State(connState{}).WithEqual(deepEqual),
 		Nodes:          ggui.State([]*protocol.Node(nil)).WithEqual(protocol.Equal),
 		Access:         ggui.State((*protocol.AccessInfo)(nil)).WithEqual(func(a, b *protocol.AccessInfo) bool { return proto.Equal(a, b) }),
+		Devices:        ggui.State(deviceList{}).WithEqual(deepEqual[deviceList]),
 		AccessNote:     ggui.State(""),
 		AccessKey:      ggui.State(""),
 		asked:          map[string]ui.ToastID{},
@@ -452,6 +459,9 @@ func (m *model) watch(ctx context.Context) {
 				}
 				if ch.GetWorkspace() {
 					m.wsStale.Store(true)
+				}
+				if ch.GetDevices() {
+					m.devicesStale.Store(true)
 				}
 				m.watching.Store(true)
 				m.pollNow()
@@ -624,6 +634,7 @@ func (m *model) poll(ctx context.Context) {
 	}
 	self := c.Node()
 	self.LastSeen = nil
+	devices := m.fetchDevices(reqCtx, c, self)
 	printed := make(map[string]time.Time, len(sessions))
 	for i := range sessions {
 		if t := protocol.TimeOf(sessions[i].GetLastOutput()); !t.IsZero() {
@@ -638,6 +649,9 @@ func (m *model) poll(ctx context.Context) {
 		if fetchAccess {
 			m.Access.Set(access)
 			m.noteRequests(access)
+		}
+		if devices != nil {
+			m.Devices.Set(*devices)
 		}
 		// The sidebar keeps the folders it groups, so a folder outlives its
 		// last session: killing that session leaves the folder to start

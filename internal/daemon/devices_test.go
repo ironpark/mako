@@ -1,11 +1,19 @@
 package daemon
 
 import (
+	"bufio"
 	"context"
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/device"
 	"github.com/ironpark/mako/internal/device/adbfake"
 	"github.com/ironpark/mako/internal/protocol"
@@ -153,5 +161,195 @@ func TestANodeBorrowsItsOwnDevice(t *testing.T) {
 	}
 	if got, err := adbfake.Request(lease.GetAddr(), "host:devices"); err != nil || got != "OKAY000aS0\tdevice\n" {
 		t.Fatalf("devices: %q, %v", got, err)
+	}
+}
+
+// adbPort is the port at the end of an adb forward's answer.
+func adbPort(t *testing.T, answer string) string {
+	t.Helper()
+	i := strings.LastIndex(answer, "OKAYOKAY")
+	if i < 0 || len(answer) < i+12 {
+		t.Fatalf("no port in %q", answer)
+	}
+	return answer[i+12:]
+}
+
+// A borrower's adb forward listens on the borrower, and its reverse
+// reaches the borrower, through the device's node.
+func TestForwardsListenWhereTheBorrowerIs(t *testing.T) {
+	a := meshDaemon(t, "a")
+	b := meshDaemon(t, "b", p2pAddr(a))
+	letIn(t, b, a)
+	letIn(t, a, b)
+	srv := withADB(t, b, true, "S0", "S1")
+	c := dialDaemon(t, a)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	waitFor(t, "a linked to b", func() bool { n := nodeOf(ctx, t, c, b.cfg.NodeID); return n != nil && n.GetTrustsUs() })
+
+	lease, err := c.Borrow(ctx, &protocol.Borrow{Device: "b/S1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := lease.GetAddr()
+
+	// forward, asked as adb does: the transport first.
+	got, _ := adbfake.Request(addr, "host:tport:serial:S1", "host:forward:tcp:0;tcp:7")
+	port := adbPort(t, got)
+	conn, err := net.Dial("tcp", "127.0.0.1:"+port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintln(conn, "hi")
+	if line, err := bufio.NewReader(conn).ReadString('\n'); err != nil || line != "hi\n" {
+		t.Fatalf("through the forward: %q, %v", line, err)
+	}
+	conn.Close()
+	if got, _ := adbfake.Request(addr, "host:list-forward"); !strings.Contains(got, "S1 tcp:"+port+" tcp:7\n") {
+		t.Fatalf("forwards listed: %q", got)
+	}
+	if slices.ContainsFunc(srv.Requests(), func(r string) bool { return strings.Contains(r, "forward:") }) {
+		t.Fatal("the forward was made on the device's node")
+	}
+	if got, _ := adbfake.Request(addr, "host:killforward-all"); got != "OKAYOKAY" {
+		t.Fatalf("killforward-all: %q", got)
+	}
+	if conn, err := net.Dial("tcp", "127.0.0.1:"+port); err == nil {
+		conn.Close()
+		t.Fatal("the forward still listens")
+	}
+
+	// reverse: the device reaches a server of the borrower's.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			line, _ := bufio.NewReader(conn).ReadString('\n')
+			fmt.Fprint(conn, "pong:"+line)
+			conn.Close()
+		}
+	}()
+	here := ln.Addr().(*net.TCPAddr).Port
+	got, _ = adbfake.Request(addr, "host:transport:S1", fmt.Sprintf("reverse:forward:tcp:9998;tcp:%d", here))
+	if got != "OKAYOKAYOKAY00049998" {
+		t.Fatalf("reverse: %q", got)
+	}
+	select {
+	case line := <-srv.Reversed():
+		if line != "pong:ping\n" {
+			t.Fatalf("through the reverse: %q", line)
+		}
+	case <-ctx.Done():
+		t.Fatal("the reverse reached nothing")
+	}
+}
+
+// A lease follows its device: detached while it is not attached to its
+// node, held again once it is.
+func TestALeaseFollowsItsDevice(t *testing.T) {
+	every := deviceWatchEvery
+	deviceWatchEvery = 20 * time.Millisecond
+	t.Cleanup(func() { deviceWatchEvery = every })
+	a := meshDaemon(t, "a")
+	b := meshDaemon(t, "b", p2pAddr(a))
+	letIn(t, b, a)
+	letIn(t, a, b)
+	srv := withADB(t, b, true, "S0", "S1")
+	c := dialDaemon(t, a)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	waitFor(t, "a linked to b", func() bool { n := nodeOf(ctx, t, c, b.cfg.NodeID); return n != nil && n.GetTrustsUs() })
+	if _, err := c.Borrow(ctx, &protocol.Borrow{Device: "S1"}); err != nil {
+		t.Fatal(err)
+	}
+	state := func() string {
+		l, err := c.Leases(ctx, &protocol.ListLeases{})
+		if err != nil || len(l.GetLeases()) != 1 {
+			return ""
+		}
+		return l.GetLeases()[0].GetState()
+	}
+	srv.SetDevices("S0")
+	waitFor(t, "the lease is not detached", func() bool { return state() == protocol.LeaseDetached })
+	srv.SetDevices("S0", "S1")
+	waitFor(t, "the lease is not held again", func() bool { return state() == protocol.LeaseHeld })
+}
+
+// A session holds the devices it started with until it ends; giving a
+// device back by hand leaves it to the session.
+func TestSessionsHoldTheirDevices(t *testing.T) {
+	a := meshDaemon(t, "a")
+	withADB(t, a, true, "S0", "S1")
+	c := dialDaemon(t, a)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	env, err := a.deviceEnv(ctx, "s1", []string{"S1"})
+	if err != nil || env["ANDROID_SERIAL"] != "S1" {
+		t.Fatalf("env %v, %v", env, err)
+	}
+	if _, err := a.deviceEnv(ctx, "s2", []string{"S0", "S1"}); err == nil {
+		t.Fatal("a session took two adb devices")
+	}
+	a.releaseSession("s2")
+	if _, err := c.GiveBack(ctx, &protocol.GiveBack{Ref: "S1"}); err == nil {
+		t.Fatal("gave back by hand what only a session holds")
+	}
+	if _, err := c.Borrow(ctx, &protocol.Borrow{Device: "S1"}); err != nil {
+		t.Fatal(err)
+	}
+	back, err := c.GiveBack(ctx, &protocol.GiveBack{Ref: "S1"})
+	if err != nil || back.GetState() != protocol.LeaseHeld || !slices.Equal(back.GetSessions(), []string{"s1"}) {
+		t.Fatalf("given back as %v, %v", back, err)
+	}
+	a.releaseSession("s1")
+	if l, _ := c.Leases(ctx, &protocol.ListLeases{}); len(l.GetLeases()) != 0 {
+		t.Fatalf("still borrowed: %v", l)
+	}
+}
+
+// A session started with a device has its environment, and gives the
+// device back as it ends.
+func TestASessionStartsWithItsDevice(t *testing.T) {
+	dir, project := t.TempDir(), t.TempDir()
+	cfg := &config.Config{NodeID: "node", Name: "here", Agents: map[string]agentspec.Agent{
+		"test": {Command: []string{"/bin/sh"}},
+	}, Devices: config.Devices{Share: []string{protocol.DeviceADB}}}
+	d := New(cfg, nil)
+	d.mcp = nil
+	if err := d.loadSessions(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(d.sessions.closeAll)
+	withADB(t, d, true, "S1")
+
+	s, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "test", Project: project, Devices: []string{"S1"},
+		Args: []string{"-c", `echo "$ANDROID_SERIAL $ADB_SERVER_SOCKET" > lent; exec cat`}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	leases := d.leases.list()
+	if len(leases) != 1 || !slices.Equal(leases[0].GetSessions(), []string{s.ID()}) || leases[0].GetBorrowed() {
+		t.Fatalf("leases %v", leases)
+	}
+	want := "S1 tcp:" + leases[0].GetAddr() + "\n"
+	waitFor(t, "the session has no device in its environment", func() bool {
+		got, _ := os.ReadFile(filepath.Join(project, "lent"))
+		return string(got) == want
+	})
+	if err := d.closeSession(s.ID()); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the session's device was not given back", func() bool { return len(d.leases.list()) == 0 })
+
+	if _, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "test", Project: project, Devices: []string{"S9"}}); err == nil {
+		t.Fatal("a session started with a device not attached")
 	}
 }

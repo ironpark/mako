@@ -113,8 +113,9 @@ java.lang.String defaultValue);
 
   /**
    * <pre>
-   * state is "held", or "reconnecting" while the device's node cannot be
-   * reached, or "returned" in GiveBack's answer.
+   * state is "held"; "detached" while the device is not attached to its
+   * node; "reconnecting" while its node cannot be reached; or "returned"
+   * once no one holds it.
    * </pre>
    *
    * <code>string state = 6 [json_name = "state"];</code>
@@ -123,8 +124,9 @@ java.lang.String defaultValue);
   java.lang.String getState();
   /**
    * <pre>
-   * state is "held", or "reconnecting" while the device's node cannot be
-   * reached, or "returned" in GiveBack's answer.
+   * state is "held"; "detached" while the device is not attached to its
+   * node; "reconnecting" while its node cannot be reached; or "returned"
+   * once no one holds it.
    * </pre>
    *
    * <code>string state = 6 [json_name = "state"];</code>
@@ -173,4 +175,55 @@ java.lang.String defaultValue);
    */
   com.google.protobuf.ByteString
       getWarningsBytes(int index);
+
+  /**
+   * <pre>
+   * Who holds it: the sessions of node_id started with it, and whether it
+   * was borrowed by hand. It is given back once none does.
+   * </pre>
+   *
+   * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+   * @return A list containing the sessions.
+   */
+  java.util.List<java.lang.String>
+      getSessionsList();
+  /**
+   * <pre>
+   * Who holds it: the sessions of node_id started with it, and whether it
+   * was borrowed by hand. It is given back once none does.
+   * </pre>
+   *
+   * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+   * @return The count of sessions.
+   */
+  int getSessionsCount();
+  /**
+   * <pre>
+   * Who holds it: the sessions of node_id started with it, and whether it
+   * was borrowed by hand. It is given back once none does.
+   * </pre>
+   *
+   * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+   * @param index The index of the element to return.
+   * @return The sessions at the given index.
+   */
+  java.lang.String getSessions(int index);
+  /**
+   * <pre>
+   * Who holds it: the sessions of node_id started with it, and whether it
+   * was borrowed by hand. It is given back once none does.
+   * </pre>
+   *
+   * <code>repeated string sessions = 8 [json_name = "sessions"];</code>
+   * @param index The index of the element to return.
+   * @return The sessions at the given index.
+   */
+  com.google.protobuf.ByteString
+      getSessionsBytes(int index);
+
+  /**
+   * <code>bool borrowed = 9 [json_name = "borrowed"];</code>
+   * @return The borrowed.
+   */
+  boolean getBorrowed();
 }
