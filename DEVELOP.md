@@ -75,6 +75,7 @@ take it out before you commit.
     internal/zed         Zed extensions: the store, manifests and languages
     internal/zedhost     Zed extensions' own wasm components, under wasmtime's C API
     internal/mcp         MCP servers for the agents, from extensions or the config
+    internal/device      the kinds of device a node lends: adb's proxy (docs/devices.md)
     internal/config      the node's identity and configuration
 
 ## Architecture

@@ -81,4 +81,28 @@ public interface AccessKeyOrBuilder extends
    */
   com.google.protobuf.ByteString
       getLineBytes();
+
+  /**
+   * <pre>
+   * source is the file outside mako's own that lets the key in, which
+   * mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+   * Empty for a key of mako's own file.
+   * </pre>
+   *
+   * <code>string source = 5 [json_name = "source"];</code>
+   * @return The source.
+   */
+  java.lang.String getSource();
+  /**
+   * <pre>
+   * source is the file outside mako's own that lets the key in, which
+   * mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+   * Empty for a key of mako's own file.
+   * </pre>
+   *
+   * <code>string source = 5 [json_name = "source"];</code>
+   * @return The bytes for source.
+   */
+  com.google.protobuf.ByteString
+      getSourceBytes();
 }

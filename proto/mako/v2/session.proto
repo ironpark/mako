@@ -29,6 +29,10 @@ message OpenSession {
   uint32 cols = 7;
   uint32 rows = 8;
   Worktree worktree = 9; // start in a new worktree of project's repository
+  // devices are devices the session's node borrows for it, as
+  // "node/kind/serial": the session starts with the environment that
+  // lends each to its programs, borrowed again when it starts again.
+  repeated string devices = 10;
 }
 
 // Worktree is a git worktree made for one session.

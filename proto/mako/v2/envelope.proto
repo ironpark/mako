@@ -9,6 +9,7 @@ syntax = "proto3";
 package mako.v2;
 
 import "mako/v2/chat.proto";
+import "mako/v2/devices.proto";
 import "mako/v2/files.proto";
 import "mako/v2/git.proto";
 import "mako/v2/forge.proto";
@@ -95,6 +96,18 @@ message Envelope {
     ForgeView forge_view = 82;
     ForgeDetail forge_detail = 83;
     ForgeRun forge_run = 84;
+
+    // Devices: those attached to a node, and those a node borrows.
+    ListDevices list_devices = 100;
+    Devices devices = 101;
+    Borrow borrow = 102;
+    Lease lease = 103;
+    GiveBack give_back = 104;
+    ListLeases list_leases = 105;
+    Leases leases = 106;
+    Claim claim = 107;
+    Claimed claimed = 108;
+    DeviceConn device_conn = 109;
   }
 }
 

@@ -23,6 +23,7 @@ public  final class AccessKey extends
     type_ = "";
     comment_ = "";
     line_ = "";
+    source_ = "";
   }
   public static final int FINGERPRINT_FIELD_NUMBER = 1;
   private java.lang.String fingerprint_;
@@ -269,6 +270,83 @@ public  final class AccessKey extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     line_ = value.toStringUtf8();
+
+  }
+
+  public static final int SOURCE_FIELD_NUMBER = 5;
+  private java.lang.String source_;
+  /**
+   * <pre>
+   * source is the file outside mako's own that lets the key in, which
+   * mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+   * Empty for a key of mako's own file.
+   * </pre>
+   *
+   * <code>string source = 5 [json_name = "source"];</code>
+   * @return The source.
+   */
+  @java.lang.Override
+  public java.lang.String getSource() {
+    return source_;
+  }
+  /**
+   * <pre>
+   * source is the file outside mako's own that lets the key in, which
+   * mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+   * Empty for a key of mako's own file.
+   * </pre>
+   *
+   * <code>string source = 5 [json_name = "source"];</code>
+   * @return The bytes for source.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getSourceBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(source_);
+  }
+  /**
+   * <pre>
+   * source is the file outside mako's own that lets the key in, which
+   * mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+   * Empty for a key of mako's own file.
+   * </pre>
+   *
+   * <code>string source = 5 [json_name = "source"];</code>
+   * @param value The source to set.
+   */
+  private void setSource(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    source_ = value;
+  }
+  /**
+   * <pre>
+   * source is the file outside mako's own that lets the key in, which
+   * mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+   * Empty for a key of mako's own file.
+   * </pre>
+   *
+   * <code>string source = 5 [json_name = "source"];</code>
+   */
+  private void clearSource() {
+
+    source_ = getDefaultInstance().getSource();
+  }
+  /**
+   * <pre>
+   * source is the file outside mako's own that lets the key in, which
+   * mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+   * Empty for a key of mako's own file.
+   * </pre>
+   *
+   * <code>string source = 5 [json_name = "source"];</code>
+   * @param value The bytes for source to set.
+   */
+  private void setSourceBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    source_ = value.toStringUtf8();
 
   }
 
@@ -629,6 +707,85 @@ public  final class AccessKey extends
       return this;
     }
 
+    /**
+     * <pre>
+     * source is the file outside mako's own that lets the key in, which
+     * mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+     * Empty for a key of mako's own file.
+     * </pre>
+     *
+     * <code>string source = 5 [json_name = "source"];</code>
+     * @return The source.
+     */
+    @java.lang.Override
+    public java.lang.String getSource() {
+      return instance.getSource();
+    }
+    /**
+     * <pre>
+     * source is the file outside mako's own that lets the key in, which
+     * mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+     * Empty for a key of mako's own file.
+     * </pre>
+     *
+     * <code>string source = 5 [json_name = "source"];</code>
+     * @return The bytes for source.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getSourceBytes() {
+      return instance.getSourceBytes();
+    }
+    /**
+     * <pre>
+     * source is the file outside mako's own that lets the key in, which
+     * mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+     * Empty for a key of mako's own file.
+     * </pre>
+     *
+     * <code>string source = 5 [json_name = "source"];</code>
+     * @param value The source to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSource(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setSource(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * source is the file outside mako's own that lets the key in, which
+     * mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+     * Empty for a key of mako's own file.
+     * </pre>
+     *
+     * <code>string source = 5 [json_name = "source"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSource() {
+      copyOnWrite();
+      instance.clearSource();
+      return this;
+    }
+    /**
+     * <pre>
+     * source is the file outside mako's own that lets the key in, which
+     * mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+     * Empty for a key of mako's own file.
+     * </pre>
+     *
+     * <code>string source = 5 [json_name = "source"];</code>
+     * @param value The bytes for source to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSourceBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setSourceBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.AccessKey)
   }
   @java.lang.Override
@@ -649,10 +806,11 @@ public  final class AccessKey extends
             "type_",
             "comment_",
             "line_",
+            "source_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

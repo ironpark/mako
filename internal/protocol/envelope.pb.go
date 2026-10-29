@@ -90,6 +90,16 @@ type Envelope struct {
 	//	*Envelope_ForgeView
 	//	*Envelope_ForgeDetail
 	//	*Envelope_ForgeRun
+	//	*Envelope_ListDevices
+	//	*Envelope_Devices
+	//	*Envelope_Borrow
+	//	*Envelope_Lease
+	//	*Envelope_GiveBack
+	//	*Envelope_ListLeases
+	//	*Envelope_Leases
+	//	*Envelope_Claim
+	//	*Envelope_Claimed
+	//	*Envelope_DeviceConn
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -625,6 +635,96 @@ func (x *Envelope) GetForgeRun() *ForgeRun {
 	return nil
 }
 
+func (x *Envelope) GetListDevices() *ListDevices {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_ListDevices); ok {
+			return x.ListDevices
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetDevices() *Devices {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Devices); ok {
+			return x.Devices
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetBorrow() *Borrow {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Borrow); ok {
+			return x.Borrow
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetLease() *Lease {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Lease); ok {
+			return x.Lease
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetGiveBack() *GiveBack {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_GiveBack); ok {
+			return x.GiveBack
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetListLeases() *ListLeases {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_ListLeases); ok {
+			return x.ListLeases
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetLeases() *Leases {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Leases); ok {
+			return x.Leases
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetClaim() *Claim {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Claim); ok {
+			return x.Claim
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetClaimed() *Claimed {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Claimed); ok {
+			return x.Claimed
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetDeviceConn() *DeviceConn {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_DeviceConn); ok {
+			return x.DeviceConn
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -853,6 +953,47 @@ type Envelope_ForgeRun struct {
 	ForgeRun *ForgeRun `protobuf:"bytes,84,opt,name=forge_run,json=forgeRun,proto3,oneof"`
 }
 
+type Envelope_ListDevices struct {
+	// Devices: those attached to a node, and those a node borrows.
+	ListDevices *ListDevices `protobuf:"bytes,100,opt,name=list_devices,json=listDevices,proto3,oneof"`
+}
+
+type Envelope_Devices struct {
+	Devices *Devices `protobuf:"bytes,101,opt,name=devices,proto3,oneof"`
+}
+
+type Envelope_Borrow struct {
+	Borrow *Borrow `protobuf:"bytes,102,opt,name=borrow,proto3,oneof"`
+}
+
+type Envelope_Lease struct {
+	Lease *Lease `protobuf:"bytes,103,opt,name=lease,proto3,oneof"`
+}
+
+type Envelope_GiveBack struct {
+	GiveBack *GiveBack `protobuf:"bytes,104,opt,name=give_back,json=giveBack,proto3,oneof"`
+}
+
+type Envelope_ListLeases struct {
+	ListLeases *ListLeases `protobuf:"bytes,105,opt,name=list_leases,json=listLeases,proto3,oneof"`
+}
+
+type Envelope_Leases struct {
+	Leases *Leases `protobuf:"bytes,106,opt,name=leases,proto3,oneof"`
+}
+
+type Envelope_Claim struct {
+	Claim *Claim `protobuf:"bytes,107,opt,name=claim,proto3,oneof"`
+}
+
+type Envelope_Claimed struct {
+	Claimed *Claimed `protobuf:"bytes,108,opt,name=claimed,proto3,oneof"`
+}
+
+type Envelope_DeviceConn struct {
+	DeviceConn *DeviceConn `protobuf:"bytes,109,opt,name=device_conn,json=deviceConn,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -961,6 +1102,26 @@ func (*Envelope_ForgeDetail) isEnvelope_Body() {}
 
 func (*Envelope_ForgeRun) isEnvelope_Body() {}
 
+func (*Envelope_ListDevices) isEnvelope_Body() {}
+
+func (*Envelope_Devices) isEnvelope_Body() {}
+
+func (*Envelope_Borrow) isEnvelope_Body() {}
+
+func (*Envelope_Lease) isEnvelope_Body() {}
+
+func (*Envelope_GiveBack) isEnvelope_Body() {}
+
+func (*Envelope_ListLeases) isEnvelope_Body() {}
+
+func (*Envelope_Leases) isEnvelope_Body() {}
+
+func (*Envelope_Claim) isEnvelope_Body() {}
+
+func (*Envelope_Claimed) isEnvelope_Body() {}
+
+func (*Envelope_DeviceConn) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -1019,7 +1180,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\"\x93\x15\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\"\xf2\x18\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12&\n" +
 	"\x05hello\x18\n" +
@@ -1087,7 +1248,19 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
 	"forge_view\x18R \x01(\v2\x12.mako.v2.ForgeViewH\x00R\tforgeView\x129\n" +
 	"\fforge_detail\x18S \x01(\v2\x14.mako.v2.ForgeDetailH\x00R\vforgeDetail\x120\n" +
-	"\tforge_run\x18T \x01(\v2\x11.mako.v2.ForgeRunH\x00R\bforgeRunB\x06\n" +
+	"\tforge_run\x18T \x01(\v2\x11.mako.v2.ForgeRunH\x00R\bforgeRun\x129\n" +
+	"\flist_devices\x18d \x01(\v2\x14.mako.v2.ListDevicesH\x00R\vlistDevices\x12,\n" +
+	"\adevices\x18e \x01(\v2\x10.mako.v2.DevicesH\x00R\adevices\x12)\n" +
+	"\x06borrow\x18f \x01(\v2\x0f.mako.v2.BorrowH\x00R\x06borrow\x12&\n" +
+	"\x05lease\x18g \x01(\v2\x0e.mako.v2.LeaseH\x00R\x05lease\x120\n" +
+	"\tgive_back\x18h \x01(\v2\x11.mako.v2.GiveBackH\x00R\bgiveBack\x126\n" +
+	"\vlist_leases\x18i \x01(\v2\x13.mako.v2.ListLeasesH\x00R\n" +
+	"listLeases\x12)\n" +
+	"\x06leases\x18j \x01(\v2\x0f.mako.v2.LeasesH\x00R\x06leases\x12&\n" +
+	"\x05claim\x18k \x01(\v2\x0e.mako.v2.ClaimH\x00R\x05claim\x12,\n" +
+	"\aclaimed\x18l \x01(\v2\x10.mako.v2.ClaimedH\x00R\aclaimed\x126\n" +
+	"\vdevice_conn\x18m \x01(\v2\x13.mako.v2.DeviceConnH\x00R\n" +
+	"deviceConnB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"5\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -1162,6 +1335,16 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*ForgeView)(nil),      // 52: mako.v2.ForgeView
 	(*ForgeDetail)(nil),    // 53: mako.v2.ForgeDetail
 	(*ForgeRun)(nil),       // 54: mako.v2.ForgeRun
+	(*ListDevices)(nil),    // 55: mako.v2.ListDevices
+	(*Devices)(nil),        // 56: mako.v2.Devices
+	(*Borrow)(nil),         // 57: mako.v2.Borrow
+	(*Lease)(nil),          // 58: mako.v2.Lease
+	(*GiveBack)(nil),       // 59: mako.v2.GiveBack
+	(*ListLeases)(nil),     // 60: mako.v2.ListLeases
+	(*Leases)(nil),         // 61: mako.v2.Leases
+	(*Claim)(nil),          // 62: mako.v2.Claim
+	(*Claimed)(nil),        // 63: mako.v2.Claimed
+	(*DeviceConn)(nil),     // 64: mako.v2.DeviceConn
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -1218,11 +1401,21 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	52, // 51: mako.v2.Envelope.forge_view:type_name -> mako.v2.ForgeView
 	53, // 52: mako.v2.Envelope.forge_detail:type_name -> mako.v2.ForgeDetail
 	54, // 53: mako.v2.Envelope.forge_run:type_name -> mako.v2.ForgeRun
-	54, // [54:54] is the sub-list for method output_type
-	54, // [54:54] is the sub-list for method input_type
-	54, // [54:54] is the sub-list for extension type_name
-	54, // [54:54] is the sub-list for extension extendee
-	0,  // [0:54] is the sub-list for field type_name
+	55, // 54: mako.v2.Envelope.list_devices:type_name -> mako.v2.ListDevices
+	56, // 55: mako.v2.Envelope.devices:type_name -> mako.v2.Devices
+	57, // 56: mako.v2.Envelope.borrow:type_name -> mako.v2.Borrow
+	58, // 57: mako.v2.Envelope.lease:type_name -> mako.v2.Lease
+	59, // 58: mako.v2.Envelope.give_back:type_name -> mako.v2.GiveBack
+	60, // 59: mako.v2.Envelope.list_leases:type_name -> mako.v2.ListLeases
+	61, // 60: mako.v2.Envelope.leases:type_name -> mako.v2.Leases
+	62, // 61: mako.v2.Envelope.claim:type_name -> mako.v2.Claim
+	63, // 62: mako.v2.Envelope.claimed:type_name -> mako.v2.Claimed
+	64, // 63: mako.v2.Envelope.device_conn:type_name -> mako.v2.DeviceConn
+	64, // [64:64] is the sub-list for method output_type
+	64, // [64:64] is the sub-list for method input_type
+	64, // [64:64] is the sub-list for extension type_name
+	64, // [64:64] is the sub-list for extension extendee
+	0,  // [0:64] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -1231,6 +1424,7 @@ func file_mako_v2_envelope_proto_init() {
 		return
 	}
 	file_mako_v2_chat_proto_init()
+	file_mako_v2_devices_proto_init()
 	file_mako_v2_files_proto_init()
 	file_mako_v2_git_proto_init()
 	file_mako_v2_forge_proto_init()
@@ -1291,6 +1485,16 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_ForgeView)(nil),
 		(*Envelope_ForgeDetail)(nil),
 		(*Envelope_ForgeRun)(nil),
+		(*Envelope_ListDevices)(nil),
+		(*Envelope_Devices)(nil),
+		(*Envelope_Borrow)(nil),
+		(*Envelope_Lease)(nil),
+		(*Envelope_GiveBack)(nil),
+		(*Envelope_ListLeases)(nil),
+		(*Envelope_Leases)(nil),
+		(*Envelope_Claim)(nil),
+		(*Envelope_Claimed)(nil),
+		(*Envelope_DeviceConn)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

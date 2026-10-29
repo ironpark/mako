@@ -165,4 +165,53 @@ java.lang.String defaultValue);
    * @return The worktree.
    */
   dev.ironpark.mako.v2.Worktree getWorktree();
+
+  /**
+   * <pre>
+   * devices are devices the session's node borrows for it, as
+   * "node/kind/serial": the session starts with the environment that
+   * lends each to its programs, borrowed again when it starts again.
+   * </pre>
+   *
+   * <code>repeated string devices = 10 [json_name = "devices"];</code>
+   * @return A list containing the devices.
+   */
+  java.util.List<java.lang.String>
+      getDevicesList();
+  /**
+   * <pre>
+   * devices are devices the session's node borrows for it, as
+   * "node/kind/serial": the session starts with the environment that
+   * lends each to its programs, borrowed again when it starts again.
+   * </pre>
+   *
+   * <code>repeated string devices = 10 [json_name = "devices"];</code>
+   * @return The count of devices.
+   */
+  int getDevicesCount();
+  /**
+   * <pre>
+   * devices are devices the session's node borrows for it, as
+   * "node/kind/serial": the session starts with the environment that
+   * lends each to its programs, borrowed again when it starts again.
+   * </pre>
+   *
+   * <code>repeated string devices = 10 [json_name = "devices"];</code>
+   * @param index The index of the element to return.
+   * @return The devices at the given index.
+   */
+  java.lang.String getDevices(int index);
+  /**
+   * <pre>
+   * devices are devices the session's node borrows for it, as
+   * "node/kind/serial": the session starts with the environment that
+   * lends each to its programs, borrowed again when it starts again.
+   * </pre>
+   *
+   * <code>repeated string devices = 10 [json_name = "devices"];</code>
+   * @param index The index of the element to return.
+   * @return The devices at the given index.
+   */
+  com.google.protobuf.ByteString
+      getDevicesBytes(int index);
 }

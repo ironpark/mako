@@ -32,6 +32,7 @@ public  final class Node extends
     multiaddrs_ = emptyProtobufList();
     key_ = "";
     owner_ = "";
+    via_ = "";
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -1089,6 +1090,103 @@ public  final class Node extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     owner_ = value.toStringUtf8();
+
+  }
+
+  public static final int HOPS_FIELD_NUMBER = 18;
+  private int hops_;
+  /**
+   * <pre>
+   * How the daemon answering reaches the node, when it can: hops is how
+   * many daemons a request goes through to it, 1 when the node lets the
+   * daemon in and more through nodes that do, each letting in the one
+   * before; via is the node ID of the peer the request goes to first,
+   * when hops is more than 1. 0 and empty for a node it cannot reach.
+   * </pre>
+   *
+   * <code>uint32 hops = 18 [json_name = "hops"];</code>
+   * @return The hops.
+   */
+  @java.lang.Override
+  public int getHops() {
+    return hops_;
+  }
+  /**
+   * <pre>
+   * How the daemon answering reaches the node, when it can: hops is how
+   * many daemons a request goes through to it, 1 when the node lets the
+   * daemon in and more through nodes that do, each letting in the one
+   * before; via is the node ID of the peer the request goes to first,
+   * when hops is more than 1. 0 and empty for a node it cannot reach.
+   * </pre>
+   *
+   * <code>uint32 hops = 18 [json_name = "hops"];</code>
+   * @param value The hops to set.
+   */
+  private void setHops(int value) {
+    
+    hops_ = value;
+  }
+  /**
+   * <pre>
+   * How the daemon answering reaches the node, when it can: hops is how
+   * many daemons a request goes through to it, 1 when the node lets the
+   * daemon in and more through nodes that do, each letting in the one
+   * before; via is the node ID of the peer the request goes to first,
+   * when hops is more than 1. 0 and empty for a node it cannot reach.
+   * </pre>
+   *
+   * <code>uint32 hops = 18 [json_name = "hops"];</code>
+   */
+  private void clearHops() {
+
+    hops_ = 0;
+  }
+
+  public static final int VIA_FIELD_NUMBER = 19;
+  private java.lang.String via_;
+  /**
+   * <code>string via = 19 [json_name = "via"];</code>
+   * @return The via.
+   */
+  @java.lang.Override
+  public java.lang.String getVia() {
+    return via_;
+  }
+  /**
+   * <code>string via = 19 [json_name = "via"];</code>
+   * @return The bytes for via.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getViaBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(via_);
+  }
+  /**
+   * <code>string via = 19 [json_name = "via"];</code>
+   * @param value The via to set.
+   */
+  private void setVia(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    via_ = value;
+  }
+  /**
+   * <code>string via = 19 [json_name = "via"];</code>
+   */
+  private void clearVia() {
+
+    via_ = getDefaultInstance().getVia();
+  }
+  /**
+   * <code>string via = 19 [json_name = "via"];</code>
+   * @param value The bytes for via to set.
+   */
+  private void setViaBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    via_ = value.toStringUtf8();
 
   }
 
@@ -2287,6 +2385,107 @@ public  final class Node extends
       return this;
     }
 
+    /**
+     * <pre>
+     * How the daemon answering reaches the node, when it can: hops is how
+     * many daemons a request goes through to it, 1 when the node lets the
+     * daemon in and more through nodes that do, each letting in the one
+     * before; via is the node ID of the peer the request goes to first,
+     * when hops is more than 1. 0 and empty for a node it cannot reach.
+     * </pre>
+     *
+     * <code>uint32 hops = 18 [json_name = "hops"];</code>
+     * @return The hops.
+     */
+    @java.lang.Override
+    public int getHops() {
+      return instance.getHops();
+    }
+    /**
+     * <pre>
+     * How the daemon answering reaches the node, when it can: hops is how
+     * many daemons a request goes through to it, 1 when the node lets the
+     * daemon in and more through nodes that do, each letting in the one
+     * before; via is the node ID of the peer the request goes to first,
+     * when hops is more than 1. 0 and empty for a node it cannot reach.
+     * </pre>
+     *
+     * <code>uint32 hops = 18 [json_name = "hops"];</code>
+     * @param value The hops to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHops(int value) {
+      copyOnWrite();
+      instance.setHops(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * How the daemon answering reaches the node, when it can: hops is how
+     * many daemons a request goes through to it, 1 when the node lets the
+     * daemon in and more through nodes that do, each letting in the one
+     * before; via is the node ID of the peer the request goes to first,
+     * when hops is more than 1. 0 and empty for a node it cannot reach.
+     * </pre>
+     *
+     * <code>uint32 hops = 18 [json_name = "hops"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearHops() {
+      copyOnWrite();
+      instance.clearHops();
+      return this;
+    }
+
+    /**
+     * <code>string via = 19 [json_name = "via"];</code>
+     * @return The via.
+     */
+    @java.lang.Override
+    public java.lang.String getVia() {
+      return instance.getVia();
+    }
+    /**
+     * <code>string via = 19 [json_name = "via"];</code>
+     * @return The bytes for via.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getViaBytes() {
+      return instance.getViaBytes();
+    }
+    /**
+     * <code>string via = 19 [json_name = "via"];</code>
+     * @param value The via to set.
+     * @return This builder for chaining.
+     */
+    public Builder setVia(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setVia(value);
+      return this;
+    }
+    /**
+     * <code>string via = 19 [json_name = "via"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearVia() {
+      copyOnWrite();
+      instance.clearVia();
+      return this;
+    }
+    /**
+     * <code>string via = 19 [json_name = "via"];</code>
+     * @param value The bytes for via to set.
+     * @return This builder for chaining.
+     */
+    public Builder setViaBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setViaBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Node)
   }
   @java.lang.Override
@@ -2322,12 +2521,14 @@ public  final class Node extends
             "trustsUs_",
             "key_",
             "owner_",
+            "hops_",
+            "via_",
           };
           java.lang.String info =
-              "\u0000\u0011\u0000\u0001\u0001\u0011\u0011\u0000\u0003\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0013\u0000\u0001\u0001\u0013\u0013\u0000\u0003\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u1009\u0000\t\u021a" +
               "\n\u001b\u000b\u0002\f\u0208\r\u021a\u000e\u0007\u000f\u0007\u0010\u0208\u0011\u0208" +
-              "";
+              "\u0012\u000b\u0013\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

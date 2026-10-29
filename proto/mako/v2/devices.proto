@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package mako.v2;
+
+option go_package = "github.com/ironpark/mako/internal/protocol";
+
+// Devices attached to one node and used from another: an Android device on
+// the desktop's USB, used by adb on a build box. The node a device is
+// attached to shares it; a node that borrows it lends it to its own
+// programs at an address on its loopback, as the kind's tools expect to
+// find it there. See docs/devices.md.
+
+// Device is a device attached to a node.
+message Device {
+  string node_id = 1; // the node it is attached to
+  string kind = 2; // "adb"
+  string serial = 3; // the kind's own name for it, unique on its node
+  string name = 4; // for people, as its model
+  string state = 5; // the kind's own: adb's "device", "unauthorized", "offline"
+  // shared is whether its node lends devices of its kind; one that does
+  // not still lists them, so that a borrower can be told why not.
+  bool shared = 6;
+  // attrs are what the kind says of the device, or of its node's tools:
+  // adb's "adb_version", the server's protocol version.
+  map<string, string> attrs = 7;
+  repeated Holder holders = 8; // the nodes borrowing it
+}
+
+// Holder is a node borrowing a device.
+message Holder {
+  string node_id = 1;
+  string name = 2;
+}
+
+// ListDevices asks a node for the devices attached to it, or with mesh,
+// a front-end's daemon for those of every node it reaches.
+message ListDevices {
+  string node_id = 1;
+  bool mesh = 2;
+}
+
+// Devices answers ListDevices. errors say which nodes could not answer.
+message Devices {
+  repeated Device devices = 1;
+  repeated string errors = 2;
+}
+
+// Borrow asks node_id to borrow a device, for its own programs: the one
+// of kind and serial attached to device_node_id, which may be node_id
+// itself. A device already borrowed there answers its lease again.
+message Borrow {
+  string node_id = 1;
+  string device_node_id = 2;
+  string kind = 3;
+  string serial = 4;
+}
+
+// Lease is a device a node borrows, and where its programs reach it.
+message Lease {
+  string id = 1;
+  string node_id = 2; // the node borrowing it
+  Device device = 3;
+  // addr is where on node_id's loopback the device is lent, as host:port;
+  // env is what tells the kind's tools so, to set for a program.
+  string addr = 4;
+  map<string, string> env = 5;
+  // state is "held", or "reconnecting" while the device's node cannot be
+  // reached, or "returned" in GiveBack's answer.
+  string state = 6;
+  repeated string warnings = 7; // what may keep the tools from working
+}
+
+// GiveBack ends node_id's lease lease_id, or the lease of the device ref
+// names ("node/kind/serial").
+message GiveBack {
+  string node_id = 1;
+  string lease_id = 2;
+  string ref = 3;
+}
+
+// ListLeases asks node_id for the devices it borrows.
+message ListLeases {
+  string node_id = 1;
+}
+
+// Leases answers ListLeases.
+message Leases {
+  repeated Lease leases = 1;
+}
+
+// Claim is what a borrowing daemon asks of the daemon of the node a device
+// is attached to. claim_id is the borrower's for the lease; a Claim of one
+// the node holds already resumes it. Once Claimed answers, the stream
+// stays open for as long as the lease does: the node holds the device for
+// the borrower while it is open, and for a while after it ends, for the
+// borrower to claim it again.
+message Claim {
+  string node_id = 1; // the node the device is attached to
+  string kind = 2;
+  string serial = 3;
+  string claim_id = 4;
+  string holder_id = 5; // the node borrowing it
+  string holder_name = 6;
+}
+
+// Claimed answers Claim.
+message Claimed {
+  Device device = 1;
+}
+
+// DeviceConn carries one connection a program made to a lent device, to
+// the device's node, under claim claim_id. Once Tunneled answers, the
+// stream carries the connection's bytes, both ways, as the kind speaks
+// them: for adb, adb's own protocol, to the node's adb server.
+message DeviceConn {
+  string node_id = 1;
+  string claim_id = 2;
+}

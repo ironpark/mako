@@ -453,17 +453,36 @@ type routed interface {
 
 // forward makes a request of a peer for the node it is addressed to.
 func forward[R proto.Message](ctx context.Context, d *Daemon, typ protocol.Type, req routed) (R, error) {
+	reply, stream, err := open[R](ctx, d, typ, req)
+	if err == nil {
+		stream.Close()
+	}
+	return reply, err
+}
+
+// open sends req to the node it names, as forward does, and keeps the
+// stream for what follows the reply on it, as a claim or a device's
+// connection. ctx's deadline bounds the wait for the reply.
+func open[R proto.Message](ctx context.Context, d *Daemon, typ protocol.Type, req routed) (R, *transport.Stream, error) {
 	var zero R
 	node, err := d.node(req.GetNodeId())
 	if err != nil {
-		return zero, err
+		return zero, nil, err
 	}
 	stream, err := d.peerStream(ctx, node)
 	if err != nil {
-		return zero, err
+		return zero, nil, err
 	}
-	defer stream.Close()
-	return transport.Call[R](stream, typ, req)
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = stream.SetReadDeadline(deadline)
+	}
+	reply, err := transport.Call[R](stream, typ, req)
+	if err != nil {
+		stream.Close()
+		return zero, nil, err
+	}
+	_ = stream.SetReadDeadline(time.Time{})
+	return reply, stream, nil
 }
 
 // fileOp makes, renames or deletes a file or folder. None of them replaces

@@ -29,7 +29,7 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 9
+const Revision = 10
 
 // RevisionTransfers is the first revision whose daemon moves files in
 // pieces (ReadFile.raw, WriteFile.offset) and opens tunnels.
@@ -43,6 +43,10 @@ const RevisionSend = 8
 // each node (Node.hops, Node.via) and passes requests on to nodes that
 // let in the nodes that let it in.
 const RevisionRoutes = 9
+
+// RevisionDevices is the first revision whose daemon lists the devices
+// attached to it, lends them, and borrows others' (docs/devices.md).
+const RevisionDevices = 10
 
 // AgentStatus is what an agent's own hooks last said it is doing,
 // SessionInfo.Status.

@@ -18,6 +18,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/device"
 	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/p2p"
 	"github.com/ironpark/mako/internal/protocol"
@@ -64,6 +65,10 @@ type Daemon struct {
 	linking              map[string]time.Time // peer ID -> the last link tried, until one holds
 	ctx                  context.Context      // Run's, for work that outlasts a request
 
+	kinds  map[string]device.Kind // the kinds of device; see devices.go
+	claims claims                 // the devices of this node lent to others
+	leases leases                 // the devices this node borrows
+
 	agentFile agentFile
 	mcp       *mcp.Resolver // nil without a configuration directory
 
@@ -88,6 +93,7 @@ func New(cfg *config.Config, log *slog.Logger) *Daemon {
 		ctx:      context.Background(),
 		ready:    make(chan struct{}),
 		mcp:      newResolver(log),
+		kinds:    deviceKinds(cfg),
 
 		hookBinary: hookProgram,
 	}
@@ -289,6 +295,24 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeTunnel:
 		return d.handleTunnel(ctx, stream, env)
+
+	case protocol.TypeListDevices:
+		return d.handleListDevices(ctx, stream, env, fromPeer)
+
+	case protocol.TypeBorrow:
+		return d.handleBorrow(ctx, stream, env)
+
+	case protocol.TypeGiveBack:
+		return d.handleGiveBack(ctx, stream, env)
+
+	case protocol.TypeListLeases:
+		return d.handleListLeases(ctx, stream, env)
+
+	case protocol.TypeClaim:
+		return d.handleClaim(ctx, stream, env)
+
+	case protocol.TypeDeviceConn:
+		return d.handleDeviceConn(ctx, stream, env)
 
 	case protocol.TypeGitStatus:
 		return d.handleGitStatus(ctx, stream, env)

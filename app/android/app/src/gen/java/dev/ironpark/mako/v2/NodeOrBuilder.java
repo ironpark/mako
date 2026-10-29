@@ -289,4 +289,30 @@ public interface NodeOrBuilder extends
    */
   com.google.protobuf.ByteString
       getOwnerBytes();
+
+  /**
+   * <pre>
+   * How the daemon answering reaches the node, when it can: hops is how
+   * many daemons a request goes through to it, 1 when the node lets the
+   * daemon in and more through nodes that do, each letting in the one
+   * before; via is the node ID of the peer the request goes to first,
+   * when hops is more than 1. 0 and empty for a node it cannot reach.
+   * </pre>
+   *
+   * <code>uint32 hops = 18 [json_name = "hops"];</code>
+   * @return The hops.
+   */
+  int getHops();
+
+  /**
+   * <code>string via = 19 [json_name = "via"];</code>
+   * @return The via.
+   */
+  java.lang.String getVia();
+  /**
+   * <code>string via = 19 [json_name = "via"];</code>
+   * @return The bytes for via.
+   */
+  com.google.protobuf.ByteString
+      getViaBytes();
 }

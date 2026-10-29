@@ -33,4 +33,17 @@ public interface HelloOrBuilder extends
    */
   com.google.protobuf.ByteString
       getVersionBytes();
+
+  /**
+   * <pre>
+   * hops is how many daemons a request on a peer's stream went through
+   * before the one that sent it: 0 from the daemon whose front-end made
+   * it. A daemon passes on no request past a limit, so a stale route
+   * cannot send one round in a loop.
+   * </pre>
+   *
+   * <code>uint32 hops = 6 [json_name = "hops"];</code>
+   * @return The hops.
+   */
+  int getHops();
 }

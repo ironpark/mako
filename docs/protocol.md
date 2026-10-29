@@ -467,6 +467,38 @@ the bytes both ways without reading them, as it does an attach. The
 desktop app listens on the same port of its own loopback when it is free,
 else on any, and opens one tunnel for each connection made to it.
 
+### Devices
+
+| Request | Payload | Reply | |
+|---|---|---|---|
+| `list_devices` | `ListDevices` | `devices` | The devices attached to the node, of every kind, shared or not, with the nodes borrowing each. With `mesh`, from a front-end, also those of every node the daemon reaches at revision 10 or later, asked at once; `errors` names those that did not answer. |
+| `borrow` | `Borrow` | `lease` | Has `node_id` borrow a device: `kind` and `serial` attached to `device_node_id`, which may be `node_id` itself. A device it borrows already answers its lease again. |
+| `give_back` | `GiveBack` | `lease` | Ends a lease, by `lease_id` or the device's `ref`; the lease's `state` is then `returned`. |
+| `list_leases` | `ListLeases` | `leases` | The devices `node_id` borrows. |
+| `claim` | `Claim` | `claimed` | Between daemons: holds a device for a borrower while the stream stays open, and 30 s after. |
+| `device_conn` | `DeviceConn` | `tunneled` | Between daemons: one connection to a claimed device; the stream then carries the kind's own bytes. |
+
+A device is named across the mesh by its ref, `node/kind/serial`. The only
+kind so far is `adb`.
+
+A daemon borrowing a device sends `claim` to the device's node, with a
+`claim_id` of its own making, and keeps the stream open: the stream is the
+claim. The node refuses a kind its configuration does not share (its
+`devices.share`), a device not attached, and a device of an exclusive kind
+lent to another. When the stream ends the node keeps the claim for 30 s,
+and a `claim` with the same `claim_id` resumes it. The borrower then lends
+the device on a port of its own loopback (`Lease.addr`), with the
+environment its tools find it by (`Lease.env`), and sends each connection
+made to the port as a `device_conn` under the claim. After `tunneled` the
+stream carries the connection's bytes as a tunnel's does. For adb, those
+are adb's protocol between a client and its server, which the device's
+node filters to the device lent; see [devices.md](devices.md#android-through-adb).
+Both `claim` and `device_conn` are routed to `node_id` as an attach is.
+
+`OpenSession.devices` lists refs the session's node borrows before the
+session starts; the leases' environments are added to the session's, over
+`env`. Two devices whose environments set one variable apart, as two adb devices do, are refused.
+
 ### Git
 
 | Request | Payload | Reply | |
@@ -725,7 +757,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 8) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 10) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
@@ -749,6 +781,8 @@ Within version 2, the protocol changes by addition, as protobuf allows:
 | Git operations | 2 minutes |
 | Forwarded peer requests | 5 s to dial |
 | `tunnel` | 5 s to reach the port |
+| `list_devices` with `mesh` | 5 s for each node |
+| A device's claim | 30 s after its stream ends |
 | Approval watch | 15 s after the last `list_sessions` with `approvals` |
 | Introductions on libp2p | 10 s |
 | A message on `/mako/trust/1`, `/mako/state/2`, `/mako/access/1` | 1 MiB |

@@ -688,5 +688,123 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.ForgeRun getForgeRun();
 
+  /**
+   * <pre>
+   * Devices: those attached to a node, and those a node borrows.
+   * </pre>
+   *
+   * <code>.mako.v2.ListDevices list_devices = 100 [json_name = "listDevices"];</code>
+   * @return Whether the listDevices field is set.
+   */
+  boolean hasListDevices();
+  /**
+   * <pre>
+   * Devices: those attached to a node, and those a node borrows.
+   * </pre>
+   *
+   * <code>.mako.v2.ListDevices list_devices = 100 [json_name = "listDevices"];</code>
+   * @return The listDevices.
+   */
+  dev.ironpark.mako.v2.ListDevices getListDevices();
+
+  /**
+   * <code>.mako.v2.Devices devices = 101 [json_name = "devices"];</code>
+   * @return Whether the devices field is set.
+   */
+  boolean hasDevices();
+  /**
+   * <code>.mako.v2.Devices devices = 101 [json_name = "devices"];</code>
+   * @return The devices.
+   */
+  dev.ironpark.mako.v2.Devices getDevices();
+
+  /**
+   * <code>.mako.v2.Borrow borrow = 102 [json_name = "borrow"];</code>
+   * @return Whether the borrow field is set.
+   */
+  boolean hasBorrow();
+  /**
+   * <code>.mako.v2.Borrow borrow = 102 [json_name = "borrow"];</code>
+   * @return The borrow.
+   */
+  dev.ironpark.mako.v2.Borrow getBorrow();
+
+  /**
+   * <code>.mako.v2.Lease lease = 103 [json_name = "lease"];</code>
+   * @return Whether the lease field is set.
+   */
+  boolean hasLease();
+  /**
+   * <code>.mako.v2.Lease lease = 103 [json_name = "lease"];</code>
+   * @return The lease.
+   */
+  dev.ironpark.mako.v2.Lease getLease();
+
+  /**
+   * <code>.mako.v2.GiveBack give_back = 104 [json_name = "giveBack"];</code>
+   * @return Whether the giveBack field is set.
+   */
+  boolean hasGiveBack();
+  /**
+   * <code>.mako.v2.GiveBack give_back = 104 [json_name = "giveBack"];</code>
+   * @return The giveBack.
+   */
+  dev.ironpark.mako.v2.GiveBack getGiveBack();
+
+  /**
+   * <code>.mako.v2.ListLeases list_leases = 105 [json_name = "listLeases"];</code>
+   * @return Whether the listLeases field is set.
+   */
+  boolean hasListLeases();
+  /**
+   * <code>.mako.v2.ListLeases list_leases = 105 [json_name = "listLeases"];</code>
+   * @return The listLeases.
+   */
+  dev.ironpark.mako.v2.ListLeases getListLeases();
+
+  /**
+   * <code>.mako.v2.Leases leases = 106 [json_name = "leases"];</code>
+   * @return Whether the leases field is set.
+   */
+  boolean hasLeases();
+  /**
+   * <code>.mako.v2.Leases leases = 106 [json_name = "leases"];</code>
+   * @return The leases.
+   */
+  dev.ironpark.mako.v2.Leases getLeases();
+
+  /**
+   * <code>.mako.v2.Claim claim = 107 [json_name = "claim"];</code>
+   * @return Whether the claim field is set.
+   */
+  boolean hasClaim();
+  /**
+   * <code>.mako.v2.Claim claim = 107 [json_name = "claim"];</code>
+   * @return The claim.
+   */
+  dev.ironpark.mako.v2.Claim getClaim();
+
+  /**
+   * <code>.mako.v2.Claimed claimed = 108 [json_name = "claimed"];</code>
+   * @return Whether the claimed field is set.
+   */
+  boolean hasClaimed();
+  /**
+   * <code>.mako.v2.Claimed claimed = 108 [json_name = "claimed"];</code>
+   * @return The claimed.
+   */
+  dev.ironpark.mako.v2.Claimed getClaimed();
+
+  /**
+   * <code>.mako.v2.DeviceConn device_conn = 109 [json_name = "deviceConn"];</code>
+   * @return Whether the deviceConn field is set.
+   */
+  boolean hasDeviceConn();
+  /**
+   * <code>.mako.v2.DeviceConn device_conn = 109 [json_name = "deviceConn"];</code>
+   * @return The deviceConn.
+   */
+  dev.ironpark.mako.v2.DeviceConn getDeviceConn();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

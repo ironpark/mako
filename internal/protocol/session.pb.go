@@ -116,16 +116,20 @@ func (x *Sessions) GetSessions() []*SessionInfo {
 
 // OpenSession starts an agent session.
 type OpenSession struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // empty for the daemon asked
-	Agent         string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
-	Profile       string                 `protobuf:"bytes,3,opt,name=profile,proto3" json:"profile,omitempty"`
-	Project       string                 `protobuf:"bytes,4,opt,name=project,proto3" json:"project,omitempty"` // the working directory; empty for the node's home
-	Args          []string               `protobuf:"bytes,5,rep,name=args,proto3" json:"args,omitempty"`
-	Env           map[string]string      `protobuf:"bytes,6,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Cols          uint32                 `protobuf:"varint,7,opt,name=cols,proto3" json:"cols,omitempty"`
-	Rows          uint32                 `protobuf:"varint,8,opt,name=rows,proto3" json:"rows,omitempty"`
-	Worktree      *Worktree              `protobuf:"bytes,9,opt,name=worktree,proto3" json:"worktree,omitempty"` // start in a new worktree of project's repository
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	NodeId   string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // empty for the daemon asked
+	Agent    string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
+	Profile  string                 `protobuf:"bytes,3,opt,name=profile,proto3" json:"profile,omitempty"`
+	Project  string                 `protobuf:"bytes,4,opt,name=project,proto3" json:"project,omitempty"` // the working directory; empty for the node's home
+	Args     []string               `protobuf:"bytes,5,rep,name=args,proto3" json:"args,omitempty"`
+	Env      map[string]string      `protobuf:"bytes,6,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Cols     uint32                 `protobuf:"varint,7,opt,name=cols,proto3" json:"cols,omitempty"`
+	Rows     uint32                 `protobuf:"varint,8,opt,name=rows,proto3" json:"rows,omitempty"`
+	Worktree *Worktree              `protobuf:"bytes,9,opt,name=worktree,proto3" json:"worktree,omitempty"` // start in a new worktree of project's repository
+	// devices are devices the session's node borrows for it, as
+	// "node/kind/serial": the session starts with the environment that
+	// lends each to its programs, borrowed again when it starts again.
+	Devices       []string `protobuf:"bytes,10,rep,name=devices,proto3" json:"devices,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -219,6 +223,13 @@ func (x *OpenSession) GetRows() uint32 {
 func (x *OpenSession) GetWorktree() *Worktree {
 	if x != nil {
 		return x.Worktree
+	}
+	return nil
+}
+
+func (x *OpenSession) GetDevices() []string {
+	if x != nil {
+		return x.Devices
 	}
 	return nil
 }
@@ -1332,7 +1343,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\fListSessions\x12\x1c\n" +
 	"\tapprovals\x18\x01 \x01(\bR\tapprovals\"<\n" +
 	"\bSessions\x120\n" +
-	"\bsessions\x18\x01 \x03(\v2\x14.mako.v2.SessionInfoR\bsessions\"\xc4\x02\n" +
+	"\bsessions\x18\x01 \x03(\v2\x14.mako.v2.SessionInfoR\bsessions\"\xde\x02\n" +
 	"\vOpenSession\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x18\n" +
@@ -1342,7 +1353,9 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x03env\x18\x06 \x03(\v2\x1d.mako.v2.OpenSession.EnvEntryR\x03env\x12\x12\n" +
 	"\x04cols\x18\a \x01(\rR\x04cols\x12\x12\n" +
 	"\x04rows\x18\b \x01(\rR\x04rows\x12-\n" +
-	"\bworktree\x18\t \x01(\v2\x11.mako.v2.WorktreeR\bworktree\x1a6\n" +
+	"\bworktree\x18\t \x01(\v2\x11.mako.v2.WorktreeR\bworktree\x12\x18\n" +
+	"\adevices\x18\n" +
+	" \x03(\tR\adevices\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"t\n" +

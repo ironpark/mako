@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
@@ -228,7 +229,19 @@ func (d *Daemon) attachSession(ctx context.Context, id string) (*session.Session
 func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.OpenSession) (*session.Session, error) {
 	// The request may be a saved entry's, which this must not change.
 	req = proto.CloneOf(req)
-	launch, err := agentspec.Resolve(req.GetAgent(), req.GetProfile(), req.GetArgs(), req.GetEnv(), d.agents())
+	env := req.GetEnv()
+	if len(req.GetDevices()) > 0 {
+		lent, err := d.deviceEnv(ctx, req.GetDevices())
+		if err != nil {
+			return nil, err
+		}
+		env = maps.Clone(env)
+		if env == nil {
+			env = map[string]string{}
+		}
+		maps.Copy(env, lent)
+	}
+	launch, err := agentspec.Resolve(req.GetAgent(), req.GetProfile(), req.GetArgs(), env, d.agents())
 	if err != nil {
 		return nil, err
 	}

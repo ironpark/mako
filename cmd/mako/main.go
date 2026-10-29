@@ -32,6 +32,14 @@ Usage:
   mako rename <session-id> [name]   name a session (no name clears it)
   mako agents                       list agents and profiles this node can launch
 
+Devices (docs/devices.md: one node's devices, used from another):
+  mako devices                      list the devices attached to every node
+  mako borrow <device>              borrow a device for this node (or -node's),
+                                     and print the environment that reaches it,
+                                     as eval "$(mako borrow pixel)" takes it
+  mako return <device>              give a borrowed device back
+  mako leases                       list the devices this node (or -node) borrows
+
 Access (trust runs one way: a node you let in can drive this one):
   mako access                       this node's keys, the nodes asking to be
                                      let in, and the keys let in
@@ -46,12 +54,16 @@ Flags:
   -daemon <path>   the daemon's socket (default: the configuration directory's)
   -node <id>       run on / target this node instead of the local one
   -project <dir>   working directory for a new session (default: cwd)
+  -device <dev>    with run, borrow a device for the session (repeatable,
+                    or comma-separated)
 `
 
 func main() {
 	daemonAddr := flag.String("daemon", "", "the daemon's socket")
 	nodeID := flag.String("node", "", "target node ID")
 	project := flag.String("project", "", "project directory")
+	var devices deviceFlag
+	flag.Var(&devices, "device", "a device to borrow for the session")
 	flag.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	flag.Parse()
 
@@ -61,13 +73,13 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := run(args, *daemonAddr, *nodeID, *project); err != nil {
+	if err := run(args, *daemonAddr, *nodeID, *project, devices); err != nil {
 		fmt.Fprintln(os.Stderr, "mako:", err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string, daemonAddr, nodeID, project string) error {
+func run(args []string, daemonAddr, nodeID, project string, devices []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -102,7 +114,7 @@ func run(args []string, daemonAddr, nodeID, project string) error {
 		if len(args) < 2 {
 			return fmt.Errorf("run needs an agent name")
 		}
-		return runAgent(ctx, c, nodeID, project, args[1], args[2:])
+		return runAgent(ctx, c, nodeID, project, args[1], args[2:], devices)
 	case "attach":
 		if len(args) < 2 {
 			return fmt.Errorf("attach needs a session ID")
@@ -146,6 +158,20 @@ func run(args []string, daemonAddr, nodeID, project string) error {
 			return fmt.Errorf("revoke needs a key's fingerprint")
 		}
 		return access(ctx, c, &protocol.Access{Op: "revoke", Key: args[1]})
+	case "devices":
+		return listDevices(ctx, c)
+	case "borrow":
+		if len(args) < 2 {
+			return fmt.Errorf("borrow needs a device")
+		}
+		return borrow(ctx, c, nodeID, args[1])
+	case "return":
+		if len(args) < 2 {
+			return fmt.Errorf("return needs a device")
+		}
+		return giveBack(ctx, c, nodeID, args[1])
+	case "leases":
+		return listLeases(ctx, c, nodeID)
 	case "rename":
 		if len(args) < 2 {
 			return fmt.Errorf("rename needs a session ID")
@@ -305,7 +331,7 @@ func listSessions(ctx context.Context, c *client.Client) error {
 	return w.Flush()
 }
 
-func runAgent(ctx context.Context, c *client.Client, nodeID, project, target string, extra []string) error {
+func runAgent(ctx context.Context, c *client.Client, nodeID, project, target string, extra, devices []string) error {
 	agent, profile := agentspec.SplitTarget(target)
 	// "mako run <agent> -- args" separates agent arguments; the separator
 	// itself is not one of them.
@@ -324,8 +350,17 @@ func runAgent(ctx context.Context, c *client.Client, nodeID, project, target str
 		return err
 	}
 	cols, rows := client.WindowSize()
+	found, err := findDevices(ctx, c, devices)
+	if err != nil {
+		return err
+	}
+	refs := make([]string, 0, len(found))
+	for _, dev := range found {
+		refs = append(refs, dev.Ref())
+	}
 
 	info, err := c.Open(ctx, &protocol.OpenSession{
+		Devices: refs,
 		NodeId:  nodeID,
 		Agent:   agent,
 		Profile: profile,

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 
 	"github.com/ironpark/mako/internal/agentspec"
@@ -51,7 +52,23 @@ type Config struct {
 	// codex sessions get, by server ID: those of the Zed extensions
 	// installed, which are on unless turned off here, and the user's own.
 	ContextServers map[string]mcp.Server `json:"context_servers,omitempty"`
+	// Devices are the devices attached to this node that it lends to the
+	// nodes it lets in. See docs/devices.md.
+	Devices Devices `json:"devices,omitzero"`
 }
+
+// Devices configures the devices a node lends.
+type Devices struct {
+	// Share are the kinds of device the node lends: "adb". A node lists
+	// its devices of every kind, but lends only these.
+	Share []string `json:"share,omitempty"`
+	// ADBServer is where this node's adb server listens, as host:port;
+	// empty is 127.0.0.1 at ANDROID_ADB_SERVER_PORT, or 5037.
+	ADBServer string `json:"adb_server,omitempty"`
+}
+
+// Shares reports whether the node lends devices of kind.
+func (d Devices) Shares(kind string) bool { return slices.Contains(d.Share, kind) }
 
 // P2P configures the daemon's libp2p host, which its peers reach it on.
 type P2P struct {

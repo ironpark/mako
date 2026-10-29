@@ -86,6 +86,16 @@ const (
 	TypeForgeView      Type = "forge_view"
 	TypeForgeDetail    Type = "forge_detail"
 	TypeForgeRun       Type = "forge_run"
+	TypeListDevices    Type = "list_devices"
+	TypeDevices        Type = "devices"
+	TypeBorrow         Type = "borrow"
+	TypeLease          Type = "lease"
+	TypeGiveBack       Type = "give_back"
+	TypeListLeases     Type = "list_leases"
+	TypeLeases         Type = "leases"
+	TypeClaim          Type = "claim"
+	TypeClaimed        Type = "claimed"
+	TypeDeviceConn     Type = "device_conn"
 )
 
 // Newer reports whether the edit made at version v on node is newer than
@@ -355,4 +365,31 @@ func TimeOf(ts *timestamppb.Timestamp) time.Time {
 		return time.Time{}
 	}
 	return ts.AsTime()
+}
+
+// Kinds of a Device.
+const (
+	DeviceADB = "adb" // an Android device or emulator, through adb
+)
+
+// States of a Lease.
+const (
+	LeaseHeld         = "held"
+	LeaseReconnecting = "reconnecting" // its device's node cannot be reached, for now
+	LeaseReturned     = "returned"
+)
+
+// Ref names a device across the mesh: "node/kind/serial".
+func (d *Device) Ref() string { return DeviceRef(d.GetNodeId(), d.GetKind(), d.GetSerial()) }
+
+// DeviceRef is the ref of the device of kind and serial on node.
+func DeviceRef(node, kind, serial string) string { return node + "/" + kind + "/" + serial }
+
+// ParseDeviceRef splits a ref into its node, kind and serial.
+func ParseDeviceRef(ref string) (node, kind, serial string, err error) {
+	parts := strings.SplitN(ref, "/", 3)
+	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+		return "", "", "", fmt.Errorf("%q is not a device, as node/kind/serial", ref)
+	}
+	return parts[0], parts[1], parts[2], nil
 }

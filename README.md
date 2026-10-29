@@ -104,6 +104,9 @@ mako attach <session-id>      # pick a session up again
 mako rename <session-id> api  # name it
 mako kill <session-id>        # end it
 mako addrs                    # this daemon's addresses, to give other nodes
+mako devices                  # devices attached to the mesh's machines
+eval "$(mako borrow pixel)"   # use another machine's Android device with adb here
+mako -device pixel run claude # ...or give it to an agent
 mako access                   # this machine's key, requests, and the keys let in
 mako request <node> [note]    # ask another machine to let this one in
 mako allow <node>             # let in a machine that asked
@@ -239,6 +242,16 @@ also says when it waits on you.
   may show less until its driver catches up. The drivers for pi, omp,
   omo and OpenCode are new and have been tried against their published
   formats rather than long use.
+
+## Devices
+
+An Android device or emulator attached to one machine can be used from
+another, by adb and by agents: the machine it is attached to lends it,
+once its `config.json` shares adb devices (`"devices": {"share":
+["adb"]}`), and the other borrows it, with `mako borrow`, or for a session
+with `mako -device`. adb on the borrowing machine sees that one device, as
+if it were attached there. See [docs/devices.md](docs/devices.md) for how
+it works, what to know, and the kinds of device to come.
 
 ## Configuration
 

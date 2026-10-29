@@ -372,3 +372,24 @@ func (c *Client) Tunnel(ctx context.Context, req *protocol.Tunnel) (io.ReadWrite
 	_ = s.SetReadDeadline(time.Time{})
 	return s, nil
 }
+
+// Devices lists the devices attached to a node, or with Mesh to every
+// node the daemon reaches.
+func (c *Client) Devices(ctx context.Context, req *protocol.ListDevices) (*protocol.Devices, error) {
+	return request[*protocol.Devices](ctx, c, protocol.TypeListDevices, req)
+}
+
+// Borrow has a node borrow a device, for its programs.
+func (c *Client) Borrow(ctx context.Context, req *protocol.Borrow) (*protocol.Lease, error) {
+	return request[*protocol.Lease](ctx, c, protocol.TypeBorrow, req)
+}
+
+// GiveBack ends a node's lease of a device.
+func (c *Client) GiveBack(ctx context.Context, req *protocol.GiveBack) (*protocol.Lease, error) {
+	return request[*protocol.Lease](ctx, c, protocol.TypeGiveBack, req)
+}
+
+// Leases lists the devices a node borrows.
+func (c *Client) Leases(ctx context.Context, req *protocol.ListLeases) (*protocol.Leases, error) {
+	return request[*protocol.Leases](ctx, c, protocol.TypeListLeases, req)
+}

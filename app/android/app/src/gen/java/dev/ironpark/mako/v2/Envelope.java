@@ -80,6 +80,16 @@ public  final class Envelope extends
     FORGE_VIEW(82),
     FORGE_DETAIL(83),
     FORGE_RUN(84),
+    LIST_DEVICES(100),
+    DEVICES(101),
+    BORROW(102),
+    LEASE(103),
+    GIVE_BACK(104),
+    LIST_LEASES(105),
+    LEASES(106),
+    CLAIM(107),
+    CLAIMED(108),
+    DEVICE_CONN(109),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -149,6 +159,16 @@ public  final class Envelope extends
         case 82: return FORGE_VIEW;
         case 83: return FORGE_DETAIL;
         case 84: return FORGE_RUN;
+        case 100: return LIST_DEVICES;
+        case 101: return DEVICES;
+        case 102: return BORROW;
+        case 103: return LEASE;
+        case 104: return GIVE_BACK;
+        case 105: return LIST_LEASES;
+        case 106: return LEASES;
+        case 107: return CLAIM;
+        case 108: return CLAIMED;
+        case 109: return DEVICE_CONN;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -3092,6 +3112,526 @@ public  final class Envelope extends
    */
   private void clearForgeRun() {
     if (bodyCase_ == 84) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int LIST_DEVICES_FIELD_NUMBER = 100;
+  /**
+   * <pre>
+   * Devices: those attached to a node, and those a node borrows.
+   * </pre>
+   *
+   * <code>.mako.v2.ListDevices list_devices = 100 [json_name = "listDevices"];</code>
+   */
+  @java.lang.Override
+  public boolean hasListDevices() {
+    return bodyCase_ == 100;
+  }
+  /**
+   * <pre>
+   * Devices: those attached to a node, and those a node borrows.
+   * </pre>
+   *
+   * <code>.mako.v2.ListDevices list_devices = 100 [json_name = "listDevices"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ListDevices getListDevices() {
+    if (bodyCase_ == 100) {
+       return (dev.ironpark.mako.v2.ListDevices) body_;
+    }
+    return dev.ironpark.mako.v2.ListDevices.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * Devices: those attached to a node, and those a node borrows.
+   * </pre>
+   *
+   * <code>.mako.v2.ListDevices list_devices = 100 [json_name = "listDevices"];</code>
+   */
+  private void setListDevices(dev.ironpark.mako.v2.ListDevices value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 100;
+  }
+  /**
+   * <pre>
+   * Devices: those attached to a node, and those a node borrows.
+   * </pre>
+   *
+   * <code>.mako.v2.ListDevices list_devices = 100 [json_name = "listDevices"];</code>
+   */
+  private void mergeListDevices(dev.ironpark.mako.v2.ListDevices value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 100 &&
+        body_ != dev.ironpark.mako.v2.ListDevices.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ListDevices.newBuilder((dev.ironpark.mako.v2.ListDevices) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 100;
+  }
+  /**
+   * <pre>
+   * Devices: those attached to a node, and those a node borrows.
+   * </pre>
+   *
+   * <code>.mako.v2.ListDevices list_devices = 100 [json_name = "listDevices"];</code>
+   */
+  private void clearListDevices() {
+    if (bodyCase_ == 100) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int DEVICES_FIELD_NUMBER = 101;
+  /**
+   * <code>.mako.v2.Devices devices = 101 [json_name = "devices"];</code>
+   */
+  @java.lang.Override
+  public boolean hasDevices() {
+    return bodyCase_ == 101;
+  }
+  /**
+   * <code>.mako.v2.Devices devices = 101 [json_name = "devices"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Devices getDevices() {
+    if (bodyCase_ == 101) {
+       return (dev.ironpark.mako.v2.Devices) body_;
+    }
+    return dev.ironpark.mako.v2.Devices.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.Devices devices = 101 [json_name = "devices"];</code>
+   */
+  private void setDevices(dev.ironpark.mako.v2.Devices value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 101;
+  }
+  /**
+   * <code>.mako.v2.Devices devices = 101 [json_name = "devices"];</code>
+   */
+  private void mergeDevices(dev.ironpark.mako.v2.Devices value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 101 &&
+        body_ != dev.ironpark.mako.v2.Devices.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Devices.newBuilder((dev.ironpark.mako.v2.Devices) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 101;
+  }
+  /**
+   * <code>.mako.v2.Devices devices = 101 [json_name = "devices"];</code>
+   */
+  private void clearDevices() {
+    if (bodyCase_ == 101) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BORROW_FIELD_NUMBER = 102;
+  /**
+   * <code>.mako.v2.Borrow borrow = 102 [json_name = "borrow"];</code>
+   */
+  @java.lang.Override
+  public boolean hasBorrow() {
+    return bodyCase_ == 102;
+  }
+  /**
+   * <code>.mako.v2.Borrow borrow = 102 [json_name = "borrow"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Borrow getBorrow() {
+    if (bodyCase_ == 102) {
+       return (dev.ironpark.mako.v2.Borrow) body_;
+    }
+    return dev.ironpark.mako.v2.Borrow.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.Borrow borrow = 102 [json_name = "borrow"];</code>
+   */
+  private void setBorrow(dev.ironpark.mako.v2.Borrow value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 102;
+  }
+  /**
+   * <code>.mako.v2.Borrow borrow = 102 [json_name = "borrow"];</code>
+   */
+  private void mergeBorrow(dev.ironpark.mako.v2.Borrow value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 102 &&
+        body_ != dev.ironpark.mako.v2.Borrow.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Borrow.newBuilder((dev.ironpark.mako.v2.Borrow) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 102;
+  }
+  /**
+   * <code>.mako.v2.Borrow borrow = 102 [json_name = "borrow"];</code>
+   */
+  private void clearBorrow() {
+    if (bodyCase_ == 102) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int LEASE_FIELD_NUMBER = 103;
+  /**
+   * <code>.mako.v2.Lease lease = 103 [json_name = "lease"];</code>
+   */
+  @java.lang.Override
+  public boolean hasLease() {
+    return bodyCase_ == 103;
+  }
+  /**
+   * <code>.mako.v2.Lease lease = 103 [json_name = "lease"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Lease getLease() {
+    if (bodyCase_ == 103) {
+       return (dev.ironpark.mako.v2.Lease) body_;
+    }
+    return dev.ironpark.mako.v2.Lease.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.Lease lease = 103 [json_name = "lease"];</code>
+   */
+  private void setLease(dev.ironpark.mako.v2.Lease value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 103;
+  }
+  /**
+   * <code>.mako.v2.Lease lease = 103 [json_name = "lease"];</code>
+   */
+  private void mergeLease(dev.ironpark.mako.v2.Lease value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 103 &&
+        body_ != dev.ironpark.mako.v2.Lease.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Lease.newBuilder((dev.ironpark.mako.v2.Lease) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 103;
+  }
+  /**
+   * <code>.mako.v2.Lease lease = 103 [json_name = "lease"];</code>
+   */
+  private void clearLease() {
+    if (bodyCase_ == 103) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int GIVE_BACK_FIELD_NUMBER = 104;
+  /**
+   * <code>.mako.v2.GiveBack give_back = 104 [json_name = "giveBack"];</code>
+   */
+  @java.lang.Override
+  public boolean hasGiveBack() {
+    return bodyCase_ == 104;
+  }
+  /**
+   * <code>.mako.v2.GiveBack give_back = 104 [json_name = "giveBack"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.GiveBack getGiveBack() {
+    if (bodyCase_ == 104) {
+       return (dev.ironpark.mako.v2.GiveBack) body_;
+    }
+    return dev.ironpark.mako.v2.GiveBack.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.GiveBack give_back = 104 [json_name = "giveBack"];</code>
+   */
+  private void setGiveBack(dev.ironpark.mako.v2.GiveBack value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 104;
+  }
+  /**
+   * <code>.mako.v2.GiveBack give_back = 104 [json_name = "giveBack"];</code>
+   */
+  private void mergeGiveBack(dev.ironpark.mako.v2.GiveBack value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 104 &&
+        body_ != dev.ironpark.mako.v2.GiveBack.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.GiveBack.newBuilder((dev.ironpark.mako.v2.GiveBack) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 104;
+  }
+  /**
+   * <code>.mako.v2.GiveBack give_back = 104 [json_name = "giveBack"];</code>
+   */
+  private void clearGiveBack() {
+    if (bodyCase_ == 104) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int LIST_LEASES_FIELD_NUMBER = 105;
+  /**
+   * <code>.mako.v2.ListLeases list_leases = 105 [json_name = "listLeases"];</code>
+   */
+  @java.lang.Override
+  public boolean hasListLeases() {
+    return bodyCase_ == 105;
+  }
+  /**
+   * <code>.mako.v2.ListLeases list_leases = 105 [json_name = "listLeases"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ListLeases getListLeases() {
+    if (bodyCase_ == 105) {
+       return (dev.ironpark.mako.v2.ListLeases) body_;
+    }
+    return dev.ironpark.mako.v2.ListLeases.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.ListLeases list_leases = 105 [json_name = "listLeases"];</code>
+   */
+  private void setListLeases(dev.ironpark.mako.v2.ListLeases value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 105;
+  }
+  /**
+   * <code>.mako.v2.ListLeases list_leases = 105 [json_name = "listLeases"];</code>
+   */
+  private void mergeListLeases(dev.ironpark.mako.v2.ListLeases value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 105 &&
+        body_ != dev.ironpark.mako.v2.ListLeases.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ListLeases.newBuilder((dev.ironpark.mako.v2.ListLeases) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 105;
+  }
+  /**
+   * <code>.mako.v2.ListLeases list_leases = 105 [json_name = "listLeases"];</code>
+   */
+  private void clearListLeases() {
+    if (bodyCase_ == 105) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int LEASES_FIELD_NUMBER = 106;
+  /**
+   * <code>.mako.v2.Leases leases = 106 [json_name = "leases"];</code>
+   */
+  @java.lang.Override
+  public boolean hasLeases() {
+    return bodyCase_ == 106;
+  }
+  /**
+   * <code>.mako.v2.Leases leases = 106 [json_name = "leases"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Leases getLeases() {
+    if (bodyCase_ == 106) {
+       return (dev.ironpark.mako.v2.Leases) body_;
+    }
+    return dev.ironpark.mako.v2.Leases.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.Leases leases = 106 [json_name = "leases"];</code>
+   */
+  private void setLeases(dev.ironpark.mako.v2.Leases value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 106;
+  }
+  /**
+   * <code>.mako.v2.Leases leases = 106 [json_name = "leases"];</code>
+   */
+  private void mergeLeases(dev.ironpark.mako.v2.Leases value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 106 &&
+        body_ != dev.ironpark.mako.v2.Leases.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Leases.newBuilder((dev.ironpark.mako.v2.Leases) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 106;
+  }
+  /**
+   * <code>.mako.v2.Leases leases = 106 [json_name = "leases"];</code>
+   */
+  private void clearLeases() {
+    if (bodyCase_ == 106) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int CLAIM_FIELD_NUMBER = 107;
+  /**
+   * <code>.mako.v2.Claim claim = 107 [json_name = "claim"];</code>
+   */
+  @java.lang.Override
+  public boolean hasClaim() {
+    return bodyCase_ == 107;
+  }
+  /**
+   * <code>.mako.v2.Claim claim = 107 [json_name = "claim"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Claim getClaim() {
+    if (bodyCase_ == 107) {
+       return (dev.ironpark.mako.v2.Claim) body_;
+    }
+    return dev.ironpark.mako.v2.Claim.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.Claim claim = 107 [json_name = "claim"];</code>
+   */
+  private void setClaim(dev.ironpark.mako.v2.Claim value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 107;
+  }
+  /**
+   * <code>.mako.v2.Claim claim = 107 [json_name = "claim"];</code>
+   */
+  private void mergeClaim(dev.ironpark.mako.v2.Claim value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 107 &&
+        body_ != dev.ironpark.mako.v2.Claim.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Claim.newBuilder((dev.ironpark.mako.v2.Claim) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 107;
+  }
+  /**
+   * <code>.mako.v2.Claim claim = 107 [json_name = "claim"];</code>
+   */
+  private void clearClaim() {
+    if (bodyCase_ == 107) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int CLAIMED_FIELD_NUMBER = 108;
+  /**
+   * <code>.mako.v2.Claimed claimed = 108 [json_name = "claimed"];</code>
+   */
+  @java.lang.Override
+  public boolean hasClaimed() {
+    return bodyCase_ == 108;
+  }
+  /**
+   * <code>.mako.v2.Claimed claimed = 108 [json_name = "claimed"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Claimed getClaimed() {
+    if (bodyCase_ == 108) {
+       return (dev.ironpark.mako.v2.Claimed) body_;
+    }
+    return dev.ironpark.mako.v2.Claimed.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.Claimed claimed = 108 [json_name = "claimed"];</code>
+   */
+  private void setClaimed(dev.ironpark.mako.v2.Claimed value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 108;
+  }
+  /**
+   * <code>.mako.v2.Claimed claimed = 108 [json_name = "claimed"];</code>
+   */
+  private void mergeClaimed(dev.ironpark.mako.v2.Claimed value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 108 &&
+        body_ != dev.ironpark.mako.v2.Claimed.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Claimed.newBuilder((dev.ironpark.mako.v2.Claimed) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 108;
+  }
+  /**
+   * <code>.mako.v2.Claimed claimed = 108 [json_name = "claimed"];</code>
+   */
+  private void clearClaimed() {
+    if (bodyCase_ == 108) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int DEVICE_CONN_FIELD_NUMBER = 109;
+  /**
+   * <code>.mako.v2.DeviceConn device_conn = 109 [json_name = "deviceConn"];</code>
+   */
+  @java.lang.Override
+  public boolean hasDeviceConn() {
+    return bodyCase_ == 109;
+  }
+  /**
+   * <code>.mako.v2.DeviceConn device_conn = 109 [json_name = "deviceConn"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.DeviceConn getDeviceConn() {
+    if (bodyCase_ == 109) {
+       return (dev.ironpark.mako.v2.DeviceConn) body_;
+    }
+    return dev.ironpark.mako.v2.DeviceConn.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.DeviceConn device_conn = 109 [json_name = "deviceConn"];</code>
+   */
+  private void setDeviceConn(dev.ironpark.mako.v2.DeviceConn value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 109;
+  }
+  /**
+   * <code>.mako.v2.DeviceConn device_conn = 109 [json_name = "deviceConn"];</code>
+   */
+  private void mergeDeviceConn(dev.ironpark.mako.v2.DeviceConn value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 109 &&
+        body_ != dev.ironpark.mako.v2.DeviceConn.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.DeviceConn.newBuilder((dev.ironpark.mako.v2.DeviceConn) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 109;
+  }
+  /**
+   * <code>.mako.v2.DeviceConn device_conn = 109 [json_name = "deviceConn"];</code>
+   */
+  private void clearDeviceConn() {
+    if (bodyCase_ == 109) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -6064,6 +6604,510 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Devices: those attached to a node, and those a node borrows.
+     * </pre>
+     *
+     * <code>.mako.v2.ListDevices list_devices = 100 [json_name = "listDevices"];</code>
+     */
+    @java.lang.Override
+    public boolean hasListDevices() {
+      return instance.hasListDevices();
+    }
+    /**
+     * <pre>
+     * Devices: those attached to a node, and those a node borrows.
+     * </pre>
+     *
+     * <code>.mako.v2.ListDevices list_devices = 100 [json_name = "listDevices"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ListDevices getListDevices() {
+      return instance.getListDevices();
+    }
+    /**
+     * <pre>
+     * Devices: those attached to a node, and those a node borrows.
+     * </pre>
+     *
+     * <code>.mako.v2.ListDevices list_devices = 100 [json_name = "listDevices"];</code>
+     */
+    public Builder setListDevices(dev.ironpark.mako.v2.ListDevices value) {
+      copyOnWrite();
+      instance.setListDevices(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Devices: those attached to a node, and those a node borrows.
+     * </pre>
+     *
+     * <code>.mako.v2.ListDevices list_devices = 100 [json_name = "listDevices"];</code>
+     */
+    public Builder setListDevices(
+        dev.ironpark.mako.v2.ListDevices.Builder builderForValue) {
+      copyOnWrite();
+      instance.setListDevices(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Devices: those attached to a node, and those a node borrows.
+     * </pre>
+     *
+     * <code>.mako.v2.ListDevices list_devices = 100 [json_name = "listDevices"];</code>
+     */
+    public Builder mergeListDevices(dev.ironpark.mako.v2.ListDevices value) {
+      copyOnWrite();
+      instance.mergeListDevices(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Devices: those attached to a node, and those a node borrows.
+     * </pre>
+     *
+     * <code>.mako.v2.ListDevices list_devices = 100 [json_name = "listDevices"];</code>
+     */
+    public Builder clearListDevices() {
+      copyOnWrite();
+      instance.clearListDevices();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.Devices devices = 101 [json_name = "devices"];</code>
+     */
+    @java.lang.Override
+    public boolean hasDevices() {
+      return instance.hasDevices();
+    }
+    /**
+     * <code>.mako.v2.Devices devices = 101 [json_name = "devices"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Devices getDevices() {
+      return instance.getDevices();
+    }
+    /**
+     * <code>.mako.v2.Devices devices = 101 [json_name = "devices"];</code>
+     */
+    public Builder setDevices(dev.ironpark.mako.v2.Devices value) {
+      copyOnWrite();
+      instance.setDevices(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Devices devices = 101 [json_name = "devices"];</code>
+     */
+    public Builder setDevices(
+        dev.ironpark.mako.v2.Devices.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDevices(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Devices devices = 101 [json_name = "devices"];</code>
+     */
+    public Builder mergeDevices(dev.ironpark.mako.v2.Devices value) {
+      copyOnWrite();
+      instance.mergeDevices(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Devices devices = 101 [json_name = "devices"];</code>
+     */
+    public Builder clearDevices() {
+      copyOnWrite();
+      instance.clearDevices();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.Borrow borrow = 102 [json_name = "borrow"];</code>
+     */
+    @java.lang.Override
+    public boolean hasBorrow() {
+      return instance.hasBorrow();
+    }
+    /**
+     * <code>.mako.v2.Borrow borrow = 102 [json_name = "borrow"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Borrow getBorrow() {
+      return instance.getBorrow();
+    }
+    /**
+     * <code>.mako.v2.Borrow borrow = 102 [json_name = "borrow"];</code>
+     */
+    public Builder setBorrow(dev.ironpark.mako.v2.Borrow value) {
+      copyOnWrite();
+      instance.setBorrow(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Borrow borrow = 102 [json_name = "borrow"];</code>
+     */
+    public Builder setBorrow(
+        dev.ironpark.mako.v2.Borrow.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBorrow(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Borrow borrow = 102 [json_name = "borrow"];</code>
+     */
+    public Builder mergeBorrow(dev.ironpark.mako.v2.Borrow value) {
+      copyOnWrite();
+      instance.mergeBorrow(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Borrow borrow = 102 [json_name = "borrow"];</code>
+     */
+    public Builder clearBorrow() {
+      copyOnWrite();
+      instance.clearBorrow();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.Lease lease = 103 [json_name = "lease"];</code>
+     */
+    @java.lang.Override
+    public boolean hasLease() {
+      return instance.hasLease();
+    }
+    /**
+     * <code>.mako.v2.Lease lease = 103 [json_name = "lease"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Lease getLease() {
+      return instance.getLease();
+    }
+    /**
+     * <code>.mako.v2.Lease lease = 103 [json_name = "lease"];</code>
+     */
+    public Builder setLease(dev.ironpark.mako.v2.Lease value) {
+      copyOnWrite();
+      instance.setLease(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Lease lease = 103 [json_name = "lease"];</code>
+     */
+    public Builder setLease(
+        dev.ironpark.mako.v2.Lease.Builder builderForValue) {
+      copyOnWrite();
+      instance.setLease(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Lease lease = 103 [json_name = "lease"];</code>
+     */
+    public Builder mergeLease(dev.ironpark.mako.v2.Lease value) {
+      copyOnWrite();
+      instance.mergeLease(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Lease lease = 103 [json_name = "lease"];</code>
+     */
+    public Builder clearLease() {
+      copyOnWrite();
+      instance.clearLease();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.GiveBack give_back = 104 [json_name = "giveBack"];</code>
+     */
+    @java.lang.Override
+    public boolean hasGiveBack() {
+      return instance.hasGiveBack();
+    }
+    /**
+     * <code>.mako.v2.GiveBack give_back = 104 [json_name = "giveBack"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.GiveBack getGiveBack() {
+      return instance.getGiveBack();
+    }
+    /**
+     * <code>.mako.v2.GiveBack give_back = 104 [json_name = "giveBack"];</code>
+     */
+    public Builder setGiveBack(dev.ironpark.mako.v2.GiveBack value) {
+      copyOnWrite();
+      instance.setGiveBack(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.GiveBack give_back = 104 [json_name = "giveBack"];</code>
+     */
+    public Builder setGiveBack(
+        dev.ironpark.mako.v2.GiveBack.Builder builderForValue) {
+      copyOnWrite();
+      instance.setGiveBack(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.GiveBack give_back = 104 [json_name = "giveBack"];</code>
+     */
+    public Builder mergeGiveBack(dev.ironpark.mako.v2.GiveBack value) {
+      copyOnWrite();
+      instance.mergeGiveBack(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.GiveBack give_back = 104 [json_name = "giveBack"];</code>
+     */
+    public Builder clearGiveBack() {
+      copyOnWrite();
+      instance.clearGiveBack();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.ListLeases list_leases = 105 [json_name = "listLeases"];</code>
+     */
+    @java.lang.Override
+    public boolean hasListLeases() {
+      return instance.hasListLeases();
+    }
+    /**
+     * <code>.mako.v2.ListLeases list_leases = 105 [json_name = "listLeases"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ListLeases getListLeases() {
+      return instance.getListLeases();
+    }
+    /**
+     * <code>.mako.v2.ListLeases list_leases = 105 [json_name = "listLeases"];</code>
+     */
+    public Builder setListLeases(dev.ironpark.mako.v2.ListLeases value) {
+      copyOnWrite();
+      instance.setListLeases(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ListLeases list_leases = 105 [json_name = "listLeases"];</code>
+     */
+    public Builder setListLeases(
+        dev.ironpark.mako.v2.ListLeases.Builder builderForValue) {
+      copyOnWrite();
+      instance.setListLeases(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ListLeases list_leases = 105 [json_name = "listLeases"];</code>
+     */
+    public Builder mergeListLeases(dev.ironpark.mako.v2.ListLeases value) {
+      copyOnWrite();
+      instance.mergeListLeases(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ListLeases list_leases = 105 [json_name = "listLeases"];</code>
+     */
+    public Builder clearListLeases() {
+      copyOnWrite();
+      instance.clearListLeases();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.Leases leases = 106 [json_name = "leases"];</code>
+     */
+    @java.lang.Override
+    public boolean hasLeases() {
+      return instance.hasLeases();
+    }
+    /**
+     * <code>.mako.v2.Leases leases = 106 [json_name = "leases"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Leases getLeases() {
+      return instance.getLeases();
+    }
+    /**
+     * <code>.mako.v2.Leases leases = 106 [json_name = "leases"];</code>
+     */
+    public Builder setLeases(dev.ironpark.mako.v2.Leases value) {
+      copyOnWrite();
+      instance.setLeases(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Leases leases = 106 [json_name = "leases"];</code>
+     */
+    public Builder setLeases(
+        dev.ironpark.mako.v2.Leases.Builder builderForValue) {
+      copyOnWrite();
+      instance.setLeases(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Leases leases = 106 [json_name = "leases"];</code>
+     */
+    public Builder mergeLeases(dev.ironpark.mako.v2.Leases value) {
+      copyOnWrite();
+      instance.mergeLeases(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Leases leases = 106 [json_name = "leases"];</code>
+     */
+    public Builder clearLeases() {
+      copyOnWrite();
+      instance.clearLeases();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.Claim claim = 107 [json_name = "claim"];</code>
+     */
+    @java.lang.Override
+    public boolean hasClaim() {
+      return instance.hasClaim();
+    }
+    /**
+     * <code>.mako.v2.Claim claim = 107 [json_name = "claim"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Claim getClaim() {
+      return instance.getClaim();
+    }
+    /**
+     * <code>.mako.v2.Claim claim = 107 [json_name = "claim"];</code>
+     */
+    public Builder setClaim(dev.ironpark.mako.v2.Claim value) {
+      copyOnWrite();
+      instance.setClaim(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Claim claim = 107 [json_name = "claim"];</code>
+     */
+    public Builder setClaim(
+        dev.ironpark.mako.v2.Claim.Builder builderForValue) {
+      copyOnWrite();
+      instance.setClaim(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Claim claim = 107 [json_name = "claim"];</code>
+     */
+    public Builder mergeClaim(dev.ironpark.mako.v2.Claim value) {
+      copyOnWrite();
+      instance.mergeClaim(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Claim claim = 107 [json_name = "claim"];</code>
+     */
+    public Builder clearClaim() {
+      copyOnWrite();
+      instance.clearClaim();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.Claimed claimed = 108 [json_name = "claimed"];</code>
+     */
+    @java.lang.Override
+    public boolean hasClaimed() {
+      return instance.hasClaimed();
+    }
+    /**
+     * <code>.mako.v2.Claimed claimed = 108 [json_name = "claimed"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Claimed getClaimed() {
+      return instance.getClaimed();
+    }
+    /**
+     * <code>.mako.v2.Claimed claimed = 108 [json_name = "claimed"];</code>
+     */
+    public Builder setClaimed(dev.ironpark.mako.v2.Claimed value) {
+      copyOnWrite();
+      instance.setClaimed(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Claimed claimed = 108 [json_name = "claimed"];</code>
+     */
+    public Builder setClaimed(
+        dev.ironpark.mako.v2.Claimed.Builder builderForValue) {
+      copyOnWrite();
+      instance.setClaimed(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Claimed claimed = 108 [json_name = "claimed"];</code>
+     */
+    public Builder mergeClaimed(dev.ironpark.mako.v2.Claimed value) {
+      copyOnWrite();
+      instance.mergeClaimed(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Claimed claimed = 108 [json_name = "claimed"];</code>
+     */
+    public Builder clearClaimed() {
+      copyOnWrite();
+      instance.clearClaimed();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.DeviceConn device_conn = 109 [json_name = "deviceConn"];</code>
+     */
+    @java.lang.Override
+    public boolean hasDeviceConn() {
+      return instance.hasDeviceConn();
+    }
+    /**
+     * <code>.mako.v2.DeviceConn device_conn = 109 [json_name = "deviceConn"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.DeviceConn getDeviceConn() {
+      return instance.getDeviceConn();
+    }
+    /**
+     * <code>.mako.v2.DeviceConn device_conn = 109 [json_name = "deviceConn"];</code>
+     */
+    public Builder setDeviceConn(dev.ironpark.mako.v2.DeviceConn value) {
+      copyOnWrite();
+      instance.setDeviceConn(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.DeviceConn device_conn = 109 [json_name = "deviceConn"];</code>
+     */
+    public Builder setDeviceConn(
+        dev.ironpark.mako.v2.DeviceConn.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDeviceConn(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.DeviceConn device_conn = 109 [json_name = "deviceConn"];</code>
+     */
+    public Builder mergeDeviceConn(dev.ironpark.mako.v2.DeviceConn value) {
+      copyOnWrite();
+      instance.mergeDeviceConn(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.DeviceConn device_conn = 109 [json_name = "deviceConn"];</code>
+     */
+    public Builder clearDeviceConn() {
+      copyOnWrite();
+      instance.clearDeviceConn();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -6137,15 +7181,26 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.ForgeRun.class,
             dev.ironpark.mako.v2.Tunnel.class,
             dev.ironpark.mako.v2.Tunneled.class,
+            dev.ironpark.mako.v2.ListDevices.class,
+            dev.ironpark.mako.v2.Devices.class,
+            dev.ironpark.mako.v2.Borrow.class,
+            dev.ironpark.mako.v2.Lease.class,
+            dev.ironpark.mako.v2.GiveBack.class,
+            dev.ironpark.mako.v2.ListLeases.class,
+            dev.ironpark.mako.v2.Leases.class,
+            dev.ironpark.mako.v2.Claim.class,
+            dev.ironpark.mako.v2.Claimed.class,
+            dev.ironpark.mako.v2.DeviceConn.class,
           };
           java.lang.String info =
-              "\u00007\u0001\u0000\u0001[7\u0000\u0000\u0000\u0001\u0208\n<\u0000\u000b<\u0000\f" +
+              "\u0000A\u0001\u0000\u0001mA\u0000\u0000\u0000\u0001\u0208\n<\u0000\u000b<\u0000\f" +
               "<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000\u001a<\u0000" +
               "\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000\"<\u0000#<\u0000" +
               "$<\u0000%<\u0000(<\u0000)<\u0000*<\u0000+<\u0000,<\u0000-<\u00002<\u00003<\u0000" +
               "4<\u00005<\u00006<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000<<\u0000=<\u0000" +
               "><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000" +
-              "P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000";
+              "P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000" +
+              "g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

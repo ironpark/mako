@@ -117,6 +117,53 @@ public  final class Hello extends
 
   }
 
+  public static final int HOPS_FIELD_NUMBER = 6;
+  private int hops_;
+  /**
+   * <pre>
+   * hops is how many daemons a request on a peer's stream went through
+   * before the one that sent it: 0 from the daemon whose front-end made
+   * it. A daemon passes on no request past a limit, so a stale route
+   * cannot send one round in a loop.
+   * </pre>
+   *
+   * <code>uint32 hops = 6 [json_name = "hops"];</code>
+   * @return The hops.
+   */
+  @java.lang.Override
+  public int getHops() {
+    return hops_;
+  }
+  /**
+   * <pre>
+   * hops is how many daemons a request on a peer's stream went through
+   * before the one that sent it: 0 from the daemon whose front-end made
+   * it. A daemon passes on no request past a limit, so a stale route
+   * cannot send one round in a loop.
+   * </pre>
+   *
+   * <code>uint32 hops = 6 [json_name = "hops"];</code>
+   * @param value The hops to set.
+   */
+  private void setHops(int value) {
+    
+    hops_ = value;
+  }
+  /**
+   * <pre>
+   * hops is how many daemons a request on a peer's stream went through
+   * before the one that sent it: 0 from the daemon whose front-end made
+   * it. A daemon passes on no request past a limit, so a stale route
+   * cannot send one round in a loop.
+   * </pre>
+   *
+   * <code>uint32 hops = 6 [json_name = "hops"];</code>
+   */
+  private void clearHops() {
+
+    hops_ = 0;
+  }
+
   public static dev.ironpark.mako.v2.Hello parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -317,6 +364,55 @@ public  final class Hello extends
       return this;
     }
 
+    /**
+     * <pre>
+     * hops is how many daemons a request on a peer's stream went through
+     * before the one that sent it: 0 from the daemon whose front-end made
+     * it. A daemon passes on no request past a limit, so a stale route
+     * cannot send one round in a loop.
+     * </pre>
+     *
+     * <code>uint32 hops = 6 [json_name = "hops"];</code>
+     * @return The hops.
+     */
+    @java.lang.Override
+    public int getHops() {
+      return instance.getHops();
+    }
+    /**
+     * <pre>
+     * hops is how many daemons a request on a peer's stream went through
+     * before the one that sent it: 0 from the daemon whose front-end made
+     * it. A daemon passes on no request past a limit, so a stale route
+     * cannot send one round in a loop.
+     * </pre>
+     *
+     * <code>uint32 hops = 6 [json_name = "hops"];</code>
+     * @param value The hops to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHops(int value) {
+      copyOnWrite();
+      instance.setHops(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * hops is how many daemons a request on a peer's stream went through
+     * before the one that sent it: 0 from the daemon whose front-end made
+     * it. A daemon passes on no request past a limit, so a stale route
+     * cannot send one round in a loop.
+     * </pre>
+     *
+     * <code>uint32 hops = 6 [json_name = "hops"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearHops() {
+      copyOnWrite();
+      instance.clearHops();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Hello)
   }
   @java.lang.Override
@@ -335,10 +431,11 @@ public  final class Hello extends
           java.lang.Object[] objects = new java.lang.Object[] {
             "name_",
             "version_",
+            "hops_",
           };
           java.lang.String info =
-              "\u0000\u0002\u0000\u0000\u0002\u0003\u0002\u0000\u0000\u0000\u0002\u0208\u0003\u0208" +
-              "";
+              "\u0000\u0003\u0000\u0000\u0002\u0006\u0003\u0000\u0000\u0000\u0002\u0208\u0003\u0208" +
+              "\u0006\u000b";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

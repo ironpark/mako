@@ -24,6 +24,7 @@ public  final class OpenSession extends
     profile_ = "";
     project_ = "";
     args_ = emptyProtobufList();
+    devices_ = emptyProtobufList();
   }
   private int bitField0_;
   public static final int NODE_ID_FIELD_NUMBER = 1;
@@ -561,6 +562,153 @@ java.lang.String defaultValue) {
   private void clearWorktree() {
     worktree_ = null;
     bitField0_ = (bitField0_ & ~0x00000001);
+  }
+
+  public static final int DEVICES_FIELD_NUMBER = 10;
+  private com.google.protobuf.Internal.ProtobufList<java.lang.String> devices_;
+  /**
+   * <pre>
+   * devices are devices the session's node borrows for it, as
+   * "node/kind/serial": the session starts with the environment that
+   * lends each to its programs, borrowed again when it starts again.
+   * </pre>
+   *
+   * <code>repeated string devices = 10 [json_name = "devices"];</code>
+   * @return A list containing the devices.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.String> getDevicesList() {
+    return devices_;
+  }
+  /**
+   * <pre>
+   * devices are devices the session's node borrows for it, as
+   * "node/kind/serial": the session starts with the environment that
+   * lends each to its programs, borrowed again when it starts again.
+   * </pre>
+   *
+   * <code>repeated string devices = 10 [json_name = "devices"];</code>
+   * @return The count of devices.
+   */
+  @java.lang.Override
+  public int getDevicesCount() {
+    return devices_.size();
+  }
+  /**
+   * <pre>
+   * devices are devices the session's node borrows for it, as
+   * "node/kind/serial": the session starts with the environment that
+   * lends each to its programs, borrowed again when it starts again.
+   * </pre>
+   *
+   * <code>repeated string devices = 10 [json_name = "devices"];</code>
+   * @param index The index of the element to return.
+   * @return The devices at the given index.
+   */
+  @java.lang.Override
+  public java.lang.String getDevices(int index) {
+    return devices_.get(index);
+  }
+  /**
+   * <pre>
+   * devices are devices the session's node borrows for it, as
+   * "node/kind/serial": the session starts with the environment that
+   * lends each to its programs, borrowed again when it starts again.
+   * </pre>
+   *
+   * <code>repeated string devices = 10 [json_name = "devices"];</code>
+   * @param index The index of the value to return.
+   * @return The bytes of the devices at the given index.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getDevicesBytes(int index) {
+    return com.google.protobuf.ByteString.copyFromUtf8(
+        devices_.get(index));
+  }
+  private void ensureDevicesIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<java.lang.String> tmp =
+        devices_;  if (!tmp.isModifiable()) {
+      devices_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+  /**
+   * <pre>
+   * devices are devices the session's node borrows for it, as
+   * "node/kind/serial": the session starts with the environment that
+   * lends each to its programs, borrowed again when it starts again.
+   * </pre>
+   *
+   * <code>repeated string devices = 10 [json_name = "devices"];</code>
+   * @param index The index to set the value at.
+   * @param value The devices to set.
+   */
+  private void setDevices(
+      int index, java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureDevicesIsMutable();
+    devices_.set(index, value);
+  }
+  /**
+   * <pre>
+   * devices are devices the session's node borrows for it, as
+   * "node/kind/serial": the session starts with the environment that
+   * lends each to its programs, borrowed again when it starts again.
+   * </pre>
+   *
+   * <code>repeated string devices = 10 [json_name = "devices"];</code>
+   * @param value The devices to add.
+   */
+  private void addDevices(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureDevicesIsMutable();
+    devices_.add(value);
+  }
+  /**
+   * <pre>
+   * devices are devices the session's node borrows for it, as
+   * "node/kind/serial": the session starts with the environment that
+   * lends each to its programs, borrowed again when it starts again.
+   * </pre>
+   *
+   * <code>repeated string devices = 10 [json_name = "devices"];</code>
+   * @param values The devices to add.
+   */
+  private void addAllDevices(
+      java.lang.Iterable<java.lang.String> values) {
+    ensureDevicesIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, devices_);
+  }
+  /**
+   * <pre>
+   * devices are devices the session's node borrows for it, as
+   * "node/kind/serial": the session starts with the environment that
+   * lends each to its programs, borrowed again when it starts again.
+   * </pre>
+   *
+   * <code>repeated string devices = 10 [json_name = "devices"];</code>
+   */
+  private void clearDevices() {
+    devices_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * devices are devices the session's node borrows for it, as
+   * "node/kind/serial": the session starts with the environment that
+   * lends each to its programs, borrowed again when it starts again.
+   * </pre>
+   *
+   * <code>repeated string devices = 10 [json_name = "devices"];</code>
+   * @param value The bytes of the devices to add.
+   */
+  private void addDevicesBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    ensureDevicesIsMutable();
+    devices_.add(value.toStringUtf8());
   }
 
   public static dev.ironpark.mako.v2.OpenSession parseFrom(
@@ -1219,6 +1367,152 @@ java.lang.String defaultValue) {
       return this;
     }
 
+    /**
+     * <pre>
+     * devices are devices the session's node borrows for it, as
+     * "node/kind/serial": the session starts with the environment that
+     * lends each to its programs, borrowed again when it starts again.
+     * </pre>
+     *
+     * <code>repeated string devices = 10 [json_name = "devices"];</code>
+     * @return A list containing the devices.
+     */
+    @java.lang.Override
+    public java.util.List<java.lang.String>
+        getDevicesList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getDevicesList());
+    }
+    /**
+     * <pre>
+     * devices are devices the session's node borrows for it, as
+     * "node/kind/serial": the session starts with the environment that
+     * lends each to its programs, borrowed again when it starts again.
+     * </pre>
+     *
+     * <code>repeated string devices = 10 [json_name = "devices"];</code>
+     * @return The count of devices.
+     */
+    @java.lang.Override
+    public int getDevicesCount() {
+      return instance.getDevicesCount();
+    }
+    /**
+     * <pre>
+     * devices are devices the session's node borrows for it, as
+     * "node/kind/serial": the session starts with the environment that
+     * lends each to its programs, borrowed again when it starts again.
+     * </pre>
+     *
+     * <code>repeated string devices = 10 [json_name = "devices"];</code>
+     * @param index The index of the element to return.
+     * @return The devices at the given index.
+     */
+    @java.lang.Override
+    public java.lang.String getDevices(int index) {
+      return instance.getDevices(index);
+    }
+    /**
+     * <pre>
+     * devices are devices the session's node borrows for it, as
+     * "node/kind/serial": the session starts with the environment that
+     * lends each to its programs, borrowed again when it starts again.
+     * </pre>
+     *
+     * <code>repeated string devices = 10 [json_name = "devices"];</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the devices at the given index.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getDevicesBytes(int index) {
+      return instance.getDevicesBytes(index);
+    }
+    /**
+     * <pre>
+     * devices are devices the session's node borrows for it, as
+     * "node/kind/serial": the session starts with the environment that
+     * lends each to its programs, borrowed again when it starts again.
+     * </pre>
+     *
+     * <code>repeated string devices = 10 [json_name = "devices"];</code>
+     * @param index The index to set the value at.
+     * @param value The devices to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDevices(
+        int index, java.lang.String value) {
+      copyOnWrite();
+      instance.setDevices(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * devices are devices the session's node borrows for it, as
+     * "node/kind/serial": the session starts with the environment that
+     * lends each to its programs, borrowed again when it starts again.
+     * </pre>
+     *
+     * <code>repeated string devices = 10 [json_name = "devices"];</code>
+     * @param value The devices to add.
+     * @return This builder for chaining.
+     */
+    public Builder addDevices(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.addDevices(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * devices are devices the session's node borrows for it, as
+     * "node/kind/serial": the session starts with the environment that
+     * lends each to its programs, borrowed again when it starts again.
+     * </pre>
+     *
+     * <code>repeated string devices = 10 [json_name = "devices"];</code>
+     * @param values The devices to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllDevices(
+        java.lang.Iterable<java.lang.String> values) {
+      copyOnWrite();
+      instance.addAllDevices(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * devices are devices the session's node borrows for it, as
+     * "node/kind/serial": the session starts with the environment that
+     * lends each to its programs, borrowed again when it starts again.
+     * </pre>
+     *
+     * <code>repeated string devices = 10 [json_name = "devices"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDevices() {
+      copyOnWrite();
+      instance.clearDevices();
+      return this;
+    }
+    /**
+     * <pre>
+     * devices are devices the session's node borrows for it, as
+     * "node/kind/serial": the session starts with the environment that
+     * lends each to its programs, borrowed again when it starts again.
+     * </pre>
+     *
+     * <code>repeated string devices = 10 [json_name = "devices"];</code>
+     * @param value The bytes of the devices to add.
+     * @return This builder for chaining.
+     */
+    public Builder addDevicesBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.addDevicesBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.OpenSession)
   }
   @java.lang.Override
@@ -1246,10 +1540,11 @@ java.lang.String defaultValue) {
             "cols_",
             "rows_",
             "worktree_",
+            "devices_",
           };
           java.lang.String info =
-              "\u0000\t\u0000\u0001\u0001\t\t\u0001\u0001\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
-              "\u0004\u0208\u0005\u021a\u00062\u0007\u000b\b\u000b\t\u1009\u0000";
+              "\u0000\n\u0000\u0001\u0001\n\n\u0001\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0004\u0208\u0005\u021a\u00062\u0007\u000b\b\u000b\t\u1009\u0000\n\u021a";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {
