@@ -905,10 +905,14 @@ func (x *Send) GetKeys() []byte {
 
 // Attach turns its stream into a pipe to a session.
 type Attach struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	NodeId        string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Replay        bool                   `protobuf:"varint,3,opt,name=replay,proto3" json:"replay,omitempty"` // send the current screen first
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	NodeId    string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Replay    bool                   `protobuf:"varint,3,opt,name=replay,proto3" json:"replay,omitempty"` // send the current screen first
+	// pack_stream asks a peer's daemon for the stream's frames packed as one
+	// zstd stream: the daemon relaying the attach to its front-end sets it,
+	// as it unpacks them. See docs/protocol.md.
+	PackStream    bool `protobuf:"varint,4,opt,name=pack_stream,json=packStream,proto3" json:"pack_stream,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -960,6 +964,13 @@ func (x *Attach) GetNodeId() string {
 func (x *Attach) GetReplay() bool {
 	if x != nil {
 		return x.Replay
+	}
+	return false
+}
+
+func (x *Attach) GetPackStream() bool {
+	if x != nil {
+		return x.PackStream
 	}
 	return false
 }
@@ -1437,12 +1448,14 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x12\n" +
 	"\x04text\x18\x03 \x01(\tR\x04text\x12\x12\n" +
-	"\x04keys\x18\x04 \x01(\fR\x04keys\"X\n" +
+	"\x04keys\x18\x04 \x01(\fR\x04keys\"y\n" +
 	"\x06Attach\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x16\n" +
-	"\x06replay\x18\x03 \x01(\bR\x06replay\":\n" +
+	"\x06replay\x18\x03 \x01(\bR\x06replay\x12\x1f\n" +
+	"\vpack_stream\x18\x04 \x01(\bR\n" +
+	"packStream\":\n" +
 	"\x05Input\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +

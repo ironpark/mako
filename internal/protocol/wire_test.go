@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
+	"io"
 	"strings"
 	"testing"
 
@@ -190,5 +192,113 @@ func TestUnpackedFramesComePlain(t *testing.T) {
 	}
 	if plain.Len() != 0 {
 		t.Fatalf("%d bytes left over", plain.Len())
+	}
+}
+
+// Frames streamed to a daemon that asked for them come plain to its
+// front-end, between frames that came packed alone or plain, the large
+// and the empty as well as the small.
+func TestStreamedFramesComePlain(t *testing.T) {
+	large := make([]byte, 600<<10) // spans several of zstd's blocks
+	rand.Read(large[:len(large)/2])
+	outputs := [][]byte{[]byte("a"), large, nil, []byte(strings.Repeat("\x1b[2K\rworking\r\n", 300)), []byte("b")}
+	p := NewPacker()
+	var wire bytes.Buffer
+	for i, data := range outputs {
+		env, _ := Encode(TypeOutput, "", &Output{SessionId: "s", Data: data})
+		var err error
+		if i == 2 {
+			err = WriteFrame(&wire, env, true) // a plain frame between
+		} else {
+			err = WriteStreamed(&wire, env, p)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := ReadFrame(bytes.NewReader(wire.Bytes())); err == nil {
+		t.Fatal("a streamed frame was read without its stream")
+	}
+	var plain bytes.Buffer
+	if err := UnpackFrames(&plain, &wire); err != nil {
+		t.Fatal(err)
+	}
+	for i, data := range outputs {
+		env, err := ReadFrame(&plain)
+		if err != nil || !bytes.Equal(env.GetOutput().GetData(), data) {
+			t.Fatalf("frame %d: %v", i, err)
+		}
+	}
+	if plain.Len() != 0 {
+		t.Fatalf("%d bytes left over", plain.Len())
+	}
+}
+
+// A streamed frame that says it holds more than it does, or holds more
+// than it says, is refused.
+func TestAStreamedFrameHoldsItsEnvelope(t *testing.T) {
+	env, _ := Encode(TypeOutput, "", &Output{SessionId: "s", Data: []byte("hello")})
+	plain, _ := proto.Marshal(env)
+	short, _ := NewPacker().pack(nil, plain)
+	_, k := binary.Uvarint(short)
+	short = append(binary.AppendUvarint(nil, uint64(len(plain)+1)), short[k:]...)
+	p := NewPacker()
+	long, _ := p.pack(nil, plain)
+	more, _ := p.pack(nil, plain)
+	_, k = binary.Uvarint(more)
+	long = append(long, more[k:]...)
+	for name, body := range map[string][]byte{"short": short, "long": long} {
+		frame := binary.BigEndian.AppendUint32(nil, uint32(len(body))|streamedBit)
+		if err := UnpackFrames(&bytes.Buffer{}, bytes.NewReader(append(frame, body...))); err == nil {
+			t.Errorf("a %s frame was read", name)
+		}
+	}
+}
+
+// spinner is output as an agent's terminal prints it while it works: the
+// lines below its reply redrawn every tick, a line of reply now and then.
+func spinner(ticks int) [][]byte {
+	glyphs := []string{"·", "✢", "✳", "✶", "✻", "✽"}
+	var out [][]byte
+	for i := range ticks {
+		var b strings.Builder
+		b.WriteString("\x1b[?2026h\x1b[4A\r")
+		if i%25 == 0 {
+			fmt.Fprintf(&b, "\x1b[2K\x1b[38;2;215;119;87m⏺\x1b[39m Reading internal/session/subscription.go, line %d of the pump\r\n", i)
+		}
+		fmt.Fprintf(&b, "\x1b[2K\x1b[38;2;215;119;87m%s\x1b[39m \x1b[38;2;235;159;127mPondering…\x1b[39m \x1b[2m(%ds · ↓ %.1fk tokens · esc to interrupt)\x1b[22m\r\n",
+			glyphs[i%len(glyphs)], i/10, float64(i)*0.3)
+		b.WriteString("\x1b[2K\r\n\x1b[2K\x1b[38;2;136;136;136m╭──────────────────────────────────────────────────────────────╮\x1b[39m\r\n")
+		b.WriteString("\x1b[2K\x1b[38;2;136;136;136m│\x1b[39m > \x1b[7m \x1b[27m                                                          \x1b[38;2;136;136;136m│\x1b[39m\r\n")
+		b.WriteString("\x1b[?2026l")
+		out = append(out, []byte(b.String()))
+	}
+	return out
+}
+
+// Streamed, an agent's redrawn screen costs a fraction of what it costs in
+// frames packed alone.
+func TestStreamingShrinksTerminalOutput(t *testing.T) {
+	var raw, alone, streamed bytes.Buffer
+	p := NewPacker()
+	for _, data := range spinner(500) {
+		env, _ := Encode(TypeOutput, "", &Output{SessionId: "0f8c2a51-6f4e-4d0e-9a8b-2a9f3c1d7e66", Data: data})
+		_ = WriteFrame(&raw, env, false)
+		_ = WriteFrame(&alone, env, true)
+		_ = WriteStreamed(&streamed, env, p)
+	}
+	t.Logf("500 ticks: %d bytes plain, %d packed alone, %d streamed", raw.Len(), alone.Len(), streamed.Len())
+	if streamed.Len()*4 > alone.Len() {
+		t.Fatalf("streamed %d bytes, packed alone %d", streamed.Len(), alone.Len())
+	}
+}
+
+func BenchmarkWriteStreamed(b *testing.B) {
+	ticks := spinner(500)
+	p := NewPacker()
+	b.ReportAllocs()
+	for i := 0; b.Loop(); i++ {
+		env, _ := Encode(TypeOutput, "", &Output{SessionId: "s", Data: ticks[i%len(ticks)]})
+		_ = WriteStreamed(io.Discard, env, p)
 	}
 }

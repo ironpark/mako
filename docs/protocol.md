@@ -106,8 +106,31 @@ Every reader takes both forms, and refuses one that decompresses past
 8 MiB. A daemon's socket carries only the plain form, since its frames
 never leave the machine: a daemon relaying a peer's attach to its
 front-end decompresses the peer's frames on the way, and a daemon
-relaying one to another daemon passes them on as they came. The `Envelope` is an `id` and a `body` oneof, one
-field for each message type:
+relaying one to another daemon passes them on as they came.
+
+**Streamed frames.** An attached session's output is mostly small frames
+that repeat what came before: a spinner redrawn, a status line, the same
+colours and cursor moves. Packed alone, none is worth it. A daemon relaying
+an attach to its front-end sets the `attach`'s `pack_stream`, and the
+session's daemon then packs every frame after it as the next piece of one
+zstd stream, flushed so each can be read as it comes; each costs about what
+is new since the frames before it. Such a frame has the second bit of its
+length set, `0x40000000`, and starts with its envelope's size:
+
+```
+┌──────────────────────────────┬────────────────┬───────────────────────────────┐
+│ 0 1 | length: 30 bits, BE    │ size: uvarint  │ the zstd stream's next piece  │
+└──────────────────────────────┴────────────────┴───────────────────────────────┘
+```
+
+The piece decodes to exactly the envelope; one that decodes to less, or
+holds more, ends the stream. A piece refers at most 1 MiB back. Only the
+daemon that asked reads these, as it unpacks every frame for its socket;
+a daemon relaying the attach between two others passes them on as they
+came, and a daemon that does not know `pack_stream` sends frames as before.
+
+The `Envelope` is an `id` and a `body` oneof, one field for each message
+type:
 
 ```proto
 message Envelope {
@@ -623,6 +646,7 @@ message Attach {
   string session_id = 1;
   string node_id = 2; // routed like any request
   bool replay = 3;    // send the current screen before live output
+  bool pack_stream = 4; // between daemons: frames streamed, see Streams and framing
 }
 ```
 

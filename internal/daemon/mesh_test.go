@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"io"
@@ -350,20 +351,12 @@ func TestTheSocketIsTheUsersAndPeersAreFoundByProbe(t *testing.T) {
 }
 
 // An attach to another node's session reaches the front-end in plain
-// frames, though the node sends its output compressed.
+// frames, though the node sends its output packed as one stream.
 func TestAnAttachAcrossTheMeshComesPlain(t *testing.T) {
 	laptop := meshDaemon(t, "laptop")
 	server := meshDaemon(t, "server", p2pAddr(laptop))
 	letIn(t, server, laptop)
-	s, err := session.Start(session.Spec{
-		ID: "loud", NodeID: server.cfg.NodeID, Agent: "shell", Project: t.TempDir(),
-		Command: []string{"sh", "-c", "i=0; while [ $i -lt 3000 ]; do echo a line the session printed; i=$((i+1)); done; sleep 30"}, Cols: 80, Rows: 24,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	server.sessions.add(s)
+	loudSession(t, server)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	fromLaptop := dialDaemon(t, laptop)
@@ -378,14 +371,14 @@ func TestAnAttachAcrossTheMeshComesPlain(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = stream.SetReadDeadline(time.Now().Add(20 * time.Second))
-	var got int
-	for got < 64<<10 {
+	var out []byte
+	for len(out) < 64<<10 {
 		var hdr [4]byte
 		if _, err := io.ReadFull(stream, hdr[:]); err != nil {
-			t.Fatalf("after %d bytes of output: %v", got, err)
+			t.Fatalf("after %d bytes of output: %v", len(out), err)
 		}
 		n := binary.BigEndian.Uint32(hdr[:])
-		if n&(1<<31) != 0 {
+		if n&(3<<30) != 0 {
 			t.Fatal("a compressed frame reached the socket")
 		}
 		body := make([]byte, n)
@@ -396,6 +389,93 @@ func TestAnAttachAcrossTheMeshComesPlain(t *testing.T) {
 		if err := proto.Unmarshal(body, env); err != nil {
 			t.Fatal(err)
 		}
-		got += len(env.GetOutput().GetData())
+		out = append(out, env.GetOutput().GetData()...)
+	}
+	checkLoud(t, out)
+}
+
+// An attach a daemon asks of a peer packed as one stream comes so, and
+// unpacks to the session's output.
+func TestAnAttachPacksAsOneStreamWhenAsked(t *testing.T) {
+	laptop := meshDaemon(t, "laptop")
+	server := meshDaemon(t, "server", p2pAddr(laptop))
+	letIn(t, server, laptop)
+	loudSession(t, server)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	stream, err := laptop.peerStream(ctx, &protocol.Node{Name: "server", PeerId: server.peerID(), Multiaddrs: server.multiaddrs()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	if err := stream.Send(protocol.TypeAttach, "", &protocol.Attach{SessionId: "loud", NodeId: server.cfg.NodeID, Replay: true, PackStream: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stream.Welcomed(); err != nil {
+		t.Fatal(err)
+	}
+	_ = stream.SetReadDeadline(time.Now().Add(20 * time.Second))
+	// The frames are kept as they came, then unpacked in order. A
+	// streamed frame starts with the size of its envelope.
+	var wire bytes.Buffer
+	var size, streamed int
+	for frames := 0; size < 64<<10; frames++ {
+		var hdr [4]byte
+		if _, err := io.ReadFull(stream, hdr[:]); err != nil {
+			t.Fatalf("after %d frames: %v", frames, err)
+		}
+		n := binary.BigEndian.Uint32(hdr[:])
+		body := make([]byte, n&^(3<<30))
+		if _, err := io.ReadFull(stream, body); err != nil {
+			t.Fatal(err)
+		}
+		plain := len(body)
+		if n&(1<<30) != 0 {
+			streamed++
+			u, _ := binary.Uvarint(body)
+			plain = int(u)
+		}
+		wire.Write(hdr[:])
+		wire.Write(body)
+		size += plain
+	}
+	if streamed == 0 {
+		t.Fatal("no frame came streamed")
+	}
+	var plain bytes.Buffer
+	if err := protocol.UnpackFrames(&plain, &wire); err != nil {
+		t.Fatal(err)
+	}
+	var out []byte
+	for plain.Len() > 0 {
+		env, err := protocol.ReadFrame(&plain)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, env.GetOutput().GetData()...)
+	}
+	checkLoud(t, out)
+}
+
+// loudSession starts a session on d that prints a line over and over.
+func loudSession(t *testing.T, d *Daemon) {
+	t.Helper()
+	s, err := session.Start(session.Spec{
+		ID: "loud", NodeID: d.cfg.NodeID, Agent: "shell", Project: t.TempDir(),
+		Command: []string{"sh", "-c", "i=0; while [ $i -lt 3000 ]; do echo a line the session printed; i=$((i+1)); done; sleep 30"}, Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	d.sessions.add(s)
+}
+
+// checkLoud fails unless out is mostly the line loudSession prints.
+func checkLoud(t *testing.T, out []byte) {
+	t.Helper()
+	line := []byte("a line the session printed\r\n")
+	if lines := bytes.Count(out, line); lines < len(out)/len(line)/2 {
+		t.Fatalf("%d of the lines in %d bytes of output", lines, len(out))
 	}
 }

@@ -15,8 +15,9 @@ import (
 // connection to its daemon's socket, or a libp2p stream from a peer.
 type Stream struct {
 	io.ReadWriteCloser
-	pack   bool // frames that compress well go compressed
-	hailed bool // a hello was sent whose welcome is not read yet
+	pack   bool             // frames that compress well go compressed
+	packer *protocol.Packer // frames go packed as one stream, once asked
+	hailed bool             // a hello was sent whose welcome is not read yet
 }
 
 // NewStream carries frames over rw.
@@ -30,6 +31,15 @@ func (s *Stream) Packs() bool { return s.pack }
 // the frames worth it go compressed. A front-end's socket is not worth
 // it: its frames never leave the machine.
 func NewPeerStream(rw io.ReadWriteCloser) *Stream { return &Stream{ReadWriteCloser: rw, pack: true} }
+
+// PackStream packs the frames sent from here on as one zstd stream, as
+// the daemon at the other end asked: see protocol.Packer. Only a stream
+// between daemons packs.
+func (s *Stream) PackStream() {
+	if s.pack && s.packer == nil {
+		s.packer = protocol.NewPacker()
+	}
+}
 
 // Hangup stops reading the stream as well as writing it, so a reader
 // blocked on it returns at once.
@@ -48,6 +58,9 @@ func (s *Stream) Send(t protocol.Type, id string, msg proto.Message) error {
 	env, err := protocol.Encode(t, id, msg)
 	if err != nil {
 		return err
+	}
+	if s.packer != nil {
+		return protocol.WriteStreamed(s, env, s.packer)
 	}
 	return protocol.WriteFrame(s, env, s.pack)
 }

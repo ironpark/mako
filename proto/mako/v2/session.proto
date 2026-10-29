@@ -128,6 +128,10 @@ message Attach {
   string session_id = 1;
   string node_id = 2;
   bool replay = 3; // send the current screen first
+  // pack_stream asks a peer's daemon for the stream's frames packed as one
+  // zstd stream: the daemon relaying the attach to its front-end sets it,
+  // as it unpacks them. See docs/protocol.md.
+  bool pack_stream = 4;
 }
 
 // Input is bytes for a session's PTY.

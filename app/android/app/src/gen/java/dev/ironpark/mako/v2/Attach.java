@@ -154,6 +154,50 @@ public  final class Attach extends
     replay_ = false;
   }
 
+  public static final int PACK_STREAM_FIELD_NUMBER = 4;
+  private boolean packStream_;
+  /**
+   * <pre>
+   * pack_stream asks a peer's daemon for the stream's frames packed as one
+   * zstd stream: the daemon relaying the attach to its front-end sets it,
+   * as it unpacks them. See docs/protocol.md.
+   * </pre>
+   *
+   * <code>bool pack_stream = 4 [json_name = "packStream"];</code>
+   * @return The packStream.
+   */
+  @java.lang.Override
+  public boolean getPackStream() {
+    return packStream_;
+  }
+  /**
+   * <pre>
+   * pack_stream asks a peer's daemon for the stream's frames packed as one
+   * zstd stream: the daemon relaying the attach to its front-end sets it,
+   * as it unpacks them. See docs/protocol.md.
+   * </pre>
+   *
+   * <code>bool pack_stream = 4 [json_name = "packStream"];</code>
+   * @param value The packStream to set.
+   */
+  private void setPackStream(boolean value) {
+    
+    packStream_ = value;
+  }
+  /**
+   * <pre>
+   * pack_stream asks a peer's daemon for the stream's frames packed as one
+   * zstd stream: the daemon relaying the attach to its front-end sets it,
+   * as it unpacks them. See docs/protocol.md.
+   * </pre>
+   *
+   * <code>bool pack_stream = 4 [json_name = "packStream"];</code>
+   */
+  private void clearPackStream() {
+
+    packStream_ = false;
+  }
+
   public static dev.ironpark.mako.v2.Attach parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -393,6 +437,52 @@ public  final class Attach extends
       return this;
     }
 
+    /**
+     * <pre>
+     * pack_stream asks a peer's daemon for the stream's frames packed as one
+     * zstd stream: the daemon relaying the attach to its front-end sets it,
+     * as it unpacks them. See docs/protocol.md.
+     * </pre>
+     *
+     * <code>bool pack_stream = 4 [json_name = "packStream"];</code>
+     * @return The packStream.
+     */
+    @java.lang.Override
+    public boolean getPackStream() {
+      return instance.getPackStream();
+    }
+    /**
+     * <pre>
+     * pack_stream asks a peer's daemon for the stream's frames packed as one
+     * zstd stream: the daemon relaying the attach to its front-end sets it,
+     * as it unpacks them. See docs/protocol.md.
+     * </pre>
+     *
+     * <code>bool pack_stream = 4 [json_name = "packStream"];</code>
+     * @param value The packStream to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPackStream(boolean value) {
+      copyOnWrite();
+      instance.setPackStream(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * pack_stream asks a peer's daemon for the stream's frames packed as one
+     * zstd stream: the daemon relaying the attach to its front-end sets it,
+     * as it unpacks them. See docs/protocol.md.
+     * </pre>
+     *
+     * <code>bool pack_stream = 4 [json_name = "packStream"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPackStream() {
+      copyOnWrite();
+      instance.clearPackStream();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Attach)
   }
   @java.lang.Override
@@ -412,10 +502,11 @@ public  final class Attach extends
             "sessionId_",
             "nodeId_",
             "replay_",
+            "packStream_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0007";
+              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0007\u0004\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

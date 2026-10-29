@@ -194,6 +194,28 @@ func WriteFrame(w io.Writer, env *Envelope, pack bool) error {
 	return err
 }
 
+// WriteStreamed writes one frame packed as p's next piece, for a reader
+// that asked for its stream so packed.
+func WriteStreamed(w io.Writer, env *Envelope, p *Packer) error {
+	plain, err := proto.Marshal(env)
+	if err != nil {
+		return err
+	}
+	if len(plain) > MaxFrameSize {
+		return fmt.Errorf("frame too large: %d bytes", len(plain))
+	}
+	frame, err := p.pack(make([]byte, 4, 4+len(plain)/4), plain)
+	if err != nil {
+		return err
+	}
+	if len(frame)-4 > MaxFrameSize {
+		return fmt.Errorf("frame too large: %d bytes", len(frame)-4)
+	}
+	binary.BigEndian.PutUint32(frame, uint32(len(frame)-4)|streamedBit)
+	_, err = w.Write(frame)
+	return err
+}
+
 // ReadFrame reads one frame, compressed or not. An envelope whose body
 // this build does not know, from a newer peer, has no Type, which a daemon
 // answers as unsupported.
@@ -203,6 +225,11 @@ func ReadFrame(r io.Reader) (*Envelope, error) {
 		return nil, err
 	}
 	n := binary.BigEndian.Uint32(hdr[:])
+	if n&streamedBit != 0 {
+		// Only the daemon that asked for them reads streamed frames, with
+		// UnpackFrames.
+		return nil, errors.New("frame: streamed on a stream that did not ask for it")
+	}
 	packed := n&packedBit != 0
 	n &^= packedBit
 	if n > MaxFrameSize {
@@ -226,10 +253,11 @@ func ReadFrame(r io.Reader) (*Envelope, error) {
 }
 
 // UnpackFrames copies the frames src carries to dst until src ends,
-// decompressing those that came compressed, for a reader that takes only
-// the plain form, as a front-end on its daemon's socket.
+// decompressing those that came compressed, streamed or not, for a reader
+// that takes only the plain form, as a front-end on its daemon's socket.
 func UnpackFrames(dst io.Writer, src io.Reader) error {
 	var hdr [4]byte
+	var stream Unpacker
 	for {
 		if _, err := io.ReadFull(src, hdr[:]); err != nil {
 			if err == io.EOF {
@@ -238,8 +266,8 @@ func UnpackFrames(dst io.Writer, src io.Reader) error {
 			return err
 		}
 		n := binary.BigEndian.Uint32(hdr[:])
-		packed := n&packedBit != 0
-		n &^= packedBit
+		packed, streamed := n&packedBit != 0, n&streamedBit != 0
+		n &^= packedBit | streamedBit
 		if n > MaxFrameSize {
 			return fmt.Errorf("frame too large: %d bytes", n)
 		}
@@ -247,8 +275,17 @@ func UnpackFrames(dst io.Writer, src io.Reader) error {
 		if _, err := io.ReadFull(src, buf[4:]); err != nil {
 			return err
 		}
-		if packed {
+		switch {
+		case packed && streamed:
+			return errors.New("frame: both packed and streamed")
+		case packed:
 			body, err := Decompress(buf[4:])
+			if err != nil {
+				return fmt.Errorf("frame: %w", err)
+			}
+			buf = append(buf[:4], body...)
+		case streamed:
+			body, err := stream.unpack(buf[4:])
 			if err != nil {
 				return fmt.Errorf("frame: %w", err)
 			}

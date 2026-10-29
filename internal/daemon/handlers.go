@@ -107,6 +107,11 @@ func (d *Daemon) handleAttach(ctx context.Context, stream *transport.Stream, env
 		return err
 	}
 	if !d.local(req.GetNodeId()) {
+		if !stream.Packs() {
+			// The relay unpacks the peer's frames for the front-end, so
+			// the peer may pack them as one stream.
+			req.PackStream = true
+		}
 		return d.relayToPeer(ctx, protocol.TypeAttach, req, stream)
 	}
 	return d.attachLocal(ctx, req, attachWire{stream: stream, id: env.GetId(), sessionID: req.GetSessionId()})
@@ -117,6 +122,9 @@ func (d *Daemon) attachLocal(ctx context.Context, req *protocol.Attach, w attach
 	s, err := d.attachSession(ctx, req.GetSessionId())
 	if err != nil {
 		return err
+	}
+	if req.GetPackStream() {
+		w.stream.PackStream()
 	}
 	sub := s.Subscribe()
 	defer func() { sub.Close() }()

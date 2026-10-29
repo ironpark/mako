@@ -43,4 +43,16 @@ public interface AttachOrBuilder extends
    * @return The replay.
    */
   boolean getReplay();
+
+  /**
+   * <pre>
+   * pack_stream asks a peer's daemon for the stream's frames packed as one
+   * zstd stream: the daemon relaying the attach to its front-end sets it,
+   * as it unpacks them. See docs/protocol.md.
+   * </pre>
+   *
+   * <code>bool pack_stream = 4 [json_name = "packStream"];</code>
+   * @return The packStream.
+   */
+  boolean getPackStream();
 }
