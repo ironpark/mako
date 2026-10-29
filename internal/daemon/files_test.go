@@ -179,11 +179,3 @@ func TestFileOpNeverReplaces(t *testing.T) {
 		}
 	}
 }
-
-func TestForPeerClearsTheNode(t *testing.T) {
-	req := &protocol.ReadFile{NodeId: "far", Path: "/a"}
-	sent := forPeer(req).(*protocol.ReadFile)
-	if sent.GetNodeId() != "" || sent.GetPath() != "/a" {
-		t.Fatalf("sent %v", sent)
-	}
-}

@@ -17,6 +17,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -61,6 +62,10 @@ type Config struct {
 	Node, Name string
 	// Owner is the SSH key that vouches for the host, nil for none.
 	Owner ssh.Signer
+	// SSHAuthorizedKeys is the user's own SSH authorized_keys file: a key
+	// that may log in there lets in the hosts it vouches for. Empty for
+	// none.
+	SSHAuthorizedKeys string
 	// OnPeer is told how the host stands with a peer each time the two
 	// introduce themselves.
 	OnPeer func(Peer)
@@ -103,7 +108,7 @@ func New(ctx context.Context, cfg Config) (*Host, error) {
 		return nil, err
 	}
 	h := &Host{log: log, done: make(chan struct{}),
-		trust: newTrust(NewKeys(cfg.Dir), intro{Node: cfg.Node, Name: cfg.Name}, cfg.Owner, log)}
+		trust: newTrust(NewKeys(cfg.Dir), NewSSHKeys(cfg.SSHAuthorizedKeys), intro{Node: cfg.Node, Name: cfg.Name, OS: runtime.GOOS, Arch: runtime.GOARCH}, cfg.Owner, log)}
 	h.trust.changed = cfg.OnPeer
 	hosts := []string{"0.0.0.0", "::"}
 	if cfg.Host != "" {
@@ -165,7 +170,8 @@ func (h *Host) watch() {
 		if err != nil {
 			h.log.Warn("could not renew the SSH key's certificate", "err", err)
 		}
-		if h.trust.keys.reload() || renewed {
+		keys, sshKeys := h.trust.keys.reload(), h.trust.sshKeys.reload()
+		if keys || sshKeys || renewed {
 			h.trust.reconsider()
 		}
 	}
@@ -182,6 +188,10 @@ func (h *Host) Close() error {
 
 // Keys are the keys the host lets in. After changing them, Reconsider.
 func (h *Host) Keys() *Keys { return h.trust.keys }
+
+// SSHKeys are the keys of the user's own SSH authorized_keys file, which
+// let in the hosts they vouch for.
+func (h *Host) SSHKeys() *Keys { return h.trust.sshKeys }
 
 // Reconsider introduces the host to its peers again, so a key let in or
 // taken out holds at once.

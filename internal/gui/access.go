@@ -173,6 +173,11 @@ func keyList(m *model, keys []*protocol.AccessKey) ggui.Widget {
 		if name == "" {
 			name = k.GetType()
 		}
+		if k.GetSource() != "" {
+			// A key of the user's own SSH file is taken out there.
+			rows = append(rows, row(name, k.GetFingerprint()+" · "+Tf("from %s", k.GetSource()), ggui.Box()))
+			continue
+		}
 		rows = append(rows, row(name, k.GetFingerprint(), ui.Button(T("Revoke"), func() {
 			m.changeAccess(&protocol.Access{Op: "revoke", Key: k.GetFingerprint()}, Tf("%s is let out.", name))
 		}).Outline()))
@@ -197,9 +202,9 @@ func (m *model) requestAccess(node *protocol.Node) {
 	m.changeAccess(&protocol.Access{Op: "request", NodeId: node.GetId()}, Tf("Asked %s to let this node in.", node.GetName()))
 }
 
-// reachable reports whether the window can drive node: this daemon, or a
-// node that lets it in.
+// reachable reports whether the window can drive node: this daemon, a
+// node that lets it in, or one reached through nodes that do.
 func reachable(n *protocol.Node) bool {
 	s := n.Standing()
-	return s == protocol.StandingSelf || s == protocol.StandingBoth || s == protocol.StandingUs
+	return s == protocol.StandingSelf || s == protocol.StandingBoth || s == protocol.StandingUs || s == protocol.StandingVia
 }

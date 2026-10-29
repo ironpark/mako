@@ -139,6 +139,9 @@ func (p *peerTable) merge(node *protocol.Node) {
 		p.nodes[node.GetId()] = node
 		return
 	}
+	if prev.GetOs() == "" && node.GetOs() != "" {
+		prev.Os, prev.Arch = node.GetOs(), node.GetArch()
+	}
 	if protocol.TimeOf(node.GetLastSeen()).After(protocol.TimeOf(prev.GetLastSeen())) {
 		prev.LastSeen = node.GetLastSeen()
 		if node.GetAgents() != nil {

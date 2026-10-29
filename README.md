@@ -83,7 +83,13 @@ let nothing in until you say so. Either:
   `~/.ssh/id_ed25519.pub` (or `id_ecdsa`, `id_rsa`), unless Settings ▸
   Access names another or none; its private half must be in the SSH agent
   or beside it without a passphrase. Machines vouched for by one key let
-  each other in, and a machine that lets the key in lets them all in.
+  each other in, and a machine that lets the key in lets them all in. A
+  machine whose `~/.ssh/authorized_keys` has the key, so that it logs in
+  there by SSH, lets them in as well.
+
+Trust carries along a chain: if the laptop is let in by the desktop, and
+the desktop by a build box, the laptop drives the build box through the
+desktop, which could do as much itself.
 
 ### From the command line
 

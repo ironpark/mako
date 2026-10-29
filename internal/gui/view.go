@@ -940,8 +940,8 @@ func nodeList(m *model, nodes []*protocol.Node) ggui.Widget {
 		rows = append(rows, ggui.Box(ggui.Row(
 			icon(kind).Size(16),
 			ggui.Expanded(ggui.Column(
-				ggui.Row(ggui.Text(n.GetName()).Size(13).Weight(ggui.WeightMedium), linkDot(reachable(n)), outdatedBadge(n), trustBadge(n)).Gap(8),
-				ggui.Text(fmt.Sprintf("%s · %s/%s · %s", n.GetAddr(), n.GetOs(), n.GetArch(), n.GetSource())).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis(),
+				ggui.Row(ggui.Text(n.GetName()).Size(13).Weight(ggui.WeightMedium), linkDot(reachable(n)), outdatedBadge(n), trustBadge(n, nodes)).Gap(8),
+				ggui.Text(joinNonEmpty(n.GetAddr(), n.Platform(), n.GetSource())).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis(),
 			).Gap(3).Stretch()),
 			ask,
 		).Gap(12)).Pad(10).Radius(8).Fill(tokSurface1))
@@ -950,8 +950,8 @@ func nodeList(m *model, nodes []*protocol.Node) ggui.Widget {
 }
 
 // trustBadge says how this node and n stand: whether each lets the other
-// in.
-func trustBadge(n *protocol.Node) ggui.Widget {
+// in, or which of nodes this one reaches n through.
+func trustBadge(n *protocol.Node, nodes []*protocol.Node) ggui.Widget {
 	var label string
 	switch n.Standing() {
 	case protocol.StandingSelf:
@@ -960,6 +960,8 @@ func trustBadge(n *protocol.Node) ggui.Widget {
 		label = T("both ways")
 	case protocol.StandingUs:
 		label = T("lets this node in")
+	case protocol.StandingVia:
+		label = Tf("through %s", nodeName(nodes, n.GetVia()))
 	case protocol.StandingThem:
 		label = T("let in here")
 	default:

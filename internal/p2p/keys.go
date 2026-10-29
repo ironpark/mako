@@ -26,7 +26,8 @@ import (
 // vouched for by an SSH key of its owner's: a certificate, signed with
 // that key, that the peer ID is the owner's for a while. A host lets in a
 // peer whose own key, or whose owner's, is in its authorized_keys file, or
-// whose owner is its own.
+// whose owner's key is in the user's own ~/.ssh/authorized_keys, or whose
+// owner is its own.
 
 // AuthorizedKeysFile holds the keys a host lets in, in its configuration
 // directory, in the format of OpenSSH's authorized_keys.
@@ -36,6 +37,10 @@ const AuthorizedKeysFile = "authorized_keys"
 // changes.
 type Keys struct {
 	path string
+	// readOnly is the user's own SSH file, which mako reads and does not
+	// edit: its keys that have options, whose limits a mako link cannot
+	// keep, are left out.
+	readOnly bool
 
 	mu     sync.Mutex
 	loaded bool
@@ -64,6 +69,24 @@ func NewKeys(dir string) *Keys {
 	return k
 }
 
+// NewSSHKeys reads the keys of the user's own SSH authorized_keys file at
+// path, those without options, which mako reads and does not edit. Empty
+// path has none.
+func NewSSHKeys(path string) *Keys {
+	k := &Keys{path: path, readOnly: true}
+	k.reload()
+	return k
+}
+
+// ErrReadOnly is a change to the keys of a file mako does not edit.
+var ErrReadOnly = errors.New("p2p: mako does not edit the file that lets the key in")
+
+// Path is the file the keys are read from.
+func (k *Keys) Path() string { return k.path }
+
+// ReadOnly reports whether the keys are of a file mako does not edit.
+func (k *Keys) ReadOnly() bool { return k.readOnly }
+
 // reload reads the file again if it changed, as edited by hand, and
 // reports whether it did.
 func (k *Keys) reload() bool {
@@ -84,7 +107,7 @@ func (k *Keys) read() bool {
 	}
 	k.loaded, k.stat = true, stamp
 	data, _ := os.ReadFile(k.path)
-	k.keys = parseAuthorizedKeys(data)
+	k.keys = parseAuthorizedKeys(data, k.readOnly)
 	k.set = make(map[string]bool, len(k.keys))
 	for _, a := range k.keys {
 		k.set[string(a.Key.Marshal())] = true
@@ -94,8 +117,9 @@ func (k *Keys) read() bool {
 
 // parseAuthorizedKeys reads the keys of an authorized_keys file, leaving
 // out lines it cannot read and those whose options restrict the key to a
-// command, which a mako link cannot honour.
-func parseAuthorizedKeys(data []byte) []AuthorizedKey {
+// command, which a mako link cannot honour; plain leaves out every line
+// with options.
+func parseAuthorizedKeys(data []byte, plain bool) []AuthorizedKey {
 	var keys []AuthorizedKey
 	for len(data) > 0 {
 		key, comment, options, rest, err := ssh.ParseAuthorizedKey(data)
@@ -103,7 +127,7 @@ func parseAuthorizedKeys(data []byte) []AuthorizedKey {
 			break
 		}
 		data = rest
-		if restricted(options) {
+		if restricted(options) || plain && len(options) > 0 {
 			continue
 		}
 		keys = append(keys, AuthorizedKey{Key: key, Comment: comment})
@@ -149,6 +173,9 @@ func KeyLine(key ssh.PublicKey, comment string) string {
 
 // Add lets key in, with comment, unless it is already.
 func (k *Keys) Add(key ssh.PublicKey, comment string) error {
+	if k.readOnly {
+		return ErrReadOnly
+	}
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	k.read()
@@ -184,10 +211,19 @@ func (k *Keys) Add(key ssh.PublicKey, comment string) error {
 }
 
 // Remove takes out the key whose fingerprint is given, keeping the file's
-// other lines as they are, and reports whether it was there.
+// other lines as they are, and reports whether it was there. Of keys mako
+// does not edit, one there is ErrReadOnly.
 func (k *Keys) Remove(fingerprint string) (bool, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
+	if k.readOnly {
+		for _, a := range k.keys {
+			if ssh.FingerprintSHA256(a.Key) == fingerprint {
+				return true, ErrReadOnly
+			}
+		}
+		return false, nil
+	}
 	data, err := os.ReadFile(k.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil

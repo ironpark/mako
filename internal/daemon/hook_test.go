@@ -162,7 +162,13 @@ func hookedDaemon(t *testing.T) (*Daemon, *session.Session, string) {
 
 func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	waitForWithin(t, 5*time.Second, what, cond)
+}
+
+// waitForWithin polls cond until it holds, failing with what after d.
+func waitForWithin(t *testing.T, d time.Duration, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(d)
 	for !cond() {
 		if time.Now().After(deadline) {
 			t.Fatal(what)

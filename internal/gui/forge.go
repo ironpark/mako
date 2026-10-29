@@ -713,6 +713,11 @@ func metaLine(it *protocol.ForgeItem, parts ...string) string {
 	if t := protocol.TimeOf(it.GetUpdated()); !t.IsZero() {
 		parts = append(parts, ago(t))
 	}
+	return joinNonEmpty(parts...)
+}
+
+// joinNonEmpty joins parts with a middle dot, leaving out those empty.
+func joinNonEmpty(parts ...string) string {
 	return strings.Join(slices.DeleteFunc(parts, func(s string) bool { return s == "" }), " · ")
 }
 

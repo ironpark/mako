@@ -40,6 +40,8 @@ var ErrNotTrusted = errors.New("p2p: the peer has not let this node in")
 type intro struct {
 	Node string `json:"node"` // its node ID
 	Name string `json:"name"`
+	OS   string `json:"os,omitempty"`   // as Go names it: darwin, linux, windows, android
+	Arch string `json:"arch,omitempty"` // as Go names it: arm64, amd64, …
 	Cert *Cert  `json:"cert,omitempty"`
 }
 
@@ -53,6 +55,8 @@ type Peer struct {
 	ID     peer.ID
 	Node   string // its node ID
 	Name   string
+	OS     string // as Go names it, "" from an older build
+	Arch   string
 	Key    ssh.PublicKey // its own
 	Owner  ssh.PublicKey // the SSH key vouching for it; nil without
 	Addr   ma.Multiaddr  // where it was last linked
@@ -62,11 +66,12 @@ type Peer struct {
 }
 
 type trust struct {
-	h     host.Host
-	keys  *Keys
-	log   *slog.Logger
-	owner ssh.Signer    // the SSH key vouching for this host, nil for none
-	own   ssh.PublicKey // owner's public half
+	h       host.Host
+	keys    *Keys
+	sshKeys *Keys // the user's ~/.ssh/authorized_keys, whose keys vouch
+	log     *slog.Logger
+	owner   ssh.Signer    // the SSH key vouching for this host, nil for none
+	own     ssh.PublicKey // owner's public half
 
 	mu    sync.Mutex
 	self  intro // what this host says of itself
@@ -84,8 +89,8 @@ type trustState struct {
 	peer    Peer
 }
 
-func newTrust(keys *Keys, self intro, owner ssh.Signer, log *slog.Logger) *trust {
-	t := &trust{keys: keys, self: self, owner: owner, log: log, peers: map[peer.ID]*trustState{}}
+func newTrust(keys, sshKeys *Keys, self intro, owner ssh.Signer, log *slog.Logger) *trust {
+	t := &trust{keys: keys, sshKeys: sshKeys, self: self, owner: owner, log: log, peers: map[peer.ID]*trustState{}}
 	if owner != nil {
 		t.own = owner.PublicKey()
 	}
@@ -271,7 +276,7 @@ func (t *trust) exchange(s network.Stream) error {
 			owner = nil
 		}
 	}
-	trusts := t.keys.Has(key) || t.keys.Has(owner) || sameKey(owner, t.own)
+	trusts := t.keys.Has(key) || t.keys.Has(owner) || t.sshKeys.Has(owner) || sameKey(owner, t.own)
 	if err := writeJSON(s, verdict{Trusts: trusts}); err != nil {
 		return err
 	}
@@ -281,7 +286,7 @@ func (t *trust) exchange(s network.Stream) error {
 	}
 	t.mu.Lock()
 	st := t.state(p)
-	st.peer = Peer{ID: p, Node: theirs.Node, Name: theirs.Name, Key: key, Owner: owner, Addr: s.Conn().RemoteMultiaddr(), Trusts: trusts, TrustedBy: v.Trusts}
+	st.peer = Peer{ID: p, Node: theirs.Node, Name: theirs.Name, OS: theirs.OS, Arch: theirs.Arch, Key: key, Owner: owner, Addr: s.Conn().RemoteMultiaddr(), Trusts: trusts, TrustedBy: v.Trusts}
 	t.mu.Unlock()
 	return nil
 }

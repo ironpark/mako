@@ -15,6 +15,11 @@ message Hello {
   // node_id and is_peer said who called; auth_tag and token carried the
   // mesh's key, then a front-end's token, before the socket.
   reserved 1, 4, 5;
+  // hops is how many daemons a request on a peer's stream went through
+  // before the one that sent it: 0 from the daemon whose front-end made
+  // it. A daemon passes on no request past a limit, so a stale route
+  // cannot send one round in a loop.
+  uint32 hops = 6;
   reserved "node_id", "is_peer", "auth_tag", "token";
 }
 
@@ -50,6 +55,13 @@ message Node {
   // SSH key that vouches for it, if one does.
   string key = 16;
   string owner = 17;
+  // How the daemon answering reaches the node, when it can: hops is how
+  // many daemons a request goes through to it, 1 when the node lets the
+  // daemon in and more through nodes that do, each letting in the one
+  // before; via is the node ID of the peer the request goes to first,
+  // when hops is more than 1. 0 and empty for a node it cannot reach.
+  uint32 hops = 18;
+  string via = 19;
 }
 
 // AgentInfo names an agent a node can launch and its profiles, and what
@@ -147,6 +159,10 @@ message AccessKey {
   string type = 2; // ssh-ed25519, …
   string comment = 3;
   string line = 4; // as authorized_keys has it
+  // source is the file outside mako's own that lets the key in, which
+  // mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+  // Empty for a key of mako's own file.
+  string source = 5;
 }
 
 // AccessRequest is a node asking to be let in.

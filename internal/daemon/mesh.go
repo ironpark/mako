@@ -2,7 +2,9 @@ package daemon
 
 import (
 	"context"
+	"maps"
 	"net"
+	"slices"
 	"sync"
 	"time"
 
@@ -48,18 +50,19 @@ func (d *Daemon) startP2P(ctx context.Context, dir string) error {
 		}
 	}
 	h, err := p2p.New(ctx, p2p.Config{
-		Dir:          dir,
-		Host:         host,
-		Port:         port,
-		Node:         d.cfg.NodeID,
-		Name:         d.cfg.Name,
-		Owner:        owner,
-		OnPeer:       d.onPeer,
-		Relays:       d.cfg.P2P.Relays,
-		RelayService: d.cfg.P2P.Relay,
-		UserAgent:    "mako/" + config.Version,
-		NoNAT:        host != "" && net.ParseIP(host).IsLoopback(),
-		Log:          d.log,
+		Dir:               dir,
+		Host:              host,
+		Port:              port,
+		Node:              d.cfg.NodeID,
+		Name:              d.cfg.Name,
+		Owner:             owner,
+		SSHAuthorizedKeys: mcp.ExpandHome("~/.ssh/authorized_keys"), // a key that logs in here by SSH vouches
+		OnPeer:            d.onPeer,
+		Relays:            d.cfg.P2P.Relays,
+		RelayService:      d.cfg.P2P.Relay,
+		UserAgent:         "mako/" + config.Version,
+		NoNAT:             host != "" && net.ParseIP(host).IsLoopback(),
+		Log:               d.log,
 	})
 	if err != nil {
 		return err
@@ -115,10 +118,13 @@ func (d *Daemon) linkedPeer(node *protocol.Node) (p2p.Peer, bool) {
 // as neither.
 func (d *Daemon) nodes() []*protocol.Node {
 	out := []*protocol.Node{d.Self()}
+	routes := d.routing()
 	for _, node := range d.peers.list() {
 		p, _ := d.linkedPeer(node)
 		node.Trusted, node.TrustsUs = p.Trusts, p.TrustedBy
 		node.Key, node.Owner = fingerprint(p.Key), fingerprint(p.Owner)
+		r := routes[node.GetId()]
+		node.Hops, node.Via = r.hops, r.via
 		out = append(out, node)
 	}
 	return out
@@ -159,6 +165,10 @@ func (d *Daemon) onPeer(p p2p.Peer) {
 		node = &protocol.Node{Id: p.Node, Source: "mesh"}
 	}
 	node.Name, node.PeerId = p.Name, p.ID.String()
+	// Every peer says what it runs on, let in or not.
+	if p.OS != "" {
+		node.Os, node.Arch = p.OS, p.Arch
+	}
 	if len(node.GetMultiaddrs()) == 0 && p.Addr != nil {
 		node.Multiaddrs = []string{p.Addr.String()}
 	}
@@ -168,7 +178,8 @@ func (d *Daemon) onPeer(p p2p.Peer) {
 	}
 	dropped := !p.TrustedBy && d.remote.drop(p.Node)
 	d.changes.fire(true, dropped)
-	shared, full, public := d.encodeState(d.state())
+	routes := d.routing()
+	shared, full, public := d.encodeState(d.state(), routes, d.meshSessions(routes))
 	go d.sendState(d.ctx, p, shared, full, public)
 }
 
@@ -222,18 +233,26 @@ func (d *Daemon) watchState(ctx context.Context) {
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	var last *protocol.NodeState
+	var lastRoutes map[string]route
+	var lastRelayed []*protocol.SessionInfo
 	var sent time.Time
 	for {
 		if d.p2p != nil || d.changes.watched() {
 			st := d.state()
+			// A route that changed goes on at once, as do the sessions of the
+			// nodes reached, so they travel a chain a hop a tick.
+			routes := d.routing()
+			relayed := d.meshSessions(routes)
+			routesChanged := !maps.Equal(routes, lastRoutes) || !sameSessions(relayed, lastRelayed)
+			lastRoutes, lastRelayed = routes, relayed
 			sessionsChanged := last != nil && !sameSessions(st.GetSessions(), last.GetSessions())
 			if sessionsChanged {
 				d.changes.fire(false, true)
 			}
-			changed := last == nil || sessionsChanged || st.GetWatchingApprovals() != last.GetWatchingApprovals() || !proto.Equal(st.GetNode(), last.GetNode()) ||
+			changed := last == nil || sessionsChanged || routesChanged || st.GetWatchingApprovals() != last.GetWatchingApprovals() || !proto.Equal(st.GetNode(), last.GetNode()) ||
 				st.GetWorkspace().GetVersion() != last.GetWorkspace().GetVersion()
 			if d.p2p != nil && (changed || time.Since(sent) >= stateEvery) {
-				shared, full, public := d.encodeState(st)
+				shared, full, public := d.encodeState(st, routes, relayed)
 				for _, p := range d.p2p.Peers() {
 					go d.sendState(ctx, p, shared, full, public)
 				}
@@ -252,12 +271,17 @@ func (d *Daemon) watchState(ctx context.Context) {
 // encodeState is st stamped now, as sent to a peer this daemon lets in,
 // with its sessions and the nodes it knows of, and the workspace for one
 // that lets it in too; and as sent to one that only lets it in, without.
-func (d *Daemon) encodeState(st *protocol.NodeState) (shared, full, public []byte) {
+// A peer this daemon lets in may route through it, so it has routes, how
+// this daemon reaches each node, and relayed, the sessions of those nodes.
+func (d *Daemon) encodeState(st *protocol.NodeState, routes map[string]route, relayed []*protocol.SessionInfo) (shared, full, public []byte) {
 	node := proto.CloneOf(st.GetNode())
 	node.LastSeen = timestamppb.Now()
-	out := &protocol.NodeState{Node: node, Sessions: st.GetSessions(), WatchingApprovals: st.GetWatchingApprovals()}
+	sessions := append(slices.Clip(st.GetSessions()), relayed...)
+	out := &protocol.NodeState{Node: node, Sessions: sessions, WatchingApprovals: st.GetWatchingApprovals()}
 	for _, n := range d.peers.list() {
 		if n.GetPeerId() != "" {
+			r := routes[n.GetId()]
+			n.Hops, n.Via = r.hops, r.via
 			out.Peers = append(out.Peers, n)
 		}
 	}
@@ -333,15 +357,6 @@ func (d *Daemon) takeState(from p2p.Peer, data []byte) {
 		d.changes.fireWorkspace()
 	}
 	if from.TrustedBy {
-		var own []*protocol.SessionInfo
-		for _, info := range st.GetSessions() {
-			if info.GetNodeId() == node.GetId() {
-				own = append(own, info)
-			}
-		}
-		if d.remote.put(node.GetId(), own) {
-			d.changes.fire(false, true)
-		}
 		for _, other := range st.GetPeers() {
 			if other.GetId() == d.cfg.NodeID || other.GetPeerId() == "" || other.GetPeerId() == d.peerID() {
 				continue
@@ -349,53 +364,16 @@ func (d *Daemon) takeState(from p2p.Peer, data []byte) {
 			d.peers.merge(other)
 			d.link(other)
 		}
+		// Its sessions, its own and those of the nodes it reaches, which
+		// are read as this daemon routes.
+		sessionsChanged, routesChanged := d.remote.put(node.GetId(), st.GetSessions(), reach(st.GetPeers(), d.cfg.NodeID))
+		if sessionsChanged || routesChanged {
+			d.changes.fire(routesChanged, sessionsChanged)
+		}
 	}
 	if from.Trusts && st.GetWatchingApprovals() {
 		d.approvals.watch(false)
 	}
-}
-
-// remoteSessions are the sessions each peer last published, by node ID.
-type remoteSessions struct {
-	mu    sync.Mutex
-	nodes map[string]publishedSessions
-}
-
-type publishedSessions struct {
-	sessions []*protocol.SessionInfo
-	at       time.Time
-}
-
-// put keeps sessions as node's, and reports whether they changed.
-func (r *remoteSessions) put(node string, sessions []*protocol.SessionInfo) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.nodes == nil {
-		r.nodes = map[string]publishedSessions{}
-	}
-	prev, ok := r.nodes[node]
-	r.nodes[node] = publishedSessions{sessions: sessions, at: time.Now()}
-	return !ok || !sameSessions(prev.sessions, sessions)
-}
-
-// drop forgets node's sessions, and reports whether there were any.
-func (r *remoteSessions) drop(node string) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	_, ok := r.nodes[node]
-	delete(r.nodes, node)
-	return ok
-}
-
-// get is the sessions node last published, if it did so lately.
-func (r *remoteSessions) get(node string) ([]*protocol.SessionInfo, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	p, ok := r.nodes[node]
-	if !ok || time.Since(p.at) > stateFresh {
-		return nil, false
-	}
-	return p.sessions, true
 }
 
 // notifier tells the front-ends watching their daemon what changed.

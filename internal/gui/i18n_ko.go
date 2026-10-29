@@ -676,6 +676,8 @@ var catalogKo = map[string]string{
 	"let in here":                       "여기서 허용됨",
 	"Let in":                            "허용된 키",
 	"lets this node in":                 "이 노드를 허용함",
+	"through %s":                        "%s 경유",
+	"from %s":                           "%s에서",
 	"no access":                         "접근 없음",
 	"No key is let in yet.":             "아직 허용된 키가 없습니다.",
 	"No node is asking to be let in.":   "접근을 요청한 노드가 없습니다.",

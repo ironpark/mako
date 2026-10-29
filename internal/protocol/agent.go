@@ -29,7 +29,7 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 8
+const Revision = 9
 
 // RevisionTransfers is the first revision whose daemon moves files in
 // pieces (ReadFile.raw, WriteFile.offset) and opens tunnels.
@@ -38,6 +38,11 @@ const RevisionTransfers = 7
 // RevisionSend is the first revision whose daemon takes send, typing into
 // a session without an attach, and holds approvals for a watch that asks.
 const RevisionSend = 8
+
+// RevisionRoutes is the first revision whose daemon says how it reaches
+// each node (Node.hops, Node.via) and passes requests on to nodes that
+// let in the nodes that let it in.
+const RevisionRoutes = 9
 
 // AgentStatus is what an agent's own hooks last said it is doing,
 // SessionInfo.Status.
@@ -155,6 +160,7 @@ const (
 	StandingSelf = "self" // the daemon itself
 	StandingBoth = "both" // each lets the other in
 	StandingUs   = "us"   // the node lets the daemon in
+	StandingVia  = "via"  // the daemon reaches it through nodes that let it in
 	StandingThem = "them" // the daemon lets the node in
 	StandingNone = "none"
 )
@@ -168,8 +174,27 @@ func (n *Node) Standing() string {
 		return StandingBoth
 	case n.GetTrustsUs():
 		return StandingUs
+	case n.GetVia() != "":
+		return StandingVia
 	case n.GetTrusted():
 		return StandingThem
 	}
 	return StandingNone
+}
+
+// Platform names the system n runs on and its processor, as "macOS
+// arm64" or "Linux x86-64", or "" for a node that did not say.
+func (n *Node) Platform() string {
+	os := map[string]string{
+		"darwin": "macOS", "linux": "Linux", "windows": "Windows", "android": "Android",
+		"ios": "iOS", "freebsd": "FreeBSD", "openbsd": "OpenBSD", "netbsd": "NetBSD",
+	}[n.GetOs()]
+	if os == "" {
+		os = n.GetOs()
+	}
+	arch := map[string]string{"amd64": "x86-64", "386": "x86"}[n.GetArch()]
+	if arch == "" {
+		arch = n.GetArch()
+	}
+	return strings.TrimSpace(os + " " + arch)
 }

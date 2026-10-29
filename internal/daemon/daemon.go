@@ -58,7 +58,7 @@ type Daemon struct {
 	keyPrint, ownerPrint string
 	access               accessRequests       // the peers asking to be let in
 	heads                heads                // the projects' branches
-	remote               remoteSessions       // the sessions peers send
+	remote               peerReports          // what peers say of their sessions and routes; see routes.go
 	changes              notifier             // tells watching front-ends what changed
 	workspace            workspaces           // the windows' tabs and panes; see workspace.go
 	linking              map[string]time.Time // peer ID -> the last link tried, until one holds
@@ -217,8 +217,12 @@ func (d *Daemon) serveStream(ctx context.Context, stream *transport.Stream, from
 	if env.Type() != protocol.TypeHello {
 		return protocol.WriteError(stream, env.GetId(), errors.New("expected hello"))
 	}
-	if _, err := protocol.Body[*protocol.Hello](env); err != nil {
+	hello, err := protocol.Body[*protocol.Hello](env)
+	if err != nil {
 		return protocol.WriteError(stream, env.GetId(), err)
+	}
+	if fromPeer {
+		ctx = withHops(ctx, hello.GetHops()+1)
 	}
 	if err := stream.Send(protocol.TypeWelcome, env.GetId(), &protocol.Welcome{Node: d.Self()}); err != nil {
 		return err

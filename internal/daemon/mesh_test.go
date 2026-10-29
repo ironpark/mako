@@ -5,10 +5,13 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/config"
@@ -117,7 +120,7 @@ func TestDaemonsThatLetEachOtherInShareTheirState(t *testing.T) {
 	defer cancel()
 
 	waitFor(t, "b's session on a", func() bool {
-		_, sent := a.remote.get(b.cfg.NodeID)
+		_, sent := a.remote.fresh()[b.cfg.NodeID]
 		return sent && lists(ctx, c, "on-b")
 	})
 	node := nodeOf(ctx, t, c, b.cfg.NodeID)
@@ -176,6 +179,91 @@ func TestTrustRunsOneWayAcrossTheMesh(t *testing.T) {
 	if n := nodeOf(ctx, t, fromServer, laptop.cfg.NodeID); n == nil || !n.GetTrusted() || n.GetTrustsUs() {
 		t.Fatalf("the server's record of the laptop: %v", n)
 	}
+}
+
+// Trust carries along a chain: a laptop let in by a server, which a build
+// box lets in, which a runner lets in, drives the runner through the
+// others, sees its sessions, and is cut off when a link of the chain
+// lets go. Nothing runs back up the chain.
+func TestTrustCarriesAlongAChain(t *testing.T) {
+	laptop := meshDaemon(t, "laptop")
+	server := meshDaemon(t, "server", p2pAddr(laptop))
+	box := meshDaemon(t, "box", p2pAddr(server))
+	runner := meshDaemon(t, "runner", p2pAddr(box))
+	letIn(t, server, laptop)
+	letIn(t, box, server)
+	letIn(t, runner, box)
+	addSession(t, runner, "on-runner")
+	addSession(t, laptop, "on-laptop")
+	fromLaptop, fromRunner := dialDaemon(t, laptop), dialDaemon(t, runner)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	waitFor(t, "the runner's session on the laptop", func() bool { return lists(ctx, fromLaptop, "on-runner") })
+	n := nodeOf(ctx, t, fromLaptop, runner.cfg.NodeID)
+	if n.GetHops() != 3 || n.GetVia() != server.cfg.NodeID || n.Standing() != protocol.StandingVia {
+		t.Fatalf("the laptop's record of the runner: hops %d via %q, %s", n.GetHops(), n.GetVia(), n.Standing())
+	}
+	if _, err := fromLaptop.ListDir(ctx, &protocol.ListDir{NodeId: runner.cfg.NodeID, Path: t.TempDir()}); err != nil {
+		t.Fatalf("the laptop asking the runner: %v", err)
+	}
+	info, err := fromLaptop.Rename(ctx, &protocol.RenameSession{NodeId: runner.cfg.NodeID, SessionId: "on-runner", Name: "renamed"})
+	if err != nil || info.GetName() != "renamed" {
+		t.Fatalf("the laptop renaming the runner's session: %v %v", info, err)
+	}
+
+	if lists(ctx, fromRunner, "on-laptop") {
+		t.Fatal("the runner lists the laptop's session")
+	}
+	if _, err := fromRunner.ListDir(ctx, &protocol.ListDir{NodeId: laptop.cfg.NodeID, Path: t.TempDir()}); err == nil {
+		t.Fatal("the runner reached the laptop")
+	}
+	// What a node runs on is told to every node it links to, let in or not.
+	if n := nodeOf(ctx, t, fromRunner, laptop.cfg.NodeID); n.GetOs() != runtime.GOOS || n.GetArch() != runtime.GOARCH {
+		t.Fatalf("the runner's record of the laptop: %s/%s", n.GetOs(), n.GetArch())
+	}
+
+	// The box letting the server go cuts the laptop off.
+	if _, err := box.p2p.Keys().Remove(ssh.FingerprintSHA256(server.p2p.Key())); err != nil {
+		t.Fatal(err)
+	}
+	box.p2p.Reconsider()
+	waitFor(t, "the laptop to be cut off from the runner", func() bool {
+		_, err := fromLaptop.ListDir(ctx, &protocol.ListDir{NodeId: runner.cfg.NodeID, Path: t.TempDir()})
+		return err != nil
+	})
+}
+
+// A route that goes stale in a ring of nodes that let each other in
+// ends: a request for the node it led to fails, rather than going round,
+// and the ring forgets the route.
+func TestAStaleRouteEnds(t *testing.T) {
+	a := meshDaemon(t, "a")
+	b := meshDaemon(t, "b", p2pAddr(a))
+	d := meshDaemon(t, "d", p2pAddr(a), p2pAddr(b))
+	c := meshDaemon(t, "c", p2pAddr(b))
+	for _, pair := range [][2]*Daemon{{a, b}, {b, d}, {d, a}} {
+		letIn(t, pair[0], pair[1])
+		letIn(t, pair[1], pair[0])
+	}
+	letIn(t, c, b)
+	fromA := dialDaemon(t, a)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	waitFor(t, "a to reach c", func() bool {
+		n := nodeOf(ctx, t, fromA, c.cfg.NodeID)
+		return n.GetHops() == 2 && n.GetVia() == b.cfg.NodeID
+	})
+
+	if _, err := c.p2p.Keys().Remove(ssh.FingerprintSHA256(b.p2p.Key())); err != nil {
+		t.Fatal(err)
+	}
+	c.p2p.Reconsider()
+	waitFor(t, "b to lose c", func() bool { return b.routing()[c.cfg.NodeID].hops == 0 })
+	if _, err := fromA.ListDir(ctx, &protocol.ListDir{NodeId: c.cfg.NodeID, Path: t.TempDir()}); err == nil {
+		t.Fatal("a reached c through the ring")
+	}
+	waitForWithin(t, stateFresh+maxHops*2*time.Second, "a to lose c", func() bool { return a.routing()[c.cfg.NodeID].hops == 0 })
 }
 
 // A node that is not let in asks to be; the other's front-end sees the

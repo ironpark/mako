@@ -19,21 +19,41 @@ func (d *Daemon) hello() *protocol.Hello {
 	}
 }
 
-// peerStream opens a greeted stream to node over libp2p, which holds the
-// node to its identity there. A node that does not let this one in
-// cannot be asked anything.
+// peerStream opens a greeted stream for node over libp2p, which holds the
+// other end to its identity there: to the node, or, when it does not let
+// this one in, to the peer this daemon reaches it through, which passes
+// on a request addressed to the node. A daemon serves one addressed to
+// itself as one addressed to none, so the request goes unchanged either
+// way. A node that lets this one in nowhere along a chain cannot be asked
+// anything.
 func (d *Daemon) peerStream(ctx context.Context, node *protocol.Node) (*transport.Stream, error) {
-	if node.GetPeerId() == "" || d.p2p == nil {
+	hops := hopsOf(ctx)
+	if hops >= maxHops {
+		return nil, fmt.Errorf("%s is more than %d nodes away", node.GetName(), maxHops)
+	}
+	to := node
+	if via := d.routing()[node.GetId()].via; via != "" {
+		var err error
+		if to, err = d.node(via); err != nil {
+			return nil, err
+		}
+	}
+	if to.GetPeerId() == "" || d.p2p == nil {
 		return nil, fmt.Errorf("%s cannot be reached: it is not linked over libp2p", node.GetName())
 	}
-	s, err := d.p2p.Open(ctx, node.GetPeerId(), node.GetMultiaddrs())
+	s, err := d.p2p.Open(ctx, to.GetPeerId(), to.GetMultiaddrs())
 	if errors.Is(err, p2p.ErrNotTrusted) {
+		if to != node {
+			return nil, fmt.Errorf("%s, which this node reaches %s through, has not let it in", to.GetName(), node.GetName())
+		}
 		return nil, fmt.Errorf("%s has not let this node in; ask it to", node.GetName())
 	} else if err != nil {
 		return nil, err
 	}
 	stream := transport.NewStream(s)
-	if _, err := transport.Greet(stream, d.hello()); err != nil {
+	hello := d.hello()
+	hello.Hops = hops
+	if _, err := transport.Greet(stream, hello); err != nil {
 		_ = s.Reset()
 		return nil, err
 	}
@@ -62,7 +82,7 @@ func (d *Daemon) relayToPeer(ctx context.Context, typ protocol.Type, req routed,
 	if err != nil {
 		return err
 	}
-	if err := peer.Send(typ, "", forPeer(req)); err != nil {
+	if err := peer.Send(typ, "", req); err != nil {
 		peer.Close()
 		return err
 	}

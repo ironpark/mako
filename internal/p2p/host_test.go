@@ -6,6 +6,8 @@ import (
 	"crypto/rand"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -162,6 +164,50 @@ func TestAnOwnersKeyVouchesForItsHosts(t *testing.T) {
 	}
 }
 
+// A key that may log in by SSH lets in the hosts it vouches for, unless
+// its line limits it.
+func TestSSHAuthorizedKeysVouch(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	signer, err := ssh.NewSignerFromKey(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := ssh.MarshalAuthorizedKey(signer.PublicKey())
+	file := filepath.Join(t.TempDir(), "authorized_keys")
+	if err := os.WriteFile(file, append([]byte(`from="10.0.0.1" `), line...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server := newHost(t, func(c *Config) { c.SSHAuthorizedKeys = file })
+	laptop := newHost(t, func(c *Config) { c.Owner = signer })
+	echo(server)
+	if err := roundTrip(ctx, laptop, server, server.Addrs()); !errors.Is(err, ErrNotTrusted) {
+		t.Fatalf("a key limited to an address: %v, want ErrNotTrusted", err)
+	}
+	if len(server.SSHKeys().List()) != 0 {
+		t.Fatalf("a limited key listed: %v", server.SSHKeys().List())
+	}
+
+	// The file is read again when it changes.
+	if err := os.WriteFile(file, line, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the laptop to be let in", func() bool {
+		p, _ := laptop.Peer(server.ID().String())
+		return p.TrustedBy
+	})
+	if err := roundTrip(ctx, laptop, server, server.Addrs()); err != nil {
+		t.Fatalf("laptop to server: %v", err)
+	}
+	if !server.SSHKeys().Has(signer.PublicKey()) || server.Keys().Has(signer.PublicKey()) {
+		t.Fatal("the SSH key went into mako's own file")
+	}
+	if ok, err := server.SSHKeys().Remove(ssh.FingerprintSHA256(signer.PublicKey())); !ok || !errors.Is(err, ErrReadOnly) {
+		t.Fatalf("taking the SSH key out: %v %v, want ErrReadOnly", ok, err)
+	}
+}
+
 // A host that is not let in asks to be, and is told of being let in.
 func TestAHostAsksToBeLetIn(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -270,7 +316,7 @@ func TestAuthorizedKeysKeepTheirFile(t *testing.T) {
 	if k.Has(s1.PublicKey()) || !k.Has(s2.PublicKey()) {
 		t.Fatal("the wrong key went")
 	}
-	restricted := parseAuthorizedKeys([]byte(`command="ls" ` + string(ssh.MarshalAuthorizedKey(s1.PublicKey()))))
+	restricted := parseAuthorizedKeys([]byte(`command="ls" `+string(ssh.MarshalAuthorizedKey(s1.PublicKey()))), false)
 	if len(restricted) != 0 {
 		t.Fatal("a key bound to a command was let in")
 	}

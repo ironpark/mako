@@ -184,15 +184,25 @@ func listNodes(ctx context.Context, c *client.Client) error {
 		return err
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tADDRESS\tVIA\tACCESS\tLAST SEEN")
+	fmt.Fprintln(w, "ID\tNAME\tPLATFORM\tADDRESS\tVIA\tACCESS\tLAST SEEN")
 	for _, n := range nodes {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", short(n.GetId()), n.GetName(), n.GetAddr(), n.GetSource(), trustLabel(n), ago(protocol.TimeOf(n.GetLastSeen())))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", short(n.GetId()), n.GetName(), n.Platform(), n.GetAddr(), n.GetSource(), trustLabel(n, nodes), ago(protocol.TimeOf(n.GetLastSeen())))
 	}
 	return w.Flush()
 }
 
-// trustLabel says how the daemon and n stand.
-func trustLabel(n *protocol.Node) string {
+// trustLabel says how the daemon and n stand, and which of nodes it
+// reaches n through.
+func trustLabel(n *protocol.Node, nodes []*protocol.Node) string {
+	if n.Standing() == protocol.StandingVia {
+		via := short(n.GetVia())
+		for _, o := range nodes {
+			if o.GetId() == n.GetVia() {
+				via = o.GetName()
+			}
+		}
+		return "through " + via
+	}
 	return map[string]string{
 		protocol.StandingSelf: "-",
 		protocol.StandingBoth: "both ways",
@@ -252,6 +262,10 @@ func access(ctx context.Context, c *client.Client, req *protocol.Access) error {
 		fmt.Println("  no key yet")
 	}
 	for _, k := range info.GetKeys() {
+		if k.GetSource() != "" {
+			fmt.Printf("  %s  %s  (from %s)\n", k.GetFingerprint(), k.GetComment(), k.GetSource())
+			continue
+		}
 		fmt.Printf("  %s  %s\n", k.GetFingerprint(), k.GetComment())
 	}
 	return nil

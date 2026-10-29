@@ -154,6 +154,7 @@ welcome { node: { ...the daemon's Node... } }
 |---|---|
 | `name` | The caller's name: a daemon's node name, or `mako-cli` from the CLI and the app alike. |
 | `version` | The caller's build. |
+| `hops` | On a peer's stream, how many daemons the requests went through before the one that sent them: 0 from the daemon whose front-end made them. See [Routing](#routing-across-the-mesh). |
 
 A stream is a peer's or a front-end's by where it comes from, not by what
 its hello says: one on libp2p is a peer's, which gets only the daemon's own
@@ -213,17 +214,30 @@ Most requests have a `node_id`:
 - **Another node's ID:** the daemon opens a peer stream to that node, sends
   the request with `node_id` cleared, and relays the reply, or the error.
   A node it does not know fails with "unknown node".
+- **A node that does not let the daemon in, but that it reaches through
+  others:** the daemon sends the request, `node_id` and all, to the peer it
+  reaches the node through, which routes it in turn.
 
-Forwarding is one hop. A daemon only forwards to nodes in its own peer table,
-and only to those that let it in; another fails with "has not let this node
-in". Each node's state tells the nodes it lets in of the nodes it knows, so
-the table fills with the whole mesh.
+Trust carries along a chain: a daemon reaches every node at the end of a
+chain of nodes each letting in the one before, through the first of them.
+That gives it nothing it lacked, since the first could make the same
+requests of the rest itself, and a link of the chain that lets go cuts off
+the rest. Each daemon sends the peers it lets in, in its state's `peers`,
+how it reaches each node it knows: `hops`, 1 for a node that lets it in, and
+`via`, the peer it goes through. A peer that cannot reach a node in fewer
+hops itself routes through it, ignoring routes that go through itself. A
+request goes through at most 8 daemons: each counts them in its `hello`'s
+`hops` to the next, and passes on none past that, so a stale route cannot
+send one round. Other nodes fail with "has not let this node in". Each
+node's state tells the nodes it lets in of the nodes it knows, so the table
+fills with the whole mesh.
 
 `list_sessions` is not routed by node. A daemon asked by a front-end answers
 with its own sessions and those every peer that lets it in
 [sent](#the-mesh-over-libp2p) in the last 20 seconds; it asks no one. A
-daemon asked by a peer answers with its own sessions only. Sessions a peer
-sends for any node other than itself are dropped.
+daemon asked by a peer answers with its own sessions only. A peer's state
+carries the sessions of the nodes it reaches too, which a daemon that
+reaches those nodes through it keeps; it drops the rest.
 
 `list_nodes`, `watch` and `access` are answered by the daemon itself.
 
@@ -261,6 +275,8 @@ message Node {
   bool trusts_us = 15; // it lets the daemon answering in
   string key = 16;     // its own key's fingerprint, SHA256:…
   string owner = 17;   // the fingerprint of the SSH key vouching for it
+  uint32 hops = 18;    // daemons a request goes through to it: 1 when it lets the daemon in, 0 for unreachable
+  string via = 19;     // the peer a request to it goes to first, when hops is more than 1
 }
 
 message Changed {
@@ -611,12 +627,13 @@ ID's key. The host that dialed then opens `/mako/trust/1`, and each side
 writes, then reads:
 
 ```
-{"node": "<node ID>", "name": "<node name>", "cert": {"owner": …, "sig": …, "expires": …}}
+{"node": "<node ID>", "name": "<node name>", "os": "darwin", "arch": "arm64", "cert": {"owner": …, "sig": …, "expires": …}}
 {"trusts": true}
 ```
 
-`cert` is there when an SSH key vouches for the host (see
-[Access](#access)). Each side decides from the other's introduction
+`os` and `arch` are what the host runs on, as Go names them, so even a node
+that lets in neither has them. `cert` is there when an SSH key vouches for
+the host (see [Access](#access)). Each side decides from the other's introduction
 whether it lets the other in, and the second message says so. The two
 introduce themselves again whenever either's keys change, or its
 certificate is renewed, so a key let in or taken out holds at once. A host
@@ -633,9 +650,9 @@ regardless, and to a peer at once when the two introduce themselves:
 ```proto
 message NodeState {
   Node node = 1;                     // the daemon itself
-  repeated SessionInfo sessions = 2; // its own sessions
+  repeated SessionInfo sessions = 2; // its own, and those of the nodes it reaches
   bool watching_approvals = 3;       // a front-end of its answers approvals
-  repeated Node peers = 4;           // the other nodes it knows of
+  repeated Node peers = 4;           // the other nodes it knows of, with how it reaches them
   Workspace workspace = 5;           // the windows' latest; see Workspaces
 }
 ```
@@ -776,7 +793,9 @@ the network protocol.
 
 Trust runs one way. A daemon lets a peer in when the peer's key is in its
 `authorized_keys` file, in its configuration directory, in OpenSSH's format:
-the peer's own key, or the SSH key that vouches for it. A daemon serves the
+the peer's own key, or the SSH key that vouches for it. An SSH key in the
+user's own `~/.ssh/authorized_keys`, one that may log in to the machine,
+lets in the peers it vouches for too. A daemon serves the
 requests of the peers it lets in, so a peer it lets in can start programs and
 read and write files on its machine; that peer must let it in for the
 reverse.
@@ -797,7 +816,9 @@ machines one SSH key vouches for let each other in without a word.
 
 **Lines in `authorized_keys`.** Lines that do not parse are skipped, as are
 keys bound to a command (`command=`, `restrict`), which a mako link cannot
-honour. The file is read again when it changes.
+honour. Of `~/.ssh/authorized_keys`, a line with any options at all
+(`from=`, `no-pty`, …) is skipped, and mako only reads it; its keys are
+listed in `access` with the file as their `source`, and taken out there. Both files are read again when they change.
 
 **Asking to be let in.** A daemon a peer does not let in may ask it to, on
 `/mako/access/1`, with a short note. The peer keeps the request, in memory,
@@ -835,5 +856,9 @@ taken out at once. The libp2p port may face the internet.
 Letting a key in hands its holder the machine: anyone it lets in can start
 programs and read and write files there, and reach any port of its
 loopback through a tunnel, even one a server there keeps from the network.
-Let in the keys of your own
-machines, and an SSH key only when its private half is kept safe.
+Letting a node in lets in, through it,
+every node it lets in, and so on along the chain. A daemon routes through a
+peer on that peer's word of what it reaches, so a node that lets yours in
+sees what yours sends the nodes it says it reaches, and answers for them.
+Let in the keys of your own machines, and an SSH key only when its private
+half is kept safe.

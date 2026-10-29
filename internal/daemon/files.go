@@ -463,17 +463,7 @@ func forward[R proto.Message](ctx context.Context, d *Daemon, typ protocol.Type,
 		return zero, err
 	}
 	defer stream.Close()
-	return transport.Call[R](stream, typ, forPeer(req))
-}
-
-// forPeer is a request as it goes on to its node's daemon: its node
-// cleared, so the peer serves it locally. The request is the relay's own,
-// decoded for it, and cleared in place rather than copied with the file
-// a write carries.
-func forPeer(req routed) proto.Message {
-	r := req.ProtoReflect()
-	r.Clear(r.Descriptor().Fields().ByName("node_id"))
-	return req
+	return transport.Call[R](stream, typ, req)
 }
 
 // fileOp makes, renames or deletes a file or folder. None of them replaces

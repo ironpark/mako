@@ -25,9 +25,14 @@ const (
 // Hello opens every stream and says who is calling, for the log: whether
 // the caller is a front-end or a peer is where the stream comes from.
 type Hello struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Version       string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Name    string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Version string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
+	// hops is how many daemons a request on a peer's stream went through
+	// before the one that sent it: 0 from the daemon whose front-end made
+	// it. A daemon passes on no request past a limit, so a stale route
+	// cannot send one round in a loop.
+	Hops          uint32 `protobuf:"varint,6,opt,name=hops,proto3" json:"hops,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -74,6 +79,13 @@ func (x *Hello) GetVersion() string {
 		return x.Version
 	}
 	return ""
+}
+
+func (x *Hello) GetHops() uint32 {
+	if x != nil {
+		return x.Hops
+	}
+	return 0
 }
 
 // Welcome answers a Hello: the daemon describing itself.
@@ -147,8 +159,15 @@ type Node struct {
 	TrustsUs bool `protobuf:"varint,15,opt,name=trusts_us,json=trustsUs,proto3" json:"trusts_us,omitempty"`
 	// key is the fingerprint of the node's own key, and owner that of the
 	// SSH key that vouches for it, if one does.
-	Key           string `protobuf:"bytes,16,opt,name=key,proto3" json:"key,omitempty"`
-	Owner         string `protobuf:"bytes,17,opt,name=owner,proto3" json:"owner,omitempty"`
+	Key   string `protobuf:"bytes,16,opt,name=key,proto3" json:"key,omitempty"`
+	Owner string `protobuf:"bytes,17,opt,name=owner,proto3" json:"owner,omitempty"`
+	// How the daemon answering reaches the node, when it can: hops is how
+	// many daemons a request goes through to it, 1 when the node lets the
+	// daemon in and more through nodes that do, each letting in the one
+	// before; via is the node ID of the peer the request goes to first,
+	// when hops is more than 1. 0 and empty for a node it cannot reach.
+	Hops          uint32 `protobuf:"varint,18,opt,name=hops,proto3" json:"hops,omitempty"`
+	Via           string `protobuf:"bytes,19,opt,name=via,proto3" json:"via,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -298,6 +317,20 @@ func (x *Node) GetKey() string {
 func (x *Node) GetOwner() string {
 	if x != nil {
 		return x.Owner
+	}
+	return ""
+}
+
+func (x *Node) GetHops() uint32 {
+	if x != nil {
+		return x.Hops
+	}
+	return 0
+}
+
+func (x *Node) GetVia() string {
+	if x != nil {
+		return x.Via
 	}
 	return ""
 }
@@ -921,11 +954,15 @@ func (x *AccessInfo) GetKeys() []*AccessKey {
 
 // AccessKey is a public key.
 type AccessKey struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Fingerprint   string                 `protobuf:"bytes,1,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"` // SHA256:…
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`               // ssh-ed25519, …
-	Comment       string                 `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`
-	Line          string                 `protobuf:"bytes,4,opt,name=line,proto3" json:"line,omitempty"` // as authorized_keys has it
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Fingerprint string                 `protobuf:"bytes,1,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"` // SHA256:…
+	Type        string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`               // ssh-ed25519, …
+	Comment     string                 `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`
+	Line        string                 `protobuf:"bytes,4,opt,name=line,proto3" json:"line,omitempty"` // as authorized_keys has it
+	// source is the file outside mako's own that lets the key in, which
+	// mako reads and does not edit: the user's ~/.ssh/authorized_keys.
+	// Empty for a key of mako's own file.
+	Source        string `protobuf:"bytes,5,opt,name=source,proto3" json:"source,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -984,6 +1021,13 @@ func (x *AccessKey) GetComment() string {
 func (x *AccessKey) GetLine() string {
 	if x != nil {
 		return x.Line
+	}
+	return ""
+}
+
+func (x *AccessKey) GetSource() string {
+	if x != nil {
+		return x.Source
 	}
 	return ""
 }
@@ -1069,12 +1113,13 @@ var File_mako_v2_mesh_proto protoreflect.FileDescriptor
 
 const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\n" +
-	"\x12mako/v2/mesh.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x15mako/v2/session.proto\"j\n" +
+	"\x12mako/v2/mesh.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x15mako/v2/session.proto\"~\n" +
 	"\x05Hello\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
-	"\aversion\x18\x03 \x01(\tR\aversionJ\x04\b\x01\x10\x02J\x04\b\x04\x10\x05J\x04\b\x05\x10\x06R\anode_idR\ais_peerR\bauth_tagR\x05token\",\n" +
+	"\aversion\x18\x03 \x01(\tR\aversion\x12\x12\n" +
+	"\x04hops\x18\x06 \x01(\rR\x04hopsJ\x04\b\x01\x10\x02J\x04\b\x04\x10\x05J\x04\b\x05\x10\x06R\anode_idR\ais_peerR\bauth_tagR\x05token\",\n" +
 	"\aWelcome\x12!\n" +
-	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\"\xc9\x03\n" +
+	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\"\xef\x03\n" +
 	"\x04Node\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -1095,7 +1140,9 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\atrusted\x18\x0e \x01(\bR\atrusted\x12\x1b\n" +
 	"\ttrusts_us\x18\x0f \x01(\bR\btrustsUs\x12\x10\n" +
 	"\x03key\x18\x10 \x01(\tR\x03key\x12\x14\n" +
-	"\x05owner\x18\x11 \x01(\tR\x05owner\"y\n" +
+	"\x05owner\x18\x11 \x01(\tR\x05owner\x12\x12\n" +
+	"\x04hops\x18\x12 \x01(\rR\x04hops\x12\x10\n" +
+	"\x03via\x18\x13 \x01(\tR\x03via\"y\n" +
 	"\tAgentInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bprofiles\x18\x02 \x03(\tR\bprofiles\x12\x12\n" +
@@ -1134,12 +1181,13 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\v2\x12.mako.v2.AccessKeyR\x03key\x12(\n" +
 	"\x05owner\x18\x02 \x01(\v2\x12.mako.v2.AccessKeyR\x05owner\x122\n" +
 	"\brequests\x18\x03 \x03(\v2\x16.mako.v2.AccessRequestR\brequests\x12&\n" +
-	"\x04keys\x18\x04 \x03(\v2\x12.mako.v2.AccessKeyR\x04keys\"o\n" +
+	"\x04keys\x18\x04 \x03(\v2\x12.mako.v2.AccessKeyR\x04keys\"\x87\x01\n" +
 	"\tAccessKey\x12 \n" +
 	"\vfingerprint\x18\x01 \x01(\tR\vfingerprint\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x18\n" +
 	"\acomment\x18\x03 \x01(\tR\acomment\x12\x12\n" +
-	"\x04line\x18\x04 \x01(\tR\x04line\"\xc2\x01\n" +
+	"\x04line\x18\x04 \x01(\tR\x04line\x12\x16\n" +
+	"\x06source\x18\x05 \x01(\tR\x06source\"\xc2\x01\n" +
 	"\rAccessRequest\x12!\n" +
 	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\x12$\n" +
 	"\x03key\x18\x02 \x01(\v2\x12.mako.v2.AccessKeyR\x03key\x12(\n" +

@@ -129,8 +129,14 @@ func (d *Daemon) accessInfo() *protocol.AccessInfo {
 		Owner:    accessKey(d.p2p.Owner(), ""),
 		Requests: d.access.list(),
 	}
-	for _, k := range d.p2p.Keys().List() {
-		info.Keys = append(info.Keys, accessKey(k.Key, k.Comment))
+	for _, keys := range []*p2p.Keys{d.p2p.Keys(), d.p2p.SSHKeys()} {
+		for _, k := range keys.List() {
+			key := accessKey(k.Key, k.Comment)
+			if keys.ReadOnly() {
+				key.Source = keys.Path()
+			}
+			info.Keys = append(info.Keys, key)
+		}
 	}
 	return info
 }
@@ -204,6 +210,9 @@ func (d *Daemon) changeAccess(ctx context.Context, r *protocol.Access) error {
 			return err
 		}
 		if !ok {
+			if ok, _ = d.p2p.SSHKeys().Remove(r.GetKey()); ok {
+				return fmt.Errorf("%s is let in by %s, which mako does not edit; take it out there", r.GetKey(), d.p2p.SSHKeys().Path())
+			}
 			return fmt.Errorf("no key %s is let in", r.GetKey())
 		}
 	default:

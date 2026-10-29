@@ -28,12 +28,9 @@ func (d *Daemon) handleListSessions(ctx context.Context, stream *transport.Strea
 		return stream.Send(protocol.TypeSessions, env.GetId(), &protocol.Sessions{Sessions: sessions})
 	}
 	// A front-end asking a single daemon for sessions expects the whole mesh,
-	// so fold in what each peer that lets this daemon in sent of its own.
-	for _, node := range d.peers.list() {
-		if sent, ok := d.remote.get(node.GetId()); ok {
-			sessions = append(sessions, sent...)
-		}
-	}
+	// so fold in what the peers that let this daemon in sent of the nodes
+	// it reaches through them.
+	sessions = append(sessions, d.meshSessions(d.routing())...)
 	return stream.Send(protocol.TypeSessions, env.GetId(), &protocol.Sessions{Sessions: sessions})
 }
 
