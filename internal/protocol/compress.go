@@ -19,11 +19,20 @@ const (
 	// packMin is the smallest envelope worth compressing: below it, the
 	// work outweighs what it saves.
 	packMin = 1 << 10
+	// packWindow is how far back a packed frame may refer. An encoder
+	// keeps a history its size once it packs a frame of more than a block,
+	// and there is one encoder for each of a few frames packed at once:
+	// at zstd's 8 MiB that kept 8 MiB each, 54 MB in a window that had
+	// read some conversations.
+	packWindow = 1 << 20
+	// packers is how many frames are packed at once; more wait.
+	packers = 4
 )
 
 var (
 	encoder = sync.OnceValue(func() *zstd.Encoder {
-		e, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest), zstd.WithEncoderCRC(false), zstd.WithLowerEncoderMem(true))
+		e, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest), zstd.WithEncoderCRC(false), zstd.WithLowerEncoderMem(true),
+			zstd.WithWindowSize(packWindow), zstd.WithEncoderConcurrency(packers))
 		return e
 	})
 	decoder = sync.OnceValue(func() *zstd.Decoder {
