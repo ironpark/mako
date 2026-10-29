@@ -164,15 +164,23 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 	clickable := func(w ggui.Widget, i int) ggui.Widget {
 		return ggui.Pointer(w).OnDown(func(ev ggui.PointerEvent) { pick(i, ev.Mods.Shift) })
 	}
-	var rows []ggui.Widget
+	// A row is made as it comes into view: a diff of thousands of lines
+	// lays out the few dozen the pane shows.
+	var rows []func() ggui.Widget
+	widest, widestCells := -1, 0 // the longest line's row, in one column
 	if !mode.Split {
 		for i, l := range lines {
 			if l.GetOp() == "@" {
-				rows = append(rows, hunkRow(l, mono, hunk(i)))
+				rows = append(rows, func() ggui.Widget { return hunkRow(l, mono, hunk(i)) })
 				continue
 			}
-			row := ggui.Box(ggui.Row(num(int(l.GetOld())), num(int(l.GetNew())), ggui.Expanded(diffText(l, words[i], mode, mono, l.GetOp()+" "))).Gap(4)).Pad(1, 8)
-			rows = append(rows, clickable(tint(l.GetOp(), sel.has(i), row), i))
+			if n := textCells(untab(l.GetText())); n > widestCells {
+				widest, widestCells = len(rows), n
+			}
+			rows = append(rows, func() ggui.Widget {
+				row := ggui.Box(ggui.Row(num(int(l.GetOld())), num(int(l.GetNew())), ggui.Expanded(diffText(l, words[i], mode, mono, l.GetOp()+" "))).Gap(4)).Pad(1, 8)
+				return clickable(tint(l.GetOp(), sel.has(i), row), i)
+			})
 		}
 	} else {
 		// A side of a split row: the line's number and text, or an empty
@@ -193,10 +201,14 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 			l := lines[i]
 			switch l.GetOp() {
 			case "@":
-				rows = append(rows, hunkRow(l, mono, hunk(i)))
+				at := i
+				rows = append(rows, func() ggui.Widget { return hunkRow(l, mono, hunk(at)) })
 				i++
 			case " ":
-				rows = append(rows, ggui.Row(ggui.Expanded(side(i, false)), vline(), ggui.Expanded(side(i, true))).Stretch())
+				at := i
+				rows = append(rows, func() ggui.Widget {
+					return ggui.Row(ggui.Expanded(side(at, false)), vline(), ggui.Expanded(side(at, true))).Stretch()
+				})
 				i++
 			default:
 				var removed, added []int
@@ -216,21 +228,55 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 					if k < len(added) {
 						right = added[k]
 					}
-					rows = append(rows, ggui.Row(ggui.Expanded(side(left, false)), vline(), ggui.Expanded(side(right, true))).Stretch())
+					rows = append(rows, func() ggui.Widget {
+						return ggui.Row(ggui.Expanded(side(left, false)), vline(), ggui.Expanded(side(right, true))).Stretch()
+					})
 				}
 			}
 		}
 	}
 	if len(lines) < len(d.GetLines()) || d.GetTruncated() {
-		rows = append(rows, ggui.Box(muted(ggui.Text(T("The rest of the diff is not shown.")).Size(11.5))).Pad(8, 12))
+		rows = append(rows, func() ggui.Widget {
+			return ggui.Box(muted(ggui.Text(T("The rest of the diff is not shown.")).Size(11.5))).Pad(8, 12)
+		})
 	}
-	col := ggui.Column(rows...).Stretch()
+	col := ggui.Each(ggui.State(rows), func(row ggui.EachItem[func() ggui.Widget]) ggui.Widget { return row.Item() }).
+		Stretch().EstimatedExtent(diffRowEstimate)
 	if mode.Wrap || mode.Split {
 		return ggui.Scroll(col).Bar(tokSurface3)
 	}
-	// Long lines run on, and the whole diff scrolls sideways to them.
-	return ggui.Scroll(ggui.Scroll(col).Horizontal().Bar(tokSurface3)).Bar(tokSurface3)
+	// Long lines run on, and the whole diff scrolls sideways to them, as
+	// far as the longest, which is laid out for its width alone.
+	var wide ggui.Widget = col
+	if widest >= 0 {
+		wide = &asWideAs{like: rows[widest](), child: col}
+	}
+	return ggui.Scroll(ggui.Scroll(wide).Horizontal().Bar(tokSurface3)).Bar(tokSurface3)
 }
+
+// diffRowEstimate is how tall a diff's row is taken to be until it is laid
+// out: one line of 11.5pt mono and its padding.
+const diffRowEstimate = 18
+
+// textCells is how many cells s takes in a monospaced font.
+func textCells(s string) int {
+	n := 0
+	for _, r := range s {
+		n += runeCells(r)
+	}
+	return n
+}
+
+// asWideAs lays its child out as wide as like, at the least: a list that
+// lays out only the rows in view, as wide as its widest row.
+type asWideAs struct{ like, child ggui.Widget }
+
+func (a *asWideAs) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	w := max(a.like.Layout(ggui.Loose(c.Max()), env).W, c.MinW)
+	return a.child.Layout(ggui.Constraints{MinW: w, MaxW: w, MinH: c.MinH, MaxH: c.MaxH}, env)
+}
+
+func (a *asWideAs) Paint(dst *ggui.Canvas, r ggui.Rect) { dst.Paint(a.child, r) }
 
 // hunkRow is a hunk's header line, with its actions on hover.
 func hunkRow(l *protocol.DiffLine, mono ggui.TextStyle, actions ggui.Widget) ggui.Widget {

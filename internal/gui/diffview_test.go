@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -78,5 +79,27 @@ func TestPreviewDiffTabsGiveWayUntilKept(t *testing.T) {
 	m.openDiffTab(root, "/p", "", "main", c, false)
 	if len(ggui.Peek(m.Tabs)) != 3 {
 		t.Fatalf("tabs %q", ggui.Peek(m.Tabs))
+	}
+}
+
+func TestALongDiffDrawsOnlyTheLinesInView(t *testing.T) {
+	lines := []*protocol.DiffLine{{Op: "@", Text: "@@ -1,1999 +1,1999 @@"}}
+	for i := 1; i < 2000; i++ {
+		lines = append(lines, &protocol.DiffLine{Op: " ", Old: int64(i), New: int64(i), Text: fmt.Sprintf("line %d", i)})
+	}
+	// The longest line is far down, and the diff scrolls sideways as far.
+	lines[1500].Text = "line 1500 " + strings.Repeat("x", 400)
+	d := &protocol.Diff{Lines: lines}
+	for _, mode := range []diffMode{{}, {Wrap: true}, {Split: true}} {
+		p := ggui.ProbeBuilder(func() ggui.Widget {
+			return diffRows(d, mode, lineSel{From: 0, To: -1}, func(int, bool) {}, func(int) ggui.Widget { return ggui.Box() })
+		}, ggui.Sz(900, 600))
+		p.Frame()
+		p.Frame()
+		page := p.Semantics().String()
+		if n := strings.Count(page, "line "); n == 0 || n > 120 {
+			t.Errorf("%+v: %d of 1999 lines drawn, want only those near the window", mode, n)
+		}
+		p.Close()
 	}
 }
