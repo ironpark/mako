@@ -63,6 +63,24 @@ func TestRepoIsTheMainWorkTree(t *testing.T) {
 	}
 }
 
+// A repository is named the same however its remote reaches it.
+func TestTheRemoteNamesTheRepository(t *testing.T) {
+	for url, want := range map[string]string{
+		"git@github.com:ironpark/ultrasync.git":            "github.com/ironpark/ultrasync",
+		"https://github.com/IronPark/UltraSync":            "github.com/ironpark/ultrasync",
+		"ssh://git@Codeberg.org:2222/forgejo/forgejo.git":  "codeberg.org/forgejo/forgejo",
+		"https://user:token@git.example.com:3000/team/app": "git.example.com/team/app",
+		"https://gitlab.com/group/sub/project.git":         "gitlab.com/group/sub/project",
+		"/srv/git/team/app.git":                            "",
+		"file:///srv/git/team/app.git":                     "",
+		"":                                                 "",
+	} {
+		if got := urlRemote(url); got != want {
+			t.Errorf("urlRemote(%q) = %q, want %q", url, got, want)
+		}
+	}
+}
+
 func TestOwnerOfTheOriginRemote(t *testing.T) {
 	for url, want := range map[string]string{
 		"git@github.com:ironpark/mako.git":                 "github.com/ironpark",
@@ -89,8 +107,8 @@ func TestOwnerOfTheOriginRemote(t *testing.T) {
 	} {
 		dir := t.TempDir()
 		write(t, dir, "config", config)
-		if got := ownerOf(dir); got != want {
-			t.Errorf("ownerOf(%q) = %q, want %q", config, got, want)
+		if got := urlOwner(originURL(dir)); got != want {
+			t.Errorf("owner of %q = %q, want %q", config, got, want)
 		}
 	}
 
@@ -102,8 +120,8 @@ func TestOwnerOfTheOriginRemote(t *testing.T) {
 	linked := filepath.Join(t.TempDir(), "linked")
 	run("worktree", "add", "-q", "-b", "other", linked)
 	for _, dir := range []string{root, linked} {
-		if _, _, got := Head(dir); got != "github.com/ironpark" {
-			t.Errorf("Owner(%s) = %q", dir, got)
+		if _, _, owner, remote := Head(dir); owner != "github.com/ironpark" || remote != "github.com/ironpark/mako" {
+			t.Errorf("Head(%s): owner %q, remote %q", dir, owner, remote)
 		}
 	}
 }

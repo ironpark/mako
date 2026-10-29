@@ -33,6 +33,7 @@ public  final class SessionInfo extends
     repo_ = "";
     status_ = "";
     owner_ = "";
+    remote_ = "";
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -1216,6 +1217,83 @@ public  final class SessionInfo extends
   private void clearCaps() {
 
     caps_ = 0;
+  }
+
+  public static final int REMOTE_FIELD_NUMBER = 26;
+  private java.lang.String remote_;
+  /**
+   * <pre>
+   * remote names the repository the origin remote is of, the same on
+   * every node that has a clone of it: "github.com/ironpark/mako". "" as
+   * owner is, and for a remote on a local path.
+   * </pre>
+   *
+   * <code>string remote = 26 [json_name = "remote"];</code>
+   * @return The remote.
+   */
+  @java.lang.Override
+  public java.lang.String getRemote() {
+    return remote_;
+  }
+  /**
+   * <pre>
+   * remote names the repository the origin remote is of, the same on
+   * every node that has a clone of it: "github.com/ironpark/mako". "" as
+   * owner is, and for a remote on a local path.
+   * </pre>
+   *
+   * <code>string remote = 26 [json_name = "remote"];</code>
+   * @return The bytes for remote.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getRemoteBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(remote_);
+  }
+  /**
+   * <pre>
+   * remote names the repository the origin remote is of, the same on
+   * every node that has a clone of it: "github.com/ironpark/mako". "" as
+   * owner is, and for a remote on a local path.
+   * </pre>
+   *
+   * <code>string remote = 26 [json_name = "remote"];</code>
+   * @param value The remote to set.
+   */
+  private void setRemote(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    remote_ = value;
+  }
+  /**
+   * <pre>
+   * remote names the repository the origin remote is of, the same on
+   * every node that has a clone of it: "github.com/ironpark/mako". "" as
+   * owner is, and for a remote on a local path.
+   * </pre>
+   *
+   * <code>string remote = 26 [json_name = "remote"];</code>
+   */
+  private void clearRemote() {
+
+    remote_ = getDefaultInstance().getRemote();
+  }
+  /**
+   * <pre>
+   * remote names the repository the origin remote is of, the same on
+   * every node that has a clone of it: "github.com/ironpark/mako". "" as
+   * owner is, and for a remote on a local path.
+   * </pre>
+   *
+   * <code>string remote = 26 [json_name = "remote"];</code>
+   * @param value The bytes for remote to set.
+   */
+  private void setRemoteBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    remote_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
@@ -2539,6 +2617,85 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * remote names the repository the origin remote is of, the same on
+     * every node that has a clone of it: "github.com/ironpark/mako". "" as
+     * owner is, and for a remote on a local path.
+     * </pre>
+     *
+     * <code>string remote = 26 [json_name = "remote"];</code>
+     * @return The remote.
+     */
+    @java.lang.Override
+    public java.lang.String getRemote() {
+      return instance.getRemote();
+    }
+    /**
+     * <pre>
+     * remote names the repository the origin remote is of, the same on
+     * every node that has a clone of it: "github.com/ironpark/mako". "" as
+     * owner is, and for a remote on a local path.
+     * </pre>
+     *
+     * <code>string remote = 26 [json_name = "remote"];</code>
+     * @return The bytes for remote.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getRemoteBytes() {
+      return instance.getRemoteBytes();
+    }
+    /**
+     * <pre>
+     * remote names the repository the origin remote is of, the same on
+     * every node that has a clone of it: "github.com/ironpark/mako". "" as
+     * owner is, and for a remote on a local path.
+     * </pre>
+     *
+     * <code>string remote = 26 [json_name = "remote"];</code>
+     * @param value The remote to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRemote(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setRemote(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * remote names the repository the origin remote is of, the same on
+     * every node that has a clone of it: "github.com/ironpark/mako". "" as
+     * owner is, and for a remote on a local path.
+     * </pre>
+     *
+     * <code>string remote = 26 [json_name = "remote"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRemote() {
+      copyOnWrite();
+      instance.clearRemote();
+      return this;
+    }
+    /**
+     * <pre>
+     * remote names the repository the origin remote is of, the same on
+     * every node that has a clone of it: "github.com/ironpark/mako". "" as
+     * owner is, and for a remote on a local path.
+     * </pre>
+     *
+     * <code>string remote = 26 [json_name = "remote"];</code>
+     * @param value The bytes for remote to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRemoteBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setRemoteBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -2581,13 +2738,14 @@ public  final class SessionInfo extends
             "worktree_",
             "owner_",
             "caps_",
+            "remote_",
           };
           java.lang.String info =
-              "\u0000\u0019\u0000\u0001\u0001\u0019\u0019\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u001a\u0000\u0001\u0001\u001a\u001a\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208" +
               "\u000b\u000b\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011" +
               "\u0208\u0012\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004" +
-              "\u0017\u1009\u0005\u0018\u0208\u0019\u000b";
+              "\u0017\u1009\u0005\u0018\u0208\u0019\u000b\u001a\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

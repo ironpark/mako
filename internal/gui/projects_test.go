@@ -117,7 +117,7 @@ func TestKeptProjectsRememberOwners(t *testing.T) {
 	m.keepProjects([]*protocol.SessionInfo{s})
 	s.Owner = "git.ironpark.dev/ironpark"
 	m.keepProjects([]*protocol.SessionInfo{s, s})
-	want := []keptProject{{fileRoot{Node: "n1", Path: "/src/mako"}, "git.ironpark.dev/ironpark"}}
+	want := []keptProject{{fileRoot{Node: "n1", Path: "/src/mako"}, "git.ironpark.dev/ironpark", ""}}
 	if got := ggui.Peek(m.Prefs).Projects; !slices.Equal(got, want) {
 		t.Fatalf("projects %+v, want %+v", got, want)
 	}
@@ -132,7 +132,7 @@ func TestProjectsGroupByOwner(t *testing.T) {
 		{Id: "4", NodeId: "a", Project: "/w/homescale", Owner: "git.ironpark.dev/ironpark"},
 		{Id: "3", NodeId: "a", Project: "/tmp/scratch"},
 	}
-	kept := []keptProject{{fileRoot{Node: "a", Path: "/w/ggui"}, "github.com/ironpark"}}
+	kept := []keptProject{{fileRoot{Node: "a", Path: "/w/ggui"}, "github.com/ironpark", ""}}
 	groups := groupSessions(sessions, groupProject, nil, kept)
 	sections := byOwner(groups)
 	var got []string
@@ -156,5 +156,38 @@ func TestHostsWithoutSessionsAreListed(t *testing.T) {
 	groups := withHosts(groupSessions([]*protocol.SessionInfo{{Id: "1", NodeId: "a"}}, groupHost, nodes, nil), nodes)
 	if len(groups) != 2 || groups[0].NodeID != "b" || len(groups[0].Sessions) != 0 || groups[1].NodeID != "a" {
 		t.Fatalf("groups %+v", groups)
+	}
+}
+
+// The clones of one repository on several nodes, in folders of their own
+// names, share a section, which starts a session on this machine's by
+// default; another repository of the same name, and folders with no
+// remote, keep their own.
+func TestClonesOfARepositoryShareASection(t *testing.T) {
+	nodes := []*protocol.Node{{Id: "mac", Name: "RND-MAC", Source: "mdns"}, {Id: "studio", Name: "studio", Source: "self"}}
+	sessions := []*protocol.SessionInfo{
+		{Id: "1", NodeId: "mac", Project: "/w/project/ultrasync", Repo: "/w/project/ultrasync", Remote: "github.com/acme/ultrasync"},
+		{Id: "2", NodeId: "mac", Project: "/w/project/ultrasync/sub", Repo: "/w/project/ultrasync", Remote: "github.com/acme/ultrasync"},
+		{Id: "3", NodeId: "studio", Project: "/u/product/ultrasync", Repo: "/u/product/ultrasync", Remote: "github.com/acme/ultrasync"},
+		{Id: "4", NodeId: "studio", Project: "/u/fork/ultrasync", Repo: "/u/fork/ultrasync", Remote: "github.com/someone/ultrasync"},
+		{Id: "5", NodeId: "mac", Project: "/w/notes"},
+		{Id: "6", NodeId: "studio", Project: "/w/notes"},
+	}
+	kept := []keptProject{{fileRoot{Node: "box", Path: "/srv/ultrasync"}, "github.com/acme", "github.com/acme/ultrasync"}}
+	groups := groupSessions(sessions, groupProject, nodes, kept)
+	if len(groups) != 4 {
+		t.Fatalf("%d sections: %+v", len(groups), groups)
+	}
+	var shared *sessionGroup
+	for i, g := range groups {
+		if g.Remote == "github.com/acme/ultrasync" {
+			shared = &groups[i]
+		}
+	}
+	if shared == nil || shared.Key != "repo:github.com/acme/ultrasync" || len(shared.Sessions) != 3 || len(shared.Roots) != 3 {
+		t.Fatalf("the clones' section: %+v", shared)
+	}
+	if shared.NodeID != "studio" || shared.Project != "/u/product/ultrasync" {
+		t.Errorf("starts in %s:%s, not this machine's clone", shared.NodeID, shared.Project)
 	}
 }

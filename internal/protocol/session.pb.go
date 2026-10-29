@@ -343,7 +343,11 @@ type SessionInfo struct {
 	Owner string `protobuf:"bytes,24,opt,name=owner,proto3" json:"owner,omitempty"`
 	// caps is what mako follows of the session's agent, protocol's Cap
 	// bits; 0 from a daemon older than them.
-	Caps          uint32 `protobuf:"varint,25,opt,name=caps,proto3" json:"caps,omitempty"`
+	Caps uint32 `protobuf:"varint,25,opt,name=caps,proto3" json:"caps,omitempty"`
+	// remote names the repository the origin remote is of, the same on
+	// every node that has a clone of it: "github.com/ironpark/mako". "" as
+	// owner is, and for a remote on a local path.
+	Remote        string `protobuf:"bytes,26,opt,name=remote,proto3" json:"remote,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -551,6 +555,13 @@ func (x *SessionInfo) GetCaps() uint32 {
 		return x.Caps
 	}
 	return 0
+}
+
+func (x *SessionInfo) GetRemote() string {
+	if x != nil {
+		return x.Remote
+	}
+	return ""
 }
 
 // Approval is a tool call an agent waits for the user to approve.
@@ -1365,7 +1376,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x12\n" +
 	"\x04base\x18\x04 \x01(\tR\x04base\x12\x14\n" +
-	"\x05start\x18\x05 \x01(\tR\x05start\"\x80\x06\n" +
+	"\x05start\x18\x05 \x01(\tR\x05start\"\x98\x06\n" +
 	"\vSessionInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x14\n" +
@@ -1394,7 +1405,8 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\bapproval\x18\x16 \x01(\v2\x11.mako.v2.ApprovalR\bapproval\x12-\n" +
 	"\bworktree\x18\x17 \x01(\v2\x11.mako.v2.WorktreeR\bworktree\x12\x14\n" +
 	"\x05owner\x18\x18 \x01(\tR\x05owner\x12\x12\n" +
-	"\x04caps\x18\x19 \x01(\rR\x04capsB\f\n" +
+	"\x04caps\x18\x19 \x01(\rR\x04caps\x12\x16\n" +
+	"\x06remote\x18\x1a \x01(\tR\x06remoteB\f\n" +
 	"\n" +
 	"_exit_code\"\x8e\x01\n" +
 	"\bApproval\x12\x0e\n" +

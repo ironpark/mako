@@ -416,13 +416,22 @@ func sessionSection(m *model, by string, g sessionGroup, folded bool, selected s
 		// A folder kept with no sessions has nothing to bring it back once
 		// it leaves, so its menu can drop it. A host is the mesh's to list.
 		if len(g.Sessions) == 0 && by == groupProject {
-			ref := fileRoot{Node: nodeID, Path: project}
+			roots := g.Roots
 			row = append(row, iconMenu(ui.MenuOf(icon("ellipsis").Size(14),
-				ui.MenuItem(T("Remove from sidebar"), func() { m.forgetProject(ref) }),
+				ui.MenuItem(T("Remove from sidebar"), func() { m.forgetProjects(roots) }),
 			).Name(T("Folder actions")), 3))
 		}
-		row = append(row, ui.Tooltip(ui.ButtonOf(icon("plus").Size(14), func() { m.openNew(nodeID, project) }).
-			Ghost().Pad(3).Radius(5).Name(Tf("New session in %s", name)), T("New session here")))
+		if len(g.Roots) > 1 {
+			// The clones of a repository on several nodes: which to start in.
+			var items []ggui.Widget
+			for _, r := range g.Roots {
+				items = append(items, ui.MenuItem(Tf("On %s, in %s", nodeName(nodes, r.Node), tail(r.Path, 2)), func() { m.openNew(r.Node, r.Path) }))
+			}
+			row = append(row, iconMenu(ui.MenuOf(icon("plus").Size(14), items...).Name(Tf("New session in %s", name)), 3))
+		} else {
+			row = append(row, ui.Tooltip(ui.ButtonOf(icon("plus").Size(14), func() { m.openNew(nodeID, project) }).
+				Ghost().Pad(3).Radius(5).Name(Tf("New session in %s", name)), T("New session here")))
+		}
 		// A session dropped on the heading starts again there: its agent
 		// in this folder, or on this host in its own folder.
 		rows = append(rows, indented(sectionDrop(m, ggui.Box(ggui.Row(row...).Gap(6).Align(ggui.AlignCenter)).Pad(2, 4, 2, 2), nodeID, project), depth))
@@ -438,11 +447,12 @@ func sessionSection(m *model, by string, g sessionGroup, folded bool, selected s
 		switch by {
 		case groupProject:
 			where = append(where, nodeName(nodes, s.GetNodeId()))
-			// A subfolder by its path in the project; a worktree elsewhere
-			// by its own name.
-			if rel := subfolder(s.GetProject(), project); rel != "" {
+			// A subfolder by its path in its clone; a worktree elsewhere by
+			// its own name.
+			root := projectOf(s)
+			if rel := subfolder(s.GetProject(), root); rel != "" {
 				where = append(where, rel)
-			} else if s.GetProject() != project {
+			} else if s.GetProject() != root {
 				where = append(where, projectName(s.GetProject()))
 			}
 		case groupHost:

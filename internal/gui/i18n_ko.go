@@ -911,4 +911,5 @@ var catalogKo = map[string]string{
 	"Borrow %s of %s":          "%[2]s의 %[1]s 빌리기",
 	"%d devices borrowed":      "빌린 기기 %d개",
 	"%d devices to borrow":     "빌릴 수 있는 기기 %d개",
+	"On %s, in %s":             "%s의 %s에서",
 }

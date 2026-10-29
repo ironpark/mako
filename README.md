@@ -117,7 +117,9 @@ mako allow <node>             # let in a machine that asked
 `mako-gui` is a window onto the mesh:
 
 - **Sidebar.** Projects and their sessions, with each session's host,
-  branch and last activity. Sessions can be pinned, searched and dragged
+  branch and last activity. A repository cloned on several machines, in
+  folders of any name, is one project, by the repository its origin
+  remote is of. Sessions can be pinned, searched and dragged
   into panes. Dropping a session onto another project or host starts the
   same agent there.
 - **Tabs and panes.** Open sessions as tabs, and drag them to split, move

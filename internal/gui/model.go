@@ -767,15 +767,22 @@ type sessionGroup struct {
 	NodeID   string
 	Project  string
 	Owner    string // the owner of the project's repository, host/name
+	Remote   string // the repository its origin is of, host/path
 	Sessions []*protocol.SessionInfo
+	// Roots are the folders of the section, on their nodes: more than one
+	// for the clones of one repository on several nodes, NodeID and
+	// Project being the one a new session starts in by default.
+	Roots []fileRoot
 }
 
 // keptProject is a folder the sidebar keeps, with the owner of its
-// repository as its sessions last said, so the folder stays in its
-// owner's group once they are gone.
+// repository and the repository its origin is of, as its sessions last
+// said, so the folder stays in its owner's group, and with the other
+// clones of its repository, once they are gone.
 type keptProject struct {
 	fileRoot
-	Owner string `json:"owner,omitempty"`
+	Owner  string `json:"owner,omitempty"`
+	Remote string `json:"remote,omitempty"`
 }
 
 // keepProjects remembers the folders the sidebar groups sessions into,
@@ -789,7 +796,7 @@ func (m *model) keepProjects(sessions []*protocol.SessionInfo) {
 	}
 	var changed []keptProject // a copy, made at the first change
 	for _, s := range sessions {
-		r := keptProject{fileRoot{Node: s.GetNodeId(), Path: projectOf(s)}, s.GetOwner()}
+		r := keptProject{fileRoot{Node: s.GetNodeId(), Path: projectOf(s)}, s.GetOwner(), s.GetRemote()}
 		if r.Path == "" {
 			continue
 		}
@@ -837,7 +844,8 @@ func projectOf(s *protocol.SessionInfo) string {
 
 // groupSessions sorts sessions into the sidebar's sections for a grouping.
 // By project, a session goes in its repository's section, as projectOf
-// says. Remembered projects keep a section when they have no sessions.
+// says, which the clones of one repository on several nodes share.
+// Remembered projects keep a section when they have no sessions.
 func groupSessions(sessions []*protocol.SessionInfo, by string, nodes []*protocol.Node, projects []keptProject) []sessionGroup {
 	switch by {
 	case groupFlat:
@@ -856,19 +864,55 @@ func groupSessions(sessions []*protocol.SessionInfo, by string, nodes []*protoco
 	present := make(map[string]bool, len(groups))
 	for i, g := range groups {
 		present[g.Key] = true
-		groups[i].Owner = g.Sessions[0].GetOwner()
+		groups[i].Owner, groups[i].Remote = g.Sessions[0].GetOwner(), g.Sessions[0].GetRemote()
 	}
 	for _, r := range projects {
 		if r.Path == "" || present[dirKey(r.Node, r.Path)] {
 			continue
 		}
 		present[dirKey(r.Node, r.Path)] = true
-		groups = append(groups, sessionGroup{Key: dirKey(r.Node, r.Path), NodeID: r.Node, Project: r.Path, Owner: r.Owner})
+		groups = append(groups, sessionGroup{Key: dirKey(r.Node, r.Path), NodeID: r.Node, Project: r.Path, Owner: r.Owner, Remote: r.Remote})
 	}
+	groups = byRemote(groups, nodes)
 	sort.SliceStable(groups, func(a, b int) bool {
 		return projectName(groups[a].Project) < projectName(groups[b].Project)
 	})
 	return groups
+}
+
+// byRemote gathers the sections of one repository's clones on several
+// nodes into one, keyed by the repository. Its folder by default is this
+// machine's clone, else the first. Every section says its folders in
+// Roots.
+func byRemote(groups []sessionGroup, nodes []*protocol.Node) []sessionGroup {
+	self := ""
+	for _, n := range nodes {
+		if n.GetSource() == "self" {
+			self = n.GetId()
+		}
+	}
+	var out []sessionGroup
+	index := map[string]int{}
+	for _, g := range groups {
+		root := fileRoot{Node: g.NodeID, Path: g.Project}
+		i, ok := index[g.Remote]
+		if g.Remote == "" || !ok {
+			g.Roots = []fileRoot{root}
+			if g.Remote != "" {
+				index[g.Remote] = len(out)
+			}
+			out = append(out, g)
+			continue
+		}
+		m := &out[i]
+		m.Key = "repo:" + g.Remote
+		m.Roots = append(m.Roots, root)
+		m.Sessions = append(m.Sessions, g.Sessions...)
+		if g.NodeID == self && m.NodeID != self {
+			m.NodeID, m.Project = g.NodeID, g.Project
+		}
+	}
+	return out
 }
 
 // withHosts adds a section for each node that has no sessions, so the

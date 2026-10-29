@@ -20,16 +20,18 @@ func Branch(dir string) string {
 }
 
 // Head is the branch checked out where dir is, as Branch says, its
-// repository, as Repo says, and the owner of that repository's origin
-// remote, "github.com/ironpark" for git@github.com:ironpark/mako.git,
-// finding the repository once. All are "" outside a repository.
-func Head(dir string) (branch, repo, owner string) {
+// repository, as Repo says, and of that repository's origin remote the
+// owner, "github.com/ironpark" for git@github.com:ironpark/mako.git, and
+// the repository it names, "github.com/ironpark/mako", finding the
+// repository once. All are "" outside a repository.
+func Head(dir string) (branch, repo, owner, remote string) {
 	gitDir, top := findGitDir(dir)
 	if gitDir == "" {
-		return "", "", ""
+		return "", "", "", ""
 	}
 	common := commonDir(gitDir)
-	return branchOf(gitDir), repoOf(gitDir, common, top), ownerOf(common)
+	url := originURL(common)
+	return branchOf(gitDir), repoOf(gitDir, common, top), urlOwner(url), urlRemote(url)
 }
 
 // branchOf is Branch for the git directory gitDir, "" for none.
@@ -61,11 +63,10 @@ func Repo(dir string) string {
 	return repoOf(gitDir, commonDir(gitDir), top)
 }
 
-// ownerOf is the user or organization whose repository the origin remote
-// in the config of the git directory common is, or of its first remote by
-// name without an origin: "github.com/ironpark" for
-// git@github.com:ironpark/mako.git. "" without a remote.
-func ownerOf(common string) string {
+// originURL is the URL the origin remote in the config of the git
+// directory common fetches from, or without an origin its first remote by
+// name; "" without a remote.
+func originURL(common string) string {
 	f, err := os.Open(filepath.Join(common, "config"))
 	if err != nil {
 		return ""
@@ -75,7 +76,7 @@ func ownerOf(common string) string {
 	if err != nil {
 		return ""
 	}
-	return urlOwner(fetchURL(cfg))
+	return fetchURL(cfg)
 }
 
 // fetchURL is the URL a repository's config has it fetch from: its
@@ -117,6 +118,26 @@ func urlOwner(url string) string {
 		return owner
 	}
 	return strings.ToLower(ep.Host) + "/" + owner
+}
+
+// urlRemote names the repository a remote URL is of, the same whichever
+// way it is reached: its host and path, without a port, credentials or
+// .git, in lower case, as hosts match them: "github.com/ironpark/mako" for
+// git@github.com:ironpark/mako.git and https://github.com/ironpark/Mako.
+// A local path's is "": one machine's path is not another's.
+func urlRemote(url string) string {
+	if url == "" {
+		return ""
+	}
+	ep, err := transport.NewEndpoint(url)
+	if err != nil || ep.Host == "" {
+		return ""
+	}
+	path := strings.TrimSuffix(strings.Trim(ep.Path, "/"), ".git")
+	if path == "" {
+		return ""
+	}
+	return strings.ToLower(ep.Host + "/" + path)
 }
 
 // repoOf is Repo for the git directory gitDir of the work tree at top,

@@ -317,4 +317,28 @@ public interface SessionInfoOrBuilder extends
    * @return The caps.
    */
   int getCaps();
+
+  /**
+   * <pre>
+   * remote names the repository the origin remote is of, the same on
+   * every node that has a clone of it: "github.com/ironpark/mako". "" as
+   * owner is, and for a remote on a local path.
+   * </pre>
+   *
+   * <code>string remote = 26 [json_name = "remote"];</code>
+   * @return The remote.
+   */
+  java.lang.String getRemote();
+  /**
+   * <pre>
+   * remote names the repository the origin remote is of, the same on
+   * every node that has a clone of it: "github.com/ironpark/mako". "" as
+   * owner is, and for a remote on a local path.
+   * </pre>
+   *
+   * <code>string remote = 26 [json_name = "remote"];</code>
+   * @return The bytes for remote.
+   */
+  com.google.protobuf.ByteString
+      getRemoteBytes();
 }

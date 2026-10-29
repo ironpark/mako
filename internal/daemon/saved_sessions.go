@@ -163,7 +163,7 @@ func (d *Daemon) listSessions() []*protocol.SessionInfo {
 	// The repositories are read from disk, outside the lock, once a project
 	// in a while: the mesh's state is listed every second.
 	for i, info := range out {
-		out[i].Branch, out[i].Repo, out[i].Owner = d.heads.of(info.GetProject())
+		out[i].Branch, out[i].Repo, out[i].Owner, out[i].Remote = d.heads.of(info.GetProject())
 	}
 	return out
 }
@@ -179,20 +179,20 @@ type heads struct {
 }
 
 type projectHead struct {
-	branch, repo, owner string
-	at                  time.Time
+	branch, repo, owner, remote string
+	at                          time.Time
 }
 
-// of is project's branch, repository and owner, read again once headsFor
-// has passed.
-func (h *heads) of(project string) (branch, repo, owner string) {
+// of is project's branch, repository, and its origin's owner and
+// repository, read again once headsFor has passed.
+func (h *heads) of(project string) (branch, repo, owner, remote string) {
 	h.mu.Lock()
 	p, ok := h.known[project]
 	h.mu.Unlock()
 	if ok && time.Since(p.at) < headsFor {
-		return p.branch, p.repo, p.owner
+		return p.branch, p.repo, p.owner, p.remote
 	}
-	p.branch, p.repo, p.owner = gitstat.Head(project)
+	p.branch, p.repo, p.owner, p.remote = gitstat.Head(project)
 	p.at = time.Now()
 	h.mu.Lock()
 	if h.known == nil {
@@ -200,7 +200,7 @@ func (h *heads) of(project string) (branch, repo, owner string) {
 	}
 	h.known[project] = p
 	h.mu.Unlock()
-	return p.branch, p.repo, p.owner
+	return p.branch, p.repo, p.owner, p.remote
 }
 
 func (d *Daemon) openSession(ctx context.Context, req *protocol.OpenSession) (*session.Session, error) {

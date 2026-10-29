@@ -76,6 +76,10 @@ message SessionInfo {
   // caps is what mako follows of the session's agent, protocol's Cap
   // bits; 0 from a daemon older than them.
   uint32 caps = 25;
+  // remote names the repository the origin remote is of, the same on
+  // every node that has a clone of it: "github.com/ironpark/mako". "" as
+  // owner is, and for a remote on a local path.
+  string remote = 26;
 }
 
 // Approval is a tool call an agent waits for the user to approve.

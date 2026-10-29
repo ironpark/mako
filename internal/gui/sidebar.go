@@ -65,9 +65,9 @@ func tail(path string, n int) string {
 // ends and asks first.
 func ownerMenu(m *model, o ownerSection, name string) []ggui.Widget {
 	var ids []string
-	roots := make([]fileRoot, len(o.Groups))
-	for i, g := range o.Groups {
-		roots[i] = fileRoot{Node: g.NodeID, Path: g.Project}
+	var roots []fileRoot
+	for _, g := range o.Groups {
+		roots = append(roots, g.Roots...)
 		for _, s := range g.Sessions {
 			ids = append(ids, s.GetId())
 		}

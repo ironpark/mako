@@ -28,7 +28,7 @@ func TestSpacesDivideSessionsByOwner(t *testing.T) {
 	if got := ids(p.spaceSessions(1, sessions)); !slices.Equal(got, []string{"1"}) {
 		t.Fatalf("work %v", got)
 	}
-	kept := []keptProject{{fileRoot{"n", "/a"}, "github.com/acme"}, {fileRoot{"n", "/b"}, ""}}
+	kept := []keptProject{{fileRoot{"n", "/a"}, "github.com/acme", ""}, {fileRoot{"n", "/b"}, "", ""}}
 	if got := p.spaceProjects(1, kept); len(got) != 1 || got[0].Path != "/a" {
 		t.Fatalf("work folders %v", got)
 	}
