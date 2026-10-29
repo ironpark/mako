@@ -62,6 +62,7 @@ func (s *subagents) Read(path string, messages []*protocol.ChatMessage) []*proto
 			Kind:        cmp.Or(scan.role, in.Agent),
 			Description: cmp.Or(started.Nickname, in.Description, agent.OneLine(in.Prompt, 80)),
 			ToolCalls:   scan.calls, Tool: scan.tool, ToolKind: scan.kind, Detail: scan.detail,
+			Log: log,
 		}
 		if !scan.Started.IsZero() {
 			a.Started, a.Updated = scan.Started.Unix(), scan.Updated.Unix()

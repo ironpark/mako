@@ -179,7 +179,9 @@ type model struct {
 	window    *ggui.Window                      // nil under a probe
 	ChatModes *ggui.StateValue[map[string]bool] // true shows chat; terminal stays attached
 	chats     map[string]*chatState
-	usages    map[string]*usageState // for the usage overlay
+	// chatImages are the images Chat shows, read once, by node and path.
+	chatImages map[string]*ggui.StateValue[mdImage]
+	usages     map[string]*usageState // for the usage overlay
 
 	// The Files tab: folders read, by dirKey; those open; the row chosen;
 	// and the file shown.
@@ -372,6 +374,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Minute:         ggui.State(time.Now().Truncate(time.Minute)),
 		ChatModes:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		chats:          map[string]*chatState{},
+		chatImages:     map[string]*ggui.StateValue[mdImage]{},
 		usages:         map[string]*usageState{},
 		Dirs:           ggui.State(map[string]dirListing{}).WithEqual(deepEqual),
 		FilesOpen:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
@@ -1352,6 +1355,7 @@ func (m *model) sendComposer(id string) {
 	}
 	text := m.composerDraft(id)
 	conn.sendText(text)
+	m.notePending(id, text)
 	state := m.chatState(id)
 	if strings.TrimSpace(text) != "" && (len(state.sent) == 0 || state.sent[len(state.sent)-1] != text) {
 		state.sent = append(state.sent, text)

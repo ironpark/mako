@@ -21,6 +21,7 @@ public  final class ReadChat extends
   private ReadChat() {
     nodeId_ = "";
     sessionId_ = "";
+    agent_ = "";
   }
   public static final int NODE_ID_FIELD_NUMBER = 1;
   private java.lang.String nodeId_;
@@ -269,6 +270,83 @@ public  final class ReadChat extends
   private void clearSeen() {
 
     seen_ = 0L;
+  }
+
+  public static final int AGENT_FIELD_NUMBER = 7;
+  private java.lang.String agent_;
+  /**
+   * <pre>
+   * agent reads the conversation of the session's subagent of this ID, as
+   * the session's Chat lists it, in place of the session's own: its
+   * messages alone, without usage or subagents of its own.
+   * </pre>
+   *
+   * <code>string agent = 7 [json_name = "agent"];</code>
+   * @return The agent.
+   */
+  @java.lang.Override
+  public java.lang.String getAgent() {
+    return agent_;
+  }
+  /**
+   * <pre>
+   * agent reads the conversation of the session's subagent of this ID, as
+   * the session's Chat lists it, in place of the session's own: its
+   * messages alone, without usage or subagents of its own.
+   * </pre>
+   *
+   * <code>string agent = 7 [json_name = "agent"];</code>
+   * @return The bytes for agent.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getAgentBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(agent_);
+  }
+  /**
+   * <pre>
+   * agent reads the conversation of the session's subagent of this ID, as
+   * the session's Chat lists it, in place of the session's own: its
+   * messages alone, without usage or subagents of its own.
+   * </pre>
+   *
+   * <code>string agent = 7 [json_name = "agent"];</code>
+   * @param value The agent to set.
+   */
+  private void setAgent(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    agent_ = value;
+  }
+  /**
+   * <pre>
+   * agent reads the conversation of the session's subagent of this ID, as
+   * the session's Chat lists it, in place of the session's own: its
+   * messages alone, without usage or subagents of its own.
+   * </pre>
+   *
+   * <code>string agent = 7 [json_name = "agent"];</code>
+   */
+  private void clearAgent() {
+
+    agent_ = getDefaultInstance().getAgent();
+  }
+  /**
+   * <pre>
+   * agent reads the conversation of the session's subagent of this ID, as
+   * the session's Chat lists it, in place of the session's own: its
+   * messages alone, without usage or subagents of its own.
+   * </pre>
+   *
+   * <code>string agent = 7 [json_name = "agent"];</code>
+   * @param value The bytes for agent to set.
+   */
+  private void setAgentBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    agent_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.ReadChat parseFrom(
@@ -633,6 +711,85 @@ public  final class ReadChat extends
       return this;
     }
 
+    /**
+     * <pre>
+     * agent reads the conversation of the session's subagent of this ID, as
+     * the session's Chat lists it, in place of the session's own: its
+     * messages alone, without usage or subagents of its own.
+     * </pre>
+     *
+     * <code>string agent = 7 [json_name = "agent"];</code>
+     * @return The agent.
+     */
+    @java.lang.Override
+    public java.lang.String getAgent() {
+      return instance.getAgent();
+    }
+    /**
+     * <pre>
+     * agent reads the conversation of the session's subagent of this ID, as
+     * the session's Chat lists it, in place of the session's own: its
+     * messages alone, without usage or subagents of its own.
+     * </pre>
+     *
+     * <code>string agent = 7 [json_name = "agent"];</code>
+     * @return The bytes for agent.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getAgentBytes() {
+      return instance.getAgentBytes();
+    }
+    /**
+     * <pre>
+     * agent reads the conversation of the session's subagent of this ID, as
+     * the session's Chat lists it, in place of the session's own: its
+     * messages alone, without usage or subagents of its own.
+     * </pre>
+     *
+     * <code>string agent = 7 [json_name = "agent"];</code>
+     * @param value The agent to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAgent(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setAgent(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * agent reads the conversation of the session's subagent of this ID, as
+     * the session's Chat lists it, in place of the session's own: its
+     * messages alone, without usage or subagents of its own.
+     * </pre>
+     *
+     * <code>string agent = 7 [json_name = "agent"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAgent() {
+      copyOnWrite();
+      instance.clearAgent();
+      return this;
+    }
+    /**
+     * <pre>
+     * agent reads the conversation of the session's subagent of this ID, as
+     * the session's Chat lists it, in place of the session's own: its
+     * messages alone, without usage or subagents of its own.
+     * </pre>
+     *
+     * <code>string agent = 7 [json_name = "agent"];</code>
+     * @param value The bytes for agent to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAgentBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setAgentBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.ReadChat)
   }
   @java.lang.Override
@@ -655,10 +812,11 @@ public  final class ReadChat extends
             "before_",
             "after_",
             "seen_",
+            "agent_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0007\u0004\u0002\u0005\u0002\u0006\u0003";
+              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0007\u0004\u0002\u0005\u0002\u0006\u0003\u0007\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

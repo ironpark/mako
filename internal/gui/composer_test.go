@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ironpark/ggui"
 	ggruntime "github.com/ironpark/ggui/runtime"
@@ -36,7 +37,7 @@ func TestComposerSendsSeveralLinesOnEnter(t *testing.T) {
 	})
 
 	draft := m.chatState("s").draft
-	p := ggui.ProbeBuilder(func() ggui.Widget { return composer(m, "s", draft) }, ggui.Sz(600, 300))
+	p := ggui.ProbeBuilder(func() ggui.Widget { return composer(m, "s", m.chatState("s")) }, ggui.Sz(600, 300))
 	defer p.Close()
 	p.Frame()
 	field, ok := p.Semantics().Find(ggui.RoleTextField, T("Message"))
@@ -95,6 +96,50 @@ func TestComposerSendsSeveralLinesOnEnter(t *testing.T) {
 	if got := link.typed(); got != "" {
 		t.Fatalf("browsing the history sent %q", got)
 	}
+
+	// A draft that begins with a slash lists the agent's commands it
+	// matches: ↑ and ↓ choose, Enter takes one, sending it when it takes no
+	// arguments, Escape closes the list.
+	menu := m.chatState("s").menu
+	menu.read = time.Now() // as if read: the test has no daemon
+	menu.commands.Set([]*protocol.Command{
+		{Name: "compact", Args: "[instructions]"}, {Name: "context"}, {Name: "frontend:config"}, {Name: "clear"},
+	})
+	m.setComposerDraft("s", "")
+	p.Text("/co")
+	p.Frame()
+	if names := matchNames(m.commandMatches(m.chatState("s"))); names != "compact context frontend:config" {
+		t.Fatalf("/co lists %q", names)
+	}
+	if _, ok := p.Semantics().Find(ggui.RoleText, "/context"); !ok {
+		t.Fatalf("no /context in the list:\n%s", p.Semantics().String())
+	}
+	p.Type(ggui.Mods{}, ggui.KeyArrowDown)
+	p.Type(ggui.Mods{}, ggui.KeyEnter)
+	if got, want := link.typed(), "\x1b[200~/context\x1b[201~\r"; got != want {
+		t.Fatalf("taking /context sent %q, want %q", got, want)
+	}
+	p.Text("/com")
+	p.Type(ggui.Mods{}, ggui.KeyEnter)
+	if got := ggui.Peek(draft); got != "/compact " {
+		t.Fatalf("taking /compact left %q, want its arguments to follow", got)
+	}
+	if got := link.typed(); got != "" {
+		t.Fatalf("taking a command with arguments sent %q", got)
+	}
+	m.setComposerDraft("s", "/cl")
+	p.Type(ggui.Mods{}, ggui.KeyEscape)
+	if len(m.commandMatches(m.chatState("s"))) != 0 {
+		t.Fatal("Escape left the list open")
+	}
+}
+
+func matchNames(cmds []*protocol.Command) string {
+	names := make([]string, len(cmds))
+	for i, c := range cmds {
+		names[i] = c.GetName()
+	}
+	return strings.Join(names, " ")
 }
 
 // A call turns a spinner while it is at work: unanswered while its agent
@@ -164,7 +209,7 @@ func TestComposerPastesAnImageAsAFile(t *testing.T) {
 	m.Attached.Set([]string{"s"})
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	draft := m.chatState("s").draft
-	p := ggui.ProbeBuilder(func() ggui.Widget { return composer(m, "s", draft) }, ggui.Sz(600, 300))
+	p := ggui.ProbeBuilder(func() ggui.Widget { return composer(m, "s", m.chatState("s")) }, ggui.Sz(600, 300))
 	defer p.Close()
 	m.post = p.Post
 	png := []byte("\x89PNG\r\n\x1a\nimage")

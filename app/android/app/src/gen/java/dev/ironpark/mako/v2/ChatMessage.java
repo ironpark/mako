@@ -26,6 +26,7 @@ public  final class ChatMessage extends
     detail_ = "";
     result_ = "";
     kind_ = "";
+    images_ = emptyProtobufList();
   }
   private int bitField0_;
   public static final int ROLE_FIELD_NUMBER = 1;
@@ -540,6 +541,144 @@ public  final class ChatMessage extends
   private void clearExitCode() {
     bitField0_ = (bitField0_ & ~0x00000001);
     exitCode_ = 0;
+  }
+
+  public static final int IMAGES_FIELD_NUMBER = 12;
+  private com.google.protobuf.Internal.ProtobufList<java.lang.String> images_;
+  /**
+   * <pre>
+   * images are the paths, on the session's node, of the images the
+   * message holds: those its log held inline, kept as files there.
+   * </pre>
+   *
+   * <code>repeated string images = 12 [json_name = "images"];</code>
+   * @return A list containing the images.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.String> getImagesList() {
+    return images_;
+  }
+  /**
+   * <pre>
+   * images are the paths, on the session's node, of the images the
+   * message holds: those its log held inline, kept as files there.
+   * </pre>
+   *
+   * <code>repeated string images = 12 [json_name = "images"];</code>
+   * @return The count of images.
+   */
+  @java.lang.Override
+  public int getImagesCount() {
+    return images_.size();
+  }
+  /**
+   * <pre>
+   * images are the paths, on the session's node, of the images the
+   * message holds: those its log held inline, kept as files there.
+   * </pre>
+   *
+   * <code>repeated string images = 12 [json_name = "images"];</code>
+   * @param index The index of the element to return.
+   * @return The images at the given index.
+   */
+  @java.lang.Override
+  public java.lang.String getImages(int index) {
+    return images_.get(index);
+  }
+  /**
+   * <pre>
+   * images are the paths, on the session's node, of the images the
+   * message holds: those its log held inline, kept as files there.
+   * </pre>
+   *
+   * <code>repeated string images = 12 [json_name = "images"];</code>
+   * @param index The index of the value to return.
+   * @return The bytes of the images at the given index.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getImagesBytes(int index) {
+    return com.google.protobuf.ByteString.copyFromUtf8(
+        images_.get(index));
+  }
+  private void ensureImagesIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<java.lang.String> tmp =
+        images_;  if (!tmp.isModifiable()) {
+      images_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+  /**
+   * <pre>
+   * images are the paths, on the session's node, of the images the
+   * message holds: those its log held inline, kept as files there.
+   * </pre>
+   *
+   * <code>repeated string images = 12 [json_name = "images"];</code>
+   * @param index The index to set the value at.
+   * @param value The images to set.
+   */
+  private void setImages(
+      int index, java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureImagesIsMutable();
+    images_.set(index, value);
+  }
+  /**
+   * <pre>
+   * images are the paths, on the session's node, of the images the
+   * message holds: those its log held inline, kept as files there.
+   * </pre>
+   *
+   * <code>repeated string images = 12 [json_name = "images"];</code>
+   * @param value The images to add.
+   */
+  private void addImages(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureImagesIsMutable();
+    images_.add(value);
+  }
+  /**
+   * <pre>
+   * images are the paths, on the session's node, of the images the
+   * message holds: those its log held inline, kept as files there.
+   * </pre>
+   *
+   * <code>repeated string images = 12 [json_name = "images"];</code>
+   * @param values The images to add.
+   */
+  private void addAllImages(
+      java.lang.Iterable<java.lang.String> values) {
+    ensureImagesIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, images_);
+  }
+  /**
+   * <pre>
+   * images are the paths, on the session's node, of the images the
+   * message holds: those its log held inline, kept as files there.
+   * </pre>
+   *
+   * <code>repeated string images = 12 [json_name = "images"];</code>
+   */
+  private void clearImages() {
+    images_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * images are the paths, on the session's node, of the images the
+   * message holds: those its log held inline, kept as files there.
+   * </pre>
+   *
+   * <code>repeated string images = 12 [json_name = "images"];</code>
+   * @param value The bytes of the images to add.
+   */
+  private void addImagesBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    ensureImagesIsMutable();
+    images_.add(value.toStringUtf8());
   }
 
   public static dev.ironpark.mako.v2.ChatMessage parseFrom(
@@ -1179,6 +1318,143 @@ public  final class ChatMessage extends
       return this;
     }
 
+    /**
+     * <pre>
+     * images are the paths, on the session's node, of the images the
+     * message holds: those its log held inline, kept as files there.
+     * </pre>
+     *
+     * <code>repeated string images = 12 [json_name = "images"];</code>
+     * @return A list containing the images.
+     */
+    @java.lang.Override
+    public java.util.List<java.lang.String>
+        getImagesList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getImagesList());
+    }
+    /**
+     * <pre>
+     * images are the paths, on the session's node, of the images the
+     * message holds: those its log held inline, kept as files there.
+     * </pre>
+     *
+     * <code>repeated string images = 12 [json_name = "images"];</code>
+     * @return The count of images.
+     */
+    @java.lang.Override
+    public int getImagesCount() {
+      return instance.getImagesCount();
+    }
+    /**
+     * <pre>
+     * images are the paths, on the session's node, of the images the
+     * message holds: those its log held inline, kept as files there.
+     * </pre>
+     *
+     * <code>repeated string images = 12 [json_name = "images"];</code>
+     * @param index The index of the element to return.
+     * @return The images at the given index.
+     */
+    @java.lang.Override
+    public java.lang.String getImages(int index) {
+      return instance.getImages(index);
+    }
+    /**
+     * <pre>
+     * images are the paths, on the session's node, of the images the
+     * message holds: those its log held inline, kept as files there.
+     * </pre>
+     *
+     * <code>repeated string images = 12 [json_name = "images"];</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the images at the given index.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getImagesBytes(int index) {
+      return instance.getImagesBytes(index);
+    }
+    /**
+     * <pre>
+     * images are the paths, on the session's node, of the images the
+     * message holds: those its log held inline, kept as files there.
+     * </pre>
+     *
+     * <code>repeated string images = 12 [json_name = "images"];</code>
+     * @param index The index to set the value at.
+     * @param value The images to set.
+     * @return This builder for chaining.
+     */
+    public Builder setImages(
+        int index, java.lang.String value) {
+      copyOnWrite();
+      instance.setImages(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * images are the paths, on the session's node, of the images the
+     * message holds: those its log held inline, kept as files there.
+     * </pre>
+     *
+     * <code>repeated string images = 12 [json_name = "images"];</code>
+     * @param value The images to add.
+     * @return This builder for chaining.
+     */
+    public Builder addImages(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.addImages(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * images are the paths, on the session's node, of the images the
+     * message holds: those its log held inline, kept as files there.
+     * </pre>
+     *
+     * <code>repeated string images = 12 [json_name = "images"];</code>
+     * @param values The images to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllImages(
+        java.lang.Iterable<java.lang.String> values) {
+      copyOnWrite();
+      instance.addAllImages(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * images are the paths, on the session's node, of the images the
+     * message holds: those its log held inline, kept as files there.
+     * </pre>
+     *
+     * <code>repeated string images = 12 [json_name = "images"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearImages() {
+      copyOnWrite();
+      instance.clearImages();
+      return this;
+    }
+    /**
+     * <pre>
+     * images are the paths, on the session's node, of the images the
+     * message holds: those its log held inline, kept as files there.
+     * </pre>
+     *
+     * <code>repeated string images = 12 [json_name = "images"];</code>
+     * @param value The bytes of the images to add.
+     * @return This builder for chaining.
+     */
+    public Builder addImagesBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.addImagesBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.ChatMessage)
   }
   @java.lang.Override
@@ -1207,11 +1483,12 @@ public  final class ChatMessage extends
             "pending_",
             "kind_",
             "exitCode_",
+            "images_",
           };
           java.lang.String info =
-              "\u0000\u000b\u0000\u0001\u0001\u000b\u000b\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0007\b\u0007\t\u0007\n\u0208" +
-              "\u000b\u1004\u0000";
+              "\u0000\f\u0000\u0001\u0001\f\f\u0000\u0001\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0007\b\u0007\t\u0007\n\u0208\u000b\u1004" +
+              "\u0000\f\u021a";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

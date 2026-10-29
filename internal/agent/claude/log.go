@@ -43,12 +43,20 @@ func (*Agent) Identity(line []byte) (string, string, time.Time, bool) {
 
 func (a *Agent) NewDecoder() agent.Decoder { return &decoder{tools: a, seen: map[string]bool{}} }
 
+// NewAgentDecoder reads a subagent's log, its sidechain.
+func (a *Agent) NewAgentDecoder() agent.Decoder {
+	return &decoder{tools: a, seen: map[string]bool{}, sidechain: true}
+}
+
 // decoder reads Claude's records. A record may be written again, as a
 // resumed conversation copies its history, so each is read once.
 type decoder struct {
 	tools   agent.Tools
 	seen    map[string]bool
 	command string // the last slash command typed, whose output follows it
+	// sidechain reads a subagent's log, whose records are all sidechains,
+	// in place of the session's, which leaves those out.
+	sidechain bool
 	// last is the latest message read, a summary aside: a command
 	// written again after it is not shown twice.
 	last *protocol.ChatMessage
@@ -56,7 +64,7 @@ type decoder struct {
 
 func (d *decoder) Line(line []byte) []*protocol.ChatMessage {
 	var r record
-	if json.Unmarshal(line, &r) != nil || r.Sidechain || r.Meta || r.Type != "user" && r.Type != "assistant" {
+	if json.Unmarshal(line, &r) != nil || r.Sidechain != d.sidechain || r.Meta || r.Type != "user" && r.Type != "assistant" {
 		return nil
 	}
 	if r.UUID != "" {

@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transcript"
 	"github.com/ironpark/mako/internal/transport"
 	"google.golang.org/protobuf/proto"
@@ -26,14 +27,23 @@ func (d *Daemon) handleReadChat(ctx context.Context, stream *transport.Stream, e
 			return &protocol.Chat{Usage: withReported(u, s.Reported())}, nil
 		}
 		span := transcript.Span{After: max(r.GetAfter(), 0), Before: max(r.GetBefore(), 0)}
-		chat, err := d.chatForSession(ctx, s, span)
-		if err != nil {
-			return nil, err
-		}
 		// The conversation is the cache's, shared: a shallow copy carries
-		// the usage reported over it.
-		reply := shallow(chat)
-		reply.Usage = withReported(chat.GetUsage(), s.Reported())
+		// the usage reported over the session's own.
+		var reply *protocol.Chat
+		if r.GetAgent() != "" {
+			chat, err := d.chatForAgent(ctx, s, r.GetAgent(), span)
+			if err != nil {
+				return nil, err
+			}
+			reply = shallow(chat)
+		} else {
+			chat, err := d.chatForSession(ctx, s, span)
+			if err != nil {
+				return nil, err
+			}
+			reply = shallow(chat)
+			reply.Usage = withReported(chat.GetUsage(), s.Reported())
+		}
 		reply.Digest = digest(reply)
 		if r.GetSeen() == reply.GetDigest() {
 			// A reader polling a quiet conversation has it already.
@@ -41,6 +51,35 @@ func (d *Daemon) handleReadChat(ctx context.Context, stream *transport.Stream, e
 		}
 		return reply, nil
 	})
+}
+
+// chatForAgent reads span of the conversation of session s's subagent
+// id, by the log the session's own conversation names for it: as the
+// cache last read it, or read again for one started since.
+func (d *Daemon) chatForAgent(ctx context.Context, s *session.Session, id string, span transcript.Span) (*protocol.Chat, error) {
+	cache := d.conversations.chatCache(s)
+	var a *protocol.SubAgent
+	if cache != nil {
+		a = cache.Agent(id)
+	}
+	if a == nil {
+		chat, err := d.chatForSession(ctx, s, transcript.Span{})
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range chat.GetAgents() {
+			if c.GetId() == id {
+				a = c
+			}
+		}
+	}
+	if a.GetLog() == "" {
+		return nil, fmt.Errorf("no subagent %s in this session", id)
+	}
+	if cache != nil {
+		return cache.ReadAgent(s.Info(), a.GetLog(), span)
+	}
+	return transcript.ReadAgent(s.Info(), a.GetLog(), span)
 }
 
 // digest names m's contents: the same contents, the same digest, while

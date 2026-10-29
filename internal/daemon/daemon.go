@@ -279,6 +279,9 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 	case protocol.TypeRenameSess:
 		return d.handleRenameSession(ctx, stream, env)
 
+	case protocol.TypeListCommands:
+		return d.handleListCommands(ctx, stream, env)
+
 	case protocol.TypeAttach:
 		return d.handleAttach(ctx, stream, env)
 

@@ -69,6 +69,15 @@ func TestSubagentsAreFollowedInTheirOwnLogs(t *testing.T) {
 		t.Fatalf("background agent %+v", b1)
 	}
 
+	// Each names its log, which reads as a conversation of its own.
+	own, err := ReadAgent(info, f1.GetLog(), Span{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msgs := own.GetMessages(); len(msgs) != 3 || msgs[0].GetText() != "Find the tests." || msgs[2].GetDetail() != "go test ./..." {
+		t.Fatalf("the foreground agent's conversation: %v", msgs)
+	}
+
 	// The background agent works on and finishes while the session's log
 	// is still.
 	f, err := os.OpenFile(filepath.Join(sub, "agent-b1.jsonl"), os.O_APPEND|os.O_WRONLY, 0)

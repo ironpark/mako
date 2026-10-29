@@ -264,6 +264,28 @@ public interface EnvelopeOrBuilder extends
   dev.ironpark.mako.v2.Send getSend();
 
   /**
+   * <code>.mako.v2.ListCommands list_commands = 38 [json_name = "listCommands"];</code>
+   * @return Whether the listCommands field is set.
+   */
+  boolean hasListCommands();
+  /**
+   * <code>.mako.v2.ListCommands list_commands = 38 [json_name = "listCommands"];</code>
+   * @return The listCommands.
+   */
+  dev.ironpark.mako.v2.ListCommands getListCommands();
+
+  /**
+   * <code>.mako.v2.Commands commands = 39 [json_name = "commands"];</code>
+   * @return Whether the commands field is set.
+   */
+  boolean hasCommands();
+  /**
+   * <code>.mako.v2.Commands commands = 39 [json_name = "commands"];</code>
+   * @return The commands.
+   */
+  dev.ironpark.mako.v2.Commands getCommands();
+
+  /**
    * <pre>
    * An attached session's stream.
    * </pre>

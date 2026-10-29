@@ -171,6 +171,13 @@ type SubAgents interface {
 	NewSubAgents() SubAgentScan
 }
 
+// SubAgentLogs is a SubAgents whose subagents' logs read otherwise than
+// its sessions', as Claude's, whose every record is a sidechain.
+type SubAgentLogs interface {
+	// NewAgentDecoder reads one pass over a subagent's log.
+	NewAgentDecoder() Decoder
+}
+
 // SubAgentScan follows one conversation's subagents, reading again only
 // what changed.
 type SubAgentScan interface {

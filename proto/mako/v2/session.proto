@@ -178,3 +178,25 @@ message Exited {
   int64 exit_code = 2;
   string err = 3;
 }
+
+// ListCommands asks for the slash commands a session's agent takes, for a
+// composer to complete: its own, the user's, the project's and its
+// plugins', as the session's node finds them.
+message ListCommands {
+  string node_id = 1;
+  string session_id = 2;
+}
+
+// Commands answers ListCommands; none for an agent mako knows no commands
+// of.
+message Commands {
+  repeated Command commands = 1;
+}
+
+// Command is a slash command, named without its slash.
+message Command {
+  string name = 1;
+  string description = 2;
+  string args = 3; // the arguments it takes, as its hint says them
+  string source = 4; // "" for the agent's own; "user", "project", or a plugin's name
+}

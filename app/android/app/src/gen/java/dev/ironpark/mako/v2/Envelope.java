@@ -45,6 +45,8 @@ public  final class Envelope extends
     RENAME_SESSION(35),
     ANSWER_APPROVAL(36),
     SEND(37),
+    LIST_COMMANDS(38),
+    COMMANDS(39),
     ATTACH(40),
     INPUT(41),
     OUTPUT(42),
@@ -126,6 +128,8 @@ public  final class Envelope extends
         case 35: return RENAME_SESSION;
         case 36: return ANSWER_APPROVAL;
         case 37: return SEND;
+        case 38: return LIST_COMMANDS;
+        case 39: return COMMANDS;
         case 40: return ATTACH;
         case 41: return INPUT;
         case 42: return OUTPUT;
@@ -1266,6 +1270,106 @@ public  final class Envelope extends
    */
   private void clearSend() {
     if (bodyCase_ == 37) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int LIST_COMMANDS_FIELD_NUMBER = 38;
+  /**
+   * <code>.mako.v2.ListCommands list_commands = 38 [json_name = "listCommands"];</code>
+   */
+  @java.lang.Override
+  public boolean hasListCommands() {
+    return bodyCase_ == 38;
+  }
+  /**
+   * <code>.mako.v2.ListCommands list_commands = 38 [json_name = "listCommands"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ListCommands getListCommands() {
+    if (bodyCase_ == 38) {
+       return (dev.ironpark.mako.v2.ListCommands) body_;
+    }
+    return dev.ironpark.mako.v2.ListCommands.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.ListCommands list_commands = 38 [json_name = "listCommands"];</code>
+   */
+  private void setListCommands(dev.ironpark.mako.v2.ListCommands value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 38;
+  }
+  /**
+   * <code>.mako.v2.ListCommands list_commands = 38 [json_name = "listCommands"];</code>
+   */
+  private void mergeListCommands(dev.ironpark.mako.v2.ListCommands value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 38 &&
+        body_ != dev.ironpark.mako.v2.ListCommands.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ListCommands.newBuilder((dev.ironpark.mako.v2.ListCommands) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 38;
+  }
+  /**
+   * <code>.mako.v2.ListCommands list_commands = 38 [json_name = "listCommands"];</code>
+   */
+  private void clearListCommands() {
+    if (bodyCase_ == 38) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int COMMANDS_FIELD_NUMBER = 39;
+  /**
+   * <code>.mako.v2.Commands commands = 39 [json_name = "commands"];</code>
+   */
+  @java.lang.Override
+  public boolean hasCommands() {
+    return bodyCase_ == 39;
+  }
+  /**
+   * <code>.mako.v2.Commands commands = 39 [json_name = "commands"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Commands getCommands() {
+    if (bodyCase_ == 39) {
+       return (dev.ironpark.mako.v2.Commands) body_;
+    }
+    return dev.ironpark.mako.v2.Commands.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.Commands commands = 39 [json_name = "commands"];</code>
+   */
+  private void setCommands(dev.ironpark.mako.v2.Commands value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 39;
+  }
+  /**
+   * <code>.mako.v2.Commands commands = 39 [json_name = "commands"];</code>
+   */
+  private void mergeCommands(dev.ironpark.mako.v2.Commands value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 39 &&
+        body_ != dev.ironpark.mako.v2.Commands.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Commands.newBuilder((dev.ironpark.mako.v2.Commands) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 39;
+  }
+  /**
+   * <code>.mako.v2.Commands commands = 39 [json_name = "commands"];</code>
+   */
+  private void clearCommands() {
+    if (bodyCase_ == 39) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -4909,6 +5013,102 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.mako.v2.ListCommands list_commands = 38 [json_name = "listCommands"];</code>
+     */
+    @java.lang.Override
+    public boolean hasListCommands() {
+      return instance.hasListCommands();
+    }
+    /**
+     * <code>.mako.v2.ListCommands list_commands = 38 [json_name = "listCommands"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ListCommands getListCommands() {
+      return instance.getListCommands();
+    }
+    /**
+     * <code>.mako.v2.ListCommands list_commands = 38 [json_name = "listCommands"];</code>
+     */
+    public Builder setListCommands(dev.ironpark.mako.v2.ListCommands value) {
+      copyOnWrite();
+      instance.setListCommands(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ListCommands list_commands = 38 [json_name = "listCommands"];</code>
+     */
+    public Builder setListCommands(
+        dev.ironpark.mako.v2.ListCommands.Builder builderForValue) {
+      copyOnWrite();
+      instance.setListCommands(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ListCommands list_commands = 38 [json_name = "listCommands"];</code>
+     */
+    public Builder mergeListCommands(dev.ironpark.mako.v2.ListCommands value) {
+      copyOnWrite();
+      instance.mergeListCommands(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ListCommands list_commands = 38 [json_name = "listCommands"];</code>
+     */
+    public Builder clearListCommands() {
+      copyOnWrite();
+      instance.clearListCommands();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.Commands commands = 39 [json_name = "commands"];</code>
+     */
+    @java.lang.Override
+    public boolean hasCommands() {
+      return instance.hasCommands();
+    }
+    /**
+     * <code>.mako.v2.Commands commands = 39 [json_name = "commands"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Commands getCommands() {
+      return instance.getCommands();
+    }
+    /**
+     * <code>.mako.v2.Commands commands = 39 [json_name = "commands"];</code>
+     */
+    public Builder setCommands(dev.ironpark.mako.v2.Commands value) {
+      copyOnWrite();
+      instance.setCommands(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Commands commands = 39 [json_name = "commands"];</code>
+     */
+    public Builder setCommands(
+        dev.ironpark.mako.v2.Commands.Builder builderForValue) {
+      copyOnWrite();
+      instance.setCommands(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Commands commands = 39 [json_name = "commands"];</code>
+     */
+    public Builder mergeCommands(dev.ironpark.mako.v2.Commands value) {
+      copyOnWrite();
+      instance.mergeCommands(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Commands commands = 39 [json_name = "commands"];</code>
+     */
+    public Builder clearCommands() {
+      copyOnWrite();
+      instance.clearCommands();
+      return this;
+    }
+
+    /**
      * <pre>
      * An attached session's stream.
      * </pre>
@@ -7346,6 +7546,8 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.RenameSession.class,
             dev.ironpark.mako.v2.AnswerApproval.class,
             dev.ironpark.mako.v2.Send.class,
+            dev.ironpark.mako.v2.ListCommands.class,
+            dev.ironpark.mako.v2.Commands.class,
             dev.ironpark.mako.v2.Attach.class,
             dev.ironpark.mako.v2.Input.class,
             dev.ironpark.mako.v2.Output.class,
@@ -7395,14 +7597,15 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.DeviceAccept.class,
           };
           java.lang.String info =
-              "\u0000C\u0001\u0000\u0001oC\u0000\u0000\u0000\u0001\u0208\n<\u0000\u000b<\u0000\f" +
+              "\u0000E\u0001\u0000\u0001oE\u0000\u0000\u0000\u0001\u0208\n<\u0000\u000b<\u0000\f" +
               "<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000\u001a<\u0000" +
               "\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000\"<\u0000#<\u0000" +
-              "$<\u0000%<\u0000(<\u0000)<\u0000*<\u0000+<\u0000,<\u0000-<\u00002<\u00003<\u0000" +
-              "4<\u00005<\u00006<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000<<\u0000=<\u0000" +
-              "><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000" +
-              "P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000" +
-              "g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000";
+              "$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000+<\u0000,<\u0000-<\u0000" +
+              "2<\u00003<\u00004<\u00005<\u00006<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000" +
+              "<<\u0000=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000" +
+              "F<\u0000G<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000" +
+              "e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000" +
+              "o<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

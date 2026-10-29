@@ -161,4 +161,26 @@ public interface SubAgentOrBuilder extends
    */
   com.google.protobuf.ByteString
       getToolKindBytes();
+
+  /**
+   * <pre>
+   * log is its conversation's log on the session's node, which a ReadChat
+   * naming the agent reads.
+   * </pre>
+   *
+   * <code>string log = 12 [json_name = "log"];</code>
+   * @return The log.
+   */
+  java.lang.String getLog();
+  /**
+   * <pre>
+   * log is its conversation's log on the session's node, which a ReadChat
+   * naming the agent reads.
+   * </pre>
+   *
+   * <code>string log = 12 [json_name = "log"];</code>
+   * @return The bytes for log.
+   */
+  com.google.protobuf.ByteString
+      getLogBytes();
 }

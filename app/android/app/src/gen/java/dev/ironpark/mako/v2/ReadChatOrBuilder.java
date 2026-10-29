@@ -74,4 +74,28 @@ public interface ReadChatOrBuilder extends
    * @return The seen.
    */
   long getSeen();
+
+  /**
+   * <pre>
+   * agent reads the conversation of the session's subagent of this ID, as
+   * the session's Chat lists it, in place of the session's own: its
+   * messages alone, without usage or subagents of its own.
+   * </pre>
+   *
+   * <code>string agent = 7 [json_name = "agent"];</code>
+   * @return The agent.
+   */
+  java.lang.String getAgent();
+  /**
+   * <pre>
+   * agent reads the conversation of the session's subagent of this ID, as
+   * the session's Chat lists it, in place of the session's own: its
+   * messages alone, without usage or subagents of its own.
+   * </pre>
+   *
+   * <code>string agent = 7 [json_name = "agent"];</code>
+   * @return The bytes for agent.
+   */
+  com.google.protobuf.ByteString
+      getAgentBytes();
 }

@@ -365,6 +365,7 @@ is polled as before.
 | `rename_session` | `RenameSession` | `session_info` | An empty name gives the session its own back. At most 200 bytes, folded to one line. |
 | `answer_approval` | `AnswerApproval` | `session_info` | Answers the tool call the session's agent waits on. |
 | `send` | `Send` | `session_info` | Types into the session without attaching: `text` pasted, bracketed when its program asked for that, then `keys` as they are, such as `\r` to submit. A `text` holding a paste's end marker is refused. |
+| `list_commands` | `ListCommands` | `commands` | The slash commands the session's agent takes, as its node finds them: the agent's own, the user's and the project's commands and skills, and its plugins'. None for an agent mako knows no commands of. |
 | `read_chat` | `ReadChat` | `chat` | The agent's native conversation, read from its log. |
 | `attach` | `Attach` | — | Turns the stream into a session pipe; see [Attach streams](#attach-streams). |
 | `resize` | `Resize` | `session_info` | Resizes a local session's window. |

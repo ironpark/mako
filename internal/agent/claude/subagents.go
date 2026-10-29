@@ -142,6 +142,7 @@ func (scans *agentScans) Read(path string, messages []*protocol.ChatMessage) []*
 			Kind:        cmp.Or(meta.AgentType, call.in.Agent),
 			Description: cmp.Or(meta.Description, call.in.Description),
 			ToolCalls:   scan.calls, Tool: scan.tool, ToolKind: scan.kind, Detail: scan.detail,
+			Log: logPath,
 		}
 		if !scan.Started.IsZero() {
 			sub.Started, sub.Updated = scan.Started.Unix(), scan.Updated.Unix()

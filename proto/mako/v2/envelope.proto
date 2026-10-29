@@ -51,6 +51,8 @@ message Envelope {
     RenameSession rename_session = 35;
     AnswerApproval answer_approval = 36;
     Send send = 37;
+    ListCommands list_commands = 38;
+    Commands commands = 39;
 
     // An attached session's stream.
     Attach attach = 40;

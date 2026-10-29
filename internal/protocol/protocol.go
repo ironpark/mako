@@ -79,6 +79,8 @@ const (
 	TypeGitCommitInfo  Type = "git_commit_info"
 	TypeGitRun         Type = "git_run"
 	TypeGitResult      Type = "git_result"
+	TypeListCommands   Type = "list_commands"
+	TypeCommands       Type = "commands"
 	TypeReadChat       Type = "read_chat"
 	TypeChat           Type = "chat"
 	TypeForgeList      Type = "forge_list"

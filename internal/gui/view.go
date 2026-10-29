@@ -740,7 +740,8 @@ func emptyState(m *model) ggui.Widget {
 // composer is the Chat lens's message box: it types a line into that
 // session's live terminal followed by Enter. Terminal mode has no composer;
 // the terminal itself takes the keys, as ovis does.
-func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
+func composer(m *model, id string, state *chatState) ggui.Widget {
+	draft := state.draft
 	disabled := ggui.Derived(func() bool { return !slices.Contains(m.Attached.Get(), id) })
 	// Files dropped or an image pasted go in by their paths.
 	insert := func(paths []string) {
@@ -750,12 +751,16 @@ func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
 	}
 	// Enter sends at once; Shift+Enter breaks the line, and the box grows
 	// with the lines to a few before it scrolls. ↑ and ↓ over an empty box
-	// bring back what was sent.
+	// bring back what was sent. A draft that begins with a slash lists the
+	// agent's commands over the box, whose keys come first.
 	field := ui.TextField(draft).Lines(1).
 		Placeholder(T("Message the agent. Enter sends, Shift+Enter adds a line")).
 		Name(T("Message")).
 		BindDisabled(disabled).
 		OnKey(func(ev ggui.KeyEvent) bool {
+			if m.commandKey(id, state, ev) {
+				return true
+			}
 			plain := !ev.Mods.Shift && !ev.Mods.Alt && !ev.Mods.Ctrl && !ev.Mods.Meta
 			switch {
 			case (ev.Key == ggui.KeyEnter || ev.Key == ggui.KeyNumpadEnter) && !ev.Mods.Shift && !ev.Mods.Alt:
@@ -775,6 +780,7 @@ func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
 	// inserted as paths.
 	over := ggui.State(false)
 	content := ggui.Column(
+		draftImages(m, id, state),
 		ggui.Box(inlineField(field)).MaxHeight(composerMaxHeight),
 		ggui.Row(ggui.Spacer(), send).Gap(8),
 	).Gap(8).Stretch()
@@ -793,7 +799,7 @@ func composer(m *model, id string, draft *ggui.StateValue[string]) ggui.Widget {
 		m.insertPath(id, d.Value.Path)
 	}).OnHover(over.Set)
 	// In the transcript's lane, as wide as its text.
-	return &lane{child: ggui.Box(files).Pad(10, 0, 14, 0)}
+	return &lane{child: ggui.Box(ggui.Column(commandList(m, id, state), files).Stretch()).Pad(10, 0, 14, 0)}
 }
 
 // composerMaxHeight is as tall as the composer's text grows, about ten

@@ -6,6 +6,8 @@ import (
 	"io"
 	"strings"
 
+	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transport"
@@ -96,6 +98,27 @@ func (d *Daemon) handleRenameSession(ctx context.Context, stream *transport.Stre
 			return nil, fmt.Errorf("a session name is at most %d bytes", maxSessionName)
 		}
 		return d.renameSession(r.GetSessionId(), name)
+	})
+}
+
+// handleListCommands lists the slash commands a session's agent takes, as
+// its driver finds them on this node.
+func (d *Daemon) handleListCommands(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeCommands, func(r *protocol.ListCommands) (*protocol.Commands, error) {
+		s, ok := d.sessions.get(r.GetSessionId())
+		if !ok {
+			return nil, fmt.Errorf("unknown session %s", r.GetSessionId())
+		}
+		info := s.Info()
+		out := &protocol.Commands{}
+		commands, ok := agents.As[agent.Commands](info.GetAgent())
+		if !ok {
+			return out, nil
+		}
+		for _, c := range commands.Commands(info.GetProject(), s.TranscriptEnv()) {
+			out.Commands = append(out.Commands, &protocol.Command{Name: c.Name, Description: c.Description, Args: c.Args, Source: c.Source})
+		}
+		return out, nil
 	})
 }
 

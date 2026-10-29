@@ -27,6 +27,7 @@ public  final class SubAgent extends
     tool_ = "";
     detail_ = "";
     toolKind_ = "";
+    log_ = "";
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -574,6 +575,78 @@ public  final class SubAgent extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     toolKind_ = value.toStringUtf8();
+
+  }
+
+  public static final int LOG_FIELD_NUMBER = 12;
+  private java.lang.String log_;
+  /**
+   * <pre>
+   * log is its conversation's log on the session's node, which a ReadChat
+   * naming the agent reads.
+   * </pre>
+   *
+   * <code>string log = 12 [json_name = "log"];</code>
+   * @return The log.
+   */
+  @java.lang.Override
+  public java.lang.String getLog() {
+    return log_;
+  }
+  /**
+   * <pre>
+   * log is its conversation's log on the session's node, which a ReadChat
+   * naming the agent reads.
+   * </pre>
+   *
+   * <code>string log = 12 [json_name = "log"];</code>
+   * @return The bytes for log.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getLogBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(log_);
+  }
+  /**
+   * <pre>
+   * log is its conversation's log on the session's node, which a ReadChat
+   * naming the agent reads.
+   * </pre>
+   *
+   * <code>string log = 12 [json_name = "log"];</code>
+   * @param value The log to set.
+   */
+  private void setLog(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    log_ = value;
+  }
+  /**
+   * <pre>
+   * log is its conversation's log on the session's node, which a ReadChat
+   * naming the agent reads.
+   * </pre>
+   *
+   * <code>string log = 12 [json_name = "log"];</code>
+   */
+  private void clearLog() {
+
+    log_ = getDefaultInstance().getLog();
+  }
+  /**
+   * <pre>
+   * log is its conversation's log on the session's node, which a ReadChat
+   * naming the agent reads.
+   * </pre>
+   *
+   * <code>string log = 12 [json_name = "log"];</code>
+   * @param value The bytes for log to set.
+   */
+  private void setLogBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    log_ = value.toStringUtf8();
 
   }
 
@@ -1250,6 +1323,80 @@ public  final class SubAgent extends
       return this;
     }
 
+    /**
+     * <pre>
+     * log is its conversation's log on the session's node, which a ReadChat
+     * naming the agent reads.
+     * </pre>
+     *
+     * <code>string log = 12 [json_name = "log"];</code>
+     * @return The log.
+     */
+    @java.lang.Override
+    public java.lang.String getLog() {
+      return instance.getLog();
+    }
+    /**
+     * <pre>
+     * log is its conversation's log on the session's node, which a ReadChat
+     * naming the agent reads.
+     * </pre>
+     *
+     * <code>string log = 12 [json_name = "log"];</code>
+     * @return The bytes for log.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getLogBytes() {
+      return instance.getLogBytes();
+    }
+    /**
+     * <pre>
+     * log is its conversation's log on the session's node, which a ReadChat
+     * naming the agent reads.
+     * </pre>
+     *
+     * <code>string log = 12 [json_name = "log"];</code>
+     * @param value The log to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLog(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setLog(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * log is its conversation's log on the session's node, which a ReadChat
+     * naming the agent reads.
+     * </pre>
+     *
+     * <code>string log = 12 [json_name = "log"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearLog() {
+      copyOnWrite();
+      instance.clearLog();
+      return this;
+    }
+    /**
+     * <pre>
+     * log is its conversation's log on the session's node, which a ReadChat
+     * naming the agent reads.
+     * </pre>
+     *
+     * <code>string log = 12 [json_name = "log"];</code>
+     * @param value The bytes for log to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLogBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setLogBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SubAgent)
   }
   @java.lang.Override
@@ -1277,11 +1424,12 @@ public  final class SubAgent extends
             "started_",
             "updated_",
             "toolKind_",
+            "log_",
           };
           java.lang.String info =
-              "\u0000\u000b\u0000\u0000\u0001\u000b\u000b\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0007\u0006\u0004\u0007\u0208\b\u0208\t\u0002\n\u0002" +
-              "\u000b\u0208";
+              "\u0000\f\u0000\u0000\u0001\f\f\u0000\u0000\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0004\u0208\u0005\u0007\u0006\u0004\u0007\u0208\b\u0208\t\u0002\n\u0002\u000b\u0208" +
+              "\f\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

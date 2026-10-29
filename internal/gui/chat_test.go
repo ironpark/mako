@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/gostty"
@@ -114,7 +116,7 @@ func TestChatComposerLeavesRoomForTheFeed(t *testing.T) {
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	m.Selected.Set("s")
 	p := ggui.ProbeBuilder(func() ggui.Widget {
-		return ggui.Column(ggui.Expanded(ggui.Text("FEEDMARKER")), composer(m, "s", ggui.State(""))).Stretch()
+		return ggui.Column(ggui.Expanded(ggui.Text("FEEDMARKER")), composer(m, "s", m.chatState("s"))).Stretch()
 	}, ggui.Sz(900, 600))
 	defer p.Close()
 	p.Frame()
@@ -279,5 +281,109 @@ func TestALongChatDrawsOnlyTheTurnsInView(t *testing.T) {
 	}
 	if strings.Count(page, "again") != 2 {
 		t.Fatalf("the latest turns, said alike, are not both at the foot of the feed:\n%s", page)
+	}
+}
+
+// A message names the images it hands over by their paths, as words of
+// their own: a relative one is the project's.
+func TestImagesAreNamedByTheirPaths(t *testing.T) {
+	got := imageRefs("look at shots/a.png and (/tmp/b.JPG), not notes.md or a.png.txt; shots/a.png again", "/repo")
+	want := []string{"/repo/shots/a.png", "/tmp/b.JPG"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("named %q, want %q", got, want)
+	}
+}
+
+// A subagent at work, over the composer, opens its own conversation in the
+// pane, which the bar over it leaves for the session's again.
+func TestASubagentOpensItsConversation(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Conn.Set(connState{OK: true, Self: &protocol.Node{Id: "n", Revision: protocol.Revision}})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", NodeId: "n", Agent: "claude", Project: "/tmp", State: protocol.StateRunning}})
+	m.Selected.Set("s")
+	state := m.chatState("s")
+	state.loading = true
+	state.result.Set(chatResult{Loaded: true, Chat: &protocol.Chat{Supported: true, Conversation: "c",
+		Messages: []*protocol.ChatMessage{{Role: "user", Text: "look around"}},
+		Agents:   []*protocol.SubAgent{{Id: "a1", Running: true, Description: "Find the tests", Log: "/logs/agent-a1.jsonl"}},
+	}})
+	sub := m.agentState("s", "a1")
+	sub.loading = true // the test has no daemon
+	sub.result.Set(chatResult{Loaded: true, Chat: &protocol.Chat{Supported: true, Messages: []*protocol.ChatMessage{{Role: "user", Text: "Find the tests."}}}})
+	p := ggui.ProbeBuilder(func() ggui.Widget { return chatView(m, "s", 1) }, ggui.Sz(900, 700))
+	defer p.Close()
+	p.Frame()
+	row, ok := p.Semantics().Find(ggui.RoleText, "Find the tests")
+	if !ok {
+		t.Fatalf("no running subagent:\n%s", p.Semantics().String())
+	}
+	p.Click(row.Rect.Origin.Add(ggui.Pt(4, row.Rect.Size.H/2)))
+	p.Frame()
+	if got := ggui.Peek(state.agent); got != "a1" {
+		t.Fatalf("the pane shows agent %q, want a1", got)
+	}
+	if _, ok := p.Semantics().Find(ggui.RoleText, "Find the tests."); !ok {
+		t.Fatalf("the subagent's conversation is not shown:\n%s", p.Semantics().String())
+	}
+	back, ok := p.Semantics().Find(ggui.RoleButton, T("Back to the session"))
+	if !ok {
+		t.Fatalf("no way back:\n%s", p.Semantics().String())
+	}
+	p.Click(back.Rect.Origin.Add(ggui.Pt(back.Rect.Size.W/2, back.Rect.Size.H/2)))
+	p.Frame()
+	if ggui.Peek(state.agent) != "" {
+		t.Fatal("Back left the subagent's conversation")
+	}
+	if _, ok := p.Semantics().Find(ggui.RoleText, "look around"); !ok {
+		t.Fatalf("the session's conversation is not back:\n%s", p.Semantics().String())
+	}
+}
+
+// A message sent shows at once, as sent, until the log has it: said after
+// the latest user message of when it was sent, or followed there by as
+// many as were waiting before it. One the log never has goes in time.
+func TestASentMessageShowsUntilTheLogHasIt(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	state := m.chatState("s")
+	read := func(texts ...string) {
+		var msgs []*protocol.ChatMessage
+		for _, text := range texts {
+			msgs = append(msgs, &protocol.ChatMessage{Role: "user", Text: text}, &protocol.ChatMessage{Role: "assistant", Text: "ok"})
+		}
+		state.result.Set(chatResult{Loaded: true, Chat: &protocol.Chat{Supported: true, Messages: msgs}})
+		settlePending(state)
+	}
+	shown := func() []string {
+		var out []string
+		for _, p := range ggui.Peek(state.pending) {
+			out = append(out, p.Text)
+		}
+		return out
+	}
+	read("yes")
+	m.notePending("s", "yes")
+	m.notePending("s", "then this")
+	if got := shown(); !slices.Equal(got, []string{"yes", "then this"}) {
+		t.Fatalf("pending %q", got)
+	}
+	if turns := pendingTurns(ggui.Peek(state.pending)); len(turns) != 2 || !turns[0].Sending {
+		t.Fatalf("turns %+v", turns)
+	}
+	read("yes", "yes") // the same words again: the first is in
+	if got := shown(); !slices.Equal(got, []string{"then this"}) {
+		t.Fatalf("after the first was logged, pending %q", got)
+	}
+	read("yes", "yes", "then this, as the agent wrote it down")
+	if got := shown(); len(got) != 0 {
+		t.Fatalf("after both were logged, pending %q", got)
+	}
+	m.notePending("s", "/model")
+	p := ggui.Peek(state.pending)
+	p[0].At = time.Now().Add(-time.Minute)
+	settlePending(state)
+	if got := shown(); len(got) != 0 {
+		t.Fatalf("a command the log never has is still pending: %q", got)
 	}
 }

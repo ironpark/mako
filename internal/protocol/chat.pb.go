@@ -36,7 +36,11 @@ type ReadChat struct {
 	After  int64 `protobuf:"varint,5,opt,name=after,proto3" json:"after,omitempty"`
 	// seen is the digest of the Chat the reader has: when the reply would
 	// be the same, it comes back unchanged, without the messages.
-	Seen          uint64 `protobuf:"varint,6,opt,name=seen,proto3" json:"seen,omitempty"`
+	Seen uint64 `protobuf:"varint,6,opt,name=seen,proto3" json:"seen,omitempty"`
+	// agent reads the conversation of the session's subagent of this ID, as
+	// the session's Chat lists it, in place of the session's own: its
+	// messages alone, without usage or subagents of its own.
+	Agent         string `protobuf:"bytes,7,opt,name=agent,proto3" json:"agent,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -113,6 +117,13 @@ func (x *ReadChat) GetSeen() uint64 {
 	return 0
 }
 
+func (x *ReadChat) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
 // ChatMessage is one turn of a conversation.
 type ChatMessage struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -127,8 +138,11 @@ type ChatMessage struct {
 	Pending bool                   `protobuf:"varint,9,opt,name=pending,proto3" json:"pending,omitempty"` // a call not answered yet
 	// kind is what the tool does, whatever its agent calls it: one of
 	// protocol's Tool kinds, "" for a tool the agent's driver does not know.
-	Kind          string `protobuf:"bytes,10,opt,name=kind,proto3" json:"kind,omitempty"`
-	ExitCode      *int32 `protobuf:"varint,11,opt,name=exit_code,json=exitCode,proto3,oneof" json:"exit_code,omitempty"` // a command's, when its agent says
+	Kind     string `protobuf:"bytes,10,opt,name=kind,proto3" json:"kind,omitempty"`
+	ExitCode *int32 `protobuf:"varint,11,opt,name=exit_code,json=exitCode,proto3,oneof" json:"exit_code,omitempty"` // a command's, when its agent says
+	// images are the paths, on the session's node, of the images the
+	// message holds: those its log held inline, kept as files there.
+	Images        []string `protobuf:"bytes,12,rep,name=images,proto3" json:"images,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -238,6 +252,13 @@ func (x *ChatMessage) GetExitCode() int32 {
 		return *x.ExitCode
 	}
 	return 0
+}
+
+func (x *ChatMessage) GetImages() []string {
+	if x != nil {
+		return x.Images
+	}
+	return nil
 }
 
 // Chat answers ReadChat.
@@ -356,18 +377,21 @@ func (x *Chat) GetUnchanged() bool {
 // SubAgent is an agent a call of the conversation's started, such as
 // Claude's Agent tool does, and how far it has got.
 type SubAgent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	CallId        string                 `protobuf:"bytes,2,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"` // the call that started it, if it is known
-	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`                   // the sort of agent, as Explore
-	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
-	Running       bool                   `protobuf:"varint,5,opt,name=running,proto3" json:"running,omitempty"`
-	ToolCalls     int32                  `protobuf:"varint,6,opt,name=tool_calls,json=toolCalls,proto3" json:"tool_calls,omitempty"` // how many calls it has made
-	Tool          string                 `protobuf:"bytes,7,opt,name=tool,proto3" json:"tool,omitempty"`                             // its latest call
-	Detail        string                 `protobuf:"bytes,8,opt,name=detail,proto3" json:"detail,omitempty"`
-	Started       int64                  `protobuf:"varint,9,opt,name=started,proto3" json:"started,omitempty"`                   // Unix seconds
-	Updated       int64                  `protobuf:"varint,10,opt,name=updated,proto3" json:"updated,omitempty"`                  // Unix seconds, when it last wrote
-	ToolKind      string                 `protobuf:"bytes,11,opt,name=tool_kind,json=toolKind,proto3" json:"tool_kind,omitempty"` // what its latest call does, as ChatMessage.kind
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	CallId      string                 `protobuf:"bytes,2,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"` // the call that started it, if it is known
+	Kind        string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`                   // the sort of agent, as Explore
+	Description string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	Running     bool                   `protobuf:"varint,5,opt,name=running,proto3" json:"running,omitempty"`
+	ToolCalls   int32                  `protobuf:"varint,6,opt,name=tool_calls,json=toolCalls,proto3" json:"tool_calls,omitempty"` // how many calls it has made
+	Tool        string                 `protobuf:"bytes,7,opt,name=tool,proto3" json:"tool,omitempty"`                             // its latest call
+	Detail      string                 `protobuf:"bytes,8,opt,name=detail,proto3" json:"detail,omitempty"`
+	Started     int64                  `protobuf:"varint,9,opt,name=started,proto3" json:"started,omitempty"`                   // Unix seconds
+	Updated     int64                  `protobuf:"varint,10,opt,name=updated,proto3" json:"updated,omitempty"`                  // Unix seconds, when it last wrote
+	ToolKind    string                 `protobuf:"bytes,11,opt,name=tool_kind,json=toolKind,proto3" json:"tool_kind,omitempty"` // what its latest call does, as ChatMessage.kind
+	// log is its conversation's log on the session's node, which a ReadChat
+	// naming the agent reads.
+	Log           string `protobuf:"bytes,12,opt,name=log,proto3" json:"log,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -475,6 +499,13 @@ func (x *SubAgent) GetUpdated() int64 {
 func (x *SubAgent) GetToolKind() string {
 	if x != nil {
 		return x.ToolKind
+	}
+	return ""
+}
+
+func (x *SubAgent) GetLog() string {
+	if x != nil {
+		return x.Log
 	}
 	return ""
 }
@@ -629,7 +660,7 @@ var File_mako_v2_chat_proto protoreflect.FileDescriptor
 
 const file_mako_v2_chat_proto_rawDesc = "" +
 	"\n" +
-	"\x12mako/v2/chat.proto\x12\amako.v2\"\xa3\x01\n" +
+	"\x12mako/v2/chat.proto\x12\amako.v2\"\xb9\x01\n" +
 	"\bReadChat\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
@@ -638,7 +669,8 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"usage_only\x18\x03 \x01(\bR\tusageOnly\x12\x16\n" +
 	"\x06before\x18\x04 \x01(\x03R\x06before\x12\x14\n" +
 	"\x05after\x18\x05 \x01(\x03R\x05after\x12\x12\n" +
-	"\x04seen\x18\x06 \x01(\x04R\x04seen\"\x95\x02\n" +
+	"\x04seen\x18\x06 \x01(\x04R\x04seen\x12\x14\n" +
+	"\x05agent\x18\a \x01(\tR\x05agent\"\xad\x02\n" +
 	"\vChatMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x0e\n" +
@@ -651,7 +683,8 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\apending\x18\t \x01(\bR\apending\x12\x12\n" +
 	"\x04kind\x18\n" +
 	" \x01(\tR\x04kind\x12 \n" +
-	"\texit_code\x18\v \x01(\x05H\x00R\bexitCode\x88\x01\x01B\f\n" +
+	"\texit_code\x18\v \x01(\x05H\x00R\bexitCode\x88\x01\x01\x12\x16\n" +
+	"\x06images\x18\f \x03(\tR\x06imagesB\f\n" +
 	"\n" +
 	"_exit_code\"\xb5\x02\n" +
 	"\x04Chat\x12\x1c\n" +
@@ -663,7 +696,7 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\x06agents\x18\x06 \x03(\v2\x11.mako.v2.SubAgentR\x06agents\x12\x14\n" +
 	"\x05start\x18\a \x01(\x03R\x05start\x12\x16\n" +
 	"\x06digest\x18\b \x01(\x04R\x06digest\x12\x1c\n" +
-	"\tunchanged\x18\t \x01(\bR\tunchanged\"\x9f\x02\n" +
+	"\tunchanged\x18\t \x01(\bR\tunchanged\"\xb1\x02\n" +
 	"\bSubAgent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\acall_id\x18\x02 \x01(\tR\x06callId\x12\x12\n" +
@@ -677,7 +710,8 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\astarted\x18\t \x01(\x03R\astarted\x12\x18\n" +
 	"\aupdated\x18\n" +
 	" \x01(\x03R\aupdated\x12\x1b\n" +
-	"\ttool_kind\x18\v \x01(\tR\btoolKind\"\xb6\x01\n" +
+	"\ttool_kind\x18\v \x01(\tR\btoolKind\x12\x10\n" +
+	"\x03log\x18\f \x01(\tR\x03log\"\xb6\x01\n" +
 	"\x05Usage\x12\x14\n" +
 	"\x05input\x18\x01 \x01(\x03R\x05input\x12!\n" +
 	"\fcached_input\x18\x02 \x01(\x03R\vcachedInput\x12\x16\n" +

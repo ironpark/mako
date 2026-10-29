@@ -56,6 +56,12 @@ func ParseMessage(raw json.RawMessage, tools Tools) []*protocol.ChatMessage {
 		IsError   bool            `json:"is_error"`
 		Input     json.RawMessage `json:"input"`
 		Content   json.RawMessage `json:"content"`
+		Source    struct {
+			Type      string `json:"type"`
+			MediaType string `json:"media_type"`
+			Data      string `json:"data"`
+		} `json:"source"`
+		ImageURL string `json:"image_url"`
 	}
 	if json.Unmarshal(m.Content, &blocks) != nil {
 		if text := ContentText(m.Content); strings.TrimSpace(text) != "" {
@@ -73,16 +79,34 @@ func ParseMessage(raw json.RawMessage, tools Tools) []*protocol.ChatMessage {
 		case "tool_result":
 			msg = &protocol.ChatMessage{Role: "tool", Id: b.ToolUseID, Text: ContentText(b.Content), Output: true, Error: b.IsError}
 		case "image", "input_image":
-			msg.Text = "[image]"
+			var path string
+			var err error
+			if b.Source.Type == "base64" {
+				path, err = KeepImage(b.Source.MediaType, b.Source.Data)
+			} else {
+				path, err = KeepDataURL(b.ImageURL)
+			}
+			if err != nil {
+				msg.Text = "[image]"
+			} else {
+				msg.Images = []string{path}
+			}
 		default:
 			continue
 		}
-		if strings.TrimSpace(msg.GetText()) == "" && msg.GetTool() == "" && !msg.GetOutput() {
+		if strings.TrimSpace(msg.GetText()) == "" && msg.GetTool() == "" && !msg.GetOutput() && len(msg.GetImages()) == 0 {
 			continue
 		}
-		// Tool rows stay apart; prose of one speaker folds together.
-		if len(out) > 0 && out[len(out)-1].GetRole() == msg.GetRole() && msg.GetRole() != "tool" {
-			out[len(out)-1].Text += "\n\n" + msg.GetText()
+		// Tool rows stay apart; prose of one speaker folds together, and
+		// the images with it.
+		if last := len(out) - 1; last >= 0 && out[last].GetRole() == msg.GetRole() && msg.GetRole() != "tool" {
+			switch {
+			case out[last].GetText() == "":
+				out[last].Text = msg.GetText()
+			case msg.GetText() != "":
+				out[last].Text += "\n\n" + msg.GetText()
+			}
+			out[last].Images = append(out[last].Images, msg.GetImages()...)
 		} else {
 			out = append(out, msg)
 		}

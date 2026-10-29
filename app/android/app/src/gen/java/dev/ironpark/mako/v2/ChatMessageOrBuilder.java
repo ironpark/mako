@@ -152,4 +152,49 @@ public interface ChatMessageOrBuilder extends
    * @return The exitCode.
    */
   int getExitCode();
+
+  /**
+   * <pre>
+   * images are the paths, on the session's node, of the images the
+   * message holds: those its log held inline, kept as files there.
+   * </pre>
+   *
+   * <code>repeated string images = 12 [json_name = "images"];</code>
+   * @return A list containing the images.
+   */
+  java.util.List<java.lang.String>
+      getImagesList();
+  /**
+   * <pre>
+   * images are the paths, on the session's node, of the images the
+   * message holds: those its log held inline, kept as files there.
+   * </pre>
+   *
+   * <code>repeated string images = 12 [json_name = "images"];</code>
+   * @return The count of images.
+   */
+  int getImagesCount();
+  /**
+   * <pre>
+   * images are the paths, on the session's node, of the images the
+   * message holds: those its log held inline, kept as files there.
+   * </pre>
+   *
+   * <code>repeated string images = 12 [json_name = "images"];</code>
+   * @param index The index of the element to return.
+   * @return The images at the given index.
+   */
+  java.lang.String getImages(int index);
+  /**
+   * <pre>
+   * images are the paths, on the session's node, of the images the
+   * message holds: those its log held inline, kept as files there.
+   * </pre>
+   *
+   * <code>repeated string images = 12 [json_name = "images"];</code>
+   * @param index The index of the element to return.
+   * @return The images at the given index.
+   */
+  com.google.protobuf.ByteString
+      getImagesBytes(int index);
 }

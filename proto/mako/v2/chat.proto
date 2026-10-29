@@ -19,6 +19,10 @@ message ReadChat {
   // seen is the digest of the Chat the reader has: when the reply would
   // be the same, it comes back unchanged, without the messages.
   uint64 seen = 6;
+  // agent reads the conversation of the session's subagent of this ID, as
+  // the session's Chat lists it, in place of the session's own: its
+  // messages alone, without usage or subagents of its own.
+  string agent = 7;
 }
 
 // ChatMessage is one turn of a conversation.
@@ -36,6 +40,9 @@ message ChatMessage {
   // protocol's Tool kinds, "" for a tool the agent's driver does not know.
   string kind = 10;
   optional int32 exit_code = 11; // a command's, when its agent says
+  // images are the paths, on the session's node, of the images the
+  // message holds: those its log held inline, kept as files there.
+  repeated string images = 12;
 }
 
 // Chat answers ReadChat.
@@ -69,6 +76,9 @@ message SubAgent {
   int64 started = 9; // Unix seconds
   int64 updated = 10; // Unix seconds, when it last wrote
   string tool_kind = 11; // what its latest call does, as ChatMessage.kind
+  // log is its conversation's log on the session's node, which a ReadChat
+  // naming the agent reads.
+  string log = 12;
 }
 
 // Usage is the tokens a conversation has spent.

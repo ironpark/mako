@@ -180,6 +180,12 @@ func (w window) fill(chat *protocol.Chat) {
 }
 
 func readWindow(path string, a agent.Logs, span Span) (window, error) {
+	tools, _ := a.(agent.Tools)
+	return readLog(path, a.NewDecoder(), tools, span)
+}
+
+// readLog reads span of the log at path with dec, as readWindow does.
+func readLog(path string, dec agent.Decoder, tools agent.Tools, span Span) (window, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return window{}, err
@@ -217,8 +223,6 @@ func readWindow(path string, a agent.Logs, span Span) (window, error) {
 	calls := map[string]int{}
 	dropped := 0
 	size := 0
-	dec := a.NewDecoder()
-	tools, _ := a.(agent.Tools)
 	// trim keeps the window small enough to send, dropping the oldest
 	// messages. The messages of one record go together, so the window
 	// starts at a record and a read up to there ends at it.
@@ -398,6 +402,25 @@ func ReadBound(info *protocol.SessionInfo, path string, span Span) (*protocol.Ch
 	return out, err
 }
 
+// ReadAgent reads span of the log at path of one of the session's
+// subagents, which the session's own read found: its messages alone, read
+// as the driver reads a subagent's log.
+func ReadAgent(info *protocol.SessionInfo, path string, span Span) (*protocol.Chat, error) {
+	a, ok := logsOf(info.GetAgent())
+	out := &protocol.Chat{Supported: ok, Conversation: info.GetConversationId()}
+	if !ok {
+		return out, nil
+	}
+	dec := a.NewDecoder()
+	if sub, ok := a.(agent.SubAgentLogs); ok {
+		dec = sub.NewAgentDecoder()
+	}
+	tools, _ := a.(agent.Tools)
+	w, err := readLog(path, dec, tools, span)
+	w.fill(out)
+	return out, err
+}
+
 // Cache keeps the last read of a bound log, so polling a log that has not
 // changed costs one stat.
 type Cache struct {
@@ -406,6 +429,56 @@ type Cache struct {
 	chat   *protocol.Chat // shared with every caller, which must not change it
 	usage  usageScan
 	agents agent.SubAgentScan // nil until a read
+	// subs are the latest reads of the subagents' logs, by log path.
+	subs map[string]subRead
+}
+
+// subRead is a subagent's log as last read.
+type subRead struct {
+	stat os.FileInfo
+	chat *protocol.Chat
+}
+
+// Agent is the subagent id of the conversation as last read, nil for one
+// it does not list.
+func (c *Cache) Agent(id string) *protocol.SubAgent {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, a := range c.chat.GetAgents() {
+		if a.GetId() == id {
+			return a
+		}
+	}
+	return nil
+}
+
+// ReadAgent is ReadAgent, its latest messages answered from the cache
+// while the subagent's log is unchanged. The reply is shared, and must not
+// be changed.
+func (c *Cache) ReadAgent(info *protocol.SessionInfo, path string, span Span) (*protocol.Chat, error) {
+	if span != (Span{}) {
+		return ReadAgent(info, path, span)
+	}
+	stat, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	r, ok := c.subs[path]
+	c.mu.Unlock()
+	if ok && os.SameFile(r.stat, stat) && r.stat.Size() == stat.Size() && r.stat.ModTime().Equal(stat.ModTime()) {
+		return r.chat, nil
+	}
+	chat, err := ReadAgent(info, path, span)
+	if err == nil {
+		c.mu.Lock()
+		if c.subs == nil {
+			c.subs = map[string]subRead{}
+		}
+		c.subs[path] = subRead{stat: stat, chat: chat}
+		c.mu.Unlock()
+	}
+	return chat, err
 }
 
 // readSpan is ReadBound of an earlier span, read as asked, with the usage

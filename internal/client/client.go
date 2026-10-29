@@ -220,6 +220,11 @@ func (c *Client) Rename(ctx context.Context, req *protocol.RenameSession) (*prot
 	return request[*protocol.SessionInfo](ctx, c, protocol.TypeRenameSess, req)
 }
 
+// Commands lists the slash commands a session's agent takes.
+func (c *Client) Commands(ctx context.Context, req *protocol.ListCommands) (*protocol.Commands, error) {
+	return request[*protocol.Commands](ctx, c, protocol.TypeListCommands, req)
+}
+
 // Kill terminates a session.
 func (c *Client) Kill(ctx context.Context, req *protocol.CloseSession) error {
 	_, err := request[*protocol.Exited](ctx, c, protocol.TypeCloseSess, req)
