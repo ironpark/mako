@@ -408,12 +408,35 @@ type Cache struct {
 	agents agent.SubAgentScan // nil until a read
 }
 
+// readSpan is ReadBound of an earlier span, read as asked, with the usage
+// and the subagents the cache keeps scanning as the log grows: a page read
+// would otherwise scan the whole log and every subagent's again.
+func (c *Cache) readSpan(info *protocol.SessionInfo, path string, span Span) (*protocol.Chat, error) {
+	a, ok := logsOf(info.GetAgent())
+	out := &protocol.Chat{Supported: ok, Conversation: info.GetConversationId()}
+	if err := verify(a, ok, info, path); err != nil {
+		return out, err
+	}
+	w, err := readWindow(path, a, span)
+	w.fill(out)
+	if err == nil {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.agents == nil || c.chat.GetConversation() != info.GetConversationId() {
+			c.agents = newSubAgents(a) // another conversation's
+		}
+		out.Usage = c.usage.read(path, a)
+		out.Agents = c.agents.Read(path, out.Messages)
+	}
+	return out, err
+}
+
 // ReadBound is ReadBound of the latest messages, answered from the cache
 // while the log is the same file, unchanged, and still bound to the same
 // conversation. An earlier span does not change, so it is read as asked.
 func (c *Cache) ReadBound(info *protocol.SessionInfo, path string, span Span) (*protocol.Chat, error) {
 	if span != (Span{}) {
-		return ReadBound(info, path, span)
+		return c.readSpan(info, path, span)
 	}
 	stat, statErr := os.Stat(path)
 	c.mu.Lock()

@@ -1,10 +1,14 @@
 package transcript
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -112,5 +116,49 @@ func TestSubagentsStartedLaterAreFound(t *testing.T) {
 	writeLog(t, filepath.Join(sub, "agent-b1.meta.json"), `{"toolUseId":"bg","requestShape":"background","finished":true}`)
 	if agents := read(); len(agents) != 1 || agents[0].GetRunning() {
 		t.Fatalf("agents %v, want the one finished", agents)
+	}
+}
+
+// A page read through the cache, before the latest messages, says what a
+// read of its own does: its messages, the whole conversation's usage and
+// the subagents its calls started, from scans the cache keeps.
+func TestCachedPagesReadAsAReadOfTheirOwn(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "projects", "p")
+	path := filepath.Join(dir, "c.jsonl")
+	var body strings.Builder
+	body.WriteString(`{"type":"user","sessionId":"c","cwd":"/p","message":{"role":"user","content":"look around"}}` + "\n")
+	body.WriteString(`{"type":"assistant","uuid":"a1","message":{"role":"assistant","usage":{"input_tokens":10,"output_tokens":5},"content":[` +
+		`{"type":"tool_use","id":"fg","name":"Agent","input":{"description":"Find the tests","prompt":"Find the tests."}}]}}` + "\n")
+	body.WriteString(`{"type":"user","uuid":"u2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"fg","content":"found"}]}}` + "\n")
+	for i := range 300 {
+		fmt.Fprintf(&body, `{"type":"user","uuid":"m%d","message":{"role":"user","content":"m%d"}}`+"\n", i, i)
+	}
+	writeLog(t, path, body.String())
+	sub := filepath.Join(dir, "c", "subagents")
+	writeLog(t, filepath.Join(sub, "agent-f1.jsonl"), `{"type":"user","isSidechain":true,"message":{"role":"user","content":"Find the tests."}}`+"\n")
+	writeLog(t, filepath.Join(sub, "agent-f1.meta.json"), `{"requestShape":"foreground"}`)
+
+	info := &protocol.SessionInfo{Agent: "claude", ConversationId: "c"}
+	var cache Cache
+	latest, err := cache.ReadBound(info, path, Span{})
+	if err != nil || latest.GetStart() == 0 {
+		t.Fatalf("latest starts at %d, %v", latest.GetStart(), err)
+	}
+	span := Span{Before: latest.GetStart()}
+	for range 2 { // the second from scans already done
+		got, err := cache.ReadBound(info, path, span)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := ReadBound(info, path, span)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !proto.Equal(got, want) {
+			t.Fatalf("cached page %v\nwant %v", got, want)
+		}
+		if len(got.GetAgents()) != 1 || got.GetUsage().GetOutput() != 5 {
+			t.Fatalf("page agents %v, usage %v", got.GetAgents(), got.GetUsage())
+		}
 	}
 }
