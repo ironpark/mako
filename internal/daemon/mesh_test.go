@@ -346,7 +346,7 @@ func TestANodeJoinsByPairingCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ownKeys(info) != 0 || len(info.GetRequests()) != 1 {
+	if len(info.GetKeys()) != 0 || len(info.GetRequests()) != 1 {
 		t.Fatalf("a wrong token let the phone in, or was not kept as a request: %v", info)
 	}
 
@@ -372,18 +372,6 @@ func TestANodeJoinsByPairingCode(t *testing.T) {
 	if len(cfg.Peers) != 1 || !strings.HasSuffix(cfg.Peers[0], "/p2p/"+server.peerID()) {
 		t.Fatalf("kept peers %v", cfg.Peers)
 	}
-}
-
-// ownKeys counts the keys mako's own file lets in, not the user's SSH
-// one's.
-func ownKeys(info *protocol.AccessInfo) int {
-	n := 0
-	for _, k := range info.GetKeys() {
-		if k.GetSource() == "" {
-			n++
-		}
-	}
-	return n
 }
 
 // Only this user reaches the daemon's socket; a daemon given another's
