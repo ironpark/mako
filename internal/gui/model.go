@@ -135,6 +135,10 @@ type model struct {
 	layouts   map[string]*layoutNode
 	layoutKey string            // what the panes shown are kept by; see layoutKey
 	contexts  map[string]string // by space, the owner or project last shown in it
+	// tabNodes are the nodes of session tabs, and missing when each tab's
+	// session went missing from the list; see leftover.go.
+	tabNodes  map[string]string
+	missing   map[string]time.Time
 	wsVersion int64
 	wsNode    string
 	wsLast    []byte
@@ -343,6 +347,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		toaster:        ui.NewToaster(),
 		layouts:        map[string]*layoutNode{},
 		contexts:       map[string]string{},
+		tabNodes:       map[string]string{},
+		missing:        map[string]time.Time{},
 		kick:           make(chan struct{}, 1),
 		Conn:           ggui.State(connState{}).WithEqual(deepEqual),
 		Nodes:          ggui.State([]*protocol.Node(nil)).WithEqual(protocol.Equal),
@@ -627,12 +633,14 @@ func (m *model) poll(ctx context.Context) {
 			access = nil // the mesh is off on the daemon
 		}
 	}
+	self := c.Node()
+	now := time.Now()
+	live := liveNodes(self, nodes, now)
 	// LastSeen moves on every poll; leaving it out keeps an unchanged mesh
 	// from rebuilding the sidebar.
 	for i := range nodes {
 		nodes[i].LastSeen = nil
 	}
-	self := c.Node()
 	self.LastSeen = nil
 	devices := m.fetchDevices(reqCtx, c, self)
 	printed := make(map[string]time.Time, len(sessions))
@@ -671,6 +679,7 @@ func (m *model) poll(ctx context.Context) {
 		}
 		m.noteStatus(sessions)
 		m.Sessions.Set(sessions)
+		m.dropLeftoverTabs(sessions, live, now)
 		m.Printed.Set(printed)
 		if now := time.Now().Truncate(time.Minute); !now.Equal(ggui.Peek(m.Minute)) {
 			m.Minute.Set(now)
@@ -1230,6 +1239,9 @@ func (m *model) killAll(ids []string, done func()) {
 func (m *model) killThen(id string, then func()) {
 	info, ok := m.session(id)
 	if !ok {
+		// A tab left over from a session that is gone has nothing to
+		// kill, but still has to leave.
+		m.closeTab(id)
 		if then != nil {
 			then()
 		}

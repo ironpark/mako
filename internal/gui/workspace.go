@@ -32,6 +32,8 @@ import (
 type workspaceDoc struct {
 	spaceList
 	Layouts map[string]*layoutNode `json:"layouts,omitempty"` // by layoutKey
+	// TabNodes are the nodes of the session tabs, by tab; see leftover.go.
+	TabNodes map[string]string `json:"tab_nodes,omitempty"`
 }
 
 // workspaceFile is workspace.json: the workspace, and the edit it is.
@@ -132,6 +134,7 @@ func setupWorkspace(m *model) {
 		if body, err := os.ReadFile(path); err == nil && json.Unmarshal(body, &f) == nil {
 			m.wsVersion, m.wsNode = f.Version, f.NodeID
 			m.layouts = keyedLayouts(f.Doc.Layouts)
+			maps.Copy(m.tabNodes, f.Doc.TabNodes)
 			if f.Contexts != nil {
 				m.contexts = f.Contexts
 			}
@@ -268,7 +271,7 @@ func (m *model) workspaceDocNow() workspaceDoc {
 		}
 		layouts[id] = root
 	}
-	return workspaceDoc{spaceList: p, Layouts: layouts}
+	return workspaceDoc{spaceList: p, Layouts: layouts, TabNodes: m.keptTabNodes(layouts)}
 }
 
 // workspaceChanged notes that the workspace may have changed: once changes
@@ -366,6 +369,7 @@ func (m *model) takeWorkspace(ws *protocol.Workspace) {
 	// kept it.
 	m.Spaces.Set(f.Doc.spaceList.upgraded())
 	m.layouts = keyedLayouts(f.Doc.Layouts)
+	maps.Copy(m.tabNodes, f.Doc.TabNodes)
 	m.layoutKey = m.shownKey()
 	root := m.takeLayout(m.layoutKey)
 	// A file with edits not saved stays open, whatever the other node had.
