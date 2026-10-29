@@ -33,6 +33,19 @@ func TestGitTreeAddsUpFolders(t *testing.T) {
 	if gui.Name != "gui" || gui.Children[0].Name != "icons" || gui.Children[1].Name != "agents.go" {
 		t.Fatalf("gui %+v: want folders first", gui)
 	}
+	// A folder holding one folder alone shares its row.
+	deep := gitTree([]*protocol.GitFile{
+		{Path: "app/android/app/src/gen/java/dev/v2/A.java", Added: 2},
+		{Path: "app/android/app/src/gen/java/dev/v2/B.java", Added: 3},
+		{Path: "app/README.md", Added: 1},
+	})
+	if len(deep) != 1 || deep[0].Name != "app" || len(deep[0].Children) != 2 {
+		t.Fatalf("app %+v", deep)
+	}
+	gen := deep[0].Children[0]
+	if gen.Name != "android/app/src/gen/java/dev/v2" || gen.Key != "app/android/app/src/gen/java/dev/v2" || gen.Added != 5 || len(gen.Children) != 2 {
+		t.Fatalf("the chain of folders: %+v", gen)
+	}
 	if lineCount(2712) != "2.7k" || lineCount(2000) != "2k" || lineCount(320) != "320" {
 		t.Fatal("counts are not written as the tree shows them")
 	}

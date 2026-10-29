@@ -95,7 +95,9 @@ type gitItem struct {
 }
 
 // gitTree arranges changed files under their folders, folders first and
-// then by name, each folder with its files' lines added up.
+// then by name, each folder with its files' lines added up. A folder that
+// holds one folder alone shares its row, "app/src/gen", so a deep path to
+// a change does not step in a level a folder.
 func gitTree(files []*protocol.GitFile) []gitItem {
 	type node struct {
 		item gitItem
@@ -125,6 +127,10 @@ func gitTree(files []*protocol.GitFile) []gitItem {
 		for _, k := range n.kids {
 			it := k.item
 			it.Children = build(k)
+			for it.Dir && len(it.Children) == 1 && it.Children[0].Dir {
+				only := it.Children[0]
+				it.Key, it.Name, it.Children = only.Key, it.Name+"/"+only.Name, only.Children
+			}
 			out = append(out, it)
 		}
 		slices.SortFunc(out, func(a, b gitItem) int {
