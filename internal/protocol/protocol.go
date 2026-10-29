@@ -171,8 +171,9 @@ func Body[T proto.Message](env *Envelope) (T, error) {
 }
 
 // WriteFrame writes one frame: the envelope's length, as a big-endian
-// uint32, then the envelope.
-func WriteFrame(w io.Writer, env *Envelope) error {
+// uint32, then the envelope. With pack, a frame that compresses well goes
+// compressed, as frames between daemons do.
+func WriteFrame(w io.Writer, env *Envelope, pack bool) error {
 	size := proto.Size(env)
 	if size > MaxFrameSize {
 		return fmt.Errorf("frame too large: %d bytes", size)
@@ -183,19 +184,27 @@ func WriteFrame(w io.Writer, env *Envelope) error {
 	if err != nil {
 		return err
 	}
+	if pack {
+		if small, ok := packed(frame[4:]); ok {
+			frame = binary.BigEndian.AppendUint32(frame[:0], uint32(len(small))|packedBit)
+			frame = append(frame, small...)
+		}
+	}
 	_, err = w.Write(frame)
 	return err
 }
 
-// ReadFrame reads one frame. An envelope whose body this build does not
-// know, from a newer peer, has no Type, which a daemon answers as
-// unsupported.
+// ReadFrame reads one frame, compressed or not. An envelope whose body
+// this build does not know, from a newer peer, has no Type, which a daemon
+// answers as unsupported.
 func ReadFrame(r io.Reader) (*Envelope, error) {
 	var hdr [4]byte
 	if _, err := io.ReadFull(r, hdr[:]); err != nil {
 		return nil, err
 	}
 	n := binary.BigEndian.Uint32(hdr[:])
+	packed := n&packedBit != 0
+	n &^= packedBit
 	if n > MaxFrameSize {
 		return nil, fmt.Errorf("frame too large: %d bytes", n)
 	}
@@ -203,11 +212,53 @@ func ReadFrame(r io.Reader) (*Envelope, error) {
 	if _, err := io.ReadFull(r, buf); err != nil {
 		return nil, err
 	}
+	if packed {
+		var err error
+		if buf, err = Decompress(buf); err != nil {
+			return nil, fmt.Errorf("frame: %w", err)
+		}
+	}
 	env := &Envelope{}
 	if err := proto.Unmarshal(buf, env); err != nil {
 		return nil, err
 	}
 	return env, nil
+}
+
+// UnpackFrames copies the frames src carries to dst until src ends,
+// decompressing those that came compressed, for a reader that takes only
+// the plain form, as a front-end on its daemon's socket.
+func UnpackFrames(dst io.Writer, src io.Reader) error {
+	var hdr [4]byte
+	for {
+		if _, err := io.ReadFull(src, hdr[:]); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		n := binary.BigEndian.Uint32(hdr[:])
+		packed := n&packedBit != 0
+		n &^= packedBit
+		if n > MaxFrameSize {
+			return fmt.Errorf("frame too large: %d bytes", n)
+		}
+		buf := make([]byte, 4+n)
+		if _, err := io.ReadFull(src, buf[4:]); err != nil {
+			return err
+		}
+		if packed {
+			body, err := Decompress(buf[4:])
+			if err != nil {
+				return fmt.Errorf("frame: %w", err)
+			}
+			buf = append(buf[:4], body...)
+		}
+		binary.BigEndian.PutUint32(buf, uint32(len(buf)-4))
+		if _, err := dst.Write(buf); err != nil {
+			return err
+		}
+	}
 }
 
 // CodedError is a failure a requester may act on by its Code, which
@@ -237,7 +288,7 @@ func WriteError(w io.Writer, id string, err error) error {
 	if encErr != nil {
 		return encErr
 	}
-	return WriteFrame(w, env)
+	return WriteFrame(w, env, false)
 }
 
 // Codes of an Error.

@@ -16,6 +16,7 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transcript"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // This subprocess emulates a native agent, holding its own log open. No API
@@ -184,5 +185,31 @@ func TestConcurrentAgentsInSameProjectBindTheirOwnLogs(t *testing.T) {
 		if err != nil || chat.GetConversation() != s.Info().GetConversationId() {
 			t.Fatalf("wrong chat: %+v %v", chat, err)
 		}
+	}
+
+	// A reader that has the conversation is told it is unchanged.
+	read := func(seen uint64) *protocol.Chat {
+		stream, done := ask(t, func(s *transport.Stream, env *protocol.Envelope) error {
+			return d.handleReadChat(t.Context(), s, env)
+		}, protocol.TypeReadChat, &protocol.ReadChat{SessionId: a.Info().GetId(), Seen: seen})
+		env, err := stream.Recv()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+		out, err := transport.Reply[*protocol.Chat](env)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	first := read(0)
+	if first.GetUnchanged() || first.GetDigest() == 0 || first.GetConversation() == "" {
+		t.Fatalf("first read: %+v", first)
+	}
+	if again := read(first.GetDigest()); !again.GetUnchanged() || again.GetDigest() != first.GetDigest() || len(again.GetMessages()) != 0 {
+		t.Fatalf("a read of what was seen: %+v", again)
 	}
 }

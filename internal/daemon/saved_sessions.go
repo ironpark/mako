@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -303,9 +304,12 @@ func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.Open
 	if existed && previous.Info.GetConversationId() == "" && d.claimedLocked(id)[conversationID] {
 		return nil, fmt.Errorf("conversation %s already belongs to another session", conversationID)
 	}
+	if launch.Shown == nil {
+		launch.Shown = slices.Clone(launch.Command)
+	}
 	cleanup := d.withContextServers(ctx, &launch, id)
 	s, err := session.Start(session.Spec{ID: id, NodeID: d.cfg.NodeID, Agent: req.GetAgent(), Profile: req.GetProfile(),
-		Project: req.GetProject(), Command: launch.Command, Env: launch.Env, Cols: uint16(req.GetCols()), Rows: uint16(req.GetRows()), Worktree: req.GetWorktree()})
+		Project: req.GetProject(), Command: launch.Command, Shown: launch.Shown, Env: launch.Env, Cols: uint16(req.GetCols()), Rows: uint16(req.GetRows()), Worktree: req.GetWorktree()})
 	if err != nil {
 		cleanup()
 		return nil, err
@@ -401,6 +405,7 @@ func (d *Daemon) conversationFor(ctx context.Context, req *protocol.OpenSession,
 	if flag := native.Isolate(); flag != "" {
 		launch.Command = withOptionalFlag(ctx, launch.Command, flag)
 	}
+	launch.Shown = slices.Clone(launch.Command)
 	if hooks, ok := driver.(agent.Hooks); ok && d.hookCommand != "" && hasFeature(ctx, launch.Command, driver) {
 		status := ""
 		if _, ok := driver.(agent.StatusLine); ok && d.statusCommand != "" {

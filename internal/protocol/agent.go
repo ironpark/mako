@@ -29,7 +29,7 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 11
+const Revision = 12
 
 // RevisionTransfers is the first revision whose daemon moves files in
 // pieces (ReadFile.raw, WriteFile.offset) and opens tunnels.

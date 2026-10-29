@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transcript"
@@ -33,8 +34,22 @@ func (d *Daemon) handleReadChat(ctx context.Context, stream *transport.Stream, e
 		// the usage reported over it.
 		reply := shallow(chat)
 		reply.Usage = withReported(chat.GetUsage(), s.Reported())
+		reply.Digest = digest(reply)
+		if r.GetSeen() == reply.GetDigest() {
+			// A reader polling a quiet conversation has it already.
+			return &protocol.Chat{Digest: reply.GetDigest(), Unchanged: true}, nil
+		}
 		return reply, nil
 	})
+}
+
+// digest names m's contents: the same contents, the same digest, while
+// the daemon runs.
+func digest(m proto.Message) uint64 {
+	b, _ := proto.MarshalOptions{Deterministic: true}.Marshal(m)
+	h := fnv.New64a()
+	h.Write(b)
+	return max(h.Sum64(), 1) // 0 is a reader that has seen nothing
 }
 
 // shallow copies m's fields, not what they hold: a repeated field's

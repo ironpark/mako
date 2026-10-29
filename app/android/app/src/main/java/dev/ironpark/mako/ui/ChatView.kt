@@ -91,10 +91,14 @@ fun ChatView(mesh: Mesh, session: SessionInfo, modifier: Modifier = Modifier) {
     var paging by remember(session.id) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    /** Reads the messages before the offset before, or with 0 the latest. */
-    suspend fun fetch(before: Long = 0): Chat? = try {
+    /**
+     * Reads the messages before the offset before, or with 0 the latest;
+     * seen is the digest of the chat on show, which comes back unchanged
+     * when the conversation is.
+     */
+    suspend fun fetch(before: Long = 0, seen: Long = 0): Chat? = try {
         mesh.daemon.chat(
-            ReadChat.newBuilder().setNodeId(session.nodeId).setSessionId(session.id).setBefore(before).build()
+            ReadChat.newBuilder().setNodeId(session.nodeId).setSessionId(session.id).setBefore(before).setSeen(seen).build()
         ).also { error = null }
     } catch (e: CancellationException) {
         throw e
@@ -104,7 +108,8 @@ fun ChatView(mesh: Mesh, session: SessionInfo, modifier: Modifier = Modifier) {
     }
 
     suspend fun read() {
-        val c = fetch() ?: return
+        val c = fetch(seen = chat?.digest ?: 0) ?: return
+        if (c.unchanged) return
         chat = c
         if (older.isEmpty()) start = c.start
     }

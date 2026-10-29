@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"strings"
 	"testing"
@@ -47,7 +48,7 @@ func TestAMessageRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	var wire bytes.Buffer
-	if err := WriteFrame(&wire, env); err != nil {
+	if err := WriteFrame(&wire, env, false); err != nil {
 		t.Fatal(err)
 	}
 	got, err := ReadFrame(&wire)
@@ -99,7 +100,7 @@ func TestAnOversizeFrameIsRefused(t *testing.T) {
 		t.Fatalf("oversize frame: %v", err)
 	}
 	env, _ := Encode(TypeOutput, "", &Output{Data: make([]byte, MaxFrameSize)})
-	if err := WriteFrame(&bytes.Buffer{}, env); err == nil {
+	if err := WriteFrame(&bytes.Buffer{}, env, false); err == nil {
 		t.Fatal("wrote an oversize frame")
 	}
 }
@@ -109,7 +110,7 @@ func TestOutputIsCarriedRaw(t *testing.T) {
 	data := bytes.Repeat([]byte("\x1b[31mhello\r\n"), 1000)
 	env, _ := Encode(TypeOutput, "", &Output{SessionId: "s", Data: data})
 	var wire bytes.Buffer
-	if err := WriteFrame(&wire, env); err != nil {
+	if err := WriteFrame(&wire, env, false); err != nil {
 		t.Fatal(err)
 	}
 	if overhead := wire.Len() - len(data); overhead > 32 {
@@ -119,5 +120,75 @@ func TestOutputIsCarriedRaw(t *testing.T) {
 	ev, ok := StreamEventOf(got)
 	if !ok || ev.Kind != EventOutput || !bytes.Equal(ev.Data, data) {
 		t.Fatalf("output event %v %v", ok, ev)
+	}
+}
+
+// A frame between daemons that compresses well goes compressed, and reads
+// back the same; one that does not, and a small one, go as they are.
+func TestAFrameGoesPackedWhenThatSaves(t *testing.T) {
+	text := []byte(strings.Repeat("func main() { fmt.Println(\"hello\") }\n", 400))
+	noise := make([]byte, 16<<10)
+	rand.Read(noise)
+	for _, c := range []struct {
+		name   string
+		data   []byte
+		packed bool
+	}{
+		{"text", text, true},
+		{"small", []byte("hi"), false},
+		{"noise", noise, false},
+	} {
+		env, _ := Encode(TypeFile, "", &File{Path: "/f", Data: c.data})
+		var wire bytes.Buffer
+		if err := WriteFrame(&wire, env, true); err != nil {
+			t.Fatal(err)
+		}
+		if packed := binary.BigEndian.Uint32(wire.Bytes())&packedBit != 0; packed != c.packed {
+			t.Errorf("%s: packed %v, want %v", c.name, packed, c.packed)
+		}
+		got, err := ReadFrame(&wire)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if f := got.GetFile(); !bytes.Equal(f.GetData(), c.data) {
+			t.Errorf("%s: read back %d bytes, want %d", c.name, len(f.GetData()), len(c.data))
+		}
+	}
+}
+
+// A compressed frame that would grow past the limit is refused.
+func TestAPackedFrameIsHeldToTheLimit(t *testing.T) {
+	big := Compress(make([]byte, MaxFrameSize+1))
+	frame := binary.BigEndian.AppendUint32(nil, uint32(len(big))|packedBit)
+	if _, err := ReadFrame(bytes.NewReader(append(frame, big...))); err == nil {
+		t.Fatal("a frame unpacking past the limit was read")
+	}
+}
+
+// Frames copied for a front-end come plain, whichever form they came in.
+func TestUnpackedFramesComePlain(t *testing.T) {
+	text := []byte(strings.Repeat("output of a session\r\n", 500))
+	var wire bytes.Buffer
+	for _, pack := range []bool{true, false, true} {
+		env, _ := Encode(TypeOutput, "", &Output{SessionId: "s", Data: text})
+		if err := WriteFrame(&wire, env, pack); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var plain bytes.Buffer
+	if err := UnpackFrames(&plain, &wire); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 3 {
+		if binary.BigEndian.Uint32(plain.Bytes())&packedBit != 0 {
+			t.Fatalf("frame %d came packed", i)
+		}
+		env, err := ReadFrame(&plain)
+		if err != nil || !bytes.Equal(env.GetOutput().GetData(), text) {
+			t.Fatalf("frame %d: %v", i, err)
+		}
+	}
+	if plain.Len() != 0 {
+		t.Fatalf("%d bytes left over", plain.Len())
 	}
 }

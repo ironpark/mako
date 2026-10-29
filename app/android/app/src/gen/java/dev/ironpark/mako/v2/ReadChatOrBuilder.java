@@ -63,4 +63,15 @@ public interface ReadChatOrBuilder extends
    * @return The after.
    */
   long getAfter();
+
+  /**
+   * <pre>
+   * seen is the digest of the Chat the reader has: when the reply would
+   * be the same, it comes back unchanged, without the messages.
+   * </pre>
+   *
+   * <code>uint64 seen = 6 [json_name = "seen"];</code>
+   * @return The seen.
+   */
+  long getSeen();
 }

@@ -37,12 +37,12 @@ import (
 
 // Protocol is the libp2p protocol the mako protocol's frames travel on,
 // one request stream to a libp2p stream, as on QUIC.
-const Protocol protocol.ID = "/mako/2"
+const Protocol protocol.ID = "/mako/3"
 
 // stateProtocol carries a host's state to a peer, one message a stream,
 // and accessProtocol a host's asking a peer to let it in.
 const (
-	stateProtocol  protocol.ID = "/mako/state/2"
+	stateProtocol  protocol.ID = "/mako/state/3"
 	accessProtocol protocol.ID = "/mako/access/1"
 )
 

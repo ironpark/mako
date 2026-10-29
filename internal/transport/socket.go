@@ -66,14 +66,10 @@ func Dial(ctx context.Context, path string, hello *protocol.Hello) (*Stream, *pr
 // Greet sends hello on a fresh stream and returns the node that welcomes
 // it.
 func Greet(stream *Stream, hello *protocol.Hello) (*protocol.Node, error) {
-	welcome, err := Call[*protocol.Welcome](stream, protocol.TypeHello, hello)
-	if err != nil {
+	if err := stream.Hail(hello); err != nil {
 		return nil, err
 	}
-	if welcome.GetNode() == nil {
-		return nil, errors.New("transport: a welcome without its node")
-	}
-	return welcome.GetNode(), nil
+	return stream.Welcomed()
 }
 
 // CloseWith hangs s up when ctx is done, if it is still open then.

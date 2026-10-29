@@ -2,9 +2,11 @@ package daemon
 
 import (
 	"context"
+	"encoding/binary"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/config"
@@ -207,6 +210,15 @@ func TestTrustCarriesAlongAChain(t *testing.T) {
 	if _, err := fromLaptop.ListDir(ctx, &protocol.ListDir{NodeId: runner.cfg.NodeID, Path: t.TempDir()}); err != nil {
 		t.Fatalf("the laptop asking the runner: %v", err)
 	}
+	// A file large enough to go compressed comes whole down the chain.
+	text := strings.Repeat("a line of the runner's source\n", 1<<15)
+	path := filepath.Join(t.TempDir(), "big.txt")
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if f, err := fromLaptop.ReadFile(ctx, &protocol.ReadFile{NodeId: runner.cfg.NodeID, Path: path}); err != nil || string(f.GetData()) != text {
+		t.Fatalf("the laptop reading the runner's file: %d bytes, %v", len(f.GetData()), err)
+	}
 	info, err := fromLaptop.Rename(ctx, &protocol.RenameSession{NodeId: runner.cfg.NodeID, SessionId: "on-runner", Name: "renamed"})
 	if err != nil || info.GetName() != "renamed" {
 		t.Fatalf("the laptop renaming the runner's session: %v %v", info, err)
@@ -334,5 +346,56 @@ func TestTheSocketIsTheUsersAndPeersAreFoundByProbe(t *testing.T) {
 	defer stream.Close()
 	if _, err := transport.Call[*protocol.AccessInfo](stream, protocol.TypeAccess, &protocol.Access{Op: "add", Key: other.accessInfo().GetKey().GetLine()}); err == nil {
 		t.Fatal("a peer changed who is let in")
+	}
+}
+
+// An attach to another node's session reaches the front-end in plain
+// frames, though the node sends its output compressed.
+func TestAnAttachAcrossTheMeshComesPlain(t *testing.T) {
+	laptop := meshDaemon(t, "laptop")
+	server := meshDaemon(t, "server", p2pAddr(laptop))
+	letIn(t, server, laptop)
+	s, err := session.Start(session.Spec{
+		ID: "loud", NodeID: server.cfg.NodeID, Agent: "shell", Project: t.TempDir(),
+		Command: []string{"sh", "-c", "i=0; while [ $i -lt 3000 ]; do echo a line the session printed; i=$((i+1)); done; sleep 30"}, Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	server.sessions.add(s)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	fromLaptop := dialDaemon(t, laptop)
+	waitFor(t, "the server's session on the laptop", func() bool { return lists(ctx, fromLaptop, "loud") })
+
+	stream, _, err := transport.Dial(ctx, laptop.Socket(), &protocol.Hello{Name: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	if err := stream.Send(protocol.TypeAttach, "", &protocol.Attach{SessionId: "loud", NodeId: server.cfg.NodeID, Replay: true}); err != nil {
+		t.Fatal(err)
+	}
+	_ = stream.SetReadDeadline(time.Now().Add(20 * time.Second))
+	var got int
+	for got < 64<<10 {
+		var hdr [4]byte
+		if _, err := io.ReadFull(stream, hdr[:]); err != nil {
+			t.Fatalf("after %d bytes of output: %v", got, err)
+		}
+		n := binary.BigEndian.Uint32(hdr[:])
+		if n&(1<<31) != 0 {
+			t.Fatal("a compressed frame reached the socket")
+		}
+		body := make([]byte, n)
+		if _, err := io.ReadFull(stream, body); err != nil {
+			t.Fatal(err)
+		}
+		env := &protocol.Envelope{}
+		if err := proto.Unmarshal(body, env); err != nil {
+			t.Fatal(err)
+		}
+		got += len(env.GetOutput().GetData())
 	}
 }

@@ -19,7 +19,7 @@ func (d *Daemon) hello() *protocol.Hello {
 	}
 }
 
-// peerStream opens a greeted stream for node over libp2p, which holds the
+// peerStream opens a hailed stream for node over libp2p, which holds the
 // other end to its identity there: to the node, or, when it does not let
 // this one in, to the peer this daemon reaches it through, which passes
 // on a request addressed to the node. A daemon serves one addressed to
@@ -50,10 +50,12 @@ func (d *Daemon) peerStream(ctx context.Context, node *protocol.Node) (*transpor
 	} else if err != nil {
 		return nil, err
 	}
-	stream := transport.NewStream(s)
+	stream := transport.NewPeerStream(s)
 	hello := d.hello()
 	hello.Hops = hops
-	if _, err := transport.Greet(stream, hello); err != nil {
+	// The request follows the hello at once; its welcome is read with
+	// the reply.
+	if err := stream.Hail(hello); err != nil {
 		_ = s.Reset()
 		return nil, err
 	}
@@ -86,7 +88,18 @@ func (d *Daemon) relayToPeer(ctx context.Context, typ protocol.Type, req routed,
 		peer.Close()
 		return err
 	}
-	if err := transport.Splice(ctx, client, peer); err != nil && !isClosed(err) {
+	// What follows the welcome is the client's: the bytes from there on
+	// are copied.
+	if _, err := peer.Welcomed(); err != nil {
+		peer.Close()
+		return err
+	}
+	splice := transport.Splice
+	if typ == protocol.TypeAttach && !client.Packs() {
+		// The socket carries frames plain; a tunnel's bytes are no frames.
+		splice = transport.SpliceUnpacking
+	}
+	if err := splice(ctx, client, peer); err != nil && !isClosed(err) {
 		d.log.Debug("relay ended", "node", node.GetName(), "type", typ, "err", err)
 	}
 	return nil

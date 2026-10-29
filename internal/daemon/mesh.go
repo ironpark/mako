@@ -71,7 +71,7 @@ func (d *Daemon) startP2P(ctx context.Context, dir string) error {
 	d.keyPrint, d.ownerPrint = fingerprint(h.Key()), fingerprint(h.Owner())
 	h.HandleStreams(func(s network.Stream) {
 		defer s.Close()
-		if err := d.serveStream(ctx, transport.NewStream(s), true); err != nil && !isClosed(err) {
+		if err := d.serveStream(ctx, transport.NewPeerStream(s), true); err != nil && !isClosed(err) {
 			d.log.Debug("peer stream ended", "err", err)
 		}
 	})
@@ -285,13 +285,20 @@ func (d *Daemon) encodeState(st *protocol.NodeState, routes map[string]route, re
 			out.Peers = append(out.Peers, n)
 		}
 	}
-	full, _ = proto.Marshal(out)
+	full = marshalState(out)
 	out.Workspace = st.GetWorkspace()
-	shared, _ = proto.Marshal(out)
+	shared = marshalState(out)
 	node = d.publicSelf()
 	node.LastSeen = out.Node.LastSeen
-	public, _ = proto.Marshal(&protocol.NodeState{Node: node, WatchingApprovals: st.GetWatchingApprovals()})
+	public = marshalState(&protocol.NodeState{Node: node, WatchingApprovals: st.GetWatchingApprovals()})
 	return shared, full, public
+}
+
+// marshalState is st as sent, compressed: a state goes to every peer every
+// few seconds.
+func marshalState(st *protocol.NodeState) []byte {
+	b, _ := proto.Marshal(st)
+	return protocol.Compress(b)
 }
 
 // sendState sends p as much of this daemon's state as it may have: shared,
@@ -341,6 +348,10 @@ func sameSessions(a, b []*protocol.SessionInfo) bool {
 // nodes it knows of; and from one this daemon lets in, whether a window
 // of its answers approvals.
 func (d *Daemon) takeState(from p2p.Peer, data []byte) {
+	data, err := protocol.Decompress(data)
+	if err != nil {
+		return
+	}
 	st := &protocol.NodeState{}
 	if proto.Unmarshal(data, st) != nil {
 		return

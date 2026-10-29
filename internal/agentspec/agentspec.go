@@ -112,6 +112,10 @@ type Launch struct {
 	// ContextServers are the MCP servers its profile picks, nil for the
 	// node's enabled ones.
 	ContextServers *[]string
+	// Shown is Command as the session reports it, set before the daemon
+	// adds its hooks and MCP servers: those are long, and sent with every
+	// state. Nil reports Command.
+	Shown []string
 }
 
 // Resolve turns an agent name, a profile of it ("" for none) and extra

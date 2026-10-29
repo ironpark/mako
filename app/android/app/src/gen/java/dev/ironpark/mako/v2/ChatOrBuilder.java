@@ -95,4 +95,24 @@ public interface ChatOrBuilder extends
    * @return The start.
    */
   long getStart();
+
+  /**
+   * <pre>
+   * digest names this reply, for the next read's seen.
+   * </pre>
+   *
+   * <code>uint64 digest = 8 [json_name = "digest"];</code>
+   * @return The digest.
+   */
+  long getDigest();
+
+  /**
+   * <pre>
+   * unchanged says the reply is the one seen named; only digest is set.
+   * </pre>
+   *
+   * <code>bool unchanged = 9 [json_name = "unchanged"];</code>
+   * @return The unchanged.
+   */
+  boolean getUnchanged();
 }

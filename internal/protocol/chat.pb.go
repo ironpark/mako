@@ -32,8 +32,11 @@ type ReadChat struct {
 	// reader scrolling back asks. 0 leaves an end open; with both 0, the
 	// latest messages. A read keeps the latest of what it finds, as many as
 	// the latest messages alone.
-	Before        int64 `protobuf:"varint,4,opt,name=before,proto3" json:"before,omitempty"`
-	After         int64 `protobuf:"varint,5,opt,name=after,proto3" json:"after,omitempty"`
+	Before int64 `protobuf:"varint,4,opt,name=before,proto3" json:"before,omitempty"`
+	After  int64 `protobuf:"varint,5,opt,name=after,proto3" json:"after,omitempty"`
+	// seen is the digest of the Chat the reader has: when the reply would
+	// be the same, it comes back unchanged, without the messages.
+	Seen          uint64 `protobuf:"varint,6,opt,name=seen,proto3" json:"seen,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -99,6 +102,13 @@ func (x *ReadChat) GetBefore() int64 {
 func (x *ReadChat) GetAfter() int64 {
 	if x != nil {
 		return x.After
+	}
+	return 0
+}
+
+func (x *ReadChat) GetSeen() uint64 {
+	if x != nil {
+		return x.Seen
 	}
 	return 0
 }
@@ -241,7 +251,11 @@ type Chat struct {
 	Agents       []*SubAgent            `protobuf:"bytes,6,rep,name=agents,proto3" json:"agents,omitempty"` // the subagents its calls started, oldest first
 	// start is the byte offset in the log the messages start at: 0 when
 	// nothing comes before them, else the before of a read that finds more.
-	Start         int64 `protobuf:"varint,7,opt,name=start,proto3" json:"start,omitempty"`
+	Start int64 `protobuf:"varint,7,opt,name=start,proto3" json:"start,omitempty"`
+	// digest names this reply, for the next read's seen.
+	Digest uint64 `protobuf:"varint,8,opt,name=digest,proto3" json:"digest,omitempty"`
+	// unchanged says the reply is the one seen named; only digest is set.
+	Unchanged     bool `protobuf:"varint,9,opt,name=unchanged,proto3" json:"unchanged,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -323,6 +337,20 @@ func (x *Chat) GetStart() int64 {
 		return x.Start
 	}
 	return 0
+}
+
+func (x *Chat) GetDigest() uint64 {
+	if x != nil {
+		return x.Digest
+	}
+	return 0
+}
+
+func (x *Chat) GetUnchanged() bool {
+	if x != nil {
+		return x.Unchanged
+	}
+	return false
 }
 
 // SubAgent is an agent a call of the conversation's started, such as
@@ -601,7 +629,7 @@ var File_mako_v2_chat_proto protoreflect.FileDescriptor
 
 const file_mako_v2_chat_proto_rawDesc = "" +
 	"\n" +
-	"\x12mako/v2/chat.proto\x12\amako.v2\"\x8f\x01\n" +
+	"\x12mako/v2/chat.proto\x12\amako.v2\"\xa3\x01\n" +
 	"\bReadChat\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
@@ -609,7 +637,8 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\n" +
 	"usage_only\x18\x03 \x01(\bR\tusageOnly\x12\x16\n" +
 	"\x06before\x18\x04 \x01(\x03R\x06before\x12\x14\n" +
-	"\x05after\x18\x05 \x01(\x03R\x05after\"\x95\x02\n" +
+	"\x05after\x18\x05 \x01(\x03R\x05after\x12\x12\n" +
+	"\x04seen\x18\x06 \x01(\x04R\x04seen\"\x95\x02\n" +
 	"\vChatMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x0e\n" +
@@ -624,7 +653,7 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	" \x01(\tR\x04kind\x12 \n" +
 	"\texit_code\x18\v \x01(\x05H\x00R\bexitCode\x88\x01\x01B\f\n" +
 	"\n" +
-	"_exit_code\"\xff\x01\n" +
+	"_exit_code\"\xb5\x02\n" +
 	"\x04Chat\x12\x1c\n" +
 	"\tsupported\x18\x01 \x01(\bR\tsupported\x12\"\n" +
 	"\fconversation\x18\x02 \x01(\tR\fconversation\x120\n" +
@@ -632,7 +661,9 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\ttruncated\x18\x04 \x01(\bR\ttruncated\x12$\n" +
 	"\x05usage\x18\x05 \x01(\v2\x0e.mako.v2.UsageR\x05usage\x12)\n" +
 	"\x06agents\x18\x06 \x03(\v2\x11.mako.v2.SubAgentR\x06agents\x12\x14\n" +
-	"\x05start\x18\a \x01(\x03R\x05start\"\x9f\x02\n" +
+	"\x05start\x18\a \x01(\x03R\x05start\x12\x16\n" +
+	"\x06digest\x18\b \x01(\x04R\x06digest\x12\x1c\n" +
+	"\tunchanged\x18\t \x01(\bR\tunchanged\"\x9f\x02\n" +
 	"\bSubAgent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\acall_id\x18\x02 \x01(\tR\x06callId\x12\x12\n" +

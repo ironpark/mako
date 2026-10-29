@@ -33,9 +33,11 @@ type Spec struct {
 	Profile string
 	Project string
 	Command []string
-	Env     map[string]string
-	Cols    uint16
-	Rows    uint16
+	// Shown is Command as Info reports it, nil for Command itself.
+	Shown []string
+	Env   map[string]string
+	Cols  uint16
+	Rows  uint16
 	// Worktree is the git worktree made for the session, which Project is.
 	Worktree *protocol.Worktree
 }
@@ -145,7 +147,7 @@ func (s *Session) Info() *protocol.SessionInfo {
 		ConversationId: s.conversationID,
 		Title:          s.title,
 		Project:        s.spec.Project,
-		Command:        s.spec.Command,
+		Command:        s.shown(),
 		State:          s.state,
 		Cols:           uint32(s.spec.Cols),
 		Rows:           uint32(s.spec.Rows),
@@ -159,6 +161,14 @@ func (s *Session) Info() *protocol.SessionInfo {
 		Approval:       s.approval,
 		Worktree:       s.spec.Worktree,
 	}
+}
+
+// shown is the command as Info reports it.
+func (s *Session) shown() []string {
+	if s.spec.Shown != nil {
+		return s.spec.Shown
+	}
+	return s.spec.Command
 }
 
 // statusLocked is what the agent is doing, as far as its hooks said.

@@ -443,6 +443,82 @@ public  final class Chat extends
     start_ = 0L;
   }
 
+  public static final int DIGEST_FIELD_NUMBER = 8;
+  private long digest_;
+  /**
+   * <pre>
+   * digest names this reply, for the next read's seen.
+   * </pre>
+   *
+   * <code>uint64 digest = 8 [json_name = "digest"];</code>
+   * @return The digest.
+   */
+  @java.lang.Override
+  public long getDigest() {
+    return digest_;
+  }
+  /**
+   * <pre>
+   * digest names this reply, for the next read's seen.
+   * </pre>
+   *
+   * <code>uint64 digest = 8 [json_name = "digest"];</code>
+   * @param value The digest to set.
+   */
+  private void setDigest(long value) {
+    
+    digest_ = value;
+  }
+  /**
+   * <pre>
+   * digest names this reply, for the next read's seen.
+   * </pre>
+   *
+   * <code>uint64 digest = 8 [json_name = "digest"];</code>
+   */
+  private void clearDigest() {
+
+    digest_ = 0L;
+  }
+
+  public static final int UNCHANGED_FIELD_NUMBER = 9;
+  private boolean unchanged_;
+  /**
+   * <pre>
+   * unchanged says the reply is the one seen named; only digest is set.
+   * </pre>
+   *
+   * <code>bool unchanged = 9 [json_name = "unchanged"];</code>
+   * @return The unchanged.
+   */
+  @java.lang.Override
+  public boolean getUnchanged() {
+    return unchanged_;
+  }
+  /**
+   * <pre>
+   * unchanged says the reply is the one seen named; only digest is set.
+   * </pre>
+   *
+   * <code>bool unchanged = 9 [json_name = "unchanged"];</code>
+   * @param value The unchanged to set.
+   */
+  private void setUnchanged(boolean value) {
+    
+    unchanged_ = value;
+  }
+  /**
+   * <pre>
+   * unchanged says the reply is the one seen named; only digest is set.
+   * </pre>
+   *
+   * <code>bool unchanged = 9 [json_name = "unchanged"];</code>
+   */
+  private void clearUnchanged() {
+
+    unchanged_ = false;
+  }
+
   public static dev.ironpark.mako.v2.Chat parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -991,6 +1067,86 @@ public  final class Chat extends
       return this;
     }
 
+    /**
+     * <pre>
+     * digest names this reply, for the next read's seen.
+     * </pre>
+     *
+     * <code>uint64 digest = 8 [json_name = "digest"];</code>
+     * @return The digest.
+     */
+    @java.lang.Override
+    public long getDigest() {
+      return instance.getDigest();
+    }
+    /**
+     * <pre>
+     * digest names this reply, for the next read's seen.
+     * </pre>
+     *
+     * <code>uint64 digest = 8 [json_name = "digest"];</code>
+     * @param value The digest to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDigest(long value) {
+      copyOnWrite();
+      instance.setDigest(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * digest names this reply, for the next read's seen.
+     * </pre>
+     *
+     * <code>uint64 digest = 8 [json_name = "digest"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDigest() {
+      copyOnWrite();
+      instance.clearDigest();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * unchanged says the reply is the one seen named; only digest is set.
+     * </pre>
+     *
+     * <code>bool unchanged = 9 [json_name = "unchanged"];</code>
+     * @return The unchanged.
+     */
+    @java.lang.Override
+    public boolean getUnchanged() {
+      return instance.getUnchanged();
+    }
+    /**
+     * <pre>
+     * unchanged says the reply is the one seen named; only digest is set.
+     * </pre>
+     *
+     * <code>bool unchanged = 9 [json_name = "unchanged"];</code>
+     * @param value The unchanged to set.
+     * @return This builder for chaining.
+     */
+    public Builder setUnchanged(boolean value) {
+      copyOnWrite();
+      instance.setUnchanged(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * unchanged says the reply is the one seen named; only digest is set.
+     * </pre>
+     *
+     * <code>bool unchanged = 9 [json_name = "unchanged"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearUnchanged() {
+      copyOnWrite();
+      instance.clearUnchanged();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Chat)
   }
   @java.lang.Override
@@ -1017,10 +1173,12 @@ public  final class Chat extends
             "agents_",
             dev.ironpark.mako.v2.SubAgent.class,
             "start_",
+            "digest_",
+            "unchanged_",
           };
           java.lang.String info =
-              "\u0000\u0007\u0000\u0001\u0001\u0007\u0007\u0000\u0002\u0000\u0001\u0007\u0002\u0208" +
-              "\u0003\u001b\u0004\u0007\u0005\u1009\u0000\u0006\u001b\u0007\u0002";
+              "\u0000\t\u0000\u0001\u0001\t\t\u0000\u0002\u0000\u0001\u0007\u0002\u0208\u0003\u001b" +
+              "\u0004\u0007\u0005\u1009\u0000\u0006\u001b\u0007\u0002\b\u0003\t\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

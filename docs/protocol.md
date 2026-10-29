@@ -11,10 +11,10 @@ and this document describes how the messages are used.
 | | Front-end ↔ its daemon | Daemon ↔ daemon |
 |---|---|---|
 | Transport | the daemon's Unix socket | libp2p (QUIC or TCP), port `4243`, maybe relayed |
-| Stream | a connection to a request | `/mako/2`, a libp2p stream to a request |
+| Stream | a connection to a request | `/mako/3`, a libp2p stream to a request |
 | Access | the socket's file mode: this user alone | keys, one way: `/mako/trust/1` |
-| Frames | length-prefixed protobuf `Envelope`s | the same |
-| Pushed state | `watch` → `changed` | `NodeState` on `/mako/state/2` |
+| Frames | length-prefixed protobuf `Envelope`s | the same, the larger compressed |
+| Pushed state | `watch` → `changed` | `NodeState` on `/mako/state/3`, compressed |
 
 ## Contents
 
@@ -76,7 +76,7 @@ Daemons link to each other over libp2p (see
 ## Streams and framing
 
 Every exchange happens on a bidirectional stream that the caller opens: a
-connection to the daemon's socket, or a libp2p stream of `/mako/2` between
+connection to the daemon's socket, or a libp2p stream of `/mako/3` between
 daemons.
 A stream carries **frames**, each one protobuf `Envelope` with a length
 prefix:
@@ -88,7 +88,25 @@ prefix:
 ```
 
 A frame is at most 8 MiB (`protocol.MaxFrameSize`); a reader refuses a larger
-length before allocating. The `Envelope` is an `id` and a `body` oneof, one
+length before allocating.
+
+**Compression.** Between daemons, a frame whose envelope is at least
+1 KiB goes compressed with [zstd](https://facebook.github.io/zstd/) when
+that saves at least an eighth of it: a file, a diff, a conversation, a
+replayed screen. Its length then has the top bit set, `0x80000000`, and
+counts the compressed bytes:
+
+```
+┌──────────────────────────────┬────────────────────────────────────┐
+│ 1 | length: 31 bits, BE      │ zstd frame of the Envelope         │
+└──────────────────────────────┴────────────────────────────────────┘
+```
+
+Every reader takes both forms, and refuses one that decompresses past
+8 MiB. A daemon's socket carries only the plain form, since its frames
+never leave the machine: a daemon relaying a peer's attach to its
+front-end decompresses the peer's frames on the way, and a daemon
+relaying one to another daemon passes them on as they came. The `Envelope` is an `id` and a `body` oneof, one
 field for each message type:
 
 ```proto
@@ -163,6 +181,10 @@ socket a front-end's.
 
 A first frame that is not a `hello` gets an `error`, and the stream is then
 done.
+
+A daemon asking a peer sends its request right after its `hello`, without
+waiting for the `welcome`, and reads the `welcome` with the reply: each
+hop of a request costs one round trip, not two.
 
 The `welcome`'s `Node` is the daemon describing itself. Its `features` and
 `revision` are what a caller checks before using newer parts of the protocol;
@@ -344,7 +366,7 @@ The fields a front-end usually needs:
 | Field | |
 |---|---|
 | `id`, `node_id` | The session, and the node it runs on. |
-| `agent`, `profile`, `command` | What it runs. |
+| `agent`, `profile`, `command` | What it runs. `command` leaves out what the daemon adds for itself, its hooks' settings and MCP servers. |
 | `project` | Its working directory. |
 | `repo` | The main work tree of the repository `project` is in, the same for its subfolders and its worktrees; empty outside one. |
 | `branch` | The branch checked out in `project`; empty outside a repository. |
@@ -385,6 +407,10 @@ and `after` with `before` the ones between, which joins older pages to the
 latest as the latest move on. Each read keeps the latest of what it finds,
 within the same limits as the latest messages. A daemon that predates them
 answers with the latest messages and `start` 0.
+Each `chat` carries a `digest` of itself. A reader that polls sends the
+one it has as `seen`, and when the reply would be the same it gets back
+`unchanged`, with only the `digest`: a quiet conversation is not sent
+again.
 `usage` is the whole conversation's tokens:
 
 | `Usage` field | |
@@ -664,13 +690,14 @@ lets the other in.
 | Protocol | |
 |---|---|
 | `/mako/trust/1` | The two introduce themselves, and each says whether it lets the other in. |
-| `/mako/2` | The protocol's frames, one request to a libp2p stream, as on the socket. Open to the peers a daemon lets in. |
-| `/mako/state/2` | A daemon's `NodeState`, one message to a stream. |
+| `/mako/3` | The protocol's frames, one request to a libp2p stream, as on the socket. Open to the peers a daemon lets in. |
+| `/mako/state/3` | A daemon's `NodeState`, compressed with zstd, one message to a stream. |
 | `/mako/access/1` | A daemon asking a peer to let it in. |
 
-The small protocols beside `/mako/2` carry length-prefixed messages (a
+The small protocols beside `/mako/3` carry length-prefixed messages (a
 32-bit big-endian length, at most 1 MiB): JSON on `/mako/trust/1` and
-`/mako/access/1`, a protobuf `NodeState` on `/mako/state/2`.
+`/mako/access/1`, a protobuf `NodeState` compressed with zstd on
+`/mako/state/3`.
 
 **Introductions.** libp2p's own handshake proves each side holds its peer
 ID's key. The host that dialed then opens `/mako/trust/1`, and each side
@@ -691,7 +718,7 @@ that cannot introduce itself is hung up on.
 
 **Requests.** A daemon reaches a peer on libp2p, dialing its `multiaddrs` if
 they are not linked, and only a peer that lets it in. Until a peer is let
-in, its `/mako/2` streams are reset.
+in, its `/mako/3` streams are reset.
 
 **State.** Each daemon sends its `NodeState` to its peers, checking every
 second and sending when its state has changed, and every 5 seconds
@@ -761,6 +788,10 @@ mesh moves to a new name together. That has happened three times:
   `/mako/state/2` instead: the two link, but never introduce themselves,
   and are hung up on. Front-ends reached their daemon on QUIC, UDP port
   `4242`, with ALPN `mako/2` and a token; they now use its socket.
+- **Compressed frames.** Builds since revision 12 compress the larger frames
+  and the state between daemons, and speak `/mako/3` and `/mako/state/3`
+  for it, in place of `/mako/2` and `/mako/state/2`: an older build links,
+  but neither asks the other anything.
 
 The names change again only for a break that no addition can bridge.
 
@@ -775,7 +806,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 11) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 12) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
@@ -803,7 +834,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
 | A device's claim | 30 s after its stream ends |
 | Approval watch | 15 s after the last `list_sessions` with `approvals` |
 | Introductions on libp2p | 10 s |
-| A message on `/mako/trust/1`, `/mako/state/2`, `/mako/access/1` | 1 MiB |
+| A message on `/mako/trust/1`, `/mako/state/3`, `/mako/access/1` | 1 MiB |
 | Access requests waiting | 32, each note 500 bytes |
 | An SSH key's certificate | 30 days, renewed a week before |
 | A peer's sessions | taken as current for 20 s after its state |

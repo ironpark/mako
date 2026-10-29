@@ -230,6 +230,47 @@ public  final class ReadChat extends
     after_ = 0L;
   }
 
+  public static final int SEEN_FIELD_NUMBER = 6;
+  private long seen_;
+  /**
+   * <pre>
+   * seen is the digest of the Chat the reader has: when the reply would
+   * be the same, it comes back unchanged, without the messages.
+   * </pre>
+   *
+   * <code>uint64 seen = 6 [json_name = "seen"];</code>
+   * @return The seen.
+   */
+  @java.lang.Override
+  public long getSeen() {
+    return seen_;
+  }
+  /**
+   * <pre>
+   * seen is the digest of the Chat the reader has: when the reply would
+   * be the same, it comes back unchanged, without the messages.
+   * </pre>
+   *
+   * <code>uint64 seen = 6 [json_name = "seen"];</code>
+   * @param value The seen to set.
+   */
+  private void setSeen(long value) {
+    
+    seen_ = value;
+  }
+  /**
+   * <pre>
+   * seen is the digest of the Chat the reader has: when the reply would
+   * be the same, it comes back unchanged, without the messages.
+   * </pre>
+   *
+   * <code>uint64 seen = 6 [json_name = "seen"];</code>
+   */
+  private void clearSeen() {
+
+    seen_ = 0L;
+  }
+
   public static dev.ironpark.mako.v2.ReadChat parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -549,6 +590,49 @@ public  final class ReadChat extends
       return this;
     }
 
+    /**
+     * <pre>
+     * seen is the digest of the Chat the reader has: when the reply would
+     * be the same, it comes back unchanged, without the messages.
+     * </pre>
+     *
+     * <code>uint64 seen = 6 [json_name = "seen"];</code>
+     * @return The seen.
+     */
+    @java.lang.Override
+    public long getSeen() {
+      return instance.getSeen();
+    }
+    /**
+     * <pre>
+     * seen is the digest of the Chat the reader has: when the reply would
+     * be the same, it comes back unchanged, without the messages.
+     * </pre>
+     *
+     * <code>uint64 seen = 6 [json_name = "seen"];</code>
+     * @param value The seen to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSeen(long value) {
+      copyOnWrite();
+      instance.setSeen(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * seen is the digest of the Chat the reader has: when the reply would
+     * be the same, it comes back unchanged, without the messages.
+     * </pre>
+     *
+     * <code>uint64 seen = 6 [json_name = "seen"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSeen() {
+      copyOnWrite();
+      instance.clearSeen();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.ReadChat)
   }
   @java.lang.Override
@@ -570,10 +654,11 @@ public  final class ReadChat extends
             "usageOnly_",
             "before_",
             "after_",
+            "seen_",
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0007\u0004\u0002\u0005\u0002";
+              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0007\u0004\u0002\u0005\u0002\u0006\u0003";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

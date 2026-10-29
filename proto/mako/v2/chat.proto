@@ -16,6 +16,9 @@ message ReadChat {
   // the latest messages alone.
   int64 before = 4;
   int64 after = 5;
+  // seen is the digest of the Chat the reader has: when the reply would
+  // be the same, it comes back unchanged, without the messages.
+  uint64 seen = 6;
 }
 
 // ChatMessage is one turn of a conversation.
@@ -46,6 +49,10 @@ message Chat {
   // start is the byte offset in the log the messages start at: 0 when
   // nothing comes before them, else the before of a read that finds more.
   int64 start = 7;
+  // digest names this reply, for the next read's seen.
+  uint64 digest = 8;
+  // unchanged says the reply is the one seen named; only digest is set.
+  bool unchanged = 9;
 }
 
 // SubAgent is an agent a call of the conversation's started, such as

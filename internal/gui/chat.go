@@ -113,7 +113,10 @@ func (m *model) loadChat(id string, state *chatState) {
 		return
 	}
 	state.loading = true
-	req := &protocol.ReadChat{NodeId: m.remoteID(info.GetNodeId()), SessionId: id}
+	// What is on show is asked after by its digest, so a quiet
+	// conversation is not sent again.
+	shown := ggui.Peek(state.result)
+	req := &protocol.ReadChat{NodeId: m.remoteID(info.GetNodeId()), SessionId: id, Seen: shown.Chat.GetDigest()}
 	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Chat, error) {
 		return c.ReadChat(ctx, req)
 	}, func(chat *protocol.Chat, err error) {
@@ -121,6 +124,12 @@ func (m *model) loadChat(id string, state *chatState) {
 			return
 		}
 		state.loading = false
+		if err == nil && chat.GetUnchanged() {
+			if shown.Err != "" {
+				state.result.Set(chatResult{Chat: shown.Chat, Loaded: true})
+			}
+			return
+		}
 		next := chatResult{Chat: chat, Loaded: true}
 		if err != nil {
 			next.Chat = ggui.Peek(state.result).Chat
