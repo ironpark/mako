@@ -431,18 +431,23 @@ func (t *termConn) key(ev input.KeyEvent, text string) {
 	}
 }
 
-// paste sends text the way the program asked for it: bracketed when it
-// enabled bracketed paste, plain otherwise.
-func (t *termConn) paste(text string) {
-	if input.IsSafePaste([]byte(text)) {
-		t.pasteLines(text)
+// runsLines reports whether text pasted would run line by line, as if
+// typed: it breaks lines, and the program did not ask for bracketed
+// pastes, which a shell holds until Enter.
+func (t *termConn) runsLines(text string) bool {
+	if !strings.ContainsAny(text, "\r\n") {
+		return false
 	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return !t.closed && !t.vt.Terminal().ModeEnabled(gostty.ModeBracketedPaste)
 }
 
-// pasteLines pastes text whose line breaks are meant, as the composer's
-// are. Only a paste's own end marker, which would let the rest run as if
-// typed, is refused.
-func (t *termConn) pasteLines(text string) {
+// paste sends text the way the program asked for it: bracketed when it
+// enabled bracketed paste, plain otherwise, its line breaks and all, as a
+// paste from the clipboard or the composer's lines. Only a paste's own end
+// marker, which would let the rest run as if typed, is refused.
+func (t *termConn) paste(text string) {
 	if text == "" || strings.Contains(text, "\x1b[201~") {
 		return
 	}
@@ -462,7 +467,7 @@ func (t *termConn) pasteLines(text string) {
 // sendText writes text followed by Enter, as the composer does, its line
 // breaks in it.
 func (t *termConn) sendText(text string) {
-	t.pasteLines(text)
+	t.paste(text)
 	t.key(input.KeyEvent{Action: input.KeyActionPress, Key: input.KeyEnter}, "")
 }
 

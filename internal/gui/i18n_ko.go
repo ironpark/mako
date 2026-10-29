@@ -297,9 +297,11 @@ var catalogKo = map[string]string{
 
 	// Settings: shortcuts
 	"Keys the window keeps. Every other key, Tab and the Ctrl chords included, goes to the terminal.": "창이 직접 처리하는 키. 그 밖의 모든 키는 Tab과 Ctrl 조합을 포함해 터미널로 전달됩니다.",
-	"Window":         "창",
-	"Copy selection": "선택 영역 복사",
-	"Paste":          "붙여넣기",
+	"Window":          "창",
+	"Copy selection":  "선택 영역 복사",
+	"Paste":           "붙여넣기",
+	"Paste %d lines?": "%d줄을 붙여넣을까요?",
+	"The program in the terminal does not take pastes as such: each line runs as soon as it is pasted, as if typed.": "터미널의 프로그램이 붙여넣기를 따로 구분하지 않습니다. 붙여넣는 즉시 각 줄이 입력한 것처럼 실행됩니다.",
 	"Bracketed when the program asks for it.": "프로그램이 요청하면 bracketed paste로 보냅니다.",
 	"Select all":            "모두 선택",
 	"The whole scrollback.": "스크롤백 전체.",

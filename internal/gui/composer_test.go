@@ -195,3 +195,40 @@ func TestComposerPastesAnImageAsAFile(t *testing.T) {
 		t.Fatalf("draft %q after pasting text", got)
 	}
 }
+
+// A paste of several lines, or of a line copied with its break, reaches
+// the program: bracketed when it asked for that, plain when not, which is
+// asked about first.
+func TestATerminalTakesPastesOfSeveralLines(t *testing.T) {
+	link := newFakeLink()
+	conn, err := newTermConn("s", link, 80, 24, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { close(link.in); conn.close() }()
+
+	if conn.runsLines("ls") || !conn.runsLines("ls\n") {
+		t.Fatal("asks about the wrong pastes where they run as typed")
+	}
+	conn.paste("ls\n")
+	if got := link.typed(); got != "ls\r" {
+		t.Fatalf("a line with its break pasted as %q", got)
+	}
+	link.output(t, "\x1b[?2004h") // the shell takes bracketed pastes
+	waitFor(t, func() bool {
+		conn.mu.Lock()
+		defer conn.mu.Unlock()
+		return conn.vt.Terminal().ModeEnabled(gostty.ModeBracketedPaste)
+	})
+	if conn.runsLines("cd /tmp\nls") {
+		t.Fatal("asks about a bracketed paste")
+	}
+	conn.paste("cd /tmp\nls")
+	if got, want := link.typed(), "\x1b[200~cd /tmp\nls\x1b[201~"; got != want {
+		t.Fatalf("pasted %q, want %q", got, want)
+	}
+	conn.paste("a\x1b[201~rm -rf ~\n")
+	if got := link.typed(); got != "" {
+		t.Fatalf("a paste ending the bracket early was sent: %q", got)
+	}
+}

@@ -34,6 +34,9 @@ type terminalView struct {
 	onDrop func(paths []string, typed func([]string))
 	// onPasteImage hands over an image pasted, as a file to type the path of
 	onPasteImage func(png []byte, typed func([]string))
+	// onRiskyPaste asks before a paste whose lines would run as typed, and
+	// calls paste if it is to go ahead; nil pastes at once.
+	onRiskyPaste func(text string, paste func())
 	// onLink follows a link ⌘-clicked, as written, with where the program
 	// said it was.
 	onLink func(target, cwd string)
@@ -102,6 +105,13 @@ func (t *terminalView) OnPress(fn func()) *terminalView { t.onPress = fn; return
 // fn hands the image over and calls typed with the path to type.
 func (t *terminalView) OnPasteImage(fn func(png []byte, typed func([]string))) *terminalView {
 	t.onPasteImage = fn
+	return t
+}
+
+// OnRiskyPaste asks with fn before a paste whose lines would run as
+// typed, the program not having asked for bracketed pastes.
+func (t *terminalView) OnRiskyPaste(fn func(text string, paste func())) *terminalView {
+	t.onRiskyPaste = fn
 	return t
 }
 
@@ -483,6 +493,8 @@ func (t *terminalView) chord(ev ggui.KeyEvent) bool {
 		text := clip.Read()
 		if png, ok := ggruntime.ReadImage(clip); text == "" && ok && t.onPasteImage != nil {
 			t.onPasteImage(png, t.typePaths)
+		} else if t.onRiskyPaste != nil && t.conn.runsLines(text) {
+			t.onRiskyPaste(text, func() { t.conn.paste(text) })
 		} else {
 			t.conn.paste(text)
 		}
