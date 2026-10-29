@@ -348,7 +348,9 @@ func ownerGroup(m *model, o ownerSection, folded bool, section func(sessionGroup
 		service = ggui.Text(host).Size(11.5).Color(tokExtraMuted).NoWrap()
 	}
 	var heading ggui.Widget = ggui.Box(groupToggle(m, "users", name, sessions, folded, ownerKey(o.Owner), service)).Pad(2, 4, 2, 2)
-	heading = ui.ContextMenu(heading, append(ownerMenu(m, o, name), ownerSpaceItems(m, o.Owner, name)...)...).Name(Tf("%s actions", name))
+	heading = ui.ContextMenuFunc(heading, func() []ggui.Widget {
+		return append(ownerMenu(m, o, name), ownerSpaceItems(m, o.Owner, name)...)
+	}).Name(Tf("%s actions", name))
 	if folded {
 		return heading
 	}

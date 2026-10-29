@@ -344,7 +344,7 @@ func commitRow(m *model, c *protocol.GitCommit, g graphRow, lanes int) ggui.Widg
 		return box
 	})
 	tap := ui.ButtonOf(row, func() { m.openCommit(c.GetHash()) }).Ghost().Pad(0).Radius(0).Name(c.GetSubject())
-	return ui.ContextMenu(tap, commitMenu(m, c)...).Name(Tf("%s actions", shortHash(c.GetHash())))
+	return ui.ContextMenuFunc(tap, func() []ggui.Widget { return commitMenu(m, c) }).Name(Tf("%s actions", shortHash(c.GetHash())))
 }
 
 // commitPane is what the chosen commit changed: its message and its files,

@@ -279,7 +279,9 @@ func localBranchRow(m *model, name, current string) ggui.Widget {
 		}
 	}).Ghost().Pad(4, 12, 4, 30).Radius(0).Name(name)
 	if on {
-		return ui.ContextMenu(row, ui.MenuItem(T("Copy name"), func() { ggui.CurrentClipboard().Write(name) })).Name(Tf("%s actions", name))
+		return ui.ContextMenuFunc(row, func() []ggui.Widget {
+			return []ggui.Widget{ui.MenuItem(T("Copy name"), func() { ggui.CurrentClipboard().Write(name) })}
+		}).Name(Tf("%s actions", name))
 	}
 	del := func(force bool) func() {
 		return func() {
@@ -292,22 +294,24 @@ func localBranchRow(m *model, name, current string) ggui.Widget {
 			}})
 		}
 	}
-	return ui.ContextMenu(row,
-		ui.MenuItem(T("Switch to branch"), func() {
-			m.gitRun(&protocol.GitRun{Op: protocol.GitOpCheckout, Branch: name}, T("Switching branch…"), nil)
-		}),
-		ui.MenuItem(Tf("Merge into %s", current), func() {
-			m.gitRun(&protocol.GitRun{Op: protocol.GitOpMergeBranch, Branch: name}, T("Merging…"), nil)
-		}),
-		ui.MenuItem(Tf("Rebase %s onto this", current), func() {
-			m.gitRun(&protocol.GitRun{Op: protocol.GitOpRebase, Branch: name}, T("Rebasing…"), nil)
-		}),
-		ui.MenuDivider(),
-		ui.MenuItem(T("Delete…"), del(false)),
-		ui.MenuItem(T("Force delete…"), del(true)),
-		ui.MenuDivider(),
-		ui.MenuItem(T("Copy name"), func() { ggui.CurrentClipboard().Write(name) }),
-	).Name(Tf("%s actions", name))
+	return ui.ContextMenuFunc(row, func() []ggui.Widget {
+		return []ggui.Widget{
+			ui.MenuItem(T("Switch to branch"), func() {
+				m.gitRun(&protocol.GitRun{Op: protocol.GitOpCheckout, Branch: name}, T("Switching branch…"), nil)
+			}),
+			ui.MenuItem(Tf("Merge into %s", current), func() {
+				m.gitRun(&protocol.GitRun{Op: protocol.GitOpMergeBranch, Branch: name}, T("Merging…"), nil)
+			}),
+			ui.MenuItem(Tf("Rebase %s onto this", current), func() {
+				m.gitRun(&protocol.GitRun{Op: protocol.GitOpRebase, Branch: name}, T("Rebasing…"), nil)
+			}),
+			ui.MenuDivider(),
+			ui.MenuItem(T("Delete…"), del(false)),
+			ui.MenuItem(T("Force delete…"), del(true)),
+			ui.MenuDivider(),
+			ui.MenuItem(T("Copy name"), func() { ggui.CurrentClipboard().Write(name) }),
+		}
+	}).Name(Tf("%s actions", name))
 }
 
 func remoteBranchRow(m *model, name, current string) ggui.Widget {
@@ -318,17 +322,19 @@ func remoteBranchRow(m *model, name, current string) ggui.Widget {
 		icon("cloud-download").Size(13).Color(tokExtraMuted),
 		ggui.Expanded(ggui.Text(name).Size(12.5).Color(tokMuted).NoWrap().Ellipsis()),
 	).Gap(6).Align(ggui.AlignCenter), track).Ghost().Pad(4, 12, 4, 30).Radius(0).Name(name)
-	return ui.ContextMenu(row,
-		ui.MenuItem(T("Check out as a local branch"), track),
-		ui.MenuItem(Tf("Merge into %s", current), func() {
-			m.gitRun(&protocol.GitRun{Op: protocol.GitOpMergeBranch, Branch: name}, T("Merging…"), nil)
-		}),
-		ui.MenuItem(Tf("Rebase %s onto this", current), func() {
-			m.gitRun(&protocol.GitRun{Op: protocol.GitOpRebase, Branch: name}, T("Rebasing…"), nil)
-		}),
-		ui.MenuDivider(),
-		ui.MenuItem(T("Copy name"), func() { ggui.CurrentClipboard().Write(name) }),
-	).Name(Tf("%s actions", name))
+	return ui.ContextMenuFunc(row, func() []ggui.Widget {
+		return []ggui.Widget{
+			ui.MenuItem(T("Check out as a local branch"), track),
+			ui.MenuItem(Tf("Merge into %s", current), func() {
+				m.gitRun(&protocol.GitRun{Op: protocol.GitOpMergeBranch, Branch: name}, T("Merging…"), nil)
+			}),
+			ui.MenuItem(Tf("Rebase %s onto this", current), func() {
+				m.gitRun(&protocol.GitRun{Op: protocol.GitOpRebase, Branch: name}, T("Rebasing…"), nil)
+			}),
+			ui.MenuDivider(),
+			ui.MenuItem(T("Copy name"), func() { ggui.CurrentClipboard().Write(name) }),
+		}
+	}).Name(Tf("%s actions", name))
 }
 
 // operationBanner says a merge, rebase, cherry-pick or revert stopped on

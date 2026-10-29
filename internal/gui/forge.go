@@ -735,7 +735,7 @@ func forgeRow(m *model, v forgeList, it *protocol.ForgeItem) ggui.Widget {
 	).Gap(2).Stretch()
 	row := ggui.Row(itemIcon(it), ggui.Expanded(text)).Gap(8).Align(ggui.AlignStart)
 	tap := ui.ButtonOf(row, func() { m.openForge(root, it.GetKind(), it.GetNumber()) }).Ghost().Pad(6, 10, 6, 12).Radius(0).Name(it.GetTitle())
-	return ui.ContextMenu(tap, forgeItemMenu(m, root, v.Forge, v.Ops, it, nil)...).Name(Tf("%s actions", it.GetTitle()))
+	return ui.ContextMenuFunc(tap, func() []ggui.Widget { return forgeItemMenu(m, root, v.Forge, v.Ops, it, nil) }).Name(Tf("%s actions", it.GetTitle()))
 }
 
 // forgeItemMenu is what can be done with an item on its forge, in its row's

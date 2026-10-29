@@ -186,49 +186,51 @@ func (m *model) submitFile() {
 	})
 }
 
-// fileMenu gives a row of the Files tab its context menu.
+// fileMenu gives a row of the Files tab its context menu, made as it opens.
 func fileMenu(m *model, w ggui.Widget, it fileItem) ggui.Widget {
-	root := ggui.Untrack(m.filesRoot)
-	var items []ggui.Widget
-	switch {
-	case it.Dir:
-		items = append(items,
-			ui.MenuItem(T("New session here…"), func() { m.openNew(it.Node, it.Path) }))
-	case isImage(it.Name):
-		items = append(items, ui.MenuItem(T("Preview"), func() { m.FileSel.Set(it.Key); m.openPreview(it) }))
-	default:
-		items = append(items, ui.MenuItem(T("Open"), func() { m.FileSel.Set(it.Key); m.openFile(it) }))
-	}
-	items = append(items,
-		ui.MenuItem(T("Insert path in the message"), func() { m.insertPath("", it.Path) }),
-		ui.MenuItem(T("Copy path"), func() { ggui.CurrentClipboard().Write(it.Path) }),
-	)
-	if rel := subfolder(it.Path, root.Path); rel != "" {
-		items = append(items, ui.MenuItem(T("Copy relative path"), func() { ggui.CurrentClipboard().Write(rel) }))
-	}
-	if m.onThisMachine(it.Node) {
-		items = append(items, ui.MenuItem(fileManagerLabel(), func() { m.showInFileManager(it) }))
-	} else {
-		// Another node's files show in a window of mako's own.
-		sel := it.Path // a file is chosen in its folder
-		if it.Dir {
-			sel = ""
+	return ui.ContextMenuFunc(w, func() []ggui.Widget {
+		root := ggui.Untrack(m.filesRoot)
+		var items []ggui.Widget
+		switch {
+		case it.Dir:
+			items = append(items,
+				ui.MenuItem(T("New session here…"), func() { m.openNew(it.Node, it.Path) }))
+		case isImage(it.Name):
+			items = append(items, ui.MenuItem(T("Preview"), func() { m.FileSel.Set(it.Key); m.openPreview(it) }))
+		default:
+			items = append(items, ui.MenuItem(T("Open"), func() { m.FileSel.Set(it.Key); m.openFile(it) }))
 		}
-		items = append(items, ui.MenuItem(Tf("Show in %s's files", nodeName(ggui.Peek(m.Nodes), it.Node)), func() {
-			m.openBrowser(it.Node, folderOf(it).Path, sel)
-		}))
-	}
-	items = append(items, m.editorItems(it.Node, it.Path, nil, m.FileNote.Set)...)
-	folder := folderOf(it)
-	items = append(items,
-		ui.MenuDivider(),
-		ui.MenuItem(T("New file…"), func() { m.askFile(protocol.FileCreate, folder) }),
-		ui.MenuItem(T("New folder…"), func() { m.askFile(protocol.FileMkdir, folder) }),
-		ui.MenuItem(T("Rename…"), func() { m.askFile(protocol.FileRename, it) }),
-		ui.MenuDivider(),
-		ui.MenuItem(T("Delete…"), func() { m.askFile(protocol.FileDelete, it) }),
-	)
-	return ui.ContextMenu(w, items...).Name(Tf("%s actions", it.Name))
+		items = append(items,
+			ui.MenuItem(T("Insert path in the message"), func() { m.insertPath("", it.Path) }),
+			ui.MenuItem(T("Copy path"), func() { ggui.CurrentClipboard().Write(it.Path) }),
+		)
+		if rel := subfolder(it.Path, root.Path); rel != "" {
+			items = append(items, ui.MenuItem(T("Copy relative path"), func() { ggui.CurrentClipboard().Write(rel) }))
+		}
+		if m.onThisMachine(it.Node) {
+			items = append(items, ui.MenuItem(fileManagerLabel(), func() { m.showInFileManager(it) }))
+		} else {
+			// Another node's files show in a window of mako's own.
+			sel := it.Path // a file is chosen in its folder
+			if it.Dir {
+				sel = ""
+			}
+			items = append(items, ui.MenuItem(Tf("Show in %s's files", nodeName(ggui.Peek(m.Nodes), it.Node)), func() {
+				m.openBrowser(it.Node, folderOf(it).Path, sel)
+			}))
+		}
+		items = append(items, m.editorItems(it.Node, it.Path, nil, m.FileNote.Set)...)
+		folder := folderOf(it)
+		items = append(items,
+			ui.MenuDivider(),
+			ui.MenuItem(T("New file…"), func() { m.askFile(protocol.FileCreate, folder) }),
+			ui.MenuItem(T("New folder…"), func() { m.askFile(protocol.FileMkdir, folder) }),
+			ui.MenuItem(T("Rename…"), func() { m.askFile(protocol.FileRename, it) }),
+			ui.MenuDivider(),
+			ui.MenuItem(T("Delete…"), func() { m.askFile(protocol.FileDelete, it) }),
+		)
+		return items
+	}).Name(Tf("%s actions", it.Name))
 }
 
 // fileManagerLabel names the desktop's file manager in its menu item.

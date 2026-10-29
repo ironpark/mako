@@ -245,7 +245,7 @@ func changesTree(m *model) ggui.Widget {
 					return ggui.Row(lead, ggui.Expanded(name), numbers, tail).Gap(7)
 				}
 				row := ggui.Row(pickBox(m, it), lead, ggui.Expanded(name), numbers, tail).Gap(7)
-				return ui.ContextMenu(row, changeMenu(m, it)...).Name(Tf("%s actions", it.Name))
+				return ui.ContextMenuFunc(row, func() []ggui.Widget { return changeMenu(m, it) }).Name(Tf("%s actions", it.Name))
 			})
 		}).
 		RowName(func(it gitItem) string { return it.Name }).

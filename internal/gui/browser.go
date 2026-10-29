@@ -437,31 +437,33 @@ func browserRow(b *browser, it fileItem) ggui.Widget {
 	return browserMenu(b, row, it)
 }
 
-// browserMenu is a row's menu.
+// browserMenu is a row's menu, made as it opens.
 func browserMenu(b *browser, w ggui.Widget, it fileItem) ggui.Widget {
-	m := b.m
-	folder := folderOf(it)
-	items := []ggui.Widget{
-		ui.MenuItem(T("Open"), func() { b.activate(it) }),
-	}
-	if it.Dir {
-		items = append(items, ui.MenuItem(T("New session here…"), func() { m.openNew(b.node, it.Path); m.window.Focus() }))
-	}
-	items = append(items,
-		ui.MenuDivider(),
-		ui.MenuItem(T("Download"), func() { b.download(it, downloadsDir()) }),
-		ui.MenuItem(T("Download to…"), func() { b.downloadTo(it) }),
-		ui.MenuItem(Tf("Upload files to %s…", folder.Name), func() { b.uploadFrom(folder.Path) }),
-		ui.MenuDivider(),
-		ui.MenuItem(T("Copy path"), func() { ggui.CurrentClipboard().Write(it.Path) }),
-		ui.MenuItem(T("Insert path in the message"), func() { m.insertPath("", it.Path) }),
-		ui.MenuDivider(),
-		ui.MenuItem(T("New folder…"), func() { b.askFile(protocol.FileMkdir, folder) }),
-		ui.MenuItem(T("Rename…"), func() { b.askFile(protocol.FileRename, it) }),
-		ui.MenuDivider(),
-		ui.MenuItem(T("Delete…"), func() { b.askFile(protocol.FileDelete, it) }),
-	)
-	return ui.ContextMenu(w, items...).Name(Tf("%s actions", it.Name))
+	return ui.ContextMenuFunc(w, func() []ggui.Widget {
+		m := b.m
+		folder := folderOf(it)
+		items := []ggui.Widget{
+			ui.MenuItem(T("Open"), func() { b.activate(it) }),
+		}
+		if it.Dir {
+			items = append(items, ui.MenuItem(T("New session here…"), func() { m.openNew(b.node, it.Path); m.window.Focus() }))
+		}
+		items = append(items,
+			ui.MenuDivider(),
+			ui.MenuItem(T("Download"), func() { b.download(it, downloadsDir()) }),
+			ui.MenuItem(T("Download to…"), func() { b.downloadTo(it) }),
+			ui.MenuItem(Tf("Upload files to %s…", folder.Name), func() { b.uploadFrom(folder.Path) }),
+			ui.MenuDivider(),
+			ui.MenuItem(T("Copy path"), func() { ggui.CurrentClipboard().Write(it.Path) }),
+			ui.MenuItem(T("Insert path in the message"), func() { m.insertPath("", it.Path) }),
+			ui.MenuDivider(),
+			ui.MenuItem(T("New folder…"), func() { b.askFile(protocol.FileMkdir, folder) }),
+			ui.MenuItem(T("Rename…"), func() { b.askFile(protocol.FileRename, it) }),
+			ui.MenuDivider(),
+			ui.MenuItem(T("Delete…"), func() { b.askFile(protocol.FileDelete, it) }),
+		)
+		return items
+	}).Name(Tf("%s actions", it.Name))
 }
 
 func browserToolbar(b *browser) ggui.Widget {
