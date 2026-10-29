@@ -37,11 +37,12 @@ jobs:
           cache: gradle
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
         with:
+          cmdline-tools-version: '16111833'
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
       - name: Install Android SDK
         run: |
-          sdkmanager 'platforms;android-37' 'build-tools;36.0.0' "ndk;$ANDROID_NDK_VERSION"
+          sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0' "ndk;$ANDROID_NDK_VERSION"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
       - name: Install mobile bindings
         working-directory: app/mobile
