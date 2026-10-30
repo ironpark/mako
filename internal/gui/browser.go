@@ -470,12 +470,7 @@ func browserToolbar(b *browser) ggui.Widget {
 	m := b.m
 	nav := navButtons(b.navigator)
 	crumbs := ggui.View(b.Path, func(p string) ggui.Widget { return pathCrumbs(p, b.goTo) })
-	hidden := ggui.View(ggui.Map(m.Prefs, func(p prefs) bool { return p.ShowHidden }), func(shown bool) ggui.Widget {
-		if shown {
-			return iconButton("eye", T("Hide hidden files"), m.toggleHidden)
-		}
-		return iconButton("eye-off", T("Show hidden files"), m.toggleHidden)
-	})
+	hidden := hiddenFilesToggle(m)
 	where := ggui.Row(icon("hard-drive").Size(14).Color(tokMuted),
 		muted(ggui.Text(nodeName(ggui.Peek(m.Nodes), b.node)).Size(12.5).NoWrap())).Gap(6)
 	return ggui.Box(ggui.Row(

@@ -418,12 +418,7 @@ func filesView(m *model, r fileRoot) ggui.Widget {
 			ggui.Expanded(ggui.Text(prettyPath(r.Path)).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis()),
 		).Gap(8).Align(ggui.AlignBaseline)),
 		ggui.Row(
-			ggui.View(ggui.Map(m.Prefs, func(p prefs) bool { return p.ShowHidden }), func(shown bool) ggui.Widget {
-				if shown {
-					return iconButton("eye", T("Hide hidden files"), m.toggleHidden)
-				}
-				return iconButton("eye-off", T("Show hidden files"), m.toggleHidden)
-			}),
+			hiddenFilesToggle(m),
 			newInRoot(m, r),
 			iconButton("refresh-cw", T("Refresh"), m.refreshFiles),
 		).Gap(2),

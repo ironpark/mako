@@ -102,6 +102,19 @@ func iconButton(name, label string, onTap func()) ggui.Widget {
 	return ui.Tooltip(ui.ButtonOf(icon(name), onTap).Ghost().Pad(6).Radius(6).Name(label), label)
 }
 
+// hiddenFilesToggle shows or hides the files whose names start with a dot,
+// in every list of files: a button of a dot and a star, in the accent
+// while they are shown, quiet while they are hidden.
+func hiddenFilesToggle(m *model) ggui.Widget {
+	return ggui.View(ggui.Map(m.Prefs, func(p prefs) bool { return p.ShowHidden }), func(shown bool) ggui.Widget {
+		label := pick(shown, T("Hide hidden files"), T("Show hidden files"))
+		glyph := ggui.Text(".*").Font(ggui.DefaultMonoFont()).Size(13).Weight(ggui.WeightSemibold).
+			Color(pick[color.Color](shown, tokAccentBright, tokExtraMuted)).NoWrap()
+		button := ui.ButtonOf(ggui.Box(ggui.Center(glyph)).Size(16, 16), m.toggleHidden).Ghost().Pad(6).Radius(6).Name(label)
+		return ui.Tooltip(button, label)
+	})
+}
+
 // statusLabel names what a session's agent is doing, as its hooks said.
 func statusLabel(s *protocol.SessionInfo) string {
 	switch {

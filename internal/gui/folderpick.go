@@ -176,12 +176,7 @@ func folderPicker(m *model) ggui.Widget {
 		ggui.Expanded(ui.TextField(p.Address).Name(T("Folder")).OnSubmit(func(dir string) {
 			p.goTo(strings.TrimSpace(dir))
 		})),
-		ggui.View(ggui.Map(m.Prefs, func(pr prefs) bool { return pr.ShowHidden }), func(shown bool) ggui.Widget {
-			if shown {
-				return iconButton("eye", T("Hide hidden files"), m.toggleHidden)
-			}
-			return iconButton("eye-off", T("Show hidden files"), m.toggleHidden)
-		}),
+		hiddenFilesToggle(m),
 	).Gap(6)
 	body := ggui.Row(
 		ggui.Box(ggui.Scroll(pickerSidebar(m))).Width(170),
