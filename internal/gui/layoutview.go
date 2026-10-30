@@ -135,7 +135,8 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				OnHover(func(bool) { m.leaveHint(id) }))
 		}
 		children = append(children, dropSlot(m, id, len(g.Tabs)))
-		bar := ggui.Scroll(ggui.Row(children...)).Horizontal().Shrink().Bar(color.Transparent)
+		// Tabs scrolled past an end fade out there.
+		bar := ggui.Scroll(ggui.Row(children...)).Horizontal().Shrink().FadeEdges(28).Bar(color.Transparent)
 		// Centred down the bar only: across, it is as wide as itself.
 		plus := ggui.Box(ggui.Column(launchButton(m, nodeID, project, targets, focus, newSession)).Justify(ggui.JustifyCenter)).
 			Height(tabBarHeight).Pad(0, 4)
