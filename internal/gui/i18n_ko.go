@@ -23,6 +23,7 @@ var catalogKo = map[string]string{
 	"The tool failed without output.": "도구가 출력 없이 실패했습니다.",
 	"Latest":                          "최신 메시지",
 	"Toggle chat and terminal":        "챗과 터미널 전환",
+	"Toggle edit and preview":         "편집과 미리보기 전환",
 
 	// Window
 	"Sessions":                               "세션",
@@ -571,7 +572,6 @@ var catalogKo = map[string]string{
 	"Caution":                                "주의",
 	"No results":                             "결과 없음",
 	"Group sessions":                         "세션 묶기",
-	"Markdown view":                          "마크다운 보기",
 	" of %s":                                 " / %s",
 	"%d results in %d files":                 "파일 %[2]d개에서 %[1]d건",
 	"%d tool calls":                          "도구 호출 %d개",

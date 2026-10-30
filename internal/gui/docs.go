@@ -10,7 +10,6 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
-	"github.com/ironpark/ggui/ui/icons"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/protocol"
@@ -406,10 +405,7 @@ func docStatus(m *model, id string, info ggui.Readable[docInfo], state ggui.Read
 	}, "text")
 	row := &statusRow{gap: 14, split: 2, items: []ggui.Widget{size, lines, lang, ending, caret}, drop: []int{3, 2, 1, 0, 4}}
 	if isMarkdown(ggui.Peek(m.Docs)[id].Name()) {
-		row.items = append(row.items, ui.ToggleGroup[bool](doc.preview).Options([]bool{false, true}).
-			Format(func(on bool) string { return T(pick(on, "Preview", "Edit")) }).
-			Icon(func(on bool) *icons.Widget { return icon(pick(on, "eye", "pencil")).Size(13) }).
-			Name(T("Markdown view")))
+		row.items = append(row.items, glyphSwitch(doc.preview, "pencil", "book-open", T("Preview"), T("Edit"), T("Toggle edit and preview")))
 	}
 	return ggui.Box(row).Pad(0, 8, 0, 14).Height(statusHeight).Fill(tokSurface0)
 }

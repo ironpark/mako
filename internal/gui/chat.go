@@ -295,22 +295,31 @@ func sessionView(m *model, id string, group int) ggui.Widget {
 // it is named for. A plain shell has no conversation, so it has none.
 func viewSwitch(m *model, id string, group int) ggui.Widget {
 	mode := ggui.Bind(func() bool { return m.ChatModes.Get()[id] }, func(chat bool) { m.focusGroup(group); m.setChatMode(id, chat) })
-	side := func(glyph string, chat bool) ggui.Widget {
+	return glyphSwitch(mode, "square-terminal", "messages-square", T("Chat"), T("Terminal"), T("Toggle chat and terminal"))
+}
+
+// glyphSwitch is a two-sided switch between the views mode picks, false
+// for left's glyph and true for right's: a pill whose track holds the two
+// glyphs, a light thumb sliding behind the one in view. A click anywhere
+// on it switches to the other, which is what it is named for: toLeft
+// while right's is in view, toRight while left's is.
+func glyphSwitch(mode ggui.Binding[bool], left, right, toRight, toLeft, tip string) ggui.Widget {
+	side := func(glyph string, on bool) ggui.Widget {
 		g := ggui.Reactive(func() ggui.Widget {
 			// Black on the light thumb in view; the other quiet on the track.
 			var c color.Color = tokExtraMuted
-			if mode.Get() == chat {
+			if mode.Get() == on {
 				c = viewThumbInk()
 			}
 			return icon(glyph).Size(14).Color(c)
 		})
 		return ggui.Box(ggui.Center(g)).Size(viewSideWidth+viewToggleInset, viewSideHeight+2*viewToggleInset)
 	}
-	toggle := &viewToggle{right: mode, child: ggui.Row(side("square-terminal", false), side("messages-square", true))}
+	toggle := &viewToggle{right: mode, child: ggui.Row(side(left, false), side(right, true))}
 	button := ui.ButtonOf(toggle, func() { mode.Set(!ggui.Untrack(mode.Get)) }).Variant(viewSideButton).Pad(0).
 		Radius((viewSideHeight + 2*viewToggleInset) / 2).
-		BindName(ggui.Map(mode, func(chat bool) string { return pick(chat, T("Terminal"), T("Chat")) }))
-	return ui.Tooltip(button, T("Toggle chat and terminal"))
+		BindName(ggui.Map(mode, func(on bool) string { return pick(on, toLeft, toRight) }))
+	return ui.Tooltip(button, tip)
 }
 
 // viewChip floats the view switch over a session's top-right corner, for a
