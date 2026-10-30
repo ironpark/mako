@@ -67,7 +67,7 @@ internal fun Composer(
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (session.working()) FilledTonalIconButton(onClick = onInterrupt) {
                     Icon(Icons.Filled.Stop, stringResource(R.string.interrupt))

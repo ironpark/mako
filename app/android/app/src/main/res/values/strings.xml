@@ -111,8 +111,13 @@
     <string name="close">Close</string>
     <string name="answer_agent">Answer the agent</string>
     <string name="answer_hint">Tap to type. Use arrows, Space and Enter to answer. Pinch to zoom; double-tap to reset.</string>
-    <string name="swipe_tabs">Swipe left for Terminal, right for Chat</string>
+    <string name="swipe_tabs">Swipe left from Chat for Terminal; swipe right for Chat, then the session list</string>
     <string name="subagent">Subagent</string>
+    <string name="subagents">Subagents</string>
+    <string name="subagents_counts">%1$d active · %2$d ended</string>
+    <string name="subagents_expand">Show subagents</string>
+    <string name="subagents_collapse">Hide subagents</string>
+    <string name="subagent_ended">Ended</string>
     <string name="subagent_read_only">Subagent conversation · read only</string>
     <string name="tool_calls">%1$d tool calls</string>
     <string name="commands_retry">Could not load commands. Tap to retry.</string>

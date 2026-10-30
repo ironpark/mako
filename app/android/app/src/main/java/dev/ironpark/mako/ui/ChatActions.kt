@@ -3,6 +3,11 @@ package dev.ironpark.mako.ui
 import dev.ironpark.mako.v2.ChatMessage
 import dev.ironpark.mako.v2.Command
 import dev.ironpark.mako.v2.SessionInfo
+import dev.ironpark.mako.v2.SubAgent
+
+/** Running agents come first; a stopped session cannot have active children. */
+internal fun partitionSubagents(session: SessionInfo, agents: List<SubAgent>): Pair<List<SubAgent>, List<SubAgent>> =
+    agents.partition { session.state == "running" && it.running }
 
 /** Merge results split over pagination boundaries into their tool calls. */
 internal fun joinMessages(older: List<ChatMessage>, newer: List<ChatMessage>): List<ChatMessage> {

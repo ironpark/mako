@@ -11,6 +11,7 @@ android {
         applicationId = "dev.ironpark.mako"
         minSdk = 26
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = providers.gradleProperty("makoVersionCode").orElse("1").get().toInt()
         versionName = providers.gradleProperty("makoVersionName").orElse("0.1.0").get()
         // The node is built for these alone (app/Makefile).
@@ -54,6 +55,11 @@ android {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     implementation(files("libs/makocore.aar"))
 
     implementation(libs.androidx.core.ktx)

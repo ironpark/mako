@@ -4,12 +4,25 @@ import dev.ironpark.mako.v2.Approval
 import dev.ironpark.mako.v2.ChatMessage
 import dev.ironpark.mako.v2.Command
 import dev.ironpark.mako.v2.SessionInfo
+import dev.ironpark.mako.v2.SubAgent
 import org.junit.Assert.*
 import org.junit.Test
 
 class ChatActionsTest {
     private val running = SessionInfo.newBuilder().setState("running").setStatus("working").build()
     private val question = ChatMessage.newBuilder().setId("q").setRole("tool").setKind("question").setPending(true).build()
+
+    @Test fun subagentSummaryCountsOnlyLiveChildrenAndKeepsHistory() {
+        val done = SubAgent.newBuilder().setId("done").build()
+        val active = SubAgent.newBuilder().setId("active").setRunning(true).build()
+        val agents = listOf(done, active)
+        assertEquals(listOf(active) to listOf(done), partitionSubagents(running, agents))
+        for (state in listOf("exited", "stopped")) {
+            assertEquals(emptyList<SubAgent>() to agents,
+                partitionSubagents(running.toBuilder().setState(state).build(), agents))
+        }
+        assertEquals(emptyList<SubAgent>() to emptyList<SubAgent>(), partitionSubagents(running, emptyList()))
+    }
 
     @Test fun questionsOnlyOpenForCurrentUnansweredCalls() {
         assertEquals("question:q", questionRequest(running, listOf(question)))

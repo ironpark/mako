@@ -1,6 +1,8 @@
 package dev.ironpark.mako.ui
 
 import android.net.Uri
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.first
 @Composable
 fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableStateFlow<String?>) {
     val nav = rememberNavController()
+    val homeState = rememberSessionsScreenState()
     val open by target.collectAsState()
     val pair by pairing.collectAsState()
     val join = rememberJoin(mesh)
@@ -45,21 +48,32 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
     }
 
     NavHost(nav, startDestination = "home") {
-        composable("home") {
+        composable("home", popEnterTransition = { EnterTransition.None }) {
             SessionsScreen(
                 mesh,
                 onOpen = { openSession(it.nodeId, it.id) },
                 onMesh = { nav.navigate("mesh") },
                 onNew = { nav.navigate("new") },
+                screenState = homeState,
             )
         }
-        composable("session/{node}/{id}") { entry ->
+        composable("session/{node}/{id}", popExitTransition = { ExitTransition.None }) { entry ->
             val args = entry.arguments
+            val previewState = rememberSessionsScreenState(homeState)
             SessionScreen(
                 mesh,
                 node = args?.getString("node").orEmpty(),
                 id = args?.getString("id").orEmpty(),
                 onBack = { nav.popBackStack() },
+                home = {
+                    SessionsScreen(
+                        mesh,
+                        onOpen = { openSession(it.nodeId, it.id) },
+                        onMesh = { nav.navigate("mesh") },
+                        onNew = { nav.navigate("new") },
+                        screenState = previewState,
+                    )
+                },
             )
         }
         composable("mesh") { MeshScreen(mesh, onBack = { nav.popBackStack() }, onScan = { nav.navigate("scan") }) }

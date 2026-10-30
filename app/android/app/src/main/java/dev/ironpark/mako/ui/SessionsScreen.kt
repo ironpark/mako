@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -41,9 +43,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarState
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -72,7 +77,28 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** What the list shows of the sessions. */
-private enum class Filter { All, NeedsYou, Working }
+internal enum class Filter { All, NeedsYou, Working }
+
+@OptIn(ExperimentalMaterial3Api::class)
+internal class SessionsScreenState(
+    val list: LazyListState,
+    val bar: TopAppBarState,
+    val filter: MutableState<Filter>,
+)
+
+/** A separate snapshot gives the swipe preview the same filter and scroll without sharing a layout. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun rememberSessionsScreenState(source: SessionsScreenState? = null): SessionsScreenState {
+    val list = rememberLazyListState(source?.list?.firstVisibleItemIndex ?: 0, source?.list?.firstVisibleItemScrollOffset ?: 0)
+    val bar = rememberTopAppBarState(
+        initialHeightOffsetLimit = source?.bar?.heightOffsetLimit ?: -Float.MAX_VALUE,
+        initialHeightOffset = source?.bar?.heightOffset ?: 0f,
+        initialContentOffset = source?.bar?.contentOffset ?: 0f,
+    )
+    val filter = rememberSaveable { mutableStateOf(source?.filter?.value ?: Filter.All) }
+    return remember(list, bar, filter) { SessionsScreenState(list, bar, filter) }
+}
 
 /**
  * SessionsScreen is the mesh's sessions: those waiting for you first, as
@@ -80,16 +106,19 @@ private enum class Filter { All, NeedsYou, Working }
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SessionsScreen(mesh: Mesh, onOpen: (SessionInfo) -> Unit, onMesh: () -> Unit, onNew: () -> Unit) {
+internal fun SessionsScreen(
+    mesh: Mesh, onOpen: (SessionInfo) -> Unit, onMesh: () -> Unit, onNew: () -> Unit,
+    screenState: SessionsScreenState = rememberSessionsScreenState(),
+) {
     val state by mesh.state.collectAsState()
     val sessions by mesh.sessions.collectAsState()
     val nodes by mesh.nodes.collectAsState()
     val loaded by mesh.loaded.collectAsState()
     val linked = nodes.count { it.trustsUs }
-    var filter by rememberSaveable { mutableStateOf(Filter.All) }
+    var filter by screenState.filter
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val bar = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val bar = TopAppBarDefaults.enterAlwaysScrollBehavior(screenState.bar)
 
     Scaffold(
         modifier = Modifier.nestedScroll(bar.nestedScrollConnection),
@@ -151,7 +180,7 @@ fun SessionsScreen(mesh: Mesh, onOpen: (SessionInfo) -> Unit, onMesh: () -> Unit
                         },
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        SessionList(mesh, nodes, sessions, filter, onFilter = { filter = it }, onOpen)
+                        SessionList(mesh, nodes, sessions, filter, onFilter = { filter = it }, onOpen, screenState.list)
                     }
                 }
             }
@@ -167,6 +196,7 @@ private fun SessionList(
     filter: Filter,
     onFilter: (Filter) -> Unit,
     onOpen: (SessionInfo) -> Unit,
+    listState: LazyListState,
 ) {
     // Times shown as "ago" move on with the clock.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -193,7 +223,7 @@ private fun SessionList(
             .sortedBy { mesh.nodeName(it.first).lowercase() }
     }
 
-    LazyColumn(contentPadding = PaddingValues(bottom = 96.dp), modifier = Modifier.fillMaxSize()) {
+    LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 96.dp), modifier = Modifier.fillMaxSize()) {
         item(key = "filters") {
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),

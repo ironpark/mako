@@ -30,8 +30,9 @@ and opens a session's conversation and its terminal.
   Settings ▸ Access ▸ Pairing (or `mako pair` prints): the computer lets
   the phone in at once, and the phone keeps its address.
   The phone lets no one in: nothing on the mesh can run anything on it.
-- **Chat on the phone.** Open a subagent card to read its conversation and
-  tool activity, then go back to the main conversation. Type `/` to browse
+- **Chat on the phone.** Subagents start folded into one compact row showing
+  active and ended counts. Expand it to open a subagent's conversation and
+  tool activity, with active agents first, then go back to the main conversation. Type `/` to browse
   the session's slash commands; tapping one inserts it for you to send.
   Drafts survive tab switches, and a failed send keeps the text.
 - **Answer questions.** A pending question opens the agent's live input in
@@ -39,10 +40,12 @@ and opens a session's conversation and its terminal.
   bar for choices and multiple selections. The session menu's **Answer the
   agent** opens the panel when automatic detection is unavailable. Close
   the panel to return to the conversation without discarding the draft.
-- **Touch controls.** Swipe across the Chat/Terminal tab strip to switch
-  views. Terminal gestures remain local to the terminal: pinch to zoom,
-  drag to pan or scroll back, and double-tap to reset zoom and return to
-  the live screen. Agent icons match the desktop throughout the app.
+- **Touch controls.** Swipe horizontally between Chat and Terminal; the
+  next view follows your finger before you release. Swipe right again
+  from Chat to reveal the main session list with its filter and scroll
+  position preserved. The terminal scrolls back with one finger vertically;
+  use two fingers to pan or pinch to zoom, and double-tap to reset zoom and
+  return to the live screen. Agent icons match the desktop throughout the app.
 - **The terminal** bundles D2Coding 1.4.0 (the standard, non-ligature
   build) for rendering and measuring character cells, including Korean.
   The original font is from [NAVER's release](https://github.com/naver/d2-coding-font/releases/tag/VER1.4.0);

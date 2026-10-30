@@ -2,7 +2,6 @@ package dev.ironpark.mako.ui
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
@@ -37,6 +36,8 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Description
@@ -68,6 +69,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -102,6 +104,7 @@ fun ChatView(
     agent: String = "", onQuestion: (String) -> Unit = {}, onAnswer: () -> Unit = {},
 ) {
     var selectedAgent by rememberSaveable(session.id, agent) { mutableStateOf("") }
+    var agentsExpanded by rememberSaveable(session.id, agent) { mutableStateOf(false) }
     val questionChanged by rememberUpdatedState(onQuestion)
     var chat by remember(session.id, agent) { mutableStateOf<Chat?>(null) } // the latest messages
     var older by remember(session.id, agent) { mutableStateOf<List<ChatMessage>>(emptyList()) }
@@ -152,6 +155,9 @@ fun ChatView(
 
     val latest = chat?.messagesList.orEmpty()
     val messages = remember(older, latest) { joinMessages(older, latest) }
+    val (activeAgents, endedAgents) = remember(session.state, chat?.agentsList) {
+        partitionSubagents(session, chat?.agentsList.orEmpty())
+    }
     val request = if (agent.isEmpty()) questionRequest(session, latest) else ""
     LaunchedEffect(request) { if (agent.isEmpty()) questionChanged(request) }
     val list = rememberLazyListState()
@@ -185,8 +191,8 @@ fun ChatView(
                 else -> SelectionContainer {
                     LazyColumn(
                         state = list,
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         if (start > 0) {
                             item(key = "older") {
@@ -207,13 +213,20 @@ fun ChatView(
                             }
                         }
                         items(messages) { m -> MessageItem(m) }
-                        if (agent.isEmpty()) {
-                            items(c?.agentsList.orEmpty(), key = { "agent:" + it.id }) { sub ->
-                                SubagentRow(sub, session.state == "running", onClick = { selectedAgent = sub.id })
+                        if (agent.isEmpty() && (activeAgents.isNotEmpty() || endedAgents.isNotEmpty())) {
+                            item(key = "agents") {
+                                SubagentSummary(activeAgents.size, endedAgents.size, agentsExpanded) {
+                                    agentsExpanded = !agentsExpanded
+                                }
+                            }
+                            if (agentsExpanded) {
+                                items(activeAgents + endedAgents, key = { "agent:" + it.id }) { sub ->
+                                    SubagentRow(sub, session.state == "running", onClick = { selectedAgent = sub.id })
+                                }
                             }
                         }
                         if (agent.isEmpty() && session.working()) {
-                            item(key = "working") { Working(c?.agentsList.orEmpty().count { it.running }) }
+                            item(key = "working") { Working(activeAgents.size) }
                         }
                     }
                 }
@@ -264,7 +277,7 @@ private fun UsageStrip(u: Usage) {
     }
     if (parts.isEmpty()) return
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -498,20 +511,50 @@ private fun AnnotatedString.Builder.inline(line: String, codeBackground: Color) 
 }
 
 @Composable
+private fun SubagentSummary(active: Int, ended: Int, expanded: Boolean, onClick: () -> Unit) {
+    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Row(
+            Modifier.fillMaxWidth().clickable(
+                role = Role.Button,
+                onClickLabel = stringResource(if (expanded) R.string.subagents_collapse else R.string.subagents_expand),
+                onClick = onClick,
+            ).heightIn(min = 48.dp).padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (active > 0) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = StatusColors.Working)
+            else Icon(Icons.Outlined.SmartToy, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.subagents), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(R.string.subagents_counts, active, ended), style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
 private fun SubagentRow(sub: SubAgent, sessionRunning: Boolean, onClick: () -> Unit) {
-    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        ListItem(
-            modifier = Modifier.clickable(onClick = onClick),
-            leadingContent = {
-                if (sub.running && sessionRunning) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                else Icon(Icons.Outlined.SmartToy, null)
-            },
-            headlineContent = { Text(sub.description.ifEmpty { sub.kind }.ifEmpty { stringResource(R.string.subagent) },
-                maxLines = 2, overflow = TextOverflow.Ellipsis) },
-            supportingContent = {
+    val active = sub.running && sessionRunning
+    val tint = if (active) StatusColors.Working else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Row(
+            Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick)
+                .heightIn(min = 48.dp).padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (active) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = tint)
+            else Icon(Icons.Outlined.SmartToy, stringResource(R.string.subagent_ended), Modifier.size(16.dp), tint = tint)
+            Column(Modifier.weight(1f)) {
+                Text(sub.description.ifEmpty { sub.kind }.ifEmpty { stringResource(R.string.subagent) },
+                    style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(dotted(sub.kind, stringResource(R.string.tool_calls, sub.toolCalls), sub.tool, sub.detail),
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-            },
-        )
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Icon(Icons.Filled.ChevronRight, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }

@@ -4,7 +4,11 @@ import android.graphics.Typeface
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroidSize
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -15,20 +19,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalRenderer
 import kotlin.math.floor
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
  * TerminalPane draws a session's screen at the session's own size, which
  * its desktop window set: the text is sized for its columns to fill the
- * width, then pinching zooms and dragging pans and scrolls back.
+ * width. One finger scrolls vertically; two fingers zoom and pan. Single
+ * finger horizontal drags stay available to the session's page navigation.
  */
 @Composable
 fun TerminalPane(term: TermSession, modifier: Modifier = Modifier, onTap: () -> Unit = {}) {
@@ -62,11 +70,41 @@ fun TerminalPane(term: TermSession, modifier: Modifier = Modifier, onTap: () -> 
                     )
                 }
                 .pointerInput(term) {
-                    detectTransformGestures { _, pan, gesture, _ ->
-                        zoom = (zoom * gesture).coerceIn(0.5f, 4f)
-                        panX = (panX - pan.x).coerceIn(0f, bound)
-                        val back = synchronized(term.lock) { term.emulator.screen.activeTranscriptRows }
-                        scroll = (scroll + pan.y / current.fontLineSpacing).coerceIn(0f, back.toFloat())
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        var totalPan = Offset.Zero
+                        var totalZoom = 1f
+                        var transforming = false
+                        var owned = false
+                        do {
+                            val event = awaitPointerEvent()
+                            if (event.changes.any { it.isConsumed }) break
+                            val pan = event.calculatePan()
+                            val gesture = event.calculateZoom()
+                            transforming = transforming || event.changes.count { it.pressed } > 1
+                            totalPan += pan
+                            totalZoom *= gesture
+                            if (!owned) {
+                                val slop = viewConfiguration.touchSlop
+                                if (transforming) {
+                                    val zoomMotion = abs(1 - totalZoom) * event.calculateCentroidSize(useCurrent = false)
+                                    owned = totalPan.getDistance() > slop || zoomMotion > slop
+                                } else if (abs(totalPan.x) > slop || abs(totalPan.y) > slop) {
+                                    // Let the pager own horizontal drags before consuming any movement.
+                                    if (abs(totalPan.x) >= abs(totalPan.y)) break
+                                    owned = true
+                                }
+                            }
+                            if (owned) {
+                                if (transforming) {
+                                    zoom = (zoom * gesture).coerceIn(0.5f, 4f)
+                                    panX = (panX - pan.x).coerceIn(0f, bound)
+                                }
+                                val back = synchronized(term.lock) { term.emulator.screen.activeTranscriptRows }
+                                scroll = (scroll + pan.y / current.fontLineSpacing).coerceIn(0f, back.toFloat())
+                                event.changes.forEach { if (it.positionChanged()) it.consume() }
+                            }
+                        } while (event.changes.any { it.pressed })
                     }
                 }
         ) {

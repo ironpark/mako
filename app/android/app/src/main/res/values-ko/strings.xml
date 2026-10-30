@@ -107,8 +107,13 @@
     <string name="close">닫기</string>
     <string name="answer_agent">에이전트 질문에 답변</string>
     <string name="answer_hint">화면을 눌러 입력하세요. 방향키·공백·Enter로 답변할 수 있습니다. 핀치로 확대하고 두 번 탭하여 복원하세요.</string>
-    <string name="swipe_tabs">왼쪽으로 밀어 터미널, 오른쪽으로 밀어 채팅</string>
+    <string name="swipe_tabs">채팅에서 왼쪽으로 밀어 터미널, 오른쪽으로 밀어 채팅과 메인 목록으로 이동</string>
     <string name="subagent">서브에이전트</string>
+    <string name="subagents">서브에이전트</string>
+    <string name="subagents_counts">실행 %1$d · 종료 %2$d</string>
+    <string name="subagents_expand">서브에이전트 펼치기</string>
+    <string name="subagents_collapse">서브에이전트 접기</string>
+    <string name="subagent_ended">종료됨</string>
     <string name="subagent_read_only">서브에이전트 대화 · 읽기 전용</string>
     <string name="tool_calls">도구 호출 %1$d회</string>
     <string name="commands_retry">명령어를 불러오지 못했습니다. 눌러 다시 시도하세요.</string>
