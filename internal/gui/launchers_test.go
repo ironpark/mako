@@ -233,3 +233,11 @@ func TestUsageDetailOverTheTerminalOpensOnHoverAlone(t *testing.T) {
 		t.Fatal("hover does not open the card's detail")
 	}
 }
+
+func TestQuickLaunchersWrapInEvenRowsOfFour(t *testing.T) {
+	for n, want := range map[int][2]int{1: {1, 1}, 4: {4, 1}, 5: {3, 2}, 6: {3, 2}, 7: {4, 2}, 8: {4, 2}, 9: {3, 3}, 10: {4, 3}, 13: {4, 4}} {
+		if cols, rows := launchGrid(n); cols != want[0] || rows != want[1] {
+			t.Errorf("%d launchers set out %d×%d; want %d×%d", n, rows, cols, want[1], want[0])
+		}
+	}
+}

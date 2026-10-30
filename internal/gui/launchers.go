@@ -105,12 +105,30 @@ func launchButton(m *model, nodeID, project string, targets []string, before, mo
 		f.items = append(f.items, t)
 		cells[i] = t
 	}
+	cols, rows := launchGrid(len(cells))
+	f.rows = rows
+	lines := make([]ggui.Widget, 0, rows)
+	for i := 0; i < len(cells); i += cols {
+		lines = append(lines, ggui.Row(cells[i:min(i+cols, len(cells))]...).Gap(2))
+	}
 	pill := ggui.Reactive(func() ggui.Widget {
-		return ggui.Box(ggui.Row(cells...).Gap(2)).Pad(2).
+		return ggui.Box(ggui.Column(lines...).Gap(2)).Pad(2).
 			Fill(tokSolidBg).Border(1, tokBorder).Radius(8).Shadow(uitheme.Use().PanelShadow)
 	})
 	f.pill = ggui.Transition(pill).Fade().Easing(ggui.EaseLinear)
 	return f
+}
+
+// launchGrid is how the quick launchers are set out: a row of up to four,
+// and more in as few rows of up to four as hold them, as even as they go:
+// 2×3 for six, 2×4 for eight, 3×3 for nine.
+func launchGrid(n int) (cols, rows int) {
+	const most = 4
+	if n <= most {
+		return n, 1
+	}
+	rows = (n + most - 1) / most
+	return (n + rows - 1) / rows, rows
 }
 
 // launchFan is a + with the quick launchers it fans out while the pointer
@@ -122,6 +140,7 @@ type launchFan struct {
 	items []*ggui.TransitionWidget
 	menus []*ui.MenuWidget
 
+	rows               int
 	plusSize, pillSize ggui.Size
 	motion             time.Duration
 }
@@ -156,7 +175,9 @@ func (f *launchFan) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	w := dst.Size().W
 	left := w > 0 && right+f.pillSize.W > w
 	x := pick(left, r.Origin.X-2-f.pillSize.W, right)
-	at := ggui.Rct(ggui.Pt(x, r.Origin.Y+(r.Size.H-f.pillSize.H)/2), f.pillSize)
+	// The first row level with the +, the rest below it.
+	row := (f.pillSize.H - 4 - 2*float64(f.rows-1)) / float64(max(f.rows, 1))
+	at := ggui.Rct(ggui.Pt(x, r.Origin.Y+(r.Size.H-row)/2-2), f.pillSize)
 	anchor := ggui.Anchor{Rect: r}
 	state, _ := dst.Retained(anchor, fanSlot)
 	now := ggui.FrameTime()
@@ -182,12 +203,13 @@ func (f *launchFan) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	// The launchers follow one another out from under the +, a step
 	// behind each, the farther from farther: to the left the nearest is
 	// the last.
-	n := len(f.items)
+	// In rows, by its place in its row, so the rows come out together.
+	n, _ := launchGrid(len(f.items))
 	dir := pick(left, 1.0, -1.0)
 	step := min(.15, .6/float64(max(n-1, 1)))
 	span := 1 - step*float64(n-1)
 	for i, item := range f.items {
-		order := pick(left, n-1-i, i)
+		order := pick(left, n-1-i%n, i%n)
 		item.Slide(dir*float64(order+1)*14, 0).Progress((k-step*float64(order))/span, !state.open)
 	}
 	f.pill.Slide(dir*8, 0).Progress(k, !state.open)
