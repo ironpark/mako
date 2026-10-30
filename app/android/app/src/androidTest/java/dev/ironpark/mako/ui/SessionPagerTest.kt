@@ -2,6 +2,7 @@ package dev.ironpark.mako.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -13,9 +14,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
@@ -23,6 +30,9 @@ import androidx.compose.ui.test.swipeUp
 import dev.ironpark.mako.net.Daemon
 import dev.ironpark.mako.term.TermSession
 import dev.ironpark.mako.term.TerminalPane
+import dev.ironpark.mako.R
+import androidx.compose.ui.res.stringResource
+import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -32,22 +42,43 @@ class SessionPagerTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var pager: PagerState
     private var returnsHome = 0
+    private lateinit var switchDescription: String
 
     private fun content(initial: Int = 1, chat: Boolean = true) {
         compose.setContent {
             MaterialTheme {
                 pager = rememberPagerState(initialPage = initial) { if (chat) 3 else 2 }
                 val scope = rememberCoroutineScope()
+                switchDescription = stringResource(R.string.switch_session_view)
                 val term = remember { TermSession(Daemon { null }, "test", "test", scope) }
                 SessionPager(pager, onHome = { returnsHome++ }, modifier = Modifier.testTag("pager")) { page ->
                     Box(Modifier.fillMaxSize().background(if (page == 0) Color.Green else Color.White).testTag("page$page")) {
-                        if (page == if (chat) 2 else 1) {
-                            TerminalPane(term, Modifier.fillMaxSize().testTag("terminal"))
+                        Column {
+                            if (chat && page > 0) SessionViewSwitch(terminal = page == 2, onTerminal = { terminal ->
+                                scope.launch { pager.animateScrollToPage(if (terminal) 2 else 1) }
+                            })
+                            if (page == if (chat) 2 else 1) {
+                                TerminalPane(term, Modifier.fillMaxSize().testTag("terminal"))
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    @Test fun toolbarSwitchAndSwipesKeepTheSameModeSelected() {
+        content()
+        val chatSwitch = compose.onNode(hasContentDescription(switchDescription) and hasAnyAncestor(hasTestTag("page1")))
+        chatSwitch.assertIsOff().performClick()
+        compose.runOnIdle { assertEquals(2, pager.settledPage) }
+        compose.onNode(hasContentDescription(switchDescription) and hasAnyAncestor(hasTestTag("page2")))
+            .assertIsOn().performClick()
+        compose.runOnIdle { assertEquals(1, pager.settledPage) }
+        compose.onNodeWithTag("page1").performTouchInput { swipeLeft() }
+        compose.onNode(hasContentDescription(switchDescription) and hasAnyAncestor(hasTestTag("page2"))).assertIsOn()
+        compose.onNodeWithTag("terminal").performTouchInput { swipeRight() }
+        chatSwitch.assertIsOff()
     }
 
     @Test fun adjacentTerminalIsVisibleWhileFingerIsStillDown() {

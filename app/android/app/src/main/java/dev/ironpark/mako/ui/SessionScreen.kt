@@ -27,7 +27,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Button
@@ -40,10 +39,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -143,9 +140,6 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit, home
             topBar = {
                 TopAppBar(
                     expandedHeight = 56.dp,
-                    navigationIcon = {
-                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-                    },
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (session != null) {
@@ -167,6 +161,9 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit, home
                         }
                     },
                     actions = {
+                        if (chat) SessionViewSwitch(terminal = pageTab == 1, onTerminal = { terminal ->
+                            scope.launch { pager.animateScrollToPage(if (terminal) terminalPage else 1) }
+                        })
                         var menu by remember { mutableStateOf(false) }
                         IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.session_actions)) }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -191,14 +188,6 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit, home
             },
         ) { pad ->
             Column(Modifier.fillMaxSize().padding(pad).consumeWindowInsets(pad).imePadding()) {
-                if (chat) {
-                    PrimaryTabRow(selectedTabIndex = pageTab) {
-                        Tab(selected = pageTab == 0, onClick = { scope.launch { pager.animateScrollToPage(1) } },
-                            text = { Text(stringResource(R.string.tab_chat)) })
-                        Tab(selected = pageTab == 1, onClick = { scope.launch { pager.animateScrollToPage(terminalPage) } },
-                            text = { Text(stringResource(R.string.tab_terminal)) })
-                    }
-                }
                 AnimatedVisibility(session != null && session.hasApproval()) {
                     if (session != null && session.hasApproval()) {
                         ApprovalCard(session, approvalExpanded, onExpand = { approvalExpanded = !approvalExpanded },

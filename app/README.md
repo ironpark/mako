@@ -35,6 +35,8 @@ and opens a session's conversation and its terminal.
   tool activity, with active agents first, then go back to the main conversation. Type `/` to browse
   the session's slash commands; tapping one inserts it for you to send.
   Drafts survive tab switches, and a failed send keeps the text.
+  Assistant messages render Markdown tables, clickable links, nested lists,
+  quotes and code; wide tables and code blocks scroll horizontally.
 - **Answer questions.** A pending question opens the agent's live input in
   a panel over Chat. Tap to type, or use Enter, arrows and Space in the key
   bar for choices and multiple selections. The session menu's **Answer the
@@ -43,7 +45,8 @@ and opens a session's conversation and its terminal.
 - **Touch controls.** Swipe horizontally between Chat and Terminal; the
   next view follows your finger before you release. Swipe right again
   from Chat to reveal the main session list with its filter and scroll
-  position preserved. The terminal scrolls back with one finger vertically;
+  position preserved. A compact switch in the session toolbar also changes
+  views, replacing the back arrow and separate tab strip. The terminal scrolls back with one finger vertically;
   use two fingers to pan or pinch to zoom, and double-tap to reset zoom and
   return to the live screen. Agent icons match the desktop throughout the app.
 - **The terminal** bundles D2Coding 1.4.0 (the standard, non-ligature

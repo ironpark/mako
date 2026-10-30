@@ -36,6 +36,8 @@
 
     <string name="tab_chat">Chat</string>
     <string name="tab_terminal">Terminal</string>
+    <string name="switch_session_view">Switch between Chat and Terminal</string>
+    <string name="link_open_failed">Unable to open this link</string>
     <string name="fit_screen">Fit to this screen</string>
     <string name="stop_session">Stop session</string>
     <string name="approval_title">Allow %1$s?</string>

@@ -14,6 +14,8 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,20 +65,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
@@ -162,11 +159,24 @@ fun ChatView(
     LaunchedEffect(request) { if (agent.isEmpty()) questionChanged(request) }
     val list = rememberLazyListState()
     val atEnd by remember { derivedStateOf { !list.canScrollForward } }
+    val dragging by list.interactionSource.collectIsDraggedAsState()
     var follow by remember(session.id, agent) { mutableStateOf(true) }
-    LaunchedEffect(atEnd) { follow = atEnd }
-    LaunchedEffect(messages.size, messages.lastOrNull()?.pending) {
-        // Follows the end as it grows, unless the reader scrolled away from it.
-        if (follow && messages.isNotEmpty()) list.scrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1)
+    LaunchedEffect(atEnd, dragging) {
+        if (atEnd) follow = true else if (dragging) follow = false
+    }
+    LaunchedEffect(list, follow) {
+        if (!follow) return@LaunchedEffect
+        // Markdown parses off-thread: follow layout growth as well as new messages.
+        snapshotFlow { list.layoutInfo to list.isScrollInProgress }.collect { (layout, scrolling) ->
+            if (!scrolling && layout.totalItemsCount > 0) {
+                val last = layout.visibleItemsInfo.lastOrNull()
+                if (last?.index != layout.totalItemsCount - 1) list.scrollToItem(layout.totalItemsCount - 1)
+                else {
+                    val overflow = last.offset + last.size + layout.afterContentPadding - layout.viewportEndOffset
+                    if (overflow > 0) list.scrollBy(overflow.toFloat())
+                }
+            }
+        }
     }
 
     Column(modifier) {
@@ -238,6 +248,7 @@ fun ChatView(
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
             ) {
                 SmallFloatingActionButton(onClick = {
+                    follow = true
                     scope.launch { list.animateScrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1) }
                 }) { Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.to_latest)) }
             }
@@ -342,7 +353,7 @@ private fun MessageItem(m: ChatMessage) {
                 )
             }
         }
-        else -> Markdown(m.text)
+        else -> MarkdownMessage(m.text)
     }
 }
 
@@ -399,115 +410,6 @@ private fun toolIcon(kind: String): ImageVector = when (kind) {
     "todo", "plan" -> Icons.Outlined.Checklist
     "task" -> Icons.Outlined.SmartToy
     else -> Icons.Outlined.Build
-}
-
-/** A block of what an agent wrote: prose, or code fenced off. */
-private sealed interface Block {
-    data class Prose(val lines: List<String>) : Block
-    data class Code(val text: String) : Block
-}
-
-private fun blocks(text: String): List<Block> {
-    val out = mutableListOf<Block>()
-    val prose = mutableListOf<String>()
-    var code: StringBuilder? = null
-    for (line in text.lines()) {
-        if (line.trimStart().startsWith("```")) {
-            if (code == null) {
-                if (prose.isNotEmpty()) out += Block.Prose(prose.toList()).also { prose.clear() }
-                code = StringBuilder()
-            } else {
-                out += Block.Code(code.toString().trimEnd('\n'))
-                code = null
-            }
-            continue
-        }
-        if (code != null) code.append(line).append('\n') else prose += line
-    }
-    code?.let { out += Block.Code(it.toString().trimEnd('\n')) }
-    if (prose.isNotEmpty()) out += Block.Prose(prose)
-    return out
-}
-
-/**
- * Markdown shows what an agent writes as a phone should: headings, lists
- * and emphasis in the text, and code in boxes of their own that scroll
- * across.
- */
-@Composable
-private fun Markdown(text: String) {
-    val parts = remember(text) { blocks(text) }
-    val code = MaterialTheme.colorScheme.surfaceContainerHigh
-    Column(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (b in parts) when (b) {
-            is Block.Code -> Surface(color = code, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    b.text, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
-                    softWrap = false,
-                    modifier = Modifier.horizontalScroll(rememberScrollState()).padding(12.dp),
-                )
-            }
-            is Block.Prose -> {
-                val styled = remember(b) { prose(b.lines, code) }
-                if (styled.isNotBlank()) Text(styled, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-    }
-}
-
-private val BulletLine = Regex("^(\\s*)[-*+] (.*)")
-private val HeadingLine = Regex("^#{1,6} (.*)")
-
-private fun prose(lines: List<String>, codeBackground: Color): AnnotatedString = buildAnnotatedString {
-    val trimmed = lines.dropWhile { it.isBlank() }.dropLastWhile { it.isBlank() }
-    trimmed.forEachIndexed { i, raw ->
-        if (i > 0) append('\n')
-        val line = raw.trimEnd()
-        val bullet = BulletLine.find(line)
-        val heading = HeadingLine.find(line)
-        when {
-            heading != null -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { inline(heading.groupValues[1], codeBackground) }
-            bullet != null -> {
-                append(bullet.groupValues[1])
-                append("•  ")
-                inline(bullet.groupValues[2], codeBackground)
-            }
-            else -> inline(line, codeBackground)
-        }
-    }
-}
-
-private fun AnnotatedString.Builder.inline(line: String, codeBackground: Color) {
-    var i = 0
-    while (i < line.length) {
-        val code = line.indexOf('`', i)
-        val bold = line.indexOf("**", i)
-        val next = listOf(code, bold).filter { it >= 0 }.minOrNull()
-        if (next == null) {
-            append(line.substring(i))
-            return
-        }
-        append(line.substring(i, next))
-        if (next == code) {
-            val end = line.indexOf('`', code + 1)
-            if (end < 0) {
-                append(line.substring(code))
-                return
-            }
-            withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackground)) {
-                append(line.substring(code + 1, end))
-            }
-            i = end + 1
-        } else {
-            val end = line.indexOf("**", bold + 2)
-            if (end < 0) {
-                append(line.substring(bold))
-                return
-            }
-            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(line.substring(bold + 2, end)) }
-            i = end + 2
-        }
-    }
 }
 
 @Composable

@@ -34,6 +34,8 @@
 
     <string name="tab_chat">채팅</string>
     <string name="tab_terminal">터미널</string>
+    <string name="switch_session_view">채팅·터미널 전환</string>
+    <string name="link_open_failed">링크를 열 수 없습니다</string>
     <string name="fit_screen">이 화면에 맞추기</string>
     <string name="stop_session">세션 중지</string>
     <string name="approval_title">%1$s 허용할까요?</string>
