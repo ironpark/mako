@@ -524,7 +524,7 @@ func treeOverPane(header, tree ggui.Widget, open ggui.Readable[bool], ratio floa
 		header,
 		hline(),
 		ggui.Expanded(ggui.If(open, func() ggui.Widget {
-			return ui.Resizable(split, tree, pane()).Vertical().MinSizes(80, 80).Name(divider)
+			return ui.Resizable(split, tree, pane()).Vertical().MinSizes(80, 80).Hairline().Name(divider)
 		}).Else(func() ggui.Widget { return tree })),
 	).Stretch()
 }

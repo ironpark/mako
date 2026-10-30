@@ -46,7 +46,7 @@ func layoutNodeView(m *model, n *layoutNode) ggui.Widget {
 		return 0.5
 	}, func(r float64) { m.setRatio(id, r) })
 	split := ui.Resizable(ratio, layoutNodeView(m, n.First), layoutNodeView(m, n.Second)).
-		MinSizes(160, 120).Name(T("Pane divider"))
+		MinSizes(160, 120).Hairline().Name(T("Pane divider"))
 	if n.Vertical {
 		split = split.Vertical()
 	}

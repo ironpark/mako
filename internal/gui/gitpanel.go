@@ -51,7 +51,7 @@ func gitTabView(m *model) ggui.Widget {
 		}
 		// The divider between them draws the line over the history.
 		bottom := ggui.Column(historyHead, ggui.Expanded(history)).Stretch()
-		return ui.Resizable(m.GitSplit, top, bottom).Vertical().MinSizes(140, 120).Name(T("History divider"))
+		return ui.Resizable(m.GitSplit, top, bottom).Vertical().MinSizes(140, 120).Hairline().Name(T("History divider"))
 	})
 	return ggui.Column(
 		gitHeader(m),

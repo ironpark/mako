@@ -320,7 +320,7 @@ func historyBody(m *model) ggui.Widget {
 	body := ggui.Scroll(ggui.Padding(list, 0, 0, 4, 0)).Bar(tokSurface3)
 	split := ggui.State(0.5)
 	return ggui.If(open, func() ggui.Widget {
-		return ui.Resizable(split, body, commitPane(m)).Vertical().MinSizes(80, 80).Name(T("Commit divider"))
+		return ui.Resizable(split, body, commitPane(m)).Vertical().MinSizes(80, 80).Hairline().Name(T("Commit divider"))
 	}).Else(func() ggui.Widget { return body })
 }
 
