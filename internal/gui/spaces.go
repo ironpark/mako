@@ -323,7 +323,7 @@ func (s *spaceSwipe) scroll(d ggui.Point, phase ggui.ScrollPhase) bool {
 	if !s.active {
 		s.active = true
 		s.moving.Set(true)
-		s.drag = s.settle.Value(ggui.Now())
+		s.drag = s.settle.Value(ggui.FrameTime())
 		if phase == ggui.ScrollPhaseNone {
 			s.watchEnd()
 		}
@@ -428,7 +428,10 @@ func (l *swipeSlide) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 
 func (l *swipeSlide) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	l.s.width = r.Size.W
-	x := l.s.offset(ggui.Now())
+	// FrameTime, not Now: the settle asks for frames itself while it
+	// moves, and the list at rest asks for none. Now kept the window
+	// painting every frame for as long as the sidebar showed.
+	x := l.s.offset(ggui.FrameTime())
 	if x == 0 || r.Size.W <= 0 {
 		dst.Paint(l.cur, r)
 		return
