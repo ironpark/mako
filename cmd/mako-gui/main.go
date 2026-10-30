@@ -27,6 +27,7 @@ func main() {
 	// Opened from the Finder or a desktop's menu, the app and the daemon
 	// in it take the login shell's PATH, to find the agents it runs.
 	shellenv.Load()
+	keepCrashes()
 	// A window of busy terminals makes garbage fast, and the collector
 	// lets the heap grow to twice what is live between collections: some
 	// 200 MB for 95 live. A soft limit collects sooner as the heap nears
