@@ -150,7 +150,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			tidy = iconButton("eraser", T("Close files, diffs and idle shells"), func() { m.tidyTabs(ids) })
 			extra += 30
 		}
-		trail := ggui.Box(tidy).Height(tabBarHeight).Pad(0, 8)
+		trail := ggui.Box(ggui.Column(tidy).Justify(ggui.JustifyCenter)).Height(tabBarHeight).Pad(0, 8, 0, 2)
 		// The + follows the last tab, as far as the bar's end, where it
 		// stays in sight as the tabs scroll; and when they do, a menu
 		// lists them all.
@@ -203,8 +203,9 @@ func tabList(m *model, g tabGroup, sessions []*protocol.SessionInfo, titles map[
 		}
 		items = append(items, ui.MenuItem(label, func() { m.showTab(id) }))
 	}
-	return ggui.Box(iconMenu(ui.MenuOf(icon("chevrons-up-down").Size(14), items...).Width(260).Name(T("All tabs")), 6)).
-		Height(tabBarHeight)
+	// Centred down the bar, the size of the + and the eraser beside it.
+	menu := iconMenu(ui.MenuOf(icon("chevrons-up-down"), items...).Width(260).Name(T("All tabs")), 6)
+	return ggui.Box(ggui.Column(menu).Justify(ggui.JustifyCenter)).Height(tabBarHeight)
 }
 
 // paneBody is the terminal of the tab a pane shows, and while a tab is
