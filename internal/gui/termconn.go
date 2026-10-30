@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -759,19 +760,24 @@ func (t *termConn) mouseReported() bool {
 // mouse encodes one mouse event under the program's modes and sends it,
 // reporting whether the modes produced anything.
 func (t *termConn) mouse(ev input.MouseEvent, size input.RenderSize, anyPressed bool) bool {
-	var buf frameBuffer
 	t.mu.Lock()
-	if t.closed {
-		t.mu.Unlock()
-		return false
-	}
-	err := input.EncodeMouse(&buf, t.vt.Terminal(), ev, size, anyPressed)
+	buf := t.encodeMouseLocked(ev, size, anyPressed)
 	t.mu.Unlock()
-	if err != nil || len(buf) == 0 {
+	if len(buf) == 0 {
 		return false
 	}
 	t.send(buf)
 	return true
+}
+
+// encodeMouseLocked is ev as the program's modes report it: nothing when
+// they report none, or the terminal is closed.
+func (t *termConn) encodeMouseLocked(ev input.MouseEvent, size input.RenderSize, anyPressed bool) frameBuffer {
+	var buf frameBuffer
+	if t.closed || input.EncodeMouse(&buf, t.vt.Terminal(), ev, size, anyPressed) != nil {
+		return nil
+	}
+	return buf
 }
 
 // The wheel turns faster than a busy program reads. Its reports then fill
@@ -788,31 +794,30 @@ const (
 // mouseWheel sends n reports of ev, a wheel's turn, under the program's
 // modes, as many of them as it is keeping up with.
 func (t *termConn) mouseWheel(ev input.MouseEvent, size input.RenderSize, n int) {
-	var buf frameBuffer
 	t.mu.Lock()
-	if t.closed {
-		t.mu.Unlock()
-		return
-	}
-	if !t.wheelAt.IsZero() {
-		if time.Since(t.wheelAt) < wheelPatience {
-			t.mu.Unlock()
-			return
-		}
-		n = 1
-	}
-	for range min(n, wheelBurst) {
-		if input.EncodeMouse(&buf, t.vt.Terminal(), ev, size, false) != nil {
-			break
-		}
-	}
-	if len(buf) > 0 {
-		t.wheelAt = time.Now()
-	}
+	buf := t.wheelLocked(ev, size, n)
 	t.mu.Unlock()
 	if len(buf) > 0 {
 		t.send(buf) // whole, so no write of ours ends inside a report
 	}
+}
+
+// wheelLocked is the reports of a wheel's turn the program is to be sent
+// now: up to wheelBurst of n, one once it has been silent past
+// wheelPatience, or none.
+func (t *termConn) wheelLocked(ev input.MouseEvent, size input.RenderSize, n int) frameBuffer {
+	if !t.wheelAt.IsZero() {
+		if time.Since(t.wheelAt) < wheelPatience {
+			return nil
+		}
+		n = 1
+	}
+	one := t.encodeMouseLocked(ev, size, false)
+	if len(one) == 0 {
+		return nil
+	}
+	t.wheelAt = time.Now()
+	return bytes.Repeat(one, min(n, wheelBurst))
 }
 
 // clipboardText is the plain text of a clipboard write, the standard
