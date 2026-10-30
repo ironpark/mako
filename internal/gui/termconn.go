@@ -71,6 +71,10 @@ type termConn struct {
 
 	progress activity.Progress // what the program says of its work
 	copied   *string           // what the program last put on the clipboard, until the view takes it
+
+	// wheelAt is when wheel reports last went to the program, zero once it
+	// has printed since; see mouseWheel.
+	wheelAt time.Time
 }
 
 // dialTerm attaches to a session and starts reading its stream.
@@ -250,6 +254,7 @@ func (t *termConn) feedLocked(p []byte) {
 		return
 	}
 	_, _ = t.vt.Write(p)
+	t.wheelAt = time.Time{}
 	stream := t.vt.Stream()
 	_ = stream.WriteReplies(io.Discard)
 	now := time.Now()
@@ -767,6 +772,47 @@ func (t *termConn) mouse(ev input.MouseEvent, size input.RenderSize, anyPressed 
 	}
 	t.send(buf)
 	return true
+}
+
+// The wheel turns faster than a busy program reads. Its reports then fill
+// the terminal's input queue, a kilobyte on macOS, and the queue can end a
+// read in the middle of one: a program that reads an Escape at the end of
+// its input as the key interrupts its agent and types the rest. So a turn
+// sends at most wheelBurst reports, and only once the program has printed
+// since the last; one that stays silent past wheelPatience gets one more.
+const (
+	wheelBurst    = 5
+	wheelPatience = 250 * time.Millisecond
+)
+
+// mouseWheel sends n reports of ev, a wheel's turn, under the program's
+// modes, as many of them as it is keeping up with.
+func (t *termConn) mouseWheel(ev input.MouseEvent, size input.RenderSize, n int) {
+	var buf frameBuffer
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		return
+	}
+	if !t.wheelAt.IsZero() {
+		if time.Since(t.wheelAt) < wheelPatience {
+			t.mu.Unlock()
+			return
+		}
+		n = 1
+	}
+	for range min(n, wheelBurst) {
+		if input.EncodeMouse(&buf, t.vt.Terminal(), ev, size, false) != nil {
+			break
+		}
+	}
+	if len(buf) > 0 {
+		t.wheelAt = time.Now()
+	}
+	t.mu.Unlock()
+	if len(buf) > 0 {
+		t.send(buf) // whole, so no write of ours ends inside a report
+	}
 }
 
 // clipboardText is the plain text of a clipboard write, the standard

@@ -624,9 +624,8 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 			if n < 0 {
 				btn, n = input.MouseButtonFive, -n
 			}
-			for range n {
-				t.reportMouse(input.MouseActionPress, btn, true, ev.Pos, ev.Mods, false)
-			}
+			mev, size := t.mouseEvent(input.MouseActionPress, btn, true, ev.Pos, ev.Mods)
+			t.conn.mouseWheel(mev, size, n)
 			return true
 		}
 		t.conn.wheel(lines)
@@ -666,6 +665,13 @@ func (t *terminalView) moved(pc pointerCell) bool {
 }
 
 func (t *terminalView) reportMouse(action input.MouseAction, btn input.MouseButton, hasButton bool, pos ggui.Point, mods ggui.Mods, anyPressed bool) bool {
+	ev, size := t.mouseEvent(action, btn, hasButton, pos, mods)
+	return t.conn.mouse(ev, size, anyPressed)
+}
+
+// mouseEvent is a mouse event at pos, in the terms the program's modes
+// encode it in.
+func (t *terminalView) mouseEvent(action input.MouseAction, btn input.MouseButton, hasButton bool, pos ggui.Point, mods ggui.Mods) (input.MouseEvent, input.RenderSize) {
 	x, cw := wholeCells(pos.X-t.origin.X, t.cellW)
 	ev := input.MouseEvent{
 		Action: action, Button: btn, HasButton: hasButton, Mods: keyMods(mods),
@@ -676,7 +682,7 @@ func (t *terminalView) reportMouse(action input.MouseAction, btn input.MouseButt
 		CellWidth: uint32(cw), CellHeight: uint32(t.cellH),
 		PaddingLeft: termPad, PaddingTop: termPad / 2,
 	}
-	return t.conn.mouse(ev, size, anyPressed)
+	return ev, size
 }
 
 // cellAt maps a window position onto the grid, clamped to it.

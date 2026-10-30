@@ -382,3 +382,42 @@ func TestTheWheelGoesToATUIThatAsked(t *testing.T) {
 		conn.close()
 	}
 }
+
+// A program that stops reading must not be flooded with wheel reports: the
+// terminal's input queue would cut one, and its Escape would interrupt the
+// agent. A turn sends a few, and the next waits for the program to print.
+func TestTheWheelWaitsForTheProgram(t *testing.T) {
+	link := newFakeLink()
+	conn, err := newTermConn("s1", link, 80, 24, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.close()
+	defer close(link.in)
+	view := newTerminalView(conn, defaultPrefs, false)
+	p := ggui.NewProbe(view, ggui.Sz(800, 400))
+	defer p.Close()
+	link.output(t, "\x1b[?1049h\x1b[?1003h\x1b[?1006hthe agent's screen")
+	waitFor(t, func() bool { return conn.mouseReported() })
+	p.Frame()
+	link.typed()
+	at := gridPoint(p, view, 2, 3)
+	p.Scroll(at, ggui.Pt(0, 10))
+	if got := strings.Count(link.typed(), "\x1b[<64;"); got != wheelBurst {
+		t.Fatalf("a long turn sent %d reports, want %d", got, wheelBurst)
+	}
+	p.Scroll(at, ggui.Pt(0, 1))
+	if got := link.typed(); got != "" {
+		t.Fatalf("a silent program was sent %q", got)
+	}
+	link.output(t, "scrolled")
+	waitFor(t, func() bool {
+		conn.mu.Lock()
+		defer conn.mu.Unlock()
+		return conn.wheelAt.IsZero()
+	})
+	p.Scroll(at, ggui.Pt(0, 1))
+	if got := link.typed(); !strings.Contains(got, "\x1b[<64;3;4M") {
+		t.Fatalf("after it printed, the wheel sent %q", got)
+	}
+}
