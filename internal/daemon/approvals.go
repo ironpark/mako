@@ -88,7 +88,7 @@ func (a *approvals) watching() bool {
 // is answered, the front-ends stop watching, the session ends or ctx does,
 // and returns the hook's reply: "" leaves it to the agent's prompt, as it
 // does a question, which only the agent's own prompt can take.
-func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev agent.Event) hookReply {
+func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev agent.Event, seq int64) hookReply {
 	// The call reads as its kind does.
 	kind, canon := "", agent.Fields(ev.Input)
 	if tools, ok := agents.As[agent.Tools](name); ok {
@@ -99,7 +99,6 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev
 		}
 	}
 	if kind == protocol.ToolQuestion || !a.watching() {
-		s.SetStatus(protocol.AgentWaiting)
 		return hookReply{}
 	}
 	id := approvalID()
@@ -110,16 +109,20 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev
 	}
 	a.pending[id] = p
 	a.mu.Unlock()
-	s.SetApproval(&protocol.Approval{
+	changed, current := s.BeginApproval(seq, &protocol.Approval{
 		Id: id, Tool: ev.Tool, Detail: agent.Detail(kind, canon),
 		Input: indentInput(ev.Input), Since: timestamppb.Now(),
 	})
+	status := protocol.AgentIdle // a disconnected hook abandoned its request
 	defer func() {
 		a.mu.Lock()
 		delete(a.pending, id)
 		a.mu.Unlock()
-		s.SetApproval(nil)
+		s.FinishApproval(seq, id, status)
 	}()
+	if !current {
+		return hookReply{}
+	}
 
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
@@ -127,17 +130,19 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev
 		select {
 		case r := <-p.reply:
 			if r.Decision == protocol.DecisionTerminal {
-				s.SetStatus(protocol.AgentWaiting)
+				status = protocol.AgentWaiting
 				return hookReply{}
 			}
-			s.SetStatus(protocol.AgentWorking)
+			status = protocol.AgentWorking
 			return r
 		case <-tick.C:
 			if !a.watching() {
-				s.SetStatus(protocol.AgentWaiting)
+				status = protocol.AgentWaiting
 				return hookReply{}
 			}
 		case <-s.Done():
+			return hookReply{}
+		case <-changed:
 			return hookReply{}
 		case <-ctx.Done():
 			return hookReply{}

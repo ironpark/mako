@@ -13,20 +13,24 @@ type EventKind int
 const (
 	// Started: a conversation began or was switched to, Event.SessionID
 	// logged at Event.Transcript.
-	Started    EventKind = iota + 1
-	Prompted             // the user gave it a turn
-	ToolDone             // a tool it ran finished
-	Approval             // it asks leave to run Event.Tool with Event.Input
-	Compacting           // it compacts the conversation
-	Waiting              // it waits on the user
-	Stopped              // it finished its turn
-	Ended                // its session ended
+	Started      EventKind = iota + 1
+	Prompted               // the user gave it a turn
+	ToolDone               // a tool it ran finished
+	Approval               // it asks leave to run Event.Tool with Event.Input
+	Compacting             // it compacts the conversation
+	Waiting                // it waits on the user
+	Stopped                // it finished its turn
+	Ended                  // its session ended
+	Idle                   // back at its prompt without a completed turn
+	ChildStarted           // the parent reports Event.AgentID started
+	ChildStopped           // the parent reports Event.AgentID stopped
 )
 
 // Event is what a hook reports.
 type Event struct {
 	Kind       EventKind
 	SessionID  string
+	AgentID    string
 	Transcript string
 	Tool       string
 	Input      json.RawMessage

@@ -66,6 +66,21 @@ func TestStatusOutOfViewIsUnread(t *testing.T) {
 	}
 }
 
+func TestCompletedSessionIgnoresOldTerminalProgress(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	s := &protocol.SessionInfo{Id: "s", State: protocol.StateRunning, Status: protocol.AgentDone, Busy: true}
+	m.Sessions.Set([]*protocol.SessionInfo{s})
+	if m.dotOf(s) != dotRest {
+		t.Fatal("a completed session stayed active because of old terminal progress")
+	}
+	s.Status = protocol.AgentWorking
+	m.Unread.Set(map[string]bool{"s": true})
+	if m.dotOf(s) != dotWorking {
+		t.Fatal("an old completion mark hid the session's new work")
+	}
+}
+
 func TestSidebarLabels(t *testing.T) {
 	sessions := []*protocol.SessionInfo{
 		{Id: "1", Agent: "claude", Project: "/w/api", Branch: "feat/login"},

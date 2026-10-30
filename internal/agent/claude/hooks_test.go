@@ -50,7 +50,29 @@ func TestClaudeHooksAreSettings(t *testing.T) {
 	if ev, ok := claude.Event([]byte(`{"hook_event_name":"Notification","notification_type":"elicitation_dialog"}`)); !ok || ev.Kind != agent.Waiting {
 		t.Fatalf("notification=%+v %v", ev, ok)
 	}
-	for _, other := range []string{`{"hook_event_name":"SessionStart","session_id":"s","agent_id":"sub"}`, `{"hook_event_name":"Notification","notification_type":"idle_prompt"}`, `not json`, `{}`} {
+	for _, step := range []struct {
+		input string
+		kind  agent.EventKind
+	}{
+		{`{"hook_event_name":"SubagentStart","session_id":"s","agent_id":"sub"}`, agent.ChildStarted},
+		{`{"hook_event_name":"SubagentStop","session_id":"s","agent_id":"sub"}`, agent.ChildStopped},
+		{`{"hook_event_name":"StopFailure","session_id":"s"}`, agent.Idle},
+		{`{"hook_event_name":"Notification","notification_type":"idle_prompt","session_id":"s"}`, agent.Idle},
+	} {
+		ev, ok := claude.Event([]byte(step.input))
+		if !ok || ev.Kind != step.kind || ev.SessionID != "s" {
+			t.Fatalf("%s: %+v, %v", step.input, ev, ok)
+		}
+		if (step.kind == agent.ChildStarted || step.kind == agent.ChildStopped) && ev.AgentID != "sub" {
+			t.Fatal("child identity lost")
+		}
+	}
+	for _, event := range []string{"SubagentStart", "SubagentStop", "StopFailure"} {
+		if len(settings.Hooks[event]) == 0 {
+			t.Fatalf("%s is not installed", event)
+		}
+	}
+	for _, other := range []string{`{"hook_event_name":"SessionStart","session_id":"s","agent_id":"sub"}`, `not json`, `{}`} {
 		if _, ok := claude.Event([]byte(other)); ok {
 			t.Errorf("%s taken", other)
 		}

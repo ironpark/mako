@@ -16,6 +16,10 @@ func (s *Session) Outputs() uint64 { return s.outputs.Load() }
 func (s *Session) SetConversation(id, path string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.conversationID != id {
+		s.agentsWorking = false
+		s.childHooks, s.childLogs = nil, nil
+	}
 	s.conversationID, s.transcriptPath = id, path
 }
 

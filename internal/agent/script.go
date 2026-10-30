@@ -30,12 +30,16 @@ func WriteOnce(dir, name, ext, source string) (string, error) {
 // and nothing waits on it.
 const HookScript = `import { spawn } from "node:child_process";
 
+let hookSequence = 0n;
+
 function runHook(hook, input) {
 	try {
+		const now = BigInt(Date.now()) * 1000000n;
+		hookSequence = now > hookSequence ? now : hookSequence + 1n;
 		const child = spawn(hook, { shell: true, stdio: ["pipe", "ignore", "ignore"], windowsHide: true });
 		child.on("error", () => {});
 		child.stdin.on("error", () => {});
-		child.stdin.end(JSON.stringify(input));
+		child.stdin.end(JSON.stringify({ ...input, mako_hook_seq: hookSequence.toString() }));
 		child.unref();
 	} catch {}
 }

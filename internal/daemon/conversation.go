@@ -94,8 +94,10 @@ type conversations struct {
 
 // conversation is what the daemon keeps of one session's conversation.
 type conversation struct {
-	outputs uint64 // the session's output count when it was last checked
-	chat    transcript.Cache
+	outputs    uint64 // the session's output count when it was last checked
+	chat       transcript.Cache
+	activity   transcript.Activity
+	activityMu sync.Mutex // keep a snapshot and its application in the same order
 	// seq numbers the newest report the agent's own hook made, 0 for none.
 	// From the first, its reports follow the conversation, and no process
 	// listing does; older reports arrive too late.
@@ -135,9 +137,10 @@ func (c *conversations) chatCache(s *session.Session) *transcript.Cache {
 // yet bound, or with output since the last look. A conversation changes only
 // through the agent, and the agent shows it. A hooked session is only worth
 // one while the log it reported is unwritten, and then only that log is: it
-// is among unseen. It reports false, and stops the loop, once nothing is
+// is among unseen. Every session left is among live, whose activity is
+// followed regardless. It reports false, and stops the loop, once nothing is
 // left to follow.
-func (c *conversations) due() (due, unseen []*session.Session, ok bool) {
+func (c *conversations) due() (due, unseen, live []*session.Session, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for s, conv := range c.sessions {
@@ -147,6 +150,7 @@ func (c *conversations) due() (due, unseen []*session.Session, ok bool) {
 			continue
 		default:
 		}
+		live = append(live, s)
 		if conv.seq > 0 {
 			if conv.unseen != "" {
 				unseen = append(unseen, s)
@@ -161,9 +165,9 @@ func (c *conversations) due() (due, unseen []*session.Session, ok bool) {
 	}
 	if len(c.sessions) == 0 {
 		c.running = false
-		return nil, nil, false
+		return nil, nil, nil, false
 	}
-	return due, unseen, true
+	return due, unseen, live, true
 }
 
 // report takes a hook's report of s's conversation, numbered seq, unless a
@@ -206,7 +210,7 @@ func (d *Daemon) followConversations() {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
-		due, unseen, ok := d.conversations.due()
+		due, unseen, live, ok := d.conversations.due()
 		if !ok {
 			return
 		}
@@ -216,7 +220,31 @@ func (d *Daemon) followConversations() {
 		for _, s := range unseen {
 			d.checkReported(s)
 		}
+		for _, s := range live {
+			d.refreshActivity(s)
+		}
 		<-ticker.C
+	}
+}
+
+// refreshActivity runs without a chat subscriber, including while the GUI
+// is closed. A Stop hook calls it before advertising completion.
+func (d *Daemon) refreshActivity(s *session.Session) {
+	d.conversations.mu.Lock()
+	conv := d.conversations.sessions[s]
+	d.conversations.mu.Unlock()
+	if conv == nil {
+		return
+	}
+	conv.activityMu.Lock()
+	defer conv.activityMu.Unlock()
+	path := s.TranscriptPath()
+	if path == "" {
+		return
+	}
+	info := s.Info()
+	if activity, err := conv.activity.Read(info, path); err == nil {
+		s.ReportActivity(info.GetConversationId(), activity.Status, activity.At, activity.Agents)
 	}
 }
 

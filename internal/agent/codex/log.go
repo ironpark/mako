@@ -27,6 +27,40 @@ type record struct {
 	Payload   json.RawMessage `json:"payload"`
 }
 
+func (*Agent) StatusEvent(line []byte) (protocol.AgentStatus, time.Time) {
+	var r struct {
+		Type      string    `json:"type"`
+		Timestamp time.Time `json:"timestamp"`
+		Payload   struct {
+			Type string `json:"type"`
+		} `json:"payload"`
+	}
+	if json.Unmarshal(line, &r) != nil || r.Timestamp.IsZero() {
+		return "", time.Time{}
+	}
+	if status := turnStatus(r.Type, r.Payload.Type); status != "" {
+		return status, r.Timestamp
+	}
+	return "", time.Time{}
+}
+
+// turnStatus is what a record of type typ, its payload of payload, says of
+// the turn: "" for a record that is no turn's boundary.
+func turnStatus(typ, payload string) protocol.AgentStatus {
+	if typ != "event_msg" {
+		return ""
+	}
+	switch payload {
+	case "task_started":
+		return protocol.AgentWorking
+	case "task_complete":
+		return protocol.AgentDone
+	case "turn_aborted":
+		return protocol.AgentIdle
+	}
+	return ""
+}
+
 // Identity is the session_meta record's. A subagent's rollout is not the
 // interactive session's conversation.
 func (*Agent) Identity(line []byte) (string, string, time.Time, bool) {

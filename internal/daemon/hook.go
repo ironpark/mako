@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/ironpark/mako/internal/agent"
@@ -96,8 +97,14 @@ func runHook(args []string, stdin io.Reader, out io.Writer) {
 	}
 	var ev struct {
 		Event string `json:"hook_event_name"`
+		Seq   string `json:"mako_hook_seq"`
 	}
 	_ = json.Unmarshal(input, &ev)
+	// Extensions launch hook processes asynchronously. Preserve the event's
+	// production order even if those processes start in a different order.
+	if produced, err := strconv.ParseInt(ev.Seq, 10, 64); err == nil && produced > 0 {
+		seq = produced
+	}
 	conn, err := sendHook(args[0], hookMessage{Session: session, Seq: seq, Input: input})
 	if err != nil {
 		return
@@ -254,12 +261,20 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	}
 	switch ev.Kind {
 	case agent.Started:
-		s.SetStatus(protocol.AgentIdle)
+		if !s.ReportStatus(protocol.AgentIdle, msg.Seq) {
+			return
+		}
 		if err := d.reportConversation(s, msg.Seq, ev); err != nil {
 			d.log.Warn("hooks: report dropped", "session", msg.Session, "err", err)
 		}
 	case agent.Prompted, agent.ToolDone:
-		s.SetStatus(protocol.AgentWorking)
+		report := s.ReportStatus
+		if ev.Kind == agent.ToolDone {
+			report = s.ReportToolStatus
+		}
+		if !report(protocol.AgentWorking, msg.Seq) {
+			return
+		}
 		// A conversation whose start went unheard, as a resumed one's may,
 		// is told by its prompts.
 		if ev.Kind == agent.Prompted && ev.SessionID != "" && ev.SessionID != s.Info().GetConversationId() {
@@ -268,14 +283,20 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 			}
 		}
 	case agent.Compacting:
-		s.SetStatus(protocol.AgentCompacting)
+		s.ReportToolStatus(protocol.AgentCompacting, msg.Seq)
 	case agent.Waiting:
-		s.SetStatus(protocol.AgentWaiting)
+		s.ReportStatus(protocol.AgentWaiting, msg.Seq)
 	case agent.Stopped:
-		s.SetStatus(protocol.AgentDone)
-	case agent.Ended:
-		s.SetStatus(protocol.AgentIdle)
+		d.refreshActivity(s)
+		s.ReportStatus(protocol.AgentDone, msg.Seq)
+	case agent.Ended, agent.Idle:
+		s.ReportStatus(protocol.AgentIdle, msg.Seq)
+	case agent.ChildStarted, agent.ChildStopped:
+		s.ReportSubagent(ev.SessionID, ev.AgentID, ev.Kind == agent.ChildStarted, msg.Seq)
 	case agent.Approval:
+		if !s.ReportStatus(protocol.AgentWaiting, msg.Seq) {
+			return
+		}
 		_ = conn.SetDeadline(time.Time{})
 		// The agent gives up on its hook when the approval is answered in
 		// its terminal, it is interrupted or the hook times out: the hook
@@ -287,7 +308,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 			_, _ = conn.Read(make([]byte, 1))
 			withdraw()
 		}()
-		reply := d.approvals.ask(asking, s, name, ev)
+		reply := d.approvals.ask(asking, s, name, ev, msg.Seq)
 		if reply.Decision != "" {
 			reply.Output = hooks.Reply(reply.Decision, reply.Message)
 		}

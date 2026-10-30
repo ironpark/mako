@@ -143,6 +143,12 @@ type Logs interface {
 	NewUsage() Usage
 }
 
+// LogStatus is a driver whose log records explicit turn boundaries,
+// including cancellations which do not necessarily run a Stop hook.
+type LogStatus interface {
+	StatusEvent(line []byte) (protocol.AgentStatus, time.Time)
+}
+
 // Folders is a Logs that keeps each conversation's log in a folder named
 // by its ID, whose lines do not say whose it is.
 type Folders interface {

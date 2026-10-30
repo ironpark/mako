@@ -118,13 +118,10 @@ func (c *childScan) read(path string) {
 		if json.Unmarshal(line, &r) != nil {
 			return
 		}
-		switch {
-		case r.Type == "session_meta":
+		if r.Type == "session_meta" {
 			c.role = r.Payload.Role
-		case r.Type == "event_msg" && r.Payload.Type == "task_started":
-			c.running = true
-		case r.Type == "event_msg" && (r.Payload.Type == "task_complete" || r.Payload.Type == "turn_aborted"):
-			c.running = false
+		} else if status := turnStatus(r.Type, r.Payload.Type); status != "" {
+			c.running = protocol.AtWork(status)
 		}
 		for _, m := range c.dec.Line(line) {
 			if m.GetRole() == "tool" && !m.GetOutput() {

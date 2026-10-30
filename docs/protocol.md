@@ -399,7 +399,7 @@ The fields a front-end usually needs:
 | `name`, `title` | The user's name for it, and the latest terminal title its program set. |
 | `conversation_id` | The agent's own conversation, stable across restarts. |
 | `busy`, `idle` | Printing on its own, as an agent at work does; nothing running in front of its program, as a shell at its prompt. |
-| `status`, `status_at` | What the agent's hooks last reported: `idle`, `working`, `waiting`, `done`. Empty for an agent without hooks. |
+| `status`, `status_at` | Reconciled agent activity: `idle`, `working`, `compacting`, `waiting`, `done`, from hooks, terminal progress and supported log events. Running subagents defer a parent's `done` until they finish. Empty when no status is known. |
 | `approval` | The tool call the agent waits to have approved. |
 | `worktree` | The worktree made for it. |
 | `last_output`, `started_at`, `cols`, `rows` | |

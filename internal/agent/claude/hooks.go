@@ -18,6 +18,8 @@ var hookEvents = []agent.HookEvent{
 	{Name: "PostToolUse", Timeout: agent.HookTimeout}, {Name: "PermissionRequest", Timeout: agent.ApprovalTimeout},
 	{Name: "Notification", Timeout: agent.HookTimeout}, {Name: "PreCompact", Timeout: agent.HookTimeout}, {Name: "Stop", Timeout: agent.HookTimeout},
 	{Name: "SessionEnd", Timeout: agent.HookTimeout},
+	{Name: "SubagentStart", Timeout: agent.HookTimeout}, {Name: "SubagentStop", Timeout: agent.HookTimeout},
+	{Name: "StopFailure", Timeout: agent.HookTimeout},
 }
 
 // settingsFlag takes settings for one launch, hooks and a status line among
@@ -64,16 +66,33 @@ func (*Agent) WithHooks(l *agent.Launch, hook, status, _ string) bool {
 // Event also reads a Notification, by which Claude says it asks the user
 // something.
 func (*Agent) Event(input []byte) (agent.Event, bool) {
-	in, ok := agent.ParseHookInput(input)
-	if !ok {
+	var in agent.HookInput
+	if json.Unmarshal(input, &in) != nil || in.Event == "" {
+		return agent.Event{}, false
+	}
+	// A subagent's own session is not the terminal's; only its lifecycle,
+	// as the parent reports it, is followed.
+	if in.AgentID != "" {
+		switch in.Event {
+		case "SubagentStart":
+			return agent.Event{Kind: agent.ChildStarted, SessionID: in.SessionID, AgentID: in.AgentID}, true
+		case "SubagentStop":
+			return agent.Event{Kind: agent.ChildStopped, SessionID: in.SessionID, AgentID: in.AgentID}, true
+		}
 		return agent.Event{}, false
 	}
 	if in.Event == "Notification" {
+		if in.NotificationType == "idle_prompt" {
+			return agent.Event{Kind: agent.Idle, SessionID: in.SessionID}, true
+		}
 		// A permission it asks through mako is already an approval.
 		if in.NotificationType != "permission_prompt" && in.NotificationType != "elicitation_dialog" {
 			return agent.Event{}, false
 		}
 		return agent.Event{Kind: agent.Waiting, SessionID: in.SessionID}, true
+	}
+	if in.Event == "StopFailure" {
+		return agent.Event{Kind: agent.Idle, SessionID: in.SessionID}, true
 	}
 	return in.Base()
 }

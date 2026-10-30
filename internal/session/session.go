@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/activity"
+	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -72,9 +73,15 @@ type Session struct {
 
 	// What the agent's hooks last reported, and the approval it waits
 	// for; guarded by mu.
-	status   protocol.AgentStatus
-	statusAt time.Time
-	approval *protocol.Approval
+	status        protocol.AgentStatus
+	statusAt      time.Time
+	statusSeq     int64
+	workEndedAt   int64 // explicit terminal inactivity, for late work hooks
+	agentsWorking bool
+	childHooks    map[string]childStatus
+	childLogs     []*protocol.SubAgent
+	approval      *protocol.Approval
+	approvalDone  chan struct{}
 	// reported is what the agent's status line last said of its tokens:
 	// the context window and the account's limits; guarded by mu.
 	reported *protocol.Usage
@@ -84,6 +91,16 @@ type Session struct {
 // before it is taken to have stopped: one at work redraws its spinner, and
 // an interrupted turn reports no end.
 const staleWork = time.Minute
+
+type childStatus struct {
+	running bool
+	seq     int64
+}
+
+// live is a child its hooks say runs, unless they fell silent too long ago.
+func (c childStatus) live() bool {
+	return c.running && time.Since(time.Unix(0, c.seq)) < agent.StaleAgent
+}
 
 // Start launches the agent on a PTY.
 func Start(spec Spec) (*Session, error) {
@@ -173,24 +190,57 @@ func (s *Session) shown() []string {
 
 // statusLocked is what the agent is doing, as far as its hooks said.
 func (s *Session) statusLocked() protocol.AgentStatus {
+	s.updateChildrenLocked()
 	switch {
 	case s.state == protocol.StateExited:
 		return ""
 	case s.approval != nil:
 		return protocol.AgentWaiting
-	case protocol.AtWork(s.status) && time.Since(s.LastOutput()) > staleWork && time.Since(s.statusAt) > staleWork:
-		return protocol.AgentIdle
+	case s.agentsWorking && s.status != protocol.AgentWaiting && !protocol.AtWork(s.status):
+		return protocol.AgentWorking
+	case !s.agentsWorking && protocol.AtWork(s.status) && time.Since(s.LastOutput()) > staleWork && time.Since(s.statusAt) > staleWork:
+		// Latch the fallback: an unrelated redraw must not revive a turn.
+		s.endWorkLocked(time.Now())
 	}
 	return s.status
 }
 
 // SetStatus records what the agent's hooks report it is doing.
 func (s *Session) SetStatus(status protocol.AgentStatus) {
+	s.ReportStatus(status, time.Now().UnixNano())
+}
+
+// ReportStatus orders hooks by when they ran, rather than when their
+// connections happened to be served. Repeated reports renew the evidence.
+func (s *Session) ReportStatus(status protocol.AgentStatus, seq int64) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.status != status {
-		s.status, s.statusAt = status, time.Now()
+	return s.reportStatusLocked(status, seq)
+}
+
+// ReportToolStatus cannot withdraw a request while another concurrent
+// tool finishes. Turn boundaries still supersede requests via ReportStatus.
+func (s *Session) ReportToolStatus(status protocol.AgentStatus, seq int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.approval != nil {
+		return false
 	}
+	return s.reportStatusLocked(status, seq)
+}
+
+func (s *Session) reportStatusLocked(status protocol.AgentStatus, seq int64) bool {
+	if s.state == protocol.StateExited || seq <= s.statusSeq || (protocol.AtWork(status) && seq <= s.workEndedAt) {
+		return false
+	}
+	s.clearApprovalLocked()
+	// The log and Stop hook can report the same completion. Renew work
+	// evidence, but keep one completion timestamp for attention and alerts.
+	if s.status != status || status != protocol.AgentDone {
+		s.statusAt = time.Now()
+	}
+	s.status, s.statusSeq = status, seq
+	return true
 }
 
 // Report records what the agent's status line says of its tokens. What a
@@ -213,14 +263,91 @@ func (s *Session) Reported() *protocol.Usage {
 	return proto.CloneOf(s.reported)
 }
 
-// SetApproval records the approval the agent waits for, nil for none.
-func (s *Session) SetApproval(a *protocol.Approval) {
+// BeginApproval holds a request only while its hook is still current.
+// The returned channel closes when another event supersedes it.
+func (s *Session) BeginApproval(seq int64, a *protocol.Approval) (<-chan struct{}, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.approval = a
-	if a != nil {
-		s.status, s.statusAt = protocol.AgentWaiting, time.Now()
+	if s.state == protocol.StateExited || s.statusSeq != seq {
+		return nil, false
 	}
+	s.clearApprovalLocked()
+	s.approval = a
+	s.approvalDone = make(chan struct{})
+	return s.approvalDone, true
+}
+
+// FinishApproval cannot clear a newer request or overwrite a newer turn.
+func (s *Session) FinishApproval(seq int64, id string, status protocol.AgentStatus) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.statusSeq == seq && s.approval.GetId() == id {
+		s.clearApprovalLocked()
+		s.status, s.statusAt = status, time.Now()
+	}
+}
+
+// endWorkLocked records that the turn ended at, and refuses work reported
+// from before it.
+func (s *Session) endWorkLocked(at time.Time) {
+	s.workEndedAt = at.UnixNano()
+	if protocol.AtWork(s.status) {
+		s.status, s.statusAt = protocol.AgentIdle, at
+	}
+}
+
+func (s *Session) clearApprovalLocked() {
+	s.approval = nil
+	if s.approvalDone != nil {
+		close(s.approvalDone)
+		s.approvalDone = nil
+	}
+}
+
+// ReportActivity reconciles the bound log and its children independently
+// of whether a client is reading chat. Historical turns never restart work.
+func (s *Session) ReportActivity(id string, status protocol.AgentStatus, at time.Time, children []*protocol.SubAgent) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited || s.conversationID != id {
+		return
+	}
+	if status != "" && !at.Before(s.started) {
+		s.reportStatusLocked(status, at.UnixNano())
+	}
+	s.childLogs = children
+	s.updateChildrenLocked()
+}
+
+// ReportSubagent is a child's own lifecycle, ordered independently of its
+// siblings and parent. A child's Stop never ends the parent's turn.
+func (s *Session) ReportSubagent(conversation, id string, running bool, seq int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited || (conversation != "" && s.conversationID != "" && s.conversationID != conversation) || seq <= s.childHooks[id].seq {
+		return
+	}
+	if s.childHooks == nil {
+		s.childHooks = map[string]childStatus{}
+	}
+	s.childHooks[id] = childStatus{running, seq}
+	s.updateChildrenLocked()
+}
+
+func (s *Session) updateChildrenLocked() {
+	running := false
+	for _, child := range s.childHooks {
+		running = running || child.live()
+	}
+	for _, child := range s.childLogs {
+		if hook, hooked := s.childHooks[child.GetId()]; !hooked || (hook.running && !hook.live()) {
+			running = running || child.GetRunning()
+		}
+	}
+	if s.agentsWorking && !running && s.status == protocol.AgentDone {
+		s.statusAt = time.Now()
+	}
+	s.agentsWorking = running
 }
 
 // LastOutput is when the program last printed; zero before it has.
@@ -415,6 +542,7 @@ func (s *Session) pump() {
 
 	s.mu.Lock()
 	s.state = protocol.StateExited
+	s.clearApprovalLocked()
 	s.exitCode = &exitCode
 	s.progress = activity.Progress{}
 	for id, sub := range s.subs {
@@ -452,6 +580,11 @@ func (s *Session) feed(chunk []byte) {
 			s.title = ev.Title
 		}
 		s.progress.Report(ev, now)
+		// Interruptions need not run a Stop hook. An explicit removal is
+		// evidence that the terminal's turn ended; silence alone is not.
+		if ev.Kind == gostty.StreamEventProgressReport && ev.ProgressState == gostty.ProgressStateRemove {
+			s.endWorkLocked(now)
+		}
 	}
 	for id, sub := range s.subs {
 		if !sub.push(chunk) {

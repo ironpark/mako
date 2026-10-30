@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -186,11 +187,120 @@ func TestHooksReportWhatTheAgentDoes(t *testing.T) {
 		{`{"hook_event_name":"UserPromptSubmit","prompt":"hi"}`, protocol.AgentWorking},
 		{`{"hook_event_name":"Notification","notification_type":"permission_prompt"}`, protocol.AgentWaiting},
 		{`{"hook_event_name":"PostToolUse","tool_name":"Bash"}`, protocol.AgentWorking},
-		{`{"hook_event_name":"Notification","notification_type":"idle_prompt"}`, protocol.AgentWorking},
+		{`{"hook_event_name":"Notification","notification_type":"idle_prompt"}`, protocol.AgentIdle},
 		{`{"hook_event_name":"Stop"}`, protocol.AgentDone},
 	} {
 		runHook([]string{socket}, strings.NewReader(step.input), io.Discard)
 		waitFor(t, step.input+" not reported", func() bool { return s.Info().GetStatus() == step.want })
+	}
+}
+
+func TestRunHookPreservesExtensionEventOrder(t *testing.T) {
+	dir, err := os.MkdirTemp("", "mako-seq")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	socket := filepath.Join(dir, "hooks.sock")
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	t.Setenv("MAKO_SESSION", "s")
+	for _, seq := range []string{"123", "122", "bad", "-1", ""} {
+		runHook([]string{socket}, strings.NewReader(`{"hook_event_name":"Stop","mako_hook_seq":"`+seq+`"}`), io.Discard)
+		conn, err := ln.Accept()
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+		var msg hookMessage
+		err = json.NewDecoder(conn).Decode(&msg)
+		conn.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, _ := strconv.ParseInt(seq, 10, 64)
+		if want > 0 {
+			if msg.Seq != want {
+				t.Fatalf("producer sequence %s became %d", seq, msg.Seq)
+			}
+		} else if msg.Seq < time.Now().Add(-time.Minute).UnixNano() {
+			t.Fatalf("invalid sequence %q did not fall back to the hook clock", seq)
+		}
+	}
+}
+
+func TestChildHooksDelayCompletionAndIgnoreLateParentEvents(t *testing.T) {
+	_, s, socket := hookedDaemon(t)
+	base := time.Now().UnixNano()
+	send := func(seq int64, input string) {
+		t.Helper()
+		conn, err := sendHook(socket, hookMessage{Session: s.ID(), Seq: base + seq, Input: json.RawMessage(input)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+		if _, err := io.Copy(io.Discard, conn); err != nil {
+			t.Fatal(err)
+		}
+	}
+	send(1, `{"hook_event_name":"UserPromptSubmit"}`)
+	send(2, `{"hook_event_name":"SubagentStart","agent_id":"a"}`)
+	send(3, `{"hook_event_name":"SubagentStart","agent_id":"b"}`)
+	send(4, `{"hook_event_name":"Stop"}`)
+	if s.Info().GetStatus() != protocol.AgentWorking {
+		t.Fatal("parent completion ignored running children")
+	}
+	send(5, `{"hook_event_name":"SubagentStop","agent_id":"a"}`)
+	if s.Info().GetStatus() != protocol.AgentWorking {
+		t.Fatal("one child ended the whole session")
+	}
+	send(6, `{"hook_event_name":"SubagentStop","agent_id":"b"}`)
+	if s.Info().GetStatus() != protocol.AgentDone {
+		t.Fatal("final child did not release completion")
+	}
+	send(3, `{"hook_event_name":"PostToolUse"}`)
+	if s.Info().GetStatus() != protocol.AgentDone {
+		t.Fatal("late parent event revived completion")
+	}
+}
+
+func TestCompletionFollowsBackgroundLogsWithoutAChatReader(t *testing.T) {
+	d, s, socket := hookedDaemon(t)
+	waitConversation(t, s)
+	path := s.TranscriptPath()
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.WriteString(`{"type":"assistant","uuid":"background-call","message":{"role":"assistant","content":[{"type":"tool_use","id":"bg","name":"Agent","input":{"prompt":"Review it."}}]}}` + "\n" +
+		`{"type":"user","uuid":"background-result","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"bg","content":"launched"}]}}` + "\n")
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(strings.TrimSuffix(path, filepath.Ext(path)), "subagents")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	meta := filepath.Join(dir, "agent-b.meta.json")
+	if err := os.WriteFile(meta, []byte(`{"toolUseId":"bg","requestShape":"background"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"type":"user","timestamp":"` + time.Now().UTC().Format(time.RFC3339Nano) + `","message":{"role":"user","content":"Review it."}}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "agent-b.jsonl"), []byte(line), 0600); err != nil {
+		t.Fatal(err)
+	}
+	runHook([]string{socket}, strings.NewReader(`{"hook_event_name":"Stop"}`), io.Discard)
+	waitFor(t, "parent completion was not read", func() bool { return s.Info().GetStatus() == protocol.AgentWorking })
+	if err := os.WriteFile(meta, []byte(`{"toolUseId":"bg","requestShape":"background","finished":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	d.refreshActivity(s)
+	if s.Info().GetStatus() != protocol.AgentDone {
+		t.Fatal("background completion was not followed")
 	}
 }
 
@@ -268,6 +378,9 @@ func TestAnApprovalTheAgentAbandonsIsWithdrawn(t *testing.T) {
 	waitFor(t, "no approval shown", func() bool { return s.Info().GetApproval() != nil })
 	conn.Close()
 	waitFor(t, "abandoned approval kept", func() bool { return s.Info().GetApproval() == nil })
+	if s.Info().GetStatus() != protocol.AgentIdle {
+		t.Fatal("abandoned approval still waits for the user")
+	}
 }
 
 // mako's status line takes the place of the user's, so it prints theirs:

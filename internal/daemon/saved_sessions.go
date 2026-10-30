@@ -107,6 +107,7 @@ func (d *Daemon) loadSessions(dir string) error {
 	for id, entry := range saved.Sessions {
 		entry.Info.Id, entry.Info.NodeId = id, d.cfg.NodeID
 		entry.Info.State, entry.Info.Busy, entry.Info.ExitCode = protocol.StateStopped, false, nil
+		entry.Info.Status, entry.Info.StatusAt, entry.Info.Approval = "", nil, nil
 		entry.Info.Caps = agents.Caps(entry.Info.GetAgent())
 		saved.Sessions[id] = entry
 	}

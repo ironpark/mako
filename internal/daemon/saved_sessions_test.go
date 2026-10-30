@@ -121,6 +121,30 @@ func TestSavedSessionFailureRetainsEntry(t *testing.T) {
 	}
 }
 
+func TestSavedSessionsDiscardRuntimeActivity(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{NodeID: "node"}
+	d := New(cfg, nil)
+	if err := d.loadSessions(dir); err != nil {
+		t.Fatal(err)
+	}
+	d.saved["s"] = savedSession{Info: &protocol.SessionInfo{
+		Id: "s", State: protocol.StateRunning, Busy: true, Status: protocol.AgentWaiting,
+		StatusAt: protocol.Time(time.Now()), Approval: &protocol.Approval{Id: "old"},
+	}}
+	if err := d.saveSessionsLocked(); err != nil {
+		t.Fatal(err)
+	}
+	restored := New(cfg, nil)
+	if err := restored.loadSessions(dir); err != nil {
+		t.Fatal(err)
+	}
+	info := restored.saved["s"].Info
+	if info.GetState() != protocol.StateStopped || info.GetBusy() || info.GetStatus() != "" || info.GetStatusAt() != nil || info.GetApproval() != nil {
+		t.Fatalf("restored stale runtime activity: %+v", info)
+	}
+}
+
 func TestInvalidSavedSessionsAreNotOverwritten(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sessions.json")

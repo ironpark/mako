@@ -135,10 +135,19 @@ has hooks. Each hook runs the daemon's own program, which reports to the
 daemon on a private Unix socket; see
 [the local hook socket](docs/protocol.md#the-local-hook-socket).
 
-An agent said to be working that prints nothing for a minute is taken to
-have stopped, since an interrupted turn reports no end. Programs that send
-OSC 9;4 progress reports (`internal/activity`) mark their session busy.
-Reports expire after 15 seconds without a refresh, as Ghostty's do.
+Status reports are ordered by when their hooks ran. An explicit OSC 9;4
+progress removal ends work even when an interruption runs no Stop hook;
+Codex's logged turn boundaries also report starts, completion and cancellation.
+Without further evidence, work that prints nothing for a minute falls back
+to idle and stays idle until a new work event. OSC progress reports expire
+after 15 seconds without a refresh, as Ghostty's do.
+
+The daemon follows subagents independently of chat readers, scanning task
+calls across the whole conversation rather than only the latest chat page.
+Claude's SubagentStart and SubagentStop hooks also report each child's
+lifecycle. A completed parent remains working while children run; only
+the final child's completion releases the session's done status and its
+notification. A request for the user takes precedence over children working.
 
 ### Approvals
 
@@ -147,6 +156,9 @@ front-end that answers approvals is watching, here or on a peer this daemon
 lets in (a peer's state says whether it has one). The window shows the
 request as a card in Chat and a bar over the terminal. With no watcher, or once the
 windows stop, the hook gives the question back to the agent's own prompt.
+An abandoned hook withdraws its request and returns to idle. A newer turn
+or approval supersedes the old request, whose eventual cleanup cannot
+replace the newer state.
 
 ### Chat and conversations
 
