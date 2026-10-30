@@ -3,6 +3,7 @@ package gui
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"slices"
 	"strings"
 	"time"
@@ -249,10 +250,17 @@ func untilText(d time.Duration) string {
 	return Tf("%dm", max(minutes, 1))
 }
 
-// overlayChip is a small raised label floating over a session: its usage,
-// the host it runs on.
+// overlayChip is a small label floating over a session: its usage, the
+// host it runs on. It is a pill as tall as the view switch beside it, on
+// the switch's track seen through.
 func overlayChip(items ...ggui.Widget) ggui.Widget {
-	return raisedChip(ggui.Row(items...).Gap(8).Align(ggui.AlignCenter)).Radius(7).Pad(4, 8)
+	row := ggui.Row(items...).Gap(8).Align(ggui.AlignCenter)
+	const h = viewSideHeight + 2*viewToggleInset
+	return ggui.Reactive(func() ggui.Widget {
+		r, g, b, _ := uitheme.Use().Muted.RGBA()
+		fill := color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 0x99}
+		return ggui.Box(ggui.Column(row).Justify(ggui.JustifyCenter)).Height(h).Radius(h/2).Pad(0, 10).Fill(fill)
+	})
 }
 
 // raisedChip is the box the window's floating chips share: their content
