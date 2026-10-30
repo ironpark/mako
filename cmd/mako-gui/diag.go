@@ -75,7 +75,8 @@ func diagnose() {
 	}
 	fmt.Fprintf(log, "# mako-gui %s, pid %d, started %s\n", revision(), os.Getpid(), time.Now().Format(time.RFC3339))
 	fmt.Fprintln(log, "# time live_mb goal_mb go_mb limit_mb goroutines gcs_per_s gc_cpu_share cpu_cores"+
-		" footprint_mb gpu_images_mb gpu_queue_mb fps frame_ms_per_s flushes_per_s commands_per_s vertices_per_s")
+		" footprint_mb gpu_images_mb gpu_queue_mb fps frame_ms_per_s flushes_per_s commands_per_s vertices_per_s"+
+		" fps_for_animation fps_for_now fps_for_callback fps_for_posted fps_for_input partial_fps")
 	samples := make([]metrics.Sample, len(diagSamples))
 	for i, name := range diagSamples {
 		samples[i].Name = name
@@ -87,9 +88,10 @@ func diagnose() {
 		r := readDiag(samples, now)
 		if !last.at.IsZero() {
 			d := r.since(last)
-			fmt.Fprintf(log, "%s %.1f %.1f %.1f %.1f %d %.2f %.2f %.2f %.1f %.1f %.1f %.1f %.1f %.1f %.0f %.0f\n", now.Format(time.RFC3339),
+			fmt.Fprintf(log, "%s %.1f %.1f %.1f %.1f %d %.2f %.2f %.2f %.1f %.1f %.1f %.1f %.1f %.1f %.0f %.0f %.1f %.1f %.1f %.1f %.1f %.1f\n", now.Format(time.RFC3339),
 				mb(r.live), mb(r.goal), mb(r.total), mb(r.limit), r.goroutines, d.gcRate, d.gcShare, d.cores,
-				mb(r.footprint), mb(r.gpuImages), mb(r.gpuQueue), d.fps, d.frameMS, d.flushes, d.commands, d.vertices)
+				mb(r.footprint), mb(r.gpuImages), mb(r.gpuQueue), d.fps, d.frameMS, d.flushes, d.commands, d.vertices,
+				d.fpsFor[0], d.fpsFor[1], d.fpsFor[2], d.fpsFor[3], d.fpsFor[4], d.partialFPS)
 			if d.troubled() && now.Sub(lastIncident) >= incidentGap {
 				lastIncident = now
 				fmt.Fprintf(log, "# incident: %.1f collections a second, %.0f%% of the CPU used, %.1f cores, %.1f frames a second\n",
@@ -128,6 +130,8 @@ type diagReading struct {
 
 	footprint, gpuImages, gpuQueue uint64
 	frames                         int64
+	framesFor                      [5]int64 // asked for by an animation, Now, a callback, posted work, input
+	partial                        int64    // painted in part, around what moved
 	frameBusy                      time.Duration
 	flushes, commands, vertices    int64
 }
@@ -142,7 +146,9 @@ func readDiag(s []metrics.Sample, at time.Time) diagReading {
 		gcCPU: s[6].Value.Float64(), userCPU: s[7].Value.Float64(), scavCPU: s[8].Value.Float64(),
 		footprint: footprint(), gpuImages: uint64(gpu.TotalGPUImageMemoryUsageInBytes), gpuQueue: uint64(gpu.QueueBufferBytes),
 		frames: frames.Frames, frameBusy: frames.Busy,
-		flushes: gpu.Flushes, commands: gpu.Commands, vertices: gpu.Vertices,
+		framesFor: [5]int64{frames.ForAnimation, frames.ForTime, frames.ForCallback, frames.ForPosted, frames.ForInput},
+		partial:   frames.Partial,
+		flushes:   gpu.Flushes, commands: gpu.Commands, vertices: gpu.Vertices,
 	}
 }
 
@@ -155,6 +161,8 @@ type diagRates struct {
 	fps                         float64 // frames run a second
 	frameMS                     float64 // milliseconds a second spent in them
 	flushes, commands, vertices float64 // sent to the GPU, a second
+	fpsFor                      [5]float64
+	partialFPS                  float64 // frames painted in part, a second
 }
 
 func (r diagReading) since(prev diagReading) diagRates {
@@ -169,6 +177,10 @@ func (r diagReading) since(prev diagReading) diagRates {
 		fps: float64(r.frames-prev.frames) / secs, frameMS: float64((r.frameBusy - prev.frameBusy).Milliseconds()) / secs,
 		flushes: float64(r.flushes-prev.flushes) / secs, commands: float64(r.commands-prev.commands) / secs,
 		vertices: float64(r.vertices-prev.vertices) / secs,
+	}
+	out.partialFPS = float64(r.partial-prev.partial) / secs
+	for i := range r.framesFor {
+		out.fpsFor[i] = float64(r.framesFor[i]-prev.framesFor[i]) / secs
 	}
 	if used > 0 {
 		out.gcShare = gc / used
