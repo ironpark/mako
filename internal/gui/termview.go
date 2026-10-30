@@ -184,7 +184,9 @@ func (t *terminalView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 
 	caret := g.cellRect(int(f.cursor.X), int(f.cursor.Y), 1)
 	if !f.exited {
-		t.paintCursor(clip, g, f, p)
+		// Painted as a widget of its own, so that its blink, which asks
+		// for a frame now and then, repaints the cursor alone.
+		clip.Paint(ggui.FromFuncs(nil, func(dst *ggui.Canvas, _ ggui.Rect) { t.paintCursor(dst, g, f, p) }), ggui.Rect{})
 	}
 	t.ime.PaintCustom(clip, r, func(dst *ggui.Canvas, _ ggui.Rect, st ggui.TextInputState) ggui.Rect {
 		// A composition, or a syllable held for one; what was sent already
