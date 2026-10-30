@@ -86,3 +86,21 @@ func TestSessionTitleUsesCustomName(t *testing.T) {
 		t.Fatalf("fallback title = %q", got)
 	}
 }
+
+func TestAnAgentsSwitchSurvivesTheDraft(t *testing.T) {
+	off, on := false, true
+	in := map[string]agentspec.Agent{"codex": {Enabled: &off}, "agy": {Enabled: &on}}
+	out, err := applyAgents(draftAgents(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := out["codex"].Enabled; e == nil || *e {
+		t.Fatalf("codex turned off came back %v", e)
+	}
+	if e := out["agy"].Enabled; e == nil || !*e {
+		t.Fatalf("agy turned on came back %v", e)
+	}
+	if e := out["claude"].Enabled; e != nil {
+		t.Fatalf("claude, never switched, came back set to %v; want it to follow whether it is installed", *e)
+	}
+}

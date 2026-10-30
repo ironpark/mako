@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"os/exec"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
@@ -23,6 +26,9 @@ type Agent struct {
 	Args     []string          `json:"args,omitempty"`
 	Env      map[string]string `json:"env,omitempty"`
 	Profiles []Profile         `json:"profiles,omitempty"`
+	// Enabled offers the agent to start sessions with, or not; unset, it
+	// is offered while its program is installed.
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // Profile is a named set of flags and environment for an agent, such as a
@@ -199,6 +205,57 @@ func expand(s string, lookup func(string) string) string {
 	return strings.ReplaceAll(s, dollar, "$")
 }
 
+// Installed reports whether the agent's program is there to run: on the
+// PATH, or at the path its command names.
+func (a Agent) Installed() bool {
+	return len(a.Command) > 0 && installed(expand(a.Command[0], os.Getenv))
+}
+
+// On reports whether the agent named is offered to start sessions with:
+// as its configuration says, else while it is installed.
+func On(name string, agents map[string]Agent) bool {
+	a, ok := Lookup(name, agents)
+	switch {
+	case !ok:
+		return false
+	case a.Enabled != nil:
+		return *a.Enabled
+	}
+	return a.Installed()
+}
+
+// Offered lists the agents a node offers to start sessions with, sorted:
+// those On. Any of Names may still be started by name.
+func Offered(agents map[string]Agent) []string {
+	return slices.DeleteFunc(Names(agents), func(name string) bool { return !On(name, agents) })
+}
+
+// installedFor is how long a program found, or not, is taken to be so:
+// a node lists its agents every few seconds, and one installed shows up
+// within this.
+const installedFor = 30 * time.Second
+
+var installedSeen sync.Map // program and PATH -> installedAt
+
+type installedAt struct {
+	ok bool
+	at time.Time
+}
+
+// installed reports whether program can be run, looking it up on the PATH
+// at most every installedFor.
+func installed(program string) bool {
+	key := program + "\x00" + os.Getenv("PATH")
+	if v, ok := installedSeen.Load(key); ok {
+		if seen := v.(installedAt); time.Since(seen.at) < installedFor {
+			return seen.ok
+		}
+	}
+	_, err := exec.LookPath(program)
+	installedSeen.Store(key, installedAt{ok: err == nil, at: time.Now()})
+	return err == nil
+}
+
 // Names lists the agents a node can launch, sorted.
 func Names(agents map[string]Agent) []string {
 	names := slices.Collect(maps.Keys(Builtin))
@@ -228,11 +285,11 @@ func SplitTarget(target string) (agent, profile string) {
 	return agent, profile
 }
 
-// Targets lists every target of the agents a node can launch: each agent,
+// Targets lists every target of the agents a node offers: each agent,
 // then each of its profiles.
 func Targets(agents map[string]Agent) []string {
 	var out []string
-	for _, name := range Names(agents) {
+	for _, name := range Offered(agents) {
 		out = append(out, name)
 		a, _ := Lookup(name, agents)
 		for _, p := range a.Profiles {

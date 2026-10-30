@@ -25,7 +25,10 @@ type agentDraft struct {
 	Agent, Profile     string
 	Description        string
 	Command, Args, Env string
-	IsProfile          bool // a profile's name may be blank while it is typed
+	// Enabled is "on" or "off" as the user set it, or "" for while the
+	// program is installed.
+	Enabled   string
+	IsProfile bool // a profile's name may be blank while it is typed
 	// PickServers gives a profile's sessions the MCP servers in Servers,
 	// one ID a line, rather than every one enabled.
 	PickServers bool
@@ -38,8 +41,12 @@ func draftAgents(agents map[string]agentspec.Agent) []agentDraft {
 	var out []agentDraft
 	for _, name := range agentspec.Names(agents) {
 		a, _ := agentspec.Lookup(name, agents)
-		out = append(out, agentDraft{ID: len(out) + 1, Agent: name,
-			Command: agentspec.JoinArgs(a.Command), Args: agentspec.JoinArgs(a.Args), Env: envText(a.Env)})
+		d := agentDraft{ID: len(out) + 1, Agent: name,
+			Command: agentspec.JoinArgs(a.Command), Args: agentspec.JoinArgs(a.Args), Env: envText(a.Env)}
+		if a.Enabled != nil {
+			d.Enabled = pick(*a.Enabled, "on", "off")
+		}
+		out = append(out, d)
 		for _, p := range a.Profiles {
 			d := agentDraft{ID: len(out) + 1, Agent: name, Profile: p.Name, IsProfile: true,
 				Description: p.Description, Args: agentspec.JoinArgs(p.Args), Env: envText(p.Env)}
@@ -87,7 +94,12 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 		if err != nil {
 			return nil, fmt.Errorf(T("%s, environment: %v"), r.Agent, err)
 		}
-		out[r.Agent] = agentspec.Agent{Command: command, Args: args, Env: env}
+		a := agentspec.Agent{Command: command, Args: args, Env: env}
+		if r.Enabled != "" {
+			on := r.Enabled == "on"
+			a.Enabled = &on
+		}
+		out[r.Agent] = a
 		order = append(order, r.Agent)
 	}
 	for _, r := range rows {
@@ -338,6 +350,7 @@ func agentSection(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 	mono := ggui.TextStyle{Font: ggui.DefaultMonoFont()}
 	children := []ggui.Widget{
 		card(
+			agentOffered(m, a.ID, a.Agent),
 			row(T("Command"), commandHint,
 				ggui.Box(ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Command })).
 					Style(mono).Name(Tf("%s command", a.Agent))).Width(300)),
@@ -363,6 +376,54 @@ func agentSection(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 	}
 	children = append(children, ggui.Row(actions...).Gap(8))
 	return section(a.Agent, children...)
+}
+
+// agentOffered is an agent's switch: whether new sessions can start it.
+// Until the user sets it, it follows whether the program is installed, as
+// its command now reads.
+func agentOffered(m *model, id int, name string) ggui.Widget {
+	draft := func() agentDraft {
+		for _, r := range m.AgentDraft.Get() {
+			if r.ID == id {
+				return r
+			}
+		}
+		return agentDraft{}
+	}
+	installed := ggui.Derived(func() bool {
+		command, err := agentspec.SplitArgs(draft().Command)
+		if err != nil {
+			return false
+		}
+		if len(command) == 0 {
+			command = agentspec.Builtin[name]
+		}
+		return agentspec.Agent{Command: command}.Installed()
+	})
+	on := ggui.Bind(func() bool {
+		switch draft().Enabled {
+		case "on":
+			return true
+		case "off":
+			return false
+		}
+		return installed.Get()
+	}, func(v bool) {
+		rows := slices.Clone(ggui.Peek(m.AgentDraft))
+		for i := range rows {
+			if rows[i].ID == id {
+				rows[i].Enabled = pick(v, "on", "off")
+			}
+		}
+		m.AgentDraft.Set(rows)
+	})
+	return ggui.Reactive(func() ggui.Widget {
+		hint := T("Offered to start sessions with, in the new session dialog and beside the +.")
+		if !installed.Get() {
+			hint = T("Not installed on this node: its command was not found, so it is turned off until it is, or turned on here.")
+		}
+		return row(T("Offered"), hint, ui.Switch(on, Tf("Offer %s", name)))
+	})
 }
 
 func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {

@@ -3,6 +3,7 @@ package agentspec
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 )
@@ -48,10 +49,23 @@ func TestABuiltinNeedsNoCommandOfItsOwn(t *testing.T) {
 	}
 }
 
+// onPath puts programs that do nothing on a PATH of their own.
+func onPath(t *testing.T, programs ...string) {
+	dir := t.TempDir()
+	for _, p := range programs {
+		if err := os.WriteFile(filepath.Join(dir, p), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir)
+	t.Setenv("SHELL", filepath.Join(dir, "sh"))
+}
+
 func TestTargets(t *testing.T) {
+	onPath(t, "claude", "codex", "sh")
 	agents := map[string]Agent{"claude": {Profiles: []Profile{{Name: "opus"}, {Name: "work"}}}}
 	got := Targets(agents)
-	want := []string{"agy", "claude", "claude:opus", "claude:work", "codex", "omo", "omp", "opencode", "pi", "shell"}
+	want := []string{"claude", "claude:opus", "claude:work", "codex", "shell"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("targets = %q, want %q", got, want)
 	}
@@ -98,5 +112,24 @@ func TestResolveExpandsLikeAShell(t *testing.T) {
 	// daemon's, unset, while the profile's BIN sees the agent's.
 	if l.Env["DIR"] != "/opt/sh" || l.Env["SAME"] != "" || l.Env["BIN"] != "/opt/sh/bin" || l.Env["CLAUDE_CONFIG_DIR"] != home+"/.claude-work" {
 		t.Fatalf("env = %v", l.Env)
+	}
+}
+
+func TestAnAgentNotInstalledIsNotOffered(t *testing.T) {
+	onPath(t, "claude", "codex", "sh")
+	yes, no := true, false
+	agents := map[string]Agent{
+		"agy":   {Enabled: &yes}, // turned on, though not found
+		"codex": {Enabled: &no},  // turned off, though found
+	}
+	got := Offered(agents)
+	if want := []string{"agy", "claude", "shell"}; !slices.Equal(got, want) {
+		t.Fatalf("offered %q, want %q", got, want)
+	}
+	if !slices.Contains(Names(agents), "codex") || !slices.Contains(Names(agents), "opencode") {
+		t.Fatal("an agent not offered left the names a node can start")
+	}
+	if !(Agent{Command: []string{"claude", "--x"}}).Installed() || (Agent{Command: []string{"nowhere-to-be-found"}}).Installed() {
+		t.Fatal("installed misread the PATH")
 	}
 }

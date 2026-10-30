@@ -85,7 +85,7 @@ func (d *Daemon) followed() (map[string]agentspec.Agent, map[string]mcp.Server) 
 // drivers say of them, since flags and environment, keys among them, stay
 // here.
 func agentInfo(configured map[string]agentspec.Agent) []*protocol.AgentInfo {
-	names := agentspec.Names(configured)
+	names := agentspec.Offered(configured)
 	out := make([]*protocol.AgentInfo, len(names))
 	for i, name := range names {
 		a, _ := agentspec.Lookup(name, configured)

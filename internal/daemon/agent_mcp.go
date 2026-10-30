@@ -348,7 +348,8 @@ func (d *Daemon) listProjectAgents(peer *agentPeer) (listAgentsResult, error) {
 		}
 	}
 	configured := d.agents()
-	for _, name := range agentspec.Names(configured) {
+	// What an agent may spawn: those this node offers, installed or on.
+	for _, name := range agentspec.Offered(configured) {
 		a, _ := agentspec.Lookup(name, configured)
 		if len(a.Command) == 0 {
 			continue
