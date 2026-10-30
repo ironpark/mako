@@ -100,6 +100,7 @@ func shortcuts(host ggui.Host, m *model) {
 	host.Shortcut("cmd+,", func() { m.openSettings("") })
 	host.Shortcut("cmd+p", m.openQuickOpen)
 	host.Shortcut("cmd+shift+f", m.openSearch)
+	host.Shortcut("cmd+f", m.openFind)
 	host.Shortcut("alt+cmd+down", func() { m.stepDiff(1) })
 	host.Shortcut("alt+cmd+up", func() { m.stepDiff(-1) })
 }
@@ -118,6 +119,7 @@ var shortcutList = []struct{ Chord, Action string }{
 	{"cmd+,", "Open settings"},
 	{"cmd+p", "Go to file"},
 	{"cmd+shift+f", "Search the project"},
+	{"cmd+f", "Find in the session"},
 	{"alt+cmd+down", "Next changed file"},
 	{"alt+cmd+up", "Previous changed file"},
 }

@@ -48,6 +48,8 @@ type termConn struct {
 	opts         termOptions
 	gesture      *gostty.Gesture // click counting and drag selection
 	dragging     bool
+	search       *gostty.Search // the find bar's, for searched, while it is open
+	searched     string
 
 	// The daemon is told of a size once a burst of them settles, as a
 	// sliding panel resizes the terminal every frame, so the program is
@@ -647,6 +649,70 @@ func (t *termConn) selectAll() {
 	_, _ = t.vt.Terminal().ActiveScreen().SelectAll()
 }
 
+// Find --------------------------------------------------------------------------
+
+// find selects the match of needle in the scrollback before the one
+// selected, further up, or the one after with back, wrapping at the ends,
+// and scrolls it into view: the selection draws it. It reports which match that is, from 1, and how many
+// there are; at is 0 when there are none.
+func (t *termConn) find(needle string, back bool) (at, count int) {
+	defer t.requestPaint()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return 0, 0
+	}
+	if t.search == nil || t.searched != needle {
+		t.endFindLocked()
+		if needle == "" {
+			t.vt.Terminal().ActiveScreen().ClearSelection()
+			return 0, 0
+		}
+		s, err := t.vt.Terminal().NewSearch(needle)
+		if err != nil {
+			return 0, 0
+		}
+		t.search, t.searched = s, needle
+	}
+	// The whole scrollback, which mako keeps to Scrollback lines.
+	t.search.All()
+	dir := gostty.SearchDirectionNext
+	if back {
+		dir = gostty.SearchDirectionPrev
+	}
+	ok, err := t.search.Select(dir, gostty.SearchScrollIfNeeded)
+	count = int(t.search.MatchCount())
+	if err != nil || !ok {
+		return 0, count
+	}
+	// The search keeps its match apart from the screen's selection; made
+	// the selection, the match is drawn as one, and ⌘C copies it.
+	if sel, ok := t.search.SelectedMatch(); ok {
+		t.applySelectionLocked(sel, true)
+	}
+	i, _ := t.search.SelectedIndex()
+	return int(i) + 1, count
+}
+
+// endFind closes the find, and the match it selected.
+func (t *termConn) endFind() {
+	defer t.requestPaint()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed || t.search == nil {
+		return
+	}
+	t.endFindLocked()
+	t.vt.Terminal().ActiveScreen().ClearSelection()
+}
+
+func (t *termConn) endFindLocked() {
+	if t.search != nil {
+		_ = t.search.Close()
+		t.search, t.searched = nil, ""
+	}
+}
+
 // Mouse reporting -------------------------------------------------------------
 
 // mouseReported reports whether the program asked for the mouse (DECSET
@@ -751,6 +817,7 @@ func (t *termConn) close() {
 	if t.settle != nil {
 		t.settle.Stop()
 	}
+	t.endFindLocked()
 	_ = t.state.Close()
 	_ = t.vt.Close()
 }

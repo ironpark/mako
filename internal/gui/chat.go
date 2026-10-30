@@ -285,7 +285,7 @@ func sessionView(m *model, id string, group int) ggui.Widget {
 			OnRiskyPaste(m.confirmPaste).
 			OnLink(func(target, cwd string) { m.followLink(id, target, cwd) })
 		body := ggui.DropZone(term, func(d ggui.Dropped[pathDrag]) { term.setDropOver(false); term.typePaths([]string{d.Value.Path}) }).OnHover(term.setDropOver)
-		return ggui.Column(approvalBar(m, id), ggui.Expanded(ggui.Stack(body, usageOverlay(m, id, nil, viewChip(m, id, group))).Expand())).Stretch()
+		return ggui.Column(approvalBar(m, id), ggui.Expanded(ggui.Stack(body, usageOverlay(m, id, nil, viewChip(m, id, group)), findBar(m, id, terminalFinder(m.conns[id]))).Expand())).Stretch()
 	})
 }
 
@@ -439,7 +439,8 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		}
 		return ggui.Padding(ggui.Column(rows...).Gap(chatGap).Stretch(), 0, 0, chatGap, 0)
 	})
-	feed := chatFeed(m, id, state, turns, head).Controller(scroll).BindOffset(offset)
+	find := &chatFinder{turns: turns, scroll: scroll, marks: map[string]rowMark{}}
+	feed := chatFeed(m, id, state, turns, head, find).Controller(scroll).BindOffset(offset)
 	// Scrolling up near the top of what is loaded reads the log from
 	// further back. Only up: the feed opens at the top before it shows the
 	// latest at the bottom.
@@ -456,7 +457,8 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	// The composer belongs to Chat alone, as in ovis: Terminal mode's grid
 	// is its own input surface, and a file view has no session to type into.
 	session := ggui.Pointer(ggui.Column(
-		ggui.Expanded(ggui.Stack(feed, hostBadge(m, id), toLatestButton(m, state, scroll, offset), usageOverlay(m, id, chatUsage, viewChip(m, id, group))).Expand()),
+		ggui.Expanded(ggui.Stack(feed, &afterPaint{fn: find.painted}, hostBadge(m, id), toLatestButton(m, state, scroll, offset),
+			usageOverlay(m, id, chatUsage, viewChip(m, id, group)), findBar(m, id, find.finder())).Expand()),
 		approvalCard(m, id), compactingRow(m, id), runningAgents(m, id, state), chatInput(m, id, group, state),
 	).Stretch()).OnDown(func(ggui.PointerEvent) { m.focusGroup(group) })
 	// A subagent opened shows its conversation in place of the session's,
@@ -475,20 +477,28 @@ func chatView(m *model, id string, group int) ggui.Widget {
 // stays where the reader is. A long conversation has thousands of turns:
 // only those near the window are built and laid out, each drawn again only
 // when it changes. Older ones coming in above keep what is in view in
-// place.
-func chatFeed(m *model, id string, state *chatState, turns ggui.Readable[[]chatTurnItem], head ggui.Widget) *ggui.ScrollWidget {
+// place. find, when there is one, finds in the feed.
+func chatFeed(m *model, id string, state *chatState, turns ggui.Readable[[]chatTurnItem], head ggui.Widget, find *chatFinder) *ggui.ScrollWidget {
 	list := ggui.EachKeyed(turns, func(t chatTurnItem) string { return t.Key }, func(row ggui.EachItem[chatTurnItem]) ggui.Widget {
 		// A read of the conversation brings every message anew: a turn is
 		// drawn again only when what it holds changed.
 		turn := ggui.Map(row.Value, func(t chatTurnItem) chatTurnItem { return t }).WithEqual(deepEqual)
-		return ggui.View(turn, func(t chatTurnItem) ggui.Widget {
+		w := ggui.View(turn, func(t chatTurnItem) ggui.Widget {
 			info, _ := m.session(id)
 			return chatTurnRow(m, id, info, state, t)
 		})
+		if find == nil {
+			return w
+		}
+		return find.mark(row.Item.Key, w)
 	}).Gap(chatGap).Stretch().EstimatedExtent(chatTurnEstimate)
 	// A drag selects through the turns in view, from one message into the
 	// next, and copies them as they read.
-	content := &lane{child: ggui.Box(ggui.SelectionArea(ggui.Column(head, list).Stretch())).Pad(18, 0)}
+	area := ggui.SelectionArea(ggui.Column(head, list).Stretch())
+	if find != nil {
+		find.area = area
+	}
+	content := &lane{child: ggui.Box(area).Pad(18, 0)}
 	return ggui.Scroll(content).FollowEnd().Bar(tokSurface3)
 }
 

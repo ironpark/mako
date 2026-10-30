@@ -92,7 +92,7 @@ func agentChatView(m *model, id string, group int, agent string) ggui.Widget {
 		}
 		return ggui.Box()
 	})
-	feed := chatFeed(m, id, sub, turns, head)
+	feed := chatFeed(m, id, sub, turns, head, nil)
 	return ggui.Pointer(ggui.Column(
 		ggui.Box(bar).Fill(tokSurface1),
 		hline(),

@@ -85,10 +85,13 @@ type model struct {
 	StopOpen       *ggui.StateValue[bool]
 	pendingStop    func() // what StopOpen confirms
 	DiscardOpen    *ggui.StateValue[bool]
-	HunkOpen       *ggui.StateValue[bool] // asks before a diff's hunk is undone
-	pendingHunk    func()                 // what HunkOpen confirms
-	confirmDiscard string                 // the file tab DiscardOpen asks about
-	QuitOpen       *ggui.StateValue[bool] // asks before quitting with unsaved files
+	HunkOpen       *ggui.StateValue[bool]   // asks before a diff's hunk is undone
+	pendingHunk    func()                   // what HunkOpen confirms
+	confirmDiscard string                   // the file tab DiscardOpen asks about
+	QuitOpen       *ggui.StateValue[bool]   // asks before quitting with unsaved files
+	FindOpen       *ggui.StateValue[bool]   // the find bar is over the selected session; see find.go
+	FindText       *ggui.StateValue[string] // the words it finds
+	findFocus      bool                     // the find bar's field takes the focus as it is painted
 	quitting       bool
 	quitAsked      bool       // a quit, not the close button, is closing the window; see tray.go
 	tray           *ggui.Tray // the menu bar's icon, in tray mode
@@ -326,6 +329,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		DiscardOpen:    ggui.State(false),
 		HunkOpen:       ggui.State(false),
 		QuitOpen:       ggui.State(false),
+		FindOpen:       ggui.State(false),
+		FindText:       ggui.State(""),
 		PaletteOpen:    ggui.State(false),
 		PaletteQuery:   ggui.State(""),
 		ExtensionsOpen: ggui.State(false),
