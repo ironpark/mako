@@ -321,8 +321,11 @@ func (d *Daemon) sendState(ctx context.Context, p p2p.Peer, shared, full, public
 	}
 }
 
-// sameSessions reports whether a and b differ in nothing but last output,
-// which the next regular state carries.
+// sameSessions reports whether a and b differ in nothing but last output
+// and the spinner of an agent at work, which turns in its title every
+// second: the next regular state carries them. Taken as a change, one
+// working agent had every watching window read the sessions anew, and
+// every peer sent this daemon's state, each second.
 func sameSessions(a, b []*protocol.SessionInfo) bool {
 	if len(a) != len(b) {
 		return false
@@ -331,11 +334,9 @@ func sameSessions(a, b []*protocol.SessionInfo) bool {
 		if proto.Equal(a[i], b[i]) {
 			continue
 		}
-		if proto.Equal(a[i].GetLastOutput(), b[i].GetLastOutput()) {
-			return false // something else differs
-		}
 		x, y := proto.CloneOf(a[i]), proto.CloneOf(b[i])
 		x.LastOutput, y.LastOutput = nil, nil
+		x.Title, y.Title = protocol.BareTitle(x.GetTitle()), protocol.BareTitle(y.GetTitle())
 		if !proto.Equal(x, y) {
 			return false
 		}

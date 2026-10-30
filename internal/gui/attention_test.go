@@ -13,21 +13,6 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-func TestTitlesLoseTheirSpinner(t *testing.T) {
-	for in, want := range map[string]string{
-		"✳ Fix the login": "Fix the login",
-		"⠋ Thinking":      "Thinking",
-		"◐ ◑ 제외된 항목":      "제외된 항목",
-		"* Claude Code":   "Claude Code",
-		"plain title":     "plain title",
-		"v1.2 · release":  "v1.2 · release",
-	} {
-		if got := cleanTitle(in); got != want {
-			t.Errorf("%q: %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestStatusOutOfViewIsUnread(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")

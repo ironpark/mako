@@ -532,3 +532,21 @@ func checkLoud(t *testing.T, out []byte) {
 		t.Fatalf("%d of the lines in %d bytes of output", lines, len(out))
 	}
 }
+
+func TestSessionsAreTheSameAsAnAgentsSpinnerTurns(t *testing.T) {
+	at := func(title string, out time.Time) []*protocol.SessionInfo {
+		return []*protocol.SessionInfo{{Id: "a", State: protocol.StateRunning, Title: title, LastOutput: protocol.Time(out)}}
+	}
+	now := time.Now()
+	if !sameSessions(at("◐ Claude Code", now), at("◑ Claude Code", now.Add(time.Second))) {
+		t.Error("a turn of the spinner and new output read as a change")
+	}
+	if sameSessions(at("◐ Claude Code", now), at("◑ Fix the login", now)) {
+		t.Error("a new title read as no change")
+	}
+	stopped := at("◐ Claude Code", now)
+	stopped[0].State = protocol.StateExited
+	if sameSessions(at("◑ Claude Code", now), stopped) {
+		t.Error("a session that exited read as no change")
+	}
+}

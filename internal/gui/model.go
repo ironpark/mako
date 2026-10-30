@@ -656,7 +656,7 @@ func (m *model) poll(ctx context.Context) {
 		// An agent at work spins a glyph at the head of its title, which
 		// the daemon then reports changed every second: without it, the
 		// sessions read the same, and nothing showing them is rebuilt.
-		sessions[i].Title = cleanTitle(sessions[i].GetTitle())
+		sessions[i].Title = protocol.BareTitle(sessions[i].GetTitle())
 	}
 	m.post(func() {
 		m.Conn.Set(connState{OK: true, Self: self})
@@ -1406,13 +1406,13 @@ func (m *model) recallComposer(id string, step int) bool {
 func (m *model) syncTitles() {
 	titles := map[string]string{}
 	for _, info := range ggui.Peek(m.Sessions) {
-		if title := cleanTitle(info.GetTitle()); title != "" {
+		if title := protocol.BareTitle(info.GetTitle()); title != "" {
 			titles[info.GetId()] = title
 		}
 	}
 	for id, conn := range m.conns {
 		if title, known := conn.windowTitle(); known {
-			title = cleanTitle(title)
+			title = protocol.BareTitle(title)
 			// Even an empty live title overrides an older polling result.
 			if title == "" {
 				delete(titles, id)
