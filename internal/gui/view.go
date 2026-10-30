@@ -845,6 +845,7 @@ func inlineField(w ggui.Widget) ggui.Widget {
 const (
 	filesTab = iota
 	gitTab
+	agentsTab
 	forgeTab
 	searchTab
 	sessionTab
@@ -887,13 +888,14 @@ func details(m *model) ggui.Widget {
 	pages := []ggui.Widget{
 		filesPanel(m),
 		gitPanel(m),
+		projectAgentsPanel(m),
 		forgePanel(m),
 		searchPanel(m),
 		ggui.Scroll(ggui.Padding(session, 16)),
 	}
 	return ggui.Box(ggui.Column(
 		ggui.View(ggui.Derived(m.forgeOf), func(f string) ggui.Widget {
-			return panelTabs(m.DetailTab, T("Files"), T("Git"), forgeLabel(f), T("Search"), T("Session"))
+			return panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), forgeLabel(f), T("Search"), T("Session"))
 		}),
 		hline(),
 		ggui.Expanded(ggui.Key(m.DetailTab, func(i int) ggui.Widget { return pages[min(max(i, 0), len(pages)-1)] })),

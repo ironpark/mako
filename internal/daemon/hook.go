@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -33,6 +34,13 @@ var hookProgram string
 // program can be one, so the daemons it runs give their agents a hook;
 // without it they only watch the agents' open files.
 func HookMain() bool {
+	if len(os.Args) > 1 && os.Args[1] == agentMCPArg {
+		if err := runAgentMCP(os.Args[2:], os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "mako agent MCP:", err)
+			os.Exit(1)
+		}
+		return true
+	}
 	if len(os.Args) > 1 && os.Args[1] == hookArg {
 		runHook(os.Args[2:], os.Stdin, os.Stdout)
 		return true

@@ -253,6 +253,7 @@ type model struct {
 	GitStashOpen   *ggui.StateValue[bool]
 	GitBranchOpen  *ggui.StateValue[bool]
 	GitSplit       *ggui.StateValue[float64]
+	AgentsSplit    *ggui.StateValue[float64] // the agents panel's agents over its messages
 	// The History tab: the commits, and the one chosen.
 	GitHistory *ggui.StateValue[historyView]
 	GitCommit  *ggui.StateValue[commitView]
@@ -264,16 +265,18 @@ type model struct {
 	DetailsOpen *ggui.StateValue[bool]
 	// DetailsWidth is the right panel's width, following a drag of its
 	// edge; the settings keep it when the drag ends.
-	DetailsWidth *ggui.StateValue[float64]
-	SidebarWidth *ggui.StateValue[float64] // the sidebar's, as DetailsWidth
-	DetailTab    *ggui.StateValue[int]
-	Forge        forgeState             // the GitHub tab, and the watch on the branch
-	Tunnels      *tunnelState           // ports of other nodes forwarded here
-	Pick         *folderPick            // the New session dialog's folder picker
-	ImageOpen    *ggui.StateValue[bool] // the previewed image is shown enlarged
-	NewOpen      *ggui.StateValue[bool]
-	Form         *ggui.StateValue[newSession]
-	FormErr      *ggui.StateValue[string]
+	DetailsWidth     *ggui.StateValue[float64]
+	SidebarWidth     *ggui.StateValue[float64] // the sidebar's, as DetailsWidth
+	DetailTab        *ggui.StateValue[int]
+	ProjectAgents    *ggui.StateValue[projectAgentsView]
+	projectAgentsGen uint64
+	Forge            forgeState             // the GitHub tab, and the watch on the branch
+	Tunnels          *tunnelState           // ports of other nodes forwarded here
+	Pick             *folderPick            // the New session dialog's folder picker
+	ImageOpen        *ggui.StateValue[bool] // the previewed image is shown enlarged
+	NewOpen          *ggui.StateValue[bool]
+	Form             *ggui.StateValue[newSession]
+	FormErr          *ggui.StateValue[string]
 
 	conns map[string]*termConn // UI goroutine only
 	// lastSession is the session tab shown last, which a note from a diff
@@ -412,6 +415,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		GitStashOpen:   ggui.State(false),
 		GitBranchOpen:  ggui.State(false),
 		GitSplit:       ggui.State(0.55),
+		AgentsSplit:    ggui.State(0.4),
 		GitHistory:     ggui.State(historyView{}).WithEqual(deepEqual),
 		GitCommit:      ggui.State(commitView{}).WithEqual(deepEqual),
 		SidebarOpen:    ggui.State(true),
@@ -419,6 +423,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		DetailsWidth:   ggui.State(p.DetailsWidth),
 		SidebarWidth:   ggui.State(p.SidebarWidth),
 		DetailTab:      ggui.State(0),
+		ProjectAgents:  ggui.State(projectAgentsView{}).WithEqual(deepEqual),
 		Forge:          newForgeState(),
 		Tunnels:        newTunnelState(),
 		ImageOpen:      ggui.State(false),

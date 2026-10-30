@@ -208,6 +208,32 @@ language servers are not run yet.
 
 ### MCP servers
 
+The built-in `mako` server (`internal/daemon/agent_mcp.go`) uses the official
+MCP Go SDK. A stdio subprocess bridges to `agents.sock`, authenticating with
+a per-session credential before MCP initialization. Tool handlers bind the
+caller to its live session and canonical project; credentials never enter
+the saved launch. Supported drivers receive it alongside resolved servers,
+unless configuration or the profile disables it.
+
+Profiles carry an optional `description` in `agentspec.Profile`, edited as
+multiline text in Settings ▸ Agents. `list_agents` exposes profile names,
+descriptions and spawnability, without launch arguments or environment.
+The MCP instructions ask callers to select a profile by its description
+and supply the owning agent/profile pair to `spawn_agent`. Descriptions
+are metadata; they do not become startup instructions. Discovery rereads
+saved profile changes through the daemon's existing config follower.
+
+`spawn_agent` starts a normal session with a saved parent ID. A watcher
+feeds that child's turn state into the parent's aggregate activity. The
+mailbox store (`agent_messages.go`) atomically persists messages, retains
+them until acknowledgement, and wakes cancellable inbox waits. See
+[Project agents over MCP](docs/agent-mcp.md) for the public tool contract.
+The desktop's Agents panel polls `read_project_agents` while visible, routed
+to the selected project's node. Its read-only snapshot includes recent
+message history retained independently of inbox acknowledgement. Set
+`MAKO_PREVIEW_AGENTS=1` with `-render-dir` to render this panel in isolation
+at normal and minimum widths, without starting a daemon or agent.
+
 An extension's MCP server (a Zed context server) is started by the
 extension's own wasm, the component Zed would run. `internal/zedhost` runs
 it and implements the parts of Zed's extension API a context server uses:

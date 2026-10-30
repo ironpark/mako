@@ -15,6 +15,7 @@ import "mako/v2/git.proto";
 import "mako/v2/forge.proto";
 import "mako/v2/mesh.proto";
 import "mako/v2/session.proto";
+import "mako/v2/project_agents.proto";
 
 option go_package = "github.com/ironpark/mako/internal/protocol";
 
@@ -91,6 +92,8 @@ message Envelope {
     // An agent's conversation.
     ReadChat read_chat = 70;
     Chat chat = 71;
+    ReadProjectAgents read_project_agents = 72;
+    ProjectAgents project_agents = 73;
 
     // A forge: GitHub, Forgejo or Gitea.
     ForgeList forge_list = 80;

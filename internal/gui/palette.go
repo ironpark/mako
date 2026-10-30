@@ -147,6 +147,7 @@ func (m *model) commands() []command {
 		command{ID: "Tidy tabs", Category: "Tab", Keys: []string{"close", "clean", "idle", "shell"}, Disabled: !m.anyTidyable(),
 			Run: func() { m.tidyTabs(ggui.Peek(m.Tabs)) }},
 		command{ID: "Toggle sidebar", Category: "View", Shortcut: "cmd+b", Run: func() { ggui.Toggle(m.SidebarOpen) }},
+		command{ID: "Project agents", Category: "View", Keys: []string{"mcp", "monitor", "messages"}, Run: func() { m.DetailsOpen.Set(true); m.DetailTab.Set(agentsTab) }},
 		command{ID: "Toggle details panel", Category: "View", Keys: []string{"files", "changes"}, Shortcut: "cmd+shift+d",
 			Run: func() { ggui.Toggle(m.DetailsOpen) }},
 		command{ID: "Extensions…", Category: "App", Keys: []string{"zed", "language", "grammar", "highlight", "mcp"},

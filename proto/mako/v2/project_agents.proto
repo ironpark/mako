@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package mako.v2;
+
+import "google/protobuf/timestamp.proto";
+import "mako/v2/session.proto";
+
+option go_package = "github.com/ironpark/mako/internal/protocol";
+
+// ReadProjectAgents asks for a read-only snapshot of a project's agents
+// and recent MCP messages. A worktree includes its repository's sessions.
+message ReadProjectAgents {
+  string node_id = 1;
+  string path = 2;
+  uint32 message_limit = 3; // default 50, at most 100
+}
+
+// ProjectAgents is a project's agents and recent messages, oldest first.
+message ProjectAgents {
+  string project = 1;
+  repeated ProjectAgent agents = 2;
+  repeated AgentMessage messages = 3;
+}
+
+// ProjectAgent follows a normal session and its MCP coordination state.
+message ProjectAgent {
+  SessionInfo session = 1;
+  string parent_session_id = 2;
+  bool messaging = 3;
+  uint32 pending_messages = 4;
+}
+
+// AgentMessage is a recent MCP message. Monitoring never acknowledges it.
+message AgentMessage {
+  uint64 id = 1;
+  string from_session_id = 2;
+  string to_session_id = 3;
+  string text = 4;
+  google.protobuf.Timestamp created_at = 5;
+  string state = 6; // pending, acknowledged, removed (recipient deleted)
+}

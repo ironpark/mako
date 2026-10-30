@@ -42,7 +42,7 @@ func TestAgentDraftRoundTrips(t *testing.T) {
 	agents := map[string]agentspec.Agent{
 		"claude": {Command: []string{"claude"}, Args: []string{"--verbose"}, Env: map[string]string{"B": "2", "A": "1"},
 			Profiles: []agentspec.Profile{
-				{Name: "opus", Args: []string{"--model", "opus"}},
+				{Name: "opus", Description: "복잡한 Go 동시성 검토\n취소 처리와 경쟁 상태를 확인합니다.", Args: []string{"--model", "opus"}},
 				{Name: "work", Env: map[string]string{"ANTHROPIC_API_KEY": "sk-x"}},
 			}},
 		"lazy": {Command: []string{"lazygit", "--path", "my dir"}},
@@ -59,6 +59,9 @@ func TestAgentDraftRoundTrips(t *testing.T) {
 	}
 	if claude.Args != "--verbose" || claude.Env != "A=1\nB=2" || opus.Args != "--model opus" {
 		t.Fatalf("claude %+v, opus %+v", claude, opus)
+	}
+	if opus.Description != agents["claude"].Profiles[0].Description {
+		t.Fatalf("profile description = %q", opus.Description)
 	}
 	got, err := applyAgents(rows)
 	if err != nil {

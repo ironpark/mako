@@ -8,6 +8,8 @@ import (
 // Flags is a Launcher from a table of an agent's options: a driver whose
 // command line picks conversations by options alone fills one in.
 type Flags struct {
+	// PromptFlag takes an interactive startup prompt; empty for a positional prompt.
+	PromptFlag string
 	// PinFlag sets a new conversation's ID, so a launch knows it before the
 	// agent writes anything; "" when the agent always picks its own.
 	PinFlag string
@@ -27,6 +29,13 @@ type Flags struct {
 	Values, Variadic []string
 	// IsolateFlag is Launcher.Isolate.
 	IsolateFlag string
+}
+
+func (f *Flags) PromptArgs(text string) []string {
+	if f.PromptFlag != "" {
+		return []string{f.PromptFlag, text}
+	}
+	return []string{text}
 }
 
 // ArgumentID extracts an explicitly selected native ID. A fork's source

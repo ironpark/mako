@@ -70,8 +70,9 @@ type Daemon struct {
 	claims claims                 // the devices of this node lent to others
 	leases leases                 // the devices this node borrows
 
-	agentFile agentFile
-	mcp       *mcp.Resolver // nil without a configuration directory
+	agentFile     agentFile
+	mcp           *mcp.Resolver // nil without a configuration directory
+	projectAgents projectAgents
 
 	hookBinary  string // the program agents run as their hook; see HookMain
 	hookCommand string // the shell command agents run as their hook; "" for none
@@ -166,6 +167,12 @@ func (d *Daemon) Run(ctx context.Context) error {
 	defer cancel()
 	d.ctx = ctx
 	d.listenHooks(ctx, run)
+	if err := d.projectAgents.messages.load(dir); err != nil {
+		return err
+	}
+	if err := d.listenAgentMCP(ctx, run); err != nil {
+		return err
+	}
 	if !d.cfg.P2P.Disabled {
 		if err := d.startP2P(ctx, dir); err != nil {
 			d.log.Warn("libp2p did not start; this daemon has no peers", "err", err)
@@ -353,6 +360,8 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeReadChat:
 		return d.handleReadChat(ctx, stream, env)
+	case protocol.TypeReadProjectAgents:
+		return d.handleReadProjectAgents(ctx, stream, env)
 
 	case protocol.TypeAnswerApproval:
 		return d.handleAnswerApproval(ctx, stream, env)

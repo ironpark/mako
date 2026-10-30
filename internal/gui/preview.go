@@ -52,6 +52,10 @@ func writePNG(path string, img image.Image) error {
 // development aid; the daemon should be running a session or two. The theme
 // setting it switches through is put back when it is done.
 func Preview(cfg *config.Config, addr, dir string, width, height int) error {
+	agentsOnly := os.Getenv("MAKO_PREVIEW_AGENTS") != ""
+	if agentsOnly {
+		width = 360
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -114,12 +118,21 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			ggui.SetDefaultMonoFont(gofont.Mono())
 			m = newModel(cfg, addr)
 			saved := ggui.Peek(m.Prefs)
+			agentsRoot := fileRoot{Node: "preview", Path: "/workspace/mako"}
+			if agentsOnly {
+				setLanguage(resolveLanguage(saved.Language))
+				m.DetailTab.Set(agentsTab)
+				m.ProjectAgents.Set(projectAgentsView{Root: agentsRoot, Data: projectAgentsPreviewData(agentsRoot), Loaded: true, Updated: time.Now()})
+			}
 			window, session := filepath.Join(dir, "backdrop-window.png"), filepath.Join(dir, "backdrop-session.png")
 			// MAKO_PREVIEW_BROWSER names a folder of this machine, which a
 			// node's file browser shows in place of the window.
 			browse := os.Getenv("MAKO_PREVIEW_BROWSER")
 			var b *browser
 			p = ggui.ProbeBuilder(func() ggui.Widget {
+				if agentsOnly {
+					return ggui.Box(ggui.Column(panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), "GitHub", T("Search"), T("Session")), hline(), ggui.Expanded(projectAgentsBody(m, agentsRoot))).Stretch()).Fill(tokSurface0)
+				}
 				if browse != "" {
 					b = newBrowser(m, "", browse)
 					return ggui.Provide(ggui.ReducedMotionKey, true, browserWindow(b))
@@ -129,7 +142,9 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				ggui.Sz(float64(width), float64(height)))
 			p.Setup(func() {
 				setup(m)
-				m.start(ctx, p.Post)
+				if !agentsOnly {
+					m.start(ctx, p.Post)
+				}
 			})
 			img = ggfx.NewImage(width, height)
 			steps = []previewStep{
@@ -406,6 +421,12 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					do(m.pickFolder), until("the picker", func() bool { return ggui.Peek(m.Pick.On) }), frames(20), shot("41-pick-folder"),
 				}
 			}
+			if agentsOnly {
+				steps = []previewStep{
+					do(setTheme(saved.Theme)), frames(3), shot("agents-panel"),
+					do(func() { p.Resize(ggui.Sz(260, float64(height))); img = ggfx.NewImage(260, height) }), frames(3), shot("agents-panel-narrow"),
+				}
+			}
 		case ggwd.FrameEvent:
 			p.Frame()
 			if len(steps) == 0 {
@@ -554,5 +575,19 @@ func previewTools() []*protocol.ChatMessage {
 		{Role: "tool", Id: "t4", Tool: "exec_command", Detail: "git status --short", Text: `{"cmd": "git status --short", "workdir": "/Users/me/mako"}`,
 			Result: "Chunk ID: 1\nWall time: 0.1 seconds\nProcess exited with code 0\nOutput:\n M internal/gui/view.go\n?? internal/gui/toolview.go\n"},
 		{Role: "tool", Id: "t5", Tool: "apply_patch", Text: "*** Begin Patch\n*** Update File: internal/gui/prefs.go\n@@ type prefs struct {\n-\tDetailsWidth float64\n+\tSidebarWidth float64\n+\tDetailsWidth float64\n*** End Patch"},
+	}
+}
+
+func projectAgentsPreviewData(root fileRoot) *protocol.ProjectAgents {
+	return &protocol.ProjectAgents{Project: root.Path,
+		Agents: []*protocol.ProjectAgent{
+			{Session: &protocol.SessionInfo{Id: "coordinator", NodeId: root.Node, Project: root.Path, Name: "Coordinator", Agent: "claude", State: protocol.StateRunning, Status: protocol.AgentWorking}, Messaging: true},
+			{Session: &protocol.SessionInfo{Id: "reviewer", NodeId: root.Node, Project: root.Path, Name: "Reviewer", Agent: "codex", State: protocol.StateRunning, Status: protocol.AgentWaiting}, ParentSessionId: "coordinator", Messaging: true, PendingMessages: 1},
+			{Session: &protocol.SessionInfo{Id: "builder", NodeId: root.Node, Project: root.Path, Name: "Builder", Agent: "claude", State: protocol.StateRunning, Status: protocol.AgentDone}, ParentSessionId: "coordinator", Messaging: true},
+		},
+		Messages: []*protocol.AgentMessage{
+			{Id: 1, FromSessionId: "coordinator", ToSessionId: "reviewer", Text: "Review cancellation", State: "pending", CreatedAt: protocol.Time(time.Now())},
+			{Id: 2, FromSessionId: "coordinator", ToSessionId: "builder", Text: "Build passed", State: "acknowledged", CreatedAt: protocol.Time(time.Now())},
+		},
 	}
 }

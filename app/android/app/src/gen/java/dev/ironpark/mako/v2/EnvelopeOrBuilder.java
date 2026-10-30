@@ -648,6 +648,28 @@ public interface EnvelopeOrBuilder extends
   dev.ironpark.mako.v2.Chat getChat();
 
   /**
+   * <code>.mako.v2.ReadProjectAgents read_project_agents = 72 [json_name = "readProjectAgents"];</code>
+   * @return Whether the readProjectAgents field is set.
+   */
+  boolean hasReadProjectAgents();
+  /**
+   * <code>.mako.v2.ReadProjectAgents read_project_agents = 72 [json_name = "readProjectAgents"];</code>
+   * @return The readProjectAgents.
+   */
+  dev.ironpark.mako.v2.ReadProjectAgents getReadProjectAgents();
+
+  /**
+   * <code>.mako.v2.ProjectAgents project_agents = 73 [json_name = "projectAgents"];</code>
+   * @return Whether the projectAgents field is set.
+   */
+  boolean hasProjectAgents();
+  /**
+   * <code>.mako.v2.ProjectAgents project_agents = 73 [json_name = "projectAgents"];</code>
+   * @return The projectAgents.
+   */
+  dev.ironpark.mako.v2.ProjectAgents getProjectAgents();
+
+  /**
    * <pre>
    * A forge: GitHub, Forgejo or Gitea.
    * </pre>

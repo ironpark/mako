@@ -102,6 +102,11 @@ const (
 	TypeDeviceAccept   Type = "device_accept"
 )
 
+const (
+	TypeReadProjectAgents Type = "read_project_agents"
+	TypeProjectAgents     Type = "project_agents"
+)
+
 // Newer reports whether the edit made at version v on node is newer than
 // the one at version w on other: the later wins, and of two at once, the
 // greater node's.

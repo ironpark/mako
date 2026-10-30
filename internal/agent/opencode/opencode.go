@@ -26,6 +26,7 @@ type Agent struct {
 // once its first prompt is sent.
 func New() *Agent {
 	return &Agent{Flags: agent.Flags{
+		PromptFlag:  "--prompt",
 		ResumeFlags: []string{"--session", "-s"}, ForkFlag: "--fork",
 		PickerFlags: []string{"--continue", "-c"},
 		Inputs:      []string{"--prompt"},

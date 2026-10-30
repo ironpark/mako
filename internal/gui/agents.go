@@ -23,6 +23,7 @@ import (
 type agentDraft struct {
 	ID                 int
 	Agent, Profile     string
+	Description        string
 	Command, Args, Env string
 	IsProfile          bool // a profile's name may be blank while it is typed
 	// PickServers gives a profile's sessions the MCP servers in Servers,
@@ -41,7 +42,7 @@ func draftAgents(agents map[string]agentspec.Agent) []agentDraft {
 			Command: agentspec.JoinArgs(a.Command), Args: agentspec.JoinArgs(a.Args), Env: envText(a.Env)})
 		for _, p := range a.Profiles {
 			d := agentDraft{ID: len(out) + 1, Agent: name, Profile: p.Name, IsProfile: true,
-				Args: agentspec.JoinArgs(p.Args), Env: envText(p.Env)}
+				Description: p.Description, Args: agentspec.JoinArgs(p.Args), Env: envText(p.Env)}
 			if p.ContextServers != nil {
 				d.PickServers, d.Servers = true, strings.Join(*p.ContextServers, "\n")
 			}
@@ -109,7 +110,7 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 		if err != nil {
 			return nil, fmt.Errorf(T("%s, environment: %v"), where, err)
 		}
-		p := agentspec.Profile{Name: r.Profile, Args: args, Env: env}
+		p := agentspec.Profile{Name: r.Profile, Description: r.Description, Args: args, Env: env}
 		if r.PickServers {
 			ids := lines(r.Servers)
 			if ids == nil {
@@ -378,6 +379,10 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 	).Gap(8)).Pad(10, 16)
 	return cardWithTail(profileServers(m, id, p.Agent+":"+p.Profile),
 		head,
+		stackedRow(T("Description"), T("Describe its specialties and when to choose it. Agents use this to select a profile when delegating work."),
+			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Description })).
+				Multiline().Lines(3).Placeholder(T("For example: Reviews Go concurrency, cancellation and race conditions.")).
+				Name(Tf("%s description", p.Agent+":"+p.Profile))),
 		row(T("Flags"), T("Added after the agent's own."),
 			ggui.Box(ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Args })).
 				Style(mono).Placeholder("--model opus").Name(Tf("%s flags", p.Agent+":"+p.Profile))).Width(300)),

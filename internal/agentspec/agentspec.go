@@ -28,9 +28,12 @@ type Agent struct {
 // Profile is a named set of flags and environment for an agent, such as a
 // claude that runs another model or with another account's key.
 type Profile struct {
-	Name string            `json:"name"`
-	Args []string          `json:"args,omitempty"`
-	Env  map[string]string `json:"env,omitempty"`
+	Name string `json:"name"`
+	// Description explains when to choose this profile, including its
+	// specialties. It is discovery metadata, not a startup prompt.
+	Description string            `json:"description,omitempty"`
+	Args        []string          `json:"args,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`
 	// ContextServers picks the MCP servers its sessions get, by ID, an
 	// empty list none; unset, they get every server enabled. A server
 	// picked here is given even when turned off for the node.

@@ -77,6 +77,8 @@ public  final class Envelope extends
     GIT_RESULT(69),
     READ_CHAT(70),
     CHAT(71),
+    READ_PROJECT_AGENTS(72),
+    PROJECT_AGENTS(73),
     FORGE_LIST(80),
     FORGE_ITEMS(81),
     FORGE_VIEW(82),
@@ -160,6 +162,8 @@ public  final class Envelope extends
         case 69: return GIT_RESULT;
         case 70: return READ_CHAT;
         case 71: return CHAT;
+        case 72: return READ_PROJECT_AGENTS;
+        case 73: return PROJECT_AGENTS;
         case 80: return FORGE_LIST;
         case 81: return FORGE_ITEMS;
         case 82: return FORGE_VIEW;
@@ -2950,6 +2954,106 @@ public  final class Envelope extends
    */
   private void clearChat() {
     if (bodyCase_ == 71) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int READ_PROJECT_AGENTS_FIELD_NUMBER = 72;
+  /**
+   * <code>.mako.v2.ReadProjectAgents read_project_agents = 72 [json_name = "readProjectAgents"];</code>
+   */
+  @java.lang.Override
+  public boolean hasReadProjectAgents() {
+    return bodyCase_ == 72;
+  }
+  /**
+   * <code>.mako.v2.ReadProjectAgents read_project_agents = 72 [json_name = "readProjectAgents"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ReadProjectAgents getReadProjectAgents() {
+    if (bodyCase_ == 72) {
+       return (dev.ironpark.mako.v2.ReadProjectAgents) body_;
+    }
+    return dev.ironpark.mako.v2.ReadProjectAgents.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.ReadProjectAgents read_project_agents = 72 [json_name = "readProjectAgents"];</code>
+   */
+  private void setReadProjectAgents(dev.ironpark.mako.v2.ReadProjectAgents value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 72;
+  }
+  /**
+   * <code>.mako.v2.ReadProjectAgents read_project_agents = 72 [json_name = "readProjectAgents"];</code>
+   */
+  private void mergeReadProjectAgents(dev.ironpark.mako.v2.ReadProjectAgents value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 72 &&
+        body_ != dev.ironpark.mako.v2.ReadProjectAgents.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ReadProjectAgents.newBuilder((dev.ironpark.mako.v2.ReadProjectAgents) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 72;
+  }
+  /**
+   * <code>.mako.v2.ReadProjectAgents read_project_agents = 72 [json_name = "readProjectAgents"];</code>
+   */
+  private void clearReadProjectAgents() {
+    if (bodyCase_ == 72) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PROJECT_AGENTS_FIELD_NUMBER = 73;
+  /**
+   * <code>.mako.v2.ProjectAgents project_agents = 73 [json_name = "projectAgents"];</code>
+   */
+  @java.lang.Override
+  public boolean hasProjectAgents() {
+    return bodyCase_ == 73;
+  }
+  /**
+   * <code>.mako.v2.ProjectAgents project_agents = 73 [json_name = "projectAgents"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ProjectAgents getProjectAgents() {
+    if (bodyCase_ == 73) {
+       return (dev.ironpark.mako.v2.ProjectAgents) body_;
+    }
+    return dev.ironpark.mako.v2.ProjectAgents.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.ProjectAgents project_agents = 73 [json_name = "projectAgents"];</code>
+   */
+  private void setProjectAgents(dev.ironpark.mako.v2.ProjectAgents value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 73;
+  }
+  /**
+   * <code>.mako.v2.ProjectAgents project_agents = 73 [json_name = "projectAgents"];</code>
+   */
+  private void mergeProjectAgents(dev.ironpark.mako.v2.ProjectAgents value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 73 &&
+        body_ != dev.ironpark.mako.v2.ProjectAgents.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ProjectAgents.newBuilder((dev.ironpark.mako.v2.ProjectAgents) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 73;
+  }
+  /**
+   * <code>.mako.v2.ProjectAgents project_agents = 73 [json_name = "projectAgents"];</code>
+   */
+  private void clearProjectAgents() {
+    if (bodyCase_ == 73) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -6645,6 +6749,102 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.mako.v2.ReadProjectAgents read_project_agents = 72 [json_name = "readProjectAgents"];</code>
+     */
+    @java.lang.Override
+    public boolean hasReadProjectAgents() {
+      return instance.hasReadProjectAgents();
+    }
+    /**
+     * <code>.mako.v2.ReadProjectAgents read_project_agents = 72 [json_name = "readProjectAgents"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ReadProjectAgents getReadProjectAgents() {
+      return instance.getReadProjectAgents();
+    }
+    /**
+     * <code>.mako.v2.ReadProjectAgents read_project_agents = 72 [json_name = "readProjectAgents"];</code>
+     */
+    public Builder setReadProjectAgents(dev.ironpark.mako.v2.ReadProjectAgents value) {
+      copyOnWrite();
+      instance.setReadProjectAgents(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ReadProjectAgents read_project_agents = 72 [json_name = "readProjectAgents"];</code>
+     */
+    public Builder setReadProjectAgents(
+        dev.ironpark.mako.v2.ReadProjectAgents.Builder builderForValue) {
+      copyOnWrite();
+      instance.setReadProjectAgents(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ReadProjectAgents read_project_agents = 72 [json_name = "readProjectAgents"];</code>
+     */
+    public Builder mergeReadProjectAgents(dev.ironpark.mako.v2.ReadProjectAgents value) {
+      copyOnWrite();
+      instance.mergeReadProjectAgents(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ReadProjectAgents read_project_agents = 72 [json_name = "readProjectAgents"];</code>
+     */
+    public Builder clearReadProjectAgents() {
+      copyOnWrite();
+      instance.clearReadProjectAgents();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.ProjectAgents project_agents = 73 [json_name = "projectAgents"];</code>
+     */
+    @java.lang.Override
+    public boolean hasProjectAgents() {
+      return instance.hasProjectAgents();
+    }
+    /**
+     * <code>.mako.v2.ProjectAgents project_agents = 73 [json_name = "projectAgents"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ProjectAgents getProjectAgents() {
+      return instance.getProjectAgents();
+    }
+    /**
+     * <code>.mako.v2.ProjectAgents project_agents = 73 [json_name = "projectAgents"];</code>
+     */
+    public Builder setProjectAgents(dev.ironpark.mako.v2.ProjectAgents value) {
+      copyOnWrite();
+      instance.setProjectAgents(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ProjectAgents project_agents = 73 [json_name = "projectAgents"];</code>
+     */
+    public Builder setProjectAgents(
+        dev.ironpark.mako.v2.ProjectAgents.Builder builderForValue) {
+      copyOnWrite();
+      instance.setProjectAgents(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ProjectAgents project_agents = 73 [json_name = "projectAgents"];</code>
+     */
+    public Builder mergeProjectAgents(dev.ironpark.mako.v2.ProjectAgents value) {
+      copyOnWrite();
+      instance.mergeProjectAgents(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ProjectAgents project_agents = 73 [json_name = "projectAgents"];</code>
+     */
+    public Builder clearProjectAgents() {
+      copyOnWrite();
+      instance.clearProjectAgents();
+      return this;
+    }
+
+    /**
      * <pre>
      * A forge: GitHub, Forgejo or Gitea.
      * </pre>
@@ -7576,6 +7776,8 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.GitResult.class,
             dev.ironpark.mako.v2.ReadChat.class,
             dev.ironpark.mako.v2.Chat.class,
+            dev.ironpark.mako.v2.ReadProjectAgents.class,
+            dev.ironpark.mako.v2.ProjectAgents.class,
             dev.ironpark.mako.v2.ForgeList.class,
             dev.ironpark.mako.v2.ForgeItems.class,
             dev.ironpark.mako.v2.ForgeView.class,
@@ -7597,15 +7799,15 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.DeviceAccept.class,
           };
           java.lang.String info =
-              "\u0000E\u0001\u0000\u0001oE\u0000\u0000\u0000\u0001\u0208\n<\u0000\u000b<\u0000\f" +
+              "\u0000G\u0001\u0000\u0001oG\u0000\u0000\u0000\u0001\u0208\n<\u0000\u000b<\u0000\f" +
               "<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000\u001a<\u0000" +
               "\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000\"<\u0000#<\u0000" +
               "$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000+<\u0000,<\u0000-<\u0000" +
               "2<\u00003<\u00004<\u00005<\u00006<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000" +
               "<<\u0000=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000" +
-              "F<\u0000G<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000" +
-              "e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000" +
-              "o<\u0000";
+              "F<\u0000G<\u0000H<\u0000I<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000" +
+              "[<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000l<\u0000" +
+              "m<\u0000n<\u0000o<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

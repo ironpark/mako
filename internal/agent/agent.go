@@ -54,6 +54,9 @@ type Launcher interface {
 	Isolate() string
 }
 
+// Prompter gives a newly launched interactive agent its initial task.
+type Prompter interface{ PromptArgs(text string) []string }
+
 // Launch is how mako starts an agent: its command line, and the variables
 // it adds to the agent's environment. Readying a launch changes both.
 type Launch struct {

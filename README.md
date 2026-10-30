@@ -279,7 +279,7 @@ the first run, and most of it can be edited in the app's Settings.
     "claude": {
       "args": ["--verbose"],
       "profiles": [
-        {"name": "opus", "args": ["--model", "opus"]},
+        {"name": "opus", "description": "Reviews complex changes, concurrency and cancellation.", "args": ["--model", "opus"]},
         {"name": "work", "env": {"CLAUDE_CONFIG_DIR": "~/.claude-work"}}
       ]
     },
@@ -299,10 +299,25 @@ built-ins `claude`, `codex`, `agy`, `pi`, `omp`, `omo`, `opencode` and
 `shell` work without any configuration. Other nodes see only your agents' and profiles' names, never
 their flags or environment.
 
+A profile can include a `description` of its specialties and when to use it,
+edited in Settings ▸ Agents. The built-in `mako` MCP server includes these
+descriptions in `list_agents`, so agents can choose a suitable agent and
+profile before delegating with `spawn_agent`. Descriptions are optional;
+existing profiles continue to work.
+
 **MCP servers.** Sessions of the agents that take them (see
 [Agents](#agents)) get the MCP servers of the Zed extensions installed on
 their node (Settings ▸ Extensions), plus any you
 list under `context_servers`. A profile can choose a subset of them.
+
+They also get the built-in **mako** MCP server: agents can start another
+agent in the same project, list project sessions, exchange messages through
+durable inboxes, and stop agents they spawned. New sessions appear in the
+app as ordinary sessions. See [Project agents over MCP](docs/agent-mcp.md)
+for the tools, message workflow and configuration.
+The right sidebar's **Agents** tab monitors their status, parent and child
+relationships, pending messages and recent communication without consuming
+their inboxes.
 
 ```json
 "context_servers": {

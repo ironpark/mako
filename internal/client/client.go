@@ -120,6 +120,11 @@ func (c *Client) ListSessions(ctx context.Context, req *protocol.ListSessions) (
 	return reply.GetSessions(), nil
 }
 
+// ProjectAgents reads a project's agent activity without consuming messages.
+func (c *Client) ProjectAgents(ctx context.Context, req *protocol.ReadProjectAgents) (*protocol.ProjectAgents, error) {
+	return request[*protocol.ProjectAgents](ctx, c, protocol.TypeReadProjectAgents, req)
+}
+
 // Search lists a project's files on a node, or finds a text in them.
 func (c *Client) Search(ctx context.Context, req *protocol.Search) (*protocol.SearchResult, error) {
 	return request[*protocol.SearchResult](ctx, c, protocol.TypeSearch, req)

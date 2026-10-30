@@ -31,6 +31,7 @@ type savedSession struct {
 	Info           *protocol.SessionInfo
 	Request        *protocol.OpenSession
 	TranscriptPath string
+	ParentID       string
 }
 
 // savedJSON is a savedSession as sessions.json has it. The messages are in
@@ -40,6 +41,7 @@ type savedJSON struct {
 	Info           json.RawMessage `json:"info"`
 	Request        json.RawMessage `json:"request"`
 	TranscriptPath string          `json:"transcript_path,omitempty"`
+	ParentID       string          `json:"parent_session,omitempty"`
 }
 
 var (
@@ -56,7 +58,7 @@ func (e savedSession) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(savedJSON{Info: info, Request: req, TranscriptPath: e.TranscriptPath})
+	return json.Marshal(savedJSON{Info: info, Request: req, TranscriptPath: e.TranscriptPath, ParentID: e.ParentID})
 }
 
 func (e *savedSession) UnmarshalJSON(data []byte) error {
@@ -65,6 +67,7 @@ func (e *savedSession) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	e.Info, e.Request, e.TranscriptPath = &protocol.SessionInfo{}, &protocol.OpenSession{}, raw.TranscriptPath
+	e.ParentID = raw.ParentID
 	if len(raw.Info) > 0 {
 		if err := savedUnmarshal.Unmarshal(raw.Info, e.Info); err != nil {
 			return fmt.Errorf("info: %w", err)
@@ -229,6 +232,10 @@ func (d *Daemon) attachSession(ctx context.Context, id string) (*session.Session
 // simultaneous windows cannot launch a restored session twice; the later one
 // gets the session the first started. Failed starts retain the saved entry.
 func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.OpenSession) (_ *session.Session, err error) {
+	return d.startSessionAs(ctx, id, req, "")
+}
+
+func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.OpenSession, parent string) (_ *session.Session, err error) {
 	// The request may be a saved entry's, which this must not change.
 	req = proto.CloneOf(req)
 	env := req.GetEnv()
@@ -281,6 +288,9 @@ func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.Open
 
 	d.sessionMu.Lock()
 	previous, existed := d.saved[id]
+	if existed {
+		parent = previous.ParentID
+	}
 	var claimed map[string]bool // only an older saved session recovers one
 	if existed && previous.Info.GetConversationId() == "" {
 		claimed = d.claimedLocked(id)
@@ -308,7 +318,11 @@ func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.Open
 	if launch.Shown == nil {
 		launch.Shown = slices.Clone(launch.Command)
 	}
-	cleanup := d.withContextServers(ctx, &launch, id)
+	cleanup := d.withContextServers(ctx, &launch, id, parent)
+	if err := ctx.Err(); err != nil {
+		cleanup()
+		return nil, err
+	}
 	s, err := session.Start(session.Spec{ID: id, NodeID: d.cfg.NodeID, Agent: req.GetAgent(), Profile: req.GetProfile(),
 		Project: req.GetProject(), Command: launch.Command, Shown: launch.Shown, Env: launch.Env, Cols: uint16(req.GetCols()), Rows: uint16(req.GetRows()), Worktree: req.GetWorktree()})
 	if err != nil {
@@ -325,7 +339,7 @@ func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.Open
 	info := s.Info()
 	// Commands can embed ephemeral MCP config and secrets; only persist inputs.
 	info.Command = nil
-	d.saved[id] = savedSession{Info: info, Request: req, TranscriptPath: transcriptPath}
+	d.saved[id] = savedSession{Info: info, Request: req, TranscriptPath: transcriptPath, ParentID: parent}
 	if err := d.saveSessionsLocked(); err != nil {
 		if existed {
 			d.saved[id] = previous
@@ -337,7 +351,12 @@ func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.Open
 		return nil, fmt.Errorf("save session: %w", err)
 	}
 	d.sessions.add(s)
+	d.projectAgents.activate(s)
 	d.trackConversation(s)
+	if parent != "" {
+		d.reportProjectAgent(s, parent)
+		go d.followProjectAgent(s, parent)
+	}
 	d.log.Info("session started", "id", id, "agent", req.GetAgent(), "project", req.GetProject())
 	go func() { <-s.Done(); cleanup(); d.releaseSession(id) }()
 	return s, nil
@@ -464,6 +483,9 @@ func (d *Daemon) closeSession(id string) error {
 	if live {
 		_ = s.Close()
 		d.sessions.remove(id)
+	}
+	if err := d.projectAgents.messages.remove(id); err != nil {
+		d.log.Warn("agent inbox could not be removed", "session", id, "err", err)
 	}
 	return nil
 }
