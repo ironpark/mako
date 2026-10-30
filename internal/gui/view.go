@@ -360,7 +360,7 @@ func ownerGroup(m *model, o ownerSection, folded bool, section func(sessionGroup
 	if host != "" {
 		service = ggui.Text(host).Size(11.5).Color(tokExtraMuted).NoWrap()
 	}
-	var heading ggui.Widget = ggui.Box(groupToggle(m, "users", name, sessions, folded, ownerKey(o.Owner), service)).Pad(2, 4, 2, 2)
+	var heading ggui.Widget = ggui.Box(groupToggle(m, ownerGlyph(host), name, sessions, folded, ownerKey(o.Owner), service)).Pad(2, 4, 2, 2)
 	heading = ui.ContextMenuFunc(heading, func() []ggui.Widget {
 		return append(ownerMenu(m, o, name), ownerSpaceItems(m, o.Owner, name)...)
 	}).Name(Tf("%s actions", name))
@@ -381,6 +381,15 @@ func ownerName(owner string) (name, host string) {
 		return owner[i+1:], owner[:i]
 	}
 	return owner, ""
+}
+
+// ownerGlyph is an owner's heading's icon: GitHub's mark for an owner on
+// GitHub, git's for one anywhere else.
+func ownerGlyph(host string) string {
+	if host == "github.com" {
+		return "github"
+	}
+	return "lang-git"
 }
 
 // groupToggle is a sidebar heading's button: its icon and name, its
