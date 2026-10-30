@@ -486,7 +486,9 @@ func chatFeed(m *model, id string, state *chatState, turns ggui.Readable[[]chatT
 			return chatTurnRow(m, id, info, state, t)
 		})
 	}).Gap(chatGap).Stretch().EstimatedExtent(chatTurnEstimate)
-	content := &lane{child: ggui.Box(ggui.Column(head, list).Stretch()).Pad(18, 0)}
+	// A drag selects through the turns in view, from one message into the
+	// next, and copies them as they read.
+	content := &lane{child: ggui.Box(ggui.SelectionArea(ggui.Column(head, list).Stretch())).Pad(18, 0)}
 	return ggui.Scroll(content).FollowEnd().Bar(tokSurface3)
 }
 

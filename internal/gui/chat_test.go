@@ -387,3 +387,40 @@ func TestASentMessageShowsUntilTheLogHasIt(t *testing.T) {
 		t.Fatalf("a command the log never has is still pending: %q", got)
 	}
 }
+
+func TestADragCopiesAcrossTheTurnsOfAChat(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
+	m.Selected.Set("s")
+	state := m.chatState("s")
+	state.loading = true
+	state.result.Set(chatResult{Loaded: true, Chat: &protocol.Chat{Supported: true, Conversation: "c",
+		Messages: []*protocol.ChatMessage{
+			{Role: "user", Text: "Why does it fail"},
+			{Role: "assistant", Text: "Because the path is wrong."},
+		}}})
+	p := ggui.ProbeBuilder(func() ggui.Widget { return chatView(m, "s", 1) }, ggui.Sz(900, 700))
+	defer p.Close()
+	p.Frame()
+	p.Frame()
+	sem := p.Semantics()
+	question, ok := sem.Find(ggui.RoleText, "Why does it fail")
+	if !ok {
+		t.Fatalf("no question:\n%s", sem)
+	}
+	answer, ok := sem.Find(ggui.RoleText, "Because the path is wrong.")
+	if !ok {
+		t.Fatalf("no answer:\n%s", sem)
+	}
+	q, a := question.Rect, answer.Rect
+	from := ggui.Pt(q.Origin.X+1, q.Origin.Y+q.Size.H/2)
+	to := ggui.Pt(a.Origin.X+a.Size.W-1, a.Origin.Y+a.Size.H/2)
+	p.Press(from)
+	p.Move(to)
+	p.Release(to)
+	p.Key("cmd+c")
+	if got := p.Clipboard().Read(); !strings.Contains(got, "Why does it fail") || !strings.Contains(got, "Because the path is wrong") {
+		t.Fatalf("a drag from the question to the answer copied %q", got)
+	}
+}
