@@ -132,6 +132,20 @@ type busyGlyph struct {
 	reduced bool
 }
 
+// idleRate is how often the sidebar's slow motions, a hop and a breath,
+// are drawn: 20 times a second, which they need no more than. Each frame
+// paints the whole window, so at the display's 120 a single breathing
+// dot kept the app on 1.5 cores.
+const idleRate = time.Second / 20
+
+// idleTick is the frame's time, for a slow motion to be drawn at, and asks
+// for the frame idleRate after it, which keeps the motion going.
+func idleTick() time.Time {
+	now := ggui.FrameTime()
+	ggui.WakeAt(now.Add(idleRate))
+	return now
+}
+
 // hopPeriod is one hop up and back; hopHeight how far it lifts.
 const (
 	hopPeriod = 700 * time.Millisecond
@@ -145,8 +159,7 @@ func (g *busyGlyph) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 
 func (g *busyGlyph) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	if !g.reduced && g.busy() {
-		// Reading Now asks for the next frame, which keeps the hop going.
-		phase := float64(ggui.Now().UnixNano()%int64(hopPeriod)) / float64(hopPeriod)
+		phase := float64(idleTick().UnixNano()%int64(hopPeriod)) / float64(hopPeriod)
 		r.Origin.Y -= math.Abs(math.Sin(phase*math.Pi)) * hopHeight
 	}
 	dst.Paint(g.icon, r)
@@ -200,8 +213,7 @@ func (d *activityDot) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	}
 	glow := 1.0
 	if !d.reduced {
-		// Reading Now asks for the next frame, which keeps it breathing.
-		phase := float64(ggui.Now().UnixNano()%int64(glowPeriod)) / float64(glowPeriod)
+		phase := float64(idleTick().UnixNano()%int64(glowPeriod)) / float64(glowPeriod)
 		glow = (1 - math.Cos(phase*2*math.Pi)) / 2
 	}
 	dst.FillCircle(center, dotSize/2+1.5+2*glow, c.Alpha(0.12+0.18*glow))
