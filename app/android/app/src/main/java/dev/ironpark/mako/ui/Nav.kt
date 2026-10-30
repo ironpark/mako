@@ -7,11 +7,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import dev.ironpark.mako.Mesh
 import dev.ironpark.mako.SessionRef
+import dev.ironpark.mako.mako
+import dev.ironpark.mako.net.GitHubAppUpdates
+import dev.ironpark.mako.net.NodeProjectFiles
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 
@@ -27,6 +32,7 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
     val open by target.collectAsState()
     val pair by pairing.collectAsState()
     val join = rememberJoin(mesh)
+    val context = LocalContext.current
 
     LaunchedEffect(pair) {
         val link = pair ?: return@LaunchedEffect
@@ -54,6 +60,7 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                 onOpen = { openSession(it.nodeId, it.id) },
                 onMesh = { nav.navigate("mesh") },
                 onNew = { nav.navigate("new") },
+                onSettings = { nav.navigate("settings") },
                 screenState = homeState,
             )
         }
@@ -65,16 +72,34 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                 node = args?.getString("node").orEmpty(),
                 id = args?.getString("id").orEmpty(),
                 onBack = { nav.popBackStack() },
+                onFiles = { root -> nav.navigate("files/${Uri.encode(args?.getString("node").orEmpty())}/${Uri.encode(root)}") },
                 home = {
                     SessionsScreen(
                         mesh,
                         onOpen = { openSession(it.nodeId, it.id) },
                         onMesh = { nav.navigate("mesh") },
                         onNew = { nav.navigate("new") },
+                        onSettings = { nav.navigate("settings") },
                         screenState = previewState,
                     )
                 },
             )
+        }
+        composable("files/{node}/{root}") { entry ->
+            val node = entry.arguments?.getString("node").orEmpty()
+            val root = entry.arguments?.getString("root").orEmpty()
+            val files = remember(mesh.daemon, node) { NodeProjectFiles(mesh.daemon, node) }
+            FilesScreen(files, root, mesh.nodeName(node), onBack = { nav.popBackStack() })
+        }
+        composable("settings") {
+            SettingsScreen(onBack = { nav.popBackStack() }, onNotifications = { nav.navigate("notifications") }, onUpdates = { nav.navigate("updates") })
+        }
+        composable("notifications") {
+            NotificationSettingsScreen(context.mako.notificationPreferences, onBack = { nav.popBackStack() })
+        }
+        composable("updates") {
+            val updates = remember(context) { GitHubAppUpdates(context.applicationContext) }
+            UpdatesScreen(updates, onBack = { nav.popBackStack() })
         }
         composable("mesh") { MeshScreen(mesh, onBack = { nav.popBackStack() }, onScan = { nav.navigate("scan") }) }
         composable("scan") { ScanScreen(mesh, onBack = { nav.popBackStack() }) }

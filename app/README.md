@@ -42,6 +42,21 @@ and opens a session's conversation and its terminal.
   bar for choices and multiple selections. The session menu's **Answer the
   agent** opens the panel when automatic detection is unavailable. Close
   the panel to return to the conversation without discarding the draft.
+- **Project files.** Open **Project files** from the session menu to browse
+  folders on that computer, show hidden files, preview text, Markdown and
+  images, and copy a file path. Search by name or contents across the project;
+  a content match opens at its line. **Git changes** lists changed files and
+  opens a colored diff, including renames and deletions. Large text files and
+  images have explicit preview limits.
+- **Notifications.** The main screen's **Settings** controls approval,
+  waiting and completed-turn alerts separately, including whether they appear
+  while the app is open. Choices persist and take effect immediately. Android
+  permissions and system notification settings are accessible there too.
+- **App updates.** **Settings → App updates** checks stable `android-v*`
+  GitHub releases, downloads their APK with progress, and verifies its SHA-256,
+  package, version and signing certificate before opening Android's installer.
+  Android asks for install permission if needed. Debug builds cannot be
+  updated with the differently signed release APK.
 - **Touch controls.** Swipe horizontally between Chat and Terminal; the
   next view follows your finger before you release. Swipe right again
   from Chat to reveal the main session list with its filter and scroll

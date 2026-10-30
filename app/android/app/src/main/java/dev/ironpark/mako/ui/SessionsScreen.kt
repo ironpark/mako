@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Devices
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -107,7 +108,7 @@ internal fun rememberSessionsScreenState(source: SessionsScreenState? = null): S
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SessionsScreen(
-    mesh: Mesh, onOpen: (SessionInfo) -> Unit, onMesh: () -> Unit, onNew: () -> Unit,
+    mesh: Mesh, onOpen: (SessionInfo) -> Unit, onMesh: () -> Unit, onNew: () -> Unit, onSettings: () -> Unit,
     screenState: SessionsScreenState = rememberSessionsScreenState(),
 ) {
     val state by mesh.state.collectAsState()
@@ -137,6 +138,7 @@ internal fun SessionsScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, stringResource(R.string.settings)) }
                     IconButton(onClick = onMesh) {
                         BadgedBox(badge = { if (linked == 0) Badge() }) {
                             Icon(Icons.Outlined.Devices, stringResource(R.string.computers))

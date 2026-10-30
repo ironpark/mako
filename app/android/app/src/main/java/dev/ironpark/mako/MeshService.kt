@@ -34,7 +34,7 @@ class MeshService : Service() {
     private var multicast: WifiManager.MulticastLock? = null
 
     /** What was last seen of each session: its approval and its status. */
-    private val seen = mutableMapOf<String, Pair<String, String>>()
+    private val seen = NoticeTracker()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -57,7 +57,9 @@ class MeshService : Service() {
                     notify(NotificationManagerCompat.from(this@MeshService), ONGOING, ongoing(it))
                 }
             }
-            combine(app.mesh.sessions, app.foreground, ::Pair).collect { (sessions, fg) -> notice(sessions, fg) }
+            combine(app.mesh.sessions, app.foreground, app.notificationPreferences.options) { sessions, fg, options ->
+                Triple(sessions, fg, options)
+            }.collect { (sessions, fg, options) -> notice(sessions, fg, options) }
         }
     }
 
@@ -76,19 +78,19 @@ class MeshService : Service() {
     }
 
     /** Notifies of the approvals asked for, and the turns ended, since last. */
-    private fun notice(sessions: List<SessionInfo>, foreground: Boolean) {
+    private fun notice(sessions: List<SessionInfo>, foreground: Boolean, options: NotificationOptions) {
         val nm = NotificationManagerCompat.from(this)
-        for (s in sessions) {
-            val approval = if (s.hasApproval()) s.approval.id else ""
-            val before = seen.put(s.id, approval to s.status) ?: continue // known from now on
-            if (approval != before.first) {
-                if (approval.isEmpty()) nm.cancel(s.id.hashCode())
-                else if (!foreground) notify(nm, s.id.hashCode(), approvalNotice(s))
-            } else if (!foreground && s.status != before.second && (s.status == "waiting" || s.status == "done")) {
-                notify(nm, s.id.hashCode(), turnNotice(s))
-            }
+        for (change in seen.update(sessions)) {
+            val s = change.session
+            val kind = change.kind
+            if (kind == null || !options.allows(kind, foreground)) nm.cancel(s.id.hashCode())
+            else notify(nm, s.id.hashCode(), if (kind == NoticeKind.Approval) approvalNotice(s) else turnNotice(s))
         }
-        seen.keys.retainAll(sessions.map { it.id }.toSet())
+        // Applying a setting also removes an alert that was already visible.
+        for (s in sessions) {
+            val kind = s.noticeKind()
+            if (!options.enabled || kind != null && !options.allows(kind, foreground)) nm.cancel(s.id.hashCode())
+        }
     }
 
     private fun notify(nm: NotificationManagerCompat, id: Int, n: Notification) {

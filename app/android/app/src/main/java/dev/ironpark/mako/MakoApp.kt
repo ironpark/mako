@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /** MakoApp holds the mesh, for the window and the service alike. */
 class MakoApp : Application() {
+    internal val notificationPreferences by lazy { NotificationPreferences(this) }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     lateinit var mesh: Mesh
         private set

@@ -29,6 +29,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -80,7 +81,7 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit, home: @Composable () -> Unit) {
+fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit, home: @Composable () -> Unit, onFiles: (String) -> Unit) {
     val sessions by mesh.sessions.collectAsState()
     val nodes by mesh.nodes.collectAsState()
     val session = sessions.firstOrNull { it.id == id }
@@ -167,6 +168,9 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit, home
                         var menu by remember { mutableStateOf(false) }
                         IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.session_actions)) }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.project_files)) },
+                                leadingIcon = { Icon(Icons.Outlined.Folder, null) }, enabled = session != null,
+                                onClick = { menu = false; onFiles(session?.project.orEmpty().ifBlank { "~" }) })
                             DropdownMenuItem(text = { Text(stringResource(R.string.answer_agent)) },
                                 enabled = session?.state == "running", onClick = { menu = false; question = true })
                             DropdownMenuItem(text = { Text(stringResource(R.string.rename)) }, onClick = {

@@ -1,10 +1,11 @@
 Android 8.0+ · arm64-v8a and x86_64 · signed release APK
 
-- Fold subagents into a compact summary of active and ended agents; expand to read their conversations, with active agents first.
-- Reduce card sizes and spacing around the conversation, toolbar and composer.
-- Swipe between Chat and Terminal anywhere in the content, with both views visible while dragging.
-- Swipe right again from Chat to return to the main list, preserving its filter and scroll position.
-- Scroll the terminal vertically with one finger; use two fingers to pan or pinch to zoom, and double-tap to reset.
-- Clear input focus when switching pages and preserve approval details across Chat and Terminal.
+- Browse project folders on the session computer, show hidden files, and preview text, Markdown and images.
+- Search file names or contents and open a result at its matching line.
+- Inspect Git changes with colored diffs, including renamed and deleted files.
+- Configure approval, waiting and completed-turn notifications independently, including alerts while using the app.
+- Check GitHub for stable Android releases, download an update with progress, and verify its checksum, package, version and signing certificate before installation.
+- Render Markdown tables, clickable links, nested lists, quotes and code in conversations.
+- Replace the back arrow and separate Chat/Terminal tabs with a compact toolbar switch, preserving interactive swipe navigation.
 
 Download the APK below. SHA256SUMS contains its checksum. This release uses a persistent release signing key. If a locally built debug APK is already installed, Android cannot update it with this differently signed APK: back up your app data before replacing it.
