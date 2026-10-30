@@ -170,7 +170,7 @@ func (m *model) readChat(id, agent string, state *chatState, current func() bool
 
 // loadOlder reads the page before what is loaded, for a reader near the
 // top, keeping what is in view in place.
-func (m *model) loadOlder(id string, state *chatState, scroll *ggui.ScrollController) {
+func (m *model) loadOlder(id string, state *chatState) {
 	before := ggui.Peek(state.result).Chat.GetStart()
 	if older := ggui.Peek(state.older); older.End > 0 {
 		before = older.Start
@@ -430,7 +430,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 			// once, once it is laid out and its extent known.
 			rows = append(rows, &onPaint{child: ggui.Center(ui.Spinner().Size(14)), fn: func(*ggui.Canvas, ggui.Rect) {
 				if scroll.MaxOffset() == 0 {
-					m.loadOlder(id, state, scroll)
+					m.loadOlder(id, state)
 				}
 			}})
 		}
@@ -446,7 +446,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	last := 0.0
 	ggui.Watch(offset, func(off float64) {
 		if off < last && off < olderNear {
-			m.loadOlder(id, state, scroll)
+			m.loadOlder(id, state)
 		}
 		last = off
 	})

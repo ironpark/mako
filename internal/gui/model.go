@@ -653,6 +653,10 @@ func (m *model) poll(ctx context.Context) {
 			printed[sessions[i].GetId()] = t.Truncate(time.Minute)
 		}
 		sessions[i].LastOutput = nil
+		// An agent at work spins a glyph at the head of its title, which
+		// the daemon then reports changed every second: without it, the
+		// sessions read the same, and nothing showing them is rebuilt.
+		sessions[i].Title = cleanTitle(sessions[i].GetTitle())
 	}
 	m.post(func() {
 		m.Conn.Set(connState{OK: true, Self: self})
