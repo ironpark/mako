@@ -90,6 +90,9 @@ type model struct {
 	confirmDiscard string                 // the file tab DiscardOpen asks about
 	QuitOpen       *ggui.StateValue[bool] // asks before quitting with unsaved files
 	quitting       bool
+	quitAsked      bool       // a quit, not the close button, is closing the window; see tray.go
+	tray           *ggui.Tray // the menu bar's icon, in tray mode
+	badge          string     // the count of sessions waiting, as the Dock's badge shows it
 
 	// The command palette, and the extensions it opens over the window;
 	// see palette.go. Each opening gives palette the commands of the

@@ -93,8 +93,12 @@ github.com/ironpark/ggui v0.0.0-20261030035734-09ff10d1b4c0 h1:sGFl0FN2RsrAELltT
 github.com/ironpark/ggui v0.0.0-20261030035734-09ff10d1b4c0/go.mod h1:RnxpMxp/xIO74jmKLyiKpcAc7ujNkwaLOjnMrSnXujc=
 github.com/ironpark/ggui v0.0.0-20261030071921-82fd0ee5b931 h1:DK794SK6mnJrqasrERVfQ+rpDSdE3rsU99U9gRJ91Ys=
 github.com/ironpark/ggui v0.0.0-20261030071921-82fd0ee5b931/go.mod h1:RnxpMxp/xIO74jmKLyiKpcAc7ujNkwaLOjnMrSnXujc=
+github.com/ironpark/ggui v0.0.0-20261030074410-951e57e898c2 h1:RZu6swdwSdJMHuRUOuAv4xllWAie8a42h6pJQPej8Y0=
+github.com/ironpark/ggui v0.0.0-20261030074410-951e57e898c2/go.mod h1:yqQNw37XxYUG40QqAYxEFkvqUZwnwVCN0mClpqisiI8=
 github.com/ironpark/ggwd v0.0.0-20261030035645-cd939c201b94 h1:q2mt33ioOPqrUOLbl+Xqu/Q35U5JEAIW7caI3099TXY=
 github.com/ironpark/ggwd v0.0.0-20261030035645-cd939c201b94/go.mod h1:ZBZM+Vgb/3nkFixAztB/X3VqhUu/l4/tvARmLHjcZ7k=
+github.com/ironpark/ggwd v0.0.0-20261030074107-f958a890e2b9 h1:NlXDvFiTdlYr1Fl3pMQNaVBvgjgP7Ghu1ETuKm2vpWU=
+github.com/ironpark/ggwd v0.0.0-20261030074107-f958a890e2b9/go.mod h1:ZBZM+Vgb/3nkFixAztB/X3VqhUu/l4/tvARmLHjcZ7k=
 github.com/ironpark/gostty v0.0.0-20261027142811-dd03466f18c8 h1:M/uELn81ZD/y/g5XrGc9RblBMZ5Xz1Pooo/fyt7jyCc=
 github.com/ironpark/gostty v0.0.0-20261027142811-dd03466f18c8/go.mod h1:YqbXLZjWWzx5yGHHff9Cwp1IXHMnTy4Ef2Pu+IO6hpo=
 github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202 h1:EPKxFHWVF3pUIGFz/Z5I/CsgVyJrGXv2LFQ/uZQHvYQ=

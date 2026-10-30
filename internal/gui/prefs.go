@@ -41,7 +41,11 @@ type prefs struct {
 	// their terminals while it is open.
 	ApproveInApp bool `json:"approve_in_app"`
 	// Notify tells the desktop when an agent out of view finishes or asks.
-	Notify     bool   `json:"notify"`
+	Notify bool `json:"notify"`
+	// Tray keeps the app in the menu bar when its window is closed, and
+	// HideDock takes it out of the Dock meanwhile; see tray.go.
+	Tray       bool   `json:"tray"`
+	HideDock   bool   `json:"hide_dock"`
 	Daemon     string `json:"daemon"`      // socket of an external daemon; empty is the local one
 	DaemonMode string `json:"daemon_mode"` // auto, embedded or external; see embedded.go
 

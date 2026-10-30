@@ -148,10 +148,7 @@ func settingsTarget(section string) string { return "settings:" + section }
 // reveal brings the window forward onto what a notification the user
 // clicked was about: a session, or a section of the settings.
 func (m *model) reveal(target string) {
-	if m.window != nil {
-		m.window.Show()
-		m.window.Focus()
-	}
+	m.showWindow()
 	if section, ok := strings.CutPrefix(target, "settings:"); ok {
 		m.openSettings(section)
 	} else if run, ok := strings.CutPrefix(target, "forge:"); ok {
@@ -187,6 +184,7 @@ func followAttention(m *model) {
 			label = strconv.Itoa(n)
 		}
 		setBadge(label)
+		m.setTrayTitle(label)
 		return nil
 	})
 }

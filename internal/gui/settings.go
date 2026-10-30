@@ -264,6 +264,11 @@ func generalSettings(m *model) ggui.Widget {
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.ApproveInApp }), "").Name(T("Approve in the window"))),
 				row(T("Notifications"), T("Tell the desktop when an agent you are not looking at finishes or asks for you."),
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.Notify }), "").Name(T("Notifications"))),
+				row(T("Keep in the menu bar"), T("Closing the window hides it to an icon in the menu bar, and the sessions and the app's daemon carry on. Quit from the icon or with ⌘Q."),
+					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.Tray }), "").Name(T("Keep in the menu bar"))),
+				row(T("Hide from the Dock"), T("While the window is hidden in the menu bar, the app leaves the Dock and ⌘-Tab. It comes back with the window."),
+					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.HideDock }), "").Name(T("Hide from the Dock")).
+						BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return !p.Tray }))),
 			),
 		),
 		section(T("Connection"),

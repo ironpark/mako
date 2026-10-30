@@ -34,13 +34,18 @@ func Run(cfg *config.Config, addr string) error {
 	app.Setup(func() {
 		go findEditors()
 		setup(m)
+		trayMode(app, m)
 		m.start(ctx, app.Post)
 		notify.Init(func(target string) { app.Post(func() { m.reveal(target) }) })
 	})
 	shortcuts(app, m)
 	app.OnDrop(m.dropFolder)
-	// Files with unsaved changes ask before the window goes.
+	// In tray mode the window hides; otherwise files with unsaved changes
+	// ask before it goes.
 	app.OnCloseRequest(func() bool {
+		if m.closeToTray() {
+			return false
+		}
 		if len(m.dirtyDocs()) == 0 || m.quitting {
 			return true
 		}
