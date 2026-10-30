@@ -31,9 +31,11 @@ func main() {
 	// A window of busy terminals makes garbage fast, and the collector
 	// lets the heap grow to twice what is live between collections: some
 	// 200 MB for 95 live. A soft limit collects sooner as the heap nears
-	// it, unless GOMEMLIMIT asks for another.
+	// it, kept clear of the live heap (see limit.go), unless GOMEMLIMIT
+	// asks for another.
 	if os.Getenv("GOMEMLIMIT") == "" {
 		debug.SetMemoryLimit(memoryLimit)
+		go fitLimit()
 	}
 	go relieve()
 	daemonAddr := flag.String("daemon", "", "the daemon's socket (default: the configuration directory's)")
