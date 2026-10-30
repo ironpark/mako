@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime/debug"
 	"runtime/metrics"
 	"runtime/pprof"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/ironpark/ggfx"
@@ -92,6 +94,9 @@ func diagnose() {
 				mb(r.live), mb(r.goal), mb(r.total), mb(r.limit), r.goroutines, d.gcRate, d.gcShare, d.cores,
 				mb(r.footprint), mb(r.gpuImages), mb(r.gpuQueue), d.fps, d.frameMS, d.flushes, d.commands, d.vertices,
 				d.fpsFor[0], d.fpsFor[1], d.fpsFor[2], d.fpsFor[3], d.fpsFor[4], d.partialFPS)
+			if d.fps >= 1 {
+				fmt.Fprintln(log, "# moving:", motionLine(ggui.ReadMotionReport()))
+			}
 			if d.troubled() && now.Sub(lastIncident) >= incidentGap {
 				lastIncident = now
 				fmt.Fprintf(log, "# incident: %.1f collections a second, %.0f%% of the CPU used, %.1f cores, %.1f frames a second\n",
@@ -259,4 +264,22 @@ func prune(dir, pattern string, keep int) {
 	for _, p := range old[:max(len(old)-keep, 0)] {
 		os.RemoveAll(p)
 	}
+}
+
+// motionLine writes what moved in the last frame, counted by type, and the
+// frames painted whole that might have been painted in part, by why.
+func motionLine(r ggui.MotionReport) string {
+	counts := map[string]int{}
+	for _, m := range r.Movers {
+		counts[m]++
+	}
+	var parts []string
+	for _, m := range slices.Sorted(maps.Keys(counts)) {
+		parts = append(parts, fmt.Sprintf("%s×%d", m, counts[m]))
+	}
+	var whole []string
+	for _, why := range slices.Sorted(maps.Keys(r.Refusals)) {
+		whole = append(whole, fmt.Sprintf("%s=%d", why, r.Refusals[why]))
+	}
+	return strings.Join(parts, " ") + "; painted whole: " + strings.Join(whole, " ")
 }

@@ -109,6 +109,8 @@ github.com/ironpark/ggui v0.0.0-20261030134535-537cd62c54d7 h1:xoPoOH6lOLOHujIMV
 github.com/ironpark/ggui v0.0.0-20261030134535-537cd62c54d7/go.mod h1:aragc5HOeNMaES/8xtRHgbRaRJXTiHDtfPhAEGV9gMY=
 github.com/ironpark/ggui v0.0.0-20261030144326-5ac2d55896bb h1:ar3WIPqVXVCxV3PPUOuWCMRoNg1OnE7RW8uq7LNoTIo=
 github.com/ironpark/ggui v0.0.0-20261030144326-5ac2d55896bb/go.mod h1:aragc5HOeNMaES/8xtRHgbRaRJXTiHDtfPhAEGV9gMY=
+github.com/ironpark/ggui v0.0.0-20261030150727-6293634ad919 h1:iLnlqQOGIXdrSQD3RFfeiAYtLotuZCwFEphEpkHo4fQ=
+github.com/ironpark/ggui v0.0.0-20261030150727-6293634ad919/go.mod h1:aragc5HOeNMaES/8xtRHgbRaRJXTiHDtfPhAEGV9gMY=
 github.com/ironpark/ggwd v0.0.0-20261030035645-cd939c201b94 h1:q2mt33ioOPqrUOLbl+Xqu/Q35U5JEAIW7caI3099TXY=
 github.com/ironpark/ggwd v0.0.0-20261030035645-cd939c201b94/go.mod h1:ZBZM+Vgb/3nkFixAztB/X3VqhUu/l4/tvARmLHjcZ7k=
 github.com/ironpark/ggwd v0.0.0-20261030074107-f958a890e2b9 h1:NlXDvFiTdlYr1Fl3pMQNaVBvgjgP7Ghu1ETuKm2vpWU=
