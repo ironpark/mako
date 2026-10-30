@@ -144,6 +144,7 @@ func (t *terminalView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	p := t.prefs()
 	t.conn.configure(termOptionsFor(p, t.pal))
 	t.rect = r
+	t.conn.painted(dst.WindowRect(r))
 	fillGround(dst, r, t.ground)
 	dst.HitKey(r, t)
 	dst.HitPointer(r, t)

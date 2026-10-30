@@ -1083,6 +1083,11 @@ func (m *model) attach(id string) {
 		if err == nil {
 			conn, err = dialTerm(context.Background(), c, info, wake, func() { post(m.syncTitles) })
 		}
+		if conn != nil && m.window != nil {
+			// Output repaints the terminal alone, not the window.
+			repaint := m.window.RepaintRect
+			conn.repaint.Store(&repaint)
+		}
 		post(func() {
 			delete(m.dialing, id)
 			if err != nil {

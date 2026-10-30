@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ironpark/ggui"
 	"github.com/ironpark/gostty"
 	"github.com/ironpark/gostty/input"
 
@@ -62,6 +63,11 @@ type termConn struct {
 	// are coalesced until the frame that drew them has run.
 	wake    func()
 	pending atomic.Bool
+	// repaint, once the window gives one, asks for the terminal's region
+	// alone to be painted again; paintedAt is where a view last painted
+	// it, nil when that could not be told.
+	repaint   atomic.Pointer[func(ggui.Rect)]
+	paintedAt atomic.Pointer[ggui.Rect]
 
 	progress activity.Progress // what the program says of its work
 	copied   *string           // what the program last put on the clipboard, until the view takes it
@@ -272,9 +278,28 @@ func (t *termConn) setTitleLocked(title string) {
 	}
 }
 
+// requestPaint asks for the terminal to be painted again: where a view
+// last painted it, and only there, when the window can do that; else the
+// window whole.
 func (t *termConn) requestPaint() {
-	if t.pending.CompareAndSwap(false, true) {
-		t.wake()
+	if !t.pending.CompareAndSwap(false, true) {
+		return
+	}
+	if repaint, at := t.repaint.Load(), t.paintedAt.Load(); repaint != nil && at != nil {
+		(*repaint)(*at)
+		return
+	}
+	t.wake()
+}
+
+// painted notes where a view painted the terminal, in the window, or that
+// it cannot be told.
+func (t *termConn) painted(at ggui.Rect, known bool) {
+	switch old := t.paintedAt.Load(); {
+	case !known:
+		t.paintedAt.Store(nil)
+	case old == nil || *old != at:
+		t.paintedAt.Store(&at)
 	}
 }
 
