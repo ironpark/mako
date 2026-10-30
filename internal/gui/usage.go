@@ -255,8 +255,9 @@ func overlayChip(items ...ggui.Widget) ggui.Widget {
 	return raisedChip(ggui.Row(items...).Gap(8).Align(ggui.AlignCenter)).Radius(7).Pad(4, 8)
 }
 
-// raisedChip is the surface the window's floating chips share, raised
-// over what is under them; each sets its own radius and padding.
+// raisedChip is the box the window's floating chips share: their content
+// alone, with no surface, line or shadow of its own over what is under
+// them; each sets its own radius and padding.
 func raisedChip(w ggui.Widget) *ggui.BoxWidget {
-	return ggui.Box(w).Fill(tokSurface1).Border(1, tokBorder).Shadow(uitheme.Use().PanelShadow)
+	return ggui.Box(w)
 }
