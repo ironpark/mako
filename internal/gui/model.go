@@ -178,7 +178,8 @@ type model struct {
 	// Unread are the sessions that finished or asked out of view; see
 	// attention.go.
 	Unread *ggui.StateValue[map[string]bool]
-	// Printed is when each session last printed, to the minute, kept apart
+	// Printed is when each session last said something, its conversation's
+	// last message or else its last print, to the minute, kept apart
 	// from Sessions so a busy program does not redraw every list of them;
 	// Minute moves on each minute, so the times shown age.
 	Printed   *ggui.StateValue[map[string]time.Time]
@@ -657,10 +658,16 @@ func (m *model) poll(ctx context.Context) {
 	devices := m.fetchDevices(reqCtx, c, self)
 	printed := make(map[string]time.Time, len(sessions))
 	for i := range sessions {
-		if t := protocol.TimeOf(sessions[i].GetLastOutput()); !t.IsZero() {
+		// An agent's time is its conversation's last message: a redraw of
+		// its screen says nothing new. Without one, it is the last print.
+		t := protocol.TimeOf(sessions[i].GetLastMessage())
+		if t.IsZero() {
+			t = protocol.TimeOf(sessions[i].GetLastOutput())
+		}
+		if !t.IsZero() {
 			printed[sessions[i].GetId()] = t.Truncate(time.Minute)
 		}
-		sessions[i].LastOutput = nil
+		sessions[i].LastOutput, sessions[i].LastMessage = nil, nil
 		// An agent at work spins a glyph at the head of its title, which
 		// the daemon then reports changed every second: without it, the
 		// sessions read the same, and nothing showing them is rebuilt.

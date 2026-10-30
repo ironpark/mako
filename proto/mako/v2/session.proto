@@ -80,6 +80,9 @@ message SessionInfo {
   // every node that has a clone of it: "github.com/ironpark/mako". "" as
   // owner is, and for a remote on a local path.
   string remote = 26;
+  // last_message is when the conversation's latest prompt or reply was
+  // written, as its log says; unset before it has one.
+  google.protobuf.Timestamp last_message = 27;
 }
 
 // Approval is a tool call an agent waits for the user to approve.

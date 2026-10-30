@@ -101,7 +101,7 @@ func TestCompletionWaitsForEveryChild(t *testing.T) {
 	}
 	child("c", "b", true, 12)
 	child("other", "x", true, 30)
-	s.ReportActivity("c", "", time.Time{}, []*protocol.SubAgent{{Id: "a", Running: true}})
+	s.ReportActivity("c", "", time.Time{}, time.Time{}, []*protocol.SubAgent{{Id: "a", Running: true}})
 	if statusOf(s) != protocol.AgentDone {
 		t.Fatal("a stale hook or log revived a stopped child")
 	}
@@ -159,12 +159,12 @@ func TestLogStatusCannotReplaceANewerPromptOrConversation(t *testing.T) {
 	now := time.Now()
 	s := &Session{state: protocol.StateRunning, started: now, conversationID: "c"}
 	s.ReportStatus(protocol.AgentWorking, now.Add(time.Second).UnixNano())
-	s.ReportActivity("c", protocol.AgentIdle, now, nil)
-	s.ReportActivity("old", protocol.AgentDone, now.Add(2*time.Second), []*protocol.SubAgent{{Id: "x", Running: true}})
+	s.ReportActivity("c", protocol.AgentIdle, now, time.Time{}, nil)
+	s.ReportActivity("old", protocol.AgentDone, now.Add(2*time.Second), time.Time{}, []*protocol.SubAgent{{Id: "x", Running: true}})
 	if statusOf(s) != protocol.AgentWorking || s.agentsWorking {
 		t.Fatal("an old scan changed the current turn")
 	}
-	s.ReportActivity("c", protocol.AgentIdle, now.Add(3*time.Second), nil)
+	s.ReportActivity("c", protocol.AgentIdle, now.Add(3*time.Second), time.Time{}, nil)
 	if statusOf(s) != protocol.AgentIdle {
 		t.Fatal("log cancellation did not end work")
 	}

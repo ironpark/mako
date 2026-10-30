@@ -1296,6 +1296,78 @@ public  final class SessionInfo extends
 
   }
 
+  public static final int LAST_MESSAGE_FIELD_NUMBER = 27;
+  private com.google.protobuf.Timestamp lastMessage_;
+  /**
+   * <pre>
+   * last_message is when the conversation's latest prompt or reply was
+   * written, as its log says; unset before it has one.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp last_message = 27 [json_name = "lastMessage"];</code>
+   */
+  @java.lang.Override
+  public boolean hasLastMessage() {
+    return ((bitField0_ & 0x00000040) != 0);
+  }
+  /**
+   * <pre>
+   * last_message is when the conversation's latest prompt or reply was
+   * written, as its log says; unset before it has one.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp last_message = 27 [json_name = "lastMessage"];</code>
+   */
+  @java.lang.Override
+  public com.google.protobuf.Timestamp getLastMessage() {
+    return lastMessage_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : lastMessage_;
+  }
+  /**
+   * <pre>
+   * last_message is when the conversation's latest prompt or reply was
+   * written, as its log says; unset before it has one.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp last_message = 27 [json_name = "lastMessage"];</code>
+   */
+  private void setLastMessage(com.google.protobuf.Timestamp value) {
+    java.util.Objects.requireNonNull(value);
+    lastMessage_ = value;
+    bitField0_ |= 0x00000040;
+  }
+  /**
+   * <pre>
+   * last_message is when the conversation's latest prompt or reply was
+   * written, as its log says; unset before it has one.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp last_message = 27 [json_name = "lastMessage"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeLastMessage(com.google.protobuf.Timestamp value) {
+    java.util.Objects.requireNonNull(value);
+    if (lastMessage_ != null &&
+        lastMessage_ != com.google.protobuf.Timestamp.getDefaultInstance()) {
+      lastMessage_ =
+        com.google.protobuf.Timestamp.newBuilder(lastMessage_).mergeFrom(value).buildPartial();
+    } else {
+      lastMessage_ = value;
+    }
+    bitField0_ |= 0x00000040;
+  }
+  /**
+   * <pre>
+   * last_message is when the conversation's latest prompt or reply was
+   * written, as its log says; unset before it has one.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp last_message = 27 [json_name = "lastMessage"];</code>
+   */
+  private void clearLastMessage() {
+    lastMessage_ = null;
+    bitField0_ = (bitField0_ & ~0x00000040);
+  }
+
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -2696,6 +2768,83 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * last_message is when the conversation's latest prompt or reply was
+     * written, as its log says; unset before it has one.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp last_message = 27 [json_name = "lastMessage"];</code>
+     */
+    @java.lang.Override
+    public boolean hasLastMessage() {
+      return instance.hasLastMessage();
+    }
+    /**
+     * <pre>
+     * last_message is when the conversation's latest prompt or reply was
+     * written, as its log says; unset before it has one.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp last_message = 27 [json_name = "lastMessage"];</code>
+     */
+    @java.lang.Override
+    public com.google.protobuf.Timestamp getLastMessage() {
+      return instance.getLastMessage();
+    }
+    /**
+     * <pre>
+     * last_message is when the conversation's latest prompt or reply was
+     * written, as its log says; unset before it has one.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp last_message = 27 [json_name = "lastMessage"];</code>
+     */
+    public Builder setLastMessage(com.google.protobuf.Timestamp value) {
+      copyOnWrite();
+      instance.setLastMessage(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * last_message is when the conversation's latest prompt or reply was
+     * written, as its log says; unset before it has one.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp last_message = 27 [json_name = "lastMessage"];</code>
+     */
+    public Builder setLastMessage(
+        com.google.protobuf.Timestamp.Builder builderForValue) {
+      copyOnWrite();
+      instance.setLastMessage(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * last_message is when the conversation's latest prompt or reply was
+     * written, as its log says; unset before it has one.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp last_message = 27 [json_name = "lastMessage"];</code>
+     */
+    public Builder mergeLastMessage(com.google.protobuf.Timestamp value) {
+      copyOnWrite();
+      instance.mergeLastMessage(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * last_message is when the conversation's latest prompt or reply was
+     * written, as its log says; unset before it has one.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp last_message = 27 [json_name = "lastMessage"];</code>
+     */
+    public Builder clearLastMessage() {  copyOnWrite();
+      instance.clearLastMessage();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -2739,13 +2888,14 @@ public  final class SessionInfo extends
             "owner_",
             "caps_",
             "remote_",
+            "lastMessage_",
           };
           java.lang.String info =
-              "\u0000\u001a\u0000\u0001\u0001\u001a\u001a\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u001b\u0000\u0001\u0001\u001b\u001b\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208" +
               "\u000b\u000b\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011" +
               "\u0208\u0012\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004" +
-              "\u0017\u1009\u0005\u0018\u0208\u0019\u000b\u001a\u0208";
+              "\u0017\u1009\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

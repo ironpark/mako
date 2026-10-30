@@ -341,4 +341,25 @@ public interface SessionInfoOrBuilder extends
    */
   com.google.protobuf.ByteString
       getRemoteBytes();
+
+  /**
+   * <pre>
+   * last_message is when the conversation's latest prompt or reply was
+   * written, as its log says; unset before it has one.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp last_message = 27 [json_name = "lastMessage"];</code>
+   * @return Whether the lastMessage field is set.
+   */
+  boolean hasLastMessage();
+  /**
+   * <pre>
+   * last_message is when the conversation's latest prompt or reply was
+   * written, as its log says; unset before it has one.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp last_message = 27 [json_name = "lastMessage"];</code>
+   * @return The lastMessage.
+   */
+  com.google.protobuf.Timestamp getLastMessage();
 }

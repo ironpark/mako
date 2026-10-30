@@ -98,3 +98,22 @@ func TestActivityReadsCodexCancellationAndResume(t *testing.T) {
 		t.Fatalf("replaced log: %+v, %v", got, err)
 	}
 }
+
+func TestActivityDatesTheLastMessage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "c.jsonl")
+	said, later := time.Now().UTC().Add(-time.Hour), time.Now().UTC()
+	at := func(t time.Time) string { return t.Format(time.RFC3339Nano) }
+	writeLog(t, path,
+		`{"type":"user","sessionId":"c","cwd":"/p","timestamp":"`+at(said.Add(-time.Minute))+`","message":{"role":"user","content":"go"}}`+"\n"+
+			`{"type":"assistant","timestamp":"`+at(said)+`","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}`+"\n"+
+			// A tool's call is no message of the conversation's.
+			`{"type":"assistant","timestamp":"`+at(later)+`","message":{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash","input":{"command":"ls"}}]}}`+"\n")
+	var activity Activity
+	got, err := activity.Read(&protocol.SessionInfo{Agent: "claude", ConversationId: "c"}, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Said.Equal(said) {
+		t.Fatalf("last message at %v, want %v", got.Said, said)
+	}
+}

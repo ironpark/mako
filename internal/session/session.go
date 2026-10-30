@@ -82,6 +82,7 @@ type Session struct {
 	childLogs     []*protocol.SubAgent
 	approval      *protocol.Approval
 	approvalDone  chan struct{}
+	lastMessage   time.Time // when the conversation last said something, as its log has it
 	// reported is what the agent's status line last said of its tokens:
 	// the context window and the account's limits; guarded by mu.
 	reported *protocol.Usage
@@ -175,6 +176,7 @@ func (s *Session) Info() *protocol.SessionInfo {
 		Status:         s.statusLocked(),
 		StatusAt:       protocol.Time(s.statusAt),
 		LastOutput:     protocol.Time(s.LastOutput()),
+		LastMessage:    protocol.Time(s.lastMessage),
 		Approval:       s.approval,
 		Worktree:       s.spec.Worktree,
 	}
@@ -306,7 +308,8 @@ func (s *Session) clearApprovalLocked() {
 
 // ReportActivity reconciles the bound log and its children independently
 // of whether a client is reading chat. Historical turns never restart work.
-func (s *Session) ReportActivity(id string, status protocol.AgentStatus, at time.Time, children []*protocol.SubAgent) {
+// said is when its latest prompt or reply was written.
+func (s *Session) ReportActivity(id string, status protocol.AgentStatus, at, said time.Time, children []*protocol.SubAgent) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.state == protocol.StateExited || s.conversationID != id {
@@ -315,6 +318,7 @@ func (s *Session) ReportActivity(id string, status protocol.AgentStatus, at time
 	if status != "" && !at.Before(s.started) {
 		s.reportStatusLocked(status, at.UnixNano())
 	}
+	s.lastMessage = said
 	s.childLogs = children
 	s.updateChildrenLocked()
 }

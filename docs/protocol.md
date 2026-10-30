@@ -403,6 +403,7 @@ The fields a front-end usually needs:
 | `approval` | The tool call the agent waits to have approved. |
 | `worktree` | The worktree made for it. |
 | `last_output`, `started_at`, `cols`, `rows` | |
+| `last_message` | When the conversation's latest prompt or reply was written, as its log says. Unset before the bound log has one; clients fall back to `last_output`. |
 
 **Approvals.** An agent's `PermissionRequest` hook holds its request in the
 daemon only while some front-end is watching for approvals. A front-end

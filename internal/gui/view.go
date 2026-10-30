@@ -537,7 +537,7 @@ func sessionRow(m *model, s *protocol.SessionInfo, selected bool, title, sub str
 			ggui.Box(ggui.Text(s.GetBranch()).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis()).MaxWidth(110),
 		).Gap(3))
 	}
-	// The title's line ends with when the program last printed.
+	// The title's line ends with when the session last said something.
 	head := []ggui.Widget{ggui.Expanded(ggui.Text(label).Size(13).NoWrap().Ellipsis())}
 	if s.GetState() == protocol.StateRunning {
 		head = append(head, ggui.Reactive(func() ggui.Widget {

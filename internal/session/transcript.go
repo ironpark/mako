@@ -1,6 +1,10 @@
 package session
 
-import "github.com/ironpark/mako/internal/transcript"
+import (
+	"time"
+
+	"github.com/ironpark/mako/internal/transcript"
+)
 
 // TranscriptEnv returns only the paths needed to find this process's native
 // conversation logs, including profile overrides.
@@ -19,6 +23,7 @@ func (s *Session) SetConversation(id, path string) {
 	if s.conversationID != id {
 		s.agentsWorking = false
 		s.childHooks, s.childLogs = nil, nil
+		s.lastMessage = time.Time{}
 	}
 	s.conversationID, s.transcriptPath = id, path
 }
