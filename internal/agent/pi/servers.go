@@ -32,6 +32,9 @@ func (p *Pi) WithServers(l *agent.Launch, list []agent.Server, dir, session stri
 	}
 	byName := map[string]server{}
 	for _, s := range list {
+		if s.Command == "" {
+			continue // pi runs its servers; one only at a URL is left out
+		}
 		byName[s.ID] = server{Command: s.Command, Args: s.ArgList(), Env: s.Env}
 	}
 	b, err := json.Marshal(byName)

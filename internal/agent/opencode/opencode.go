@@ -84,6 +84,9 @@ func withConfig(l *agent.Launch, key string, value any) error {
 func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, _, _ string) (func(), error) {
 	mcp := map[string]any{}
 	for _, s := range servers {
+		if s.Command == "" {
+			continue // run as OpenCode runs its servers; one only at a URL is left out
+		}
 		server := map[string]any{"type": "local", "command": append([]string{s.Command}, s.ArgList()...), "enabled": true}
 		if len(s.Env) > 0 {
 			server["environment"] = s.Env

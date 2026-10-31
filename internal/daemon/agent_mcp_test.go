@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -457,5 +458,63 @@ func TestProjectMCPChildrenShareTheirParentsWorktreeScope(t *testing.T) {
 	}
 	if s.Info().GetProject() != worktree {
 		t.Fatal("child changed the working directory")
+	}
+}
+
+// bearer sends a session's token with every request, as Claude Code and
+// Codex do with the server mako gives them.
+type bearer string
+
+func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header.Set("Authorization", "Bearer "+string(b))
+	return http.DefaultTransport.RoundTrip(r)
+}
+
+func projectMCPHTTPClient(t *testing.T, d *Daemon, token string) (*sdk.ClientSession, error) {
+	t.Helper()
+	client := sdk.NewClient(&sdk.Implementation{Name: "test", Version: "1"}, nil)
+	cs, err := client.Connect(t.Context(), &sdk.StreamableClientTransport{Endpoint: d.projectAgents.url, HTTPClient: &http.Client{Transport: bearer(token)}}, nil)
+	if err == nil {
+		t.Cleanup(func() { cs.Close() })
+	}
+	return cs, err
+}
+
+// An agent that speaks HTTP reaches its session's server on loopback, with
+// no process of its own: as the session its token names, and no longer
+// once the session ends. A token that names none is turned away.
+func TestProjectMCPOverHTTP(t *testing.T) {
+	d, s := projectMCPDaemon(t)
+	if !strings.HasPrefix(d.projectAgents.url, "http://127.0.0.1:") {
+		t.Fatalf("server at %q", d.projectAgents.url)
+	}
+	config, err := os.ReadFile(filepath.Join(filepath.Dir(d.projectAgents.socket), "mcp-"+s.ID()+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := d.projectAgents.peer(s.ID())
+	if !strings.Contains(string(config), `"type": "http"`) || !strings.Contains(string(config), d.projectAgents.url) || !strings.Contains(string(config), "Bearer "+peer.token) {
+		t.Fatalf("Claude Code was not given the server over HTTP:\n%s", config)
+	}
+	if _, err := projectMCPHTTPClient(t, d, "forged"); err == nil {
+		t.Fatal("a forged token was accepted")
+	}
+	cs, err := projectMCPHTTPClient(t, d, peer.token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := callProjectTool[listAgentsResult](t, cs, "list_agents", map[string]any{}); got.SelfID != s.ID() {
+		t.Fatalf("the server took the agent for %q, not %q", got.SelfID, s.ID())
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "credential was not revoked", func() bool { return peer.ctx.Err() != nil })
+	if _, err := cs.ListTools(t.Context(), nil); err == nil {
+		t.Fatal("an ended session kept its MCP session over HTTP")
+	}
+	if _, err := projectMCPHTTPClient(t, d, peer.token); err == nil {
+		t.Fatal("an ended session's token was accepted")
 	}
 }

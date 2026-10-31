@@ -43,17 +43,31 @@ func (*Agent) Info() agent.Info {
 // dir and named for session, and names the file on the command line;
 // cleanup removes it. It holds the servers' keys, so only the user reads it.
 func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, dir, session string) (func(), error) {
-	type server struct {
+	type stdio struct {
 		Type    string            `json:"type"`
 		Command string            `json:"command"`
 		Args    []string          `json:"args"`
 		Env     map[string]string `json:"env,omitempty"`
 	}
+	type remote struct {
+		Type    string            `json:"type"`
+		URL     string            `json:"url"`
+		Headers map[string]string `json:"headers,omitempty"`
+	}
 	cfg := struct {
-		Servers map[string]server `json:"mcpServers"`
-	}{map[string]server{}}
+		Servers map[string]any `json:"mcpServers"`
+	}{map[string]any{}}
 	for _, s := range servers {
-		cfg.Servers[s.ID] = server{Type: "stdio", Command: s.Command, Args: s.ArgList(), Env: s.Env}
+		switch {
+		case s.URL != "":
+			srv := remote{Type: "http", URL: s.URL}
+			if s.BearerToken != "" {
+				srv.Headers = map[string]string{"Authorization": "Bearer " + s.BearerToken}
+			}
+			cfg.Servers[s.ID] = srv
+		case s.Command != "":
+			cfg.Servers[s.ID] = stdio{Type: "stdio", Command: s.Command, Args: s.ArgList(), Env: s.Env}
+		}
 	}
 	b, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

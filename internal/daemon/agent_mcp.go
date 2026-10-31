@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,7 +34,8 @@ const agentMCPTokenEnv = "MAKO_AGENT_MCP_TOKEN"
 
 type projectAgents struct {
 	mu       sync.Mutex
-	socket   string
+	socket   string // the stdio bridge's, for an agent that cannot reach url
+	url      string // where the agents reach the server over HTTP
 	peers    map[string]*agentPeer
 	messages agentMessages
 }
@@ -44,6 +46,7 @@ type agentPeer struct {
 	cancel            context.CancelFunc
 	ready             chan struct{}
 	session           *session.Session // guarded by projectAgents.mu
+	http              http.Handler     // its sessions over HTTP, made at the first; guarded by projectAgents.mu
 }
 
 func (p *projectAgents) server(ctx context.Context, binary, id, parent string) (agent.Server, func()) {
@@ -60,7 +63,12 @@ func (p *projectAgents) server(ctx context.Context, binary, id, parent string) (
 	}
 	p.peers[id] = peer
 	p.mu.Unlock()
-	return agent.Server{ID: agentMCPName, Command: binary, Args: []string{agentMCPArg, p.socket}, Env: map[string]string{"MAKO_SESSION": id, agentMCPTokenEnv: peer.token}}, func() {
+	server := agent.Server{ID: agentMCPName, URL: p.url, BearerToken: peer.token}
+	if p.socket != "" && binary != "" {
+		server.Command, server.Args = binary, []string{agentMCPArg, p.socket}
+		server.Env = map[string]string{"MAKO_SESSION": id, agentMCPTokenEnv: peer.token}
+	}
+	return server, func() {
 		cancel()
 		p.mu.Lock()
 		if p.peers[id] == peer {
@@ -83,6 +91,18 @@ func (p *projectAgents) peer(id string) *agentPeer {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.peers[id]
+}
+
+// byToken is the live session whose token is token, nil for none.
+func (p *projectAgents) byToken(token string) *agentPeer {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, peer := range p.peers {
+		if subtle.ConstantTimeCompare([]byte(peer.token), []byte(token)) == 1 && peer.ctx.Err() == nil {
+			return peer
+		}
+	}
+	return nil
 }
 
 // The stdio child only bridges MCP bytes. Session identity is authenticated
@@ -112,7 +132,14 @@ type agentMCPHello struct {
 	Token   string `json:"token"`
 }
 
+// listenAgentMCP serves the agents' MCP server over HTTP on loopback,
+// which Claude Code and Codex reach without a process of their own, and,
+// where this program can run as the bridge, on agents.sock, for agents
+// that run their servers.
 func (d *Daemon) listenAgentMCP(ctx context.Context, dir string) error {
+	if err := d.listenAgentMCPHTTP(ctx); err != nil {
+		return err
+	}
 	if d.hookBinary == "" {
 		return nil
 	}
@@ -135,6 +162,62 @@ func (d *Daemon) listenAgentMCP(ctx context.Context, dir string) error {
 	}()
 	return nil
 }
+
+// agentMCPPath is where the agents' MCP server answers over HTTP.
+const agentMCPPath = "/mcp"
+
+func (d *Daemon) listenAgentMCPHTTP(ctx context.Context) error {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return fmt.Errorf("agent MCP over HTTP: %w", err)
+	}
+	mux := http.NewServeMux()
+	mux.Handle(agentMCPPath, http.HandlerFunc(d.serveAgentMCPHTTP))
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	d.projectAgents.url = "http://" + ln.Addr().String() + agentMCPPath
+	context.AfterFunc(ctx, func() { _ = srv.Close() })
+	go func() { _ = srv.Serve(ln) }()
+	return nil
+}
+
+// serveAgentMCPHTTP answers a request of a session's agent, which its
+// bearer token names: every request, not only the first, so that one
+// session's MCP session cannot be reached with another's token. Each
+// session has a handler of its own, and its MCP sessions go with it.
+func (d *Daemon) serveAgentMCPHTTP(w http.ResponseWriter, r *http.Request) {
+	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	peer := d.projectAgents.byToken(token)
+	if !ok || peer == nil {
+		http.Error(w, "unknown session", http.StatusUnauthorized)
+		return
+	}
+	select {
+	case <-peer.ready:
+	case <-peer.ctx.Done():
+		http.Error(w, "session ended", http.StatusUnauthorized)
+		return
+	case <-r.Context().Done():
+		return
+	}
+	d.projectAgents.mu.Lock()
+	if peer.http == nil {
+		server := d.projectAgentServer(peer)
+		peer.http = sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, &sdk.StreamableHTTPOptions{SessionTimeout: agentMCPIdle})
+		// The session's end ends its MCP sessions, as it closes a bridge's.
+		context.AfterFunc(peer.ctx, func() {
+			for ss := range server.Sessions() {
+				_ = ss.Close()
+			}
+		})
+	}
+	h := peer.http
+	d.projectAgents.mu.Unlock()
+	h.ServeHTTP(w, r)
+}
+
+// agentMCPIdle is how long an MCP session over HTTP lasts unused: an agent
+// that went away without saying so leaves it behind.
+const agentMCPIdle = 30 * time.Minute
 
 func (d *Daemon) serveAgentMCP(ctx context.Context, conn net.Conn) {
 	defer conn.Close()

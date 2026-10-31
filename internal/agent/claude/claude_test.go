@@ -49,3 +49,29 @@ func TestServersAreAConfigFile(t *testing.T) {
 		t.Errorf("cleanup left %s", path)
 	}
 }
+
+// A server at a URL is given as one Claude Code reaches over HTTP, with
+// its token as a header, and spares the process its command would run.
+func TestServerAtAURLIsReachedOverHTTP(t *testing.T) {
+	dir := t.TempDir()
+	servers := []agent.Server{{ID: "mako", Command: "bridge", URL: "http://127.0.0.1:9/mcp", BearerToken: "secret"}}
+	l := agent.Launch{Command: []string{"claude"}}
+	if _, err := New().WithServers(&l, servers, dir, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "mcp-s1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		Servers map[string]map[string]any `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	got := cfg.Servers["mako"]
+	headers, _ := got["headers"].(map[string]any)
+	if got["type"] != "http" || got["url"] != "http://127.0.0.1:9/mcp" || headers["Authorization"] != "Bearer secret" || got["command"] != nil {
+		t.Fatalf("server %v", got)
+	}
+}

@@ -155,9 +155,17 @@ profile enables it even if it is disabled at node level. `spawn_agent`
 rejects a profile that would disable the child's communication tools.
 Changes apply when a session is started or restored.
 
-The server uses stdio through the daemon's own executable. Its private
-`agents.sock` socket accepts a fresh per-session credential, passed in the
-MCP server's environment. Tool arguments cannot choose the sender identity
+Claude Code and Codex reach the server over streamable HTTP on a loopback
+port the daemon picks, with no process per session: every request carries
+the session's fresh credential as a bearer token, in Claude Code's MCP
+configuration file (readable by the user alone) and, for Codex, in an
+environment variable that `bearer_token_env_var` names rather than on its
+command line. Each session has its own handler, so one session's MCP
+session cannot be reached with another's token. Agents that run their
+servers, as pi and OpenCode do, use stdio through the daemon's own
+executable instead: its private `agents.sock` socket accepts the same
+credential, passed in the MCP server's environment. Tool arguments cannot
+choose the sender identity
 or a different project. Credentials are revoked when a session exits;
 restarted sessions receive new credentials. Projects are compared using
 canonical local paths, with worktrees grouped by their repository path.

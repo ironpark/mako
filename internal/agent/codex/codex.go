@@ -41,10 +41,25 @@ func (*Agent) Info() agent.Info {
 
 // WithServers gives the servers as -c overrides of Codex's mcp_servers
 // table, each value TOML, which a JSON string or array of strings also is.
+// A server at a URL is given its token in Codex's environment, which only
+// the user's processes read, rather than on its command line, which any
+// may list.
 func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, _, _ string) (func(), error) {
 	flags := []string{l.Command[0]}
 	for _, s := range servers {
 		key := "mcp_servers." + tomlKey(s.ID)
+		if s.URL != "" {
+			flags = append(flags, "-c", key+".url="+jsonString(s.URL))
+			if s.BearerToken != "" {
+				env := tokenEnv(s.ID)
+				l.SetEnv(env, s.BearerToken)
+				flags = append(flags, "-c", key+".bearer_token_env_var="+jsonString(env))
+			}
+			continue
+		}
+		if s.Command == "" {
+			continue
+		}
 		flags = append(flags, "-c", key+".command="+jsonString(s.Command))
 		flags = append(flags, "-c", key+".args="+jsonString(s.ArgList()))
 		if len(s.Env) > 0 {
@@ -57,6 +72,19 @@ func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, _, _ string) 
 	}
 	l.Command = append(flags, l.Command[1:]...)
 	return func() {}, nil
+}
+
+// tokenEnv is the variable that holds the bearer token of server id.
+func tokenEnv(id string) string {
+	name := []byte("MAKO_MCP_TOKEN_")
+	for _, c := range strings.ToUpper(id) {
+		if c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' {
+			name = append(name, byte(c))
+		} else {
+			name = append(name, '_')
+		}
+	}
+	return string(name)
 }
 
 // tomlKey is id as a TOML key, bare when it can be.

@@ -70,7 +70,7 @@ func (d *Daemon) withContextServers(ctx context.Context, launch *agentspec.Launc
 		}
 	}
 	release := func() {}
-	if d.projectAgents.socket != "" && d.agentMCPEnabled(launch.ContextServers) {
+	if (d.projectAgents.url != "" || d.projectAgents.socket != "") && d.agentMCPEnabled(launch.ContextServers) {
 		var builtin agent.Server
 		builtin, release = d.projectAgents.server(d.ctx, d.hookBinary, session, parent)
 		servers = append(servers, builtin)

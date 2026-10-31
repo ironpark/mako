@@ -72,12 +72,18 @@ func (l *Launch) SetEnv(key, value string) {
 	l.Env[key] = value
 }
 
-// Server is an MCP server, as a launch gives it to an agent.
+// Server is an MCP server, as a launch gives it to an agent: one it runs
+// with Command, or one it reaches at URL over streamable HTTP, sending
+// BearerToken. A server may give both, and an agent that speaks HTTP takes
+// the URL, which spares a process for each session.
 type Server struct {
 	ID      string
 	Command string
 	Args    []string
 	Env     map[string]string
+
+	URL         string
+	BearerToken string
 }
 
 // ArgList is the server's arguments, empty rather than nil, as a
