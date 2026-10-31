@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"strings"
 	"time"
 
 	"github.com/ironpark/mako/internal/agent"
@@ -61,11 +62,13 @@ func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState,
 			}
 			if m.GetOutput() {
 				if call := a.calls[m.GetId()]; call != nil {
-					call.Result, call.Pending = m.GetText(), false
+					call.Result, call.Pending = keptResult(m.GetText()), false
 				}
 			} else if m.GetKind() == protocol.ToolTask {
-				m.Pending = m.GetResult() == ""
-				a.calls[m.GetId()] = m
+				a.calls[m.GetId()] = &protocol.ChatMessage{
+					Role: m.GetRole(), Id: m.GetId(), Kind: m.GetKind(), Text: m.GetText(),
+					Result: keptResult(m.GetResult()), Pending: m.GetResult() == "",
+				}
 			}
 		}
 	})
@@ -74,4 +77,18 @@ func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState,
 		calls = append(calls, call)
 	}
 	return ActivityState{a.status, a.at, a.said, a.subs.Read(path, calls)}, nil
+}
+
+// resultKept is as much of a task's result as is kept for the whole
+// conversation. A scan reads one only for the child it names, which the
+// start of a result says; a child's closing report can run to many
+// kilobytes, and every task the conversation ran has one.
+const resultKept = 4 << 10
+
+// keptResult is the start of result, copied, so that the rest is released.
+func keptResult(result string) string {
+	if len(result) <= resultKept {
+		return result
+	}
+	return strings.Clone(result[:resultKept])
 }

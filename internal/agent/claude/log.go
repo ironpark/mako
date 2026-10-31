@@ -41,18 +41,18 @@ func (*Agent) Identity(line []byte) (string, string, time.Time, bool) {
 	return r.SessionID, r.Cwd, r.Timestamp, true
 }
 
-func (a *Agent) NewDecoder() agent.Decoder { return &decoder{tools: a, seen: map[string]bool{}} }
+func (a *Agent) NewDecoder() agent.Decoder { return &decoder{tools: a} }
 
 // NewAgentDecoder reads a subagent's log, its sidechain.
 func (a *Agent) NewAgentDecoder() agent.Decoder {
-	return &decoder{tools: a, seen: map[string]bool{}, sidechain: true}
+	return &decoder{tools: a, sidechain: true}
 }
 
 // decoder reads Claude's records. A record may be written again, as a
 // resumed conversation copies its history, so each is read once.
 type decoder struct {
 	tools   agent.Tools
-	seen    map[string]bool
+	seen    agent.Seen
 	command string // the last slash command typed, whose output follows it
 	// sidechain reads a subagent's log, whose records are all sidechains,
 	// in place of the session's, which leaves those out.
@@ -67,11 +67,8 @@ func (d *decoder) Line(line []byte) []*protocol.ChatMessage {
 	if json.Unmarshal(line, &r) != nil || r.Sidechain != d.sidechain || r.Meta || r.Type != "user" && r.Type != "assistant" {
 		return nil
 	}
-	if r.UUID != "" {
-		if d.seen[r.UUID] {
-			return nil
-		}
-		d.seen[r.UUID] = true
+	if r.UUID != "" && !d.seen.Add(r.UUID) {
+		return nil
 	}
 	parsed := agent.ParseMessage(r.Message, d.tools)
 	if r.Summary {
@@ -99,11 +96,11 @@ func (d *decoder) retyped(m *protocol.ChatMessage) bool {
 		d.last.GetRole() == "user" && d.last.GetText() == m.GetText()
 }
 
-func (*Agent) NewUsage() agent.Usage { return &usage{seen: map[string]bool{}} }
+func (*Agent) NewUsage() agent.Usage { return &usage{} }
 
 // usage counts the tokens of Claude's replies. A reply written in several
 // records repeats its usage in each, so each counts once.
-type usage struct{ seen map[string]bool }
+type usage struct{ seen agent.Seen }
 
 func (u *usage) Count(line []byte, total *protocol.Usage) {
 	if !bytes.Contains(line, []byte(`"usage"`)) {
@@ -125,11 +122,8 @@ func (u *usage) Count(line []byte, total *protocol.Usage) {
 	if json.Unmarshal(line, &r) != nil || r.Type != "assistant" || r.Message.Usage == nil {
 		return
 	}
-	if r.Message.ID != "" {
-		if u.seen[r.Message.ID] {
-			return
-		}
-		u.seen[r.Message.ID] = true
+	if r.Message.ID != "" && !u.seen.Add(r.Message.ID) {
+		return
 	}
 	t := r.Message.Usage
 	total.Input += t.Input + t.CacheCreation
