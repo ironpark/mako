@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -48,7 +49,7 @@ func Status(dir string) (*protocol.GitChanges, error) {
 		return nil, err
 	}
 	out := &protocol.GitChanges{Root: wt.Filesystem.Root(), Branch: branch(repo)}
-	st, track, err := status(wt, out.GetRoot())
+	st, track, heads, err := status(wt, out.GetRoot())
 	if err != nil {
 		return nil, err
 	}
@@ -78,46 +79,115 @@ func Status(dir string) (*protocol.GitChanges, error) {
 	if out.Operation = Operation(ctx, out.GetRoot()); out.Operation != "" {
 		unmerged = conflicted(ctx, out.GetRoot())
 	}
-	tree := headTree(repo)
+	// HEAD's tree is read for a file whose lines are not counted already.
+	var tree *object.Tree
+	treeRead := false
 	for p, fs := range st {
 		f, ok := change(p, fs)
 		if !ok {
 			continue
 		}
-		old, oldOK := headContent(tree, cmp.Or(f.GetFrom(), f.GetPath()))
-		cur, curOK := diskContent(out.GetRoot(), f.GetPath())
+		full := filepath.Join(out.GetRoot(), filepath.FromSlash(f.GetPath()))
+		info, err := os.Stat(full)
+		curOK := err == nil && !info.IsDir()
 		if f.GetStatus() == protocol.GitAdded && !curOK {
 			continue // added to the index and gone from the disk: nothing to show
 		}
 		if unmerged[f.GetPath()] {
 			f.Status = protocol.GitConflicted
 		}
-		if Binary(old) || Binary(cur) || (!oldOK && !curOK) {
-			f.Binary = true
-		} else {
-			added, removed := count(old, cur)
-			f.Added, f.Removed = int64(added), int64(removed)
+		head, known := heads[p]
+		key := countKey{path: full, head: head, cur: curOK}
+		if curOK {
+			key.size, key.mod = info.Size(), info.ModTime().UnixNano()
 		}
+		c, ok := counts.get(key)
+		if !known || !ok {
+			if !treeRead {
+				tree, treeRead = headTree(repo), true
+			}
+			c = countFile(tree, cmp.Or(f.GetFrom(), f.GetPath()), out.GetRoot(), f.GetPath())
+			if known {
+				counts.put(key, c)
+			}
+		}
+		f.Binary, f.Added, f.Removed = c.binary, int64(c.added), int64(c.removed)
 		out.Files = append(out.Files, f)
 	}
 	slices.SortFunc(out.Files, func(a, b *protocol.GitFile) int { return strings.Compare(a.GetPath(), b.GetPath()) })
 	return out, nil
 }
 
-// status is the work tree's status, and its branch's upstream. git reports
-// it when it is on the PATH: it skips the folders .gitignore leaves out,
-// where go-git walks every one (node_modules and the like, seconds a time),
-// and it takes no lock an agent's own git would wait on. go-git's is the
-// fallback, which knows no upstream.
-func status(wt *git.Worktree, root string) (git.Status, tracking, error) {
+// countFile is the lines a file's change adds and removes: from as HEAD
+// has it to p as the work tree does.
+func countFile(tree *object.Tree, from, root, p string) counted {
+	old, oldOK := headContent(tree, from)
+	cur, curOK := diskContent(root, p)
+	if Binary(old) || Binary(cur) || (!oldOK && !curOK) {
+		return counted{binary: true}
+	}
+	added, removed := count(old, cur)
+	return counted{added: added, removed: removed}
+}
+
+// counts are the lines files' changes were counted at, so a poll reads and
+// diffs only the files that changed since: a file's count holds while
+// HEAD has the same object for it and the disk the same size and time.
+var counts countCache
+
+// countKey is what a file's count depends on: its path on the disk, the
+// object HEAD has for it, "" or zeros for none, and the file on the disk.
+type countKey struct {
+	path, head string
+	cur        bool
+	size, mod  int64
+}
+
+type counted struct {
+	added, removed int
+	binary         bool
+}
+
+type countCache struct {
+	sync.Mutex
+	m map[countKey]counted
+}
+
+func (c *countCache) get(k countKey) (counted, bool) {
+	c.Lock()
+	defer c.Unlock()
+	v, ok := c.m[k]
+	return v, ok
+}
+
+// put keeps a count, starting afresh past mostCounts: an entry outlives
+// its file's next change, and nothing else removes it.
+func (c *countCache) put(k countKey, v counted) {
+	c.Lock()
+	defer c.Unlock()
+	if c.m == nil || len(c.m) >= mostCounts {
+		c.m = make(map[countKey]counted)
+	}
+	c.m[k] = v
+}
+
+const mostCounts = 4096
+
+// status is the work tree's status, its branch's upstream and, by path,
+// the object HEAD has for each changed file. git reports them when it is
+// on the PATH: it skips the folders .gitignore leaves out, where go-git
+// walks every one (node_modules and the like, seconds a time), and it
+// takes no lock an agent's own git would wait on. go-git's is the
+// fallback, which knows no upstream, nor the objects.
+func status(wt *git.Worktree, root string) (git.Status, tracking, map[string]string, error) {
 	out, err := exec.Command("git", "-C", root, "--no-optional-locks",
 		"status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all").Output()
 	if err != nil {
 		st, err := wt.Status()
-		return st, tracking{}, err
+		return st, tracking{}, nil, err
 	}
-	st, track := parsePorcelain(out)
-	return st, track, nil
+	st, track, heads := parsePorcelain(out)
+	return st, track, heads, nil
 }
 
 // tracking is a branch's upstream, and the commits each has that the
@@ -128,10 +198,12 @@ type tracking struct {
 }
 
 // parsePorcelain reads git status --porcelain=v2 --branch -z as go-git's
-// status, the same status codes but for '.' where a side is unchanged, and
-// the branch's upstream from its headers.
-func parsePorcelain(out []byte) (git.Status, tracking) {
+// status, the same status codes but for '.' where a side is unchanged, the
+// branch's upstream from its headers, and the object HEAD has for each
+// file, "" for an untracked one; a file in conflict has none.
+func parsePorcelain(out []byte) (git.Status, tracking, map[string]string) {
 	st := git.Status{}
+	heads := map[string]string{}
 	var t tracking
 	file := func(p string) *git.FileStatus {
 		if st[p] == nil {
@@ -161,19 +233,23 @@ func parsePorcelain(out []byte) (git.Status, tracking) {
 			}
 			f := file(parts[n-1])
 			f.Staging, f.Worktree = code(parts[1][0]), code(parts[1][1])
+			if r[0] != 'u' {
+				heads[parts[n-1]] = parts[6]
+			}
 			if r[0] == '2' && i+1 < len(records) { // a rename: the path it had follows
 				i++
 				f.Extra = records[i]
 			}
 		case r[0] == '?':
 			file(r[2:]).Worktree = git.Untracked
+			heads[r[2:]] = ""
 		case strings.HasPrefix(r, "# branch.upstream "):
 			t.upstream = strings.TrimPrefix(r, "# branch.upstream ")
 		case strings.HasPrefix(r, "# branch.ab "):
 			_, _ = fmt.Sscanf(strings.TrimPrefix(r, "# branch.ab "), "+%d -%d", &t.ahead, &t.behind)
 		}
 	}
-	return st, t
+	return st, t, heads
 }
 
 // change reads a file's status codes as one change, or reports none.

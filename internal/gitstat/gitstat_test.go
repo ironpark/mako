@@ -130,7 +130,7 @@ func TestParsePorcelain(t *testing.T) {
 		"? new/n",
 		"",
 	}, "\x00")
-	got, _ := parsePorcelain([]byte(out))
+	got, _, _ := parsePorcelain([]byte(out))
 	want := map[string]git.FileStatus{
 		"a file": {Staging: git.Unmodified, Worktree: git.Modified},
 		"b":      {Staging: git.Deleted, Worktree: git.Untracked}, // unstaged, kept on disk
@@ -161,7 +161,7 @@ func TestStatusMatchesGoGit(t *testing.T) {
 	}
 	r, _ := git.PlainOpen(root)
 	wt, _ := r.Worktree()
-	fromGit, _, err := status(wt, root)
+	fromGit, _, _, err := status(wt, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,5 +186,36 @@ func TestStatusMatchesGoGit(t *testing.T) {
 		if !proto.Equal(b[p], f) {
 			t.Errorf("%s: git %+v, go-git %+v", p, f, b[p])
 		}
+	}
+}
+
+// A poll counts again a file changed since the last, and keeps the count
+// of one that did not change.
+func TestStatusCountsAFileAgainOnlyWhenItChanged(t *testing.T) {
+	root := repo(t, map[string]string{"a.txt": "one\n"})
+	counted := func() (int64, int64) {
+		t.Helper()
+		st, err := Status(root)
+		if err != nil || len(st.GetFiles()) != 1 {
+			t.Fatalf("status %+v, %v", st, err)
+		}
+		f := st.GetFiles()[0]
+		return f.GetAdded(), f.GetRemoved()
+	}
+	write(t, root, "a.txt", "one\ntwo\n")
+	if a, r := counted(); a != 1 || r != 0 {
+		t.Fatalf("+%d -%d, want +1 -0", a, r)
+	}
+	if a, r := counted(); a != 1 || r != 0 {
+		t.Fatalf("again: +%d -%d, want +1 -0", a, r)
+	}
+	// The same size, another time: counted again.
+	write(t, root, "a.txt", "uno\ntwo\n")
+	future := time.Now().Add(time.Hour)
+	if err := os.Chtimes(filepath.Join(root, "a.txt"), future, future); err != nil {
+		t.Fatal(err)
+	}
+	if a, r := counted(); a != 2 || r != 1 {
+		t.Fatalf("changed: +%d -%d, want +2 -1", a, r)
 	}
 }
