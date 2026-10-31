@@ -44,6 +44,7 @@ var settingsNav = []settingsGroup{
 		{"host", "Host", "server-cog"},
 		{"discovery", "Discovery", "radar"},
 		{"agents", "Agents", "bot"},
+		{"shell", "Shell", "square-terminal"},
 	}},
 	{"Mesh", []settingsSection{
 		{"nodes", "Nodes", "network"},
@@ -127,6 +128,8 @@ func settingsContent(m *model, id string) ggui.Widget {
 		return discoverySettings(m)
 	case "agents":
 		return agentSettings(m)
+	case "shell":
+		return shellSettings(m)
 	case "nodes":
 		return nodeSettings(m)
 	case "access":

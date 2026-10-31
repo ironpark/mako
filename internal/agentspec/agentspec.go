@@ -76,15 +76,46 @@ func (a Agent) ProfileNames() []string {
 	return names
 }
 
-// Builtin holds the default command line for each known terminal agent,
-// and for the shell.
+// Builtin holds the default command line for each known terminal agent.
 var Builtin = builtin()
 
 func builtin() map[string][]string {
-	out := map[string][]string{"shell": {defaultShell()}}
+	out := map[string][]string{}
 	for _, d := range agents.All() {
 		out[d.Info().Name] = d.Info().Command
 	}
+	return out
+}
+
+// ShellName is what a session of the shell is started by: not an agent,
+// but configured apart, as Shell, and launched as one.
+const ShellName = "shell"
+
+// Shell is how a node starts its shell: its program, empty for the user's
+// login shell, and the arguments and environment it adds.
+type Shell struct {
+	Command []string          `json:"command,omitempty"`
+	Args    []string          `json:"args,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+}
+
+// Agent is the shell as an agent is launched.
+func (s Shell) Agent() Agent {
+	command := s.Command
+	if len(command) == 0 {
+		command = []string{DefaultShell()}
+	}
+	return Agent{Command: command, Args: s.Args, Env: s.Env}
+}
+
+// WithShell is agents with shell among them, as ShellName, for a session
+// to be started with.
+func WithShell(agents map[string]Agent, shell Shell) map[string]Agent {
+	out := maps.Clone(agents)
+	if out == nil {
+		out = map[string]Agent{}
+	}
+	out[ShellName] = shell.Agent()
 	return out
 }
 
@@ -140,7 +171,7 @@ type Launch struct {
 // shell has expanded them already.
 func Resolve(name, profile string, args []string, env map[string]string, agents map[string]Agent) (Launch, error) {
 	if name == "" {
-		name = "shell"
+		name = ShellName
 	}
 	a, ok := Lookup(name, agents)
 	if !ok {
@@ -305,8 +336,8 @@ func ValidName(s string) bool {
 	return s != "" && !strings.ContainsAny(s, ": \t\n")
 }
 
-// defaultShell is the user's login shell, else the platform's.
-func defaultShell() string {
+// DefaultShell is the user's login shell, else the platform's.
+func DefaultShell() string {
 	if runtime.GOOS == "windows" {
 		return "powershell.exe"
 	}

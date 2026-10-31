@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -288,6 +289,9 @@ func (m *model) removeAgentRow(id int) {
 // Page ------------------------------------------------------------------------
 
 func agentSettings(m *model) ggui.Widget {
+	// One agent unfolds at a time, by name, and stays so as rows come and
+	// go.
+	open := ggui.State("")
 	// The editors are rebuilt when rows come or go, not as their text is
 	// typed, so a field keeps its focus.
 	shape := ggui.Derived(func() string {
@@ -299,27 +303,29 @@ func agentSettings(m *model) ggui.Widget {
 	})
 	agents := ggui.Key(shape, func(string) ggui.Widget {
 		rows := ggui.Peek(m.AgentDraft)
-		var sections []ggui.Widget
+		var items []ggui.Widget
 		for i := 0; i < len(rows); {
 			j := i + 1
 			for j < len(rows) && rows[j].IsProfile && rows[j].Agent == rows[i].Agent {
 				j++
 			}
-			sections = append(sections, agentSection(m, rows[i], rows[i+1:j]))
+			items = append(items, agentItem(m, open, rows[i], rows[i+1:j]))
 			i = j
 		}
-		return ggui.Column(sections...).Gap(28).Stretch()
+		return card(items...)
 	})
 
 	name := ggui.State("")
 	note := ggui.State("")
 	add := func() {
-		if err := m.addAgent(ggui.Peek(name)); err != nil {
+		n := strings.TrimSpace(ggui.Peek(name))
+		if err := m.addAgent(n); err != nil {
 			note.Set(err.Error())
 			return
 		}
 		name.Set("")
 		note.Set("")
+		open.Set(n)
 	}
 	hasNote := ggui.Map(note, func(s string) bool { return s != "" })
 	addCard := card(
@@ -335,13 +341,53 @@ func agentSettings(m *model) ggui.Widget {
 
 	return page(T("Agents"), T("The programs a session can start on this node, the flags and environment each starts with, and profiles: named variations of an agent, such as claude on another model or account. A session picks one as agent:profile. Changes apply to the next session started."),
 		agents,
-		section(T("Other programs"), addCard),
+		addCard,
 		saveBar(m),
 	)
 }
 
-// agentSection is an agent's card, followed by a card for each profile.
-func agentSection(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
+// agentItem is an agent's line in the list: its glyph, its name, what it
+// runs and its profiles, and whether it is offered; tapped, it unfolds its
+// settings and its profiles under it.
+func agentItem(m *model, open *ggui.StateValue[string], a agentDraft, profiles []agentDraft) ggui.Widget {
+	name := a.Agent
+	offered, installed := agentOffered(m, a.ID, name)
+	isOpen := ggui.Map(open, func(o string) bool { return o == name })
+	summary := ggui.Reactive(func() ggui.Widget {
+		d := m.agentRow(a.ID)
+		text := strings.TrimSpace(d.Command + " " + d.Args)
+		if d.Command == "" {
+			text = strings.TrimSpace(strings.Join(agentspec.Builtin[name], " ") + " " + d.Args)
+		}
+		if n := m.profileCount(name); n > 0 {
+			text += " · " + Tf("%d profiles", n)
+		}
+		if !installed.Get() {
+			text += " · " + T("not installed")
+		}
+		return ggui.Text(text).Size(11.5).Color(tokExtraMuted).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()
+	})
+	head := ggui.Row(
+		ggui.Expanded(ui.ButtonOf(ggui.Row(
+			agentGlyph(name, tokMuted).Size(15),
+			ggui.Text(name).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
+			ggui.Expanded(summary),
+			ggui.View(isOpen, func(o bool) ggui.Widget {
+				return icon("chevron-down").Size(13).Color(tokExtraMuted).Rotate(pick(o, 0.0, -math.Pi/2))
+			}),
+		).Gap(10).Align(ggui.AlignCenter), func() { open.Set(pick(ggui.Peek(open) == name, "", name)) }).
+			Ghost().Pad(8, 10).Radius(7).Name(Tf("%s settings", name))),
+		offered,
+	).Gap(10).Align(ggui.AlignCenter)
+	return ggui.Box(ggui.Column(
+		head,
+		ggui.If(isOpen, func() ggui.Widget { return agentEditor(m, a, profiles) }),
+	).Stretch()).Pad(4, 8)
+}
+
+// agentEditor is an unfolded agent's settings: its command, flags and
+// environment, then its profiles, and what adds a profile or removes it.
+func agentEditor(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 	_, builtin := agentspec.Builtin[a.Agent]
 	commandHint := T("The program and any arguments it always needs.")
 	if builtin {
@@ -349,18 +395,15 @@ func agentSection(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 	}
 	mono := ggui.TextStyle{Font: ggui.DefaultMonoFont()}
 	children := []ggui.Widget{
-		card(
-			agentOffered(m, a.ID, a.Agent),
-			row(T("Command"), commandHint,
-				ggui.Box(ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Command })).
-					Style(mono).Name(Tf("%s command", a.Agent))).Width(300)),
-			row(T("Flags"), T("Added to every session of it, before a profile's. Quote as in a shell."),
-				ggui.Box(ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Args })).
-					Style(mono).Placeholder("--flag value").Name(Tf("%s flags", a.Agent))).Width(300)),
-			stackedRow(T("Environment"), T("One per line as NAME=value, added to the daemon's. $NAME, ${NAME} and a leading ~ expand when a session starts; $$ is a $."),
-				ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Env })).
-					Multiline().Lines(3).Style(mono).Name(Tf("%s environment", a.Agent))),
-		),
+		compactField(T("Command"), commandHint,
+			ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Command })).
+				Style(mono).Name(Tf("%s command", a.Agent))),
+		compactField(T("Flags"), T("Added to every session of it, before a profile's. Quote as in a shell."),
+			ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Args })).
+				Style(mono).Placeholder("--flag value").Name(Tf("%s flags", a.Agent))),
+		compactField(T("Environment"), T("One per line as NAME=value, added to the daemon's. $NAME, ${NAME} and a leading ~ expand when a session starts; $$ is a $."),
+			ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Env })).
+				Multiline().Lines(2).Style(mono).Name(Tf("%s environment", a.Agent))),
 	}
 	for _, p := range profiles {
 		children = append(children, profileCard(m, p, mono))
@@ -375,23 +418,45 @@ func agentSection(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 		actions = append(actions, ui.Button(T("Remove agent"), func() { m.removeAgentRow(id) }).Ghost().Name(Tf("Remove %s", a.Agent)))
 	}
 	children = append(children, ggui.Row(actions...).Gap(8))
-	return section(a.Agent, children...)
+	return ggui.Padding(ggui.Column(children...).Gap(10).Stretch(), 6, 10, 10, 35)
 }
 
-// agentOffered is an agent's switch: whether new sessions can start it.
-// Until the user sets it, it follows whether the program is installed, as
-// its command now reads.
-func agentOffered(m *model, id int, name string) ggui.Widget {
-	draft := func() agentDraft {
-		for _, r := range m.AgentDraft.Get() {
-			if r.ID == id {
-				return r
-			}
+// compactField is a field under its label, its hint as the label's
+// tooltip, for the list's unfolded agent.
+func compactField(label, hint string, field ggui.Widget) ggui.Widget {
+	return ggui.Column(
+		ui.Tooltip(ggui.Text(label).Size(12).Color(tokMuted), hint),
+		field,
+	).Gap(4).Stretch()
+}
+
+// agentRow is the draft's row id, its zero value once gone. Reactive.
+func (m *model) agentRow(id int) agentDraft {
+	for _, r := range m.AgentDraft.Get() {
+		if r.ID == id {
+			return r
 		}
-		return agentDraft{}
 	}
+	return agentDraft{}
+}
+
+// profileCount is how many profiles the draft gives agent. Reactive.
+func (m *model) profileCount(agent string) int {
+	n := 0
+	for _, r := range m.AgentDraft.Get() {
+		if r.IsProfile && r.Agent == agent {
+			n++
+		}
+	}
+	return n
+}
+
+// agentOffered is an agent's switch, whether new sessions can start it,
+// and whether its program is installed. Until the user sets it, it follows
+// whether the program is installed, as its command now reads.
+func agentOffered(m *model, id int, name string) (ggui.Widget, ggui.Readable[bool]) {
 	installed := ggui.Derived(func() bool {
-		command, err := agentspec.SplitArgs(draft().Command)
+		command, err := agentspec.SplitArgs(m.agentRow(id).Command)
 		if err != nil {
 			return false
 		}
@@ -401,7 +466,7 @@ func agentOffered(m *model, id int, name string) ggui.Widget {
 		return agentspec.Agent{Command: command}.Installed()
 	})
 	on := ggui.Bind(func() bool {
-		switch draft().Enabled {
+		switch m.agentRow(id).Enabled {
 		case "on":
 			return true
 		case "off":
@@ -417,40 +482,40 @@ func agentOffered(m *model, id int, name string) ggui.Widget {
 		}
 		m.AgentDraft.Set(rows)
 	})
-	return ggui.Reactive(func() ggui.Widget {
-		hint := T("Offered to start sessions with, in the new session dialog and beside the +.")
-		if !installed.Get() {
-			hint = T("Not installed on this node: its command was not found, so it is turned off until it is, or turned on here.")
-		}
-		return row(T("Offered"), hint, ui.Switch(on, Tf("Offer %s", name)))
-	})
+	hint := T("Offered to start sessions with, in the new session dialog and beside the +.")
+	return ui.Tooltip(ui.Switch(on, Tf("Offer %s", name)), hint), installed
 }
 
+// profileCard is a profile of an unfolded agent: its name, which removes
+// it beside, what it is for, its flags and environment over the agent's,
+// and the MCP servers its sessions get.
 func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 	id := p.ID
+	target := p.Agent + ":" + p.Profile
 	nameField := ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Profile })).
 		Style(mono).Name(Tf("%s profile name", p.Agent))
-	head := ggui.Box(ggui.Row(
-		icon("layers").Size(15),
+	head := ggui.Row(
+		icon("layers").Size(14).Color(tokMuted),
 		muted(ggui.Text(p.Agent+":").Size(13).Style(mono)),
 		ggui.Box(nameField).Width(180),
 		ggui.Spacer(),
 		ui.ButtonOf(icon("trash-2").Size(14), func() { m.removeAgentRow(id) }).Ghost().Pad(6).Radius(6).
-			Name(Tf("Remove %s", p.Agent+":"+p.Profile)),
-	).Gap(8)).Pad(10, 16)
-	return cardWithTail(profileServers(m, id, p.Agent+":"+p.Profile),
+			Name(Tf("Remove %s", target)),
+	).Gap(8).Align(ggui.AlignCenter)
+	return ggui.Box(ggui.Column(
 		head,
-		stackedRow(T("Description"), T("Describe its specialties and when to choose it. Agents use this to select a profile when delegating work."),
+		compactField(T("Description"), T("Describe its specialties and when to choose it. Agents use this to select a profile when delegating work."),
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Description })).
-				Multiline().Lines(3).Placeholder(T("For example: Reviews Go concurrency, cancellation and race conditions.")).
-				Name(Tf("%s description", p.Agent+":"+p.Profile))),
-		row(T("Flags"), T("Added after the agent's own."),
-			ggui.Box(ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Args })).
-				Style(mono).Placeholder("--model opus").Name(Tf("%s flags", p.Agent+":"+p.Profile))).Width(300)),
-		stackedRow(T("Environment"), T("NAME=value lines over the agent's own, which $NAME reads."),
+				Multiline().Lines(2).Placeholder(T("For example: Reviews Go concurrency, cancellation and race conditions.")).
+				Name(Tf("%s description", target))),
+		compactField(T("Flags"), T("Added after the agent's own."),
+			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Args })).
+				Style(mono).Placeholder("--model opus").Name(Tf("%s flags", target))),
+		compactField(T("Environment"), T("NAME=value lines over the agent's own, which $NAME reads."),
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Env })).
-				Multiline().Lines(3).Style(mono).Name(Tf("%s environment", p.Agent+":"+p.Profile))),
-	)
+				Multiline().Lines(2).Style(mono).Name(Tf("%s environment", target))),
+		profileServers(m, id, target),
+	).Gap(10).Stretch()).Border(1, tokBorder).Radius(8).Pad(10, 12)
 }
 
 // mcpServerIDs are the MCP servers this node has: the installed
@@ -521,7 +586,10 @@ func profileServers(m *model, id int, name string) ggui.Widget {
 		if d.PickServers {
 			hint = T("Only the servers ticked, even one turned off for the node.")
 		}
-		rows := []ggui.Widget{row(T("MCP servers"), hint, ui.Switch(pick, "").Name(Tf("%s chooses its MCP servers", name)))}
+		rows := []ggui.Widget{ggui.Row(
+			ggui.Expanded(ui.Tooltip(ggui.Text(T("Choose its MCP servers")).Size(12).Color(tokMuted), hint)),
+			ui.Switch(pick, "").Name(Tf("%s chooses its MCP servers", name)),
+		).Gap(8).Align(ggui.AlignCenter)}
 		if d.PickServers {
 			boxes := make([]ggui.Widget, 0, len(ids))
 			for _, s := range ids {
@@ -537,8 +605,8 @@ func profileServers(m *model, id int, name string) ggui.Widget {
 				})
 				boxes = append(boxes, ui.Checkbox(on, s))
 			}
-			rows = append(rows, ggui.Box(ggui.Column(boxes...).Gap(8).Stretch()).Pad(0, 16, 14, 16))
+			rows = append(rows, ggui.Column(boxes...).Gap(8).Stretch())
 		}
-		return ggui.Column(append([]ggui.Widget{hline()}, rows...)...).Stretch()
+		return ggui.Column(rows...).Gap(8).Stretch()
 	})
 }

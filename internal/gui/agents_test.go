@@ -104,3 +104,43 @@ func TestAnAgentsSwitchSurvivesTheDraft(t *testing.T) {
 		t.Fatalf("claude, never switched, came back set to %v; want it to follow whether it is installed", *e)
 	}
 }
+
+// The agents page lists each agent on a line, the shell not among them,
+// and a line tapped unfolds its settings, one at a time.
+func TestTheAgentsListUnfoldsOneAgent(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	cfg := config.Default()
+	cfg.Agents = map[string]agentspec.Agent{"claude": {Profiles: []agentspec.Profile{{Name: "opus"}}}}
+	m := newModel(cfg, "")
+	p := ggui.ProbeBuilder(func() ggui.Widget { return ggui.Scroll(agentSettings(m)) }, ggui.Sz(760, 2000))
+	defer p.Close()
+	p.Frame()
+	if _, ok := p.Semantics().Find(ggui.RoleButton, Tf("%s settings", "shell")); ok {
+		t.Fatal("the shell is listed among the agents")
+	}
+	if _, ok := p.Semantics().Find(ggui.RoleTextField, Tf("%s command", "claude")); ok {
+		t.Fatal("an agent's settings show before it is opened")
+	}
+	click := func(name string) {
+		b, ok := p.Semantics().Find(ggui.RoleButton, Tf("%s settings", name))
+		if !ok {
+			t.Fatalf("no line for %s:\n%s", name, p.Semantics().String())
+		}
+		p.Click(b.Rect.Origin.Add(ggui.Pt(20, b.Rect.Size.H/2)))
+		p.Frame()
+	}
+	click("claude")
+	if _, ok := p.Semantics().Find(ggui.RoleTextField, Tf("%s command", "claude")); !ok {
+		t.Fatalf("claude's settings did not unfold:\n%s", p.Semantics().String())
+	}
+	if _, ok := p.Semantics().Find(ggui.RoleTextField, Tf("%s profile name", "claude")); !ok {
+		t.Fatal("claude's profile is not under it")
+	}
+	click("codex")
+	if _, ok := p.Semantics().Find(ggui.RoleTextField, Tf("%s command", "claude")); ok {
+		t.Fatal("claude stayed open with codex opened")
+	}
+	if _, ok := p.Semantics().Find(ggui.RoleTextField, Tf("%s command", "codex")); !ok {
+		t.Fatal("codex's settings did not unfold")
+	}
+}

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/ironpark/mako/internal/agentspec"
 	"os"
 	"path/filepath"
 	"testing"
@@ -47,5 +48,26 @@ func TestLoadDefaultsSSHKey(t *testing.T) {
 	}
 	if got := load(`{"node_id": "n1", "ssh_key": "~/keys/work.pub"}`); got != "~/keys/work.pub" {
 		t.Fatalf("set: %q, want ~/keys/work.pub", got)
+	}
+}
+
+// A shell an older configuration kept among its agents moves to its own
+// place, the login shell it named by default left to follow the user's.
+func TestTheShellLeavesTheAgents(t *testing.T) {
+	cfg := &Config{Agents: map[string]agentspec.Agent{
+		"shell":  {Command: []string{agentspec.DefaultShell()}, Env: map[string]string{"A": "b"}},
+		"claude": {},
+	}}
+	cfg.TakeShell()
+	if _, ok := cfg.Agents["shell"]; ok || len(cfg.Agents) != 1 {
+		t.Fatalf("agents %v", cfg.Agents)
+	}
+	if cfg.Shell.Command != nil || cfg.Shell.Env["A"] != "b" {
+		t.Fatalf("shell %+v", cfg.Shell)
+	}
+	cfg = &Config{Agents: map[string]agentspec.Agent{"shell": {Command: []string{"fish"}}}}
+	cfg.TakeShell()
+	if len(cfg.Shell.Command) != 1 || cfg.Shell.Command[0] != "fish" {
+		t.Fatalf("a shell of its own became %+v", cfg.Shell)
 	}
 }

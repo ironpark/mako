@@ -65,9 +65,13 @@ func TestTargets(t *testing.T) {
 	onPath(t, "claude", "codex", "sh")
 	agents := map[string]Agent{"claude": {Profiles: []Profile{{Name: "opus"}, {Name: "work"}}}}
 	got := Targets(agents)
-	want := []string{"claude", "claude:opus", "claude:work", "codex", "shell"}
+	want := []string{"claude", "claude:opus", "claude:work", "codex"}
 	if !slices.Equal(got, want) {
-		t.Fatalf("targets = %q, want %q", got, want)
+		t.Fatalf("targets = %q, want %q: the shell is not an agent", got, want)
+	}
+	// A node's daemon starts the shell as it does an agent.
+	if got := Targets(WithShell(agents, Shell{})); !slices.Contains(got, ShellName) {
+		t.Fatalf("targets with the shell = %q", got)
 	}
 	if a, p := SplitTarget("claude:opus"); a != "claude" || p != "opus" || Target(a, p) != "claude:opus" {
 		t.Fatal("a target does not split into its agent and profile")
@@ -123,7 +127,7 @@ func TestAnAgentNotInstalledIsNotOffered(t *testing.T) {
 		"codex": {Enabled: &no},  // turned off, though found
 	}
 	got := Offered(agents)
-	if want := []string{"agy", "claude", "shell"}; !slices.Equal(got, want) {
+	if want := []string{"agy", "claude"}; !slices.Equal(got, want) {
 		t.Fatalf("offered %q, want %q", got, want)
 	}
 	if !slices.Contains(Names(agents), "codex") || !slices.Contains(Names(agents), "opencode") {
@@ -131,5 +135,19 @@ func TestAnAgentNotInstalledIsNotOffered(t *testing.T) {
 	}
 	if !(Agent{Command: []string{"claude", "--x"}}).Installed() || (Agent{Command: []string{"nowhere-to-be-found"}}).Installed() {
 		t.Fatal("installed misread the PATH")
+	}
+}
+
+// The shell starts as the user's login shell, unless it names another
+// program, with its own flags and environment.
+func TestTheShellIsConfiguredApart(t *testing.T) {
+	onPath(t, "sh", "zsh")
+	l, err := Resolve("", "", nil, nil, WithShell(nil, Shell{}))
+	if err != nil || filepath.Base(l.Command[0]) != "sh" {
+		t.Fatalf("the default shell is %q, %v; want the login shell", l.Command, err)
+	}
+	l, err = Resolve(ShellName, "", nil, nil, WithShell(nil, Shell{Command: []string{"zsh"}, Args: []string{"-l"}, Env: map[string]string{"A": "b"}}))
+	if err != nil || filepath.Base(l.Command[0]) != "zsh" || !slices.Equal(l.Command[1:], []string{"-l"}) || l.Env["A"] != "b" {
+		t.Fatalf("the configured shell is %q %v, %v", l.Command, l.Env, err)
 	}
 }

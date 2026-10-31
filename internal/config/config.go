@@ -48,6 +48,9 @@ type Config struct {
 	// default flags and environment, and its profiles. A built-in left out
 	// launches with its default command.
 	Agents map[string]agentspec.Agent `json:"agents,omitempty"`
+	// Shell is how this node starts its shell, which is not an agent:
+	// the user's login shell unless it names another program.
+	Shell agentspec.Shell `json:"shell,omitzero"`
 	// ContextServers configure the MCP servers this node's claude and
 	// codex sessions get, by server ID: those of the Zed extensions
 	// installed, which are on unless turned off here, and the user's own.
@@ -275,7 +278,25 @@ func Load() (*Config, error) {
 	if cfg.NodeID == "" {
 		cfg.NodeID = newNodeID()
 	}
+	cfg.TakeShell()
 	return cfg, nil
+}
+
+// TakeShell moves the shell an older configuration kept among its agents
+// to Shell, the login shell it named by default left to follow the user's.
+func (cfg *Config) TakeShell() {
+	a, ok := cfg.Agents[agentspec.ShellName]
+	if !ok {
+		return
+	}
+	delete(cfg.Agents, agentspec.ShellName)
+	if len(cfg.Shell.Command)+len(cfg.Shell.Args)+len(cfg.Shell.Env) > 0 {
+		return // the file names its shell already
+	}
+	cfg.Shell = agentspec.Shell{Command: a.Command, Args: a.Args, Env: a.Env}
+	if len(a.Command) == 1 && a.Command[0] == agentspec.DefaultShell() {
+		cfg.Shell.Command = nil
+	}
 }
 
 // Save writes the config file, creating its directory as needed.
