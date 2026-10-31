@@ -19,12 +19,14 @@ func TestAgentsFollowTheConfigFile(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write(`{"agents": {"claude": ["claude"]}}`)
-	d := New(&config.Config{NodeID: "n1", Agents: map[string]agentspec.Agent{"claude": {Command: []string{"claude"}}}}, nil)
+	// Switched on, as an agent not installed here, as on CI, is not offered.
+	on := true
+	write(`{"agents": {"claude": {"command": ["claude"], "enabled": true}}}`)
+	d := New(&config.Config{NodeID: "n1", Agents: map[string]agentspec.Agent{"claude": {Command: []string{"claude"}, Enabled: &on}}}, nil)
 	d.FollowAgents(path)
 
 	later := time.Now().Add(time.Second)
-	write(`{"agents": {"claude": {"command": ["claude"], "profiles": [{"name": "opus", "args": ["--model", "opus"]}]}}}`)
+	write(`{"agents": {"claude": {"command": ["claude"], "enabled": true, "profiles": [{"name": "opus", "args": ["--model", "opus"]}]}}}`)
 	if err := os.Chtimes(path, later, later); err != nil {
 		t.Fatal(err)
 	}
