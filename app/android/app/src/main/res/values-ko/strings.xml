@@ -118,6 +118,15 @@
     <string name="subagent_ended">종료됨</string>
     <string name="subagent_read_only">서브에이전트 대화 · 읽기 전용</string>
     <string name="tool_calls">도구 호출 %1$d회</string>
+    <string name="tool_run_expand">도구 호출 펼치기</string>
+    <string name="tool_run_collapse">도구 호출 접기</string>
+    <string name="tool_calls_failed">%1$d개 실패</string>
+    <string name="attach">파일 첨부</string>
+    <string name="attach_remove">첨부 제거</string>
+    <string name="attach_unreadable">%1$s 파일을 읽을 수 없습니다</string>
+    <string name="tunnel_failed">%2$s의 %1$d 포트에 연결할 수 없습니다</string>
+    <string name="tunnel_other_port">이 기기에서 %1$d 포트가 사용 중이라 localhost:%2$d로 연결합니다</string>
+    <string name="open_in_browser">브라우저에서 열기</string>
     <string name="commands_retry">명령어를 불러오지 못했습니다. 눌러 다시 시도하세요.</string>
     <string name="commands_empty">일치하는 명령어가 없습니다. 직접 입력할 수 있습니다.</string>
     <string name="space_key">공백</string>

@@ -72,6 +72,9 @@ class Mesh(
 
     val daemon = Daemon { Mobile.socket().ifEmpty { null } }
 
+    /** Other nodes' loopback ports, forwarded to this phone's. */
+    val tunnels = dev.ironpark.mako.net.Tunnels(daemon)
+
     private var job: Job? = null
 
     /** Starts the node, unless it runs, and follows it. */
@@ -234,6 +237,10 @@ class Mesh(
     fun canSend(node: String): Boolean =
         node == _self.value?.id || (_nodes.value.firstOrNull { it.id == node }?.revision ?: 0) >= REVISION_SEND
 
+    /** Whether node takes files and tunnels: staged uploads, and its loopback ports forwarded. */
+    fun canTransfer(node: String): Boolean =
+        (_nodes.value.firstOrNull { it.id == node }?.revision ?: REVISION_TRANSFERS) >= REVISION_TRANSFERS
+
     /** Types into a session: text pasted as its program asked for pastes, then keys as they are. */
     suspend fun send(s: SessionInfo, text: String = "", keys: String = "") = daemon.send(s.nodeId, s.id, text, keys)
 
@@ -272,6 +279,9 @@ class Mesh(
 
         /** Whether text is a computer's pairing code, as its QR code holds it. */
         fun isPairing(text: String): Boolean = text.startsWith("mako://pair?")
+
+        /** The first protocol revision whose daemon stages files and tunnels (protocol.RevisionTransfers). */
+        const val REVISION_TRANSFERS = 7L
 
         /** The first protocol revision whose daemon takes send (protocol.RevisionSend). */
         const val REVISION_SEND = 8L

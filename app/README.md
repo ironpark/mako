@@ -37,6 +37,21 @@ and opens a session's conversation and its terminal.
   Drafts survive tab switches, and a failed send keeps the text.
   Assistant messages render Markdown tables, clickable links, nested lists,
   quotes and code; wide tables and code blocks scroll horizontally.
+  Tool calls in a row share one card, and a run of three or more folds into
+  a line that counts them and names their tools, as on the desktop: all but
+  the last run start folded.
+- **Attach files.** The paperclip beside the composer picks files or photos,
+  sends them to the session's computer (where they are kept for a day, as
+  files dropped on the desktop are), and puts their paths in the draft for
+  the agent. Images show as thumbnails over the composer, and in your
+  messages, and open full size when tapped.
+- **Links in the conversation.** A link to a path, absolute or relative to
+  the session's project (`src/main.go:12`, `README.md#L40`), opens that file
+  from the session's computer: images previewed, text at its line, folders
+  in Project files. An address on that computer's loopback, such as
+  `http://localhost:5173`, is forwarded through a tunnel to the same port
+  on the phone (another, when that is taken) and opens in the browser; an
+  image there is previewed in the app. Other addresses open as they are.
 - **Answer questions.** A pending question opens the agent's live input in
   a panel over Chat. Tap to type, or use Enter, arrows and Space in the key
   bar for choices and multiple selections. The session menu's **Answer the
@@ -61,7 +76,8 @@ and opens a session's conversation and its terminal.
   next view follows your finger before you release. Swipe right again
   from Chat to reveal the main session list with its filter and scroll
   position preserved. A compact switch in the session toolbar also changes
-  views, replacing the back arrow and separate tab strip. The terminal scrolls back with one finger vertically;
+  views, replacing the back arrow and separate tab strip. The toolbar stays
+  in place between Chat and Terminal; only the view under it moves. The terminal scrolls back with one finger vertically;
   use two fingers to pan or pinch to zoom, and double-tap to reset zoom and
   return to the live screen. Agent icons match the desktop throughout the app.
 - **The terminal** bundles D2Coding 1.4.0 (the standard, non-ligature

@@ -15,6 +15,7 @@ import dev.ironpark.mako.v2.OpenSession
 import dev.ironpark.mako.v2.ReadChat
 import dev.ironpark.mako.v2.RenameSession
 import dev.ironpark.mako.v2.Send
+import dev.ironpark.mako.v2.StageFile
 import dev.ironpark.mako.v2.SessionInfo
 import dev.ironpark.mako.v2.Watch
 import kotlinx.coroutines.Dispatchers
@@ -86,6 +87,35 @@ class Daemon(private val socket: () -> String?) {
     suspend fun chat(req: ReadChat): Chat = call(envelope { readChat = req }).chat
 
     /**
+     * Sends what input holds to node, a piece at a time, as a file named
+     * name its node keeps for a session to be handed; returns where it is
+     * kept there. sent hears how many bytes have gone.
+     */
+    suspend fun stage(node: String, name: String, input: java.io.InputStream, sent: (Long) -> Unit = {}): String =
+        withContext(Dispatchers.IO) {
+            val buf = ByteArray(STAGE_CHUNK)
+            var path = ""
+            var offset = 0L
+            while (true) {
+                var n = 0
+                while (n < buf.size) {
+                    val r = input.read(buf, n, buf.size - n)
+                    if (r < 0) break
+                    n += r
+                }
+                if (n == 0 && offset > 0) break
+                path = call(envelope {
+                    stageFile = StageFile.newBuilder().setNodeId(node).setName(name).setPath(path)
+                        .setOffset(offset).setData(ByteString.copyFrom(buf, 0, n)).build()
+                }).staged.path
+                offset += n
+                sent(offset)
+                if (n < buf.size) break
+            }
+            path
+        }
+
+    /**
      * What changes on the mesh, until the flow is cancelled; a stream that
      * breaks ends it with the error. While it is collected, this device
      * answers approvals: an agent asking for one waits for its answer.
@@ -104,4 +134,9 @@ class Daemon(private val socket: () -> String?) {
         reader.start()
         awaitClose { s.close() }
     }.flowOn(Dispatchers.IO)
+
+    companion object {
+        /** How much of a file one staged piece carries, well inside a frame. */
+        const val STAGE_CHUNK = 4 shl 20
+    }
 }

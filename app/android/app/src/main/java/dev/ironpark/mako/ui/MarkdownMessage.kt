@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -32,17 +33,21 @@ import com.mikepenz.markdown.model.markdownPadding
 import com.mikepenz.markdown.model.rememberMarkdownState
 import dev.ironpark.mako.R
 
-/** GFM rendered as selectable native text, with scrollable tables and clickable links. */
+/**
+ * GFM rendered as selectable native text, with scrollable tables and
+ * clickable links: onLink, when given, follows each, else the system does.
+ */
 @Composable
-internal fun MarkdownMessage(text: String, modifier: Modifier = Modifier) {
+internal fun MarkdownMessage(text: String, modifier: Modifier = Modifier, onLink: ((String) -> Unit)? = null) {
     val state = rememberMarkdownState(text, retainState = true)
     val type = MaterialTheme.typography
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val follow = rememberUpdatedState(onLink)
     val links = remember(uriHandler, context) {
         object : UriHandler {
             override fun openUri(uri: String) {
-                runCatching { uriHandler.openUri(uri) }.onFailure {
+                runCatching { follow.value?.invoke(uri) ?: uriHandler.openUri(uri) }.onFailure {
                     Toast.makeText(context, R.string.link_open_failed, Toast.LENGTH_SHORT).show()
                 }
             }

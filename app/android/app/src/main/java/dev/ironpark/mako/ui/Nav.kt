@@ -73,6 +73,12 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                 id = args?.getString("id").orEmpty(),
                 onBack = { nav.popBackStack() },
                 onFiles = { root -> nav.navigate("files/${Uri.encode(args?.getString("node").orEmpty())}/${Uri.encode(root)}") },
+                onFile = { link ->
+                    val node = Uri.encode(args?.getString("node").orEmpty())
+                    val project = mesh.session(args?.getString("id").orEmpty())?.project.orEmpty()
+                    if (link.folder) nav.navigate("files/$node/${Uri.encode(link.path)}")
+                    else nav.navigate("file/$node/${Uri.encode(project.ifEmpty { remoteParent(link.path) })}/${Uri.encode(link.path)}?line=${link.line}")
+                },
                 home = {
                     SessionsScreen(
                         mesh,
@@ -90,6 +96,15 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
             val root = entry.arguments?.getString("root").orEmpty()
             val files = remember(mesh.daemon, node) { NodeProjectFiles(mesh.daemon, node) }
             FilesScreen(files, root, mesh.nodeName(node), onBack = { nav.popBackStack() })
+        }
+        // A file a conversation links to, on its session's node.
+        composable("file/{node}/{root}/{path}?line={line}") { entry ->
+            val a = entry.arguments
+            val node = a?.getString("node").orEmpty()
+            val files = remember(mesh.daemon, node) { NodeProjectFiles(mesh.daemon, node) }
+            ProjectFileScreen(files, a?.getString("root").orEmpty(), a?.getString("path").orEmpty(),
+                a?.getString("line")?.toLongOrNull() ?: 0L, diffPath = "", from = "", deleted = false,
+                onBack = { nav.popBackStack() })
         }
         composable("settings") {
             SettingsScreen(onBack = { nav.popBackStack() }, onNotifications = { nav.navigate("notifications") }, onUpdates = { nav.navigate("updates") })

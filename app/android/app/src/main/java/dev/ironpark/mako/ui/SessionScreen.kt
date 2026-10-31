@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,7 +41,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -81,7 +81,10 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit, home: @Composable () -> Unit, onFiles: (String) -> Unit) {
+fun SessionScreen(
+    mesh: Mesh, node: String, id: String, onBack: () -> Unit, home: @Composable () -> Unit, onFiles: (String) -> Unit,
+    onFile: (ChatLink.File) -> Unit = {},
+) {
     val sessions by mesh.sessions.collectAsState()
     val nodes by mesh.nodes.collectAsState()
     val session = sessions.firstOrNull { it.id == id }
@@ -128,17 +131,13 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit, home
     }
     val act = actor()
 
+    val onTerminalPage = pager.currentPage == terminalPage
     // The insets beneath are the panes' own: the keyboard's, or the
     // navigation bar's under the bar at the bottom.
-    SessionPager(pager, onHome = onBack, modifier = Modifier.semantics { contentDescription = swipeHint }) { page ->
-        if (page == 0) {
-            home()
-            return@SessionPager
-        }
-        val pageTab = if (chat) page - 1 else 1
-        Scaffold(
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            topBar = {
+    SessionPager(pager, onHome = onBack, modifier = Modifier.semantics { contentDescription = swipeHint }, header = {
+        // One header over chat and terminal, which stays as they change.
+        Surface(color = MaterialTheme.colorScheme.surface) {
+            Column {
                 TopAppBar(
                     expandedHeight = 56.dp,
                     title = {
@@ -162,7 +161,7 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit, home
                         }
                     },
                     actions = {
-                        if (chat) SessionViewSwitch(terminal = pageTab == 1, onTerminal = { terminal ->
+                        if (chat) SessionViewSwitch(terminal = onTerminalPage, onTerminal = { terminal ->
                             scope.launch { pager.animateScrollToPage(if (terminal) terminalPage else 1) }
                         })
                         var menu by remember { mutableStateOf(false) }
@@ -189,17 +188,27 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit, home
                         }
                     },
                 )
-            },
-        ) { pad ->
-            Column(Modifier.fillMaxSize().padding(pad).consumeWindowInsets(pad).imePadding()) {
                 AnimatedVisibility(session != null && session.hasApproval()) {
                     if (session != null && session.hasApproval()) {
                         ApprovalCard(session, approvalExpanded, onExpand = { approvalExpanded = !approvalExpanded },
                             onAnswer = { decision -> act { mesh.answer(session, decision); if (decision == "terminal") question = true } })
                     }
                 }
+            }
+        }
+    }) { page ->
+        if (page == 0) {
+            home()
+            return@SessionPager
+        }
+        val pageTab = if (chat) page - 1 else 1
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.fillMaxSize().consumeWindowInsets(WindowInsets.statusBars).imePadding()) {
                 Box(Modifier.weight(1f)) {
-                    if (pageTab == 0 && session != null) ChatView(mesh, session, Modifier.fillMaxSize(), onQuestion = { request = it }, onAnswer = { question = true })
+                    if (pageTab == 0 && session != null) ChatView(
+                        mesh, session, Modifier.fillMaxSize(),
+                        onQuestion = { request = it }, onAnswer = { question = true }, onFile = onFile,
+                    )
                     else if (pageTab == 1) TerminalTab(term, fits, Modifier.fillMaxSize())
                 }
                 if (pageTab == 0 && session != null) {
@@ -207,6 +216,7 @@ fun SessionScreen(mesh: Mesh, node: String, id: String, onBack: () -> Unit, home
                         mesh = mesh, session = session, text = draft, onText = { draft = it },
                         onSend = { text -> if (canSend) mesh.send(session, text, keys = "\r") else term.submit(text) },
                         onInterrupt = { if (canSend) act { mesh.send(session, keys = "\u001b") } else term.send("\u001b") },
+                        onOpen = { path -> onFile(ChatLink.File(path)) },
                     )
                 }
             }

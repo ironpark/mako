@@ -18,6 +18,8 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -45,6 +47,7 @@ import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Terminal
@@ -99,6 +102,7 @@ import kotlinx.coroutines.launch
 fun ChatView(
     mesh: Mesh, session: SessionInfo, modifier: Modifier = Modifier,
     agent: String = "", onQuestion: (String) -> Unit = {}, onAnswer: () -> Unit = {},
+    onFile: (ChatLink.File) -> Unit = {},
 ) {
     var selectedAgent by rememberSaveable(session.id, agent) { mutableStateOf("") }
     var agentsExpanded by rememberSaveable(session.id, agent) { mutableStateOf(false) }
@@ -152,6 +156,9 @@ fun ChatView(
 
     val latest = chat?.messagesList.orEmpty()
     val messages = remember(older, latest) { joinMessages(older, latest) }
+    val turns = remember(messages) { chatTurns(messages) }
+    val links = rememberLinkOpener(mesh, session, onFile)
+    val openImage: (String) -> Unit = { path -> onFile(ChatLink.File(path)) }
     val (activeAgents, endedAgents) = remember(session.state, chat?.agentsList) {
         partitionSubagents(session, chat?.agentsList.orEmpty())
     }
@@ -222,7 +229,10 @@ fun ChatView(
                                 ) { Text(stringResource(R.string.load_earlier)) }
                             }
                         }
-                        items(messages) { m -> MessageItem(m) }
+                        items(turns, key = { "m:" + it.key }, contentType = { if (it.tools) "tools" else it.messages.first().role }) { t ->
+                            if (t.tools) ToolRun(t)
+                            else MessageItem(t.messages.first(), mesh, session, links, openImage)
+                        }
                         if (agent.isEmpty() && (activeAgents.isNotEmpty() || endedAgents.isNotEmpty())) {
                             item(key = "agents") {
                                 SubagentSummary(activeAgents.size, endedAgents.size, agentsExpanded) {
@@ -271,7 +281,7 @@ fun ChatView(
                         }
                     }
                     androidx.compose.runtime.key(selectedAgent) {
-                        ChatView(mesh, session, Modifier.weight(1f), agent = selectedAgent)
+                        ChatView(mesh, session, Modifier.weight(1f), agent = selectedAgent, onFile = onFile)
                     }
                 }
             }
@@ -337,12 +347,22 @@ private fun Working(subagents: Int) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MessageItem(m: ChatMessage) {
+private fun MessageItem(m: ChatMessage, mesh: Mesh, session: SessionInfo, onLink: (String) -> Unit, onImage: (String) -> Unit) {
     when {
-        m.tool.isNotEmpty() || m.role == "tool" -> ToolItem(m)
-        m.role == "user" -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Surface(
+        m.role == "user" -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            // The images it holds, and those it names by their paths, over it.
+            val named = remember(m.text, session.project) { imageRefs(m.text, session.project).filterNot { it in m.imagesList } }
+            if (m.imagesCount + named.size > 0) FlowRow(
+                Modifier.widthIn(max = 320.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                for (p in m.imagesList) RemoteThumbnail(mesh.daemon, session.nodeId, p, named = false, onOpen = { onImage(p) })
+                for (p in named) RemoteThumbnail(mesh.daemon, session.nodeId, p, named = true, onOpen = { onImage(p) })
+            }
+            if (m.text.isNotBlank()) Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 shape = RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp),
                 modifier = Modifier.widthIn(max = 320.dp),
@@ -353,7 +373,53 @@ private fun MessageItem(m: ChatMessage) {
                 )
             }
         }
-        else -> MarkdownMessage(m.text)
+        else -> MarkdownMessage(m.text, onLink = onLink)
+    }
+}
+
+/**
+ * ToolRun is a run of tool calls in a row, as one card whose rows fold. A
+ * long run folds into one line that counts them and names their tools, as
+ * on the desktop; the last run starts open, as the agent's work in hand.
+ */
+@Composable
+private fun ToolRun(t: ChatTurn) {
+    // Unless it is turned by hand, a run's fold follows whether it is the last.
+    var turned by rememberSaveable(t.key) { mutableStateOf<Boolean?>(null) }
+    val open = t.messages.size < FOLD_RUN || (turned ?: !t.folded)
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.animateContentSize().padding(vertical = 2.dp)) {
+            if (t.messages.size >= FOLD_RUN) {
+                val names = remember(t.messages) { t.messages.map { it.tool.ifEmpty { it.kind } }.filter { it.isNotEmpty() }.distinct() }
+                val pending = t.messages.any { it.pending }
+                val failed = t.messages.count { it.error }
+                Row(
+                    Modifier.fillMaxWidth().clickable(
+                        role = Role.Button,
+                        onClickLabel = stringResource(if (open) R.string.tool_run_collapse else R.string.tool_run_expand),
+                    ) { turned = !open }.heightIn(min = 40.dp).padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (pending) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Outlined.Layers, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(10.dp))
+                    Text(stringResource(R.string.tool_calls, t.messages.size), style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (failed > 0) Text(" · " + stringResource(R.string.tool_calls_failed, failed), style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.width(8.dp))
+                    Text(names.joinToString(", "), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Icon(if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, null,
+                        Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (open) for (m in t.messages) androidx.compose.runtime.key(messageKey(m)) { ToolItem(m) }
+        }
     }
 }
 
@@ -361,41 +427,35 @@ private fun MessageItem(m: ChatMessage) {
 private fun ToolItem(m: ChatMessage) {
     var open by remember(m.id, m.text) { mutableStateOf(m.error) }
     val tint = if (m.error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
+    Column(
+        Modifier.fillMaxWidth().clickable(enabled = m.result.isNotEmpty() || m.text.isNotEmpty()) { open = !open }
+            .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        Column(
-            Modifier.animateContentSize().clickable(enabled = m.result.isNotEmpty() || m.text.isNotEmpty()) { open = !open }
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (m.pending) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                else Icon(toolIcon(m.kind), null, Modifier.size(16.dp), tint = tint)
-                Spacer(Modifier.width(10.dp))
-                Text(m.tool.ifEmpty { m.kind }, style = MaterialTheme.typography.labelLarge, color = tint)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    m.detail.ifEmpty { m.text }, style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-                )
-                if (m.hasExitCode() && m.exitCode != 0) {
-                    Text(" ${m.exitCode}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (m.pending) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+            else Icon(toolIcon(m.kind), null, Modifier.size(16.dp), tint = tint)
+            Spacer(Modifier.width(10.dp))
+            Text(m.tool.ifEmpty { m.kind }, style = MaterialTheme.typography.labelLarge, color = tint)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                m.detail.ifEmpty { m.text }, style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            )
+            if (m.hasExitCode() && m.exitCode != 0) {
+                Text(" ${m.exitCode}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
             }
-            if (open) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(max = 320.dp),
-                ) {
-                    Text(
-                        listOf(m.text, m.result).filter { it.isNotBlank() }.joinToString("\n\n"), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.padding(8.dp).verticalScroll(rememberScrollState()),
-                    )
-                }
+        }
+        if (open) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(max = 320.dp),
+            ) {
+                Text(
+                    listOf(m.text, m.result).filter { it.isNotBlank() }.joinToString("\n\n"), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(8.dp).verticalScroll(rememberScrollState()),
+                )
             }
         }
     }

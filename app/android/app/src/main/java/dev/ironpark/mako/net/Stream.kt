@@ -45,6 +45,19 @@ class Stream private constructor(private val socket: LocalSocket) : Closeable {
         return env
     }
 
+    /**
+     * The stream's bytes as they are, for a stream a tunnel turned into a
+     * connection: what is read already, past the last frame, comes first.
+     */
+    val rawInput: java.io.InputStream get() = input
+    val rawOutput: java.io.OutputStream get() = output
+
+    /** Says no more is sent, while what comes back is still read. */
+    fun shutdownOutput() {
+        runCatching { output.flush() }
+        runCatching { socket.shutdownOutput() }
+    }
+
     override fun close() {
         // Shutting the input down wakes a read blocked on it, which closing
         // alone does not.

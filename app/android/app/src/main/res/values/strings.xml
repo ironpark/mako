@@ -122,6 +122,15 @@
     <string name="subagent_ended">Ended</string>
     <string name="subagent_read_only">Subagent conversation · read only</string>
     <string name="tool_calls">%1$d tool calls</string>
+    <string name="tool_run_expand">Show tool calls</string>
+    <string name="tool_run_collapse">Hide tool calls</string>
+    <string name="tool_calls_failed">%1$d failed</string>
+    <string name="attach">Attach files</string>
+    <string name="attach_remove">Remove attachment</string>
+    <string name="attach_unreadable">Could not read %1$s</string>
+    <string name="tunnel_failed">Could not reach port %1$d on %2$s</string>
+    <string name="tunnel_other_port">Port %1$d is taken here; localhost:%2$d reaches it</string>
+    <string name="open_in_browser">Open in browser</string>
     <string name="commands_retry">Could not load commands. Tap to retry.</string>
     <string name="commands_empty">No matching commands. You can still type a command.</string>
     <string name="space_key">Space</string>

@@ -2,7 +2,9 @@ package dev.ironpark.mako.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -51,15 +53,16 @@ class SessionPagerTest {
                 val scope = rememberCoroutineScope()
                 switchDescription = stringResource(R.string.switch_session_view)
                 val term = remember { TermSession(Daemon { null }, "test", "test", scope) }
-                SessionPager(pager, onHome = { returnsHome++ }, modifier = Modifier.testTag("pager")) { page ->
+                SessionPager(pager, onHome = { returnsHome++ }, modifier = Modifier.testTag("pager"), header = {
+                    Box(Modifier.fillMaxWidth().height(56.dp).background(Color.Gray).testTag("header")) {
+                        if (chat) SessionViewSwitch(terminal = pager.currentPage == 2, onTerminal = { terminal ->
+                            scope.launch { pager.animateScrollToPage(if (terminal) 2 else 1) }
+                        })
+                    }
+                }) { page ->
                     Box(Modifier.fillMaxSize().background(if (page == 0) Color.Green else Color.White).testTag("page$page")) {
-                        Column {
-                            if (chat && page > 0) SessionViewSwitch(terminal = page == 2, onTerminal = { terminal ->
-                                scope.launch { pager.animateScrollToPage(if (terminal) 2 else 1) }
-                            })
-                            if (page == if (chat) 2 else 1) {
-                                TerminalPane(term, Modifier.fillMaxSize().testTag("terminal"))
-                            }
+                        if (page == if (chat) 2 else 1) {
+                            TerminalPane(term, Modifier.fillMaxSize().testTag("terminal"))
                         }
                     }
                 }
@@ -69,16 +72,39 @@ class SessionPagerTest {
 
     @Test fun toolbarSwitchAndSwipesKeepTheSameModeSelected() {
         content()
-        val chatSwitch = compose.onNode(hasContentDescription(switchDescription) and hasAnyAncestor(hasTestTag("page1")))
-        chatSwitch.assertIsOff().performClick()
+        val toggle = compose.onNode(hasContentDescription(switchDescription) and hasAnyAncestor(hasTestTag("header")))
+        toggle.assertIsOff().performClick()
         compose.runOnIdle { assertEquals(2, pager.settledPage) }
-        compose.onNode(hasContentDescription(switchDescription) and hasAnyAncestor(hasTestTag("page2")))
-            .assertIsOn().performClick()
+        toggle.assertIsOn().performClick()
         compose.runOnIdle { assertEquals(1, pager.settledPage) }
         compose.onNodeWithTag("page1").performTouchInput { swipeLeft() }
-        compose.onNode(hasContentDescription(switchDescription) and hasAnyAncestor(hasTestTag("page2"))).assertIsOn()
+        toggle.assertIsOn()
         compose.onNodeWithTag("terminal").performTouchInput { swipeRight() }
-        chatSwitch.assertIsOff()
+        toggle.assertIsOff()
+    }
+
+    @Test fun headerStaysBetweenChatAndTerminalButLeavesWithTheSessionForHome() {
+        content()
+        fun headerLeft() = compose.onNodeWithTag("header").fetchSemanticsNode().boundsInRoot.left
+        compose.onNodeWithTag("pager").performTouchInput {
+            down(center)
+            moveTo(center - Offset(width * 0.4f, 0f), delayMillis = 300)
+        }
+        compose.runOnIdle { assertTrue(pager.currentPageOffsetFraction != 0f) }
+        assertEquals(0f, headerLeft())
+        compose.onNodeWithTag("pager").performTouchInput {
+            moveTo(center, delayMillis = 300)
+            moveTo(center + Offset(width * 0.4f, 0f), delayMillis = 300)
+        }
+        assertTrue(headerLeft() > 0f)
+        // Content below the header is the page's own, not covered by it.
+        assertTrue(compose.onNodeWithTag("page1").fetchSemanticsNode().boundsInRoot.top >= 0f)
+        compose.onNodeWithTag("pager").performTouchInput {
+            moveTo(center, delayMillis = 300)
+            up()
+        }
+        compose.runOnIdle { assertEquals(1, pager.settledPage) }
+        assertEquals(0f, headerLeft())
     }
 
     @Test fun adjacentTerminalIsVisibleWhileFingerIsStillDown() {
