@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -186,113 +187,225 @@ func readWindow(path string, a agent.Logs, span Span) (window, error) {
 
 // readLog reads span of the log at path with dec, as readWindow does.
 func readLog(path string, dec agent.Decoder, tools agent.Tools, span Span) (window, error) {
+	r := logRead{dec: dec, tools: tools}
+	err := r.read(path, span)
+	return r.window(), err
+}
+
+// logRead is a read of a log under way: the messages it keeps so far and
+// where it stopped, so a read of the log grown since goes on from there
+// with the same decoder, as one read of it all would, rather than
+// decoding the latest maxRead of it again.
+type logRead struct {
+	dec   agent.Decoder
+	tools agent.Tools
+
+	begun     bool
+	skip      bool  // the read began inside a record, which it leaves out
+	pos       int64 // where the next record starts
+	start     int64 // where the read began, after what it skipped
+	truncated bool
+
+	messages []*protocol.ChatMessage
+	offsets  []int64 // the start of each message's record
+	// A tool call's ID to its place in messages, counting the dropped ones,
+	// so dropping never has to move the places.
+	calls   map[string]int
+	dropped int
+	size    int
+	// handed is how many of the first messages the last window gave out,
+	// which callers share: one of them, or the slice holding them, is
+	// changed only as a copy.
+	handed int
+	shared bool // messages' backing array is a window's
+}
+
+// read reads on to span's end, from where the last read stopped or, the
+// first time, from as far back as a poll can send.
+func (r *logRead) read(path string, span Span) error {
 	f, err := os.Open(path)
 	if err != nil {
-		return window{}, err
+		return err
 	}
 	defer f.Close()
 	stat, err := f.Stat()
 	if err != nil {
-		return window{}, err
+		return err
 	}
 	end := stat.Size()
 	if span.Before > 0 {
 		end = min(span.Before, end)
 	}
-	begin := max(end-maxRead, span.After, 0)
-	truncated := begin > span.After
-	pos := begin // where the next record starts
-	if begin > 0 {
-		// The read may begin inside a record, and then the next one is the
-		// first. It begins a byte early, to see the end of the one before.
-		pos--
-	}
-	if _, err = f.Seek(pos, io.SeekStart); err != nil {
-		return window{}, err
-	}
-	reader := bufio.NewReader(io.LimitReader(f, end-pos))
-	if pos > 0 {
-		skipped, _ := reader.ReadBytes('\n')
-		pos += int64(len(skipped))
-	}
-	start := pos
-	var messages []*protocol.ChatMessage
-	var offsets []int64 // the start of each message's record
-	// A tool call's ID to its place in messages, counting the dropped ones,
-	// so dropping never has to move the places.
-	calls := map[string]int{}
-	dropped := 0
-	size := 0
-	// trim keeps the window small enough to send, dropping the oldest
-	// messages. The messages of one record go together, so the window
-	// starts at a record and a read up to there ends at it.
-	trim := func() {
-		for len(messages) > 0 && (len(messages) > 200 || size > 512<<10) {
-			gone := offsets[0]
-			for len(messages) > 0 && offsets[0] == gone {
-				size -= len(messages[0].GetText()) + len(messages[0].GetResult())
-				messages, offsets = messages[1:], offsets[1:]
-				dropped++
-			}
+	if !r.begun {
+		r.begun = true
+		begin := max(end-maxRead, span.After, 0)
+		r.truncated = begin > span.After
+		r.pos, r.start = begin, begin
+		if begin > 0 {
+			// The read may begin inside a record, and then the next one is
+			// the first. It begins a byte early, to see the end of the one
+			// before.
+			r.pos, r.skip = begin-1, true
 		}
 	}
-	for {
-		line, err := reader.ReadBytes('\n')
-		// The writer may be in the middle of a record. Wait for the next poll.
+	if end <= r.pos {
+		return nil
+	}
+	if _, err = f.Seek(r.pos, io.SeekStart); err != nil {
+		return err
+	}
+	reader := readers.Get().(*bufio.Reader)
+	reader.Reset(io.LimitReader(f, end-r.pos))
+	defer func() { reader.Reset(nil); readers.Put(reader) }()
+	var long []byte // a record longer than reader's buffer, put together
+	defer func() {
+		if cap(long) > 0 && cap(long) <= 1<<20 {
+			longLines.Put(&long)
+		}
+	}()
+	if r.skip {
+		skipped, err := readRecord(reader, &long)
 		if err == io.EOF {
-			break
+			return nil // the record skipped is still being written
 		}
 		if err != nil {
-			return window{truncated: truncated}, err
+			return err
 		}
-		at := pos
-		pos += int64(len(line))
-		parsed := dec.Line(line)
-		for _, m := range parsed {
-			for _, s := range []*string{&m.Text, &m.Result} {
-				if len(*s) > maxText {
-					*s = trimUTF8(*s, maxText) + "\n…"
-					truncated = true
-				}
+		r.pos += int64(len(skipped))
+		r.start, r.skip = r.pos, false
+	}
+	for {
+		line, err := readRecord(reader, &long)
+		// The writer may be in the middle of a record. Wait for the next poll.
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		at := r.pos
+		r.pos += int64(len(line))
+		r.add(at, r.dec.Line(line))
+	}
+}
+
+// readers are the buffered readers reads borrow, and longLines the room
+// they put a long record together in.
+var (
+	readers   = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, 64<<10) }}
+	longLines sync.Pool
+)
+
+// readRecord is the next line of reader, up to and with its newline: in
+// reader's own buffer, valid until it reads again, when it fits, else put
+// together in long, which comes from longLines when it is nil.
+func readRecord(reader *bufio.Reader, long *[]byte) ([]byte, error) {
+	line, err := reader.ReadSlice('\n')
+	if err != bufio.ErrBufferFull {
+		return line, err
+	}
+	if *long == nil {
+		if p, ok := longLines.Get().(*[]byte); ok {
+			*long = *p
+		}
+	}
+	buf := append((*long)[:0], line...)
+	for err == bufio.ErrBufferFull {
+		line, err = reader.ReadSlice('\n')
+		buf = append(buf, line...)
+	}
+	*long = buf
+	return buf, err
+}
+
+// add keeps the messages decoded from the record at at.
+func (r *logRead) add(at int64, parsed []*protocol.ChatMessage) {
+	for _, m := range parsed {
+		for _, s := range []*string{&m.Text, &m.Result} {
+			if len(*s) > maxText {
+				*s = trimUTF8(*s, maxText) + "\n…"
+				r.truncated = true
 			}
-			// A result belongs to the call it answers: one row in the chat
-			// rather than a second line of loose output.
-			if m.GetRole() == "tool" && m.GetOutput() && m.GetId() != "" {
-				if i, ok := calls[m.GetId()]; ok && i >= dropped {
-					call := messages[i-dropped]
-					call.Result, call.Error, call.ExitCode, call.Pending = m.GetText(), m.GetError(), m.ExitCode, false
-					call.Detail = cmp.Or(call.GetDetail(), m.GetDetail())
-					if tools != nil {
-						// What the call's tool gave back, out of what the
-						// agent wrapped it in.
-						result, exit := tools.Output(call.GetKind(), call.GetResult())
-						call.Result = result
-						if exit >= 0 {
-							call.ExitCode = proto.Int32(int32(exit))
-						}
+		}
+		// A result belongs to the call it answers: one row in the chat
+		// rather than a second line of loose output.
+		if m.GetRole() == "tool" && m.GetOutput() && m.GetId() != "" {
+			if i, ok := r.calls[m.GetId()]; ok && i >= r.dropped {
+				call := r.own(i - r.dropped)
+				call.Result, call.Error, call.ExitCode, call.Pending = m.GetText(), m.GetError(), m.ExitCode, false
+				call.Detail = cmp.Or(call.GetDetail(), m.GetDetail())
+				if r.tools != nil {
+					// What the call's tool gave back, out of what the agent
+					// wrapped it in.
+					result, exit := r.tools.Output(call.GetKind(), call.GetResult())
+					call.Result = result
+					if exit >= 0 {
+						call.ExitCode = proto.Int32(int32(exit))
 					}
-					size += len(m.GetText())
-					trim()
-					continue
 				}
+				r.size += len(m.GetText())
+				r.trim()
+				continue
 			}
-			if m.GetRole() == "tool" && !m.GetOutput() && m.GetId() != "" {
-				calls[m.GetId()] = dropped + len(messages)
-				m.Pending = m.GetResult() == "" // a call read with its result is done
+		}
+		if m.GetRole() == "tool" && !m.GetOutput() && m.GetId() != "" {
+			if r.calls == nil {
+				r.calls = map[string]int{}
 			}
-			messages = append(messages, m)
-			offsets = append(offsets, at)
-			size += len(m.GetText()) + len(m.GetResult())
-			trim()
+			r.calls[m.GetId()] = r.dropped + len(r.messages)
+			m.Pending = m.GetResult() == "" // a call read with its result is done
+		}
+		r.messages = append(r.messages, m)
+		r.offsets = append(r.offsets, at)
+		r.size += len(m.GetText()) + len(m.GetResult())
+		r.trim()
+	}
+}
+
+// own is messages[i], to be changed: a copy of it, in a copy of the
+// slice, when a window gave them out.
+func (r *logRead) own(i int) *protocol.ChatMessage {
+	if i >= r.handed {
+		return r.messages[i]
+	}
+	if r.shared {
+		r.messages, r.shared = slices.Clone(r.messages), false
+	}
+	m := proto.CloneOf(r.messages[i])
+	r.messages[i] = m
+	return m
+}
+
+// trim keeps the window small enough to send, dropping the oldest
+// messages. The messages of one record go together, so the window starts
+// at a record and a read up to there ends at it.
+func (r *logRead) trim() {
+	for len(r.messages) > 0 && (len(r.messages) > 200 || r.size > 512<<10) {
+		gone := r.offsets[0]
+		for len(r.messages) > 0 && r.offsets[0] == gone {
+			r.size -= len(r.messages[0].GetText()) + len(r.messages[0].GetResult())
+			r.messages, r.offsets = r.messages[1:], r.offsets[1:]
+			r.dropped++
+			r.handed = max(r.handed-1, 0)
 		}
 	}
-	if dropped > 0 {
-		truncated, start = true, pos
-		if len(offsets) > 0 {
-			start = offsets[0]
+	// The calls of dropped messages can no longer be answered.
+	if len(r.calls) > 2*len(r.messages)+64 {
+		maps.DeleteFunc(r.calls, func(_ string, i int) bool { return i < r.dropped })
+	}
+}
+
+// window is what the read keeps, for callers to share.
+func (r *logRead) window() window {
+	r.handed, r.shared = len(r.messages), true
+	w := window{messages: r.messages, start: r.start, truncated: r.truncated}
+	if r.dropped > 0 {
+		w.truncated, w.start = true, r.pos
+		if len(r.offsets) > 0 {
+			w.start = r.offsets[0]
 		}
 	}
-	return window{messages: messages, start: start, truncated: truncated}, nil
+	return w
 }
 
 func trimUTF8(s string, n int) string {
@@ -427,6 +540,7 @@ type Cache struct {
 	mu     sync.Mutex
 	stat   os.FileInfo
 	chat   *protocol.Chat // shared with every caller, which must not change it
+	live   *logRead       // the read chat came from, which a poll goes on with
 	usage  usageScan
 	agents agent.SubAgentScan // nil until a read
 	// subs are the latest reads of the subagents' logs, by log path.
@@ -532,9 +646,14 @@ func (c *Cache) ReadBound(info *protocol.SessionInfo, path string, span Span) (*
 		c.agents = newSubAgents(a) // another conversation's
 	}
 	if err == nil {
-		var w window
-		w, err = readWindow(path, a, Span{})
-		w.fill(chat)
+		// The same log grown: read on from where the last read stopped.
+		if c.live == nil || c.stat == nil || statErr != nil || c.chat.GetConversation() != info.GetConversationId() ||
+			!os.SameFile(c.stat, stat) || stat.Size() < c.stat.Size() {
+			tools, _ := a.(agent.Tools)
+			c.live = &logRead{dec: a.NewDecoder(), tools: tools}
+		}
+		err = c.live.read(path, Span{})
+		c.live.window().fill(chat)
 	}
 	if err == nil {
 		chat.Usage = c.usage.read(path, a)
@@ -543,7 +662,7 @@ func (c *Cache) ReadBound(info *protocol.SessionInfo, path string, span Span) (*
 	if err == nil && statErr == nil {
 		c.stat, c.chat = stat, chat
 	} else {
-		c.stat = nil
+		c.stat, c.live = nil, nil
 	}
 	return chat, err
 }

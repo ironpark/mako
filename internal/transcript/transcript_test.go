@@ -237,3 +237,42 @@ func claudeLogs(t *testing.T) agent.Logs {
 	}
 	return a
 }
+
+// A poll of a grown log reads on from where the last stopped, and comes to
+// what one read of it all does: a result answers a call read before, and
+// a long record is read whole. What an earlier poll gave out is left as
+// it was.
+func TestCacheReadsOnAsTheLogGrows(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "projects", "p", "c.jsonl")
+	head := `{"type":"user","sessionId":"c","cwd":"/p","uuid":"u0","message":{"role":"user","content":"hi"}}` + "\n"
+	call := `{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"main.go"}}]}}` + "\n"
+	result := `{"type":"user","uuid":"u2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":[{"type":"text","text":"package main"}]}]}}` + "\n"
+	long := `{"type":"assistant","uuid":"a3","message":{"role":"assistant","content":[{"type":"text","text":"` + strings.Repeat("x", 200<<10) + `"}]}}` + "\n"
+	writeLog(t, path, head+call+result[:20])
+	info := &protocol.SessionInfo{Agent: "claude", ConversationId: "c"}
+	var cache Cache
+	first, err := cache.ReadBound(info, path, Span{})
+	if err != nil || len(first.GetMessages()) != 2 || !first.GetMessages()[1].GetPending() {
+		t.Fatalf("first: %+v, %v", first.GetMessages(), err)
+	}
+	writeLog(t, path, head+call+result+long)
+	grown, err := cache.ReadBound(info, path, Span{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	whole, _, _ := readMessages(path, claudeLogs(t))
+	if len(grown.GetMessages()) != len(whole) {
+		t.Fatalf("read on: %d messages, read whole: %d", len(grown.GetMessages()), len(whole))
+	}
+	for i, m := range grown.GetMessages() {
+		if m.GetText() != whole[i].GetText() || m.GetResult() != whole[i].GetResult() || m.GetPending() != whole[i].GetPending() {
+			t.Fatalf("message %d read on: %+v, read whole: %+v", i, m, whole[i])
+		}
+	}
+	if grown.GetMessages()[1].GetResult() != "package main" || len(grown.GetMessages()[2].GetText()) < maxText {
+		t.Fatalf("grown: %+v", grown.GetMessages())
+	}
+	if m := first.GetMessages()[1]; !m.GetPending() || m.GetResult() != "" {
+		t.Fatalf("the first poll's call was changed: %+v", m)
+	}
+}
