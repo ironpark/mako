@@ -98,4 +98,16 @@ public interface ReadChatOrBuilder extends
    */
   com.google.protobuf.ByteString
       getAgentBytes();
+
+  /**
+   * <pre>
+   * patch says the reader takes, for the latest messages, a Chat that
+   * patches the one seen names: see Chat's base. A daemon that does not
+   * know the field, or no longer has that Chat, sends the whole of it.
+   * </pre>
+   *
+   * <code>bool patch = 8 [json_name = "patch"];</code>
+   * @return The patch.
+   */
+  boolean getPatch();
 }

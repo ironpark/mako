@@ -98,6 +98,7 @@ type conversation struct {
 	chat       transcript.Cache
 	activity   transcript.Activity
 	activityMu sync.Mutex // keep a snapshot and its application in the same order
+	sent       sentChats  // the latest chats readers were sent, for their next read to patch
 	// seq numbers the newest report the agent's own hook made, 0 for none.
 	// From the first, its reports follow the conversation, and no process
 	// listing does; older reports arrive too late.
@@ -121,6 +122,17 @@ func (d *Daemon) trackConversation(s *session.Session) {
 		c.running = true
 		go d.followConversations()
 	}
+}
+
+// sentChats is what readers of s's conversation were last sent, or nil
+// once it is not followed.
+func (c *conversations) sentChats(s *session.Session) *sentChats {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if conv, ok := c.sessions[s]; ok {
+		return &conv.sent
+	}
+	return nil
 }
 
 // chatCache is the cache of s's conversation, or nil once it is not followed.

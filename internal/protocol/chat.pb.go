@@ -40,7 +40,11 @@ type ReadChat struct {
 	// agent reads the conversation of the session's subagent of this ID, as
 	// the session's Chat lists it, in place of the session's own: its
 	// messages alone, without usage or subagents of its own.
-	Agent         string `protobuf:"bytes,7,opt,name=agent,proto3" json:"agent,omitempty"`
+	Agent string `protobuf:"bytes,7,opt,name=agent,proto3" json:"agent,omitempty"`
+	// patch says the reader takes, for the latest messages, a Chat that
+	// patches the one seen names: see Chat's base. A daemon that does not
+	// know the field, or no longer has that Chat, sends the whole of it.
+	Patch         bool `protobuf:"varint,8,opt,name=patch,proto3" json:"patch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -122,6 +126,13 @@ func (x *ReadChat) GetAgent() string {
 		return x.Agent
 	}
 	return ""
+}
+
+func (x *ReadChat) GetPatch() bool {
+	if x != nil {
+		return x.Patch
+	}
+	return false
 }
 
 // ChatMessage is one turn of a conversation.
@@ -276,7 +287,14 @@ type Chat struct {
 	// digest names this reply, for the next read's seen.
 	Digest uint64 `protobuf:"varint,8,opt,name=digest,proto3" json:"digest,omitempty"`
 	// unchanged says the reply is the one seen named; only digest is set.
-	Unchanged     bool `protobuf:"varint,9,opt,name=unchanged,proto3" json:"unchanged,omitempty"`
+	Unchanged bool `protobuf:"varint,9,opt,name=unchanged,proto3" json:"unchanged,omitempty"`
+	// base, when set, says this reply patches the Chat of that digest, the
+	// one the read named seen, to the Chat digest names: its messages are
+	// base's, drop of them left out from the front and the keep after them
+	// kept, followed by messages. Every other field is whole.
+	Base          uint64 `protobuf:"varint,10,opt,name=base,proto3" json:"base,omitempty"`
+	Drop          int32  `protobuf:"varint,11,opt,name=drop,proto3" json:"drop,omitempty"`
+	Keep          int32  `protobuf:"varint,12,opt,name=keep,proto3" json:"keep,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -372,6 +390,27 @@ func (x *Chat) GetUnchanged() bool {
 		return x.Unchanged
 	}
 	return false
+}
+
+func (x *Chat) GetBase() uint64 {
+	if x != nil {
+		return x.Base
+	}
+	return 0
+}
+
+func (x *Chat) GetDrop() int32 {
+	if x != nil {
+		return x.Drop
+	}
+	return 0
+}
+
+func (x *Chat) GetKeep() int32 {
+	if x != nil {
+		return x.Keep
+	}
+	return 0
 }
 
 // SubAgent is an agent a call of the conversation's started, such as
@@ -660,7 +699,7 @@ var File_mako_v2_chat_proto protoreflect.FileDescriptor
 
 const file_mako_v2_chat_proto_rawDesc = "" +
 	"\n" +
-	"\x12mako/v2/chat.proto\x12\amako.v2\"\xb9\x01\n" +
+	"\x12mako/v2/chat.proto\x12\amako.v2\"\xcf\x01\n" +
 	"\bReadChat\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
@@ -670,7 +709,8 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\x06before\x18\x04 \x01(\x03R\x06before\x12\x14\n" +
 	"\x05after\x18\x05 \x01(\x03R\x05after\x12\x12\n" +
 	"\x04seen\x18\x06 \x01(\x04R\x04seen\x12\x14\n" +
-	"\x05agent\x18\a \x01(\tR\x05agent\"\xad\x02\n" +
+	"\x05agent\x18\a \x01(\tR\x05agent\x12\x14\n" +
+	"\x05patch\x18\b \x01(\bR\x05patch\"\xad\x02\n" +
 	"\vChatMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x0e\n" +
@@ -686,7 +726,7 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\texit_code\x18\v \x01(\x05H\x00R\bexitCode\x88\x01\x01\x12\x16\n" +
 	"\x06images\x18\f \x03(\tR\x06imagesB\f\n" +
 	"\n" +
-	"_exit_code\"\xb5\x02\n" +
+	"_exit_code\"\xf1\x02\n" +
 	"\x04Chat\x12\x1c\n" +
 	"\tsupported\x18\x01 \x01(\bR\tsupported\x12\"\n" +
 	"\fconversation\x18\x02 \x01(\tR\fconversation\x120\n" +
@@ -696,7 +736,11 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\x06agents\x18\x06 \x03(\v2\x11.mako.v2.SubAgentR\x06agents\x12\x14\n" +
 	"\x05start\x18\a \x01(\x03R\x05start\x12\x16\n" +
 	"\x06digest\x18\b \x01(\x04R\x06digest\x12\x1c\n" +
-	"\tunchanged\x18\t \x01(\bR\tunchanged\"\xb1\x02\n" +
+	"\tunchanged\x18\t \x01(\bR\tunchanged\x12\x12\n" +
+	"\x04base\x18\n" +
+	" \x01(\x04R\x04base\x12\x12\n" +
+	"\x04drop\x18\v \x01(\x05R\x04drop\x12\x12\n" +
+	"\x04keep\x18\f \x01(\x05R\x04keep\"\xb1\x02\n" +
 	"\bSubAgent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\acall_id\x18\x02 \x01(\tR\x06callId\x12\x12\n" +

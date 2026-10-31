@@ -519,6 +519,105 @@ public  final class Chat extends
     unchanged_ = false;
   }
 
+  public static final int BASE_FIELD_NUMBER = 10;
+  private long base_;
+  /**
+   * <pre>
+   * base, when set, says this reply patches the Chat of that digest, the
+   * one the read named seen, to the Chat digest names: its messages are
+   * base's, drop of them left out from the front and the keep after them
+   * kept, followed by messages. Every other field is whole.
+   * </pre>
+   *
+   * <code>uint64 base = 10 [json_name = "base"];</code>
+   * @return The base.
+   */
+  @java.lang.Override
+  public long getBase() {
+    return base_;
+  }
+  /**
+   * <pre>
+   * base, when set, says this reply patches the Chat of that digest, the
+   * one the read named seen, to the Chat digest names: its messages are
+   * base's, drop of them left out from the front and the keep after them
+   * kept, followed by messages. Every other field is whole.
+   * </pre>
+   *
+   * <code>uint64 base = 10 [json_name = "base"];</code>
+   * @param value The base to set.
+   */
+  private void setBase(long value) {
+    
+    base_ = value;
+  }
+  /**
+   * <pre>
+   * base, when set, says this reply patches the Chat of that digest, the
+   * one the read named seen, to the Chat digest names: its messages are
+   * base's, drop of them left out from the front and the keep after them
+   * kept, followed by messages. Every other field is whole.
+   * </pre>
+   *
+   * <code>uint64 base = 10 [json_name = "base"];</code>
+   */
+  private void clearBase() {
+
+    base_ = 0L;
+  }
+
+  public static final int DROP_FIELD_NUMBER = 11;
+  private int drop_;
+  /**
+   * <code>int32 drop = 11 [json_name = "drop"];</code>
+   * @return The drop.
+   */
+  @java.lang.Override
+  public int getDrop() {
+    return drop_;
+  }
+  /**
+   * <code>int32 drop = 11 [json_name = "drop"];</code>
+   * @param value The drop to set.
+   */
+  private void setDrop(int value) {
+    
+    drop_ = value;
+  }
+  /**
+   * <code>int32 drop = 11 [json_name = "drop"];</code>
+   */
+  private void clearDrop() {
+
+    drop_ = 0;
+  }
+
+  public static final int KEEP_FIELD_NUMBER = 12;
+  private int keep_;
+  /**
+   * <code>int32 keep = 12 [json_name = "keep"];</code>
+   * @return The keep.
+   */
+  @java.lang.Override
+  public int getKeep() {
+    return keep_;
+  }
+  /**
+   * <code>int32 keep = 12 [json_name = "keep"];</code>
+   * @param value The keep to set.
+   */
+  private void setKeep(int value) {
+    
+    keep_ = value;
+  }
+  /**
+   * <code>int32 keep = 12 [json_name = "keep"];</code>
+   */
+  private void clearKeep() {
+
+    keep_ = 0;
+  }
+
   public static dev.ironpark.mako.v2.Chat parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1147,6 +1246,111 @@ public  final class Chat extends
       return this;
     }
 
+    /**
+     * <pre>
+     * base, when set, says this reply patches the Chat of that digest, the
+     * one the read named seen, to the Chat digest names: its messages are
+     * base's, drop of them left out from the front and the keep after them
+     * kept, followed by messages. Every other field is whole.
+     * </pre>
+     *
+     * <code>uint64 base = 10 [json_name = "base"];</code>
+     * @return The base.
+     */
+    @java.lang.Override
+    public long getBase() {
+      return instance.getBase();
+    }
+    /**
+     * <pre>
+     * base, when set, says this reply patches the Chat of that digest, the
+     * one the read named seen, to the Chat digest names: its messages are
+     * base's, drop of them left out from the front and the keep after them
+     * kept, followed by messages. Every other field is whole.
+     * </pre>
+     *
+     * <code>uint64 base = 10 [json_name = "base"];</code>
+     * @param value The base to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBase(long value) {
+      copyOnWrite();
+      instance.setBase(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * base, when set, says this reply patches the Chat of that digest, the
+     * one the read named seen, to the Chat digest names: its messages are
+     * base's, drop of them left out from the front and the keep after them
+     * kept, followed by messages. Every other field is whole.
+     * </pre>
+     *
+     * <code>uint64 base = 10 [json_name = "base"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBase() {
+      copyOnWrite();
+      instance.clearBase();
+      return this;
+    }
+
+    /**
+     * <code>int32 drop = 11 [json_name = "drop"];</code>
+     * @return The drop.
+     */
+    @java.lang.Override
+    public int getDrop() {
+      return instance.getDrop();
+    }
+    /**
+     * <code>int32 drop = 11 [json_name = "drop"];</code>
+     * @param value The drop to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDrop(int value) {
+      copyOnWrite();
+      instance.setDrop(value);
+      return this;
+    }
+    /**
+     * <code>int32 drop = 11 [json_name = "drop"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDrop() {
+      copyOnWrite();
+      instance.clearDrop();
+      return this;
+    }
+
+    /**
+     * <code>int32 keep = 12 [json_name = "keep"];</code>
+     * @return The keep.
+     */
+    @java.lang.Override
+    public int getKeep() {
+      return instance.getKeep();
+    }
+    /**
+     * <code>int32 keep = 12 [json_name = "keep"];</code>
+     * @param value The keep to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKeep(int value) {
+      copyOnWrite();
+      instance.setKeep(value);
+      return this;
+    }
+    /**
+     * <code>int32 keep = 12 [json_name = "keep"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearKeep() {
+      copyOnWrite();
+      instance.clearKeep();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Chat)
   }
   @java.lang.Override
@@ -1175,10 +1379,14 @@ public  final class Chat extends
             "start_",
             "digest_",
             "unchanged_",
+            "base_",
+            "drop_",
+            "keep_",
           };
           java.lang.String info =
-              "\u0000\t\u0000\u0001\u0001\t\t\u0000\u0002\u0000\u0001\u0007\u0002\u0208\u0003\u001b" +
-              "\u0004\u0007\u0005\u1009\u0000\u0006\u001b\u0007\u0002\b\u0003\t\u0007";
+              "\u0000\f\u0000\u0001\u0001\f\f\u0000\u0002\u0000\u0001\u0007\u0002\u0208\u0003\u001b" +
+              "\u0004\u0007\u0005\u1009\u0000\u0006\u001b\u0007\u0002\b\u0003\t\u0007\n\u0003\u000b" +
+              "\u0004\f\u0004";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

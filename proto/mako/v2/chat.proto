@@ -23,6 +23,10 @@ message ReadChat {
   // the session's Chat lists it, in place of the session's own: its
   // messages alone, without usage or subagents of its own.
   string agent = 7;
+  // patch says the reader takes, for the latest messages, a Chat that
+  // patches the one seen names: see Chat's base. A daemon that does not
+  // know the field, or no longer has that Chat, sends the whole of it.
+  bool patch = 8;
 }
 
 // ChatMessage is one turn of a conversation.
@@ -60,6 +64,13 @@ message Chat {
   uint64 digest = 8;
   // unchanged says the reply is the one seen named; only digest is set.
   bool unchanged = 9;
+  // base, when set, says this reply patches the Chat of that digest, the
+  // one the read named seen, to the Chat digest names: its messages are
+  // base's, drop of them left out from the front and the keep after them
+  // kept, followed by messages. Every other field is whole.
+  uint64 base = 10;
+  int32 drop = 11;
+  int32 keep = 12;
 }
 
 // SubAgent is an agent a call of the conversation's started, such as

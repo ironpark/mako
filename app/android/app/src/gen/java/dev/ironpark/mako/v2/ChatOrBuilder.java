@@ -115,4 +115,29 @@ public interface ChatOrBuilder extends
    * @return The unchanged.
    */
   boolean getUnchanged();
+
+  /**
+   * <pre>
+   * base, when set, says this reply patches the Chat of that digest, the
+   * one the read named seen, to the Chat digest names: its messages are
+   * base's, drop of them left out from the front and the keep after them
+   * kept, followed by messages. Every other field is whole.
+   * </pre>
+   *
+   * <code>uint64 base = 10 [json_name = "base"];</code>
+   * @return The base.
+   */
+  long getBase();
+
+  /**
+   * <code>int32 drop = 11 [json_name = "drop"];</code>
+   * @return The drop.
+   */
+  int getDrop();
+
+  /**
+   * <code>int32 keep = 12 [json_name = "keep"];</code>
+   * @return The keep.
+   */
+  int getKeep();
 }

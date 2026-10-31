@@ -436,7 +436,14 @@ answers with the latest messages and `start` 0.
 Each `chat` carries a `digest` of itself. A reader that polls sends the
 one it has as `seen`, and when the reply would be the same it gets back
 `unchanged`, with only the `digest`: a quiet conversation is not sent
-again.
+again. A reader that also sets `patch` is sent, when the latest messages
+changed, only what changed of the chat `seen` names: `base` is that digest,
+and the messages are the base's with `drop` of them left out from the
+front and the `keep` after them kept, followed by the reply's `messages`.
+Every other field is whole, and `digest` is the patched chat's. A daemon
+that no longer has the chat `seen` names, or predates `patch`, sends the
+whole chat with `base` 0. Pages read with `before` or `after` are always
+whole.
 `usage` is the whole conversation's tokens:
 
 | `Usage` field | |

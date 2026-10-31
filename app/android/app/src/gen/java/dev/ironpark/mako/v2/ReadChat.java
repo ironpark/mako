@@ -349,6 +349,50 @@ public  final class ReadChat extends
 
   }
 
+  public static final int PATCH_FIELD_NUMBER = 8;
+  private boolean patch_;
+  /**
+   * <pre>
+   * patch says the reader takes, for the latest messages, a Chat that
+   * patches the one seen names: see Chat's base. A daemon that does not
+   * know the field, or no longer has that Chat, sends the whole of it.
+   * </pre>
+   *
+   * <code>bool patch = 8 [json_name = "patch"];</code>
+   * @return The patch.
+   */
+  @java.lang.Override
+  public boolean getPatch() {
+    return patch_;
+  }
+  /**
+   * <pre>
+   * patch says the reader takes, for the latest messages, a Chat that
+   * patches the one seen names: see Chat's base. A daemon that does not
+   * know the field, or no longer has that Chat, sends the whole of it.
+   * </pre>
+   *
+   * <code>bool patch = 8 [json_name = "patch"];</code>
+   * @param value The patch to set.
+   */
+  private void setPatch(boolean value) {
+    
+    patch_ = value;
+  }
+  /**
+   * <pre>
+   * patch says the reader takes, for the latest messages, a Chat that
+   * patches the one seen names: see Chat's base. A daemon that does not
+   * know the field, or no longer has that Chat, sends the whole of it.
+   * </pre>
+   *
+   * <code>bool patch = 8 [json_name = "patch"];</code>
+   */
+  private void clearPatch() {
+
+    patch_ = false;
+  }
+
   public static dev.ironpark.mako.v2.ReadChat parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -790,6 +834,52 @@ public  final class ReadChat extends
       return this;
     }
 
+    /**
+     * <pre>
+     * patch says the reader takes, for the latest messages, a Chat that
+     * patches the one seen names: see Chat's base. A daemon that does not
+     * know the field, or no longer has that Chat, sends the whole of it.
+     * </pre>
+     *
+     * <code>bool patch = 8 [json_name = "patch"];</code>
+     * @return The patch.
+     */
+    @java.lang.Override
+    public boolean getPatch() {
+      return instance.getPatch();
+    }
+    /**
+     * <pre>
+     * patch says the reader takes, for the latest messages, a Chat that
+     * patches the one seen names: see Chat's base. A daemon that does not
+     * know the field, or no longer has that Chat, sends the whole of it.
+     * </pre>
+     *
+     * <code>bool patch = 8 [json_name = "patch"];</code>
+     * @param value The patch to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPatch(boolean value) {
+      copyOnWrite();
+      instance.setPatch(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * patch says the reader takes, for the latest messages, a Chat that
+     * patches the one seen names: see Chat's base. A daemon that does not
+     * know the field, or no longer has that Chat, sends the whole of it.
+     * </pre>
+     *
+     * <code>bool patch = 8 [json_name = "patch"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPatch() {
+      copyOnWrite();
+      instance.clearPatch();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.ReadChat)
   }
   @java.lang.Override
@@ -813,10 +903,11 @@ public  final class ReadChat extends
             "after_",
             "seen_",
             "agent_",
+            "patch_",
           };
           java.lang.String info =
-              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0007\u0004\u0002\u0005\u0002\u0006\u0003\u0007\u0208";
+              "\u0000\b\u0000\u0000\u0001\b\b\u0000\u0000\u0000\u0001\u0208\u0002\u0208\u0003\u0007" +
+              "\u0004\u0002\u0005\u0002\u0006\u0003\u0007\u0208\b\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -45,6 +45,9 @@ type chatState struct {
 	draft   *ggui.StateValue[string]
 	tools   *ggui.StateValue[map[string]bool] // open tool rows, by message key
 	loading bool
+	// whole asks the next read for the whole chat, a patch having missed
+	// what was on show.
+	whole bool
 	// older are the messages read from before the latest, for a reader who
 	// scrolled back; paging while a read of them is out.
 	older  *ggui.StateValue[chatPages]
@@ -138,7 +141,10 @@ func (m *model) readChat(id, agent string, state *chatState, current func() bool
 	// What is on show is asked after by its digest, so a quiet
 	// conversation is not sent again.
 	shown := ggui.Peek(state.result)
-	req := &protocol.ReadChat{NodeId: m.remoteID(info.GetNodeId()), SessionId: id, Agent: agent, Seen: shown.Chat.GetDigest()}
+	req := &protocol.ReadChat{NodeId: m.remoteID(info.GetNodeId()), SessionId: id, Agent: agent, Seen: shown.Chat.GetDigest(), Patch: true}
+	if state.whole {
+		req.Seen, state.whole = 0, false
+	}
 	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Chat, error) {
 		return c.ReadChat(ctx, req)
 	}, func(chat *protocol.Chat, err error) {
@@ -153,6 +159,13 @@ func (m *model) readChat(id, agent string, state *chatState, current func() bool
 			settlePending(state) // one that waited too long goes
 			return
 		}
+		if err == nil {
+			var ok bool
+			if chat, ok = patched(shown.Chat, chat); !ok {
+				state.whole = true
+				return
+			}
+		}
 		next := chatResult{Chat: chat, Loaded: true}
 		if err != nil {
 			next.Chat = ggui.Peek(state.result).Chat
@@ -166,6 +179,23 @@ func (m *model) readChat(id, agent string, state *chatState, current func() bool
 			m.readOlder(id, state, transcript.Span{After: older.End, Before: chat.GetStart()})
 		}
 	})
+}
+
+// patched is chat, a reply that may patch shown, made whole: the messages
+// it keeps of shown's are shown's own, so their rows are not built again.
+// It is false for a patch of another chat than shown.
+func patched(shown, chat *protocol.Chat) (*protocol.Chat, bool) {
+	if chat.GetBase() == 0 {
+		return chat, true
+	}
+	old := shown.GetMessages()
+	drop, keep := int(chat.GetDrop()), int(chat.GetKeep())
+	if chat.GetBase() != shown.GetDigest() || drop < 0 || keep < 0 || drop+keep > len(old) {
+		return nil, false
+	}
+	chat.Messages = slices.Concat(old[drop:drop+keep], chat.GetMessages())
+	chat.Base, chat.Drop, chat.Keep = 0, 0, 0
+	return chat, true
 }
 
 // loadOlder reads the page before what is loaded, for a reader near the

@@ -17,6 +17,7 @@ import (
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transcript"
 	"github.com/ironpark/mako/internal/transport"
+	"google.golang.org/protobuf/proto"
 )
 
 // This subprocess emulates a native agent, holding its own log open. No API
@@ -188,10 +189,10 @@ func TestConcurrentAgentsInSameProjectBindTheirOwnLogs(t *testing.T) {
 	}
 
 	// A reader that has the conversation is told it is unchanged.
-	read := func(seen uint64) *protocol.Chat {
+	read := func(seen uint64, patch ...bool) *protocol.Chat {
 		stream, done := ask(t, func(s *transport.Stream, env *protocol.Envelope) error {
 			return d.handleReadChat(t.Context(), s, env)
-		}, protocol.TypeReadChat, &protocol.ReadChat{SessionId: a.Info().GetId(), Seen: seen})
+		}, protocol.TypeReadChat, &protocol.ReadChat{SessionId: a.Info().GetId(), Seen: seen, Patch: len(patch) > 0})
 		env, err := stream.Recv()
 		if err != nil {
 			t.Fatal(err)
@@ -211,5 +212,39 @@ func TestConcurrentAgentsInSameProjectBindTheirOwnLogs(t *testing.T) {
 	}
 	if again := read(first.GetDigest()); !again.GetUnchanged() || again.GetDigest() != first.GetDigest() || len(again.GetMessages()) != 0 {
 		t.Fatalf("a read of what was seen: %+v", again)
+	}
+
+	// A reader that takes patches is sent what changed since, which puts
+	// back together what a whole read sends.
+	say := func(text string) {
+		t.Helper()
+		log, err := os.OpenFile(a.TranscriptPath(), os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer log.Close()
+		if _, err := log.WriteString(`{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"` + text + `"}]}}` + "\n"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	say("one")
+	say("two")
+	base := read(first.GetDigest(), true)
+	if len(base.GetMessages()) == 0 {
+		t.Fatal("the messages said are not read")
+	}
+	say("three")
+	patched := read(base.GetDigest(), true)
+	whole := read(0)
+	if patched.GetBase() != base.GetDigest() || patched.GetDigest() != whole.GetDigest() {
+		t.Fatalf("a patch: base %d of %d, digest %d of %d", patched.GetBase(), base.GetDigest(), patched.GetDigest(), whole.GetDigest())
+	}
+	old := base.GetMessages()
+	got := append(slices.Clone(old[patched.GetDrop():patched.GetDrop()+patched.GetKeep()]), patched.GetMessages()...)
+	if !slices.EqualFunc(got, whole.GetMessages(), func(x, y *protocol.ChatMessage) bool { return proto.Equal(x, y) }) {
+		t.Fatalf("patched to %v, want %v", got, whole.GetMessages())
+	}
+	if len(patched.GetMessages()) >= len(whole.GetMessages()) {
+		t.Fatalf("a patch sent %d messages of %d", len(patched.GetMessages()), len(whole.GetMessages()))
 	}
 }
