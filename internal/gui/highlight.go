@@ -598,10 +598,16 @@ func captureColor(name string, pal palette) color.Color {
 	return nil
 }
 
-// wake asks the window for a frame, from any goroutine.
+// wake asks for the window to be painted again, from any goroutine, for a
+// change no signal records, as fields a worker wrote: work posted alone
+// repaints only what its signals reach.
 func (m *model) wake() {
+	if w := m.window; w != nil {
+		w.Repaint()
+		return
+	}
 	if post := m.post; post != nil {
-		post(func() {})
+		post(func() {}) // a probe paints each frame whole
 	}
 }
 

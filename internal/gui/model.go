@@ -1085,8 +1085,7 @@ func (m *model) attach(id string) {
 		return
 	}
 	m.dialing[id] = true
-	post := m.post
-	wake := func() { post(func() {}) }
+	post, wake := m.post, m.wake
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
