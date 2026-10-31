@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	ggruntime "github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/gostty"
@@ -275,5 +276,30 @@ func TestATerminalTakesPastesOfSeveralLines(t *testing.T) {
 	conn.paste("a\x1b[201~rm -rf ~\n")
 	if got := link.typed(); got != "" {
 		t.Fatalf("a paste ending the bracket early was sent: %q", got)
+	}
+}
+
+// An image the draft names shows over the text as a thumbnail as large as
+// the image, its remove button in its corner, and the composer stays as
+// tall as the two.
+func TestADraftImageIsAThumbnail(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Attached.Set([]string{"s"})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", NodeId: "n", Agent: "claude", Project: "/tmp"}})
+	img := ggfx.NewImage(100, 50)
+	m.chatImages["n\x00/tmp/shot.png"] = ggui.State(mdImage{Img: img})
+	m.setComposerDraft("s", "look /tmp/shot.png ")
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		return ggui.Column(ggui.Expanded(ggui.Text("FEED")), composer(m, "s", m.chatState("s"))).Stretch()
+	}, ggui.Sz(900, 700))
+	defer p.Close()
+	p.Frame()
+	feed, ok := p.Semantics().Find(ggui.RoleText, "FEED")
+	if !ok || feed.Rect.Size.H < 400 {
+		t.Fatalf("the composer took the pane: the feed is %v\n%s", feed.Rect, p.Semantics().String())
+	}
+	if _, ok := p.Semantics().Find(ggui.RoleButton, T("Remove")); !ok {
+		t.Fatalf("no remove button:\n%s", p.Semantics().String())
 	}
 }

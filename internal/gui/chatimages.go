@@ -129,8 +129,29 @@ func draftImages(m *model, id string, state *chatState) ggui.Widget {
 			remove := ui.ButtonOf(icon("x").Size(11).Color(tokMuted), func() {
 				m.setComposerDraft(id, strings.Join(strings.Fields(strings.Replace(ggui.Peek(state.draft), w.Word, "", 1)), " ")+" ")
 			}).Ghost().Pad(2).Radius(4).Name(T("Remove"))
-			thumbs[i] = ggui.Stack(chatImage(m, n.Node, w.Path, true), ggui.Align(ggui.Box(remove).Fill(tokSurface1).Radius(5)).At(1, 0))
+			thumbs[i] = &cornered{child: chatImage(m, n.Node, w.Path, true), corner: ggui.Box(remove).Fill(tokSurface1).Radius(5)}
 		}
 		return ggui.Box(ggui.Wrap(thumbs...).Gap(6).RunGap(6)).Pad(0, 0, 4, 0)
 	})
+}
+
+// cornered is its child, as large as the child is, with corner over its
+// top-right corner, inside it.
+type cornered struct {
+	child, corner ggui.Widget
+	cornerSize    ggui.Size
+}
+
+func (c *cornered) Layout(cs ggui.Constraints, env ggui.Env) ggui.Size {
+	size := c.child.Layout(cs.Loosen(), env)
+	c.cornerSize = c.corner.Layout(ggui.Loose(size), env)
+	return size
+}
+
+func (c *cornered) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.Paint(c.child, r)
+	if r.Size.W < c.cornerSize.W || r.Size.H < c.cornerSize.H {
+		return // a thumbnail too small to hold it, as one not there
+	}
+	dst.Paint(c.corner, ggui.Rct(ggui.Pt(r.Origin.X+r.Size.W-c.cornerSize.W-2, r.Origin.Y+2), c.cornerSize))
 }
