@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -143,13 +144,14 @@ internal fun FileChip(name: String, modifier: Modifier = Modifier, onClick: (() 
 @Composable
 internal fun rememberLinkOpener(mesh: Mesh, session: SessionInfo, onFile: (ChatLink.File) -> Unit): (String) -> Unit {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val uri = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     val current by rememberUpdatedState(session)
     val file by rememberUpdatedState(onFile)
     var preview by remember { mutableStateOf<String?>(null) }
     preview?.let { url -> ImageUrlDialog(url, onBrowser = { preview = null; uri.openUri(url) }, onDismiss = { preview = null }) }
-    return remember(context, uri) {
+    return remember(context, resources, uri) {
         { dest ->
             val s = current
             when (val link = chatLink(dest, s.project)) {
@@ -162,11 +164,11 @@ internal fun rememberLinkOpener(mesh: Mesh, session: SessionInfo, onFile: (ChatL
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        Toast.makeText(context, context.getString(R.string.tunnel_failed, link.port, mesh.nodeName(s.nodeId)) +
+                        Toast.makeText(context, resources.getString(R.string.tunnel_failed, link.port, mesh.nodeName(s.nodeId)) +
                             e.message?.let { "\n$it" }.orEmpty(), Toast.LENGTH_LONG).show()
                         return@launch
                     }
-                    if (local != link.port) Toast.makeText(context, context.getString(R.string.tunnel_other_port, link.port, local), Toast.LENGTH_SHORT).show()
+                    if (local != link.port) Toast.makeText(context, resources.getString(R.string.tunnel_other_port, link.port, local), Toast.LENGTH_SHORT).show()
                     val url = link.at(local)
                     if (link.image) preview = url
                     else runCatching { uri.openUri(url) }.onFailure {

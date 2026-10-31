@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.*
@@ -72,6 +73,7 @@ internal fun Composer(
     }
     val matches = remember(text, commands) { matchingCommands(text, commands) }
     val context = LocalContext.current
+    val resources = LocalResources.current
     var uploads by remember(session.id) { mutableStateOf<List<Upload>>(emptyList()) }
     val attached = remember(text, session.project) { attachments(text, session.project) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
@@ -83,7 +85,7 @@ internal fun Composer(
                 // One at a time, each into the draft as it arrives.
                 for ((uri, up) in pending) {
                     val path = withContext(Dispatchers.IO) {
-                        val input = context.contentResolver.openInputStream(uri) ?: error(context.getString(R.string.attach_unreadable, up.name))
+                        val input = context.contentResolver.openInputStream(uri) ?: error(resources.getString(R.string.attach_unreadable, up.name))
                         input.use { mesh.daemon.stage(session.nodeId, up.name, it) { sent -> uploads = uploads.map { u -> if (u.id == up.id) u.copy(sent = sent) else u } } }
                     }
                     uploads = uploads.filterNot { it.id == up.id }
