@@ -38,6 +38,9 @@ type termConn struct {
 	clusters     []string
 	dirtyRows    []uint16
 	hasFrame     bool // cells and clusters hold a complete screen
+	// unpainted lets go of cells and clusters once no view painted the
+	// terminal for shownFor (see frame).
+	unpainted *time.Timer
 	title        string
 	titleKnown   bool
 	titleChanged func() // immutable; posts UI work without acquiring mu
@@ -320,6 +323,11 @@ func (t *termConn) frame() (frameSnapshot, error) {
 	if err := t.state.Update(t.vt.Terminal()); err != nil {
 		return frameSnapshot{}, err
 	}
+	if t.unpainted == nil {
+		t.unpainted = time.AfterFunc(shownFor, t.forgetFrame)
+	} else {
+		t.unpainted.Reset(shownFor)
+	}
 	cols, rows := int(t.state.Cols()), int(t.state.Rows())
 	n := cols * rows
 	if len(t.cells) != n {
@@ -378,6 +386,21 @@ func (t *termConn) frame() (frameSnapshot, error) {
 		exitCode: t.exitCode,
 		err:      t.err,
 	}, nil
+}
+
+// shownFor is how long a terminal keeps a copy of its screen after a view
+// last painted it: every session's terminal is followed, and a screen of
+// 300 by 80 cells is 900 KB of cells and their clusters, which only the
+// one shown needs. The native state keeps the screen, and the next paint
+// copies all of it again.
+const shownFor = 30 * time.Second
+
+// forgetFrame lets go of the copy of the screen, for a terminal no view
+// painted for shownFor.
+func (t *termConn) forgetFrame() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.cells, t.clusters, t.dirtyRows, t.hasFrame = nil, nil, nil, false
 }
 
 // refreshClustersLocked rebuilds the grapheme clusters of rows [y0, y1) from
@@ -892,6 +915,9 @@ func (t *termConn) close() {
 	t.closed = true
 	if t.settle != nil {
 		t.settle.Stop()
+	}
+	if t.unpainted != nil {
+		t.unpainted.Stop()
 	}
 	t.endFindLocked()
 	_ = t.state.Close()
