@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"os"
@@ -97,6 +98,7 @@ func diagnose() {
 			if d.fps >= 1 {
 				fmt.Fprintln(log, "# moving:", motionLine(ggui.ReadMotionReport()))
 			}
+			fmt.Fprintln(log, "# atlas:", r.atlas)
 			if d.troubled() && now.Sub(lastIncident) >= incidentGap {
 				lastIncident = now
 				fmt.Fprintf(log, "# incident: %.1f collections a second, %.0f%% of the CPU used, %.1f cores, %.1f frames a second\n",
@@ -139,6 +141,7 @@ type diagReading struct {
 	partial                        int64    // painted in part, around what moved
 	frameBusy                      time.Duration
 	flushes, commands, vertices    int64
+	atlas                          string // the GPU's images: see atlasLine
 }
 
 func readDiag(s []metrics.Sample, at time.Time) diagReading {
@@ -154,7 +157,45 @@ func readDiag(s []metrics.Sample, at time.Time) diagReading {
 		framesFor: [5]int64{frames.ForAnimation, frames.ForTime, frames.ForCallback, frames.ForPosted, frames.ForInput},
 		partial:   frames.Partial,
 		flushes:   gpu.Flushes, commands: gpu.Commands, vertices: gpu.Vertices,
+		atlas:     atlasLine(gpu),
 	}
+}
+
+// atlasLine tells the GPU's images apart: each atlas page, largest first,
+// its size, how much of it its images use and how many there are, "s" for
+// one that serves as a source, then the images that have a GPU image of
+// their own, the screens among them. A page grows as images come and lets
+// go only once all of them have gone, so one that holds little of what it
+// keeps shows here.
+func atlasLine(gpu ggfx.DebugInfo) string {
+	pages := slices.SortedFunc(slices.Values(gpu.AtlasPages), func(a, b ggfx.AtlasPage) int { return cmp.Compare(b.Bytes, a.Bytes) })
+	var kept, used int64
+	var b strings.Builder
+	for _, p := range pages {
+		kept += p.Bytes
+		used += 4 * p.UsedPixels
+	}
+	fmt.Fprintf(&b, "%d pages %.1f MB, %.0f%% used;", len(pages), mb(uint64(kept)), percent(used, kept))
+	for i, p := range pages {
+		if i == 8 {
+			fmt.Fprintf(&b, " and %d more", len(pages)-i)
+			break
+		}
+		src := ""
+		if p.Source {
+			src = "s"
+		}
+		fmt.Fprintf(&b, " %dx%d%s %.0f%% %d", p.Width, p.Height, src, percent(4*p.UsedPixels, p.Bytes), p.Images)
+	}
+	fmt.Fprintf(&b, "; own %.1f MB in %d", mb(uint64(gpu.Isolated.Bytes)), gpu.Isolated.Images)
+	return b.String()
+}
+
+func percent(part, whole int64) float64 {
+	if whole == 0 {
+		return 0
+	}
+	return 100 * float64(part) / float64(whole)
 }
 
 // diagRates is how the runtime went between two readings.

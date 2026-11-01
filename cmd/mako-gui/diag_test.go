@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/ironpark/ggfx"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -44,5 +45,19 @@ func TestTheFootprintIsRead(t *testing.T) {
 	footprintReport(path)
 	if b, err := os.ReadFile(path); err != nil || len(b) == 0 {
 		t.Fatal("no footprint report", err)
+	}
+}
+
+func TestTheAtlasLineTellsPagesApart(t *testing.T) {
+	gpu := ggfx.DebugInfo{
+		AtlasPages: []ggfx.AtlasPage{
+			{Width: 1024, Height: 1024, Bytes: 4 << 20, UsedPixels: 1 << 18, Images: 3},
+			{Width: 4096, Height: 4096, Bytes: 64 << 20, UsedPixels: 4 << 20, Images: 40, Source: true},
+		},
+		Isolated: ggfx.AtlasPage{Bytes: 80 << 20, Images: 2},
+	}
+	want := "2 pages 68.0 MB, 25% used; 4096x4096s 25% 40 1024x1024 25% 3; own 80.0 MB in 2"
+	if got := atlasLine(gpu); got != want {
+		t.Fatalf("got  %q\nwant %q", got, want)
 	}
 }
