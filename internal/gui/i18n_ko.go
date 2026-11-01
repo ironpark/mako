@@ -100,7 +100,7 @@ var catalogKo = map[string]string{
 	"From %s":                              "%s에서 생성",
 	"Filter messages for %s":               "%s의 메시지 보기",
 	"Open session %s":                      "%s 세션 열기",
-	"Awaiting acknowledgement":             "확인 대기",
+	"Not yet received":                     "전달 대기",
 	"Acknowledged":                         "확인됨",
 	"Recipient removed":                    "수신 세션 제거됨",
 	"Show less":                            "접기",

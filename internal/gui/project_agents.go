@@ -152,13 +152,13 @@ func projectAgentsBody(m *model, root fileRoot) ggui.Widget {
 		byID := projectAgentsByID(snapshot)
 		found := projectAgentMessages(snapshot.GetMessages(), filter.Get())
 		rows := make([]ggui.Widget, 0, len(found))
-		for i := len(found) - 1; i >= 0; i-- {
-			rows = append(rows, projectAgentMessage(found[i], byID, expanded))
+		for _, msg := range found {
+			rows = append(rows, projectAgentMessage(msg, byID, expanded, filter.Get()))
 		}
 		if len(rows) == 0 {
 			rows = append(rows, ggui.Box(muted(ggui.Text(T("No messages yet.")).Size(12))).Pad(8, 12))
 		}
-		return ggui.Column(rows...).Stretch()
+		return ggui.Box(ggui.Column(rows...).Stretch()).Pad(4, 0)
 	})
 	messagesHead := ggui.Reactive(func() ggui.Widget {
 		title := T("Recent messages")
@@ -168,7 +168,8 @@ func projectAgentsBody(m *model, root fileRoot) ggui.Widget {
 		return panelHead(title, ggui.Box(), ggui.Box())
 	})
 	top := ggui.Column(agentsHead, ggui.Expanded(ggui.Scroll(agents).Bar(tokSurface3))).Stretch()
-	bottom := ggui.Column(messagesHead, ggui.Expanded(ggui.Scroll(messages).Bar(tokSurface3))).Stretch()
+	// Oldest first, as a conversation reads, kept at the newest.
+	bottom := ggui.Column(messagesHead, ggui.Expanded(ggui.Scroll(messages).FollowEnd().Bar(tokSurface3))).Stretch()
 	split := ui.Resizable(m.AgentsSplit, top, bottom).Vertical().MinSizes(60, 80).Hairline().Name(T("Messages divider"))
 	return ggui.Column(header, hline(), status, ggui.Expanded(split)).Stretch()
 }
@@ -330,44 +331,60 @@ func projectAgentMessages(messages []*protocol.AgentMessage, id string) []*proto
 	return found
 }
 
-// projectAgentMessage is a message between agents in two lines or so: who
-// to whom and when, then its words, a long message cut until opened. One
-// not yet acknowledged says so.
-func projectAgentMessage(msg *protocol.AgentMessage, byID map[string]*protocol.ProjectAgent, expanded *ggui.StateValue[uint64]) ggui.Widget {
+// projectAgentMessage is a message between agents as a compact bubble
+// under who sent it to whom and when, a long one cut until opened. With
+// the messages filtered to one agent, those it sent sit on the right and
+// name only their recipient, those it got on the left and only their
+// sender. One not yet received says so.
+func projectAgentMessage(msg *protocol.AgentMessage, byID map[string]*protocol.ProjectAgent, expanded *ggui.StateValue[uint64], self string) ggui.Widget {
 	label := func(id string) string {
 		if a := byID[id]; a != nil {
 			return projectAgentName(a.GetSession())
 		}
 		return id
 	}
+	mine := self != "" && msg.GetFromSessionId() == self
+	who := label(msg.GetFromSessionId()) + " → " + label(msg.GetToSessionId())
+	switch {
+	case mine:
+		who = "→ " + label(msg.GetToSessionId())
+	case self != "":
+		who = label(msg.GetFromSessionId())
+	}
 	var state string
 	var tint color.Color = tokExtraMuted
 	switch msg.GetState() {
-	case "acknowledged":
+	case "acknowledged", "delivered":
 	case "removed":
 		state = T("Recipient removed")
 	default:
-		state, tint = T("Awaiting acknowledgement"), tokDotWaiting
+		state, tint = T("Not yet received"), tokDotWaiting
 	}
-	long := len([]rune(msg.GetText())) > 180 || strings.Contains(msg.GetText(), "\n")
+	long := len([]rune(msg.GetText())) > 120 || strings.Contains(msg.GetText(), "\n")
 	return ggui.Reactive(func() ggui.Widget {
 		open := expanded.Get() == msg.GetId()
-		head := []ggui.Widget{
-			ggui.Expanded(ggui.Text(label(msg.GetFromSessionId()) + " → " + label(msg.GetToSessionId())).Size(11.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
+		meta := []ggui.Widget{
+			ggui.Expanded(ggui.Text(who).Size(10.5).Weight(ggui.WeightMedium).Color(tokMuted).NoWrap().Ellipsis().Align(pick(mine, 1.0, 0.0))),
 		}
 		if state != "" {
-			head = append(head, ggui.Text(state).Size(10.5).Color(tint).NoWrap())
+			meta = append(meta, ggui.Text(state).Size(10).Color(tint).NoWrap())
 		}
-		head = append(head, ggui.Text(protocol.TimeOf(msg.GetCreatedAt()).Local().Format("15:04")).Size(10.5).Color(tokExtraMuted))
+		meta = append(meta, ggui.Text(protocol.TimeOf(msg.GetCreatedAt()).Local().Format("15:04")).Size(10).Color(tokExtraMuted).NoWrap())
 		if long {
-			head = append(head, ui.ButtonOf(icon(pick(open, "chevron-up", "chevron-down")).Size(12).Color(tokMuted),
-				func() { expanded.Set(pick(open, uint64(0), msg.GetId())) }).Ghost().Pad(2).Radius(4).Name(Tf("Toggle message %d", msg.GetId())))
+			meta = append(meta, ui.ButtonOf(icon(pick(open, "chevron-up", "chevron-down")).Size(11).Color(tokMuted),
+				func() { expanded.Set(pick(open, uint64(0), msg.GetId())) }).Ghost().Pad(1).Radius(4).Name(Tf("Toggle message %d", msg.GetId())))
 		}
 		text := ggui.Text(msg.GetText()).Size(12).Color(tokFg).Selectable()
 		if !open {
-			text = ggui.Text(projectMessagePreview(msg.GetText())).Size(12).Color(tokFg).MaxLines(2).Ellipsis().Selectable()
+			text = ggui.Text(projectMessagePreview(msg.GetText())).Size(12).Color(tokFg).MaxLines(3).Ellipsis().Selectable()
 		}
-		return ggui.Box(ggui.Column(ggui.Row(head...).Gap(6).Align(ggui.AlignCenter), text).Gap(3).Stretch()).Pad(6, 12)
+		bubble := ggui.Box(text).Fill(pick[color.Color](mine, tokSurface3, tokSurface2)).Radius(10).Pad(5, 9)
+		line := ggui.Row(bubble, ggui.Spacer())
+		if mine {
+			line = ggui.Row(ggui.Spacer(), bubble)
+		}
+		return ggui.Box(ggui.Column(ggui.Row(meta...).Gap(5).Align(ggui.AlignCenter), line.Stretch()).Gap(2).Stretch()).
+			Pad(3, pick(mine, 12.0, 36.0), 3, pick(mine, 36.0, 12.0))
 	})
 }
 

@@ -26,7 +26,7 @@ func TestProjectAgentsPanelFiltersMessagesAndOpensSessions(t *testing.T) {
 	p := ggui.ProbeBuilder(func() ggui.Widget { return projectAgentsBody(m, root) }, ggui.Sz(360, 1000))
 	defer p.Close()
 	p.Frame()
-	for _, text := range []string{"1 working · 1 waiting · 1 pending", "Review cancellation", "Build passed", "Awaiting acknowledgement"} {
+	for _, text := range []string{"1 working · 1 waiting · 1 pending", "Review cancellation", "Build passed", "Not yet received"} {
 		if _, ok := p.Semantics().Find(ggui.RoleText, text); !ok {
 			t.Fatalf("missing %q:\n%s", text, p.Semantics().String())
 		}

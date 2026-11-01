@@ -144,6 +144,8 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				setup(m)
 				if !agentsOnly {
 					m.start(ctx, p.Post)
+				} else {
+					m.post = func(func()) {} // the panel's refreshes, with no daemon, keep the fixed data
 				}
 			})
 			img = ggfx.NewImage(width, height)
@@ -424,6 +426,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			if agentsOnly {
 				steps = []previewStep{
 					do(setTheme(saved.Theme)), frames(3), shot("agents-panel"),
+					do(func() { p.Tap(Tf("Filter messages for %s", "Coordinator")) }), frames(3), shot("agents-panel-filtered"),
 					do(func() { p.Resize(ggui.Sz(260, float64(height))); img = ggfx.NewImage(260, height) }), frames(3), shot("agents-panel-narrow"),
 				}
 			}
@@ -588,6 +591,8 @@ func projectAgentsPreviewData(root fileRoot) *protocol.ProjectAgents {
 		Messages: []*protocol.AgentMessage{
 			{Id: 1, FromSessionId: "coordinator", ToSessionId: "reviewer", Text: "Review cancellation", State: "pending", CreatedAt: protocol.Time(time.Now())},
 			{Id: 2, FromSessionId: "coordinator", ToSessionId: "builder", Text: "Build passed", State: "acknowledged", CreatedAt: protocol.Time(time.Now())},
+			{Id: 3, FromSessionId: "builder", ToSessionId: "coordinator", Text: "The GUI and daemon packages build and their tests pass.\nThe one flaky test left is the tunnel's, which times out under -race.", State: "delivered", CreatedAt: protocol.Time(time.Now())},
+			{Id: 4, FromSessionId: "reviewer", ToSessionId: "coordinator", Text: "On it", State: "delivered", CreatedAt: protocol.Time(time.Now())},
 		},
 	}
 }
