@@ -70,6 +70,7 @@ type Session struct {
 	progress       activity.Progress // guarded by mu
 	outputs        atomic.Uint64
 	lastOutput     atomic.Int64 // unix nanoseconds
+	lastInput      atomic.Int64 // unix nanoseconds
 
 	// What the agent's hooks last reported, and the approval it waits
 	// for; guarded by mu.
@@ -370,7 +371,52 @@ func (s *Session) SetName(name string) {
 }
 
 // Write sends input to the agent.
-func (s *Session) Write(p []byte) (int, error) { return s.proc.Write(p) }
+func (s *Session) Write(p []byte) (int, error) {
+	s.lastInput.Store(time.Now().UnixNano())
+	return s.proc.Write(p)
+}
+
+// LastInput is when anything was last written to the agent; zero before.
+func (s *Session) LastInput() time.Time {
+	if ns := s.lastInput.Load(); ns != 0 {
+		return time.Unix(0, ns)
+	}
+	return time.Time{}
+}
+
+// AtPrompt reports whether the agent waits at its prompt, as its own hooks
+// last said, and since when: its turn done or not yet begun, nothing asked
+// of the user. Subagents it left working do not keep it from a prompt.
+func (s *Session) AtPrompt() (bool, time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.statusLocked() // latches the end of a turn gone quiet
+	if s.state != protocol.StateRunning || s.approval != nil {
+		return false, time.Time{}
+	}
+	return s.status == protocol.AgentIdle || s.status == protocol.AgentDone, s.statusAt
+}
+
+// Prompt gives the agent text as the composer does: pasted, then Enter.
+// Text of several lines needs a program that takes bracketed pastes, which
+// would otherwise run each line as a prompt of its own.
+func (s *Session) Prompt(text string) error {
+	s.mu.Lock()
+	if s.state == protocol.StateExited {
+		s.mu.Unlock()
+		return errors.New("session: exited")
+	}
+	bracketed := s.term.Terminal().ModeEnabled(gostty.ModeBracketedPaste)
+	s.mu.Unlock()
+	if !bracketed && strings.ContainsAny(text, "\r\n") {
+		return errors.New("session: the program takes no bracketed paste for lines")
+	}
+	if err := s.Paste(text); err != nil {
+		return err
+	}
+	_, err := s.Write([]byte{'\r'})
+	return err
+}
 
 // Paste sends text to the agent as a paste: bracketed when its program
 // enabled bracketed paste, plain otherwise, its line breaks meant. A

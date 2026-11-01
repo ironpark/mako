@@ -78,13 +78,17 @@ func (p *projectAgents) server(ctx context.Context, binary, id, parent string) (
 	}
 }
 
-func (p *projectAgents) activate(s *session.Session) {
+// activate gives s's peer its session, returning the peer, nil when s
+// serves no MCP or already had it.
+func (p *projectAgents) activate(s *session.Session) *agentPeer {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if peer := p.peers[s.ID()]; peer != nil && peer.session == nil {
 		peer.session = s
 		close(peer.ready)
+		return peer
 	}
+	return nil
 }
 
 func (p *projectAgents) peer(id string) *agentPeer {
@@ -313,7 +317,7 @@ type stopAgentResult struct {
 func (d *Daemon) projectAgentServer(peer *agentPeer) *sdk.Server {
 	server := sdk.NewServer(&sdk.Implementation{Name: "mako", Version: config.Version}, &sdk.ServerOptions{
 		Logger:       d.log,
-		Instructions: fmt.Sprintf("You are Mako session %s in project %s. Parent session: %s. Before delegating, use list_agents to inspect available agents and their profile descriptions. Choose a spawnable profile whose specialties match the task, then pass its owning agent name and exact profile name to spawn_agent. If no profile is needed, omit profile and use a spawnable agent default. Use send_message to communicate and read_messages to receive or wait for messages. Messages are durable mailboxes; they do not interrupt the recipient's terminal. Report results to the parent with send_message. After processing a batch, acknowledge its IDs using read_messages ack_through. stop_agent only stops agents you spawned.", peer.id, peer.session.Info().GetProject(), peer.parent),
+		Instructions: fmt.Sprintf("You are Mako session %s in project %s. Parent session: %s. Before delegating, use list_agents to inspect available agents and their profile descriptions. Choose a spawnable profile whose specialties match the task, then pass its owning agent name and exact profile name to spawn_agent. If no profile is needed, omit profile and use a spawnable agent default. Use send_message to communicate. A message is typed into its recipient's terminal as a new prompt, headed with its sender, once that agent waits at its prompt, so it never interrupts a turn; messages to you arrive the same way. Until then a message waits in the recipient's inbox: to wait for a reply within a turn, use read_messages and acknowledge what you processed with ack_through, or it will be typed in later as well. Report results to the parent with send_message. stop_agent only stops agents you spawned.", peer.id, peer.session.Info().GetProject(), peer.parent),
 	})
 	sdk.AddTool(server, &sdk.Tool{Name: "list_agents", Description: "List sessions in this project, their IDs, status and messaging support, plus available agent types and profiles with descriptions and spawnable flags. Read the profile descriptions to select the best match for a task before calling spawn_agent. Only spawnable choices can receive the required Mako MCP tools.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, listAgentsResult, error) {
 		out, err := d.listProjectAgents(peer)
@@ -323,7 +327,7 @@ func (d *Daemon) projectAgentServer(peer *agentPeer) *sdk.Server {
 		out, err := d.spawnProjectAgent(ctx, peer, in)
 		return nil, out, err
 	})
-	sdk.AddTool(server, &sdk.Tool{Name: "send_message", Description: "Store a message in another active agent's inbox in this project. The recipient receives it with read_messages. Does not inject terminal input or interrupt work."}, func(ctx context.Context, _ *sdk.CallToolRequest, in sendMessageArgs) (*sdk.CallToolResult, agentMessage, error) {
+	sdk.AddTool(server, &sdk.Tool{Name: "send_message", Description: "Send a message to another active agent in this project. It is typed into the recipient's terminal as a new prompt once that agent waits at its prompt, never interrupting a turn; until then it waits in the recipient's inbox, which read_messages reads."}, func(ctx context.Context, _ *sdk.CallToolRequest, in sendMessageArgs) (*sdk.CallToolResult, agentMessage, error) {
 		if _, err := d.projectCaller(peer); err != nil {
 			return nil, agentMessage{}, err
 		}
@@ -336,7 +340,7 @@ func (d *Daemon) projectAgentServer(peer *agentPeer) *sdk.Server {
 		msg, err := d.projectAgents.messages.send(peer.id, in.To, in.Text, projectScope(peer.session.Info()))
 		return nil, msg, err
 	})
-	sdk.AddTool(server, &sdk.Tool{Name: "read_messages", Description: "Read your own inbox, optionally waiting for messages. Use after_id for pagination. Messages remain available across reconnects and daemon restarts until you acknowledge them with ack_through."}, func(ctx context.Context, _ *sdk.CallToolRequest, in readMessagesArgs) (*sdk.CallToolResult, readMessagesResult, error) {
+	sdk.AddTool(server, &sdk.Tool{Name: "read_messages", Description: "Read your own inbox, optionally waiting for messages. Messages also reach you as prompts once you are at your prompt; use this to wait for a reply within a turn. Use after_id for pagination. Messages remain available across reconnects and daemon restarts until you acknowledge them with ack_through or they are typed into your terminal."}, func(ctx context.Context, _ *sdk.CallToolRequest, in readMessagesArgs) (*sdk.CallToolResult, readMessagesResult, error) {
 		if _, err := d.projectCaller(peer); err != nil {
 			return nil, readMessagesResult{}, err
 		}

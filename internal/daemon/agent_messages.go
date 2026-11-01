@@ -230,3 +230,37 @@ func (m *agentMessages) monitor(project string, members map[string]bool, limit i
 	}
 	return pending, messages
 }
+
+// pending is id's inbox, and a channel closed when any inbox next changes.
+func (m *agentMessages) pending(id string) ([]agentMessage, <-chan struct{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.changed == nil {
+		m.changed = make(chan struct{})
+	}
+	return slices.Clone(m.data.Inboxes[id]), m.changed
+}
+
+// delivered takes the messages through, typed into id's terminal, out of
+// its inbox: the agent has them as a prompt and need not read them.
+func (m *agentMessages) delivered(id string, through uint64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	next := m.copyLocked()
+	var kept []agentMessage
+	for _, msg := range next.Inboxes[id] {
+		if msg.ID > through {
+			kept = append(kept, msg)
+		}
+	}
+	if len(kept) == len(next.Inboxes[id]) {
+		return nil
+	}
+	next.Inboxes[id] = kept
+	for i := range next.History {
+		if next.History[i].Message.To == id && next.History[i].Message.ID <= through && next.History[i].State == "pending" {
+			next.History[i].State = "delivered"
+		}
+	}
+	return m.saveLocked(next)
+}

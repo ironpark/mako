@@ -351,7 +351,9 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 		return nil, fmt.Errorf("save session: %w", err)
 	}
 	d.sessions.add(s)
-	d.projectAgents.activate(s)
+	if peer := d.projectAgents.activate(s); peer != nil {
+		go d.deliverAgentMessages(peer)
+	}
 	d.trackConversation(s)
 	if parent != "" {
 		d.reportProjectAgent(s, parent)

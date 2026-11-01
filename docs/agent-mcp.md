@@ -16,8 +16,8 @@ support do not receive these tools.
 | --- | --- | --- |
 | `list_agents` | `{}` | Your `self_id`, project, project sessions with status and parent IDs, and available agent types and profiles with descriptions and `spawnable` flags. `messaging` says whether a session can receive messages now. |
 | `spawn_agent` | `prompt`, optional `agent`, `profile`, `name` | Starts a new session in your working directory, with the same worktree metadata. Defaults to your agent type. Returns its session `id`. |
-| `send_message` | `to`, `text` | Stores a message in the recipient's inbox. Returns its `id`, authenticated `from`, `to`, text and creation time. |
-| `read_messages` | Optional `after_id`, `ack_through`, `limit`, `wait_seconds` | Reads your own inbox. Returns `messages` and `next_after_id`. |
+| `send_message` | `to`, `text` | Sends a message: typed into the recipient's terminal as a prompt once it waits at its prompt, kept in its inbox until then. Returns its `id`, authenticated `from`, `to`, text and creation time. |
+| `read_messages` | Optional `after_id`, `ack_through`, `limit`, `wait_seconds` | Reads your own inbox, for waiting on a reply within a turn. Returns `messages` and `next_after_id`. |
 | `stop_agent` | `session_id` | Terminates and removes a session you spawned directly, including a child whose process has already exited. |
 
 The MCP client may prefix tool names with the server name. The server's
@@ -68,8 +68,9 @@ Use the returned session ID to send more context:
 {"to":"<child-session-id>","text":"Please include the case where background agents are still running."}
 ```
 
-The child replies to the parent ID with `send_message`. The parent can wait
-for that reply with `read_messages`:
+The child replies to the parent ID with `send_message`. Once the parent's
+turn has ended, the reply is typed into its terminal as a new prompt. To
+wait for it within a turn instead, the parent uses `read_messages`:
 
 ```json
 {"after_id":0,"wait_seconds":30}
@@ -100,9 +101,11 @@ every two seconds while visible. The panel shows agent status, parent and
 child relationships, messaging availability and pending message counts.
 Select an agent to filter messages, or use its arrow to open its session.
 
-Recent messages show their sender, recipient, time and whether they are
-pending, acknowledged, or addressed to a removed session. Expand a message
-to read its full text. Monitoring does not consume or acknowledge messages.
+Recent messages read as a conversation, oldest first, each a compact
+bubble under its sender, recipient and time, and marked while not yet
+received or when addressed to a removed session. With one agent selected,
+the messages it sent sit on the right. Expand a long message to read its
+full text. Monitoring does not consume or acknowledge messages.
 The most recent 200 messages per project are retained for monitoring even
 after acknowledgement; the panel fetches the latest 50. This history is
 saved alongside the inboxes and also survives daemon restarts.
@@ -111,9 +114,17 @@ The panel can monitor a project on a remote node through the mesh; that
 node needs protocol revision 15 or later. MCP agent messaging itself stays
 local to each node.
 
-Messages do not inject terminal input or interrupt the recipient's current
-turn. A recipient needs to call `read_messages` to receive them. An agent
-that should keep responding to requests can wait for messages in a loop.
+A message is delivered by typing it into the recipient's terminal as a
+new prompt, headed with its ID and sender, once the recipient waits at its
+prompt: its own hooks say its turn is done or not yet begun, nothing is
+asked of the user, and nobody has typed in its terminal for two seconds.
+It never interrupts a turn. Messages waiting together go as one prompt, and
+the next prompt waits until the agent has taken the last. A delivered
+message leaves the inbox; until then, `read_messages` reads it, and
+acknowledging it there keeps it from being typed in as well. An agent
+whose hooks do not report its status receives messages only through
+`read_messages`. Text typed into the agent's own prompt but not yet sent
+would run together with a delivered message.
 Messages can be sent to active messaging sessions in the same project,
 including siblings. Currently this server coordinates sessions on one
 daemon; it does not relay messages to another node.
