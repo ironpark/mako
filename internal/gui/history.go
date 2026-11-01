@@ -307,14 +307,16 @@ func historyBody(m *model) ggui.Widget {
 		}
 		graph := commitGraph(cs)
 		lanes := graphWidth(graph)
-		rows := make([]ggui.Widget, 0, len(cs)+1)
-		for i, c := range cs {
-			rows = append(rows, commitRow(m, c, graph[i], lanes))
+		// Only the rows in view are built: a row is a subject, refs, a
+		// button and a menu, and a history lists up to 500 of them.
+		rows := ggui.Each(ggui.State(cs), func(row ggui.EachItem[*protocol.GitCommit]) ggui.Widget {
+			i := ggui.Peek(row.Index)
+			return commitRow(m, row.Item, graph[i], lanes)
+		}).Stretch().ItemExtent(historyRow)
+		if !v.More {
+			return rows
 		}
-		if v.More {
-			rows = append(rows, ggui.Box(muted(ggui.Text(Tf("Showing the newest %d commits.", len(cs))).Size(11.5))).Pad(8, 12))
-		}
-		return ggui.Column(rows...).Stretch()
+		return ggui.Column(rows, ggui.Box(muted(ggui.Text(Tf("Showing the newest %d commits.", len(cs))).Size(11.5))).Pad(8, 12)).Stretch()
 	})
 	open := ggui.Map(m.GitCommit, func(c commitView) bool { return c.Hash != "" })
 	body := ggui.Scroll(ggui.Padding(list, 0, 0, 4, 0)).Bar(tokSurface3)
