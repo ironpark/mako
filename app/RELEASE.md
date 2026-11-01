@@ -1,9 +1,11 @@
 Android 8.0+ · arm64-v8a and x86_64 · signed release APK
 
-- Attach files and photos to a message: they are sent to the session's computer and handed to the agent by their paths, with image thumbnails over the composer and in your messages.
-- Group tool calls in a row into one card; runs of three or more fold into a single line naming their tools, as on the desktop.
-- Open links to paths, absolute or relative to the project, as files from the session's computer: images previewed, text at its line.
-- Forward links to the session computer's localhost through a tunnel and open them in the browser; images there are previewed in the app.
-- Keep the session toolbar in place while switching between Chat and Terminal.
+- Pair a computer from the first screen: scanning its QR code is the main action, with the list of computers beside it.
+- Empty and failed screens show an icon and the next step: start a session, retry reading a conversation.
+- Ask before stopping a session, from the list or from the session's menu; the menu's items have icons.
+- Switch between Chat and Terminal with a two-icon toggle in the toolbar.
+- Show an agent's question as a banner over the conversation, with what it asks and an Answer button.
+- While the agent works, the send button stops it until you type, leaving the message field more room.
+- Keep a new session's Start button above the keyboard, and open without a black flash in light mode.
 
 Download the APK below. SHA256SUMS contains its checksum. This release uses a persistent release signing key. If a locally built debug APK is already installed, Android cannot update it with this differently signed APK: back up your app data before replacing it.
