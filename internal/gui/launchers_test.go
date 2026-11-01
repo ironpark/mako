@@ -176,13 +176,16 @@ func TestClosingATabEndsItsSession(t *testing.T) {
 	probeUntil(t, p, "the command", idle(false))
 	// The tab goes by the title the shell gives its terminal, where its
 	// rc file sets one, as bash's on Ubuntu does.
+	// The title may come while the test looks, so it looks again, with a
+	// frame between, until the tab drawn goes by the title it has now.
 	id := ggui.Peek(m.Selected)
-	s, _ := m.session(id)
-	label := sessionTitle(s, ggui.Peek(m.Titles)[id])
-	x, ok := p.Find(Tf("Close %s", label))
-	if !ok {
-		t.Fatalf("no close button on the tab %q", label)
-	}
+	var x ggui.Found
+	probeUntil(t, p, "a close button on the tab", func() bool {
+		s, _ := m.session(id)
+		r, ok := p.Find(Tf("Close %s", sessionTitle(s, ggui.Peek(m.Titles)[id])))
+		x = r
+		return ok
+	})
 	p.Click(x.Center())
 	probeUntil(t, p, "the question", func() bool { return ggui.Peek(m.ConfirmOpen) })
 	m.ConfirmOpen.Set(false) // as the dialog's button closes it
