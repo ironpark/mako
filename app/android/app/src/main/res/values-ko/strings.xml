@@ -20,7 +20,7 @@
     <string name="new_session">새 세션</string>
     <string name="node_failed">이 기기의 노드를 시작하지 못했습니다</string>
     <string name="connect_title">컴퓨터를 연결하세요</string>
-    <string name="connect_body">mako가 실행 중인 컴퓨터가 이 기기를 허용하면 여기에 나타납니다. 컴퓨터 목록에서 요청하세요.</string>
+    <string name="connect_body">mako가 실행 중인 컴퓨터가 이 기기를 허용하면 여기에 나타납니다. 컴퓨터의 mako에 표시된 페어링 코드를 스캔하거나, 컴퓨터 목록에서 요청하세요.</string>
     <string name="no_sessions_body">컴퓨터에서 에이전트를 시작해 보세요.</string>
 
     <string name="status_approval">승인 필요</string>
@@ -213,4 +213,11 @@
     <string name="update_install_failed">Android 설치 화면을 열지 못했습니다.</string>
     <string name="update_too_large">업데이트 응답이 지원하는 크기를 초과했습니다.</string>
     <string name="update_http_error">GitHub 요청에 실패했습니다(HTTP %1$d). 잠시 후 다시 시도하세요.</string>
+    <string name="no_sessions">아직 세션이 없습니다</string>
+    <string name="stop">중지</string>
+    <string name="stop_session_title">%1$s 세션을 중지할까요?</string>
+    <string name="stop_session_body">컴퓨터에서 에이전트가 종료됩니다. 저장하지 않은 작업은 사라집니다.</string>
+    <string name="agent_asks">에이전트가 질문했습니다</string>
+    <string name="agent_asks_body">터미널에서 답변을 기다리고 있습니다.</string>
+    <string name="answer">답변</string>
 </resources>

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.LaptopMac
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -269,4 +270,25 @@ internal fun agentDrawable(agent: String): Int? = when (agent.lowercase()) {
     "omp" -> R.drawable.ic_agent_omp
     "pi" -> R.drawable.ic_agent_pi
     else -> null
+}
+
+/**
+ * StopDialog asks before a session is stopped: its agent ends, and what it
+ * was doing with it, which is not undone from here.
+ */
+@Composable
+fun StopDialog(s: SessionInfo, onDismiss: () -> Unit, onStop: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Outlined.StopCircle, null) },
+        title = { Text(stringResource(R.string.stop_session_title, s.label())) },
+        text = { Text(stringResource(R.string.stop_session_body)) },
+        confirmButton = {
+            TextButton(
+                onClick = { onDismiss(); onStop() },
+                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) { Text(stringResource(R.string.stop)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
 }

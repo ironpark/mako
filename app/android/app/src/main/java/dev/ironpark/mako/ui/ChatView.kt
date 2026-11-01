@@ -70,6 +70,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.automirrored.outlined.Chat
+import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.QuestionAnswer
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -195,16 +199,22 @@ fun ChatView(
                 Icon(Icons.Outlined.Refresh, stringResource(R.string.retry))
             }
         }
-        if (request.isNotEmpty()) TextButton(onClick = onAnswer, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.answer_agent))
+        androidx.compose.animation.AnimatedVisibility(request.isNotEmpty()) { 
+            val asked = remember(request, latest) {
+                latest.lastOrNull { request == "question:" + it.id.ifEmpty { it.text } }?.let { it.detail.ifEmpty { it.text } }.orEmpty()
+            }
+            QuestionBanner(asked, onAnswer)
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             val c = chat
             when {
                 c == null && error == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                c != null && !c.supported -> Message(stringResource(R.string.chat_unsupported), stringResource(R.string.chat_unsupported_body))
-                error != null && messages.isEmpty() -> Message(stringResource(R.string.chat_failed), error.orEmpty())
-                messages.isEmpty() -> Message(stringResource(R.string.chat_empty), stringResource(R.string.chat_empty_body))
+                c != null && !c.supported -> Message(stringResource(R.string.chat_unsupported), stringResource(R.string.chat_unsupported_body),
+                    icon = Icons.Outlined.Terminal)
+                error != null && messages.isEmpty() -> Message(stringResource(R.string.chat_failed), error.orEmpty(),
+                    stringResource(R.string.retry), { scope.launch { read() } }, icon = Icons.Outlined.CloudOff)
+                messages.isEmpty() -> Message(stringResource(R.string.chat_empty), stringResource(R.string.chat_empty_body),
+                    icon = Icons.AutoMirrored.Outlined.Chat)
                 else -> SelectionContainer {
                     LazyColumn(
                         state = list,
@@ -285,6 +295,34 @@ fun ChatView(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * QuestionBanner is the agent's question, waiting for an answer it reads
+ * from its terminal: what it asks, and a way there.
+ */
+@Composable
+private fun QuestionBanner(question: String, onAnswer: () -> Unit) {
+    Surface(
+        onClick = onAnswer,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Row(Modifier.padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.QuestionAnswer, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onTertiaryContainer)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.agent_asks), style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer)
+                Text(question.lines().firstOrNull { it.isNotBlank() }?.trim() ?: stringResource(R.string.agent_asks_body),
+                    style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f))
+            }
+            Spacer(Modifier.width(8.dp))
+            FilledTonalButton(onClick = onAnswer) { Text(stringResource(R.string.answer)) }
         }
     }
 }

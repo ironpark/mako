@@ -57,6 +57,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FitScreen
+import androidx.compose.material.icons.outlined.QuestionAnswer
+import androidx.compose.material.icons.outlined.StopCircle
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -122,6 +127,7 @@ fun SessionScreen(
         if (session != null) term.follow(session.cols, session.rows)
     }
     var renaming by remember { mutableStateOf(false) }
+    var stopping by remember { mutableStateOf(false) }
     var fits by remember { mutableIntStateOf(0) } // asked to fit the session to the pane, so many times
     val approvalId = session?.approval?.id.orEmpty()
     var approvalExpanded by remember(approvalId) { mutableStateOf(false) }
@@ -171,20 +177,26 @@ fun SessionScreen(
                                 leadingIcon = { Icon(Icons.Outlined.Folder, null) }, enabled = session != null,
                                 onClick = { menu = false; onFiles(session?.project.orEmpty().ifBlank { "~" }) })
                             DropdownMenuItem(text = { Text(stringResource(R.string.answer_agent)) },
+                                leadingIcon = { Icon(Icons.Outlined.QuestionAnswer, null) },
                                 enabled = session?.state == "running", onClick = { menu = false; question = true })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.rename)) }, onClick = {
-                                menu = false
-                                renaming = true
-                            })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.fit_screen)) }, onClick = {
-                                menu = false
-                                scope.launch { pager.animateScrollToPage(terminalPage) }
-                                fits++
-                            })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.stop_session)) }, onClick = {
-                                menu = false
-                                if (session != null) act { mesh.closeSession(session) }
-                            })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.rename)) },
+                                leadingIcon = { Icon(Icons.Outlined.Edit, null) }, onClick = {
+                                    menu = false
+                                    renaming = true
+                                })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.fit_screen)) },
+                                leadingIcon = { Icon(Icons.Outlined.FitScreen, null) }, onClick = {
+                                    menu = false
+                                    scope.launch { pager.animateScrollToPage(terminalPage) }
+                                    fits++
+                                })
+                            HorizontalDivider()
+                            DropdownMenuItem(text = { Text(stringResource(R.string.stop_session), color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = { Icon(Icons.Outlined.StopCircle, null, tint = MaterialTheme.colorScheme.error) },
+                                enabled = session != null && !session.ended(), onClick = {
+                                    menu = false
+                                    stopping = true
+                                })
                         }
                     },
                 )
@@ -242,6 +254,7 @@ fun SessionScreen(
     }
 
     if (renaming && session != null) RenameDialog(mesh, session, onDismiss = { renaming = false })
+    if (stopping && session != null) StopDialog(session, onDismiss = { stopping = false }) { act { mesh.closeSession(session) } }
 }
 
 /**

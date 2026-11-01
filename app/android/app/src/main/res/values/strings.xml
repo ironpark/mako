@@ -22,7 +22,7 @@
     <string name="new_session">New session</string>
     <string name="node_failed">This device\'s node did not start</string>
     <string name="connect_title">Connect your computers</string>
-    <string name="connect_body">Your computers running mako appear here once they let this device in. Ask them from the list of computers.</string>
+    <string name="connect_body">Your computers running mako appear here once they let this device in. Scan the pairing code mako shows on the computer, or ask it from the list of computers.</string>
     <string name="no_sessions_body">Start an agent on one of your computers.</string>
 
     <string name="status_approval">Needs approval</string>
@@ -217,4 +217,11 @@
     <string name="update_install_failed">Could not open the Android installer.</string>
     <string name="update_too_large">The update response exceeds the supported size.</string>
     <string name="update_http_error">GitHub request failed (HTTP %1$d). Try again later.</string>
+    <string name="no_sessions">No sessions yet</string>
+    <string name="stop">Stop</string>
+    <string name="stop_session_title">Stop %1$s?</string>
+    <string name="stop_session_body">Its agent ends on its computer. Work it has not saved is lost.</string>
+    <string name="agent_asks">The agent asks you</string>
+    <string name="agent_asks_body">It waits for your answer in its terminal.</string>
+    <string name="answer">Answer</string>
 </resources>

@@ -40,6 +40,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.StopCircle
+import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -109,6 +119,7 @@ internal fun rememberSessionsScreenState(source: SessionsScreenState? = null): S
 @Composable
 internal fun SessionsScreen(
     mesh: Mesh, onOpen: (SessionInfo) -> Unit, onMesh: () -> Unit, onNew: () -> Unit, onSettings: () -> Unit,
+    onScan: () -> Unit = onMesh,
     screenState: SessionsScreenState = rememberSessionsScreenState(),
 ) {
     val state by mesh.state.collectAsState()
@@ -163,13 +174,14 @@ internal fun SessionsScreen(
                 Mesh.State.Starting -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                 is Mesh.State.Failed -> Message(
                     stringResource(R.string.node_failed), s.message,
-                    stringResource(R.string.retry), mesh::start,
+                    stringResource(R.string.retry), mesh::start, icon = Icons.Outlined.CloudOff,
                 )
                 Mesh.State.Running -> when {
                     !loaded && sessions.isEmpty() -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                     linked == 0 && sessions.isEmpty() -> Message(
                         stringResource(R.string.connect_title), stringResource(R.string.connect_body),
-                        stringResource(R.string.computers), onMesh,
+                        stringResource(R.string.scan_qr), onScan, icon = Icons.Outlined.Lan,
+                        secondary = stringResource(R.string.computers), onSecondary = onMesh,
                     )
                     else -> PullToRefreshBox(
                         isRefreshing = refreshing,
@@ -182,7 +194,8 @@ internal fun SessionsScreen(
                         },
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        SessionList(mesh, nodes, sessions, filter, onFilter = { filter = it }, onOpen, screenState.list)
+                        SessionList(mesh, nodes, sessions, filter, onFilter = { filter = it }, onOpen, screenState.list,
+                            onNew = onNew.takeIf { linked > 0 })
                     }
                 }
             }
@@ -199,6 +212,7 @@ private fun SessionList(
     onFilter: (Filter) -> Unit,
     onOpen: (SessionInfo) -> Unit,
     listState: LazyListState,
+    onNew: (() -> Unit)? = null,
 ) {
     // Times shown as "ago" move on with the clock.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -242,16 +256,19 @@ private fun SessionList(
             }
         }
         if (filter == Filter.All && waiting.isNotEmpty()) {
-            item(key = "waiting") { Heading(stringResource(R.string.needs_you)) }
+            item(key = "waiting") { Heading(stringResource(R.string.needs_you), waiting.size) }
             items(waiting, key = { "w:" + it.id }) { s -> WaitingCard(mesh, nodes, s, now, onOpen = { onOpen(s) }) }
         }
         if (shown.isEmpty()) {
             item(key = "empty") {
-                Text(
-                    stringResource(if (filter == Filter.All) R.string.no_sessions_body else R.string.nothing_here),
-                    style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth().padding(48.dp),
+                val all = filter == Filter.All
+                EmptyState(
+                    stringResource(if (all) R.string.no_sessions else R.string.nothing_here),
+                    if (all) stringResource(R.string.no_sessions_body) else "",
+                    action = if (all && onNew != null) stringResource(R.string.new_session) else null,
+                    onAction = { onNew?.invoke() },
+                    icon = Icons.Outlined.Inbox,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 64.dp),
                 )
             }
         }
@@ -278,11 +295,16 @@ private fun SessionList(
 }
 
 @Composable
-private fun Heading(text: String) {
-    Text(
-        text, style = MaterialTheme.typography.titleSmall, color = StatusColors.Approval,
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 6.dp),
-    )
+private fun Heading(text: String, count: Int) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Dot(StatusColors.Approval, size = 8.dp)
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = MaterialTheme.typography.titleSmall, color = StatusColors.Approval, modifier = Modifier.weight(1f))
+        Text("$count", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 /** SessionRow is a session in the list; a long press offers renaming and stopping it. */
@@ -291,6 +313,7 @@ private fun Heading(text: String) {
 private fun SessionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long, onClick: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
+    var stopping by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     val act = actor()
     Box {
@@ -331,19 +354,22 @@ private fun SessionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long,
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(text = { Text(stringResource(R.string.rename)) }, onClick = {
-                menu = false
-                renaming = true
-            })
-            if (s.state == "running" || s.state == "starting") {
-                DropdownMenuItem(text = { Text(stringResource(R.string.stop_session)) }, onClick = {
+            DropdownMenuItem(text = { Text(stringResource(R.string.rename)) },
+                leadingIcon = { Icon(Icons.Outlined.Edit, null) }, onClick = {
                     menu = false
-                    act { mesh.closeSession(s) }
+                    renaming = true
                 })
+            if (s.state == "running" || s.state == "starting") {
+                DropdownMenuItem(text = { Text(stringResource(R.string.stop_session)) },
+                    leadingIcon = { Icon(Icons.Outlined.StopCircle, null) }, onClick = {
+                        menu = false
+                        stopping = true
+                    })
             }
         }
     }
     if (renaming) RenameDialog(mesh, s, onDismiss = { renaming = false })
+    if (stopping) StopDialog(s, onDismiss = { stopping = false }) { act { mesh.closeSession(s) } }
 }
 
 /**
@@ -403,14 +429,37 @@ private fun WaitingCard(mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long
     }
 }
 
-/** Message is a screen with nothing to list: why, and what to do about it. */
+/**
+ * Message is a screen with nothing to list: why, and what to do about it,
+ * under an icon that says what kind of nothing it is.
+ */
 @Composable
-fun Message(title: String, body: String, action: String? = null, onAction: () -> Unit = {}) {
+fun Message(
+    title: String, body: String, action: String? = null, onAction: () -> Unit = {},
+    icon: ImageVector? = null, secondary: String? = null, onSecondary: () -> Unit = {},
+) {
     Column(
-        Modifier.fillMaxSize().padding(32.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    ) { EmptyState(title, body, Modifier, action, onAction, icon, secondary, onSecondary) }
+}
+
+/** EmptyState is Message's content, for a place that scrolls already. */
+@Composable
+fun EmptyState(
+    title: String, body: String, modifier: Modifier = Modifier, action: String? = null, onAction: () -> Unit = {},
+    icon: ImageVector? = null, secondary: String? = null, onSecondary: () -> Unit = {},
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        if (icon != null) {
+            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(72.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, null, Modifier.size(34.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+        }
         Text(title, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(
@@ -420,6 +469,10 @@ fun Message(title: String, body: String, action: String? = null, onAction: () ->
         if (action != null) {
             Spacer(Modifier.height(24.dp))
             Button(onClick = onAction) { Text(action) }
+        }
+        if (secondary != null) {
+            Spacer(Modifier.height(4.dp))
+            TextButton(onClick = onSecondary) { Text(secondary) }
         }
     }
 }

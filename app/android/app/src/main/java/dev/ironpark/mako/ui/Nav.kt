@@ -61,6 +61,7 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                 onMesh = { nav.navigate("mesh") },
                 onNew = { nav.navigate("new") },
                 onSettings = { nav.navigate("settings") },
+                onScan = { nav.navigate("scan") },
                 screenState = homeState,
             )
         }
@@ -86,6 +87,7 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                         onMesh = { nav.navigate("mesh") },
                         onNew = { nav.navigate("new") },
                         onSettings = { nav.navigate("settings") },
+                onScan = { nav.navigate("scan") },
                         screenState = previewState,
                     )
                 },

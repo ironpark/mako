@@ -35,6 +35,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material.icons.outlined.DesktopAccessDisabled
+import androidx.compose.material3.Surface
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -71,13 +76,50 @@ fun NewSessionScreen(mesh: Mesh, onBack: () -> Unit, onStarted: (SessionInfo) ->
                 },
             )
         },
+        bottomBar = {
+            if (node != null) Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp) {
+                Box(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(16.dp)) {
+                    Button(
+                        enabled = agent.isNotEmpty() && !starting,
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        onClick = {
+                            starting = true
+                            act {
+                                try {
+                                    val s = mesh.daemon.startSession(
+                                        OpenSession.newBuilder()
+                                            .setNodeId(node.id)
+                                            .setAgent(agent)
+                                            .setProfile(profile)
+                                            .setProject(project.trim())
+                                            .setCols(COLS)
+                                            .setRows(ROWS)
+                                            .build()
+                                    )
+                                    mesh.refreshSessions()
+                                    onStarted(s)
+                                } finally {
+                                    starting = false
+                                }
+                            }
+                        },
+                    ) {
+                        if (starting) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        else Text(stringResource(R.string.start))
+                    }
+                }
+            }
+        },
     ) { pad ->
         if (node == null) {
-            Message(stringResource(R.string.no_computers_to_run), stringResource(R.string.no_computers_to_run_body))
+            Box(Modifier.padding(pad)) {
+                Message(stringResource(R.string.no_computers_to_run), stringResource(R.string.no_computers_to_run_body),
+                    icon = Icons.Outlined.DesktopAccessDisabled)
+            }
             return@Scaffold
         }
         Column(
-            Modifier.fillMaxSize().padding(pad).imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
+            Modifier.fillMaxSize().padding(pad).consumeWindowInsets(pad).imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Label(stringResource(R.string.computer))
@@ -127,35 +169,6 @@ fun NewSessionScreen(mesh: Mesh, onBack: () -> Unit, onStarted: (SessionInfo) ->
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-            Button(
-                enabled = agent.isNotEmpty() && !starting,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    starting = true
-                    act {
-                        try {
-                            val s = mesh.daemon.startSession(
-                                OpenSession.newBuilder()
-                                    .setNodeId(node.id)
-                                    .setAgent(agent)
-                                    .setProfile(profile)
-                                    .setProject(project.trim())
-                                    .setCols(COLS)
-                                    .setRows(ROWS)
-                                    .build()
-                            )
-                            mesh.refreshSessions()
-                            onStarted(s)
-                        } finally {
-                            starting = false
-                        }
-                    }
-                },
-            ) {
-                if (starting) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                else Text(stringResource(R.string.start))
-            }
         }
     }
 }

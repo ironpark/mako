@@ -144,9 +144,6 @@ internal fun Composer(
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (session.working()) FilledTonalIconButton(onClick = onInterrupt) {
-                    Icon(Icons.Filled.Stop, stringResource(R.string.interrupt))
-                }
                 IconButton(
                     onClick = { pick.launch("*/*") },
                     enabled = session.state == "running" && mesh.canTransfer(session.nodeId),
@@ -158,7 +155,15 @@ internal fun Composer(
                     colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                         focusedContainerColor = MaterialTheme.colorScheme.surface),
                 )
-                FilledIconButton(enabled = text.isNotBlank() && !sending && uploads.isEmpty() && session.state == "running", onClick = {
+                // While the agent works and nothing is typed, the button stops it instead.
+                if (session.working() && text.isBlank() && uploads.isEmpty()) FilledTonalIconButton(
+                    onClick = onInterrupt,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
+                ) { Icon(Icons.Filled.Stop, stringResource(R.string.interrupt)) }
+                else FilledIconButton(enabled = text.isNotBlank() && !sending && uploads.isEmpty() && session.state == "running", onClick = {
                     val submitted = text
                     sending = true
                     act {
