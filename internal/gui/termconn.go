@@ -411,6 +411,8 @@ func (t *termConn) forgetFrame() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.cells, t.clusters, t.dirtyRows, t.hasFrame = nil, nil, nil, false
+	// ghostty's copy of the cells the state hands them through, as large.
+	t.state.ReleaseScratch()
 }
 
 // refreshClustersLocked rebuilds the grapheme clusters of rows [y0, y1) from
