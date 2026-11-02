@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -61,7 +62,10 @@ fun NewSessionScreen(mesh: Mesh, onBack: () -> Unit, onStarted: (SessionInfo) ->
     val usable = nodes.filter { it.trustsUs && it.agentsCount > 0 }
     var nodeId by rememberSaveable { mutableStateOf(usable.firstOrNull()?.id.orEmpty()) }
     val node = usable.firstOrNull { it.id == nodeId } ?: usable.firstOrNull()
-    var agent by rememberSaveable(node?.id) { mutableStateOf(node?.agentsList?.firstOrNull()?.name.orEmpty()) }
+    // The agent last started on the computer, else its first.
+    val usual = sessions.filter { it.nodeId == node?.id && it.agent != "shell" }.maxByOrNull { it.startedAt.seconds }?.agent
+        ?.takeIf { a -> node?.agentsList?.any { it.name == a } == true }
+    var agent by rememberSaveable(node?.id) { mutableStateOf(usual ?: node?.agentsList?.firstOrNull()?.name.orEmpty()) }
     var profile by rememberSaveable(node?.id, agent) { mutableStateOf("") }
     var project by rememberSaveable(node?.id) { mutableStateOf("") }
     var starting by remember { mutableStateOf(false) }
@@ -105,7 +109,7 @@ fun NewSessionScreen(mesh: Mesh, onBack: () -> Unit, onStarted: (SessionInfo) ->
                         },
                     ) {
                         if (starting) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                        else Text(stringResource(R.string.start))
+                        else Text(stringResource(R.string.start_agent, agent))
                     }
                 }
             }
@@ -165,7 +169,10 @@ fun NewSessionScreen(mesh: Mesh, onBack: () -> Unit, onStarted: (SessionInfo) ->
                 .take(8)
             if (recent.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (p in recent) SuggestionChip(onClick = { project = p }, label = { Text(baseName(p)) })
+                    for (p in recent) FilterChip(
+                        selected = project == p, onClick = { project = p }, label = { Text(baseName(p)) },
+                        leadingIcon = { Icon(Icons.Outlined.Folder, null, Modifier.size(18.dp)) },
+                    )
                 }
             }
 

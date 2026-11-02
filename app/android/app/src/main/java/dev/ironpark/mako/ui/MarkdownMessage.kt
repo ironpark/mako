@@ -20,6 +20,25 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import android.content.ClipData
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.res.stringResource
+import com.mikepenz.markdown.compose.elements.MarkdownCodeBlock
+import com.mikepenz.markdown.compose.elements.MarkdownCodeFence
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.DisposableEffect
@@ -113,6 +132,8 @@ internal fun MarkdownMessage(
                 heading6 = { Heading(it, it.typography.h6, MarkdownTokenTypes.ATX_CONTENT, headings) },
                 setextHeading1 = { Heading(it, it.typography.h1, MarkdownTokenTypes.SETEXT_CONTENT, headings) },
                 setextHeading2 = { Heading(it, it.typography.h2, MarkdownTokenTypes.SETEXT_CONTENT, headings) },
+                codeFence = { MarkdownCodeFence(it.content, it.node, it.typography.code, block = { code, language, style -> CodeBlock(code, language, style) }) },
+                codeBlock = { MarkdownCodeBlock(it.content, it.node, it.typography.code, block = { code, language, style -> CodeBlock(code, language, style) }) },
                 checkbox = { MarkdownCheckBox(it.content, it.node, it.typography.text) }, table = { model ->
                 MarkdownTable(
                     model.content, model.node, model.typography.table,
@@ -172,4 +193,36 @@ internal fun anchorIndex(titles: List<String>, anchor: String): Int {
         if ((if (n == 0) base else "$base-$n") == want) return i
     }
     return -1
+}
+
+/**
+ * CodeBlock is a block of code as it is written, its lines unwrapped and
+ * scrolled sideways, under its language and a button that copies it.
+ */
+@Composable
+private fun CodeBlock(code: String, language: String?, style: TextStyle) {
+    val colors = MaterialTheme.colorScheme
+    val clipboard = LocalClipboard.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    Surface(
+        color = colors.surfaceContainerHigh, shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
+        Column {
+            Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(language.orEmpty(), Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+                IconButton(onClick = {
+                    scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("code", code))) }
+                    Toast.makeText(context, R.string.code_copied, Toast.LENGTH_SHORT).show()
+                }, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Outlined.ContentCopy, stringResource(R.string.copy_code), Modifier.size(16.dp), tint = colors.onSurfaceVariant)
+                }
+            }
+            Text(
+                code.trimEnd('\n'), style = style, softWrap = false,
+                modifier = Modifier.horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+            )
+        }
+    }
 }

@@ -11,7 +11,6 @@
     <string name="share">Share</string>
     <string name="retry">Try again</string>
     <string name="send">Send</string>
-    <string name="start">Start</string>
     <string name="allow">Allow</string>
     <string name="deny">Deny</string>
     <string name="details">Details</string>
@@ -82,9 +81,9 @@
         <item quantity="one">Connected to %d computer</item>
         <item quantity="other">Connected to %d computers</item>
     </plurals>
-    <string name="filter_all">All %1$d</string>
-    <string name="filter_needs_you">Needs you %1$d</string>
-    <string name="filter_working">Working %1$d</string>
+    <string name="filter_all">All</string>
+    <string name="filter_needs_you">Needs you</string>
+    <string name="filter_working">Working</string>
     <string name="just_now">just now</string>
     <string name="needs_you">Needs you</string>
     <string name="nothing_here">No sessions here.</string>
@@ -99,10 +98,6 @@
     <string name="usage_5h">5h</string>
     <string name="usage_week">Week</string>
     <string name="working_with">Working, with %1$d subagents</string>
-    <plurals name="linked_summary">
-        <item quantity="one">%1$d computers · %2$d session</item>
-        <item quantity="other">%1$d computers · %2$d sessions</item>
-    </plurals>
     <string name="scan_qr">Scan QR code</string>
     <string name="scan_qr_hint">Join a computer by its pairing code, in Settings ▸ Access ▸ Pairing in mako on it. It lets this device in at once.</string>
     <string name="scan_qr_note">Point the camera at the QR code in mako on the computer: Settings ▸ Access ▸ Pairing.</string>
@@ -224,4 +219,17 @@
     <string name="agent_asks">The agent asks you</string>
     <string name="agent_asks_body">It waits for your answer in its terminal.</string>
     <string name="answer">Answer</string>
+    <string name="code_copied">Code copied</string>
+    <string name="copy_code">Copy code</string>
+    <plurals name="computers_count">
+        <item quantity="one">%1$d computer</item>
+        <item quantity="other">%1$d computers</item>
+    </plurals>
+    <plurals name="sessions_count">
+        <item quantity="one">%1$d session</item>
+        <item quantity="other">%1$d sessions</item>
+    </plurals>
+    <string name="starting_node">Starting this device\'s node…</string>
+    <string name="reaching_computers">Reaching your computers…</string>
+    <string name="start_agent">Start %1$s</string>
 </resources>

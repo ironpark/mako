@@ -41,6 +41,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.PredictiveBackHandler
@@ -179,7 +186,10 @@ internal fun SessionsScreen(
                         Text(stringResource(R.string.app_name), fontWeight = FontWeight.SemiBold)
                         if (linked > 0) {
                             Text(
-                                pluralStringResource(R.plurals.linked_summary, sessions.size, linked, sessions.size),
+                                dotted(
+                                    pluralStringResource(R.plurals.computers_count, linked, linked),
+                                    pluralStringResource(R.plurals.sessions_count, sessions.size, sessions.size),
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -199,8 +209,10 @@ internal fun SessionsScreen(
         },
         floatingActionButton = {
             if (linked > 0) {
+                // Out at the top of the list, an icon alone once it scrolls.
+                val top by remember { derivedStateOf { screenState.list.firstVisibleItemIndex == 0 } }
                 ExtendedFloatingActionButton(
-                    onClick = onNew,
+                    onClick = onNew, expanded = top,
                     icon = { Icon(Icons.Filled.Add, null) },
                     text = { Text(stringResource(R.string.new_session)) },
                 )
@@ -209,13 +221,13 @@ internal fun SessionsScreen(
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
             when (val s = state) {
-                Mesh.State.Starting -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                Mesh.State.Starting -> Loading(stringResource(R.string.starting_node))
                 is Mesh.State.Failed -> Message(
                     stringResource(R.string.node_failed), s.message,
                     stringResource(R.string.retry), mesh::start, icon = Icons.Outlined.CloudOff,
                 )
                 Mesh.State.Running -> when {
-                    !loaded && sessions.isEmpty() -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    !loaded && sessions.isEmpty() -> Loading(stringResource(R.string.reaching_computers))
                     linked == 0 && sessions.isEmpty() -> Message(
                         stringResource(R.string.connect_title), stringResource(R.string.connect_body),
                         stringResource(R.string.scan_qr), onScan, icon = Icons.Outlined.Lan,
@@ -285,12 +297,15 @@ private fun SessionList(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 for (f in Filter.entries) {
-                    val label = when (f) {
-                        Filter.All -> stringResource(R.string.filter_all, sessions.size)
-                        Filter.NeedsYou -> stringResource(R.string.filter_needs_you, waiting.size)
-                        Filter.Working -> stringResource(R.string.filter_working, sessions.count { it.working() })
+                    val (label, count) = when (f) {
+                        Filter.All -> stringResource(R.string.filter_all) to 0
+                        Filter.NeedsYou -> stringResource(R.string.filter_needs_you) to waiting.size
+                        Filter.Working -> stringResource(R.string.filter_working) to sessions.count { it.working() }
                     }
-                    FilterChip(filter == f, { onFilter(f) }, { Text(label) })
+                    // A count only where there is one, in the colour of what it counts.
+                    FilterChip(filter == f, { onFilter(f) }, { Text(label) }, trailingIcon = if (count == 0) null else ({
+                        CountBadge(count, if (f == Filter.NeedsYou) StatusColors.Approval else StatusColors.Working)
+                    }))
                 }
             }
         }
@@ -315,20 +330,27 @@ private fun SessionList(
             item(key = "node:$node") {
                 val n = nodes.firstOrNull { it.id == node }
                 Row(
-                    Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 6.dp),
+                    Modifier.fillMaxWidth().padding(start = 28.dp, end = 28.dp, top = 20.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(osIcon(n?.os.orEmpty()), null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    Icon(osIcon(n?.os.orEmpty()), null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        mesh.nodeName(node), style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f),
+                        mesh.nodeName(node), style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f),
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Text("${list.size}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            items(list, key = { it.id }) { s -> SessionRow(mesh, nodes, s, now, onClick = { onOpen(s) }) }
+            // A computer's sessions are one card, its rows joined by hairlines.
+            itemsIndexed(list, key = { _, s -> s.id }) { i, s ->
+                val shape = groupShape(i, list.size)
+                Column(Modifier.padding(horizontal = 12.dp).clip(shape).background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+                    if (i > 0) HorizontalDivider(Modifier.padding(start = 70.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    SessionRow(mesh, nodes, s, now, onClick = { onOpen(s) })
+                }
+            }
         }
     }
 }
@@ -374,12 +396,12 @@ private fun SessionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long,
     ) { Box {
         Row(
             Modifier.fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 .combinedClickable(onClick = onClick, onLongClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     menu = true
                 })
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val dimmed = s.ended()
@@ -393,7 +415,8 @@ private fun SessionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long,
                     s.label(), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = if (dimmed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 )
-                val where = dotted(s.agent, baseName(s.project), s.branch)
+                // The agent, unless the session goes by its name already.
+                val where = dotted(s.agent.takeUnless { s.label().equals(it, ignoreCase = true) }, baseName(s.project), s.branch)
                 Text(
                     where, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -401,12 +424,16 @@ private fun SessionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long,
             }
             Spacer(Modifier.width(8.dp))
             Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    s.statusText(), style = MaterialTheme.typography.labelMedium, color = s.statusColor(),
-                    fontWeight = if (s.working()) FontWeight.SemiBold else FontWeight.Normal,
-                )
                 now // the time below follows the clock
                 Text(ago(s.lastActive()), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // An idle session says nothing more; one that does something says what.
+                if (s.hasApproval() || s.ended() || s.status in setOf("working", "waiting", "done")) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        s.statusText(), style = MaterialTheme.typography.labelMedium, color = s.statusColor(),
+                        fontWeight = if (s.working() || s.needsYou()) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                }
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -554,11 +581,46 @@ fun EmptyState(
 /** Section is a card of a screen's settings, under its heading. */
 @Composable
 fun Section(title: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Column(modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(
-            title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+    Column(modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+        if (title.isNotEmpty()) Text(
+            title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
         )
-        Card(Modifier.fillMaxWidth()) { content() }
+        // The same card as a computer's sessions on the home screen.
+        Card(
+            Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        ) { content() }
+    }
+}
+
+/** The shape of the i-th of n rows of one card: its outer corners round, its inner ones square. */
+private fun groupShape(i: Int, n: Int): RoundedCornerShape {
+    val outer = 20.dp
+    val inner = 4.dp
+    return RoundedCornerShape(
+        topStart = if (i == 0) outer else inner, topEnd = if (i == 0) outer else inner,
+        bottomStart = if (i == n - 1) outer else inner, bottomEnd = if (i == n - 1) outer else inner,
+    )
+}
+
+/** CountBadge is how many a filter chip would show, in a dot of its colour. */
+@Composable
+private fun CountBadge(count: Int, color: Color) {
+    Surface(color = color, shape = CircleShape, modifier = Modifier.heightIn(min = 18.dp)) {
+        Text(
+            "$count", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+        )
+    }
+}
+
+/** Loading is a screen waiting for something, saying what. */
+@Composable
+private fun Loading(what: String) {
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        CircularProgressIndicator()
+        Spacer(Modifier.height(16.dp))
+        Text(what, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

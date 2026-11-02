@@ -10,6 +10,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -42,12 +44,34 @@ internal fun SettingsScreen(onBack: () -> Unit, onNotifications: () -> Unit, onU
         })
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            FileRow(stringResource(R.string.notification_settings), stringResource(R.string.notification_settings_summary),
-                Icons.Outlined.Notifications, onClick = onNotifications)
-            FileRow(stringResource(R.string.app_updates), stringResource(R.string.current_version, BuildConfig.VERSION_NAME),
-                Icons.Outlined.SystemUpdate, onClick = onUpdates)
+            Section("") {
+                Column {
+                    SettingRow(stringResource(R.string.notification_settings), stringResource(R.string.notification_settings_summary),
+                        Icons.Outlined.Notifications, onClick = onNotifications)
+                    HorizontalDivider(Modifier.padding(start = 72.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    SettingRow(stringResource(R.string.app_updates), stringResource(R.string.current_version, BuildConfig.VERSION_NAME),
+                        Icons.Outlined.SystemUpdate, onClick = onUpdates)
+                }
+            }
         }
     }
+}
+
+/** SettingRow is a setting that opens a page of its own, its icon in a tonal circle. */
+@Composable
+private fun SettingRow(title: String, detail: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(detail) },
+        leadingContent = {
+            Surface(shape = androidx.compose.foundation.shape.CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(40.dp)) {
+                Box(contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer) }
+            }
+        },
+        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
+        modifier = Modifier.clickable(onClick = onClick),
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

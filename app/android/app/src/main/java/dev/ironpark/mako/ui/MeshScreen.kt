@@ -160,7 +160,7 @@ fun MeshScreen(mesh: Mesh, onBack: () -> Unit, onScan: () -> Unit) {
                     )
                     for (p in peers) {
                         ListItem(
-                            headlineContent = { Text(p, fontFamily = FontFamily.Monospace) },
+                            headlineContent = { Text(p, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) },
                             trailingContent = {
                                 IconButton(onClick = { act { mesh.removePeer(p) } }) {
                                     Icon(Icons.Outlined.Close, stringResource(R.string.remove))

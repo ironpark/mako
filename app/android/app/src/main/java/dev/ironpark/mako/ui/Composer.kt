@@ -25,6 +25,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.TextFieldValue
@@ -56,10 +61,13 @@ internal fun Composer(
     var loading by remember(session.id) { mutableStateOf(false) }
     var attempt by remember(session.id) { mutableIntStateOf(0) }
     var sending by remember(session.id) { mutableStateOf(false) }
-    val currentText by rememberUpdatedState(text)
+    // The field's own value is the draft; what changes it here other than
+    // typing sets both at once, as reconciling them after the fact lost
+    // keys typed in between.
     var editing by remember(session.id) { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
-    LaunchedEffect(text) {
-        if (editing.text != text) editing = TextFieldValue(text, TextRange(text.length))
+    fun set(t: String) {
+        editing = TextFieldValue(t, TextRange(t.length))
+        onText(t)
     }
     val act = actor()
     LaunchedEffect(session.nodeId, session.id, session.project, attempt) {
@@ -89,7 +97,7 @@ internal fun Composer(
                         input.use { mesh.daemon.stage(session.nodeId, up.name, it) { sent -> uploads = uploads.map { u -> if (u.id == up.id) u.copy(sent = sent) else u } } }
                     }
                     uploads = uploads.filterNot { it.id == up.id }
-                    onText(withPath(currentText, path))
+                    set(withPath(editing.text, path))
                 }
             } finally {
                 val ids = pending.map { it.second.id }.toSet()
@@ -97,14 +105,14 @@ internal fun Composer(
             }
         }
     }
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+    Surface(color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.navigationBarsPadding()) {
             if (attached.isNotEmpty() || uploads.isNotEmpty()) Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom,
             ) {
                 for (a in attached) key(a.path) {
-                    val remove: () -> Unit = { onText(withoutWord(currentText, a.word)) }
+                    val remove: () -> Unit = { set(withoutWord(editing.text, a.word)) }
                     if (a.image) Box {
                         RemoteThumbnail(mesh.daemon, session.nodeId, a.path, named = false, onOpen = { onOpen(a.path) })
                         Surface(Modifier.align(Alignment.TopEnd).padding(3.dp).size(24.dp).clickable(onClick = remove),
@@ -135,26 +143,42 @@ internal fun Composer(
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 200.dp)) {
                     items(matches, key = { it.name }) { command ->
                         ListItem(
-                            modifier = Modifier.clickable { onText("/${command.name} ") },
+                            modifier = Modifier.clickable { set("/${command.name} ") },
                             headlineContent = { Text("/${command.name}" + command.args.takeIf { it.isNotBlank() }?.let { " $it" }.orEmpty()) },
                             supportingContent = { Text(dotted(command.description, command.source), maxLines = 2, overflow = TextOverflow.Ellipsis) },
                         )
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconButton(
-                    onClick = { pick.launch("*/*") },
-                    enabled = session.state == "running" && mesh.canTransfer(session.nodeId),
-                ) { Icon(Icons.Outlined.AttachFile, stringResource(R.string.attach)) }
-                OutlinedTextField(
-                    value = editing, onValueChange = { editing = it; onText(it.text) },
-                    placeholder = { Text(stringResource(R.string.composer_hint)) },
-                    modifier = Modifier.weight(1f).heightIn(max = 160.dp), shape = RoundedCornerShape(24.dp),
-                    colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedContainerColor = MaterialTheme.colorScheme.surface),
-                )
+            Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // One pill holds the field and what it attaches, as messengers have it.
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(26.dp), modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        IconButton(
+                            onClick = { pick.launch("*/*") },
+                            enabled = session.state == "running" && mesh.canTransfer(session.nodeId),
+                            modifier = Modifier.padding(start = 2.dp, bottom = 2.dp),
+                        ) { Icon(Icons.Outlined.AttachFile, stringResource(R.string.attach)) }
+                        // A field of the pill's own, without the box and padding a TextField draws.
+                        val interaction = remember { MutableInteractionSource() }
+                        val style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface)
+                        BasicTextField(
+                            value = editing, onValueChange = { editing = it; onText(it.text) },
+                            modifier = Modifier.weight(1f).heightIn(min = 52.dp, max = 168.dp),
+                            textStyle = style, interactionSource = interaction,
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        ) { field ->
+                            TextFieldDefaults.DecorationBox(
+                                value = editing.text, innerTextField = field, enabled = true, singleLine = false,
+                                visualTransformation = VisualTransformation.None, interactionSource = interaction,
+                                placeholder = { Text(stringResource(R.string.composer_hint), style = style) },
+                                contentPadding = PaddingValues(start = 4.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
+                                container = {},
+                            )
+                        }
+                    }
+                }
                 // While the agent works and nothing is typed, the button stops it instead.
                 if (session.working() && text.isBlank() && uploads.isEmpty()) FilledTonalIconButton(
                     onClick = onInterrupt,
@@ -162,14 +186,16 @@ internal fun Composer(
                         containerColor = MaterialTheme.colorScheme.errorContainer,
                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
                     ),
+                    modifier = Modifier.size(52.dp),
                 ) { Icon(Icons.Filled.Stop, stringResource(R.string.interrupt)) }
-                else FilledIconButton(enabled = text.isNotBlank() && !sending && uploads.isEmpty() && session.state == "running", onClick = {
+                else FilledIconButton(enabled = text.isNotBlank() && !sending && uploads.isEmpty() && session.state == "running",
+                    modifier = Modifier.size(52.dp), onClick = {
                     val submitted = text
                     sending = true
                     act {
                         try {
                             onSend(submitted)
-                            if (currentText == submitted) onText("")
+                            if (editing.text == submitted) set("")
                         } finally { sending = false }
                     }
                 }) {
