@@ -189,3 +189,54 @@ func TestSidebarAndSettingsWithSpaces(t *testing.T) {
 		p.Close()
 	}
 }
+
+// The settings say why a space shows each project: by an owner it holds,
+// held itself, or left out; they list projects a space holds that no
+// section is now, by their IDs.
+func TestSpaceSettingsSayWhyAProjectShows(t *testing.T) {
+	l := spaceList{Spaces: []space{{Owners: []string{"github.com/acme"}, Projects: []string{"notes", "repo:github.com/x/gone"}, Hidden: []string{"repo:github.com/acme/old"}}}}
+	set := spaceSet{spaceList: l}
+	for key, want := range map[string]sectionReason{
+		"repo:github.com/acme/api": shownByOwner, "notes": byProject, "repo:github.com/acme/old": leftOut, "repo:github.com/me/toy": notShown,
+	} {
+		owners := []string{"github.com/acme"}
+		if key == "notes" || key == "repo:github.com/me/toy" {
+			owners = nil
+		}
+		if got := set.sectionIn(1, key, owners); got != want {
+			t.Errorf("%s: %v, want %v", key, got, want)
+		}
+	}
+	got := sectionsOf([]sessionGroup{{Key: "notes", Project: "/notes"}}, l)
+	if len(got) != 3 || !slices.ContainsFunc(got, func(s spaceSection) bool { return s.Key == "repo:github.com/x/gone" && s.Name == "gone" }) {
+		t.Fatalf("sections %+v", got)
+	}
+}
+
+// A deleted space comes back with its notice's Undo; spaces move up and
+// down among themselves, as far as they go.
+func TestDeletingAndReorderingSpaces(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.newSpace("a")
+	m.newSpace("b")
+	names := func() (out []string) {
+		for _, sp := range ggui.Peek(m.Spaces).Spaces {
+			out = append(out, sp.Name)
+		}
+		return out
+	}
+	m.reorderSpace(1, -1)
+	m.reorderSpace(0, -1)
+	if got := names(); !slices.Equal(got, []string{"b", "a"}) {
+		t.Fatalf("reordered %v", got)
+	}
+	undo := m.deleteSpace(0)
+	if got := names(); !slices.Equal(got, []string{"a"}) {
+		t.Fatalf("deleted %v", got)
+	}
+	undo()
+	if got := names(); !slices.Equal(got, []string{"b", "a"}) {
+		t.Fatalf("undone %v", got)
+	}
+}

@@ -122,16 +122,41 @@ func spansNodes(roots []fileRoot) bool {
 // first leaves out what it hides, shows what it holds, and else shows a
 // section any of whose owners it holds, the whole section.
 func (p spaceSet) showsGroup(i int, g sessionGroup) bool {
+	return p.showsSection(i, g.Key, groupOwners(g))
+}
+
+// showsSection is showsGroup for the section of ID key whose repositories
+// owners hold.
+func (p spaceSet) showsSection(i int, key string, owners []string) bool {
+	r := p.sectionIn(i, key, owners)
+	return r == shownByOwner || r == byProject
+}
+
+// sectionReason is why a space shows a section, or that it does not.
+type sectionReason int
+
+const (
+	notShown     sectionReason = iota
+	shownByOwner               // an owner it holds holds the section's repositories
+	byProject                  // it holds the section itself
+	leftOut                    // it hides the section, whatever its owners
+)
+
+// sectionIn is why space i shows the section of ID key whose repositories
+// owners hold, or that it does not, or hides it.
+func (p spaceSet) sectionIn(i int, key string, owners []string) sectionReason {
 	sp, ok := p.spaceOf(i)
 	switch {
 	case !ok:
-		return true
-	case slices.Contains(sp.Hidden, g.Key):
-		return false
-	case slices.Contains(sp.Projects, g.Key):
-		return true
+		return byProject
+	case slices.Contains(sp.Hidden, key):
+		return leftOut
+	case slices.Contains(sp.Projects, key):
+		return byProject
+	case slices.ContainsFunc(owners, func(o string) bool { return slices.Contains(sp.Owners, o) }):
+		return shownByOwner
 	}
-	return slices.ContainsFunc(groupOwners(g), func(o string) bool { return slices.Contains(sp.Owners, o) })
+	return notShown
 }
 
 // spaceGroups keeps the sections space i shows.
@@ -145,22 +170,26 @@ func (p spaceSet) spaceGroups(i int, groups []sessionGroup) []sessionGroup {
 // toggleProject shows section g in space i, an index into the spaces after
 // the first, or leaves it out: held or hidden as its owners do not already
 // say.
-func (m *model) toggleProject(i int, g sessionGroup) {
+func (m *model) toggleProject(i int, g sessionGroup) { m.toggleSection(i, g.Key, groupOwners(g)) }
+
+// toggleSection is toggleProject for the section of ID key whose
+// repositories owners hold.
+func (m *model) toggleSection(i int, key string, owners []string) {
 	m.updateSpaces(func(spaces []space) []space {
 		if i < 0 || i >= len(spaces) {
 			return spaces
 		}
 		sp := &spaces[i]
 		set := spaceSet{spaceList: spaceList{Spaces: spaces}}
-		shown := set.showsGroup(i+1, g)
-		sp.Projects = slices.DeleteFunc(slices.Clone(sp.Projects), func(id string) bool { return id == g.Key })
-		sp.Hidden = slices.DeleteFunc(slices.Clone(sp.Hidden), func(id string) bool { return id == g.Key })
-		if now := set.showsGroup(i+1, g); now == shown {
+		shown := set.showsSection(i+1, key, owners)
+		sp.Projects = slices.DeleteFunc(slices.Clone(sp.Projects), func(id string) bool { return id == key })
+		sp.Hidden = slices.DeleteFunc(slices.Clone(sp.Hidden), func(id string) bool { return id == key })
+		if now := set.showsSection(i+1, key, owners); now == shown {
 			// The owners say as it was: the space says otherwise itself.
 			if shown {
-				sp.Hidden = append(sp.Hidden, g.Key)
+				sp.Hidden = append(sp.Hidden, key)
 			} else {
-				sp.Projects = append(sp.Projects, g.Key)
+				sp.Projects = append(sp.Projects, key)
 			}
 		}
 		return spaces
