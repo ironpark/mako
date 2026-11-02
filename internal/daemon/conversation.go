@@ -235,7 +235,27 @@ func (d *Daemon) followConversations() {
 		for _, s := range live {
 			d.refreshActivity(s)
 		}
+		d.conversations.forgetUnread(time.Now())
 		<-ticker.C
+	}
+}
+
+// chatIdle is how long a conversation goes unread before the daemon lets
+// go of what it read of it, and of what its readers were last sent.
+const chatIdle = 5 * time.Minute
+
+// forgetUnread lets go of the conversations no reader read for chatIdle.
+func (c *conversations) forgetUnread(now time.Time) {
+	c.mu.Lock()
+	convs := make([]*conversation, 0, len(c.sessions))
+	for _, conv := range c.sessions {
+		convs = append(convs, conv)
+	}
+	c.mu.Unlock()
+	for _, conv := range convs {
+		if conv.chat.Forget(chatIdle, now) {
+			conv.sent.forget()
+		}
 	}
 }
 

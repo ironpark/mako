@@ -85,6 +85,13 @@ type sentChat struct {
 // subagents' its readers looked at.
 const sentChatsKept = 8
 
+// forget lets go of the chats kept: a reader's next read is sent whole.
+func (c *sentChats) forget() {
+	c.mu.Lock()
+	c.last = nil
+	c.mu.Unlock()
+}
+
 // find is the chat of agent sent under digest, nil for one not kept.
 func (c *sentChats) find(agent string, digest uint64) *protocol.Chat {
 	c.mu.Lock()

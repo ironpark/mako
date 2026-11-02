@@ -545,6 +545,25 @@ type Cache struct {
 	agents agent.SubAgentScan // nil until a read
 	// subs are the latest reads of the subagents' logs, by log path.
 	subs map[string]subRead
+	// readAt is when the cache was last read from (see Forget).
+	readAt time.Time
+}
+
+// Forget lets go of the conversation read, and its subagents', when
+// nobody read it since idle ago, and reports whether it did: a session's
+// conversation is followed for as long as it runs, and a front-end reads
+// the one it shows. The next read reads the log again. The usage and the
+// subagents found are kept, as they are scanned on from where they stopped.
+func (c *Cache) Forget(idle time.Duration, now time.Time) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.chat == nil || c.live == nil && c.subs == nil || now.Sub(c.readAt) < idle {
+		return false
+	}
+	c.stat, c.live, c.subs = nil, nil, nil
+	// The conversation's ID stays, which the subagents' scan is kept by.
+	c.chat = &protocol.Chat{Conversation: c.chat.GetConversation()}
+	return true
 }
 
 // subRead is a subagent's log as last read.
@@ -570,6 +589,7 @@ func (c *Cache) Agent(id string) *protocol.SubAgent {
 // while the subagent's log is unchanged. The reply is shared, and must not
 // be changed.
 func (c *Cache) ReadAgent(info *protocol.SessionInfo, path string, span Span) (*protocol.Chat, error) {
+	c.touch()
 	if span != (Span{}) {
 		return ReadAgent(info, path, span)
 	}
@@ -622,6 +642,7 @@ func (c *Cache) readSpan(info *protocol.SessionInfo, path string, span Span) (*p
 // while the log is the same file, unchanged, and still bound to the same
 // conversation. An earlier span does not change, so it is read as asked.
 func (c *Cache) ReadBound(info *protocol.SessionInfo, path string, span Span) (*protocol.Chat, error) {
+	c.touch()
 	if span != (Span{}) {
 		return c.readSpan(info, path, span)
 	}
@@ -665,6 +686,13 @@ func (c *Cache) ReadBound(info *protocol.SessionInfo, path string, span Span) (*
 		c.stat, c.live = nil, nil
 	}
 	return chat, err
+}
+
+// touch notes a read, which keeps the cache from Forget.
+func (c *Cache) touch() {
+	c.mu.Lock()
+	c.readAt = time.Now()
+	c.mu.Unlock()
 }
 
 // withAgents is chat with other agents. chat is shared, so it is copied,

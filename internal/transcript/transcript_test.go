@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/ironpark/mako/internal/agent"
@@ -274,5 +275,30 @@ func TestCacheReadsOnAsTheLogGrows(t *testing.T) {
 	}
 	if m := first.GetMessages()[1]; !m.GetPending() || m.GetResult() != "" {
 		t.Fatalf("the first poll's call was changed: %+v", m)
+	}
+}
+
+// A conversation nobody read for a while is let go, and read again when
+// asked; one read since is kept.
+func TestCacheForgetsAConversationNobodyRead(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "projects", "p", "c.jsonl")
+	writeLog(t, path, `{"type":"user","sessionId":"c","cwd":"/p","uuid":"u0","message":{"role":"user","content":"hi"}}`+"\n")
+	info := &protocol.SessionInfo{Agent: "claude", ConversationId: "c"}
+	var cache Cache
+	if chat, err := cache.ReadBound(info, path, Span{}); err != nil || len(chat.GetMessages()) != 1 {
+		t.Fatalf("chat=%+v %v", chat, err)
+	}
+	now := time.Now()
+	if cache.Forget(time.Minute, now) {
+		t.Fatal("a conversation just read was let go")
+	}
+	if !cache.Forget(time.Minute, now.Add(2*time.Minute)) || cache.live != nil {
+		t.Fatal("a conversation unread for two minutes was kept")
+	}
+	if cache.Forget(time.Minute, now.Add(3*time.Minute)) {
+		t.Fatal("a conversation let go was let go again")
+	}
+	if chat, err := cache.ReadBound(info, path, Span{}); err != nil || len(chat.GetMessages()) != 1 {
+		t.Fatalf("read again: chat=%+v %v", chat, err)
 	}
 }
