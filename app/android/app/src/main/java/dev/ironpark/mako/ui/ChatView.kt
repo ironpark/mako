@@ -95,6 +95,7 @@ import dev.ironpark.mako.v2.Usage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 /**
  * ChatView is a session's conversation, as its agent's log has it: read
@@ -190,6 +191,41 @@ fun ChatView(
         }
     }
 
+    /**
+     * Reads the messages before those on show, keeping in place the message
+     * at the top, which the earlier ones then come in above.
+     */
+    val shownTurns by rememberUpdatedState(turns)
+    fun loadOlder() {
+        if (paging || start <= 0) return
+        paging = true
+        scope.launch {
+            val anchor = list.layoutInfo.visibleItemsInfo.firstOrNull { (it.key as? String)?.startsWith("m:") == true }
+            val before = shownTurns
+            try {
+                val read = fetch(start) ?: return@launch
+                val joined = joinMessages(read.messagesList, older)
+                val grew = joined.size > older.size
+                older = joined
+                start = read.start
+                if (anchor == null || !grew) return@launch
+                // Once the list has the earlier messages, the anchor's key is further down.
+                val now = snapshotFlow { shownTurns }.first { it !== before }
+                val i = now.indexOfFirst { "m:" + it.key == anchor.key }
+                if (i < 0) return@launch
+                list.scrollToItem(i + if (start > 0) 1 else 0)
+                if (anchor.offset != 0) list.scrollBy(-anchor.offset.toFloat())
+            } finally {
+                paging = false
+            }
+        }
+    }
+    // At the top of what has been read, the earlier messages come by themselves.
+    LaunchedEffect(list, start) {
+        snapshotFlow { !follow && start > 0 && list.firstVisibleItemIndex == 0 && list.layoutInfo.totalItemsCount > 1 }
+            .collect { top -> if (top) loadOlder() }
+    }
+
     Column(modifier) {
         chat?.takeIf { it.hasUsage() }?.let { UsageStrip(it.usage) }
         if (error != null) Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -199,7 +235,7 @@ fun ChatView(
                 Icon(Icons.Outlined.Refresh, stringResource(R.string.retry))
             }
         }
-        androidx.compose.animation.AnimatedVisibility(request.isNotEmpty()) { 
+        androidx.compose.animation.AnimatedVisibility(request.isNotEmpty()) {
             val asked = remember(request, latest) {
                 latest.lastOrNull { request == "question:" + it.id.ifEmpty { it.text } }?.let { it.detail.ifEmpty { it.text } }.orEmpty()
             }
@@ -223,25 +259,15 @@ fun ChatView(
                     ) {
                         if (start > 0) {
                             item(key = "older") {
-                                TextButton(
-                                    enabled = !paging,
-                                    onClick = {
-                                        paging = true
-                                        scope.launch {
-                                            fetch(start)?.let {
-                                                older = joinMessages(it.messagesList, older)
-                                                start = it.start
-                                            }
-                                            paging = false
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) { Text(stringResource(R.string.load_earlier)) }
+                                Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.Center) {
+                                    if (paging) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                                    else TextButton(onClick = ::loadOlder) { Text(stringResource(R.string.load_earlier)) }
+                                }
                             }
                         }
                         items(turns, key = { "m:" + it.key }, contentType = { if (it.tools) "tools" else it.messages.first().role }) { t ->
                             if (t.tools) ToolRun(t)
-                            else MessageItem(t.messages.first(), mesh, session, links, openImage)
+                            else MessageItem(t.messages.first(), mesh, session, links, openImage, onAnchor = { follow = false })
                         }
                         if (agent.isEmpty() && (activeAgents.isNotEmpty() || endedAgents.isNotEmpty())) {
                             item(key = "agents") {
@@ -387,7 +413,10 @@ private fun Working(subagents: Int) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MessageItem(m: ChatMessage, mesh: Mesh, session: SessionInfo, onLink: (String) -> Unit, onImage: (String) -> Unit) {
+private fun MessageItem(
+    m: ChatMessage, mesh: Mesh, session: SessionInfo, onLink: (String) -> Unit, onImage: (String) -> Unit,
+    onAnchor: () -> Unit = {},
+) {
     when {
         m.role == "user" -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             // The images it holds, and those it names by their paths, over it.
@@ -411,7 +440,7 @@ private fun MessageItem(m: ChatMessage, mesh: Mesh, session: SessionInfo, onLink
                 )
             }
         }
-        else -> MarkdownMessage(m.text, onLink = onLink)
+        else -> MarkdownMessage(m.text, onLink = onLink, onAnchor = onAnchor)
     }
 }
 

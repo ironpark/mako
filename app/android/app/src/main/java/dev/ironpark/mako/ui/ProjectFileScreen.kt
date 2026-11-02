@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.text.format.Formatter
 import android.widget.Toast
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -52,6 +53,7 @@ internal data class SourceLine(val text: String, val number: Long, val old: Long
 internal fun ProjectFileScreen(
     files: ProjectFiles, root: String, path: String, line: Long,
     diffPath: String, from: String, deleted: Boolean, onBack: () -> Unit,
+    onFile: (ChatLink.File) -> Unit = {},
 ) {
     var diff by rememberSaveable { mutableStateOf(diffPath.isNotEmpty()) }
     var preview by rememberSaveable { mutableStateOf(markdownFile(path) && line == 0L) }
@@ -59,6 +61,7 @@ internal fun ProjectFileScreen(
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
     Scaffold(topBar = {
         TopAppBar(
             title = { Column {
@@ -119,7 +122,17 @@ internal fun ProjectFileScreen(
                             opened.file.binary -> Message(stringResource(R.string.binary_file), stringResource(R.string.binary_file_body))
                             opened.text.isEmpty() -> Message(stringResource(R.string.file_empty), baseName(path))
                             preview -> SelectionContainer {
-                                LazyColumn(contentPadding = PaddingValues(12.dp)) { item { MarkdownMessage(opened.text) } }
+                                LazyColumn(contentPadding = PaddingValues(12.dp)) {
+                                    // A link elsewhere in the project is a path from this file's folder.
+                                    item { MarkdownMessage(opened.text, onLink = { dest ->
+                                        when (val link = chatLink(dest, remoteParent(path))) {
+                                            null -> {}
+                                            is ChatLink.File -> onFile(link)
+                                            is ChatLink.Web -> uriHandler.openUri(link.url)
+                                            is ChatLink.Loopback -> uriHandler.openUri(link.url)
+                                        }
+                                    }) }
+                                }
                             }
                             else -> {
                                 val lines = remember(opened.text) { opened.text.lines().mapIndexed { index, text -> SourceLine(text, index + 1L) } }

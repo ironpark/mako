@@ -41,6 +41,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.foundation.background
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -307,7 +311,10 @@ private fun Heading(text: String, count: Int) {
     }
 }
 
-/** SessionRow is a session in the list; a long press offers renaming and stopping it. */
+/**
+ * SessionRow is a session in the list. Swiped right it is renamed, swiped
+ * left stopped, after asking; a long press offers both as well.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SessionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long, onClick: () -> Unit) {
@@ -316,9 +323,23 @@ private fun SessionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long,
     var stopping by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     val act = actor()
-    Box {
+    val scope = rememberCoroutineScope()
+    val stoppable = s.state == "running" || s.state == "starting"
+    val swipe = rememberSwipeToDismissBoxState()
+    SwipeToDismissBox(
+        swipe,
+        enableDismissFromEndToStart = stoppable,
+        backgroundContent = { SwipeBackground(swipe.dismissDirection) },
+        onDismiss = { value ->
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            if (value == SwipeToDismissBoxValue.StartToEnd) renaming = true
+            if (value == SwipeToDismissBoxValue.EndToStart) stopping = true
+            scope.launch { swipe.reset() }
+        },
+    ) { Box {
         Row(
             Modifier.fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
                 .combinedClickable(onClick = onClick, onLongClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     menu = true
@@ -359,7 +380,7 @@ private fun SessionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long,
                     menu = false
                     renaming = true
                 })
-            if (s.state == "running" || s.state == "starting") {
+            if (stoppable) {
                 DropdownMenuItem(text = { Text(stringResource(R.string.stop_session)) },
                     leadingIcon = { Icon(Icons.Outlined.StopCircle, null) }, onClick = {
                         menu = false
@@ -367,9 +388,27 @@ private fun SessionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long,
                     })
             }
         }
-    }
+    } }
     if (renaming) RenameDialog(mesh, s, onDismiss = { renaming = false })
     if (stopping) StopDialog(s, onDismiss = { stopping = false }) { act { mesh.closeSession(s) } }
+}
+
+/** What a row shows under it as it is swiped: renaming one way, stopping the other. */
+@Composable
+private fun SwipeBackground(direction: SwipeToDismissBoxValue) {
+    val stop = direction == SwipeToDismissBoxValue.EndToStart
+    if (direction == SwipeToDismissBoxValue.Settled) return
+    val colors = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxSize().background(if (stop) colors.errorContainer else colors.secondaryContainer).padding(horizontal = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (stop) Arrangement.End else Arrangement.Start,
+    ) {
+        val tint = if (stop) colors.onErrorContainer else colors.onSecondaryContainer
+        Icon(if (stop) Icons.Outlined.StopCircle else Icons.Outlined.Edit, null, tint = tint)
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(if (stop) R.string.stop else R.string.rename), color = tint, style = MaterialTheme.typography.labelLarge)
+    }
 }
 
 /**

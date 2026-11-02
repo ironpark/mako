@@ -106,7 +106,11 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
             val files = remember(mesh.daemon, node) { NodeProjectFiles(mesh.daemon, node) }
             ProjectFileScreen(files, a?.getString("root").orEmpty(), a?.getString("path").orEmpty(),
                 a?.getString("line")?.toLongOrNull() ?: 0L, diffPath = "", from = "", deleted = false,
-                onBack = { nav.popBackStack() })
+                onBack = { nav.popBackStack() },
+                onFile = { link ->
+                    if (link.folder) nav.navigate("files/${Uri.encode(node)}/${Uri.encode(link.path)}")
+                    else nav.navigate("file/${Uri.encode(node)}/${Uri.encode(a?.getString("root").orEmpty())}/${Uri.encode(link.path)}?line=${link.line}")
+                })
         }
         composable("settings") {
             SettingsScreen(onBack = { nav.popBackStack() }, onNotifications = { nav.navigate("notifications") }, onUpdates = { nav.navigate("updates") })

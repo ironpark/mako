@@ -52,6 +52,8 @@ internal fun FilesScreen(files: ProjectFiles, root: String, nodeName: String, on
     var diffPath by rememberSaveable { mutableStateOf("") }
     var diffFrom by rememberSaveable { mutableStateOf("") }
     var deleted by rememberSaveable { mutableStateOf(false) }
+    // The files a file's links led from, to go back to, latest last, as path and line.
+    var trail by rememberSaveable { mutableStateOf(listOf<String>()) }
     val scrolls = rememberSaveableStateHolder()
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -73,6 +75,11 @@ internal fun FilesScreen(files: ProjectFiles, root: String, nodeName: String, on
     }
     fun back() {
         when {
+            trail.isNotEmpty() -> {
+                val (from, line) = trail.last().split('\n', limit = 2).let { it[0] to (it.getOrNull(1)?.toLongOrNull() ?: 0L) }
+                trail = trail.dropLast(1)
+                open(from, line, repoRoot = selectedRoot)
+            }
             selected.isNotEmpty() -> selected = ""
             searching -> { searching = false; query = ""; focus.clearFocus(); keyboard?.hide() }
             section == 0 && resolvedRoot.isNotEmpty() && relativeRemote(resolvedRoot, currentPath).isNotEmpty() -> path = remoteParent(currentPath)
@@ -82,7 +89,18 @@ internal fun FilesScreen(files: ProjectFiles, root: String, nodeName: String, on
     BackHandler { back() }
     if (selected.isNotEmpty()) {
         key(selected, diffPath) {
-            ProjectFileScreen(files, selectedRoot, selected, selectedLine, diffPath, diffFrom, deleted, onBack = { selected = "" })
+            ProjectFileScreen(files, selectedRoot, selected, selectedLine, diffPath, diffFrom, deleted, onBack = { back() },
+                onFile = { link ->
+                    if (link.folder) {
+                        trail = emptyList()
+                        selected = ""
+                        section = 0
+                        path = link.path
+                    } else {
+                        trail = trail + "$selected\n$selectedLine"
+                        open(link.path, link.line, repoRoot = selectedRoot)
+                    }
+                })
         }
         return
     }

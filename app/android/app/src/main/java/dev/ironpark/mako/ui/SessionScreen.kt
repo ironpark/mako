@@ -7,8 +7,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,6 +55,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FitScreen
 import androidx.compose.material.icons.outlined.QuestionAnswer
@@ -258,19 +262,20 @@ fun SessionScreen(
 }
 
 /**
- * ApprovalCard is the tool call an agent waits for you to allow: allowed,
- * denied, or left to the agent's own question in its terminal.
+ * ApprovalCard is the tool call an agent waits for you to allow: allowed or
+ * denied, its two answers, or left to the agent's own question in its
+ * terminal, from the corner. Its detail unfolds into the call's input.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ApprovalCard(s: SessionInfo, expanded: Boolean, onExpand: () -> Unit, onAnswer: (String) -> Unit) {
     val a = s.approval
+    val colors = MaterialTheme.colorScheme
     Card(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerHigh),
         shape = RoundedCornerShape(20.dp),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Shield, null, tint = StatusColors.Approval, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
@@ -279,42 +284,48 @@ private fun ApprovalCard(s: SessionInfo, expanded: Boolean, onExpand: () -> Unit
                     style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
+                IconButton(onClick = { onAnswer("terminal") }) {
+                    Icon(Icons.Outlined.Terminal, stringResource(R.string.in_terminal), tint = colors.onSurfaceVariant)
+                }
             }
-            if (a.detail.isNotEmpty()) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            Column(Modifier.padding(end = 8.dp)) {
+                val more = a.input.isNotEmpty() || a.detail.lines().size > 4 || a.detail.length > 160
+                if (a.detail.isNotEmpty() || more) Surface(
+                    color = colors.surfaceContainerHighest,
                     shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 ) {
-                    Text(
-                        a.detail, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
-                        maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(10.dp),
-                    )
+                    Column(
+                        Modifier.then(if (more) Modifier.clickable(
+                            role = Role.Button,
+                            onClickLabel = stringResource(if (expanded) R.string.less else R.string.details),
+                            onClick = onExpand,
+                        ) else Modifier).animateContentSize().padding(10.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.Top) {
+                            Text(
+                                a.detail.ifEmpty { a.tool }, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                                maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (more) Icon(
+                                if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, null,
+                                Modifier.size(18.dp), tint = colors.onSurfaceVariant,
+                            )
+                        }
+                        if (expanded && a.input.isNotEmpty()) {
+                            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                            Text(
+                                a.input, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState()),
+                            )
+                        }
+                    }
                 }
-            }
-            if (expanded && a.input.isNotEmpty()) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(max = 220.dp),
-                ) {
-                    Text(
-                        a.input, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.padding(10.dp).verticalScroll(rememberScrollState()),
-                    )
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { onAnswer("deny") }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.deny)) }
+                    Button(onClick = { onAnswer("allow") }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.allow)) }
                 }
-            }
-            FlowRow(
-                Modifier.fillMaxWidth().padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                TextButton(onClick = onExpand) {
-                    Text(stringResource(if (expanded) R.string.less else R.string.details))
-                }
-                TextButton(onClick = { onAnswer("terminal") }) { Text(stringResource(R.string.in_terminal)) }
-                OutlinedButton(onClick = { onAnswer("deny") }) { Text(stringResource(R.string.deny)) }
-                Button(onClick = { onAnswer("allow") }) { Text(stringResource(R.string.allow)) }
             }
         }
     }

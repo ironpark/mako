@@ -16,6 +16,9 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.height
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -123,5 +126,33 @@ class MarkdownMessageTest {
         compose.onNodeWithText("답변 중 강조").assertIsDisplayed()
         compose.onNodeWithText("항목", substring = true).assertIsDisplayed()
         compose.onNodeWithText("성공", substring = true).assertIsDisplayed()
+    }
+
+    @Test fun aLinkToAHeadingScrollsToItAndOthersGoToOnLink() {
+        val opened = mutableListOf<String>()
+        var anchored = 0
+        val filler = (1..60).joinToString("\n\n") { "Paragraph $it." }
+        compose.setContent {
+            MaterialTheme {
+                LazyColumn(Modifier.height(400.dp)) {
+                    item {
+                        MarkdownMessage(
+                            "[Jump](#target-heading)\n\n[File link](<docs/a b.md>)\n\n$filler\n\n## Target heading\n\nEnd.",
+                            onLink = { opened += it }, onAnchor = { anchored++ },
+                        )
+                    }
+                }
+            }
+        }
+        awaitText("Jump")
+        compose.onNodeWithText("Target heading").assertIsNotDisplayed()
+        compose.onNodeWithText("Jump", substring = true).performClick()
+        compose.waitUntil(5_000) { runCatching { compose.onNodeWithText("Target heading").assertIsDisplayed() }.isSuccess }
+        compose.runOnIdle {
+            assertEquals(1, anchored)
+            assertEquals(emptyList<String>(), opened)
+        }
+        compose.onNodeWithText("File link").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(listOf("<docs/a b.md>"), opened) }
     }
 }

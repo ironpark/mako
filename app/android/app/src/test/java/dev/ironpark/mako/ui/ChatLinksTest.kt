@@ -21,6 +21,8 @@ class ChatLinksTest {
         assertEquals(ChatLink.File("/tmp/x.kt", 3), chatLink("file:///tmp/x.kt#L3", project))
         assertEquals(ChatLink.File("/home/me/api/docs", folder = true), chatLink("docs/", project))
         assertEquals(ChatLink.File("C:\\src\\b.txt"), chatLink("C:\\src\\a\\..\\b.txt", "C:\\src"))
+        assertEquals(ChatLink.File("/home/me/api/docs/a b.md"), chatLink("<docs/a b.md>", project))
+        assertEquals(ChatLink.Web("https://example.com/x"), chatLink("<https://example.com/x>", project))
         assertNull(chatLink("#heading", project))
         assertNull(chatLink("", project))
     }
@@ -70,5 +72,18 @@ class ChatLinksTest {
         val twice = ChatMessage.newBuilder().setRole("assistant").setText("same").build()
         val keys = chatTurns(listOf(twice, tool("x"), twice)).map { it.key }
         assertEquals(keys.distinct(), keys)
+    }
+
+    @Test fun anchorsGoToHeadingsByGitHubsSlugs() {
+        assertEquals("getting-started", headingSlug("Getting Started"))
+        assertEquals("api--v2-notes", headingSlug("API & v2: notes!"))
+        assertEquals("the-config-file", headingSlug("The `config` [file](x.md)"))
+        assertEquals("설치-방법", headingSlug("설치 방법"))
+        val titles = listOf("Intro", "Usage", "Usage", "설치 방법")
+        assertEquals(1, anchorIndex(titles, "usage"))
+        assertEquals(2, anchorIndex(titles, "usage-1"))
+        assertEquals(3, anchorIndex(titles, "%EC%84%A4%EC%B9%98-%EB%B0%A9%EB%B2%95"))
+        assertEquals(0, anchorIndex(titles, "Intro"))
+        assertEquals(-1, anchorIndex(titles, "missing"))
     }
 }

@@ -37,7 +37,8 @@ private val windowsDrive = Regex("""^[A-Za-z]:[\\/]""")
 
 /** dest, a link's destination in a message of a session in project. */
 internal fun chatLink(dest: String, project: String): ChatLink? {
-    val d = dest.trim()
+    // A destination in angle brackets, as CommonMark allows one with spaces.
+    val d = dest.trim().removeSurrounding("<", ">").trim()
     if (d.isEmpty() || d.startsWith("#")) return null
     if (bareLoopback.matches(d)) return loopbackLink("http://$d")
     if (!windowsDrive.containsMatchIn(d) && scheme.containsMatchIn(d)) {
