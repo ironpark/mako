@@ -41,6 +41,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.activity.BackEventCompat
+import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -124,6 +129,7 @@ internal fun rememberSessionsScreenState(source: SessionsScreenState? = null): S
 internal fun SessionsScreen(
     mesh: Mesh, onOpen: (SessionInfo) -> Unit, onMesh: () -> Unit, onNew: () -> Unit, onSettings: () -> Unit,
     onScan: () -> Unit = onMesh,
+    last: SessionInfo? = null, onLast: () -> Unit = {},
     screenState: SessionsScreenState = rememberSessionsScreenState(),
 ) {
     val state by mesh.state.collectAsState()
@@ -135,9 +141,37 @@ internal fun SessionsScreen(
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val bar = TopAppBarDefaults.enterAlwaysScrollBehavior(screenState.bar)
+    // How far a swipe from the right edge has pulled the last session in.
+    var pull by remember { mutableFloatStateOf(0f) }
+    val haptic = LocalHapticFeedback.current
+    val openLast by rememberUpdatedState(onLast)
+    val activity = LocalActivity.current
+    fun pulled(p: Float) {
+        if (last == null) return
+        if (p >= 1f && pull < 1f) haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+        pull = p
+    }
+    fun released(open: Boolean) {
+        pull = 0f
+        if (open && last != null) openLast()
+    }
+    // With gesture navigation the right edge's swipe is the system's back:
+    // from that edge it brings the last session, from the other it leaves.
+    PredictiveBackHandler(enabled = last != null) { events ->
+        var edge = BackEventCompat.EDGE_NONE
+        try {
+            events.collect { e ->
+                edge = e.swipeEdge
+                if (edge == BackEventCompat.EDGE_RIGHT) pulled(e.progress * 1.5f)
+            }
+            if (edge == BackEventCompat.EDGE_RIGHT) released(true) else activity?.moveTaskToBack(true)
+        } finally {
+            pull = 0f
+        }
+    }
 
     Scaffold(
-        modifier = Modifier.nestedScroll(bar.nestedScrollConnection),
+        modifier = Modifier.nestedScroll(bar.nestedScrollConnection).edgeSwipes(::pulled, ::released),
         topBar = {
             TopAppBar(
                 title = {
@@ -203,6 +237,7 @@ internal fun SessionsScreen(
                     }
                 }
             }
+            if (last != null) LastSessionPeek(last, nodes, pull, Modifier.align(Alignment.CenterEnd))
         }
     }
 }

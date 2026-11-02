@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- The node links to the mesh over libp2p, and finds it with mDNS. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -16,6 +17,8 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
+        android:enableOnBackInvokedCallback="true"
+        tools:targetApi="33"
         android:name=".MakoApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"

@@ -8,6 +8,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -33,6 +40,10 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
     val pair by pairing.collectAsState()
     val join = rememberJoin(mesh)
     val context = LocalContext.current
+    val sessions by mesh.sessions.collectAsState()
+    // The session seen last, as "node\nid", for a swipe from the right edge of home to bring back.
+    var lastSeen by rememberSaveable { mutableStateOf("") }
+    val last = lastSeen.substringAfter('\n').takeIf { it.isNotEmpty() }?.let { id -> sessions.firstOrNull { it.id == id } }
 
     LaunchedEffect(pair) {
         val link = pair ?: return@LaunchedEffect
@@ -54,7 +65,11 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
     }
 
     NavHost(nav, startDestination = "home") {
-        composable("home", popEnterTransition = { EnterTransition.None }) {
+        composable(
+            "home",
+            popEnterTransition = { EnterTransition.None },
+            exitTransition = { if (targetState.destination.route?.startsWith("session/") == true) slideOutHorizontally { -it / 4 } else fadeOut() },
+        ) {
             SessionsScreen(
                 mesh,
                 onOpen = { openSession(it.nodeId, it.id) },
@@ -62,11 +77,18 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                 onNew = { nav.navigate("new") },
                 onSettings = { nav.navigate("settings") },
                 onScan = { nav.navigate("scan") },
+                last = last,
+                onLast = { last?.let { openSession(it.nodeId, it.id) } },
                 screenState = homeState,
             )
         }
-        composable("session/{node}/{id}", popExitTransition = { ExitTransition.None }) { entry ->
+        composable(
+            "session/{node}/{id}",
+            enterTransition = { if (initialState.destination.route == "home") slideInHorizontally { it } else fadeIn() },
+            popExitTransition = { ExitTransition.None },
+        ) { entry ->
             val args = entry.arguments
+            LaunchedEffect(args) { lastSeen = args?.getString("node").orEmpty() + "\n" + args?.getString("id").orEmpty() }
             val previewState = rememberSessionsScreenState(homeState)
             SessionScreen(
                 mesh,
