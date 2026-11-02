@@ -83,6 +83,14 @@ message SessionInfo {
   // last_message is when the conversation's latest prompt or reply was
   // written, as its log says; unset before it has one.
   google.protobuf.Timestamp last_message = 27;
+  // agent_scope is the project of several folders the session's agent is
+  // in, as its MCP tools know it, "project:" and the project's ID; set in
+  // the state a daemon sends its peers, so that agents of one project on
+  // other nodes find it. "" outside such a project.
+  string agent_scope = 28;
+  // agent_messaging says the session's agent takes messages over its MCP
+  // tools, as of the same state.
+  bool agent_messaging = 29;
 }
 
 // Approval is a tool call an agent waits for the user to approve.

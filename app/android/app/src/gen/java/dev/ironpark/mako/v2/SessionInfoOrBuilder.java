@@ -362,4 +362,41 @@ public interface SessionInfoOrBuilder extends
    * @return The lastMessage.
    */
   com.google.protobuf.Timestamp getLastMessage();
+
+  /**
+   * <pre>
+   * agent_scope is the project of several folders the session's agent is
+   * in, as its MCP tools know it, "project:" and the project's ID; set in
+   * the state a daemon sends its peers, so that agents of one project on
+   * other nodes find it. "" outside such a project.
+   * </pre>
+   *
+   * <code>string agent_scope = 28 [json_name = "agentScope"];</code>
+   * @return The agentScope.
+   */
+  java.lang.String getAgentScope();
+  /**
+   * <pre>
+   * agent_scope is the project of several folders the session's agent is
+   * in, as its MCP tools know it, "project:" and the project's ID; set in
+   * the state a daemon sends its peers, so that agents of one project on
+   * other nodes find it. "" outside such a project.
+   * </pre>
+   *
+   * <code>string agent_scope = 28 [json_name = "agentScope"];</code>
+   * @return The bytes for agentScope.
+   */
+  com.google.protobuf.ByteString
+      getAgentScopeBytes();
+
+  /**
+   * <pre>
+   * agent_messaging says the session's agent takes messages over its MCP
+   * tools, as of the same state.
+   * </pre>
+   *
+   * <code>bool agent_messaging = 29 [json_name = "agentMessaging"];</code>
+   * @return The agentMessaging.
+   */
+  boolean getAgentMessaging();
 }

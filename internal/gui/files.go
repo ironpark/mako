@@ -11,6 +11,7 @@ import (
 	"maps"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -56,6 +57,7 @@ type dirListing struct {
 type fileItem struct {
 	Key, Node, Path, Name string
 	Dir, Stub             bool
+	Root                  bool // a project's folder, at the top of the tree
 	Ignored               bool // left out of the repository, and shown dimmed
 	Size                  int64
 	Mod                   time.Time
@@ -165,13 +167,13 @@ func (m *model) loadDir(node, path string, force bool) {
 	})
 }
 
-// refreshFiles reads the project again, and every folder open in it.
+// refreshFiles reads the project again, every folder of it shown, and
+// every folder open in them.
 func (m *model) refreshFiles() {
-	root := ggui.Untrack(m.filesRoot)
-	if root.Path == "" {
-		return
+	open := ggui.Peek(m.FilesOpen)
+	for _, r := range ggui.Peek(m.Roots).Roots {
+		m.reloadOpen(r.Node, r.Path, open)
 	}
-	m.reloadOpen(root.Node, root.Path, ggui.Peek(m.FilesOpen))
 	if p := ggui.Peek(m.Preview); p.Key != "" {
 		m.openPreview(p.fileItem)
 	}
@@ -334,31 +336,59 @@ func (m *model) insertPath(id, path string) {
 // Panel -------------------------------------------------------------------------
 
 func filesPanel(m *model) ggui.Widget {
-	root := ggui.Derived(m.filesRoot)
+	shown := m.Roots
 	// The project is read when it is shown, and a new one clears the
-	// preview of the last.
+	// preview of the last. Of a project of several folders, the session's
+	// own opens at first, and those left open are read.
 	ggui.Effect(func() ggui.Cleanup {
-		r := root.Get()
-		if r.Path == "" {
+		p := shown.Get()
+		if len(p.Roots) == 0 {
 			return nil
 		}
-		m.loadDir(r.Node, r.Path, false)
-		if p := ggui.Peek(m.Preview); p.Key != "" && (p.Node != r.Node || !strings.HasPrefix(p.Path, r.Path)) {
+		open := ggui.Peek(m.FilesOpen)
+		own := p.own()
+		if _, seen := open[dirKey(own.Node, own.Path)]; p.multi() && !seen {
+			open = maps.Clone(open)
+			open[dirKey(own.Node, own.Path)] = true
+			m.FilesOpen.Set(open)
+		}
+		for _, r := range p.Roots {
+			if !p.multi() || open[dirKey(r.Node, r.Path)] {
+				m.loadDir(r.Node, r.Path, false)
+			}
+		}
+		if pv := ggui.Peek(m.Preview); pv.Key != "" && !slices.ContainsFunc(p.Roots, func(r panelRoot) bool {
+			return pv.Node == r.Node && strings.HasPrefix(pv.Path, r.Path)
+		}) {
 			m.Preview.Set(filePreview{})
 		}
 		return nil
 	})
-	return ggui.Key(root, func(r fileRoot) ggui.Widget {
-		if r.Path == "" {
+	return ggui.View(shown, func(p panelRoots) ggui.Widget {
+		if len(p.Roots) == 0 {
 			return ggui.Box(muted(ggui.Text(T("Open a session to browse its project.")).Size(13))).Pad(16)
 		}
-		return filesView(m, r)
+		return filesView(m, p)
 	})
 }
 
-func filesView(m *model, r fileRoot) ggui.Widget {
-	rootItem := fileItem{Key: dirKey(r.Node, r.Path), Node: r.Node, Path: r.Path, Dir: true}
-	roots := ggui.Derived(func() []fileItem { return m.children(rootItem) })
+// rootItems are the rows at the top of the tree: the folder's entries, or
+// of a project of several folders, each folder.
+func (m *model) rootItems(p panelRoots) []fileItem {
+	if !p.multi() {
+		r := p.Roots[0]
+		return m.children(fileItem{Key: dirKey(r.Node, r.Path), Node: r.Node, Path: r.Path, Dir: true})
+	}
+	items := make([]fileItem, len(p.Roots))
+	for i, r := range p.Roots {
+		items[i] = fileItem{Key: dirKey(r.Node, r.Path), Node: r.Node, Path: r.Path, Name: r.Label, Dir: true, Root: true}
+	}
+	return items
+}
+
+func filesView(m *model, p panelRoots) ggui.Widget {
+	r := p.own()
+	roots := ggui.Derived(func() []fileItem { return m.rootItems(p) })
 	tree := ui.Tree(roots, func(it fileItem) string { return it.Key }, m.children,
 		func(item ggui.Readable[fileItem]) ggui.Widget {
 			it := ggui.Untrack(item.Get)
@@ -385,8 +415,13 @@ func filesView(m *model, r fileRoot) ggui.Widget {
 				row = folderDrop(m, row, it)
 			}
 			// Dragged to a terminal or the message box, it is typed as
-			// its path; to a folder, it moves there.
-			return fileMenu(m, ggui.DragSource(row, pathDrag{Node: it.Node, Path: it.Path}), it)
+			// its path; to a folder, it moves there. A project's folder
+			// stays put, and is not to rename or delete here.
+			drag := ggui.DragSource(row, pathDrag{Node: it.Node, Path: it.Path})
+			if it.Root {
+				return drag
+			}
+			return fileMenu(m, drag, it)
 		}).
 		RowName(func(it fileItem) string { return it.Name }).
 		// A folder says it is open by its icon, and opens on a press.
@@ -411,11 +446,15 @@ func filesView(m *model, r fileRoot) ggui.Widget {
 		}).
 		Name(T("Files"))
 
+	name, where := projectName(r.Path), prettyPath(r.Path)
+	if p.multi() {
+		name, where = p.Name, Tf("%d folders", len(p.Roots))
+	}
 	header := panelHeader(
 		icon("folder-open").Size(15),
 		ggui.Expanded(ggui.Row(
-			ggui.Text(projectName(r.Path)).Size(13).Weight(ggui.WeightMedium).NoWrap(),
-			ggui.Expanded(ggui.Text(prettyPath(r.Path)).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis()),
+			ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap(),
+			ggui.Expanded(ggui.Text(where).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis()),
 		).Gap(8).Align(ggui.AlignBaseline)),
 		ggui.Row(
 			hiddenFilesToggle(m),

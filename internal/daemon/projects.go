@@ -128,13 +128,22 @@ func (d *Daemon) projectFor(dir, repo string) (*protocol.ProjectScope, []string)
 }
 
 // projectScope is the project a session is in, as its agent's MCP tools
-// and the Agents panel know it: "project:" and the ID of the project
-// holding its folder, else its folderScope.
+// and the Agents panel know it: its sharedScope, else its folderScope.
 func (d *Daemon) projectScope(info *protocol.SessionInfo) string {
-	if s, _ := d.projectFor(info.GetProject(), cmp.Or(info.GetWorktree().GetRepo(), info.GetRepo())); s != nil {
-		return "project:" + s.GetId()
+	return cmp.Or(d.sharedScope(info), folderScope(info))
+}
+
+// sharedScope is the scope of a session in a project of several folders,
+// which spans nodes: "project:" and the ID of the project holding its
+// folder; "" for none.
+func (d *Daemon) sharedScope(info *protocol.SessionInfo) string {
+	if len(d.projects.get()) == 0 {
+		return "" // nothing to follow the folders' links for
 	}
-	return folderScope(info)
+	if s, _ := d.projectFor(info.GetProject(), cmp.Or(info.GetWorktree().GetRepo(), info.GetRepo())); s != nil {
+		return projectScopePrefix + s.GetId()
+	}
+	return ""
 }
 
 // folderScope is the project of a session no project holds: its folder,

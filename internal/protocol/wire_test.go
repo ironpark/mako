@@ -23,7 +23,7 @@ func TestEveryTypeHasABody(t *testing.T) {
 		TypeListDir, TypeDir, TypeReadFile, TypeFile, TypeWriteFile, TypeFileOp, TypeSearch, TypeSearchResult, TypeStageFile, TypeStaged, TypeTunnel, TypeTunneled,
 		TypeGitStatus, TypeGitChanges, TypeGitDiff, TypeDiff, TypeGitLog, TypeGitHistory, TypeGitShow,
 		TypeGitCommitInfo, TypeGitRun, TypeGitResult, TypeReadChat, TypeChat,
-		TypeReadProjectAgents, TypeProjectAgents, TypeSetProjects, TypeProjects,
+		TypeReadProjectAgents, TypeProjectAgents, TypeSetProjects, TypeProjects, TypeRelayAgentMessage, TypeAgentMessage,
 		TypeForgeList, TypeForgeItems, TypeForgeView, TypeForgeDetail, TypeForgeRun,
 		TypeListDevices, TypeDevices, TypeBorrow, TypeLease, TypeGiveBack, TypeListLeases, TypeLeases, TypeClaim, TypeClaimed, TypeDeviceConn, TypeDeviceListen, TypeDeviceAccept,
 	}

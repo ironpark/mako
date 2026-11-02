@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 )
 
@@ -87,17 +88,12 @@ func deliveryOf(inbox []agentMessage) []agentMessage {
 // sent it and how to answer.
 func (d *Daemon) agentPrompt(messages []agentMessage) string {
 	var b strings.Builder
+	var mesh []*protocol.SessionInfo // read once, for the first sender of another node's
 	for i, msg := range messages {
 		if i > 0 {
 			b.WriteString("\n\n")
 		}
-		from := msg.From
-		if s, ok := d.sessions.get(msg.From); ok {
-			if name := typable(s.Info().GetName()); name != "" {
-				from += fmt.Sprintf(" (%s)", name)
-			}
-		}
-		fmt.Fprintf(&b, "[Mako message %d from session %s. Answer with send_message to %s if it asks for one.]\n%s", msg.ID, from, msg.From, typable(msg.Text))
+		fmt.Fprintf(&b, "[Mako message %d from session %s. Answer with send_message to %s if it asks for one.]\n%s", msg.ID, d.agentLabel(msg.From, &mesh), msg.From, typable(msg.Text))
 	}
 	return b.String()
 }

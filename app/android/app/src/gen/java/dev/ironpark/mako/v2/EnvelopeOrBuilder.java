@@ -692,6 +692,28 @@ public interface EnvelopeOrBuilder extends
   dev.ironpark.mako.v2.Projects getProjects();
 
   /**
+   * <code>.mako.v2.RelayAgentMessage relay_agent_message = 76 [json_name = "relayAgentMessage"];</code>
+   * @return Whether the relayAgentMessage field is set.
+   */
+  boolean hasRelayAgentMessage();
+  /**
+   * <code>.mako.v2.RelayAgentMessage relay_agent_message = 76 [json_name = "relayAgentMessage"];</code>
+   * @return The relayAgentMessage.
+   */
+  dev.ironpark.mako.v2.RelayAgentMessage getRelayAgentMessage();
+
+  /**
+   * <code>.mako.v2.AgentMessage agent_message = 77 [json_name = "agentMessage"];</code>
+   * @return Whether the agentMessage field is set.
+   */
+  boolean hasAgentMessage();
+  /**
+   * <code>.mako.v2.AgentMessage agent_message = 77 [json_name = "agentMessage"];</code>
+   * @return The agentMessage.
+   */
+  dev.ironpark.mako.v2.AgentMessage getAgentMessage();
+
+  /**
    * <pre>
    * A forge: GitHub, Forgejo or Gitea.
    * </pre>

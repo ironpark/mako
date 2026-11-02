@@ -350,9 +350,17 @@ type SessionInfo struct {
 	Remote string `protobuf:"bytes,26,opt,name=remote,proto3" json:"remote,omitempty"`
 	// last_message is when the conversation's latest prompt or reply was
 	// written, as its log says; unset before it has one.
-	LastMessage   *timestamppb.Timestamp `protobuf:"bytes,27,opt,name=last_message,json=lastMessage,proto3" json:"last_message,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	LastMessage *timestamppb.Timestamp `protobuf:"bytes,27,opt,name=last_message,json=lastMessage,proto3" json:"last_message,omitempty"`
+	// agent_scope is the project of several folders the session's agent is
+	// in, as its MCP tools know it, "project:" and the project's ID; set in
+	// the state a daemon sends its peers, so that agents of one project on
+	// other nodes find it. "" outside such a project.
+	AgentScope string `protobuf:"bytes,28,opt,name=agent_scope,json=agentScope,proto3" json:"agent_scope,omitempty"`
+	// agent_messaging says the session's agent takes messages over its MCP
+	// tools, as of the same state.
+	AgentMessaging bool `protobuf:"varint,29,opt,name=agent_messaging,json=agentMessaging,proto3" json:"agent_messaging,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SessionInfo) Reset() {
@@ -572,6 +580,20 @@ func (x *SessionInfo) GetLastMessage() *timestamppb.Timestamp {
 		return x.LastMessage
 	}
 	return nil
+}
+
+func (x *SessionInfo) GetAgentScope() string {
+	if x != nil {
+		return x.AgentScope
+	}
+	return ""
+}
+
+func (x *SessionInfo) GetAgentMessaging() bool {
+	if x != nil {
+		return x.AgentMessaging
+	}
+	return false
 }
 
 // Approval is a tool call an agent waits for the user to approve.
@@ -1567,7 +1589,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x12\n" +
 	"\x04base\x18\x04 \x01(\tR\x04base\x12\x14\n" +
-	"\x05start\x18\x05 \x01(\tR\x05start\"\xd7\x06\n" +
+	"\x05start\x18\x05 \x01(\tR\x05start\"\xa1\a\n" +
 	"\vSessionInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x14\n" +
@@ -1598,7 +1620,10 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x05owner\x18\x18 \x01(\tR\x05owner\x12\x12\n" +
 	"\x04caps\x18\x19 \x01(\rR\x04caps\x12\x16\n" +
 	"\x06remote\x18\x1a \x01(\tR\x06remote\x12=\n" +
-	"\flast_message\x18\x1b \x01(\v2\x1a.google.protobuf.TimestampR\vlastMessageB\f\n" +
+	"\flast_message\x18\x1b \x01(\v2\x1a.google.protobuf.TimestampR\vlastMessage\x12\x1f\n" +
+	"\vagent_scope\x18\x1c \x01(\tR\n" +
+	"agentScope\x12'\n" +
+	"\x0fagent_messaging\x18\x1d \x01(\bR\x0eagentMessagingB\f\n" +
 	"\n" +
 	"_exit_code\"\x8e\x01\n" +
 	"\bApproval\x12\x0e\n" +

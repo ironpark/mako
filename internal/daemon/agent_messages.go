@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +38,24 @@ type messageFile struct {
 	Next    uint64                    `json:"next_id"`
 	Inboxes map[string][]agentMessage `json:"inboxes"`
 	History []agentMessageRecord      `json:"history,omitempty"`
+}
+
+// proto is msg as the wire carries it, in state.
+func (msg agentMessage) proto(state string) *protocol.AgentMessage {
+	return &protocol.AgentMessage{Id: msg.ID, FromSessionId: msg.From, ToSessionId: msg.To, Text: msg.Text, CreatedAt: protocol.Time(msg.Created), State: state}
+}
+
+// agentMessageOf is the message the wire carries as m.
+func agentMessageOf(m *protocol.AgentMessage) agentMessage {
+	return agentMessage{ID: m.GetId(), From: m.GetFromSessionId(), To: m.GetToSessionId(), Text: m.GetText(), Created: protocol.TimeOf(m.GetCreatedAt())}
+}
+
+// checkAgentText says what is wrong with text as a message, nil if nothing.
+func checkAgentText(text string) error {
+	if strings.TrimSpace(text) == "" || len(text) > maxAgentMessage {
+		return fmt.Errorf("text must be non-empty and at most %d bytes", maxAgentMessage)
+	}
+	return nil
 }
 
 // Messages are kept until explicitly acknowledged. Reconnecting a tool
@@ -223,7 +243,7 @@ func (m *agentMessages) monitor(project string, members map[string]bool, limit i
 		if record.Project != project && !(record.Project == "" && (members[msg.From] || members[msg.To])) {
 			continue
 		}
-		messages = append(messages, &protocol.AgentMessage{Id: msg.ID, FromSessionId: msg.From, ToSessionId: msg.To, Text: msg.Text, CreatedAt: protocol.Time(msg.Created), State: record.State})
+		messages = append(messages, msg.proto(record.State))
 	}
 	if len(messages) > limit {
 		messages = messages[len(messages)-limit:]

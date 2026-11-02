@@ -107,6 +107,8 @@ const (
 	TypeProjectAgents     Type = "project_agents"
 	TypeSetProjects       Type = "set_projects"
 	TypeProjects          Type = "projects"
+	TypeRelayAgentMessage Type = "relay_agent_message"
+	TypeAgentMessage      Type = "agent_message"
 )
 
 // Newer reports whether the edit made at version v on node is newer than

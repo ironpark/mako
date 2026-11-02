@@ -91,6 +91,8 @@ type Envelope struct {
 	//	*Envelope_ProjectAgents
 	//	*Envelope_SetProjects
 	//	*Envelope_Projects
+	//	*Envelope_RelayAgentMessage
+	//	*Envelope_AgentMessage
 	//	*Envelope_ForgeList
 	//	*Envelope_ForgeItems
 	//	*Envelope_ForgeView
@@ -652,6 +654,24 @@ func (x *Envelope) GetProjects() *Projects {
 	return nil
 }
 
+func (x *Envelope) GetRelayAgentMessage() *RelayAgentMessage {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_RelayAgentMessage); ok {
+			return x.RelayAgentMessage
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetAgentMessage() *AgentMessage {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_AgentMessage); ok {
+			return x.AgentMessage
+		}
+	}
+	return nil
+}
+
 func (x *Envelope) GetForgeList() *ForgeList {
 	if x != nil {
 		if x, ok := x.Body.(*Envelope_ForgeList); ok {
@@ -1036,6 +1056,14 @@ type Envelope_Projects struct {
 	Projects *Projects `protobuf:"bytes,75,opt,name=projects,proto3,oneof"`
 }
 
+type Envelope_RelayAgentMessage struct {
+	RelayAgentMessage *RelayAgentMessage `protobuf:"bytes,76,opt,name=relay_agent_message,json=relayAgentMessage,proto3,oneof"`
+}
+
+type Envelope_AgentMessage struct {
+	AgentMessage *AgentMessage `protobuf:"bytes,77,opt,name=agent_message,json=agentMessage,proto3,oneof"`
+}
+
 type Envelope_ForgeList struct {
 	// A forge: GitHub, Forgejo or Gitea.
 	ForgeList *ForgeList `protobuf:"bytes,80,opt,name=forge_list,json=forgeList,proto3,oneof"`
@@ -1216,6 +1244,10 @@ func (*Envelope_SetProjects) isEnvelope_Body() {}
 
 func (*Envelope_Projects) isEnvelope_Body() {}
 
+func (*Envelope_RelayAgentMessage) isEnvelope_Body() {}
+
+func (*Envelope_AgentMessage) isEnvelope_Body() {}
+
 func (*Envelope_ForgeList) isEnvelope_Body() {}
 
 func (*Envelope_ForgeItems) isEnvelope_Body() {}
@@ -1308,7 +1340,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xd8\x1c\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xe4\x1d\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12&\n" +
 	"\x05hello\x18\n" +
@@ -1374,7 +1406,9 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\x13read_project_agents\x18H \x01(\v2\x1a.mako.v2.ReadProjectAgentsH\x00R\x11readProjectAgents\x12?\n" +
 	"\x0eproject_agents\x18I \x01(\v2\x16.mako.v2.ProjectAgentsH\x00R\rprojectAgents\x129\n" +
 	"\fset_projects\x18J \x01(\v2\x14.mako.v2.SetProjectsH\x00R\vsetProjects\x12/\n" +
-	"\bprojects\x18K \x01(\v2\x11.mako.v2.ProjectsH\x00R\bprojects\x123\n" +
+	"\bprojects\x18K \x01(\v2\x11.mako.v2.ProjectsH\x00R\bprojects\x12L\n" +
+	"\x13relay_agent_message\x18L \x01(\v2\x1a.mako.v2.RelayAgentMessageH\x00R\x11relayAgentMessage\x12<\n" +
+	"\ragent_message\x18M \x01(\v2\x15.mako.v2.AgentMessageH\x00R\fagentMessage\x123\n" +
 	"\n" +
 	"forge_list\x18P \x01(\v2\x12.mako.v2.ForgeListH\x00R\tforgeList\x126\n" +
 	"\vforge_items\x18Q \x01(\v2\x13.mako.v2.ForgeItemsH\x00R\n" +
@@ -1472,23 +1506,25 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*ProjectAgents)(nil),     // 53: mako.v2.ProjectAgents
 	(*SetProjects)(nil),       // 54: mako.v2.SetProjects
 	(*Projects)(nil),          // 55: mako.v2.Projects
-	(*ForgeList)(nil),         // 56: mako.v2.ForgeList
-	(*ForgeItems)(nil),        // 57: mako.v2.ForgeItems
-	(*ForgeView)(nil),         // 58: mako.v2.ForgeView
-	(*ForgeDetail)(nil),       // 59: mako.v2.ForgeDetail
-	(*ForgeRun)(nil),          // 60: mako.v2.ForgeRun
-	(*ListDevices)(nil),       // 61: mako.v2.ListDevices
-	(*Devices)(nil),           // 62: mako.v2.Devices
-	(*Borrow)(nil),            // 63: mako.v2.Borrow
-	(*Lease)(nil),             // 64: mako.v2.Lease
-	(*GiveBack)(nil),          // 65: mako.v2.GiveBack
-	(*ListLeases)(nil),        // 66: mako.v2.ListLeases
-	(*Leases)(nil),            // 67: mako.v2.Leases
-	(*Claim)(nil),             // 68: mako.v2.Claim
-	(*Claimed)(nil),           // 69: mako.v2.Claimed
-	(*DeviceConn)(nil),        // 70: mako.v2.DeviceConn
-	(*DeviceListen)(nil),      // 71: mako.v2.DeviceListen
-	(*DeviceAccept)(nil),      // 72: mako.v2.DeviceAccept
+	(*RelayAgentMessage)(nil), // 56: mako.v2.RelayAgentMessage
+	(*AgentMessage)(nil),      // 57: mako.v2.AgentMessage
+	(*ForgeList)(nil),         // 58: mako.v2.ForgeList
+	(*ForgeItems)(nil),        // 59: mako.v2.ForgeItems
+	(*ForgeView)(nil),         // 60: mako.v2.ForgeView
+	(*ForgeDetail)(nil),       // 61: mako.v2.ForgeDetail
+	(*ForgeRun)(nil),          // 62: mako.v2.ForgeRun
+	(*ListDevices)(nil),       // 63: mako.v2.ListDevices
+	(*Devices)(nil),           // 64: mako.v2.Devices
+	(*Borrow)(nil),            // 65: mako.v2.Borrow
+	(*Lease)(nil),             // 66: mako.v2.Lease
+	(*GiveBack)(nil),          // 67: mako.v2.GiveBack
+	(*ListLeases)(nil),        // 68: mako.v2.ListLeases
+	(*Leases)(nil),            // 69: mako.v2.Leases
+	(*Claim)(nil),             // 70: mako.v2.Claim
+	(*Claimed)(nil),           // 71: mako.v2.Claimed
+	(*DeviceConn)(nil),        // 72: mako.v2.DeviceConn
+	(*DeviceListen)(nil),      // 73: mako.v2.DeviceListen
+	(*DeviceAccept)(nil),      // 74: mako.v2.DeviceAccept
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -1546,28 +1582,30 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	53, // 52: mako.v2.Envelope.project_agents:type_name -> mako.v2.ProjectAgents
 	54, // 53: mako.v2.Envelope.set_projects:type_name -> mako.v2.SetProjects
 	55, // 54: mako.v2.Envelope.projects:type_name -> mako.v2.Projects
-	56, // 55: mako.v2.Envelope.forge_list:type_name -> mako.v2.ForgeList
-	57, // 56: mako.v2.Envelope.forge_items:type_name -> mako.v2.ForgeItems
-	58, // 57: mako.v2.Envelope.forge_view:type_name -> mako.v2.ForgeView
-	59, // 58: mako.v2.Envelope.forge_detail:type_name -> mako.v2.ForgeDetail
-	60, // 59: mako.v2.Envelope.forge_run:type_name -> mako.v2.ForgeRun
-	61, // 60: mako.v2.Envelope.list_devices:type_name -> mako.v2.ListDevices
-	62, // 61: mako.v2.Envelope.devices:type_name -> mako.v2.Devices
-	63, // 62: mako.v2.Envelope.borrow:type_name -> mako.v2.Borrow
-	64, // 63: mako.v2.Envelope.lease:type_name -> mako.v2.Lease
-	65, // 64: mako.v2.Envelope.give_back:type_name -> mako.v2.GiveBack
-	66, // 65: mako.v2.Envelope.list_leases:type_name -> mako.v2.ListLeases
-	67, // 66: mako.v2.Envelope.leases:type_name -> mako.v2.Leases
-	68, // 67: mako.v2.Envelope.claim:type_name -> mako.v2.Claim
-	69, // 68: mako.v2.Envelope.claimed:type_name -> mako.v2.Claimed
-	70, // 69: mako.v2.Envelope.device_conn:type_name -> mako.v2.DeviceConn
-	71, // 70: mako.v2.Envelope.device_listen:type_name -> mako.v2.DeviceListen
-	72, // 71: mako.v2.Envelope.device_accept:type_name -> mako.v2.DeviceAccept
-	72, // [72:72] is the sub-list for method output_type
-	72, // [72:72] is the sub-list for method input_type
-	72, // [72:72] is the sub-list for extension type_name
-	72, // [72:72] is the sub-list for extension extendee
-	0,  // [0:72] is the sub-list for field type_name
+	56, // 55: mako.v2.Envelope.relay_agent_message:type_name -> mako.v2.RelayAgentMessage
+	57, // 56: mako.v2.Envelope.agent_message:type_name -> mako.v2.AgentMessage
+	58, // 57: mako.v2.Envelope.forge_list:type_name -> mako.v2.ForgeList
+	59, // 58: mako.v2.Envelope.forge_items:type_name -> mako.v2.ForgeItems
+	60, // 59: mako.v2.Envelope.forge_view:type_name -> mako.v2.ForgeView
+	61, // 60: mako.v2.Envelope.forge_detail:type_name -> mako.v2.ForgeDetail
+	62, // 61: mako.v2.Envelope.forge_run:type_name -> mako.v2.ForgeRun
+	63, // 62: mako.v2.Envelope.list_devices:type_name -> mako.v2.ListDevices
+	64, // 63: mako.v2.Envelope.devices:type_name -> mako.v2.Devices
+	65, // 64: mako.v2.Envelope.borrow:type_name -> mako.v2.Borrow
+	66, // 65: mako.v2.Envelope.lease:type_name -> mako.v2.Lease
+	67, // 66: mako.v2.Envelope.give_back:type_name -> mako.v2.GiveBack
+	68, // 67: mako.v2.Envelope.list_leases:type_name -> mako.v2.ListLeases
+	69, // 68: mako.v2.Envelope.leases:type_name -> mako.v2.Leases
+	70, // 69: mako.v2.Envelope.claim:type_name -> mako.v2.Claim
+	71, // 70: mako.v2.Envelope.claimed:type_name -> mako.v2.Claimed
+	72, // 71: mako.v2.Envelope.device_conn:type_name -> mako.v2.DeviceConn
+	73, // 72: mako.v2.Envelope.device_listen:type_name -> mako.v2.DeviceListen
+	74, // 73: mako.v2.Envelope.device_accept:type_name -> mako.v2.DeviceAccept
+	74, // [74:74] is the sub-list for method output_type
+	74, // [74:74] is the sub-list for method input_type
+	74, // [74:74] is the sub-list for extension type_name
+	74, // [74:74] is the sub-list for extension extendee
+	0,  // [0:74] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -1639,6 +1677,8 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_ProjectAgents)(nil),
 		(*Envelope_SetProjects)(nil),
 		(*Envelope_Projects)(nil),
+		(*Envelope_RelayAgentMessage)(nil),
+		(*Envelope_AgentMessage)(nil),
 		(*Envelope_ForgeList)(nil),
 		(*Envelope_ForgeItems)(nil),
 		(*Envelope_ForgeView)(nil),

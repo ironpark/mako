@@ -275,6 +275,8 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeSetProjects:
 		return d.handleSetProjects(ctx, stream, env)
+	case protocol.TypeRelayAgentMessage:
+		return d.handleRelayAgentMessage(ctx, stream, env)
 
 	case protocol.TypeListSess:
 		return d.handleListSessions(ctx, stream, env, fromPeer)

@@ -64,3 +64,16 @@ message ProjectScope {
 message Projects {
   repeated ProjectScope projects = 1;
 }
+
+// RelayAgentMessage is a message an agent sent over its MCP tools to an
+// agent of its project on another node, which the sender's daemon passes
+// to that node's. The receiving daemon takes it when the recipient's agent
+// takes messages and is in scope, as the sender, as its peers say, is too.
+// It answers with the AgentMessage as the recipient's inbox keeps it.
+message RelayAgentMessage {
+  string node_id = 1; // the recipient's node
+  string from_session_id = 2;
+  string to_session_id = 3;
+  string text = 4;
+  string scope = 5; // the project both are in, "project:" and its ID
+}

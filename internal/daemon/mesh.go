@@ -223,7 +223,9 @@ func (d *Daemon) link(node *protocol.Node) {
 func (d *Daemon) state() *protocol.NodeState {
 	node := d.Self()
 	node.LastSeen = nil
-	return &protocol.NodeState{Node: node, Sessions: d.listSessions(), WatchingApprovals: d.approvals.watchedHere(), Workspace: d.workspace.get()}
+	sessions := d.listSessions()
+	d.shareScopes(sessions)
+	return &protocol.NodeState{Node: node, Sessions: sessions, WatchingApprovals: d.approvals.watchedHere(), Workspace: d.workspace.get()}
 }
 
 // watchState sends this daemon's state to its peers, and tells watching

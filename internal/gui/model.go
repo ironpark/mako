@@ -239,7 +239,11 @@ type model struct {
 	GitAmend   *ggui.StateValue[bool]
 	GitBusy    *ggui.StateValue[string]
 	GitBase    *ggui.StateValue[string] // the branch the changes are read since, "" for HEAD
-	GitNote    *ggui.StateValue[gitNote]
+	RepoPick   *ggui.StateValue[repoPick]
+	// Roots are the folders the Files, Git and forge tabs show; see
+	// panelRoots.
+	Roots   *ggui.DerivedValue[panelRoots] // the project's folder the tab shows; see repoFolder
+	GitNote *ggui.StateValue[gitNote]
 	// A name a git operation asks for; see gitactions.go.
 	GitAsk     *ggui.StateValue[gitAsk]
 	GitAskOpen *ggui.StateValue[bool]
@@ -405,6 +409,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		GitAmend:       ggui.State(false),
 		GitBusy:        ggui.State(""),
 		GitBase:        ggui.State(""),
+		RepoPick:       ggui.State(repoPick{}),
 		GitNote:        ggui.State(gitNote{}),
 		// Their functions do not compare: each asking is new.
 		GitAsk:         ggui.State(gitAsk{}).WithEqual(func(a, b gitAsk) bool { return false }),
@@ -440,6 +445,7 @@ func newModel(cfg *config.Config, addr string) *model {
 	m.approveInApp.Store(p.ApproveInApp)
 	m.accessStale.Store(true)
 	m.wsStale.Store(true)
+	m.Roots = ggui.Derived(m.panelRoots).WithEqual(deepEqual)
 	m.spaceSet = ggui.Combine(m.Spaces, ggui.Map(m.Prefs, func(p prefs) string { return p.ShownSpace }), spaceSetOf).
 		WithEqual(func(a, b spaceSet) bool { return reflect.DeepEqual(a, b) })
 	m.Pick = newFolderPick(m)

@@ -34,6 +34,7 @@ public  final class SessionInfo extends
     status_ = "";
     owner_ = "";
     remote_ = "";
+    agentScope_ = "";
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -1366,6 +1367,129 @@ public  final class SessionInfo extends
   private void clearLastMessage() {
     lastMessage_ = null;
     bitField0_ = (bitField0_ & ~0x00000040);
+  }
+
+  public static final int AGENT_SCOPE_FIELD_NUMBER = 28;
+  private java.lang.String agentScope_;
+  /**
+   * <pre>
+   * agent_scope is the project of several folders the session's agent is
+   * in, as its MCP tools know it, "project:" and the project's ID; set in
+   * the state a daemon sends its peers, so that agents of one project on
+   * other nodes find it. "" outside such a project.
+   * </pre>
+   *
+   * <code>string agent_scope = 28 [json_name = "agentScope"];</code>
+   * @return The agentScope.
+   */
+  @java.lang.Override
+  public java.lang.String getAgentScope() {
+    return agentScope_;
+  }
+  /**
+   * <pre>
+   * agent_scope is the project of several folders the session's agent is
+   * in, as its MCP tools know it, "project:" and the project's ID; set in
+   * the state a daemon sends its peers, so that agents of one project on
+   * other nodes find it. "" outside such a project.
+   * </pre>
+   *
+   * <code>string agent_scope = 28 [json_name = "agentScope"];</code>
+   * @return The bytes for agentScope.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getAgentScopeBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(agentScope_);
+  }
+  /**
+   * <pre>
+   * agent_scope is the project of several folders the session's agent is
+   * in, as its MCP tools know it, "project:" and the project's ID; set in
+   * the state a daemon sends its peers, so that agents of one project on
+   * other nodes find it. "" outside such a project.
+   * </pre>
+   *
+   * <code>string agent_scope = 28 [json_name = "agentScope"];</code>
+   * @param value The agentScope to set.
+   */
+  private void setAgentScope(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    agentScope_ = value;
+  }
+  /**
+   * <pre>
+   * agent_scope is the project of several folders the session's agent is
+   * in, as its MCP tools know it, "project:" and the project's ID; set in
+   * the state a daemon sends its peers, so that agents of one project on
+   * other nodes find it. "" outside such a project.
+   * </pre>
+   *
+   * <code>string agent_scope = 28 [json_name = "agentScope"];</code>
+   */
+  private void clearAgentScope() {
+
+    agentScope_ = getDefaultInstance().getAgentScope();
+  }
+  /**
+   * <pre>
+   * agent_scope is the project of several folders the session's agent is
+   * in, as its MCP tools know it, "project:" and the project's ID; set in
+   * the state a daemon sends its peers, so that agents of one project on
+   * other nodes find it. "" outside such a project.
+   * </pre>
+   *
+   * <code>string agent_scope = 28 [json_name = "agentScope"];</code>
+   * @param value The bytes for agentScope to set.
+   */
+  private void setAgentScopeBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    agentScope_ = value.toStringUtf8();
+
+  }
+
+  public static final int AGENT_MESSAGING_FIELD_NUMBER = 29;
+  private boolean agentMessaging_;
+  /**
+   * <pre>
+   * agent_messaging says the session's agent takes messages over its MCP
+   * tools, as of the same state.
+   * </pre>
+   *
+   * <code>bool agent_messaging = 29 [json_name = "agentMessaging"];</code>
+   * @return The agentMessaging.
+   */
+  @java.lang.Override
+  public boolean getAgentMessaging() {
+    return agentMessaging_;
+  }
+  /**
+   * <pre>
+   * agent_messaging says the session's agent takes messages over its MCP
+   * tools, as of the same state.
+   * </pre>
+   *
+   * <code>bool agent_messaging = 29 [json_name = "agentMessaging"];</code>
+   * @param value The agentMessaging to set.
+   */
+  private void setAgentMessaging(boolean value) {
+    
+    agentMessaging_ = value;
+  }
+  /**
+   * <pre>
+   * agent_messaging says the session's agent takes messages over its MCP
+   * tools, as of the same state.
+   * </pre>
+   *
+   * <code>bool agent_messaging = 29 [json_name = "agentMessaging"];</code>
+   */
+  private void clearAgentMessaging() {
+
+    agentMessaging_ = false;
   }
 
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
@@ -2845,6 +2969,133 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * agent_scope is the project of several folders the session's agent is
+     * in, as its MCP tools know it, "project:" and the project's ID; set in
+     * the state a daemon sends its peers, so that agents of one project on
+     * other nodes find it. "" outside such a project.
+     * </pre>
+     *
+     * <code>string agent_scope = 28 [json_name = "agentScope"];</code>
+     * @return The agentScope.
+     */
+    @java.lang.Override
+    public java.lang.String getAgentScope() {
+      return instance.getAgentScope();
+    }
+    /**
+     * <pre>
+     * agent_scope is the project of several folders the session's agent is
+     * in, as its MCP tools know it, "project:" and the project's ID; set in
+     * the state a daemon sends its peers, so that agents of one project on
+     * other nodes find it. "" outside such a project.
+     * </pre>
+     *
+     * <code>string agent_scope = 28 [json_name = "agentScope"];</code>
+     * @return The bytes for agentScope.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getAgentScopeBytes() {
+      return instance.getAgentScopeBytes();
+    }
+    /**
+     * <pre>
+     * agent_scope is the project of several folders the session's agent is
+     * in, as its MCP tools know it, "project:" and the project's ID; set in
+     * the state a daemon sends its peers, so that agents of one project on
+     * other nodes find it. "" outside such a project.
+     * </pre>
+     *
+     * <code>string agent_scope = 28 [json_name = "agentScope"];</code>
+     * @param value The agentScope to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAgentScope(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setAgentScope(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * agent_scope is the project of several folders the session's agent is
+     * in, as its MCP tools know it, "project:" and the project's ID; set in
+     * the state a daemon sends its peers, so that agents of one project on
+     * other nodes find it. "" outside such a project.
+     * </pre>
+     *
+     * <code>string agent_scope = 28 [json_name = "agentScope"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAgentScope() {
+      copyOnWrite();
+      instance.clearAgentScope();
+      return this;
+    }
+    /**
+     * <pre>
+     * agent_scope is the project of several folders the session's agent is
+     * in, as its MCP tools know it, "project:" and the project's ID; set in
+     * the state a daemon sends its peers, so that agents of one project on
+     * other nodes find it. "" outside such a project.
+     * </pre>
+     *
+     * <code>string agent_scope = 28 [json_name = "agentScope"];</code>
+     * @param value The bytes for agentScope to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAgentScopeBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setAgentScopeBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * agent_messaging says the session's agent takes messages over its MCP
+     * tools, as of the same state.
+     * </pre>
+     *
+     * <code>bool agent_messaging = 29 [json_name = "agentMessaging"];</code>
+     * @return The agentMessaging.
+     */
+    @java.lang.Override
+    public boolean getAgentMessaging() {
+      return instance.getAgentMessaging();
+    }
+    /**
+     * <pre>
+     * agent_messaging says the session's agent takes messages over its MCP
+     * tools, as of the same state.
+     * </pre>
+     *
+     * <code>bool agent_messaging = 29 [json_name = "agentMessaging"];</code>
+     * @param value The agentMessaging to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAgentMessaging(boolean value) {
+      copyOnWrite();
+      instance.setAgentMessaging(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * agent_messaging says the session's agent takes messages over its MCP
+     * tools, as of the same state.
+     * </pre>
+     *
+     * <code>bool agent_messaging = 29 [json_name = "agentMessaging"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAgentMessaging() {
+      copyOnWrite();
+      instance.clearAgentMessaging();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -2889,13 +3140,16 @@ public  final class SessionInfo extends
             "caps_",
             "remote_",
             "lastMessage_",
+            "agentScope_",
+            "agentMessaging_",
           };
           java.lang.String info =
-              "\u0000\u001b\u0000\u0001\u0001\u001b\u001b\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u001d\u0000\u0001\u0001\u001d\u001d\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208" +
               "\u000b\u000b\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011" +
               "\u0208\u0012\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004" +
-              "\u0017\u1009\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006";
+              "\u0017\u1009\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006\u001c\u0208" +
+              "\u001d\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

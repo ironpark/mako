@@ -111,8 +111,9 @@ after acknowledgement; the panel fetches the latest 50. This history is
 saved alongside the inboxes and also survives daemon restarts.
 
 The panel can monitor a project on a remote node through the mesh; that
-node needs protocol revision 15 or later. MCP agent messaging itself stays
-local to each node.
+node needs protocol revision 15 or later. For a project of several
+folders, the panel also lists the project's agents on other nodes; their
+messages show on the node of their recipient.
 
 A message is delivered by typing it into the recipient's terminal as a
 new prompt, headed with its ID and sender, once the recipient waits at its
@@ -126,8 +127,15 @@ whose hooks do not report its status receives messages only through
 `read_messages`. Text typed into the agent's own prompt but not yet sent
 would run together with a delivered message.
 Messages can be sent to active messaging sessions in the same project,
-including siblings. Currently this server coordinates sessions on one
-daemon; it does not relay messages to another node.
+including siblings. In a project of several folders, that includes the
+project's agents on other nodes, which `list_agents` lists with their
+`node`: the sender's daemon passes the message to the recipient's
+(`relay_agent_message`), which keeps it in the recipient's inbox, and the
+delivered prompt names the sender's node. Each daemon tells its peers, in
+the state it sends them, which such project each of its agents is in and
+whether it takes messages, so the two nodes must let each other in, or
+reach each other through nodes that do. Spawning and stopping agents stay
+on the caller's node. A folder outside such a project is one node's only.
 
 ## Session lifecycle
 

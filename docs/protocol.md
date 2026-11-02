@@ -369,6 +369,7 @@ is polled as before.
 | `read_chat` | `ReadChat` | `chat` | The agent's native conversation, read from its log. |
 | `read_project_agents` | `ReadProjectAgents` | `project_agents` | Read-only agent and message monitor for an absolute project `path` on `node_id`. Worktrees include their repository's sessions. `message_limit` defaults to 50 and is capped at 100. Each agent has its session, parent ID, messaging availability and pending message count; recent messages include sender, recipient, timestamp, text and state (`pending`, `acknowledged`, `removed`). Monitoring never consumes messages. Requires revision 15. |
 | `set_projects` | `SetProjects` | `projects` | Gives `node_id`'s daemon the projects the user put together, each as its absolute folders on that node (`paths`): its agents in any of them are one project's, for the agents' MCP tools and `read_project_agents`. A folder holds its subfolders, but not a repository of its own inside it. `give_dirs` starts an agent in one folder with the others too, as an agent that takes `--add-dir` does. The front-end sends every project each time; the daemon keeps the last, on disk. Requires revision 16. |
+| `relay_agent_message` | `RelayAgentMessage` | `agent_message` | Passes a message an agent sent over its MCP tools to an agent of its project on `node_id`, from one daemon to another. The receiving daemon keeps it in the recipient's inbox when `scope` (`project:` and the project's ID) is both the recipient's, there, and the sender's, as the sender's node said in its state (`SessionInfo.agent_scope`, with `agent_messaging`). |
 | `attach` | `Attach` | — | Turns the stream into a session pipe; see [Attach streams](#attach-streams). |
 | `resize` | `Resize` | `session_info` | Resizes a local session's window. |
 | `input` | `Input` | — | Writes to a local session's PTY. No reply. |
@@ -406,6 +407,8 @@ The fields a front-end usually needs:
 | `worktree` | The worktree made for it. |
 | `last_output`, `started_at`, `cols`, `rows` | |
 | `last_message` | When the conversation's latest prompt or reply was written, as its log says. Unset before the bound log has one; clients fall back to `last_output`. |
+| `agent_scope` | The project of several folders the session's agent is in, `project:` and the project's ID, as the state a daemon sends its peers says; empty elsewhere. Agents of one project on other nodes find each other by it. |
+| `agent_messaging` | Whether the session's agent takes messages over its MCP tools, as of the same state. |
 
 **Approvals.** An agent's `PermissionRequest` hook holds its request in the
 daemon only while some front-end is watching for approvals. A front-end

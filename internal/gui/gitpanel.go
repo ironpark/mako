@@ -9,20 +9,21 @@ import (
 // it, as a source control panel: the branch and its sync at the head; the
 // changed files, the stashes and the branches over the commit box; the
 // history under them. Each section folds, and the history, folded, gives
-// the rest its room.
+// the rest its room. Of a project of several folders, it shows one at a
+// time, picked over the header (repoFolder).
 
 func gitPanel(m *model) ggui.Widget {
-	root := ggui.Derived(m.filesRoot)
+	root := ggui.Derived(m.repoFolder)
 	// Read again every while the tab shows, as agents change files and
 	// commit.
 	pollWhileShown(m, root, gitTab, gitRefresh, m.loadGit)
 	pollWhileShown(m, root, gitTab, historyRefresh, m.loadHistory)
-	return ggui.Key(root, func(r fileRoot) ggui.Widget {
+	return withRootPicker(m, ggui.Key(root, func(r fileRoot) ggui.Widget {
 		if r.Path == "" {
 			return ggui.Box(muted(ggui.Text(T("Open a session to see its changes.")).Size(13))).Pad(16)
 		}
 		return gitTabView(m)
-	})
+	}))
 }
 
 func gitTabView(m *model) ggui.Widget {

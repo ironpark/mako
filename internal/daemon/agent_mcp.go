@@ -273,6 +273,9 @@ type agentSummary struct {
 	// Folder is where it works: in a project of several folders, which
 	// of them.
 	Folder string `json:"folder,omitempty"`
+	// Node names the node it is on when it is another's: an agent of the
+	// project there.
+	Node string `json:"node,omitempty"`
 }
 
 type availableAgent struct {
@@ -324,9 +327,9 @@ type stopAgentResult struct {
 func (d *Daemon) projectAgentServer(peer *agentPeer) *sdk.Server {
 	server := sdk.NewServer(&sdk.Implementation{Name: "mako", Version: config.Version}, &sdk.ServerOptions{
 		Logger:       d.log,
-		Instructions: fmt.Sprintf("You are Mako session %s in project %s. Parent session: %s. Before delegating, use list_agents to inspect available agents and their profile descriptions. Choose a spawnable profile whose specialties match the task, then pass its owning agent name and exact profile name to spawn_agent. If no profile is needed, omit profile and use a spawnable agent default. Use send_message to communicate. A message is typed into its recipient's terminal as a new prompt, headed with its sender, once that agent waits at its prompt, so it never interrupts a turn; messages to you arrive the same way. Until then a message waits in the recipient's inbox: to wait for a reply within a turn, use read_messages and acknowledge what you processed with ack_through, or it will be typed in later as well. Report results to the parent with send_message. stop_agent only stops agents you spawned.", peer.id, peer.session.Info().GetProject(), peer.parent),
+		Instructions: fmt.Sprintf("You are Mako session %s in project %s. Parent session: %s. Before delegating, use list_agents to inspect available agents and their profile descriptions. Choose a spawnable profile whose specialties match the task, then pass its owning agent name and exact profile name to spawn_agent. If no profile is needed, omit profile and use a spawnable agent default. Use send_message to communicate, with agents of this project on other nodes too, which list_agents lists with their node. A message is typed into its recipient's terminal as a new prompt, headed with its sender, once that agent waits at its prompt, so it never interrupts a turn; messages to you arrive the same way. Until then a message waits in the recipient's inbox: to wait for a reply within a turn, use read_messages and acknowledge what you processed with ack_through, or it will be typed in later as well. Report results to the parent with send_message. stop_agent only stops agents you spawned.", peer.id, peer.session.Info().GetProject(), peer.parent),
 	})
-	sdk.AddTool(server, &sdk.Tool{Name: "list_agents", Description: "List sessions in this project, their IDs, status and messaging support, plus available agent types and profiles with descriptions and spawnable flags. Read the profile descriptions to select the best match for a task before calling spawn_agent. Only spawnable choices can receive the required Mako MCP tools.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, listAgentsResult, error) {
+	sdk.AddTool(server, &sdk.Tool{Name: "list_agents", Description: "List sessions in this project, on this node and, for a project of several folders, on other nodes, their IDs, status and messaging support, plus available agent types and profiles with descriptions and spawnable flags. Read the profile descriptions to select the best match for a task before calling spawn_agent. Only spawnable choices can receive the required Mako MCP tools.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, listAgentsResult, error) {
 		out, err := d.listProjectAgents(peer)
 		return nil, out, err
 	})
@@ -334,17 +337,14 @@ func (d *Daemon) projectAgentServer(peer *agentPeer) *sdk.Server {
 		out, err := d.spawnProjectAgent(ctx, peer, in)
 		return nil, out, err
 	})
-	sdk.AddTool(server, &sdk.Tool{Name: "send_message", Description: "Send a message to another active agent in this project. It is typed into the recipient's terminal as a new prompt once that agent waits at its prompt, never interrupting a turn; until then it waits in the recipient's inbox, which read_messages reads."}, func(ctx context.Context, _ *sdk.CallToolRequest, in sendMessageArgs) (*sdk.CallToolResult, agentMessage, error) {
+	sdk.AddTool(server, &sdk.Tool{Name: "send_message", Description: "Send a message to another active agent in this project, on this node or another. It is typed into the recipient's terminal as a new prompt once that agent waits at its prompt, never interrupting a turn; until then it waits in the recipient's inbox, which read_messages reads."}, func(ctx context.Context, _ *sdk.CallToolRequest, in sendMessageArgs) (*sdk.CallToolResult, agentMessage, error) {
 		if _, err := d.projectCaller(peer); err != nil {
 			return nil, agentMessage{}, err
 		}
-		if strings.TrimSpace(in.Text) == "" || len(in.Text) > maxAgentMessage {
-			return nil, agentMessage{}, fmt.Errorf("text must be non-empty and at most %d bytes", maxAgentMessage)
-		}
-		if _, err := d.projectTarget(peer, in.To); err != nil {
+		if err := checkAgentText(in.Text); err != nil {
 			return nil, agentMessage{}, err
 		}
-		msg, err := d.projectAgents.messages.send(peer.id, in.To, in.Text, d.projectScope(peer.session.Info()))
+		msg, err := d.sendAgentMessage(ctx, peer, in.To, in.Text)
 		return nil, msg, err
 	})
 	sdk.AddTool(server, &sdk.Tool{Name: "read_messages", Description: "Read your own inbox, optionally waiting for messages. Messages also reach you as prompts once you are at your prompt; use this to wait for a reply within a turn. Use after_id for pagination. Messages remain available across reconnects and daemon restarts until you acknowledge them with ack_through or they are typed into your terminal."}, func(ctx context.Context, _ *sdk.CallToolRequest, in readMessagesArgs) (*sdk.CallToolResult, readMessagesResult, error) {
@@ -393,21 +393,24 @@ func (d *Daemon) projectCaller(peer *agentPeer) (*session.Session, error) {
 	return s, nil
 }
 
-func (d *Daemon) projectTarget(caller *agentPeer, id string) (*session.Session, error) {
+// projectTarget is the session of this daemon's whose agent id is, when it
+// takes messages and is in scope.
+func (d *Daemon) projectTarget(scope, id string) (*session.Session, error) {
 	target := d.projectAgents.peer(id)
 	if target == nil {
-		return nil, errors.New("recipient is not an active messaging session in this project")
+		return nil, errNotInProject
 	}
 	s, err := d.projectCaller(target)
-	if err != nil || d.projectScope(s.Info()) != d.projectScope(caller.session.Info()) {
-		return nil, errors.New("recipient is not an active messaging session in this project")
+	if err != nil || d.projectScope(s.Info()) != scope {
+		return nil, errNotInProject
 	}
 	return s, nil
 }
 
-func (d *Daemon) summarizeAgent(info *protocol.SessionInfo, parent string) agentSummary {
-	peer := d.projectAgents.peer(info.GetId())
-	return agentSummary{ID: info.GetId(), Agent: info.GetAgent(), Profile: info.GetProfile(), Name: info.GetName(), State: info.GetState(), Status: info.GetStatus(), ParentID: parent, Messaging: peer != nil && peer.ctx.Err() == nil && info.GetState() == protocol.StateRunning, Folder: info.GetProject()}
+// summarizeAgent is a session as list_agents lists it; messaging says
+// whether its agent takes messages.
+func summarizeAgent(info *protocol.SessionInfo, parent string, messaging bool) agentSummary {
+	return agentSummary{ID: info.GetId(), Agent: info.GetAgent(), Profile: info.GetProfile(), Name: info.GetName(), State: info.GetState(), Status: info.GetStatus(), ParentID: parent, Messaging: messaging, Folder: info.GetProject()}
 }
 
 func (d *Daemon) listProjectAgents(peer *agentPeer) (listAgentsResult, error) {
@@ -429,8 +432,11 @@ func (d *Daemon) listProjectAgents(peer *agentPeer) (listAgentsResult, error) {
 	d.sessionMu.Unlock()
 	for _, other := range d.listSessions() {
 		if d.projectScope(other) == self {
-			out.Agents = append(out.Agents, d.summarizeAgent(other, parents[other.GetId()]))
+			out.Agents = append(out.Agents, summarizeAgent(other, parents[other.GetId()], d.takesMessages(other)))
 		}
+	}
+	for _, other := range d.remoteAgents(self) {
+		out.Agents = append(out.Agents, d.remoteSummary(other))
 	}
 	configured := d.agents()
 	// What an agent may spawn: those this node offers, installed or on.
@@ -519,7 +525,8 @@ func (d *Daemon) spawnProjectAgent(ctx context.Context, peer *agentPeer, in spaw
 			return agentSummary{}, fmt.Errorf("agent %s started but could not be named: %w", child.ID(), err)
 		}
 	}
-	return d.summarizeAgent(child.Info(), peer.id), nil
+	info = child.Info()
+	return summarizeAgent(info, peer.id, d.takesMessages(info)), nil
 }
 
 // Project agents are sessions of their own. Keep the parent's aggregate

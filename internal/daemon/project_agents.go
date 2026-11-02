@@ -43,10 +43,12 @@ func (d *Daemon) readProjectAgents(req *protocol.ReadProjectAgents) (*protocol.P
 		if scopes[i] != scope {
 			continue
 		}
-		info.Command = nil // runtime commands are not needed for monitoring
-		summary := d.summarizeAgent(info, parents[info.GetId()])
-		out.Agents = append(out.Agents, &protocol.ProjectAgent{Session: info, ParentSessionId: summary.ParentID, Messaging: summary.Messaging})
+		out.Agents = append(out.Agents, &protocol.ProjectAgent{Session: withoutCommand(info), ParentSessionId: parents[info.GetId()], Messaging: d.takesMessages(info)})
 		members[info.GetId()] = true
+	}
+	// The project's agents on other nodes, whose inboxes are theirs.
+	for _, info := range d.remoteAgents(scope) {
+		out.Agents = append(out.Agents, &protocol.ProjectAgent{Session: withoutCommand(info), Messaging: info.GetAgentMessaging()})
 	}
 	limit := int(min(req.GetMessageLimit(), 100))
 	if limit == 0 {

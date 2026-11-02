@@ -472,6 +472,87 @@ func (x *Projects) GetProjects() []*ProjectScope {
 	return nil
 }
 
+// RelayAgentMessage is a message an agent sent over its MCP tools to an
+// agent of its project on another node, which the sender's daemon passes
+// to that node's. The receiving daemon takes it when the recipient's agent
+// takes messages and is in scope, as the sender, as its peers say, is too.
+// It answers with the AgentMessage as the recipient's inbox keeps it.
+type RelayAgentMessage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // the recipient's node
+	FromSessionId string                 `protobuf:"bytes,2,opt,name=from_session_id,json=fromSessionId,proto3" json:"from_session_id,omitempty"`
+	ToSessionId   string                 `protobuf:"bytes,3,opt,name=to_session_id,json=toSessionId,proto3" json:"to_session_id,omitempty"`
+	Text          string                 `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"`
+	Scope         string                 `protobuf:"bytes,5,opt,name=scope,proto3" json:"scope,omitempty"` // the project both are in, "project:" and its ID
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RelayAgentMessage) Reset() {
+	*x = RelayAgentMessage{}
+	mi := &file_mako_v2_project_agents_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RelayAgentMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RelayAgentMessage) ProtoMessage() {}
+
+func (x *RelayAgentMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_project_agents_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RelayAgentMessage.ProtoReflect.Descriptor instead.
+func (*RelayAgentMessage) Descriptor() ([]byte, []int) {
+	return file_mako_v2_project_agents_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *RelayAgentMessage) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *RelayAgentMessage) GetFromSessionId() string {
+	if x != nil {
+		return x.FromSessionId
+	}
+	return ""
+}
+
+func (x *RelayAgentMessage) GetToSessionId() string {
+	if x != nil {
+		return x.ToSessionId
+	}
+	return ""
+}
+
+func (x *RelayAgentMessage) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *RelayAgentMessage) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
 var File_mako_v2_project_agents_proto protoreflect.FileDescriptor
 
 const file_mako_v2_project_agents_proto_rawDesc = "" +
@@ -507,7 +588,13 @@ const file_mako_v2_project_agents_proto_rawDesc = "" +
 	"\x05paths\x18\x03 \x03(\tR\x05paths\x12\x1b\n" +
 	"\tgive_dirs\x18\x04 \x01(\bR\bgiveDirs\"=\n" +
 	"\bProjects\x121\n" +
-	"\bprojects\x18\x01 \x03(\v2\x15.mako.v2.ProjectScopeR\bprojectsB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
+	"\bprojects\x18\x01 \x03(\v2\x15.mako.v2.ProjectScopeR\bprojects\"\xa2\x01\n" +
+	"\x11RelayAgentMessage\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12&\n" +
+	"\x0ffrom_session_id\x18\x02 \x01(\tR\rfromSessionId\x12\"\n" +
+	"\rto_session_id\x18\x03 \x01(\tR\vtoSessionId\x12\x12\n" +
+	"\x04text\x18\x04 \x01(\tR\x04text\x12\x14\n" +
+	"\x05scope\x18\x05 \x01(\tR\x05scopeB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
 	file_mako_v2_project_agents_proto_rawDescOnce sync.Once
@@ -521,7 +608,7 @@ func file_mako_v2_project_agents_proto_rawDescGZIP() []byte {
 	return file_mako_v2_project_agents_proto_rawDescData
 }
 
-var file_mako_v2_project_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_mako_v2_project_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_mako_v2_project_agents_proto_goTypes = []any{
 	(*ReadProjectAgents)(nil),     // 0: mako.v2.ReadProjectAgents
 	(*ProjectAgents)(nil),         // 1: mako.v2.ProjectAgents
@@ -530,14 +617,15 @@ var file_mako_v2_project_agents_proto_goTypes = []any{
 	(*SetProjects)(nil),           // 4: mako.v2.SetProjects
 	(*ProjectScope)(nil),          // 5: mako.v2.ProjectScope
 	(*Projects)(nil),              // 6: mako.v2.Projects
-	(*SessionInfo)(nil),           // 7: mako.v2.SessionInfo
-	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
+	(*RelayAgentMessage)(nil),     // 7: mako.v2.RelayAgentMessage
+	(*SessionInfo)(nil),           // 8: mako.v2.SessionInfo
+	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
 }
 var file_mako_v2_project_agents_proto_depIdxs = []int32{
 	2, // 0: mako.v2.ProjectAgents.agents:type_name -> mako.v2.ProjectAgent
 	3, // 1: mako.v2.ProjectAgents.messages:type_name -> mako.v2.AgentMessage
-	7, // 2: mako.v2.ProjectAgent.session:type_name -> mako.v2.SessionInfo
-	8, // 3: mako.v2.AgentMessage.created_at:type_name -> google.protobuf.Timestamp
+	8, // 2: mako.v2.ProjectAgent.session:type_name -> mako.v2.SessionInfo
+	9, // 3: mako.v2.AgentMessage.created_at:type_name -> google.protobuf.Timestamp
 	5, // 4: mako.v2.SetProjects.projects:type_name -> mako.v2.ProjectScope
 	5, // 5: mako.v2.Projects.projects:type_name -> mako.v2.ProjectScope
 	6, // [6:6] is the sub-list for method output_type
@@ -559,7 +647,7 @@ func file_mako_v2_project_agents_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_project_agents_proto_rawDesc), len(file_mako_v2_project_agents_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

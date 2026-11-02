@@ -78,7 +78,7 @@ func forgeIcon(forge string) string {
 
 // forgeOf is the forge of the selected project, once known.
 func (m *model) forgeOf() string {
-	root := m.filesRoot()
+	root := m.repoFolder()
 	if l := m.Forge.List.Get(); l.Root == root && l.Forge != "" {
 		return l.Forge
 	}
@@ -288,7 +288,7 @@ const (
 // watchForge follows the selected project's branch on its forge while the window
 // is open.
 func watchForge(m *model) {
-	root := ggui.Derived(m.filesRoot)
+	root := ggui.Derived(m.repoFolder)
 	ggui.Effect(func() ggui.Cleanup {
 		r := root.Get()
 		if r.Path == "" {
@@ -339,7 +339,7 @@ func (m *model) loadForgeBranch(root fileRoot) {
 		return r, cmp.Or(prErr, err)
 	}, func(r read, err error) {
 		m.Forge.branchReading = false
-		if ggui.Untrack(m.filesRoot) != root {
+		if ggui.Untrack(m.repoFolder) != root {
 			return
 		}
 		b := forgeBranch{Root: root, Forge: cmp.Or(r.runs.GetForge(), r.pr.GetForge())}
@@ -527,7 +527,7 @@ func (m *model) askPR() {
 
 // submitPR pushes the branch and opens its pull request.
 func (m *model) submitPR() {
-	root := ggui.Untrack(m.filesRoot)
+	root := ggui.Untrack(m.repoFolder)
 	req := &protocol.ForgeRun{Op: protocol.ForgeOpCreatePR, Title: strings.TrimSpace(ggui.Peek(m.Forge.PRTitle)),
 		Body: ggui.Peek(m.Forge.PRBody), Base: strings.TrimSpace(ggui.Peek(m.Forge.PRBase)), Draft: ggui.Peek(m.Forge.PRDraft)}
 	m.Forge.PROpen.Set(false)
@@ -546,7 +546,7 @@ func (m *model) submitPR() {
 // View ----------------------------------------------------------------------
 
 func forgePanel(m *model) ggui.Widget {
-	root := ggui.Derived(m.filesRoot)
+	root := ggui.Derived(m.repoFolder)
 	ggui.Effect(func() ggui.Cleanup {
 		r := root.Get()
 		m.Forge.Kind.Get()
@@ -563,14 +563,14 @@ func forgePanel(m *model) ggui.Widget {
 	})
 	open := ggui.Map(m.Forge.Open, func(o forgeOpen) bool { return o.Kind != "" })
 	list, detail := forgeListView(m, root), forgeDetailView(m)
-	return ggui.Key(root, func(r fileRoot) ggui.Widget {
+	return withRootPicker(m, ggui.Key(root, func(r fileRoot) ggui.Widget {
 		if r.Path == "" {
 			return ggui.Box(muted(ggui.Text(T("Open a session to see its repository's pull requests, issues and runs.")).Size(13))).Pad(16)
 		}
 		return ggui.Column(
 			ggui.Expanded(ggui.If(open, func() ggui.Widget { return detail }).Else(func() ggui.Widget { return list })),
 		).Stretch()
-	})
+	}))
 }
 
 func forgeListView(m *model, root ggui.Readable[fileRoot]) ggui.Widget {
@@ -1001,7 +1001,7 @@ func forgeComposer(m *model, root fileRoot, it *protocol.ForgeItem) ggui.Widget 
 // request, or a button to open one, and its newest commit's runs.
 func forgeBranchLine(m *model) ggui.Widget {
 	return ggui.View(m.Forge.Branch, func(b forgeBranch) ggui.Widget {
-		if b.Root.Path == "" || b.Err != "" || ggui.Untrack(m.filesRoot) != b.Root {
+		if b.Root.Path == "" || b.Err != "" || ggui.Untrack(m.repoFolder) != b.Root {
 			return ggui.Box()
 		}
 		var parts []ggui.Widget

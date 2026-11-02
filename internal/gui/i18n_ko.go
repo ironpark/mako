@@ -996,6 +996,7 @@ var catalogKo = map[string]string{
 
 	// Projects (projects.go, projectmenu.go)
 	"%d folders":                    "폴더 %d개",
+	"Repository":                    "저장소",
 	"%s (not reachable)":            "%s (연결 안 됨)",
 	"%s is in the project already.": "%s 폴더는 이미 프로젝트에 있습니다.",
 	"%s on %s joined %s, as a clone of its repository.": "%s(%s)이(가) 같은 저장소의 클론이라 %s에 연결되었습니다.",

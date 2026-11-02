@@ -452,7 +452,7 @@ func TestProjectMCPChildrenShareTheirParentsWorktreeScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := d.projectTarget(peer, child.ID)
+	s, err := d.projectTarget(d.projectScope(parent.Info()), child.ID)
 	if err != nil || d.projectScope(s.Info()) != d.projectScope(parent.Info()) {
 		t.Fatalf("worktree scope: %v", err)
 	}
