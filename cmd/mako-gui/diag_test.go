@@ -61,3 +61,14 @@ func TestTheAtlasLineTellsPagesApart(t *testing.T) {
 		t.Fatalf("got  %q\nwant %q", got, want)
 	}
 }
+
+func TestTheDirtiersLineNamesTheMostFirst(t *testing.T) {
+	got := dirtiersLine(map[string]int64{
+		"dirty(signal) github.com/ironpark/mako/internal/gui.a": 3,
+		"dirty(anim) github.com/ironpark/ggui/ui.b":             9,
+		"dirty(repaint) c": 1,
+	}, 2)
+	if want := "dirty(anim) ggui/ui.b=9 dirty(signal) mako/internal/gui.a=3"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}

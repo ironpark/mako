@@ -160,8 +160,8 @@ func readDiag(s []metrics.Sample, at time.Time) diagReading {
 		framesFor: [5]int64{frames.ForAnimation, frames.ForTime, frames.ForCallback, frames.ForPosted, frames.ForInput},
 		partial:   frames.Partial,
 		flushes:   gpu.Flushes, commands: gpu.Commands, vertices: gpu.Vertices,
-		atlas:     atlasLine(gpu),
-		terms:     gui.ReadTerminalMemory(),
+		atlas: atlasLine(gpu),
+		terms: gui.ReadTerminalMemory(),
 	}
 }
 
@@ -334,5 +334,27 @@ func motionLine(r ggui.MotionReport) string {
 	for _, why := range slices.Sorted(maps.Keys(r.Refusals)) {
 		whole = append(whole, fmt.Sprintf("%s=%d", why, r.Refusals[why]))
 	}
-	return strings.Join(parts, " ") + "; painted whole: " + strings.Join(whole, " ")
+	return strings.Join(parts, " ") + "; painted whole: " + strings.Join(whole, " ") + "; by: " + dirtiersLine(r.Dirtiers, mostDirtiers)
+}
+
+// mostDirtiers is how many of what made frames whole the stats name.
+const mostDirtiers = 8
+
+// dirtiersLine names the n sites that made the most frames whole, the most
+// first, with their counts.
+func dirtiersLine(by map[string]int64, n int) string {
+	names := slices.SortedFunc(maps.Keys(by), func(a, b string) int {
+		if c := cmp.Compare(by[b], by[a]); c != 0 {
+			return c
+		}
+		return strings.Compare(a, b)
+	})
+	if len(names) > n {
+		names = names[:n]
+	}
+	parts := make([]string, len(names))
+	for i, name := range names {
+		parts[i] = fmt.Sprintf("%s=%d", strings.ReplaceAll(name, "github.com/ironpark/", ""), by[name])
+	}
+	return strings.Join(parts, " ")
 }
