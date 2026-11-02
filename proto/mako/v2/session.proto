@@ -91,6 +91,28 @@ message SessionInfo {
   // agent_messaging says the session's agent takes messages over its MCP
   // tools, as of the same state.
   bool agent_messaging = 29;
+  // tasks are the commands the session's agent runs in the background, as
+  // Claude Code's Bash does with run_in_background, the latest last: those
+  // running, and the last few that ended. None once the session has ended.
+  repeated BackgroundTask tasks = 30;
+}
+
+// BackgroundTask is a command a session's agent started in the background,
+// and how it is getting on, as the agent's log says.
+message BackgroundTask {
+  string id = 1; // the agent's, as it names the task
+  string call_id = 2; // the call that started it
+  string command = 3; // its first line, cut short
+  string description = 4;
+  bool running = 5;
+  // status is how it ended: completed, failed or killed, as the agent
+  // said; stopped for one its agent's process did not outlive; "" while
+  // it runs.
+  string status = 6;
+  optional int32 exit_code = 7;
+  int64 started = 8; // Unix seconds
+  int64 ended = 9; // Unix seconds, once it has
+  string output = 10; // the file on the session's node its output goes to
 }
 
 // Approval is a tool call an agent waits for the user to approve.

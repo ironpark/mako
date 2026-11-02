@@ -81,6 +81,7 @@ type Session struct {
 	agentsWorking bool
 	childHooks    map[string]childStatus
 	childLogs     []*protocol.SubAgent
+	tasks         []*protocol.BackgroundTask // its agent's in the background, as its log says
 	approval      *protocol.Approval
 	approvalDone  chan struct{}
 	lastMessage   time.Time // when the conversation last said something, as its log has it
@@ -180,7 +181,33 @@ func (s *Session) Info() *protocol.SessionInfo {
 		LastMessage:    protocol.Time(s.lastMessage),
 		Approval:       s.approval,
 		Worktree:       s.spec.Worktree,
+		Tasks:          s.tasksLocked(),
 	}
+}
+
+// ReportTasks keeps the commands the agent of conversation id runs in the
+// background, as its log says. One started before this process was is
+// not running, whatever the log says: it was the last process's.
+func (s *Session) ReportTasks(id string, tasks []*protocol.BackgroundTask) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited || s.conversationID != id {
+		return
+	}
+	for _, t := range tasks {
+		if t.GetRunning() && t.GetStarted() < s.started.Unix() {
+			t.Running, t.Status = false, protocol.TaskStopped
+		}
+	}
+	s.tasks = tasks
+}
+
+// tasksLocked is the tasks Info reports: none once the session has ended.
+func (s *Session) tasksLocked() []*protocol.BackgroundTask {
+	if s.state == protocol.StateExited {
+		return nil
+	}
+	return s.tasks
 }
 
 // shown is the command as Info reports it.

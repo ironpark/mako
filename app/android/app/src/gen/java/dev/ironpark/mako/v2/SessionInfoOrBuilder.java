@@ -399,4 +399,36 @@ public interface SessionInfoOrBuilder extends
    * @return The agentMessaging.
    */
   boolean getAgentMessaging();
+
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.BackgroundTask> 
+      getTasksList();
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  dev.ironpark.mako.v2.BackgroundTask getTasks(int index);
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  int getTasksCount();
 }

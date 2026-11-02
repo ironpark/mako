@@ -149,6 +149,27 @@ const (
 	ToolSummary   = "summary"  // the summary a compaction leaves
 )
 
+// How a BackgroundTask ended, as BackgroundTask.status says.
+const (
+	TaskCompleted = "completed"
+	TaskFailed    = "failed"
+	TaskKilled    = "killed"
+	// TaskStopped is a task its agent's process did not outlive, of which
+	// the log says no end.
+	TaskStopped = "stopped"
+)
+
+// RunningTasks is how many of a session's background tasks run.
+func (x *SessionInfo) RunningTasks() int {
+	n := 0
+	for _, t := range x.GetTasks() {
+		if t.GetRunning() {
+			n++
+		}
+	}
+	return n
+}
+
 // The windows of the limits agents name, in minutes.
 const (
 	FiveHours = 5 * 60

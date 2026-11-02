@@ -20,6 +20,7 @@ type Activity struct {
 	status protocol.AgentStatus
 	at     time.Time
 	said   time.Time // when the latest prompt or reply was written
+	tasks  backgroundTasks
 }
 
 type ActivityState struct {
@@ -27,6 +28,7 @@ type ActivityState struct {
 	At     time.Time
 	Said   time.Time
 	Agents []*protocol.SubAgent
+	Tasks  []*protocol.BackgroundTask // see backgroundTasks
 }
 
 func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState, error) {
@@ -38,13 +40,20 @@ func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState,
 		a.dec, a.subs = logs.NewDecoder(), newSubAgents(logs)
 		a.calls = map[string]*protocol.ChatMessage{}
 		a.status, a.at, a.said = "", time.Time{}, time.Time{}
+		a.tasks = backgroundTasks{}
 	}
 	if a.path != path || a.dec == nil {
 		a.path, a.tail = path, agent.Tail{}
 		reset()
 	}
 	events, hasStatus := logs.(agent.LogStatus)
+	tasks, hasTasks := logs.(agent.BackgroundTasks)
 	a.tail.Read(path, reset, func(line []byte) {
+		if hasTasks {
+			for _, ev := range tasks.TaskEvents(line) {
+				a.tasks.take(ev)
+			}
+		}
 		if hasStatus {
 			if status, at := events.StatusEvent(line); status != "" && !at.Before(a.at) {
 				a.status, a.at = status, at
@@ -76,7 +85,7 @@ func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState,
 	for _, call := range a.calls {
 		calls = append(calls, call)
 	}
-	return ActivityState{a.status, a.at, a.said, a.subs.Read(path, calls)}, nil
+	return ActivityState{a.status, a.at, a.said, a.subs.Read(path, calls), a.tasks.list()}, nil
 }
 
 // resultKept is as much of a task's result as is kept for the whole

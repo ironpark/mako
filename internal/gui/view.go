@@ -596,6 +596,9 @@ func sessionRow(m *model, s *protocol.SessionInfo, selected bool, title, sub str
 			ggui.Box(ggui.Text(s.GetBranch()).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis()).MaxWidth(110),
 		).Gap(3))
 	}
+	if badge := tasksBadge(s); badge != nil {
+		line = append(line, badge)
+	}
 	// The title's line ends with when the session last said something.
 	head := []ggui.Widget{ggui.Expanded(ggui.Text(label).Size(13).NoWrap().Ellipsis())}
 	if s.GetState() == protocol.StateRunning {
@@ -686,16 +689,21 @@ func workspaceHeader(m *model) ggui.Widget {
 		}
 		where := fmt.Sprintf("%s:%s", nodeName(m.Nodes.Get(), s.GetNodeId()), prettyPath(s.GetProject()))
 		id := s.GetId()
-		return ggui.Row(
+		row := []ggui.Widget{
 			ggui.Text(projectName(s.GetProject())).Size(14).Weight(ggui.WeightMedium).NoWrap(),
 			muted(ggui.Text(where).Size(13).NoWrap().Ellipsis()),
+		}
+		if tasks := tasksMenu(m, s); tasks != nil {
+			row = append(row, tasks)
+		}
+		return ggui.Row(append(row,
 			iconMenu(ui.MenuOf(icon("ellipsis"),
 				ui.MenuItem(T("Rename…"), func() { m.askRename(id) }),
 				ui.MenuItem(T("Detach tab"), func() { m.closeTab(id) }),
 				ui.MenuItem(T("Show details"), func() { m.DetailsOpen.Set(true) }),
 				ui.MenuDivider(),
 				ui.MenuItem(T("Kill session"), func() { m.askKill(id) }),
-			).Name(T("Session actions")), 6),
+			).Name(T("Session actions")), 6))...,
 		).Gap(10)
 	})
 	return ggui.Box(ggui.Row(

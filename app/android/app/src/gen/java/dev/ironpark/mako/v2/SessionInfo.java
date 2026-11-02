@@ -35,6 +35,7 @@ public  final class SessionInfo extends
     owner_ = "";
     remote_ = "";
     agentScope_ = "";
+    tasks_ = emptyProtobufList();
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -1490,6 +1491,166 @@ public  final class SessionInfo extends
   private void clearAgentMessaging() {
 
     agentMessaging_ = false;
+  }
+
+  public static final int TASKS_FIELD_NUMBER = 30;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.BackgroundTask> tasks_;
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.BackgroundTask> getTasksList() {
+    return tasks_;
+  }
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.BackgroundTaskOrBuilder> 
+      getTasksOrBuilderList() {
+    return tasks_;
+  }
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  @java.lang.Override
+  public int getTasksCount() {
+    return tasks_.size();
+  }
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.BackgroundTask getTasks(int index) {
+    return tasks_.get(index);
+  }
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  public dev.ironpark.mako.v2.BackgroundTaskOrBuilder getTasksOrBuilder(
+      int index) {
+    return tasks_.get(index);
+  }
+  private void ensureTasksIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.BackgroundTask> tmp = tasks_;
+    if (!tmp.isModifiable()) {
+      tasks_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  private void setTasks(
+      int index, dev.ironpark.mako.v2.BackgroundTask value) {
+    java.util.Objects.requireNonNull(value);
+    ensureTasksIsMutable();
+    tasks_.set(index, value);
+  }
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  private void addTasks(dev.ironpark.mako.v2.BackgroundTask value) {
+    java.util.Objects.requireNonNull(value);
+    ensureTasksIsMutable();
+    tasks_.add(value);
+  }
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  private void addTasks(
+      int index, dev.ironpark.mako.v2.BackgroundTask value) {
+    java.util.Objects.requireNonNull(value);
+    ensureTasksIsMutable();
+    tasks_.add(index, value);
+  }
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  private void addAllTasks(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.BackgroundTask> values) {
+    ensureTasksIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, tasks_);
+  }
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  private void clearTasks() {
+    tasks_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * tasks are the commands the session's agent runs in the background, as
+   * Claude Code's Bash does with run_in_background, the latest last: those
+   * running, and the last few that ended. None once the session has ended.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+   */
+  private void removeTasks(int index) {
+    ensureTasksIsMutable();
+    tasks_.remove(index);
   }
 
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
@@ -3096,6 +3257,180 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * tasks are the commands the session's agent runs in the background, as
+     * Claude Code's Bash does with run_in_background, the latest last: those
+     * running, and the last few that ended. None once the session has ended.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.BackgroundTask> getTasksList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getTasksList());
+    }
+    /**
+     * <pre>
+     * tasks are the commands the session's agent runs in the background, as
+     * Claude Code's Bash does with run_in_background, the latest last: those
+     * running, and the last few that ended. None once the session has ended.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+     */
+    @java.lang.Override
+    public int getTasksCount() {
+      return instance.getTasksCount();
+    }/**
+     * <pre>
+     * tasks are the commands the session's agent runs in the background, as
+     * Claude Code's Bash does with run_in_background, the latest last: those
+     * running, and the last few that ended. None once the session has ended.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.BackgroundTask getTasks(int index) {
+      return instance.getTasks(index);
+    }
+    /**
+     * <pre>
+     * tasks are the commands the session's agent runs in the background, as
+     * Claude Code's Bash does with run_in_background, the latest last: those
+     * running, and the last few that ended. None once the session has ended.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+     */
+    public Builder setTasks(
+        int index, dev.ironpark.mako.v2.BackgroundTask value) {
+      copyOnWrite();
+      instance.setTasks(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * tasks are the commands the session's agent runs in the background, as
+     * Claude Code's Bash does with run_in_background, the latest last: those
+     * running, and the last few that ended. None once the session has ended.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+     */
+    public Builder setTasks(
+        int index, dev.ironpark.mako.v2.BackgroundTask.Builder builderForValue) {
+      copyOnWrite();
+      instance.setTasks(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * tasks are the commands the session's agent runs in the background, as
+     * Claude Code's Bash does with run_in_background, the latest last: those
+     * running, and the last few that ended. None once the session has ended.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+     */
+    public Builder addTasks(dev.ironpark.mako.v2.BackgroundTask value) {
+      copyOnWrite();
+      instance.addTasks(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * tasks are the commands the session's agent runs in the background, as
+     * Claude Code's Bash does with run_in_background, the latest last: those
+     * running, and the last few that ended. None once the session has ended.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+     */
+    public Builder addTasks(
+        int index, dev.ironpark.mako.v2.BackgroundTask value) {
+      copyOnWrite();
+      instance.addTasks(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * tasks are the commands the session's agent runs in the background, as
+     * Claude Code's Bash does with run_in_background, the latest last: those
+     * running, and the last few that ended. None once the session has ended.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+     */
+    public Builder addTasks(
+        dev.ironpark.mako.v2.BackgroundTask.Builder builderForValue) {
+      copyOnWrite();
+      instance.addTasks(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * tasks are the commands the session's agent runs in the background, as
+     * Claude Code's Bash does with run_in_background, the latest last: those
+     * running, and the last few that ended. None once the session has ended.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+     */
+    public Builder addTasks(
+        int index, dev.ironpark.mako.v2.BackgroundTask.Builder builderForValue) {
+      copyOnWrite();
+      instance.addTasks(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * tasks are the commands the session's agent runs in the background, as
+     * Claude Code's Bash does with run_in_background, the latest last: those
+     * running, and the last few that ended. None once the session has ended.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+     */
+    public Builder addAllTasks(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.BackgroundTask> values) {
+      copyOnWrite();
+      instance.addAllTasks(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * tasks are the commands the session's agent runs in the background, as
+     * Claude Code's Bash does with run_in_background, the latest last: those
+     * running, and the last few that ended. None once the session has ended.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+     */
+    public Builder clearTasks() {
+      copyOnWrite();
+      instance.clearTasks();
+      return this;
+    }
+    /**
+     * <pre>
+     * tasks are the commands the session's agent runs in the background, as
+     * Claude Code's Bash does with run_in_background, the latest last: those
+     * running, and the last few that ended. None once the session has ended.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
+     */
+    public Builder removeTasks(int index) {
+      copyOnWrite();
+      instance.removeTasks(index);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -3142,14 +3477,16 @@ public  final class SessionInfo extends
             "lastMessage_",
             "agentScope_",
             "agentMessaging_",
+            "tasks_",
+            dev.ironpark.mako.v2.BackgroundTask.class,
           };
           java.lang.String info =
-              "\u0000\u001d\u0000\u0001\u0001\u001d\u001d\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u001e\u0000\u0001\u0001\u001e\u001e\u0000\u0002\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208" +
               "\u000b\u000b\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011" +
               "\u0208\u0012\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004" +
               "\u0017\u1009\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006\u001c\u0208" +
-              "\u001d\u0007";
+              "\u001d\u0007\u001e\u001b";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -169,3 +169,21 @@ func TestLogStatusCannotReplaceANewerPromptOrConversation(t *testing.T) {
 		t.Fatal("log cancellation did not end work")
 	}
 }
+
+// A background task the log says still runs, but which started before
+// this process did, was the last process's: it is stopped. The tasks go
+// with the session's end.
+func TestBackgroundTasksOfAnEarlierProcessAreStopped(t *testing.T) {
+	started := time.Unix(1000, 0)
+	s := &Session{state: protocol.StateRunning, conversationID: "c", started: started}
+	s.ReportTasks("c", []*protocol.BackgroundTask{{Id: "old", Running: true, Started: 900}, {Id: "new", Running: true, Started: 1100}})
+	s.ReportTasks("other", nil)
+	tasks := s.tasksLocked()
+	if len(tasks) != 2 || tasks[0].GetRunning() || tasks[0].GetStatus() != protocol.TaskStopped || !tasks[1].GetRunning() {
+		t.Fatalf("tasks %v", tasks)
+	}
+	s.state = protocol.StateExited
+	if s.tasksLocked() != nil {
+		t.Fatal("an ended session kept its tasks")
+	}
+}

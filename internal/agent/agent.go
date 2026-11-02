@@ -162,6 +162,39 @@ type LogStatus interface {
 	StatusEvent(line []byte) (protocol.AgentStatus, time.Time)
 }
 
+// BackgroundTasks is a driver whose log records the commands its agent
+// runs in the background: the call that asks for one, the task it became,
+// and how it ended.
+type BackgroundTasks interface {
+	TaskEvents(line []byte) []TaskEvent
+}
+
+// TaskEvent is what one line of a log says of a background task.
+type TaskEvent struct {
+	Kind   TaskEventKind
+	CallID string // the call that asked for the task
+	ID     string // the task's, from TaskStarted on
+	At     time.Time
+	// Command and Description, of a TaskCalled, are what the call asked.
+	Command, Description string
+	Output               string // of a TaskStarted: the file its output goes to
+	// Status and ExitCode, of a TaskEnded, are how it ended.
+	Status   string
+	ExitCode *int32
+}
+
+// TaskEventKind is what a TaskEvent says.
+type TaskEventKind int
+
+const (
+	// TaskCalled is a call that asks for a command in the background.
+	TaskCalled TaskEventKind = iota + 1
+	// TaskStarted is the call's answer, naming the task it started.
+	TaskStarted
+	// TaskEnded says the task ended.
+	TaskEnded
+)
+
 // Folders is a Logs that keeps each conversation's log in a folder named
 // by its ID, whose lines do not say whose it is.
 type Folders interface {

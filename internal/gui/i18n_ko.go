@@ -996,6 +996,10 @@ var catalogKo = map[string]string{
 
 	// Projects (projects.go, projectmenu.go)
 	"%d folders":                    "폴더 %d개",
+	"Killed":                        "종료됨",
+	"Running in the background: %s": "백그라운드에서 실행 중: %s",
+	"Background commands":           "백그라운드 명령",
+	"Open its output":               "출력 열기",
 	"Repository":                    "저장소",
 	"%s (not reachable)":            "%s (연결 안 됨)",
 	"%s is in the project already.": "%s 폴더는 이미 프로젝트에 있습니다.",
