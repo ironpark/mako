@@ -23,8 +23,9 @@ const (
 	// keeps a history its size once it packs a frame of more than a block,
 	// and there is one encoder for each of a few frames packed at once:
 	// at zstd's 8 MiB that kept 8 MiB each, 54 MB in a window that had
-	// read some conversations.
-	packWindow = 1 << 20
+	// read some conversations, and at 1 MiB still 5 MB. A conversation's
+	// or a file's repeats lie close together: 256 KiB finds most of them.
+	packWindow = 256 << 10
 	// packers is how many frames are packed at once; more wait.
 	packers = 4
 )
@@ -73,9 +74,15 @@ func packed(b []byte) ([]byte, bool) {
 // Attach.pack_stream.
 const (
 	streamedBit = 1 << 30
-	// streamWindow is how far back a streamed frame may refer: some screens
-	// of a large terminal, redrawn whole.
-	streamWindow = 1 << 20
+	// streamWindow is how far back a streamed frame may refer: a few
+	// screens of a large terminal, redrawn whole. Its reader keeps a
+	// history as long as the window the writer used, for as long as the
+	// stream is attached, so each attached session cost 1 MiB at both
+	// ends when it was that.
+	streamWindow = 256 << 10
+	// streamReadWindow is the longest window a reader takes: a writer
+	// before streamWindow shrank used 1 MiB.
+	streamReadWindow = 1 << 20
 )
 
 // A Packer packs the frames of one stream as one zstd stream. Its frames
@@ -121,7 +128,7 @@ func (u *Unpacker) unpack(b []byte) ([]byte, error) {
 	}
 	if u.dec == nil {
 		var err error
-		u.dec, err = zstd.NewReader(&u.in, zstd.WithDecoderConcurrency(1), zstd.WithDecoderMaxWindow(streamWindow),
+		u.dec, err = zstd.NewReader(&u.in, zstd.WithDecoderConcurrency(1), zstd.WithDecoderMaxWindow(streamReadWindow),
 			zstd.WithDecoderMaxMemory(MaxFrameSize), zstd.WithDecoderLowmem(true))
 		if err != nil {
 			return nil, err
