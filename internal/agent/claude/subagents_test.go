@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -236,6 +238,91 @@ func TestTheCallsArgumentsAreParsedOnce(t *testing.T) {
 	t.Logf("%v allocations", n)
 	if n > 4 {
 		t.Fatalf("%v allocations reading 20 calls read before", n)
+	}
+}
+
+// An agent read to have finished is reported as it was without its files
+// being read, until settledFor has passed; one that runs is followed as
+// it writes. One whose call is gone, or open again, is read again at
+// once.
+func TestFinishedSubagentsAreNotReadAgain(t *testing.T) {
+	dir := t.TempDir()
+	path, messages := subagentFixture(t, dir, 4) // a00 and a01 finished, a02 and a03 running
+	now := time.Now()
+	clock = func() time.Time { return now }
+	t.Cleanup(func() { clock = time.Now })
+	scans := &agentScans{}
+	first := byID(scans.Read(path, messages))
+	if len(first) != 4 || first["a00"].GetRunning() || first["a01"].GetRunning() || !first["a02"].GetRunning() || !first["a03"].GetRunning() {
+		t.Fatalf("agents %v", first)
+	}
+	sub := filepath.Join(dir, "c", "subagents")
+	call := `{"type":"assistant","timestamp":"` + now.UTC().Format(time.RFC3339Nano) + `","message":{"role":"assistant","content":[{"type":"tool_use","id":"z","name":"Bash","input":{"command":"make"}}]}}` + "\n"
+	for _, id := range []string{"a00", "a01", "a02", "a03"} {
+		f, err := os.OpenFile(filepath.Join(sub, "agent-"+id+".jsonl"), os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = f.WriteString(call)
+		f.Close()
+	}
+	// Its meta spoilt, an agent that finished is still reported as it was:
+	// its files are not read.
+	if err := os.WriteFile(filepath.Join(sub, "agent-a00.meta.json"), []byte(`{"spoilt`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "agent-a01.meta.json"), []byte(`{"agentType":"Plan","requestShape":"foreground"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(settledFor - time.Second)
+	again := byID(scans.Read(path, messages))
+	for _, id := range []string{"a00", "a01"} {
+		if !proto.Equal(again[id], first[id]) {
+			t.Errorf("finished agent %s read again: %v, was %v", id, again[id], first[id])
+		}
+	}
+	for _, id := range []string{"a02", "a03"} {
+		if again[id].GetToolCalls() != first[id].GetToolCalls()+1 || again[id].GetDetail() != "make" {
+			t.Errorf("running agent %s not followed: %v", id, again[id])
+		}
+	}
+	// Its call open again, a foreground agent is read again at once.
+	messages[1].Pending = true
+	if a := byID(scans.Read(path, messages))["a01"]; !a.GetRunning() || a.GetKind() != "Plan" || a.GetDetail() != "make" {
+		t.Fatalf("an agent whose call is open again: %v", a)
+	}
+	messages[1].Pending = false
+	scans.Read(path, messages)
+	// Once settledFor has passed, a finished agent's files are read again.
+	now = now.Add(settledFor)
+	later := byID(scans.Read(path, messages))
+	if _, ok := later["a00"]; ok {
+		t.Errorf("an agent whose meta is spoilt is still reported once read again: %v", later["a00"])
+	}
+	if a := later["a01"]; a.GetKind() != "Plan" || a.GetToolCalls() != first["a01"].GetToolCalls()+1 || a.GetRunning() {
+		t.Errorf("finished agent read again %v", a)
+	}
+	// One whose call is gone is not reported, settled or not.
+	if a, ok := byID(scans.Read(path, messages[1:]))["a00"]; ok {
+		t.Errorf("an agent whose call is gone: %v", a)
+	}
+}
+
+// A read of agents that have finished allocates little more than the
+// agents it returns: no call's arguments parsed again, no file read.
+func TestReadingSettledSubagentsAllocatesLittle(t *testing.T) {
+	path, messages := subagentFixture(t, t.TempDir(), 20)
+	for _, m := range messages {
+		m.Pending = false
+	}
+	scans := &agentScans{}
+	scans.Read(path, messages)
+	// Each agent's one allocation, a meta not finished, which is read
+	// again with its log, and the slice holding them.
+	n := testing.AllocsPerRun(50, func() { scans.Read(path, messages) })
+	t.Logf("%v allocations", n)
+	if n > 20+10+8 {
+		t.Fatalf("%v allocations reading 20 agents, 19 of them finished", n)
 	}
 }
 

@@ -39,8 +39,9 @@ type agentScan struct {
 // agentScans keeps what was read of a conversation's subagents, to read
 // again only what changed: the list of them while their folder is the
 // same, each meta while its file is, and each log on from where it was.
-// A read then costs a stat of each file. The arguments of each call that
-// started one are parsed once, and again only if they change.
+// A read while one runs then costs a stat of each file; one that has
+// finished is not read again for settledFor. The arguments of each call
+// that started one are parsed once, and again only if they change.
 type agentScans struct {
 	path, at   string    // the conversation's log, and the subagents folder beside it
 	dir        string    // the subagents folder listed
@@ -73,7 +74,33 @@ type task struct {
 // subagent is one subagent as last read.
 type subagent struct {
 	id, log string // its ID, and its log's path
+	meta    agentMeta
 	scan    agentScan
+	// settled is when it was last read to have finished, by the call
+	// callID, or zero while it runs.
+	settled time.Time
+	callID  string
+}
+
+// settledFor is how long a subagent read to have finished is taken to
+// stay so without reading its files: neither its meta nor its log, while
+// the call that started it is still there, and answered.
+const settledFor = time.Minute
+
+// clock is the time, which tests set.
+var clock = time.Now
+
+// stays reports whether sub, read to have finished, is taken to be so now,
+// when the calls are calls, without reading its files.
+func (sub *subagent) stays(now time.Time, calls map[string]started, byPrompt map[string]string) bool {
+	if sub.settled.IsZero() || now.Sub(sub.settled) >= settledFor {
+		return false
+	}
+	call, ok := calls[sub.callID]
+	if !ok || (sub.meta.ToolUseID == "" && byPrompt[sub.scan.prompt] != sub.callID) {
+		return false
+	}
+	return sub.meta.RequestShape == "background" || !call.msg.GetPending()
 }
 
 // metaRead is a meta file as last read.
@@ -225,7 +252,7 @@ func (scans *agentScans) Read(path string, messages []*protocol.ChatMessage) []*
 	if path != scans.path {
 		scans.path, scans.at = path, filepath.Join(strings.TrimSuffix(path, filepath.Ext(path)), "subagents")
 	}
-	now := time.Now()
+	now := clock()
 	var out []*protocol.SubAgent
 	for _, metaPath := range scans.list(scans.at) {
 		sub := scans.subs[metaPath]
@@ -234,15 +261,20 @@ func (scans *agentScans) Read(path string, messages []*protocol.ChatMessage) []*
 			sub = &subagent{log: log, id: strings.TrimPrefix(filepath.Base(strings.TrimSuffix(log, ".jsonl")), "agent-")}
 			scans.subs[metaPath] = sub
 		}
-		meta, ok := scans.readMeta(metaPath)
-		if !ok {
-			continue
+		reread := !sub.stays(now, calls, byPrompt)
+		if reread {
+			sub.settled = time.Time{}
+			meta, ok := scans.readMeta(metaPath)
+			if !ok {
+				continue
+			}
+			sub.meta = meta
+			if meta.ToolUseID != "" && calls[meta.ToolUseID].msg == nil {
+				continue // started by a call out of the window
+			}
+			sub.scan.read(sub.log)
 		}
-		if meta.ToolUseID != "" && calls[meta.ToolUseID].msg == nil {
-			continue // started by a call out of the window
-		}
-		scan := &sub.scan
-		scan.read(sub.log)
+		meta, scan := &sub.meta, &sub.scan
 		callID := cmp.Or(meta.ToolUseID, byPrompt[scan.prompt])
 		call, ok := calls[callID]
 		if !ok {
@@ -251,6 +283,9 @@ func (scans *agentScans) Read(path string, messages []*protocol.ChatMessage) []*
 		running := call.msg.GetPending()
 		if meta.RequestShape == "background" {
 			running = meta.Finished == nil || !*meta.Finished
+		}
+		if reread && !running {
+			sub.settled, sub.callID = now, callID
 		}
 		if running && now.Sub(scan.Updated) > agent.StaleAgent {
 			running = false
