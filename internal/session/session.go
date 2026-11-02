@@ -237,7 +237,13 @@ func (s *Session) statusLocked() protocol.AgentStatus {
 
 // SetStatus records what the agent's hooks report it is doing.
 func (s *Session) SetStatus(status protocol.AgentStatus) {
-	s.ReportStatus(status, time.Now().UnixNano())
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// The wall clock reads in microseconds on macOS: two statuses set in a
+	// row can read the same, and the second would be taken as no newer
+	// than the first. A status set here is the newest there is.
+	seq := max(time.Now().UnixNano(), s.statusSeq+1, s.workEndedAt+1)
+	s.reportStatusLocked(status, seq)
 }
 
 // ReportStatus orders hooks by when they ran, rather than when their
