@@ -1,8 +1,11 @@
 package transcript
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -51,5 +54,58 @@ func TestUsageAddsUpAsTheLogGrows(t *testing.T) {
 	if got := cs.read(rollout, codex); !proto.Equal(got, &protocol.Usage{Input: 3926, CachedInput: 13184, Output: 5, Context: 9000, Window: 258400,
 		Limits: []*protocol.RateLimit{{Minutes: 300, Used: 12.5, Resets: 1793500000}, {Minutes: 10080, Used: 8, Resets: 1793528251}}}) {
 		t.Fatalf("codex %+v", got)
+	}
+}
+
+// Records longer than a reader's buffer count as the short ones do, read
+// at once or as the log grows, while other reads use the same readers.
+func TestUsageCountsLongRecords(t *testing.T) {
+	claude, _ := logsOf("claude")
+	dir := t.TempDir()
+	var lines []string
+	for i := range 30 {
+		lines = append(lines, fmt.Sprintf(`{"type":"assistant","message":{"id":"m%d","content":[{"type":"text","text":%q}],"usage":{"input_tokens":%d,"output_tokens":5}}}`, i, strings.Repeat("x", (i%3)*(70<<10)), i))
+	}
+	want := &protocol.Usage{Input: 29 * 30 / 2, Output: 150, Context: 29}
+	var wg sync.WaitGroup
+	for n := range 4 {
+		wg.Go(func() {
+			path := filepath.Join(dir, fmt.Sprintf("log%d.jsonl", n))
+			var whole, grown usageScan
+			f, _ := os.Create(path)
+			for i, l := range lines {
+				_, _ = f.WriteString(l + "\n")
+				if i%(n+2) == 0 {
+					grown.read(path, claude)
+				}
+			}
+			f.Close()
+			if got := grown.read(path, claude); !proto.Equal(got, want) {
+				t.Errorf("read as it grew: %v, want %v", got, want)
+			}
+			if got := whole.read(path, claude); !proto.Equal(got, want) {
+				t.Errorf("read at once: %v, want %v", got, want)
+			}
+		})
+	}
+	wg.Wait()
+}
+
+func BenchmarkUsageRead(b *testing.B) {
+	claude, _ := logsOf("claude")
+	path := filepath.Join(b.TempDir(), "log.jsonl")
+	var body []byte
+	for i := range 200 {
+		body = fmt.Appendf(body, `{"type":"assistant","message":{"id":"m%d","content":[{"type":"text","text":%q}],"usage":{"input_tokens":2,"output_tokens":5}}}`+"\n", i, strings.Repeat("x", 1+(i%5/4)*(100<<10)))
+	}
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		var scan usageScan
+		if scan.read(path, claude).GetOutput() != 1000 {
+			b.Fatal("miscounted")
+		}
 	}
 }

@@ -1,7 +1,6 @@
 package transcript
 
 import (
-	"bufio"
 	"io"
 	"os"
 
@@ -34,9 +33,11 @@ func (u *usageScan) read(path string, a agent.Logs) *protocol.Usage {
 	if _, err := f.Seek(u.offset, io.SeekStart); err != nil {
 		return u.result()
 	}
-	reader := bufio.NewReaderSize(f, 64<<10)
+	reader := agent.BorrowReader(f)
+	var long []byte // a record longer than reader's buffer, put together
+	defer func() { agent.GiveBack(reader, long) }()
 	for {
-		line, err := reader.ReadBytes('\n')
+		line, err := agent.ReadRecord(reader, &long)
 		if err != nil {
 			break // the writer may be in the middle of a record
 		}

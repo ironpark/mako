@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"bufio"
 	"cmp"
 	"encoding/json"
 	"io"
@@ -22,11 +21,18 @@ type Tail struct {
 	offset           int64
 	file             os.FileInfo
 	Started, Updated time.Time
+	stamp            struct { // a record's time, decoded in place not to allocate it
+		Timestamp time.Time `json:"timestamp"`
+	}
 }
 
 // Read reads path's records written since the last read, handing each to
 // line. A replaced, truncated or rewritten log is read again from its
 // start, after reset drops what the caller kept of it.
+//
+// The record line is given is valid only until line returns: it lies in a
+// buffer the next record is read into, which other reads use after, so
+// line copies what it keeps of it.
 func (t *Tail) Read(path string, reset func(), line func([]byte)) {
 	stat, err := os.Stat(path)
 	if err != nil {
@@ -48,19 +54,19 @@ func (t *Tail) Read(path string, reset func(), line func([]byte)) {
 	if _, err := f.Seek(t.offset, io.SeekStart); err != nil {
 		return
 	}
-	reader := bufio.NewReaderSize(f, 64<<10)
+	reader := BorrowReader(f)
+	var long []byte // a record longer than reader's buffer, put together
+	defer func() { GiveBack(reader, long) }()
 	for {
-		l, err := reader.ReadBytes('\n')
+		l, err := ReadRecord(reader, &long)
 		if err != nil {
 			return // the writer may be in the middle of a record
 		}
 		t.offset += int64(len(l))
-		var r struct {
-			Timestamp time.Time `json:"timestamp"`
-		}
-		if json.Unmarshal(l, &r) == nil && !r.Timestamp.IsZero() {
-			t.Started = cmp.Or(t.Started, r.Timestamp)
-			t.Updated = r.Timestamp
+		t.stamp.Timestamp = time.Time{}
+		if json.Unmarshal(l, &t.stamp) == nil && !t.stamp.Timestamp.IsZero() {
+			t.Started = cmp.Or(t.Started, t.stamp.Timestamp)
+			t.Updated = t.stamp.Timestamp
 		}
 		line(l)
 	}

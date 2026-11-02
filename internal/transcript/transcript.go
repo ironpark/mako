@@ -254,17 +254,11 @@ func (r *logRead) read(path string, span Span) error {
 	if _, err = f.Seek(r.pos, io.SeekStart); err != nil {
 		return err
 	}
-	reader := readers.Get().(*bufio.Reader)
-	reader.Reset(io.LimitReader(f, end-r.pos))
-	defer func() { reader.Reset(nil); readers.Put(reader) }()
+	reader := agent.BorrowReader(io.LimitReader(f, end-r.pos))
 	var long []byte // a record longer than reader's buffer, put together
-	defer func() {
-		if cap(long) > 0 && cap(long) <= 1<<20 {
-			longLines.Put(&long)
-		}
-	}()
+	defer func() { agent.GiveBack(reader, long) }()
 	if r.skip {
-		skipped, err := readRecord(reader, &long)
+		skipped, err := agent.ReadRecord(reader, &long)
 		if err == io.EOF {
 			return nil // the record skipped is still being written
 		}
@@ -275,7 +269,7 @@ func (r *logRead) read(path string, span Span) error {
 		r.start, r.skip = r.pos, false
 	}
 	for {
-		line, err := readRecord(reader, &long)
+		line, err := agent.ReadRecord(reader, &long)
 		// The writer may be in the middle of a record. Wait for the next poll.
 		if err == io.EOF {
 			return nil
@@ -287,35 +281,6 @@ func (r *logRead) read(path string, span Span) error {
 		r.pos += int64(len(line))
 		r.add(at, r.dec.Line(line))
 	}
-}
-
-// readers are the buffered readers reads borrow, and longLines the room
-// they put a long record together in.
-var (
-	readers   = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, 64<<10) }}
-	longLines sync.Pool
-)
-
-// readRecord is the next line of reader, up to and with its newline: in
-// reader's own buffer, valid until it reads again, when it fits, else put
-// together in long, which comes from longLines when it is nil.
-func readRecord(reader *bufio.Reader, long *[]byte) ([]byte, error) {
-	line, err := reader.ReadSlice('\n')
-	if err != bufio.ErrBufferFull {
-		return line, err
-	}
-	if *long == nil {
-		if p, ok := longLines.Get().(*[]byte); ok {
-			*long = *p
-		}
-	}
-	buf := append((*long)[:0], line...)
-	for err == bufio.ErrBufferFull {
-		line, err = reader.ReadSlice('\n')
-		buf = append(buf, line...)
-	}
-	*long = buf
-	return buf, err
 }
 
 // add keeps the messages decoded from the record at at.
