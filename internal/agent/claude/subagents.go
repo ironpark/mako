@@ -1,6 +1,7 @@
 package claude
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json"
 	"os"
@@ -56,24 +57,100 @@ type metaRead struct {
 }
 
 // read brings the scan up to the end of path's complete records.
+//
+// It reads of each record only what it keeps, as ParseMessage would read
+// it: the text of the first message the agent was given, and the calls
+// it made. The rest, results that carry whole files and images among
+// them, is left undecoded, and once the prompt is known a record that
+// makes no call is not decoded at all.
 func (s *agentScan) read(path string) {
 	s.Tail.Read(path, func() { *s = agentScan{} }, func(line []byte) {
+		if s.prompt != "" && !bytes.Contains(line, toolUse) {
+			return
+		}
 		var r struct {
-			Message json.RawMessage `json:"message"`
+			Message struct {
+				Role    string     `json:"role"`
+				Content subContent `json:"content"`
+			} `json:"message"`
 		}
 		if json.Unmarshal(line, &r) != nil {
 			return
 		}
-		for _, m := range agent.ParseMessage(r.Message, claudeTools) {
-			switch {
-			case m.GetRole() == "user" && s.prompt == "":
-				s.prompt = strings.TrimSpace(m.GetText())
-			case m.GetRole() == "tool" && !m.GetOutput():
+		m := &r.Message
+		if m.Role != "user" && m.Role != "assistant" {
+			return
+		}
+		if m.Content.text != nil {
+			if s.prompt == "" && m.Role == "user" {
+				s.prompt = strings.TrimSpace(*m.Content.text)
+			}
+			return
+		}
+		// Prose of one speaker folds together until a call or a result
+		// comes between, as ParseMessage folds it: the prompt is the first
+		// of the user's.
+		var prose string
+		inProse := false
+		endProse := func() {
+			if inProse && m.Role == "user" && s.prompt == "" {
+				s.prompt = strings.TrimSpace(prose)
+			}
+			prose, inProse = "", false
+		}
+		for _, b := range m.Content.blocks {
+			switch b.Type {
+			case "text", "input_text", "output_text":
+				if strings.TrimSpace(b.Text) == "" {
+					continue
+				}
+				switch {
+				case prose == "":
+					prose = b.Text
+				default:
+					prose += "\n\n" + b.Text
+				}
+				inProse = true
+			case "image", "input_image":
+				inProse = true // kept as a file, it adds no text
+			case "tool_use":
+				call := agent.Call(claudeTools, b.ID, b.Name, b.Input)
+				if strings.TrimSpace(call.GetText()) == "" && call.GetTool() == "" {
+					continue
+				}
+				endProse()
 				s.calls++
-				s.tool, s.kind, s.detail = m.GetTool(), m.GetKind(), m.GetDetail()
+				s.tool, s.kind, s.detail = call.GetTool(), call.GetKind(), call.GetDetail()
+			case "tool_result":
+				endProse()
 			}
 		}
+		endProse()
 	})
+}
+
+// toolUse is in every record that makes a call.
+var toolUse = []byte(`"tool_use"`)
+
+// subContent is a message's content: its text, or its blocks with no more
+// of each than a scan keeps.
+type subContent struct {
+	text   *string
+	blocks []struct {
+		Type  string          `json:"type"`
+		Text  string          `json:"text"`
+		ID    string          `json:"id"`
+		Name  string          `json:"name"`
+		Input json.RawMessage `json:"input"`
+	}
+}
+
+func (c *subContent) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] == '"' {
+		c.text = new(string)
+		return json.Unmarshal(data, c.text)
+	}
+	return json.Unmarshal(data, &c.blocks)
 }
 
 // claudeTools reads the subagents' calls.
