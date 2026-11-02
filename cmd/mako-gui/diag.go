@@ -169,8 +169,8 @@ func readDiag(s []metrics.Sample, at time.Time) diagReading {
 // the memory they use, the address space they reserve, and how much of what
 // they use is compressed scrollback.
 func terminalLine(m gui.TerminalMemory) string {
-	return fmt.Sprintf("%d, %.1f MB used of %.1f MB, %.1f MB of it compressed",
-		m.Terminals, mb(m.Resident), mb(m.Virtual), mb(m.Compressed))
+	return fmt.Sprintf("%d, %.1f MB used of %.1f MB, %.1f MB of it compressed; %d pages, %d compressed, %d the most in one",
+		m.Terminals, mb(m.Resident), mb(m.Virtual), mb(m.Compressed), m.Pages, m.CompressedPages, m.MostPages)
 }
 
 // atlasLine tells the GPU's images apart: each atlas page, largest first,

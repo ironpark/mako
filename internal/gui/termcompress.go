@@ -62,10 +62,14 @@ func (t *termConn) compressPass() {
 
 // TerminalMemory is what the terminals followed hold in ghostty's pages:
 // how many there are, the address space their pages reserve, the memory
-// they use, and how much of it is compressed scrollback.
+// they use, and how much of it is compressed scrollback; the pages, those
+// compressed, and the most one terminal holds, as only full pages of
+// scrollback above the screen are compressed.
 type TerminalMemory struct {
 	Terminals                     int
 	Virtual, Resident, Compressed uint64
+	Pages, CompressedPages        uint64
+	MostPages                     uint64
 }
 
 // liveTerms are the terminals followed, for ReadTerminalMemory.
@@ -80,6 +84,9 @@ func ReadTerminalMemory() TerminalMemory {
 		out.Virtual += m.Virtual
 		out.Resident += m.Resident
 		out.Compressed += m.Compressed
+		out.Pages += m.Pages
+		out.CompressedPages += m.CompressedPages
+		out.MostPages = max(out.MostPages, m.Pages)
 	}
 	return out
 }
@@ -104,6 +111,8 @@ func readTerminalMemory(which func(*termConn) bool) []TerminalMemory {
 				m.Virtual += u.VirtualBytes
 				m.Resident += u.ResidentBytes
 				m.Compressed += u.CompressedBytes
+				m.Pages += u.Pages
+				m.CompressedPages += u.CompressedPages
 			}
 		}
 		out = append(out, m)

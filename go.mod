@@ -11,7 +11,7 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/ironpark/ggfx v0.0.0-20261102030748-9d4113fd82f5
-	github.com/ironpark/ggui v0.0.0-20261102033638-6c25e9f57321
+	github.com/ironpark/ggui v0.0.0-20261102143527-5a17833ef438
 	github.com/ironpark/ggwd v0.0.0-20261102030823-b0d6ceac0632
 	github.com/ironpark/gostty v0.0.0-20261102002340-7e484d175602
 	github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202
@@ -22,6 +22,8 @@ require (
 	github.com/multiformats/go-multistream v0.6.1
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
 	github.com/yuin/goldmark v1.8.6
+	github.com/zalando/go-keyring v0.2.8
+	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/crypto v0.56.0
 	golang.org/x/image v0.46.0
 	golang.org/x/sys v0.48.0
@@ -43,6 +45,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cyphar/filepath-securejoin v0.6.1 // indirect
+	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/dunglas/httpsfv v1.1.1 // indirect
