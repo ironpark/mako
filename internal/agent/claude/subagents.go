@@ -39,13 +39,41 @@ type agentScan struct {
 // agentScans keeps what was read of a conversation's subagents, to read
 // again only what changed: the list of them while their folder is the
 // same, each meta while its file is, and each log on from where it was.
-// A read while one runs then costs a stat of each file.
+// A read then costs a stat of each file. The arguments of each call that
+// started one are parsed once, and again only if they change.
 type agentScans struct {
+	path, at   string    // the conversation's log, and the subagents folder beside it
 	dir        string    // the subagents folder listed
 	dirMod     time.Time // its time when it was
 	metaPaths  []string
-	metaByPath map[string]*metaRead  // by path
-	scans      map[string]*agentScan // by log path
+	metaByPath map[string]*metaRead // by path
+	subs       map[string]*subagent // by meta path
+
+	tasks map[string]task // the calls' arguments, by call ID
+	read  uint64          // reads, to tell the tasks of calls gone
+	// calls and byPrompt are the calls a read was given, by ID and by
+	// prompt, kept to fill again at the next.
+	calls    map[string]started
+	byPrompt map[string]string
+}
+
+// started is a call that starts a subagent, and its arguments.
+type started struct {
+	msg *protocol.ChatMessage
+	in  agent.Task
+}
+
+// task is a call's arguments, text, as parsed into in by the read'th read.
+type task struct {
+	text string
+	in   agent.Task
+	read uint64
+}
+
+// subagent is one subagent as last read.
+type subagent struct {
+	id, log string // its ID, and its log's path
+	scan    agentScan
 }
 
 // metaRead is a meta file as last read.
@@ -161,32 +189,51 @@ func (*Agent) NewSubAgents() agent.SubAgentScan { return &agentScans{} }
 // Read is the subagents the calls in messages started, from the
 // conversation logged at path, oldest first.
 func (scans *agentScans) Read(path string, messages []*protocol.ChatMessage) []*protocol.SubAgent {
-	type started struct {
-		msg *protocol.ChatMessage
-		in  agent.Task
+	if scans.subs == nil {
+		scans.metaByPath, scans.subs = map[string]*metaRead{}, map[string]*subagent{}
+		scans.tasks, scans.calls, scans.byPrompt = map[string]task{}, map[string]started{}, map[string]string{}
 	}
-	calls := map[string]started{}
-	byPrompt := map[string]string{}
+	scans.read++
+	calls, byPrompt := scans.calls, scans.byPrompt
+	clear(calls)
+	clear(byPrompt)
 	for _, m := range messages {
 		if m.GetRole() != "tool" || m.GetOutput() || m.GetKind() != protocol.ToolTask || m.GetId() == "" {
 			continue
 		}
-		var in agent.Task
-		_ = json.Unmarshal([]byte(m.GetText()), &in)
-		calls[m.GetId()] = started{m, in}
-		if p := strings.TrimSpace(in.Prompt); p != "" {
+		t, ok := scans.tasks[m.GetId()]
+		if !ok || t.text != m.GetText() {
+			t = task{text: m.GetText(), in: parseTask(m.GetText())}
+		}
+		t.read = scans.read
+		scans.tasks[m.GetId()] = t
+		calls[m.GetId()] = started{m, t.in}
+		if p := strings.TrimSpace(t.in.Prompt); p != "" {
 			byPrompt[p] = m.GetId()
+		}
+	}
+	if len(scans.tasks) > len(calls) {
+		for id, t := range scans.tasks {
+			if t.read != scans.read {
+				delete(scans.tasks, id)
+			}
 		}
 	}
 	if len(calls) == 0 {
 		return nil
 	}
-	if scans.scans == nil {
-		scans.metaByPath, scans.scans = map[string]*metaRead{}, map[string]*agentScan{}
+	if path != scans.path {
+		scans.path, scans.at = path, filepath.Join(strings.TrimSuffix(path, filepath.Ext(path)), "subagents")
 	}
 	now := time.Now()
 	var out []*protocol.SubAgent
-	for _, metaPath := range scans.list(filepath.Join(strings.TrimSuffix(path, filepath.Ext(path)), "subagents")) {
+	for _, metaPath := range scans.list(scans.at) {
+		sub := scans.subs[metaPath]
+		if sub == nil {
+			log := strings.TrimSuffix(metaPath, ".meta.json") + ".jsonl"
+			sub = &subagent{log: log, id: strings.TrimPrefix(filepath.Base(strings.TrimSuffix(log, ".jsonl")), "agent-")}
+			scans.subs[metaPath] = sub
+		}
 		meta, ok := scans.readMeta(metaPath)
 		if !ok {
 			continue
@@ -194,13 +241,8 @@ func (scans *agentScans) Read(path string, messages []*protocol.ChatMessage) []*
 		if meta.ToolUseID != "" && calls[meta.ToolUseID].msg == nil {
 			continue // started by a call out of the window
 		}
-		logPath := strings.TrimSuffix(metaPath, ".meta.json") + ".jsonl"
-		scan := scans.scans[logPath]
-		if scan == nil {
-			scan = &agentScan{}
-			scans.scans[logPath] = scan
-		}
-		scan.read(logPath)
+		scan := &sub.scan
+		scan.read(sub.log)
 		callID := cmp.Or(meta.ToolUseID, byPrompt[scan.prompt])
 		call, ok := calls[callID]
 		if !ok {
@@ -213,21 +255,28 @@ func (scans *agentScans) Read(path string, messages []*protocol.ChatMessage) []*
 		if running && now.Sub(scan.Updated) > agent.StaleAgent {
 			running = false
 		}
-		sub := &protocol.SubAgent{
-			Id:     strings.TrimPrefix(filepath.Base(strings.TrimSuffix(logPath, ".jsonl")), "agent-"),
+		a := &protocol.SubAgent{
+			Id:     sub.id,
 			CallId: callID, Running: running,
 			Kind:        cmp.Or(meta.AgentType, call.in.Agent),
 			Description: cmp.Or(meta.Description, call.in.Description),
 			ToolCalls:   scan.calls, Tool: scan.tool, ToolKind: scan.kind, Detail: scan.detail,
-			Log: logPath,
+			Log: sub.log,
 		}
 		if !scan.Started.IsZero() {
-			sub.Started, sub.Updated = scan.Started.Unix(), scan.Updated.Unix()
+			a.Started, a.Updated = scan.Started.Unix(), scan.Updated.Unix()
 		}
-		out = append(out, sub)
+		out = append(out, a)
 	}
 	agent.SortAgents(out)
 	return out
+}
+
+// parseTask is the arguments of a call that starts a subagent.
+func parseTask(text string) agent.Task {
+	var in agent.Task
+	_ = json.Unmarshal([]byte(text), &in)
+	return in
 }
 
 // list is the meta files in dir, listed again only once dir has changed.

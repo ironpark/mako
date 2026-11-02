@@ -179,6 +179,66 @@ func TestAgentScanReadsRealLogsAsParsingAllOfThem(t *testing.T) {
 	t.Logf("%d logs", len(paths))
 }
 
+// byID is agents by their IDs.
+func byID(agents []*protocol.SubAgent) map[string]*protocol.SubAgent {
+	out := map[string]*protocol.SubAgent{}
+	for _, a := range agents {
+		out[a.GetId()] = a
+	}
+	return out
+}
+
+// A call's arguments are parsed once, and again when they change: a
+// foreground agent found by its prompt is no longer once its call's
+// prompt is another, and a description changed is read.
+func TestTheCallsArgumentsAreReadAgainWhenTheyChange(t *testing.T) {
+	path, messages := subagentFixture(t, t.TempDir(), 4)
+	scans := &agentScans{}
+	if a := byID(scans.Read(path, messages))["a01"]; a.GetDescription() != "Look 1" || a.GetCallId() != "toolu_01" {
+		t.Fatalf("foreground agent %v", a)
+	}
+	if len(scans.tasks) != 4 {
+		t.Fatalf("%d calls' arguments kept, want 4", len(scans.tasks))
+	}
+	var in agent.Task
+	_ = json.Unmarshal([]byte(messages[1].Text), &in)
+	in.Description = "Looked again"
+	text, _ := json.Marshal(in)
+	messages[1].Text = string(text)
+	if a := byID(scans.Read(path, messages))["a01"]; a.GetDescription() != "Looked again" {
+		t.Fatalf("foreground agent after its call's arguments changed: %v", a)
+	}
+	in.Prompt = "Another prompt."
+	text, _ = json.Marshal(in)
+	messages[1].Text = string(text)
+	if a, ok := byID(scans.Read(path, messages))["a01"]; ok {
+		t.Fatalf("an agent whose call's prompt is another's is still found by it: %v", a)
+	}
+	// A call gone takes its arguments with it.
+	scans.Read(path, messages[2:])
+	if _, ok := scans.tasks["toolu_00"]; ok || len(scans.tasks) != 2 {
+		t.Fatalf("arguments kept of calls %v, want the two given", scans.tasks)
+	}
+}
+
+// The arguments of calls read already are not parsed again: a read of a
+// conversation with no subagents' folder allocates only for its stat,
+// however many calls it has and however long their prompts.
+func TestTheCallsArgumentsAreParsedOnce(t *testing.T) {
+	dir := t.TempDir()
+	path, messages := subagentFixture(t, dir, 20)
+	if err := os.RemoveAll(filepath.Join(dir, "c")); err != nil {
+		t.Fatal(err)
+	}
+	scans := &agentScans{}
+	scans.Read(path, messages)
+	n := testing.AllocsPerRun(50, func() { scans.Read(path, messages) })
+	t.Logf("%v allocations", n)
+	if n > 4 {
+		t.Fatalf("%v allocations reading 20 calls read before", n)
+	}
+}
+
 func BenchmarkSubAgentsRead(b *testing.B) {
 	path, messages := subagentFixture(b, b.TempDir(), 20)
 	scans := &agentScans{}

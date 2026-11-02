@@ -17,6 +17,7 @@ type Activity struct {
 	dec    agent.Decoder
 	subs   agent.SubAgentScan
 	calls  map[string]*protocol.ChatMessage
+	list   []*protocol.ChatMessage // calls, as the latest read handed them to subs
 	status protocol.AgentStatus
 	at     time.Time
 	said   time.Time // when the latest prompt or reply was written
@@ -81,11 +82,11 @@ func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState,
 			}
 		}
 	})
-	calls := make([]*protocol.ChatMessage, 0, len(a.calls))
+	a.list = a.list[:0]
 	for _, call := range a.calls {
-		calls = append(calls, call)
+		a.list = append(a.list, call)
 	}
-	return ActivityState{a.status, a.at, a.said, a.subs.Read(path, calls), a.tasks.list()}, nil
+	return ActivityState{a.status, a.at, a.said, a.subs.Read(path, a.list), a.tasks.list()}, nil
 }
 
 // resultKept is as much of a task's result as is kept for the whole
