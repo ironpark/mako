@@ -17,6 +17,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -189,9 +190,12 @@ func WriteFrame(w io.Writer, env *Envelope, pack bool) error {
 	if size > MaxFrameSize {
 		return fmt.Errorf("frame too large: %d bytes", size)
 	}
-	frame := binary.BigEndian.AppendUint32(make([]byte, 0, 4+size), uint32(size))
+	buf := getFrame()
+	defer putFrame(buf)
+	frame := binary.BigEndian.AppendUint32(slices.Grow((*buf)[:0], 4+size), uint32(size))
 	// The size was just computed, so marshalling need not again.
 	frame, err := proto.MarshalOptions{UseCachedSize: true}.MarshalAppend(frame, env)
+	*buf = frame
 	if err != nil {
 		return err
 	}
@@ -246,7 +250,10 @@ func ReadFrame(r io.Reader) (*Envelope, error) {
 	if n > MaxFrameSize {
 		return nil, fmt.Errorf("frame too large: %d bytes", n)
 	}
-	buf := make([]byte, n)
+	room := getFrame()
+	defer putFrame(room)
+	*room = slices.Grow((*room)[:0], int(n))[:n]
+	buf := *room
 	if _, err := io.ReadFull(r, buf); err != nil {
 		return nil, err
 	}
@@ -261,6 +268,23 @@ func ReadFrame(r io.Reader) (*Envelope, error) {
 		return nil, err
 	}
 	return env, nil
+}
+
+// frames is the room frames are written and read in, which a frame is done
+// with once written, or once unmarshalled: proto.Unmarshal copies the
+// bytes and strings it reads out. Only the room of a frame up to
+// maxPooledFrame goes back, so that one as large as MaxFrameSize is not
+// held on to.
+var frames = sync.Pool{New: func() any { return new([]byte) }}
+
+const maxPooledFrame = 64 << 10
+
+func getFrame() *[]byte { return frames.Get().(*[]byte) }
+
+func putFrame(b *[]byte) {
+	if cap(*b) <= maxPooledFrame {
+		frames.Put(b)
+	}
 }
 
 // UnpackFrames copies the frames src carries to dst until src ends,

@@ -303,3 +303,71 @@ func BenchmarkWriteStreamed(b *testing.B) {
 		_ = WriteStreamed(io.Discard, env, p)
 	}
 }
+
+// Frames are written and read in room used again: what one frame read
+// holds stays as it was once the next is read in the same room, frames of
+// every size read back whole, plain and packed, and the room of a large
+// one is not kept.
+func TestFramesRoundTripInRoomUsedAgain(t *testing.T) {
+	text := func(n int, c byte) []byte { return bytes.Repeat([]byte{c, ' ', 'l', 's', '\n'}, n/5) }
+	noise := make([]byte, 300<<10)
+	_, _ = rand.Read(noise)
+	sizes := []struct {
+		data []byte
+		pack bool
+	}{
+		{text(100, 'a'), false},
+		{text(60<<10, 'b'), false},
+		{text(1<<20, 'c'), false}, // past the room kept
+		{text(200, 'd'), false},
+		{text(2<<20, 'e'), true}, // packed small, unpacked large
+		{noise, true},            // too random to pack
+		{text(5<<20, 'f'), false},
+		{text(100, 'g'), true},
+	}
+	var wire bytes.Buffer
+	for _, c := range sizes {
+		env, _ := Encode(TypeOutput, "", &Output{SessionId: "s", Data: c.data})
+		if err := WriteFrame(&wire, env, c.pack); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var got []*Envelope
+	for range sizes {
+		env, err := ReadFrame(&wire)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, env)
+	}
+	for i, c := range sizes {
+		if data := got[i].GetOutput().GetData(); !bytes.Equal(data, c.data) {
+			t.Errorf("frame %d: read back %d bytes, %q…, want %d", i, len(data), data[:min(len(data), 8)], len(c.data))
+		}
+	}
+	for range 16 {
+		b := getFrame()
+		if cap(*b) > maxPooledFrame {
+			t.Fatalf("room of %d bytes kept for a frame, past %d", cap(*b), maxPooledFrame)
+		}
+		defer putFrame(b)
+	}
+}
+
+func BenchmarkFrameRoundTrip(b *testing.B) {
+	env, err := Encode(TypeOutput, "", &Output{SessionId: "s", Data: bytes.Repeat([]byte("\x1b[0mls -la\r\n"), 200)})
+	if err != nil {
+		b.Fatal(err)
+	}
+	var wire bytes.Buffer
+	b.ReportAllocs()
+	for b.Loop() {
+		wire.Reset()
+		if err := WriteFrame(&wire, env, false); err != nil {
+			b.Fatal(err)
+		}
+		if _, err := ReadFrame(&wire); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
