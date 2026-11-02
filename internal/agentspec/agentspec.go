@@ -266,7 +266,16 @@ func Offered(agents map[string]Agent) []string {
 // within this.
 const installedFor = 30 * time.Second
 
-var installedSeen sync.Map // program and PATH -> installedAt
+// installedSeen is what installed last found, by program and PATH. Its
+// key is a struct, not the two joined: a lookup then copies neither, as
+// os.Getenv returns a piece of the environment it keeps. A sync.Map would
+// box the key on every lookup.
+var installedSeen struct {
+	sync.Mutex
+	m map[installedKey]installedAt
+}
+
+type installedKey struct{ program, path string }
 
 type installedAt struct {
 	ok bool
@@ -276,14 +285,20 @@ type installedAt struct {
 // installed reports whether program can be run, looking it up on the PATH
 // at most every installedFor.
 func installed(program string) bool {
-	key := program + "\x00" + os.Getenv("PATH")
-	if v, ok := installedSeen.Load(key); ok {
-		if seen := v.(installedAt); time.Since(seen.at) < installedFor {
-			return seen.ok
-		}
+	key := installedKey{program, os.Getenv("PATH")}
+	installedSeen.Lock()
+	seen, ok := installedSeen.m[key]
+	installedSeen.Unlock()
+	if ok && time.Since(seen.at) < installedFor {
+		return seen.ok
 	}
 	_, err := exec.LookPath(program)
-	installedSeen.Store(key, installedAt{ok: err == nil, at: time.Now()})
+	installedSeen.Lock()
+	if installedSeen.m == nil {
+		installedSeen.m = map[installedKey]installedAt{}
+	}
+	installedSeen.m[key] = installedAt{ok: err == nil, at: time.Now()}
+	installedSeen.Unlock()
 	return err == nil
 }
 

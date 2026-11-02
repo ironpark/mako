@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -50,7 +51,7 @@ func TestABuiltinNeedsNoCommandOfItsOwn(t *testing.T) {
 }
 
 // onPath puts programs that do nothing on a PATH of their own.
-func onPath(t *testing.T, programs ...string) {
+func onPath(t testing.TB, programs ...string) {
 	dir := t.TempDir()
 	for _, p := range programs {
 		if err := os.WriteFile(filepath.Join(dir, p), []byte("#!/bin/sh\n"), 0o755); err != nil {
@@ -149,5 +150,36 @@ func TestTheShellIsConfiguredApart(t *testing.T) {
 	l, err = Resolve(ShellName, "", nil, nil, WithShell(nil, Shell{Command: []string{"zsh"}, Args: []string{"-l"}, Env: map[string]string{"A": "b"}}))
 	if err != nil || filepath.Base(l.Command[0]) != "zsh" || !slices.Equal(l.Command[1:], []string{"-l"}) || l.Env["A"] != "b" {
 		t.Fatalf("the configured shell is %q %v, %v", l.Command, l.Env, err)
+	}
+}
+
+// A program found is taken to be there for a while, without allocating,
+// on the PATH it was found on: another PATH looks it up again.
+func TestInstalledLooksUpOnlyOnceAWhile(t *testing.T) {
+	onPath(t, "claude")
+	found := os.Getenv("PATH")
+	if !installed("claude") {
+		t.Fatal("claude not found on the PATH")
+	}
+	if n := testing.AllocsPerRun(100, func() { installed("claude") }); n != 0 {
+		t.Fatalf("%v allocations for a program looked up already", n)
+	}
+	t.Setenv("PATH", t.TempDir())
+	if installed("claude") {
+		t.Fatal("claude found on a PATH it is not on: the lookup on another PATH was taken")
+	}
+	t.Setenv("PATH", found)
+	if !installed("claude") {
+		t.Fatal("claude not found on its PATH again")
+	}
+}
+
+func BenchmarkInstalled(b *testing.B) {
+	onPath(b, "claude")
+	// A PATH as long as a user's.
+	b.Setenv("PATH", os.Getenv("PATH")+strings.Repeat(":/opt/homebrew/bin", 20))
+	b.ReportAllocs()
+	for b.Loop() {
+		installed("claude")
 	}
 }
