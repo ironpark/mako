@@ -232,4 +232,10 @@
     <string name="starting_node">Starting this device\'s node…</string>
     <string name="reaching_computers">Reaching your computers…</string>
     <string name="start_agent">Start %1$s</string>
+    <string name="group_by">Group by</string>
+    <string name="group_computer">Computer</string>
+    <string name="group_status">Status</string>
+    <string name="group_project">Project</string>
+    <string name="group_time">None, latest first</string>
+    <string name="group_ended">Ended</string>
 </resources>

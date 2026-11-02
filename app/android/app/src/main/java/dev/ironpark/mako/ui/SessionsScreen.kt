@@ -41,6 +41,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.edit
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.heightIn
@@ -111,6 +118,7 @@ internal class SessionsScreenState(
     val list: LazyListState,
     val bar: TopAppBarState,
     val filter: MutableState<Filter>,
+    val grouping: MutableState<Grouping>,
 )
 
 /** A separate snapshot gives the swipe preview the same filter and scroll without sharing a layout. */
@@ -124,7 +132,13 @@ internal fun rememberSessionsScreenState(source: SessionsScreenState? = null): S
         initialContentOffset = source?.bar?.contentOffset ?: 0f,
     )
     val filter = rememberSaveable { mutableStateOf(source?.filter?.value ?: Filter.All) }
-    return remember(list, bar, filter) { SessionsScreenState(list, bar, filter) }
+    // How the list is grouped is kept, as a choice of the user's.
+    val prefs = LocalContext.current.getSharedPreferences("home", android.content.Context.MODE_PRIVATE)
+    val grouping = remember {
+        mutableStateOf(source?.grouping?.value ?: runCatching { Grouping.valueOf(prefs.getString("grouping", null)!!) }.getOrDefault(Grouping.Computer))
+    }
+    LaunchedEffect(grouping.value) { prefs.edit { putString("grouping", grouping.value.name) } }
+    return remember(list, bar, filter, grouping) { SessionsScreenState(list, bar, filter, grouping) }
 }
 
 /**
@@ -197,6 +211,7 @@ internal fun SessionsScreen(
                     }
                 },
                 actions = {
+                    if (linked > 0 || sessions.isNotEmpty()) GroupingMenu(screenState.grouping.value) { screenState.grouping.value = it }
                     IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, stringResource(R.string.settings)) }
                     IconButton(onClick = onMesh) {
                         BadgedBox(badge = { if (linked == 0) Badge() }) {
@@ -245,7 +260,7 @@ internal fun SessionsScreen(
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         SessionList(mesh, nodes, sessions, filter, onFilter = { filter = it }, onOpen, screenState.list,
-                            onNew = onNew.takeIf { linked > 0 })
+                            grouping = screenState.grouping.value, onNew = onNew.takeIf { linked > 0 })
                     }
                 }
             }
@@ -263,6 +278,7 @@ private fun SessionList(
     onFilter: (Filter) -> Unit,
     onOpen: (SessionInfo) -> Unit,
     listState: LazyListState,
+    grouping: Grouping = Grouping.Computer,
     onNew: (() -> Unit)? = null,
 ) {
     // Times shown as "ago" move on with the clock.
@@ -281,14 +297,11 @@ private fun SessionList(
             Filter.Working -> sessions.filter { it.working() }
         }
     }
-    val byNode = remember(shown, filter, nodes) {
-        shown
-            .filter { filter != Filter.All || !it.needsYou() }
-            .sortedByDescending { it.lastActive() }
-            .groupBy { it.nodeId }
-            .toList()
-            .sortedBy { mesh.nodeName(it.first).lowercase() }
+    val groups = remember(shown, filter, nodes, grouping) {
+        groupSessions(shown.filter { filter != Filter.All || !it.needsYou() }, grouping, mesh::nodeName)
     }
+    // A row names its computer where the group does not and there is more than one.
+    val manyNodes = remember(sessions) { sessions.map { it.nodeId }.distinct().size > 1 }
 
     LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 96.dp), modifier = Modifier.fillMaxSize()) {
         item(key = "filters") {
@@ -326,29 +339,19 @@ private fun SessionList(
                 )
             }
         }
-        for ((node, list) in byNode) {
-            item(key = "node:$node") {
-                val n = nodes.firstOrNull { it.id == node }
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 28.dp, end = 28.dp, top = 20.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(osIcon(n?.os.orEmpty()), null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        mesh.nodeName(node), style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
-                    Text("${list.size}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            // A computer's sessions are one card, its rows joined by hairlines.
-            itemsIndexed(list, key = { _, s -> s.id }) { i, s ->
+        for (group in groups) {
+            val list = group.sessions
+            item(key = group.key) { GroupHeader(group, grouping, nodes) }
+            // A group's sessions are one card, its rows joined by hairlines.
+            itemsIndexed(list, key = { _, s -> group.key + "/" + s.id }) { i, s ->
                 val shape = groupShape(i, list.size)
                 Column(Modifier.padding(horizontal = 12.dp).clip(shape).background(MaterialTheme.colorScheme.surfaceContainerLow)) {
                     if (i > 0) HorizontalDivider(Modifier.padding(start = 70.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    SessionRow(mesh, nodes, s, now, onClick = { onOpen(s) })
+                    SessionRow(
+                        mesh, nodes, s, now, onClick = { onOpen(s) },
+                        node = if (grouping != Grouping.Computer && manyNodes) mesh.nodeName(s.nodeId) else null,
+                        showProject = grouping != Grouping.Project,
+                    )
                 }
             }
         }
@@ -374,7 +377,10 @@ private fun Heading(text: String, count: Int) {
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SessionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long, onClick: () -> Unit) {
+private fun SessionRow(
+    mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long, onClick: () -> Unit,
+    node: String? = null, showProject: Boolean = true,
+) {
     var menu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var stopping by remember { mutableStateOf(false) }
@@ -416,8 +422,11 @@ private fun SessionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long,
                     color = if (dimmed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 )
                 // The agent, unless the session goes by its name already.
-                val where = dotted(s.agent.takeUnless { s.label().equals(it, ignoreCase = true) }, baseName(s.project), s.branch)
-                Text(
+                val where = dotted(
+                    s.agent.takeUnless { s.label().equals(it, ignoreCase = true) }, node,
+                    baseName(s.project).takeIf { showProject }, s.branch,
+                )
+                if (where.isNotEmpty()) Text(
                     where, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
@@ -622,5 +631,75 @@ private fun Loading(what: String) {
         CircularProgressIndicator()
         Spacer(Modifier.height(16.dp))
         Text(what, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** GroupHeader names a group of the list: its computer, its project or its status. */
+@Composable
+private fun GroupHeader(group: SessionGroup, by: Grouping, nodes: List<Node>) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().padding(start = 28.dp, end = 28.dp, top = if (by == Grouping.Time) 8.dp else 20.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (by == Grouping.Time) return@Row
+        val status = if (by == Grouping.Status) StatusGroup.valueOf(group.label) else null
+        when (by) {
+            Grouping.Computer -> Icon(osIcon(nodes.firstOrNull { it.id == group.sessions.first().nodeId }?.os.orEmpty()), null,
+                Modifier.size(16.dp), tint = colors.onSurfaceVariant)
+            Grouping.Project -> Icon(Icons.Outlined.Folder, null, Modifier.size(16.dp), tint = colors.onSurfaceVariant)
+            else -> Dot(status?.color() ?: colors.onSurfaceVariant, size = 8.dp)
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            if (status != null) status.label() else group.label, style = MaterialTheme.typography.labelLarge,
+            color = if (status == StatusGroup.NeedsYou) StatusColors.Approval else colors.onSurfaceVariant,
+            modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+        Text("${group.sessions.size}", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+    }
+}
+
+private fun StatusGroup.color(): Color = when (this) {
+    StatusGroup.NeedsYou -> StatusColors.Approval
+    StatusGroup.Working -> StatusColors.Working
+    StatusGroup.Done -> StatusColors.Done
+    StatusGroup.Idle, StatusGroup.Ended -> StatusColors.Idle
+}
+
+@Composable
+private fun StatusGroup.label(): String = stringResource(when (this) {
+    StatusGroup.NeedsYou -> R.string.needs_you
+    StatusGroup.Working -> R.string.status_working
+    StatusGroup.Done -> R.string.status_done
+    StatusGroup.Idle -> R.string.status_idle
+    StatusGroup.Ended -> R.string.group_ended
+})
+
+/** GroupingMenu chooses what the list is grouped by, from the top bar. */
+@Composable
+private fun GroupingMenu(current: Grouping, onChoose: (Grouping) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) { Icon(Icons.AutoMirrored.Outlined.Sort, stringResource(R.string.group_by)) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            Text(
+                stringResource(R.string.group_by), style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            for ((g, label, icon) in listOf(
+                Triple(Grouping.Computer, R.string.group_computer, Icons.Outlined.Devices),
+                Triple(Grouping.Status, R.string.group_status, Icons.Outlined.Bolt),
+                Triple(Grouping.Project, R.string.group_project, Icons.Outlined.Folder),
+                Triple(Grouping.Time, R.string.group_time, Icons.Outlined.Schedule),
+            )) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(label)) },
+                    leadingIcon = { Icon(icon, null) },
+                    trailingIcon = { if (g == current) Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.primary) },
+                    onClick = { open = false; onChoose(g) },
+                )
+            }
+        }
     }
 }
