@@ -13,7 +13,7 @@ require (
 	github.com/ironpark/ggfx v0.0.0-20261102001743-143df6bf0b71
 	github.com/ironpark/ggui v0.0.0-20261102001810-7700e65f05ce
 	github.com/ironpark/ggwd v0.0.0-20261031170520-65df921002d2
-	github.com/ironpark/gostty v0.0.0-20261027142811-dd03466f18c8
+	github.com/ironpark/gostty v0.0.0-20261102002340-7e484d175602
 	github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202
 	github.com/klauspost/compress v1.20.3
 	github.com/libp2p/go-libp2p v0.51.0

@@ -31,30 +31,36 @@ type termConn struct {
 	id  string
 	att sessionLink
 
-	mu           sync.Mutex // guards everything below, the terminal included
-	vt           *gostty.Session
-	state        *gostty.RenderState
-	cells        []gostty.RenderCell
-	clusters     []string
-	dirtyRows    []uint16
-	hasFrame     bool // cells and clusters hold a complete screen
+	mu        sync.Mutex // guards everything below, the terminal included
+	vt        *gostty.Session
+	state     *gostty.RenderState
+	cells     []gostty.RenderCell
+	clusters  []string
+	dirtyRows []uint16
+	hasFrame  bool // cells and clusters hold a complete screen
 	// unpainted lets go of cells and clusters once no view painted the
 	// terminal for shownFor (see frame).
 	unpainted *time.Timer
-	title        string
-	titleKnown   bool
-	titleChanged func() // immutable; posts UI work without acquiring mu
-	exited       bool
-	exitCode     int
-	err          error
-	cols         uint16
-	rows         uint16
-	closed       bool // vt and state are released; nothing may touch them
-	opts         termOptions
-	gesture      *gostty.Gesture // click counting and drag selection
-	dragging     bool
-	search       *gostty.Search // the find bar's, for searched, while it is open
-	searched     string
+	// compressTimer runs the compression of the scrollback (see
+	// termcompress.go), compressSeen is ghostty's activity as of the last
+	// pass, and compressUnsupported is set where the system cannot.
+	compressTimer       *time.Timer
+	compressSeen        uint64
+	compressUnsupported bool
+	title               string
+	titleKnown          bool
+	titleChanged        func() // immutable; posts UI work without acquiring mu
+	exited              bool
+	exitCode            int
+	err                 error
+	cols                uint16
+	rows                uint16
+	closed              bool // vt and state are released; nothing may touch them
+	opts                termOptions
+	gesture             *gostty.Gesture // click counting and drag selection
+	dragging            bool
+	search              *gostty.Search // the find bar's, for searched, while it is open
+	searched            string
 
 	// The daemon is told of a size once a burst of them settles, as a
 	// sliding panel resizes the terminal every frame, so the program is
@@ -117,6 +123,7 @@ func newTermConn(id string, link sessionLink, cols, rows uint16, wake func(), ti
 	// three the line.
 	gesture.SetBehaviors(gostty.GestureBehaviorCell, gostty.GestureBehaviorWord, gostty.GestureBehaviorLine)
 	t := &termConn{id: id, att: link, vt: vt, state: state, gesture: gesture, cols: cols, rows: rows, wake: wake}
+	liveTerms.Store(t, struct{}{})
 	if len(titleChanged) > 0 {
 		t.titleChanged = titleChanged[0]
 	}
@@ -275,6 +282,7 @@ func (t *termConn) feedLocked(p []byte) {
 			t.wake()
 		}
 	}
+	t.noteCompressionLocked()
 }
 
 // Title notifications are independent of paint coalescing: hidden tabs may
@@ -374,6 +382,8 @@ func (t *termConn) frame() (frameSnapshot, error) {
 	}
 	t.hasFrame = true
 	t.state.Clean()
+	// A scroll or a search shown may have restored pages.
+	t.noteCompressionLocked()
 	colors, cursor := t.state.Colors(), t.state.Cursor()
 	return frameSnapshot{
 		cells:    t.cells,
@@ -919,6 +929,10 @@ func (t *termConn) close() {
 	if t.unpainted != nil {
 		t.unpainted.Stop()
 	}
+	if t.compressTimer != nil {
+		t.compressTimer.Stop()
+	}
+	liveTerms.Delete(t)
 	t.endFindLocked()
 	_ = t.state.Close()
 	_ = t.vt.Close()

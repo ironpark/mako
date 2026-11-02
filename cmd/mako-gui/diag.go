@@ -16,6 +16,7 @@ import (
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui"
 )
 
 // The app keeps, in diag in the configuration directory, what a look at
@@ -99,6 +100,7 @@ func diagnose() {
 				fmt.Fprintln(log, "# moving:", motionLine(ggui.ReadMotionReport()))
 			}
 			fmt.Fprintln(log, "# atlas:", r.atlas)
+			fmt.Fprintln(log, "# terminals:", terminalLine(r.terms))
 			if d.troubled() && now.Sub(lastIncident) >= incidentGap {
 				lastIncident = now
 				fmt.Fprintf(log, "# incident: %.1f collections a second, %.0f%% of the CPU used, %.1f cores, %.1f frames a second\n",
@@ -142,6 +144,7 @@ type diagReading struct {
 	frameBusy                      time.Duration
 	flushes, commands, vertices    int64
 	atlas                          string // the GPU's images: see atlasLine
+	terms                          gui.TerminalMemory
 }
 
 func readDiag(s []metrics.Sample, at time.Time) diagReading {
@@ -158,7 +161,16 @@ func readDiag(s []metrics.Sample, at time.Time) diagReading {
 		partial:   frames.Partial,
 		flushes:   gpu.Flushes, commands: gpu.Commands, vertices: gpu.Vertices,
 		atlas:     atlasLine(gpu),
+		terms:     gui.ReadTerminalMemory(),
 	}
+}
+
+// terminalLine tells what the terminals followed hold in ghostty's pages:
+// the memory they use, the address space they reserve, and how much of what
+// they use is compressed scrollback.
+func terminalLine(m gui.TerminalMemory) string {
+	return fmt.Sprintf("%d, %.1f MB used of %.1f MB, %.1f MB of it compressed",
+		m.Terminals, mb(m.Resident), mb(m.Virtual), mb(m.Compressed))
 }
 
 // atlasLine tells the GPU's images apart: each atlas page, largest first,
