@@ -82,6 +82,7 @@ type terminalView struct {
 	cellW, cellH float64
 	cols, rows   int
 	runBuf       []byte // the text of a run of cells, kept between paints
+	paintMemo    paintMemo
 }
 
 const (
@@ -179,7 +180,7 @@ func (t *terminalView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	if err != nil && f.cols == 0 {
 		return
 	}
-	g := grid{origin: t.origin, cellW: t.cellW, cellH: t.cellH, size: p.FontSize, font: font, italic: italic, pal: t.pal, scale: dst.Scale(), runBuf: &t.runBuf}
+	g := grid{origin: t.origin, cellW: t.cellW, cellH: t.cellH, size: p.FontSize, font: font, italic: italic, pal: t.pal, scale: dst.Scale(), runBuf: &t.runBuf, memo: &t.paintMemo}
 	clip := dst.Clip(r)
 	g.paint(clip, f)
 
@@ -719,6 +720,7 @@ type grid struct {
 	ground       color.Color // the fill under the cells: the theme's, clear over a background image
 	scale        float64     // device pixels per logical pixel
 	runBuf       *[]byte
+	memo         *paintMemo
 }
 
 // cellWidth is a cell as wide as the font's advance, rounded to whole device
@@ -766,7 +768,7 @@ func (g grid) paint(dst *ggui.Canvas, f frameSnapshot) {
 				end++
 			}
 			if !def {
-				dst.FillRect(g.cellRect(start, row, end-start), bg)
+				dst.FillRect(g.cellRect(start, row, end-start), g.memo.color(bg))
 			}
 			start = end
 		}
@@ -783,7 +785,7 @@ func (g grid) paint(dst *ggui.Canvas, f frameSnapshot) {
 			fg := g.foreground(cell, f.colors)
 			rect := g.cellRect(start, row, 1)
 			if f.clusters[base+start] != "" || cell.Codepoint > 0x7e {
-				g.cellGlyph(dst, cell, f.textAt(base+start), rect, fg)
+				g.cellGlyph(dst, cell, f.clusters[base+start], rect, fg)
 				g.decorate(dst, cell, start, row, fg)
 				start++
 				continue
@@ -801,7 +803,7 @@ func (g grid) paint(dst *ggui.Canvas, f frameSnapshot) {
 				}
 			}
 			*g.runBuf = b
-			g.glyph(dst, string(b), rect.Origin, fg, cell.Flags.Bold, cell.Flags.Italic)
+			g.glyph(dst, g.memo.run(b), rect.Origin, fg, cell.Flags.Bold, cell.Flags.Italic)
 			for i := start; i < end; i++ {
 				g.decorate(dst, line[i], i, row, fg)
 			}
@@ -848,11 +850,16 @@ func (g grid) foreground(c gostty.RenderCell, colors gostty.RenderColors) color.
 }
 
 // cellGlyph draws one cell's character: as shapes if it is a box or block
-// character, else as text.
-func (g grid) cellGlyph(dst *ggui.Canvas, c gostty.RenderCell, text string, rect ggui.Rect, fg color.RGBA) {
-	if !drawBoxChar(dst, c.Codepoint, rect, fg) {
-		g.glyph(dst, text, rect.Origin, fg, c.Flags.Bold, c.Flags.Italic)
+// character, else as text, its grapheme cluster when it has one.
+func (g grid) cellGlyph(dst *ggui.Canvas, c gostty.RenderCell, cluster string, rect ggui.Rect, fg color.RGBA) {
+	if drawBoxChar(dst, c.Codepoint, rect, g.memo.color(fg)) {
+		return
 	}
+	text := cluster
+	if text == "" {
+		text = g.memo.rune(c.Codepoint)
+	}
+	g.glyph(dst, text, rect.Origin, fg, c.Flags.Bold, c.Flags.Italic)
 }
 
 // glyph draws text from a cell's top-left in the mono face, a grapheme to a
@@ -863,7 +870,7 @@ func (g grid) glyph(dst *ggui.Canvas, s string, at ggui.Point, fg color.RGBA, bo
 	if italic && g.italic != nil {
 		font = g.italic
 	}
-	st := ggui.TextStyle{Font: font, Size: g.size, Color: fg}
+	st := ggui.TextStyle{Font: font, Size: g.size, Color: g.memo.color(fg)}
 	if bold {
 		st.Weight = ggui.WeightBold
 	}
@@ -877,10 +884,10 @@ func (g grid) decorate(dst *ggui.Canvas, c gostty.RenderCell, col, row int, fg c
 	}
 	r := g.cellRect(col, row, width)
 	if c.Flags.Underline != gostty.UnderlineNone {
-		dst.FillRect(ggui.Rect{Origin: ggui.Pt(r.Origin.X, r.Origin.Y+r.Size.H-3), Size: ggui.Sz(r.Size.W, 1)}, fg)
+		dst.FillRect(ggui.Rect{Origin: ggui.Pt(r.Origin.X, r.Origin.Y+r.Size.H-3), Size: ggui.Sz(r.Size.W, 1)}, g.memo.color(fg))
 	}
 	if c.Flags.Strikethrough {
-		dst.FillRect(ggui.Rect{Origin: ggui.Pt(r.Origin.X, r.Origin.Y+r.Size.H/2), Size: ggui.Sz(r.Size.W, 1)}, fg)
+		dst.FillRect(ggui.Rect{Origin: ggui.Pt(r.Origin.X, r.Origin.Y+r.Size.H/2), Size: ggui.Sz(r.Size.W, 1)}, g.memo.color(fg))
 	}
 }
 
@@ -913,4 +920,66 @@ func strokeRect(dst *ggui.Canvas, r ggui.Rect, c color.Color) {
 	dst.FillRect(ggui.Rect{Origin: ggui.Pt(x, y+h-1), Size: ggui.Sz(w, 1)}, c)
 	dst.FillRect(ggui.Rect{Origin: ggui.Pt(x, y), Size: ggui.Sz(1, h)}, c)
 	dst.FillRect(ggui.Rect{Origin: ggui.Pt(x+w-1, y), Size: ggui.Sz(1, h)}, c)
+}
+
+// paintMemo is what a terminal's paint keeps from paint to paint so as not
+// to make it again for every cell: its colors boxed as color.Color, which
+// a color.RGBA passed as one is each time, the text of its runs of ASCII,
+// and its characters as strings. A screen paints mostly what it painted
+// last time, so nearly every lookup finds what it needs. It belongs to the
+// UI goroutine.
+type paintMemo struct {
+	lastRGBA  color.RGBA
+	lastColor color.Color
+	colors    map[color.RGBA]color.Color
+	runs      map[string]string
+	runes     map[rune]string
+}
+
+// mostMemoized is how many of each a paintMemo keeps before starting
+// over: enough for a screen of runs, little next to the screen itself.
+const mostMemoized = 4096
+
+// color returns c boxed, boxing it only the first time.
+func (m *paintMemo) color(c color.RGBA) color.Color {
+	if m.lastColor != nil && c == m.lastRGBA {
+		return m.lastColor
+	}
+	boxed, ok := m.colors[c]
+	if !ok {
+		if m.colors == nil || len(m.colors) >= mostMemoized {
+			m.colors = make(map[color.RGBA]color.Color)
+		}
+		boxed = c
+		m.colors[c] = boxed
+	}
+	m.lastRGBA, m.lastColor = c, boxed
+	return boxed
+}
+
+// run returns b as a string, which the text caches may keep as a key, so
+// it is never b's bytes: the same string as last time when b reads the same.
+func (m *paintMemo) run(b []byte) string {
+	if s, ok := m.runs[string(b)]; ok {
+		return s
+	}
+	if m.runs == nil || len(m.runs) >= mostMemoized {
+		m.runs = make(map[string]string)
+	}
+	s := string(b)
+	m.runs[s] = s
+	return s
+}
+
+// rune returns r as a string, made once.
+func (m *paintMemo) rune(r rune) string {
+	if s, ok := m.runes[r]; ok {
+		return s
+	}
+	if m.runes == nil || len(m.runes) >= mostMemoized {
+		m.runes = make(map[rune]string)
+	}
+	s := string(r)
+	m.runes[r] = s
+	return s
 }

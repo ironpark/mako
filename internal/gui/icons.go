@@ -205,10 +205,10 @@ func (d *activityDot) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	case dotWaiting:
 		c = tokDotWaiting
 	case dotDone:
-		dst.FillCircle(center, dotSize/2+1, tokDotDone)
+		dst.FillCircle(center, dotSize/2+1, dotColor(tokDotDone, 1))
 		return
 	default:
-		dst.FillCircle(center, dotSize/2, tokDotExited)
+		dst.FillCircle(center, dotSize/2, dotColor(tokDotExited, 1))
 		return
 	}
 	glow := 1.0
@@ -216,6 +216,28 @@ func (d *activityDot) Paint(dst *ggui.Canvas, r ggui.Rect) {
 		phase := float64(idleTick().UnixNano()%int64(glowPeriod)) / float64(glowPeriod)
 		glow = (1 - math.Cos(phase*2*math.Pi)) / 2
 	}
-	dst.FillCircle(center, dotSize/2+1.5+2*glow, c.Alpha(0.12+0.18*glow))
-	dst.FillCircle(center, dotSize/2, c.Alpha(0.7+0.3*glow))
+	dst.FillCircle(center, dotSize/2+1.5+2*glow, dotColor(c, 0.12+0.18*glow))
+	dst.FillCircle(center, dotSize/2, dotColor(c, 0.7+0.3*glow))
+}
+
+// dotColors are the dots' colors boxed as color.Color, by token and alpha:
+// a dot glows every frame, and a token passed as a color.Color is boxed
+// each time. The alpha is kept to 1/255, all a pixel shows. Dots paint on
+// the UI goroutine.
+var dotColors = map[uitheme.Color]color.Color{}
+
+// dotColor returns c at alpha, boxed once.
+func dotColor(c uitheme.Color, alpha float64) color.Color {
+	if alpha < 1 {
+		c = c.Alpha(math.Round(alpha*255) / 255)
+	}
+	boxed, ok := dotColors[c]
+	if !ok {
+		if len(dotColors) >= 4096 {
+			clear(dotColors)
+		}
+		boxed = c
+		dotColors[c] = boxed
+	}
+	return boxed
 }

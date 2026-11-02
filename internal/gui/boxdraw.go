@@ -16,7 +16,7 @@ import (
 // drawBoxChar draws r into the cell rect if it is one of the characters
 // above, reporting whether it was. rect's edges are already on device
 // pixels, so neighbouring cells meet without a seam.
-func drawBoxChar(dst *ggui.Canvas, r rune, rect ggui.Rect, fg color.RGBA) bool {
+func drawBoxChar(dst *ggui.Canvas, r rune, rect ggui.Rect, fg color.Color) bool {
 	switch {
 	case r >= 0x2580 && r <= 0x259F:
 		drawBlock(dst, r, rect, fg)
@@ -44,7 +44,7 @@ var quadrants = [...]uint8{
 	qUR, qUR | qLL, qUR | qLL | qLR,
 }
 
-func drawBlock(dst *ggui.Canvas, r rune, c ggui.Rect, fg color.RGBA) {
+func drawBlock(dst *ggui.Canvas, r rune, c ggui.Rect, fg color.Color) {
 	x, y, w, h := c.Origin.X, c.Origin.Y, c.Size.W, c.Size.H
 	fill := func(x0, y0, x1, y1 float64, col color.Color) { fillSnapped(dst, x0, y0, x1, y1, col) }
 	switch {
@@ -168,7 +168,7 @@ func lineWidths(dst *ggui.Canvas, c ggui.Rect) (thin, thick float64) {
 	return thin, thick
 }
 
-func drawLines(dst *ggui.Canvas, r rune, c ggui.Rect, fg color.RGBA) bool {
+func drawLines(dst *ggui.Canvas, r rune, c ggui.Rect, fg color.Color) bool {
 	x, y, w, h := c.Origin.X, c.Origin.Y, c.Size.W, c.Size.H
 	thin, thick := lineWidths(dst, c)
 	s := dst.Scale()
@@ -304,7 +304,7 @@ func drawArms(a arms, x, y, w, h, cx, cy, thin, thick float64, rect func(x0, y0,
 
 // drawArc draws a rounded corner: straight from the two edges it joins,
 // bending through a quarter circle about the corner of the cell's centre.
-func drawArc(dst *ggui.Canvas, r rune, c ggui.Rect, cx, cy, t float64, fg color.RGBA) {
+func drawArc(dst *ggui.Canvas, r rune, c ggui.Rect, cx, cy, t float64, fg color.Color) {
 	x, y, w, h := c.Origin.X, c.Origin.Y, c.Size.W, c.Size.H
 	rad := math.Min(w, h) / 2
 	// Which way the corner opens: the arms it joins.
