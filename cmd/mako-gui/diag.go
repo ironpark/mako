@@ -152,7 +152,7 @@ func readDiag(s []metrics.Sample, at time.Time) diagReading {
 		at: at, live: s[0].Value.Uint64(), goal: s[1].Value.Uint64(), total: s[2].Value.Uint64(),
 		limit: s[3].Value.Uint64(), goroutines: s[4].Value.Uint64(), gcs: s[5].Value.Uint64(),
 		gcCPU: s[6].Value.Float64(), userCPU: s[7].Value.Float64(), scavCPU: s[8].Value.Float64(),
-		footprint: footprint(), gpuImages: uint64(gpu.TotalGPUImageMemoryUsageInBytes), gpuQueue: uint64(gpu.QueueBufferBytes),
+		footprint: footprint(), gpuImages: uint64(gpu.TotalGPUImageMemoryUsageInBytes - gpu.ScreenBytes), gpuQueue: uint64(gpu.QueueBufferBytes),
 		frames: frames.Frames, frameBusy: frames.Busy,
 		framesFor: [5]int64{frames.ForAnimation, frames.ForTime, frames.ForCallback, frames.ForPosted, frames.ForInput},
 		partial:   frames.Partial,
