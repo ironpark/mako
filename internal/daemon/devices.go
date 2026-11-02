@@ -110,8 +110,11 @@ func (d *Daemon) meshDevices(ctx context.Context) *protocol.Devices {
 	}
 	wg.Go(func() { add(d.localDevices(ctx)) })
 	for id := range d.routing() {
+		// A revision of 0 is one not heard yet, as a node is listed as soon
+		// as it links, before it says what it speaks: it is asked, and a
+		// node too old to list devices says so among the errors.
 		node, ok := d.peers.get(id)
-		if !ok || node.GetRevision() < protocol.RevisionDevices {
+		if !ok || node.GetRevision() != 0 && node.GetRevision() < protocol.RevisionDevices {
 			continue
 		}
 		wg.Go(func() {
