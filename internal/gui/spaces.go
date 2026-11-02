@@ -13,10 +13,12 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// Spaces: the sidebar's sessions divided by whose repositories they are
-// in. A space is a set of owners, host/name as the daemon gives them; the
-// sidebar shows the sessions and kept folders of the space chosen, or of
-// every owner and none in the first, which is always there. A swipe of two
+// Spaces: the sidebar's sessions divided by project, as views of them. A
+// space holds owners, host/name as the daemon gives them, and projects by
+// ID; the sidebar shows the project sections of the space chosen, whole,
+// or every section in the first, which is always there. A space holds a
+// section it names, leaves out one it hides, and else holds one of an
+// owner of its; see showsGroup. A swipe of two
 // fingers across the sidebar moves to the space beside it.
 
 // space is a named set of repository owners.
@@ -24,6 +26,10 @@ type space struct {
 	ID     string   `json:"id"` // what it is shown by, and its tabs and panes kept by
 	Name   string   `json:"name"`
 	Owners []string `json:"owners,omitempty"`
+	// Projects are the sections the space shows whatever their owners,
+	// and Hidden those it leaves out though their owners are its: by ID.
+	Projects []string `json:"projects,omitempty"`
+	Hidden   []string `json:"hidden,omitempty"`
 	// OldLayoutBy is how the space kept its tabs and panes before one way
 	// held for every space, read once into spaceList's LayoutBy.
 	OldLayoutBy string `json:"layout_by,omitempty"`
@@ -38,6 +44,12 @@ type spaceList struct {
 	LayoutBy string  `json:"layout_by,omitempty"` // whole space, by owner or by project; see layoutBys
 	// NoAll leaves the space of every session out, while there are others.
 	NoAll bool `json:"no_all,omitempty"`
+	// Projects are the folders the user put together or named; see
+	// projects.go.
+	Projects []project `json:"projects,omitempty"`
+	// Names are the names given to the sections the sidebar groups itself,
+	// by their keys.
+	Names map[string]string `json:"names,omitempty"`
 	// OldAllLayoutBy is how the space of every session kept its tabs and
 	// panes, as OldLayoutBy is a space's.
 	OldAllLayoutBy string `json:"all_layout_by,omitempty"`
@@ -115,28 +127,6 @@ func (p spaceSet) spaceName(i int) string {
 	return cmp.Or(sp.Name, Tf("Space %d", i))
 }
 
-// inSpace reports whether a session or folder of owner shows in space i.
-func (p spaceSet) inSpace(i int, owner string) bool {
-	sp, ok := p.spaceOf(i)
-	return !ok || slices.Contains(sp.Owners, owner)
-}
-
-// spaceSessions keeps the sessions space i shows.
-func (p spaceSet) spaceSessions(i int, sessions []*protocol.SessionInfo) []*protocol.SessionInfo {
-	if _, ok := p.spaceOf(i); !ok {
-		return sessions
-	}
-	return slices.DeleteFunc(slices.Clone(sessions), func(s *protocol.SessionInfo) bool { return !p.inSpace(i, s.GetOwner()) })
-}
-
-// spaceProjects keeps the kept folders space i shows.
-func (p spaceSet) spaceProjects(i int, projects []keptProject) []keptProject {
-	if _, ok := p.spaceOf(i); !ok {
-		return projects
-	}
-	return slices.DeleteFunc(slices.Clone(projects), func(r keptProject) bool { return !p.inSpace(i, r.Owner) })
-}
-
 // setSpace shows space i in the sidebar, as far as there is one.
 func (m *model) setSpace(i int) {
 	set := m.spacesNow()
@@ -155,6 +145,8 @@ func (m *model) updateSpaces(fn func([]space) []space) {
 		spaces := slices.Clone(l.Spaces)
 		for i := range spaces {
 			spaces[i].Owners = slices.Clone(spaces[i].Owners)
+			spaces[i].Projects = slices.Clone(spaces[i].Projects)
+			spaces[i].Hidden = slices.Clone(spaces[i].Hidden)
 		}
 		l.Spaces = fn(spaces)
 		return l
@@ -476,7 +468,7 @@ func spacesSettings(m *model) ggui.Widget {
 		row(T("All sessions"), T("A space of every session, before the others. Left out, the sidebar shows only the spaces you add."),
 			ui.Switch(showAll, "").Name(T("All sessions"))),
 	)
-	return page(T("Spaces"), T("Spaces divide the sidebar's sessions by whose repositories they are in. Swipe across the sidebar with two fingers, or pick one from its title, to move between them."),
+	return page(T("Spaces"), T("Spaces divide the sidebar's projects: those of the owners a space holds, and those you put in it from a project's menu. Swipe across the sidebar with two fingers, or pick one from its title, to move between them."),
 		section(T("Every space"), general),
 		ggui.View(spaces, func(n int) ggui.Widget {
 			if n == 0 {
@@ -529,7 +521,49 @@ func spaceCard(m *model, i int, owners ggui.Readable[[]string]) ggui.Widget {
 		ggui.Expanded(ui.TextField(name).Placeholder(Tf("Space %d", i+1)).Name(T("Space name"))),
 		remove,
 	).Gap(8).Align(ggui.AlignCenter)
-	return card(ggui.Box(ggui.Column(head, chips).Gap(12).Stretch()).Pad(14, 16))
+	return card(ggui.Box(ggui.Column(head, chips, spaceProjectChips(m, i)).Gap(12).Stretch()).Pad(14, 16))
+}
+
+// spaceProjectChips are the projects space i holds or hides apart from its
+// owners, each a chip that lets it go.
+func spaceProjectChips(m *model, i int) ggui.Widget {
+	return ggui.Reactive(func() ggui.Widget {
+		l := m.Spaces.Get()
+		if i >= len(l.Spaces) {
+			return ggui.Box()
+		}
+		sp := l.Spaces[i]
+		if len(sp.Projects)+len(sp.Hidden) == 0 {
+			return ggui.Box()
+		}
+		var w []ggui.Widget
+		chip := func(id, label string) {
+			w = append(w, ui.ButtonOf(ggui.Row(
+				ggui.Text(label).Size(12.5).NoWrap(),
+				icon("x").Size(12).Color(tokMuted),
+			).Gap(6).Align(ggui.AlignCenter), func() {
+				m.updateSpaces(func(spaces []space) []space {
+					if i < len(spaces) {
+						drop := func(ids []string) []string {
+							return slices.DeleteFunc(ids, func(o string) bool { return o == id })
+						}
+						spaces[i].Projects, spaces[i].Hidden = drop(spaces[i].Projects), drop(spaces[i].Hidden)
+					}
+					return spaces
+				})
+			}).Outline().Name(Tf("Let go of %s", label)))
+		}
+		for _, id := range sp.Projects {
+			chip(id, projectLabel(l.Projects, id))
+		}
+		for _, id := range sp.Hidden {
+			chip(id, Tf("%s, left out", projectLabel(l.Projects, id)))
+		}
+		return ggui.Column(
+			muted(ggui.Text(T("Projects put in or left out from their menus, whatever their owners:")).Size(12)),
+			ggui.Wrap(w...).Gap(6),
+		).Gap(8).Stretch()
+	})
 }
 
 // spaceField binds a field of space i, as prefField does a setting's.

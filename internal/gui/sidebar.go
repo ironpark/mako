@@ -20,7 +20,7 @@ import (
 func projectLabels(groups []sessionGroup, nodes []*protocol.Node) map[string]string {
 	byName := map[string][]sessionGroup{}
 	for _, g := range groups {
-		if g.Project != "" {
+		if g.Project != "" && g.Name == "" {
 			byName[projectName(g.Project)] = append(byName[projectName(g.Project)], g)
 		}
 	}

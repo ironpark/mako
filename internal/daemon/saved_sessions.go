@@ -285,6 +285,10 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 		}
 		req.Project = w.GetPath()
 	}
+	// A project that gives its folders gives them to an agent started in
+	// one: worked out at each start, so a resumed session has its
+	// project's folders as they are now.
+	launch.Command = withProjectDirs(req.GetAgent(), launch.Command, d.projectDirs(req.GetProject()))
 
 	d.sessionMu.Lock()
 	previous, existed := d.saved[id]

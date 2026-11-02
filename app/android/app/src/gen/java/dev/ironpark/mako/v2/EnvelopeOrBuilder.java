@@ -670,6 +670,28 @@ public interface EnvelopeOrBuilder extends
   dev.ironpark.mako.v2.ProjectAgents getProjectAgents();
 
   /**
+   * <code>.mako.v2.SetProjects set_projects = 74 [json_name = "setProjects"];</code>
+   * @return Whether the setProjects field is set.
+   */
+  boolean hasSetProjects();
+  /**
+   * <code>.mako.v2.SetProjects set_projects = 74 [json_name = "setProjects"];</code>
+   * @return The setProjects.
+   */
+  dev.ironpark.mako.v2.SetProjects getSetProjects();
+
+  /**
+   * <code>.mako.v2.Projects projects = 75 [json_name = "projects"];</code>
+   * @return Whether the projects field is set.
+   */
+  boolean hasProjects();
+  /**
+   * <code>.mako.v2.Projects projects = 75 [json_name = "projects"];</code>
+   * @return The projects.
+   */
+  dev.ironpark.mako.v2.Projects getProjects();
+
+  /**
    * <pre>
    * A forge: GitHub, Forgejo or Gitea.
    * </pre>

@@ -94,6 +94,8 @@ message Envelope {
     Chat chat = 71;
     ReadProjectAgents read_project_agents = 72;
     ProjectAgents project_agents = 73;
+    SetProjects set_projects = 74;
+    Projects projects = 75;
 
     // A forge: GitHub, Forgejo or Gitea.
     ForgeList forge_list = 80;

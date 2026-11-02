@@ -74,13 +74,13 @@ func layoutKey(spaceID, context string) string { return spaceID + "|" + context 
 func keySpace(key string) string { s, _, _ := strings.Cut(key, "|"); return s }
 
 // sessionContext is the set of tabs a session is in within a space that
-// keeps them by: its owner's, or its project's.
-func sessionContext(by string, s *protocol.SessionInfo) string {
+// keeps them by: its owner's, or its project's section's.
+func sessionContext(by string, defs []project, s *protocol.SessionInfo) string {
 	switch by {
 	case layoutByOwner:
 		return "owner:" + s.GetOwner()
 	case layoutByProject:
-		return "project:" + dirKey(s.GetNodeId(), projectOf(s))
+		return "project:" + sectionID(defs, s)
 	}
 	return ""
 }
@@ -142,6 +142,7 @@ func setupWorkspace(m *model) {
 	}
 	m.Spaces.Set(f.Doc.spaceList.upgraded())
 	moveOldSpaces(m)
+	m.migrateProjectKeys()
 	m.layoutKey = m.shownKey()
 	m.setLayout(m.takeLayout(m.layoutKey))
 	m.wsLast, _ = json.Marshal(m.workspaceDocNow())
@@ -149,6 +150,9 @@ func setupWorkspace(m *model) {
 	shown := ggui.Derived(func() string { p := m.spaces(); return layoutKey(p.spaceID(p.Space), p.LayoutBy) })
 	ggui.Watch(shown, func(string) { m.showLayout(m.shownKey()) })
 	ggui.Watch(m.Spaces, func(spaceList) { m.workspaceChanged() })
+	// The daemons hear of the projects as they change, not at the next poll.
+	projects := ggui.Map(m.Spaces, func(l spaceList) []project { return l.Projects }).WithEqual(slicesEqual)
+	ggui.Watch(projects, func([]project) { m.pushProjects(ggui.Peek(m.Nodes)) })
 	ggui.Watch(m.Layout, func(*layoutNode) { m.workspaceChanged() })
 	sync := ggui.Map(m.Prefs, func(p prefs) bool { return p.SyncWorkspace })
 	ggui.Watch(sync, func(on bool) {
@@ -211,7 +215,7 @@ func (m *model) showContext(s *protocol.SessionInfo) {
 		return
 	}
 	id := p.spaceID(p.Space)
-	if c := sessionContext(by, s); c != m.contexts[id] {
+	if c := sessionContext(by, p.Projects, s); c != m.contexts[id] {
 		m.contexts[id] = c
 		m.contextsMoved = true
 	}
@@ -372,6 +376,7 @@ func (m *model) takeWorkspace(ws *protocol.Workspace) {
 	m.Spaces.Set(f.Doc.spaceList.upgraded())
 	m.layouts = keyedLayouts(f.Doc.Layouts)
 	maps.Copy(m.tabNodes, f.Doc.TabNodes)
+	m.migrateProjectKeys()
 	m.layoutKey = m.shownKey()
 	root := m.takeLayout(m.layoutKey)
 	// A file with edits not saved stays open, whatever the other node had.

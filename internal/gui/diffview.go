@@ -8,6 +8,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -355,7 +356,7 @@ func agentNote(path string, lines []*protocol.DiffLine, note string) string {
 func (m *model) agentsFor(root fileRoot) []*protocol.SessionInfo {
 	var out []*protocol.SessionInfo
 	for _, s := range ggui.Peek(m.Sessions) {
-		if s.GetNodeId() != root.Node || !(within(s.GetProject(), root.Path) || within(root.Path, s.GetProject())) || !m.chatCapable(s.GetId()) {
+		if s.GetNodeId() != root.Node || !(pathscope.Within(s.GetProject(), root.Path) || pathscope.Within(root.Path, s.GetProject())) || !m.chatCapable(s.GetId()) {
 			continue
 		}
 		if s.GetId() == m.lastSession {

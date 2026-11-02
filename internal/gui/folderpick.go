@@ -33,6 +33,9 @@ type folderPick struct {
 	Naming  *ggui.StateValue[bool]   // a new folder's name is being typed
 	NewName *ggui.StateValue[string] // and the name
 	taps    taps
+	// done takes the folder chosen, "" for none, once the picker closes:
+	// back to the dialog it was opened over.
+	done func(dir string)
 }
 
 func newFolderPick(m *model) *folderPick {
@@ -57,23 +60,44 @@ func newFolderPick(m *model) *folderPick {
 // the form names, at the folder it names, else the node's home.
 func (m *model) pickFolder() {
 	f := ggui.Peek(m.Form)
-	if err := m.canTransfer(f.NodeID); err != nil { // its ListDir does not read ~
-		m.FormErr.Set(nodeErr(err))
+	m.pickFolderFor(m.NewOpen, f.NodeID, f.Project, m.FormErr.Set, func(dir string) {
+		if dir != "" {
+			m.Form.Update(func(f newSession) newSession { f.Project = dir; return f })
+		}
+	})
+}
+
+// pickFolderFor shows the picker for a folder on node, at start, else the
+// node's home, in place of the dialog over, which comes back as it
+// closes; done takes the folder chosen, "" for none. Why it cannot open
+// goes to fail.
+func (m *model) pickFolderFor(over *ggui.StateValue[bool], node, start string, fail func(string), done func(dir string)) {
+	abort := func(why string) {
+		m.Pick.done = nil
+		fail(why)
+		over.Set(true)
+	}
+	if err := m.canTransfer(node); err != nil { // its ListDir does not read ~
+		abort(nodeErr(err))
 		return
 	}
-	m.resolveHome(f.NodeID, "~", func(home string) {
+	over.Set(false)
+	m.Pick.done = func(dir string) {
+		done(dir)
+		over.Set(true)
+	}
+	m.resolveHome(node, "~", func(home string) {
 		p := m.Pick
-		p.Node, p.Home = f.NodeID, home
+		p.Node, p.Home = node, home
 		p.Naming.Set(false)
 		m.loadDir(p.Node, home, false) // for the sidebar's places in it
-		start := strings.TrimSpace(f.Project)
+		start := strings.TrimSpace(start)
 		if !isAbsPath(start) {
 			start = home
 		}
 		p.reset(start)
-		m.NewOpen.Set(false)
 		p.On.Set(true)
-	}, m.FormErr.Set)
+	}, abort)
 }
 
 // isAbsPath reports whether p is absolute on a node of either kind.
@@ -81,12 +105,15 @@ func isAbsPath(p string) bool {
 	return strings.HasPrefix(p, "/") || len(p) >= 3 && p[1] == ':' && (p[2] == '\\' || p[2] == '/')
 }
 
-// closePicker goes back to the form, with dir in it unless it is "".
+// closePicker goes back to the dialog it was opened over, with dir in it
+// unless it is "".
 func (m *model) closePicker(dir string) {
-	if dir != "" {
-		m.Form.Update(func(f newSession) newSession { f.Project = dir; return f })
-	}
+	done := m.Pick.done
+	m.Pick.done = nil
 	m.Pick.On.Set(false)
+	if done != nil {
+		done(dir)
+	}
 }
 
 // picked is the folder the picker would choose: the one selected, else
@@ -154,12 +181,12 @@ func (m *model) places(p *folderPick) (favorites, recent, locations []place) {
 // folderPickerDialog is the picker, over the window.
 func folderPickerDialog(m *model) ggui.Widget {
 	p := m.Pick
-	// Closed by its buttons, Escape or a tap outside, it goes back to the
-	// form.
+	// Closed by Escape or a tap outside, it goes back to the dialog it was
+	// opened over, as its buttons do.
 	was := false
 	ggui.Watch(p.On, func(on bool) {
-		if was && !on {
-			m.NewOpen.Set(true)
+		if was && !on && p.done != nil {
+			m.closePicker("")
 		}
 		was = on
 	})

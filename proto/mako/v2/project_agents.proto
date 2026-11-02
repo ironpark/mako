@@ -39,3 +39,28 @@ message AgentMessage {
   google.protobuf.Timestamp created_at = 5;
   string state = 6; // pending, acknowledged, removed (recipient deleted)
 }
+
+// SetProjects gives a daemon the projects the user put together, as far
+// as they have folders on its node: its agents in one project's folders
+// see and message each other as one project's, whatever folder each is
+// in. A front-end sends every project there is each time, and the daemon
+// keeps the last it was given. It answers with the Projects it keeps.
+message SetProjects {
+  string node_id = 1; // empty for the daemon asked
+  repeated ProjectScope projects = 2;
+}
+
+// ProjectScope is a project's folders on one node.
+message ProjectScope {
+  string id = 1;
+  string name = 2;
+  repeated string paths = 3; // absolute; each holds its subfolders, but not a repository of its own in one
+  // give_dirs gives an agent started in one of the folders the others
+  // too, as an agent that takes more folders than its own takes them.
+  bool give_dirs = 4;
+}
+
+// Projects is the projects a daemon keeps, as SetProjects gave them.
+message Projects {
+  repeated ProjectScope projects = 1;
+}

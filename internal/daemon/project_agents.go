@@ -16,10 +16,18 @@ func (d *Daemon) readProjectAgents(req *protocol.ReadProjectAgents) (*protocol.P
 		return nil, err
 	}
 	all := d.listSessions()
-	scope := projectScope(&protocol.SessionInfo{Project: req.GetPath()})
-	for _, info := range all {
-		if projectScope(&protocol.SessionInfo{Project: info.GetProject()}) == scope {
-			scope = projectScope(info)
+	// Each session's project, worked out once: it reads the folders.
+	scopes := make([]string, len(all))
+	for i, info := range all {
+		scopes[i] = d.projectScope(info)
+	}
+	// The folder's project, or the project of a session working in it, as
+	// a worktree's is its repository's.
+	scope := d.projectScope(&protocol.SessionInfo{Project: req.GetPath()})
+	path := cleanPath(req.GetPath())
+	for i, info := range all {
+		if cleanPath(info.GetProject()) == path {
+			scope = scopes[i]
 			break
 		}
 	}
@@ -31,8 +39,8 @@ func (d *Daemon) readProjectAgents(req *protocol.ReadProjectAgents) (*protocol.P
 	d.sessionMu.Unlock()
 	out := &protocol.ProjectAgents{Project: scope}
 	members := map[string]bool{}
-	for _, info := range all {
-		if projectScope(info) != scope {
+	for i, info := range all {
+		if scopes[i] != scope {
 			continue
 		}
 		info.Command = nil // runtime commands are not needed for monitoring

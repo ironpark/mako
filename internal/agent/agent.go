@@ -57,6 +57,10 @@ type Launcher interface {
 // Prompter gives a newly launched interactive agent its initial task.
 type Prompter interface{ PromptArgs(text string) []string }
 
+// DirTaker is an agent that works in folders besides its own: DirArgs are
+// the arguments that give it dirs, none when this one takes none.
+type DirTaker interface{ DirArgs(dirs []string) []string }
+
 // Launch is how mako starts an agent: its command line, and the variables
 // it adds to the agent's environment. Readying a launch changes both.
 type Launch struct {

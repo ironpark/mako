@@ -299,6 +299,179 @@ func (x *AgentMessage) GetState() string {
 	return ""
 }
 
+// SetProjects gives a daemon the projects the user put together, as far
+// as they have folders on its node: its agents in one project's folders
+// see and message each other as one project's, whatever folder each is
+// in. A front-end sends every project there is each time, and the daemon
+// keeps the last it was given. It answers with the Projects it keeps.
+type SetProjects struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // empty for the daemon asked
+	Projects      []*ProjectScope        `protobuf:"bytes,2,rep,name=projects,proto3" json:"projects,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetProjects) Reset() {
+	*x = SetProjects{}
+	mi := &file_mako_v2_project_agents_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetProjects) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetProjects) ProtoMessage() {}
+
+func (x *SetProjects) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_project_agents_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetProjects.ProtoReflect.Descriptor instead.
+func (*SetProjects) Descriptor() ([]byte, []int) {
+	return file_mako_v2_project_agents_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SetProjects) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *SetProjects) GetProjects() []*ProjectScope {
+	if x != nil {
+		return x.Projects
+	}
+	return nil
+}
+
+// ProjectScope is a project's folders on one node.
+type ProjectScope struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Paths []string               `protobuf:"bytes,3,rep,name=paths,proto3" json:"paths,omitempty"` // absolute; each holds its subfolders, but not a repository of its own in one
+	// give_dirs gives an agent started in one of the folders the others
+	// too, as an agent that takes more folders than its own takes them.
+	GiveDirs      bool `protobuf:"varint,4,opt,name=give_dirs,json=giveDirs,proto3" json:"give_dirs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProjectScope) Reset() {
+	*x = ProjectScope{}
+	mi := &file_mako_v2_project_agents_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProjectScope) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProjectScope) ProtoMessage() {}
+
+func (x *ProjectScope) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_project_agents_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProjectScope.ProtoReflect.Descriptor instead.
+func (*ProjectScope) Descriptor() ([]byte, []int) {
+	return file_mako_v2_project_agents_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ProjectScope) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ProjectScope) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ProjectScope) GetPaths() []string {
+	if x != nil {
+		return x.Paths
+	}
+	return nil
+}
+
+func (x *ProjectScope) GetGiveDirs() bool {
+	if x != nil {
+		return x.GiveDirs
+	}
+	return false
+}
+
+// Projects is the projects a daemon keeps, as SetProjects gave them.
+type Projects struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Projects      []*ProjectScope        `protobuf:"bytes,1,rep,name=projects,proto3" json:"projects,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Projects) Reset() {
+	*x = Projects{}
+	mi := &file_mako_v2_project_agents_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Projects) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Projects) ProtoMessage() {}
+
+func (x *Projects) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_project_agents_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Projects.ProtoReflect.Descriptor instead.
+func (*Projects) Descriptor() ([]byte, []int) {
+	return file_mako_v2_project_agents_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *Projects) GetProjects() []*ProjectScope {
+	if x != nil {
+		return x.Projects
+	}
+	return nil
+}
+
 var File_mako_v2_project_agents_proto protoreflect.FileDescriptor
 
 const file_mako_v2_project_agents_proto_rawDesc = "" +
@@ -324,7 +497,17 @@ const file_mako_v2_project_agents_proto_rawDesc = "" +
 	"\x04text\x18\x04 \x01(\tR\x04text\x129\n" +
 	"\n" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x14\n" +
-	"\x05state\x18\x06 \x01(\tR\x05stateB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
+	"\x05state\x18\x06 \x01(\tR\x05state\"Y\n" +
+	"\vSetProjects\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x121\n" +
+	"\bprojects\x18\x02 \x03(\v2\x15.mako.v2.ProjectScopeR\bprojects\"e\n" +
+	"\fProjectScope\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
+	"\x05paths\x18\x03 \x03(\tR\x05paths\x12\x1b\n" +
+	"\tgive_dirs\x18\x04 \x01(\bR\bgiveDirs\"=\n" +
+	"\bProjects\x121\n" +
+	"\bprojects\x18\x01 \x03(\v2\x15.mako.v2.ProjectScopeR\bprojectsB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
 	file_mako_v2_project_agents_proto_rawDescOnce sync.Once
@@ -338,25 +521,30 @@ func file_mako_v2_project_agents_proto_rawDescGZIP() []byte {
 	return file_mako_v2_project_agents_proto_rawDescData
 }
 
-var file_mako_v2_project_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_mako_v2_project_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_mako_v2_project_agents_proto_goTypes = []any{
 	(*ReadProjectAgents)(nil),     // 0: mako.v2.ReadProjectAgents
 	(*ProjectAgents)(nil),         // 1: mako.v2.ProjectAgents
 	(*ProjectAgent)(nil),          // 2: mako.v2.ProjectAgent
 	(*AgentMessage)(nil),          // 3: mako.v2.AgentMessage
-	(*SessionInfo)(nil),           // 4: mako.v2.SessionInfo
-	(*timestamppb.Timestamp)(nil), // 5: google.protobuf.Timestamp
+	(*SetProjects)(nil),           // 4: mako.v2.SetProjects
+	(*ProjectScope)(nil),          // 5: mako.v2.ProjectScope
+	(*Projects)(nil),              // 6: mako.v2.Projects
+	(*SessionInfo)(nil),           // 7: mako.v2.SessionInfo
+	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
 }
 var file_mako_v2_project_agents_proto_depIdxs = []int32{
 	2, // 0: mako.v2.ProjectAgents.agents:type_name -> mako.v2.ProjectAgent
 	3, // 1: mako.v2.ProjectAgents.messages:type_name -> mako.v2.AgentMessage
-	4, // 2: mako.v2.ProjectAgent.session:type_name -> mako.v2.SessionInfo
-	5, // 3: mako.v2.AgentMessage.created_at:type_name -> google.protobuf.Timestamp
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	7, // 2: mako.v2.ProjectAgent.session:type_name -> mako.v2.SessionInfo
+	8, // 3: mako.v2.AgentMessage.created_at:type_name -> google.protobuf.Timestamp
+	5, // 4: mako.v2.SetProjects.projects:type_name -> mako.v2.ProjectScope
+	5, // 5: mako.v2.Projects.projects:type_name -> mako.v2.ProjectScope
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_project_agents_proto_init() }
@@ -371,7 +559,7 @@ func file_mako_v2_project_agents_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_project_agents_proto_rawDesc), len(file_mako_v2_project_agents_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

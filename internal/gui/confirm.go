@@ -11,6 +11,7 @@ import (
 type confirmation struct {
 	Title, Body, Action string
 	Run                 func()
+	Safe                bool // the action loses nothing, and is not marked as one that does
 }
 
 // askConfirm asks to be sure of c, in the window's confirmation dialog.
@@ -37,10 +38,14 @@ func confirmDialog(m *model) ggui.Widget {
 		}
 	})
 	return ggui.View(m.Confirmation, func(c confirmation) ggui.Widget {
-		return ui.AlertDialog(open, c.Title, c.Body).Confirm(c.Action, func() {
+		d := ui.AlertDialog(open, c.Title, c.Body).Confirm(c.Action, func() {
 			if c.Run != nil {
 				c.Run()
 			}
-		}).Destructive()
+		})
+		if c.Safe {
+			return d
+		}
+		return d.Destructive()
 	})
 }

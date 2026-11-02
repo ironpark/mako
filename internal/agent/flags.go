@@ -31,6 +31,23 @@ type Flags struct {
 	IsolateFlag string
 }
 
+// DirArgs gives the agent folders besides its own through its --add-dir
+// option, in the = form where the option takes any number of values, so
+// it does not take the arguments after it; none for an agent without one.
+func (f *Flags) DirArgs(dirs []string) []string {
+	const flag = "--add-dir"
+	var out []string
+	for _, dir := range dirs {
+		switch {
+		case slices.Contains(f.Variadic, flag):
+			out = append(out, flag+"="+dir)
+		case slices.Contains(f.Values, flag):
+			out = append(out, flag, dir)
+		}
+	}
+	return out
+}
+
 func (f *Flags) PromptArgs(text string) []string {
 	if f.PromptFlag != "" {
 		return []string{f.PromptFlag, text}

@@ -11,29 +11,54 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// A space shows the sessions and kept folders of its owners; the first
-// shows every one, those of no owner too.
-func TestSpacesDivideSessionsByOwner(t *testing.T) {
-	p := spaceSet{spaceList: spaceList{Spaces: []space{{Name: "work", Owners: []string{"github.com/acme"}}}}}
-	sessions := []*protocol.SessionInfo{{Id: "1", Owner: "github.com/acme"}, {Id: "2", Owner: "github.com/me"}, {Id: "3"}}
-	ids := func(ss []*protocol.SessionInfo) (out []string) {
-		for _, s := range ss {
-			out = append(out, s.GetId())
+// A space shows the project sections of its owners, whole, and those it
+// holds by ID, and leaves out those it hides; the first shows every one,
+// those of no owner too.
+func TestSpacesShowProjectsByOwnerAndByID(t *testing.T) {
+	p := spaceSet{spaceList: spaceList{Spaces: []space{{Name: "work", Owners: []string{"github.com/acme"}, Projects: []string{"notes"}, Hidden: []string{"repo:github.com/acme/old"}}}}}
+	groups := []sessionGroup{
+		{Key: "repo:github.com/acme/api", Owner: "github.com/acme"},
+		{Key: "repo:github.com/acme/old", Owner: "github.com/acme"},
+		{Key: "repo:github.com/me/toy", Owner: "github.com/me"},
+		{Key: "notes"},
+		// A project of two owners shows where either is held.
+		{Key: "product", Def: &project{Roots: []projectRoot{{Owner: "github.com/me"}, {Owner: "github.com/acme"}}}},
+	}
+	keys := func(gs []sessionGroup) (out []string) {
+		for _, g := range gs {
+			out = append(out, g.Key)
 		}
 		return out
 	}
-	if got := ids(p.spaceSessions(0, sessions)); !slices.Equal(got, []string{"1", "2", "3"}) {
+	if got := keys(p.spaceGroups(0, groups)); len(got) != len(groups) {
 		t.Fatalf("all sessions %v", got)
 	}
-	if got := ids(p.spaceSessions(1, sessions)); !slices.Equal(got, []string{"1"}) {
-		t.Fatalf("work %v", got)
+	if got, want := keys(p.spaceGroups(1, groups)), []string{"repo:github.com/acme/api", "notes", "product"}; !slices.Equal(got, want) {
+		t.Fatalf("work %v, want %v", got, want)
 	}
-	kept := []keptProject{{fileRoot{"n", "/a"}, "github.com/acme", ""}, {fileRoot{"n", "/b"}, "", ""}}
-	if got := p.spaceProjects(1, kept); len(got) != 1 || got[0].Path != "/a" {
-		t.Fatalf("work folders %v", got)
-	}
-	if len(sessions) != 3 || len(kept) != 2 {
+	if len(groups) != 5 {
 		t.Fatal("filtering changed its input")
+	}
+}
+
+// A project put in a space from its menu stays, and one left out of it
+// stays out, whatever its owners say.
+func TestTogglingAProjectInASpace(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.newSpace("work", "github.com/acme")
+	api := sessionGroup{Key: "repo:github.com/acme/api", Owner: "github.com/acme"}
+	notes := sessionGroup{Key: "notes"}
+	m.toggleProject(0, api)
+	m.toggleProject(0, notes)
+	sp := ggui.Peek(m.Spaces).Spaces[0]
+	if !slices.Equal(sp.Hidden, []string{api.Key}) || !slices.Equal(sp.Projects, []string{notes.Key}) {
+		t.Fatalf("held %v, hidden %v", sp.Projects, sp.Hidden)
+	}
+	m.toggleProject(0, api)
+	m.toggleProject(0, notes)
+	if sp := ggui.Peek(m.Spaces).Spaces[0]; len(sp.Projects)+len(sp.Hidden) != 0 {
+		t.Fatalf("after toggling back: held %v, hidden %v", sp.Projects, sp.Hidden)
 	}
 }
 

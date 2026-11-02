@@ -29,7 +29,11 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 15
+const Revision = 16
+
+// RevisionProjects adds SetProjects: projects of several folders, which
+// the daemon's agents share as one project.
+const RevisionProjects = 16
 
 // RevisionProjectAgents adds the read-only project agent monitor.
 const RevisionProjectAgents = 15

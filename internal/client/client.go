@@ -105,6 +105,12 @@ func (c *Client) SetWorkspace(ctx context.Context, ws *protocol.Workspace) (*pro
 	return request[*protocol.Workspace](ctx, c, protocol.TypeWorkspace, ws)
 }
 
+// SetProjects gives a node's daemon the projects the user put together,
+// and returns those it keeps.
+func (c *Client) SetProjects(ctx context.Context, req *protocol.SetProjects) (*protocol.Projects, error) {
+	return request[*protocol.Projects](ctx, c, protocol.TypeSetProjects, req)
+}
+
 // Sessions lists agent sessions across the mesh.
 func (c *Client) Sessions(ctx context.Context) ([]*protocol.SessionInfo, error) {
 	return c.ListSessions(ctx, &protocol.ListSessions{})

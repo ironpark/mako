@@ -17,7 +17,7 @@ func TestProjectMonitorKeepsAcknowledgedMessagesAndDoesNotConsumeInboxes(t *test
 		t.Fatal(err)
 	}
 	project := parent.Info().GetProject()
-	msg, err := d.projectAgents.messages.send(parent.ID(), child.ID, "Review cancellation", projectScope(parent.Info()))
+	msg, err := d.projectAgents.messages.send(parent.ID(), child.ID, "Review cancellation", d.projectScope(parent.Info()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,11 +62,11 @@ func TestProjectMonitorKeepsAcknowledgedMessagesAndDoesNotConsumeInboxes(t *test
 	if err := restored.load(d.dir); err != nil {
 		t.Fatal(err)
 	}
-	_, history := restored.monitor(projectScope(parent.Info()), map[string]bool{parent.ID(): true}, 50)
+	_, history := restored.monitor(d.projectScope(parent.Info()), map[string]bool{parent.ID(): true}, 50)
 	if len(history) != 1 || history[0].GetState() != "acknowledged" {
 		t.Fatal("monitor history was not persisted")
 	}
-	if _, err := d.projectAgents.messages.send(parent.ID(), child.ID, "More context", projectScope(parent.Info())); err != nil {
+	if _, err := d.projectAgents.messages.send(parent.ID(), child.ID, "More context", d.projectScope(parent.Info())); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.closeSession(child.ID); err != nil {
@@ -110,7 +110,7 @@ func TestProjectMonitorRoutesToTheSessionsNode(t *testing.T) {
 	addSession(t, b, "remote-agent")
 	s, _ := b.sessions.get("remote-agent")
 	project := s.Info().GetProject()
-	if _, err := b.projectAgents.messages.send("other", "remote-agent", "remote message", projectScope(s.Info())); err != nil {
+	if _, err := b.projectAgents.messages.send("other", "remote-agent", "remote message", b.projectScope(s.Info())); err != nil {
 		t.Fatal(err)
 	}
 	c := dialDaemon(t, a)

@@ -270,10 +270,12 @@ type model struct {
 	DetailTab        *ggui.StateValue[int]
 	ProjectAgents    *ggui.StateValue[projectAgentsView]
 	projectAgentsGen uint64
-	Forge            forgeState             // the GitHub tab, and the watch on the branch
-	Tunnels          *tunnelState           // ports of other nodes forwarded here
-	Pick             *folderPick            // the New session dialog's folder picker
-	ImageOpen        *ggui.StateValue[bool] // the previewed image is shown enlarged
+	Forge            forgeState                          // the GitHub tab, and the watch on the branch
+	Tunnels          *tunnelState                        // ports of other nodes forwarded here
+	Pick             *folderPick                         // the New session dialog's folder picker
+	Proj             *projectAsk                         // the project dialogs; see projectmenu.go
+	projectsSent     map[string][]*protocol.ProjectScope // by node, the projects its daemon was last told; UI goroutine only
+	ImageOpen        *ggui.StateValue[bool]              // the previewed image is shown enlarged
 	NewOpen          *ggui.StateValue[bool]
 	Form             *ggui.StateValue[newSession]
 	FormErr          *ggui.StateValue[string]
@@ -441,6 +443,8 @@ func newModel(cfg *config.Config, addr string) *model {
 	m.spaceSet = ggui.Combine(m.Spaces, ggui.Map(m.Prefs, func(p prefs) string { return p.ShownSpace }), spaceSetOf).
 		WithEqual(func(a, b spaceSet) bool { return reflect.DeepEqual(a, b) })
 	m.Pick = newFolderPick(m)
+	m.Proj = newProjectAsk()
+	m.projectsSent = map[string][]*protocol.ProjectScope{}
 	return m
 }
 
@@ -693,6 +697,8 @@ func (m *model) poll(ctx context.Context) {
 		// last session: killing that session leaves the folder to start
 		// another in.
 		m.keepProjects(sessions)
+		m.joinClones(sessions)
+		m.pushProjects(nodes)
 		// A restarted daemon restores IDs as stopped. Discard their old
 		// terminal links, including hidden tabs, before displaying them again.
 		for _, info := range sessions {
@@ -807,9 +813,17 @@ type sessionGroup struct {
 	Remote   string // the repository its origin is of, host/path
 	Sessions []*protocol.SessionInfo
 	// Roots are the folders of the section, on their nodes: more than one
-	// for the clones of one repository on several nodes, NodeID and
-	// Project being the one a new session starts in by default.
+	// for the clones of one repository on several nodes, or a project's
+	// folders, NodeID and Project being the one a new session starts in
+	// by default.
 	Roots []fileRoot
+	// Name is the section's name, as a project gives it; "" for its
+	// folder's.
+	Name string
+	// Def is the project the section is, nil for one the sidebar groups
+	// itself; RootOf is the root of it each session is in, by ID.
+	Def    *project
+	RootOf map[string]int
 }
 
 // keptProject is a folder the sidebar keeps, with the owner of its
@@ -922,12 +936,7 @@ func groupSessions(sessions []*protocol.SessionInfo, by string, nodes []*protoco
 // machine's clone, else the first. Every section says its folders in
 // Roots.
 func byRemote(groups []sessionGroup, nodes []*protocol.Node) []sessionGroup {
-	self := ""
-	for _, n := range nodes {
-		if n.GetSource() == "self" {
-			self = n.GetId()
-		}
-	}
+	self := selfNode(nodes)
 	var out []sessionGroup
 	index := map[string]int{}
 	for _, g := range groups {
@@ -936,13 +945,15 @@ func byRemote(groups []sessionGroup, nodes []*protocol.Node) []sessionGroup {
 		if g.Remote == "" || !ok {
 			g.Roots = []fileRoot{root}
 			if g.Remote != "" {
+				// A repository's section is keyed by it, so its key stays
+				// as its clones come and go.
+				g.Key = implicitKey(g.NodeID, g.Project, g.Remote)
 				index[g.Remote] = len(out)
 			}
 			out = append(out, g)
 			continue
 		}
 		m := &out[i]
-		m.Key = "repo:" + g.Remote
 		m.Roots = append(m.Roots, root)
 		m.Sessions = append(m.Sessions, g.Sessions...)
 		if g.NodeID == self && m.NodeID != self {
@@ -1026,18 +1037,6 @@ func bucket(sessions []*protocol.SessionInfo, key func(*protocol.SessionInfo) (s
 		groups[i].Sessions = append(groups[i].Sessions, s)
 	}
 	return groups
-}
-
-// within reports whether dir is root or a folder inside it.
-func within(dir, root string) bool {
-	if dir == root {
-		return true
-	}
-	if root == "" {
-		return false
-	}
-	sep := pathSep(root)
-	return strings.HasPrefix(dir, strings.TrimSuffix(root, sep)+sep)
 }
 
 // Actions -------------------------------------------------------------------

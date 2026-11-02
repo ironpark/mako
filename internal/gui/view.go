@@ -15,6 +15,7 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -63,6 +64,7 @@ func window(m *model) ggui.Widget {
 		newSessionDialog(m),
 		folderPickerDialog(m),
 		renameDialog(m),
+		projectDialogs(m),
 		fileDialogs(m),
 		tunnelDialog(m),
 		forgeDialogs(m),
@@ -188,14 +190,16 @@ func sidebar(m *model) ggui.Widget {
 			if i < 0 {
 				return ggui.Box()
 			}
-			owners := ggui.Map(m.Spaces, func(l spaceList) string {
+			// The list follows what the space shows and the projects; the
+			// rest of the workspace, its panes, it does not.
+			shows := ggui.Map(m.Spaces, func(l spaceList) spaceShowing {
 				sp, _ := spaceSet{spaceList: l}.spaceOf(i)
-				return strings.Join(sp.Owners, "\x00")
-			})
+				return spaceShowing{sp, l.Projects, l.Names}
+			}).WithEqual(deepEqual[spaceShowing])
 			// The foot leaves room to scroll the last row out from under
 			// the grouping's chip.
 			return ggui.Scroll(ggui.Padding(ggui.Reactive(func() ggui.Widget {
-				owners.Get()
+				shows.Get()
 				return spaceSessionList(m, st, i)
 			}), 8, 8, groupChipRoom, 8)).Bar(tokSurface3)
 		})
@@ -207,6 +211,14 @@ func sidebar(m *model) ggui.Widget {
 		hline(),
 		sidebarFooter(m),
 	).Stretch()).Fill(tokSidebar))
+}
+
+// spaceShowing is what a space's list shows by: the space, the projects
+// and the sections' names, not the panes the workspace also holds.
+type spaceShowing struct {
+	space    space
+	projects []project
+	names    map[string]string
 }
 
 // sidebarState is what of the settings the sidebar's lists follow.
@@ -225,19 +237,34 @@ func spaceSessionList(m *model, st sidebarState, i int) ggui.Widget {
 	selected := m.Selected.Get()
 	m.Unread.Get() // the dots show what is unread
 	p := m.spacesNow()
-	sessions := p.spaceSessions(i, m.Sessions.Get())
+	// The space shows whole project sections, and the sessions in them
+	// however the sidebar groups; the space of every session shows every
+	// session, and needs its sections only to list them.
+	var projects []sessionGroup
+	if _, ok := p.spaceOf(i); ok || by == groupProject {
+		projects = p.spaceGroups(i, groupProjects(m.Sessions.Get(), nodes, st.projects.Get(), p.Projects, p.Names))
+	} else {
+		projects = []sessionGroup{{Sessions: m.Sessions.Get()}}
+	}
 	// Pinned sessions come first, in a section of their own.
 	pins := st.pinned.Get()
-	var top []*protocol.SessionInfo
-	rest := sessions[:0:0]
-	for _, s := range sessions {
-		if slices.Contains(pins, s.GetId()) {
-			top = append(top, s)
-		} else {
-			rest = append(rest, s)
+	var top, rest []*protocol.SessionInfo
+	for j, g := range projects {
+		kept := g.Sessions[:0:0]
+		for _, s := range g.Sessions {
+			if slices.Contains(pins, s.GetId()) {
+				top = append(top, s)
+			} else {
+				kept = append(kept, s)
+				rest = append(rest, s)
+			}
 		}
+		projects[j].Sessions = kept
 	}
-	groups := groupSessions(rest, by, nodes, p.spaceProjects(i, st.projects.Get()))
+	groups := projects
+	if by != groupProject {
+		groups = groupSessions(rest, by, nodes, nil)
+	}
 	if by == groupHost {
 		groups = withHosts(groups, nodes)
 	}
@@ -435,30 +462,37 @@ func sessionSection(m *model, by string, g sessionGroup, folded bool, selected s
 			}
 			status = linkDot(up)
 		}
+		if by == groupProject {
+			name = cmp.Or(g.Name, name)
+			if g.multiRoot() {
+				status = ggui.Text(Tf("%d folders", len(g.Def.Roots))).Size(11.5).Color(tokExtraMuted).NoWrap()
+			}
+		}
 		toggle := groupToggle(m, glyph, name, g.Sessions, folded, foldKey(by, g), status)
 		row := []ggui.Widget{ggui.Expanded(toggle)}
-		// A folder kept with no sessions has nothing to bring it back once
-		// it leaves, so its menu can drop it. A host is the mesh's to list.
-		if len(g.Sessions) == 0 && by == groupProject {
-			roots := g.Roots
-			row = append(row, iconMenu(ui.MenuOf(icon("ellipsis").Size(14),
-				ui.MenuItem(T("Remove from sidebar"), func() { m.forgetProjects(roots) }),
-			).Name(T("Folder actions")), 3))
+		if by == groupProject {
+			row = append(row, iconMenu(ui.MenuOf(icon("ellipsis").Size(14), projectMenu(m, g, name)...).Name(T("Folder actions")), 3))
 		}
+		// The plus starts where the section starts by default; the folders
+		// and clones it has besides, each on its node, are picked from the
+		// chevron's menu.
+		row = append(row, ui.Tooltip(ui.ButtonOf(icon("plus").Size(14), func() { m.openNew(nodeID, project) }).
+			Ghost().Pad(3).Radius(5).Name(Tf("New session in %s", name)), T("New session here")))
 		if len(g.Roots) > 1 {
-			// The clones of a repository on several nodes: which to start in.
-			var items []ggui.Widget
-			for _, r := range g.Roots {
-				items = append(items, ui.MenuItem(Tf("On %s, in %s", nodeName(nodes, r.Node), tail(r.Path, 2)), func() { m.openNew(r.Node, r.Path) }))
-			}
-			row = append(row, iconMenu(ui.MenuOf(icon("plus").Size(14), items...).Name(Tf("New session in %s", name)), 3))
-		} else {
-			row = append(row, ui.Tooltip(ui.ButtonOf(icon("plus").Size(14), func() { m.openNew(nodeID, project) }).
-				Ghost().Pad(3).Radius(5).Name(Tf("New session in %s", name)), T("New session here")))
+			row = append(row, iconMenu(ui.MenuOf(icon("chevron-down").Size(12), startItems(m, g, nodes)...).Name(Tf("Start in a folder of %s", name)), 3))
+		}
+		var head ggui.Widget = ggui.Box(ggui.Row(row...).Gap(6).Align(ggui.AlignCenter)).Pad(2, 4, 2, 2)
+		if by == groupProject {
+			head = ui.ContextMenuFunc(head, func() []ggui.Widget { return projectMenu(m, g, name) }).Name(Tf("%s actions", name))
 		}
 		// A session dropped on the heading starts again there: its agent
 		// in this folder, or on this host in its own folder.
-		rows = append(rows, indented(sectionDrop(m, ggui.Box(ggui.Row(row...).Gap(6).Align(ggui.AlignCenter)).Pad(2, 4, 2, 2), nodeID, project), depth))
+		head = sectionDrop(m, head, nodeID, project)
+		if by == groupProject {
+			// A heading dragged onto another's merges its project there.
+			head = projectDragged(m, head, g)
+		}
+		rows = append(rows, indented(head, depth))
 		if folded {
 			return ggui.Column(rows...).Gap(2).Stretch()
 		}
@@ -467,27 +501,52 @@ func sessionSection(m *model, by string, g sessionGroup, folded bool, selected s
 		}
 	}
 	for _, s := range g.Sessions {
-		var where []string
-		switch by {
-		case groupProject:
-			where = append(where, nodeName(nodes, s.GetNodeId()))
-			// A subfolder by its path in its clone; a worktree elsewhere by
-			// its own name.
-			root := projectOf(s)
-			if rel := subfolder(s.GetProject(), root); rel != "" {
-				where = append(where, rel)
-			} else if s.GetProject() != root {
-				where = append(where, projectName(s.GetProject()))
-			}
-		case groupHost:
-			where = append(where, projectName(s.GetProject()))
-		default:
-			where = append(where, nodeName(nodes, s.GetNodeId()), projectName(s.GetProject()))
-		}
-		where = append(where, short(s.GetId()))
-		rows = append(rows, sessionRow(m, s, s.GetId() == selected, titles[s.GetId()], strings.Join(where, " · "), rowDepth))
+		rows = append(rows, sessionRow(m, s, s.GetId() == selected, titles[s.GetId()], sessionWhere(by, g, s, nodes), rowDepth))
 	}
 	return ggui.Column(rows...).Gap(2).Stretch()
+}
+
+// sessionWhere is the line under a session's title in section g: where it
+// runs, as far as the section does not say, and its ID.
+func sessionWhere(by string, g sessionGroup, s *protocol.SessionInfo, nodes []*protocol.Node) string {
+	var where []string
+	switch by {
+	case groupProject:
+		// A project of several folders says which a session is in; its
+		// node, when the project is on more than one.
+		r := g.rootOf(s)
+		if g.multiRoot() {
+			if r != nil {
+				where = append(where, r.label())
+			}
+			if spansNodes(g.Roots) {
+				where = append(where, nodeName(nodes, s.GetNodeId()))
+			}
+		} else {
+			where = append(where, nodeName(nodes, s.GetNodeId()))
+		}
+		// A subfolder by its path in its clone, or in the project's folder
+		// it is in; a worktree elsewhere by its own name.
+		root := projectOf(s)
+		if r != nil {
+			for _, l := range r.Locations {
+				if l.Node == s.GetNodeId() && pathscope.Within(s.GetProject(), l.Path) {
+					root = l.Path
+				}
+			}
+		}
+		if rel := subfolder(s.GetProject(), root); rel != "" {
+			where = append(where, rel)
+		} else if s.GetProject() != root {
+			where = append(where, projectName(s.GetProject()))
+		}
+	case groupHost:
+		where = append(where, projectName(s.GetProject()))
+	default:
+		where = append(where, nodeName(nodes, s.GetNodeId()), projectName(s.GetProject()))
+	}
+	where = append(where, short(s.GetId()))
+	return strings.Join(where, " · ")
 }
 
 // kindBadges counts a folded group's sessions by kind, a badge for each
@@ -518,7 +577,7 @@ func kindBadges(sessions []*protocol.SessionInfo) ggui.Widget {
 
 // subfolder is where dir is inside root, or "" for root itself.
 func subfolder(dir, root string) string {
-	if dir == root || !within(dir, root) {
+	if dir == root || !pathscope.Within(dir, root) {
 		return ""
 	}
 	return strings.TrimLeft(dir[len(root):], `/\`)
@@ -1032,15 +1091,7 @@ func newSessionDialog(m *model) ggui.Widget {
 	project := m.Form.Field(func(f *newSession) *string { return &f.Project })
 	worktree := m.Form.Field(func(f *newSession) *bool { return &f.Worktree })
 	branch := m.Form.Field(func(f *newSession) *string { return &f.Branch })
-	nodeIDs := ggui.Map(m.Nodes, func(nodes []*protocol.Node) []string {
-		var ids []string
-		for _, n := range nodes {
-			if reachable(n) {
-				ids = append(ids, n.GetId())
-			}
-		}
-		return ids
-	})
+	nodeIDs := reachableNodeIDs(m)
 	// This machine's folders are picked in its own dialog; another node's
 	// in the dialog, through the daemons.
 	browse := browseButton(project, func(d runtime.Dialogs) (string, error) {

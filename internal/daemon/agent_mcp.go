@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
@@ -269,6 +270,9 @@ type agentSummary struct {
 	State     string `json:"state"`
 	Status    string `json:"status,omitempty"`
 	Messaging bool   `json:"messaging"`
+	// Folder is where it works: in a project of several folders, which
+	// of them.
+	Folder string `json:"folder,omitempty"`
 }
 
 type availableAgent struct {
@@ -282,10 +286,13 @@ type availableProfile struct {
 	Spawnable   bool   `json:"spawnable" jsonschema:"Whether this profile enables the Mako MCP tools required for spawning."`
 }
 type listAgentsResult struct {
-	SelfID    string           `json:"self_id"`
-	Project   string           `json:"project"`
-	Agents    []agentSummary   `json:"agents"`
-	Available []availableAgent `json:"available"`
+	SelfID  string `json:"self_id"`
+	Project string `json:"project"`
+	// ProjectName names the project of several folders the session is in,
+	// whose agents in every folder it lists.
+	ProjectName string           `json:"project_name,omitempty"`
+	Agents      []agentSummary   `json:"agents"`
+	Available   []availableAgent `json:"available"`
 }
 type spawnAgentArgs struct {
 	Agent   string `json:"agent,omitempty" jsonschema:"Agent to launch; defaults to this session's agent. Use list_agents for choices."`
@@ -337,7 +344,7 @@ func (d *Daemon) projectAgentServer(peer *agentPeer) *sdk.Server {
 		if _, err := d.projectTarget(peer, in.To); err != nil {
 			return nil, agentMessage{}, err
 		}
-		msg, err := d.projectAgents.messages.send(peer.id, in.To, in.Text, projectScope(peer.session.Info()))
+		msg, err := d.projectAgents.messages.send(peer.id, in.To, in.Text, d.projectScope(peer.session.Info()))
 		return nil, msg, err
 	})
 	sdk.AddTool(server, &sdk.Tool{Name: "read_messages", Description: "Read your own inbox, optionally waiting for messages. Messages also reach you as prompts once you are at your prompt; use this to wait for a reply within a turn. Use after_id for pagination. Messages remain available across reconnects and daemon restarts until you acknowledge them with ack_through or they are typed into your terminal."}, func(ctx context.Context, _ *sdk.CallToolRequest, in readMessagesArgs) (*sdk.CallToolResult, readMessagesResult, error) {
@@ -363,8 +370,9 @@ func (d *Daemon) projectAgentServer(peer *agentPeer) *sdk.Server {
 		}
 		d.sessionMu.Lock()
 		saved, exists := d.saved[in.SessionID]
-		owned := exists && saved.ParentID == peer.id && projectScope(saved.Info) == projectScope(peer.session.Info())
 		d.sessionMu.Unlock()
+		// Scoping reads the folders, off the lock.
+		owned := exists && saved.ParentID == peer.id && d.projectScope(saved.Info) == d.projectScope(peer.session.Info())
 		if !owned {
 			return nil, stopAgentResult{}, errors.New("only agents you spawned can be stopped")
 		}
@@ -385,27 +393,13 @@ func (d *Daemon) projectCaller(peer *agentPeer) (*session.Session, error) {
 	return s, nil
 }
 
-func projectScope(info *protocol.SessionInfo) string {
-	path := info.GetProject()
-	if info.GetWorktree().GetRepo() != "" {
-		path = info.GetWorktree().GetRepo()
-	}
-	if abs, err := filepath.Abs(path); err == nil {
-		path = abs
-	}
-	if real, err := filepath.EvalSymlinks(path); err == nil {
-		path = real
-	}
-	return filepath.Clean(path)
-}
-
 func (d *Daemon) projectTarget(caller *agentPeer, id string) (*session.Session, error) {
 	target := d.projectAgents.peer(id)
 	if target == nil {
 		return nil, errors.New("recipient is not an active messaging session in this project")
 	}
 	s, err := d.projectCaller(target)
-	if err != nil || projectScope(s.Info()) != projectScope(caller.session.Info()) {
+	if err != nil || d.projectScope(s.Info()) != d.projectScope(caller.session.Info()) {
 		return nil, errors.New("recipient is not an active messaging session in this project")
 	}
 	return s, nil
@@ -413,7 +407,7 @@ func (d *Daemon) projectTarget(caller *agentPeer, id string) (*session.Session, 
 
 func (d *Daemon) summarizeAgent(info *protocol.SessionInfo, parent string) agentSummary {
 	peer := d.projectAgents.peer(info.GetId())
-	return agentSummary{ID: info.GetId(), Agent: info.GetAgent(), Profile: info.GetProfile(), Name: info.GetName(), State: info.GetState(), Status: info.GetStatus(), ParentID: parent, Messaging: peer != nil && peer.ctx.Err() == nil && info.GetState() == protocol.StateRunning}
+	return agentSummary{ID: info.GetId(), Agent: info.GetAgent(), Profile: info.GetProfile(), Name: info.GetName(), State: info.GetState(), Status: info.GetStatus(), ParentID: parent, Messaging: peer != nil && peer.ctx.Err() == nil && info.GetState() == protocol.StateRunning, Folder: info.GetProject()}
 }
 
 func (d *Daemon) listProjectAgents(peer *agentPeer) (listAgentsResult, error) {
@@ -423,6 +417,10 @@ func (d *Daemon) listProjectAgents(peer *agentPeer) (listAgentsResult, error) {
 	}
 	info := s.Info()
 	out := listAgentsResult{SelfID: peer.id, Project: info.GetProject(), Agents: []agentSummary{}, Available: []availableAgent{}}
+	self := d.projectScope(info)
+	if s, _ := d.projectFor(info.GetProject(), cmp.Or(info.GetWorktree().GetRepo(), info.GetRepo())); s != nil {
+		out.ProjectName = cmp.Or(s.GetName(), s.GetId())
+	}
 	d.sessionMu.Lock()
 	parents := map[string]string{}
 	for id, saved := range d.saved {
@@ -430,7 +428,7 @@ func (d *Daemon) listProjectAgents(peer *agentPeer) (listAgentsResult, error) {
 	}
 	d.sessionMu.Unlock()
 	for _, other := range d.listSessions() {
-		if projectScope(other) == projectScope(info) {
+		if d.projectScope(other) == self {
 			out.Agents = append(out.Agents, d.summarizeAgent(other, parents[other.GetId()]))
 		}
 	}

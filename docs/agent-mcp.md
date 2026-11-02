@@ -180,3 +180,10 @@ choose the sender identity
 or a different project. Credentials are revoked when a session exits;
 restarted sessions receive new credentials. Projects are compared using
 canonical local paths, with worktrees grouped by their repository path.
+A project the user put together of several folders in the desktop (a
+server's and a web app's repositories, say) is one project here: its
+sessions in any of its folders on the node list and message each other.
+`list_agents` then names it in `project_name`, and each agent's `folder`
+says which folder it works in. The desktop gives each node's daemon the
+projects' folders there (`set_projects`); a project may also give an agent
+started in one folder its other folders, through the agent's `--add-dir`.
