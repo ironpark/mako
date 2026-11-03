@@ -94,6 +94,11 @@ func TestSplitArgsReadsWhatJoinArgsWrites(t *testing.T) {
 	if err != nil || !slices.Equal(got, []string{"--a", "two words", "three four", "its"}) {
 		t.Fatalf("split = %q, %v", got, err)
 	}
+	// A Windows path keeps its backslashes.
+	got, err = SplitArgs(`C:\tools\claude.exe --add-dir \\server\share C:\with\ space\`)
+	if err != nil || !slices.Equal(got, []string{`C:\tools\claude.exe`, "--add-dir", `\\server\share`, `C:\with space\`}) {
+		t.Fatalf("split = %q, %v", got, err)
+	}
 	if _, err := SplitArgs(`"open`); err == nil {
 		t.Fatal("an unterminated quote was accepted")
 	}

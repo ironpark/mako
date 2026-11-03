@@ -269,7 +269,13 @@ func pathStart(line []rune, s int) bool {
 	if s > 0 && !linkStop(line[s-1]) {
 		return false
 	}
-	return line[s] == '/' || line[s] == '~' && s+1 < len(line) && line[s+1] == '/'
+	return line[s] == '/' || line[s] == '~' && s+1 < len(line) && line[s+1] == '/' ||
+		s+2 < len(line) && driveRoot(string(line[s:s+3]))
+}
+
+// driveRoot reports whether p starts with a Windows drive's root: C:\ or C:/.
+func driveRoot(p string) bool {
+	return len(p) >= 3 && p[0] < unicode.MaxASCII && unicode.IsLetter(rune(p[0])) && p[1] == ':' && (p[2] == '\\' || p[2] == '/')
 }
 
 // linkStop reports whether r ends a link: space, quotes, brackets, and
@@ -304,10 +310,15 @@ func looksLinked(word string) bool {
 	switch {
 	case p == "" || strings.Trim(p, "/.~") == "":
 		return false
-	case strings.HasPrefix(p, "/"), strings.HasPrefix(p, "~/"), strings.HasPrefix(p, "./"), strings.HasPrefix(p, "../"):
+	case strings.HasPrefix(p, "/"), strings.HasPrefix(p, "~/"), strings.HasPrefix(p, "./"), strings.HasPrefix(p, "../"), driveRoot(p):
 		return true
 	case strings.Contains(p, "/"):
 		return !strings.HasPrefix(p, "-") && !strings.Contains(p, "//")
+	case strings.HasPrefix(p, `.\`), strings.HasPrefix(p, `..\`):
+		return true
+	case strings.Contains(p, `\`) && !strings.Contains(p, `\ `):
+		// src\main.go, as an agent on Windows writes it.
+		return !strings.HasPrefix(p, "-") && !strings.HasPrefix(p, `\`) && !strings.Contains(p, `\\`) && fileName.MatchString(p[strings.LastIndex(p, `\`)+1:])
 	}
 	dot := strings.LastIndex(p, ".")
 	return fileName.MatchString(p) && (len(p)-dot-1 > 1 || dot > 1)
@@ -319,6 +330,10 @@ func linkPath(target string) (string, int) {
 		u, err := url.Parse(target)
 		if err != nil {
 			return "", 0
+		}
+		// file:///C:/x is C:/x.
+		if p := u.Path; len(p) > 2 && p[0] == '/' && p[2] == ':' && unicode.IsLetter(rune(p[1])) {
+			return p[1:], 0
 		}
 		return u.Path, 0
 	}

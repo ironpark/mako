@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 )
 
 // ValidID matches a conversation ID mako takes from a log, a hook or a
@@ -15,6 +16,10 @@ var ValidID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$`)
 type Place struct {
 	RootEnv, HomeDir string
 	Dirs             []string
+	// ProfileHome is for an agent that, on Windows, keeps HomeDir in the
+	// user's profile whatever HOME says, as a native program does; one
+	// on Node, as Claude Code, follows HOME.
+	ProfileHome bool
 }
 
 // Root is the directory the agent keeps its settings and logs under,
@@ -24,7 +29,7 @@ func (p Place) Root(env map[string]string) string {
 		return root
 	}
 	home := env["HOME"]
-	if home == "" {
+	if home == "" || p.ProfileHome && runtime.GOOS == "windows" {
 		home, _ = os.UserHomeDir()
 	}
 	return filepath.Join(home, p.HomeDir)

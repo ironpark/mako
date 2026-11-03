@@ -15,7 +15,7 @@ import (
 // Codex logs a conversation as a rollout by its day,
 // <root>/sessions/<yyyy>/<mm>/<dd>/rollout-<time>-<id>.jsonl: a
 // session_meta record, then a response_item record an item.
-var place = agent.Place{RootEnv: "CODEX_HOME", HomeDir: ".codex", Dirs: []string{"sessions", "*", "*", "*"}}
+var place = agent.Place{RootEnv: "CODEX_HOME", HomeDir: ".codex", Dirs: []string{"sessions", "*", "*", "*"}, ProfileHome: true}
 
 func (*Agent) Place() agent.Place { return place }
 

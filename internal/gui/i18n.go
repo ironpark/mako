@@ -71,7 +71,7 @@ func resolveLanguage(setting string) string {
 
 // systemLanguage is the first of the user's languages the window has, else
 // English: macOS keeps the order in AppleLanguages, elsewhere the locale
-// variables say it.
+// variables say it, and on Windows, which has none, its display languages.
 var systemLanguage = sync.OnceValue(func() string {
 	var prefs []string
 	for _, v := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
@@ -87,6 +87,7 @@ var systemLanguage = sync.OnceValue(func() string {
 			prefs = append(langs, prefs...)
 		}
 	}
+	prefs = append(prefs, platformLanguages()...)
 	for _, p := range prefs {
 		code := strings.ToLower(p)
 		if i := strings.IndexAny(code, "-_."); i >= 0 {

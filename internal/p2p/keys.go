@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -347,17 +346,15 @@ func LoadSigner(pubPath string) (ssh.Signer, error) {
 	if err != nil {
 		return nil, err
 	}
-	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
-		if conn, err := net.DialTimeout("unix", sock, 2*time.Second); err == nil {
-			signers, _ := agent.NewClient(conn).Signers()
-			for _, s := range signers {
-				if sameKey(s.PublicKey(), pub) {
-					// The agent's connection stays open for the signer.
-					return s, nil
-				}
+	if conn, err := dialSSHAgent(); err == nil {
+		signers, _ := agent.NewClient(conn).Signers()
+		for _, s := range signers {
+			if sameKey(s.PublicKey(), pub) {
+				// The agent's connection stays open for the signer.
+				return s, nil
 			}
-			conn.Close()
 		}
+		conn.Close()
 	}
 	priv, err := os.ReadFile(strings.TrimSuffix(pubPath, ".pub"))
 	if err != nil {

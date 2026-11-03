@@ -8,8 +8,10 @@ import (
 // SplitArgs splits a command line as a POSIX shell would split words:
 // spaces separate them, single quotes keep everything literal, double
 // quotes keep spaces and let a backslash escape ", \ and $, and a
-// backslash outside quotes escapes the next character. Nothing is expanded.
+// backslash outside quotes escapes a space, a quote or a $ after it, and is
+// itself otherwise, as in a Windows path. Nothing is expanded.
 func SplitArgs(s string) ([]string, error) {
+	const escapes = " \t\n'\"$"
 	var (
 		out   []string
 		word  strings.Builder
@@ -38,10 +40,7 @@ func SplitArgs(s string) ([]string, error) {
 			}
 		case r == '\'' || r == '"':
 			quote, inArg = r, true
-		case r == '\\':
-			if i+1 == len(rs) {
-				return nil, fmt.Errorf("a trailing backslash escapes nothing")
-			}
+		case r == '\\' && i+1 < len(rs) && strings.ContainsRune(escapes, rs[i+1]):
 			i++
 			word.WriteRune(rs[i])
 			inArg = true

@@ -57,10 +57,10 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 	if i := slices.Index(args, "--settings"); i < 0 || json.Unmarshal([]byte(args[i+1]), &settings) != nil {
 		t.Fatalf("launch has no hook: %q", args)
 	}
-	if h := settings.Hooks["SessionStart"]; len(h) != 1 || h[0].Hooks[0].Command != `'/opt/mako'\''s/makod' hook `+socket {
+	if h := settings.Hooks["SessionStart"]; len(h) != 1 || h[0].Hooks[0].Command != agentspec.CommandLine([]string{"/opt/mako's/makod", "hook", socket}) {
 		t.Fatalf("hook %+v", settings)
 	}
-	if settings.StatusLine.Command != `'/opt/mako'\''s/makod' statusline `+socket+" claude" {
+	if settings.StatusLine.Command != agentspec.CommandLine([]string{"/opt/mako's/makod", "statusline", socket, "claude"}) {
 		t.Fatalf("status line %+v", settings)
 	}
 

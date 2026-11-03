@@ -28,6 +28,9 @@ func TestLinksAreFoundInText(t *testing.T) {
 		{"[Image: source: /var/T/스크린샷 2026-10-27 오후 4.41.22.png]", "source", ""},
 		{"cat '/tmp/my notes/a b.txt' | less", "notes", "/tmp/my notes/a b.txt"},
 		{`open /tmp/a\ b.png now`, "b.png", `/tmp/a\ b.png`},
+		{`⏺ Updated C:\Users\me\x\main.go:12 and`, "main", `C:\Users\me\x\main.go:12`},
+		{`Read src\gui\view.go, then`, "view", `src\gui\view.go`},
+		{`│ .\run.ps1 │`, "run", `.\run.ps1`},
 		{"cd /tmp/build then make", "then", ""},
 		{"see /tmp/a.png and more.txt", "and", ""},
 		{"e.g. this", "e.g", ""},
@@ -55,6 +58,8 @@ func TestLinksAreFoundInText(t *testing.T) {
 		{"/a/b.md:7", "/a/b.md", 7},
 		{"file:///Users/me/a%20b.png", "/Users/me/a b.png", 0},
 		{"README.md", "README.md", 0},
+		{"file:///C:/Users/me/a%20b.png", "C:/Users/me/a b.png", 0},
+		{`C:\x\main.go:12:4`, `C:\x\main.go`, 12},
 		{`/tmp/a\ b.png`, "/tmp/a b.png", 0},
 	} {
 		if p, line := linkPath(c.target); p != c.path || line != c.line {

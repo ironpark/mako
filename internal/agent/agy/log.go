@@ -20,7 +20,7 @@ import (
 // <root>/brain/<id>/.system_generated/logs/transcript_full.jsonl: a record
 // a step, which says nothing of whose it is. The working directory is in
 // the history of the prompts typed, <root>/history.jsonl.
-var place = agent.Place{HomeDir: filepath.Join(".gemini", "antigravity-cli")}
+var place = agent.Place{HomeDir: filepath.Join(".gemini", "antigravity-cli"), ProfileHome: true}
 
 // logFile is a conversation's transcript, in full: transcript.jsonl beside
 // it cuts long fields short.

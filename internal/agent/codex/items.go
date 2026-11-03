@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/protocol"
@@ -121,7 +122,14 @@ func (d *decoder) item(payload json.RawMessage) []*protocol.ChatMessage {
 }
 
 // localPath is a path Codex gives as a file URL, as a path.
-func localPath(p string) string { return strings.TrimPrefix(p, "file://") }
+// file:///C:/a.png is C:/a.png.
+func localPath(p string) string {
+	p = strings.TrimPrefix(p, "file://")
+	if len(p) > 2 && p[0] == '/' && p[2] == ':' && unicode.IsLetter(rune(p[1])) {
+		p = p[1:]
+	}
+	return p
+}
 
 // change is one file a FileChange changed.
 type change struct {

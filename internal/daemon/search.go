@@ -115,7 +115,7 @@ func smartCase(q string) bool { return strings.IndexFunc(q, unicode.IsUpper) >= 
 func searchText(ctx context.Context, root, query string) (*protocol.SearchResult, error) {
 	if rg, err := exec.LookPath("rg"); err == nil {
 		cmd := exec.CommandContext(ctx, rg, "--null", "--no-heading", "--line-number", "--column", "--color", "never",
-			"--fixed-strings", "--smart-case", "--no-require-git", "--glob", "!node_modules/", "--max-count", "100", "--max-columns", strconv.Itoa(maxMatchText),
+			"--fixed-strings", "--smart-case", "--no-require-git", "--path-separator", "/", "--glob", "!node_modules/", "--max-count", "100", "--max-columns", strconv.Itoa(maxMatchText),
 			"--max-columns-preview", "--", query, ".")
 		cmd.Dir = root
 		return grepOutput(cmd)

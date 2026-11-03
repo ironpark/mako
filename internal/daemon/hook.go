@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -189,7 +188,7 @@ func runStatusLine(args []string, stdin io.Reader, out io.Writer) {
 		}
 	}()
 	if command := userStatusLine(name, input); command != "" {
-		cmd := exec.Command("sh", "-c", command)
+		cmd := shellCommand(command)
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = bytes.NewReader(input), out, os.Stderr
 		_ = cmd.Run()
 	}
@@ -220,8 +219,8 @@ func (d *Daemon) listenHooks(ctx context.Context, dir string) {
 		return
 	}
 	context.AfterFunc(ctx, func() { _ = ln.Close() })
-	d.hookCommand = agentspec.JoinArgs([]string{d.hookBinary, hookArg, path})
-	d.statusCommand = agentspec.JoinArgs([]string{d.hookBinary, statusArg, path})
+	d.hookCommand = agentspec.CommandLine([]string{d.hookBinary, hookArg, path})
+	d.statusCommand = agentspec.CommandLine([]string{d.hookBinary, statusArg, path})
 	go func() {
 		for {
 			conn, err := ln.Accept()

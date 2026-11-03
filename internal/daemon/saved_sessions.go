@@ -8,7 +8,9 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -281,6 +283,11 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 	if err != nil {
 		return nil, err
 	}
+	// Windows takes a folder in whatever case it is typed, which the
+	// projects' paths, and the window's, are not in.
+	if real, err := filepath.EvalSymlinks(project); runtime.GOOS == "windows" && err == nil && strings.EqualFold(real, project) {
+		project = real
+	}
 	req.Project = project
 	// A session of its own worktree gets it made once, when it first
 	// starts; the saved request then names it.
@@ -447,7 +454,7 @@ func (d *Daemon) conversationFor(ctx context.Context, req *protocol.OpenSession,
 	if hooks, ok := driver.(agent.Hooks); ok && d.hookCommand != "" && hasFeature(ctx, launch.Command, driver) {
 		status := ""
 		if _, ok := driver.(agent.StatusLine); ok && d.statusCommand != "" {
-			status = d.statusCommand + " " + agentspec.JoinArgs([]string{req.GetAgent()})
+			status = d.statusCommand + " " + agentspec.CommandLine([]string{req.GetAgent()})
 		}
 		run, err := config.RunDir(d.dir)
 		if err != nil {
