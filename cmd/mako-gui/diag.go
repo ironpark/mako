@@ -81,7 +81,7 @@ func diagnose() {
 	fmt.Fprintf(log, "# mako-gui %s, pid %d, started %s\n", revision(), os.Getpid(), time.Now().Format(time.RFC3339))
 	fmt.Fprintln(log, "# time live_mb goal_mb go_mb limit_mb goroutines gcs_per_s gc_cpu_share cpu_cores"+
 		" footprint_mb gpu_images_mb gpu_queue_mb fps frame_ms_per_s flushes_per_s commands_per_s vertices_per_s"+
-		" fps_for_animation fps_for_now fps_for_callback fps_for_posted fps_for_input partial_fps skipped_fps")
+		" fps_for_animation fps_for_now fps_for_callback fps_for_posted fps_for_input partial_fps skipped_fps contained_fps")
 	samples := make([]metrics.Sample, len(diagSamples))
 	for i, name := range diagSamples {
 		samples[i].Name = name
@@ -94,10 +94,10 @@ func diagnose() {
 		r := readDiag(samples, now)
 		if !last.at.IsZero() {
 			d := r.since(last)
-			fmt.Fprintf(log, "%s %.1f %.1f %.1f %.1f %d %.2f %.2f %.2f %.1f %.1f %.1f %.1f %.1f %.1f %.0f %.0f %.1f %.1f %.1f %.1f %.1f %.1f %.1f\n", now.Format(time.RFC3339),
+			fmt.Fprintf(log, "%s %.1f %.1f %.1f %.1f %d %.2f %.2f %.2f %.1f %.1f %.1f %.1f %.1f %.1f %.0f %.0f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f\n", now.Format(time.RFC3339),
 				mb(r.live), mb(r.goal), mb(r.total), mb(r.limit), r.goroutines, d.gcRate, d.gcShare, d.cores,
 				mb(r.footprint), mb(r.gpuImages), mb(r.gpuQueue), d.fps, d.frameMS, d.flushes, d.commands, d.vertices,
-				d.fpsFor[0], d.fpsFor[1], d.fpsFor[2], d.fpsFor[3], d.fpsFor[4], d.partialFPS, d.skippedFPS)
+				d.fpsFor[0], d.fpsFor[1], d.fpsFor[2], d.fpsFor[3], d.fpsFor[4], d.partialFPS, d.skippedFPS, d.containedFPS)
 			if d.fps >= 1 {
 				fmt.Fprintln(log, "# moving:", motionLine(ggui.ReadMotionReport()))
 			}
@@ -144,6 +144,7 @@ type diagReading struct {
 	framesFor                      [5]int64 // asked for by an animation, Now, a callback, posted work, input
 	partial                        int64    // painted in part, around what moved
 	skipped                        int64    // painted nothing, as nothing changed
+	contained                      int64    // painted only the viewport a scroll moved
 	frameBusy                      time.Duration
 	flushes, commands, vertices    int64
 	atlas                          string // the GPU's images: see atlasLine
@@ -163,6 +164,7 @@ func readDiag(s []metrics.Sample, at time.Time) diagReading {
 		framesFor: [5]int64{frames.ForAnimation, frames.ForTime, frames.ForCallback, frames.ForPosted, frames.ForInput},
 		partial:   frames.Partial,
 		skipped:   frames.Skipped,
+		contained: frames.Contained,
 		flushes:   gpu.Flushes, commands: gpu.Commands, vertices: gpu.Vertices,
 		atlas: atlasLine(gpu),
 		terms: gui.ReadTerminalMemory(),
@@ -226,6 +228,7 @@ type diagRates struct {
 	fpsFor                      [5]float64
 	partialFPS                  float64 // frames painted in part, a second
 	skippedFPS                  float64 // frames that painted nothing, a second
+	containedFPS                float64 // frames that painted only a scroll's viewport, a second
 }
 
 func (r diagReading) since(prev diagReading) diagRates {
@@ -243,6 +246,7 @@ func (r diagReading) since(prev diagReading) diagRates {
 	}
 	out.partialFPS = float64(r.partial-prev.partial) / secs
 	out.skippedFPS = float64(r.skipped-prev.skipped) / secs
+	out.containedFPS = float64(r.contained-prev.contained) / secs
 	for i := range r.framesFor {
 		out.fpsFor[i] = float64(r.framesFor[i]-prev.framesFor[i]) / secs
 	}
@@ -430,9 +434,9 @@ func keepBurst(dir string, now time.Time) {
 	after, motion2 := ggui.ReadFrameStats(), ggui.ReadMotionReport()
 	secs := burstCPU.Seconds()
 	var b strings.Builder
-	fmt.Fprintf(&b, "frames %.1f/s, painted in part %.1f/s, skipped %.1f/s, busy %.0f ms/s\n",
+	fmt.Fprintf(&b, "frames %.1f/s, painted in part %.1f/s, in a scroll %.1f/s, skipped %.1f/s, busy %.0f ms/s\n",
 		float64(after.Frames-before.Frames)/secs, float64(after.Partial-before.Partial)/secs,
-		float64(after.Skipped-before.Skipped)/secs, float64(after.Busy-before.Busy)/1e6/secs)
+		float64(after.Contained-before.Contained)/secs, float64(after.Skipped-before.Skipped)/secs, float64(after.Busy-before.Busy)/1e6/secs)
 	b.WriteString("painted whole, by why:")
 	for _, why := range slices.Sorted(maps.Keys(motion2.Refusals)) {
 		if n := motion2.Refusals[why] - motion.Refusals[why]; n > 0 {
