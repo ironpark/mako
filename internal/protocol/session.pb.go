@@ -362,7 +362,12 @@ type SessionInfo struct {
 	// tasks are the commands the session's agent runs in the background, as
 	// Claude Code's Bash does with run_in_background, the latest last: those
 	// running, and the last few that ended. None once the session has ended.
-	Tasks         []*BackgroundTask `protobuf:"bytes,30,rep,name=tasks,proto3" json:"tasks,omitempty"`
+	Tasks []*BackgroundTask `protobuf:"bytes,30,rep,name=tasks,proto3" json:"tasks,omitempty"`
+	// git_stamp changes when the project's repository's history does: a
+	// commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+	// repository, on any node, reads it again when it moves. "" outside a
+	// repository.
+	GitStamp      string `protobuf:"bytes,31,opt,name=git_stamp,json=gitStamp,proto3" json:"git_stamp,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -607,13 +612,20 @@ func (x *SessionInfo) GetTasks() []*BackgroundTask {
 	return nil
 }
 
+func (x *SessionInfo) GetGitStamp() string {
+	if x != nil {
+		return x.GitStamp
+	}
+	return ""
+}
+
 // BackgroundTask is a command a session's agent started in the background,
 // and how it is getting on, as the agent's log says.
 type BackgroundTask struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                       // the agent's, as it names the task
 	CallId      string                 `protobuf:"bytes,2,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"` // the call that started it
-	Command     string                 `protobuf:"bytes,3,opt,name=command,proto3" json:"command,omitempty"`             // its first line, cut short
+	Command     string                 `protobuf:"bytes,3,opt,name=command,proto3" json:"command,omitempty"`             // as written, lines and all, cut short past 1000 characters
 	Description string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
 	Running     bool                   `protobuf:"varint,5,opt,name=running,proto3" json:"running,omitempty"`
 	// status is how it ended: completed, failed or killed, as the agent
@@ -1740,7 +1752,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x12\n" +
 	"\x04base\x18\x04 \x01(\tR\x04base\x12\x14\n" +
-	"\x05start\x18\x05 \x01(\tR\x05start\"\xd0\a\n" +
+	"\x05start\x18\x05 \x01(\tR\x05start\"\xed\a\n" +
 	"\vSessionInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x14\n" +
@@ -1775,7 +1787,8 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\vagent_scope\x18\x1c \x01(\tR\n" +
 	"agentScope\x12'\n" +
 	"\x0fagent_messaging\x18\x1d \x01(\bR\x0eagentMessaging\x12-\n" +
-	"\x05tasks\x18\x1e \x03(\v2\x17.mako.v2.BackgroundTaskR\x05tasksB\f\n" +
+	"\x05tasks\x18\x1e \x03(\v2\x17.mako.v2.BackgroundTaskR\x05tasks\x12\x1b\n" +
+	"\tgit_stamp\x18\x1f \x01(\tR\bgitStampB\f\n" +
 	"\n" +
 	"_exit_code\"\x9f\x02\n" +
 	"\x0eBackgroundTask\x12\x0e\n" +

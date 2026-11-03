@@ -107,4 +107,11 @@ func TestAFileMovesInPieces(t *testing.T) {
 	if f, err := readPiece(p, 20_000, 0); err != nil || len(f.GetData()) != 0 || f.GetTruncated() {
 		t.Fatalf("past the end: %v, %v", f, err)
 	}
+	// A negative offset reads the end, as a log's is.
+	if f, err := readPiece(p, -100, 100); err != nil || !bytes.Equal(f.GetData(), data[len(data)-100:]) {
+		t.Fatalf("the end: %v", err)
+	}
+	if f, err := readPiece(p, -1<<40, 50); err != nil || !bytes.Equal(f.GetData(), data[:50]) {
+		t.Fatalf("further back than the start: %v", err)
+	}
 }

@@ -314,13 +314,17 @@ func readFile(path string, limit int) (*protocol.File, error) {
 }
 
 // readPiece reads a file from offset on, at most limit bytes of it,
-// whatever they are: a piece of a download.
+// whatever they are: a piece of a download. A negative offset counts from
+// the end, as the end of a log is read.
 func readPiece(path string, offset int64, limit int) (*protocol.File, error) {
 	f, info, limit, err := openToRead(path, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
+	if offset < 0 {
+		offset = max(0, info.Size()+offset)
+	}
 	data := make([]byte, max(0, min(int64(limit), info.Size()-offset)))
 	n, err := f.ReadAt(data, offset)
 	if err != nil && !errors.Is(err, io.EOF) {

@@ -36,6 +36,7 @@ public  final class SessionInfo extends
     remote_ = "";
     agentScope_ = "";
     tasks_ = emptyProtobufList();
+    gitStamp_ = "";
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -1651,6 +1652,88 @@ public  final class SessionInfo extends
   private void removeTasks(int index) {
     ensureTasksIsMutable();
     tasks_.remove(index);
+  }
+
+  public static final int GIT_STAMP_FIELD_NUMBER = 31;
+  private java.lang.String gitStamp_;
+  /**
+   * <pre>
+   * git_stamp changes when the project's repository's history does: a
+   * commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+   * repository, on any node, reads it again when it moves. "" outside a
+   * repository.
+   * </pre>
+   *
+   * <code>string git_stamp = 31 [json_name = "gitStamp"];</code>
+   * @return The gitStamp.
+   */
+  @java.lang.Override
+  public java.lang.String getGitStamp() {
+    return gitStamp_;
+  }
+  /**
+   * <pre>
+   * git_stamp changes when the project's repository's history does: a
+   * commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+   * repository, on any node, reads it again when it moves. "" outside a
+   * repository.
+   * </pre>
+   *
+   * <code>string git_stamp = 31 [json_name = "gitStamp"];</code>
+   * @return The bytes for gitStamp.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getGitStampBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(gitStamp_);
+  }
+  /**
+   * <pre>
+   * git_stamp changes when the project's repository's history does: a
+   * commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+   * repository, on any node, reads it again when it moves. "" outside a
+   * repository.
+   * </pre>
+   *
+   * <code>string git_stamp = 31 [json_name = "gitStamp"];</code>
+   * @param value The gitStamp to set.
+   */
+  private void setGitStamp(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    gitStamp_ = value;
+  }
+  /**
+   * <pre>
+   * git_stamp changes when the project's repository's history does: a
+   * commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+   * repository, on any node, reads it again when it moves. "" outside a
+   * repository.
+   * </pre>
+   *
+   * <code>string git_stamp = 31 [json_name = "gitStamp"];</code>
+   */
+  private void clearGitStamp() {
+
+    gitStamp_ = getDefaultInstance().getGitStamp();
+  }
+  /**
+   * <pre>
+   * git_stamp changes when the project's repository's history does: a
+   * commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+   * repository, on any node, reads it again when it moves. "" outside a
+   * repository.
+   * </pre>
+   *
+   * <code>string git_stamp = 31 [json_name = "gitStamp"];</code>
+   * @param value The bytes for gitStamp to set.
+   */
+  private void setGitStampBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    gitStamp_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
@@ -3431,6 +3514,90 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * git_stamp changes when the project's repository's history does: a
+     * commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+     * repository, on any node, reads it again when it moves. "" outside a
+     * repository.
+     * </pre>
+     *
+     * <code>string git_stamp = 31 [json_name = "gitStamp"];</code>
+     * @return The gitStamp.
+     */
+    @java.lang.Override
+    public java.lang.String getGitStamp() {
+      return instance.getGitStamp();
+    }
+    /**
+     * <pre>
+     * git_stamp changes when the project's repository's history does: a
+     * commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+     * repository, on any node, reads it again when it moves. "" outside a
+     * repository.
+     * </pre>
+     *
+     * <code>string git_stamp = 31 [json_name = "gitStamp"];</code>
+     * @return The bytes for gitStamp.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getGitStampBytes() {
+      return instance.getGitStampBytes();
+    }
+    /**
+     * <pre>
+     * git_stamp changes when the project's repository's history does: a
+     * commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+     * repository, on any node, reads it again when it moves. "" outside a
+     * repository.
+     * </pre>
+     *
+     * <code>string git_stamp = 31 [json_name = "gitStamp"];</code>
+     * @param value The gitStamp to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGitStamp(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setGitStamp(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * git_stamp changes when the project's repository's history does: a
+     * commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+     * repository, on any node, reads it again when it moves. "" outside a
+     * repository.
+     * </pre>
+     *
+     * <code>string git_stamp = 31 [json_name = "gitStamp"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearGitStamp() {
+      copyOnWrite();
+      instance.clearGitStamp();
+      return this;
+    }
+    /**
+     * <pre>
+     * git_stamp changes when the project's repository's history does: a
+     * commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+     * repository, on any node, reads it again when it moves. "" outside a
+     * repository.
+     * </pre>
+     *
+     * <code>string git_stamp = 31 [json_name = "gitStamp"];</code>
+     * @param value The bytes for gitStamp to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGitStampBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setGitStampBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -3479,14 +3646,15 @@ public  final class SessionInfo extends
             "agentMessaging_",
             "tasks_",
             dev.ironpark.mako.v2.BackgroundTask.class,
+            "gitStamp_",
           };
           java.lang.String info =
-              "\u0000\u001e\u0000\u0001\u0001\u001e\u001e\u0000\u0002\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u001f\u0000\u0001\u0001\u001f\u001f\u0000\u0002\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208" +
               "\u000b\u000b\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011" +
               "\u0208\u0012\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004" +
               "\u0017\u1009\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006\u001c\u0208" +
-              "\u001d\u0007\u001e\u001b";
+              "\u001d\u0007\u001e\u001b\u001f\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -168,7 +168,8 @@ func (d *Daemon) listSessions() []*protocol.SessionInfo {
 	// The repositories are read from disk, outside the lock, once a project
 	// in a while: the mesh's state is listed every second.
 	for i, info := range out {
-		out[i].Branch, out[i].Repo, out[i].Owner, out[i].Remote = d.heads.of(info.GetProject())
+		h := d.heads.of(info.GetProject())
+		out[i].Branch, out[i].Repo, out[i].Owner, out[i].Remote, out[i].GitStamp = h.branch, h.repo, h.owner, h.remote, h.stamp
 	}
 	return out
 }
@@ -176,8 +177,8 @@ func (d *Daemon) listSessions() []*protocol.SessionInfo {
 // headsFor is how long a project's branch is taken as read.
 const headsFor = 3 * time.Second
 
-// heads keeps each project's branch, repository and its owner as last
-// read.
+// heads keeps each project's branch, repository and its owner, and the
+// stamp of its repository, as last read.
 type heads struct {
 	mu    sync.Mutex
 	known map[string]projectHead
@@ -185,19 +186,21 @@ type heads struct {
 
 type projectHead struct {
 	branch, repo, owner, remote string
+	stamp                       string // gitstat.Stamp's
 	at                          time.Time
 }
 
-// of is project's branch, repository, and its origin's owner and
-// repository, read again once headsFor has passed.
-func (h *heads) of(project string) (branch, repo, owner, remote string) {
+// of is project's branch, repository, its origin's owner and repository,
+// and its repository's stamp, read again once headsFor has passed.
+func (h *heads) of(project string) projectHead {
 	h.mu.Lock()
 	p, ok := h.known[project]
 	h.mu.Unlock()
 	if ok && time.Since(p.at) < headsFor {
-		return p.branch, p.repo, p.owner, p.remote
+		return p
 	}
 	p.branch, p.repo, p.owner, p.remote = gitstat.Head(project)
+	p.stamp = gitstat.Stamp(project)
 	p.at = time.Now()
 	h.mu.Lock()
 	if h.known == nil {
@@ -205,7 +208,7 @@ func (h *heads) of(project string) (branch, repo, owner, remote string) {
 	}
 	h.known[project] = p
 	h.mu.Unlock()
-	return p.branch, p.repo, p.owner, p.remote
+	return p
 }
 
 func (d *Daemon) openSession(ctx context.Context, req *protocol.OpenSession) (*session.Session, error) {

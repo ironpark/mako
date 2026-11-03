@@ -103,14 +103,17 @@ func (*Agent) NewUsage() agent.Usage { return &usage{} }
 type usage struct{ seen agent.Seen }
 
 func (u *usage) Count(line []byte, total *protocol.Usage) {
-	if !bytes.Contains(line, []byte(`"usage"`)) {
+	if !bytes.Contains(line, []byte(`"usage"`)) && !bytes.Contains(line, []byte(`"permissionMode"`)) {
 		return
 	}
 	var r struct {
-		Type      string `json:"type"`
-		Sidechain bool   `json:"isSidechain"`
-		Message   struct {
+		Type       string `json:"type"`
+		Sidechain  bool   `json:"isSidechain"`
+		Effort     string `json:"effort"`
+		Permission string `json:"permissionMode"`
+		Message    struct {
 			ID    string `json:"id"`
+			Model string `json:"model"`
 			Usage *struct {
 				Input         int64 `json:"input_tokens"`
 				CacheCreation int64 `json:"cache_creation_input_tokens"`
@@ -119,8 +122,24 @@ func (u *usage) Count(line []byte, total *protocol.Usage) {
 			} `json:"usage"`
 		} `json:"message"`
 	}
-	if json.Unmarshal(line, &r) != nil || r.Type != "assistant" || r.Message.Usage == nil {
+	if json.Unmarshal(line, &r) != nil {
 		return
+	}
+	// A prompt says what the agent may do unasked, as the user last set it.
+	if r.Type == "user" && !r.Sidechain && r.Permission != "" {
+		total.PermissionMode = r.Permission
+	}
+	if r.Type != "assistant" || r.Message.Usage == nil {
+		return
+	}
+	if !r.Sidechain {
+		// "<synthetic>" stands for a reply Claude Code wrote itself.
+		if m := r.Message.Model; m != "" && !strings.HasPrefix(m, "<") {
+			total.Model = m
+		}
+		if r.Effort != "" {
+			total.Effort = r.Effort
+		}
 	}
 	if r.Message.ID != "" && !u.seen.Add(r.Message.ID) {
 		return

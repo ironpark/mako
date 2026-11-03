@@ -281,6 +281,7 @@ type model struct {
 	Proj             *projectAsk                         // the project dialogs; see projectmenu.go
 	projectsSent     map[string][]*protocol.ProjectScope // by node, the projects its daemon was last told; UI goroutine only
 	ImageOpen        *ggui.StateValue[bool]              // the previewed image is shown enlarged
+	Shell            *shellView                          // a background command shown in full; see tasks.go
 	NewOpen          *ggui.StateValue[bool]
 	Form             *ggui.StateValue[newSession]
 	FormErr          *ggui.StateValue[string]
@@ -435,6 +436,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Forge:          newForgeState(),
 		Tunnels:        newTunnelState(),
 		ImageOpen:      ggui.State(false),
+		Shell:          newShellView(),
 		NewOpen:        ggui.State(false),
 		Form:           ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),
 		FormErr:        ggui.State(""),

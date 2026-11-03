@@ -47,7 +47,7 @@ func TestChatQuestionInputReachesSession(t *testing.T) {
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", State: protocol.StateRunning, Status: protocol.AgentWaiting}})
 	state := m.chatState("s")
 	state.draft.Set("keep this draft")
-	p := ggui.ProbeBuilder(func() ggui.Widget { return chatInput(m, "s", 0, state) }, ggui.Sz(800, 450))
+	p := ggui.ProbeBuilder(func() ggui.Widget { return chatInput(m, "s", state) }, ggui.Sz(800, 450))
 	t.Cleanup(func() { p.Close(); close(link.in); conn.close() })
 	p.Frame()
 	if _, ok := p.Find(T("Back to message")); !ok {

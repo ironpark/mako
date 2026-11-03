@@ -49,7 +49,7 @@ func agentOf(state *chatState, agent string) *protocol.SubAgent {
 // agentChatView is the conversation of session id's subagent agent: a bar
 // with the way back, what it was asked and how far it has got, over its
 // turns, read again every few seconds while it is in view.
-func agentChatView(m *model, id string, group int, agent string) ggui.Widget {
+func agentChatView(m *model, id string, agent string) ggui.Widget {
 	state, sub := m.chatState(id), m.agentState(id, agent)
 	ggui.Effect(func() ggui.Cleanup {
 		m.loadAgentChat(id, agent, sub)
@@ -93,11 +93,11 @@ func agentChatView(m *model, id string, group int, agent string) ggui.Widget {
 		return ggui.Box()
 	})
 	feed := chatFeed(m, id, sub, turns, head, nil)
-	return ggui.Pointer(ggui.Column(
+	return ggui.Column(
 		ggui.Box(bar).Fill(tokSurface1),
 		hline(),
 		ggui.Expanded(feed),
-	).Stretch()).OnDown(func(ggui.PointerEvent) { m.focusGroup(group) })
+	).Stretch()
 }
 
 // agentLink makes w, with a chevron after it, open session id's subagent

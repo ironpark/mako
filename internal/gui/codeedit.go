@@ -29,7 +29,6 @@ type codeEditor struct {
 	input     *ggui.TextInputWidget
 	readOnly  bool
 	colors    func(text string, pal palette) []styleSpan // may be nil
-	onPress   func()
 	autoFocus bool
 	tabSize   int
 	comment   string // the line comment ⌘/ toggles, as "// "
@@ -145,9 +144,6 @@ func (e *codeEditor) TabSize(n int) *codeEditor {
 
 // OnChange runs fn with the text after every edit.
 func (e *codeEditor) OnChange(fn func(string)) *codeEditor { e.input.OnChange(fn); return e }
-
-// OnPress runs fn when the editor is pressed.
-func (e *codeEditor) OnPress(fn func()) *codeEditor { e.onPress = fn; return e }
 
 // AutoFocus takes the keyboard on the first paint.
 func (e *codeEditor) AutoFocus(v bool) *codeEditor { e.autoFocus = v; return e }
@@ -750,9 +746,6 @@ func (e *codeEditor) HandlePointer(ev ggui.PointerEvent) bool {
 	case ggui.PointerDown:
 		if ev.Button != ggui.MouseButtonLeft {
 			return false
-		}
-		if e.onPress != nil {
-			e.onPress()
 		}
 		e.blinkFrom, e.goalCol = ggui.Now(), -1
 		now := ggui.FrameTime()

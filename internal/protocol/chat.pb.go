@@ -551,15 +551,23 @@ func (x *SubAgent) GetLog() string {
 
 // Usage is the tokens a conversation has spent.
 type Usage struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Input         int64                  `protobuf:"varint,1,opt,name=input,proto3" json:"input,omitempty"`
-	CachedInput   int64                  `protobuf:"varint,2,opt,name=cached_input,json=cachedInput,proto3" json:"cached_input,omitempty"`
-	Output        int64                  `protobuf:"varint,3,opt,name=output,proto3" json:"output,omitempty"`
-	Context       int64                  `protobuf:"varint,4,opt,name=context,proto3" json:"context,omitempty"`
-	Window        int64                  `protobuf:"varint,5,opt,name=window,proto3" json:"window,omitempty"`
-	Limits        []*RateLimit           `protobuf:"bytes,6,rep,name=limits,proto3" json:"limits,omitempty"` // the shortest window first
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Input       int64                  `protobuf:"varint,1,opt,name=input,proto3" json:"input,omitempty"`
+	CachedInput int64                  `protobuf:"varint,2,opt,name=cached_input,json=cachedInput,proto3" json:"cached_input,omitempty"`
+	Output      int64                  `protobuf:"varint,3,opt,name=output,proto3" json:"output,omitempty"`
+	Context     int64                  `protobuf:"varint,4,opt,name=context,proto3" json:"context,omitempty"`
+	Window      int64                  `protobuf:"varint,5,opt,name=window,proto3" json:"window,omitempty"`
+	Limits      []*RateLimit           `protobuf:"bytes,6,rep,name=limits,proto3" json:"limits,omitempty"` // the shortest window first
+	// model and effort are what the latest reply was made with, as the
+	// agent names them: "claude-opus-5-5", "high"; "" where it says none.
+	Model  string `protobuf:"bytes,7,opt,name=model,proto3" json:"model,omitempty"`
+	Effort string `protobuf:"bytes,8,opt,name=effort,proto3" json:"effort,omitempty"`
+	// permission_mode is what the agent may do unasked, as of its latest
+	// prompt, as it names it: "default", "acceptEdits", "plan",
+	// "bypassPermissions"; "" where it says none.
+	PermissionMode string `protobuf:"bytes,9,opt,name=permission_mode,json=permissionMode,proto3" json:"permission_mode,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Usage) Reset() {
@@ -632,6 +640,27 @@ func (x *Usage) GetLimits() []*RateLimit {
 		return x.Limits
 	}
 	return nil
+}
+
+func (x *Usage) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *Usage) GetEffort() string {
+	if x != nil {
+		return x.Effort
+	}
+	return ""
+}
+
+func (x *Usage) GetPermissionMode() string {
+	if x != nil {
+		return x.PermissionMode
+	}
+	return ""
 }
 
 // RateLimit is how much of one of an account's limits is spent.
@@ -755,14 +784,17 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\aupdated\x18\n" +
 	" \x01(\x03R\aupdated\x12\x1b\n" +
 	"\ttool_kind\x18\v \x01(\tR\btoolKind\x12\x10\n" +
-	"\x03log\x18\f \x01(\tR\x03log\"\xb6\x01\n" +
+	"\x03log\x18\f \x01(\tR\x03log\"\x8d\x02\n" +
 	"\x05Usage\x12\x14\n" +
 	"\x05input\x18\x01 \x01(\x03R\x05input\x12!\n" +
 	"\fcached_input\x18\x02 \x01(\x03R\vcachedInput\x12\x16\n" +
 	"\x06output\x18\x03 \x01(\x03R\x06output\x12\x18\n" +
 	"\acontext\x18\x04 \x01(\x03R\acontext\x12\x16\n" +
 	"\x06window\x18\x05 \x01(\x03R\x06window\x12*\n" +
-	"\x06limits\x18\x06 \x03(\v2\x12.mako.v2.RateLimitR\x06limits\"Q\n" +
+	"\x06limits\x18\x06 \x03(\v2\x12.mako.v2.RateLimitR\x06limits\x12\x14\n" +
+	"\x05model\x18\a \x01(\tR\x05model\x12\x16\n" +
+	"\x06effort\x18\b \x01(\tR\x06effort\x12'\n" +
+	"\x0fpermission_mode\x18\t \x01(\tR\x0epermissionMode\"Q\n" +
 	"\tRateLimit\x12\x18\n" +
 	"\aminutes\x18\x01 \x01(\x03R\aminutes\x12\x12\n" +
 	"\x04used\x18\x02 \x01(\x01R\x04used\x12\x16\n" +

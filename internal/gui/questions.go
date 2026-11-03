@@ -36,7 +36,7 @@ func questionPrompt(s *protocol.SessionInfo, messages []*protocol.ChatMessage) s
 // chatInput lets the agent's own prompt receive answers inside Chat.
 // Using the live terminal preserves each agent's navigation, multiple
 // selection, free text and multi-question submission semantics.
-func chatInput(m *model, id string, group int, state *chatState) ggui.Widget {
+func chatInput(m *model, id string, state *chatState) ggui.Widget {
 	prompt := ggui.Derived(func() string {
 		if !slices.Contains(m.Attached.Get(), id) {
 			return ""
@@ -59,7 +59,7 @@ func chatInput(m *model, id string, group int, state *chatState) ggui.Widget {
 				return ggui.Column(header, composer(m, id, state)).Stretch()
 			}
 			term := newTerminalView(m.conns[id], func() prefs { return ggui.Peek(m.Prefs) }, false).
-				OnPress(func() { m.focusGroup(group) }).OnRiskyPaste(m.confirmPaste).
+				OnRiskyPaste(m.confirmPaste).
 				OnLink(func(target, cwd string) { m.followLink(id, target, cwd) })
 			return ggui.Column(header, &lane{child: ggui.Box(ggui.Column(
 				muted(ggui.Text(T("Click below to select options or type your answer.")).Size(12)),

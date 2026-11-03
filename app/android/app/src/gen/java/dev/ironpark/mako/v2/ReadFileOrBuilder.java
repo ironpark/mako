@@ -53,7 +53,8 @@ public interface ReadFileOrBuilder extends
   /**
    * <pre>
    * A file read in pieces, as a download reads one: raw replies with the
-   * bytes from offset on, text or not.
+   * bytes from offset on, text or not; a negative offset counts from the
+   * end.
    * </pre>
    *
    * <code>int64 offset = 5 [json_name = "offset"];</code>

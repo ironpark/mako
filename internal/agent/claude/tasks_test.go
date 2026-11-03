@@ -26,7 +26,7 @@ func TestBackgroundCommandsAreFollowed(t *testing.T) {
 	if len(got) != 5 {
 		t.Fatalf("events %+v", got)
 	}
-	if c := got[0]; c.Kind != agent.TaskCalled || c.CallID != "toolu_1" || c.Command != "go test ./..." || c.Description != "Run the tests" {
+	if c := got[0]; c.Kind != agent.TaskCalled || c.CallID != "toolu_1" || c.Command != "go test ./...\nmore" || c.Description != "Run the tests" {
 		t.Fatalf("call %+v", c)
 	}
 	if s := got[1]; s.Kind != agent.TaskStarted || s.ID != "b1" || s.CallID != "toolu_1" || s.Output != "/tmp/x/tasks/b1.output" {

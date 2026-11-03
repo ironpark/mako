@@ -119,7 +119,7 @@ func (p *projectStore) projectOf(dir, repo string) (*protocol.ProjectScope, []st
 // with their links followed; nil for none.
 func (d *Daemon) projectFor(dir, repo string) (*protocol.ProjectScope, []string) {
 	if repo == "" {
-		_, repo, _, _ = d.heads.of(dir)
+		repo = d.heads.of(dir).repo
 	}
 	if repo != "" {
 		repo = cleanPath(repo)

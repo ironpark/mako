@@ -95,6 +95,11 @@ message SessionInfo {
   // Claude Code's Bash does with run_in_background, the latest last: those
   // running, and the last few that ended. None once the session has ended.
   repeated BackgroundTask tasks = 30;
+  // git_stamp changes when the project's repository's history does: a
+  // commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+  // repository, on any node, reads it again when it moves. "" outside a
+  // repository.
+  string git_stamp = 31;
 }
 
 // BackgroundTask is a command a session's agent started in the background,
@@ -102,7 +107,7 @@ message SessionInfo {
 message BackgroundTask {
   string id = 1; // the agent's, as it names the task
   string call_id = 2; // the call that started it
-  string command = 3; // its first line, cut short
+  string command = 3; // as written, lines and all, cut short past 1000 characters
   string description = 4;
   bool running = 5;
   // status is how it ended: completed, failed or killed, as the agent

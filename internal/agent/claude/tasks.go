@@ -89,7 +89,7 @@ func (*Agent) TaskEvents(line []byte) []agent.TaskEvent {
 			}
 			if background, _ := in["run_in_background"].(bool); background {
 				out = append(out, agent.TaskEvent{Kind: agent.TaskCalled, CallID: b.ID, At: r.Timestamp,
-					Command: agent.OneLine(agent.Str(in, "command"), 200), Description: agent.Str(in, "description")})
+					Command: agent.Clip(agent.Str(in, "command"), commandRunes), Description: agent.Str(in, "description")})
 			}
 		}
 	case "user":
@@ -129,6 +129,11 @@ func taskEnded(text string, r record) []agent.TaskEvent {
 	}
 	return []agent.TaskEvent{ev}
 }
+
+// commandRunes is as much of a background command as a session's state
+// carries, to every window of every node: a script written inline can be
+// pages long.
+const commandRunes = 1000
 
 // hasAny reports whether line holds any of marks.
 func hasAny(line []byte, marks [][]byte) bool {

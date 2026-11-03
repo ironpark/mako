@@ -431,4 +431,30 @@ public interface SessionInfoOrBuilder extends
    * <code>repeated .mako.v2.BackgroundTask tasks = 30 [json_name = "tasks"];</code>
    */
   int getTasksCount();
+
+  /**
+   * <pre>
+   * git_stamp changes when the project's repository's history does: a
+   * commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+   * repository, on any node, reads it again when it moves. "" outside a
+   * repository.
+   * </pre>
+   *
+   * <code>string git_stamp = 31 [json_name = "gitStamp"];</code>
+   * @return The gitStamp.
+   */
+  java.lang.String getGitStamp();
+  /**
+   * <pre>
+   * git_stamp changes when the project's repository's history does: a
+   * commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
+   * repository, on any node, reads it again when it moves. "" outside a
+   * repository.
+   * </pre>
+   *
+   * <code>string git_stamp = 31 [json_name = "gitStamp"];</code>
+   * @return The bytes for gitStamp.
+   */
+  com.google.protobuf.ByteString
+      getGitStampBytes();
 }

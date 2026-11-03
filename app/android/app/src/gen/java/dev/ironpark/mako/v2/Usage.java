@@ -20,6 +20,9 @@ public  final class Usage extends
     UsageOrBuilder {
   private Usage() {
     limits_ = emptyProtobufList();
+    model_ = "";
+    effort_ = "";
+    permissionMode_ = "";
   }
   public static final int INPUT_FIELD_NUMBER = 1;
   private long input_;
@@ -287,6 +290,202 @@ public  final class Usage extends
   private void removeLimits(int index) {
     ensureLimitsIsMutable();
     limits_.remove(index);
+  }
+
+  public static final int MODEL_FIELD_NUMBER = 7;
+  private java.lang.String model_;
+  /**
+   * <pre>
+   * model and effort are what the latest reply was made with, as the
+   * agent names them: "claude-opus-5-5", "high"; "" where it says none.
+   * </pre>
+   *
+   * <code>string model = 7 [json_name = "model"];</code>
+   * @return The model.
+   */
+  @java.lang.Override
+  public java.lang.String getModel() {
+    return model_;
+  }
+  /**
+   * <pre>
+   * model and effort are what the latest reply was made with, as the
+   * agent names them: "claude-opus-5-5", "high"; "" where it says none.
+   * </pre>
+   *
+   * <code>string model = 7 [json_name = "model"];</code>
+   * @return The bytes for model.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getModelBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(model_);
+  }
+  /**
+   * <pre>
+   * model and effort are what the latest reply was made with, as the
+   * agent names them: "claude-opus-5-5", "high"; "" where it says none.
+   * </pre>
+   *
+   * <code>string model = 7 [json_name = "model"];</code>
+   * @param value The model to set.
+   */
+  private void setModel(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    model_ = value;
+  }
+  /**
+   * <pre>
+   * model and effort are what the latest reply was made with, as the
+   * agent names them: "claude-opus-5-5", "high"; "" where it says none.
+   * </pre>
+   *
+   * <code>string model = 7 [json_name = "model"];</code>
+   */
+  private void clearModel() {
+
+    model_ = getDefaultInstance().getModel();
+  }
+  /**
+   * <pre>
+   * model and effort are what the latest reply was made with, as the
+   * agent names them: "claude-opus-5-5", "high"; "" where it says none.
+   * </pre>
+   *
+   * <code>string model = 7 [json_name = "model"];</code>
+   * @param value The bytes for model to set.
+   */
+  private void setModelBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    model_ = value.toStringUtf8();
+
+  }
+
+  public static final int EFFORT_FIELD_NUMBER = 8;
+  private java.lang.String effort_;
+  /**
+   * <code>string effort = 8 [json_name = "effort"];</code>
+   * @return The effort.
+   */
+  @java.lang.Override
+  public java.lang.String getEffort() {
+    return effort_;
+  }
+  /**
+   * <code>string effort = 8 [json_name = "effort"];</code>
+   * @return The bytes for effort.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getEffortBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(effort_);
+  }
+  /**
+   * <code>string effort = 8 [json_name = "effort"];</code>
+   * @param value The effort to set.
+   */
+  private void setEffort(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    effort_ = value;
+  }
+  /**
+   * <code>string effort = 8 [json_name = "effort"];</code>
+   */
+  private void clearEffort() {
+
+    effort_ = getDefaultInstance().getEffort();
+  }
+  /**
+   * <code>string effort = 8 [json_name = "effort"];</code>
+   * @param value The bytes for effort to set.
+   */
+  private void setEffortBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    effort_ = value.toStringUtf8();
+
+  }
+
+  public static final int PERMISSION_MODE_FIELD_NUMBER = 9;
+  private java.lang.String permissionMode_;
+  /**
+   * <pre>
+   * permission_mode is what the agent may do unasked, as of its latest
+   * prompt, as it names it: "default", "acceptEdits", "plan",
+   * "bypassPermissions"; "" where it says none.
+   * </pre>
+   *
+   * <code>string permission_mode = 9 [json_name = "permissionMode"];</code>
+   * @return The permissionMode.
+   */
+  @java.lang.Override
+  public java.lang.String getPermissionMode() {
+    return permissionMode_;
+  }
+  /**
+   * <pre>
+   * permission_mode is what the agent may do unasked, as of its latest
+   * prompt, as it names it: "default", "acceptEdits", "plan",
+   * "bypassPermissions"; "" where it says none.
+   * </pre>
+   *
+   * <code>string permission_mode = 9 [json_name = "permissionMode"];</code>
+   * @return The bytes for permissionMode.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getPermissionModeBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(permissionMode_);
+  }
+  /**
+   * <pre>
+   * permission_mode is what the agent may do unasked, as of its latest
+   * prompt, as it names it: "default", "acceptEdits", "plan",
+   * "bypassPermissions"; "" where it says none.
+   * </pre>
+   *
+   * <code>string permission_mode = 9 [json_name = "permissionMode"];</code>
+   * @param value The permissionMode to set.
+   */
+  private void setPermissionMode(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    permissionMode_ = value;
+  }
+  /**
+   * <pre>
+   * permission_mode is what the agent may do unasked, as of its latest
+   * prompt, as it names it: "default", "acceptEdits", "plan",
+   * "bypassPermissions"; "" where it says none.
+   * </pre>
+   *
+   * <code>string permission_mode = 9 [json_name = "permissionMode"];</code>
+   */
+  private void clearPermissionMode() {
+
+    permissionMode_ = getDefaultInstance().getPermissionMode();
+  }
+  /**
+   * <pre>
+   * permission_mode is what the agent may do unasked, as of its latest
+   * prompt, as it names it: "default", "acceptEdits", "plan",
+   * "bypassPermissions"; "" where it says none.
+   * </pre>
+   *
+   * <code>string permission_mode = 9 [json_name = "permissionMode"];</code>
+   * @param value The bytes for permissionMode to set.
+   */
+  private void setPermissionModeBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    permissionMode_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.Usage parseFrom(
@@ -680,6 +879,208 @@ public  final class Usage extends
       return this;
     }
 
+    /**
+     * <pre>
+     * model and effort are what the latest reply was made with, as the
+     * agent names them: "claude-opus-5-5", "high"; "" where it says none.
+     * </pre>
+     *
+     * <code>string model = 7 [json_name = "model"];</code>
+     * @return The model.
+     */
+    @java.lang.Override
+    public java.lang.String getModel() {
+      return instance.getModel();
+    }
+    /**
+     * <pre>
+     * model and effort are what the latest reply was made with, as the
+     * agent names them: "claude-opus-5-5", "high"; "" where it says none.
+     * </pre>
+     *
+     * <code>string model = 7 [json_name = "model"];</code>
+     * @return The bytes for model.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getModelBytes() {
+      return instance.getModelBytes();
+    }
+    /**
+     * <pre>
+     * model and effort are what the latest reply was made with, as the
+     * agent names them: "claude-opus-5-5", "high"; "" where it says none.
+     * </pre>
+     *
+     * <code>string model = 7 [json_name = "model"];</code>
+     * @param value The model to set.
+     * @return This builder for chaining.
+     */
+    public Builder setModel(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setModel(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * model and effort are what the latest reply was made with, as the
+     * agent names them: "claude-opus-5-5", "high"; "" where it says none.
+     * </pre>
+     *
+     * <code>string model = 7 [json_name = "model"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearModel() {
+      copyOnWrite();
+      instance.clearModel();
+      return this;
+    }
+    /**
+     * <pre>
+     * model and effort are what the latest reply was made with, as the
+     * agent names them: "claude-opus-5-5", "high"; "" where it says none.
+     * </pre>
+     *
+     * <code>string model = 7 [json_name = "model"];</code>
+     * @param value The bytes for model to set.
+     * @return This builder for chaining.
+     */
+    public Builder setModelBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setModelBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string effort = 8 [json_name = "effort"];</code>
+     * @return The effort.
+     */
+    @java.lang.Override
+    public java.lang.String getEffort() {
+      return instance.getEffort();
+    }
+    /**
+     * <code>string effort = 8 [json_name = "effort"];</code>
+     * @return The bytes for effort.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getEffortBytes() {
+      return instance.getEffortBytes();
+    }
+    /**
+     * <code>string effort = 8 [json_name = "effort"];</code>
+     * @param value The effort to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEffort(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setEffort(value);
+      return this;
+    }
+    /**
+     * <code>string effort = 8 [json_name = "effort"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearEffort() {
+      copyOnWrite();
+      instance.clearEffort();
+      return this;
+    }
+    /**
+     * <code>string effort = 8 [json_name = "effort"];</code>
+     * @param value The bytes for effort to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEffortBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setEffortBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * permission_mode is what the agent may do unasked, as of its latest
+     * prompt, as it names it: "default", "acceptEdits", "plan",
+     * "bypassPermissions"; "" where it says none.
+     * </pre>
+     *
+     * <code>string permission_mode = 9 [json_name = "permissionMode"];</code>
+     * @return The permissionMode.
+     */
+    @java.lang.Override
+    public java.lang.String getPermissionMode() {
+      return instance.getPermissionMode();
+    }
+    /**
+     * <pre>
+     * permission_mode is what the agent may do unasked, as of its latest
+     * prompt, as it names it: "default", "acceptEdits", "plan",
+     * "bypassPermissions"; "" where it says none.
+     * </pre>
+     *
+     * <code>string permission_mode = 9 [json_name = "permissionMode"];</code>
+     * @return The bytes for permissionMode.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getPermissionModeBytes() {
+      return instance.getPermissionModeBytes();
+    }
+    /**
+     * <pre>
+     * permission_mode is what the agent may do unasked, as of its latest
+     * prompt, as it names it: "default", "acceptEdits", "plan",
+     * "bypassPermissions"; "" where it says none.
+     * </pre>
+     *
+     * <code>string permission_mode = 9 [json_name = "permissionMode"];</code>
+     * @param value The permissionMode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPermissionMode(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setPermissionMode(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * permission_mode is what the agent may do unasked, as of its latest
+     * prompt, as it names it: "default", "acceptEdits", "plan",
+     * "bypassPermissions"; "" where it says none.
+     * </pre>
+     *
+     * <code>string permission_mode = 9 [json_name = "permissionMode"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPermissionMode() {
+      copyOnWrite();
+      instance.clearPermissionMode();
+      return this;
+    }
+    /**
+     * <pre>
+     * permission_mode is what the agent may do unasked, as of its latest
+     * prompt, as it names it: "default", "acceptEdits", "plan",
+     * "bypassPermissions"; "" where it says none.
+     * </pre>
+     *
+     * <code>string permission_mode = 9 [json_name = "permissionMode"];</code>
+     * @param value The bytes for permissionMode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPermissionModeBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setPermissionModeBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Usage)
   }
   @java.lang.Override
@@ -703,10 +1104,13 @@ public  final class Usage extends
             "window_",
             "limits_",
             dev.ironpark.mako.v2.RateLimit.class,
+            "model_",
+            "effort_",
+            "permissionMode_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0001\u0000\u0001\u0002\u0002\u0002" +
-              "\u0003\u0002\u0004\u0002\u0005\u0002\u0006\u001b";
+              "\u0000\t\u0000\u0000\u0001\t\t\u0000\u0001\u0000\u0001\u0002\u0002\u0002\u0003\u0002" +
+              "\u0004\u0002\u0005\u0002\u0006\u001b\u0007\u0208\b\u0208\t\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

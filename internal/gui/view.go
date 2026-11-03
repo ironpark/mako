@@ -71,6 +71,7 @@ func window(m *model) ggui.Widget {
 		gitAskDialog(m),
 		confirmDialog(m),
 		imageViewer(m),
+		shellDialog(m),
 		paletteDialog(m),
 		m.toaster,
 		quickOpenDialog(m),
@@ -842,7 +843,7 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 	// with the lines to a few before it scrolls. ↑ and ↓ over an empty box
 	// bring back what was sent. A draft that begins with a slash lists the
 	// agent's commands over the box, whose keys come first.
-	field := ui.TextField(draft).Lines(1).
+	field := ui.TextField(draft).Lines(2).
 		Placeholder(T("Message the agent. Enter sends, Shift+Enter adds a line")).
 		Name(T("Message")).
 		BindDisabled(disabled).
@@ -863,22 +864,20 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 			return false
 		}).
 		OnPasteImage(func(png []byte) bool { m.pasteImage(id, png, insert); return true })
-	send := ui.ButtonOf(iconColored("arrow-up", uitheme.PrimaryFg).Size(15), func() { m.sendComposer(id) }).
-		Pad(6).Radius(14).Name(T("Send")).BindDisabled(disabled)
 	// Files dropped on the box, from the desktop or the Files tab, are
 	// inserted as paths.
 	over := ggui.State(false)
 	content := ggui.Column(
 		draftImages(m, id, state),
 		ggui.Box(inlineField(field)).MaxHeight(composerMaxHeight),
-		ggui.Row(ggui.Spacer(), send).Gap(8),
-	).Gap(8).Stretch()
+		composerBar(m, id, state, disabled, insert),
+	).Gap(6).Stretch()
 	box := ggui.View(over, func(o bool) ggui.Widget {
-		var border ggui.Widget = ggui.Box(content).Fill(tokSurface1).Border(1, tokBorderAccent).Radius(12).Pad(10, 12)
+		var border color.Color = tokBorder
 		if o {
-			border = ggui.Box(content).Fill(tokSurface1).Border(1, uitheme.Ring).Radius(12).Pad(10, 12)
+			border = uitheme.Ring
 		}
-		return border
+		return ggui.Box(content).Fill(tokSurface1).Border(1, border).Radius(composerRadius).Pad(12, 12, 8, 12)
 	})
 	desktop := ggui.Pointer(box).OnDropHover(over.Set).OnDrop(func(ev ggui.DropEvent) {
 		m.handOver(id, ev.Paths(), insert)

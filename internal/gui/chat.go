@@ -309,7 +309,7 @@ func sessionView(m *model, id string, group int) ggui.Widget {
 			return chatView(m, id, group)
 		}
 		focus := ggui.Peek(m.FocusGroup) == group
-		term := newTerminalView(m.conns[id], func() prefs { return ggui.Peek(m.Prefs) }, focus).OnPress(func() { m.focusGroup(group) }).
+		term := newTerminalView(m.conns[id], func() prefs { return ggui.Peek(m.Prefs) }, focus).
 			OnDrop(func(paths []string, typed func([]string)) { m.handOver(id, paths, typed) }).
 			OnPasteImage(func(png []byte, typed func([]string)) { m.pasteImage(id, png, typed) }).
 			OnRiskyPaste(m.confirmPaste).
@@ -495,11 +495,11 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	}).WithEqual(protocol.Same)
 	// The composer belongs to Chat alone, as in ovis: Terminal mode's grid
 	// is its own input surface, and a file view has no session to type into.
-	session := ggui.Pointer(ggui.Column(
+	session := ggui.Column(
 		ggui.Expanded(ggui.Stack(feed, &afterPaint{fn: find.painted}, hostBadge(m, id), toLatestButton(m, state, scroll, offset),
 			usageOverlay(m, id, chatUsage, viewChip(m, id, group)), findBar(m, id, find.finder())).Expand()),
-		approvalCard(m, id), compactingRow(m, id), runningAgents(m, id, state), runningTasks(m, id), chatInput(m, id, group, state),
-	).Stretch()).OnDown(func(ggui.PointerEvent) { m.focusGroup(group) })
+		approvalCard(m, id), compactingRow(m, id), runningAgents(m, id, state), runningTasks(m, id), chatInput(m, id, state),
+	).Stretch()
 	// A subagent opened shows its conversation in place of the session's,
 	// which is built once and kept, scroll and draft and all, to come back
 	// to.
@@ -507,7 +507,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		if agent == "" {
 			return session
 		}
-		return agentChatView(m, id, group, agent)
+		return agentChatView(m, id, agent)
 	})
 }
 

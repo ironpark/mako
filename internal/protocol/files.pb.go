@@ -221,7 +221,8 @@ type ReadFile struct {
 	Max    int64                  `protobuf:"varint,3,opt,name=max,proto3" json:"max,omitempty"` // bytes; capped by the daemon
 	Image  bool                   `protobuf:"varint,4,opt,name=image,proto3" json:"image,omitempty"`
 	// A file read in pieces, as a download reads one: raw replies with the
-	// bytes from offset on, text or not.
+	// bytes from offset on, text or not; a negative offset counts from the
+	// end.
 	Offset        int64 `protobuf:"varint,5,opt,name=offset,proto3" json:"offset,omitempty"`
 	Raw           bool  `protobuf:"varint,6,opt,name=raw,proto3" json:"raw,omitempty"`
 	unknownFields protoimpl.UnknownFields

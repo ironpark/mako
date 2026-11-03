@@ -100,6 +100,14 @@ message Usage {
   int64 context = 4;
   int64 window = 5;
   repeated RateLimit limits = 6; // the shortest window first
+  // model and effort are what the latest reply was made with, as the
+  // agent names them: "claude-opus-5-5", "high"; "" where it says none.
+  string model = 7;
+  string effort = 8;
+  // permission_mode is what the agent may do unasked, as of its latest
+  // prompt, as it names it: "default", "acceptEdits", "plan",
+  // "bypassPermissions"; "" where it says none.
+  string permission_mode = 9;
 }
 
 // RateLimit is how much of one of an account's limits is spent.

@@ -27,8 +27,7 @@ import (
 type terminalView struct {
 	conn      *termConn
 	prefs     func() prefs
-	autoFocus bool   // take the keyboard on first paint, as a new tab does
-	onPress   func() // a press anywhere in it, which makes its pane current
+	autoFocus bool // take the keyboard on first paint, as a new tab does
 	// onDrop hands over files dropped from the desktop, by their paths
 	// here, and types what it gives back; nil types the paths as they are.
 	onDrop func(paths []string, typed func([]string))
@@ -112,9 +111,6 @@ func newTerminalView(conn *termConn, prefs func() prefs, autoFocus bool) *termin
 		pal: darkPalette, lastCell: [2]int{-1, -1}, probed: [2]int{-1, -1},
 	}
 }
-
-// OnPress runs fn when the terminal is pressed.
-func (t *terminalView) OnPress(fn func()) *terminalView { t.onPress = fn; return t }
 
 // OnPasteImage takes a paste of a clipboard holding an image and no text:
 // fn hands the image over and calls typed with the path to type.
@@ -679,9 +675,6 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 	pc := t.cellAt(ev.Pos)
 	switch ev.Kind {
 	case ggui.PointerDown:
-		if t.onPress != nil {
-			t.onPress()
-		}
 		t.dragMods = ev.Mods
 		// A link is followed before the program hears of the click.
 		if ev.Button == ggui.MouseButtonLeft && linkMods(ev.Mods) && t.onLink != nil {

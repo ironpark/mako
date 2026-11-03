@@ -65,4 +65,62 @@ public interface UsageOrBuilder extends
    * <code>repeated .mako.v2.RateLimit limits = 6 [json_name = "limits"];</code>
    */
   int getLimitsCount();
+
+  /**
+   * <pre>
+   * model and effort are what the latest reply was made with, as the
+   * agent names them: "claude-opus-5-5", "high"; "" where it says none.
+   * </pre>
+   *
+   * <code>string model = 7 [json_name = "model"];</code>
+   * @return The model.
+   */
+  java.lang.String getModel();
+  /**
+   * <pre>
+   * model and effort are what the latest reply was made with, as the
+   * agent names them: "claude-opus-5-5", "high"; "" where it says none.
+   * </pre>
+   *
+   * <code>string model = 7 [json_name = "model"];</code>
+   * @return The bytes for model.
+   */
+  com.google.protobuf.ByteString
+      getModelBytes();
+
+  /**
+   * <code>string effort = 8 [json_name = "effort"];</code>
+   * @return The effort.
+   */
+  java.lang.String getEffort();
+  /**
+   * <code>string effort = 8 [json_name = "effort"];</code>
+   * @return The bytes for effort.
+   */
+  com.google.protobuf.ByteString
+      getEffortBytes();
+
+  /**
+   * <pre>
+   * permission_mode is what the agent may do unasked, as of its latest
+   * prompt, as it names it: "default", "acceptEdits", "plan",
+   * "bypassPermissions"; "" where it says none.
+   * </pre>
+   *
+   * <code>string permission_mode = 9 [json_name = "permissionMode"];</code>
+   * @return The permissionMode.
+   */
+  java.lang.String getPermissionMode();
+  /**
+   * <pre>
+   * permission_mode is what the agent may do unasked, as of its latest
+   * prompt, as it names it: "default", "acceptEdits", "plan",
+   * "bypassPermissions"; "" where it says none.
+   * </pre>
+   *
+   * <code>string permission_mode = 9 [json_name = "permissionMode"];</code>
+   * @return The bytes for permissionMode.
+   */
+  com.google.protobuf.ByteString
+      getPermissionModeBytes();
 }

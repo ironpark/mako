@@ -284,7 +284,7 @@ func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget 
 // docView is a file's tab content: a line about the file and the caret,
 // a banner while it reads, or when it cannot be edited or saved, and the
 // editor, or for Markdown the page it renders.
-func docView(m *model, id string, focus bool, onPress func()) ggui.Widget {
+func docView(m *model, id string, focus bool) ggui.Widget {
 	doc := m.docs[id]
 	info := ggui.Derived(func() docInfo { return m.Docs.Get()[id] })
 	state := ggui.Derived(func() string {
@@ -314,7 +314,7 @@ func docView(m *model, id string, focus bool, onPress func()) ggui.Widget {
 			return ggui.View(doc.text, func(text string) ggui.Widget { return markdownView(m, id, text) })
 		}
 		e := m.docEditor(id)
-		e.ReadOnly(d.ReadOnly()).AutoFocus(focus).OnPress(onPress)
+		e.ReadOnly(d.ReadOnly()).AutoFocus(focus)
 		return e
 	})
 	banner := ggui.Reactive(func() ggui.Widget {

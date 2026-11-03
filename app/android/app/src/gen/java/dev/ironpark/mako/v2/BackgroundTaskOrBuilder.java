@@ -52,7 +52,7 @@ public interface BackgroundTaskOrBuilder extends
 
   /**
    * <pre>
-   * its first line, cut short
+   * as written, lines and all, cut short past 1000 characters
    * </pre>
    *
    * <code>string command = 3 [json_name = "command"];</code>
@@ -61,7 +61,7 @@ public interface BackgroundTaskOrBuilder extends
   java.lang.String getCommand();
   /**
    * <pre>
-   * its first line, cut short
+   * as written, lines and all, cut short past 1000 characters
    * </pre>
    *
    * <code>string command = 3 [json_name = "command"];</code>

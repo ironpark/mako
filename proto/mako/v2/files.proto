@@ -35,7 +35,8 @@ message ReadFile {
   int64 max = 3; // bytes; capped by the daemon
   bool image = 4;
   // A file read in pieces, as a download reads one: raw replies with the
-  // bytes from offset on, text or not.
+  // bytes from offset on, text or not; a negative offset counts from the
+  // end.
   int64 offset = 5;
   bool raw = 6;
 }

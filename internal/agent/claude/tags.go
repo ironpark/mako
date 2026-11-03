@@ -28,9 +28,6 @@ const (
 // pasted matches the tags Claude Code wraps pasted text in.
 var pasted = regexp.MustCompile(`</?pasted_content[^>]*>`)
 
-// ansi matches the escape sequences a local command colors its output with.
-var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)`)
-
 // inner is the content of s's first <name> tag, trimmed.
 func inner(s, name string) (string, bool) {
 	_, rest, ok := strings.Cut(s, "<"+name+">")
@@ -99,7 +96,7 @@ func userTurn(text string, command *string) []*protocol.ChatMessage {
 	}
 	user := func(s string) *protocol.ChatMessage { return &protocol.ChatMessage{Role: "user", Text: s} }
 	output := func(tool, kind, s string, failed bool) *protocol.ChatMessage {
-		s = strings.TrimSpace(ansi.ReplaceAllString(s, ""))
+		s = strings.TrimSpace(agent.StripANSI(s))
 		return &protocol.ChatMessage{Role: "tool", Tool: tool, Kind: kind, Detail: agent.OneLine(s, 120), Text: s, Output: true, Error: failed}
 	}
 	if name, ok := inner(text, "command-name"); ok && leads("command-name", "command-message") {

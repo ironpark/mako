@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"encoding/json"
+	"regexp"
 	"strings"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -302,12 +303,24 @@ func OneLine(s string, n int) string {
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		s = s[:i]
 	}
-	s = strings.Join(strings.Fields(s), " ")
+	return Clip(strings.Join(strings.Fields(s), " "), n)
+}
+
+// Clip is s trimmed, cut short past n runes, its lines kept.
+func Clip(s string, n int) string {
+	s = strings.TrimSpace(s)
 	if r := []rune(s); len(r) > n {
 		s = string(r[:n]) + "…"
 	}
 	return s
 }
+
+// ansi finds the escape sequences a command's colours and cursor moves
+// leave in its output, and the carriage returns its progress redraws with.
+var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b[()][0-9A-Za-z]|\r`)
+
+// StripANSI is a command's output without its escape sequences.
+func StripANSI(s string) string { return ansi.ReplaceAllString(s, "") }
 
 // ContentText is a content field's text: a string, or its blocks' text.
 func ContentText(raw json.RawMessage) string {

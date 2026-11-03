@@ -166,7 +166,7 @@ public  final class BackgroundTask extends
   private java.lang.String command_;
   /**
    * <pre>
-   * its first line, cut short
+   * as written, lines and all, cut short past 1000 characters
    * </pre>
    *
    * <code>string command = 3 [json_name = "command"];</code>
@@ -178,7 +178,7 @@ public  final class BackgroundTask extends
   }
   /**
    * <pre>
-   * its first line, cut short
+   * as written, lines and all, cut short past 1000 characters
    * </pre>
    *
    * <code>string command = 3 [json_name = "command"];</code>
@@ -191,7 +191,7 @@ public  final class BackgroundTask extends
   }
   /**
    * <pre>
-   * its first line, cut short
+   * as written, lines and all, cut short past 1000 characters
    * </pre>
    *
    * <code>string command = 3 [json_name = "command"];</code>
@@ -205,7 +205,7 @@ public  final class BackgroundTask extends
   }
   /**
    * <pre>
-   * its first line, cut short
+   * as written, lines and all, cut short past 1000 characters
    * </pre>
    *
    * <code>string command = 3 [json_name = "command"];</code>
@@ -216,7 +216,7 @@ public  final class BackgroundTask extends
   }
   /**
    * <pre>
-   * its first line, cut short
+   * as written, lines and all, cut short past 1000 characters
    * </pre>
    *
    * <code>string command = 3 [json_name = "command"];</code>
@@ -798,7 +798,7 @@ public  final class BackgroundTask extends
 
     /**
      * <pre>
-     * its first line, cut short
+     * as written, lines and all, cut short past 1000 characters
      * </pre>
      *
      * <code>string command = 3 [json_name = "command"];</code>
@@ -810,7 +810,7 @@ public  final class BackgroundTask extends
     }
     /**
      * <pre>
-     * its first line, cut short
+     * as written, lines and all, cut short past 1000 characters
      * </pre>
      *
      * <code>string command = 3 [json_name = "command"];</code>
@@ -823,7 +823,7 @@ public  final class BackgroundTask extends
     }
     /**
      * <pre>
-     * its first line, cut short
+     * as written, lines and all, cut short past 1000 characters
      * </pre>
      *
      * <code>string command = 3 [json_name = "command"];</code>
@@ -838,7 +838,7 @@ public  final class BackgroundTask extends
     }
     /**
      * <pre>
-     * its first line, cut short
+     * as written, lines and all, cut short past 1000 characters
      * </pre>
      *
      * <code>string command = 3 [json_name = "command"];</code>
@@ -851,7 +851,7 @@ public  final class BackgroundTask extends
     }
     /**
      * <pre>
-     * its first line, cut short
+     * as written, lines and all, cut short past 1000 characters
      * </pre>
      *
      * <code>string command = 3 [json_name = "command"];</code>

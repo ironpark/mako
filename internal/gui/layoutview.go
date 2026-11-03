@@ -66,11 +66,39 @@ func paneGroup(m *model, id int) ggui.Readable[tabGroup] {
 
 func paneView(m *model, id int) ggui.Widget {
 	group := paneGroup(m, id)
-	return ggui.Column(
+	// A press anywhere in it makes the pane current, whatever takes it.
+	return &pressWatch{child: ggui.Column(
 		paneTabBar(m, id, group),
 		hline(),
 		ggui.Expanded(paneBody(m, id, group)),
-	).Stretch()
+	).Stretch(), fn: func() { m.focusGroup(id) }}
+}
+
+// pressWatch runs fn as a button goes down anywhere over its child, before
+// whatever under it takes the press, which it leaves to them: a chat's
+// text, its feed and its composer each take a press of their own. Not
+// Canvas.ObserveInput, which hears the wheel and keys too: scrolling a
+// pane beside the current one leaves it so.
+type pressWatch struct {
+	child ggui.Widget
+	fn    func()
+}
+
+func (w *pressWatch) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	return w.child.Layout(c, env)
+}
+
+func (w *pressWatch) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.Paint(w.child, r)
+	dst.HitPointer(r, w) // over the child, so it hears first
+}
+
+// HandlePointer implements ggui.PointerHandler, consuming nothing.
+func (w *pressWatch) HandlePointer(ev ggui.PointerEvent) bool {
+	if ev.Kind == ggui.PointerDown {
+		w.fn()
+	}
+	return false
 }
 
 // paneTabBar is a pane's tabs, which drag to reorder, to another pane or to
@@ -224,7 +252,7 @@ func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			if m.docs[p.ID] == nil {
 				return ggui.Box()
 			}
-			return docView(m, p.ID, ggui.Peek(m.FocusGroup) == id, func() { m.focusGroup(id) })
+			return docView(m, p.ID, ggui.Peek(m.FocusGroup) == id)
 		case isDiffTab(p.ID):
 			return diffTabView(m, p.ID)
 		case !p.Ready:

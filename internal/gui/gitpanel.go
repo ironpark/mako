@@ -1,8 +1,14 @@
 package gui
 
 import (
+	"slices"
+	"strings"
+
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+
+	"github.com/ironpark/mako/internal/pathscope"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // The right panel's Git tab is the selected session's project as git sees
@@ -15,9 +21,15 @@ import (
 func gitPanel(m *model) ggui.Widget {
 	root := ggui.Derived(m.repoFolder)
 	// Read again every while the tab shows, as agents change files and
-	// commit.
-	pollWhileShown(m, root, gitTab, gitRefresh, m.loadGit)
-	pollWhileShown(m, root, gitTab, historyRefresh, m.loadHistory)
+	// commit; and at once when a commit, a checkout or a stash, by an agent
+	// or by a window on any node, moves the stamp of the repository the
+	// sessions in it are in, which their node's state brings within a few
+	// seconds.
+	stamp := ggui.Derived(func() string {
+		return repoStamp(m.Sessions.Get(), root.Get(), m.Git.Get().Changes.GetRoot())
+	})
+	pollWhileShown(m, root, gitTab, gitRefresh, m.loadGit, stamp)
+	pollWhileShown(m, root, gitTab, historyRefresh, m.loadHistory, stamp)
 	return withRootPicker(m, ggui.Key(root, func(r fileRoot) ggui.Widget {
 		if r.Path == "" {
 			return ggui.Box(muted(ggui.Text(T("Open a session to see its changes.")).Size(13))).Pad(16)
@@ -62,6 +74,29 @@ func gitTabView(m *model) ggui.Widget {
 		operationBanner(m),
 		ggui.Expanded(body),
 	).Stretch()
+}
+
+// repoStamp is the stamps of the sessions on root's node in its
+// repository, top being the top of its work tree once known: "" for none.
+// A session is in it by its folder, or by the repository it is of, as a
+// linked work tree's is, whose commits move the branches all share.
+func repoStamp(sessions []*protocol.SessionInfo, root fileRoot, top string) string {
+	repos := map[string]bool{}
+	for _, s := range sessions {
+		p := s.GetProject()
+		if s.GetNodeId() == root.Node && s.GetRepo() != "" &&
+			(pathscope.Within(p, root.Path) || top != "" && pathscope.Within(p, top) || pathscope.Within(root.Path, p)) {
+			repos[s.GetRepo()] = true
+		}
+	}
+	var stamps []string
+	for _, s := range sessions {
+		if s.GetNodeId() == root.Node && s.GetGitStamp() != "" && repos[s.GetRepo()] {
+			stamps = append(stamps, s.GetId()+"="+s.GetGitStamp())
+		}
+	}
+	slices.Sort(stamps)
+	return strings.Join(stamps, ",")
 }
 
 // gitTabRefresh reads the Git tab's changes and history again, after an
