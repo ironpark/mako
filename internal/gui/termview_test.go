@@ -3,6 +3,7 @@ package gui
 import (
 	"bytes"
 	"encoding/base64"
+	"image"
 	"io"
 	"runtime"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -423,5 +425,42 @@ func TestTheWheelWaitsForTheProgram(t *testing.T) {
 	p.Scroll(at, ggui.Pt(0, 1))
 	if got := link.typed(); !strings.Contains(got, "\x1b[<64;3;4M") {
 		t.Fatalf("after it printed, the wheel sent %q", got)
+	}
+}
+
+// A frame that paints elsewhere, around a chat's scroll say, paints the
+// terminal from the screen it last copied; one that shows it copies the
+// screen again.
+func TestATerminalNotShownKeepsTheScreenItCopied(t *testing.T) {
+	link := newFakeLink()
+	conn, err := newTermConn("s1", link, 80, 24, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := newTerminalView(conn, defaultPrefs, false)
+	p := ggui.NewProbe(ggui.Column(otherTarget(), ggui.Expanded(view)).Stretch(), ggui.Sz(800, 400))
+	defer func() { p.Close(); close(link.in); conn.close() }()
+	img := ggfx.NewImage(800, 400)
+	p.Draw(img)
+	link.output(t, "hello world\r\n")
+	waitFor(t, func() bool { return strings.Contains(screenText(conn), "hello world") })
+
+	shownHello := func() bool {
+		f := view.shown
+		for i := range min(11, len(f.cells)) {
+			if f.textAt(i) == "h" {
+				return true
+			}
+		}
+		return false
+	}
+	// Above the terminal only.
+	p.Draw(img.SubImage(image.Rect(0, 0, 800, 40)).(*ggfx.Image))
+	if !view.shownOK || shownHello() {
+		t.Fatal("a frame that did not show the terminal copied its screen")
+	}
+	p.Draw(img)
+	if !shownHello() {
+		t.Fatal("a frame that showed the terminal did not copy its screen")
 	}
 }

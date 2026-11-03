@@ -24,12 +24,14 @@ func BenchmarkChatScroll(b *testing.B) {
 	state := m.chatState("s")
 	state.loading = true
 	var messages []*protocol.ChatMessage
-	code := "```go\n" + strings.Repeat("func f(x int) int {\n\treturn x * 2 // doubled\n}\n", 6) + "```"
+	// Every turn's text is its own, as a real conversation's is: no line
+	// is shaped once for all the turns.
 	for i := range 300 {
+		code := "```go\n" + strings.Repeat(fmt.Sprintf("func f%d(x int) int {\n\treturn x * %d // doubled\n}\n", i, i), 6) + "```"
 		messages = append(messages,
 			&protocol.ChatMessage{Role: "user", Text: fmt.Sprintf("turn %d: can you look at the **cache** and fix the `layout` bug?", i)},
-			&protocol.ChatMessage{Role: "assistant", Text: "I looked at it. The problem is in `cache.go`:\n\n- the sources are copied\n- every cache keeps them\n\n" + code + "\n\nThat should do it. 한국어 문장도 섞여 있습니다."},
-			&protocol.ChatMessage{Role: "assistant", Tool: "Bash", Kind: "Bash", Detail: "go test ./...", Result: strings.Repeat("ok  \tgithub.com/x/y\t0.3s\n", 8)},
+			&protocol.ChatMessage{Role: "assistant", Text: fmt.Sprintf("I looked at it (%d). The problem is in `cache%d.go`:\n\n- the sources are copied %d times\n- every cache keeps them\n\n", i, i, i) + code + fmt.Sprintf("\n\nThat should do it, %d. 한국어 문장도 섞여 있습니다.", i)},
+			&protocol.ChatMessage{Role: "assistant", Tool: "Bash", Kind: "Bash", Detail: "go test ./...", Result: strings.Repeat(fmt.Sprintf("ok  \tgithub.com/x/y%d\t0.3s\n", i), 8)},
 			&protocol.ChatMessage{Role: "assistant", Tool: "Edit", Kind: "Edit", Detail: "cache.go"},
 		)
 	}

@@ -91,6 +91,12 @@ type terminalView struct {
 	cols, rows   int
 	runBuf       []byte // the text of a run of cells, kept between paints
 	paintMemo    paintMemo
+	// shown is the screen as the last paint that showed it copied it: a
+	// frame painted in part elsewhere, around a chat's scroll say, paints
+	// the terminal from it rather than copying the screen again for
+	// drawing nobody sees. shownOK is whether there is one.
+	shown   frameSnapshot
+	shownOK bool
 }
 
 const (
@@ -185,9 +191,15 @@ func (t *terminalView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	// A cell in device pixels, as a program sizes the images it shows.
 	t.conn.resize(uint16(t.cols), uint16(t.rows), uint16(math.Round(t.cellW*dst.Scale())), uint16(math.Round(t.cellH*dst.Scale())))
 
-	f, err := t.conn.frame()
-	if err != nil && f.cols == 0 {
-		return
+	f := t.shown
+	if !t.shownOK || dst.Shows(r) {
+		var err error
+		f, err = t.conn.frame()
+		if err != nil && f.cols == 0 {
+			t.shown, t.shownOK = frameSnapshot{}, false
+			return
+		}
+		t.shown, t.shownOK = f, true
 	}
 	g := grid{origin: t.origin, cellW: t.cellW, cellH: t.cellH, size: p.FontSize, font: font, italic: italic, pal: t.pal, scale: dst.Scale(), runBuf: &t.runBuf, memo: &t.paintMemo}
 	clip := dst.Clip(r)
