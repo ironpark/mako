@@ -52,11 +52,13 @@ func (a *Attachment) Input(p []byte) error {
 	return a.s.Send(protocol.TypeInput, "", &protocol.Input{SessionId: a.sessionID, Data: p})
 }
 
-// Resize changes the session window size.
-func (a *Attachment) Resize(cols, rows uint16) error {
+// Resize changes the session window size, with a cell's size in pixels,
+// zero to keep the last.
+func (a *Attachment) Resize(cols, rows, cellW, cellH uint16) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.s.Send(protocol.TypeResize, "", &protocol.Resize{SessionId: a.sessionID, Cols: uint32(cols), Rows: uint32(rows)})
+	return a.s.Send(protocol.TypeResize, "", &protocol.Resize{SessionId: a.sessionID, Cols: uint32(cols), Rows: uint32(rows),
+		CellWidth: uint32(cellW), CellHeight: uint32(cellH)})
 }
 
 // Close detaches; the session keeps running.

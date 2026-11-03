@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/ironpark/gostty"
+
+	"github.com/ironpark/mako/internal/kitty"
 )
 
 // An exited session keeps the screen its agent left, so it can still be
@@ -129,7 +131,7 @@ func TestASnapshotCarriesTheProgramsModes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer src.Close()
-	_, _ = src.WriteString("prompt\r\n\x1b[?1049h\x1b[?1000h\x1b[?1006h\x1b[?2004h\x1b[?1h\x1b[?25ltui screen")
+	_, _ = src.WriteString("prompt\r\n\x1b[?1049h\x1b[?1000h\x1b[?1006h\x1b[?2004h\x1b[?1h\x1b[?25l\x1b[>11utui screen")
 	text, err := src.FormatString(gostty.FormatOptions{Format: gostty.FormatterFormatVt, Cursor: true})
 	if err != nil {
 		t.Fatal(err)
@@ -149,6 +151,9 @@ func TestASnapshotCarriesTheProgramsModes(t *testing.T) {
 	}
 	if !term.ModeEnabled(gostty.ModeBracketedPaste) || !term.ModeEnabled(gostty.ModeCursorKeys) || term.ModeEnabled(gostty.ModeCursorVisible) {
 		t.Fatal("modes lost")
+	}
+	if got := kitty.Flags(term); got != kitty.Disambiguate|kitty.EventTypes|kitty.AllKeysAsCodes {
+		t.Fatalf("Kitty keyboard flags %05b, want those pushed", got)
 	}
 	plain, _ := dst.FormatString(gostty.FormatOptions{})
 	if !strings.Contains(plain, "tui screen") {

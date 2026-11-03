@@ -259,7 +259,7 @@ func (w attachWire) readInput(s *session.Session) {
 			_, _ = s.Write(in.GetInput().GetData())
 		case protocol.TypeResize:
 			r := in.GetResize()
-			_ = s.Resize(uint16(r.GetCols()), uint16(r.GetRows()))
+			_ = s.ResizeCells(uint16(r.GetCols()), uint16(r.GetRows()), uint16(r.GetCellWidth()), uint16(r.GetCellHeight()))
 		}
 	}
 }

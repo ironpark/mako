@@ -309,7 +309,7 @@ func (c *Client) forwardInput(ctx context.Context, a *Attachment, cancel func())
 func (c *Client) forwardWinch(ctx context.Context, a *Attachment) {
 	send := func() {
 		if cols, rows, ok := localSize(); ok {
-			_ = a.Resize(cols, rows)
+			_ = a.Resize(cols, rows, 0, 0)
 		}
 	}
 	send()

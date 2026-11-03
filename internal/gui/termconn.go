@@ -18,6 +18,7 @@ import (
 
 	"github.com/ironpark/mako/internal/activity"
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/kitty"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -55,7 +56,8 @@ type termConn struct {
 	err                 error
 	cols                uint16
 	rows                uint16
-	closed              bool // vt and state are released; nothing may touch them
+	cellW, cellH        uint16 // a cell in device pixels, zero until a view paints it
+	closed              bool   // vt and state are released; nothing may touch them
 	opts                termOptions
 	gesture             *gostty.Gesture // click counting and drag selection
 	dragging            bool
@@ -85,6 +87,12 @@ type termConn struct {
 	// wheelAt is when wheel reports last went to the program, zero once it
 	// has printed since; see mouseWheel.
 	wheelAt time.Time
+
+	// The images the program placed, as the last frame found them, and the
+	// textures they are drawn from; see termimages.go.
+	placements []gostty.RenderImagePlacement
+	images     []placedImage
+	textures   map[uint32]*imageTexture
 }
 
 // dialTerm attaches to a session and starts reading its stream.
@@ -234,7 +242,7 @@ func (t *termConn) read() {
 			t.opts = termOptions{}
 			t.applyOptionsLocked(opts)
 			cols, rows := uint16(max(snap.GetCols(), 2)), uint16(max(snap.GetRows(), 2))
-			_ = t.vt.Terminal().Resize(cols, rows)
+			_ = t.vt.Terminal().ResizeCells(cols, rows, uint32(t.cellW), uint32(t.cellH))
 			t.cols, t.rows = cols, rows
 			t.setTitleLocked(snap.GetTitle())
 			t.progress.Restore(snap.GetProgress(), time.Now())
@@ -385,6 +393,7 @@ func (t *termConn) frame() (frameSnapshot, error) {
 	// A scroll or a search shown may have restored pages.
 	t.noteCompressionLocked()
 	colors, cursor := t.state.Colors(), t.state.Cursor()
+	t.updatePlacementsLocked()
 	return frameSnapshot{
 		cells:    t.cells,
 		clusters: t.clusters,
@@ -395,6 +404,9 @@ func (t *termConn) frame() (frameSnapshot, error) {
 		exited:   t.exited,
 		exitCode: t.exitCode,
 		err:      t.err,
+		images:   t.images,
+		cellPxW:  t.cellW,
+		cellPxH:  t.cellH,
 	}, nil
 }
 
@@ -411,6 +423,7 @@ func (t *termConn) forgetFrame() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.cells, t.clusters, t.dirtyRows, t.hasFrame = nil, nil, nil, false
+	t.placements, t.images = nil, nil
 	// ghostty's copy of the cells the state hands them through, as large.
 	t.state.ReleaseScratch()
 }
@@ -438,17 +451,18 @@ func (t *termConn) refreshClustersLocked(y0, y1, cols int) {
 	}
 }
 
-// resize follows the widget's size: the local terminal at once, the
-// session PTY by a message to the daemon.
-func (t *termConn) resize(cols, rows uint16) {
+// resize follows the widget's size, cols by rows of cells cellW by cellH
+// device pixels: the local terminal at once, the session PTY by a message
+// to the daemon.
+func (t *termConn) resize(cols, rows, cellW, cellH uint16) {
 	cols, rows = max(cols, 2), max(rows, 2)
 	t.mu.Lock()
-	if t.closed || (cols == t.cols && rows == t.rows) {
+	if t.closed || (cols == t.cols && rows == t.rows && cellW == t.cellW && cellH == t.cellH) {
 		t.mu.Unlock()
 		return
 	}
-	t.cols, t.rows = cols, rows
-	_ = t.vt.Terminal().Resize(cols, rows)
+	t.cols, t.rows, t.cellW, t.cellH = cols, rows, cellW, cellH
+	_ = t.vt.Terminal().ResizeCells(cols, rows, uint32(cellW), uint32(cellH))
 	live := !t.exited && t.err == nil
 	now := time.Now()
 	send := live && t.settle == nil && now.Sub(t.sentAt) >= resizeSettle
@@ -459,7 +473,7 @@ func (t *termConn) resize(cols, rows uint16) {
 	}
 	t.mu.Unlock()
 	if send {
-		_ = t.att.Resize(cols, rows)
+		_ = t.att.Resize(cols, rows, cellW, cellH)
 	}
 }
 
@@ -472,11 +486,11 @@ func (t *termConn) sendSize() {
 	t.mu.Lock()
 	t.settle = nil
 	t.sentAt = time.Now()
-	cols, rows := t.cols, t.rows
+	cols, rows, cellW, cellH := t.cols, t.rows, t.cellW, t.cellH
 	live := !t.closed && !t.exited && t.err == nil
 	t.mu.Unlock()
 	if live {
-		_ = t.att.Resize(cols, rows)
+		_ = t.att.Resize(cols, rows, cellW, cellH)
 	}
 }
 
@@ -497,6 +511,16 @@ func (t *termConn) key(ev input.KeyEvent, text string) {
 	if err == nil && len(buf) > 0 {
 		t.send(buf)
 	}
+}
+
+// keyFlags are the Kitty keyboard flags the program set.
+func (t *termConn) keyFlags() kitty.KeyFlags {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return 0
+	}
+	return kitty.Flags(t.vt.Terminal())
 }
 
 // runsLines reports whether text pasted would run line by line, as if
@@ -945,7 +969,8 @@ func (t *termConn) close() {
 type sessionLink interface {
 	Recv() (*protocol.StreamEvent, error)
 	Input(p []byte) error
-	Resize(cols, rows uint16) error
+	// Resize sizes the session's window, with a cell's size in pixels.
+	Resize(cols, rows, cellW, cellH uint16) error
 	Close() error
 }
 
@@ -960,6 +985,10 @@ type frameSnapshot struct {
 	exited     bool
 	exitCode   int
 	err        error
+	images     []placedImage // in drawing order
+	// cellPxW and cellPxH are a cell in the pixels images are placed in,
+	// zero when not yet told.
+	cellPxW, cellPxH uint16
 }
 
 // frameBuffer collects encoder output for one write.

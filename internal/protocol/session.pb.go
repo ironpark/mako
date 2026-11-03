@@ -1245,12 +1245,17 @@ func (x *Output) GetData() []byte {
 	return nil
 }
 
-// Resize changes a session's window.
+// Resize changes a session's window. cell_width and cell_height are a
+// cell's size in pixels, as the front-end draws it: the PTY reports the
+// window's size in pixels from them, and images a program places are sized
+// by them. Zero keeps the size last told.
 type Resize struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	Cols          uint32                 `protobuf:"varint,2,opt,name=cols,proto3" json:"cols,omitempty"`
 	Rows          uint32                 `protobuf:"varint,3,opt,name=rows,proto3" json:"rows,omitempty"`
+	CellWidth     uint32                 `protobuf:"varint,4,opt,name=cell_width,json=cellWidth,proto3" json:"cell_width,omitempty"`
+	CellHeight    uint32                 `protobuf:"varint,5,opt,name=cell_height,json=cellHeight,proto3" json:"cell_height,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1302,6 +1307,20 @@ func (x *Resize) GetCols() uint32 {
 func (x *Resize) GetRows() uint32 {
 	if x != nil {
 		return x.Rows
+	}
+	return 0
+}
+
+func (x *Resize) GetCellWidth() uint32 {
+	if x != nil {
+		return x.CellWidth
+	}
+	return 0
+}
+
+func (x *Resize) GetCellHeight() uint32 {
+	if x != nil {
+		return x.CellHeight
 	}
 	return 0
 }
@@ -1816,12 +1835,16 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x06Output\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\"O\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\"\x8f\x01\n" +
 	"\x06Resize\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +
 	"\x04cols\x18\x02 \x01(\rR\x04cols\x12\x12\n" +
-	"\x04rows\x18\x03 \x01(\rR\x04rows\"_\n" +
+	"\x04rows\x18\x03 \x01(\rR\x04rows\x12\x1d\n" +
+	"\n" +
+	"cell_width\x18\x04 \x01(\rR\tcellWidth\x12\x1f\n" +
+	"\vcell_height\x18\x05 \x01(\rR\n" +
+	"cellHeight\"_\n" +
 	"\x0eProgressReport\x12\x14\n" +
 	"\x05state\x18\x01 \x01(\rR\x05state\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value\x12!\n" +

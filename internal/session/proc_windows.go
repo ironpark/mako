@@ -144,7 +144,8 @@ func (p *proc) Close() error {
 	return errors.Join(p.in.Close(), p.out.Close())
 }
 
-func (p *proc) resize(cols, rows uint16) error {
+// resize sizes the console cols by rows; a console has no pixel size.
+func (p *proc) resize(cols, rows, _, _ uint16) error {
 	return windows.ResizePseudoConsole(p.console, coord(cols, rows))
 }
 

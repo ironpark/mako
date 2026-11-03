@@ -687,7 +687,12 @@ subscribes again and sends a fresh snapshot rather than an exit. A front-end
 must accept a snapshot at any point and reset its screen to it.
 
 From the front-end: **`input`** (bytes for the PTY) and **`resize`** (columns
-and rows), each naming the `session_id`. Anything else is ignored.
+and rows, and a cell's size in pixels where the front-end draws images,
+zero to keep the last), each naming the `session_id`. Anything else is
+ignored. The pixel size is what the PTY reports to programs that ask for
+the window's size in pixels and what the daemon's terminal sizes Kitty
+images placed in cells by; a styled snapshot ends with the Kitty images on
+the screen and the Kitty keyboard flags the program pushed, sent again.
 
 `output` and `input` carry their bytes as protobuf `bytes`, as they are,
 which is why the attach stream needs no framing of its own. (The first

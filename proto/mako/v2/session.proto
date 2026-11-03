@@ -179,11 +179,16 @@ message Output {
   bytes data = 2;
 }
 
-// Resize changes a session's window.
+// Resize changes a session's window. cell_width and cell_height are a
+// cell's size in pixels, as the front-end draws it: the PTY reports the
+// window's size in pixels from them, and images a program places are sized
+// by them. Zero keeps the size last told.
 message Resize {
   string session_id = 1;
   uint32 cols = 2;
   uint32 rows = 3;
+  uint32 cell_width = 4;
+  uint32 cell_height = 5;
 }
 
 // ProgressReport is a terminal's latest OSC 9;4 state.

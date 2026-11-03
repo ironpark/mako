@@ -23,6 +23,7 @@ import (
 	"github.com/ironpark/mako/internal/activity"
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
+	"github.com/ironpark/mako/internal/kitty"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -39,6 +40,9 @@ type Spec struct {
 	Env   map[string]string
 	Cols  uint16
 	Rows  uint16
+	// CellWidth and CellHeight are a cell's size in pixels, as the
+	// front-end last said, zero until one does.
+	CellWidth, CellHeight uint16
 	// Worktree is the git worktree made for the session, which Project is.
 	Worktree *protocol.Worktree
 }
@@ -475,20 +479,30 @@ func (s *Session) Paste(text string) error {
 }
 
 // Resize changes the PTY and terminal dimensions together.
-func (s *Session) Resize(cols, rows uint16) error {
+func (s *Session) Resize(cols, rows uint16) error { return s.ResizeCells(cols, rows, 0, 0) }
+
+// ResizeCells changes the PTY and terminal dimensions together, with a
+// cell's size in pixels, which zero keeps as it was: the PTY says the
+// window's size in pixels from it, as programs that draw images ask, and
+// the terminal sizes images placed in cells by it.
+func (s *Session) ResizeCells(cols, rows, cellW, cellH uint16) error {
 	if cols == 0 || rows == 0 {
 		return errors.New("session: zero window size")
 	}
-	if err := s.proc.resize(cols, rows); err != nil {
-		return err
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if cellW == 0 || cellH == 0 {
+		cellW, cellH = s.spec.CellWidth, s.spec.CellHeight
+	}
+	if err := s.proc.resize(cols, rows, cellW, cellH); err != nil {
+		return err
+	}
 	if s.state == protocol.StateExited {
 		return nil // its screen is kept as it was left
 	}
 	s.spec.Cols, s.spec.Rows = cols, rows
-	return s.term.Terminal().Resize(cols, rows)
+	s.spec.CellWidth, s.spec.CellHeight = cellW, cellH
+	return s.term.Terminal().ResizeCells(cols, rows, uint32(cellW), uint32(cellH))
 }
 
 // Snapshot renders the current screen. Styled output replays colors and
@@ -557,13 +571,16 @@ var replayedModes = []struct {
 
 // modesAround is a screen's text as a terminal must be fed it to be in the
 // program's modes: on the alternate screen, where the program is on it,
-// and after it each mode the program changed, set as it left it.
+// and after it the images the program placed on it, the Kitty keyboard
+// flags it pushed and each mode it changed, set as it left them.
 func modesAround(term *gostty.Terminal, text string) string {
 	var b strings.Builder
 	if term.ActiveScreenKey() == gostty.ScreenKeyAlternate {
 		b.WriteString("\x1b[?1049h")
 	}
 	b.WriteString(text)
+	b.WriteString(kitty.Replay(term))
+	b.WriteString(kitty.Flags(term).Restore())
 	for _, m := range replayedModes {
 		if on := term.ModeEnabled(m.mode); on != m.on {
 			set := byte('l')

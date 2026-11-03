@@ -22,7 +22,7 @@ type fakeLink struct {
 
 	mu      sync.Mutex
 	input   bytes.Buffer
-	resizes [][2]uint16
+	resizes [][4]uint16 // cols, rows, and a cell in pixels
 }
 
 func newFakeLink() *fakeLink { return &fakeLink{in: make(chan *protocol.StreamEvent, 16)} }
@@ -42,10 +42,10 @@ func (f *fakeLink) Input(p []byte) error {
 	return nil
 }
 
-func (f *fakeLink) Resize(cols, rows uint16) error {
+func (f *fakeLink) Resize(cols, rows, cellW, cellH uint16) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.resizes = append(f.resizes, [2]uint16{cols, rows})
+	f.resizes = append(f.resizes, [4]uint16{cols, rows, cellW, cellH})
 	return nil
 }
 
@@ -175,6 +175,10 @@ func TestResizeFollowsTheWidget(t *testing.T) {
 	last := link.resizes[len(link.resizes)-1]
 	if last[0] < 40 || last[1] < 10 {
 		t.Fatalf("resized to %v, too small for an 800x460 view", last)
+	}
+	// A program sizes the images it shows by a cell's pixels.
+	if last[2] == 0 || last[3] == 0 {
+		t.Fatalf("resized to %v, without a cell's size in pixels", last)
 	}
 }
 

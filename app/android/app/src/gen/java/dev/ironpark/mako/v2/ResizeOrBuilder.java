@@ -33,4 +33,16 @@ public interface ResizeOrBuilder extends
    * @return The rows.
    */
   int getRows();
+
+  /**
+   * <code>uint32 cell_width = 4 [json_name = "cellWidth"];</code>
+   * @return The cellWidth.
+   */
+  int getCellWidth();
+
+  /**
+   * <code>uint32 cell_height = 5 [json_name = "cellHeight"];</code>
+   * @return The cellHeight.
+   */
+  int getCellHeight();
 }

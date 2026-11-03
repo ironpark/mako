@@ -54,6 +54,14 @@ type terminalView struct {
 	// held are keys pressed while the IME composes, which it may take for
 	// itself; see settleHeld.
 	held []input.KeyEvent
+	// down are the keys sent as keys and not yet let go of: a press of one
+	// is a repeat, and its release is reported to a program that asks.
+	down map[ggui.KeyboardKey]input.KeyEvent
+	// typed are the keys that type text, pressed while the program wants
+	// them as keys, waiting for the text they typed; pairing is whether it
+	// does, as of this frame's tick. See pairTyped.
+	typed   []typedKey
+	pairing bool
 	// tickText is the editor's text before this frame's IME edits.
 	tickText string
 	// dropOver is whether files are dragged over the terminal, which
@@ -174,7 +182,8 @@ func (t *terminalView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	if t.cols < 2 || t.rows < 2 {
 		return
 	}
-	t.conn.resize(uint16(t.cols), uint16(t.rows))
+	// A cell in device pixels, as a program sizes the images it shows.
+	t.conn.resize(uint16(t.cols), uint16(t.rows), uint16(math.Round(t.cellW*dst.Scale())), uint16(math.Round(t.cellH*dst.Scale())))
 
 	f, err := t.conn.frame()
 	if err != nil && f.cols == 0 {
@@ -288,12 +297,14 @@ func (t *terminalView) HandleKey(ev ggui.KeyEvent) {
 		t.blink = time.Time{}
 		t.ime.HandleKey(ev)
 		t.flushText(true)
+		t.releaseAll()
 		t.conn.requestPaint()
 	case ggui.KeyText:
 		// The editor commits typed text itself where there is no platform
 		// IME, and leaves it to the IME where there is, so text is sent from
 		// one place either way.
 		t.ime.HandleKey(ev)
+		t.pairTyped()
 		t.flushText(false)
 	case ggui.KeyPress:
 		t.blink = time.Time{}
@@ -307,18 +318,23 @@ func (t *terminalView) HandleKey(ev ggui.KeyEvent) {
 		if !ok || code.Modifier() {
 			return
 		}
-		// A printable key arrives again as text, already through the layout,
-		// dead keys and the IME; it is described as a key only when a
-		// modifier took its text away.
-		if code.Printable() && code != input.KeyTab && !ev.Mods.Ctrl && (!ev.Mods.Alt || altMakesText) {
-			return
-		}
 		unshifted, _ := code.Codepoint()
 		key := input.KeyEvent{
 			Action:             input.KeyActionPress,
 			Key:                code,
 			Mods:               keyMods(ev.Mods),
 			UnshiftedCodepoint: unshifted,
+		}
+		// A printable key arrives again as text, already through the layout,
+		// dead keys and the IME; it is described as a key only when a
+		// modifier took its text away, or with the text it typed when the
+		// program wants keys that type as keys.
+		if code.Printable() && code != input.KeyTab && !ev.Mods.Ctrl && (!ev.Mods.Alt || altMakesText) {
+			if t.pairing && !t.ime.EditingState().Composing {
+				t.typed = append(t.typed, typedKey{ev.Key, key})
+				t.pairTyped()
+			}
+			return
 		}
 		if t.ime.EditingState().Composing {
 			t.held = append(t.held, key)
@@ -328,8 +344,98 @@ func (t *terminalView) HandleKey(ev ggui.KeyEvent) {
 			return
 		}
 		t.conn.clearSelection()
+		t.sendKey(ev.Key, key, "")
+	}
+}
+
+// HandleKeyRelease implements ggui.KeyReleaseHandler: a key sent as one is
+// reported let go of, to a program that asks.
+func (t *terminalView) HandleKeyRelease(ev ggui.KeyEvent) {
+	key, ok := t.down[ev.Key]
+	if !ok {
+		return
+	}
+	delete(t.down, ev.Key)
+	key.Action, key.Mods = input.KeyActionRelease, keyMods(ev.Mods)
+	t.conn.key(key, "")
+}
+
+// releaseAll lets go of the keys held as focus comes or goes, whose
+// releases would go elsewhere.
+func (t *terminalView) releaseAll() {
+	for k, key := range t.down {
+		delete(t.down, k)
+		key.Action = input.KeyActionRelease
 		t.conn.key(key, "")
 	}
+}
+
+// sendKey sends key k, which typed text, if any: as a repeat while it is
+// held, as a press otherwise.
+func (t *terminalView) sendKey(k ggui.KeyboardKey, key input.KeyEvent, text string) {
+	if _, held := t.down[k]; held {
+		key.Action = input.KeyActionRepeat
+	}
+	t.conn.key(key, text)
+	if t.down == nil {
+		t.down = map[ggui.KeyboardKey]input.KeyEvent{}
+	}
+	key.Action = input.KeyActionPress
+	t.down[k] = key
+}
+
+// typedKey is a key that typed text, for pairTyped.
+type typedKey struct {
+	k   ggui.KeyboardKey
+	key input.KeyEvent
+}
+
+// pairTyped sends the keys in typed with the text they typed, which the
+// editor holds unsent: before its press, where the platform IME put it
+// there in this frame's tick, or after, as the KeyText that follows. The
+// last keys typed the last characters, so they are matched from the end;
+// the text before them, the IME's own, goes as text. A syllable the IME
+// may still rewrite is no key's, and nor is Hangul: it is the IME's.
+func (t *terminalView) pairTyped() {
+	if len(t.typed) == 0 || t.ime.EditingState().Composing {
+		return
+	}
+	text := ggui.Peek(t.imeText)
+	t.sent = min(t.sent, len(text))
+	end := len(text) - len(t.rewritable())
+	if end <= t.sent {
+		return
+	}
+	unsent := []rune(text[t.sent:end])
+	n := 0
+	for n < len(t.typed) && n < len(unsent) && !isHangul(unsent[len(unsent)-1-n]) {
+		n++
+	}
+	if n == 0 {
+		return
+	}
+	keys := t.typed[len(t.typed)-n:]
+	t.typed = t.typed[:0]
+	t.conn.clearSelection()
+	if plain := string(unsent[:len(unsent)-n]); plain != "" {
+		t.conn.key(input.KeyEvent{Action: input.KeyActionPress, Key: input.KeyUnidentified}, plain)
+	}
+	for i, tk := range keys {
+		r := unsent[len(unsent)-n+i]
+		key := tk.key
+		if key.Mods.Shift && r != key.UnshiftedCodepoint {
+			key.ConsumedMods.Shift = true
+		}
+		if key.Mods.Alt && altMakesText && r > 0x7e {
+			key.ConsumedMods.Alt = true
+		}
+		t.sendKey(tk.k, key, string(r))
+	}
+	t.sent = end
+}
+
+func isHangul(r rune) bool {
+	return (r >= 0x1100 && r <= 0x11ff) || (r >= 0x3131 && r <= 0x318e) || (r >= 0xac00 && r <= 0xd7a3)
 }
 
 // settleHeld decides the keys pressed while the IME composed, once it has
@@ -380,11 +486,24 @@ func (t *terminalView) sendKeys(keys []input.KeyEvent) {
 
 // HandleTick implements ggui.TickHandler: it runs the platform IME while
 // focused, and sends whatever the IME committed.
+//
+// While the program wants keys that type text as keys, the text is kept a
+// frame for the presses that typed it, which come after the tick; what no
+// press took goes at the next tick, as text.
 func (t *terminalView) HandleTick() bool {
+	t.typed = t.typed[:0] // presses whose text never came, as a dead key's
+	if t.pairing {
+		t.flushText(false)
+	}
 	t.tickText = ggui.Peek(t.imeText)
 	handled := t.ime.HandleTick()
 	t.settleHeld()
-	t.flushText(false)
+	t.pairing = !handled && t.conn.keyFlags().NeedsKeys()
+	if t.pairing && ggui.Peek(t.imeText) != "" {
+		ggui.WakeAt(ggui.Now()) // the next tick sends what no press takes
+	} else {
+		t.flushText(false)
+	}
 	t.autoscroll()
 	return handled
 }
@@ -445,7 +564,7 @@ func (t *terminalView) rewritable() string {
 	}
 	text := ggui.Peek(t.imeText)
 	r, n := utf8.DecodeLastRuneInString(text)
-	if (r >= 0x1100 && r <= 0x11ff) || (r >= 0x3131 && r <= 0x318e) || (r >= 0xac00 && r <= 0xd7a3) {
+	if isHangul(r) {
 		return text[len(text)-n:]
 	}
 	return ""
@@ -749,7 +868,18 @@ func (g grid) snap(v float64) float64 { return snapTo(g.scale, v) }
 // font's line in the cell.
 func (g grid) textTop() float64 { return (g.cellH - g.size*1.2) / 2 }
 
+// paint draws the screen: the images placed under everything, the cells'
+// backgrounds, the images between those and the text, the text, and the
+// images over it.
 func (g grid) paint(dst *ggui.Canvas, f frameSnapshot) {
+	g.paintImages(dst, f, gostty.KittyLayerBelowBg)
+	g.paintBackgrounds(dst, f)
+	g.paintImages(dst, f, gostty.KittyLayerBelowText)
+	g.paintText(dst, f)
+	g.paintImages(dst, f, gostty.KittyLayerAboveText)
+}
+
+func (g grid) paintBackgrounds(dst *ggui.Canvas, f frameSnapshot) {
 	for row := 0; row < f.rows; row++ {
 		base := row * f.cols
 		if base+f.cols > len(f.cells) {
@@ -772,6 +902,16 @@ func (g grid) paint(dst *ggui.Canvas, f frameSnapshot) {
 			}
 			start = end
 		}
+	}
+}
+
+func (g grid) paintText(dst *ggui.Canvas, f frameSnapshot) {
+	for row := 0; row < f.rows; row++ {
+		base := row * f.cols
+		if base+f.cols > len(f.cells) {
+			break
+		}
+		line := f.cells[base : base+f.cols]
 
 		// Glyphs in runs of one style. A run breaks at anything that is not
 		// plain ASCII, which is drawn in its own cell so a wide character or
@@ -908,9 +1048,9 @@ func (g grid) paintPreedit(dst *ggui.Canvas, at ggui.Point, text string) {
 }
 
 // skipGlyph reports a cell with nothing to draw: a blank, the spacer behind
-// a wide character, or hidden text.
+// a wide character, hidden text, or a cell an image is placed by.
 func skipGlyph(c gostty.RenderCell) bool {
-	return c.Codepoint <= ' ' || c.Flags.Invisible ||
+	return c.Codepoint <= ' ' || c.Flags.Invisible || c.Codepoint == placeholder ||
 		c.Flags.Wide == gostty.CellWidthSpacerTail || c.Flags.Wide == gostty.CellWidthSpacerHead
 }
 

@@ -388,7 +388,7 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		if !ok {
 			return fmt.Errorf("unknown session %q", payload.GetSessionId())
 		}
-		if err := s.Resize(uint16(payload.GetCols()), uint16(payload.GetRows())); err != nil {
+		if err := s.ResizeCells(uint16(payload.GetCols()), uint16(payload.GetRows()), uint16(payload.GetCellWidth()), uint16(payload.GetCellHeight())); err != nil {
 			return err
 		}
 		return stream.Send(protocol.TypeSessionInfo, env.GetId(), s.Info())

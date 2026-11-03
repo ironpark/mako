@@ -36,8 +36,10 @@ func (p *proc) Write(b []byte) (int, error) { return p.tty.Write(b) }
 // Close closes the terminal.
 func (p *proc) Close() error { return p.tty.Close() }
 
-func (p *proc) resize(cols, rows uint16) error {
-	return pty.Setsize(p.tty, &pty.Winsize{Cols: cols, Rows: rows})
+// resize sizes the terminal cols by rows of cells cellW by cellH pixels,
+// which zero leaves unsaid.
+func (p *proc) resize(cols, rows, cellW, cellH uint16) error {
+	return pty.Setsize(p.tty, &pty.Winsize{Cols: cols, Rows: rows, X: cols * cellW, Y: rows * cellH})
 }
 
 func (p *proc) pid() int { return p.cmd.Process.Pid }

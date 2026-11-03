@@ -7,7 +7,10 @@ package dev.ironpark.mako.v2;
 
 /**
  * <pre>
- * Resize changes a session's window.
+ * Resize changes a session's window. cell_width and cell_height are a
+ * cell's size in pixels, as the front-end draws it: the PTY reports the
+ * window's size in pixels from them, and images a program places are sized
+ * by them. Zero keeps the size last told.
  * </pre>
  *
  * Protobuf type {@code mako.v2.Resize}
@@ -120,6 +123,58 @@ public  final class Resize extends
     rows_ = 0;
   }
 
+  public static final int CELL_WIDTH_FIELD_NUMBER = 4;
+  private int cellWidth_;
+  /**
+   * <code>uint32 cell_width = 4 [json_name = "cellWidth"];</code>
+   * @return The cellWidth.
+   */
+  @java.lang.Override
+  public int getCellWidth() {
+    return cellWidth_;
+  }
+  /**
+   * <code>uint32 cell_width = 4 [json_name = "cellWidth"];</code>
+   * @param value The cellWidth to set.
+   */
+  private void setCellWidth(int value) {
+    
+    cellWidth_ = value;
+  }
+  /**
+   * <code>uint32 cell_width = 4 [json_name = "cellWidth"];</code>
+   */
+  private void clearCellWidth() {
+
+    cellWidth_ = 0;
+  }
+
+  public static final int CELL_HEIGHT_FIELD_NUMBER = 5;
+  private int cellHeight_;
+  /**
+   * <code>uint32 cell_height = 5 [json_name = "cellHeight"];</code>
+   * @return The cellHeight.
+   */
+  @java.lang.Override
+  public int getCellHeight() {
+    return cellHeight_;
+  }
+  /**
+   * <code>uint32 cell_height = 5 [json_name = "cellHeight"];</code>
+   * @param value The cellHeight to set.
+   */
+  private void setCellHeight(int value) {
+    
+    cellHeight_ = value;
+  }
+  /**
+   * <code>uint32 cell_height = 5 [json_name = "cellHeight"];</code>
+   */
+  private void clearCellHeight() {
+
+    cellHeight_ = 0;
+  }
+
   public static dev.ironpark.mako.v2.Resize parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -205,7 +260,10 @@ public  final class Resize extends
 
   /**
    * <pre>
-   * Resize changes a session's window.
+   * Resize changes a session's window. cell_width and cell_height are a
+   * cell's size in pixels, as the front-end draws it: the PTY reports the
+   * window's size in pixels from them, and images a program places are sized
+   * by them. Zero keeps the size last told.
    * </pre>
    *
    * Protobuf type {@code mako.v2.Resize}
@@ -326,6 +384,62 @@ public  final class Resize extends
       return this;
     }
 
+    /**
+     * <code>uint32 cell_width = 4 [json_name = "cellWidth"];</code>
+     * @return The cellWidth.
+     */
+    @java.lang.Override
+    public int getCellWidth() {
+      return instance.getCellWidth();
+    }
+    /**
+     * <code>uint32 cell_width = 4 [json_name = "cellWidth"];</code>
+     * @param value The cellWidth to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCellWidth(int value) {
+      copyOnWrite();
+      instance.setCellWidth(value);
+      return this;
+    }
+    /**
+     * <code>uint32 cell_width = 4 [json_name = "cellWidth"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCellWidth() {
+      copyOnWrite();
+      instance.clearCellWidth();
+      return this;
+    }
+
+    /**
+     * <code>uint32 cell_height = 5 [json_name = "cellHeight"];</code>
+     * @return The cellHeight.
+     */
+    @java.lang.Override
+    public int getCellHeight() {
+      return instance.getCellHeight();
+    }
+    /**
+     * <code>uint32 cell_height = 5 [json_name = "cellHeight"];</code>
+     * @param value The cellHeight to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCellHeight(int value) {
+      copyOnWrite();
+      instance.setCellHeight(value);
+      return this;
+    }
+    /**
+     * <code>uint32 cell_height = 5 [json_name = "cellHeight"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCellHeight() {
+      copyOnWrite();
+      instance.clearCellHeight();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Resize)
   }
   @java.lang.Override
@@ -345,10 +459,12 @@ public  final class Resize extends
             "sessionId_",
             "cols_",
             "rows_",
+            "cellWidth_",
+            "cellHeight_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
-              "\u0003\u000b";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
+              "\u0003\u000b\u0004\u000b\u0005\u000b";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {
