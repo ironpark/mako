@@ -80,7 +80,7 @@ func diagnose() {
 	fmt.Fprintf(log, "# mako-gui %s, pid %d, started %s\n", revision(), os.Getpid(), time.Now().Format(time.RFC3339))
 	fmt.Fprintln(log, "# time live_mb goal_mb go_mb limit_mb goroutines gcs_per_s gc_cpu_share cpu_cores"+
 		" footprint_mb gpu_images_mb gpu_queue_mb fps frame_ms_per_s flushes_per_s commands_per_s vertices_per_s"+
-		" fps_for_animation fps_for_now fps_for_callback fps_for_posted fps_for_input partial_fps")
+		" fps_for_animation fps_for_now fps_for_callback fps_for_posted fps_for_input partial_fps skipped_fps")
 	samples := make([]metrics.Sample, len(diagSamples))
 	for i, name := range diagSamples {
 		samples[i].Name = name
@@ -92,10 +92,10 @@ func diagnose() {
 		r := readDiag(samples, now)
 		if !last.at.IsZero() {
 			d := r.since(last)
-			fmt.Fprintf(log, "%s %.1f %.1f %.1f %.1f %d %.2f %.2f %.2f %.1f %.1f %.1f %.1f %.1f %.1f %.0f %.0f %.1f %.1f %.1f %.1f %.1f %.1f\n", now.Format(time.RFC3339),
+			fmt.Fprintf(log, "%s %.1f %.1f %.1f %.1f %d %.2f %.2f %.2f %.1f %.1f %.1f %.1f %.1f %.1f %.0f %.0f %.1f %.1f %.1f %.1f %.1f %.1f %.1f\n", now.Format(time.RFC3339),
 				mb(r.live), mb(r.goal), mb(r.total), mb(r.limit), r.goroutines, d.gcRate, d.gcShare, d.cores,
 				mb(r.footprint), mb(r.gpuImages), mb(r.gpuQueue), d.fps, d.frameMS, d.flushes, d.commands, d.vertices,
-				d.fpsFor[0], d.fpsFor[1], d.fpsFor[2], d.fpsFor[3], d.fpsFor[4], d.partialFPS)
+				d.fpsFor[0], d.fpsFor[1], d.fpsFor[2], d.fpsFor[3], d.fpsFor[4], d.partialFPS, d.skippedFPS)
 			if d.fps >= 1 {
 				fmt.Fprintln(log, "# moving:", motionLine(ggui.ReadMotionReport()))
 			}
@@ -141,6 +141,7 @@ type diagReading struct {
 	frames                         int64
 	framesFor                      [5]int64 // asked for by an animation, Now, a callback, posted work, input
 	partial                        int64    // painted in part, around what moved
+	skipped                        int64    // painted nothing, as nothing changed
 	frameBusy                      time.Duration
 	flushes, commands, vertices    int64
 	atlas                          string // the GPU's images: see atlasLine
@@ -159,6 +160,7 @@ func readDiag(s []metrics.Sample, at time.Time) diagReading {
 		frames: frames.Frames, frameBusy: frames.Busy,
 		framesFor: [5]int64{frames.ForAnimation, frames.ForTime, frames.ForCallback, frames.ForPosted, frames.ForInput},
 		partial:   frames.Partial,
+		skipped:   frames.Skipped,
 		flushes:   gpu.Flushes, commands: gpu.Commands, vertices: gpu.Vertices,
 		atlas: atlasLine(gpu),
 		terms: gui.ReadTerminalMemory(),
@@ -221,6 +223,7 @@ type diagRates struct {
 	flushes, commands, vertices float64 // sent to the GPU, a second
 	fpsFor                      [5]float64
 	partialFPS                  float64 // frames painted in part, a second
+	skippedFPS                  float64 // frames that painted nothing, a second
 }
 
 func (r diagReading) since(prev diagReading) diagRates {
@@ -237,6 +240,7 @@ func (r diagReading) since(prev diagReading) diagRates {
 		vertices: float64(r.vertices-prev.vertices) / secs,
 	}
 	out.partialFPS = float64(r.partial-prev.partial) / secs
+	out.skippedFPS = float64(r.skipped-prev.skipped) / secs
 	for i := range r.framesFor {
 		out.fpsFor[i] = float64(r.framesFor[i]-prev.framesFor[i]) / secs
 	}

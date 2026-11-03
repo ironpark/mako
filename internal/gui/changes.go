@@ -41,7 +41,7 @@ func (m *model) loadGit(root fileRoot) {
 		return
 	}
 	v := ggui.Peek(m.Git)
-	if v.Loading && v.Root == root {
+	if m.gitReading && v.Root == root {
 		return
 	}
 	base := ggui.Peek(m.GitBase)
@@ -58,12 +58,19 @@ func (m *model) loadGit(root fileRoot) {
 	if v.Base != base {
 		v = gitView{Root: root, Base: base}
 	}
-	v.Loading = true
+	// What is shown stays while it is read again, as it is every few
+	// seconds: only a first read, with nothing to show, says it loads. A
+	// refresh that finds the same then writes nothing, and paints nothing.
+	if v.Changes == nil {
+		v.Loading = true
+	}
 	m.Git.Set(v)
+	m.gitReading = true
 	req := &protocol.GitStatus{NodeId: m.remoteID(root.Node), Path: root.Path, Base: base}
 	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitChanges, error) {
 		return c.GitStatus(ctx, req)
 	}, func(ch *protocol.GitChanges, err error) {
+		m.gitReading = false
 		if cur := ggui.Peek(m.Git); cur.Root != root || cur.Base != base {
 			return // another project, or base, is shown now
 		}

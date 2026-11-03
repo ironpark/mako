@@ -10,8 +10,8 @@ require (
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/grandcat/zeroconf v1.0.0
-	github.com/ironpark/ggfx v0.0.0-20261102170747-481598ba4b49
-	github.com/ironpark/ggui v0.0.0-20261102171832-b9eceeebd08a
+	github.com/ironpark/ggfx v0.0.0-20261103034438-0d6a3c118d7a
+	github.com/ironpark/ggui v0.0.0-20261103034511-a7219ed2a1b8
 	github.com/ironpark/ggwd v0.0.0-20261102030823-b0d6ceac0632
 	github.com/ironpark/gostty v0.0.0-20261102180724-c0ee0bdcacdf
 	github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202

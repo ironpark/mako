@@ -261,9 +261,10 @@ type model struct {
 	// The History tab: the commits, and the one chosen.
 	GitHistory *ggui.StateValue[historyView]
 	GitCommit  *ggui.StateValue[commitView]
-	// historyReading is set while the history is asked for; UI goroutine
-	// only.
+	// historyReading is set while the history is asked for, and gitReading
+	// while the changes are; UI goroutine only.
 	historyReading bool
+	gitReading     bool
 
 	SidebarOpen *ggui.StateValue[bool]
 	DetailsOpen *ggui.StateValue[bool]
