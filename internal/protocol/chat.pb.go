@@ -272,6 +272,187 @@ func (x *ChatMessage) GetImages() []string {
 	return nil
 }
 
+// WatchChat follows a session's conversation as it is written, until the
+// reader hangs up: a ChatLive at once, then whenever its log grows, and as
+// its agent's reply streams, what has streamed of it and is not yet in the
+// log (RevisionLiveChat).
+type WatchChat struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchChat) Reset() {
+	*x = WatchChat{}
+	mi := &file_mako_v2_chat_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchChat) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchChat) ProtoMessage() {}
+
+func (x *WatchChat) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_chat_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchChat.ProtoReflect.Descriptor instead.
+func (*WatchChat) Descriptor() ([]byte, []int) {
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *WatchChat) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *WatchChat) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+// ChatLive answers WatchChat, as often as the conversation moves.
+type ChatLive struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Logged bool                   `protobuf:"varint,1,opt,name=logged,proto3" json:"logged,omitempty"` // the log grew: what a ReadChat finds changed
+	// blocks are the reply the agent is writing, streamed and not yet
+	// logged, in order; none when there is none.
+	Blocks        []*LiveBlock `protobuf:"bytes,2,rep,name=blocks,proto3" json:"blocks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChatLive) Reset() {
+	*x = ChatLive{}
+	mi := &file_mako_v2_chat_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChatLive) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChatLive) ProtoMessage() {}
+
+func (x *ChatLive) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_chat_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChatLive.ProtoReflect.Descriptor instead.
+func (*ChatLive) Descriptor() ([]byte, []int) {
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ChatLive) GetLogged() bool {
+	if x != nil {
+		return x.Logged
+	}
+	return false
+}
+
+func (x *ChatLive) GetBlocks() []*LiveBlock {
+	if x != nil {
+		return x.Blocks
+	}
+	return nil
+}
+
+// LiveBlock is one block of a reply streaming: text, or a tool call
+// begun.
+type LiveBlock struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Index         int32                  `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"` // the block's, within the model's response
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`    // text or tool
+	Text          string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
+	Tool          string                 `protobuf:"bytes,4,opt,name=tool,proto3" json:"tool,omitempty"` // a tool call's tool
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LiveBlock) Reset() {
+	*x = LiveBlock{}
+	mi := &file_mako_v2_chat_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LiveBlock) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LiveBlock) ProtoMessage() {}
+
+func (x *LiveBlock) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_chat_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LiveBlock.ProtoReflect.Descriptor instead.
+func (*LiveBlock) Descriptor() ([]byte, []int) {
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *LiveBlock) GetIndex() int32 {
+	if x != nil {
+		return x.Index
+	}
+	return 0
+}
+
+func (x *LiveBlock) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *LiveBlock) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *LiveBlock) GetTool() string {
+	if x != nil {
+		return x.Tool
+	}
+	return ""
+}
+
 // Chat answers ReadChat.
 type Chat struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
@@ -301,7 +482,7 @@ type Chat struct {
 
 func (x *Chat) Reset() {
 	*x = Chat{}
-	mi := &file_mako_v2_chat_proto_msgTypes[2]
+	mi := &file_mako_v2_chat_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -313,7 +494,7 @@ func (x *Chat) String() string {
 func (*Chat) ProtoMessage() {}
 
 func (x *Chat) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_chat_proto_msgTypes[2]
+	mi := &file_mako_v2_chat_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -326,7 +507,7 @@ func (x *Chat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Chat.ProtoReflect.Descriptor instead.
 func (*Chat) Descriptor() ([]byte, []int) {
-	return file_mako_v2_chat_proto_rawDescGZIP(), []int{2}
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Chat) GetSupported() bool {
@@ -437,7 +618,7 @@ type SubAgent struct {
 
 func (x *SubAgent) Reset() {
 	*x = SubAgent{}
-	mi := &file_mako_v2_chat_proto_msgTypes[3]
+	mi := &file_mako_v2_chat_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -449,7 +630,7 @@ func (x *SubAgent) String() string {
 func (*SubAgent) ProtoMessage() {}
 
 func (x *SubAgent) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_chat_proto_msgTypes[3]
+	mi := &file_mako_v2_chat_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -462,7 +643,7 @@ func (x *SubAgent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubAgent.ProtoReflect.Descriptor instead.
 func (*SubAgent) Descriptor() ([]byte, []int) {
-	return file_mako_v2_chat_proto_rawDescGZIP(), []int{3}
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *SubAgent) GetId() string {
@@ -572,7 +753,7 @@ type Usage struct {
 
 func (x *Usage) Reset() {
 	*x = Usage{}
-	mi := &file_mako_v2_chat_proto_msgTypes[4]
+	mi := &file_mako_v2_chat_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -584,7 +765,7 @@ func (x *Usage) String() string {
 func (*Usage) ProtoMessage() {}
 
 func (x *Usage) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_chat_proto_msgTypes[4]
+	mi := &file_mako_v2_chat_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -597,7 +778,7 @@ func (x *Usage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Usage.ProtoReflect.Descriptor instead.
 func (*Usage) Descriptor() ([]byte, []int) {
-	return file_mako_v2_chat_proto_rawDescGZIP(), []int{4}
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Usage) GetInput() int64 {
@@ -675,7 +856,7 @@ type RateLimit struct {
 
 func (x *RateLimit) Reset() {
 	*x = RateLimit{}
-	mi := &file_mako_v2_chat_proto_msgTypes[5]
+	mi := &file_mako_v2_chat_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -687,7 +868,7 @@ func (x *RateLimit) String() string {
 func (*RateLimit) ProtoMessage() {}
 
 func (x *RateLimit) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_chat_proto_msgTypes[5]
+	mi := &file_mako_v2_chat_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -700,7 +881,7 @@ func (x *RateLimit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RateLimit.ProtoReflect.Descriptor instead.
 func (*RateLimit) Descriptor() ([]byte, []int) {
-	return file_mako_v2_chat_proto_rawDescGZIP(), []int{5}
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *RateLimit) GetMinutes() int64 {
@@ -755,7 +936,19 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\texit_code\x18\v \x01(\x05H\x00R\bexitCode\x88\x01\x01\x12\x16\n" +
 	"\x06images\x18\f \x03(\tR\x06imagesB\f\n" +
 	"\n" +
-	"_exit_code\"\xf1\x02\n" +
+	"_exit_code\"C\n" +
+	"\tWatchChat\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\"N\n" +
+	"\bChatLive\x12\x16\n" +
+	"\x06logged\x18\x01 \x01(\bR\x06logged\x12*\n" +
+	"\x06blocks\x18\x02 \x03(\v2\x12.mako.v2.LiveBlockR\x06blocks\"]\n" +
+	"\tLiveBlock\x12\x14\n" +
+	"\x05index\x18\x01 \x01(\x05R\x05index\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
+	"\x04text\x18\x03 \x01(\tR\x04text\x12\x12\n" +
+	"\x04tool\x18\x04 \x01(\tR\x04tool\"\xf1\x02\n" +
 	"\x04Chat\x12\x1c\n" +
 	"\tsupported\x18\x01 \x01(\bR\tsupported\x12\"\n" +
 	"\fconversation\x18\x02 \x01(\tR\fconversation\x120\n" +
@@ -812,25 +1005,29 @@ func file_mako_v2_chat_proto_rawDescGZIP() []byte {
 	return file_mako_v2_chat_proto_rawDescData
 }
 
-var file_mako_v2_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_mako_v2_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_mako_v2_chat_proto_goTypes = []any{
 	(*ReadChat)(nil),    // 0: mako.v2.ReadChat
 	(*ChatMessage)(nil), // 1: mako.v2.ChatMessage
-	(*Chat)(nil),        // 2: mako.v2.Chat
-	(*SubAgent)(nil),    // 3: mako.v2.SubAgent
-	(*Usage)(nil),       // 4: mako.v2.Usage
-	(*RateLimit)(nil),   // 5: mako.v2.RateLimit
+	(*WatchChat)(nil),   // 2: mako.v2.WatchChat
+	(*ChatLive)(nil),    // 3: mako.v2.ChatLive
+	(*LiveBlock)(nil),   // 4: mako.v2.LiveBlock
+	(*Chat)(nil),        // 5: mako.v2.Chat
+	(*SubAgent)(nil),    // 6: mako.v2.SubAgent
+	(*Usage)(nil),       // 7: mako.v2.Usage
+	(*RateLimit)(nil),   // 8: mako.v2.RateLimit
 }
 var file_mako_v2_chat_proto_depIdxs = []int32{
-	1, // 0: mako.v2.Chat.messages:type_name -> mako.v2.ChatMessage
-	4, // 1: mako.v2.Chat.usage:type_name -> mako.v2.Usage
-	3, // 2: mako.v2.Chat.agents:type_name -> mako.v2.SubAgent
-	5, // 3: mako.v2.Usage.limits:type_name -> mako.v2.RateLimit
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	4, // 0: mako.v2.ChatLive.blocks:type_name -> mako.v2.LiveBlock
+	1, // 1: mako.v2.Chat.messages:type_name -> mako.v2.ChatMessage
+	7, // 2: mako.v2.Chat.usage:type_name -> mako.v2.Usage
+	6, // 3: mako.v2.Chat.agents:type_name -> mako.v2.SubAgent
+	8, // 4: mako.v2.Usage.limits:type_name -> mako.v2.RateLimit
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_chat_proto_init() }
@@ -845,7 +1042,7 @@ func file_mako_v2_chat_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_chat_proto_rawDesc), len(file_mako_v2_chat_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

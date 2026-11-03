@@ -98,6 +98,8 @@ message Envelope {
     Projects projects = 75;
     RelayAgentMessage relay_agent_message = 76;
     AgentMessage agent_message = 77;
+    WatchChat watch_chat = 78;
+    ChatLive chat_live = 79;
 
     // A forge: GitHub, Forgejo or Gitea.
     ForgeList forge_list = 80;

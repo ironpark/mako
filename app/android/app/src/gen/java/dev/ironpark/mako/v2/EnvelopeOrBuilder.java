@@ -714,6 +714,28 @@ public interface EnvelopeOrBuilder extends
   dev.ironpark.mako.v2.AgentMessage getAgentMessage();
 
   /**
+   * <code>.mako.v2.WatchChat watch_chat = 78 [json_name = "watchChat"];</code>
+   * @return Whether the watchChat field is set.
+   */
+  boolean hasWatchChat();
+  /**
+   * <code>.mako.v2.WatchChat watch_chat = 78 [json_name = "watchChat"];</code>
+   * @return The watchChat.
+   */
+  dev.ironpark.mako.v2.WatchChat getWatchChat();
+
+  /**
+   * <code>.mako.v2.ChatLive chat_live = 79 [json_name = "chatLive"];</code>
+   * @return Whether the chatLive field is set.
+   */
+  boolean hasChatLive();
+  /**
+   * <code>.mako.v2.ChatLive chat_live = 79 [json_name = "chatLive"];</code>
+   * @return The chatLive.
+   */
+  dev.ironpark.mako.v2.ChatLive getChatLive();
+
+  /**
    * <pre>
    * A forge: GitHub, Forgejo or Gitea.
    * </pre>

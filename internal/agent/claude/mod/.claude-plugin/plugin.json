@@ -1,0 +1,5 @@
+{
+  "name": "mako-live",
+  "version": "1.0.0",
+  "description": "Streams the reply as it is written to the mako daemon that runs this session, for its chat view."
+}

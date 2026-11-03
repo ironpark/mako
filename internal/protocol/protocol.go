@@ -110,6 +110,8 @@ const (
 	TypeProjects          Type = "projects"
 	TypeRelayAgentMessage Type = "relay_agent_message"
 	TypeAgentMessage      Type = "agent_message"
+	TypeWatchChat         Type = "watch_chat"
+	TypeChatLive          Type = "chat_live"
 )
 
 // Newer reports whether the edit made at version v on node is newer than

@@ -34,6 +34,10 @@ type Daemon struct {
 	log *slog.Logger
 	dir string // the configuration directory, config.Dir() when empty
 
+	loggedCommands loggedCommands // the commands agents' logs name
+	live           liveHub        // the replies streaming, by session
+	liveSocket     string         // where they are posted; "" before it listens
+
 	sessionMu   sync.Mutex // protects saved launches and activation
 	saved       map[string]savedSession
 	sessionPath string
@@ -169,6 +173,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	defer cancel()
 	d.ctx = ctx
 	d.listenHooks(ctx, run)
+	d.listenLive(ctx, run)
 	if err := d.projectAgents.messages.load(dir); err != nil {
 		return err
 	}
@@ -283,6 +288,9 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeWatch:
 		return d.handleWatch(ctx, stream, env, fromPeer)
+
+	case protocol.TypeWatchChat:
+		return d.handleWatchChat(ctx, stream, env)
 
 	case protocol.TypeOpenSession:
 		return d.handleOpenSession(ctx, stream, env)

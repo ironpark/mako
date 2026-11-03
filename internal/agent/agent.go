@@ -177,6 +177,24 @@ func Interrupt(d Driver) []byte {
 	return []byte{0x1b}
 }
 
+// LiveReplies is an agent that streams its replies to mako as they are
+// written, by a mod of mako's it loads, which posts them to the socket
+// MAKO_LIVE_SOCKET names, for the session MAKO_SESSION names.
+type LiveReplies interface {
+	// LiveMod writes the mod into dir, and returns the folder it is in.
+	LiveMod(dir string) (string, error)
+	// LiveCheck is the command, after the agent's program, that says
+	// whether this version of the agent loads the mod at folder, and what
+	// its output then holds.
+	LiveCheck(folder string) (args []string, want string)
+	// WithLive has l load the mod at folder.
+	WithLive(l *Launch, folder string)
+}
+
+// LiveSocketEnv names, in a session's environment, the socket a live
+// reply goes to.
+const LiveSocketEnv = "MAKO_LIVE_SOCKET"
+
 // BackgroundTasks is a driver whose log records the commands its agent
 // runs in the background: the call that asks for one, the task it became,
 // and how it ended.

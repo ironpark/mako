@@ -83,6 +83,8 @@ public  final class Envelope extends
     PROJECTS(75),
     RELAY_AGENT_MESSAGE(76),
     AGENT_MESSAGE(77),
+    WATCH_CHAT(78),
+    CHAT_LIVE(79),
     FORGE_LIST(80),
     FORGE_ITEMS(81),
     FORGE_VIEW(82),
@@ -172,6 +174,8 @@ public  final class Envelope extends
         case 75: return PROJECTS;
         case 76: return RELAY_AGENT_MESSAGE;
         case 77: return AGENT_MESSAGE;
+        case 78: return WATCH_CHAT;
+        case 79: return CHAT_LIVE;
         case 80: return FORGE_LIST;
         case 81: return FORGE_ITEMS;
         case 82: return FORGE_VIEW;
@@ -3262,6 +3266,106 @@ public  final class Envelope extends
    */
   private void clearAgentMessage() {
     if (bodyCase_ == 77) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int WATCH_CHAT_FIELD_NUMBER = 78;
+  /**
+   * <code>.mako.v2.WatchChat watch_chat = 78 [json_name = "watchChat"];</code>
+   */
+  @java.lang.Override
+  public boolean hasWatchChat() {
+    return bodyCase_ == 78;
+  }
+  /**
+   * <code>.mako.v2.WatchChat watch_chat = 78 [json_name = "watchChat"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.WatchChat getWatchChat() {
+    if (bodyCase_ == 78) {
+       return (dev.ironpark.mako.v2.WatchChat) body_;
+    }
+    return dev.ironpark.mako.v2.WatchChat.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.WatchChat watch_chat = 78 [json_name = "watchChat"];</code>
+   */
+  private void setWatchChat(dev.ironpark.mako.v2.WatchChat value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 78;
+  }
+  /**
+   * <code>.mako.v2.WatchChat watch_chat = 78 [json_name = "watchChat"];</code>
+   */
+  private void mergeWatchChat(dev.ironpark.mako.v2.WatchChat value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 78 &&
+        body_ != dev.ironpark.mako.v2.WatchChat.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.WatchChat.newBuilder((dev.ironpark.mako.v2.WatchChat) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 78;
+  }
+  /**
+   * <code>.mako.v2.WatchChat watch_chat = 78 [json_name = "watchChat"];</code>
+   */
+  private void clearWatchChat() {
+    if (bodyCase_ == 78) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int CHAT_LIVE_FIELD_NUMBER = 79;
+  /**
+   * <code>.mako.v2.ChatLive chat_live = 79 [json_name = "chatLive"];</code>
+   */
+  @java.lang.Override
+  public boolean hasChatLive() {
+    return bodyCase_ == 79;
+  }
+  /**
+   * <code>.mako.v2.ChatLive chat_live = 79 [json_name = "chatLive"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ChatLive getChatLive() {
+    if (bodyCase_ == 79) {
+       return (dev.ironpark.mako.v2.ChatLive) body_;
+    }
+    return dev.ironpark.mako.v2.ChatLive.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.ChatLive chat_live = 79 [json_name = "chatLive"];</code>
+   */
+  private void setChatLive(dev.ironpark.mako.v2.ChatLive value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 79;
+  }
+  /**
+   * <code>.mako.v2.ChatLive chat_live = 79 [json_name = "chatLive"];</code>
+   */
+  private void mergeChatLive(dev.ironpark.mako.v2.ChatLive value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 79 &&
+        body_ != dev.ironpark.mako.v2.ChatLive.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ChatLive.newBuilder((dev.ironpark.mako.v2.ChatLive) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 79;
+  }
+  /**
+   * <code>.mako.v2.ChatLive chat_live = 79 [json_name = "chatLive"];</code>
+   */
+  private void clearChatLive() {
+    if (bodyCase_ == 79) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -7245,6 +7349,102 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.mako.v2.WatchChat watch_chat = 78 [json_name = "watchChat"];</code>
+     */
+    @java.lang.Override
+    public boolean hasWatchChat() {
+      return instance.hasWatchChat();
+    }
+    /**
+     * <code>.mako.v2.WatchChat watch_chat = 78 [json_name = "watchChat"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.WatchChat getWatchChat() {
+      return instance.getWatchChat();
+    }
+    /**
+     * <code>.mako.v2.WatchChat watch_chat = 78 [json_name = "watchChat"];</code>
+     */
+    public Builder setWatchChat(dev.ironpark.mako.v2.WatchChat value) {
+      copyOnWrite();
+      instance.setWatchChat(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.WatchChat watch_chat = 78 [json_name = "watchChat"];</code>
+     */
+    public Builder setWatchChat(
+        dev.ironpark.mako.v2.WatchChat.Builder builderForValue) {
+      copyOnWrite();
+      instance.setWatchChat(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.WatchChat watch_chat = 78 [json_name = "watchChat"];</code>
+     */
+    public Builder mergeWatchChat(dev.ironpark.mako.v2.WatchChat value) {
+      copyOnWrite();
+      instance.mergeWatchChat(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.WatchChat watch_chat = 78 [json_name = "watchChat"];</code>
+     */
+    public Builder clearWatchChat() {
+      copyOnWrite();
+      instance.clearWatchChat();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.ChatLive chat_live = 79 [json_name = "chatLive"];</code>
+     */
+    @java.lang.Override
+    public boolean hasChatLive() {
+      return instance.hasChatLive();
+    }
+    /**
+     * <code>.mako.v2.ChatLive chat_live = 79 [json_name = "chatLive"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ChatLive getChatLive() {
+      return instance.getChatLive();
+    }
+    /**
+     * <code>.mako.v2.ChatLive chat_live = 79 [json_name = "chatLive"];</code>
+     */
+    public Builder setChatLive(dev.ironpark.mako.v2.ChatLive value) {
+      copyOnWrite();
+      instance.setChatLive(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ChatLive chat_live = 79 [json_name = "chatLive"];</code>
+     */
+    public Builder setChatLive(
+        dev.ironpark.mako.v2.ChatLive.Builder builderForValue) {
+      copyOnWrite();
+      instance.setChatLive(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ChatLive chat_live = 79 [json_name = "chatLive"];</code>
+     */
+    public Builder mergeChatLive(dev.ironpark.mako.v2.ChatLive value) {
+      copyOnWrite();
+      instance.mergeChatLive(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ChatLive chat_live = 79 [json_name = "chatLive"];</code>
+     */
+    public Builder clearChatLive() {
+      copyOnWrite();
+      instance.clearChatLive();
+      return this;
+    }
+
+    /**
      * <pre>
      * A forge: GitHub, Forgejo or Gitea.
      * </pre>
@@ -8182,6 +8382,8 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.Projects.class,
             dev.ironpark.mako.v2.RelayAgentMessage.class,
             dev.ironpark.mako.v2.AgentMessage.class,
+            dev.ironpark.mako.v2.WatchChat.class,
+            dev.ironpark.mako.v2.ChatLive.class,
             dev.ironpark.mako.v2.ForgeList.class,
             dev.ironpark.mako.v2.ForgeItems.class,
             dev.ironpark.mako.v2.ForgeView.class,
@@ -8203,15 +8405,15 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.DeviceAccept.class,
           };
           java.lang.String info =
-              "\u0000K\u0001\u0000\u0001oK\u0000\u0000\u0000\u0001\u0208\n<\u0000\u000b<\u0000\f" +
+              "\u0000M\u0001\u0000\u0001oM\u0000\u0000\u0000\u0001\u0208\n<\u0000\u000b<\u0000\f" +
               "<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000\u001a<\u0000" +
               "\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000\"<\u0000#<\u0000" +
               "$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000+<\u0000,<\u0000-<\u0000" +
               "2<\u00003<\u00004<\u00005<\u00006<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000" +
               "<<\u0000=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000" +
-              "F<\u0000G<\u0000H<\u0000I<\u0000J<\u0000K<\u0000L<\u0000M<\u0000P<\u0000Q<\u0000" +
-              "R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000" +
-              "i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000";
+              "F<\u0000G<\u0000H<\u0000I<\u0000J<\u0000K<\u0000L<\u0000M<\u0000N<\u0000O<\u0000" +
+              "P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000" +
+              "g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

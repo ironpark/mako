@@ -371,6 +371,35 @@ func (c *Client) Watch(ctx context.Context, fn func(*protocol.Changed)) error {
 	}
 }
 
+// WatchChat follows a session's conversation, calling fn with each
+// ChatLive until ctx ends or the stream does; see protocol.WatchChat.
+func (c *Client) WatchChat(ctx context.Context, req *protocol.WatchChat, fn func(*protocol.ChatLive)) error {
+	s, err := c.stream(ctx)
+	if err != nil {
+		return err
+	}
+	defer s.Hangup()
+	stop := context.AfterFunc(ctx, func() { _ = s.Hangup() })
+	defer stop()
+	if err := s.Send(protocol.TypeWatchChat, "", req); err != nil {
+		return err
+	}
+	for {
+		env, err := s.Recv()
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return err
+		}
+		live, err := transport.Reply[*protocol.ChatLive](env)
+		if err != nil {
+			return err
+		}
+		fn(live)
+	}
+}
+
 // Tunnel connects to a TCP port on a node's loopback; see
 // protocol.Tunnel. What it returns carries the connection's bytes.
 func (c *Client) Tunnel(ctx context.Context, req *protocol.Tunnel) (io.ReadWriteCloser, error) {

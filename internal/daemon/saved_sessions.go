@@ -445,6 +445,7 @@ func (d *Daemon) conversationFor(ctx context.Context, req *protocol.OpenSession,
 			d.log.Warn("hooks: no directory for the agent's files", "err", err)
 		}
 		hooks.WithHooks(&launch.Launch, d.hookCommand, status, run)
+		d.withLive(ctx, &launch.Launch, driver, run)
 	}
 	return conversationID, transcriptPath, nil
 }
@@ -493,6 +494,7 @@ func (d *Daemon) closeSession(id string) error {
 		_ = s.Close()
 		d.sessions.remove(id)
 	}
+	d.live.forget(id)
 	if err := d.projectAgents.messages.remove(id); err != nil {
 		d.log.Warn("agent inbox could not be removed", "session", id, "err", err)
 	}

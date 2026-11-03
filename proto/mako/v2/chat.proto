@@ -49,6 +49,32 @@ message ChatMessage {
   repeated string images = 12;
 }
 
+// WatchChat follows a session's conversation as it is written, until the
+// reader hangs up: a ChatLive at once, then whenever its log grows, and as
+// its agent's reply streams, what has streamed of it and is not yet in the
+// log (RevisionLiveChat).
+message WatchChat {
+  string node_id = 1;
+  string session_id = 2;
+}
+
+// ChatLive answers WatchChat, as often as the conversation moves.
+message ChatLive {
+  bool logged = 1; // the log grew: what a ReadChat finds changed
+  // blocks are the reply the agent is writing, streamed and not yet
+  // logged, in order; none when there is none.
+  repeated LiveBlock blocks = 2;
+}
+
+// LiveBlock is one block of a reply streaming: text, or a tool call
+// begun.
+message LiveBlock {
+  int32 index = 1; // the block's, within the model's response
+  string kind = 2; // text or tool
+  string text = 3;
+  string tool = 4; // a tool call's tool
+}
+
 // Chat answers ReadChat.
 message Chat {
   bool supported = 1;

@@ -29,7 +29,11 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 16
+const Revision = 17
+
+// RevisionLiveChat adds WatchChat: a conversation followed as its log
+// grows and its agent's reply streams.
+const RevisionLiveChat = 17
 
 // RevisionProjects adds SetProjects: projects of several folders, which
 // the daemon's agents share as one project.

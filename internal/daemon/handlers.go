@@ -102,7 +102,7 @@ func (d *Daemon) handleRenameSession(ctx context.Context, stream *transport.Stre
 }
 
 // handleListCommands lists the slash commands a session's agent takes, as
-// its driver finds them on this node.
+// its driver finds them on this node and its log names them.
 func (d *Daemon) handleListCommands(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeCommands, func(r *protocol.ListCommands) (*protocol.Commands, error) {
 		s, ok := d.sessions.get(r.GetSessionId())
@@ -115,7 +115,12 @@ func (d *Daemon) handleListCommands(ctx context.Context, stream *transport.Strea
 		if !ok {
 			return out, nil
 		}
-		for _, c := range commands.Commands(info.GetProject(), s.TranscriptEnv()) {
+		list := commands.Commands(info.GetProject(), s.TranscriptEnv())
+		// Those the agent brings along, which its log alone names.
+		if logged, ok := agents.As[agent.LoggedCommands](info.GetAgent()); ok {
+			list = withLogged(list, d.loggedCommands.of(logged, info.GetAgent(), s.TranscriptPath()))
+		}
+		for _, c := range list {
 			out.Commands = append(out.Commands, &protocol.Command{Name: c.Name, Description: c.Description, Args: c.Args, Source: c.Source})
 		}
 		return out, nil

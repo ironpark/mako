@@ -67,6 +67,21 @@ func hasFeature(ctx context.Context, command []string, driver agent.Driver) bool
 	return value.(bool)
 }
 
+// hasOutput reports whether program, run with args, succeeds and says
+// want: asked once for each program and question, for the daemon's life.
+func hasOutput(ctx context.Context, program string, args []string, want string) bool {
+	key := program + "\x00" + strings.Join(args, " ") + "\x00" + want
+	value, ok := optionalFlags.Load(key)
+	if !ok {
+		check, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+		out, err := exec.CommandContext(check, program, args...).CombinedOutput()
+		value = err == nil && strings.Contains(string(out), want)
+		optionalFlags.Store(key, value)
+	}
+	return value.(bool)
+}
+
 // featureOn reads a features listing, a line a feature: its name, its
 // stage, and whether it is on.
 func featureOn(listing, feature string) bool {

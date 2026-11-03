@@ -68,6 +68,15 @@ type chatState struct {
 	subID string
 	// pending are the messages sent and not yet in the log.
 	pending *ggui.StateValue[[]pendingMessage]
+	// live is the reply streaming and not yet in the log, as the
+	// session's node says while the chat follows it (followChat). Once
+	// the log grows, what the node says next is held in liveHeld until
+	// the read of the log lands, so a block leaves the stream as the
+	// logged one shows; reread asks for another read after the one out.
+	live        *ggui.StateValue[[]*protocol.LiveBlock]
+	liveHeld    []*protocol.LiveBlock
+	liveWaiting bool
+	reread      bool
 }
 
 func (m *model) chatState(id string) *chatState {
@@ -88,6 +97,7 @@ func newChatState() *chatState {
 		tools:    ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		menu:     newCommandMenu(),
 		agent:    ggui.State(""),
+		live:     ggui.State[[]*protocol.LiveBlock](nil).WithEqual(deepEqual),
 		pending: ggui.State[[]pendingMessage](nil).WithEqual(func(a, b []pendingMessage) bool {
 			return slices.Equal(a, b)
 		}),
@@ -138,6 +148,9 @@ func (m *model) loadChat(id string, state *chatState) {
 // current reports the state gone is let go.
 func (m *model) readChat(id, agent string, state *chatState, current func() bool) {
 	info, ok := m.session(id)
+	if state.loading {
+		state.reread = true // what moved since the read went out
+	}
 	if state.loading || !ok {
 		return
 	}
@@ -156,6 +169,17 @@ func (m *model) readChat(id, agent string, state *chatState, current func() bool
 			return
 		}
 		state.loading = false
+		defer func() {
+			if state.reread {
+				state.reread = false
+				m.readChat(id, agent, state, current)
+				return
+			}
+			if state.liveWaiting {
+				state.liveWaiting = false
+				state.live.Set(state.liveHeld)
+			}
+		}()
 		if err == nil && chat.GetUnchanged() {
 			if shown.Err != "" {
 				state.result.Set(chatResult{Chat: shown.Chat, Loaded: true})
@@ -429,11 +453,15 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	state := m.chatState(id)
 	ggui.Effect(func() ggui.Cleanup {
 		m.loadChat(id, state)
-		return m.every(2*time.Second, func() {
+		unfollow := m.followChat(id, state)
+		// Read every few seconds too, for a node that cannot be followed
+		// and in case a word of it is lost.
+		stop := m.every(2*time.Second, func() {
 			if ggui.Peek(m.ChatModes)[id] {
 				m.loadChat(id, state)
 			}
 		})
+		return func() { unfollow(); stop() }
 	})
 
 	scroll := &ggui.ScrollController{}
@@ -443,7 +471,8 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	})
 	turns := ggui.Derived(func() []chatTurnItem {
 		turns := chatTurns(loaded.Get(), agentsByCall(state.result.Get().Chat.GetAgents()))
-		return append(turns, pendingTurns(state.pending.Get())...)
+		turns = append(turns, pendingTurns(state.pending.Get())...)
+		return append(turns, liveTurns(state.live.Get())...)
 	}).WithEqual(deepEqual)
 	// What stands over the conversation: why it cannot be read, that it is
 	// on its way, or that more of it is further back.

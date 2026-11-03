@@ -93,6 +93,8 @@ type Envelope struct {
 	//	*Envelope_Projects
 	//	*Envelope_RelayAgentMessage
 	//	*Envelope_AgentMessage
+	//	*Envelope_WatchChat
+	//	*Envelope_ChatLive
 	//	*Envelope_ForgeList
 	//	*Envelope_ForgeItems
 	//	*Envelope_ForgeView
@@ -672,6 +674,24 @@ func (x *Envelope) GetAgentMessage() *AgentMessage {
 	return nil
 }
 
+func (x *Envelope) GetWatchChat() *WatchChat {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_WatchChat); ok {
+			return x.WatchChat
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetChatLive() *ChatLive {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_ChatLive); ok {
+			return x.ChatLive
+		}
+	}
+	return nil
+}
+
 func (x *Envelope) GetForgeList() *ForgeList {
 	if x != nil {
 		if x, ok := x.Body.(*Envelope_ForgeList); ok {
@@ -1064,6 +1084,14 @@ type Envelope_AgentMessage struct {
 	AgentMessage *AgentMessage `protobuf:"bytes,77,opt,name=agent_message,json=agentMessage,proto3,oneof"`
 }
 
+type Envelope_WatchChat struct {
+	WatchChat *WatchChat `protobuf:"bytes,78,opt,name=watch_chat,json=watchChat,proto3,oneof"`
+}
+
+type Envelope_ChatLive struct {
+	ChatLive *ChatLive `protobuf:"bytes,79,opt,name=chat_live,json=chatLive,proto3,oneof"`
+}
+
 type Envelope_ForgeList struct {
 	// A forge: GitHub, Forgejo or Gitea.
 	ForgeList *ForgeList `protobuf:"bytes,80,opt,name=forge_list,json=forgeList,proto3,oneof"`
@@ -1248,6 +1276,10 @@ func (*Envelope_RelayAgentMessage) isEnvelope_Body() {}
 
 func (*Envelope_AgentMessage) isEnvelope_Body() {}
 
+func (*Envelope_WatchChat) isEnvelope_Body() {}
+
+func (*Envelope_ChatLive) isEnvelope_Body() {}
+
 func (*Envelope_ForgeList) isEnvelope_Body() {}
 
 func (*Envelope_ForgeItems) isEnvelope_Body() {}
@@ -1340,7 +1372,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xe4\x1d\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xcb\x1e\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12&\n" +
 	"\x05hello\x18\n" +
@@ -1409,6 +1441,9 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\bprojects\x18K \x01(\v2\x11.mako.v2.ProjectsH\x00R\bprojects\x12L\n" +
 	"\x13relay_agent_message\x18L \x01(\v2\x1a.mako.v2.RelayAgentMessageH\x00R\x11relayAgentMessage\x12<\n" +
 	"\ragent_message\x18M \x01(\v2\x15.mako.v2.AgentMessageH\x00R\fagentMessage\x123\n" +
+	"\n" +
+	"watch_chat\x18N \x01(\v2\x12.mako.v2.WatchChatH\x00R\twatchChat\x120\n" +
+	"\tchat_live\x18O \x01(\v2\x11.mako.v2.ChatLiveH\x00R\bchatLive\x123\n" +
 	"\n" +
 	"forge_list\x18P \x01(\v2\x12.mako.v2.ForgeListH\x00R\tforgeList\x126\n" +
 	"\vforge_items\x18Q \x01(\v2\x13.mako.v2.ForgeItemsH\x00R\n" +
@@ -1508,23 +1543,25 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*Projects)(nil),          // 55: mako.v2.Projects
 	(*RelayAgentMessage)(nil), // 56: mako.v2.RelayAgentMessage
 	(*AgentMessage)(nil),      // 57: mako.v2.AgentMessage
-	(*ForgeList)(nil),         // 58: mako.v2.ForgeList
-	(*ForgeItems)(nil),        // 59: mako.v2.ForgeItems
-	(*ForgeView)(nil),         // 60: mako.v2.ForgeView
-	(*ForgeDetail)(nil),       // 61: mako.v2.ForgeDetail
-	(*ForgeRun)(nil),          // 62: mako.v2.ForgeRun
-	(*ListDevices)(nil),       // 63: mako.v2.ListDevices
-	(*Devices)(nil),           // 64: mako.v2.Devices
-	(*Borrow)(nil),            // 65: mako.v2.Borrow
-	(*Lease)(nil),             // 66: mako.v2.Lease
-	(*GiveBack)(nil),          // 67: mako.v2.GiveBack
-	(*ListLeases)(nil),        // 68: mako.v2.ListLeases
-	(*Leases)(nil),            // 69: mako.v2.Leases
-	(*Claim)(nil),             // 70: mako.v2.Claim
-	(*Claimed)(nil),           // 71: mako.v2.Claimed
-	(*DeviceConn)(nil),        // 72: mako.v2.DeviceConn
-	(*DeviceListen)(nil),      // 73: mako.v2.DeviceListen
-	(*DeviceAccept)(nil),      // 74: mako.v2.DeviceAccept
+	(*WatchChat)(nil),         // 58: mako.v2.WatchChat
+	(*ChatLive)(nil),          // 59: mako.v2.ChatLive
+	(*ForgeList)(nil),         // 60: mako.v2.ForgeList
+	(*ForgeItems)(nil),        // 61: mako.v2.ForgeItems
+	(*ForgeView)(nil),         // 62: mako.v2.ForgeView
+	(*ForgeDetail)(nil),       // 63: mako.v2.ForgeDetail
+	(*ForgeRun)(nil),          // 64: mako.v2.ForgeRun
+	(*ListDevices)(nil),       // 65: mako.v2.ListDevices
+	(*Devices)(nil),           // 66: mako.v2.Devices
+	(*Borrow)(nil),            // 67: mako.v2.Borrow
+	(*Lease)(nil),             // 68: mako.v2.Lease
+	(*GiveBack)(nil),          // 69: mako.v2.GiveBack
+	(*ListLeases)(nil),        // 70: mako.v2.ListLeases
+	(*Leases)(nil),            // 71: mako.v2.Leases
+	(*Claim)(nil),             // 72: mako.v2.Claim
+	(*Claimed)(nil),           // 73: mako.v2.Claimed
+	(*DeviceConn)(nil),        // 74: mako.v2.DeviceConn
+	(*DeviceListen)(nil),      // 75: mako.v2.DeviceListen
+	(*DeviceAccept)(nil),      // 76: mako.v2.DeviceAccept
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -1584,28 +1621,30 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	55, // 54: mako.v2.Envelope.projects:type_name -> mako.v2.Projects
 	56, // 55: mako.v2.Envelope.relay_agent_message:type_name -> mako.v2.RelayAgentMessage
 	57, // 56: mako.v2.Envelope.agent_message:type_name -> mako.v2.AgentMessage
-	58, // 57: mako.v2.Envelope.forge_list:type_name -> mako.v2.ForgeList
-	59, // 58: mako.v2.Envelope.forge_items:type_name -> mako.v2.ForgeItems
-	60, // 59: mako.v2.Envelope.forge_view:type_name -> mako.v2.ForgeView
-	61, // 60: mako.v2.Envelope.forge_detail:type_name -> mako.v2.ForgeDetail
-	62, // 61: mako.v2.Envelope.forge_run:type_name -> mako.v2.ForgeRun
-	63, // 62: mako.v2.Envelope.list_devices:type_name -> mako.v2.ListDevices
-	64, // 63: mako.v2.Envelope.devices:type_name -> mako.v2.Devices
-	65, // 64: mako.v2.Envelope.borrow:type_name -> mako.v2.Borrow
-	66, // 65: mako.v2.Envelope.lease:type_name -> mako.v2.Lease
-	67, // 66: mako.v2.Envelope.give_back:type_name -> mako.v2.GiveBack
-	68, // 67: mako.v2.Envelope.list_leases:type_name -> mako.v2.ListLeases
-	69, // 68: mako.v2.Envelope.leases:type_name -> mako.v2.Leases
-	70, // 69: mako.v2.Envelope.claim:type_name -> mako.v2.Claim
-	71, // 70: mako.v2.Envelope.claimed:type_name -> mako.v2.Claimed
-	72, // 71: mako.v2.Envelope.device_conn:type_name -> mako.v2.DeviceConn
-	73, // 72: mako.v2.Envelope.device_listen:type_name -> mako.v2.DeviceListen
-	74, // 73: mako.v2.Envelope.device_accept:type_name -> mako.v2.DeviceAccept
-	74, // [74:74] is the sub-list for method output_type
-	74, // [74:74] is the sub-list for method input_type
-	74, // [74:74] is the sub-list for extension type_name
-	74, // [74:74] is the sub-list for extension extendee
-	0,  // [0:74] is the sub-list for field type_name
+	58, // 57: mako.v2.Envelope.watch_chat:type_name -> mako.v2.WatchChat
+	59, // 58: mako.v2.Envelope.chat_live:type_name -> mako.v2.ChatLive
+	60, // 59: mako.v2.Envelope.forge_list:type_name -> mako.v2.ForgeList
+	61, // 60: mako.v2.Envelope.forge_items:type_name -> mako.v2.ForgeItems
+	62, // 61: mako.v2.Envelope.forge_view:type_name -> mako.v2.ForgeView
+	63, // 62: mako.v2.Envelope.forge_detail:type_name -> mako.v2.ForgeDetail
+	64, // 63: mako.v2.Envelope.forge_run:type_name -> mako.v2.ForgeRun
+	65, // 64: mako.v2.Envelope.list_devices:type_name -> mako.v2.ListDevices
+	66, // 65: mako.v2.Envelope.devices:type_name -> mako.v2.Devices
+	67, // 66: mako.v2.Envelope.borrow:type_name -> mako.v2.Borrow
+	68, // 67: mako.v2.Envelope.lease:type_name -> mako.v2.Lease
+	69, // 68: mako.v2.Envelope.give_back:type_name -> mako.v2.GiveBack
+	70, // 69: mako.v2.Envelope.list_leases:type_name -> mako.v2.ListLeases
+	71, // 70: mako.v2.Envelope.leases:type_name -> mako.v2.Leases
+	72, // 71: mako.v2.Envelope.claim:type_name -> mako.v2.Claim
+	73, // 72: mako.v2.Envelope.claimed:type_name -> mako.v2.Claimed
+	74, // 73: mako.v2.Envelope.device_conn:type_name -> mako.v2.DeviceConn
+	75, // 74: mako.v2.Envelope.device_listen:type_name -> mako.v2.DeviceListen
+	76, // 75: mako.v2.Envelope.device_accept:type_name -> mako.v2.DeviceAccept
+	76, // [76:76] is the sub-list for method output_type
+	76, // [76:76] is the sub-list for method input_type
+	76, // [76:76] is the sub-list for extension type_name
+	76, // [76:76] is the sub-list for extension extendee
+	0,  // [0:76] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -1679,6 +1718,8 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_Projects)(nil),
 		(*Envelope_RelayAgentMessage)(nil),
 		(*Envelope_AgentMessage)(nil),
+		(*Envelope_WatchChat)(nil),
+		(*Envelope_ChatLive)(nil),
 		(*Envelope_ForgeList)(nil),
 		(*Envelope_ForgeItems)(nil),
 		(*Envelope_ForgeView)(nil),

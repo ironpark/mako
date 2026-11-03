@@ -28,6 +28,15 @@ type Commands interface {
 	Commands(project string, env map[string]string) []Command
 }
 
+// LoggedCommands is an agent whose log says, as it goes, commands it takes
+// that no file of the user's tells of: those it brings along, which change
+// with its version.
+type LoggedCommands interface {
+	// LogCommands are the commands a line of a log says the agent takes,
+	// none for a line that says none.
+	LogCommands(line []byte) []Command
+}
+
 // maxCommandFile bounds what is read of a command's file for its front
 // matter and first line.
 const maxCommandFile = 16 << 10
