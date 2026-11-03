@@ -56,6 +56,7 @@ message ChatMessage {
 message WatchChat {
   string node_id = 1;
   string session_id = 2;
+  string agent = 3; // a subagent of the session's, "" for its own
 }
 
 // ChatLive answers WatchChat, as often as the conversation moves.
@@ -70,7 +71,9 @@ message ChatLive {
 // begun.
 message LiveBlock {
   int32 index = 1; // the block's, within the model's response
-  string kind = 2; // text or tool
+  // kind is text; thinking, whose words are not sent; or tool, whose text
+  // is its arguments as JSON as far as they have streamed.
+  string kind = 2;
   string text = 3;
   string tool = 4; // a tool call's tool
 }

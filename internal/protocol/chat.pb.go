@@ -280,6 +280,7 @@ type WatchChat struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Agent         string                 `protobuf:"bytes,3,opt,name=agent,proto3" json:"agent,omitempty"` // a subagent of the session's, "" for its own
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -324,6 +325,13 @@ func (x *WatchChat) GetNodeId() string {
 func (x *WatchChat) GetSessionId() string {
 	if x != nil {
 		return x.SessionId
+	}
+	return ""
+}
+
+func (x *WatchChat) GetAgent() string {
+	if x != nil {
+		return x.Agent
 	}
 	return ""
 }
@@ -386,11 +394,13 @@ func (x *ChatLive) GetBlocks() []*LiveBlock {
 // LiveBlock is one block of a reply streaming: text, or a tool call
 // begun.
 type LiveBlock struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Index         int32                  `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"` // the block's, within the model's response
-	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`    // text or tool
-	Text          string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
-	Tool          string                 `protobuf:"bytes,4,opt,name=tool,proto3" json:"tool,omitempty"` // a tool call's tool
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Index int32                  `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"` // the block's, within the model's response
+	// kind is text; thinking, whose words are not sent; or tool, whose text
+	// is its arguments as JSON as far as they have streamed.
+	Kind          string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	Text          string `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
+	Tool          string `protobuf:"bytes,4,opt,name=tool,proto3" json:"tool,omitempty"` // a tool call's tool
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -936,11 +946,12 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\texit_code\x18\v \x01(\x05H\x00R\bexitCode\x88\x01\x01\x12\x16\n" +
 	"\x06images\x18\f \x03(\tR\x06imagesB\f\n" +
 	"\n" +
-	"_exit_code\"C\n" +
+	"_exit_code\"Y\n" +
 	"\tWatchChat\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x02 \x01(\tR\tsessionId\"N\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x14\n" +
+	"\x05agent\x18\x03 \x01(\tR\x05agent\"N\n" +
 	"\bChatLive\x12\x16\n" +
 	"\x06logged\x18\x01 \x01(\bR\x06logged\x12*\n" +
 	"\x06blocks\x18\x02 \x03(\v2\x12.mako.v2.LiveBlockR\x06blocks\"]\n" +

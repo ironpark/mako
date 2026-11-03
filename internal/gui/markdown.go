@@ -48,12 +48,16 @@ type mdRenderer struct {
 	src []byte
 }
 
-// markdownView is a Markdown file rendered, scrolling.
+// markdownView is a Markdown file rendered, scrolling. Its text selects as
+// one page: a drag runs from one block into the next, and a click anywhere
+// in the view, a block or the space around them, drops the whole
+// selection.
 func markdownView(m *model, id string, src string) ggui.Widget {
 	r := &mdRenderer{m: m, id: id, doc: ggui.Peek(m.Docs)[id], src: []byte(src)}
 	root := markdown.Parser().Parse(text.NewReader(r.src))
 	page := ggui.Box(ggui.Column(r.blocks(root)...).Gap(14).Stretch()).MaxWidth(880)
-	return ggui.Box(ggui.Scroll(ggui.Align(ggui.Padding(page, 28, 36, 48, 36)).Top()).Bar(tokSurface3)).Fill(tokSurface0)
+	scroll := ggui.Scroll(ggui.Align(ggui.Padding(page, 28, 36, 48, 36)).Top()).Bar(tokSurface3)
+	return ggui.Box(ggui.SelectionArea(scroll)).Fill(tokSurface0)
 }
 
 // markdownText is Markdown written somewhere other than a file, as on

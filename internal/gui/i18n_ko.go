@@ -1004,6 +1004,7 @@ var catalogKo = map[string]string{
 	"Stop the agent's turn":         "에이전트 작업 중지",
 	"Don't ask":                     "묻지 않음",
 	"Read only":                     "읽기 전용",
+	"Thinking…":                     "생각 중…",
 	"Ask first":                     "먼저 묻기",
 	"Full access":                   "전체 액세스",
 	"Accept edits":                  "편집 자동 허용",

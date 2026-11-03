@@ -53,11 +53,13 @@ func agentChatView(m *model, id string, agent string) ggui.Widget {
 	state, sub := m.chatState(id), m.agentState(id, agent)
 	ggui.Effect(func() ggui.Cleanup {
 		m.loadAgentChat(id, agent, sub)
-		return m.every(2*time.Second, func() {
-			if a := ggui.Untrack(func() *protocol.SubAgent { return agentOf(state, agent) }); a.GetRunning() || !ggui.Peek(sub.result).Loaded {
+		unfollow := m.followChat(id, agent, sub, func(then func()) { readThen(sub, then, func() { m.loadAgentChat(id, agent, sub) }) })
+		stop := m.every(2*time.Second, func() {
+			if a := ggui.Untrack(func() *protocol.SubAgent { return agentOf(state, agent) }); (a.GetRunning() || !ggui.Peek(sub.result).Loaded) && pollChat(sub) {
 				m.loadAgentChat(id, agent, sub)
 			}
 		})
+		return func() { unfollow(); stop() }
 	})
 	back := ui.ButtonOf(ggui.Row(icon("arrow-left").Size(14).Color(tokMuted), muted(ggui.Text(T("Session")).Size(12.5))).Gap(6),
 		func() { m.openAgent(id, "") }).Ghost().Pad(4, 8).Radius(6).Name(T("Back to the session"))
@@ -77,9 +79,10 @@ func agentChatView(m *model, id string, agent string) ggui.Widget {
 			status,
 		).Gap(10).Align(ggui.AlignCenter)).Pad(8, 12)
 	})
-	turns := ggui.Derived(func() []chatTurnItem {
+	logged := ggui.Derived(func() []chatTurnItem {
 		return chatTurns(sub.result.Get().Chat.GetMessages(), nil)
 	}).WithEqual(deepEqual)
+	turns := withLive(logged, sub)
 	head := ggui.Reactive(func() ggui.Widget {
 		v := sub.result.Get()
 		switch {
@@ -92,7 +95,7 @@ func agentChatView(m *model, id string, agent string) ggui.Widget {
 		}
 		return ggui.Box()
 	})
-	feed := chatFeed(m, id, sub, turns, head, nil)
+	_, feed := chatFeed(m, id, sub, turns, head, nil)
 	return ggui.Column(
 		ggui.Box(bar).Fill(tokSurface1),
 		hline(),

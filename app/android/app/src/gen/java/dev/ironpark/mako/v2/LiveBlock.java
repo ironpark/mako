@@ -66,7 +66,8 @@ public  final class LiveBlock extends
   private java.lang.String kind_;
   /**
    * <pre>
-   * text or tool
+   * kind is text; thinking, whose words are not sent; or tool, whose text
+   * is its arguments as JSON as far as they have streamed.
    * </pre>
    *
    * <code>string kind = 2 [json_name = "kind"];</code>
@@ -78,7 +79,8 @@ public  final class LiveBlock extends
   }
   /**
    * <pre>
-   * text or tool
+   * kind is text; thinking, whose words are not sent; or tool, whose text
+   * is its arguments as JSON as far as they have streamed.
    * </pre>
    *
    * <code>string kind = 2 [json_name = "kind"];</code>
@@ -91,7 +93,8 @@ public  final class LiveBlock extends
   }
   /**
    * <pre>
-   * text or tool
+   * kind is text; thinking, whose words are not sent; or tool, whose text
+   * is its arguments as JSON as far as they have streamed.
    * </pre>
    *
    * <code>string kind = 2 [json_name = "kind"];</code>
@@ -105,7 +108,8 @@ public  final class LiveBlock extends
   }
   /**
    * <pre>
-   * text or tool
+   * kind is text; thinking, whose words are not sent; or tool, whose text
+   * is its arguments as JSON as far as they have streamed.
    * </pre>
    *
    * <code>string kind = 2 [json_name = "kind"];</code>
@@ -116,7 +120,8 @@ public  final class LiveBlock extends
   }
   /**
    * <pre>
-   * text or tool
+   * kind is text; thinking, whose words are not sent; or tool, whose text
+   * is its arguments as JSON as far as they have streamed.
    * </pre>
    *
    * <code>string kind = 2 [json_name = "kind"];</code>
@@ -387,7 +392,8 @@ public  final class LiveBlock extends
 
     /**
      * <pre>
-     * text or tool
+     * kind is text; thinking, whose words are not sent; or tool, whose text
+     * is its arguments as JSON as far as they have streamed.
      * </pre>
      *
      * <code>string kind = 2 [json_name = "kind"];</code>
@@ -399,7 +405,8 @@ public  final class LiveBlock extends
     }
     /**
      * <pre>
-     * text or tool
+     * kind is text; thinking, whose words are not sent; or tool, whose text
+     * is its arguments as JSON as far as they have streamed.
      * </pre>
      *
      * <code>string kind = 2 [json_name = "kind"];</code>
@@ -412,7 +419,8 @@ public  final class LiveBlock extends
     }
     /**
      * <pre>
-     * text or tool
+     * kind is text; thinking, whose words are not sent; or tool, whose text
+     * is its arguments as JSON as far as they have streamed.
      * </pre>
      *
      * <code>string kind = 2 [json_name = "kind"];</code>
@@ -427,7 +435,8 @@ public  final class LiveBlock extends
     }
     /**
      * <pre>
-     * text or tool
+     * kind is text; thinking, whose words are not sent; or tool, whose text
+     * is its arguments as JSON as far as they have streamed.
      * </pre>
      *
      * <code>string kind = 2 [json_name = "kind"];</code>
@@ -440,7 +449,8 @@ public  final class LiveBlock extends
     }
     /**
      * <pre>
-     * text or tool
+     * kind is text; thinking, whose words are not sent; or tool, whose text
+     * is its arguments as JSON as far as they have streamed.
      * </pre>
      *
      * <code>string kind = 2 [json_name = "kind"];</code>

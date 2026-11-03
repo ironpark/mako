@@ -455,6 +455,17 @@ func (n *notifier) watch() (feed <-chan *protocol.Changed, stop func()) {
 	}
 }
 
+// hungUp says, with the error that ended it, when the front-end that
+// watches over stream closes it: it sends nothing more.
+func hungUp(stream *transport.Stream) <-chan error {
+	gone := make(chan error, 1)
+	go func() {
+		_, err := stream.Recv()
+		gone <- err
+	}()
+	return gone
+}
+
 // handleWatch sends a front-end a Changed whenever the mesh's nodes or
 // sessions change, until it hangs up, and counts it as watching for
 // approvals meanwhile if it asks.
@@ -470,13 +481,7 @@ func (d *Daemon) handleWatch(ctx context.Context, stream *transport.Stream, env 
 	if err := stream.Send(protocol.TypeChanged, env.GetId(), &protocol.Changed{Nodes: true, Sessions: true, Access: true}); err != nil {
 		return err
 	}
-	// The front-end reads nothing more from the stream; its closing it
-	// ends the watch.
-	gone := make(chan error, 1)
-	go func() {
-		_, err := stream.Recv()
-		gone <- err
-	}()
+	gone := hungUp(stream)
 	for {
 		select {
 		case c := <-feed:

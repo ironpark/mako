@@ -214,13 +214,7 @@ func (d *Daemon) listenHooks(ctx context.Context, dir string) {
 	if d.hookBinary == "" {
 		return
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		d.log.Warn("hooks: no run directory", "err", err)
-		return
-	}
-	path := filepath.Join(dir, "hooks.sock")
-	_ = os.Remove(path) // left by a daemon that did not stop cleanly
-	ln, err := net.Listen("unix", path)
+	ln, path, err := listenUnix(dir, "hooks.sock")
 	if err != nil {
 		d.log.Warn("hooks: not listening", "err", err)
 		return
@@ -237,6 +231,19 @@ func (d *Daemon) listenHooks(ctx context.Context, dir string) {
 			go d.serveHook(ctx, conn)
 		}
 	}()
+}
+
+// listenUnix listens on the socket name in dir, the private run
+// directory, made if it is not there, in place of one a daemon that did
+// not stop cleanly left.
+func listenUnix(dir, name string) (net.Listener, string, error) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, "", err
+	}
+	path := filepath.Join(dir, name)
+	_ = os.Remove(path)
+	ln, err := net.Listen("unix", path)
+	return ln, path, err
 }
 
 func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {

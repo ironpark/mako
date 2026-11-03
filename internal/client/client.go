@@ -345,35 +345,18 @@ func WindowSize() (cols, rows uint16) {
 // daemon sends, the first at once, until ctx ends or the stream breaks,
 // whose error Watch returns. A daemon too old to watch fails at once.
 func (c *Client) Watch(ctx context.Context, fn func(*protocol.Changed)) error {
-	s, err := c.stream(ctx)
-	if err != nil {
-		return err
-	}
-	defer s.Hangup()
-	stop := context.AfterFunc(ctx, func() { _ = s.Hangup() })
-	defer stop()
-	if err := s.Send(protocol.TypeWatch, "", &protocol.Watch{}); err != nil {
-		return err
-	}
-	for {
-		env, err := s.Recv()
-		if err != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			return err
-		}
-		changed, err := transport.Reply[*protocol.Changed](env)
-		if err != nil {
-			return err
-		}
-		fn(changed)
-	}
+	return follow(ctx, c, protocol.TypeWatch, &protocol.Watch{}, fn)
 }
 
 // WatchChat follows a session's conversation, calling fn with each
 // ChatLive until ctx ends or the stream does; see protocol.WatchChat.
 func (c *Client) WatchChat(ctx context.Context, req *protocol.WatchChat, fn func(*protocol.ChatLive)) error {
+	return follow(ctx, c, protocol.TypeWatchChat, req, fn)
+}
+
+// follow sends req, as typ, over a stream of its own, and calls fn with
+// each reply until ctx ends or the stream does.
+func follow[R proto.Message](ctx context.Context, c *Client, typ protocol.Type, req proto.Message, fn func(R)) error {
 	s, err := c.stream(ctx)
 	if err != nil {
 		return err
@@ -381,7 +364,7 @@ func (c *Client) WatchChat(ctx context.Context, req *protocol.WatchChat, fn func
 	defer s.Hangup()
 	stop := context.AfterFunc(ctx, func() { _ = s.Hangup() })
 	defer stop()
-	if err := s.Send(protocol.TypeWatchChat, "", req); err != nil {
+	if err := s.Send(typ, "", req); err != nil {
 		return err
 	}
 	for {
@@ -392,11 +375,11 @@ func (c *Client) WatchChat(ctx context.Context, req *protocol.WatchChat, fn func
 			}
 			return err
 		}
-		live, err := transport.Reply[*protocol.ChatLive](env)
+		reply, err := transport.Reply[R](env)
 		if err != nil {
 			return err
 		}
-		fn(live)
+		fn(reply)
 	}
 }
 

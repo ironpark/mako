@@ -69,14 +69,13 @@ type chatState struct {
 	// pending are the messages sent and not yet in the log.
 	pending *ggui.StateValue[[]pendingMessage]
 	// live is the reply streaming and not yet in the log, as the
-	// session's node says while the chat follows it (followChat). Once
-	// the log grows, what the node says next is held in liveHeld until
-	// the read of the log lands, so a block leaves the stream as the
-	// logged one shows; reread asks for another read after the one out.
-	live        *ggui.StateValue[[]*protocol.LiveBlock]
-	liveHeld    []*protocol.LiveBlock
-	liveWaiting bool
-	reread      bool
+	// session's node says while the chat follows it (followChat).
+	live   *ggui.StateValue[[]*protocol.LiveBlock]
+	follow chatFollow
+	// afterRead runs once a read lands that went out after it was asked
+	// for; reread asks for one more read, the one out having gone first.
+	afterRead []func()
+	reread    bool
 }
 
 func (m *model) chatState(id string) *chatState {
@@ -148,9 +147,6 @@ func (m *model) loadChat(id string, state *chatState) {
 // current reports the state gone is let go.
 func (m *model) readChat(id, agent string, state *chatState, current func() bool) {
 	info, ok := m.session(id)
-	if state.loading {
-		state.reread = true // what moved since the read went out
-	}
 	if state.loading || !ok {
 		return
 	}
@@ -175,9 +171,10 @@ func (m *model) readChat(id, agent string, state *chatState, current func() bool
 				m.readChat(id, agent, state, current)
 				return
 			}
-			if state.liveWaiting {
-				state.liveWaiting = false
-				state.live.Set(state.liveHeld)
+			after := state.afterRead
+			state.afterRead = nil
+			for _, fn := range after {
+				fn()
 			}
 		}()
 		if err == nil && chat.GetUnchanged() {
@@ -453,11 +450,11 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	state := m.chatState(id)
 	ggui.Effect(func() ggui.Cleanup {
 		m.loadChat(id, state)
-		unfollow := m.followChat(id, state)
-		// Read every few seconds too, for a node that cannot be followed
-		// and in case a word of it is lost.
+		unfollow := m.followChat(id, "", state, func(then func()) { readThen(state, then, func() { m.loadChat(id, state) }) })
+		// Read every few seconds too, for a node that cannot be followed,
+		// and now and then in case a word of it is lost.
 		stop := m.every(2*time.Second, func() {
-			if ggui.Peek(m.ChatModes)[id] {
+			if ggui.Peek(m.ChatModes)[id] && pollChat(state) {
 				m.loadChat(id, state)
 			}
 		})
@@ -469,11 +466,11 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	loaded := ggui.Derived(func() []*protocol.ChatMessage {
 		return chatMessages(state.result.Get(), state.older.Get())
 	})
-	turns := ggui.Derived(func() []chatTurnItem {
+	logged := ggui.Derived(func() []chatTurnItem {
 		turns := chatTurns(loaded.Get(), agentsByCall(state.result.Get().Chat.GetAgents()))
-		turns = append(turns, pendingTurns(state.pending.Get())...)
-		return append(turns, liveTurns(state.live.Get())...)
+		return append(turns, pendingTurns(state.pending.Get())...)
 	}).WithEqual(deepEqual)
+	turns := withLive(logged, state)
 	// What stands over the conversation: why it cannot be read, that it is
 	// on its way, or that more of it is further back.
 	head := ggui.Reactive(func() ggui.Widget {
@@ -512,7 +509,8 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		return ggui.Padding(ggui.Column(rows...).Gap(chatGap).Stretch(), 0, 0, chatGap, 0)
 	})
 	find := &chatFinder{turns: turns, scroll: scroll, marks: map[string]rowMark{}}
-	feed := chatFeed(m, id, state, turns, head, find).Controller(scroll).BindOffset(offset)
+	scrolling, feed := chatFeed(m, id, state, turns, head, find)
+	scrolling.Controller(scroll).BindOffset(offset)
 	// Scrolling up near the top of what is loaded reads the log from
 	// further back. Only up: the feed opens at the top before it shows the
 	// latest at the bottom.
@@ -550,7 +548,10 @@ func chatView(m *model, id string, group int) ggui.Widget {
 // only those near the window are built and laid out, each drawn again only
 // when it changes. Older ones coming in above keep what is in view in
 // place. find, when there is one, finds in the feed.
-func chatFeed(m *model, id string, state *chatState, turns ggui.Readable[[]chatTurnItem], head ggui.Widget, find *chatFinder) *ggui.ScrollWidget {
+//
+// It is the feed's scroll, to set up, and the feed to show: the scroll in
+// its selection.
+func chatFeed(m *model, id string, state *chatState, turns ggui.Readable[[]chatTurnItem], head ggui.Widget, find *chatFinder) (scroll *ggui.ScrollWidget, feed ggui.Widget) {
 	list := ggui.EachKeyed(turns, func(t chatTurnItem) string { return t.Key }, func(row ggui.EachItem[chatTurnItem]) ggui.Widget {
 		// A read of the conversation brings every message anew: a turn is
 		// drawn again only when what it holds changed.
@@ -564,14 +565,16 @@ func chatFeed(m *model, id string, state *chatState, turns ggui.Readable[[]chatT
 		}
 		return find.mark(row.Item.Key, w)
 	}).Gap(chatGap).Stretch().EstimatedExtent(chatTurnEstimate).Retain(chatRetain)
+	content := &lane{child: ggui.Box(ggui.Column(head, list).Stretch()).Pad(18, 0)}
+	scroll = ggui.Scroll(content).FollowEnd().Bar(tokSurface3)
 	// A drag selects through the turns in view, from one message into the
-	// next, and copies them as they read.
-	area := ggui.SelectionArea(ggui.Column(head, list).Stretch())
+	// next, and copies them as they read; a click anywhere in the feed, on
+	// a message or the room around and below them, drops the selection.
+	area := ggui.SelectionArea(scroll)
 	if find != nil {
 		find.area = area
 	}
-	content := &lane{child: ggui.Box(area).Pad(18, 0)}
-	return ggui.Scroll(content).FollowEnd().Bar(tokSurface3)
+	return scroll, area
 }
 
 // olderNear is how near the top of the feed the reader comes before older
@@ -704,6 +707,7 @@ type chatTurnItem struct {
 	Agents   []*protocol.SubAgent
 	Folded   bool // a long run folded to a line
 	Sending  bool // a message sent, not yet in the log
+	Thinking bool // the agent thinks, as its reply streams
 }
 
 // chatGap is the room between the feed's turns, and chatTurnEstimate how
@@ -722,6 +726,9 @@ const (
 func chatTurnRow(m *model, id string, info *protocol.SessionInfo, state *chatState, t chatTurnItem) ggui.Widget {
 	if len(t.Messages) == 0 {
 		return ggui.Box()
+	}
+	if t.Thinking {
+		return thinkingRow()
 	}
 	if t.Sending {
 		label := ggui.Row(ggui.Spacer(), icon("clock").Size(11).Color(tokExtraMuted), ggui.Text(T("Sent")).Size(11).Color(tokExtraMuted)).Gap(4).Align(ggui.AlignCenter)

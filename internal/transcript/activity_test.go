@@ -117,3 +117,40 @@ func TestActivityDatesTheLastMessage(t *testing.T) {
 		t.Fatalf("last message at %v, want %v", got.Said, said)
 	}
 }
+
+// A log that lists the agent's skills says the commands it takes, read on
+// as the log grows; a later listing renews those it names again.
+func TestActivityReadsTheCommandsALogSays(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "c.jsonl")
+	listing := func(desc string, names ...string) string {
+		var content []string
+		for _, n := range names {
+			content = append(content, "- "+n+": "+desc)
+		}
+		return `{"type":"attachment","attachment":{"type":"skill_listing","content":"` + strings.Join(content, `\n`) + `","names":["` + strings.Join(names, `","`) + `"]}}` + "\n"
+	}
+	writeLog(t, path, `{"type":"user","sessionId":"c","cwd":"/p","message":{"role":"user","content":"go"}}`+"\n"+listing("old", "simplify", "loop"))
+	info := &protocol.SessionInfo{Agent: "claude", ConversationId: "c"}
+	var activity Activity
+	names := func() string {
+		t.Helper()
+		got, err := activity.Read(info, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, c := range got.Commands {
+			out = append(out, c.Name+"="+c.Description)
+		}
+		return strings.Join(out, ",")
+	}
+	if got := names(); got != "simplify=old,loop=old" {
+		t.Fatalf("commands %q", got)
+	}
+	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	f.WriteString(listing("new", "loop", "review"))
+	f.Close()
+	if got := names(); got != "simplify=old,loop=new,review=new" {
+		t.Fatalf("read on: %q", got)
+	}
+}

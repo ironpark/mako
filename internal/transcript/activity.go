@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -22,6 +23,9 @@ type Activity struct {
 	at     time.Time
 	said   time.Time // when the latest prompt or reply was written
 	tasks  backgroundTasks
+	// commands are those the log says the agent takes
+	// (agent.LoggedCommands), in the order first said.
+	commands []agent.Command
 }
 
 type ActivityState struct {
@@ -30,6 +34,9 @@ type ActivityState struct {
 	Said   time.Time
 	Agents []*protocol.SubAgent
 	Tasks  []*protocol.BackgroundTask // see backgroundTasks
+	// Commands are those the log says the agent takes, beside the files
+	// that say others: see agent.LoggedCommands.
+	Commands []agent.Command
 }
 
 func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState, error) {
@@ -42,6 +49,7 @@ func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState,
 		a.calls = map[string]*protocol.ChatMessage{}
 		a.status, a.at, a.said = "", time.Time{}, time.Time{}
 		a.tasks = backgroundTasks{}
+		a.commands = nil
 	}
 	if a.path != path || a.dec == nil {
 		a.path, a.tail = path, agent.Tail{}
@@ -49,7 +57,17 @@ func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState,
 	}
 	events, hasStatus := logs.(agent.LogStatus)
 	tasks, hasTasks := logs.(agent.BackgroundTasks)
+	commands, hasCommands := logs.(agent.LoggedCommands)
 	a.tail.Read(path, reset, func(line []byte) {
+		if hasCommands {
+			for _, c := range commands.LogCommands(line) {
+				if i := slices.IndexFunc(a.commands, func(k agent.Command) bool { return k.Name == c.Name }); i >= 0 {
+					a.commands[i] = c
+				} else {
+					a.commands = append(a.commands, c)
+				}
+			}
+		}
 		if hasTasks {
 			for _, ev := range tasks.TaskEvents(line) {
 				a.tasks.take(ev)
@@ -86,7 +104,7 @@ func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState,
 	for _, call := range a.calls {
 		a.list = append(a.list, call)
 	}
-	return ActivityState{a.status, a.at, a.said, a.subs.Read(path, a.list), a.tasks.list()}, nil
+	return ActivityState{a.status, a.at, a.said, a.subs.Read(path, a.list), a.tasks.list(), slices.Clone(a.commands)}, nil
 }
 
 // resultKept is as much of a task's result as is kept for the whole

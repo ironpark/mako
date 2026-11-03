@@ -424,3 +424,54 @@ func TestADragCopiesAcrossTheTurnsOfAChat(t *testing.T) {
 		t.Fatalf("a drag from the question to the answer copied %q", got)
 	}
 }
+
+// A conversation selects as one: a drag runs from one message into the
+// next, and a click in the feed's room below a short conversation drops
+// all of it.
+func TestAChatSelectsAsOne(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude"}})
+	state := m.chatState("s")
+	turns := ggui.State(chatTurns([]*protocol.ChatMessage{
+		{Role: "assistant", Text: "First reply here.", Id: "a"},
+		{Role: "user", Text: "A question.", Id: "b"},
+		{Role: "assistant", Text: "Last reply.", Id: "c"},
+	}, nil))
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		_, feed := chatFeed(m, "s", state, turns, ggui.Box(), nil)
+		return feed
+	}, ggui.Sz(800, 700))
+	defer p.Close()
+	p.Frame()
+	find := func(name string) ggui.SemNode {
+		t.Helper()
+		n, ok := p.Semantics().Find(ggui.RoleText, name)
+		if !ok {
+			t.Fatalf("no %q:\n%s", name, p.Semantics().String())
+		}
+		return n
+	}
+	selected := func() int {
+		n := 0
+		for _, name := range []string{"First reply here.", "Last reply."} {
+			if s := find(name); s.SelEnd > s.SelStart {
+				n++
+			}
+		}
+		return n
+	}
+	first, last := find("First reply here."), find("Last reply.")
+	p.Press(first.Rect.Origin.Add(ggui.Pt(2, 5)))
+	p.Move(last.Rect.Origin.Add(ggui.Pt(20, 5)))
+	p.Release(last.Rect.Origin.Add(ggui.Pt(20, 5)))
+	p.Frame()
+	if n := selected(); n != 2 {
+		t.Fatalf("a drag across the conversation selected %d replies", n)
+	}
+	p.Click(ggui.Pt(400, 650)) // below the last message
+	p.Frame()
+	if n := selected(); n != 0 {
+		t.Fatalf("a click below the conversation left %d replies selected", n)
+	}
+}

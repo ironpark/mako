@@ -42,7 +42,8 @@ func (d *Daemon) handleOpenSession(ctx context.Context, stream *transport.Stream
 		if err != nil {
 			return nil, err
 		}
-		return s.Info(), nil
+		// As the listing has it, which the front-end places it by at once.
+		return d.withHead(s.Info()), nil
 	})
 }
 
@@ -116,10 +117,10 @@ func (d *Daemon) handleListCommands(ctx context.Context, stream *transport.Strea
 			return out, nil
 		}
 		list := commands.Commands(info.GetProject(), s.TranscriptEnv())
-		// Those the agent brings along, which its log alone names.
-		if logged, ok := agents.As[agent.LoggedCommands](info.GetAgent()); ok {
-			list = withLogged(list, d.loggedCommands.of(logged, info.GetAgent(), s.TranscriptPath()))
-		}
+		// Those the agent brings along, which its log alone names, read
+		// up to now.
+		d.refreshActivity(s)
+		list = withLogged(list, d.loggedCommands.of(s.ID(), info.GetAgent()))
 		for _, c := range list {
 			out.Commands = append(out.Commands, &protocol.Command{Name: c.Name, Description: c.Description, Args: c.Args, Source: c.Source})
 		}

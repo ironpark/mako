@@ -22,7 +22,8 @@ public interface LiveBlockOrBuilder extends
 
   /**
    * <pre>
-   * text or tool
+   * kind is text; thinking, whose words are not sent; or tool, whose text
+   * is its arguments as JSON as far as they have streamed.
    * </pre>
    *
    * <code>string kind = 2 [json_name = "kind"];</code>
@@ -31,7 +32,8 @@ public interface LiveBlockOrBuilder extends
   java.lang.String getKind();
   /**
    * <pre>
-   * text or tool
+   * kind is text; thinking, whose words are not sent; or tool, whose text
+   * is its arguments as JSON as far as they have streamed.
    * </pre>
    *
    * <code>string kind = 2 [json_name = "kind"];</code>

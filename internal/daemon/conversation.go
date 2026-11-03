@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -26,60 +27,48 @@ func conversationUUID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
-// optionalFlags remembers, per program and flag, whether the program's
-// version has the flag.
+// optionalFlags remembers, per program as it is on disk and question,
+// what the program's version answered.
 var optionalFlags sync.Map
+
+// probed runs program with args, at most for timeout, and reports whether
+// it succeeds and accept takes what it printed: asked once for each build
+// of the program and question, so an update is asked again.
+func probed(ctx context.Context, program string, args []string, question string, timeout time.Duration, accept func(string) bool) bool {
+	key := program + "\x00" + strings.Join(args, "\x00") + "\x00" + question
+	if path, err := exec.LookPath(program); err == nil {
+		if fi, err := os.Stat(path); err == nil {
+			key += "\x00" + fi.ModTime().String()
+		}
+	}
+	if value, ok := optionalFlags.Load(key); ok {
+		return value.(bool)
+	}
+	check, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	out, err := exec.CommandContext(check, program, args...).Output()
+	value := err == nil && accept(string(out))
+	optionalFlags.Store(key, value)
+	return value
+}
 
 // withOptionalFlag adds flag to command when the program's --help lists it.
 func withOptionalFlag(ctx context.Context, command []string, flag string) []string {
-	key := command[0] + "\x00" + flag
-	value, ok := optionalFlags.Load(key)
-	if !ok {
-		check, cancel := context.WithTimeout(ctx, 2*time.Second)
-		defer cancel()
-		help, err := exec.CommandContext(check, command[0], "--help").Output()
-		value = err == nil && strings.Contains(string(help), flag)
-		optionalFlags.Store(key, value)
-	}
-	if value.(bool) {
+	if probed(ctx, command[0], []string{"--help"}, flag, 2*time.Second, func(help string) bool { return strings.Contains(help, flag) }) {
 		return append(command, flag)
 	}
 	return command
 }
 
 // hasFeature reports whether the agent command runs takes hooks: not every
-// version of every agent does. What its binary says is remembered.
+// version of every agent does.
 func hasFeature(ctx context.Context, command []string, driver agent.Driver) bool {
 	gate, ok := driver.(agent.HookGate)
 	if !ok {
 		return true
 	}
 	args, feature := gate.HookFeature()
-	key := command[0] + "\x00" + strings.Join(args, " ")
-	value, ok := optionalFlags.Load(key)
-	if !ok {
-		check, cancel := context.WithTimeout(ctx, 3*time.Second)
-		defer cancel()
-		out, err := exec.CommandContext(check, command[0], args...).Output()
-		value = err == nil && featureOn(string(out), feature)
-		optionalFlags.Store(key, value)
-	}
-	return value.(bool)
-}
-
-// hasOutput reports whether program, run with args, succeeds and says
-// want: asked once for each program and question, for the daemon's life.
-func hasOutput(ctx context.Context, program string, args []string, want string) bool {
-	key := program + "\x00" + strings.Join(args, " ") + "\x00" + want
-	value, ok := optionalFlags.Load(key)
-	if !ok {
-		check, cancel := context.WithTimeout(ctx, 15*time.Second)
-		defer cancel()
-		out, err := exec.CommandContext(check, program, args...).CombinedOutput()
-		value = err == nil && strings.Contains(string(out), want)
-		optionalFlags.Store(key, value)
-	}
-	return value.(bool)
+	return probed(ctx, command[0], args, feature, 3*time.Second, func(listing string) bool { return featureOn(listing, feature) })
 }
 
 // featureOn reads a features listing, a line a feature: its name, its
@@ -293,6 +282,7 @@ func (d *Daemon) refreshActivity(s *session.Session) {
 	if activity, err := conv.activity.Read(info, path); err == nil {
 		s.ReportActivity(info.GetConversationId(), activity.Status, activity.At, activity.Said, activity.Agents)
 		s.ReportTasks(info.GetConversationId(), activity.Tasks)
+		d.loggedCommands.set(s.ID(), info.GetAgent(), activity.Commands)
 	}
 }
 

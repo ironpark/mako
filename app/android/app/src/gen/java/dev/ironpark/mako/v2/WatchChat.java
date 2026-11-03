@@ -24,6 +24,7 @@ public  final class WatchChat extends
   private WatchChat() {
     nodeId_ = "";
     sessionId_ = "";
+    agent_ = "";
   }
   public static final int NODE_ID_FIELD_NUMBER = 1;
   private java.lang.String nodeId_;
@@ -116,6 +117,73 @@ public  final class WatchChat extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     sessionId_ = value.toStringUtf8();
+
+  }
+
+  public static final int AGENT_FIELD_NUMBER = 3;
+  private java.lang.String agent_;
+  /**
+   * <pre>
+   * a subagent of the session's, "" for its own
+   * </pre>
+   *
+   * <code>string agent = 3 [json_name = "agent"];</code>
+   * @return The agent.
+   */
+  @java.lang.Override
+  public java.lang.String getAgent() {
+    return agent_;
+  }
+  /**
+   * <pre>
+   * a subagent of the session's, "" for its own
+   * </pre>
+   *
+   * <code>string agent = 3 [json_name = "agent"];</code>
+   * @return The bytes for agent.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getAgentBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(agent_);
+  }
+  /**
+   * <pre>
+   * a subagent of the session's, "" for its own
+   * </pre>
+   *
+   * <code>string agent = 3 [json_name = "agent"];</code>
+   * @param value The agent to set.
+   */
+  private void setAgent(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    agent_ = value;
+  }
+  /**
+   * <pre>
+   * a subagent of the session's, "" for its own
+   * </pre>
+   *
+   * <code>string agent = 3 [json_name = "agent"];</code>
+   */
+  private void clearAgent() {
+
+    agent_ = getDefaultInstance().getAgent();
+  }
+  /**
+   * <pre>
+   * a subagent of the session's, "" for its own
+   * </pre>
+   *
+   * <code>string agent = 3 [json_name = "agent"];</code>
+   * @param value The bytes for agent to set.
+   */
+  private void setAgentBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    agent_ = value.toStringUtf8();
 
   }
 
@@ -321,6 +389,75 @@ public  final class WatchChat extends
       return this;
     }
 
+    /**
+     * <pre>
+     * a subagent of the session's, "" for its own
+     * </pre>
+     *
+     * <code>string agent = 3 [json_name = "agent"];</code>
+     * @return The agent.
+     */
+    @java.lang.Override
+    public java.lang.String getAgent() {
+      return instance.getAgent();
+    }
+    /**
+     * <pre>
+     * a subagent of the session's, "" for its own
+     * </pre>
+     *
+     * <code>string agent = 3 [json_name = "agent"];</code>
+     * @return The bytes for agent.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getAgentBytes() {
+      return instance.getAgentBytes();
+    }
+    /**
+     * <pre>
+     * a subagent of the session's, "" for its own
+     * </pre>
+     *
+     * <code>string agent = 3 [json_name = "agent"];</code>
+     * @param value The agent to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAgent(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setAgent(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * a subagent of the session's, "" for its own
+     * </pre>
+     *
+     * <code>string agent = 3 [json_name = "agent"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAgent() {
+      copyOnWrite();
+      instance.clearAgent();
+      return this;
+    }
+    /**
+     * <pre>
+     * a subagent of the session's, "" for its own
+     * </pre>
+     *
+     * <code>string agent = 3 [json_name = "agent"];</code>
+     * @param value The bytes for agent to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAgentBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setAgentBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.WatchChat)
   }
   @java.lang.Override
@@ -339,10 +476,11 @@ public  final class WatchChat extends
           java.lang.Object[] objects = new java.lang.Object[] {
             "nodeId_",
             "sessionId_",
+            "agent_",
           };
           java.lang.String info =
-              "\u0000\u0002\u0000\u0000\u0001\u0002\u0002\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "";
+              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

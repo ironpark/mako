@@ -33,4 +33,24 @@ public interface WatchChatOrBuilder extends
    */
   com.google.protobuf.ByteString
       getSessionIdBytes();
+
+  /**
+   * <pre>
+   * a subagent of the session's, "" for its own
+   * </pre>
+   *
+   * <code>string agent = 3 [json_name = "agent"];</code>
+   * @return The agent.
+   */
+  java.lang.String getAgent();
+  /**
+   * <pre>
+   * a subagent of the session's, "" for its own
+   * </pre>
+   *
+   * <code>string agent = 3 [json_name = "agent"];</code>
+   * @return The bytes for agent.
+   */
+  com.google.protobuf.ByteString
+      getAgentBytes();
 }

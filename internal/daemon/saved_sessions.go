@@ -167,11 +167,19 @@ func (d *Daemon) listSessions() []*protocol.SessionInfo {
 	sortByStart(out)
 	// The repositories are read from disk, outside the lock, once a project
 	// in a while: the mesh's state is listed every second.
-	for i, info := range out {
-		h := d.heads.of(info.GetProject())
-		out[i].Branch, out[i].Repo, out[i].Owner, out[i].Remote, out[i].GitStamp = h.branch, h.repo, h.owner, h.remote, h.stamp
+	for _, info := range out {
+		d.withHead(info)
 	}
 	return out
+}
+
+// withHead fills in info's git as its project's repository has it: its
+// branch, the repository, its owner and remote, and its stamp. A
+// front-end places a session by them, in its project's section.
+func (d *Daemon) withHead(info *protocol.SessionInfo) *protocol.SessionInfo {
+	h := d.heads.of(info.GetProject())
+	info.Branch, info.Repo, info.Owner, info.Remote, info.GitStamp = h.branch, h.repo, h.owner, h.remote, h.stamp
+	return info
 }
 
 // headsFor is how long a project's branch is taken as read.
@@ -330,6 +338,7 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 		cleanup()
 		return nil, err
 	}
+	d.withLive(ctx, &launch.Launch, req.GetAgent(), id)
 	s, err := session.Start(session.Spec{ID: id, NodeID: d.cfg.NodeID, Agent: req.GetAgent(), Profile: req.GetProfile(),
 		Project: req.GetProject(), Command: launch.Command, Shown: launch.Shown, Env: launch.Env, Cols: uint16(req.GetCols()), Rows: uint16(req.GetRows()), Worktree: req.GetWorktree()})
 	if err != nil {
@@ -445,7 +454,6 @@ func (d *Daemon) conversationFor(ctx context.Context, req *protocol.OpenSession,
 			d.log.Warn("hooks: no directory for the agent's files", "err", err)
 		}
 		hooks.WithHooks(&launch.Launch, d.hookCommand, status, run)
-		d.withLive(ctx, &launch.Launch, driver, run)
 	}
 	return conversationID, transcriptPath, nil
 }
@@ -495,6 +503,7 @@ func (d *Daemon) closeSession(id string) error {
 		d.sessions.remove(id)
 	}
 	d.live.forget(id)
+	d.loggedCommands.forget(id)
 	if err := d.projectAgents.messages.remove(id); err != nil {
 		d.log.Warn("agent inbox could not be removed", "session", id, "err", err)
 	}
