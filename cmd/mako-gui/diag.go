@@ -11,6 +11,7 @@ import (
 	"runtime/pprof"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ironpark/ggfx"
@@ -87,6 +88,7 @@ func diagnose() {
 	}
 	var last diagReading
 	var lastHeap, lastIncident time.Time
+	go watchBursts(dir)
 	for now := range time.Tick(diagEvery) {
 		metrics.Read(samples)
 		r := readDiag(samples, now)
@@ -361,4 +363,90 @@ func dirtiersLine(by map[string]int64, n int) string {
 		parts[i] = fmt.Sprintf("%s=%d", strings.ReplaceAll(name, "github.com/ironpark/", ""), by[name])
 	}
 	return strings.Join(parts, " ")
+}
+
+// A burst is the CPU busy for a second or two, as a scroll's flick keeps
+// it: the minute's average hides it, and the incident's threshold is far
+// above it. watchBursts reads the CPU the process used each burstTick and,
+// when a second of it kept burstCores busy, profiles the next burstCPU to
+// burst-<time>.pb.gz, with what the frames did meanwhile beside it, at
+// most once each burstGap, and not in the first burstAfter.
+const (
+	burstTick  = 250 * time.Millisecond
+	burstCores = 1.0
+	burstCPU   = 3 * time.Second
+	burstGap   = 3 * time.Minute
+	burstAfter = time.Minute // past the start, which keeps the CPU busy by itself
+	burstsKept = 6
+)
+
+func watchBursts(dir string) {
+	var window [4]time.Duration // the CPU used in each of the last ticks
+	last, i := processCPU(), 0
+	lastBurst := time.Now().Add(burstAfter - burstGap)
+	for now := range time.Tick(burstTick) {
+		used := processCPU()
+		window[i%len(window)], last = used-last, used
+		i++
+		var sum time.Duration
+		for _, d := range window {
+			sum += d
+		}
+		if i < len(window) || sum.Seconds() < burstCores*burstTick.Seconds()*float64(len(window)) || now.Sub(lastBurst) < burstGap {
+			continue
+		}
+		lastBurst = now
+		keepBurst(dir, now)
+		last, i = processCPU(), 0
+	}
+}
+
+// processCPU is the CPU time the process has used, user and system.
+func processCPU() time.Duration {
+	var ru syscall.Rusage
+	if syscall.Getrusage(syscall.RUSAGE_SELF, &ru) != nil {
+		return 0
+	}
+	return time.Duration(ru.Utime.Nano() + ru.Stime.Nano())
+}
+
+// keepBurst profiles the CPU over burstCPU, and notes how the frames went.
+func keepBurst(dir string, now time.Time) {
+	name := filepath.Join(dir, "burst-"+now.Format("20060102-150405"))
+	f, err := os.Create(name + ".pb.gz")
+	if err != nil {
+		return
+	}
+	before, motion := ggui.ReadFrameStats(), ggui.ReadMotionReport()
+	// Not while another CPU profile runs, as an incident's may.
+	if pprof.StartCPUProfile(f) != nil {
+		f.Close()
+		os.Remove(name + ".pb.gz")
+		return
+	}
+	time.Sleep(burstCPU)
+	pprof.StopCPUProfile()
+	f.Close()
+	after, motion2 := ggui.ReadFrameStats(), ggui.ReadMotionReport()
+	secs := burstCPU.Seconds()
+	var b strings.Builder
+	fmt.Fprintf(&b, "frames %.1f/s, painted in part %.1f/s, skipped %.1f/s, busy %.0f ms/s\n",
+		float64(after.Frames-before.Frames)/secs, float64(after.Partial-before.Partial)/secs,
+		float64(after.Skipped-before.Skipped)/secs, float64(after.Busy-before.Busy)/1e6/secs)
+	b.WriteString("painted whole, by why:")
+	for _, why := range slices.Sorted(maps.Keys(motion2.Refusals)) {
+		if n := motion2.Refusals[why] - motion.Refusals[why]; n > 0 {
+			fmt.Fprintf(&b, " %s=%d", why, n)
+		}
+	}
+	b.WriteString("\nby:")
+	for _, who := range slices.Sorted(maps.Keys(motion2.Dirtiers)) {
+		if n := motion2.Dirtiers[who] - motion.Dirtiers[who]; n > 0 {
+			fmt.Fprintf(&b, "\n  %s=%d", who, n)
+		}
+	}
+	b.WriteString("\n")
+	os.WriteFile(name+".txt", []byte(b.String()), 0o600)
+	prune(dir, "burst-*.pb.gz", burstsKept)
+	prune(dir, "burst-*.txt", burstsKept)
 }
