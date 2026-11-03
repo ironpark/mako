@@ -625,8 +625,12 @@ head as the asker saw it.
 The node answers for the forge of the repository at `root`: the host its
 origin fetches from, else its first remote's, when that is GitHub or a
 Forgejo or Gitea; else GitHub, when a remote pushes there. GitHub is asked
-through the node's GitHub CLI, `gh`, with the login its user gave it, the
-repository named to it as `GH_REPO` when gh would not find it. A Forgejo or
+through its REST and GraphQL APIs, as its CLI, `gh`, asks them, which need
+not be installed: the repository is found as gh finds it (the remote `gh
+repo set-default` chose, else `upstream`, `github` or `origin` before the
+rest), with the login gh keeps (`GH_TOKEN`, `GITHUB_TOKEN`, gh's
+`hosts.yml` or the system's keyring), else the credentials git keeps for
+github.com. A Forgejo or
 Gitea is asked through its API at https on the host, with the credentials
 git keeps for it (`git credential fill`), or none, for what is public.
 `forge_items` and `forge_detail` say which answered in `forge`: `github`,
@@ -636,7 +640,7 @@ git keeps for it (`git credential fill`), or none, for what is public.
 |---|---|---|---|
 | `forge_list` | `ForgeList` | `forge_items` | Pull requests, issues or Actions runs (`kind`: `pr`, `issue`, `run`), `state` `open`, `closed` or `all`; of `branch`, or with `current` of the branch checked out. |
 | `forge_view` | `ForgeView` | `forge_detail` | One in full: its body, comments, reviews and line comments oldest first, a pull request's files and checks, a run's jobs. Pull request 0 is the branch's, `none` when it has none. |
-| `forge_run` | `ForgeRun` | `git_result` | An operation, and what the forge said: gh's output, or the address of what was made. |
+| `forge_run` | `ForgeRun` | `git_result` | An operation, and what the forge said: a run's failed logs, or the address of what was made. |
 
 A run's `number` is its ID. `forge_run` operations (`op`):
 

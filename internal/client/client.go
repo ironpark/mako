@@ -205,7 +205,7 @@ func (c *Client) GitShow(ctx context.Context, req *protocol.GitShow) (*protocol.
 }
 
 // ForgeList lists a repository's pull requests, issues or Actions runs,
-// through the GitHub CLI of the node it is on.
+// through the forge's API, with the login of the node it is on.
 func (c *Client) ForgeList(ctx context.Context, req *protocol.ForgeList) (*protocol.ForgeItems, error) {
 	return request[*protocol.ForgeItems](ctx, c, protocol.TypeForgeList, req)
 }

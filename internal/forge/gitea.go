@@ -537,24 +537,7 @@ func (g *gitea) openPR(ctx context.Context, root, branch, base, title, body stri
 		base = repo.Default
 	}
 	if strings.TrimSpace(title) == "" {
-		// Filled from the branch's commits, as gh's --fill does: one
-		// commit's message, or the branch's name over their subjects.
-		log, err := gitstat.Git(ctx, root, "log", "--format=%s%x1f%b%x1e", "--reverse", "origin/"+base+"..HEAD")
-		if err != nil {
-			log, _ = gitstat.Git(ctx, root, "log", "-1", "--format=%s%x1f%b%x1e")
-		}
-		var subjects []string
-		for c := range strings.SplitSeq(strings.TrimSpace(log), "\x1e") {
-			subject, b, _ := strings.Cut(strings.TrimSpace(c), "\x1f")
-			if subject == "" {
-				continue
-			}
-			subjects = append(subjects, subject)
-			title, body = subject, strings.TrimSpace(b)
-		}
-		if len(subjects) > 1 {
-			title, body = branch, "- "+strings.Join(subjects, "\n- ")
-		}
+		title, body = fill(ctx, root, branch, "origin/"+base)
 	}
 	if draft {
 		title = "WIP: " + title
@@ -599,13 +582,7 @@ func (g *gitea) checkout(ctx context.Context, root string, n int64) (string, err
 	if g.own(pr) && pr.Head.Ref != "" {
 		branch = pr.Head.Ref
 	}
-	if _, err := gitstat.Git(ctx, root, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); err != nil {
-		return gitstat.Run(ctx, &protocol.GitRun{Root: root, Op: protocol.GitOpBranch, Branch: branch, Commit: pr.Head.SHA})
-	}
-	if out, err := gitstat.Run(ctx, &protocol.GitRun{Root: root, Op: protocol.GitOpCheckout, Branch: branch}); err != nil {
-		return out, err
-	}
-	return gitstat.Git(ctx, root, "merge", "--ff-only", pr.Head.SHA)
+	return checkoutAt(ctx, root, branch, pr.Head.SHA)
 }
 
 func (g *gitea) diff(ctx context.Context, _ string, n int64) (string, error) {

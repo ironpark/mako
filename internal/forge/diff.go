@@ -3,6 +3,7 @@ package forge
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -64,8 +65,8 @@ func PullDiff(ctx context.Context, root string, n int64, head, path string) (*pr
 	return nil, fmt.Errorf("pull request #%d does not change %s", n, path)
 }
 
-func (github) diff(ctx context.Context, root string, n int64) (string, error) {
-	out, err := gh(ctx, root, nil, "pr", "diff", strconv.FormatInt(n, 10), "--color", "never")
+func (g *github) diff(ctx context.Context, _ string, n int64) (string, error) {
+	out, err := githubCall(ctx, http.MethodGet, githubAPI+g.path(fmt.Sprintf("/pulls/%d", n)), "application/vnd.github.v3.diff", nil)
 	return string(out), err
 }
 

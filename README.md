@@ -143,9 +143,10 @@ mako allow <node>             # let in a machine that asked
   push, pull, stash or switch branches. Look through the commit graph, and
   search the project's text with ⌘⇧F.
 - **GitHub, Forgejo and Gitea.** The forge the project's origin is on,
-  with the login the node already has there: GitHub through its CLI
-  (`gh`), a Forgejo or Gitea through its API with the credentials git
-  keeps for the host. List the repository's pull requests, issues and
+  with the login the node already has there: GitHub through its API,
+  natively, with the login `gh auth login` left (gh itself need not be
+  installed), `GH_TOKEN`, or git's credentials; a Forgejo or Gitea through
+  its API with the credentials git keeps for the host. List the repository's pull requests, issues and
   Actions runs; read one in full, with its checks, files and diffs, and
   its conversation; comment, review, check out, open a pull request of
   the branch, or on GitHub run a workflow again. Hand an issue, a review

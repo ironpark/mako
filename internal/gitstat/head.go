@@ -67,13 +67,8 @@ func Repo(dir string) string {
 // directory common fetches from, or without an origin its first remote by
 // name; "" without a remote.
 func originURL(common string) string {
-	f, err := os.Open(filepath.Join(common, "config"))
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	cfg, err := config.ReadConfig(f)
-	if err != nil {
+	cfg := configAt(common)
+	if cfg == nil {
 		return ""
 	}
 	return fetchURL(cfg)

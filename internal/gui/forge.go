@@ -277,7 +277,7 @@ func (m *model) forgeRun(root fileRoot, req *protocol.ForgeRun, label string, do
 // Watching the branch ---------------------------------------------------------
 
 // The branch's runs are read this often while one is under way, and
-// otherwise every forgeIdle; a project gh cannot read is asked again after
+// otherwise every forgeIdle; a project its forge will not answer for is asked again after
 // forgeBackoff.
 const (
 	forgeTick    = 15 * time.Second

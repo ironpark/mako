@@ -2,8 +2,9 @@
 // this node, GitHub, or a Forgejo or Gitea, with the login the node's user
 // already has there: the pull requests, issues and Actions runs, a pull
 // request's change, and the comments, reviews and runs a front-end asks
-// for. GitHub is reached through its CLI, gh; a Forgejo or Gitea through
-// its API, with the credentials git keeps for its host.
+// for. GitHub is reached through its API, with the login gh keeps; a
+// Forgejo or Gitea through its API, with the credentials git keeps for its
+// host.
 package forge
 
 import (
@@ -39,16 +40,18 @@ func of(ctx context.Context, root string) (backend, error) {
 		owner, repo, ok := ownerRepo(path)
 		switch {
 		case !ok:
-		case host == "github.com":
-			return github{}, nil
+		case host == githubHost:
+			if g := gitHubOf(root); g != nil {
+				return g, nil
+			}
 		default:
 			if flavor := giteaAt(ctx, host); flavor != "" {
 				return &gitea{flavor: flavor, host: host, owner: owner, repo: repo, url: u}, nil
 			}
 		}
 	}
-	if repoOf(root) != "" {
-		return github{}, nil
+	if g := gitHubOf(root); g != nil {
+		return g, nil
 	}
 	return nil, errors.New("this repository is not on a forge mako knows: GitHub, Forgejo or Gitea")
 }
