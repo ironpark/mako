@@ -238,4 +238,7 @@
     <string name="group_project">Project</string>
     <string name="group_time">None, latest first</string>
     <string name="group_ended">Ended</string>
+    <string name="draft">Draft:</string>
+    <string name="expanded">Expanded</string>
+    <string name="collapsed">Collapsed</string>
 </resources>

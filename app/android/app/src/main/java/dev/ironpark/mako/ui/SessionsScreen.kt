@@ -47,6 +47,16 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.ui.draw.rotate
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.core.content.edit
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -302,6 +312,14 @@ private fun SessionList(
     }
     // A row names its computer where the group does not and there is more than one.
     val manyNodes = remember(sessions) { sessions.map { it.nodeId }.distinct().size > 1 }
+    // Groups folded away stay so, by their keys, until opened again.
+    val prefs = LocalContext.current.getSharedPreferences("home", android.content.Context.MODE_PRIVATE)
+    var folded by remember { mutableStateOf(prefs.getStringSet("folded", null).orEmpty().toSet()) }
+    fun fold(key: String) {
+        folded = if (key in folded) folded - key else folded + key
+        prefs.edit { putStringSet("folded", folded) }
+    }
+    val drafts = rememberDrafts()
 
     LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 96.dp), modifier = Modifier.fillMaxSize()) {
         item(key = "filters") {
@@ -323,8 +341,11 @@ private fun SessionList(
             }
         }
         if (filter == Filter.All && waiting.isNotEmpty()) {
-            item(key = "waiting") { Heading(stringResource(R.string.needs_you), waiting.size) }
-            items(waiting, key = { "w:" + it.id }) { s -> WaitingCard(mesh, nodes, s, now, onOpen = { onOpen(s) }) }
+            val open = "waiting" !in folded
+            item(key = "waiting") { Heading(stringResource(R.string.needs_you), waiting.size, open, Modifier.animateItem()) { fold("waiting") } }
+            if (open) items(waiting, key = { "w:" + it.id }) { s ->
+                Box(Modifier.animateItem()) { WaitingCard(mesh, nodes, s, now, onOpen = { onOpen(s) }) }
+            }
         }
         if (shown.isEmpty()) {
             item(key = "empty") {
@@ -341,16 +362,19 @@ private fun SessionList(
         }
         for (group in groups) {
             val list = group.sessions
-            item(key = group.key) { GroupHeader(group, grouping, nodes) }
+            // By time there is one group and no heading to fold it by.
+            val open = grouping == Grouping.Time || group.key !in folded
+            item(key = group.key) { GroupHeader(group, grouping, nodes, open, Modifier.animateItem()) { fold(group.key) } }
             // A group's sessions are one card, its rows joined by hairlines.
-            itemsIndexed(list, key = { _, s -> group.key + "/" + s.id }) { i, s ->
+            if (open) itemsIndexed(list, key = { _, s -> group.key + "/" + s.id }) { i, s ->
                 val shape = groupShape(i, list.size)
-                Column(Modifier.padding(horizontal = 12.dp).clip(shape).background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+                Column(Modifier.animateItem().padding(horizontal = 12.dp).clip(shape).background(MaterialTheme.colorScheme.surfaceContainerLow)) {
                     if (i > 0) HorizontalDivider(Modifier.padding(start = 70.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     SessionRow(
                         mesh, nodes, s, now, onClick = { onOpen(s) },
                         node = if (grouping != Grouping.Computer && manyNodes) mesh.nodeName(s.nodeId) else null,
                         showProject = grouping != Grouping.Project,
+                        draft = drafts[s.nodeId, s.id],
                     )
                 }
             }
@@ -359,16 +383,32 @@ private fun SessionList(
 }
 
 @Composable
-private fun Heading(text: String, count: Int) {
+private fun Heading(text: String, count: Int, open: Boolean, modifier: Modifier = Modifier, onToggle: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 6.dp),
+        modifier.fillMaxWidth().foldable(open, onToggle).padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Dot(StatusColors.Approval, size = 8.dp)
         Spacer(Modifier.width(8.dp))
         Text(text, style = MaterialTheme.typography.titleSmall, color = StatusColors.Approval, modifier = Modifier.weight(1f))
         Text("$count", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FoldChevron(open)
     }
+}
+
+/** A heading that folds what is under it away when tapped, and says whether it has. */
+@Composable
+private fun Modifier.foldable(open: Boolean, onToggle: () -> Unit): Modifier {
+    val state = stringResource(if (open) R.string.expanded else R.string.collapsed)
+    return semantics { stateDescription = state }.clickable(role = Role.Button, onClick = onToggle)
+}
+
+/** The chevron of a heading, down while what it heads shows and turned aside while folded. */
+@Composable
+private fun FoldChevron(open: Boolean) {
+    val turn by animateFloatAsState(if (open) 0f else -90f, label = "fold")
+    Spacer(Modifier.width(4.dp))
+    Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(20.dp).rotate(turn), tint = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 /**
@@ -379,7 +419,7 @@ private fun Heading(text: String, count: Int) {
 @Composable
 private fun SessionRow(
     mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long, onClick: () -> Unit,
-    node: String? = null, showProject: Boolean = true,
+    node: String? = null, showProject: Boolean = true, draft: String = "",
 ) {
     var menu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
@@ -426,7 +466,18 @@ private fun SessionRow(
                     s.agent.takeUnless { s.label().equals(it, ignoreCase = true) }, node,
                     baseName(s.project).takeIf { showProject }, s.branch,
                 )
-                if (where.isNotEmpty()) Text(
+                // A draft not yet sent shows in its stead, as messengers have it.
+                val draftLabel = stringResource(R.string.draft)
+                val error = MaterialTheme.colorScheme.error
+                if (draft.isNotBlank()) Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = error, fontWeight = FontWeight.Medium)) { append(draftLabel) }
+                        append(" ")
+                        append(draft.trim().replace(Regex("\\s+"), " "))
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                ) else if (where.isNotEmpty()) Text(
                     where, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
@@ -636,13 +687,16 @@ private fun Loading(what: String) {
 
 /** GroupHeader names a group of the list: its computer, its project or its status. */
 @Composable
-private fun GroupHeader(group: SessionGroup, by: Grouping, nodes: List<Node>) {
+private fun GroupHeader(group: SessionGroup, by: Grouping, nodes: List<Node>, open: Boolean, modifier: Modifier = Modifier, onToggle: () -> Unit) {
     val colors = MaterialTheme.colorScheme
+    if (by == Grouping.Time) {
+        Spacer(modifier.height(8.dp))
+        return
+    }
     Row(
-        Modifier.fillMaxWidth().padding(start = 28.dp, end = 28.dp, top = if (by == Grouping.Time) 8.dp else 20.dp, bottom = 8.dp),
+        modifier.fillMaxWidth().foldable(open, onToggle).padding(start = 28.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (by == Grouping.Time) return@Row
         val status = if (by == Grouping.Status) StatusGroup.valueOf(group.label) else null
         when (by) {
             Grouping.Computer -> Icon(osIcon(nodes.firstOrNull { it.id == group.sessions.first().nodeId }?.os.orEmpty()), null,
@@ -657,6 +711,7 @@ private fun GroupHeader(group: SessionGroup, by: Grouping, nodes: List<Node>) {
             modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         Text("${group.sessions.size}", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+        FoldChevron(open)
     }
 }
 

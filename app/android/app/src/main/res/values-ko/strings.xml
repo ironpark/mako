@@ -233,4 +233,7 @@
     <string name="group_project">프로젝트별</string>
     <string name="group_time">묶지 않음 (최근순)</string>
     <string name="group_ended">종료됨</string>
+    <string name="draft">임시 저장:</string>
+    <string name="expanded">펼침</string>
+    <string name="collapsed">접힘</string>
 </resources>

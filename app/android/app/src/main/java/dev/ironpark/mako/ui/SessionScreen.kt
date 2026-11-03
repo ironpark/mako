@@ -112,7 +112,9 @@ fun SessionScreen(
     // An older node takes typing only on an attach, which the composer then
     // needs as well.
     val canSend = mesh.canSend(node)
-    var draft by rememberSaveable(node, id) { mutableStateOf("") }
+    // What was typed and not sent outlasts this screen and the app.
+    val drafts = rememberDrafts()
+    val draft = drafts[node, id]
     var question by rememberSaveable(node, id) { mutableStateOf(false) }
     var request by remember(node, id) { mutableStateOf("") }
     val attached = pager.currentPage == terminalPage || pager.targetPage == terminalPage || question || !canSend
@@ -229,7 +231,7 @@ fun SessionScreen(
                 }
                 if (pageTab == 0 && session != null) {
                     Composer(
-                        mesh = mesh, session = session, text = draft, onText = { draft = it },
+                        mesh = mesh, session = session, text = draft, onText = { drafts[node, id] = it },
                         onSend = { text -> if (canSend) mesh.send(session, text, keys = "\r") else term.submit(text) },
                         onInterrupt = { if (canSend) act { mesh.send(session, keys = "\u001b") } else term.send("\u001b") },
                         onOpen = { path -> onFile(ChatLink.File(path)) },
