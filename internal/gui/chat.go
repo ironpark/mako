@@ -530,7 +530,7 @@ func chatFeed(m *model, id string, state *chatState, turns ggui.Readable[[]chatT
 			return w
 		}
 		return find.mark(row.Item.Key, w)
-	}).Gap(chatGap).Stretch().EstimatedExtent(chatTurnEstimate)
+	}).Gap(chatGap).Stretch().EstimatedExtent(chatTurnEstimate).Retain(chatRetain)
 	// A drag selects through the turns in view, from one message into the
 	// next, and copies them as they read.
 	area := ggui.SelectionArea(ggui.Column(head, list).Stretch())
@@ -674,10 +674,14 @@ type chatTurnItem struct {
 }
 
 // chatGap is the room between the feed's turns, and chatTurnEstimate how
-// tall one is taken to be until it is laid out.
+// tall one is taken to be until it is laid out. chatRetain is how many
+// turns out of sight stay built: a long conversation scrolled through
+// would otherwise keep every turn it ever showed, its text laid out and
+// its glyphs, for as long as it is open.
 const (
 	chatGap          = 14
 	chatTurnEstimate = 120
+	chatRetain       = 64
 )
 
 // chatTurnRow draws a turn: the user's on the right, the agent's prose as
