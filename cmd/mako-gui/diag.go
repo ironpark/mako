@@ -373,7 +373,7 @@ func dirtiersLine(by map[string]int64, n int) string {
 // most once each burstGap, and not in the first burstAfter.
 const (
 	burstTick  = 250 * time.Millisecond
-	burstCores = 1.0
+	burstCores = 0.35
 	burstCPU   = 3 * time.Second
 	burstGap   = 3 * time.Minute
 	burstAfter = time.Minute // past the start, which keeps the CPU busy by itself
