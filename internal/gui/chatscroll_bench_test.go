@@ -82,4 +82,4 @@ func BenchmarkChatScroll(b *testing.B) {
 
 // scrollStep is how far a frame of BenchmarkChatScroll scrolls, as a
 // flick with momentum does.
-const scrollStep = 60
+const scrollStep = 3
