@@ -172,7 +172,9 @@ func TestCommandClickFollowsALink(t *testing.T) {
 	p := ggui.NewProbe(view, ggui.Sz(800, 400))
 	defer func() { p.Close(); close(link.in); conn.close() }()
 	link.output(t, "\x1b[?1000h\x1b[?1006hsaved out/plot.png")
-	waitFor(t, func() bool { p.Frame(); return strings.Contains(screenText(conn), "plot.png") })
+	// Links are found on the screen as last painted, which the output may
+	// reach a frame after the terminal does.
+	waitFor(t, func() bool { p.Frame(); _, ok := conn.linkAt(10, 0); return ok })
 
 	follow := ggui.Mods{Meta: true}
 	if runtime.GOOS != "darwin" {

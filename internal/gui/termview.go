@@ -191,8 +191,10 @@ func (t *terminalView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	// A cell in device pixels, as a program sizes the images it shows.
 	t.conn.resize(uint16(t.cols), uint16(t.rows), uint16(math.Round(t.cellW*dst.Scale())), uint16(math.Round(t.cellH*dst.Scale())))
 
+	// Only a paint known to fall outside what is drawn reuses the last
+	// copy; one into no image, as a test's probe paints, may not know.
 	f := t.shown
-	if !t.shownOK || dst.Shows(r) {
+	if !t.shownOK || dst.Image == nil || dst.Shows(r) {
 		var err error
 		f, err = t.conn.frame()
 		if err != nil && f.cols == 0 {
