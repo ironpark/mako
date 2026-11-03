@@ -41,10 +41,13 @@ type chatPages struct {
 }
 
 type chatState struct {
-	result  *ggui.StateValue[chatResult]
-	draft   *ggui.StateValue[string]
-	tools   *ggui.StateValue[map[string]bool] // open tool rows, by message key
-	loading bool
+	result *ggui.StateValue[chatResult]
+	draft  *ggui.StateValue[string]
+	// attached are the files the draft goes with, by their paths on the
+	// session's node, shown over its text and sent after it.
+	attached *ggui.StateValue[[]string]
+	tools    *ggui.StateValue[map[string]bool] // open tool rows, by message key
+	loading  bool
 	// whole asks the next read for the whole chat, a patch having missed
 	// what was on show.
 	whole bool
@@ -78,12 +81,13 @@ func (m *model) chatState(id string) *chatState {
 
 func newChatState() *chatState {
 	return &chatState{
-		result: ggui.State(chatResult{}).WithEqual(deepEqual),
-		older:  ggui.State(chatPages{}).WithEqual(deepEqual),
-		draft:  ggui.State(""),
-		tools:  ggui.State(map[string]bool{}).WithEqual(maps.Equal),
-		menu:   newCommandMenu(),
-		agent:  ggui.State(""),
+		result:   ggui.State(chatResult{}).WithEqual(deepEqual),
+		older:    ggui.State(chatPages{}).WithEqual(deepEqual),
+		draft:    ggui.State(""),
+		attached: ggui.State[[]string](nil).WithEqual(slices.Equal[[]string]),
+		tools:    ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		menu:     newCommandMenu(),
+		agent:    ggui.State(""),
 		pending: ggui.State[[]pendingMessage](nil).WithEqual(func(a, b []pendingMessage) bool {
 			return slices.Equal(a, b)
 		}),

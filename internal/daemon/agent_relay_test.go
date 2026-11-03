@@ -17,7 +17,7 @@ import (
 // given the MCP tools does, in a project of the ID project there.
 func messagingSession(t *testing.T, d *Daemon, id, project string) (*session.Session, *agentPeer) {
 	t.Helper()
-	addSession(t, d, id)
+	addSessionOf(t, d, id, "claude")
 	s, _ := d.sessions.get(id)
 	_, stop := d.projectAgents.server(t.Context(), "", id, "")
 	t.Cleanup(stop)

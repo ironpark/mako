@@ -10,6 +10,8 @@ import (
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 
+	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -22,18 +24,17 @@ import (
 // composerRadius rounds the composer's box.
 const composerRadius = 20
 
-// composerBar is the bar of session id's composer. insert types the paths
-// of files attached.
-func composerBar(m *model, id string, state *chatState, disabled ggui.Readable[bool], insert func([]string)) ggui.Widget {
-	attach := ui.Tooltip(ui.ButtonOf(icon("plus").Size(17).Color(tokFg), func() { m.attachFiles(id, insert) }).
+// composerBar is the bar of session id's composer.
+func composerBar(m *model, id string, state *chatState, disabled ggui.Readable[bool]) ggui.Widget {
+	attach := ui.Tooltip(ui.ButtonOf(icon("plus").Size(17).Color(tokFg), func() { m.attachFiles(id) }).
 		Ghost().Pad(5).Radius(15).Name(T("Attach files")).BindDisabled(disabled), T("Attach files"))
 	usage := ggui.Map(state.result, func(v chatResult) *protocol.Usage { return v.Chat.GetUsage() }).WithEqual(protocol.Same)
 	mode := ggui.View(usage, func(u *protocol.Usage) ggui.Widget { return permissionChip(u.GetPermissionMode()) })
 	model := ggui.View(usage, func(u *protocol.Usage) ggui.Widget { return modelChip(u.GetModel(), u.GetEffort()) })
-	// The agent at work on a turn, with nothing typed, can be stopped.
+	// The agent at work on a turn, with nothing to send, can be stopped.
 	stoppable := ggui.Derived(func() bool {
 		s, ok := sessionIn(m.Sessions.Get(), id)
-		return ok && s.GetStatus() == protocol.AgentWorking && strings.TrimSpace(state.draft.Get()) == ""
+		return ok && s.GetStatus() == protocol.AgentWorking && !state.sendable()
 	})
 	button := ggui.View(stoppable, func(stop bool) ggui.Widget {
 		if stop {
@@ -50,25 +51,26 @@ func roundButton(glyph, name string, fn func(), disabled ggui.Readable[bool]) gg
 		Pad(7).Radius(16).Name(name).BindDisabled(disabled)
 }
 
-// attachFiles asks for files on this machine and types their paths into
-// session id's composer, sending them over first to a session on another
-// node.
-func (m *model) attachFiles(id string, insert func([]string)) {
+// attachFiles asks for files on this machine and attaches them to session
+// id's draft, sending them over first to a session on another node.
+func (m *model) attachFiles(id string) {
 	dialogs := ggui.UseHost().Dialogs()
 	ggui.Async(func() ([]string, error) {
 		return dialogs.OpenFiles(ggruntime.FileDialog{Title: T("Attach files")})
 	}, func(paths []string, err error) {
 		if err == nil && len(paths) > 0 {
-			m.handOver(id, paths, insert)
+			m.handOver(id, paths, func(paths []string) { m.attachTo(id, paths) })
 		}
 	})
 }
 
-// stopTurn interrupts the turn session id's agent is on, as Escape does in
-// its terminal.
+// stopTurn interrupts the turn session id's agent is on, as its driver
+// says to in its terminal.
 func (m *model) stopTurn(id string) {
+	s, _ := m.session(id)
 	if conn := m.conns[id]; conn != nil {
-		conn.send([]byte{0x1b})
+		known, _ := agents.Lookup(s.GetAgent())
+		conn.send(agent.Interrupt(known.Driver))
 	}
 }
 
@@ -79,7 +81,7 @@ func permissionChip(mode string) ggui.Widget {
 	if mode == "" {
 		return ggui.Box()
 	}
-	glyph, label, tip := "lock", modeLabel(mode), T("What the agent may do without asking. Shift+Tab in its terminal changes it.")
+	glyph, label, tip := "lock", modeLabel(mode), T("What the agent may do without asking, as its terminal sets it.")
 	var c color.Color = tokMuted
 	switch mode {
 	case "bypassPermissions":
@@ -109,6 +111,8 @@ func modeLabel(mode string) string {
 		return T("Ask first")
 	case "dontAsk":
 		return T("Don't ask")
+	case "readOnly":
+		return T("Read only")
 	}
 	return mode
 }
@@ -119,10 +123,7 @@ func modelChip(model, effort string) ggui.Widget {
 	if model == "" {
 		return ggui.Box()
 	}
-	parts := []ggui.Widget{
-		icon("sparkles").Size(14).Color(tokFg),
-		ggui.Text(modelName(model)).Size(13).NoWrap(),
-	}
+	parts := []ggui.Widget{ggui.Text(modelName(model)).Size(13).NoWrap()}
 	if effort != "" {
 		parts = append(parts, ggui.Text(capitalized(effort)).Size(13).Color(tokMuted).NoWrap())
 	}

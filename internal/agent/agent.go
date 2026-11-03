@@ -162,6 +162,21 @@ type LogStatus interface {
 	StatusEvent(line []byte) (protocol.AgentStatus, time.Time)
 }
 
+// Interrupter is an agent whose turn is stopped from its terminal by
+// other than Escape, which stops most: Interrupt is what is typed there to
+// stop the turn it is on, as a person would at its prompt.
+type Interrupter interface{ Interrupt() []byte }
+
+// Interrupt is what stops the turn the agent d drives is on, typed into
+// its terminal: Escape, unless its driver says otherwise; Escape too for
+// an agent no driver knows.
+func Interrupt(d Driver) []byte {
+	if i, ok := d.(Interrupter); ok {
+		return i.Interrupt()
+	}
+	return []byte{0x1b}
+}
+
 // BackgroundTasks is a driver whose log records the commands its agent
 // runs in the background: the call that asks for one, the task it became,
 // and how it ended.

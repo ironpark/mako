@@ -2,6 +2,7 @@ package codex
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -158,6 +159,10 @@ func (*Agent) NewUsage() agent.Usage { return usage{} }
 type usage struct{}
 
 func (usage) Count(line []byte, total *protocol.Usage) {
+	if bytes.Contains(line, []byte(`"type":"turn_context"`)) {
+		turnContext(line, total)
+		return
+	}
 	if !bytes.Contains(line, []byte(`"token_count"`)) {
 		return
 	}
@@ -199,5 +204,52 @@ func (usage) Count(line []byte, total *protocol.Usage) {
 				total.SetLimit(&protocol.RateLimit{Minutes: w.Minutes, Used: w.Used, Resets: w.Resets})
 			}
 		}
+	}
+}
+
+// turnContext reads what a turn ran with: its model, at its effort, and
+// what it may do unasked, said as Claude Code's permission modes, which
+// the GUI names: plan mode; no sandbox and no asking, full access; edits
+// in the workspace; reading alone, a mode of Codex's own; else asking
+// first.
+func turnContext(line []byte, total *protocol.Usage) {
+	var r struct {
+		Type    string `json:"type"`
+		Payload struct {
+			Model    string `json:"model"`
+			Effort   string `json:"effort"`
+			Approval string `json:"approval_policy"`
+			Sandbox  struct {
+				Type string `json:"type"`
+			} `json:"sandbox_policy"`
+			Mode struct {
+				Mode     string `json:"mode"`
+				Settings struct {
+					Effort string `json:"reasoning_effort"`
+				} `json:"settings"`
+			} `json:"collaboration_mode"`
+		} `json:"payload"`
+	}
+	if json.Unmarshal(line, &r) != nil || r.Type != "turn_context" {
+		return
+	}
+	p := r.Payload
+	if p.Model != "" {
+		total.Model = p.Model
+	}
+	if effort := cmp.Or(p.Effort, p.Mode.Settings.Effort); effort != "" {
+		total.Effort = effort
+	}
+	switch {
+	case p.Mode.Mode == "plan":
+		total.PermissionMode = "plan"
+	case p.Sandbox.Type == "danger-full-access" && p.Approval == "never":
+		total.PermissionMode = "bypassPermissions"
+	case p.Sandbox.Type == "workspace-write":
+		total.PermissionMode = "acceptEdits"
+	case p.Sandbox.Type == "read-only":
+		total.PermissionMode = "readOnly" // Codex's own, which nothing of Claude's is
+	case p.Sandbox.Type != "":
+		total.PermissionMode = "default"
 	}
 }

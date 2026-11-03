@@ -13,7 +13,7 @@ import (
 
 // Slash commands: a composer's draft that begins with a slash, and has no
 // space yet, lists the commands of the session's agent that it begins, or
-// holds, for ↑ and ↓ to choose from and Enter to take. The commands are
+// holds, for ↑ and ↓ to choose from, Enter to take and Tab to complete. The commands are
 // those the session's node finds for its agent, read when a draft first
 // begins with a slash, and again once they are a while old.
 
@@ -107,11 +107,12 @@ func (m *model) readCommands(id string, state *chatState) {
 }
 
 // commandKey is the composer's keys while its menu lists commands: ↑ and
-// ↓ choose, Enter takes the one chosen and Escape closes the menu. It
-// reports whether it took the key.
+// ↓ choose, Enter takes the one chosen, Tab completes the draft to it to
+// write on, and Escape closes the menu. It reports whether it took the
+// key.
 func (m *model) commandKey(id string, state *chatState, ev ggui.KeyEvent) bool {
-	matches := ggui.Untrack(func() []*protocol.Command { return m.commandMatches(state) })
-	if len(matches) == 0 || ev.Mods.Shift || ev.Mods.Alt || ev.Mods.Ctrl || ev.Mods.Meta {
+	matches := m.commandMenuKeys(state, ev)
+	if len(matches) == 0 {
 		return false
 	}
 	pick := min(ggui.Peek(state.menu.pick), len(matches)-1)
@@ -122,12 +123,29 @@ func (m *model) commandKey(id string, state *chatState, ev ggui.KeyEvent) bool {
 		state.menu.pick.Set((pick + 1) % len(matches))
 	case ggui.KeyEnter, ggui.KeyNumpadEnter:
 		m.takeCommand(id, matches[pick])
+	case ggui.KeyTab:
+		m.setComposerDraft(id, "/"+matches[pick].GetName()+" ")
 	case ggui.KeyEscape:
 		state.menu.closed.Set(ggui.Peek(state.draft))
 	default:
 		return false
 	}
 	return true
+}
+
+// commandMenuKeys are the commands the menu lists while it takes ev, a
+// key pressed with no modifier; none when it does not.
+func (m *model) commandMenuKeys(state *chatState, ev ggui.KeyEvent) []*protocol.Command {
+	if ev.Mods.Shift || ev.Mods.Alt || ev.Mods.Ctrl || ev.Mods.Meta {
+		return nil
+	}
+	return ggui.Untrack(func() []*protocol.Command { return m.commandMatches(state) })
+}
+
+// commandClaims reports whether the composer keeps ev from the window
+// while its menu lists commands: Tab, which would move the focus.
+func (m *model) commandClaims(state *chatState, ev ggui.KeyEvent) bool {
+	return ev.Key == ggui.KeyTab && len(m.commandMenuKeys(state, ev)) > 0
 }
 
 // takeCommand puts c in the composer: sent at once when it takes no
@@ -182,7 +200,8 @@ func commandRow(m *model, id string, c *protocol.Command, chosen bool) ggui.Widg
 	}
 	row := ggui.Box(ggui.Row(parts...).Gap(12)).Pad(6, 10).Radius(6)
 	if chosen {
-		row = row.Fill(tokSurface2)
+		// As plain as a selected row in the sidebar, and as plain to see.
+		row = row.Fill(tokSidebarSel).Border(1, tokBorderAccent)
 	}
 	return ggui.Tap(row, func() { m.takeCommand(id, c) })
 }

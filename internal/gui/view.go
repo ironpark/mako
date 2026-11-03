@@ -501,10 +501,50 @@ func sessionSection(m *model, by string, g sessionGroup, folded bool, selected s
 			rows = append(rows, indented(ggui.Box(muted(ggui.Text(T("No sessions")).Size(11.5))).Pad(3, 4), rowDepth))
 		}
 	}
+	row := func(s *protocol.SessionInfo, depth int) ggui.Widget {
+		return sessionRow(m, s, s.GetId() == selected, titles[s.GetId()], sessionWhere(by, g, s, nodes), depth)
+	}
+	if by != groupProject || !g.multiRoot() {
+		for _, s := range g.Sessions {
+			rows = append(rows, row(s, rowDepth))
+		}
+		return ggui.Column(rows...).Gap(2).Stretch()
+	}
+	// A project of several folders lists its sessions under the folder
+	// each is in, in the project's order, so which is whose shows at a
+	// glance; any in none of them follow.
+	byRoot := make([][]*protocol.SessionInfo, len(g.Def.Roots))
+	var loose []*protocol.SessionInfo
 	for _, s := range g.Sessions {
-		rows = append(rows, sessionRow(m, s, s.GetId() == selected, titles[s.GetId()], sessionWhere(by, g, s, nodes), rowDepth))
+		if i, ok := g.RootOf[s.GetId()]; ok && i < len(byRoot) {
+			byRoot[i] = append(byRoot[i], s)
+		} else {
+			loose = append(loose, s)
+		}
+	}
+	for i, in := range byRoot {
+		if len(in) == 0 {
+			continue
+		}
+		rows = append(rows, indented(rootHeading(g.Def.Roots[i].label(), len(in)), rowDepth))
+		for _, s := range in {
+			rows = append(rows, row(s, rowDepth+1))
+		}
+	}
+	for _, s := range loose {
+		rows = append(rows, row(s, rowDepth))
 	}
 	return ggui.Column(rows...).Gap(2).Stretch()
+}
+
+// rootHeading names one folder of a project of several, over the sessions
+// in it, quieter than the project's own heading.
+func rootHeading(label string, sessions int) ggui.Widget {
+	return ggui.Box(ggui.Row(
+		icon("folder").Size(13).Color(tokExtraMuted),
+		ggui.Expanded(ggui.Align(ggui.Text(label).Size(12).Weight(ggui.WeightMedium).Color(tokMuted).NoWrap().Ellipsis()).Left()),
+		ggui.Text(fmt.Sprint(sessions)).Size(11).Color(tokExtraMuted).NoWrap(),
+	).Gap(6).Align(ggui.AlignCenter)).Pad(4, 8, 2, 6)
 }
 
 // sessionWhere is the line under a session's title in section g: where it
@@ -513,19 +553,10 @@ func sessionWhere(by string, g sessionGroup, s *protocol.SessionInfo, nodes []*p
 	var where []string
 	switch by {
 	case groupProject:
-		// A project of several folders says which a session is in; its
-		// node, when the project is on more than one.
+		// A project of several folders lists a session under the folder
+		// it is in, which its line need not say again.
 		r := g.rootOf(s)
-		if g.multiRoot() {
-			if r != nil {
-				where = append(where, r.label())
-			}
-			if spansNodes(g.Roots) {
-				where = append(where, nodeName(nodes, s.GetNodeId()))
-			}
-		} else {
-			where = append(where, nodeName(nodes, s.GetNodeId()))
-		}
+		where = append(where, nodeName(nodes, s.GetNodeId()))
 		// A subfolder by its path in its clone, or in the project's folder
 		// it is in; a worktree elsewhere by its own name.
 		root := projectOf(s)
@@ -833,12 +864,9 @@ func emptyState(m *model) ggui.Widget {
 func composer(m *model, id string, state *chatState) ggui.Widget {
 	draft := state.draft
 	disabled := ggui.Derived(func() bool { return !slices.Contains(m.Attached.Get(), id) })
-	// Files dropped or an image pasted go in by their paths.
-	insert := func(paths []string) {
-		for _, p := range paths {
-			m.insertPath(id, p)
-		}
-	}
+	// Files dropped, attached or an image pasted go with the message, shown
+	// over its text, and are sent by their paths after it.
+	insert := func(paths []string) { m.attachTo(id, paths) }
 	// Enter sends at once; Shift+Enter breaks the line, and the box grows
 	// with the lines to a few before it scrolls. ↑ and ↓ over an empty box
 	// bring back what was sent. A draft that begins with a slash lists the
@@ -847,6 +875,8 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 		Placeholder(T("Message the agent. Enter sends, Shift+Enter adds a line")).
 		Name(T("Message")).
 		BindDisabled(disabled).
+		// Tab completes a command the menu lists, rather than moving on.
+		ClaimKeys(func(ev ggui.KeyEvent) bool { return m.commandClaims(state, ev) }).
 		OnKey(func(ev ggui.KeyEvent) bool {
 			if m.commandKey(id, state, ev) {
 				return true
@@ -864,13 +894,13 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 			return false
 		}).
 		OnPasteImage(func(png []byte) bool { m.pasteImage(id, png, insert); return true })
-	// Files dropped on the box, from the desktop or the Files tab, are
-	// inserted as paths.
+	// Files dropped on the box, from the desktop or the Files tab, go
+	// with the message.
 	over := ggui.State(false)
 	content := ggui.Column(
-		draftImages(m, id, state),
+		attachmentStrip(m, id, state),
 		ggui.Box(inlineField(field)).MaxHeight(composerMaxHeight),
-		composerBar(m, id, state, disabled, insert),
+		composerBar(m, id, state, disabled),
 	).Gap(6).Stretch()
 	box := ggui.View(over, func(o bool) ggui.Widget {
 		var border color.Color = tokBorder
@@ -884,7 +914,7 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 	})
 	files := ggui.DropZone(desktop, func(d ggui.Dropped[pathDrag]) {
 		over.Set(false)
-		m.insertPath(id, d.Value.Path)
+		m.attachTo(id, []string{d.Value.Path})
 	}).OnHover(over.Set)
 	// In the transcript's lane, as wide as its text.
 	return &lane{child: ggui.Box(ggui.Column(commandList(m, id, state), files).Stretch()).Pad(10, 0, 14, 0)}

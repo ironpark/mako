@@ -191,7 +191,7 @@ func TestOldProjectKeysMove(t *testing.T) {
 }
 
 // The sidebar draws a project of two folders under its name, its sessions
-// marked with their folders, and its menu.
+// under the folders they are in, and its menu.
 func TestSidebarShowsAProject(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
@@ -209,13 +209,19 @@ func TestSidebarShowsAProject(t *testing.T) {
 			t.Fatalf("the sidebar has no %q:\n%s", label, page)
 		}
 	}
+	// Each folder heads its sessions, in the project's order.
+	server, okServer := p.Semantics().Find(ggui.RoleText, "server")
+	web, okWeb := p.Semantics().Find(ggui.RoleText, "web")
+	if !okServer || !okWeb || server.Rect.Origin.Y >= web.Rect.Origin.Y {
+		t.Fatalf("no folder headings in order:\n%s", page)
+	}
 	g := groupProjects(ggui.Peek(m.Sessions), nil, nil, m.projectsNow(), nil)[0]
-	if got := sessionWhere(groupProject, g, ggui.Peek(m.Sessions)[1], nil); got != "web · ui000000" {
+	if got := sessionWhere(groupProject, g, ggui.Peek(m.Sessions)[1], nil); got != "mac · ui000000" {
 		t.Fatalf("a web session says %q", got)
 	}
 	sub := &protocol.SessionInfo{Id: "src00000", NodeId: "mac", Project: "/w/web/src"}
 	g.RootOf[sub.GetId()] = 1
-	if got := sessionWhere(groupProject, g, sub, nil); got != "web · src · src00000" {
+	if got := sessionWhere(groupProject, g, sub, nil); got != "mac · src · src00000" {
 		t.Fatalf("a session in a web subfolder says %q", got)
 	}
 }

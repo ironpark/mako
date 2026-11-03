@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -107,7 +108,7 @@ func TestProjectMonitorRoutesToTheSessionsNode(t *testing.T) {
 	b := meshDaemon(t, "monitor-b", p2pAddr(a))
 	letIn(t, b, a)
 	letIn(t, a, b)
-	addSession(t, b, "remote-agent")
+	addSessionOf(t, b, "remote-agent", "claude")
 	s, _ := b.sessions.get("remote-agent")
 	project := s.Info().GetProject()
 	if _, err := b.projectAgents.messages.send("other", "remote-agent", "remote message", b.projectScope(s.Info())); err != nil {
@@ -124,5 +125,39 @@ func TestProjectMonitorRoutesToTheSessionsNode(t *testing.T) {
 	})
 	if got.GetAgents()[0].GetSession().GetId() != "remote-agent" || len(got.GetMessages()) != 1 || got.GetMessages()[0].GetText() != "remote message" {
 		t.Fatalf("remote monitor: %v", got)
+	}
+}
+
+// A shell in the project's folder is no agent of the project: neither the
+// monitor nor list_agents lists it, nor does its node share it as one.
+func TestAProjectsAgentsLeaveOutItsShells(t *testing.T) {
+	d, parent := projectMCPDaemon(t)
+	project := parent.Info().GetProject()
+	shell, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: agentspec.ShellName, Project: project})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.readProjectAgents(&protocol.ReadProjectAgents{Path: project})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range got.GetAgents() {
+		if a.GetSession().GetId() == shell.ID() {
+			t.Fatal("the monitor lists a shell")
+		}
+	}
+	list, err := d.listProjectAgents(d.projectAgents.peer(parent.ID()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range list.Agents {
+		if a.ID == shell.ID() {
+			t.Fatal("list_agents lists a shell")
+		}
+	}
+	info := shell.Info()
+	d.shareScopes([]*protocol.SessionInfo{info})
+	if info.GetAgentScope() != "" || info.GetAgentMessaging() {
+		t.Fatalf("a shell is shared as an agent: %v", info)
 	}
 }

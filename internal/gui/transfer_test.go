@@ -14,6 +14,7 @@ import (
 
 	"github.com/ironpark/ggui"
 
+	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 )
 
@@ -25,6 +26,8 @@ func daemonApp(t *testing.T) (*model, *ggui.Probe) {
 	cfg := config.Default()
 	cfg.P2P.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
+	// An agent no driver knows, for a session that is not the shell.
+	cfg.Agents = map[string]agentspec.Agent{"sleeper": {Command: []string{"sh", "-c", "sleep 600"}}}
 	if err := savePrefs(prefs{DaemonMode: "embedded", Language: "en"}.normalized()); err != nil {
 		t.Fatal(err)
 	}

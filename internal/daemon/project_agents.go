@@ -40,7 +40,7 @@ func (d *Daemon) readProjectAgents(req *protocol.ReadProjectAgents) (*protocol.P
 	out := &protocol.ProjectAgents{Project: scope}
 	members := map[string]bool{}
 	for i, info := range all {
-		if scopes[i] != scope {
+		if scopes[i] != scope || !isAgent(info) {
 			continue
 		}
 		out.Agents = append(out.Agents, &protocol.ProjectAgent{Session: withoutCommand(info), ParentSessionId: parents[info.GetId()], Messaging: d.takesMessages(info)})

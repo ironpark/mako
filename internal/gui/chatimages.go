@@ -15,13 +15,10 @@ import (
 // shows as a thumbnail, read from the session's node, that opens the image
 // in the Files tab's preview.
 
-// imageWord is a word of text that names an image, and the image's path.
-type imageWord struct{ Word, Path string }
-
-// imageWords are the words of text that name images, each once, those
-// relative to project resolved against it.
-func imageWords(text, project string) []imageWord {
-	var out []imageWord
+// imageRefs are the paths of the images text names, as words of their
+// own, each once, those relative to project resolved against it.
+func imageRefs(text, project string) []string {
+	var out []string
 	for _, word := range strings.Fields(text) {
 		bare := strings.Trim(word, "\"'`()[]<>,;")
 		if !isImage(bare) {
@@ -31,18 +28,9 @@ func imageWords(text, project string) []imageWord {
 		if project != "" {
 			path = resolvePath(project, bare)
 		}
-		if !slices.ContainsFunc(out, func(w imageWord) bool { return w.Path == path }) {
-			out = append(out, imageWord{Word: word, Path: path})
+		if !slices.Contains(out, path) {
+			out = append(out, path)
 		}
-	}
-	return out
-}
-
-// imageRefs are the paths of the images text names, as words of their own.
-func imageRefs(text, project string) []string {
-	var out []string
-	for _, w := range imageWords(text, project) {
-		out = append(out, w.Path)
 	}
 	return out
 }
@@ -105,33 +93,32 @@ func chatImages(m *model, node string, held, named []string) ggui.Widget {
 	return ggui.Wrap(thumbs...).Gap(6).RunGap(6)
 }
 
-// draftImages shows the images a session's draft names, over the
-// composer's text, each with a button that takes it out of the draft. They
-// are built again only as the images named change, not as words are typed.
-func draftImages(m *model, id string, state *chatState) ggui.Widget {
-	type named struct {
-		Node  string
-		Words []imageWord
-	}
-	images := ggui.Derived(func() named {
-		info, ok := m.session(id)
-		if !ok {
-			return named{}
-		}
-		return named{Node: info.GetNodeId(), Words: imageWords(state.draft.Get(), info.GetProject())}
-	}).WithEqual(deepEqual)
-	return ggui.View(images, func(n named) ggui.Widget {
-		if len(n.Words) == 0 {
+// attachmentStrip shows the files a session's draft goes with, over the
+// composer's text: an image as its thumbnail, another file as its name,
+// each with a button that takes it off.
+func attachmentStrip(m *model, id string, state *chatState) ggui.Widget {
+	return ggui.View(state.attached, func(paths []string) ggui.Widget {
+		if len(paths) == 0 {
 			return ggui.Box()
 		}
-		thumbs := make([]ggui.Widget, len(n.Words))
-		for i, w := range n.Words {
-			remove := ui.ButtonOf(icon("x").Size(11).Color(tokMuted), func() {
-				m.setComposerDraft(id, strings.Join(strings.Fields(strings.Replace(ggui.Peek(state.draft), w.Word, "", 1)), " ")+" ")
-			}).Ghost().Pad(2).Radius(4).Name(T("Remove"))
-			thumbs[i] = &cornered{child: chatImage(m, n.Node, w.Path, true), corner: ggui.Box(remove).Fill(tokSurface1).Radius(5)}
+		node := ggui.Untrack(func() string { s, _ := m.session(id); return s.GetNodeId() })
+		items := make([]ggui.Widget, len(paths))
+		for i, p := range paths {
+			remove := ui.ButtonOf(icon("x").Size(11).Color(tokMuted), func() { m.detachFrom(id, p) }).
+				Ghost().Pad(2).Radius(4).Name(Tf("Remove %s", baseName(p)))
+			var item ggui.Widget
+			if isImage(p) {
+				item = chatImage(m, node, p, false)
+			} else {
+				item = ggui.Box(ggui.Row(
+					fileTypeIcon(baseName(p), false, false).Size(14),
+					ggui.Text(baseName(p)).Size(12).NoWrap().Ellipsis(),
+					ggui.Box().Width(14), // under the corner's button
+				).Gap(6).Align(ggui.AlignCenter)).Fill(tokSurface2).Border(1, tokBorder).Radius(8).Pad(7, 8).MaxWidth(thumbW)
+			}
+			items[i] = &cornered{child: item, corner: ggui.Box(remove).Fill(tokSurface1).Radius(5)}
 		}
-		return ggui.Box(ggui.Wrap(thumbs...).Gap(6).RunGap(6)).Pad(0, 0, 4, 0)
+		return ggui.Box(ggui.Wrap(items...).Gap(6).RunGap(6)).Pad(0, 0, 4, 0)
 	})
 }
 

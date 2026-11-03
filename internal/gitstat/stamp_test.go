@@ -50,6 +50,18 @@ func TestStampMovesWithTheRepository(t *testing.T) {
 	write(t, root, "a.txt", "c\n")
 	run("stash", "-q")
 	moved("a stash")
+	tick()
+	remote := t.TempDir()
+	run("init", "-q", "--bare", remote)
+	run("remote", "add", "origin", remote)
+	run("push", "-q", "-u", "origin", "other")
+	moved("a push")
+	tick()
+	run("commit", "-q", "--allow-empty", "-m", "third")
+	moved("a commit to push")
+	tick()
+	run("push", "-q")
+	moved("a push of the branch again")
 	if Stamp(filepath.Join(root, "missing")) != last {
 		t.Fatal("a folder in the repository has another stamp")
 	}

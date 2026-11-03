@@ -276,19 +276,41 @@ func (m *model) forgeRun(root fileRoot, req *protocol.ForgeRun, label string, do
 
 // Watching the branch ---------------------------------------------------------
 
-// The branch's runs are read this often while one is under way, and
-// otherwise every forgeIdle; a project its forge will not answer for is asked again after
-// forgeBackoff.
+// The branch is looked at every forgeTick: read again after forgeIdle,
+// or forgeBusy while its runs are under way or for forgeEager after the
+// repository moved, as a push does before the runs it starts show. A
+// project its forge will not answer for is asked again after
+// forgeBackoff. The runs are read by their ETags, so a close look at them
+// costs nothing of the rate limit while they have not changed.
 const (
-	forgeTick    = 15 * time.Second
+	forgeTick    = 5 * time.Second
+	forgeBusy    = 10 * time.Second
 	forgeIdle    = time.Minute
+	forgeEager   = 2 * time.Minute
 	forgeBackoff = 5 * time.Minute
 )
 
 // watchForge follows the selected project's branch on its forge while the window
-// is open.
+// is open: at once when the repository moves, and then closely for a while.
 func watchForge(m *model) {
 	root := ggui.Derived(m.repoFolder)
+	type stamped struct {
+		Root  fileRoot
+		Stamp string
+	}
+	// The stamp of the repository, which moves with its history: a
+	// commit, a push, a fetch.
+	stamp := ggui.Derived(func() stamped { r := root.Get(); return stamped{r, repoStamp(m.Sessions.Get(), r, "")} })
+	var moved time.Time
+	last := ggui.Peek(stamp)
+	ggui.Watch(stamp, func(now stamped) {
+		// Another project is read as it is picked, below; this one moved.
+		if now.Root == last.Root && now.Stamp != "" && last.Stamp != "" {
+			moved = time.Now()
+			m.loadForgeBranch(now.Root)
+		}
+		last = now
+	})
 	ggui.Effect(func() ggui.Cleanup {
 		r := root.Get()
 		if r.Path == "" {
@@ -303,8 +325,8 @@ func watchForge(m *model) {
 				wait = 0
 			case b.Err != "":
 				wait = forgeBackoff
-			case runsState(b.Runs) == "pending" || b.PR.GetChecks() == "pending":
-				wait = 0
+			case runsState(b.Runs) == "pending" || b.PR.GetChecks() == "pending" || time.Since(moved) < forgeEager:
+				wait = forgeBusy
 			}
 			if time.Since(m.Forge.branchRead) >= wait {
 				m.loadForgeBranch(r)
@@ -547,10 +569,13 @@ func (m *model) submitPR() {
 
 func forgePanel(m *model) ggui.Widget {
 	root := ggui.Derived(m.repoFolder)
+	// Read again as the repository moves, a push opening runs.
+	stamp := ggui.Derived(func() string { return repoStamp(m.Sessions.Get(), root.Get(), "") })
 	ggui.Effect(func() ggui.Cleanup {
 		r := root.Get()
 		m.Forge.Kind.Get()
 		m.Forge.Filter.Get()
+		stamp.Get()
 		if r.Path == "" || !m.DetailsOpen.Get() || m.DetailTab.Get() != forgeTab {
 			return nil // nothing shows it
 		}

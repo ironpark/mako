@@ -1383,17 +1383,63 @@ func (m *model) chatTarget() string {
 	return ""
 }
 
-// sendComposer types a session's draft into its terminal, followed by
-// Enter, and clears the draft.
+// attachTo adds the files at paths, on session id's node, to what its draft
+// goes with, each once.
+func (m *model) attachTo(id string, paths []string) {
+	m.chatState(id).attached.Update(func(v []string) []string {
+		v = slices.Clone(v)
+		for _, p := range paths {
+			if !slices.Contains(v, p) {
+				v = append(v, p)
+			}
+		}
+		return v
+	})
+}
+
+// detachFrom takes the file at path off what session id's draft goes with.
+func (m *model) detachFrom(id, path string) {
+	m.chatState(id).attached.Update(func(v []string) []string {
+		return slices.DeleteFunc(slices.Clone(v), func(p string) bool { return p == path })
+	})
+}
+
+// sendable reports whether the composer has a message to send: text, or
+// files. Reactive.
+func (s *chatState) sendable() bool {
+	return strings.TrimSpace(s.draft.Get()) != "" || len(s.attached.Get()) > 0
+}
+
+// composed is the message a draft and the files it goes with make: the
+// text, then each file's path, from the project when it is in it, as the
+// agent's own terminal types a file dropped on it.
+func composed(text string, attached []string, project string) string {
+	if len(attached) == 0 {
+		return text
+	}
+	paths := make([]string, len(attached))
+	for i, p := range attached {
+		paths[i] = cmp.Or(subfolder(p, project), p)
+	}
+	text = strings.TrimRight(text, " \t")
+	if text != "" && !strings.HasSuffix(text, "\n") {
+		text += " "
+	}
+	return text + strings.TrimSuffix(shellPaths(paths), " ")
+}
+
+// sendComposer types a session's draft into its terminal, with the files
+// it goes with, followed by Enter, and clears both.
 func (m *model) sendComposer(id string) {
 	conn := m.conns[id]
 	if conn == nil {
 		return
 	}
-	text := m.composerDraft(id)
+	state := m.chatState(id)
+	s, _ := m.session(id)
+	text := composed(m.composerDraft(id), ggui.Peek(state.attached), s.GetProject())
 	conn.sendText(text)
 	m.notePending(id, text)
-	state := m.chatState(id)
 	if strings.TrimSpace(text) != "" && (len(state.sent) == 0 || state.sent[len(state.sent)-1] != text) {
 		state.sent = append(state.sent, text)
 		if len(state.sent) > composerHistory {
@@ -1401,6 +1447,7 @@ func (m *model) sendComposer(id string) {
 		}
 	}
 	m.setComposerDraft(id, "")
+	state.attached.Set(nil)
 }
 
 // composerHistory is how many sent messages a session's composer keeps.

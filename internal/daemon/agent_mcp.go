@@ -431,7 +431,7 @@ func (d *Daemon) listProjectAgents(peer *agentPeer) (listAgentsResult, error) {
 	}
 	d.sessionMu.Unlock()
 	for _, other := range d.listSessions() {
-		if d.projectScope(other) == self {
+		if isAgent(other) && d.projectScope(other) == self {
 			out.Agents = append(out.Agents, summarizeAgent(other, parents[other.GetId()], d.takesMessages(other)))
 		}
 	}

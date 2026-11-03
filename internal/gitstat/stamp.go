@@ -10,7 +10,8 @@ import (
 
 // Stamp changes whenever the history a source control panel shows of the
 // repository dir is in moves: a commit, a reset or a checkout, a branch
-// made or deleted, a stash, a fetch. It is read from the files git keeps
+// made or deleted, a stash, a fetch, a push of the branch checked out. It
+// is read from the files git keeps
 // those in, by their size and time and HEAD's text, so it is cheap to ask
 // for often, and says nothing of what they hold. Not the index: a git
 // status rewrites it, as agents run one often, and what is staged is read
@@ -33,6 +34,15 @@ func Stamp(dir string) string {
 	}
 	if ref, ok := strings.CutPrefix(strings.TrimSpace(string(head)), "ref: "); ok {
 		files = append(files, filepath.Join(common, filepath.FromSlash(ref)))
+		// The branch as each remote has it, which a push moves: what a
+		// forge runs its checks on.
+		if branch, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+			remotes := filepath.Join(common, "refs", "remotes")
+			entries, _ := os.ReadDir(remotes)
+			for _, e := range entries {
+				files = append(files, filepath.Join(remotes, e.Name(), filepath.FromSlash(branch)))
+			}
+		}
 	}
 	for _, f := range files {
 		fi, err := os.Stat(f)

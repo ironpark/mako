@@ -102,7 +102,8 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 		t.Fatalf("composer %q, want the path from the project", got)
 	}
 
-	// Dragged onto the message box, a file is inserted as its path.
+	// Dragged onto the message box, a file goes with the message, not in
+	// its text.
 	m.setComposerDraft(session, "")
 	f, _ = p.FindRole(ggui.RoleTreeItem, "main.go")
 	box, ok := p.Find(T("Message"))
@@ -115,8 +116,8 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 	p.Move(box.Center())
 	p.Release(box.Center())
 	p.Frame()
-	if got := m.composerDraft(session); got != filepath.Join("src", "main.go")+" " {
-		t.Fatalf("composer %q after the drag, want the file's path", got)
+	if got := ggui.Peek(m.chatState(session).attached); len(got) != 1 || filepath.Base(got[0]) != "main.go" || m.composerDraft(session) != "" {
+		t.Fatalf("attached %q, draft %q after the drag, want the file attached", got, m.composerDraft(session))
 	}
 
 	// An image is shown, and enlarged.

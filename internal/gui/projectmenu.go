@@ -111,11 +111,6 @@ func startItems(m *model, g sessionGroup, nodes []*protocol.Node) []ggui.Widget 
 	return items
 }
 
-// spansNodes reports whether folders are on more than one node.
-func spansNodes(roots []fileRoot) bool {
-	return slices.ContainsFunc(roots, func(r fileRoot) bool { return r.Node != roots[0].Node })
-}
-
 // Spaces ----------------------------------------------------------------------
 
 // showsGroup reports whether space i shows section g: every space but the

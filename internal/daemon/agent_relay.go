@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transport"
 )
@@ -38,9 +39,18 @@ var errNotInProject = errors.New("recipient is not an active messaging session i
 // agent takes messages.
 func (d *Daemon) shareScopes(sessions []*protocol.SessionInfo) {
 	for _, info := range sessions {
+		if !isAgent(info) {
+			continue // a shell is in no project's agents, here or there
+		}
 		info.AgentScope = d.sharedScope(info)
 		info.AgentMessaging = d.takesMessages(info)
 	}
+}
+
+// isAgent reports whether a session runs an agent, which a project's
+// agents list, rather than the node's shell.
+func isAgent(info *protocol.SessionInfo) bool {
+	return info.GetAgent() != agentspec.ShellName
 }
 
 // takesMessages reports whether the agent of a session of this daemon's
@@ -58,7 +68,8 @@ func (d *Daemon) remoteAgents(scope string) []*protocol.SessionInfo {
 	}
 	var out []*protocol.SessionInfo
 	for _, info := range d.meshSessions(d.routing()) {
-		if info.GetAgentScope() == scope && info.GetNodeId() != d.cfg.NodeID {
+		// A node of an older daemon shares its shells too.
+		if info.GetAgentScope() == scope && info.GetNodeId() != d.cfg.NodeID && isAgent(info) {
 			out = append(out, info)
 		}
 	}

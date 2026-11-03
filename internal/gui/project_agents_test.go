@@ -74,7 +74,7 @@ func TestProjectAgentHierarchyHandlesMissingParentsAndCycles(t *testing.T) {
 
 func TestProjectAgentMonitorPollsOnlyWhileShownAndChangesProjects(t *testing.T) {
 	m, p := daemonApp(t)
-	m.launch("shell", "", t.TempDir())
+	m.launch("sleeper", "", t.TempDir())
 	probeUntil(t, p, "first session", func() bool { return len(ggui.Peek(m.Sessions)) == 1 })
 	first := ggui.Peek(m.Selected)
 	m.DetailTab.Set(agentsTab)
@@ -94,7 +94,7 @@ func TestProjectAgentMonitorPollsOnlyWhileShownAndChangesProjects(t *testing.T) 
 	if m.projectAgentsGen != before {
 		t.Fatal("hidden monitor kept polling")
 	}
-	m.launch("shell", "", t.TempDir())
+	m.launch("sleeper", "", t.TempDir())
 	probeUntil(t, p, "second session", func() bool { return len(ggui.Peek(m.Sessions)) == 2 && ggui.Peek(m.Selected) != first })
 	m.DetailsOpen.Set(true)
 	probeUntil(t, p, "second project monitor", func() bool {

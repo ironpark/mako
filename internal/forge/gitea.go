@@ -44,7 +44,9 @@ func (g *gitea) ops() []string {
 	return []string{protocol.ForgeOpCheckout, protocol.ForgeOpFetchPR, protocol.ForgeOpComment, protocol.ForgeOpReview}
 }
 
-var hostClient = &http.Client{Timeout: 30 * time.Second}
+// hostClient asks the forges, a read asked again by the ETag it was
+// answered with (etagTransport).
+var hostClient = &http.Client{Timeout: 30 * time.Second, Transport: newETagTransport(http.DefaultTransport, 256)}
 
 // How long a host's credentials are kept, and what it is: a host that is
 // no Forgejo or Gitea, as one reached over SSH alone, is asked again less

@@ -201,15 +201,15 @@ func TestRunningSubagentsShowOverTheComposer(t *testing.T) {
 	}
 }
 
-// An image pasted into the composer goes in as a file, by its path; text
-// pastes as text.
+// An image pasted into the composer goes with the message as a file, not
+// in its text; text pastes as text.
 func TestComposerPastesAnImageAsAFile(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	t.Setenv("TMPDIR", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Attached.Set([]string{"s"})
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
-	draft := m.chatState("s").draft
+	draft, attached := m.chatState("s").draft, m.chatState("s").attached
 	p := ggui.ProbeBuilder(func() ggui.Widget { return composer(m, "s", m.chatState("s")) }, ggui.Sz(600, 300))
 	defer p.Close()
 	m.post = p.Post
@@ -226,10 +226,10 @@ func TestComposerPastesAnImageAsAFile(t *testing.T) {
 
 	clip.WriteImage(png)
 	p.Type(paste, ggui.KeyV)
-	probeUntil(t, p, "the image's path", func() bool { return ggui.Peek(draft) != "" })
-	path := strings.TrimSuffix(ggui.Peek(draft), " ")
-	if filepath.Dir(path) != clipboardDir() || filepath.Ext(path) != ".png" {
-		t.Fatalf("draft %q, want the path of the pasted image", path)
+	probeUntil(t, p, "the image attached", func() bool { return len(ggui.Peek(attached)) > 0 })
+	path := ggui.Peek(attached)[0]
+	if filepath.Dir(path) != clipboardDir() || filepath.Ext(path) != ".png" || ggui.Peek(draft) != "" {
+		t.Fatalf("attached %q, draft %q, want the pasted image attached", path, ggui.Peek(draft))
 	}
 	if data, err := os.ReadFile(path); err != nil || string(data) != string(png) {
 		t.Fatalf("pasted file holds %q, %v", data, err)
@@ -237,7 +237,7 @@ func TestComposerPastesAnImageAsAFile(t *testing.T) {
 
 	clip.Write("words")
 	p.Type(paste, ggui.KeyV)
-	if got := ggui.Peek(draft); got != path+" words" {
+	if got := ggui.Peek(draft); got != "words" {
 		t.Fatalf("draft %q after pasting text", got)
 	}
 }
@@ -279,9 +279,9 @@ func TestATerminalTakesPastesOfSeveralLines(t *testing.T) {
 	}
 }
 
-// An image the draft names shows over the text as a thumbnail as large as
-// the image, its remove button in its corner, and the composer stays as
-// tall as the two.
+// An image attached shows over the text as a thumbnail as large as the
+// image, its remove button in its corner, and the composer stays as tall
+// as the two. The message sent names it after the text, and clears both.
 func TestADraftImageIsAThumbnail(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
@@ -289,7 +289,8 @@ func TestADraftImageIsAThumbnail(t *testing.T) {
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", NodeId: "n", Agent: "claude", Project: "/tmp"}})
 	img := ggfx.NewImage(100, 50)
 	m.chatImages["n\x00/tmp/shot.png"] = ggui.State(mdImage{Img: img})
-	m.setComposerDraft("s", "look /tmp/shot.png ")
+	m.setComposerDraft("s", "look")
+	m.attachTo("s", []string{"/tmp/shot.png"})
 	p := ggui.ProbeBuilder(func() ggui.Widget {
 		return ggui.Column(ggui.Expanded(ggui.Text("FEED")), composer(m, "s", m.chatState("s"))).Stretch()
 	}, ggui.Sz(900, 700))
@@ -299,7 +300,24 @@ func TestADraftImageIsAThumbnail(t *testing.T) {
 	if !ok || feed.Rect.Size.H < 400 {
 		t.Fatalf("the composer took the pane: the feed is %v\n%s", feed.Rect, p.Semantics().String())
 	}
-	if _, ok := p.Semantics().Find(ggui.RoleButton, T("Remove")); !ok {
+	if _, ok := p.Semantics().Find(ggui.RoleButton, Tf("Remove %s", "shot.png")); !ok {
 		t.Fatalf("no remove button:\n%s", p.Semantics().String())
+	}
+}
+
+func TestAMessageNamesItsFilesAfterItsText(t *testing.T) {
+	for _, c := range []struct {
+		text     string
+		attached []string
+		want     string
+	}{
+		{"look", nil, "look"},
+		{"look ", []string{"/w/p/shot.png"}, "look shot.png"},
+		{"", []string{"/w/p/a b.txt", "/tmp/c.png"}, "'a b.txt' /tmp/c.png"},
+		{"two\nlines\n", []string{"/tmp/c.png"}, "two\nlines\n/tmp/c.png"},
+	} {
+		if got := composed(c.text, c.attached, "/w/p"); got != c.want {
+			t.Errorf("composed(%q, %q) = %q, want %q", c.text, c.attached, got, c.want)
+		}
 	}
 }

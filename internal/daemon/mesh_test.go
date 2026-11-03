@@ -66,8 +66,14 @@ func p2pAddr(d *Daemon) string { return d.p2p.Addrs()[0] + "/p2p/" + d.p2p.ID().
 // addSession runs a session on d that lasts the test.
 func addSession(t *testing.T, d *Daemon, id string) {
 	t.Helper()
+	addSessionOf(t, d, id, "shell")
+}
+
+// addSessionOf adds a session named for agent, which runs a sleep.
+func addSessionOf(t *testing.T, d *Daemon, id, agent string) {
+	t.Helper()
 	s, err := session.Start(session.Spec{
-		ID: id, NodeID: d.cfg.NodeID, Agent: "shell", Project: t.TempDir(),
+		ID: id, NodeID: d.cfg.NodeID, Agent: agent, Project: t.TempDir(),
 		Command: []string{"sh", "-c", "sleep 30"}, Cols: 40, Rows: 6,
 	})
 	if err != nil {
