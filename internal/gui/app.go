@@ -33,6 +33,9 @@ func Run(cfg *config.Config, addr string) error {
 	}, func() ggui.Widget { return build(m) })
 	app.Setup(func() {
 		go findEditors()
+		// setup's effects already fetch, and a call that fails at once
+		// hands its result back before start would have set post.
+		m.post = app.Post
 		setup(m)
 		trayMode(app, m)
 		m.start(ctx, app.Post)
