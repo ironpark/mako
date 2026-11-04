@@ -77,6 +77,10 @@ type termConn struct {
 	// are coalesced until the frame that drew them has run.
 	wake    func()
 	pending atomic.Bool
+	// asked counts the paints asked for; overdue, when one asked has not
+	// been painted for paintOverdue, asks for the window whole.
+	asked   atomic.Uint64
+	overdue atomic.Pointer[time.Timer]
 	// repaint, once the window gives one, asks for the terminal's region
 	// alone to be painted again; paintedAt is where a view last painted
 	// it, nil when that could not be told.
@@ -321,9 +325,33 @@ func (t *termConn) requestPaint() {
 	}
 	if repaint, at := t.repaint.Load(), t.paintedAt.Load(); repaint != nil && at != nil {
 		(*repaint)(*at)
+		t.watchPaint()
 		return
 	}
 	t.wake()
+}
+
+// paintOverdue is how long a paint asked for of the terminal's region may
+// take before the window is asked to paint whole.
+const paintOverdue = 250 * time.Millisecond
+
+// watchPaint makes sure the paint just asked for of the terminal's region
+// comes. It may not: the region is where a view last painted the
+// terminal, and a view elsewhere, or none, may show it now. Until a paint
+// copies the screen, every later output only waits on it, and the
+// terminal would show nothing new, the keys typed included, until
+// something painted the window whole, as a resize does.
+func (t *termConn) watchPaint() {
+	n := t.asked.Add(1)
+	check := func() {
+		if t.pending.Load() && t.asked.Load() == n {
+			t.wake()
+		}
+	}
+	timer := time.AfterFunc(paintOverdue, check)
+	if old := t.overdue.Swap(timer); old != nil {
+		old.Stop()
+	}
 }
 
 // painted notes where a view painted the terminal, in the window, or that
@@ -959,6 +987,9 @@ func (t *termConn) close() {
 		return
 	}
 	t.closed = true
+	if timer := t.overdue.Load(); timer != nil {
+		timer.Stop()
+	}
 	if t.settle != nil {
 		t.settle.Stop()
 	}
