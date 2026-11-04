@@ -12,7 +12,8 @@ import (
 func statusOf(s *Session) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.statusLocked()
+	status, _ := s.statusLocked()
+	return status
 }
 
 func TestStatusReportsAreOrderedAndRenewWork(t *testing.T) {

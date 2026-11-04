@@ -89,6 +89,9 @@ type Session struct {
 	approval      *protocol.Approval
 	approvalDone  chan struct{}
 	lastMessage   time.Time // when the conversation last said something, as its log has it
+	// screen is what the agent's screen shows, read by its driver's
+	// rules; nil for an agent whose screen is not read.
+	screen *screenWatch
 	// reported is what the agent's status line last said of its tokens:
 	// the context window and the account's limits; guarded by mu.
 	reported *protocol.Usage
@@ -147,6 +150,10 @@ func Start(spec Spec) (*Session, error) {
 		started: time.Now(),
 		done:    make(chan struct{}),
 	}
+	if d, ok := agents.As[agent.Screen](spec.Agent); ok {
+		s.screen = &screenWatch{rules: d.ScreenRules()}
+		go s.watchScreen()
+	}
 	go s.pump()
 	return s, nil
 }
@@ -161,6 +168,7 @@ func (s *Session) Agent() string { return s.spec.Agent }
 func (s *Session) Info() *protocol.SessionInfo {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	status, statusAt := s.statusLocked()
 	return &protocol.SessionInfo{
 		Id:             s.spec.ID,
 		NodeId:         s.spec.NodeID,
@@ -179,8 +187,8 @@ func (s *Session) Info() *protocol.SessionInfo {
 		ExitCode:       s.exitCode,
 		Busy:           s.state != protocol.StateExited && s.progress.Busy(time.Now()),
 		Idle:           s.state == protocol.StateRunning && s.proc.idle(),
-		Status:         s.statusLocked(),
-		StatusAt:       protocol.Time(s.statusAt),
+		Status:         status,
+		StatusAt:       protocol.Time(statusAt),
 		LastOutput:     protocol.Time(s.LastOutput()),
 		LastMessage:    protocol.Time(s.lastMessage),
 		Approval:       s.approval,
@@ -222,21 +230,27 @@ func (s *Session) shown() []string {
 	return s.spec.Command
 }
 
-// statusLocked is what the agent is doing, as far as its hooks said.
-func (s *Session) statusLocked() protocol.AgentStatus {
+// statusLocked is what the agent is doing, as far as its hooks said and
+// its screen shows over them, and since when.
+func (s *Session) statusLocked() (protocol.AgentStatus, time.Time) {
 	s.updateChildrenLocked()
+	if s.state == protocol.StateExited {
+		return "", s.statusAt
+	}
+	if s.approval != nil {
+		return protocol.AgentWaiting, s.statusAt
+	}
+	if status, at, ok := s.screenStatusLocked(); ok {
+		return status, at
+	}
 	switch {
-	case s.state == protocol.StateExited:
-		return ""
-	case s.approval != nil:
-		return protocol.AgentWaiting
 	case s.agentsWorking && s.status != protocol.AgentWaiting && !protocol.AtWork(s.status):
-		return protocol.AgentWorking
+		return protocol.AgentWorking, s.statusAt
 	case !s.agentsWorking && protocol.AtWork(s.status) && time.Since(s.LastOutput()) > staleWork && time.Since(s.statusAt) > staleWork:
 		// Latch the fallback: an unrelated redraw must not revive a turn.
 		s.endWorkLocked(time.Now())
 	}
-	return s.status
+	return s.status, s.statusAt
 }
 
 // SetStatus records what the agent's hooks report it is doing.
@@ -431,7 +445,13 @@ func (s *Session) AtPrompt() (bool, time.Time) {
 	if s.state != protocol.StateRunning || s.approval != nil {
 		return false, time.Time{}
 	}
-	return s.status == protocol.AgentIdle || s.status == protocol.AgentDone, s.statusAt
+	// The screen, where it outweighs the hooks: a dialog it shows is not a
+	// prompt, which typing would answer.
+	status, at, ok := s.screenStatusLocked()
+	if !ok {
+		status, at = s.status, s.statusAt
+	}
+	return status == protocol.AgentIdle || status == protocol.AgentDone, at
 }
 
 // Prompt gives the agent text as the composer does: pasted, then Enter.
@@ -520,17 +540,17 @@ func (s *Session) Snapshot(styled bool) (*protocol.Snapshot, error) {
 }
 
 func (s *Session) snapshotLocked(styled bool) (*protocol.Snapshot, error) {
-	opts := gostty.FormatOptions{Format: gostty.FormatterFormatPlain}
+	var text string
+	var err error
 	if styled {
-		opts.Format = gostty.FormatterFormatVt
-		opts.Cursor = true
+		if text, err = s.term.FormatString(gostty.FormatOptions{Format: gostty.FormatterFormatVt, Cursor: true}); err == nil {
+			text = modesAround(s.term.Terminal(), text)
+		}
+	} else {
+		text, err = s.plainTextLocked()
 	}
-	text, err := s.term.FormatString(opts)
 	if err != nil {
 		return nil, err
-	}
-	if styled {
-		text = modesAround(s.term.Terminal(), text)
 	}
 	return &protocol.Snapshot{
 		SessionId: s.spec.ID,
@@ -541,6 +561,11 @@ func (s *Session) snapshotLocked(styled bool) (*protocol.Snapshot, error) {
 		Title:     s.title,
 		Progress:  s.progress.Snapshot(time.Now()),
 	}, nil
+}
+
+// plainTextLocked is the text the screen shows, without its styles.
+func (s *Session) plainTextLocked() (string, error) {
+	return s.term.FormatString(gostty.FormatOptions{Format: gostty.FormatterFormatPlain})
 }
 
 // replayedModes are the DEC private modes a program sets that a terminal

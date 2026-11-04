@@ -12,6 +12,7 @@ import (
 	"image/color"
 	"time"
 
+	"github.com/ironpark/mako/internal/detect"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -161,6 +162,11 @@ type Logs interface {
 type LogStatus interface {
 	StatusEvent(line []byte) (protocol.AgentStatus, time.Time)
 }
+
+// Screen is an agent whose state shows on its screen: its rules read the
+// dialogs it asks in, which no hook may tell of, and the prompt it waits
+// at once a turn ended unreported.
+type Screen interface{ ScreenRules() *detect.Rules }
 
 // Interrupter is an agent whose turn is stopped from its terminal by
 // other than Escape, which stops most: Interrupt is what is typed there to
