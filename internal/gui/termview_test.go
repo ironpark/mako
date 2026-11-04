@@ -25,6 +25,7 @@ type fakeLink struct {
 	mu      sync.Mutex
 	input   bytes.Buffer
 	resizes [][4]uint16 // cols, rows, and a cell in pixels
+	colors  []*protocol.TerminalColors
 }
 
 func newFakeLink() *fakeLink { return &fakeLink{in: make(chan *protocol.StreamEvent, 16)} }
@@ -48,6 +49,13 @@ func (f *fakeLink) Resize(cols, rows, cellW, cellH uint16) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.resizes = append(f.resizes, [4]uint16{cols, rows, cellW, cellH})
+	return nil
+}
+
+func (f *fakeLink) Colors(c *protocol.TerminalColors) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.colors = append(f.colors, c)
 	return nil
 }
 

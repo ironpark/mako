@@ -147,3 +147,31 @@ func TestSidebarGroupsFoldAndWidthsStayInBounds(t *testing.T) {
 		t.Fatalf("sidebar width %v", p.SidebarWidth)
 	}
 }
+
+// A notification a program posts itself marks its session unread, unless
+// mako follows the agent's hooks and says so itself; a bell does not.
+func TestAProgramsOwnNotificationIsUnread(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Prefs.Update(func(p prefs) prefs { p.Notify = false; return p })
+	shell := &protocol.SessionInfo{Id: "sh", State: protocol.StateRunning}
+	agent := &protocol.SessionInfo{Id: "ag", State: protocol.StateRunning, Caps: protocol.CapHooks}
+	rang := &protocol.SessionInfo{Id: "bell", State: protocol.StateRunning}
+	m.Sessions.Set([]*protocol.SessionInfo{shell, agent, rang})
+
+	notice := &protocol.Notice{Title: "Build", Body: "done", Seq: 1}
+	shell, agent, rang = proto.CloneOf(shell), proto.CloneOf(agent), proto.CloneOf(rang)
+	shell.Notice, agent.Notice, rang.Bells = notice, notice, 1
+	next := []*protocol.SessionInfo{shell, agent, rang}
+	m.noteStatus(next)
+	m.Sessions.Set(next)
+	if u := ggui.Peek(m.Unread); !u["sh"] || u["ag"] || u["bell"] {
+		t.Fatalf("unread %v", u)
+	}
+	// The same notification polled again is not new.
+	m.Unread.Set(nil)
+	m.noteStatus(next)
+	if u := ggui.Peek(m.Unread); len(u) != 0 {
+		t.Fatalf("unread %v", u)
+	}
+}

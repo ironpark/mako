@@ -72,10 +72,13 @@ type Session struct {
 	// attached to and read.
 	finalPlain, finalStyled *protocol.Snapshot
 
-	conversationID string // guarded by mu
-	transcriptPath string // guarded by mu
-	name           string // guarded by mu
-	title          string // latest terminal title, guarded by mu
+	conversationID string              // guarded by mu
+	transcriptPath string              // guarded by mu
+	name           string              // guarded by mu
+	title          string              // latest terminal title, guarded by mu
+	notice         *protocol.Notice    // the program's last notification, guarded by mu
+	scheme         *gostty.ColorScheme // the front-end's, once one said; guarded by mu
+	bells          uint64              // bells the program rang, guarded by mu
 	started        time.Time
 	done           chan struct{}
 	progress       activity.Progress // guarded by mu
@@ -208,6 +211,8 @@ func (s *Session) Info() *protocol.SessionInfo {
 		Worktree:       s.spec.Worktree,
 		Tasks:          s.tasksLocked(),
 		Turns:          s.turns,
+		Notice:         s.notice,
+		Bells:          s.bells,
 	}
 }
 
@@ -614,9 +619,53 @@ func (s *Session) ResizeCells(cols, rows, cellW, cellH uint16) error {
 	if s.state == protocol.StateExited {
 		return nil // its screen is kept as it was left
 	}
+	if cols == s.spec.Cols && rows == s.spec.Rows && cellW == s.spec.CellWidth && cellH == s.spec.CellHeight {
+		return nil // a size report for no change would be a lie
+	}
 	s.spec.Cols, s.spec.Rows = cols, rows
 	s.spec.CellWidth, s.spec.CellHeight = cellW, cellH
-	return s.term.Terminal().ResizeCells(cols, rows, uint32(cellW), uint32(cellH))
+	// Through the stream, not the terminal: a program that asked for
+	// in-band size reports (mode 2048) is owed one, which only the stream
+	// queues.
+	stream := s.term.Stream()
+	if err := stream.ResizeCells(cols, rows, uint32(cellW), uint32(cellH)); err != nil {
+		return err
+	}
+	_ = stream.WriteReplies(s.proc)
+	return nil
+}
+
+// SetColors makes c the colours the session's terminal answers a program
+// asking for them: its default foreground, background and ANSI palette,
+// and whether it is dark, which a program that subscribed (mode 2031) is
+// told when it changes.
+func (s *Session) SetColors(c *protocol.TerminalColors) {
+	if c == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited {
+		return
+	}
+	term := s.term.Terminal()
+	for i, rgb := range c.GetPalette() {
+		if i < 16 {
+			_ = term.SetDefaultPaletteColor(uint8(i), gostty.RGBFromUint32(rgb))
+		}
+	}
+	term.SetDefaultForegroundColor(gostty.RGBFromUint32(c.GetForeground()))
+	term.SetDefaultBackgroundColor(gostty.RGBFromUint32(c.GetBackground()))
+	scheme := gostty.ColorSchemeLight
+	if c.GetDark() {
+		scheme = gostty.ColorSchemeDark
+	}
+	if s.scheme == nil || *s.scheme != scheme {
+		s.scheme = &scheme
+		stream := s.term.Stream()
+		stream.ColorSchemeChanged(scheme)
+		_ = stream.WriteReplies(s.proc)
+	}
 }
 
 // Snapshot renders the current screen. Styled output replays colors and
@@ -803,8 +852,15 @@ func (s *Session) feed(chunk []byte) {
 		if err != nil {
 			break
 		}
-		if ev.Kind == gostty.StreamEventTitleChanged {
+		switch ev.Kind {
+		case gostty.StreamEventTitleChanged:
 			s.title = ev.Title
+		case gostty.StreamEventBell:
+			s.bells++
+			s.changedLocked()
+		case gostty.StreamEventDesktopNotification:
+			s.notice = &protocol.Notice{Title: ev.Title, Body: ev.Body, Seq: s.notice.GetSeq() + 1}
+			s.changedLocked()
 		}
 		s.progress.Report(ev, now)
 		// Interruptions need not run a Stop hook. An explicit removal is

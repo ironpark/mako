@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image/color"
 	"io"
 	"math"
 	"slices"
@@ -69,6 +70,10 @@ type termConn struct {
 	cellW, cellH        uint16 // a cell in device pixels, zero until a view paints it
 	closed              bool   // vt and state are released; nothing may touch them
 	opts                termOptions
+	told                *palette        // the palette the daemon was last told
+	viewFocused         bool            // the view has the keyboard
+	windowAway          bool            // its window does not
+	focusIn             bool            // what the program was last told of focus
 	nodeOS              string          // the GOOS of the session's node, "" for unknown; see edit
 	tap                 *streamTap      // records what it receives, for the developer option; nil for none
 	gesture             *gostty.Gesture // click counting and drag selection
@@ -201,12 +206,35 @@ func termOptionsFor(p prefs, pal palette) termOptions {
 // every paint, so it is cheap when nothing did.
 func (t *termConn) configure(o termOptions) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.closed || o == t.opts {
+	if t.closed {
+		t.mu.Unlock()
 		return
 	}
-	t.applyOptionsLocked(o)
+	if o != t.opts {
+		t.applyOptionsLocked(o)
+	}
+	tell := t.told == nil || *t.told != o.palette
+	if tell {
+		told := o.palette
+		t.told = &told
+	}
+	t.mu.Unlock()
+	if tell {
+		// The daemon's terminal answers the program's questions, so it
+		// must know the colours this one draws with.
+		_ = t.att.Colors(terminalColors(o.palette))
+	}
 }
+
+// terminalColors are a palette's terminal colours as the daemon takes them.
+func terminalColors(p palette) *protocol.TerminalColors {
+	return &protocol.TerminalColors{
+		Foreground: rgbOf(p.Fg), Background: rgbOf(p.Surface0),
+		Palette: p.ANSI[:], Dark: p.Dark,
+	}
+}
+
+func rgbOf(c color.RGBA) uint32 { return uint32(c.R)<<16 | uint32(c.G)<<8 | uint32(c.B) }
 
 func (t *termConn) applyOptionsLocked(o termOptions) {
 	vt := t.vt.Terminal()
@@ -1116,6 +1144,8 @@ type sessionLink interface {
 	Input(p []byte) error
 	// Resize sizes the session's window, with a cell's size in pixels.
 	Resize(cols, rows, cellW, cellH uint16) error
+	// Colors tells the session's terminal the window's colours.
+	Colors(c *protocol.TerminalColors) error
 	Close() error
 }
 

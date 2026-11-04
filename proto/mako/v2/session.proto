@@ -104,6 +104,20 @@ message SessionInfo {
   // or its screen said: one that waits for a turn to end, on any node,
   // waits for it to move. 0 from a daemon older than it.
   uint64 turns = 32;
+  // notice is the last desktop notification the session's program posted
+  // itself, over OSC 9 or 777; unset before it posts one.
+  Notice notice = 33;
+  // bells counts the bells the session's program rang: a front-end that
+  // sees it move asks for the user's attention.
+  uint64 bells = 34;
+}
+
+// Notice is a desktop notification a session's program posted. seq grows
+// with each, so that one the same as the last still tells.
+message Notice {
+  string title = 1;
+  string body = 2;
+  uint64 seq = 3;
 }
 
 // BackgroundTask is a command a session's agent started in the background,
@@ -191,13 +205,25 @@ message Output {
 // Resize changes a session's window. cell_width and cell_height are a
 // cell's size in pixels, as the front-end draws it: the PTY reports the
 // window's size in pixels from them, and images a program places are sized
-// by them. Zero keeps the size last told.
+// by them. Zero keeps the size last told. colors, when set, are the
+// front-end's: what the session's terminal answers a program asking its
+// colours or whether it is dark, and tells one that subscribed to that.
+// A Resize of colors alone leaves cols and rows zero.
 message Resize {
   string session_id = 1;
   uint32 cols = 2;
   uint32 rows = 3;
   uint32 cell_width = 4;
   uint32 cell_height = 5;
+  TerminalColors colors = 6;
+}
+
+// TerminalColors are a front-end's terminal colours, each 0xRRGGBB.
+message TerminalColors {
+  uint32 foreground = 1;
+  uint32 background = 2;
+  repeated uint32 palette = 3; // the sixteen ANSI colours
+  bool dark = 4;
 }
 
 // ProgressReport is a terminal's latest OSC 9;4 state.

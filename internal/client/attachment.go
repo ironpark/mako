@@ -61,6 +61,14 @@ func (a *Attachment) Resize(cols, rows, cellW, cellH uint16) error {
 		CellWidth: uint32(cellW), CellHeight: uint32(cellH)})
 }
 
+// Colors tells the session's terminal the front-end's colours, which it
+// answers a program asking for them with.
+func (a *Attachment) Colors(c *protocol.TerminalColors) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.s.Send(protocol.TypeResize, "", &protocol.Resize{SessionId: a.sessionID, Colors: c})
+}
+
 // Close detaches; the session keeps running.
 func (a *Attachment) Close() error {
 	return a.s.Hangup()

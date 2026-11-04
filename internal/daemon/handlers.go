@@ -257,8 +257,17 @@ func (w attachWire) readInput(s *session.Session) {
 		case protocol.TypeInput:
 			_, _ = s.Write(in.GetInput().GetData())
 		case protocol.TypeResize:
-			r := in.GetResize()
-			_ = s.ResizeCells(uint16(r.GetCols()), uint16(r.GetRows()), uint16(r.GetCellWidth()), uint16(r.GetCellHeight()))
+			_ = resize(s, in.GetResize())
 		}
 	}
+}
+
+// resize applies a Resize to s: the colours it carries, and its size
+// unless it carries colours alone.
+func resize(s *session.Session, r *protocol.Resize) error {
+	s.SetColors(r.GetColors())
+	if r.GetColors() != nil && r.GetCols() == 0 && r.GetRows() == 0 {
+		return nil
+	}
+	return s.ResizeCells(uint16(r.GetCols()), uint16(r.GetRows()), uint16(r.GetCellWidth()), uint16(r.GetCellHeight()))
 }

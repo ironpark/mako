@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"cmp"
 	"maps"
 	"strconv"
 	"strings"
@@ -65,6 +66,13 @@ func (m *model) noteStatus(next []*protocol.SessionInfo) {
 	changed := false
 	for _, s := range next {
 		old, known := sessionIn(prev, s.GetId())
+		if known && m.noteProgram(old, s) && !unread[s.GetId()] {
+			if !changed {
+				unread = maps.Clone(unread)
+				changed = true
+			}
+			unread[s.GetId()] = true
+		}
 		if !known || !attends(s) || (old.GetStatus() == s.GetStatus() && proto.Equal(old.GetStatusAt(), s.GetStatusAt()) && old.GetApproval().GetId() == s.GetApproval().GetId()) {
 			continue
 		}
@@ -138,6 +146,32 @@ func (m *model) announce(s *protocol.SessionInfo) {
 		body = T("Finished its turn")
 	}
 	go notify.Post(title, projectName(s.GetProject())+" · "+body, sessionTarget(s.GetId()))
+}
+
+// noteProgram passes on what a session's program asked of the terminal
+// since the last poll, out of view: a bell asks for the user's attention,
+// as Ghostty's does, and a notification it posted goes to the desktop. An
+// agent whose hooks mako follows is announced by mako, and its own
+// notifications would say the same again. It reports whether the session
+// has something new to read.
+func (m *model) noteProgram(old, s *protocol.SessionInfo) bool {
+	rang := s.GetBells() > old.GetBells()
+	posted := s.GetNotice().GetSeq() > old.GetNotice().GetSeq() && s.GetCaps()&protocol.CapHooks == 0
+	if (!rang && !posted) || m.inView(s.GetId()) {
+		return false
+	}
+	if m.window != nil && !ggui.Peek(m.window.Focused()) {
+		m.window.RequestAttention()
+	}
+	if !posted {
+		return false
+	}
+	if ggui.Peek(m.Prefs).Notify {
+		n := s.GetNotice()
+		title := cmp.Or(n.GetTitle(), sessionTitle(s, ggui.Peek(m.Titles)[s.GetId()]))
+		go notify.Post(title, projectName(s.GetProject())+" · "+n.GetBody(), sessionTarget(s.GetId()))
+	}
+	return true
 }
 
 // sessionTarget and settingsTarget name what a notification is about, for

@@ -697,6 +697,19 @@ the window's size in pixels and what the daemon's terminal sizes Kitty
 images placed in cells by; a styled snapshot ends with the Kitty images on
 the screen and the Kitty keyboard flags the program pushed, sent again.
 
+A `resize` may carry `colors`, the front-end's terminal colours: its
+default foreground and background, the sixteen ANSI colours, and whether it
+is dark. The daemon's terminal answers the program's colour queries (OSC 4,
+10, 11) and color scheme queries (`CSI ? 996 n`) with them, and tells a
+program that subscribed (mode 2031) when dark becomes light or back. A
+`resize` of colours alone leaves `cols` and `rows` zero. A resize that
+changes the size sends a program that asked for in-band size reports (mode
+2048) one.
+
+The program's bells and the desktop notifications it posts itself (OSC 9
+and 777) reach the front-ends in `SessionInfo`: `bells` counts the bells,
+and `notice` is the latest notification, its `seq` growing with each.
+
 `output` and `input` carry their bytes as protobuf `bytes`, as they are,
 which is why the attach stream needs no framing of its own. (The first
 version of the protocol, in JSON, needed a separate binary framing for

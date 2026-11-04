@@ -304,6 +304,7 @@ func (t *terminalView) HandleKey(ev ggui.KeyEvent) {
 	switch ev.Kind {
 	case ggui.KeyFocus, ggui.KeyBlur:
 		t.focused = ev.Kind == ggui.KeyFocus
+		t.conn.focusView(t.focused)
 		t.blink = time.Time{}
 		t.ime.HandleKey(ev)
 		t.flushText(true)
