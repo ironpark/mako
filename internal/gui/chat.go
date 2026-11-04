@@ -187,7 +187,10 @@ func (m *model) readChat(id, agent string, state *chatState, current func() bool
 		if err == nil {
 			var ok bool
 			if chat, ok = patched(shown.Chat, chat); !ok {
-				state.whole = true
+				// A patch of another chat than the one shown: read it
+				// whole now, not at the next poll, which leaves the chat
+				// behind its terminal till then.
+				state.whole, state.reread = true, true
 				return
 			}
 		}

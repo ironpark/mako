@@ -50,10 +50,16 @@ func TestTheStreamWaitsForTheLog(t *testing.T) {
 	}
 	tookLive(state, &protocol.ChatLive{Logged: true}, read)
 	tookLive(state, &protocol.ChatLive{Logged: true, Blocks: []*protocol.LiveBlock{{Kind: "text", Text: "b"}}}, read)
-	if got := ggui.Peek(state.live); len(landed) != 1 || len(got) != 1 || got[0].GetText() != "a" {
+	// The log grew again while it was read: read again, as the read out
+	// may have gone before it grew.
+	if got := ggui.Peek(state.live); len(landed) != 2 || len(got) != 1 || got[0].GetText() != "a" {
 		t.Fatalf("while the log is read: %v, %d reads", got, len(landed))
 	}
 	landed[0]()
+	if got := ggui.Peek(state.live); len(got) != 1 || got[0].GetText() != "a" {
+		t.Fatalf("with a read still out: %v", got)
+	}
+	landed[1]()
 	if got := ggui.Peek(state.live); len(got) != 1 || got[0].GetText() != "b" {
 		t.Fatalf("once the read landed: %v", got)
 	}

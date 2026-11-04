@@ -26,7 +26,7 @@ import (
 // one shows.
 type chatFollow struct {
 	on      bool // the node is followed now
-	waiting bool // for the read of a log that grew
+	waiting int  // reads out of a log that grew
 	held    []*protocol.LiveBlock
 	polled  time.Time // when the chat was last read every few seconds anyway
 }
@@ -93,14 +93,21 @@ func pollChat(state *chatState) bool {
 // and the reply streaming waits for the read.
 func tookLive(state *chatState, l *protocol.ChatLive, read func(then func())) {
 	f := &state.follow
-	if l.GetLogged() && !f.waiting {
-		f.waiting = true
+	// A log that grows again while it is read is read again: the read out
+	// may have gone before it grew, and its last message would wait for
+	// the next poll.
+	if l.GetLogged() {
+		f.waiting++
 		read(func() {
-			f.waiting = false
-			state.live.Set(f.held)
+			// A follow begun again since has nothing out.
+			if f.waiting > 0 {
+				if f.waiting--; f.waiting == 0 {
+					state.live.Set(f.held)
+				}
+			}
 		})
 	}
-	if f.waiting {
+	if f.waiting > 0 {
 		f.held = l.GetBlocks()
 		return
 	}
