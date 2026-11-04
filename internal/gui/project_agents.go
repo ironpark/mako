@@ -75,11 +75,63 @@ func (m *model) loadProjectAgents(root fileRoot) {
 func projectAgentsPanel(m *model) ggui.Widget {
 	root := ggui.Derived(m.filesRoot)
 	pollWhileShown(m, root, agentsTab, 2*time.Second, m.loadProjectAgents)
-	return ggui.Key(root, func(r fileRoot) ggui.Widget {
+	// The chosen session itself heads its project's agents.
+	agents := ggui.Key(root, func(r fileRoot) ggui.Widget {
 		if r.Path == "" {
 			return ggui.Box(muted(ggui.Text(T("Open a session to monitor its project agents.")).Size(13))).Pad(16)
 		}
 		return projectAgentsBody(m, r)
+	})
+	return ggui.Column(sessionCard(m), hline(), ggui.Expanded(agents)).Stretch()
+}
+
+// sessionCard is the chosen session at the top of the Agents tab: what it
+// is, what it does and where, and the rest of what is known of it opened.
+func sessionCard(m *model) ggui.Widget {
+	more := ggui.State(false)
+	return ggui.Reactive(func() ggui.Widget {
+		s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get())
+		if !ok {
+			return ggui.Box(muted(ggui.Text(T("No session selected.")).Size(12.5))).Pad(10, 12)
+		}
+		open := more.Get()
+		status, tint := projectAgentStatus(s)
+		chevron := pick(open, "chevron-down", "chevron-right")
+		head := ui.ButtonOf(ggui.Row(
+			agentGlyph(s.GetAgent(), tokMuted).Size(14),
+			ggui.Expanded(ggui.Text(projectAgentName(s)).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
+			dot(tint),
+			ggui.Text(status).Size(11.5).Color(tokMuted).NoWrap(),
+			icon(chevron).Size(13).Color(tokExtraMuted),
+		).Gap(7).Align(ggui.AlignCenter), func() { more.Set(!open) }).Ghost().Pad(5, 6).Radius(5).Name(T("Session details"))
+		pair := func(a, b ggui.Widget) ggui.Widget {
+			return ggui.Row(ggui.Expanded(a), ggui.Expanded(b)).Gap(12).Stretch()
+		}
+		where := prettyPath(s.GetProject())
+		if w := s.GetWorktree(); w != nil {
+			where = Tf("%s, from %s, of %s", w.GetBranch(), cmp.Or(w.GetBase(), "HEAD"), prettyPath(w.GetRepo()))
+		}
+		props := []ggui.Widget{
+			pair(prop(T("Agent"), sessionLabel(s)), prop(T("Node"), nodeName(m.Nodes.Get(), s.GetNodeId()))),
+			prop(pick(s.GetWorktree() != nil, T("Worktree"), T("Project")), where),
+		}
+		if open {
+			code := "-"
+			if s.ExitCode != nil {
+				code = fmt.Sprint(*s.ExitCode)
+			}
+			if st := statusLabel(s); s.GetStatus() != "" && st != "" {
+				props = append(props, prop(T("Doing"), st))
+			}
+			props = append(props,
+				prop(T("Command"), strings.Join(s.GetCommand(), " ")),
+				pair(prop(T("State"), stateLabel(s.GetState())), prop(T("Exit code"), code)),
+				pair(prop(T("Started"), protocol.TimeOf(s.GetStartedAt()).Local().Format("Jan 2 15:04:05")),
+					prop(T("Uptime"), time.Since(protocol.TimeOf(s.GetStartedAt())).Truncate(time.Second).String())),
+				pair(prop(T("Size"), fmt.Sprintf("%d × %d", s.GetCols(), s.GetRows())), prop(T("Session"), s.GetId())),
+			)
+		}
+		return ggui.Box(ggui.Column(head, ggui.Box(ggui.Column(props...).Gap(10).Stretch()).Pad(2, 6, 4, 6)).Gap(4).Stretch()).Pad(6, 6, 8, 6)
 	})
 }
 

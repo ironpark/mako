@@ -288,6 +288,7 @@ var catalogKo = map[string]string{
 	"Host":             "호스트",
 	"Discovery":        "탐색",
 	"Agents":           "에이전트",
+	"Session details":  "세션 정보",
 	"About":            "정보",
 
 	// Settings: general

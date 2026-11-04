@@ -6,7 +6,6 @@ import (
 	"image/color"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
@@ -944,41 +943,9 @@ const (
 	agentsTab
 	forgeTab
 	searchTab
-	sessionTab
 )
 
 func details(m *model) ggui.Widget {
-	session := ggui.Reactive(func() ggui.Widget {
-		s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get())
-		if !ok {
-			return ggui.Box(muted(ggui.Text(T("No session selected.")).Size(13))).Pad(16)
-		}
-		code := "-"
-		if s.ExitCode != nil {
-			code = fmt.Sprint(*s.ExitCode)
-		}
-		props := []ggui.Widget{
-			prop(T("Agent"), sessionLabel(s)),
-		}
-		if s.GetStatus() != "" {
-			props = append(props, prop(T("Doing"), statusLabel(s)))
-		}
-		props = append(props,
-			prop(T("Node"), nodeName(m.Nodes.Get(), s.GetNodeId())),
-			prop(T("Project"), prettyPath(s.GetProject())))
-		if w := s.GetWorktree(); w != nil {
-			props = append(props, prop(T("Worktree"), Tf("%s, from %s, of %s", w.GetBranch(), cmp.Or(w.GetBase(), "HEAD"), prettyPath(w.GetRepo()))))
-		}
-		return ggui.Column(append(props,
-			prop(T("Command"), strings.Join(s.GetCommand(), " ")),
-			prop(T("State"), stateLabel(s.GetState())),
-			prop(T("Exit code"), code),
-			prop(T("Size"), fmt.Sprintf("%d × %d", s.GetCols(), s.GetRows())),
-			prop(T("Started"), protocol.TimeOf(s.GetStartedAt()).Local().Format("Jan 2 15:04:05")),
-			prop(T("Uptime"), time.Since(protocol.TimeOf(s.GetStartedAt())).Truncate(time.Second).String()),
-			prop(T("Session"), s.GetId()),
-		)...).Gap(14).Stretch()
-	})
 	watchForge(m)
 	// Built once, so each keeps its scroll and open folders across tabs.
 	pages := []ggui.Widget{
@@ -987,11 +954,10 @@ func details(m *model) ggui.Widget {
 		projectAgentsPanel(m),
 		forgePanel(m),
 		searchPanel(m),
-		ggui.Scroll(ggui.Padding(session, 16)),
 	}
 	return ggui.Box(ggui.Column(
 		ggui.View(ggui.Derived(m.forgeOf), func(f string) ggui.Widget {
-			return panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), forgeLabel(f), T("Search"), T("Session"))
+			return panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), forgeLabel(f), T("Search"))
 		}),
 		hline(),
 		ggui.Expanded(ggui.Key(m.DetailTab, func(i int) ggui.Widget { return pages[min(max(i, 0), len(pages)-1)] })),

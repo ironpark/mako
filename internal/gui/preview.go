@@ -131,7 +131,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			var b *browser
 			p = ggui.ProbeBuilder(func() ggui.Widget {
 				if agentsOnly {
-					return ggui.Box(ggui.Column(panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), "GitHub", T("Search"), T("Session")), hline(), ggui.Expanded(projectAgentsBody(m, agentsRoot))).Stretch()).Fill(tokSurface0)
+					return ggui.Box(ggui.Column(panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), "GitHub", T("Search")), hline(), ggui.Expanded(projectAgentsBody(m, agentsRoot))).Stretch()).Fill(tokSurface0)
 				}
 				if browse != "" {
 					b = newBrowser(m, "", browse)
@@ -360,7 +360,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(m.openQuickOpen), do(func() { m.QuickQuery.Set("view") }), frames(30), shot("03-quick-open"),
 				do(func() { m.QuickOpen.Set(false); m.DetailTab.Set(gitTab) }),
 				do(func() { m.DetailsWidth.Set(ggui.Peek(m.Prefs).DetailsWidth) }),
-				do(func() { m.DetailTab.Set(sessionTab) }), frames(2), shot("03-details"),
+				do(func() { m.DetailTab.Set(agentsTab) }), frames(2), shot("03-details"),
 				do(func() { m.DetailTab.Set(filesTab); m.openNew("", "") }), frames(2), shot("04-new-session"),
 				do(func() { m.NewOpen.Set(false); m.openSettings("general") }), frames(2), shot("05-settings-general"),
 				do(func() { m.Section.Set("appearance") }), frames(2), shot("06-settings-appearance"),
