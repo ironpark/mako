@@ -241,6 +241,10 @@ class Mesh(
     fun canTransfer(node: String): Boolean =
         (_nodes.value.firstOrNull { it.id == node }?.revision ?: REVISION_TRANSFERS) >= REVISION_TRANSFERS
 
+    /** Whether node reads a project's agents. */
+    fun readsProjectAgents(node: String): Boolean =
+        node == _self.value?.id || (_nodes.value.firstOrNull { it.id == node }?.revision ?: 0) >= REVISION_PROJECT_AGENTS
+
     /** Types into a session: text pasted as its program asked for pastes, then keys as they are. */
     suspend fun send(s: SessionInfo, text: String = "", keys: String = "") = daemon.send(s.nodeId, s.id, text, keys)
 
@@ -285,6 +289,9 @@ class Mesh(
 
         /** The first protocol revision whose daemon takes send (protocol.RevisionSend). */
         const val REVISION_SEND = 8L
+
+        /** The first protocol revision whose daemon reads a project's agents (protocol.RevisionProjectAgents). */
+        const val REVISION_PROJECT_AGENTS = 15L
 
         /** How long the sessions may take to come, before none is taken to mean none. */
         private const val SETTLE = 8_000L

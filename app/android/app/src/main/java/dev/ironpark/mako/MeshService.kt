@@ -88,7 +88,7 @@ class MeshService : Service() {
         }
         // Applying a setting also removes an alert that was already visible.
         for (s in sessions) {
-            val kind = s.noticeKind()
+            val kind = seen.kind(s)
             if (!options.enabled || kind != null && !options.allows(kind, foreground)) nm.cancel(s.id.hashCode())
         }
     }

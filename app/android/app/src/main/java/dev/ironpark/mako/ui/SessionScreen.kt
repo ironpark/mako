@@ -63,6 +63,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FitScreen
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.QuestionAnswer
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material3.HorizontalDivider
@@ -92,6 +93,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun SessionScreen(
     mesh: Mesh, node: String, id: String, onBack: () -> Unit, home: @Composable () -> Unit, onFiles: (String) -> Unit,
+    onAgents: (String) -> Unit = {},
     onFile: (ChatLink.File) -> Unit = {},
 ) {
     val sessions by mesh.sessions.collectAsState()
@@ -182,6 +184,10 @@ fun SessionScreen(
                             DropdownMenuItem(text = { Text(stringResource(R.string.project_files)) },
                                 leadingIcon = { Icon(Icons.Outlined.Folder, null) }, enabled = session != null,
                                 onClick = { menu = false; onFiles(session?.project.orEmpty().ifBlank { "~" }) })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.project_agents)) },
+                                leadingIcon = { Icon(Icons.Outlined.Groups, null) },
+                                enabled = session != null && session.project.isNotEmpty() && mesh.readsProjectAgents(node),
+                                onClick = { menu = false; onAgents(session?.project.orEmpty()) })
                             DropdownMenuItem(text = { Text(stringResource(R.string.answer_agent)) },
                                 leadingIcon = { Icon(Icons.Outlined.QuestionAnswer, null) },
                                 enabled = session?.state == "running", onClick = { menu = false; question = true })

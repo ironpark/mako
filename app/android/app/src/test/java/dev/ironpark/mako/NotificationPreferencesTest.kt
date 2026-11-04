@@ -30,6 +30,26 @@ class NotificationPreferencesTest {
         assertNull(tracker.update(emptyList()).single().kind)
     }
 
+    private fun turn(status: String, turns: Long) = session(status).toBuilder().setTurns(turns).build()
+
+    @Test fun aTurnEndedIdleNotifiesAsDoneUntilItWorksAgain() {
+        val tracker = NoticeTracker()
+        tracker.update(listOf(turn("working", 0)))
+        assertEquals(NoticeKind.Done, tracker.update(listOf(turn("idle", 1))).single().kind)
+        assertTrue(tracker.update(listOf(turn("idle", 1))).isEmpty())
+        assertEquals(NoticeKind.Done, tracker.kind(turn("idle", 1)))
+        assertNull(tracker.update(listOf(turn("working", 1))).single().kind)
+        // An idle agent that ended no turn, as a node older than turns says, calls for nothing.
+        assertTrue(tracker.update(listOf(turn("idle", 0).toBuilder().setId("other").build())).let { it.size == 1 && it.single().kind == null })
+    }
+
+    @Test fun aTurnEndedBetweenTwoLooksNotifiesAgain() {
+        val tracker = NoticeTracker()
+        tracker.update(listOf(turn("done", 1)))
+        assertEquals(NoticeKind.Done, tracker.update(listOf(turn("done", 2))).single().kind)
+        assertTrue(tracker.update(listOf(turn("done", 2))).isEmpty())
+    }
+
     @Test fun observingWhileDisabledDoesNotReplayOldEventsAfterReenabling() {
         val tracker = NoticeTracker()
         tracker.update(listOf(session("working")))

@@ -236,4 +236,16 @@
     <string name="draft">임시 저장:</string>
     <string name="expanded">펼침</string>
     <string name="collapsed">접힘</string>
+    <string name="project_agents">프로젝트 에이전트</string>
+    <string name="project_agents_counts">작업 중 %1$d · 대기 %2$d · 전달 대기 %3$d</string>
+    <string name="project_agents_unsupported">프로젝트 에이전트를 보려면 이 컴퓨터의 Mako를 업데이트하세요.</string>
+    <string name="agents">에이전트</string>
+    <string name="recent_messages">최근 메시지</string>
+    <string name="no_agents">이 프로젝트에 에이전트가 없습니다.</string>
+    <string name="no_messages">아직 메시지가 없습니다.</string>
+    <string name="mako_note_about">%1$s에 대한 Mako 알림</string>
+    <string name="message_pending">전달 대기</string>
+    <string name="message_removed">수신자 삭제됨</string>
+    <string name="pending_messages">메시지 %1$d개 대기</string>
+    <string name="this_session">이 세션</string>
 </resources>

@@ -96,6 +96,9 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                 id = args?.getString("id").orEmpty(),
                 onBack = { nav.popBackStack() },
                 onFiles = { root -> nav.navigate("files/${Uri.encode(args?.getString("node").orEmpty())}/${Uri.encode(root)}") },
+                onAgents = { path ->
+                    nav.navigate("agents/${Uri.encode(args?.getString("node").orEmpty())}/${Uri.encode(path)}/${Uri.encode(args?.getString("id").orEmpty())}")
+                },
                 onFile = { link ->
                     val node = Uri.encode(args?.getString("node").orEmpty())
                     val project = mesh.session(args?.getString("id").orEmpty())?.project.orEmpty()
@@ -114,6 +117,12 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                     )
                 },
             )
+        }
+        // The agents of a session's project, on its node.
+        composable("agents/{node}/{path}/{self}") { entry ->
+            val a = entry.arguments
+            ProjectAgentsScreen(mesh, a?.getString("node").orEmpty(), a?.getString("path").orEmpty(), a?.getString("self").orEmpty(),
+                onBack = { nav.popBackStack() }, onOpen = { openSession(it.nodeId, it.id) })
         }
         composable("files/{node}/{root}") { entry ->
             val node = entry.arguments?.getString("node").orEmpty()

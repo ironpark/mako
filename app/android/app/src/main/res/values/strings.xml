@@ -241,4 +241,16 @@
     <string name="draft">Draft:</string>
     <string name="expanded">Expanded</string>
     <string name="collapsed">Collapsed</string>
+    <string name="project_agents">Project agents</string>
+    <string name="project_agents_counts">%1$d working · %2$d waiting · %3$d pending</string>
+    <string name="project_agents_unsupported">Update Mako on this computer to see its project\'s agents.</string>
+    <string name="agents">Agents</string>
+    <string name="recent_messages">Recent messages</string>
+    <string name="no_agents">No agents in this project.</string>
+    <string name="no_messages">No messages yet.</string>
+    <string name="mako_note_about">Mako note about %1$s</string>
+    <string name="message_pending">Not yet received</string>
+    <string name="message_removed">Recipient removed</string>
+    <string name="pending_messages">%1$d pending</string>
+    <string name="this_session">This session</string>
 </resources>

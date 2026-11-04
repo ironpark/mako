@@ -12,6 +12,8 @@ import dev.ironpark.mako.v2.ListNodes
 import dev.ironpark.mako.v2.ListSessions
 import dev.ironpark.mako.v2.Node
 import dev.ironpark.mako.v2.OpenSession
+import dev.ironpark.mako.v2.ProjectAgents
+import dev.ironpark.mako.v2.ReadProjectAgents
 import dev.ironpark.mako.v2.ReadChat
 import dev.ironpark.mako.v2.RenameSession
 import dev.ironpark.mako.v2.Send
@@ -85,6 +87,10 @@ class Daemon(private val socket: () -> String?) {
         }).commands.commandsList
 
     suspend fun chat(req: ReadChat): Chat = call(envelope { readChat = req }).chat
+
+    /** The agents of the project path is in on node, and their latest messages to each other. */
+    suspend fun projectAgents(node: String, path: String): ProjectAgents =
+        call(envelope { readProjectAgents = ReadProjectAgents.newBuilder().setNodeId(node).setPath(path).build() }).projectAgents
 
     /**
      * Sends what input holds to node, a piece at a time, as a file named
