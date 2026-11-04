@@ -574,10 +574,7 @@ func (r *mdRenderer) open(dest string) {
 
 // beside is a relative path from the file's folder, on its node.
 func (r *mdRenderer) beside(rel string) string {
-	if pathSep(r.doc.Path) == `\` {
-		return resolvePath(filepath.Dir(r.doc.Path), rel)
-	}
-	return resolvePath(path.Dir(r.doc.Path), rel)
+	return resolvePath(parentDir(r.doc.Path), rel)
 }
 
 // code is a code block, highlighted in its language when there is one,

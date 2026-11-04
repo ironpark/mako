@@ -129,3 +129,22 @@ func TestAnImageOnTheWebIsRead(t *testing.T) {
 		t.Fatal("an image not there was read")
 	}
 }
+
+// An image beside a file on a Windows node resolves on that node, whatever
+// this machine is: the page's folder by its backslashes, the link by
+// either separator.
+func TestAnImageBesideAWindowsFile(t *testing.T) {
+	for _, c := range []struct{ doc, rel, want string }{
+		{`C:\Users\me\mako\README.md`, "docs/shot.png", `C:\Users\me\mako\docs\shot.png`},
+		{`C:\Users\me\mako\docs\guide.md`, "../assets/logo.svg", `C:\Users\me\mako\assets\logo.svg`},
+		{`C:\Users\me\mako\README.md`, `.\img\a.png`, `C:\Users\me\mako\img\a.png`},
+		{`C:\Users\me\mako\README.md`, `D:/pics/a.png`, `D:\pics\a.png`},
+		{`\\srv\share\README.md`, "a.png", `\\srv\share\a.png`},
+		{"/home/me/mako/README.md", "docs/shot.png", "/home/me/mako/docs/shot.png"},
+	} {
+		r := &mdRenderer{doc: docInfo{Path: c.doc}}
+		if got := r.beside(c.rel); got != c.want {
+			t.Errorf("%s beside %s = %s, want %s", c.rel, c.doc, got, c.want)
+		}
+	}
+}

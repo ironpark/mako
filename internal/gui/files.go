@@ -225,15 +225,32 @@ func joinPath(dir, name string) string {
 }
 
 // resolvePath is rel from dir on a node, cleaned, or rel itself when it is
-// absolute there.
+// absolute there. A Windows node's paths, by their separator, resolve the
+// same on whatever this machine is: a link in them may be written with
+// either.
 func resolvePath(dir, rel string) string {
 	if strings.HasPrefix(rel, "/") || filepath.IsAbs(rel) {
 		return rel
 	}
-	if pathSep(dir) == `\` {
-		return filepath.Join(dir, rel)
+	if pathSep(dir) != `\` {
+		return path.Join(dir, rel)
 	}
-	return path.Join(dir, rel)
+	rel = strings.ReplaceAll(rel, `\`, "/")
+	if strings.HasPrefix(rel, "/") || winDrive(rel) {
+		return strings.ReplaceAll(rel, "/", `\`) // absolute on the node
+	}
+	slashed := strings.ReplaceAll(dir, `\`, "/")
+	unc := strings.HasPrefix(slashed, "//") // \\server\share, which Join would fold
+	joined := path.Join(slashed, rel)
+	if unc {
+		joined = "/" + joined
+	}
+	return strings.ReplaceAll(joined, "/", `\`)
+}
+
+// winDrive reports whether p starts with a Windows drive, as C: does.
+func winDrive(p string) bool {
+	return len(p) >= 2 && p[1] == ':' && ('a' <= p[0]|0x20 && p[0]|0x20 <= 'z')
 }
 
 // openItem opens a file in what shows it: an image in the Files tab's
