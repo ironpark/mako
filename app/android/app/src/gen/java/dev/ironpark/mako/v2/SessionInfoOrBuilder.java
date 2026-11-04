@@ -457,4 +457,16 @@ public interface SessionInfoOrBuilder extends
    */
   com.google.protobuf.ByteString
       getGitStampBytes();
+
+  /**
+   * <pre>
+   * turns counts the turns the session's agent has ended, as its hooks
+   * or its screen said: one that waits for a turn to end, on any node,
+   * waits for it to move. 0 from a daemon older than it.
+   * </pre>
+   *
+   * <code>uint64 turns = 32 [json_name = "turns"];</code>
+   * @return The turns.
+   */
+  long getTurns();
 }

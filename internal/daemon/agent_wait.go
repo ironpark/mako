@@ -20,14 +20,14 @@ import (
 // gone, in a note typed in as its messages are.
 
 type waitAgentArgs struct {
-	SessionID string `json:"session_id" jsonschema:"The agent to wait on, of this project on this node."`
-	Until     string `json:"until,omitempty" jsonschema:"turn (the default): until the turn it is on, or the next, ends. output: until text shows in what it prints from now on. Either way, the wait ends when the agent waits on the user or exits."`
+	SessionID string `json:"session_id" jsonschema:"The agent to wait on, of this project, on any node."`
+	Until     string `json:"until,omitempty" jsonschema:"turn (the default): until the turn it is on, or the next, ends. output: until text shows in what it prints from now on, for an agent of this node. Either way, the wait ends when the agent waits on the user or exits."`
 	Text      string `json:"text,omitempty" jsonschema:"With until=output, the text to wait for, in its output with terminal escapes removed."`
 	Timeout   int    `json:"timeout_seconds,omitempty" jsonschema:"1 to 300; defaults to 120. A timeout is a check-in, not a failure: wait again while it works."`
 }
 
 type waitAgentResult struct {
-	Reason string `json:"reason" jsonschema:"turn_ended: it ended a turn. idle: it was at its prompt, its turns done and nothing sent to it pending. waiting: it waits on the user, an approval or a question in its terminal. exited. output: the text showed. message: a message reached you, which read_messages reads. timeout."`
+	Reason string `json:"reason" jsonschema:"turn_ended: it ended a turn. idle: it was at its prompt, its turns done and nothing sent to it pending. waiting: it waits on the user, an approval or a question in its terminal. exited. gone: it is no longer listed, closed or its node out of reach. output: the text showed. message: a message reached you, which read_messages reads. timeout."`
 	Status string `json:"status,omitempty"`
 	State  string `json:"state"`
 }
@@ -35,11 +35,19 @@ type waitAgentResult struct {
 const (
 	waitDefault = 120 * time.Second
 	waitMax     = 300 * time.Second
-	// waitPoll is how often the agent waited on is looked at.
-	waitPoll = 250 * time.Millisecond
+	// waitRecheck is how often the agent waited on is looked at besides
+	// when it changes: for status gone stale as it is read, and an agent
+	// of another node, whose state comes as its daemon sends it.
+	waitRecheck = time.Second
 	// waitOutputKept is how much of what it printed is kept to match in.
 	waitOutputKept = 64 << 10
 )
+
+// waited is the agent a wait_agent waits on, of this node or another.
+type waited struct {
+	info    func() *protocol.SessionInfo // nil once it is gone
+	changed func() <-chan struct{}       // nil for one never announced
+}
 
 func (d *Daemon) waitProjectAgent(ctx context.Context, peer *agentPeer, in waitAgentArgs) (waitAgentResult, error) {
 	caller, err := d.projectCaller(peer)
@@ -62,57 +70,78 @@ func (d *Daemon) waitProjectAgent(ctx context.Context, peer *agentPeer, in waitA
 		return waitAgentResult{}, errors.New("an agent cannot wait on itself")
 	}
 	scope := d.projectScope(caller.Info())
-	target, ok := d.sessions.get(in.SessionID)
-	if !ok || !d.inProject(scope, target.Info()) {
-		if d.remoteAgent(scope, in.SessionID) != nil {
-			return waitAgentResult{}, errors.New("wait_agent waits on agents of this node; read_messages waits for one of another's to report")
-		}
-		return waitAgentResult{}, errNotInProject
-	}
+	var target waited
+	var printed <-chan struct{}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	if s, ok := d.sessions.get(in.SessionID); ok && d.inProject(scope, s.Info()) {
+		target = waited{info: s.Info, changed: s.Changed}
+		if !byTurn {
+			printed = watchOutput(ctx, s, in.Text)
+		}
+	} else if d.remoteAgent(scope, in.SessionID) != nil {
+		if !byTurn {
+			return waitAgentResult{}, errors.New("until=output waits on agents of this node; wait for another's turn instead")
+		}
+		target = waited{info: func() *protocol.SessionInfo { return d.remoteAgent(scope, in.SessionID) }}
+	} else {
+		return waitAgentResult{}, errNotInProject
+	}
 	release := d.projectAgents.waitOn(in.SessionID)
 	defer release()
 
-	var printed <-chan struct{}
-	if !byTurn {
-		printed = watchOutput(ctx, target, in.Text)
-	}
 	mine, _ := d.projectAgents.messages.pending(peer.id)
 	seen := lastID(mine)
-	turns := target.Turns()
 	result := func(info *protocol.SessionInfo, reason string) waitAgentResult {
 		return waitAgentResult{Reason: reason, Status: info.GetStatus(), State: info.GetState()}
 	}
-	if info := target.Info(); byTurn && turns > 0 && !protocol.AtWork(info.GetStatus()) && info.GetStatus() != protocol.AgentWaiting {
+	info := target.info()
+	turns := info.GetTurns()
+	if byTurn && turns > 0 && !protocol.AtWork(info.GetStatus()) && info.GetStatus() != protocol.AgentWaiting && info.GetState() != protocol.StateExited {
 		// Its turn ended before the wait, unless a message waits to start
-		// it on another.
-		if inbox, _ := d.projectAgents.messages.pending(in.SessionID); len(inbox) == 0 && info.GetState() != protocol.StateExited {
+		// it on another. One sent to another node's waits there, and so
+		// is not seen: the wait then ends at once, as it would had the
+		// message started no turn.
+		if inbox, _ := d.projectAgents.messages.pending(in.SessionID); len(inbox) == 0 {
 			return result(info, "idle"), nil
 		}
 	}
+	recheck := time.NewTicker(waitRecheck)
+	defer recheck.Stop()
+	worked := false
 	for {
-		info := target.Info()
+		var changed <-chan struct{}
+		if target.changed != nil {
+			changed = target.changed()
+		}
+		info := target.info()
+		status := info.GetStatus()
+		worked = worked || protocol.AtWork(status)
 		switch {
+		case info == nil:
+			return result(info, "gone"), nil
 		case info.GetState() == protocol.StateExited:
 			return result(info, "exited"), nil
-		case info.GetStatus() == protocol.AgentWaiting:
+		case status == protocol.AgentWaiting:
 			return result(info, "waiting"), nil
-		case byTurn && target.Turns() > turns:
+		// A daemon older than turns counts none: the turn ends as its
+		// work, seen in the wait, does.
+		case byTurn && (info.GetTurns() > turns || turns == 0 && worked && !protocol.AtWork(status)):
 			return result(info, "turn_ended"), nil
 		}
-		inbox, changed := d.projectAgents.messages.pending(peer.id)
+		inbox, messaged := d.projectAgents.messages.pending(peer.id)
 		if lastID(inbox) > seen {
 			return result(info, "message"), nil
 		}
 		select {
 		case <-printed:
-			return result(target.Info(), "output"), nil
+			return result(target.info(), "output"), nil
 		case <-changed:
-		case <-time.After(waitPoll):
+		case <-messaged:
+		case <-recheck.C:
 		case <-ctx.Done():
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return result(target.Info(), "timeout"), nil
+				return result(target.info(), "timeout"), nil
 			}
 			return waitAgentResult{}, ctx.Err()
 		}

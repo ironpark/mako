@@ -44,7 +44,7 @@ type messageFile struct {
 
 // proto is msg as the wire carries it, in state.
 func (msg agentMessage) proto(state string) *protocol.AgentMessage {
-	return &protocol.AgentMessage{Id: msg.ID, FromSessionId: msg.From, ToSessionId: msg.To, Text: msg.Text, CreatedAt: protocol.Time(msg.Created), State: state}
+	return &protocol.AgentMessage{Id: msg.ID, FromSessionId: msg.From, ToSessionId: msg.To, Text: msg.Text, CreatedAt: protocol.Time(msg.Created), State: state, Note: msg.Note}
 }
 
 // agentMessageOf is the message the wire carries as m.

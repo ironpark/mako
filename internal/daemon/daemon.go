@@ -67,6 +67,7 @@ type Daemon struct {
 	heads                heads                // the projects' branches
 	remote               peerReports          // what peers say of their sessions and routes; see routes.go
 	changes              notifier             // tells watching front-ends what changed
+	statusPoke           chan struct{}        // a session's status changed; see watchState
 	workspace            workspaces           // the windows' tabs and panes; see workspace.go
 	projects             projectStore         // the projects of several folders; see projects.go
 	linking              map[string]time.Time // peer ID -> the last link tried, until one holds
@@ -102,6 +103,9 @@ func New(cfg *config.Config, log *slog.Logger) *Daemon {
 		ready:    make(chan struct{}),
 		mcp:      newResolver(log),
 		kinds:    deviceKinds(cfg),
+		// One poke waits however many sessions change before watchState
+		// takes it.
+		statusPoke: make(chan struct{}, 1),
 
 		hookBinary: hookProgram,
 	}

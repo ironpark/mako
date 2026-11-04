@@ -38,6 +38,9 @@ message AgentMessage {
   string text = 4;
   google.protobuf.Timestamp created_at = 5;
   string state = 6; // pending, acknowledged, removed (recipient deleted)
+  // note says Mako wrote it, of from_session_id, to the agent that
+  // spawned it: that it waits on the user, or exited without a word.
+  bool note = 7;
 }
 
 // SetProjects gives a daemon the projects the user put together, as far

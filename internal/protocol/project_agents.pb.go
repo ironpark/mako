@@ -223,6 +223,9 @@ type AgentMessage struct {
 	Text          string                 `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	State         string                 `protobuf:"bytes,6,opt,name=state,proto3" json:"state,omitempty"` // pending, acknowledged, removed (recipient deleted)
+	// note says Mako wrote it, of from_session_id, to the agent that
+	// spawned it: that it waits on the user, or exited without a word.
+	Note          bool `protobuf:"varint,7,opt,name=note,proto3" json:"note,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -297,6 +300,13 @@ func (x *AgentMessage) GetState() string {
 		return x.State
 	}
 	return ""
+}
+
+func (x *AgentMessage) GetNote() bool {
+	if x != nil {
+		return x.Note
+	}
+	return false
 }
 
 // SetProjects gives a daemon the projects the user put together, as far
@@ -570,7 +580,7 @@ const file_mako_v2_project_agents_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\v2\x14.mako.v2.SessionInfoR\asession\x12*\n" +
 	"\x11parent_session_id\x18\x02 \x01(\tR\x0fparentSessionId\x12\x1c\n" +
 	"\tmessaging\x18\x03 \x01(\bR\tmessaging\x12)\n" +
-	"\x10pending_messages\x18\x04 \x01(\rR\x0fpendingMessages\"\xcf\x01\n" +
+	"\x10pending_messages\x18\x04 \x01(\rR\x0fpendingMessages\"\xe3\x01\n" +
 	"\fAgentMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12&\n" +
 	"\x0ffrom_session_id\x18\x02 \x01(\tR\rfromSessionId\x12\"\n" +
@@ -578,7 +588,8 @@ const file_mako_v2_project_agents_proto_rawDesc = "" +
 	"\x04text\x18\x04 \x01(\tR\x04text\x129\n" +
 	"\n" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x14\n" +
-	"\x05state\x18\x06 \x01(\tR\x05state\"Y\n" +
+	"\x05state\x18\x06 \x01(\tR\x05state\x12\x12\n" +
+	"\x04note\x18\a \x01(\bR\x04note\"Y\n" +
 	"\vSetProjects\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x121\n" +
 	"\bprojects\x18\x02 \x03(\v2\x15.mako.v2.ProjectScopeR\bprojects\"e\n" +

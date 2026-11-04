@@ -1736,6 +1736,50 @@ public  final class SessionInfo extends
 
   }
 
+  public static final int TURNS_FIELD_NUMBER = 32;
+  private long turns_;
+  /**
+   * <pre>
+   * turns counts the turns the session's agent has ended, as its hooks
+   * or its screen said: one that waits for a turn to end, on any node,
+   * waits for it to move. 0 from a daemon older than it.
+   * </pre>
+   *
+   * <code>uint64 turns = 32 [json_name = "turns"];</code>
+   * @return The turns.
+   */
+  @java.lang.Override
+  public long getTurns() {
+    return turns_;
+  }
+  /**
+   * <pre>
+   * turns counts the turns the session's agent has ended, as its hooks
+   * or its screen said: one that waits for a turn to end, on any node,
+   * waits for it to move. 0 from a daemon older than it.
+   * </pre>
+   *
+   * <code>uint64 turns = 32 [json_name = "turns"];</code>
+   * @param value The turns to set.
+   */
+  private void setTurns(long value) {
+    
+    turns_ = value;
+  }
+  /**
+   * <pre>
+   * turns counts the turns the session's agent has ended, as its hooks
+   * or its screen said: one that waits for a turn to end, on any node,
+   * waits for it to move. 0 from a daemon older than it.
+   * </pre>
+   *
+   * <code>uint64 turns = 32 [json_name = "turns"];</code>
+   */
+  private void clearTurns() {
+
+    turns_ = 0L;
+  }
+
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -3598,6 +3642,52 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * turns counts the turns the session's agent has ended, as its hooks
+     * or its screen said: one that waits for a turn to end, on any node,
+     * waits for it to move. 0 from a daemon older than it.
+     * </pre>
+     *
+     * <code>uint64 turns = 32 [json_name = "turns"];</code>
+     * @return The turns.
+     */
+    @java.lang.Override
+    public long getTurns() {
+      return instance.getTurns();
+    }
+    /**
+     * <pre>
+     * turns counts the turns the session's agent has ended, as its hooks
+     * or its screen said: one that waits for a turn to end, on any node,
+     * waits for it to move. 0 from a daemon older than it.
+     * </pre>
+     *
+     * <code>uint64 turns = 32 [json_name = "turns"];</code>
+     * @param value The turns to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTurns(long value) {
+      copyOnWrite();
+      instance.setTurns(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * turns counts the turns the session's agent has ended, as its hooks
+     * or its screen said: one that waits for a turn to end, on any node,
+     * waits for it to move. 0 from a daemon older than it.
+     * </pre>
+     *
+     * <code>uint64 turns = 32 [json_name = "turns"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTurns() {
+      copyOnWrite();
+      instance.clearTurns();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -3647,14 +3737,15 @@ public  final class SessionInfo extends
             "tasks_",
             dev.ironpark.mako.v2.BackgroundTask.class,
             "gitStamp_",
+            "turns_",
           };
           java.lang.String info =
-              "\u0000\u001f\u0000\u0001\u0001\u001f\u001f\u0000\u0002\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208" +
-              "\u000b\u000b\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011" +
-              "\u0208\u0012\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004" +
-              "\u0017\u1009\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006\u001c\u0208" +
-              "\u001d\u0007\u001e\u001b\u001f\u0208";
+              "\u0000 \u0000\u0001\u0001  \u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208\u000b\u000b" +
+              "\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011\u0208\u0012" +
+              "\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004\u0017\u1009" +
+              "\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006\u001c\u0208\u001d\u0007" +
+              "\u001e\u001b\u001f\u0208 \u0003";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

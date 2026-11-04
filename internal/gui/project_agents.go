@@ -346,6 +346,10 @@ func projectAgentMessage(msg *protocol.AgentMessage, byID map[string]*protocol.P
 	mine := self != "" && msg.GetFromSessionId() == self
 	who := label(msg.GetFromSessionId()) + " → " + label(msg.GetToSessionId())
 	switch {
+	case msg.GetNote():
+		// Mako wrote it, of the agent it is from.
+		mine = false
+		who = Tf("Mako note about %s", label(msg.GetFromSessionId()))
 	case mine:
 		who = "→ " + label(msg.GetToSessionId())
 	case self != "":

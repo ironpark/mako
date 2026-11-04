@@ -82,4 +82,15 @@ public interface AgentMessageOrBuilder extends
    */
   com.google.protobuf.ByteString
       getStateBytes();
+
+  /**
+   * <pre>
+   * note says Mako wrote it, of from_session_id, to the agent that
+   * spawned it: that it waits on the user, or exited without a word.
+   * </pre>
+   *
+   * <code>bool note = 7 [json_name = "note"];</code>
+   * @return The note.
+   */
+  boolean getNote();
 }

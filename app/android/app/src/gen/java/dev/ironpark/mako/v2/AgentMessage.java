@@ -306,6 +306,47 @@ public  final class AgentMessage extends
 
   }
 
+  public static final int NOTE_FIELD_NUMBER = 7;
+  private boolean note_;
+  /**
+   * <pre>
+   * note says Mako wrote it, of from_session_id, to the agent that
+   * spawned it: that it waits on the user, or exited without a word.
+   * </pre>
+   *
+   * <code>bool note = 7 [json_name = "note"];</code>
+   * @return The note.
+   */
+  @java.lang.Override
+  public boolean getNote() {
+    return note_;
+  }
+  /**
+   * <pre>
+   * note says Mako wrote it, of from_session_id, to the agent that
+   * spawned it: that it waits on the user, or exited without a word.
+   * </pre>
+   *
+   * <code>bool note = 7 [json_name = "note"];</code>
+   * @param value The note to set.
+   */
+  private void setNote(boolean value) {
+    
+    note_ = value;
+  }
+  /**
+   * <pre>
+   * note says Mako wrote it, of from_session_id, to the agent that
+   * spawned it: that it waits on the user, or exited without a word.
+   * </pre>
+   *
+   * <code>bool note = 7 [json_name = "note"];</code>
+   */
+  private void clearNote() {
+
+    note_ = false;
+  }
+
   public static dev.ironpark.mako.v2.AgentMessage parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -698,6 +739,49 @@ public  final class AgentMessage extends
       return this;
     }
 
+    /**
+     * <pre>
+     * note says Mako wrote it, of from_session_id, to the agent that
+     * spawned it: that it waits on the user, or exited without a word.
+     * </pre>
+     *
+     * <code>bool note = 7 [json_name = "note"];</code>
+     * @return The note.
+     */
+    @java.lang.Override
+    public boolean getNote() {
+      return instance.getNote();
+    }
+    /**
+     * <pre>
+     * note says Mako wrote it, of from_session_id, to the agent that
+     * spawned it: that it waits on the user, or exited without a word.
+     * </pre>
+     *
+     * <code>bool note = 7 [json_name = "note"];</code>
+     * @param value The note to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNote(boolean value) {
+      copyOnWrite();
+      instance.setNote(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * note says Mako wrote it, of from_session_id, to the agent that
+     * spawned it: that it waits on the user, or exited without a word.
+     * </pre>
+     *
+     * <code>bool note = 7 [json_name = "note"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearNote() {
+      copyOnWrite();
+      instance.clearNote();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.AgentMessage)
   }
   @java.lang.Override
@@ -721,10 +805,11 @@ public  final class AgentMessage extends
             "text_",
             "createdAt_",
             "state_",
+            "note_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0001\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0003\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u1009\u0000\u0006\u0208";
+              "\u0000\u0007\u0000\u0001\u0001\u0007\u0007\u0000\u0000\u0000\u0001\u0003\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u1009\u0000\u0006\u0208\u0007\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

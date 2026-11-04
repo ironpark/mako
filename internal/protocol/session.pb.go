@@ -367,7 +367,11 @@ type SessionInfo struct {
 	// commit, a checkout, a branch, a stash, a fetch. It says nothing of what changed: a window showing the
 	// repository, on any node, reads it again when it moves. "" outside a
 	// repository.
-	GitStamp      string `protobuf:"bytes,31,opt,name=git_stamp,json=gitStamp,proto3" json:"git_stamp,omitempty"`
+	GitStamp string `protobuf:"bytes,31,opt,name=git_stamp,json=gitStamp,proto3" json:"git_stamp,omitempty"`
+	// turns counts the turns the session's agent has ended, as its hooks
+	// or its screen said: one that waits for a turn to end, on any node,
+	// waits for it to move. 0 from a daemon older than it.
+	Turns         uint64 `protobuf:"varint,32,opt,name=turns,proto3" json:"turns,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -617,6 +621,13 @@ func (x *SessionInfo) GetGitStamp() string {
 		return x.GitStamp
 	}
 	return ""
+}
+
+func (x *SessionInfo) GetTurns() uint64 {
+	if x != nil {
+		return x.Turns
+	}
+	return 0
 }
 
 // BackgroundTask is a command a session's agent started in the background,
@@ -1752,7 +1763,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x12\n" +
 	"\x04base\x18\x04 \x01(\tR\x04base\x12\x14\n" +
-	"\x05start\x18\x05 \x01(\tR\x05start\"\xed\a\n" +
+	"\x05start\x18\x05 \x01(\tR\x05start\"\x83\b\n" +
 	"\vSessionInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x14\n" +
@@ -1788,7 +1799,8 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"agentScope\x12'\n" +
 	"\x0fagent_messaging\x18\x1d \x01(\bR\x0eagentMessaging\x12-\n" +
 	"\x05tasks\x18\x1e \x03(\v2\x17.mako.v2.BackgroundTaskR\x05tasks\x12\x1b\n" +
-	"\tgit_stamp\x18\x1f \x01(\tR\bgitStampB\f\n" +
+	"\tgit_stamp\x18\x1f \x01(\tR\bgitStamp\x12\x14\n" +
+	"\x05turns\x18  \x01(\x04R\x05turnsB\f\n" +
 	"\n" +
 	"_exit_code\"\x9f\x02\n" +
 	"\x0eBackgroundTask\x12\x0e\n" +

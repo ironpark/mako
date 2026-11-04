@@ -85,3 +85,30 @@ func mustSession(t *testing.T, d *Daemon, id string) *session.Session {
 	}
 	return s
 }
+
+// An agent waits on another node's for its turn to end, as that node's
+// state says, but not for its output.
+func TestWaitingOnAnotherNodesAgent(t *testing.T) {
+	a := meshDaemon(t, "wait-a")
+	b := meshDaemon(t, "wait-b", p2pAddr(a))
+	letIn(t, b, a)
+	letIn(t, a, b)
+	_, server := messagingSession(t, a, "server-agent", "product")
+	web, _ := messagingSession(t, b, "web-agent", "product")
+	web.SetStatus(protocol.AgentWorking)
+	waitFor(t, "the other node's agent at work", func() bool {
+		return protocol.AtWork(a.remoteAgent("project:product", "web-agent").GetStatus())
+	})
+
+	time.AfterFunc(300*time.Millisecond, func() { web.SetStatus(protocol.AgentDone) })
+	got, err := a.waitProjectAgent(t.Context(), server, waitAgentArgs{SessionID: "web-agent", Timeout: 10})
+	if err != nil || got.Reason != "turn_ended" || got.Status != protocol.AgentDone {
+		t.Fatalf("waiting on its turn: %+v %v", got, err)
+	}
+	if r := a.remoteAgent("project:product", "web-agent"); r.GetTurns() != 1 {
+		t.Fatalf("turns as shared: %d", r.GetTurns())
+	}
+	if _, err := a.waitProjectAgent(t.Context(), server, waitAgentArgs{SessionID: "web-agent", Until: "output", Text: "ok", Timeout: 1}); err == nil {
+		t.Fatal("waited on another node's output")
+	}
+}

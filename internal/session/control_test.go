@@ -34,6 +34,42 @@ func TestTurnsAreCounted(t *testing.T) {
 	}
 }
 
+// Changed closes as the status, an approval or the state changes, and not
+// for a status said again.
+func TestChangesAreAnnounced(t *testing.T) {
+	pokes := 0
+	s := &Session{state: protocol.StateRunning, spec: Spec{OnChange: func() { pokes++ }}}
+	closed := func(ch <-chan struct{}) bool {
+		select {
+		case <-ch:
+			return true
+		default:
+			return false
+		}
+	}
+	ch := s.Changed()
+	s.SetStatus(protocol.AgentWorking)
+	if !closed(ch) || pokes != 1 {
+		t.Fatal("a status that changed was not announced")
+	}
+	ch = s.Changed()
+	s.SetStatus(protocol.AgentWorking)
+	if closed(ch) || pokes != 1 {
+		t.Fatal("a status said again was announced")
+	}
+	s.mu.Lock()
+	seq := s.statusSeq
+	s.mu.Unlock()
+	if _, ok := s.BeginApproval(seq, &protocol.Approval{Id: "a"}); !ok || !closed(ch) {
+		t.Fatal("an approval was not announced")
+	}
+	ch = s.Changed()
+	s.FinishApproval(seq, "a", protocol.AgentWorking)
+	if !closed(ch) {
+		t.Fatal("an approval answered was not announced")
+	}
+}
+
 // Keys sent after a paste come a moment after it, not in its burst.
 func TestKeysWaitOnAPaste(t *testing.T) {
 	s, err := Start(Spec{ID: "send", Command: []string{"sh", "-c", "stty raw -echo; od -c"}})

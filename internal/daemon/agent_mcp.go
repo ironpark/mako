@@ -365,7 +365,7 @@ func (d *Daemon) projectAgentServer(peer *agentPeer) *sdk.Server {
 		}
 		return nil, readMessagesResult{Messages: messages, NextAfterID: next}, err
 	})
-	sdk.AddTool(server, &sdk.Tool{Name: "wait_agent", Description: "Wait until an agent of this project on this node ends its turn, or, with until=output, prints a text; the wait ends early when it waits on the user, exits, or a message reaches you. Right after send_message to it, this waits for the turn the message starts. A timeout is a check-in: wait again while it works.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, in waitAgentArgs) (*sdk.CallToolResult, waitAgentResult, error) {
+	sdk.AddTool(server, &sdk.Tool{Name: "wait_agent", Description: "Wait until an agent of this project, on any node, ends its turn, or, with until=output, one of this node prints a text; the wait ends early when it waits on the user, exits, or a message reaches you. Right after send_message to it, this waits for the turn the message starts. A timeout is a check-in: wait again while it works.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, in waitAgentArgs) (*sdk.CallToolResult, waitAgentResult, error) {
 		out, err := d.waitProjectAgent(ctx, peer, in)
 		return nil, out, err
 	})
@@ -547,14 +547,17 @@ func (d *Daemon) followProjectAgent(child *session.Session, parentID string) {
 	defer tick.Stop()
 	var watch childWatch
 	for {
+		changed := child.Changed()
 		info := d.reportProjectAgent(child, parentID)
 		if info.GetState() == protocol.StateExited {
 			d.noteExit(info, parentID, watch.workSince)
 			return
 		}
 		d.noteChild(info, parentID, &watch, time.Now())
+		// The tick is for what changes as time passes: work gone stale, a
+		// wait on the user that has lasted.
 		select {
-		case <-child.Done():
+		case <-changed:
 		case <-tick.C:
 		case <-d.ctx.Done():
 			return

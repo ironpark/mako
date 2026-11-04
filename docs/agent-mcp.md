@@ -18,6 +18,7 @@ support do not receive these tools.
 | `spawn_agent` | `prompt`, optional `agent`, `profile`, `name` | Starts a new session in your working directory, with the same worktree metadata. Defaults to your agent type. Returns its session `id`. |
 | `send_message` | `to`, `text` | Sends a message: typed into the recipient's terminal as a prompt once it waits at its prompt, kept in its inbox until then. Returns its `id`, authenticated `from`, `to`, text and creation time. |
 | `read_messages` | Optional `after_id`, `ack_through`, `limit`, `wait_seconds` | Reads your own inbox, for waiting on a reply within a turn. Returns `messages` and `next_after_id`. |
+| `wait_agent` | `session_id`, optional `until` (`turn` or `output`), `text`, `timeout_seconds` | Waits until an agent of the project ends its turn, or, with `until=output`, an agent of this node prints `text`. Returns a `reason`: `turn_ended`, `idle` (its turns were done, nothing sent to it pending), `waiting` (on the user), `exited`, `gone`, `output`, `message` (one reached you) or `timeout`, with its `status` and `state`. |
 | `stop_agent` | `session_id` | Terminates and removes a session you spawned directly, including a child whose process has already exited. |
 
 The MCP client may prefix tool names with the server name. The server's
@@ -126,6 +127,13 @@ acknowledging it there keeps it from being typed in as well. An agent
 whose hooks do not report its status receives messages only through
 `read_messages`. Text typed into the agent's own prompt but not yet sent
 would run together with a delivered message.
+An agent that spawned another hears from Mako, in a note typed in as a
+message is, when its child has waited on the user for ten seconds, or
+exits without having sent it a message since its last turn began; not
+while it waits on that child with `wait_agent`, whose result says as much.
+A note names the child it is about; the window's project panel shows it as Mako's, and `ReadProjectAgents` marks it `note`.
+`wait_agent` on an agent of another node follows its turns as that node's
+state, which it sends its peers as the turn ends, says.
 Messages can be sent to active messaging sessions in the same project,
 including siblings. In a project of several folders, that includes the
 project's agents on other nodes, which `list_agents` lists with their

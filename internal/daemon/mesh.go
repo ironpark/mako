@@ -234,6 +234,8 @@ func (d *Daemon) state() *protocol.NodeState {
 func (d *Daemon) watchState(ctx context.Context) {
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
+	settle := time.NewTimer(0)
+	<-settle.C
 	var last *protocol.NodeState
 	var lastRoutes map[string]route
 	var lastRelayed []*protocol.SessionInfo
@@ -266,7 +268,31 @@ func (d *Daemon) watchState(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
+			continue
+		case <-d.statusPoke:
 		}
+		// A status that changed goes out without waiting for the tick,
+		// once those changing with it have: a turn's end and its approval
+		// cleared go together.
+		settle.Reset(statusSettle)
+		select {
+		case <-ctx.Done():
+			return
+		case <-settle.C:
+		}
+	}
+}
+
+// statusSettle is how long watchState lets a session's status settle once
+// it changed before it sends it, which bounds how often it does.
+const statusSettle = 100 * time.Millisecond
+
+// pokeStatus tells watchState a session's status changed. It never blocks:
+// sessions call it locked.
+func (d *Daemon) pokeStatus() {
+	select {
+	case d.statusPoke <- struct{}{}:
+	default:
 	}
 }
 

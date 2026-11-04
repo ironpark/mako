@@ -47,6 +47,9 @@ type Spec struct {
 	CellWidth, CellHeight uint16
 	// Worktree is the git worktree made for the session, which Project is.
 	Worktree *protocol.Worktree
+	// OnChange, if set, is called as Changed's channel closes. It is
+	// called with the session locked, so it must not block or call back.
+	OnChange func()
 }
 
 // Session is a running agent process with its terminal state.
@@ -84,6 +87,7 @@ type Session struct {
 	status        protocol.AgentStatus
 	statusAt      time.Time
 	turns         uint64 // turns ended: work that went idle or done
+	changed       chan struct{}
 	statusSeq     int64
 	workEndedAt   int64 // explicit terminal inactivity, for late work hooks
 	agentsWorking bool
@@ -202,6 +206,30 @@ func (s *Session) Info() *protocol.SessionInfo {
 		Approval:       s.approval,
 		Worktree:       s.spec.Worktree,
 		Tasks:          s.tasksLocked(),
+		Turns:          s.turns,
+	}
+}
+
+// Changed is a channel closed the next time the agent's status, approval
+// or state changes, or a turn ends. Take it before reading what changes:
+// a change after Info closes the channel taken before it. Status worked
+// out as it is read, as work gone stale, changes unannounced.
+func (s *Session) Changed() <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.changed == nil {
+		s.changed = make(chan struct{})
+	}
+	return s.changed
+}
+
+func (s *Session) changedLocked() {
+	if s.changed != nil {
+		close(s.changed)
+		s.changed = nil
+	}
+	if s.spec.OnChange != nil {
+		s.spec.OnChange()
 	}
 }
 
@@ -337,6 +365,7 @@ func (s *Session) BeginApproval(seq int64, a *protocol.Approval) (<-chan struct{
 	s.clearApprovalLocked()
 	s.approval = a
 	s.approvalDone = make(chan struct{})
+	s.changedLocked()
 	return s.approvalDone, true
 }
 
@@ -364,10 +393,14 @@ func (s *Session) endWorkLocked(at time.Time) {
 // setStatusLocked records the agent's status, counting the end of a turn
 // it makes.
 func (s *Session) setStatusLocked(next protocol.AgentStatus) {
+	if next == s.status {
+		return
+	}
 	if protocol.AtWork(s.status) && (next == protocol.AgentIdle || next == protocol.AgentDone) {
 		s.turns++
 	}
 	s.status = next
+	s.changedLocked()
 }
 
 // Turns is how many turns the agent has ended.
@@ -378,7 +411,10 @@ func (s *Session) Turns() uint64 {
 }
 
 func (s *Session) clearApprovalLocked() {
-	s.approval = nil
+	if s.approval != nil {
+		s.approval = nil
+		s.changedLocked()
+	}
 	if s.approvalDone != nil {
 		close(s.approvalDone)
 		s.approvalDone = nil
@@ -430,7 +466,10 @@ func (s *Session) updateChildrenLocked() {
 	if s.agentsWorking && !running && s.status == protocol.AgentDone {
 		s.statusAt = time.Now()
 	}
-	s.agentsWorking = running
+	if s.agentsWorking != running {
+		s.agentsWorking = running
+		s.changedLocked()
+	}
 }
 
 // LastOutput is when the program last printed; zero before it has.
@@ -729,6 +768,7 @@ func (s *Session) pump() {
 	s.finalPlain, _ = s.snapshotLocked(false)
 	s.finalStyled, _ = s.snapshotLocked(true)
 	s.term.Close()
+	s.changedLocked()
 	s.mu.Unlock()
 }
 

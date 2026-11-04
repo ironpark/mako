@@ -79,10 +79,13 @@ func (s *Session) scanScreen(now time.Time) time.Duration {
 			return screenTick
 		}
 		w.scanned, w.seen, w.title = true, n, s.title
-		was := w.state
+		was, wasVisible := w.state, w.visible
 		w.observe(w.rules.Detect(detect.Input{Screen: text, Title: s.title}), now)
 		if s.status == "" && was == detect.Working && w.state == detect.Idle {
 			s.turns++ // a turn no hook told of, as the screen shows it
+		}
+		if w.state != was || w.visible != wasVisible {
+			s.changedLocked()
 		}
 	}
 	s.screenEndsTurnLocked(now)
