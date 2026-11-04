@@ -62,6 +62,16 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 		return func() bool { _, ok := p.Find(label); return ok }
 	}
 	probeUntil(t, p, "the project's files", found("README.md"))
+	// A row's right click opens the row's menu, not the folder's that the
+	// empty part of the list has.
+	readme, _ := p.FindRole(ggui.RoleTreeItem, "README.md")
+	p.ClickButton(readme.Center(), ggui.MouseButtonRight)
+	p.Frame()
+	if _, ok := p.Find(T("Rename…")); !ok {
+		t.Fatal("a file's right click opened the folder's menu, not the file's")
+	}
+	p.Type(ggui.Mods{}, ggui.KeyEscape)
+	p.Frame()
 	src, _ := p.Find("src")
 	p.Click(src.Center())
 	probeUntil(t, p, "src to open", found("main.go"))
