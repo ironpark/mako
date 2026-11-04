@@ -48,6 +48,7 @@ type mdRenderer struct {
 	doc   docInfo
 	src   []byte
 	depth int // how deep the list being rendered is nested
+	folds int // the details rendered so far
 }
 
 // markdownView is a Markdown file rendered, scrolling. Its text selects as
@@ -73,13 +74,11 @@ func markdownText(m *model, src string) ggui.Widget {
 
 // blocks renders the block children of n.
 func (r *mdRenderer) blocks(n ast.Node) []ggui.Widget {
-	var out []ggui.Widget
+	var nodes []ast.Node
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
-		if w := r.block(c); w != nil {
-			out = append(out, w)
-		}
+		nodes = append(nodes, c)
 	}
-	return out
+	return r.blockList(nodes)
 }
 
 func (r *mdRenderer) block(n ast.Node) ggui.Widget {
@@ -103,11 +102,7 @@ func (r *mdRenderer) block(n ast.Node) ggui.Widget {
 	case *ast.CodeBlock:
 		return r.code(n, "")
 	case *ast.HTMLBlock:
-		s := r.segmentsText(n.Lines())
-		if n.HasClosure() {
-			s += string(n.ClosureLine.Value(r.src))
-		}
-		return r.html(s)
+		return r.html(r.htmlBlockText(n))
 	case *ast.Blockquote:
 		return r.quote(n)
 	case *ast.List:
@@ -743,4 +738,8 @@ type mdImage struct {
 	Loading bool
 	Img     *ggfx.Image // nil for one that could not be read
 	Size    ggui.Size
+	// Labels are an SVG's text, set over Img; Origin is its view box's
+	// corner, which they are placed from.
+	Labels []svgText
+	Origin ggui.Point
 }

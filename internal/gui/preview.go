@@ -128,10 +128,23 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			// MAKO_PREVIEW_BROWSER names a folder of this machine, which a
 			// node's file browser shows in place of the window.
 			browse := os.Getenv("MAKO_PREVIEW_BROWSER")
+			// MAKO_PREVIEW_MARKDOWN names a Markdown file rendered in place
+			// of the window, then with its first details opened.
+			var mdSrc string
+			if path := os.Getenv("MAKO_PREVIEW_MARKDOWN"); path != "" {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				mdSrc = string(data)
+			}
 			var b *browser
 			p = ggui.ProbeBuilder(func() ggui.Widget {
 				if agentsOnly {
 					return ggui.Box(ggui.Column(panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), "GitHub", T("Search")), hline(), ggui.Expanded(projectAgentsBody(m, agentsRoot))).Stretch()).Fill(tokSurface0)
+				}
+				if mdSrc != "" {
+					return ggui.Provide(ggui.ReducedMotionKey, true, markdownView(m, "", mdSrc))
 				}
 				if browse != "" {
 					b = newBrowser(m, "", browse)
@@ -409,6 +422,16 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			// whose forge tab is rendered in place of the rest.
 			if dir := os.Getenv("MAKO_PREVIEW_FORGE"); dir != "" {
 				steps = forgePreview(m, dir, do, until, frames, shot)
+			}
+			if mdSrc != "" {
+				steps = []previewStep{
+					do(setTheme("dark")), frames(200), shot("50-markdown"),
+					do(func() {
+						if n, ok := p.Semantics().Find(ggui.RoleDisclosure, ""); ok {
+							p.Click(n.Rect.Center())
+						}
+					}), frames(20), shot("51-markdown-details"),
+				}
 			}
 			if browse != "" {
 				steps = browserPreview(m, func() *browser { return b }, do, until, frames, shot)

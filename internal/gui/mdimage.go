@@ -17,6 +17,7 @@ import (
 	ggsvg "github.com/ironpark/ggfx/svg"
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	xdraw "golang.org/x/image/draw"
 )
 
 // Images in Markdown: those beside the file, read from its node, and those
@@ -70,7 +71,11 @@ func (r *mdRenderer) image(p mdPicture) ggui.Widget {
 		case v.Img == nil:
 			return fallback()
 		}
-		return &fitImage{img: v.Img, size: v.Size, want: ggui.Sz(p.width, p.height), alt: label}
+		f := &fitImage{img: v.Img, size: v.Size, want: ggui.Sz(p.width, p.height), alt: label}
+		if len(v.Labels) > 0 {
+			f.labels = &svgLabels{texts: v.Labels, origin: v.Origin}
+		}
+		return f
 	})
 }
 
@@ -98,7 +103,11 @@ func asMDImage(d decodedImage, err error) mdImage {
 // svgImage is an SVG drawn at svgScale, sized as its view box; nothing for
 // one that cannot be drawn.
 func svgImage(data []byte) mdImage {
-	doc, err := ggsvg.Parse(bytes.NewReader(data))
+	clean, labels, embeds, err := cleanSVG(data)
+	if err != nil {
+		return mdImage{}
+	}
+	doc, err := ggsvg.Parse(bytes.NewReader(clean))
 	if err != nil {
 		return mdImage{}
 	}
@@ -111,7 +120,10 @@ func svgImage(data []byte) mdImage {
 	g.Translate(-x, -y)
 	g.Scale(svgScale, svgScale)
 	doc.Draw(px, g)
-	return mdImage{Img: ggfx.NewImageFromImage(px), Size: ggui.Sz(w, h)}
+	for _, e := range embeds {
+		drawEmbed(px, e, x, y)
+	}
+	return mdImage{Img: ggfx.NewImageFromImage(px), Size: ggui.Sz(w, h), Labels: labels, Origin: ggui.Pt(x, y)}
 }
 
 // webImage is the image at the web address url, read once for the window.
@@ -168,6 +180,7 @@ type fitImage struct {
 	size, want ggui.Size
 	alt        string
 	child      ggui.Widget
+	labels     *svgLabels // an SVG's text, set over it
 }
 
 func (f *fitImage) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
@@ -184,7 +197,56 @@ func (f *fitImage) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 		w, h = c.MaxW, h*c.MaxW/w
 	}
 	f.child = ggui.Image(f.img).Alt(f.alt).Size(w, h)
+	if f.labels != nil {
+		f.labels.scale = w / max(f.size.W, 1)
+		f.labels.layout(env)
+	}
 	return f.child.Layout(ggui.Loose(ggui.Sz(w, h)), env)
 }
 
-func (f *fitImage) Paint(dst *ggui.Canvas, r ggui.Rect) { dst.Paint(f.child, r) }
+func (f *fitImage) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.Paint(f.child, r)
+	if f.labels != nil {
+		f.labels.paint(dst, r)
+	}
+}
+
+// drawEmbed draws an image an SVG holds into px, the SVG drawn from its
+// view box's corner x, y at svgScale. An SVG it holds is drawn as an SVG
+// is, but without images of its own.
+func drawEmbed(px *image.RGBA, e svgEmbed, x, y float64) {
+	var src image.Image
+	if e.svg {
+		clean, _, _, err := cleanSVG(e.data)
+		if err != nil {
+			return
+		}
+		doc, err := ggsvg.Parse(bytes.NewReader(clean))
+		if err != nil {
+			return
+		}
+		vx, vy, vw, vh := doc.ViewBox()
+		if vw <= 0 || vh <= 0 || vw*vh > 4096*4096 {
+			return
+		}
+		// Drawn at the size it takes on the page, so it is not scaled twice.
+		k := e.w * e.m.scale() * svgScale / vw
+		img := image.NewRGBA(image.Rect(0, 0, int(math.Ceil(vw*k)), int(math.Ceil(vh*k))))
+		var g ggfx.GeoM
+		g.Translate(-vx, -vy)
+		g.Scale(k, k)
+		doc.Draw(img, g)
+		src = img
+	} else {
+		img, _, err := image.Decode(bytes.NewReader(e.data))
+		if err != nil {
+			return
+		}
+		src = img
+	}
+	x0, y0 := e.m.apply(e.x, e.y)
+	x1, y1 := e.m.apply(e.x+e.w, e.y+e.h)
+	r := image.Rect(int(math.Round((min(x0, x1)-x)*svgScale)), int(math.Round((min(y0, y1)-y)*svgScale)),
+		int(math.Round((max(x0, x1)-x)*svgScale)), int(math.Round((max(y0, y1)-y)*svgScale)))
+	xdraw.CatmullRom.Scale(px, r, src, src.Bounds(), xdraw.Over, nil)
+}
