@@ -1,7 +1,9 @@
 package gui
 
 import (
+	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ironpark/ggui"
@@ -141,4 +143,71 @@ func pendingTurns(pending []pendingMessage) []chatTurnItem {
 		}
 	}
 	return out
+}
+
+// submit gives session id text as its composer does, pasted and then
+// Enter, through the session's node, which waits between the two: a
+// program that tells a paste by the burst it arrives in, as Codex does on
+// Windows, where its console marks no paste's end, takes an Enter right
+// behind it as a line of the paste and does not submit. Sent through the
+// terminal's own stream, a gap kept here could close on the way. Should
+// the node not take it, it goes through the terminal as before.
+func (m *model) submit(id string, conn *termConn, text string) {
+	s, ok := m.session(id)
+	enter := conn.enter()
+	if !ok || enter == nil {
+		conn.sendText(text)
+		return
+	}
+	prev, done := submitAfter(id)
+	ggui.Async(func() (struct{}, error) {
+		// One message at a time, in the order sent.
+		defer submitDone(id, done)
+		<-prev
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		c, err := m.client(ctx)
+		if err != nil {
+			return struct{}{}, err
+		}
+		_, err = c.Send(ctx, &protocol.Send{NodeId: s.GetNodeId(), SessionId: id, Text: text, Keys: enter})
+		return struct{}{}, err
+	}, func(_ struct{}, err error) {
+		if err != nil {
+			conn.sendText(text)
+		}
+	})
+}
+
+// submitted is, for each session sent to, what closes once the last
+// message sent to it has gone, which the next waits for.
+var submitted = struct {
+	sync.Mutex
+	last map[string]chan struct{}
+}{last: map[string]chan struct{}{}}
+
+// submitAfter is what a message to session id waits for, closed when the
+// one before it has gone, and what it closes when it has.
+func submitAfter(id string) (prev <-chan struct{}, done chan struct{}) {
+	submitted.Lock()
+	defer submitted.Unlock()
+	done = make(chan struct{})
+	p, ok := submitted.last[id]
+	if !ok {
+		p = make(chan struct{})
+		close(p)
+	}
+	submitted.last[id] = done
+	return p, done
+}
+
+// submitDone lets the message after the one done go, and forgets the
+// session's turn if none waits.
+func submitDone(id string, done chan struct{}) {
+	close(done)
+	submitted.Lock()
+	if submitted.last[id] == done {
+		delete(submitted.last, id)
+	}
+	submitted.Unlock()
 }

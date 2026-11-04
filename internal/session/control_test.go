@@ -82,7 +82,7 @@ func TestKeysWaitOnAPaste(t *testing.T) {
 	if err := s.Send("text", []byte{'\r'}); err != nil {
 		t.Fatal(err)
 	}
-	if time.Since(start) < pasteGap {
+	if time.Since(start) < pasteGap(len("text")) {
 		t.Fatal("the keys went with the paste")
 	}
 }

@@ -56,7 +56,8 @@ func TestComposerSendsSeveralLinesOnEnter(t *testing.T) {
 		t.Fatalf("Shift+Enter sent %q", got)
 	}
 	p.Type(ggui.Mods{}, ggui.KeyEnter)
-	if got, want := link.typed(), "\x1b[200~one\ntwo\x1b[201~\r"; got != want {
+	// With no node to send it, the message goes through the terminal.
+	if got, want := sentThrough(p, link), "\x1b[200~one\ntwo\x1b[201~\r"; got != want {
 		t.Fatalf("sent %q, want %q", got, want)
 	}
 	if ggui.Peek(draft) != "" {
@@ -68,7 +69,7 @@ func TestComposerSendsSeveralLinesOnEnter(t *testing.T) {
 	// message edited, they are the editor's.
 	p.Text("three")
 	p.Type(ggui.Mods{}, ggui.KeyEnter)
-	_ = link.typed()
+	_ = sentThrough(p, link)
 	for _, step := range []struct {
 		key  ggui.KeyboardKey
 		want string
@@ -117,7 +118,7 @@ func TestComposerSendsSeveralLinesOnEnter(t *testing.T) {
 	}
 	p.Type(ggui.Mods{}, ggui.KeyArrowDown)
 	p.Type(ggui.Mods{}, ggui.KeyEnter)
-	if got, want := link.typed(), "\x1b[200~/context\x1b[201~\r"; got != want {
+	if got, want := sentThrough(p, link), "\x1b[200~/context\x1b[201~\r"; got != want {
 		t.Fatalf("taking /context sent %q, want %q", got, want)
 	}
 	p.Text("/com")
@@ -320,4 +321,17 @@ func TestAMessageNamesItsFilesAfterItsText(t *testing.T) {
 			t.Errorf("composed(%q, %q) = %q, want %q", c.text, c.attached, got, c.want)
 		}
 	}
+}
+
+// sentThrough is what reached the terminal of a message sent, up to the
+// Enter that ends it; it waits through frames, in which a send that found
+// no node goes through the terminal.
+func sentThrough(p *ggui.Probe, link *fakeLink) string {
+	var got strings.Builder
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline) && !strings.HasSuffix(got.String(), "\r"); {
+		p.Frame()
+		got.WriteString(link.typed())
+		time.Sleep(5 * time.Millisecond)
+	}
+	return got.String()
 }

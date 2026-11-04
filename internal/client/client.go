@@ -236,6 +236,12 @@ func (c *Client) Commands(ctx context.Context, req *protocol.ListCommands) (*pro
 	return request[*protocol.Commands](ctx, c, protocol.TypeListCommands, req)
 }
 
+// Send gives a session text pasted, then keys typed after it, the node
+// waiting between the two, and returns the session as it is now.
+func (c *Client) Send(ctx context.Context, req *protocol.Send) (*protocol.SessionInfo, error) {
+	return request[*protocol.SessionInfo](ctx, c, protocol.TypeSend, req)
+}
+
 // Kill terminates a session.
 func (c *Client) Kill(ctx context.Context, req *protocol.CloseSession) error {
 	_, err := request[*protocol.Exited](ctx, c, protocol.TypeCloseSess, req)

@@ -67,3 +67,59 @@ func TestSnapshotTextFollowsAsOutput(t *testing.T) {
 		return strings.Contains(screenText(conn), "restored")
 	})
 }
+
+// A screen drawn inside a render hold, synchronized output's, shows only
+// once the hold ends, however many pieces it arrives in: a program that
+// redraws lines in place would otherwise show them blank and half drawn.
+func TestARenderHoldShowsTheLastWholeScreen(t *testing.T) {
+	link := newFakeLink()
+	conn, err := newTermConn("s", link, 40, 6, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { close(link.in); conn.close() }()
+
+	link.output(t, "old")
+	var f frameSnapshot
+	waitFor(t, func() bool {
+		f, err = conn.frame()
+		return err == nil && f.textAt(0) == "o"
+	})
+	// The redraw begins: the line is erased, and the rest is yet to come.
+	link.output(t, "\x1b[?2026h\r\x1b[2K")
+	link.output(t, "n")
+	waitFor(t, func() bool {
+		conn.mu.Lock()
+		defer conn.mu.Unlock()
+		text, _ := conn.vt.Terminal().PlainString()
+		return conn.held && strings.HasPrefix(text, "n")
+	})
+	if f, _ = conn.frame(); f.textAt(0) != "o" {
+		t.Fatalf("row 0 %q inside the hold, want the last screen's o", f.textAt(0))
+	}
+	link.output(t, "ew\x1b[?2026l")
+	waitFor(t, func() bool {
+		f, err = conn.frame()
+		return err == nil && f.textAt(0) == "n" && f.textAt(2) == "w"
+	})
+}
+
+// A hold that never ends gives way after renderHoldLimit.
+func TestARenderHoldGivesWay(t *testing.T) {
+	link := newFakeLink()
+	conn, err := newTermConn("s", link, 40, 6, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { close(link.in); conn.close() }()
+	link.output(t, "old")
+	waitFor(t, func() bool { f, err := conn.frame(); return err == nil && f.textAt(0) == "o" })
+	link.output(t, "\x1b[?2026h\rnew")
+	waitFor(t, func() bool { conn.mu.Lock(); defer conn.mu.Unlock(); return conn.held })
+	conn.mu.Lock()
+	conn.heldSince = conn.heldSince.Add(-renderHoldLimit)
+	conn.mu.Unlock()
+	if f, _ := conn.frame(); f.textAt(0) != "n" {
+		t.Fatalf("row 0 %q past the limit, want n", f.textAt(0))
+	}
+}

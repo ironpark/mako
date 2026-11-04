@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"slices"
@@ -39,6 +40,15 @@ type termConn struct {
 	clusters  []string
 	dirtyRows []uint16
 	hasFrame  bool // cells and clusters hold a complete screen
+	// held is set while the program draws its next screen inside a render
+	// hold, synchronized output's, from heldSince; frame keeps showing last,
+	// the screen it last copied, until the hold ends or renderHoldLimit
+	// passes, so a screen sent in more than one piece is never shown half
+	// drawn. holdTimer paints once the limit passes.
+	held      bool
+	heldSince time.Time
+	holdTimer *time.Timer
+	last      frameSnapshot
 	// unpainted lets go of cells and clusters once no view painted the
 	// terminal for shownFor (see frame).
 	unpainted *time.Timer
@@ -249,6 +259,7 @@ func (t *termConn) read() {
 			// daemon's screen at the moment of attach. The screen text
 			// follows as output frames.
 			t.vt.Terminal().FullReset()
+			t.holdLocked(false, time.Time{})
 			opts := t.opts
 			t.opts = termOptions{}
 			t.applyOptionsLocked(opts)
@@ -302,8 +313,35 @@ func (t *termConn) feedLocked(p []byte) {
 			// Hidden terminals may have an outstanding paint forever.
 			t.wake()
 		}
+		if ev.Kind == gostty.StreamEventRenderHold {
+			t.holdLocked(ev.Held, now)
+		}
 	}
 	t.noteCompressionLocked()
+}
+
+// renderHoldLimit is how long a render hold may keep the last screen
+// shown: a program that never ends one is drawn regardless after it.
+const renderHoldLimit = time.Second
+
+// holdLocked starts or ends a render hold.
+func (t *termConn) holdLocked(held bool, now time.Time) {
+	if held == t.held {
+		return
+	}
+	t.held = held
+	if !held {
+		if t.holdTimer != nil {
+			t.holdTimer.Stop()
+		}
+		return
+	}
+	t.heldSince = now
+	if t.holdTimer == nil {
+		t.holdTimer = time.AfterFunc(renderHoldLimit, t.wake)
+	} else {
+		t.holdTimer.Reset(renderHoldLimit)
+	}
 }
 
 // Title notifications are independent of paint coalescing: hidden tabs may
@@ -373,6 +411,10 @@ func (t *termConn) frame() (frameSnapshot, error) {
 	if t.closed {
 		return frameSnapshot{}, errors.New("detached")
 	}
+	// Inside a render hold the screen is half drawn: the last one shows.
+	if t.held && t.hasFrame && !t.exited && time.Since(t.heldSince) < renderHoldLimit {
+		return t.last, nil
+	}
 	if err := t.state.Update(t.vt.Terminal()); err != nil {
 		return frameSnapshot{}, err
 	}
@@ -431,7 +473,7 @@ func (t *termConn) frame() (frameSnapshot, error) {
 	t.noteCompressionLocked()
 	colors, cursor := t.state.Colors(), t.state.Cursor()
 	t.updatePlacementsLocked()
-	return frameSnapshot{
+	t.last = frameSnapshot{
 		cells:    t.cells,
 		clusters: t.clusters,
 		cols:     cols,
@@ -444,7 +486,8 @@ func (t *termConn) frame() (frameSnapshot, error) {
 		images:   t.images,
 		cellPxW:  t.cellW,
 		cellPxH:  t.cellH,
-	}, nil
+	}
+	return t.last, nil
 }
 
 // shownFor is how long a terminal keeps a copy of its screen after a view
@@ -460,6 +503,7 @@ func (t *termConn) forgetFrame() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.cells, t.clusters, t.dirtyRows, t.hasFrame = nil, nil, nil, false
+	t.last = frameSnapshot{}
 	t.placements, t.images = nil, nil
 	// ghostty's copy of the cells the state hands them through, as large.
 	t.state.ReleaseScratch()
@@ -500,6 +544,8 @@ func (t *termConn) resize(cols, rows, cellW, cellH uint16) {
 	}
 	t.cols, t.rows, t.cellW, t.cellH = cols, rows, cellW, cellH
 	_ = t.vt.Terminal().ResizeCells(cols, rows, uint32(cellW), uint32(cellH))
+	// A resize through the terminal ends a hold the stream does not know of.
+	t.holdLocked(false, time.Time{})
 	live := !t.exited && t.err == nil
 	now := time.Now()
 	send := live && t.settle == nil && now.Sub(t.sentAt) >= resizeSettle
@@ -539,7 +585,12 @@ func (t *termConn) key(ev input.KeyEvent, text string) {
 		t.mu.Unlock()
 		return
 	}
-	err := input.EncodeKey(&buf, t.vt.Terminal(), ev, text)
+	var err error
+	if seq, ok := consoleKey(ev, t.nodeOS, kitty.Flags(t.vt.Terminal())); ok {
+		buf = append(buf, seq...)
+	} else {
+		err = input.EncodeKey(&buf, t.vt.Terminal(), ev, text)
+	}
 	if err == nil && len(buf) > 0 {
 		// Typing snaps the viewport back to the bottom, as every terminal does.
 		t.vt.Terminal().ScrollViewport(gostty.ScrollViewportBottom())
@@ -548,6 +599,44 @@ func (t *termConn) key(ev input.KeyEvent, text string) {
 	if err == nil && len(buf) > 0 {
 		t.send(buf)
 	}
+}
+
+// consoleKey is ev as a Windows console's own key event, for a session on
+// goos "windows" whose program asked for no Kitty keys, and whether it is
+// one. A Windows console makes key events of the bytes typed into it, and
+// no byte a terminal sends for Enter carries its modifiers: Shift+Enter,
+// which Codex takes as a new line, would arrive as Enter and submit. The
+// console reads a key event whole in win32-input-mode's form,
+// ESC [ Vk ; Sc ; Uc ; Kd ; Cs ; Rc _, which keeps them. A release goes
+// with its press, so one sent alone is none.
+func consoleKey(ev input.KeyEvent, goos string, flags kitty.KeyFlags) (string, bool) {
+	m := ev.Mods
+	if goos != "windows" || flags != 0 || ev.Key != input.KeyEnter || !(m.Shift || m.Ctrl || m.Alt) {
+		return "", false
+	}
+	if ev.Action == input.KeyActionRelease {
+		return "", true
+	}
+	const (
+		vkReturn, scReturn = 13, 28
+		shiftPressed       = 0x10
+		leftCtrlPressed    = 0x08
+		leftAltPressed     = 0x02
+	)
+	state := 0
+	if m.Shift {
+		state |= shiftPressed
+	}
+	if m.Ctrl {
+		state |= leftCtrlPressed
+	}
+	if m.Alt {
+		state |= leftAltPressed
+	}
+	key := func(down int) string {
+		return fmt.Sprintf("\x1b[%d;%d;%d;%d;%d;1_", vkReturn, scReturn, '\r', down, state)
+	}
+	return key(1) + key(0), true
 }
 
 // keyFlags are the Kitty keyboard flags the program set.
@@ -598,6 +687,18 @@ func (t *termConn) paste(text string) {
 func (t *termConn) sendText(text string) {
 	t.paste(text)
 	t.key(input.KeyEvent{Action: input.KeyActionPress, Key: input.KeyEnter}, "")
+}
+
+// enter is Enter as the program asked for keys, nil once closed.
+func (t *termConn) enter() []byte {
+	var buf frameBuffer
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed || input.EncodeKey(&buf, t.vt.Terminal(), input.KeyEvent{Action: input.KeyActionPress, Key: input.KeyEnter}, "") != nil {
+		return nil
+	}
+	t.vt.Terminal().ScrollViewport(gostty.ScrollViewportBottom())
+	return buf
 }
 
 // wheel scrolls the scrollback, or on the alternate screen, where there is
@@ -992,6 +1093,9 @@ func (t *termConn) close() {
 	}
 	if t.settle != nil {
 		t.settle.Stop()
+	}
+	if t.holdTimer != nil {
+		t.holdTimer.Stop()
 	}
 	if t.unpainted != nil {
 		t.unpainted.Stop()

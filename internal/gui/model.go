@@ -1480,7 +1480,7 @@ func (m *model) sendComposer(id string) {
 	state := m.chatState(id)
 	s, _ := m.session(id)
 	text := composed(m.composerDraft(id), ggui.Peek(state.attached), s.GetProject())
-	conn.sendText(text)
+	m.submit(id, conn, text)
 	m.notePending(id, text)
 	if strings.TrimSpace(text) != "" && (len(state.sent) == 0 || state.sent[len(state.sent)-1] != text) {
 		state.sent = append(state.sent, text)

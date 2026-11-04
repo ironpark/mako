@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	goruntime "runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -537,10 +538,19 @@ func (s *Session) Prompt(text string) error {
 	return s.Send(text, []byte{'\r'})
 }
 
-// pasteGap is how long a paste stands before the keys sent after it, as
-// Enter: a program that takes a burst of input as a paste would take them
-// as part of it, and not submit.
-const pasteGap = 200 * time.Millisecond
+// pasteGap is how long a paste of n bytes stands before the keys sent
+// after it, as Enter: a program that takes a burst of input as a paste
+// would take them as part of it, and not submit. A Windows console hands
+// a program a paste as a key event a character, which it may still be
+// reading when the gap, counted from the write, has passed: Codex there
+// tells a paste by its burst alone, and its Enter would be a new line. The
+// gap there is longer, and grows with the paste.
+func pasteGap(n int) time.Duration {
+	if goruntime.GOOS != "windows" {
+		return 200 * time.Millisecond
+	}
+	return min(500*time.Millisecond+time.Duration(n)*time.Millisecond/4, 2*time.Second)
+}
 
 // Send pastes text, if any, then types keys, if any, pasteGap after it.
 func (s *Session) Send(text string, keys []byte) error {
@@ -553,7 +563,7 @@ func (s *Session) Send(text string, keys []byte) error {
 		return nil
 	}
 	if text != "" {
-		time.Sleep(pasteGap)
+		time.Sleep(pasteGap(len(text)))
 	}
 	_, err := s.Write(keys)
 	return err
