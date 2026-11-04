@@ -59,6 +59,7 @@ type termConn struct {
 	cellW, cellH        uint16 // a cell in device pixels, zero until a view paints it
 	closed              bool   // vt and state are released; nothing may touch them
 	opts                termOptions
+	nodeOS              string          // the GOOS of the session's node, "" for unknown; see edit
 	gesture             *gostty.Gesture // click counting and drag selection
 	dragging            bool
 	search              *gostty.Search // the find bar's, for searched, while it is open
@@ -96,7 +97,8 @@ type termConn struct {
 }
 
 // dialTerm attaches to a session and starts reading its stream.
-func dialTerm(ctx context.Context, c *client.Client, info *protocol.SessionInfo, wake func(), titleChanged func()) (*termConn, error) {
+// goos is the system of the session's node, "" for one not known.
+func dialTerm(ctx context.Context, c *client.Client, info *protocol.SessionInfo, goos string, wake func(), titleChanged func()) (*termConn, error) {
 	att, err := c.AttachStream(ctx, &protocol.Attach{SessionId: info.GetId(), NodeId: info.GetNodeId(), Replay: true})
 	if err != nil {
 		return nil, err
@@ -106,6 +108,9 @@ func dialTerm(ctx context.Context, c *client.Client, info *protocol.SessionInfo,
 		_ = att.Close()
 		return nil, err
 	}
+	t.mu.Lock()
+	t.nodeOS = goos
+	t.mu.Unlock()
 	return t, nil
 }
 

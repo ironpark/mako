@@ -32,6 +32,7 @@ internal class FakeProjectFiles : ProjectFiles {
         return File.newBuilder().setPath(path).setSize(500).setBinary(path.endsWith(".bin"))
             .setData(if (path.endsWith(".bin")) ByteString.EMPTY else ByteString.copyFromUtf8(text)).build()
     }
+    override suspend fun stat(path: String): File = File.newBuilder().setPath(path).build()
     override suspend fun search(root: String, query: String, names: Boolean): SearchResult =
         if (names) SearchResult.newBuilder().addFiles("src/main.go").addFiles("README.md").build()
         else SearchResult.newBuilder().addMatches(SearchMatch.newBuilder().setPath("src/main.go").setLine(25).setText("target match")).build()

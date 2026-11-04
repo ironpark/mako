@@ -21,8 +21,13 @@ import (
 // Anywhere else a file opens in a tab, and a folder opens a new session in
 // it.
 
-// pathDrag is a file or folder of the Files tab being dragged.
-type pathDrag struct{ Node, Path string }
+// pathDrag is a file or folder of the Files tab being dragged, or copied
+// or cut for Paste.
+type pathDrag struct {
+	Node, Path string
+	Dir        bool
+	Cut        bool // for Paste, moved rather than copied
+}
 
 // dropFolder opens the files dropped where nothing else takes them, each
 // in a tab, or the New session dialog on the first folder dropped.
@@ -112,9 +117,20 @@ func litDrop(w ggui.Widget, moved func(pathDrag), drop func([]string)) ggui.Widg
 }
 
 // folderDrop makes w, a folder of the Files tab, take files: from the
-// desktop, copied in, and from the tab, moved in.
+// desktop, copied in, and from the tab, moved in on the same node and
+// copied from another.
 func folderDrop(m *model, w ggui.Widget, dir fileItem) ggui.Widget {
-	return litDrop(w, func(d pathDrag) { m.moveInto(d, dir) }, func(paths []string) { m.copyInto(dir.Node, dir.Path, paths) })
+	return litDrop(w, func(d pathDrag) { m.dropInto(d, dir) }, func(paths []string) { m.copyInto(dir.Node, dir.Path, paths) })
+}
+
+// dropInto takes a row of the Files tab dropped on the folder dir: moved
+// there on its own node, copied there from another.
+func (m *model) dropInto(d pathDrag, dir fileItem) {
+	if d.Node == dir.Node {
+		m.moveInto(d, dir)
+		return
+	}
+	m.placeFile(d, dir)
 }
 
 // shellQuote writes a path as a shell reads it back: as it is when it has

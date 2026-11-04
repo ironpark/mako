@@ -40,6 +40,8 @@ class TermSession(
     val sessionId: String,
     val nodeId: String,
     private val scope: CoroutineScope,
+    /** Puts on the phone's clipboard what the session's program copied, with OSC 52 or its node's clipboard tools. */
+    private val onCopy: (String) -> Unit = {},
 ) : TerminalOutput() {
     sealed interface Status {
         data object Connecting : Status
@@ -240,7 +242,10 @@ class TermSession(
     override fun write(data: ByteArray, offset: Int, count: Int) = send(data.copyOfRange(offset, offset + count))
 
     override fun titleChanged(oldTitle: String?, newTitle: String?) {}
-    override fun onCopyTextToClipboard(text: String?) {}
+    override fun onCopyTextToClipboard(text: String?) {
+        if (text.isNullOrEmpty()) return
+        scope.launch(Dispatchers.Main) { onCopy(text) }
+    }
     override fun onPasteTextFromClipboard() {}
     override fun onBell() {}
     override fun onColorsChanged() = changed()

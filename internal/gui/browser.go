@@ -380,11 +380,13 @@ func browserView(b *browser) ggui.Widget {
 	})
 	// The empty part of the list has the folder's own menu.
 	here := func() fileItem { return dirItem(b.node, ggui.Peek(b.Path)) }
-	body := ui.ContextMenu(ggui.Pointer(list).OnDropHover(b.DropOver.Set).OnDrop(b.dropHere),
-		ui.MenuItem(T("New folder…"), func() { b.askFile(protocol.FileMkdir, here()) }),
-		ui.MenuItem(T("Upload files…"), func() { b.uploadFrom(ggui.Peek(b.Path)) }),
-		ui.MenuItem(T("Refresh"), b.refresh),
-	)
+	body := ui.ContextMenuFunc(ggui.Pointer(list).OnDropHover(b.DropOver.Set).OnDrop(b.dropHere), func() []ggui.Widget {
+		return append(folderItems(b.m, here(), b.askFile),
+			ui.MenuItem(T("Upload files…"), func() { b.uploadFrom(ggui.Peek(b.Path)) }),
+			ui.MenuDivider(),
+			ui.MenuItem(T("Refresh"), b.refresh),
+		)
+	}).Name(T("File actions"))
 
 	return ggui.Stack(
 		ggui.Box(ggui.Column(
@@ -457,7 +459,11 @@ func browserMenu(b *browser, w ggui.Widget, it fileItem) ggui.Widget {
 			ui.MenuItem(T("Copy path"), func() { ggui.CurrentClipboard().Write(it.Path) }),
 			ui.MenuItem(T("Insert path in the message"), func() { m.insertPath("", it.Path) }),
 			ui.MenuDivider(),
-			ui.MenuItem(T("New folder…"), func() { b.askFile(protocol.FileMkdir, folder) }),
+		)
+		items = append(items, clipItems(m, it)...)
+		items = append(items, ui.MenuDivider())
+		items = append(items, folderItems(m, folder, b.askFile)...)
+		items = append(items,
 			ui.MenuItem(T("Rename…"), func() { b.askFile(protocol.FileRename, it) }),
 			ui.MenuDivider(),
 			ui.MenuItem(T("Delete…"), func() { b.askFile(protocol.FileDelete, it) }),

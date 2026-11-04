@@ -321,6 +321,15 @@ func (t *terminalView) HandleKey(ev ggui.KeyEvent) {
 		if t.chord(ev) {
 			return
 		}
+		// A word or line edit goes as the node's shell reads it, after the
+		// text typed before it.
+		if e := editKeyOf(ev, runtime.GOOS); e != editNone && !t.ime.EditingState().Composing {
+			t.flushText(true)
+			if t.conn.edit(e) {
+				t.conn.clearSelection()
+				return
+			}
+		}
 		if ev.Mods.Meta && runtime.GOOS == "darwin" {
 			return // the other ⌘ chords are the app's
 		}
@@ -658,6 +667,8 @@ func (t *terminalView) ClaimsChord(ev ggui.KeyEvent) bool {
 		return true
 	case isCopy(ev):
 		return t.conn.selection() != ""
+	case editKeyOf(ev, runtime.GOOS) != editNone:
+		return true
 	}
 	if runtime.GOOS == "darwin" && ev.Mods.Meta {
 		return false

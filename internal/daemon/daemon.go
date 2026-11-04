@@ -62,16 +62,16 @@ type Daemon struct {
 	// keyPrint and ownerPrint are the fingerprints of the host's own key
 	// and of the SSH key vouching for it.
 	keyPrint, ownerPrint string
-	access               accessRequests       // the peers asking to be let in
-	pairing              pairing              // the pairing code waiting to be read
-	heads                heads                // the projects' branches
-	remote               peerReports          // what peers say of their sessions and routes; see routes.go
-	changes              notifier             // tells watching front-ends what changed
-	statusPoke           chan struct{}        // a session's status changed; see watchState
-	workspace            workspaces           // the windows' tabs and panes; see workspace.go
-	projects             projectStore         // the projects of several folders; see projects.go
-	linking              map[string]time.Time // peer ID -> the last link tried, until one holds
-	ctx                  context.Context      // Run's, for work that outlasts a request
+	access               accessRequests      // the peers asking to be let in
+	pairing              pairing             // the pairing code waiting to be read
+	heads                heads               // the projects' branches
+	remote               peerReports         // what peers say of their sessions and routes; see routes.go
+	changes              notifier            // tells watching front-ends what changed
+	statusPoke           chan struct{}       // a session's status changed; see watchState
+	workspace            workspaces          // the windows' tabs and panes; see workspace.go
+	projects             projectStore        // the projects of several folders; see projects.go
+	linking              map[string]*linkTry // peer ID -> how its link is being made, until one holds
+	ctx                  context.Context     // Run's, for work that outlasts a request
 
 	kinds  map[string]device.Kind // the kinds of device; see devices.go
 	claims claims                 // the devices of this node lent to others
@@ -86,6 +86,9 @@ type Daemon struct {
 	// statusCommand is the one Claude runs as its status line, which
 	// reports the account's limits; "" for none.
 	statusCommand string
+	// clipTools is the folder of the clipboard tools put first in a
+	// session's PATH; see clipboard.go. "" for none.
+	clipTools string
 }
 
 // New builds a daemon from configuration.
@@ -98,7 +101,7 @@ func New(cfg *config.Config, log *slog.Logger) *Daemon {
 		log:      log,
 		sessions: newRegistry(),
 		peers:    newPeerTable(),
-		linking:  map[string]time.Time{},
+		linking:  map[string]*linkTry{},
 		ctx:      context.Background(),
 		ready:    make(chan struct{}),
 		mcp:      newResolver(log),

@@ -166,8 +166,15 @@ type Node struct {
 	// daemon in and more through nodes that do, each letting in the one
 	// before; via is the node ID of the peer the request goes to first,
 	// when hops is more than 1. 0 and empty for a node it cannot reach.
-	Hops          uint32 `protobuf:"varint,18,opt,name=hops,proto3" json:"hops,omitempty"`
-	Via           string `protobuf:"bytes,19,opt,name=via,proto3" json:"via,omitempty"`
+	Hops uint32 `protobuf:"varint,18,opt,name=hops,proto3" json:"hops,omitempty"`
+	Via  string `protobuf:"bytes,19,opt,name=via,proto3" json:"via,omitempty"`
+	// How the daemon answering stands linked to the node over libp2p: "up";
+	// "linking" while it tries; "down" while it waits to try again, at
+	// relink_at, link_error saying why the last try failed. Empty for
+	// itself, a node without a libp2p identity, and a daemon too old to say.
+	Link          string                 `protobuf:"bytes,20,opt,name=link,proto3" json:"link,omitempty"`
+	LinkError     string                 `protobuf:"bytes,21,opt,name=link_error,json=linkError,proto3" json:"link_error,omitempty"`
+	RelinkAt      *timestamppb.Timestamp `protobuf:"bytes,22,opt,name=relink_at,json=relinkAt,proto3" json:"relink_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -333,6 +340,27 @@ func (x *Node) GetVia() string {
 		return x.Via
 	}
 	return ""
+}
+
+func (x *Node) GetLink() string {
+	if x != nil {
+		return x.Link
+	}
+	return ""
+}
+
+func (x *Node) GetLinkError() string {
+	if x != nil {
+		return x.LinkError
+	}
+	return ""
+}
+
+func (x *Node) GetRelinkAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RelinkAt
+	}
+	return nil
 }
 
 // AgentInfo names an agent a node can launch and its profiles, and what
@@ -815,7 +843,8 @@ type Access struct {
 	// in, with note; "allow" lets in the node node_id that asked, by its own
 	// key or with owner by the SSH key that vouches for it; "deny" drops its
 	// request; "add" lets in the authorized_keys line key; "revoke" removes
-	// the key whose fingerprint is key.
+	// the key whose fingerprint is key; "relink" tries the link to node_id
+	// again at once, rather than when its wait ends.
 	Op            string `protobuf:"bytes,1,opt,name=op,proto3" json:"op,omitempty"`
 	NodeId        string `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	Key           string `protobuf:"bytes,3,opt,name=key,proto3" json:"key,omitempty"`
@@ -1201,7 +1230,7 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\aversion\x18\x03 \x01(\tR\aversion\x12\x12\n" +
 	"\x04hops\x18\x06 \x01(\rR\x04hopsJ\x04\b\x01\x10\x02J\x04\b\x04\x10\x05J\x04\b\x05\x10\x06R\anode_idR\ais_peerR\bauth_tagR\x05token\",\n" +
 	"\aWelcome\x12!\n" +
-	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\"\xef\x03\n" +
+	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\"\xdb\x04\n" +
 	"\x04Node\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -1224,7 +1253,11 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\x03key\x18\x10 \x01(\tR\x03key\x12\x14\n" +
 	"\x05owner\x18\x11 \x01(\tR\x05owner\x12\x12\n" +
 	"\x04hops\x18\x12 \x01(\rR\x04hops\x12\x10\n" +
-	"\x03via\x18\x13 \x01(\tR\x03via\"y\n" +
+	"\x03via\x18\x13 \x01(\tR\x03via\x12\x12\n" +
+	"\x04link\x18\x14 \x01(\tR\x04link\x12\x1d\n" +
+	"\n" +
+	"link_error\x18\x15 \x01(\tR\tlinkError\x127\n" +
+	"\trelink_at\x18\x16 \x01(\v2\x1a.google.protobuf.TimestampR\brelinkAt\"y\n" +
 	"\tAgentInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bprofiles\x18\x02 \x03(\tR\bprofiles\x12\x12\n" +
@@ -1320,26 +1353,27 @@ var file_mako_v2_mesh_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Welcome.node:type_name -> mako.v2.Node
 	16, // 1: mako.v2.Node.last_seen:type_name -> google.protobuf.Timestamp
 	3,  // 2: mako.v2.Node.agents:type_name -> mako.v2.AgentInfo
-	2,  // 3: mako.v2.Nodes.nodes:type_name -> mako.v2.Node
-	2,  // 4: mako.v2.NodeState.node:type_name -> mako.v2.Node
-	17, // 5: mako.v2.NodeState.sessions:type_name -> mako.v2.SessionInfo
-	2,  // 6: mako.v2.NodeState.peers:type_name -> mako.v2.Node
-	7,  // 7: mako.v2.NodeState.workspace:type_name -> mako.v2.Workspace
-	14, // 8: mako.v2.AccessInfo.key:type_name -> mako.v2.AccessKey
-	14, // 9: mako.v2.AccessInfo.owner:type_name -> mako.v2.AccessKey
-	15, // 10: mako.v2.AccessInfo.requests:type_name -> mako.v2.AccessRequest
-	14, // 11: mako.v2.AccessInfo.keys:type_name -> mako.v2.AccessKey
-	13, // 12: mako.v2.AccessInfo.pairing:type_name -> mako.v2.Pairing
-	16, // 13: mako.v2.Pairing.expires:type_name -> google.protobuf.Timestamp
-	2,  // 14: mako.v2.AccessRequest.node:type_name -> mako.v2.Node
-	14, // 15: mako.v2.AccessRequest.key:type_name -> mako.v2.AccessKey
-	14, // 16: mako.v2.AccessRequest.owner:type_name -> mako.v2.AccessKey
-	16, // 17: mako.v2.AccessRequest.at:type_name -> google.protobuf.Timestamp
-	18, // [18:18] is the sub-list for method output_type
-	18, // [18:18] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	16, // 3: mako.v2.Node.relink_at:type_name -> google.protobuf.Timestamp
+	2,  // 4: mako.v2.Nodes.nodes:type_name -> mako.v2.Node
+	2,  // 5: mako.v2.NodeState.node:type_name -> mako.v2.Node
+	17, // 6: mako.v2.NodeState.sessions:type_name -> mako.v2.SessionInfo
+	2,  // 7: mako.v2.NodeState.peers:type_name -> mako.v2.Node
+	7,  // 8: mako.v2.NodeState.workspace:type_name -> mako.v2.Workspace
+	14, // 9: mako.v2.AccessInfo.key:type_name -> mako.v2.AccessKey
+	14, // 10: mako.v2.AccessInfo.owner:type_name -> mako.v2.AccessKey
+	15, // 11: mako.v2.AccessInfo.requests:type_name -> mako.v2.AccessRequest
+	14, // 12: mako.v2.AccessInfo.keys:type_name -> mako.v2.AccessKey
+	13, // 13: mako.v2.AccessInfo.pairing:type_name -> mako.v2.Pairing
+	16, // 14: mako.v2.Pairing.expires:type_name -> google.protobuf.Timestamp
+	2,  // 15: mako.v2.AccessRequest.node:type_name -> mako.v2.Node
+	14, // 16: mako.v2.AccessRequest.key:type_name -> mako.v2.AccessKey
+	14, // 17: mako.v2.AccessRequest.owner:type_name -> mako.v2.AccessKey
+	16, // 18: mako.v2.AccessRequest.at:type_name -> google.protobuf.Timestamp
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_mesh_proto_init() }

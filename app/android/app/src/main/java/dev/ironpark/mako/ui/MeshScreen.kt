@@ -28,11 +28,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +54,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.ironpark.mako.Mesh
 import dev.ironpark.mako.R
+import kotlinx.coroutines.delay
 import dev.ironpark.mako.v2.Node
 import kotlinx.coroutines.launch
 
@@ -146,7 +150,7 @@ fun MeshScreen(mesh: Mesh, onBack: () -> Unit, onScan: () -> Unit) {
                                 mesh.askToJoin(n.id, resources.getString(R.string.ask_note, Mesh.deviceName()))
                                 asked = asked + n.id
                             }
-                        })
+                        }, onRelink = { act { mesh.relink(n.id) } })
                     }
                 }
             }
@@ -205,8 +209,34 @@ fun MeshScreen(mesh: Mesh, onBack: () -> Unit, onScan: () -> Unit) {
     }
 }
 
+/** Whether this device's link to n is down or being made again; an older daemon does not say. */
+internal fun Node.linkDown(): Boolean = link == Mesh.LINK_DOWN || link == Mesh.LINK_LINKING
+
+/**
+ * How a link down stands: being made, or when it is tried again, counting
+ * down, with why the last try failed.
+ */
 @Composable
-private fun NodeItem(n: Node, asked: Boolean, onAsk: () -> Unit) {
+private fun linkText(n: Node): String {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(n.relinkAt) {
+        // Counts down to the next try, and stops there.
+        while (n.link == Mesh.LINK_DOWN && n.relinkAt.millis() > now) {
+            delay(1_000)
+            now = System.currentTimeMillis()
+        }
+    }
+    val wait = if (n.hasRelinkAt()) (n.relinkAt.millis() - now + 999) / 1000 else 0
+    val text = when {
+        n.link == Mesh.LINK_LINKING -> stringResource(R.string.connecting)
+        wait > 0 -> stringResource(R.string.offline_retry_in, wait)
+        else -> stringResource(R.string.offline_retrying)
+    }
+    return dotted(text, n.linkError)
+}
+
+@Composable
+private fun NodeItem(n: Node, asked: Boolean, onAsk: () -> Unit, onRelink: () -> Unit) {
     ListItem(
         leadingContent = {
             Icon(
@@ -216,13 +246,21 @@ private fun NodeItem(n: Node, asked: Boolean, onAsk: () -> Unit) {
         },
         headlineContent = { Text(n.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         supportingContent = {
-            Text(
-                dotted(osName(n.os), n.addr.ifEmpty { n.source }),
-                style = MaterialTheme.typography.bodySmall,
-            )
+            Column {
+                Text(
+                    dotted(osName(n.os), n.addr.ifEmpty { n.source }),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (n.linkDown()) Text(
+                    linkText(n), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    color = if (n.link == Mesh.LINK_LINKING) StatusColors.Waiting else MaterialTheme.colorScheme.error,
+                )
+            }
         },
         trailingContent = {
             when {
+                // Not let in reads the same as not linked: only a link made says which.
+                n.linkDown() -> OutlinedButton(onClick = onRelink, enabled = n.link != Mesh.LINK_LINKING) { Text(stringResource(R.string.reconnect)) }
                 n.trustsUs -> Pill(stringResource(R.string.lets_in), StatusColors.Done)
                 asked -> Text(
                     stringResource(R.string.asked, n.name), style = MaterialTheme.typography.labelSmall,

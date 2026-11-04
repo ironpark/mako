@@ -322,6 +322,9 @@ message Node {
   string owner = 17;   // the fingerprint of the SSH key vouching for it
   uint32 hops = 18;    // daemons a request goes through to it: 1 when it lets the daemon in, 0 for unreachable
   string via = 19;     // the peer a request to it goes to first, when hops is more than 1
+  string link = 20;    // the daemon's own libp2p link to it: up, linking, down; "" for itself or none
+  string link_error = 21; // why the last try at a link down failed
+  google.protobuf.Timestamp relink_at = 22; // when a link down is tried again
 }
 
 message Changed {
@@ -481,7 +484,7 @@ for. A daemon that predates the flag ignores it and sends the messages too.
 | `list_dir` | `ListDir` | `dir` | A directory's entries, directories first, then by name. |
 | `read_file` | `ReadFile` | `file` | The start of a file, or with `image` the whole of an image, or with `raw` a piece of any file from `offset`. |
 | `write_file` | `WriteFile` | `file` | Replaces a file's contents, keeping its mode, or with an `offset` adds a piece to its end. |
-| `file_op` | `FileOp` | `file` | `create`, `mkdir`, `rename` (to `to`) or `delete`. None replaces what exists. |
+| `file_op` | `FileOp` | `file` | `create`, `mkdir`, `rename` (to `to`), `copy` (to `to`, a folder with all it holds) or `delete`. None replaces what exists. |
 | `search` | `Search` | `search_result` | A project's files, or the lines holding `query`. Both leave out what `.gitignore` does. |
 | `stage_file` | `StageFile` | `staged` | A piece of a file the front-end has, such as one dropped on a window, kept on the node so a session there can read it. |
 
@@ -968,6 +971,11 @@ that drops the oldest.
 | `deny` | Drop `node_id`'s request. |
 | `add` | Let in `key`, an `authorized_keys` line. |
 | `revoke` | Take out the key whose fingerprint is `key`. |
+| `relink` | Try the link to `node_id` again now, rather than when its wait ends. |
+
+A link that drops is tried again at once, and one that fails then waits
+2 seconds, twice as long each time it fails again, up to 30; `list_nodes`
+says how each stands in `link`, `link_error` and `relink_at`.
 
 The reply, `AccessInfo`, gives this node's own key and its owner's, each with
 the line another node's `authorized_keys` takes, the requests waiting, and

@@ -69,6 +69,9 @@ type Config struct {
 	// OnPeer is told how the host stands with a peer each time the two
 	// introduce themselves.
 	OnPeer func(Peer)
+	// OnDrop is told of a peer the host no longer has a link to, the
+	// peer's ID, off the network's goroutine.
+	OnDrop func(id string)
 	// Relays are relay nodes' multiaddrs, each with its /p2p/ ID, that
 	// this host reserves a slot on to be reachable behind NAT.
 	Relays []string
@@ -110,6 +113,7 @@ func New(ctx context.Context, cfg Config) (*Host, error) {
 	h := &Host{log: log, done: make(chan struct{}),
 		trust: newTrust(NewKeys(cfg.Dir), NewSSHKeys(cfg.SSHAuthorizedKeys), intro{Node: cfg.Node, Name: cfg.Name, OS: runtime.GOOS, Arch: runtime.GOARCH}, cfg.Owner, log)}
 	h.trust.changed = cfg.OnPeer
+	h.trust.dropped = cfg.OnDrop
 	hosts := []string{"0.0.0.0", "::"}
 	if cfg.Host != "" {
 		hosts = []string{cfg.Host}

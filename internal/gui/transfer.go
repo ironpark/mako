@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/ironpark/ggui"
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -27,12 +26,9 @@ var errOlder = &protocol.CodedError{Code: protocol.CodeUnsupported, Message: "th
 // canTransfer says why node cannot move files in pieces or open tunnels,
 // when its daemon is from before them: nil when it can, or is not known.
 func (m *model) canTransfer(node string) error {
-	n := ggui.Peek(m.Conn).Self
-	if !m.onThisMachine(node) {
-		var ok bool
-		if n, ok = nodeIn(ggui.Peek(m.Nodes), node); !ok {
-			return nil
-		}
+	n, ok := m.nodeInfo(node)
+	if !ok {
+		return nil
 	}
 	if n.GetRevision() < protocol.RevisionTransfers {
 		return errOlder
@@ -214,17 +210,31 @@ func downloadFile(ctx context.Context, c *client.Client, node, from, to string, 
 			os.Remove(to)
 		}
 	}()
+	return readPieces(ctx, c, node, from, func(_ int64, p []byte) error {
+		if _, err := f.Write(p); err != nil {
+			return err
+		}
+		t.done.Add(int64(len(p)))
+		return nil
+	})
+}
+
+// readPieces reads the file at from on node a piece at a time, handing
+// each to got with where in the file it goes, until its end.
+func readPieces(ctx context.Context, c *client.Client, node, from string, got func(off int64, p []byte) error) error {
 	for off := int64(0); ; {
 		piece, err := c.ReadFile(ctx, &protocol.ReadFile{NodeId: node, Path: from, Offset: off, Raw: true, Max: stageChunk})
 		if err != nil {
 			return err
 		}
-		if _, err := f.Write(piece.GetData()); err != nil {
+		if len(piece.GetData()) == 0 {
+			return nil
+		}
+		if err := got(off, piece.GetData()); err != nil {
 			return err
 		}
 		off += int64(len(piece.GetData()))
-		t.done.Add(int64(len(piece.GetData())))
-		if !piece.GetTruncated() || len(piece.GetData()) == 0 {
+		if !piece.GetTruncated() {
 			return nil
 		}
 	}

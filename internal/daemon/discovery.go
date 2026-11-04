@@ -67,6 +67,40 @@ func (d *Daemon) discover(ctx context.Context) {
 	}
 }
 
+// relinkDue is the peers whose failed link's wait has ended by now.
+func (d *Daemon) relinkDue(now time.Time) map[string]bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var due map[string]bool
+	for id, try := range d.linking {
+		if !try.busy && !try.next.IsZero() && !now.Before(try.next) {
+			if due == nil {
+				due = map[string]bool{}
+			}
+			due[id] = true
+		}
+	}
+	return due
+}
+
+// relinkPeers tries the links to the peers due again, and forgets those
+// no longer listed or linked meanwhile.
+func (d *Daemon) relinkPeers(due map[string]bool) {
+	for _, node := range d.peers.list() {
+		if id := node.GetPeerId(); due[id] {
+			delete(due, id)
+			d.link(node)
+		}
+	}
+	d.mu.Lock()
+	for id := range due {
+		if try := d.linking[id]; try != nil && !try.busy {
+			delete(d.linking, id)
+		}
+	}
+	d.mu.Unlock()
+}
+
 // keepStatic keeps a link to a configured peer: a multiaddr ending in its
 // /p2p/ ID, or a host with its libp2p port, probed for its peer ID until
 // it is linked. The node's record comes as the two introduce themselves.
@@ -104,20 +138,27 @@ func (d *Daemon) linkStatic(ctx context.Context, addr string) (string, error) {
 }
 
 // maintain expires stale peers, keeping those still linked, and links
-// again to those whose link dropped.
+// again to those whose link dropped, as each one's wait ends.
 func (d *Daemon) maintain(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
+	prune := time.NewTicker(30 * time.Second)
+	defer prune.Stop()
+	due := time.NewTicker(time.Second)
+	defer due.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-prune.C:
 			if d.peers.prune(peerTTL, func(n *protocol.Node) bool { return d.p2p != nil && d.p2p.Connected(n.GetPeerId()) }) {
 				d.changes.fire(true, false)
 			}
 			for _, node := range d.peers.list() {
 				d.link(node) // a link dropped is made again
+			}
+		case now := <-due.C:
+			// A link that failed is tried again as its wait ends.
+			if due := d.relinkDue(now); len(due) > 0 {
+				d.relinkPeers(due)
 			}
 		}
 	}

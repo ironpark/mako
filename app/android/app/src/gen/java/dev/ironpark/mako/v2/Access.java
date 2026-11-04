@@ -33,7 +33,8 @@ public  final class Access extends
    * in, with note; "allow" lets in the node node_id that asked, by its own
    * key or with owner by the SSH key that vouches for it; "deny" drops its
    * request; "add" lets in the authorized_keys line key; "revoke" removes
-   * the key whose fingerprint is key.
+   * the key whose fingerprint is key; "relink" tries the link to node_id
+   * again at once, rather than when its wait ends.
    * </pre>
    *
    * <code>string op = 1 [json_name = "op"];</code>
@@ -49,7 +50,8 @@ public  final class Access extends
    * in, with note; "allow" lets in the node node_id that asked, by its own
    * key or with owner by the SSH key that vouches for it; "deny" drops its
    * request; "add" lets in the authorized_keys line key; "revoke" removes
-   * the key whose fingerprint is key.
+   * the key whose fingerprint is key; "relink" tries the link to node_id
+   * again at once, rather than when its wait ends.
    * </pre>
    *
    * <code>string op = 1 [json_name = "op"];</code>
@@ -66,7 +68,8 @@ public  final class Access extends
    * in, with note; "allow" lets in the node node_id that asked, by its own
    * key or with owner by the SSH key that vouches for it; "deny" drops its
    * request; "add" lets in the authorized_keys line key; "revoke" removes
-   * the key whose fingerprint is key.
+   * the key whose fingerprint is key; "relink" tries the link to node_id
+   * again at once, rather than when its wait ends.
    * </pre>
    *
    * <code>string op = 1 [json_name = "op"];</code>
@@ -84,7 +87,8 @@ public  final class Access extends
    * in, with note; "allow" lets in the node node_id that asked, by its own
    * key or with owner by the SSH key that vouches for it; "deny" drops its
    * request; "add" lets in the authorized_keys line key; "revoke" removes
-   * the key whose fingerprint is key.
+   * the key whose fingerprint is key; "relink" tries the link to node_id
+   * again at once, rather than when its wait ends.
    * </pre>
    *
    * <code>string op = 1 [json_name = "op"];</code>
@@ -99,7 +103,8 @@ public  final class Access extends
    * in, with note; "allow" lets in the node node_id that asked, by its own
    * key or with owner by the SSH key that vouches for it; "deny" drops its
    * request; "add" lets in the authorized_keys line key; "revoke" removes
-   * the key whose fingerprint is key.
+   * the key whose fingerprint is key; "relink" tries the link to node_id
+   * again at once, rather than when its wait ends.
    * </pre>
    *
    * <code>string op = 1 [json_name = "op"];</code>
@@ -387,7 +392,8 @@ public  final class Access extends
      * in, with note; "allow" lets in the node node_id that asked, by its own
      * key or with owner by the SSH key that vouches for it; "deny" drops its
      * request; "add" lets in the authorized_keys line key; "revoke" removes
-     * the key whose fingerprint is key.
+     * the key whose fingerprint is key; "relink" tries the link to node_id
+     * again at once, rather than when its wait ends.
      * </pre>
      *
      * <code>string op = 1 [json_name = "op"];</code>
@@ -403,7 +409,8 @@ public  final class Access extends
      * in, with note; "allow" lets in the node node_id that asked, by its own
      * key or with owner by the SSH key that vouches for it; "deny" drops its
      * request; "add" lets in the authorized_keys line key; "revoke" removes
-     * the key whose fingerprint is key.
+     * the key whose fingerprint is key; "relink" tries the link to node_id
+     * again at once, rather than when its wait ends.
      * </pre>
      *
      * <code>string op = 1 [json_name = "op"];</code>
@@ -420,7 +427,8 @@ public  final class Access extends
      * in, with note; "allow" lets in the node node_id that asked, by its own
      * key or with owner by the SSH key that vouches for it; "deny" drops its
      * request; "add" lets in the authorized_keys line key; "revoke" removes
-     * the key whose fingerprint is key.
+     * the key whose fingerprint is key; "relink" tries the link to node_id
+     * again at once, rather than when its wait ends.
      * </pre>
      *
      * <code>string op = 1 [json_name = "op"];</code>
@@ -439,7 +447,8 @@ public  final class Access extends
      * in, with note; "allow" lets in the node node_id that asked, by its own
      * key or with owner by the SSH key that vouches for it; "deny" drops its
      * request; "add" lets in the authorized_keys line key; "revoke" removes
-     * the key whose fingerprint is key.
+     * the key whose fingerprint is key; "relink" tries the link to node_id
+     * again at once, rather than when its wait ends.
      * </pre>
      *
      * <code>string op = 1 [json_name = "op"];</code>
@@ -456,7 +465,8 @@ public  final class Access extends
      * in, with note; "allow" lets in the node node_id that asked, by its own
      * key or with owner by the SSH key that vouches for it; "deny" drops its
      * request; "add" lets in the authorized_keys line key; "revoke" removes
-     * the key whose fingerprint is key.
+     * the key whose fingerprint is key; "relink" tries the link to node_id
+     * again at once, rather than when its wait ends.
      * </pre>
      *
      * <code>string op = 1 [json_name = "op"];</code>

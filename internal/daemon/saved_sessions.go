@@ -346,6 +346,9 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 		return nil, err
 	}
 	d.withLive(ctx, &launch.Launch, req.GetAgent(), id)
+	if d.clipTools != "" {
+		launch.SetEnv("PATH", d.clipTools+string(os.PathListSeparator)+cmp.Or(launch.Env["PATH"], os.Getenv("PATH")))
+	}
 	s, err := session.Start(session.Spec{ID: id, NodeID: d.cfg.NodeID, Agent: req.GetAgent(), Profile: req.GetProfile(),
 		Project: req.GetProject(), Command: launch.Command, Shown: launch.Shown, Env: launch.Env, Cols: uint16(req.GetCols()), Rows: uint16(req.GetRows()), Worktree: req.GetWorktree(), OnChange: d.pokeStatus})
 	if err != nil {

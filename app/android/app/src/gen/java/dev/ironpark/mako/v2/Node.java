@@ -33,6 +33,8 @@ public  final class Node extends
     key_ = "";
     owner_ = "";
     via_ = "";
+    link_ = "";
+    linkError_ = "";
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -1188,6 +1190,182 @@ public  final class Node extends
     checkByteStringIsUtf8(value);
     via_ = value.toStringUtf8();
 
+  }
+
+  public static final int LINK_FIELD_NUMBER = 20;
+  private java.lang.String link_;
+  /**
+   * <pre>
+   * How the daemon answering stands linked to the node over libp2p: "up";
+   * "linking" while it tries; "down" while it waits to try again, at
+   * relink_at, link_error saying why the last try failed. Empty for
+   * itself, a node without a libp2p identity, and a daemon too old to say.
+   * </pre>
+   *
+   * <code>string link = 20 [json_name = "link"];</code>
+   * @return The link.
+   */
+  @java.lang.Override
+  public java.lang.String getLink() {
+    return link_;
+  }
+  /**
+   * <pre>
+   * How the daemon answering stands linked to the node over libp2p: "up";
+   * "linking" while it tries; "down" while it waits to try again, at
+   * relink_at, link_error saying why the last try failed. Empty for
+   * itself, a node without a libp2p identity, and a daemon too old to say.
+   * </pre>
+   *
+   * <code>string link = 20 [json_name = "link"];</code>
+   * @return The bytes for link.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getLinkBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(link_);
+  }
+  /**
+   * <pre>
+   * How the daemon answering stands linked to the node over libp2p: "up";
+   * "linking" while it tries; "down" while it waits to try again, at
+   * relink_at, link_error saying why the last try failed. Empty for
+   * itself, a node without a libp2p identity, and a daemon too old to say.
+   * </pre>
+   *
+   * <code>string link = 20 [json_name = "link"];</code>
+   * @param value The link to set.
+   */
+  private void setLink(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    link_ = value;
+  }
+  /**
+   * <pre>
+   * How the daemon answering stands linked to the node over libp2p: "up";
+   * "linking" while it tries; "down" while it waits to try again, at
+   * relink_at, link_error saying why the last try failed. Empty for
+   * itself, a node without a libp2p identity, and a daemon too old to say.
+   * </pre>
+   *
+   * <code>string link = 20 [json_name = "link"];</code>
+   */
+  private void clearLink() {
+
+    link_ = getDefaultInstance().getLink();
+  }
+  /**
+   * <pre>
+   * How the daemon answering stands linked to the node over libp2p: "up";
+   * "linking" while it tries; "down" while it waits to try again, at
+   * relink_at, link_error saying why the last try failed. Empty for
+   * itself, a node without a libp2p identity, and a daemon too old to say.
+   * </pre>
+   *
+   * <code>string link = 20 [json_name = "link"];</code>
+   * @param value The bytes for link to set.
+   */
+  private void setLinkBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    link_ = value.toStringUtf8();
+
+  }
+
+  public static final int LINK_ERROR_FIELD_NUMBER = 21;
+  private java.lang.String linkError_;
+  /**
+   * <code>string link_error = 21 [json_name = "linkError"];</code>
+   * @return The linkError.
+   */
+  @java.lang.Override
+  public java.lang.String getLinkError() {
+    return linkError_;
+  }
+  /**
+   * <code>string link_error = 21 [json_name = "linkError"];</code>
+   * @return The bytes for linkError.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getLinkErrorBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(linkError_);
+  }
+  /**
+   * <code>string link_error = 21 [json_name = "linkError"];</code>
+   * @param value The linkError to set.
+   */
+  private void setLinkError(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    linkError_ = value;
+  }
+  /**
+   * <code>string link_error = 21 [json_name = "linkError"];</code>
+   */
+  private void clearLinkError() {
+
+    linkError_ = getDefaultInstance().getLinkError();
+  }
+  /**
+   * <code>string link_error = 21 [json_name = "linkError"];</code>
+   * @param value The bytes for linkError to set.
+   */
+  private void setLinkErrorBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    linkError_ = value.toStringUtf8();
+
+  }
+
+  public static final int RELINK_AT_FIELD_NUMBER = 22;
+  private com.google.protobuf.Timestamp relinkAt_;
+  /**
+   * <code>.google.protobuf.Timestamp relink_at = 22 [json_name = "relinkAt"];</code>
+   */
+  @java.lang.Override
+  public boolean hasRelinkAt() {
+    return ((bitField0_ & 0x00000002) != 0);
+  }
+  /**
+   * <code>.google.protobuf.Timestamp relink_at = 22 [json_name = "relinkAt"];</code>
+   */
+  @java.lang.Override
+  public com.google.protobuf.Timestamp getRelinkAt() {
+    return relinkAt_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : relinkAt_;
+  }
+  /**
+   * <code>.google.protobuf.Timestamp relink_at = 22 [json_name = "relinkAt"];</code>
+   */
+  private void setRelinkAt(com.google.protobuf.Timestamp value) {
+    java.util.Objects.requireNonNull(value);
+    relinkAt_ = value;
+    bitField0_ |= 0x00000002;
+  }
+  /**
+   * <code>.google.protobuf.Timestamp relink_at = 22 [json_name = "relinkAt"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeRelinkAt(com.google.protobuf.Timestamp value) {
+    java.util.Objects.requireNonNull(value);
+    if (relinkAt_ != null &&
+        relinkAt_ != com.google.protobuf.Timestamp.getDefaultInstance()) {
+      relinkAt_ =
+        com.google.protobuf.Timestamp.newBuilder(relinkAt_).mergeFrom(value).buildPartial();
+    } else {
+      relinkAt_ = value;
+    }
+    bitField0_ |= 0x00000002;
+  }
+  /**
+   * <code>.google.protobuf.Timestamp relink_at = 22 [json_name = "relinkAt"];</code>
+   */
+  private void clearRelinkAt() {
+    relinkAt_ = null;
+    bitField0_ = (bitField0_ & ~0x00000002);
   }
 
   public static dev.ironpark.mako.v2.Node parseFrom(
@@ -2486,6 +2664,186 @@ public  final class Node extends
       return this;
     }
 
+    /**
+     * <pre>
+     * How the daemon answering stands linked to the node over libp2p: "up";
+     * "linking" while it tries; "down" while it waits to try again, at
+     * relink_at, link_error saying why the last try failed. Empty for
+     * itself, a node without a libp2p identity, and a daemon too old to say.
+     * </pre>
+     *
+     * <code>string link = 20 [json_name = "link"];</code>
+     * @return The link.
+     */
+    @java.lang.Override
+    public java.lang.String getLink() {
+      return instance.getLink();
+    }
+    /**
+     * <pre>
+     * How the daemon answering stands linked to the node over libp2p: "up";
+     * "linking" while it tries; "down" while it waits to try again, at
+     * relink_at, link_error saying why the last try failed. Empty for
+     * itself, a node without a libp2p identity, and a daemon too old to say.
+     * </pre>
+     *
+     * <code>string link = 20 [json_name = "link"];</code>
+     * @return The bytes for link.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getLinkBytes() {
+      return instance.getLinkBytes();
+    }
+    /**
+     * <pre>
+     * How the daemon answering stands linked to the node over libp2p: "up";
+     * "linking" while it tries; "down" while it waits to try again, at
+     * relink_at, link_error saying why the last try failed. Empty for
+     * itself, a node without a libp2p identity, and a daemon too old to say.
+     * </pre>
+     *
+     * <code>string link = 20 [json_name = "link"];</code>
+     * @param value The link to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLink(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setLink(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * How the daemon answering stands linked to the node over libp2p: "up";
+     * "linking" while it tries; "down" while it waits to try again, at
+     * relink_at, link_error saying why the last try failed. Empty for
+     * itself, a node without a libp2p identity, and a daemon too old to say.
+     * </pre>
+     *
+     * <code>string link = 20 [json_name = "link"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearLink() {
+      copyOnWrite();
+      instance.clearLink();
+      return this;
+    }
+    /**
+     * <pre>
+     * How the daemon answering stands linked to the node over libp2p: "up";
+     * "linking" while it tries; "down" while it waits to try again, at
+     * relink_at, link_error saying why the last try failed. Empty for
+     * itself, a node without a libp2p identity, and a daemon too old to say.
+     * </pre>
+     *
+     * <code>string link = 20 [json_name = "link"];</code>
+     * @param value The bytes for link to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLinkBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setLinkBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string link_error = 21 [json_name = "linkError"];</code>
+     * @return The linkError.
+     */
+    @java.lang.Override
+    public java.lang.String getLinkError() {
+      return instance.getLinkError();
+    }
+    /**
+     * <code>string link_error = 21 [json_name = "linkError"];</code>
+     * @return The bytes for linkError.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getLinkErrorBytes() {
+      return instance.getLinkErrorBytes();
+    }
+    /**
+     * <code>string link_error = 21 [json_name = "linkError"];</code>
+     * @param value The linkError to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLinkError(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setLinkError(value);
+      return this;
+    }
+    /**
+     * <code>string link_error = 21 [json_name = "linkError"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearLinkError() {
+      copyOnWrite();
+      instance.clearLinkError();
+      return this;
+    }
+    /**
+     * <code>string link_error = 21 [json_name = "linkError"];</code>
+     * @param value The bytes for linkError to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLinkErrorBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setLinkErrorBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>.google.protobuf.Timestamp relink_at = 22 [json_name = "relinkAt"];</code>
+     */
+    @java.lang.Override
+    public boolean hasRelinkAt() {
+      return instance.hasRelinkAt();
+    }
+    /**
+     * <code>.google.protobuf.Timestamp relink_at = 22 [json_name = "relinkAt"];</code>
+     */
+    @java.lang.Override
+    public com.google.protobuf.Timestamp getRelinkAt() {
+      return instance.getRelinkAt();
+    }
+    /**
+     * <code>.google.protobuf.Timestamp relink_at = 22 [json_name = "relinkAt"];</code>
+     */
+    public Builder setRelinkAt(com.google.protobuf.Timestamp value) {
+      copyOnWrite();
+      instance.setRelinkAt(value);
+      return this;
+      }
+    /**
+     * <code>.google.protobuf.Timestamp relink_at = 22 [json_name = "relinkAt"];</code>
+     */
+    public Builder setRelinkAt(
+        com.google.protobuf.Timestamp.Builder builderForValue) {
+      copyOnWrite();
+      instance.setRelinkAt(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.google.protobuf.Timestamp relink_at = 22 [json_name = "relinkAt"];</code>
+     */
+    public Builder mergeRelinkAt(com.google.protobuf.Timestamp value) {
+      copyOnWrite();
+      instance.mergeRelinkAt(value);
+      return this;
+    }
+    /**
+     * <code>.google.protobuf.Timestamp relink_at = 22 [json_name = "relinkAt"];</code>
+     */
+    public Builder clearRelinkAt() {  copyOnWrite();
+      instance.clearRelinkAt();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Node)
   }
   @java.lang.Override
@@ -2523,12 +2881,15 @@ public  final class Node extends
             "owner_",
             "hops_",
             "via_",
+            "link_",
+            "linkError_",
+            "relinkAt_",
           };
           java.lang.String info =
-              "\u0000\u0013\u0000\u0001\u0001\u0013\u0013\u0000\u0003\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0016\u0000\u0001\u0001\u0016\u0016\u0000\u0003\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u1009\u0000\t\u021a" +
               "\n\u001b\u000b\u0002\f\u0208\r\u021a\u000e\u0007\u000f\u0007\u0010\u0208\u0011\u0208" +
-              "\u0012\u000b\u0013\u0208";
+              "\u0012\u000b\u0013\u0208\u0014\u0208\u0015\u0208\u0016\u1009\u0001";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -315,4 +315,53 @@ public interface NodeOrBuilder extends
    */
   com.google.protobuf.ByteString
       getViaBytes();
+
+  /**
+   * <pre>
+   * How the daemon answering stands linked to the node over libp2p: "up";
+   * "linking" while it tries; "down" while it waits to try again, at
+   * relink_at, link_error saying why the last try failed. Empty for
+   * itself, a node without a libp2p identity, and a daemon too old to say.
+   * </pre>
+   *
+   * <code>string link = 20 [json_name = "link"];</code>
+   * @return The link.
+   */
+  java.lang.String getLink();
+  /**
+   * <pre>
+   * How the daemon answering stands linked to the node over libp2p: "up";
+   * "linking" while it tries; "down" while it waits to try again, at
+   * relink_at, link_error saying why the last try failed. Empty for
+   * itself, a node without a libp2p identity, and a daemon too old to say.
+   * </pre>
+   *
+   * <code>string link = 20 [json_name = "link"];</code>
+   * @return The bytes for link.
+   */
+  com.google.protobuf.ByteString
+      getLinkBytes();
+
+  /**
+   * <code>string link_error = 21 [json_name = "linkError"];</code>
+   * @return The linkError.
+   */
+  java.lang.String getLinkError();
+  /**
+   * <code>string link_error = 21 [json_name = "linkError"];</code>
+   * @return The bytes for linkError.
+   */
+  com.google.protobuf.ByteString
+      getLinkErrorBytes();
+
+  /**
+   * <code>.google.protobuf.Timestamp relink_at = 22 [json_name = "relinkAt"];</code>
+   * @return Whether the relinkAt field is set.
+   */
+  boolean hasRelinkAt();
+  /**
+   * <code>.google.protobuf.Timestamp relink_at = 22 [json_name = "relinkAt"];</code>
+   * @return The relinkAt.
+   */
+  com.google.protobuf.Timestamp getRelinkAt();
 }

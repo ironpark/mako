@@ -127,7 +127,7 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
         composable("files/{node}/{root}") { entry ->
             val node = entry.arguments?.getString("node").orEmpty()
             val root = entry.arguments?.getString("root").orEmpty()
-            val files = remember(mesh.daemon, node) { NodeProjectFiles(mesh.daemon, node) }
+            val files = remember(mesh.daemon, node) { NodeProjectFiles(mesh.daemon, node) { mesh.copiesFiles(node) } }
             FilesScreen(files, root, mesh.nodeName(node), onBack = { nav.popBackStack() })
         }
         // A file a conversation links to, on its session's node.

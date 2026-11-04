@@ -220,11 +220,10 @@ func fileMenu(m *model, w ggui.Widget, it fileItem) ggui.Widget {
 			}))
 		}
 		items = append(items, m.editorItems(it.Node, it.Path, nil, m.FileNote.Set)...)
-		folder := folderOf(it)
+		items = append(items, ui.MenuDivider())
+		items = append(items, clipItems(m, it)...)
+		items = append(items, folderItems(m, folderOf(it), m.askFile)...)
 		items = append(items,
-			ui.MenuDivider(),
-			ui.MenuItem(T("New file…"), func() { m.askFile(protocol.FileCreate, folder) }),
-			ui.MenuItem(T("New folder…"), func() { m.askFile(protocol.FileMkdir, folder) }),
 			ui.MenuItem(T("Rename…"), func() { m.askFile(protocol.FileRename, it) }),
 			ui.MenuDivider(),
 			ui.MenuItem(T("Delete…"), func() { m.askFile(protocol.FileDelete, it) }),

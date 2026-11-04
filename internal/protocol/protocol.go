@@ -396,6 +396,7 @@ const (
 	FileMkdir  = "mkdir"  // a folder, which must not exist yet
 	FileRename = "rename" // to To, which must not exist yet
 	FileDelete = "delete" // a file, or a folder and all it holds
+	FileCopy   = "copy"   // to To, which must not exist yet: a file, or a folder and all it holds
 )
 
 // Change kinds of a GitFile.

@@ -41,9 +41,15 @@ import androidx.compose.ui.unit.dp
 import dev.ironpark.mako.R
 import dev.ironpark.mako.net.ProjectFiles
 import dev.ironpark.mako.v2.File as RemoteFile
+import dev.ironpark.mako.mako
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** How often a file that shows is looked at for a change on disk. */
+private const val FILE_CHECK = 2_500L
 
 private data class FilePreview(val file: RemoteFile, val text: String, val bitmap: Bitmap?)
 internal data class SourceLine(val text: String, val number: Long, val old: Long = 0, val op: String = "")
@@ -59,6 +65,24 @@ internal fun ProjectFileScreen(
     var preview by rememberSaveable { mutableStateOf(markdownFile(path) && line == 0L) }
     var refresh by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
+    // While it shows, a change on disk, by an agent or an editor, is read
+    // again in place.
+    var changed by remember { mutableIntStateOf(0) }
+    val shown by context.mako.foreground.collectAsState()
+    LaunchedEffect(path, shown) {
+        var seen: com.google.protobuf.Timestamp? = null
+        while (shown) {
+            try {
+                val mod = files.stat(path).modTime
+                if (seen != null && mod != seen) changed++
+                seen = mod
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+            }
+            delay(FILE_CHECK)
+        }
+    }
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
@@ -88,7 +112,7 @@ internal fun ProjectFileScreen(
     }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             if (diff) {
-                val result = remoteLoad(files, root, diffPath, from, refresh) { files.diff(root, diffPath, from) }
+                val result = remoteLoad(files, root, diffPath, from, refresh, quiet = changed) { files.diff(root, diffPath, from) }
                 RemoteContent(result, retry = { refresh++ }) { resultDiff ->
                     Column {
                         if (resultDiff.truncated) FileNotice(stringResource(R.string.diff_truncated))
@@ -104,7 +128,7 @@ internal fun ProjectFileScreen(
                 }
             } else {
                 val image = imageFile(path)
-                val result = remoteLoad(files, path, refresh) {
+                val result = remoteLoad(files, path, refresh, quiet = changed) {
                     val file = files.read(path, image)
                     withContext(Dispatchers.Default) {
                         FilePreview(file, if (image) "" else file.data.toStringUtf8(), if (image && !file.truncated) decodePreview(file.data.toByteArray()) else null)

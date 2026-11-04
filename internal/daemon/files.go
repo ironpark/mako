@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -522,6 +523,71 @@ func fileOp(r *protocol.FileOp) (*protocol.File, error) {
 			return nil, err
 		}
 		return &protocol.File{Path: p}, os.RemoveAll(p)
+	case protocol.FileCopy:
+		if err := absolute(r.GetTo()); err != nil {
+			return nil, err
+		}
+		to := filepath.Clean(r.GetTo())
+		if _, err := os.Lstat(to); err == nil {
+			return nil, fmt.Errorf("%s already exists", filepath.Base(to))
+		}
+		if to == p || strings.HasPrefix(to, p+string(filepath.Separator)) {
+			return nil, errors.New("a folder cannot be copied into itself")
+		}
+		if err := copyTree(p, to); err != nil {
+			os.RemoveAll(to) // not left half done
+			return nil, err
+		}
+		return &protocol.File{Path: to}, nil
 	}
 	return nil, fmt.Errorf("unknown file operation %q", r.GetOp())
+}
+
+// copyTree copies the file, link or folder at from, and all a folder
+// holds, to the new path to, keeping their modes.
+func copyTree(from, to string) error {
+	return filepath.WalkDir(from, func(p string, e fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(from, p)
+		if err != nil {
+			return err
+		}
+		dst := filepath.Join(to, rel)
+		info, err := e.Info()
+		if err != nil {
+			return err
+		}
+		switch {
+		case e.IsDir():
+			return os.Mkdir(dst, info.Mode().Perm()|0o700)
+		case e.Type()&fs.ModeSymlink != 0:
+			target, err := os.Readlink(p)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(target, dst)
+		case !e.Type().IsRegular():
+			return nil // a socket or device is not copied
+		}
+		return copyFile(p, dst, info.Mode().Perm())
+	})
+}
+
+func copyFile(from, to string, mode fs.FileMode) error {
+	src, err := os.Open(from)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	dst, err := os.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		dst.Close()
+		return err
+	}
+	return dst.Close()
 }

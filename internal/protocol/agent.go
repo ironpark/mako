@@ -29,7 +29,12 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 17
+const Revision = 18
+
+// RevisionLinks adds how a daemon's link to each node stands, Node's
+// link, link_error and relink_at, and Access's "relink"; and FileOp's
+// "copy".
+const RevisionLinks = 18
 
 // RevisionLiveChat adds WatchChat: a conversation followed as its log
 // grows and its agent's reply streams.
@@ -211,6 +216,13 @@ const (
 	StandingVia  = "via"  // the daemon reaches it through nodes that let it in
 	StandingThem = "them" // the daemon lets the node in
 	StandingNone = "none"
+)
+
+// How a daemon's libp2p link to a node stands, as Node's link says.
+const (
+	LinkUp      = "up"
+	LinkLinking = "linking" // a try is under way
+	LinkDown    = "down"    // waiting to try again
 )
 
 // Standing is how the daemon that listed n stands with it.

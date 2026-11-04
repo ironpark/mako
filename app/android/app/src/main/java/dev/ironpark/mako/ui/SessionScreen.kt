@@ -70,6 +70,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -100,7 +103,12 @@ fun SessionScreen(
     val nodes by mesh.nodes.collectAsState()
     val session = sessions.firstOrNull { it.id == id }
     val scope = rememberCoroutineScope()
-    val term = remember(node, id) { TermSession(mesh.daemon, id, node, scope) }
+    val context = LocalContext.current
+    val term = remember(node, id) {
+        TermSession(mesh.daemon, id, node, scope, onCopy = { text ->
+            context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("mako", text))
+        })
+    }
     val chat = session == null || session.caps and CAP_CHAT != 0
     // An agent whose conversation is not read shows its terminal alone.
     val pager = rememberPagerState(initialPage = 1) { if (chat) 3 else 2 }

@@ -44,6 +44,9 @@ func HookMain() bool {
 		runHook(os.Args[2:], os.Stdin, os.Stdout)
 		return true
 	}
+	if len(os.Args) > 1 && os.Args[1] == clipArg {
+		os.Exit(runClip(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	}
 	if len(os.Args) > 1 && os.Args[1] == statusArg {
 		runStatusLine(os.Args[2:], os.Stdin, os.Stdout)
 		return true
@@ -221,6 +224,9 @@ func (d *Daemon) listenHooks(ctx context.Context, dir string) {
 	context.AfterFunc(ctx, func() { _ = ln.Close() })
 	d.hookCommand = agentspec.CommandLine([]string{d.hookBinary, hookArg, path})
 	d.statusCommand = agentspec.CommandLine([]string{d.hookBinary, statusArg, path})
+	if d.clipTools, err = writeClipTools(dir, d.hookBinary, path); err != nil {
+		d.log.Warn("hooks: no clipboard tools", "err", err)
+	}
 	go func() {
 		for {
 			conn, err := ln.Accept()
@@ -256,6 +262,13 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	s, ok := d.sessions.get(msg.Session)
 	d.sessionMu.Unlock()
 	if !ok {
+		return
+	}
+	if msg.Kind == clipArg {
+		var text string
+		if json.Unmarshal(msg.Input, &text) == nil && text != "" {
+			s.Copy(text)
+		}
 		return
 	}
 	name := s.Agent()

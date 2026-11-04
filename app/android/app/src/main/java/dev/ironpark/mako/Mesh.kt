@@ -234,16 +234,27 @@ class Mesh(
     }
 
     /** Whether node takes send, typing into its sessions without an attach. */
-    fun canSend(node: String): Boolean =
-        node == _self.value?.id || (_nodes.value.firstOrNull { it.id == node }?.revision ?: 0) >= REVISION_SEND
+    fun canSend(node: String): Boolean = revision(node) >= REVISION_SEND
 
     /** Whether node takes files and tunnels: staged uploads, and its loopback ports forwarded. */
     fun canTransfer(node: String): Boolean =
         (_nodes.value.firstOrNull { it.id == node }?.revision ?: REVISION_TRANSFERS) >= REVISION_TRANSFERS
 
+    /** Whether node's daemon copies files itself, and says how its links stand. */
+    fun copiesFiles(node: String): Boolean = revision(node) >= REVISION_LINKS
+
+    /** node's protocol revision; this device's own node reads as current. */
+    private fun revision(node: String): Long =
+        if (node == _self.value?.id) Long.MAX_VALUE else _nodes.value.firstOrNull { it.id == node }?.revision ?: 0
+
+    /** Has this device's node try its link to node again now. */
+    suspend fun relink(node: String) {
+        daemon.access(Access.newBuilder().setOp("relink").setNodeId(node).build())
+        refreshNodes()
+    }
+
     /** Whether node reads a project's agents. */
-    fun readsProjectAgents(node: String): Boolean =
-        node == _self.value?.id || (_nodes.value.firstOrNull { it.id == node }?.revision ?: 0) >= REVISION_PROJECT_AGENTS
+    fun readsProjectAgents(node: String): Boolean = revision(node) >= REVISION_PROJECT_AGENTS
 
     /** Types into a session: text pasted as its program asked for pastes, then keys as they are. */
     suspend fun send(s: SessionInfo, text: String = "", keys: String = "") = daemon.send(s.nodeId, s.id, text, keys)
@@ -292,6 +303,13 @@ class Mesh(
 
         /** The first protocol revision whose daemon reads a project's agents (protocol.RevisionProjectAgents). */
         const val REVISION_PROJECT_AGENTS = 15L
+
+        /** The first protocol revision whose daemon copies files and says how its links stand (protocol.RevisionLinks). */
+        const val REVISION_LINKS = 18L
+
+        /** How a node's link stands, as Node.link says (protocol.Link*). */
+        const val LINK_LINKING = "linking"
+        const val LINK_DOWN = "down"
 
         /** How long the sessions may take to come, before none is taken to mean none. */
         private const val SETTLE = 8_000L

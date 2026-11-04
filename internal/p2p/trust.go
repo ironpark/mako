@@ -78,6 +78,7 @@ type trust struct {
 	peers map[peer.ID]*trustState
 	// changed is told of a peer each time it introduces itself again.
 	changed func(Peer)
+	dropped func(id string)
 }
 
 // trustState is where a peer stands: done is closed once the two have
@@ -138,7 +139,11 @@ func (t *trust) attach(h host.Host) {
 			if n.Connectedness(c.RemotePeer()) == network.NotConnected {
 				t.mu.Lock()
 				delete(t.peers, c.RemotePeer())
+				dropped := t.dropped
 				t.mu.Unlock()
+				if dropped != nil {
+					go dropped(c.RemotePeer().String())
+				}
 			}
 		},
 	})

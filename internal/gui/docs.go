@@ -43,6 +43,7 @@ type docInfo struct {
 	Err        string // why it could not be read
 	SaveErr    string // why the last save failed
 	Changed    bool   // the last save found it changed on disk since it was read
+	Stale      bool   // it changed on disk while edited, unsaved
 	Binary     bool
 	Truncated  bool
 	Size       int64
@@ -69,6 +70,46 @@ type document struct {
 	preview *ggui.StateValue[bool]
 	images  map[string]*ggui.StateValue[mdImage] // what its preview shows, by path
 	line    int                                  // the line to put the caret on once read, 0 for none
+	// checking is set while its node is asked whether it changed; staleMod
+	// is the ModTime the user was told of, so they are told once.
+	checking bool
+	staleMod time.Time
+}
+
+// docCheckEvery is how often an open file that shows is looked at for a
+// change on disk, by an agent or another editor.
+const docCheckEvery = 2 * time.Second
+
+// checkDoc asks the node whether an open file changed on disk since it was
+// read or saved: one unedited is read again, and of one edited the banner
+// tells.
+func (m *model) checkDoc(id string) {
+	d, ok := m.doc(id)
+	doc := m.docs[id]
+	if !ok || doc == nil || doc.checking || d.Loading || d.Saving || d.Err != "" || d.Binary || doc.mod.IsZero() {
+		return
+	}
+	doc.checking = true
+	req := &protocol.ReadFile{NodeId: m.remoteID(d.Node), Path: d.Path, Max: 1}
+	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.File, error) {
+		return c.ReadFile(ctx, req)
+	}, func(f *protocol.File, err error) {
+		doc.checking = false
+		d, ok := m.doc(id)
+		if err != nil || !ok || m.docs[id] != doc || d.Loading || d.Saving {
+			return
+		}
+		mod := protocol.TimeOf(f.GetModTime())
+		if mod.IsZero() || mod.Equal(doc.mod) || mod.Equal(doc.staleMod) {
+			return
+		}
+		if !d.Dirty {
+			m.readDoc(id)
+			return
+		}
+		doc.staleMod = mod
+		m.updateDoc(id, func(d *docInfo) { d.Stale = true })
+	})
 }
 
 func (m *model) doc(id string) (docInfo, bool) {
@@ -207,6 +248,8 @@ func (m *model) saveDoc(id string, force bool) {
 				d.Changed = true
 			case err != nil:
 				d.SaveErr = err.Error()
+			default:
+				d.Stale = false
 			}
 		})
 	})
@@ -320,6 +363,10 @@ func docView(m *model, id string, focus bool) ggui.Widget {
 	banner := ggui.Reactive(func() ggui.Widget {
 		d := info.Get()
 		switch {
+		case d.Stale && !d.Changed:
+			return docBanner(T("The file changed on disk while you edited it."),
+				ui.Button(T("Keep mine"), func() { m.updateDoc(id, func(d *docInfo) { d.Stale = false }) }).Outline(),
+				ui.Button(T("Reload"), func() { m.readDoc(id) }).Outline())
 		case d.Changed:
 			return docBanner(T("The file changed on disk since it was opened."),
 				ui.Button(T("Overwrite"), func() { m.saveDoc(id, true) }).Outline(),
@@ -331,6 +378,8 @@ func docView(m *model, id string, focus bool) ggui.Widget {
 		}
 		return ggui.Box()
 	})
+	// While it shows, a change on disk is followed.
+	ggui.Effect(func() ggui.Cleanup { return m.every(docCheckEvery, func() { m.checkDoc(id) }) })
 	return ggui.Column(docStatus(m, id, info, state), hline(), banner, ggui.Expanded(body)).Stretch()
 }
 

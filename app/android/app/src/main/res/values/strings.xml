@@ -253,4 +253,16 @@
     <string name="message_removed">Recipient removed</string>
     <string name="pending_messages">%1$d pending</string>
     <string name="this_session">This session</string>
+    <string name="new_file">New file</string>
+    <string name="new_folder">New folder</string>
+    <string name="file_name">Name</string>
+    <string name="cut">Cut</string>
+    <string name="delete">Delete</string>
+    <string name="delete_named">Delete %1$s?</string>
+    <string name="delete_file_body">A folder goes with all it holds. This cannot be undone.</string>
+    <string name="paste_named">Paste %1$s</string>
+    <string name="connecting">Connecting…</string>
+    <string name="offline_retry_in">Offline · trying again in %1$ds</string>
+    <string name="offline_retrying">Offline · trying again</string>
+    <string name="reconnect">Reconnect</string>
 </resources>

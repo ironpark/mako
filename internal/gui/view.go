@@ -461,7 +461,7 @@ func sessionSection(m *model, by string, g sessionGroup, folded bool, selected s
 			if n.GetSource() == "self" {
 				glyph = "laptop"
 			}
-			status = linkDot(up)
+			status = nodeDot(n)
 		}
 		if by == groupProject {
 			name = cmp.Or(g.Name, name)
@@ -1067,20 +1067,29 @@ func nodeList(m *model, nodes []*protocol.Node) ggui.Widget {
 		}
 		var ask ggui.Widget = ggui.Box()
 		switch {
-		case !reachable(n) && n.GetPeerId() != "":
-			ask = ui.Button(T("Ask to be let in"), func() { m.requestAccess(n) }).Outline()
 		case reachable(n) && n.GetSource() != "self":
 			id := n.GetId()
-			ask = ggui.Row(
+			actions := []ggui.Widget{
 				iconButton("hard-drive", T("Browse files"), func() { m.openBrowser(id, "~", "") }),
 				iconButton("arrow-right-left", T("Forward a port…"), func() { m.askTunnel(id) }),
-			).Gap(2)
+			}
+			if linkDown(n) { // reached through another node meanwhile
+				actions = append(actions, iconButton("refresh-cw", T("Reconnect"), func() { m.relink(n) }))
+			}
+			ask = ggui.Row(actions...).Gap(2)
+		case linkDown(n):
+			// Not let in reads the same as not linked: only a link made
+			// says which.
+			ask = relinkButton(m, n)
+		case !reachable(n) && n.GetPeerId() != "":
+			ask = ui.Button(T("Ask to be let in"), func() { m.requestAccess(n) }).Outline()
 		}
 		rows = append(rows, ggui.Box(ggui.Row(
 			icon(kind).Size(16),
 			ggui.Expanded(ggui.Column(
-				ggui.Row(ggui.Text(n.GetName()).Size(13).Weight(ggui.WeightMedium), linkDot(reachable(n)), outdatedBadge(n), trustBadge(n, nodes)).Gap(8),
+				ggui.Row(ggui.Text(n.GetName()).Size(13).Weight(ggui.WeightMedium), nodeDot(n), outdatedBadge(n), trustBadge(n, nodes)).Gap(8),
 				ggui.Text(joinNonEmpty(n.GetAddr(), n.Platform(), n.GetSource())).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis(),
+				nodeLinkLine(m, n),
 			).Gap(3).Stretch()),
 			ask,
 		).Gap(12)).Pad(10).Radius(8).Fill(tokSurface1))
@@ -1091,6 +1100,9 @@ func nodeList(m *model, nodes []*protocol.Node) ggui.Widget {
 // trustBadge says how this node and n stand: whether each lets the other
 // in, or which of nodes this one reaches n through.
 func trustBadge(n *protocol.Node, nodes []*protocol.Node) ggui.Widget {
+	if linkDown(n) && n.Standing() == protocol.StandingNone {
+		return ggui.Box() // unknown until it is linked
+	}
 	var label string
 	switch n.Standing() {
 	case protocol.StandingSelf:

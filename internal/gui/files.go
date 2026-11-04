@@ -440,7 +440,7 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 			// Dragged to a terminal or the message box, it is typed as
 			// its path; to a folder, it moves there. A project's folder
 			// stays put, and is not to rename or delete here.
-			drag := ggui.DragSource(row, pathDrag{Node: it.Node, Path: it.Path})
+			drag := ggui.DragSource(row, pathDrag{Node: it.Node, Path: it.Path, Dir: it.Dir})
 			if it.Root {
 				return drag
 			}
@@ -493,10 +493,16 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 		).Gap(6)).Pad(4, 6, 4, 12)
 	})).Stretch()
 	hasPreview := ggui.Map(m.Preview, func(p filePreview) bool { return p.Key != "" })
-	// Files dropped from the desktop below the folders go into the project.
-	list := ggui.Pointer(ggui.Scroll(ggui.Padding(tree, 4, 4)).Bar(tokSurface3)).OnDrop(func(ev ggui.DropEvent) {
+	// Files dropped below the folders go into the project, from the
+	// desktop and from the tab; a right click there makes or pastes there.
+	root := dirItem(r.Node, r.Path)
+	var list ggui.Widget = ggui.Pointer(ggui.Scroll(ggui.Padding(tree, 4, 4)).Bar(tokSurface3)).OnDrop(func(ev ggui.DropEvent) {
 		m.copyInto(r.Node, r.Path, ev.Paths())
 	})
+	list = ggui.DropZone(list, func(d ggui.Dropped[pathDrag]) { m.dropInto(d.Value, root) })
+	list = ui.ContextMenuFunc(list, func() []ggui.Widget {
+		return append(folderItems(m, root, m.askFile), ui.MenuDivider(), ui.MenuItem(T("Refresh"), m.refreshFiles))
+	}).Name(T("File actions"))
 	return treeOverPane(header, list,
 		hasPreview, 0.55, func() ggui.Widget { return previewPane(m) }, T("Preview divider"))
 }

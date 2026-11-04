@@ -179,3 +179,28 @@ func TestFileOpNeverReplaces(t *testing.T) {
 		}
 	}
 }
+
+// A copy takes a folder and all it holds, and replaces nothing.
+func TestCopyAFolder(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src")
+	if err := os.MkdirAll(filepath.Join(src, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "sub", "a.txt"), []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	to := filepath.Join(dir, "copy")
+	if _, err := fileOp(&protocol.FileOp{Op: protocol.FileCopy, Path: src, To: to}); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(to, "sub", "a.txt")); err != nil || string(b) != "hello" {
+		t.Fatalf("copied: %q, %v", b, err)
+	}
+	if _, err := fileOp(&protocol.FileOp{Op: protocol.FileCopy, Path: src, To: to}); err == nil {
+		t.Fatal("a copy replaced a folder")
+	}
+	if _, err := fileOp(&protocol.FileOp{Op: protocol.FileCopy, Path: src, To: filepath.Join(src, "sub", "in")}); err == nil {
+		t.Fatal("a folder was copied into itself")
+	}
+}

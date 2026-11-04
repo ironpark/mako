@@ -201,6 +201,9 @@ type model struct {
 	// the Files header once its dialog has closed.
 	FileOps  fileOps
 	FileNote *ggui.StateValue[string]
+	// FileClip is the file or folder copied or cut for Paste, in the Files
+	// tab or a node's file browser; Path is "" for none.
+	FileClip *ggui.StateValue[pathDrag]
 
 	// The files open in tabs, by tab ID; see docs.go.
 	Docs *ggui.StateValue[map[string]docInfo]
@@ -403,6 +406,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Preview:        ggui.State(filePreview{}).WithEqual(filePreview.same),
 		FileOps:        newFileOps(),
 		FileNote:       ggui.State(""),
+		FileClip:       ggui.State(pathDrag{}),
 		Git:            ggui.State(gitView{}).WithEqual(deepEqual),
 		GitClosed:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		GitSel:         ggui.State(""),
@@ -1094,13 +1098,14 @@ func (m *model) attach(id string) {
 	}
 	m.dialing[id] = true
 	post, wake := m.post, m.wake
+	goos := m.nodeOS(info.GetNodeId())
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
 		c, err := m.client(ctx)
 		var conn *termConn
 		if err == nil {
-			conn, err = dialTerm(context.Background(), c, info, wake, func() { post(m.syncTitles) })
+			conn, err = dialTerm(context.Background(), c, info, goos, wake, func() { post(m.syncTitles) })
 		}
 		if conn != nil && m.window != nil {
 			// Output repaints the terminal alone, not the window.
@@ -1122,6 +1127,12 @@ func (m *model) attach(id string) {
 			m.Attached.Set(append(slices.Clone(ggui.Peek(m.Attached)), id))
 		})
 	}()
+}
+
+// nodeOS is the GOOS of node id, "" for one not known.
+func (m *model) nodeOS(id string) string {
+	n, _ := nodeIn(ggui.Peek(m.Nodes), id)
+	return n.GetOs()
 }
 
 // closeTab detaches a session's tab, closing its pane if it was the last

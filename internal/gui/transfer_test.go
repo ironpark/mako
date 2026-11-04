@@ -206,3 +206,38 @@ func TestThePickerChoosesAFolderOnTheNode(t *testing.T) {
 		t.Fatalf("recent = %v", got)
 	}
 }
+
+// A folder copied a piece at a time through the daemons, as one goes
+// between nodes, comes whole: a file larger than a piece, an empty one,
+// and a folder in it.
+func TestAFolderIsCopiedAcross(t *testing.T) {
+	m, _ := daemonApp(t)
+	src, dst := t.TempDir(), t.TempDir()
+	big := bytes.Repeat([]byte{9, 8, 7}, (stageChunk+500)/3)
+	files := map[string][]byte{"big.bin": big, "empty": nil, "sub/note.md": []byte("# hi\n")}
+	for name, data := range files {
+		p := filepath.Join(src, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	c, err := m.client(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	to := filepath.Join(dst, "copy")
+	if err := copyAcross(ctx, c, "", src, true, "", to); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range files {
+		data, err := os.ReadFile(filepath.Join(to, name))
+		if err != nil || !bytes.Equal(data, want) {
+			t.Fatalf("%s was copied as %d bytes, %v", name, len(data), err)
+		}
+	}
+}

@@ -294,25 +294,43 @@ func agentSettings(m *model) ggui.Widget {
 	open := ggui.State("")
 	// The editors are rebuilt when rows come or go, not as their text is
 	// typed, so a field keeps its focus.
+	// An agent whose program is not installed moves to a card of its own,
+	// below the ones that can start.
 	shape := ggui.Derived(func() string {
 		var b strings.Builder
 		for _, r := range m.AgentDraft.Get() {
-			fmt.Fprintf(&b, "%d,", r.ID)
+			fmt.Fprintf(&b, "%d", r.ID)
+			if !agentReady(r) {
+				b.WriteByte('-')
+			}
+			b.WriteByte(',')
 		}
 		return b.String()
 	})
 	agents := ggui.Key(shape, func(string) ggui.Widget {
 		rows := ggui.Peek(m.AgentDraft)
-		var items []ggui.Widget
+		var ready, missing []ggui.Widget
 		for i := 0; i < len(rows); {
 			j := i + 1
 			for j < len(rows) && rows[j].IsProfile && rows[j].Agent == rows[i].Agent {
 				j++
 			}
-			items = append(items, agentItem(m, open, rows[i], rows[i+1:j]))
+			item := agentItem(m, open, rows[i], rows[i+1:j])
+			if agentReady(rows[i]) {
+				ready = append(ready, item)
+			} else {
+				missing = append(missing, item)
+			}
 			i = j
 		}
-		return card(items...)
+		var out []ggui.Widget
+		if len(ready) > 0 {
+			out = append(out, card(ready...))
+		}
+		if len(missing) > 0 {
+			out = append(out, section(T("Not installed"), card(missing...)))
+		}
+		return ggui.Column(out...).Gap(28).Stretch()
 	})
 
 	name := ggui.State("")
@@ -351,7 +369,7 @@ func agentSettings(m *model) ggui.Widget {
 // settings and its profiles under it.
 func agentItem(m *model, open *ggui.StateValue[string], a agentDraft, profiles []agentDraft) ggui.Widget {
 	name := a.Agent
-	offered, installed := agentOffered(m, a.ID, name)
+	offered := agentOffered(m, a.ID, name)
 	isOpen := ggui.Map(open, func(o string) bool { return o == name })
 	summary := ggui.Reactive(func() ggui.Widget {
 		d := m.agentRow(a.ID)
@@ -361,9 +379,6 @@ func agentItem(m *model, open *ggui.StateValue[string], a agentDraft, profiles [
 		}
 		if n := m.profileCount(name); n > 0 {
 			text += " · " + Tf("%d profiles", n)
-		}
-		if !installed.Get() {
-			text += " · " + T("not installed")
 		}
 		return ggui.Text(text).Size(11.5).Color(tokExtraMuted).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()
 	})
@@ -451,20 +466,11 @@ func (m *model) profileCount(agent string) int {
 	return n
 }
 
-// agentOffered is an agent's switch, whether new sessions can start it,
-// and whether its program is installed. Until the user sets it, it follows
-// whether the program is installed, as its command now reads.
-func agentOffered(m *model, id int, name string) (ggui.Widget, ggui.Readable[bool]) {
-	installed := ggui.Derived(func() bool {
-		command, err := agentspec.SplitArgs(m.agentRow(id).Command)
-		if err != nil {
-			return false
-		}
-		if len(command) == 0 {
-			command = agentspec.Builtin[name]
-		}
-		return agentspec.Agent{Command: command}.Installed()
-	})
+// agentOffered is an agent's switch, whether new sessions can start it.
+// Until the user sets it, it follows whether the program is installed, as
+// its command now reads.
+func agentOffered(m *model, id int, name string) ggui.Widget {
+	installed := ggui.Derived(func() bool { return draftInstalled(m.agentRow(id)) })
 	on := ggui.Bind(func() bool {
 		switch m.agentRow(id).Enabled {
 		case "on":
@@ -483,7 +489,24 @@ func agentOffered(m *model, id int, name string) (ggui.Widget, ggui.Readable[boo
 		m.AgentDraft.Set(rows)
 	})
 	hint := T("Offered to start sessions with, in the new session dialog and beside the +.")
-	return ui.Tooltip(ui.Switch(on, Tf("Offer %s", name)), hint), installed
+	return ui.Tooltip(ui.Switch(on, "").Name(Tf("Offer %s", name)), hint)
+}
+
+// agentReady reports whether the row r goes in the card of agents that
+// can start: a profile goes with its agent.
+func agentReady(r agentDraft) bool { return r.IsProfile || draftInstalled(r) }
+
+// draftInstalled reports whether the program of the agent row d, as its
+// command now reads, is installed.
+func draftInstalled(d agentDraft) bool {
+	command, err := agentspec.SplitArgs(d.Command)
+	if err != nil {
+		return false
+	}
+	if len(command) == 0 {
+		command = agentspec.Builtin[d.Agent]
+	}
+	return agentspec.Agent{Command: command}.Installed()
 }
 
 // profileCard is a profile of an unfolded agent: its name, which removes

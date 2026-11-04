@@ -62,6 +62,13 @@ message Node {
   // when hops is more than 1. 0 and empty for a node it cannot reach.
   uint32 hops = 18;
   string via = 19;
+  // How the daemon answering stands linked to the node over libp2p: "up";
+  // "linking" while it tries; "down" while it waits to try again, at
+  // relink_at, link_error saying why the last try failed. Empty for
+  // itself, a node without a libp2p identity, and a daemon too old to say.
+  string link = 20;
+  string link_error = 21;
+  google.protobuf.Timestamp relink_at = 22;
 }
 
 // AgentInfo names an agent a node can launch and its profiles, and what
@@ -137,7 +144,8 @@ message Access {
   // in, with note; "allow" lets in the node node_id that asked, by its own
   // key or with owner by the SSH key that vouches for it; "deny" drops its
   // request; "add" lets in the authorized_keys line key; "revoke" removes
-  // the key whose fingerprint is key.
+  // the key whose fingerprint is key; "relink" tries the link to node_id
+  // again at once, rather than when its wait ends.
   string op = 1;
   string node_id = 2;
   string key = 3;

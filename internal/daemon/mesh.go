@@ -58,6 +58,7 @@ func (d *Daemon) startP2P(ctx context.Context, dir string) error {
 		Owner:             owner,
 		SSHAuthorizedKeys: mcp.ExpandHome("~/.ssh/authorized_keys"), // a key that logs in here by SSH vouches
 		OnPeer:            d.onPeer,
+		OnDrop:            d.onDrop,
 		Relays:            d.cfg.P2P.Relays,
 		RelayService:      d.cfg.P2P.Relay,
 		UserAgent:         "mako/" + config.Version,
@@ -125,6 +126,7 @@ func (d *Daemon) nodes() []*protocol.Node {
 		node.Key, node.Owner = fingerprint(p.Key), fingerprint(p.Owner)
 		r := routes[node.GetId()]
 		node.Hops, node.Via = r.hops, r.via
+		d.linkState(node)
 		out = append(out, node)
 	}
 	return out
@@ -183,40 +185,124 @@ func (d *Daemon) onPeer(p p2p.Peer) {
 	go d.sendState(d.ctx, p, shared, full, public)
 }
 
-// relinkAfter is how long a failed link to a peer waits to be tried again,
-// and linkTimeout how long one is tried.
+// A failed link to a peer is tried again after relinkFirst, then after
+// twice as long each time it fails again, up to relinkAfter; linkTimeout
+// is how long one is tried.
 const (
+	relinkFirst = 2 * time.Second
 	relinkAfter = 30 * time.Second
 	linkTimeout = 15 * time.Second
 )
 
+// linkTry is how the link to a peer not linked is being made.
+type linkTry struct {
+	busy  bool      // a try is under way
+	fails int       // how many tries failed in a row
+	next  time.Time // when the next may begin
+	err   string    // why the last failed
+}
+
+// relinkWait is how long a link that failed fails times in a row waits.
+func relinkWait(fails int) time.Duration {
+	return min(relinkFirst<<min(max(fails-1, 0), 5), relinkAfter)
+}
+
 // link connects to node over libp2p, if it has an identity there and is
 // not linked already. One attempt at a time goes to a peer, and one that
-// failed waits a while.
+// failed waits, longer each time.
 func (d *Daemon) link(node *protocol.Node) {
 	id := node.GetPeerId()
-	if d.p2p == nil || id == "" || d.p2p.Connected(id) {
+	if d.p2p == nil || id == "" {
 		return
 	}
-	d.mu.Lock()
-	if time.Since(d.linking[id]) < relinkAfter {
+	if d.p2p.Connected(id) {
+		d.mu.Lock()
+		if try := d.linking[id]; try != nil && !try.busy {
+			delete(d.linking, id) // linked from the other side
+		}
 		d.mu.Unlock()
 		return
 	}
-	d.linking[id] = time.Now()
+	d.mu.Lock()
+	try := d.linking[id]
+	if try == nil {
+		try = &linkTry{}
+		d.linking[id] = try
+	}
+	if try.busy || time.Now().Before(try.next) {
+		d.mu.Unlock()
+		return
+	}
+	try.busy = true
 	d.mu.Unlock()
 	go func() {
 		ctx, cancel := context.WithTimeout(d.ctx, linkTimeout)
 		defer cancel()
 		err := d.p2p.Ensure(ctx, id, node.GetMultiaddrs())
-		if err != nil {
-			d.log.Debug("libp2p link failed", "node", node.GetName(), "err", err)
+		d.mu.Lock()
+		try.busy = false
+		if err == nil {
+			if d.linking[id] == try {
+				delete(d.linking, id)
+			}
+		} else {
+			try.fails++
+			try.err = err.Error()
+			try.next = time.Now().Add(relinkWait(try.fails))
+			d.log.Debug("libp2p link failed", "node", node.GetName(), "err", err, "fails", try.fails)
+		}
+		d.mu.Unlock()
+		d.changes.fire(true, false)
+	}()
+}
+
+// onDrop links again at once to a peer whose link dropped, as a laptop
+// waking or a network changing drops them.
+func (d *Daemon) onDrop(id string) {
+	if d.ctx.Err() != nil {
+		return
+	}
+	d.relink(id)
+}
+
+// relink forgets the wait of the link to the peer id and tries it now.
+func (d *Daemon) relink(id string) {
+	d.mu.Lock()
+	if try := d.linking[id]; try != nil && !try.busy {
+		delete(d.linking, id)
+	}
+	d.mu.Unlock()
+	for _, node := range d.peers.list() {
+		if node.GetPeerId() == id {
+			d.link(node)
 			return
 		}
-		d.mu.Lock()
-		delete(d.linking, id)
-		d.mu.Unlock()
-	}()
+	}
+	d.changes.fire(true, false)
+}
+
+// linkState sets on node how this daemon's link to it stands.
+func (d *Daemon) linkState(node *protocol.Node) {
+	id := node.GetPeerId()
+	if d.p2p == nil || id == "" {
+		return
+	}
+	if d.p2p.Connected(id) {
+		node.Link = protocol.LinkUp
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	node.Link = protocol.LinkDown
+	if try := d.linking[id]; try != nil {
+		if try.busy {
+			node.Link = protocol.LinkLinking
+		}
+		node.LinkError = try.err
+		if !try.next.IsZero() {
+			node.RelinkAt = protocol.Time(try.next)
+		}
+	}
 }
 
 // state is this daemon's state as it stands, the node without its time.

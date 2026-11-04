@@ -248,6 +248,16 @@ func (d *Daemon) changeKeys(ctx context.Context, r *protocol.Access) error {
 		d.pairing.drop()
 		d.changes.fireAccess()
 		return nil
+	case "relink":
+		node, err := d.node(r.GetNodeId())
+		if err != nil {
+			return err
+		}
+		if node.GetPeerId() == "" {
+			return fmt.Errorf("%s is not on libp2p", node.GetName())
+		}
+		d.relink(node.GetPeerId())
+		return nil
 	case "request":
 		node, err := d.node(r.GetNodeId())
 		if err != nil {

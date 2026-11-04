@@ -19,13 +19,18 @@ internal sealed interface RemoteLoad<out T> {
     data class Failed(val message: String) : RemoteLoad<Nothing>
 }
 
+/**
+ * What load gives, loading again as keys change, and as [quiet] changes
+ * keeping what it showed until the new value comes, and on a failure then.
+ */
 @Composable
-internal fun <T> remoteLoad(vararg keys: Any?, load: suspend () -> T): RemoteLoad<T> {
+internal fun <T> remoteLoad(vararg keys: Any?, quiet: Int = 0, load: suspend () -> T): RemoteLoad<T> {
     val state = remember(*keys) { mutableStateOf<RemoteLoad<T>>(RemoteLoad.Loading) }
-    LaunchedEffect(*keys) {
+    LaunchedEffect(*keys, quiet) {
+        val shown = state.value
         state.value = try { RemoteLoad.Ready(load()) }
         catch (e: CancellationException) { throw e }
-        catch (e: Exception) { RemoteLoad.Failed(e.message ?: e.toString()) }
+        catch (e: Exception) { if (shown is RemoteLoad.Ready) shown else RemoteLoad.Failed(e.message ?: e.toString()) }
     }
     return state.value
 }

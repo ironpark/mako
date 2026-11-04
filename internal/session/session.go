@@ -803,6 +803,12 @@ func (s *Session) feed(chunk []byte) {
 			s.endWorkLocked(now)
 		}
 	}
+	s.pushLocked(chunk)
+	s.mu.Unlock()
+}
+
+// pushLocked sends chunk to every front-end attached.
+func (s *Session) pushLocked(chunk []byte) {
 	for id, sub := range s.subs {
 		if !sub.push(chunk) {
 			// Dropped for falling too far behind; the front-end resyncs
@@ -810,7 +816,6 @@ func (s *Session) feed(chunk []byte) {
 			delete(s.subs, id)
 		}
 	}
-	s.mu.Unlock()
 }
 
 // terminalEnv is the daemon's environment as a session's program sees it:
