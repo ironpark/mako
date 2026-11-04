@@ -290,6 +290,10 @@ type model struct {
 	FormErr          *ggui.StateValue[string]
 
 	conns map[string]*termConn // UI goroutine only
+	// killed are the sessions killed here, by when, which a poll begun
+	// before the kill still lists; they stay out of the list until the
+	// daemon's leaves them out too. UI goroutine only.
+	killed map[string]time.Time
 	// lastSession is the session tab shown last, which a note from a diff
 	// goes to first.
 	lastSession string
@@ -447,6 +451,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Form:           ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),
 		FormErr:        ggui.State(""),
 		conns:          map[string]*termConn{},
+		killed:         map[string]time.Time{},
 		revealedTab:    map[int]string{},
 		dialing:        map[string]bool{},
 		daemon:         p.Daemon,
@@ -728,6 +733,7 @@ func (m *model) poll(ctx context.Context) {
 				}
 			}
 		}
+		sessions = m.dropKilled(sessions, time.Now())
 		m.noteStatus(sessions)
 		m.Sessions.Set(sessions)
 		m.dropLeftoverTabs(sessions, live, now)
@@ -1309,12 +1315,37 @@ func (m *model) killThen(id string, then func()) {
 		return struct{}{}, c.Kill(ctx, &protocol.CloseSession{SessionId: id, NodeId: info.GetNodeId()})
 	}, func(_ struct{}, err error) {
 		if err == nil {
+			m.killed[id] = time.Now()
 			m.Sessions.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Sessions)), func(s *protocol.SessionInfo) bool { return s.GetId() == id }))
 		}
 		if then != nil {
 			then()
 		}
 	})
+}
+
+// killedLinger is how long a killed session is kept out of the list while
+// the daemon still lists it: past it, one the kill did not end shows again.
+const killedLinger = 15 * time.Second
+
+// dropKilled leaves the sessions killed here out of sessions, a poll's,
+// and forgets each once the daemon no longer lists it or killedLinger has
+// passed: a poll that began before a kill went through would otherwise
+// bring the session back until the next, and the list blinks.
+func (m *model) dropKilled(sessions []*protocol.SessionInfo, now time.Time) []*protocol.SessionInfo {
+	if len(m.killed) == 0 {
+		return sessions
+	}
+	listed := make(map[string]bool, len(sessions))
+	for _, s := range sessions {
+		listed[s.GetId()] = true
+	}
+	for id, at := range m.killed {
+		if !listed[id] || now.Sub(at) > killedLinger {
+			delete(m.killed, id)
+		}
+	}
+	return slices.DeleteFunc(sessions, func(s *protocol.SessionInfo) bool { _, gone := m.killed[s.GetId()]; return gone })
 }
 
 // tidyable tells whether closing a tab loses nothing, as the sessions'

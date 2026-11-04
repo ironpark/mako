@@ -169,9 +169,26 @@ class Mesh(
         }
     }
 
+    private val closed = ClosedSessions()
+    private val sessionsAsked = java.util.concurrent.atomic.AtomicLong()
+    private var sessionsShown = 0L
+
+    /**
+     * Lists the sessions again. Lists asked for at once, by the watch and
+     * after a close, can come back in any order; only one asked for after
+     * the list shown replaces it, so an older one never brings back what a
+     * newer one left out.
+     */
     suspend fun refreshSessions() {
         quietly {
-            _sessions.value = daemon.sessions()
+            val asked = sessionsAsked.incrementAndGet()
+            val list = daemon.sessions()
+            synchronized(closed) {
+                if (asked > sessionsShown) {
+                    sessionsShown = asked
+                    _sessions.value = closed.filter(list, System.currentTimeMillis())
+                }
+            }
             if (_sessions.value.isNotEmpty()) _loaded.value = true
         }
     }
@@ -265,8 +282,17 @@ class Mesh(
         refreshSessions()
     }
 
+    /** Closes s, gone from the list at once and kept gone; back if the close fails. */
     suspend fun closeSession(s: SessionInfo) {
-        daemon.closeSession(s.nodeId, s.id)
+        closed.close(s.id, System.currentTimeMillis())
+        synchronized(closed) { _sessions.value = _sessions.value.filterNot { it.id == s.id } }
+        try {
+            daemon.closeSession(s.nodeId, s.id)
+        } catch (e: Exception) {
+            closed.reopen(s.id)
+            refreshSessions()
+            throw e
+        }
         refreshSessions()
     }
 
