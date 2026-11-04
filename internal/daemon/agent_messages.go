@@ -32,6 +32,8 @@ type agentMessage struct {
 	To      string    `json:"to"`
 	Text    string    `json:"text"`
 	Created time.Time `json:"created_at"`
+	// Note is Mako's own word about the agent From, not one it sent.
+	Note bool `json:"note,omitempty"`
 }
 
 type messageFile struct {
@@ -141,14 +143,36 @@ func (m *agentMessages) saveLocked(next messageFile) error {
 }
 
 func (m *agentMessages) send(from, to, text, project string) (agentMessage, error) {
+	return m.add(agentMessage{From: from, To: to, Text: text}, project)
+}
+
+// note leaves to a note about the agent from, as a message from it.
+func (m *agentMessages) note(from, to, text, project string) (agentMessage, error) {
+	return m.add(agentMessage{From: from, To: to, Text: text, Note: true}, project)
+}
+
+// sentSince reports whether from sent to a message, not a note, after t.
+func (m *agentMessages) sentSince(from, to string, t time.Time) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	for _, r := range m.data.History {
+		if msg := r.Message; msg.From == from && msg.To == to && !msg.Note && msg.Created.After(t) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *agentMessages) add(msg agentMessage, project string) (agentMessage, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	to := msg.To
 	if len(m.data.Inboxes[to]) >= maxAgentInbox {
 		return agentMessage{}, errors.New("recipient inbox is full; read_messages with ack_through to acknowledge received messages")
 	}
 	next := m.copyLocked()
 	next.Next++
-	msg := agentMessage{ID: next.Next, From: from, To: to, Text: text, Created: time.Now().UTC()}
+	msg.ID, msg.Created = next.Next, time.Now().UTC()
 	next.Inboxes[to] = append(append([]agentMessage(nil), next.Inboxes[to]...), msg)
 	next.History = trimAgentHistory(append(next.History, agentMessageRecord{Message: msg, Project: project, State: "pending"}))
 	if err := m.saveLocked(next); err != nil {

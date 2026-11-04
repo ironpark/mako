@@ -93,6 +93,10 @@ func (d *Daemon) agentPrompt(messages []agentMessage) string {
 		if i > 0 {
 			b.WriteString("\n\n")
 		}
+		if msg.Note {
+			fmt.Fprintf(&b, "[Mako note %d about session %s, not from it.]\n%s", msg.ID, d.agentLabel(msg.From, &mesh), typable(msg.Text))
+			continue
+		}
 		fmt.Fprintf(&b, "[Mako message %d from session %s. Answer with send_message to %s if it asks for one.]\n%s", msg.ID, d.agentLabel(msg.From, &mesh), msg.From, typable(msg.Text))
 	}
 	return b.String()

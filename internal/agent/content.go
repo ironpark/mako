@@ -316,8 +316,9 @@ func Clip(s string, n int) string {
 }
 
 // ansi finds the escape sequences a command's colours and cursor moves
-// leave in its output, and the carriage returns its progress redraws with.
-var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b[()][0-9A-Za-z]|\r`)
+// leave in its output, a terminal program's modes and strings among them,
+// and the carriage returns its progress redraws with.
+var ansi = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[P^_][^\x1b]*\x1b\\|\x1b[ -/]*[0-~]|\r`)
 
 // StripANSI is a command's output without its escape sequences.
 func StripANSI(s string) string { return ansi.ReplaceAllString(s, "") }

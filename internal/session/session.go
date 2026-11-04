@@ -7,6 +7,8 @@ package session
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -51,8 +53,9 @@ type Spec struct {
 type Session struct {
 	spec Spec
 
-	proc *proc    // the agent's process, on its terminal
-	env  []string // the process's environment
+	proc  *proc    // the agent's process, on its terminal
+	env   []string // the process's environment
+	scope string   // scopeEnv's value, which every process it starts inherits
 
 	mu       sync.Mutex
 	term     *gostty.Session
@@ -80,6 +83,7 @@ type Session struct {
 	// for; guarded by mu.
 	status        protocol.AgentStatus
 	statusAt      time.Time
+	turns         uint64 // turns ended: work that went idle or done
 	statusSeq     int64
 	workEndedAt   int64 // explicit terminal inactivity, for late work hooks
 	agentsWorking bool
@@ -129,7 +133,10 @@ func Start(spec Spec) (*Session, error) {
 		return nil, fmt.Errorf("session: terminal: %w", err)
 	}
 
-	env := append(terminalEnv(os.Environ()), "MAKO_SESSION="+spec.ID)
+	var token [16]byte
+	_, _ = rand.Read(token[:])
+	scope := hex.EncodeToString(token[:])
+	env := append(terminalEnv(os.Environ()), "MAKO_SESSION="+spec.ID, scopeEnv+"="+scope)
 	for k, v := range spec.Env {
 		env = append(env, k+"="+v)
 	}
@@ -144,6 +151,7 @@ func Start(spec Spec) (*Session, error) {
 		spec:    spec,
 		proc:    p,
 		env:     env,
+		scope:   scope,
 		term:    term,
 		state:   protocol.StateRunning,
 		subs:    map[int]*Subscription{},
@@ -293,7 +301,8 @@ func (s *Session) reportStatusLocked(status protocol.AgentStatus, seq int64) boo
 	if s.status != status || status != protocol.AgentDone {
 		s.statusAt = time.Now()
 	}
-	s.status, s.statusSeq = status, seq
+	s.setStatusLocked(status)
+	s.statusSeq = seq
 	return true
 }
 
@@ -337,7 +346,8 @@ func (s *Session) FinishApproval(seq int64, id string, status protocol.AgentStat
 	defer s.mu.Unlock()
 	if s.statusSeq == seq && s.approval.GetId() == id {
 		s.clearApprovalLocked()
-		s.status, s.statusAt = status, time.Now()
+		s.setStatusLocked(status)
+		s.statusAt = time.Now()
 	}
 }
 
@@ -346,8 +356,25 @@ func (s *Session) FinishApproval(seq int64, id string, status protocol.AgentStat
 func (s *Session) endWorkLocked(at time.Time) {
 	s.workEndedAt = at.UnixNano()
 	if protocol.AtWork(s.status) {
-		s.status, s.statusAt = protocol.AgentIdle, at
+		s.setStatusLocked(protocol.AgentIdle)
+		s.statusAt = at
 	}
+}
+
+// setStatusLocked records the agent's status, counting the end of a turn
+// it makes.
+func (s *Session) setStatusLocked(next protocol.AgentStatus) {
+	if protocol.AtWork(s.status) && (next == protocol.AgentIdle || next == protocol.AgentDone) {
+		s.turns++
+	}
+	s.status = next
+}
+
+// Turns is how many turns the agent has ended.
+func (s *Session) Turns() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.turns
 }
 
 func (s *Session) clearApprovalLocked() {
@@ -468,10 +495,28 @@ func (s *Session) Prompt(text string) error {
 	if !bracketed && strings.ContainsAny(text, "\r\n") {
 		return errors.New("session: the program takes no bracketed paste for lines")
 	}
-	if err := s.Paste(text); err != nil {
-		return err
+	return s.Send(text, []byte{'\r'})
+}
+
+// pasteGap is how long a paste stands before the keys sent after it, as
+// Enter: a program that takes a burst of input as a paste would take them
+// as part of it, and not submit.
+const pasteGap = 200 * time.Millisecond
+
+// Send pastes text, if any, then types keys, if any, pasteGap after it.
+func (s *Session) Send(text string, keys []byte) error {
+	if text != "" {
+		if err := s.Paste(text); err != nil {
+			return err
+		}
 	}
-	_, err := s.Write([]byte{'\r'})
+	if len(keys) == 0 {
+		return nil
+	}
+	if text != "" {
+		time.Sleep(pasteGap)
+	}
+	_, err := s.Write(keys)
 	return err
 }
 
@@ -638,11 +683,18 @@ func (s *Session) Subscribe() *Subscription {
 // Done is closed once the agent process has exited.
 func (s *Session) Done() <-chan struct{} { return s.done }
 
-// Close terminates the agent and releases the terminal.
+// scopeEnv names a variable of a session's own in its program's
+// environment, which every process it starts inherits, so that what it
+// left running is found when the session is closed.
+const scopeEnv = "MAKO_SCOPE"
+
+// Close terminates the agent, and every process it started that runs
+// still, and releases the terminal.
 func (s *Session) Close() error {
 	s.proc.kill()
 	err := s.proc.Close()
 	<-s.done
+	sweep(s.scope, s.proc.pid())
 	return err
 }
 

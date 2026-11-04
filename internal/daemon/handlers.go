@@ -75,15 +75,8 @@ func (d *Daemon) handleSend(ctx context.Context, stream *transport.Stream, env *
 		if !ok {
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
 		}
-		if r.GetText() != "" {
-			if err := s.Paste(r.GetText()); err != nil {
-				return nil, err
-			}
-		}
-		if len(r.GetKeys()) > 0 {
-			if _, err := s.Write(r.GetKeys()); err != nil {
-				return nil, err
-			}
+		if err := s.Send(r.GetText(), r.GetKeys()); err != nil {
+			return nil, err
 		}
 		return s.Info(), nil
 	})
