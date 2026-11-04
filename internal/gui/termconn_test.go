@@ -28,7 +28,7 @@ func TestOutputRepaintsTheTerminalWhereItWasPainted(t *testing.T) {
 	if wakes.Load() != 1 || len(asked) != 1 || asked[0] != at {
 		t.Fatalf("painted: %d wakes, %v asked; want %v asked once", wakes.Load(), asked, at)
 	}
-	conn.pending.Store(false) // painted in time
+	conn.pending.Store(false)        // painted in time
 	conn.painted(ggui.Rect{}, false) // under a transform
 	conn.requestPaint()
 	if wakes.Load() != 2 {

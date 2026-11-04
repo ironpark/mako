@@ -2,6 +2,8 @@ package gui
 
 import (
 	"fmt"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
@@ -129,7 +131,7 @@ func chatMatches(turns []chatTurnItem, needle string) []chatMatch {
 		}
 		text := t.Messages[0].GetText()
 		for i, n := 0, 0; ; n++ {
-			lo, hi := ggui.IndexFold(text, needle, i)
+			lo, hi := indexFold(text, needle, i)
 			if lo < 0 {
 				break
 			}
@@ -245,3 +247,38 @@ func (a *afterPaint) Layout(c ggui.Constraints, _ ggui.Env) ggui.Size {
 }
 
 func (a *afterPaint) Paint(dst *ggui.Canvas, _ ggui.Rect) { a.fn(dst) }
+
+// indexFold returns where needle is first found in s at or after byte
+// from, ignoring case, as the byte range [lo, hi) of s; lo is -1 when it
+// is not found. The range is s's own, which may differ in length from
+// needle.
+func indexFold(s, needle string, from int) (lo, hi int) {
+	if needle == "" {
+		return -1, -1
+	}
+	for i := max(from, 0); i < len(s); {
+		if j, ok := prefixFold(s[i:], needle); ok {
+			return i, i + j
+		}
+		_, w := utf8.DecodeRuneInString(s[i:])
+		i += w
+	}
+	return -1, -1
+}
+
+// prefixFold reports whether s begins with prefix, ignoring case, and how
+// many bytes of s that takes.
+func prefixFold(s, prefix string) (int, bool) {
+	i := 0
+	for _, p := range prefix {
+		if i >= len(s) {
+			return 0, false
+		}
+		r, w := utf8.DecodeRuneInString(s[i:])
+		if r != p && unicode.ToLower(r) != unicode.ToLower(p) {
+			return 0, false
+		}
+		i += w
+	}
+	return i, true
+}

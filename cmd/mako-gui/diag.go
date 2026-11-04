@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/ironpark/ggfx"
-	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/inspect"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui"
 )
@@ -98,7 +98,7 @@ func diagnose() {
 				mb(r.footprint), mb(r.gpuImages), mb(r.gpuQueue), d.fps, d.frameMS, d.flushes, d.commands, d.vertices,
 				d.fpsFor[0], d.fpsFor[1], d.fpsFor[2], d.fpsFor[3], d.fpsFor[4], d.partialFPS, d.skippedFPS, d.containedFPS)
 			if d.fps >= 1 {
-				fmt.Fprintln(log, "# moving:", motionLine(ggui.ReadMotionReport()))
+				fmt.Fprintln(log, "# moving:", motionLine(inspect.ReadMotionReport()))
 			}
 			fmt.Fprintln(log, "# atlas:", r.atlas)
 			fmt.Fprintln(log, "# terminals:", terminalLine(r.terms))
@@ -153,7 +153,7 @@ type diagReading struct {
 func readDiag(s []metrics.Sample, at time.Time) diagReading {
 	var gpu ggfx.DebugInfo
 	ggfx.ReadDebugInfo(&gpu)
-	frames := ggui.ReadFrameStats()
+	frames := inspect.ReadFrameStats()
 	return diagReading{
 		at: at, live: s[0].Value.Uint64(), goal: s[1].Value.Uint64(), total: s[2].Value.Uint64(),
 		limit: s[3].Value.Uint64(), goroutines: s[4].Value.Uint64(), gcs: s[5].Value.Uint64(),
@@ -330,7 +330,7 @@ func prune(dir, pattern string, keep int) {
 
 // motionLine writes what moved in the last frame, counted by type, and the
 // frames painted whole that might have been painted in part, by why.
-func motionLine(r ggui.MotionReport) string {
+func motionLine(r inspect.MotionReport) string {
 	counts := map[string]int{}
 	for _, m := range r.Movers {
 		counts[m]++
@@ -411,7 +411,7 @@ func keepBurst(dir string, now time.Time) {
 	if err != nil {
 		return
 	}
-	before, motion := ggui.ReadFrameStats(), ggui.ReadMotionReport()
+	before, motion := inspect.ReadFrameStats(), inspect.ReadMotionReport()
 	// Not while another CPU profile runs, as an incident's may.
 	if pprof.StartCPUProfile(f) != nil {
 		f.Close()
@@ -421,7 +421,7 @@ func keepBurst(dir string, now time.Time) {
 	time.Sleep(burstCPU)
 	pprof.StopCPUProfile()
 	f.Close()
-	after, motion2 := ggui.ReadFrameStats(), ggui.ReadMotionReport()
+	after, motion2 := inspect.ReadFrameStats(), inspect.ReadMotionReport()
 	secs := burstCPU.Seconds()
 	var b strings.Builder
 	fmt.Fprintf(&b, "frames %.1f/s, painted in part %.1f/s, in a scroll %.1f/s, skipped %.1f/s, busy %.0f ms/s\n",
