@@ -313,6 +313,8 @@ type model struct {
 	watching atomic.Bool
 	// approveInApp mirrors the setting for the polling worker.
 	approveInApp atomic.Bool
+	// recorder keeps the terminal streams the developer option records.
+	recorder *streamRecorder
 }
 
 func newModel(cfg *config.Config, addr string) *model {
@@ -450,6 +452,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		daemon:         p.Daemon,
 	}
 	m.approveInApp.Store(p.ApproveInApp)
+	m.recorder = newStreamRecorder(recordDir())
+	m.recorder.on.Store(p.RecordStreams)
 	m.accessStale.Store(true)
 	m.wsStale.Store(true)
 	m.Roots = ggui.Derived(m.panelRoots).WithEqual(deepEqual)
@@ -1098,14 +1102,16 @@ func (m *model) attach(id string) {
 	}
 	m.dialing[id] = true
 	post, wake := m.post, m.wake
-	goos := m.nodeOS(info.GetNodeId())
+	n, _ := m.nodeInfo(info.GetNodeId())
+	goos := n.GetOs()
+	tap := m.recorder.tap(id, info.GetAgent(), goos)
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
 		c, err := m.client(ctx)
 		var conn *termConn
 		if err == nil {
-			conn, err = dialTerm(context.Background(), c, info, goos, wake, func() { post(m.syncTitles) })
+			conn, err = dialTerm(context.Background(), c, info, goos, tap, wake, func() { post(m.syncTitles) })
 		}
 		if conn != nil && m.window != nil {
 			// Output repaints the terminal alone, not the window.
@@ -1127,12 +1133,6 @@ func (m *model) attach(id string) {
 			m.Attached.Set(append(slices.Clone(ggui.Peek(m.Attached)), id))
 		})
 	}()
-}
-
-// nodeOS is the GOOS of node id, "" for one not known.
-func (m *model) nodeOS(id string) string {
-	n, _ := nodeIn(ggui.Peek(m.Nodes), id)
-	return n.GetOs()
 }
 
 // closeTab detaches a session's tab, closing its pane if it was the last

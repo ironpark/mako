@@ -51,6 +51,9 @@ type prefs struct {
 
 	// Files
 	ShowHidden bool `json:"show_hidden"` // list dotfiles in the Files tab
+	// RecordStreams records every terminal stream received, a developer
+	// option; see streamrec.go.
+	RecordStreams bool `json:"record_streams,omitempty"`
 
 	// The sidebar's sessions: by project, by host, or in one list.
 	SidebarGroup string `json:"sidebar_group"`

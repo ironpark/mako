@@ -60,6 +60,7 @@ type termConn struct {
 	closed              bool   // vt and state are released; nothing may touch them
 	opts                termOptions
 	nodeOS              string          // the GOOS of the session's node, "" for unknown; see edit
+	tap                 *streamTap      // records what it receives, for the developer option; nil for none
 	gesture             *gostty.Gesture // click counting and drag selection
 	dragging            bool
 	search              *gostty.Search // the find bar's, for searched, while it is open
@@ -98,7 +99,8 @@ type termConn struct {
 
 // dialTerm attaches to a session and starts reading its stream.
 // goos is the system of the session's node, "" for one not known.
-func dialTerm(ctx context.Context, c *client.Client, info *protocol.SessionInfo, goos string, wake func(), titleChanged func()) (*termConn, error) {
+// tap, if not nil, records what it receives.
+func dialTerm(ctx context.Context, c *client.Client, info *protocol.SessionInfo, goos string, tap *streamTap, wake func(), titleChanged func()) (*termConn, error) {
 	att, err := c.AttachStream(ctx, &protocol.Attach{SessionId: info.GetId(), NodeId: info.GetNodeId(), Replay: true})
 	if err != nil {
 		return nil, err
@@ -109,7 +111,7 @@ func dialTerm(ctx context.Context, c *client.Client, info *protocol.SessionInfo,
 		return nil, err
 	}
 	t.mu.Lock()
-	t.nodeOS = goos
+	t.nodeOS, t.tap = goos, tap
 	t.mu.Unlock()
 	return t, nil
 }
@@ -257,7 +259,9 @@ func (t *termConn) read() {
 		case protocol.EventOutput:
 			t.mu.Lock()
 			t.feedLocked(ev.Data)
+			tap := t.tap
 			t.mu.Unlock()
+			tap.write(ev.Data)
 		case protocol.EventExited:
 			t.mu.Lock()
 			t.exited, t.exitCode = true, ev.ExitCode
@@ -948,6 +952,7 @@ func (t *termConn) windowTitle() (string, bool) {
 // close detaches and releases the terminal. The session keeps running.
 func (t *termConn) close() {
 	_ = t.att.Close()
+	defer t.tap.close()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.closed {

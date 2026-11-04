@@ -38,6 +38,7 @@ var settingsNav = []settingsGroup{
 		{"terminal", "Terminal", "square-terminal"},
 		{"shortcuts", "Shortcuts", "keyboard"},
 		{"extensions", "Extensions", "layers"},
+		{"developer", "Developer", "code-xml"},
 	}},
 	{"This node", []settingsSection{
 		{"daemon", "Daemon", "server"},
@@ -136,6 +137,8 @@ func settingsContent(m *model, id string) ggui.Widget {
 		return accessSettings(m)
 	case "about":
 		return aboutSettings(m)
+	case "developer":
+		return developerSettings(m)
 	}
 	return generalSettings(m)
 }
