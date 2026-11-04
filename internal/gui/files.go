@@ -97,6 +97,7 @@ func isImage(name string) bool {
 type decodedImage struct {
 	File *protocol.File
 	Img  image.Image
+	SVG  []byte // an SVG's source, drawn by who shows it
 }
 
 // fetch makes a daemon call off the window's goroutine and hands done its
@@ -286,6 +287,11 @@ func fetchImage(m *model, node, path string, done func(decodedImage, error)) {
 		f, err := c.ReadFile(ctx, req)
 		if err != nil || f.GetData() == nil {
 			return decodedImage{File: f}, err
+		}
+		if isSVG(path) {
+			data := f.GetData()
+			f.Data = nil
+			return decodedImage{File: f, SVG: data}, nil
 		}
 		img, _, err := image.Decode(bytes.NewReader(f.GetData()))
 		f.Data = nil

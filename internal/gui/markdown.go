@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"cmp"
 	"html"
 	"image/color"
 	"path"
@@ -42,10 +43,11 @@ const mdBodySize = 14
 
 // mdRenderer turns one file's syntax tree into widgets.
 type mdRenderer struct {
-	m   *model
-	id  string // the file's tab
-	doc docInfo
-	src []byte
+	m     *model
+	id    string // the file's tab
+	doc   docInfo
+	src   []byte
+	depth int // how deep the list being rendered is nested
 }
 
 // markdownView is a Markdown file rendered, scrolling. Its text selects as
@@ -84,16 +86,16 @@ func (r *mdRenderer) block(n ast.Node) ggui.Widget {
 	switch n := n.(type) {
 	case *ast.Heading:
 		sizes := [...]float64{0, 26, 21, 17.5, 15.5, 14, 13.5}
-		t := r.paragraph(n).Size(sizes[min(n.Level, 6)]).Weight(ggui.WeightSemibold).LineHeight(1.3)
+		t := r.paragraph(n, sizes[min(n.Level, 6)]).Weight(ggui.WeightSemibold).LineHeight(1.3)
 		if n.Level <= 2 {
 			return ggui.Column(ggui.Padding(t, 6, 0, 0, 0), hline()).Gap(8).Stretch()
 		}
 		return ggui.Padding(t, 4, 0, 0, 0)
 	case *ast.Paragraph, *ast.TextBlock:
-		if img, ok := onlyImage(n); ok {
-			return r.image(string(img.Destination), r.altText(img))
+		if pics, ok := r.picturesOnly(n); ok {
+			return r.pictures(pics, false)
 		}
-		return r.paragraph(n)
+		return r.paragraph(n, mdBodySize)
 	case *ast.ThematicBreak:
 		return hline()
 	case *ast.FencedCodeBlock:
@@ -119,19 +121,89 @@ func (r *mdRenderer) block(n ast.Node) ggui.Widget {
 	return nil
 }
 
-// onlyImage reports whether a paragraph is just an image, which shows as
-// one rather than as its alt text.
-func onlyImage(n ast.Node) (*ast.Image, bool) {
-	img, ok := n.FirstChild().(*ast.Image)
-	return img, ok && n.FirstChild() == n.LastChild()
+// mdPicture is an image a page shows: where it is, what it shows, the
+// link it opens, and the size its tag asks for, 0 for its own.
+type mdPicture struct {
+	dest, alt, link string
+	width, height   float64
 }
 
-// paragraph is n's inline content as one paragraph of text, which the
-// reader can select and copy.
-func (r *mdRenderer) paragraph(n ast.Node) *ggui.RichTextWidget {
+// picturesOnly is a paragraph's images when it holds nothing else but the
+// links around them and the space between, as a README's row of badges:
+// they show as images, not their alt text.
+func (r *mdRenderer) picturesOnly(n ast.Node) ([]mdPicture, bool) {
+	var pics []mdPicture
+	var walk func(n ast.Node, link string) bool
+	walk = func(n ast.Node, link string) bool {
+		for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+			switch c := c.(type) {
+			case *ast.Image:
+				pics = append(pics, mdPicture{dest: string(c.Destination), alt: r.altText(c), link: link})
+			case *ast.Link:
+				if !walk(c, string(c.Destination)) {
+					return false
+				}
+			case *ast.Text:
+				if strings.TrimSpace(string(c.Value(r.src))) != "" {
+					return false
+				}
+			case *ast.RawHTML:
+				tag := r.segmentsText(c.Segments)
+				name, closing, _ := htmlTagName(tag)
+				switch {
+				case strings.HasPrefix(strings.ToLower(tag), "<img"):
+					pics = append(pics, imgPicture(tag, link))
+				case name == "a" && !closing:
+					link = attr(tag, "href")
+				case name == "a":
+					link = ""
+				case name != "br" && name != "p":
+					return false
+				}
+			default:
+				return false
+			}
+		}
+		return true
+	}
+	return pics, walk(n, "") && len(pics) > 0
+}
+
+// imgPicture is the image an <img> tag shows, inside the link link.
+func imgPicture(tag, link string) mdPicture {
+	src, alt := imgAttrs(tag)
+	w, _ := strconv.ParseFloat(strings.TrimSuffix(attr(tag, "width"), "px"), 64)
+	h, _ := strconv.ParseFloat(strings.TrimSuffix(attr(tag, "height"), "px"), 64)
+	return mdPicture{dest: src, alt: alt, link: link, width: w, height: h}
+}
+
+// pictures shows images in a row that wraps, each opening its link when
+// it has one; centred as a tag that says so has them.
+func (r *mdRenderer) pictures(pics []mdPicture, center bool) ggui.Widget {
+	items := make([]ggui.Widget, len(pics))
+	for i, p := range pics {
+		items[i] = r.image(p)
+		if p.link != "" {
+			dest := p.link
+			items[i] = ui.Tooltip(ggui.Tap(items[i], func() { r.open(dest) }).Cursor(ggui.CursorShapePointer), dest)
+		}
+	}
+	var w ggui.Widget = items[0]
+	if len(items) > 1 {
+		w = ggui.Wrap(items...).Gap(6).RunGap(6)
+	}
+	if center {
+		return ggui.Align(w).At(0.5, 0)
+	}
+	return w
+}
+
+// paragraph is n's inline content as one paragraph of text at size, which
+// the reader can select and copy.
+func (r *mdRenderer) paragraph(n ast.Node, size float64) *ggui.RichTextWidget {
 	var spans []ggui.TextSpan
-	r.inline(n, mdStyle{r: r}, &spans)
-	return ggui.RichText(spans...).Size(mdBodySize).LineHeight(1.55).Selectable()
+	r.inline(n, mdStyle{r: r, size: size}, &spans)
+	return ggui.RichText(spans...).Size(size).LineHeight(1.55).Selectable()
 }
 
 // alerts are the kinds of GitHub's alert quotes, "> [!NOTE]", and their
@@ -204,24 +276,43 @@ func (q *quoteBar) Paint(dst *ggui.Canvas, r ggui.Rect) {
 func (r *mdRenderer) inlineAfter(n ast.Node, from int, out *[]ggui.TextSpan) {
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 		if t, ok := c.(*ast.Text); !ok || t.Segment.Start >= from {
-			r.inlineNode(c, mdStyle{r: r}, out)
+			r.inlineNode(c, mdStyle{r: r, size: mdBodySize}, out)
 		}
 	}
 }
 
-// html is a block of HTML as GitHub shows what it allows: its images, and
-// its text without the tags.
+// html is a block of HTML as GitHub shows what it allows: its images,
+// each opening the link around it, then its text without the tags,
+// centred where the block asks to be, as a README's header is.
 func (r *mdRenderer) html(s string) ggui.Widget {
-	var out []ggui.Widget
-	for _, tag := range imgTag.FindAllString(s, -1) {
-		if src, alt := imgAttrs(tag); src != "" {
-			out = append(out, r.image(src, alt))
+	s = htmlComment.ReplaceAllString(s, "")
+	center := alignCenter.MatchString(s)
+	var pics []mdPicture
+	link := ""
+	for _, tag := range htmlTag.FindAllString(s, -1) {
+		name, closing, _ := htmlTagName(tag)
+		switch {
+		case strings.HasPrefix(strings.ToLower(tag), "<img"):
+			if p := imgPicture(tag, link); p.dest != "" {
+				pics = append(pics, p)
+			}
+		case name == "a" && !closing:
+			link = attr(tag, "href")
+		case name == "a":
+			link = ""
 		}
 	}
-	s = htmlComment.ReplaceAllString(s, "")
+	var out []ggui.Widget
+	if len(pics) > 0 {
+		out = append(out, r.pictures(pics, center))
+	}
 	text := strings.Join(strings.Fields(htmlTag.ReplaceAllString(s, " ")), " ")
 	if text != "" {
-		out = append(out, ggui.Text(html.UnescapeString(text)).Size(mdBodySize).LineHeight(1.55).Selectable())
+		var t ggui.Widget = ggui.Text(html.UnescapeString(text)).Size(mdBodySize).LineHeight(1.55).Selectable()
+		if center {
+			t = ggui.Align(t).At(0.5, 0)
+		}
+		out = append(out, t)
 	}
 	switch len(out) {
 	case 0:
@@ -229,11 +320,11 @@ func (r *mdRenderer) html(s string) ggui.Widget {
 	case 1:
 		return out[0]
 	}
-	return ggui.Wrap(out...).Gap(8).RunGap(8)
+	return ggui.Column(out...).Gap(8).Stretch()
 }
 
 var (
-	imgTag      = regexp.MustCompile(`(?is)<img\b[^>]*>`)
+	alignCenter = regexp.MustCompile(`(?i)align\s*=\s*["']?center`)
 	htmlTag     = regexp.MustCompile(`(?s)<[^>]*>`)
 	htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
 	htmlAttr    = regexp.MustCompile(`(?i)\b([a-z-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))`)
@@ -268,16 +359,43 @@ func (r *mdRenderer) segmentsText(segs *text.Segments) string {
 	return b.String()
 }
 
-// mdStyle is what a span of inline text is drawn in: the style its
-// emphasis and code give it, and the link it is part of.
+// mdStyle is what a span of inline text is drawn in: the weight and colour
+// its emphasis gives it, whether it is italic, code or struck out, the
+// paragraph's size, which code is set a little under, and the link it is
+// part of.
 type mdStyle struct {
-	text ggui.TextStyle
-	link string // where a click goes, or ""
-	r    *mdRenderer
+	text                 ggui.TextStyle
+	italic, code, strike bool
+	size                 float64
+	link                 string // where a click goes, or ""
+	r                    *mdRenderer
 }
 
+// mdCodeScale is inline code's size, of its paragraph's: monospace runs
+// larger than the text around it.
+const mdCodeScale = 0.88
+
 func (st mdStyle) span(s string) ggui.TextSpan {
-	sp := ggui.Span(s).Style(st.text)
+	ts := st.text
+	sans, mono := ggui.SystemItalicFonts()
+	switch {
+	case st.code:
+		ts.Font, ts.Size = ggui.DefaultMonoFont(), cmp.Or(st.size, mdBodySize)*mdCodeScale
+		if st.italic && mono != nil {
+			ts.Font = mono
+		}
+	case st.italic && sans != nil:
+		ts.Font = sans
+	case st.italic && ts.Weight == 0:
+		ts.Weight = ggui.WeightMedium // where the platform has no italic
+	}
+	sp := ggui.Span(s).Style(ts)
+	if st.code {
+		sp = sp.Background(tokSurface2)
+	}
+	if st.strike {
+		sp = sp.Strike()
+	}
 	if st.link != "" {
 		dest, r := st.link, st.r
 		sp = sp.Color(tokAccentBright).Underline().OnTap(func() { r.open(dest) }).Name(dest)
@@ -287,10 +405,59 @@ func (st mdStyle) span(s string) ggui.TextSpan {
 
 func (st mdStyle) with(ts ggui.TextStyle) mdStyle { st.text = st.text.Merge(ts); return st }
 
+// tagged is style inside the inline HTML tag name, opened by tag: bold,
+// italic, code, struck out or a link; the same for a tag of none of these,
+// whose text shows as it is.
+func (st mdStyle) tagged(name, tag string) mdStyle {
+	switch name {
+	case "b", "strong":
+		return st.with(ggui.TextStyle{Weight: ggui.WeightBold})
+	case "i", "em", "cite", "var":
+		st.italic = true
+	case "code", "kbd", "samp", "tt":
+		st.code = true
+	case "s", "del", "strike":
+		st.strike = true
+	case "a":
+		if href := attr(tag, "href"); href != "" {
+			st.link = href
+		}
+	}
+	return st
+}
+
+// htmlTagName is the name of an inline HTML tag, lower case, and whether
+// it closes one; ok is false for what is not an opening or closing tag,
+// as a comment, and for one that closes itself, as <br/>.
+func htmlTagName(tag string) (name string, closing, ok bool) {
+	m := tagName.FindStringSubmatch(tag)
+	if m == nil || strings.HasSuffix(tag, "/>") {
+		return "", false, false
+	}
+	return strings.ToLower(m[2]), m[1] == "/", true
+}
+
+var tagName = regexp.MustCompile(`^<(/?)([A-Za-z][A-Za-z0-9]*)\b`)
+
 // inline appends the spans of n's inline children, each in style with
-// its own laid on.
+// its own laid on. An inline HTML tag, as <b> or <kbd>, styles what
+// follows it up to the tag that closes it.
 func (r *mdRenderer) inline(n ast.Node, style mdStyle, out *[]ggui.TextSpan) {
+	var open []mdStyle // the styles the tags open replaced
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+		if raw, ok := c.(*ast.RawHTML); ok {
+			tag := r.segmentsText(raw.Segments)
+			if name, closing, ok := htmlTagName(tag); ok && name != "br" && name != "img" {
+				switch {
+				case !closing:
+					open = append(open, style)
+					style = style.tagged(name, tag)
+				case len(open) > 0:
+					style, open = open[len(open)-1], open[:len(open)-1]
+				}
+				continue
+			}
+		}
 		r.inlineNode(c, style, out)
 	}
 }
@@ -320,15 +487,22 @@ func (r *mdRenderer) inlineNode(c ast.Node, style mdStyle, out *[]ggui.TextSpan)
 				b.Write(t.Value(r.src))
 			}
 		}
-		add(b.String(), style.with(ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: mdBodySize - 1, Color: tokAccentBright}))
+		code := style
+		code.code = true
+		add(b.String(), code)
 	case *ast.Emphasis:
-		w := ggui.WeightMedium
+		// *one* is italic, **two** bold, ***three*** both.
 		if c.Level >= 2 {
-			w = ggui.WeightBold
+			r.inline(c, style.with(ggui.TextStyle{Weight: ggui.WeightBold}), out)
+		} else {
+			italic := style
+			italic.italic = true
+			r.inline(c, italic, out)
 		}
-		r.inline(c, style.with(ggui.TextStyle{Weight: w}), out)
 	case *east.Strikethrough:
-		r.inline(c, style.with(ggui.TextStyle{Color: tokExtraMuted}), out)
+		struck := style
+		struck.strike = true
+		r.inline(c, struck, out)
 	case *ast.Link:
 		r.inline(c, r.linked(style, string(c.Destination)), out)
 	case *ast.AutoLink:
@@ -493,11 +667,16 @@ func expandTabs(s string, tab int) string {
 	return b.String()
 }
 
+// listMarks are a list's bullets, by how deep it is nested.
+var listMarks = [...]string{"•", "◦", "▪"}
+
 func (r *mdRenderer) list(n *ast.List) ggui.Widget {
 	var rows []ggui.Widget
 	num := n.Start
+	r.depth++
+	defer func() { r.depth-- }()
 	for item := n.FirstChild(); item != nil; item = item.NextSibling() {
-		marker := "•"
+		marker := listMarks[(r.depth-1)%len(listMarks)]
 		if n.IsOrdered() {
 			marker = strconv.Itoa(num) + "."
 			num++
@@ -533,7 +712,7 @@ func (r *mdRenderer) table(t *east.Table) ggui.Widget {
 		_, head := row.(*east.TableHeader)
 		var cells []ggui.Widget
 		for cell := row.FirstChild(); cell != nil; cell = cell.NextSibling() {
-			p := r.paragraph(cell).Size(13.5)
+			p := r.paragraph(cell, 13.5)
 			if head {
 				p.Weight(ggui.WeightSemibold)
 			}
@@ -561,45 +740,10 @@ func (r *mdRenderer) table(t *east.Table) ggui.Widget {
 	return ggui.Box(ggui.Column(rows...).Stretch()).Border(1, tokBorder).Radius(6)
 }
 
-// image shows an image beside the file, read from its node; one from
-// the web shows as a link.
-func (r *mdRenderer) image(dest, label string) ggui.Widget {
-	if strings.Contains(dest, "://") || !isImage(dest) {
-		return ggui.RichText(r.linked(mdStyle{r: r}, dest).span("🖼 " + label)).Size(mdBodySize)
-	}
-	p := r.beside(dest)
-	doc := r.m.docs[r.id]
-	if doc == nil {
-		return ggui.RichText(r.linked(mdStyle{r: r}, dest).span("🖼 " + label)).Size(mdBodySize)
-	}
-	if doc.images == nil {
-		doc.images = map[string]*ggui.StateValue[mdImage]{}
-	}
-	img, ok := doc.images[p]
-	if !ok {
-		img = ggui.State(mdImage{Loading: true})
-		doc.images[p] = img
-		fetchImage(r.m, r.doc.Node, p, func(d decodedImage, err error) {
-			if err != nil || d.Img == nil {
-				img.Set(mdImage{})
-				return
-			}
-			img.Set(mdImage{Img: ggfx.NewImageFromImage(d.Img)})
-		})
-	}
-	return ggui.View(img, func(v mdImage) ggui.Widget {
-		switch {
-		case v.Loading:
-			return ggui.Box(ui.Spinner()).Pad(8)
-		case v.Img == nil:
-			return muted(ggui.Text("🖼 " + label).Size(13))
-		}
-		return ggui.Align(ggui.Image(v.Img).Alt(label)).Left()
-	})
-}
-
-// mdImage is an image a Markdown file shows, as read.
+// mdImage is an image a Markdown file shows, as read: Size is how large
+// it is drawn at its own size, which an SVG's pixels are twice of.
 type mdImage struct {
 	Loading bool
 	Img     *ggfx.Image // nil for one that could not be read
+	Size    ggui.Size
 }
