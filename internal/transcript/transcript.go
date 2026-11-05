@@ -13,6 +13,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -89,7 +90,18 @@ func samePath(a, b string) bool {
 	if p, err := filepath.EvalSymlinks(b); err == nil {
 		b = p
 	}
-	return filepath.Clean(a) == filepath.Clean(b)
+	return pathKey(a, runtime.GOOS) == pathKey(b, runtime.GOOS)
+}
+
+// pathKey is path as two names of one folder compare on goos: on Windows,
+// whose names ignore case, without the \\?\ a native program's own
+// paths may carry, as Codex's may.
+func pathKey(path, goos string) string {
+	if goos != "windows" {
+		return filepath.Clean(path)
+	}
+	path = strings.TrimPrefix(path, `\\?\`)
+	return strings.ToLower(filepath.Clean(path))
 }
 
 func metadata(path string, a agent.Logs) (string, string) {

@@ -147,8 +147,19 @@ func TestLogOfTrustsOnlyTheAgentsOwnPlace(t *testing.T) {
 			t.Errorf("LogOf(%s)=%v", path, got)
 		}
 	}
-	if LogOf("claude", env, "../x", "/c/projects/-p/../x.jsonl") || LogOf("codex", map[string]string{"CODEX_HOME": "/c"}, id, "/c/sessions/2026/10/26/rollout-"+id+".jsonl") {
-		t.Fatal("invalid ID or rollout log trusted")
+	if LogOf("claude", env, "../x", "/c/projects/-p/../x.jsonl") {
+		t.Fatal("invalid ID trusted")
+	}
+	codex := map[string]string{"CODEX_HOME": "/c"}
+	for path, want := range map[string]bool{
+		"/c/sessions/2026/10/26/rollout-2026-10-26T10-00-00-" + id + ".jsonl": true,
+		"/c/sessions/2026/10/26/rollout-2026-10-26T10-00-00-other.jsonl":      false,
+		"/c/sessions/2026/10/rollout-2026-10-26T10-00-00-" + id + ".jsonl":    false,
+		"/c/elsewhere/" + id + ".jsonl":                                       false,
+	} {
+		if got := LogOf("codex", codex, id, filepath.FromSlash(path)); got != want {
+			t.Errorf("LogOf(codex, %s)=%v", path, got)
+		}
 	}
 }
 
@@ -300,5 +311,14 @@ func TestCacheForgetsAConversationNobodyRead(t *testing.T) {
 	}
 	if chat, err := cache.ReadBound(info, path, Span{}); err != nil || len(chat.GetMessages()) != 1 {
 		t.Fatalf("read again: chat=%+v %v", chat, err)
+	}
+}
+
+func TestAWindowsFolderIsOneWhateverItsCaseOrPrefix(t *testing.T) {
+	if pathKey(`\\?\C:\Users\me\proj`, "windows") != pathKey(`c:\users\me\proj`, "windows") {
+		t.Fatal("a Windows folder named two ways is not one")
+	}
+	if pathKey("/Users/me/Proj", "darwin") == pathKey("/Users/me/proj", "darwin") {
+		t.Fatal("folders only a case apart are one off Windows")
 	}
 }

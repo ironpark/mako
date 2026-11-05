@@ -19,8 +19,11 @@ var place = agent.Place{RootEnv: "CODEX_HOME", HomeDir: ".codex", Dirs: []string
 
 func (*Agent) Place() agent.Place { return place }
 
-// LogName: a rollout's name holds its time as well as its ID.
-func (*Agent) LogName(string) string { return "" }
+// LogName: a rollout's name holds its time as well as its ID, so it is a
+// glob of the names conversation id's rollout may have. A hook's report of
+// the rollout is all that tells a session on Windows its conversation:
+// there no listing of open files finds it.
+func (*Agent) LogName(id string) string { return "rollout-*-" + id + ".jsonl" }
 
 type record struct {
 	Type      string          `json:"type"`

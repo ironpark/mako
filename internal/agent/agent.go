@@ -143,8 +143,9 @@ type StatusLine interface {
 // line, one conversation a file.
 type Logs interface {
 	Place() Place
-	// LogName is the file name of conversation id's log, "" when the name
-	// is not the ID's alone: then a log path a hook reports is not trusted.
+	// LogName is the file name of conversation id's log, or a glob of the
+	// names it may have, holding the ID; "" when no name says whose the log
+	// is: then a log path a hook reports is not trusted.
 	LogName(id string) string
 	// Identity reads a log's line for whose it is: its conversation's ID,
 	// working directory and creation time. done is false to read on, and
