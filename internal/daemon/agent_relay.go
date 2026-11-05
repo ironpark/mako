@@ -15,17 +15,27 @@ import (
 )
 
 // The agents of one project on several nodes see and message each other.
-// Each daemon says in the state it sends its peers which project of
-// several folders each of its sessions' agents is in, and whether it takes
-// messages (shareScopes); the project's ID is the same on every node, as
-// a front-end gives each the project's folders there. A message for an
+// Each daemon says in the state it sends its peers which project each of
+// its sessions' agents is in, and whether it takes messages (shareScopes):
+// a project of several folders, whose ID is the same on every node, as a
+// front-end gives each the project's folders there, or, with none, the
+// clones of one repository, by its remote. A message for an
 // agent on another node goes to that node's daemon as a RelayAgentMessage,
 // which keeps it in the recipient's inbox as one of its own agents' would
 // be. So both nodes must let each other in, or reach each other through
 // nodes that do: one to send it its sessions, the other to be asked.
 
-// projectScopePrefix starts a sharedScope.
-const projectScopePrefix = "project:"
+// projectScopePrefix and repoScopePrefix start a sharedScope: of a
+// project of several folders, and of the clones of one repository.
+const (
+	projectScopePrefix = "project:"
+	repoScopePrefix    = "repo:"
+)
+
+// shared reports whether scope spans nodes.
+func shared(scope string) bool {
+	return strings.HasPrefix(scope, projectScopePrefix) || strings.HasPrefix(scope, repoScopePrefix)
+}
 
 // relayTimeout bounds how long a message for another node's agent waits
 // for that node to take it.
@@ -63,7 +73,7 @@ func (d *Daemon) takesMessages(info *protocol.SessionInfo) bool {
 // remoteAgents are the sessions on other nodes whose agents are in scope,
 // as their daemons last said: none outside a project of several folders.
 func (d *Daemon) remoteAgents(scope string) []*protocol.SessionInfo {
-	if !strings.HasPrefix(scope, projectScopePrefix) {
+	if !shared(scope) {
 		return nil
 	}
 	var out []*protocol.SessionInfo

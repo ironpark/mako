@@ -133,15 +133,23 @@ func (d *Daemon) projectScope(info *protocol.SessionInfo) string {
 	return cmp.Or(d.sharedScope(info), folderScope(info))
 }
 
-// sharedScope is the scope of a session in a project of several folders,
-// which spans nodes: "project:" and the ID of the project holding its
-// folder; "" for none.
+// sharedScope is the scope of a session in a project that spans nodes:
+// "project:" and the ID of the project of several folders holding its
+// folder; else, in a clone of a repository with a remote, "repo:" and the
+// remote, which names it the same on every node, so that the agents of
+// its clones anywhere are one project's; "" for neither.
 func (d *Daemon) sharedScope(info *protocol.SessionInfo) string {
-	if len(d.projects.get()) == 0 {
-		return "" // nothing to follow the folders' links for
+	if len(d.projects.get()) > 0 {
+		if s, _ := d.projectFor(info.GetProject(), cmp.Or(info.GetWorktree().GetRepo(), info.GetRepo())); s != nil {
+			return projectScopePrefix + s.GetId()
+		}
 	}
-	if s, _ := d.projectFor(info.GetProject(), cmp.Or(info.GetWorktree().GetRepo(), info.GetRepo())); s != nil {
-		return projectScopePrefix + s.GetId()
+	remote := info.GetRemote()
+	if remote == "" && info.GetProject() != "" {
+		remote = d.heads.of(info.GetProject()).remote // a folder asked of, no session's
+	}
+	if remote != "" {
+		return repoScopePrefix + remote
 	}
 	return ""
 }

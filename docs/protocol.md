@@ -410,7 +410,7 @@ The fields a front-end usually needs:
 | `worktree` | The worktree made for it. |
 | `last_output`, `started_at`, `cols`, `rows` | |
 | `last_message` | When the conversation's latest prompt or reply was written, as its log says. Unset before the bound log has one; clients fall back to `last_output`. |
-| `agent_scope` | The project of several folders the session's agent is in, `project:` and the project's ID, as the state a daemon sends its peers says; empty elsewhere. Agents of one project on other nodes find each other by it. |
+| `agent_scope` | The project the session's agent is in, as the state a daemon sends its peers says: `project:` and the ID of the project of several folders holding it, else `repo:` and the remote of its repository, the same on every node; empty elsewhere. Agents of one project on other nodes find each other by it. |
 | `agent_messaging` | Whether the session's agent takes messages over its MCP tools, as of the same state. |
 | `tasks` | The commands the session's agent runs in the background, as Claude Code's Bash does with `run_in_background`, oldest first: those running and the last five that ended (`BackgroundTask`: `id`, `call_id`, `command` cut to its first line, `description`, `running`, `status` — `completed`, `failed`, `killed`, or `stopped` for one the agent's process did not outlive — `exit_code`, `started`/`ended` in Unix seconds, and `output`, the file on the session's node its output goes to). Read from the agent's log; empty once the session has ended. |
 

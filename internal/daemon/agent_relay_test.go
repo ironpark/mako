@@ -4,6 +4,7 @@ package daemon
 
 import (
 	"context"
+	"os/exec"
 	"slices"
 	"strings"
 	"testing"
@@ -110,5 +111,68 @@ func TestWaitingOnAnotherNodesAgent(t *testing.T) {
 	}
 	if _, err := a.waitProjectAgent(t.Context(), server, waitAgentArgs{SessionID: "web-agent", Until: "output", Text: "ok", Timeout: 1}); err == nil {
 		t.Fatal("waited on another node's output")
+	}
+}
+
+// cloneSession runs a session on d whose agent takes messages, in a clone
+// of the repository at remote, and in no project of several folders.
+func cloneSession(t *testing.T, d *Daemon, id, remote string) *agentPeer {
+	t.Helper()
+	dir := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", remote}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	s, err := session.Start(session.Spec{
+		ID: id, NodeID: d.cfg.NodeID, Agent: "claude", Project: dir,
+		Command: []string{"sh", "-c", "sleep 30"}, Cols: 40, Rows: 6,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	d.sessions.add(s)
+	_, stop := d.projectAgents.server(t.Context(), "", id, "")
+	t.Cleanup(stop)
+	return d.projectAgents.activate(s)
+}
+
+// The agents of two clones of one repository, on two nodes, are one
+// project's with no project made of them: they list and message each
+// other. A clone of another repository is not theirs.
+func TestAgentsOfClonesOfOneRepositoryMessageAcrossNodes(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	a := meshDaemon(t, "clone-a")
+	b := meshDaemon(t, "clone-b", p2pAddr(a))
+	letIn(t, b, a)
+	letIn(t, a, b)
+	server := cloneSession(t, a, "server-agent", "git@github.com:acme/app.git")
+	cloneSession(t, b, "web-agent", "https://github.com/acme/app.git")
+	cloneSession(t, b, "other-agent", "https://github.com/acme/other.git")
+
+	scope := a.projectScope(server.session.Info())
+	if !strings.HasPrefix(scope, repoScopePrefix) {
+		t.Fatalf("scope %q", scope)
+	}
+	waitFor(t, "the other node's clone", func() bool {
+		r := a.remoteAgent(scope, "web-agent")
+		return r != nil && r.GetAgentMessaging()
+	})
+	if a.remoteAgent(scope, "other-agent") != nil {
+		t.Fatal("an agent of another repository is listed")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	if _, err := a.sendAgentMessage(ctx, server, "web-agent", "the API changed"); err != nil {
+		t.Fatal(err)
+	}
+	if inbox, _ := b.projectAgents.messages.pending("web-agent"); len(inbox) != 1 || inbox[0].Text != "the API changed" {
+		t.Fatalf("inbox %+v", inbox)
+	}
+	if _, err := a.sendAgentMessage(ctx, server, "other-agent", "hello"); err == nil {
+		t.Fatal("reached an agent of another repository")
 	}
 }

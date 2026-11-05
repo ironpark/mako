@@ -135,7 +135,8 @@ A note names the child it is about; the window's project panel shows it as Mako'
 `wait_agent` on an agent of another node follows its turns as that node's
 state, which it sends its peers as the turn ends, says.
 Messages can be sent to active messaging sessions in the same project,
-including siblings. In a project of several folders, that includes the
+including siblings. In a project of several folders, and in clones of one
+repository with a remote, which no such project holds, that includes the
 project's agents on other nodes, which `list_agents` lists with their
 `node`: the sender's daemon passes the message to the recipient's
 (`relay_agent_message`), which keeps it in the recipient's inbox, and the
@@ -195,7 +196,10 @@ credential, passed in the MCP server's environment. Tool arguments cannot
 choose the sender identity
 or a different project. Credentials are revoked when a session exits;
 restarted sessions receive new credentials. Projects are compared using
-canonical local paths, with worktrees grouped by their repository path.
+canonical local paths, with worktrees grouped by their repository path;
+clones of a repository with a remote, on any node and in any folder, are
+one project by the remote (`repo:` and, say, `github.com/acme/app`) when no
+project of several folders holds them.
 A project the user put together of several folders in the desktop (a
 server's and a web app's repositories, say) is one project here: its
 sessions in any of its folders on the node list and message each other.
