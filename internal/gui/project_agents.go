@@ -82,7 +82,10 @@ func projectAgentsPanel(m *model) ggui.Widget {
 		}
 		return projectAgentsBody(m, r)
 	})
-	return ggui.Column(sessionCard(m), hline(), ggui.Expanded(agents)).Stretch()
+	// The card is as tall as what it says while that fits, and scrolls in a
+	// panel shorter than it, rather than its lines drawn over each other.
+	card := ggui.Scroll(sessionCard(m)).Shrink().Bar(tokSurface3)
+	return ggui.Column(card, hline(), ggui.Expanded(agents)).Stretch()
 }
 
 // sessionCard is the chosen session at the top of the Agents tab: what it
