@@ -12,6 +12,8 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/gostty"
 	"github.com/ironpark/gostty/input"
+
+	"github.com/ironpark/mako/internal/gui/boxdraw"
 	"github.com/ironpark/mako/internal/gui/skin"
 )
 
@@ -882,7 +884,7 @@ func (g grid) cellRect(col, row, width int) ggui.Rect {
 	return ggui.Rect{Origin: ggui.Pt(x0, y0), Size: ggui.Sz(x1-x0, y1-y0)}
 }
 
-func (g grid) snap(v float64) float64 { return snapTo(g.scale, v) }
+func (g grid) snap(v float64) float64 { return boxdraw.Snap(g.scale, v) }
 
 // textTop is how far below a cell's top its text is drawn, centring the
 // font's line in the cell.
@@ -1012,7 +1014,7 @@ func (g grid) foreground(c gostty.RenderCell, colors gostty.RenderColors) color.
 // cellGlyph draws one cell's character: as shapes if it is a box or block
 // character, else as text, its grapheme cluster when it has one.
 func (g grid) cellGlyph(dst *ggui.Canvas, c gostty.RenderCell, cluster string, rect ggui.Rect, fg color.RGBA) {
-	if drawBoxChar(dst, c.Codepoint, rect, g.memo.color(fg)) {
+	if boxdraw.Draw(dst, c.Codepoint, rect, g.memo.color(fg)) {
 		return
 	}
 	text := cluster

@@ -1,4 +1,6 @@
-package gui
+// Package boxdraw draws box drawing (U+2500–257F) and block elements
+// (U+2580–259F) as shapes rather than glyphs, as terminals do.
+package boxdraw
 
 import (
 	"image/color"
@@ -13,10 +15,10 @@ import (
 // cell and a logo or a frame made of them shows gaps between rows. Drawn
 // here they fill the cell exactly, whatever the font and the spacing.
 
-// drawBoxChar draws r into the cell rect if it is one of the characters
+// Draw draws r into the cell rect if it is one of the characters
 // above, reporting whether it was. rect's edges are already on device
 // pixels, so neighbouring cells meet without a seam.
-func drawBoxChar(dst *ggui.Canvas, r rune, rect ggui.Rect, fg color.Color) bool {
+func Draw(dst *ggui.Canvas, r rune, rect ggui.Rect, fg color.Color) bool {
 	switch {
 	case r >= 0x2580 && r <= 0x259F:
 		drawBlock(dst, r, rect, fg)
@@ -172,7 +174,7 @@ func drawLines(dst *ggui.Canvas, r rune, c ggui.Rect, fg color.Color) bool {
 	x, y, w, h := c.Origin.X, c.Origin.Y, c.Size.W, c.Size.H
 	thin, thick := lineWidths(dst, c)
 	s := dst.Scale()
-	cx, cy := snapTo(s, x+w/2-thin/2)+thin/2, snapTo(s, y+h/2-thin/2)+thin/2
+	cx, cy := Snap(s, x+w/2-thin/2)+thin/2, Snap(s, y+h/2-thin/2)+thin/2
 	rect := func(x0, y0, x1, y1 float64) { fillSnapped(dst, x0, y0, x1, y1, fg) }
 
 	if a := boxArms[r-0x2500]; a != (arms{}) {
@@ -341,14 +343,14 @@ func drawArc(dst *ggui.Canvas, r rune, c ggui.Rect, cx, cy, t float64, fg color.
 // device pixels, if anything is left of it.
 func fillSnapped(dst *ggui.Canvas, x0, y0, x1, y1 float64, col color.Color) {
 	s := dst.Scale()
-	x0, y0, x1, y1 = snapTo(s, x0), snapTo(s, y0), snapTo(s, x1), snapTo(s, y1)
+	x0, y0, x1, y1 = Snap(s, x0), Snap(s, y0), Snap(s, x1), Snap(s, y1)
 	if x1 > x0 && y1 > y0 {
 		dst.FillRect(ggui.Rect{Origin: ggui.Pt(x0, y0), Size: ggui.Sz(x1-x0, y1-y0)}, col)
 	}
 }
 
-// snapTo rounds a logical coordinate to the nearest device pixel at scale.
-func snapTo(scale, v float64) float64 {
+// Snap rounds a logical coordinate to the nearest device pixel at scale.
+func Snap(scale, v float64) float64 {
 	if scale <= 0 {
 		return v
 	}

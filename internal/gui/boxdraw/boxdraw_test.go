@@ -1,4 +1,4 @@
-package gui
+package boxdraw
 
 import (
 	"image/color"
@@ -13,11 +13,11 @@ func TestEveryBoxAndBlockCharacterIsDrawn(t *testing.T) {
 	c := &ggui.Canvas{}
 	cell := ggui.Rect{Origin: ggui.Pt(0, 0), Size: ggui.Sz(8, 18)}
 	for r := rune(0x2500); r <= 0x259F; r++ {
-		if !drawBoxChar(c, r, cell, color.RGBA{A: 0xff}) {
+		if !Draw(c, r, cell, color.RGBA{A: 0xff}) {
 			t.Errorf("%U %c is left to the font", r, r)
 		}
 	}
-	if drawBoxChar(c, 'A', cell, color.RGBA{}) || drawBoxChar(c, '❯', cell, color.RGBA{}) {
+	if Draw(c, 'A', cell, color.RGBA{}) || Draw(c, '❯', cell, color.RGBA{}) {
 		t.Error("an ordinary character was taken as a box character")
 	}
 }
