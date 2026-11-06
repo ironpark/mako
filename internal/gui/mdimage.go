@@ -36,27 +36,8 @@ func (r *mdRenderer) image(p mdPicture) ggui.Widget {
 	fallback := func() ggui.Widget {
 		return ggui.RichText(r.linked(mdStyle{r: r}, p.dest).span("🖼 " + label)).Size(mdBodySize)
 	}
-	web := strings.HasPrefix(p.dest, "http://") || strings.HasPrefix(p.dest, "https://")
-	var img *ggui.StateValue[mdImage]
-	switch {
-	case web:
-		img = r.m.webImage(p.dest)
-	case isImage(p.dest) || isSVG(p.dest):
-		doc := r.m.docs[r.id]
-		if doc == nil || r.doc.Path == "" {
-			return fallback() // nothing it is beside
-		}
-		where := r.beside(p.dest)
-		if doc.images == nil {
-			doc.images = map[string]*ggui.StateValue[mdImage]{}
-		}
-		var ok bool
-		if img, ok = doc.images[where]; !ok {
-			img = ggui.State(mdImage{Loading: true})
-			doc.images[where] = img
-			fetchImage(r.m, r.doc.Node, where, func(d decodedImage, err error) { img.Set(asMDImage(d, err)) })
-		}
-	default:
+	img := r.host.Image(p.dest)
+	if img == nil {
 		return fallback()
 	}
 	return ggui.View(img, func(v mdImage) ggui.Widget {

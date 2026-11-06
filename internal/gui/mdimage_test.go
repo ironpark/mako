@@ -19,7 +19,7 @@ import (
 // A paragraph of images alone, a README's badges in their links or an
 // <img> among them, shows as images; one with words among them does not.
 func TestAParagraphOfImagesShowsThem(t *testing.T) {
-	r := &mdRenderer{}
+	r := &mdRenderer{host: mdBase{}}
 	pics := func(src string) ([]mdPicture, bool) {
 		r.src = []byte(src)
 		doc := markdown.Parser().Parse(text.NewReader(r.src))
@@ -144,8 +144,8 @@ func TestAnImageBesideAWindowsFile(t *testing.T) {
 		{`\\srv\share\README.md`, "a.png", `\\srv\share\a.png`},
 		{"/home/me/mako/README.md", "docs/shot.png", "/home/me/mako/docs/shot.png"},
 	} {
-		r := &mdRenderer{doc: docInfo{Path: c.doc}}
-		if got := r.beside(c.rel); got != c.want {
+		h := pageHost{doc: docInfo{Path: c.doc}}
+		if got := h.beside(c.rel); got != c.want {
 			t.Errorf("%s beside %s = %s, want %s", c.rel, c.doc, got, c.want)
 		}
 	}

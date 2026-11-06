@@ -46,9 +46,7 @@ const mdBodySize = 14
 
 // mdRenderer turns one file's syntax tree into widgets.
 type mdRenderer struct {
-	m     *model
-	id    string // the file's tab
-	doc   docInfo
+	host  mdHost
 	src   []byte
 	depth int // how deep the list being rendered is nested
 	folds int // the details rendered so far
@@ -59,7 +57,7 @@ type mdRenderer struct {
 // in the view, a block or the space around them, drops the whole
 // selection.
 func markdownView(m *model, id string, src string) ggui.Widget {
-	r := &mdRenderer{m: m, id: id, doc: ggui.Peek(m.Docs)[id], src: []byte(src)}
+	r := &mdRenderer{host: pageHost{m: m, id: id, doc: ggui.Peek(m.Docs)[id]}, src: []byte(src)}
 	root := markdown.Parser().Parse(text.NewReader(r.src))
 	page := ggui.Box(ggui.Column(r.blocks(root)...).Gap(14).Stretch()).MaxWidth(880)
 	scroll := ggui.Scroll(ggui.Align(ggui.Padding(page, 28, 36, 48, 36)).Top()).Bar(skin.Surface3)
@@ -70,7 +68,7 @@ func markdownView(m *model, id string, src string) ggui.Widget {
 // GitHub: its blocks, to set in a column of their own. Its relative links
 // lead nowhere.
 func markdownText(m *model, src string) ggui.Widget {
-	r := &mdRenderer{m: m, src: []byte(src)}
+	r := &mdRenderer{host: pageHost{m: m}, src: []byte(src)}
 	root := markdown.Parser().Parse(text.NewReader(r.src))
 	return ggui.Column(r.blocks(root)...).Gap(10).Stretch()
 }
@@ -227,8 +225,8 @@ func (r *mdRenderer) quote(n *ast.Blockquote) ggui.Widget {
 		if kind, ok := strings.CutPrefix(line, "[!"); ok {
 			if a, ok := alerts[strings.ToUpper(strings.TrimSuffix(kind, "]"))]; ok && strings.HasSuffix(kind, "]") {
 				bar = a.Color
-				body = append(body, ggui.Row(icon("info").Size(15).Color(a.Color),
-					ggui.Text(T(a.Title)).Size(mdBodySize).Weight(ggui.WeightSemibold).Color(a.Color)).Gap(8))
+				body = append(body, ggui.Row(r.host.Icon("info", 15, a.Color),
+					ggui.Text(r.host.Text(a.Title)).Size(mdBodySize).Weight(ggui.WeightSemibold).Color(a.Color)).Gap(8))
 				// The rest of the paragraph, after the line naming it.
 				var spans []ggui.TextSpan
 				r.inlineAfter(p, first.Stop, &spans)
@@ -550,30 +548,8 @@ func (r *mdRenderer) linked(style mdStyle, dest string) mdStyle {
 	return style
 }
 
-// open follows a link: a web address in the browser, a file beside this
-// one in a tab of its own.
-func (r *mdRenderer) open(dest string) {
-	switch {
-	case dest == "" || strings.HasPrefix(dest, "#"):
-		return
-	case strings.Contains(dest, "://") || strings.HasPrefix(dest, "mailto:"):
-		r.m.openWeb(r.doc.Node, dest) // a server a file on another node names, as a README's
-		return
-	}
-	if r.doc.Path == "" {
-		return // not a file's, with nothing beside it
-	}
-	if i := strings.IndexAny(dest, "#?"); i >= 0 {
-		dest = dest[:i]
-	}
-	p := r.beside(dest)
-	r.m.openItem(fileItem{Key: dirKey(r.doc.Node, p), Node: r.doc.Node, Path: p, Name: baseName(p)}, 0)
-}
-
-// beside is a relative path from the file's folder, on its node.
-func (r *mdRenderer) beside(rel string) string {
-	return resolvePath(parentDir(r.doc.Path), rel)
-}
+// open follows a link, as the host has it.
+func (r *mdRenderer) open(dest string) { r.host.Open(dest) }
 
 // code is a code block, highlighted in its language when there is one,
 // selectable, and scrolling sideways rather than wrapping.
@@ -583,12 +559,7 @@ func (r *mdRenderer) code(n ast.Node, lang string) ggui.Widget {
 	} else {
 		lang = ""
 	}
-	var l language
-	ok := false
-	if lang != "" {
-		l, ok = r.m.hl.languageNamed(lang)
-	}
-	text := codeText(r.m, r.segmentsText(n.Lines()), l, ok, ggui.Peek(r.m.Prefs).FontSize)
+	text := r.host.Code(r.segmentsText(n.Lines()), lang)
 	return ggui.Box(ggui.Scroll(ggui.Padding(text, 12, 14)).Horizontal().Bar(skin.Surface3)).
 		Fill(skin.Surface1).Border(1, skin.Border).Radius(8)
 }

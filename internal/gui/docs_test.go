@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -104,5 +105,17 @@ func TestClosingAnEditedFileAsksFirst(t *testing.T) {
 	p2.Frame()
 	if ggui.Peek(m2.Confirmation).Title != "" || len(ggui.Peek(m2.Tabs)) != 0 {
 		t.Fatal("a saved file asked before closing")
+	}
+}
+
+func TestStatusRowLeavesOutWhatDoesNotFit(t *testing.T) {
+	item := func(w float64) ggui.Widget { return ggui.Box().Size(w, 10) }
+	r := &statusRow{gap: 10, split: 2, items: []ggui.Widget{item(50), item(50), item(50), item(50), item(80)}, drop: []int{3, 2, 1, 0, 4}}
+	p := ggui.ProbeBuilder(func() ggui.Widget { return r }, ggui.Sz(280, 30))
+	defer p.Close()
+	p.Frame()
+	// 280 and the gaps is wider than 280; the first to drop goes.
+	if want := []bool{true, true, true, false, true}; !slices.Equal(r.shown, want) {
+		t.Fatalf("shown %v, want %v", r.shown, want)
 	}
 }

@@ -802,7 +802,8 @@ func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.Cha
 		}
 		return turn
 	}
-	r := &mdRenderer{m: m, id: id, doc: docInfo{Node: info.GetNodeId(), Path: joinPath(info.GetProject(), "conversation.md")}, src: []byte(msg.GetText())}
+	host := pageHost{m: m, id: id, doc: docInfo{Node: info.GetNodeId(), Path: joinPath(info.GetProject(), "conversation.md")}}
+	r := &mdRenderer{host: host, src: []byte(msg.GetText())}
 	root := markdown.Parser().Parse(text.NewReader(r.src))
 	return &withCopy{content: ggui.Column(r.blocks(root)...).Gap(10).Stretch(), button: copyButton(m, msg.GetText())}
 }

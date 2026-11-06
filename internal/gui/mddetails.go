@@ -90,7 +90,7 @@ func (r *mdRenderer) blockList(nodes []ast.Node) []ggui.Widget {
 func (r *mdRenderer) details(head string, body []ast.Node, tail string) ggui.Widget {
 	tag := detailsOpen.FindString(head)
 	head = head[len(tag):]
-	title := T("Details")
+	title := r.host.Text("Details")
 	if m := summaryTag.FindStringSubmatchIndex(head); m != nil {
 		inner := htmlTag.ReplaceAllString(head[m[2]:m[3]], " ")
 		if t := strings.Join(strings.Fields(html.UnescapeString(inner)), " "); t != "" {
@@ -118,24 +118,11 @@ func (r *mdRenderer) details(head string, body []ast.Node, tail string) ggui.Wid
 	return fold
 }
 
-// fold is whether the page's next details is open, kept with the file so
-// it stays as the reader left it while the page is drawn again.
+// fold is whether the page's next details is open, as the host keeps it.
 func (r *mdRenderer) fold(open bool) *ggui.StateValue[bool] {
 	n := r.folds
 	r.folds++
-	if r.m == nil || r.m.docs[r.id] == nil {
-		return ggui.State(open)
-	}
-	doc := r.m.docs[r.id]
-	if doc.folds == nil {
-		doc.folds = map[int]*ggui.StateValue[bool]{}
-	}
-	s, ok := doc.folds[n]
-	if !ok {
-		s = ggui.State(open)
-		doc.folds[n] = s
-	}
-	return s
+	return r.host.Fold(n, open)
 }
 
 // htmlBlockText is an HTML block's source, its closing line with it.
