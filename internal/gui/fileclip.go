@@ -19,7 +19,7 @@ import (
 // clipItems are a row's Copy and Cut.
 func clipItems(m *model, it fileItem) []ggui.Widget {
 	clip := func(cut bool) func() {
-		return func() { m.FileClip.Set(pathDrag{Node: it.Node, Path: it.Path, Dir: it.Dir, Cut: cut}) }
+		return func() { m.files.Clip.Set(pathDrag{Node: it.Node, Path: it.Path, Dir: it.Dir, Cut: cut}) }
 	}
 	return []ggui.Widget{
 		ui.MenuItem(T("Copy"), clip(false)),
@@ -39,7 +39,7 @@ func folderItems(m *model, dir fileItem, ask func(op string, it fileItem)) []ggu
 
 // pasteItems is Paste into the folder dir, while something is copied.
 func pasteItems(m *model, dir fileItem) []ggui.Widget {
-	clip := ggui.Peek(m.FileClip)
+	clip := ggui.Peek(m.files.Clip)
 	if clip.Path == "" {
 		return nil
 	}
@@ -52,12 +52,12 @@ func pasteItems(m *model, dir fileItem) []ggui.Widget {
 
 // pasteInto puts what was copied or cut into the folder dir.
 func (m *model) pasteInto(dir fileItem) {
-	clip := ggui.Peek(m.FileClip)
+	clip := ggui.Peek(m.files.Clip)
 	if clip.Path == "" {
 		return
 	}
 	if clip.Cut {
-		m.FileClip.Set(pathDrag{}) // a move is pasted once
+		m.files.Clip.Set(pathDrag{}) // a move is pasted once
 		if clip.Node == dir.Node {
 			m.moveInto(clip, dir)
 			return
@@ -73,7 +73,7 @@ func (m *model) pasteInto(dir fileItem) {
 func (m *model) placeFile(src pathDrag, dir fileItem) {
 	same := src.Node == dir.Node
 	if same && (dir.Path == src.Path || strings.HasPrefix(dir.Path, src.Path+pathSep(src.Path))) {
-		m.FileNote.Set(T("A folder cannot be copied into itself."))
+		m.files.Note.Set(T("A folder cannot be copied into itself."))
 		return
 	}
 	for _, node := range []string{src.Node, dir.Node} {

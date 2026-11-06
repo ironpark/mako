@@ -277,7 +277,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					readme := joinPath(r.Path, "README.md")
 					m.openPreview(fileItem{Key: dirKey(r.Node, readme), Node: r.Node, Path: readme, Name: "README.md"})
 				}),
-				until("the preview", func() bool { return !ggui.Peek(m.Preview).Loading }),
+				until("the preview", func() bool { return !ggui.Peek(m.files.Preview).Loading }),
 				frames(5), shot("03-files"),
 				// Files of a few kinds, each with its type's icon.
 				do(func() {
@@ -286,7 +286,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 						dir := joinPath(r.Path, sub)
 						m.toggleDir(fileItem{Key: dirKey(r.Node, dir), Node: r.Node, Path: dir, Dir: true})
 					}
-					m.Preview.Set(filePreview{})
+					m.files.Preview.Set(filePreview{})
 				}),
 				frames(30), shot("03-file-icons"),
 				// README.md opened in a tab of its own.
@@ -299,11 +299,11 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				frames(60), shot("03-file-tab"),
 				do(m.toggleSelectedPreview), frames(30), shot("03-markdown-preview"),
 				do(m.toggleSelectedPreview), do(m.openPalette), frames(10), shot("03-palette"),
-				do(func() { m.PaletteQuery.Set("side") }), frames(4), shot("03-palette-search"),
-				do(func() { m.PaletteOpen.Set(false); m.ExtensionsOpen.Set(true) }),
-				until("the extension store", func() bool { r := ggui.Peek(m.ExtResults); return r.Listings != nil || r.Err != "" }),
+				do(func() { m.pickers.PaletteQuery.Set("side") }), frames(4), shot("03-palette-search"),
+				do(func() { m.pickers.PaletteOpen.Set(false); m.ext.Open.Set(true) }),
+				until("the extension store", func() bool { r := ggui.Peek(m.ext.Results); return r.Listings != nil || r.Err != "" }),
 				frames(10), shot("03-extensions"),
-				do(func() { m.ExtensionsOpen.Set(false); m.setSidebarGroup(groupHost) }), frames(10), shot("03-sidebar-host"),
+				do(func() { m.ext.Open.Set(false); m.setSidebarGroup(groupHost) }), frames(10), shot("03-sidebar-host"),
 				do(func() { m.setSidebarGroup(groupFlat) }), frames(4), shot("03-sidebar-flat"),
 				do(func() { m.setSidebarGroup(groupProject) }), frames(2),
 				do(func() { m.togglePin(ggui.Peek(m.Sessions)[0].GetId()) }), frames(4), shot("03-sidebar-pinned"),
@@ -370,8 +370,8 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				}),
 				until("the search", func() bool { return !ggui.Peek(m.Search).Loading }),
 				frames(5), shot("03-search"),
-				do(m.openQuickOpen), do(func() { m.QuickQuery.Set("view") }), frames(30), shot("03-quick-open"),
-				do(func() { m.QuickOpen.Set(false); m.DetailTab.Set(gitTab) }),
+				do(m.openQuickOpen), do(func() { m.pickers.QuickQuery.Set("view") }), frames(30), shot("03-quick-open"),
+				do(func() { m.pickers.QuickOpen.Set(false); m.DetailTab.Set(gitTab) }),
 				do(func() { m.DetailsWidth.Set(ggui.Peek(m.Prefs).DetailsWidth) }),
 				do(func() { m.DetailTab.Set(agentsTab) }), frames(2), shot("03-details"),
 				do(func() { m.DetailTab.Set(filesTab); m.openNew("", "") }), frames(2), shot("04-new-session"),

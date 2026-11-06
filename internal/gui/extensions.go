@@ -31,39 +31,39 @@ type extSearch struct {
 // searchExtensions asks the store for the extensions matching query.
 func (m *model) searchExtensions(query string) {
 	query = strings.TrimSpace(query)
-	m.ExtResults.Set(extSearch{Query: query, Listings: ggui.Peek(m.ExtResults).Listings, Loading: true})
+	m.ext.Results.Set(extSearch{Query: query, Listings: ggui.Peek(m.ext.Results).Listings, Loading: true})
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		found, err := extensionStore().Search(ctx, query)
 		m.post(func() {
-			if ggui.Peek(m.ExtResults).Query != query {
+			if ggui.Peek(m.ext.Results).Query != query {
 				return // another search went out meanwhile
 			}
 			r := extSearch{Query: query, Listings: found}
 			if err != nil {
 				r.Err = err.Error()
 			}
-			m.ExtResults.Set(r)
+			m.ext.Results.Set(r)
 		})
 	}()
 }
 
 // setExtBusy marks an extension as being installed or removed, or done.
 func (m *model) setExtBusy(id string, busy bool) {
-	next := maps.Clone(ggui.Peek(m.ExtBusy))
+	next := maps.Clone(ggui.Peek(m.ext.Busy))
 	if busy {
 		next[id] = true
 	} else {
 		delete(next, id)
 	}
-	m.ExtBusy.Set(next)
+	m.ext.Busy.Set(next)
 }
 
 // installExtension downloads an extension and highlights with it.
 func (m *model) installExtension(id string) {
 	m.setExtBusy(id, true)
-	m.ExtErr.Set("")
+	m.ext.Err.Set("")
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -71,7 +71,7 @@ func (m *model) installExtension(id string) {
 		m.post(func() {
 			m.setExtBusy(id, false)
 			if err != nil {
-				m.ExtErr.Set(err.Error())
+				m.ext.Err.Set(err.Error())
 			}
 			m.loadExtensions()
 		})
@@ -81,7 +81,7 @@ func (m *model) installExtension(id string) {
 // uninstallExtension removes an extension.
 func (m *model) uninstallExtension(id string) {
 	if err := extensionStore().Uninstall(id); err != nil {
-		m.ExtErr.Set(err.Error())
+		m.ext.Err.Set(err.Error())
 	}
 	m.loadExtensions()
 }
@@ -201,11 +201,11 @@ const extSearchDelay = 300 * time.Millisecond
 // extensionsDialog is Settings ▸ Extensions in a window of its own, as
 // the palette opens it: the search and filters stay as the list scrolls.
 func extensionsDialog(m *model) ggui.Widget {
-	content := ggui.If(m.ExtensionsOpen, func() ggui.Widget {
+	content := ggui.If(m.ext.Open, func() ggui.Widget {
 		list := ggui.Scroll(ggui.Padding(extensionsList(m), 0, 12, 0, 0)).Bar(tokSurface3)
 		return ggui.Box(ggui.Column(extensionsHeader(m), ggui.Expanded(list)).Gap(16).Stretch()).Height(600)
 	})
-	return ui.Dialog(m.ExtensionsOpen, content).Title(T("Extensions")).Width(880)
+	return ui.Dialog(m.ext.Open, content).Title(T("Extensions")).Width(880)
 }
 
 // extensionsHeader is the search over the list and its filters, as Zed's
@@ -213,19 +213,19 @@ func extensionsDialog(m *model) ggui.Widget {
 // and the kinds under it.
 func extensionsHeader(m *model) ggui.Widget {
 	// The most downloaded show before anything is searched for.
-	if r := ggui.Peek(m.ExtResults); r.Query == "" && r.Listings == nil && !r.Loading && r.Err == "" {
+	if r := ggui.Peek(m.ext.Results); r.Query == "" && r.Listings == nil && !r.Loading && r.Err == "" {
 		m.searchExtensions("")
 	}
 	// What is typed is asked for once typing pauses.
 	var pending *time.Timer
 	ggui.Effect(func() ggui.Cleanup {
-		q := strings.TrimSpace(m.ExtQuery.Get())
-		if q == ggui.Peek(m.ExtResults).Query {
+		q := strings.TrimSpace(m.ext.Query.Get())
+		if q == ggui.Peek(m.ext.Results).Query {
 			return nil
 		}
 		pending = time.AfterFunc(extSearchDelay, func() {
 			m.post(func() {
-				if strings.TrimSpace(ggui.Peek(m.ExtQuery)) == q {
+				if strings.TrimSpace(ggui.Peek(m.ext.Query)) == q {
 					m.searchExtensions(q)
 				}
 			})
@@ -234,27 +234,27 @@ func extensionsHeader(m *model) ggui.Widget {
 	})
 	search := ggui.Box(ggui.Row(
 		icon("search").Size(15).Color(tokMuted),
-		ggui.Expanded(ggui.TextInput(m.ExtQuery).Placeholder(T("Search extensions…")).Name(T("Search extensions")).
+		ggui.Expanded(ggui.TextInput(m.ext.Query).Placeholder(T("Search extensions…")).Name(T("Search extensions")).
 			Style(ggui.TextStyle{Size: 13.5}).OnSubmit(m.searchExtensions)),
 	).Gap(8).Align(ggui.AlignCenter)).Pad(8, 12).Border(1, tokBorder).Radius(8).Fill(tokSurface0)
-	show := ui.ToggleGroup[string](m.ExtShow).Options([]string{extShowAll, extShowInstalled, extShowAvailable}).
+	show := ui.ToggleGroup[string](m.ext.Show).Options([]string{extShowAll, extShowInstalled, extShowAvailable}).
 		Format(func(v string) string {
 			return T(map[string]string{extShowAll: "All", extShowInstalled: "Installed", extShowAvailable: "Not Installed"}[v])
 		}).Name(T("Show extensions"))
 	kinds := ggui.Reactive(func() ggui.Widget {
-		cur := m.ExtKind.Get()
+		cur := m.ext.Kind.Get()
 		tabs := make([]ggui.Widget, 0, len(extKinds))
 		for _, k := range extKinds {
 			fg := tokMuted
 			if k.Provides == cur {
 				fg = tokAccentBright
 			}
-			tabs = append(tabs, ui.ButtonOf(ggui.Text(T(k.Label)).Size(13.5).Color(fg).NoWrap(), func() { m.ExtKind.Set(k.Provides) }).
+			tabs = append(tabs, ui.ButtonOf(ggui.Text(T(k.Label)).Size(13.5).Color(fg).NoWrap(), func() { m.ext.Kind.Set(k.Provides) }).
 				Ghost().Pad(4, 8).Radius(6).Name(T(k.Label)))
 		}
 		return ggui.Row(tabs...).Gap(4)
 	})
-	errNote := ggui.View(m.ExtErr, func(e string) ggui.Widget {
+	errNote := ggui.View(m.ext.Err, func(e string) ggui.Widget {
 		if e == "" {
 			return ggui.Box()
 		}
@@ -278,8 +278,8 @@ func extensionsList(m *model) ggui.Widget {
 		Loading bool
 	}
 	list := ggui.Derived(func() shown {
-		r := m.ExtResults.Get()
-		cards := extCards(r, m.Extensions.Get(), m.ExtShow.Get(), m.ExtKind.Get())
+		r := m.ext.Results.Get()
+		cards := extCards(r, m.ext.Installed.Get(), m.ext.Show.Get(), m.ext.Kind.Get())
 		if len(cards) > 0 {
 			return shown{Cards: cards}
 		}
@@ -370,7 +370,7 @@ func extensionAction(m *model, c extCard) ggui.Widget {
 	id := c.ID
 	return ggui.Reactive(func() ggui.Widget {
 		switch {
-		case m.ExtBusy.Get()[id]:
+		case m.ext.Busy.Get()[id]:
 			return ui.Spinner()
 		case c.Installed == "":
 			return ui.ButtonOf(ggui.Row(icon("download").Size(14), ggui.Text(T("Install")).Size(13)).Gap(6).Align(ggui.AlignCenter),

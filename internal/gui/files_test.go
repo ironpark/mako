@@ -133,15 +133,15 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 	// An image is shown, and enlarged.
 	logoRow, _ := p.FindRole(ggui.RoleTreeItem, "logo.png")
 	p.Click(logoRow.Center())
-	probeUntil(t, p, "the image", func() bool { return ggui.Peek(m.Preview).Img != nil })
-	if b := ggui.Peek(m.Preview).Img.Bounds(); b.Dx() != 3 || b.Dy() != 2 {
+	probeUntil(t, p, "the image", func() bool { return ggui.Peek(m.files.Preview).Img != nil })
+	if b := ggui.Peek(m.files.Preview).Img.Bounds(); b.Dx() != 3 || b.Dy() != 2 {
 		t.Fatalf("image of %v, want 3×2", b)
 	}
 	p.Tap(T("Enlarge"))
-	if !ggui.Peek(m.ImageOpen) {
+	if !ggui.Peek(m.files.ImageOpen) {
 		t.Fatal("the image did not open enlarged")
 	}
-	m.ImageOpen.Set(false)
+	m.files.ImageOpen.Set(false)
 
 	// A folder dropped from the desktop where nothing takes it opens a new
 	// session in it.

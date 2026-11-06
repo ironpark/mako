@@ -99,7 +99,7 @@ func fits(by, context string) bool {
 func (m *model) shownKey() string {
 	p := m.spacesNow()
 	id := p.spaceID(p.Space)
-	context := m.contexts[id]
+	context := m.ws.contexts[id]
 	if !fits(p.LayoutBy, context) {
 		context = ""
 	}
@@ -132,20 +132,20 @@ func setupWorkspace(m *model) {
 	var f workspaceFile
 	if path, err := configFile("workspace.json"); err == nil {
 		if body, err := os.ReadFile(path); err == nil && json.Unmarshal(body, &f) == nil {
-			m.wsVersion, m.wsNode = f.Version, f.NodeID
-			m.layouts = keyedLayouts(f.Doc.Layouts)
+			m.ws.version, m.ws.node = f.Version, f.NodeID
+			m.ws.layouts = keyedLayouts(f.Doc.Layouts)
 			maps.Copy(m.tabNodes, f.Doc.TabNodes)
 			if f.Contexts != nil {
-				m.contexts = f.Contexts
+				m.ws.contexts = f.Contexts
 			}
 		}
 	}
 	m.Spaces.Set(f.Doc.spaceList.upgraded())
 	moveOldSpaces(m)
 	m.migrateProjectKeys()
-	m.layoutKey = m.shownKey()
-	m.setLayout(m.takeLayout(m.layoutKey))
-	m.wsLast, _ = json.Marshal(m.workspaceDocNow())
+	m.ws.layoutKey = m.shownKey()
+	m.setLayout(m.takeLayout(m.ws.layoutKey))
+	m.ws.last, _ = json.Marshal(m.workspaceDocNow())
 	// Another space, or another way of keeping its tabs, shows its own.
 	shown := ggui.Derived(func() string { p := m.spaces(); return layoutKey(p.spaceID(p.Space), p.LayoutBy) })
 	ggui.Watch(shown, func(string) { m.showLayout(m.shownKey()) })
@@ -215,18 +215,18 @@ func (m *model) showContext(s *protocol.SessionInfo) {
 		return
 	}
 	id := p.spaceID(p.Space)
-	if c := sessionContext(by, p.Projects, s); c != m.contexts[id] {
-		m.contexts[id] = c
-		m.contextsMoved = true
+	if c := sessionContext(by, p.Projects, s); c != m.ws.contexts[id] {
+		m.ws.contexts[id] = c
+		m.ws.contextsMoved = true
 	}
-	m.showLayout(layoutKey(id, m.contexts[id]))
+	m.showLayout(layoutKey(id, m.ws.contexts[id]))
 }
 
 // takeLayout takes key's panes out of those put by, or one empty pane for
 // a key with none yet.
 func (m *model) takeLayout(key string) *layoutNode {
-	root := m.layouts[key]
-	delete(m.layouts, key)
+	root := m.ws.layouts[key]
+	delete(m.ws.layouts, key)
 	if root == nil {
 		root = newLayout()
 	}
@@ -236,11 +236,11 @@ func (m *model) takeLayout(key string) *layoutNode {
 // showLayout puts the panes shown by, under the key they belong to, and
 // brings out key's.
 func (m *model) showLayout(key string) {
-	if key == m.layoutKey {
+	if key == m.ws.layoutKey {
 		return
 	}
-	m.layouts[m.layoutKey] = ggui.Peek(m.Layout)
-	m.layoutKey = key
+	m.ws.layouts[m.ws.layoutKey] = ggui.Peek(m.Layout)
+	m.ws.layoutKey = key
 	m.setLayout(m.takeLayout(key))
 }
 
@@ -259,8 +259,8 @@ func (m *model) setLayout(root *layoutNode) {
 // workspaceDocNow is the workspace as it stands: every space's panes, with
 // the diffs left out, which are not written down.
 func (m *model) workspaceDocNow() workspaceDoc {
-	layouts := maps.Clone(m.layouts)
-	layouts[m.layoutKey] = ggui.Peek(m.Layout)
+	layouts := maps.Clone(m.ws.layouts)
+	layouts[m.ws.layoutKey] = ggui.Peek(m.Layout)
 	p := ggui.Peek(m.Spaces)
 	for id, root := range layouts {
 		if s := keySpace(id); s != allSpaceID && !slices.ContainsFunc(p.Spaces, func(sp space) bool { return sp.ID == s }) {
@@ -287,10 +287,10 @@ func (m *model) workspaceChanged() {
 	if post == nil {
 		return // not started, as in a test
 	}
-	if m.wsTimer != nil {
-		m.wsTimer.Stop()
+	if m.ws.timer != nil {
+		m.ws.timer.Stop()
 	}
-	m.wsTimer = time.AfterFunc(workspaceSave, func() { post(m.saveWorkspace) })
+	m.ws.timer = time.AfterFunc(workspaceSave, func() { post(m.saveWorkspace) })
 }
 
 // saveWorkspace writes the workspace down and gives it to the daemon, as a
@@ -300,22 +300,22 @@ func (m *model) saveWorkspace() {
 	if err != nil {
 		return
 	}
-	if bytes.Equal(doc, m.wsLast) {
-		if m.contextsMoved {
+	if bytes.Equal(doc, m.ws.last) {
+		if m.ws.contextsMoved {
 			m.writeWorkspace() // the window's own, and no edit to share
 		}
 		return
 	}
-	m.wsLast = doc
-	m.wsVersion, m.wsNode = time.Now().UnixNano(), ggui.Peek(m.Conn).Self.GetId()
+	m.ws.last = doc
+	m.ws.version, m.ws.node = time.Now().UnixNano(), ggui.Peek(m.Conn).Self.GetId()
 	m.giveWorkspace(m.writeWorkspace())
 }
 
 // writeWorkspace writes the workspace down as the edit it is, and returns
 // what it wrote.
 func (m *model) writeWorkspace() []byte {
-	m.contextsMoved = false
-	body, err := json.Marshal(workspaceFile{Version: m.wsVersion, NodeID: m.wsNode, Doc: m.workspaceDocNow(), Contexts: m.contexts})
+	m.ws.contextsMoved = false
+	body, err := json.Marshal(workspaceFile{Version: m.ws.version, NodeID: m.ws.node, Doc: m.workspaceDocNow(), Contexts: m.ws.contexts})
 	if err != nil {
 		return nil
 	}
@@ -325,9 +325,9 @@ func (m *model) writeWorkspace() []byte {
 	if err != nil {
 		return body
 	}
-	m.wsWrites.Add(1)
+	m.ws.writes.Add(1)
 	go func() {
-		defer m.wsWrites.Done()
+		defer m.ws.writes.Done()
 		if err := writeWindowFile(path, body); err != nil {
 			log.Printf("mako: save workspace: %v", err)
 		}
@@ -341,7 +341,7 @@ func (m *model) giveWorkspace(body []byte) {
 	if body == nil || !ggui.Peek(m.Prefs).SyncWorkspace || m.post == nil {
 		return
 	}
-	ws := &protocol.Workspace{Doc: body, Version: m.wsVersion, NodeId: m.wsNode}
+	ws := &protocol.Workspace{Doc: body, Version: m.ws.version, NodeId: m.ws.node}
 	fetch(m, 5*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Workspace, error) {
 		return c.SetWorkspace(ctx, ws)
 	}, func(ws *protocol.Workspace, err error) {
@@ -358,27 +358,27 @@ func (m *model) takeWorkspace(ws *protocol.Workspace) {
 		return
 	}
 	switch {
-	case ws.GetVersion() < m.wsVersion:
+	case ws.GetVersion() < m.ws.version:
 		// The window's is newer, or the daemon holds none: it has the
 		// window's next.
 		m.giveWorkspace(m.writeWorkspace())
 		return
-	case !protocol.Newer(ws.GetVersion(), ws.GetNodeId(), m.wsVersion, m.wsNode):
+	case !protocol.Newer(ws.GetVersion(), ws.GetNodeId(), m.ws.version, m.ws.node):
 		return
 	}
 	var f workspaceFile
 	if json.Unmarshal(ws.GetDoc(), &f) != nil {
 		return
 	}
-	m.wsVersion, m.wsNode = ws.GetVersion(), ws.GetNodeId()
+	m.ws.version, m.ws.node = ws.GetVersion(), ws.GetNodeId()
 	// The space shown is kept by its ID, and stays shown if the other node
 	// kept it.
 	m.Spaces.Set(f.Doc.spaceList.upgraded())
-	m.layouts = keyedLayouts(f.Doc.Layouts)
+	m.ws.layouts = keyedLayouts(f.Doc.Layouts)
 	maps.Copy(m.tabNodes, f.Doc.TabNodes)
 	m.migrateProjectKeys()
-	m.layoutKey = m.shownKey()
-	root := m.takeLayout(m.layoutKey)
+	m.ws.layoutKey = m.shownKey()
+	root := m.takeLayout(m.ws.layoutKey)
 	// A file with edits not saved stays open, whatever the other node had.
 	for _, id := range m.dirtyDocs() {
 		if root.groupOf(id) == nil {
@@ -389,6 +389,6 @@ func (m *model) takeWorkspace(ws *protocol.Workspace) {
 	m.setLayout(root)
 	// Written down as it came, under its own version, and no edit to give
 	// back.
-	m.wsLast, _ = json.Marshal(m.workspaceDocNow())
+	m.ws.last, _ = json.Marshal(m.workspaceDocNow())
 	m.writeWorkspace()
 }

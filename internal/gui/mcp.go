@@ -52,7 +52,7 @@ func (m *model) loadMCPInfo(exts []zed.Extension) {
 				info[id] = i
 			}
 		}
-		m.post(func() { m.MCPInfo.Set(info) })
+		m.post(func() { m.ext.MCPInfo.Set(info) })
 	}()
 }
 
@@ -70,25 +70,25 @@ func (m *model) saveMCPServer(id string, s mcp.Server) {
 		next.ContextServers[id] = s
 	}
 	if err := config.Save(&next); err != nil {
-		m.MCPNote.Set(Tf("Could not save: %v", err))
+		m.ext.MCPNote.Set(Tf("Could not save: %v", err))
 		return
 	}
 	*m.cfg = next
-	m.MCPServers.Set(maps.Clone(next.ContextServers))
-	m.MCPNote.Set(T("Saved. Sessions of agents that take MCP servers use it from now on."))
+	m.ext.MCPServers.Set(maps.Clone(next.ContextServers))
+	m.ext.MCPNote.Set(T("Saved. Sessions of agents that take MCP servers use it from now on."))
 }
 
 // mcpText is the settings field of a server, kept across the section's
 // rebuilds.
 func (m *model) mcpText(id string) *ggui.StateValue[string] {
-	if t, ok := m.mcpTexts[id]; ok {
+	if t, ok := m.ext.mcpTexts[id]; ok {
 		return t
 	}
 	t := ggui.State(settingsText(m.cfg.ContextServers[id].Settings))
-	if m.mcpTexts == nil {
-		m.mcpTexts = map[string]*ggui.StateValue[string]{}
+	if m.ext.mcpTexts == nil {
+		m.ext.mcpTexts = map[string]*ggui.StateValue[string]{}
 	}
-	m.mcpTexts[id] = t
+	m.ext.mcpTexts[id] = t
 	return t
 }
 
@@ -109,10 +109,10 @@ func settingsText(settings json.RawMessage) string {
 func mcpServerCard(m *model, id, ext string) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		mono := ggui.TextStyle{Font: ggui.DefaultMonoFont()}
-		conf := m.MCPServers.Get()[id]
-		i := m.MCPInfo.Get()[id]
-		on := ggui.Bind(func() bool { return ggui.Peek(m.MCPServers)[id].On() }, func(v bool) {
-			next := ggui.Peek(m.MCPServers)[id]
+		conf := m.ext.MCPServers.Get()[id]
+		i := m.ext.MCPInfo.Get()[id]
+		on := ggui.Bind(func() bool { return ggui.Peek(m.ext.MCPServers)[id].On() }, func(v bool) {
+			next := ggui.Peek(m.ext.MCPServers)[id]
 			next.Enabled = nil
 			if !v {
 				next.Enabled = &v
@@ -142,10 +142,10 @@ func mcpServerCard(m *model, id, ext string) ggui.Widget {
 			ui.Button(T("Save settings"), func() {
 				settings, err := mcp.ParseSettings(ggui.Peek(text))
 				if err != nil {
-					m.MCPNote.Set(Tf("%s: the settings are not JSON: %v", id, err))
+					m.ext.MCPNote.Set(Tf("%s: the settings are not JSON: %v", id, err))
 					return
 				}
-				next := ggui.Peek(m.MCPServers)[id]
+				next := ggui.Peek(m.ext.MCPServers)[id]
 				next.Settings = settings
 				m.saveMCPServer(id, next)
 			}).Outline(),
@@ -155,7 +155,7 @@ func mcpServerCard(m *model, id, ext string) ggui.Widget {
 		}
 		rows = append(rows, stackedRow(T("Settings"), hint,
 			ggui.Column(field, ggui.Row(buttons...).Gap(8)).Gap(8).Stretch()))
-		note := ggui.View(m.MCPNote, func(s string) ggui.Widget {
+		note := ggui.View(m.ext.MCPNote, func(s string) ggui.Widget {
 			if s == "" {
 				return ggui.Box()
 			}

@@ -625,8 +625,8 @@ func (m *model) loadExtensions() {
 		langs := zed.Languages(exts)
 		m.hl.setLanguages(langs)
 		m.post(func() {
-			m.Extensions.Set(exts)
-			m.langGen++
+			m.ext.Installed.Set(exts)
+			m.ext.langGen++
 		})
 		m.loadMCPInfo(exts)
 	}()

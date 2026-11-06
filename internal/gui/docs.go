@@ -429,7 +429,7 @@ func docStatus(m *model, id string, info ggui.Readable[docInfo], state ggui.Read
 	editor := m.docEditor(id)
 	lines := shown(func() string { return Tf("%d lines", editor.Caret.Get().Lines) }, "text", "preview")
 	lang := shown(func() string {
-		m.Extensions.Get() // the language may come from one installed later
+		m.ext.Installed.Get() // the language may come from one installed later
 		if l, ok := m.hl.languageFor(info.Get().Path, ggui.Peek(doc.text)); ok {
 			return l.Name
 		}
@@ -593,8 +593,8 @@ func (m *model) docColors(id string) func(string, palette) []styleSpan {
 	var ds *docSyntax
 	gen := -1
 	return func(text string, pal palette) []styleSpan {
-		if gen != m.langGen {
-			gen = m.langGen
+		if gen != m.ext.langGen {
+			gen = m.ext.langGen
 			d, _ := m.doc(id)
 			l, ok := m.hl.languageFor(d.Path, text)
 			switch {

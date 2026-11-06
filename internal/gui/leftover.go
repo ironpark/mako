@@ -44,7 +44,7 @@ func liveNodes(self *protocol.Node, nodes []*protocol.Node, now time.Time) map[s
 // spaces not shown.
 func (m *model) allTabs() []string {
 	tabs := slices.Clone(ggui.Peek(m.Tabs))
-	for _, root := range m.layouts {
+	for _, root := range m.ws.layouts {
 		for _, g := range root.groups() {
 			tabs = append(tabs, g.Tabs...)
 		}
@@ -89,10 +89,10 @@ func (m *model) dropLeftoverTabs(sessions []*protocol.SessionInfo, live map[stri
 		delete(m.tabNodes, id)
 		m.closeTab(id)
 	}
-	for key, root := range m.layouts {
+	for key, root := range m.ws.layouts {
 		root = root.clone()
 		root.removeTabs(func(id string) bool { return gone[id] })
-		m.layouts[key] = root
+		m.ws.layouts[key] = root
 	}
 	m.workspaceChanged()
 }

@@ -144,7 +144,7 @@ func (m *model) filesRoot() fileRoot {
 // set, keeping what was read before on show until the new entries come.
 func (m *model) loadDir(node, path string, force bool) {
 	key := dirKey(node, path)
-	dirs := ggui.Peek(m.Dirs)
+	dirs := ggui.Peek(m.files.Dirs)
 	if l, ok := dirs[key]; ok && (l.Loading || !force) {
 		return
 	}
@@ -152,30 +152,30 @@ func (m *model) loadDir(node, path string, force bool) {
 	l := next[key]
 	l.Loading = true
 	next[key] = l
-	m.Dirs.Set(next)
+	m.files.Dirs.Set(next)
 
 	req := &protocol.ListDir{NodeId: m.remoteID(node), Path: path}
 	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Dir, error) {
 		return c.ListDir(ctx, req)
 	}, func(dir *protocol.Dir, err error) {
-		next := maps.Clone(ggui.Peek(m.Dirs))
+		next := maps.Clone(ggui.Peek(m.files.Dirs))
 		if err != nil {
 			next[key] = dirListing{Err: err.Error()}
 		} else {
 			next[key] = dirListing{Entries: dir.GetEntries()}
 		}
-		m.Dirs.Set(next)
+		m.files.Dirs.Set(next)
 	})
 }
 
 // refreshFiles reads the project again, every folder of it shown, and
 // every folder open in them.
 func (m *model) refreshFiles() {
-	open := ggui.Peek(m.FilesOpen)
+	open := ggui.Peek(m.files.Open)
 	for _, r := range ggui.Peek(m.Roots).Roots {
 		m.reloadOpen(r.Node, r.Path, open)
 	}
-	if p := ggui.Peek(m.Preview); p.Key != "" {
+	if p := ggui.Peek(m.files.Preview); p.Key != "" {
 		m.openPreview(p.fileItem)
 	}
 }
@@ -197,7 +197,7 @@ func (m *model) children(it fileItem) []fileItem {
 	if !it.Dir || it.Stub {
 		return nil
 	}
-	l, ok := m.Dirs.Get()[it.Key]
+	l, ok := m.files.Dirs.Get()[it.Key]
 	switch {
 	case l.Err != "":
 		return []fileItem{{Key: it.Key + "\x00stub", Name: l.Err, Stub: true}}
@@ -288,12 +288,12 @@ func (m *model) toggleHidden() {
 
 // toggleDir opens a closed folder, reading it, and closes an open one.
 func (m *model) toggleDir(it fileItem) {
-	open := maps.Clone(ggui.Peek(m.FilesOpen))
+	open := maps.Clone(ggui.Peek(m.files.Open))
 	open[it.Key] = !open[it.Key]
 	if open[it.Key] {
 		m.loadDir(it.Node, it.Path, false)
 	}
-	m.FilesOpen.Set(open)
+	m.files.Open.Set(open)
 }
 
 // fetchImage reads an image file from its node and decodes it, off the
@@ -319,9 +319,9 @@ func fetchImage(m *model, node, path string, done func(decodedImage, error)) {
 // openPreview reads an image into the preview under the tree; any other
 // file opens in a tab.
 func (m *model) openPreview(it fileItem) {
-	m.Preview.Set(filePreview{fileItem: it, Loading: true})
+	m.files.Preview.Set(filePreview{fileItem: it, Loading: true})
 	fetchImage(m, it.Node, it.Path, func(d decodedImage, err error) {
-		if ggui.Peek(m.Preview).Key != it.Key {
+		if ggui.Peek(m.files.Preview).Key != it.Key {
 			return // another file was chosen meanwhile
 		}
 		p := filePreview{fileItem: it, File: d.File}
@@ -331,7 +331,7 @@ func (m *model) openPreview(it fileItem) {
 		case d.Img != nil:
 			p.Img = ggfx.NewImageFromImage(d.Img)
 		}
-		m.Preview.Set(p)
+		m.files.Preview.Set(p)
 	})
 }
 
@@ -368,22 +368,22 @@ func filesPanel(m *model) ggui.Widget {
 		if len(p.Roots) == 0 {
 			return nil
 		}
-		open := ggui.Peek(m.FilesOpen)
+		open := ggui.Peek(m.files.Open)
 		own := p.own()
 		if _, seen := open[dirKey(own.Node, own.Path)]; p.multi() && !seen {
 			open = maps.Clone(open)
 			open[dirKey(own.Node, own.Path)] = true
-			m.FilesOpen.Set(open)
+			m.files.Open.Set(open)
 		}
 		for _, r := range p.Roots {
 			if !p.multi() || open[dirKey(r.Node, r.Path)] {
 				m.loadDir(r.Node, r.Path, false)
 			}
 		}
-		if pv := ggui.Peek(m.Preview); pv.Key != "" && !slices.ContainsFunc(p.Roots, func(r panelRoot) bool {
+		if pv := ggui.Peek(m.files.Preview); pv.Key != "" && !slices.ContainsFunc(p.Roots, func(r panelRoot) bool {
 			return pv.Node == r.Node && strings.HasPrefix(pv.Path, r.Path)
 		}) {
-			m.Preview.Set(filePreview{})
+			m.files.Preview.Set(filePreview{})
 		}
 		return nil
 	})
@@ -431,7 +431,7 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 			}
 			lead := leadIcon(false)
 			if it.Dir { // a folder's icon opens with it
-				lead = ggui.View(ggui.Map(m.FilesOpen, func(o map[string]bool) bool { return o[it.Key] }), leadIcon)
+				lead = ggui.View(ggui.Map(m.files.Open, func(o map[string]bool) bool { return o[it.Key] }), leadIcon)
 			}
 			var row ggui.Widget = ggui.Row(lead, ggui.Expanded(label)).Gap(7)
 			if it.Dir {
@@ -449,13 +449,13 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 		RowName(func(it fileItem) string { return it.Name }).
 		// A folder says it is open by its icon, and opens on a press.
 		RowHeight(26).Indent(14).Chevrons(false).
-		BindExpanded(m.FilesOpen).
+		BindExpanded(m.files.Open).
 		OnToggle(func(it fileItem, open bool) {
 			if open {
 				m.loadDir(it.Node, it.Path, false)
 			}
 		}).
-		BindSelected(m.FileSel).
+		BindSelected(m.files.Sel).
 		OnSelect(func(it fileItem) {
 			switch {
 			case it.Stub:
@@ -486,13 +486,13 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 		).Gap(2),
 	)
 	// A failed delete says why under the header.
-	header = ggui.Column(header, ggui.If(ggui.Map(m.FileNote, func(s string) bool { return s != "" }), func() ggui.Widget {
+	header = ggui.Column(header, ggui.If(ggui.Map(m.files.Note, func(s string) bool { return s != "" }), func() ggui.Widget {
 		return ggui.Box(ggui.Row(
-			ggui.Expanded(ggui.TextOf(m.FileNote).Size(12).Color(tokDotDown)),
-			iconButton("x", T("Dismiss"), func() { m.FileNote.Set("") }),
+			ggui.Expanded(ggui.TextOf(m.files.Note).Size(12).Color(tokDotDown)),
+			iconButton("x", T("Dismiss"), func() { m.files.Note.Set("") }),
 		).Gap(6)).Pad(4, 6, 4, 12)
 	})).Stretch()
-	hasPreview := ggui.Map(m.Preview, func(p filePreview) bool { return p.Key != "" })
+	hasPreview := ggui.Map(m.files.Preview, func(p filePreview) bool { return p.Key != "" })
 	// Files dropped below the folders go into the project, from the
 	// desktop and from the tab; a right click there makes or pastes there.
 	root := dirItem(r.Node, r.Path)
@@ -508,7 +508,7 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 }
 
 func previewPane(m *model) ggui.Widget {
-	head := ggui.View(m.Preview, func(p filePreview) ggui.Widget {
+	head := ggui.View(m.files.Preview, func(p filePreview) ggui.Widget {
 		path := p.Path
 		info := ""
 		switch {
@@ -522,7 +522,7 @@ func previewPane(m *model) ggui.Widget {
 		}
 		var enlarge ggui.Widget = ggui.Box()
 		if p.Img != nil {
-			enlarge = iconButton("maximize-2", T("Enlarge"), func() { m.ImageOpen.Set(true) })
+			enlarge = iconButton("maximize-2", T("Enlarge"), func() { m.files.ImageOpen.Set(true) })
 		}
 		return panelHeader(
 			fileTypeIcon(p.Name, false, false).Size(14),
@@ -534,11 +534,11 @@ func previewPane(m *model) ggui.Widget {
 				enlarge,
 				iconButton("terminal", T("Insert path in the message"), func() { m.insertPath("", path) }),
 				iconButton("copy", T("Copy path"), func() { ggui.CurrentClipboard().Write(path) }),
-				iconButton("x", T("Close preview"), func() { m.Preview.Set(filePreview{}); m.FileSel.Set("") }),
+				iconButton("x", T("Close preview"), func() { m.files.Preview.Set(filePreview{}); m.files.Sel.Set("") }),
 			).Gap(2),
 		)
 	})
-	content := ggui.View(m.Preview, func(p filePreview) ggui.Widget {
+	content := ggui.View(m.files.Preview, func(p filePreview) ggui.Widget {
 		var note string
 		switch {
 		case p.Loading:
@@ -547,7 +547,7 @@ func previewPane(m *model) ggui.Widget {
 			note = p.Err
 		case p.Img != nil:
 			// Clicked, it shows as large as the window allows.
-			img := ggui.Pointer(ggui.Image(p.Img).Alt(p.Name)).OnTap(func() { m.ImageOpen.Set(true) })
+			img := ggui.Pointer(ggui.Image(p.Img).Alt(p.Name)).OnTap(func() { m.files.ImageOpen.Set(true) })
 			return ggui.Padding(ggui.Center(img), 12)
 		case p.File.GetTruncated():
 			note = Tf("An image of %s, too large to show.", byteSize(p.File.GetSize()))
@@ -562,19 +562,19 @@ func previewPane(m *model) ggui.Widget {
 // imageViewer shows the previewed image as large as the window allows,
 // at most its own size, until a click on it or Escape closes it.
 func imageViewer(m *model) ggui.Widget {
-	img := ggui.Map(m.Preview, func(p filePreview) *ggfx.Image { return p.Img })
+	img := ggui.Map(m.files.Preview, func(p filePreview) *ggfx.Image { return p.Img })
 	return ggui.View(img, func(*ggfx.Image) ggui.Widget {
-		p := ggui.Peek(m.Preview)
+		p := ggui.Peek(m.files.Preview)
 		if p.Img == nil {
 			return ggui.Box()
 		}
 		b := p.Img.Bounds()
 		content := ggui.Column(
-			ggui.Pointer(ggui.Image(p.Img).Alt(p.Name)).OnTap(func() { m.ImageOpen.Set(false) }),
+			ggui.Pointer(ggui.Image(p.Img).Alt(p.Name)).OnTap(func() { m.files.ImageOpen.Set(false) }),
 			muted(ggui.Text(fmt.Sprintf("%s · %d × %d", p.Name, b.Dx(), b.Dy())).Size(12)),
 		).Gap(10).Align(ggui.AlignCenter)
 		// The panel hugs the image, which shrinks to fit the window.
-		return ui.Dialog(m.ImageOpen, ggui.Padding(content, 12)).Name(T("Image")).Compact().Width(float64(max(b.Dx(), 240) + 24))
+		return ui.Dialog(m.files.ImageOpen, ggui.Padding(content, 12)).Name(T("Image")).Compact().Width(float64(max(b.Dx(), 240) + 24))
 	})
 }
 

@@ -17,8 +17,8 @@ func TestPaletteOpensExtensions(t *testing.T) {
 	}
 	p.Tap(label)
 	p.Frame()
-	if ggui.Peek(m.PaletteOpen) || !ggui.Peek(m.ExtensionsOpen) {
-		t.Fatalf("palette open %v, extensions open %v", ggui.Peek(m.PaletteOpen), ggui.Peek(m.ExtensionsOpen))
+	if ggui.Peek(m.pickers.PaletteOpen) || !ggui.Peek(m.ext.Open) {
+		t.Fatalf("palette open %v, extensions open %v", ggui.Peek(m.pickers.PaletteOpen), ggui.Peek(m.ext.Open))
 	}
 }
 
@@ -26,22 +26,22 @@ func TestPaletteListsRecentCommandsFirstAndMatchesLetters(t *testing.T) {
 	m, p, _, _ := docApp(t, "x")
 	m.openPalette()
 	p.Frame()
-	m.palette.run(slices.IndexFunc(ggui.Peek(m.palette.rows), func(r pickRow) bool { return r.Label == T("View")+": "+T("Toggle sidebar") }))
+	m.pickers.palette.run(slices.IndexFunc(ggui.Peek(m.pickers.palette.rows), func(r pickRow) bool { return r.Label == T("View")+": "+T("Toggle sidebar") }))
 	m.openPalette()
 	p.Frame()
-	if first := ggui.Peek(m.palette.rows)[0]; first.Label != T("View")+": "+T("Toggle sidebar") || !first.Recent {
+	if first := ggui.Peek(m.pickers.palette.rows)[0]; first.Label != T("View")+": "+T("Toggle sidebar") || !first.Recent {
 		t.Fatalf("first %+v", first)
 	}
 	// Letters in order find a command, by its English name too.
-	m.PaletteQuery.Set("extns")
+	m.pickers.PaletteQuery.Set("extns")
 	p.Frame()
-	rows := ggui.Peek(m.palette.rows)
+	rows := ggui.Peek(m.pickers.palette.rows)
 	if len(rows) == 0 || rows[0].Label != T("App")+": "+T("Extensions…") {
 		t.Fatalf("rows %+v", rows)
 	}
 	p.Type(ggui.Mods{}, ggui.KeyEnter)
 	p.Frame()
-	if !ggui.Peek(m.ExtensionsOpen) {
+	if !ggui.Peek(m.ext.Open) {
 		t.Fatal("Enter did not run the command")
 	}
 }

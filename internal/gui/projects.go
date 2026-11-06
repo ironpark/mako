@@ -514,30 +514,30 @@ func (m *model) moveContexts(moved map[string]string) {
 // the spaces showing the one to the other. The panes shown move too, or
 // give way to the new context's own.
 func (m *model) rekeyContexts(moved map[string]string) {
-	for key, root := range maps.Clone(m.layouts) {
+	for key, root := range maps.Clone(m.ws.layouts) {
 		space, ctx, _ := strings.Cut(key, "|")
 		to, ok := moved[ctx]
 		if !ok {
 			continue
 		}
-		delete(m.layouts, key)
-		if _, taken := m.layouts[layoutKey(space, to)]; !taken && m.layoutKey != layoutKey(space, to) {
-			m.layouts[layoutKey(space, to)] = root
+		delete(m.ws.layouts, key)
+		if _, taken := m.ws.layouts[layoutKey(space, to)]; !taken && m.ws.layoutKey != layoutKey(space, to) {
+			m.ws.layouts[layoutKey(space, to)] = root
 		}
 	}
-	for space, ctx := range m.contexts {
+	for space, ctx := range m.ws.contexts {
 		if to, ok := moved[ctx]; ok {
-			m.contexts[space] = to
-			m.contextsMoved = true
+			m.ws.contexts[space] = to
+			m.ws.contextsMoved = true
 		}
 	}
-	if space, ctx, _ := strings.Cut(m.layoutKey, "|"); m.layoutKey != "" {
+	if space, ctx, _ := strings.Cut(m.ws.layoutKey, "|"); m.ws.layoutKey != "" {
 		if to, ok := moved[ctx]; ok {
-			if _, own := m.layouts[layoutKey(space, to)]; own {
+			if _, own := m.ws.layouts[layoutKey(space, to)]; own {
 				m.showLayout(layoutKey(space, to))
-				delete(m.layouts, layoutKey(space, ctx))
+				delete(m.ws.layouts, layoutKey(space, ctx))
 			} else {
-				m.layoutKey = layoutKey(space, to)
+				m.ws.layoutKey = layoutKey(space, to)
 			}
 		}
 	}

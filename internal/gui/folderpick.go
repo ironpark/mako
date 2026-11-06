@@ -159,7 +159,7 @@ type place struct {
 func (m *model) places(p *folderPick) (favorites, recent, locations []place) {
 	favorites = []place{{"house", baseName(p.Home), p.Home}}
 	have := map[string]bool{}
-	for _, e := range m.Dirs.Get()[dirKey(p.Node, p.Home)].Entries {
+	for _, e := range m.files.Dirs.Get()[dirKey(p.Node, p.Home)].Entries {
 		have[e.GetName()] = e.GetDir()
 	}
 	for _, name := range []string{"Desktop", "Documents", "Downloads", "Projects"} {

@@ -19,7 +19,7 @@ func TestLeftoverTabsLeaveOnlyWhenTheirNodeIsLive(t *testing.T) {
 	// Another space's layout holds a gone tab too.
 	other := newLayout()
 	other.Group.Tabs, other.Group.Active = []string{"gone", "kept"}, "gone"
-	m.layouts["other"] = other
+	m.ws.layouts["other"] = other
 
 	live := map[string]bool{"n1": true}
 	at := time.Unix(1000, 0)
@@ -41,7 +41,7 @@ func TestLeftoverTabsLeaveOnlyWhenTheirNodeIsLive(t *testing.T) {
 	if got := paneTabs(m); !samePanes(got, []string{"alive", "away"}) {
 		t.Fatalf("panes %q, want alive and away", got)
 	}
-	if tabs := m.layouts["other"].Group.Tabs; len(tabs) != 1 || tabs[0] != "kept" {
+	if tabs := m.ws.layouts["other"].Group.Tabs; len(tabs) != 1 || tabs[0] != "kept" {
 		t.Fatalf("other space's tabs %q", tabs)
 	}
 

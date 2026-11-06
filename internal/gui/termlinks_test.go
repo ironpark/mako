@@ -147,7 +147,7 @@ func TestFollowedPathsOpenOnTheSessionsNode(t *testing.T) {
 
 	m.DetailsOpen.Set(false)
 	m.followLink("s", "file://"+shot, "")
-	probeUntil(t, p, "the preview", func() bool { return ggui.Peek(m.Preview).Path == shot })
+	probeUntil(t, p, "the preview", func() bool { return ggui.Peek(m.files.Preview).Path == shot })
 	if !ggui.Peek(m.DetailsOpen) || ggui.Peek(m.DetailTab) != filesTab {
 		t.Fatal("the preview opened out of sight")
 	}

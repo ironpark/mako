@@ -28,23 +28,23 @@ const maxRecent = 12
 // openPalette shows the palette with an empty search and the commands as
 // things stand now.
 func (m *model) openPalette() {
-	m.PaletteQuery.Set("")
-	m.paletteCommands, m.paletteTabs = nil, nil
-	if m.palette != nil {
-		m.palette.refresh()
+	m.pickers.PaletteQuery.Set("")
+	m.pickers.commands, m.pickers.tabs = nil, nil
+	if m.pickers.palette != nil {
+		m.pickers.palette.refresh()
 	}
-	m.PaletteOpen.Set(true)
+	m.pickers.PaletteOpen.Set(true)
 }
 
 // paletteDialog is the palette over the window, which closes as it runs
 // what was chosen.
 func paletteDialog(m *model) ggui.Widget {
-	m.palette = newPicker(m.PaletteOpen, m.PaletteQuery, m.paletteRows)
-	m.palette.Placeholder = T("Execute a command…")
-	m.palette.Name = T("Search commands")
-	m.palette.Empty = T("No results")
-	m.palette.Action = T("Run")
-	return m.palette.dialog()
+	m.pickers.palette = newPicker(m.pickers.PaletteOpen, m.pickers.PaletteQuery, m.paletteRows)
+	m.pickers.palette.Placeholder = T("Execute a command…")
+	m.pickers.palette.Name = T("Search commands")
+	m.pickers.palette.Empty = T("No results")
+	m.pickers.palette.Action = T("Run")
+	return m.pickers.palette.dialog()
 }
 
 // ran puts a command first in the recent list.
@@ -62,8 +62,8 @@ func (m *model) ran(id string) {
 func (m *model) paletteRows(q string) []pickRow {
 	// What the palette lists is read once as it opens, and searched as
 	// the query changes.
-	if m.paletteCommands == nil {
-		m.paletteCommands, m.paletteTabs = m.commands(), m.tabRows()
+	if m.pickers.commands == nil {
+		m.pickers.commands, m.pickers.tabs = m.commands(), m.tabRows()
 	}
 	recent := ggui.Peek(m.Prefs).RecentCommands
 	type ranked struct {
@@ -71,7 +71,7 @@ func (m *model) paletteRows(q string) []pickRow {
 		score int
 	}
 	var out []ranked
-	for _, c := range m.paletteCommands {
+	for _, c := range m.pickers.commands {
 		label := T(c.Category) + ": " + T(c.ID)
 		at := slices.Index(recent, c.ID)
 		score, hits, ok := fuzzyMatch(label, q)
@@ -98,7 +98,7 @@ func (m *model) paletteRows(q string) []pickRow {
 		out = append(out, ranked{pickRow{Label: label, Hits: hits, Shortcut: c.Shortcut, Recent: at >= 0, Disabled: c.Disabled,
 			Run: func() { m.ran(id); run() }}, score})
 	}
-	for _, r := range m.paletteTabs {
+	for _, r := range m.pickers.tabs {
 		score, hits, ok := fuzzyMatch(r.Label, q)
 		if !ok {
 			if score, _, ok = fuzzyMatch(r.Detail, q); !ok {
@@ -151,7 +151,7 @@ func (m *model) commands() []command {
 		command{ID: "Toggle details panel", Category: "View", Keys: []string{"files", "changes"}, Shortcut: "cmd+shift+d",
 			Run: func() { ggui.Toggle(m.DetailsOpen) }},
 		command{ID: "Extensions…", Category: "App", Keys: []string{"zed", "language", "grammar", "highlight", "mcp"},
-			Run: func() { m.ExtensionsOpen.Set(true) }},
+			Run: func() { m.ext.Open.Set(true) }},
 		command{ID: "Settings", Category: "App", Keys: []string{"preferences"}, Shortcut: "cmd+,", Run: func() { m.openSettings("") }},
 	)
 	for _, g := range groupings {

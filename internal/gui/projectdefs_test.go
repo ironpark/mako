@@ -178,15 +178,15 @@ func TestOldProjectKeysMove(t *testing.T) {
 		p.Collapsed = []string{old, "project:other"}
 		return p
 	})
-	m.layouts = map[string]*layoutNode{layoutKey("all", old): newLayout()}
-	m.contexts = map[string]string{"all": old}
+	m.ws.layouts = map[string]*layoutNode{layoutKey("all", old): newLayout()}
+	m.ws.contexts = map[string]string{"all": old}
 	m.migrateProjectKeys()
 	now := "project:repo:github.com/acme/server"
 	if got := ggui.Peek(m.Prefs).Collapsed; !slices.Contains(got, now) || slices.Contains(got, old) {
 		t.Fatalf("folded %v", got)
 	}
-	if _, ok := m.layouts[layoutKey("all", now)]; !ok || m.contexts["all"] != now {
-		t.Fatalf("layouts %v, contexts %v", m.layouts, m.contexts)
+	if _, ok := m.ws.layouts[layoutKey("all", now)]; !ok || m.ws.contexts["all"] != now {
+		t.Fatalf("layouts %v, contexts %v", m.ws.layouts, m.ws.contexts)
 	}
 }
 

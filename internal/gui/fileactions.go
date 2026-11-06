@@ -161,26 +161,26 @@ func (o fileOps) dialogs(submit func()) ggui.Widget {
 }
 
 // askFile asks, in the Files tab, for what op needs.
-func (m *model) askFile(op string, it fileItem) { m.FileOps.ask(op, it) }
+func (m *model) askFile(op string, it fileItem) { m.files.Ops.ask(op, it) }
 
 // submitFile carries out the operation the Files tab asked, then shows
 // what it made: a new file in a tab, a new folder open.
 func (m *model) submitFile() {
-	m.FileOps.submit(m, m.FileNote.Set, func(a fileAsk, f *protocol.File) {
+	m.files.Ops.submit(m, m.files.Note.Set, func(a fileAsk, f *protocol.File) {
 		it := a.Item
-		m.FileNote.Set("")
+		m.files.Note.Set("")
 		switch a.Op {
 		case protocol.FileCreate:
 			m.openFile(fileItem{Key: dirKey(it.Node, f.GetPath()), Node: it.Node, Path: f.GetPath(), Name: baseName(f.GetPath())})
 		case protocol.FileMkdir:
-			m.FilesOpen.Update(func(v map[string]bool) map[string]bool {
+			m.files.Open.Update(func(v map[string]bool) map[string]bool {
 				v = maps.Clone(v)
 				v[it.Key] = true
 				return v
 			})
 		case protocol.FileRename, protocol.FileDelete:
-			if p := ggui.Peek(m.Preview); p.Key == it.Key {
-				m.Preview.Set(filePreview{})
+			if p := ggui.Peek(m.files.Preview); p.Key == it.Key {
+				m.files.Preview.Set(filePreview{})
 			}
 		}
 	})
@@ -196,9 +196,9 @@ func fileMenu(m *model, w ggui.Widget, it fileItem) ggui.Widget {
 			items = append(items,
 				ui.MenuItem(T("New session here…"), func() { m.openNew(it.Node, it.Path) }))
 		case isImage(it.Name):
-			items = append(items, ui.MenuItem(T("Preview"), func() { m.FileSel.Set(it.Key); m.openPreview(it) }))
+			items = append(items, ui.MenuItem(T("Preview"), func() { m.files.Sel.Set(it.Key); m.openPreview(it) }))
 		default:
-			items = append(items, ui.MenuItem(T("Open"), func() { m.FileSel.Set(it.Key); m.openFile(it) }))
+			items = append(items, ui.MenuItem(T("Open"), func() { m.files.Sel.Set(it.Key); m.openFile(it) }))
 		}
 		items = append(items,
 			ui.MenuItem(T("Insert path in the message"), func() { m.insertPath("", it.Path) }),
@@ -219,7 +219,7 @@ func fileMenu(m *model, w ggui.Widget, it fileItem) ggui.Widget {
 				m.openBrowser(it.Node, folderOf(it).Path, sel)
 			}))
 		}
-		items = append(items, m.editorItems(it.Node, it.Path, nil, m.FileNote.Set)...)
+		items = append(items, m.editorItems(it.Node, it.Path, nil, m.files.Note.Set)...)
 		items = append(items, ui.MenuDivider())
 		items = append(items, clipItems(m, it)...)
 		items = append(items, folderItems(m, folderOf(it), m.askFile)...)
@@ -251,7 +251,7 @@ func (m *model) showInFileManager(it fileItem) {
 		open = runtime.OpenURL
 	}
 	if err := open(it.Path); err != nil {
-		m.FileNote.Set(err.Error())
+		m.files.Note.Set(err.Error())
 	}
 }
 
@@ -265,4 +265,4 @@ func newInRoot(m *model, r fileRoot) ggui.Widget {
 }
 
 // fileDialogs are the Files tab's name prompt and delete confirmation.
-func fileDialogs(m *model) ggui.Widget { return m.FileOps.dialogs(m.submitFile) }
+func fileDialogs(m *model) ggui.Widget { return m.files.Ops.dialogs(m.submitFile) }

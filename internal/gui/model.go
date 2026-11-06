@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ironpark/ggui"
@@ -17,9 +16,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
-	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/protocol"
-	"github.com/ironpark/mako/internal/zed"
 )
 
 // newSession is the new-session dialog's form.
@@ -77,23 +74,8 @@ type model struct {
 	tray       *ggui.Tray // the menu bar's icon, in tray mode
 	badge      string     // the count of sessions waiting, as the Dock's badge shows it
 
-	// The command palette, and the extensions it opens over the window;
-	// see palette.go. Each opening gives palette the commands of the
-	// moment.
-	PaletteOpen  *ggui.StateValue[bool]
-	PaletteQuery *ggui.StateValue[string]
-	palette      *picker
-	toaster      *ui.ToasterWidget // notices over the window, such as a dropped file sent
-	// What the palette lists while it is open: its commands and the tabs
-	// and sessions, read as it opens.
-	paletteCommands []command
-	paletteTabs     []pickRow
-	ExtensionsOpen  *ggui.StateValue[bool]
-	// Quick open, and the files it last read; see search.go.
-	QuickOpen  *ggui.StateValue[bool]
-	QuickQuery *ggui.StateValue[string]
-	quick      *picker
-	quickFiles quickFiles
+	pickers *pickerState      // the command palette and quick open; see pickers.go
+	toaster *ui.ToasterWidget // notices over the window, such as a dropped file sent
 	// The Search tab: what is typed, what was found, and whether its field
 	// is to take the keys when it next shows.
 	SearchQuery *ggui.StateValue[string]
@@ -113,26 +95,11 @@ type model struct {
 	AccessNote *ggui.StateValue[string] // the last access change's outcome
 	AccessKey  *ggui.StateValue[string] // a key being let in, as typed
 	asked      map[string]ui.ToastID    // requests told of, by their toasts; UI goroutine only
-	// The workspace (see workspace.go), on the UI goroutine: the panes of
-	// the spaces not shown, the space whose panes are, the edit the
-	// workspace is and when it was last written out, and the pause after
-	// an edit before it is written down. wsStale says the next poll asks
-	// the daemon for its workspace.
-	layouts   map[string]*layoutNode
-	layoutKey string            // what the panes shown are kept by; see layoutKey
-	contexts  map[string]string // by space, the owner or project last shown in it
+	ws         *wsState                 // how the workspace is kept and written down; see wsstate.go
 	// tabNodes are the nodes of session tabs, and missing when each tab's
 	// session went missing from the list; see leftover.go.
-	tabNodes  map[string]string
-	missing   map[string]time.Time
-	wsVersion int64
-	wsNode    string
-	wsLast    []byte
-	wsTimer   *time.Timer
-	wsWrites  sync.WaitGroup // workspace writes still reaching disk
-	// contextsMoved says the window showed another owner's or project's
-	// tabs since the workspace was written down.
-	contextsMoved bool
+	tabNodes map[string]string
+	missing  map[string]time.Time
 	// Devices are the mesh's devices, and those the daemon borrows;
 	// devicesAt is when the poll last asked for them, on its goroutine.
 	Devices   *ggui.StateValue[deviceList]
@@ -164,19 +131,7 @@ type model struct {
 	chatImages map[string]*ggui.StateValue[mdImage]
 	usages     map[string]*usageState // for the usage overlay
 
-	// The Files tab: folders read, by dirKey; those open; the row chosen;
-	// and the file shown.
-	Dirs      *ggui.StateValue[map[string]dirListing]
-	FilesOpen *ggui.StateValue[map[string]bool]
-	FileSel   *ggui.StateValue[string]
-	Preview   *ggui.StateValue[filePreview]
-	// A file operation asked of the user; FileNote shows a failure under
-	// the Files header once its dialog has closed.
-	FileOps  fileOps
-	FileNote *ggui.StateValue[string]
-	// FileClip is the file or folder copied or cut for Paste, in the Files
-	// tab or a node's file browser; Path is "" for none.
-	FileClip *ggui.StateValue[pathDrag]
+	files *filesState // the Files tab's; see filesstate.go
 
 	// The files open in tabs, by tab ID; see docs.go.
 	Docs *ggui.StateValue[map[string]docInfo]
@@ -184,24 +139,8 @@ type model struct {
 	Diffs *ggui.StateValue[map[string]diffTab]
 	docs  map[string]*document // UI goroutine only
 
-	// Highlighting, and the Zed extensions it takes languages from; see
-	// highlight.go. langGen counts the changes to the languages.
-	hl         *highlighter
-	Extensions *ggui.StateValue[[]zed.Extension]
-	langGen    int
-	ExtResults *ggui.StateValue[extSearch]
-	ExtBusy    *ggui.StateValue[map[string]bool] // extensions being installed
-	ExtErr     *ggui.StateValue[string]
-	// What the extensions list is searched for and narrowed to.
-	ExtQuery *ggui.StateValue[string]
-	ExtShow  *ggui.StateValue[string]
-	ExtKind  *ggui.StateValue[string]
-	// MCPServers mirrors cfg.ContextServers for the settings page, and
-	// MCPInfo is what the extensions say about setting each up.
-	MCPServers *ggui.StateValue[map[string]mcp.Server]
-	MCPInfo    *ggui.StateValue[map[string]mcpInfo]
-	MCPNote    *ggui.StateValue[string]
-	mcpTexts   map[string]*ggui.StateValue[string]
+	hl  *highlighter // highlighting, which takes languages from ext; see highlight.go
+	ext *extState    // the extensions and MCP servers; see extstate.go
 
 	git      *gitState // the Git panel's; see gitstate.go
 	RepoPick *ggui.StateValue[repoPick]
@@ -226,7 +165,6 @@ type model struct {
 	Pick             *folderPick                         // the New session dialog's folder picker
 	Proj             *projectAsk                         // the project dialogs; see projectmenu.go
 	projectsSent     map[string][]*protocol.ProjectScope // by node, the projects its daemon was last told; UI goroutine only
-	ImageOpen        *ggui.StateValue[bool]              // the previewed image is shown enlarged
 	Shell            *shellView                          // a background command shown in full; see tasks.go
 	NewOpen          *ggui.StateValue[bool]
 	Form             *ggui.StateValue[newSession]
@@ -260,85 +198,65 @@ func newModel(cfg *config.Config, addr string) *model {
 	}
 	p := loadPrefs()
 	m := &model{
-		cfg:            cfg,
-		link:           newDaemonLink(addr, p.Daemon),
-		Prefs:          ggui.State(p),
-		Spaces:         ggui.State(spaceList{}).WithEqual(func(a, b spaceList) bool { return reflect.DeepEqual(a, b) }),
-		Themes:         ggui.State(loadThemes()).WithEqual(maps.Equal),
-		ThemesRead:     ggui.State(0),
-		Page:           ggui.State("workspace"),
-		Section:        ggui.State("general"),
-		Host:           ggui.State(draftFrom(cfg)),
-		AgentDraft:     ggui.State(draftAgents(cfg.Agents)).WithEqual(slices.Equal),
-		HostNote:       ggui.State(""),
-		RenameOpen:     ggui.State(false),
-		RenameText:     ggui.State(""),
-		RenameErr:      ggui.State(""),
-		QuitOpen:       ggui.State(false),
-		FindOpen:       ggui.State(false),
-		FindText:       ggui.State(""),
-		PaletteOpen:    ggui.State(false),
-		PaletteQuery:   ggui.State(""),
-		ExtensionsOpen: ggui.State(false),
-		QuickOpen:      ggui.State(false),
-		QuickQuery:     ggui.State(""),
-		SearchQuery:    ggui.State(""),
-		Search:         ggui.State(searchView{}).WithEqual(deepEqual),
-		Docs:           ggui.State(map[string]docInfo{}).WithEqual(maps.Equal),
-		docs:           map[string]*document{},
-		Diffs:          ggui.State(map[string]diffTab{}).WithEqual(deepEqual),
-		hl:             newHighlighter(),
-		ExtResults:     ggui.State(extSearch{}).WithEqual(func(a, b extSearch) bool { return reflect.DeepEqual(a, b) }),
-		ExtBusy:        ggui.State(map[string]bool{}).WithEqual(maps.Equal),
-		ExtErr:         ggui.State(""),
-		ExtQuery:       ggui.State(""),
-		ExtShow:        ggui.State(extShowAll),
-		ExtKind:        ggui.State(""),
-		MCPServers:     ggui.State(maps.Clone(cfg.ContextServers)).WithEqual(func(a, b map[string]mcp.Server) bool { return reflect.DeepEqual(a, b) }),
-		MCPInfo:        ggui.State(map[string]mcpInfo(nil)).WithEqual(func(a, b map[string]mcpInfo) bool { return reflect.DeepEqual(a, b) }),
-		MCPNote:        ggui.State(""),
-		Extensions:     ggui.State([]zed.Extension(nil)).WithEqual(func(a, b []zed.Extension) bool { return reflect.DeepEqual(a, b) }),
-		DaemonState:    ggui.State(daemonState{}),
-		DaemonLog:      ggui.State([]string(nil)).WithEqual(slices.Equal),
-		embedded:       newEmbeddedDaemon(),
-		toaster:        ui.NewToaster(),
-		layouts:        map[string]*layoutNode{},
-		contexts:       map[string]string{},
-		tabNodes:       map[string]string{},
-		missing:        map[string]time.Time{},
-		Conn:           ggui.State(connState{}).WithEqual(deepEqual),
-		Nodes:          ggui.State([]*protocol.Node(nil)).WithEqual(protocol.Equal),
-		Access:         ggui.State((*protocol.AccessInfo)(nil)).WithEqual(func(a, b *protocol.AccessInfo) bool { return proto.Equal(a, b) }),
-		Devices:        ggui.State(deviceList{}).WithEqual(deepEqual[deviceList]),
-		AccessNote:     ggui.State(""),
-		AccessKey:      ggui.State(""),
-		asked:          map[string]ui.ToastID{},
-		Sessions:       ggui.State([]*protocol.SessionInfo(nil)).WithEqual(protocol.Equal),
-		Agents:         ggui.State(agentspec.Targets(cfg.Agents)).WithEqual(slices.Equal),
-		Selected:       ggui.State(""),
-		Tabs:           ggui.State([]string(nil)).WithEqual(slices.Equal),
-		Layout:         ggui.State(newLayout()).WithEqual(func(a, b *layoutNode) bool { return reflect.DeepEqual(a, b) }),
-		FocusGroup:     ggui.State(1),
-		Dragging:       ggui.State(false),
-		TabHint:        ggui.State(tabHint{}),
-		Attached:       ggui.State([]string(nil)).WithEqual(slices.Equal),
-		Titles:         ggui.State(map[string]string{}).WithEqual(func(a, b map[string]string) bool { return reflect.DeepEqual(a, b) }),
-		Unread:         ggui.State(map[string]bool{}).WithEqual(maps.Equal),
-		Printed:        ggui.State(map[string]time.Time{}).WithEqual(func(a, b map[string]time.Time) bool { return reflect.DeepEqual(a, b) }),
-		Minute:         ggui.State(time.Now().Truncate(time.Minute)),
-		ChatModes:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
-		chats:          map[string]*chatState{},
-		chatImages:     map[string]*ggui.StateValue[mdImage]{},
-		usages:         map[string]*usageState{},
-		Dirs:           ggui.State(map[string]dirListing{}).WithEqual(deepEqual),
-		FilesOpen:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
-		FileSel:        ggui.State(""),
-		Preview:        ggui.State(filePreview{}).WithEqual(filePreview.same),
-		FileOps:        newFileOps(),
-		FileNote:       ggui.State(""),
-		FileClip:       ggui.State(pathDrag{}),
-		git:            newGitState(),
-		RepoPick:       ggui.State(repoPick{}),
+		cfg:         cfg,
+		link:        newDaemonLink(addr, p.Daemon),
+		Prefs:       ggui.State(p),
+		Spaces:      ggui.State(spaceList{}).WithEqual(func(a, b spaceList) bool { return reflect.DeepEqual(a, b) }),
+		Themes:      ggui.State(loadThemes()).WithEqual(maps.Equal),
+		ThemesRead:  ggui.State(0),
+		Page:        ggui.State("workspace"),
+		Section:     ggui.State("general"),
+		Host:        ggui.State(draftFrom(cfg)),
+		AgentDraft:  ggui.State(draftAgents(cfg.Agents)).WithEqual(slices.Equal),
+		HostNote:    ggui.State(""),
+		RenameOpen:  ggui.State(false),
+		RenameText:  ggui.State(""),
+		RenameErr:   ggui.State(""),
+		QuitOpen:    ggui.State(false),
+		FindOpen:    ggui.State(false),
+		FindText:    ggui.State(""),
+		SearchQuery: ggui.State(""),
+		Search:      ggui.State(searchView{}).WithEqual(deepEqual),
+		Docs:        ggui.State(map[string]docInfo{}).WithEqual(maps.Equal),
+		docs:        map[string]*document{},
+		Diffs:       ggui.State(map[string]diffTab{}).WithEqual(deepEqual),
+		pickers:     newPickerState(),
+		ext:         newExtState(cfg),
+		files:       newFilesState(),
+		ws:          newWsState(),
+		hl:          newHighlighter(),
+		DaemonState: ggui.State(daemonState{}),
+		DaemonLog:   ggui.State([]string(nil)).WithEqual(slices.Equal),
+		embedded:    newEmbeddedDaemon(),
+		toaster:     ui.NewToaster(),
+		tabNodes:    map[string]string{},
+		missing:     map[string]time.Time{},
+		Conn:        ggui.State(connState{}).WithEqual(deepEqual),
+		Nodes:       ggui.State([]*protocol.Node(nil)).WithEqual(protocol.Equal),
+		Access:      ggui.State((*protocol.AccessInfo)(nil)).WithEqual(func(a, b *protocol.AccessInfo) bool { return proto.Equal(a, b) }),
+		Devices:     ggui.State(deviceList{}).WithEqual(deepEqual[deviceList]),
+		AccessNote:  ggui.State(""),
+		AccessKey:   ggui.State(""),
+		asked:       map[string]ui.ToastID{},
+		Sessions:    ggui.State([]*protocol.SessionInfo(nil)).WithEqual(protocol.Equal),
+		Agents:      ggui.State(agentspec.Targets(cfg.Agents)).WithEqual(slices.Equal),
+		Selected:    ggui.State(""),
+		Tabs:        ggui.State([]string(nil)).WithEqual(slices.Equal),
+		Layout:      ggui.State(newLayout()).WithEqual(func(a, b *layoutNode) bool { return reflect.DeepEqual(a, b) }),
+		FocusGroup:  ggui.State(1),
+		Dragging:    ggui.State(false),
+		TabHint:     ggui.State(tabHint{}),
+		Attached:    ggui.State([]string(nil)).WithEqual(slices.Equal),
+		Titles:      ggui.State(map[string]string{}).WithEqual(func(a, b map[string]string) bool { return reflect.DeepEqual(a, b) }),
+		Unread:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		Printed:     ggui.State(map[string]time.Time{}).WithEqual(func(a, b map[string]time.Time) bool { return reflect.DeepEqual(a, b) }),
+		Minute:      ggui.State(time.Now().Truncate(time.Minute)),
+		ChatModes:   ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		chats:       map[string]*chatState{},
+		chatImages:  map[string]*ggui.StateValue[mdImage]{},
+		usages:      map[string]*usageState{},
+		git:         newGitState(),
+		RepoPick:    ggui.State(repoPick{}),
 		// Its functions do not compare: each asking is new.
 		Confirmation:  ggui.State(confirmation{}).WithEqual(func(a, b confirmation) bool { return false }),
 		AgentsSplit:   ggui.State(0.4),
@@ -350,7 +268,6 @@ func newModel(cfg *config.Config, addr string) *model {
 		ProjectAgents: ggui.State(projectAgentsView{}).WithEqual(deepEqual),
 		Forge:         newForgeState(),
 		Tunnels:       newTunnelState(),
-		ImageOpen:     ggui.State(false),
 		Shell:         newShellView(),
 		NewOpen:       ggui.State(false),
 		Form:          ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),
@@ -657,10 +574,10 @@ func (m *model) openSettings(section string) {
 // shutdown detaches every terminal, hangs up, and stops the app's daemon
 // with the sessions it runs.
 func (m *model) shutdown() {
-	if m.wsTimer != nil {
-		m.wsTimer.Stop()
+	if m.ws.timer != nil {
+		m.ws.timer.Stop()
 	}
-	m.wsWrites.Wait()
+	m.ws.writes.Wait()
 	defer m.embedded.stop()
 	defer m.hl.close()
 	defer m.closeTunnels()

@@ -545,10 +545,10 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 // extensions' and those configured with a command, sorted.
 func (m *model) mcpServerIDs() []string {
 	var ids []string
-	for _, e := range m.Extensions.Get() {
+	for _, e := range m.ext.Installed.Get() {
 		ids = append(ids, e.ContextServerIDs()...)
 	}
-	for id, s := range m.MCPServers.Get() {
+	for id, s := range m.ext.MCPServers.Get() {
 		if s.Command != nil && !slices.Contains(ids, id) {
 			ids = append(ids, id)
 		}
@@ -595,7 +595,7 @@ func profileServers(m *model, id int, name string) ggui.Widget {
 				d.PickServers = v
 				if v && d.Servers == "" { // start from what it gets now
 					var on []string
-					servers := ggui.Peek(m.MCPServers)
+					servers := ggui.Peek(m.ext.MCPServers)
 					for _, s := range m.mcpServerIDs() {
 						if servers[s].On() {
 							on = append(on, s)

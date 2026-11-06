@@ -78,12 +78,12 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 	// Files: a file made through the context menu's dialog.
 	root := ggui.Untrack(m.filesRoot)
 	m.askFile(protocol.FileCreate, fileItem{Key: dirKey(root.Node, root.Path), Node: root.Node, Path: root.Path, Name: "project", Dir: true})
-	m.FileOps.Name.Set("made.txt")
+	m.files.Ops.Name.Set("made.txt")
 	p.Frame()
 	m.submitFile()
 	probeUntil(t, p, "the new file", func() bool {
 		_, err := os.Stat(filepath.Join(project, "made.txt"))
-		return err == nil && !ggui.Peek(m.FileOps.NameOpen)
+		return err == nil && !ggui.Peek(m.files.Ops.NameOpen)
 	})
 
 	m.DetailTab.Set(gitTab)

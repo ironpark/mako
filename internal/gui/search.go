@@ -35,27 +35,27 @@ func (m *model) openQuickOpen() {
 	if root.Path == "" {
 		return
 	}
-	m.QuickQuery.Set("")
-	cur := m.quickFiles
+	m.pickers.QuickQuery.Set("")
+	cur := m.pickers.quickFiles
 	if cur.Root != root {
 		cur = quickFiles{Root: root}
 	}
 	cur.Loading = true
-	m.quickFiles = cur
+	m.pickers.quickFiles = cur
 	m.refreshQuick()
-	m.QuickOpen.Set(true)
+	m.pickers.QuickOpen.Set(true)
 	req := &protocol.Search{NodeId: m.remoteID(root.Node), Root: root.Path, Files: true}
 	fetch(m, 25*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SearchResult, error) {
 		return c.Search(ctx, req)
 	}, func(r *protocol.SearchResult, err error) {
-		if m.quickFiles.Root != root {
+		if m.pickers.quickFiles.Root != root {
 			return
 		}
 		next := quickFiles{Root: root, Files: r.GetFiles()}
 		if err != nil {
-			next.Files, next.Err = m.quickFiles.Files, nodeErr(err)
+			next.Files, next.Err = m.pickers.quickFiles.Files, nodeErr(err)
 		}
-		m.quickFiles = next
+		m.pickers.quickFiles = next
 		m.refreshQuick()
 	})
 }
@@ -65,15 +65,15 @@ const maxQuick = 80
 
 // refreshQuick lists the files that match what is typed again.
 func (m *model) refreshQuick() {
-	if m.quick != nil {
-		m.quick.refresh()
+	if m.pickers.quick != nil {
+		m.pickers.quick.refresh()
 	}
 }
 
 // quickRows are the files that match q, best first: the name and the
 // folder it is in, their letters typed marked.
 func (m *model) quickRows(q string) []pickRow {
-	qf := m.quickFiles
+	qf := m.pickers.quickFiles
 	var rows []pickRow
 	for _, f := range rankFiles(qf.Files, q, maxQuick) {
 		p := f.Path
@@ -134,12 +134,12 @@ func rankFiles(paths []string, q string, n int) []rankedFile {
 
 // quickOpenDialog is quick open over the window.
 func quickOpenDialog(m *model) ggui.Widget {
-	m.quick = newPicker(m.QuickOpen, m.QuickQuery, m.quickRows)
-	m.quick.Placeholder = T("Go to a file by its name…")
-	m.quick.Name = T("Go to file")
-	m.quick.Empty = T("No files match")
-	m.quick.Action = T("Open")
-	return m.quick.dialog()
+	m.pickers.quick = newPicker(m.pickers.QuickOpen, m.pickers.QuickQuery, m.quickRows)
+	m.pickers.quick.Placeholder = T("Go to a file by its name…")
+	m.pickers.quick.Name = T("Go to file")
+	m.pickers.quick.Empty = T("No files match")
+	m.pickers.quick.Action = T("Open")
+	return m.pickers.quick.dialog()
 }
 
 // searchView is what the Search tab last found.

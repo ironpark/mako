@@ -84,7 +84,7 @@ func (m *model) moveInto(d pathDrag, dir fileItem) {
 		return c.FileOp(ctx, req)
 	}, func(_ *protocol.File, err error) {
 		if err != nil {
-			m.FileNote.Set(nodeErr(err))
+			m.files.Note.Set(nodeErr(err))
 			return
 		}
 		m.loadDir(d.Node, parentDir(d.Path), true)

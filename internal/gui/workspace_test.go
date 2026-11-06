@@ -64,7 +64,7 @@ func TestANewerWorkspaceIsTakenUp(t *testing.T) {
 		allSpaceID: {ID: 1, Group: &tabGroup{ID: 1, Tabs: []string{"theirs", "diff\x00x"}, Active: "theirs"}},
 	}}
 	body, _ := json.Marshal(workspaceFile{Version: 1, NodeID: "b", Doc: other})
-	m.wsVersion = 2
+	m.ws.version = 2
 	m.takeWorkspace(&protocol.Workspace{Doc: body, Version: 1, NodeId: "b"})
 	if tabs := ggui.Peek(m.Tabs); !slices.Equal(tabs, []string{"mine"}) {
 		t.Fatalf("an older workspace was taken up: %v", tabs)
@@ -79,8 +79,8 @@ func TestANewerWorkspaceIsTakenUp(t *testing.T) {
 	}
 	// Taken up, it is no edit of the window's to send back.
 	p.Frame()
-	if m.wsVersion != newer || m.wsNode != "b" {
-		t.Fatalf("version %v %q after taking one up", m.wsVersion, m.wsNode)
+	if m.ws.version != newer || m.ws.node != "b" {
+		t.Fatalf("version %v %q after taking one up", m.ws.version, m.ws.node)
 	}
 	m.Prefs.Update(func(p prefs) prefs { p.SyncWorkspace = false; return p })
 	m.takeWorkspace(&protocol.Workspace{Doc: []byte(`{"doc":{}}`), Version: newer + 1, NodeId: "c"})
@@ -156,7 +156,7 @@ func TestContextsAndOldSpacesCarryOver(t *testing.T) {
 	p.Frame()
 	m.selectSession("b1")
 	m.writeWorkspace()
-	m.wsWrites.Wait() // all queued writes have reached disk
+	m.ws.writes.Wait() // all queued writes have reached disk
 
 	restart := func(prep func(*model)) *model {
 		again := newModel(config.Default(), "")
