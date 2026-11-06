@@ -26,7 +26,7 @@ func gitPanel(m *model) ggui.Widget {
 	// sessions in it are in, which their node's state brings within a few
 	// seconds.
 	stamp := ggui.Derived(func() string {
-		return repoStamp(m.Sessions.Get(), root.Get(), m.Git.Get().Changes.GetRoot())
+		return repoStamp(m.Sessions.Get(), root.Get(), m.git.View.Get().Changes.GetRoot())
 	})
 	pollWhileShown(m, root, gitTab, gitRefresh, m.loadGit, stamp)
 	pollWhileShown(m, root, gitTab, historyRefresh, m.loadHistory, stamp)
@@ -39,32 +39,32 @@ func gitPanel(m *model) ggui.Widget {
 }
 
 func gitTabView(m *model) ggui.Widget {
-	count := ggui.Map(m.Git, func(v gitView) int { return len(v.Changes.GetFiles()) })
+	count := ggui.Map(m.git.View, func(v gitView) int { return len(v.Changes.GetFiles()) })
 	changesHead := ggui.View(count, func(n int) ggui.Widget {
-		return foldSection(m.GitChangesOpen, T("Changes"), n)
+		return foldSection(m.git.ChangesOpen, T("Changes"), n)
 	})
 	tree := changesTree(m)
 	sections := ggui.Column(
 		changesHead,
-		ggui.If(m.GitChangesOpen, func() ggui.Widget { return tree }),
-		stashSection(m, m.GitStashOpen),
-		branchSection(m, m.GitBranchOpen),
+		ggui.If(m.git.ChangesOpen, func() ggui.Widget { return tree }),
+		stashSection(m, m.git.StashOpen),
+		branchSection(m, m.git.BranchOpen),
 	).Stretch()
 	top := ggui.Column(
 		ggui.Expanded(ggui.Scroll(ggui.Padding(sections, 2, 0, 6, 0)).Bar(tokSurface3)),
 		commitBox(m),
 	).Stretch()
 
-	historyHead := foldSection(m.GitHistoryOpen, T("History"), 0,
-		iconButton("refresh-cw", T("Refresh"), func() { m.loadHistory(ggui.Peek(m.GitHistory).Root) }))
+	historyHead := foldSection(m.git.HistoryOpen, T("History"), 0,
+		iconButton("refresh-cw", T("Refresh"), func() { m.loadHistory(ggui.Peek(m.git.History).Root) }))
 	history := historyBody(m)
-	body := ggui.View(m.GitHistoryOpen, func(open bool) ggui.Widget {
+	body := ggui.View(m.git.HistoryOpen, func(open bool) ggui.Widget {
 		if !open {
 			return ggui.Column(ggui.Expanded(top), hline(), historyHead).Stretch()
 		}
 		// The divider between them draws the line over the history.
 		bottom := ggui.Column(historyHead, ggui.Expanded(history)).Stretch()
-		return ui.Resizable(m.GitSplit, top, bottom).Vertical().MinSizes(140, 120).Hairline().Name(T("History divider"))
+		return ui.Resizable(m.git.Split, top, bottom).Vertical().MinSizes(140, 120).Hairline().Name(T("History divider"))
 	})
 	return ggui.Column(
 		gitHeader(m),
@@ -102,7 +102,7 @@ func repoStamp(sessions []*protocol.SessionInfo, root fileRoot, top string) stri
 // gitTabRefresh reads the Git tab's changes and history again, after an
 // operation that changes either.
 func (m *model) gitTabRefresh() {
-	root := ggui.Peek(m.Git).Root
+	root := ggui.Peek(m.git.View).Root
 	m.loadGit(root)
 	if ggui.Peek(m.DetailTab) == gitTab {
 		m.loadHistory(root)

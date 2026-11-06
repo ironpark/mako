@@ -40,19 +40,19 @@ func (m *model) loadGit(root fileRoot) {
 	if root.Path == "" {
 		return
 	}
-	v := ggui.Peek(m.Git)
-	if m.gitReading && v.Root == root {
+	v := ggui.Peek(m.git.View)
+	if m.git.reading && v.Root == root {
 		return
 	}
-	base := ggui.Peek(m.GitBase)
+	base := ggui.Peek(m.git.Base)
 	if v.Root != root {
 		// A commit drafted for another project is not this one's, nor is
 		// the base it was compared with.
 		v = gitView{Root: root}
-		m.GitSkip.Set(map[string]bool{})
-		m.GitMessage.Set("")
-		m.GitAmend.Set(false)
-		m.GitBase.Set("")
+		m.git.Skip.Set(map[string]bool{})
+		m.git.Message.Set("")
+		m.git.Amend.Set(false)
+		m.git.Base.Set("")
 		base = ""
 	}
 	if v.Base != base {
@@ -64,21 +64,21 @@ func (m *model) loadGit(root fileRoot) {
 	if v.Changes == nil {
 		v.Loading = true
 	}
-	m.Git.Set(v)
-	m.gitReading = true
+	m.git.View.Set(v)
+	m.git.reading = true
 	req := &protocol.GitStatus{NodeId: m.remoteID(root.Node), Path: root.Path, Base: base}
 	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitChanges, error) {
 		return c.GitStatus(ctx, req)
 	}, func(ch *protocol.GitChanges, err error) {
-		m.gitReading = false
-		if cur := ggui.Peek(m.Git); cur.Root != root || cur.Base != base {
+		m.git.reading = false
+		if cur := ggui.Peek(m.git.View); cur.Root != root || cur.Base != base {
 			return // another project, or base, is shown now
 		}
 		next := gitView{Root: root, Base: base, Changes: ch}
 		if err != nil {
-			next.Changes, next.Err = ggui.Peek(m.Git).Changes, err.Error()
+			next.Changes, next.Err = ggui.Peek(m.git.View).Changes, err.Error()
 		}
-		m.Git.Set(next)
+		m.git.View.Set(next)
 		if err == nil {
 			m.followChanges(next)
 		}
@@ -87,7 +87,7 @@ func (m *model) loadGit(root fileRoot) {
 
 // openDiff shows a changed file's diff in a tab.
 func (m *model) openDiff(f *protocol.GitFile) {
-	v := ggui.Peek(m.Git)
+	v := ggui.Peek(m.git.View)
 	m.openDiffTab(v.Root, v.Changes.GetRoot(), "", v.Base, f, true)
 }
 
@@ -229,7 +229,7 @@ func (m *model) every(period time.Duration, fn func()) ggui.Cleanup {
 // the next commit, its diff a click away and more in its menu.
 func changesTree(m *model) ggui.Widget {
 	// A refresh that changes nothing, as most do, leaves the tree be.
-	files := ggui.Map(m.Git, func(v gitView) []*protocol.GitFile { return v.Changes.GetFiles() }).WithEqual(protocol.Equal)
+	files := ggui.Map(m.git.View, func(v gitView) []*protocol.GitFile { return v.Changes.GetFiles() }).WithEqual(protocol.Equal)
 	roots := ggui.Map(files, gitTree)
 	tree := ui.Tree(roots, func(it gitItem) string { return it.Key }, func(it gitItem) []gitItem { return it.Children },
 		func(item ggui.Readable[gitItem]) ggui.Widget {
@@ -239,7 +239,7 @@ func changesTree(m *model) ggui.Widget {
 				var tail ggui.Widget = ggui.Box().Width(14)
 				if it.Dir {
 					// A folder says it is open by its icon, as the file tree's does.
-					lead = icon(pick(m.GitClosed.Get()[it.Key], "folder", "folder-open")).Size(14)
+					lead = icon(pick(m.git.Closed.Get()[it.Key], "folder", "folder-open")).Size(14)
 				} else {
 					tail = statusIcon(it.File.GetStatus())
 				}
@@ -251,7 +251,7 @@ func changesTree(m *model) ggui.Widget {
 				if !it.Dir && it.File.GetStatus() == protocol.GitDeleted {
 					name = name.Color(tokMuted)
 				}
-				if ggui.Peek(m.GitBase) != "" {
+				if ggui.Peek(m.git.Base) != "" {
 					// Since a base, the files are the branch's work, not a commit's pick.
 					return ggui.Row(lead, ggui.Expanded(name), numbers, tail).Gap(7)
 				}
@@ -261,20 +261,20 @@ func changesTree(m *model) ggui.Widget {
 		}).
 		RowName(func(it gitItem) string { return it.Name }).
 		RowHeight(26).Indent(14).Chevrons(false).
-		BindCollapsed(m.GitClosed). // folders start open
-		BindSelected(m.GitSel).
+		BindCollapsed(m.git.Closed). // folders start open
+		BindSelected(m.git.Sel).
 		OnSelect(func(it gitItem) {
 			if it.Dir {
-				closed := maps.Clone(ggui.Peek(m.GitClosed))
+				closed := maps.Clone(ggui.Peek(m.git.Closed))
 				closed[it.Key] = !closed[it.Key]
-				m.GitClosed.Set(closed)
+				m.git.Closed.Set(closed)
 				return
 			}
 			m.openDiff(it.File)
 		}).
 		Name(T("Changes"))
 	return ggui.Reactive(func() ggui.Widget {
-		v := m.Git.Get()
+		v := m.git.View.Get()
 		var note string
 		switch {
 		case v.Changes.GetNotRepo():
@@ -307,7 +307,7 @@ func gitHeader(m *model) ggui.Widget {
 		Worktree         *protocol.Worktree // the session's own, for its actions
 	}
 	head := ggui.Derived(func() headed {
-		v := m.Git.Get()
+		v := m.git.View.Get()
 		c := v.Changes
 		return headed{v.Root, cmp.Or(c.GetBranch(), projectName(v.Root.Path)), c.GetUpstream(),
 			c.GetRoot() != "" && !c.GetNotRepo(), int(c.GetAhead()), int(c.GetBehind()), c.GetBranches(), v.Base, m.worktreeAt(v.Root)}
@@ -329,7 +329,7 @@ func gitHeader(m *model) ggui.Widget {
 		run := func(op, label string) func() {
 			return func() { m.gitRun(&protocol.GitRun{Op: op}, label, nil) }
 		}
-		files := func() []*protocol.GitFile { return ggui.Peek(m.Git).Changes.GetFiles() }
+		files := func() []*protocol.GitFile { return ggui.Peek(m.git.View).Changes.GetFiles() }
 		items := []ggui.Widget{
 			ui.MenuItem(T("Fetch"), run(protocol.GitOpFetch, T("Fetching…"))),
 			ui.MenuItem(T("Pull"), run(protocol.GitOpPull, T("Pulling…"))),
@@ -361,7 +361,7 @@ func gitHeader(m *model) ggui.Widget {
 				label = Tf("since %s", base)
 			}
 			against = ui.Tooltip(ui.Button(label, func() {
-				m.GitBase.Set(pick(h.Base == "", base, ""))
+				m.git.Base.Set(pick(h.Base == "", base, ""))
 				m.loadGit(h.Root)
 			}).Ghost(), T("Compare with HEAD, or with the branch the worktree started from"))
 		}
@@ -408,7 +408,7 @@ func fileCounts(f *protocol.GitFile) ggui.Widget {
 // or for a folder all its files, some of them showing as a dash.
 func pickBox(m *model, it gitItem) ggui.Widget {
 	paths := itemPaths(it, nil)
-	state := ggui.Map(m.GitSkip, func(skipped map[string]bool) int {
+	state := ggui.Map(m.git.Skip, func(skipped map[string]bool) int {
 		n := 0
 		for _, p := range paths {
 			if skipped[p] {
@@ -443,21 +443,21 @@ func quietBox(box ggui.Widget) ggui.Widget {
 // commitBox is the message and the button that commits the files picked.
 func commitBox(m *model) ggui.Widget {
 	// Under a merge or rebase, the banner over the tab goes on with it.
-	hidden := ggui.Map(m.Git, func(v gitView) bool {
+	hidden := ggui.Map(m.git.View, func(v gitView) bool {
 		return v.Changes.GetRoot() == "" || v.Changes.GetNotRepo() || v.Base != "" || v.Changes.GetOperation() != ""
 	})
-	field := ui.TextField(m.GitMessage).Multiline().Lines(3).Placeholder(T("Commit message")).Name(T("Commit message"))
+	field := ui.TextField(m.git.Message).Multiline().Lines(3).Placeholder(T("Commit message")).Name(T("Commit message"))
 	// The button changes with what a commit would take, not each key typed.
 	type ready struct {
 		Files       int
 		Typed, Busy bool
 	}
 	state := ggui.Derived(func() ready {
-		return ready{picked(m.Git.Get().Changes.GetFiles(), m.GitSkip.Get()),
-			strings.TrimSpace(m.GitMessage.Get()) != "", m.GitBusy.Get() != ""}
+		return ready{picked(m.git.View.Get().Changes.GetFiles(), m.git.Skip.Get()),
+			strings.TrimSpace(m.git.Message.Get()) != "", m.git.Busy.Get() != ""}
 	})
 	button := ggui.Reactive(func() ggui.Widget {
-		r, amend := state.Get(), m.GitAmend.Get()
+		r, amend := state.Get(), m.git.Amend.Get()
 		label := Tf("Commit %d files", r.Files)
 		switch {
 		case amend:
@@ -470,7 +470,7 @@ func commitBox(m *model) ggui.Widget {
 	})
 	box := ggui.Column(
 		field,
-		ggui.Row(ui.Checkbox(m.GitAmend, T("Amend")), ggui.Spacer(), button).Gap(8).Align(ggui.AlignCenter),
+		ggui.Row(ui.Checkbox(m.git.Amend, T("Amend")), ggui.Spacer(), button).Gap(8).Align(ggui.AlignCenter),
 	).Gap(8).Stretch()
 	return ggui.If(hidden, func() ggui.Widget { return ggui.Box() }).
 		Else(func() ggui.Widget { return ggui.Column(hline(), ggui.Box(box).Pad(10, 12)).Stretch() })

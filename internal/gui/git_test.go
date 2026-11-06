@@ -87,19 +87,19 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 	})
 
 	m.DetailTab.Set(gitTab)
-	probeUntil(t, p, "changes", func() bool { return len(ggui.Peek(m.Git).Changes.GetFiles()) == 3 })
+	probeUntil(t, p, "changes", func() bool { return len(ggui.Peek(m.git.View).Changes.GetFiles()) == 3 })
 
 	// Commit main.go and made.txt, leaving notes.txt out.
 	p.Tap(Tf("Commit %s", "notes.txt"))
 	p.Frame()
-	if !ggui.Peek(m.GitSkip)["notes.txt"] || len(ggui.Peek(m.Diffs)) != 0 {
-		t.Fatalf("the box: skipped %v, diffs %v", ggui.Peek(m.GitSkip), ggui.Peek(m.Diffs))
+	if !ggui.Peek(m.git.Skip)["notes.txt"] || len(ggui.Peek(m.Diffs)) != 0 {
+		t.Fatalf("the box: skipped %v, diffs %v", ggui.Peek(m.git.Skip), ggui.Peek(m.Diffs))
 	}
-	m.GitMessage.Set("Fill in main")
+	m.git.Message.Set("Fill in main")
 	p.Frame()
 	p.Tap(T("Commit 2 files"))
-	probeUntil(t, p, "the commit", func() bool { return ggui.Peek(m.GitBusy) == "" && ggui.Peek(m.GitMessage) == "" })
-	if n := ggui.Peek(m.GitNote); n.Err {
+	probeUntil(t, p, "the commit", func() bool { return ggui.Peek(m.git.Busy) == "" && ggui.Peek(m.git.Message) == "" })
+	if n := ggui.Peek(m.git.Note); n.Err {
 		t.Fatalf("commit failed: %s", n.Text)
 	}
 	if st := strings.TrimSpace(git("status", "--porcelain")); st != "?? notes.txt" {
@@ -109,15 +109,15 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 		t.Fatalf("last commit %q", log)
 	}
 
-	probeUntil(t, p, "history", func() bool { return len(ggui.Peek(m.GitHistory).History.GetCommits()) == 5 })
+	probeUntil(t, p, "history", func() bool { return len(ggui.Peek(m.git.History).History.GetCommits()) == 5 })
 	p.Frame()
-	h := ggui.Peek(m.GitHistory).History
+	h := ggui.Peek(m.git.History).History
 	if h.GetCurrent() != "main" || h.GetCommits()[0].GetSubject() != "Fill in main" || len(h.GetCommits()[1].GetParents()) != 2 {
 		t.Fatalf("history %+v", h)
 	}
 	m.openCommit(h.GetCommits()[1].GetHash())
-	probeUntil(t, p, "the merge", func() bool { c := ggui.Peek(m.GitCommit); return !c.Loading && c.Info.GetCommit().GetHash() != "" })
-	m.openCommitFile(ggui.Peek(m.GitCommit).Info.GetFiles()[0])
+	probeUntil(t, p, "the merge", func() bool { c := ggui.Peek(m.git.Commit); return !c.Loading && c.Info.GetCommit().GetHash() != "" })
+	m.openCommitFile(ggui.Peek(m.git.Commit).Info.GetFiles()[0])
 	diff := ggui.Peek(m.Selected)
 	probeUntil(t, p, "its diff", func() bool { d, ok := ggui.Peek(m.Diffs)[diff]; return ok && !d.Loading })
 	if d := ggui.Peek(m.Diffs)[diff]; d.Err != "" || len(d.Diff.GetLines()) == 0 || d.Commit != h.GetCommits()[1].GetHash() {
@@ -134,21 +134,21 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 
 	// A new branch from the header's menu, switched to.
 	m.askBranch("")
-	m.GitAskText.Set("next")
+	m.git.AskText.Set("next")
 	m.submitAsk()
-	probeUntil(t, p, "the branch", func() bool { return ggui.Peek(m.GitHistory).History.GetCurrent() == "next" })
+	probeUntil(t, p, "the branch", func() bool { return ggui.Peek(m.git.History).History.GetCurrent() == "next" })
 
 	// notes.txt stashed under a message, then popped back.
 	m.askStash()
-	m.GitAskText.Set("notes for later")
+	m.git.AskText.Set("notes for later")
 	m.submitAsk()
 	probeUntil(t, p, "the stash", func() bool {
-		c := ggui.Peek(m.Git).Changes
+		c := ggui.Peek(m.git.View).Changes
 		return len(c.GetStashes()) == 1 && len(c.GetFiles()) == 0
 	})
 	m.gitRun(&protocol.GitRun{Op: protocol.GitOpStashPop, Stash: 0}, "", nil)
 	probeUntil(t, p, "the pop", func() bool {
-		c := ggui.Peek(m.Git).Changes
+		c := ggui.Peek(m.git.View).Changes
 		return len(c.GetStashes()) == 0 && len(c.GetFiles()) == 1
 	})
 	// Discarding asks first, then removes the new file.
@@ -157,7 +157,7 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 		t.Fatal("discarding did not ask")
 	}
 	ggui.Peek(m.Confirmation).Run()
-	probeUntil(t, p, "the discard", func() bool { return len(ggui.Peek(m.Git).Changes.GetFiles()) == 0 })
+	probeUntil(t, p, "the discard", func() bool { return len(ggui.Peek(m.git.View).Changes.GetFiles()) == 0 })
 	if _, err := os.Stat(filepath.Join(project, "notes.txt")); !os.IsNotExist(err) {
 		t.Fatal("notes.txt is still there")
 	}

@@ -224,44 +224,14 @@ type model struct {
 	MCPNote    *ggui.StateValue[string]
 	mcpTexts   map[string]*ggui.StateValue[string]
 
-	// The Changes tab: the project's changes, the folders closed in their
-	// tree, and the row chosen.
-	Git       *ggui.StateValue[gitView]
-	GitClosed *ggui.StateValue[map[string]bool]
-	GitSel    *ggui.StateValue[string]
-	// The files left out of the next commit, its message, and whether it
-	// amends the last; the operation under way and what the last said.
-	GitSkip    *ggui.StateValue[map[string]bool]
-	GitMessage *ggui.StateValue[string]
-	GitAmend   *ggui.StateValue[bool]
-	GitBusy    *ggui.StateValue[string]
-	GitBase    *ggui.StateValue[string] // the branch the changes are read since, "" for HEAD
-	RepoPick   *ggui.StateValue[repoPick]
+	git      *gitState // the Git panel's; see gitstate.go
+	RepoPick *ggui.StateValue[repoPick]
 	// Roots are the folders the Files, Git and forge tabs show; see
 	// panelRoots.
-	Roots   *ggui.DerivedValue[panelRoots] // the project's folder the tab shows; see repoFolder
-	GitNote *ggui.StateValue[gitNote]
-	// A name a git operation asks for; see gitactions.go.
-	GitAsk     *ggui.StateValue[gitAsk]
-	GitAskOpen *ggui.StateValue[bool]
-	GitAskText *ggui.StateValue[string]
-	GitAskErr  *ggui.StateValue[string]
+	Roots *ggui.DerivedValue[panelRoots] // the project's folder the tab shows; see repoFolder
 	// An operation that loses work, asking to be sure; see confirm.go.
 	Confirmation *ggui.StateValue[confirmation]
-	// The Git tab's sections, open or folded, and how its height is split.
-	GitChangesOpen *ggui.StateValue[bool]
-	GitHistoryOpen *ggui.StateValue[bool]
-	GitStashOpen   *ggui.StateValue[bool]
-	GitBranchOpen  *ggui.StateValue[bool]
-	GitSplit       *ggui.StateValue[float64]
-	AgentsSplit    *ggui.StateValue[float64] // the agents panel's agents over its messages
-	// The History tab: the commits, and the one chosen.
-	GitHistory *ggui.StateValue[historyView]
-	GitCommit  *ggui.StateValue[commitView]
-	// historyReading is set while the history is asked for, and gitReading
-	// while the changes are; UI goroutine only.
-	historyReading bool
-	gitReading     bool
+	AgentsSplit  *ggui.StateValue[float64] // the agents panel's agents over its messages
 
 	SidebarOpen *ggui.StateValue[bool]
 	DetailsOpen *ggui.StateValue[bool]
@@ -392,47 +362,28 @@ func newModel(cfg *config.Config, addr string) *model {
 		FileOps:        newFileOps(),
 		FileNote:       ggui.State(""),
 		FileClip:       ggui.State(pathDrag{}),
-		Git:            ggui.State(gitView{}).WithEqual(deepEqual),
-		GitClosed:      ggui.State(map[string]bool{}).WithEqual(maps.Equal),
-		GitSel:         ggui.State(""),
-		GitSkip:        ggui.State(map[string]bool{}).WithEqual(maps.Equal),
-		GitMessage:     ggui.State(""),
-		GitAmend:       ggui.State(false),
-		GitBusy:        ggui.State(""),
-		GitBase:        ggui.State(""),
+		git:            newGitState(),
 		RepoPick:       ggui.State(repoPick{}),
-		GitNote:        ggui.State(gitNote{}),
-		// Their functions do not compare: each asking is new.
-		GitAsk:         ggui.State(gitAsk{}).WithEqual(func(a, b gitAsk) bool { return false }),
-		GitAskOpen:     ggui.State(false),
-		GitAskText:     ggui.State(""),
-		GitAskErr:      ggui.State(""),
-		Confirmation:   ggui.State(confirmation{}).WithEqual(func(a, b confirmation) bool { return false }),
-		GitChangesOpen: ggui.State(true),
-		GitHistoryOpen: ggui.State(true),
-		GitStashOpen:   ggui.State(false),
-		GitBranchOpen:  ggui.State(false),
-		GitSplit:       ggui.State(0.55),
-		AgentsSplit:    ggui.State(0.4),
-		GitHistory:     ggui.State(historyView{}).WithEqual(deepEqual),
-		GitCommit:      ggui.State(commitView{}).WithEqual(deepEqual),
-		SidebarOpen:    ggui.State(true),
-		DetailsOpen:    ggui.State(true),
-		DetailsWidth:   ggui.State(p.DetailsWidth),
-		SidebarWidth:   ggui.State(p.SidebarWidth),
-		DetailTab:      ggui.State(0),
-		ProjectAgents:  ggui.State(projectAgentsView{}).WithEqual(deepEqual),
-		Forge:          newForgeState(),
-		Tunnels:        newTunnelState(),
-		ImageOpen:      ggui.State(false),
-		Shell:          newShellView(),
-		NewOpen:        ggui.State(false),
-		Form:           ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),
-		FormErr:        ggui.State(""),
-		conns:          map[string]*termConn{},
-		killed:         map[string]time.Time{},
-		revealedTab:    map[int]string{},
-		dialing:        map[string]bool{},
+		// Its functions do not compare: each asking is new.
+		Confirmation:  ggui.State(confirmation{}).WithEqual(func(a, b confirmation) bool { return false }),
+		AgentsSplit:   ggui.State(0.4),
+		SidebarOpen:   ggui.State(true),
+		DetailsOpen:   ggui.State(true),
+		DetailsWidth:  ggui.State(p.DetailsWidth),
+		SidebarWidth:  ggui.State(p.SidebarWidth),
+		DetailTab:     ggui.State(0),
+		ProjectAgents: ggui.State(projectAgentsView{}).WithEqual(deepEqual),
+		Forge:         newForgeState(),
+		Tunnels:       newTunnelState(),
+		ImageOpen:     ggui.State(false),
+		Shell:         newShellView(),
+		NewOpen:       ggui.State(false),
+		Form:          ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),
+		FormErr:       ggui.State(""),
+		conns:         map[string]*termConn{},
+		killed:        map[string]time.Time{},
+		revealedTab:   map[int]string{},
+		dialing:       map[string]bool{},
 	}
 	m.link.approveInApp.Store(p.ApproveInApp)
 	m.recorder = newStreamRecorder(recordDir())

@@ -199,30 +199,30 @@ type commitView struct {
 }
 
 func (m *model) openCommit(hash string) {
-	root := ggui.Peek(m.GitHistory).Root
+	root := ggui.Peek(m.git.History).Root
 	if root.Path == "" {
 		return
 	}
-	m.GitCommit.Set(commitView{Hash: hash, Loading: true})
+	m.git.Commit.Set(commitView{Hash: hash, Loading: true})
 	req := &protocol.GitShow{NodeId: m.remoteID(root.Node), Root: root.Path, Hash: hash}
 	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitCommitInfo, error) {
 		return c.GitShow(ctx, req)
 	}, func(info *protocol.GitCommitInfo, err error) {
-		if ggui.Peek(m.GitCommit).Hash != hash {
+		if ggui.Peek(m.git.Commit).Hash != hash {
 			return
 		}
 		next := commitView{Hash: hash, Info: info}
 		if err != nil {
 			next.Err = nodeErr(err)
 		}
-		m.GitCommit.Set(next)
+		m.git.Commit.Set(next)
 	})
 }
 
 // openCommitFile shows what the chosen commit changed in a file, in a tab.
 func (m *model) openCommitFile(f *protocol.GitFile) {
-	root := ggui.Peek(m.GitHistory).Root
-	m.openDiffTab(root, root.Path, ggui.Peek(m.GitCommit).Hash, "", f, true)
+	root := ggui.Peek(m.git.History).Root
+	m.openDiffTab(root, root.Path, ggui.Peek(m.git.Commit).Hash, "", f, true)
 }
 
 // shortHash is a commit's hash as people quote it.
@@ -283,7 +283,7 @@ func historyBody(m *model) ggui.Widget {
 		Err           string
 		Loading, More bool
 	}
-	shown := ggui.Map(m.GitHistory, func(v historyView) listed {
+	shown := ggui.Map(m.git.History, func(v historyView) listed {
 		return listed{v.History.GetCommits(), v.Err, v.Loading && v.History.GetCommits() == nil, v.History.GetMore()}
 	}).WithEqual(func(a, b listed) bool {
 		return a.Err == b.Err && a.Loading == b.Loading && a.More == b.More &&
@@ -318,7 +318,7 @@ func historyBody(m *model) ggui.Widget {
 		}
 		return ggui.Column(rows, ggui.Box(muted(ggui.Text(Tf("Showing the newest %d commits.", len(cs))).Size(11.5))).Pad(8, 12)).Stretch()
 	})
-	open := ggui.Map(m.GitCommit, func(c commitView) bool { return c.Hash != "" })
+	open := ggui.Map(m.git.Commit, func(c commitView) bool { return c.Hash != "" })
 	body := ggui.Scroll(ggui.Padding(list, 0, 0, 4, 0)).Bar(tokSurface3)
 	split := ggui.State(0.5)
 	return ggui.If(open, func() ggui.Widget {
@@ -337,7 +337,7 @@ func commitRow(m *model, c *protocol.GitCommit, g graphRow, lanes int) ggui.Widg
 	).Gap(2).Stretch()
 	content := ggui.Row(&graphCell{row: g, lanes: lanes, head: head}, ggui.Expanded(text)).Gap(6).Align(ggui.AlignCenter)
 	// Only the rows chosen and no longer chosen redraw as the choice moves.
-	chosen := ggui.Map(m.GitCommit, func(cv commitView) bool { return cv.Hash == c.GetHash() })
+	chosen := ggui.Map(m.git.Commit, func(cv commitView) bool { return cv.Hash == c.GetHash() })
 	row := ggui.View(chosen, func(on bool) ggui.Widget {
 		box := ggui.Box(content).Height(historyRow).Pad(0, 10, 0, 6)
 		if on {
@@ -352,15 +352,15 @@ func commitRow(m *model, c *protocol.GitCommit, g graphRow, lanes int) ggui.Widg
 // commitPane is what the chosen commit changed: its message and its files,
 // each opening its diff in a tab.
 func commitPane(m *model) ggui.Widget {
-	head := ggui.View(m.GitCommit, func(cv commitView) ggui.Widget {
+	head := ggui.View(m.git.Commit, func(cv commitView) ggui.Widget {
 		return panelHeader(
 			icon("git-commit-horizontal").Size(15),
 			ggui.Expanded(ggui.Text(shortHash(cv.Hash)).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap()),
 			iconButton("copy", T("Copy hash"), func() { ggui.CurrentClipboard().Write(cv.Hash) }),
-			iconButton("x", T("Close commit"), func() { m.GitCommit.Set(commitView{}) }),
+			iconButton("x", T("Close commit"), func() { m.git.Commit.Set(commitView{}) }),
 		)
 	})
-	content := ggui.View(m.GitCommit, func(cv commitView) ggui.Widget {
+	content := ggui.View(m.git.Commit, func(cv commitView) ggui.Widget {
 		switch {
 		case cv.Loading:
 			return ggui.Center(ui.Spinner())

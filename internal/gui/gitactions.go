@@ -25,15 +25,15 @@ type gitAsk struct {
 
 // ask opens the name dialog for a.
 func (m *model) ask(a gitAsk) {
-	m.GitAsk.Set(a)
-	m.GitAskText.Set("")
-	m.GitAskErr.Set("")
-	m.GitAskOpen.Set(true)
+	m.git.Ask.Set(a)
+	m.git.AskText.Set("")
+	m.git.AskErr.Set("")
+	m.git.AskOpen.Set(true)
 }
 
 func (m *model) submitAsk() {
-	a := ggui.Peek(m.GitAsk)
-	name := strings.TrimSpace(ggui.Peek(m.GitAskText))
+	a := ggui.Peek(m.git.Ask)
+	name := strings.TrimSpace(ggui.Peek(m.git.AskText))
 	why := ""
 	switch {
 	case name == "" && !a.Blank:
@@ -42,17 +42,17 @@ func (m *model) submitAsk() {
 		why = a.Check(name)
 	}
 	if why != "" {
-		m.GitAskErr.Set(why)
+		m.git.AskErr.Set(why)
 		return
 	}
-	m.GitAskOpen.Set(false)
+	m.git.AskOpen.Set(false)
 	a.Submit(name)
 }
 
 func gitAskDialog(m *model) ggui.Widget {
-	return ggui.View(m.GitAsk, func(a gitAsk) ggui.Widget {
+	return ggui.View(m.git.Ask, func(a gitAsk) ggui.Widget {
 		return nameDialog(nameAsk{
-			Open: m.GitAskOpen, Text: m.GitAskText, Err: m.GitAskErr,
+			Open: m.git.AskOpen, Text: m.git.AskText, Err: m.git.AskErr,
 			Title: a.Title, Field: a.Field, Action: a.Action, Placeholder: a.Placeholder, Note: a.Note,
 			Submit: m.submitAsk,
 		})
@@ -69,7 +69,7 @@ func (m *model) askBranch(commit string) {
 	m.ask(gitAsk{
 		Title: T("New branch"), Field: T("Branch name"), Action: T("Create branch"), Placeholder: "feature/name", Note: note,
 		Check: func(name string) string {
-			if slices.Contains(ggui.Peek(m.Git).Changes.GetBranches(), name) {
+			if slices.Contains(ggui.Peek(m.git.View).Changes.GetBranches(), name) {
 				return T("That branch already exists.")
 			}
 			return ""
@@ -200,7 +200,7 @@ func foldSection(open *ggui.StateValue[bool], title string, count int, actions .
 
 // stashSection lists the stashes, each to pop, apply or drop.
 func stashSection(m *model, open *ggui.StateValue[bool]) ggui.Widget {
-	stashes := ggui.Map(m.Git, func(v gitView) []*protocol.GitStash { return v.Changes.GetStashes() }).WithEqual(protocol.Equal)
+	stashes := ggui.Map(m.git.View, func(v gitView) []*protocol.GitStash { return v.Changes.GetStashes() }).WithEqual(protocol.Equal)
 	return ggui.View(stashes, func(list []*protocol.GitStash) ggui.Widget {
 		head := foldSection(open, T("Stashes"), len(list), iconButton("plus", T("Stash changes…"), m.askStash))
 		rows := ggui.If(open, func() ggui.Widget {
@@ -241,7 +241,7 @@ func branchSection(m *model, open *ggui.StateValue[bool]) ggui.Widget {
 		Current       string
 		Local, Remote []string
 	}
-	state := ggui.Map(m.Git, func(v gitView) branches {
+	state := ggui.Map(m.git.View, func(v gitView) branches {
 		c := v.Changes
 		return branches{c.GetBranch(), c.GetBranches(), c.GetRemoteBranches()}
 	}).WithEqual(func(a, b branches) bool {
@@ -345,7 +345,7 @@ func operationBanner(m *model) ggui.Widget {
 		Op        string
 		Conflicts int
 	}
-	state := ggui.Map(m.Git, func(v gitView) stopped {
+	state := ggui.Map(m.git.View, func(v gitView) stopped {
 		n := 0
 		for _, f := range v.Changes.GetFiles() {
 			if f.GetStatus() == protocol.GitConflicted {

@@ -93,7 +93,7 @@ func TestChangesTabShowsTheWorkTree(t *testing.T) {
 	probeUntil(t, p, "the app's daemon", func() bool { return ggui.Peek(m.Conn).OK })
 	m.launch("shell", "", project)
 	probeUntil(t, p, "the changes", func() bool { _, ok := p.Find("main.go"); return ok })
-	if f := ggui.Peek(m.Git).Changes.GetFiles(); len(f) != 1 || f[0].GetAdded() != 2 || f[0].GetRemoved() != 0 {
+	if f := ggui.Peek(m.git.View).Changes.GetFiles(); len(f) != 1 || f[0].GetAdded() != 2 || f[0].GetRemoved() != 0 {
 		t.Fatalf("changes %+v", f)
 	}
 	row, _ := p.Find("main.go")

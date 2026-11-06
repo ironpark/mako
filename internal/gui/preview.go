@@ -338,22 +338,22 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					s, ok := m.session(ggui.Peek(m.Selected))
 					return ok && s.GetNodeId() == ggui.Peek(m.Conn).Self.GetId()
 				}),
-				until("the history", func() bool { v := ggui.Peek(m.GitHistory); return v.Root.Path != "" && !v.Loading }),
+				until("the history", func() bool { v := ggui.Peek(m.git.History); return v.Root.Path != "" && !v.Loading }),
 				frames(5), shot("03-history"),
 				// The changes folded, the stashes and branches open.
-				do(func() { m.GitChangesOpen.Set(false); m.GitStashOpen.Set(true); m.GitBranchOpen.Set(true) }),
+				do(func() { m.git.ChangesOpen.Set(false); m.git.StashOpen.Set(true); m.git.BranchOpen.Set(true) }),
 				frames(5), shot("03-git-sections"),
-				do(func() { m.GitChangesOpen.Set(true); m.GitStashOpen.Set(false); m.GitBranchOpen.Set(false) }),
+				do(func() { m.git.ChangesOpen.Set(true); m.git.StashOpen.Set(false); m.git.BranchOpen.Set(false) }),
 				do(func() {
-					if cs := ggui.Peek(m.GitHistory).History.GetCommits(); len(cs) > 0 {
+					if cs := ggui.Peek(m.git.History).History.GetCommits(); len(cs) > 0 {
 						m.openCommit(cs[0].GetHash())
 					}
 				}),
-				until("the commit", func() bool { return !ggui.Peek(m.GitCommit).Loading }),
+				until("the commit", func() bool { return !ggui.Peek(m.git.Commit).Loading }),
 				frames(5), shot("03-commit"),
 				// A file of it, its diff in a tab, beside a wider panel.
 				do(func() {
-					if fs := ggui.Peek(m.GitCommit).Info.GetFiles(); len(fs) > 0 {
+					if fs := ggui.Peek(m.git.Commit).Info.GetFiles(); len(fs) > 0 {
 						m.openCommitFile(fs[0])
 					}
 					m.DetailsWidth.Set(440)

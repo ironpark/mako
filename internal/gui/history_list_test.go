@@ -18,7 +18,7 @@ func TestAHistoryBuildsTheRowsInView(t *testing.T) {
 	for i := range 500 {
 		h.Commits = append(h.Commits, &protocol.GitCommit{Hash: fmt.Sprintf("%040d", i), Subject: fmt.Sprintf("commit %d", i), Author: "a"})
 	}
-	m.GitHistory.Set(historyView{History: h})
+	m.git.History.Set(historyView{History: h})
 	p := ggui.ProbeBuilder(func() ggui.Widget { return historyBody(m) }, ggui.Sz(400, 600))
 	defer p.Close()
 	p.Frame()

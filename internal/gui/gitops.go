@@ -38,7 +38,7 @@ type historyView struct {
 
 // gitRoot is the work tree of the project the Changes tab shows, once read.
 func (m *model) gitRoot() (fileRoot, bool) {
-	v := ggui.Peek(m.Git)
+	v := ggui.Peek(m.git.View)
 	if v.Changes.GetRoot() == "" || v.Changes.GetNotRepo() {
 		return fileRoot{}, false
 	}
@@ -49,20 +49,20 @@ func (m *model) gitRoot() (fileRoot, bool) {
 // changes and history again. done runs after it succeeds.
 func (m *model) gitRun(req *protocol.GitRun, label string, done func()) {
 	root, ok := m.gitRoot()
-	if !ok || ggui.Peek(m.GitBusy) != "" {
+	if !ok || ggui.Peek(m.git.Busy) != "" {
 		return
 	}
 	req.NodeId, req.Root = m.remoteID(root.Node), root.Path
-	m.GitBusy.Set(label)
-	m.GitNote.Set(gitNote{})
+	m.git.Busy.Set(label)
+	m.git.Note.Set(gitNote{})
 	fetch(m, gitOpTimeout, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
 		return c.GitRun(ctx, req)
 	}, func(r *protocol.GitResult, err error) {
-		m.GitBusy.Set("")
+		m.git.Busy.Set("")
 		if err != nil {
-			m.GitNote.Set(gitNote{Text: nodeErr(err), Err: true})
+			m.git.Note.Set(gitNote{Text: nodeErr(err), Err: true})
 		} else {
-			m.GitNote.Set(gitNote{Text: lastLines(r.GetOutput(), 4)})
+			m.git.Note.Set(gitNote{Text: lastLines(r.GetOutput(), 4)})
 			if done != nil {
 				done()
 			}
@@ -90,32 +90,32 @@ func lastLines(s string, n int) string {
 // they have been, only a changed history comes back, and the list shows on
 // while it is asked for.
 func (m *model) loadHistory(root fileRoot) {
-	if root.Path == "" || m.historyReading {
+	if root.Path == "" || m.git.historyReading {
 		return
 	}
-	v := ggui.Peek(m.GitHistory)
+	v := ggui.Peek(m.git.History)
 	if v.Root != root {
 		v = historyView{Root: root, Loading: true}
-		m.GitHistory.Set(v)
-		m.GitCommit.Set(commitView{})
+		m.git.History.Set(v)
+		m.git.Commit.Set(commitView{})
 	}
-	m.historyReading = true
+	m.git.historyReading = true
 	req := &protocol.GitLog{NodeId: m.remoteID(root.Node), Root: root.Path, Known: v.History.GetFingerprint()}
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitHistory, error) {
 		return c.GitLog(ctx, req)
 	}, func(h *protocol.GitHistory, err error) {
-		m.historyReading = false
-		v := ggui.Peek(m.GitHistory)
+		m.git.historyReading = false
+		v := ggui.Peek(m.git.History)
 		switch {
 		case v.Root != root:
 		case err != nil:
 			v.Err, v.Loading = nodeErr(err), false
-			m.GitHistory.Set(v)
+			m.git.History.Set(v)
 		case !h.GetUnchanged() || v.Err != "" || v.Loading:
 			if h.GetUnchanged() {
 				h = v.History
 			}
-			m.GitHistory.Set(historyView{Root: root, History: h})
+			m.git.History.Set(historyView{Root: root, History: h})
 		}
 	})
 }
@@ -152,18 +152,18 @@ func picked(files []*protocol.GitFile, skipped map[string]bool) int {
 
 // commit commits the picked files with the message typed.
 func (m *model) commit() {
-	files := ggui.Peek(m.Git).Changes.GetFiles()
-	skipped := ggui.Peek(m.GitSkip)
-	amend := ggui.Peek(m.GitAmend)
-	msg := strings.TrimSpace(ggui.Peek(m.GitMessage))
+	files := ggui.Peek(m.git.View).Changes.GetFiles()
+	skipped := ggui.Peek(m.git.Skip)
+	amend := ggui.Peek(m.git.Amend)
+	msg := strings.TrimSpace(ggui.Peek(m.git.Message))
 	if !canCommit(picked(files, skipped), msg, amend) {
 		return
 	}
 	req := &protocol.GitRun{Op: protocol.GitOpCommit, Message: msg, Paths: commitPaths(files, skipped), Amend: amend}
 	m.gitRun(req, T("Committing…"), func() {
-		m.GitMessage.Set("")
-		m.GitAmend.Set(false)
-		m.GitSkip.Set(map[string]bool{})
+		m.git.Message.Set("")
+		m.git.Amend.Set(false)
+		m.git.Skip.Set(map[string]bool{})
 	})
 }
 
@@ -175,7 +175,7 @@ func canCommit(files int, msg string, amend bool) bool {
 
 // skipFiles leaves files out of the next commit, or takes them back in.
 func (m *model) skipFiles(paths []string, skip bool) {
-	m.GitSkip.Update(func(v map[string]bool) map[string]bool {
+	m.git.Skip.Update(func(v map[string]bool) map[string]bool {
 		v = maps.Clone(v)
 		for _, p := range paths {
 			if skip {
@@ -237,7 +237,7 @@ func syncButton(name, label string, count int, onTap func()) ggui.Widget {
 
 // gitStatusLine is the operation under way, or what the last one said,
 // under a git tab's header.
-func gitStatusLine(m *model) ggui.Widget { return statusLine(m.GitBusy, m.GitNote) }
+func gitStatusLine(m *model) ggui.Widget { return statusLine(m.git.Busy, m.git.Note) }
 
 // statusLine is the operation under way, busy, or what the last one said,
 // note, under a panel's header.

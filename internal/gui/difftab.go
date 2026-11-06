@@ -219,12 +219,12 @@ func (m *model) siblings(d diffTab) []*protocol.GitFile {
 		return nil
 	}
 	if d.Commit != "" {
-		if c := ggui.Peek(m.GitCommit); c.Hash == d.Commit {
+		if c := ggui.Peek(m.git.Commit); c.Hash == d.Commit {
 			return c.Info.GetFiles()
 		}
 		return nil
 	}
-	if v := ggui.Peek(m.Git); v.Root == d.Root && v.Base == d.Base && v.Changes.GetRoot() == d.Repo {
+	if v := ggui.Peek(m.git.View); v.Root == d.Root && v.Base == d.Base && v.Changes.GetRoot() == d.Repo {
 		return v.Changes.GetFiles()
 	}
 	return nil
@@ -263,7 +263,7 @@ func (m *model) askDiscardHunk(id string, hunk []*protocol.DiffLine) {
 				return
 			}
 			m.readDiff(id)
-			m.loadGit(ggui.Peek(m.Git).Root)
+			m.loadGit(ggui.Peek(m.git.View).Root)
 		})
 	}
 	m.HunkOpen.Set(true)
