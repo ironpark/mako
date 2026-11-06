@@ -150,7 +150,7 @@ func TestClosingATabEndsItsSession(t *testing.T) {
 		return func() bool {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			c, err := m.client(ctx)
+			c, err := m.link.client(ctx)
 			if err != nil {
 				return false
 			}

@@ -38,7 +38,7 @@ func (m *model) fetchDevices(ctx context.Context, c *client.Client, self *protoc
 	if self.GetRevision() < protocol.RevisionDevices {
 		return nil
 	}
-	if !m.devicesStale.Swap(false) && time.Since(m.devicesAt) < devicesEvery {
+	if !m.link.devicesStale.Swap(false) && time.Since(m.devicesAt) < devicesEvery {
 		return nil
 	}
 	m.devicesAt = time.Now()
@@ -63,7 +63,7 @@ func (m *model) borrowDevice(dev *protocol.Device) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		var lease *protocol.Lease
-		c, err := m.client(ctx)
+		c, err := m.link.client(ctx)
 		if err == nil {
 			lease, err = c.Borrow(ctx, &protocol.Borrow{Device: dev.Ref()})
 		}
@@ -78,8 +78,8 @@ func (m *model) borrowDevice(dev *protocol.Device) {
 			}
 			m.toaster.Push(ui.Toast(Tf("%s is lent here", name), body))
 		})
-		m.devicesStale.Store(true)
-		m.pollNow()
+		m.link.devicesStale.Store(true)
+		m.link.pollNow()
 	}()
 }
 
@@ -89,7 +89,7 @@ func (m *model) giveBackDevice(l *protocol.Lease) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		c, err := m.client(ctx)
+		c, err := m.link.client(ctx)
 		if err == nil {
 			_, err = c.GiveBack(ctx, &protocol.GiveBack{LeaseId: l.GetId()})
 		}
@@ -98,8 +98,8 @@ func (m *model) giveBackDevice(l *protocol.Lease) {
 				m.toaster.Push(ui.Toast(Tf("Could not give %s back", name), nodeErr(err)).Destructive())
 			})
 		}
-		m.devicesStale.Store(true)
-		m.pollNow()
+		m.link.devicesStale.Store(true)
+		m.link.pollNow()
 	}()
 }
 

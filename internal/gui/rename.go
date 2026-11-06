@@ -41,7 +41,7 @@ func (m *model) submitRename() {
 	ggui.Async(func() (*protocol.SessionInfo, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		c, err := m.client(ctx)
+		c, err := m.link.client(ctx)
 		if err != nil {
 			return nil, err
 		}

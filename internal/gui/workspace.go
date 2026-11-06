@@ -156,10 +156,10 @@ func setupWorkspace(m *model) {
 	ggui.Watch(m.Layout, func(*layoutNode) { m.workspaceChanged() })
 	sync := ggui.Map(m.Prefs, func(p prefs) bool { return p.SyncWorkspace })
 	ggui.Watch(sync, func(on bool) {
-		m.syncing.Store(on)
+		m.link.syncing.Store(on)
 		if on {
-			m.wsStale.Store(true)
-			m.pollNow()
+			m.link.wsStale.Store(true)
+			m.link.pollNow()
 		}
 	})
 }

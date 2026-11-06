@@ -119,8 +119,8 @@ func (m *model) externalAddr() string {
 	if d := ggui.Peek(m.Prefs).Daemon; d != "" {
 		return d
 	}
-	if m.addr != "" {
-		return m.addr
+	if m.link.addr != "" {
+		return m.link.addr
 	}
 	path, _ := config.SocketPath("")
 	return path
@@ -140,7 +140,7 @@ func (m *model) applyDaemonMode() {
 			return // already ours; probing its socket would find it
 		}
 		addr := m.externalAddr()
-		m.linked.Store(false)
+		m.link.linked.Store(false)
 		m.setDaemonState(func(s *daemonState) { s.Mode, s.Err = "", "" })
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
@@ -175,7 +175,7 @@ func (m *model) startEmbedded() {
 	if m.embedded.running() {
 		return
 	}
-	m.linked.Store(false)
+	m.link.linked.Store(false)
 	m.setDaemonState(func(s *daemonState) { *s = daemonState{Mode: "embedded", Starting: true} })
 	m.reconnect(ggui.Peek(m.Prefs).Daemon)
 	// A daemon stopped for a restart reports its exit after the next one

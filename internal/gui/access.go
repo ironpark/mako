@@ -29,7 +29,7 @@ func (m *model) answerAccess(req *protocol.Access, done string, failed func(erro
 	ggui.Async(func() (*protocol.AccessInfo, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		c, err := m.client(ctx)
+		c, err := m.link.client(ctx)
 		if err != nil {
 			return nil, err
 		}

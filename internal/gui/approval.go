@@ -42,16 +42,8 @@ func (m *model) answerApproval(id, approval, decision string) {
 		if err != nil {
 			m.Conn.Set(connState{OK: ggui.Peek(m.Conn).OK, Self: ggui.Peek(m.Conn).Self, Err: err.Error()})
 		}
-		m.pollNow()
+		m.link.pollNow()
 	})
-}
-
-// pollNow refreshes the mesh now rather than at the next tick.
-func (m *model) pollNow() {
-	select {
-	case m.kick <- struct{}{}:
-	default:
-	}
 }
 
 // approvalButtons are an approval's answers.

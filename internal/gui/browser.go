@@ -205,7 +205,7 @@ func (b *browser) run(verb string, t *transfer, work func(context.Context, *clie
 		}
 	}()
 	go func() {
-		c, err := b.m.client(ctx)
+		c, err := b.m.link.client(ctx)
 		if err == nil {
 			err = work(ctx, c)
 		}

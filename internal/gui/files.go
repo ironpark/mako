@@ -107,7 +107,7 @@ func fetch[T any](m *model, timeout time.Duration, call func(context.Context, *c
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		var v T
-		c, err := m.client(ctx)
+		c, err := m.link.client(ctx)
 		if err == nil {
 			v, err = call(ctx, c)
 		}

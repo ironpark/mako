@@ -69,7 +69,7 @@ func TestAFolderGoesUpAndComesBack(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	c, err := m.client(ctx)
+	c, err := m.link.client(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestAFolderIsCopiedAcross(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	c, err := m.client(ctx)
+	c, err := m.link.client(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

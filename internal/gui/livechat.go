@@ -52,7 +52,7 @@ func (m *model) followChat(id, agent string, state *chatState, read func(then fu
 	}
 	go func() {
 		for ctx.Err() == nil {
-			if c, err := m.client(ctx); err == nil {
+			if c, err := m.link.client(ctx); err == nil {
 				_ = c.WatchChat(ctx, req, func(l *protocol.ChatLive) {
 					live(func() { state.follow.on = true; tookLive(state, l, read) })
 				})

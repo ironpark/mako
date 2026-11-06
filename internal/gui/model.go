@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ironpark/ggui"
@@ -55,8 +54,10 @@ type newSession struct {
 // workers hand results back through post.
 type model struct {
 	cfg  *config.Config
-	addr string // the -daemon flag; Prefs.Daemon overrides it
 	post func(func())
+	// link is the daemon the window talks to, shared with the workers
+	// that poll it; see link.go.
+	link *daemonLink
 
 	Prefs *ggui.StateValue[prefs]
 	// Spaces are the spaces, the workspace's, and spaceSet them with the
@@ -150,22 +151,15 @@ type model struct {
 	wsLast    []byte
 	wsTimer   *time.Timer
 	wsWrites  sync.WaitGroup // workspace writes still reaching disk
-	wsStale   atomic.Bool
-	syncing   atomic.Bool // the window follows the other nodes; for the poll
 	// contextsMoved says the window showed another owner's or project's
 	// tabs since the workspace was written down.
 	contextsMoved bool
-	// accessStale says the next poll asks for Access again: at first, and
-	// when the daemon says it changed.
-	accessStale atomic.Bool
 	// Devices are the mesh's devices, and those the daemon borrows;
-	// devicesStale says the next poll asks for them again, and devicesAt
-	// is when it last did, on the poll's goroutine.
-	Devices      *ggui.StateValue[deviceList]
-	devicesStale atomic.Bool
-	devicesAt    time.Time
-	Sessions     *ggui.StateValue[[]*protocol.SessionInfo]
-	Agents       *ggui.StateValue[[]string] // what this node can launch, as agent:profile targets
+	// devicesAt is when the poll last asked for them, on its goroutine.
+	Devices   *ggui.StateValue[deviceList]
+	devicesAt time.Time
+	Sessions  *ggui.StateValue[[]*protocol.SessionInfo]
+	Agents    *ggui.StateValue[[]string] // what this node can launch, as agent:profile targets
 
 	Selected   *ggui.StateValue[string]      // the tab the current pane shows
 	Tabs       *ggui.StateValue[[]string]    // every pane's tabs, in order
@@ -303,20 +297,6 @@ type model struct {
 	revealedTab map[int]string
 	dialing     map[string]bool
 
-	mu        sync.Mutex // guards the link fields below, which workers read
-	cli       *client.Client
-	daemon    string // the external daemon's address from the settings
-	embedAddr string // the app's own daemon, while it runs
-
-	// linked says the window knows which daemon to talk to; until then a
-	// poll would dial an address nothing may answer and wait out its timeout.
-	linked atomic.Bool
-	kick   chan struct{} // polls now rather than at the next tick
-	// watching is set while the daemon tells the GUI of changes, which
-	// then polls seldom.
-	watching atomic.Bool
-	// approveInApp mirrors the setting for the polling worker.
-	approveInApp atomic.Bool
 	// recorder keeps the terminal streams the developer option records.
 	recorder *streamRecorder
 }
@@ -332,7 +312,7 @@ func newModel(cfg *config.Config, addr string) *model {
 	p := loadPrefs()
 	m := &model{
 		cfg:            cfg,
-		addr:           addr,
+		link:           newDaemonLink(addr, p.Daemon),
 		Prefs:          ggui.State(p),
 		Spaces:         ggui.State(spaceList{}).WithEqual(func(a, b spaceList) bool { return reflect.DeepEqual(a, b) }),
 		Themes:         ggui.State(loadThemes()).WithEqual(maps.Equal),
@@ -381,7 +361,6 @@ func newModel(cfg *config.Config, addr string) *model {
 		contexts:       map[string]string{},
 		tabNodes:       map[string]string{},
 		missing:        map[string]time.Time{},
-		kick:           make(chan struct{}, 1),
 		Conn:           ggui.State(connState{}).WithEqual(deepEqual),
 		Nodes:          ggui.State([]*protocol.Node(nil)).WithEqual(protocol.Equal),
 		Access:         ggui.State((*protocol.AccessInfo)(nil)).WithEqual(func(a, b *protocol.AccessInfo) bool { return proto.Equal(a, b) }),
@@ -454,13 +433,10 @@ func newModel(cfg *config.Config, addr string) *model {
 		killed:         map[string]time.Time{},
 		revealedTab:    map[int]string{},
 		dialing:        map[string]bool{},
-		daemon:         p.Daemon,
 	}
-	m.approveInApp.Store(p.ApproveInApp)
+	m.link.approveInApp.Store(p.ApproveInApp)
 	m.recorder = newStreamRecorder(recordDir())
 	m.recorder.on.Store(p.RecordStreams)
-	m.accessStale.Store(true)
-	m.wsStale.Store(true)
 	m.Roots = ggui.Derived(m.panelRoots).WithEqual(deepEqual)
 	m.spaceSet = ggui.Combine(m.Spaces, ggui.Map(m.Prefs, func(p prefs) string { return p.ShownSpace }), spaceSetOf).
 		WithEqual(func(a, b spaceSet) bool { return reflect.DeepEqual(a, b) })
@@ -479,13 +455,13 @@ func (m *model) start(ctx context.Context, post func(func())) {
 		for {
 			m.poll(ctx)
 			every := pollInterval
-			if m.watching.Load() {
+			if m.link.watching.Load() {
 				every = watchedPollInterval
 			}
 			select {
 			case <-ctx.Done():
 				return
-			case <-m.kick:
+			case <-m.link.kick:
 			case <-time.After(every):
 			}
 		}
@@ -502,25 +478,25 @@ const watchedPollInterval = 15 * time.Second
 func (m *model) watch(ctx context.Context) {
 	for ctx.Err() == nil {
 		wait := time.Second
-		if c, err := m.client(ctx); err == nil && m.linked.Load() {
+		if c, err := m.link.client(ctx); err == nil && m.link.linked.Load() {
 			err = c.Watch(ctx, func(ch *protocol.Changed) {
 				if ch.GetAccess() {
-					m.accessStale.Store(true)
+					m.link.accessStale.Store(true)
 				}
 				if ch.GetWorkspace() {
-					m.wsStale.Store(true)
+					m.link.wsStale.Store(true)
 				}
 				if ch.GetDevices() {
-					m.devicesStale.Store(true)
+					m.link.devicesStale.Store(true)
 				}
-				m.watching.Store(true)
-				m.pollNow()
+				m.link.watching.Store(true)
+				m.link.pollNow()
 			})
 			if protocol.HasCode(err, protocol.CodeUnsupported) {
 				wait = time.Minute // an older daemon, which may be updated
 			}
 		}
-		m.watching.Store(false)
+		m.link.watching.Store(false)
 		select {
 		case <-ctx.Done():
 		case <-time.After(wait):
@@ -528,45 +504,17 @@ func (m *model) watch(ctx context.Context) {
 	}
 }
 
-// daemonAddr is the daemon the GUI talks through: the app's own when it
-// runs one, else the external one the settings or the -daemon flag name,
-// else the local default.
-func (m *model) daemonAddr() string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	switch {
-	case m.embedAddr != "":
-		return m.embedAddr
-	case m.daemon != "":
-		return m.daemon
-	}
-	return m.addr
-}
-
 // reconnect drops the daemon link so the next request dials again, as after
 // the external address changed.
 func (m *model) reconnect(daemon string) {
-	m.mu.Lock()
-	c := m.cli
-	m.cli, m.daemon = nil, daemon
-	m.mu.Unlock()
-	m.accessStale.Store(true)
-	m.wsStale.Store(true)
-	if c != nil {
-		_ = c.Close()
-	}
+	m.link.retarget(func(l *daemonLink) { l.daemon = daemon })
+	m.link.stale()
 }
 
 // unlink leaves the window with no daemon, as when the app's own stops.
 func (m *model) unlink(reason string) {
-	m.linked.Store(false)
-	m.mu.Lock()
-	c := m.cli
-	m.cli, m.embedAddr = nil, ""
-	m.mu.Unlock()
-	if c != nil {
-		_ = c.Close()
-	}
+	m.link.linked.Store(false)
+	m.link.retarget(func(l *daemonLink) { l.embedAddr = "" })
 	for id, conn := range m.conns {
 		conn.close()
 		delete(m.conns, id)
@@ -578,20 +526,10 @@ func (m *model) unlink(reason string) {
 // setLink points the window at the app's own daemon, or with "" back at the
 // external one.
 func (m *model) setLink(embedAddr string) {
-	m.mu.Lock()
-	c := m.cli
-	m.cli, m.embedAddr = nil, embedAddr
-	m.mu.Unlock()
-	m.accessStale.Store(true)
-	m.wsStale.Store(true)
-	m.linked.Store(true)
-	select {
-	case m.kick <- struct{}{}:
-	default:
-	}
-	if c != nil {
-		_ = c.Close()
-	}
+	m.link.retarget(func(l *daemonLink) { l.embedAddr = embedAddr })
+	m.link.stale()
+	m.link.linked.Store(true)
+	m.link.pollNow()
 	// Terminals attached through the old link went with it.
 	for _, id := range slices.Clone(ggui.Peek(m.Tabs)) {
 		if conn := m.conns[id]; conn != nil {
@@ -603,44 +541,17 @@ func (m *model) setLink(embedAddr string) {
 	m.attachVisible()
 }
 
-// client returns a connected client, dialing on first use or after a failure.
-func (m *model) client(ctx context.Context) (*client.Client, error) {
-	addr := m.daemonAddr()
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.cli != nil {
-		return m.cli, nil
-	}
-	dialCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	c, err := client.Dial(dialCtx, addr)
-	if err != nil {
-		return nil, err
-	}
-	m.cli = c
-	return c, nil
-}
-
-func (m *model) dropClient(c *client.Client) {
-	m.mu.Lock()
-	if m.cli == c {
-		m.cli = nil
-	}
-	m.mu.Unlock()
-	_ = c.Close()
-}
-
 // poll fetches the mesh view on a worker and publishes it on the UI thread.
 func (m *model) poll(ctx context.Context) {
 	logs := m.embedded.logs.snapshot()
 	m.post(func() { m.DaemonLog.Set(logs) })
-	if !m.linked.Load() {
+	if !m.link.linked.Load() {
 		return // still deciding, or starting, which daemon to talk to
 	}
 	fail := func(err error) {
 		m.post(func() { m.Conn.Set(connState{Err: err.Error()}) })
 	}
-	c, err := m.client(ctx)
+	c, err := m.link.client(ctx)
 	if err != nil {
 		fail(err)
 		return
@@ -649,24 +560,24 @@ func (m *model) poll(ctx context.Context) {
 	defer cancel()
 	nodes, err := c.Nodes(reqCtx)
 	if err != nil {
-		m.dropClient(c)
+		m.link.drop(c)
 		fail(err)
 		return
 	}
 	// Approvals wait for this window's answer only while it offers one.
-	approvals := m.approveInApp.Load()
+	approvals := m.link.approveInApp.Load()
 	sessions, err := c.ListSessions(reqCtx, &protocol.ListSessions{Approvals: approvals})
 	if err != nil {
-		m.dropClient(c)
+		m.link.drop(c)
 		fail(err)
 		return
 	}
 	// Access is asked for when it changed, or on every poll while the
 	// daemon is not watched.
-	fetchAccess := m.accessStale.Swap(false) || !m.watching.Load()
+	fetchAccess := m.link.accessStale.Swap(false) || !m.link.watching.Load()
 	// The workspace too: at first, and when the daemon has a newer one.
 	var ws *protocol.Workspace
-	if m.syncing.Load() && (m.wsStale.Swap(false) || !m.watching.Load()) {
+	if m.link.syncing.Load() && (m.link.wsStale.Swap(false) || !m.link.watching.Load()) {
 		if ws, err = c.Workspace(reqCtx); err != nil {
 			ws = nil // an older daemon
 		}
@@ -1114,7 +1025,7 @@ func (m *model) attach(id string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
-		c, err := m.client(ctx)
+		c, err := m.link.client(ctx)
 		var conn *termConn
 		if err == nil {
 			conn, err = dialTerm(context.Background(), c, info, goos, tap, wake, func() { post(m.syncTitles) })
@@ -1203,7 +1114,7 @@ func (m *model) submitNew() {
 	ggui.Async(func() (*protocol.SessionInfo, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		c, err := m.client(ctx)
+		c, err := m.link.client(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -1308,7 +1219,7 @@ func (m *model) killThen(id string, then func()) {
 	ggui.Async(func() (struct{}, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		c, err := m.client(ctx)
+		c, err := m.link.client(ctx)
 		if err != nil {
 			return struct{}{}, err
 		}
@@ -1587,11 +1498,5 @@ func (m *model) shutdown() {
 		conn.close()
 		delete(m.conns, id)
 	}
-	m.mu.Lock()
-	c := m.cli
-	m.cli = nil
-	m.mu.Unlock()
-	if c != nil {
-		_ = c.Close()
-	}
+	m.link.retarget(func(*daemonLink) {})
 }

@@ -166,7 +166,7 @@ func (m *model) submit(id string, conn *termConn, text string) {
 		<-prev
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		c, err := m.client(ctx)
+		c, err := m.link.client(ctx)
 		if err != nil {
 			return struct{}{}, err
 		}

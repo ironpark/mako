@@ -189,7 +189,7 @@ func (m *model) listen(node string, port int) (tunnelInfo, error) {
 func (m *model) dialTunnel(node string, port int) (io.ReadWriteCloser, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), tunnelTimeout)
 	defer cancel()
-	c, err := m.client(ctx)
+	c, err := m.link.client(ctx)
 	if err != nil {
 		return nil, err
 	}

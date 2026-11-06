@@ -97,7 +97,7 @@ func (m *model) stage(node, path string) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), stageTimeout)
 	defer cancel()
-	c, err := m.client(ctx)
+	c, err := m.link.client(ctx)
 	if err != nil {
 		return "", err
 	}
