@@ -23,7 +23,7 @@ func TestAnImageOnTheWebIsRead(t *testing.T) {
 			w.Write(pic.Bytes())
 		case "/badge":
 			w.Header().Set("Content-Type", "image/svg+xml")
-			w.Write([]byte("<svg/>"))
+			w.Write([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 4"><rect width="8" height="4"/></svg>`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -32,7 +32,7 @@ func TestAnImageOnTheWebIsRead(t *testing.T) {
 	if d, err := readWebImage(srv.URL + "/a.png"); err != nil || d.Img == nil || d.Img.Bounds().Dx() != 3 {
 		t.Fatalf("a picture: %v, %v", d, err)
 	}
-	if d, err := readWebImage(srv.URL + "/badge"); err != nil || string(d.SVG) != "<svg/>" {
+	if d, err := readWebImage(srv.URL + "/badge"); err != nil || d.Drawn == nil || d.Drawn.Size.W != 8 {
 		t.Fatalf("an SVG: %v, %v", d, err)
 	}
 	if _, err := readWebImage(srv.URL + "/gone.png"); err == nil {

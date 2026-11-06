@@ -23,6 +23,7 @@ import (
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/gui/svgdraw"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -94,11 +95,21 @@ func isImage(name string) bool {
 }
 
 // decodedImage is an image file as read, and decoded off the window's
-// goroutine.
+// goroutine: a picture, or an SVG drawn.
 type decodedImage struct {
-	File *protocol.File
-	Img  image.Image
-	SVG  []byte // an SVG's source, drawn by who shows it
+	File  *protocol.File
+	Img   image.Image
+	Drawn *svgdraw.Picture // an SVG's; nil for none, or one that cannot be drawn
+}
+
+// drawnSVG is an SVG read as f, drawn, as it is read: off the window's
+// goroutine, which only wraps its pixels.
+func drawnSVG(f *protocol.File, data []byte) decodedImage {
+	d := decodedImage{File: f}
+	if p, ok := svgdraw.Draw(data); ok {
+		d.Drawn = &p
+	}
+	return d
 }
 
 // fetch makes a daemon call off the window's goroutine and hands done its
@@ -309,7 +320,7 @@ func fetchImage(m *model, node, path string, done func(decodedImage, error)) {
 		if isSVG(path) {
 			data := f.GetData()
 			f.Data = nil
-			return decodedImage{File: f, SVG: data}, nil
+			return drawnSVG(f, data), nil
 		}
 		img, _, err := image.Decode(bytes.NewReader(f.GetData()))
 		f.Data = nil

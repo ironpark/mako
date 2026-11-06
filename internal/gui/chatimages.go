@@ -4,7 +4,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
@@ -53,13 +52,7 @@ func chatImage(m *model, node, path string, named bool) ggui.Widget {
 	if !ok {
 		img = ggui.State(mdview.Image{Loading: true})
 		m.chatImages[key] = img
-		fetchImage(m, node, path, func(d decodedImage, err error) {
-			if err != nil || d.Img == nil {
-				img.Set(mdview.Image{})
-				return
-			}
-			img.Set(mdview.Image{Img: ggfx.NewImageFromImage(d.Img)})
-		})
+		fetchImage(m, node, path, func(d decodedImage, err error) { img.Set(asMDImage(d, err)) })
 	}
 	name := baseName(path)
 	open := func() { m.openItem(fileItem{Key: key, Node: node, Path: path, Name: name}, 0) }
@@ -73,9 +66,9 @@ func chatImage(m *model, node, path string, named bool) ggui.Widget {
 		case v.Img == nil:
 			w = ggui.Box(ggui.Row(icon("file-image").Size(14).Color(skin.Muted), muted(ggui.Text(name).Size(12).NoWrap().Ellipsis())).Gap(6)).Pad(8, 10).MaxWidth(thumbW)
 		default:
-			b := v.Img.Bounds()
-			scale := min(1, thumbW/float64(max(b.Dx(), 1)), thumbH/float64(max(b.Dy(), 1)))
-			w = ggui.Image(v.Img).Alt(name).Size(float64(b.Dx())*scale, float64(b.Dy())*scale)
+			// Size, not the pixels: an SVG's are drawn at twice it.
+			scale := min(1, thumbW/max(v.Size.W, 1), thumbH/max(v.Size.H, 1))
+			w = ggui.Image(v.Img).Alt(name).Size(v.Size.W*scale, v.Size.H*scale)
 		}
 		return ggui.Tap(ggui.Box(w).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(2), open)
 	})

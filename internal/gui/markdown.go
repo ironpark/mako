@@ -57,9 +57,9 @@ func isSVG(name string) bool {
 // else decoded as it came.
 func asMDImage(d decodedImage, err error) mdview.Image {
 	if err != nil {
-		d.Img = nil // an SVG read is drawn all the same
+		d.Img = nil // an SVG drawn shows all the same
 	}
-	return mdview.ImageOf(d.Img, d.SVG)
+	return mdview.ImageOf(d.Img, d.Drawn)
 }
 
 // webImage is the image at the web address url, read once for the window.
@@ -77,8 +77,7 @@ func (m *model) webImage(url string) *ggui.StateValue[mdview.Image] {
 	return img
 }
 
-// readWebImage reads and decodes the image at url: an SVG's source is
-// kept to be drawn, on the window's goroutine.
+// readWebImage reads and decodes the image at url, drawing an SVG.
 func readWebImage(url string) (decodedImage, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -103,7 +102,7 @@ func readWebImage(url string) (decodedImage, error) {
 		return decodedImage{}, fmt.Errorf("%s is too large", url)
 	}
 	if isSVG(url) || strings.Contains(resp.Header.Get("Content-Type"), "svg") {
-		return decodedImage{SVG: data}, nil
+		return drawnSVG(nil, data), nil
 	}
 	img, _, err := image.Decode(bytes.NewReader(data))
 	return decodedImage{Img: img}, err

@@ -56,21 +56,18 @@ func (r *mdRenderer) image(p mdPicture) ggui.Widget {
 }
 
 // ImageOf is a read file as a page's picture: img as it decoded, or else
-// the SVG svg drawn at svgdraw.Scale, sized as its view box; none for
-// neither, or an SVG that cannot be drawn.
-func ImageOf(img image.Image, svg []byte) Image {
+// the SVG drawn, sized as its view box; none for neither. Drawing an SVG
+// is slow, so it is done where the file is read; this, which makes a
+// texture, is for the window's goroutine.
+func ImageOf(img image.Image, drawn *svgdraw.Picture) Image {
 	if img != nil {
 		b := img.Bounds()
 		return Image{Img: ggfx.NewImageFromImage(img), Size: ggui.Sz(float64(b.Dx()), float64(b.Dy()))}
 	}
-	if svg == nil {
+	if drawn == nil {
 		return Image{}
 	}
-	p, ok := svgdraw.Draw(svg)
-	if !ok {
-		return Image{}
-	}
-	return Image{Img: ggfx.NewImageFromImage(p.Pixels), Size: p.Size, Labels: p.Labels, Origin: p.Origin}
+	return Image{Img: ggfx.NewImageFromImage(drawn.Pixels), Size: drawn.Size, Labels: drawn.Labels, Origin: drawn.Origin}
 }
 
 // fitImage draws an image at its own size, or the one asked for, the
