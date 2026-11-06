@@ -70,6 +70,8 @@ take it out before you commit.
     internal/gitstat     git status, diffs, history and operations
     internal/gui         the window: sidebar, panes and tabs, terminal, chat, editor
     internal/gui/skin    the window's palettes, theme tokens and what a theme sets
+    internal/gui/i18n    the window's languages and their catalogs
+    internal/gui/iconset the window's bundled icons
     internal/gui/boxdraw the terminal's box drawing and block elements, as shapes
     internal/gui/mdview  a Markdown page laid out as widgets; the window is its Host
     internal/gui/svgdraw a Markdown page's SVGs, drawn, with their text set apart
@@ -279,7 +281,7 @@ with `MAKO_SHELL_ENV=1` set for a profile that wants to tell, so it finds
 the agents on the user's `PATH`.
 
 Its settings are kept in `gui.json` beside `config.json`, and the user's
-themes in `themes/` beside them, a JSON file each (`internal/gui/themes.go`):
+themes in `themes/` beside them, a JSON file each (`internal/gui/themefiles.go`):
 a base, light or dark, and the colours that differ, by name. Settings ▸
 Appearance makes one by duplicating the theme in use, and edits its
 colours in place. A background image goes under the whole window, under

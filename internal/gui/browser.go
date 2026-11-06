@@ -13,6 +13,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -334,9 +335,9 @@ func (b *browser) submitFile() {
 // browserWindow is the window: in the language the settings choose, as
 // the main one is.
 func browserWindow(b *browser) ggui.Widget {
-	lang := ggui.Map(b.m.Prefs, func(p prefs) string { return resolveLanguage(p.Language) })
+	lang := ggui.Map(b.m.Prefs, func(p prefs) string { return i18n.Resolve(p.Language) })
 	return ggui.Key(lang, func(code string) ggui.Widget {
-		setLanguage(code)
+		i18n.Set(code)
 		return browserView(b)
 	})
 }

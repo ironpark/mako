@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -240,10 +241,10 @@ func generalSettings(m *model) ggui.Widget {
 		return ggui.Row(linkDot(true), muted(ggui.Text(Tf("Connected to %s", c.Self.GetName())).Size(12.5))).Gap(8)
 	})
 
-	codes := make([]string, 0, len(languages)+1)
+	codes := make([]string, 0, len(i18n.Languages)+1)
 	codes = append(codes, "system")
 	names := map[string]string{"system": T("System")}
-	for _, l := range languages {
+	for _, l := range i18n.Languages {
 		codes = append(codes, l.Code)
 		names[l.Code] = l.Name
 	}

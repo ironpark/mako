@@ -8,6 +8,8 @@ import (
 
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggfx/svg"
+
+	"github.com/ironpark/mako/internal/gui/iconset"
 )
 
 func TestFileIconName(t *testing.T) {
@@ -69,7 +71,7 @@ func TestFileIconsLoad(t *testing.T) {
 	}
 	for _, n := range names {
 		_ = icon(n) // panics on a missing or unparsable icon
-		data, err := fs.ReadFile(iconFiles, "icons/"+n+".svg")
+		data, err := fs.ReadFile(iconset.Files, "icons/"+n+".svg")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -121,7 +122,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			saved := ggui.Peek(m.Prefs)
 			agentsRoot := fileRoot{Node: "preview", Path: "/workspace/mako"}
 			if agentsOnly {
-				setLanguage(resolveLanguage(saved.Language))
+				i18n.Set(i18n.Resolve(saved.Language))
 				m.DetailTab.Set(agentsTab)
 				m.ProjectAgents.Set(projectAgentsView{Root: agentsRoot, Data: projectAgentsPreviewData(agentsRoot), Loaded: true, Updated: time.Now()})
 			}

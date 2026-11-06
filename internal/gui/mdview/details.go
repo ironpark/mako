@@ -8,6 +8,8 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	"github.com/yuin/goldmark/ast"
+
+	"github.com/ironpark/mako/internal/gui/i18n"
 )
 
 // <details> folds what it holds away under its <summary>, as on GitHub.
@@ -90,7 +92,7 @@ func (r *mdRenderer) blockList(nodes []ast.Node) []ggui.Widget {
 func (r *mdRenderer) details(head string, body []ast.Node, tail string) ggui.Widget {
 	tag := detailsOpen.FindString(head)
 	head = head[len(tag):]
-	title := r.host.Text("Details")
+	title := i18n.T("Details")
 	if m := summaryTag.FindStringSubmatchIndex(head); m != nil {
 		inner := htmlTag.ReplaceAllString(head[m[2]:m[3]], " ")
 		if t := strings.Join(strings.Fields(html.UnescapeString(inner)), " "); t != "" {

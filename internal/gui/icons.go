@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"embed"
 	"image/color"
 	"math"
 	"sync"
@@ -11,37 +10,14 @@ import (
 	"github.com/ironpark/ggui/ui/icons"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/mako/internal/agents"
+	"github.com/ironpark/mako/internal/gui/iconset"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// Lucide icons (ISC, see icons/LICENSE), the set Paseo draws with, and the
-// agents' own (icons/agent-*.svg, drawn for mako). Only the ones the window
-// uses are bundled.
-//
-//go:embed icons/*.svg
-var iconFiles embed.FS
-
-var (
-	iconMu    sync.Mutex
-	iconCache = map[string]*icons.SVG{}
-)
-
-// icon returns a bundled Lucide icon at 16px in the muted text colour.
-func icon(name string) *icons.Widget {
-	iconMu.Lock()
-	svg, ok := iconCache[name]
-	if !ok {
-		var err error
-		svg, err = icons.Load(iconFiles, "icons/"+name+".svg")
-		if err != nil {
-			panic("mako: missing icon " + name + ": " + err.Error())
-		}
-		iconCache[name] = svg
-	}
-	iconMu.Unlock()
-	return icons.New(svg).Size(16).Color(skin.Muted)
-}
+// icon is the bundled icon called name at 16px in the muted text colour;
+// see package iconset.
+func icon(name string) *icons.Widget { return iconset.Icon(name) }
 
 func iconColored(name string, c color.Color) *icons.Widget { return icon(name).Color(c) }
 
@@ -100,18 +76,8 @@ func iconOf(name, glyph string) string {
 	return "bot"
 }
 
-// bundled remembers which icons are bundled, by name.
-var bundled sync.Map
-
 // hasIcon reports whether the icon called name is bundled.
-func hasIcon(name string) bool {
-	if ok, seen := bundled.Load(name); seen {
-		return ok.(bool)
-	}
-	_, err := iconFiles.Open("icons/" + name + ".svg")
-	bundled.Store(name, err == nil)
-	return err == nil
-}
+func hasIcon(name string) bool { return iconset.Has(name) }
 
 // agentGlyph is an agent's icon in its own colour, or in c for an agent
 // without one.

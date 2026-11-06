@@ -14,6 +14,7 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/protocol"
@@ -38,9 +39,9 @@ const (
 // build draws the window in the language the settings choose, again from
 // the top when it changes, so every label is drawn in the new one.
 func build(m *model) ggui.Widget {
-	lang := ggui.Map(m.Prefs, func(p prefs) string { return resolveLanguage(p.Language) })
+	lang := ggui.Map(m.Prefs, func(p prefs) string { return i18n.Resolve(p.Language) })
 	return ggui.Key(lang, func(code string) ggui.Widget {
-		setLanguage(code)
+		i18n.Set(code)
 		return window(m)
 	})
 }

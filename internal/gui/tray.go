@@ -4,7 +4,8 @@ import (
 	"image"
 
 	"github.com/ironpark/ggui"
-	"github.com/ironpark/ggui/ui/icons"
+
+	"github.com/ironpark/mako/internal/gui/iconset"
 )
 
 // In tray mode the app lives on in the menu bar's status area when its
@@ -129,7 +130,7 @@ func (m *model) setTrayTitle(label string) {
 // trayIcon is the tray's icon, a terminal, as a template macOS draws in
 // the menu bar's color.
 func trayIcon() image.Image {
-	svg, err := icons.Load(iconFiles, "icons/square-terminal.svg")
+	svg, err := iconset.Load("square-terminal")
 	if err != nil {
 		return nil
 	}

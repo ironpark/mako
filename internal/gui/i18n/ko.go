@@ -1,4 +1,4 @@
-package gui
+package i18n
 
 // catalogKo is the window in Korean. TestEveryStringIsTranslated keeps it
 // complete.

@@ -4,26 +4,31 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/ironpark/mako/internal/gui/mdview"
+	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/skin"
 )
 
 // Every string the window translates has a translation in each catalog:
-// the literals handed to T and Tf, and the English held in tables and
+// the literals handed to T and Tf, here and in the packages under this
+// one, those marked with i18n.N, and the English held in tables and
 // translated where it is drawn.
 func TestEveryStringIsTranslated(t *testing.T) {
 	want := map[string]string{} // string -> where it is
-	files, _ := filepath.Glob("*.go")
+	var files []string
+	_ = filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
+			files = append(files, path)
+		}
+		return err
+	})
 	fset := token.NewFileSet()
 	for _, name := range files {
-		if strings.HasSuffix(name, "_test.go") {
-			continue
-		}
 		f, err := parser.ParseFile(fset, name, nil, 0)
 		if err != nil {
 			t.Fatal(err)
@@ -33,7 +38,7 @@ func TestEveryStringIsTranslated(t *testing.T) {
 			if !ok || len(call.Args) == 0 {
 				return true
 			}
-			if id, ok := call.Fun.(*ast.Ident); !ok || (id.Name != "T" && id.Name != "Tf") {
+			if !translates(call.Fun) {
 				return true
 			}
 			if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
@@ -57,9 +62,6 @@ func TestEveryStringIsTranslated(t *testing.T) {
 			want[l] = "settings labels"
 		}
 	}
-	for _, w := range mdview.Strings {
-		want[w] = "mdview.Strings"
-	}
 	for _, c := range skin.Colors {
 		want[c.Label] = "skin.Colors"
 		want[c.Group] = "skin.Colors"
@@ -67,7 +69,7 @@ func TestEveryStringIsTranslated(t *testing.T) {
 	if len(want) < 100 {
 		t.Fatalf("found only %d strings to translate; is the scan broken?", len(want))
 	}
-	for _, l := range languages[1:] { // English is the strings' own
+	for _, l := range i18n.Languages[1:] { // English is the strings' own
 		for s, at := range want {
 			if l.Catalog[s] == "" {
 				t.Errorf("%s: %q has no %s translation", at, s, l.Code)
@@ -76,12 +78,15 @@ func TestEveryStringIsTranslated(t *testing.T) {
 	}
 }
 
-func TestSystemLanguageIsOneTheWindowHas(t *testing.T) {
-	got := systemLanguage()
-	if _, ok := catalog(got); !ok {
-		t.Fatalf("system language %q has no catalog", got)
+// translates reports whether a call is to T or Tf, gui's or i18n's, or
+// to i18n.N.
+func translates(fun ast.Expr) bool {
+	switch f := fun.(type) {
+	case *ast.Ident:
+		return f.Name == "T" || f.Name == "Tf"
+	case *ast.SelectorExpr:
+		pkg, ok := f.X.(*ast.Ident)
+		return ok && pkg.Name == "i18n" && (f.Sel.Name == "T" || f.Sel.Name == "Tf" || f.Sel.Name == "N")
 	}
-	if resolveLanguage("ko") != "ko" || resolveLanguage("en") != "en" {
-		t.Fatal("a chosen language is not used")
-	}
+	return false
 }

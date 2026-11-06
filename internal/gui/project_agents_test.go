@@ -8,14 +8,15 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
 func TestProjectAgentsPanelFiltersMessagesAndOpensSessions(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
-	old := currentLanguage()
-	setLanguage("en")
-	t.Cleanup(func() { setLanguage(old) })
+	old := i18n.Current()
+	i18n.Set("en")
+	t.Cleanup(func() { i18n.Set(old) })
 	m := newModel(config.Default(), "")
 	root := fileRoot{Node: "node", Path: t.TempDir()}
 	snapshot := projectAgentsPreviewData(root)

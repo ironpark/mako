@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/i18n"
 )
 
 // prefs are the desktop app's own settings, kept apart from the daemon's
@@ -139,7 +140,7 @@ func (p prefs) normalized() prefs {
 		p.Theme = d.Theme
 	}
 	p.WindowBackdrop, p.SessionBackdrop = p.WindowBackdrop.normalized(), p.SessionBackdrop.normalized()
-	if _, ok := catalog(p.Language); !ok && p.Language != "system" {
+	if _, ok := i18n.Catalog(p.Language); !ok && p.Language != "system" {
 		p.Language = d.Language
 	}
 	if _, ok := usageCornerLabels[p.UsageCorner]; !ok {

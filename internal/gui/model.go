@@ -16,6 +16,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/mdview"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -190,7 +191,7 @@ type model struct {
 }
 
 func newModel(cfg *config.Config, addr string) *model {
-	go systemLanguage() // asks the platform, so not on the first frame
+	go i18n.System() // asks the platform, so not on the first frame
 	if addr == "" {
 		// The configuration's socket, found now: requests dial it from
 		// goroutines, which must not find another should MAKO_HOME change,

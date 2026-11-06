@@ -22,6 +22,8 @@ import (
 	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 
+	"github.com/ironpark/mako/internal/gui/i18n"
+	"github.com/ironpark/mako/internal/gui/iconset"
 	"github.com/ironpark/mako/internal/gui/skin"
 )
 
@@ -194,11 +196,11 @@ var alerts = map[string]struct {
 	Title string
 	Color color.Color
 }{
-	"NOTE":      {"Note", color.RGBA{0x44, 0x93, 0xf8, 0xff}},
-	"TIP":       {"Tip", color.RGBA{0x3f, 0xb9, 0x50, 0xff}},
-	"IMPORTANT": {"Important", color.RGBA{0xab, 0x7d, 0xf8, 0xff}},
-	"WARNING":   {"Warning", color.RGBA{0xd2, 0x99, 0x22, 0xff}},
-	"CAUTION":   {"Caution", color.RGBA{0xf8, 0x51, 0x49, 0xff}},
+	"NOTE":      {i18n.N("Note"), color.RGBA{0x44, 0x93, 0xf8, 0xff}},
+	"TIP":       {i18n.N("Tip"), color.RGBA{0x3f, 0xb9, 0x50, 0xff}},
+	"IMPORTANT": {i18n.N("Important"), color.RGBA{0xab, 0x7d, 0xf8, 0xff}},
+	"WARNING":   {i18n.N("Warning"), color.RGBA{0xd2, 0x99, 0x22, 0xff}},
+	"CAUTION":   {i18n.N("Caution"), color.RGBA{0xf8, 0x51, 0x49, 0xff}},
 }
 
 // quote is a block quote, or an alert where its first line names one.
@@ -211,8 +213,8 @@ func (r *mdRenderer) quote(n *ast.Blockquote) ggui.Widget {
 		if kind, ok := strings.CutPrefix(line, "[!"); ok {
 			if a, ok := alerts[strings.ToUpper(strings.TrimSuffix(kind, "]"))]; ok && strings.HasSuffix(kind, "]") {
 				bar = a.Color
-				body = append(body, ggui.Row(r.host.Icon("info", 15, a.Color),
-					ggui.Text(r.host.Text(a.Title)).Size(mdBodySize).Weight(ggui.WeightSemibold).Color(a.Color)).Gap(8))
+				body = append(body, ggui.Row(iconset.Icon("info").Size(15).Color(a.Color),
+					ggui.Text(i18n.T(a.Title)).Size(mdBodySize).Weight(ggui.WeightSemibold).Color(a.Color)).Gap(8))
 				// The rest of the paragraph, after the line naming it.
 				var spans []ggui.TextSpan
 				r.inlineAfter(p, first.Stop, &spans)

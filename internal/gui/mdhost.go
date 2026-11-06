@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"image/color"
 	"strings"
 
 	"github.com/ironpark/ggui"
@@ -95,10 +94,4 @@ func (h pageHost) Fold(n int, open bool) *ggui.StateValue[bool] {
 		doc.folds[n] = s
 	}
 	return s
-}
-
-func (pageHost) Text(s string) string { return T(s) }
-
-func (pageHost) Icon(name string, size float64, c color.Color) ggui.Widget {
-	return icon(name).Size(size).Color(c)
 }
