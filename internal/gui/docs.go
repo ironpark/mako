@@ -260,18 +260,15 @@ func (m *model) saveDoc(id string, force bool) {
 // changes.
 func (m *model) askCloseDoc(id string) {
 	if d, ok := m.doc(id); ok && d.Dirty {
-		m.confirmDiscard = id
-		m.DiscardOpen.Set(true)
+		m.askConfirm(confirmation{
+			Title:  T("Close without saving?"),
+			Body:   T("Your changes to this file are lost."),
+			Action: T("Discard changes"),
+			Run:    func() { m.closeDoc(id) },
+		})
 		return
 	}
 	m.closeDoc(id)
-}
-
-func (m *model) confirmedDiscard() {
-	if id := m.confirmDiscard; id != "" {
-		m.confirmDiscard = ""
-		m.closeDoc(id)
-	}
 }
 
 // closeDoc closes a file's tab and forgets its text.

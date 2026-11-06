@@ -60,10 +60,10 @@ func TestAppRunsItsOwnDaemon(t *testing.T) {
 
 	// Stopping it asks first, since that session would end.
 	m.guardStop(m.stopEmbedded)
-	if !ggui.Peek(m.StopOpen) || !ggui.Peek(m.DaemonState).Running {
+	if ggui.Peek(m.Confirmation).Title == "" || !ggui.Peek(m.DaemonState).Running {
 		t.Fatal("the daemon stopped without asking while a session ran in it")
 	}
-	m.confirmedStop()
+	answerConfirm(m)
 	if ggui.Peek(m.DaemonState).Running || m.embedded.running() {
 		t.Fatal("the daemon still runs after a confirmed stop")
 	}

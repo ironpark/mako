@@ -248,7 +248,7 @@ func (m *model) stepDiff(dir int) {
 
 // discardHunk undoes a hunk of a work tree's diff, once confirmed.
 func (m *model) askDiscardHunk(id string, hunk []*protocol.DiffLine) {
-	m.pendingHunk = func() {
+	discard := func() {
 		d, ok := ggui.Peek(m.Diffs)[id]
 		if !ok {
 			return
@@ -266,7 +266,12 @@ func (m *model) askDiscardHunk(id string, hunk []*protocol.DiffLine) {
 			m.loadGit(ggui.Peek(m.git.View).Root)
 		})
 	}
-	m.HunkOpen.Set(true)
+	m.askConfirm(confirmation{
+		Title:  T("Discard this hunk?"),
+		Body:   T("Its lines go back to what the last commit has. The change is lost."),
+		Action: T("Discard hunk"),
+		Run:    discard,
+	})
 }
 
 // View --------------------------------------------------------------------------

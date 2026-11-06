@@ -250,15 +250,12 @@ func (m *model) guardStop(fn func()) {
 		fn()
 		return
 	}
-	m.pendingStop = fn
-	m.StopOpen.Set(true)
-}
-
-func (m *model) confirmedStop() {
-	if fn := m.pendingStop; fn != nil {
-		m.pendingStop = nil
-		fn()
-	}
+	m.askConfirm(confirmation{
+		Title:  T("Stop the app's daemon?"),
+		Body:   T("The sessions running in it end with it."),
+		Action: T("Stop daemon"),
+		Run:    fn,
+	})
 }
 
 // setDaemonMode is the settings toggle's write: leaving the app's daemon

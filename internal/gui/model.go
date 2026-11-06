@@ -70,33 +70,25 @@ type model struct {
 	backdropSeen [2]ggui.Size
 	// Themes are the user's themes, by name; ThemesRead counts their
 	// readings from disk, so the editor starts again on what was read.
-	Themes         *ggui.StateValue[map[string]palette]
-	ThemesRead     *ggui.StateValue[int]
-	Page           *ggui.StateValue[string] // "workspace" or "settings"
-	Section        *ggui.StateValue[string] // the settings page shown
-	Host           *ggui.StateValue[hostDraft]
-	AgentDraft     *ggui.StateValue[[]agentDraft]
-	HostNote       *ggui.StateValue[string]
-	ConfirmOpen    *ggui.StateValue[bool]
-	RenameOpen     *ggui.StateValue[bool]
-	RenameText     *ggui.StateValue[string]
-	RenameErr      *ggui.StateValue[string]
-	renaming       string // the session RenameOpen names
-	confirmKill    string // the session ConfirmOpen asks about
-	StopOpen       *ggui.StateValue[bool]
-	pendingStop    func() // what StopOpen confirms
-	DiscardOpen    *ggui.StateValue[bool]
-	HunkOpen       *ggui.StateValue[bool]   // asks before a diff's hunk is undone
-	pendingHunk    func()                   // what HunkOpen confirms
-	confirmDiscard string                   // the file tab DiscardOpen asks about
-	QuitOpen       *ggui.StateValue[bool]   // asks before quitting with unsaved files
-	FindOpen       *ggui.StateValue[bool]   // the find bar is over the selected session; see find.go
-	FindText       *ggui.StateValue[string] // the words it finds
-	findFocus      bool                     // the find bar's field takes the focus as it is painted
-	quitting       bool
-	quitAsked      bool       // a quit, not the close button, is closing the window; see tray.go
-	tray           *ggui.Tray // the menu bar's icon, in tray mode
-	badge          string     // the count of sessions waiting, as the Dock's badge shows it
+	Themes     *ggui.StateValue[map[string]palette]
+	ThemesRead *ggui.StateValue[int]
+	Page       *ggui.StateValue[string] // "workspace" or "settings"
+	Section    *ggui.StateValue[string] // the settings page shown
+	Host       *ggui.StateValue[hostDraft]
+	AgentDraft *ggui.StateValue[[]agentDraft]
+	HostNote   *ggui.StateValue[string]
+	RenameOpen *ggui.StateValue[bool]
+	RenameText *ggui.StateValue[string]
+	RenameErr  *ggui.StateValue[string]
+	renaming   string                   // the session RenameOpen names
+	QuitOpen   *ggui.StateValue[bool]   // asks before quitting with unsaved files
+	FindOpen   *ggui.StateValue[bool]   // the find bar is over the selected session; see find.go
+	FindText   *ggui.StateValue[string] // the words it finds
+	findFocus  bool                     // the find bar's field takes the focus as it is painted
+	quitting   bool
+	quitAsked  bool       // a quit, not the close button, is closing the window; see tray.go
+	tray       *ggui.Tray // the menu bar's icon, in tray mode
+	badge      string     // the count of sessions waiting, as the Dock's badge shows it
 
 	// The command palette, and the extensions it opens over the window;
 	// see palette.go. Each opening gives palette the commands of the
@@ -292,13 +284,9 @@ func newModel(cfg *config.Config, addr string) *model {
 		Host:           ggui.State(draftFrom(cfg)),
 		AgentDraft:     ggui.State(draftAgents(cfg.Agents)).WithEqual(slices.Equal),
 		HostNote:       ggui.State(""),
-		ConfirmOpen:    ggui.State(false),
 		RenameOpen:     ggui.State(false),
 		RenameText:     ggui.State(""),
 		RenameErr:      ggui.State(""),
-		StopOpen:       ggui.State(false),
-		DiscardOpen:    ggui.State(false),
-		HunkOpen:       ggui.State(false),
 		QuitOpen:       ggui.State(false),
 		FindOpen:       ggui.State(false),
 		FindText:       ggui.State(""),
@@ -1106,8 +1094,12 @@ func (m *model) askKill(id string) {
 		return
 	}
 	confirm := func() {
-		m.confirmKill = id
-		m.ConfirmOpen.Set(true)
+		m.askConfirm(confirmation{
+			Title:  T("Kill this session?"),
+			Body:   T("The program is stopped on its node. Its output is lost."),
+			Action: T("Kill session"),
+			Run:    func() { m.kill(id) },
+		})
 	}
 	if !ok || s.GetAgent() != "shell" {
 		confirm()
@@ -1125,13 +1117,6 @@ func (m *model) askKill(id string) {
 		}
 		confirm()
 	})
-}
-
-func (m *model) confirmedKill() {
-	if id := m.confirmKill; id != "" {
-		m.confirmKill = ""
-		m.kill(id)
-	}
 }
 
 // kill terminates a session and closes its tab.

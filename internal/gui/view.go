@@ -75,21 +75,8 @@ func window(m *model) ggui.Widget {
 		m.toaster,
 		quickOpenDialog(m),
 		extensionsDialog(m),
-		ui.AlertDialog(m.ConfirmOpen, T("Kill this session?"), T("The program is stopped on its node. Its output is lost.")).
-			Confirm(T("Kill session"), m.confirmedKill).Destructive(),
-		ui.AlertDialog(m.DiscardOpen, T("Close without saving?"), T("Your changes to this file are lost.")).
-			Confirm(T("Discard changes"), m.confirmedDiscard).Destructive(),
-		ui.AlertDialog(m.HunkOpen, T("Discard this hunk?"), T("Its lines go back to what the last commit has. The change is lost.")).
-			Confirm(T("Discard hunk"), func() {
-				if fn := m.pendingHunk; fn != nil {
-					m.pendingHunk = nil
-					fn()
-				}
-			}).Destructive(),
 		ui.AlertDialog(m.QuitOpen, T("Quit without saving?"), T("Files you edited have unsaved changes, which are lost.")).
 			Confirm(T("Quit"), func() { m.quitting = true; ggui.UseHost().Close() }).Destructive(),
-		ui.AlertDialog(m.StopOpen, T("Stop the app's daemon?"), T("The sessions running in it end with it.")).
-			Confirm(T("Stop daemon"), m.confirmedStop).Destructive(),
 	).Expand()
 }
 

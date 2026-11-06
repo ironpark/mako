@@ -89,10 +89,10 @@ func TestClosingAnEditedFileAsksFirst(t *testing.T) {
 	p.Frame()
 	m.askKill(id) // ⌘W
 	p.Frame()
-	if !ggui.Peek(m.DiscardOpen) || len(ggui.Peek(m.Tabs)) != 1 {
-		t.Fatalf("closed an edited file unasked: dialog %v, tabs %v", ggui.Peek(m.DiscardOpen), ggui.Peek(m.Tabs))
+	if ggui.Peek(m.Confirmation).Title == "" || len(ggui.Peek(m.Tabs)) != 1 {
+		t.Fatalf("closed an edited file unasked: dialog %q, tabs %v", ggui.Peek(m.Confirmation).Title, ggui.Peek(m.Tabs))
 	}
-	m.confirmedDiscard()
+	answerConfirm(m)
 	p.Frame()
 	if _, ok := m.doc(id); ok || len(ggui.Peek(m.Tabs)) != 0 || m.docs[id] != nil {
 		t.Fatalf("still open: tabs %v", ggui.Peek(m.Tabs))
@@ -102,7 +102,7 @@ func TestClosingAnEditedFileAsksFirst(t *testing.T) {
 	m2, p2, id2, _ := docApp(t, "x")
 	m2.askKill(id2)
 	p2.Frame()
-	if ggui.Peek(m2.DiscardOpen) || len(ggui.Peek(m2.Tabs)) != 0 {
+	if ggui.Peek(m2.Confirmation).Title != "" || len(ggui.Peek(m2.Tabs)) != 0 {
 		t.Fatal("a saved file asked before closing")
 	}
 }

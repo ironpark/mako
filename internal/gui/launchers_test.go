@@ -187,9 +187,8 @@ func TestClosingATabEndsItsSession(t *testing.T) {
 		return ok
 	})
 	p.Click(x.Center())
-	probeUntil(t, p, "the question", func() bool { return ggui.Peek(m.ConfirmOpen) })
-	m.ConfirmOpen.Set(false) // as the dialog's button closes it
-	m.confirmedKill()
+	probeUntil(t, p, "the question", func() bool { return ggui.Peek(m.Confirmation).Title != "" })
+	answerConfirm(m) // as the dialog's button does
 	probeUntil(t, p, "the session to end", func() bool {
 		return len(ggui.Peek(m.Tabs)) == 0 && len(ggui.Peek(m.Sessions)) == 0
 	})
@@ -201,7 +200,7 @@ func TestClosingATabEndsItsSession(t *testing.T) {
 	probeUntil(t, p, "the idle shell to end", func() bool {
 		return len(ggui.Peek(m.Tabs)) == 0 && len(ggui.Peek(m.Sessions)) == 0
 	})
-	if ggui.Peek(m.ConfirmOpen) {
+	if ggui.Peek(m.Confirmation).Title != "" {
 		t.Fatal("asked before closing a shell at its prompt")
 	}
 }
