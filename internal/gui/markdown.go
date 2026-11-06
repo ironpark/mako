@@ -13,12 +13,14 @@ import (
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
-	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
+
+	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/gui/svgdraw"
 )
 
 // A Markdown file's tab shows it rendered as well as its source: the
@@ -741,6 +743,6 @@ type mdImage struct {
 	Size    ggui.Size
 	// Labels are an SVG's text, set over Img; Origin is its view box's
 	// corner, which they are placed from.
-	Labels []svgText
+	Labels []svgdraw.Text
 	Origin ggui.Point
 }

@@ -70,6 +70,8 @@ take it out before you commit.
     internal/gitstat     git status, diffs, history and operations
     internal/gui         the window: sidebar, panes and tabs, terminal, chat, editor
     internal/gui/skin    the window's palettes, theme tokens and the user's themes
+    internal/gui/boxdraw the terminal's box drawing and block elements, as shapes
+    internal/gui/svgdraw a Markdown page's SVGs, drawn, with their text set apart
     internal/notify      desktop notifications, each platform's own way
     internal/shellenv    the login shell's environment, for an app the desktop started
     internal/syntax      tree-sitter compiled to wasm, under wasmtime

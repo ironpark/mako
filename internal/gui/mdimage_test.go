@@ -12,6 +12,8 @@ import (
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	"github.com/yuin/goldmark/text"
+
+	"github.com/ironpark/mako/internal/gui/svgdraw"
 )
 
 // A paragraph of images alone, a README's badges in their links or an
@@ -92,7 +94,7 @@ func TestAnSVGIsDrawn(t *testing.T) {
 	if v.Img == nil || v.Size != ggui.Sz(40, 20) {
 		t.Fatalf("drawn %+v", v)
 	}
-	if b := v.Img.Bounds(); b.Dx() != 40*svgScale || b.Dy() != 20*svgScale {
+	if b := v.Img.Bounds(); b.Dx() != 40*svgdraw.Scale || b.Dy() != 20*svgdraw.Scale {
 		t.Fatalf("drawn %v pixels", b)
 	}
 	if svgImage([]byte("not svg")).Img != nil {

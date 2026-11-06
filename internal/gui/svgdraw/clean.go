@@ -1,4 +1,7 @@
-package gui
+// Package svgdraw draws the SVGs a Markdown page shows: what ggfx can
+// draw of them as pixels, and their text, taken out, set over those in
+// the window's own font.
+package svgdraw
 
 import (
 	"bytes"
@@ -23,8 +26,8 @@ import (
 // and its text taken out, to be set over the drawing in the window's own
 // font.
 
-// svgText is a run of an SVG's text, placed in its view box's units.
-type svgText struct {
+// Text is a run of an SVG's text, placed in its view box's units.
+type Text struct {
 	text      string
 	x, y      float64 // the baseline's start, middle or end, as anchor says
 	size      float64
@@ -68,15 +71,15 @@ type svgEmbed struct {
 	x, y, w, h float64
 }
 
-// cleanSVG is data with only what ggfx draws, and the text and the images
+// clean is data with only what ggfx draws, and the text and the images
 // it holds taken out of it.
-func cleanSVG(data []byte) ([]byte, []svgText, []svgEmbed, error) {
+func clean(data []byte) ([]byte, []Text, []svgEmbed, error) {
 	dec := xml.NewDecoder(bytes.NewReader(data))
 	dec.Strict = false
 	dec.AutoClose = xml.HTMLAutoClose
 	dec.Entity = xml.HTMLEntity
 	var out bytes.Buffer
-	var texts []svgText
+	var texts []Text
 	var embeds []svgEmbed
 	styles := []svgStyle{{m: identity(), fill: color.Black, opacity: 1, size: 16, anchor: "start"}}
 	skip := 0        // depth inside an element left out
@@ -251,9 +254,9 @@ func withoutUndrawn(style string) string {
 
 // svgRun gathers a text element's runs: each tspan placed anew starts one.
 type svgRun struct {
-	cur  svgText
+	cur  Text
 	x, y float64
-	done []svgText
+	done []Text
 }
 
 // move places what follows where an element's x, y, dx and dy say.
@@ -286,7 +289,7 @@ func (r *svgRun) add(s string, st svgStyle) {
 		px, py := st.m.apply(r.x, r.y)
 		c := color.NRGBAModel.Convert(st.fill).(color.NRGBA)
 		c.A = uint8(math.Round(float64(c.A) * min(max(st.opacity, 0), 1)))
-		r.cur = svgText{x: px, y: py, size: st.size * st.m.scale(), anchor: st.anchor,
+		r.cur = Text{x: px, y: py, size: st.size * st.m.scale(), anchor: st.anchor,
 			color: c, bold: st.bold, monospace: st.monospace}
 		r.cur.text = s
 		return
@@ -299,7 +302,7 @@ func (r *svgRun) flush() {
 	if r.cur.text != "" && r.cur.size > 0 && r.cur.color.(color.NRGBA).A > 0 {
 		r.done = append(r.done, r.cur)
 	}
-	r.cur = svgText{}
+	r.cur = Text{}
 }
 
 // with is the style an element with attrs has under st.
@@ -503,20 +506,21 @@ func parseSVGTransform(v string) svgMatrix {
 	}
 }
 
-// svgLabels sets an SVG's text over its drawing, scaled as it is.
-type svgLabels struct {
-	texts    []svgText
-	origin   ggui.Point // the view box's corner, in its units
-	scale    float64    // window units for each of the view box's
+// Labels sets an SVG's text over its drawing, scaled as it is.
+type Labels struct {
+	Texts    []Text
+	Origin   ggui.Point // the view box's corner, in its units
+	Scale    float64    // window units for each of the view box's
 	laid     []ggui.Widget
 	at       []ggui.Point
 	measured []ggui.Size
 }
 
-func (l *svgLabels) layout(env ggui.Env) {
+// Layout sets each text at its place and size.
+func (l *Labels) Layout(env ggui.Env) {
 	l.laid, l.at, l.measured = l.laid[:0], l.at[:0], l.measured[:0]
-	for _, t := range l.texts {
-		w := ggui.Text(t.text).Size(t.size * l.scale).Color(t.color).NoWrap().LineHeight(1)
+	for _, t := range l.Texts {
+		w := ggui.Text(t.text).Size(t.size * l.Scale).Color(t.color).NoWrap().LineHeight(1)
 		if t.bold {
 			w = w.Weight(ggui.WeightBold)
 		}
@@ -528,7 +532,7 @@ func (l *svgLabels) layout(env ggui.Env) {
 		if !ok {
 			base = size.H * 0.8
 		}
-		x := (t.x - l.origin.X) * l.scale
+		x := (t.x - l.Origin.X) * l.Scale
 		switch t.anchor {
 		case "middle":
 			x -= size.W / 2
@@ -536,12 +540,13 @@ func (l *svgLabels) layout(env ggui.Env) {
 			x -= size.W
 		}
 		l.laid = append(l.laid, w)
-		l.at = append(l.at, ggui.Pt(x, (t.y-l.origin.Y)*l.scale-base))
+		l.at = append(l.at, ggui.Pt(x, (t.y-l.Origin.Y)*l.Scale-base))
 		l.measured = append(l.measured, size)
 	}
 }
 
-func (l *svgLabels) paint(dst *ggui.Canvas, r ggui.Rect) {
+// Paint paints the texts Layout set over r, the drawing's rectangle.
+func (l *Labels) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	clip := dst.Clip(r)
 	for i, w := range l.laid {
 		at := l.at[i]

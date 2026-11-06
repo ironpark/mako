@@ -1,4 +1,4 @@
-package gui
+package svgdraw
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ func TestABadgeIsDrawnWithItsText(t *testing.T) {
 	if _, err := ggsvg.Parse(strings.NewReader(badge)); err == nil {
 		t.Log("ggfx reads the badge itself now")
 	}
-	clean, texts, embeds, err := cleanSVG([]byte(badge))
+	clean, texts, embeds, err := clean([]byte(badge))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,8 +56,8 @@ func TestABadgeIsDrawnWithItsText(t *testing.T) {
 	if link.text != "passing" || link.x != 61.5 {
 		t.Errorf("text in a link %+v", link)
 	}
-	img := svgImage([]byte(badge))
-	if img.Img == nil || img.Size.W != 88 || len(img.Labels) != 3 {
+	img, ok := Draw([]byte(badge))
+	if !ok || img.Pixels == nil || img.Size.W != 88 || len(img.Labels) != 3 {
 		t.Fatalf("image %+v", img)
 	}
 }
