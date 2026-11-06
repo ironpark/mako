@@ -17,6 +17,7 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transcript"
 	"github.com/yuin/goldmark/text"
@@ -365,7 +366,7 @@ func glyphSwitch(mode ggui.Binding[bool], left, right, toRight, toLeft, tip stri
 	side := func(glyph string, on bool) ggui.Widget {
 		g := ggui.Reactive(func() ggui.Widget {
 			// Black on the light thumb in view; the other quiet on the track.
-			var c color.Color = tokExtraMuted
+			var c color.Color = skin.ExtraMuted
 			if mode.Get() == on {
 				c = viewThumbInk()
 			}
@@ -406,17 +407,17 @@ var viewSideButton = ui.NewVariant("view-switch", func(t uitheme.Theme) ui.Butto
 // viewThumb is the colour of the view switch's thumb, near white in either
 // theme, and viewThumbInk the glyph's on it.
 func viewThumb() color.Color {
-	if pal, ok := uitheme.Use().Get(paletteKey); ok && pal.Dark {
+	if pal, ok := uitheme.Use().Get(skin.Key); ok && pal.Dark {
 		return pal.Fg
 	}
-	return tokSolidBg
+	return skin.SolidBg
 }
 
 func viewThumbInk() color.Color {
-	if pal, ok := uitheme.Use().Get(paletteKey); ok && pal.Dark {
+	if pal, ok := uitheme.Use().Get(skin.Key); ok && pal.Dark {
 		return pal.Surface0
 	}
-	return tokFg
+	return skin.Fg
 }
 
 // viewToggle draws a two-sided switch's track and its thumb, which slides
@@ -484,7 +485,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		}
 		var rows []ggui.Widget
 		if v.Err != "" {
-			rows = append(rows, ggui.Text(v.Err).Size(13).Color(tokMuted).Selectable())
+			rows = append(rows, ggui.Text(v.Err).Size(13).Color(skin.Muted).Selectable())
 		}
 		switch {
 		case !v.Loaded:
@@ -569,7 +570,7 @@ func chatFeed(m *model, id string, state *chatState, turns ggui.Readable[[]chatT
 		return find.mark(row.Item.Key, w)
 	}).Gap(chatGap).Stretch().EstimatedExtent(chatTurnEstimate).Retain(chatRetain)
 	content := &lane{child: ggui.Box(ggui.Column(head, list).Stretch()).Pad(18, 0)}
-	scroll = ggui.Scroll(content).FollowEnd().Bar(tokSurface3)
+	scroll = ggui.Scroll(content).FollowEnd().Bar(skin.Surface3)
 	// A drag selects through the turns in view, from one message into the
 	// next, and copies them as they read; a click anywhere in the feed, on
 	// a message or the room around and below them, drops the selection.
@@ -616,7 +617,7 @@ func toLatestButton(m *model, state *chatState, scroll *ggui.ScrollController, o
 		if !far {
 			return ggui.Box()
 		}
-		btn := ui.ButtonOf(icon("arrow-down").Size(16).Color(tokFg), func() { m.toLatest(state, scroll) }).
+		btn := ui.ButtonOf(icon("arrow-down").Size(16).Color(skin.Fg), func() { m.toLatest(state, scroll) }).
 			Outline().Pad(8).Radius(18).Name(T("Latest"))
 		return ggui.Padding(ggui.Align(ggui.Box(btn).Radius(18).Shadow(uitheme.Use().PanelShadow)).At(0.5, 1), 0, 0, 14, 0)
 	})
@@ -734,7 +735,7 @@ func chatTurnRow(m *model, id string, info *protocol.SessionInfo, state *chatSta
 		return thinkingRow()
 	}
 	if t.Sending {
-		label := ggui.Row(ggui.Spacer(), icon("clock").Size(11).Color(tokExtraMuted), ggui.Text(T("Sent")).Size(11).Color(tokExtraMuted)).Gap(4).Align(ggui.AlignCenter)
+		label := ggui.Row(ggui.Spacer(), icon("clock").Size(11).Color(skin.ExtraMuted), ggui.Text(T("Sent")).Size(11).Color(skin.ExtraMuted)).Gap(4).Align(ggui.AlignCenter)
 		return ggui.Column(ggui.Opacity(chatTurn(m, id, info, t.Messages[0]), 0.6), label).Gap(4).Stretch()
 	}
 	if t.Messages[0].GetRole() != "tool" {
@@ -751,7 +752,7 @@ func chatTurnRow(m *model, id string, info *protocol.SessionInfo, state *chatSta
 	if len(tools) >= foldRun {
 		body = toolRun(state, chatMessageKey(t.Messages[0]), names, t.Folded, body)
 	}
-	return ggui.Box(body).Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(6, 8)
+	return ggui.Box(body).Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(6, 8)
 }
 
 // foldRun is how many tool calls in a row fold into one line.
@@ -768,7 +769,7 @@ func toolRun(state *chatState, key string, names []string, folded bool, body ggu
 		}
 	}
 	title := Tf("%d tool calls", len(names))
-	header := foldHeader(open, icon("layers").Size(14).Color(tokMuted), ggui.Text(title).Size(12.5).NoWrap(), strings.Join(distinct, ", "), title)
+	header := foldHeader(open, icon("layers").Size(14).Color(skin.Muted), ggui.Text(title).Size(12.5).NoWrap(), strings.Join(distinct, ", "), title)
 	return ggui.Column(header, ggui.If(open, func() ggui.Widget { return body })).Gap(2).Stretch()
 }
 
@@ -780,7 +781,7 @@ func foldHeader(open ggui.Binding[bool], glyph, title ggui.Widget, detail, name 
 		title,
 		ggui.Expanded(muted(ggui.Text(detail).Size(12).NoWrap().Ellipsis())),
 		ggui.View(open, func(o bool) ggui.Widget {
-			return icon("chevron-down").Size(13).Color(tokExtraMuted).Rotate(pick(o, 0.0, -math.Pi/2))
+			return icon("chevron-down").Size(13).Color(skin.ExtraMuted).Rotate(pick(o, 0.0, -math.Pi/2))
 		}),
 	).Gap(8).Stretch(), func() { open.Set(!ggui.Untrack(open.Get)) }).Ghost().Pad(4, 6).Radius(6).Name(name)
 }
@@ -788,7 +789,7 @@ func foldHeader(open ggui.Binding[bool], glyph, title ggui.Widget, detail, name 
 func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage) ggui.Widget {
 	if msg.GetRole() == "user" {
 		bubble := ggui.Box(ggui.Text(msg.GetText()).Size(14).Selectable()).
-			Fill(tokSurface2).Radius(12).Pad(10, 14).MaxWidth(680)
+			Fill(skin.Surface2).Radius(12).Pad(10, 14).MaxWidth(680)
 		var turn ggui.Widget = ggui.Row(ggui.Spacer(), &withCopy{content: bubble, button: copyButton(m, msg.GetText())}).Stretch()
 		// The images it holds, and those it names by their paths, over it.
 		named := imageRefs(msg.GetText(), info.GetProject())
@@ -837,7 +838,7 @@ func (w *withCopy) Paint(dst *ggui.Canvas, r ggui.Rect) {
 func copyButton(m *model, text string) ggui.Widget {
 	copied := ggui.State(false)
 	return ggui.View(copied, func(done bool) ggui.Widget {
-		glyph := icon(pick(done, "check", "copy")).Size(13).Color(tokMuted)
+		glyph := icon(pick(done, "check", "copy")).Size(13).Color(skin.Muted)
 		return ui.Tooltip(ui.ButtonOf(glyph, func() {
 			ggui.CurrentClipboard().Write(text)
 			copied.Set(true)
@@ -853,7 +854,7 @@ func copyButton(m *model, text string) ggui.Widget {
 func toolRow(m *model, id string, state *chatState, msg *protocol.ChatMessage, agent *protocol.SubAgent) ggui.Widget {
 	name, detail, _, _, failed := toolParts(msg)
 	open := state.toolOpen(chatMessageKey(msg), failed)
-	var glyph ggui.Widget = icon(toolGlyph(msg.GetKind())).Size(14).Color(pick(failed, tokDotDown, tokMuted))
+	var glyph ggui.Widget = icon(toolGlyph(msg.GetKind())).Size(14).Color(pick(failed, skin.DotDown, skin.Muted))
 	if msg.GetPending() || agent.GetRunning() {
 		still := glyph
 		glyph = ggui.Reactive(func() ggui.Widget {
@@ -917,8 +918,8 @@ func agentProgress(a *protocol.SubAgent) ggui.Widget {
 	line := []ggui.Widget{muted(ggui.Text(strings.Join(parts, " · ")).Size(11.5).NoWrap())}
 	if a.GetTool() != "" {
 		line = append(line,
-			icon(toolGlyph(a.GetToolKind())).Size(12).Color(tokExtraMuted),
-			ggui.Expanded(ggui.Text(strings.TrimSpace(a.GetTool()+"  "+a.GetDetail())).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis()))
+			icon(toolGlyph(a.GetToolKind())).Size(12).Color(skin.ExtraMuted),
+			ggui.Expanded(ggui.Text(strings.TrimSpace(a.GetTool()+"  "+a.GetDetail())).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()))
 	}
 	return ggui.Row(line...).Gap(6).Align(ggui.AlignCenter)
 }
@@ -937,7 +938,7 @@ func compactingRow(m *model, id string) ggui.Widget {
 		return &lane{child: ggui.Box(ggui.Row(
 			ui.Spinner().Size(13),
 			muted(ggui.Text(T("Compacting conversation…")).Size(12.5).NoWrap()),
-		).Gap(8).Align(ggui.AlignCenter)).Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(8, 12)}
+		).Gap(8).Align(ggui.AlignCenter)).Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(8, 12)}
 	})
 }
 
@@ -978,22 +979,22 @@ func runningAgents(m *model, id string, state *chatState) ggui.Widget {
 			).Gap(8).Align(ggui.AlignCenter))
 		}
 		return &lane{child: ggui.Box(ggui.Column(rows...).Gap(6).Stretch()).
-			Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(8, 12)}
+			Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(8, 12)}
 	})
 }
 
 // toolFrame is the frame of a tool's code, output or command.
 func toolFrame(w ggui.Widget) *ggui.BoxWidget {
-	return ggui.Box(w).Fill(tokSurface0).Border(1, tokBorder).Radius(6)
+	return ggui.Box(w).Fill(skin.Surface0).Border(1, skin.Border).Radius(6)
 }
 
-func toolLabel(s string) ggui.Widget { return ggui.Text(s).Size(11).Color(tokExtraMuted) }
+func toolLabel(s string) ggui.Widget { return ggui.Text(s).Size(11).Color(skin.ExtraMuted) }
 
 func toolBlock(text string, failed bool) ggui.Widget {
 	t := ggui.Text(strings.TrimRight(text, "\n")).Font(ggui.DefaultMonoFont()).Size(12).
 		LineHeight(1.4).Selectable()
 	if failed {
-		t = t.Color(tokDotDown)
+		t = t.Color(skin.DotDown)
 	}
 	return toolFrame(t).Pad(8, 10)
 }

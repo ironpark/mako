@@ -1,4 +1,6 @@
-package gui
+// Package skin is how the window looks: its palettes, the theme tokens
+// widgets are coloured with, and the user's themes on disk.
+package skin
 
 import (
 	"image/color"
@@ -8,9 +10,9 @@ import (
 	"github.com/ironpark/gostty"
 )
 
-// palette is one of Paseo's colour schemes: surfaces stepping up from the
+// Palette is one of Paseo's colour schemes: surfaces stepping up from the
 // workspace, the sidebar a shade apart, and an ANSI palette for terminals.
-type palette struct {
+type Palette struct {
 	Name                           string
 	Dark                           bool
 	Surface0, Surface1, Surface2   color.RGBA // workspace; hovered rows; selected rows, inputs, popovers
@@ -32,47 +34,47 @@ type palette struct {
 	ANSI                           [16]uint32
 }
 
-var darkPalette = palette{
+var Dark = Palette{
 	Name: "dark", Dark: true,
-	Surface0: hex(0x181B1A), Surface1: hex(0x1E2120), Surface2: hex(0x272A29), Surface3: hex(0x434645),
-	Sidebar: hex(0x141716), SidebarHover: hex(0x1E2120), SidebarSelected: hex(0x272A29),
-	Fg: hex(0xFAFAFA), Muted: hex(0xA1A5A4), ExtraMuted: hex(0x717574),
-	Border: hex(0x252B2A), BorderAccent: hex(0x2F3534),
-	Accent: hex(0x20744A), AccentBright: hex(0x7CCBA0), Highlight: hex(0x383C3B),
-	Primary: hex(0xFAFAFA), PrimaryFg: hex(0x181B1A),
-	Destructive: hex(0xC64F43), Ring: hex(0xD4D4D8),
-	DotRunning: hex(0x35C264), DotExited: hex(0x717574), DotDown: hex(0xF7796D),
-	DotWaiting: hex(0xE2B04A), DotDone: hex(0x6A9DE0),
-	Selection: hex(0x3A5A48),
-	DiffAdded: hex(0x6CC08A), DiffRemoved: hex(0xE57E7E), DiffModified: hex(0xE2C06A),
-	DiffAddedBg: hex(0x1D3326), DiffRemovedBg: hex(0x3A2224),
+	Surface0: Hex(0x181B1A), Surface1: Hex(0x1E2120), Surface2: Hex(0x272A29), Surface3: Hex(0x434645),
+	Sidebar: Hex(0x141716), SidebarHover: Hex(0x1E2120), SidebarSelected: Hex(0x272A29),
+	Fg: Hex(0xFAFAFA), Muted: Hex(0xA1A5A4), ExtraMuted: Hex(0x717574),
+	Border: Hex(0x252B2A), BorderAccent: Hex(0x2F3534),
+	Accent: Hex(0x20744A), AccentBright: Hex(0x7CCBA0), Highlight: Hex(0x383C3B),
+	Primary: Hex(0xFAFAFA), PrimaryFg: Hex(0x181B1A),
+	Destructive: Hex(0xC64F43), Ring: Hex(0xD4D4D8),
+	DotRunning: Hex(0x35C264), DotExited: Hex(0x717574), DotDown: Hex(0xF7796D),
+	DotWaiting: Hex(0xE2B04A), DotDone: Hex(0x6A9DE0),
+	Selection: Hex(0x3A5A48),
+	DiffAdded: Hex(0x6CC08A), DiffRemoved: Hex(0xE57E7E), DiffModified: Hex(0xE2C06A),
+	DiffAddedBg: Hex(0x1D3326), DiffRemovedBg: Hex(0x3A2224),
 	ANSI: [16]uint32{
 		0x141716, 0xE07070, 0x5DBA80, 0xD4A44A, 0x6A9DE0, 0xB07AD0, 0x4AABB8, 0xD4D4D8,
 		0x434645, 0xE89090, 0x7ECF9A, 0xE0BE6E, 0x8AB4E8, 0xC49AE0, 0x6EC2CC, 0xF0F0F2,
 	},
 }
 
-var lightPalette = palette{
+var Light = Palette{
 	Name:     "light",
-	Surface0: hex(0xFFFFFF), Surface1: hex(0xFAFAFA), Surface2: hex(0xF4F4F5), Surface3: hex(0xE4E4E7),
-	Sidebar: hex(0xF4F4F5), SidebarHover: hex(0xE4E4E7), SidebarSelected: hex(0xD4D4D8),
-	Fg: hex(0x1A1A1E), Muted: hex(0x71717A), ExtraMuted: hex(0xA1A1AA),
-	Border: hex(0xE4E4E7), BorderAccent: hex(0xD4D4D8),
-	Accent: hex(0x20744A), AccentBright: hex(0x239956), Highlight: hex(0xE4E4E7),
-	Primary: hex(0x18181B), PrimaryFg: hex(0xFAFAFA),
-	Destructive: hex(0xB04138), Ring: hex(0x18181B),
-	DotRunning: hex(0x299F51), DotExited: hex(0xA1A1AA), DotDown: hex(0xF12E2F),
-	DotWaiting: hex(0xD97706), DotDone: hex(0x2563EB),
-	Selection: hex(0xC8E6D2),
-	DiffAdded: hex(0x16A34A), DiffRemoved: hex(0xDC2626), DiffModified: hex(0xCA8A04),
-	DiffAddedBg: hex(0xE6F4EA), DiffRemovedBg: hex(0xFBE9E9),
+	Surface0: Hex(0xFFFFFF), Surface1: Hex(0xFAFAFA), Surface2: Hex(0xF4F4F5), Surface3: Hex(0xE4E4E7),
+	Sidebar: Hex(0xF4F4F5), SidebarHover: Hex(0xE4E4E7), SidebarSelected: Hex(0xD4D4D8),
+	Fg: Hex(0x1A1A1E), Muted: Hex(0x71717A), ExtraMuted: Hex(0xA1A1AA),
+	Border: Hex(0xE4E4E7), BorderAccent: Hex(0xD4D4D8),
+	Accent: Hex(0x20744A), AccentBright: Hex(0x239956), Highlight: Hex(0xE4E4E7),
+	Primary: Hex(0x18181B), PrimaryFg: Hex(0xFAFAFA),
+	Destructive: Hex(0xB04138), Ring: Hex(0x18181B),
+	DotRunning: Hex(0x299F51), DotExited: Hex(0xA1A1AA), DotDown: Hex(0xF12E2F),
+	DotWaiting: Hex(0xD97706), DotDone: Hex(0x2563EB),
+	Selection: Hex(0xC8E6D2),
+	DiffAdded: Hex(0x16A34A), DiffRemoved: Hex(0xDC2626), DiffModified: Hex(0xCA8A04),
+	DiffAddedBg: Hex(0xE6F4EA), DiffRemovedBg: Hex(0xFBE9E9),
 	ANSI: [16]uint32{
 		0x1A1A1E, 0xDC2626, 0x16A34A, 0xCA8A04, 0x2563EB, 0x9333EA, 0x0891B2, 0xD4D4D8,
 		0x3F3F46, 0xEF4444, 0x22C55E, 0xF59E0B, 0x3B82F6, 0xA855F7, 0x06B6D4, 0xFAFAFA,
 	},
 }
 
-func hex(v uint32) color.RGBA {
+func Hex(v uint32) color.RGBA {
 	return color.RGBA{R: uint8(v >> 16), G: uint8(v >> 8), B: uint8(v), A: 0xff}
 }
 
@@ -81,42 +83,42 @@ func hex(v uint32) color.RGBA {
 // rebuilding it. Paseo's extra steps ride on the theme as variables.
 //
 // The workspace's and the sidebar's fills are variables of their own, which
-// a background image clears (backdrop.go); tokSolidBg is the workspace's
+// a background image clears (gui's backdrop.go); SolidBg is the workspace's
 // colour that stays, for what must cover what is under it.
 var (
-	tokSurface0     = uitheme.Var("surface-0")
-	tokSurface1     = uitheme.Card
-	tokSurface2     = uitheme.Muted
-	tokSurface3     = uitheme.Var("surface-3")
-	tokSidebar      = uitheme.Var("sidebar-fill")
-	tokSolidBg      = uitheme.Bg
-	tokSidebarSel   = uitheme.Var("sidebar-selected")
-	tokFg           = uitheme.Fg
-	tokMuted        = uitheme.MutedFg
-	tokExtraMuted   = uitheme.Var("extra-muted")
-	tokBorder       = uitheme.Border
-	tokBorderAccent = uitheme.InputBorder
-	tokAccentBright = uitheme.Var("accent-bright")
-	tokDotRunning   = uitheme.Var("dot-running")
-	tokDotExited    = uitheme.Var("dot-exited")
-	tokDotDown      = uitheme.Var("dot-down")
-	tokDotWaiting   = uitheme.Var("dot-waiting")
-	tokDotDone      = uitheme.Var("dot-done")
+	Surface0     = uitheme.Var("surface-0")
+	Surface1     = uitheme.Card
+	Surface2     = uitheme.Muted
+	Surface3     = uitheme.Var("surface-3")
+	Sidebar      = uitheme.Var("sidebar-fill")
+	SolidBg      = uitheme.Bg
+	SidebarSel   = uitheme.Var("sidebar-selected")
+	Fg           = uitheme.Fg
+	Muted        = uitheme.MutedFg
+	ExtraMuted   = uitheme.Var("extra-muted")
+	Border       = uitheme.Border
+	BorderAccent = uitheme.InputBorder
+	AccentBright = uitheme.Var("accent-bright")
+	DotRunning   = uitheme.Var("dot-running")
+	DotExited    = uitheme.Var("dot-exited")
+	DotDown      = uitheme.Var("dot-down")
+	DotWaiting   = uitheme.Var("dot-waiting")
+	DotDone      = uitheme.Var("dot-done")
 
-	tokDiffAdded     = uitheme.Var("diff-added")
-	tokDiffRemoved   = uitheme.Var("diff-removed")
-	tokDiffModified  = uitheme.Var("diff-modified")
-	tokDiffAddedBg   = uitheme.Var("diff-added-bg")
-	tokDiffRemovedBg = uitheme.Var("diff-removed-bg")
+	DiffAdded     = uitheme.Var("diff-added")
+	DiffRemoved   = uitheme.Var("diff-removed")
+	DiffModified  = uitheme.Var("diff-modified")
+	DiffAddedBg   = uitheme.Var("diff-added-bg")
+	DiffRemovedBg = uitheme.Var("diff-removed-bg")
 )
 
-// paletteKey carries the palette on the theme, for the terminal, which
+// Key carries the palette on the theme, for the terminal, which
 // paints with concrete colours.
-var paletteKey = ggui.NewEnvKey[palette]("mako palette")
+var Key = ggui.NewEnvKey[Palette]("mako palette")
 
-// themeFor maps a palette onto ggui's semantic tokens, so the stock
+// Theme maps a palette onto ggui's semantic tokens, so the stock
 // controls (buttons, selects, dialogs, fields) match the custom chrome.
-func themeFor(p palette) uitheme.Theme {
+func Theme(p Palette) uitheme.Theme {
 	t := uitheme.Default()
 	if p.Dark {
 		t = uitheme.Dark()
@@ -133,7 +135,7 @@ func themeFor(p palette) uitheme.Theme {
 	// Accent is what ggui lights the item under the pointer with, in menus,
 	// selects and lists; it must stand off the popover they open on.
 	t.Accent, t.AccentFg = p.Highlight, p.Fg
-	t.Destructive, t.DestructiveFg = p.Destructive, hex(0xFFFFFF)
+	t.Destructive, t.DestructiveFg = p.Destructive, Hex(0xFFFFFF)
 	t.Border = p.Border
 	t.InputBorder = p.BorderAccent
 	t.Input = p.Surface1
@@ -162,37 +164,37 @@ func themeFor(p palette) uitheme.Theme {
 	set("diff-modified", p.DiffModified)
 	set("diff-added-bg", p.DiffAddedBg)
 	set("diff-removed-bg", p.DiffRemovedBg)
-	return t.Set(paletteKey, p)
+	return t.Set(Key, p)
 }
 
-// paletteFor picks the palette a theme preference names: one of the
+// Pick picks the palette a theme preference names: one of the
 // user's themes, light, dark, or the one that follows the desktop's
 // appearance for "system" and a theme that is gone.
-func paletteFor(pref string, systemDark bool, custom map[string]palette) palette {
+func Pick(pref string, systemDark bool, custom map[string]Palette) Palette {
 	switch pref {
 	case "light":
-		return lightPalette
+		return Light
 	case "dark":
-		return darkPalette
+		return Dark
 	}
 	if p, ok := custom[pref]; ok {
 		return p
 	}
 	if systemDark {
-		return darkPalette
+		return Dark
 	}
-	return lightPalette
+	return Light
 }
 
-// applyPalette gives a terminal the window's colours: its defaults and the
+// ApplyTerminal gives a terminal the window's colours: its defaults and the
 // sixteen ANSI entries. The 256-colour cube and grays stay standard.
-func applyPalette(vt *gostty.Terminal, p palette) {
+func ApplyTerminal(vt *gostty.Terminal, p Palette) {
 	for i, c := range p.ANSI {
 		_ = vt.SetDefaultPaletteColor(uint8(i), gostty.RGBFromUint32(c))
 	}
 	vt.ResetPalette()
-	vt.SetDefaultBackgroundColor(rgb(p.Surface0))
-	vt.SetDefaultForegroundColor(rgb(p.Fg))
+	vt.SetDefaultBackgroundColor(RGB(p.Surface0))
+	vt.SetDefaultForegroundColor(RGB(p.Fg))
 }
 
-func rgb(c color.RGBA) gostty.RGB { return gostty.NewRGB(c.R, c.G, c.B) }
+func RGB(c color.RGBA) gostty.RGB { return gostty.NewRGB(c.R, c.G, c.B) }

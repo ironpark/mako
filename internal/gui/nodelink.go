@@ -6,6 +6,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -25,11 +26,11 @@ func linkDown(n *protocol.Node) bool {
 func nodeDot(n *protocol.Node) ggui.Widget {
 	switch {
 	case n.GetLink() == protocol.LinkLinking:
-		return dot(tokDotWaiting)
+		return dot(skin.DotWaiting)
 	case reachable(n):
-		return dot(tokDotRunning)
+		return dot(skin.DotRunning)
 	}
-	return dot(tokDotDown)
+	return dot(skin.DotDown)
 }
 
 // nodeLinkLine says how a link down stands, the time to the next try
@@ -53,7 +54,7 @@ func nodeLinkLine(m *model, n *protocol.Node) ggui.Widget {
 				text = T("Offline · trying again")
 			}
 		}
-		return ggui.Text(text).Size(11.5).Color(pick(n.GetLink() == protocol.LinkLinking, tokDotWaiting, tokDotDown)).NoWrap().Ellipsis()
+		return ggui.Text(text).Size(11.5).Color(pick(n.GetLink() == protocol.LinkLinking, skin.DotWaiting, skin.DotDown)).NoWrap().Ellipsis()
 	})
 	if n.GetLinkError() == "" {
 		return line

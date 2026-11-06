@@ -12,6 +12,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -290,9 +291,9 @@ func firstChange(d *protocol.Diff) int {
 // diffTabFace is a diff's tab: how the file changed, its name, and in a
 // commit, which. A preview's name is dimmed, and a double click keeps it.
 func diffTabFace(m *model, id string, d diffTab, selected, focused bool) ggui.Widget {
-	fg := tokMuted
+	fg := skin.Muted
 	if selected && !d.Preview {
-		fg = tokFg
+		fg = skin.Fg
 	}
 	name := d.Name()
 	label := name
@@ -377,7 +378,7 @@ func diffTabView(m *model, id string) ggui.Widget {
 		rows := []ggui.Widget{
 			diffHeader(dt.File, diffTools(m, id, dt, v.Mode)),
 			hline(),
-			ggui.Expanded(ggui.Box(body).Fill(tokSurface1)),
+			ggui.Expanded(ggui.Box(body).Fill(skin.Surface1)),
 		}
 		if !v.Sel.empty() {
 			rows = append(rows, selectionBar(m, dt.Root, joinPath(subfolder(dt.Repo, dt.Root.Path), dt.File.GetPath()), dt.Diff.GetLines(), sel))
@@ -406,9 +407,9 @@ func diffNote(loading bool, err string, d *protocol.Diff) ggui.Widget {
 // is drawn, and reading it again.
 func diffTools(m *model, id string, d diffTab, mode diffMode) ggui.Widget {
 	toggle := func(glyph, label string, on bool, set func(*prefs)) ggui.Widget {
-		c := tokExtraMuted
+		c := skin.ExtraMuted
 		if on {
-			c = tokFg
+			c = skin.Fg
 		}
 		return ui.Tooltip(ui.ButtonOf(icon(glyph).Color(c), func() {
 			m.Prefs.Update(func(p prefs) prefs { set(&p); return p })

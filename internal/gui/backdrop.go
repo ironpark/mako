@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/mcp"
 )
 
@@ -108,7 +109,7 @@ func backdropped(m *model, slot backdropSlot, child ggui.Widget) ggui.Widget {
 func backdropScrim(m *model, slot backdropSlot) ggui.Widget {
 	alpha := ggui.Map(m.Prefs, func(p prefs) float64 { return 1 - slot.of(&p).Opacity })
 	return ggui.Reactive(func() ggui.Widget {
-		return ggui.Box().Fill(tokSolidBg.Alpha(alpha.Get()))
+		return ggui.Box().Fill(skin.SolidBg.Alpha(alpha.Get()))
 	})
 }
 

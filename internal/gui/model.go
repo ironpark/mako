@@ -16,6 +16,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -54,7 +55,7 @@ type model struct {
 	backdropSeen [2]ggui.Size
 	// Themes are the user's themes, by name; ThemesRead counts their
 	// readings from disk, so the editor starts again on what was read.
-	Themes     *ggui.StateValue[map[string]palette]
+	Themes     *ggui.StateValue[map[string]skin.Palette]
 	ThemesRead *ggui.StateValue[int]
 	Page       *ggui.StateValue[string] // "workspace" or "settings"
 	Section    *ggui.StateValue[string] // the settings page shown
@@ -202,7 +203,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		link:        newDaemonLink(addr, p.Daemon),
 		Prefs:       ggui.State(p),
 		Spaces:      ggui.State(spaceList{}).WithEqual(func(a, b spaceList) bool { return reflect.DeepEqual(a, b) }),
-		Themes:      ggui.State(loadThemes()).WithEqual(maps.Equal),
+		Themes:      ggui.State(skin.Load()).WithEqual(maps.Equal),
 		ThemesRead:  ggui.State(0),
 		Page:        ggui.State("workspace"),
 		Section:     ggui.State("general"),
@@ -545,14 +546,14 @@ func (m *model) syncTitles() {
 
 // themePalette is the palette the theme preference picks; it subscribes
 // the caller.
-func (m *model) themePalette() palette {
-	return paletteFor(m.Prefs.Get().Theme, ggui.SystemDark().Get(), m.Themes.Get())
+func (m *model) themePalette() skin.Palette {
+	return skin.Pick(m.Prefs.Get().Theme, ggui.SystemDark().Get(), m.Themes.Get())
 }
 
 // reloadThemes reads the user's themes from disk again, and starts the
 // editor again on them if they changed.
 func (m *model) reloadThemes() {
-	themes := loadThemes()
+	themes := skin.Load()
 	if maps.Equal(themes, ggui.Peek(m.Themes)) {
 		return
 	}

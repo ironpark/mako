@@ -10,6 +10,8 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
+
+	"github.com/ironpark/mako/internal/gui/skin"
 )
 
 // Settings ▸ Appearance: the theme, the user's own themes and their
@@ -17,13 +19,13 @@ import (
 
 func appearanceSettings(m *model) ggui.Widget {
 	theme := ui.Select(prefField(m, func(p *prefs) *string { return &p.Theme })).
-		BindOptions(ggui.Map(m.Themes, themeNames)).Format(themeLabel).Name(T("Theme"))
+		BindOptions(ggui.Map(m.Themes, skin.Names)).Format(themeLabel).Name(T("Theme"))
 	corner := ui.Select(prefField(m, func(p *prefs) *string { return &p.UsageCorner })).
 		Options(usageCorners).Format(func(s string) string { return T(usageCornerLabels[s]) }).Name(T("Overlay position")).
 		BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return !p.UsageOverlay }))
 	actions := ggui.Row(
 		ui.Button(T("Duplicate"), m.duplicateTheme).Outline(),
-		ui.Button(T("Delete"), m.deleteTheme).Outline().BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return isBuiltinTheme(p.Theme) })),
+		ui.Button(T("Delete"), m.deleteTheme).Outline().BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return skin.IsBuiltin(p.Theme) })),
 		ui.Button(T("Open folder"), openThemesFolder).Ghost(),
 		ui.Button(T("Reload"), m.reloadThemes).Ghost(),
 	).Gap(6)
@@ -52,7 +54,7 @@ func appearanceSettings(m *model) ggui.Widget {
 // themeLabel names a theme: the app's own in the window's language, the
 // user's by their names.
 func themeLabel(name string) string {
-	if isBuiltinTheme(name) {
+	if skin.IsBuiltin(name) {
 		return T(themeLabels[name])
 	}
 	return name
@@ -72,10 +74,10 @@ func themeEditor(m *model) ggui.Widget {
 			return themeSwatch(m.themePalette())
 		}
 		var groups, rows []ggui.Widget
-		for i, c := range paletteColors {
+		for i, c := range skin.Colors {
 			rows = append(rows, colorRow(m, theme, c, p))
-			if i == len(paletteColors)-1 || paletteColors[i+1].group != c.group {
-				groups = append(groups, section(T(c.group), card(rows...)))
+			if i == len(skin.Colors)-1 || skin.Colors[i+1].Group != c.Group {
+				groups = append(groups, section(T(c.Group), card(rows...)))
 				rows = nil
 			}
 		}
@@ -85,16 +87,16 @@ func themeEditor(m *model) ggui.Widget {
 
 // colorRow is one colour of a theme: its swatch and its hex, saved to the
 // theme as soon as the hex is whole.
-func colorRow(m *model, theme string, c paletteColor, p palette) ggui.Widget {
-	value := ggui.State(hexString(c.get(p)))
+func colorRow(m *model, theme string, c skin.Color, p skin.Palette) ggui.Widget {
+	value := ggui.State(skin.HexString(c.Get(p)))
 	ggui.Watch(value, func(s string) {
-		if v, ok := parseHex(s); ok {
+		if v, ok := skin.ParseHex(s); ok {
 			m.setThemeColor(theme, c, v)
 		}
 	})
 	swatch := ggui.View(value, func(s string) ggui.Widget {
-		box := ggui.Box().Size(22, 22).Radius(5).Border(1, tokBorder)
-		if v, ok := parseHex(s); ok {
+		box := ggui.Box().Size(22, 22).Radius(5).Border(1, skin.Border)
+		if v, ok := skin.ParseHex(s); ok {
 			box = box.Fill(v)
 		}
 		return box
@@ -109,23 +111,23 @@ func colorRow(m *model, theme string, c paletteColor, p palette) ggui.Widget {
 }
 
 // colorLabel is a colour's name in the window's language.
-func colorLabel(c paletteColor) string {
-	if strings.HasPrefix(c.key, "ansi-bright-") {
-		return Tf("Bright %s", T(c.label))
+func colorLabel(c skin.Color) string {
+	if strings.HasPrefix(c.Key, "ansi-bright-") {
+		return Tf("Bright %s", T(c.Label))
 	}
-	return T(c.label)
+	return T(c.Label)
 }
 
 // themeSwatch shows a palette's colours, for a theme that cannot be
 // changed: the surfaces in order, then the terminal's sixteen.
-func themeSwatch(p palette) ggui.Widget {
+func themeSwatch(p skin.Palette) ggui.Widget {
 	var surfaces []ggui.Widget
 	for _, c := range []color.RGBA{p.Sidebar, p.Surface0, p.Surface1, p.Surface2, p.Surface3} {
-		surfaces = append(surfaces, ggui.Box().Size(40, 26).Radius(6).Fill(c).Border(1, tokBorder))
+		surfaces = append(surfaces, ggui.Box().Size(40, 26).Radius(6).Fill(c).Border(1, skin.Border))
 	}
 	var ansi []ggui.Widget
 	for _, c := range p.ANSI {
-		ansi = append(ansi, ggui.Box().Size(20, 20).Radius(4).Fill(hex(c)))
+		ansi = append(ansi, ggui.Box().Size(20, 20).Radius(4).Fill(skin.Hex(c)))
 	}
 	return card(
 		row(T("Surfaces"), T("Duplicate the theme to change its colours."), ggui.Row(surfaces...).Gap(6)),
@@ -134,17 +136,17 @@ func themeSwatch(p palette) ggui.Widget {
 }
 
 // setThemeColor changes one colour of a theme of the user's, and saves it.
-func (m *model) setThemeColor(theme string, c paletteColor, v color.RGBA) {
+func (m *model) setThemeColor(theme string, c skin.Color, v color.RGBA) {
 	themes := ggui.Peek(m.Themes)
 	p, ok := themes[theme]
-	if !ok || c.get(p) == v {
+	if !ok || c.Get(p) == v {
 		return
 	}
-	c.set(&p, v)
+	c.Set(&p, v)
 	themes = maps.Clone(themes)
 	themes[theme] = p
 	m.Themes.Set(themes)
-	if err := saveTheme(theme, p); err != nil {
+	if err := skin.Save(theme, p); err != nil {
 		m.toaster.Push(ui.Toast(T("Could not save the theme"), err.Error()).Destructive())
 	}
 }
@@ -153,10 +155,10 @@ func (m *model) setThemeColor(theme string, c paletteColor, v color.RGBA) {
 // chooses it.
 func (m *model) duplicateTheme() {
 	themes := ggui.Peek(m.Themes)
-	p := paletteFor(ggui.Peek(m.Prefs).Theme, ggui.Peek(ggui.SystemDark()), themes)
-	name := newThemeName(themes)
+	p := skin.Pick(ggui.Peek(m.Prefs).Theme, ggui.Peek(ggui.SystemDark()), themes)
+	name := skin.NewName(themes)
 	p.Name = name
-	if err := saveTheme(name, p); err != nil {
+	if err := skin.Save(name, p); err != nil {
 		m.toaster.Push(ui.Toast(T("Could not save the theme"), err.Error()).Destructive())
 		return
 	}
@@ -170,10 +172,10 @@ func (m *model) duplicateTheme() {
 // system's.
 func (m *model) deleteTheme() {
 	name := ggui.Peek(m.Prefs).Theme
-	if isBuiltinTheme(name) {
+	if skin.IsBuiltin(name) {
 		return
 	}
-	if err := removeTheme(name); err != nil && !os.IsNotExist(err) {
+	if err := skin.Remove(name); err != nil && !os.IsNotExist(err) {
 		m.toaster.Push(ui.Toast(T("Could not delete the theme"), err.Error()).Destructive())
 		return
 	}
@@ -183,7 +185,7 @@ func (m *model) deleteTheme() {
 
 // openThemesFolder shows the themes folder in the desktop's file manager.
 func openThemesFolder() {
-	if dir, err := themesDir(); err == nil && os.MkdirAll(dir, 0o700) == nil {
+	if dir, err := skin.Dir(); err == nil && os.MkdirAll(dir, 0o700) == nil {
 		_ = runtime.OpenURL(dir)
 	}
 }
@@ -307,8 +309,8 @@ func backdropPreview(m *model, slot backdropSlot) ggui.Widget {
 	scale := backdropPreviewWidth / seen.W
 	height := min(max(seen.H*scale, backdropPreviewMinHeight), backdropPreviewMaxHeight)
 	position := prefField(m, func(p *prefs) *string { return &slot.of(p).Position })
-	view := ggui.Stack(ggui.Box().Fill(tokSolidBg), backdropLayer(m, slot, scale), backdropScrim(m, slot), positionZones(position))
-	return ggui.Box(view).Size(backdropPreviewWidth, height).Border(1, tokBorder).Radius(6)
+	view := ggui.Stack(ggui.Box().Fill(skin.SolidBg), backdropLayer(m, slot, scale), backdropScrim(m, slot), positionZones(position))
+	return ggui.Box(view).Size(backdropPreviewWidth, height).Border(1, skin.Border).Radius(6)
 }
 
 // positionZones are nine buttons in thirds of their room, one a position,
@@ -321,7 +323,7 @@ func positionZones(value ggui.Binding[string]) ggui.Widget {
 			on := chosen.Get()
 			d := pick(on, 9.0, 5.0)
 			return ggui.Box().Size(d, d).Radius(d/2).Border(1, color.RGBA{A: 0x70}).
-				Fill(pick[color.Color](on, tokAccentBright, color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xb0}))
+				Fill(pick[color.Color](on, skin.AccentBright, color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xb0}))
 		})
 		b := ui.ButtonOf(ggui.Center(dot), func() { value.Set(pos) }).Ghost().Pad(0).Radius(4).
 			Name(T(backdropPositionLabels[pos]))

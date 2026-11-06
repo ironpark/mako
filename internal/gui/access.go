@@ -7,6 +7,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/notify"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -85,7 +86,7 @@ func accessSettings(m *model) ggui.Widget {
 			if s == "" {
 				return ggui.Box()
 			}
-			return ggui.Text(s).Size(12.5).Color(tokAccentBright)
+			return ggui.Text(s).Size(12.5).Color(skin.AccentBright)
 		}),
 		ggui.View(m.Access, func(info *protocol.AccessInfo) ggui.Widget {
 			if info == nil {
@@ -113,7 +114,7 @@ func accessSettings(m *model) ggui.Widget {
 // node's authorized_keys.
 func keyRow(m *model, title, hint string, key *protocol.AccessKey) ggui.Widget {
 	return row(title, hint, ggui.Row(
-		ggui.Text(key.GetFingerprint()).Size(12).Color(tokMuted).Selectable().NoWrap().Ellipsis(),
+		ggui.Text(key.GetFingerprint()).Size(12).Color(skin.Muted).Selectable().NoWrap().Ellipsis(),
 		copyButton(m, key.GetLine()),
 	).Gap(8))
 }
@@ -139,7 +140,7 @@ func requestList(m *model, requests []*protocol.AccessRequest) ggui.Widget {
 		}
 		text := []ggui.Widget{
 			ggui.Text(node.GetName()).Size(13.5).Weight(ggui.WeightMedium),
-			ggui.Text(detail).Size(11.5).Color(tokExtraMuted).Selectable(),
+			ggui.Text(detail).Size(11.5).Color(skin.ExtraMuted).Selectable(),
 		}
 		if r.GetNote() != "" {
 			text = append(text, muted(ggui.Text("“"+r.GetNote()+"”").Size(12.5)))

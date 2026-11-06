@@ -13,6 +13,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -81,7 +82,7 @@ func (m *model) quickRows(q string) []pickRow {
 		dir := strings.TrimSuffix(strings.TrimSuffix(p, it.Name), "/")
 		inDir, inName := splitHits(f.Hits, utf8.RuneCountInString(p)-utf8.RuneCountInString(it.Name))
 		rows = append(rows, pickRow{Label: it.Name, Hits: inName, Detail: dir, DetailHits: inDir,
-			Icon: icon(fileIconName(it.Name)).Size(15).Color(tokMuted), Run: func() { m.openFile(it) }})
+			Icon: icon(fileIconName(it.Name)).Size(15).Color(skin.Muted), Run: func() { m.openFile(it) }})
 	}
 	return rows
 }
@@ -208,7 +209,7 @@ func searchPanel(m *model) ggui.Widget {
 	return ggui.Column(
 		ggui.Box(ggui.Row(ggui.Expanded(focus), iconButton("search", T("Search"), m.runSearch)).Gap(6)).Pad(8, 10),
 		hline(),
-		ggui.Expanded(ggui.Scroll(results).Bar(tokSurface3)),
+		ggui.Expanded(ggui.Scroll(results).Bar(skin.Surface3)),
 	).Stretch()
 }
 
@@ -238,7 +239,7 @@ func searchResults(m *model, v searchView) ggui.Widget {
 		line := match.GetLine()
 		text := strings.TrimLeft(untab(match.GetText()), " ")
 		row := ggui.Row(
-			ggui.Box(ggui.Text(fmt.Sprint(match.GetLine())).Style(mono).Color(tokExtraMuted).NoWrap()).Width(36),
+			ggui.Box(ggui.Text(fmt.Sprint(match.GetLine())).Style(mono).Color(skin.ExtraMuted).NoWrap()).Width(36),
 			ggui.Expanded(markQuery(text, v.Query, fold, mono)),
 		).Gap(4)
 		rows = append(rows, ui.ButtonOf(row, func() { m.openFileAt(it, int(line)) }).Ghost().Pad(2, 12, 2, 18).Radius(0).
@@ -264,7 +265,7 @@ func markQuery(text, q string, fold bool, mono ggui.TextStyle) ggui.Widget {
 	}
 	return ggui.RichText(
 		ggui.Span(text[:i]),
-		ggui.Span(text[i:i+len(q)]).Color(tokAccentBright).Weight(ggui.WeightSemibold),
+		ggui.Span(text[i:i+len(q)]).Color(skin.AccentBright).Weight(ggui.WeightSemibold),
 		ggui.Span(text[i+len(q):]),
 	).Style(mono).NoWrap().Ellipsis()
 }

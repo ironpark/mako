@@ -12,6 +12,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -304,9 +305,9 @@ func (m *model) dirtyDocs() []string {
 // docTab is a file's tab: its icon, its name, a dot while it has unsaved
 // changes, which the close button becomes on hover, as editors show it.
 func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget {
-	fg := tokMuted
+	fg := skin.Muted
 	if selected {
-		fg = tokFg
+		fg = skin.Fg
 	}
 	name := d.Name()
 	label := name
@@ -454,7 +455,7 @@ func docStatus(m *model, id string, info ggui.Readable[docInfo], state ggui.Read
 	if isMarkdown(ggui.Peek(m.Docs)[id].Name()) {
 		row.items = append(row.items, glyphSwitch(doc.preview, "pencil", "book-open", T("Preview"), T("Edit"), T("Toggle edit and preview")))
 	}
-	return ggui.Box(row).Pad(0, 8, 0, 14).Height(statusHeight).Fill(tokSurface0)
+	return ggui.Box(row).Pad(0, 8, 0, 14).Height(statusHeight).Fill(skin.Surface0)
 }
 
 // statusRow lays out a status line: its items before split at the left,
@@ -543,7 +544,7 @@ func previewLabel(doc *document) string {
 func docBanner(msg string, actions ...ggui.Widget) ggui.Widget {
 	row := append([]ggui.Widget{icon("info").Size(14), ggui.Expanded(ggui.Text(msg).Size(12.5))}, actions...)
 	return ggui.Column(
-		ggui.Box(ggui.Row(row...).Gap(10)).Pad(6, 12).Fill(tokSurface2),
+		ggui.Box(ggui.Row(row...).Gap(10)).Pad(6, 12).Fill(skin.Surface2),
 		hline(),
 	).Stretch()
 }
@@ -589,10 +590,10 @@ func (m *model) docLine(id string) int {
 
 // docColors is what colours a file's text: its language's highlighting,
 // found again when the extensions installed change.
-func (m *model) docColors(id string) func(string, palette) []styleSpan {
+func (m *model) docColors(id string) func(string, skin.Palette) []styleSpan {
 	var ds *docSyntax
 	gen := -1
-	return func(text string, pal palette) []styleSpan {
+	return func(text string, pal skin.Palette) []styleSpan {
 		if gen != m.ext.langGen {
 			gen = m.ext.langGen
 			d, _ := m.doc(id)

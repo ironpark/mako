@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -205,7 +206,7 @@ func spaceSwitcher(m *model) ggui.Widget {
 		items = append(items, ui.MenuDivider(), ui.MenuItem(T("Edit spaces…"), func() { m.openSettings("spaces") }))
 		title := ggui.Row(
 			ggui.Text(p.spaceName(current)).Size(14).Weight(ggui.WeightMedium).NoWrap().Ellipsis(),
-			icon("chevron-down").Size(13).Color(tokMuted),
+			icon("chevron-down").Size(13).Color(skin.Muted),
 		).Gap(4).Align(ggui.AlignCenter)
 		w := []ggui.Widget{iconMenu(ui.MenuOf(title, items...).Name(T("Spaces")), 2)}
 		if first := p.firstSpace(); len(p.Spaces) > first {
@@ -220,9 +221,9 @@ func spaceSwitcher(m *model) ggui.Widget {
 func spaceDots(m *model, first, last, current int) ggui.Widget {
 	var dots []ggui.Widget
 	for i := first; i <= last; i++ {
-		c := tokSurface3
+		c := skin.Surface3
 		if i == current {
-			c = tokMuted
+			c = skin.Muted
 		}
 		dots = append(dots, ui.ButtonOf(ggui.Box().Size(6, 6).Radius(3).Fill(c), func() { m.setSpace(i) }).
 			Ghost().Pad(2).Radius(4).Name(m.spacesNow().spaceName(i)))
@@ -547,7 +548,7 @@ func spaceCard(m *model, i, n int, owners ggui.Readable[[]string], sections ggui
 	button := func(glyph, label string, enabled bool, fn func()) ggui.Widget {
 		face := icon(glyph).Size(14)
 		if !enabled {
-			face = face.Color(tokExtraMuted)
+			face = face.Color(skin.ExtraMuted)
 		}
 		return ui.Tooltip(ui.ButtonOf(face, fn).Ghost().Pad(6).Radius(6).Disabled(!enabled).Name(label), label)
 	}
@@ -684,7 +685,7 @@ func spaceProjectRow(m *model, i int, sec spaceSection, reason sectionReason, se
 	})
 	text := ggui.Text(sec.Name).Size(13).NoWrap().Ellipsis()
 	if reason == leftOut {
-		text = text.Color(tokMuted)
+		text = text.Color(skin.Muted)
 	}
 	return ggui.Row(
 		ggui.Expanded(ggui.Column(text, muted(ggui.Text(why).Size(11.5).NoWrap().Ellipsis())).Gap(1).Stretch()),
@@ -696,7 +697,7 @@ func spaceProjectRow(m *model, i int, sec spaceSection, reason sectionReason, se
 func removableChip(label, name string, remove func()) ggui.Widget {
 	return ui.ButtonOf(ggui.Row(
 		ggui.Text(label).Size(12.5).NoWrap(),
-		icon("x").Size(12).Color(tokMuted),
+		icon("x").Size(12).Color(skin.Muted),
 	).Gap(6).Align(ggui.AlignCenter), remove).Outline().Name(name)
 }
 

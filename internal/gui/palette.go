@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -177,9 +178,9 @@ func (m *model) tabRows() []pickRow {
 		open[id] = true
 		var r pickRow
 		if d, ok := docs[id]; ok {
-			r = pickRow{Label: d.Name(), Detail: d.Path, Icon: icon(fileIconName(d.Name())).Size(15).Color(tokMuted)}
+			r = pickRow{Label: d.Name(), Detail: d.Path, Icon: icon(fileIconName(d.Name())).Size(15).Color(skin.Muted)}
 		} else if s, ok := m.session(id); ok {
-			r = sessionPick(s, titles[id], nodes, tokMuted)
+			r = sessionPick(s, titles[id], nodes, skin.Muted)
 		} else {
 			continue
 		}
@@ -191,7 +192,7 @@ func (m *model) tabRows() []pickRow {
 			continue
 		}
 		id := s.GetId()
-		r := sessionPick(s, titles[id], nodes, tokExtraMuted)
+		r := sessionPick(s, titles[id], nodes, skin.ExtraMuted)
 		r.Run = func() { m.selectSession(id) }
 		rows = append(rows, r)
 	}

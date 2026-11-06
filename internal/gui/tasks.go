@@ -14,6 +14,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -99,7 +100,7 @@ func endOf(t *protocol.BackgroundTask) taskEnd {
 
 // taskColor is the colour of a task's dot.
 func taskColor(t *protocol.BackgroundTask) color.Color {
-	return [...]color.Color{tokDotRunning, tokDotDone, tokDiffRemoved, tokDotExited}[endOf(t)]
+	return [...]color.Color{skin.DotRunning, skin.DotDone, skin.DiffRemoved, skin.DotExited}[endOf(t)]
 }
 
 // taskMark is a task's dot in text, for a menu.
@@ -181,8 +182,8 @@ func tasksBadge(s *protocol.SessionInfo) ggui.Widget {
 		}
 	}
 	badge := ggui.Row(
-		icon("square-terminal").Size(11).Color(tokAccentBright),
-		ggui.Text(fmt.Sprint(n)).Size(11.5).Color(tokAccentBright).NoWrap(),
+		icon("square-terminal").Size(11).Color(skin.AccentBright),
+		ggui.Text(fmt.Sprint(n)).Size(11.5).Color(skin.AccentBright).NoWrap(),
 	).Gap(3).Align(ggui.AlignCenter)
 	return ui.Tooltip(badge, Tf("Running in the background: %s", strings.Join(titles, ", ")))
 }
@@ -198,11 +199,11 @@ func tasksMenu(m *model, s *protocol.SessionInfo) ggui.Widget {
 	for _, t := range latestFirst(s.GetTasks()) {
 		items = append(items, ui.MenuItem(fmt.Sprintf("%s  %s · %s", taskMark(t), taskTitle(t), taskState(t, now)), func() { m.Shell.open(id, t.GetId()) }))
 	}
-	trigger := []ggui.Widget{icon("square-terminal").Size(15).Color(tokMuted)}
+	trigger := []ggui.Widget{icon("square-terminal").Size(15).Color(skin.Muted)}
 	if n := s.RunningTasks(); n > 0 {
 		trigger = []ggui.Widget{
-			icon("square-terminal").Size(15).Color(tokAccentBright),
-			ggui.Text(fmt.Sprint(n)).Size(12).Color(tokAccentBright).NoWrap(),
+			icon("square-terminal").Size(15).Color(skin.AccentBright),
+			ggui.Text(fmt.Sprint(n)).Size(12).Color(skin.AccentBright).NoWrap(),
 		}
 	}
 	return ui.Tooltip(iconMenu(ui.MenuOf(ggui.Row(trigger...).Gap(4).Align(ggui.AlignCenter), items...).Name(T("Background commands")), 6), T("Background commands"))
@@ -233,11 +234,11 @@ func runningTasks(m *model, id string) ggui.Widget {
 			running = len(list)
 		}
 		var head ggui.Widget = ggui.Tap(ggui.Row(
-			icon("square-terminal").Size(13).Color(tokAccentBright),
-			ggui.Text(shellsText(running)).Size(12.5).Weight(ggui.WeightMedium).Color(tokAccentBright).NoWrap(),
+			icon("square-terminal").Size(13).Color(skin.AccentBright),
+			ggui.Text(shellsText(running)).Size(12.5).Weight(ggui.WeightMedium).Color(skin.AccentBright).NoWrap(),
 			ggui.Expanded(muted(ggui.Text(taskTitle(list[0])).Size(12).NoWrap().Ellipsis())),
 			ggui.View(open, func(o bool) ggui.Widget {
-				return icon(pick(o, "chevron-down", "chevron-up")).Size(14).Color(tokMuted)
+				return icon(pick(o, "chevron-down", "chevron-up")).Size(14).Color(skin.Muted)
 			}),
 		).Gap(8).Align(ggui.AlignCenter), func() { open.Set(!ggui.Peek(open)) }).Cursor(ggui.CursorShapePointer)
 		head = ui.Tooltip(head, T("Background commands"))
@@ -249,7 +250,7 @@ func runningTasks(m *model, id string) ggui.Widget {
 			return ggui.Column(append([]ggui.Widget{hline()}, out...)...).Gap(4).Stretch()
 		})
 		return &lane{child: ggui.Box(ggui.Column(head, rows).Gap(6).Stretch()).
-			Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(8, 12)}
+			Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(8, 12)}
 	})
 }
 
@@ -430,8 +431,8 @@ func shellDialog(m *model) ggui.Widget {
 			}
 			// The end is what matters: the scroll opens there, and stays
 			// there as more is read while it is.
-			return ggui.Box(ggui.Scroll(ggui.Box(text).Pad(8, 10)).Bar(tokSurface3).FollowEnd()).
-				Fill(tokSurface0).Border(1, tokBorder).Radius(8).Height(260)
+			return ggui.Box(ggui.Scroll(ggui.Box(text).Pad(8, 10)).Bar(skin.Surface3).FollowEnd()).
+				Fill(skin.Surface0).Border(1, skin.Border).Radius(8).Height(260)
 		})
 		head := ggui.Row(
 			ggui.Expanded(ggui.Text(T("Output")).Size(12.5).Weight(ggui.WeightMedium)),

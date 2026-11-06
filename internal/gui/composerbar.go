@@ -12,6 +12,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -26,7 +27,7 @@ const composerRadius = 20
 
 // composerBar is the bar of session id's composer.
 func composerBar(m *model, id string, state *chatState, disabled ggui.Readable[bool]) ggui.Widget {
-	attach := ui.Tooltip(ui.ButtonOf(icon("plus").Size(17).Color(tokFg), func() { m.attachFiles(id) }).
+	attach := ui.Tooltip(ui.ButtonOf(icon("plus").Size(17).Color(skin.Fg), func() { m.attachFiles(id) }).
 		Ghost().Pad(5).Radius(15).Name(T("Attach files")).BindDisabled(disabled), T("Attach files"))
 	usage := ggui.Map(state.result, func(v chatResult) *protocol.Usage { return v.Chat.GetUsage() }).WithEqual(protocol.Same)
 	mode := ggui.View(usage, func(u *protocol.Usage) ggui.Widget { return permissionChip(u.GetPermissionMode()) })
@@ -82,14 +83,14 @@ func permissionChip(mode string) ggui.Widget {
 		return ggui.Box()
 	}
 	glyph, label, tip := "lock", modeLabel(mode), T("What the agent may do without asking, as its terminal sets it.")
-	var c color.Color = tokMuted
+	var c color.Color = skin.Muted
 	switch mode {
 	case "bypassPermissions":
-		glyph, c = "shield-alert", tokDotWaiting
+		glyph, c = "shield-alert", skin.DotWaiting
 	case "acceptEdits":
-		glyph, c = "pencil", tokAccentBright
+		glyph, c = "pencil", skin.AccentBright
 	case "plan":
-		glyph, c = "list", tokAccentBright
+		glyph, c = "list", skin.AccentBright
 	}
 	chip := ggui.Row(
 		icon(glyph).Size(15).Color(c),
@@ -125,7 +126,7 @@ func modelChip(model, effort string) ggui.Widget {
 	}
 	parts := []ggui.Widget{ggui.Text(modelName(model)).Size(13).NoWrap()}
 	if effort != "" {
-		parts = append(parts, ggui.Text(capitalized(effort)).Size(13).Color(tokMuted).NoWrap())
+		parts = append(parts, ggui.Text(capitalized(effort)).Size(13).Color(skin.Muted).NoWrap())
 	}
 	return ui.Tooltip(ggui.Box(ggui.Row(parts...).Gap(5).Align(ggui.AlignCenter)).Pad(4, 6), model)
 }

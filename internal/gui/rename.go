@@ -9,6 +9,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -86,7 +87,7 @@ func nameDialog(a nameAsk) ggui.Widget {
 		rows = append(rows, muted(ggui.Text(a.Note).Size(12)))
 	}
 	rows = append(rows,
-		ggui.If(hasErr, func() ggui.Widget { return ggui.TextOf(a.Err).Size(12).Color(tokDotDown) }),
+		ggui.If(hasErr, func() ggui.Widget { return ggui.TextOf(a.Err).Size(12).Color(skin.DotDown) }),
 		ggui.Row(
 			ui.Button(T("Cancel"), func() { a.Open.Set(false) }).Outline(),
 			ui.Button(a.Action, a.Submit),

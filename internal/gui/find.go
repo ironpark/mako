@@ -7,6 +7,8 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+
+	"github.com/ironpark/mako/internal/gui/skin"
 )
 
 // ⌘F (Ctrl+F elsewhere) finds in the session in view: its terminal's
@@ -85,14 +87,14 @@ func findBar(m *model, id string, f finder) ggui.Widget {
 			return fmt.Sprintf("%d/%d", p.At, p.Count)
 		})
 		bar := ggui.Row(
-			icon("search").Size(14).Color(tokMuted),
+			icon("search").Size(14).Color(skin.Muted),
 			focus,
 			ggui.Box(muted(ggui.TextOf(count).Size(12).NoWrap())).Width(56),
 			iconButton("chevron-up", T("Previous match"), func() { run(false) }),
 			iconButton("chevron-down", T("Next match"), func() { run(true) }),
 			iconButton("x", T("Close find"), closeBar),
 		).Gap(6).Align(ggui.AlignCenter)
-		return ggui.Align(ggui.Padding(ggui.Box(bar).Fill(tokSurface1).Border(1, tokBorder).Radius(8).Pad(4, 6, 4, 10), 8, 12)).At(1, 0)
+		return ggui.Align(ggui.Padding(ggui.Box(bar).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(4, 6, 4, 10), 8, 12)).At(1, 0)
 	})
 }
 

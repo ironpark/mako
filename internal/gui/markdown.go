@@ -13,6 +13,7 @@ import (
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -59,8 +60,8 @@ func markdownView(m *model, id string, src string) ggui.Widget {
 	r := &mdRenderer{m: m, id: id, doc: ggui.Peek(m.Docs)[id], src: []byte(src)}
 	root := markdown.Parser().Parse(text.NewReader(r.src))
 	page := ggui.Box(ggui.Column(r.blocks(root)...).Gap(14).Stretch()).MaxWidth(880)
-	scroll := ggui.Scroll(ggui.Align(ggui.Padding(page, 28, 36, 48, 36)).Top()).Bar(tokSurface3)
-	return ggui.Box(ggui.SelectionArea(scroll)).Fill(tokSurface0)
+	scroll := ggui.Scroll(ggui.Align(ggui.Padding(page, 28, 36, 48, 36)).Top()).Bar(skin.Surface3)
+	return ggui.Box(ggui.SelectionArea(scroll)).Fill(skin.Surface0)
 }
 
 // markdownText is Markdown written somewhere other than a file, as on
@@ -216,7 +217,7 @@ var alerts = map[string]struct {
 
 // quote is a block quote, or an alert where its first line names one.
 func (r *mdRenderer) quote(n *ast.Blockquote) ggui.Widget {
-	bar := color.Color(tokBorder)
+	bar := color.Color(skin.Border)
 	var body []ggui.Widget
 	if p, ok := n.FirstChild().(*ast.Paragraph); ok && p.Lines().Len() > 0 {
 		first := p.Lines().At(0)
@@ -386,14 +387,14 @@ func (st mdStyle) span(s string) ggui.TextSpan {
 	}
 	sp := ggui.Span(s).Style(ts)
 	if st.code {
-		sp = sp.Background(tokSurface2)
+		sp = sp.Background(skin.Surface2)
 	}
 	if st.strike {
 		sp = sp.Strike()
 	}
 	if st.link != "" {
 		dest, r := st.link, st.r
-		sp = sp.Color(tokAccentBright).Underline().OnTap(func() { r.open(dest) }).Name(dest)
+		sp = sp.Color(skin.AccentBright).Underline().OnTap(func() { r.open(dest) }).Name(dest)
 	}
 	return sp
 }
@@ -521,7 +522,7 @@ func (r *mdRenderer) inlineNode(c ast.Node, style mdStyle, out *[]ggui.TextSpan)
 		if c.IsChecked {
 			mark = "☑ "
 		}
-		add(mark, style.with(ggui.TextStyle{Color: tokMuted}))
+		add(mark, style.with(ggui.TextStyle{Color: skin.Muted}))
 	default:
 		r.inline(c, style, out)
 	}
@@ -586,8 +587,8 @@ func (r *mdRenderer) code(n ast.Node, lang string) ggui.Widget {
 		l, ok = r.m.hl.languageNamed(lang)
 	}
 	text := codeText(r.m, r.segmentsText(n.Lines()), l, ok, ggui.Peek(r.m.Prefs).FontSize)
-	return ggui.Box(ggui.Scroll(ggui.Padding(text, 12, 14)).Horizontal().Bar(tokSurface3)).
-		Fill(tokSurface1).Border(1, tokBorder).Radius(8)
+	return ggui.Box(ggui.Scroll(ggui.Padding(text, 12, 14)).Horizontal().Bar(skin.Surface3)).
+		Fill(skin.Surface1).Border(1, skin.Border).Radius(8)
 }
 
 // codeText is src as selectable lines of code, highlighted in l when has
@@ -722,14 +723,14 @@ func (r *mdRenderer) table(t *east.Table) ggui.Widget {
 		}
 		var w ggui.Widget = ggui.Row(cells...).Stretch()
 		if head {
-			w = ggui.Box(w).Fill(tokSurface1)
+			w = ggui.Box(w).Fill(skin.Surface1)
 		}
 		if len(rows) > 0 {
 			rows = append(rows, hline())
 		}
 		rows = append(rows, w)
 	}
-	return ggui.Box(ggui.Column(rows...).Stretch()).Border(1, tokBorder).Radius(6)
+	return ggui.Box(ggui.Column(rows...).Stretch()).Border(1, skin.Border).Radius(6)
 }
 
 // mdImage is an image a Markdown file shows, as read: Size is how large

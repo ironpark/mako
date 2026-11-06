@@ -13,6 +13,8 @@ import (
 	"github.com/ironpark/ggui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"golang.org/x/text/width"
+
+	"github.com/ironpark/mako/internal/gui/skin"
 )
 
 // codeEditor edits a file's text in a grid of monospaced cells: lines that
@@ -28,7 +30,7 @@ import (
 type codeEditor struct {
 	input     *ggui.TextInputWidget
 	readOnly  bool
-	colors    func(text string, pal palette) []styleSpan // may be nil
+	colors    func(text string, pal skin.Palette) []styleSpan // may be nil
 	autoFocus bool
 	tabSize   int
 	comment   string // the line comment ⌘/ toggles, as "// "
@@ -55,7 +57,7 @@ type codeEditor struct {
 	widest    int // the longest line's length in bytes, which bounds its cells
 
 	// From the last paint, in logical pixels.
-	pal          palette
+	pal          skin.Palette
 	ground       color.Color // the fill under the text, as termview's
 	rect         ggui.Rect
 	textX        float64 // where column 0 is, before scrolling
@@ -84,7 +86,7 @@ const (
 func newCodeEditor(text *ggui.StateValue[string], prefs func() prefs) *codeEditor {
 	e := &codeEditor{
 		input: ggui.TextInput(text).NoWrap(),
-		prefs: prefs, tabSize: defaultTab, goalCol: -1, dragFrom: -1, pal: darkPalette,
+		prefs: prefs, tabSize: defaultTab, goalCol: -1, dragFrom: -1, pal: skin.Dark,
 		Caret: ggui.State(caretPos{Line: 1, Col: 1, Lines: 1}),
 	}
 	// A file opens at its start, where a text field would put the caret
@@ -126,7 +128,7 @@ func (e *codeEditor) publish() {
 func (e *codeEditor) ReadOnly(v bool) *codeEditor { e.readOnly = v; return e }
 
 // Colors sets what colours the text.
-func (e *codeEditor) Colors(fn func(text string, pal palette) []styleSpan) *codeEditor {
+func (e *codeEditor) Colors(fn func(text string, pal skin.Palette) []styleSpan) *codeEditor {
 	e.colors = fn
 	return e
 }
@@ -149,10 +151,10 @@ func (e *codeEditor) OnChange(fn func(string)) *codeEditor { e.input.OnChange(fn
 func (e *codeEditor) AutoFocus(v bool) *codeEditor { e.autoFocus = v; return e }
 
 func (e *codeEditor) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	if p, ok := uitheme.From(env).Get(paletteKey); ok {
+	if p, ok := uitheme.From(env).Get(skin.Key); ok {
 		e.pal = p
 	}
-	e.ground = ggui.ResolveColor(tokSurface0, env)
+	e.ground = ggui.ResolveColor(skin.Surface0, env)
 	e.input.Style(ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: e.prefs().FontSize})
 	// Painted only through PaintCustom, which wants it laid out first.
 	e.input.Layout(ggui.Loose(c.Max()), env)

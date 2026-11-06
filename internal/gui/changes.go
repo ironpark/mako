@@ -14,6 +14,7 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -168,22 +169,22 @@ func lineCount(n int) string {
 func statusIcon(status string) ggui.Widget {
 	switch status {
 	case protocol.GitAdded:
-		return iconColored("square-plus", tokDiffAdded).Size(14)
+		return iconColored("square-plus", skin.DiffAdded).Size(14)
 	case protocol.GitDeleted:
-		return iconColored("square-minus", tokDiffRemoved).Size(14)
+		return iconColored("square-minus", skin.DiffRemoved).Size(14)
 	case protocol.GitRenamed:
-		return iconColored("square-arrow-right", tokDiffModified).Size(14)
+		return iconColored("square-arrow-right", skin.DiffModified).Size(14)
 	case protocol.GitConflicted:
-		return iconColored("shield-alert", tokDotDown).Size(14)
+		return iconColored("shield-alert", skin.DotDown).Size(14)
 	}
-	return iconColored("square-dot", tokDiffModified).Size(14)
+	return iconColored("square-dot", skin.DiffModified).Size(14)
 }
 
 // counts is a row's +added -removed.
 func counts(added, removed int) ggui.Widget {
 	return ggui.Row(
-		ggui.Text("+"+lineCount(added)).Size(12).Color(tokDiffAdded).NoWrap(),
-		ggui.Text("-"+lineCount(removed)).Size(12).Color(tokDiffRemoved).NoWrap(),
+		ggui.Text("+"+lineCount(added)).Size(12).Color(skin.DiffAdded).NoWrap(),
+		ggui.Text("-"+lineCount(removed)).Size(12).Color(skin.DiffRemoved).NoWrap(),
 	).Gap(5)
 }
 
@@ -249,7 +250,7 @@ func changesTree(m *model) ggui.Widget {
 				}
 				name := ggui.Text(it.Name).Size(12.5).NoWrap().Ellipsis()
 				if !it.Dir && it.File.GetStatus() == protocol.GitDeleted {
-					name = name.Color(tokMuted)
+					name = name.Color(skin.Muted)
 				}
 				if ggui.Peek(m.git.Base) != "" {
 					// Since a base, the files are the branch's work, not a commit's pick.

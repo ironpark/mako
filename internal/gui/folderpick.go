@@ -11,6 +11,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -213,8 +214,8 @@ func folderPicker(m *model) ggui.Widget {
 	hasErr := ggui.Map(p.Err, func(s string) bool { return s != "" })
 	return ggui.Column(
 		toolbar,
-		ggui.Box(body).Height(340).Border(1, tokBorder).Radius(8),
-		ggui.If(hasErr, func() ggui.Widget { return ggui.TextOf(p.Err).Size(12).Color(tokDotDown) }),
+		ggui.Box(body).Height(340).Border(1, skin.Border).Radius(8),
+		ggui.If(hasErr, func() ggui.Widget { return ggui.TextOf(p.Err).Size(12).Color(skin.DotDown) }),
 		pickerFooter(m),
 	).Gap(12).Stretch()
 }
@@ -230,13 +231,13 @@ func pickerSidebar(m *model) ggui.Widget {
 			if len(list) == 0 {
 				return
 			}
-			rows = append(rows, ggui.Box(ggui.Text(title).Size(11).Weight(ggui.WeightMedium).Color(tokExtraMuted)).Pad(10, 10, 4, 10))
+			rows = append(rows, ggui.Box(ggui.Text(title).Size(11).Weight(ggui.WeightMedium).Color(skin.ExtraMuted)).Pad(10, 10, 4, 10))
 			for _, pl := range list {
-				lead := icon(pl.Icon).Size(14).Color(tokMuted)
+				lead := icon(pl.Icon).Size(14).Color(skin.Muted)
 				var row ggui.Widget = ggui.Row(lead, ggui.Expanded(ggui.Text(pl.Name).Size(12.5).NoWrap().Ellipsis())).Gap(8)
 				btn := ui.ButtonOf(row, func() { p.goTo(pl.Path) }).Ghost().Pad(5, 10).Radius(6).Name(pl.Path)
 				if pl.Path == cur {
-					rows = append(rows, ggui.Box(btn).Fill(tokSurface3).Radius(6))
+					rows = append(rows, ggui.Box(btn).Fill(skin.Surface3).Radius(6))
 					continue
 				}
 				rows = append(rows, btn)
@@ -266,10 +267,10 @@ func pickerList(m *model) ggui.Widget {
 			if !it.Mod.IsZero() {
 				mod = it.Mod.Local().Format("2006-01-02 15:04")
 			}
-			modText := ggui.Text(mod).Size(12).Color(tokMuted).NoWrap()
+			modText := ggui.Text(mod).Size(12).Color(skin.Muted).NoWrap()
 			if !it.Dir {
-				name, modText = name.Color(tokExtraMuted), modText.Color(tokExtraMuted)
-				lead = lead.Color(tokExtraMuted)
+				name, modText = name.Color(skin.ExtraMuted), modText.Color(skin.ExtraMuted)
+				lead = lead.Color(skin.ExtraMuted)
 			}
 			return ggui.Row(
 				ggui.Expanded(ggui.Row(lead, ggui.Expanded(name)).Gap(8)),
@@ -293,7 +294,7 @@ func pickerList(m *model) ggui.Widget {
 		ggui.Expanded(columnHead(T("Name"), 0)),
 		ggui.Box(columnHead(T("Modified"), 0)).Width(modColumn),
 	).Gap(12)).Pad(6, 14)
-	return ggui.Column(head, hline(), ggui.Expanded(ggui.Scroll(ggui.Padding(tree, 4, 6)).Bar(tokSurface3))).Stretch()
+	return ggui.Column(head, hline(), ggui.Expanded(ggui.Scroll(ggui.Padding(tree, 4, 6)).Bar(skin.Surface3))).Stretch()
 }
 
 // pickerFooter is New Folder on the left, and Cancel and Choose on the

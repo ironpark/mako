@@ -7,6 +7,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -51,7 +52,7 @@ func gitTabView(m *model) ggui.Widget {
 		branchSection(m, m.git.BranchOpen),
 	).Stretch()
 	top := ggui.Column(
-		ggui.Expanded(ggui.Scroll(ggui.Padding(sections, 2, 0, 6, 0)).Bar(tokSurface3)),
+		ggui.Expanded(ggui.Scroll(ggui.Padding(sections, 2, 0, 6, 0)).Bar(skin.Surface3)),
 		commitBox(m),
 	).Stretch()
 

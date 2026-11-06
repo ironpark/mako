@@ -5,6 +5,8 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/gostty"
+
+	"github.com/ironpark/mako/internal/gui/skin"
 )
 
 // A program that asked for focus events hears of the terminal and its
@@ -51,7 +53,7 @@ func TestTheDaemonIsToldTheTerminalsColours(t *testing.T) {
 		t.Fatalf("told %d times, want once", len(link.colors))
 	}
 	c := link.colors[0]
-	if c.GetBackground() != rgbOf(darkPalette.Surface0) || c.GetForeground() != rgbOf(darkPalette.Fg) || !c.GetDark() || len(c.GetPalette()) != 16 {
+	if c.GetBackground() != rgbOf(skin.Dark.Surface0) || c.GetForeground() != rgbOf(skin.Dark.Fg) || !c.GetDark() || len(c.GetPalette()) != 16 {
 		t.Fatalf("told %v", c)
 	}
 }

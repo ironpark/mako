@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -99,7 +100,7 @@ func litDrop(w ggui.Widget, moved func(pathDrag), drop func([]string)) ggui.Widg
 	over := ggui.State(false)
 	lit := ggui.View(over, func(o bool) ggui.Widget {
 		if o {
-			return ggui.Box(w).Fill(tokSurface3).Radius(4)
+			return ggui.Box(w).Fill(skin.Surface3).Radius(4)
 		}
 		return w
 	})

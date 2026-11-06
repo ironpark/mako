@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -260,7 +261,7 @@ func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			return ggui.View(m.Conn, func(c connState) ggui.Widget {
 				if !c.OK && c.Err != "" {
 					return ggui.Center(ggui.Column(
-						icon("server").Size(28).Color(tokExtraMuted),
+						icon("server").Size(28).Color(skin.ExtraMuted),
 						muted(ggui.Text(c.Err).Size(13)),
 						ui.Button(T("Daemon settings"), func() { m.openSettings("daemon") }).Outline(),
 					).Gap(12).Align(ggui.AlignCenter))
@@ -341,9 +342,9 @@ type dropShade struct {
 }
 
 func (s *dropShade) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	accent := ggui.ResolveColor(tokAccentBright, env)
+	accent := ggui.ResolveColor(skin.AccentBright, env)
 	if accent == nil {
-		accent = darkPalette.AccentBright // no theme, as in a bare probe
+		accent = skin.Dark.AccentBright // no theme, as in a bare probe
 	}
 	r, g, b, _ := accent.RGBA()
 	s.fill = color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 0x30}
@@ -396,7 +397,7 @@ func dropSlot(m *model, group, i int) ggui.Widget {
 		return 0
 	})
 	gap := ggui.AnimatedBox().BindWidth(width).Collapsible().Height(tabBarHeight).
-		Fill(tokSurface2).Duration(150 * time.Millisecond).Easing(ggui.EaseOut)
+		Fill(skin.Surface2).Duration(150 * time.Millisecond).Easing(ggui.EaseOut)
 	// An open gap is where the pointer is once the tabs moved aside, so it
 	// keeps itself open, and takes the tab dropped in it.
 	return tabDrop(m, gap, group, func(ggui.Dropped[tabDrag]) int { return i })

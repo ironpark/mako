@@ -12,6 +12,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -176,15 +177,15 @@ func usageCard(m *model, u *protocol.Usage) ggui.Widget {
 	if u.IsZero() {
 		return ggui.Box()
 	}
-	label := func(s string) ggui.Widget { return ggui.Text(s).Size(11).Color(tokExtraMuted).NoWrap() }
+	label := func(s string) ggui.Widget { return ggui.Text(s).Size(11).Color(skin.ExtraMuted).NoWrap() }
 	pair := func(lead ggui.Widget, v string, share float64) ggui.Widget {
-		return ggui.Row(lead, ggui.Text(v).Size(11.5).Color(shareColor(share, tokFg)).NoWrap()).Gap(4).Align(ggui.AlignCenter)
+		return ggui.Row(lead, ggui.Text(v).Size(11.5).Color(shareColor(share, skin.Fg)).NoWrap()).Gap(4).Align(ggui.AlignCenter)
 	}
 	var head []ggui.Widget
 	switch {
 	case u.GetContext() > 0 && u.GetWindow() > 0:
 		share := float64(u.GetContext()) / float64(u.GetWindow())
-		ring := ui.ProgressRing(ggui.Const(share)).Size(12).Color(shareColor(share, tokFg)).Track(tokSurface3)
+		ring := ui.ProgressRing(ggui.Const(share)).Size(12).Color(shareColor(share, skin.Fg)).Track(skin.Surface3)
 		head = append(head, pair(ring, Tf("%d%%", u.GetContext()*100/u.GetWindow()), share))
 	case u.GetContext() > 0:
 		head = append(head, pair(label(T("Context")), tokens(u.GetContext()), 0))
@@ -216,9 +217,9 @@ func usageCard(m *model, u *protocol.Usage) ggui.Widget {
 func shareColor(share float64, c uitheme.Color) uitheme.Color {
 	switch {
 	case share >= .95:
-		return tokDiffRemoved
+		return skin.DiffRemoved
 	case share >= .8:
-		return tokDotWaiting
+		return skin.DotWaiting
 	}
 	return c
 }

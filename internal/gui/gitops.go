@@ -11,6 +11,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -221,7 +222,7 @@ func branchMenu(m *model, branch string, branches []string) ggui.Widget {
 	label := ggui.Row(
 		icon("git-branch").Size(15),
 		ggui.Box(ggui.Text(branch).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).MaxWidth(130),
-		icon("chevron-down").Size(12).Color(tokExtraMuted),
+		icon("chevron-down").Size(12).Color(skin.ExtraMuted),
 	).Gap(6)
 	return borderless(ui.MenuOf(label, items...).Name(T("Branch")))
 }
@@ -230,7 +231,7 @@ func branchMenu(m *model, branch string, branches []string) ggui.Widget {
 func syncButton(name, label string, count int, onTap func()) ggui.Widget {
 	content := []ggui.Widget{icon(name).Size(14)}
 	if count > 0 {
-		content = append(content, ggui.Text(lineCount(count)).Size(11.5).Color(tokMuted).NoWrap())
+		content = append(content, ggui.Text(lineCount(count)).Size(11.5).Color(skin.Muted).NoWrap())
 	}
 	return ui.Tooltip(ui.ButtonOf(ggui.Row(content...).Gap(3), onTap).Ghost().Pad(5, 6).Radius(6).Name(label), label)
 }
@@ -251,7 +252,7 @@ func statusLine(busy *ggui.StateValue[string], note *ggui.StateValue[gitNote]) g
 			return ggui.Box()
 		}
 		return ggui.Column(ggui.Box(ggui.Row(
-			ggui.Expanded(ggui.Text(n.Text).Size(11.5).Color(pick[color.Color](n.Err, tokDotDown, tokMuted)).Font(ggui.DefaultMonoFont()).Selectable()),
+			ggui.Expanded(ggui.Text(n.Text).Size(11.5).Color(pick[color.Color](n.Err, skin.DotDown, skin.Muted)).Font(ggui.DefaultMonoFont()).Selectable()),
 			iconButton("x", T("Dismiss"), func() { note.Set(gitNote{}) }),
 		).Gap(6).Align(ggui.AlignStart)).Pad(6, 6, 6, 12), hline()).Stretch()
 	})

@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/ironpark/mako/internal/gui/skin"
 )
 
 // Every string the window translates has a translation in each catalog:
@@ -54,9 +56,9 @@ func TestEveryStringIsTranslated(t *testing.T) {
 			want[l] = "settings labels"
 		}
 	}
-	for _, c := range paletteColors {
-		want[c.label] = "paletteColors"
-		want[c.group] = "paletteColors"
+	for _, c := range skin.Colors {
+		want[c.Label] = "skin.Colors"
+		want[c.Group] = "skin.Colors"
 	}
 	if len(want) < 100 {
 		t.Fatalf("found only %d strings to translate; is the scan broken?", len(want))

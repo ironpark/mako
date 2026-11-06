@@ -20,6 +20,7 @@ import (
 
 	"github.com/ironpark/mako/internal/activity"
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/kitty"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -70,7 +71,7 @@ type termConn struct {
 	cellW, cellH        uint16 // a cell in device pixels, zero until a view paints it
 	closed              bool   // vt and state are released; nothing may touch them
 	opts                termOptions
-	told                *palette        // the palette the daemon was last told
+	told                *skin.Palette   // the palette the daemon was last told
 	viewFocused         bool            // the view has the keyboard
 	windowAway          bool            // its window does not
 	focusIn             bool            // what the program was last told of focus
@@ -181,17 +182,17 @@ func newTermConn(id string, link sessionLink, cols, rows uint16, wake func(), ti
 // colours, how much it remembers, and the cursor shown until a program asks
 // for another.
 type termOptions struct {
-	palette     palette
+	palette     skin.Palette
 	scrollback  int
 	cursorStyle gostty.CursorStyle
 	cursorBlink bool
 }
 
 func defaultTermOptions() termOptions {
-	return termOptionsFor(defaultPrefs(), darkPalette)
+	return termOptionsFor(defaultPrefs(), skin.Dark)
 }
 
-func termOptionsFor(p prefs, pal palette) termOptions {
+func termOptionsFor(p prefs, pal skin.Palette) termOptions {
 	style := gostty.CursorStyleBlock
 	switch p.CursorStyle {
 	case "bar":
@@ -227,7 +228,7 @@ func (t *termConn) configure(o termOptions) {
 }
 
 // terminalColors are a palette's terminal colours as the daemon takes them.
-func terminalColors(p palette) *protocol.TerminalColors {
+func terminalColors(p skin.Palette) *protocol.TerminalColors {
 	return &protocol.TerminalColors{
 		Foreground: rgbOf(p.Fg), Background: rgbOf(p.Surface0),
 		Palette: p.ANSI[:], Dark: p.Dark,
@@ -239,7 +240,7 @@ func rgbOf(c color.RGBA) uint32 { return uint32(c.R)<<16 | uint32(c.G)<<8 | uint
 func (t *termConn) applyOptionsLocked(o termOptions) {
 	vt := t.vt.Terminal()
 	if o.palette != t.opts.palette {
-		applyPalette(vt, o.palette)
+		skin.ApplyTerminal(vt, o.palette)
 		// A cell keeps the palette index it was written with, but nothing on
 		// screen changed, so the old render state would hand back the colours
 		// it resolved before. A fresh one resolves them again.

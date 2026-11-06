@@ -12,6 +12,7 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/gostty"
 	"github.com/ironpark/gostty/input"
+	"github.com/ironpark/mako/internal/gui/skin"
 )
 
 // terminalView draws a termConn's screen and sends it keyboard, mouse and
@@ -82,7 +83,7 @@ type terminalView struct {
 	scrolled  time.Time   // when a held drag last scrolled the view
 
 	// From the last layout and paint, in logical pixels.
-	pal          palette
+	pal          skin.Palette
 	ground       color.Color // the fill under the cells: the theme's, clear over a background image
 	origin       ggui.Point  // the grid's top-left
 	rect         ggui.Rect   // the whole widget
@@ -108,7 +109,7 @@ func newTerminalView(conn *termConn, prefs func() prefs, autoFocus bool) *termin
 	return &terminalView{
 		conn: conn, prefs: prefs, autoFocus: autoFocus,
 		ime: ggui.TextInput(text), imeText: text,
-		pal: darkPalette, lastCell: [2]int{-1, -1}, probed: [2]int{-1, -1},
+		pal: skin.Dark, lastCell: [2]int{-1, -1}, probed: [2]int{-1, -1},
 	}
 }
 
@@ -141,10 +142,10 @@ func (t *terminalView) OnLink(fn func(target, cwd string)) *terminalView {
 }
 
 func (t *terminalView) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	if p, ok := uitheme.From(env).Get(paletteKey); ok {
+	if p, ok := uitheme.From(env).Get(skin.Key); ok {
 		t.pal = p
 	}
-	t.ground = ggui.ResolveColor(tokSurface0, env)
+	t.ground = ggui.ResolveColor(skin.Surface0, env)
 	// The editor is never painted as itself, but PaintCustom wants it laid
 	// out first.
 	t.ime.Layout(ggui.Loose(c.Max()), env)
@@ -854,7 +855,7 @@ type grid struct {
 	cellW, cellH float64
 	size         float64
 	font, italic *ggui.Font // italic is nil where there is none
-	pal          palette
+	pal          skin.Palette
 	ground       color.Color // the fill under the cells: the theme's, clear over a background image
 	scale        float64     // device pixels per logical pixel
 	runBuf       *[]byte

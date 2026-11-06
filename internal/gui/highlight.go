@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/syntax"
 	"github.com/ironpark/mako/internal/syntax/builtin"
 	"github.com/ironpark/mako/internal/zed"
@@ -392,7 +393,7 @@ func (d *docSyntax) work() {
 
 // colors is the editor's colours for text under a palette: the layers
 // last found, moved along with any edit made since.
-func (d *docSyntax) colors(text string, pal palette) []styleSpan {
+func (d *docSyntax) colors(text string, pal skin.Palette) []styleSpan {
 	d.request(text)
 	d.mu.Lock()
 	src, layers := d.src, d.layers
@@ -413,7 +414,7 @@ func (d *docSyntax) colors(text string, pal palette) []styleSpan {
 // layer injected into another colours over it where it has a colour of
 // its own, and leaves it showing where it has none, as a heading's
 // inline text keeps the heading's.
-func colorLayers(layers []hlLayer, pal palette) []styleSpan {
+func colorLayers(layers []hlLayer, pal skin.Palette) []styleSpan {
 	type colored struct {
 		depth int
 		spans []styleSpan
@@ -583,11 +584,11 @@ var syntaxColors = map[bool]map[string]uint32{
 
 // captureColor is a capture's colour under a palette, or nil for the
 // text's own, as a plain variable has.
-func captureColor(name string, pal palette) color.Color {
+func captureColor(name string, pal skin.Palette) color.Color {
 	colors := syntaxColors[pal.Dark]
 	for n := name; n != ""; {
 		if v, ok := colors[n]; ok {
-			return hex(v)
+			return skin.Hex(v)
 		}
 		i := strings.LastIndexByte(n, '.')
 		if i < 0 {

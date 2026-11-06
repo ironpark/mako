@@ -8,6 +8,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -65,7 +66,7 @@ func approvalCard(m *model, id string) ggui.Widget {
 		}
 		open := ggui.State(false)
 		head := ggui.Row(
-			icon("shield-alert").Size(16).Color(tokDotWaiting),
+			icon("shield-alert").Size(16).Color(skin.DotWaiting),
 			ggui.Text(Tf("Allow %s?", a.GetTool())).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
 			ggui.Spacer(),
 			ggui.If(ggui.Const(a.GetInput() != ""), func() ggui.Widget {
@@ -81,7 +82,7 @@ func approvalCard(m *model, id string) ggui.Widget {
 			ggui.Row(append([]ggui.Widget{ggui.Spacer()}, approvalButtons(m, id, a)...)...).Gap(8),
 		)
 		card := ggui.Box(ggui.Column(rows...).Gap(10).Stretch()).
-			Fill(tokSurface1).Border(1, tokDotWaiting).Radius(12).Pad(12, 14)
+			Fill(skin.Surface1).Border(1, skin.DotWaiting).Radius(12).Pad(12, 14)
 		return &lane{child: ggui.Box(card).Pad(0, 0, 8, 0)}
 	})
 }
@@ -97,12 +98,12 @@ func approvalBar(m *model, id string) ggui.Widget {
 			what += "  " + a.GetDetail()
 		}
 		row := append([]ggui.Widget{
-			icon("shield-alert").Size(15).Color(tokDotWaiting),
+			icon("shield-alert").Size(15).Color(skin.DotWaiting),
 			ggui.Text(T("Approve?")).Size(12.5).Weight(ggui.WeightMedium).NoWrap(),
 			ggui.Expanded(ggui.Text(what).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()),
 		}, approvalButtons(m, id, a)...)
 		return ggui.Column(
-			ggui.Box(ggui.Row(row...).Gap(10).Align(ggui.AlignCenter)).Pad(6, 12).Fill(tokSurface2),
+			ggui.Box(ggui.Row(row...).Gap(10).Align(ggui.AlignCenter)).Pad(6, 12).Fill(skin.Surface2),
 			hline(),
 		).Stretch()
 	})

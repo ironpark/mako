@@ -7,6 +7,8 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+
+	"github.com/ironpark/mako/internal/gui/skin"
 )
 
 // A picker is a search over a list, as Zed's command palette and file
@@ -152,10 +154,10 @@ func (p *picker) dialog() ggui.Widget {
 		}
 		return ggui.Column(out...).Gap(0).Stretch()
 	})
-	scroll := ggui.Scroll(ggui.Padding(list, 6)).BindOffset(p.offset).Bar(tokSurface3)
+	scroll := ggui.Scroll(ggui.Padding(list, 6)).BindOffset(p.offset).Bar(skin.Surface3)
 	footer := ggui.Row(ggui.Spacer(),
-		ggui.Text(p.Action).Size(12.5).Color(tokFg).NoWrap(),
-		ggui.Text("↵").Size(12.5).Color(tokMuted).NoWrap(),
+		ggui.Text(p.Action).Size(12.5).Color(skin.Fg).NoWrap(),
+		ggui.Text("↵").Size(12.5).Color(skin.Muted).NoWrap(),
 	).Gap(6).Align(ggui.AlignCenter)
 	body := ggui.Column(
 		ggui.Box(input).Pad(14, 16),
@@ -171,9 +173,9 @@ func (p *picker) dialog() ggui.Widget {
 
 // row is row i, filled while it is the one picked.
 func (p *picker) row(i int, r pickRow) ggui.Widget {
-	var fg color.Color = tokFg
+	var fg color.Color = skin.Fg
 	if r.Disabled {
-		fg = tokExtraMuted
+		fg = skin.ExtraMuted
 	}
 	line := []ggui.Widget{}
 	if r.Icon != nil {
@@ -181,7 +183,7 @@ func (p *picker) row(i int, r pickRow) ggui.Widget {
 	}
 	text := []ggui.Widget{hitText(r.Label, r.Hits, fg)}
 	if r.Detail != "" {
-		text = append(text, ggui.Expanded(hitText(r.Detail, r.DetailHits, tokMuted)))
+		text = append(text, ggui.Expanded(hitText(r.Detail, r.DetailHits, skin.Muted)))
 	} else {
 		text = append(text, ggui.Spacer())
 	}
@@ -190,13 +192,13 @@ func (p *picker) row(i int, r pickRow) ggui.Widget {
 		line = append(line, keyCaps(chordLabel(r.Shortcut)))
 	}
 	if r.Recent {
-		line = append(line, icon("history").Size(14).Color(tokExtraMuted))
+		line = append(line, icon("history").Size(14).Color(skin.ExtraMuted))
 	}
 	content := ggui.Box(ggui.Row(line...).Gap(10).Align(ggui.AlignCenter)).Height(pickRowHeight).Pad(0, 10)
 	btn := ui.ButtonOf(content, func() { p.run(i) }).Ghost().Pad(0).Radius(6).Disabled(r.Disabled).Name(r.Label)
 	picked := ggui.Map(p.sel, func(s int) bool { return s == i })
 	return ggui.View(picked, func(on bool) ggui.Widget {
-		return ggui.Box(btn).Fill(pick[color.Color](on, tokSurface3, color.Transparent)).Radius(6)
+		return ggui.Box(btn).Fill(pick[color.Color](on, skin.Surface3, color.Transparent)).Radius(6)
 	})
 }
 
@@ -205,7 +207,7 @@ func hitText(s string, hits []int, fg color.Color) ggui.Widget {
 	style := func(t ggui.TextSpan, hit bool) ggui.TextSpan {
 		t = t.Size(13.5)
 		if hit {
-			return t.Color(tokAccentBright).Weight(ggui.WeightSemibold)
+			return t.Color(skin.AccentBright).Weight(ggui.WeightSemibold)
 		}
 		return t.Color(fg)
 	}
@@ -243,7 +245,7 @@ func chordLabel(chord string) string {
 func keyCaps(label string) ggui.Widget {
 	var keys []ggui.Widget
 	for _, r := range label {
-		keys = append(keys, ggui.Text(string(r)).Size(12.5).Color(tokMuted).NoWrap())
+		keys = append(keys, ggui.Text(string(r)).Size(12.5).Color(skin.Muted).NoWrap())
 	}
 	return ggui.Row(keys...).Gap(3).Align(ggui.AlignCenter)
 }

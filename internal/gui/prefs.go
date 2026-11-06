@@ -133,7 +133,7 @@ const (
 
 func (p prefs) normalized() prefs {
 	d := defaultPrefs()
-	// A theme of the user's is checked when the window paints: paletteFor
+	// A theme of the user's is checked when the window paints: skin.Pick
 	// takes one that is gone for the system's.
 	if p.Theme == "" {
 		p.Theme = d.Theme

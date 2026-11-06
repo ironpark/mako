@@ -14,6 +14,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/zed"
 )
 
@@ -202,7 +203,7 @@ const extSearchDelay = 300 * time.Millisecond
 // the palette opens it: the search and filters stay as the list scrolls.
 func extensionsDialog(m *model) ggui.Widget {
 	content := ggui.If(m.ext.Open, func() ggui.Widget {
-		list := ggui.Scroll(ggui.Padding(extensionsList(m), 0, 12, 0, 0)).Bar(tokSurface3)
+		list := ggui.Scroll(ggui.Padding(extensionsList(m), 0, 12, 0, 0)).Bar(skin.Surface3)
 		return ggui.Box(ggui.Column(extensionsHeader(m), ggui.Expanded(list)).Gap(16).Stretch()).Height(600)
 	})
 	return ui.Dialog(m.ext.Open, content).Title(T("Extensions")).Width(880)
@@ -233,10 +234,10 @@ func extensionsHeader(m *model) ggui.Widget {
 		return func() { pending.Stop() }
 	})
 	search := ggui.Box(ggui.Row(
-		icon("search").Size(15).Color(tokMuted),
+		icon("search").Size(15).Color(skin.Muted),
 		ggui.Expanded(ggui.TextInput(m.ext.Query).Placeholder(T("Search extensions…")).Name(T("Search extensions")).
 			Style(ggui.TextStyle{Size: 13.5}).OnSubmit(m.searchExtensions)),
-	).Gap(8).Align(ggui.AlignCenter)).Pad(8, 12).Border(1, tokBorder).Radius(8).Fill(tokSurface0)
+	).Gap(8).Align(ggui.AlignCenter)).Pad(8, 12).Border(1, skin.Border).Radius(8).Fill(skin.Surface0)
 	show := ui.ToggleGroup[string](m.ext.Show).Options([]string{extShowAll, extShowInstalled, extShowAvailable}).
 		Format(func(v string) string {
 			return T(map[string]string{extShowAll: "All", extShowInstalled: "Installed", extShowAvailable: "Not Installed"}[v])
@@ -245,9 +246,9 @@ func extensionsHeader(m *model) ggui.Widget {
 		cur := m.ext.Kind.Get()
 		tabs := make([]ggui.Widget, 0, len(extKinds))
 		for _, k := range extKinds {
-			fg := tokMuted
+			fg := skin.Muted
 			if k.Provides == cur {
-				fg = tokAccentBright
+				fg = skin.AccentBright
 			}
 			tabs = append(tabs, ui.ButtonOf(ggui.Text(T(k.Label)).Size(13.5).Color(fg).NoWrap(), func() { m.ext.Kind.Set(k.Provides) }).
 				Ghost().Pad(4, 8).Radius(6).Name(T(k.Label)))
@@ -324,8 +325,8 @@ func extensionCard(m *model, c extCard) ggui.Widget {
 
 	third := []ggui.Widget{}
 	if len(c.Authors) > 0 {
-		third = append(third, icon("user").Size(13).Color(tokExtraMuted),
-			ggui.Expanded(ggui.Text(strings.Join(c.Authors, ", ")).Size(12.5).Color(tokMuted).NoWrap().Ellipsis()))
+		third = append(third, icon("user").Size(13).Color(skin.ExtraMuted),
+			ggui.Expanded(ggui.Text(strings.Join(c.Authors, ", ")).Size(12.5).Color(skin.Muted).NoWrap().Ellipsis()))
 	} else {
 		third = append(third, ggui.Spacer())
 	}
@@ -335,13 +336,13 @@ func extensionCard(m *model, c extCard) ggui.Widget {
 	}
 	if c.Repository != "" {
 		repo := c.Repository
-		third = append(third, ui.Tooltip(ui.ButtonOf(icon(pick(strings.Contains(repo, "github.com"), "github", "external-link")).Size(15).Color(tokMuted),
+		third = append(third, ui.Tooltip(ui.ButtonOf(icon(pick(strings.Contains(repo, "github.com"), "github", "external-link")).Size(15).Color(skin.Muted),
 			func() { _ = runtime.OpenURL(repo) }).Ghost().Pad(5).Radius(6).Name(T("Open the repository")), T("Open the repository")))
 	}
 	// Uninstall is the action of one that is up to date; one with an
 	// update offers it here.
 	if c.Installed != "" && c.Version != "" && c.Installed != c.Version {
-		third = append(third, iconMenu(ui.MenuOf(icon("ellipsis").Size(15).Color(tokMuted),
+		third = append(third, iconMenu(ui.MenuOf(icon("ellipsis").Size(15).Color(skin.Muted),
 			ui.MenuItem(T("Uninstall"), func() { m.uninstallExtension(id) }),
 		).Name(Tf("%s actions", c.Name)), 5))
 	}
@@ -361,7 +362,7 @@ func extensionCard(m *model, c extCard) ggui.Widget {
 			return ggui.Column(cards...).Gap(10).Stretch()
 		}))
 	}
-	return ggui.Box(ggui.Column(rows...).Gap(10).Stretch()).Pad(14, 16).Fill(tokSurface1).Border(1, tokBorder).Radius(10)
+	return ggui.Box(ggui.Column(rows...).Gap(10).Stretch()).Pad(14, 16).Fill(skin.Surface1).Border(1, skin.Border).Radius(10)
 }
 
 // extensionAction is what can be done with an extension: install it,
@@ -388,8 +389,8 @@ func providesBadge(p string) ggui.Widget {
 	if l, ok := providesLabels[p]; ok {
 		label = T(l)
 	}
-	return ggui.Box(ggui.Text(label).Size(11).Font(ggui.DefaultMonoFont()).Color(tokMuted).NoWrap()).
-		Pad(2, 6).Border(1, tokBorder).Radius(4)
+	return ggui.Box(ggui.Text(label).Size(11).Font(ggui.DefaultMonoFont()).Color(skin.Muted).NoWrap()).
+		Pad(2, 6).Border(1, skin.Border).Radius(4)
 }
 
 // noteCard is a card holding a line of muted text.

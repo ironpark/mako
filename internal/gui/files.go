@@ -22,6 +22,7 @@ import (
 	_ "golang.org/x/image/webp"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -420,12 +421,12 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 			}
 			label := ggui.Text(it.Name).Size(12.5).NoWrap().Ellipsis()
 			if it.Ignored {
-				label = label.Color(tokExtraMuted)
+				label = label.Color(skin.ExtraMuted)
 			}
 			leadIcon := func(open bool) ggui.Widget {
 				w := fileTypeIcon(it.Name, it.Dir, open).Size(14)
 				if it.Ignored {
-					w = w.Color(tokExtraMuted)
+					w = w.Color(skin.ExtraMuted)
 				}
 				return w
 			}
@@ -477,7 +478,7 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 		icon("folder-open").Size(15),
 		ggui.Expanded(ggui.Row(
 			ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap(),
-			ggui.Expanded(ggui.Text(where).Size(11.5).Color(tokExtraMuted).NoWrap().Ellipsis()),
+			ggui.Expanded(ggui.Text(where).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()),
 		).Gap(8).Align(ggui.AlignBaseline)),
 		ggui.Row(
 			hiddenFilesToggle(m),
@@ -488,7 +489,7 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 	// A failed delete says why under the header.
 	header = ggui.Column(header, ggui.If(ggui.Map(m.files.Note, func(s string) bool { return s != "" }), func() ggui.Widget {
 		return ggui.Box(ggui.Row(
-			ggui.Expanded(ggui.TextOf(m.files.Note).Size(12).Color(tokDotDown)),
+			ggui.Expanded(ggui.TextOf(m.files.Note).Size(12).Color(skin.DotDown)),
 			iconButton("x", T("Dismiss"), func() { m.files.Note.Set("") }),
 		).Gap(6)).Pad(4, 6, 4, 12)
 	})).Stretch()
@@ -496,7 +497,7 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 	// Files dropped below the folders go into the project, from the
 	// desktop and from the tab; a right click there makes or pastes there.
 	root := dirItem(r.Node, r.Path)
-	var list ggui.Widget = ggui.Pointer(ggui.Scroll(ggui.Padding(tree, 4, 4)).Bar(tokSurface3)).OnDrop(func(ev ggui.DropEvent) {
+	var list ggui.Widget = ggui.Pointer(ggui.Scroll(ggui.Padding(tree, 4, 4)).Bar(skin.Surface3)).OnDrop(func(ev ggui.DropEvent) {
 		m.copyInto(r.Node, r.Path, ev.Paths())
 	})
 	list = ggui.DropZone(list, func(d ggui.Dropped[pathDrag]) { m.dropInto(d.Value, root) })
@@ -528,7 +529,7 @@ func previewPane(m *model) ggui.Widget {
 			fileTypeIcon(p.Name, false, false).Size(14),
 			ggui.Expanded(ggui.Row(
 				ggui.Box(ggui.Text(p.Name).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).MaxWidth(170),
-				ggui.Text(info).Size(11.5).Color(tokExtraMuted).NoWrap(),
+				ggui.Text(info).Size(11.5).Color(skin.ExtraMuted).NoWrap(),
 			).Gap(8).Align(ggui.AlignBaseline)),
 			ggui.Row(
 				enlarge,
@@ -600,7 +601,7 @@ func treeOverPane(header, tree ggui.Widget, open ggui.Readable[bool], ratio floa
 // lowerPane frames the pane under a tree: its head line, then its content
 // on the sunken surface.
 func lowerPane(head, content ggui.Widget) ggui.Widget {
-	return ggui.Column(hline(), head, hline(), ggui.Expanded(ggui.Box(content).Fill(tokSurface1))).Stretch()
+	return ggui.Column(hline(), head, hline(), ggui.Expanded(ggui.Box(content).Fill(skin.Surface1))).Stretch()
 }
 
 // paneNote stands in a lower pane for content it has none of.

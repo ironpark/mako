@@ -7,6 +7,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -186,11 +187,11 @@ func commitMenu(m *model, c *protocol.GitCommit) []ggui.Widget {
 func foldSection(open *ggui.StateValue[bool], title string, count int, actions ...ggui.Widget) ggui.Widget {
 	return ggui.View(open, func(o bool) ggui.Widget {
 		label := []ggui.Widget{
-			icon(pick(o, "chevron-down", "chevron-right")).Size(12).Color(tokExtraMuted),
-			ggui.Text(title).Size(11.5).Weight(ggui.WeightSemibold).Color(tokMuted).NoWrap(),
+			icon(pick(o, "chevron-down", "chevron-right")).Size(12).Color(skin.ExtraMuted),
+			ggui.Text(title).Size(11.5).Weight(ggui.WeightSemibold).Color(skin.Muted).NoWrap(),
 		}
 		if count > 0 {
-			label = append(label, ggui.Text(lineCount(count)).Size(11).Color(tokExtraMuted).NoWrap())
+			label = append(label, ggui.Text(lineCount(count)).Size(11).Color(skin.ExtraMuted).NoWrap())
 		}
 		toggle := ui.ButtonOf(ggui.Row(append(label, ggui.Spacer())...).Gap(6).Align(ggui.AlignCenter),
 			func() { open.Set(!ggui.Peek(open)) }).Ghost().Pad(4, 8).Radius(0).Name(pick(o, Tf("Collapse %s", title), Tf("Expand %s", title)))
@@ -218,9 +219,9 @@ func stashSection(m *model, open *ggui.StateValue[bool]) ggui.Widget {
 						Run: run(protocol.GitOpStashDrop, T("Dropping…"))})
 				}
 				out[i] = ggui.Box(ggui.Row(
-					icon("layers").Size(13).Color(tokMuted),
+					icon("layers").Size(13).Color(skin.Muted),
 					ggui.Expanded(ggui.Text(s.GetMessage()).Size(12.5).NoWrap().Ellipsis()),
-					ggui.Text(ago(protocol.TimeOf(s.GetTime()))).Size(11).Color(tokExtraMuted).NoWrap(),
+					ggui.Text(ago(protocol.TimeOf(s.GetTime()))).Size(11).Color(skin.ExtraMuted).NoWrap(),
 					ui.Tooltip(ui.Button(T("Pop"), run(protocol.GitOpStashPop, T("Popping…"))).Ghost(), T("Apply the stash and drop it")),
 					iconMenu(ui.MenuOf(icon("ellipsis").Size(14),
 						ui.MenuItem(T("Apply"), run(protocol.GitOpStashApply, T("Applying…"))),
@@ -255,7 +256,7 @@ func branchSection(m *model, open *ggui.StateValue[bool]) ggui.Widget {
 				out = append(out, localBranchRow(m, name, b.Current))
 			}
 			if len(b.Remote) > 0 {
-				out = append(out, ggui.Box(ggui.Text(T("Remote")).Size(11).Color(tokExtraMuted)).Pad(6, 12, 2, 30))
+				out = append(out, ggui.Box(ggui.Text(T("Remote")).Size(11).Color(skin.ExtraMuted)).Pad(6, 12, 2, 30))
 				for _, name := range b.Remote {
 					out = append(out, remoteBranchRow(m, name, b.Current))
 				}
@@ -268,10 +269,10 @@ func branchSection(m *model, open *ggui.StateValue[bool]) ggui.Widget {
 
 func localBranchRow(m *model, name, current string) ggui.Widget {
 	on := name == current
-	glyph := icon("git-branch").Size(13).Color(tokMuted)
+	glyph := icon("git-branch").Size(13).Color(skin.Muted)
 	text := ggui.Text(name).Size(12.5).NoWrap().Ellipsis()
 	if on {
-		glyph, text = icon("check").Size(13).Color(tokAccentBright), text.Weight(ggui.WeightMedium)
+		glyph, text = icon("check").Size(13).Color(skin.AccentBright), text.Weight(ggui.WeightMedium)
 	}
 	row := ui.ButtonOf(ggui.Row(glyph, ggui.Expanded(text)).Gap(6).Align(ggui.AlignCenter), func() {
 		if !on {
@@ -319,8 +320,8 @@ func remoteBranchRow(m *model, name, current string) ggui.Widget {
 		m.gitRun(&protocol.GitRun{Op: protocol.GitOpTrack, Branch: name}, T("Checking out…"), nil)
 	}
 	row := ui.ButtonOf(ggui.Row(
-		icon("cloud-download").Size(13).Color(tokExtraMuted),
-		ggui.Expanded(ggui.Text(name).Size(12.5).Color(tokMuted).NoWrap().Ellipsis()),
+		icon("cloud-download").Size(13).Color(skin.ExtraMuted),
+		ggui.Expanded(ggui.Text(name).Size(12.5).Color(skin.Muted).NoWrap().Ellipsis()),
 	).Gap(6).Align(ggui.AlignCenter), track).Ghost().Pad(4, 12, 4, 30).Radius(0).Name(name)
 	return ui.ContextMenuFunc(row, func() []ggui.Widget {
 		return []ggui.Widget{
@@ -369,7 +370,7 @@ func operationBanner(m *model) ggui.Widget {
 				Action: T("Abort"), Run: run(protocol.GitOpAbort, T("Aborting…"))})
 		}
 		return ggui.Column(ggui.Box(ggui.Column(
-			ggui.Row(icon("shield-alert").Size(15).Color(tokDotWaiting), ggui.Expanded(ggui.Text(note).Size(12.5))).Gap(8).Align(ggui.AlignStart),
+			ggui.Row(icon("shield-alert").Size(15).Color(skin.DotWaiting), ggui.Expanded(ggui.Text(note).Size(12.5))).Gap(8).Align(ggui.AlignStart),
 			ggui.Row(ggui.Spacer(),
 				ui.Button(T("Abort"), abort).Ghost(),
 				ui.Button(T("Continue"), func() {
@@ -385,6 +386,6 @@ func operationBanner(m *model) ggui.Widget {
 						Action: T("Continue"), Run: run(protocol.GitOpContinue, T("Continuing…"))})
 				}),
 			).Gap(6),
-		).Gap(8).Stretch()).Pad(10, 12).Fill(tokSurface2), hline()).Stretch()
+		).Gap(8).Stretch()).Pad(10, 12).Fill(skin.Surface2), hline()).Stretch()
 	})
 }

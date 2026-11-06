@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -374,7 +375,7 @@ func addFolderDialog(m *model) ggui.Widget {
 			ggui.Expanded(ui.TextField(a.AddPath).Placeholder(T("Its whole path")).Name(T("Folder")).OnSubmit(func(string) { m.submitAddFolder() })),
 			ggui.If(local, func() ggui.Widget { return browse }).Else(func() ggui.Widget { return browseRemote }),
 		).Gap(8)),
-		ggui.If(hasErr, func() ggui.Widget { return ggui.TextOf(a.AddErr).Size(12).Color(tokDotDown) }),
+		ggui.If(hasErr, func() ggui.Widget { return ggui.TextOf(a.AddErr).Size(12).Color(skin.DotDown) }),
 		ggui.Row(
 			ui.Button(T("Cancel"), func() { a.AddOpen.Set(false) }).Outline(),
 			ui.Button(T("Add folder"), m.submitAddFolder),
@@ -488,7 +489,7 @@ func rootSettingsRow(a *projectAsk, i int, r projectRoot, n int, nodes []*protoc
 		where = append(where, muted(ggui.Text(nodeName(nodes, l.Node)+" · "+prettyPath(l.Path)).Size(11.5).NoWrap().Ellipsis()))
 	}
 	if r.Remote != "" {
-		where = append(where, ggui.Text(r.Remote).Size(11).Color(tokExtraMuted).NoWrap().Ellipsis())
+		where = append(where, ggui.Text(r.Remote).Size(11).Color(skin.ExtraMuted).NoWrap().Ellipsis())
 	}
 	buttons := []ggui.Widget{}
 	if i > 0 {
@@ -534,8 +535,8 @@ func projectDragged(m *model, head ggui.Widget, g sessionGroup) ggui.Widget {
 		if from == "" {
 			return head
 		}
-		hint := ggui.Box(ggui.Text(Tf("Drop to merge %s into %s", from, into)).Size(11.5).Color(tokAccentBright).NoWrap().Ellipsis()).Pad(0, 8, 4, 8)
-		return ggui.Box(ggui.Column(head, hint).Stretch()).Border(1.5, tokAccentBright).Radius(7)
+		hint := ggui.Box(ggui.Text(Tf("Drop to merge %s into %s", from, into)).Size(11.5).Color(skin.AccentBright).NoWrap().Ellipsis()).Pad(0, 8, 4, 8)
+		return ggui.Box(ggui.Column(head, hint).Stretch()).Border(1.5, skin.AccentBright).Radius(7)
 	})
 	zone := ggui.DropZone(marked, func(d ggui.Dropped[projectDrag]) {
 		over.Set("")

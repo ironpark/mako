@@ -5,6 +5,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -64,7 +65,7 @@ func chatInput(m *model, id string, state *chatState) ggui.Widget {
 			return ggui.Column(header, &lane{child: ggui.Box(ggui.Column(
 				muted(ggui.Text(T("Click below to select options or type your answer.")).Size(12)),
 				ggui.Box(term).Height(320),
-			).Gap(6).Stretch()).Border(1, tokDotWaiting).Radius(10).Pad(8)}).Stretch()
+			).Gap(6).Stretch()).Border(1, skin.DotWaiting).Radius(10).Pad(8)}).Stretch()
 		})
 	})
 }

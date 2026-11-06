@@ -10,6 +10,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/gui/skin"
 )
 
 // launchable is an agent a node can start and its profiles.
@@ -69,7 +70,7 @@ func quickLaunchers(m *model, nodeID, project string, targets []string, before f
 		if l.Agent == "shell" {
 			label = T("New terminal")
 		}
-		glyph := agentGlyph(l.Agent, tokMuted)
+		glyph := agentGlyph(l.Agent, skin.Muted)
 		if len(l.Profiles) == 0 {
 			buttons = append(buttons, ui.Tooltip(ui.ButtonOf(glyph, start(l.Agent)).Ghost().Pad(6).Radius(6).Name(label), label))
 			continue
@@ -113,7 +114,7 @@ func launchButton(m *model, nodeID, project string, targets []string, before, mo
 	}
 	pill := ggui.Reactive(func() ggui.Widget {
 		return ggui.Box(ggui.Column(lines...).Gap(2)).Pad(2).
-			Fill(tokSolidBg).Border(1, tokBorder).Radius(8).Shadow(uitheme.Use().PanelShadow)
+			Fill(skin.SolidBg).Border(1, skin.Border).Radius(8).Shadow(uitheme.Use().PanelShadow)
 	})
 	f.pill = ggui.Transition(pill).Fade().Easing(ggui.EaseLinear)
 	return f

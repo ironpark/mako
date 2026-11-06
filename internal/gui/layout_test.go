@@ -7,6 +7,7 @@ import (
 	"github.com/ironpark/ggui"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -168,7 +169,7 @@ func TestSidePanelsSlide(t *testing.T) {
 	width := ggui.State[float64](300)
 	var d *drawer
 	p := ggui.ProbeBuilder(func() ggui.Widget {
-		d = newDrawer(ggui.Box().Fill(tokSurface1), open, width, false)
+		d = newDrawer(ggui.Box().Fill(skin.Surface1), open, width, false)
 		return ggui.Row(d, ggui.Expanded(ggui.Box())).Stretch()
 	}, ggui.Sz(800, 400))
 	defer p.Close()

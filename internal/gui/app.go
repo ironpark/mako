@@ -11,6 +11,7 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/notify"
 )
 
@@ -67,7 +68,7 @@ func setup(m *model) {
 	setupWorkspace(m)
 	ggui.Effect(func() ggui.Cleanup {
 		pal := m.themePalette()
-		uitheme.Set(themeFor(pal))
+		uitheme.Set(skin.Theme(pal))
 		return nil
 	})
 	last := ggui.Peek(m.Prefs)

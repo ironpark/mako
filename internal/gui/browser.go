@@ -13,6 +13,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -370,11 +371,11 @@ func browserView(b *browser) ggui.Widget {
 		ggui.Box(columnHead(T("Size"), 1)).Width(sizeColumn),
 		ggui.Box(columnHead(T("Modified"), 0)).Width(modColumn),
 	).Gap(12)).Pad(6, 16, 6, 38)
-	var list ggui.Widget = ggui.Column(columns, hline(), ggui.Expanded(ggui.Scroll(ggui.Padding(tree, 4, 8)).Bar(tokSurface3))).Stretch()
+	var list ggui.Widget = ggui.Column(columns, hline(), ggui.Expanded(ggui.Scroll(ggui.Padding(tree, 4, 8)).Bar(skin.Surface3))).Stretch()
 	// A drop over the list says where it goes.
 	list = ggui.View(b.DropOver, func(over bool) ggui.Widget {
 		if over {
-			return ggui.Box(list).Border(2, tokAccentBright)
+			return ggui.Box(list).Border(2, skin.AccentBright)
 		}
 		return list
 	})
@@ -395,7 +396,7 @@ func browserView(b *browser) ggui.Widget {
 			ggui.Expanded(body),
 			hline(),
 			browserStatus(b, rows),
-		).Stretch()).Fill(tokSolidBg),
+		).Stretch()).Fill(skin.SolidBg),
 		b.Ops.dialogs(b.submitFile),
 	).Expand()
 }
@@ -407,7 +408,7 @@ const (
 )
 
 func columnHead(label string, align float64) ggui.Widget {
-	return ggui.Text(label).Size(11.5).Color(tokExtraMuted).Weight(ggui.WeightMedium).NoWrap().Align(align)
+	return ggui.Text(label).Size(11.5).Color(skin.ExtraMuted).Weight(ggui.WeightMedium).NoWrap().Align(align)
 }
 
 // browserRow is a file's row: its name, size and when it last changed, and
@@ -423,12 +424,12 @@ func browserRow(b *browser, it fileItem) ggui.Widget {
 	lead := fileTypeIcon(it.Name, it.Dir, false).Size(15)
 	label := ggui.Text(it.Name).Size(13).NoWrap().Ellipsis()
 	if strings.HasPrefix(it.Name, ".") {
-		label = label.Color(tokMuted)
+		label = label.Color(skin.Muted)
 	}
 	var row ggui.Widget = ggui.Row(
 		ggui.Expanded(ggui.Row(lead, ggui.Expanded(label)).Gap(8)),
-		ggui.Box(ggui.Text(size).Size(12).Color(tokMuted).NoWrap().Align(1)).Width(sizeColumn),
-		ggui.Box(ggui.Text(mod).Size(12).Color(tokMuted).NoWrap()).Width(modColumn),
+		ggui.Box(ggui.Text(size).Size(12).Color(skin.Muted).NoWrap().Align(1)).Width(sizeColumn),
+		ggui.Box(ggui.Text(mod).Size(12).Color(skin.Muted).NoWrap()).Width(modColumn),
 	).Gap(12)
 	if it.Dir {
 		row = litDrop(row, nil, func(paths []string) {
@@ -477,7 +478,7 @@ func browserToolbar(b *browser) ggui.Widget {
 	nav := navButtons(b.navigator)
 	crumbs := ggui.View(b.Path, func(p string) ggui.Widget { return pathCrumbs(p, b.goTo) })
 	hidden := hiddenFilesToggle(m)
-	where := ggui.Row(icon("hard-drive").Size(14).Color(tokMuted),
+	where := ggui.Row(icon("hard-drive").Size(14).Color(skin.Muted),
 		muted(ggui.Text(nodeName(ggui.Peek(m.Nodes), b.node)).Size(12.5).NoWrap())).Gap(6)
 	return ggui.Box(ggui.Row(
 		nav,
@@ -518,7 +519,7 @@ func pathCrumbs(p string, goTo func(string)) ggui.Widget {
 		if i == len(segs)-1 {
 			text = text.Weight(ggui.WeightMedium)
 		} else {
-			text = text.Color(tokMuted)
+			text = text.Color(skin.Muted)
 		}
 		parts = append(parts, ui.ButtonOf(text, func() { goTo(target) }).Ghost().Pad(3, 5).Radius(5).Name(target))
 	}
@@ -539,7 +540,7 @@ func browserStatus(b *browser, rows ggui.Readable[[]fileItem]) ggui.Widget {
 		var right []ggui.Widget
 		switch busy, note := b.Busy.Get(), b.Status.Get(); {
 		case busy != "":
-			left = ggui.Row(icon("loader-circle").Size(13).Color(tokMuted), muted(ggui.Text(busy).Size(12).NoWrap().Ellipsis())).Gap(6)
+			left = ggui.Row(icon("loader-circle").Size(13).Color(skin.Muted), muted(ggui.Text(busy).Size(12).NoWrap().Ellipsis())).Gap(6)
 			right = append(right, ui.Button(T("Cancel"), b.stop).Ghost().Pad(3, 8))
 		case note.Text != "":
 			left = ggui.Text(note.Text).Size(12).NoWrap().Ellipsis()

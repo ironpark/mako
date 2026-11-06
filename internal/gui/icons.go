@@ -11,6 +11,7 @@ import (
 	"github.com/ironpark/ggui/ui/icons"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/mako/internal/agents"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -39,7 +40,7 @@ func icon(name string) *icons.Widget {
 		iconCache[name] = svg
 	}
 	iconMu.Unlock()
-	return icons.New(svg).Size(16).Color(tokMuted)
+	return icons.New(svg).Size(16).Color(skin.Muted)
 }
 
 func iconColored(name string, c color.Color) *icons.Widget { return icon(name).Color(c) }
@@ -201,14 +202,14 @@ func (d *activityDot) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	var c uitheme.Color
 	switch d.state() {
 	case dotWorking:
-		c = tokDotRunning
+		c = skin.DotRunning
 	case dotWaiting:
-		c = tokDotWaiting
+		c = skin.DotWaiting
 	case dotDone:
-		dst.FillCircle(center, dotSize/2+1, dotColor(tokDotDone, 1))
+		dst.FillCircle(center, dotSize/2+1, dotColor(skin.DotDone, 1))
 		return
 	default:
-		dst.FillCircle(center, dotSize/2, dotColor(tokDotExited, 1))
+		dst.FillCircle(center, dotSize/2, dotColor(skin.DotExited, 1))
 		return
 	}
 	glow := 1.0

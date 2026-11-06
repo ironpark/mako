@@ -13,6 +13,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -353,7 +354,7 @@ func agentSettings(m *model) ggui.Widget {
 				ui.Button(T("Add"), add).Outline(),
 			).Gap(8)),
 		ggui.If(hasNote, func() ggui.Widget {
-			return ggui.Box(ggui.TextOf(note).Size(12).Color(tokDotDown)).Pad(0, 16, 12, 16)
+			return ggui.Box(ggui.TextOf(note).Size(12).Color(skin.DotDown)).Pad(0, 16, 12, 16)
 		}),
 	)
 
@@ -380,15 +381,15 @@ func agentItem(m *model, open *ggui.StateValue[string], a agentDraft, profiles [
 		if n := m.profileCount(name); n > 0 {
 			text += " · " + Tf("%d profiles", n)
 		}
-		return ggui.Text(text).Size(11.5).Color(tokExtraMuted).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()
+		return ggui.Text(text).Size(11.5).Color(skin.ExtraMuted).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()
 	})
 	head := ggui.Row(
 		ggui.Expanded(ui.ButtonOf(ggui.Row(
-			agentGlyph(name, tokMuted).Size(15),
+			agentGlyph(name, skin.Muted).Size(15),
 			ggui.Text(name).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
 			ggui.Expanded(summary),
 			ggui.View(isOpen, func(o bool) ggui.Widget {
-				return icon("chevron-down").Size(13).Color(tokExtraMuted).Rotate(pick(o, 0.0, -math.Pi/2))
+				return icon("chevron-down").Size(13).Color(skin.ExtraMuted).Rotate(pick(o, 0.0, -math.Pi/2))
 			}),
 		).Gap(10).Align(ggui.AlignCenter), func() { open.Set(pick(ggui.Peek(open) == name, "", name)) }).
 			Ghost().Pad(8, 10).Radius(7).Name(Tf("%s settings", name))),
@@ -440,7 +441,7 @@ func agentEditor(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 // tooltip, for the list's unfolded agent.
 func compactField(label, hint string, field ggui.Widget) ggui.Widget {
 	return ggui.Column(
-		ui.Tooltip(ggui.Text(label).Size(12).Color(tokMuted), hint),
+		ui.Tooltip(ggui.Text(label).Size(12).Color(skin.Muted), hint),
 		field,
 	).Gap(4).Stretch()
 }
@@ -518,7 +519,7 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 	nameField := ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Profile })).
 		Style(mono).Name(Tf("%s profile name", p.Agent))
 	head := ggui.Row(
-		icon("layers").Size(14).Color(tokMuted),
+		icon("layers").Size(14).Color(skin.Muted),
 		muted(ggui.Text(p.Agent+":").Size(13).Style(mono)),
 		ggui.Box(nameField).Width(180),
 		ggui.Spacer(),
@@ -538,7 +539,7 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Env })).
 				Multiline().Lines(2).Style(mono).Name(Tf("%s environment", target))),
 		profileServers(m, id, target),
-	).Gap(10).Stretch()).Border(1, tokBorder).Radius(8).Pad(10, 12)
+	).Gap(10).Stretch()).Border(1, skin.Border).Radius(8).Pad(10, 12)
 }
 
 // mcpServerIDs are the MCP servers this node has: the installed
@@ -610,7 +611,7 @@ func profileServers(m *model, id int, name string) ggui.Widget {
 			hint = T("Only the servers ticked, even one turned off for the node.")
 		}
 		rows := []ggui.Widget{ggui.Row(
-			ggui.Expanded(ui.Tooltip(ggui.Text(T("Choose its MCP servers")).Size(12).Color(tokMuted), hint)),
+			ggui.Expanded(ui.Tooltip(ggui.Text(T("Choose its MCP servers")).Size(12).Color(skin.Muted), hint)),
 			ui.Switch(pick, "").Name(Tf("%s chooses its MCP servers", name)),
 		).Gap(8).Align(ggui.AlignCenter)}
 		if d.PickServers {

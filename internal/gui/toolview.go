@@ -10,6 +10,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/gitstat"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -189,7 +190,7 @@ func textLines(s string) int {
 // pathLine is the file a tool works on, with its icon, and a note after.
 func pathLine(path, note string) ggui.Widget {
 	row := []ggui.Widget{
-		icon(fileIconName(baseName(path))).Size(14).Color(tokMuted),
+		icon(fileIconName(baseName(path))).Size(14).Color(skin.Muted),
 		ggui.Flex(ggui.Text(path).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis().Selectable(), 1),
 	}
 	if note != "" {
@@ -201,18 +202,18 @@ func pathLine(path, note string) ggui.Widget {
 // commandBlock is a command as a terminal shows it, with where it runs.
 func commandBlock(cmd, dir string) ggui.Widget {
 	mono := ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: 12}
-	text := ggui.RichText(ggui.Span("$ ").Color(tokAccentBright), ggui.Span(strings.TrimRight(cmd, "\n"))).
+	text := ggui.RichText(ggui.Span("$ ").Color(skin.AccentBright), ggui.Span(strings.TrimRight(cmd, "\n"))).
 		Style(mono).LineHeight(1.4).Selectable()
 	rows := []ggui.Widget{text}
 	if dir != "" {
-		rows = append(rows, ggui.Text(dir).Style(mono).Color(tokExtraMuted).NoWrap().Ellipsis())
+		rows = append(rows, ggui.Text(dir).Style(mono).Color(skin.ExtraMuted).NoWrap().Ellipsis())
 	}
 	return toolFrame(ggui.Column(rows...).Gap(4).Stretch()).Pad(8, 10)
 }
 
 // exitBadge is a command's exit code, green for success.
 func exitBadge(code int) ggui.Widget {
-	c := pick(code == 0, tokDiffAdded, tokDotDown)
+	c := pick(code == 0, skin.DiffAdded, skin.DotDown)
 	return ggui.Box(ggui.Text(Tf("exit %d", code)).Size(11).Font(ggui.DefaultMonoFont()).Color(c).NoWrap()).
 		Pad(1, 6).Border(1, c).Radius(4)
 }
@@ -226,7 +227,7 @@ func codeView(m *model, path, src string) ggui.Widget {
 		src = strings.Join(lines[:maxToolLines], "\n")
 	}
 	l, ok := m.hl.languageFor(path, src)
-	rows := []ggui.Widget{ggui.Scroll(ggui.Padding(codeText(m, src, l, ok, 12), 8, 10)).Horizontal().Bar(tokSurface3)}
+	rows := []ggui.Widget{ggui.Scroll(ggui.Padding(codeText(m, src, l, ok, 12), 8, 10)).Horizontal().Bar(skin.Surface3)}
 	if cut {
 		rows = append(rows, ggui.Box(muted(ggui.Text(Tf("%d more lines", len(lines)-maxToolLines)).Size(11.5))).Pad(4, 10, 8, 10))
 	}
@@ -236,7 +237,7 @@ func codeView(m *model, path, src string) ggui.Widget {
 // scrolled caps w at maxToolHeight, scrolling what is over; shorter, it
 // is as tall as it is.
 func scrolled(w ggui.Widget) ggui.Widget {
-	return &capHeight{content: w, scroll: ggui.Scroll(w).Bar(tokSurface3), max: maxToolHeight}
+	return &capHeight{content: w, scroll: ggui.Scroll(w).Bar(skin.Surface3), max: maxToolHeight}
 }
 
 // capHeight is content as tall as it is up to max, and scroll, which
@@ -270,7 +271,7 @@ func diffBlock(lines []*protocol.DiffLine) ggui.Widget {
 		switch l.GetOp() {
 		case "@":
 			if i > 0 {
-				rows = append(rows, ggui.Box(muted(ggui.Text("⋯").Style(mono))).Pad(0, 10).Fill(tokSurface2))
+				rows = append(rows, ggui.Box(muted(ggui.Text("⋯").Style(mono))).Pad(0, 10).Fill(skin.Surface2))
 			}
 			continue
 		case "+", "-":
@@ -280,9 +281,9 @@ func diffBlock(lines []*protocol.DiffLine) ggui.Widget {
 		row := ggui.Box(diffText(l, words[i], diffMode{Wrap: true}, mono, l.GetOp()+" ")).Pad(1, 10)
 		switch l.GetOp() {
 		case "+":
-			row = row.Fill(tokDiffAddedBg)
+			row = row.Fill(skin.DiffAddedBg)
 		case "-":
-			row = row.Fill(tokDiffRemovedBg)
+			row = row.Fill(skin.DiffRemovedBg)
 		}
 		rows = append(rows, row)
 	}
@@ -365,14 +366,14 @@ func checklist(items []any) ggui.Widget {
 			continue
 		}
 		status := agent.Str(step, "status")
-		glyph := icon("circle").Size(14).Color(tokExtraMuted)
+		glyph := icon("circle").Size(14).Color(skin.ExtraMuted)
 		text := ggui.Text(agent.Str(step, "text")).Size(12.5)
 		switch status {
 		case "completed", "done":
-			glyph = icon("circle-check").Size(14).Color(tokDiffAdded)
-			text = text.Color(tokMuted)
+			glyph = icon("circle-check").Size(14).Color(skin.DiffAdded)
+			text = text.Color(skin.Muted)
 		case "in_progress":
-			glyph = icon("circle-dot").Size(14).Color(tokAccentBright)
+			glyph = icon("circle-dot").Size(14).Color(skin.AccentBright)
 			text = text.Weight(ggui.WeightMedium)
 		}
 		rows = append(rows, ggui.Row(glyph, ggui.Expanded(text)).Gap(8).Align(ggui.AlignStart))
@@ -393,7 +394,7 @@ func fieldChips(in map[string]any, keys ...string) ggui.Widget {
 			continue
 		}
 		chips = append(chips, ggui.Row(
-			ggui.Text(k).Size(11).Color(tokExtraMuted).NoWrap(),
+			ggui.Text(k).Size(11).Color(skin.ExtraMuted).NoWrap(),
 			ggui.Flex(ggui.Text(v).Size(12).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis().Selectable(), 1),
 		).Gap(6).Align(ggui.AlignCenter))
 	}

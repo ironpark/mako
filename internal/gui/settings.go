@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -64,12 +65,12 @@ var (
 func settingsPage(m *model) ggui.Widget {
 	content := ggui.Key(m.Section, func(id string) ggui.Widget {
 		return ggui.Scroll(ggui.Align(ggui.Box(ggui.Padding(settingsContent(m, id), 32, 40)).MaxWidth(760)).Top()).
-			Bar(tokSurface3)
+			Bar(skin.Surface3)
 	})
 	return ggui.Row(
 		settingsSidebar(m),
 		vline(),
-		ggui.Expanded(ggui.Box(content).Fill(tokSurface0)),
+		ggui.Expanded(ggui.Box(content).Fill(skin.Surface0)),
 	).Stretch()
 }
 
@@ -81,19 +82,19 @@ func settingsSidebar(m *model) ggui.Widget {
 	nav := ggui.View(m.Section, func(current string) ggui.Widget {
 		var rows []ggui.Widget
 		for _, g := range settingsNav {
-			rows = append(rows, ggui.Box(ggui.Text(T(g.title)).Size(11.5).Color(tokExtraMuted)).Pad(14, 10, 4, 10))
+			rows = append(rows, ggui.Box(ggui.Text(T(g.title)).Size(11.5).Color(skin.ExtraMuted)).Pad(14, 10, 4, 10))
 			for _, s := range g.sections {
 				id := s.id
-				fg := tokMuted
+				fg := skin.Muted
 				if id == current {
-					fg = tokFg
+					fg = skin.Fg
 				}
 				item := ui.ButtonOf(ggui.Row(
 					iconColored(s.icon, fg).Size(15),
 					ggui.Text(T(s.label)).Size(13).Color(fg),
 				).Gap(10), func() { m.Section.Set(id) }).Ghost().Pad(7, 10).Radius(7).Name(T(s.label))
 				if id == current {
-					rows = append(rows, ggui.Box(item).Fill(tokSidebarSel).Radius(7))
+					rows = append(rows, ggui.Box(item).Fill(skin.SidebarSel).Radius(7))
 				} else {
 					rows = append(rows, item)
 				}
@@ -106,7 +107,7 @@ func settingsSidebar(m *model) ggui.Widget {
 		header,
 		hline(),
 		ggui.Expanded(ggui.Scroll(ggui.Padding(nav, 4, 8))),
-	).Stretch()).Width(sidebarWidth).Fill(tokSidebar)
+	).Stretch()).Width(sidebarWidth).Fill(skin.Sidebar)
 }
 
 func settingsContent(m *model, id string) ggui.Widget {
@@ -174,7 +175,7 @@ func cardWithTail(tail ggui.Widget, rows ...ggui.Widget) ggui.Widget {
 	if tail != nil {
 		children = append(children, tail)
 	}
-	return ggui.Box(ggui.Column(children...).Stretch()).Fill(tokSurface1).Border(1, tokBorder).Radius(10)
+	return ggui.Box(ggui.Column(children...).Stretch()).Fill(skin.Surface1).Border(1, skin.Border).Radius(10)
 }
 
 // row is one setting: what it is on the left, its control on the right.
@@ -307,7 +308,7 @@ func terminalSettings(m *model) ggui.Widget {
 				row(T("Line height"), T("Space between rows, as a multiple of the font size."),
 					ggui.Row(
 						ggui.Box(ui.Slider(lineHeight, minLineHeight, maxLineHeight).Step(0.05).Name(T("Line height"))).Width(160),
-						ggui.Box(ggui.Textf("%.2f×", lineHeight).Size(12.5).Color(tokMuted)).Width(44),
+						ggui.Box(ggui.Textf("%.2f×", lineHeight).Size(12.5).Color(skin.Muted)).Width(44),
 					).Gap(10)),
 			),
 		),
@@ -372,7 +373,7 @@ func saveBar(m *model) ggui.Widget {
 		if s == "" {
 			return muted(ggui.Text(T("Saved to config.json. The daemon reads agents as they change and the rest when it starts.")).Size(12))
 		}
-		return ggui.Text(s).Size(12).Color(tokAccentBright)
+		return ggui.Text(s).Size(12).Color(skin.AccentBright)
 	})
 	embedded := ggui.Map(m.DaemonState, func(s daemonState) bool { return s.Running })
 	return ggui.Row(
@@ -441,7 +442,7 @@ func daemonSettings(m *model) ggui.Widget {
 			return muted(ggui.Text(T("Nothing logged yet.")).Size(12))
 		}
 		mono := ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: 11.5}
-		return ggui.Text(strings.Join(lines, "\n")).Style(mono).Color(tokMuted).Selectable()
+		return ggui.Text(strings.Join(lines, "\n")).Style(mono).Color(skin.Muted).Selectable()
 	})
 	inApp := ggui.Map(m.DaemonState, func(s daemonState) bool { return s.Mode == "embedded" })
 
@@ -454,8 +455,8 @@ func daemonSettings(m *model) ggui.Widget {
 		section(T("Status"), card(status)),
 		ggui.If(inApp, func() ggui.Widget {
 			return section(T("Log"),
-				ggui.Box(ggui.Scroll(ggui.Padding(logs, 12, 14)).FollowEnd().Bar(tokSurface3)).
-					Height(260).Fill(tokSurface1).Border(1, tokBorder).Radius(10),
+				ggui.Box(ggui.Scroll(ggui.Padding(logs, 12, 14)).FollowEnd().Bar(skin.Surface3)).
+					Height(260).Fill(skin.Surface1).Border(1, skin.Border).Radius(10),
 			)
 		}),
 	)
@@ -468,7 +469,7 @@ func hostSettings(m *model) ggui.Widget {
 				row(T("Node name"), T("How this machine appears to the others."),
 					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Name })).Name(T("Node name"))).Width(240)),
 				row(T("Node ID"), T("Generated once; the mesh tells nodes apart by it."),
-					ggui.Text(m.cfg.NodeID).Size(12).Color(tokMuted).Selectable()),
+					ggui.Text(m.cfg.NodeID).Size(12).Color(skin.Muted).Selectable()),
 			),
 		),
 		section(T("Network"),
@@ -491,7 +492,7 @@ func hostSettings(m *model) ggui.Widget {
 						if addrs := c.Self.DialAddrs(); len(addrs) > 0 {
 							text = strings.Join(addrs, "\n")
 						}
-						return ggui.Text(text).Size(12).Color(tokMuted).Selectable()
+						return ggui.Text(text).Size(12).Color(skin.Muted).Selectable()
 					})),
 			),
 		),
@@ -535,9 +536,9 @@ func aboutSettings(m *model) ggui.Widget {
 	return page(T("About"), "mako runs terminal agents on any of your computers and drives them from one place.",
 		section(T("Build"),
 			card(
-				row(T("Version"), "", ggui.Text(config.Version).Size(13).Color(tokMuted).Selectable()),
-				row(T("Daemon config"), "", ggui.Text(filepath.Join(dir, "config.json")).Size(12).Color(tokMuted).Selectable()),
-				row(T("App settings"), "", ggui.Text(filepath.Join(dir, "gui.json")).Size(12).Color(tokMuted).Selectable()),
+				row(T("Version"), "", ggui.Text(config.Version).Size(13).Color(skin.Muted).Selectable()),
+				row(T("Daemon config"), "", ggui.Text(filepath.Join(dir, "config.json")).Size(12).Color(skin.Muted).Selectable()),
+				row(T("App settings"), "", ggui.Text(filepath.Join(dir, "gui.json")).Size(12).Color(skin.Muted).Selectable()),
 			),
 		),
 	)

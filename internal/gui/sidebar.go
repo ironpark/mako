@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -155,7 +156,7 @@ func sectionDrop(m *model, w ggui.Widget, nodeID, project string) ggui.Widget {
 	over := ggui.State(false)
 	marked := ggui.View(over, func(o bool) ggui.Widget {
 		if o {
-			return ggui.Box(w).Border(1, tokAccentBright).Radius(7)
+			return ggui.Box(w).Border(1, skin.AccentBright).Radius(7)
 		}
 		return ggui.Box(w).Border(1, color.Transparent).Radius(7)
 	})

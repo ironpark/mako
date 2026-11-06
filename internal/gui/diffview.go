@@ -8,6 +8,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -119,9 +120,9 @@ func diffText(l *protocol.DiffLine, span wordSpan, mode diffMode, mono ggui.Text
 		}
 		return t
 	}
-	mark := tokDiffAdded
+	mark := skin.DiffAdded
 	if l.GetOp() == "-" {
-		mark = tokDiffRemoved
+		mark = skin.DiffRemoved
 	}
 	t := ggui.RichText(
 		ggui.Span(prefix+text[:span.Lo]),
@@ -149,16 +150,16 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 		if n > 0 {
 			s = fmt.Sprint(n)
 		}
-		return ggui.Box(ggui.Text(s).Style(mono).Color(tokExtraMuted).NoWrap()).Width(34)
+		return ggui.Box(ggui.Text(s).Style(mono).Color(skin.ExtraMuted).NoWrap()).Width(34)
 	}
 	tint := func(op string, picked bool, w *ggui.BoxWidget) ggui.Widget {
 		switch {
 		case picked:
-			return w.Fill(tokAccentBright.Alpha(0.22))
+			return w.Fill(skin.AccentBright.Alpha(0.22))
 		case op == "+":
-			return w.Fill(tokDiffAddedBg)
+			return w.Fill(skin.DiffAddedBg)
 		case op == "-":
-			return w.Fill(tokDiffRemovedBg)
+			return w.Fill(skin.DiffRemovedBg)
 		}
 		return w
 	}
@@ -188,7 +189,7 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 		// cell where the other side has a line and this one none.
 		side := func(i int, newSide bool) ggui.Widget {
 			if i < 0 {
-				return ggui.Box(ggui.Row(num(0))).Pad(1, 8).Fill(tokSurface2)
+				return ggui.Box(ggui.Row(num(0))).Pad(1, 8).Fill(skin.Surface2)
 			}
 			l := lines[i]
 			n := l.GetOld()
@@ -244,7 +245,7 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 	col := ggui.Each(ggui.State(rows), func(row ggui.EachItem[func() ggui.Widget]) ggui.Widget { return row.Item() }).
 		Stretch().EstimatedExtent(diffRowEstimate)
 	if mode.Wrap || mode.Split {
-		return ggui.Scroll(col).Bar(tokSurface3)
+		return ggui.Scroll(col).Bar(skin.Surface3)
 	}
 	// Long lines run on, and the whole diff scrolls sideways to them, as
 	// far as the longest, which is laid out for its width alone.
@@ -252,7 +253,7 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 	if widest >= 0 {
 		wide = &asWideAs{like: rows[widest](), child: col}
 	}
-	return ggui.Scroll(ggui.Scroll(wide).Horizontal().Bar(tokSurface3)).Bar(tokSurface3)
+	return ggui.Scroll(ggui.Scroll(wide).Horizontal().Bar(skin.Surface3)).Bar(skin.Surface3)
 }
 
 // diffRowEstimate is how tall a diff's row is taken to be until it is laid
@@ -283,9 +284,9 @@ func (a *asWideAs) Paint(dst *ggui.Canvas, r ggui.Rect) { dst.Paint(a.child, r) 
 func hunkRow(l *protocol.DiffLine, mono ggui.TextStyle, actions ggui.Widget) ggui.Widget {
 	hover := ggui.State(false)
 	row := ggui.Box(ggui.Row(
-		ggui.Expanded(ggui.Text(l.GetText()).Style(mono).Color(tokMuted).NoWrap().Ellipsis()),
+		ggui.Expanded(ggui.Text(l.GetText()).Style(mono).Color(skin.Muted).NoWrap().Ellipsis()),
 		ggui.Box(ggui.If(hover, func() ggui.Widget { return actions })).Height(22),
-	).Gap(8).Align(ggui.AlignCenter)).Pad(2, 8, 2, 10).Fill(tokSurface2)
+	).Gap(8).Align(ggui.AlignCenter)).Pad(2, 8, 2, 10).Fill(skin.Surface2)
 	return ggui.Pointer(row).OnHover(hover.Set)
 }
 
@@ -409,7 +410,7 @@ func selectionBar(m *model, root fileRoot, path string, lines []*protocol.DiffLi
 		return lineRef(baseName(path), lines[s.From:s.To+1])
 	})
 	return ggui.Column(hline(), ggui.Box(ggui.Row(
-		icon("send-horizontal").Size(14).Color(tokMuted),
+		icon("send-horizontal").Size(14).Color(skin.Muted),
 		ggui.TextOf(count).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap(),
 		ggui.Expanded(ui.TextField(note).Placeholder(T("Note for the agent (optional)")).Name(T("Note for the agent")).
 			OnSubmit(func(string) {
@@ -419,5 +420,5 @@ func selectionBar(m *model, root fileRoot, path string, lines []*protocol.DiffLi
 			})),
 		target,
 		iconButton("x", T("Clear selection"), func() { sel.Set(noSel) }),
-	).Gap(10).Align(ggui.AlignCenter)).Pad(8, 12).Fill(tokSurface1)).Stretch()
+	).Gap(10).Align(ggui.AlignCenter)).Pad(8, 12).Fill(skin.Surface1)).Stretch()
 }

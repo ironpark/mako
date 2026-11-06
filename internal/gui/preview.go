@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -141,7 +142,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			var b *browser
 			p = ggui.ProbeBuilder(func() ggui.Widget {
 				if agentsOnly {
-					return ggui.Box(ggui.Column(panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), "GitHub", T("Search")), hline(), ggui.Expanded(projectAgentsBody(m, agentsRoot))).Stretch()).Fill(tokSurface0)
+					return ggui.Box(ggui.Column(panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), "GitHub", T("Search")), hline(), ggui.Expanded(projectAgentsBody(m, agentsRoot))).Stretch()).Fill(skin.Surface0)
 				}
 				if mdSrc != "" {
 					return ggui.Provide(ggui.ReducedMotionKey, true, markdownView(m, "", mdSrc))
@@ -389,8 +390,8 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				// then a theme of the user's in its editor, both kept in
 				// memory: the themes folder is not touched.
 				do(func() {
-					_ = writeGradient(window, hex(0x2563EB), hex(0xE07070))
-					_ = writeGradient(session, hex(0x35C264), hex(0xE2B04A))
+					_ = writeGradient(window, skin.Hex(0x2563EB), skin.Hex(0xE07070))
+					_ = writeGradient(session, skin.Hex(0x35C264), skin.Hex(0xE2B04A))
 					m.Prefs.Update(func(p prefs) prefs {
 						p.Theme = "dark"
 						p.WindowBackdrop = backdrop{Image: window, Opacity: 0.35}
@@ -399,9 +400,9 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					})
 				}), frames(40), shot("12-backdrop"),
 				do(func() {
-					pal := darkPalette
-					pal.Name, pal.AccentBright, pal.Sidebar = "Preview", hex(0xE2B04A), hex(0x101826)
-					m.Themes.Set(map[string]palette{"Preview": pal})
+					pal := skin.Dark
+					pal.Name, pal.AccentBright, pal.Sidebar = "Preview", skin.Hex(0xE2B04A), skin.Hex(0x101826)
+					m.Themes.Set(map[string]skin.Palette{"Preview": pal})
 					m.Prefs.Update(func(p prefs) prefs {
 						p.Theme, p.WindowBackdrop, p.SessionBackdrop = "Preview", backdrop{}, backdrop{}
 						return p

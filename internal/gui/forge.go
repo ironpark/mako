@@ -14,6 +14,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/notify"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -618,7 +619,7 @@ func forgeListView(m *model, root ggui.Readable[fileRoot]) ggui.Widget {
 				}
 				items = append(items, ui.MenuItem(label, func() { m.Forge.Filter.Set(f) }))
 			}
-			face := ggui.Row(muted(ggui.Text(forgeFilterLabel(filter)).Size(12.5).NoWrap()), icon("chevron-down").Size(12).Color(tokExtraMuted)).Gap(3)
+			face := ggui.Row(muted(ggui.Text(forgeFilterLabel(filter)).Size(12.5).NoWrap()), icon("chevron-down").Size(12).Color(skin.ExtraMuted)).Gap(3)
 			row = append(row, borderless(ui.MenuOf(face, items...).Name(T("Which to list"))))
 		}
 		if kind == protocol.ForgePR {
@@ -643,7 +644,7 @@ func forgeListView(m *model, root ggui.Readable[fileRoot]) ggui.Widget {
 		for _, it := range v.Items {
 			rows = append(rows, forgeRow(m, v, it))
 		}
-		return ggui.Scroll(ggui.Column(rows...).Stretch()).Bar(tokSurface3)
+		return ggui.Scroll(ggui.Column(rows...).Stretch()).Bar(skin.Surface3)
 	})
 	return ggui.Column(header, hline(), statusLine(m.Forge.Busy, m.Forge.Note), ggui.Expanded(body)).Stretch()
 }
@@ -660,10 +661,10 @@ func forgeFilterLabel(filter string) string {
 
 // kindChip is a flat choice in a panel's header, filled while chosen.
 func kindChip(label string, on bool, onTap func()) ggui.Widget {
-	text := ggui.Text(label).Size(12.5).NoWrap().Color(pick[color.Color](on, tokFg, tokMuted))
+	text := ggui.Text(label).Size(12.5).NoWrap().Color(pick[color.Color](on, skin.Fg, skin.Muted))
 	face := ggui.Box(text).Pad(4, 8).Radius(6)
 	if on {
-		face = face.Fill(tokSurface2)
+		face = face.Fill(skin.Surface2)
 	}
 	return ui.ButtonOf(face, onTap).Ghost().Pad(0).Radius(6).Name(label)
 }
@@ -673,36 +674,36 @@ func itemIcon(it *protocol.ForgeItem) ggui.Widget {
 	switch it.GetKind() {
 	case protocol.ForgeIssue:
 		if it.GetState() == "OPEN" {
-			return iconColored("circle-dot", tokDiffAdded).Size(15)
+			return iconColored("circle-dot", skin.DiffAdded).Size(15)
 		}
-		return iconColored("circle-check", tokAccentBright).Size(15)
+		return iconColored("circle-check", skin.AccentBright).Size(15)
 	case protocol.ForgeRuns:
 		return checkIcon(it.GetState(), it.GetChecks())
 	}
 	switch {
 	case it.GetState() == "MERGED":
-		return iconColored("git-merge", tokAccentBright).Size(15)
+		return iconColored("git-merge", skin.AccentBright).Size(15)
 	case it.GetState() == "CLOSED":
-		return iconColored("git-pull-request", tokDotDown).Size(15)
+		return iconColored("git-pull-request", skin.DotDown).Size(15)
 	case it.GetDraft():
-		return iconColored("git-pull-request", tokExtraMuted).Size(15)
+		return iconColored("git-pull-request", skin.ExtraMuted).Size(15)
 	}
-	return iconColored("git-pull-request", tokDiffAdded).Size(15)
+	return iconColored("git-pull-request", skin.DiffAdded).Size(15)
 }
 
 // checkIcon is a check's, or a run's, state.
 func checkIcon(status, conclusion string) ggui.Widget {
 	switch {
 	case status == "queued" || status == "waiting" || status == "pending" || status == "requested":
-		return iconColored("clock", tokDotWaiting).Size(14)
+		return iconColored("clock", skin.DotWaiting).Size(14)
 	case status != "completed" && status != "":
-		return iconColored("loader-circle", tokDotWaiting).Size(14)
+		return iconColored("loader-circle", skin.DotWaiting).Size(14)
 	case protocol.Failed(conclusion):
-		return iconColored("circle-x", tokDotDown).Size(14)
+		return iconColored("circle-x", skin.DotDown).Size(14)
 	case conclusion == "success":
-		return iconColored("circle-check", tokDiffAdded).Size(14)
+		return iconColored("circle-check", skin.DiffAdded).Size(14)
 	}
-	return iconColored("circle-slash", tokExtraMuted).Size(14) // skipped, neutral
+	return iconColored("circle-slash", skin.ExtraMuted).Size(14) // skipped, neutral
 }
 
 // rollupIcon is a pull request's checks summed up.
@@ -756,7 +757,7 @@ func forgeRow(m *model, v forgeList, it *protocol.ForgeItem) ggui.Widget {
 	}
 	text := ggui.Column(
 		ggui.Row(title...).Gap(6).Align(ggui.AlignCenter),
-		ggui.Text(forgeMeta(it)).Size(11).Color(tokExtraMuted).NoWrap().Ellipsis(),
+		ggui.Text(forgeMeta(it)).Size(11).Color(skin.ExtraMuted).NoWrap().Ellipsis(),
 	).Gap(2).Stretch()
 	row := ggui.Row(itemIcon(it), ggui.Expanded(text)).Gap(8).Align(ggui.AlignStart)
 	tap := ui.ButtonOf(row, func() { m.openForge(root, it.GetKind(), it.GetNumber()) }).Ghost().Pad(6, 10, 6, 12).Radius(0).Name(it.GetTitle())
@@ -845,9 +846,9 @@ func forgeDetailView(m *model) ggui.Widget {
 
 // sectionTitle heads a part of an item's view.
 func sectionTitle(title string, count int) ggui.Widget {
-	label := []ggui.Widget{ggui.Text(title).Size(11.5).Weight(ggui.WeightSemibold).Color(tokMuted).NoWrap()}
+	label := []ggui.Widget{ggui.Text(title).Size(11.5).Weight(ggui.WeightSemibold).Color(skin.Muted).NoWrap()}
 	if count > 0 {
-		label = append(label, ggui.Text(lineCount(count)).Size(11).Color(tokExtraMuted))
+		label = append(label, ggui.Text(lineCount(count)).Size(11).Color(skin.ExtraMuted))
 	}
 	return ggui.Box(ggui.Row(label...).Gap(6)).Pad(12, 12, 4, 12)
 }
@@ -886,7 +887,7 @@ func forgeDetailBody(m *model, o forgeOpen) ggui.Widget {
 	}
 	top := []ggui.Widget{
 		ggui.Row(itemIcon(it), ggui.Expanded(ggui.Text(it.GetTitle()).Size(14).Weight(ggui.WeightSemibold).Selectable())).Gap(8).Align(ggui.AlignStart),
-		ggui.Text(metaLine(it, meta...)).Size(11.5).Color(tokExtraMuted).Selectable(),
+		ggui.Text(metaLine(it, meta...)).Size(11.5).Color(skin.ExtraMuted).Selectable(),
 	}
 	if len(it.GetLabels()) > 0 {
 		var badges []ggui.Widget
@@ -932,7 +933,7 @@ func forgeDetailBody(m *model, o forgeOpen) ggui.Widget {
 		}
 		rows = append(rows, forgeComposer(m, o.Root, it))
 	}
-	return ggui.Scroll(ggui.Column(rows...).Stretch()).Bar(tokSurface3)
+	return ggui.Scroll(ggui.Column(rows...).Stretch()).Bar(skin.Surface3)
 }
 
 // forgeActions are the buttons an item's view leads with: what is most often
@@ -986,8 +987,8 @@ func forgeComment(m *model, c *protocol.ForgeComment) ggui.Widget {
 		head = append(head, ago(t))
 	}
 	rows := []ggui.Widget{ggui.Row(
-		iconColored("message-square", tokExtraMuted).Size(13),
-		ggui.Expanded(ggui.Text(strings.Join(head, " · ")).Size(11.5).Color(tokMuted).NoWrap().Ellipsis()),
+		iconColored("message-square", skin.ExtraMuted).Size(13),
+		ggui.Expanded(ggui.Text(strings.Join(head, " · ")).Size(11.5).Color(skin.Muted).NoWrap().Ellipsis()),
 	).Gap(6).Align(ggui.AlignCenter)}
 	if strings.TrimSpace(c.GetBody()) != "" {
 		rows = append(rows, markdownText(m, c.GetBody()))
@@ -1034,7 +1035,7 @@ func forgeBranchLine(m *model) ggui.Widget {
 			label := ggui.Row(itemIcon(pr), ggui.Box(ggui.Text(fmt.Sprintf("#%d %s", pr.GetNumber(), pr.GetTitle())).Size(12).NoWrap().Ellipsis()).MaxWidth(200), rollupIcon(pr.GetChecks())).Gap(6).Align(ggui.AlignCenter)
 			parts = append(parts, ui.ButtonOf(label, func() { m.openForge(b.Root, protocol.ForgePR, pr.GetNumber()) }).Ghost().Pad(3, 6).Radius(6).Name(pr.GetTitle()))
 		} else {
-			parts = append(parts, ui.ButtonOf(ggui.Row(iconColored("git-pull-request", tokMuted).Size(14), muted(ggui.Text(T("Create pull request")).Size(12))).Gap(6),
+			parts = append(parts, ui.ButtonOf(ggui.Row(iconColored("git-pull-request", skin.Muted).Size(14), muted(ggui.Text(T("Create pull request")).Size(12))).Gap(6),
 				m.askPR).Ghost().Pad(3, 6).Radius(6).Name(T("Create pull request")))
 		}
 		parts = append(parts, ggui.Spacer())

@@ -8,6 +8,7 @@ import (
 	"github.com/ironpark/ggui"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -181,7 +182,7 @@ func commandList(m *model, id string, state *chatState) ggui.Widget {
 			rows[i] = commandRow(m, id, c, i == pick)
 		}
 		list := ggui.Box(ggui.Column(rows...).Gap(2).Stretch()).
-			Fill(tokSurface1).Border(1, tokBorder).Radius(10).Pad(4)
+			Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(4)
 		return ggui.Box(list).Pad(0, 0, 6, 0)
 	})
 }
@@ -189,19 +190,19 @@ func commandList(m *model, id string, state *chatState) ggui.Widget {
 func commandRow(m *model, id string, c *protocol.Command, chosen bool) ggui.Widget {
 	name := []ggui.Widget{ggui.Text("/" + c.GetName()).Size(13).Weight(ggui.WeightMedium).NoWrap()}
 	if c.GetArgs() != "" {
-		name = append(name, ggui.Text(c.GetArgs()).Size(12).Color(tokExtraMuted).NoWrap())
+		name = append(name, ggui.Text(c.GetArgs()).Size(12).Color(skin.ExtraMuted).NoWrap())
 	}
 	parts := []ggui.Widget{
 		ggui.Row(name...).Gap(6),
 		ggui.Expanded(muted(ggui.Text(c.GetDescription()).Size(12).NoWrap().Ellipsis())),
 	}
 	if c.GetSource() != "" {
-		parts = append(parts, ggui.Text(commandSource(c.GetSource())).Size(11).Color(tokExtraMuted).NoWrap())
+		parts = append(parts, ggui.Text(commandSource(c.GetSource())).Size(11).Color(skin.ExtraMuted).NoWrap())
 	}
 	row := ggui.Box(ggui.Row(parts...).Gap(12)).Pad(6, 10).Radius(6)
 	if chosen {
 		// As plain as a selected row in the sidebar, and as plain to see.
-		row = row.Fill(tokSidebarSel).Border(1, tokBorderAccent)
+		row = row.Fill(skin.SidebarSel).Border(1, skin.BorderAccent)
 	}
 	return ggui.Tap(row, func() { m.takeCommand(id, c) })
 }

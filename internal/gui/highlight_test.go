@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/zed"
 )
 
@@ -63,13 +64,13 @@ func TestHighlightsWithAZedExtension(t *testing.T) {
 	woke := make(chan struct{}, 8)
 	d := &docSyntax{h: h, lang: l, wake: func() { woke <- struct{}{} }}
 	text := "name = \"mako\" # hi\n"
-	d.colors(text, darkPalette)
+	d.colors(text, skin.Dark)
 	select {
 	case <-woke:
 	case <-time.After(10 * time.Second):
 		t.Fatal("no spans")
 	}
-	spans := d.colors(text, darkPalette)
+	spans := d.colors(text, skin.Dark)
 	at := func(sub string) styleSpan {
 		i := strings.Index(text, sub)
 		for _, s := range spans {
@@ -80,26 +81,26 @@ func TestHighlightsWithAZedExtension(t *testing.T) {
 		t.Fatalf("nothing colours %q in %+v", sub, spans)
 		return styleSpan{}
 	}
-	if c := at("mako").Color; c != captureColor("string", darkPalette) {
+	if c := at("mako").Color; c != captureColor("string", skin.Dark) {
 		t.Fatalf("string coloured %v", c)
 	}
-	if c := at("# hi").Color; c != captureColor("comment", darkPalette) {
+	if c := at("# hi").Color; c != captureColor("comment", skin.Dark) {
 		t.Fatalf("comment coloured %v", c)
 	}
 
 	// Typed into before it is parsed again, the colours move along.
 	edited := "x" + text
-	moved := d.colors(edited, darkPalette)
+	moved := d.colors(edited, skin.Dark)
 	if len(moved) == 0 || moved[0].Start != spans[0].Start+1 {
 		t.Fatalf("spans did not move: %+v", moved)
 	}
 }
 
 func TestCaptureColorFallsBackByPrefix(t *testing.T) {
-	if captureColor("function.method.call", darkPalette) != captureColor("function", darkPalette) {
+	if captureColor("function.method.call", skin.Dark) != captureColor("function", skin.Dark) {
 		t.Fatal("no fallback to function")
 	}
-	if captureColor("variable", darkPalette) != nil {
+	if captureColor("variable", skin.Dark) != nil {
 		t.Fatal("a plain variable got a colour")
 	}
 }
@@ -107,13 +108,13 @@ func TestCaptureColorFallsBackByPrefix(t *testing.T) {
 // awaitColors asks d for the colours of text until its worker has them.
 func awaitColors(t *testing.T, d *docSyntax, woke chan struct{}, text string) []styleSpan {
 	t.Helper()
-	d.colors(text, darkPalette)
+	d.colors(text, skin.Dark)
 	select {
 	case <-woke:
 	case <-time.After(20 * time.Second):
 		t.Fatal("no spans")
 	}
-	return d.colors(text, darkPalette)
+	return d.colors(text, skin.Dark)
 }
 
 // colorAt is the colour of the first byte of sub in text.
@@ -142,7 +143,7 @@ func TestBuiltinLanguagesAndInjections(t *testing.T) {
 	wake := func() { woke <- struct{}{} }
 	src := "package main\n\nfunc main() { return }\n"
 	spans := awaitColors(t, &docSyntax{h: h, lang: l, wake: wake}, woke, src)
-	if colorAt(spans, src, "func") != captureColor("keyword", darkPalette) {
+	if colorAt(spans, src, "func") != captureColor("keyword", skin.Dark) {
 		t.Fatalf("func not a keyword: %+v", spans)
 	}
 
@@ -151,7 +152,7 @@ func TestBuiltinLanguagesAndInjections(t *testing.T) {
 	md, _ := h.languageFor("/p/README.md", "")
 	doc := "# Title\n\nSome `code` here.\n\n```go\nfunc f() {}\n```\n"
 	spans = awaitColors(t, &docSyntax{h: h, lang: md, wake: wake}, woke, doc)
-	if colorAt(spans, doc, "func") != captureColor("keyword", darkPalette) {
+	if colorAt(spans, doc, "func") != captureColor("keyword", skin.Dark) {
 		t.Fatalf("the fenced go is not coloured as go: %+v", spans)
 	}
 	if colorAt(spans, doc, "Title") == nil {

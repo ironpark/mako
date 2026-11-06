@@ -69,6 +69,7 @@ take it out before you commit.
     internal/transcript  Claude's and Codex's native conversation logs
     internal/gitstat     git status, diffs, history and operations
     internal/gui         the window: sidebar, panes and tabs, terminal, chat, editor
+    internal/gui/skin    the window's palettes, theme tokens and the user's themes
     internal/notify      desktop notifications, each platform's own way
     internal/shellenv    the login shell's environment, for an app the desktop started
     internal/syntax      tree-sitter compiled to wasm, under wasmtime

@@ -7,6 +7,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -61,7 +62,7 @@ func agentChatView(m *model, id string, agent string) ggui.Widget {
 		})
 		return func() { unfollow(); stop() }
 	})
-	back := ui.ButtonOf(ggui.Row(icon("arrow-left").Size(14).Color(tokMuted), muted(ggui.Text(T("Session")).Size(12.5))).Gap(6),
+	back := ui.ButtonOf(ggui.Row(icon("arrow-left").Size(14).Color(skin.Muted), muted(ggui.Text(T("Session")).Size(12.5))).Gap(6),
 		func() { m.openAgent(id, "") }).Ghost().Pad(4, 8).Radius(6).Name(T("Back to the session"))
 	bar := ggui.Reactive(func() ggui.Widget {
 		a := agentOf(state, agent)
@@ -87,7 +88,7 @@ func agentChatView(m *model, id string, agent string) ggui.Widget {
 		v := sub.result.Get()
 		switch {
 		case v.Err != "":
-			return ggui.Text(v.Err).Size(13).Color(tokMuted).Selectable()
+			return ggui.Text(v.Err).Size(13).Color(skin.Muted).Selectable()
 		case !v.Loaded:
 			return muted(ggui.Text(T("Loading conversation…")))
 		case len(v.Chat.GetMessages()) == 0:
@@ -97,7 +98,7 @@ func agentChatView(m *model, id string, agent string) ggui.Widget {
 	})
 	_, feed := chatFeed(m, id, sub, turns, head, nil)
 	return ggui.Column(
-		ggui.Box(bar).Fill(tokSurface1),
+		ggui.Box(bar).Fill(skin.Surface1),
 		hline(),
 		ggui.Expanded(feed),
 	).Stretch()
@@ -109,7 +110,7 @@ func agentLink(m *model, id string, a *protocol.SubAgent, w ggui.Widget) ggui.Wi
 	if !m.nodeHas(id, protocol.RevisionAgentChat) {
 		return w
 	}
-	row := ggui.Row(ggui.Expanded(w), icon("chevron-right").Size(12).Color(tokExtraMuted)).Gap(6).Align(ggui.AlignCenter)
+	row := ggui.Row(ggui.Expanded(w), icon("chevron-right").Size(12).Color(skin.ExtraMuted)).Gap(6).Align(ggui.AlignCenter)
 	return ui.Tooltip(ggui.Tap(row, func() { m.openAgent(id, a.GetId()) }).Cursor(ggui.CursorShapePointer), T("Open its conversation"))
 }
 

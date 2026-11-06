@@ -7,6 +7,8 @@ import (
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+
+	"github.com/ironpark/mako/internal/gui/skin"
 )
 
 // Images in Chat: those a message holds, which its agent's log held inline
@@ -68,13 +70,13 @@ func chatImage(m *model, node, path string, named bool) ggui.Widget {
 		case v.Img == nil && named:
 			return ggui.Box()
 		case v.Img == nil:
-			w = ggui.Box(ggui.Row(icon("file-image").Size(14).Color(tokMuted), muted(ggui.Text(name).Size(12).NoWrap().Ellipsis())).Gap(6)).Pad(8, 10).MaxWidth(thumbW)
+			w = ggui.Box(ggui.Row(icon("file-image").Size(14).Color(skin.Muted), muted(ggui.Text(name).Size(12).NoWrap().Ellipsis())).Gap(6)).Pad(8, 10).MaxWidth(thumbW)
 		default:
 			b := v.Img.Bounds()
 			scale := min(1, thumbW/float64(max(b.Dx(), 1)), thumbH/float64(max(b.Dy(), 1)))
 			w = ggui.Image(v.Img).Alt(name).Size(float64(b.Dx())*scale, float64(b.Dy())*scale)
 		}
-		return ggui.Tap(ggui.Box(w).Fill(tokSurface1).Border(1, tokBorder).Radius(8).Pad(2), open)
+		return ggui.Tap(ggui.Box(w).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(2), open)
 	})
 }
 
@@ -104,7 +106,7 @@ func attachmentStrip(m *model, id string, state *chatState) ggui.Widget {
 		node := ggui.Untrack(func() string { s, _ := m.session(id); return s.GetNodeId() })
 		items := make([]ggui.Widget, len(paths))
 		for i, p := range paths {
-			remove := ui.ButtonOf(icon("x").Size(11).Color(tokMuted), func() { m.detachFrom(id, p) }).
+			remove := ui.ButtonOf(icon("x").Size(11).Color(skin.Muted), func() { m.detachFrom(id, p) }).
 				Ghost().Pad(2).Radius(4).Name(Tf("Remove %s", baseName(p)))
 			var item ggui.Widget
 			if isImage(p) {
@@ -114,9 +116,9 @@ func attachmentStrip(m *model, id string, state *chatState) ggui.Widget {
 					fileTypeIcon(baseName(p), false, false).Size(14),
 					ggui.Text(baseName(p)).Size(12).NoWrap().Ellipsis(),
 					ggui.Box().Width(14), // under the corner's button
-				).Gap(6).Align(ggui.AlignCenter)).Fill(tokSurface2).Border(1, tokBorder).Radius(8).Pad(7, 8).MaxWidth(thumbW)
+				).Gap(6).Align(ggui.AlignCenter)).Fill(skin.Surface2).Border(1, skin.Border).Radius(8).Pad(7, 8).MaxWidth(thumbW)
 			}
-			items[i] = &cornered{child: item, corner: ggui.Box(remove).Fill(tokSurface1).Radius(5)}
+			items[i] = &cornered{child: item, corner: ggui.Box(remove).Fill(skin.Surface1).Radius(5)}
 		}
 		return ggui.Box(ggui.Wrap(items...).Gap(6).RunGap(6)).Pad(0, 0, 4, 0)
 	})
