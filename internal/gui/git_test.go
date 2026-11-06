@@ -156,7 +156,7 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 	if ggui.Peek(m.Confirmation).Title == "" {
 		t.Fatal("discarding did not ask")
 	}
-	ggui.Peek(m.Confirmation).Run()
+	answerConfirm(m)
 	probeUntil(t, p, "the discard", func() bool { return len(ggui.Peek(m.git.View).Changes.GetFiles()) == 0 })
 	if _, err := os.Stat(filepath.Join(project, "notes.txt")); !os.IsNotExist(err) {
 		t.Fatal("notes.txt is still there")

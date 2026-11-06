@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	"github.com/yuin/goldmark"
@@ -24,7 +23,6 @@ import (
 	"github.com/yuin/goldmark/text"
 
 	"github.com/ironpark/mako/internal/gui/skin"
-	"github.com/ironpark/mako/internal/gui/svgdraw"
 )
 
 var markdown = goldmark.New(goldmark.WithExtensions(extension.GFM))
@@ -44,9 +42,7 @@ type mdRenderer struct {
 // page: a drag runs from one block into the next, and a click anywhere in
 // the view, a block or the space around them, drops the whole selection.
 func Page(h Host, src string) ggui.Widget {
-	r := &mdRenderer{host: h, src: []byte(src)}
-	root := markdown.Parser().Parse(text.NewReader(r.src))
-	page := ggui.Box(ggui.Column(r.blocks(root)...).Gap(14).Stretch()).MaxWidth(880)
+	page := ggui.Box(ggui.Column(render(h, src)...).Gap(14).Stretch()).MaxWidth(880)
 	scroll := ggui.Scroll(ggui.Align(ggui.Padding(page, 28, 36, 48, 36)).Top()).Bar(skin.Surface3)
 	return ggui.Box(ggui.SelectionArea(scroll)).Fill(skin.Surface0)
 }
@@ -54,9 +50,13 @@ func Page(h Host, src string) ggui.Widget {
 // Column is Markdown's blocks alone, to set in a column of their own: a
 // message, or text written somewhere other than a file, as on GitHub.
 func Column(h Host, src string) ggui.Widget {
+	return ggui.Column(render(h, src)...).Gap(10).Stretch()
+}
+
+// render is src's blocks, parsed and laid out.
+func render(h Host, src string) []ggui.Widget {
 	r := &mdRenderer{host: h, src: []byte(src)}
-	root := markdown.Parser().Parse(text.NewReader(r.src))
-	return ggui.Column(r.blocks(root)...).Gap(10).Stretch()
+	return r.blocks(markdown.Parser().Parse(text.NewReader(r.src)))
 }
 
 // blocks renders the block children of n.
@@ -623,20 +623,9 @@ func (r *mdRenderer) table(t *east.Table) ggui.Widget {
 	return ggui.Box(ggui.Column(rows...).Stretch()).Border(1, skin.Border).Radius(6)
 }
 
-// Image is an image a Markdown file shows, as read: Size is how large
-// it is drawn at its own size, which an SVG's pixels are twice of.
-type Image struct {
-	Loading bool
-	Img     *ggfx.Image // nil for one that could not be read
-	Size    ggui.Size
-	// Labels are an SVG's text, set over Img; Origin is its view box's
-	// corner, which they are placed from.
-	Labels []svgdraw.Text
-	Origin ggui.Point
-}
-
 // hline and vline are rules between blocks, and muted is the text of
-// what is said in passing, as the window draws them.
+// what is said in passing, drawn as the window's own (gui's view.go),
+// which this package cannot reach.
 func hline() ggui.Widget                        { return ui.Divider() }
 func vline() ggui.Widget                        { return ui.Divider().Vertical() }
 func muted(t *ggui.TextWidget) *ggui.TextWidget { return t.Color(skin.Muted) }

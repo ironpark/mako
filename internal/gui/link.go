@@ -25,7 +25,8 @@ type connState struct {
 // daemonLink is what the window shares between the UI goroutine and the
 // workers that poll and watch its daemon: which daemon to talk to, the
 // client dialed to it, and the flags that pace the poll. Every field of it
-// is safe to use from any goroutine; the model's other fields are not.
+// is safe to use from any goroutine; the model's other fields are not, but
+// for devicesAt, which only the poll touches.
 type daemonLink struct {
 	addr string // the -daemon flag; Prefs.Daemon overrides it. Set once.
 
@@ -44,8 +45,9 @@ type daemonLink struct {
 	// approveInApp mirrors the setting for the polling worker.
 	approveInApp atomic.Bool
 	// accessStale, wsStale and devicesStale say the next poll asks for
-	// Access, the workspace and the devices again: at first, and when the
-	// daemon says they changed.
+	// Access, the workspace and the devices again, as the daemon says they
+	// changed; the first two start set, and the devices are first asked
+	// for as model.devicesAt is zero.
 	accessStale  atomic.Bool
 	wsStale      atomic.Bool
 	devicesStale atomic.Bool
@@ -54,8 +56,7 @@ type daemonLink struct {
 
 func newDaemonLink(addr, daemon string) *daemonLink {
 	l := &daemonLink{addr: addr, daemon: daemon, kick: make(chan struct{}, 1)}
-	l.accessStale.Store(true)
-	l.wsStale.Store(true)
+	l.stale()
 	return l
 }
 
@@ -103,17 +104,28 @@ func (l *daemonLink) drop(c *client.Client) {
 	_ = c.Close()
 }
 
-// retarget closes the client and points the link elsewhere: set changes
-// the addresses under the lock. The next request dials again.
-func (l *daemonLink) retarget(set func(l *daemonLink)) {
+// hangUp closes the client, so the next request dials again.
+func (l *daemonLink) hangUp() { l.swap(func() {}) }
+
+// setDaemon points the link at the external daemon the settings name, ""
+// for the -daemon flag's.
+func (l *daemonLink) setDaemon(addr string) { l.swap(func() { l.daemon = addr }) }
+
+// setEmbedded points the link at the app's own daemon, "" for none.
+func (l *daemonLink) setEmbedded(addr string) { l.swap(func() { l.embedAddr = addr }) }
+
+// swap closes the client, running set under the lock as it lets it go,
+// and has the poll ask again for what a new daemon may hold otherwise.
+func (l *daemonLink) swap(set func()) {
 	l.mu.Lock()
 	c := l.cli
 	l.cli = nil
-	set(l)
+	set()
 	l.mu.Unlock()
 	if c != nil {
 		_ = c.Close()
 	}
+	l.stale()
 }
 
 // stale asks the next poll for Access and the workspace again.
@@ -164,22 +176,25 @@ const watchedPollInterval = 15 * time.Second
 func (m *model) watch(ctx context.Context) {
 	for ctx.Err() == nil {
 		wait := time.Second
-		if c, err := m.link.client(ctx); err == nil && m.link.linked.Load() {
-			err = c.Watch(ctx, func(ch *protocol.Changed) {
-				if ch.GetAccess() {
-					m.link.accessStale.Store(true)
+		// Nothing is followed until the window knows which daemon it has.
+		if m.link.linked.Load() {
+			if c, err := m.link.client(ctx); err == nil {
+				err = c.Watch(ctx, func(ch *protocol.Changed) {
+					if ch.GetAccess() {
+						m.link.accessStale.Store(true)
+					}
+					if ch.GetWorkspace() {
+						m.link.wsStale.Store(true)
+					}
+					if ch.GetDevices() {
+						m.link.devicesStale.Store(true)
+					}
+					m.link.watching.Store(true)
+					m.link.pollNow()
+				})
+				if protocol.HasCode(err, protocol.CodeUnsupported) {
+					wait = time.Minute // an older daemon, which may be updated
 				}
-				if ch.GetWorkspace() {
-					m.link.wsStale.Store(true)
-				}
-				if ch.GetDevices() {
-					m.link.devicesStale.Store(true)
-				}
-				m.link.watching.Store(true)
-				m.link.pollNow()
-			})
-			if protocol.HasCode(err, protocol.CodeUnsupported) {
-				wait = time.Minute // an older daemon, which may be updated
 			}
 		}
 		m.link.watching.Store(false)
@@ -193,18 +208,14 @@ func (m *model) watch(ctx context.Context) {
 // reconnect drops the daemon link so the next request dials again, as after
 // the external address changed.
 func (m *model) reconnect(daemon string) {
-	m.link.retarget(func(l *daemonLink) { l.daemon = daemon })
-	m.link.stale()
+	m.link.setDaemon(daemon)
 }
 
 // unlink leaves the window with no daemon, as when the app's own stops.
 func (m *model) unlink(reason string) {
 	m.link.linked.Store(false)
-	m.link.retarget(func(l *daemonLink) { l.embedAddr = "" })
-	for id, conn := range m.conns {
-		conn.close()
-		delete(m.conns, id)
-	}
+	m.link.setEmbedded("")
+	m.dropConns()
 	m.Attached.Set(nil)
 	m.Conn.Set(connState{Err: reason})
 }
@@ -212,16 +223,12 @@ func (m *model) unlink(reason string) {
 // setLink points the window at the app's own daemon, or with "" back at the
 // external one.
 func (m *model) setLink(embedAddr string) {
-	m.link.retarget(func(l *daemonLink) { l.embedAddr = embedAddr })
-	m.link.stale()
+	m.link.setEmbedded(embedAddr)
 	m.link.linked.Store(true)
 	m.link.pollNow()
 	// Terminals attached through the old link went with it.
-	for _, id := range slices.Clone(ggui.Peek(m.Tabs)) {
-		if conn := m.conns[id]; conn != nil {
-			conn.close()
-			delete(m.conns, id)
-		}
+	for _, id := range ggui.Peek(m.Tabs) {
+		m.dropConn(id)
 	}
 	m.Attached.Set(nil)
 	m.attachVisible()
@@ -323,9 +330,7 @@ func (m *model) poll(ctx context.Context) {
 		for _, info := range sessions {
 			previous, known := m.session(info.GetId())
 			if info.GetState() == protocol.StateStopped && known && previous.GetState() != protocol.StateStopped {
-				if conn := m.conns[info.GetId()]; conn != nil {
-					conn.close()
-					delete(m.conns, info.GetId())
+				if m.dropConn(info.GetId()) {
 					m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(id string) bool { return id == info.GetId() }))
 				}
 			}
@@ -344,4 +349,23 @@ func (m *model) poll(ctx context.Context) {
 			m.takeWorkspace(ws)
 		}
 	})
+}
+
+// dropConn closes the terminal attached to the tab id, reporting whether
+// there was one.
+func (m *model) dropConn(id string) bool {
+	conn := m.conns[id]
+	if conn == nil {
+		return false
+	}
+	conn.close()
+	delete(m.conns, id)
+	return true
+}
+
+// dropConns closes every terminal attached.
+func (m *model) dropConns() {
+	for id := range m.conns {
+		m.dropConn(id)
+	}
 }

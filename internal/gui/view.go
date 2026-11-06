@@ -76,8 +76,6 @@ func window(m *model) ggui.Widget {
 		m.toaster,
 		quickOpenDialog(m),
 		extensionsDialog(m),
-		ui.AlertDialog(m.QuitOpen, T("Quit without saving?"), T("Files you edited have unsaved changes, which are lost.")).
-			Confirm(T("Quit"), func() { m.quitting = true; ggui.UseHost().Close() }).Destructive(),
 	).Expand()
 }
 

@@ -240,7 +240,7 @@ func rgbOf(c color.RGBA) uint32 { return uint32(c.R)<<16 | uint32(c.G)<<8 | uint
 func (t *termConn) applyOptionsLocked(o termOptions) {
 	vt := t.vt.Terminal()
 	if o.palette != t.opts.palette {
-		skin.ApplyTerminal(vt, o.palette)
+		applyPalette(vt, o.palette)
 		// A cell keeps the palette index it was written with, but nothing on
 		// screen changed, so the old render state would hand back the colours
 		// it resolved before. A fresh one resolves them again.
@@ -1183,3 +1183,16 @@ func (f frameSnapshot) textAt(i int) string {
 	}
 	return string(f.cells[i].Codepoint)
 }
+
+// applyPalette gives a terminal the window's colours: its defaults and the
+// sixteen ANSI entries. The 256-colour cube and grays stay standard.
+func applyPalette(vt *gostty.Terminal, p skin.Palette) {
+	for i, c := range p.ANSI {
+		_ = vt.SetDefaultPaletteColor(uint8(i), gostty.RGBFromUint32(c))
+	}
+	vt.ResetPalette()
+	vt.SetDefaultBackgroundColor(rgb(p.Surface0))
+	vt.SetDefaultForegroundColor(rgb(p.Fg))
+}
+
+func rgb(c color.RGBA) gostty.RGB { return gostty.NewRGB(c.R, c.G, c.B) }

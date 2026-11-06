@@ -2,6 +2,7 @@ package gui
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
@@ -116,14 +117,7 @@ func (e *embeddedDaemon) running() bool {
 // settings', else the -daemon flag's, else the one of this machine's
 // configuration directory.
 func (m *model) externalAddr() string {
-	if d := ggui.Peek(m.Prefs).Daemon; d != "" {
-		return d
-	}
-	if m.link.addr != "" {
-		return m.link.addr
-	}
-	path, _ := config.SocketPath("")
-	return path
+	return cmp.Or(ggui.Peek(m.Prefs).Daemon, m.link.addr) // newModel found the configuration's
 }
 
 // applyDaemonMode brings the daemon in line with the mode setting. It runs
@@ -177,7 +171,7 @@ func (m *model) startEmbedded() {
 	}
 	m.link.linked.Store(false)
 	m.setDaemonState(func(s *daemonState) { *s = daemonState{Mode: "embedded", Starting: true} })
-	m.reconnect(ggui.Peek(m.Prefs).Daemon)
+	m.link.hangUp()
 	// A daemon stopped for a restart reports its exit after the next one
 	// has started; the generation tells the two apart.
 	m.daemonGen++

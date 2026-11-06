@@ -37,10 +37,9 @@ type gitState struct {
 	// The History tab: the commits, and the one chosen.
 	History *ggui.StateValue[historyView]
 	Commit  *ggui.StateValue[commitView]
-	// historyReading is set while the history is asked for, and reading
-	// while the changes are.
+	// Set while the history and the changes are asked for.
 	historyReading bool
-	reading        bool
+	changesReading bool
 }
 
 func newGitState() *gitState {

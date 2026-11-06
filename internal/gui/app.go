@@ -53,7 +53,7 @@ func Run(cfg *config.Config, addr string) error {
 		if len(m.dirtyDocs()) == 0 || m.quitting {
 			return true
 		}
-		m.QuitOpen.Set(true)
+		m.askQuit()
 		return false
 	})
 	return app.Run()

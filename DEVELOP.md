@@ -69,7 +69,7 @@ take it out before you commit.
     internal/transcript  Claude's and Codex's native conversation logs
     internal/gitstat     git status, diffs, history and operations
     internal/gui         the window: sidebar, panes and tabs, terminal, chat, editor
-    internal/gui/skin    the window's palettes, theme tokens and the user's themes
+    internal/gui/skin    the window's palettes, theme tokens and what a theme sets
     internal/gui/boxdraw the terminal's box drawing and block elements, as shapes
     internal/gui/mdview  a Markdown page laid out as widgets; the window is its Host
     internal/gui/svgdraw a Markdown page's SVGs, drawn, with their text set apart

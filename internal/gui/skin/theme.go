@@ -1,5 +1,5 @@
 // Package skin is how the window looks: its palettes, the theme tokens
-// widgets are coloured with, and the user's themes on disk.
+// widgets are coloured with, and the colours a theme of the user's sets.
 package skin
 
 import (
@@ -7,7 +7,6 @@ import (
 
 	"github.com/ironpark/ggui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
-	"github.com/ironpark/gostty"
 )
 
 // Palette is one of Paseo's colour schemes: surfaces stepping up from the
@@ -185,16 +184,3 @@ func Pick(pref string, systemDark bool, custom map[string]Palette) Palette {
 	}
 	return Light
 }
-
-// ApplyTerminal gives a terminal the window's colours: its defaults and the
-// sixteen ANSI entries. The 256-colour cube and grays stay standard.
-func ApplyTerminal(vt *gostty.Terminal, p Palette) {
-	for i, c := range p.ANSI {
-		_ = vt.SetDefaultPaletteColor(uint8(i), gostty.RGBFromUint32(c))
-	}
-	vt.ResetPalette()
-	vt.SetDefaultBackgroundColor(RGB(p.Surface0))
-	vt.SetDefaultForegroundColor(RGB(p.Fg))
-}
-
-func RGB(c color.RGBA) gostty.RGB { return gostty.NewRGB(c.R, c.G, c.B) }

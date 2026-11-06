@@ -67,7 +67,6 @@ type model struct {
 	RenameText *ggui.StateValue[string]
 	RenameErr  *ggui.StateValue[string]
 	renaming   string                   // the session RenameOpen names
-	QuitOpen   *ggui.StateValue[bool]   // asks before quitting with unsaved files
 	FindOpen   *ggui.StateValue[bool]   // the find bar is over the selected session; see find.go
 	FindText   *ggui.StateValue[string] // the words it finds
 	findFocus  bool                     // the find bar's field takes the focus as it is painted
@@ -204,7 +203,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		link:        newDaemonLink(addr, p.Daemon),
 		Prefs:       ggui.State(p),
 		Spaces:      ggui.State(spaceList{}).WithEqual(func(a, b spaceList) bool { return reflect.DeepEqual(a, b) }),
-		Themes:      ggui.State(skin.Load()).WithEqual(maps.Equal),
+		Themes:      ggui.State(loadThemes()).WithEqual(maps.Equal),
 		ThemesRead:  ggui.State(0),
 		Page:        ggui.State("workspace"),
 		Section:     ggui.State("general"),
@@ -214,7 +213,6 @@ func newModel(cfg *config.Config, addr string) *model {
 		RenameOpen:  ggui.State(false),
 		RenameText:  ggui.State(""),
 		RenameErr:   ggui.State(""),
-		QuitOpen:    ggui.State(false),
 		FindOpen:    ggui.State(false),
 		FindText:    ggui.State(""),
 		SearchQuery: ggui.State(""),
@@ -554,7 +552,7 @@ func (m *model) themePalette() skin.Palette {
 // reloadThemes reads the user's themes from disk again, and starts the
 // editor again on them if they changed.
 func (m *model) reloadThemes() {
-	themes := skin.Load()
+	themes := loadThemes()
 	if maps.Equal(themes, ggui.Peek(m.Themes)) {
 		return
 	}
@@ -583,9 +581,6 @@ func (m *model) shutdown() {
 	defer m.embedded.stop()
 	defer m.hl.close()
 	defer m.closeTunnels()
-	for id, conn := range m.conns {
-		conn.close()
-		delete(m.conns, id)
-	}
-	m.link.retarget(func(*daemonLink) {})
+	m.dropConns()
+	m.link.hangUp()
 }

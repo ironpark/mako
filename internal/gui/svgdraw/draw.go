@@ -28,27 +28,40 @@ type Picture struct {
 // Draw draws an SVG at Scale, sized as its view box, reporting false for
 // one that cannot be drawn.
 func Draw(data []byte) (Picture, bool) {
-	clean, labels, embeds, err := clean(data)
+	cleaned, labels, embeds, err := clean(data)
 	if err != nil {
 		return Picture{}, false
 	}
-	doc, err := ggsvg.Parse(bytes.NewReader(clean))
-	if err != nil {
+	px, x, y, w, h, ok := raster(cleaned, func(float64) float64 { return Scale })
+	if !ok {
 		return Picture{}, false
 	}
-	x, y, w, h := doc.ViewBox()
-	if w <= 0 || h <= 0 || math.IsNaN(w+h) || w*h > 4096*4096 {
-		return Picture{}, false
-	}
-	px := image.NewRGBA(image.Rect(0, 0, int(math.Ceil(w*Scale)), int(math.Ceil(h*Scale))))
-	var g ggfx.GeoM
-	g.Translate(-x, -y)
-	g.Scale(Scale, Scale)
-	doc.Draw(px, g)
 	for _, e := range embeds {
 		drawEmbed(px, e, x, y)
 	}
 	return Picture{Pixels: px, Size: ggui.Sz(w, h), Labels: labels, Origin: ggui.Pt(x, y)}, true
+}
+
+// raster draws a cleaned SVG from its view box's corner at the scale k
+// gives for the box's width, with the box x, y, w, h, in the SVG's own
+// units; false for an SVG that does not parse, or whose box is empty or
+// too large.
+func raster(cleaned []byte, k func(w float64) float64) (px *image.RGBA, x, y, w, h float64, ok bool) {
+	doc, err := ggsvg.Parse(bytes.NewReader(cleaned))
+	if err != nil {
+		return nil, 0, 0, 0, 0, false
+	}
+	x, y, w, h = doc.ViewBox()
+	if w <= 0 || h <= 0 || math.IsNaN(w+h) || w*h > 4096*4096 {
+		return nil, 0, 0, 0, 0, false
+	}
+	s := k(w)
+	px = image.NewRGBA(image.Rect(0, 0, int(math.Ceil(w*s)), int(math.Ceil(h*s))))
+	var g ggfx.GeoM
+	g.Translate(-x, -y)
+	g.Scale(s, s)
+	doc.Draw(px, g)
+	return px, x, y, w, h, true
 }
 
 // drawEmbed draws an image an SVG holds into px, the SVG drawn from its
@@ -57,25 +70,15 @@ func Draw(data []byte) (Picture, bool) {
 func drawEmbed(px *image.RGBA, e svgEmbed, x, y float64) {
 	var src image.Image
 	if e.svg {
-		clean, _, _, err := clean(e.data)
+		cleaned, _, _, err := clean(e.data)
 		if err != nil {
-			return
-		}
-		doc, err := ggsvg.Parse(bytes.NewReader(clean))
-		if err != nil {
-			return
-		}
-		vx, vy, vw, vh := doc.ViewBox()
-		if vw <= 0 || vh <= 0 || vw*vh > 4096*4096 {
 			return
 		}
 		// Drawn at the size it takes on the page, so it is not scaled twice.
-		k := e.w * e.m.scale() * Scale / vw
-		img := image.NewRGBA(image.Rect(0, 0, int(math.Ceil(vw*k)), int(math.Ceil(vh*k))))
-		var g ggfx.GeoM
-		g.Translate(-vx, -vy)
-		g.Scale(k, k)
-		doc.Draw(img, g)
+		img, _, _, _, _, ok := raster(cleaned, func(w float64) float64 { return e.w * e.m.scale() * Scale / w })
+		if !ok {
+			return
+		}
 		src = img
 	} else {
 		img, _, err := image.Decode(bytes.NewReader(e.data))

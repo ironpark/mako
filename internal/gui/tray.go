@@ -92,9 +92,25 @@ func (m *model) showWindow() {
 func (m *model) quitFromTray() {
 	if len(m.dirtyDocs()) > 0 {
 		m.showWindow()
-		m.QuitOpen.Set(true)
+		m.askQuit()
 		return
 	}
+	m.quit()
+}
+
+// askQuit asks before quitting with files whose changes are unsaved.
+func (m *model) askQuit() {
+	m.askConfirm(confirmation{
+		Title:  T("Quit without saving?"),
+		Body:   T("Files you edited have unsaved changes, which are lost."),
+		Action: T("Quit"),
+		Run:    m.quit,
+	})
+}
+
+// quit closes the window for good, past the tray and the question of
+// unsaved files.
+func (m *model) quit() {
 	m.quitting = true
 	if m.window != nil {
 		m.window.Close()

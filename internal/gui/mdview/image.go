@@ -12,15 +12,25 @@ import (
 	"github.com/ironpark/mako/internal/gui/svgdraw"
 )
 
-// Images in Markdown: those beside the file, read from its node, and those
-// on the web, read from this machine, as a browser would; an SVG, as a
-// logo often is, drawn from its paths (not its text, which badges are
-// mostly made of: those show as their links). Each is drawn at its own
-// size, or the one its tag asks for, and no wider than the page.
+// Images in Markdown come from the host, which reads them; an SVG, as a
+// logo often is, is drawn from its paths, its text set over it. Each is
+// drawn at its own size, or the one its tag asks for, and no wider than
+// the page.
 
-// image shows the picture p: read once for the file, or for the window
-// from the web, a spinner while it comes, its link where it cannot be
-// read.
+// Image is an image a Markdown file shows, as read: Size is how large
+// it is drawn at its own size, which an SVG's pixels are twice of.
+type Image struct {
+	Loading bool
+	Img     *ggfx.Image // nil for one that could not be read
+	Size    ggui.Size
+	// Labels are an SVG's text, set over Img; Origin is its view box's
+	// corner, which they are placed from.
+	Labels []svgdraw.Text
+	Origin ggui.Point
+}
+
+// image shows the picture p as the host has it: a spinner while it
+// comes, its link where it cannot be read.
 func (r *mdRenderer) image(p mdPicture) ggui.Widget {
 	label := cmp.Or(p.alt, path.Base(p.dest))
 	fallback := func() ggui.Widget {
@@ -46,22 +56,17 @@ func (r *mdRenderer) image(p mdPicture) ggui.Widget {
 }
 
 // ImageOf is a read file as a page's picture: img as it decoded, or else
-// the SVG svg drawn; none for neither.
+// the SVG svg drawn at svgdraw.Scale, sized as its view box; none for
+// neither, or an SVG that cannot be drawn.
 func ImageOf(img image.Image, svg []byte) Image {
 	if img != nil {
 		b := img.Bounds()
 		return Image{Img: ggfx.NewImageFromImage(img), Size: ggui.Sz(float64(b.Dx()), float64(b.Dy()))}
 	}
-	if svg != nil {
-		return svgImage(svg)
+	if svg == nil {
+		return Image{}
 	}
-	return Image{}
-}
-
-// svgImage is an SVG drawn at svgdraw.Scale, sized as its view box;
-// nothing for one that cannot be drawn.
-func svgImage(data []byte) Image {
-	p, ok := svgdraw.Draw(data)
+	p, ok := svgdraw.Draw(svg)
 	if !ok {
 		return Image{}
 	}

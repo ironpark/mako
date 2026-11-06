@@ -146,7 +146,7 @@ func (m *model) setThemeColor(theme string, c skin.Color, v color.RGBA) {
 	themes = maps.Clone(themes)
 	themes[theme] = p
 	m.Themes.Set(themes)
-	if err := skin.Save(theme, p); err != nil {
+	if err := saveTheme(theme, p); err != nil {
 		m.toaster.Push(ui.Toast(T("Could not save the theme"), err.Error()).Destructive())
 	}
 }
@@ -158,7 +158,7 @@ func (m *model) duplicateTheme() {
 	p := skin.Pick(ggui.Peek(m.Prefs).Theme, ggui.Peek(ggui.SystemDark()), themes)
 	name := skin.NewName(themes)
 	p.Name = name
-	if err := skin.Save(name, p); err != nil {
+	if err := saveTheme(name, p); err != nil {
 		m.toaster.Push(ui.Toast(T("Could not save the theme"), err.Error()).Destructive())
 		return
 	}
@@ -175,7 +175,7 @@ func (m *model) deleteTheme() {
 	if skin.IsBuiltin(name) {
 		return
 	}
-	if err := skin.Remove(name); err != nil && !os.IsNotExist(err) {
+	if err := removeTheme(name); err != nil && !os.IsNotExist(err) {
 		m.toaster.Push(ui.Toast(T("Could not delete the theme"), err.Error()).Destructive())
 		return
 	}
@@ -185,7 +185,7 @@ func (m *model) deleteTheme() {
 
 // openThemesFolder shows the themes folder in the desktop's file manager.
 func openThemesFolder() {
-	if dir, err := skin.Dir(); err == nil && os.MkdirAll(dir, 0o700) == nil {
+	if dir, err := themesDir(); err == nil && os.MkdirAll(dir, 0o700) == nil {
 		_ = runtime.OpenURL(dir)
 	}
 }

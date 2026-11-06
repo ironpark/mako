@@ -247,7 +247,7 @@ func (m *model) stepDiff(dir int) {
 	m.openDiffFrom(d, files[i+dir], d.Preview)
 }
 
-// discardHunk undoes a hunk of a work tree's diff, once confirmed.
+// askDiscardHunk undoes a hunk of a work tree's diff, once confirmed.
 func (m *model) askDiscardHunk(id string, hunk []*protocol.DiffLine) {
 	discard := func() {
 		d, ok := ggui.Peek(m.Diffs)[id]

@@ -84,14 +84,14 @@ func TestAnImageFitsThePage(t *testing.T) {
 // An SVG is drawn from its paths, sized as its view box; one that cannot
 // be drawn is none.
 func TestAnSVGIsDrawn(t *testing.T) {
-	v := svgImage([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20"><rect width="40" height="20" fill="#f00"/></svg>`))
+	v := ImageOf(nil, []byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20"><rect width="40" height="20" fill="#f00"/></svg>`))
 	if v.Img == nil || v.Size != ggui.Sz(40, 20) {
 		t.Fatalf("drawn %+v", v)
 	}
 	if b := v.Img.Bounds(); b.Dx() != 40*svgdraw.Scale || b.Dy() != 20*svgdraw.Scale {
 		t.Fatalf("drawn %v pixels", b)
 	}
-	if svgImage([]byte("not svg")).Img != nil {
+	if ImageOf(nil, []byte("not svg")).Img != nil {
 		t.Fatal("drew what is no SVG")
 	}
 }

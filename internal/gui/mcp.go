@@ -85,9 +85,6 @@ func (m *model) mcpText(id string) *ggui.StateValue[string] {
 		return t
 	}
 	t := ggui.State(settingsText(m.cfg.ContextServers[id].Settings))
-	if m.ext.mcpTexts == nil {
-		m.ext.mcpTexts = map[string]*ggui.StateValue[string]{}
-	}
 	m.ext.mcpTexts[id] = t
 	return t
 }
