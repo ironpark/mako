@@ -34,6 +34,7 @@ type daemonLink struct {
 	cli       *client.Client
 	daemon    string // the external daemon's address from the settings
 	embedAddr string // the app's own daemon, while it runs
+	gen       int    // counts the swaps, so a dial can tell it was outrun
 
 	// linked says the window knows which daemon to talk to; until then a
 	// poll would dial an address nothing may answer and wait out its timeout.
@@ -66,6 +67,10 @@ func newDaemonLink(addr, daemon string) *daemonLink {
 func (l *daemonLink) target() string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	return l.targetLocked()
+}
+
+func (l *daemonLink) targetLocked() string {
 	switch {
 	case l.embedAddr != "":
 		return l.embedAddr
@@ -75,22 +80,43 @@ func (l *daemonLink) target() string {
 	return l.addr
 }
 
-// client returns a connected client, dialing on first use or after a failure.
+// client returns a connected client, dialing on first use or after a
+// failure. It dials without the lock, so the UI goroutine pointing the
+// link elsewhere meanwhile does not wait out a dial to an address nothing
+// answers; a client dialed to an address the link has since left is
+// closed and the new one dialed, and one dialed while another worker's
+// was kept gives way to it.
 func (l *daemonLink) client(ctx context.Context) (*client.Client, error) {
-	addr := l.target()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if l.cli != nil {
-		return l.cli, nil
+	for {
+		l.mu.Lock()
+		if c := l.cli; c != nil {
+			l.mu.Unlock()
+			return c, nil
+		}
+		addr, gen := l.targetLocked(), l.gen
+		l.mu.Unlock()
+		dialCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		c, err := client.Dial(dialCtx, addr)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+		l.mu.Lock()
+		switch {
+		case l.gen != gen:
+			l.mu.Unlock()
+			_ = c.Close()
+			continue
+		case l.cli != nil:
+			kept := l.cli
+			l.mu.Unlock()
+			_ = c.Close()
+			return kept, nil
+		}
+		l.cli = c
+		l.mu.Unlock()
+		return c, nil
 	}
-	dialCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	c, err := client.Dial(dialCtx, addr)
-	if err != nil {
-		return nil, err
-	}
-	l.cli = c
-	return c, nil
 }
 
 // drop closes c, and forgets it if it is still the link's client, so the
@@ -120,6 +146,7 @@ func (l *daemonLink) swap(set func()) {
 	l.mu.Lock()
 	c := l.cli
 	l.cli = nil
+	l.gen++
 	set()
 	l.mu.Unlock()
 	if c != nil {
