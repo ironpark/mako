@@ -12,6 +12,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/mdview"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -69,9 +70,9 @@ type document struct {
 	crlf   bool // its lines end in CR LF, as read
 	// preview shows a Markdown file rendered rather than its source.
 	preview *ggui.StateValue[bool]
-	images  map[string]*ggui.StateValue[mdImage] // what its preview shows, by path
-	folds   map[int]*ggui.StateValue[bool]       // whether its preview's details are open, in order
-	line    int                                  // the line to put the caret on once read, 0 for none
+	images  map[string]*ggui.StateValue[mdview.Image] // what its preview shows, by path
+	folds   map[int]*ggui.StateValue[bool]            // whether its preview's details are open, in order
+	line    int                                       // the line to put the caret on once read, 0 for none
 	// checking is set while its node is asked whether it changed; staleMod
 	// is the ModTime the user was told of, so they are told once.
 	checking bool

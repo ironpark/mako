@@ -16,6 +16,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/mdview"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -129,7 +130,7 @@ type model struct {
 	ChatModes *ggui.StateValue[map[string]bool] // true shows chat; terminal stays attached
 	chats     map[string]*chatState
 	// chatImages are the images Chat shows, read once, by node and path.
-	chatImages map[string]*ggui.StateValue[mdImage]
+	chatImages map[string]*ggui.StateValue[mdview.Image]
 	usages     map[string]*usageState // for the usage overlay
 
 	files *filesState // the Files tab's; see filesstate.go
@@ -254,7 +255,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Minute:      ggui.State(time.Now().Truncate(time.Minute)),
 		ChatModes:   ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		chats:       map[string]*chatState{},
-		chatImages:  map[string]*ggui.StateValue[mdImage]{},
+		chatImages:  map[string]*ggui.StateValue[mdview.Image]{},
 		usages:      map[string]*usageState{},
 		git:         newGitState(),
 		RepoPick:    ggui.State(repoPick{}),

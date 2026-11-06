@@ -8,6 +8,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/gui/mdview"
 	"github.com/ironpark/mako/internal/gui/skin"
 )
 
@@ -50,19 +51,19 @@ func chatImage(m *model, node, path string, named bool) ggui.Widget {
 	key := node + "\x00" + path
 	img, ok := m.chatImages[key]
 	if !ok {
-		img = ggui.State(mdImage{Loading: true})
+		img = ggui.State(mdview.Image{Loading: true})
 		m.chatImages[key] = img
 		fetchImage(m, node, path, func(d decodedImage, err error) {
 			if err != nil || d.Img == nil {
-				img.Set(mdImage{})
+				img.Set(mdview.Image{})
 				return
 			}
-			img.Set(mdImage{Img: ggfx.NewImageFromImage(d.Img)})
+			img.Set(mdview.Image{Img: ggfx.NewImageFromImage(d.Img)})
 		})
 	}
 	name := baseName(path)
 	open := func() { m.openItem(fileItem{Key: key, Node: node, Path: path, Name: name}, 0) }
-	return ggui.View(img, func(v mdImage) ggui.Widget {
+	return ggui.View(img, func(v mdview.Image) ggui.Widget {
 		var w ggui.Widget
 		switch {
 		case v.Loading:

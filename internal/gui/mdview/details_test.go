@@ -1,23 +1,19 @@
-package gui
+package mdview
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/ironpark/ggui"
-
-	"github.com/ironpark/mako/internal/config"
 )
 
 // A details shows its summary and folds what it holds, Markdown between its
 // tags or HTML inside them, until the summary is clicked; one marked open
 // starts open.
 func TestDetailsFoldUnderTheirSummary(t *testing.T) {
-	t.Setenv("MAKO_HOME", t.TempDir())
-	m := newModel(config.Default(), "")
 	src := "Before.\n\n<details>\n<summary>More <b>here</b></summary>\n\nHidden *Markdown*.\n\n</details>\n\n" +
 		"<details open><summary>Shown</summary>Inline HTML body</details>\n\nAfter.\n"
-	p := ggui.NewProbe(markdownView(m, "doc", src), ggui.Sz(900, 600))
+	p := ggui.NewProbe(Page(Base{}, src), ggui.Sz(900, 600))
 	defer p.Close()
 	p.Frame()
 	page := p.Semantics().String()

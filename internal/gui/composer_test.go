@@ -13,6 +13,7 @@ import (
 	ggruntime "github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/gostty"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/mdview"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -289,7 +290,7 @@ func TestADraftImageIsAThumbnail(t *testing.T) {
 	m.Attached.Set([]string{"s"})
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", NodeId: "n", Agent: "claude", Project: "/tmp"}})
 	img := ggfx.NewImage(100, 50)
-	m.chatImages["n\x00/tmp/shot.png"] = ggui.State(mdImage{Img: img})
+	m.chatImages["n\x00/tmp/shot.png"] = ggui.State(mdview.Image{Img: img})
 	m.setComposerDraft("s", "look")
 	m.attachTo("s", []string{"/tmp/shot.png"})
 	p := ggui.ProbeBuilder(func() ggui.Widget {

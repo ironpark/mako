@@ -17,10 +17,10 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/mdview"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transcript"
-	"github.com/yuin/goldmark/text"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -803,9 +803,7 @@ func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.Cha
 		return turn
 	}
 	host := pageHost{m: m, id: id, doc: docInfo{Node: info.GetNodeId(), Path: joinPath(info.GetProject(), "conversation.md")}}
-	r := &mdRenderer{host: host, src: []byte(msg.GetText())}
-	root := markdown.Parser().Parse(text.NewReader(r.src))
-	return &withCopy{content: ggui.Column(r.blocks(root)...).Gap(10).Stretch(), button: copyButton(m, msg.GetText())}
+	return &withCopy{content: mdview.Column(host, msg.GetText()), button: copyButton(m, msg.GetText())}
 }
 
 // withCopy is a message with its copy button over its bottom-right

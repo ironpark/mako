@@ -1,16 +1,9 @@
-package gui
+package mdview
 
 import (
-	"bytes"
 	"cmp"
-	"context"
-	"fmt"
 	"image"
-	"io"
-	"net/http"
 	"path"
-	"strings"
-	"time"
 
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
@@ -25,9 +18,6 @@ import (
 // mostly made of: those show as their links). Each is drawn at its own
 // size, or the one its tag asks for, and no wider than the page.
 
-// webImageLimit bounds an image read from the web.
-const webImageLimit = 20 << 20
-
 // image shows the picture p: read once for the file, or for the window
 // from the web, a spinner while it comes, its link where it cannot be
 // read.
@@ -40,7 +30,7 @@ func (r *mdRenderer) image(p mdPicture) ggui.Widget {
 	if img == nil {
 		return fallback()
 	}
-	return ggui.View(img, func(v mdImage) ggui.Widget {
+	return ggui.View(img, func(v Image) ggui.Widget {
 		switch {
 		case v.Loading:
 			return ggui.Box(ui.Spinner()).Pad(8)
@@ -55,82 +45,27 @@ func (r *mdRenderer) image(p mdPicture) ggui.Widget {
 	})
 }
 
-// isSVG reports whether a name or address names an SVG.
-func isSVG(name string) bool {
-	if i := strings.IndexAny(name, "?#"); i >= 0 {
-		name = name[:i]
+// ImageOf is a read file as a page's picture: img as it decoded, or else
+// the SVG svg drawn; none for neither.
+func ImageOf(img image.Image, svg []byte) Image {
+	if img != nil {
+		b := img.Bounds()
+		return Image{Img: ggfx.NewImageFromImage(img), Size: ggui.Sz(float64(b.Dx()), float64(b.Dy()))}
 	}
-	return strings.EqualFold(path.Ext(name), ".svg")
-}
-
-// asMDImage is an image file as read, for a page: an SVG drawn, anything
-// else decoded as it came.
-func asMDImage(d decodedImage, err error) mdImage {
-	if err == nil && d.Img != nil {
-		b := d.Img.Bounds()
-		return mdImage{Img: ggfx.NewImageFromImage(d.Img), Size: ggui.Sz(float64(b.Dx()), float64(b.Dy()))}
+	if svg != nil {
+		return svgImage(svg)
 	}
-	if d.SVG != nil {
-		return svgImage(d.SVG)
-	}
-	return mdImage{}
+	return Image{}
 }
 
 // svgImage is an SVG drawn at svgdraw.Scale, sized as its view box;
 // nothing for one that cannot be drawn.
-func svgImage(data []byte) mdImage {
+func svgImage(data []byte) Image {
 	p, ok := svgdraw.Draw(data)
 	if !ok {
-		return mdImage{}
+		return Image{}
 	}
-	return mdImage{Img: ggfx.NewImageFromImage(p.Pixels), Size: p.Size, Labels: p.Labels, Origin: p.Origin}
-}
-
-// webImage is the image at the web address url, read once for the window.
-func (m *model) webImage(url string) *ggui.StateValue[mdImage] {
-	key := "web\x00" + url
-	if img, ok := m.chatImages[key]; ok {
-		return img
-	}
-	img := ggui.State(mdImage{Loading: true})
-	m.chatImages[key] = img
-	go func() {
-		d, err := readWebImage(url)
-		m.post(func() { img.Set(asMDImage(d, err)) })
-	}()
-	return img
-}
-
-// readWebImage reads and decodes the image at url: an SVG's source is
-// kept to be drawn, on the window's goroutine.
-func readWebImage(url string) (decodedImage, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return decodedImage{}, err
-	}
-	req.Header.Set("User-Agent", "mako")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return decodedImage{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return decodedImage{}, fmt.Errorf("%s answered %s", url, resp.Status)
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, webImageLimit+1))
-	if err != nil {
-		return decodedImage{}, err
-	}
-	if len(data) > webImageLimit {
-		return decodedImage{}, fmt.Errorf("%s is too large", url)
-	}
-	if isSVG(url) || strings.Contains(resp.Header.Get("Content-Type"), "svg") {
-		return decodedImage{SVG: data}, nil
-	}
-	img, _, err := image.Decode(bytes.NewReader(data))
-	return decodedImage{Img: img}, err
+	return Image{Img: ggfx.NewImageFromImage(p.Pixels), Size: p.Size, Labels: p.Labels, Origin: p.Origin}
 }
 
 // fitImage draws an image at its own size, or the one asked for, the

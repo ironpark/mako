@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ironpark/mako/internal/gui/mdview"
 	"github.com/ironpark/mako/internal/gui/skin"
 )
 
@@ -55,6 +56,9 @@ func TestEveryStringIsTranslated(t *testing.T) {
 		for _, l := range labels {
 			want[l] = "settings labels"
 		}
+	}
+	for _, w := range mdview.Strings {
+		want[w] = "mdview.Strings"
 	}
 	for _, c := range skin.Colors {
 		want[c.Label] = "skin.Colors"
