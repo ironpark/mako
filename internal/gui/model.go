@@ -374,11 +374,21 @@ func (m *model) selectSession(id string) {
 	m.showTab(id)
 }
 
-// attachVisible resumes only the active tab of each visible pane.
+// attachVisible resumes only the active tab of each visible pane. A
+// terminal whose stream failed is dialed again too, while its session has
+// not exited: a poll that loses the daemon closes the client, and with it
+// every stream, and those tabs would otherwise stay disconnected until
+// each is clicked.
 func (m *model) attachVisible() {
 	for _, group := range ggui.Peek(m.Layout).groups() {
-		if group.Active != "" && m.conns[group.Active] == nil {
-			m.attach(group.Active)
+		id := group.Active
+		if id == "" {
+			continue
+		}
+		if conn := m.conns[id]; conn == nil {
+			m.attach(id)
+		} else if s, ok := m.session(id); ok && s.GetState() != protocol.StateExited && conn.failed() {
+			m.attach(id)
 		}
 	}
 }
@@ -389,10 +399,7 @@ func (m *model) attach(id string) {
 		return
 	}
 	if conn := m.conns[id]; conn != nil {
-		conn.mu.Lock()
-		failed := conn.err != nil || conn.closed
-		conn.mu.Unlock()
-		if !failed {
+		if !conn.failed() {
 			return
 		}
 		conn.close()

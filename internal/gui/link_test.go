@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // Pointing the link elsewhere, as the UI goroutine does, does not wait out
@@ -51,5 +54,37 @@ func TestRetargetingDoesNotWaitOutADial(t *testing.T) {
 	}
 	if err := <-done; err == nil {
 		t.Fatal("a client was kept from a daemon that never answered")
+	}
+}
+
+// A visible tab whose stream broke off, as every stream does when a poll
+// loses the daemon, is dialed again by the next attachVisible; one whose
+// session exited is left as it is.
+func TestAttachVisibleRedialsAFailedTerminal(t *testing.T) {
+	m := newModel(config.Default(), "")
+	m.post = func(func()) {}
+	m.link.setDaemon(filepath.Join(t.TempDir(), "none"))
+	for _, state := range []protocol.SessionState{protocol.StateRunning, protocol.StateExited} {
+		link := newFakeLink()
+		conn, err := newTermConn("s", link, 80, 24, func() {})
+		if err != nil {
+			t.Fatal(err)
+		}
+		close(link.in)
+		for !conn.failed() {
+			time.Sleep(time.Millisecond)
+		}
+		m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", State: state}})
+		m.dialing["s"] = true // showTab's own attach
+		m.showTab("s")
+		delete(m.dialing, "s")
+		m.conns["s"] = conn
+		m.attachVisible()
+		if redialed := m.dialing["s"] && m.conns["s"] == nil; redialed != (state == protocol.StateRunning) {
+			t.Fatalf("%s: redialed=%v", state, redialed)
+		}
+		conn.close()
+		delete(m.conns, "s")
+		delete(m.dialing, "s")
 	}
 }

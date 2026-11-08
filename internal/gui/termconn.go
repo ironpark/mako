@@ -1105,6 +1105,14 @@ func (t *termConn) busyState() (bool, bool) {
 	return t.progress.Busy(time.Now()), t.progress.Known()
 }
 
+// failed reports whether the terminal's stream broke off or it was closed,
+// rather than its session having ended.
+func (t *termConn) failed() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.err != nil || t.closed
+}
+
 func (t *termConn) windowTitle() (string, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
