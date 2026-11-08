@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"sync"
-	"time"
 
 	"golang.org/x/term"
 	"google.golang.org/protobuf/proto"
@@ -150,8 +149,8 @@ func (c *Client) Open(ctx context.Context, req *protocol.OpenSession) (*protocol
 // as R.
 //
 // Dial keeps to ctx only until the daemon greets, so the request keeps to
-// it after: its end, by its deadline or its cancel, hangs the stream up.
-// The stream is the request's alone, so a request given up leaves the
+// it after (transport.Ask), and the daemon is told how long it is waited
+// for. The stream is the request's alone, so a request given up leaves the
 // client as it was for the next.
 func request[R proto.Message](ctx context.Context, c *Client, typ protocol.Type, req proto.Message) (R, error) {
 	s, err := c.stream(ctx)
@@ -160,15 +159,7 @@ func request[R proto.Message](ctx context.Context, c *Client, typ protocol.Type,
 		return zero, err
 	}
 	defer s.Close()
-	// Not a read deadline as well, which would race ctx's own timer and
-	// report the timeout as some other error.
-	stop := context.AfterFunc(ctx, func() { _ = s.Close() })
-	defer stop()
-	reply, err := transport.Call[R](s, typ, req)
-	if err != nil && ctx.Err() != nil {
-		return reply, ctx.Err()
-	}
-	return reply, err
+	return transport.Ask[R](ctx, s, typ, req)
 }
 
 // ListDir lists a directory on a node.
@@ -409,14 +400,10 @@ func (c *Client) Tunnel(ctx context.Context, req *protocol.Tunnel) (io.ReadWrite
 	if err != nil {
 		return nil, err
 	}
-	if deadline, ok := ctx.Deadline(); ok {
-		_ = s.SetReadDeadline(deadline)
-	}
-	if _, err := transport.Call[*protocol.Tunneled](s, protocol.TypeTunnel, req); err != nil {
+	if _, err := transport.CallContext[*protocol.Tunneled](ctx, s, protocol.TypeTunnel, req); err != nil {
 		s.Close()
 		return nil, err
 	}
-	_ = s.SetReadDeadline(time.Time{})
 	return s, nil
 }
 

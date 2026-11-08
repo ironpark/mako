@@ -129,12 +129,13 @@ daemon that asked reads these, as it unpacks every frame for its socket;
 a daemon relaying the attach between two others passes them on as they
 came, and a daemon that does not know `pack_stream` sends frames as before.
 
-The `Envelope` is an `id` and a `body` oneof, one field for each message
-type:
+The `Envelope` is an `id`, a `within_ms`, and a `body` oneof, one field for
+each message type:
 
 ```proto
 message Envelope {
   string id = 1;
+  uint32 within_ms = 2;
   oneof body {
     Hello hello = 10;
     Welcome welcome = 11;
@@ -151,6 +152,15 @@ The body field's name is the message's type (`protocol.Type`): `hello`,
 the `id` of its request, and current clients leave it empty and rely on
 order. A body this build does not know, from a newer peer, reads as no type,
 which a daemon answers as `unsupported`.
+
+`within_ms`, on a request whose reply ends the stream's use, is how long
+from its sending the asker waits for that reply; 0, or left out, for no
+bound. It is a time rather than a moment, as nodes' clocks differ. A daemon
+passing the request on to another node waits for that node's reply no
+longer, and sets `within_ms` to what is left; one passed on with no bound
+is waited for two minutes at most, so a peer that takes a request and never
+answers holds nothing for long. A request whose stream goes on past its
+reply, as an attach, a tunnel or a claim, sets none.
 
 ### The schema and the Go types
 

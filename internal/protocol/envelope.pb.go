@@ -34,6 +34,12 @@ type Envelope struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// id, when a request sets it, comes back on its reply.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// within_ms, on a request whose reply ends the stream's use, is how
+	// long from its sending the asker waits for that reply; 0 for no
+	// bound. A daemon passing the request to another node waits no longer,
+	// and passes on what is left. A time, not a moment: nodes' clocks
+	// differ.
+	WithinMs uint32 `protobuf:"varint,2,opt,name=within_ms,json=withinMs,proto3" json:"within_ms,omitempty"`
 	// Types that are valid to be assigned to Body:
 	//
 	//	*Envelope_Hello
@@ -152,6 +158,13 @@ func (x *Envelope) GetId() string {
 		return x.Id
 	}
 	return ""
+}
+
+func (x *Envelope) GetWithinMs() uint32 {
+	if x != nil {
+		return x.WithinMs
+	}
+	return 0
 }
 
 func (x *Envelope) GetBody() isEnvelope_Body {
@@ -1372,9 +1385,10 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xcb\x1e\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xe8\x1e\n" +
 	"\bEnvelope\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12&\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
+	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
 	"\x05hello\x18\n" +
 	" \x01(\v2\x0e.mako.v2.HelloH\x00R\x05hello\x12,\n" +
 	"\awelcome\x18\v \x01(\v2\x10.mako.v2.WelcomeH\x00R\awelcome\x12&\n" +

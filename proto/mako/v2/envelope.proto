@@ -24,6 +24,12 @@ option go_package = "github.com/ironpark/mako/internal/protocol";
 message Envelope {
   // id, when a request sets it, comes back on its reply.
   string id = 1;
+  // within_ms, on a request whose reply ends the stream's use, is how
+  // long from its sending the asker waits for that reply; 0 for no
+  // bound. A daemon passing the request to another node waits no longer,
+  // and passes on what is left. A time, not a moment: nodes' clocks
+  // differ.
+  uint32 within_ms = 2;
 
   reserved 22; // gossip, between daemons before libp2p
   reserved "gossip";
