@@ -506,3 +506,29 @@ func TestATerminalNotShownKeepsTheScreenItCopied(t *testing.T) {
 		t.Fatal("a frame that showed the terminal did not copy its screen")
 	}
 }
+
+// A scroll moves at its first event, though less than a line has turned,
+// and moves as far as it turned in all; one the other way, or after a
+// pause, starts afresh.
+func TestAScrollMovesAtOnce(t *testing.T) {
+	var v terminalView
+	now := time.Now()
+	step := func(dy float64) int { now = now.Add(10 * time.Millisecond); return v.wheelLines(dy, now) }
+	if got := step(0.25); got != 1 {
+		t.Fatalf("a scroll's first quarter line moved %d", got)
+	}
+	total := 1
+	for range 11 {
+		total += step(0.25)
+	}
+	if total != 3 {
+		t.Fatalf("three lines' turn moved %d", total)
+	}
+	if got := step(-0.25); got != -1 {
+		t.Fatalf("turned back, moved %d", got)
+	}
+	now = now.Add(time.Second)
+	if got := step(-0.25); got != -1 {
+		t.Fatalf("after a pause, moved %d", got)
+	}
+}
