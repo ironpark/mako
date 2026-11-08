@@ -1,10 +1,8 @@
 package gui
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"image"
 	"io"
 	"net/http"
 	"path"
@@ -15,6 +13,7 @@ import (
 	"github.com/ironpark/ggui"
 
 	"github.com/ironpark/mako/internal/gui/mdview"
+	"github.com/ironpark/mako/internal/gui/svgdraw"
 )
 
 // A Markdown file's tab shows it rendered as well as its source: the
@@ -104,6 +103,6 @@ func readWebImage(url string) (decodedImage, error) {
 	if isSVG(url) || strings.Contains(resp.Header.Get("Content-Type"), "svg") {
 		return drawnSVG(nil, data), nil
 	}
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, err := svgdraw.DecodeImage(data, svgdraw.ImagePixels)
 	return decodedImage{Img: img}, err
 }

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,8 +36,11 @@ const MaxDiffLines = 5000
 const contextLines = 3
 
 // Status reports the changes of the work tree dir is in, against HEAD,
-// staged or not. A dir in no repository reports NotRepo.
-func Status(dir string) (*protocol.GitChanges, error) {
+// staged or not. A dir in no repository reports NotRepo. git is given
+// ten seconds, within ctx, to answer.
+func Status(ctx context.Context, dir string) (*protocol.GitChanges, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	repo, err := git.PlainOpenWithOptions(dir, &git.PlainOpenOptions{DetectDotGit: true, EnableDotGitCommonDir: true})
 	if errors.Is(err, git.ErrRepositoryNotExists) {
 		return &protocol.GitChanges{NotRepo: true}, nil
@@ -49,7 +53,7 @@ func Status(dir string) (*protocol.GitChanges, error) {
 		return nil, err
 	}
 	out := &protocol.GitChanges{Root: wt.Filesystem.Root(), Branch: branch(repo)}
-	st, track, heads, err := status(wt, out.GetRoot())
+	st, track, heads, err := status(ctx, wt, out.GetRoot())
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +76,6 @@ func Status(dir string) (*protocol.GitChanges, error) {
 	}
 	// What go-git does not read, git is asked: stashes, and a merge or
 	// rebase under way with the files it left in conflict.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	out.Stashes = stashes(ctx, out.GetRoot())
 	var unmerged map[string]bool
 	if out.Operation = Operation(ctx, out.GetRoot()); out.Operation != "" {
@@ -178,10 +180,14 @@ const mostCounts = 4096
 // on the PATH: it skips the folders .gitignore leaves out, where go-git
 // walks every one (node_modules and the like, seconds a time), and it
 // takes no lock an agent's own git would wait on. go-git's is the
-// fallback, which knows no upstream, nor the objects.
-func status(wt *git.Worktree, root string) (git.Status, tracking, map[string]string, error) {
-	out, err := exec.Command("git", "-C", root, "--no-optional-locks",
+// fallback, which knows no upstream, nor the objects; but not for a git
+// that ran out of time, as go-git would take longer still.
+func status(ctx context.Context, wt *git.Worktree, root string) (git.Status, tracking, map[string]string, error) {
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "--no-optional-locks",
 		"status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all").Output()
+	if err != nil && ctx.Err() != nil {
+		return nil, tracking{}, nil, ctx.Err()
+	}
 	if err != nil {
 		st, err := wt.Status()
 		return st, tracking{}, nil, err
@@ -311,18 +317,48 @@ func headContent(tree *object.Tree, p string) (string, bool) {
 	return s, err == nil
 }
 
-// diskContent is a file as the work tree has it, and whether it has it.
+// diskContent is a file as the work tree has it, and whether it has it. A
+// symbolic link is the path it holds, as git has it, not what it points
+// to, which may be a device or a pipe with no end.
 func diskContent(root, p string) (string, bool) {
 	full := filepath.Join(root, filepath.FromSlash(p))
-	info, err := os.Stat(full)
+	info, err := os.Lstat(full)
 	if err != nil || info.IsDir() {
 		return "", false
 	}
-	if info.Size() > maxCounted {
-		return "\x00", true // too large to count: shown as binary
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(full)
+		return filepath.ToSlash(target), err == nil
 	}
-	b, err := os.ReadFile(full)
+	if !info.Mode().IsRegular() || info.Size() > maxCounted {
+		return "\x00", true // not to be counted: shown as binary
+	}
+	b, err := readRegular(full, maxCounted)
+	if errors.Is(err, errTooLarge) {
+		return "\x00", true
+	}
 	return string(b), err == nil
+}
+
+var errTooLarge = errors.New("too large")
+
+// readRegular reads a regular file, which it is still when it is opened,
+// through no more than max bytes of it: a file grown past its stat is
+// errTooLarge.
+func readRegular(full string, max int64) ([]byte, error) {
+	f, err := os.Open(full)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if info, err := f.Stat(); err != nil || !info.Mode().IsRegular() {
+		return nil, cmp.Or(err, errors.New("not a regular file"))
+	}
+	b, err := io.ReadAll(io.LimitReader(f, max+1))
+	if err == nil && int64(len(b)) > max {
+		return nil, errTooLarge
+	}
+	return b, err
 }
 
 // Binary reports a NUL in a file's first 8000 bytes, as git decides.

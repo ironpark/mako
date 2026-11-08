@@ -75,7 +75,7 @@ func (d *Daemon) handleGitStatus(ctx context.Context, stream *transport.Stream, 
 					return gitstat.BaseStatus(ctx, r.GetPath(), r.GetBase())
 				})
 			}
-			return gitstat.Status(r.GetPath())
+			return gitstat.Status(ctx, r.GetPath())
 		})
 }
 
