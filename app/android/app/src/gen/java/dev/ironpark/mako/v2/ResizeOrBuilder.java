@@ -45,4 +45,15 @@ public interface ResizeOrBuilder extends
    * @return The cellHeight.
    */
   int getCellHeight();
+
+  /**
+   * <code>.mako.v2.TerminalColors colors = 6 [json_name = "colors"];</code>
+   * @return Whether the colors field is set.
+   */
+  boolean hasColors();
+  /**
+   * <code>.mako.v2.TerminalColors colors = 6 [json_name = "colors"];</code>
+   * @return The colors.
+   */
+  dev.ironpark.mako.v2.TerminalColors getColors();
 }

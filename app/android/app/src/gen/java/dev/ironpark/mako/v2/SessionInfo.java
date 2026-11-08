@@ -1780,6 +1780,119 @@ public  final class SessionInfo extends
     turns_ = 0L;
   }
 
+  public static final int NOTICE_FIELD_NUMBER = 33;
+  private dev.ironpark.mako.v2.Notice notice_;
+  /**
+   * <pre>
+   * notice is the last desktop notification the session's program posted
+   * itself, over OSC 9 or 777; unset before it posts one.
+   * </pre>
+   *
+   * <code>.mako.v2.Notice notice = 33 [json_name = "notice"];</code>
+   */
+  @java.lang.Override
+  public boolean hasNotice() {
+    return ((bitField0_ & 0x00000080) != 0);
+  }
+  /**
+   * <pre>
+   * notice is the last desktop notification the session's program posted
+   * itself, over OSC 9 or 777; unset before it posts one.
+   * </pre>
+   *
+   * <code>.mako.v2.Notice notice = 33 [json_name = "notice"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Notice getNotice() {
+    return notice_ == null ? dev.ironpark.mako.v2.Notice.getDefaultInstance() : notice_;
+  }
+  /**
+   * <pre>
+   * notice is the last desktop notification the session's program posted
+   * itself, over OSC 9 or 777; unset before it posts one.
+   * </pre>
+   *
+   * <code>.mako.v2.Notice notice = 33 [json_name = "notice"];</code>
+   */
+  private void setNotice(dev.ironpark.mako.v2.Notice value) {
+    java.util.Objects.requireNonNull(value);
+    notice_ = value;
+    bitField0_ |= 0x00000080;
+  }
+  /**
+   * <pre>
+   * notice is the last desktop notification the session's program posted
+   * itself, over OSC 9 or 777; unset before it posts one.
+   * </pre>
+   *
+   * <code>.mako.v2.Notice notice = 33 [json_name = "notice"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeNotice(dev.ironpark.mako.v2.Notice value) {
+    java.util.Objects.requireNonNull(value);
+    if (notice_ != null &&
+        notice_ != dev.ironpark.mako.v2.Notice.getDefaultInstance()) {
+      notice_ =
+        dev.ironpark.mako.v2.Notice.newBuilder(notice_).mergeFrom(value).buildPartial();
+    } else {
+      notice_ = value;
+    }
+    bitField0_ |= 0x00000080;
+  }
+  /**
+   * <pre>
+   * notice is the last desktop notification the session's program posted
+   * itself, over OSC 9 or 777; unset before it posts one.
+   * </pre>
+   *
+   * <code>.mako.v2.Notice notice = 33 [json_name = "notice"];</code>
+   */
+  private void clearNotice() {
+    notice_ = null;
+    bitField0_ = (bitField0_ & ~0x00000080);
+  }
+
+  public static final int BELLS_FIELD_NUMBER = 34;
+  private long bells_;
+  /**
+   * <pre>
+   * bells counts the bells the session's program rang: a front-end that
+   * sees it move asks for the user's attention.
+   * </pre>
+   *
+   * <code>uint64 bells = 34 [json_name = "bells"];</code>
+   * @return The bells.
+   */
+  @java.lang.Override
+  public long getBells() {
+    return bells_;
+  }
+  /**
+   * <pre>
+   * bells counts the bells the session's program rang: a front-end that
+   * sees it move asks for the user's attention.
+   * </pre>
+   *
+   * <code>uint64 bells = 34 [json_name = "bells"];</code>
+   * @param value The bells to set.
+   */
+  private void setBells(long value) {
+    
+    bells_ = value;
+  }
+  /**
+   * <pre>
+   * bells counts the bells the session's program rang: a front-end that
+   * sees it move asks for the user's attention.
+   * </pre>
+   *
+   * <code>uint64 bells = 34 [json_name = "bells"];</code>
+   */
+  private void clearBells() {
+
+    bells_ = 0L;
+  }
+
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -3688,6 +3801,126 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * notice is the last desktop notification the session's program posted
+     * itself, over OSC 9 or 777; unset before it posts one.
+     * </pre>
+     *
+     * <code>.mako.v2.Notice notice = 33 [json_name = "notice"];</code>
+     */
+    @java.lang.Override
+    public boolean hasNotice() {
+      return instance.hasNotice();
+    }
+    /**
+     * <pre>
+     * notice is the last desktop notification the session's program posted
+     * itself, over OSC 9 or 777; unset before it posts one.
+     * </pre>
+     *
+     * <code>.mako.v2.Notice notice = 33 [json_name = "notice"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Notice getNotice() {
+      return instance.getNotice();
+    }
+    /**
+     * <pre>
+     * notice is the last desktop notification the session's program posted
+     * itself, over OSC 9 or 777; unset before it posts one.
+     * </pre>
+     *
+     * <code>.mako.v2.Notice notice = 33 [json_name = "notice"];</code>
+     */
+    public Builder setNotice(dev.ironpark.mako.v2.Notice value) {
+      copyOnWrite();
+      instance.setNotice(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * notice is the last desktop notification the session's program posted
+     * itself, over OSC 9 or 777; unset before it posts one.
+     * </pre>
+     *
+     * <code>.mako.v2.Notice notice = 33 [json_name = "notice"];</code>
+     */
+    public Builder setNotice(
+        dev.ironpark.mako.v2.Notice.Builder builderForValue) {
+      copyOnWrite();
+      instance.setNotice(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * notice is the last desktop notification the session's program posted
+     * itself, over OSC 9 or 777; unset before it posts one.
+     * </pre>
+     *
+     * <code>.mako.v2.Notice notice = 33 [json_name = "notice"];</code>
+     */
+    public Builder mergeNotice(dev.ironpark.mako.v2.Notice value) {
+      copyOnWrite();
+      instance.mergeNotice(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * notice is the last desktop notification the session's program posted
+     * itself, over OSC 9 or 777; unset before it posts one.
+     * </pre>
+     *
+     * <code>.mako.v2.Notice notice = 33 [json_name = "notice"];</code>
+     */
+    public Builder clearNotice() {  copyOnWrite();
+      instance.clearNotice();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * bells counts the bells the session's program rang: a front-end that
+     * sees it move asks for the user's attention.
+     * </pre>
+     *
+     * <code>uint64 bells = 34 [json_name = "bells"];</code>
+     * @return The bells.
+     */
+    @java.lang.Override
+    public long getBells() {
+      return instance.getBells();
+    }
+    /**
+     * <pre>
+     * bells counts the bells the session's program rang: a front-end that
+     * sees it move asks for the user's attention.
+     * </pre>
+     *
+     * <code>uint64 bells = 34 [json_name = "bells"];</code>
+     * @param value The bells to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBells(long value) {
+      copyOnWrite();
+      instance.setBells(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * bells counts the bells the session's program rang: a front-end that
+     * sees it move asks for the user's attention.
+     * </pre>
+     *
+     * <code>uint64 bells = 34 [json_name = "bells"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBells() {
+      copyOnWrite();
+      instance.clearBells();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -3738,14 +3971,16 @@ public  final class SessionInfo extends
             dev.ironpark.mako.v2.BackgroundTask.class,
             "gitStamp_",
             "turns_",
+            "notice_",
+            "bells_",
           };
           java.lang.String info =
-              "\u0000 \u0000\u0001\u0001  \u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0000\"\u0000\u0001\u0001\"\"\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
               "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208\u000b\u000b" +
               "\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011\u0208\u0012" +
               "\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004\u0017\u1009" +
               "\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006\u001c\u0208\u001d\u0007" +
-              "\u001e\u001b\u001f\u0208 \u0003";
+              "\u001e\u001b\u001f\u0208 \u0003!\u1009\u0007\"\u0003";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

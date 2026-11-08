@@ -32,6 +32,20 @@ public interface EnvelopeOrBuilder extends
 
   /**
    * <pre>
+   * within_ms, on a request whose reply ends the stream's use, is how
+   * long from its sending the asker waits for that reply; 0 for no
+   * bound. A daemon passing the request to another node waits no longer,
+   * and passes on what is left. A time, not a moment: nodes' clocks
+   * differ.
+   * </pre>
+   *
+   * <code>uint32 within_ms = 2 [json_name = "withinMs"];</code>
+   * @return The withinMs.
+   */
+  int getWithinMs();
+
+  /**
+   * <pre>
    * The handshake, which opens every stream.
    * </pre>
    *

@@ -94,9 +94,8 @@ func (m *model) loadHistory(root fileRoot) {
 	if root.Path == "" {
 		return
 	}
-	m.git.historyWanted = root
-	if m.git.historyReading {
-		return
+	if !m.git.historyRead.ask(root) {
+		return // read once the read under way is done
 	}
 	v := ggui.Peek(m.git.History)
 	if v.Root != root {
@@ -104,12 +103,10 @@ func (m *model) loadHistory(root fileRoot) {
 		m.git.History.Set(v)
 		m.git.Commit.Set(commitView{})
 	}
-	m.git.historyReading = true
 	req := &protocol.GitLog{NodeId: m.remoteID(root.Node), Root: root.Path, Known: v.History.GetFingerprint()}
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitHistory, error) {
 		return c.GitLog(ctx, req)
 	}, func(h *protocol.GitHistory, err error) {
-		m.git.historyReading = false
 		v := ggui.Peek(m.git.History)
 		switch {
 		case v.Root != root:
@@ -122,9 +119,8 @@ func (m *model) loadHistory(root fileRoot) {
 			}
 			m.git.History.Set(historyView{Root: root, History: h})
 		}
-		// Another project asked for while this one was read is read now.
-		if want := m.git.historyWanted; want != root {
-			m.loadHistory(want)
+		if next, again := m.git.historyRead.done(); again {
+			m.loadHistory(next)
 		}
 	})
 }

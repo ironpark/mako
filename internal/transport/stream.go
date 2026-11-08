@@ -1,8 +1,10 @@
 package transport
 
 import (
+	"context"
 	"errors"
 	"io"
+	"math"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -58,6 +60,10 @@ func (s *Stream) Send(t protocol.Type, id string, msg proto.Message) error {
 	if err != nil {
 		return err
 	}
+	return s.send(env)
+}
+
+func (s *Stream) send(env *protocol.Envelope) error {
 	if s.packer != nil {
 		return protocol.WriteStreamed(s, env, s.packer)
 	}
@@ -117,6 +123,55 @@ func Call[R proto.Message](s *Stream, t protocol.Type, req proto.Message) (R, er
 		return zero, err
 	}
 	return Reply[R](env)
+}
+
+// CallContext is Call keeping to ctx: its end, by its deadline or its
+// cancel, closes s and fails the call with ctx's error. Once the reply
+// comes s is left open, for what may follow it on s.
+//
+// Not a read deadline, which would race ctx's own timer and report the
+// timeout as some other error.
+func CallContext[R proto.Message](ctx context.Context, s *Stream, t protocol.Type, req proto.Message) (R, error) {
+	return call[R](ctx, s, t, req, false)
+}
+
+// Ask is CallContext for a request whose reply ends s's use: it tells the
+// node answering how long it is waited for (protocol.Envelope's
+// within_ms), so a daemon passing it on waits no longer either.
+func Ask[R proto.Message](ctx context.Context, s *Stream, t protocol.Type, req proto.Message) (R, error) {
+	return call[R](ctx, s, t, req, true)
+}
+
+func call[R proto.Message](ctx context.Context, s *Stream, t protocol.Type, req proto.Message, whole bool) (R, error) {
+	var zero R
+	env, err := protocol.Encode(t, "", req)
+	if err != nil {
+		return zero, err
+	}
+	if deadline, ok := ctx.Deadline(); whole && ok {
+		env.WithinMs = uint32(min(max(time.Until(deadline).Milliseconds(), 1), math.MaxUint32))
+	}
+	stop := context.AfterFunc(ctx, func() { _ = s.Close() })
+	reply, err := func() (R, error) {
+		if err := s.send(env); err != nil {
+			return zero, err
+		}
+		env, err := s.Recv()
+		if err != nil {
+			return zero, err
+		}
+		return Reply[R](env)
+	}()
+	if !stop() {
+		return zero, ctx.Err() // ctx ended, and closed s, first
+	}
+	return reply, err
+}
+
+// Within is the time a request's asker waits for its reply, as within_ms
+// says; 0 for no bound.
+func Within(env *protocol.Envelope) time.Duration {
+	return time.Duration(env.GetWithinMs()) * time.Millisecond
 }
 
 // Reply is the message env carries as R, or the Error it carries.

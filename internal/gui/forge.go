@@ -128,10 +128,11 @@ type forgeState struct {
 	// UI goroutine only: the newest commit of each project whose runs were
 	// seen, and the state they were last seen in, and when the branch was
 	// last read.
-	seen          map[fileRoot]seenRuns
-	branchRead    time.Time
-	listing       bool // a list is being read
-	branchReading bool // and the branch
+	seen     map[fileRoot]seenRuns
+	branchAt time.Time
+	// The reads of a list and of the branch; see latestRead.
+	listRead   latestRead[forgeListKey]
+	branchRead latestRead[fileRoot]
 }
 
 func newForgeState() forgeState {
@@ -155,13 +156,22 @@ func newForgeState() forgeState {
 
 // Reading -------------------------------------------------------------------------
 
+// forgeListKey is what a read of a list is of.
+type forgeListKey struct {
+	root        fileRoot
+	kind, state string
+}
+
 // loadForgeList lists what the tab's kind and filter say of the project's
 // repository.
 func (m *model) loadForgeList(root fileRoot) {
-	if root.Path == "" || m.Forge.listing {
+	if root.Path == "" {
 		return
 	}
 	kind, state := ggui.Peek(m.Forge.Kind), ggui.Peek(m.Forge.Filter)
+	if !m.Forge.listRead.ask(forgeListKey{root, kind, state}) {
+		return // read once the read under way is done
+	}
 	v := ggui.Peek(m.Forge.List)
 	if v.Root != root || v.Kind != kind || v.State != state {
 		v = forgeList{Root: root, Kind: kind, State: state}
@@ -170,12 +180,14 @@ func (m *model) loadForgeList(root fileRoot) {
 	// as it is until the next comes.
 	v.Loading = len(v.Items) == 0
 	m.Forge.List.Set(v)
-	m.Forge.listing = true
 	req := &protocol.ForgeList{NodeId: m.remoteID(root.Node), Root: root.Path, Kind: kind, State: state, Max: 50}
 	fetch(m, 40*time.Second, func(ctx context.Context, c *client.Client) (*protocol.ForgeItems, error) {
 		return c.ForgeList(ctx, req)
 	}, func(items *protocol.ForgeItems, err error) {
-		m.Forge.listing = false
+		if next, again := m.Forge.listRead.done(); again {
+			m.loadForgeList(next.root)
+			return
+		}
 		cur := ggui.Peek(m.Forge.List)
 		if cur.Root != root || cur.Kind != kind || cur.State != state {
 			return // another list is asked for now
@@ -330,7 +342,7 @@ func watchForge(m *model) {
 			case runsState(b.Runs) == "pending" || b.PR.GetChecks() == "pending" || time.Since(moved) < forgeEager:
 				wait = forgeBusy
 			}
-			if time.Since(m.Forge.branchRead) >= wait {
+			if time.Since(m.Forge.branchAt) >= wait {
 				m.loadForgeBranch(r)
 			}
 		})
@@ -340,10 +352,10 @@ func watchForge(m *model) {
 // loadForgeBranch reads the branch's pull request and its newest commit's
 // runs, telling the desktop of runs that finished since the last read.
 func (m *model) loadForgeBranch(root fileRoot) {
-	if root.Path == "" || m.Forge.branchReading {
+	if root.Path == "" || !m.Forge.branchRead.ask(root) {
 		return
 	}
-	m.Forge.branchRead, m.Forge.branchReading = time.Now(), true
+	m.Forge.branchAt = time.Now()
 	node := m.remoteID(root.Node)
 	type read struct {
 		pr   *protocol.ForgeItems
@@ -362,11 +374,15 @@ func (m *model) loadForgeBranch(root fileRoot) {
 		r.runs = runs
 		return r, cmp.Or(prErr, err)
 	}, func(r read, err error) {
-		m.Forge.branchReading = false
-		if now := ggui.Untrack(m.repoFolder); now != root {
-			// Another project was picked while this one was read, and
-			// its read was refused for this one's under way.
-			m.loadForgeBranch(now)
+		// Another project picked meanwhile is read now, whether or not
+		// its read was asked for while this one's was under way.
+		next, again := m.Forge.branchRead.done()
+		if !again {
+			next = ggui.Untrack(m.repoFolder)
+			again = next != root
+		}
+		if again {
+			m.loadForgeBranch(next)
 			return
 		}
 		b := forgeBranch{Root: root, Forge: cmp.Or(r.runs.GetForge(), r.pr.GetForge())}
