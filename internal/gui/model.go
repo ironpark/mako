@@ -92,11 +92,12 @@ type model struct {
 	Nodes *ggui.StateValue[[]*protocol.Node]
 	// Access is who the daemon lets in and the requests waiting; nil while
 	// unknown, or with the mesh off.
-	Access     *ggui.StateValue[*protocol.AccessInfo]
-	AccessNote *ggui.StateValue[string] // the last access change's outcome
-	AccessKey  *ggui.StateValue[string] // a key being let in, as typed
-	asked      map[string]ui.ToastID    // requests told of, by their toasts; UI goroutine only
-	ws         *wsState                 // how the workspace is kept and written down; see wsstate.go
+	Access      *ggui.StateValue[*protocol.AccessInfo]
+	AccessNote  *ggui.StateValue[string] // the last access change's outcome
+	AccessKey   *ggui.StateValue[string] // a key being let in, as typed
+	asked       map[string]ui.ToastID    // requests told of, by their toasts; UI goroutine only
+	ws          *wsState                 // how the workspace is kept and written down; see wsstate.go
+	prefsWriter *fileWriter              // writes gui.json
 	// tabNodes are the nodes of session tabs, and missing when each tab's
 	// session went missing from the list; see leftover.go.
 	tabNodes map[string]string
@@ -225,6 +226,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		ext:         newExtState(cfg),
 		files:       newFilesState(),
 		ws:          newWsState(),
+		prefsWriter: &fileWriter{what: "settings"},
 		hl:          newHighlighter(),
 		DaemonState: ggui.State(daemonState{}),
 		DaemonLog:   ggui.State([]string(nil)).WithEqual(slices.Equal),
@@ -621,7 +623,8 @@ func (m *model) shutdown() {
 	if m.ws.timer != nil {
 		m.ws.timer.Stop()
 	}
-	m.ws.writes.Wait()
+	m.ws.writer.wait()
+	m.prefsWriter.wait()
 	defer m.embedded.stop()
 	defer m.hl.close()
 	defer m.closeTunnels()

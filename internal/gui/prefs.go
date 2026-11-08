@@ -207,42 +207,6 @@ func configFile(name string) (string, error) {
 	return filepath.Join(dir, name), nil
 }
 
-// writeConfigFile writes a file of the window's in mako's folder, making
-// the folder if need be.
-func writeConfigFile(name string, body []byte) error {
-	path, err := configFile(name)
-	if err != nil {
-		return err
-	}
-	return writeWindowFile(path, body)
-}
-
-// writeWindowFile writes a file of the window's at path, making its folder if
-// need be. It writes a file beside it and renames that over it, so a
-// crash, or the window read meanwhile, finds the old file or the new,
-// never half of one.
-func writeWindowFile(path string, body []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*") // 0600
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	defer tmp.Close()
-	if _, err := tmp.Write(body); err != nil {
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
-}
-
 // loadPrefs reads gui.json, falling back to the defaults for a missing file
 // or field.
 func loadPrefs() prefs {
@@ -257,10 +221,21 @@ func loadPrefs() prefs {
 	return p.normalized()
 }
 
+// prefsFile is gui.json as p is written down.
+func prefsFile(p prefs) (path string, body []byte, err error) {
+	if body, err = json.MarshalIndent(p, "", "  "); err != nil {
+		return "", nil, err
+	}
+	path, err = configFile("gui.json")
+	return path, append(body, '\n'), err
+}
+
+// savePrefs writes gui.json now; the window writes it through its
+// fileWriter instead, off the UI goroutine.
 func savePrefs(p prefs) error {
-	body, err := json.MarshalIndent(p, "", "  ")
+	path, body, err := prefsFile(p)
 	if err != nil {
 		return err
 	}
-	return writeConfigFile("gui.json", append(body, '\n'))
+	return writeWindowFile(path, body)
 }

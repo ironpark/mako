@@ -36,9 +36,9 @@ func TestWorkspaceWritesLandInOrder(t *testing.T) {
 	path := filepath.Join(dir, "workspace.json")
 	ws := newWsState()
 	for i := range 200 {
-		ws.write(path, []byte(strconv.Itoa(i)))
+		ws.writer.write(path, []byte(strconv.Itoa(i)))
 	}
-	ws.writes.Wait()
+	ws.writer.wait()
 	if got, err := os.ReadFile(path); err != nil || string(got) != "199" {
 		t.Fatalf("the file holds %q, %v", got, err)
 	}
@@ -177,7 +177,7 @@ func TestContextsAndOldSpacesCarryOver(t *testing.T) {
 	p.Frame()
 	m.selectSession("b1")
 	m.writeWorkspace()
-	m.ws.writes.Wait() // all queued writes have reached disk
+	m.ws.writer.wait() // all queued writes have reached disk
 
 	restart := func(prep func(*model)) *model {
 		again := newModel(config.Default(), "")

@@ -325,7 +325,7 @@ func (m *model) writeWorkspace() []byte {
 	if err != nil {
 		return body
 	}
-	m.ws.write(path, body)
+	m.ws.writer.write(path, body)
 	return body
 }
 

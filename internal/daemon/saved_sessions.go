@@ -17,6 +17,7 @@ import (
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
@@ -129,28 +130,7 @@ func (d *Daemon) saveSessionsLocked() error {
 	if err != nil {
 		return err
 	}
-	return writeAtomic(d.sessionPath, data)
-}
-
-// writeAtomic replaces the file at path with data, so a crash leaves the
-// old file or the new, never half of one.
-func writeAtomic(path string, data []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	defer tmp.Close()
-	if _, err := tmp.Write(data); err != nil {
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
+	return atomicfile.Write(d.sessionPath, data)
 }
 
 func (d *Daemon) listSessions() []*protocol.SessionInfo {
