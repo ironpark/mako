@@ -402,7 +402,7 @@ func TestTheWheelGoesToATUIThatAsked(t *testing.T) {
 // A program that stops reading must not be flooded with wheel reports: the
 // terminal's input queue would cut one, and its Escape would interrupt the
 // agent. Reports go as the wheel turns, up to a budget until the program
-// prints again, then one a while; one that keeps up never meets it.
+// prints again; the rest is owed, and goes as it does.
 func TestTheWheelWaitsForTheProgram(t *testing.T) {
 	link := newFakeLink()
 	conn, err := newTermConn("s1", link, 80, 24, func() {})
@@ -420,32 +420,26 @@ func TestTheWheelWaitsForTheProgram(t *testing.T) {
 	link.typed()
 	at := gridPoint(p, view, 2, 3)
 	const report = "\x1b[<64;3;4M"
+	most := wheelBudget / len(report)
 	reports := func() int { return strings.Count(link.typed(), report) }
 	p.Scroll(at, ggui.Pt(0, 10)) // 30 lines
-	if got := reports(); got != 30 {
-		t.Fatalf("a turn sent %d reports, want 30", got)
+	p.Scroll(at, ggui.Pt(0, 10)) // 30 more, past the budget
+	if got := reports(); got != most {
+		t.Fatalf("a silent program was sent %d reports, want %d", got, most)
 	}
-	for range 10 {
-		p.Scroll(at, ggui.Pt(0, 10))
-	}
-	if got, most := reports(), wheelBudget/len(report)-30; got != most {
-		t.Fatalf("a silent program was sent %d more reports, want %d", got, most)
-	}
-	link.output(t, "scrolled")
-	waitFor(t, func() bool {
-		conn.mu.Lock()
-		defer conn.mu.Unlock()
-		return conn.wheelSent == 0
-	})
-	p.Scroll(at, ggui.Pt(0, 1))
-	if got := reports(); got != 3 {
-		t.Fatalf("after it printed, the wheel sent %d reports, want 3", got)
+	link.output(t, "scrolled") // it read them: what is owed goes
+	sent := 0
+	waitFor(t, func() bool { sent += reports(); return sent >= 60-most })
+	if sent != 60-most {
+		t.Fatalf("once it printed, it was sent %d reports, want the %d owed", sent, 60-most)
 	}
 }
 
-// A program silent past wheelPatience, as one at the end of what it
-// scrolls, gets a report though the budget is spent.
-func TestTheWheelGetsThroughToASilentProgram(t *testing.T) {
+// A turn back the other way starts afresh, as a program at the end of what
+// it scrolls prints nothing for the turn that ran into it; typing lets go
+// of what is owed, and so does a second without a redraw. One report a
+// wheelPatience still goes to a program that stays silent.
+func TestTheWheelOwesOnlyTheLatestTurn(t *testing.T) {
 	link := newFakeLink()
 	conn, err := newTermConn("s1", link, 80, 24, func() {})
 	if err != nil {
@@ -457,16 +451,40 @@ func TestTheWheelGetsThroughToASilentProgram(t *testing.T) {
 	waitFor(t, func() bool { return conn.mouseReported() })
 	size := input.RenderSize{ScreenWidth: 800, ScreenHeight: 400, CellWidth: 10, CellHeight: 16}
 	up := input.MouseEvent{Action: input.MouseActionPress, Button: input.MouseButtonFour, HasButton: true, X: 50, Y: 50}
+	down := up
+	down.Button = input.MouseButtonFive
+	state := func() (owedWheel, int) { conn.mu.Lock(); defer conn.mu.Unlock(); return conn.owed, conn.wheelSent }
+
+	conn.mouseWheel(up, size, 60) // past the budget: some owed
+	if w, sent := state(); w.n == 0 || sent == 0 {
+		t.Fatalf("owed %d with %d sent", w.n, sent)
+	}
+	link.typed()
+	conn.mouseWheel(down, size, 2)
+	if w, _ := state(); w.n != 0 || !strings.Contains(link.typed(), "\x1b[<65;") {
+		t.Fatalf("turned back, %d still owed, or the turn back did not go", w.n)
+	}
+
 	conn.mu.Lock()
-	defer conn.mu.Unlock()
-	conn.wheelSent = wheelBudget
-	conn.wheelAt = time.Now()
-	if buf := conn.wheelLocked(up, size, 3); len(buf) > 0 {
+	conn.wheelSent, conn.wheelAt = wheelBudget, time.Now()
+	conn.owed = owedWheel{ev: up, size: size, n: 3, at: time.Now()}
+	if buf := conn.wheelLocked(); len(buf) > 0 {
 		t.Fatal("a report went past the budget at once")
 	}
 	conn.wheelAt = time.Now().Add(-wheelPatience)
-	if buf, one := conn.wheelLocked(up, size, 3), conn.encodeMouseLocked(up, size, false); len(buf) != len(one) {
+	one := conn.encodeMouseLocked(up, size, false)
+	if buf := conn.wheelLocked(); len(buf) != len(one) {
 		t.Fatalf("a silent program was sent %q", buf)
+	}
+	conn.owed.at = time.Now().Add(-2 * wheelStale)
+	if buf := conn.wheelLocked(); len(buf) > 0 || conn.owed.n != 0 {
+		t.Fatal("a stale turn was sent")
+	}
+	conn.owed = owedWheel{ev: up, size: size, n: 3, at: time.Now()}
+	conn.mu.Unlock()
+	conn.key(input.KeyEvent{Action: input.KeyActionPress, Key: input.KeyEnter}, "")
+	if w, _ := state(); w.n != 0 {
+		t.Fatal("a turn was still owed after typing")
 	}
 }
 

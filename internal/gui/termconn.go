@@ -112,9 +112,11 @@ type termConn struct {
 	copied   *string           // what the program last put on the clipboard, until the view takes it
 
 	// wheelSent is the bytes of wheel reports sent since the program last
-	// printed, and wheelAt when the last went; see mouseWheel.
+	// printed, wheelAt when the last went, and owed the turn not yet sent;
+	// see mouseWheel.
 	wheelSent int
 	wheelAt   time.Time
+	owed      owedWheel
 
 	// The images the program placed, as the last frame found them, and the
 	// textures they are drawn from; see termimages.go.
@@ -312,9 +314,13 @@ func (t *termConn) read() {
 			t.mu.Lock()
 			wheelTrace.tracef("output %d bytes held=%v", len(ev.Data), t.held)
 			t.feedOutputLocked(ev.Data)
+			owed := t.wheelLocked()
 			tap := t.tap
 			t.mu.Unlock()
 			tap.write(ev.Data)
+			if len(owed) > 0 {
+				t.send(owed) // what the wheel turned while the program was busy
+			}
 		case protocol.EventExited:
 			t.mu.Lock()
 			t.exited, t.exitCode = true, ev.ExitCode
@@ -676,8 +682,10 @@ func (t *termConn) key(ev input.KeyEvent, text string) {
 		err = input.EncodeKey(&buf, t.vt.Terminal(), ev, text)
 	}
 	if err == nil && len(buf) > 0 {
-		// Typing snaps the viewport back to the bottom, as every terminal does.
+		// Typing snaps the viewport back to the bottom, as every terminal
+		// does, and lets go of a turn of the wheel still owed.
 		t.vt.Terminal().ScrollViewport(gostty.ScrollViewportBottom())
+		t.owed = owedWheel{}
 	}
 	t.mu.Unlock()
 	if err == nil && len(buf) > 0 {
@@ -1066,46 +1074,75 @@ func (t *termConn) encodeMouseLocked(ev input.MouseEvent, size input.RenderSize,
 // the queue can end a read in the middle of one, and a program that reads
 // an Escape at the end of its input as the key interrupts its agent and
 // types the rest. So reports go as the wheel turns while those sent since
-// the program last printed come to less than wheelBudget, half the queue;
-// past it they are dropped, but for one a wheelPatience, as a program at
-// the end of what it scrolls prints nothing. A program that keeps up, as
-// Claude Code redrawing in a few milliseconds does, never meets the bound,
-// and scrolls as the wheel turns: pacing it to its redraws made it crawl.
+// the program last printed come to less than wheelBudget, half the queue.
+// Past it they are owed, not lost, and go as the program prints again:
+// Claude Code goes quiet for a moment mid-flick, loading what it scrolls
+// to, and a scroll that dropped what turned meanwhile stopped, then
+// jumped. What is owed is let go of past wheelOwed lines, after
+// wheelStale, or when the user types; turned the other way, the turn
+// starts afresh, as a program at the end of what it scrolls prints
+// nothing to show it read the last. One a wheelPatience still goes to a
+// program that stays silent.
 const (
 	wheelBudget   = 512
 	wheelPatience = 250 * time.Millisecond
+	wheelOwed     = 64
+	wheelStale    = time.Second
 )
 
+// owedWheel is a turn of the wheel not yet sent: n reports of ev, the
+// latest, turned at the latest at.
+type owedWheel struct {
+	ev   input.MouseEvent
+	size input.RenderSize
+	n    int
+	at   time.Time
+}
+
 // mouseWheel sends n reports of ev, a wheel's turn, under the program's
-// modes, as many of them as it is keeping up with.
+// modes, as many of them as it is keeping up with, owing it the rest.
 func (t *termConn) mouseWheel(ev input.MouseEvent, size input.RenderSize, n int) {
 	t.mu.Lock()
-	buf := t.wheelLocked(ev, size, n)
+	if t.owed.ev.Button != ev.Button {
+		t.owed.n, t.wheelSent = 0, 0 // turned back: afresh
+	}
+	t.owed = owedWheel{ev: ev, size: size, n: min(t.owed.n+n, wheelOwed), at: time.Now()}
+	buf := t.wheelLocked()
 	t.mu.Unlock()
 	if len(buf) > 0 {
 		t.send(buf) // whole, so no write of ours ends inside a report
 	}
 }
 
-// wheelLocked is the reports of a wheel's turn the program is to be sent
-// now: those within wheelBudget, one once it has been silent past
+// wheelLocked is the reports of the turn owed that the program is to be
+// sent now: those within wheelBudget, one once it has been silent past
 // wheelPatience, or none.
-func (t *termConn) wheelLocked(ev input.MouseEvent, size input.RenderSize, n int) frameBuffer {
-	one := t.encodeMouseLocked(ev, size, false)
-	if len(one) == 0 {
+func (t *termConn) wheelLocked() frameBuffer {
+	w := &t.owed
+	if w.n == 0 {
 		return nil
 	}
-	k := min(n, (wheelBudget-t.wheelSent)/len(one))
+	if time.Since(w.at) > wheelStale {
+		w.n = 0
+		return nil
+	}
+	one := t.encodeMouseLocked(w.ev, w.size, false)
+	if len(one) == 0 {
+		w.n = 0
+		return nil
+	}
+	k := min(w.n, (wheelBudget-t.wheelSent)/len(one))
 	if k <= 0 {
 		if time.Since(t.wheelAt) < wheelPatience {
-			wheelTrace.tracef("wheel drop n=%d unread=%d", n, t.wheelSent)
+			wheelTrace.tracef("wheel owe n=%d unread=%d", w.n, t.wheelSent)
 			return nil
 		}
 		k = 1
 	}
-	wheelTrace.tracef("wheel send %d of %d unread=%d", k, n, t.wheelSent)
+	wheelTrace.tracef("wheel send %d of %d unread=%d", k, w.n, t.wheelSent)
 	t.wheelSent += k * len(one)
 	t.wheelAt = time.Now()
+	w.n -= k
 	return bytes.Repeat(one, k)
 }
 
