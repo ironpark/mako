@@ -1,9 +1,11 @@
 package gui
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -24,6 +26,24 @@ func TestRunsState(t *testing.T) {
 		if got := runsState(c.runs); got != c.want {
 			t.Errorf("runsState = %q, want %q", got, c.want)
 		}
+	}
+}
+
+// The runs seen are kept for each project's newest commit alone, however
+// many commits the branch moves through.
+func TestRunsSeenAreKeptForTheNewestCommit(t *testing.T) {
+	m := newModel(config.Default(), "")
+	m.Prefs.Update(func(p prefs) prefs { p.Notify = false; return p })
+	root := fileRoot{Node: "n", Path: "/p"}
+	for i := range 50 {
+		sha := strconv.Itoa(i)
+		for _, state := range []string{"in_progress", "completed"} {
+			m.noteRuns(forgeBranch{Root: root, Runs: []*protocol.ForgeItem{{HeadOid: sha, State: state, Checks: "success"}}})
+		}
+	}
+	m.noteRuns(forgeBranch{Root: fileRoot{Node: "n", Path: "/q"}, Runs: []*protocol.ForgeItem{{HeadOid: "x", State: "queued"}}})
+	if len(m.Forge.seen) != 2 || m.Forge.seen[root] != (seenRuns{"49", "success"}) {
+		t.Fatalf("seen %v", m.Forge.seen)
 	}
 }
 
