@@ -55,7 +55,9 @@ type termConn struct {
 	// terminal for shownFor (see frame).
 	unpainted *time.Timer
 	// compressTimer runs the compression of the scrollback (see
-	// termcompress.go), compressSeen is ghostty's activity as of the last
+	// termcompress.go). It is made, stopped, before the terminal is shared
+	// and never replaced, as compressPass resets it without the lock.
+	// compressSeen is ghostty's activity as of the last
 	// pass, and compressUnsupported is set where the system cannot.
 	compressTimer       *time.Timer
 	compressSeen        uint64
@@ -158,6 +160,8 @@ func newTermConn(id string, link sessionLink, cols, rows uint16, wake func(), ti
 	// three the line.
 	gesture.SetBehaviors(gostty.GestureBehaviorCell, gostty.GestureBehaviorWord, gostty.GestureBehaviorLine)
 	t := &termConn{id: id, att: link, vt: vt, state: state, gesture: gesture, cols: cols, rows: rows, wake: wake}
+	t.compressTimer = time.AfterFunc(time.Hour, t.compressPass)
+	t.compressTimer.Stop()
 	liveTerms.Store(t, struct{}{})
 	if len(titleChanged) > 0 {
 		t.titleChanged = titleChanged[0]
@@ -1129,9 +1133,7 @@ func (t *termConn) close() {
 	if t.unpainted != nil {
 		t.unpainted.Stop()
 	}
-	if t.compressTimer != nil {
-		t.compressTimer.Stop()
-	}
+	t.compressTimer.Stop()
 	liveTerms.Delete(t)
 	t.endFindLocked()
 	_ = t.state.Close()

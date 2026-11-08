@@ -31,11 +31,7 @@ func (t *termConn) noteCompressionLocked() {
 	if a := t.vt.Terminal().CompressionActivity(); a == t.compressSeen {
 		return
 	}
-	if t.compressTimer == nil {
-		t.compressTimer = time.AfterFunc(compressQuiet, t.compressPass)
-	} else {
-		t.compressTimer.Reset(compressQuiet)
-	}
+	t.compressTimer.Reset(compressQuiet)
 }
 
 // compressPass runs one step of compression, and arranges the next while
