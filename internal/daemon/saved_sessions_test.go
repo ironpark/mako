@@ -213,3 +213,44 @@ func TestSavedSessionsOfTheJSONEraLoad(t *testing.T) {
 		t.Fatalf("round trip %v %v", a.Info, a.Request)
 	}
 }
+
+// A start under way holds off another start of its session, but not the
+// session lock, which listings and other starts wait on.
+func TestAStartUnderWayHoldsOffOnlyItsOwnSession(t *testing.T) {
+	d := New(&config.Config{NodeID: "node"}, nil)
+	if s, err := d.claimStart(t.Context(), "a"); s != nil || err != nil {
+		t.Fatalf("claim: %v, %v", s, err)
+	}
+	locked := make(chan struct{})
+	go func() {
+		d.sessionMu.Lock()
+		d.sessionMu.Unlock()
+		close(locked)
+	}()
+	select {
+	case <-locked:
+	case <-time.After(time.Second):
+		t.Fatal("the session lock is held while a start is under way")
+	}
+	if s, err := d.claimStart(t.Context(), "b"); s != nil || err != nil {
+		t.Fatalf("another session's claim: %v, %v", s, err)
+	}
+	second := make(chan struct{})
+	go func() {
+		if _, err := d.claimStart(t.Context(), "a"); err != nil {
+			t.Error(err)
+		}
+		close(second)
+	}()
+	select {
+	case <-second:
+		t.Fatal("a second start went on while the first was under way")
+	case <-time.After(50 * time.Millisecond):
+	}
+	d.endStart("a")
+	select {
+	case <-second:
+	case <-time.After(time.Second):
+		t.Fatal("the second start waits still")
+	}
+}
