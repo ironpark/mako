@@ -126,9 +126,18 @@ func (h *Host) Load(ctx context.Context, ext zed.Extension) (*Extension, error) 
 		Manifest: ext.Manifest, api: api, dir: ext.Dir, work: work, host: h,
 		log: log.With("extension", ext.ID),
 	}
-	e.comp, err = compile(work, bin)
+	compiled, err := h.compiledDir(ext.ID)
+	if err != nil {
+		return nil, err
+	}
+	e.comp, err = compile(compiled, bin)
 	if err != nil {
 		return nil, fmt.Errorf("zedhost: %s: %w", ext.ID, err)
+	}
+	// Builds before kept the compiled code in the work directory.
+	stale, _ := filepath.Glob(filepath.Join(work, ".mako-*.cwasm"))
+	for _, s := range stale {
+		os.Remove(s)
 	}
 	if err := e.instantiate(); err != nil {
 		e.Close()
@@ -141,16 +150,30 @@ func (h *Host) Load(ctx context.Context, ext zed.Extension) (*Extension, error) 
 	return e, nil
 }
 
+// compiledDir is the directory an extension's compiled code is kept in,
+// made if it is missing: beside the work directories, not in the
+// extension's own, which the guest can write to. Wasmtime runs what it
+// deserializes as machine code, so code the guest planted there would run
+// outside its sandbox.
+func (h *Host) compiledDir(id string) (string, error) {
+	work, err := filepath.Abs(h.WorkDir)
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(work+".compiled", id)
+	return dir, os.MkdirAll(dir, 0o755)
+}
+
 // compile compiles a component, or reads the machine code a compile
-// before left in the work directory; wasmtime refuses code from another
-// version of itself, which then compiles again.
-func compile(work string, bin []byte) (*wasmtime.Component, error) {
+// before left in dir; wasmtime refuses code from another version of
+// itself, which then compiles again.
+func compile(dir string, bin []byte) (*wasmtime.Component, error) {
 	engine, err := sharedEngine()
 	if err != nil {
 		return nil, err
 	}
 	sum := sha256.Sum256(bin)
-	cache := filepath.Join(work, ".mako-"+hex.EncodeToString(sum[:8])+".cwasm")
+	cache := filepath.Join(dir, ".mako-"+hex.EncodeToString(sum[:8])+".cwasm")
 	if code, ok := readCompiled(cache); ok {
 		if comp, err := wasmtime.NewComponentDeserialize(engine, code); err == nil {
 			return comp, nil
@@ -161,7 +184,7 @@ func compile(work string, bin []byte) (*wasmtime.Component, error) {
 		return nil, err
 	}
 	if code, err := comp.Serialize(); err == nil {
-		old, _ := filepath.Glob(filepath.Join(work, ".mako-*.cwasm"))
+		old, _ := filepath.Glob(filepath.Join(dir, ".mako-*.cwasm"))
 		for _, o := range old {
 			if o != cache {
 				os.Remove(o)

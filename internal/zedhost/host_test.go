@@ -104,6 +104,22 @@ func TestContextServer(t *testing.T) {
 	}
 }
 
+// Compiled code is kept where the guest, which can write its work
+// directory, cannot plant any.
+func TestCompiledCodeIsOutOfTheGuestsReach(t *testing.T) {
+	h := &Host{WorkDir: t.TempDir()}
+	dir, err := h.compiledDir("ext")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		t.Fatalf("%s not made: %v", dir, err)
+	}
+	if rel, err := filepath.Rel(h.WorkDir, dir); err == nil && filepath.IsLocal(rel) {
+		t.Fatalf("%s is inside the work directories %s", dir, h.WorkDir)
+	}
+}
+
 // Compiled code comes back only exactly as it was written: one cut short,
 // or written over in the middle, as by another process compiling the same
 // extension, is not handed to wasmtime, which would run it and crash.
