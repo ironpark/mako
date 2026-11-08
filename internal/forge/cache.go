@@ -57,13 +57,22 @@ func (t *etagTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		resp.Body, resp.ContentLength = io.NopCloser(bytes.NewReader(kept.body)), int64(len(kept.body))
 	case resp.StatusCode == http.StatusOK && resp.Header.Get("ETag") != "" && resp.ContentLength <= etagBody:
 		body, err := io.ReadAll(io.LimitReader(resp.Body, etagBody+1))
-		resp.Body.Close()
 		if err != nil {
+			resp.Body.Close()
 			return nil, err
 		}
-		if len(body) <= etagBody {
-			t.put(&etagEntry{key: key, etag: resp.Header.Get("ETag"), header: resp.Header.Clone(), body: body})
+		if len(body) > etagBody {
+			// A reply of no stated length, as a decompressed one, can be
+			// larger than is kept: it is not kept, and is read on from
+			// where the limit stopped.
+			resp.Body = struct {
+				io.Reader
+				io.Closer
+			}{io.MultiReader(bytes.NewReader(body), resp.Body), resp.Body}
+			break
 		}
+		resp.Body.Close()
+		t.put(&etagEntry{key: key, etag: resp.Header.Get("ETag"), header: resp.Header.Clone(), body: body})
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 	}
 	return resp, nil
