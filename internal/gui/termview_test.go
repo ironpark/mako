@@ -401,8 +401,8 @@ func TestTheWheelGoesToATUIThatAsked(t *testing.T) {
 
 // A program that stops reading must not be flooded with wheel reports: the
 // terminal's input queue would cut one, and its Escape would interrupt the
-// agent. A turn sends a few, and the rest is owed: sent as the program
-// prints, not lost, so a fast turn scrolls as far as it was turned.
+// agent. Reports go as the wheel turns, up to a budget until the program
+// prints again, then one a while; one that keeps up never meets it.
 func TestTheWheelWaitsForTheProgram(t *testing.T) {
 	link := newFakeLink()
 	conn, err := newTermConn("s1", link, 80, 24, func() {})
@@ -419,30 +419,33 @@ func TestTheWheelWaitsForTheProgram(t *testing.T) {
 	p.Frame()
 	link.typed()
 	at := gridPoint(p, view, 2, 3)
-	reports := func() int { return strings.Count(link.typed(), "\x1b[<64;") }
+	const report = "\x1b[<64;3;4M"
+	reports := func() int { return strings.Count(link.typed(), report) }
 	p.Scroll(at, ggui.Pt(0, 10)) // 30 lines
-	if got := reports(); got != wheelBurst {
-		t.Fatalf("a long turn sent %d reports, want %d", got, wheelBurst)
+	if got := reports(); got != 30 {
+		t.Fatalf("a turn sent %d reports, want 30", got)
 	}
-	p.Scroll(at, ggui.Pt(0, 1)) // 3 more
-	if got := reports(); got != 0 {
-		t.Fatalf("a silent program was sent %d reports", got)
+	for range 10 {
+		p.Scroll(at, ggui.Pt(0, 10))
 	}
-	// As it draws each, the rest it is owed: a burst, then what is left.
-	sent := 0
-	for _, want := range []int{wheelBurst, 33 - 2*wheelBurst} {
-		link.output(t, "scrolled")
-		waitFor(t, func() bool { sent += reports(); return sent >= want })
-		if sent != want {
-			t.Fatalf("as it printed, the program was sent %d reports, want %d", sent, want)
-		}
-		sent = 0
+	if got, most := reports(), wheelBudget/len(report)-30; got != most {
+		t.Fatalf("a silent program was sent %d more reports, want %d", got, most)
+	}
+	link.output(t, "scrolled")
+	waitFor(t, func() bool {
+		conn.mu.Lock()
+		defer conn.mu.Unlock()
+		return conn.wheelSent == 0
+	})
+	p.Scroll(at, ggui.Pt(0, 1))
+	if got := reports(); got != 3 {
+		t.Fatalf("after it printed, the wheel sent %d reports, want 3", got)
 	}
 }
 
-// What the wheel owes goes the way it was last turned, and not at all once
-// stale, or once the user types.
-func TestTheWheelOwesOnlyTheLatestTurn(t *testing.T) {
+// A program silent past wheelPatience, as one at the end of what it
+// scrolls, gets a report though the budget is spent.
+func TestTheWheelGetsThroughToASilentProgram(t *testing.T) {
 	link := newFakeLink()
 	conn, err := newTermConn("s1", link, 80, 24, func() {})
 	if err != nil {
@@ -454,26 +457,16 @@ func TestTheWheelOwesOnlyTheLatestTurn(t *testing.T) {
 	waitFor(t, func() bool { return conn.mouseReported() })
 	size := input.RenderSize{ScreenWidth: 800, ScreenHeight: 400, CellWidth: 10, CellHeight: 16}
 	up := input.MouseEvent{Action: input.MouseActionPress, Button: input.MouseButtonFour, HasButton: true, X: 50, Y: 50}
-	down := up
-	down.Button = input.MouseButtonFive
-	owed := func() owedWheel { conn.mu.Lock(); defer conn.mu.Unlock(); return conn.owed }
-
-	conn.mouseWheel(up, size, wheelBurst+5)
-	conn.mouseWheel(down, size, 2)
-	if w := owed(); w.n != 2 || w.ev.Button != input.MouseButtonFive {
-		t.Fatalf("turned back, owed %d of %v", w.n, w.ev.Button)
-	}
 	conn.mu.Lock()
-	conn.owed.at = time.Now().Add(-2 * wheelStale)
-	buf := conn.wheelLocked()
-	conn.mu.Unlock()
-	if len(buf) > 0 || owed().n != 0 {
-		t.Fatal("a stale turn was sent")
+	defer conn.mu.Unlock()
+	conn.wheelSent = wheelBudget
+	conn.wheelAt = time.Now()
+	if buf := conn.wheelLocked(up, size, 3); len(buf) > 0 {
+		t.Fatal("a report went past the budget at once")
 	}
-	conn.mouseWheel(up, size, 3)
-	conn.key(input.KeyEvent{Action: input.KeyActionPress, Key: input.KeyEnter}, "")
-	if owed().n != 0 {
-		t.Fatal("a turn was still owed after typing")
+	conn.wheelAt = time.Now().Add(-wheelPatience)
+	if buf, one := conn.wheelLocked(up, size, 3), conn.encodeMouseLocked(up, size, false); len(buf) != len(one) {
+		t.Fatalf("a silent program was sent %q", buf)
 	}
 }
 
