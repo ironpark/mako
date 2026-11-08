@@ -109,3 +109,33 @@ func TestAskAgainTellsAnswersFromFailures(t *testing.T) {
 		}
 	}
 }
+
+// A terminal dialed of itself again and again waits longer each time, up
+// to redialMax, and starts over once one has held that long.
+func TestRedialsBackOff(t *testing.T) {
+	m := &model{redials: map[string]redial{}}
+	if !m.redialDue("s") {
+		t.Fatal("a first dial waited")
+	}
+	if m.redialDue("s") {
+		t.Fatal("a dial again did not wait")
+	}
+	var waits []time.Duration
+	for range 8 {
+		r := m.redials["s"]
+		r.next = time.Now().Add(-time.Millisecond)
+		m.redials["s"] = r
+		m.redialDue("s")
+		waits = append(waits, m.redials["s"].delay)
+	}
+	if waits[0] != 2*redialMin || waits[len(waits)-1] != redialMax {
+		t.Fatalf("waits %v", waits)
+	}
+	r := m.redials["s"]
+	r.next = time.Now().Add(-redialMax)
+	m.redials["s"] = r
+	m.heldUp("s")
+	if _, ok := m.redials["s"]; ok {
+		t.Fatal("a terminal that held kept its wait")
+	}
+}

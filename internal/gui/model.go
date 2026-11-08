@@ -186,6 +186,7 @@ type model struct {
 	// does so once per tab it comes to show.
 	revealedTab map[int]string
 	dialing     map[string]bool
+	redials     map[string]redial // see redialDue
 
 	// recorder keeps the terminal streams the developer option records.
 	recorder *streamRecorder
@@ -279,6 +280,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		killed:        map[string]time.Time{},
 		revealedTab:   map[int]string{},
 		dialing:       map[string]bool{},
+		redials:       map[string]redial{},
 	}
 	m.link.approveInApp.Store(p.ApproveInApp)
 	m.recorder = newStreamRecorder(recordDir())
@@ -387,11 +389,54 @@ func (m *model) attachVisible() {
 		if id == "" {
 			continue
 		}
-		if conn := m.conns[id]; conn == nil {
-			m.attach(id)
-		} else if conn.failed() && m.sessionLive(id) {
-			m.attach(id)
+		conn := m.conns[id]
+		switch {
+		case conn != nil && !conn.failed():
+			m.heldUp(id)
+		case conn != nil && !m.sessionLive(id):
+			// exited: its last screen stays
+		default:
+			if _, ok := m.session(id); ok && m.redialDue(id) {
+				m.attach(id)
+			}
 		}
+	}
+}
+
+// A terminal dialed again and again, as its stream fails as soon as it
+// is made or the daemon is not there, is dialed less and less often: the
+// wait after each try doubles from redialMin to redialMax, and starts over
+// once one has held for redialMax. Showing the tab dials it at once.
+const (
+	redialMin = pollInterval
+	redialMax = time.Minute
+)
+
+// redial is when a tab's terminal was last dialed of itself, and the
+// wait before the next.
+type redial struct {
+	next  time.Time
+	delay time.Duration
+}
+
+// redialDue reports whether tab id may be dialed again now, noting the try
+// if it may.
+func (m *model) redialDue(id string) bool {
+	r, now := m.redials[id], time.Now()
+	if now.Before(r.next) {
+		return false
+	}
+	r.delay = min(max(2*r.delay, redialMin), redialMax)
+	r.next = now.Add(r.delay)
+	m.redials[id] = r
+	return true
+}
+
+// heldUp notes that tab id's terminal holds, starting its waits over once
+// it has for redialMax past the last.
+func (m *model) heldUp(id string) {
+	if r, ok := m.redials[id]; ok && time.Since(r.next) >= redialMax {
+		delete(m.redials, id)
 	}
 }
 
@@ -494,6 +539,7 @@ func (m *model) forgetTabs(gone func(id string) bool) {
 	}
 	maps.DeleteFunc(m.chats, func(id string, _ *chatState) bool { return gone(id) })
 	maps.DeleteFunc(m.usages, func(id string, _ *usageState) bool { return gone(id) })
+	maps.DeleteFunc(m.redials, func(id string, _ redial) bool { return gone(id) })
 	for id := range ggui.Peek(m.ChatModes) {
 		if gone(id) {
 			modes := maps.Clone(ggui.Peek(m.ChatModes))
