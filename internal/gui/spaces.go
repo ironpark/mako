@@ -232,13 +232,13 @@ func spaceDots(m *model, first, last, current int) ggui.Widget {
 }
 
 // The trackpad swipe that moves between spaces. The list follows the
-// fingers, swipePixels to a wheel unit; when they lift past swipeCommit of
+// fingers, pixel for pixel, or swipePixels to a wheel's unit; when they lift past swipeCommit of
 // its width it moves to the space beside, and short of that springs back.
 // Past the first or last space the list gives only swipeEdge of the way. A
 // scroll that says nothing of the fingers, a wheel's, ends at a pause of
 // swipeGap.
 const (
-	swipePixels = trackpadPoints
+	swipePixels = 10
 	swipeCommit = 0.15
 	swipeEdge   = 0.3
 	swipeGap    = 200 * time.Millisecond
@@ -288,7 +288,7 @@ func (s *spaceSwipe) slide(prev, cur, next ggui.Widget) ggui.Widget {
 
 // scroll takes a scroll of the fingers across, until they lift, and
 // leaves the rest.
-func (s *spaceSwipe) scroll(d ggui.Point, phase ggui.ScrollPhase) bool {
+func (s *spaceSwipe) scroll(d ggui.Point, phase ggui.ScrollPhase, pixels bool) bool {
 	now := time.Now()
 	gap := now.Sub(s.last) > swipeGap
 	s.last = now
@@ -321,7 +321,10 @@ func (s *spaceSwipe) scroll(d ggui.Point, phase ggui.ScrollPhase) bool {
 			s.watchEnd()
 		}
 	}
-	step := d.X * swipePixels
+	step := d.X
+	if !pixels {
+		step *= swipePixels
+	}
 	// Fingers to the left, d.X below 0, bring the next space in.
 	if !s.can(pick(s.drag+step < 0, 1, -1)) {
 		step *= swipeEdge
@@ -400,7 +403,7 @@ func (a *swipeArea) Paint(dst *ggui.Canvas, r ggui.Rect) {
 }
 
 func (a *swipeArea) HandlePointer(ev ggui.PointerEvent) bool {
-	return ev.Kind == ggui.PointerScroll && a.s.scroll(ev.Scroll, ev.ScrollPhase)
+	return ev.Kind == ggui.PointerScroll && a.s.scroll(ev.Scroll, ev.ScrollPhase, ev.ScrollPixels)
 }
 
 // swipeSlide is the lists a spaceSwipe moves: the space shown, and the

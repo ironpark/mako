@@ -771,26 +771,13 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 	return false
 }
 
-// trackpadPoints is the points of a trackpad's scroll a unit of it comes
-// as: the window passes macOS's precise deltas on at a tenth, as GLFW
-// does, without saying they are precise.
-const trackpadPoints = 10
-
-// scrollLines is the lines a scroll event turns. A trackpad's, which comes
-// in a gesture's phases, is in tenths of points: taken for a wheel's
-// notches, wheelLines each, a flick turned thousands of lines a second,
-// and taken for pixels, a crawl.
+// scrollLines is the lines a scroll event turns: a trackpad's pixels by
+// the cell's height, a wheel's notches wheelLines each.
 func (t *terminalView) scrollLines(ev ggui.PointerEvent) float64 {
-	dy := ev.Scroll.Y
-	if t.cellH > 0 {
-		switch {
-		case ev.ScrollPixels:
-			return dy / t.cellH
-		case ev.ScrollPhase != ggui.ScrollPhaseNone:
-			return dy * trackpadPoints / t.cellH
-		}
+	if ev.ScrollPixels && t.cellH > 0 {
+		return ev.Scroll.Y / t.cellH
 	}
-	return dy * wheelLines // a wheel's notches
+	return ev.Scroll.Y * wheelLines
 }
 
 // A trackpad scrolls by pixels, a cell's worth over a few events, and the

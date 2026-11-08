@@ -453,7 +453,7 @@ func TestTheWheelOwesOnlyTheLatestTurn(t *testing.T) {
 	up := input.MouseEvent{Action: input.MouseActionPress, Button: input.MouseButtonFour, HasButton: true, X: 50, Y: 50}
 	down := up
 	down.Button = input.MouseButtonFive
-	state := func() (owedWheel, int) { conn.mu.Lock(); defer conn.mu.Unlock(); return conn.owed, conn.wheelSent }
+	state := func() (owedWheel, int) { conn.mu.Lock(); defer conn.mu.Unlock(); return conn.owed, conn.unread }
 
 	conn.mouseWheel(up, size, 60) // past the budget: some owed
 	if w, sent := state(); w.n == 0 || sent == 0 {
@@ -466,7 +466,7 @@ func TestTheWheelOwesOnlyTheLatestTurn(t *testing.T) {
 	}
 
 	conn.mu.Lock()
-	conn.wheelSent, conn.wheelAt = wheelBudget, time.Now()
+	conn.unread, conn.wheelAt = wheelBudget, time.Now()
 	conn.owed = owedWheel{ev: up, size: size, n: 3, at: time.Now()}
 	if buf := conn.wheelLocked(); len(buf) > 0 {
 		t.Fatal("a report went past the budget at once")
@@ -551,15 +551,53 @@ func TestAScrollMovesAtOnce(t *testing.T) {
 	}
 }
 
-// A trackpad's scroll, in tenths of points, turns lines by the cell's
-// height; a wheel's notch, three.
-func TestATrackpadScrollsByPoints(t *testing.T) {
+// A trackpad's scroll, in pixels, turns lines by the cell's height; a
+// wheel's notch, three.
+func TestATrackpadScrollsByPixels(t *testing.T) {
 	v := terminalView{cellH: 16}
-	pad := ggui.PointerEvent{Scroll: ggui.Pt(0, 3.2), ScrollPhase: ggui.ScrollPhaseChanged}
+	pad := ggui.PointerEvent{Scroll: ggui.Pt(0, 32), ScrollPixels: true, ScrollPhase: ggui.ScrollPhaseChanged}
 	if got := v.scrollLines(pad); got != 2 {
 		t.Fatalf("32 points turned %v lines", got)
 	}
 	if got := v.scrollLines(ggui.PointerEvent{Scroll: ggui.Pt(0, 1)}); got != 3 {
 		t.Fatalf("a notch turned %v lines", got)
+	}
+}
+
+// The pointer's moves keep to the wheel's budget, and do not end its turn;
+// a click does.
+func TestMovesKeepToTheBudgetAndClicksEndATurn(t *testing.T) {
+	link := newFakeLink()
+	conn, err := newTermConn("s1", link, 80, 24, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.close()
+	defer close(link.in)
+	link.output(t, "\x1b[?1049h\x1b[?1003h\x1b[?1006hthe agent's screen")
+	waitFor(t, func() bool { return conn.mouseReported() })
+	size := input.RenderSize{ScreenWidth: 800, ScreenHeight: 400, CellWidth: 10, CellHeight: 16}
+	move := input.MouseEvent{Action: input.MouseActionMotion, X: 50, Y: 50}
+	link.typed()
+	conn.mu.Lock()
+	conn.unread = wheelBudget
+	conn.owed = owedWheel{ev: move, size: size, n: 3, at: time.Now()}
+	conn.mu.Unlock()
+	conn.mouse(move, size, false)
+	if got := link.typed(); got != "" {
+		t.Fatalf("a move past the budget was sent: %q", got)
+	}
+	conn.mu.Lock()
+	owed := conn.owed.n
+	conn.mu.Unlock()
+	if owed != 3 {
+		t.Fatal("a move ended the wheel's turn")
+	}
+	conn.mouse(input.MouseEvent{Action: input.MouseActionPress, Button: input.MouseButtonLeft, HasButton: true, X: 50, Y: 50}, size, false)
+	conn.mu.Lock()
+	owed = conn.owed.n
+	conn.mu.Unlock()
+	if owed != 0 {
+		t.Fatal("a click left the wheel's turn owed")
 	}
 }
