@@ -4,6 +4,7 @@ package gui
 
 import (
 	"context"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // Pointing the link elsewhere, as the UI goroutine does, does not wait out
@@ -86,5 +88,21 @@ func TestAttachVisibleRedialsAFailedTerminal(t *testing.T) {
 		conn.close()
 		delete(m.conns, "s")
 		delete(m.dialing, "s")
+	}
+}
+
+// The daemon's refusals are told apart from requests failing on the way,
+// which the poll asks again.
+func TestDaemonRefusedTellsAnswersFromFailures(t *testing.T) {
+	for _, e := range []*protocol.Error{{Message: "the mesh is off on this node"}, {Code: protocol.CodeUnsupported, Message: "unsupported"}} {
+		_, err := transport.Reply[*protocol.AccessInfo](&protocol.Envelope{Body: &protocol.Envelope_Error{Error: e}})
+		if err == nil || !daemonRefused(err) {
+			t.Fatalf("%v is not taken for the daemon's answer", err)
+		}
+	}
+	for _, err := range []error{context.DeadlineExceeded, io.EOF, net.ErrClosed} {
+		if daemonRefused(err) {
+			t.Fatalf("%v is taken for the daemon's answer", err)
+		}
 	}
 }

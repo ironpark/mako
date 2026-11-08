@@ -2,7 +2,9 @@ package gui
 
 import (
 	"context"
+	"errors"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -294,18 +296,33 @@ func (m *model) poll(ctx context.Context) {
 	}
 	// Access is asked for when it changed, or on every poll while the
 	// daemon is not watched.
-	fetchAccess := m.link.accessStale.Swap(false) || !m.link.watching.Load()
+	accessStale := m.link.accessStale.Swap(false)
+	fetchAccess := accessStale || !m.link.watching.Load()
 	// The workspace too: at first, and when the daemon has a newer one.
+	// A request that failed on the way, rather than being refused by the
+	// daemon, is asked again at the next poll, and what the window shows
+	// stays as it was meanwhile.
 	var ws *protocol.Workspace
-	if m.link.syncing.Load() && (m.link.wsStale.Swap(false) || !m.link.watching.Load()) {
-		if ws, err = c.Workspace(reqCtx); err != nil {
-			ws = nil // an older daemon
+	if m.link.syncing.Load() {
+		if wsStale := m.link.wsStale.Swap(false); wsStale || !m.link.watching.Load() {
+			if ws, err = c.Workspace(reqCtx); err != nil {
+				ws = nil // an older daemon
+				if wsStale && !daemonRefused(err) {
+					m.link.wsStale.Store(true)
+				}
+			}
 		}
 	}
 	var access *protocol.AccessInfo
 	if fetchAccess {
 		if access, err = c.Access(reqCtx, &protocol.Access{}); err != nil {
 			access = nil // the mesh is off on the daemon
+			if !daemonRefused(err) {
+				fetchAccess = false
+				if accessStale {
+					m.link.accessStale.Store(true)
+				}
+			}
 		}
 	}
 	self := c.Node()
@@ -376,6 +393,14 @@ func (m *model) poll(ctx context.Context) {
 			m.takeWorkspace(ws)
 		}
 	})
+}
+
+// daemonRefused reports whether err is the daemon's answer to a request,
+// as one it does not know or cannot serve, rather than the request failing
+// on the way to it. transport.Reply marks the daemon's answers so.
+func daemonRefused(err error) bool {
+	var coded *protocol.CodedError
+	return errors.As(err, &coded) || strings.HasPrefix(err.Error(), "remote: ")
 }
 
 // dropConn closes the terminal attached to the tab id, reporting whether
