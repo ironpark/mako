@@ -192,9 +192,18 @@ func (b *browser) run(verb string, t *transfer, work func(context.Context, *clie
 	b.cancel = cancel
 	b.say("", "")
 	b.Busy.Set(verb + "…")
+	// Stopping the ticker does not close its channel, so the copy's end
+	// is told to the goroutine showing its progress by finished.
 	tick := time.NewTicker(250 * time.Millisecond)
+	finished := make(chan struct{})
 	go func() {
-		for range tick.C {
+		defer tick.Stop()
+		for {
+			select {
+			case <-finished:
+				return
+			case <-tick.C:
+			}
 			text := verb + " · " + byteSize(t.done.Load())
 			if total := t.total.Load(); total > 0 {
 				text += " / " + byteSize(total)
@@ -211,7 +220,7 @@ func (b *browser) run(verb string, t *transfer, work func(context.Context, *clie
 		if err == nil {
 			err = work(ctx, c)
 		}
-		tick.Stop()
+		close(finished)
 		b.m.post(func() {
 			cancel()
 			b.cancel = nil
