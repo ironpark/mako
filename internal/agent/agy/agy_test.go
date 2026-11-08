@@ -108,6 +108,12 @@ func TestWhoseTranscript(t *testing.T) {
 	if matches, _ := filepath.Glob(a.LogPath(root, "*")); !slices.Equal(matches, []string{path}) {
 		t.Errorf("every transcript %v", matches)
 	}
+	// A long prompt pasted in before is passed over.
+	long := `{"display":"` + strings.Repeat("x", 5<<20) + `","workspace":"/other","conversationId":"c0"}` + "\n"
+	_ = os.WriteFile(filepath.Join(root, "history.jsonl"), []byte(long+`{"display":"y","workspace":"/w","conversationId":"c1"}`+"\n"), 0o644)
+	if _, cwd, _ := a.Whose(path); cwd != "/w" {
+		t.Errorf("after a long prompt, the workspace is %q", cwd)
+	}
 }
 
 // mako's entry joins the user's hooks, once, each event's command naming
