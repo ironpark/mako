@@ -93,3 +93,28 @@ func TestBellsAndNotificationsReachTheInfo(t *testing.T) {
 		t.Errorf("notice = %v", n)
 	}
 }
+
+// A program that asks the terminal things and never reads the answers
+// fills its input, and the answers then wait without holding the session.
+func TestUnreadRepliesDoNotHoldTheSession(t *testing.T) {
+	script := `stty raw -echo; while :; do printf '\033[c\033[6n\033[c\033[6n\033[c\033[6n\033[c\033[6n'; done`
+	s, err := Start(Spec{ID: "unread", Command: []string{"/bin/sh", "-c", script}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	time.Sleep(time.Second) // long enough to fill the PTY's input
+	got := make(chan struct{})
+	go func() {
+		for range 10 {
+			s.Info()
+			time.Sleep(50 * time.Millisecond)
+		}
+		close(got)
+	}()
+	select {
+	case <-got:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Info blocked behind the program's unread input")
+	}
+}

@@ -85,6 +85,12 @@ type Session struct {
 	outputs        atomic.Uint64
 	lastOutput     atomic.Int64 // unix nanoseconds
 	lastInput      atomic.Int64 // unix nanoseconds
+	// replies are the terminal's answers to the program's queries, on
+	// their way to writeReplies, which types them without mu held: a
+	// program that stops reading its input fills the PTY, and a write
+	// blocked on it must not hold the session, and every caller of Info
+	// with it, until it reads again.
+	replies chan []byte
 
 	// What the agent's hooks last reported, and the approval it waits
 	// for; guarded by mu.
@@ -165,12 +171,14 @@ func Start(spec Spec) (*Session, error) {
 		subs:    map[int]*Subscription{},
 		started: time.Now(),
 		done:    make(chan struct{}),
+		replies: make(chan []byte, replyQueue),
 	}
 	if d, ok := agents.As[agent.Screen](spec.Agent); ok {
 		s.screen = &screenWatch{rules: d.ScreenRules()}
 		go s.watchScreen()
 	}
 	go s.pump()
+	go s.writeReplies()
 	return s, nil
 }
 
@@ -631,7 +639,7 @@ func (s *Session) ResizeCells(cols, rows, cellW, cellH uint16) error {
 	if err := stream.ResizeCells(cols, rows, uint32(cellW), uint32(cellH)); err != nil {
 		return err
 	}
-	_ = stream.WriteReplies(s.proc)
+	s.queueRepliesLocked(stream)
 	return nil
 }
 
@@ -664,7 +672,7 @@ func (s *Session) SetColors(c *protocol.TerminalColors) {
 		s.scheme = &scheme
 		stream := s.term.Stream()
 		stream.ColorSchemeChanged(scheme)
-		_ = stream.WriteReplies(s.proc)
+		s.queueRepliesLocked(stream)
 	}
 }
 
@@ -846,7 +854,7 @@ func (s *Session) feed(chunk []byte) {
 	// exactly once. Keep titles and progress for metadata and replay;
 	// draining the rest keeps the queue from growing.
 	stream := s.term.Stream()
-	_ = stream.WriteReplies(s.proc)
+	s.queueRepliesLocked(stream)
 	now := time.Now()
 	for ev, err := range stream.EventValues() {
 		if err != nil {
@@ -871,6 +879,40 @@ func (s *Session) feed(chunk []byte) {
 	}
 	s.pushLocked(chunk)
 	s.mu.Unlock()
+}
+
+// replyQueue is how many batches of replies may wait for a program that
+// reads none of its input; those after it are dropped, as a program that
+// reads nothing would not have seen them anyway.
+const replyQueue = 64
+
+// queueRepliesLocked takes what the terminal has answered and queues it
+// for writeReplies.
+func (s *Session) queueRepliesLocked(stream *gostty.Stream) {
+	if !stream.HasReplies() {
+		return
+	}
+	var b bytes.Buffer
+	if stream.WriteReplies(&b) != nil || b.Len() == 0 {
+		return
+	}
+	select {
+	case s.replies <- b.Bytes():
+	default:
+	}
+}
+
+// writeReplies types the terminal's replies to the program, in the order
+// they were made, until the program exits.
+func (s *Session) writeReplies() {
+	for {
+		select {
+		case b := <-s.replies:
+			_, _ = s.proc.Write(b)
+		case <-s.done:
+			return
+		}
+	}
 }
 
 // pushLocked sends chunk to every front-end attached.
