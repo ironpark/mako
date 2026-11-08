@@ -91,7 +91,53 @@ func TestAttachCarriesSnapshotOutputAndExit(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exit code %d", exitCode)
 	}
+	// The attach reads the stream until the front-end hangs up, so that
+	// what reads it next does not read it alongside.
+	select {
+	case err := <-serveErr:
+		t.Fatalf("the attach ended with its input still read: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	a.Close()
 	if err := <-serveErr; err != nil && !isClosed(err) {
 		t.Fatalf("handler: %v", err)
+	}
+}
+
+// A daemon stopping ends an attach whose front-end holds on.
+func TestAnAttachEndsAsTheDaemonStops(t *testing.T) {
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+	s, err := session.Start(session.Spec{ID: "s", NodeID: "test-node", Agent: "shell", Project: t.TempDir(), Command: []string{"sleep", "10"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d.sessions.add(s)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	served := transport.NewStream(b)
+	serveErr := make(chan error, 1)
+	go func() {
+		env, err := served.Recv()
+		if err != nil {
+			serveErr <- err
+			return
+		}
+		serveErr <- d.handleAttach(ctx, served, env)
+	}()
+	go func() { _, _ = io.Copy(io.Discard, a) }()
+	if err := transport.NewStream(a).Send(protocol.TypeAttach, "", &protocol.Attach{SessionId: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	select {
+	case <-serveErr:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the attach outlived its daemon")
 	}
 }
