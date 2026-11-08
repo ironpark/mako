@@ -54,6 +54,7 @@ type termConn struct {
 	// next is output held back from the terminal: the start of the
 	// program's next screen, behind one it just finished; see feedOutput.
 	next []byte
+	join []byte // next and the output after it, fed together
 	// unpainted lets go of cells and clusters once no view painted the
 	// terminal for shownFor (see frame).
 	unpainted *time.Timer
@@ -111,10 +112,10 @@ type termConn struct {
 	progress activity.Progress // what the program says of its work
 	copied   *string           // what the program last put on the clipboard, until the view takes it
 
-	// wheelSent is the bytes of wheel reports sent since the program last
-	// printed, wheelAt when the last went, and owed the turn not yet sent;
-	// see mouseWheel.
-	wheelSent int
+	// unread is the bytes of mouse reports, the wheel's and the pointer's
+	// moves, sent since the program last printed; wheelAt is when the
+	// wheel's last went, and owed its turn not yet sent. See mouseWheel.
+	unread    int
 	wheelAt   time.Time
 	owed      owedWheel
 
@@ -319,7 +320,7 @@ func (t *termConn) read() {
 			t.mu.Unlock()
 			tap.write(ev.Data)
 			if len(owed) > 0 {
-				t.send(owed) // what the wheel turned while the program was busy
+				t.write(owed) // what the wheel turned while the program was busy
 			}
 		case protocol.EventExited:
 			t.mu.Lock()
@@ -341,7 +342,16 @@ func (t *termConn) feedLocked(p []byte) {
 		return
 	}
 	_, _ = t.vt.Write(p)
-	t.wheelSent = 0
+	t.fedLocked()
+}
+
+// fedLocked takes in what feeding the terminal did: the replies it made,
+// to discard, and its events.
+func (t *termConn) fedLocked() {
+	if t.closed {
+		return
+	}
+	t.unread = 0
 	stream := t.vt.Stream()
 	_ = stream.WriteReplies(io.Discard)
 	now := time.Now()
@@ -368,28 +378,36 @@ func (t *termConn) feedLocked(p []byte) {
 // Claude Code does while it scrolls, begins the next in the same piece of
 // output that ends the last: fed whole, the terminal is always amid one
 // when it is painted, and the last screen stays up until the program
-// stops, then jumps. So a piece is fed up to the end of the last screen it
-// finishes, and what starts the next waits, in next, for the screen to be
-// painted or for more output, whichever comes first.
-var (
-	holdBegin = []byte("\x1b[?2026h")
-	holdEnd   = []byte("\x1b[?2026l")
-)
+// stops, then jumps. So output is fed through the end of the last hold it
+// ends, the parser saying where (FeedThroughHoldEnd), and what follows
+// waits, in next, for the screen to be painted or for more output,
+// whichever comes first.
 
-// feedOutputLocked feeds the program's output p, holding back the start of
-// a screen that follows one it finishes.
+// holdEnd is how a hold ends, looked for only to tell whether another
+// may end further on; the parser says where one does.
+var holdEnd = []byte("\x1b[?2026l")
+
+// feedOutputLocked feeds the program's output p through the end of the
+// last render hold it ends, holding back the rest.
 func (t *termConn) feedOutputLocked(p []byte) {
 	if len(t.next) > 0 {
-		t.feedLocked(t.next) // the parser takes its input as a stream
+		t.join = append(append(t.join[:0], t.next...), p...)
 		t.next = t.next[:0]
+		p = t.join
 	}
-	// Only a screen begun after the last one ended waits.
-	if i := bytes.LastIndex(p, holdEnd); i >= 0 && bytes.LastIndex(p, holdBegin) > i {
-		t.feedLocked(p[:i+len(holdEnd)])
-		t.next = append(t.next, p[i+len(holdEnd):]...)
+	if t.closed {
 		return
 	}
-	t.feedLocked(p)
+	stream := t.vt.Stream()
+	for len(p) > 0 {
+		n := int(stream.FeedThroughHoldEnd(p))
+		p = p[n:]
+		if !bytes.Contains(p, holdEnd) {
+			break
+		}
+	}
+	t.next = append(t.next, p...)
+	t.fedLocked()
 }
 
 // feedNextLocked feeds what feedOutputLocked held back, once the screen
@@ -398,8 +416,9 @@ func (t *termConn) feedNextLocked() {
 	if len(t.next) == 0 {
 		return
 	}
-	t.feedLocked(t.next)
+	t.join = append(t.join[:0], t.next...)
 	t.next = t.next[:0]
+	t.feedOutputLocked(t.join)
 	if !t.held {
 		t.requestPaint() // a screen it finished; one begun shows once ended
 	}
@@ -679,10 +698,8 @@ func (t *termConn) key(ev input.KeyEvent, text string) {
 		err = input.EncodeKey(&buf, t.vt.Terminal(), ev, text)
 	}
 	if err == nil && len(buf) > 0 {
-		// Typing snaps the viewport back to the bottom, as every terminal
-		// does, and lets go of a turn of the wheel still owed.
+		// Typing snaps the viewport back to the bottom, as every terminal does.
 		t.vt.Terminal().ScrollViewport(gostty.ScrollViewportBottom())
-		t.owed = owedWheel{}
 	}
 	t.mu.Unlock()
 	if err == nil && len(buf) > 0 {
@@ -816,7 +833,17 @@ func (t *termConn) wheel(lines int) {
 	}
 }
 
+// send sends the user's input p to the program, ending a turn of the
+// wheel still owed.
 func (t *termConn) send(p []byte) {
+	t.mu.Lock()
+	t.owed = owedWheel{} // the user did something else: the turn is over
+	t.mu.Unlock()
+	t.write(p)
+}
+
+// write sends p to the program as it is.
+func (t *termConn) write(p []byte) {
 	if err := t.att.Input(p); err != nil {
 		t.mu.Lock()
 		if t.err == nil && !t.exited {
@@ -1045,14 +1072,32 @@ func (t *termConn) mouseReported() bool {
 
 // mouse encodes one mouse event under the program's modes and sends it,
 // reporting whether the modes produced anything.
+//
+// A move is a report like the wheel's, as many as the pointer crosses
+// cells, and keeps to the same budget (see wheelBudget): past it the
+// program, not reading, misses moves it would have had only the last of.
+// Other input lets go of a turn of the wheel still owed; a move does not,
+// the pointer drifting as the fingers scroll.
 func (t *termConn) mouse(ev input.MouseEvent, size input.RenderSize, anyPressed bool) bool {
 	t.mu.Lock()
 	buf := t.encodeMouseLocked(ev, size, anyPressed)
-	t.mu.Unlock()
-	if len(buf) == 0 {
-		return false
+	move := ev.Action == input.MouseActionMotion
+	if move && len(buf) > 0 {
+		if t.unread+len(buf) > wheelBudget {
+			buf = nil
+		} else {
+			t.unread += len(buf)
+		}
 	}
-	t.send(buf)
+	t.mu.Unlock()
+	switch {
+	case len(buf) == 0:
+		return move
+	case move:
+		t.write(buf)
+	default:
+		t.send(buf)
+	}
 	return true
 }
 
@@ -1076,10 +1121,11 @@ func (t *termConn) encodeMouseLocked(ev input.MouseEvent, size input.RenderSize,
 // Claude Code goes quiet for a moment mid-flick, loading what it scrolls
 // to, and a scroll that dropped what turned meanwhile stopped, then
 // jumped. What is owed is let go of past wheelOwed lines, after
-// wheelStale, or when the user types; turned the other way, the turn
-// starts afresh, as a program at the end of what it scrolls prints
-// nothing to show it read the last. One a wheelPatience still goes to a
-// program that stays silent.
+// wheelStale, or once the user does anything else but move the pointer
+// (see send); turned the other way, the turn starts afresh, as a program
+// at the end of what it scrolls prints nothing to show it read the last.
+// One a wheelPatience still goes to a program that stays silent. The
+// pointer's moves keep to the same budget (see mouse).
 const (
 	wheelBudget   = 512
 	wheelPatience = 250 * time.Millisecond
@@ -1102,13 +1148,13 @@ func (t *termConn) mouseWheel(ev input.MouseEvent, size input.RenderSize, n int)
 	t.mu.Lock()
 	owed := t.owed.n
 	if t.owed.ev.Button != ev.Button {
-		owed, t.wheelSent = 0, 0 // turned back: afresh
+		owed, t.unread = 0, 0 // turned back: afresh
 	}
 	t.owed = owedWheel{ev: ev, size: size, n: min(owed+n, wheelOwed), at: time.Now()}
 	buf := t.wheelLocked()
 	t.mu.Unlock()
 	if len(buf) > 0 {
-		t.send(buf) // whole, so no write of ours ends inside a report
+		t.write(buf) // whole, so no write of ours ends inside a report
 	}
 }
 
@@ -1128,14 +1174,14 @@ func (t *termConn) wheelLocked() frameBuffer {
 		*w = owedWheel{} // stale, or no longer the program's to report
 		return nil
 	}
-	k := min(w.n, (wheelBudget-t.wheelSent)/len(one))
+	k := min(w.n, (wheelBudget-t.unread)/len(one))
 	if k <= 0 {
 		if time.Since(t.wheelAt) < wheelPatience {
 			return nil
 		}
 		k = 1
 	}
-	t.wheelSent += k * len(one)
+	t.unread += k * len(one)
 	t.wheelAt = time.Now()
 	w.n -= k
 	return bytes.Repeat(one, k)

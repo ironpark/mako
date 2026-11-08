@@ -137,26 +137,35 @@ func TestSwipeMovesWhenTheFingersLift(t *testing.T) {
 	gesture := func(steps ...ggui.Point) {
 		s.settle, s.drag = ggui.Motion{}, 0
 		for i, d := range steps {
-			s.scroll(d, pick(i == 0, ggui.ScrollPhaseBegan, ggui.ScrollPhaseChanged))
+			s.scroll(d, pick(i == 0, ggui.ScrollPhaseBegan, ggui.ScrollPhaseChanged), false)
 		}
 	}
 	gesture(ggui.Pt(-1, 0.1), ggui.Pt(-6, 0), ggui.Pt(-6, 0))
 	if s.drag != -13*swipePixels || len(moves) != 0 {
 		t.Fatalf("drag %v moves %v: the list does not follow, or moved before the lift", s.drag, moves)
 	}
-	if !s.scroll(ggui.Point{}, ggui.ScrollPhaseEnded) || !slices.Equal(moves, []int{1}) {
+	if !s.scroll(ggui.Point{}, ggui.ScrollPhaseEnded, false) || !slices.Equal(moves, []int{1}) {
 		t.Fatalf("moves %v after the lift", moves)
 	}
 	if s.offset(time.Now()) <= 0 {
 		t.Fatal("the next space does not come in from the right")
 	}
-	if s.scroll(ggui.Pt(-3, 0), ggui.ScrollPhaseMomentum) {
+	if s.scroll(ggui.Pt(-3, 0), ggui.ScrollPhaseMomentum, false) {
 		t.Fatal("momentum was taken")
 	}
 
+	// A trackpad's scroll, in pixels, moves it pixel for pixel.
+	s.settle, s.drag = ggui.Motion{}, 0
+	s.scroll(ggui.Pt(-12, 0), ggui.ScrollPhaseBegan, true)
+	s.scroll(ggui.Pt(-8, 0), ggui.ScrollPhaseChanged, true)
+	if s.drag != -20 {
+		t.Fatalf("drag %v for 20 pixels", s.drag)
+	}
+	s.settle, s.drag, s.active = ggui.Motion{}, 0, false
+
 	// A short swipe goes back.
 	gesture(ggui.Pt(1, 0), ggui.Pt(1, 0))
-	s.scroll(ggui.Point{}, ggui.ScrollPhaseEnded)
+	s.scroll(ggui.Point{}, ggui.ScrollPhaseEnded, false)
 	if len(moves) != 1 {
 		t.Fatalf("a short swipe moved: %v", moves)
 	}
@@ -166,14 +175,14 @@ func TestSwipeMovesWhenTheFingersLift(t *testing.T) {
 	if s.drag != -6*swipePixels*swipeEdge {
 		t.Fatalf("past the edge drag %v", s.drag)
 	}
-	s.scroll(ggui.Point{}, ggui.ScrollPhaseEnded)
+	s.scroll(ggui.Point{}, ggui.ScrollPhaseEnded, false)
 	if len(moves) != 1 {
 		t.Fatalf("moved past the last: %v", moves)
 	}
 	// Begun down the list, it scrolls the list to its end.
 	at = 0
 	gesture(ggui.Pt(0.2, 2), ggui.Pt(-5, 0))
-	if s.active || s.scroll(ggui.Point{}, ggui.ScrollPhaseEnded) {
+	if s.active || s.scroll(ggui.Point{}, ggui.ScrollPhaseEnded, false) {
 		t.Fatal("a scroll down turned into a swipe")
 	}
 }
