@@ -131,7 +131,7 @@ func TestRunCommitsBranchesAndPushes(t *testing.T) {
 	if h, _ := Log(ctx, root, 0, ""); h.GetCurrent() != "feature" {
 		t.Fatalf("current=%+v", h)
 	}
-	if st, _ := Status(root); st.GetBranch() != "feature" || !slices.Equal(st.GetBranches(), []string{"feature", "main"}) {
+	if st, _ := Status(t.Context(), root); st.GetBranch() != "feature" || !slices.Equal(st.GetBranches(), []string{"feature", "main"}) {
 		t.Fatalf("branches=%+v", st)
 	}
 
@@ -149,7 +149,7 @@ func TestRunCommitsBranchesAndPushes(t *testing.T) {
 	if _, err := Run(ctx, &protocol.GitRun{Root: root, Op: protocol.GitOpCommit, Message: "ahead", Paths: []string{"a.txt"}}); err != nil {
 		t.Fatal(err)
 	}
-	st, err := Status(root)
+	st, err := Status(t.Context(), root)
 	if err != nil || st.GetUpstream() != "origin/feature" || st.GetAhead() != 1 || st.GetBehind() != 0 {
 		t.Fatalf("tracking=%+v %v", st, err)
 	}
@@ -159,7 +159,7 @@ func TestRunCommitsBranchesAndPushes(t *testing.T) {
 	if _, err := Run(ctx, &protocol.GitRun{Root: root, Op: protocol.GitOpFetch}); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := Status(root); st.GetAhead() != 0 {
+	if st, _ := Status(t.Context(), root); st.GetAhead() != 0 {
 		t.Fatalf("still ahead after push: %+v", st)
 	}
 }

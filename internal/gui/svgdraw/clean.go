@@ -200,7 +200,7 @@ func embeddedImage(attrs []xml.Attr, m svgMatrix) (svgEmbed, bool) {
 	y, _ := svgAttrNum(attrs, "y")
 	w, okW := svgAttrNum(attrs, "width")
 	h, okH := svgAttrNum(attrs, "height")
-	if !okW || !okH || w <= 0 || h <= 0 {
+	if !okW || !okH || w <= 0 || h <= 0 || math.IsInf(x+y+w+h, 0) || math.IsNaN(x+y+w+h) {
 		return svgEmbed{}, false
 	}
 	return svgEmbed{data: data, svg: strings.Contains(meta, "svg"), m: m, x: x, y: y, w: w, h: h}, true

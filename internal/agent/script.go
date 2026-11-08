@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -15,13 +16,16 @@ import (
 func WriteOnce(dir, name, ext, source string) (string, error) {
 	sum := sha256.Sum256([]byte(source))
 	path := filepath.Join(dir, name+"-"+hex.EncodeToString(sum[:6])+ext)
-	if _, err := os.Stat(path); err == nil {
+	// Its size checked, not only that it is there: one cut short, by a
+	// write before writes were whole, is written again. Its name holds
+	// its hash, so a file of that name and size is the one.
+	if info, err := os.Stat(path); err == nil && info.Size() == int64(len(source)) {
 		return path, nil
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
-	return path, os.WriteFile(path, []byte(source), 0o600)
+	return path, atomicfile.Write(path, []byte(source))
 }
 
 // HookScript is JavaScript, for the extensions and plugins mako writes for

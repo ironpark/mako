@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -67,6 +68,10 @@ func TestAFolderGoesUpAndComesBack(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(dst, "proj"), 0o755); err != nil { // taken
 		t.Fatal(err)
 	}
+	// A link inside to a folder above is not followed round.
+	if err := os.Symlink("../..", filepath.Join(src, "proj", "sub", "up")); err != nil && runtime.GOOS != "windows" {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	c, err := m.link.client(ctx)
@@ -79,6 +84,9 @@ func TestAFolderGoesUpAndComesBack(t *testing.T) {
 	}
 	if want := int64(len(big) + 4 + 5); tr.done.Load() != want {
 		t.Fatalf("%d bytes went up, not %d", tr.done.Load(), want)
+	}
+	if _, err := os.Lstat(filepath.Join(dst, "proj 2", "sub", "up")); err == nil {
+		t.Fatal("a link to a folder above went up")
 	}
 	got, err := download(ctx, c, "", filepath.Join(dst, "proj 2"), true, back, &transfer{})
 	if err != nil {

@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"image"
@@ -24,6 +23,7 @@ import (
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/gui/svgdraw"
+	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -100,6 +100,7 @@ type decodedImage struct {
 	File  *protocol.File
 	Img   image.Image
 	Drawn *svgdraw.Picture // an SVG's; nil for none, or one that cannot be drawn
+	Shown ggui.Size        // the size Img had as read, when it was shrunk to it
 }
 
 // drawnSVG is an SVG read as f, drawn, as it is read: off the window's
@@ -180,6 +181,37 @@ func (m *model) loadDir(node, path string, force bool) {
 	})
 }
 
+// pruneDirs lets go of the listings of folders nothing shows, as the
+// window would otherwise keep every folder it ever listed: it keeps those
+// in the project shown and those open in the Files tab, which show again
+// with their project, and every folder of a node a file browser or the
+// folder picker is open on, as either goes anywhere there. A folder let
+// go of is read again when it is opened.
+func (m *model) pruneDirs() {
+	roots := ggui.Peek(m.Roots).Roots
+	open := ggui.Peek(m.files.Open)
+	picking := ggui.Peek(m.Pick.On)
+	dirs := ggui.Peek(m.files.Dirs)
+	keep := func(key string, l dirListing) bool {
+		node, p := splitKey(key)
+		return l.Loading || open[key] || m.files.browsing[node] > 0 || picking && node == m.Pick.Node ||
+			slices.ContainsFunc(roots, func(r panelRoot) bool { return r.Node == node && pathscope.Within(p, r.Path) })
+	}
+	var next map[string]dirListing
+	for key, l := range dirs {
+		if keep(key, l) {
+			continue
+		}
+		if next == nil {
+			next = maps.Clone(dirs)
+		}
+		delete(next, key)
+	}
+	if next != nil {
+		m.files.Dirs.Set(next)
+	}
+}
+
 // refreshFiles reads the project again, every folder of it shown, and
 // every folder open in them.
 func (m *model) refreshFiles() {
@@ -197,7 +229,7 @@ func (m *model) refreshFiles() {
 func (m *model) reloadOpen(node, dir string, open map[string]bool) {
 	m.loadDir(node, dir, true)
 	for key, o := range open {
-		if n, p := splitKey(key); o && n == node && strings.HasPrefix(p, dir) {
+		if n, p := splitKey(key); o && n == node && pathscope.Within(p, dir) {
 			m.loadDir(n, p, true)
 		}
 	}
@@ -309,30 +341,38 @@ func (m *model) toggleDir(it fileItem) {
 }
 
 // fetchImage reads an image file from its node and decodes it, off the
-// window's goroutine; one too large to send comes without an image.
-func fetchImage(m *model, node, path string, done func(decodedImage, error)) {
+// window's goroutine, shrunk to fit box (none for an empty one); one too
+// large to send comes without an image.
+func fetchImage(m *model, node, path string, box ggui.Size, done func(decodedImage, error)) {
 	req := &protocol.ReadFile{NodeId: m.remoteID(node), Path: path, Image: true}
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (decodedImage, error) {
 		f, err := c.ReadFile(ctx, req)
 		if err != nil || f.GetData() == nil {
 			return decodedImage{File: f}, err
 		}
-		if isSVG(path) {
-			data := f.GetData()
-			f.Data = nil
-			return drawnSVG(f, data), nil
-		}
-		img, _, err := image.Decode(bytes.NewReader(f.GetData()))
+		data := f.GetData()
 		f.Data = nil
-		return decodedImage{File: f, Img: img}, err
+		d, err := decodeImage(data, isSVG(path))
+		d.File = f
+		return shrinkImage(d, box), err
 	}, done)
+}
+
+// decodeImage decodes an image read, or draws it for an SVG; one larger
+// than an image is shown at is refused before its pixels are made.
+func decodeImage(data []byte, svg bool) (decodedImage, error) {
+	if svg {
+		return drawnSVG(nil, data), nil
+	}
+	img, err := svgdraw.DecodeImage(data, svgdraw.ImagePixels)
+	return decodedImage{Img: img}, err
 }
 
 // openPreview reads an image into the preview under the tree; any other
 // file opens in a tab.
 func (m *model) openPreview(it fileItem) {
 	m.files.Preview.Set(filePreview{fileItem: it, Loading: true})
-	fetchImage(m, it.Node, it.Path, func(d decodedImage, err error) {
+	fetchImage(m, it.Node, it.Path, ggui.Size{}, func(d decodedImage, err error) {
 		if ggui.Peek(m.files.Preview).Key != it.Key {
 			return // another file was chosen meanwhile
 		}
@@ -387,6 +427,7 @@ func filesPanel(m *model) ggui.Widget {
 			open[dirKey(own.Node, own.Path)] = true
 			m.files.Open.Set(open)
 		}
+		m.pruneDirs()
 		for _, r := range p.Roots {
 			if !p.multi() || open[dirKey(r.Node, r.Path)] {
 				m.loadDir(r.Node, r.Path, false)

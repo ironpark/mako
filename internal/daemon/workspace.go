@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transport"
 )
@@ -77,7 +78,7 @@ func (w *workspaces) save() {
 	path := w.path
 	w.mu.Unlock()
 	if path != "" {
-		_ = writeAtomic(path, data)
+		_ = atomicfile.Write(path, data)
 	}
 }
 

@@ -1,7 +1,6 @@
 package agy
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -71,21 +70,26 @@ func workspace(path, id string) string {
 	}
 	defer f.Close()
 	want := []byte(`"` + id + `"`)
-	s := bufio.NewScanner(f)
-	s.Buffer(make([]byte, 64<<10), 4<<20)
-	for s.Scan() {
-		if !bytes.Contains(s.Bytes(), want) {
-			continue
+	// Read as the logs are, so a long prompt pasted in is passed over
+	// rather than ending the read before the prompts after it.
+	reader := agent.BorrowReader(f)
+	var long []byte
+	defer func() { agent.GiveBack(reader, long) }()
+	for {
+		line, err := agent.ReadRecord(reader, &long)
+		if bytes.Contains(line, want) {
+			var h struct {
+				Workspace      string `json:"workspace"`
+				ConversationID string `json:"conversationId"`
+			}
+			if json.Unmarshal(line, &h) == nil && h.ConversationID == id && h.Workspace != "" {
+				return h.Workspace
+			}
 		}
-		var h struct {
-			Workspace      string `json:"workspace"`
-			ConversationID string `json:"conversationId"`
-		}
-		if json.Unmarshal(s.Bytes(), &h) == nil && h.ConversationID == id && h.Workspace != "" {
-			return h.Workspace
+		if err != nil {
+			return ""
 		}
 	}
-	return ""
 }
 
 // step is a transcript's record.

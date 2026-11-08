@@ -91,7 +91,11 @@ func lastLines(s string, n int) string {
 // they have been, only a changed history comes back, and the list shows on
 // while it is asked for.
 func (m *model) loadHistory(root fileRoot) {
-	if root.Path == "" || m.git.historyReading {
+	if root.Path == "" {
+		return
+	}
+	m.git.historyWanted = root
+	if m.git.historyReading {
 		return
 	}
 	v := ggui.Peek(m.git.History)
@@ -117,6 +121,10 @@ func (m *model) loadHistory(root fileRoot) {
 				h = v.History
 			}
 			m.git.History.Set(historyView{Root: root, History: h})
+		}
+		// Another project asked for while this one was read is read now.
+		if want := m.git.historyWanted; want != root {
+			m.loadHistory(want)
 		}
 	})
 }

@@ -23,6 +23,9 @@ type filesState struct {
 	// Clip is the file or folder copied or cut for Paste, in the Files tab
 	// or a node's file browser; Path is "" for none.
 	Clip *ggui.StateValue[pathDrag]
+	// browsing counts the file browser windows open on each node, whose
+	// folders pruneDirs keeps.
+	browsing map[string]int
 }
 
 func newFilesState() *filesState {
@@ -35,5 +38,6 @@ func newFilesState() *filesState {
 		Ops:       newFileOps(),
 		Note:      ggui.State(""),
 		Clip:      ggui.State(pathDrag{}),
+		browsing:  map[string]int{},
 	}
 }

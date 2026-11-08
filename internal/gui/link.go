@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -294,18 +295,25 @@ func (m *model) poll(ctx context.Context) {
 	}
 	// Access is asked for when it changed, or on every poll while the
 	// daemon is not watched.
-	fetchAccess := m.link.accessStale.Swap(false) || !m.link.watching.Load()
+	accessStale := m.link.accessStale.Swap(false)
+	fetchAccess := accessStale || !m.link.watching.Load()
 	// The workspace too: at first, and when the daemon has a newer one.
 	var ws *protocol.Workspace
-	if m.link.syncing.Load() && (m.link.wsStale.Swap(false) || !m.link.watching.Load()) {
-		if ws, err = c.Workspace(reqCtx); err != nil {
-			ws = nil // an older daemon
+	if m.link.syncing.Load() {
+		if wsStale := m.link.wsStale.Swap(false); wsStale || !m.link.watching.Load() {
+			if ws, err = c.Workspace(reqCtx); err != nil {
+				ws = nil // an older daemon
+				askAgain(&m.link.wsStale, wsStale, err)
+			}
 		}
 	}
 	var access *protocol.AccessInfo
 	if fetchAccess {
 		if access, err = c.Access(reqCtx, &protocol.Access{}); err != nil {
 			access = nil // the mesh is off on the daemon
+			if askAgain(&m.link.accessStale, accessStale, err) {
+				fetchAccess = false // what the window shows stays meanwhile
+			}
 		}
 	}
 	self := c.Node()
@@ -376,6 +384,21 @@ func (m *model) poll(ctx context.Context) {
 			m.takeWorkspace(ws)
 		}
 	})
+}
+
+// askAgain marks stale again, as it was, for a request that failed on the
+// way rather than the daemon refusing it, as one it does not know or
+// cannot serve: it is asked again at the next poll. It reports whether
+// the request failed on the way.
+func askAgain(stale *atomic.Bool, was bool, err error) bool {
+	var refused *protocol.CodedError // the daemon's answer; see transport.Reply
+	if errors.As(err, &refused) {
+		return false
+	}
+	if was {
+		stale.Store(true)
+	}
+	return true
 }
 
 // dropConn closes the terminal attached to the tab id, reporting whether

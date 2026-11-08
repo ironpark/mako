@@ -60,7 +60,7 @@ func TestStatusCountsEachChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := Status(filepath.Join(root, "internal")) // from inside the tree
+	got, err := Status(t.Context(), filepath.Join(root, "internal")) // from inside the tree
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestStatusCountsEachChange(t *testing.T) {
 		}
 	}
 
-	if out, err := Status(t.TempDir()); err != nil || !out.GetNotRepo() {
+	if out, err := Status(t.Context(), t.TempDir()); err != nil || !out.GetNotRepo() {
 		t.Fatalf("outside a repository: %+v, %v", out, err)
 	}
 }
@@ -161,7 +161,7 @@ func TestStatusMatchesGoGit(t *testing.T) {
 	}
 	r, _ := git.PlainOpen(root)
 	wt, _ := r.Worktree()
-	fromGit, _, _, err := status(wt, root)
+	fromGit, _, _, err := status(t.Context(), wt, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestStatusCountsAFileAgainOnlyWhenItChanged(t *testing.T) {
 	root := repo(t, map[string]string{"a.txt": "one\n"})
 	counted := func() (int64, int64) {
 		t.Helper()
-		st, err := Status(root)
+		st, err := Status(t.Context(), root)
 		if err != nil || len(st.GetFiles()) != 1 {
 			t.Fatalf("status %+v, %v", st, err)
 		}
@@ -217,5 +217,25 @@ func TestStatusCountsAFileAgainOnlyWhenItChanged(t *testing.T) {
 	}
 	if a, r := counted(); a != 2 || r != 1 {
 		t.Fatalf("changed: +%d -%d, want +2 -1", a, r)
+	}
+}
+
+// A symbolic link is read as the path it holds, as git has it, and not
+// followed to a device that never ends; nor is a hunk discarded through
+// one.
+func TestALinkIsNotFollowed(t *testing.T) {
+	if _, err := os.Stat("/dev/zero"); err != nil {
+		t.Skip("no /dev/zero")
+	}
+	root := t.TempDir()
+	if err := os.Symlink("/dev/zero", filepath.Join(root, "zero")); err != nil {
+		t.Skip(err)
+	}
+	if got, ok := diskContent(root, "zero"); !ok || got != "/dev/zero" {
+		t.Errorf("read %.20q, %v", got, ok)
+	}
+	hunk := []*protocol.DiffLine{{Op: "+", New: 1, Text: "x"}}
+	if err := DiscardHunk(root, "zero", hunk); err == nil {
+		t.Error("a hunk was discarded through a link")
 	}
 }

@@ -49,6 +49,42 @@ func TestAReadAskedAgainIsAnsweredFromItsETag(t *testing.T) {
 	}
 }
 
+// A reply of no stated length, as one sent in chunks or decompressed, is
+// read whole when it is larger than is kept, and is not kept.
+func TestALargeReplyOfNoStatedLengthIsReadWhole(t *testing.T) {
+	body, unchanged := strings.Repeat("x", etagBody+4096), 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("If-None-Match") != "" {
+			unchanged++
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.Header().Set("ETag", `"big"`)
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush() // sent in chunks, with no Content-Length
+		io.WriteString(w, body)
+	}))
+	defer srv.Close()
+	client := &http.Client{Transport: newETagTransport(http.DefaultTransport, 4)}
+	for range 2 {
+		resp, err := client.Get(srv.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.ContentLength != -1 {
+			t.Fatalf("the reply stated its length, %d", resp.ContentLength)
+		}
+		got, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil || len(got) != len(body) {
+			t.Fatalf("read %d of %d bytes: %v", len(got), len(body), err)
+		}
+	}
+	if unchanged != 0 {
+		t.Fatalf("a large reply was kept: unchanged %d", unchanged)
+	}
+}
+
 // The transport keeps the latest replies, as many as it holds.
 func TestTheETagTransportKeepsTheLatest(t *testing.T) {
 	c := newETagTransport(nil, 2)

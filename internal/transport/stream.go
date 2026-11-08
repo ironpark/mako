@@ -2,7 +2,6 @@ package transport
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"time"
 
@@ -124,10 +123,9 @@ func Call[R proto.Message](s *Stream, t protocol.Type, req proto.Message) (R, er
 func Reply[R proto.Message](env *protocol.Envelope) (R, error) {
 	var zero R
 	if e := env.GetError(); e != nil {
-		if e.GetCode() != "" {
-			return zero, &protocol.CodedError{Code: e.GetCode(), Message: "remote: " + e.GetMessage()}
-		}
-		return zero, fmt.Errorf("remote: %s", e.GetMessage())
+		// A CodedError, its code "" for none, so a caller tells the
+		// daemon's answer from a request failing on the way.
+		return zero, &protocol.CodedError{Code: e.GetCode(), Message: "remote: " + e.GetMessage()}
 	}
 	return protocol.Body[R](env)
 }

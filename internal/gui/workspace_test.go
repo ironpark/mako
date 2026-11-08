@@ -2,7 +2,10 @@ package gui
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -24,6 +27,24 @@ func workspaceModel(t *testing.T) (*model, *ggui.Probe) {
 	t.Cleanup(func() { p.Close(); m.shutdown() })
 	p.Frame()
 	return m, p
+}
+
+// The workspace written down many times over is the last asked for, with
+// no file of a write left beside it.
+func TestWorkspaceWritesLandInOrder(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "workspace.json")
+	ws := newWsState()
+	for i := range 200 {
+		ws.writer.write(path, []byte(strconv.Itoa(i)))
+	}
+	ws.writer.wait()
+	if got, err := os.ReadFile(path); err != nil || string(got) != "199" {
+		t.Fatalf("the file holds %q, %v", got, err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
+		t.Fatalf("files left: %v", entries)
+	}
 }
 
 // Each space keeps its own tabs and panes: moving to one brings out its
@@ -156,7 +177,7 @@ func TestContextsAndOldSpacesCarryOver(t *testing.T) {
 	p.Frame()
 	m.selectSession("b1")
 	m.writeWorkspace()
-	m.ws.writes.Wait() // all queued writes have reached disk
+	m.ws.writer.wait() // all queued writes have reached disk
 
 	restart := func(prep func(*model)) *model {
 		again := newModel(config.Default(), "")

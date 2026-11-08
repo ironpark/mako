@@ -126,6 +126,59 @@ func TestTrustRunsOneWay(t *testing.T) {
 	}
 }
 
+// A peer let out is out at once, though it never answers the introduction
+// that would tell it, and the link to it is hung up.
+func TestALetOutPeerNeedNotAnswer(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	server, laptop := newHost(t), newHost(t)
+	echo(server)
+	letIn(t, server, laptop)
+	if err := roundTrip(ctx, laptop, server, server.Addrs()); err != nil {
+		t.Fatal(err)
+	}
+	laptop.h.RemoveStreamHandler(trustProtocol)
+	if _, err := server.Keys().Remove(ssh.FingerprintSHA256(laptop.Key())); err != nil {
+		t.Fatal(err)
+	}
+	server.Reconsider()
+	if server.trust.trusts(laptop.ID()) {
+		t.Fatal("the laptop is still let in")
+	}
+	waitFor(t, "the server to hang up", func() bool {
+		return server.h.Network().Connectedness(laptop.ID()) != network.Connected
+	})
+}
+
+// The streams a peer opened while it was let in are cut as it is let out.
+func TestALetOutPeersStreamsAreCut(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	server, laptop := newHost(t), newHost(t)
+	echo(server)
+	letIn(t, server, laptop)
+	s, err := laptop.Open(ctx, server.ID().String(), server.Addrs())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	buf := make([]byte, 4)
+	if _, err := s.Write([]byte("ping")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.ReadFull(s, buf); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := server.Keys().Remove(ssh.FingerprintSHA256(laptop.Key())); err != nil {
+		t.Fatal(err)
+	}
+	server.Reconsider()
+	_ = s.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if _, err := s.Read(buf); !errors.Is(err, network.ErrReset) {
+		t.Fatalf("the laptop's stream read %v, want it reset", err)
+	}
+}
+
 // A host vouched for by an SSH key is let in where the key is, and by the
 // hosts the same key vouches for.
 func TestAnOwnersKeyVouchesForItsHosts(t *testing.T) {
@@ -361,5 +414,43 @@ func TestPairingLink(t *testing.T) {
 		if _, err := ParsePairing(bad); err == nil {
 			t.Errorf("%q read as a pairing code", bad)
 		}
+	}
+}
+
+// An introduction that ends after its link went leaves nothing behind, and
+// on the next link a later introduction clears an earlier failure.
+func TestATrustStateGoesWithItsLink(t *testing.T) {
+	tr := newHost(t).trust
+	p := newHost(t).ID()
+
+	tr.mu.Lock()
+	old := tr.state(p)
+	tr.mu.Unlock()
+	tr.forget(p)
+	select {
+	case <-old.done:
+	default:
+		t.Fatal("an introduction of a link gone still pending")
+	}
+	tr.settle(p, old, errors.New("stream reset"))
+	tr.settle(p, old, nil)
+	tr.mu.Lock()
+	left := tr.peers[p] != nil
+	tr.mu.Unlock()
+	if left {
+		t.Fatal("an introduction of a link gone left a state behind")
+	}
+
+	tr.mu.Lock()
+	st := tr.state(p)
+	st.peer = Peer{ID: p, Trusts: true}
+	tr.mu.Unlock()
+	tr.settle(p, st, errors.New("timed out"))
+	if tr.trusts(p) {
+		t.Fatal("trusted after a failed introduction")
+	}
+	tr.settle(p, st, nil)
+	if !tr.trusts(p) {
+		t.Fatal("a later introduction did not clear the failure")
 	}
 }

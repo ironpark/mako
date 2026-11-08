@@ -17,6 +17,7 @@ import (
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
@@ -129,28 +130,7 @@ func (d *Daemon) saveSessionsLocked() error {
 	if err != nil {
 		return err
 	}
-	return writeAtomic(d.sessionPath, data)
-}
-
-// writeAtomic replaces the file at path with data, so a crash leaves the
-// old file or the new, never half of one.
-func writeAtomic(path string, data []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	defer tmp.Close()
-	if _, err := tmp.Write(data); err != nil {
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
+	return atomicfile.Write(d.sessionPath, data)
 }
 
 func (d *Daemon) listSessions() []*protocol.SessionInfo {
@@ -323,20 +303,16 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 		return nil, err
 	}
 
-	d.sessionMu.Lock()
-	defer d.sessionMu.Unlock()
-	if s, ok := d.sessions.get(id); ok {
-		return s, nil
+	// The session's MCP servers are resolved, and its agent probed for
+	// live replies, without the session lock, which every other start and
+	// every listing waits on: they can take most of a minute. Only one
+	// start of a session does so at a time, as a second would take the
+	// first's agent peer from it; a later one waits, and gets the session
+	// the first started.
+	if s, err := d.claimStart(ctx, id); s != nil || err != nil {
+		return s, err
 	}
-	previous, ok := d.saved[id]
-	if ok != existed {
-		return nil, fmt.Errorf("session %q changed while it was starting", id)
-	}
-	// A conversation recovered for an older saved session is only its own
-	// while no other session took it in the meantime.
-	if existed && previous.Info.GetConversationId() == "" && d.claimedLocked(id)[conversationID] {
-		return nil, fmt.Errorf("conversation %s already belongs to another session", conversationID)
-	}
+	defer d.endStart(id)
 	if launch.Shown == nil {
 		launch.Shown = slices.Clone(launch.Command)
 	}
@@ -348,6 +324,20 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 	d.withLive(ctx, &launch.Launch, req.GetAgent(), id)
 	if d.clipTools != "" {
 		launch.SetEnv("PATH", d.clipTools+string(os.PathListSeparator)+cmp.Or(launch.Env["PATH"], os.Getenv("PATH")))
+	}
+
+	d.sessionMu.Lock()
+	defer d.sessionMu.Unlock()
+	previous, ok := d.saved[id]
+	if ok != existed {
+		cleanup()
+		return nil, fmt.Errorf("session %q changed while it was starting", id)
+	}
+	// A conversation recovered for an older saved session is only its own
+	// while no other session took it in the meantime.
+	if existed && previous.Info.GetConversationId() == "" && d.claimedLocked(id)[conversationID] {
+		cleanup()
+		return nil, fmt.Errorf("conversation %s already belongs to another session", conversationID)
 	}
 	s, err := session.Start(session.Spec{ID: id, NodeID: d.cfg.NodeID, Agent: req.GetAgent(), Profile: req.GetProfile(),
 		Project: req.GetProject(), Command: launch.Command, Shown: launch.Shown, Env: launch.Env, Cols: uint16(req.GetCols()), Rows: uint16(req.GetRows()), Worktree: req.GetWorktree(), OnChange: d.pokeStatus})
@@ -388,6 +378,43 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 	d.log.Info("session started", "id", id, "agent", req.GetAgent(), "project", req.GetProject())
 	go func() { <-s.Done(); cleanup(); d.releaseSession(id) }()
 	return s, nil
+}
+
+// claimStart makes this the one start of session id under way, waiting
+// out another's first. It returns the session another start started, nil
+// when this one is to start it.
+func (d *Daemon) claimStart(ctx context.Context, id string) (*session.Session, error) {
+	for {
+		d.sessionMu.Lock()
+		if s, ok := d.sessions.get(id); ok {
+			d.sessionMu.Unlock()
+			return s, nil
+		}
+		other, busy := d.starting[id]
+		if !busy {
+			if d.starting == nil {
+				d.starting = map[string]chan struct{}{}
+			}
+			d.starting[id] = make(chan struct{})
+			d.sessionMu.Unlock()
+			return nil, nil
+		}
+		d.sessionMu.Unlock()
+		select {
+		case <-other:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
+// endStart ends the start claimStart claimed, letting the next go on.
+// The caller must not hold sessionMu.
+func (d *Daemon) endStart(id string) {
+	d.sessionMu.Lock()
+	close(d.starting[id])
+	delete(d.starting, id)
+	d.sessionMu.Unlock()
 }
 
 // conversationFor binds a native agent's command to the conversation the

@@ -125,9 +125,10 @@ type forgeState struct {
 	PRTitle, PRBody, PRBase *ggui.StateValue[string]
 	PRDraft                 *ggui.StateValue[bool]
 
-	// UI goroutine only: the state each watched commit's runs were last
-	// seen in, by project and commit, and when the branch was last read.
-	seen          map[string]string
+	// UI goroutine only: the newest commit of each project whose runs were
+	// seen, and the state they were last seen in, and when the branch was
+	// last read.
+	seen          map[fileRoot]seenRuns
 	branchRead    time.Time
 	listing       bool // a list is being read
 	branchReading bool // and the branch
@@ -148,7 +149,7 @@ func newForgeState() forgeState {
 		PRBody:  ggui.State(""),
 		PRBase:  ggui.State(""),
 		PRDraft: ggui.State(false),
-		seen:    map[string]string{},
+		seen:    map[fileRoot]seenRuns{},
 	}
 }
 
@@ -362,7 +363,10 @@ func (m *model) loadForgeBranch(root fileRoot) {
 		return r, cmp.Or(prErr, err)
 	}, func(r read, err error) {
 		m.Forge.branchReading = false
-		if ggui.Untrack(m.repoFolder) != root {
+		if now := ggui.Untrack(m.repoFolder); now != root {
+			// Another project was picked while this one was read, and
+			// its read was refused for this one's under way.
+			m.loadForgeBranch(now)
 			return
 		}
 		b := forgeBranch{Root: root, Forge: cmp.Or(r.runs.GetForge(), r.pr.GetForge())}
@@ -396,9 +400,13 @@ func (m *model) noteRuns(b forgeBranch) {
 		return
 	}
 	run := b.Runs[0]
-	key := b.Root.Node + "\x00" + b.Root.Path + "\x00" + run.GetHeadOid()
-	state, was := runsState(b.Runs), m.Forge.seen[key]
-	m.Forge.seen[key] = state
+	state, was := runsState(b.Runs), ""
+	if seen := m.Forge.seen[b.Root]; seen.Commit == run.GetHeadOid() {
+		was = seen.State
+	}
+	// Only the newest commit is kept: the runs of one before it are not
+	// read again.
+	m.Forge.seen[b.Root] = seenRuns{run.GetHeadOid(), state}
 	if was != "pending" || state == "pending" || !ggui.Peek(m.Prefs).Notify {
 		return
 	}
@@ -412,6 +420,9 @@ func (m *model) noteRuns(b forgeBranch) {
 	}
 	go notify.Post(title, projectName(b.Root.Path)+" · "+strings.Join(names, ", "), forgeTarget(b.Root, run.GetNumber()))
 }
+
+// seenRuns is the state a commit's runs were last seen in.
+type seenRuns struct{ Commit, State string }
 
 // forgeTarget names a run, for reveal to open when its notification is
 // clicked.

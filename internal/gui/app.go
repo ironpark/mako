@@ -73,8 +73,10 @@ func setup(m *model) {
 	})
 	last := ggui.Peek(m.Prefs)
 	ggui.Watch(m.Prefs, func(p prefs) {
-		if err := savePrefs(p); err != nil {
+		if path, body, err := prefsFile(p); err != nil {
 			log.Printf("mako: save settings: %v", err)
+		} else {
+			m.prefsWriter.write(path, body)
 		}
 		prev := last
 		last = p

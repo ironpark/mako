@@ -17,7 +17,6 @@ import (
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/i18n"
-	"github.com/ironpark/mako/internal/gui/mdview"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -93,11 +92,12 @@ type model struct {
 	Nodes *ggui.StateValue[[]*protocol.Node]
 	// Access is who the daemon lets in and the requests waiting; nil while
 	// unknown, or with the mesh off.
-	Access     *ggui.StateValue[*protocol.AccessInfo]
-	AccessNote *ggui.StateValue[string] // the last access change's outcome
-	AccessKey  *ggui.StateValue[string] // a key being let in, as typed
-	asked      map[string]ui.ToastID    // requests told of, by their toasts; UI goroutine only
-	ws         *wsState                 // how the workspace is kept and written down; see wsstate.go
+	Access      *ggui.StateValue[*protocol.AccessInfo]
+	AccessNote  *ggui.StateValue[string] // the last access change's outcome
+	AccessKey   *ggui.StateValue[string] // a key being let in, as typed
+	asked       map[string]ui.ToastID    // requests told of, by their toasts; UI goroutine only
+	ws          *wsState                 // how the workspace is kept and written down; see wsstate.go
+	prefsWriter *fileWriter              // writes gui.json
 	// tabNodes are the nodes of session tabs, and missing when each tab's
 	// session went missing from the list; see leftover.go.
 	tabNodes map[string]string
@@ -129,8 +129,9 @@ type model struct {
 	window    *ggui.Window                      // nil under a probe
 	ChatModes *ggui.StateValue[map[string]bool] // true shows chat; terminal stays attached
 	chats     map[string]*chatState
-	// chatImages are the images Chat shows, read once, by node and path.
-	chatImages map[string]*ggui.StateValue[mdview.Image]
+	// chatImages are the images Chat and pages show, read once, by node
+	// and path or by address, the latest used of them; see imageCache.
+	chatImages *imageCache
 	usages     map[string]*usageState // for the usage overlay
 
 	files *filesState // the Files tab's; see filesstate.go
@@ -225,6 +226,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		ext:         newExtState(cfg),
 		files:       newFilesState(),
 		ws:          newWsState(),
+		prefsWriter: &fileWriter{what: "settings"},
 		hl:          newHighlighter(),
 		DaemonState: ggui.State(daemonState{}),
 		DaemonLog:   ggui.State([]string(nil)).WithEqual(slices.Equal),
@@ -254,7 +256,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Minute:      ggui.State(time.Now().Truncate(time.Minute)),
 		ChatModes:   ggui.State(map[string]bool{}).WithEqual(maps.Equal),
 		chats:       map[string]*chatState{},
-		chatImages:  map[string]*ggui.StateValue[mdview.Image]{},
+		chatImages:  newImageCache(),
 		usages:      map[string]*usageState{},
 		git:         newGitState(),
 		RepoPick:    ggui.State(repoPick{}),
@@ -374,13 +376,30 @@ func (m *model) selectSession(id string) {
 	m.showTab(id)
 }
 
-// attachVisible resumes only the active tab of each visible pane.
+// attachVisible resumes only the active tab of each visible pane. A
+// terminal whose stream failed is dialed again too, while its session has
+// not exited: a poll that loses the daemon closes the client, and with it
+// every stream, and those tabs would otherwise stay disconnected until
+// each is clicked.
 func (m *model) attachVisible() {
 	for _, group := range ggui.Peek(m.Layout).groups() {
-		if group.Active != "" && m.conns[group.Active] == nil {
-			m.attach(group.Active)
+		id := group.Active
+		if id == "" {
+			continue
+		}
+		if conn := m.conns[id]; conn == nil {
+			m.attach(id)
+		} else if conn.failed() && m.sessionLive(id) {
+			m.attach(id)
 		}
 	}
+}
+
+// sessionLive reports whether the session of tab id is known and has not
+// exited.
+func (m *model) sessionLive(id string) bool {
+	s, ok := m.session(id)
+	return ok && s.GetState() != protocol.StateExited
 }
 
 // attach dials a session's terminal on a worker.
@@ -389,14 +408,10 @@ func (m *model) attach(id string) {
 		return
 	}
 	if conn := m.conns[id]; conn != nil {
-		conn.mu.Lock()
-		failed := conn.err != nil || conn.closed
-		conn.mu.Unlock()
-		if !failed {
+		if !conn.failed() {
 			return
 		}
-		conn.close()
-		delete(m.conns, id)
+		m.dropConn(id)
 		m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(tab string) bool { return tab == id }))
 	}
 	info, ok := m.session(id)
@@ -448,14 +463,48 @@ func (m *model) closeTab(id string) {
 		root.remove(id)
 		return 0
 	})
-	if conn := m.conns[id]; conn != nil {
-		conn.close()
-		delete(m.conns, id)
+	m.forgetTab(id)
+}
+
+// forgetTab lets go of what the window holds for a tab no layout has: its
+// terminal, with the stream and goroutine reading it, its chat and usage,
+// and its view.
+func (m *model) forgetTab(id string) {
+	m.forgetTabs(func(t string) bool { return t == id })
+}
+
+// forgetClosedTabs forgets every tab that is in no layout, shown or not.
+// A tab leaves a space not shown, or with a layout another node gave,
+// without closeTab, which closes only the tabs shown.
+func (m *model) forgetClosedTabs() {
+	open := map[string]bool{}
+	for _, id := range m.allTabs() {
+		open[id] = true
 	}
-	delete(m.chats, id)
-	delete(m.usages, id)
-	m.ChatModes.Update(func(v map[string]bool) map[string]bool { v = maps.Clone(v); delete(v, id); return v })
-	m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(s string) bool { return s == id }))
+	m.forgetTabs(func(id string) bool { return !open[id] })
+}
+
+// forgetTabs forgets the tabs gone says are, setting the window's state
+// once for them all.
+func (m *model) forgetTabs(gone func(id string) bool) {
+	for id := range m.conns {
+		if gone(id) {
+			m.dropConn(id)
+		}
+	}
+	maps.DeleteFunc(m.chats, func(id string, _ *chatState) bool { return gone(id) })
+	maps.DeleteFunc(m.usages, func(id string, _ *usageState) bool { return gone(id) })
+	for id := range ggui.Peek(m.ChatModes) {
+		if gone(id) {
+			modes := maps.Clone(ggui.Peek(m.ChatModes))
+			maps.DeleteFunc(modes, func(id string, _ bool) bool { return gone(id) })
+			m.ChatModes.Set(modes)
+			break
+		}
+	}
+	if attached := ggui.Peek(m.Attached); slices.ContainsFunc(attached, gone) {
+		m.Attached.Set(slices.DeleteFunc(slices.Clone(attached), gone))
+	}
 }
 
 // openNew shows the new-session dialog, prefilled for a node and project.
@@ -578,7 +627,8 @@ func (m *model) shutdown() {
 	if m.ws.timer != nil {
 		m.ws.timer.Stop()
 	}
-	m.ws.writes.Wait()
+	m.ws.writer.wait()
+	m.prefsWriter.wait()
 	defer m.embedded.stop()
 	defer m.hl.close()
 	defer m.closeTunnels()

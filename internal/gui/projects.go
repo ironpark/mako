@@ -541,6 +541,7 @@ func (m *model) rekeyContexts(moved map[string]string) {
 			}
 		}
 	}
+	m.forgetClosedTabs() // the tabs of panes given way
 }
 
 // joinClones adds the new clones of the projects' repositories to their

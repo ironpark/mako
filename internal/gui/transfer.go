@@ -131,6 +131,14 @@ func uploadOne(ctx context.Context, c *client.Client, node, dir, p string, taken
 	}
 	inside := map[string]bool{}
 	for _, e := range entries {
+		// A folder dropped is followed through a link, but a link to a
+		// folder inside it is not: one naming a folder above it would
+		// have the copy go round for ever.
+		if e.Type()&os.ModeSymlink != 0 {
+			if info, err := os.Stat(filepath.Join(p, e.Name())); err == nil && info.IsDir() {
+				continue
+			}
+		}
 		err := uploadOne(ctx, c, node, to, filepath.Join(p, e.Name()), inside, t)
 		if errors.Is(err, fs.ErrNotExist) && e.Type()&os.ModeSymlink != 0 {
 			continue // a link to nothing

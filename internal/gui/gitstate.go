@@ -37,8 +37,10 @@ type gitState struct {
 	// The History tab: the commits, and the one chosen.
 	History *ggui.StateValue[historyView]
 	Commit  *ggui.StateValue[commitView]
-	// Set while the history and the changes are asked for.
+	// Set while the history and the changes are asked for, and the
+	// project whose history was last asked for.
 	historyReading bool
+	historyWanted  fileRoot
 	changesReading bool
 }
 

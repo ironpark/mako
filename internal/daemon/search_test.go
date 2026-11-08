@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 )
 
 func searchTree(t *testing.T, git bool) string {
@@ -113,5 +114,28 @@ func TestGrepOutputReadsRipgrepAndGitGrep(t *testing.T) {
 		if m := res.GetMatches(); len(m) != 1 || m[0].GetPath() != "main.go" || m[0].GetLine() != 3 || m[0].GetCol() != 6 || m[0].GetText() != "a: b" {
 			t.Fatalf("%s: %+v", name, m)
 		}
+	}
+}
+
+// A line longer than the scanner takes ends the search with what came
+// before it, rather than leaving the program blocked on what is unread.
+func TestASearchEndsAtALineTooLong(t *testing.T) {
+	cmd := exec.Command("sh", "-c", `printf 'a.go|1|1|found\n' | tr '|' '\0'; head -c 3000000 /dev/zero | tr '\0' a`)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		out, err := grepOutput(cmd)
+		if err != nil {
+			t.Error(err)
+		}
+		if len(out.GetMatches()) != 1 || !out.GetTruncated() {
+			t.Errorf("result: %v", out)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatal("the search waits on its program")
 	}
 }

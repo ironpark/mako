@@ -80,6 +80,12 @@ func start() error {
 	case <-d.Ready():
 	case err := <-failed:
 		cancel()
+		// halt, which closes the log, is not called for a node that never
+		// ran.
+		if logFile != nil {
+			logFile.Close()
+			logFile = nil
+		}
 		if err == nil {
 			err = errors.New("the node stopped as it started")
 		}

@@ -69,11 +69,46 @@ func download(ctx context.Context, rawURL, dst, kind string) error {
 	return fmt.Errorf("unknown file type %q", kind)
 }
 
+// writeFile writes the file at dst, making its directory.
 func writeFile(dst string, r io.Reader, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	root, err := openRoot(filepath.Dir(dst))
+	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	defer root.Close()
+	return writeIn(root, filepath.Base(dst), r, mode)
+}
+
+// local is an archive entry's name as a path inside the archive, "." for
+// its top, refusing one that would land outside it.
+func local(name string) (string, error) {
+	name = filepath.FromSlash(strings.TrimPrefix(name, "./"))
+	if name == "" || name == "." {
+		return ".", nil
+	}
+	if !filepath.IsLocal(name) {
+		return "", fmt.Errorf("%q is outside the archive", name)
+	}
+	return name, nil
+}
+
+// openRoot makes dir if it is missing and opens it as the root an archive
+// unpacks into. Every path is resolved within it, links and all, so an
+// entry reached through a link the archive made earlier cannot land
+// outside dir, as a check of the names alone lets it.
+func openRoot(dir string) (*os.Root, error) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	return os.OpenRoot(dir)
+}
+
+// writeIn writes a file at name within root, making its directory.
+func writeIn(root *os.Root, name string, r io.Reader, mode os.FileMode) error {
+	if err := root.MkdirAll(filepath.Dir(name), 0o755); err != nil {
+		return err
+	}
+	f, err := root.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}
@@ -84,22 +119,14 @@ func writeFile(dst string, r io.Reader, mode os.FileMode) error {
 	return err
 }
 
-// inside joins an archive entry's name to dir, refusing one that would
-// land outside it.
-func inside(dir, name string) (string, error) {
-	name = filepath.FromSlash(strings.TrimPrefix(name, "./"))
-	if name == "" || name == "." {
-		return dir, nil
-	}
-	if !filepath.IsLocal(name) {
-		return "", fmt.Errorf("%q is outside the archive", name)
-	}
-	return filepath.Join(dir, name), nil
-}
-
 // untar unpacks files, directories and links that stay inside dir,
 // keeping files' permissions, so a binary stays executable.
 func untar(r io.Reader, dir string) error {
+	root, err := openRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
 	tr := tar.NewReader(r)
 	for {
 		h, err := tr.Next()
@@ -109,23 +136,23 @@ func untar(r io.Reader, dir string) error {
 		if err != nil {
 			return err
 		}
-		path, err := inside(dir, h.Name)
+		name, err := local(h.Name)
 		if err != nil {
 			return err
 		}
 		switch h.Typeflag {
 		case tar.TypeDir:
-			err = os.MkdirAll(path, 0o755)
+			err = root.MkdirAll(name, 0o755)
 		case tar.TypeReg:
-			err = writeFile(path, tr, os.FileMode(h.Mode).Perm()|0o600)
+			err = writeIn(root, name, tr, os.FileMode(h.Mode).Perm()|0o600)
 		case tar.TypeSymlink:
-			target := filepath.Join(filepath.Dir(path), filepath.FromSlash(h.Linkname))
-			if rel, rerr := filepath.Rel(dir, target); rerr != nil || !filepath.IsLocal(rel) {
+			link := filepath.FromSlash(h.Linkname)
+			if filepath.IsAbs(link) || !filepath.IsLocal(filepath.Join(filepath.Dir(name), link)) {
 				continue // a link out of the archive is left out
 			}
-			_ = os.MkdirAll(filepath.Dir(path), 0o755)
-			_ = os.Remove(path)
-			err = os.Symlink(h.Linkname, path)
+			_ = root.MkdirAll(filepath.Dir(name), 0o755)
+			_ = root.Remove(name)
+			err = root.Symlink(h.Linkname, name)
 		}
 		if err != nil {
 			return err
@@ -138,13 +165,18 @@ func unzip(f io.ReaderAt, size int64, dir string) error {
 	if err != nil {
 		return err
 	}
+	root, err := openRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
 	for _, zf := range zr.File {
-		path, err := inside(dir, zf.Name)
+		name, err := local(zf.Name)
 		if err != nil {
 			return err
 		}
 		if zf.FileInfo().IsDir() {
-			if err := os.MkdirAll(path, 0o755); err != nil {
+			if err := root.MkdirAll(name, 0o755); err != nil {
 				return err
 			}
 			continue
@@ -156,7 +188,7 @@ func unzip(f io.ReaderAt, size int64, dir string) error {
 		if err != nil {
 			return err
 		}
-		err = writeFile(path, rc, zf.Mode().Perm()|0o600)
+		err = writeIn(root, name, rc, zf.Mode().Perm()|0o600)
 		rc.Close()
 		if err != nil {
 			return err

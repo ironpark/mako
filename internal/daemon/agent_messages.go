@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -130,7 +131,7 @@ func (m *agentMessages) saveLocked(next messageFile) error {
 		if err != nil {
 			return err
 		}
-		if err := writeAtomic(m.path, data); err != nil {
+		if err := atomicfile.Write(m.path, data); err != nil {
 			return err
 		}
 	}

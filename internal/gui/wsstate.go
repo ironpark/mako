@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"sync"
 	"time"
 )
 
@@ -23,9 +22,9 @@ type wsState struct {
 	node    string
 	last    []byte
 	timer   *time.Timer
-	writes  sync.WaitGroup // workspace writes still reaching disk
+	writer  fileWriter // writes workspace.json
 }
 
 func newWsState() *wsState {
-	return &wsState{layouts: map[string]*layoutNode{}, contexts: map[string]string{}}
+	return &wsState{layouts: map[string]*layoutNode{}, contexts: map[string]string{}, writer: fileWriter{what: "workspace"}}
 }

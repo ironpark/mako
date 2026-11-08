@@ -5,13 +5,16 @@ import (
 	"context"
 	"image"
 	pngenc "image/png"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/ironpark/ggui"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // The Files tab lists the session's project through its daemon, reads a
@@ -150,6 +153,29 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 	p.Frame()
 	if !ggui.Peek(m.NewOpen) || ggui.Peek(m.Form).Project != filepath.Join(project, "src") {
 		t.Fatalf("dialog open %v on %q", ggui.Peek(m.NewOpen), ggui.Peek(m.Form).Project)
+	}
+}
+
+// The listings of folders nothing shows are let go of; those of the
+// project shown, of folders open, and of a node browsed are kept.
+func TestPruneDirsKeepsWhatShows(t *testing.T) {
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", NodeId: "n", Project: "/p"}})
+	m.dialing["s"] = true // no daemon to attach through
+	m.showTab("s")
+	m.files.Open.Set(map[string]bool{dirKey("n", "/open"): true})
+	m.files.browsing["b"] = 1
+	dirs := map[string]dirListing{}
+	for _, key := range []string{dirKey("n", "/p"), dirKey("n", "/p/sub"), dirKey("n", "/pq"), dirKey("n", "/q"), dirKey("n", "/open"), dirKey("b", "/anywhere")} {
+		dirs[key] = dirListing{}
+	}
+	dirs[dirKey("n", "/reading")] = dirListing{Loading: true}
+	m.files.Dirs.Set(dirs)
+	m.pruneDirs()
+	got := slices.Sorted(maps.Keys(ggui.Peek(m.files.Dirs)))
+	want := slices.Sorted(slices.Values([]string{dirKey("n", "/p"), dirKey("n", "/p/sub"), dirKey("n", "/open"), dirKey("b", "/anywhere"), dirKey("n", "/reading")}))
+	if !slices.Equal(got, want) {
+		t.Fatalf("kept %q, want %q", got, want)
 	}
 }
 

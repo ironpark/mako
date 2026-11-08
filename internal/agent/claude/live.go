@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/atomicfile"
 )
 
 // mod is mako-live, the mod that streams a reply to mako as Claude Code
@@ -37,11 +38,7 @@ func (*Agent) LiveMod(dir string) (string, error) {
 		if old, err := os.ReadFile(to); err == nil && string(old) == string(data) {
 			return nil // as written: a session loading it reads it whole
 		}
-		tmp := to + ".tmp"
-		if err := os.WriteFile(tmp, data, 0o600); err != nil {
-			return err
-		}
-		return os.Rename(tmp, to)
+		return atomicfile.Write(to, data)
 	})
 	return folder, err
 }

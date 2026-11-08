@@ -153,7 +153,25 @@ type devListener struct {
 	claimID string
 	ln      net.Listener
 	conns   chan net.Conn
-	done    chan struct{} // closed once it no longer listens
+	done    chan struct{} // closed, under mu, once it no longer listens
+	mu      sync.Mutex    // orders queueing in conns with closing done
+}
+
+// queue has c wait for the borrower to take it, or closes it when more
+// wait than the borrower takes, or the port is no longer listened on.
+func (l *devListener) queue(c net.Conn) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	select {
+	case <-l.done: // asked first: a select picks among those ready at random
+	default:
+		select {
+		case l.conns <- c:
+			return
+		default:
+		}
+	}
+	c.Close()
 }
 
 func (c *claims) listen(l *devListener) {
@@ -170,7 +188,19 @@ func (c *claims) unlisten(l *devListener) {
 	delete(c.listeners, l.ln.Addr().String())
 	c.mu.Unlock()
 	l.ln.Close()
+	// What waits for a borrower who will not take it now is closed, and
+	// what comes after, queue closes.
+	l.mu.Lock()
 	close(l.done)
+	l.mu.Unlock()
+	for {
+		select {
+		case conn := <-l.conns:
+			conn.Close()
+		default:
+			return
+		}
+	}
 }
 
 // listener is the port listened on at addr for claim claimID.
@@ -413,11 +443,7 @@ func (d *Daemon) handleDeviceListen(ctx context.Context, stream *transport.Strea
 			if err != nil {
 				return
 			}
-			select {
-			case l.conns <- c:
-			default:
-				c.Close() // more waiting than the borrower takes
-			}
+			l.queue(c)
 		}
 	}()
 	if err := stream.Send(protocol.TypeTunneled, env.GetId(), &protocol.Tunneled{Addr: ln.Addr().String()}); err != nil {
@@ -450,11 +476,7 @@ func (d *Daemon) handleDeviceAccept(ctx context.Context, stream *transport.Strea
 		return ctx.Err()
 	}
 	if err := stream.Send(protocol.TypeTunneled, env.GetId(), &protocol.Tunneled{Addr: c.RemoteAddr().String()}); err != nil {
-		select { // the borrower went; the next to wait takes it
-		case l.conns <- c:
-		default:
-			c.Close()
-		}
+		l.queue(c) // the borrower went; the next to wait takes it
 		return err
 	}
 	if err := transport.Splice(ctx, stream, c); err != nil && !isClosed(err) {

@@ -4,6 +4,8 @@ package session
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -35,6 +37,36 @@ func TestClosingEndsWhatTheAgentStarted(t *testing.T) {
 	}
 	if swept("other", os.Getpid()) != nil {
 		t.Fatal("another session's processes found")
+	}
+}
+
+// An agent that exits leaving a process holding its terminal, one the
+// sweep cannot find, still ends: it is waited for as it exits, what it
+// printed last is read, and Done closes without the session being closed.
+// macOS revokes the terminal as its leader exits, so there only Linux's
+// case is not.
+func TestAnAgentEndsThoughItLeftTheTerminalHeld(t *testing.T) {
+	ready := filepath.Join(t.TempDir(), "ready")
+	script := `(trap '' HUP; unset MAKO_SCOPE
+if command -v setsid >/dev/null; then exec setsid sh -c "touch '` + ready + `'; exec sleep 8"; fi
+touch '` + ready + `'; exec sleep 8) &
+while [ ! -e '` + ready + `' ]; do sleep 0.05; done; printf bye; exit 3`
+	s, err := Start(Spec{ID: "held", Command: []string{"sh", "-c", script}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	select {
+	case <-s.Done():
+	case <-time.After(4 * time.Second):
+		t.Fatal("the session did not end")
+	}
+	info := s.Info()
+	if info.GetExitCode() != 3 {
+		t.Errorf("exit code = %d, want 3", info.GetExitCode())
+	}
+	if snap, _ := s.Snapshot(false); !strings.Contains(snap.GetText(), "bye") {
+		t.Errorf("screen = %q, want what the agent printed", snap.GetText())
 	}
 }
 

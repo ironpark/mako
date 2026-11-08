@@ -61,7 +61,7 @@ func (h pageHost) Image(dest string) *ggui.StateValue[mdview.Image] {
 		if !ok {
 			img = ggui.State(mdview.Image{Loading: true})
 			doc.images[where] = img
-			fetchImage(h.m, h.doc.Node, where, func(d decodedImage, err error) { img.Set(asMDImage(d, err)) })
+			fetchImage(h.m, h.doc.Node, where, ggui.Sz(pageImageMax, pageImageMax), func(d decodedImage, err error) { img.Set(asMDImage(d, err)) })
 		}
 		return img
 	}

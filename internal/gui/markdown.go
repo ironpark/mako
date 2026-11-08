@@ -1,10 +1,8 @@
 package gui
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"image"
 	"io"
 	"net/http"
 	"path"
@@ -59,22 +57,26 @@ func asMDImage(d decodedImage, err error) mdview.Image {
 	if err != nil {
 		d.Img = nil // an SVG drawn shows all the same
 	}
-	return mdview.ImageOf(d.Img, d.Drawn)
+	v := mdview.ImageOf(d.Img, d.Drawn)
+	if d.Shown.W > 0 && v.Img != nil && d.Img != nil {
+		v.Size = d.Shown // shown at the size it was read at
+	}
+	return v
 }
+
+// pageImageMax is the most pixels on its long side an image of a page is
+// kept with: more than a page's width shows, at twice the pixels.
+const pageImageMax = 2048
 
 // webImage is the image at the web address url, read once for the window.
 func (m *model) webImage(url string) *ggui.StateValue[mdview.Image] {
-	key := "web\x00" + url
-	if img, ok := m.chatImages[key]; ok {
-		return img
-	}
-	img := ggui.State(mdview.Image{Loading: true})
-	m.chatImages[key] = img
-	go func() {
-		d, err := readWebImage(url)
-		m.post(func() { img.Set(asMDImage(d, err)) })
-	}()
-	return img
+	return m.cachedImage("web\x00"+url, func(done func(decodedImage, error)) {
+		go func() {
+			d, err := readWebImage(url)
+			d = shrinkImage(d, ggui.Sz(pageImageMax, pageImageMax))
+			m.post(func() { done(d, err) })
+		}()
+	})
 }
 
 // readWebImage reads and decodes the image at url, drawing an SVG.
@@ -101,9 +103,5 @@ func readWebImage(url string) (decodedImage, error) {
 	if len(data) > webImageLimit {
 		return decodedImage{}, fmt.Errorf("%s is too large", url)
 	}
-	if isSVG(url) || strings.Contains(resp.Header.Get("Content-Type"), "svg") {
-		return drawnSVG(nil, data), nil
-	}
-	img, _, err := image.Decode(bytes.NewReader(data))
-	return decodedImage{Img: img}, err
+	return decodeImage(data, isSVG(url) || strings.Contains(resp.Header.Get("Content-Type"), "svg"))
 }

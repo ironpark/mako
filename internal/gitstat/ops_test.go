@@ -28,12 +28,12 @@ func TestStashDiscardAndIgnore(t *testing.T) {
 	write(t, root, "a.txt", "two\n")
 	write(t, root, "new.txt", "new\n")
 	op(&protocol.GitRun{Op: protocol.GitOpStash, Message: "wip"})
-	st, err := Status(root)
+	st, err := Status(t.Context(), root)
 	if err != nil || len(st.GetFiles()) != 0 || len(st.GetStashes()) != 1 || !strings.Contains(st.GetStashes()[0].GetMessage(), "wip") {
 		t.Fatalf("after stash: %v %v", st, err)
 	}
 	op(&protocol.GitRun{Op: protocol.GitOpStashPop, Stash: 0})
-	if st, _ = Status(root); len(st.GetFiles()) != 2 || len(st.GetStashes()) != 0 {
+	if st, _ = Status(t.Context(), root); len(st.GetFiles()) != 2 || len(st.GetStashes()) != 0 {
 		t.Fatalf("after pop: %v", st)
 	}
 
@@ -86,12 +86,12 @@ func TestBranchesCommitsAndAConflict(t *testing.T) {
 	if _, err := op(&protocol.GitRun{Op: protocol.GitOpMergeBranch, Branch: "side"}); err == nil {
 		t.Fatal("a conflicting merge succeeded")
 	}
-	st, _ := Status(root)
+	st, _ := Status(t.Context(), root)
 	if st.GetOperation() != "merge" || len(st.GetFiles()) != 1 || st.GetFiles()[0].GetStatus() != protocol.GitConflicted {
 		t.Fatalf("mid-merge status: %v", st)
 	}
 	must(&protocol.GitRun{Op: protocol.GitOpAbort})
-	if st, _ = Status(root); st.GetOperation() != "" || len(st.GetFiles()) != 0 {
+	if st, _ = Status(t.Context(), root); st.GetOperation() != "" || len(st.GetFiles()) != 0 {
 		t.Fatalf("after abort: %v", st)
 	}
 
@@ -99,7 +99,7 @@ func TestBranchesCommitsAndAConflict(t *testing.T) {
 	_, _ = op(&protocol.GitRun{Op: protocol.GitOpMergeBranch, Branch: "side"})
 	write(t, root, "a.txt", "both\n")
 	must(&protocol.GitRun{Op: protocol.GitOpContinue})
-	if st, _ = Status(root); st.GetOperation() != "" || !strings.Contains(git("log", "-1", "--format=%s"), "Merge") {
+	if st, _ = Status(t.Context(), root); st.GetOperation() != "" || !strings.Contains(git("log", "-1", "--format=%s"), "Merge") {
 		t.Fatalf("after continue: %v", st)
 	}
 

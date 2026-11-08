@@ -290,7 +290,8 @@ func TestADraftImageIsAThumbnail(t *testing.T) {
 	m.Attached.Set([]string{"s"})
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", NodeId: "n", Agent: "claude", Project: "/tmp"}})
 	img := ggfx.NewImage(100, 50)
-	m.chatImages["n\x00/tmp/shot.png"] = ggui.State(mdview.Image{Img: img, Size: ggui.Sz(100, 50)})
+	shot := m.chatImages.add("n\x00/tmp/shot.png")
+	m.chatImages.set("n\x00/tmp/shot.png", shot, mdview.Image{Img: img, Size: ggui.Sz(100, 50)})
 	m.setComposerDraft("s", "look")
 	m.attachTo("s", []string{"/tmp/shot.png"})
 	p := ggui.ProbeBuilder(func() ggui.Widget {
