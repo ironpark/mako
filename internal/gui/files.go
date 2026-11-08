@@ -197,7 +197,7 @@ func (m *model) refreshFiles() {
 func (m *model) reloadOpen(node, dir string, open map[string]bool) {
 	m.loadDir(node, dir, true)
 	for key, o := range open {
-		if n, p := splitKey(key); o && n == node && strings.HasPrefix(p, dir) {
+		if n, p := splitKey(key); o && n == node && inDir(dir, p) {
 			m.loadDir(n, p, true)
 		}
 	}
@@ -288,6 +288,12 @@ func pathSep(p string) string {
 		return `\`
 	}
 	return "/"
+}
+
+// inDir reports whether p is the folder dir or in it, by the separator
+// dir is written with: /a/bc is not in /a/b.
+func inDir(dir, p string) bool {
+	return p == dir || strings.HasPrefix(p, strings.TrimSuffix(dir, pathSep(dir))+pathSep(dir))
 }
 
 // baseName is a path's last element, by either separator.
