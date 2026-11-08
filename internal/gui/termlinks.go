@@ -153,7 +153,7 @@ func (t *termConn) pwd() string {
 	if t.closed {
 		return ""
 	}
-	p, _ := t.vt.Terminal().GetPwd()
+	p, _ := t.vt.Terminal().Pwd()
 	if u, err := url.Parse(p); err == nil && u.Scheme == "file" {
 		return u.Path
 	}
