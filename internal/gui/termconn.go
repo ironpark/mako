@@ -51,6 +51,9 @@ type termConn struct {
 	heldSince time.Time
 	holdTimer *time.Timer
 	last      frameSnapshot
+	// next is output held back from the terminal: the start of the
+	// program's next screen, behind one it just finished; see feedOutput.
+	next []byte
 	// unpainted lets go of cells and clusters once no view painted the
 	// terminal for shownFor (see frame).
 	unpainted *time.Timer
@@ -307,7 +310,8 @@ func (t *termConn) read() {
 			t.wake()
 		case protocol.EventOutput:
 			t.mu.Lock()
-			t.feedLocked(ev.Data)
+			wheelTrace.tracef("output %d bytes held=%v", len(ev.Data), t.held)
+			t.feedOutputLocked(ev.Data)
 			tap := t.tap
 			t.mu.Unlock()
 			tap.write(ev.Data)
@@ -352,6 +356,48 @@ func (t *termConn) feedLocked(p []byte) {
 		}
 	}
 	t.noteCompressionLocked()
+}
+
+// A program that draws screen after screen, each in a render hold, as
+// Claude Code does while it scrolls, begins the next in the same piece of
+// output that ends the last: fed whole, the terminal is always amid one
+// when it is painted, and the last screen stays up until the program
+// stops, then jumps. So a piece is fed up to the end of the last screen it
+// finishes, and what starts the next waits, in next, for the screen to be
+// painted or for more output, whichever comes first.
+var (
+	holdBegin = []byte("\x1b[?2026h")
+	holdEnd   = []byte("\x1b[?2026l")
+)
+
+// feedOutputLocked feeds the program's output p, holding back the start of
+// a screen that follows one it finishes.
+func (t *termConn) feedOutputLocked(p []byte) {
+	if len(t.next) > 0 {
+		p = append(t.next, p...)
+		t.next = nil
+	}
+	if i := bytes.LastIndex(p, holdEnd); i >= 0 {
+		rest := p[i+len(holdEnd):]
+		if bytes.Contains(rest, holdBegin) {
+			t.feedLocked(p[:i+len(holdEnd)])
+			t.next = bytes.Clone(rest)
+			return
+		}
+	}
+	t.feedLocked(p)
+}
+
+// feedNextLocked feeds what feedOutputLocked held back, once the screen
+// before it is painted.
+func (t *termConn) feedNextLocked() {
+	if len(t.next) == 0 {
+		return
+	}
+	p := t.next
+	t.next = nil
+	t.feedLocked(p)
+	t.requestPaint()
 }
 
 // renderHoldLimit is how long a render hold may keep the last screen
@@ -447,8 +493,11 @@ func (t *termConn) frame() (frameSnapshot, error) {
 	}
 	// Inside a render hold the screen is half drawn: the last one shows.
 	if t.held && t.hasFrame && !t.exited && time.Since(t.heldSince) < renderHoldLimit {
+		wheelTrace.tracef("frame held")
+		t.feedNextLocked()
 		return t.last, nil
 	}
+	wheelTrace.tracef("frame")
 	if err := t.state.Update(t.vt.Terminal()); err != nil {
 		return frameSnapshot{}, err
 	}
@@ -521,6 +570,7 @@ func (t *termConn) frame() (frameSnapshot, error) {
 		cellPxW:  t.cellW,
 		cellPxH:  t.cellH,
 	}
+	t.feedNextLocked() // the screen copied, what follows it
 	return t.last, nil
 }
 
@@ -1048,10 +1098,12 @@ func (t *termConn) wheelLocked(ev input.MouseEvent, size input.RenderSize, n int
 	k := min(n, (wheelBudget-t.wheelSent)/len(one))
 	if k <= 0 {
 		if time.Since(t.wheelAt) < wheelPatience {
+			wheelTrace.tracef("wheel drop n=%d unread=%d", n, t.wheelSent)
 			return nil
 		}
 		k = 1
 	}
+	wheelTrace.tracef("wheel send %d of %d unread=%d", k, n, t.wheelSent)
 	t.wheelSent += k * len(one)
 	t.wheelAt = time.Now()
 	return bytes.Repeat(one, k)

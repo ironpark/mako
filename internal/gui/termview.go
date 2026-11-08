@@ -751,12 +751,16 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 		return false
 	case ggui.PointerScroll:
 		dy := ev.Scroll.Y
-		if ev.ScrollPixels && t.cellH > 0 {
+		// A trackpad's scroll, which comes in a gesture's phases, is in
+		// pixels though it says nothing of it; taken for a wheel's notches
+		// a flick turned thousands of lines a second.
+		if (ev.ScrollPixels || ev.ScrollPhase != ggui.ScrollPhaseNone) && t.cellH > 0 {
 			dy /= t.cellH
 		} else {
 			dy *= 3
 		}
 		lines := t.wheelLines(dy, time.Now())
+		wheelTrace.tracef("scroll raw=%.2f px=%v phase=%v momentum=%v lines=%d", ev.Scroll.Y, ev.ScrollPixels, ev.ScrollPhase, ev.ScrollMomentum, lines)
 		if lines == 0 {
 			return true
 		}
