@@ -531,7 +531,7 @@ func TestATerminalNotShownKeepsTheScreenItCopied(t *testing.T) {
 func TestAScrollMovesAtOnce(t *testing.T) {
 	var v terminalView
 	now := time.Now()
-	step := func(dy float64) int { now = now.Add(10 * time.Millisecond); return v.wheelLines(dy, now) }
+	step := func(dy float64) int { now = now.Add(10 * time.Millisecond); return v.turnLines(dy, now) }
 	if got := step(0.25); got != 1 {
 		t.Fatalf("a scroll's first quarter line moved %d", got)
 	}

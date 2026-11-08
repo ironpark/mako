@@ -298,6 +298,7 @@ func (t *termConn) read() {
 			// daemon's screen at the moment of attach. The screen text
 			// follows as output frames.
 			t.vt.Terminal().FullReset()
+			t.next = t.next[:0] // of the screen replaced
 			t.holdLocked(false, time.Time{})
 			opts := t.opts
 			t.opts = termOptions{}
@@ -312,7 +313,6 @@ func (t *termConn) read() {
 			t.wake()
 		case protocol.EventOutput:
 			t.mu.Lock()
-			wheelTrace.tracef("output %d bytes held=%v", len(ev.Data), t.held)
 			t.feedOutputLocked(ev.Data)
 			owed := t.wheelLocked()
 			tap := t.tap
@@ -380,16 +380,14 @@ var (
 // a screen that follows one it finishes.
 func (t *termConn) feedOutputLocked(p []byte) {
 	if len(t.next) > 0 {
-		p = append(t.next, p...)
-		t.next = nil
+		t.feedLocked(t.next) // the parser takes its input as a stream
+		t.next = t.next[:0]
 	}
-	if i := bytes.LastIndex(p, holdEnd); i >= 0 {
-		rest := p[i+len(holdEnd):]
-		if bytes.Contains(rest, holdBegin) {
-			t.feedLocked(p[:i+len(holdEnd)])
-			t.next = bytes.Clone(rest)
-			return
-		}
+	// Only a screen begun after the last one ended waits.
+	if i := bytes.LastIndex(p, holdEnd); i >= 0 && bytes.LastIndex(p, holdBegin) > i {
+		t.feedLocked(p[:i+len(holdEnd)])
+		t.next = append(t.next, p[i+len(holdEnd):]...)
+		return
 	}
 	t.feedLocked(p)
 }
@@ -400,10 +398,11 @@ func (t *termConn) feedNextLocked() {
 	if len(t.next) == 0 {
 		return
 	}
-	p := t.next
-	t.next = nil
-	t.feedLocked(p)
-	t.requestPaint()
+	t.feedLocked(t.next)
+	t.next = t.next[:0]
+	if !t.held {
+		t.requestPaint() // a screen it finished; one begun shows once ended
+	}
 }
 
 // renderHoldLimit is how long a render hold may keep the last screen
@@ -499,11 +498,9 @@ func (t *termConn) frame() (frameSnapshot, error) {
 	}
 	// Inside a render hold the screen is half drawn: the last one shows.
 	if t.held && t.hasFrame && !t.exited && time.Since(t.heldSince) < renderHoldLimit {
-		wheelTrace.tracef("frame held")
 		t.feedNextLocked()
 		return t.last, nil
 	}
-	wheelTrace.tracef("frame")
 	if err := t.state.Update(t.vt.Terminal()); err != nil {
 		return frameSnapshot{}, err
 	}
@@ -1103,10 +1100,11 @@ type owedWheel struct {
 // modes, as many of them as it is keeping up with, owing it the rest.
 func (t *termConn) mouseWheel(ev input.MouseEvent, size input.RenderSize, n int) {
 	t.mu.Lock()
+	owed := t.owed.n
 	if t.owed.ev.Button != ev.Button {
-		t.owed.n, t.wheelSent = 0, 0 // turned back: afresh
+		owed, t.wheelSent = 0, 0 // turned back: afresh
 	}
-	t.owed = owedWheel{ev: ev, size: size, n: min(t.owed.n+n, wheelOwed), at: time.Now()}
+	t.owed = owedWheel{ev: ev, size: size, n: min(owed+n, wheelOwed), at: time.Now()}
 	buf := t.wheelLocked()
 	t.mu.Unlock()
 	if len(buf) > 0 {
@@ -1122,24 +1120,21 @@ func (t *termConn) wheelLocked() frameBuffer {
 	if w.n == 0 {
 		return nil
 	}
-	if time.Since(w.at) > wheelStale {
-		w.n = 0
-		return nil
+	var one frameBuffer
+	if time.Since(w.at) <= wheelStale {
+		one = t.encodeMouseLocked(w.ev, w.size, false)
 	}
-	one := t.encodeMouseLocked(w.ev, w.size, false)
 	if len(one) == 0 {
-		w.n = 0
+		*w = owedWheel{} // stale, or no longer the program's to report
 		return nil
 	}
 	k := min(w.n, (wheelBudget-t.wheelSent)/len(one))
 	if k <= 0 {
 		if time.Since(t.wheelAt) < wheelPatience {
-			wheelTrace.tracef("wheel owe n=%d unread=%d", w.n, t.wheelSent)
 			return nil
 		}
 		k = 1
 	}
-	wheelTrace.tracef("wheel send %d of %d unread=%d", k, w.n, t.wheelSent)
 	t.wheelSent += k * len(one)
 	t.wheelAt = time.Now()
 	w.n -= k

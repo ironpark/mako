@@ -87,3 +87,21 @@ func TestAScreenFinishedIsPaintedBeforeTheNextBegins(t *testing.T) {
 		t.Fatalf("once painted, the screen is %q, want what followed fed", got)
 	}
 }
+
+// A piece that ends a screen it begins is fed whole: nothing waits.
+func TestAScreenEndedInItsPieceIsNotHeldBack(t *testing.T) {
+	link := newFakeLink()
+	conn, err := newTermConn("s1", link, 20, 4, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.close()
+	defer close(link.in)
+	link.output(t, "\x1b[?2026h\x1b[Hfirst\x1b[?2026l\x1b[?2026h\x1b[Hsecond\x1b[?2026l")
+	waitFor(t, func() bool { return strings.HasPrefix(screenText(conn), "second") })
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	if len(conn.next) != 0 {
+		t.Fatalf("%q was held back", conn.next)
+	}
+}

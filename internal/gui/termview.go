@@ -48,9 +48,9 @@ type terminalView struct {
 	probed [2]int
 
 	focused  bool
-	wheelAcc float64   // lines turned, not yet scrolled; see wheelLines
-	wheelAt  time.Time // the last scroll, and its turn
-	wheelDy  float64
+	wheelAcc float64   // lines turned, not yet scrolled; see turnLines
+	wheelAt  time.Time // the last scroll
+	wheelDy  float64   // its turn, kept for the way it went
 	blink    time.Time // when the cursor last started a lit phase
 
 	ime     *ggui.TextInputWidget
@@ -751,8 +751,7 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 		return false
 	case ggui.PointerScroll:
 		dy := t.scrollLines(ev)
-		lines := t.wheelLines(dy, time.Now())
-		wheelTrace.tracef("scroll raw=%.2f px=%v phase=%v momentum=%v lines=%d", ev.Scroll.Y, ev.ScrollPixels, ev.ScrollPhase, ev.ScrollMomentum, lines)
+		lines := t.turnLines(dy, time.Now())
 		if lines == 0 {
 			return true
 		}
@@ -779,19 +778,19 @@ const trackpadPoints = 10
 
 // scrollLines is the lines a scroll event turns. A trackpad's, which comes
 // in a gesture's phases, is in tenths of points: taken for a wheel's
-// notches, three lines each, a flick turned thousands of lines a second,
+// notches, wheelLines each, a flick turned thousands of lines a second,
 // and taken for pixels, a crawl.
 func (t *terminalView) scrollLines(ev ggui.PointerEvent) float64 {
 	dy := ev.Scroll.Y
-	switch {
-	case t.cellH <= 0:
-		return dy * 3
-	case ev.ScrollPixels:
-		return dy / t.cellH
-	case ev.ScrollPhase != ggui.ScrollPhaseNone:
-		return dy * trackpadPoints / t.cellH
+	if t.cellH > 0 {
+		switch {
+		case ev.ScrollPixels:
+			return dy / t.cellH
+		case ev.ScrollPhase != ggui.ScrollPhaseNone:
+			return dy * trackpadPoints / t.cellH
+		}
 	}
-	return dy * 3 // a wheel's notch
+	return dy * wheelLines // a wheel's notches
 }
 
 // A trackpad scrolls by pixels, a cell's worth over a few events, and the
@@ -802,9 +801,9 @@ func (t *terminalView) scrollLines(ev ggui.PointerEvent) float64 {
 // holds a new one back nor adds to it.
 const wheelGap = 150 * time.Millisecond
 
-// wheelLines is the lines a scroll of dy at now turns, counted from those
+// turnLines is the lines a scroll of dy at now turns, counted from those
 // before it.
-func (t *terminalView) wheelLines(dy float64, now time.Time) int {
+func (t *terminalView) turnLines(dy float64, now time.Time) int {
 	// The way it turns, by the last event's sign: the count left may be
 	// below zero, the line owed for a scroll's first.
 	fresh := now.Sub(t.wheelAt) > wheelGap || t.wheelDy*dy < 0
@@ -815,10 +814,7 @@ func (t *terminalView) wheelLines(dy float64, now time.Time) int {
 	t.wheelAcc += dy
 	lines := int(t.wheelAcc)
 	if fresh && lines == 0 && dy != 0 {
-		lines = 1 // at once, owing the rest of the line
-		if dy < 0 {
-			lines = -1
-		}
+		lines = int(math.Copysign(1, dy)) // at once, owing the rest of the line
 	}
 	t.wheelAcc -= float64(lines)
 	return lines
