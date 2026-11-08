@@ -2,6 +2,7 @@ package svgdraw
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	"math"
 
@@ -99,7 +100,7 @@ func drawEmbed(px *image.RGBA, e svgEmbed, x, y float64) {
 		}
 		src = img
 	} else {
-		img, _, err := image.Decode(bytes.NewReader(e.data))
+		img, err := DecodeImage(e.data, maxPixels)
 		if err != nil {
 			return
 		}
@@ -117,4 +118,23 @@ func drawEmbed(px *image.RGBA, e svgEmbed, x, y float64) {
 	r := image.Rect(int(math.Round((min(x0, x1)-x)*Scale)), int(math.Round((min(y0, y1)-y)*Scale)),
 		int(math.Round((max(x0, x1)-x)*Scale)), int(math.Round((max(y0, y1)-y)*Scale)))
 	xdraw.CatmullRom.Scale(px, r, src, src.Bounds(), xdraw.Over, nil)
+}
+
+// ImagePixels bounds the pixels of a picture read to be shown: an 8K
+// screen's, 128 MB as RGBA.
+const ImagePixels = 1 << 25
+
+// DecodeImage decodes a picture, refusing one whose header says it is
+// larger than max pixels before its pixels are allocated: a PNG of a few
+// KB can say it is 20000 by 20000, and be decoded into 1.6 GB.
+func DecodeImage(data []byte, max int) (image.Image, error) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > max/cfg.Height {
+		return nil, errors.New("image too large")
+	}
+	img, _, err := image.Decode(bytes.NewReader(data))
+	return img, err
 }

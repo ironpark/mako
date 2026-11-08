@@ -1,7 +1,12 @@
 package svgdraw
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/binary"
+	"hash/crc32"
+	"image"
+	"image/png"
 	"testing"
 )
 
@@ -20,6 +25,31 @@ func TestAnEmbedTooLargeIsNotDrawnAtItsSize(t *testing.T) {
 		if !ok || p.Pixels.Bounds().Dx() != 10*Scale {
 			t.Errorf("%s: drawn %v, %+v", image, ok, p.Size)
 		}
+	}
+}
+
+// A picture whose header says it is larger than the budget is refused
+// before it is decoded; one within it is decoded.
+func TestAPictureTooLargeIsNotDecoded(t *testing.T) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewGray(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatal(err)
+	}
+	small := buf.Bytes()
+	if img, err := DecodeImage(small, maxPixels); err != nil || img.Bounds().Dx() != 1 {
+		t.Fatalf("a small picture: %v", err)
+	}
+	// The same, saying it is 20000 by 20000: its IHDR, after the 8-byte
+	// signature, the chunk's length and its type.
+	large := bytes.Clone(small)
+	binary.BigEndian.PutUint32(large[16:], 20000)
+	binary.BigEndian.PutUint32(large[20:], 20000)
+	binary.BigEndian.PutUint32(large[29:], crc32.ChecksumIEEE(large[12:29]))
+	if cfg, err := png.DecodeConfig(bytes.NewReader(large)); err != nil || cfg.Width != 20000 {
+		t.Fatalf("the large header does not read: %v", err)
+	}
+	if _, err := DecodeImage(large, ImagePixels); err == nil {
+		t.Fatal("a picture saying it is 20000 by 20000 was decoded")
 	}
 }
 

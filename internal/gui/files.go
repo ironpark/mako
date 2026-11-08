@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"image"
@@ -322,7 +321,7 @@ func fetchImage(m *model, node, path string, done func(decodedImage, error)) {
 			f.Data = nil
 			return drawnSVG(f, data), nil
 		}
-		img, _, err := image.Decode(bytes.NewReader(f.GetData()))
+		img, err := svgdraw.DecodeImage(f.GetData(), svgdraw.ImagePixels)
 		f.Data = nil
 		return decodedImage{File: f, Img: img}, err
 	}, done)
