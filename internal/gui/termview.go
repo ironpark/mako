@@ -48,7 +48,9 @@ type terminalView struct {
 	probed [2]int
 
 	focused  bool
-	wheelAcc float64
+	wheelAcc float64   // lines turned, not yet scrolled; see turnLines
+	wheelAt  time.Time // the last scroll
+	wheelDy  float64   // its turn, kept for the way it went
 	blink    time.Time // when the cursor last started a lit phase
 
 	ime     *ggui.TextInputWidget
@@ -748,18 +750,11 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 		}
 		return false
 	case ggui.PointerScroll:
-		dy := ev.Scroll.Y
-		if ev.ScrollPixels && t.cellH > 0 {
-			dy /= t.cellH
-		} else {
-			dy *= 3
-		}
-		t.wheelAcc += dy
-		lines := int(t.wheelAcc)
+		dy := t.scrollLines(ev)
+		lines := t.turnLines(dy, time.Now())
 		if lines == 0 {
 			return true
 		}
-		t.wheelAcc -= float64(lines)
 		if !ev.Mods.Shift && t.conn.mouseReported() {
 			btn := input.MouseButtonFour // up
 			n := lines
@@ -774,6 +769,55 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 		return true
 	}
 	return false
+}
+
+// trackpadPoints is the points of a trackpad's scroll a unit of it comes
+// as: the window passes macOS's precise deltas on at a tenth, as GLFW
+// does, without saying they are precise.
+const trackpadPoints = 10
+
+// scrollLines is the lines a scroll event turns. A trackpad's, which comes
+// in a gesture's phases, is in tenths of points: taken for a wheel's
+// notches, wheelLines each, a flick turned thousands of lines a second,
+// and taken for pixels, a crawl.
+func (t *terminalView) scrollLines(ev ggui.PointerEvent) float64 {
+	dy := ev.Scroll.Y
+	if t.cellH > 0 {
+		switch {
+		case ev.ScrollPixels:
+			return dy / t.cellH
+		case ev.ScrollPhase != ggui.ScrollPhaseNone:
+			return dy * trackpadPoints / t.cellH
+		}
+	}
+	return dy * wheelLines // a wheel's notches
+}
+
+// A trackpad scrolls by pixels, a cell's worth over a few events, and the
+// wheel's lines are counted from them. A scroll moves at its first event,
+// though less than a line has turned, owing the rest of that line: waiting
+// a line out made every scroll start a beat late. What is left of a scroll
+// the other way, or one past wheelGap ago, is let go of, so it neither
+// holds a new one back nor adds to it.
+const wheelGap = 150 * time.Millisecond
+
+// turnLines is the lines a scroll of dy at now turns, counted from those
+// before it.
+func (t *terminalView) turnLines(dy float64, now time.Time) int {
+	// The way it turns, by the last event's sign: the count left may be
+	// below zero, the line owed for a scroll's first.
+	fresh := now.Sub(t.wheelAt) > wheelGap || t.wheelDy*dy < 0
+	t.wheelAt, t.wheelDy = now, dy
+	if fresh {
+		t.wheelAcc = 0
+	}
+	t.wheelAcc += dy
+	lines := int(t.wheelAcc)
+	if fresh && lines == 0 && dy != 0 {
+		lines = int(math.Copysign(1, dy)) // at once, owing the rest of the line
+	}
+	t.wheelAcc -= float64(lines)
+	return lines
 }
 
 // hoverLink underlines the link under the pointer while the keys that

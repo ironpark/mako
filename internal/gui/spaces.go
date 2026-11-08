@@ -238,7 +238,7 @@ func spaceDots(m *model, first, last, current int) ggui.Widget {
 // scroll that says nothing of the fingers, a wheel's, ends at a pause of
 // swipeGap.
 const (
-	swipePixels = 10
+	swipePixels = trackpadPoints
 	swipeCommit = 0.15
 	swipeEdge   = 0.3
 	swipeGap    = 200 * time.Millisecond

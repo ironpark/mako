@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ironpark/gostty/input"
+
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 
@@ -399,7 +401,8 @@ func TestTheWheelGoesToATUIThatAsked(t *testing.T) {
 
 // A program that stops reading must not be flooded with wheel reports: the
 // terminal's input queue would cut one, and its Escape would interrupt the
-// agent. A turn sends a few, and the next waits for the program to print.
+// agent. Reports go as the wheel turns, up to a budget until the program
+// prints again; the rest is owed, and goes as it does.
 func TestTheWheelWaitsForTheProgram(t *testing.T) {
 	link := newFakeLink()
 	conn, err := newTermConn("s1", link, 80, 24, func() {})
@@ -416,23 +419,72 @@ func TestTheWheelWaitsForTheProgram(t *testing.T) {
 	p.Frame()
 	link.typed()
 	at := gridPoint(p, view, 2, 3)
-	p.Scroll(at, ggui.Pt(0, 10))
-	if got := strings.Count(link.typed(), "\x1b[<64;"); got != wheelBurst {
-		t.Fatalf("a long turn sent %d reports, want %d", got, wheelBurst)
+	const report = "\x1b[<64;3;4M"
+	most := wheelBudget / len(report)
+	reports := func() int { return strings.Count(link.typed(), report) }
+	p.Scroll(at, ggui.Pt(0, 10)) // 30 lines
+	p.Scroll(at, ggui.Pt(0, 10)) // 30 more, past the budget
+	if got := reports(); got != most {
+		t.Fatalf("a silent program was sent %d reports, want %d", got, most)
 	}
-	p.Scroll(at, ggui.Pt(0, 1))
-	if got := link.typed(); got != "" {
-		t.Fatalf("a silent program was sent %q", got)
+	link.output(t, "scrolled") // it read them: what is owed goes
+	sent := 0
+	waitFor(t, func() bool { sent += reports(); return sent >= 60-most })
+	if sent != 60-most {
+		t.Fatalf("once it printed, it was sent %d reports, want the %d owed", sent, 60-most)
 	}
-	link.output(t, "scrolled")
-	waitFor(t, func() bool {
-		conn.mu.Lock()
-		defer conn.mu.Unlock()
-		return conn.wheelAt.IsZero()
-	})
-	p.Scroll(at, ggui.Pt(0, 1))
-	if got := link.typed(); !strings.Contains(got, "\x1b[<64;3;4M") {
-		t.Fatalf("after it printed, the wheel sent %q", got)
+}
+
+// A turn back the other way starts afresh, as a program at the end of what
+// it scrolls prints nothing for the turn that ran into it; typing lets go
+// of what is owed, and so does a second without a redraw. One report a
+// wheelPatience still goes to a program that stays silent.
+func TestTheWheelOwesOnlyTheLatestTurn(t *testing.T) {
+	link := newFakeLink()
+	conn, err := newTermConn("s1", link, 80, 24, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.close()
+	defer close(link.in)
+	link.output(t, "\x1b[?1049h\x1b[?1003h\x1b[?1006hthe agent's screen")
+	waitFor(t, func() bool { return conn.mouseReported() })
+	size := input.RenderSize{ScreenWidth: 800, ScreenHeight: 400, CellWidth: 10, CellHeight: 16}
+	up := input.MouseEvent{Action: input.MouseActionPress, Button: input.MouseButtonFour, HasButton: true, X: 50, Y: 50}
+	down := up
+	down.Button = input.MouseButtonFive
+	state := func() (owedWheel, int) { conn.mu.Lock(); defer conn.mu.Unlock(); return conn.owed, conn.wheelSent }
+
+	conn.mouseWheel(up, size, 60) // past the budget: some owed
+	if w, sent := state(); w.n == 0 || sent == 0 {
+		t.Fatalf("owed %d with %d sent", w.n, sent)
+	}
+	link.typed()
+	conn.mouseWheel(down, size, 2)
+	if w, _ := state(); w.n != 0 || !strings.Contains(link.typed(), "\x1b[<65;") {
+		t.Fatalf("turned back, %d still owed, or the turn back did not go", w.n)
+	}
+
+	conn.mu.Lock()
+	conn.wheelSent, conn.wheelAt = wheelBudget, time.Now()
+	conn.owed = owedWheel{ev: up, size: size, n: 3, at: time.Now()}
+	if buf := conn.wheelLocked(); len(buf) > 0 {
+		t.Fatal("a report went past the budget at once")
+	}
+	conn.wheelAt = time.Now().Add(-wheelPatience)
+	one := conn.encodeMouseLocked(up, size, false)
+	if buf := conn.wheelLocked(); len(buf) != len(one) {
+		t.Fatalf("a silent program was sent %q", buf)
+	}
+	conn.owed.at = time.Now().Add(-2 * wheelStale)
+	if buf := conn.wheelLocked(); len(buf) > 0 || conn.owed.n != 0 {
+		t.Fatal("a stale turn was sent")
+	}
+	conn.owed = owedWheel{ev: up, size: size, n: 3, at: time.Now()}
+	conn.mu.Unlock()
+	conn.key(input.KeyEvent{Action: input.KeyActionPress, Key: input.KeyEnter}, "")
+	if w, _ := state(); w.n != 0 {
+		t.Fatal("a turn was still owed after typing")
 	}
 }
 
@@ -470,5 +522,44 @@ func TestATerminalNotShownKeepsTheScreenItCopied(t *testing.T) {
 	p.Draw(img)
 	if !shownHello() {
 		t.Fatal("a frame that showed the terminal did not copy its screen")
+	}
+}
+
+// A scroll moves at its first event, though less than a line has turned,
+// and moves as far as it turned in all; one the other way, or after a
+// pause, starts afresh.
+func TestAScrollMovesAtOnce(t *testing.T) {
+	var v terminalView
+	now := time.Now()
+	step := func(dy float64) int { now = now.Add(10 * time.Millisecond); return v.turnLines(dy, now) }
+	if got := step(0.25); got != 1 {
+		t.Fatalf("a scroll's first quarter line moved %d", got)
+	}
+	total := 1
+	for range 11 {
+		total += step(0.25)
+	}
+	if total != 3 {
+		t.Fatalf("three lines' turn moved %d", total)
+	}
+	if got := step(-0.25); got != -1 {
+		t.Fatalf("turned back, moved %d", got)
+	}
+	now = now.Add(time.Second)
+	if got := step(-0.25); got != -1 {
+		t.Fatalf("after a pause, moved %d", got)
+	}
+}
+
+// A trackpad's scroll, in tenths of points, turns lines by the cell's
+// height; a wheel's notch, three.
+func TestATrackpadScrollsByPoints(t *testing.T) {
+	v := terminalView{cellH: 16}
+	pad := ggui.PointerEvent{Scroll: ggui.Pt(0, 3.2), ScrollPhase: ggui.ScrollPhaseChanged}
+	if got := v.scrollLines(pad); got != 2 {
+		t.Fatalf("32 points turned %v lines", got)
+	}
+	if got := v.scrollLines(ggui.PointerEvent{Scroll: ggui.Pt(0, 1)}); got != 3 {
+		t.Fatalf("a notch turned %v lines", got)
 	}
 }
