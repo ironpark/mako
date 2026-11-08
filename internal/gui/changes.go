@@ -35,6 +35,12 @@ type gitView struct {
 // gitRefresh is how often the shown changes are read again.
 const gitRefresh = 5 * time.Second
 
+// changesKey is what a read of the changes is of.
+type changesKey struct {
+	root fileRoot
+	base string
+}
+
 // loadGit reads the project's changes, keeping the last ones on show until
 // the new come.
 func (m *model) loadGit(root fileRoot) {
@@ -42,10 +48,13 @@ func (m *model) loadGit(root fileRoot) {
 		return
 	}
 	v := ggui.Peek(m.git.View)
-	if m.git.changesReading && v.Root == root {
-		return
-	}
 	base := ggui.Peek(m.git.Base)
+	if v.Root != root {
+		base = "" // reset below
+	}
+	if !m.git.changesRead.ask(changesKey{root, base}) {
+		return // read once the read under way is done
+	}
 	if v.Root != root {
 		// A commit drafted for another project is not this one's, nor is
 		// the base it was compared with.
@@ -66,14 +75,16 @@ func (m *model) loadGit(root fileRoot) {
 		v.Loading = true
 	}
 	m.git.View.Set(v)
-	m.git.changesReading = true
 	req := &protocol.GitStatus{NodeId: m.remoteID(root.Node), Path: root.Path, Base: base}
 	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitChanges, error) {
 		return c.GitStatus(ctx, req)
 	}, func(ch *protocol.GitChanges, err error) {
-		m.git.changesReading = false
-		if cur := ggui.Peek(m.git.View); cur.Root != root || cur.Base != base {
+		if next, again := m.git.changesRead.done(); again {
+			m.loadGit(next.root)
 			return // another project, or base, is shown now
+		}
+		if cur := ggui.Peek(m.git.View); cur.Root != root || cur.Base != base {
+			return
 		}
 		next := gitView{Root: root, Base: base, Changes: ch}
 		if err != nil {
