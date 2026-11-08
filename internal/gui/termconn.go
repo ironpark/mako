@@ -115,9 +115,9 @@ type termConn struct {
 	// unread is the bytes of mouse reports, the wheel's and the pointer's
 	// moves, sent since the program last printed; wheelAt is when the
 	// wheel's last went, and owed its turn not yet sent. See mouseWheel.
-	unread    int
-	wheelAt   time.Time
-	owed      owedWheel
+	unread  int
+	wheelAt time.Time
+	owed    owedWheel
 
 	// The images the program placed, as the last frame found them, and the
 	// textures they are drawn from; see termimages.go.
