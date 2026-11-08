@@ -153,10 +153,8 @@ type devListener struct {
 	claimID string
 	ln      net.Listener
 	conns   chan net.Conn
-	done    chan struct{} // closed once it no longer listens
-
-	mu      sync.Mutex // orders queueing in conns with stopping
-	stopped bool
+	done    chan struct{} // closed, under mu, once it no longer listens
+	mu      sync.Mutex    // orders queueing in conns with closing done
 }
 
 // queue has c wait for the borrower to take it, or closes it when more
@@ -164,7 +162,9 @@ type devListener struct {
 func (l *devListener) queue(c net.Conn) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if !l.stopped {
+	select {
+	case <-l.done: // asked first: a select picks among those ready at random
+	default:
 		select {
 		case l.conns <- c:
 			return
@@ -188,11 +188,10 @@ func (c *claims) unlisten(l *devListener) {
 	delete(c.listeners, l.ln.Addr().String())
 	c.mu.Unlock()
 	l.ln.Close()
-	close(l.done)
 	// What waits for a borrower who will not take it now is closed, and
 	// what comes after, queue closes.
 	l.mu.Lock()
-	l.stopped = true
+	close(l.done)
 	l.mu.Unlock()
 	for {
 		select {

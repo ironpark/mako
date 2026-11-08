@@ -69,19 +69,14 @@ func download(ctx context.Context, rawURL, dst, kind string) error {
 	return fmt.Errorf("unknown file type %q", kind)
 }
 
+// writeFile writes the file at dst, making its directory.
 func writeFile(dst string, r io.Reader, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	root, err := openRoot(filepath.Dir(dst))
 	if err != nil {
 		return err
 	}
-	_, err = io.Copy(f, io.LimitReader(r, maxDownload))
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	return err
+	defer root.Close()
+	return writeIn(root, filepath.Base(dst), r, mode)
 }
 
 // local is an archive entry's name as a path inside the archive, "." for

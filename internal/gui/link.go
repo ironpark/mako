@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -299,17 +298,12 @@ func (m *model) poll(ctx context.Context) {
 	accessStale := m.link.accessStale.Swap(false)
 	fetchAccess := accessStale || !m.link.watching.Load()
 	// The workspace too: at first, and when the daemon has a newer one.
-	// A request that failed on the way, rather than being refused by the
-	// daemon, is asked again at the next poll, and what the window shows
-	// stays as it was meanwhile.
 	var ws *protocol.Workspace
 	if m.link.syncing.Load() {
 		if wsStale := m.link.wsStale.Swap(false); wsStale || !m.link.watching.Load() {
 			if ws, err = c.Workspace(reqCtx); err != nil {
 				ws = nil // an older daemon
-				if wsStale && !daemonRefused(err) {
-					m.link.wsStale.Store(true)
-				}
+				askAgain(&m.link.wsStale, wsStale, err)
 			}
 		}
 	}
@@ -317,11 +311,8 @@ func (m *model) poll(ctx context.Context) {
 	if fetchAccess {
 		if access, err = c.Access(reqCtx, &protocol.Access{}); err != nil {
 			access = nil // the mesh is off on the daemon
-			if !daemonRefused(err) {
-				fetchAccess = false
-				if accessStale {
-					m.link.accessStale.Store(true)
-				}
+			if askAgain(&m.link.accessStale, accessStale, err) {
+				fetchAccess = false // what the window shows stays meanwhile
 			}
 		}
 	}
@@ -395,12 +386,19 @@ func (m *model) poll(ctx context.Context) {
 	})
 }
 
-// daemonRefused reports whether err is the daemon's answer to a request,
-// as one it does not know or cannot serve, rather than the request failing
-// on the way to it. transport.Reply marks the daemon's answers so.
-func daemonRefused(err error) bool {
-	var coded *protocol.CodedError
-	return errors.As(err, &coded) || strings.HasPrefix(err.Error(), "remote: ")
+// askAgain marks stale again, as it was, for a request that failed on the
+// way rather than the daemon refusing it, as one it does not know or
+// cannot serve: it is asked again at the next poll. It reports whether
+// the request failed on the way.
+func askAgain(stale *atomic.Bool, was bool, err error) bool {
+	var refused *protocol.CodedError // the daemon's answer; see transport.Reply
+	if errors.As(err, &refused) {
+		return false
+	}
+	if was {
+		stale.Store(true)
+	}
+	return true
 }
 
 // dropConn closes the terminal attached to the tab id, reporting whether

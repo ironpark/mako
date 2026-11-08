@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -93,15 +94,17 @@ func TestAttachVisibleRedialsAFailedTerminal(t *testing.T) {
 
 // The daemon's refusals are told apart from requests failing on the way,
 // which the poll asks again.
-func TestDaemonRefusedTellsAnswersFromFailures(t *testing.T) {
+func TestAskAgainTellsAnswersFromFailures(t *testing.T) {
+	var stale atomic.Bool
 	for _, e := range []*protocol.Error{{Message: "the mesh is off on this node"}, {Code: protocol.CodeUnsupported, Message: "unsupported"}} {
 		_, err := transport.Reply[*protocol.AccessInfo](&protocol.Envelope{Body: &protocol.Envelope_Error{Error: e}})
-		if err == nil || !daemonRefused(err) {
+		if err == nil || askAgain(&stale, true, err) || stale.Load() {
 			t.Fatalf("%v is not taken for the daemon's answer", err)
 		}
 	}
 	for _, err := range []error{context.DeadlineExceeded, io.EOF, net.ErrClosed} {
-		if daemonRefused(err) {
+		stale.Store(false)
+		if !askAgain(&stale, true, err) || !stale.Load() {
 			t.Fatalf("%v is taken for the daemon's answer", err)
 		}
 	}

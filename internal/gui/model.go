@@ -389,10 +389,17 @@ func (m *model) attachVisible() {
 		}
 		if conn := m.conns[id]; conn == nil {
 			m.attach(id)
-		} else if s, ok := m.session(id); ok && s.GetState() != protocol.StateExited && conn.failed() {
+		} else if conn.failed() && m.sessionLive(id) {
 			m.attach(id)
 		}
 	}
+}
+
+// sessionLive reports whether the session of tab id is known and has not
+// exited.
+func (m *model) sessionLive(id string) bool {
+	s, ok := m.session(id)
+	return ok && s.GetState() != protocol.StateExited
 }
 
 // attach dials a session's terminal on a worker.

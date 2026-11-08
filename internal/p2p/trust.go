@@ -293,20 +293,9 @@ func (t *trust) reconsider() {
 	t.mu.Unlock()
 	for _, s := range all {
 		if trusts := t.lets(s.info.Key, s.info.Owner); trusts != s.info.Trusts {
-			t.mu.Lock()
-			still := t.peers[s.p] == s.st
-			if still {
-				s.st.peer.Trusts = trusts
-				s.info = s.st.peer
-			}
-			t.mu.Unlock()
-			if still {
-				if !trusts {
-					t.shut(s.p)
-				}
-				if changed != nil {
-					changed(s.info)
-				}
+			info, still := t.update(s.p, s.st, func(pe *Peer) { pe.Trusts = trusts })
+			if still && changed != nil {
+				changed(info)
 			}
 		}
 		go t.introduce(s.p, s.st)
@@ -369,15 +358,25 @@ func (t *trust) exchange(st *trustState, s network.Stream) error {
 	if err := readJSON(s, &v); err != nil {
 		return err
 	}
+	t.update(p, st, func(pe *Peer) {
+		*pe = Peer{ID: p, Node: theirs.Node, Name: theirs.Name, OS: theirs.OS, Arch: theirs.Arch, Key: key, Owner: owner, Addr: s.Conn().RemoteMultiaddr(), Trusts: trusts, TrustedBy: v.Trusts}
+	})
+	return nil
+}
+
+// update sets how this host stands with p in st, through set, and cuts the
+// streams p opened if it let p in and no longer does. It reports the peer
+// as set, and whether st is still p's link.
+func (t *trust) update(p peer.ID, st *trustState, set func(*Peer)) (Peer, bool) {
 	t.mu.Lock()
 	was, ok := settled(st)
-	st.peer = Peer{ID: p, Node: theirs.Node, Name: theirs.Name, OS: theirs.OS, Arch: theirs.Arch, Key: key, Owner: owner, Addr: s.Conn().RemoteMultiaddr(), Trusts: trusts, TrustedBy: v.Trusts}
-	still := t.peers[p] == st
+	set(&st.peer)
+	info, still := st.peer, t.peers[p] == st
 	t.mu.Unlock()
-	if still && ok && was.Trusts && !trusts {
+	if still && ok && was.Trusts && !info.Trusts {
 		t.shut(p)
 	}
-	return nil
+	return info, still
 }
 
 // settle records in st that p has introduced itself, or failed to. The
@@ -391,11 +390,9 @@ func (t *trust) settle(p peer.ID, st *trustState, err error) {
 		t.mu.Unlock()
 		return
 	}
-	first := false
 	select {
 	case <-st.done:
 	default:
-		first = true
 		close(st.done)
 	}
 	// The last introduction is what holds: a later one that went through
@@ -404,7 +401,7 @@ func (t *trust) settle(p peer.ID, st *trustState, err error) {
 	info, changed := st.peer, t.changed
 	t.mu.Unlock()
 	if err != nil {
-		t.log.Debug("peer could not introduce itself", "peer", p, "first", first, "err", err)
+		t.log.Debug("peer could not introduce itself", "peer", p, "err", err)
 		_ = t.h.Network().ClosePeer(p)
 		return
 	}
