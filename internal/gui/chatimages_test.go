@@ -2,6 +2,7 @@ package gui
 
 import (
 	"image"
+	"runtime"
 	"testing"
 
 	"github.com/ironpark/ggfx"
@@ -16,14 +17,14 @@ import (
 func TestAnImageIsKeptNoLargerThanItShows(t *testing.T) {
 	box := ggui.Sz(480, 360)
 	s := shrinkImage(decodedImage{Img: image.NewRGBA(image.Rect(0, 0, 4000, 1000))}, box)
-	if b := s.Img.Bounds(); b.Dx() != 480 || b.Dy() != 120 || s.size != ggui.Sz(4000, 1000) {
-		t.Fatalf("shrunk to %v, size %v", b, s.size)
+	if b := s.Img.Bounds(); b.Dx() != 480 || b.Dy() != 120 || s.Shown != ggui.Sz(4000, 1000) {
+		t.Fatalf("shrunk to %v, size %v", b, s.Shown)
 	}
-	if v := s.mdImage(nil); v.Size != ggui.Sz(4000, 1000) {
+	if v := asMDImage(s, nil); v.Size != ggui.Sz(4000, 1000) {
 		t.Fatalf("shown as %v", v.Size)
 	}
 	small := image.NewRGBA(image.Rect(0, 0, 30, 20))
-	if s := shrinkImage(decodedImage{Img: small}, box); s.Img != image.Image(small) || s.size != (ggui.Size{}) {
+	if s := shrinkImage(decodedImage{Img: small}, box); s.Img != image.Image(small) || s.Shown != (ggui.Size{}) {
 		t.Fatal("a small image was scaled")
 	}
 	drawn := &svgdraw.Picture{Pixels: image.NewRGBA(image.Rect(0, 0, 2000, 2000)), Size: ggui.Sz(1000, 1000)}
@@ -34,28 +35,30 @@ func TestAnImageIsKeptNoLargerThanItShows(t *testing.T) {
 }
 
 // The images kept hold no more pixels than the cache's bound: those used
-// longest ago go first.
+// longest ago go first, though one still shown is found again.
 func TestTheImagesKeptAreBounded(t *testing.T) {
 	c := newImageCache()
 	c.max = 3 * 100 * 100 * 4
-	load := func(key string) {
+	load := func(key string) *ggui.StateValue[mdview.Image] {
 		img := c.add(key)
 		c.set(key, img, mdview.Image{Img: ggfx.NewImage(100, 100), Size: ggui.Sz(100, 100)})
+		return img
 	}
-	for _, key := range []string{"a", "b", "c"} {
-		load(key)
-	}
+	load("a")
+	load("b")
+	shown := load("c")
 	c.get("a")
-	load("d")
+	load("d") // lets go of b
+	load("e") // and of c, which is still shown
+	runtime.GC()
 	if _, ok := c.get("b"); ok {
-		t.Fatal("the image used longest ago was kept")
+		t.Fatal("the image used longest ago, shown nowhere, was kept")
 	}
-	for _, key := range []string{"a", "c", "d"} {
-		if _, ok := c.get(key); !ok {
-			t.Fatalf("%s was let go of", key)
-		}
+	if img, ok := c.get("c"); !ok || img != shown {
+		t.Fatal("an image still shown was read again")
 	}
-	if c.bytes != c.max {
-		t.Fatalf("%d bytes counted", c.bytes)
+	runtime.KeepAlive(shown)
+	if c.bytes > c.max || c.kept.Len() != 3 {
+		t.Fatalf("%d bytes in %d kept", c.bytes, c.kept.Len())
 	}
 }

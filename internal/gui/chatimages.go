@@ -1,9 +1,11 @@
 package gui
 
 import (
+	"container/list"
 	"image"
 	"slices"
 	"strings"
+	"weak"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
@@ -50,16 +52,9 @@ const (
 // nothing when it is named only: text may name a file that is not there.
 func chatImage(m *model, node, path string, named bool) ggui.Widget {
 	key := node + "\x00" + path
-	img, ok := m.chatImages.get(key)
-	if !ok {
-		img = m.chatImages.add(key)
-		fetchImage(m, node, path, func(d decodedImage, err error) {
-			go func() {
-				s := shrinkImage(d, ggui.Sz(2*thumbW, 2*thumbH)) // for a screen of twice the pixels
-				m.post(func() { m.chatImages.set(key, img, s.mdImage(err)) })
-			}()
-		})
-	}
+	img := m.cachedImage(key, func(done func(decodedImage, error)) {
+		fetchImage(m, node, path, ggui.Sz(2*thumbW, 2*thumbH), done) // for a screen of twice the pixels
+	})
 	name := baseName(path)
 	open := func() { m.openItem(fileItem{Key: key, Node: node, Path: path, Name: name}, 0) }
 	return ggui.View(img, func(v mdview.Image) ggui.Widget {
@@ -146,113 +141,143 @@ func (c *cornered) Paint(dst *ggui.Canvas, r ggui.Rect) {
 }
 
 // Images read for Chat and for pages are kept for the window, the latest
-// used of them, up to imageCacheBytes of pixels: a session's images, or a
-// page's from the web, would otherwise stay for as long as it runs. An
-// image let go of while it shows stays on show, and is read again once it
-// is asked for. Each is kept no larger than it shows (shrinkImage).
-const imageCacheBytes = 128 << 20
+// used of them, up to imageCacheBytes of pixels and imageCacheCount
+// images: a session's images, or a page's from the web, would otherwise
+// stay for as long as it runs. One let go of while it shows is still
+// found while it does, not read again, and goes once nothing shows it.
+// Each is kept no larger than it shows (shrinkImage).
+const (
+	imageCacheBytes = 128 << 20
+	imageCacheCount = 256
+)
 
 // imageCache is the images read for Chat and pages, by node and path or by
 // address. UI goroutine only.
 type imageCache struct {
-	entries    map[string]*cachedImage
-	bytes, max int
-	clock      uint64
+	kept  *list.List // of the *cachedImage kept, used latest first
+	keys  map[string]*cachedImage
+	bytes int // of the images kept
+	max   int
 }
 
 type cachedImage struct {
+	key string
+	// img is held while the image is kept; shown, it is found through
+	// weak while anything shows it.
 	img   *ggui.StateValue[mdview.Image]
+	weak  weak.Pointer[ggui.StateValue[mdview.Image]]
 	bytes int
-	used  uint64
+	el    *list.Element // in kept; nil once let go of
 }
 
 func newImageCache() *imageCache {
-	return &imageCache{entries: map[string]*cachedImage{}, max: imageCacheBytes}
+	return &imageCache{kept: list.New(), keys: map[string]*cachedImage{}, max: imageCacheBytes}
 }
 
-// get is the image kept under key, noting it used.
+// cachedImage is the image kept under key, or one read through read,
+// which hands done the image back on the window's goroutine.
+func (m *model) cachedImage(key string, read func(done func(decodedImage, error))) *ggui.StateValue[mdview.Image] {
+	if img, ok := m.chatImages.get(key); ok {
+		return img
+	}
+	img := m.chatImages.add(key)
+	read(func(d decodedImage, err error) { m.chatImages.set(key, img, asMDImage(d, err)) })
+	return img
+}
+
+// get is the image under key, kept again if it was let go of while
+// something still shows it.
 func (c *imageCache) get(key string) (*ggui.StateValue[mdview.Image], bool) {
-	e, ok := c.entries[key]
+	e, ok := c.keys[key]
 	if !ok {
 		return nil, false
 	}
-	c.clock++
-	e.used = c.clock
+	if e.el != nil {
+		c.kept.MoveToFront(e.el)
+		return e.img, true
+	}
+	if e.img = e.weak.Value(); e.img == nil {
+		delete(c.keys, key)
+		return nil, false
+	}
+	e.el = c.kept.PushFront(e)
+	c.bytes += e.bytes
+	c.trim(e)
 	return e.img, true
 }
 
 // add keeps a new image under key, loading until set.
 func (c *imageCache) add(key string) *ggui.StateValue[mdview.Image] {
 	img := ggui.State(mdview.Image{Loading: true})
-	c.clock++
-	c.entries[key] = &cachedImage{img: img, used: c.clock}
+	e := &cachedImage{key: key, img: img, weak: weak.Make(img)}
+	e.el = c.kept.PushFront(e)
+	c.keys[key] = e
+	c.trim(e)
 	return img
 }
 
-// set shows v as img, the image added under key, and lets go of the images
-// used longest ago while those kept hold too many pixels.
+// set shows v as img, the image added under key, counting its pixels.
 func (c *imageCache) set(key string, img *ggui.StateValue[mdview.Image], v mdview.Image) {
 	img.Set(v)
-	e, ok := c.entries[key]
-	if !ok || e.img != img {
-		return // let go of while it was read
+	e, ok := c.keys[key]
+	if !ok || e.weak != weak.Make(img) {
+		return // gone, and read again, while it was read
 	}
-	c.bytes -= e.bytes
-	e.bytes = 0
+	n := 0
 	if v.Img != nil {
 		b := v.Img.Bounds()
-		e.bytes = b.Dx() * b.Dy() * 4
+		n = b.Dx() * b.Dy() * 4
 	}
-	c.bytes += e.bytes
-	for c.bytes > c.max && len(c.entries) > 1 {
-		oldest := ""
-		for k, o := range c.entries {
-			if k != key && (oldest == "" || o.used < c.entries[oldest].used) {
-				oldest = k
-			}
-		}
-		c.bytes -= c.entries[oldest].bytes
-		delete(c.entries, oldest)
+	if e.el != nil {
+		c.bytes += n - e.bytes
 	}
+	e.bytes = n
+	c.trim(e)
 }
 
-// shrunkImage is an image read, its pixels made no larger than it shows,
-// with the size it has as read.
-type shrunkImage struct {
-	decodedImage
-	size ggui.Size // 0 for one not shrunk
+// trim lets go of the images used longest ago, but for keep, while those
+// kept are too many or hold too many pixels, and forgets those let go of
+// that nothing shows any more once there are many.
+func (c *imageCache) trim(keep *cachedImage) {
+	for c.bytes > c.max || c.kept.Len() > imageCacheCount {
+		e := c.kept.Back().Value.(*cachedImage)
+		if e == keep {
+			break
+		}
+		c.kept.Remove(e.el)
+		e.el, e.img = nil, nil
+		c.bytes -= e.bytes
+	}
+	if len(c.keys) > 2*imageCacheCount {
+		for key, e := range c.keys {
+			if e.el == nil && e.weak.Value() == nil {
+				delete(c.keys, key)
+			}
+		}
+	}
 }
 
 // shrinkImage scales an image read down to fit within box, keeping its
 // shape, as it is read: off the window's goroutine. A drawn SVG keeps its
-// size, as its pixels are drawn into it.
-func shrinkImage(d decodedImage, box ggui.Size) shrunkImage {
-	s := shrunkImage{decodedImage: d}
+// size, as its pixels are drawn into it. An empty box leaves it as read.
+func shrinkImage(d decodedImage, box ggui.Size) decodedImage {
+	if box.W <= 0 || box.H <= 0 {
+		return d
+	}
 	if d.Img != nil {
 		b := d.Img.Bounds()
 		if small, ok := scaledToFit(d.Img, box); ok {
-			s.Img, s.size = small, ggui.Sz(float64(b.Dx()), float64(b.Dy()))
+			d.Img, d.Shown = small, ggui.Sz(float64(b.Dx()), float64(b.Dy()))
 		}
 	}
 	if d.Drawn != nil {
 		if small, ok := scaledToFit(d.Drawn.Pixels, box); ok {
 			drawn := *d.Drawn
 			drawn.Pixels = small
-			s.Drawn = &drawn
+			d.Drawn = &drawn
 		}
 	}
-	return s
-}
-
-// mdImage is the image for a page, as asMDImage makes it, its size the one
-// it had as read. It makes its texture, and so runs on the window's
-// goroutine.
-func (s shrunkImage) mdImage(err error) mdview.Image {
-	v := asMDImage(s.decodedImage, err)
-	if s.size.W > 0 && v.Img != nil && s.Img != nil {
-		v.Size = s.size
-	}
-	return v
+	return d
 }
 
 // scaledToFit is img scaled down to fit within box, keeping its shape, or

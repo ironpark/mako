@@ -100,6 +100,7 @@ type decodedImage struct {
 	File  *protocol.File
 	Img   image.Image
 	Drawn *svgdraw.Picture // an SVG's; nil for none, or one that cannot be drawn
+	Shown ggui.Size        // the size Img had as read, when it was shrunk to it
 }
 
 // drawnSVG is an SVG read as f, drawn, as it is read: off the window's
@@ -340,30 +341,38 @@ func (m *model) toggleDir(it fileItem) {
 }
 
 // fetchImage reads an image file from its node and decodes it, off the
-// window's goroutine; one too large to send comes without an image.
-func fetchImage(m *model, node, path string, done func(decodedImage, error)) {
+// window's goroutine, shrunk to fit box (none for an empty one); one too
+// large to send comes without an image.
+func fetchImage(m *model, node, path string, box ggui.Size, done func(decodedImage, error)) {
 	req := &protocol.ReadFile{NodeId: m.remoteID(node), Path: path, Image: true}
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (decodedImage, error) {
 		f, err := c.ReadFile(ctx, req)
 		if err != nil || f.GetData() == nil {
 			return decodedImage{File: f}, err
 		}
-		if isSVG(path) {
-			data := f.GetData()
-			f.Data = nil
-			return drawnSVG(f, data), nil
-		}
-		img, err := svgdraw.DecodeImage(f.GetData(), svgdraw.ImagePixels)
+		data := f.GetData()
 		f.Data = nil
-		return decodedImage{File: f, Img: img}, err
+		d, err := decodeImage(data, isSVG(path))
+		d.File = f
+		return shrinkImage(d, box), err
 	}, done)
+}
+
+// decodeImage decodes an image read, or draws it for an SVG; one larger
+// than an image is shown at is refused before its pixels are made.
+func decodeImage(data []byte, svg bool) (decodedImage, error) {
+	if svg {
+		return drawnSVG(nil, data), nil
+	}
+	img, err := svgdraw.DecodeImage(data, svgdraw.ImagePixels)
+	return decodedImage{Img: img}, err
 }
 
 // openPreview reads an image into the preview under the tree; any other
 // file opens in a tab.
 func (m *model) openPreview(it fileItem) {
 	m.files.Preview.Set(filePreview{fileItem: it, Loading: true})
-	fetchImage(m, it.Node, it.Path, func(d decodedImage, err error) {
+	fetchImage(m, it.Node, it.Path, ggui.Size{}, func(d decodedImage, err error) {
 		if ggui.Peek(m.files.Preview).Key != it.Key {
 			return // another file was chosen meanwhile
 		}
