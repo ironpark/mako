@@ -69,6 +69,21 @@ func (m *model) openBrowser(node, path, sel string) {
 	if sel != "" {
 		b.Sel.Set(dirKey(node, sel))
 	}
+	// closed runs once, as the window closes or fails to open, whichever
+	// comes, and an open that fails after building may bring both.
+	m.files.browsing[node]++
+	var gone bool
+	closed := func() {
+		if gone {
+			return
+		}
+		gone = true
+		m.files.browsing[node]--
+		if m.files.browsing[node] <= 0 {
+			delete(m.files.browsing, node)
+		}
+		m.pruneDirs()
+	}
 	w, err := m.window.App().OpenWindow(ggui.Config{
 		Title: b.title(path), Width: 860, Height: 560, MinWidth: 520, MinHeight: 320, Resizable: true,
 	}, func() ggui.Widget {
@@ -76,9 +91,11 @@ func (m *model) openBrowser(node, path, sel string) {
 		w := ggui.UseWindow()
 		ggui.Watch(b.Path, func(p string) { w.SetTitle(b.title(p)) })
 		ggui.OnCleanup(b.stop)
+		ggui.OnCleanup(closed)
 		return browserWindow(b)
 	})
 	if err != nil {
+		closed()
 		m.toaster.Push(ui.Toast(T("Could not browse the node"), err.Error()).Destructive())
 		return
 	}

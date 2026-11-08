@@ -180,6 +180,37 @@ func (m *model) loadDir(node, path string, force bool) {
 	})
 }
 
+// pruneDirs lets go of the listings of folders nothing shows, as the
+// window would otherwise keep every folder it ever listed: it keeps those
+// in the project shown and those open in the Files tab, which show again
+// with their project, and every folder of a node a file browser or the
+// folder picker is open on, as either goes anywhere there. A folder let
+// go of is read again when it is opened.
+func (m *model) pruneDirs() {
+	roots := ggui.Peek(m.Roots).Roots
+	open := ggui.Peek(m.files.Open)
+	picking := ggui.Peek(m.Pick.On)
+	dirs := ggui.Peek(m.files.Dirs)
+	keep := func(key string, l dirListing) bool {
+		node, p := splitKey(key)
+		return l.Loading || open[key] || m.files.browsing[node] > 0 || picking && node == m.Pick.Node ||
+			slices.ContainsFunc(roots, func(r panelRoot) bool { return r.Node == node && inDir(r.Path, p) })
+	}
+	var next map[string]dirListing
+	for key, l := range dirs {
+		if keep(key, l) {
+			continue
+		}
+		if next == nil {
+			next = maps.Clone(dirs)
+		}
+		delete(next, key)
+	}
+	if next != nil {
+		m.files.Dirs.Set(next)
+	}
+}
+
 // refreshFiles reads the project again, every folder of it shown, and
 // every folder open in them.
 func (m *model) refreshFiles() {
@@ -393,6 +424,7 @@ func filesPanel(m *model) ggui.Widget {
 			open[dirKey(own.Node, own.Path)] = true
 			m.files.Open.Set(open)
 		}
+		m.pruneDirs()
 		for _, r := range p.Roots {
 			if !p.multi() || open[dirKey(r.Node, r.Path)] {
 				m.loadDir(r.Node, r.Path, false)
