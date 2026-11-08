@@ -455,14 +455,50 @@ func (m *model) closeTab(id string) {
 		root.remove(id)
 		return 0
 	})
-	if conn := m.conns[id]; conn != nil {
-		conn.close()
-		delete(m.conns, id)
-	}
+	m.forgetTab(id)
+}
+
+// forgetTab lets go of what the window holds for a tab no layout has: its
+// terminal, with the stream and goroutine reading it, its chat and usage,
+// and its view.
+func (m *model) forgetTab(id string) {
+	m.dropConn(id)
 	delete(m.chats, id)
 	delete(m.usages, id)
-	m.ChatModes.Update(func(v map[string]bool) map[string]bool { v = maps.Clone(v); delete(v, id); return v })
-	m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(s string) bool { return s == id }))
+	if _, ok := ggui.Peek(m.ChatModes)[id]; ok {
+		m.ChatModes.Update(func(v map[string]bool) map[string]bool { v = maps.Clone(v); delete(v, id); return v })
+	}
+	if slices.Contains(ggui.Peek(m.Attached), id) {
+		m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(s string) bool { return s == id }))
+	}
+}
+
+// forgetClosedTabs forgets every tab that is in no layout, shown or not.
+// A tab leaves a space not shown, or with a layout another node gave,
+// without closeTab, which closes only the tabs shown.
+func (m *model) forgetClosedTabs() {
+	open := map[string]bool{}
+	for _, id := range m.allTabs() {
+		open[id] = true
+	}
+	var gone []string
+	for id := range m.conns {
+		gone = append(gone, id)
+	}
+	for id := range m.chats {
+		gone = append(gone, id)
+	}
+	for id := range m.usages {
+		gone = append(gone, id)
+	}
+	for id := range ggui.Peek(m.ChatModes) {
+		gone = append(gone, id)
+	}
+	for _, id := range gone {
+		if !open[id] {
+			m.forgetTab(id)
+		}
+	}
 }
 
 // openNew shows the new-session dialog, prefilled for a node and project.

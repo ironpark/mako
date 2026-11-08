@@ -94,6 +94,7 @@ func (m *model) dropLeftoverTabs(sessions []*protocol.SessionInfo, live map[stri
 		root.removeTabs(func(id string) bool { return gone[id] })
 		m.ws.layouts[key] = root
 	}
+	m.forgetClosedTabs()
 	m.workspaceChanged()
 }
 

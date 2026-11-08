@@ -253,6 +253,7 @@ func (m *model) setLayout(root *layoutNode) {
 		*r = *root
 		return root.groups()[0].ID
 	})
+	m.forgetClosedTabs()
 	m.attachVisible()
 }
 
