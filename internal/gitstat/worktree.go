@@ -178,11 +178,14 @@ func DiscardHunk(root, p string, hunk []*protocol.DiffLine) error {
 		}
 	}
 	full := filepath.Join(root, filepath.FromSlash(p))
-	info, err := os.Stat(full)
+	info, err := os.Lstat(full)
 	if err != nil {
 		return err
 	}
-	data, err := os.ReadFile(full)
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", p)
+	}
+	data, err := readRegular(full, maxCounted)
 	if err != nil {
 		return err
 	}

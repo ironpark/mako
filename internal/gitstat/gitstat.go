@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -311,18 +312,48 @@ func headContent(tree *object.Tree, p string) (string, bool) {
 	return s, err == nil
 }
 
-// diskContent is a file as the work tree has it, and whether it has it.
+// diskContent is a file as the work tree has it, and whether it has it. A
+// symbolic link is the path it holds, as git has it, not what it points
+// to, which may be a device or a pipe with no end.
 func diskContent(root, p string) (string, bool) {
 	full := filepath.Join(root, filepath.FromSlash(p))
-	info, err := os.Stat(full)
+	info, err := os.Lstat(full)
 	if err != nil || info.IsDir() {
 		return "", false
 	}
-	if info.Size() > maxCounted {
-		return "\x00", true // too large to count: shown as binary
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(full)
+		return filepath.ToSlash(target), err == nil
 	}
-	b, err := os.ReadFile(full)
+	if !info.Mode().IsRegular() || info.Size() > maxCounted {
+		return "\x00", true // not to be counted: shown as binary
+	}
+	b, err := readRegular(full, maxCounted)
+	if errors.Is(err, errTooLarge) {
+		return "\x00", true
+	}
 	return string(b), err == nil
+}
+
+var errTooLarge = errors.New("too large")
+
+// readRegular reads a regular file, which it is still when it is opened,
+// through no more than max bytes of it: a file grown past its stat is
+// errTooLarge.
+func readRegular(full string, max int64) ([]byte, error) {
+	f, err := os.Open(full)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if info, err := f.Stat(); err != nil || !info.Mode().IsRegular() {
+		return nil, cmp.Or(err, errors.New("not a regular file"))
+	}
+	b, err := io.ReadAll(io.LimitReader(f, max+1))
+	if err == nil && int64(len(b)) > max {
+		return nil, errTooLarge
+	}
+	return b, err
 }
 
 // Binary reports a NUL in a file's first 8000 bytes, as git decides.

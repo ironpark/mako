@@ -219,3 +219,23 @@ func TestStatusCountsAFileAgainOnlyWhenItChanged(t *testing.T) {
 		t.Fatalf("changed: +%d -%d, want +2 -1", a, r)
 	}
 }
+
+// A symbolic link is read as the path it holds, as git has it, and not
+// followed to a device that never ends; nor is a hunk discarded through
+// one.
+func TestALinkIsNotFollowed(t *testing.T) {
+	if _, err := os.Stat("/dev/zero"); err != nil {
+		t.Skip("no /dev/zero")
+	}
+	root := t.TempDir()
+	if err := os.Symlink("/dev/zero", filepath.Join(root, "zero")); err != nil {
+		t.Skip(err)
+	}
+	if got, ok := diskContent(root, "zero"); !ok || got != "/dev/zero" {
+		t.Errorf("read %.20q, %v", got, ok)
+	}
+	hunk := []*protocol.DiffLine{{Op: "+", New: 1, Text: "x"}}
+	if err := DiscardHunk(root, "zero", hunk); err == nil {
+		t.Error("a hunk was discarded through a link")
+	}
+}
