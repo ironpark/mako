@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"log"
 	"sync"
 	"time"
 )
@@ -24,6 +25,49 @@ type wsState struct {
 	last    []byte
 	timer   *time.Timer
 	writes  sync.WaitGroup // workspace writes still reaching disk
+	// writing is set while a goroutine writes the workspace down, and
+	// next is the file it writes after, the latest asked for; see write.
+	writeMu sync.Mutex
+	writing bool
+	next    *wsWrite
+}
+
+// wsWrite is a workspace file to write.
+type wsWrite struct {
+	path string
+	body []byte
+}
+
+// write writes body to path on a goroutine. One goroutine writes at a
+// time, the writes in the order asked for, and of those asked for while
+// one is under way only the latest: an older one landing last would
+// leave the file behind the window.
+func (ws *wsState) write(path string, body []byte) {
+	ws.writeMu.Lock()
+	defer ws.writeMu.Unlock()
+	ws.next = &wsWrite{path, body}
+	if ws.writing {
+		return
+	}
+	ws.writing = true
+	ws.writes.Add(1)
+	go func() {
+		defer ws.writes.Done()
+		for {
+			ws.writeMu.Lock()
+			w := ws.next
+			ws.next = nil
+			if w == nil {
+				ws.writing = false
+				ws.writeMu.Unlock()
+				return
+			}
+			ws.writeMu.Unlock()
+			if err := writeWindowFile(w.path, w.body); err != nil {
+				log.Printf("mako: save workspace: %v", err)
+			}
+		}
+	}()
 }
 
 func newWsState() *wsState {

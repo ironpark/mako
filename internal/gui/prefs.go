@@ -218,12 +218,29 @@ func writeConfigFile(name string, body []byte) error {
 }
 
 // writeWindowFile writes a file of the window's at path, making its folder if
-// need be.
+// need be. It writes a file beside it and renames that over it, so a
+// crash, or the window read meanwhile, finds the old file or the new,
+// never half of one.
 func writeWindowFile(path string, body []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(path, body, 0o600)
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*") // 0600
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+	if _, err := tmp.Write(body); err != nil {
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 // loadPrefs reads gui.json, falling back to the defaults for a missing file
