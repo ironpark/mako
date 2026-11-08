@@ -115,6 +115,7 @@ func (m *model) closePicker(dir string) {
 	if done != nil {
 		done(dir)
 	}
+	m.pruneDirs()
 }
 
 // picked is the folder the picker would choose: the one selected, else

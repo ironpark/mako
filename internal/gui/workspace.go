@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"log"
 	"maps"
 	"os"
 	"reflect"
@@ -253,6 +252,7 @@ func (m *model) setLayout(root *layoutNode) {
 		*r = *root
 		return root.groups()[0].ID
 	})
+	m.forgetClosedTabs()
 	m.attachVisible()
 }
 
@@ -325,13 +325,7 @@ func (m *model) writeWorkspace() []byte {
 	if err != nil {
 		return body
 	}
-	m.ws.writes.Add(1)
-	go func() {
-		defer m.ws.writes.Done()
-		if err := writeWindowFile(path, body); err != nil {
-			log.Printf("mako: save workspace: %v", err)
-		}
-	}()
+	m.ws.write(path, body)
 	return body
 }
 
