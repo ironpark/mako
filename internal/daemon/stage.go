@@ -11,15 +11,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transport"
 )
 
 // A file dropped on a window goes to the node of the session it was
 // dropped on, which cannot read the window's disk: the window sends it in
-// pieces, and the node keeps it in a folder of its own under the temporary
-// directory, whose path the session is given. A day on, the next file
-// staged clears it away.
+// pieces, and the node keeps it in a folder of its own under this user's
+// cache, whose path the session is given. A day on, the next file staged
+// clears it away.
 
 // maxStaged caps a staged file, which a session is handed to read.
 const maxStaged = 512 << 20
@@ -27,12 +28,28 @@ const maxStaged = 512 << 20
 // stagedFor is how long a staged file is kept.
 const stagedFor = 24 * time.Hour
 
-// stageRoot is where staged files are kept on this node.
-func stageRoot() string { return filepath.Join(os.TempDir(), "mako-drops") }
+// stageRoot is where staged files are kept on this node: in this user's
+// cache, or failing that the daemon's run directory, which no one else may
+// enter. A fixed folder in the temporary directory, as it was, is one that
+// any user may make first, and so read or swap what is staged in it.
+func (d *Daemon) stageRoot() (string, error) {
+	if cache, err := os.UserCacheDir(); err == nil {
+		return filepath.Join(cache, "mako", "mako-drops"), nil
+	}
+	run, err := config.RunDir(d.dir)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(run, "mako-drops"), nil
+}
 
 func (d *Daemon) handleStageFile(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeStaged, func(r *protocol.StageFile) (*protocol.Staged, error) {
-		return stageFile(stageRoot(), r)
+		root, err := d.stageRoot()
+		if err != nil {
+			return nil, err
+		}
+		return stageFile(root, r)
 	})
 }
 

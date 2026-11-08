@@ -3,9 +3,12 @@ package daemon
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -43,5 +46,30 @@ func TestStagedFilesArriveInPieces(t *testing.T) {
 	}
 	if _, err := os.Stat(old); !os.IsNotExist(err) {
 		t.Fatal("the old staged folder is still there")
+	}
+}
+
+// Files are staged in this user's own cache, not in a folder of the
+// temporary directory another user may have made first.
+func TestFilesAreStagedInTheUsersCache(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the cache is named by LocalAppData")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", "")
+	root, err := New(&config.Config{NodeID: "node"}, nil).stageRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(root, home+string(filepath.Separator)) || filepath.Base(root) != "mako-drops" {
+		t.Fatalf("staged in %s", root)
+	}
+	staged, err := stageFile(root, &protocol.StageFile{Name: "a.txt", Data: []byte("a")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(filepath.Dir(staged.GetPath())); err != nil || info.Mode().Perm() != 0o700 {
+		t.Fatalf("staged folder: %v, %v", info, err)
 	}
 }
