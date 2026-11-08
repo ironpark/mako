@@ -60,7 +60,7 @@ func TestStatusCountsEachChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := Status(filepath.Join(root, "internal")) // from inside the tree
+	got, err := Status(t.Context(), filepath.Join(root, "internal")) // from inside the tree
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestStatusCountsEachChange(t *testing.T) {
 		}
 	}
 
-	if out, err := Status(t.TempDir()); err != nil || !out.GetNotRepo() {
+	if out, err := Status(t.Context(), t.TempDir()); err != nil || !out.GetNotRepo() {
 		t.Fatalf("outside a repository: %+v, %v", out, err)
 	}
 }
@@ -161,7 +161,7 @@ func TestStatusMatchesGoGit(t *testing.T) {
 	}
 	r, _ := git.PlainOpen(root)
 	wt, _ := r.Worktree()
-	fromGit, _, _, err := status(wt, root)
+	fromGit, _, _, err := status(t.Context(), wt, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestStatusCountsAFileAgainOnlyWhenItChanged(t *testing.T) {
 	root := repo(t, map[string]string{"a.txt": "one\n"})
 	counted := func() (int64, int64) {
 		t.Helper()
-		st, err := Status(root)
+		st, err := Status(t.Context(), root)
 		if err != nil || len(st.GetFiles()) != 1 {
 			t.Fatalf("status %+v, %v", st, err)
 		}

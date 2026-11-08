@@ -36,8 +36,11 @@ const MaxDiffLines = 5000
 const contextLines = 3
 
 // Status reports the changes of the work tree dir is in, against HEAD,
-// staged or not. A dir in no repository reports NotRepo.
-func Status(dir string) (*protocol.GitChanges, error) {
+// staged or not. A dir in no repository reports NotRepo. git is given
+// ten seconds, within ctx, to answer.
+func Status(ctx context.Context, dir string) (*protocol.GitChanges, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	repo, err := git.PlainOpenWithOptions(dir, &git.PlainOpenOptions{DetectDotGit: true, EnableDotGitCommonDir: true})
 	if errors.Is(err, git.ErrRepositoryNotExists) {
 		return &protocol.GitChanges{NotRepo: true}, nil
@@ -50,7 +53,7 @@ func Status(dir string) (*protocol.GitChanges, error) {
 		return nil, err
 	}
 	out := &protocol.GitChanges{Root: wt.Filesystem.Root(), Branch: branch(repo)}
-	st, track, heads, err := status(wt, out.GetRoot())
+	st, track, heads, err := status(ctx, wt, out.GetRoot())
 	if err != nil {
 		return nil, err
 	}
@@ -73,8 +76,6 @@ func Status(dir string) (*protocol.GitChanges, error) {
 	}
 	// What go-git does not read, git is asked: stashes, and a merge or
 	// rebase under way with the files it left in conflict.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	out.Stashes = stashes(ctx, out.GetRoot())
 	var unmerged map[string]bool
 	if out.Operation = Operation(ctx, out.GetRoot()); out.Operation != "" {
@@ -179,10 +180,14 @@ const mostCounts = 4096
 // on the PATH: it skips the folders .gitignore leaves out, where go-git
 // walks every one (node_modules and the like, seconds a time), and it
 // takes no lock an agent's own git would wait on. go-git's is the
-// fallback, which knows no upstream, nor the objects.
-func status(wt *git.Worktree, root string) (git.Status, tracking, map[string]string, error) {
-	out, err := exec.Command("git", "-C", root, "--no-optional-locks",
+// fallback, which knows no upstream, nor the objects; but not for a git
+// that ran out of time, as go-git would take longer still.
+func status(ctx context.Context, wt *git.Worktree, root string) (git.Status, tracking, map[string]string, error) {
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "--no-optional-locks",
 		"status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all").Output()
+	if err != nil && ctx.Err() != nil {
+		return nil, tracking{}, nil, ctx.Err()
+	}
 	if err != nil {
 		st, err := wt.Status()
 		return st, tracking{}, nil, err
