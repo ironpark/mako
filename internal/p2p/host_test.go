@@ -363,3 +363,41 @@ func TestPairingLink(t *testing.T) {
 		}
 	}
 }
+
+// An introduction that ends after its link went leaves nothing behind, and
+// on the next link a later introduction clears an earlier failure.
+func TestATrustStateGoesWithItsLink(t *testing.T) {
+	tr := newHost(t).trust
+	p := newHost(t).ID()
+
+	tr.mu.Lock()
+	old := tr.state(p)
+	tr.mu.Unlock()
+	tr.forget(p)
+	select {
+	case <-old.done:
+	default:
+		t.Fatal("an introduction of a link gone still pending")
+	}
+	tr.settle(p, old, errors.New("stream reset"))
+	tr.settle(p, old, nil)
+	tr.mu.Lock()
+	left := tr.peers[p] != nil
+	tr.mu.Unlock()
+	if left {
+		t.Fatal("an introduction of a link gone left a state behind")
+	}
+
+	tr.mu.Lock()
+	st := tr.state(p)
+	st.peer = Peer{ID: p, Trusts: true}
+	tr.mu.Unlock()
+	tr.settle(p, st, errors.New("timed out"))
+	if tr.trusts(p) {
+		t.Fatal("trusted after a failed introduction")
+	}
+	tr.settle(p, st, nil)
+	if !tr.trusts(p) {
+		t.Fatal("a later introduction did not clear the failure")
+	}
+}

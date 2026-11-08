@@ -36,6 +36,9 @@ const trustProtocol protocol.ID = "/mako/trust/1"
 // ErrNotTrusted is a request to a peer that does not let this host in.
 var ErrNotTrusted = errors.New("p2p: the peer has not let this node in")
 
+// errGone is an introduction cut short by the peer's link going.
+var errGone = errors.New("p2p: the peer's link went")
+
 // intro is what a host says of itself on the trust protocol.
 type intro struct {
 	Node string `json:"node"` // its node ID
@@ -81,8 +84,11 @@ type trust struct {
 	dropped func(id string)
 }
 
-// trustState is where a peer stands: done is closed once the two have
-// first introduced themselves, err saying whether that failed.
+// trustState is where a peer stands over one link: done is closed once
+// the two have first introduced themselves, err saying whether the last
+// introduction failed. A link that goes takes its state with it, so an
+// introduction holds on to the state it began with, and what it brings
+// for a state no longer the peer's is dropped.
 type trustState struct {
 	started bool
 	done    chan struct{}
@@ -127,7 +133,10 @@ func (t *trust) attach(h host.Host) {
 	t.h = h
 	h.SetStreamHandler(trustProtocol, func(s network.Stream) {
 		p := s.Conn().RemotePeer()
-		t.settle(p, t.exchange(s))
+		t.mu.Lock()
+		st := t.state(p)
+		t.mu.Unlock()
+		t.settle(p, st, t.exchange(st, s))
 	})
 	h.Network().Notify(&network.NotifyBundle{
 		ConnectedF: func(_ network.Network, c network.Conn) {
@@ -137,16 +146,32 @@ func (t *trust) attach(h host.Host) {
 		},
 		DisconnectedF: func(n network.Network, c network.Conn) {
 			if n.Connectedness(c.RemotePeer()) == network.NotConnected {
-				t.mu.Lock()
-				delete(t.peers, c.RemotePeer())
-				dropped := t.dropped
-				t.mu.Unlock()
-				if dropped != nil {
-					go dropped(c.RemotePeer().String())
-				}
+				t.forget(c.RemotePeer())
 			}
 		},
 	})
+}
+
+// forget drops where p stands, its link gone. An introduction still under
+// way belongs to that link: it fails now, so whoever waits on it does not
+// wait out its timeout, and what it brings later is dropped, as the next
+// link starts afresh.
+func (t *trust) forget(p peer.ID) {
+	t.mu.Lock()
+	if st := t.peers[p]; st != nil {
+		select {
+		case <-st.done:
+		default:
+			st.err = errGone
+			close(st.done)
+		}
+	}
+	delete(t.peers, p)
+	dropped := t.dropped
+	t.mu.Unlock()
+	if dropped != nil {
+		go dropped(p.String())
+	}
 }
 
 // state is where p stands, made the first time it is asked for. t.mu is
@@ -228,34 +253,40 @@ func (t *trust) begin(p peer.ID) {
 	st.started = true
 	t.mu.Unlock()
 	if start {
-		go t.introduce(p)
+		go t.introduce(p, st)
 	}
 }
 
-// introduce opens the trust protocol to p and introduces the two.
-func (t *trust) introduce(p peer.ID) {
+// introduce opens the trust protocol to p and introduces the two, over
+// the link st is of.
+func (t *trust) introduce(p peer.ID, st *trustState) {
 	ctx, cancel := context.WithTimeout(context.Background(), trustTimeout)
 	defer cancel()
 	s, err := t.h.NewStream(network.WithAllowLimitedConn(ctx, "mako-trust"), p, trustProtocol)
 	if err != nil {
-		t.settle(p, err)
+		t.settle(p, st, err)
 		return
 	}
-	t.settle(p, t.exchange(s))
+	t.settle(p, st, t.exchange(st, s))
 }
 
 // reconsider introduces this host again to every peer, as when its keys
 // changed, so each side decides anew.
 func (t *trust) reconsider() {
-	for _, p := range t.list() {
-		go t.introduce(p.ID)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for p, st := range t.peers {
+		if _, ok := settled(st); ok {
+			go t.introduce(p, st)
+		}
 	}
 }
 
 // exchange introduces the two hosts on s, which either side opened: each
 // says who it is, then whether it lets the other in. It records where the
-// peer stands, and returns an error if the peer cannot be told apart.
-func (t *trust) exchange(s network.Stream) error {
+// peer stands in st, and returns an error if the peer cannot be told
+// apart.
+func (t *trust) exchange(st *trustState, s network.Stream) error {
 	defer s.Close()
 	_ = s.SetDeadline(time.Now().Add(trustTimeout))
 	p := s.Conn().RemotePeer()
@@ -290,25 +321,30 @@ func (t *trust) exchange(s network.Stream) error {
 		return err
 	}
 	t.mu.Lock()
-	st := t.state(p)
 	st.peer = Peer{ID: p, Node: theirs.Node, Name: theirs.Name, OS: theirs.OS, Arch: theirs.Arch, Key: key, Owner: owner, Addr: s.Conn().RemoteMultiaddr(), Trusts: trusts, TrustedBy: v.Trusts}
 	t.mu.Unlock()
 	return nil
 }
 
-// settle records that p has introduced itself, or failed to. The first
-// time decides whether the link is of any use; a failure then hangs up.
-func (t *trust) settle(p peer.ID, err error) {
+// settle records in st that p has introduced itself, or failed to. The
+// first time decides whether the link is of any use; a failure then hangs
+// up. Of a link gone, nothing is recorded.
+func (t *trust) settle(p peer.ID, st *trustState, err error) {
 	t.mu.Lock()
-	st := t.state(p)
+	if t.peers[p] != st {
+		t.mu.Unlock()
+		return
+	}
 	first := false
 	select {
 	case <-st.done:
 	default:
 		first = true
-		st.err = err
 		close(st.done)
 	}
+	// The last introduction is what holds: a later one that went through
+	// clears an earlier failure.
+	st.err = err
 	info, changed := st.peer, t.changed
 	t.mu.Unlock()
 	if err != nil {
