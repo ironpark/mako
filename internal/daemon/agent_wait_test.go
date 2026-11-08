@@ -126,6 +126,17 @@ func TestWaitingForOutput(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("the text did not show")
 	}
+	// Text longer than what is kept of the output is still found.
+	long, err := session.Start(session.Spec{ID: "long", Command: []string{"sh", "-c", `sleep 0.3; head -c 200000 /dev/zero | tr '\0' x; printf end; sleep 5`}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer long.Close()
+	select {
+	case <-watchOutput(t.Context(), long, strings.Repeat("x", 200000)+"end"):
+	case <-time.After(5 * time.Second):
+		t.Fatal("the long text did not show")
+	}
 	if got := agent.StripANSI("\x1b[38;5;2mok\x1b[0m\x1b]8;;http://x\x1b\\link\x1b(B\x1b[>1u\x1bP+q\x1b\\\r\n"); got != "oklink\n" {
 		t.Fatalf("stripped: %q", got)
 	}

@@ -353,3 +353,26 @@ func TestASessionStartsWithItsDevice(t *testing.T) {
 		t.Fatal("a session started with a device not attached")
 	}
 }
+
+// A port no longer listened on closes the connections that waited on it
+// for the borrower, and any that come after.
+func TestAPortNoLongerListenedOnClosesWhatWaited(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c claims
+	l := &devListener{claimID: "c", ln: ln, conns: make(chan net.Conn, 16), done: make(chan struct{})}
+	c.listen(l)
+	waiting, waitingPeer := net.Pipe()
+	l.queue(waiting)
+	c.unlisten(l)
+	late, latePeer := net.Pipe()
+	l.queue(late)
+	for name, peer := range map[string]net.Conn{"waiting": waitingPeer, "late": latePeer} {
+		_ = peer.SetReadDeadline(time.Now().Add(time.Second))
+		if _, err := peer.Read(make([]byte, 1)); err == nil || os.IsTimeout(err) {
+			t.Errorf("the %s connection was left open: %v", name, err)
+		}
+	}
+}

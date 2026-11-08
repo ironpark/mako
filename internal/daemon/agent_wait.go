@@ -180,7 +180,9 @@ func watchOutput(ctx context.Context, s *session.Session, text string) <-chan st
 				return
 			}
 			if len(kept) > waitOutputKept {
-				kept = append(kept[:0], kept[len(kept)-len(want):]...)
+				// Waiting for text longer than that, all of it is kept, as
+				// the text may begin anywhere in it.
+				kept = append(kept[:0], kept[max(0, len(kept)-len(want)):]...)
 			}
 		}
 	}()

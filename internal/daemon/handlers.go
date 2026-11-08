@@ -140,7 +140,7 @@ func (d *Daemon) handleAttach(ctx context.Context, stream *transport.Stream, env
 }
 
 // attachLocal pipes a session of this daemon through w.
-func (d *Daemon) attachLocal(ctx context.Context, req *protocol.Attach, w attachWire) error {
+func (d *Daemon) attachLocal(ctx context.Context, req *protocol.Attach, w attachWire) (err error) {
 	s, err := d.attachSession(ctx, req.GetSessionId())
 	if err != nil {
 		return err
@@ -164,13 +164,29 @@ func (d *Daemon) attachLocal(ctx context.Context, req *protocol.Attach, w attach
 		}
 	}
 
+	served := ctx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	// Inbound frames on an attached stream are input and resize only.
+	// readInput is the stream's one reader until the front-end hangs up,
+	// so the attach waits for it: serveStream reads the stream next. An
+	// error is told the front-end first, as it hangs up once it hears of
+	// the attach's end; a daemon stopping hangs up itself.
+	input := make(chan struct{})
 	go func() {
+		defer close(input)
 		defer cancel()
 		w.readInput(s)
+	}()
+	defer func() {
+		switch {
+		case served.Err() != nil:
+			_ = w.stream.Hangup()
+		case err != nil && !isClosed(err):
+			err = protocol.WriteError(w.stream, w.id, err)
+		}
+		<-input
 	}()
 
 	for {

@@ -42,6 +42,9 @@ type Daemon struct {
 	sessionMu   sync.Mutex // protects saved launches and activation
 	saved       map[string]savedSession
 	sessionPath string
+	// starting are the sessions whose launch is being made ready, each
+	// closed as its start ends; guarded by sessionMu.
+	starting map[string]chan struct{}
 
 	sessions      *registry
 	conversations conversations

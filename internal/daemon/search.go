@@ -165,6 +165,13 @@ func grepOutput(cmd *exec.Cmd) (*protocol.SearchResult, error) {
 		}
 		out.Matches = append(out.Matches, &protocol.SearchMatch{Path: strings.TrimPrefix(path, "./"), Line: int64(line), Col: int64(col), Text: clip(text)})
 	}
+	if sc.Err() != nil {
+		// A line past the scanner's limit, as git grep prints whole: the
+		// program, its output no longer read, would block on it, and Wait
+		// with it. What came before it is the result.
+		out.Truncated = true
+		_ = cmd.Process.Kill()
+	}
 	err = cmd.Wait()
 	var exit *exec.ExitError
 	if err != nil && (out.GetTruncated() || errors.As(err, &exit) && exit.ExitCode() == 1) {
