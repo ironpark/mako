@@ -281,6 +281,56 @@ public  final class Envelope extends
 
   }
 
+  public static final int WITHIN_MS_FIELD_NUMBER = 2;
+  private int withinMs_;
+  /**
+   * <pre>
+   * within_ms, on a request whose reply ends the stream's use, is how
+   * long from its sending the asker waits for that reply; 0 for no
+   * bound. A daemon passing the request to another node waits no longer,
+   * and passes on what is left. A time, not a moment: nodes' clocks
+   * differ.
+   * </pre>
+   *
+   * <code>uint32 within_ms = 2 [json_name = "withinMs"];</code>
+   * @return The withinMs.
+   */
+  @java.lang.Override
+  public int getWithinMs() {
+    return withinMs_;
+  }
+  /**
+   * <pre>
+   * within_ms, on a request whose reply ends the stream's use, is how
+   * long from its sending the asker waits for that reply; 0 for no
+   * bound. A daemon passing the request to another node waits no longer,
+   * and passes on what is left. A time, not a moment: nodes' clocks
+   * differ.
+   * </pre>
+   *
+   * <code>uint32 within_ms = 2 [json_name = "withinMs"];</code>
+   * @param value The withinMs to set.
+   */
+  private void setWithinMs(int value) {
+    
+    withinMs_ = value;
+  }
+  /**
+   * <pre>
+   * within_ms, on a request whose reply ends the stream's use, is how
+   * long from its sending the asker waits for that reply; 0 for no
+   * bound. A daemon passing the request to another node waits no longer,
+   * and passes on what is left. A time, not a moment: nodes' clocks
+   * differ.
+   * </pre>
+   *
+   * <code>uint32 within_ms = 2 [json_name = "withinMs"];</code>
+   */
+  private void clearWithinMs() {
+
+    withinMs_ = 0;
+  }
+
   public static final int HELLO_FIELD_NUMBER = 10;
   /**
    * <pre>
@@ -4446,6 +4496,58 @@ public  final class Envelope extends
 
     /**
      * <pre>
+     * within_ms, on a request whose reply ends the stream's use, is how
+     * long from its sending the asker waits for that reply; 0 for no
+     * bound. A daemon passing the request to another node waits no longer,
+     * and passes on what is left. A time, not a moment: nodes' clocks
+     * differ.
+     * </pre>
+     *
+     * <code>uint32 within_ms = 2 [json_name = "withinMs"];</code>
+     * @return The withinMs.
+     */
+    @java.lang.Override
+    public int getWithinMs() {
+      return instance.getWithinMs();
+    }
+    /**
+     * <pre>
+     * within_ms, on a request whose reply ends the stream's use, is how
+     * long from its sending the asker waits for that reply; 0 for no
+     * bound. A daemon passing the request to another node waits no longer,
+     * and passes on what is left. A time, not a moment: nodes' clocks
+     * differ.
+     * </pre>
+     *
+     * <code>uint32 within_ms = 2 [json_name = "withinMs"];</code>
+     * @param value The withinMs to set.
+     * @return This builder for chaining.
+     */
+    public Builder setWithinMs(int value) {
+      copyOnWrite();
+      instance.setWithinMs(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * within_ms, on a request whose reply ends the stream's use, is how
+     * long from its sending the asker waits for that reply; 0 for no
+     * bound. A daemon passing the request to another node waits no longer,
+     * and passes on what is left. A time, not a moment: nodes' clocks
+     * differ.
+     * </pre>
+     *
+     * <code>uint32 within_ms = 2 [json_name = "withinMs"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearWithinMs() {
+      copyOnWrite();
+      instance.clearWithinMs();
+      return this;
+    }
+
+    /**
+     * <pre>
      * The handshake, which opens every stream.
      * </pre>
      *
@@ -8327,6 +8429,7 @@ public  final class Envelope extends
             "body_",
             "bodyCase_",
             "id_",
+            "withinMs_",
             dev.ironpark.mako.v2.Hello.class,
             dev.ironpark.mako.v2.Welcome.class,
             dev.ironpark.mako.v2.Error.class,
@@ -8405,15 +8508,16 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.DeviceAccept.class,
           };
           java.lang.String info =
-              "\u0000M\u0001\u0000\u0001oM\u0000\u0000\u0000\u0001\u0208\n<\u0000\u000b<\u0000\f" +
-              "<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000\u001a<\u0000" +
-              "\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000\"<\u0000#<\u0000" +
-              "$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000+<\u0000,<\u0000-<\u0000" +
-              "2<\u00003<\u00004<\u00005<\u00006<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000" +
-              "<<\u0000=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000" +
-              "F<\u0000G<\u0000H<\u0000I<\u0000J<\u0000K<\u0000L<\u0000M<\u0000N<\u0000O<\u0000" +
-              "P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000" +
-              "g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000";
+              "\u0000N\u0001\u0000\u0001oN\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000\u000b" +
+              "<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000" +
+              "\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000" +
+              "\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000+<\u0000" +
+              ",<\u0000-<\u00002<\u00003<\u00004<\u00005<\u00006<\u00007<\u00008<\u00009<\u0000" +
+              ":<\u0000;<\u0000<<\u0000=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000" +
+              "D<\u0000E<\u0000F<\u0000G<\u0000H<\u0000I<\u0000J<\u0000K<\u0000L<\u0000M<\u0000" +
+              "N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000" +
+              "e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000" +
+              "o<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

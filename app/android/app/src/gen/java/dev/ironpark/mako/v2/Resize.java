@@ -10,7 +10,10 @@ package dev.ironpark.mako.v2;
  * Resize changes a session's window. cell_width and cell_height are a
  * cell's size in pixels, as the front-end draws it: the PTY reports the
  * window's size in pixels from them, and images a program places are sized
- * by them. Zero keeps the size last told.
+ * by them. Zero keeps the size last told. colors, when set, are the
+ * front-end's: what the session's terminal answers a program asking its
+ * colours or whether it is dark, and tells one that subscribed to that.
+ * A Resize of colors alone leaves cols and rows zero.
  * </pre>
  *
  * Protobuf type {@code mako.v2.Resize}
@@ -24,6 +27,7 @@ public  final class Resize extends
   private Resize() {
     sessionId_ = "";
   }
+  private int bitField0_;
   public static final int SESSION_ID_FIELD_NUMBER = 1;
   private java.lang.String sessionId_;
   /**
@@ -175,6 +179,53 @@ public  final class Resize extends
     cellHeight_ = 0;
   }
 
+  public static final int COLORS_FIELD_NUMBER = 6;
+  private dev.ironpark.mako.v2.TerminalColors colors_;
+  /**
+   * <code>.mako.v2.TerminalColors colors = 6 [json_name = "colors"];</code>
+   */
+  @java.lang.Override
+  public boolean hasColors() {
+    return ((bitField0_ & 0x00000001) != 0);
+  }
+  /**
+   * <code>.mako.v2.TerminalColors colors = 6 [json_name = "colors"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.TerminalColors getColors() {
+    return colors_ == null ? dev.ironpark.mako.v2.TerminalColors.getDefaultInstance() : colors_;
+  }
+  /**
+   * <code>.mako.v2.TerminalColors colors = 6 [json_name = "colors"];</code>
+   */
+  private void setColors(dev.ironpark.mako.v2.TerminalColors value) {
+    java.util.Objects.requireNonNull(value);
+    colors_ = value;
+    bitField0_ |= 0x00000001;
+  }
+  /**
+   * <code>.mako.v2.TerminalColors colors = 6 [json_name = "colors"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeColors(dev.ironpark.mako.v2.TerminalColors value) {
+    java.util.Objects.requireNonNull(value);
+    if (colors_ != null &&
+        colors_ != dev.ironpark.mako.v2.TerminalColors.getDefaultInstance()) {
+      colors_ =
+        dev.ironpark.mako.v2.TerminalColors.newBuilder(colors_).mergeFrom(value).buildPartial();
+    } else {
+      colors_ = value;
+    }
+    bitField0_ |= 0x00000001;
+  }
+  /**
+   * <code>.mako.v2.TerminalColors colors = 6 [json_name = "colors"];</code>
+   */
+  private void clearColors() {
+    colors_ = null;
+    bitField0_ = (bitField0_ & ~0x00000001);
+  }
+
   public static dev.ironpark.mako.v2.Resize parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -263,7 +314,10 @@ public  final class Resize extends
    * Resize changes a session's window. cell_width and cell_height are a
    * cell's size in pixels, as the front-end draws it: the PTY reports the
    * window's size in pixels from them, and images a program places are sized
-   * by them. Zero keeps the size last told.
+   * by them. Zero keeps the size last told. colors, when set, are the
+   * front-end's: what the session's terminal answers a program asking its
+   * colours or whether it is dark, and tells one that subscribed to that.
+   * A Resize of colors alone leaves cols and rows zero.
    * </pre>
    *
    * Protobuf type {@code mako.v2.Resize}
@@ -440,6 +494,53 @@ public  final class Resize extends
       return this;
     }
 
+    /**
+     * <code>.mako.v2.TerminalColors colors = 6 [json_name = "colors"];</code>
+     */
+    @java.lang.Override
+    public boolean hasColors() {
+      return instance.hasColors();
+    }
+    /**
+     * <code>.mako.v2.TerminalColors colors = 6 [json_name = "colors"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.TerminalColors getColors() {
+      return instance.getColors();
+    }
+    /**
+     * <code>.mako.v2.TerminalColors colors = 6 [json_name = "colors"];</code>
+     */
+    public Builder setColors(dev.ironpark.mako.v2.TerminalColors value) {
+      copyOnWrite();
+      instance.setColors(value);
+      return this;
+      }
+    /**
+     * <code>.mako.v2.TerminalColors colors = 6 [json_name = "colors"];</code>
+     */
+    public Builder setColors(
+        dev.ironpark.mako.v2.TerminalColors.Builder builderForValue) {
+      copyOnWrite();
+      instance.setColors(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.TerminalColors colors = 6 [json_name = "colors"];</code>
+     */
+    public Builder mergeColors(dev.ironpark.mako.v2.TerminalColors value) {
+      copyOnWrite();
+      instance.mergeColors(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.TerminalColors colors = 6 [json_name = "colors"];</code>
+     */
+    public Builder clearColors() {  copyOnWrite();
+      instance.clearColors();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Resize)
   }
   @java.lang.Override
@@ -456,15 +557,17 @@ public  final class Resize extends
       }
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
+            "bitField0_",
             "sessionId_",
             "cols_",
             "rows_",
             "cellWidth_",
             "cellHeight_",
+            "colors_",
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
-              "\u0003\u000b\u0004\u000b\u0005\u000b";
+              "\u0000\u0006\u0000\u0001\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
+              "\u0003\u000b\u0004\u000b\u0005\u000b\u0006\u1009\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

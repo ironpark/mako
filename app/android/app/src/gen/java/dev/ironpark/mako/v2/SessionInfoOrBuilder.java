@@ -469,4 +469,36 @@ public interface SessionInfoOrBuilder extends
    * @return The turns.
    */
   long getTurns();
+
+  /**
+   * <pre>
+   * notice is the last desktop notification the session's program posted
+   * itself, over OSC 9 or 777; unset before it posts one.
+   * </pre>
+   *
+   * <code>.mako.v2.Notice notice = 33 [json_name = "notice"];</code>
+   * @return Whether the notice field is set.
+   */
+  boolean hasNotice();
+  /**
+   * <pre>
+   * notice is the last desktop notification the session's program posted
+   * itself, over OSC 9 or 777; unset before it posts one.
+   * </pre>
+   *
+   * <code>.mako.v2.Notice notice = 33 [json_name = "notice"];</code>
+   * @return The notice.
+   */
+  dev.ironpark.mako.v2.Notice getNotice();
+
+  /**
+   * <pre>
+   * bells counts the bells the session's program rang: a front-end that
+   * sees it move asks for the user's attention.
+   * </pre>
+   *
+   * <code>uint64 bells = 34 [json_name = "bells"];</code>
+   * @return The bells.
+   */
+  long getBells();
 }
