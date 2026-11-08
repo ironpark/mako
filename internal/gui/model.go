@@ -404,8 +404,7 @@ func (m *model) attach(id string) {
 		if !conn.failed() {
 			return
 		}
-		conn.close()
-		delete(m.conns, id)
+		m.dropConn(id)
 		m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(tab string) bool { return tab == id }))
 	}
 	info, ok := m.session(id)
@@ -464,15 +463,7 @@ func (m *model) closeTab(id string) {
 // terminal, with the stream and goroutine reading it, its chat and usage,
 // and its view.
 func (m *model) forgetTab(id string) {
-	m.dropConn(id)
-	delete(m.chats, id)
-	delete(m.usages, id)
-	if _, ok := ggui.Peek(m.ChatModes)[id]; ok {
-		m.ChatModes.Update(func(v map[string]bool) map[string]bool { v = maps.Clone(v); delete(v, id); return v })
-	}
-	if slices.Contains(ggui.Peek(m.Attached), id) {
-		m.Attached.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(m.Attached)), func(s string) bool { return s == id }))
-	}
+	m.forgetTabs(func(t string) bool { return t == id })
 }
 
 // forgetClosedTabs forgets every tab that is in no layout, shown or not.
@@ -483,23 +474,29 @@ func (m *model) forgetClosedTabs() {
 	for _, id := range m.allTabs() {
 		open[id] = true
 	}
-	var gone []string
+	m.forgetTabs(func(id string) bool { return !open[id] })
+}
+
+// forgetTabs forgets the tabs gone says are, setting the window's state
+// once for them all.
+func (m *model) forgetTabs(gone func(id string) bool) {
 	for id := range m.conns {
-		gone = append(gone, id)
-	}
-	for id := range m.chats {
-		gone = append(gone, id)
-	}
-	for id := range m.usages {
-		gone = append(gone, id)
-	}
-	for id := range ggui.Peek(m.ChatModes) {
-		gone = append(gone, id)
-	}
-	for _, id := range gone {
-		if !open[id] {
-			m.forgetTab(id)
+		if gone(id) {
+			m.dropConn(id)
 		}
+	}
+	maps.DeleteFunc(m.chats, func(id string, _ *chatState) bool { return gone(id) })
+	maps.DeleteFunc(m.usages, func(id string, _ *usageState) bool { return gone(id) })
+	for id := range ggui.Peek(m.ChatModes) {
+		if gone(id) {
+			modes := maps.Clone(ggui.Peek(m.ChatModes))
+			maps.DeleteFunc(modes, func(id string, _ bool) bool { return gone(id) })
+			m.ChatModes.Set(modes)
+			break
+		}
+	}
+	if attached := ggui.Peek(m.Attached); slices.ContainsFunc(attached, gone) {
+		m.Attached.Set(slices.DeleteFunc(slices.Clone(attached), gone))
 	}
 }
 

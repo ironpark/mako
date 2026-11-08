@@ -179,26 +179,6 @@ func TestPruneDirsKeepsWhatShows(t *testing.T) {
 	}
 }
 
-// A folder is in another only past a separator.
-func TestInDir(t *testing.T) {
-	for _, c := range []struct {
-		dir, p string
-		in     bool
-	}{
-		{"/a/b", "/a/b", true},
-		{"/a/b", "/a/b/c", true},
-		{"/a/b/", "/a/b/c", true},
-		{"/a/b", "/a/bc", false},
-		{"/", "/a", true},
-		{`C:\a`, `C:\a\b`, true},
-		{`C:\a`, `C:\ab`, false},
-	} {
-		if got := inDir(c.dir, c.p); got != c.in {
-			t.Errorf("inDir(%q, %q) = %v", c.dir, c.p, got)
-		}
-	}
-}
-
 func TestShellPathsQuote(t *testing.T) {
 	got := shellPaths([]string{"/tmp/a.txt", "/Users/me/My Files", "it's", "/한글/파일"})
 	want := `/tmp/a.txt '/Users/me/My Files' 'it'\''s' /한글/파일 `

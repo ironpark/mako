@@ -3,6 +3,7 @@
 package gitstat
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"errors"
@@ -351,14 +352,20 @@ func readRegular(full string, max int64) ([]byte, error) {
 		return nil, err
 	}
 	defer f.Close()
-	if info, err := f.Stat(); err != nil || !info.Mode().IsRegular() {
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
 		return nil, cmp.Or(err, errors.New("not a regular file"))
 	}
-	b, err := io.ReadAll(io.LimitReader(f, max+1))
-	if err == nil && int64(len(b)) > max {
+	// Sized as it says it is, with the room a buffer reads into past it
+	// to find its end; read a byte past max to tell one too large.
+	b := bytes.NewBuffer(make([]byte, 0, min(info.Size(), max)+bytes.MinRead))
+	if _, err := b.ReadFrom(io.LimitReader(f, max+1)); err != nil {
+		return nil, err
+	}
+	if int64(b.Len()) > max {
 		return nil, errTooLarge
 	}
-	return b, err
+	return b.Bytes(), nil
 }
 
 // Binary reports a NUL in a file's first 8000 bytes, as git decides.
