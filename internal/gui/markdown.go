@@ -62,17 +62,21 @@ func asMDImage(d decodedImage, err error) mdview.Image {
 	return mdview.ImageOf(d.Img, d.Drawn)
 }
 
+// pageImageMax is the most pixels on its long side an image of a page is
+// kept with: more than a page's width shows, at twice the pixels.
+const pageImageMax = 2048
+
 // webImage is the image at the web address url, read once for the window.
 func (m *model) webImage(url string) *ggui.StateValue[mdview.Image] {
 	key := "web\x00" + url
-	if img, ok := m.chatImages[key]; ok {
+	if img, ok := m.chatImages.get(key); ok {
 		return img
 	}
-	img := ggui.State(mdview.Image{Loading: true})
-	m.chatImages[key] = img
+	img := m.chatImages.add(key)
 	go func() {
 		d, err := readWebImage(url)
-		m.post(func() { img.Set(asMDImage(d, err)) })
+		s := shrinkImage(d, ggui.Sz(pageImageMax, pageImageMax))
+		m.post(func() { m.chatImages.set(key, img, s.mdImage(err)) })
 	}()
 	return img
 }

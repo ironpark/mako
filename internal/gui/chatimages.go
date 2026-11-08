@@ -1,11 +1,13 @@
 package gui
 
 import (
+	"image"
 	"slices"
 	"strings"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	xdraw "golang.org/x/image/draw"
 
 	"github.com/ironpark/mako/internal/gui/mdview"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -48,11 +50,15 @@ const (
 // nothing when it is named only: text may name a file that is not there.
 func chatImage(m *model, node, path string, named bool) ggui.Widget {
 	key := node + "\x00" + path
-	img, ok := m.chatImages[key]
+	img, ok := m.chatImages.get(key)
 	if !ok {
-		img = ggui.State(mdview.Image{Loading: true})
-		m.chatImages[key] = img
-		fetchImage(m, node, path, func(d decodedImage, err error) { img.Set(asMDImage(d, err)) })
+		img = m.chatImages.add(key)
+		fetchImage(m, node, path, func(d decodedImage, err error) {
+			go func() {
+				s := shrinkImage(d, ggui.Sz(2*thumbW, 2*thumbH)) // for a screen of twice the pixels
+				m.post(func() { m.chatImages.set(key, img, s.mdImage(err)) })
+			}()
+		})
 	}
 	name := baseName(path)
 	open := func() { m.openItem(fileItem{Key: key, Node: node, Path: path, Name: name}, 0) }
@@ -137,4 +143,128 @@ func (c *cornered) Paint(dst *ggui.Canvas, r ggui.Rect) {
 		return // a thumbnail too small to hold it, as one not there
 	}
 	dst.Paint(c.corner, ggui.Rct(ggui.Pt(r.Origin.X+r.Size.W-c.cornerSize.W-2, r.Origin.Y+2), c.cornerSize))
+}
+
+// Images read for Chat and for pages are kept for the window, the latest
+// used of them, up to imageCacheBytes of pixels: a session's images, or a
+// page's from the web, would otherwise stay for as long as it runs. An
+// image let go of while it shows stays on show, and is read again once it
+// is asked for. Each is kept no larger than it shows (shrinkImage).
+const imageCacheBytes = 128 << 20
+
+// imageCache is the images read for Chat and pages, by node and path or by
+// address. UI goroutine only.
+type imageCache struct {
+	entries    map[string]*cachedImage
+	bytes, max int
+	clock      uint64
+}
+
+type cachedImage struct {
+	img   *ggui.StateValue[mdview.Image]
+	bytes int
+	used  uint64
+}
+
+func newImageCache() *imageCache {
+	return &imageCache{entries: map[string]*cachedImage{}, max: imageCacheBytes}
+}
+
+// get is the image kept under key, noting it used.
+func (c *imageCache) get(key string) (*ggui.StateValue[mdview.Image], bool) {
+	e, ok := c.entries[key]
+	if !ok {
+		return nil, false
+	}
+	c.clock++
+	e.used = c.clock
+	return e.img, true
+}
+
+// add keeps a new image under key, loading until set.
+func (c *imageCache) add(key string) *ggui.StateValue[mdview.Image] {
+	img := ggui.State(mdview.Image{Loading: true})
+	c.clock++
+	c.entries[key] = &cachedImage{img: img, used: c.clock}
+	return img
+}
+
+// set shows v as img, the image added under key, and lets go of the images
+// used longest ago while those kept hold too many pixels.
+func (c *imageCache) set(key string, img *ggui.StateValue[mdview.Image], v mdview.Image) {
+	img.Set(v)
+	e, ok := c.entries[key]
+	if !ok || e.img != img {
+		return // let go of while it was read
+	}
+	c.bytes -= e.bytes
+	e.bytes = 0
+	if v.Img != nil {
+		b := v.Img.Bounds()
+		e.bytes = b.Dx() * b.Dy() * 4
+	}
+	c.bytes += e.bytes
+	for c.bytes > c.max && len(c.entries) > 1 {
+		oldest := ""
+		for k, o := range c.entries {
+			if k != key && (oldest == "" || o.used < c.entries[oldest].used) {
+				oldest = k
+			}
+		}
+		c.bytes -= c.entries[oldest].bytes
+		delete(c.entries, oldest)
+	}
+}
+
+// shrunkImage is an image read, its pixels made no larger than it shows,
+// with the size it has as read.
+type shrunkImage struct {
+	decodedImage
+	size ggui.Size // 0 for one not shrunk
+}
+
+// shrinkImage scales an image read down to fit within box, keeping its
+// shape, as it is read: off the window's goroutine. A drawn SVG keeps its
+// size, as its pixels are drawn into it.
+func shrinkImage(d decodedImage, box ggui.Size) shrunkImage {
+	s := shrunkImage{decodedImage: d}
+	if d.Img != nil {
+		b := d.Img.Bounds()
+		if small, ok := scaledToFit(d.Img, box); ok {
+			s.Img, s.size = small, ggui.Sz(float64(b.Dx()), float64(b.Dy()))
+		}
+	}
+	if d.Drawn != nil {
+		if small, ok := scaledToFit(d.Drawn.Pixels, box); ok {
+			drawn := *d.Drawn
+			drawn.Pixels = small
+			s.Drawn = &drawn
+		}
+	}
+	return s
+}
+
+// mdImage is the image for a page, as asMDImage makes it, its size the one
+// it had as read. It makes its texture, and so runs on the window's
+// goroutine.
+func (s shrunkImage) mdImage(err error) mdview.Image {
+	v := asMDImage(s.decodedImage, err)
+	if s.size.W > 0 && v.Img != nil && s.Img != nil {
+		v.Size = s.size
+	}
+	return v
+}
+
+// scaledToFit is img scaled down to fit within box, keeping its shape, or
+// false for one that fits already.
+func scaledToFit(img image.Image, box ggui.Size) (*image.RGBA, bool) {
+	b := img.Bounds()
+	scale := min(box.W/max(float64(b.Dx()), 1), box.H/max(float64(b.Dy()), 1))
+	if scale >= 1 {
+		return nil, false
+	}
+	w, h := max(int(float64(b.Dx())*scale), 1), max(int(float64(b.Dy())*scale), 1)
+	dst := image.NewRGBA(image.Rect(0, 0, w, h))
+	xdraw.BiLinear.Scale(dst, dst.Bounds(), img, b, xdraw.Src, nil)
+	return dst, true
 }
