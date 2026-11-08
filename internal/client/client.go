@@ -148,6 +148,11 @@ func (c *Client) Open(ctx context.Context, req *protocol.OpenSession) (*protocol
 
 // request makes one request on a stream of its own, and returns the reply
 // as R.
+//
+// Dial keeps to ctx only until the daemon greets, so the request keeps to
+// it after: its deadline bounds the reply, and its end hangs the stream
+// up. The stream is the request's alone, so a request given up leaves the
+// client as it was for the next.
 func request[R proto.Message](ctx context.Context, c *Client, typ protocol.Type, req proto.Message) (R, error) {
 	s, err := c.stream(ctx)
 	if err != nil {
@@ -155,7 +160,16 @@ func request[R proto.Message](ctx context.Context, c *Client, typ protocol.Type,
 		return zero, err
 	}
 	defer s.Close()
-	return transport.Call[R](s, typ, req)
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = s.SetReadDeadline(deadline)
+	}
+	stop := context.AfterFunc(ctx, func() { _ = s.Close() })
+	defer stop()
+	reply, err := transport.Call[R](s, typ, req)
+	if err != nil && ctx.Err() != nil {
+		return reply, ctx.Err()
+	}
+	return reply, err
 }
 
 // ListDir lists a directory on a node.
