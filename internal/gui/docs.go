@@ -107,7 +107,7 @@ func (m *model) checkDoc(id string) {
 			return
 		}
 		if !d.Dirty {
-			m.readDoc(id)
+			m.rereadDoc(id)
 			return
 		}
 		doc.staleMod = mod
@@ -174,7 +174,14 @@ func (m *model) goToLine(id string) {
 
 // readDoc reads an open file from its node, replacing what the editor
 // holds.
-func (m *model) readDoc(id string) {
+func (m *model) readDoc(id string) { m.loadDoc(id, false) }
+
+// rereadDoc reads an open file not edited again, as one changed on disk
+// is. Edits made while it was being read are kept, and the banner tells
+// of the change instead, as checkDoc does of a file edited before.
+func (m *model) rereadDoc(id string) { m.loadDoc(id, true) }
+
+func (m *model) loadDoc(id string, keepEdits bool) {
 	d, ok := m.doc(id)
 	if !ok {
 		return
@@ -186,6 +193,13 @@ func (m *model) readDoc(id string) {
 		doc := m.docs[id]
 		if doc == nil {
 			return // closed meanwhile
+		}
+		if keepEdits && ggui.Peek(doc.text) != doc.saved {
+			if err == nil {
+				doc.staleMod = protocol.TimeOf(f.GetModTime())
+				m.updateDoc(id, func(d *docInfo) { d.Stale = true })
+			}
+			return
 		}
 		if err == nil && !f.GetBinary() {
 			doc.saved, doc.mod = string(f.GetData()), protocol.TimeOf(f.GetModTime())

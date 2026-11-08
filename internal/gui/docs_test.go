@@ -83,6 +83,28 @@ func TestSaveRefusesAFileChangedOnDisk(t *testing.T) {
 	}
 }
 
+// A file read again for a change on disk keeps what was typed while it was
+// being read, and the banner tells of the change; a reload asked for
+// replaces it.
+func TestARereadKeepsEditsMadeMeanwhile(t *testing.T) {
+	m, p, id, path := docApp(t, "one\n")
+	if err := os.WriteFile(path, []byte("theirs\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m.rereadDoc(id)
+	m.docs[id].text.Set("mine\n")
+	m.docEdited(id, "mine\n")
+	probeUntil(t, p, "the change told of", func() bool { d, _ := m.doc(id); return d.Stale })
+	if got := ggui.Peek(m.docs[id].text); got != "mine\n" {
+		t.Fatalf("the edit was replaced with %q", got)
+	}
+	if d, _ := m.doc(id); !d.Dirty {
+		t.Fatalf("the edit is not marked: %+v", d)
+	}
+	m.readDoc(id)
+	probeUntil(t, p, "the reload", func() bool { return ggui.Peek(m.docs[id].text) == "theirs\n" })
+}
+
 func TestClosingAnEditedFileAsksFirst(t *testing.T) {
 	m, p, id, _ := docApp(t, "one\n")
 	m.docs[id].text.Set("two\n")

@@ -163,7 +163,7 @@ func (m *model) openTaskOutput(node string, t *protocol.BackgroundTask) {
 		return
 	}
 	if doc := m.docs[docTabID(node, path)]; doc != nil && ggui.Peek(doc.text) == doc.saved {
-		m.readDoc(docTabID(node, path))
+		m.rereadDoc(docTabID(node, path))
 	}
 	m.openFile(fileItem{Key: dirKey(node, path), Node: node, Path: path, Name: baseName(path)})
 }
