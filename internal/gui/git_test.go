@@ -162,3 +162,19 @@ func TestGitPanelsCommitAndShowHistory(t *testing.T) {
 		t.Fatal("notes.txt is still there")
 	}
 }
+
+// The history of a project picked while another's is read comes once that
+// read is back, though it was asked for while the read was under way.
+func TestHistoryAskedForDuringAReadComes(t *testing.T) {
+	m, p := daemonApp(t)
+	first, _ := gitProject(t)
+	second, git := gitProject(t)
+	git("commit", "-q", "--allow-empty", "-m", "One more")
+	self := ggui.Peek(m.Conn).Self.GetId()
+	m.loadHistory(fileRoot{Node: self, Path: first})
+	m.loadHistory(fileRoot{Node: self, Path: second})
+	probeUntil(t, p, "the second project's history", func() bool {
+		v := ggui.Peek(m.git.History)
+		return v.Root.Path == second && len(v.History.GetCommits()) == 5
+	})
+}

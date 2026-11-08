@@ -363,7 +363,10 @@ func (m *model) loadForgeBranch(root fileRoot) {
 		return r, cmp.Or(prErr, err)
 	}, func(r read, err error) {
 		m.Forge.branchReading = false
-		if ggui.Untrack(m.repoFolder) != root {
+		if now := ggui.Untrack(m.repoFolder); now != root {
+			// Another project was picked while this one was read, and
+			// its read was refused for this one's under way.
+			m.loadForgeBranch(now)
 			return
 		}
 		b := forgeBranch{Root: root, Forge: cmp.Or(r.runs.GetForge(), r.pr.GetForge())}
