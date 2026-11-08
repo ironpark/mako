@@ -163,6 +163,39 @@ func TestBuiltinLanguagesAndInjections(t *testing.T) {
 	}
 }
 
+// A language is looked up, as the window's goroutine does, while a grammar
+// is being compiled, and a second worker asking for that language waits
+// for the one load.
+func TestLookupsDoNotWaitOnACompile(t *testing.T) {
+	h := newHighlighter()
+	defer h.close()
+	l, _ := h.languageFor("/p/main.go", "")
+	h.rtMu.Lock() // a compile under way
+	loads := make(chan *loadedLanguage, 2)
+	for range 2 {
+		go func() { ll, _ := h.load(l); loads <- ll }()
+	}
+	looked := make(chan bool)
+	go func() {
+		_, ok := h.languageFor("/p/x.py", "")
+		_, named := h.languageNamed("go")
+		looked <- ok && named
+	}()
+	select {
+	case ok := <-looked:
+		if !ok {
+			t.Fatal("the languages were not found")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a lookup waited on a compile")
+	}
+	h.rtMu.Unlock()
+	a, b := <-loads, <-loads
+	if a != b || a.err != nil || a.query == nil {
+		t.Fatalf("two loads: %p %p, %v", a, b, a.err)
+	}
+}
+
 func TestCutSpanLeavesTheHoles(t *testing.T) {
 	from := 0
 	got := cutSpan(0, 10, [][2]int{{2, 4}, {6, 7}}, &from)

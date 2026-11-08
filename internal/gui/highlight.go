@@ -88,16 +88,21 @@ func extensionsDir() string {
 // highlighter parses and colours the open files. It is shared by the
 // window's documents and safe for use from their workers.
 type highlighter struct {
+	// mu guards langs and loaded, and is held a moment only: a language
+	// looked up, as the window's goroutine does, never waits on a grammar
+	// being compiled. rtMu is held while one is, and guards rt.
 	mu     sync.Mutex
-	rt     *syntax.Runtime // made on first use
-	rtErr  error
 	langs  []language
 	loaded map[string]*loadedLanguage // by Key
+	rtMu   sync.Mutex
+	rt     *syntax.Runtime // made on first use
+	rtErr  error
 }
 
 // loadedLanguage is a language's grammar loaded into the runtime, with its
-// queries.
+// queries. Its fields are set before ready is closed.
 type loadedLanguage struct {
+	ready      chan struct{}
 	lang       *syntax.Language
 	query      *syntax.Query
 	injections *syntax.Query // nil without any
@@ -177,15 +182,21 @@ func (m *model) syntaxFor(l language) *docSyntax {
 	return &docSyntax{h: m.hl, lang: l, wake: m.wake}
 }
 
-// load is a language ready to parse with, loading it the first time.
+// load is a language ready to parse with, loading it the first time. A
+// worker asking for a language another is loading waits for that load.
 func (h *highlighter) load(l language) (*loadedLanguage, error) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if ll, ok := h.loaded[l.Key]; ok {
+		h.mu.Unlock()
+		<-ll.ready
 		return ll, ll.err
 	}
-	ll := &loadedLanguage{}
+	ll := &loadedLanguage{ready: make(chan struct{})}
 	h.loaded[l.Key] = ll
+	h.mu.Unlock()
+	defer close(ll.ready)
+	h.rtMu.Lock()
+	defer h.rtMu.Unlock()
 	if h.rt == nil && h.rtErr == nil {
 		h.rt, h.rtErr = syntax.NewRuntime(context.Background())
 	}
@@ -220,8 +231,8 @@ func (h *highlighter) load(l language) (*loadedLanguage, error) {
 }
 
 func (h *highlighter) close() {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.rtMu.Lock()
+	defer h.rtMu.Unlock()
 	if h.rt != nil {
 		h.rt.Close()
 	}
