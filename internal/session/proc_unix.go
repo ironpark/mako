@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/creack/pty"
 	"golang.org/x/sys/unix"
@@ -27,7 +28,27 @@ func startProc(argv []string, dir string, env []string, cols, rows uint16) (*pro
 	if err != nil {
 		return nil, err
 	}
-	return &proc{cmd: cmd, tty: tty}, nil
+	return &proc{cmd: cmd, tty: pollable(tty)}, nil
+}
+
+// pollable is the terminal f as a file the runtime's poller waits on. pty
+// leaves its file blocking, as its ioctls take its descriptor, and a read
+// blocked on that is ended neither by a deadline nor by closing it, only
+// by the last process holding the terminal letting go. f is kept, where
+// it cannot be copied.
+func pollable(f *os.File) *os.File {
+	fd, err := unix.Dup(int(f.Fd()))
+	if err != nil {
+		return f
+	}
+	unix.CloseOnExec(fd)
+	if err := unix.SetNonblock(fd, true); err != nil {
+		unix.Close(fd)
+		return f
+	}
+	g := os.NewFile(uintptr(fd), f.Name())
+	f.Close()
+	return g
 }
 
 func (p *proc) Read(b []byte) (int, error)  { return p.tty.Read(b) }
@@ -36,10 +57,27 @@ func (p *proc) Write(b []byte) (int, error) { return p.tty.Write(b) }
 // Close closes the terminal.
 func (p *proc) Close() error { return p.tty.Close() }
 
+// endOutput ends reading the terminal after grace, the process gone: the
+// output otherwise ends only once every process holding the terminal has
+// closed it, which one the process left in the background may never do.
+func (p *proc) endOutput(grace time.Duration) {
+	_ = p.tty.SetReadDeadline(time.Now().Add(grace))
+}
+
 // resize sizes the terminal cols by rows of cells cellW by cellH pixels,
 // which zero leaves unsaid.
 func (p *proc) resize(cols, rows, cellW, cellH uint16) error {
-	return pty.Setsize(p.tty, &pty.Winsize{Cols: cols, Rows: rows, X: cols * cellW, Y: rows * cellH})
+	raw, err := p.tty.SyscallConn()
+	if err != nil {
+		return err
+	}
+	ws := &unix.Winsize{Col: cols, Row: rows, Xpixel: cols * cellW, Ypixel: rows * cellH}
+	// Control, rather than pty.Setsize, which takes the file's descriptor
+	// and so makes it blocking again.
+	if cerr := raw.Control(func(fd uintptr) { err = unix.IoctlSetWinsize(int(fd), unix.TIOCSWINSZ, ws) }); cerr != nil {
+		return cerr
+	}
+	return err
 }
 
 func (p *proc) pid() int { return p.cmd.Process.Pid }

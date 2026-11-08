@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -143,6 +144,10 @@ func (p *proc) Close() error {
 	p.closeConsole()
 	return errors.Join(p.in.Close(), p.out.Close())
 }
+
+// endOutput leaves the output to end as it does: the watcher closes the
+// console once the process exits.
+func (p *proc) endOutput(time.Duration) {}
 
 // resize sizes the console cols by rows; a console has no pixel size.
 func (p *proc) resize(cols, rows, _, _ uint16) error {

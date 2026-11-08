@@ -800,13 +800,31 @@ func (s *Session) Close() error {
 	s.proc.kill()
 	err := s.proc.Close()
 	<-s.done
-	sweep(s.scope, s.proc.pid())
 	return err
 }
+
+// outputGrace is how long the terminal's output is read once the agent has
+// exited: long enough for what it printed last, and no longer, as a
+// process it left holding the terminal would otherwise keep the session
+// from ever ending.
+const outputGrace = time.Second
 
 // pump copies PTY output into the terminal state and out to subscribers.
 func (s *Session) pump() {
 	defer close(s.done)
+
+	// The agent is waited for as it exits, not once its terminal's output
+	// ends, which a process it left in the background may hold off
+	// forever. What it started is swept then, while its leader's id still
+	// names its terminal's session: by the time the session is closed, that
+	// id may be another process's, and its session another's too.
+	exited := make(chan int64, 1)
+	go func() {
+		code := s.proc.wait()
+		sweep(s.scope, s.proc.pid())
+		s.proc.endOutput(outputGrace)
+		exited <- code
+	}()
 
 	buf := make([]byte, 32*1024)
 	for {
@@ -821,7 +839,7 @@ func (s *Session) pump() {
 		}
 	}
 
-	exitCode := s.proc.wait()
+	exitCode := <-exited
 
 	s.mu.Lock()
 	s.state = protocol.StateExited
