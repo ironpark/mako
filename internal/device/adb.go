@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -319,6 +320,12 @@ type adbPlan struct {
 // of no device sends to any.
 var deviceServices = []string{"get-state", "get-serialno", "get-devpath", "features", "reconnect", "forward:", "killforward:", "wait-for-"}
 
+// serverQueries are the host requests of no device that a client may send
+// as they are, which ask the server of itself and change nothing. Any
+// other, as connect, disconnect, pair or emulator, would act on the
+// device's node beyond the device lent, and is refused.
+var serverQueries = []string{"version", "host-features"}
+
 // plan is how a client's request goes to the server, as one for serial
 // alone, or why it does not.
 func plan(req, serial string, transportID func() (string, error)) (adbPlan, error) {
@@ -382,7 +389,10 @@ func plan(req, serial string, transportID func() (string, error)) (adbPlan, erro
 				return onSerial(cmd), nil
 			}
 		}
-		return adbPlan{req: req}, nil
+		if slices.Contains(serverQueries, cmd) {
+			return adbPlan{req: req}, nil
+		}
+		return adbPlan{}, fmt.Errorf("%s acts on the adb server of the device's node, which lends %s alone", req, serial)
 	}
 	return adbPlan{req: req, selectFirst: true}, nil
 }

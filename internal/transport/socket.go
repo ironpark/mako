@@ -74,8 +74,11 @@ func Greet(stream *Stream, hello *protocol.Hello) (*protocol.Node, error) {
 
 // CloseWith hangs s up when ctx is done, if it is still open then.
 func CloseWith(s *Stream, ctx context.Context) {
-	stop := context.AfterFunc(ctx, func() { _ = s.ReadWriteCloser.Close() })
-	s.ReadWriteCloser = &closing{s.ReadWriteCloser, stop}
+	// The hang-up closes the connection as it is now, not s's field, which
+	// is written below while a ctx done already may be closing.
+	rw := s.ReadWriteCloser
+	stop := context.AfterFunc(ctx, func() { _ = rw.Close() })
+	s.ReadWriteCloser = &closing{rw, stop}
 }
 
 // closing is a connection that stops watching for its hang-up on Close,

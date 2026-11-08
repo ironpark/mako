@@ -44,6 +44,11 @@ func TestARequestGoesToTheDeviceLentAlone(t *testing.T) {
 		{req: "host:wait-for-any-device", want: "host-serial:S1:wait-for-any-device"},
 		{req: "host:host-features", want: "host:host-features"},
 		{req: "host:track-devices-proto-text", refused: true},
+		{req: "host:connect:10.0.0.9:5555", refused: true},
+		{req: "host:disconnect:", refused: true},
+		{req: "host:pair:123456:10.0.0.9:37000", refused: true},
+		{req: "host:emulator:5554", refused: true},
+		{req: "host:mdns:services", refused: true},
 		{req: "shell:ls", want: "shell:ls", first: true},
 	} {
 		p, err := plan(c.req, "S1", tid)
