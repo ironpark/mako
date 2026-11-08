@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ironpark/gostty/input"
+
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 
@@ -399,7 +401,8 @@ func TestTheWheelGoesToATUIThatAsked(t *testing.T) {
 
 // A program that stops reading must not be flooded with wheel reports: the
 // terminal's input queue would cut one, and its Escape would interrupt the
-// agent. A turn sends a few, and the next waits for the program to print.
+// agent. A turn sends a few, and the rest is owed: sent as the program
+// prints, not lost, so a fast turn scrolls as far as it was turned.
 func TestTheWheelWaitsForTheProgram(t *testing.T) {
 	link := newFakeLink()
 	conn, err := newTermConn("s1", link, 80, 24, func() {})
@@ -416,23 +419,61 @@ func TestTheWheelWaitsForTheProgram(t *testing.T) {
 	p.Frame()
 	link.typed()
 	at := gridPoint(p, view, 2, 3)
-	p.Scroll(at, ggui.Pt(0, 10))
-	if got := strings.Count(link.typed(), "\x1b[<64;"); got != wheelBurst {
+	reports := func() int { return strings.Count(link.typed(), "\x1b[<64;") }
+	p.Scroll(at, ggui.Pt(0, 10)) // 30 lines
+	if got := reports(); got != wheelBurst {
 		t.Fatalf("a long turn sent %d reports, want %d", got, wheelBurst)
 	}
-	p.Scroll(at, ggui.Pt(0, 1))
-	if got := link.typed(); got != "" {
-		t.Fatalf("a silent program was sent %q", got)
+	p.Scroll(at, ggui.Pt(0, 1)) // 3 more
+	if got := reports(); got != 0 {
+		t.Fatalf("a silent program was sent %d reports", got)
 	}
-	link.output(t, "scrolled")
-	waitFor(t, func() bool {
-		conn.mu.Lock()
-		defer conn.mu.Unlock()
-		return conn.wheelAt.IsZero()
-	})
-	p.Scroll(at, ggui.Pt(0, 1))
-	if got := link.typed(); !strings.Contains(got, "\x1b[<64;3;4M") {
-		t.Fatalf("after it printed, the wheel sent %q", got)
+	// As it draws each, the rest it is owed: a burst, then what is left.
+	sent := 0
+	for _, want := range []int{wheelBurst, 33 - 2*wheelBurst} {
+		link.output(t, "scrolled")
+		waitFor(t, func() bool { sent += reports(); return sent >= want })
+		if sent != want {
+			t.Fatalf("as it printed, the program was sent %d reports, want %d", sent, want)
+		}
+		sent = 0
+	}
+}
+
+// What the wheel owes goes the way it was last turned, and not at all once
+// stale, or once the user types.
+func TestTheWheelOwesOnlyTheLatestTurn(t *testing.T) {
+	link := newFakeLink()
+	conn, err := newTermConn("s1", link, 80, 24, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.close()
+	defer close(link.in)
+	link.output(t, "\x1b[?1049h\x1b[?1003h\x1b[?1006hthe agent's screen")
+	waitFor(t, func() bool { return conn.mouseReported() })
+	size := input.RenderSize{ScreenWidth: 800, ScreenHeight: 400, CellWidth: 10, CellHeight: 16}
+	up := input.MouseEvent{Action: input.MouseActionPress, Button: input.MouseButtonFour, HasButton: true, X: 50, Y: 50}
+	down := up
+	down.Button = input.MouseButtonFive
+	owed := func() owedWheel { conn.mu.Lock(); defer conn.mu.Unlock(); return conn.owed }
+
+	conn.mouseWheel(up, size, wheelBurst+5)
+	conn.mouseWheel(down, size, 2)
+	if w := owed(); w.n != 2 || w.ev.Button != input.MouseButtonFive {
+		t.Fatalf("turned back, owed %d of %v", w.n, w.ev.Button)
+	}
+	conn.mu.Lock()
+	conn.owed.at = time.Now().Add(-2 * wheelStale)
+	buf := conn.wheelLocked()
+	conn.mu.Unlock()
+	if len(buf) > 0 || owed().n != 0 {
+		t.Fatal("a stale turn was sent")
+	}
+	conn.mouseWheel(up, size, 3)
+	conn.key(input.KeyEvent{Action: input.KeyActionPress, Key: input.KeyEnter}, "")
+	if owed().n != 0 {
+		t.Fatal("a turn was still owed after typing")
 	}
 }
 

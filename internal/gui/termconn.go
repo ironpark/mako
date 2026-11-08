@@ -109,8 +109,10 @@ type termConn struct {
 	copied   *string           // what the program last put on the clipboard, until the view takes it
 
 	// wheelAt is when wheel reports last went to the program, zero once it
-	// has printed since; see mouseWheel.
+	// has printed since; owed is the turn owed to it meanwhile, sent as it
+	// prints. See mouseWheel.
 	wheelAt time.Time
+	owed    owedWheel
 
 	// The images the program placed, as the last frame found them, and the
 	// textures they are drawn from; see termimages.go.
@@ -307,9 +309,13 @@ func (t *termConn) read() {
 		case protocol.EventOutput:
 			t.mu.Lock()
 			t.feedLocked(ev.Data)
+			owed := t.wheelLocked()
 			tap := t.tap
 			t.mu.Unlock()
 			tap.write(ev.Data)
+			if len(owed) > 0 {
+				t.send(owed) // the turn it was owed, now it has printed
+			}
 		case protocol.EventExited:
 			t.mu.Lock()
 			t.exited, t.exitCode = true, ev.ExitCode
@@ -625,8 +631,10 @@ func (t *termConn) key(ev input.KeyEvent, text string) {
 		err = input.EncodeKey(&buf, t.vt.Terminal(), ev, text)
 	}
 	if err == nil && len(buf) > 0 {
-		// Typing snaps the viewport back to the bottom, as every terminal does.
+		// Typing snaps the viewport back to the bottom, as every terminal
+		// does, and a turn of the wheel still owed is let go of.
 		t.vt.Terminal().ScrollViewport(gostty.ScrollViewportBottom())
+		t.owed = owedWheel{}
 	}
 	t.mu.Unlock()
 	if err == nil && len(buf) > 0 {
@@ -1013,41 +1021,72 @@ func (t *termConn) encodeMouseLocked(ev input.MouseEvent, size input.RenderSize,
 // The wheel turns faster than a busy program reads. Its reports then fill
 // the terminal's input queue, a kilobyte on macOS, and the queue can end a
 // read in the middle of one: a program that reads an Escape at the end of
-// its input as the key interrupts its agent and types the rest. So a turn
-// sends at most wheelBurst reports, and only once the program has printed
-// since the last; one that stays silent past wheelPatience gets one more.
+// its input as the key interrupts its agent and types the rest. So reports
+// go at most wheelBurst at a time (a few hundred bytes), and the next only
+// once the program has printed since; one that stays silent past
+// wheelPatience gets one more. What the wheel turns meanwhile is owed, not
+// lost, and goes as the program prints, as a TUI does once it has drawn
+// what it scrolled to: up to wheelOwed lines, for no longer than
+// wheelStale, so a turn the program never drew for does not scroll it
+// later, out of the blue.
 const (
-	wheelBurst    = 5
+	wheelBurst    = 16
 	wheelPatience = 250 * time.Millisecond
+	wheelOwed     = 4 * wheelBurst
+	wheelStale    = time.Second
 )
 
+// owedWheel is a turn of the wheel not yet sent: n reports of ev, the
+// latest, turned at the latest at.
+type owedWheel struct {
+	ev   input.MouseEvent
+	size input.RenderSize
+	n    int
+	at   time.Time
+}
+
 // mouseWheel sends n reports of ev, a wheel's turn, under the program's
-// modes, as many of them as it is keeping up with.
+// modes, as many of them as it is keeping up with, owing it the rest.
 func (t *termConn) mouseWheel(ev input.MouseEvent, size input.RenderSize, n int) {
 	t.mu.Lock()
-	buf := t.wheelLocked(ev, size, n)
+	if t.owed.n > 0 && t.owed.ev.Button != ev.Button {
+		t.owed.n = 0 // turned back: what was owed the other way is not
+	}
+	t.owed = owedWheel{ev: ev, size: size, n: min(t.owed.n+n, wheelOwed), at: time.Now()}
+	buf := t.wheelLocked()
 	t.mu.Unlock()
 	if len(buf) > 0 {
 		t.send(buf) // whole, so no write of ours ends inside a report
 	}
 }
 
-// wheelLocked is the reports of a wheel's turn the program is to be sent
-// now: up to wheelBurst of n, one once it has been silent past
-// wheelPatience, or none.
-func (t *termConn) wheelLocked(ev input.MouseEvent, size input.RenderSize, n int) frameBuffer {
+// wheelLocked is the reports of the turn owed that the program is to be
+// sent now: up to wheelBurst once it has printed since the last, one once
+// it has been silent past wheelPatience, or none.
+func (t *termConn) wheelLocked() frameBuffer {
+	w := &t.owed
+	if w.n == 0 {
+		return nil
+	}
+	if time.Since(w.at) > wheelStale {
+		*w = owedWheel{}
+		return nil
+	}
+	n := min(w.n, wheelBurst)
 	if !t.wheelAt.IsZero() {
 		if time.Since(t.wheelAt) < wheelPatience {
 			return nil
 		}
 		n = 1
 	}
-	one := t.encodeMouseLocked(ev, size, false)
+	one := t.encodeMouseLocked(w.ev, w.size, false)
 	if len(one) == 0 {
+		*w = owedWheel{}
 		return nil
 	}
 	t.wheelAt = time.Now()
-	return bytes.Repeat(one, min(n, wheelBurst))
+	w.n -= n
+	return bytes.Repeat(one, n)
 }
 
 // clipboardText is the plain text of a clipboard write, the standard
