@@ -272,12 +272,61 @@ func (t *trust) introduce(p peer.ID, st *trustState) {
 
 // reconsider introduces this host again to every peer, as when its keys
 // changed, so each side decides anew.
+//
+// Whether this host lets a peer in rests on the peer's key and owner, which
+// it has already, and on its own keys alone, so that is decided here at
+// once: a peer let out stays out though it never answers the introduction.
 func (t *trust) reconsider() {
+	type stand struct {
+		p    peer.ID
+		st   *trustState
+		info Peer
+	}
+	var all []stand
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	for p, st := range t.peers {
-		if _, ok := settled(st); ok {
-			go t.introduce(p, st)
+		if info, ok := settled(st); ok {
+			all = append(all, stand{p, st, info})
+		}
+	}
+	changed := t.changed
+	t.mu.Unlock()
+	for _, s := range all {
+		if trusts := t.lets(s.info.Key, s.info.Owner); trusts != s.info.Trusts {
+			t.mu.Lock()
+			still := t.peers[s.p] == s.st
+			if still {
+				s.st.peer.Trusts = trusts
+				s.info = s.st.peer
+			}
+			t.mu.Unlock()
+			if still {
+				if !trusts {
+					t.shut(s.p)
+				}
+				if changed != nil {
+					changed(s.info)
+				}
+			}
+		}
+		go t.introduce(s.p, s.st)
+	}
+}
+
+// lets reports whether this host lets in a peer of key, vouched for by
+// owner, which may be nil.
+func (t *trust) lets(key, owner ssh.PublicKey) bool {
+	return t.keys.Has(key) || t.keys.Has(owner) || t.sshKeys.Has(owner) || sameKey(owner, t.own)
+}
+
+// shut resets the mako protocol streams p opened, which were let in as they
+// opened, once this host lets p in no longer.
+func (t *trust) shut(p peer.ID) {
+	for _, c := range t.h.Network().ConnsToPeer(p) {
+		for _, s := range c.GetStreams() {
+			if s.Protocol() == Protocol && s.Stat().Direction == network.DirInbound {
+				_ = s.Reset()
+			}
 		}
 	}
 }
@@ -312,7 +361,7 @@ func (t *trust) exchange(st *trustState, s network.Stream) error {
 			owner = nil
 		}
 	}
-	trusts := t.keys.Has(key) || t.keys.Has(owner) || t.sshKeys.Has(owner) || sameKey(owner, t.own)
+	trusts := t.lets(key, owner)
 	if err := writeJSON(s, verdict{Trusts: trusts}); err != nil {
 		return err
 	}
@@ -321,14 +370,21 @@ func (t *trust) exchange(st *trustState, s network.Stream) error {
 		return err
 	}
 	t.mu.Lock()
+	was, ok := settled(st)
 	st.peer = Peer{ID: p, Node: theirs.Node, Name: theirs.Name, OS: theirs.OS, Arch: theirs.Arch, Key: key, Owner: owner, Addr: s.Conn().RemoteMultiaddr(), Trusts: trusts, TrustedBy: v.Trusts}
+	still := t.peers[p] == st
 	t.mu.Unlock()
+	if still && ok && was.Trusts && !trusts {
+		t.shut(p)
+	}
 	return nil
 }
 
 // settle records in st that p has introduced itself, or failed to. The
-// first time decides whether the link is of any use; a failure then hangs
-// up. Of a link gone, nothing is recorded.
+// first time decides whether the link is of any use. A failure hangs up,
+// then or later: a peer that will not introduce itself again cannot say
+// whether it still lets this host in, and the next link starts afresh. Of
+// a link gone, nothing is recorded.
 func (t *trust) settle(p peer.ID, st *trustState, err error) {
 	t.mu.Lock()
 	if t.peers[p] != st {
@@ -348,10 +404,8 @@ func (t *trust) settle(p peer.ID, st *trustState, err error) {
 	info, changed := st.peer, t.changed
 	t.mu.Unlock()
 	if err != nil {
-		if first {
-			t.log.Debug("peer could not introduce itself", "peer", p, "err", err)
-			_ = t.h.Network().ClosePeer(p)
-		}
+		t.log.Debug("peer could not introduce itself", "peer", p, "first", first, "err", err)
+		_ = t.h.Network().ClosePeer(p)
 		return
 	}
 	if changed != nil {
