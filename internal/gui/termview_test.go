@@ -532,3 +532,16 @@ func TestAScrollMovesAtOnce(t *testing.T) {
 		t.Fatalf("after a pause, moved %d", got)
 	}
 }
+
+// A trackpad's scroll, in tenths of points, turns lines by the cell's
+// height; a wheel's notch, three.
+func TestATrackpadScrollsByPoints(t *testing.T) {
+	v := terminalView{cellH: 16}
+	pad := ggui.PointerEvent{Scroll: ggui.Pt(0, 3.2), ScrollPhase: ggui.ScrollPhaseChanged}
+	if got := v.scrollLines(pad); got != 2 {
+		t.Fatalf("32 points turned %v lines", got)
+	}
+	if got := v.scrollLines(ggui.PointerEvent{Scroll: ggui.Pt(0, 1)}); got != 3 {
+		t.Fatalf("a notch turned %v lines", got)
+	}
+}

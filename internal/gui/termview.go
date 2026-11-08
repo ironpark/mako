@@ -750,15 +750,7 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 		}
 		return false
 	case ggui.PointerScroll:
-		dy := ev.Scroll.Y
-		// A trackpad's scroll, which comes in a gesture's phases, is in
-		// pixels though it says nothing of it; taken for a wheel's notches
-		// a flick turned thousands of lines a second.
-		if (ev.ScrollPixels || ev.ScrollPhase != ggui.ScrollPhaseNone) && t.cellH > 0 {
-			dy /= t.cellH
-		} else {
-			dy *= 3
-		}
+		dy := t.scrollLines(ev)
 		lines := t.wheelLines(dy, time.Now())
 		wheelTrace.tracef("scroll raw=%.2f px=%v phase=%v momentum=%v lines=%d", ev.Scroll.Y, ev.ScrollPixels, ev.ScrollPhase, ev.ScrollMomentum, lines)
 		if lines == 0 {
@@ -778,6 +770,28 @@ func (t *terminalView) HandlePointer(ev ggui.PointerEvent) bool {
 		return true
 	}
 	return false
+}
+
+// trackpadPoints is the points of a trackpad's scroll a unit of it comes
+// as: the window passes macOS's precise deltas on at a tenth, as GLFW
+// does, without saying they are precise.
+const trackpadPoints = 10
+
+// scrollLines is the lines a scroll event turns. A trackpad's, which comes
+// in a gesture's phases, is in tenths of points: taken for a wheel's
+// notches, three lines each, a flick turned thousands of lines a second,
+// and taken for pixels, a crawl.
+func (t *terminalView) scrollLines(ev ggui.PointerEvent) float64 {
+	dy := ev.Scroll.Y
+	switch {
+	case t.cellH <= 0:
+		return dy * 3
+	case ev.ScrollPixels:
+		return dy / t.cellH
+	case ev.ScrollPhase != ggui.ScrollPhaseNone:
+		return dy * trackpadPoints / t.cellH
+	}
+	return dy * 3 // a wheel's notch
 }
 
 // A trackpad scrolls by pixels, a cell's worth over a few events, and the
