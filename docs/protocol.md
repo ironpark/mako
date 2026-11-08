@@ -498,7 +498,8 @@ Search matching is case-insensitive unless `query` has a capital.
 
 `stage_file` sends a file in pieces of a few megabytes, each a request of its
 own. The first gives the file's `name` and no `path`; the node keeps it under
-a folder of its own in its temporary directory, as `mako-drops/<time>-<id>/<name>`,
+a folder of its own in the user's cache directory (its run directory without
+one), as `mako-drops/<time>-<id>/<name>`,
 and answers with the `path`. The rest give that `path` and the `offset` their
 `data` goes at. A staged file is at most 512 MB, and the first piece staged a
 day later removes the folders older than that.
