@@ -24,54 +24,82 @@ type svgMarker struct {
 	tokens     []xml.Token
 }
 
-// markers are the markers data defines, by id.
-func markers(data []byte) map[string]*svgMarker {
+// svgDefs are what an SVG defines that clean draws itself, ggfx not: its
+// markers, its clips and masks, and its paths text follows, by id.
+type svgDefs struct {
+	markers map[string]*svgMarker
+	clips   map[string]*svgClip
+	paths   map[string]string // a path's d
+}
+
+// svgClip is a <clipPath>, or with mask set a <mask>, and the elements it
+// holds.
+type svgClip struct {
+	mask   bool
+	tokens []xml.Token
+}
+
+// scanDefs reads what data defines for clean to draw.
+func scanDefs(data []byte) svgDefs {
 	dec := xml.NewDecoder(bytes.NewReader(data))
 	dec.Strict = false
 	dec.AutoClose = xml.HTMLAutoClose
 	dec.Entity = xml.HTMLEntity
-	var found map[string]*svgMarker
-	var cur *svgMarker
+	defs := svgDefs{markers: map[string]*svgMarker{}, clips: map[string]*svgClip{}, paths: map[string]string{}}
+	var into *[]xml.Token // the tokens of the marker or clip being read
 	depth := 0
 	for {
 		tok, err := dec.Token()
 		if err != nil {
-			return found
+			return defs
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
-			if cur != nil {
+			if into != nil {
 				depth++
-				cur.tokens = append(cur.tokens, t.Copy())
+				*into = append(*into, t.Copy())
 				continue
 			}
-			if t.Name.Local != "marker" {
-				continue
-			}
-			m, id := newMarker(t.Attr)
+			id := attr(t.Attr, "id")
 			if id == "" {
 				continue
 			}
-			if found == nil {
-				found = map[string]*svgMarker{}
+			switch t.Name.Local {
+			case "marker":
+				m, _ := newMarker(t.Attr)
+				defs.markers[id], into, depth = m, &m.tokens, 0
+			case "clipPath", "mask":
+				c := &svgClip{mask: t.Name.Local == "mask"}
+				defs.clips[id], into, depth = c, &c.tokens, 0
+			case "path":
+				defs.paths[id] = attr(t.Attr, "d")
 			}
-			found[id], cur, depth = m, m, 0
 		case xml.EndElement:
-			if cur == nil {
+			if into == nil {
 				continue
 			}
 			if depth == 0 {
-				cur = nil
+				into = nil
 				continue
 			}
 			depth--
-			cur.tokens = append(cur.tokens, t)
+			*into = append(*into, t)
 		case xml.CharData:
-			if cur != nil {
-				cur.tokens = append(cur.tokens, t.Copy())
+			if into != nil {
+				*into = append(*into, t.Copy())
 			}
 		}
 	}
+}
+
+// attr is the value of the attribute named k, "" for none.
+func attr(attrs []xml.Attr, k string) string {
+	for _, a := range attrs {
+		if a.Name.Local == k {
+			return a.Value
+		}
+	}
+	return ""
 }
 
 // newMarker is the marker a <marker>'s attributes describe, and its id.
@@ -258,14 +286,7 @@ type vertex struct{ x, y, angle float64 }
 // shapeVertices are the vertices of a line, polyline, polygon or path, in
 // order, each with the way the shape runs through it.
 func shapeVertices(name string, attrs []xml.Attr) []vertex {
-	get := func(k string) string {
-		for _, a := range attrs {
-			if a.Name.Local == k {
-				return a.Value
-			}
-		}
-		return ""
-	}
+	get := func(k string) string { return attr(attrs, k) }
 	var pts [][2]float64
 	switch name {
 	case "line":

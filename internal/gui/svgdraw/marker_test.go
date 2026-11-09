@@ -44,3 +44,21 @@ func TestPathVertices(t *testing.T) {
 		t.Fatalf("the corner turns %v, want 45", a)
 	}
 }
+
+// Text turned by a transform keeps its turn; text on a path starts where
+// the path does, turned as it runs there.
+func TestTextTurnsAndFollowsAPath(t *testing.T) {
+	_, texts, _, err := clean([]byte(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 100 100">
+<defs><path id="p" d="M20,80 L80,20"/></defs>
+<text x="10" y="50" transform="rotate(-90 10 50)">Axis</text>
+<text><textPath xlink:href="#p">Along</textPath></text></svg>`))
+	if err != nil || len(texts) != 2 {
+		t.Fatalf("texts %+v, %v", texts, err)
+	}
+	if a := texts[0].angle; math.Abs(a+math.Pi/2) > 1e-9 {
+		t.Errorf("the turned text's angle is %v, want -π/2", a)
+	}
+	if p := texts[1]; p.x != 20 || p.y != 80 || math.Abs(p.angle+math.Pi/4) > 1e-9 {
+		t.Errorf("the text on a path is at %v,%v turned %v", p.x, p.y, p.angle)
+	}
+}
