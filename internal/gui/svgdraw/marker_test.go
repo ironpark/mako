@@ -12,7 +12,8 @@ func TestMarkersAreDrawnAtAShapesEnds(t *testing.T) {
 	svg := []byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
 <path d="M10,10 L50,10 L50,90" stroke-width="2" marker-end="url(#arrow)" marker-start="url(#arrow)"/></svg>`)
-	out, _, _, err := clean(svg)
+	doc, _, _, err := clean(svg)
+	out := doc.data
 	if err != nil {
 		t.Fatal(err)
 	}

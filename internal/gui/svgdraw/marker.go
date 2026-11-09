@@ -257,6 +257,7 @@ func writeMarkers(out *bytes.Buffer, name string, attrs []xml.Attr, defs map[str
 // those ggfx draws, the rest left out with what they hold.
 func writeTokens(out *bytes.Buffer, tokens []xml.Token) {
 	skip := 0
+	var names []string // the names written, for their end tags
 	for _, tok := range tokens {
 		switch t := tok.(type) {
 		case xml.StartElement:
@@ -264,13 +265,16 @@ func writeTokens(out *bytes.Buffer, tokens []xml.Token) {
 				skip++
 				continue
 			}
-			writeSVGStart(out, t.Name.Local, t.Attr, false)
+			names = append(names, writeSVGStart(out, t.Name.Local, t.Attr, false))
 		case xml.EndElement:
 			if skip > 0 {
 				skip--
 				continue
 			}
-			out.WriteString("</" + t.Name.Local + ">")
+			if n := len(names); n > 0 {
+				out.WriteString("</" + names[n-1] + ">")
+				names = names[:n-1]
+			}
 		case xml.CharData:
 			if skip == 0 {
 				_ = xml.EscapeText(out, t)

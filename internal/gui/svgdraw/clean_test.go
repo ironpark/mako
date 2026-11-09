@@ -30,7 +30,8 @@ func TestABadgeIsDrawnWithItsText(t *testing.T) {
 	if _, err := ggsvg.Parse(strings.NewReader(badge)); err == nil {
 		t.Log("ggfx reads the badge itself now")
 	}
-	clean, texts, embeds, err := clean([]byte(badge))
+	doc, texts, embeds, err := clean([]byte(badge))
+	clean := doc.data
 	if err != nil {
 		t.Fatal(err)
 	}
