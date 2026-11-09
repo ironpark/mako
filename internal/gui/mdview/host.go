@@ -19,6 +19,11 @@ type Host interface {
 	// Code is a code block's text, highlighted in lang ("" for none),
 	// selectable and not wrapping. The page puts it in its box.
 	Code(src, lang string) ggui.Widget
+	// Diagram is the picture a code block in a diagram's language, as
+	// mermaid, draws, read once and kept; nil for a language the host
+	// draws nothing of, which the page shows as code. One that cannot be
+	// drawn comes without an image, and shows as code too.
+	Diagram(src, lang string) *ggui.StateValue[Image]
 	// Fold is whether the page's nth <details> is open, kept so it stays as
 	// the reader left it; open is its first state.
 	Fold(n int, open bool) *ggui.StateValue[bool]
@@ -30,6 +35,9 @@ type Base struct{}
 
 func (Base) Open(string)                          {}
 func (Base) Image(string) *ggui.StateValue[Image] { return nil }
+func (Base) Diagram(_, _ string) *ggui.StateValue[Image] {
+	return nil
+}
 func (Base) Fold(_ int, open bool) *ggui.StateValue[bool] {
 	return ggui.State(open)
 }

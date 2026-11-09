@@ -47,12 +47,17 @@ func (r *mdRenderer) image(p mdPicture) ggui.Widget {
 		case v.Img == nil:
 			return fallback()
 		}
-		f := &fitImage{img: v.Img, size: v.Size, want: ggui.Sz(p.width, p.height), alt: label}
-		if len(v.Labels) > 0 {
-			f.labels = &svgdraw.Labels{Texts: v.Labels, Origin: v.Origin}
-		}
-		return f
+		return fit(v, ggui.Sz(p.width, p.height), label)
 	})
+}
+
+// fit is the picture v at its own size, or want's, no wider than the page.
+func fit(v Image, want ggui.Size, alt string) *fitImage {
+	f := &fitImage{img: v.Img, size: v.Size, want: want, alt: alt}
+	if len(v.Labels) > 0 {
+		f.labels = &svgdraw.Labels{Texts: v.Labels, Origin: v.Origin}
+	}
+	return f
 }
 
 // ImageOf is a read file as a page's picture: img as it decoded, or else

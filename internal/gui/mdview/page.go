@@ -547,9 +547,28 @@ func (r *mdRenderer) code(n ast.Node, lang string) ggui.Widget {
 	} else {
 		lang = ""
 	}
-	text := r.host.Code(r.segmentsText(n.Lines()), lang)
-	return ggui.Box(ggui.Scroll(ggui.Padding(text, 12, 14)).Horizontal().Bar(skin.Surface3)).
-		Fill(skin.Surface1).Border(1, skin.Border).Radius(8)
+	src := r.segmentsText(n.Lines())
+	block := func() ggui.Widget {
+		text := r.host.Code(src, lang)
+		return ggui.Box(ggui.Scroll(ggui.Padding(text, 12, 14)).Horizontal().Bar(skin.Surface3)).
+			Fill(skin.Surface1).Border(1, skin.Border).Radius(8)
+	}
+	if lang == "" {
+		return block()
+	}
+	img := r.host.Diagram(src, lang)
+	if img == nil {
+		return block()
+	}
+	return ggui.View(img, func(v Image) ggui.Widget {
+		switch {
+		case v.Loading:
+			return ggui.Box(ui.Spinner()).Pad(8)
+		case v.Img == nil:
+			return block() // its source, as one that cannot be drawn
+		}
+		return fit(v, ggui.Size{}, lang)
+	})
 }
 
 // listMarks are a list's bullets, by how deep it is nested.
