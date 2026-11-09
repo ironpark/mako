@@ -86,6 +86,8 @@ func clean(data []byte) ([]byte, []Text, []svgEmbed, error) {
 	var text *svgRun // the text element being read
 	textDepth := 0   // depth inside it
 	rooted := false
+	defs := markers(data)
+	var open []xml.StartElement // the elements written and not yet ended, for their markers
 	for {
 		tok, err := dec.Token()
 		if err == io.EOF {
@@ -133,6 +135,7 @@ func clean(data []byte) ([]byte, []Text, []svgEmbed, error) {
 			}
 			styles = append(styles, st)
 			writeSVGStart(&out, name, t.Attr, !rooted)
+			open = append(open, t)
 			rooted = true
 		case xml.EndElement:
 			if skip > 0 {
@@ -153,6 +156,13 @@ func clean(data []byte) ([]byte, []Text, []svgEmbed, error) {
 				name = "g"
 			}
 			out.WriteString("</" + name + ">")
+			if n := len(open); n > 0 {
+				el := open[n-1]
+				open = open[:n-1]
+				if defs != nil && !styles[len(styles)-1].hidden {
+					writeMarkers(&out, el.Name.Local, el.Attr, defs)
+				}
+			}
 		case xml.CharData:
 			if skip > 0 {
 				continue
