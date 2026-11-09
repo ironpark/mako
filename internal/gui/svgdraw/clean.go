@@ -74,13 +74,20 @@ type svgEmbed struct {
 	x, y, w, h float64
 }
 
-// clean is data with only what ggfx draws, and the text and the images
-// it holds taken out of it.
-func clean(data []byte) (svgDoc, []Text, []svgEmbed, error) {
+// newDecoder reads an SVG leniently, as browsers do: HTML's entities, and
+// elements left open.
+func newDecoder(data []byte) *xml.Decoder {
 	dec := xml.NewDecoder(bytes.NewReader(data))
 	dec.Strict = false
 	dec.AutoClose = xml.HTMLAutoClose
 	dec.Entity = xml.HTMLEntity
+	return dec
+}
+
+// clean is data with only what ggfx draws, and the text and the images
+// it holds taken out of it.
+func clean(data []byte) (svgDoc, []Text, []svgEmbed, error) {
+	dec := newDecoder(data)
 	var out bytes.Buffer
 	var texts []Text
 	var embeds []svgEmbed
@@ -89,7 +96,11 @@ func clean(data []byte) (svgDoc, []Text, []svgEmbed, error) {
 	var text *svgRun // the text element being read
 	textDepth := 0   // depth inside it
 	rooted := false
-	defs := scanDefs(data)
+	var defs svgDefs
+	if bytes.Contains(data, []byte("<marker")) || bytes.Contains(data, []byte("clipPath")) ||
+		bytes.Contains(data, []byte("<mask")) || bytes.Contains(data, []byte("textPath")) {
+		defs = scanDefs(data, bytes.Contains(data, []byte("textPath")))
+	}
 	// The elements written and not yet ended, for their markers and the
 	// layers a clip or a mask cuts the document into.
 	type openEl struct {
@@ -124,7 +135,7 @@ func clean(data []byte) (svgDoc, []Text, []svgEmbed, error) {
 				if name == "textPath" {
 					// Set at the start of the path it follows, turned as the
 					// path runs there: not bent along it.
-					if vs := pathVertices(defs.paths[markerID("url("+attr(t.Attr, "href")+")")]); len(vs) > 0 {
+					if vs := pathVertices(defs.paths[strings.TrimPrefix(strings.TrimSpace(attr(t.Attr, "href")), "#")]); len(vs) > 0 {
 						text.flush()
 						text.x, text.y, text.along = vs[0].x, vs[0].y, vs[0].angle
 					}
@@ -189,7 +200,7 @@ func clean(data []byte) (svgDoc, []Text, []svgEmbed, error) {
 				out.WriteString("</" + open[n-1].tag.name + ">")
 				el := open[n-1].el
 				open = open[:n-1]
-				if !styles[len(styles)-1].hidden {
+				if len(defs.markers) > 0 && !styles[len(styles)-1].hidden {
 					writeMarkers(&out, el.Name.Local, el.Attr, defs.markers)
 				}
 				if defsAt >= 0 && len(open) == defsIn {
@@ -308,14 +319,7 @@ func writeSVGStart(out *bytes.Buffer, name string, attrs []xml.Attr, root bool) 
 // its corners quarter ellipses made of curves; false for one whose corners
 // are square, or that has no size.
 func roundedRect(attrs []xml.Attr) (string, bool) {
-	num := func(k string) (float64, bool) {
-		v := attr(attrs, k)
-		if v == "" {
-			return 0, false
-		}
-		n, ok := svgLength(v, 16)
-		return n, ok
-	}
+	num := func(k string) (float64, bool) { return svgAttrNum(attrs, k) }
 	x, _ := num("x")
 	y, _ := num("y")
 	w, okW := num("width")
@@ -415,8 +419,10 @@ func (r *svgRun) flush() {
 	r.cur = Text{}
 }
 
-// with is the style an element with attrs has under st.
-func (st svgStyle) with(attrs []xml.Attr) svgStyle {
+// svgProps are an element's properties, its attributes and the
+// declarations of its style, the style's over the attribute's, as CSS has
+// them.
+func svgProps(attrs []xml.Attr) map[string]string {
 	props := map[string]string{}
 	for _, a := range attrs {
 		if a.Name.Local == "style" {
@@ -431,6 +437,12 @@ func (st svgStyle) with(attrs []xml.Attr) svgStyle {
 			props[a.Name.Local] = strings.TrimSpace(a.Value)
 		}
 	}
+	return props
+}
+
+// with is the style an element with attrs has under st.
+func (st svgStyle) with(attrs []xml.Attr) svgStyle {
+	props := svgProps(attrs)
 	if v, ok := props["transform"]; ok {
 		st.m = st.m.mul(parseSVGTransform(v))
 	}
@@ -624,12 +636,11 @@ type Labels struct {
 	laid     []ggui.Widget
 	at       []ggui.Point
 	measured []ggui.Size
-	pivot    []ggui.Point // where each turns about, for one that turns
 }
 
 // Layout sets each text at its place and size.
 func (l *Labels) Layout(env ggui.Env) {
-	l.laid, l.at, l.measured, l.pivot = l.laid[:0], l.at[:0], l.measured[:0], l.pivot[:0]
+	l.laid, l.at, l.measured = l.laid[:0], l.at[:0], l.measured[:0]
 	for _, t := range l.Texts {
 		w := ggui.Text(t.text).Size(t.size * l.Scale).Color(t.color).NoWrap().LineHeight(1)
 		if t.bold {
@@ -653,7 +664,6 @@ func (l *Labels) Layout(env ggui.Env) {
 		l.laid = append(l.laid, w)
 		l.at = append(l.at, ggui.Pt(x, (t.y-l.Origin.Y)*l.Scale-base))
 		l.measured = append(l.measured, size)
-		l.pivot = append(l.pivot, ggui.Pt((t.x-l.Origin.X)*l.Scale, (t.y-l.Origin.Y)*l.Scale))
 	}
 }
 
@@ -663,10 +673,12 @@ func (l *Labels) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	for i, w := range l.laid {
 		at := l.at[i]
 		rect := ggui.Rct(ggui.Pt(r.Origin.X+at.X, r.Origin.Y+at.Y), l.measured[i])
-		if a := l.Texts[i].angle; a != 0 {
-			// Turned as its baseline is, about where it starts.
-			pivot := ggui.Pt(r.Origin.X+l.pivot[i].X, r.Origin.Y+l.pivot[i].Y)
-			clip.Transform(ggui.Affine{}.Rotate(a).About(pivot), func(dst *ggui.Canvas) { dst.Paint(w, rect) })
+		if t := l.Texts[i]; t.angle != 0 {
+			// Turned as its baseline is, about where it starts, through a
+			// layer no larger than the text turned.
+			pivot := ggui.Pt(r.Origin.X+(t.x-l.Origin.X)*l.Scale, r.Origin.Y+(t.y-l.Origin.Y)*l.Scale)
+			m := ggui.Affine{}.Rotate(t.angle).About(pivot)
+			clip.Clip(m.Bounds(rect).Grow(2)).Transform(m, func(dst *ggui.Canvas) { dst.Paint(w, rect) })
 			continue
 		}
 		clip.Paint(w, rect)

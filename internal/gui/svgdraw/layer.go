@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"encoding/xml"
 	"image"
-	"image/draw"
 	"strings"
 )
 
@@ -43,21 +42,8 @@ type openTag struct {
 // clipRef is the id of the clip or mask an element's attributes name, ""
 // for none.
 func clipRef(attrs []xml.Attr) string {
-	id := ""
-	for _, a := range attrs {
-		switch a.Name.Local {
-		case "clip-path", "mask":
-			id = cmp.Or(markerID(a.Value), id)
-		case "style":
-			for decl := range strings.SplitSeq(a.Value, ";") {
-				k, v, _ := strings.Cut(decl, ":")
-				if k = strings.TrimSpace(k); k == "clip-path" || k == "mask" {
-					id = cmp.Or(markerID(v), id)
-				}
-			}
-		}
-	}
-	return id
+	props := svgProps(attrs)
+	return urlID(cmp.Or(props["clip-path"], props["mask"]))
 }
 
 // layers draws doc at the scale k gives, each of its layers through its
@@ -66,33 +52,43 @@ func (doc svgDoc) layers(k func(w float64) float64) (px *image.RGBA, x, y, w, h 
 	if len(doc.cuts) == 0 {
 		return raster(doc.data, k)
 	}
-	add := func(data []byte, through []byte, mask bool) bool {
-		layer, lx, ly, lw, lh, ok := raster(data, k)
+	// add draws the layer of the document's bytes from a to b, the elements
+	// before and after it open around it, through the clip or mask through
+	// draws, if any.
+	add := func(a, b int, before, after []openTag, through []byte, mask bool) bool {
+		if px != nil && !startsAny(doc.data[a:b]) {
+			return true // nothing of its own to draw
+		}
+		layer, lx, ly, lw, lh, ok := raster(doc.segment(a, b, before, after), k)
 		if !ok {
 			return false
 		}
+		var by *image.RGBA
 		if through != nil {
-			if by, _, _, _, _, ok := raster(through, k); ok {
-				apply(layer, by, mask)
+			if by, _, _, _, _, ok = raster(through, k); !ok {
+				by = nil
 			}
 		}
-		if px == nil {
+		if px == nil && by == nil {
 			px, x, y, w, h = layer, lx, ly, lw, lh
 			return true
 		}
-		draw.Draw(px, px.Bounds(), layer, image.Point{}, draw.Over)
+		if px == nil {
+			px, x, y, w, h = image.NewRGBA(layer.Bounds()), lx, ly, lw, lh
+		}
+		over(px, layer, by, mask)
 		return true
 	}
 	at := 0
 	var around []openTag // the elements open where the last layer ended
 	for _, c := range doc.cuts {
-		if !add(doc.segment(at, c.start, around, c.around), nil, false) {
+		if !add(at, c.start, around, c.around, nil, false) {
 			return nil, 0, 0, 0, 0, false
 		}
-		add(doc.segment(c.start, c.end, c.around, c.around), doc.through(c), c.clip.mask)
+		add(c.start, c.end, c.around, c.around, doc.through(c), c.clip.mask)
 		at, around = c.end, c.around
 	}
-	if !add(doc.segment(at, len(doc.data), around, nil), nil, false) {
+	if !add(at, len(doc.data), around, nil, nil, false) {
 		return nil, 0, 0, 0, 0, false
 	}
 	return px, x, y, w, h, true
@@ -153,23 +149,46 @@ func (doc svgDoc) through(c svgCut) []byte {
 	return out.Bytes()
 }
 
-// apply lets through of layer only what by covers: by its coverage for a
-// clip, by its light for a mask.
-func apply(layer, by *image.RGBA, mask bool) {
-	if layer.Bounds() != by.Bounds() {
+// startsAny reports whether data starts an element: holds a start tag,
+// not only end tags and the space between.
+func startsAny(data []byte) bool {
+	for i := 0; i+1 < len(data); i++ {
+		if data[i] == '<' && data[i+1] != '/' {
+			return true
+		}
+	}
+	return false
+}
+
+// over lays layer over dst, letting through only what by covers, where by
+// is not nil: by its coverage for a clip, by its light for a mask.
+// Premultiplied, so each channel scales alike.
+func over(dst, layer, by *image.RGBA, mask bool) {
+	if dst.Bounds() != layer.Bounds() || by != nil && by.Bounds() != layer.Bounds() {
 		return
 	}
-	for i := 0; i+3 < len(layer.Pix); i += 4 {
-		p := by.Pix[i : i+4 : i+4]
-		var f uint32
-		if mask {
-			// Premultiplied, so the light is already its alpha's.
-			f = (2126*uint32(p[0]) + 7152*uint32(p[1]) + 722*uint32(p[2])) / 10000
-		} else {
-			f = uint32(p[3])
+	d, l := dst.Pix, layer.Pix
+	for i := 0; i+3 < len(l); i += 4 {
+		if l[i+3] == 0 {
+			continue
 		}
+		f := uint32(255)
+		if by != nil {
+			p := by.Pix[i : i+4 : i+4]
+			if mask {
+				// Premultiplied, so the light is already its alpha's.
+				f = (2126*uint32(p[0]) + 7152*uint32(p[1]) + 722*uint32(p[2])) / 10000
+			} else {
+				f = uint32(p[3])
+			}
+			if f == 0 {
+				continue
+			}
+		}
+		a := uint32(l[i+3]) * f / 255
 		for j := range 4 {
-			layer.Pix[i+j] = uint8(uint32(layer.Pix[i+j]) * f / 255)
+			src := uint32(l[i+j]) * f / 255
+			d[i+j] = uint8(src + uint32(d[i+j])*(255-a)/255)
 		}
 	}
 }

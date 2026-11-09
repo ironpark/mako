@@ -33,34 +33,25 @@ func (r *mdRenderer) diagram(img *ggui.StateValue[Image], block func() ggui.Widg
 			why := ggui.Text(v.Err).Size(12).Color(skin.DiffRemoved).Selectable()
 			return ggui.Column(block(), why).Gap(6).Stretch()
 		}
-		return ggui.View(ggui.Combine(code, zoom, func(c, z bool) [2]bool { return [2]bool{c, z} }), func(s [2]bool) ggui.Widget {
+		return ggui.View(code, func(showCode bool) ggui.Widget {
 			label := i18n.T("Code")
-			if s[0] {
+			if showCode {
 				label = i18n.T("Diagram")
 			}
 			bar := ggui.Row(ggui.Expanded(ggui.Box()),
-				ui.Button(label, func() { code.Set(!s[0]) }).Ghost()).Align(ggui.AlignCenter)
-			if s[0] {
+				ui.Button(label, func() { code.Set(!showCode) }).Ghost()).Align(ggui.AlignCenter)
+			if showCode {
 				return ggui.Column(bar, block()).Gap(4).Stretch()
 			}
-			var pic ggui.Widget = fit(v, ggui.Size{}, lang)
-			if s[1] {
-				big := fit(v, ggui.Sz(v.Size.W*diagramZoom, v.Size.H*diagramZoom), lang)
-				pic = ggui.Scroll(&unbounded{big}).Horizontal().Bar(skin.Surface3)
-			}
-			pic = ggui.Tap(pic, func() { zoom.Set(!s[1]) })
+			pic := ggui.View(zoom, func(big bool) ggui.Widget {
+				var pic ggui.Widget = fit(v, ggui.Size{}, lang)
+				if big {
+					// A sideways scroll lays it out unbounded, at the size asked.
+					pic = ggui.Scroll(fit(v, ggui.Sz(v.Size.W*diagramZoom, v.Size.H*diagramZoom), lang)).Horizontal().Bar(skin.Surface3)
+				}
+				return ggui.Tap(pic, func() { zoom.Set(!big) })
+			})
 			return ggui.Column(bar, pic).Gap(4).Stretch()
 		})
 	})
 }
-
-// unbounded lays its child out with no bound on its width, so a picture
-// in a sideways scroll keeps the size asked of it.
-type unbounded struct{ child *fitImage }
-
-func (u *unbounded) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	c.MaxW = 0
-	return u.child.Layout(c, env)
-}
-
-func (u *unbounded) Paint(dst *ggui.Canvas, r ggui.Rect) { u.child.Paint(dst, r) }

@@ -150,6 +150,9 @@ type model struct {
 	// Roots are the folders the Files, Git and forge tabs show; see
 	// panelRoots.
 	Roots *ggui.DerivedValue[panelRoots] // the project's folder the tab shows; see repoFolder
+	// dark is whether the theme shown is dark, for what changes with that
+	// alone, as a page's diagrams: not every setting the theme is read from.
+	dark *ggui.DerivedValue[bool]
 	// An operation that loses work, asking to be sure; see confirm.go.
 	Confirmation *ggui.StateValue[confirmation]
 	AgentsSplit  *ggui.StateValue[float64] // the agents panel's agents over its messages
@@ -286,6 +289,7 @@ func newModel(cfg *config.Config, addr string) *model {
 	m.recorder = newStreamRecorder(recordDir())
 	m.recorder.on.Store(p.RecordStreams)
 	m.Roots = ggui.Derived(m.panelRoots).WithEqual(deepEqual)
+	m.dark = ggui.Derived(func() bool { return m.themePalette().Dark })
 	m.spaceSet = ggui.Combine(m.Spaces, ggui.Map(m.Prefs, func(p prefs) string { return p.ShownSpace }), spaceSetOf).
 		WithEqual(func(a, b spaceSet) bool { return reflect.DeepEqual(a, b) })
 	m.Pick = newFolderPick(m)
