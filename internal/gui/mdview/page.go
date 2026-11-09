@@ -17,6 +17,8 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	"github.com/yuin/goldmark"
+	emoji "github.com/yuin/goldmark-emoji"
+	eemoji "github.com/yuin/goldmark-emoji/ast"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
@@ -27,7 +29,7 @@ import (
 	"github.com/ironpark/mako/internal/gui/skin"
 )
 
-var markdown = goldmark.New(goldmark.WithExtensions(extension.GFM))
+var markdown = goldmark.New(goldmark.WithExtensions(extension.GFM, extension.Footnote, emoji.Emoji))
 
 // mdBodySize is the page's text size; headings scale from it.
 const mdBodySize = 14
@@ -98,6 +100,8 @@ func (r *mdRenderer) block(n ast.Node) ggui.Widget {
 		return r.list(n)
 	case *east.Table:
 		return r.table(n)
+	case *east.FootnoteList:
+		return r.footnotes(n)
 	}
 	if n.HasChildren() {
 		return ggui.Column(r.blocks(n)...).Gap(10).Stretch()
@@ -483,6 +487,12 @@ func (r *mdRenderer) inlineNode(c ast.Node, style mdStyle, out *[]ggui.TextSpan)
 			italic.italic = true
 			r.inline(c, italic, out)
 		}
+	case *eemoji.Emoji:
+		add(string(c.Value.Unicode), style)
+	case *east.FootnoteLink:
+		add(superscript(c.Index), style)
+	case *east.FootnoteBacklink:
+		// Back to the reference, which the page has no way to scroll to.
 	case *east.Strikethrough:
 		struck := style
 		struck.strike = true
@@ -556,19 +566,10 @@ func (r *mdRenderer) code(n ast.Node, lang string) ggui.Widget {
 	if lang == "" {
 		return block()
 	}
-	img := r.host.Diagram(src, lang)
-	if img == nil {
-		return block()
+	if img := r.host.Diagram(src, lang); img != nil {
+		return r.diagram(img, block, lang)
 	}
-	return ggui.View(img, func(v Image) ggui.Widget {
-		switch {
-		case v.Loading:
-			return ggui.Box(ui.Spinner()).Pad(8)
-		case v.Img == nil:
-			return block() // its source, as one that cannot be drawn
-		}
-		return fit(v, ggui.Size{}, lang)
-	})
+	return block()
 }
 
 // listMarks are a list's bullets, by how deep it is nested.

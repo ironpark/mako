@@ -23,7 +23,9 @@ require (
 	github.com/multiformats/go-multistream v0.6.1
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
 	github.com/yuin/goldmark v1.8.6
+	github.com/yuin/goldmark-emoji v1.0.6
 	github.com/zalando/go-keyring v0.2.8
+	github.com/zkrebbekx/dot2svg v0.1.1
 	github.com/zkrebbekx/go-mermaid v0.1.6
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/crypto v0.56.0

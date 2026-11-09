@@ -27,6 +27,9 @@ type Image struct {
 	// corner, which they are placed from.
 	Labels []svgdraw.Text
 	Origin ggui.Point
+	// Err is why there is no Img, where the host says: a diagram's
+	// mistake, shown under its code.
+	Err string
 }
 
 // image shows the picture p as the host has it: a spinner while it

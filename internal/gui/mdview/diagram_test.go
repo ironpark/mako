@@ -42,6 +42,24 @@ func TestADiagramBlockShowsAsItsPicture(t *testing.T) {
 		t.Fatalf("a drawn diagram shows its code, or not its picture:\n%s", page)
 	}
 
+	// Turned to its code, and back.
+	button, ok := p.Semantics().Find(ggui.RoleButton, "Code")
+	if !ok {
+		t.Fatalf("no button to show the code:\n%s", page)
+	}
+	p.Click(button.Rect.Center())
+	p.Frame()
+	if page := p.Semantics().String(); !strings.Contains(page, "flowchart LR") {
+		t.Fatalf("turned to its code, the diagram does not show it:\n%s", page)
+	}
+
+	// One that cannot be drawn says why, under its code.
+	img.Set(Image{Err: "line 2: unexpected arrow"})
+	p.Frame()
+	if page := p.Semantics().String(); !strings.Contains(page, "flowchart LR") || !strings.Contains(page, "unexpected arrow") {
+		t.Fatalf("a mistake is not shown under the code:\n%s", page)
+	}
+
 	q := ggui.NewProbe(Page(Base{}, src), ggui.Sz(900, 600))
 	defer q.Close()
 	q.Frame()

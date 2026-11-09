@@ -290,6 +290,8 @@ var catalogKo = map[string]string{
 	"Agents":           "에이전트",
 	"Session details":  "세션 정보",
 	"Details":          "자세히",
+	"Code":             "코드",
+	"Diagram":          "다이어그램",
 	"About":            "정보",
 
 	// Settings: general

@@ -61,6 +61,9 @@ func asMDImage(d decodedImage, err error) mdview.Image {
 	if d.Shown.W > 0 && v.Img != nil && d.Img != nil {
 		v.Size = d.Shown // shown at the size it was read at
 	}
+	if v.Img == nil && err != nil {
+		v.Err = err.Error()
+	}
 	return v
 }
 
