@@ -8,12 +8,10 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"image/color"
 	"io"
 	"math"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -21,12 +19,11 @@ import (
 )
 
 // An SVG on a page is drawn by ggfx, which knows paths, shapes, groups,
-// gradients and use, and fails on anything else. A README's SVG is seldom
-// so plain: a badge clips its corners and is mostly text, a diagram wraps
+// gradients, use, clips, masks and markers, and fails on anything else. A
+// README's SVG is seldom so plain: a badge is mostly text, a diagram wraps
 // shapes in links. So the document is cleaned first: what ggfx cannot
-// draw is left out, a clip or mask not applied, a link drawn as a group,
-// and its text taken out, to be set over the drawing in the window's own
-// font.
+// draw is left out, a filter not applied, a link drawn as a group, and its
+// text taken out, to be set over the drawing in the window's own font.
 
 // Text is a run of an SVG's text, placed in its view box's units.
 type Text struct {
@@ -46,12 +43,12 @@ var svgDrawn = map[string]bool{
 	"svg": true, "g": true, "line": true, "stop": true, "rect": true, "circle": true,
 	"ellipse": true, "polyline": true, "polygon": true, "path": true, "desc": true,
 	"defs": true, "style": true, "title": true, "linearGradient": true,
-	"radialGradient": true, "use": true,
+	"radialGradient": true, "use": true, "clipPath": true, "mask": true, "marker": true,
 }
 
 // svgUndrawnAttrs are the attributes of effects ggfx does not apply; the
 // shapes they would affect are drawn without them.
-var svgUndrawnAttrs = map[string]bool{"clip-path": true, "mask": true, "filter": true}
+var svgUndrawnAttrs = map[string]bool{"filter": true}
 
 // svgStyle is what an element's text inherits.
 type svgStyle struct {
@@ -86,7 +83,7 @@ func newDecoder(data []byte) *xml.Decoder {
 
 // clean is data with only what ggfx draws, and the text and the images
 // it holds taken out of it.
-func clean(data []byte) (svgDoc, []Text, []svgEmbed, error) {
+func clean(data []byte) ([]byte, []Text, []svgEmbed, error) {
 	dec := newDecoder(data)
 	var out bytes.Buffer
 	var texts []Text
@@ -96,30 +93,18 @@ func clean(data []byte) (svgDoc, []Text, []svgEmbed, error) {
 	var text *svgRun // the text element being read
 	textDepth := 0   // depth inside it
 	rooted := false
-	var defs svgDefs
-	if bytes.Contains(data, []byte("<marker")) || bytes.Contains(data, []byte("clipPath")) ||
-		bytes.Contains(data, []byte("<mask")) || bytes.Contains(data, []byte("textPath")) {
-		defs = scanDefs(data, bytes.Contains(data, []byte("textPath")))
+	var paths map[string]string // the paths text follows, by id
+	if bytes.Contains(data, []byte("textPath")) {
+		paths = pathsByID(data)
 	}
-	// The elements written and not yet ended, for their markers and the
-	// layers a clip or a mask cuts the document into.
-	type openEl struct {
-		el  xml.StartElement
-		tag openTag
-	}
-	var open []openEl
-	var doc svgDoc
-	var defsOut bytes.Buffer // the defs and gradients written, for each layer
-	defsAt, defsIn := -1, 0  // where the defs being written began, and how many were open around them
-	var cut *svgCut          // the element being drawn through a clip, nil for none
-	cutIn := 0               // how many elements were open around it
+	var open []string // the names written of the elements not yet ended
 	for {
 		tok, err := dec.Token()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return svgDoc{}, nil, nil, err
+			return nil, nil, nil, err
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
@@ -135,7 +120,7 @@ func clean(data []byte) (svgDoc, []Text, []svgEmbed, error) {
 				if name == "textPath" {
 					// Set at the start of the path it follows, turned as the
 					// path runs there: not bent along it.
-					if vs := pathVertices(defs.paths[strings.TrimPrefix(strings.TrimSpace(attr(t.Attr, "href")), "#")]); len(vs) > 0 {
+					if vs := pathVertices(paths[strings.TrimPrefix(strings.TrimSpace(attr(t.Attr, "href")), "#")]); len(vs) > 0 {
 						text.flush()
 						text.x, text.y, text.along = vs[0].x, vs[0].y, vs[0].angle
 					}
@@ -148,6 +133,11 @@ func clean(data []byte) (svgDoc, []Text, []svgEmbed, error) {
 				continue
 			}
 			st := styles[len(styles)-1].with(t.Attr)
+			if name == "clipPath" || name == "mask" || name == "marker" {
+				// Drawn where they are named, by ggfx, not here: their text
+				// and images are none of the picture's.
+				st.hidden = true
+			}
 			if name == "text" {
 				styles = append(styles, st)
 				text, textDepth = &svgRun{}, 1
@@ -167,20 +157,8 @@ func clean(data []byte) (svgDoc, []Text, []svgEmbed, error) {
 				continue
 			}
 			styles = append(styles, st)
-			if c := defs.clips[clipRef(t.Attr)]; c != nil && cut == nil && rooted && !st.hidden {
-				around := make([]openTag, len(open))
-				for i, o := range open {
-					around[i] = o.tag
-				}
-				cut = &svgCut{start: out.Len(), around: around, clip: c, transform: attr(t.Attr, "transform")}
-				cutIn = len(open)
-			}
-			if defsAt < 0 && (name == "defs" || name == "linearGradient" || name == "radialGradient") {
-				defsAt, defsIn = out.Len(), len(open)
-			}
-			start := out.Len()
-			name = writeSVGStart(&out, name, t.Attr, !rooted)
-			open = append(open, openEl{t, openTag{name: name, start: start, end: out.Len()}})
+			writeSVGStart(&out, name, t.Attr, !rooted)
+			open = append(open, name)
 			rooted = true
 		case xml.EndElement:
 			if skip > 0 {
@@ -197,21 +175,8 @@ func clean(data []byte) (svgDoc, []Text, []svgEmbed, error) {
 				continue
 			}
 			if n := len(open); n > 0 {
-				out.WriteString("</" + open[n-1].tag.name + ">")
-				el := open[n-1].el
+				out.WriteString("</" + open[n-1] + ">")
 				open = open[:n-1]
-				if len(defs.markers) > 0 && !styles[len(styles)-1].hidden {
-					writeMarkers(&out, el.Name.Local, el.Attr, defs.markers)
-				}
-				if defsAt >= 0 && len(open) == defsIn {
-					defsOut.Write(out.Bytes()[defsAt:])
-					defsAt = -1
-				}
-				if cut != nil && len(open) == cutIn {
-					cut.end = out.Len()
-					doc.cuts = append(doc.cuts, *cut)
-					cut = nil
-				}
 			}
 		case xml.CharData:
 			if skip > 0 {
@@ -225,10 +190,9 @@ func clean(data []byte) (svgDoc, []Text, []svgEmbed, error) {
 		}
 	}
 	if !rooted {
-		return svgDoc{}, nil, nil, errors.New("svg: no document")
+		return nil, nil, nil, errors.New("svg: no document")
 	}
-	doc.data, doc.defs = out.Bytes(), defsOut.Bytes()
-	return doc, texts, embeds, nil
+	return out.Bytes(), texts, embeds, nil
 }
 
 // embeddedImage is an <image> whose picture is in its data: address.
@@ -270,22 +234,8 @@ func embeddedImage(attrs []xml.Attr, m svgMatrix) (svgEmbed, bool) {
 const svgNamespace = "http://www.w3.org/2000/svg"
 
 // writeSVGStart writes an element's start tag with the attributes ggfx
-// reads: by their own names, the namespaces and effects left out. It
-// returns the name it wrote, for the end tag: a rect with rounded corners,
-// which ggfx draws square, is written as the path of its outline.
-func writeSVGStart(out *bytes.Buffer, name string, attrs []xml.Attr, root bool) string {
-	if name == "rect" {
-		if d, ok := roundedRect(attrs); ok {
-			name = "path"
-			attrs = append(slices.DeleteFunc(slices.Clone(attrs), func(a xml.Attr) bool {
-				switch a.Name.Local {
-				case "x", "y", "width", "height", "rx", "ry", "d":
-					return true
-				}
-				return false
-			}), xml.Attr{Name: xml.Name{Local: "d"}, Value: d})
-		}
-	}
+// reads: by their own names, the namespaces and effects left out.
+func writeSVGStart(out *bytes.Buffer, name string, attrs []xml.Attr, root bool) {
 	out.WriteString("<" + name)
 	if root {
 		out.WriteString(` xmlns="` + svgNamespace + `"`)
@@ -312,43 +262,6 @@ func writeSVGStart(out *bytes.Buffer, name string, attrs []xml.Attr, root bool) 
 		out.WriteString(`"`)
 	}
 	out.WriteString(">")
-	return name
-}
-
-// roundedRect is the outline of a rect with rounded corners, as path data,
-// its corners quarter ellipses made of curves; false for one whose corners
-// are square, or that has no size.
-func roundedRect(attrs []xml.Attr) (string, bool) {
-	num := func(k string) (float64, bool) { return svgAttrNum(attrs, k) }
-	x, _ := num("x")
-	y, _ := num("y")
-	w, okW := num("width")
-	h, okH := num("height")
-	rx, okX := num("rx")
-	ry, okY := num("ry")
-	switch {
-	case !okX && !okY:
-		return "", false
-	case !okX:
-		rx = ry
-	case !okY:
-		ry = rx
-	}
-	if !okW || !okH || w <= 0 || h <= 0 || rx <= 0 || ry <= 0 {
-		return "", false
-	}
-	rx, ry = min(rx, w/2), min(ry, h/2)
-	const k = 0.5522847498 // a quarter circle's control points, as a share of its radius
-	cx, cy := rx*k, ry*k
-	return fmt.Sprintf("M%g,%g H%g C%g,%g %g,%g %g,%g V%g C%g,%g %g,%g %g,%g H%g C%g,%g %g,%g %g,%g V%g C%g,%g %g,%g %g,%g Z",
-		x+rx, y, x+w-rx,
-		x+w-rx+cx, y, x+w, y+ry-cy, x+w, y+ry,
-		y+h-ry,
-		x+w, y+h-ry+cy, x+w-rx+cx, y+h, x+w-rx, y+h,
-		x+rx,
-		x+rx-cx, y+h, x, y+h-ry+cy, x, y+h-ry,
-		y+ry,
-		x, y+ry-cy, x+rx-cx, y, x+rx, y), true
 }
 
 // withoutUndrawn is a style attribute without the effects ggfx does not

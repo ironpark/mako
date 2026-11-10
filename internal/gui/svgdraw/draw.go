@@ -40,11 +40,11 @@ func Draw(data []byte) (pic Picture, ok bool) {
 			pic, ok = Picture{}, false
 		}
 	}()
-	doc, labels, embeds, err := clean(data)
+	cleaned, labels, embeds, err := clean(data)
 	if err != nil {
 		return Picture{}, false
 	}
-	px, x, y, w, h, ok := doc.layers(func(float64) float64 { return Scale })
+	px, x, y, w, h, ok := raster(cleaned, func(float64) float64 { return Scale })
 	if !ok {
 		return Picture{}, false
 	}
@@ -89,12 +89,12 @@ func raster(cleaned []byte, k func(w float64) float64) (px *image.RGBA, x, y, w,
 func drawEmbed(px *image.RGBA, e svgEmbed, x, y float64) {
 	var src image.Image
 	if e.svg {
-		doc, _, _, err := clean(e.data)
+		cleaned, _, _, err := clean(e.data)
 		if err != nil {
 			return
 		}
 		// Drawn at the size it takes on the page, so it is not scaled twice.
-		img, _, _, _, _, ok := doc.layers(func(w float64) float64 { return e.w * e.m.scale() * Scale / w })
+		img, _, _, _, _, ok := raster(cleaned, func(w float64) float64 { return e.w * e.m.scale() * Scale / w })
 		if !ok {
 			return
 		}

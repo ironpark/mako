@@ -30,16 +30,15 @@ func TestABadgeIsDrawnWithItsText(t *testing.T) {
 	if _, err := ggsvg.Parse(strings.NewReader(badge)); err == nil {
 		t.Log("ggfx reads the badge itself now")
 	}
-	doc, texts, embeds, err := clean([]byte(badge))
-	clean := doc.data
+	clean, texts, embeds, err := clean([]byte(badge))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ggsvg.Parse(bytes.NewReader(clean)); err != nil {
 		t.Fatalf("the cleaned badge does not parse: %v\n%s", err, clean)
 	}
-	if strings.Contains(string(clean), "clip") || strings.Contains(string(clean), "not drawn") {
-		t.Errorf("the clip or foreign content stayed:\n%s", clean)
+	if strings.Contains(string(clean), "not drawn") || !strings.Contains(string(clean), "clipPath") {
+		t.Errorf("foreign content stayed, or the clip, which ggfx draws, went:\n%s", clean)
 	}
 	if len(embeds) != 1 || !embeds[0].svg || embeds[0].x != 5 || embeds[0].w != 14 || !strings.Contains(string(embeds[0].data), "<svg") {
 		t.Errorf("embedded logo %+v", embeds)

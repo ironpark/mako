@@ -1,33 +1,26 @@
 package svgdraw
 
 import (
-	"bytes"
 	"math"
 	"testing"
 )
 
-// A shape's markers are drawn after it, at its ends, turned as it runs
-// there and sized by its stroke.
+// A shape's markers, which ggfx draws, are kept, and drawn at its ends;
+// text inside a marker is none of the picture's.
 func TestMarkersAreDrawnAtAShapesEnds(t *testing.T) {
 	svg := []byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
-<path d="M10,10 L50,10 L50,90" stroke-width="2" marker-end="url(#arrow)" marker-start="url(#arrow)"/></svg>`)
-	doc, _, _, err := clean(svg)
-	out := doc.data
-	if err != nil {
-		t.Fatal(err)
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f00"/><text>no</text></marker></defs>
+<path d="M10,10 L50,10 L50,90" stroke="#000" stroke-width="2" fill="none" marker-end="url(#arrow)" marker-start="url(#arrow)"/></svg>`)
+	_, texts, _, err := clean(svg)
+	if err != nil || len(texts) != 0 {
+		t.Fatalf("texts %+v, %v", texts, err)
 	}
-	if got := bytes.Count(out, []byte(`<path d="M0,0 L10,5 L0,10 z">`)); got != 2 {
-		t.Fatalf("drew %d markers, want 2:\n%s", got, out)
-	}
-	if !bytes.Contains(out, []byte(`translate(50,90) rotate(90) scale(1.4,1.4) translate(-9,-5)`)) {
-		t.Fatalf("the end's marker is not at the end, turned down:\n%s", out)
-	}
-	if !bytes.Contains(out, []byte(`translate(10,10) rotate(180)`)) {
-		t.Fatalf("the start's marker is not reversed:\n%s", out)
-	}
-	if _, ok := Draw(svg); !ok {
+	pic, ok := Draw(svg)
+	if !ok {
 		t.Fatal("not drawn")
+	}
+	if c := pic.Pixels.RGBAAt(50*Scale, 85*Scale); c.R != 0xff || c.G != 0 {
+		t.Fatalf("at the end, turned down: %v, want the red marker", c)
 	}
 }
 
