@@ -253,13 +253,14 @@ func untilText(d time.Duration) string {
 
 // overlayChip is a small label floating over a session: its usage, the
 // host it runs on. It is a pill as tall as the view switch beside it, on
-// the switch's track seen through.
+// the switch's track, solid enough that what scrolls under it does not
+// read through its words.
 func overlayChip(items ...ggui.Widget) ggui.Widget {
 	row := ggui.Row(items...).Gap(8).Align(ggui.AlignCenter)
 	const h = viewSideHeight + 2*viewToggleInset
 	return ggui.Reactive(func() ggui.Widget {
 		r, g, b, _ := uitheme.Use().Muted.RGBA()
-		fill := color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 0x99}
+		fill := color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 0xE0}
 		return ggui.Box(ggui.Column(row).Justify(ggui.JustifyCenter)).Height(h).Radius(h/2).Pad(0, 10).Fill(fill)
 	})
 }

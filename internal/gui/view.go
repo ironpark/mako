@@ -60,8 +60,12 @@ func window(m *model) ggui.Widget {
 		// The settings page takes the whole window, as Paseo's does; the
 		// sessions stay attached while it shows.
 		backdropped(m, windowBackdrop,
-			ggui.If(inSettings, func() ggui.Widget { return settingsPage(m) }).
-				Else(func() ggui.Widget { return main })),
+			crossfade(inSettings, func(settings bool) ggui.Widget {
+				if settings {
+					return settingsPage(m)
+				}
+				return main
+			})),
 		newSessionDialog(m),
 		folderPickerDialog(m),
 		renameDialog(m),
@@ -73,6 +77,7 @@ func window(m *model) ggui.Widget {
 		confirmDialog(m),
 		imageViewer(m),
 		shellDialog(m),
+		searchDialog(m),
 		paletteDialog(m),
 		m.toaster,
 		quickOpenDialog(m),
@@ -152,7 +157,8 @@ func sidebar(m *model) ggui.Widget {
 	header := ggui.Box(ggui.Row(
 		icon("messages-square").Size(17),
 		ggui.Expanded(ggui.Align(spaceSwitcher(m)).Left()),
-	).Gap(6)).Pad(0, 10, 0, 16).Height(headerHeight)
+		waitingPill(m),
+	).Gap(6).Align(ggui.AlignCenter)).Pad(0, 10, 0, 16).Height(headerHeight)
 
 	st := sidebarState{
 		grouping:  ggui.Map(m.Prefs, func(p prefs) string { return p.SidebarGroup }),
@@ -929,7 +935,6 @@ const (
 	gitTab
 	agentsTab
 	forgeTab
-	searchTab
 )
 
 func details(m *model) ggui.Widget {
@@ -940,11 +945,10 @@ func details(m *model) ggui.Widget {
 		gitPanel(m),
 		projectAgentsPanel(m),
 		forgePanel(m),
-		searchPanel(m),
 	}
 	return ggui.Box(ggui.Column(
 		ggui.View(ggui.Derived(m.forgeOf), func(f string) ggui.Widget {
-			return panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), forgeLabel(f), T("Search"))
+			return panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), forgeLabel(f))
 		}),
 		hline(),
 		ggui.Expanded(ggui.Key(m.DetailTab, func(i int) ggui.Widget { return pages[min(max(i, 0), len(pages)-1)] })),
@@ -1124,7 +1128,7 @@ func newSessionDialog(m *model) ggui.Widget {
 			}),
 			muted(ggui.Text(T("A worktree of the folder's repository, beside it, on a new branch: agents in one repository then keep out of each other's files.")).Size(11.5)),
 		).Gap(8).Stretch()),
-		ggui.If(hasErr, func() ggui.Widget {
+		reveal(hasErr, func() ggui.Widget {
 			return ggui.TextOf(m.FormErr).Size(12).Color(skin.DotDown)
 		}),
 		ggui.Row(

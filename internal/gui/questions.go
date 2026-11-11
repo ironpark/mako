@@ -73,19 +73,20 @@ func chatInput(m *model, id string, state *chatState) ggui.Widget {
 			}
 			request = "waiting" // its questions do not read: the terminal answers them
 		}
-		open := ggui.State(request != "")
+		// A dialog its card answers needs no terminal opened under it.
+		dialog, _ := m.session(id)
+		open := ggui.State(request != "" && dialog.GetDialog() == nil)
 		disabled := ggui.Derived(func() bool { return !slices.Contains(m.Attached.Get(), id) })
+		// The composer's bar opens the terminal; the terminal's own heading
+		// goes back.
+		state.inTerminal = func() { open.Set(true) }
 		return ggui.View(open, func(show bool) ggui.Widget {
-			label := T("Answer the agent")
-			if show {
-				label = T("Back to message")
+			if !show || m.conns[id] == nil {
+				return composer(m, id, state)
 			}
 			header := &lane{child: ggui.Row(ggui.Spacer(),
-				ui.Button(label, func() { open.Set(!ggui.Peek(open)) }).Ghost().BindDisabled(disabled),
+				ui.Button(T("Back to message"), func() { open.Set(false) }).Ghost().BindDisabled(disabled),
 			).Gap(8)}
-			if !show || m.conns[id] == nil {
-				return ggui.Column(header, composer(m, id, state)).Stretch()
-			}
 			return answerTerminal(m, id, header)
 		})
 	})

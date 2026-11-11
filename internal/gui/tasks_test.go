@@ -38,6 +38,7 @@ func TestShellsOpenToTheirDetails(t *testing.T) {
 	}
 	clickText(t, p, Tf("%d shells", 2))
 	p.Frame()
+	p.Advance(2 * motionDuration) // the list eases open
 	if _, ok := p.Semantics().Find(ggui.RoleText, "make check …"); !ok {
 		t.Fatal("an ended command is not listed by its first line")
 	}

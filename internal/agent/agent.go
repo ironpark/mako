@@ -225,12 +225,16 @@ type Modes interface {
 
 // Models is an agent whose model and effort commands typed at its prompt
 // set: Models and Efforts are those offered, by the names the commands
-// take, which ModelCommand and EffortCommand are.
+// take, which ModelCommand and EffortCommand are. An agent may ask before
+// it switches, as Claude Code does of a conversation cached for the model
+// it leaves: ConfirmKeys is what is typed to say yes to the screen shown,
+// nil for a screen that asks nothing of the sort.
 type Models interface {
 	Models() []string
 	Efforts() []string
 	ModelCommand(model string) string
 	EffortCommand(effort string) string
+	ConfirmKeys(screen string) []byte
 }
 
 // Keystroke is a step of typing into an agent's terminal: Text pasted, if

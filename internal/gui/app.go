@@ -103,6 +103,9 @@ func shortcuts(host ggui.Host, m *model) {
 	host.Shortcut("cmd+shift+p", m.openPalette)
 	host.Shortcut("cmd+shift+v", m.toggleSelectedPreview)
 	host.Shortcut("cmd+shift+j", m.toggleChat)
+	host.Shortcut("cmd+shift+a", m.nextWaiting)
+	host.Shortcut("cmd+enter", func() { m.answerSelected("allow") })
+	host.Shortcut("cmd+.", func() { m.answerSelected("deny") })
 	host.Shortcut("cmd+b", func() { ggui.Toggle(m.SidebarOpen) })
 	host.Shortcut("cmd+shift+d", func() { ggui.Toggle(m.DetailsOpen) })
 	host.Shortcut("cmd+,", func() { m.openSettings("") })
@@ -122,6 +125,9 @@ var shortcutList = []struct{ Chord, Action string }{
 	{"cmd+k", "Command palette"},
 	{"cmd+shift+v", "Toggle Markdown preview"},
 	{"cmd+shift+j", "Toggle chat and terminal"},
+	{"cmd+shift+a", "Next waiting session"},
+	{"cmd+enter", "Allow the approval asked for"},
+	{"cmd+.", "Deny the approval asked for"},
 	{"cmd+b", "Toggle sidebar"},
 	{"cmd+shift+d", "Toggle details panel"},
 	{"cmd+,", "Open settings"},

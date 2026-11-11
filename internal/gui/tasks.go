@@ -242,7 +242,7 @@ func runningTasks(m *model, id string) ggui.Widget {
 			}),
 		).Gap(8).Align(ggui.AlignCenter), func() { open.Set(!ggui.Peek(open)) }).Cursor(ggui.CursorShapePointer)
 		head = ui.Tooltip(head, T("Background commands"))
-		rows := ggui.If(open, func() ggui.Widget {
+		rows := reveal(open, func() ggui.Widget {
 			out := make([]ggui.Widget, len(list))
 			for i, t := range list {
 				out[i] = taskRow(m, id, t)

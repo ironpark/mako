@@ -6,7 +6,6 @@ import (
 	"hash/fnv"
 	"image/color"
 	"maps"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -48,7 +47,10 @@ type chatState struct {
 	// session's node, shown over its text and sent after it.
 	attached *ggui.StateValue[[]string]
 	tools    *ggui.StateValue[map[string]bool] // open tool rows, by message key
-	loading  bool
+	// inTerminal opens the session's terminal in place of the composer, to
+	// type into what the agent shows there; nil where Chat has none to open.
+	inTerminal func()
+	loading    bool
 	// whole asks the next read for the whole chat, a patch having missed
 	// what was on show.
 	whole bool
@@ -533,12 +535,12 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	session := ggui.Column(
 		ggui.Expanded(ggui.Stack(feed, &afterPaint{fn: find.painted}, hostBadge(m, id), toLatestButton(m, state, scroll, offset),
 			usageOverlay(m, id, chatUsage, viewChip(m, id, group)), findBar(m, id, find.finder())).Expand()),
-		approvalCard(m, id), dialogCard(m, id), compactingRow(m, id), runningAgents(m, id, state), runningTasks(m, id), chatInput(m, id, state),
+		approvalCard(m, id), dialogCard(m, id), compactingRow(m, id), planProgress(m, id, state), runningAgents(m, id, state), runningTasks(m, id), chatInput(m, id, state),
 	).Stretch()
 	// A subagent opened shows its conversation in place of the session's,
 	// which is built once and kept, scroll and draft and all, to come back
 	// to.
-	return ggui.Key(state.agent, func(agent string) ggui.Widget {
+	return crossfade(state.agent, func(agent string) ggui.Widget {
 		if agent == "" {
 			return session
 		}
@@ -770,7 +772,7 @@ func toolRun(state *chatState, key string, names []string, folded bool, body ggu
 	}
 	title := Tf("%d tool calls", len(names))
 	header := foldHeader(open, icon("layers").Size(14).Color(skin.Muted), ggui.Text(title).Size(12.5).NoWrap(), strings.Join(distinct, ", "), title)
-	return ggui.Column(header, ggui.If(open, func() ggui.Widget { return body })).Gap(2).Stretch()
+	return ggui.Column(header, reveal(open, func() ggui.Widget { return body })).Gap(2).Stretch()
 }
 
 // foldHeader is the line a fold opens and closes from: a glyph, a title,
@@ -780,9 +782,7 @@ func foldHeader(open ggui.Binding[bool], glyph, title ggui.Widget, detail, name 
 		glyph,
 		title,
 		ggui.Expanded(muted(ggui.Text(detail).Size(12).NoWrap().Ellipsis())),
-		ggui.View(open, func(o bool) ggui.Widget {
-			return icon("chevron-down").Size(13).Color(skin.ExtraMuted).Rotate(pick(o, 0.0, -math.Pi/2))
-		}),
+		chevron(open, 13, skin.ExtraMuted),
 	).Gap(8).Stretch(), func() { open.Set(!ggui.Untrack(open.Get)) }).Ghost().Pad(4, 6).Radius(6).Name(name)
 }
 
@@ -872,7 +872,7 @@ func toolRow(m *model, id string, state *chatState, msg *protocol.ChatMessage, a
 	if agent != nil {
 		rows = append(rows, ggui.Padding(agentLink(m, id, agent, agentProgress(agent)), 0, 6, 2, 28))
 	}
-	rows = append(rows, ggui.If(open, func() ggui.Widget { return toolBody(m, msg) }))
+	rows = append(rows, reveal(open, func() ggui.Widget { return toolBody(m, msg) }))
 	return ggui.Column(rows...).Gap(2).Stretch()
 }
 
@@ -930,10 +930,7 @@ func compactingRow(m *model, id string) ggui.Widget {
 		s, ok := sessionIn(m.Sessions.Get(), id)
 		return ok && s.GetState() == protocol.StateRunning && s.GetStatus() == protocol.AgentCompacting
 	})
-	return ggui.View(compacting, func(on bool) ggui.Widget {
-		if !on {
-			return ggui.Box()
-		}
+	return reveal(compacting, func() ggui.Widget {
 		return &lane{child: ggui.Box(ggui.Row(
 			ui.Spinner().Size(13),
 			muted(ggui.Text(T("Compacting conversation…")).Size(12.5).NoWrap()),

@@ -80,6 +80,7 @@ type model struct {
 	// The Search tab: what is typed, what was found, and whether its field
 	// is to take the keys when it next shows.
 	SearchQuery *ggui.StateValue[string]
+	SearchOpen  *ggui.StateValue[bool]
 	Search      *ggui.StateValue[searchView]
 	searchFocus bool
 
@@ -222,6 +223,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		FindOpen:    ggui.State(false),
 		FindText:    ggui.State(""),
 		SearchQuery: ggui.State(""),
+		SearchOpen:  ggui.State(false),
 		Search:      ggui.State(searchView{}).WithEqual(deepEqual),
 		Docs:        ggui.State(map[string]docInfo{}).WithEqual(maps.Equal),
 		docs:        map[string]*document{},

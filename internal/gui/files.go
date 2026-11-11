@@ -539,7 +539,7 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 		).Gap(2),
 	)
 	// A failed delete says why under the header.
-	header = ggui.Column(header, ggui.If(ggui.Map(m.files.Note, func(s string) bool { return s != "" }), func() ggui.Widget {
+	header = ggui.Column(header, reveal(ggui.Map(m.files.Note, func(s string) bool { return s != "" }), func() ggui.Widget {
 		return ggui.Box(ggui.Row(
 			ggui.Expanded(ggui.TextOf(m.files.Note).Size(12).Color(skin.DotDown)),
 			iconButton("x", T("Dismiss"), func() { m.files.Note.Set("") }),

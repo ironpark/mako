@@ -71,8 +71,46 @@ func paneView(m *model, id int) ggui.Widget {
 	return &pressWatch{child: ggui.Column(
 		paneTabBar(m, id, group),
 		hline(),
-		ggui.Expanded(paneBody(m, id, group)),
+		ggui.Expanded(ggui.Stack(paneBody(m, id, group), &paneGlow{on: func() bool {
+			return m.Prefs.Get().PaneGlow && m.FocusGroup.Get() == id
+		}}).Expand()),
 	).Stretch(), fn: func() { m.focusGroup(id) }}
+}
+
+// paneGlow marks the pane that has the keys, where the settings ask: the
+// accent round the edge of what it shows, under its tabs, fading inward to
+// nothing. It only paints, over the pane's content, and takes no input.
+type paneGlow struct {
+	on    func() bool
+	shown bool        // as the last layout read it
+	tint  color.Color // the accent under the theme it was laid out in
+}
+
+// glowDepth is how far in from the pane's edge the glow reaches.
+const glowDepth = 14
+
+func (g *paneGlow) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	g.shown, g.tint = g.on(), ggui.ResolveColor(skin.AccentBright, env)
+	return c.Constrain(ggui.Sz(c.MaxW, c.MaxH))
+}
+
+func (g *paneGlow) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	if !g.shown {
+		return
+	}
+	cr, cg, cb, _ := g.tint.RGBA()
+	// A line a pixel wide at each step in, each fainter than the last, the
+	// fall steep at first so the edge reads and the rest is a haze.
+	for i := range glowDepth {
+		d := float64(i) + .5
+		t := 1 - float64(i)/glowDepth
+		a := uint8(0x66 * t * t * t)
+		if a == 0 {
+			break
+		}
+		at := ggui.Rct(ggui.Pt(r.Origin.X+d, r.Origin.Y+d), ggui.Sz(r.Size.W-2*d, r.Size.H-2*d))
+		dst.StrokeRoundRect(at, 0, 1, color.NRGBA{R: uint8(cr >> 8), G: uint8(cg >> 8), B: uint8(cb >> 8), A: a})
+	}
 }
 
 // pressWatch runs fn as a button goes down anywhere over its child, before

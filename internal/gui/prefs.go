@@ -22,6 +22,9 @@ type prefs struct {
 	// bottom-right.
 	UsageOverlay bool   `json:"usage_overlay"`
 	UsageCorner  string `json:"usage_corner"`
+	// PaneGlow marks the pane that has the keys with the accent round the
+	// edge of what it shows, fading inward.
+	PaneGlow bool `json:"pane_glow"`
 	// Background images, under the window and under each session.
 	WindowBackdrop  backdrop `json:"window_backdrop"`
 	SessionBackdrop backdrop `json:"session_backdrop"`

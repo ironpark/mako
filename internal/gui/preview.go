@@ -143,7 +143,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			var b *browser
 			p = ggui.ProbeBuilder(func() ggui.Widget {
 				if agentsOnly {
-					return ggui.Box(ggui.Column(panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), "GitHub", T("Search")), hline(), ggui.Expanded(projectAgentsBody(m, agentsRoot))).Stretch()).Fill(skin.Surface0)
+					return ggui.Box(ggui.Column(panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), "GitHub"), hline(), ggui.Expanded(projectAgentsBody(m, agentsRoot))).Stretch()).Fill(skin.Surface0)
 				}
 				if mdSrc != "" {
 					return ggui.Provide(ggui.ReducedMotionKey, true, markdownView(m, "", mdSrc))
@@ -285,6 +285,9 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(func() { m.splitTab(ggui.Peek(m.Selected), ggui.Peek(m.FocusGroup), dropRight) }),
 				until("its terminal", func() bool { return slices.Contains(ggui.Peek(m.Attached), ggui.Peek(m.Selected)) }),
 				frames(30), shot("03-split"),
+				// The pane in hand marked, as the settings may ask.
+				do(func() { m.Prefs.Update(func(p prefs) prefs { p.PaneGlow = true; return p }) }), frames(4), shot("03-split-outline"),
+				do(func() { m.Prefs.Update(func(p prefs) prefs { p.PaneGlow = false; return p }) }),
 				// The project's files, a folder open and a file previewed.
 				do(func() {
 					r := ggui.Untrack(m.filesRoot)
@@ -386,6 +389,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				}),
 				until("the search", func() bool { return !ggui.Peek(m.Search).Loading }),
 				frames(5), shot("03-search"),
+				do(func() { m.SearchOpen.Set(false) }),
 				do(m.openQuickOpen), do(func() { m.pickers.QuickQuery.Set("view") }), frames(30), shot("03-quick-open"),
 				do(func() { m.pickers.QuickOpen.Set(false); m.DetailTab.Set(gitTab) }),
 				do(func() { m.DetailsWidth.Set(ggui.Peek(m.Prefs).DetailsWidth) }),
@@ -501,7 +505,11 @@ func forgePreview(m *model, dir string, do func(func()) previewStep, until func(
 		v := ggui.Peek(m.Forge.List)
 		return v.Root.Path == dir && v.Kind == ggui.Peek(m.Forge.Kind) && !v.Loading
 	}
-	opened := func() bool { o := ggui.Peek(m.Forge.Open); return o.Kind != "" && !o.Loading }
+	// A list with nothing in it has nothing to open.
+	opened := func() bool {
+		o := ggui.Peek(m.Forge.Open)
+		return len(ggui.Peek(m.Forge.List).Items) == 0 || o.Kind != "" && !o.Loading
+	}
 	openFirst := func() {
 		if items := ggui.Peek(m.Forge.List).Items; len(items) > 0 {
 			m.openForge(ggui.Peek(m.Forge.List).Root, items[0].GetKind(), items[0].GetNumber())
@@ -636,7 +644,7 @@ func previewTools() []*protocol.ChatMessage {
 		{Role: "tool", Id: "t1", Tool: "Bash", Detail: "go test ./internal/gui", Text: `{"command": "go test ./internal/gui", "description": "Run the GUI tests"}`,
 			Result: "ok  \tgithub.com/ironpark/mako/internal/gui\t7.450s\n"},
 		{Role: "tool", Id: "t2", Tool: "Edit", Detail: "internal/gui/view.go", Text: `{"file_path": "internal/gui/view.go", "old_string": "\tsidebarWidth = 272\n\tdetailsWidth = 320", "new_string": "\tsidebarWidth = 272 // until dragged\n\tdetailsWidth = 320"}`},
-		{Role: "tool", Id: "t3", Tool: "TodoWrite", Text: `{"todos": [{"content": "Resize the sidebar", "status": "completed"}, {"content": "Fold sidebar groups", "status": "in_progress"}, {"content": "Render tool calls", "status": "pending"}]}`},
+		{Role: "tool", Id: "t3", Tool: "TodoWrite", Kind: protocol.ToolTodo, Text: `{"items": [{"text": "Resize the sidebar", "status": "completed"}, {"text": "Fold sidebar groups", "status": "in_progress"}, {"text": "Render tool calls", "status": "pending"}]}`},
 		{Role: "tool", Id: "t4", Tool: "exec_command", Detail: "git status --short", Text: `{"cmd": "git status --short", "workdir": "/Users/me/mako"}`,
 			Result: "Chunk ID: 1\nWall time: 0.1 seconds\nProcess exited with code 0\nOutput:\n M internal/gui/view.go\n?? internal/gui/toolview.go\n"},
 		{Role: "tool", Id: "t5", Tool: "apply_patch", Text: "*** Begin Patch\n*** Update File: internal/gui/prefs.go\n@@ type prefs struct {\n-\tDetailsWidth float64\n+\tSidebarWidth float64\n+\tDetailsWidth float64\n*** End Patch"},

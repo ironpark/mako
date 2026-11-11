@@ -23,3 +23,20 @@ func TestScreenMode(t *testing.T) {
 		t.Errorf("under a dialog: %q", got)
 	}
 }
+
+// Claude asks before it leaves the model a conversation is cached for;
+// yes is typed to that, and to nothing else.
+func TestConfirmKeys(t *testing.T) {
+	ask := "⏺ ok\n\n   Switch model?\n   Your next response will be slower and use more tokens\n\n" +
+		"   This conversation is cached for the current model. Switching to Fable 5.2 means the full history gets re-read.\n\n"
+	if got := string((&Agent{}).ConfirmKeys(ask + "   ❯ 1. Yes, switch to Fable 5.2\n     2. No, go back\n")); got != keyEnter {
+		t.Errorf("at yes: %q", got)
+	}
+	if got := string((&Agent{}).ConfirmKeys(ask + "     1. Yes, switch to Fable 5.2\n   ❯ 2. No, go back\n")); got != keyUp+keyEnter {
+		t.Errorf("at no: %q", got)
+	}
+	other := " Do you want to proceed?\n ❯ 1. Yes\n   2. No\n Esc to cancel"
+	if got := (&Agent{}).ConfirmKeys(other); got != nil {
+		t.Errorf("another dialog: %q", got)
+	}
+}

@@ -69,7 +69,7 @@ func TestChatQuestionInputReachesSession(t *testing.T) {
 	if state.draft.Get() != "keep this draft" {
 		t.Fatal("draft lost")
 	}
-	p.Tap(T("Answer the agent"))
+	p.Tap(T("Type in the terminal"))
 	p.Frame()
 	if _, ok := p.Find(T("Back to message")); !ok {
 		t.Fatal("manual question input did not open")

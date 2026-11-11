@@ -135,6 +135,8 @@ func (m *model) commands() []command {
 			Disabled: !isSessionTab(selected), Run: func() { m.togglePin(selected) }},
 		{ID: "Toggle chat and terminal", Category: "Session", Keys: []string{"conversation"}, Shortcut: "cmd+shift+j",
 			Disabled: selected == "" || onDoc || !m.chatCapable(selected), Run: m.toggleChat},
+		{ID: "Next waiting session", Category: "Session", Keys: []string{"approval", "question", "attention", "needs"}, Shortcut: "cmd+shift+a",
+			Disabled: m.waitingCount() == 0, Run: m.nextWaiting},
 		{ID: "Go to file…", Category: "File", Keys: []string{"open", "find", "quick"}, Shortcut: "cmd+p", Run: m.openQuickOpen},
 		{ID: "Save file", Category: "File", Shortcut: "cmd+s", Disabled: !onDoc || d.ReadOnly(), Run: m.saveSelected},
 		{ID: "Search the project…", Category: "File", Keys: []string{"find", "grep", "text"}, Shortcut: "cmd+shift+f", Run: m.openSearch},

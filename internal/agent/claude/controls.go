@@ -2,6 +2,7 @@ package claude
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/ironpark/mako/internal/detect"
@@ -51,8 +52,24 @@ func (*Agent) ScreenMode(screen string) string {
 // promptRules find the prompt box, under which the mode is named.
 var promptRules = detect.MustCompile([]detect.Rule{promptBoxRule})
 
-func (*Agent) Models() []string  { return []string{"opus", "sonnet", "haiku"} }
+func (*Agent) Models() []string  { return []string{"fable", "opus", "sonnet", "haiku"} }
 func (*Agent) Efforts() []string { return []string{"low", "medium", "high", "xhigh", "max"} }
 
 func (*Agent) ModelCommand(model string) string   { return "/model " + model }
 func (*Agent) EffortCommand(effort string) string { return "/effort " + effort }
+
+// ConfirmKeys says yes to "Switch model?", which Claude Code asks before
+// it leaves the model a conversation is cached for: the cursor moved to
+// its "Yes", then Enter.
+func (*Agent) ConfirmKeys(screen string) []byte {
+	c, ok := detect.ParseChoice(screen, 0)
+	if !ok || !strings.Contains(c.Text, "Switch model?") {
+		return nil
+	}
+	yes := slices.IndexFunc(c.Options, func(o string) bool { return strings.HasPrefix(o, "Yes") })
+	if yes < 0 {
+		return nil
+	}
+	keys := strings.Repeat(keyDown, max(yes-c.Selected, 0)) + strings.Repeat(keyUp, max(c.Selected-yes, 0))
+	return []byte(keys + keyEnter)
+}

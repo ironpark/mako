@@ -37,6 +37,12 @@ func appearanceSettings(m *model) ggui.Widget {
 			),
 			themeEditor(m),
 		),
+		section(T("Panes"),
+			card(
+				row(T("Glow round the current pane"), T("A faint glow of the accent round the edge of the pane you are in, under its tabs, to tell it at a glance among split panes."),
+					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.PaneGlow }), "").Name(T("Glow round the current pane"))),
+			),
+		),
 		section(T("Background"),
 			card(backdropRows(m, T("Window"), T("Behind the whole window: the sidebar, the workspace and the settings."), windowBackdrop)...),
 			card(backdropRows(m, T("Sessions"), T("Behind each session's terminal and chat, over the window's."), sessionBackdrop)...),

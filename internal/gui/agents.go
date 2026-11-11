@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -388,16 +387,14 @@ func agentItem(m *model, open *ggui.StateValue[string], a agentDraft, profiles [
 			agentGlyph(name, skin.Muted).Size(15),
 			ggui.Text(name).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
 			ggui.Expanded(summary),
-			ggui.View(isOpen, func(o bool) ggui.Widget {
-				return icon("chevron-down").Size(13).Color(skin.ExtraMuted).Rotate(pick(o, 0.0, -math.Pi/2))
-			}),
+			chevron(isOpen, 13, skin.ExtraMuted),
 		).Gap(10).Align(ggui.AlignCenter), func() { open.Set(pick(ggui.Peek(open) == name, "", name)) }).
 			Ghost().Pad(8, 10).Radius(7).Name(Tf("%s settings", name))),
 		offered,
 	).Gap(10).Align(ggui.AlignCenter)
 	return ggui.Box(ggui.Column(
 		head,
-		ggui.If(isOpen, func() ggui.Widget { return agentEditor(m, a, profiles) }),
+		reveal(isOpen, func() ggui.Widget { return agentEditor(m, a, profiles) }),
 	).Stretch()).Pad(4, 8)
 }
 

@@ -110,18 +110,18 @@ func approvalCard(m *model, id string) ggui.Widget {
 			}
 		}
 		// They wrap in a narrow pane, the answer most give first.
-		buttons := []ggui.Widget{ui.Button(T("Allow"), allow(""))}
+		buttons := []ggui.Widget{ui.Tooltip(ui.Button(T("Allow"), allow("")), chordLabel("cmd+enter"))}
 		for _, o := range a.GetOptions() {
 			buttons = append(buttons, ui.Button(optionLabel(o), allow(o.GetId())).Outline())
 		}
 		buttons = append(buttons, inTerminalButton(m.decide(id, a, protocol.DecisionTerminal)))
 		deny := func() { denyWith(m, id, a, ggui.Peek(why)) }
 		rows = append(rows,
-			ggui.If(open, func() ggui.Widget { return ggui.Box(toolBlock(a.GetInput(), false)).MaxHeight(260) }),
+			reveal(open, func() ggui.Widget { return ggui.Box(toolBlock(a.GetInput(), false)).MaxHeight(260) }),
 			ggui.Wrap(buttons...).Gap(8).RunGap(8).Align(ggui.AlignCenter),
 			ggui.Row(
 				ggui.Expanded(ui.TextField(why).Placeholder(T("Tell the agent what to do instead")).Name(T("Why not")).OnSubmit(func(string) { deny() })),
-				ui.Button(T("Deny"), deny).Outline(),
+				ui.Tooltip(ui.Button(T("Deny"), deny).Outline(), chordLabel("cmd+.")),
 			).Gap(8).Align(ggui.AlignCenter),
 		)
 		return approvalFrame(ggui.Column(rows...).Gap(10).Stretch())
@@ -131,7 +131,7 @@ func approvalCard(m *model, id string) ggui.Widget {
 // approvalFrame frames an approval's card at the foot of Chat.
 func approvalFrame(content ggui.Widget) ggui.Widget {
 	card := ggui.Box(content).Fill(skin.Surface1).Border(1, skin.DotWaiting).Radius(12).Pad(12, 14)
-	return &lane{child: ggui.Box(card).Pad(0, 0, 8, 0)}
+	return &lane{child: arrive(ggui.Box(card).Pad(0, 0, 8, 0))}
 }
 
 // approvalBody is what an approval's call would do as its kind shows it,

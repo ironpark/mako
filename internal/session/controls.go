@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
@@ -49,7 +50,10 @@ func (s *Session) Configure(mode, model, effort string) error {
 		if !slices.Contains(offered, value) {
 			return fmt.Errorf("the agent takes no %q", value)
 		}
-		return s.Send(command(value), []byte{'\r'})
+		if err := s.Send(command(value), []byte{'\r'}); err != nil {
+			return err
+		}
+		return s.confirm(m)
 	}
 	if model != "" {
 		if err := set(model, c.GetModels(), m.ModelCommand); err != nil {
@@ -86,4 +90,23 @@ func (s *Session) setMode(mode string) error {
 		}
 	}
 	return fmt.Errorf("the agent offers no %q mode now", mode)
+}
+
+// confirmWait is how long the agent is given to ask before it switches.
+const confirmWait = 1500 * time.Millisecond
+
+// confirm says yes to what the agent asks before it switches, if it asks
+// within a while of the command.
+func (s *Session) confirm(m agent.Models) error {
+	for deadline := time.Now().Add(confirmWait); time.Now().Before(deadline); time.Sleep(4 * recallPoll) {
+		screen, _, ok := s.recallScreen()
+		if !ok {
+			return errors.New("session: exited")
+		}
+		if keys := m.ConfirmKeys(screen); keys != nil {
+			_, err := s.Write(keys)
+			return err
+		}
+	}
+	return nil
 }

@@ -187,7 +187,7 @@ func commitMenu(m *model, c *protocol.GitCommit) []ggui.Widget {
 func foldSection(open *ggui.StateValue[bool], title string, count int, actions ...ggui.Widget) ggui.Widget {
 	return ggui.View(open, func(o bool) ggui.Widget {
 		label := []ggui.Widget{
-			icon(pick(o, "chevron-down", "chevron-right")).Size(12).Color(skin.ExtraMuted),
+			chevron(open, 12, skin.ExtraMuted),
 			ggui.Text(title).Size(11.5).Weight(ggui.WeightSemibold).Color(skin.Muted).NoWrap(),
 		}
 		if count > 0 {
@@ -204,7 +204,7 @@ func stashSection(m *model, open *ggui.StateValue[bool]) ggui.Widget {
 	stashes := ggui.Map(m.git.View, func(v gitView) []*protocol.GitStash { return v.Changes.GetStashes() }).WithEqual(protocol.Equal)
 	return ggui.View(stashes, func(list []*protocol.GitStash) ggui.Widget {
 		head := foldSection(open, T("Stashes"), len(list), iconButton("plus", T("Stash changes…"), m.askStash))
-		rows := ggui.If(open, func() ggui.Widget {
+		rows := reveal(open, func() ggui.Widget {
 			if len(list) == 0 {
 				return ggui.Box(muted(ggui.Text(T("No stashes.")).Size(12))).Pad(4, 12, 8, 30)
 			}
@@ -250,7 +250,7 @@ func branchSection(m *model, open *ggui.StateValue[bool]) ggui.Widget {
 	})
 	return ggui.View(state, func(b branches) ggui.Widget {
 		head := foldSection(open, T("Branches"), len(b.Local), iconButton("plus", T("New branch…"), func() { m.askBranch("") }))
-		rows := ggui.If(open, func() ggui.Widget {
+		rows := reveal(open, func() ggui.Widget {
 			var out []ggui.Widget
 			for _, name := range b.Local {
 				out = append(out, localBranchRow(m, name, b.Current))

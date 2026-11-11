@@ -186,9 +186,9 @@ func projectAgentsBody(m *model, root fileRoot) ggui.Widget {
 			rows = append(rows, projectAgentRow(m, row.Agent, row.Depth, chosen, filter, byID))
 		}
 		if len(rows) == 0 {
-			rows = append(rows, ggui.Box(muted(ggui.Text(T("No agents in this project.")).Size(12))).Pad(8, 12))
+			return ggui.Box(emptyNote("users", T("No agents in this project."))).Height(120)
 		}
-		return ggui.Column(rows...).Stretch()
+		return ggui.Box(ggui.Column(rows...).Stretch()).Pad(2, 0)
 	})
 	agentsHead := ggui.Reactive(func() ggui.Widget {
 		working, waiting, pending := projectAgentCounts(data.Get())
@@ -196,9 +196,19 @@ func projectAgentsBody(m *model, root fileRoot) ggui.Widget {
 		if filter.Get() != "" {
 			clear = ui.Button(T("All agents"), func() { filter.Set("") }).Ghost().Pad(1, 6).Name(T("All agents"))
 		}
-		return panelHead(T("Agents"),
-			ggui.Text(Tf("%d working · %d waiting · %d pending", working, waiting, pending)).Size(11).Color(skin.ExtraMuted).NoWrap().Ellipsis(),
-			clear)
+		// Each count in its state's colour, quiet while it is nothing.
+		count := func(n int, label string, c color.Color) ggui.Widget {
+			if n == 0 {
+				c = skin.ExtraMuted
+			}
+			return pill(label, c)
+		}
+		counts := ggui.Row(
+			count(working, Tf("%d working", working), skin.DotRunning),
+			count(waiting, Tf("%d waiting", waiting), skin.DotWaiting),
+			count(int(pending), Tf("%d unread", pending), skin.DotDone),
+		).Gap(4).Align(ggui.AlignCenter)
+		return panelHead(T("Agents"), ggui.Align(counts).Left(), clear)
 	})
 	messages := ggui.Reactive(func() ggui.Widget {
 		snapshot := data.Get()
@@ -212,7 +222,7 @@ func projectAgentsBody(m *model, root fileRoot) ggui.Widget {
 			rows = append(rows, projectAgentMessage(msg, byID, expanded, filter.Get()))
 		}
 		if len(rows) == 0 {
-			rows = append(rows, ggui.Box(muted(ggui.Text(T("No messages yet.")).Size(12))).Pad(8, 12))
+			return ggui.Box(emptyNote("message-square", T("No messages yet."))).Height(120)
 		}
 		return ggui.Box(ggui.Column(rows...).Stretch()).Pad(4, 0)
 	})
@@ -346,20 +356,24 @@ func projectAgentRow(m *model, a *protocol.ProjectAgent, depth int, selected str
 		}
 		about = append(about, Tf("From %s", label))
 	}
+	// Its name over its state, said in the state's colour.
 	line := []ggui.Widget{
-		agentGlyph(s.GetAgent(), skin.Muted).Size(13),
-		ggui.Expanded(ggui.Text(name).Size(12.5).NoWrap().Ellipsis()),
+		agentGlyph(s.GetAgent(), skin.Muted).Size(15),
+		ggui.Expanded(ggui.Column(
+			ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis(),
+			ggui.Text(status).Size(11).Color(tint).NoWrap().Ellipsis(),
+		).Gap(1).Stretch()),
 	}
 	if n := a.GetPendingMessages(); n > 0 {
 		line = append(line, ggui.Row(icon("message-square").Size(11).Color(skin.DotWaiting),
 			ggui.Text(fmt.Sprint(n)).Size(10.5).Color(skin.DotWaiting)).Gap(2).Align(ggui.AlignCenter))
 	}
 	line = append(line, dot(tint))
-	button := ui.ButtonOf(ggui.Row(line...).Gap(7).Align(ggui.AlignCenter),
-		func() { filter.Set(pick(selected == s.GetId(), "", s.GetId())) }).Ghost().Pad(4, 6).Radius(5).Name(Tf("Filter messages for %s", name))
+	button := ui.ButtonOf(ggui.Row(line...).Gap(9).Align(ggui.AlignCenter),
+		func() { filter.Set(pick(selected == s.GetId(), "", s.GetId())) }).Ghost().Pad(6, 8).Radius(8).Name(Tf("Filter messages for %s", name))
 	var content ggui.Widget = ui.Tooltip(button, strings.Join(about, " · "))
 	if selected == s.GetId() {
-		content = ggui.Box(content).Radius(5).Fill(skin.Surface2)
+		content = ggui.Box(content).Radius(8).Fill(skin.Surface2)
 	}
 	open := ui.Tooltip(ui.ButtonOf(icon("chevron-right").Size(13), func() { m.openProjectAgent(s) }).Ghost().Pad(4).Radius(5).Name(Tf("Open session %s", name)), Tf("Open session %s", name))
 	return ggui.Box(ggui.Row(ggui.Expanded(content), open).Gap(2).Align(ggui.AlignCenter)).Pad(0, 6, 0, 6+float64(min(depth, 4))*14)

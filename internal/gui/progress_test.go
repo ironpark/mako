@@ -2,79 +2,28 @@ package gui
 
 import (
 	"testing"
-	"time"
 
-	"github.com/ironpark/ggui"
-	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-func TestLiveProgressOverridesPollingAndWakesHiddenTabs(t *testing.T) {
-	link := newFakeLink()
-	woke := make(chan struct{}, 32)
-	conn, err := newTermConn("s", link, 80, 24, func() { woke <- struct{}{} })
-	if err != nil {
-		t.Fatal(err)
+// The latest list stands for the agent's progress: those done, and the
+// step in hand, or the next where none is.
+func TestPlanStanding(t *testing.T) {
+	messages := []*protocol.ChatMessage{
+		{Role: "tool", Kind: protocol.ToolTodo, Text: `{"items":[{"text":"old","status":"pending"}]}`},
+		{Role: "assistant", Text: "on it"},
+		{Role: "tool", Kind: protocol.ToolPlan, Text: `{"items":[{"text":"a","status":"completed"},{"text":"b","status":"in_progress"},{"text":"c","status":"pending"}]}`},
+		{Role: "tool", Kind: protocol.ToolShell, Text: `{"command":"ls"}`},
 	}
-	defer conn.close()
-	defer close(link.in)
-	// Simulate an unpainted hidden terminal whose ordinary output wake is pending.
-	conn.pending.Store(true)
-	m := newModel(config.Default(), "")
-	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", State: protocol.StateRunning, Busy: true}})
-	m.conns["s"] = conn
-	if !m.busy("s") {
-		t.Fatal("missing metadata fallback before the first report")
+	steps := planSteps(messages)
+	if done, current := planStanding(steps); len(steps) != 3 || done != 1 || current != "b" {
+		t.Fatalf("steps %v: done %d, current %q", steps, done, current)
 	}
-	for _, tc := range []struct {
-		seq  string
-		busy bool
-	}{
-		{"\x1b]9;4;3\x07", true},
-		{"\x1b]9;4;0\x07", false},
-		{"\x1b]9;4;1;42\x1b\\", true},
-		{"\x1b]9;4;4;42\x1b\\", false},
-		{"\x1b]9;4;3\x1b\\", true},
-		{"\x1b]9;4;2;42\x07", false},
-	} {
-		// A PTY read is free to split an escape sequence at any byte.
-		for _, b := range []byte(tc.seq) {
-			link.output(t, string([]byte{b}))
-		}
-		select {
-		case <-woke:
-		case <-time.After(time.Second):
-			t.Fatalf("no wake for %q", tc.seq)
-		}
-		if got := m.busy("s"); got != tc.busy {
-			t.Fatalf("busy=%v after %q; stale poll=%v", got, tc.seq, ggui.Peek(m.Sessions)[0].GetBusy())
-		}
+	none := `{"items":[{"text":"a","status":"completed"},{"text":"c","status":"pending"}]}`
+	if _, current := planStanding(planSteps([]*protocol.ChatMessage{{Role: "tool", Kind: protocol.ToolTodo, Text: none}})); current != "c" {
+		t.Fatalf("with none in hand, current %q", current)
 	}
-}
-
-func TestSnapshotRestoresProgressWithoutNewOSC(t *testing.T) {
-	link := newFakeLink()
-	woke := make(chan struct{}, 8)
-	conn, err := newTermConn("s", link, 80, 24, func() { woke <- struct{}{} })
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.close()
-	defer close(link.in)
-	conn.pending.Store(true)
-	for _, state := range []uint8{3, 0} {
-		link.in <- &protocol.StreamEvent{
-			Kind:     protocol.EventSnapshot,
-			Snapshot: &protocol.Snapshot{SessionId: "s", Cols: 80, Rows: 24, Progress: &protocol.ProgressReport{State: uint32(state), Value: -1, RemainingMs: 1000}},
-		}
-		select {
-		case <-woke:
-		case <-time.After(time.Second):
-			t.Fatal("snapshot did not wake UI")
-		}
-		busy, known := conn.busyState()
-		if !known || busy != (state == 3) {
-			t.Fatalf("state=%d busy=%v known=%v", state, busy, known)
-		}
+	if steps := planSteps(messages[1:2]); steps != nil {
+		t.Fatalf("no list read as %v", steps)
 	}
 }

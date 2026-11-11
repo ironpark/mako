@@ -60,7 +60,14 @@ func composerBar(m *model, id string, state *chatState, disabled ggui.Readable[b
 		}
 		return roundButton("arrow-up", T("Send"), func() { m.sendComposer(id) }, disabled)
 	})
-	return ggui.Row(attach, mode, ggui.Spacer(), model, button).Gap(6).Align(ggui.AlignCenter)
+	left := []ggui.Widget{attach}
+	if state.inTerminal != nil {
+		// The agent's terminal, here, for what only it takes: a dialog no
+		// card shows, a key the agent asks for.
+		left = append(left, ui.Tooltip(ui.ButtonOf(icon("square-terminal").Size(16).Color(skin.Muted), state.inTerminal).
+			Ghost().Pad(5).Radius(15).Name(T("Type in the terminal")).BindDisabled(disabled), T("Type in the terminal")))
+	}
+	return ggui.Row(append(left, mode, ggui.Spacer(), model, button)...).Gap(6).Align(ggui.AlignCenter)
 }
 
 // roundButton is the composer's main button: a light disc with glyph.

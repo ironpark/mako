@@ -662,7 +662,8 @@ func forgeListView(m *model, root ggui.Readable[fileRoot]) ggui.Widget {
 		case v.Err != "" && len(v.Items) == 0:
 			return paneNote(v.Err)
 		case len(v.Items) == 0:
-			return paneNote(map[string]string{protocol.ForgePR: T("No pull requests."), protocol.ForgeIssue: T("No issues."), protocol.ForgeRuns: T("No runs.")}[v.Kind])
+			glyph := map[string]string{protocol.ForgePR: "git-pull-request", protocol.ForgeIssue: "circle-dot", protocol.ForgeRuns: "circle-check"}[v.Kind]
+			return emptyNote(glyph, map[string]string{protocol.ForgePR: T("No pull requests."), protocol.ForgeIssue: T("No issues."), protocol.ForgeRuns: T("No runs.")}[v.Kind])
 		}
 		rows := make([]ggui.Widget, 0, len(v.Items)+1)
 		if v.Err != "" {
@@ -671,7 +672,7 @@ func forgeListView(m *model, root ggui.Readable[fileRoot]) ggui.Widget {
 		for _, it := range v.Items {
 			rows = append(rows, forgeRow(m, v, it))
 		}
-		return ggui.Scroll(ggui.Column(rows...).Stretch()).Bar(skin.Surface3)
+		return ggui.Scroll(ggui.Box(ggui.Column(rows...).Stretch()).Pad(5, 0)).Bar(skin.Surface3)
 	})
 	return ggui.Column(header, hline(), statusLine(m.Forge.Busy, m.Forge.Note), ggui.Expanded(body)).Stretch()
 }
@@ -778,17 +779,61 @@ func joinNonEmpty(parts ...string) string {
 // with it.
 func forgeRow(m *model, v forgeList, it *protocol.ForgeItem) ggui.Widget {
 	root := v.Root
-	title := []ggui.Widget{ggui.Expanded(ggui.Text(it.GetTitle()).Size(12.5).NoWrap().Ellipsis())}
+	title := []ggui.Widget{ggui.Expanded(ggui.Text(it.GetTitle()).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis())}
 	if it.GetKind() == protocol.ForgePR {
 		title = append(title, rollupIcon(it.GetChecks()))
 	}
+	if t := protocol.TimeOf(it.GetUpdated()); !t.IsZero() {
+		title = append(title, ggui.Text(ago(t)).Size(11).Color(skin.ExtraMuted).NoWrap())
+	}
+	// Under it, what names it set apart, and the rest in words.
+	var meta []ggui.Widget
+	about := it.GetAuthor()
+	if it.GetKind() == protocol.ForgeRuns {
+		meta = append(meta, chip(it.GetHead()))
+		about = it.GetEvent()
+		if it.GetWorkflow() != it.GetTitle() { // a scheduled run is titled by its workflow
+			about = joinNonEmpty(it.GetWorkflow(), about)
+		}
+	} else {
+		meta = append(meta, chip(fmt.Sprintf("#%d", it.GetNumber())))
+		if it.GetDraft() && it.GetState() == "OPEN" {
+			meta = append(meta, pill(T("Draft"), skin.Muted))
+		}
+	}
+	meta = append(meta, ggui.Expanded(ggui.Text(about).Size(11).Color(skin.ExtraMuted).NoWrap().Ellipsis()))
 	text := ggui.Column(
 		ggui.Row(title...).Gap(6).Align(ggui.AlignCenter),
-		ggui.Text(forgeMeta(it)).Size(11).Color(skin.ExtraMuted).NoWrap().Ellipsis(),
-	).Gap(2).Stretch()
-	row := ggui.Row(itemIcon(it), ggui.Expanded(text)).Gap(8).Align(ggui.AlignStart)
-	tap := ui.ButtonOf(row, func() { m.openForge(root, it.GetKind(), it.GetNumber()) }).Ghost().Pad(6, 10, 6, 12).Radius(0).Name(it.GetTitle())
+		ggui.Row(meta...).Gap(6).Align(ggui.AlignCenter),
+	).Gap(4).Stretch()
+	row := ggui.Row(ggui.Box(itemIcon(it)).Pad(1, 0, 0, 0), ggui.Expanded(text)).Gap(9).Align(ggui.AlignStart)
+	tap := listRow(row, it.GetTitle(), func() { m.openForge(root, it.GetKind(), it.GetNumber()) })
 	return ui.ContextMenuFunc(tap, func() []ggui.Widget { return forgeItemMenu(m, root, v.Forge, v.Ops, it, nil) }).Name(Tf("%s actions", it.GetTitle()))
+}
+
+// forgeStateColor is the colour an item's state is said in.
+func forgeStateColor(it *protocol.ForgeItem) color.Color {
+	switch it.GetKind() {
+	case protocol.ForgeRuns:
+		switch {
+		case it.GetState() != "completed":
+			return skin.DotWaiting
+		case protocol.Failed(it.GetChecks()):
+			return skin.DotDown
+		case it.GetChecks() == "success":
+			return skin.DiffAdded
+		}
+		return skin.Muted
+	}
+	switch {
+	case it.GetDraft() && it.GetState() == "OPEN":
+		return skin.Muted
+	case it.GetState() == "OPEN":
+		return skin.DiffAdded
+	case it.GetState() == "MERGED":
+		return skin.AccentBright
+	}
+	return skin.DotDown
 }
 
 // forgeItemMenu is what can be done with an item on its forge, in its row's
@@ -903,18 +948,21 @@ func forgeStateLabel(it *protocol.ForgeItem) string {
 func forgeDetailBody(m *model, o forgeOpen) ggui.Widget {
 	d := o.Detail
 	it := d.GetItem()
-	meta := []string{forgeStateLabel(it)}
+	// Its state as a word in its colour, then whose it is and where it
+	// goes, the branches set apart.
+	meta := []ggui.Widget{pill(forgeStateLabel(it), forgeStateColor(it))}
+	about := []string{it.GetAuthor()}
 	switch it.GetKind() {
 	case protocol.ForgePR:
-		meta = append(meta, it.GetAuthor(), it.GetHead()+" → "+it.GetBase())
-	case protocol.ForgeIssue:
-		meta = append(meta, it.GetAuthor())
-	default:
-		meta = append(meta, it.GetHead(), it.GetEvent())
+		meta = append(meta, chip(it.GetHead()), icon("arrow-right").Size(11).Color(skin.ExtraMuted), chip(it.GetBase()))
+	case protocol.ForgeRuns:
+		meta = append(meta, chip(it.GetHead()))
+		about = []string{it.GetEvent()}
 	}
+	meta = append(meta, ggui.Text(metaLine(it, about...)).Size(11.5).Color(skin.ExtraMuted).NoWrap())
 	top := []ggui.Widget{
-		ggui.Row(itemIcon(it), ggui.Expanded(ggui.Text(it.GetTitle()).Size(14).Weight(ggui.WeightSemibold).Selectable())).Gap(8).Align(ggui.AlignStart),
-		ggui.Text(metaLine(it, meta...)).Size(11.5).Color(skin.ExtraMuted).Selectable(),
+		ggui.Row(ggui.Box(itemIcon(it)).Pad(2, 0, 0, 0), ggui.Expanded(ggui.Text(it.GetTitle()).Size(15).Weight(ggui.WeightSemibold).Selectable())).Gap(8).Align(ggui.AlignStart),
+		ggui.Wrap(meta...).Gap(6).RunGap(4).Align(ggui.AlignCenter),
 	}
 	if len(it.GetLabels()) > 0 {
 		var badges []ggui.Widget
@@ -926,7 +974,7 @@ func forgeDetailBody(m *model, o forgeOpen) ggui.Widget {
 	if acts := forgeActions(m, o.Root, d); acts != nil {
 		top = append(top, acts)
 	}
-	rows := []ggui.Widget{ggui.Box(ggui.Column(top...).Gap(8).Stretch()).Pad(12, 12, 10, 12)}
+	rows := []ggui.Widget{ggui.Box(ggui.Column(top...).Gap(10).Stretch()).Pad(14, 14, 12, 14)}
 	if strings.TrimSpace(d.GetBody()) != "" {
 		rows = append(rows, hline(), ggui.Box(markdownText(m, d.GetBody())).Pad(12))
 	}
@@ -941,16 +989,17 @@ func forgeDetailBody(m *model, o forgeOpen) ggui.Widget {
 			if c.GetWorkflow() != "" && it.GetKind() != protocol.ForgeRuns {
 				name = c.GetWorkflow() + " / " + name
 			}
-			row := ggui.Row(checkIcon(c.GetStatus(), c.GetConclusion()), ggui.Expanded(ggui.Text(name).Size(12).NoWrap().Ellipsis())).Gap(7).Align(ggui.AlignCenter)
-			rows = append(rows, ui.ButtonOf(row, func() { _ = runtime.OpenURL(c.GetUrl()) }).Ghost().Pad(4, 12).Radius(0).Name(name))
+			row := ggui.Row(checkIcon(c.GetStatus(), c.GetConclusion()), ggui.Expanded(ggui.Text(name).Size(12.5).NoWrap().Ellipsis()),
+				icon("external-link").Size(11).Color(skin.ExtraMuted)).Gap(8).Align(ggui.AlignCenter)
+			rows = append(rows, listRow(row, name, func() { _ = runtime.OpenURL(c.GetUrl()) }))
 		}
 	}
 	if len(d.GetFiles()) > 0 {
 		rows = append(rows, hline(), sectionTitle(T("Files"), len(d.GetFiles())))
 		from := o.diffFrom()
 		for _, f := range d.GetFiles() {
-			row := ggui.Row(statusIcon(f.GetStatus()), ggui.Expanded(ggui.Text(f.GetPath()).Size(12).NoWrap().Ellipsis()), fileCounts(f)).Gap(7)
-			rows = append(rows, ui.ButtonOf(row, func() { m.openDiffFrom(from, f, true) }).Ghost().Pad(4, 12).Radius(0).Name(f.GetPath()))
+			row := ggui.Row(statusIcon(f.GetStatus()), ggui.Expanded(ggui.Text(f.GetPath()).Size(12.5).NoWrap().Ellipsis()), fileCounts(f)).Gap(8).Align(ggui.AlignCenter)
+			rows = append(rows, listRow(row, f.GetPath(), func() { m.openDiffFrom(from, f, true) }))
 		}
 	}
 	if it.GetKind() != protocol.ForgeRuns {
@@ -974,20 +1023,20 @@ func forgeActions(m *model, root fileRoot, d *protocol.ForgeDetail) ggui.Widget 
 		if slices.ContainsFunc(d.GetComments(), func(c *protocol.ForgeComment) bool { return c.GetPath() != "" || c.GetReview() == "CHANGES_REQUESTED" }) {
 			btns = append(btns, ui.Button(T("Send review to session"), func() { m.sendToSession(reviewPrompt(d)) }).Outline())
 		}
-		btns = append(btns, ui.Button(T("Check out"), m.forgeOp(root, protocol.ForgeOpCheckout, n, false)).Ghost())
+		btns = append(btns, ui.Button(T("Check out"), m.forgeOp(root, protocol.ForgeOpCheckout, n, false)).Outline())
 	case protocol.ForgeIssue:
 		btns = append(btns, ui.Button(T("Start a session on it…"), func() { m.startOnIssue(root, it, d) }).Outline())
 	case protocol.ForgeRuns:
 		switch {
 		case !slices.Contains(d.GetOps(), protocol.ForgeOpRerun):
 		case it.GetState() != "completed":
-			btns = append(btns, ui.Button(T("Cancel run"), m.forgeOp(root, protocol.ForgeOpCancel, n, false)).Ghost())
+			btns = append(btns, ui.Button(T("Cancel run"), m.forgeOp(root, protocol.ForgeOpCancel, n, false)).Outline())
 		case protocol.Failed(it.GetChecks()):
 			btns = append(btns,
 				ui.Button(T("Send failed logs to session"), func() { m.sendFailedLogs(root, it) }).Outline(),
-				ui.Button(T("Run failed jobs again"), m.forgeOp(root, protocol.ForgeOpRerun, n, true)).Ghost())
+				ui.Button(T("Run failed jobs again"), m.forgeOp(root, protocol.ForgeOpRerun, n, true)).Outline())
 		default:
-			btns = append(btns, ui.Button(T("Run again"), m.forgeOp(root, protocol.ForgeOpRerun, n, false)).Ghost())
+			btns = append(btns, ui.Button(T("Run again"), m.forgeOp(root, protocol.ForgeOpRerun, n, false)).Outline())
 		}
 	}
 	if len(btns) == 0 {

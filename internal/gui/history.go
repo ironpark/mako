@@ -267,7 +267,7 @@ func refBadges(refs []string) []ggui.Widget {
 		out = append(out, ggui.Box(ggui.Row(
 			icon(lead).Size(10).Color(fg),
 			ggui.Box(ggui.Text(name).Size(10.5).Color(fg).NoWrap().Ellipsis()).MaxWidth(90),
-		).Gap(3)).Pad(1, 5).Radius(4).Border(1, skin.Border))
+		).Gap(3)).Pad(1, 5).Radius(4).Fill(skin.Surface2))
 	}
 	return out
 }
@@ -334,7 +334,10 @@ func commitRow(m *model, c *protocol.GitCommit, g graphRow, lanes int) ggui.Widg
 	top := append([]ggui.Widget{ggui.Expanded(ggui.Text(c.GetSubject()).Size(12.5).NoWrap().Ellipsis())}, refBadges(c.GetRefs())...)
 	text := ggui.Column(
 		ggui.Row(top...).Gap(5).Align(ggui.AlignCenter),
-		ggui.Text(c.GetAuthor()+" · "+ago(protocol.TimeOf(c.GetTime()))+" · "+shortHash(c.GetHash())).Size(11).Color(skin.ExtraMuted).NoWrap().Ellipsis(),
+		ggui.Row(
+			ggui.Expanded(ggui.Text(c.GetAuthor()+" · "+ago(protocol.TimeOf(c.GetTime()))).Size(11).Color(skin.ExtraMuted).NoWrap().Ellipsis()),
+			chip(shortHash(c.GetHash())),
+		).Gap(6).Align(ggui.AlignCenter),
 	).Gap(2).Stretch()
 	content := ggui.Row(&graphCell{row: g, lanes: lanes, head: head}, ggui.Expanded(text)).Gap(6).Align(ggui.AlignCenter)
 	// Only the rows chosen and no longer chosen redraw as the choice moves.

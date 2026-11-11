@@ -3,12 +3,15 @@ package gui
 import (
 	"cmp"
 	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/ui"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/notify"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -221,4 +224,64 @@ func followAttention(m *model) {
 		m.setTrayTitle(label)
 		return nil
 	})
+}
+
+// asksNow reports whether a session waits on the user for an answer now:
+// an approval, a question, a dialog in its terminal.
+func asksNow(s *protocol.SessionInfo) bool {
+	if s.GetState() != protocol.StateRunning {
+		return false
+	}
+	return s.GetApproval() != nil || s.GetDialog() != nil || s.GetStatus() == protocol.AgentWaiting
+}
+
+// waitingCount is how many sessions wait on the user.
+func (m *model) waitingCount() int {
+	n := 0
+	for _, s := range m.Sessions.Get() {
+		if asksNow(s) {
+			n++
+		}
+	}
+	return n
+}
+
+// nextWaiting shows the next session that waits on the user, after the one
+// selected, round to the first: answered one after another, each brings the
+// next.
+func (m *model) nextWaiting() {
+	sessions := ggui.Peek(m.Sessions)
+	at := slices.IndexFunc(sessions, func(s *protocol.SessionInfo) bool { return s.GetId() == ggui.Peek(m.Selected) })
+	for i := 1; i <= len(sessions); i++ {
+		if s := sessions[(at+i+len(sessions))%len(sessions)]; asksNow(s) && s.GetId() != ggui.Peek(m.Selected) {
+			m.selectSession(s.GetId())
+			return
+		}
+	}
+}
+
+// waitingPill counts the sessions that wait on the user, in the sidebar's
+// heading, and goes to the next of them; nothing while none waits.
+func waitingPill(m *model) ggui.Widget {
+	return ggui.View(ggui.Derived(m.waitingCount), func(n int) ggui.Widget {
+		if n == 0 {
+			return ggui.Box()
+		}
+		tip := Tf("%d waiting for you — go to the next (%s)", n, chordLabel("cmd+shift+a"))
+		face := ggui.Row(dot(skin.DotWaiting), ggui.Text(strconv.Itoa(n)).Size(12).Weight(ggui.WeightMedium).Color(skin.DotWaiting)).Gap(5).Align(ggui.AlignCenter)
+		return arrive(ui.Tooltip(ui.ButtonOf(face, m.nextWaiting).Ghost().Pad(3, 7).Radius(9).Name(T("Next waiting session")), tip))
+	})
+}
+
+// answerSelected answers the approval the selected session waits on, from
+// the keyboard: a call allowed or denied. A plan, questions and a dialog
+// want reading, and are answered where they show.
+func (m *model) answerSelected(decision string) {
+	id := ggui.Peek(m.Selected)
+	s, ok := m.session(id)
+	a := s.GetApproval()
+	if !ok || a == nil || len(a.GetQuestions()) > 0 || a.GetKind() == protocol.ToolExitPlan {
+		return
+	}
+	m.decide(id, a, decision)()
 }

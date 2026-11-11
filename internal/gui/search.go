@@ -143,7 +143,7 @@ func quickOpenDialog(m *model) ggui.Widget {
 	return m.pickers.quick.dialog()
 }
 
-// searchView is what the Search tab last found.
+// searchView is what the search last found.
 type searchView struct {
 	Root    fileRoot
 	Query   string
@@ -152,11 +152,17 @@ type searchView struct {
 	Loading bool
 }
 
-// openSearch shows the Search tab, its field ready to type in.
+// openSearch shows the search of the project, its field ready to type in.
 func (m *model) openSearch() {
-	m.DetailsOpen.Set(true)
-	m.DetailTab.Set(searchTab)
 	m.searchFocus = true
+	m.SearchOpen.Set(true)
+}
+
+// searchDialog is the search of the project shown, over the window: a
+// line found opens its file there and closes it.
+func searchDialog(m *model) ggui.Widget {
+	content := ggui.If(m.SearchOpen, func() ggui.Widget { return ggui.Box(searchPanel(m)).Height(560) })
+	return ui.Dialog(m.SearchOpen, content).Title(T("Search the project")).Width(760)
 }
 
 // runSearch searches the project shown for what the Search field holds.
@@ -182,7 +188,7 @@ func (m *model) runSearch() {
 	})
 }
 
-// searchPanel is the Search tab: a field, and the lines found, by file.
+// searchPanel is the search: a field, and the lines found, by file.
 func searchPanel(m *model) ggui.Widget {
 	field := ui.TextField(m.SearchQuery).Placeholder(T("Search the project's files")).Name(T("Search")).
 		OnSubmit(func(string) { m.runSearch() })
@@ -242,7 +248,7 @@ func searchResults(m *model, v searchView) ggui.Widget {
 			ggui.Box(ggui.Text(fmt.Sprint(match.GetLine())).Style(mono).Color(skin.ExtraMuted).NoWrap()).Width(36),
 			ggui.Expanded(markQuery(text, v.Query, fold, mono)),
 		).Gap(4)
-		rows = append(rows, ui.ButtonOf(row, func() { m.openFileAt(it, int(line)) }).Ghost().Pad(2, 12, 2, 18).Radius(0).
+		rows = append(rows, ui.ButtonOf(row, func() { m.SearchOpen.Set(false); m.openFileAt(it, int(line)) }).Ghost().Pad(2, 12, 2, 18).Radius(0).
 			Name(fmt.Sprintf("%s:%d", match.GetPath(), match.GetLine())))
 	}
 	note := Tf("%d results in %d files", len(v.Result.GetMatches()), files)
