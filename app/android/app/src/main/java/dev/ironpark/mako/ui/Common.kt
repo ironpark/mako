@@ -58,6 +58,18 @@ import dev.ironpark.mako.v2.SessionInfo
 /** CapChat is the bit of SessionInfo.caps saying its conversation can be read. */
 const val CAP_CHAT = 1
 
+/** CapAnswerKeys is the bit of SessionInfo.caps saying its questions are answered by AnswerQuestion. */
+const val CAP_ANSWER_KEYS = 8
+
+/** Whether the session's approval is questions its agent asks, answered rather than allowed. */
+fun SessionInfo.asks(): Boolean = hasApproval() && approval.questionsCount > 0
+
+/** Whether the session's approval is a plan its agent puts to you, approved into a mode to carry it out in. */
+fun SessionInfo.plans(): Boolean = hasApproval() && approval.kind == KIND_EXIT_PLAN
+
+/** The kind of call that puts a plan to the user, as Approval.kind names it. */
+const val KIND_EXIT_PLAN = "exit_plan"
+
 /** What a session is called: its name, else its title, else its agent. */
 fun SessionInfo.label(): String = name.ifEmpty { title.ifEmpty { agent } }.trimStart('✳', '◐', '◑', '◒', '◓', ' ')
 

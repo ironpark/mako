@@ -1893,6 +1893,150 @@ public  final class SessionInfo extends
     bells_ = 0L;
   }
 
+  public static final int DIALOG_FIELD_NUMBER = 35;
+  private dev.ironpark.mako.v2.ScreenDialog dialog_;
+  /**
+   * <pre>
+   * dialog is the choice the agent's terminal shows a dialog for, while it
+   * waits there on one no hook holds; unset otherwise.
+   * </pre>
+   *
+   * <code>.mako.v2.ScreenDialog dialog = 35 [json_name = "dialog"];</code>
+   */
+  @java.lang.Override
+  public boolean hasDialog() {
+    return ((bitField0_ & 0x00000100) != 0);
+  }
+  /**
+   * <pre>
+   * dialog is the choice the agent's terminal shows a dialog for, while it
+   * waits there on one no hook holds; unset otherwise.
+   * </pre>
+   *
+   * <code>.mako.v2.ScreenDialog dialog = 35 [json_name = "dialog"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ScreenDialog getDialog() {
+    return dialog_ == null ? dev.ironpark.mako.v2.ScreenDialog.getDefaultInstance() : dialog_;
+  }
+  /**
+   * <pre>
+   * dialog is the choice the agent's terminal shows a dialog for, while it
+   * waits there on one no hook holds; unset otherwise.
+   * </pre>
+   *
+   * <code>.mako.v2.ScreenDialog dialog = 35 [json_name = "dialog"];</code>
+   */
+  private void setDialog(dev.ironpark.mako.v2.ScreenDialog value) {
+    java.util.Objects.requireNonNull(value);
+    dialog_ = value;
+    bitField0_ |= 0x00000100;
+  }
+  /**
+   * <pre>
+   * dialog is the choice the agent's terminal shows a dialog for, while it
+   * waits there on one no hook holds; unset otherwise.
+   * </pre>
+   *
+   * <code>.mako.v2.ScreenDialog dialog = 35 [json_name = "dialog"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeDialog(dev.ironpark.mako.v2.ScreenDialog value) {
+    java.util.Objects.requireNonNull(value);
+    if (dialog_ != null &&
+        dialog_ != dev.ironpark.mako.v2.ScreenDialog.getDefaultInstance()) {
+      dialog_ =
+        dev.ironpark.mako.v2.ScreenDialog.newBuilder(dialog_).mergeFrom(value).buildPartial();
+    } else {
+      dialog_ = value;
+    }
+    bitField0_ |= 0x00000100;
+  }
+  /**
+   * <pre>
+   * dialog is the choice the agent's terminal shows a dialog for, while it
+   * waits there on one no hook holds; unset otherwise.
+   * </pre>
+   *
+   * <code>.mako.v2.ScreenDialog dialog = 35 [json_name = "dialog"];</code>
+   */
+  private void clearDialog() {
+    dialog_ = null;
+    bitField0_ = (bitField0_ & ~0x00000100);
+  }
+
+  public static final int CONTROLS_FIELD_NUMBER = 36;
+  private dev.ironpark.mako.v2.AgentControls controls_;
+  /**
+   * <pre>
+   * controls are what ConfigureAgent may set of the session's agent; unset
+   * for an agent with none.
+   * </pre>
+   *
+   * <code>.mako.v2.AgentControls controls = 36 [json_name = "controls"];</code>
+   */
+  @java.lang.Override
+  public boolean hasControls() {
+    return ((bitField0_ & 0x00000200) != 0);
+  }
+  /**
+   * <pre>
+   * controls are what ConfigureAgent may set of the session's agent; unset
+   * for an agent with none.
+   * </pre>
+   *
+   * <code>.mako.v2.AgentControls controls = 36 [json_name = "controls"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.AgentControls getControls() {
+    return controls_ == null ? dev.ironpark.mako.v2.AgentControls.getDefaultInstance() : controls_;
+  }
+  /**
+   * <pre>
+   * controls are what ConfigureAgent may set of the session's agent; unset
+   * for an agent with none.
+   * </pre>
+   *
+   * <code>.mako.v2.AgentControls controls = 36 [json_name = "controls"];</code>
+   */
+  private void setControls(dev.ironpark.mako.v2.AgentControls value) {
+    java.util.Objects.requireNonNull(value);
+    controls_ = value;
+    bitField0_ |= 0x00000200;
+  }
+  /**
+   * <pre>
+   * controls are what ConfigureAgent may set of the session's agent; unset
+   * for an agent with none.
+   * </pre>
+   *
+   * <code>.mako.v2.AgentControls controls = 36 [json_name = "controls"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeControls(dev.ironpark.mako.v2.AgentControls value) {
+    java.util.Objects.requireNonNull(value);
+    if (controls_ != null &&
+        controls_ != dev.ironpark.mako.v2.AgentControls.getDefaultInstance()) {
+      controls_ =
+        dev.ironpark.mako.v2.AgentControls.newBuilder(controls_).mergeFrom(value).buildPartial();
+    } else {
+      controls_ = value;
+    }
+    bitField0_ |= 0x00000200;
+  }
+  /**
+   * <pre>
+   * controls are what ConfigureAgent may set of the session's agent; unset
+   * for an agent with none.
+   * </pre>
+   *
+   * <code>.mako.v2.AgentControls controls = 36 [json_name = "controls"];</code>
+   */
+  private void clearControls() {
+    controls_ = null;
+    bitField0_ = (bitField0_ & ~0x00000200);
+  }
+
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -3921,6 +4065,160 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * dialog is the choice the agent's terminal shows a dialog for, while it
+     * waits there on one no hook holds; unset otherwise.
+     * </pre>
+     *
+     * <code>.mako.v2.ScreenDialog dialog = 35 [json_name = "dialog"];</code>
+     */
+    @java.lang.Override
+    public boolean hasDialog() {
+      return instance.hasDialog();
+    }
+    /**
+     * <pre>
+     * dialog is the choice the agent's terminal shows a dialog for, while it
+     * waits there on one no hook holds; unset otherwise.
+     * </pre>
+     *
+     * <code>.mako.v2.ScreenDialog dialog = 35 [json_name = "dialog"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ScreenDialog getDialog() {
+      return instance.getDialog();
+    }
+    /**
+     * <pre>
+     * dialog is the choice the agent's terminal shows a dialog for, while it
+     * waits there on one no hook holds; unset otherwise.
+     * </pre>
+     *
+     * <code>.mako.v2.ScreenDialog dialog = 35 [json_name = "dialog"];</code>
+     */
+    public Builder setDialog(dev.ironpark.mako.v2.ScreenDialog value) {
+      copyOnWrite();
+      instance.setDialog(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * dialog is the choice the agent's terminal shows a dialog for, while it
+     * waits there on one no hook holds; unset otherwise.
+     * </pre>
+     *
+     * <code>.mako.v2.ScreenDialog dialog = 35 [json_name = "dialog"];</code>
+     */
+    public Builder setDialog(
+        dev.ironpark.mako.v2.ScreenDialog.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDialog(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * dialog is the choice the agent's terminal shows a dialog for, while it
+     * waits there on one no hook holds; unset otherwise.
+     * </pre>
+     *
+     * <code>.mako.v2.ScreenDialog dialog = 35 [json_name = "dialog"];</code>
+     */
+    public Builder mergeDialog(dev.ironpark.mako.v2.ScreenDialog value) {
+      copyOnWrite();
+      instance.mergeDialog(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * dialog is the choice the agent's terminal shows a dialog for, while it
+     * waits there on one no hook holds; unset otherwise.
+     * </pre>
+     *
+     * <code>.mako.v2.ScreenDialog dialog = 35 [json_name = "dialog"];</code>
+     */
+    public Builder clearDialog() {  copyOnWrite();
+      instance.clearDialog();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * controls are what ConfigureAgent may set of the session's agent; unset
+     * for an agent with none.
+     * </pre>
+     *
+     * <code>.mako.v2.AgentControls controls = 36 [json_name = "controls"];</code>
+     */
+    @java.lang.Override
+    public boolean hasControls() {
+      return instance.hasControls();
+    }
+    /**
+     * <pre>
+     * controls are what ConfigureAgent may set of the session's agent; unset
+     * for an agent with none.
+     * </pre>
+     *
+     * <code>.mako.v2.AgentControls controls = 36 [json_name = "controls"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.AgentControls getControls() {
+      return instance.getControls();
+    }
+    /**
+     * <pre>
+     * controls are what ConfigureAgent may set of the session's agent; unset
+     * for an agent with none.
+     * </pre>
+     *
+     * <code>.mako.v2.AgentControls controls = 36 [json_name = "controls"];</code>
+     */
+    public Builder setControls(dev.ironpark.mako.v2.AgentControls value) {
+      copyOnWrite();
+      instance.setControls(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * controls are what ConfigureAgent may set of the session's agent; unset
+     * for an agent with none.
+     * </pre>
+     *
+     * <code>.mako.v2.AgentControls controls = 36 [json_name = "controls"];</code>
+     */
+    public Builder setControls(
+        dev.ironpark.mako.v2.AgentControls.Builder builderForValue) {
+      copyOnWrite();
+      instance.setControls(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * controls are what ConfigureAgent may set of the session's agent; unset
+     * for an agent with none.
+     * </pre>
+     *
+     * <code>.mako.v2.AgentControls controls = 36 [json_name = "controls"];</code>
+     */
+    public Builder mergeControls(dev.ironpark.mako.v2.AgentControls value) {
+      copyOnWrite();
+      instance.mergeControls(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * controls are what ConfigureAgent may set of the session's agent; unset
+     * for an agent with none.
+     * </pre>
+     *
+     * <code>.mako.v2.AgentControls controls = 36 [json_name = "controls"];</code>
+     */
+    public Builder clearControls() {  copyOnWrite();
+      instance.clearControls();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -3973,14 +4271,16 @@ public  final class SessionInfo extends
             "turns_",
             "notice_",
             "bells_",
+            "dialog_",
+            "controls_",
           };
           java.lang.String info =
-              "\u0000\"\u0000\u0001\u0001\"\"\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0000$\u0000\u0001\u0001$$\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
               "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208\u000b\u000b" +
               "\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011\u0208\u0012" +
               "\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004\u0017\u1009" +
               "\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006\u001c\u0208\u001d\u0007" +
-              "\u001e\u001b\u001f\u0208 \u0003!\u1009\u0007\"\u0003";
+              "\u001e\u001b\u001f\u0208 \u0003!\u1009\u0007\"\u0003#\u1009\b$\u1009\t";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

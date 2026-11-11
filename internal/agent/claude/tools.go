@@ -23,6 +23,7 @@ var tools = map[string]string{
 	"websearch": protocol.ToolWebSearch,
 	"task":      protocol.ToolTask, "agent": protocol.ToolTask,
 	"askuserquestion": protocol.ToolQuestion,
+	"exitplanmode":    protocol.ToolExitPlan,
 }
 
 // toolKind is what a call of the tool name does. The rows the decoder makes
@@ -74,6 +75,8 @@ func (*Agent) Tool(name string, args json.RawMessage) (string, map[string]any) {
 		return kind, agent.Canon(map[string]any{"pattern": agent.Str(in, "pattern"), "path": agent.Str(in, "path"), "glob": agent.Str(in, "glob"), "type": agent.Str(in, "type"), "mode": agent.Str(in, "output_mode")})
 	case protocol.ToolTodo:
 		return kind, agent.Canon(map[string]any{"items": agent.Items(agent.List(in, "todos"), "content", "status")})
+	case protocol.ToolExitPlan:
+		return kind, agent.Canon(map[string]any{"plan": agent.Str(in, "plan")})
 	case protocol.ToolFetch:
 		return kind, agent.Canon(map[string]any{"url": agent.Str(in, "url"), "prompt": agent.Str(in, "prompt")})
 	case protocol.ToolWebSearch:

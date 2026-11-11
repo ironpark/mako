@@ -111,16 +111,16 @@ func TestQuestionFormAnswers(t *testing.T) {
 	}
 }
 
-// Questions of the call the agent waits on are read from the log.
-func TestPendingQuestions(t *testing.T) {
-	text := `{"question":"Which?","options":["A"],"questions":[{"question":"Which?","header":"H","options":[{"label":"A","description":"a"}],"multiSelect":false}]}`
-	waiting := []*protocol.ChatMessage{{Role: "user", Text: "go"}, {Role: "tool", Kind: protocol.ToolQuestion, Pending: true, Text: text}}
-	if qs := callQuestions(pendingQuestionCall(waiting)); len(qs) != 1 || qs[0].GetHeader() != "H" || qs[0].GetOptions()[0].GetDescription() != "a" {
-		t.Fatalf("questions %v", qs)
+// The question call the agent waits on is the last of the trailing calls,
+// still pending.
+func TestPendingQuestionCall(t *testing.T) {
+	call := &protocol.ChatMessage{Role: "tool", Kind: protocol.ToolQuestion, Pending: true}
+	if got := pendingQuestionCall([]*protocol.ChatMessage{{Role: "user", Text: "go"}, call}); got != call {
+		t.Fatalf("call %v", got)
 	}
-	answered := []*protocol.ChatMessage{{Role: "tool", Kind: protocol.ToolQuestion, Text: text}}
-	if qs := pendingQuestionCall(answered); qs != nil {
-		t.Fatalf("an answered call asks %v", qs)
+	answered := []*protocol.ChatMessage{{Role: "tool", Kind: protocol.ToolQuestion}}
+	if got := pendingQuestionCall(answered); got != nil {
+		t.Fatalf("an answered call asks: %v", got)
 	}
 }
 
@@ -139,7 +139,9 @@ func TestKeyedQuestionsShowAForm(t *testing.T) {
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "codex", State: protocol.StateRunning, Status: protocol.AgentWaiting, Caps: protocol.CapAnswerKeys}})
 	state := m.chatState("s")
 	state.result.Set(chatResult{Loaded: true, Chat: &protocol.Chat{Supported: true, Conversation: "c", Messages: []*protocol.ChatMessage{
-		{Role: "tool", Kind: protocol.ToolQuestion, Pending: true, Text: `{"questions":[{"question":"Which color?","options":[{"label":"Red"},{"label":"Blue"}]}]}`},
+		{Role: "tool", Kind: protocol.ToolQuestion, Pending: true, Questions: []*protocol.Question{
+			{Question: "Which color?", Options: []*protocol.QuestionOption{{Label: "Red"}, {Label: "Blue"}}},
+		}},
 	}}})
 	p := ggui.ProbeBuilder(func() ggui.Widget { return chatInput(m, "s", state) }, ggui.Sz(800, 450))
 	t.Cleanup(func() { p.Close(); close(link.in); conn.close() })

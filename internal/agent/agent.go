@@ -199,6 +199,40 @@ type KeyedAnswers interface {
 	AnswerKeys(questions []*protocol.Question, answers []*protocol.QuestionAnswer) []Keystroke
 }
 
+// ApprovalOptions is an agent that offers, with an approval, ways to allow
+// the call besides once, which change what it may do from then on: Options
+// are those the approval ev, of a call of kind, offers, and AllowReply is
+// what its PermissionRequest hook prints to allow the call with the option
+// of that id, or once for "". A plan the agent puts to the user, of kind
+// protocol.ToolExitPlan, is allowed by one of them. DenyMessage is what a
+// denial with no word of the user's tells the agent, "" for what any
+// denial does.
+type ApprovalOptions interface {
+	Options(kind string, ev Event) []*protocol.ApprovalOption
+	AllowReply(kind string, ev Event, option string) []byte
+	DenyMessage(kind string) string
+}
+
+// Modes is an agent whose permission mode a key at its prompt moves on to
+// the next, as Claude Code's shift+tab: Modes are those it may be switched
+// to, as Usage.permission_mode names them, ModeKey is the key, and
+// ScreenMode the mode the screen shows, "" for none it can tell.
+type Modes interface {
+	Modes() []string
+	ModeKey() []byte
+	ScreenMode(screen string) string
+}
+
+// Models is an agent whose model and effort commands typed at its prompt
+// set: Models and Efforts are those offered, by the names the commands
+// take, which ModelCommand and EffortCommand are.
+type Models interface {
+	Models() []string
+	Efforts() []string
+	ModelCommand(model string) string
+	EffortCommand(effort string) string
+}
+
 // Keystroke is a step of typing into an agent's terminal: Text pasted, if
 // any, then Keys pressed, as its terminal encodes them.
 type Keystroke struct {

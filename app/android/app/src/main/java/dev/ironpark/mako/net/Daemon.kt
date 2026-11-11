@@ -4,6 +4,9 @@ import com.google.protobuf.ByteString
 import dev.ironpark.mako.v2.Access
 import dev.ironpark.mako.v2.AccessInfo
 import dev.ironpark.mako.v2.AnswerApproval
+import dev.ironpark.mako.v2.AnswerDialog
+import dev.ironpark.mako.v2.ConfigureAgent
+import dev.ironpark.mako.v2.AnswerQuestion
 import dev.ironpark.mako.v2.Changed
 import dev.ironpark.mako.v2.Chat
 import dev.ironpark.mako.v2.CloseSession
@@ -67,6 +70,25 @@ class Daemon(private val socket: () -> String?) {
 
     suspend fun answer(req: AnswerApproval) {
         call(envelope { answerApproval = req })
+    }
+
+    /**
+     * Answers the questions a session's agent asks in its terminal's
+     * dialog, typed there by its node. Nodes from
+     * [dev.ironpark.mako.Mesh.REVISION_QUESTIONS] on take it.
+     */
+    suspend fun answer(req: AnswerQuestion) {
+        call(envelope { answerQuestion = req })
+    }
+
+    /** Sets a session's agent's permission mode, model or effort. */
+    suspend fun configure(req: ConfigureAgent) {
+        call(envelope { configureAgent = req })
+    }
+
+    /** Picks an option of the dialog a session's agent shows in its terminal, as the user would there. */
+    suspend fun answer(req: AnswerDialog) {
+        call(envelope { answerDialog = req })
     }
 
     /**

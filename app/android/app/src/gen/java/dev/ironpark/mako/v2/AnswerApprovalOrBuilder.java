@@ -114,4 +114,26 @@ public interface AnswerApprovalOrBuilder extends
    * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
    */
   int getAnswersCount();
+
+  /**
+   * <pre>
+   * option is the id of the approval's option allow chooses; "" allows
+   * the call once.
+   * </pre>
+   *
+   * <code>string option = 7 [json_name = "option"];</code>
+   * @return The option.
+   */
+  java.lang.String getOption();
+  /**
+   * <pre>
+   * option is the id of the approval's option allow chooses; "" allows
+   * the call once.
+   * </pre>
+   *
+   * <code>string option = 7 [json_name = "option"];</code>
+   * @return The bytes for option.
+   */
+  com.google.protobuf.ByteString
+      getOptionBytes();
 }

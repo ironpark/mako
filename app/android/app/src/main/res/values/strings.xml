@@ -265,4 +265,36 @@
     <string name="offline_retry_in">Offline · trying again in %1$ds</string>
     <string name="offline_retrying">Offline · trying again</string>
     <string name="reconnect">Reconnect</string>
+    <string name="question_progress">Question %1$d of %2$d</string>
+    <string name="question_other">Other</string>
+    <string name="question_other_hint">Answer in your own words</string>
+    <string name="next">Next</string>
+    <string name="decline">Decline</string>
+    <string name="notice_question">%1$s asks you</string>
+    <plurals name="more_questions">
+        <item quantity="one">and %1$d more question</item>
+        <item quantity="other">and %1$d more questions</item>
+    </plurals>
+    <string name="notice_plan">%1$s has a plan</string>
+    <string name="plan_ready">Ready to carry out the plan?</string>
+    <string name="review">Review</string>
+    <string name="plan_auto">Yes, in auto mode</string>
+    <string name="plan_accept_edits">Yes, accepting edits</string>
+    <string name="plan_default">Yes, asking before edits</string>
+    <string name="keep_planning">Keep planning</string>
+    <string name="plan_change_hint">Tell the agent what to change</string>
+    <string name="deny_reason_hint">Tell the agent what to do instead</string>
+    <string name="always_allow">Always allow %1$s</string>
+    <string name="allow_accept_edits">Allow, and accept edits from now on</string>
+    <string name="allow_auto">Allow, and switch to auto mode</string>
+    <string name="allow_mode">Allow, and switch to %1$s</string>
+    <string name="dialog_title">The agent waits in its terminal</string>
+    <string name="mode_default">Ask first</string>
+    <string name="mode_accept_edits">Accept edits</string>
+    <string name="mode_plan">Plan mode</string>
+    <string name="mode_auto">Auto</string>
+    <string name="mode_bypass">Full access</string>
+    <string name="model">Model</string>
+    <string name="effort_level">%1$s effort</string>
+    <string name="kept_as_default">The agent keeps these as your default</string>
 </resources>

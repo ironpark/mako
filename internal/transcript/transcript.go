@@ -427,7 +427,7 @@ func Upgrade(chat *protocol.Chat) {
 			raw, _ = json.Marshal(m.GetText())
 		}
 		read := agent.Call(tools, m.GetId(), m.GetTool(), raw)
-		m.Kind, m.Text, m.Detail = cmp.Or(read.GetKind(), kind), read.GetText(), read.GetDetail()
+		m.Kind, m.Text, m.Detail, m.Questions = cmp.Or(read.GetKind(), kind), read.GetText(), read.GetDetail(), read.GetQuestions()
 		if m.GetResult() != "" {
 			var exit int
 			if m.Result, exit = tools.Output(m.GetKind(), m.GetResult()); exit >= 0 {

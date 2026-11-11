@@ -378,6 +378,8 @@ is polled as before.
 | `rename_session` | `RenameSession` | `session_info` | An empty name gives the session its own back. At most 200 bytes, folded to one line. |
 | `answer_approval` | `AnswerApproval` | `session_info` | Answers the tool call the session's agent waits on. |
 | `send` | `Send` | `session_info` | Types into the session without attaching: `text` pasted, bracketed when its program asked for that, then `keys` as they are, such as `\r` to submit. A `text` holding a paste's end marker is refused. With `text`, an agent that shows a view over its own prompt (Claude Code's or Codex's subagent, transcript, or agents list) is first taken back to that prompt, as its screen shows, so the text reaches the agent itself. |
+| `configure_agent` | `ConfigureAgent` | `session_info` | Sets what is given of the session's agent, as `SessionInfo.controls` offers: `mode`, by the key that moves its permission mode on, pressed at its prompt until its screen names the mode; `model` and `effort`, by its own commands typed there (Claude Code's `/model` and `/effort`, which it also keeps as the user's defaults). Refused for a value not offered, or a mode the agent does not reach. |
+| `answer_dialog` | `AnswerDialog` | `session_info` | Picks `option`, by index, of the dialog `dialog_id` the session's agent shows in its terminal (`SessionInfo.dialog`), as the user would there: the cursor moved with the arrow keys, then Enter. Refused once the screen shows another dialog, or none. |
 | `answer_question` | `AnswerQuestion` | `session_info` | Answers the questions the session's agent asks in a dialog in its terminal, which no hook holds (Codex's `request_user_input`; agents with `CapAnswerKeys`): `answers`, one for each of `questions` in order, as `QuestionAnswer` (`picked` option indexes, `text` in the user's own words), typed into the dialog. Refused unless the screen shows the dialog and every question has an answer. |
 | `list_commands` | `ListCommands` | `commands` | The slash commands the session's agent takes, as its node finds them: the agent's own, the user's and the project's commands and skills, and its plugins'. None for an agent mako knows no commands of. |
 | `read_chat` | `ReadChat` | `chat` | The agent's native conversation, read from its log. |
@@ -417,7 +419,9 @@ The fields a front-end usually needs:
 | `conversation_id` | The agent's own conversation, stable across restarts. |
 | `busy`, `idle` | Printing on its own, as an agent at work does; nothing running in front of its program, as a shell at its prompt. |
 | `status`, `status_at` | Reconciled agent activity: `idle`, `working`, `compacting`, `waiting`, `done`, from hooks, terminal progress and supported log events. Running subagents defer a parent's `done` until they finish. Empty when no status is known. |
-| `approval` | The tool call the agent waits to have approved. A question tool's (Claude Code's `AskUserQuestion`) carries its `questions` (`Question`: `question`, `header`, `options` of `label` and `description`, `multi_select`). |
+| `controls` | What `configure_agent` may set of the agent (`AgentControls`: `modes`, as `Usage.permission_mode` names them, `models`, `efforts`); unset for an agent with none. |
+| `dialog` | A dialog of options the agent's terminal shows while it waits there on one no hook holds, as a folder's trust or a permission asked while nobody watched (`ScreenDialog`: `id`, `text`, `options`, `selected`, the option its cursor is on); unset otherwise. Answered by `answer_dialog`. |
+| `approval` | The tool call the agent waits to have approved: its `kind` and the `options` to allow it with (see Approvals). A question tool's (Claude Code's `AskUserQuestion`) carries its `questions` (`Question`: `question`, `header`, `options` of `label` and `description`, `multi_select`). |
 | `worktree` | The worktree made for it. |
 | `last_output`, `started_at`, `cols`, `rows` | |
 | `last_message` | When the conversation's latest prompt or reply was written, as its log says. Unset before the bound log has one; clients fall back to `last_output`. |
@@ -443,6 +447,19 @@ An approval with `questions` is answered with `allow` and `answers`, one
 user's answers to its own dialog. `allow` without an answer to each, as a
 front-end that knows no questions sends, is taken as `terminal`; `deny`
 declines to answer.
+
+An approval's `kind` names what the call does, as `ChatMessage.kind` does,
+its `input` then read as that kind's arguments: an edit's `old` and `new`, a
+command's `command`. Its `options` are ways to allow the call besides once
+that the agent offers (`ApprovalOption`: `mode`, a permission mode to
+switch to, or `rules`, calls allowed from then on without asking, as the
+agent writes them, such as `Bash(npm test:*)`); `allow` with `option` set
+to one's `id` allows the call that way. A plan the agent puts to the user
+(kind `exit_plan`, Claude Code's `ExitPlanMode`; its `input` has the plan's
+Markdown as `plan`) is approved with `allow` and the option of the mode the
+work goes on in; `allow` with no option goes on in `default`, asking before
+edits; `deny` with a `message` keeps the agent planning, told what to
+change.
 
 When nobody is watching, the agent asks in its terminal, as it would without
 mako.
@@ -478,7 +495,8 @@ whole.
 | `limits` | The account's subscription limits, shortest window first: `{minutes, used, resets}`, where `used` is a percentage and `resets` Unix seconds. Claude's are its five-hour and weekly windows (300 and 10080 minutes). |
 
 A `tool` turn that calls a tool carries its answer in `result`; one not
-answered yet is `pending`. `agents` are the subagents the calls in
+answered yet is `pending`. A question call (`kind` `question`) carries the
+`questions` it asks, as an approval does. `agents` are the subagents the calls in
 `messages` started, as Claude's Agent tool does, oldest first, each read from
 the log the agent keeps of its own:
 
@@ -888,7 +906,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 12) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 20) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end

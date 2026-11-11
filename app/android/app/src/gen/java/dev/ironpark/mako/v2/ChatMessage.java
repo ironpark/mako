@@ -27,6 +27,7 @@ public  final class ChatMessage extends
     result_ = "";
     kind_ = "";
     images_ = emptyProtobufList();
+    questions_ = emptyProtobufList();
   }
   private int bitField0_;
   public static final int ROLE_FIELD_NUMBER = 1;
@@ -679,6 +680,155 @@ public  final class ChatMessage extends
     checkByteStringIsUtf8(value);
     ensureImagesIsMutable();
     images_.add(value.toStringUtf8());
+  }
+
+  public static final int QUESTIONS_FIELD_NUMBER = 13;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.Question> questions_;
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.Question> getQuestionsList() {
+    return questions_;
+  }
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.QuestionOrBuilder> 
+      getQuestionsOrBuilderList() {
+    return questions_;
+  }
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  @java.lang.Override
+  public int getQuestionsCount() {
+    return questions_.size();
+  }
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Question getQuestions(int index) {
+    return questions_.get(index);
+  }
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  public dev.ironpark.mako.v2.QuestionOrBuilder getQuestionsOrBuilder(
+      int index) {
+    return questions_.get(index);
+  }
+  private void ensureQuestionsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.Question> tmp = questions_;
+    if (!tmp.isModifiable()) {
+      questions_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  private void setQuestions(
+      int index, dev.ironpark.mako.v2.Question value) {
+    java.util.Objects.requireNonNull(value);
+    ensureQuestionsIsMutable();
+    questions_.set(index, value);
+  }
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  private void addQuestions(dev.ironpark.mako.v2.Question value) {
+    java.util.Objects.requireNonNull(value);
+    ensureQuestionsIsMutable();
+    questions_.add(value);
+  }
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  private void addQuestions(
+      int index, dev.ironpark.mako.v2.Question value) {
+    java.util.Objects.requireNonNull(value);
+    ensureQuestionsIsMutable();
+    questions_.add(index, value);
+  }
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  private void addAllQuestions(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.Question> values) {
+    ensureQuestionsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, questions_);
+  }
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  private void clearQuestions() {
+    questions_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  private void removeQuestions(int index) {
+    ensureQuestionsIsMutable();
+    questions_.remove(index);
   }
 
   public static dev.ironpark.mako.v2.ChatMessage parseFrom(
@@ -1455,6 +1605,168 @@ public  final class ChatMessage extends
       return this;
     }
 
+    /**
+     * <pre>
+     * questions are what a question call asks, as its driver reads them;
+     * none for other calls.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.Question> getQuestionsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getQuestionsList());
+    }
+    /**
+     * <pre>
+     * questions are what a question call asks, as its driver reads them;
+     * none for other calls.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+     */
+    @java.lang.Override
+    public int getQuestionsCount() {
+      return instance.getQuestionsCount();
+    }/**
+     * <pre>
+     * questions are what a question call asks, as its driver reads them;
+     * none for other calls.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Question getQuestions(int index) {
+      return instance.getQuestions(index);
+    }
+    /**
+     * <pre>
+     * questions are what a question call asks, as its driver reads them;
+     * none for other calls.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+     */
+    public Builder setQuestions(
+        int index, dev.ironpark.mako.v2.Question value) {
+      copyOnWrite();
+      instance.setQuestions(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * questions are what a question call asks, as its driver reads them;
+     * none for other calls.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+     */
+    public Builder setQuestions(
+        int index, dev.ironpark.mako.v2.Question.Builder builderForValue) {
+      copyOnWrite();
+      instance.setQuestions(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * questions are what a question call asks, as its driver reads them;
+     * none for other calls.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+     */
+    public Builder addQuestions(dev.ironpark.mako.v2.Question value) {
+      copyOnWrite();
+      instance.addQuestions(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * questions are what a question call asks, as its driver reads them;
+     * none for other calls.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+     */
+    public Builder addQuestions(
+        int index, dev.ironpark.mako.v2.Question value) {
+      copyOnWrite();
+      instance.addQuestions(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * questions are what a question call asks, as its driver reads them;
+     * none for other calls.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+     */
+    public Builder addQuestions(
+        dev.ironpark.mako.v2.Question.Builder builderForValue) {
+      copyOnWrite();
+      instance.addQuestions(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * questions are what a question call asks, as its driver reads them;
+     * none for other calls.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+     */
+    public Builder addQuestions(
+        int index, dev.ironpark.mako.v2.Question.Builder builderForValue) {
+      copyOnWrite();
+      instance.addQuestions(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * questions are what a question call asks, as its driver reads them;
+     * none for other calls.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+     */
+    public Builder addAllQuestions(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.Question> values) {
+      copyOnWrite();
+      instance.addAllQuestions(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * questions are what a question call asks, as its driver reads them;
+     * none for other calls.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+     */
+    public Builder clearQuestions() {
+      copyOnWrite();
+      instance.clearQuestions();
+      return this;
+    }
+    /**
+     * <pre>
+     * questions are what a question call asks, as its driver reads them;
+     * none for other calls.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+     */
+    public Builder removeQuestions(int index) {
+      copyOnWrite();
+      instance.removeQuestions(index);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.ChatMessage)
   }
   @java.lang.Override
@@ -1484,11 +1796,13 @@ public  final class ChatMessage extends
             "kind_",
             "exitCode_",
             "images_",
+            "questions_",
+            dev.ironpark.mako.v2.Question.class,
           };
           java.lang.String info =
-              "\u0000\f\u0000\u0001\u0001\f\f\u0000\u0001\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0000\r\u0000\u0001\u0001\r\r\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
               "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0007\b\u0007\t\u0007\n\u0208\u000b\u1004" +
-              "\u0000\f\u021a";
+              "\u0000\f\u021a\r\u001b";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

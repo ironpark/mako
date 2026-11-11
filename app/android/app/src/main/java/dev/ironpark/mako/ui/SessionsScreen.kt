@@ -560,7 +560,35 @@ private fun WaitingCard(mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long
                 }
                 Pill(s.statusText(), s.statusColor())
             }
-            if (s.hasApproval()) {
+            if (s.asks()) {
+                Text(
+                    stringResource(R.string.agent_asks),
+                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                Text(
+                    s.approval.getQuestions(0).question, style = MaterialTheme.typography.bodySmall,
+                    maxLines = 3, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
+                    Button(onClick = onOpen) { Text(stringResource(R.string.answer)) }
+                }
+            } else if (s.plans()) {
+                Text(
+                    stringResource(R.string.plan_ready),
+                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                Text(
+                    s.approval.detail, style = MaterialTheme.typography.bodySmall,
+                    maxLines = 3, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
+                    Button(onClick = onOpen) { Text(stringResource(R.string.review)) }
+                }
+            } else if (s.hasApproval()) {
                 val a = s.approval
                 Text(
                     stringResource(R.string.approval_title, a.tool),

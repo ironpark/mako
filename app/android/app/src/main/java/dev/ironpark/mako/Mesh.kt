@@ -8,6 +8,11 @@ import dev.ironpark.mako.net.Daemon
 import dev.ironpark.mako.v2.Access
 import dev.ironpark.mako.v2.AccessInfo
 import dev.ironpark.mako.v2.AnswerApproval
+import dev.ironpark.mako.v2.AnswerDialog
+import dev.ironpark.mako.v2.ConfigureAgent
+import dev.ironpark.mako.v2.AnswerQuestion
+import dev.ironpark.mako.v2.Question
+import dev.ironpark.mako.v2.QuestionAnswer
 import dev.ironpark.mako.v2.Node
 import dev.ironpark.mako.v2.SessionInfo
 import kotlinx.coroutines.CancellationException
@@ -235,16 +240,69 @@ class Mesh(
         return info.joined
     }
 
-    suspend fun answer(s: SessionInfo, decision: String) = answer(s.nodeId, s.id, s.approval.id, decision)
+    suspend fun answer(
+        s: SessionInfo, decision: String, answers: List<QuestionAnswer> = emptyList(), option: String = "", message: String = "",
+    ) = answer(s.nodeId, s.id, s.approval.id, decision, answers, option, message)
 
-    /** Answers the approval of a session; the node refuses one answered or withdrawn. */
-    suspend fun answer(node: String, session: String, approval: String, decision: String) {
+    /**
+     * Answers the approval of a session, and its questions, if it asks
+     * any, with answers, one each; allowed with the approval's option of
+     * that id, or denied telling the agent message. The node refuses one
+     * answered or withdrawn.
+     */
+    suspend fun answer(
+        node: String, session: String, approval: String, decision: String,
+        answers: List<QuestionAnswer> = emptyList(), option: String = "", message: String = "",
+    ) {
         daemon.answer(
             AnswerApproval.newBuilder()
                 .setNodeId(node)
                 .setSessionId(session)
                 .setApprovalId(approval)
                 .setDecision(decision)
+                .addAllAnswers(answers)
+                .setOption(option)
+                .setMessage(message)
+                .build()
+        )
+        refreshSessions()
+    }
+
+    /** Sets the session's agent's permission mode, model or effort: those given, not empty. */
+    suspend fun configure(s: SessionInfo, mode: String = "", model: String = "", effort: String = "") {
+        daemon.configure(
+            ConfigureAgent.newBuilder()
+                .setNodeId(s.nodeId)
+                .setSessionId(s.id)
+                .setMode(mode)
+                .setModel(model)
+                .setEffort(effort)
+                .build()
+        )
+        refreshSessions()
+    }
+
+    /** Picks option, by its index, of the dialog the session's agent shows in its terminal. */
+    suspend fun answerDialog(s: SessionInfo, option: Int) {
+        daemon.answer(
+            AnswerDialog.newBuilder()
+                .setNodeId(s.nodeId)
+                .setSessionId(s.id)
+                .setDialogId(s.dialog.id)
+                .setOption(option)
+                .build()
+        )
+        refreshSessions()
+    }
+
+    /** Answers questions the session's agent asks in its terminal's dialog, typed there. */
+    suspend fun answerQuestions(s: SessionInfo, questions: List<Question>, answers: List<QuestionAnswer>) {
+        daemon.answer(
+            AnswerQuestion.newBuilder()
+                .setNodeId(s.nodeId)
+                .setSessionId(s.id)
+                .addAllQuestions(questions)
+                .addAllAnswers(answers)
                 .build()
         )
         refreshSessions()
@@ -332,6 +390,9 @@ class Mesh(
 
         /** The first protocol revision whose daemon copies files and says how its links stand (protocol.RevisionLinks). */
         const val REVISION_LINKS = 18L
+
+        /** The first protocol revision whose daemon asks and answers questions in the app (protocol.RevisionQuestions). */
+        const val REVISION_QUESTIONS = 19L
 
         /** How a node's link stands, as Node.link says (protocol.Link*). */
         const val LINK_LINKING = "linking"

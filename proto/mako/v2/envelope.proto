@@ -61,6 +61,8 @@ message Envelope {
     ListCommands list_commands = 38;
     Commands commands = 39;
     AnswerQuestion answer_question = 46;
+    AnswerDialog answer_dialog = 47;
+    ConfigureAgent configure_agent = 48;
 
     // An attached session's stream.
     Attach attach = 40;

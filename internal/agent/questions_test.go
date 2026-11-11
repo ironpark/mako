@@ -60,3 +60,15 @@ func TestAnswers(t *testing.T) {
 		t.Error("unanswered questions taken")
 	}
 }
+
+// A question call's row carries its questions.
+func TestARowCarriesItsQuestions(t *testing.T) {
+	in := map[string]any{"questions": []any{map[string]any{"question": "Which?", "options": []any{"A"}}}}
+	row := Row("call", "AskUserQuestion", protocol.ToolQuestion, Question(in, "question"))
+	if len(row.GetQuestions()) != 1 || row.GetQuestions()[0].GetOptions()[0].GetLabel() != "A" {
+		t.Fatalf("questions %v", row.GetQuestions())
+	}
+	if other := Row("call", "Bash", protocol.ToolShell, map[string]any{"command": "ls"}); other.GetQuestions() != nil {
+		t.Fatal("a call that asks nothing carries questions")
+	}
+}

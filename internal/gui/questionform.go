@@ -2,7 +2,6 @@ package gui
 
 import (
 	"context"
-	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -10,7 +9,6 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
-	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -69,19 +67,7 @@ func questionCard(form ggui.Widget, actions ...ggui.Widget) ggui.Widget {
 		ggui.Text(T("The agent asks")).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
 		ggui.Spacer(),
 	}, actions...)...).Gap(8).Align(ggui.AlignCenter)
-	card := ggui.Box(ggui.Column(head, form).Gap(12).Stretch()).
-		Fill(skin.Surface1).Border(1, skin.DotWaiting).Radius(12).Pad(12, 14)
-	return &lane{child: ggui.Box(card).Pad(0, 0, 8, 0)}
-}
-
-// callQuestions are the questions a question call asks, as its log
-// reads.
-func callQuestions(call *protocol.ChatMessage) []*protocol.Question {
-	var canon map[string]any
-	if json.Unmarshal([]byte(call.GetText()), &canon) != nil {
-		return nil
-	}
-	return agent.Questions(canon)
+	return approvalFrame(ggui.Column(head, form).Gap(12).Stretch())
 }
 
 // answerQuestion types answers to the questions session id's agent shows

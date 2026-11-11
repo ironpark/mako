@@ -24,6 +24,8 @@ public  final class Approval extends
     detail_ = "";
     input_ = "";
     questions_ = emptyProtobufList();
+    kind_ = "";
+    options_ = emptyProtobufList();
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -428,6 +430,243 @@ public  final class Approval extends
   private void removeQuestions(int index) {
     ensureQuestionsIsMutable();
     questions_.remove(index);
+  }
+
+  public static final int KIND_FIELD_NUMBER = 7;
+  private java.lang.String kind_;
+  /**
+   * <pre>
+   * kind is what the call does, as ChatMessage.kind names it, its input
+   * then read as that kind's: an edit's old and new text, a plan's
+   * markdown. "" for a tool of no kind.
+   * </pre>
+   *
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   * @return The kind.
+   */
+  @java.lang.Override
+  public java.lang.String getKind() {
+    return kind_;
+  }
+  /**
+   * <pre>
+   * kind is what the call does, as ChatMessage.kind names it, its input
+   * then read as that kind's: an edit's old and new text, a plan's
+   * markdown. "" for a tool of no kind.
+   * </pre>
+   *
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   * @return The bytes for kind.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getKindBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(kind_);
+  }
+  /**
+   * <pre>
+   * kind is what the call does, as ChatMessage.kind names it, its input
+   * then read as that kind's: an edit's old and new text, a plan's
+   * markdown. "" for a tool of no kind.
+   * </pre>
+   *
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   * @param value The kind to set.
+   */
+  private void setKind(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    kind_ = value;
+  }
+  /**
+   * <pre>
+   * kind is what the call does, as ChatMessage.kind names it, its input
+   * then read as that kind's: an edit's old and new text, a plan's
+   * markdown. "" for a tool of no kind.
+   * </pre>
+   *
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   */
+  private void clearKind() {
+
+    kind_ = getDefaultInstance().getKind();
+  }
+  /**
+   * <pre>
+   * kind is what the call does, as ChatMessage.kind names it, its input
+   * then read as that kind's: an edit's old and new text, a plan's
+   * markdown. "" for a tool of no kind.
+   * </pre>
+   *
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   * @param value The bytes for kind to set.
+   */
+  private void setKindBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    kind_ = value.toStringUtf8();
+
+  }
+
+  public static final int OPTIONS_FIELD_NUMBER = 8;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.ApprovalOption> options_;
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.ApprovalOption> getOptionsList() {
+    return options_;
+  }
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.ApprovalOptionOrBuilder> 
+      getOptionsOrBuilderList() {
+    return options_;
+  }
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  @java.lang.Override
+  public int getOptionsCount() {
+    return options_.size();
+  }
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ApprovalOption getOptions(int index) {
+    return options_.get(index);
+  }
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  public dev.ironpark.mako.v2.ApprovalOptionOrBuilder getOptionsOrBuilder(
+      int index) {
+    return options_.get(index);
+  }
+  private void ensureOptionsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.ApprovalOption> tmp = options_;
+    if (!tmp.isModifiable()) {
+      options_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  private void setOptions(
+      int index, dev.ironpark.mako.v2.ApprovalOption value) {
+    java.util.Objects.requireNonNull(value);
+    ensureOptionsIsMutable();
+    options_.set(index, value);
+  }
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  private void addOptions(dev.ironpark.mako.v2.ApprovalOption value) {
+    java.util.Objects.requireNonNull(value);
+    ensureOptionsIsMutable();
+    options_.add(value);
+  }
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  private void addOptions(
+      int index, dev.ironpark.mako.v2.ApprovalOption value) {
+    java.util.Objects.requireNonNull(value);
+    ensureOptionsIsMutable();
+    options_.add(index, value);
+  }
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  private void addAllOptions(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.ApprovalOption> values) {
+    ensureOptionsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, options_);
+  }
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  private void clearOptions() {
+    options_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  private void removeOptions(int index) {
+    ensureOptionsIsMutable();
+    options_.remove(index);
   }
 
   public static dev.ironpark.mako.v2.Approval parseFrom(
@@ -956,6 +1195,259 @@ public  final class Approval extends
       return this;
     }
 
+    /**
+     * <pre>
+     * kind is what the call does, as ChatMessage.kind names it, its input
+     * then read as that kind's: an edit's old and new text, a plan's
+     * markdown. "" for a tool of no kind.
+     * </pre>
+     *
+     * <code>string kind = 7 [json_name = "kind"];</code>
+     * @return The kind.
+     */
+    @java.lang.Override
+    public java.lang.String getKind() {
+      return instance.getKind();
+    }
+    /**
+     * <pre>
+     * kind is what the call does, as ChatMessage.kind names it, its input
+     * then read as that kind's: an edit's old and new text, a plan's
+     * markdown. "" for a tool of no kind.
+     * </pre>
+     *
+     * <code>string kind = 7 [json_name = "kind"];</code>
+     * @return The bytes for kind.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getKindBytes() {
+      return instance.getKindBytes();
+    }
+    /**
+     * <pre>
+     * kind is what the call does, as ChatMessage.kind names it, its input
+     * then read as that kind's: an edit's old and new text, a plan's
+     * markdown. "" for a tool of no kind.
+     * </pre>
+     *
+     * <code>string kind = 7 [json_name = "kind"];</code>
+     * @param value The kind to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKind(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setKind(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * kind is what the call does, as ChatMessage.kind names it, its input
+     * then read as that kind's: an edit's old and new text, a plan's
+     * markdown. "" for a tool of no kind.
+     * </pre>
+     *
+     * <code>string kind = 7 [json_name = "kind"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearKind() {
+      copyOnWrite();
+      instance.clearKind();
+      return this;
+    }
+    /**
+     * <pre>
+     * kind is what the call does, as ChatMessage.kind names it, its input
+     * then read as that kind's: an edit's old and new text, a plan's
+     * markdown. "" for a tool of no kind.
+     * </pre>
+     *
+     * <code>string kind = 7 [json_name = "kind"];</code>
+     * @param value The bytes for kind to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKindBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setKindBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * options are ways to allow the call besides once, as the agent offers
+     * them, chosen by AnswerApproval.option; a plan put to the user
+     * (kind "exit_plan") is allowed by one of them.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.ApprovalOption> getOptionsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getOptionsList());
+    }
+    /**
+     * <pre>
+     * options are ways to allow the call besides once, as the agent offers
+     * them, chosen by AnswerApproval.option; a plan put to the user
+     * (kind "exit_plan") is allowed by one of them.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+     */
+    @java.lang.Override
+    public int getOptionsCount() {
+      return instance.getOptionsCount();
+    }/**
+     * <pre>
+     * options are ways to allow the call besides once, as the agent offers
+     * them, chosen by AnswerApproval.option; a plan put to the user
+     * (kind "exit_plan") is allowed by one of them.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ApprovalOption getOptions(int index) {
+      return instance.getOptions(index);
+    }
+    /**
+     * <pre>
+     * options are ways to allow the call besides once, as the agent offers
+     * them, chosen by AnswerApproval.option; a plan put to the user
+     * (kind "exit_plan") is allowed by one of them.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+     */
+    public Builder setOptions(
+        int index, dev.ironpark.mako.v2.ApprovalOption value) {
+      copyOnWrite();
+      instance.setOptions(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * options are ways to allow the call besides once, as the agent offers
+     * them, chosen by AnswerApproval.option; a plan put to the user
+     * (kind "exit_plan") is allowed by one of them.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+     */
+    public Builder setOptions(
+        int index, dev.ironpark.mako.v2.ApprovalOption.Builder builderForValue) {
+      copyOnWrite();
+      instance.setOptions(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * options are ways to allow the call besides once, as the agent offers
+     * them, chosen by AnswerApproval.option; a plan put to the user
+     * (kind "exit_plan") is allowed by one of them.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+     */
+    public Builder addOptions(dev.ironpark.mako.v2.ApprovalOption value) {
+      copyOnWrite();
+      instance.addOptions(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * options are ways to allow the call besides once, as the agent offers
+     * them, chosen by AnswerApproval.option; a plan put to the user
+     * (kind "exit_plan") is allowed by one of them.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+     */
+    public Builder addOptions(
+        int index, dev.ironpark.mako.v2.ApprovalOption value) {
+      copyOnWrite();
+      instance.addOptions(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * options are ways to allow the call besides once, as the agent offers
+     * them, chosen by AnswerApproval.option; a plan put to the user
+     * (kind "exit_plan") is allowed by one of them.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+     */
+    public Builder addOptions(
+        dev.ironpark.mako.v2.ApprovalOption.Builder builderForValue) {
+      copyOnWrite();
+      instance.addOptions(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * options are ways to allow the call besides once, as the agent offers
+     * them, chosen by AnswerApproval.option; a plan put to the user
+     * (kind "exit_plan") is allowed by one of them.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+     */
+    public Builder addOptions(
+        int index, dev.ironpark.mako.v2.ApprovalOption.Builder builderForValue) {
+      copyOnWrite();
+      instance.addOptions(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * options are ways to allow the call besides once, as the agent offers
+     * them, chosen by AnswerApproval.option; a plan put to the user
+     * (kind "exit_plan") is allowed by one of them.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+     */
+    public Builder addAllOptions(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.ApprovalOption> values) {
+      copyOnWrite();
+      instance.addAllOptions(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * options are ways to allow the call besides once, as the agent offers
+     * them, chosen by AnswerApproval.option; a plan put to the user
+     * (kind "exit_plan") is allowed by one of them.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+     */
+    public Builder clearOptions() {
+      copyOnWrite();
+      instance.clearOptions();
+      return this;
+    }
+    /**
+     * <pre>
+     * options are ways to allow the call besides once, as the agent offers
+     * them, chosen by AnswerApproval.option; a plan put to the user
+     * (kind "exit_plan") is allowed by one of them.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+     */
+    public Builder removeOptions(int index) {
+      copyOnWrite();
+      instance.removeOptions(index);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Approval)
   }
   @java.lang.Override
@@ -980,10 +1472,13 @@ public  final class Approval extends
             "since_",
             "questions_",
             dev.ironpark.mako.v2.Question.class,
+            "kind_",
+            "options_",
+            dev.ironpark.mako.v2.ApprovalOption.class,
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0001\u0001\u0006\u0006\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u1009\u0000\u0006\u001b";
+              "\u0000\b\u0000\u0001\u0001\b\b\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0004\u0208\u0005\u1009\u0000\u0006\u001b\u0007\u0208\b\u001b";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

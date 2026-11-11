@@ -1,17 +1,21 @@
 package gui
 
 import (
+	"context"
 	"image/color"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/ironpark/ggui"
 	ggruntime "github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
+	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -30,8 +34,21 @@ func composerBar(m *model, id string, state *chatState, disabled ggui.Readable[b
 	attach := ui.Tooltip(ui.ButtonOf(icon("plus").Size(17).Color(skin.Fg), func() { m.attachFiles(id) }).
 		Ghost().Pad(5).Radius(15).Name(T("Attach files")).BindDisabled(disabled), T("Attach files"))
 	usage := ggui.Map(state.result, func(v chatResult) *protocol.Usage { return v.Chat.GetUsage() }).WithEqual(protocol.Same)
-	mode := ggui.View(usage, func(u *protocol.Usage) ggui.Widget { return permissionChip(u.GetPermissionMode()) })
-	model := ggui.View(usage, func(u *protocol.Usage) ggui.Widget { return modelChip(u.GetModel(), u.GetEffort()) })
+	// What the agent says it runs with, and what it may be set to.
+	// Only these of its usage, whose counts move with every reply.
+	type running struct {
+		mode, model, effort string
+		controls            *protocol.AgentControls
+	}
+	now := ggui.Derived(func() running {
+		s, _ := sessionIn(m.Sessions.Get(), id)
+		u := usage.Get()
+		return running{u.GetPermissionMode(), u.GetModel(), u.GetEffort(), s.GetControls()}
+	}).WithEqual(func(a, b running) bool {
+		return a.mode == b.mode && a.model == b.model && a.effort == b.effort && proto.Equal(a.controls, b.controls)
+	})
+	mode := ggui.View(now, func(r running) ggui.Widget { return modeMenu(m, id, r.mode, r.controls.GetModes()) })
+	model := ggui.View(now, func(r running) ggui.Widget { return modelMenu(m, id, r.model, r.effort, r.controls) })
 	// The agent at work on a turn, with nothing to send, can be stopped.
 	stoppable := ggui.Derived(func() bool {
 		s, ok := sessionIn(m.Sessions.Get(), id)
@@ -99,6 +116,76 @@ func permissionChip(mode string) ggui.Widget {
 	return ui.Tooltip(ggui.Box(chip).Pad(4, 6), tip)
 }
 
+// modeMenu is the permission chip, which switches the agent to one of
+// modes, where it has any.
+func modeMenu(m *model, id, mode string, modes []string) ggui.Widget {
+	if len(modes) == 0 {
+		return permissionChip(mode)
+	}
+	if mode == "" {
+		mode = "default"
+	}
+	items := make([]ggui.Widget, len(modes))
+	for i, to := range modes {
+		label := modeLabel(to)
+		if to == mode {
+			label = "✓ " + label
+		}
+		items[i] = ui.MenuItem(label, func() { m.configureAgent(id, &protocol.ConfigureAgent{Mode: to}) })
+	}
+	return iconMenu(ui.MenuOf(permissionChip(mode), items...).Width(200).Name(T("Permission mode")), 0)
+}
+
+// modelMenu is the model chip, which sets the agent's model or effort to
+// one of those it offers, where it offers any; the agent keeps what is set
+// as the user's default.
+func modelMenu(m *model, id, current, effort string, c *protocol.AgentControls) ggui.Widget {
+	chip := modelChip(current, effort)
+	if len(c.GetModels())+len(c.GetEfforts()) == 0 {
+		return chip
+	}
+	if current == "" {
+		chip = ggui.Box(ggui.Text(T("Model")).Size(13).Color(skin.Muted).NoWrap()).Pad(4, 6)
+	}
+	var items []ggui.Widget
+	for _, to := range c.GetModels() {
+		label := capitalized(to)
+		if strings.Contains(strings.ToLower(current), to) {
+			label = "✓ " + label
+		}
+		items = append(items, ui.MenuItem(label, func() { m.configureAgent(id, &protocol.ConfigureAgent{Model: to}) }))
+	}
+	if len(items) > 0 && len(c.GetEfforts()) > 0 {
+		items = append(items, ui.MenuDivider())
+	}
+	for _, to := range c.GetEfforts() {
+		label := Tf("%s effort", capitalized(to))
+		if to == effort {
+			label = "✓ " + label
+		}
+		items = append(items, ui.MenuItem(label, func() { m.configureAgent(id, &protocol.ConfigureAgent{Effort: to}) }))
+	}
+	items = append(items, ui.MenuDivider(), ui.MenuItem(T("The agent keeps these as your default"), nil).Disabled(true))
+	return iconMenu(ui.MenuOf(chip, items...).Width(260).Name(T("Model")), 0)
+}
+
+// configureAgent sets what req gives of session id's agent.
+func (m *model) configureAgent(id string, req *protocol.ConfigureAgent) {
+	info, ok := m.session(id)
+	if !ok {
+		return
+	}
+	req.NodeId, req.SessionId = m.remoteID(info.GetNodeId()), id
+	fetch(m, 15*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SessionInfo, error) {
+		return c.ConfigureAgent(ctx, req)
+	}, func(_ *protocol.SessionInfo, err error) {
+		if err != nil {
+			m.connErr(err)
+		}
+		m.link.pollNow()
+	})
+}
+
 // modeLabel names a permission mode.
 func modeLabel(mode string) string {
 	switch mode {
@@ -110,6 +197,8 @@ func modeLabel(mode string) string {
 		return T("Plan mode")
 	case "default":
 		return T("Ask first")
+	case "auto":
+		return T("Auto")
 	case "dontAsk":
 		return T("Don't ask")
 	case "readOnly":

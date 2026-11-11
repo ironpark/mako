@@ -396,6 +396,10 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleSend(ctx, stream, env)
 	case protocol.TypeAnswerQuestion:
 		return d.handleAnswerQuestion(ctx, stream, env)
+	case protocol.TypeAnswerDialog:
+		return d.handleAnswerDialog(ctx, stream, env)
+	case protocol.TypeConfigureAgent:
+		return d.handleConfigureAgent(ctx, stream, env)
 
 	case protocol.TypeSearch:
 		return d.handleSearch(ctx, stream, env)

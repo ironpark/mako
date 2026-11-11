@@ -221,6 +221,8 @@ func (s *Session) Info() *protocol.SessionInfo {
 		Turns:          s.turns,
 		Notice:         s.notice,
 		Bells:          s.bells,
+		Dialog:         s.dialogLocked(),
+		Controls:       controls(s.spec.Agent),
 	}
 }
 

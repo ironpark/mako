@@ -18,7 +18,7 @@ import (
 func TestEveryTypeHasABody(t *testing.T) {
 	types := []Type{
 		TypeHello, TypeWelcome, TypeError, TypeListNodes, TypeNodes, TypeWatch, TypeChanged, TypeAccess, TypeAccessInfo, TypeGetWorkspace, TypeWorkspace,
-		TypeListSess, TypeSessions, TypeOpenSession, TypeSessionInfo, TypeCloseSess, TypeRenameSess, TypeAnswerApproval, TypeSend, TypeAnswerQuestion, TypeListCommands, TypeCommands,
+		TypeListSess, TypeSessions, TypeOpenSession, TypeSessionInfo, TypeCloseSess, TypeRenameSess, TypeAnswerApproval, TypeSend, TypeAnswerQuestion, TypeAnswerDialog, TypeConfigureAgent, TypeListCommands, TypeCommands,
 		TypeAttach, TypeInput, TypeOutput, TypeResize, TypeSnapshot, TypeExited,
 		TypeListDir, TypeDir, TypeReadFile, TypeFile, TypeWriteFile, TypeFileOp, TypeSearch, TypeSearchResult, TypeStageFile, TypeStaged, TypeTunnel, TypeTunneled,
 		TypeGitStatus, TypeGitChanges, TypeGitDiff, TypeDiff, TypeGitLog, TypeGitHistory, TypeGitShow,

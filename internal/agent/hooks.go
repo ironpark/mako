@@ -34,6 +34,9 @@ type Event struct {
 	Transcript string
 	Tool       string
 	Input      json.RawMessage
+	// Suggestions are what else than once the agent offers to allow an
+	// Approval with, as it writes them.
+	Suggestions json.RawMessage
 }
 
 // ApprovalTimeout is how long an agent waits on the hook for an approval:
@@ -63,6 +66,9 @@ type HookInput struct {
 	NotificationType string          `json:"notification_type"`
 	Tool             string          `json:"tool_name"`
 	ToolInput        json.RawMessage `json:"tool_input"`
+	// Suggestions are Claude's permission_suggestions: rules to add, a
+	// mode to switch to, which allow a call from then on.
+	Suggestions json.RawMessage `json:"permission_suggestions"`
 }
 
 // ParseHookInput reads a hook's input as HookInput, false for input it
@@ -78,7 +84,7 @@ func ParseHookInput(input []byte) (HookInput, bool) {
 // Base is the event in the names every agent hooking this way shares; false for
 // one mako does not follow.
 func (in HookInput) Base() (Event, bool) {
-	ev := Event{SessionID: in.SessionID, Transcript: in.TranscriptPath, Tool: in.Tool, Input: in.ToolInput}
+	ev := Event{SessionID: in.SessionID, Transcript: in.TranscriptPath, Tool: in.Tool, Input: in.ToolInput, Suggestions: in.Suggestions}
 	switch in.Event {
 	case "SessionStart":
 		ev.Kind = Started

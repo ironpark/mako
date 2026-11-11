@@ -48,23 +48,32 @@ func (s *Session) recall() {
 		if _, err := s.Write(keys); err != nil {
 			return
 		}
-		// Until the screen's foot, where a step shows, is drawn anew; the
-		// screen is read again only once the program has printed.
-		was := foot(screen)
-		for deadline := time.Now().Add(recallWait); time.Now().Before(deadline); {
-			time.Sleep(recallPoll)
-			if s.outputs.Load() == seen {
-				continue
-			}
-			now, n, ok := s.recallScreen()
-			if !ok {
-				return
-			}
-			if seen = n; foot(now) != was {
-				break
-			}
+		if !s.awaitFoot(screen, seen) {
+			return
 		}
 	}
+}
+
+// awaitFoot waits, a while, until the screen's foot, where a step typed
+// shows, is drawn anew from what screen, of seen outputs, showed; the
+// screen is read again only once the program has printed. False once the
+// agent has exited.
+func (s *Session) awaitFoot(screen string, seen uint64) bool {
+	was := foot(screen)
+	for deadline := time.Now().Add(recallWait); time.Now().Before(deadline); {
+		time.Sleep(recallPoll)
+		if s.outputs.Load() == seen {
+			continue
+		}
+		now, n, ok := s.recallScreen()
+		if !ok {
+			return false
+		}
+		if seen = n; foot(now) != was {
+			break
+		}
+	}
+	return true
 }
 
 // recallScreen is the screen shown, without the scrollback, and the

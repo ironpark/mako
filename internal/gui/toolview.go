@@ -94,6 +94,8 @@ func toolInput(m *model, kind string, args string, in map[string]any) []ggui.Wid
 			rows = append(rows, ggui.Text(e).Size(12.5))
 		}
 		return append(rows, checklist(agent.List(in, "items")))
+	case protocol.ToolExitPlan:
+		return []ggui.Widget{scrolled(toolFrame(markdownText(m, agent.Str(in, "plan"))).Pad(8, 12))}
 	case protocol.ToolFetch:
 		return []ggui.Widget{fieldChips(in, "url"), proseBlock(agent.Str(in, "prompt"))}
 	case protocol.ToolWebSearch:

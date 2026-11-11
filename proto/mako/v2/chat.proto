@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package mako.v2;
 
+import "mako/v2/session.proto";
+
 option go_package = "github.com/ironpark/mako/internal/protocol";
 
 // ReadChat reads the conversation of a session's agent.
@@ -47,6 +49,9 @@ message ChatMessage {
   // images are the paths, on the session's node, of the images the
   // message holds: those its log held inline, kept as files there.
   repeated string images = 12;
+  // questions are what a question call asks, as its driver reads them;
+  // none for other calls.
+  repeated Question questions = 13;
 }
 
 // WatchChat follows a session's conversation as it is written, until the

@@ -89,6 +89,7 @@ import dev.ironpark.mako.Mesh
 import dev.ironpark.mako.R
 import dev.ironpark.mako.v2.Chat
 import dev.ironpark.mako.v2.ChatMessage
+import dev.ironpark.mako.v2.Question
 import dev.ironpark.mako.v2.ReadChat
 import dev.ironpark.mako.v2.SessionInfo
 import dev.ironpark.mako.v2.Usage
@@ -106,7 +107,7 @@ import kotlinx.coroutines.flow.first
 @Composable
 fun ChatView(
     mesh: Mesh, session: SessionInfo, modifier: Modifier = Modifier,
-    agent: String = "", onQuestion: (String) -> Unit = {}, onAnswer: () -> Unit = {},
+    agent: String = "", onQuestion: (String, List<Question>) -> Unit = { _, _ -> }, onAnswer: () -> Unit = {},
     onFile: (ChatLink.File) -> Unit = {},
 ) {
     var selectedAgent by rememberSaveable(session.id, agent) { mutableStateOf("") }
@@ -168,7 +169,8 @@ fun ChatView(
         partitionSubagents(session, chat?.agentsList.orEmpty())
     }
     val request = if (agent.isEmpty()) questionRequest(session, latest) else ""
-    LaunchedEffect(request) { if (agent.isEmpty()) questionChanged(request) }
+    val keyed = remember(session.caps, request, latest) { if (agent.isEmpty()) keyedQuestions(session, latest) else emptyList() }
+    LaunchedEffect(request, keyed) { if (agent.isEmpty()) questionChanged(request, keyed) }
     val list = rememberLazyListState()
     val atEnd by remember { derivedStateOf { !list.canScrollForward } }
     val dragging by list.interactionSource.collectIsDraggedAsState()
@@ -228,6 +230,9 @@ fun ChatView(
 
     Column(modifier) {
         chat?.takeIf { it.hasUsage() }?.let { UsageStrip(it.usage) }
+        if (session.hasControls()) AgentControlsRow(session.controls, chat?.usage) { mode, model, effort ->
+            scope.launch { runCatching { mesh.configure(session, mode, model, effort) }.onFailure { error = it.message } }
+        }
         if (error != null) Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(error.orEmpty(), Modifier.weight(1f), color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)

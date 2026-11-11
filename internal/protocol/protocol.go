@@ -53,6 +53,8 @@ const (
 	TypeAnswerApproval Type = "answer_approval"
 	TypeSend           Type = "send"
 	TypeAnswerQuestion Type = "answer_question"
+	TypeAnswerDialog   Type = "answer_dialog"
+	TypeConfigureAgent Type = "configure_agent"
 	TypeAttach         Type = "attach"
 	TypeInput          Type = "input"
 	TypeOutput         Type = "output"

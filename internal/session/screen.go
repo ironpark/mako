@@ -47,6 +47,8 @@ type screenWatch struct {
 
 	pendingAt time.Time // when a turn's end began to be confirmed
 	confirms  int
+
+	dialog *protocol.ScreenDialog // the dialog of options it waits on, if any
 }
 
 // watchScreen reads the screen as it changes until the agent exits.
@@ -84,7 +86,7 @@ func (s *Session) scanScreen(now time.Time) time.Duration {
 		if s.status == "" && was == detect.Working && w.state == detect.Idle {
 			s.turns++ // a turn no hook told of, as the screen shows it
 		}
-		if w.state != was || w.visible != wasVisible {
+		if dialog := s.readDialogLocked(); dialog || w.state != was || w.visible != wasVisible {
 			s.changedLocked()
 		}
 	}

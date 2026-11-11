@@ -1,5 +1,8 @@
 package dev.ironpark.mako.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import dev.ironpark.mako.v2.SessionInfo
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material3.ModalBottomSheet
@@ -17,21 +20,16 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,20 +45,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.semantics.Role
-import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FitScreen
 import androidx.compose.material.icons.outlined.Groups
@@ -75,15 +65,14 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.ironpark.mako.Mesh
 import dev.ironpark.mako.R
 import dev.ironpark.mako.term.TermSession
-import dev.ironpark.mako.v2.SessionInfo
+import dev.ironpark.mako.v2.Question
 import kotlinx.coroutines.launch
 
 /**
@@ -127,13 +116,25 @@ fun SessionScreen(
     val draft = drafts[node, id]
     var question by rememberSaveable(node, id) { mutableStateOf(false) }
     var request by remember(node, id) { mutableStateOf("") }
+    // Questions answered in a form: those of the approval, or those the
+    // agent asks in its terminal's dialog, which its node types answers to.
+    var keyed by remember(node, id) { mutableStateOf(emptyList<Question>()) }
+    var form by rememberSaveable(node, id) { mutableStateOf(false) }
+    var planning by rememberSaveable(node, id) { mutableStateOf(false) }
+    val asked = if (session?.asks() == true) session.approval.questionsList else keyed
     val attached = pager.currentPage == terminalPage || pager.targetPage == terminalPage || question || !canSend
     LaunchedEffect(request, pager.settledPage, pager.isScrollInProgress) {
-        if (request.isNotEmpty() && chat && pager.settledPage == 1 && !pager.isScrollInProgress) question = true
+        if (request.isNotEmpty() && chat && pager.settledPage == 1 && !pager.isScrollInProgress) {
+            if (keyed.isNotEmpty()) form = true else question = true
+        }
     }
     LaunchedEffect(session?.state, session?.status) {
-        if (session?.ended() == true || session?.status == "done" || session?.status == "idle") question = false
+        if (session?.ended() == true || session?.status == "done" || session?.status == "idle") {
+            question = false
+            form = false
+        }
     }
+    LaunchedEffect(asked.isEmpty()) { if (asked.isEmpty()) form = false }
     val swipeHint = stringResource(R.string.swipe_tabs)
     DisposableEffect(term, attached) {
         if (attached) term.start()
@@ -220,10 +221,23 @@ fun SessionScreen(
                         }
                     },
                 )
+                AnimatedVisibility(session != null && !session.hasApproval() && session.hasDialog()) {
+                    if (session != null && session.hasDialog()) {
+                        DialogCard(session.dialog, onTerminal = { question = true }) { option -> act { mesh.answerDialog(session, option) } }
+                    }
+                }
                 AnimatedVisibility(session != null && session.hasApproval()) {
                     if (session != null && session.hasApproval()) {
-                        ApprovalCard(session, approvalExpanded, onExpand = { approvalExpanded = !approvalExpanded },
-                            onAnswer = { decision -> act { mesh.answer(session, decision); if (decision == "terminal") question = true } })
+                        val decide = { decision: String ->
+                            act { mesh.answer(session, decision); if (decision == "terminal") question = true }
+                        }
+                        when {
+                            session.asks() -> QuestionCard(session.approval.questionsList, onAnswer = { form = true }, onDecision = decide)
+                            session.plans() -> PlanCard(session.approval, onReview = { planning = true }, onTerminal = { decide("terminal") })
+                            else -> ApprovalCard(session, approvalExpanded, onExpand = { approvalExpanded = !approvalExpanded }) { decision, option, message ->
+                                act { mesh.answer(session, decision, option = option, message = message); if (decision == "terminal") question = true }
+                            }
+                        }
                     }
                 }
             }
@@ -239,7 +253,8 @@ fun SessionScreen(
                 Box(Modifier.weight(1f)) {
                     if (pageTab == 0 && session != null) ChatView(
                         mesh, session, Modifier.fillMaxSize(),
-                        onQuestion = { request = it }, onAnswer = { question = true }, onFile = onFile,
+                        onQuestion = { r, qs -> request = r; keyed = qs },
+                        onAnswer = { if (keyed.isNotEmpty()) form = true else question = true }, onFile = onFile,
                     )
                     else if (pageTab == 1) TerminalTab(term, fits, Modifier.fillMaxSize())
                 }
@@ -273,76 +288,85 @@ fun SessionScreen(
         }
     }
 
+    if (planning && session != null && session.plans()) {
+        ModalBottomSheet(
+            onDismissRequest = { planning = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            Column(Modifier.fillMaxHeight(0.9f).imePadding().padding(horizontal = 16.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.plan_ready), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    TextButton(onClick = {
+                        planning = false
+                        act { mesh.answer(session, "terminal"); question = true }
+                    }) { Text(stringResource(R.string.in_terminal)) }
+                }
+                PlanReview(
+                    session.approval, modifier = Modifier.weight(1f).padding(bottom = 16.dp),
+                    onApprove = { option -> planning = false; act { mesh.answer(session, "allow", option = option) } },
+                    onKeepPlanning = { why ->
+                        planning = false
+                        act { mesh.answer(session, "deny", message = why) }
+                    },
+                )
+            }
+        }
+    }
+
+    if (form && session != null && asked.isNotEmpty()) {
+        val approval = session.asks()
+        ModalBottomSheet(
+            onDismissRequest = { form = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            Column(Modifier.fillMaxHeight(0.85f).imePadding()) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.agent_asks), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    TextButton(onClick = {
+                        form = false
+                        if (approval) act { mesh.answer(session, "terminal") }
+                        question = true
+                    }) { Text(stringResource(R.string.in_terminal)) }
+                }
+                QuestionForm(
+                    asked,
+                    onSubmit = { answers ->
+                        form = false
+                        act {
+                            if (approval) mesh.answer(session, "allow", answers)
+                            else mesh.answerQuestions(session, asked, answers)
+                        }
+                    },
+                    modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
+                )
+            }
+        }
+    }
+
     if (renaming && session != null) RenameDialog(mesh, session, onDismiss = { renaming = false })
     if (stopping && session != null) StopDialog(session, onDismiss = { stopping = false }) { act { mesh.closeSession(session) } }
 }
 
 /**
- * ApprovalCard is the tool call an agent waits for you to allow: allowed or
- * denied, its two answers, or left to the agent's own question in its
- * terminal, from the corner. Its detail unfolds into the call's input.
+ * QuestionCard is the questions an agent waits for you to answer: in a
+ * form, declined, or left to its own dialog in its terminal, from the
+ * corner.
  */
 @Composable
-private fun ApprovalCard(s: SessionInfo, expanded: Boolean, onExpand: () -> Unit, onAnswer: (String) -> Unit) {
-    val a = s.approval
-    val colors = MaterialTheme.colorScheme
-    Card(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerHigh),
-        shape = RoundedCornerShape(20.dp),
-    ) {
-        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Shield, null, tint = StatusColors.Approval, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    stringResource(R.string.approval_title, a.tool),
-                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = { onAnswer("terminal") }) {
-                    Icon(Icons.Outlined.Terminal, stringResource(R.string.in_terminal), tint = colors.onSurfaceVariant)
-                }
-            }
-            Column(Modifier.padding(end = 8.dp)) {
-                val more = a.input.isNotEmpty() || a.detail.lines().size > 4 || a.detail.length > 160
-                if (a.detail.isNotEmpty() || more) Surface(
-                    color = colors.surfaceContainerHighest,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                ) {
-                    Column(
-                        Modifier.then(if (more) Modifier.clickable(
-                            role = Role.Button,
-                            onClickLabel = stringResource(if (expanded) R.string.less else R.string.details),
-                            onClick = onExpand,
-                        ) else Modifier).animateContentSize().padding(10.dp),
-                    ) {
-                        Row(verticalAlignment = Alignment.Top) {
-                            Text(
-                                a.detail.ifEmpty { a.tool }, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
-                                maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                            )
-                            if (more) Icon(
-                                if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, null,
-                                Modifier.size(18.dp), tint = colors.onSurfaceVariant,
-                            )
-                        }
-                        if (expanded && a.input.isNotEmpty()) {
-                            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                            Text(
-                                a.input, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState()),
-                            )
-                        }
-                    }
-                }
-                Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { onAnswer("deny") }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.deny)) }
-                    Button(onClick = { onAnswer("allow") }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.allow)) }
-                }
-            }
+private fun QuestionCard(questions: List<Question>, onAnswer: () -> Unit, onDecision: (String) -> Unit) {
+    WaitCard(Icons.Outlined.QuestionAnswer, stringResource(R.string.agent_asks), onTerminal = { onDecision("terminal") }) {
+        Text(
+            questions.first().question, style = MaterialTheme.typography.bodyMedium,
+            maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp),
+        )
+        if (questions.size > 1) Text(
+            pluralStringResource(R.plurals.more_questions, questions.size - 1, questions.size - 1),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { onDecision("deny") }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.decline)) }
+            Button(onClick = onAnswer, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.answer)) }
         }
     }
 }
+

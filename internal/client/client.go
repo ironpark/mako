@@ -428,6 +428,17 @@ func (c *Client) Leases(ctx context.Context, req *protocol.ListLeases) (*protoco
 	return request[*protocol.Leases](ctx, c, protocol.TypeListLeases, req)
 }
 
+// ConfigureAgent sets a session's agent's mode, model or effort.
+func (c *Client) ConfigureAgent(ctx context.Context, req *protocol.ConfigureAgent) (*protocol.SessionInfo, error) {
+	return request[*protocol.SessionInfo](ctx, c, protocol.TypeConfigureAgent, req)
+}
+
+// AnswerDialog picks an option of the dialog a session's agent shows in
+// its terminal.
+func (c *Client) AnswerDialog(ctx context.Context, req *protocol.AnswerDialog) (*protocol.SessionInfo, error) {
+	return request[*protocol.SessionInfo](ctx, c, protocol.TypeAnswerDialog, req)
+}
+
 // AnswerQuestion answers the questions a session's agent shows in its
 // terminal, typing the answers there.
 func (c *Client) AnswerQuestion(ctx context.Context, req *protocol.AnswerQuestion) (*protocol.SessionInfo, error) {

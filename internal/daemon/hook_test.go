@@ -410,6 +410,52 @@ func TestQuestionsAreAnsweredInTheWindow(t *testing.T) {
 	}
 }
 
+// A plan, and a call offered rules or a mode to allow it from then on, is
+// allowed in the window with the option the user chose; a plan with its
+// input given back, which Claude takes it only with.
+func TestApprovalsAreAllowedWithAnOption(t *testing.T) {
+	d, s, socket := hookedDaemon(t)
+	d.approvals.watch(true)
+	for _, c := range []struct {
+		name, input, option string
+		kind                string
+		options             int
+		want                []string
+	}{
+		{"plan", `{"hook_event_name":"PermissionRequest","tool_name":"ExitPlanMode","tool_input":{"plan":"# Plan\n1. Do it","planFilePath":"/p.md"}}`,
+			"acceptEdits", protocol.ToolExitPlan, 3,
+			[]string{`"updatedInput":{"plan":"# Plan\n1. Do it","planFilePath":"/p.md"}`, `"mode":"acceptEdits"`}},
+		{"plan once", `{"hook_event_name":"PermissionRequest","tool_name":"ExitPlanMode","tool_input":{"plan":"# Plan"}}`,
+			"", protocol.ToolExitPlan, 3, []string{`"updatedInput":{"plan":"# Plan"}`, `"mode":"default"`}},
+		{"rules", `{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"wc -c a"},` +
+			`"permission_suggestions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"wc *"}],"behavior":"allow","destination":"localSettings"}]}`,
+			"0", protocol.ToolShell, 1,
+			[]string{`"updatedPermissions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"wc *"}],"behavior":"allow","destination":"localSettings"}]`}},
+	} {
+		out := make(chan string, 1)
+		go func() {
+			var buf bytes.Buffer
+			runHook([]string{socket}, strings.NewReader(c.input), &buf)
+			out <- buf.String()
+		}()
+		waitFor(t, "no approval shown", func() bool { return s.Info().GetApproval() != nil })
+		a := s.Info().GetApproval()
+		if a.GetKind() != c.kind || len(a.GetOptions()) != c.options {
+			t.Fatalf("%s: kind %q, options %+v", c.name, a.GetKind(), a.GetOptions())
+		}
+		if err := d.approvals.answer(s.ID(), &protocol.AnswerApproval{ApprovalId: a.GetId(), Decision: protocol.DecisionAllow, Option: c.option}); err != nil {
+			t.Fatal(err)
+		}
+		got := <-out
+		for _, w := range append(c.want, `"behavior":"allow"`) {
+			if !strings.Contains(got, w) {
+				t.Fatalf("%s: hook printed %q, want %s", c.name, got, w)
+			}
+		}
+		waitFor(t, "approval kept", func() bool { return s.Info().GetApproval() == nil })
+	}
+}
+
 // An agent that gives up on its hook -- answered in its terminal,
 // interrupted, timed out -- takes its approval out of the window.
 func TestAnApprovalTheAgentAbandonsIsWithdrawn(t *testing.T) {

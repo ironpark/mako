@@ -260,4 +260,35 @@
     <string name="offline_retry_in">오프라인 · %1$d초 후 다시 시도</string>
     <string name="offline_retrying">오프라인 · 다시 시도 중</string>
     <string name="reconnect">다시 연결</string>
+    <string name="question_progress">질문 %1$d / %2$d</string>
+    <string name="question_other">기타</string>
+    <string name="question_other_hint">직접 입력</string>
+    <string name="next">다음</string>
+    <string name="decline">거절</string>
+    <string name="notice_question">%1$s의 질문</string>
+    <plurals name="more_questions">
+        <item quantity="other">외 질문 %1$d개</item>
+    </plurals>
+    <string name="notice_plan">%1$s의 플랜</string>
+    <string name="plan_ready">이 플랜대로 진행할까요?</string>
+    <string name="review">검토</string>
+    <string name="plan_auto">예, 자동 모드로</string>
+    <string name="plan_accept_edits">예, 수정 자동 승인</string>
+    <string name="plan_default">예, 수정마다 확인</string>
+    <string name="keep_planning">계속 계획</string>
+    <string name="plan_change_hint">플랜에서 바꿀 점을 알려주세요</string>
+    <string name="deny_reason_hint">대신 할 일을 에이전트에게 알려주세요</string>
+    <string name="always_allow">%1$s 항상 허용</string>
+    <string name="allow_accept_edits">허용하고 이후 수정 자동 승인</string>
+    <string name="allow_auto">허용하고 자동 모드로 전환</string>
+    <string name="allow_mode">허용하고 %1$s(으)로 전환</string>
+    <string name="dialog_title">에이전트가 터미널에서 선택을 기다립니다</string>
+    <string name="mode_default">먼저 묻기</string>
+    <string name="mode_accept_edits">편집 자동 허용</string>
+    <string name="mode_plan">계획 모드</string>
+    <string name="mode_auto">자동</string>
+    <string name="mode_bypass">전체 액세스</string>
+    <string name="model">모델</string>
+    <string name="effort_level">%1$s effort</string>
+    <string name="kept_as_default">에이전트가 이 값을 기본값으로 저장합니다</string>
 </resources>

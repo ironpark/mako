@@ -110,6 +110,53 @@ message SessionInfo {
   // bells counts the bells the session's program rang: a front-end that
   // sees it move asks for the user's attention.
   uint64 bells = 34;
+  // dialog is the choice the agent's terminal shows a dialog for, while it
+  // waits there on one no hook holds; unset otherwise.
+  ScreenDialog dialog = 35;
+  // controls are what ConfigureAgent may set of the session's agent; unset
+  // for an agent with none.
+  AgentControls controls = 36;
+}
+
+// AgentControls are the permission modes, models and efforts a session's
+// agent may be set to, by the names it gives them.
+message AgentControls {
+  repeated string modes = 1; // as Usage.permission_mode names them
+  repeated string models = 2;
+  repeated string efforts = 3;
+}
+
+// ConfigureAgent sets what of a session's agent is given: its permission
+// mode, as a key at its prompt moves it on; its model and effort, by its
+// own commands, which the agent may keep as the user's defaults. The reply
+// is its SessionInfo.
+message ConfigureAgent {
+  string node_id = 1;
+  string session_id = 2;
+  string mode = 3;
+  string model = 4;
+  string effort = 5;
+}
+
+// ScreenDialog is a dialog in an agent's terminal that asks the user to
+// pick one of its options, as a folder's trust or a permission asked for
+// there: answered by AnswerDialog, which picks one there as the user would.
+message ScreenDialog {
+  // id names the dialog by what it shows, so that an answer to it is not
+  // taken by another.
+  string id = 1;
+  string text = 2; // what it asks, a line each
+  repeated string options = 3;
+  int32 selected = 4; // the option the dialog's cursor is on
+}
+
+// AnswerDialog picks option, by its index, of the dialog dialog_id the
+// session's agent shows in its terminal; the reply is its SessionInfo.
+message AnswerDialog {
+  string node_id = 1;
+  string session_id = 2;
+  string dialog_id = 3;
+  int32 option = 4;
 }
 
 // Notice is a desktop notification a session's program posted. seq grows
@@ -148,6 +195,26 @@ message Approval {
   // questions are what a question tool asks, which the approval is
   // answered with the answers to rather than allowed; none for others.
   repeated Question questions = 6;
+  // kind is what the call does, as ChatMessage.kind names it, its input
+  // then read as that kind's: an edit's old and new text, a plan's
+  // markdown. "" for a tool of no kind.
+  string kind = 7;
+  // options are ways to allow the call besides once, as the agent offers
+  // them, chosen by AnswerApproval.option; a plan put to the user
+  // (kind "exit_plan") is allowed by one of them.
+  repeated ApprovalOption options = 8;
+}
+
+// ApprovalOption is a way to allow an approval's call that also changes
+// what the agent may do from then on.
+message ApprovalOption {
+  string id = 1;
+  // mode is the permission mode the agent switches to, as it names it:
+  // "acceptEdits", "auto", "default"; "" for none.
+  string mode = 2;
+  // rules are what it may do from then on without asking, as the agent
+  // writes them: "Bash(npm test:*)".
+  repeated string rules = 3;
 }
 
 // Question is one a question tool asks the user, with the options it
@@ -195,6 +262,9 @@ message AnswerApproval {
   // answers answer an approval's questions, one each, in order, with
   // allow; allow without them leaves the questions to the terminal.
   repeated QuestionAnswer answers = 6;
+  // option is the id of the approval's option allow chooses; "" allows
+  // the call once.
+  string option = 7;
 }
 
 // AnswerQuestion answers the questions a session's agent shows in its

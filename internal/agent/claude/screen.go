@@ -60,6 +60,21 @@ var transcriptViewer = detect.Rule{
 	},
 }
 
+// promptBoxRule is the prompt box, waiting for the user.
+var promptBoxRule = detect.Rule{
+	ID: "prompt_box", State: detect.Idle, Priority: 950, Region: detect.PromptBox,
+	Gate: detect.Gate{
+		Lines: []string{`^\s*❯`},
+		Not: []detect.Gate{
+			{Contains: []string{"enter to select"}},
+			{Contains: []string{"esc to cancel"}},
+			{Contains: []string{"tab/arrow keys"}},
+			{Contains: []string{"arrow keys to navigate"}},
+			{Contains: []string{"↑/↓ to navigate"}},
+		},
+	},
+}
+
 var screenRules = detect.MustCompile([]detect.Rule{
 	{
 		// Braille is the spinner of 2.1.227 and before; half circles of after.
@@ -124,19 +139,7 @@ var screenRules = detect.MustCompile([]detect.Rule{
 			},
 		},
 	},
-	{
-		ID: "prompt_box", State: detect.Idle, Priority: 950, Region: detect.PromptBox,
-		Gate: detect.Gate{
-			Lines: []string{`^\s*❯`},
-			Not: []detect.Gate{
-				{Contains: []string{"enter to select"}},
-				{Contains: []string{"esc to cancel"}},
-				{Contains: []string{"tab/arrow keys"}},
-				{Contains: []string{"arrow keys to navigate"}},
-				{Contains: []string{"↑/↓ to navigate"}},
-			},
-		},
-	},
+	promptBoxRule,
 	{
 		ID: "model_picker", Priority: 900, Region: detect.Whole, Hold: true,
 		Gate: detect.Gate{

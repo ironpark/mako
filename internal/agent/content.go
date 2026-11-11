@@ -128,7 +128,11 @@ func Call(tools Tools, id, name string, input json.RawMessage) *protocol.ChatMes
 // Row is a call of kind with its arguments already in the kind's form.
 func Row(id, name, kind string, canon map[string]any) *protocol.ChatMessage {
 	args, _ := json.MarshalIndent(canon, "", "  ")
-	return &protocol.ChatMessage{Role: "tool", Id: id, Tool: name, Kind: kind, Detail: Detail(kind, canon), Text: string(args)}
+	msg := &protocol.ChatMessage{Role: "tool", Id: id, Tool: name, Kind: kind, Detail: Detail(kind, canon), Text: string(args)}
+	if kind == protocol.ToolQuestion {
+		msg.Questions = Questions(canon)
+	}
+	return msg
 }
 
 // Summary is the row a compaction leaves, text its summary.
@@ -347,6 +351,8 @@ func Detail(kind string, canon map[string]any) string {
 		s = Str(canon, "question")
 	case protocol.ToolTodo, protocol.ToolPlan:
 		s = Str(canon, "explanation")
+	case protocol.ToolExitPlan:
+		s = strings.TrimLeft(Str(canon, "plan"), "# ")
 	default:
 		s = Str(canon, "command", "file_path", "path", "pattern", "url", "description", "query", "notebook_path", "glob")
 		for _, v := range canon {

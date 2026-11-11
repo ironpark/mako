@@ -16,6 +16,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import dev.ironpark.mako.ui.label
+import dev.ironpark.mako.ui.plans
 import dev.ironpark.mako.v2.SessionInfo
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
@@ -100,20 +101,35 @@ class MeshService : Service() {
         ) nm.notify(id, n)
     }
 
+    /**
+     * The approval asked for: allowed or denied from the notice, or, for
+     * questions, opened to be answered in the session.
+     */
     private fun approvalNotice(s: SessionInfo): Notification {
         val who = sessionLabel(s)
-        return NotificationCompat.Builder(this, AGENTS)
+        val questions = s.approval.questionsList
+        val text = questions.firstOrNull()?.question ?: s.approval.detail
+        val notice = NotificationCompat.Builder(this, AGENTS)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(getString(R.string.notice_approval, who, s.approval.tool))
-            .setContentText(s.approval.detail)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(s.approval.detail))
+            .setContentTitle(
+                when {
+                    questions.isNotEmpty() -> getString(R.string.notice_question, who)
+                    s.plans() -> getString(R.string.notice_plan, who)
+                    else -> getString(R.string.notice_approval, who, s.approval.tool)
+                }
+            )
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(MainActivity.openSession(this, s))
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .addAction(0, getString(R.string.allow), ApprovalReceiver.intent(this, s, "allow"))
-            .addAction(0, getString(R.string.deny), ApprovalReceiver.intent(this, s, "deny"))
-            .build()
+        // A plan is approved into a mode, which wants it read first.
+        if (questions.isEmpty() && !s.plans()) {
+            notice.addAction(0, getString(R.string.allow), ApprovalReceiver.intent(this, s, "allow"))
+                .addAction(0, getString(R.string.deny), ApprovalReceiver.intent(this, s, "deny"))
+        }
+        return notice.build()
     }
 
     private fun turnNotice(s: SessionInfo): Notification =

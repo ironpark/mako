@@ -153,7 +153,10 @@ type ChatMessage struct {
 	ExitCode *int32 `protobuf:"varint,11,opt,name=exit_code,json=exitCode,proto3,oneof" json:"exit_code,omitempty"` // a command's, when its agent says
 	// images are the paths, on the session's node, of the images the
 	// message holds: those its log held inline, kept as files there.
-	Images        []string `protobuf:"bytes,12,rep,name=images,proto3" json:"images,omitempty"`
+	Images []string `protobuf:"bytes,12,rep,name=images,proto3" json:"images,omitempty"`
+	// questions are what a question call asks, as its driver reads them;
+	// none for other calls.
+	Questions     []*Question `protobuf:"bytes,13,rep,name=questions,proto3" json:"questions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -268,6 +271,13 @@ func (x *ChatMessage) GetExitCode() int32 {
 func (x *ChatMessage) GetImages() []string {
 	if x != nil {
 		return x.Images
+	}
+	return nil
+}
+
+func (x *ChatMessage) GetQuestions() []*Question {
+	if x != nil {
+		return x.Questions
 	}
 	return nil
 }
@@ -919,7 +929,7 @@ var File_mako_v2_chat_proto protoreflect.FileDescriptor
 
 const file_mako_v2_chat_proto_rawDesc = "" +
 	"\n" +
-	"\x12mako/v2/chat.proto\x12\amako.v2\"\xcf\x01\n" +
+	"\x12mako/v2/chat.proto\x12\amako.v2\x1a\x15mako/v2/session.proto\"\xcf\x01\n" +
 	"\bReadChat\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
@@ -930,7 +940,7 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\x05after\x18\x05 \x01(\x03R\x05after\x12\x12\n" +
 	"\x04seen\x18\x06 \x01(\x04R\x04seen\x12\x14\n" +
 	"\x05agent\x18\a \x01(\tR\x05agent\x12\x14\n" +
-	"\x05patch\x18\b \x01(\bR\x05patch\"\xad\x02\n" +
+	"\x05patch\x18\b \x01(\bR\x05patch\"\xde\x02\n" +
 	"\vChatMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x0e\n" +
@@ -944,7 +954,8 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\x04kind\x18\n" +
 	" \x01(\tR\x04kind\x12 \n" +
 	"\texit_code\x18\v \x01(\x05H\x00R\bexitCode\x88\x01\x01\x12\x16\n" +
-	"\x06images\x18\f \x03(\tR\x06imagesB\f\n" +
+	"\x06images\x18\f \x03(\tR\x06images\x12/\n" +
+	"\tquestions\x18\r \x03(\v2\x11.mako.v2.QuestionR\tquestionsB\f\n" +
 	"\n" +
 	"_exit_code\"Y\n" +
 	"\tWatchChat\x12\x17\n" +
@@ -1027,18 +1038,20 @@ var file_mako_v2_chat_proto_goTypes = []any{
 	(*SubAgent)(nil),    // 6: mako.v2.SubAgent
 	(*Usage)(nil),       // 7: mako.v2.Usage
 	(*RateLimit)(nil),   // 8: mako.v2.RateLimit
+	(*Question)(nil),    // 9: mako.v2.Question
 }
 var file_mako_v2_chat_proto_depIdxs = []int32{
-	4, // 0: mako.v2.ChatLive.blocks:type_name -> mako.v2.LiveBlock
-	1, // 1: mako.v2.Chat.messages:type_name -> mako.v2.ChatMessage
-	7, // 2: mako.v2.Chat.usage:type_name -> mako.v2.Usage
-	6, // 3: mako.v2.Chat.agents:type_name -> mako.v2.SubAgent
-	8, // 4: mako.v2.Usage.limits:type_name -> mako.v2.RateLimit
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	9, // 0: mako.v2.ChatMessage.questions:type_name -> mako.v2.Question
+	4, // 1: mako.v2.ChatLive.blocks:type_name -> mako.v2.LiveBlock
+	1, // 2: mako.v2.Chat.messages:type_name -> mako.v2.ChatMessage
+	7, // 3: mako.v2.Chat.usage:type_name -> mako.v2.Usage
+	6, // 4: mako.v2.Chat.agents:type_name -> mako.v2.SubAgent
+	8, // 5: mako.v2.Usage.limits:type_name -> mako.v2.RateLimit
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_chat_proto_init() }
@@ -1046,6 +1059,7 @@ func file_mako_v2_chat_proto_init() {
 	if File_mako_v2_chat_proto != nil {
 		return
 	}
+	file_mako_v2_session_proto_init()
 	file_mako_v2_chat_proto_msgTypes[1].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

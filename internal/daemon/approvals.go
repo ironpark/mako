@@ -15,7 +15,6 @@ import (
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -92,13 +91,12 @@ func (a *approvals) watching() bool {
 // answered with the user's answers.
 func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev agent.Event, seq int64) hookReply {
 	// The call reads as its kind does.
-	raw := ev.Input
-	kind, canon := "", agent.Fields(ev.Input)
+	kind, canon, shown := "", agent.Fields(ev.Input), ev.Input
 	if tools, ok := agents.As[agent.Tools](name); ok {
 		var read map[string]any
 		if kind, read = tools.Tool(ev.Tool, ev.Input); read != nil {
 			canon = read
-			ev.Input, _ = json.Marshal(read)
+			shown, _ = json.Marshal(read)
 		}
 	}
 	var questions []*protocol.Question
@@ -111,6 +109,11 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev
 	if !a.watching() {
 		return hookReply{}
 	}
+	var options []*protocol.ApprovalOption
+	optioner, _ := agents.As[agent.ApprovalOptions](name)
+	if optioner != nil && questions == nil {
+		options = optioner.Options(kind, ev)
+	}
 	id := approvalID()
 	p := &pendingApproval{session: s, reply: make(chan *protocol.AnswerApproval, 1)}
 	a.mu.Lock()
@@ -121,7 +124,8 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev
 	a.mu.Unlock()
 	changed, current := s.BeginApproval(seq, &protocol.Approval{
 		Id: id, Tool: ev.Tool, Detail: agent.Detail(kind, canon),
-		Input: indentInput(ev.Input), Since: timestamppb.Now(), Questions: questions,
+		Input: indentInput(shown), Since: timestamppb.Now(), Questions: questions,
+		Kind: kind, Options: options,
 	})
 	status := protocol.AgentIdle // a disconnected hook abandoned its request
 	defer func() {
@@ -140,6 +144,12 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev
 		select {
 		case r := <-p.reply:
 			decision, reply := r.GetDecision(), hookReply{Decision: r.GetDecision(), Message: r.GetMessage()}
+			if decision == protocol.DecisionDeny && reply.Message == "" {
+				reply.Message = "The user denied this in mako."
+				if optioner != nil && optioner.DenyMessage(kind) != "" {
+					reply.Message = optioner.DenyMessage(kind)
+				}
+			}
 			if questions != nil && decision == protocol.DecisionAllow {
 				// Allowed, a question is answered; allowed unanswered, as
 				// a front-end that knows no questions would, it is left to
@@ -147,8 +157,10 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev
 				if !agent.Answered(questions, r.GetAnswers()) {
 					decision = protocol.DecisionTerminal
 				} else {
-					reply.Output = answerer.AnswerReply(raw, questions, r.GetAnswers())
+					reply.Output = answerer.AnswerReply(ev.Input, questions, r.GetAnswers())
 				}
+			} else if optioner != nil && decision == protocol.DecisionAllow {
+				reply.Output = optioner.AllowReply(kind, ev, r.GetOption())
 			}
 			if decision == protocol.DecisionTerminal {
 				status = protocol.AgentWaiting
@@ -184,10 +196,6 @@ func (a *approvals) answer(sessionID string, req *protocol.AnswerApproval) error
 	a.mu.Unlock()
 	if !ok || p.session.ID() != sessionID {
 		return fmt.Errorf("the approval was answered or withdrawn")
-	}
-	if req.GetDecision() == protocol.DecisionDeny && req.GetMessage() == "" {
-		req = proto.CloneOf(req)
-		req.Message = "The user denied this in mako."
 	}
 	select {
 	case p.reply <- req:

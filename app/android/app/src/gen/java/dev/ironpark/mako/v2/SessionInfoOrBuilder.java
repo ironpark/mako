@@ -501,4 +501,46 @@ public interface SessionInfoOrBuilder extends
    * @return The bells.
    */
   long getBells();
+
+  /**
+   * <pre>
+   * dialog is the choice the agent's terminal shows a dialog for, while it
+   * waits there on one no hook holds; unset otherwise.
+   * </pre>
+   *
+   * <code>.mako.v2.ScreenDialog dialog = 35 [json_name = "dialog"];</code>
+   * @return Whether the dialog field is set.
+   */
+  boolean hasDialog();
+  /**
+   * <pre>
+   * dialog is the choice the agent's terminal shows a dialog for, while it
+   * waits there on one no hook holds; unset otherwise.
+   * </pre>
+   *
+   * <code>.mako.v2.ScreenDialog dialog = 35 [json_name = "dialog"];</code>
+   * @return The dialog.
+   */
+  dev.ironpark.mako.v2.ScreenDialog getDialog();
+
+  /**
+   * <pre>
+   * controls are what ConfigureAgent may set of the session's agent; unset
+   * for an agent with none.
+   * </pre>
+   *
+   * <code>.mako.v2.AgentControls controls = 36 [json_name = "controls"];</code>
+   * @return Whether the controls field is set.
+   */
+  boolean hasControls();
+  /**
+   * <pre>
+   * controls are what ConfigureAgent may set of the session's agent; unset
+   * for an agent with none.
+   * </pre>
+   *
+   * <code>.mako.v2.AgentControls controls = 36 [json_name = "controls"];</code>
+   * @return The controls.
+   */
+  dev.ironpark.mako.v2.AgentControls getControls();
 }

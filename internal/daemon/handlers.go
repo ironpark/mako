@@ -109,6 +109,36 @@ func (d *Daemon) handleAnswerQuestion(ctx context.Context, stream *transport.Str
 	})
 }
 
+// handleAnswerDialog picks an option of the dialog a session's agent shows
+// in its terminal, as the user would there.
+func (d *Daemon) handleAnswerDialog(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.AnswerDialog) (*protocol.SessionInfo, error) {
+		s, ok := d.sessions.get(r.GetSessionId())
+		if !ok {
+			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
+		}
+		if err := s.AnswerDialog(r.GetDialogId(), int(r.GetOption())); err != nil {
+			return nil, err
+		}
+		return s.Info(), nil
+	})
+}
+
+// handleConfigureAgent sets a session's agent's mode, model or effort, at
+// its prompt, as its driver says to.
+func (d *Daemon) handleConfigureAgent(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.ConfigureAgent) (*protocol.SessionInfo, error) {
+		s, ok := d.sessions.get(r.GetSessionId())
+		if !ok {
+			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
+		}
+		if err := s.Configure(r.GetMode(), r.GetModel(), r.GetEffort()); err != nil {
+			return nil, err
+		}
+		return s.Info(), nil
+	})
+}
+
 // maxSessionName caps a session's name, which every listing carries.
 const maxSessionName = 200
 

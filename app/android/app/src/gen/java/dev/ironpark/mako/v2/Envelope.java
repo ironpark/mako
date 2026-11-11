@@ -48,6 +48,8 @@ public  final class Envelope extends
     LIST_COMMANDS(38),
     COMMANDS(39),
     ANSWER_QUESTION(46),
+    ANSWER_DIALOG(47),
+    CONFIGURE_AGENT(48),
     ATTACH(40),
     INPUT(41),
     OUTPUT(42),
@@ -140,6 +142,8 @@ public  final class Envelope extends
         case 38: return LIST_COMMANDS;
         case 39: return COMMANDS;
         case 46: return ANSWER_QUESTION;
+        case 47: return ANSWER_DIALOG;
+        case 48: return CONFIGURE_AGENT;
         case 40: return ATTACH;
         case 41: return INPUT;
         case 42: return OUTPUT;
@@ -1488,6 +1492,106 @@ public  final class Envelope extends
    */
   private void clearAnswerQuestion() {
     if (bodyCase_ == 46) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int ANSWER_DIALOG_FIELD_NUMBER = 47;
+  /**
+   * <code>.mako.v2.AnswerDialog answer_dialog = 47 [json_name = "answerDialog"];</code>
+   */
+  @java.lang.Override
+  public boolean hasAnswerDialog() {
+    return bodyCase_ == 47;
+  }
+  /**
+   * <code>.mako.v2.AnswerDialog answer_dialog = 47 [json_name = "answerDialog"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.AnswerDialog getAnswerDialog() {
+    if (bodyCase_ == 47) {
+       return (dev.ironpark.mako.v2.AnswerDialog) body_;
+    }
+    return dev.ironpark.mako.v2.AnswerDialog.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.AnswerDialog answer_dialog = 47 [json_name = "answerDialog"];</code>
+   */
+  private void setAnswerDialog(dev.ironpark.mako.v2.AnswerDialog value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 47;
+  }
+  /**
+   * <code>.mako.v2.AnswerDialog answer_dialog = 47 [json_name = "answerDialog"];</code>
+   */
+  private void mergeAnswerDialog(dev.ironpark.mako.v2.AnswerDialog value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 47 &&
+        body_ != dev.ironpark.mako.v2.AnswerDialog.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.AnswerDialog.newBuilder((dev.ironpark.mako.v2.AnswerDialog) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 47;
+  }
+  /**
+   * <code>.mako.v2.AnswerDialog answer_dialog = 47 [json_name = "answerDialog"];</code>
+   */
+  private void clearAnswerDialog() {
+    if (bodyCase_ == 47) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int CONFIGURE_AGENT_FIELD_NUMBER = 48;
+  /**
+   * <code>.mako.v2.ConfigureAgent configure_agent = 48 [json_name = "configureAgent"];</code>
+   */
+  @java.lang.Override
+  public boolean hasConfigureAgent() {
+    return bodyCase_ == 48;
+  }
+  /**
+   * <code>.mako.v2.ConfigureAgent configure_agent = 48 [json_name = "configureAgent"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ConfigureAgent getConfigureAgent() {
+    if (bodyCase_ == 48) {
+       return (dev.ironpark.mako.v2.ConfigureAgent) body_;
+    }
+    return dev.ironpark.mako.v2.ConfigureAgent.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.ConfigureAgent configure_agent = 48 [json_name = "configureAgent"];</code>
+   */
+  private void setConfigureAgent(dev.ironpark.mako.v2.ConfigureAgent value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 48;
+  }
+  /**
+   * <code>.mako.v2.ConfigureAgent configure_agent = 48 [json_name = "configureAgent"];</code>
+   */
+  private void mergeConfigureAgent(dev.ironpark.mako.v2.ConfigureAgent value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 48 &&
+        body_ != dev.ironpark.mako.v2.ConfigureAgent.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ConfigureAgent.newBuilder((dev.ironpark.mako.v2.ConfigureAgent) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 48;
+  }
+  /**
+   * <code>.mako.v2.ConfigureAgent configure_agent = 48 [json_name = "configureAgent"];</code>
+   */
+  private void clearConfigureAgent() {
+    if (bodyCase_ == 48) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -5727,6 +5831,102 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.mako.v2.AnswerDialog answer_dialog = 47 [json_name = "answerDialog"];</code>
+     */
+    @java.lang.Override
+    public boolean hasAnswerDialog() {
+      return instance.hasAnswerDialog();
+    }
+    /**
+     * <code>.mako.v2.AnswerDialog answer_dialog = 47 [json_name = "answerDialog"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.AnswerDialog getAnswerDialog() {
+      return instance.getAnswerDialog();
+    }
+    /**
+     * <code>.mako.v2.AnswerDialog answer_dialog = 47 [json_name = "answerDialog"];</code>
+     */
+    public Builder setAnswerDialog(dev.ironpark.mako.v2.AnswerDialog value) {
+      copyOnWrite();
+      instance.setAnswerDialog(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AnswerDialog answer_dialog = 47 [json_name = "answerDialog"];</code>
+     */
+    public Builder setAnswerDialog(
+        dev.ironpark.mako.v2.AnswerDialog.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAnswerDialog(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AnswerDialog answer_dialog = 47 [json_name = "answerDialog"];</code>
+     */
+    public Builder mergeAnswerDialog(dev.ironpark.mako.v2.AnswerDialog value) {
+      copyOnWrite();
+      instance.mergeAnswerDialog(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AnswerDialog answer_dialog = 47 [json_name = "answerDialog"];</code>
+     */
+    public Builder clearAnswerDialog() {
+      copyOnWrite();
+      instance.clearAnswerDialog();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.ConfigureAgent configure_agent = 48 [json_name = "configureAgent"];</code>
+     */
+    @java.lang.Override
+    public boolean hasConfigureAgent() {
+      return instance.hasConfigureAgent();
+    }
+    /**
+     * <code>.mako.v2.ConfigureAgent configure_agent = 48 [json_name = "configureAgent"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ConfigureAgent getConfigureAgent() {
+      return instance.getConfigureAgent();
+    }
+    /**
+     * <code>.mako.v2.ConfigureAgent configure_agent = 48 [json_name = "configureAgent"];</code>
+     */
+    public Builder setConfigureAgent(dev.ironpark.mako.v2.ConfigureAgent value) {
+      copyOnWrite();
+      instance.setConfigureAgent(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ConfigureAgent configure_agent = 48 [json_name = "configureAgent"];</code>
+     */
+    public Builder setConfigureAgent(
+        dev.ironpark.mako.v2.ConfigureAgent.Builder builderForValue) {
+      copyOnWrite();
+      instance.setConfigureAgent(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ConfigureAgent configure_agent = 48 [json_name = "configureAgent"];</code>
+     */
+    public Builder mergeConfigureAgent(dev.ironpark.mako.v2.ConfigureAgent value) {
+      copyOnWrite();
+      instance.mergeConfigureAgent(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ConfigureAgent configure_agent = 48 [json_name = "configureAgent"];</code>
+     */
+    public Builder clearConfigureAgent() {
+      copyOnWrite();
+      instance.clearConfigureAgent();
+      return this;
+    }
+
+    /**
      * <pre>
      * An attached session's stream.
      * </pre>
@@ -8558,6 +8758,8 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.Snapshot.class,
             dev.ironpark.mako.v2.Exited.class,
             dev.ironpark.mako.v2.AnswerQuestion.class,
+            dev.ironpark.mako.v2.AnswerDialog.class,
+            dev.ironpark.mako.v2.ConfigureAgent.class,
             dev.ironpark.mako.v2.ListDir.class,
             dev.ironpark.mako.v2.Dir.class,
             dev.ironpark.mako.v2.ReadFile.class,
@@ -8609,16 +8811,16 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.DeviceAccept.class,
           };
           java.lang.String info =
-              "\u0000O\u0001\u0000\u0001oO\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000\u000b" +
+              "\u0000Q\u0001\u0000\u0001oQ\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000\u000b" +
               "<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000" +
               "\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000" +
               "\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000+<\u0000" +
-              ",<\u0000-<\u0000.<\u00002<\u00003<\u00004<\u00005<\u00006<\u00007<\u00008<\u0000" +
-              "9<\u0000:<\u0000;<\u0000<<\u0000=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000" +
-              "C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000H<\u0000I<\u0000J<\u0000K<\u0000L<\u0000" +
-              "M<\u0000N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000" +
-              "d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000" +
-              "n<\u0000o<\u0000";
+              ",<\u0000-<\u0000.<\u0000/<\u00000<\u00002<\u00003<\u00004<\u00005<\u00006<\u0000" +
+              "7<\u00008<\u00009<\u0000:<\u0000;<\u0000<<\u0000=<\u0000><\u0000?<\u0000@<\u0000" +
+              "A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000H<\u0000I<\u0000J<\u0000" +
+              "K<\u0000L<\u0000M<\u0000N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000" +
+              "Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000" +
+              "l<\u0000m<\u0000n<\u0000o<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

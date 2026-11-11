@@ -197,4 +197,33 @@ public interface ChatMessageOrBuilder extends
    */
   com.google.protobuf.ByteString
       getImagesBytes(int index);
+
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.Question> 
+      getQuestionsList();
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  dev.ironpark.mako.v2.Question getQuestions(int index);
+  /**
+   * <pre>
+   * questions are what a question call asks, as its driver reads them;
+   * none for other calls.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 13 [json_name = "questions"];</code>
+   */
+  int getQuestionsCount();
 }

@@ -29,7 +29,25 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 18
+const Revision = 20
+
+// RevisionApprovalOptions adds what an approval's call does and the ways
+// it may be allowed besides once: Approval.kind and options, chosen by
+// AnswerApproval.option; a plan put to the user, kind "exit_plan".
+const RevisionApprovalOptions = 20
+
+// RevisionDialogs adds the dialogs of options an agent's terminal shows
+// where no hook holds them, SessionInfo.dialog, picked by AnswerDialog.
+const RevisionDialogs = 20
+
+// RevisionControls adds what of an agent may be set from a front-end,
+// SessionInfo.controls, set by ConfigureAgent.
+const RevisionControls = 20
+
+// RevisionQuestions adds the questions a question tool asks, answered in
+// the window: Approval.questions answered with AnswerApproval.answers,
+// ChatMessage.questions, and AnswerQuestion.
+const RevisionQuestions = 19
 
 // RevisionLinks adds how a daemon's link to each node stands, Node's
 // link, link_error and relink_at, and Access's "relink"; and FileOp's
@@ -155,10 +173,11 @@ const (
 	ToolPlan      = "plan" // a plan's steps, as Codex's update_plan
 	ToolFetch     = "fetch"
 	ToolWebSearch = "websearch"
-	ToolTask      = "task"     // starts a subagent
-	ToolQuestion  = "question" // asks the user
-	ToolCommand   = "command"  // what a slash command the user typed printed
-	ToolSummary   = "summary"  // the summary a compaction leaves
+	ToolTask      = "task"      // starts a subagent
+	ToolQuestion  = "question"  // asks the user
+	ToolExitPlan  = "exit_plan" // puts a plan to the user, as Claude's ExitPlanMode
+	ToolCommand   = "command"   // what a slash command the user typed printed
+	ToolSummary   = "summary"   // the summary a compaction leaves
 )
 
 // How a BackgroundTask ended, as BackgroundTask.status says.

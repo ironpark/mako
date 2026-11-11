@@ -105,4 +105,60 @@ public interface ApprovalOrBuilder extends
    * <code>repeated .mako.v2.Question questions = 6 [json_name = "questions"];</code>
    */
   int getQuestionsCount();
+
+  /**
+   * <pre>
+   * kind is what the call does, as ChatMessage.kind names it, its input
+   * then read as that kind's: an edit's old and new text, a plan's
+   * markdown. "" for a tool of no kind.
+   * </pre>
+   *
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   * @return The kind.
+   */
+  java.lang.String getKind();
+  /**
+   * <pre>
+   * kind is what the call does, as ChatMessage.kind names it, its input
+   * then read as that kind's: an edit's old and new text, a plan's
+   * markdown. "" for a tool of no kind.
+   * </pre>
+   *
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   * @return The bytes for kind.
+   */
+  com.google.protobuf.ByteString
+      getKindBytes();
+
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.ApprovalOption> 
+      getOptionsList();
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  dev.ironpark.mako.v2.ApprovalOption getOptions(int index);
+  /**
+   * <pre>
+   * options are ways to allow the call besides once, as the agent offers
+   * them, chosen by AnswerApproval.option; a plan put to the user
+   * (kind "exit_plan") is allowed by one of them.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ApprovalOption options = 8 [json_name = "options"];</code>
+   */
+  int getOptionsCount();
 }

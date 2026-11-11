@@ -67,7 +67,7 @@ func chatInput(m *model, id string, state *chatState) ggui.Widget {
 	return ggui.Key(prompt, func(request string) ggui.Widget {
 		if strings.HasPrefix(request, keyedPrefix) {
 			if call := pendingQuestionCall(ggui.Peek(state.result).Chat.GetMessages()); call != nil {
-				if qs := callQuestions(call); len(qs) > 0 {
+				if qs := call.GetQuestions(); len(qs) > 0 {
 					return keyedQuestions(m, id, qs)
 				}
 			}

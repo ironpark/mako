@@ -311,6 +311,28 @@ public interface EnvelopeOrBuilder extends
   dev.ironpark.mako.v2.AnswerQuestion getAnswerQuestion();
 
   /**
+   * <code>.mako.v2.AnswerDialog answer_dialog = 47 [json_name = "answerDialog"];</code>
+   * @return Whether the answerDialog field is set.
+   */
+  boolean hasAnswerDialog();
+  /**
+   * <code>.mako.v2.AnswerDialog answer_dialog = 47 [json_name = "answerDialog"];</code>
+   * @return The answerDialog.
+   */
+  dev.ironpark.mako.v2.AnswerDialog getAnswerDialog();
+
+  /**
+   * <code>.mako.v2.ConfigureAgent configure_agent = 48 [json_name = "configureAgent"];</code>
+   * @return Whether the configureAgent field is set.
+   */
+  boolean hasConfigureAgent();
+  /**
+   * <code>.mako.v2.ConfigureAgent configure_agent = 48 [json_name = "configureAgent"];</code>
+   * @return The configureAgent.
+   */
+  dev.ironpark.mako.v2.ConfigureAgent getConfigureAgent();
+
+  /**
    * <pre>
    * An attached session's stream.
    * </pre>

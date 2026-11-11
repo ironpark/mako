@@ -25,6 +25,7 @@ public  final class AnswerApproval extends
     decision_ = "";
     message_ = "";
     answers_ = emptyProtobufList();
+    option_ = "";
   }
   public static final int NODE_ID_FIELD_NUMBER = 1;
   private java.lang.String nodeId_;
@@ -448,6 +449,78 @@ public  final class AnswerApproval extends
   private void removeAnswers(int index) {
     ensureAnswersIsMutable();
     answers_.remove(index);
+  }
+
+  public static final int OPTION_FIELD_NUMBER = 7;
+  private java.lang.String option_;
+  /**
+   * <pre>
+   * option is the id of the approval's option allow chooses; "" allows
+   * the call once.
+   * </pre>
+   *
+   * <code>string option = 7 [json_name = "option"];</code>
+   * @return The option.
+   */
+  @java.lang.Override
+  public java.lang.String getOption() {
+    return option_;
+  }
+  /**
+   * <pre>
+   * option is the id of the approval's option allow chooses; "" allows
+   * the call once.
+   * </pre>
+   *
+   * <code>string option = 7 [json_name = "option"];</code>
+   * @return The bytes for option.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getOptionBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(option_);
+  }
+  /**
+   * <pre>
+   * option is the id of the approval's option allow chooses; "" allows
+   * the call once.
+   * </pre>
+   *
+   * <code>string option = 7 [json_name = "option"];</code>
+   * @param value The option to set.
+   */
+  private void setOption(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    option_ = value;
+  }
+  /**
+   * <pre>
+   * option is the id of the approval's option allow chooses; "" allows
+   * the call once.
+   * </pre>
+   *
+   * <code>string option = 7 [json_name = "option"];</code>
+   */
+  private void clearOption() {
+
+    option_ = getDefaultInstance().getOption();
+  }
+  /**
+   * <pre>
+   * option is the id of the approval's option allow chooses; "" allows
+   * the call once.
+   * </pre>
+   *
+   * <code>string option = 7 [json_name = "option"];</code>
+   * @param value The bytes for option to set.
+   */
+  private void setOptionBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    option_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.AnswerApproval parseFrom(
@@ -998,6 +1071,80 @@ public  final class AnswerApproval extends
       return this;
     }
 
+    /**
+     * <pre>
+     * option is the id of the approval's option allow chooses; "" allows
+     * the call once.
+     * </pre>
+     *
+     * <code>string option = 7 [json_name = "option"];</code>
+     * @return The option.
+     */
+    @java.lang.Override
+    public java.lang.String getOption() {
+      return instance.getOption();
+    }
+    /**
+     * <pre>
+     * option is the id of the approval's option allow chooses; "" allows
+     * the call once.
+     * </pre>
+     *
+     * <code>string option = 7 [json_name = "option"];</code>
+     * @return The bytes for option.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getOptionBytes() {
+      return instance.getOptionBytes();
+    }
+    /**
+     * <pre>
+     * option is the id of the approval's option allow chooses; "" allows
+     * the call once.
+     * </pre>
+     *
+     * <code>string option = 7 [json_name = "option"];</code>
+     * @param value The option to set.
+     * @return This builder for chaining.
+     */
+    public Builder setOption(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setOption(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * option is the id of the approval's option allow chooses; "" allows
+     * the call once.
+     * </pre>
+     *
+     * <code>string option = 7 [json_name = "option"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearOption() {
+      copyOnWrite();
+      instance.clearOption();
+      return this;
+    }
+    /**
+     * <pre>
+     * option is the id of the approval's option allow chooses; "" allows
+     * the call once.
+     * </pre>
+     *
+     * <code>string option = 7 [json_name = "option"];</code>
+     * @param value The bytes for option to set.
+     * @return This builder for chaining.
+     */
+    public Builder setOptionBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setOptionBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.AnswerApproval)
   }
   @java.lang.Override
@@ -1021,10 +1168,11 @@ public  final class AnswerApproval extends
             "message_",
             "answers_",
             dev.ironpark.mako.v2.QuestionAnswer.class,
+            "option_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u001b";
+              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u001b\u0007\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

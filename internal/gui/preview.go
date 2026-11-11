@@ -221,6 +221,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					v.Chat.Agents = []*protocol.SubAgent{{Id: "a1", CallId: "agent", Kind: "Explore", Description: "Find the flaky tests",
 						Running: true, ToolCalls: 7, Tool: "Grep", ToolKind: protocol.ToolSearch, Detail: "probeUntil", Started: time.Now().Add(-3 * time.Minute).Unix()}}
 					v.Chat.Usage = &protocol.Usage{Input: 41200, CachedInput: 380000, Output: 9800, Context: 96000, Window: 258400,
+						Model: "claude-opus-5-5", Effort: "high", PermissionMode: "acceptEdits",
 						Limits: []*protocol.RateLimit{
 							{Minutes: protocol.FiveHours, Used: 23, Resets: time.Now().Add(2*time.Hour + 10*time.Minute).Unix()},
 							{Minutes: protocol.Week, Used: 84, Resets: time.Now().Add(76 * time.Hour).Unix()},
@@ -237,6 +238,19 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					m.Unread.Set(unread)
 				}),
 				frames(5), shot("02-chat-approval"),
+				// An edit, as a diff, and a plan put to the user.
+				do(func() { setPreviewApproval(m, previewApprovals()[1]) }), frames(5), shot("02-chat-approval-edit"),
+				do(func() { setPreviewApproval(m, previewApprovals()[2]) }), frames(10), shot("02-chat-approval-plan"),
+				// A dialog in the terminal no hook holds, as a folder's trust.
+				do(func() {
+					setPreviewApproval(m, nil)
+					m.editSession(ggui.Peek(m.Selected), func(s *protocol.SessionInfo) {
+						s.Dialog = &protocol.ScreenDialog{Id: "preview", Text: "Accessing workspace:\n/workspace/mako\nQuick safety check: Is this a project you created or one you trust?",
+							Options: []string{"No, exit", "Yes, I trust this folder"}}
+					})
+				}), frames(5), shot("02-chat-dialog"),
+				do(func() { m.editSession(ggui.Peek(m.Selected), func(s *protocol.SessionInfo) { s.Dialog = nil }) }),
+				do(func() { setPreviewApproval(m, previewApprovals()[0]) }),
 				// Tool calls as each tool's view reads them, their folds open.
 				do(func() {
 					id := ggui.Peek(m.Selected)
@@ -579,14 +593,37 @@ func previewStatus(sessions []*protocol.SessionInfo, id string) []*protocol.Sess
 		out[i].State = protocol.StateRunning
 		if out[i].GetId() == id {
 			out[i].Status = protocol.AgentWaiting
-			out[i].Approval = &protocol.Approval{Id: "preview", Tool: "Bash", Detail: "rm -rf build && go build ./...",
-				Input: "{\n  \"command\": \"rm -rf build && go build ./...\"\n}"}
+			out[i].Approval = previewApprovals()[0]
+			out[i].Controls = &protocol.AgentControls{Modes: []string{"default", "acceptEdits", "plan", "auto"},
+				Models: []string{"opus", "sonnet", "haiku"}, Efforts: []string{"low", "medium", "high"}}
 			continue
 		}
 		out[i].Status = states[n%len(states)]
 		n++
 	}
 	return out
+}
+
+// previewApprovals are approvals of the kinds a card shows its own way: a
+// command offered a rule, an edit offered a mode, a plan.
+func previewApprovals() []*protocol.Approval {
+	return []*protocol.Approval{
+		{Id: "preview", Tool: "Bash", Kind: protocol.ToolShell, Detail: "rm -rf build && go build ./...",
+			Input:   "{\n  \"command\": \"rm -rf build && go build ./...\",\n  \"description\": \"Rebuild from scratch\"\n}",
+			Options: []*protocol.ApprovalOption{{Id: "0", Rules: []string{"Bash(go build *)"}}}},
+		{Id: "preview-edit", Tool: "Edit", Kind: protocol.ToolEdit, Detail: "internal/gui/approval.go",
+			Input:   `{"new": "func approvalCard(m *model, id string) ggui.Widget {\n\treturn planCard(m, id)\n}", "old": "func approvalCard(m *model, id string) ggui.Widget {\n\treturn nil\n}", "path": "internal/gui/approval.go"}`,
+			Options: []*protocol.ApprovalOption{{Id: "0", Mode: "acceptEdits"}}},
+		{Id: "preview-plan", Tool: "ExitPlanMode", Kind: protocol.ToolExitPlan, Detail: "Plan: Show plans in the window",
+			Input:   `{"plan": "# Plan: Show plans in the window\n\n## Context\nA plan Claude puts to the user shows only its first line.\n\n## Steps\n1. Read ExitPlanMode as a kind of its own.\n2. Render the plan as **Markdown** in its approval card.\n3. Offer the modes the work goes on in."}`,
+			Options: []*protocol.ApprovalOption{{Id: "auto", Mode: "auto"}, {Id: "acceptEdits", Mode: "acceptEdits"}, {Id: "default", Mode: "default"}}},
+	}
+}
+
+// setPreviewApproval puts a in place of the selected session's approval.
+func setPreviewApproval(m *model, a *protocol.Approval) {
+	id := ggui.Peek(m.Selected)
+	m.editSession(id, func(s *protocol.SessionInfo) { s.Approval = a })
 }
 
 // previewStep runs on a frame and reports whether it is finished.

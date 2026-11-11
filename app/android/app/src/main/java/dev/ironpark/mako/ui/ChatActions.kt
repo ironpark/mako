@@ -2,6 +2,7 @@ package dev.ironpark.mako.ui
 
 import dev.ironpark.mako.v2.ChatMessage
 import dev.ironpark.mako.v2.Command
+import dev.ironpark.mako.v2.Question
 import dev.ironpark.mako.v2.SessionInfo
 import dev.ironpark.mako.v2.SubAgent
 
@@ -27,10 +28,22 @@ internal fun questionRequest(session: SessionInfo, messages: List<ChatMessage>):
     if (session.state != "running" || session.hasApproval()) return ""
     if (session.status == "waiting") return "waiting"
     if (session.status == "idle" || session.status == "done") return ""
-    return messages.asReversed().takeWhile { it.role == "tool" }
-        .firstOrNull { it.kind == "question" && it.pending && !it.output }
-        ?.let { "question:" + it.id.ifEmpty { it.text } }.orEmpty()
+    return pendingQuestionCall(messages)?.let { "question:" + it.id.ifEmpty { it.text } }.orEmpty()
 }
+
+/** The question call the agent waits on, the last of the trailing calls; null when it asks none. */
+internal fun pendingQuestionCall(messages: List<ChatMessage>): ChatMessage? =
+    messages.asReversed().takeWhile { it.role == "tool" }
+        .firstOrNull { it.kind == "question" && it.pending && !it.output }
+
+/**
+ * The questions of the call the session's agent waits on that the app can
+ * answer in a form, typed into the agent's terminal by its node; none
+ * when its node cannot, or the call asks none it reads.
+ */
+internal fun keyedQuestions(session: SessionInfo, messages: List<ChatMessage>): List<Question> =
+    if (session.caps and CAP_ANSWER_KEYS == 0 || questionRequest(session, messages).isEmpty()) emptyList()
+    else pendingQuestionCall(messages)?.questionsList.orEmpty()
 
 internal fun matchingCommands(text: String, commands: List<Command>): List<Command> {
     if (!text.startsWith('/') || text.any { it.isWhitespace() }) return emptyList()

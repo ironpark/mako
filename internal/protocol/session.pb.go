@@ -377,7 +377,13 @@ type SessionInfo struct {
 	Notice *Notice `protobuf:"bytes,33,opt,name=notice,proto3" json:"notice,omitempty"`
 	// bells counts the bells the session's program rang: a front-end that
 	// sees it move asks for the user's attention.
-	Bells         uint64 `protobuf:"varint,34,opt,name=bells,proto3" json:"bells,omitempty"`
+	Bells uint64 `protobuf:"varint,34,opt,name=bells,proto3" json:"bells,omitempty"`
+	// dialog is the choice the agent's terminal shows a dialog for, while it
+	// waits there on one no hook holds; unset otherwise.
+	Dialog *ScreenDialog `protobuf:"bytes,35,opt,name=dialog,proto3" json:"dialog,omitempty"`
+	// controls are what ConfigureAgent may set of the session's agent; unset
+	// for an agent with none.
+	Controls      *AgentControls `protobuf:"bytes,36,opt,name=controls,proto3" json:"controls,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -650,6 +656,305 @@ func (x *SessionInfo) GetBells() uint64 {
 	return 0
 }
 
+func (x *SessionInfo) GetDialog() *ScreenDialog {
+	if x != nil {
+		return x.Dialog
+	}
+	return nil
+}
+
+func (x *SessionInfo) GetControls() *AgentControls {
+	if x != nil {
+		return x.Controls
+	}
+	return nil
+}
+
+// AgentControls are the permission modes, models and efforts a session's
+// agent may be set to, by the names it gives them.
+type AgentControls struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Modes         []string               `protobuf:"bytes,1,rep,name=modes,proto3" json:"modes,omitempty"` // as Usage.permission_mode names them
+	Models        []string               `protobuf:"bytes,2,rep,name=models,proto3" json:"models,omitempty"`
+	Efforts       []string               `protobuf:"bytes,3,rep,name=efforts,proto3" json:"efforts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentControls) Reset() {
+	*x = AgentControls{}
+	mi := &file_mako_v2_session_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentControls) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentControls) ProtoMessage() {}
+
+func (x *AgentControls) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentControls.ProtoReflect.Descriptor instead.
+func (*AgentControls) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *AgentControls) GetModes() []string {
+	if x != nil {
+		return x.Modes
+	}
+	return nil
+}
+
+func (x *AgentControls) GetModels() []string {
+	if x != nil {
+		return x.Models
+	}
+	return nil
+}
+
+func (x *AgentControls) GetEfforts() []string {
+	if x != nil {
+		return x.Efforts
+	}
+	return nil
+}
+
+// ConfigureAgent sets what of a session's agent is given: its permission
+// mode, as a key at its prompt moves it on; its model and effort, by its
+// own commands, which the agent may keep as the user's defaults. The reply
+// is its SessionInfo.
+type ConfigureAgent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Mode          string                 `protobuf:"bytes,3,opt,name=mode,proto3" json:"mode,omitempty"`
+	Model         string                 `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
+	Effort        string                 `protobuf:"bytes,5,opt,name=effort,proto3" json:"effort,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConfigureAgent) Reset() {
+	*x = ConfigureAgent{}
+	mi := &file_mako_v2_session_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfigureAgent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfigureAgent) ProtoMessage() {}
+
+func (x *ConfigureAgent) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfigureAgent.ProtoReflect.Descriptor instead.
+func (*ConfigureAgent) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ConfigureAgent) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *ConfigureAgent) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *ConfigureAgent) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *ConfigureAgent) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *ConfigureAgent) GetEffort() string {
+	if x != nil {
+		return x.Effort
+	}
+	return ""
+}
+
+// ScreenDialog is a dialog in an agent's terminal that asks the user to
+// pick one of its options, as a folder's trust or a permission asked for
+// there: answered by AnswerDialog, which picks one there as the user would.
+type ScreenDialog struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id names the dialog by what it shows, so that an answer to it is not
+	// taken by another.
+	Id            string   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Text          string   `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"` // what it asks, a line each
+	Options       []string `protobuf:"bytes,3,rep,name=options,proto3" json:"options,omitempty"`
+	Selected      int32    `protobuf:"varint,4,opt,name=selected,proto3" json:"selected,omitempty"` // the option the dialog's cursor is on
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScreenDialog) Reset() {
+	*x = ScreenDialog{}
+	mi := &file_mako_v2_session_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScreenDialog) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScreenDialog) ProtoMessage() {}
+
+func (x *ScreenDialog) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScreenDialog.ProtoReflect.Descriptor instead.
+func (*ScreenDialog) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ScreenDialog) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ScreenDialog) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *ScreenDialog) GetOptions() []string {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+func (x *ScreenDialog) GetSelected() int32 {
+	if x != nil {
+		return x.Selected
+	}
+	return 0
+}
+
+// AnswerDialog picks option, by its index, of the dialog dialog_id the
+// session's agent shows in its terminal; the reply is its SessionInfo.
+type AnswerDialog struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	DialogId      string                 `protobuf:"bytes,3,opt,name=dialog_id,json=dialogId,proto3" json:"dialog_id,omitempty"`
+	Option        int32                  `protobuf:"varint,4,opt,name=option,proto3" json:"option,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AnswerDialog) Reset() {
+	*x = AnswerDialog{}
+	mi := &file_mako_v2_session_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AnswerDialog) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AnswerDialog) ProtoMessage() {}
+
+func (x *AnswerDialog) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AnswerDialog.ProtoReflect.Descriptor instead.
+func (*AnswerDialog) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *AnswerDialog) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *AnswerDialog) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *AnswerDialog) GetDialogId() string {
+	if x != nil {
+		return x.DialogId
+	}
+	return ""
+}
+
+func (x *AnswerDialog) GetOption() int32 {
+	if x != nil {
+		return x.Option
+	}
+	return 0
+}
+
 // Notice is a desktop notification a session's program posted. seq grows
 // with each, so that one the same as the last still tells.
 type Notice struct {
@@ -663,7 +968,7 @@ type Notice struct {
 
 func (x *Notice) Reset() {
 	*x = Notice{}
-	mi := &file_mako_v2_session_proto_msgTypes[5]
+	mi := &file_mako_v2_session_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -675,7 +980,7 @@ func (x *Notice) String() string {
 func (*Notice) ProtoMessage() {}
 
 func (x *Notice) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[5]
+	mi := &file_mako_v2_session_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -688,7 +993,7 @@ func (x *Notice) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Notice.ProtoReflect.Descriptor instead.
 func (*Notice) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{5}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Notice) GetTitle() string {
@@ -735,7 +1040,7 @@ type BackgroundTask struct {
 
 func (x *BackgroundTask) Reset() {
 	*x = BackgroundTask{}
-	mi := &file_mako_v2_session_proto_msgTypes[6]
+	mi := &file_mako_v2_session_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -747,7 +1052,7 @@ func (x *BackgroundTask) String() string {
 func (*BackgroundTask) ProtoMessage() {}
 
 func (x *BackgroundTask) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[6]
+	mi := &file_mako_v2_session_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -760,7 +1065,7 @@ func (x *BackgroundTask) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackgroundTask.ProtoReflect.Descriptor instead.
 func (*BackgroundTask) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{6}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *BackgroundTask) GetId() string {
@@ -843,14 +1148,22 @@ type Approval struct {
 	Since  *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=since,proto3" json:"since,omitempty"`
 	// questions are what a question tool asks, which the approval is
 	// answered with the answers to rather than allowed; none for others.
-	Questions     []*Question `protobuf:"bytes,6,rep,name=questions,proto3" json:"questions,omitempty"`
+	Questions []*Question `protobuf:"bytes,6,rep,name=questions,proto3" json:"questions,omitempty"`
+	// kind is what the call does, as ChatMessage.kind names it, its input
+	// then read as that kind's: an edit's old and new text, a plan's
+	// markdown. "" for a tool of no kind.
+	Kind string `protobuf:"bytes,7,opt,name=kind,proto3" json:"kind,omitempty"`
+	// options are ways to allow the call besides once, as the agent offers
+	// them, chosen by AnswerApproval.option; a plan put to the user
+	// (kind "exit_plan") is allowed by one of them.
+	Options       []*ApprovalOption `protobuf:"bytes,8,rep,name=options,proto3" json:"options,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Approval) Reset() {
 	*x = Approval{}
-	mi := &file_mako_v2_session_proto_msgTypes[7]
+	mi := &file_mako_v2_session_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -862,7 +1175,7 @@ func (x *Approval) String() string {
 func (*Approval) ProtoMessage() {}
 
 func (x *Approval) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[7]
+	mi := &file_mako_v2_session_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -875,7 +1188,7 @@ func (x *Approval) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Approval.ProtoReflect.Descriptor instead.
 func (*Approval) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{7}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Approval) GetId() string {
@@ -920,6 +1233,86 @@ func (x *Approval) GetQuestions() []*Question {
 	return nil
 }
 
+func (x *Approval) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *Approval) GetOptions() []*ApprovalOption {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+// ApprovalOption is a way to allow an approval's call that also changes
+// what the agent may do from then on.
+type ApprovalOption struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// mode is the permission mode the agent switches to, as it names it:
+	// "acceptEdits", "auto", "default"; "" for none.
+	Mode string `protobuf:"bytes,2,opt,name=mode,proto3" json:"mode,omitempty"`
+	// rules are what it may do from then on without asking, as the agent
+	// writes them: "Bash(npm test:*)".
+	Rules         []string `protobuf:"bytes,3,rep,name=rules,proto3" json:"rules,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApprovalOption) Reset() {
+	*x = ApprovalOption{}
+	mi := &file_mako_v2_session_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApprovalOption) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApprovalOption) ProtoMessage() {}
+
+func (x *ApprovalOption) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApprovalOption.ProtoReflect.Descriptor instead.
+func (*ApprovalOption) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ApprovalOption) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ApprovalOption) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *ApprovalOption) GetRules() []string {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
 // Question is one a question tool asks the user, with the options it
 // offers; the user may answer in words of their own instead.
 type Question struct {
@@ -934,7 +1327,7 @@ type Question struct {
 
 func (x *Question) Reset() {
 	*x = Question{}
-	mi := &file_mako_v2_session_proto_msgTypes[8]
+	mi := &file_mako_v2_session_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -946,7 +1339,7 @@ func (x *Question) String() string {
 func (*Question) ProtoMessage() {}
 
 func (x *Question) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[8]
+	mi := &file_mako_v2_session_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -959,7 +1352,7 @@ func (x *Question) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Question.ProtoReflect.Descriptor instead.
 func (*Question) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{8}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Question) GetQuestion() string {
@@ -1001,7 +1394,7 @@ type QuestionOption struct {
 
 func (x *QuestionOption) Reset() {
 	*x = QuestionOption{}
-	mi := &file_mako_v2_session_proto_msgTypes[9]
+	mi := &file_mako_v2_session_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1013,7 +1406,7 @@ func (x *QuestionOption) String() string {
 func (*QuestionOption) ProtoMessage() {}
 
 func (x *QuestionOption) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[9]
+	mi := &file_mako_v2_session_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1026,7 +1419,7 @@ func (x *QuestionOption) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuestionOption.ProtoReflect.Descriptor instead.
 func (*QuestionOption) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{9}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *QuestionOption) GetLabel() string {
@@ -1055,7 +1448,7 @@ type QuestionAnswer struct {
 
 func (x *QuestionAnswer) Reset() {
 	*x = QuestionAnswer{}
-	mi := &file_mako_v2_session_proto_msgTypes[10]
+	mi := &file_mako_v2_session_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1067,7 +1460,7 @@ func (x *QuestionAnswer) String() string {
 func (*QuestionAnswer) ProtoMessage() {}
 
 func (x *QuestionAnswer) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[10]
+	mi := &file_mako_v2_session_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1080,7 +1473,7 @@ func (x *QuestionAnswer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuestionAnswer.ProtoReflect.Descriptor instead.
 func (*QuestionAnswer) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{10}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *QuestionAnswer) GetPicked() []int32 {
@@ -1108,7 +1501,7 @@ type CloseSession struct {
 
 func (x *CloseSession) Reset() {
 	*x = CloseSession{}
-	mi := &file_mako_v2_session_proto_msgTypes[11]
+	mi := &file_mako_v2_session_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1120,7 +1513,7 @@ func (x *CloseSession) String() string {
 func (*CloseSession) ProtoMessage() {}
 
 func (x *CloseSession) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[11]
+	mi := &file_mako_v2_session_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1133,7 +1526,7 @@ func (x *CloseSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloseSession.ProtoReflect.Descriptor instead.
 func (*CloseSession) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{11}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *CloseSession) GetSessionId() string {
@@ -1162,7 +1555,7 @@ type RenameSession struct {
 
 func (x *RenameSession) Reset() {
 	*x = RenameSession{}
-	mi := &file_mako_v2_session_proto_msgTypes[12]
+	mi := &file_mako_v2_session_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1174,7 +1567,7 @@ func (x *RenameSession) String() string {
 func (*RenameSession) ProtoMessage() {}
 
 func (x *RenameSession) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[12]
+	mi := &file_mako_v2_session_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1187,7 +1580,7 @@ func (x *RenameSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameSession.ProtoReflect.Descriptor instead.
 func (*RenameSession) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{12}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *RenameSession) GetSessionId() string {
@@ -1221,14 +1614,17 @@ type AnswerApproval struct {
 	Message    string                 `protobuf:"bytes,5,opt,name=message,proto3" json:"message,omitempty"`   // why, for a denial
 	// answers answer an approval's questions, one each, in order, with
 	// allow; allow without them leaves the questions to the terminal.
-	Answers       []*QuestionAnswer `protobuf:"bytes,6,rep,name=answers,proto3" json:"answers,omitempty"`
+	Answers []*QuestionAnswer `protobuf:"bytes,6,rep,name=answers,proto3" json:"answers,omitempty"`
+	// option is the id of the approval's option allow chooses; "" allows
+	// the call once.
+	Option        string `protobuf:"bytes,7,opt,name=option,proto3" json:"option,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AnswerApproval) Reset() {
 	*x = AnswerApproval{}
-	mi := &file_mako_v2_session_proto_msgTypes[13]
+	mi := &file_mako_v2_session_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1240,7 +1636,7 @@ func (x *AnswerApproval) String() string {
 func (*AnswerApproval) ProtoMessage() {}
 
 func (x *AnswerApproval) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[13]
+	mi := &file_mako_v2_session_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1253,7 +1649,7 @@ func (x *AnswerApproval) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnswerApproval.ProtoReflect.Descriptor instead.
 func (*AnswerApproval) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{13}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *AnswerApproval) GetNodeId() string {
@@ -1298,6 +1694,13 @@ func (x *AnswerApproval) GetAnswers() []*QuestionAnswer {
 	return nil
 }
 
+func (x *AnswerApproval) GetOption() string {
+	if x != nil {
+		return x.Option
+	}
+	return ""
+}
+
 // AnswerQuestion answers the questions a session's agent shows in its
 // terminal, where no approval holds them, by typing the answers into its
 // dialog; the agent's driver says how. questions are those the dialog
@@ -1315,7 +1718,7 @@ type AnswerQuestion struct {
 
 func (x *AnswerQuestion) Reset() {
 	*x = AnswerQuestion{}
-	mi := &file_mako_v2_session_proto_msgTypes[14]
+	mi := &file_mako_v2_session_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1327,7 +1730,7 @@ func (x *AnswerQuestion) String() string {
 func (*AnswerQuestion) ProtoMessage() {}
 
 func (x *AnswerQuestion) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[14]
+	mi := &file_mako_v2_session_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1340,7 +1743,7 @@ func (x *AnswerQuestion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnswerQuestion.ProtoReflect.Descriptor instead.
 func (*AnswerQuestion) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{14}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *AnswerQuestion) GetNodeId() string {
@@ -1386,7 +1789,7 @@ type Send struct {
 
 func (x *Send) Reset() {
 	*x = Send{}
-	mi := &file_mako_v2_session_proto_msgTypes[15]
+	mi := &file_mako_v2_session_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1398,7 +1801,7 @@ func (x *Send) String() string {
 func (*Send) ProtoMessage() {}
 
 func (x *Send) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[15]
+	mi := &file_mako_v2_session_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1411,7 +1814,7 @@ func (x *Send) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Send.ProtoReflect.Descriptor instead.
 func (*Send) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{15}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *Send) GetNodeId() string {
@@ -1458,7 +1861,7 @@ type Attach struct {
 
 func (x *Attach) Reset() {
 	*x = Attach{}
-	mi := &file_mako_v2_session_proto_msgTypes[16]
+	mi := &file_mako_v2_session_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1470,7 +1873,7 @@ func (x *Attach) String() string {
 func (*Attach) ProtoMessage() {}
 
 func (x *Attach) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[16]
+	mi := &file_mako_v2_session_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1483,7 +1886,7 @@ func (x *Attach) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Attach.ProtoReflect.Descriptor instead.
 func (*Attach) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{16}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *Attach) GetSessionId() string {
@@ -1525,7 +1928,7 @@ type Input struct {
 
 func (x *Input) Reset() {
 	*x = Input{}
-	mi := &file_mako_v2_session_proto_msgTypes[17]
+	mi := &file_mako_v2_session_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1537,7 +1940,7 @@ func (x *Input) String() string {
 func (*Input) ProtoMessage() {}
 
 func (x *Input) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[17]
+	mi := &file_mako_v2_session_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1550,7 +1953,7 @@ func (x *Input) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Input.ProtoReflect.Descriptor instead.
 func (*Input) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{17}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *Input) GetSessionId() string {
@@ -1578,7 +1981,7 @@ type Output struct {
 
 func (x *Output) Reset() {
 	*x = Output{}
-	mi := &file_mako_v2_session_proto_msgTypes[18]
+	mi := &file_mako_v2_session_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1590,7 +1993,7 @@ func (x *Output) String() string {
 func (*Output) ProtoMessage() {}
 
 func (x *Output) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[18]
+	mi := &file_mako_v2_session_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1603,7 +2006,7 @@ func (x *Output) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Output.ProtoReflect.Descriptor instead.
 func (*Output) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{18}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *Output) GetSessionId() string {
@@ -1641,7 +2044,7 @@ type Resize struct {
 
 func (x *Resize) Reset() {
 	*x = Resize{}
-	mi := &file_mako_v2_session_proto_msgTypes[19]
+	mi := &file_mako_v2_session_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1653,7 +2056,7 @@ func (x *Resize) String() string {
 func (*Resize) ProtoMessage() {}
 
 func (x *Resize) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[19]
+	mi := &file_mako_v2_session_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1666,7 +2069,7 @@ func (x *Resize) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Resize.ProtoReflect.Descriptor instead.
 func (*Resize) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{19}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *Resize) GetSessionId() string {
@@ -1724,7 +2127,7 @@ type TerminalColors struct {
 
 func (x *TerminalColors) Reset() {
 	*x = TerminalColors{}
-	mi := &file_mako_v2_session_proto_msgTypes[20]
+	mi := &file_mako_v2_session_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1736,7 +2139,7 @@ func (x *TerminalColors) String() string {
 func (*TerminalColors) ProtoMessage() {}
 
 func (x *TerminalColors) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[20]
+	mi := &file_mako_v2_session_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1749,7 +2152,7 @@ func (x *TerminalColors) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TerminalColors.ProtoReflect.Descriptor instead.
 func (*TerminalColors) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{20}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *TerminalColors) GetForeground() uint32 {
@@ -1792,7 +2195,7 @@ type ProgressReport struct {
 
 func (x *ProgressReport) Reset() {
 	*x = ProgressReport{}
-	mi := &file_mako_v2_session_proto_msgTypes[21]
+	mi := &file_mako_v2_session_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1804,7 +2207,7 @@ func (x *ProgressReport) String() string {
 func (*ProgressReport) ProtoMessage() {}
 
 func (x *ProgressReport) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[21]
+	mi := &file_mako_v2_session_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1817,7 +2220,7 @@ func (x *ProgressReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProgressReport.ProtoReflect.Descriptor instead.
 func (*ProgressReport) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{21}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ProgressReport) GetState() uint32 {
@@ -1858,7 +2261,7 @@ type Snapshot struct {
 
 func (x *Snapshot) Reset() {
 	*x = Snapshot{}
-	mi := &file_mako_v2_session_proto_msgTypes[22]
+	mi := &file_mako_v2_session_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1870,7 +2273,7 @@ func (x *Snapshot) String() string {
 func (*Snapshot) ProtoMessage() {}
 
 func (x *Snapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[22]
+	mi := &file_mako_v2_session_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1883,7 +2286,7 @@ func (x *Snapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Snapshot.ProtoReflect.Descriptor instead.
 func (*Snapshot) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{22}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *Snapshot) GetProgress() *ProgressReport {
@@ -1947,7 +2350,7 @@ type Exited struct {
 
 func (x *Exited) Reset() {
 	*x = Exited{}
-	mi := &file_mako_v2_session_proto_msgTypes[23]
+	mi := &file_mako_v2_session_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1959,7 +2362,7 @@ func (x *Exited) String() string {
 func (*Exited) ProtoMessage() {}
 
 func (x *Exited) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[23]
+	mi := &file_mako_v2_session_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1972,7 +2375,7 @@ func (x *Exited) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Exited.ProtoReflect.Descriptor instead.
 func (*Exited) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{23}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *Exited) GetSessionId() string {
@@ -2009,7 +2412,7 @@ type ListCommands struct {
 
 func (x *ListCommands) Reset() {
 	*x = ListCommands{}
-	mi := &file_mako_v2_session_proto_msgTypes[24]
+	mi := &file_mako_v2_session_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2021,7 +2424,7 @@ func (x *ListCommands) String() string {
 func (*ListCommands) ProtoMessage() {}
 
 func (x *ListCommands) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[24]
+	mi := &file_mako_v2_session_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2034,7 +2437,7 @@ func (x *ListCommands) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCommands.ProtoReflect.Descriptor instead.
 func (*ListCommands) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{24}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ListCommands) GetNodeId() string {
@@ -2062,7 +2465,7 @@ type Commands struct {
 
 func (x *Commands) Reset() {
 	*x = Commands{}
-	mi := &file_mako_v2_session_proto_msgTypes[25]
+	mi := &file_mako_v2_session_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2074,7 +2477,7 @@ func (x *Commands) String() string {
 func (*Commands) ProtoMessage() {}
 
 func (x *Commands) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[25]
+	mi := &file_mako_v2_session_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2087,7 +2490,7 @@ func (x *Commands) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Commands.ProtoReflect.Descriptor instead.
 func (*Commands) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{25}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *Commands) GetCommands() []*Command {
@@ -2110,7 +2513,7 @@ type Command struct {
 
 func (x *Command) Reset() {
 	*x = Command{}
-	mi := &file_mako_v2_session_proto_msgTypes[26]
+	mi := &file_mako_v2_session_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2122,7 +2525,7 @@ func (x *Command) String() string {
 func (*Command) ProtoMessage() {}
 
 func (x *Command) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_session_proto_msgTypes[26]
+	mi := &file_mako_v2_session_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2135,7 +2538,7 @@ func (x *Command) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Command.ProtoReflect.Descriptor instead.
 func (*Command) Descriptor() ([]byte, []int) {
-	return file_mako_v2_session_proto_rawDescGZIP(), []int{26}
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *Command) GetName() string {
@@ -2195,7 +2598,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x12\n" +
 	"\x04base\x18\x04 \x01(\tR\x04base\x12\x14\n" +
-	"\x05start\x18\x05 \x01(\tR\x05start\"\xc2\b\n" +
+	"\x05start\x18\x05 \x01(\tR\x05start\"\xa5\t\n" +
 	"\vSessionInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x14\n" +
@@ -2234,9 +2637,33 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\tgit_stamp\x18\x1f \x01(\tR\bgitStamp\x12\x14\n" +
 	"\x05turns\x18  \x01(\x04R\x05turns\x12'\n" +
 	"\x06notice\x18! \x01(\v2\x0f.mako.v2.NoticeR\x06notice\x12\x14\n" +
-	"\x05bells\x18\" \x01(\x04R\x05bellsB\f\n" +
+	"\x05bells\x18\" \x01(\x04R\x05bells\x12-\n" +
+	"\x06dialog\x18# \x01(\v2\x15.mako.v2.ScreenDialogR\x06dialog\x122\n" +
+	"\bcontrols\x18$ \x01(\v2\x16.mako.v2.AgentControlsR\bcontrolsB\f\n" +
 	"\n" +
-	"_exit_code\"D\n" +
+	"_exit_code\"W\n" +
+	"\rAgentControls\x12\x14\n" +
+	"\x05modes\x18\x01 \x03(\tR\x05modes\x12\x16\n" +
+	"\x06models\x18\x02 \x03(\tR\x06models\x12\x18\n" +
+	"\aefforts\x18\x03 \x03(\tR\aefforts\"\x8a\x01\n" +
+	"\x0eConfigureAgent\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x12\n" +
+	"\x04mode\x18\x03 \x01(\tR\x04mode\x12\x14\n" +
+	"\x05model\x18\x04 \x01(\tR\x05model\x12\x16\n" +
+	"\x06effort\x18\x05 \x01(\tR\x06effort\"h\n" +
+	"\fScreenDialog\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\x12\x18\n" +
+	"\aoptions\x18\x03 \x03(\tR\aoptions\x12\x1a\n" +
+	"\bselected\x18\x04 \x01(\x05R\bselected\"{\n" +
+	"\fAnswerDialog\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1b\n" +
+	"\tdialog_id\x18\x03 \x01(\tR\bdialogId\x12\x16\n" +
+	"\x06option\x18\x04 \x01(\x05R\x06option\"D\n" +
 	"\x06Notice\x12\x14\n" +
 	"\x05title\x18\x01 \x01(\tR\x05title\x12\x12\n" +
 	"\x04body\x18\x02 \x01(\tR\x04body\x12\x10\n" +
@@ -2254,14 +2681,20 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x06output\x18\n" +
 	" \x01(\tR\x06outputB\f\n" +
 	"\n" +
-	"_exit_code\"\xbf\x01\n" +
+	"_exit_code\"\x86\x02\n" +
 	"\bApproval\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04tool\x18\x02 \x01(\tR\x04tool\x12\x16\n" +
 	"\x06detail\x18\x03 \x01(\tR\x06detail\x12\x14\n" +
 	"\x05input\x18\x04 \x01(\tR\x05input\x120\n" +
 	"\x05since\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x05since\x12/\n" +
-	"\tquestions\x18\x06 \x03(\v2\x11.mako.v2.QuestionR\tquestions\"\x94\x01\n" +
+	"\tquestions\x18\x06 \x03(\v2\x11.mako.v2.QuestionR\tquestions\x12\x12\n" +
+	"\x04kind\x18\a \x01(\tR\x04kind\x121\n" +
+	"\aoptions\x18\b \x03(\v2\x17.mako.v2.ApprovalOptionR\aoptions\"J\n" +
+	"\x0eApprovalOption\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04mode\x18\x02 \x01(\tR\x04mode\x12\x14\n" +
+	"\x05rules\x18\x03 \x03(\tR\x05rules\"\x94\x01\n" +
 	"\bQuestion\x12\x1a\n" +
 	"\bquestion\x18\x01 \x01(\tR\bquestion\x12\x16\n" +
 	"\x06header\x18\x02 \x01(\tR\x06header\x121\n" +
@@ -2281,7 +2714,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\"\xd2\x01\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\"\xea\x01\n" +
 	"\x0eAnswerApproval\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
@@ -2290,7 +2723,8 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"approvalId\x12\x1a\n" +
 	"\bdecision\x18\x04 \x01(\tR\bdecision\x12\x18\n" +
 	"\amessage\x18\x05 \x01(\tR\amessage\x121\n" +
-	"\aanswers\x18\x06 \x03(\v2\x17.mako.v2.QuestionAnswerR\aanswers\"\xac\x01\n" +
+	"\aanswers\x18\x06 \x03(\v2\x17.mako.v2.QuestionAnswerR\aanswers\x12\x16\n" +
+	"\x06option\x18\a \x01(\tR\x06option\"\xac\x01\n" +
 	"\x0eAnswerQuestion\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
@@ -2379,64 +2813,72 @@ func file_mako_v2_session_proto_rawDescGZIP() []byte {
 	return file_mako_v2_session_proto_rawDescData
 }
 
-var file_mako_v2_session_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
+var file_mako_v2_session_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_mako_v2_session_proto_goTypes = []any{
 	(*ListSessions)(nil),          // 0: mako.v2.ListSessions
 	(*Sessions)(nil),              // 1: mako.v2.Sessions
 	(*OpenSession)(nil),           // 2: mako.v2.OpenSession
 	(*Worktree)(nil),              // 3: mako.v2.Worktree
 	(*SessionInfo)(nil),           // 4: mako.v2.SessionInfo
-	(*Notice)(nil),                // 5: mako.v2.Notice
-	(*BackgroundTask)(nil),        // 6: mako.v2.BackgroundTask
-	(*Approval)(nil),              // 7: mako.v2.Approval
-	(*Question)(nil),              // 8: mako.v2.Question
-	(*QuestionOption)(nil),        // 9: mako.v2.QuestionOption
-	(*QuestionAnswer)(nil),        // 10: mako.v2.QuestionAnswer
-	(*CloseSession)(nil),          // 11: mako.v2.CloseSession
-	(*RenameSession)(nil),         // 12: mako.v2.RenameSession
-	(*AnswerApproval)(nil),        // 13: mako.v2.AnswerApproval
-	(*AnswerQuestion)(nil),        // 14: mako.v2.AnswerQuestion
-	(*Send)(nil),                  // 15: mako.v2.Send
-	(*Attach)(nil),                // 16: mako.v2.Attach
-	(*Input)(nil),                 // 17: mako.v2.Input
-	(*Output)(nil),                // 18: mako.v2.Output
-	(*Resize)(nil),                // 19: mako.v2.Resize
-	(*TerminalColors)(nil),        // 20: mako.v2.TerminalColors
-	(*ProgressReport)(nil),        // 21: mako.v2.ProgressReport
-	(*Snapshot)(nil),              // 22: mako.v2.Snapshot
-	(*Exited)(nil),                // 23: mako.v2.Exited
-	(*ListCommands)(nil),          // 24: mako.v2.ListCommands
-	(*Commands)(nil),              // 25: mako.v2.Commands
-	(*Command)(nil),               // 26: mako.v2.Command
-	nil,                           // 27: mako.v2.OpenSession.EnvEntry
-	(*timestamppb.Timestamp)(nil), // 28: google.protobuf.Timestamp
+	(*AgentControls)(nil),         // 5: mako.v2.AgentControls
+	(*ConfigureAgent)(nil),        // 6: mako.v2.ConfigureAgent
+	(*ScreenDialog)(nil),          // 7: mako.v2.ScreenDialog
+	(*AnswerDialog)(nil),          // 8: mako.v2.AnswerDialog
+	(*Notice)(nil),                // 9: mako.v2.Notice
+	(*BackgroundTask)(nil),        // 10: mako.v2.BackgroundTask
+	(*Approval)(nil),              // 11: mako.v2.Approval
+	(*ApprovalOption)(nil),        // 12: mako.v2.ApprovalOption
+	(*Question)(nil),              // 13: mako.v2.Question
+	(*QuestionOption)(nil),        // 14: mako.v2.QuestionOption
+	(*QuestionAnswer)(nil),        // 15: mako.v2.QuestionAnswer
+	(*CloseSession)(nil),          // 16: mako.v2.CloseSession
+	(*RenameSession)(nil),         // 17: mako.v2.RenameSession
+	(*AnswerApproval)(nil),        // 18: mako.v2.AnswerApproval
+	(*AnswerQuestion)(nil),        // 19: mako.v2.AnswerQuestion
+	(*Send)(nil),                  // 20: mako.v2.Send
+	(*Attach)(nil),                // 21: mako.v2.Attach
+	(*Input)(nil),                 // 22: mako.v2.Input
+	(*Output)(nil),                // 23: mako.v2.Output
+	(*Resize)(nil),                // 24: mako.v2.Resize
+	(*TerminalColors)(nil),        // 25: mako.v2.TerminalColors
+	(*ProgressReport)(nil),        // 26: mako.v2.ProgressReport
+	(*Snapshot)(nil),              // 27: mako.v2.Snapshot
+	(*Exited)(nil),                // 28: mako.v2.Exited
+	(*ListCommands)(nil),          // 29: mako.v2.ListCommands
+	(*Commands)(nil),              // 30: mako.v2.Commands
+	(*Command)(nil),               // 31: mako.v2.Command
+	nil,                           // 32: mako.v2.OpenSession.EnvEntry
+	(*timestamppb.Timestamp)(nil), // 33: google.protobuf.Timestamp
 }
 var file_mako_v2_session_proto_depIdxs = []int32{
 	4,  // 0: mako.v2.Sessions.sessions:type_name -> mako.v2.SessionInfo
-	27, // 1: mako.v2.OpenSession.env:type_name -> mako.v2.OpenSession.EnvEntry
+	32, // 1: mako.v2.OpenSession.env:type_name -> mako.v2.OpenSession.EnvEntry
 	3,  // 2: mako.v2.OpenSession.worktree:type_name -> mako.v2.Worktree
-	28, // 3: mako.v2.SessionInfo.started_at:type_name -> google.protobuf.Timestamp
-	28, // 4: mako.v2.SessionInfo.status_at:type_name -> google.protobuf.Timestamp
-	28, // 5: mako.v2.SessionInfo.last_output:type_name -> google.protobuf.Timestamp
-	7,  // 6: mako.v2.SessionInfo.approval:type_name -> mako.v2.Approval
+	33, // 3: mako.v2.SessionInfo.started_at:type_name -> google.protobuf.Timestamp
+	33, // 4: mako.v2.SessionInfo.status_at:type_name -> google.protobuf.Timestamp
+	33, // 5: mako.v2.SessionInfo.last_output:type_name -> google.protobuf.Timestamp
+	11, // 6: mako.v2.SessionInfo.approval:type_name -> mako.v2.Approval
 	3,  // 7: mako.v2.SessionInfo.worktree:type_name -> mako.v2.Worktree
-	28, // 8: mako.v2.SessionInfo.last_message:type_name -> google.protobuf.Timestamp
-	6,  // 9: mako.v2.SessionInfo.tasks:type_name -> mako.v2.BackgroundTask
-	5,  // 10: mako.v2.SessionInfo.notice:type_name -> mako.v2.Notice
-	28, // 11: mako.v2.Approval.since:type_name -> google.protobuf.Timestamp
-	8,  // 12: mako.v2.Approval.questions:type_name -> mako.v2.Question
-	9,  // 13: mako.v2.Question.options:type_name -> mako.v2.QuestionOption
-	10, // 14: mako.v2.AnswerApproval.answers:type_name -> mako.v2.QuestionAnswer
-	8,  // 15: mako.v2.AnswerQuestion.questions:type_name -> mako.v2.Question
-	10, // 16: mako.v2.AnswerQuestion.answers:type_name -> mako.v2.QuestionAnswer
-	20, // 17: mako.v2.Resize.colors:type_name -> mako.v2.TerminalColors
-	21, // 18: mako.v2.Snapshot.progress:type_name -> mako.v2.ProgressReport
-	26, // 19: mako.v2.Commands.commands:type_name -> mako.v2.Command
-	20, // [20:20] is the sub-list for method output_type
-	20, // [20:20] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	33, // 8: mako.v2.SessionInfo.last_message:type_name -> google.protobuf.Timestamp
+	10, // 9: mako.v2.SessionInfo.tasks:type_name -> mako.v2.BackgroundTask
+	9,  // 10: mako.v2.SessionInfo.notice:type_name -> mako.v2.Notice
+	7,  // 11: mako.v2.SessionInfo.dialog:type_name -> mako.v2.ScreenDialog
+	5,  // 12: mako.v2.SessionInfo.controls:type_name -> mako.v2.AgentControls
+	33, // 13: mako.v2.Approval.since:type_name -> google.protobuf.Timestamp
+	13, // 14: mako.v2.Approval.questions:type_name -> mako.v2.Question
+	12, // 15: mako.v2.Approval.options:type_name -> mako.v2.ApprovalOption
+	14, // 16: mako.v2.Question.options:type_name -> mako.v2.QuestionOption
+	15, // 17: mako.v2.AnswerApproval.answers:type_name -> mako.v2.QuestionAnswer
+	13, // 18: mako.v2.AnswerQuestion.questions:type_name -> mako.v2.Question
+	15, // 19: mako.v2.AnswerQuestion.answers:type_name -> mako.v2.QuestionAnswer
+	25, // 20: mako.v2.Resize.colors:type_name -> mako.v2.TerminalColors
+	26, // 21: mako.v2.Snapshot.progress:type_name -> mako.v2.ProgressReport
+	31, // 22: mako.v2.Commands.commands:type_name -> mako.v2.Command
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_session_proto_init() }
@@ -2445,14 +2887,14 @@ func file_mako_v2_session_proto_init() {
 		return
 	}
 	file_mako_v2_session_proto_msgTypes[4].OneofWrappers = []any{}
-	file_mako_v2_session_proto_msgTypes[6].OneofWrappers = []any{}
+	file_mako_v2_session_proto_msgTypes[10].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_session_proto_rawDesc), len(file_mako_v2_session_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   28,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
