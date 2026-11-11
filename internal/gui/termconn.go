@@ -108,6 +108,11 @@ type termConn struct {
 	// it, nil when that could not be told.
 	repaint   atomic.Pointer[func(ggui.Rect)]
 	paintedAt atomic.Pointer[ggui.Rect]
+	// whole is that the paint pending was asked of all of the terminal,
+	// not of the rows output changed alone; rowsAt is where a view last
+	// painted its rows.
+	whole  atomic.Bool
+	rowsAt atomic.Pointer[termRows]
 
 	progress activity.Progress // what the program says of its work
 	copied   *string           // what the program last put on the clipboard, until the view takes it
@@ -322,6 +327,8 @@ func (t *termConn) read() {
 			if len(owed) > 0 {
 				t.write(owed) // what the wheel turned while the program was busy
 			}
+			t.paintOutput()
+			continue
 		case protocol.EventExited:
 			t.mu.Lock()
 			t.exited, t.exitCode = true, ev.ExitCode
@@ -462,7 +469,7 @@ func (t *termConn) setTitleLocked(title string) {
 // last painted it, and only there, when the window can do that; else the
 // window whole.
 func (t *termConn) requestPaint() {
-	if !t.pending.CompareAndSwap(false, true) {
+	if was := t.pending.Swap(true); t.whole.Swap(true) && was {
 		return
 	}
 	if repaint, at := t.repaint.Load(), t.paintedAt.Load(); repaint != nil && at != nil {
@@ -475,6 +482,86 @@ func (t *termConn) requestPaint() {
 
 // paintOverdue is how long a paint asked for of the terminal's region may
 // take before the window is asked to paint whole.
+// termRows is where a view painted a terminal's rows: the top of the
+// first in the window, and how tall each is.
+type termRows struct{ top, height float64 }
+
+// paintOutput asks for what output changed to be painted again: the rows
+// it wrote and those the cursor left and came to, when they are few and a
+// view's place for them is known, so that an agent's spinner turning at
+// the foot of a terminal that fills the window does not have the window
+// painted whole; else all of the terminal, as requestPaint does.
+func (t *termConn) paintOutput() {
+	repaint, at, rows := t.repaint.Load(), t.paintedAt.Load(), t.rowsAt.Load()
+	if repaint == nil || at == nil || rows == nil || t.pending.Load() && t.whole.Load() {
+		t.requestPaint()
+		return
+	}
+	t.mu.Lock()
+	y0, y1, ok := t.changedRowsLocked()
+	t.mu.Unlock()
+	if !ok {
+		t.requestPaint()
+		return
+	}
+	// A row more each way, for what a glyph draws past its cell.
+	top := rows.top + float64(y0-1)*rows.height
+	band := ggui.Rct(ggui.Pt(at.Origin.X, top), ggui.Sz(at.Size.W, float64(y1-y0+3)*rows.height)).Intersect(*at)
+	if band.Empty() {
+		t.requestPaint()
+		return
+	}
+	was := t.pending.Swap(true)
+	(*repaint)(band)
+	if !was {
+		t.watchPaint()
+	}
+}
+
+// changedRowsLocked is the rows of the screen, the first and the last,
+// that differ from the copy last painted, and false when that cannot be
+// told by rows or they are half the screen: nothing painted yet, a screen
+// half drawn, images, a scroll, the colours changed.
+func (t *termConn) changedRowsLocked() (first, last int, ok bool) {
+	if t.closed || t.held || !t.hasFrame || t.exited || t.err != nil || len(t.placements) > 0 {
+		return 0, 0, false
+	}
+	if t.state.Update(t.vt.Terminal()) != nil {
+		return 0, 0, false
+	}
+	cols, rows := int(t.state.Cols()), int(t.state.Rows())
+	if cols != t.last.cols || rows != t.last.rows || t.state.Colors() != t.last.colors {
+		return 0, 0, false
+	}
+	first, last = rows, -1
+	note := func(y int) { first, last = min(first, y), max(last, y) }
+	switch t.state.Dirty() {
+	case gostty.RenderDirtyClean:
+	case gostty.RenderDirtyPartial:
+		if cap(t.dirtyRows) < rows {
+			t.dirtyRows = make([]uint16, rows)
+		}
+		dst := t.dirtyRows[:rows]
+		n, err := t.state.DirtyRows(dst)
+		if err != nil {
+			return 0, 0, false
+		}
+		for _, y := range dst[:n] {
+			note(int(y))
+		}
+	default:
+		return 0, 0, false
+	}
+	if c := t.state.Cursor(); c != t.last.cursor {
+		note(int(c.Y))
+		note(int(t.last.cursor.Y))
+	}
+	if last < first || (last-first+1)*2 >= rows {
+		return 0, 0, false
+	}
+	return first, last, true
+}
+
 const paintOverdue = 250 * time.Millisecond
 
 // watchPaint makes sure the paint just asked for of the terminal's region
@@ -507,9 +594,22 @@ func (t *termConn) painted(at ggui.Rect, known bool) {
 	}
 }
 
+// paintedRows notes where a view painted the terminal's rows, in the
+// window: the top of the first and the height of each, none when that
+// cannot be told.
+func (t *termConn) paintedRows(top, height float64, known bool) {
+	switch old := t.rowsAt.Load(); {
+	case !known || height <= 0:
+		t.rowsAt.Store(nil)
+	case old == nil || *old != (termRows{top, height}):
+		t.rowsAt.Store(&termRows{top, height})
+	}
+}
+
 // frame copies the screen for one paint. It runs on the UI goroutine.
 func (t *termConn) frame() (frameSnapshot, error) {
 	t.pending.Store(false)
+	t.whole.Store(false)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.closed {

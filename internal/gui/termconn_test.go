@@ -2,6 +2,7 @@ package gui
 
 import (
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -103,5 +104,64 @@ func TestAScreenEndedInItsPieceIsNotHeldBack(t *testing.T) {
 	defer conn.mu.Unlock()
 	if len(conn.next) != 0 {
 		t.Fatalf("%q was held back", conn.next)
+	}
+}
+
+// Output that changes a row or two of a screen already painted asks for
+// those rows to be painted again, not all of the terminal; output that
+// changes most of it, or comes before any paint, asks for all of it.
+func TestOutputRepaintsTheRowsItChanged(t *testing.T) {
+	link := newFakeLink()
+	var mu sync.Mutex
+	var asked []ggui.Rect
+	conn, err := newTermConn("s1", link, 20, 10, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.close()
+	defer close(link.in)
+	repaint := func(r ggui.Rect) { mu.Lock(); asked = append(asked, r); mu.Unlock() }
+	conn.repaint.Store(&repaint)
+	at := ggui.Rct(ggui.Pt(300, 40), ggui.Sz(800, 200))
+	conn.painted(at, true)
+	conn.paintedRows(40, 20, true)
+	last := func() (ggui.Rect, int) {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(asked) == 0 {
+			return ggui.Rect{}, 0
+		}
+		return asked[len(asked)-1], len(asked)
+	}
+	paint := func() {
+		t.Helper()
+		if _, err := conn.frame(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	link.output(t, "\x1b[8;1Hwork")
+	waitFor(t, func() bool { return strings.Contains(screenText(conn), "work") })
+	waitFor(t, func() bool { _, n := last(); return n > 0 })
+	if r, _ := last(); r != at {
+		t.Fatalf("before any paint, %v was asked; want all of the terminal, %v", r, at)
+	}
+	paint()
+	_, before := last()
+
+	// Row 8, where the cursor stays: it and a row each way.
+	link.output(t, "\x1b[8;1Hdone")
+	waitFor(t, func() bool { _, n := last(); return n > before })
+	want := ggui.Rct(ggui.Pt(300, 40+6*20), ggui.Sz(800, 3*20))
+	if r, _ := last(); r != want {
+		t.Fatalf("a row changed and %v was asked; want its rows, %v", r, want)
+	}
+	paint()
+	_, before = last()
+
+	link.output(t, "\x1b[1;1Ha\x1b[9;1Hb")
+	waitFor(t, func() bool { _, n := last(); return n > before })
+	if r, _ := last(); r != at {
+		t.Fatalf("rows across the screen changed and %v was asked; want all of the terminal", r)
 	}
 }

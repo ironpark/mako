@@ -160,7 +160,9 @@ func (t *terminalView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	p := t.prefs()
 	t.conn.configure(termOptionsFor(p, t.pal))
 	t.rect = r
-	t.conn.painted(dst.WindowRect(r))
+	at, placed := dst.WindowRect(r)
+	t.conn.painted(at, placed)
+	t.conn.paintedRows(at.Origin.Y+termPad/2, math.Ceil(p.FontSize*p.LineHeight), placed)
 	fillGround(dst, r, t.ground)
 	dst.HitKey(r, t)
 	dst.HitPointer(r, t)
@@ -932,11 +934,21 @@ func (g grid) paint(dst *ggui.Canvas, f frameSnapshot) {
 	g.paintImages(dst, f, gostty.KittyLayerAboveText)
 }
 
+// rowShows is whether a frame paints anything of a row, or of what its
+// glyphs draw past it: one painted in part, for the rows output changed or
+// a spinner beside the terminal, leaves the rest as they were.
+func (g grid) rowShows(dst *ggui.Canvas, row, cols int) bool {
+	return dst.Image == nil || dst.Shows(g.cellRect(0, row, cols).Grow(g.cellH/2))
+}
+
 func (g grid) paintBackgrounds(dst *ggui.Canvas, f frameSnapshot) {
 	for row := 0; row < f.rows; row++ {
 		base := row * f.cols
 		if base+f.cols > len(f.cells) {
 			break
+		}
+		if !g.rowShows(dst, row, f.cols) {
+			continue
 		}
 		line := f.cells[base : base+f.cols]
 
@@ -963,6 +975,9 @@ func (g grid) paintText(dst *ggui.Canvas, f frameSnapshot) {
 		base := row * f.cols
 		if base+f.cols > len(f.cells) {
 			break
+		}
+		if !g.rowShows(dst, row, f.cols) {
+			continue
 		}
 		line := f.cells[base : base+f.cols]
 
