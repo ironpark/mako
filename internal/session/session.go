@@ -566,7 +566,17 @@ func pasteGap(n int) time.Duration {
 }
 
 // Send pastes text, if any, then types keys, if any, pasteGap after it.
+// Text goes to the agent's own prompt, as a message: from a view over it,
+// as a subagent's, the agent is first taken back there.
 func (s *Session) Send(text string, keys []byte) error {
+	if text != "" {
+		s.recall()
+	}
+	return s.send(text, keys)
+}
+
+// send is Send as typed, wherever the screen is.
+func (s *Session) send(text string, keys []byte) error {
 	if text != "" {
 		if err := s.Paste(text); err != nil {
 			return err

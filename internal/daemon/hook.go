@@ -336,7 +336,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 			withdraw()
 		}()
 		reply := d.approvals.ask(asking, s, name, ev, msg.Seq)
-		if reply.Decision != "" {
+		if reply.Decision != "" && len(reply.Output) == 0 {
 			reply.Output = hooks.Reply(reply.Decision, reply.Message)
 		}
 		_ = conn.SetDeadline(time.Now().Add(2 * time.Second))

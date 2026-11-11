@@ -24,13 +24,14 @@ func (m *model) approvalOfSession(id string) ggui.Readable[*protocol.Approval] {
 	}).WithEqual(func(a, b *protocol.Approval) bool { return a.GetId() == b.GetId() })
 }
 
-// answerApproval passes the user's decision to the agent.
-func (m *model) answerApproval(id, approval, decision string) {
+// answerApproval passes the user's decision to the agent, with the
+// answers to its questions, if it asks any.
+func (m *model) answerApproval(id, approval, decision string, answers ...*protocol.QuestionAnswer) {
 	info, ok := m.session(id)
 	if !ok {
 		return
 	}
-	req := &protocol.AnswerApproval{NodeId: m.remoteID(info.GetNodeId()), SessionId: id, ApprovalId: approval, Decision: decision}
+	req := &protocol.AnswerApproval{NodeId: m.remoteID(info.GetNodeId()), SessionId: id, ApprovalId: approval, Decision: decision, Answers: answers}
 	// Answered, the approval leaves at once rather than at the next poll.
 	m.editSession(id, func(s *protocol.SessionInfo) {
 		if s.GetApproval().GetId() == approval {
@@ -41,17 +42,23 @@ func (m *model) answerApproval(id, approval, decision string) {
 		return c.AnswerApproval(ctx, req)
 	}, func(_ *protocol.SessionInfo, err error) {
 		if err != nil {
-			m.Conn.Set(connState{OK: ggui.Peek(m.Conn).OK, Self: ggui.Peek(m.Conn).Self, Err: err.Error()})
+			m.connErr(err)
 		}
 		m.link.pollNow()
 	})
+}
+
+// connErr shows err, as the connection's last error.
+func (m *model) connErr(err error) {
+	c := ggui.Peek(m.Conn)
+	m.Conn.Set(connState{OK: c.OK, Self: c.Self, Err: err.Error()})
 }
 
 // approvalButtons are an approval's answers.
 func approvalButtons(m *model, id string, a *protocol.Approval) []ggui.Widget {
 	answer := func(decision string) func() { return func() { m.answerApproval(id, a.GetId(), decision) } }
 	return []ggui.Widget{
-		ui.Button(T("In terminal"), answer(protocol.DecisionTerminal)).Ghost().Name(T("Answer in the terminal")),
+		inTerminalButton(answer(protocol.DecisionTerminal)),
 		ui.Button(T("Deny"), answer(protocol.DecisionDeny)).Outline(),
 		ui.Button(T("Allow"), answer(protocol.DecisionAllow)),
 	}
@@ -63,6 +70,15 @@ func approvalCard(m *model, id string) ggui.Widget {
 	return ggui.View(m.approvalOfSession(id), func(a *protocol.Approval) ggui.Widget {
 		if a == nil {
 			return ggui.Box()
+		}
+		if qs := a.GetQuestions(); len(qs) > 0 {
+			answer := func(decision string) func() { return func() { m.answerApproval(id, a.GetId(), decision) } }
+			return questionCard(questionForm(qs, func(answers []*protocol.QuestionAnswer) {
+				m.answerApproval(id, a.GetId(), protocol.DecisionAllow, answers...)
+			}),
+				inTerminalButton(answer(protocol.DecisionTerminal)),
+				ui.Button(T("Decline"), answer(protocol.DecisionDeny)).Outline().Name(T("Decline to answer")),
+			)
 		}
 		open := ggui.State(false)
 		head := ggui.Row(
@@ -97,11 +113,21 @@ func approvalBar(m *model, id string) ggui.Widget {
 		if a.GetDetail() != "" {
 			what += "  " + a.GetDetail()
 		}
+		glyph, ask, buttons := "shield-alert", T("Approve?"), approvalButtons(m, id, a)
+		if qs := a.GetQuestions(); len(qs) > 0 {
+			// Its form is in Chat; the terminal shows no dialog until
+			// it is handed back.
+			glyph, ask, what = "message-square", T("The agent asks"), qs[0].GetQuestion()
+			buttons = []ggui.Widget{
+				ui.Button(T("Answer in Chat"), func() { m.setChatMode(id, true) }).Outline(),
+				inTerminalButton(func() { m.answerApproval(id, a.GetId(), protocol.DecisionTerminal) }),
+			}
+		}
 		row := append([]ggui.Widget{
-			icon("shield-alert").Size(15).Color(skin.DotWaiting),
-			ggui.Text(T("Approve?")).Size(12.5).Weight(ggui.WeightMedium).NoWrap(),
+			icon(glyph).Size(15).Color(skin.DotWaiting),
+			ggui.Text(ask).Size(12.5).Weight(ggui.WeightMedium).NoWrap(),
 			ggui.Expanded(ggui.Text(what).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()),
-		}, approvalButtons(m, id, a)...)
+		}, buttons...)
 		return ggui.Column(
 			ggui.Box(ggui.Row(row...).Gap(10).Align(ggui.AlignCenter)).Pad(6, 12).Fill(skin.Surface2),
 			hline(),

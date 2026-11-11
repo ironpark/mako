@@ -300,6 +300,17 @@ public interface EnvelopeOrBuilder extends
   dev.ironpark.mako.v2.Commands getCommands();
 
   /**
+   * <code>.mako.v2.AnswerQuestion answer_question = 46 [json_name = "answerQuestion"];</code>
+   * @return Whether the answerQuestion field is set.
+   */
+  boolean hasAnswerQuestion();
+  /**
+   * <code>.mako.v2.AnswerQuestion answer_question = 46 [json_name = "answerQuestion"];</code>
+   * @return The answerQuestion.
+   */
+  dev.ironpark.mako.v2.AnswerQuestion getAnswerQuestion();
+
+  /**
    * <pre>
    * An attached session's stream.
    * </pre>

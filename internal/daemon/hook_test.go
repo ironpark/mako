@@ -365,6 +365,51 @@ func TestQuestionsAreNotApprovals(t *testing.T) {
 	}
 }
 
+// A question an agent's hook can answer waits for the window, as an
+// approval does, and is answered with the user's answers; allowed with
+// none, it goes to the agent's prompt.
+func TestQuestionsAreAnsweredInTheWindow(t *testing.T) {
+	d, s, socket := hookedDaemon(t)
+	d.approvals.watch(true)
+	ask := func() <-chan string {
+		out := make(chan string, 1)
+		go func() {
+			var buf bytes.Buffer
+			runHook([]string{socket}, strings.NewReader(`{"hook_event_name":"PermissionRequest","tool_name":"AskUserQuestion","tool_input":{"questions":[`+
+				`{"question":"Which fruits?","header":"Fruit","multiSelect":true,"options":[{"label":"Apple","description":"red"},{"label":"Pear","description":"green"}]},`+
+				`{"question":"Which color?","header":"Color","multiSelect":false,"options":[{"label":"Red","description":""},{"label":"Blue","description":""}]}]}}`), &buf)
+			out <- buf.String()
+		}()
+		return out
+	}
+	for _, c := range []struct {
+		name    string
+		answers []*protocol.QuestionAnswer
+		want    string
+	}{
+		{"answered", []*protocol.QuestionAnswer{{Picked: []int32{0, 1}}, {Text: "Purple"}}, `"answers":{"Which color?":"Purple","Which fruits?":"Apple, Pear"}`},
+		{"unanswered", nil, ""},
+	} {
+		out := ask()
+		waitFor(t, "no question shown", func() bool { return s.Info().GetApproval() != nil })
+		a := s.Info().GetApproval()
+		if len(a.GetQuestions()) != 2 || !a.GetQuestions()[0].GetMultiSelect() || a.GetQuestions()[1].GetOptions()[1].GetLabel() != "Blue" {
+			t.Fatalf("%s: questions %+v", c.name, a.GetQuestions())
+		}
+		if err := d.approvals.answer(s.ID(), &protocol.AnswerApproval{ApprovalId: a.GetId(), Decision: protocol.DecisionAllow, Answers: c.answers}); err != nil {
+			t.Fatal(err)
+		}
+		got := <-out
+		if c.want == "" && got != "" || !strings.Contains(got, c.want) || c.want != "" && !strings.Contains(got, `"behavior":"allow"`) {
+			t.Fatalf("%s: hook printed %q", c.name, got)
+		}
+		if c.want != "" && !strings.Contains(got, `"questions":[`) {
+			t.Fatalf("%s: the questions were not kept: %q", c.name, got)
+		}
+		waitFor(t, "question kept", func() bool { return s.Info().GetApproval() == nil })
+	}
+}
+
 // An agent that gives up on its hook -- answered in its terminal,
 // interrupted, timed out -- takes its approval out of the window.
 func TestAnApprovalTheAgentAbandonsIsWithdrawn(t *testing.T) {

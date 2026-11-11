@@ -45,6 +45,21 @@ var yesNo = []detect.Gate{
 	{Lines: []string{`(?i)^\s*❯?\s*3\.\s*no\b`}},
 }
 
+// transcriptViewer is the detailed transcript (ctrl+o) over the prompt.
+var transcriptViewer = detect.Rule{
+	ID: "transcript_viewer", Priority: 1000, Region: detect.Bottom(3), Hold: true,
+	Gate: detect.Gate{
+		Contains: []string{"showing detailed transcript"},
+		Any: []detect.Gate{
+			{Contains: []string{"ctrl+o", "to toggle"}},
+			{Contains: []string{"ctrl+e", "show all"}},
+			{Contains: []string{"ctrl+e", "collapse"}},
+			{Contains: []string{"↑↓ scroll"}},
+			{Contains: []string{"? for shortcuts"}},
+		},
+	},
+}
+
 var screenRules = detect.MustCompile([]detect.Rule{
 	{
 		// Braille is the spinner of 2.1.227 and before; half circles of after.
@@ -75,19 +90,7 @@ var screenRules = detect.MustCompile([]detect.Rule{
 		ID: "btw_overlay", State: detect.Working, Priority: 975, Region: detect.Bottom(5),
 		Gate: detect.Gate{Lines: []string{`^\s*/btw(?:\s|$)`, `(?i)esc to close\s*$`}},
 	},
-	{
-		ID: "transcript_viewer", Priority: 1000, Region: detect.Bottom(3), Hold: true,
-		Gate: detect.Gate{
-			Contains: []string{"showing detailed transcript"},
-			Any: []detect.Gate{
-				{Contains: []string{"ctrl+o", "to toggle"}},
-				{Contains: []string{"ctrl+e", "show all"}},
-				{Contains: []string{"ctrl+e", "collapse"}},
-				{Contains: []string{"↑↓ scroll"}},
-				{Contains: []string{"? for shortcuts"}},
-			},
-		},
-	},
+	transcriptViewer,
 	{
 		ID: "form", State: detect.Blocked, Priority: 980, Region: detect.AfterRule,
 		Gate: detect.Gate{

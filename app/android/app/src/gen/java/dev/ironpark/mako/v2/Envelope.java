@@ -47,6 +47,7 @@ public  final class Envelope extends
     SEND(37),
     LIST_COMMANDS(38),
     COMMANDS(39),
+    ANSWER_QUESTION(46),
     ATTACH(40),
     INPUT(41),
     OUTPUT(42),
@@ -138,6 +139,7 @@ public  final class Envelope extends
         case 37: return SEND;
         case 38: return LIST_COMMANDS;
         case 39: return COMMANDS;
+        case 46: return ANSWER_QUESTION;
         case 40: return ATTACH;
         case 41: return INPUT;
         case 42: return OUTPUT;
@@ -1436,6 +1438,56 @@ public  final class Envelope extends
    */
   private void clearCommands() {
     if (bodyCase_ == 39) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int ANSWER_QUESTION_FIELD_NUMBER = 46;
+  /**
+   * <code>.mako.v2.AnswerQuestion answer_question = 46 [json_name = "answerQuestion"];</code>
+   */
+  @java.lang.Override
+  public boolean hasAnswerQuestion() {
+    return bodyCase_ == 46;
+  }
+  /**
+   * <code>.mako.v2.AnswerQuestion answer_question = 46 [json_name = "answerQuestion"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.AnswerQuestion getAnswerQuestion() {
+    if (bodyCase_ == 46) {
+       return (dev.ironpark.mako.v2.AnswerQuestion) body_;
+    }
+    return dev.ironpark.mako.v2.AnswerQuestion.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.AnswerQuestion answer_question = 46 [json_name = "answerQuestion"];</code>
+   */
+  private void setAnswerQuestion(dev.ironpark.mako.v2.AnswerQuestion value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 46;
+  }
+  /**
+   * <code>.mako.v2.AnswerQuestion answer_question = 46 [json_name = "answerQuestion"];</code>
+   */
+  private void mergeAnswerQuestion(dev.ironpark.mako.v2.AnswerQuestion value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 46 &&
+        body_ != dev.ironpark.mako.v2.AnswerQuestion.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.AnswerQuestion.newBuilder((dev.ironpark.mako.v2.AnswerQuestion) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 46;
+  }
+  /**
+   * <code>.mako.v2.AnswerQuestion answer_question = 46 [json_name = "answerQuestion"];</code>
+   */
+  private void clearAnswerQuestion() {
+    if (bodyCase_ == 46) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -5627,6 +5679,54 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.mako.v2.AnswerQuestion answer_question = 46 [json_name = "answerQuestion"];</code>
+     */
+    @java.lang.Override
+    public boolean hasAnswerQuestion() {
+      return instance.hasAnswerQuestion();
+    }
+    /**
+     * <code>.mako.v2.AnswerQuestion answer_question = 46 [json_name = "answerQuestion"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.AnswerQuestion getAnswerQuestion() {
+      return instance.getAnswerQuestion();
+    }
+    /**
+     * <code>.mako.v2.AnswerQuestion answer_question = 46 [json_name = "answerQuestion"];</code>
+     */
+    public Builder setAnswerQuestion(dev.ironpark.mako.v2.AnswerQuestion value) {
+      copyOnWrite();
+      instance.setAnswerQuestion(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AnswerQuestion answer_question = 46 [json_name = "answerQuestion"];</code>
+     */
+    public Builder setAnswerQuestion(
+        dev.ironpark.mako.v2.AnswerQuestion.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAnswerQuestion(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AnswerQuestion answer_question = 46 [json_name = "answerQuestion"];</code>
+     */
+    public Builder mergeAnswerQuestion(dev.ironpark.mako.v2.AnswerQuestion value) {
+      copyOnWrite();
+      instance.mergeAnswerQuestion(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AnswerQuestion answer_question = 46 [json_name = "answerQuestion"];</code>
+     */
+    public Builder clearAnswerQuestion() {
+      copyOnWrite();
+      instance.clearAnswerQuestion();
+      return this;
+    }
+
+    /**
      * <pre>
      * An attached session's stream.
      * </pre>
@@ -8457,6 +8557,7 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.Resize.class,
             dev.ironpark.mako.v2.Snapshot.class,
             dev.ironpark.mako.v2.Exited.class,
+            dev.ironpark.mako.v2.AnswerQuestion.class,
             dev.ironpark.mako.v2.ListDir.class,
             dev.ironpark.mako.v2.Dir.class,
             dev.ironpark.mako.v2.ReadFile.class,
@@ -8508,16 +8609,16 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.DeviceAccept.class,
           };
           java.lang.String info =
-              "\u0000N\u0001\u0000\u0001oN\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000\u000b" +
+              "\u0000O\u0001\u0000\u0001oO\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000\u000b" +
               "<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000" +
               "\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000" +
               "\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000+<\u0000" +
-              ",<\u0000-<\u00002<\u00003<\u00004<\u00005<\u00006<\u00007<\u00008<\u00009<\u0000" +
-              ":<\u0000;<\u0000<<\u0000=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000" +
-              "D<\u0000E<\u0000F<\u0000G<\u0000H<\u0000I<\u0000J<\u0000K<\u0000L<\u0000M<\u0000" +
-              "N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000" +
-              "e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000" +
-              "o<\u0000";
+              ",<\u0000-<\u0000.<\u00002<\u00003<\u00004<\u00005<\u00006<\u00007<\u00008<\u0000" +
+              "9<\u0000:<\u0000;<\u0000<<\u0000=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000" +
+              "C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000H<\u0000I<\u0000J<\u0000K<\u0000L<\u0000" +
+              "M<\u0000N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000" +
+              "d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000" +
+              "n<\u0000o<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

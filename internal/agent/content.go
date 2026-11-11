@@ -173,23 +173,87 @@ type Task struct {
 
 // Question is a question tool's arguments in the question kind's form:
 // the first of its questions, read from the first of keys it has, and its
-// options' labels, or the options themselves when they are strings.
+// options' labels; and all of them, as Questions reads them, which
+// Questions reads back.
 func Question(in map[string]any, keys ...string) map[string]any {
+	qs := Questions(in, keys...)
+	var all []any
+	for _, q := range qs {
+		opts := make([]any, len(q.GetOptions()))
+		for j, o := range q.GetOptions() {
+			opts[j] = map[string]any{"label": o.GetLabel(), "description": o.GetDescription()}
+		}
+		all = append(all, map[string]any{"question": q.GetQuestion(), "header": q.GetHeader(), "options": opts, "multiSelect": q.GetMultiSelect()})
+	}
 	var question string
 	var options []any
-	if qs := List(in, "questions"); len(qs) > 0 {
-		q, _ := qs[0].(map[string]any)
-		question = Str(q, keys...)
+	if len(qs) > 0 {
+		question = qs[0].GetQuestion()
+		for _, o := range qs[0].GetOptions() {
+			options = append(options, o.GetLabel())
+		}
+	}
+	return Canon(map[string]any{"question": question, "options": options, "questions": all})
+}
+
+// Questions are those a question tool's arguments ask, under "questions",
+// each read from the first of keys it has, "question" when none are given.
+// An option is an object with a label, or a string that is its label.
+func Questions(in map[string]any, keys ...string) []*protocol.Question {
+	if len(keys) == 0 {
+		keys = []string{"question"}
+	}
+	var out []*protocol.Question
+	for _, q := range List(in, "questions") {
+		q, _ := q.(map[string]any)
+		text := Str(q, keys...)
+		if text == "" {
+			continue
+		}
+		question := &protocol.Question{Question: text, Header: Str(q, "header")}
+		question.MultiSelect, _ = q["multiSelect"].(bool)
+		if multi, ok := q["multi_select"].(bool); ok {
+			question.MultiSelect = multi
+		}
 		for _, o := range List(q, "options") {
 			switch o := o.(type) {
 			case map[string]any:
-				options = append(options, Str(o, "label"))
-			case string: // an option that is its label
-				options = append(options, o)
+				question.Options = append(question.Options, &protocol.QuestionOption{Label: Str(o, "label"), Description: Str(o, "description")})
+			case string:
+				question.Options = append(question.Options, &protocol.QuestionOption{Label: o})
 			}
 		}
+		out = append(out, question)
 	}
-	return Canon(map[string]any{"question": question, "options": options})
+	return out
+}
+
+// AnswerText is an answer as an agent takes it in words: the labels of the
+// options picked, then the user's own words, joined by ", ".
+func AnswerText(q *protocol.Question, a *protocol.QuestionAnswer) string {
+	var parts []string
+	for _, i := range a.GetPicked() {
+		if i >= 0 && int(i) < len(q.GetOptions()) {
+			parts = append(parts, q.GetOptions()[i].GetLabel())
+		}
+	}
+	if t := strings.TrimSpace(a.GetText()); t != "" {
+		parts = append(parts, t)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// Answered reports whether answers answer each of questions.
+func Answered(questions []*protocol.Question, answers []*protocol.QuestionAnswer) bool {
+	if len(questions) == 0 || len(answers) != len(questions) {
+		return false
+	}
+	for i, q := range questions {
+		if AnswerText(q, answers[i]) == "" {
+			return false
+		}
+	}
+	return true
 }
 
 // Fields are a call's arguments as a JSON object, nil for others.

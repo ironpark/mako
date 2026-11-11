@@ -52,6 +52,7 @@ const (
 	TypeRenameSess     Type = "rename_session"
 	TypeAnswerApproval Type = "answer_approval"
 	TypeSend           Type = "send"
+	TypeAnswerQuestion Type = "answer_question"
 	TypeAttach         Type = "attach"
 	TypeInput          Type = "input"
 	TypeOutput         Type = "output"

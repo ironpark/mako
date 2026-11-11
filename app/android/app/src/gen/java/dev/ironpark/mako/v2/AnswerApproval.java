@@ -24,6 +24,7 @@ public  final class AnswerApproval extends
     approvalId_ = "";
     decision_ = "";
     message_ = "";
+    answers_ = emptyProtobufList();
   }
   public static final int NODE_ID_FIELD_NUMBER = 1;
   private java.lang.String nodeId_;
@@ -298,6 +299,155 @@ public  final class AnswerApproval extends
     checkByteStringIsUtf8(value);
     message_ = value.toStringUtf8();
 
+  }
+
+  public static final int ANSWERS_FIELD_NUMBER = 6;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.QuestionAnswer> answers_;
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.QuestionAnswer> getAnswersList() {
+    return answers_;
+  }
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.QuestionAnswerOrBuilder> 
+      getAnswersOrBuilderList() {
+    return answers_;
+  }
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  @java.lang.Override
+  public int getAnswersCount() {
+    return answers_.size();
+  }
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.QuestionAnswer getAnswers(int index) {
+    return answers_.get(index);
+  }
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  public dev.ironpark.mako.v2.QuestionAnswerOrBuilder getAnswersOrBuilder(
+      int index) {
+    return answers_.get(index);
+  }
+  private void ensureAnswersIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.QuestionAnswer> tmp = answers_;
+    if (!tmp.isModifiable()) {
+      answers_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  private void setAnswers(
+      int index, dev.ironpark.mako.v2.QuestionAnswer value) {
+    java.util.Objects.requireNonNull(value);
+    ensureAnswersIsMutable();
+    answers_.set(index, value);
+  }
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  private void addAnswers(dev.ironpark.mako.v2.QuestionAnswer value) {
+    java.util.Objects.requireNonNull(value);
+    ensureAnswersIsMutable();
+    answers_.add(value);
+  }
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  private void addAnswers(
+      int index, dev.ironpark.mako.v2.QuestionAnswer value) {
+    java.util.Objects.requireNonNull(value);
+    ensureAnswersIsMutable();
+    answers_.add(index, value);
+  }
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  private void addAllAnswers(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.QuestionAnswer> values) {
+    ensureAnswersIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, answers_);
+  }
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  private void clearAnswers() {
+    answers_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  private void removeAnswers(int index) {
+    ensureAnswersIsMutable();
+    answers_.remove(index);
   }
 
   public static dev.ironpark.mako.v2.AnswerApproval parseFrom(
@@ -686,6 +836,168 @@ public  final class AnswerApproval extends
       return this;
     }
 
+    /**
+     * <pre>
+     * answers answer an approval's questions, one each, in order, with
+     * allow; allow without them leaves the questions to the terminal.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.QuestionAnswer> getAnswersList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getAnswersList());
+    }
+    /**
+     * <pre>
+     * answers answer an approval's questions, one each, in order, with
+     * allow; allow without them leaves the questions to the terminal.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+     */
+    @java.lang.Override
+    public int getAnswersCount() {
+      return instance.getAnswersCount();
+    }/**
+     * <pre>
+     * answers answer an approval's questions, one each, in order, with
+     * allow; allow without them leaves the questions to the terminal.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.QuestionAnswer getAnswers(int index) {
+      return instance.getAnswers(index);
+    }
+    /**
+     * <pre>
+     * answers answer an approval's questions, one each, in order, with
+     * allow; allow without them leaves the questions to the terminal.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+     */
+    public Builder setAnswers(
+        int index, dev.ironpark.mako.v2.QuestionAnswer value) {
+      copyOnWrite();
+      instance.setAnswers(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * answers answer an approval's questions, one each, in order, with
+     * allow; allow without them leaves the questions to the terminal.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+     */
+    public Builder setAnswers(
+        int index, dev.ironpark.mako.v2.QuestionAnswer.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAnswers(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * answers answer an approval's questions, one each, in order, with
+     * allow; allow without them leaves the questions to the terminal.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+     */
+    public Builder addAnswers(dev.ironpark.mako.v2.QuestionAnswer value) {
+      copyOnWrite();
+      instance.addAnswers(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * answers answer an approval's questions, one each, in order, with
+     * allow; allow without them leaves the questions to the terminal.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+     */
+    public Builder addAnswers(
+        int index, dev.ironpark.mako.v2.QuestionAnswer value) {
+      copyOnWrite();
+      instance.addAnswers(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * answers answer an approval's questions, one each, in order, with
+     * allow; allow without them leaves the questions to the terminal.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+     */
+    public Builder addAnswers(
+        dev.ironpark.mako.v2.QuestionAnswer.Builder builderForValue) {
+      copyOnWrite();
+      instance.addAnswers(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * answers answer an approval's questions, one each, in order, with
+     * allow; allow without them leaves the questions to the terminal.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+     */
+    public Builder addAnswers(
+        int index, dev.ironpark.mako.v2.QuestionAnswer.Builder builderForValue) {
+      copyOnWrite();
+      instance.addAnswers(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * answers answer an approval's questions, one each, in order, with
+     * allow; allow without them leaves the questions to the terminal.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+     */
+    public Builder addAllAnswers(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.QuestionAnswer> values) {
+      copyOnWrite();
+      instance.addAllAnswers(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * answers answer an approval's questions, one each, in order, with
+     * allow; allow without them leaves the questions to the terminal.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+     */
+    public Builder clearAnswers() {
+      copyOnWrite();
+      instance.clearAnswers();
+      return this;
+    }
+    /**
+     * <pre>
+     * answers answer an approval's questions, one each, in order, with
+     * allow; allow without them leaves the questions to the terminal.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+     */
+    public Builder removeAnswers(int index) {
+      copyOnWrite();
+      instance.removeAnswers(index);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.AnswerApproval)
   }
   @java.lang.Override
@@ -707,10 +1019,12 @@ public  final class AnswerApproval extends
             "approvalId_",
             "decision_",
             "message_",
+            "answers_",
+            dev.ironpark.mako.v2.QuestionAnswer.class,
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0208";
+              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u001b";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

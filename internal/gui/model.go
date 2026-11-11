@@ -488,7 +488,7 @@ func (m *model) attach(id string) {
 		post(func() {
 			delete(m.dialing, id)
 			if err != nil {
-				m.Conn.Set(connState{OK: ggui.Peek(m.Conn).OK, Self: ggui.Peek(m.Conn).Self, Err: err.Error()})
+				m.connErr(err)
 				return
 			}
 			if !slices.Contains(ggui.Peek(m.Tabs), id) {

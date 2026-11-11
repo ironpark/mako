@@ -132,3 +132,63 @@ func TestAWatchHoldsApprovals(t *testing.T) {
 	stream.Close()
 	<-done
 }
+
+// Questions a terminal's dialog asks are answered by typing there, as the
+// agent's driver says, once the dialog shows; not before, nor unanswered.
+func TestAnswerQuestionTypesTheAnswers(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out")
+	ready := filepath.Join(dir, "ready")
+	s, err := session.Start(session.Spec{
+		ID: "s", NodeID: "test-node", Agent: "codex", Project: dir,
+		Command: []string{"sh", "-c", `stty raw -echo; printf '\033[?2004h'; while [ ! -e ready ]; do sleep 0.05; done; ` +
+			`printf '  Which color?\r\n  > 1. Red\r\n    2. Blue\r\n  tab to add notes | enter to submit all | esc to interrupt\r\n'; cat > out`},
+		Cols: 80, Rows: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d.sessions.add(s)
+	questions := []*protocol.Question{{Question: "Which color?", Options: []*protocol.QuestionOption{{Label: "Red"}, {Label: "Blue"}}}}
+	answer := func(answers []*protocol.QuestionAnswer) *protocol.Envelope {
+		stream, _ := ask(t, func(st *transport.Stream, env *protocol.Envelope) error {
+			if err := d.handleAnswerQuestion(t.Context(), st, env); err != nil {
+				return protocol.WriteError(st, env.GetId(), err)
+			}
+			return nil
+		}, protocol.TypeAnswerQuestion, &protocol.AnswerQuestion{SessionId: "s", Questions: questions, Answers: answers})
+		env, err := stream.Recv()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return env
+	}
+	mine := []*protocol.QuestionAnswer{{Picked: []int32{1}, Text: "a darker one"}}
+	if env := answer(mine); env.Type() != protocol.TypeError {
+		t.Fatal("answered with no dialog shown")
+	}
+	if err := os.WriteFile(ready, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the dialog never showed", func() bool {
+		snap, err := s.Snapshot(false)
+		return err == nil && strings.Contains(snap.GetText(), "enter to submit all")
+	})
+	if env := answer([]*protocol.QuestionAnswer{{}}); env.Type() != protocol.TypeError {
+		t.Fatal("typed an empty answer")
+	}
+	if env := answer(mine); env.Type() != protocol.TypeSessionInfo {
+		t.Fatalf("reply %v", env)
+	}
+	want := "\x1b[B\t\x1b[200~a darker one\x1b[201~\r"
+	var got []byte
+	waitFor(t, "the answer never came", func() bool {
+		got, _ = os.ReadFile(out)
+		return len(got) >= len(want)
+	})
+	if string(got) != want {
+		t.Fatalf("typed %q, want %q", got, want)
+	}
+}

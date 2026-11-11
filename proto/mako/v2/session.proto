@@ -145,6 +145,31 @@ message Approval {
   string detail = 3;
   string input = 4; // the call's arguments, as indented JSON
   google.protobuf.Timestamp since = 5;
+  // questions are what a question tool asks, which the approval is
+  // answered with the answers to rather than allowed; none for others.
+  repeated Question questions = 6;
+}
+
+// Question is one a question tool asks the user, with the options it
+// offers; the user may answer in words of their own instead.
+message Question {
+  string question = 1;
+  string header = 2; // a short label for it
+  repeated QuestionOption options = 3;
+  bool multi_select = 4; // any number of the options may be picked
+}
+
+// QuestionOption is a choice a Question offers.
+message QuestionOption {
+  string label = 1;
+  string description = 2;
+}
+
+// QuestionAnswer answers a Question: the options picked, by their index,
+// and words of the user's own, with them or in their place.
+message QuestionAnswer {
+  repeated int32 picked = 1;
+  string text = 2;
 }
 
 // CloseSession stops a session; the reply is an Exited.
@@ -167,6 +192,21 @@ message AnswerApproval {
   string approval_id = 3;
   string decision = 4; // allow, deny, terminal
   string message = 5; // why, for a denial
+  // answers answer an approval's questions, one each, in order, with
+  // allow; allow without them leaves the questions to the terminal.
+  repeated QuestionAnswer answers = 6;
+}
+
+// AnswerQuestion answers the questions a session's agent shows in its
+// terminal, where no approval holds them, by typing the answers into its
+// dialog; the agent's driver says how. questions are those the dialog
+// shows, as the GUI read them from the call; answers, one each, in order.
+// The reply is its SessionInfo.
+message AnswerQuestion {
+  string node_id = 1;
+  string session_id = 2;
+  repeated Question questions = 3;
+  repeated QuestionAnswer answers = 4;
 }
 
 // Send types into a session without attaching to it: text pasted as its

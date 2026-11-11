@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/ironpark/mako/internal/detect"
@@ -20,6 +21,22 @@ var askYes = []detect.Gate{
 	{Contains: []string{"would you like to"}, Any: []detect.Gate{{Contains: []string{"yes"}}, {Contains: []string{"❯"}}}},
 }
 
+// transcriptViewer is the transcript (ctrl+t) of older versions, over the
+// prompt.
+var transcriptViewer = detect.Rule{
+	ID: "transcript_viewer", Priority: 1000, Region: afterPrompt, Hold: true,
+	Gate: detect.Gate{
+		Contains: []string{"↑/↓ to scroll", "pgup/pgdn to", "home/end to jump", "q to quit"},
+		Any:      []detect.Gate{{Contains: []string{"esc to edit prev"}}, {Contains: []string{"esc/← to edit prev"}}},
+	},
+}
+
+// questionDialog are the footers of request_user_input's dialog.
+var questionDialog = []detect.Gate{
+	{Contains: []string{"enter to submit answer"}},
+	{Contains: []string{"enter to submit all"}},
+}
+
 var screenRules = detect.MustCompile([]detect.Rule{
 	{
 		ID: "title_blocked", State: detect.Blocked, Priority: 1100, Region: detect.Title,
@@ -29,13 +46,7 @@ var screenRules = detect.MustCompile([]detect.Rule{
 		ID: "title_working", State: detect.Working, Priority: 1050, Region: detect.Title,
 		Gate: detect.Gate{Regex: []string{spinner}},
 	},
-	{
-		ID: "transcript_viewer", Priority: 1000, Region: afterPrompt, Hold: true,
-		Gate: detect.Gate{
-			Contains: []string{"↑/↓ to scroll", "pgup/pgdn to", "home/end to jump", "q to quit"},
-			Any:      []detect.Gate{{Contains: []string{"esc to edit prev"}}, {Contains: []string{"esc/← to edit prev"}}},
-		},
-	},
+	transcriptViewer,
 	{
 		ID: "trust_directory", State: detect.Blocked, Priority: 950, Region: detect.Top(20),
 		Gate: detect.Gate{All: []detect.Gate{
@@ -66,13 +77,14 @@ var screenRules = detect.MustCompile([]detect.Rule{
 	},
 	{
 		ID: "dialog", State: detect.Blocked, Priority: 900, Region: afterPrompt,
-		Gate: detect.Gate{Any: []detect.Gate{
-			{Contains: []string{"press enter to confirm or esc to cancel"}},
-			{Contains: []string{"enter to submit answer"}},
-			{Contains: []string{"enter to submit all"}},
-			{Contains: []string{"allow command?"}},
-			{Contains: []string{"All Results", "Filesystem Only", "Plugins"}},
-		}},
+		Gate: detect.Gate{Any: slices.Concat(
+			[]detect.Gate{{Contains: []string{"press enter to confirm or esc to cancel"}}},
+			questionDialog,
+			[]detect.Gate{
+				{Contains: []string{"allow command?"}},
+				{Contains: []string{"All Results", "Filesystem Only", "Plugins"}},
+			},
+		)},
 	},
 	{
 		// A question in place of the composer; a prompt still being typed,

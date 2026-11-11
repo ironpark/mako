@@ -122,9 +122,15 @@ func PermissionReply(decision, message string) []byte {
 	if decision == protocol.DecisionDeny {
 		d["message"] = message
 	}
+	return PermissionDecision(d)
+}
+
+// PermissionDecision is the PermissionRequest hook's output that gives
+// decision, as Claude Code and Codex read it.
+func PermissionDecision(decision map[string]any) []byte {
 	out, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]any{
 		"hookEventName": "PermissionRequest",
-		"decision":      d,
+		"decision":      decision,
 	}})
 	return append(out, '\n')
 }

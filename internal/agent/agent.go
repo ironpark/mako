@@ -12,6 +12,8 @@ import (
 	"image/color"
 	"time"
 
+	"github.com/ironpark/gostty/input"
+
 	"github.com/ironpark/mako/internal/detect"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -174,6 +176,36 @@ type Screen interface{ ScreenRules() *detect.Rules }
 // stop the turn it is on, as a person would at its prompt.
 type Interrupter interface{ Interrupt() []byte }
 
+// Recaller is an agent whose terminal can show a view over its own prompt,
+// as a subagent's or its transcript, where text typed would go to another
+// agent or be lost. Recall is what is typed to take it a step back toward
+// its own prompt from the screen shown, nil once it is there or the screen
+// shows nothing it knows.
+type Recaller interface{ Recall(screen string) []byte }
+
+// HookAnswers is an agent whose question tool its PermissionRequest hook
+// answers: AnswerReply is what the hook prints to answer the call of
+// input with answers, one for each of its questions.
+type HookAnswers interface {
+	AnswerReply(input json.RawMessage, questions []*protocol.Question, answers []*protocol.QuestionAnswer) []byte
+}
+
+// KeyedAnswers is an agent whose question tool asks in a dialog in its
+// terminal, which no hook holds: Asking reports whether the screen shows
+// the dialog, and AnswerKeys is what is typed there to answer questions
+// with answers, a step at a time.
+type KeyedAnswers interface {
+	Asking(screen string) bool
+	AnswerKeys(questions []*protocol.Question, answers []*protocol.QuestionAnswer) []Keystroke
+}
+
+// Keystroke is a step of typing into an agent's terminal: Text pasted, if
+// any, then Keys pressed, as its terminal encodes them.
+type Keystroke struct {
+	Text string
+	Keys []input.Key
+}
+
 // Interrupt is what stops the turn the agent d drives is on, typed into
 // its terminal: Escape, unless its driver says otherwise; Escape too for
 // an agent no driver knows.
@@ -300,6 +332,9 @@ func Caps(d Driver) uint32 {
 	}
 	if _, ok := d.(SubAgents); ok {
 		caps |= protocol.CapSubAgents
+	}
+	if _, ok := d.(KeyedAnswers); ok {
+		caps |= protocol.CapAnswerKeys
 	}
 	return caps
 }

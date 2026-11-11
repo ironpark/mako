@@ -15,6 +15,7 @@ import (
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -41,7 +42,7 @@ type approvals struct {
 
 type pendingApproval struct {
 	session *session.Session
-	reply   chan hookReply
+	reply   chan *protocol.AnswerApproval
 }
 
 // watch notes a listing by a front-end that shows approvals: one of this
@@ -86,10 +87,12 @@ func (a *approvals) watching() bool {
 
 // ask holds an approval s's agent, the one called name, asks for until it
 // is answered, the front-ends stop watching, the session ends or ctx does,
-// and returns the hook's reply: "" leaves it to the agent's prompt, as it
-// does a question, which only the agent's own prompt can take.
+// and returns the hook's reply: "" leaves it to the agent's prompt. A
+// question is held so only for an agent whose hook can answer it, and is
+// answered with the user's answers.
 func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev agent.Event, seq int64) hookReply {
 	// The call reads as its kind does.
+	raw := ev.Input
 	kind, canon := "", agent.Fields(ev.Input)
 	if tools, ok := agents.As[agent.Tools](name); ok {
 		var read map[string]any
@@ -98,11 +101,18 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev
 			ev.Input, _ = json.Marshal(read)
 		}
 	}
-	if kind == protocol.ToolQuestion || !a.watching() {
+	var questions []*protocol.Question
+	answerer, _ := agents.As[agent.HookAnswers](name)
+	if kind == protocol.ToolQuestion {
+		if questions = agent.Questions(canon); answerer == nil || len(questions) == 0 {
+			return hookReply{}
+		}
+	}
+	if !a.watching() {
 		return hookReply{}
 	}
 	id := approvalID()
-	p := &pendingApproval{session: s, reply: make(chan hookReply, 1)}
+	p := &pendingApproval{session: s, reply: make(chan *protocol.AnswerApproval, 1)}
 	a.mu.Lock()
 	if a.pending == nil {
 		a.pending = map[string]*pendingApproval{}
@@ -111,7 +121,7 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev
 	a.mu.Unlock()
 	changed, current := s.BeginApproval(seq, &protocol.Approval{
 		Id: id, Tool: ev.Tool, Detail: agent.Detail(kind, canon),
-		Input: indentInput(ev.Input), Since: timestamppb.Now(),
+		Input: indentInput(ev.Input), Since: timestamppb.Now(), Questions: questions,
 	})
 	status := protocol.AgentIdle // a disconnected hook abandoned its request
 	defer func() {
@@ -129,12 +139,23 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev
 	for {
 		select {
 		case r := <-p.reply:
-			if r.Decision == protocol.DecisionTerminal {
+			decision, reply := r.GetDecision(), hookReply{Decision: r.GetDecision(), Message: r.GetMessage()}
+			if questions != nil && decision == protocol.DecisionAllow {
+				// Allowed, a question is answered; allowed unanswered, as
+				// a front-end that knows no questions would, it is left to
+				// the terminal.
+				if !agent.Answered(questions, r.GetAnswers()) {
+					decision = protocol.DecisionTerminal
+				} else {
+					reply.Output = answerer.AnswerReply(raw, questions, r.GetAnswers())
+				}
+			}
+			if decision == protocol.DecisionTerminal {
 				status = protocol.AgentWaiting
 				return hookReply{}
 			}
 			status = protocol.AgentWorking
-			return r
+			return reply
 		case <-tick.C:
 			if !a.watching() {
 				status = protocol.AgentWaiting
@@ -164,12 +185,12 @@ func (a *approvals) answer(sessionID string, req *protocol.AnswerApproval) error
 	if !ok || p.session.ID() != sessionID {
 		return fmt.Errorf("the approval was answered or withdrawn")
 	}
-	message := req.GetMessage()
-	if req.GetDecision() == protocol.DecisionDeny && message == "" {
-		message = "The user denied this in mako."
+	if req.GetDecision() == protocol.DecisionDeny && req.GetMessage() == "" {
+		req = proto.CloneOf(req)
+		req.Message = "The user denied this in mako."
 	}
 	select {
-	case p.reply <- hookReply{Decision: req.GetDecision(), Message: message}:
+	case p.reply <- req:
 	default: // answered twice at once; the first stands
 	}
 	return nil

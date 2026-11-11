@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -76,6 +77,32 @@ func (d *Daemon) handleSend(ctx context.Context, stream *transport.Stream, env *
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
 		}
 		if err := s.Send(r.GetText(), r.GetKeys()); err != nil {
+			return nil, err
+		}
+		return s.Info(), nil
+	})
+}
+
+// handleAnswerQuestion answers the questions a session's agent shows in
+// its terminal, by typing the answers there, as its driver says to, once
+// its screen shows them asked.
+func (d *Daemon) handleAnswerQuestion(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.AnswerQuestion) (*protocol.SessionInfo, error) {
+		s, ok := d.sessions.get(r.GetSessionId())
+		if !ok {
+			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
+		}
+		keyed, ok := agents.As[agent.KeyedAnswers](s.Agent())
+		if !ok {
+			return nil, errors.New("this agent's questions are answered in its terminal")
+		}
+		if !agent.Answered(r.GetQuestions(), r.GetAnswers()) {
+			return nil, errors.New("every question needs an answer")
+		}
+		if !s.Shows(keyed.Asking) {
+			return nil, errors.New("the agent is not asking now")
+		}
+		if err := s.Type(keyed.AnswerKeys(r.GetQuestions(), r.GetAnswers())); err != nil {
 			return nil, err
 		}
 		return s.Info(), nil

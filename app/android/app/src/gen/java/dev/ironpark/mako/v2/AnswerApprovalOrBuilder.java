@@ -85,4 +85,33 @@ public interface AnswerApprovalOrBuilder extends
    */
   com.google.protobuf.ByteString
       getMessageBytes();
+
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.QuestionAnswer> 
+      getAnswersList();
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  dev.ironpark.mako.v2.QuestionAnswer getAnswers(int index);
+  /**
+   * <pre>
+   * answers answer an approval's questions, one each, in order, with
+   * allow; allow without them leaves the questions to the terminal.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.QuestionAnswer answers = 6 [json_name = "answers"];</code>
+   */
+  int getAnswersCount();
 }

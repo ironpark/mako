@@ -63,6 +63,7 @@ type Envelope struct {
 	//	*Envelope_Send
 	//	*Envelope_ListCommands
 	//	*Envelope_Commands
+	//	*Envelope_AnswerQuestion
 	//	*Envelope_Attach
 	//	*Envelope_Input
 	//	*Envelope_Output
@@ -358,6 +359,15 @@ func (x *Envelope) GetCommands() *Commands {
 	if x != nil {
 		if x, ok := x.Body.(*Envelope_Commands); ok {
 			return x.Commands
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetAnswerQuestion() *AnswerQuestion {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_AnswerQuestion); ok {
+			return x.AnswerQuestion
 		}
 	}
 	return nil
@@ -949,6 +959,10 @@ type Envelope_Commands struct {
 	Commands *Commands `protobuf:"bytes,39,opt,name=commands,proto3,oneof"`
 }
 
+type Envelope_AnswerQuestion struct {
+	AnswerQuestion *AnswerQuestion `protobuf:"bytes,46,opt,name=answer_question,json=answerQuestion,proto3,oneof"`
+}
+
 type Envelope_Attach struct {
 	// An attached session's stream.
 	Attach *Attach `protobuf:"bytes,40,opt,name=attach,proto3,oneof"`
@@ -1217,6 +1231,8 @@ func (*Envelope_ListCommands) isEnvelope_Body() {}
 
 func (*Envelope_Commands) isEnvelope_Body() {}
 
+func (*Envelope_AnswerQuestion) isEnvelope_Body() {}
+
 func (*Envelope_Attach) isEnvelope_Body() {}
 
 func (*Envelope_Input) isEnvelope_Body() {}
@@ -1385,7 +1401,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xe8\x1e\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xac\x1f\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -1412,7 +1428,8 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\x0fanswer_approval\x18$ \x01(\v2\x17.mako.v2.AnswerApprovalH\x00R\x0eanswerApproval\x12#\n" +
 	"\x04send\x18% \x01(\v2\r.mako.v2.SendH\x00R\x04send\x12<\n" +
 	"\rlist_commands\x18& \x01(\v2\x15.mako.v2.ListCommandsH\x00R\flistCommands\x12/\n" +
-	"\bcommands\x18' \x01(\v2\x11.mako.v2.CommandsH\x00R\bcommands\x12)\n" +
+	"\bcommands\x18' \x01(\v2\x11.mako.v2.CommandsH\x00R\bcommands\x12B\n" +
+	"\x0fanswer_question\x18. \x01(\v2\x17.mako.v2.AnswerQuestionH\x00R\x0eanswerQuestion\x12)\n" +
 	"\x06attach\x18( \x01(\v2\x0f.mako.v2.AttachH\x00R\x06attach\x12&\n" +
 	"\x05input\x18) \x01(\v2\x0e.mako.v2.InputH\x00R\x05input\x12)\n" +
 	"\x06output\x18* \x01(\v2\x0f.mako.v2.OutputH\x00R\x06output\x12)\n" +
@@ -1521,61 +1538,62 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*Send)(nil),              // 19: mako.v2.Send
 	(*ListCommands)(nil),      // 20: mako.v2.ListCommands
 	(*Commands)(nil),          // 21: mako.v2.Commands
-	(*Attach)(nil),            // 22: mako.v2.Attach
-	(*Input)(nil),             // 23: mako.v2.Input
-	(*Output)(nil),            // 24: mako.v2.Output
-	(*Resize)(nil),            // 25: mako.v2.Resize
-	(*Snapshot)(nil),          // 26: mako.v2.Snapshot
-	(*Exited)(nil),            // 27: mako.v2.Exited
-	(*ListDir)(nil),           // 28: mako.v2.ListDir
-	(*Dir)(nil),               // 29: mako.v2.Dir
-	(*ReadFile)(nil),          // 30: mako.v2.ReadFile
-	(*File)(nil),              // 31: mako.v2.File
-	(*WriteFile)(nil),         // 32: mako.v2.WriteFile
-	(*FileOp)(nil),            // 33: mako.v2.FileOp
-	(*Search)(nil),            // 34: mako.v2.Search
-	(*SearchResult)(nil),      // 35: mako.v2.SearchResult
-	(*StageFile)(nil),         // 36: mako.v2.StageFile
-	(*Staged)(nil),            // 37: mako.v2.Staged
-	(*Tunnel)(nil),            // 38: mako.v2.Tunnel
-	(*Tunneled)(nil),          // 39: mako.v2.Tunneled
-	(*GitStatus)(nil),         // 40: mako.v2.GitStatus
-	(*GitChanges)(nil),        // 41: mako.v2.GitChanges
-	(*GitDiff)(nil),           // 42: mako.v2.GitDiff
-	(*Diff)(nil),              // 43: mako.v2.Diff
-	(*GitLog)(nil),            // 44: mako.v2.GitLog
-	(*GitHistory)(nil),        // 45: mako.v2.GitHistory
-	(*GitShow)(nil),           // 46: mako.v2.GitShow
-	(*GitCommitInfo)(nil),     // 47: mako.v2.GitCommitInfo
-	(*GitRun)(nil),            // 48: mako.v2.GitRun
-	(*GitResult)(nil),         // 49: mako.v2.GitResult
-	(*ReadChat)(nil),          // 50: mako.v2.ReadChat
-	(*Chat)(nil),              // 51: mako.v2.Chat
-	(*ReadProjectAgents)(nil), // 52: mako.v2.ReadProjectAgents
-	(*ProjectAgents)(nil),     // 53: mako.v2.ProjectAgents
-	(*SetProjects)(nil),       // 54: mako.v2.SetProjects
-	(*Projects)(nil),          // 55: mako.v2.Projects
-	(*RelayAgentMessage)(nil), // 56: mako.v2.RelayAgentMessage
-	(*AgentMessage)(nil),      // 57: mako.v2.AgentMessage
-	(*WatchChat)(nil),         // 58: mako.v2.WatchChat
-	(*ChatLive)(nil),          // 59: mako.v2.ChatLive
-	(*ForgeList)(nil),         // 60: mako.v2.ForgeList
-	(*ForgeItems)(nil),        // 61: mako.v2.ForgeItems
-	(*ForgeView)(nil),         // 62: mako.v2.ForgeView
-	(*ForgeDetail)(nil),       // 63: mako.v2.ForgeDetail
-	(*ForgeRun)(nil),          // 64: mako.v2.ForgeRun
-	(*ListDevices)(nil),       // 65: mako.v2.ListDevices
-	(*Devices)(nil),           // 66: mako.v2.Devices
-	(*Borrow)(nil),            // 67: mako.v2.Borrow
-	(*Lease)(nil),             // 68: mako.v2.Lease
-	(*GiveBack)(nil),          // 69: mako.v2.GiveBack
-	(*ListLeases)(nil),        // 70: mako.v2.ListLeases
-	(*Leases)(nil),            // 71: mako.v2.Leases
-	(*Claim)(nil),             // 72: mako.v2.Claim
-	(*Claimed)(nil),           // 73: mako.v2.Claimed
-	(*DeviceConn)(nil),        // 74: mako.v2.DeviceConn
-	(*DeviceListen)(nil),      // 75: mako.v2.DeviceListen
-	(*DeviceAccept)(nil),      // 76: mako.v2.DeviceAccept
+	(*AnswerQuestion)(nil),    // 22: mako.v2.AnswerQuestion
+	(*Attach)(nil),            // 23: mako.v2.Attach
+	(*Input)(nil),             // 24: mako.v2.Input
+	(*Output)(nil),            // 25: mako.v2.Output
+	(*Resize)(nil),            // 26: mako.v2.Resize
+	(*Snapshot)(nil),          // 27: mako.v2.Snapshot
+	(*Exited)(nil),            // 28: mako.v2.Exited
+	(*ListDir)(nil),           // 29: mako.v2.ListDir
+	(*Dir)(nil),               // 30: mako.v2.Dir
+	(*ReadFile)(nil),          // 31: mako.v2.ReadFile
+	(*File)(nil),              // 32: mako.v2.File
+	(*WriteFile)(nil),         // 33: mako.v2.WriteFile
+	(*FileOp)(nil),            // 34: mako.v2.FileOp
+	(*Search)(nil),            // 35: mako.v2.Search
+	(*SearchResult)(nil),      // 36: mako.v2.SearchResult
+	(*StageFile)(nil),         // 37: mako.v2.StageFile
+	(*Staged)(nil),            // 38: mako.v2.Staged
+	(*Tunnel)(nil),            // 39: mako.v2.Tunnel
+	(*Tunneled)(nil),          // 40: mako.v2.Tunneled
+	(*GitStatus)(nil),         // 41: mako.v2.GitStatus
+	(*GitChanges)(nil),        // 42: mako.v2.GitChanges
+	(*GitDiff)(nil),           // 43: mako.v2.GitDiff
+	(*Diff)(nil),              // 44: mako.v2.Diff
+	(*GitLog)(nil),            // 45: mako.v2.GitLog
+	(*GitHistory)(nil),        // 46: mako.v2.GitHistory
+	(*GitShow)(nil),           // 47: mako.v2.GitShow
+	(*GitCommitInfo)(nil),     // 48: mako.v2.GitCommitInfo
+	(*GitRun)(nil),            // 49: mako.v2.GitRun
+	(*GitResult)(nil),         // 50: mako.v2.GitResult
+	(*ReadChat)(nil),          // 51: mako.v2.ReadChat
+	(*Chat)(nil),              // 52: mako.v2.Chat
+	(*ReadProjectAgents)(nil), // 53: mako.v2.ReadProjectAgents
+	(*ProjectAgents)(nil),     // 54: mako.v2.ProjectAgents
+	(*SetProjects)(nil),       // 55: mako.v2.SetProjects
+	(*Projects)(nil),          // 56: mako.v2.Projects
+	(*RelayAgentMessage)(nil), // 57: mako.v2.RelayAgentMessage
+	(*AgentMessage)(nil),      // 58: mako.v2.AgentMessage
+	(*WatchChat)(nil),         // 59: mako.v2.WatchChat
+	(*ChatLive)(nil),          // 60: mako.v2.ChatLive
+	(*ForgeList)(nil),         // 61: mako.v2.ForgeList
+	(*ForgeItems)(nil),        // 62: mako.v2.ForgeItems
+	(*ForgeView)(nil),         // 63: mako.v2.ForgeView
+	(*ForgeDetail)(nil),       // 64: mako.v2.ForgeDetail
+	(*ForgeRun)(nil),          // 65: mako.v2.ForgeRun
+	(*ListDevices)(nil),       // 66: mako.v2.ListDevices
+	(*Devices)(nil),           // 67: mako.v2.Devices
+	(*Borrow)(nil),            // 68: mako.v2.Borrow
+	(*Lease)(nil),             // 69: mako.v2.Lease
+	(*GiveBack)(nil),          // 70: mako.v2.GiveBack
+	(*ListLeases)(nil),        // 71: mako.v2.ListLeases
+	(*Leases)(nil),            // 72: mako.v2.Leases
+	(*Claim)(nil),             // 73: mako.v2.Claim
+	(*Claimed)(nil),           // 74: mako.v2.Claimed
+	(*DeviceConn)(nil),        // 75: mako.v2.DeviceConn
+	(*DeviceListen)(nil),      // 76: mako.v2.DeviceListen
+	(*DeviceAccept)(nil),      // 77: mako.v2.DeviceAccept
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -1599,66 +1617,67 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	19, // 18: mako.v2.Envelope.send:type_name -> mako.v2.Send
 	20, // 19: mako.v2.Envelope.list_commands:type_name -> mako.v2.ListCommands
 	21, // 20: mako.v2.Envelope.commands:type_name -> mako.v2.Commands
-	22, // 21: mako.v2.Envelope.attach:type_name -> mako.v2.Attach
-	23, // 22: mako.v2.Envelope.input:type_name -> mako.v2.Input
-	24, // 23: mako.v2.Envelope.output:type_name -> mako.v2.Output
-	25, // 24: mako.v2.Envelope.resize:type_name -> mako.v2.Resize
-	26, // 25: mako.v2.Envelope.snapshot:type_name -> mako.v2.Snapshot
-	27, // 26: mako.v2.Envelope.exited:type_name -> mako.v2.Exited
-	28, // 27: mako.v2.Envelope.list_dir:type_name -> mako.v2.ListDir
-	29, // 28: mako.v2.Envelope.dir:type_name -> mako.v2.Dir
-	30, // 29: mako.v2.Envelope.read_file:type_name -> mako.v2.ReadFile
-	31, // 30: mako.v2.Envelope.file:type_name -> mako.v2.File
-	32, // 31: mako.v2.Envelope.write_file:type_name -> mako.v2.WriteFile
-	33, // 32: mako.v2.Envelope.file_op:type_name -> mako.v2.FileOp
-	34, // 33: mako.v2.Envelope.search:type_name -> mako.v2.Search
-	35, // 34: mako.v2.Envelope.search_result:type_name -> mako.v2.SearchResult
-	36, // 35: mako.v2.Envelope.stage_file:type_name -> mako.v2.StageFile
-	37, // 36: mako.v2.Envelope.staged:type_name -> mako.v2.Staged
-	38, // 37: mako.v2.Envelope.tunnel:type_name -> mako.v2.Tunnel
-	39, // 38: mako.v2.Envelope.tunneled:type_name -> mako.v2.Tunneled
-	40, // 39: mako.v2.Envelope.git_status:type_name -> mako.v2.GitStatus
-	41, // 40: mako.v2.Envelope.git_changes:type_name -> mako.v2.GitChanges
-	42, // 41: mako.v2.Envelope.git_diff:type_name -> mako.v2.GitDiff
-	43, // 42: mako.v2.Envelope.diff:type_name -> mako.v2.Diff
-	44, // 43: mako.v2.Envelope.git_log:type_name -> mako.v2.GitLog
-	45, // 44: mako.v2.Envelope.git_history:type_name -> mako.v2.GitHistory
-	46, // 45: mako.v2.Envelope.git_show:type_name -> mako.v2.GitShow
-	47, // 46: mako.v2.Envelope.git_commit_info:type_name -> mako.v2.GitCommitInfo
-	48, // 47: mako.v2.Envelope.git_run:type_name -> mako.v2.GitRun
-	49, // 48: mako.v2.Envelope.git_result:type_name -> mako.v2.GitResult
-	50, // 49: mako.v2.Envelope.read_chat:type_name -> mako.v2.ReadChat
-	51, // 50: mako.v2.Envelope.chat:type_name -> mako.v2.Chat
-	52, // 51: mako.v2.Envelope.read_project_agents:type_name -> mako.v2.ReadProjectAgents
-	53, // 52: mako.v2.Envelope.project_agents:type_name -> mako.v2.ProjectAgents
-	54, // 53: mako.v2.Envelope.set_projects:type_name -> mako.v2.SetProjects
-	55, // 54: mako.v2.Envelope.projects:type_name -> mako.v2.Projects
-	56, // 55: mako.v2.Envelope.relay_agent_message:type_name -> mako.v2.RelayAgentMessage
-	57, // 56: mako.v2.Envelope.agent_message:type_name -> mako.v2.AgentMessage
-	58, // 57: mako.v2.Envelope.watch_chat:type_name -> mako.v2.WatchChat
-	59, // 58: mako.v2.Envelope.chat_live:type_name -> mako.v2.ChatLive
-	60, // 59: mako.v2.Envelope.forge_list:type_name -> mako.v2.ForgeList
-	61, // 60: mako.v2.Envelope.forge_items:type_name -> mako.v2.ForgeItems
-	62, // 61: mako.v2.Envelope.forge_view:type_name -> mako.v2.ForgeView
-	63, // 62: mako.v2.Envelope.forge_detail:type_name -> mako.v2.ForgeDetail
-	64, // 63: mako.v2.Envelope.forge_run:type_name -> mako.v2.ForgeRun
-	65, // 64: mako.v2.Envelope.list_devices:type_name -> mako.v2.ListDevices
-	66, // 65: mako.v2.Envelope.devices:type_name -> mako.v2.Devices
-	67, // 66: mako.v2.Envelope.borrow:type_name -> mako.v2.Borrow
-	68, // 67: mako.v2.Envelope.lease:type_name -> mako.v2.Lease
-	69, // 68: mako.v2.Envelope.give_back:type_name -> mako.v2.GiveBack
-	70, // 69: mako.v2.Envelope.list_leases:type_name -> mako.v2.ListLeases
-	71, // 70: mako.v2.Envelope.leases:type_name -> mako.v2.Leases
-	72, // 71: mako.v2.Envelope.claim:type_name -> mako.v2.Claim
-	73, // 72: mako.v2.Envelope.claimed:type_name -> mako.v2.Claimed
-	74, // 73: mako.v2.Envelope.device_conn:type_name -> mako.v2.DeviceConn
-	75, // 74: mako.v2.Envelope.device_listen:type_name -> mako.v2.DeviceListen
-	76, // 75: mako.v2.Envelope.device_accept:type_name -> mako.v2.DeviceAccept
-	76, // [76:76] is the sub-list for method output_type
-	76, // [76:76] is the sub-list for method input_type
-	76, // [76:76] is the sub-list for extension type_name
-	76, // [76:76] is the sub-list for extension extendee
-	0,  // [0:76] is the sub-list for field type_name
+	22, // 21: mako.v2.Envelope.answer_question:type_name -> mako.v2.AnswerQuestion
+	23, // 22: mako.v2.Envelope.attach:type_name -> mako.v2.Attach
+	24, // 23: mako.v2.Envelope.input:type_name -> mako.v2.Input
+	25, // 24: mako.v2.Envelope.output:type_name -> mako.v2.Output
+	26, // 25: mako.v2.Envelope.resize:type_name -> mako.v2.Resize
+	27, // 26: mako.v2.Envelope.snapshot:type_name -> mako.v2.Snapshot
+	28, // 27: mako.v2.Envelope.exited:type_name -> mako.v2.Exited
+	29, // 28: mako.v2.Envelope.list_dir:type_name -> mako.v2.ListDir
+	30, // 29: mako.v2.Envelope.dir:type_name -> mako.v2.Dir
+	31, // 30: mako.v2.Envelope.read_file:type_name -> mako.v2.ReadFile
+	32, // 31: mako.v2.Envelope.file:type_name -> mako.v2.File
+	33, // 32: mako.v2.Envelope.write_file:type_name -> mako.v2.WriteFile
+	34, // 33: mako.v2.Envelope.file_op:type_name -> mako.v2.FileOp
+	35, // 34: mako.v2.Envelope.search:type_name -> mako.v2.Search
+	36, // 35: mako.v2.Envelope.search_result:type_name -> mako.v2.SearchResult
+	37, // 36: mako.v2.Envelope.stage_file:type_name -> mako.v2.StageFile
+	38, // 37: mako.v2.Envelope.staged:type_name -> mako.v2.Staged
+	39, // 38: mako.v2.Envelope.tunnel:type_name -> mako.v2.Tunnel
+	40, // 39: mako.v2.Envelope.tunneled:type_name -> mako.v2.Tunneled
+	41, // 40: mako.v2.Envelope.git_status:type_name -> mako.v2.GitStatus
+	42, // 41: mako.v2.Envelope.git_changes:type_name -> mako.v2.GitChanges
+	43, // 42: mako.v2.Envelope.git_diff:type_name -> mako.v2.GitDiff
+	44, // 43: mako.v2.Envelope.diff:type_name -> mako.v2.Diff
+	45, // 44: mako.v2.Envelope.git_log:type_name -> mako.v2.GitLog
+	46, // 45: mako.v2.Envelope.git_history:type_name -> mako.v2.GitHistory
+	47, // 46: mako.v2.Envelope.git_show:type_name -> mako.v2.GitShow
+	48, // 47: mako.v2.Envelope.git_commit_info:type_name -> mako.v2.GitCommitInfo
+	49, // 48: mako.v2.Envelope.git_run:type_name -> mako.v2.GitRun
+	50, // 49: mako.v2.Envelope.git_result:type_name -> mako.v2.GitResult
+	51, // 50: mako.v2.Envelope.read_chat:type_name -> mako.v2.ReadChat
+	52, // 51: mako.v2.Envelope.chat:type_name -> mako.v2.Chat
+	53, // 52: mako.v2.Envelope.read_project_agents:type_name -> mako.v2.ReadProjectAgents
+	54, // 53: mako.v2.Envelope.project_agents:type_name -> mako.v2.ProjectAgents
+	55, // 54: mako.v2.Envelope.set_projects:type_name -> mako.v2.SetProjects
+	56, // 55: mako.v2.Envelope.projects:type_name -> mako.v2.Projects
+	57, // 56: mako.v2.Envelope.relay_agent_message:type_name -> mako.v2.RelayAgentMessage
+	58, // 57: mako.v2.Envelope.agent_message:type_name -> mako.v2.AgentMessage
+	59, // 58: mako.v2.Envelope.watch_chat:type_name -> mako.v2.WatchChat
+	60, // 59: mako.v2.Envelope.chat_live:type_name -> mako.v2.ChatLive
+	61, // 60: mako.v2.Envelope.forge_list:type_name -> mako.v2.ForgeList
+	62, // 61: mako.v2.Envelope.forge_items:type_name -> mako.v2.ForgeItems
+	63, // 62: mako.v2.Envelope.forge_view:type_name -> mako.v2.ForgeView
+	64, // 63: mako.v2.Envelope.forge_detail:type_name -> mako.v2.ForgeDetail
+	65, // 64: mako.v2.Envelope.forge_run:type_name -> mako.v2.ForgeRun
+	66, // 65: mako.v2.Envelope.list_devices:type_name -> mako.v2.ListDevices
+	67, // 66: mako.v2.Envelope.devices:type_name -> mako.v2.Devices
+	68, // 67: mako.v2.Envelope.borrow:type_name -> mako.v2.Borrow
+	69, // 68: mako.v2.Envelope.lease:type_name -> mako.v2.Lease
+	70, // 69: mako.v2.Envelope.give_back:type_name -> mako.v2.GiveBack
+	71, // 70: mako.v2.Envelope.list_leases:type_name -> mako.v2.ListLeases
+	72, // 71: mako.v2.Envelope.leases:type_name -> mako.v2.Leases
+	73, // 72: mako.v2.Envelope.claim:type_name -> mako.v2.Claim
+	74, // 73: mako.v2.Envelope.claimed:type_name -> mako.v2.Claimed
+	75, // 74: mako.v2.Envelope.device_conn:type_name -> mako.v2.DeviceConn
+	76, // 75: mako.v2.Envelope.device_listen:type_name -> mako.v2.DeviceListen
+	77, // 76: mako.v2.Envelope.device_accept:type_name -> mako.v2.DeviceAccept
+	77, // [77:77] is the sub-list for method output_type
+	77, // [77:77] is the sub-list for method input_type
+	77, // [77:77] is the sub-list for extension type_name
+	77, // [77:77] is the sub-list for extension extendee
+	0,  // [0:77] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -1696,6 +1715,7 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_Send)(nil),
 		(*Envelope_ListCommands)(nil),
 		(*Envelope_Commands)(nil),
+		(*Envelope_AnswerQuestion)(nil),
 		(*Envelope_Attach)(nil),
 		(*Envelope_Input)(nil),
 		(*Envelope_Output)(nil),

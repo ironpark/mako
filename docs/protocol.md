@@ -377,7 +377,8 @@ is polled as before.
 | `close_session` | `CloseSession` | `exited` | Stops the session and forgets it. |
 | `rename_session` | `RenameSession` | `session_info` | An empty name gives the session its own back. At most 200 bytes, folded to one line. |
 | `answer_approval` | `AnswerApproval` | `session_info` | Answers the tool call the session's agent waits on. |
-| `send` | `Send` | `session_info` | Types into the session without attaching: `text` pasted, bracketed when its program asked for that, then `keys` as they are, such as `\r` to submit. A `text` holding a paste's end marker is refused. |
+| `send` | `Send` | `session_info` | Types into the session without attaching: `text` pasted, bracketed when its program asked for that, then `keys` as they are, such as `\r` to submit. A `text` holding a paste's end marker is refused. With `text`, an agent that shows a view over its own prompt (Claude Code's or Codex's subagent, transcript, or agents list) is first taken back to that prompt, as its screen shows, so the text reaches the agent itself. |
+| `answer_question` | `AnswerQuestion` | `session_info` | Answers the questions the session's agent asks in a dialog in its terminal, which no hook holds (Codex's `request_user_input`; agents with `CapAnswerKeys`): `answers`, one for each of `questions` in order, as `QuestionAnswer` (`picked` option indexes, `text` in the user's own words), typed into the dialog. Refused unless the screen shows the dialog and every question has an answer. |
 | `list_commands` | `ListCommands` | `commands` | The slash commands the session's agent takes, as its node finds them: the agent's own, the user's and the project's commands and skills, and its plugins'. None for an agent mako knows no commands of. |
 | `read_chat` | `ReadChat` | `chat` | The agent's native conversation, read from its log. |
 | `read_project_agents` | `ReadProjectAgents` | `project_agents` | Read-only agent and message monitor for an absolute project `path` on `node_id`. Worktrees include their repository's sessions. `message_limit` defaults to 50 and is capped at 100. Each agent has its session, parent ID, messaging availability and pending message count; recent messages include sender, recipient, timestamp, text and state (`pending`, `acknowledged`, `removed`). Monitoring never consumes messages. Requires revision 15. |
@@ -416,7 +417,7 @@ The fields a front-end usually needs:
 | `conversation_id` | The agent's own conversation, stable across restarts. |
 | `busy`, `idle` | Printing on its own, as an agent at work does; nothing running in front of its program, as a shell at its prompt. |
 | `status`, `status_at` | Reconciled agent activity: `idle`, `working`, `compacting`, `waiting`, `done`, from hooks, terminal progress and supported log events. Running subagents defer a parent's `done` until they finish. Empty when no status is known. |
-| `approval` | The tool call the agent waits to have approved. |
+| `approval` | The tool call the agent waits to have approved. A question tool's (Claude Code's `AskUserQuestion`) carries its `questions` (`Question`: `question`, `header`, `options` of `label` and `description`, `multi_select`). |
 | `worktree` | The worktree made for it. |
 | `last_output`, `started_at`, `cols`, `rows` | |
 | `last_message` | When the conversation's latest prompt or reply was written, as its log says. Unset before the bound log has one; clients fall back to `last_output`. |
@@ -436,6 +437,12 @@ gives a `decision`:
 | `allow` | The tool call runs. |
 | `deny` | It does not; `message` says why, to the agent. |
 | `terminal` | The question goes back to the agent's own prompt in its terminal. |
+
+An approval with `questions` is answered with `allow` and `answers`, one
+`QuestionAnswer` for each question, in order: the agent takes them as the
+user's answers to its own dialog. `allow` without an answer to each, as a
+front-end that knows no questions sends, is taken as `terminal`; `deny`
+declines to answer.
 
 When nobody is watching, the agent asks in its terminal, as it would without
 mako.

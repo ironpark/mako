@@ -114,9 +114,10 @@ func (a *AgentInfo) Channels() (r, g, b, alpha uint8) {
 // Caps are what mako follows of an agent, SessionInfo.Caps: each bit is a
 // capability the agent's driver has.
 const (
-	CapChat      uint32 = 1 << iota // its conversation reads from a log: chat, usage
-	CapHooks                        // its hooks report: status, approvals
-	CapSubAgents                    // the subagents its calls start are followed
+	CapChat       uint32 = 1 << iota // its conversation reads from a log: chat, usage
+	CapHooks                         // its hooks report: status, approvals
+	CapSubAgents                     // the subagents its calls start are followed
+	CapAnswerKeys                    // its questions are answered by AnswerQuestion
 )
 
 // The kinds of tool, ChatMessage.Kind: what a tool does, whatever its agent
@@ -135,7 +136,9 @@ const (
 //	fetch      url, prompt
 //	websearch  query, allowed_domains, blocked_domains
 //	task       description, prompt, agent (the sort of agent)
-//	question   question, options: [string]
+//	question   question, options: [string] (the first question's), and
+//	           questions: [{question, header, options: [{label,
+//	           description}], multiSelect}]
 //
 // and what it gave back as the tool's own output, without what the agent
 // wraps it in: a read's text without line numbers, a command's output

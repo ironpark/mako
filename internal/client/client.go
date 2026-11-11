@@ -427,3 +427,9 @@ func (c *Client) GiveBack(ctx context.Context, req *protocol.GiveBack) (*protoco
 func (c *Client) Leases(ctx context.Context, req *protocol.ListLeases) (*protocol.Leases, error) {
 	return request[*protocol.Leases](ctx, c, protocol.TypeListLeases, req)
 }
+
+// AnswerQuestion answers the questions a session's agent shows in its
+// terminal, typing the answers there.
+func (c *Client) AnswerQuestion(ctx context.Context, req *protocol.AnswerQuestion) (*protocol.SessionInfo, error) {
+	return request[*protocol.SessionInfo](ctx, c, protocol.TypeAnswerQuestion, req)
+}

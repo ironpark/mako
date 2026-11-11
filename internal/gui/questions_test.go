@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/ironpark/ggui"
@@ -77,5 +78,78 @@ func TestChatQuestionInputReachesSession(t *testing.T) {
 	p.Frame()
 	if _, ok := p.Find(T("Message")); !ok {
 		t.Fatal("manual close did not restore composer")
+	}
+}
+
+// The form asks each question in turn and gives back the options picked,
+// several where a question allows, and words of the user's own.
+func TestQuestionFormAnswers(t *testing.T) {
+	questions := []*protocol.Question{
+		{Question: "Which fruits?", MultiSelect: true, Options: []*protocol.QuestionOption{{Label: "Apple"}, {Label: "Pear"}, {Label: "Fig"}}},
+		{Question: "Which color?", Options: []*protocol.QuestionOption{{Label: "Red"}, {Label: "Blue"}}},
+	}
+	var got []*protocol.QuestionAnswer
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		return questionForm(questions, func(a []*protocol.QuestionAnswer) { got = a })
+	}, ggui.Sz(600, 500))
+	t.Cleanup(p.Close)
+	p.Frame()
+	p.Tap("Apple")
+	p.Tap("Fig")
+	p.Frame()
+	p.Tap("Next")
+	p.Frame()
+	if _, ok := p.Find("Blue"); !ok {
+		t.Fatal("the second question did not show")
+	}
+	p.Tap("Blue")
+	p.Frame()
+	p.Tap(T("Answer"))
+	p.Frame()
+	if len(got) != 2 || !slices.Equal(got[0].GetPicked(), []int32{0, 2}) || !slices.Equal(got[1].GetPicked(), []int32{1}) {
+		t.Fatalf("answers %v", got)
+	}
+}
+
+// Questions of the call the agent waits on are read from the log.
+func TestPendingQuestions(t *testing.T) {
+	text := `{"question":"Which?","options":["A"],"questions":[{"question":"Which?","header":"H","options":[{"label":"A","description":"a"}],"multiSelect":false}]}`
+	waiting := []*protocol.ChatMessage{{Role: "user", Text: "go"}, {Role: "tool", Kind: protocol.ToolQuestion, Pending: true, Text: text}}
+	if qs := callQuestions(pendingQuestionCall(waiting)); len(qs) != 1 || qs[0].GetHeader() != "H" || qs[0].GetOptions()[0].GetDescription() != "a" {
+		t.Fatalf("questions %v", qs)
+	}
+	answered := []*protocol.ChatMessage{{Role: "tool", Kind: protocol.ToolQuestion, Text: text}}
+	if qs := pendingQuestionCall(answered); qs != nil {
+		t.Fatalf("an answered call asks %v", qs)
+	}
+}
+
+// An agent whose dialog takes typed answers is answered in a form in
+// Chat, which hands it to the terminal when asked.
+func TestKeyedQuestionsShowAForm(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	link := newFakeLink()
+	conn, err := newTermConn("s", link, 80, 24, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.conns["s"] = conn
+	m.Attached.Set([]string{"s"})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "codex", State: protocol.StateRunning, Status: protocol.AgentWaiting, Caps: protocol.CapAnswerKeys}})
+	state := m.chatState("s")
+	state.result.Set(chatResult{Loaded: true, Chat: &protocol.Chat{Supported: true, Conversation: "c", Messages: []*protocol.ChatMessage{
+		{Role: "tool", Kind: protocol.ToolQuestion, Pending: true, Text: `{"questions":[{"question":"Which color?","options":[{"label":"Red"},{"label":"Blue"}]}]}`},
+	}}})
+	p := ggui.ProbeBuilder(func() ggui.Widget { return chatInput(m, "s", state) }, ggui.Sz(800, 450))
+	t.Cleanup(func() { p.Close(); close(link.in); conn.close() })
+	p.Frame()
+	if _, ok := p.Find("Blue"); !ok {
+		t.Fatal("the form did not show")
+	}
+	p.Tap(T("Answer in the terminal"))
+	p.Frame()
+	if _, ok := p.Find(T("Answer here")); !ok {
+		t.Fatal("the terminal did not show")
 	}
 }

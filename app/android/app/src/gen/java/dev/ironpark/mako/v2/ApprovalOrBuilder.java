@@ -76,4 +76,33 @@ public interface ApprovalOrBuilder extends
    * @return The since.
    */
   com.google.protobuf.Timestamp getSince();
+
+  /**
+   * <pre>
+   * questions are what a question tool asks, which the approval is
+   * answered with the answers to rather than allowed; none for others.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 6 [json_name = "questions"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.Question> 
+      getQuestionsList();
+  /**
+   * <pre>
+   * questions are what a question tool asks, which the approval is
+   * answered with the answers to rather than allowed; none for others.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 6 [json_name = "questions"];</code>
+   */
+  dev.ironpark.mako.v2.Question getQuestions(int index);
+  /**
+   * <pre>
+   * questions are what a question tool asks, which the approval is
+   * answered with the answers to rather than allowed; none for others.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.Question questions = 6 [json_name = "questions"];</code>
+   */
+  int getQuestionsCount();
 }
