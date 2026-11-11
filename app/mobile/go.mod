@@ -40,7 +40,7 @@ require (
 	github.com/grandcat/zeroconf v1.0.0 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/ipfs/go-cid v0.6.2 // indirect
-	github.com/ironpark/gostty v0.0.0-20261102180724-c0ee0bdcacdf // indirect
+	github.com/ironpark/gostty v0.0.0-20261108124048-de82fbcca291 // indirect
 	github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
