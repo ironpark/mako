@@ -396,6 +396,12 @@ func TestQuestionsAreAnsweredInTheWindow(t *testing.T) {
 		if len(a.GetQuestions()) != 2 || !a.GetQuestions()[0].GetMultiSelect() || a.GetQuestions()[1].GetOptions()[1].GetLabel() != "Blue" {
 			t.Fatalf("%s: questions %+v", c.name, a.GetQuestions())
 		}
+		// Claude, its own dialog shown beside the hook's, says it waits.
+		runHook([]string{socket}, strings.NewReader(`{"hook_event_name":"Notification","notification_type":"permission_prompt"}`), io.Discard)
+		time.Sleep(100 * time.Millisecond)
+		if s.Info().GetApproval().GetId() != a.GetId() {
+			t.Fatalf("%s: the agent saying it waits withdrew its question", c.name)
+		}
 		if err := d.approvals.answer(s.ID(), &protocol.AnswerApproval{ApprovalId: a.GetId(), Decision: protocol.DecisionAllow, Answers: c.answers}); err != nil {
 			t.Fatal(err)
 		}

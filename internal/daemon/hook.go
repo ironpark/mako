@@ -312,7 +312,10 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	case agent.Compacting:
 		s.ReportToolStatus(protocol.AgentCompacting, msg.Seq)
 	case agent.Waiting:
-		s.ReportStatus(protocol.AgentWaiting, msg.Seq)
+		// Claude says it waits a few seconds into the approval its hook
+		// still holds, its own dialog shown beside it: the approval, which
+		// waits already, stands.
+		s.ReportToolStatus(protocol.AgentWaiting, msg.Seq)
 	case agent.Stopped:
 		d.refreshActivity(s)
 		s.ReportStatus(protocol.AgentDone, msg.Seq)
