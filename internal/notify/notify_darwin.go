@@ -2,6 +2,7 @@ package notify
 
 import (
 	"os/exec"
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -144,6 +145,12 @@ func post(title, body, target string) {
 			"-e", "end run", title, body).Run()
 		return
 	}
+	// An autorelease pool belongs to the thread that made it, and a
+	// goroutine moves between threads at every call into Objective-C:
+	// drained elsewhere, it pops another thread's pools, or one a second
+	// post pushed above it, and the process faults.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	pool := objc.ID(objc.GetClass("NSAutoreleasePool")).Send(selNew)
 	defer pool.Send(selPool)
 	t := nsString(target)
