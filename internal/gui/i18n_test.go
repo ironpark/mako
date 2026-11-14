@@ -57,7 +57,7 @@ func TestEveryStringIsTranslated(t *testing.T) {
 	for _, s := range shortcutList {
 		want[s.Action] = "shortcutList"
 	}
-	for _, labels := range []map[string]string{themeLabels, cursorLabels, daemonModeLabels, usageCornerLabels, backdropFitLabels, backdropPositionLabels} {
+	for _, labels := range []map[string]string{themeLabels, cursorLabels, daemonModeLabels, usageCornerLabels, templateTypeLabels, backdropFitLabels, backdropPositionLabels} {
 		for _, l := range labels {
 			want[l] = "settings labels"
 		}

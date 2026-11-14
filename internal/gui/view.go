@@ -867,10 +867,11 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 		Placeholder(T("Message the agent. Enter sends, Shift+Enter adds a line")).
 		Name(T("Message")).
 		BindDisabled(disabled).
-		// Tab completes a command the menu lists, rather than moving on.
-		ClaimKeys(func(ev ggui.KeyEvent) bool { return m.commandClaims(state, ev) }).
+		// Tab completes a command or template the menu lists, rather
+		// than moving on.
+		ClaimKeys(func(ev ggui.KeyEvent) bool { return m.menuClaims(id, state, ev) }).
 		OnKey(func(ev ggui.KeyEvent) bool {
-			if m.commandKey(id, state, ev) {
+			if m.menuKey(id, state, ev) {
 				return true
 			}
 			plain := !ev.Mods.Shift && !ev.Mods.Alt && !ev.Mods.Ctrl && !ev.Mods.Meta
@@ -909,7 +910,7 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 		m.attachTo(id, []string{d.Value.Path})
 	}).OnHover(over.Set)
 	// In the transcript's lane, as wide as its text.
-	return &lane{child: ggui.Box(ggui.Column(commandList(m, id, state), files).Stretch()).Pad(10, 0, 14, 0)}
+	return &lane{child: ggui.Box(ggui.Column(composerMenu(m, id, state), files).Stretch()).Pad(10, 0, 14, 0)}
 }
 
 // composerMaxHeight is as tall as the composer's text grows, about ten

@@ -166,6 +166,9 @@ mako allow <node>             # let in a machine that asked
   from a file's or a diff's tab at its line.
 - **Command palette** (⌘K), **go to file** (⌘P), and English and Korean
   interfaces with light and dark themes.
+- **Prompt templates.** Type `//` in Chat's composer to pick one of your
+  [prompt templates](#prompt-templates) by name; Tab completes it, and
+  Enter sends the prompt it makes from the arguments after it.
 
 ## The Android app
 
@@ -339,6 +342,52 @@ in the configuration folder, and daemons talk to each other on port 4243
 is behind NAT that no hole can be punched through, run a relay on a node
 with a public address: set `"p2p": {"relay": true}` there, run `mako addrs`
 on it, and add the address it prints to the other nodes' `p2p.relays`.
+
+### Prompt templates
+
+Prompt templates are edited in Settings ▸ Templates, and kept as Markdown
+files in `templates/` beside `config.json`, each named for its file:
+`templates/review.md` is `//review`. The page checks a template as Chat
+would read it before saving it; saving rewrites the file, so comments in
+a file written by hand are not kept. YAML front
+matter says what a template is for, which agents it is offered to and the
+arguments it takes; the rest is the prompt, where `{{name}}` stands for an
+argument or a built-in variable. That is the whole language: no functions,
+conditions or loops.
+
+```markdown
+---
+description: Review a file
+agents: [claude, codex:fast]   # by agent, or agent:profile; left out, every agent
+args:
+  - name: file
+    type: string
+    required: true
+  - name: depth
+    type: integer
+    default: 2
+  - name: tone
+    type: choice
+    options: [kind, blunt]
+    default: kind
+---
+Review {{file}} {{depth}} levels deep, in a {{tone}} tone.
+You are {{agent}} ({{model}}) working in {{project}} on {{branch}}.
+```
+
+An argument's `type` is `string` (one line, the default), `text` (lines and
+all), `integer`, `number`, `boolean` (`true`/`false`, `yes`/`no`) or
+`choice` (one of its `options`). It can be `required`, or have a
+`default`; otherwise it is empty when left out.
+
+The built-in variables are `agent`, `profile`, `model` (as the agent's
+latest reply reports it), `project`, `branch`, `repo` and `date`.
+
+Call a template in Chat with its arguments in order, or by name, quoting
+what has spaces: `//review "src/my file.go" tone=blunt`. The line over the
+composer shows the arguments the template takes and what is wrong with
+those given, and a wrong call is not sent. A template not for the session's
+agent is not listed, and a `//` draft naming no template is sent as typed.
 
 ## Security
 

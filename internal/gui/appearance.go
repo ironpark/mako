@@ -26,7 +26,7 @@ func appearanceSettings(m *model) ggui.Widget {
 	actions := ggui.Row(
 		ui.Button(T("Duplicate"), m.duplicateTheme).Outline(),
 		ui.Button(T("Delete"), m.deleteTheme).Outline().BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return skin.IsBuiltin(p.Theme) })),
-		ui.Button(T("Open folder"), openThemesFolder).Ghost(),
+		ui.Button(T("Open folder"), openFolder(themesDir)).Ghost(),
 		ui.Button(T("Reload"), m.reloadThemes).Ghost(),
 	).Gap(6)
 	return page(T("Appearance"), T("The window's colours, after Paseo's palettes, or your own."),
@@ -189,10 +189,13 @@ func (m *model) deleteTheme() {
 	m.reloadThemes()
 }
 
-// openThemesFolder shows the themes folder in the desktop's file manager.
-func openThemesFolder() {
-	if dir, err := themesDir(); err == nil && os.MkdirAll(dir, 0o700) == nil {
-		_ = runtime.OpenURL(dir)
+// openFolder shows the folder dir names in the desktop's file manager,
+// made first when it is not there.
+func openFolder(dir func() (string, error)) func() {
+	return func() {
+		if d, err := dir(); err == nil && os.MkdirAll(d, 0o700) == nil {
+			_ = runtime.OpenURL(d)
+		}
 	}
 }
 

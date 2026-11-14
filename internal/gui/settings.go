@@ -39,6 +39,7 @@ var settingsNav = []settingsGroup{
 		{"spaces", "Spaces", "layout-grid"},
 		{"terminal", "Terminal", "square-terminal"},
 		{"shortcuts", "Shortcuts", "keyboard"},
+		{"templates", "Templates", "file-text"},
 		{"extensions", "Extensions", "layers"},
 		{"developer", "Developer", "code-xml"},
 	}},
@@ -121,6 +122,8 @@ func settingsContent(m *model, id string) ggui.Widget {
 		return terminalSettings(m)
 	case "shortcuts":
 		return shortcutSettings()
+	case "templates":
+		return templateSettings(m)
 	case "extensions":
 		return extensionSettings(m)
 	case "daemon":
