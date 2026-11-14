@@ -208,17 +208,8 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		plus := ggui.Box(ggui.Column(launchButton(m, nodeID, project, targets, focus, newSession)).Justify(ggui.JustifyCenter)).
 			Height(tabBarHeight).Pad(0, 4)
 
-		// Beside the tabs: the + and what trails the bar.
+		// Beside the tabs: the +.
 		extra := float64(34)
-		// The eraser closes the pane's tabs that lose nothing by closing,
-		// shown while there are some.
-		var tidy ggui.Widget = ggui.Box()
-		if slices.ContainsFunc(g.Tabs, func(t string) bool { return tidyable(t, sessions, docs) }) {
-			ids := g.Tabs
-			tidy = iconButton("eraser", T("Close files, diffs and idle shells"), func() { m.tidyTabs(ids) })
-			extra += 30
-		}
-		trail := ggui.Box(ggui.Column(tidy).Justify(ggui.JustifyCenter)).Height(tabBarHeight).Pad(0, 8, 0, 2)
 		// The + follows the last tab, as far as the bar's end, where it
 		// stays in sight as the tabs scroll; and when they do, a menu
 		// lists them all.
@@ -230,7 +221,6 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		return ggui.Row(
 			ggui.Expanded(tabsAndPlus),
 			ggui.Responsive(need, ggui.Box().Size(0, 0), tabList(m, g, sessions, titles, docs, diffs)),
-			trail,
 		).Stretch()
 	})
 	return ggui.Box(tabs).Height(tabBarHeight)
