@@ -55,6 +55,10 @@ func writePNG(path string, img image.Image) error {
 // setting it switches through is put back when it is done.
 func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 	agentsOnly := os.Getenv("MAKO_PREVIEW_AGENTS") != ""
+	// MAKO_PREVIEW_RAIL renders a long conversation's turn rail, with no
+	// daemon: at a prompt part way up, and with a tick hovered.
+	railOnly := os.Getenv("MAKO_PREVIEW_RAIL") != ""
+	var rail *turnRail
 	if agentsOnly {
 		width = 360
 	}
@@ -142,6 +146,11 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			}
 			var b *browser
 			p = ggui.ProbeBuilder(func() ggui.Widget {
+				if railOnly {
+					var feed ggui.Widget
+					feed, rail = railPreview(m)
+					return feed
+				}
 				if agentsOnly {
 					return ggui.Box(ggui.Column(panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), "GitHub"), hline(), ggui.Expanded(projectAgentsBody(m, agentsRoot))).Stretch()).Fill(skin.Surface0)
 				}
@@ -157,7 +166,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				ggui.Sz(float64(width), float64(height)))
 			p.Setup(func() {
 				setup(m)
-				if !agentsOnly {
+				if !agentsOnly && !railOnly {
 					m.start(ctx, p.Post)
 				} else {
 					m.post = func(func()) {} // the panel's refreshes, with no daemon, keep the fixed data
@@ -466,6 +475,16 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					do(m.pickFolder), until("the picker", func() bool { return ggui.Peek(m.Pick.On) }), frames(20), shot("41-pick-folder"),
 				}
 			}
+			if railOnly {
+				tick := func(i int) ggui.Point {
+					return ggui.Pt(10, (float64(height)-rail.gap*float64(len(ggui.Peek(rail.prompts))))/2+rail.gap*(float64(i)+0.5))
+				}
+				steps = []previewStep{
+					do(setTheme("dark")), frames(5),
+					do(func() { rail.find.jumpTo(ggui.Peek(rail.prompts)[12].Key) }), frames(10), shot("rail"),
+					do(func() { p.Move(tick(17)) }), frames(10), shot("rail-hover"),
+				}
+			}
 			if agentsOnly {
 				steps = []previewStep{
 					do(setTheme(saved.Theme)), frames(3), shot("agents-panel"),
@@ -665,4 +684,25 @@ func projectAgentsPreviewData(root fileRoot) *protocol.ProjectAgents {
 			{Id: 4, FromSessionId: "reviewer", ToSessionId: "coordinator", Text: "On it", State: "delivered", CreatedAt: protocol.Time(time.Now())},
 		},
 	}
+}
+
+// railPreview is a long conversation's feed with its turn rail, for
+// MAKO_PREVIEW_RAIL.
+func railPreview(m *model) (ggui.Widget, *turnRail) {
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "preview", Agent: "claude", Project: "/workspace/mako"}})
+	state := m.chatState("preview")
+	var messages []*protocol.ChatMessage
+	for i := range 30 {
+		messages = append(messages,
+			&protocol.ChatMessage{Role: "user", Id: fmt.Sprintf("u%d", i), Text: fmt.Sprintf("C%d를 완료하려면?", i)},
+			&protocol.ChatMessage{Role: "assistant", Id: fmt.Sprintf("a%d", i), Text: fmt.Sprintf(
+				"현재 남은 항목은 **C5.%d 원격 CI**, **C6.1 전체 검증**, **C6.7 종료 판정**입니다. 기능 수정과 로컬 build/check는 통과했습니다.\n\n- 대상 브랜치는 main입니다.\n- 전체 검증은 CI에서 다시 돕니다.\n- 바이너리는 릴리스에 올립니다.", i)})
+	}
+	turns := ggui.State(chatTurns(messages, nil))
+	scroll := &ggui.ScrollController{}
+	find := &chatFinder{turns: turns, scroll: scroll, marks: map[string]rowMark{}}
+	rail := newTurnRail(m, find, turns)
+	scrolling, feed := chatFeed(m, "preview", state, turns, ggui.Box(), find)
+	scrolling.Controller(scroll)
+	return ggui.Box(ggui.Stack(feed, rail, &afterPaint{fn: find.painted}).Expand()).Fill(skin.Surface0), rail
 }
