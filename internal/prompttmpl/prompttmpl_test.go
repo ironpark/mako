@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -206,5 +207,44 @@ func TestBindKeepsAWindowsPath(t *testing.T) {
 	values, err := tm.Bind(`C:\src\a.go`)
 	if err != nil || values["file"] != `C:\src\a.go` {
 		t.Fatalf("got %v, %v", values, err)
+	}
+}
+
+// The placeholders of a body are found where they are, spaces in their
+// braces and all, and a brace that opens none is not one.
+func TestPlaceholders(t *testing.T) {
+	body := "Review {{ file }} as {{agent}}, {{ not closed"
+	got := Placeholders(body)
+	want := []Placeholder{{Start: 7, End: 17, Name: "file"}, {Start: 21, End: 30, Name: "agent"}}
+	if !slices.Equal(got, want) {
+		t.Fatalf("placeholders %v, want %v", got, want)
+	}
+	if !IsBuiltin("agent") || IsBuiltin("file") {
+		t.Fatal("built-ins")
+	}
+}
+
+// The {{ a text ends in is found with what is typed of its name, spaces
+// and tabs before the name allowed; and the }} after it, with spaces.
+func TestOpenPlaceholderAndClosing(t *testing.T) {
+	for _, c := range []struct {
+		text  string
+		ok    bool
+		start int
+		typed string
+	}{
+		{"Review {{fi", true, 9, "fi"},
+		{"Review {{ \t", true, 11, ""},
+		{"Review {{file}} ", false, 0, ""},
+		{"Review {{fi le", false, 0, ""},
+		{"Review", false, 0, ""},
+	} {
+		start, typed, ok := OpenPlaceholder(c.text)
+		if ok != c.ok || ok && (start != c.start || typed != c.typed) {
+			t.Errorf("%q: %d %q %v", c.text, start, typed, ok)
+		}
+	}
+	if Closing(" }} b") != 3 || Closing("}}") != 2 || Closing(" b}}") != 0 {
+		t.Fatal("closing")
 	}
 }

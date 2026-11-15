@@ -92,6 +92,55 @@ var placeholder = regexp.MustCompile(`\{\{\s*([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}`)
 
 var argName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 
+// Placeholder is a {{name}} in a template's body: its bytes [Start, End),
+// braces and all, and the name in it.
+type Placeholder struct {
+	Start, End int
+	Name       string
+}
+
+// Placeholders are the {{name}}s of body, in order.
+func Placeholders(body string) []Placeholder {
+	var out []Placeholder
+	for _, m := range placeholder.FindAllStringSubmatchIndex(body, -1) {
+		out = append(out, Placeholder{Start: m[0], End: m[1], Name: body[m[2]:m[3]]})
+	}
+	return out
+}
+
+// openPlaceholder is a {{ not yet closed at the end of a text, and the
+// start of the name typed in it; closing is the }} a text begins with.
+var (
+	openPlaceholder = regexp.MustCompile(`\{\{\s*([A-Za-z_][A-Za-z0-9_-]*)?$`)
+	closing         = regexp.MustCompile(`^\s*\}\}`)
+)
+
+// OpenPlaceholder finds the {{ the end of before is in, not yet closed:
+// where the name in it starts, and what of the name is typed. ok is false
+// when before ends in none.
+func OpenPlaceholder(before string) (start int, typed string, ok bool) {
+	m := openPlaceholder.FindStringSubmatchIndex(before)
+	if m == nil {
+		return 0, "", false
+	}
+	if m[2] < 0 {
+		return len(before), "", true
+	}
+	return m[2], before[m[2]:m[3]], true
+}
+
+// Closing is how long the }} that after begins with is, spaces before it
+// and all; 0 when it begins with none.
+func Closing(after string) int {
+	if m := closing.FindStringIndex(after); m != nil {
+		return m[1]
+	}
+	return 0
+}
+
+// IsBuiltin reports whether name is one of the built-in variables.
+func IsBuiltin(name string) bool { return slices.Contains(Builtins, name) }
+
 // Parse reads a template named name from its file's content.
 func Parse(name string, content []byte) (*Template, error) {
 	t := &Template{Name: name}
@@ -145,7 +194,7 @@ func (t *Template) check() error {
 		if seen[a.Name] {
 			return fmt.Errorf("argument %q: given twice", a.Name)
 		}
-		if slices.Contains(Builtins, a.Name) {
+		if IsBuiltin(a.Name) {
 			return fmt.Errorf("argument %q: a built-in variable has that name", a.Name)
 		}
 		seen[a.Name] = true
@@ -172,9 +221,9 @@ func (t *Template) check() error {
 			a.Default = &v
 		}
 	}
-	for _, m := range placeholder.FindAllStringSubmatch(t.Body, -1) {
-		if !seen[m[1]] && !slices.Contains(Builtins, m[1]) {
-			return fmt.Errorf("{{%s}}: no argument or built-in variable has that name", m[1])
+	for _, p := range Placeholders(t.Body) {
+		if !seen[p.Name] && !IsBuiltin(p.Name) {
+			return fmt.Errorf("{{%s}}: no argument or built-in variable has that name", p.Name)
 		}
 	}
 	return nil

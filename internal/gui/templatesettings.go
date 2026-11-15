@@ -421,9 +421,8 @@ func templateEditor(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 	children = append(children,
 		ggui.Row(ui.ButtonOf(ggui.Row(icon("plus").Size(14), ggui.Text(T("Add argument")).Size(13)).Gap(6),
 			func() { pg.addArg(id) }).Ghost().Pad(6, 10).Radius(7).Name(T("Add argument"))),
-		compactField(T("Prompt"), T("What it sends. {{name}} stands for an argument's value or a built-in variable's."),
-			ui.TextField(pg.field(id, func(d *templateDraft) *string { return &d.Body })).
-				Multiline().Lines(6).Style(mono).Placeholder("Review {{file}} as {{agent}}.").Name(T("Template prompt"))),
+		compactField(T("Prompt"), T("What it sends. {{name}} stands for an argument's value or a built-in variable's; type {{ to pick one."),
+			templateBody(pg, id, mono)),
 		ggui.Reactive(func() ggui.Widget {
 			if e := pg.draft(id).Err; e != "" {
 				return ggui.Text(e).Size(12).Color(uitheme.Destructive)

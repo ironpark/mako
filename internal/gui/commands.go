@@ -144,12 +144,11 @@ func (m *model) menuKey(id string, state *chatState, ev ggui.KeyEvent) bool {
 	if len(items) == 0 {
 		return false
 	}
+	if stepPick(state.menu.pick, len(items), ev.Key) {
+		return true
+	}
 	pick := min(ggui.Peek(state.menu.pick), len(items)-1)
 	switch ev.Key {
-	case ggui.KeyArrowUp:
-		state.menu.pick.Set((pick + len(items) - 1) % len(items))
-	case ggui.KeyArrowDown:
-		state.menu.pick.Set((pick + 1) % len(items))
 	case ggui.KeyEnter, ggui.KeyNumpadEnter:
 		items[pick].take()
 	case ggui.KeyTab:
@@ -162,10 +161,31 @@ func (m *model) menuKey(id string, state *chatState, ev ggui.KeyEvent) bool {
 	return true
 }
 
+// stepPick moves pick, the row chosen among n, up for ↑ and down for ↓,
+// round from either end; it reports whether key was either.
+func stepPick(pick *ggui.StateValue[int], n int, key ggui.KeyboardKey) bool {
+	at := min(ggui.Peek(pick), n-1)
+	switch key {
+	case ggui.KeyArrowUp:
+		pick.Set((at + n - 1) % n)
+	case ggui.KeyArrowDown:
+		pick.Set((at + 1) % n)
+	default:
+		return false
+	}
+	return true
+}
+
+// plainKey reports whether ev is a key pressed with no modifier, as a
+// menu's keys are.
+func plainKey(ev ggui.KeyEvent) bool {
+	return !ev.Mods.Shift && !ev.Mods.Alt && !ev.Mods.Ctrl && !ev.Mods.Meta
+}
+
 // menuKeys are what the menu lists while it takes ev, a key pressed with
 // no modifier; none when it does not.
 func (m *model) menuKeys(id string, state *chatState, ev ggui.KeyEvent) []menuItem {
-	if ev.Mods.Shift || ev.Mods.Alt || ev.Mods.Ctrl || ev.Mods.Meta {
+	if !plainKey(ev) {
 		return nil
 	}
 	return ggui.Untrack(func() []menuItem { return m.menuItems(id, state) })
@@ -214,8 +234,7 @@ func composerMenu(m *model, id string, state *chatState) ggui.Widget {
 		} else if content = templateHint(state); content == nil {
 			return ggui.Box()
 		}
-		list := ggui.Box(content).Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(4)
-		return ggui.Box(list).Pad(0, 0, 6, 0)
+		return ggui.Box(menuPanel(content)).Pad(0, 0, 6, 0)
 	})
 }
 
@@ -231,12 +250,23 @@ func menuRow(it menuItem, chosen bool) ggui.Widget {
 	if it.tag != "" {
 		parts = append(parts, ggui.Text(it.tag).Size(11).Color(skin.ExtraMuted).NoWrap())
 	}
-	row := ggui.Box(ggui.Row(parts...).Gap(12)).Pad(6, 10).Radius(6)
+	return menuRowBox(ggui.Row(parts...).Gap(12), chosen, it.take)
+}
+
+// menuPanel is the box a menu's rows are listed in, as the composer's
+// and a template prompt's are.
+func menuPanel(rows ggui.Widget) ggui.Widget {
+	return ggui.Box(rows).Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(4)
+}
+
+// menuRowBox is a row of a menu, marked when chosen, which a tap takes.
+func menuRowBox(content ggui.Widget, chosen bool, take func()) ggui.Widget {
+	row := ggui.Box(content).Pad(6, 10).Radius(6)
 	if chosen {
 		// As plain as a selected row in the sidebar, and as plain to see.
 		row = row.Fill(skin.SidebarSel).Border(1, skin.BorderAccent)
 	}
-	return ggui.Tap(row, it.take)
+	return ggui.Tap(row, take)
 }
 
 // commandSource names where a command comes from, for the menu.
