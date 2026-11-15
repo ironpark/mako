@@ -100,6 +100,21 @@ func TestTheRailFollowsTheReaderAndGoesToAPrompt(t *testing.T) {
 	if _, ok := p.Semantics().Find(ggui.RoleGroup, "prompt 5"); !ok {
 		t.Fatalf("no card for prompt 5:\n%s", p.Semantics().String())
 	}
+	// On to the next tick, its card takes the place of the last: one card
+	// at a time.
+	p.Move(at.Add(ggui.Pt(0, rail.gap)))
+	for range 5 {
+		p.Frame()
+	}
+	_, five := p.Semantics().Find(ggui.RoleGroup, "prompt 5")
+	_, six := p.Semantics().Find(ggui.RoleGroup, "prompt 6")
+	if five || !six {
+		t.Fatalf("cards for prompt 5 %v and 6 %v:\n%s", five, six, p.Semantics().String())
+	}
+	p.Move(at)
+	for range 5 {
+		p.Frame()
+	}
 	p.Click(at)
 	for range 10 {
 		p.Frame()

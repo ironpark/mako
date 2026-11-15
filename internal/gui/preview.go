@@ -482,6 +482,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				steps = []previewStep{
 					do(setTheme("dark")), frames(5),
 					do(func() { rail.find.jumpTo(ggui.Peek(rail.prompts)[12].Key) }), frames(10), shot("rail"),
+					do(func() { p.Move(tick(15)) }), frames(5), do(func() { p.Move(tick(16)) }), frames(5),
 					do(func() { p.Move(tick(17)) }), frames(10), shot("rail-hover"),
 				}
 			}
