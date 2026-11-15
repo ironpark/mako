@@ -158,27 +158,10 @@ func extCards(r extSearch, installed []zed.Extension, show, kind string) []extCa
 	for _, e := range installed {
 		have[e.ID] = e
 	}
-	listed := map[string]bool{}
-	var store []extCard
-	for _, l := range r.Listings[:min(len(r.Listings), maxListings)] {
-		c := extCard{ID: l.ID, Name: l.Name, Version: l.Version, Description: l.Description, Repository: l.Repository,
-			Authors: l.Authors, Provides: l.Provides, Downloads: l.DownloadCount}
-		if e, ok := have[l.ID]; ok {
-			c.Installed, c.ContextServers = e.Version, e.ContextServerIDs()
-		}
-		listed[l.ID] = true
-		store = append(store, c)
-	}
-	var out []extCard
-	q := strings.ToLower(r.Query)
-	for _, e := range installed {
-		c := installedCard(e)
-		if !listed[e.ID] && strings.Contains(strings.ToLower(c.Name+" "+c.ID+" "+c.Description), q) {
-			out = append(out, c)
-		}
-	}
-	out = append(out, store...)
-	return slices.DeleteFunc(out, func(c extCard) bool {
+	// The filters pick from all the store listed, and then the most
+	// downloaded of what they keep are shown: capped first, the kinds
+	// downloaded less, MCP servers among them, would hardly show at all.
+	hidden := func(c extCard) bool {
 		switch {
 		case show == extShowInstalled && c.Installed == "", show == extShowAvailable && c.Installed != "":
 			return true
@@ -186,7 +169,29 @@ func extCards(r extSearch, installed []zed.Extension, show, kind string) []extCa
 			return true
 		}
 		return false
-	})
+	}
+	listed := map[string]bool{}
+	var store []extCard
+	for _, l := range r.Listings {
+		c := extCard{ID: l.ID, Name: l.Name, Version: l.Version, Description: l.Description, Repository: l.Repository,
+			Authors: l.Authors, Provides: l.Provides, Downloads: l.DownloadCount}
+		if e, ok := have[l.ID]; ok {
+			c.Installed, c.ContextServers = e.Version, e.ContextServerIDs()
+		}
+		if !hidden(c) && len(store) < maxListings {
+			listed[l.ID] = true
+			store = append(store, c)
+		}
+	}
+	var out []extCard
+	q := strings.ToLower(r.Query)
+	for _, e := range installed {
+		c := installedCard(e)
+		if !listed[e.ID] && !hidden(c) && strings.Contains(strings.ToLower(c.Name+" "+c.ID+" "+c.Description), q) {
+			out = append(out, c)
+		}
+	}
+	return append(out, store...)
 }
 
 func extensionSettings(m *model) ggui.Widget {
