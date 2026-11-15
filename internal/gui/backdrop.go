@@ -9,6 +9,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/mcp"
@@ -128,7 +129,7 @@ func backdropLayer(m *model, slot backdropSlot, scale float64) ggui.Widget {
 		if b.Image == "" {
 			return ggui.Box()
 		}
-		img := ggui.AsyncImage(mcp.ExpandHome(b.Image)).MaxSize(backdropMaxSize).Fit(ggui.FitFill)
+		img := widget.AsyncImage(mcp.ExpandHome(b.Image)).MaxSize(backdropMaxSize).Fit(ggui.FitFill)
 		return &backdropImage{img: img, b: b.scaled(scale), scale: scale}
 	})
 }
@@ -164,7 +165,7 @@ func (b *backdropView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 
 // backdropImage paints an image as b places it, once loaded.
 type backdropImage struct {
-	img     *ggui.AsyncImageWidget
+	img     *widget.AsyncImageWidget
 	b       backdrop // its lengths scaled
 	scale   float64
 	natural ggui.Size // the image's, scaled; zero until it loads

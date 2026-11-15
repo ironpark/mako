@@ -13,6 +13,7 @@ import (
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/zed"
@@ -235,7 +236,7 @@ func extensionsHeader(m *model) ggui.Widget {
 	})
 	search := ggui.Box(ggui.Row(
 		icon("search").Size(15).Color(skin.Muted),
-		ggui.Expanded(ggui.TextInput(m.ext.Query).Placeholder(T("Search extensions…")).Name(T("Search extensions")).
+		ggui.Expanded(widget.TextInput(m.ext.Query).Placeholder(T("Search extensions…")).Name(T("Search extensions")).
 			Style(ggui.TextStyle{Size: 13.5}).OnSubmit(m.searchExtensions)),
 	).Gap(8).Align(ggui.AlignCenter)).Pad(8, 12).Border(1, skin.Border).Radius(8).Fill(skin.Surface0)
 	show := ui.ToggleGroup[string](m.ext.Show).Options([]string{extShowAll, extShowInstalled, extShowAvailable}).

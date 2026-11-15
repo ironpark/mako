@@ -7,6 +7,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 )
@@ -140,7 +141,7 @@ func (p *picker) dialog() ggui.Widget {
 		})
 		return nil
 	})
-	input := ggui.TextInput(p.query).Placeholder(p.Placeholder).Name(p.Name).
+	input := widget.TextInput(p.query).Placeholder(p.Placeholder).Name(p.Name).
 		Style(ggui.TextStyle{Size: 15}).OnKey(p.key)
 	// The rows are built when they change; moving the pick only fills
 	// another.

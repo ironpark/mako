@@ -17,6 +17,7 @@ import (
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/webp"
 
@@ -600,7 +601,7 @@ func previewPane(m *model) ggui.Widget {
 			note = p.Err
 		case p.Img != nil:
 			// Clicked, it shows as large as the window allows.
-			img := ggui.Pointer(ggui.Image(p.Img).Alt(p.Name)).OnTap(func() { m.files.ImageOpen.Set(true) })
+			img := ggui.Pointer(widget.Image(p.Img).Alt(p.Name)).OnTap(func() { m.files.ImageOpen.Set(true) })
 			return ggui.Padding(ggui.Center(img), 12)
 		case p.File.GetTruncated():
 			note = Tf("An image of %s, too large to show.", byteSize(p.File.GetSize()))
@@ -623,7 +624,7 @@ func imageViewer(m *model) ggui.Widget {
 		}
 		b := p.Img.Bounds()
 		content := ggui.Column(
-			ggui.Pointer(ggui.Image(p.Img).Alt(p.Name)).OnTap(func() { m.files.ImageOpen.Set(false) }),
+			ggui.Pointer(widget.Image(p.Img).Alt(p.Name)).OnTap(func() { m.files.ImageOpen.Set(false) }),
 			muted(ggui.Text(fmt.Sprintf("%s · %d × %d", p.Name, b.Dx(), b.Dy())).Size(12)),
 		).Gap(10).Align(ggui.AlignCenter)
 		// The panel hugs the image, which shrinks to fit the window.
