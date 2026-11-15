@@ -8,6 +8,7 @@ import (
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/svgdraw"
 )
@@ -101,7 +102,7 @@ func (f *fitImage) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	if c.MaxW > 0 && w > c.MaxW {
 		w, h = c.MaxW, h*c.MaxW/w
 	}
-	f.child = ggui.Image(f.img).Alt(f.alt).Size(w, h)
+	f.child = widget.Image(f.img).Alt(f.alt).Size(w, h)
 	if f.labels != nil {
 		f.labels.Scale = w / max(f.size.W, 1)
 		f.labels.Layout(env)

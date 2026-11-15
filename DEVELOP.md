@@ -239,6 +239,8 @@ to the selected project's node. Its read-only snapshot includes recent
 message history retained independently of inbox acknowledgement. Set
 `MAKO_PREVIEW_AGENTS=1` with `-render-dir` to render this panel in isolation
 at normal and minimum widths, without starting a daemon or agent.
+`MAKO_PREVIEW_RAIL=1` does the same for Chat's turn rail, over a long
+conversation, with a tick hovered.
 
 An extension's MCP server (a Zed context server) is started by the
 extension's own wasm, the component Zed would run. `internal/zedhost` runs

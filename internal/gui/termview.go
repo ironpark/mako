@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui"
 	ggruntime "github.com/ironpark/ggui/runtime"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/ggui/widget"
 	"github.com/ironpark/gostty"
 	"github.com/ironpark/gostty/input"
 
@@ -53,7 +54,7 @@ type terminalView struct {
 	wheelDy  float64   // its turn, kept for the way it went
 	blink    time.Time // when the cursor last started a lit phase
 
-	ime     *ggui.TextInputWidget
+	ime     *widget.TextInputWidget
 	imeText *ggui.StateValue[string]
 	// held are keys pressed while the IME composes, which it may take for
 	// itself; see settleHeld.
@@ -112,7 +113,7 @@ func newTerminalView(conn *termConn, prefs func() prefs, autoFocus bool) *termin
 	text := ggui.State("")
 	return &terminalView{
 		conn: conn, prefs: prefs, autoFocus: autoFocus,
-		ime: ggui.TextInput(text), imeText: text,
+		ime: widget.TextInput(text), imeText: text,
 		pal: skin.Dark, lastCell: [2]int{-1, -1}, probed: [2]int{-1, -1},
 	}
 }
@@ -216,7 +217,7 @@ func (t *terminalView) Paint(dst *ggui.Canvas, r ggui.Rect) {
 		// for a frame now and then, repaints the cursor alone.
 		clip.Paint(ggui.FromFuncs(nil, func(dst *ggui.Canvas, _ ggui.Rect) { t.paintCursor(dst, g, f, p) }), ggui.Rect{})
 	}
-	t.ime.PaintCustom(clip, r, func(dst *ggui.Canvas, _ ggui.Rect, st ggui.TextInputState) ggui.Rect {
+	t.ime.PaintCustom(clip, r, func(dst *ggui.Canvas, _ ggui.Rect, st widget.TextInputState) ggui.Rect {
 		// A composition, or a syllable held for one; what was sent already
 		// shows on the screen.
 		if unsent := st.Text[min(t.sent, len(st.Text)):]; unsent != "" {

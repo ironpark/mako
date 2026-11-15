@@ -9,6 +9,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 	xdraw "golang.org/x/image/draw"
 
 	"github.com/ironpark/mako/internal/gui/mdview"
@@ -69,7 +70,7 @@ func chatImage(m *model, node, path string, named bool) ggui.Widget {
 		default:
 			// Size, not the pixels: an SVG's are drawn at twice it.
 			scale := min(1, thumbW/max(v.Size.W, 1), thumbH/max(v.Size.H, 1))
-			w = ggui.Image(v.Img).Alt(name).Size(v.Size.W*scale, v.Size.H*scale)
+			w = widget.Image(v.Img).Alt(name).Size(v.Size.W*scale, v.Size.H*scale)
 		}
 		return ggui.Tap(ggui.Box(w).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(2), open)
 	})

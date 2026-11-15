@@ -12,6 +12,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/ggui/widget"
 	"golang.org/x/text/width"
 
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -28,7 +29,7 @@ import (
 // wide characters, Page Up and Down, Enter keeping the line's indent, and
 // Tab indenting the lines of a selection.
 type codeEditor struct {
-	input     *ggui.TextInputWidget
+	input     *widget.TextInputWidget
 	readOnly  bool
 	colors    func(text string, pal skin.Palette) []styleSpan // may be nil
 	autoFocus bool
@@ -85,7 +86,7 @@ const (
 
 func newCodeEditor(text *ggui.StateValue[string], prefs func() prefs) *codeEditor {
 	e := &codeEditor{
-		input: ggui.TextInput(text).NoWrap(),
+		input: widget.TextInput(text).NoWrap(),
 		prefs: prefs, tabSize: defaultTab, goalCol: -1, dragFrom: -1, pal: skin.Dark,
 		Caret: ggui.State(caretPos{Line: 1, Col: 1, Lines: 1}),
 	}
@@ -342,7 +343,7 @@ func (e *codeEditor) Paint(dst *ggui.Canvas, r ggui.Rect) {
 			ggui.WakeAt(e.blinkFrom.Add((phase + 1) * cursorRate))
 		}
 	}
-	e.input.PaintCustom(clip, r, func(*ggui.Canvas, ggui.Rect, ggui.TextInputState) ggui.Rect { return caret })
+	e.input.PaintCustom(clip, r, func(*ggui.Canvas, ggui.Rect, widget.TextInputState) ggui.Rect { return caret })
 }
 
 // paintLine draws one line from its text's offset start: runs of plain

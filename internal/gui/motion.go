@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 )
 
 // What opens and closes in the window does so in one time and one curve,
@@ -29,7 +30,7 @@ func reveal(open ggui.Readable[bool], build func() ggui.Widget) ggui.Widget {
 	return ggui.Component(func() ggui.Widget {
 		share := ggui.TweenOf(ggui.Map(open, func(o bool) float64 { return pick(o, 1.0, 0.0) }), motionDuration)
 		present := ggui.Derived(func() bool { return open.Get() || share.Get() > 0 })
-		return ggui.Reveal(open, ggui.If(present, build)).Duration(motionDuration)
+		return widget.Reveal(open, ggui.If(present, build)).Duration(motionDuration)
 	})
 }
 

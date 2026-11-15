@@ -533,7 +533,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	// The composer belongs to Chat alone, as in ovis: Terminal mode's grid
 	// is its own input surface, and a file view has no session to type into.
 	session := ggui.Column(
-		ggui.Expanded(ggui.Stack(feed, &afterPaint{fn: find.painted}, hostBadge(m, id), toLatestButton(m, state, scroll, offset),
+		ggui.Expanded(ggui.Stack(feed, newTurnRail(m, find, turns), &afterPaint{fn: find.painted}, hostBadge(m, id), toLatestButton(m, state, scroll, offset),
 			usageOverlay(m, id, chatUsage, viewChip(m, id, group)), findBar(m, id, find.finder())).Expand()),
 		approvalCard(m, id), dialogCard(m, id), compactingRow(m, id), planProgress(m, id, state), runningAgents(m, id, state), runningTasks(m, id), chatInput(m, id, state),
 	).Stretch()

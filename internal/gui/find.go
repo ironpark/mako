@@ -159,8 +159,12 @@ type chatFinder struct {
 
 	pending *chatMatch // scrolled to, to select once its turn is painted
 	tries   int
-	marks   map[string]rowMark // where each turn was last painted
-	serial  int                // counts the paints of the feed
+	// jump is a turn gone to by its key, jumped to again until it is
+	// painted, as the scroll goes to an estimate of where it is.
+	jump      string
+	jumpTries int
+	marks     map[string]rowMark // where each turn was last painted
+	serial    int                // counts the paints of the feed
 }
 
 // rowMark is where a turn was painted, and in which paint of the feed.
@@ -197,6 +201,12 @@ func (c *chatFinder) run(needle string, forward bool) findPlace {
 
 func (c *chatFinder) end() { c.pending = nil }
 
+// jumpTo takes the feed to the turn key, its top at the top.
+func (c *chatFinder) jumpTo(key string) {
+	c.jump, c.jumpTries = key, 0
+	c.scroll.JumpToKey(key)
+}
+
 // mark wraps a turn's row so that its place is noted as it is painted.
 func (c *chatFinder) mark(key string, row ggui.Widget) ggui.Widget {
 	return &markedRow{child: row, note: func(r ggui.Rect) { c.marks[key] = rowMark{at: r, serial: c.serial} }}
@@ -206,6 +216,14 @@ func (c *chatFinder) mark(key string, row ggui.Widget) ggui.Widget {
 // has been painted, the match is selected in it and brought into view.
 func (c *chatFinder) painted(dst *ggui.Canvas) {
 	defer func() { c.serial++ }()
+	if c.jump != "" {
+		if mk, ok := c.marks[c.jump]; (ok && mk.serial == c.serial) || c.jumpTries >= 6 {
+			c.jump = ""
+		} else {
+			c.jumpTries++
+			c.scroll.JumpToKey(c.jump)
+		}
+	}
 	p := c.pending
 	if p == nil {
 		return

@@ -135,7 +135,9 @@ mako allow <node>             # let in a machine that asked
   types into the live session (Enter sends; Shift-Enter starts a new line;
   ↑ recalls what you sent). When an agent asks a question, its live input
   screen opens inside Chat so you can select options or type an answer.
-  Click the screen to use the agent's keyboard controls. **Answer the
+  Click the screen to use the agent's keyboard controls. A rail down the
+  left edge has a tick for each prompt: hover one to see the prompt and
+  how the reply ended, click it to go there. **Answer the
   agent** also opens it manually; **Back to message** restores the composer
   with your draft intact.
 - **Files, Changes, History, Search.** Browse and edit the project's files

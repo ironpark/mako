@@ -752,8 +752,7 @@ var catalogKo = map[string]string{
 	"Pin session to the top": "세션을 맨 위에 고정",
 
 	// Tidying the tabs
-	"Tidy tabs":                          "탭 정리",
-	"Close files, diffs and idle shells": "파일, diff, 유휴 쉘 탭 닫기",
+	"Clean tabs": "탭 정리",
 
 	// Settings: access
 	"%s asks to be let in. Settings ▸ Access answers it.":                  "%s 노드가 접근을 요청합니다. 설정 ▸ 접근에서 응답하세요.",

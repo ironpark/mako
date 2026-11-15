@@ -147,7 +147,7 @@ func (m *model) commands() []command {
 	}
 	cmds = append(cmds,
 		command{ID: "Close tab", Category: "Tab", Shortcut: "cmd+w", Disabled: selected == "", Run: func() { m.askKill(selected) }},
-		command{ID: "Tidy tabs", Category: "Tab", Keys: []string{"close", "clean", "idle", "shell"}, Disabled: !m.anyTidyable(),
+		command{ID: "Clean tabs", Category: "Tab", Keys: []string{"clean", "tidy", "close", "idle", "shell", "files", "diffs"}, Disabled: !m.anyTidyable(),
 			Run: func() { m.tidyTabs(ggui.Peek(m.Tabs)) }},
 		command{ID: "Toggle sidebar", Category: "View", Shortcut: "cmd+b", Run: func() { ggui.Toggle(m.SidebarOpen) }},
 		command{ID: "Project agents", Category: "View", Keys: []string{"mcp", "monitor", "messages"}, Run: func() { m.DetailsOpen.Set(true); m.DetailTab.Set(agentsTab) }},
