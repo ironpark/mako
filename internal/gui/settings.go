@@ -90,9 +90,12 @@ func settingsSidebar(m *model) ggui.Widget {
 				if id == current {
 					fg = skin.Fg
 				}
+				// The row runs the button's width, so its label stays at the
+				// start, as the chosen one's does, rather than centred in it.
 				item := ui.ButtonOf(ggui.Row(
 					iconColored(s.icon, fg).Size(15),
 					ggui.Text(T(s.label)).Size(13).Color(fg),
+					ggui.Spacer(),
 				).Gap(10), func() { m.Section.Set(id) }).Ghost().Pad(7, 10).Radius(7).Name(T(s.label))
 				if id == current {
 					rows = append(rows, ggui.Box(item).Fill(skin.SidebarSel).Radius(7))
