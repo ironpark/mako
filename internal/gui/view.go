@@ -152,12 +152,15 @@ func dot(c color.Color) ggui.Widget { return ggui.Box().Size(7, 7).Radius(3.5).F
 // The sidebar: the space's projects over its agents, a divider between
 // them to drag; see sidebartree.go and sidebaragents.go.
 func sidebar(m *model) ggui.Widget {
-	header := ggui.Box(ggui.Row(
+	// The traffic lights take the start of the header, where the window
+	// has no title bar of its own.
+	header := titlebar(m, ggui.Box(ggui.Row(
+		titlebarGap(m.titlebarRoom(), 10),
 		icon("messages-square").Size(17),
 		ggui.Expanded(ggui.Align(spaceSwitcher(m)).Left()),
 		waitingPill(m),
 		iconButton("plus", T("Add a project"), m.addProjectFolder),
-	).Gap(6).Align(ggui.AlignCenter)).Pad(0, 8, 0, 16).Height(headerHeight)
+	).Gap(6).Align(ggui.AlignCenter)).Pad(0, 8, 0, 0).Height(headerHeight))
 
 	st := newSidebarState(m)
 	// Two fingers across anywhere on it move the sidebar to the space
@@ -361,11 +364,17 @@ func workspaceHeader(m *model) ggui.Widget {
 			).Name(T("Session actions")), 6))...,
 		).Gap(10)
 	})
-	return ggui.Box(ggui.Row(
+	// With the sidebar closed, the header runs from the window's edge, and
+	// leaves the traffic lights their room.
+	room := ggui.Combine(m.titlebarRoom(), m.SidebarOpen, func(r float64, open bool) float64 {
+		return pick(open, 0, r)
+	})
+	return titlebar(m, ggui.Box(ggui.Row(
+		titlebarGap(room, 2),
 		iconButton("panel-left", T("Toggle sidebar"), func() { ggui.Toggle(m.SidebarOpen) }),
 		ggui.Expanded(title),
 		iconButton("panel-right", T("Toggle details"), func() { ggui.Toggle(m.DetailsOpen) }),
-	).Gap(8)).Pad(0, 10).Height(headerHeight)
+	).Gap(8)).Pad(0, 10, 0, 0).Height(headerHeight))
 }
 
 func sessionIn(sessions []*protocol.SessionInfo, id string) (*protocol.SessionInfo, bool) {

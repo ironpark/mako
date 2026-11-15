@@ -31,6 +31,9 @@ func Run(cfg *config.Config, addr string) error {
 		MinWidth:  720,
 		MinHeight: 480,
 		Resizable: true,
+		// On macOS the headers stand for the title bar; see titlebar.go.
+		TitlebarHidden: titlebarHidden,
+		TrafficLights:  trafficLights(),
 	}, func() ggui.Widget { return build(m) })
 	app.Setup(func() {
 		go findEditors()
