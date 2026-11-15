@@ -157,8 +157,9 @@ func (m *model) commands() []command {
 			Run: func() { m.ext.Open.Set(true) }},
 		command{ID: "Settings", Category: "App", Keys: []string{"preferences"}, Shortcut: "cmd+,", Run: func() { m.openSettings("") }},
 	)
-	for _, g := range groupings {
-		cmds = append(cmds, command{ID: g.Label, Category: "Sidebar", Keys: []string{"group", "sessions"}, Run: func() { m.setSidebarGroup(g.By) }})
+	for _, by := range agentGroups {
+		cmds = append(cmds, command{ID: agentGroupCommands[by], Category: "Sidebar", Keys: []string{"group", "agents", "sessions"},
+			Run: func() { m.setAgentView(func(p *prefs) { p.AgentGroup = by }) }})
 	}
 	for _, t := range []string{"system", "dark", "light"} {
 		cmds = append(cmds, command{ID: themeLabels[t], Category: "Theme", Keys: []string{"appearance"}, Run: func() {

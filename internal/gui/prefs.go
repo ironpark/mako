@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/i18n"
@@ -59,14 +60,22 @@ type prefs struct {
 	// option; see streamrec.go.
 	RecordStreams bool `json:"record_streams,omitempty"`
 
-	// The sidebar's sessions: by project, by host, or in one list.
-	SidebarGroup string `json:"sidebar_group"`
 	// The side panels' widths, as last dragged.
 	SidebarWidth float64 `json:"sidebar_width,omitempty"`
 	DetailsWidth float64 `json:"details_width,omitempty"`
-	// Collapsed are the sidebar's groups folded to their headings, by how
-	// it groups and the group: "project:<node>:<path>", "host:<node>".
-	Collapsed []string `json:"collapsed,omitempty"`
+	// SidebarSplit is how tall the sidebar's projects are over its
+	// agents, as last dragged.
+	SidebarSplit float64 `json:"sidebar_split,omitempty"`
+	// How the sidebar lists agents: grouped (agentGroups), sorted
+	// (agentSorts), on one line each when compact, and only those of a
+	// status (agentFilters), "" for all.
+	AgentGroup   string `json:"agent_group"`
+	AgentSort    string `json:"agent_sort"`
+	AgentCompact bool   `json:"agent_compact,omitempty"`
+	AgentFilter  string `json:"agent_filter,omitempty"`
+	// PinnedProjects are the projects, and folders of them, the sidebar
+	// lists first.
+	PinnedProjects []scopeKey `json:"pinned_projects,omitempty"`
 
 	// How diffs are drawn: side by side, and with long lines wrapped.
 	DiffSplit bool `json:"diff_split,omitempty"`
@@ -89,9 +98,8 @@ type prefs struct {
 	ShownSpace string `json:"shown_space,omitempty"`
 	// The spaces as they were kept here before the workspace kept them,
 	// read once to be moved there.
-	OldSpaces      []space `json:"spaces,omitempty"`
-	OldSpace       int     `json:"space,omitempty"`
-	OldAllLayoutBy string  `json:"all_layout_by,omitempty"`
+	OldSpaces []space `json:"spaces,omitempty"`
+	OldSpace  int     `json:"space,omitempty"`
 	// SyncWorkspace has the window follow, and be followed by, the
 	// windows of the nodes it trusts both ways: tabs, panes and spaces.
 	SyncWorkspace bool `json:"sync_workspace"`
@@ -123,7 +131,8 @@ func defaultPrefs() prefs {
 		ApproveInApp:    true,
 		Notify:          true,
 		DaemonMode:      "auto",
-		SidebarGroup:    groupProject,
+		AgentGroup:      agentGroupFolder,
+		AgentSort:       agentSortRecent,
 	}
 }
 
@@ -154,10 +163,14 @@ func (p prefs) normalized() prefs {
 	default:
 		p.DaemonMode = d.DaemonMode
 	}
-	switch p.SidebarGroup {
-	case groupProject, groupHost, groupFlat:
-	default:
-		p.SidebarGroup = d.SidebarGroup
+	if !slices.Contains(agentGroups, p.AgentGroup) {
+		p.AgentGroup = d.AgentGroup
+	}
+	if !slices.Contains(agentSorts, p.AgentSort) {
+		p.AgentSort = d.AgentSort
+	}
+	if !slices.Contains(agentFilters, p.AgentFilter) {
+		p.AgentFilter = d.AgentFilter
 	}
 	switch p.CursorStyle {
 	case "block", "bar", "underline":
@@ -181,6 +194,10 @@ func (p prefs) normalized() prefs {
 		p.DetailsWidth = detailsWidth
 	}
 	p.DetailsWidth = min(max(p.DetailsWidth, minDetailsWidth), maxDetailsWidth)
+	if p.SidebarSplit == 0 {
+		p.SidebarSplit = sidebarSplit
+	}
+	p.SidebarSplit = min(max(p.SidebarSplit, minSidebarSplit), maxSidebarSplit)
 	if p.DefaultAgent == "" {
 		p.DefaultAgent = d.DefaultAgent
 	}

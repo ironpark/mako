@@ -125,8 +125,8 @@ func TestTheWorkspaceLeavesOutDiffs(t *testing.T) {
 	}
 }
 
-// A space that keeps tabs by project shows each project's own, following
-// the session picked; kept whole again, it shows the space's.
+// A space keeps tabs for each project, the one shown following the
+// session picked, or the project picked in the sidebar.
 func TestTabsKeptByProject(t *testing.T) {
 	m, p := workspaceModel(t)
 	m.Sessions.Set([]*protocol.SessionInfo{
@@ -134,8 +134,6 @@ func TestTabsKeptByProject(t *testing.T) {
 		{Id: "a2", NodeId: "n", Project: "/w/a/sub", Repo: "/w/a"},
 		{Id: "b1", NodeId: "n", Project: "/w/b"},
 	})
-	m.showTab("whole")
-	m.Spaces.Update(func(l spaceList) spaceList { l.LayoutBy = layoutByProject; return l })
 	p.Frame()
 	m.selectSession("a1")
 	m.selectSession("a2")
@@ -147,12 +145,16 @@ func TestTabsKeptByProject(t *testing.T) {
 	if tabs := ggui.Peek(m.Tabs); !slices.Equal(tabs, []string{"a1", "a2"}) {
 		t.Fatalf("project a shows %v", tabs)
 	}
-	m.Spaces.Update(func(l spaceList) spaceList { l.LayoutBy = layoutBySpace; return l })
-	p.Frame()
-	if tabs := ggui.Peek(m.Tabs); !slices.Equal(tabs, []string{"whole"}) {
-		t.Fatalf("the whole space shows %v", tabs)
+	m.pickScope(scopeKey{Section: dirKey("n", "/w/b")})
+	if tabs := ggui.Peek(m.Tabs); !slices.Equal(tabs, []string{"b1"}) {
+		t.Fatalf("project b picked shows %v", tabs)
 	}
-	if got := len(m.workspaceDocNow().Layouts); got != 3 {
+	// A session of another project picked moves the scope to its project.
+	m.selectSession("a2")
+	if got := ggui.Peek(m.Scope).Section; got != dirKey("n", "/w/a") {
+		t.Fatalf("the scope stayed at %q", got)
+	}
+	if got := len(m.workspaceDocNow().Layouts); got != 2 {
 		t.Fatalf("%d layouts written down", got)
 	}
 }
@@ -173,7 +175,6 @@ func TestOldLayoutsAreTheWholeSpaces(t *testing.T) {
 func TestContextsAndOldSpacesCarryOver(t *testing.T) {
 	m, p := workspaceModel(t)
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "b1", NodeId: "n", Project: "/w/b"}})
-	m.Spaces.Update(func(l spaceList) spaceList { l.LayoutBy = layoutByProject; return l })
 	p.Frame()
 	m.selectSession("b1")
 	m.writeWorkspace()

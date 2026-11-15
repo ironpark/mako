@@ -1,22 +1,18 @@
 package gui
 
 import (
-	"cmp"
 	"fmt"
 	"image/color"
 	"slices"
-	"strings"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
-	"github.com/ironpark/ggui/ui/icons"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/skin"
-	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -153,25 +149,24 @@ func dot(c color.Color) ggui.Widget { return ggui.Box().Size(7, 7).Radius(3.5).F
 
 // Sidebar --------------------------------------------------------------------
 
+// The sidebar: the space's projects over its agents, a divider between
+// them to drag; see sidebartree.go and sidebaragents.go.
 func sidebar(m *model) ggui.Widget {
 	header := ggui.Box(ggui.Row(
 		icon("messages-square").Size(17),
 		ggui.Expanded(ggui.Align(spaceSwitcher(m)).Left()),
 		waitingPill(m),
-	).Gap(6).Align(ggui.AlignCenter)).Pad(0, 10, 0, 16).Height(headerHeight)
+		iconButton("plus", T("Add a project"), m.addProjectFolder),
+	).Gap(6).Align(ggui.AlignCenter)).Pad(0, 8, 0, 16).Height(headerHeight)
 
-	st := sidebarState{
-		grouping:  ggui.Map(m.Prefs, func(p prefs) string { return p.SidebarGroup }),
-		projects:  ggui.Map(m.Prefs, func(p prefs) []keptProject { return p.Projects }).WithEqual(slices.Equal),
-		pinned:    ggui.Map(m.Prefs, func(p prefs) []string { return p.Pinned }).WithEqual(slices.Equal),
-		collapsed: ggui.Map(m.Prefs, func(p prefs) []string { return p.Collapsed }).WithEqual(slices.Equal),
-	}
-	// Two fingers across anywhere on it move the list to the space beside.
+	st := newSidebarState(m)
+	// Two fingers across anywhere on it move the sidebar to the space
+	// beside.
 	swipe := newSpaceSwipe(m)
-	// list is the sessions of the space by from the one shown: 0 that one,
-	// and -1 and 1 those beside, there only while a swipe moves the list.
-	// Each is made for a space, so its scroll is that space's.
-	list := func(by int) ggui.Widget {
+	// body is the space by from the one shown: 0 that one, and -1 and 1
+	// those beside, there only while a swipe moves the sidebar. Each is
+	// made for a space, so its scrolls are that space's.
+	body := func(by int) ggui.Widget {
 		space := ggui.Derived(func() int {
 			p := m.spaces()
 			if i := p.Space + by; p.hasSpace(i) && (by == 0 || swipe.moving.Get()) {
@@ -183,479 +178,115 @@ func sidebar(m *model) ggui.Widget {
 			if i < 0 {
 				return ggui.Box()
 			}
-			// The list follows what the space shows and the projects; the
-			// rest of the workspace, its panes, it does not.
-			shows := ggui.Map(m.Spaces, func(l spaceList) spaceShowing {
-				sp, _ := spaceSet{spaceList: l}.spaceOf(i)
-				return spaceShowing{sp, l.Projects, l.Names}
-			}).WithEqual(deepEqual[spaceShowing])
-			// The foot leaves room to scroll the last row out from under
-			// the grouping's chip.
-			return ggui.Scroll(ggui.Padding(ggui.Reactive(func() ggui.Widget {
-				shows.Get()
-				return spaceSessionList(m, st, i)
-			}), 8, 8, groupChipRoom, 8)).Bar(skin.Surface3)
+			tree := ggui.Scroll(ggui.Padding(projectTree(m, st, i), 10, 8, 10, 8)).Bar(skin.Surface3)
+			return &sidebarBody{top: tree, grip: sidebarGrip(m), bottom: agentsPanel(m, st, i), split: m.SidebarSplit}
 		})
 	}
-	return swipe.area(ggui.Box(ggui.Column(
+	// The menus' faces sit on the sidebar's fill, not the page's.
+	return uitheme.Override(func(t *uitheme.Theme) { t.Bg = t.Sidebar }, swipe.area(ggui.Box(ggui.Column(
 		header,
 		hline(),
-		ggui.Expanded(ggui.Stack(swipe.slide(list(-1), list(0), list(1)), groupChip(m)).Expand()),
+		// The spaces' dots stay put over the foot of the agents as a
+		// swipe moves the sidebar under them.
+		ggui.Expanded(ggui.Stack(
+			swipe.slide(body(-1), body(0), body(1)),
+			ggui.Padding(ggui.Align(spaceDots(m)).Bottom(), 0, 0, 6, 0),
+		).Expand()),
 		hline(),
 		sidebarFooter(m),
-	).Stretch()).Fill(skin.Sidebar))
+	).Stretch()).Fill(skin.Sidebar)))
 }
 
-// spaceShowing is what a space's list shows by: the space, the projects
-// and the sections' names, not the panes the workspace also holds.
-type spaceShowing struct {
-	space    space
-	projects []project
-	names    map[string]string
-}
-
-// sidebarState is what of the settings the sidebar's lists follow.
-type sidebarState struct {
-	grouping          ggui.Readable[string]
-	projects          ggui.Readable[[]keptProject]
-	pinned, collapsed ggui.Readable[[]string]
-}
-
-// spaceSessionList is the sidebar's list of the sessions of space i, as it
-// groups them, pinned ones first.
-func spaceSessionList(m *model, st sidebarState, i int) ggui.Widget {
-	by := st.grouping.Get()
-	nodes := m.Nodes.Get()
-	titles := m.Titles.Get()
-	selected := m.Selected.Get()
-	m.Unread.Get() // the dots show what is unread
-	p := m.spacesNow()
-	// The space shows whole project sections, and the sessions in them
-	// however the sidebar groups; the space of every session shows every
-	// session, and needs its sections only to list them.
-	var projects []sessionGroup
-	if _, ok := p.spaceOf(i); ok || by == groupProject {
-		projects = p.spaceGroups(i, groupProjects(m.Sessions.Get(), nodes, st.projects.Get(), p.Projects, p.Names))
-	} else {
-		projects = []sessionGroup{{Sessions: m.Sessions.Get()}}
-	}
-	// Pinned sessions come first, in a section of their own.
-	pins := st.pinned.Get()
-	var top, rest []*protocol.SessionInfo
-	for j, g := range projects {
-		kept := g.Sessions[:0:0]
-		for _, s := range g.Sessions {
-			if slices.Contains(pins, s.GetId()) {
-				top = append(top, s)
-			} else {
-				kept = append(kept, s)
-				rest = append(rest, s)
-			}
-		}
-		projects[j].Sessions = kept
-	}
-	groups := projects
-	if by != groupProject {
-		groups = groupSessions(rest, by, nodes, nil)
-	}
-	if by == groupHost {
-		groups = withHosts(groups, nodes)
-	}
-	if len(groups) == 0 && len(top) == 0 {
-		return ggui.Box(muted(ggui.Text(T("No sessions yet. Start one with +.")).Size(12))).Pad(16)
-	}
-	names := projectLabels(groups, nodes)
-	children := make([]ggui.Widget, 0, len(groups)+1)
-	if len(top) > 0 {
-		children = append(children, pinnedSection(m, top, selected, nodes, titles))
-	}
-	folded := st.collapsed.Get()
-	section := func(g sessionGroup, depth int) ggui.Widget {
-		return sessionSection(m, by, g, slices.Contains(folded, foldKey(by, g)), selected, nodes, titles, names[g.Key], depth)
-	}
-	var sections []ownerSection
-	if by == groupProject {
-		sections = byOwner(groups)
-	}
-	if sections == nil {
-		sections = []ownerSection{{Groups: groups}}
-	}
-	for _, o := range sections {
-		if o.Owner == "" {
-			for _, g := range o.Groups {
-				children = append(children, section(g, 0))
-			}
-			continue
-		}
-		children = append(children, ownerGroup(m, o, slices.Contains(folded, ownerKey(o.Owner)), section))
-	}
-	return ggui.Column(children...).Gap(6).Stretch()
-}
-
-// grouping is a way the sidebar groups sessions, and how its header shows
-// it.
-type grouping struct{ By, Icon, Label string }
-
-// groupings are the sidebar's ways of grouping sessions, as its header
-// offers them.
-var groupings = []grouping{
-	{groupProject, "folder", "Group by project"},
-	{groupHost, "server", "Group by host"},
-	{groupFlat, "list", "Show as a list"},
-}
-
-// The grouping's chip sits groupChipInset from the sidebar list's
-// bottom-right corner, and the foot of the list leaves groupChipRoom for
-// it: its inset and its height, the picker's 32 in 3 of padding and a
-// border.
+// The sidebar's projects are sidebarSplit tall until the divider under
+// them is dragged, within these bounds; a window too short for that and
+// minSidebarAgents of agents under them takes the room from the projects.
 const (
-	groupChipInset = 12
-	groupChipRoom  = groupChipInset + 32 + 2*3 + 2
+	sidebarSplit                     = 300
+	minSidebarSplit, maxSidebarSplit = 80, 900
+	minSidebarAgents                 = 180
 )
 
-// groupChip floats the grouping's picker over the sidebar list's
-// bottom-right corner, raised as the session's view switch is.
-func groupChip(m *model) ggui.Widget {
-	chip := raisedChip(groupPicker(m)).Radius(9).Pad(3)
-	return ggui.Padding(ggui.Align(chip).At(1, 1), 0, groupChipInset, groupChipInset, 0)
+// sidebarBody lays the sidebar's projects over the divider and its agents:
+// the projects as tall as the divider was dragged, as far as that leaves
+// the agents minSidebarAgents, the agents the rest. Each is drawn within
+// its own room, so a short window cuts them rather than letting one run
+// over the other, or over the foot of the sidebar.
+type sidebarBody struct {
+	top, grip, bottom ggui.Widget
+	split             ggui.Readable[float64]
+
+	topH, gripH, bottomH float64
 }
 
-// groupPicker switches how the sidebar groups its sessions.
-func groupPicker(m *model) ggui.Widget {
-	by := make([]string, len(groupings))
-	for i, g := range groupings {
-		by[i] = g.By
-	}
-	find := func(v string) grouping {
-		return groupings[max(slices.IndexFunc(groupings, func(g grouping) bool { return g.By == v }), 0)]
-	}
-	return ui.ToggleGroup(prefField(m, func(p *prefs) *string { return &p.SidebarGroup })).Options(by).
-		Format(func(v string) string { return T(find(v).Label) }).
-		Icon(func(v string) *icons.Widget { return icon(find(v).Icon).Size(14) }).
-		IconOnly().Name(T("Group sessions"))
+func (b *sidebarBody) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	w, h := c.MaxW, c.MaxH
+	b.gripH = b.grip.Layout(ggui.Constraints{MinW: w, MaxW: w, MaxH: ggui.Unbounded}, env).H
+	b.topH = max(min(b.split.Get(), h-b.gripH-minSidebarAgents), 0)
+	b.bottomH = max(h-b.topH-b.gripH, 0)
+	b.top.Layout(ggui.Tight(ggui.Sz(w, b.topH)), env)
+	b.bottom.Layout(ggui.Tight(ggui.Sz(w, b.bottomH)), env)
+	return c.Constrain(ggui.Sz(w, h))
 }
 
-// setSidebarGroup changes how the sidebar groups its sessions.
-func (m *model) setSidebarGroup(by string) {
-	m.Prefs.Update(func(p prefs) prefs { p.SidebarGroup = by; return p })
+func (b *sidebarBody) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	x, y, w := r.Origin.X, r.Origin.Y, r.Size.W
+	top := ggui.Rct(ggui.Pt(x, y), ggui.Sz(w, b.topH))
+	grip := ggui.Rct(ggui.Pt(x, y+b.topH), ggui.Sz(w, b.gripH))
+	bottom := ggui.Rct(ggui.Pt(x, y+b.topH+b.gripH), ggui.Sz(w, b.bottomH))
+	dst.Clip(top).Paint(b.top, top)
+	dst.Paint(b.grip, grip)
+	dst.Clip(bottom).Paint(b.bottom, bottom)
 }
 
-// foldKey names a sidebar group in the folded list: how the sidebar
-// groups, and the group.
-func foldKey(by string, g sessionGroup) string { return by + ":" + g.Key }
-
-// toggleFold folds a sidebar group to its heading, or opens it.
-func (m *model) toggleFold(key string) {
-	m.Prefs.Update(func(p prefs) prefs { p.Collapsed = toggled(p.Collapsed, key); return p })
-}
-
-// depthIndent is how far the sidebar sets in each level of its tree.
-const depthIndent = 10
-
-// indented sets w in by depth levels of the sidebar's tree.
-func indented(w ggui.Widget, depth int) ggui.Widget {
-	if depth == 0 {
-		return w
-	}
-	return ggui.Padding(w, 0, 0, 0, float64(depth*depthIndent))
-}
-
-// ownerKey names an owner's group in the folded list.
-func ownerKey(owner string) string { return "owner:" + owner }
-
-// ownerGroup is the projects of one user or organization, under a heading
-// that folds them as a project's folds its sessions.
-func ownerGroup(m *model, o ownerSection, folded bool, section func(sessionGroup, int) ggui.Widget) ggui.Widget {
-	// Folded, the heading counts the sessions under it.
-	var sessions []*protocol.SessionInfo
-	if folded {
-		for _, g := range o.Groups {
-			sessions = append(sessions, g.Sessions...)
-		}
-	}
-	// The name leads; the service it is on, which tells apart the same
-	// name on two, follows it quietly.
-	name, host := ownerName(o.Owner)
-	var service ggui.Widget = ggui.Box()
-	if host != "" {
-		service = ggui.Text(host).Size(11.5).Color(skin.ExtraMuted).NoWrap()
-	}
-	var heading ggui.Widget = ggui.Box(groupToggle(m, ownerGlyph(host), name, sessions, folded, ownerKey(o.Owner), service)).Pad(2, 4, 2, 2)
-	heading = ui.ContextMenuFunc(heading, func() []ggui.Widget {
-		return append(ownerMenu(m, o, name), ownerSpaceItems(m, o.Owner, name)...)
-	}).Name(Tf("%s actions", name))
-	if folded {
-		return heading
-	}
-	rows := []ggui.Widget{heading}
-	for _, g := range o.Groups {
-		rows = append(rows, section(g, 1))
-	}
-	return ggui.Column(rows...).Gap(6).Stretch()
-}
-
-// ownerName splits an owner as the daemon gives it, host/name, into the
-// name and the host serving it; a local remote's owner has no host.
-func ownerName(owner string) (name, host string) {
-	if i := strings.LastIndex(owner, "/"); i >= 0 {
-		return owner[i+1:], owner[:i]
-	}
-	return owner, ""
-}
-
-// ownerGlyph is an owner's heading's icon: GitHub's mark for an owner on
-// GitHub, git's for one anywhere else.
-func ownerGlyph(host string) string {
-	if host == "github.com" {
-		return "github"
-	}
-	return "lang-git"
-}
-
-// groupToggle is a sidebar heading's button: its icon and name, its
-// sessions counted by kind while folded, and status at the end. A tap
-// folds the group to it, or opens it.
-func groupToggle(m *model, glyph, name string, sessions []*protocol.SessionInfo, folded bool, key string, status ggui.Widget) ggui.Widget {
-	title := []ggui.Widget{
-		icon(glyph).Size(15),
-		ggui.Expanded(ggui.Align(ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).Left()),
-	}
-	if folded && len(sessions) > 0 {
-		title = append(title, kindBadges(sessions))
-	}
-	// The name takes the room the row has, so it is cut only when it
-	// must be.
-	return ui.ButtonOf(ggui.Row(append(title, status)...).Gap(6).Align(ggui.AlignCenter),
-		func() { m.toggleFold(key) }).Ghost().Pad(2, 4).Radius(5).Name(pick(folded, Tf("Expand %s", name), Tf("Collapse %s", name)))
-}
-
-// sessionSection is one of the sidebar's groups: a heading for its project
-// or host with a button to start another session there, over its sessions,
-// depth levels into the tree. A tap on the heading folds the group to it,
-// its sessions counted. The list's one group has no heading.
-func sessionSection(m *model, by string, g sessionGroup, folded bool, selected string, nodes []*protocol.Node, titles map[string]string, label string, depth int) ggui.Widget {
-	nodeID, project := g.NodeID, g.Project
-	var rows []ggui.Widget
-	rowDepth := depth
-	if by != groupFlat {
-		rowDepth++
-		// A folder's icon opens with it, as the file tree's does.
-		name, glyph := cmp.Or(label, projectName(project)), pick(folded, "folder", "folder-open")
-		var status ggui.Widget = ggui.Box()
-		if by == groupHost {
-			// A node the mesh no longer lists has gone; its sessions stay
-			// until it is back.
-			n, up := nodeIn(nodes, nodeID)
-			name, glyph = n.GetName(), "monitor"
-			if !up {
-				name = short(nodeID)
-			}
-			if n.GetSource() == "self" {
-				glyph = "laptop"
-			}
-			status = nodeDot(n)
-		}
-		if by == groupProject {
-			name = cmp.Or(g.Name, name)
-			if g.multiRoot() {
-				status = ggui.Text(Tf("%d folders", len(g.Def.Roots))).Size(11.5).Color(skin.ExtraMuted).NoWrap()
-			}
-		}
-		toggle := groupToggle(m, glyph, name, g.Sessions, folded, foldKey(by, g), status)
-		row := []ggui.Widget{ggui.Expanded(toggle)}
-		if by == groupProject {
-			row = append(row, iconMenu(ui.MenuOf(icon("ellipsis").Size(14), projectMenu(m, g, name)...).Name(T("Folder actions")), 3))
-		}
-		// The plus starts where the section starts by default; the folders
-		// and clones it has besides, each on its node, are picked from the
-		// chevron's menu.
-		row = append(row, ui.Tooltip(ui.ButtonOf(icon("plus").Size(14), func() { m.openNew(nodeID, project) }).
-			Ghost().Pad(3).Radius(5).Name(Tf("New session in %s", name)), T("New session here")))
-		if len(g.Roots) > 1 {
-			row = append(row, iconMenu(ui.MenuOf(icon("chevron-down").Size(12), startItems(m, g, nodes)...).Name(Tf("Start in a folder of %s", name)), 3))
-		}
-		var head ggui.Widget = ggui.Box(ggui.Row(row...).Gap(6).Align(ggui.AlignCenter)).Pad(2, 4, 2, 2)
-		if by == groupProject {
-			head = ui.ContextMenuFunc(head, func() []ggui.Widget { return projectMenu(m, g, name) }).Name(Tf("%s actions", name))
-		}
-		// A session dropped on the heading starts again there: its agent
-		// in this folder, or on this host in its own folder.
-		head = sectionDrop(m, head, nodeID, project)
-		if by == groupProject {
-			// A heading dragged onto another's merges its project there.
-			head = projectDragged(m, head, g)
-		}
-		rows = append(rows, indented(head, depth))
-		if folded {
-			return ggui.Column(rows...).Gap(2).Stretch()
-		}
-		if len(g.Sessions) == 0 {
-			rows = append(rows, indented(ggui.Box(muted(ggui.Text(T("No sessions")).Size(11.5))).Pad(3, 4), rowDepth))
-		}
-	}
-	row := func(s *protocol.SessionInfo, depth int) ggui.Widget {
-		return sessionRow(m, s, s.GetId() == selected, titles[s.GetId()], sessionWhere(by, g, s, nodes), depth)
-	}
-	if by != groupProject || !g.multiRoot() {
-		for _, s := range g.Sessions {
-			rows = append(rows, row(s, rowDepth))
-		}
-		return ggui.Column(rows...).Gap(2).Stretch()
-	}
-	// A project of several folders lists its sessions under the folder
-	// each is in, in the project's order, so which is whose shows at a
-	// glance; any in none of them follow.
-	byRoot := make([][]*protocol.SessionInfo, len(g.Def.Roots))
-	var loose []*protocol.SessionInfo
-	for _, s := range g.Sessions {
-		if i, ok := g.RootOf[s.GetId()]; ok && i < len(byRoot) {
-			byRoot[i] = append(byRoot[i], s)
-		} else {
-			loose = append(loose, s)
-		}
-	}
-	for i, in := range byRoot {
-		if len(in) == 0 {
-			continue
-		}
-		rows = append(rows, indented(rootHeading(g.Def.Roots[i].label(), len(in)), rowDepth))
-		for _, s := range in {
-			rows = append(rows, row(s, rowDepth+1))
-		}
-	}
-	for _, s := range loose {
-		rows = append(rows, row(s, rowDepth))
-	}
-	return ggui.Column(rows...).Gap(2).Stretch()
-}
-
-// rootHeading names one folder of a project of several, over the sessions
-// in it, quieter than the project's own heading.
-func rootHeading(label string, sessions int) ggui.Widget {
-	return ggui.Box(ggui.Row(
-		icon("folder").Size(13).Color(skin.ExtraMuted),
-		ggui.Expanded(ggui.Align(ggui.Text(label).Size(12).Weight(ggui.WeightMedium).Color(skin.Muted).NoWrap().Ellipsis()).Left()),
-		ggui.Text(fmt.Sprint(sessions)).Size(11).Color(skin.ExtraMuted).NoWrap(),
-	).Gap(6).Align(ggui.AlignCenter)).Pad(4, 8, 2, 6)
-}
-
-// sessionWhere is the line under a session's title in section g: where it
-// runs, as far as the section does not say, and its ID.
-func sessionWhere(by string, g sessionGroup, s *protocol.SessionInfo, nodes []*protocol.Node) string {
-	var where []string
-	switch by {
-	case groupProject:
-		// A project of several folders lists a session under the folder
-		// it is in, which its line need not say again.
-		r := g.rootOf(s)
-		where = append(where, nodeName(nodes, s.GetNodeId()))
-		// A subfolder by its path in its clone, or in the project's folder
-		// it is in; a worktree elsewhere by its own name.
-		root := projectOf(s)
-		if r != nil {
-			for _, l := range r.Locations {
-				if l.Node == s.GetNodeId() && pathscope.Within(s.GetProject(), l.Path) {
-					root = l.Path
-				}
-			}
-		}
-		if rel := subfolder(s.GetProject(), root); rel != "" {
-			where = append(where, rel)
-		} else if s.GetProject() != root {
-			where = append(where, projectName(s.GetProject()))
-		}
-	case groupHost:
-		where = append(where, projectName(s.GetProject()))
-	default:
-		where = append(where, nodeName(nodes, s.GetNodeId()), projectName(s.GetProject()))
-	}
-	where = append(where, short(s.GetId()))
-	return strings.Join(where, " · ")
-}
-
-// kindBadges counts a folded group's sessions by kind, a badge for each
-// with the kind's icon: shells first, then agents as they first appear.
-func kindBadges(sessions []*protocol.SessionInfo) ggui.Widget {
-	var kinds []string
-	count := map[string]int{}
-	for _, s := range sessions {
-		k := s.GetAgent()
-		if agentIcon(k) == agentIcon("shell") {
-			k = "shell"
-		}
-		if count[k] == 0 {
-			kinds = append(kinds, k)
-		}
-		count[k]++
-	}
-	slices.SortStableFunc(kinds, func(a, b string) int { return cmp.Compare(pick(a == "shell", 0, 1), pick(b == "shell", 0, 1)) })
-	badges := make([]ggui.Widget, len(kinds))
-	for i, k := range kinds {
-		badges[i] = ggui.Box(ggui.Row(
-			agentGlyph(k, skin.Muted).Size(11),
-			ggui.Text(fmt.Sprint(count[k])).Size(11).Color(skin.Muted).NoWrap(),
-		).Gap(2).Align(ggui.AlignCenter)).Pad(1, 4).Radius(4).Fill(skin.Surface2)
-	}
-	return ggui.Row(badges...).Gap(2).Align(ggui.AlignCenter)
-}
-
-// subfolder is where dir is inside root, or "" for root itself.
-func subfolder(dir, root string) string {
-	if dir == root || !pathscope.Within(dir, root) {
-		return ""
-	}
-	return strings.TrimLeft(dir[len(root):], `/\`)
-}
-
-// sessionRow is a session in the sidebar: its title, where it runs and
-// the branch checked out there, and on hover a button that closes it as
-// its tab's does.
-func sessionRow(m *model, s *protocol.SessionInfo, selected bool, title, sub string, depth int) ggui.Widget {
-	id := s.GetId()
-	label := sessionTitle(s, title)
-	line := []ggui.Widget{ggui.Expanded(ggui.Text(sub).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis())}
-	if s.GetBranch() != "" {
-		line = append(line, ggui.Row(
-			icon("git-branch").Size(11).Color(skin.ExtraMuted),
-			ggui.Box(ggui.Text(s.GetBranch()).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()).MaxWidth(110),
-		).Gap(3))
-	}
-	if badge := tasksBadge(s); badge != nil {
-		line = append(line, badge)
-	}
-	// The title's line ends with when the session last said something.
-	head := []ggui.Widget{ggui.Expanded(ggui.Text(label).Size(13).NoWrap().Ellipsis())}
-	if s.GetState() == protocol.StateRunning {
-		head = append(head, ggui.Reactive(func() ggui.Widget {
-			m.Minute.Get()
-			t := m.Printed.Get()[id]
-			if t.IsZero() {
-				return ggui.Box()
-			}
-			return ggui.Text(ago(t)).Size(11).Color(skin.ExtraMuted).NoWrap()
-		}))
-	}
+// sidebarGrip is the divider between the sidebar's projects and its
+// agents, which drags to give either more room; its handle shows under the
+// pointer.
+func sidebarGrip(m *model) ggui.Widget {
 	hover := ggui.State(false)
-	end := ggui.If(hover, func() ggui.Widget {
-		return ui.ButtonOf(icon("x").Size(13), func() { m.askKill(id) }).Ghost().Pad(2).Radius(4).Name(Tf("Close %s", label))
-	}).Else(func() ggui.Widget {
-		return &activityDot{state: m.dotFor(id)}
+	handle := ggui.View(hover, func(h bool) ggui.Widget {
+		c := pick[color.Color](h, skin.Surface3, color.Transparent)
+		return ggui.Box(ggui.Center(ggui.Box().Size(32, 3).Radius(1.5).Fill(c))).Height(8)
 	})
-	content := ggui.Row(
-		&busyGlyph{icon: agentGlyph(s.GetAgent(), skin.Muted).Size(15), busy: func() bool { return m.busy(id) }},
-		ggui.Expanded(ggui.Column(
-			ggui.Row(head...).Gap(8).Align(ggui.AlignCenter),
-			ggui.Row(line...).Gap(8).Align(ggui.AlignCenter),
-		).Gap(2).Stretch()),
-		end,
-	).Gap(10)
-	btn := ui.ButtonOf(content, func() { m.selectSession(id) }).Ghost().Pad(7, 10).Radius(7).Name(label)
-	// A row drags into a pane, or to a pane's edge, as a tab does.
-	var w ggui.Widget = sessionMenu(m, btn, id, label, false)
-	if selected {
-		w = ggui.Box(btn).Fill(skin.SidebarSel).Radius(7)
-	}
-	return indented(sessionDrag(m, ggui.Pointer(w).OnHover(hover.Set), id), depth)
+	var from, start float64
+	return ggui.Pointer(ggui.Column(hline(), handle).Stretch()).Cursor(ggui.CursorShapeNSResize).OnHover(hover.Set).
+		OnDown(func(ev ggui.PointerEvent) { from, start = ev.Pos.Y, ggui.Peek(m.SidebarSplit) }).
+		OnDrag(func(ev ggui.PointerEvent) {
+			m.SidebarSplit.Set(min(max(start+ev.Pos.Y-from, minSidebarSplit), maxSidebarSplit))
+		}).
+		OnUp(func(ggui.PointerEvent) {
+			h := ggui.Peek(m.SidebarSplit)
+			m.Prefs.Update(func(p prefs) prefs { p.SidebarSplit = h; return p })
+		})
+}
+
+// addProjectFolder asks for a folder on this machine and keeps it in the
+// sidebar, a project of its own, given a look at random, unless a project
+// holds it already; either is picked.
+func (m *model) addProjectFolder() {
+	self := ggui.Peek(m.Conn).Self.GetId()
+	fail := func(why string) { m.toaster.Push(ui.Toast(T("Could not open the folder picker"), why).Destructive()) }
+	m.pickFolderFor(ggui.State(false), self, "", fail, func(dir string) {
+		if dir == "" {
+			return
+		}
+		r := keptProject{fileRoot: fileRoot{Node: self, Path: dir}}
+		m.Prefs.Update(func(p prefs) prefs {
+			if !slices.ContainsFunc(p.Projects, func(o keptProject) bool { return o.fileRoot == r.fileRoot }) {
+				p.Projects = append(slices.Clone(p.Projects), r)
+			}
+			return p
+		})
+		defs := m.projectsNow()
+		if pl := placeKept(defs, r); pl.At >= 0 {
+			m.setScope(scopeKey{Section: defs[pl.At].ID})
+			return
+		}
+		key := sectionKey(defs, implicitKey(self, dir, ""))
+		if _, ok := ggui.Peek(m.Spaces).Looks[key]; !ok {
+			m.setLook(key, randomLook())
+		}
+		m.setScope(scopeKey{Section: key})
+	})
 }
 
 func sidebarFooter(m *model) ggui.Widget {
@@ -670,13 +301,14 @@ func sidebarFooter(m *model) ggui.Widget {
 		case d.Running:
 			name += " · in app"
 		}
-		row := ggui.Row(linkDot(c.OK), muted(ggui.Text(name).Size(13).NoWrap().Ellipsis())).Gap(10)
+		mark := icon(osIcon(c.Self.GetOs())).Size(13)
+		row := ggui.Row(linkDot(c.OK), mark, muted(ggui.Text(name).Size(13).NoWrap().Ellipsis())).Gap(8)
 		if c.OK && outdated(c.Self) {
 			// A daemon from an older build leaves agents' state and
 			// approvals out; say so rather than show them blank.
 			warn := ui.Tooltip(icon("info").Size(14).Color(skin.DotWaiting),
 				T("This daemon is from an older mako. Restart it with this build to see agents' state and approve in the window."))
-			row = ggui.Row(linkDot(c.OK), ggui.Expanded(muted(ggui.Text(name).Size(13).NoWrap().Ellipsis())), warn).Gap(10)
+			row = ggui.Row(linkDot(c.OK), mark, ggui.Expanded(muted(ggui.Text(name).Size(13).NoWrap().Ellipsis())), warn).Gap(8)
 		}
 		return row
 	})
@@ -684,7 +316,6 @@ func sidebarFooter(m *model) ggui.Widget {
 		ggui.Expanded(host),
 		devicesMenu(m),
 		tunnelsMenu(m),
-		iconButton("plus", T("New session"), func() { m.openNew("", "") }),
 		iconButton("settings", T("Settings"), func() { m.openSettings("") }),
 	).Gap(4)).Pad(8, 10, 8, 16).Height(52)
 }

@@ -213,7 +213,7 @@ func groupProjects(sessions []*protocol.SessionInfo, nodes []*protocol.Node, kep
 		own[pl.At].RootOf[s.GetId()] = pl.Root
 	}
 	kept = slices.DeleteFunc(slices.Clone(kept), func(r keptProject) bool { return placeKept(defs, r).At >= 0 })
-	groups := groupSessions(rest, groupProject, nodes, kept)
+	groups := groupSessions(rest, nodes, kept)
 	for i := range groups {
 		groups[i].Key = sectionKey(defs, groups[i].Key)
 		groups[i].Name = names[groups[i].Key]
@@ -343,7 +343,8 @@ func (m *model) projectsNow() []project { return ggui.Peek(m.Spaces).Projects }
 
 // changeProjects changes the projects, the sections' names and the spaces
 // showing them, and moves what was kept by each section's ID in moved to
-// the ID it maps to: the tabs a space kept for it, and its fold. A notice,
+// the ID it maps to: the tabs a space kept for it, its look and its pins.
+// A notice,
 // unless it is "", offers to put the projects, names and spaces back as
 // they were, and moves back what moved.
 func (m *model) changeProjects(notice string, moved map[string]string, fn func(l spaceList) spaceList) {
@@ -353,7 +354,14 @@ func (m *model) changeProjects(notice string, moved map[string]string, fn func(l
 		l.Spaces = slices.Clone(l.Spaces)
 		l.Names = maps.Clone(l.Names)
 		l = fn(l)
+		l.Looks = maps.Clone(l.Looks)
 		for from, to := range moved {
+			if look, ok := l.Looks[from]; ok && from != to {
+				if _, taken := l.Looks[to]; !taken {
+					l.Looks[to] = look
+				}
+				delete(l.Looks, from)
+			}
 			for i := range l.Spaces {
 				l.Spaces[i].Projects = replaceID(l.Spaces[i].Projects, from, to)
 				l.Spaces[i].Hidden = slices.DeleteFunc(slices.Clone(l.Spaces[i].Hidden), func(id string) bool { return id == from })
@@ -369,7 +377,7 @@ func (m *model) changeProjects(notice string, moved map[string]string, fn func(l
 		m.Spaces.Update(func(now spaceList) spaceList {
 			// The projects, names and spaces' projects as they were; the
 			// rest as it is now.
-			now.Projects, now.Names = before.Projects, before.Names
+			now.Projects, now.Names, now.Looks = before.Projects, before.Names, before.Looks
 			spaces := slices.Clone(now.Spaces)
 			for i := range spaces {
 				if j := slices.IndexFunc(before.Spaces, func(sp space) bool { return sp.ID == spaces[i].ID }); j >= 0 {
@@ -489,9 +497,10 @@ func (m *model) ungroup(g sessionGroup) {
 }
 
 // moveContexts gives the tabs and panes a space kept for each section in
-// moved to the one it maps to, where that one kept none, shows the new
-// one's where the old one's showed, and drops the old one's fold.
+// moved to the one it maps to, where that one kept none, and shows the new
+// one's where the old one's showed; the pins move as well.
 func (m *model) moveContexts(moved map[string]string) {
+	m.movePins(moved)
 	contexts := map[string]string{}
 	for from, to := range moved {
 		if from != to {
@@ -502,10 +511,6 @@ func (m *model) moveContexts(moved map[string]string) {
 		return
 	}
 	m.rekeyContexts(contexts)
-	m.Prefs.Update(func(p prefs) prefs {
-		p.Collapsed = slices.DeleteFunc(slices.Clone(p.Collapsed), func(k string) bool { _, ok := contexts[k]; return ok })
-		return p
-	})
 	m.workspaceChanged()
 }
 
@@ -615,30 +620,40 @@ func (m *model) joinClones(sessions []*protocol.SessionInfo) {
 
 // migrateProjectKeys moves what was kept by the key a section of one
 // clone of a repository had, its node and folder, to the key it has now,
-// its repository's, which the kept folders remember: whether it was
-// folded, and the tabs a space kept for it.
+// its repository's, which the kept folders remember: its pins, and the
+// tabs a space kept for it.
 func (m *model) migrateProjectKeys() {
-	moved := map[string]string{}
+	sections, moved := map[string]string{}, map[string]string{}
 	for _, r := range ggui.Peek(m.Prefs).Projects {
 		if r.Remote != "" {
-			moved["project:"+dirKey(r.Node, r.Path)] = "project:repo:" + r.Remote
+			sections[dirKey(r.Node, r.Path)] = "repo:" + r.Remote
+			moved[projectContext(dirKey(r.Node, r.Path))] = projectContext("repo:" + r.Remote)
 		}
 	}
 	if len(moved) == 0 {
 		return
 	}
-	if slices.ContainsFunc(ggui.Peek(m.Prefs).Collapsed, func(k string) bool { _, ok := moved[k]; return ok }) {
-		m.Prefs.Update(func(p prefs) prefs {
-			out := make([]string, 0, len(p.Collapsed))
-			for _, k := range p.Collapsed {
-				out = append(out, cmp.Or(moved[k], k))
-			}
-			slices.Sort(out)
-			p.Collapsed = slices.Compact(out)
-			return p
-		})
-	}
+	m.movePins(sections)
 	m.rekeyContexts(moved)
+}
+
+// movePins moves the pins of each section in moved to the one it maps to.
+func (m *model) movePins(moved map[string]string) {
+	pins := ggui.Peek(m.Prefs).PinnedProjects
+	if !slices.ContainsFunc(pins, func(k scopeKey) bool { _, ok := moved[k.Section]; return ok }) {
+		return
+	}
+	m.Prefs.Update(func(p prefs) prefs {
+		out := make([]scopeKey, 0, len(p.PinnedProjects))
+		for _, k := range p.PinnedProjects {
+			k.Section = cmp.Or(moved[k.Section], k.Section)
+			if !slices.Contains(out, k) {
+				out = append(out, k)
+			}
+		}
+		p.PinnedProjects = out
+		return p
+	})
 }
 
 // Daemons --------------------------------------------------------------------
