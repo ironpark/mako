@@ -84,7 +84,13 @@ func (m *model) sendComposer(id string) {
 	}
 	state := m.chatState(id)
 	s, _ := m.session(id)
-	text := composed(m.composerDraft(id), ggui.Peek(state.attached), s.GetProject())
+	// A draft that calls a template sends the prompt it makes, and stays
+	// as it is while the call is wrong.
+	draft, ok := m.expandDraft(id, state, m.composerDraft(id))
+	if !ok {
+		return
+	}
+	text := composed(draft, ggui.Peek(state.attached), s.GetProject())
 	m.submit(id, conn, text)
 	m.notePending(id, text)
 	if strings.TrimSpace(text) != "" && (len(state.sent) == 0 || state.sent[len(state.sent)-1] != text) {

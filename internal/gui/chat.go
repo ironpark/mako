@@ -64,6 +64,9 @@ type chatState struct {
 	recall int
 	// menu lists the slash commands a draft begins.
 	menu *commandMenu
+	// templates are the prompt templates a draft that begins with two
+	// slashes calls.
+	templates *templateMenu
 	// agent is the subagent whose conversation the pane shows in place of
 	// the session's, "" for none, and sub the read of the one shown last.
 	agent *ggui.StateValue[string]
@@ -92,14 +95,15 @@ func (m *model) chatState(id string) *chatState {
 
 func newChatState() *chatState {
 	return &chatState{
-		result:   ggui.State(chatResult{}).WithEqual(deepEqual),
-		older:    ggui.State(chatPages{}).WithEqual(deepEqual),
-		draft:    ggui.State(""),
-		attached: ggui.State[[]string](nil).WithEqual(slices.Equal[[]string]),
-		tools:    ggui.State(map[string]bool{}).WithEqual(maps.Equal),
-		menu:     newCommandMenu(),
-		agent:    ggui.State(""),
-		live:     ggui.State[[]*protocol.LiveBlock](nil).WithEqual(deepEqual),
+		result:    ggui.State(chatResult{}).WithEqual(deepEqual),
+		older:     ggui.State(chatPages{}).WithEqual(deepEqual),
+		draft:     ggui.State(""),
+		attached:  ggui.State[[]string](nil).WithEqual(slices.Equal[[]string]),
+		tools:     ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		menu:      newCommandMenu(),
+		templates: newTemplateMenu(),
+		agent:     ggui.State(""),
+		live:      ggui.State[[]*protocol.LiveBlock](nil).WithEqual(deepEqual),
 		pending: ggui.State[[]pendingMessage](nil).WithEqual(func(a, b []pendingMessage) bool {
 			return slices.Equal(a, b)
 		}),

@@ -111,7 +111,7 @@ func TestComposerSendsSeveralLinesOnEnter(t *testing.T) {
 	m.setComposerDraft("s", "")
 	p.Text("/co")
 	p.Frame()
-	if names := matchNames(m.commandMatches(m.chatState("s"))); names != "compact context frontend:config" {
+	if names := matchNames(m.menuItems("s", m.chatState("s"))); names != "compact context frontend:config" {
 		t.Fatalf("/co lists %q", names)
 	}
 	if _, ok := p.Semantics().Find(ggui.RoleText, "/context"); !ok {
@@ -132,15 +132,15 @@ func TestComposerSendsSeveralLinesOnEnter(t *testing.T) {
 	}
 	m.setComposerDraft("s", "/cl")
 	p.Type(ggui.Mods{}, ggui.KeyEscape)
-	if len(m.commandMatches(m.chatState("s"))) != 0 {
+	if len(m.menuItems("s", m.chatState("s"))) != 0 {
 		t.Fatal("Escape left the list open")
 	}
 }
 
-func matchNames(cmds []*protocol.Command) string {
-	names := make([]string, len(cmds))
-	for i, c := range cmds {
-		names[i] = c.GetName()
+func matchNames(items []menuItem) string {
+	names := make([]string, len(items))
+	for i, it := range items {
+		names[i] = strings.TrimPrefix(it.name, "/")
 	}
 	return strings.Join(names, " ")
 }

@@ -9,14 +9,17 @@ import (
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/prompttmpl"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// Slash commands: a composer's draft that begins with a slash, and has no
-// space yet, lists the commands of the session's agent that it begins, or
-// holds, for ↑ and ↓ to choose from, Enter to take and Tab to complete. The commands are
-// those the session's node finds for its agent, read when a draft first
-// begins with a slash, and again once they are a while old.
+// The composer's menu: a draft that begins with a slash, and has no space
+// yet, lists the commands of the session's agent that it begins, or holds;
+// one that begins with two lists the templates for it (templates.go). ↑
+// and ↓ choose, Enter takes the one chosen and Tab completes the draft to
+// it. The commands are those the session's node finds for its agent, read
+// when a draft first begins with a slash, and again once they are a while
+// old.
 
 // commandMenu is the composer's list of the commands its draft matches.
 type commandMenu struct {
@@ -41,8 +44,8 @@ func newCommandMenu() *commandMenu {
 // with a slash asks for them again, for those written since.
 const commandsStale = time.Minute
 
-// maxCommandMatches bounds the commands the menu lists.
-const maxCommandMatches = 8
+// maxMenuItems bounds what the menu lists.
+const maxMenuItems = 8
 
 // commandQuery is what draft asks of the commands: the name it begins,
 // without its slash, and whether it asks at all.
@@ -53,35 +56,60 @@ func commandQuery(draft string) (string, bool) {
 	return strings.ToLower(draft[1:]), true
 }
 
-// matchCommands are the commands whose names begin with query, then those
-// that hold it elsewhere, each in the order the agent lists them.
-func matchCommands(commands []*protocol.Command, query string) []*protocol.Command {
-	var begins, holds []*protocol.Command
-	for _, c := range commands {
-		name := strings.ToLower(c.GetName())
+// matchByName are the items whose names begin with query, then those that
+// hold it elsewhere, each in the order given.
+func matchByName[T any](items []T, query string, name func(T) string) []T {
+	var begins, holds []T
+	for _, it := range items {
+		n := strings.ToLower(name(it))
 		switch {
-		case strings.HasPrefix(name, query):
-			begins = append(begins, c)
-		case strings.Contains(name, query):
-			holds = append(holds, c)
+		case strings.HasPrefix(n, query):
+			begins = append(begins, it)
+		case strings.Contains(n, query):
+			holds = append(holds, it)
 		}
 	}
 	out := append(begins, holds...)
-	if len(out) > maxCommandMatches {
-		out = out[:maxCommandMatches]
+	if len(out) > maxMenuItems {
+		out = out[:maxMenuItems]
 	}
 	return out
 }
 
-// commandMatches are the commands the composer's draft lists, none while
-// the menu is closed. Reactive.
-func (m *model) commandMatches(state *chatState) []*protocol.Command {
+// menuItem is a line of the composer's menu: a command or a template.
+type menuItem struct {
+	name, usage, description, tag string
+	complete                      string // the draft Tab completes to
+	take                          func() // what Enter or a click does
+}
+
+// menuItems are what the composer's draft lists: the templates it calls,
+// or the commands it begins; none while the menu is closed. Reactive.
+func (m *model) menuItems(id string, state *chatState) []menuItem {
 	draft := state.draft.Get()
-	query, ok := commandQuery(draft)
-	if !ok || draft == state.menu.closed.Get() {
+	if draft == state.menu.closed.Get() {
 		return nil
 	}
-	return matchCommands(state.menu.commands.Get(), query)
+	if _, ok := prompttmpl.ParseCall(draft); ok {
+		return m.templateItems(id, state, draft)
+	}
+	query, ok := commandQuery(draft)
+	if !ok {
+		return nil
+	}
+	cmds := matchByName(state.menu.commands.Get(), query, (*protocol.Command).GetName)
+	items := make([]menuItem, len(cmds))
+	for i, c := range cmds {
+		tag := ""
+		if c.GetSource() != "" {
+			tag = commandSource(c.GetSource())
+		}
+		items[i] = menuItem{
+			name: "/" + c.GetName(), usage: c.GetArgs(), description: c.GetDescription(), tag: tag,
+			complete: "/" + c.GetName() + " ", take: func() { m.takeCommand(id, c) },
+		}
+	}
+	return items
 }
 
 // readCommands asks the session's node for its agent's commands, unless
@@ -107,25 +135,25 @@ func (m *model) readCommands(id string, state *chatState) {
 	})
 }
 
-// commandKey is the composer's keys while its menu lists commands: ↑ and
-// ↓ choose, Enter takes the one chosen, Tab completes the draft to it to
+// menuKey is the composer's keys while its menu lists anything: ↑ and ↓
+// choose, Enter takes the one chosen, Tab completes the draft to it to
 // write on, and Escape closes the menu. It reports whether it took the
 // key.
-func (m *model) commandKey(id string, state *chatState, ev ggui.KeyEvent) bool {
-	matches := m.commandMenuKeys(state, ev)
-	if len(matches) == 0 {
+func (m *model) menuKey(id string, state *chatState, ev ggui.KeyEvent) bool {
+	items := m.menuKeys(id, state, ev)
+	if len(items) == 0 {
 		return false
 	}
-	pick := min(ggui.Peek(state.menu.pick), len(matches)-1)
+	pick := min(ggui.Peek(state.menu.pick), len(items)-1)
 	switch ev.Key {
 	case ggui.KeyArrowUp:
-		state.menu.pick.Set((pick + len(matches) - 1) % len(matches))
+		state.menu.pick.Set((pick + len(items) - 1) % len(items))
 	case ggui.KeyArrowDown:
-		state.menu.pick.Set((pick + 1) % len(matches))
+		state.menu.pick.Set((pick + 1) % len(items))
 	case ggui.KeyEnter, ggui.KeyNumpadEnter:
-		m.takeCommand(id, matches[pick])
+		items[pick].take()
 	case ggui.KeyTab:
-		m.setComposerDraft(id, "/"+matches[pick].GetName()+" ")
+		m.setComposerDraft(id, items[pick].complete)
 	case ggui.KeyEscape:
 		state.menu.closed.Set(ggui.Peek(state.draft))
 	default:
@@ -134,19 +162,19 @@ func (m *model) commandKey(id string, state *chatState, ev ggui.KeyEvent) bool {
 	return true
 }
 
-// commandMenuKeys are the commands the menu lists while it takes ev, a
-// key pressed with no modifier; none when it does not.
-func (m *model) commandMenuKeys(state *chatState, ev ggui.KeyEvent) []*protocol.Command {
+// menuKeys are what the menu lists while it takes ev, a key pressed with
+// no modifier; none when it does not.
+func (m *model) menuKeys(id string, state *chatState, ev ggui.KeyEvent) []menuItem {
 	if ev.Mods.Shift || ev.Mods.Alt || ev.Mods.Ctrl || ev.Mods.Meta {
 		return nil
 	}
-	return ggui.Untrack(func() []*protocol.Command { return m.commandMatches(state) })
+	return ggui.Untrack(func() []menuItem { return m.menuItems(id, state) })
 }
 
-// commandClaims reports whether the composer keeps ev from the window
-// while its menu lists commands: Tab, which would move the focus.
-func (m *model) commandClaims(state *chatState, ev ggui.KeyEvent) bool {
-	return ev.Key == ggui.KeyTab && len(m.commandMenuKeys(state, ev)) > 0
+// menuClaims reports whether the composer keeps ev from the window while
+// its menu lists anything: Tab, which would move the focus.
+func (m *model) menuClaims(id string, state *chatState, ev ggui.KeyEvent) bool {
+	return ev.Key == ggui.KeyTab && len(m.menuKeys(id, state, ev)) > 0
 }
 
 // takeCommand puts c in the composer: sent at once when it takes no
@@ -160,51 +188,55 @@ func (m *model) takeCommand(id string, c *protocol.Command) {
 	m.sendComposer(id)
 }
 
-// commandList shows the commands the composer's draft matches, over it,
-// the one chosen marked.
-func commandList(m *model, id string, state *chatState) ggui.Widget {
-	// A draft that begins with a slash reads the commands, and a new
-	// query chooses its first match again.
+// composerMenu shows what the composer's draft lists, over it, the one
+// chosen marked; or, once a template's name has arguments after it, what
+// the template takes.
+func composerMenu(m *model, id string, state *chatState) ggui.Widget {
+	// A draft that begins with two slashes reads the templates, one with a
+	// slash the commands, and a new query chooses its first match again.
 	ggui.Watch(state.draft, func(draft string) {
-		if _, ok := commandQuery(draft); ok {
+		if _, ok := prompttmpl.ParseCall(draft); ok {
+			m.readTemplates(state, false)
+		} else if _, ok := commandQuery(draft); ok {
 			m.readCommands(id, state)
 		}
 		state.menu.pick.Set(0)
 	})
 	return ggui.Reactive(func() ggui.Widget {
-		matches := m.commandMatches(state)
-		if len(matches) == 0 {
+		var content ggui.Widget
+		if items := m.menuItems(id, state); len(items) > 0 {
+			pick := min(state.menu.pick.Get(), len(items)-1)
+			rows := make([]ggui.Widget, len(items))
+			for i, it := range items {
+				rows[i] = menuRow(it, i == pick)
+			}
+			content = ggui.Column(rows...).Gap(2).Stretch()
+		} else if content = templateHint(state); content == nil {
 			return ggui.Box()
 		}
-		pick := min(state.menu.pick.Get(), len(matches)-1)
-		rows := make([]ggui.Widget, len(matches))
-		for i, c := range matches {
-			rows[i] = commandRow(m, id, c, i == pick)
-		}
-		list := ggui.Box(ggui.Column(rows...).Gap(2).Stretch()).
-			Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(4)
+		list := ggui.Box(content).Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(4)
 		return ggui.Box(list).Pad(0, 0, 6, 0)
 	})
 }
 
-func commandRow(m *model, id string, c *protocol.Command, chosen bool) ggui.Widget {
-	name := []ggui.Widget{ggui.Text("/" + c.GetName()).Size(13).Weight(ggui.WeightMedium).NoWrap()}
-	if c.GetArgs() != "" {
-		name = append(name, ggui.Text(c.GetArgs()).Size(12).Color(skin.ExtraMuted).NoWrap())
+func menuRow(it menuItem, chosen bool) ggui.Widget {
+	name := []ggui.Widget{ggui.Text(it.name).Size(13).Weight(ggui.WeightMedium).NoWrap()}
+	if it.usage != "" {
+		name = append(name, ggui.Text(it.usage).Size(12).Color(skin.ExtraMuted).NoWrap())
 	}
 	parts := []ggui.Widget{
 		ggui.Row(name...).Gap(6),
-		ggui.Expanded(muted(ggui.Text(c.GetDescription()).Size(12).NoWrap().Ellipsis())),
+		ggui.Expanded(muted(ggui.Text(it.description).Size(12).NoWrap().Ellipsis())),
 	}
-	if c.GetSource() != "" {
-		parts = append(parts, ggui.Text(commandSource(c.GetSource())).Size(11).Color(skin.ExtraMuted).NoWrap())
+	if it.tag != "" {
+		parts = append(parts, ggui.Text(it.tag).Size(11).Color(skin.ExtraMuted).NoWrap())
 	}
 	row := ggui.Box(ggui.Row(parts...).Gap(12)).Pad(6, 10).Radius(6)
 	if chosen {
 		// As plain as a selected row in the sidebar, and as plain to see.
 		row = row.Fill(skin.SidebarSel).Border(1, skin.BorderAccent)
 	}
-	return ggui.Tap(row, func() { m.takeCommand(id, c) })
+	return ggui.Tap(row, it.take)
 }
 
 // commandSource names where a command comes from, for the menu.
