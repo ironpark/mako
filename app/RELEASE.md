@@ -1,10 +1,7 @@
 Android 8.0+ · arm64-v8a and x86_64 · signed release APK
 
-- A question an agent asks is answered in a form in the app: Claude Code's from its card, Codex's as it asks, one question at a time, with an option, several, or words of your own.
-- A plan Claude puts to you opens in full, to approve into auto mode, accepting edits or asking before each, or to send back with what to change.
-- An approval unfolds into what its call would do, an edit as a diff, and takes what to tell the agent with a denial. Where Claude offers it, a call is allowed from then on: "Always allow", or accepting edits for the session.
-- A dialog an agent shows only in its terminal, as a folder's trust, is picked from the session's card.
-- Claude's permission mode, model and effort are set from the chat. Claude keeps a model or effort set as your default.
+- A question or approval Claude Code waits on stays in the app's form until it is answered: Claude's own reminder, a few seconds in, that it needs permission no longer takes it back to the card read off its terminal.
+- Claude's model can be set to Fable, and a model set from the chat takes: Claude Code's "Switch model?" for a conversation cached for another model is said yes to.
 
 These need the computer's mako to be of this release as well.
 
