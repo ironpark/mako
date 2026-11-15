@@ -162,8 +162,12 @@ type model struct {
 	DetailsOpen *ggui.StateValue[bool]
 	// DetailsWidth is the right panel's width, following a drag of its
 	// edge; the settings keep it when the drag ends.
-	DetailsWidth     *ggui.StateValue[float64]
-	SidebarWidth     *ggui.StateValue[float64] // the sidebar's, as DetailsWidth
+	DetailsWidth *ggui.StateValue[float64]
+	SidebarWidth *ggui.StateValue[float64] // the sidebar's, as DetailsWidth
+	SidebarSplit *ggui.StateValue[float64] // the sidebar's projects' height, as SidebarWidth
+	// Scope is the project, or folder of one, picked in the sidebar for
+	// the agents it lists; see sidebartree.go.
+	Scope            *ggui.StateValue[sidebarScope]
 	DetailTab        *ggui.StateValue[int]
 	ProjectAgents    *ggui.StateValue[projectAgentsView]
 	projectAgentsGen uint64
@@ -273,6 +277,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		DetailsOpen:   ggui.State(true),
 		DetailsWidth:  ggui.State(p.DetailsWidth),
 		SidebarWidth:  ggui.State(p.SidebarWidth),
+		SidebarSplit:  ggui.State(p.SidebarSplit),
+		Scope:         ggui.State(sidebarScope{}),
 		DetailTab:     ggui.State(0),
 		ProjectAgents: ggui.State(projectAgentsView{}).WithEqual(deepEqual),
 		Forge:         newForgeState(),
@@ -377,9 +383,11 @@ func (m *model) selectSession(id string) {
 	if id == "" {
 		return
 	}
-	// A space that keeps tabs by owner or project shows the session's.
+	// The space shows the tabs of the session's project, and the
+	// sidebar's agents follow to it from another project.
 	if s, ok := m.session(id); ok {
 		m.showContext(s)
+		m.followScope(s)
 	}
 	m.showTab(id)
 }

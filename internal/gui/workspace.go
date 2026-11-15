@@ -49,57 +49,32 @@ type workspaceFile struct {
 // as the others' are.
 const allSpaceID = "all"
 
-// How a space keeps its tabs and panes: one set for the whole space, or a
-// set for each owner, or each project, of the sessions in it, the one
-// shown following the session last picked in the sidebar.
-const (
-	layoutBySpace   = ""
-	layoutByOwner   = "owner"
-	layoutByProject = "project"
-)
-
-// layoutBys are the ways, in the order the settings offer them, and their
-// labels, in English for T.
-var (
-	layoutBys      = []string{layoutBySpace, layoutByOwner, layoutByProject}
-	layoutByLabels = map[string]string{layoutBySpace: "Whole space", layoutByOwner: "By owner", layoutByProject: "By project"}
-)
+// A space keeps tabs and panes for each project, the one shown following
+// the project last picked in the sidebar, or the session last picked;
+// those of a space before any project was picked are its own.
 
 // layoutKey is what a set of tabs and panes is kept by: its space's ID, and
-// within the space the owner or project it is for, "" for the whole space.
+// within the space the project it is for, "" for none.
 func layoutKey(spaceID, context string) string { return spaceID + "|" + context }
 
 // keySpace is the space a layout key is in.
 func keySpace(key string) string { s, _, _ := strings.Cut(key, "|"); return s }
 
-// sessionContext is the set of tabs a session is in within a space that
-// keeps them by: its owner's, or its project's section's.
-func sessionContext(by string, defs []project, s *protocol.SessionInfo) string {
-	switch by {
-	case layoutByOwner:
-		return "owner:" + s.GetOwner()
-	case layoutByProject:
-		return "project:" + sectionID(defs, s)
-	}
-	return ""
-}
+// projectContext is the set of tabs a project section is kept by in a
+// space.
+func projectContext(section string) string { return "project:" + section }
 
-// fits reports whether context is one a space keeping tabs by has.
-func fits(by, context string) bool {
-	if by == layoutBySpace {
-		return context == ""
-	}
-	return strings.HasPrefix(context, by+":")
-}
+// fits reports whether context is a project's, as a space keeps tabs by;
+// one kept by an owner, as spaces once could, is not.
+func fits(context string) bool { return context == "" || strings.HasPrefix(context, "project:") }
 
 // shownKey is the layout key of what the window shows: the space shown's,
-// and in it the owner's or project's last picked, while it keeps its tabs
-// that way.
+// and in it the project's last picked.
 func (m *model) shownKey() string {
 	p := m.spacesNow()
 	id := p.spaceID(p.Space)
 	context := m.ws.contexts[id]
-	if !fits(p.LayoutBy, context) {
+	if !fits(context) {
 		context = ""
 	}
 	return layoutKey(id, context)
@@ -139,14 +114,14 @@ func setupWorkspace(m *model) {
 			}
 		}
 	}
-	m.Spaces.Set(f.Doc.spaceList.upgraded())
+	m.Spaces.Set(f.Doc.spaceList)
 	moveOldSpaces(m)
 	m.migrateProjectKeys()
 	m.ws.layoutKey = m.shownKey()
 	m.setLayout(m.takeLayout(m.ws.layoutKey))
 	m.ws.last, _ = json.Marshal(m.workspaceDocNow())
-	// Another space, or another way of keeping its tabs, shows its own.
-	shown := ggui.Derived(func() string { p := m.spaces(); return layoutKey(p.spaceID(p.Space), p.LayoutBy) })
+	// Another space shows its own.
+	shown := ggui.Derived(func() string { p := m.spaces(); return p.spaceID(p.Space) })
 	ggui.Watch(shown, func(string) { m.showLayout(m.shownKey()) })
 	ggui.Watch(m.Spaces, func(spaceList) { m.workspaceChanged() })
 	// The daemons hear of the projects as they change, not at the next poll.
@@ -167,7 +142,7 @@ func setupWorkspace(m *model) {
 // kept them, into the workspace, the one shown with them.
 func moveOldSpaces(m *model) {
 	p := ggui.Peek(m.Prefs)
-	if len(p.OldSpaces) == 0 && p.OldAllLayoutBy == "" {
+	if len(p.OldSpaces) == 0 {
 		return
 	}
 	if len(ggui.Peek(m.Spaces).Spaces) == 0 {
@@ -177,14 +152,14 @@ func moveOldSpaces(m *model) {
 				old[i].ID = newSpaceID()
 			}
 		}
-		m.Spaces.Set(spaceList{Spaces: old, OldAllLayoutBy: p.OldAllLayoutBy}.upgraded())
+		m.Spaces.Set(spaceList{Spaces: old})
 		if p.OldSpace > 0 && p.OldSpace <= len(old) {
 			p.ShownSpace = old[p.OldSpace-1].ID
 		}
 	}
 	m.Prefs.Update(func(q prefs) prefs {
 		q.ShownSpace = p.ShownSpace
-		q.OldSpaces, q.OldSpace, q.OldAllLayoutBy = nil, 0, ""
+		q.OldSpaces, q.OldSpace = nil, 0
 		return q
 	})
 }
@@ -205,16 +180,17 @@ func keyedLayouts(layouts map[string]*layoutNode) map[string]*layoutNode {
 	return out
 }
 
-// showContext shows, in the space shown, the tabs and panes of the owner or
-// project of session s, when the space keeps them that way.
+// showContext shows, in the space shown, the tabs and panes of the project
+// of session s.
 func (m *model) showContext(s *protocol.SessionInfo) {
-	p := m.spacesNow()
-	by := p.LayoutBy
-	if by == layoutBySpace {
-		return
-	}
-	id := p.spaceID(p.Space)
-	if c := sessionContext(by, p.Projects, s); c != m.ws.contexts[id] {
+	m.showProjectTabs(sectionID(m.projectsNow(), s))
+}
+
+// showProjectTabs shows, in the space shown, the tabs and panes of the
+// project section with ID section.
+func (m *model) showProjectTabs(section string) {
+	id := m.spacesNow().spaceID(m.spacesNow().Space)
+	if c := projectContext(section); c != m.ws.contexts[id] {
 		m.ws.contexts[id] = c
 		m.ws.contextsMoved = true
 	}
@@ -367,7 +343,7 @@ func (m *model) takeWorkspace(ws *protocol.Workspace) {
 	m.ws.version, m.ws.node = ws.GetVersion(), ws.GetNodeId()
 	// The space shown is kept by its ID, and stays shown if the other node
 	// kept it.
-	m.Spaces.Set(f.Doc.spaceList.upgraded())
+	m.Spaces.Set(f.Doc.spaceList)
 	m.ws.layouts = keyedLayouts(f.Doc.Layouts)
 	maps.Copy(m.tabNodes, f.Doc.TabNodes)
 	m.migrateProjectKeys()

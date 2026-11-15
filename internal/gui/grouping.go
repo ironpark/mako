@@ -10,18 +10,11 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// How the sidebar groups sessions, and the projects it keeps.
-
-// The ways the sidebar groups its sessions.
-const (
-	groupProject = "project" // by node and working directory
-	groupHost    = "host"    // by node
-	groupFlat    = "flat"    // one list
-)
+// How the sidebar sorts sessions into its sections, and the projects it
+// keeps.
 
 // sessionGroup is one sidebar section: the sessions sharing a node and a
-// project, the way Paseo groups workspaces under a repository, or only a
-// node. Project is empty for a node's section.
+// project, the way Paseo groups workspaces under a repository.
 type sessionGroup struct {
 	Key      string
 	NodeID   string
@@ -110,24 +103,11 @@ func projectOf(s *protocol.SessionInfo) string {
 	return s.GetProject()
 }
 
-// groupSessions sorts sessions into the sidebar's sections for a grouping.
-// By project, a session goes in its repository's section, as projectOf
-// says, which the clones of one repository on several nodes share.
-// Remembered projects keep a section when they have no sessions.
-func groupSessions(sessions []*protocol.SessionInfo, by string, nodes []*protocol.Node, projects []keptProject) []sessionGroup {
-	switch by {
-	case groupFlat:
-		if len(sessions) == 0 {
-			return nil
-		}
-		return []sessionGroup{{Key: "", Sessions: sessions}}
-	case groupHost:
-		groups := bucket(sessions, func(s *protocol.SessionInfo) (string, string) { return s.GetNodeId(), "" })
-		sort.SliceStable(groups, func(a, b int) bool {
-			return nodeName(nodes, groups[a].NodeID) < nodeName(nodes, groups[b].NodeID)
-		})
-		return groups
-	}
+// groupSessions sorts sessions into the sidebar's sections: a session
+// goes in its repository's section, as projectOf says, which the clones of
+// one repository on several nodes share. Remembered projects keep a
+// section when they have no sessions.
+func groupSessions(sessions []*protocol.SessionInfo, nodes []*protocol.Node, projects []keptProject) []sessionGroup {
 	groups := bucket(sessions, func(s *protocol.SessionInfo) (string, string) { return s.GetNodeId(), projectOf(s) })
 	present := make(map[string]bool, len(groups))
 	for i, g := range groups {
@@ -178,25 +158,6 @@ func byRemote(groups []sessionGroup, nodes []*protocol.Node) []sessionGroup {
 		}
 	}
 	return out
-}
-
-// withHosts adds a section for each node that has no sessions, so the
-// sidebar grouped by host lists every host there is to start one on.
-func withHosts(groups []sessionGroup, nodes []*protocol.Node) []sessionGroup {
-	present := make(map[string]bool, len(groups))
-	for _, g := range groups {
-		present[g.NodeID] = true
-	}
-	for _, n := range nodes {
-		if !present[n.GetId()] {
-			present[n.GetId()] = true
-			groups = append(groups, sessionGroup{Key: dirKey(n.GetId(), ""), NodeID: n.GetId()})
-		}
-	}
-	sort.SliceStable(groups, func(a, b int) bool {
-		return nodeName(nodes, groups[a].NodeID) < nodeName(nodes, groups[b].NodeID)
-	})
-	return groups
 }
 
 // ownerSection is the project sections whose repositories one user or

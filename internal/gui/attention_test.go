@@ -87,7 +87,7 @@ func TestSidebarLabels(t *testing.T) {
 		{Id: "2", Agent: "shell", Project: "/oss/api"},
 		{Id: "3", Agent: "codex", Project: "/w/web"},
 	}
-	groups := groupSessions(sessions, groupProject, nil, nil)
+	groups := groupSessions(sessions, nil, nil)
 	labels := projectLabels(groups, nil)
 	var names []string
 	for _, g := range groups {
@@ -98,7 +98,7 @@ func TestSidebarLabels(t *testing.T) {
 		t.Fatalf("labels %q", names)
 	}
 	// The same folder on two hosts goes by its host.
-	twin := groupSessions([]*protocol.SessionInfo{{Id: "1", NodeId: "a", Project: "/w/api"}, {Id: "2", NodeId: "b", Project: "/w/api"}}, groupProject, []*protocol.Node{{Id: "a", Name: "mac"}, {Id: "b", Name: "box"}}, nil)
+	twin := groupSessions([]*protocol.SessionInfo{{Id: "1", NodeId: "a", Project: "/w/api"}, {Id: "2", NodeId: "b", Project: "/w/api"}}, []*protocol.Node{{Id: "a", Name: "mac"}, {Id: "b", Name: "box"}}, nil)
 	labels = projectLabels(twin, []*protocol.Node{{Id: "a", Name: "mac"}, {Id: "b", Name: "box"}})
 	if labels[twin[0].Key] != "api · mac" && labels[twin[0].Key] != "api · box" || labels[twin[0].Key] == labels[twin[1].Key] {
 		t.Fatalf("twin labels %v", labels)
@@ -126,25 +126,15 @@ func TestRankFilesPrefersNamesAndRuns(t *testing.T) {
 	}
 }
 
-func TestSidebarGroupsFoldAndWidthsStayInBounds(t *testing.T) {
-	t.Setenv("MAKO_HOME", t.TempDir())
-	m := newModel(config.Default(), "")
-	g := sessionGroup{Key: dirKey("n", "/w/api")}
-	key := foldKey(groupProject, g)
-	m.toggleFold(key)
-	if !slices.Contains(ggui.Peek(m.Prefs).Collapsed, key) {
-		t.Fatal("the group did not fold")
+// The sidebar's width and the height of its projects stay in bounds,
+// however the settings file has them.
+func TestSidebarSizesStayInBounds(t *testing.T) {
+	p := prefs{SidebarWidth: 5000, SidebarSplit: 2}.normalized()
+	if p.SidebarWidth != maxSidebarWidth || p.SidebarSplit != minSidebarSplit {
+		t.Fatalf("sidebar width %v, split %v", p.SidebarWidth, p.SidebarSplit)
 	}
-	if foldKey(groupHost, g) == key {
-		t.Fatal("a host's fold is a project's")
-	}
-	m.toggleFold(key)
-	if len(ggui.Peek(m.Prefs).Collapsed) != 0 {
-		t.Fatal("the group did not open")
-	}
-	p := prefs{SidebarWidth: 5000}.normalized()
-	if p.SidebarWidth != maxSidebarWidth {
-		t.Fatalf("sidebar width %v", p.SidebarWidth)
+	if p := (prefs{AgentGroup: "nope", AgentSort: "nope", AgentFilter: "nope"}).normalized(); p.AgentGroup != agentGroupFolder || p.AgentSort != agentSortRecent || p.AgentFilter != "" {
+		t.Fatalf("agent view %q %q %q", p.AgentGroup, p.AgentSort, p.AgentFilter)
 	}
 }
 

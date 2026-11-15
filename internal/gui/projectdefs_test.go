@@ -168,30 +168,31 @@ func TestMergingProjects(t *testing.T) {
 }
 
 // A repository of one clone was kept by its node and folder; it is kept
-// by its repository now, its fold and its tabs with it.
+// by its repository now, its pin and its tabs with it.
 func TestOldProjectKeysMove(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	old := "project:" + dirKey("mac", "/w/server")
 	m.Prefs.Update(func(p prefs) prefs {
 		p.Projects = []keptProject{{fileRoot{Node: "mac", Path: "/w/server"}, "github.com/acme", "github.com/acme/server"}}
-		p.Collapsed = []string{old, "project:other"}
+		p.PinnedProjects = []scopeKey{{Section: dirKey("mac", "/w/server")}, {Section: "other"}}
 		return p
 	})
 	m.ws.layouts = map[string]*layoutNode{layoutKey("all", old): newLayout()}
 	m.ws.contexts = map[string]string{"all": old}
 	m.migrateProjectKeys()
 	now := "project:repo:github.com/acme/server"
-	if got := ggui.Peek(m.Prefs).Collapsed; !slices.Contains(got, now) || slices.Contains(got, old) {
-		t.Fatalf("folded %v", got)
+	if got := ggui.Peek(m.Prefs).PinnedProjects; !slices.Equal(got, []scopeKey{{Section: "repo:github.com/acme/server"}, {Section: "other"}}) {
+		t.Fatalf("pinned %v", got)
 	}
 	if _, ok := m.ws.layouts[layoutKey("all", now)]; !ok || m.ws.contexts["all"] != now {
 		t.Fatalf("layouts %v, contexts %v", m.ws.layouts, m.ws.contexts)
 	}
 }
 
-// The sidebar draws a project of two folders under its name, its sessions
-// under the folders they are in, and its menu.
+// The sidebar draws a project of two folders under its name, each marked
+// # and in the project's order, and its menu; picked, the project scopes
+// the agents to it, and a folder of it to that folder.
 func TestSidebarShowsAProject(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
@@ -199,30 +200,57 @@ func TestSidebarShowsAProject(t *testing.T) {
 	m.Sessions.Set([]*protocol.SessionInfo{
 		{Id: "api00000", NodeId: "mac", Project: "/w/server", Repo: "/w/server", State: protocol.StateRunning},
 		{Id: "ui000000", NodeId: "mac", Project: "/w/web", State: protocol.StateRunning},
+		{Id: "else0000", NodeId: "mac", Project: "/w/else", State: protocol.StateRunning},
 	})
-	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))
+	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 900))
 	defer p.Close()
 	p.Frame()
 	page := p.Semantics().String()
-	for _, label := range []string{Tf("New session in %s", "Product"), Tf("%s actions", "Product"), Tf("Start in a folder of %s", "Product")} {
+	for _, label := range []string{Tf("%s actions", "Product"), Tf("Icon of %s", "Product"), "#server", "#web"} {
 		if !strings.Contains(page, label) {
 			t.Fatalf("the sidebar has no %q:\n%s", label, page)
 		}
 	}
-	// Each folder heads its sessions, in the project's order.
-	server, okServer := p.Semantics().Find(ggui.RoleText, "server")
-	web, okWeb := p.Semantics().Find(ggui.RoleText, "web")
+	server, okServer := p.Semantics().Find(ggui.RoleButton, "#server")
+	web, okWeb := p.Semantics().Find(ggui.RoleButton, "#web")
 	if !okServer || !okWeb || server.Rect.Origin.Y >= web.Rect.Origin.Y {
-		t.Fatalf("no folder headings in order:\n%s", page)
+		t.Fatalf("no folders in order:\n%s", page)
 	}
-	g := groupProjects(ggui.Peek(m.Sessions), nil, nil, m.projectsNow(), nil)[0]
-	if got := sessionWhere(groupProject, g, ggui.Peek(m.Sessions)[1], nil); got != "mac · ui000000" {
-		t.Fatalf("a web session says %q", got)
+	agents := func() []string {
+		l := m.listAgents(newSidebarState(m), 0, agentView{Group: agentGroupNone})
+		var ids []string
+		for _, g := range l.groups {
+			for _, s := range g.Sessions {
+				ids = append(ids, s.GetId())
+			}
+		}
+		slices.Sort(ids)
+		return ids
 	}
-	sub := &protocol.SessionInfo{Id: "src00000", NodeId: "mac", Project: "/w/web/src"}
-	g.RootOf[sub.GetId()] = 1
-	if got := sessionWhere(groupProject, g, sub, nil); got != "mac · src · src00000" {
-		t.Fatalf("a session in a web subfolder says %q", got)
+	if got := agents(); len(got) != 3 {
+		t.Fatalf("every agent of the space: %v", got)
+	}
+	p.Tap("Product")
+	p.Frame()
+	if got := agents(); !slices.Equal(got, []string{"api00000", "ui000000"}) {
+		t.Fatalf("the project's agents: %v", got)
+	}
+	p.Tap("#web")
+	p.Frame()
+	if got := agents(); !slices.Equal(got, []string{"ui000000"}) {
+		t.Fatalf("the folder's agents: %v", got)
+	}
+	l := m.listAgents(newSidebarState(m), 0, agentView{Group: agentGroupFolder})
+	if l.by != agentGroupNone {
+		t.Fatalf("one folder grouped by %q", l.by)
+	}
+	// The project's icon opens its picker, which keeps what is picked.
+	p.Tap(Tf("Icon of %s", "Product"))
+	p.Frame()
+	p.Tap(T("Rocket"))
+	p.Frame()
+	if got := ggui.Peek(m.Spaces).Looks[product().ID]; got.Icon != "rocket" {
+		t.Fatalf("the look picked is %+v", got)
 	}
 }
 

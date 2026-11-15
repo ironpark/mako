@@ -109,19 +109,6 @@ func TestTheSpaceOfEverySessionLeftOut(t *testing.T) {
 	}
 }
 
-// Each space's way of keeping tabs, from before one way held for all,
-// becomes the one: every session's space's first.
-func TestOneWayOfKeepingTabs(t *testing.T) {
-	got := spaceList{Spaces: []space{{ID: "w", OldLayoutBy: layoutByProject}}}.upgraded()
-	if got.LayoutBy != layoutByProject || got.Spaces[0].OldLayoutBy != "" {
-		t.Fatalf("%+v", got)
-	}
-	got = spaceList{Spaces: []space{{ID: "w", OldLayoutBy: layoutByProject}}, OldAllLayoutBy: layoutByOwner}.upgraded()
-	if got.LayoutBy != layoutByOwner || got.OldAllLayoutBy != "" {
-		t.Fatalf("%+v", got)
-	}
-}
-
 // The list follows the fingers across, and moves to the space that way
 // only when they lift far enough along; short of it, or with no space
 // there, it goes back. A gesture begun down the list scrolls it.

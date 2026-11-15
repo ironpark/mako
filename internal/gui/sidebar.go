@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"cmp"
+	"fmt"
 	"image/color"
 	"path/filepath"
 	"slices"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -120,19 +123,6 @@ func sessionList(m *model, ids []string) string {
 	return strings.Join(lines, "\n")
 }
 
-// pinnedSection is the sidebar's pinned sessions, above the groups.
-func pinnedSection(m *model, sessions []*protocol.SessionInfo, selected string, nodes []*protocol.Node, titles map[string]string) ggui.Widget {
-	rows := []ggui.Widget{ggui.Box(ggui.Row(
-		icon("pin").Size(14),
-		ggui.Text(T("Pinned")).Size(13).Weight(ggui.WeightMedium),
-	).Gap(10)).Pad(4, 4, 4, 10)}
-	for _, s := range sessions {
-		where := strings.Join([]string{nodeName(nodes, s.GetNodeId()), projectName(s.GetProject()), short(s.GetId())}, " · ")
-		rows = append(rows, sessionRow(m, s, s.GetId() == selected, titles[s.GetId()], where, 1))
-	}
-	return ggui.Column(rows...).Gap(2).Stretch()
-}
-
 // pinned reports whether the sidebar lists a session first.
 func (m *model) pinned(id string) bool { return slices.Contains(ggui.Peek(m.Prefs).Pinned, id) }
 
@@ -176,4 +166,56 @@ func sectionDrop(m *model, w ggui.Widget, nodeID, project string) ggui.Widget {
 		}
 		m.launch(agentspec.Target(s.GetAgent(), s.GetProfile()), nodeID, dir)
 	}).OnHover(over.Set)
+}
+
+// ownerName splits an owner as the daemon gives it, host/name, into the
+// name and the host serving it; a local remote's owner has no host.
+func ownerName(owner string) (name, host string) {
+	if i := strings.LastIndex(owner, "/"); i >= 0 {
+		return owner[i+1:], owner[:i]
+	}
+	return owner, ""
+}
+
+// ownerGlyph is an owner's heading's icon: GitHub's mark for an owner on
+// GitHub, git's for one anywhere else.
+func ownerGlyph(host string) string {
+	if host == "github.com" {
+		return "github"
+	}
+	return "lang-git"
+}
+
+// kindBadges counts a folded group's sessions by kind, a badge for each
+// with the kind's icon: shells first, then agents as they first appear.
+func kindBadges(sessions []*protocol.SessionInfo) ggui.Widget {
+	var kinds []string
+	count := map[string]int{}
+	for _, s := range sessions {
+		k := s.GetAgent()
+		if agentIcon(k) == agentIcon("shell") {
+			k = "shell"
+		}
+		if count[k] == 0 {
+			kinds = append(kinds, k)
+		}
+		count[k]++
+	}
+	slices.SortStableFunc(kinds, func(a, b string) int { return cmp.Compare(pick(a == "shell", 0, 1), pick(b == "shell", 0, 1)) })
+	badges := make([]ggui.Widget, len(kinds))
+	for i, k := range kinds {
+		badges[i] = ggui.Box(ggui.Row(
+			agentGlyph(k, skin.Muted).Size(11),
+			ggui.Text(fmt.Sprint(count[k])).Size(11).Color(skin.Muted).NoWrap(),
+		).Gap(2).Align(ggui.AlignCenter)).Pad(1, 4).Radius(4).Fill(skin.Surface2)
+	}
+	return ggui.Row(badges...).Gap(2).Align(ggui.AlignCenter)
+}
+
+// subfolder is where dir is inside root, or "" for root itself.
+func subfolder(dir, root string) string {
+	if dir == root || !pathscope.Within(dir, root) {
+		return ""
+	}
+	return strings.TrimLeft(dir[len(root):], `/\`)
 }

@@ -78,7 +78,7 @@ func settingsPage(m *model) ggui.Widget {
 func settingsSidebar(m *model) ggui.Widget {
 	back := ui.ButtonOf(ggui.Row(icon("arrow-left").Size(16), ggui.Text(T("Back to sessions")).Size(13)).Gap(10),
 		func() { m.Page.Set("workspace") }).Ghost().Pad(7, 10).Radius(7).Name(T("Back to sessions"))
-	header := ggui.Box(ggui.Row(back)).Pad(8, 8).Height(headerHeight)
+	header := titlebar(m, ggui.Box(ggui.Row(titlebarGap(m.titlebarRoom(), 8), back)).Pad(8, 8, 8, 0).Height(headerHeight))
 
 	nav := ggui.View(m.Section, func(current string) ggui.Widget {
 		var rows []ggui.Widget

@@ -2,6 +2,7 @@ package gui
 
 import (
 	"cmp"
+	"image/color"
 	"math"
 	"slices"
 	"strings"
@@ -31,18 +32,13 @@ type space struct {
 	// and Hidden those it leaves out though their owners are its: by ID.
 	Projects []string `json:"projects,omitempty"`
 	Hidden   []string `json:"hidden,omitempty"`
-	// OldLayoutBy is how the space kept its tabs and panes before one way
-	// held for every space, read once into spaceList's LayoutBy.
-	OldLayoutBy string `json:"layout_by,omitempty"`
 }
 
-// spaceList is the spaces, how they keep their tabs and panes, and whether
-// the space of every session is among them: part of the workspace
-// (workspace.go), which writes them down and shares them with the other
-// nodes.
+// spaceList is the spaces, and whether the space of every session is among
+// them: part of the workspace (workspace.go), which writes them down and
+// shares them with the other nodes.
 type spaceList struct {
-	Spaces   []space `json:"spaces,omitempty"`
-	LayoutBy string  `json:"layout_by,omitempty"` // whole space, by owner or by project; see layoutBys
+	Spaces []space `json:"spaces,omitempty"`
 	// NoAll leaves the space of every session out, while there are others.
 	NoAll bool `json:"no_all,omitempty"`
 	// Projects are the folders the user put together or named; see
@@ -51,23 +47,9 @@ type spaceList struct {
 	// Names are the names given to the sections the sidebar groups itself,
 	// by their keys.
 	Names map[string]string `json:"names,omitempty"`
-	// OldAllLayoutBy is how the space of every session kept its tabs and
-	// panes, as OldLayoutBy is a space's.
-	OldAllLayoutBy string `json:"all_layout_by,omitempty"`
-}
-
-// upgraded is l with the ways its spaces each kept their tabs, from before
-// one way held for all, made the one way: the space of every session's,
-// or else the first space's that had one.
-func (l spaceList) upgraded() spaceList {
-	by := l.OldAllLayoutBy
-	l.Spaces = slices.Clone(l.Spaces)
-	for i := range l.Spaces {
-		by = cmp.Or(by, l.Spaces[i].OldLayoutBy)
-		l.Spaces[i].OldLayoutBy = ""
-	}
-	l.LayoutBy, l.OldAllLayoutBy = cmp.Or(l.LayoutBy, by), ""
-	return l
+	// Looks are the icons and colours of the project sections, by their
+	// IDs; see projectlook.go.
+	Looks map[string]projectLook `json:"looks,omitempty"`
 }
 
 // spaceSet is the spaces with the one the window shows, by index: 0 for
@@ -193,8 +175,8 @@ func compareOwners(a, b string) int {
 	return cmp.Or(cmp.Compare(strings.ToLower(na), strings.ToLower(nb)), cmp.Compare(ha, hb))
 }
 
-// spaceSwitcher is the sidebar heading's title: the space shown, a menu
-// of the others, and a dot for each space when there is more than one.
+// spaceSwitcher is the sidebar heading's title: the space shown, and a
+// menu of the others.
 func spaceSwitcher(m *model) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		p := m.spaces()
@@ -205,30 +187,33 @@ func spaceSwitcher(m *model) ggui.Widget {
 		}
 		items = append(items, ui.MenuDivider(), ui.MenuItem(T("Edit spaces…"), func() { m.openSettings("spaces") }))
 		title := ggui.Row(
-			ggui.Text(p.spaceName(current)).Size(14).Weight(ggui.WeightMedium).NoWrap().Ellipsis(),
+			ggui.Text(p.spaceName(current)).Size(14).Weight(ggui.WeightSemibold).NoWrap().Ellipsis(),
 			icon("chevron-down").Size(13).Color(skin.Muted),
 		).Gap(4).Align(ggui.AlignCenter)
-		w := []ggui.Widget{iconMenu(ui.MenuOf(title, items...).Name(T("Spaces")), 2)}
-		if first := p.firstSpace(); len(p.Spaces) > first {
-			w = append(w, spaceDots(m, first, len(p.Spaces), current))
-		}
-		return ggui.Row(w...).Gap(6).Align(ggui.AlignCenter)
+		return iconMenu(ui.MenuOf(title, items...).Name(T("Spaces")), 2)
 	})
 }
 
-// spaceDots marks the space shown among first through last, each dot
-// showing its own.
-func spaceDots(m *model, first, last, current int) ggui.Widget {
-	var dots []ggui.Widget
-	for i := first; i <= last; i++ {
-		c := skin.Surface3
-		if i == current {
-			c = skin.Muted
+// spaceDots float at the foot of the sidebar's agents, outside the swipe
+// that moves them, while there is more than one space: a dot for each, the one shown drawn long and bright.
+func spaceDots(m *model) ggui.Widget {
+	return ggui.Reactive(func() ggui.Widget {
+		p := m.spaces()
+		first, last := p.firstSpace(), len(p.Spaces)
+		if last <= first {
+			return ggui.Box()
 		}
-		dots = append(dots, ui.ButtonOf(ggui.Box().Size(6, 6).Radius(3).Fill(c), func() { m.setSpace(i) }).
-			Ghost().Pad(2).Radius(4).Name(m.spacesNow().spaceName(i)))
-	}
-	return ggui.Row(dots...).Gap(0).Align(ggui.AlignCenter)
+		var dots []ggui.Widget
+		for i := first; i <= last; i++ {
+			w, c := 6.0, color.Color(skin.Surface3)
+			if i == p.Space {
+				w, c = 16, skin.Muted
+			}
+			face := ggui.Box(ggui.Center(ggui.Box().Size(w, 6).Radius(3).Fill(c))).Size(22, 22)
+			dots = append(dots, ui.ButtonOf(face, func() { m.setSpace(i) }).Ghost().Pad(0).Radius(6).Name(p.spaceName(i)))
+		}
+		return ggui.Row(dots...).Gap(2).Align(ggui.AlignCenter)
+	})
 }
 
 // The trackpad swipe that moves between spaces. The list follows the
@@ -471,8 +456,6 @@ func spacesSettings(m *model) ggui.Widget {
 		m.Spaces.Update(func(l spaceList) spaceList { l.NoAll = !on; return l })
 	})
 	general := card(
-		row(T("Tabs and panes"), T("Each space keeps tabs and panes of its own: one set for the whole space, or one for each owner or project, shown as you pick one of its sessions in the sidebar."),
-			layoutByToggle(m.Spaces.Field(func(l *spaceList) *string { return &l.LayoutBy }))),
 		row(T("All sessions"), T("A space of every session, before the others. Left out, the sidebar shows only the spaces you add."),
 			ui.Switch(showAll, "").Name(T("All sessions"))),
 	)
@@ -725,9 +708,4 @@ func spaceField(m *model, i int, field func(*space) *string) ggui.Binding[string
 			return spaces
 		})
 	})
-}
-
-// layoutByToggle picks how a space keeps its tabs and panes.
-func layoutByToggle(b ggui.Binding[string]) ggui.Widget {
-	return ui.ToggleGroup(b).Options(layoutBys).Format(func(s string) string { return T(layoutByLabels[s]) }).Name(T("Tabs and panes"))
 }

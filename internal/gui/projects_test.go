@@ -26,14 +26,14 @@ func TestProjectsOutliveTheirSessions(t *testing.T) {
 		t.Fatalf("projects = %+v, want %+v", projects, want)
 	}
 	// The session is killed; the folder keeps a section of its own.
-	groups := groupSessions(nil, groupProject, nil, projects)
+	groups := groupSessions(nil, nil, projects)
 	if len(groups) != 1 || groups[0].Project != want.Path || len(groups[0].Sessions) != 0 {
 		t.Fatalf("groups = %+v", groups)
 	}
 	// A kept repository is still the section a session in its subfolder
 	// joins.
 	sub := []*protocol.SessionInfo{{Id: "b", NodeId: "n1", Project: "/src/mako/internal", Repo: "/src/mako"}}
-	groups = groupSessions(sub, groupProject, nil, projects)
+	groups = groupSessions(sub, nil, projects)
 	if len(groups) != 1 || groups[0].Project != want.Path || len(groups[0].Sessions) != 1 {
 		t.Fatalf("groups with a subfolder session = %+v", groups)
 	}
@@ -57,7 +57,7 @@ func TestAHomeFolderDoesNotSwallowItsProjects(t *testing.T) {
 	}
 	kept := []keptProject{{fileRoot: fileRoot{Node: "n1", Path: "/home/me"}}}
 	got := map[string][]string{}
-	for _, g := range groupSessions(sessions, groupProject, nil, kept) {
+	for _, g := range groupSessions(sessions, nil, kept) {
 		for _, s := range g.Sessions {
 			got[g.Project] = append(got[g.Project], s.GetId())
 		}
@@ -73,8 +73,8 @@ func TestAHomeFolderDoesNotSwallowItsProjects(t *testing.T) {
 	}
 }
 
-// A kept folder is drawn with its heading, its start button and its menu
-// while no session is in it.
+// A kept folder is drawn with its row, its icon and its menu while no
+// session is in it.
 func TestSidebarShowsKeptFolders(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
@@ -86,7 +86,7 @@ func TestSidebarShowsKeptFolders(t *testing.T) {
 	defer p.Close()
 	p.Frame()
 	page := p.Semantics().String()
-	for _, label := range []string{Tf("New session in %s", "mako"), T("No sessions"), T("Folder actions")} {
+	for _, label := range []string{Tf("%s actions", "mako"), Tf("Icon of %s", "mako"), T("No agents here.")} {
 		if !strings.Contains(page, label) {
 			t.Fatalf("the sidebar has no %q:\n%s", label, page)
 		}
@@ -133,7 +133,7 @@ func TestProjectsGroupByOwner(t *testing.T) {
 		{Id: "3", NodeId: "a", Project: "/tmp/scratch"},
 	}
 	kept := []keptProject{{fileRoot{Node: "a", Path: "/w/ggui"}, "github.com/ironpark", ""}}
-	groups := groupSessions(sessions, groupProject, nil, kept)
+	groups := groupSessions(sessions, nil, kept)
 	sections := byOwner(groups)
 	var got []string
 	for _, o := range sections {
@@ -146,16 +146,8 @@ func TestProjectsGroupByOwner(t *testing.T) {
 	if want := []string{"github.com/golang:go", "git.ironpark.dev/ironpark:homescale", "github.com/ironpark:ggui,mako", ":scratch"}; !slices.Equal(got, want) {
 		t.Fatalf("sections %q, want %q", got, want)
 	}
-	if byOwner(groupSessions(sessions[3:], groupProject, nil, nil)) != nil {
+	if byOwner(groupSessions(sessions[3:], nil, nil)) != nil {
 		t.Fatal("folders no one owns are grouped by owner")
-	}
-}
-
-func TestHostsWithoutSessionsAreListed(t *testing.T) {
-	nodes := []*protocol.Node{{Id: "a", Name: "mac"}, {Id: "b", Name: "box"}}
-	groups := withHosts(groupSessions([]*protocol.SessionInfo{{Id: "1", NodeId: "a"}}, groupHost, nodes, nil), nodes)
-	if len(groups) != 2 || groups[0].NodeID != "b" || len(groups[0].Sessions) != 0 || groups[1].NodeID != "a" {
-		t.Fatalf("groups %+v", groups)
 	}
 }
 
@@ -174,7 +166,7 @@ func TestClonesOfARepositoryShareASection(t *testing.T) {
 		{Id: "6", NodeId: "studio", Project: "/w/notes"},
 	}
 	kept := []keptProject{{fileRoot{Node: "box", Path: "/srv/ultrasync"}, "github.com/acme", "github.com/acme/ultrasync"}}
-	groups := groupSessions(sessions, groupProject, nodes, kept)
+	groups := groupSessions(sessions, nodes, kept)
 	if len(groups) != 4 {
 		t.Fatalf("%d sections: %+v", len(groups), groups)
 	}

@@ -58,6 +58,14 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 	// MAKO_PREVIEW_RAIL renders a long conversation's turn rail, with no
 	// daemon: at a prompt part way up, and with a tick hovered.
 	railOnly := os.Getenv("MAKO_PREVIEW_RAIL") != ""
+	// MAKO_PREVIEW_SIDEBAR renders the sidebar alone, with no daemon: its
+	// projects over its agents, a project picked, and the agents grouped
+	// by machine and in compact rows.
+	sidebarOnly := os.Getenv("MAKO_PREVIEW_SIDEBAR") != ""
+	if sidebarOnly {
+		railOnly = true // no daemon either
+		width, height = sidebarWidth+8, 900
+	}
 	var rail *turnRail
 	if agentsOnly {
 		width = 360
@@ -146,6 +154,10 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			}
 			var b *browser
 			p = ggui.ProbeBuilder(func() ggui.Widget {
+				if sidebarOnly {
+					sidebarPreview(m)
+					return ggui.Provide(ggui.ReducedMotionKey, true, sidebar(m))
+				}
 				if railOnly {
 					var feed ggui.Widget
 					feed, rail = railPreview(m)
@@ -331,9 +343,9 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(func() { m.pickers.PaletteOpen.Set(false); m.ext.Open.Set(true) }),
 				until("the extension store", func() bool { r := ggui.Peek(m.ext.Results); return r.Listings != nil || r.Err != "" }),
 				frames(10), shot("03-extensions"),
-				do(func() { m.ext.Open.Set(false); m.setSidebarGroup(groupHost) }), frames(10), shot("03-sidebar-host"),
-				do(func() { m.setSidebarGroup(groupFlat) }), frames(4), shot("03-sidebar-flat"),
-				do(func() { m.setSidebarGroup(groupProject) }), frames(2),
+				do(func() { m.ext.Open.Set(false); m.setAgentView(func(p *prefs) { p.AgentGroup = agentGroupMachine }) }), frames(10), shot("03-sidebar-machine"),
+				do(func() { m.setAgentView(func(p *prefs) { p.AgentGroup, p.AgentCompact = agentGroupNone, true }) }), frames(4), shot("03-sidebar-compact"),
+				do(func() { m.setAgentView(func(p *prefs) { p.AgentGroup, p.AgentCompact = agentGroupFolder, false }) }), frames(2),
 				do(func() { m.togglePin(ggui.Peek(m.Sessions)[0].GetId()) }), frames(4), shot("03-sidebar-pinned"),
 				do(func() { m.togglePin(ggui.Peek(m.Sessions)[0].GetId()) }), frames(2),
 				// The right pane's tab dragged over the bottom of the left
@@ -475,7 +487,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					do(m.pickFolder), until("the picker", func() bool { return ggui.Peek(m.Pick.On) }), frames(20), shot("41-pick-folder"),
 				}
 			}
-			if railOnly {
+			if railOnly && !sidebarOnly {
 				tick := func(i int) ggui.Point {
 					return ggui.Pt(10, (float64(height)-rail.gap*float64(len(ggui.Peek(rail.prompts))))/2+rail.gap*(float64(i)+0.5))
 				}
@@ -484,6 +496,15 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					do(func() { rail.find.jumpTo(ggui.Peek(rail.prompts)[12].Key) }), frames(10), shot("rail"),
 					do(func() { p.Move(tick(15)) }), frames(5), do(func() { p.Move(tick(16)) }), frames(5),
 					do(func() { p.Move(tick(17)) }), frames(10), shot("rail-hover"),
+				}
+			}
+			if sidebarOnly {
+				steps = []previewStep{
+					do(setTheme("dark")), frames(5), shot("sidebar"),
+					do(func() { m.setScope(scopeKey{Section: "xxgg"}) }), frames(5), shot("sidebar-project"),
+					do(func() { m.setAgentView(func(p *prefs) { p.AgentGroup = agentGroupMachine }) }), frames(5), shot("sidebar-machine"),
+					do(func() { m.setAgentView(func(p *prefs) { p.AgentGroup, p.AgentCompact = agentGroupNone, true }) }), frames(5), shot("sidebar-compact"),
+					do(setTheme("light")), frames(5), shot("sidebar-light"),
 				}
 			}
 			if agentsOnly {
@@ -706,4 +727,60 @@ func railPreview(m *model) (ggui.Widget, *turnRail) {
 	scrolling, feed := chatFeed(m, "preview", state, turns, ggui.Box(), find)
 	scrolling.Controller(scroll)
 	return ggui.Box(ggui.Stack(feed, rail, &afterPaint{fn: find.painted}).Expand()).Fill(skin.Surface0), rail
+}
+
+// sidebarPreview gives the sidebar a mesh of four machines, a project of
+// four repositories and a few of one, and sessions across them, for
+// MAKO_PREVIEW_SIDEBAR.
+func sidebarPreview(m *model) {
+	self := &protocol.Node{Id: "studio", Name: "MacStudio.local", Os: "darwin", Source: "self"}
+	nodes := []*protocol.Node{self,
+		{Id: "air", Name: "MacBook-Air", Os: "darwin", Source: "mesh"},
+		{Id: "box", Name: "build-box", Os: "linux", Source: "mesh"},
+		{Id: "desk", Name: "desktop", Os: "windows", Source: "mesh"},
+	}
+	m.Nodes.Set(nodes)
+	m.Conn.Set(connState{OK: true, Self: self})
+	root := func(name string) projectRoot {
+		return projectRoot{Remote: "github.com/xxgg/" + name, Owner: "github.com/xxgg", Locations: []fileRoot{{Node: "studio", Path: "/w/" + name}}}
+	}
+	m.Spaces.Set(spaceList{Spaces: []space{{ID: "work", Name: "Work", Owners: []string{"github.com/xxgg"}}}, Projects: []project{{ID: "xxgg", Name: "XXGG/MAKO", Roots: []projectRoot{root("mako"), root("ggui"), root("ggfx"), root("ggwd")}}}})
+	type row struct{ id, node, dir, agent, title, status, branch string }
+	rows := []row{
+		{"50518a4e", "studio", "/w/mako", "claude", "메모리 개선", "", "main"},
+		{"a6660693", "studio", "/w/mako", "claude", "프롬프트 템플릿 인자 및 자동완성", protocol.AgentDone, "main"},
+		{"5d09dc58", "box", "/w/ggui", "codex", "range-drawer", "", "ci/release"},
+		{"9593a6cb", "studio", "/w/ggui", "claude", "Ggui 루트 Go 파일 구조", protocol.AgentWorking, "main"},
+		{"31d6d43d", "studio", "/w/ggui", "claude", "claude", protocol.AgentWaiting, "main"},
+		{"6a3b0c59", "air", "/w/ggui", "codex", "code-trace", "", "main"},
+		{"e81f22c0", "box", "/w/mako", "codex", "Linux 패키징", protocol.AgentWorking, "ci/release"},
+		{"4d2a9b17", "air", "/w/ggwd", "claude", "Wayland 입력 메서드", protocol.AgentWaiting, "main"},
+		{"19c675d2", "studio", "/w/ggfx", "claude", "gogpu/naga 의존성 업데이트", "", "main"},
+		{"6f0e3d21", "desk", "/w/ggwd", "codex", "Windows IME 조합 창 위치", protocol.AgentWorking, "windows-ime"},
+		{"0b14e2aa", "studio", "/w/acp-go", "claude", "ACP 핸드셰이크 정리", "", "main"},
+		{"7e01c9d3", "studio", "/w/gostty", "claude", "키 인코딩 회귀 수정", "", "main"},
+		{"aa31b7e2", "studio", "/w/qngg", "claude", "렌더 루프 프로파일링", protocol.AgentWorking, "main"},
+	}
+	var sessions []*protocol.SessionInfo
+	titles := map[string]string{}
+	printed := map[string]time.Time{}
+	now := time.Now().Truncate(time.Minute)
+	for i, r := range rows {
+		owner, remote := "", ""
+		if slices.Contains([]string{"/w/mako", "/w/ggui", "/w/ggfx", "/w/ggwd"}, r.dir) {
+			owner, remote = "github.com/xxgg", "github.com/xxgg/"+projectName(r.dir)
+		}
+		sessions = append(sessions, &protocol.SessionInfo{Id: r.id + "00000000", NodeId: r.node, Project: r.dir, Repo: r.dir, Owner: owner, Remote: remote,
+			Agent: r.agent, State: protocol.StateRunning, Status: r.status, Branch: r.branch})
+		titles[r.id+"00000000"] = r.title
+		printed[r.id+"00000000"] = now.Add(-time.Duration(i*i*17) * time.Minute)
+	}
+	m.Sessions.Set(sessions)
+	m.Titles.Set(titles)
+	m.Printed.Set(printed)
+	m.Prefs.Update(func(p prefs) prefs {
+		p.Pinned = []string{"9593a6cb00000000"}
+		p.PinnedProjects = []scopeKey{{Section: "xxgg", Root: "github.com/xxgg/ggui"}}
+		return p
+	})
 }
