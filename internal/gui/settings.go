@@ -66,7 +66,7 @@ var (
 
 func settingsPage(m *model) ggui.Widget {
 	content := ggui.Key(m.Section, func(id string) ggui.Widget {
-		return ggui.Scroll(ggui.Align(ggui.Box(ggui.Padding(settingsContent(m, id), 32, 40)).MaxWidth(760)).Top()).
+		return ggui.Scroll(ggui.Align(ggui.Box(ggui.Padding(settingsContent(m, id), 32, 40)).MaxWidth(settingsMaxWidth)).Top()).
 			Bar(skin.Surface3)
 	})
 	return ggui.Row(
@@ -153,19 +153,6 @@ func settingsContent(m *model, id string) ggui.Widget {
 
 // Building blocks -------------------------------------------------------------
 
-func pageTitle(title, description string) ggui.Widget {
-	return ggui.Column(
-		ggui.Text(title).Size(20).Weight(ggui.WeightSemibold),
-		muted(ggui.Text(description).Size(13)),
-	).Gap(6).Stretch()
-}
-
-// section is a muted heading over its cards.
-func section(title string, children ...ggui.Widget) ggui.Widget {
-	head := ggui.Box(muted(ggui.Text(title).Size(12.5))).Pad(0, 4)
-	return ggui.Column(append([]ggui.Widget{head}, children...)...).Gap(10).Stretch()
-}
-
 // card groups rows on a raised surface, a hairline between each.
 func card(rows ...ggui.Widget) ggui.Widget { return cardWithTail(nil, rows...) }
 
@@ -204,10 +191,6 @@ func stackedRow(title, hint string, control ggui.Widget) ggui.Widget {
 		text = append(text, muted(ggui.Text(hint).Size(12)))
 	}
 	return ggui.Box(ggui.Column(append(text, ggui.Box().Height(4), control)...).Gap(3).Stretch()).Pad(14, 16)
-}
-
-func page(title, description string, sections ...ggui.Widget) ggui.Widget {
-	return ggui.Column(append([]ggui.Widget{pageTitle(title, description)}, sections...)...).Gap(28).Stretch()
 }
 
 // browseButton is a Browse… button that sets b to what pick chooses in the

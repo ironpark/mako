@@ -195,7 +195,7 @@ func extCards(r extSearch, installed []zed.Extension, show, kind string) []extCa
 }
 
 func extensionSettings(m *model) ggui.Widget {
-	return page(T("Extensions"), extensionsAbout(), extensionsHeader(m), extensionsList(m))
+	return listPage(T("Extensions"), extensionsAbout(), extensionsHeader(m), extensionsList(m))
 }
 
 func extensionsAbout() string {

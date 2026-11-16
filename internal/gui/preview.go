@@ -62,6 +62,13 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 	// projects over its agents, a project picked, and the agents grouped
 	// by machine and in compact rows.
 	sidebarOnly := os.Getenv("MAKO_PREVIEW_SIDEBAR") != ""
+	// MAKO_PREVIEW_SETTINGS renders every settings page, with no daemon,
+	// in a wide window and then a narrow one.
+	settingsOnly := os.Getenv("MAKO_PREVIEW_SETTINGS") != ""
+	if settingsOnly {
+		railOnly = true // no daemon either
+		width, height = 1440, 1000
+	}
 	if sidebarOnly {
 		railOnly = true // no daemon either
 		width, height = sidebarWidth+8, 900
@@ -157,6 +164,9 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				if sidebarOnly {
 					sidebarPreview(m)
 					return ggui.Provide(ggui.ReducedMotionKey, true, sidebar(m))
+				}
+				if settingsOnly {
+					return ggui.Provide(ggui.ReducedMotionKey, true, settingsPage(m))
 				}
 				if railOnly {
 					var feed ggui.Widget
@@ -487,7 +497,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					do(m.pickFolder), until("the picker", func() bool { return ggui.Peek(m.Pick.On) }), frames(20), shot("41-pick-folder"),
 				}
 			}
-			if railOnly && !sidebarOnly {
+			if railOnly && !sidebarOnly && !settingsOnly {
 				tick := func(i int) ggui.Point {
 					return ggui.Pt(10, (float64(height)-rail.gap*float64(len(ggui.Peek(rail.prompts))))/2+rail.gap*(float64(i)+0.5))
 				}
@@ -505,6 +515,17 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					do(func() { m.setAgentView(func(p *prefs) { p.AgentGroup = agentGroupMachine }) }), frames(5), shot("sidebar-machine"),
 					do(func() { m.setAgentView(func(p *prefs) { p.AgentGroup, p.AgentCompact = agentGroupNone, true }) }), frames(5), shot("sidebar-compact"),
 					do(setTheme("light")), frames(5), shot("sidebar-light"),
+				}
+			}
+			if settingsOnly {
+				steps = []previewStep{do(setTheme("dark"))}
+				for _, w := range []int{width, 900} {
+					steps = append(steps, do(func() { p.Resize(ggui.Sz(float64(w), float64(height))); img = ggfx.NewImage(w, height) }))
+					for _, g := range settingsNav {
+						for _, s := range g.sections {
+							steps = append(steps, do(func() { m.Section.Set(s.id) }), frames(3), shot(fmt.Sprintf("settings-%d-%s", w, s.id)))
+						}
+					}
 				}
 			}
 			if agentsOnly {

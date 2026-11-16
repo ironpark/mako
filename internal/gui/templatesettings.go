@@ -312,16 +312,14 @@ func templateSettings(m *model) ggui.Widget {
 		}
 		return b.String()
 	})
-	list := ggui.Key(shape, func(string) ggui.Widget {
-		drafts := ggui.Peek(pg.drafts)
-		if len(drafts) == 0 {
-			return card(ggui.Box(muted(ggui.Text(T("No templates yet. Add one below.")).Size(13))).Pad(14, 16))
+	// Beside the list, on a wide page, the template open shows, or the
+	// first while none is.
+	shown := ggui.Derived(func() int {
+		drafts, o := pg.drafts.Get(), pg.open.Get()
+		if slices.ContainsFunc(drafts, func(d templateDraft) bool { return d.ID == o }) || len(drafts) == 0 {
+			return o
 		}
-		items := make([]ggui.Widget, len(drafts))
-		for i, d := range drafts {
-			items[i] = templateItem(m, pg, d)
-		}
-		return card(items...)
+		return drafts[0].ID
 	})
 	broken := ggui.View(pg.broken, func(broken []prompttmpl.Broken) ggui.Widget {
 		if len(broken) == 0 {
@@ -344,34 +342,55 @@ func templateSettings(m *model) ggui.Widget {
 		name.Set("")
 		note.Set("")
 	}
-	hasNote := ggui.Map(note, func(s string) bool { return s != "" })
-	addCard := card(
-		row(T("Add a template"), T("Called in Chat by its name after two slashes."),
-			ggui.Row(
-				ggui.Box(ui.TextField(name).Placeholder("review").Name(T("New template name")).OnSubmit(func(string) { add() })).Width(160),
-				ui.Button(T("Add"), add).Outline(),
-			).Gap(8)),
-		ggui.If(hasNote, func() ggui.Widget {
-			return ggui.Box(ggui.TextOf(note).Size(12).Color(skin.DotDown)).Pad(0, 16, 12, 16)
-		}),
-		stackedRow(T("Template files"), T("Each template is a Markdown file in the templates folder, which you can also edit by hand."),
-			ggui.Row(
-				ui.Button(T("Open folder"), openFolder(config.TemplatesDir)).Ghost(),
-				ui.Button(T("Reload"), pg.reload).Ghost(),
-			).Gap(6)),
-	)
-	return page(T("Templates"), T("Prompts to send in Chat by typing // and a template's name, with arguments of the types you set. {{name}} in a prompt stands for an argument, or for a built-in variable: agent, profile, model, project, branch, repo or date."),
+	addCard := func(compact bool) ggui.Widget {
+		files := ggui.Row(
+			ui.Button(T("Open folder"), openFolder(config.TemplatesDir)).Ghost(),
+			ui.Button(T("Reload"), pg.reload).Ghost(),
+		).Gap(6)
+		hint := T("Each template is a Markdown file in the templates folder, which you can also edit by hand.")
+		var folder ggui.Widget = stackedRow(T("Template files"), hint, files)
+		if compact {
+			folder = ggui.Box(ui.Tooltip(files, hint)).Pad(6, 8)
+		}
+		return card(
+			addField(T("Add a template"), T("Called in Chat by its name after two slashes."), "review", T("New template name"), name, note, add, compact),
+			folder,
+		)
+	}
+	list := ggui.Key(shape, func(string) ggui.Widget {
+		drafts := ggui.Peek(pg.drafts)
+		items := func(inline bool) ggui.Widget {
+			if len(drafts) == 0 {
+				return card(ggui.Box(muted(ggui.Text(T("No templates yet. Add one below.")).Size(13))).Pad(14, 16))
+			}
+			items := make([]ggui.Widget, len(drafts))
+			for i, d := range drafts {
+				items[i] = templateItem(m, pg, shown, d, inline)
+			}
+			return card(items...)
+		}
+		detail := ggui.Key(shown, func(id int) ggui.Widget {
+			if id == 0 {
+				return ggui.Box()
+			}
+			return templateDetail(m, pg, pg.draft(id))
+		})
+		return listBeside(
+			ggui.Column(items(false), broken, addCard(true)).Gap(20).Stretch(),
+			detail,
+			ggui.Column(items(true), broken, addCard(false)).Gap(pageGap).Stretch(),
+		)
+	})
+	return listPage(T("Templates"), T("Prompts to send in Chat by typing // and a template's name, with arguments of the types you set. {{name}} in a prompt stands for an argument, or for a built-in variable: agent, profile, model, project, branch, repo or date."),
 		list,
-		broken,
-		addCard,
 	)
 }
 
 // templateItem is a template's line in the list: its name and what it is
-// for; tapped, it unfolds its editor.
-func templateItem(m *model, pg *templatePage, d templateDraft) ggui.Widget {
+// for. Inline, tapped, it unfolds its editor; otherwise it is the one
+// shown beside the list.
+func templateItem(m *model, pg *templatePage, shown ggui.Readable[int], d templateDraft, inline bool) ggui.Widget {
 	id := d.ID
-	isOpen := ggui.Map(pg.open, func(o int) bool { return o == id })
 	summary := ggui.Reactive(func() ggui.Widget {
 		cur := pg.draft(id)
 		text := cur.template().Usage()
@@ -386,17 +405,32 @@ func templateItem(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 	title := ggui.Reactive(func() ggui.Widget {
 		return ggui.Text("//" + pg.draft(id).Name).Size(13.5).Weight(ggui.WeightMedium).NoWrap()
 	})
-	head := ui.ButtonOf(ggui.Row(
-		icon("file-text").Size(15).Color(skin.Muted),
-		title,
-		ggui.Expanded(summary),
-		chevron(isOpen, 13, skin.ExtraMuted),
-	).Gap(10).Align(ggui.AlignCenter), func() { pg.open.Set(pick(ggui.Peek(pg.open) == id, 0, id)) }).
+	label := []ggui.Widget{icon("file-text").Size(15).Color(skin.Muted), title, ggui.Expanded(summary)}
+	if !inline {
+		chosen := ggui.Map(shown, func(s int) bool { return s == id })
+		return ggui.Box(listItem(ggui.Row(label...).Gap(10).Align(ggui.AlignCenter), chosen,
+			func() { pg.open.Set(id) }, Tf("%s template", d.Name))).Pad(4, 8)
+	}
+	isOpen := ggui.Map(pg.open, func(o int) bool { return o == id })
+	head := ui.ButtonOf(ggui.Row(append(label, chevron(isOpen, 13, skin.ExtraMuted))...).Gap(10).Align(ggui.AlignCenter),
+		func() { pg.open.Set(pick(ggui.Peek(pg.open) == id, 0, id)) }).
 		Ghost().Pad(8, 10).Radius(7).Name(Tf("%s template", d.Name))
 	return ggui.Box(ggui.Column(
 		head,
-		reveal(isOpen, func() ggui.Widget { return templateEditor(m, pg, d) }),
+		reveal(isOpen, func() ggui.Widget { return ggui.Padding(templateEditor(m, pg, d), 6, 10, 10, 35) }),
 	).Stretch()).Pad(4, 8)
+}
+
+// templateDetail is the template shown beside the list: its name over
+// its editor.
+func templateDetail(m *model, pg *templatePage, d templateDraft) ggui.Widget {
+	id := d.ID
+	return detailCard(ggui.Row(
+		icon("file-text").Size(18).Color(skin.Muted),
+		ggui.Reactive(func() ggui.Widget {
+			return ggui.Text("//" + pg.draft(id).Name).Size(16).Weight(ggui.WeightSemibold).NoWrap()
+		}),
+	).Gap(10).Align(ggui.AlignCenter), templateEditor(m, pg, d))
 }
 
 // templateEditor is an unfolded template's fields, its arguments, and
@@ -445,7 +479,7 @@ func templateEditor(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 			})
 		}).Ghost(),
 	).Gap(8).Align(ggui.AlignCenter))
-	return ggui.Padding(ggui.Column(children...).Gap(10).Stretch(), 6, 10, 10, 35)
+	return ggui.Column(children...).Gap(10).Stretch()
 }
 
 // not is b turned over.

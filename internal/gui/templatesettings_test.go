@@ -113,3 +113,35 @@ func TestTemplateSettingsRenders(t *testing.T) {
 		t.Fatalf("the editor did not unfold:\n%s", p.Semantics().String())
 	}
 }
+
+// On a wide page the list has the template chosen beside it, the first
+// until another is tapped.
+func TestTemplateSettingsBesideTheList(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	dir, _ := config.TemplatesDir()
+	_ = os.MkdirAll(dir, 0o700)
+	_ = os.WriteFile(filepath.Join(dir, "a.md"), []byte("{{date}}\n"), 0o600)
+	_ = os.WriteFile(filepath.Join(dir, "b.md"), []byte("{{repo}}\n"), 0o600)
+	m := newModel(config.Default(), "")
+	p := ggui.ProbeBuilder(func() ggui.Widget { return settingsContent(m, "templates") }, ggui.Sz(1100, 1000))
+	defer p.Close()
+	p.Frame()
+	name := func() string {
+		f, ok := p.Semantics().Find(ggui.RoleTextField, T("Template name"))
+		if !ok {
+			t.Fatalf("no editor beside the list:\n%s", p.Semantics().String())
+		}
+		return f.Value
+	}
+	if got := name(); got != "a" {
+		t.Fatalf("shown %q first, want a", got)
+	}
+	item, _ := p.Semantics().Find(ggui.RoleButton, Tf("%s template", "b"))
+	p.Click(item.Rect.Origin.Add(ggui.Pt(10, item.Rect.Size.H/2)))
+	for range 5 {
+		p.Frame()
+	}
+	if got := name(); got != "b" {
+		t.Fatalf("shown %q once b was tapped", got)
+	}
+}

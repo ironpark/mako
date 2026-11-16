@@ -290,8 +290,22 @@ func (m *model) removeAgentRow(id int) {
 
 func agentSettings(m *model) ggui.Widget {
 	// One agent unfolds at a time, by name, and stays so as rows come and
-	// go.
+	// go; beside the list, on a wide page, the one open shows, or the
+	// first while none is.
 	open := ggui.State("")
+	shown := ggui.Derived(func() string {
+		rows := m.AgentDraft.Get()
+		o := open.Get()
+		if slices.ContainsFunc(rows, func(r agentDraft) bool { return !r.IsProfile && r.Agent == o }) {
+			return o
+		}
+		for _, r := range rows {
+			if !r.IsProfile {
+				return r.Agent
+			}
+		}
+		return ""
+	})
 	// The editors are rebuilt when rows come or go, not as their text is
 	// typed, so a field keeps its focus.
 	// An agent whose program is not installed moves to a card of its own,
@@ -307,31 +321,6 @@ func agentSettings(m *model) ggui.Widget {
 		}
 		return b.String()
 	})
-	agents := ggui.Key(shape, func(string) ggui.Widget {
-		rows := ggui.Peek(m.AgentDraft)
-		var ready, missing []ggui.Widget
-		for i := 0; i < len(rows); {
-			j := i + 1
-			for j < len(rows) && rows[j].IsProfile && rows[j].Agent == rows[i].Agent {
-				j++
-			}
-			item := agentItem(m, open, rows[i], rows[i+1:j])
-			if agentReady(rows[i]) {
-				ready = append(ready, item)
-			} else {
-				missing = append(missing, item)
-			}
-			i = j
-		}
-		var out []ggui.Widget
-		if len(ready) > 0 {
-			out = append(out, card(ready...))
-		}
-		if len(missing) > 0 {
-			out = append(out, section(T("Not installed"), card(missing...)))
-		}
-		return ggui.Column(out...).Gap(28).Stretch()
-	})
 
 	name := ggui.State("")
 	note := ggui.State("")
@@ -345,32 +334,76 @@ func agentSettings(m *model) ggui.Widget {
 		note.Set("")
 		open.Set(n)
 	}
-	hasNote := ggui.Map(note, func(s string) bool { return s != "" })
-	addCard := card(
-		row(T("Add an agent"), T("Any program that runs in a terminal, by a name sessions start it with."),
-			ggui.Row(
-				ggui.Box(ui.TextField(name).Placeholder("name").Name(T("New agent name")).OnSubmit(func(string) { add() })).Width(160),
-				ui.Button(T("Add"), add).Outline(),
-			).Gap(8)),
-		ggui.If(hasNote, func() ggui.Widget {
-			return ggui.Box(ggui.TextOf(note).Size(12).Color(skin.DotDown)).Pad(0, 16, 12, 16)
-		}),
-	)
+	addAgent := func(compact bool) ggui.Widget {
+		return card(addField(T("Add an agent"), T("Any program that runs in a terminal, by a name sessions start it with."),
+			"name", T("New agent name"), name, note, add, compact))
+	}
 
-	return page(T("Agents"), T("The programs a session can start on this node, the flags and environment each starts with, and profiles: named variations of an agent, such as claude on another model or account. A session picks one as agent:profile. Changes apply to the next session started."),
+	agents := ggui.Key(shape, func(string) ggui.Widget {
+		groups := agentDraftGroups(ggui.Peek(m.AgentDraft))
+		list := func(inline bool) ggui.Widget {
+			var ready, missing []ggui.Widget
+			for _, g := range groups {
+				item := agentItem(m, open, shown, g.agent, g.profiles, inline)
+				if agentReady(g.agent) {
+					ready = append(ready, item)
+				} else {
+					missing = append(missing, item)
+				}
+			}
+			var out []ggui.Widget
+			if len(ready) > 0 {
+				out = append(out, card(ready...))
+			}
+			if len(missing) > 0 {
+				out = append(out, section(T("Not installed"), card(missing...)))
+			}
+			return ggui.Column(append(out, addAgent(!inline))...).Gap(pick[float64](inline, pageGap, 20)).Stretch()
+		}
+		detail := ggui.Key(shown, func(name string) ggui.Widget {
+			for _, g := range groups {
+				if g.agent.Agent == name {
+					return agentDetail(m, g.agent, g.profiles)
+				}
+			}
+			return ggui.Box()
+		})
+		return listBeside(list(false), detail, list(true))
+	})
+
+	return listPage(T("Agents"), T("The programs a session can start on this node, the flags and environment each starts with, and profiles: named variations of an agent, such as claude on another model or account. A session picks one as agent:profile. Changes apply to the next session started."),
 		agents,
-		addCard,
 		saveBar(m),
 	)
 }
 
+// agentEntry is an agent's row of the draft and its profiles' after it.
+type agentEntry struct {
+	agent    agentDraft
+	profiles []agentDraft
+}
+
+// agentDraftGroups are the draft's agents, each with its profiles.
+func agentDraftGroups(rows []agentDraft) []agentEntry {
+	var out []agentEntry
+	for i := 0; i < len(rows); {
+		j := i + 1
+		for j < len(rows) && rows[j].IsProfile && rows[j].Agent == rows[i].Agent {
+			j++
+		}
+		out = append(out, agentEntry{rows[i], rows[i+1 : j]})
+		i = j
+	}
+	return out
+}
+
 // agentItem is an agent's line in the list: its glyph, its name, what it
-// runs and its profiles, and whether it is offered; tapped, it unfolds its
-// settings and its profiles under it.
-func agentItem(m *model, open *ggui.StateValue[string], a agentDraft, profiles []agentDraft) ggui.Widget {
+// runs and its profiles, and whether it is offered. Inline, tapped, it
+// unfolds its settings and its profiles under it; otherwise it is the one
+// shown beside the list.
+func agentItem(m *model, open *ggui.StateValue[string], shown ggui.Readable[string], a agentDraft, profiles []agentDraft, inline bool) ggui.Widget {
 	name := a.Agent
 	offered := agentOffered(m, a.ID, name)
-	isOpen := ggui.Map(open, func(o string) bool { return o == name })
 	summary := ggui.Reactive(func() ggui.Widget {
 		d := m.agentRow(a.ID)
 		text := strings.TrimSpace(d.Command + " " + d.Args)
@@ -382,20 +415,40 @@ func agentItem(m *model, open *ggui.StateValue[string], a agentDraft, profiles [
 		}
 		return ggui.Text(text).Size(11.5).Color(skin.ExtraMuted).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()
 	})
+	label := []ggui.Widget{
+		agentGlyph(name, skin.Muted).Size(15),
+		ggui.Text(name).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
+		ggui.Expanded(summary),
+	}
+	if !inline {
+		chosen := ggui.Map(shown, func(s string) bool { return s == name })
+		return ggui.Box(ggui.Row(
+			ggui.Expanded(listItem(ggui.Row(label...).Gap(10).Align(ggui.AlignCenter), chosen, func() { open.Set(name) }, Tf("%s settings", name))),
+			offered,
+		).Gap(10).Align(ggui.AlignCenter)).Pad(4, 8)
+	}
+	isOpen := ggui.Map(open, func(o string) bool { return o == name })
 	head := ggui.Row(
-		ggui.Expanded(ui.ButtonOf(ggui.Row(
-			agentGlyph(name, skin.Muted).Size(15),
-			ggui.Text(name).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
-			ggui.Expanded(summary),
-			chevron(isOpen, 13, skin.ExtraMuted),
-		).Gap(10).Align(ggui.AlignCenter), func() { open.Set(pick(ggui.Peek(open) == name, "", name)) }).
+		ggui.Expanded(ui.ButtonOf(ggui.Row(append(label, chevron(isOpen, 13, skin.ExtraMuted))...).Gap(10).Align(ggui.AlignCenter),
+			func() { open.Set(pick(ggui.Peek(open) == name, "", name)) }).
 			Ghost().Pad(8, 10).Radius(7).Name(Tf("%s settings", name))),
 		offered,
 	).Gap(10).Align(ggui.AlignCenter)
 	return ggui.Box(ggui.Column(
 		head,
-		reveal(isOpen, func() ggui.Widget { return agentEditor(m, a, profiles) }),
+		reveal(isOpen, func() ggui.Widget {
+			return ggui.Padding(agentEditor(m, a, profiles), 6, 10, 10, 35)
+		}),
 	).Stretch()).Pad(4, 8)
+}
+
+// agentDetail is the agent shown beside the list: its name over its
+// settings and its profiles.
+func agentDetail(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
+	return detailCard(ggui.Row(
+		agentGlyph(a.Agent, skin.Muted).Size(18),
+		ggui.Text(a.Agent).Size(16).Weight(ggui.WeightSemibold).NoWrap(),
+	).Gap(10).Align(ggui.AlignCenter), agentEditor(m, a, profiles))
 }
 
 // agentEditor is an unfolded agent's settings: its command, flags and
@@ -431,7 +484,7 @@ func agentEditor(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 		actions = append(actions, ui.Button(T("Remove agent"), func() { m.removeAgentRow(id) }).Ghost().Name(Tf("Remove %s", a.Agent)))
 	}
 	children = append(children, ggui.Row(actions...).Gap(8))
-	return ggui.Padding(ggui.Column(children...).Gap(10).Stretch(), 6, 10, 10, 35)
+	return ggui.Column(children...).Gap(10).Stretch()
 }
 
 // compactField is a field under its label, its hint as the label's
