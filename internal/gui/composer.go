@@ -19,11 +19,11 @@ func (m *model) setComposerDraft(id, text string) { m.chatState(id).draft.Set(te
 // chatTarget is the session a message would go to: the focused one while it
 // shows Chat, else a pane that does.
 func (m *model) chatTarget() string {
-	if id := m.Selected.Get(); isSessionTab(id) && m.ChatModes.Get()[id] {
+	if id := m.Selected.Get(); m.chatOn(id) {
 		return id
 	}
 	for _, g := range m.Layout.Get().groups() {
-		if id := g.Active; isSessionTab(id) && m.ChatModes.Get()[id] {
+		if id := g.Active; m.chatOn(id) {
 			return id
 		}
 	}

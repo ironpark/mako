@@ -4,9 +4,10 @@
 // name. Front matter in YAML, between lines of three dashes, says what it
 // is for, the agents it is for and the arguments it takes; the rest is the
 // prompt, in which {{name}} stands for an argument's value or a built-in
-// variable's. There is nothing more to the language: no functions, no
-// conditions, no loops. A pair of braces around anything that is not a
-// name is left as it is.
+// variable's, and a {{match name}} block picks text by its value, as
+// Rust's match does (see match.go). There is nothing more to the
+// language: no functions, no loops. A pair of braces around anything else
+// is left as it is.
 //
 //	---
 //	description: Review a file
@@ -81,6 +82,8 @@ type Template struct {
 	Agents []string `yaml:"agents,omitempty,flow"`
 	Args   []Arg    `yaml:"args,omitempty"`
 	Body   string   `yaml:"-"`
+	// segs is Body read into its text and blocks, as check found them.
+	segs []segment
 }
 
 // Builtins are the variables every template may use, filled from the
@@ -88,9 +91,13 @@ type Template struct {
 var Builtins = []string{"agent", "profile", "model", "project", "branch", "repo", "date"}
 
 // placeholder is {{name}}, spaces allowed inside the braces.
-var placeholder = regexp.MustCompile(`\{\{\s*([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}`)
+var placeholder = regexp.MustCompile(`\{\{\s*(` + namePattern + `)\s*\}\}`)
 
-var argName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
+// namePattern is how a name is spelt: an argument's, a built-in
+// variable's, or the one a {{match}} matches.
+const namePattern = `[A-Za-z_][A-Za-z0-9_-]*`
+
+var argName = regexp.MustCompile(`^` + namePattern + `$`)
 
 // Placeholder is a {{name}} in a template's body: its bytes [Start, End),
 // braces and all, and the name in it.
@@ -99,34 +106,42 @@ type Placeholder struct {
 	Name       string
 }
 
-// Placeholders are the {{name}}s of body, in order.
+// Placeholders are the {{name}}s of body, in order; not {{end}}, which
+// closes a block.
 func Placeholders(body string) []Placeholder {
 	var out []Placeholder
 	for _, m := range placeholder.FindAllStringSubmatchIndex(body, -1) {
-		out = append(out, Placeholder{Start: m[0], End: m[1], Name: body[m[2]:m[3]]})
+		if name := body[m[2]:m[3]]; !isKeyword(name) {
+			out = append(out, Placeholder{Start: m[0], End: m[1], Name: name})
+		}
 	}
 	return out
 }
 
+// isKeyword reports whether name is a word of the language's own, which
+// names no argument.
+func isKeyword(name string) bool { return name == "match" || name == "end" }
+
 // openPlaceholder is a {{ not yet closed at the end of a text, and the
 // start of the name typed in it; closing is the }} a text begins with.
 var (
-	openPlaceholder = regexp.MustCompile(`\{\{\s*([A-Za-z_][A-Za-z0-9_-]*)?$`)
+	openPlaceholder = regexp.MustCompile(`\{\{\s*(match\s+)?(` + namePattern + `)?$`)
 	closing         = regexp.MustCompile(`^\s*\}\}`)
 )
 
 // OpenPlaceholder finds the {{ the end of before is in, not yet closed:
-// where the name in it starts, and what of the name is typed. ok is false
-// when before ends in none.
-func OpenPlaceholder(before string) (start int, typed string, ok bool) {
+// where the name in it starts, what of the name is typed, and whether it
+// is the name a {{match}} matches. ok is false when before ends in none.
+func OpenPlaceholder(before string) (start int, typed string, subject, ok bool) {
 	m := openPlaceholder.FindStringSubmatchIndex(before)
 	if m == nil {
-		return 0, "", false
+		return 0, "", false, false
 	}
-	if m[2] < 0 {
-		return len(before), "", true
+	subject = m[2] >= 0
+	if m[4] < 0 {
+		return len(before), "", subject, true
 	}
-	return m[2], before[m[2]:m[3]], true
+	return m[4], before[m[4]:m[5]], subject, true
 }
 
 // Closing is how long the }} that after begins with is, spaces before it
@@ -197,6 +212,9 @@ func (t *Template) check() error {
 		if IsBuiltin(a.Name) {
 			return fmt.Errorf("argument %q: a built-in variable has that name", a.Name)
 		}
+		if isKeyword(a.Name) {
+			return fmt.Errorf("argument %q: the name is the language's own", a.Name)
+		}
 		seen[a.Name] = true
 		if a.Type == "" {
 			a.Type = String
@@ -226,7 +244,12 @@ func (t *Template) check() error {
 			return fmt.Errorf("{{%s}}: no argument or built-in variable has that name", p.Name)
 		}
 	}
-	return nil
+	segs, err := parseSegments(t.Body)
+	if err != nil {
+		return err
+	}
+	t.segs = segs
+	return t.checkBlocks(segs)
 }
 
 // For reports whether the template is for agent, started with profile.
@@ -428,12 +451,23 @@ func (t *Template) arg(name string) *Arg {
 // Fill is the template's prompt with each name in it given its value:
 // an argument's from values, a built-in variable's from builtins.
 func (t *Template) Fill(values, builtins map[string]string) string {
-	out := placeholder.ReplaceAllStringFunc(t.Body, func(s string) string {
-		name := strings.TrimSpace(s[2 : len(s)-2])
+	value := func(name string) string {
 		if v, ok := values[name]; ok {
 			return v
 		}
 		return builtins[name]
+	}
+	// Blocks pick their arms first, and the names are filled in what they
+	// leave, once: a value is not read again for names of its own.
+	segs := t.segs
+	if segs == nil { // a template not read, as one made to save is
+		var err error
+		if segs, err = parseSegments(t.Body); err != nil {
+			segs = []segment{{text: t.Body}}
+		}
+	}
+	out := placeholder.ReplaceAllStringFunc(render(segs, value), func(s string) string {
+		return value(strings.TrimSpace(s[2 : len(s)-2]))
 	})
 	return strings.TrimRight(out, "\n")
 }

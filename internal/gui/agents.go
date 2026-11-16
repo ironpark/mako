@@ -11,6 +11,8 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -34,6 +36,7 @@ type agentDraft struct {
 	// one ID a line, rather than every one enabled.
 	PickServers bool
 	Servers     string
+	Model       string // a profile's; "" for the agent's default
 }
 
 // draftAgents lays out cfg's agents for editing: every agent the node can
@@ -50,7 +53,7 @@ func draftAgents(agents map[string]agentspec.Agent) []agentDraft {
 		out = append(out, d)
 		for _, p := range a.Profiles {
 			d := agentDraft{ID: len(out) + 1, Agent: name, Profile: p.Name, IsProfile: true,
-				Description: p.Description, Args: agentspec.JoinArgs(p.Args), Env: envText(p.Env)}
+				Description: p.Description, Args: agentspec.JoinArgs(p.Args), Env: envText(p.Env), Model: p.Model}
 			if p.ContextServers != nil {
 				d.PickServers, d.Servers = true, strings.Join(*p.ContextServers, "\n")
 			}
@@ -123,7 +126,7 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 		if err != nil {
 			return nil, fmt.Errorf(T("%s, environment: %v"), where, err)
 		}
-		p := agentspec.Profile{Name: r.Profile, Description: r.Description, Args: args, Env: env}
+		p := agentspec.Profile{Name: r.Profile, Description: r.Description, Args: args, Env: env, Model: strings.TrimSpace(r.Model)}
 		if r.PickServers {
 			ids := lines(r.Servers)
 			if ids == nil {
@@ -582,9 +585,10 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Description })).
 				Multiline().Lines(2).Placeholder(T("For example: Reviews Go concurrency, cancellation and race conditions.")).
 				Name(Tf("%s description", target))),
+		profileModel(m, p, target, mono),
 		compactField(T("Flags"), T("Added after the agent's own."),
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Args })).
-				Style(mono).Placeholder("--model opus").Name(Tf("%s flags", target))),
+				Style(mono).Placeholder("--flag value").Name(Tf("%s flags", target))),
 		compactField(T("Environment"), T("NAME=value lines over the agent's own, which $NAME reads."),
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Env })).
 				Multiline().Lines(2).Style(mono).Name(Tf("%s environment", target))),
@@ -683,4 +687,32 @@ func profileServers(m *model, id int, name string) ggui.Widget {
 		}
 		return ggui.Column(rows...).Gap(8).Stretch()
 	})
+}
+
+// profileModel is the model a profile's sessions start on: picked from
+// those its agent offers, or typed for an agent mako knows no models of;
+// none for an agent mako starts on no model of its own.
+func profileModel(m *model, p agentDraft, target string, mono ggui.TextStyle) ggui.Widget {
+	entry, _ := agents.Lookup(p.Agent)
+	if flag, ok := entry.Driver.(agent.ModelFlag); !ok || flag.ModelArgs("x") == nil {
+		return ggui.Box()
+	}
+	model := m.agentField(p.ID, func(d *agentDraft) *string { return &d.Model })
+	hint := T("The model its sessions start on, over the agent's default and any its flags name.")
+	known, ok := entry.Driver.(agent.Models)
+	if !ok {
+		return compactField(T("Model"), hint,
+			ui.TextField(model).Style(mono).Placeholder(T("The agent's default")).Name(Tf("%s model", target)))
+	}
+	options := append([]string{""}, known.Models()...)
+	if cur := ggui.Peek(model); cur != "" && !slices.Contains(options, cur) {
+		options = append(options, cur) // one typed into config.json
+	}
+	return compactField(T("Model"), hint,
+		ggui.Box(ui.Select(model).Options(options).Format(func(s string) string {
+			if s == "" {
+				return T("The agent's default")
+			}
+			return s
+		}).Name(Tf("%s model", target))).Width(220))
 }

@@ -99,6 +99,7 @@ type model struct {
 	asked       map[string]ui.ToastID    // requests told of, by their toasts; UI goroutine only
 	ws          *wsState                 // how the workspace is kept and written down; see wsstate.go
 	prefsWriter *fileWriter              // writes gui.json
+	titleCache  *titleCache              // titles.json; see titlecache.go
 	// tabNodes are the nodes of session tabs, and missing when each tab's
 	// session went missing from the list; see leftover.go.
 	tabNodes map[string]string
@@ -154,6 +155,8 @@ type model struct {
 	// dark is whether the theme shown is dark, for what changes with that
 	// alone, as a page's diagrams: not every setting the theme is read from.
 	dark *ggui.DerivedValue[bool]
+	// openChat says the settings open an agent's tab in its chat.
+	openChat ggui.Readable[bool]
 	// An operation that loses work, asking to be sure; see confirm.go.
 	Confirmation *ggui.StateValue[confirmation]
 	AgentsSplit  *ggui.StateValue[float64] // the agents panel's agents over its messages
@@ -238,6 +241,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		files:       newFilesState(),
 		ws:          newWsState(),
 		prefsWriter: &fileWriter{what: "settings"},
+		titleCache:  loadTitleCache(time.Now()),
 		hl:          newHighlighter(),
 		DaemonState: ggui.State(daemonState{}),
 		DaemonLog:   ggui.State([]string(nil)).WithEqual(slices.Equal),
@@ -299,6 +303,7 @@ func newModel(cfg *config.Config, addr string) *model {
 	m.recorder.on.Store(p.RecordStreams)
 	m.Roots = ggui.Derived(m.panelRoots).WithEqual(deepEqual)
 	m.dark = ggui.Derived(func() bool { return m.themePalette().Dark })
+	m.openChat = ggui.Map(m.Prefs, func(p prefs) bool { return p.OpenView == openChat })
 	m.spaceSet = ggui.Combine(m.Spaces, ggui.Map(m.Prefs, func(p prefs) string { return p.ShownSpace }), spaceSetOf).
 		WithEqual(func(a, b spaceSet) bool { return reflect.DeepEqual(a, b) })
 	m.Pick = newFolderPick(m)
@@ -635,14 +640,19 @@ func (m *model) submitNew() {
 // syncTitles publishes the titles programs set on their terminals.
 func (m *model) syncTitles() {
 	titles := map[string]string{}
-	for _, info := range ggui.Peek(m.Sessions) {
+	sessions := ggui.Peek(m.Sessions)
+	ids := make([]string, len(sessions))
+	for i, info := range sessions {
+		ids[i] = info.GetId()
 		if title := protocol.BareTitle(info.GetTitle()); title != "" {
 			titles[info.GetId()] = title
 		}
 	}
+	live := map[string]bool{}
 	for id, conn := range m.conns {
 		if title, known := conn.windowTitle(); known {
 			title = protocol.BareTitle(title)
+			live[id] = true
 			// Even an empty live title overrides an older polling result.
 			if title == "" {
 				delete(titles, id)
@@ -651,7 +661,7 @@ func (m *model) syncTitles() {
 			}
 		}
 	}
-	m.Titles.Set(titles)
+	m.Titles.Set(m.titleCache.merge(titles, live, ids, time.Now()))
 }
 
 // themePalette is the palette the theme preference picks; it subscribes
@@ -690,6 +700,8 @@ func (m *model) shutdown() {
 	}
 	m.ws.writer.wait()
 	m.prefsWriter.wait()
+	m.titleCache.flush(time.Now())
+	m.titleCache.writer.wait()
 	defer m.embedded.stop()
 	defer m.hl.close()
 	defer m.closeTunnels()

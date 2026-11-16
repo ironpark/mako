@@ -56,6 +56,17 @@ func As[T any](name string) (T, bool) {
 	return t, ok
 }
 
+// Native is the agent called name, when program runs it as its own and
+// not through a wrapper of the user's, whose flags mako does not know.
+func Native(name, program string) (Entry, bool) {
+	e, ok := Lookup(name)
+	if !ok {
+		return Entry{}, false
+	}
+	runs, _ := ByProgram(program)
+	return e, runs.Info.Name == e.Info.Name
+}
+
 // ByProgram is the agent the program runs, by its file name.
 func ByProgram(program string) (Entry, bool) {
 	e, ok := byProgram[agent.ProgramName(program)]

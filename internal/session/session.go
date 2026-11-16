@@ -503,6 +503,14 @@ func (s *Session) SetName(name string) {
 	s.mu.Unlock()
 }
 
+// SetTitle gives the session the title its program set before it started
+// again, until it sets one of its own.
+func (s *Session) SetTitle(title string) {
+	s.mu.Lock()
+	s.title = title
+	s.mu.Unlock()
+}
+
 // Write sends input to the agent.
 func (s *Session) Write(p []byte) (int, error) {
 	s.lastInput.Store(time.Now().UnixNano())

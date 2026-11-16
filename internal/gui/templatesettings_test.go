@@ -145,3 +145,31 @@ func TestTemplateSettingsBesideTheList(t *testing.T) {
 		t.Fatalf("shown %q once b was tapped", got)
 	}
 }
+
+// The agents a template is for are checked in a menu, kept in its list;
+// Every agent clears it, and one the node does not run stays till unchecked.
+func TestTemplateAgentsPicker(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Agents.Set([]string{"claude", "claude:work", "codex"})
+	agents := ggui.State("elsewhere")
+	p := ggui.NewProbe(ggui.Provide(ggui.ReducedMotionKey, true, ggui.Row(templateAgents(m, agents))), ggui.Sz(400, 500))
+	defer p.Close()
+	p.Tap(T("Template agents"))
+	click := func(name string) {
+		p.Tap(name)
+	}
+	click(targetLabel("claude:work"))
+	click(targetLabel("codex"))
+	if got := ggui.Peek(agents); got != "elsewhere, claude:work, codex" {
+		t.Fatalf("checked %q", got)
+	}
+	click("elsewhere")
+	if got := ggui.Peek(agents); got != "claude:work, codex" {
+		t.Fatalf("unchecked to %q", got)
+	}
+	click(T("Every agent"))
+	if got := ggui.Peek(agents); got != "" {
+		t.Fatalf("every agent left %q", got)
+	}
+}

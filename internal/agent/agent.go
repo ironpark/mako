@@ -237,6 +237,13 @@ type Models interface {
 	ConfirmKeys(screen string) []byte
 }
 
+// ModelFlag is an agent started on a model of the user's choosing by its
+// flags: ModelArgs are those that start it on model, nil for an agent that
+// takes none.
+type ModelFlag interface {
+	ModelArgs(model string) []string
+}
+
 // Keystroke is a step of typing into an agent's terminal: Text pasted, if
 // any, then Keys pressed, as its terminal encodes them.
 type Keystroke struct {

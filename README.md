@@ -285,7 +285,7 @@ the first run, and most of it can be edited in the app's Settings.
     "claude": {
       "args": ["--verbose"],
       "profiles": [
-        {"name": "opus", "description": "Reviews complex changes, concurrency and cancellation.", "args": ["--model", "opus"]},
+        {"name": "opus", "description": "Reviews complex changes, concurrency and cancellation.", "model": "opus"},
         {"name": "work", "env": {"CLAUDE_CONFIG_DIR": "~/.claude-work"}}
       ]
     },
@@ -310,6 +310,11 @@ edited in Settings ▸ Agents. The built-in `mako` MCP server includes these
 descriptions in `list_agents`, so agents can choose a suitable agent and
 profile before delegating with `spawn_agent`. Descriptions are optional;
 existing profiles continue to work.
+
+A profile's `model` starts its sessions on that model, picked in Settings ▸
+Agents from those the agent offers. mako gives it as the agent's own
+`--model` flag, for the agents that take one, after the agent's and the
+profile's flags, so it wins over a model they name.
 
 **MCP servers.** Sessions of the agents that take them (see
 [Agents](#agents)) get the MCP servers of the Zed extensions installed on
@@ -354,8 +359,8 @@ would read it before saving it; saving rewrites the file, so comments in
 a file written by hand are not kept. YAML front
 matter says what a template is for, which agents it is offered to and the
 arguments it takes; the rest is the prompt, where `{{name}}` stands for an
-argument or a built-in variable. That is the whole language: no functions,
-conditions or loops.
+argument or a built-in variable, and a `{{match name}}` block picks text by
+its value. That is the whole language: no functions or loops.
 
 ```markdown
 ---
@@ -384,6 +389,34 @@ all), `integer`, `number`, `boolean` (`true`/`false`, `yes`/`no`) or
 
 The built-in variables are `agent`, `profile`, `model` (as the agent's
 latest reply reports it), `project`, `branch`, `repo` and `date`.
+
+A `{{match name}}` block, closed by `{{end}}`, picks text by a value as
+Rust's `match` does: each arm, on a line of its own, is a pattern, `=>`,
+and the text for a value it matches, which may go on over the lines under
+it, hold `{{name}}`s and other blocks. The first arm that matches is taken.
+
+```markdown
+{{match tone}}
+kind | "plain" => Be encouraging.
+blunt => "Be direct.",
+_ => Be neutral.
+{{end}}
+{{match depth}}
+1..=2 => Read it.
+3.. =>
+  Read every line,
+  and every caller.
+_ => Skim it.
+{{end}}
+```
+
+A pattern is a word, as the value is spelt; a `"quoted"` text; a range of
+numbers (`1..=3` with its end, `1..3` without, `3..`, `..=10`); or `_`, any
+value; `|` joins patterns. An arm's text written as a quoted string, with
+a comma after it or not, is that string. As in Rust, a block must cover
+every value, or the template is not saved: each of a choice's options,
+`true` and `false`, or the rest with `_`. A pattern its argument cannot
+take, as an option a choice does not have, is refused too.
 
 Call a template in Chat with its arguments in order, or by name, quoting
 what has spaces: `//review "src/my file.go" tone=blunt`. The line over the

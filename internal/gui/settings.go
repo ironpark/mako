@@ -62,6 +62,7 @@ var (
 	themeLabels      = map[string]string{"system": "System", "light": "Light", "dark": "Dark"}
 	cursorLabels     = map[string]string{"block": "Block", "bar": "Bar", "underline": "Underline"}
 	daemonModeLabels = map[string]string{"auto": "Auto", "embedded": "In this app", "external": "External"}
+	openViewLabels   = map[string]string{openTerminal: "Terminal", openChat: "Chat"}
 )
 
 func settingsPage(m *model) ggui.Widget {
@@ -256,6 +257,9 @@ func generalSettings(m *model) ggui.Widget {
 			card(
 				row(T("Default agent"), T("Chosen first in the new-session dialog."),
 					ggui.Box(ui.Select(agent).BindOptions(m.Agents).Format(targetLabel).Name(T("Default agent"))).Width(200)),
+				row(T("Open agents in"), T("What a session's tab shows until you switch it. Chat is for agents whose conversation mako reads; the others open in their terminals."),
+					ui.ToggleGroup(prefField(m, func(p *prefs) *string { return &p.OpenView })).Options([]string{openTerminal, openChat}).
+						Format(func(s string) string { return T(openViewLabels[s]) }).Name(T("Open agents in"))),
 				stackedRow(T("Default working directory"), T("Where a new session starts unless you pick another."),
 					ggui.Row(ggui.Expanded(ui.TextField(project).Name(T("Default working directory"))), browse).Gap(8)),
 				row(T("Follow other nodes"), T("Keep the tabs, panes and spaces the same as in the windows of the nodes this one trusts both ways."),

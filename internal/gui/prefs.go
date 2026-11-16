@@ -49,8 +49,11 @@ type prefs struct {
 	Notify bool `json:"notify"`
 	// SleepIdle stops the programs of agents out of view that have rested
 	// SleepAfter minutes, to resume when shown; see sleep.go.
-	SleepIdle  bool `json:"sleep_idle"`
-	SleepAfter int  `json:"sleep_after"`
+	SleepIdle bool `json:"sleep_idle"`
+	// OpenView is how a session's tab opens until it is switched: its
+	// terminal, or its chat for an agent whose conversation mako reads.
+	OpenView   string `json:"open_view"`
+	SleepAfter int    `json:"sleep_after"`
 	// Tray keeps the app in the menu bar when its window is closed, and
 	// HideDock takes it out of the Dock meanwhile; see tray.go.
 	Tray       bool   `json:"tray"`
@@ -135,6 +138,7 @@ func defaultPrefs() prefs {
 		ApproveInApp:    true,
 		Notify:          true,
 		SleepAfter:      5,
+		OpenView:        openTerminal,
 		DaemonMode:      "auto",
 		AgentGroup:      agentGroupFolder,
 		AgentSort:       agentSortRecent,
@@ -192,6 +196,9 @@ func (p prefs) normalized() prefs {
 	}
 	p.LineHeight = min(max(p.LineHeight, minLineHeight), maxLineHeight)
 	p.Scrollback = min(max(p.Scrollback, minScrollback), maxScrollback)
+	if p.OpenView != openChat {
+		p.OpenView = openTerminal
+	}
 	if p.SleepAfter == 0 {
 		p.SleepAfter = d.SleepAfter
 	}

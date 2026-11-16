@@ -442,9 +442,8 @@ func templateEditor(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 		ggui.Row(
 			ggui.Expanded(compactField(T("Name"), T("Called as //name. Renaming it renames its file."),
 				ui.TextField(pg.field(id, func(d *templateDraft) *string { return &d.Name })).Style(mono).Name(T("Template name")))),
-			ggui.Expanded(compactField(T("Agents"), T("The agents it is offered to, by name or as agent:profile, with commas between; empty for every agent."),
-				ui.TextField(pg.field(id, func(d *templateDraft) *string { return &d.Agents })).Style(mono).
-					Placeholder(T("every agent")).Name(T("Template agents")))),
+			ggui.Expanded(compactField(T("Agents"), T("The agents and profiles it is offered to; none checked for every agent."),
+				templateAgents(m, pg.field(id, func(d *templateDraft) *string { return &d.Agents })))),
 		).Gap(10),
 		compactField(T("Description"), T("Shown beside its name in Chat's list."),
 			ui.TextField(pg.field(id, func(d *templateDraft) *string { return &d.Description })).Name(T("Template description"))),
@@ -455,7 +454,7 @@ func templateEditor(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 	children = append(children,
 		ggui.Row(ui.ButtonOf(ggui.Row(icon("plus").Size(14), ggui.Text(T("Add argument")).Size(13)).Gap(6),
 			func() { pg.addArg(id) }).Ghost().Pad(6, 10).Radius(7).Name(T("Add argument"))),
-		compactField(T("Prompt"), T("What it sends. {{name}} stands for an argument's value or a built-in variable's; type {{ to pick one."),
+		compactField(T("Prompt"), T("What it sends. {{name}} stands for an argument's value or a built-in variable's, and {{match name}} picks text by it, a line pattern => text for each arm, closed by {{end}}; type {{ to pick one."),
 			templateBody(pg, id, mono)),
 		ggui.Reactive(func() ggui.Widget {
 			if e := pg.draft(id).Err; e != "" {
@@ -521,4 +520,55 @@ func argCard(pg *templatePage, id int, a argDraft, mono ggui.TextStyle) ggui.Wid
 					Name(T("Argument description")))),
 		).Gap(10),
 	).Gap(8).Stretch()).Border(1, skin.Border).Radius(8).Pad(10, 12)
+}
+
+// templateAgents picks the agents a template is offered to, checked in a
+// menu of those this node runs and their profiles, kept in agents as the
+// list the template's file has, commas between. One the file names that
+// this node does not run stays, checked, until it is unchecked.
+func templateAgents(m *model, agents ggui.Binding[string]) ggui.Widget {
+	// Read as saving reads it, each once.
+	picked := func() []string {
+		var out []string
+		for _, a := range splitList(agents.Get()) {
+			if !slices.Contains(out, a) {
+				out = append(out, a)
+			}
+		}
+		return out
+	}
+	set := func(list []string) { agents.Set(strings.Join(list, ", ")) }
+	face := ggui.Row(
+		ggui.Expanded(ggui.Reactive(func() ggui.Widget {
+			list := picked()
+			if len(list) == 0 {
+				return muted(ggui.Text(T("every agent")).Size(13).NoWrap())
+			}
+			return ggui.Text(strings.Join(list, ", ")).Size(13).NoWrap().Ellipsis()
+		})),
+		icon("chevron-down").Size(14).Color(skin.Muted),
+	).Gap(8).Align(ggui.AlignCenter)
+	// The menu is made again as the node's agents change, not as they are
+	// checked, which would close it.
+	return ggui.View(m.Agents, func(targets []string) ggui.Widget {
+		targets = slices.Clone(targets)
+		for _, a := range picked() {
+			if !slices.Contains(targets, a) {
+				targets = append(targets, a)
+			}
+		}
+		every := ggui.Bind(func() bool { return len(picked()) == 0 }, func(bool) { set(nil) })
+		items := []ggui.Widget{ui.MenuCheckbox(T("Every agent"), every), ui.MenuDivider()}
+		for _, target := range targets {
+			on := ggui.Bind(func() bool { return slices.Contains(picked(), target) }, func(v bool) {
+				list := slices.DeleteFunc(picked(), func(a string) bool { return a == target })
+				if v {
+					list = append(list, target)
+				}
+				set(list)
+			})
+			items = append(items, ui.MenuCheckbox(targetLabel(target), on))
+		}
+		return ui.MenuOf(face, items...).Name(T("Template agents"))
+	})
 }

@@ -35,7 +35,10 @@ func TestPlaceholderColors(t *testing.T) {
 // names begin as typed before those that hold it; and says what each
 // built-in variable is.
 func TestPlaceholderOptions(t *testing.T) {
-	opts := placeholderOptions([]argDraft{{Name: "file", Type: prompttmpl.String}, {Name: "date"}}, "D")
+	if opts := placeholderOptions(nil, "ma", false); len(opts) != 1 || opts[0].Name != "match" || !opts[0].Keyword {
+		t.Fatalf("the block's word not offered: %+v", opts)
+	}
+	opts := placeholderOptions([]argDraft{{Name: "file", Type: prompttmpl.String}, {Name: "date"}}, "D", true)
 	var names []string
 	for _, o := range opts {
 		names = append(names, o.Name)

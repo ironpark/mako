@@ -188,3 +188,28 @@ func BenchmarkInstalled(b *testing.B) {
 		installed("claude")
 	}
 }
+
+// A profile's model starts its agent on it by the agent's own flag, after
+// the agent's and the profile's flags and before the request's; an agent
+// run through a wrapper gets no flag mako does not know the place of.
+func TestResolveGivesAProfilesModel(t *testing.T) {
+	claude := filepath.Join(t.TempDir(), "claude")
+	if err := os.WriteFile(claude, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	profiles := []Profile{{Name: "p", Args: []string{"--b"}, Model: "opus"}}
+	l, err := Resolve("claude", "p", []string{"req"}, nil, map[string]Agent{"claude": {Command: []string{claude}, Args: []string{"--a"}, Profiles: profiles}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(l.Command[1:], " "); got != "--a --b --model opus req" {
+		t.Fatalf("command %q", got)
+	}
+	l, err = Resolve("claude", "p", nil, nil, map[string]Agent{"claude": {Command: []string{"/bin/sh", "-c", "claude"}, Profiles: profiles}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(l.Command, "--model") {
+		t.Fatalf("a wrapper given %q", l.Command)
+	}
+}

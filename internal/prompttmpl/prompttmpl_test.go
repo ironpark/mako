@@ -239,10 +239,13 @@ func TestOpenPlaceholderAndClosing(t *testing.T) {
 		{"Review {{fi le", false, 0, ""},
 		{"Review", false, 0, ""},
 	} {
-		start, typed, ok := OpenPlaceholder(c.text)
-		if ok != c.ok || ok && (start != c.start || typed != c.typed) {
-			t.Errorf("%q: %d %q %v", c.text, start, typed, ok)
+		start, typed, subject, ok := OpenPlaceholder(c.text)
+		if ok != c.ok || ok && (start != c.start || typed != c.typed) || subject {
+			t.Errorf("%q: %d %q %v %v", c.text, start, typed, subject, ok)
 		}
+	}
+	if start, typed, subject, ok := OpenPlaceholder("{{match to"); !ok || !subject || start != 8 || typed != "to" {
+		t.Errorf("a match's name: %d %q %v %v", start, typed, subject, ok)
 	}
 	if Closing(" }} b") != 3 || Closing("}}") != 2 || Closing(" b}}") != 0 {
 		t.Fatal("closing")

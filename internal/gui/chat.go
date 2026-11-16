@@ -139,7 +139,22 @@ func (m *model) toggleChat() {
 	if !m.chatCapable(id) {
 		return
 	}
-	m.setChatMode(id, !ggui.Peek(m.ChatModes)[id])
+	m.setChatMode(id, !ggui.Untrack(func() bool { return m.chatOn(id) }))
+}
+
+// chatOn reports whether tab id shows its chat: as it was switched to, or
+// else as the settings say an agent opens, for one whose conversation mako
+// reads. A session not listed yet, as the window starts, keeps the
+// setting, rather than showing its terminal until the list comes. Reactive.
+func (m *model) chatOn(id string) bool {
+	if chat, ok := m.ChatModes.Get()[id]; ok {
+		return chat
+	}
+	if !isSessionTab(id) || !m.openChat.Get() {
+		return false
+	}
+	s, ok := sessionIn(m.Sessions.Get(), id)
+	return !ok || hasCap(s, protocol.CapChat)
 }
 
 func (m *model) loadChat(id string, state *chatState) {
@@ -339,7 +354,7 @@ func hasCap(s *protocol.SessionInfo, c uint32) bool {
 // stay alive when chat is shown, so switching back has the current screen.
 // The switch between them is in the pane's tab bar; see viewSwitch.
 func sessionView(m *model, id string, group int) ggui.Widget {
-	return ggui.Key(ggui.Map(m.ChatModes, func(v map[string]bool) bool { return v[id] }), func(chat bool) ggui.Widget {
+	return ggui.Key(ggui.Derived(func() bool { return m.chatOn(id) }), func(chat bool) ggui.Widget {
 		if chat {
 			return chatView(m, id, group)
 		}
@@ -359,7 +374,9 @@ func sessionView(m *model, id string, group int) ggui.Widget {
 // one in view. A click anywhere on it switches to the other, which is what
 // it is named for. A plain shell has no conversation, so it has none.
 func viewSwitch(m *model, id string, group int) ggui.Widget {
-	mode := ggui.Bind(func() bool { return m.ChatModes.Get()[id] }, func(chat bool) { m.focusGroup(group); m.setChatMode(id, chat) })
+	// Read once, so the switch follows the one bool, not what decides it.
+	on := ggui.Derived(func() bool { return m.chatOn(id) })
+	mode := ggui.Bind(on.Get, func(chat bool) { m.focusGroup(group); m.setChatMode(id, chat) })
 	return glyphSwitch(mode, "square-terminal", "messages-square", T("Chat"), T("Terminal"), T("Toggle chat and terminal"))
 }
 
@@ -464,7 +481,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		// Read every few seconds too, for a node that cannot be followed,
 		// and now and then in case a word of it is lost.
 		stop := m.every(2*time.Second, func() {
-			if ggui.Peek(m.ChatModes)[id] && pollChat(state) {
+			if ggui.Untrack(func() bool { return m.chatOn(id) }) && pollChat(state) {
 				m.loadChat(id, state)
 			}
 		})
@@ -1021,3 +1038,9 @@ func chatMessageKey(msg *protocol.ChatMessage) string {
 	}
 	return strconv.FormatUint(h.Sum64(), 16)
 }
+
+// How a session's tab opens, as the settings say.
+const (
+	openTerminal = "terminal"
+	openChat     = "chat"
+)

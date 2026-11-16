@@ -31,6 +31,15 @@ type Flags struct {
 	IsolateFlag string
 }
 
+// ModelArgs starts the agent on model through its --model option, which
+// implements ModelFlag; nil for an agent with none.
+func (f *Flags) ModelArgs(model string) []string {
+	if slices.Contains(f.Values, "--model") {
+		return []string{"--model", model}
+	}
+	return nil
+}
+
 // DirArgs gives the agent folders besides its own through its --add-dir
 // option, in the = form where the option takes any number of values, so
 // it does not take the arguments after it; none for an agent without one.

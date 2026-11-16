@@ -54,6 +54,7 @@ func TestSleepingSessionResumesOnAttach(t *testing.T) {
 		t.Fatal("no conversation pinned")
 	}
 	startsIn(t, starts, 1)
+	s.SetTitle("Fix the build") // as its program would set it
 	sub := s.Subscribe()
 	if _, err := d.sleepSession(s.ID()); err == nil || !strings.Contains(err.Error(), "attached") {
 		t.Fatalf("slept a session attached to: %v", err)
@@ -78,7 +79,7 @@ func TestSleepingSessionResumesOnAttach(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := again.Info(); got.GetState() != protocol.StateRunning || got.GetConversationId() != conversation {
+	if got := again.Info(); got.GetState() != protocol.StateRunning || got.GetConversationId() != conversation || got.GetTitle() != "Fix the build" {
 		t.Fatalf("resumed as %+v", got)
 	}
 	if lines := startsIn(t, starts, 2); !strings.Contains(lines[1], conversation) {

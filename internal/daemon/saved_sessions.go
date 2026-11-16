@@ -348,6 +348,7 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 	s.SetConversation(conversationID, transcriptPath)
 	if existed {
 		s.SetName(previous.Info.GetName())
+		s.SetTitle(previous.Info.GetTitle())
 	}
 	if d.saved == nil {
 		d.saved = map[string]savedSession{}
@@ -422,15 +423,15 @@ func (d *Daemon) endStart(id string) {
 // is the conversations other sessions hold.
 func (d *Daemon) conversationFor(ctx context.Context, req *protocol.OpenSession, launch *agentspec.Launch, previous savedSession, existed bool, claimed map[string]bool) (string, string, error) {
 	conversationID, transcriptPath := previous.Info.GetConversationId(), previous.TranscriptPath
-	entry, ok := agents.Lookup(req.GetAgent())
+	var entry agents.Entry
+	ok := len(launch.Command) > 0
+	if ok {
+		entry, ok = agents.Native(req.GetAgent(), launch.Command[0])
+	}
 	driver := entry.Driver
 	native, launches := driver.(agent.Launcher)
 	_, logs := driver.(agent.Logs)
-	ok = ok && launches && logs && len(launch.Command) > 0
-	if ok {
-		runs, _ := agents.ByProgram(launch.Command[0])
-		ok = runs.Info.Name == entry.Info.Name
-	}
+	ok = ok && launches && logs
 	if existed && conversationID != "" && !ok {
 		return "", "", fmt.Errorf("cannot resume %s through a custom wrapper; configure the native %s command", conversationID, req.GetAgent())
 	}
@@ -625,12 +626,11 @@ func (d *Daemon) childAtWorkLocked(id string) bool {
 // when it starts again: one mako drives natively, run as its own program,
 // not through a wrapper of the user's.
 func resumable(info *protocol.SessionInfo) bool {
-	entry, ok := agents.Lookup(info.GetAgent())
-	_, launches := entry.Driver.(agent.Launcher)
-	_, logs := entry.Driver.(agent.Logs)
-	if !ok || !launches || !logs || len(info.GetCommand()) == 0 {
+	if len(info.GetCommand()) == 0 {
 		return false
 	}
-	runs, _ := agents.ByProgram(info.GetCommand()[0])
-	return runs.Info.Name == entry.Info.Name
+	entry, ok := agents.Native(info.GetAgent(), info.GetCommand()[0])
+	_, launches := entry.Driver.(agent.Launcher)
+	_, logs := entry.Driver.(agent.Logs)
+	return ok && launches && logs
 }

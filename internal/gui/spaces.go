@@ -2,7 +2,6 @@ package gui
 
 import (
 	"cmp"
-	"image/color"
 	"math"
 	"slices"
 	"strings"
@@ -197,22 +196,48 @@ func spaceSwitcher(m *model) ggui.Widget {
 // spaceDots float at the foot of the sidebar's agents, outside the swipe
 // that moves them, while there is more than one space: a dot for each, the one shown drawn long and bright.
 func spaceDots(m *model) ggui.Widget {
-	return ggui.Reactive(func() ggui.Widget {
+	// The dots are made again as spaces come, go or are renamed, not as
+	// the current one changes, which each dot follows itself.
+	type dotList struct {
+		First int
+		Names []string
+	}
+	list := ggui.Derived(func() dotList {
 		p := m.spaces()
-		first, last := p.firstSpace(), len(p.Spaces)
-		if last <= first {
+		l := dotList{First: p.firstSpace()}
+		for i := l.First; i <= len(p.Spaces); i++ {
+			l.Names = append(l.Names, p.spaceName(i))
+		}
+		return l
+	}).WithEqual(deepEqual)
+	current := ggui.Derived(func() int { return m.spaces().Space })
+	return ggui.View(list, func(l dotList) ggui.Widget {
+		if len(l.Names) <= 1 {
 			return ggui.Box()
 		}
 		var dots []ggui.Widget
-		for i := first; i <= last; i++ {
-			w, c := 6.0, color.Color(skin.Surface3)
-			if i == p.Space {
-				w, c = 16, skin.Muted
-			}
-			face := ggui.Box(ggui.Center(ggui.Box().Size(w, 6).Radius(3).Fill(c))).Size(22, 22)
-			dots = append(dots, ui.ButtonOf(face, func() { m.setSpace(i) }).Ghost().Pad(0).Radius(6).Name(p.spaceName(i)))
+		for j, name := range l.Names {
+			i := l.First + j
+			dots = append(dots, ui.ButtonOf(spaceDot(current, i), func() { m.setSpace(i) }).Ghost().Pad(0).Radius(6).Name(name))
 		}
 		return ggui.Row(dots...).Gap(2).Align(ggui.AlignCenter)
+	})
+}
+
+// spaceDot is space i's dot: a pill while it is the current space, which
+// grows from a dot, and brightens, as the space comes in, and shrinks back
+// as it goes.
+func spaceDot(current ggui.Readable[int], i int) ggui.Widget {
+	return ggui.Component(func() ggui.Widget {
+		on := ggui.TweenOf(ggui.Map(current, func(c int) float64 { return pick(c == i, 1.0, 0.0) }), motionDuration).Easing(ggui.EaseOut)
+		return ggui.View(on, func(t float64) ggui.Widget {
+			w := 6 + 10*t
+			pill := ggui.Stack(
+				ggui.Box().Size(w, 6).Radius(3).Fill(skin.Surface3),
+				ggui.Opacity(ggui.Box().Size(w, 6).Radius(3).Fill(skin.Muted), t),
+			)
+			return ggui.Box(ggui.Center(pill)).Size(22, 22)
+		})
 	})
 }
 

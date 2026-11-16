@@ -40,6 +40,10 @@ type Profile struct {
 	Description string            `json:"description,omitempty"`
 	Args        []string          `json:"args,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
+	// Model is the model its sessions start on, by the name the agent's
+	// own model flag takes; "" leaves the agent's default. An agent mako
+	// starts no model of its own on (agent.ModelFlag) ignores it.
+	Model string `json:"model,omitempty"`
 	// ContextServers picks the MCP servers its sessions get, by ID, an
 	// empty list none; unset, they get every server enabled. A server
 	// picked here is given even when turned off for the node.
@@ -216,6 +220,7 @@ func Resolve(name, profile string, args []string, env map[string]string, agents 
 	for _, arg := range slices.Concat(a.Args, p.Args) {
 		command = append(command, expand(arg, lookup))
 	}
+	command = append(command, modelArgs(name, path, p.Model)...)
 	command = append(command, args...)
 	return Launch{Launch: agent.Launch{Command: command, Env: merged}, ContextServers: p.ContextServers}, nil
 }
@@ -370,4 +375,19 @@ func findProgram(program string) (string, error) {
 		dirs = e.Info.Dirs
 	}
 	return agent.Find(program, dirs...)
+}
+
+// modelArgs are the flags that start the agent called name, run as
+// program, on model, after its own flags and its profile's, which it
+// overrides; none for no model, or an agent run through a wrapper of the
+// user's, whose flags mako does not know.
+func modelArgs(name, program, model string) []string {
+	if model == "" {
+		return nil
+	}
+	e, ok := agents.Native(name, program)
+	if flag, flags := e.Driver.(agent.ModelFlag); ok && flags {
+		return flag.ModelArgs(model)
+	}
+	return nil
 }

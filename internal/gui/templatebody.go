@@ -45,13 +45,21 @@ func placeholderColor(name string, args []argDraft) color.Color {
 }
 
 // placeholderColors colours the {{name}}s of text, of a template whose
-// arguments are args.
+// arguments are args, and its blocks' {{match name}}s and {{end}}s: in
+// amber, or red for a match of a name that is neither.
 func placeholderColors(text string, args []argDraft) []widget.TextColor {
-	found := prompttmpl.Placeholders(text)
-	out := make([]widget.TextColor, len(found))
-	for i, p := range found {
-		out[i] = widget.TextColor{Start: p.Start, End: p.End, Color: placeholderColor(p.Name, args)}
+	var out []widget.TextColor
+	for _, p := range prompttmpl.Placeholders(text) {
+		out = append(out, widget.TextColor{Start: p.Start, End: p.End, Color: placeholderColor(p.Name, args)})
 	}
+	for _, t := range prompttmpl.Tags(text) {
+		c := color.Color(skin.DotWaiting)
+		if t.Subject != "" && placeholderColor(t.Subject, args) == uitheme.Destructive {
+			c = uitheme.Destructive
+		}
+		out = append(out, widget.TextColor{Start: t.Start, End: t.End, Color: c})
+	}
+	slices.SortFunc(out, func(a, b widget.TextColor) int { return a.Start - b.Start })
 	return out
 }
 
@@ -61,11 +69,13 @@ func placeholderColors(text string, args []argDraft) []widget.TextColor {
 type placeholderOption struct {
 	Name, About string
 	Color       color.Color
+	Keyword     bool // match or end, not a name
 }
 
 // placeholderOptions are the arguments, then the built-in variables, named
-// as typed, as the composer's menu matches names.
-func placeholderOptions(args []argDraft, typed string) []placeholderOption {
+// as typed, as the composer's menu matches names; and, but for the name a
+// block matches, the words that open and close a block.
+func placeholderOptions(args []argDraft, typed string, subject bool) []placeholderOption {
 	var all []placeholderOption
 	for _, a := range args {
 		if a.Name != "" {
@@ -77,6 +87,11 @@ func placeholderOptions(args []argDraft, typed string) []placeholderOption {
 			all = append(all, placeholderOption{Name: b, About: T(builtinLabels[b]), Color: skin.DotDone})
 		}
 	}
+	if !subject {
+		all = append(all,
+			placeholderOption{Name: "match", About: T("Pick text by a value, arm by arm"), Color: skin.DotWaiting, Keyword: true},
+			placeholderOption{Name: "end", About: T("Close a match block"), Color: skin.DotWaiting, Keyword: true})
+	}
 	return matchByName(all, strings.ToLower(typed), func(o placeholderOption) string { return o.Name })
 }
 
@@ -86,6 +101,7 @@ type placeholderQuery struct {
 	Open         bool
 	Start, Caret int
 	Typed        string
+	Subject      bool // the name a {{match}} matches
 }
 
 // queryAt is the placeholder the caret is in, as st has the editor.
@@ -93,11 +109,11 @@ func queryAt(st widget.TextInputState) placeholderQuery {
 	if !st.Focused || st.Composing || st.Anchor != st.Caret {
 		return placeholderQuery{}
 	}
-	start, typed, ok := prompttmpl.OpenPlaceholder(st.Text[:st.Caret])
+	start, typed, subject, ok := prompttmpl.OpenPlaceholder(st.Text[:st.Caret])
 	if !ok {
 		return placeholderQuery{}
 	}
-	return placeholderQuery{Open: true, Start: start, Caret: st.Caret, Typed: typed}
+	return placeholderQuery{Open: true, Start: start, Caret: st.Caret, Typed: typed, Subject: subject}
 }
 
 // templateBody is the prompt's editor of draft id: its field, and under
@@ -111,7 +127,7 @@ func templateBody(pg *templatePage, id int, mono ggui.TextStyle) ggui.Widget {
 		if !q.Open || dismissed.Get() {
 			return nil
 		}
-		return placeholderOptions(pg.draft(id).Args, q.Typed)
+		return placeholderOptions(pg.draft(id).Args, q.Typed, q.Subject)
 	})
 	field := ui.TextField(pg.field(id, func(d *templateDraft) *string { return &d.Body })).
 		Multiline().Lines(6).Style(mono).Placeholder("Review {{file}} as {{agent}}.").Name(T("Template prompt")).
@@ -123,6 +139,11 @@ func templateBody(pg *templatePage, id int, mono ggui.TextStyle) ggui.Widget {
 		// What was typed, and the }} after it, are put in as one edit,
 		// which undo takes back whole.
 		input.Select(q.Start, q.Caret+prompttmpl.Closing(st.Text[q.Caret:]))
+		if o.Name == "match" && o.Keyword {
+			// The name it matches is picked next, from the list again.
+			input.Replace("match ")
+			return
+		}
 		input.Replace(o.Name + "}}")
 		query.Set(placeholderQuery{})
 	}
