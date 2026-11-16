@@ -24,7 +24,7 @@
 
     <string name="status_approval">승인 필요</string>
     <string name="status_exited">종료됨</string>
-    <string name="status_stopped">중지됨</string>
+    <string name="status_stopped">잠듦</string>
     <string name="status_starting">시작 중</string>
     <string name="status_working">작업 중</string>
     <string name="status_waiting">대기 중</string>

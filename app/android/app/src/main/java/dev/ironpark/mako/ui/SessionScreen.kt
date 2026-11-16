@@ -122,7 +122,10 @@ fun SessionScreen(
     var form by rememberSaveable(node, id) { mutableStateOf(false) }
     var planning by rememberSaveable(node, id) { mutableStateOf(false) }
     val asked = if (session?.asks() == true) session.approval.questionsList else keyed
-    val attached = pager.currentPage == terminalPage || pager.targetPage == terminalPage || question || !canSend
+    // A session asleep, or restored, starts again on its conversation once
+    // attached: opening it wakes it, so what is typed in chat reaches it.
+    val asleep = session?.state == "stopped"
+    val attached = pager.currentPage == terminalPage || pager.targetPage == terminalPage || question || !canSend || asleep
     LaunchedEffect(request, pager.settledPage, pager.isScrollInProgress) {
         if (request.isNotEmpty() && chat && pager.settledPage == 1 && !pager.isScrollInProgress) {
             if (keyed.isNotEmpty()) form = true else question = true

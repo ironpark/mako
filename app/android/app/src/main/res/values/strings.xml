@@ -26,7 +26,7 @@
 
     <string name="status_approval">Needs approval</string>
     <string name="status_exited">Exited</string>
-    <string name="status_stopped">Stopped</string>
+    <string name="status_stopped">Asleep</string>
     <string name="status_starting">Starting</string>
     <string name="status_working">Working</string>
     <string name="status_waiting">Waiting</string>
