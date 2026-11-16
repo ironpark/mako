@@ -73,6 +73,22 @@ func TestChatSwitchKeepsLiveSessionAndComposer(t *testing.T) {
 		text, _ := conn.vt.FormatString(gostty.FormatOptions{Format: gostty.FormatterFormatPlain})
 		return strings.Contains(text, "live input")
 	})
+	// A template's JavaScript runs off the UI goroutine, and what it makes
+	// is sent once it has.
+	tdir, _ := config.TemplatesDir()
+	_ = os.MkdirAll(tdir, 0o700)
+	_ = os.WriteFile(filepath.Join(tdir, "calc.md"), []byte("---\nargs: [{name: n, type: integer}]\n---\n```js\nargs.n * 3 + \" apples\"\n```\n"), 0o600)
+	m.setComposerDraft(id, "//calc 7")
+	m.sendComposer(id)
+	probeUntil(t, p, "a template's script sent", func() bool {
+		conn.mu.Lock()
+		defer conn.mu.Unlock()
+		text, _ := conn.vt.FormatString(gostty.FormatOptions{Format: gostty.FormatterFormatPlain})
+		return strings.Contains(text, "21 apples")
+	})
+	if m.composerDraft(id) != "" {
+		t.Fatalf("the draft stayed: %q", m.composerDraft(id))
+	}
 	p.Tap(T("Terminal"))
 	p.Frame()
 	if m.conns[id] != conn || ggui.Peek(m.ChatModes)[id] {

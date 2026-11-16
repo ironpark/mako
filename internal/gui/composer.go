@@ -83,14 +83,22 @@ func (m *model) sendComposer(id string) {
 		return
 	}
 	state := m.chatState(id)
-	s, _ := m.session(id)
 	// A draft that calls a template sends the prompt it makes, and stays
 	// as it is while the call is wrong.
-	draft, ok := m.expandDraft(id, state, m.composerDraft(id))
-	if !ok {
+	draft := m.composerDraft(id)
+	m.expandDraft(id, state, draft, func(prompt string) { m.sendPrompt(id, state, draft, prompt) })
+}
+
+// sendPrompt sends prompt, what draft makes, to session id, with the files
+// attached to the draft; and clears the composer, unless it has been
+// written in since, as it may while a template's scripts run.
+func (m *model) sendPrompt(id string, state *chatState, draft, prompt string) {
+	conn := m.conns[id]
+	if conn == nil {
 		return
 	}
-	text := composed(draft, ggui.Peek(state.attached), s.GetProject())
+	s, _ := m.session(id)
+	text := composed(prompt, ggui.Peek(state.attached), s.GetProject())
 	m.submit(id, conn, text)
 	m.notePending(id, text)
 	if strings.TrimSpace(text) != "" && (len(state.sent) == 0 || state.sent[len(state.sent)-1] != text) {
@@ -99,8 +107,10 @@ func (m *model) sendComposer(id string) {
 			state.sent = slices.Delete(state.sent, 0, len(state.sent)-composerHistory)
 		}
 	}
-	m.setComposerDraft(id, "")
-	state.attached.Set(nil)
+	if m.composerDraft(id) == draft {
+		m.setComposerDraft(id, "")
+		state.attached.Set(nil)
+	}
 }
 
 // composerHistory is how many sent messages a session's composer keeps.

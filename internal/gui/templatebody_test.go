@@ -32,13 +32,25 @@ func TestPlaceholderColors(t *testing.T) {
 }
 
 // The list offers the arguments, then the built-in variables, those whose
-// names begin as typed before those that hold it; and says what each
-// built-in variable is.
+// names begin as typed before those that hold it, and says what each
+// built-in variable is; a block's tags for a tag begun; and for an arm, the
+// values of the block's subject, then else.
 func TestPlaceholderOptions(t *testing.T) {
-	if opts := placeholderOptions(nil, "ma", false); len(opts) != 1 || opts[0].Name != "match" || !opts[0].Keyword {
-		t.Fatalf("the block's word not offered: %+v", opts)
+	query := func(kind, typed, block string) placeholderQuery {
+		return placeholderQuery{Open: true, Completion: prompttmpl.Completion{Kind: kind, Typed: typed, Block: block}}
 	}
-	opts := placeholderOptions([]argDraft{{Name: "file", Type: prompttmpl.String}, {Name: "date"}}, "D", true)
+	if opts := placeholderOptions(nil, query(prompttmpl.CompleteTag, "#ma", "")); len(opts) != 1 || opts[0].Shown != "{#match}" {
+		t.Fatalf("the block's tag not offered: %+v", opts)
+	}
+	tone := []argDraft{{Name: "tone", Type: prompttmpl.Choice, Options: "kind, blunt"}}
+	var arms []string
+	for _, o := range placeholderOptions(tone, query(prompttmpl.CompleteArm, "", "tone")) {
+		arms = append(arms, o.Shown)
+	}
+	if !slices.Equal(arms, []string{"{:kind}", "{:blunt}", "{:else}"}) {
+		t.Fatalf("arms offered %v", arms)
+	}
+	opts := placeholderOptions([]argDraft{{Name: "file", Type: prompttmpl.String}, {Name: "date"}}, query(prompttmpl.CompleteSubject, "D", ""))
 	var names []string
 	for _, o := range opts {
 		names = append(names, o.Name)
@@ -90,5 +102,37 @@ func TestPlaceholderCompletesInTheEditor(t *testing.T) {
 	}
 	if sem := p.Semantics().String(); strings.Contains(sem, T(templateTypeLabels["string"])) {
 		t.Fatalf("the list stayed:\n%s", sem)
+	}
+	// A block is typed tag by tag: its tag, the name it matches, an arm.
+	pg.addArg(id)
+	pg.update(id, func(d *templateDraft) {
+		d.Args[1].Name, d.Args[1].Type, d.Args[1].Options = "tone", prompttmpl.Choice, "kind, blunt"
+	})
+	for _, step := range []struct{ typed, want string }{
+		{"\n{#ma", "Review {{file}}\n{#match "},
+		{"to", "Review {{file}}\n{#match tone}"},
+		{"\n{:", "Review {{file}}\n{#match tone}\n{:kind}"},
+	} {
+		p.Text(step.typed)
+		for range 3 {
+			p.Frame()
+		}
+		p.Key("enter")
+		for range 3 {
+			p.Frame()
+		}
+		if got := pg.draft(id).Body; got != step.want {
+			t.Fatalf("after %q the prompt is %q", step.typed, got)
+		}
+	}
+}
+
+// A script's fences are coloured as a block's tags are; a {{name}} in its
+// code is no placeholder.
+func TestScriptColours(t *testing.T) {
+	text := "a\n```js run\nvar x = \"{{nope}}\"\n```\nb"
+	got := placeholderColors(text, nil)
+	if len(got) != 2 || text[got[0].Start:got[0].End] != "```js run" || text[got[1].Start:got[1].End] != "```" {
+		t.Fatalf("colours %+v", got)
 	}
 }

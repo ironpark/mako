@@ -4,10 +4,10 @@
 // name. Front matter in YAML, between lines of three dashes, says what it
 // is for, the agents it is for and the arguments it takes; the rest is the
 // prompt, in which {{name}} stands for an argument's value or a built-in
-// variable's, and a {{match name}} block picks text by its value, as
-// Rust's match does (see match.go). There is nothing more to the
-// language: no functions, no loops. A pair of braces around anything else
-// is left as it is.
+// variable's, and a {#match subject} block picks text by its value, as
+// Rust's match does (see match.go), and a fenced ```js block runs
+// JavaScript in a sandbox, its value put in its place (see script.go). A
+// pair of braces around anything else is left as it is.
 //
 //	---
 //	description: Review a file
@@ -32,6 +32,7 @@ package prompttmpl
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -94,7 +95,7 @@ var Builtins = []string{"agent", "profile", "model", "project", "branch", "repo"
 var placeholder = regexp.MustCompile(`\{\{\s*(` + namePattern + `)\s*\}\}`)
 
 // namePattern is how a name is spelt: an argument's, a built-in
-// variable's, or the one a {{match}} matches.
+// variable's, or the one a {#match} matches.
 const namePattern = `[A-Za-z_][A-Za-z0-9_-]*`
 
 var argName = regexp.MustCompile(`^` + namePattern + `$`)
@@ -106,42 +107,90 @@ type Placeholder struct {
 	Name       string
 }
 
-// Placeholders are the {{name}}s of body, in order; not {{end}}, which
-// closes a block.
+// Placeholders are the {{name}}s of body, in order, but for those in a
+// script's code.
 func Placeholders(body string) []Placeholder {
 	var out []Placeholder
+	scripts := Scripts(body)
 	for _, m := range placeholder.FindAllStringSubmatchIndex(body, -1) {
-		if name := body[m[2]:m[3]]; !isKeyword(name) {
+		if name := body[m[2]:m[3]]; !inScript(scripts, m[0], m[1]) {
 			out = append(out, Placeholder{Start: m[0], End: m[1], Name: name})
 		}
 	}
 	return out
 }
 
-// isKeyword reports whether name is a word of the language's own, which
-// names no argument.
-func isKeyword(name string) bool { return name == "match" || name == "end" }
-
-// openPlaceholder is a {{ not yet closed at the end of a text, and the
-// start of the name typed in it; closing is the }} a text begins with.
-var (
-	openPlaceholder = regexp.MustCompile(`\{\{\s*(match\s+)?(` + namePattern + `)?$`)
-	closing         = regexp.MustCompile(`^\s*\}\}`)
+// What the caret may be in, not yet closed, for an editor to complete.
+const (
+	CompleteName    = "name"    // {{name, a placeholder's
+	CompleteSubject = "subject" // {#match name, a block's subject
+	CompleteTag     = "tag"     // {# or {/, a block's tag begun
+	CompleteArm     = "arm"     // {:pattern, an arm of the block it is in
 )
 
-// OpenPlaceholder finds the {{ the end of before is in, not yet closed:
-// where the name in it starts, what of the name is typed, and whether it
-// is the name a {{match}} matches. ok is false when before ends in none.
-func OpenPlaceholder(before string) (start int, typed string, subject, ok bool) {
-	m := openPlaceholder.FindStringSubmatchIndex(before)
-	if m == nil {
-		return 0, "", false, false
+// Completion is what the end of a text is in, not yet closed: its kind;
+// where its { is, and where what is typed in it starts; what is typed; and
+// for an arm, the subject of the block it is in.
+type Completion struct {
+	Kind         string
+	Brace, Start int
+	Typed, Block string
+}
+
+var (
+	openName    = regexp.MustCompile(`\{\{\s*(` + namePattern + `)?$`)
+	openSubject = regexp.MustCompile(`\{#match\s+(` + namePattern + `)?$`)
+	openTag     = regexp.MustCompile(`\{([#/][A-Za-z]*)$`)
+	openArm     = regexp.MustCompile(`\{:\s*([^{}\n]*)$`)
+	closing     = regexp.MustCompile(`^\s*\}\}`)
+	closingOne  = regexp.MustCompile(`^\s*\}`)
+)
+
+// Complete finds what the end of before is in, not yet closed; ok is
+// false when it is in none.
+func Complete(before string) (c Completion, ok bool) {
+	found := func(kind string, m []int, block string) (Completion, bool) {
+		c := Completion{Kind: kind, Brace: m[0], Start: len(before), Block: block}
+		if m[2] >= 0 {
+			c.Start, c.Typed = m[2], before[m[2]:m[3]]
+		}
+		return c, true
 	}
-	subject = m[2] >= 0
-	if m[4] < 0 {
-		return len(before), "", subject, true
+	if m := openArm.FindStringSubmatchIndex(before); m != nil {
+		if subject := openBlock(before[:m[0]]); subject != "" {
+			return found(CompleteArm, m, subject)
+		}
 	}
-	return m[4], before[m[4]:m[5]], subject, true
+	if m := openSubject.FindStringSubmatchIndex(before); m != nil {
+		return found(CompleteSubject, m, "")
+	}
+	if m := openTag.FindStringSubmatchIndex(before); m != nil {
+		return found(CompleteTag, m, "")
+	}
+	if m := openName.FindStringSubmatchIndex(before); m != nil {
+		return found(CompleteName, m, "")
+	}
+	return Completion{}, false
+}
+
+// openBlock is the subject of the innermost block open at the end of s,
+// "" for none.
+func openBlock(s string) string {
+	var open []string
+	for _, t := range Tags(s) {
+		switch t.Kind {
+		case TagMatch:
+			open = append(open, t.Arg)
+		case TagEnd:
+			if len(open) > 0 {
+				open = open[:len(open)-1]
+			}
+		}
+	}
+	if len(open) == 0 {
+		return ""
+	}
+	return open[len(open)-1]
 }
 
 // Closing is how long the }} that after begins with is, spaces before it
@@ -152,6 +201,19 @@ func Closing(after string) int {
 	}
 	return 0
 }
+
+// ClosingOne is how long the } that after begins with is, spaces before it
+// and all; 0 when it begins with none.
+func ClosingOne(after string) int {
+	if m := closingOne.FindStringIndex(after); m != nil {
+		return m[1]
+	}
+	return 0
+}
+
+// IsName reports whether s is spelt as a name: an argument's, a built-in
+// variable's; a block's subject spelt otherwise is JavaScript.
+func IsName(s string) bool { return argName.MatchString(s) }
 
 // IsBuiltin reports whether name is one of the built-in variables.
 func IsBuiltin(name string) bool { return slices.Contains(Builtins, name) }
@@ -212,9 +274,6 @@ func (t *Template) check() error {
 		if IsBuiltin(a.Name) {
 			return fmt.Errorf("argument %q: a built-in variable has that name", a.Name)
 		}
-		if isKeyword(a.Name) {
-			return fmt.Errorf("argument %q: the name is the language's own", a.Name)
-		}
 		seen[a.Name] = true
 		if a.Type == "" {
 			a.Type = String
@@ -249,7 +308,10 @@ func (t *Template) check() error {
 		return err
 	}
 	t.segs = segs
-	return t.checkBlocks(segs)
+	if err := t.checkBlocks(segs); err != nil {
+		return err
+	}
+	return t.checkScripts(segs)
 }
 
 // For reports whether the template is for agent, started with profile.
@@ -449,37 +511,43 @@ func (t *Template) arg(name string) *Arg {
 }
 
 // Fill is the template's prompt with each name in it given its value:
-// an argument's from values, a built-in variable's from builtins.
-func (t *Template) Fill(values, builtins map[string]string) string {
-	value := func(name string) string {
-		if v, ok := values[name]; ok {
-			return v
-		}
-		return builtins[name]
+// an argument's from values, a built-in variable's from builtins; each
+// block given the arm its subject's value picks; and its scripts run,
+// which ctx bounds.
+func (t *Template) Fill(ctx context.Context, values, builtins map[string]string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, scriptTimeout)
+	defer cancel()
+	f := &filler{ctx: ctx, t: t, values: values, builtins: builtins}
+	defer f.close()
+	out, err := f.segments(t.parsed())
+	if err != nil {
+		return "", err
 	}
-	// Blocks pick their arms first, and the names are filled in what they
-	// leave, once: a value is not read again for names of its own.
-	segs := t.segs
-	if segs == nil { // a template not read, as one made to save is
-		var err error
-		if segs, err = parseSegments(t.Body); err != nil {
-			segs = []segment{{text: t.Body}}
-		}
+	return strings.TrimRight(out, "\n"), nil
+}
+
+// parsed is the prompt read into its text and blocks: as check read it,
+// or, for a template not read, as one made to save is, read now; as text
+// alone when it does not read.
+func (t *Template) parsed() []segment {
+	if t.segs != nil {
+		return t.segs
 	}
-	out := placeholder.ReplaceAllStringFunc(render(segs, value), func(s string) string {
-		return value(strings.TrimSpace(s[2 : len(s)-2]))
-	})
-	return strings.TrimRight(out, "\n")
+	segs, err := parseSegments(t.Body)
+	if err != nil {
+		return []segment{{text: t.Body}}
+	}
+	return segs
 }
 
 // Expand is what a call of the template sends: its arguments bound and
 // its prompt filled.
-func (t *Template) Expand(args string, builtins map[string]string) (string, error) {
+func (t *Template) Expand(ctx context.Context, args string, builtins map[string]string) (string, error) {
 	values, err := t.Bind(args)
 	if err != nil {
 		return "", err
 	}
-	return t.Fill(values, builtins), nil
+	return t.Fill(ctx, values, builtins)
 }
 
 // Broken is a template file that did not read, and why.

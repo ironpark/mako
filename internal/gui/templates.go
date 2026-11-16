@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"slices"
@@ -31,6 +32,8 @@ type templateMenu struct {
 	// failed is what was wrong with the last call Enter tried to send, and
 	// the draft it was for; it goes once the draft changes.
 	failed *ggui.StateValue[templateFailure]
+	// running is set while a call's scripts run, off the UI goroutine.
+	running bool
 }
 
 type templateFailure struct{ draft, why string }
@@ -99,39 +102,61 @@ func (m *model) takeTemplate(id string, t *prompttmpl.Template) {
 	m.sendComposer(id)
 }
 
-// expandDraft is what session id's draft sends: the prompt its template
-// makes, when it calls one, read from its file as it is now; otherwise,
-// and for a name no file has, the draft as it is. It reports false,
-// saying why over the composer, when the call is wrong.
-func (m *model) expandDraft(id string, state *chatState, draft string) (string, bool) {
+// expandDraft gives send what session id's draft sends: the prompt its
+// template makes, when it calls one, read from its file as it is now;
+// otherwise, and for a name no file has, the draft as it is. A template
+// that runs JavaScript makes its prompt off the UI goroutine, and sends
+// once it has. A wrong call sends nothing, saying why over the composer.
+func (m *model) expandDraft(id string, state *chatState, draft string, send func(string)) {
 	call, ok := prompttmpl.ParseCall(draft)
 	if !ok || !prompttmpl.ValidName(call.Name) {
-		return draft, true
+		send(draft)
+		return
 	}
-	fail := func(why string) (string, bool) {
-		state.templates.failed.Set(templateFailure{draft, why})
-		return "", false
-	}
+	fail := func(why string) { state.templates.failed.Set(templateFailure{draft, why}) }
 	dir, err := config.TemplatesDir()
 	if err != nil {
-		return draft, true
+		send(draft)
+		return
 	}
 	t, err := prompttmpl.Load(dir, call.Name)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		return draft, true
+		send(draft)
+		return
 	case err != nil:
-		return fail(err.Error())
+		fail(err.Error())
+		return
 	}
 	s, _ := m.session(id)
 	if !t.For(s.GetAgent(), s.GetProfile()) {
-		return fail(Tf("//%s is not for %s", t.Name, s.GetAgent()))
+		fail(Tf("//%s is not for %s", t.Name, s.GetAgent()))
+		return
 	}
-	out, err := t.Expand(call.Args, m.templateBuiltins(id, state))
-	if err != nil {
-		return fail(templateError(err))
+	builtins := m.templateBuiltins(id, state)
+	done := func(out string, err error) {
+		if err != nil {
+			fail(templateError(err))
+			return
+		}
+		send(out)
 	}
-	return out, true
+	if !t.HasScripts() {
+		done(t.Expand(context.Background(), call.Args, builtins))
+		return
+	}
+	if state.templates.running {
+		return // Enter again while its scripts run
+	}
+	state.templates.running = true
+	post := m.post
+	go func() {
+		out, err := t.Expand(context.Background(), call.Args, builtins)
+		post(func() {
+			state.templates.running = false
+			done(out, err)
+		})
+	}()
 }
 
 // templateBuiltins are the built-in variables' values for session id.

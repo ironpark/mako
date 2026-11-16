@@ -60,7 +60,7 @@ func TestParseReadsFrontMatterAndFillsTypes(t *testing.T) {
 
 func TestExpandFillsArgumentsAndBuiltins(t *testing.T) {
 	tm := parse(t, review)
-	got, err := tm.Expand(`main.go tone=BLUNT notes="line one
+	got, err := tm.Expand(t.Context(), `main.go tone=BLUNT notes="line one
 line two" 3`, map[string]string{"agent": "claude", "model": "opus"})
 	if err != nil {
 		t.Fatal(err)
@@ -224,30 +224,32 @@ func TestPlaceholders(t *testing.T) {
 	}
 }
 
-// The {{ a text ends in is found with what is typed of its name, spaces
-// and tabs before the name allowed; and the }} after it, with spaces.
-func TestOpenPlaceholderAndClosing(t *testing.T) {
+// What a text ends in, not yet closed, is found with what is typed in it:
+// a {{name, a {#match's name, a tag begun, and an arm of the block it is
+// in, with the block's subject; and the } or }} after it, with spaces.
+func TestCompleteAndClosing(t *testing.T) {
 	for _, c := range []struct {
 		text  string
-		ok    bool
-		start int
-		typed string
+		want  Completion
+		found bool
 	}{
-		{"Review {{fi", true, 9, "fi"},
-		{"Review {{ \t", true, 11, ""},
-		{"Review {{file}} ", false, 0, ""},
-		{"Review {{fi le", false, 0, ""},
-		{"Review", false, 0, ""},
+		{"Review {{fi", Completion{Kind: CompleteName, Brace: 7, Start: 9, Typed: "fi"}, true},
+		{"Review {{ \t", Completion{Kind: CompleteName, Brace: 7, Start: 11}, true},
+		{"Review {{file}} ", Completion{}, false},
+		{"Review {{fi le", Completion{}, false},
+		{"Review", Completion{}, false},
+		{"{#match to", Completion{Kind: CompleteSubject, Start: 8, Typed: "to"}, true},
+		{"a {#ma", Completion{Kind: CompleteTag, Brace: 2, Start: 3, Typed: "#ma"}, true},
+		{"{#match tone}\n{:ki", Completion{Kind: CompleteArm, Brace: 14, Start: 16, Typed: "ki", Block: "tone"}, true},
+		{"{#match a}{:x}{#match b}{:y}{/match}{:", Completion{Kind: CompleteArm, Brace: 36, Start: 38, Block: "a"}, true},
+		{"a {:ki", Completion{}, false},
 	} {
-		start, typed, subject, ok := OpenPlaceholder(c.text)
-		if ok != c.ok || ok && (start != c.start || typed != c.typed) || subject {
-			t.Errorf("%q: %d %q %v %v", c.text, start, typed, subject, ok)
+		got, ok := Complete(c.text)
+		if ok != c.found || got != c.want {
+			t.Errorf("%q: %+v %v, want %+v", c.text, got, ok, c.want)
 		}
 	}
-	if start, typed, subject, ok := OpenPlaceholder("{{match to"); !ok || !subject || start != 8 || typed != "to" {
-		t.Errorf("a match's name: %d %q %v %v", start, typed, subject, ok)
-	}
-	if Closing(" }} b") != 3 || Closing("}}") != 2 || Closing(" b}}") != 0 {
+	if Closing(" }} b") != 3 || Closing("}}") != 2 || Closing(" b}}") != 0 || ClosingOne(" } b") != 2 || ClosingOne("b}") != 0 {
 		t.Fatal("closing")
 	}
 }

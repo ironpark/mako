@@ -103,6 +103,8 @@ github.com/ironpark/ggwd v0.0.0-20261115062550-27e69288e59f h1:d6NNitLip08unwlKS
 github.com/ironpark/ggwd v0.0.0-20261115062550-27e69288e59f/go.mod h1:5j6FtfpTNHuQUDSxWPVSlBm8spczqe26OHuR6ldxyWk=
 github.com/ironpark/gostty v0.0.0-20261108124048-de82fbcca291 h1:hXyeHamTwG/khJnJfu7nd4n6fCeOC4CT27oA+Z42RcI=
 github.com/ironpark/gostty v0.0.0-20261108124048-de82fbcca291/go.mod h1:YqbXLZjWWzx5yGHHff9Cwp1IXHMnTy4Ef2Pu+IO6hpo=
+github.com/ironpark/qngg v0.0.0-20261030173357-5bb022c263f0 h1:SYsoFxFl0/x27eEbn0kse33UbOMjoELefYmutiVoC38=
+github.com/ironpark/qngg v0.0.0-20261030173357-5bb022c263f0/go.mod h1:/fhCR9yu9GsREWgd2Gj4WCimUxqoGWxvN0GZDCglzOU=
 github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202 h1:EPKxFHWVF3pUIGFz/Z5I/CsgVyJrGXv2LFQ/uZQHvYQ=
 github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202/go.mod h1:5iGSPmbCOj6b1t/7NbS1JnMP8pYcK8pZuwHIRVd4OwM=
 github.com/jackpal/go-nat-pmp v1.0.2 h1:KzKSgb7qkJvOUTqYl9/Hg/me3pWgBmERKrTGD7BdWus=

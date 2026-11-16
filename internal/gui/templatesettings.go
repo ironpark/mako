@@ -455,7 +455,7 @@ func templateEditor(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 	children = append(children,
 		widget.Row(ui.ButtonOf(widget.Row(icon("plus").Size(14), widget.Text(T("Add argument")).Size(13)).Gap(6),
 			func() { pg.addArg(id) }).Ghost().Pad(6, 10).Radius(7).Name(T("Add argument"))),
-		compactField(T("Prompt"), T("What it sends. {{name}} stands for an argument's value or a built-in variable's, and {{match name}} picks text by it, a line pattern => text for each arm, closed by {{end}}; type {{ to pick one."),
+		compactField(T("Prompt"), T("What it sends. {{name}} stands for an argument's value or a built-in variable's; {#match name} picks text by it, or by a JavaScript expression, each arm begun by {:pattern} or {:else}, and {/match} closes it; type {{ or { to pick. A ```js block gives way to the value its JavaScript ends on, with args and vars to read; a ```js run block only runs."),
 			templateBody(pg, id, mono)),
 		ggui.Reactive(func() ggui.Widget {
 			if e := pg.draft(id).Err; e != "" {

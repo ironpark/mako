@@ -8,50 +8,53 @@ import (
 	"strings"
 )
 
-// A prompt picks text by a value as Rust's match does: a block names an
-// argument or a built-in variable, and each arm under it, a line of its
-// own, gives a pattern and, after =>, the text for a value it matches,
-// going on over the lines under it until the next arm. The first arm that
-// matches is taken; its text may hold {{name}}s, and other blocks.
+// A prompt picks text by a value in blocks written as Svelte writes its
+// own, and matched as Rust's match matches: {#match subject} opens one,
+// each {:pattern} begins an arm for the values its pattern matches, and
+// {/match} closes it. The first arm that matches is taken; its text runs
+// to the next arm, and may hold {{name}}s, blocks of its own and scripts.
 //
-//	{{match tone}}
-//	kind | gentle => Be encouraging.
-//	blunt => "Be direct.",
-//	_ => Be neutral.
-//	{{end}}
+//	{#match tone}
+//	{:kind | gentle}
+//	Be encouraging.
+//	{:blunt}
+//	Be direct.
+//	{:else}
+//	Be neutral.
+//	{/match}
 //
-// A pattern is a word, as a value is spelt; a "quoted" text; a range of
-// numbers, 1..=3 with its end, 1..3 without, or open at either end, 3..
-// and ..=10; or _, for any value. Patterns are joined with | to match any
-// of them. An arm's text written as a quoted string, a comma after it or
-// not, is the string. As in Rust, a block must cover every value: a
-// choice's options, true and false, or anything with _.
+//	Read it {#match args.depth > 2}{:true}closely{:false}quickly{/match}.
+//
+// A subject is an argument's name or a built-in variable's, or a
+// JavaScript expression, which reads them as args and vars and what the
+// scripts before it defined (script.go). A pattern is a word, as a value
+// is spelt; a "quoted" text; a range of numbers, 1..=3 with its end, 1..3
+// without, or open at either end, 3.. and ..=10; or _ for any value, which
+// {:else} is too. Patterns are joined with | to match any of them. A line
+// of tags alone goes with them, and an arm's text starts after the spaces
+// that follow its tag on its line. As in Rust, a block must cover every
+// value: a choice's options, true and false, or anything with {:else}.
 
-// tagPattern is {{match name}}, the name its first group, or {{end}}.
-var tagPattern = regexp.MustCompile(`\{\{\s*(?:match\s+(` + namePattern + `)|end)\s*\}\}`)
-
-// patternWord is one pattern of an arm, and armLine an arm's first line:
-// its patterns, joined by |, then => and the start of its text.
+// patternWord is one pattern of an arm, and patternList an arm's
+// patterns, joined by |.
 var (
-	patternWord = `"[^"\n]*"|(?:-?\d+(?:\.\d+)?)?\.\.=?(?:-?\d+(?:\.\d+)?)?|[^\s|"=]+`
-	armLine     = regexp.MustCompile(`^[ \t]*((?:` + patternWord + `)(?:[ \t]*\|[ \t]*(?:` + patternWord + `))*)[ \t]*=>[ \t]?(.*)$`)
+	patternWord = `"[^"\n]*"|(?:-?\d+(?:\.\d+)?)?\.\.=?(?:-?\d+(?:\.\d+)?)?|[^\s|"]+`
+	patternList = regexp.MustCompile(`^\s*(?:` + patternWord + `)(?:\s*\|\s*(?:` + patternWord + `))*\s*$`)
 	patternOne  = regexp.MustCompile(patternWord)
 	rangeWord   = regexp.MustCompile(`^(-?\d+(?:\.\d+)?)?\.\.(=)?(-?\d+(?:\.\d+)?)?$`)
 )
 
-// segment is a stretch of a prompt: text as it is, {{name}}s and all, or a
-// match block.
+// segment is a stretch of a prompt: text as it is, {{name}}s and scripts
+// and all, or a match block.
 type segment struct {
 	text  string
 	block *matchBlock
 }
 
-// matchBlock is a {{match name}} block: what it matches, its arms, and
-// whether it takes lines of its own, which it leaves no blank line in.
+// matchBlock is a {#match subject} block: what it matches, and its arms.
 type matchBlock struct {
 	subject string
 	arms    []matchArm
-	lines   bool
 }
 
 // matchArm is an arm of a block: its patterns, as written, and its text.
@@ -60,38 +63,120 @@ type matchArm struct {
 	body     []segment
 }
 
-// Tag is a keyword of a prompt's blocks, {{match name}} or {{end}}: its
-// bytes [Start, End), and for a match the name it matches, "" for an end.
+// Tag kinds.
+const (
+	TagMatch = "match" // {#match subject}
+	TagArm   = "arm"   // {:patterns}
+	TagEnd   = "end"   // {/match}
+)
+
+// Tag is a tag of a prompt's blocks: its kind; its bytes [Start, End);
+// the subject a match matches, or an arm's patterns as written; and
+// [From, To), what it takes of the prompt, its line when it stands on one
+// with tags alone, and an arm's the spaces after it.
 type Tag struct {
+	Kind       string
 	Start, End int
-	Subject    string
+	Arg        string
+	From, To   int
 }
 
-// Tags are s's {{match name}}s and {{end}}s, in order.
+// Tags are s's block tags, in order: {#match subject}s, the {:pattern}s
+// within a block, and {/match}s; none in a script's code. A { that begins
+// no tag, as JSON's, is text.
 func Tags(s string) []Tag {
 	var out []Tag
-	for _, m := range tagPattern.FindAllStringSubmatchIndex(s, -1) {
-		t := Tag{Start: m[0], End: m[1]}
-		if m[2] >= 0 {
-			t.Subject = s[m[2]:m[3]]
+	scripts := Scripts(s)
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] != '{' {
+			continue
 		}
-		out = append(out, t)
+		if sc, ok := scriptAt(scripts, i); ok {
+			i = sc.End - 1
+			continue
+		}
+		rest := s[i:]
+		switch {
+		case strings.HasPrefix(rest, "{#match") && len(rest) > 7 && (rest[7] == ' ' || rest[7] == '\t'):
+			end := closingBrace(s, i+1)
+			if end < 0 {
+				continue
+			}
+			out = append(out, Tag{Kind: TagMatch, Start: i, End: end + 1, Arg: strings.TrimSpace(s[i+7 : end])})
+			depth++
+			i = end
+		case strings.HasPrefix(rest, "{:") && depth > 0:
+			end := closingBrace(s, i+1)
+			if end < 0 {
+				continue
+			}
+			out = append(out, Tag{Kind: TagArm, Start: i, End: end + 1, Arg: strings.TrimSpace(s[i+2 : end])})
+			i = end
+		case strings.HasPrefix(rest, "{/match}"):
+			out = append(out, Tag{Kind: TagEnd, Start: i, End: i + len("{/match}")})
+			depth = max(depth-1, 0)
+			i += len("{/match}") - 1
+		}
+	}
+	for i := range out {
+		out[i].From, out[i].To = out[i].Start, out[i].End
+		if out[i].Kind == TagArm {
+			// An arm's text starts after the spaces that follow it.
+			rest := s[out[i].End:]
+			out[i].To = out[i].End + len(rest) - len(strings.TrimLeft(rest, " \t"))
+		}
+	}
+	// A line of tags alone, spaces aside, goes with them.
+	for i := 0; i < len(out); {
+		lineStart := strings.LastIndexByte(s[:out[i].Start], '\n') + 1
+		j, at := i, lineStart
+		for j < len(out) && strings.TrimSpace(s[at:out[j].Start]) == "" && !strings.Contains(s[at:out[j].Start], "\n") {
+			at = out[j].End
+			j++
+		}
+		lineEnd := strings.IndexByte(s[at:], '\n')
+		if lineEnd < 0 {
+			lineEnd = len(s) - at
+		}
+		if j > i && strings.TrimSpace(s[at:at+lineEnd]) == "" {
+			out[i].From = lineStart
+			for k := i; k < j; k++ {
+				out[k].To = min(at+lineEnd+1, len(s))
+				if k+1 < j {
+					out[k].To = out[k+1].Start
+				}
+			}
+		}
+		i = max(j, i+1)
 	}
 	return out
 }
 
-// closingEnd is the index in tags of the {{end}} that closes the block tags
-// begin after, past the blocks within it; -1 when there is none.
-func closingEnd(tags []Tag) int {
-	depth := 0
-	for i, t := range tags {
+// closingBrace is the index of the } that closes the { before from, past
+// braces nested in it and those in quotes; -1 when none does.
+func closingBrace(s string, from int) int {
+	depth := 1
+	var quote byte
+	for i := from; i < len(s); i++ {
+		c := s[i]
 		switch {
-		case t.Subject != "":
+		case quote != 0:
+			if c == '\\' {
+				i++
+			} else if c == quote {
+				quote = 0
+			}
+		case c == '"' || c == '\'' || c == '`':
+			quote = c
+		case c == '{':
 			depth++
-		case depth == 0:
-			return i
-		default:
-			depth--
+		case c == '}':
+			if depth--; depth == 0 {
+				return i
+			}
+		case c == '\n':
+			return -1 // a tag is on one line
 		}
 	}
 	return -1
@@ -99,118 +184,77 @@ func closingEnd(tags []Tag) int {
 
 // parseSegments reads a prompt into its text and its blocks.
 func parseSegments(s string) ([]segment, error) {
+	tags := Tags(s)
+	segs, i, at, err := parseRun(s, tags, 0, 0)
+	if err != nil {
+		return nil, err
+	}
+	if i < len(tags) {
+		if tags[i].Kind == TagEnd {
+			return nil, fmt.Errorf("{/match} with no {#match} before it")
+		}
+		return nil, fmt.Errorf("{:%s} is outside a {#match}", tags[i].Arg)
+	}
+	if at < len(s) {
+		segs = append(segs, segment{text: s[at:]})
+	}
+	return segs, nil
+}
+
+// parseRun reads s from at, tags[i:] in it, up to an arm's or a block's
+// end at this depth: the text and blocks before it, the index of the tag
+// it stopped at, len(tags) at the end, and where in s it stopped.
+func parseRun(s string, tags []Tag, i, at int) ([]segment, int, int, error) {
 	var segs []segment
-	for {
-		tags := Tags(s)
-		if len(tags) == 0 {
-			if s != "" {
-				segs = append(segs, segment{text: s})
-			}
-			return segs, nil
+	for ; i < len(tags); i++ {
+		t := tags[i]
+		if t.From > at {
+			segs = append(segs, segment{text: s[at:t.From]})
 		}
-		open := tags[0]
-		if open.Subject == "" {
-			return nil, fmt.Errorf("{{end}} with no {{match}} before it")
+		if t.Kind != TagMatch {
+			return segs, i, max(at, t.From), nil
 		}
-		end := closingEnd(tags[1:])
-		if end < 0 {
-			return nil, fmt.Errorf("{{match %s}} has no {{end}}", open.Subject)
-		}
-		end++ // in tags
-		before, inner, after := s[:open.Start], s[open.End:tags[end].Start], s[tags[end].End:]
-		// A block on lines of its own leaves no line of its own behind.
-		lineStart := strings.LastIndexByte(before, '\n') + 1
-		lines := strings.TrimSpace(before[lineStart:]) == "" && strings.TrimLeft(inner[:strings.IndexByte(inner+"\n", '\n')], " \t") == ""
-		if lines {
-			before = before[:lineStart]
-			if strings.HasPrefix(after, "\n") {
-				after = after[1:]
-			}
-		}
-		if before != "" {
-			segs = append(segs, segment{text: before})
-		}
-		block, err := parseArms(open.Subject, inner)
+		block, end, err := parseBlock(s, tags, i)
 		if err != nil {
-			return nil, err
+			return nil, 0, 0, err
 		}
-		block.lines = lines
 		segs = append(segs, segment{block: block})
-		s = after
+		i, at = end, tags[end].To
 	}
+	return segs, i, at, nil
 }
 
-// parseArms reads the arms of a block matching subject from inner, its
-// text between its {{match}} and its {{end}}.
-func parseArms(subject, inner string) (*matchBlock, error) {
-	// Arms begin on lines at the block's own depth, not on those of a
-	// block within.
-	type armText struct {
-		patterns []string
-		lines    []string
+// parseBlock reads the block tags[i] opens, giving it and the index of the
+// tag that closes it.
+func parseBlock(s string, tags []Tag, i int) (*matchBlock, int, error) {
+	open := tags[i]
+	block := &matchBlock{subject: open.Arg}
+	j := i + 1
+	if j < len(tags) && strings.TrimSpace(s[open.To:tags[j].From]) != "" {
+		return nil, 0, fmt.Errorf("{#match %s}: text before its first {:pattern}", open.Arg)
 	}
-	var arms []armText
-	depth := 0
-	for line := range strings.SplitSeq(strings.TrimPrefix(inner, "\n"), "\n") {
-		m := armLine.FindStringSubmatch(line)
-		switch {
-		case depth == 0 && m != nil:
-			arms = append(arms, armText{patterns: patternOne.FindAllString(m[1], -1), lines: []string{m[2]}})
-		case len(arms) > 0:
-			arms[len(arms)-1].lines = append(arms[len(arms)-1].lines, line)
-		case strings.TrimSpace(line) != "":
-			return nil, fmt.Errorf("{{match %s}}: %q is not an arm, pattern => text", subject, strings.TrimSpace(line))
+	for j < len(tags) && tags[j].Kind == TagArm {
+		arm := tags[j]
+		if arm.Arg == "else" {
+			arm.Arg = "_"
 		}
-		for _, t := range Tags(line) {
-			if t.Subject != "" {
-				depth++
-			} else {
-				depth--
-			}
+		if !patternList.MatchString(arm.Arg) {
+			return nil, 0, fmt.Errorf("{#match %s}: {:%s} is not a pattern", open.Arg, arm.Arg)
 		}
-	}
-	if len(arms) == 0 {
-		return nil, fmt.Errorf("{{match %s}} has no arms", subject)
-	}
-	block := &matchBlock{subject: subject}
-	for _, a := range arms {
-		body, err := parseSegments(armBody(a.lines))
+		body, next, _, err := parseRun(s, tags, j+1, arm.To)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
-		block.arms = append(block.arms, matchArm{patterns: a.patterns, body: body})
+		block.arms = append(block.arms, matchArm{patterns: patternOne.FindAllString(arm.Arg, -1), body: body})
+		j = next
 	}
-	return block, nil
-}
-
-// armBody is an arm's text from its lines: the first's after =>, and the
-// rest, their common indent taken off, blank lines at either end dropped,
-// and a quoted string, a comma after it or not, as the string it is.
-func armBody(lines []string) string {
-	indent := -1
-	for _, l := range lines[1:] {
-		if strings.TrimSpace(l) == "" {
-			continue
-		}
-		n := len(l) - len(strings.TrimLeft(l, " \t"))
-		if indent < 0 || n < indent {
-			indent = n
-		}
+	switch {
+	case j >= len(tags):
+		return nil, 0, fmt.Errorf("{#match %s} has no {/match}", open.Arg)
+	case len(block.arms) == 0:
+		return nil, 0, fmt.Errorf("{#match %s} has no arms", open.Arg)
 	}
-	out := []string{lines[0]}
-	for _, l := range lines[1:] {
-		if len(l) >= indent && indent > 0 {
-			l = l[indent:]
-		}
-		out = append(out, l)
-	}
-	body := strings.TrimSpace(strings.Join(out, "\n"))
-	if q := strings.TrimSuffix(body, ","); len(q) >= 2 && q[0] == '"' {
-		if s, err := strconv.Unquote(q); err == nil {
-			return s
-		}
-	}
-	return body
+	return block, j, nil
 }
 
 // matches reports whether value matches pattern.
@@ -240,30 +284,6 @@ func matches(pattern, value string) bool {
 	return pattern == value
 }
 
-// render is segs with each block given the text of its arm that matches
-// its subject's value, which value gives.
-func render(segs []segment, value func(name string) string) string {
-	var b strings.Builder
-	for _, s := range segs {
-		if s.block == nil {
-			b.WriteString(s.text)
-			continue
-		}
-		v := value(s.block.subject)
-		for _, arm := range s.block.arms {
-			if slices.ContainsFunc(arm.patterns, func(p string) bool { return matches(p, v) }) {
-				text := render(arm.body, value)
-				b.WriteString(text)
-				if s.block.lines && text != "" && !strings.HasSuffix(text, "\n") {
-					b.WriteByte('\n')
-				}
-				break
-			}
-		}
-	}
-	return b.String()
-}
-
 // checkBlocks finds what is wrong with the blocks of segs: a subject that
 // is neither an argument nor built in, a pattern its subject's values
 // cannot match, and values no arm covers.
@@ -273,15 +293,15 @@ func (t *Template) checkBlocks(segs []segment) error {
 			continue
 		}
 		b := s.block
-		var arg *Arg
-		if arg = t.arg(b.subject); arg == nil && !IsBuiltin(b.subject) {
-			return fmt.Errorf("{{match %s}}: no argument or built-in variable has that name", b.subject)
+		arg := t.arg(b.subject)
+		if t.isExpression(b.subject) && IsName(b.subject) {
+			return fmt.Errorf("{#match %s}: no argument or built-in variable has that name", b.subject)
 		}
 		var covered []string
 		for _, a := range b.arms {
 			for _, p := range a.patterns {
 				if err := checkPattern(arg, p); err != nil {
-					return fmt.Errorf("{{match %s}}: %w", b.subject, err)
+					return fmt.Errorf("{#match %s}: %w", b.subject, err)
 				}
 			}
 			covered = append(covered, a.patterns...)
@@ -293,12 +313,15 @@ func (t *Template) checkBlocks(segs []segment) error {
 			continue
 		}
 		values := arg.values()
+		if values == nil && slices.Contains(covered, "true") && slices.Contains(covered, "false") {
+			continue // an expression's true or false
+		}
 		if values == nil {
-			return fmt.Errorf("{{match %s}}: not every value is matched; add an arm _ => for the rest", b.subject)
+			return fmt.Errorf("{#match %s}: not every value is matched; add {:else} for the rest", b.subject)
 		}
 		for _, v := range values {
 			if !slices.ContainsFunc(covered, func(p string) bool { return matches(p, v) }) {
-				return fmt.Errorf("{{match %s}}: no arm matches %q; add one, or _ => for the rest", b.subject, v)
+				return fmt.Errorf("{#match %s}: no arm matches %q; add one, or {:else} for the rest", b.subject, v)
 			}
 		}
 	}
@@ -350,4 +373,28 @@ func checkPattern(arg *Arg, p string) error {
 		return fmt.Errorf("%s: a call gives it as %s", p, as)
 	}
 	return nil
+}
+
+// isExpression reports whether a block's subject is JavaScript, rather
+// than an argument's name or a built-in variable's.
+func (t *Template) isExpression(subject string) bool {
+	return t.arg(subject) == nil && !IsBuiltin(subject)
+}
+
+// expressions are the subjects of segs' blocks that are JavaScript, in
+// order, those of blocks in arms too.
+func (t *Template) expressions(segs []segment) []string {
+	var out []string
+	for _, s := range segs {
+		if s.block == nil {
+			continue
+		}
+		if t.isExpression(s.block.subject) {
+			out = append(out, s.block.subject)
+		}
+		for _, a := range s.block.arms {
+			out = append(out, t.expressions(a.body)...)
+		}
+	}
+	return out
 }

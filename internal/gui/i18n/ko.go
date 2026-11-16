@@ -1269,7 +1269,7 @@ var catalogKo = map[string]string{
 	"The model its sessions start on, over the agent's default and any its flags name.":                                                     "이 프로필의 세션이 시작할 모델입니다. 에이전트 기본값과 플래그에 적힌 모델보다 우선합니다.",
 	"%s model":            "%s 모델",
 	"The agent's default": "에이전트 기본값",
-	"What it sends. {{name}} stands for an argument's value or a built-in variable's, and {{match name}} picks text by it, a line pattern => text for each arm, closed by {{end}}; type {{ to pick one.": "보낼 내용입니다. {{name}}은 인자의 값이나 내장 변수의 값으로 바뀌고, {{match name}}은 그 값에 따라 글을 고릅니다. 각 갈래는 한 줄에 패턴 => 내용으로 쓰고 {{end}}로 닫습니다. {{를 입력하면 고를 수 있습니다.",
+	"What it sends. {{name}} stands for an argument's value or a built-in variable's; {#match name} picks text by it, or by a JavaScript expression, each arm begun by {:pattern} or {:else}, and {/match} closes it; type {{ or { to pick. A ```js block gives way to the value its JavaScript ends on, with args and vars to read; a ```js run block only runs.": "보낼 내용입니다. {{name}}은 인자의 값이나 내장 변수의 값으로 바뀝니다. {#match name}은 그 값이나 JavaScript 식의 값에 따라 글을 고르는데, 각 갈래는 {:패턴}이나 {:else}로 시작하고 {/match}로 닫습니다. {{나 {를 입력하면 고를 수 있습니다. ```js 블록은 JavaScript가 끝나는 값으로 바뀌고 args와 vars를 읽을 수 있습니다. ```js run 블록은 실행만 합니다.",
 	"Pick text by a value, arm by arm": "값에 따라 갈래별로 글 고르기",
 	"Close a match block":              "match 블록 닫기",
 	"Every agent":                      "모든 에이전트",
@@ -1283,4 +1283,6 @@ var catalogKo = map[string]string{
 	"Could not copy the spaces of %s": "%s의 스페이스를 가져오지 못했습니다",
 	"Copied the spaces of %s":         "%s의 스페이스를 가져왔습니다",
 	"No other node to copy from":      "가져올 다른 노드가 없습니다",
+	"An arm for this value":           "이 값의 갈래",
+	"An arm for the rest":             "나머지 값의 갈래",
 }
