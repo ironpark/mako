@@ -240,8 +240,11 @@ func TestCompleteAndClosing(t *testing.T) {
 		{"Review", Completion{}, false},
 		{"{#match to", Completion{Kind: CompleteSubject, Start: 8, Typed: "to"}, true},
 		{"a {#ma", Completion{Kind: CompleteTag, Brace: 2, Start: 3, Typed: "#ma"}, true},
-		{"{#match tone}\n{:ki", Completion{Kind: CompleteArm, Brace: 14, Start: 16, Typed: "ki", Block: "tone"}, true},
-		{"{#match a}{:x}{#match b}{:y}{/match}{:", Completion{Kind: CompleteArm, Brace: 36, Start: 38, Block: "a"}, true},
+		{"{#match tone}\n{:ki", Completion{Kind: CompleteArm, Brace: 14, Start: 16, Typed: "ki", Open: "match", Block: "tone"}, true},
+		{"{#match a}{:x}{#match b}{:y}{/match}{:", Completion{Kind: CompleteArm, Brace: 36, Start: 38, Open: "match", Block: "a"}, true},
+		{"{#if x}a{:el", Completion{Kind: CompleteArm, Brace: 8, Start: 10, Typed: "el", Open: "if"}, true},
+		{"{#each xs as x}{/", Completion{Kind: CompleteTag, Brace: 15, Start: 16, Typed: "/", Open: "each"}, true},
+		{"a {@re", Completion{Kind: CompleteTag, Brace: 2, Start: 3, Typed: "@re"}, true},
 		{"a {:ki", Completion{}, false},
 	} {
 		got, ok := Complete(c.text)

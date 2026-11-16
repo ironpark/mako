@@ -3,11 +3,11 @@
 // A template is a Markdown file whose name, without .md, is the template's
 // name. Front matter in YAML, between lines of three dashes, says what it
 // is for, the agents it is for and the arguments it takes; the rest is the
-// prompt, in which {{name}} stands for an argument's value or a built-in
-// variable's, and a {#match subject} block picks text by its value, as
-// Rust's match does (see match.go), and a fenced ```js block runs
-// JavaScript in a sandbox, its value put in its place (see script.go). A
-// pair of braces around anything else is left as it is.
+// prompt, written as Svelte writes markup, its values in double braces:
+// {{name}} an argument's value or a built-in variable's, {{expression}}
+// JavaScript's, and the blocks {#if}, {#each}, {#match}, {#snippet}, with
+// {@const} and {@render}, and fenced ```js scripts (see syntax.go). A
+// prompt compiles to JavaScript, run in a sandbox (compile.go, run.go).
 //
 //	---
 //	description: Review a file
@@ -83,16 +83,14 @@ type Template struct {
 	Agents []string `yaml:"agents,omitempty,flow"`
 	Args   []Arg    `yaml:"args,omitempty"`
 	Body   string   `yaml:"-"`
-	// segs is Body read into its text and blocks, as check found them.
-	segs []segment
+	// nodes is Body read, and comp what fills it in, as check found them.
+	nodes []*node
+	comp  *compiled
 }
 
 // Builtins are the variables every template may use, filled from the
 // session it is sent to.
 var Builtins = []string{"agent", "profile", "model", "project", "branch", "repo", "date"}
-
-// placeholder is {{name}}, spaces allowed inside the braces.
-var placeholder = regexp.MustCompile(`\{\{\s*(` + namePattern + `)\s*\}\}`)
 
 // namePattern is how a name is spelt: an argument's, a built-in
 // variable's, or the one a {#match} matches.
@@ -100,47 +98,36 @@ const namePattern = `[A-Za-z_][A-Za-z0-9_-]*`
 
 var argName = regexp.MustCompile(`^` + namePattern + `$`)
 
-// Placeholder is a {{name}} in a template's body: its bytes [Start, End),
-// braces and all, and the name in it.
+// Placeholder is a {{…}} in a template's body: its bytes [Start, End),
+// braces and all, and what it holds: a name alone, or an expression.
 type Placeholder struct {
 	Start, End int
-	Name       string
-}
-
-// Placeholders are the {{name}}s of body, in order, but for those in a
-// script's code.
-func Placeholders(body string) []Placeholder {
-	var out []Placeholder
-	scripts := Scripts(body)
-	for _, m := range placeholder.FindAllStringSubmatchIndex(body, -1) {
-		if name := body[m[2]:m[3]]; !inScript(scripts, m[0], m[1]) {
-			out = append(out, Placeholder{Start: m[0], End: m[1], Name: name})
-		}
-	}
-	return out
+	Name, Expr string
 }
 
 // What the caret may be in, not yet closed, for an editor to complete.
 const (
 	CompleteName    = "name"    // {{name, a placeholder's
-	CompleteSubject = "subject" // {#match name, a block's subject
-	CompleteTag     = "tag"     // {# or {/, a block's tag begun
-	CompleteArm     = "arm"     // {:pattern, an arm of the block it is in
+	CompleteSubject = "subject" // {#match name, a match's subject
+	CompleteTag     = "tag"     // {#, {/ or {@, a tag begun
+	CompleteArm     = "arm"     // {:, an arm or an else of the block it is in
 )
 
 // Completion is what the end of a text is in, not yet closed: its kind;
 // where its { is, and where what is typed in it starts; what is typed; and
-// for an arm, the subject of the block it is in.
+// the innermost block open there, "if", "each", "match" or "snippet", with
+// a match's subject.
 type Completion struct {
 	Kind         string
 	Brace, Start int
-	Typed, Block string
+	Typed        string
+	Open, Block  string
 }
 
 var (
 	openName    = regexp.MustCompile(`\{\{\s*(` + namePattern + `)?$`)
 	openSubject = regexp.MustCompile(`\{#match\s+(` + namePattern + `)?$`)
-	openTag     = regexp.MustCompile(`\{([#/][A-Za-z]*)$`)
+	openTag     = regexp.MustCompile(`\{([#/@][A-Za-z]*)$`)
 	openArm     = regexp.MustCompile(`\{:\s*([^{}\n]*)$`)
 	closing     = regexp.MustCompile(`^\s*\}\}`)
 	closingOne  = regexp.MustCompile(`^\s*\}`)
@@ -149,38 +136,39 @@ var (
 // Complete finds what the end of before is in, not yet closed; ok is
 // false when it is in none.
 func Complete(before string) (c Completion, ok bool) {
-	found := func(kind string, m []int, block string) (Completion, bool) {
-		c := Completion{Kind: kind, Brace: m[0], Start: len(before), Block: block}
+	found := func(kind string, m []int) (Completion, bool) {
+		c := Completion{Kind: kind, Brace: m[0], Start: len(before)}
+		c.Open, c.Block = openBlock(before[:m[0]])
 		if m[2] >= 0 {
 			c.Start, c.Typed = m[2], before[m[2]:m[3]]
 		}
 		return c, true
 	}
 	if m := openArm.FindStringSubmatchIndex(before); m != nil {
-		if subject := openBlock(before[:m[0]]); subject != "" {
-			return found(CompleteArm, m, subject)
+		if open, _ := openBlock(before[:m[0]]); open != "" && open != "snippet" {
+			return found(CompleteArm, m)
 		}
 	}
 	if m := openSubject.FindStringSubmatchIndex(before); m != nil {
-		return found(CompleteSubject, m, "")
+		return found(CompleteSubject, m)
 	}
 	if m := openTag.FindStringSubmatchIndex(before); m != nil {
-		return found(CompleteTag, m, "")
+		return found(CompleteTag, m)
 	}
 	if m := openName.FindStringSubmatchIndex(before); m != nil {
-		return found(CompleteName, m, "")
+		return found(CompleteName, m)
 	}
 	return Completion{}, false
 }
 
-// openBlock is the subject of the innermost block open at the end of s,
-// "" for none.
-func openBlock(s string) string {
-	var open []string
+// openBlock is the innermost block open at the end of s, "" for none,
+// with a match's subject.
+func openBlock(s string) (block, subject string) {
+	var open []Tag
 	for _, t := range Tags(s) {
 		switch t.Kind {
-		case TagMatch:
-			open = append(open, t.Arg)
+		case TagIf, TagEach, TagMatch, TagSnippet:
+			open = append(open, t)
 		case TagEnd:
 			if len(open) > 0 {
 				open = open[:len(open)-1]
@@ -188,9 +176,13 @@ func openBlock(s string) string {
 		}
 	}
 	if len(open) == 0 {
-		return ""
+		return "", ""
 	}
-	return open[len(open)-1]
+	t := open[len(open)-1]
+	if t.Kind == TagMatch {
+		return t.Block, t.Arg
+	}
+	return t.Block, ""
 }
 
 // Closing is how long the }} that after begins with is, spaces before it
@@ -298,20 +290,12 @@ func (t *Template) check() error {
 			a.Default = &v
 		}
 	}
-	for _, p := range Placeholders(t.Body) {
-		if !seen[p.Name] && !IsBuiltin(p.Name) {
-			return fmt.Errorf("{{%s}}: no argument or built-in variable has that name", p.Name)
-		}
-	}
-	segs, err := parseSegments(t.Body)
+	nodes, comp, err := t.prepare()
 	if err != nil {
 		return err
 	}
-	t.segs = segs
-	if err := t.checkBlocks(segs); err != nil {
-		return err
-	}
-	return t.checkScripts(segs)
+	t.nodes, t.comp = nodes, comp
+	return nil
 }
 
 // For reports whether the template is for agent, started with profile.
@@ -508,36 +492,6 @@ func (t *Template) arg(name string) *Arg {
 		}
 	}
 	return nil
-}
-
-// Fill is the template's prompt with each name in it given its value:
-// an argument's from values, a built-in variable's from builtins; each
-// block given the arm its subject's value picks; and its scripts run,
-// which ctx bounds.
-func (t *Template) Fill(ctx context.Context, values, builtins map[string]string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, scriptTimeout)
-	defer cancel()
-	f := &filler{ctx: ctx, t: t, values: values, builtins: builtins}
-	defer f.close()
-	out, err := f.segments(t.parsed())
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimRight(out, "\n"), nil
-}
-
-// parsed is the prompt read into its text and blocks: as check read it,
-// or, for a template not read, as one made to save is, read now; as text
-// alone when it does not read.
-func (t *Template) parsed() []segment {
-	if t.segs != nil {
-		return t.segs
-	}
-	segs, err := parseSegments(t.Body)
-	if err != nil {
-		return []segment{{text: t.Body}}
-	}
-	return segs
 }
 
 // Expand is what a call of the template sends: its arguments bound and

@@ -44,17 +44,23 @@ func placeholderColor(name string, args []argDraft) color.Color {
 	return uitheme.Destructive
 }
 
-// placeholderColors colours the {{name}}s of text, of a template whose
-// arguments are args, and its blocks' tags: in amber, or red for a match
-// of a name that is neither, which no JavaScript is.
+// placeholderColors colours the {{…}}s of text, of a template whose
+// arguments are args: an argument's, a built-in variable's, a name the
+// prompt defines or an expression, or red for a name that is none of
+// them; and its tags, in amber, or red for a match of such a name.
 func placeholderColors(text string, args []argDraft) []widget.TextColor {
 	var out []widget.TextColor
+	locals := prompttmpl.Locals(text)
 	for _, p := range prompttmpl.Placeholders(text) {
-		out = append(out, widget.TextColor{Start: p.Start, End: p.End, Color: placeholderColor(p.Name, args)})
+		c := placeholderColor(p.Name, args)
+		if p.Expr != "" || slices.Contains(locals, p.Name) {
+			c = localColor
+		}
+		out = append(out, widget.TextColor{Start: p.Start, End: p.End, Color: c})
 	}
 	for _, t := range prompttmpl.Tags(text) {
 		c := color.Color(skin.DotWaiting)
-		if t.Kind == prompttmpl.TagMatch && prompttmpl.IsName(t.Arg) && placeholderColor(t.Arg, args) == uitheme.Destructive {
+		if t.Kind == prompttmpl.TagMatch && prompttmpl.IsName(t.Arg) && !slices.Contains(locals, t.Arg) && placeholderColor(t.Arg, args) == uitheme.Destructive {
 			c = uitheme.Destructive
 		}
 		out = append(out, widget.TextColor{Start: t.Start, End: t.End, Color: c})
@@ -84,23 +90,40 @@ type placeholderOption struct {
 }
 
 // placeholderOptions are what the list offers for q, of a template whose
-// arguments are args, as typed, as the composer's menu matches names: for
-// a {{name}} or a block's subject, the arguments then the built-in
-// variables; for a tag begun, the tags that open and close a block; and
-// for an arm, the values the block's subject takes, then else.
-func placeholderOptions(args []argDraft, q placeholderQuery) []placeholderOption {
+// arguments are args and whose prompt defines locals, as typed, as the
+// composer's menu matches names: for a {{name}} or a match's subject, the
+// arguments, the built-in variables, then the names the prompt defines;
+// for a tag begun, the tags, the open block's end first; and for an arm or
+// an else, what the block it is in takes.
+func placeholderOptions(args []argDraft, locals []string, q placeholderQuery) []placeholderOption {
 	var all []placeholderOption
+	tag := func(name, about string) placeholderOption {
+		return placeholderOption{Name: name, About: about, Color: skin.DotWaiting}
+	}
 	switch q.Kind {
 	case prompttmpl.CompleteTag:
-		all = []placeholderOption{
-			{Name: "#match", About: T("Pick text by a value, arm by arm"), Color: skin.DotWaiting},
-			{Name: "/match", About: T("Close a match block"), Color: skin.DotWaiting},
+		if q.Open != "" {
+			all = append(all, tag("/"+q.Open, T("Close the block")))
 		}
+		all = append(all,
+			tag("#if", T("Show text while a condition holds")),
+			tag("#each", T("Repeat text for each item of a list")),
+			tag("#match", T("Pick text by a value, arm by arm")),
+			tag("#snippet", T("Define text to render again")),
+			tag("@const", T("Name a value within a block")),
+			tag("@render", T("Put a snippet's text here")))
 	case prompttmpl.CompleteArm:
-		for _, v := range armValues(args, q.Block) {
-			all = append(all, placeholderOption{Name: v, About: T("An arm for this value"), Color: skin.DotWaiting})
+		switch q.Open {
+		case "match":
+			for _, v := range armValues(args, q.Block) {
+				all = append(all, tag(v, T("An arm for this value")))
+			}
+			all = append(all, tag("else", T("An arm for the rest")))
+		case "if":
+			all = append(all, tag("else if", T("Text when this condition holds instead")), tag("else", T("Text when no condition holds")))
+		case "each":
+			all = append(all, tag("else", T("Text for an empty list")))
 		}
-		all = append(all, placeholderOption{Name: "else", About: T("An arm for the rest"), Color: skin.DotWaiting})
 	default:
 		for _, a := range args {
 			if a.Name != "" {
@@ -112,6 +135,11 @@ func placeholderOptions(args []argDraft, q placeholderQuery) []placeholderOption
 				all = append(all, placeholderOption{Name: b, About: T(builtinLabels[b]), Color: skin.DotDone})
 			}
 		}
+		for _, l := range locals {
+			if !slices.ContainsFunc(all, func(o placeholderOption) bool { return o.Name == l }) {
+				all = append(all, placeholderOption{Name: l, About: T("Defined in this prompt"), Color: localColor})
+			}
+		}
 	}
 	out := matchByName(all, strings.ToLower(q.Typed), func(o placeholderOption) string { return o.Name })
 	for i := range out {
@@ -120,15 +148,25 @@ func placeholderOptions(args []argDraft, q placeholderQuery) []placeholderOption
 	return out
 }
 
+// localColor is a name the prompt defines, or an expression, as coloured:
+// a value, as an argument is.
+var localColor = skin.AccentBright
+
 // shownAs is name written as what completes a query of kind.
 func shownAs(kind, name string) string {
 	switch kind {
 	case prompttmpl.CompleteName:
 		return "{{" + name + "}}"
 	case prompttmpl.CompleteArm:
+		if name == "else if" {
+			return "{:else if …}"
+		}
 		return "{:" + name + "}"
 	case prompttmpl.CompleteTag:
-		return "{" + name + "}"
+		if name[0] == '/' {
+			return "{" + name + "}"
+		}
+		return "{" + name + " …}"
 	}
 	return name
 }
@@ -153,7 +191,7 @@ func armValues(args []argDraft, subject string) []string {
 // placeholderQuery is what the caret is in, not yet closed, and where the
 // caret is.
 type placeholderQuery struct {
-	Open bool
+	Active bool
 	prompttmpl.Completion
 	Caret int
 }
@@ -167,7 +205,7 @@ func queryAt(st widget.TextInputState) placeholderQuery {
 	if !ok {
 		return placeholderQuery{}
 	}
-	return placeholderQuery{Open: true, Completion: c, Caret: st.Caret}
+	return placeholderQuery{Active: true, Completion: c, Caret: st.Caret}
 }
 
 // templateBody is the prompt's editor of draft id: its field, and under
@@ -178,10 +216,10 @@ func templateBody(pg *templatePage, id int, mono ggui.TextStyle) ggui.Widget {
 	dismissed := ggui.State(false) // Escape put the list away, until the caret is in another
 	options := ggui.Derived(func() []placeholderOption {
 		q := query.Get()
-		if !q.Open || dismissed.Get() {
+		if !q.Active || dismissed.Get() {
 			return nil
 		}
-		return placeholderOptions(pg.draft(id).Args, q)
+		return placeholderOptions(pg.draft(id).Args, prompttmpl.Locals(pg.draft(id).Body), q)
 	})
 	field := ui.TextField(pg.field(id, func(d *templateDraft) *string { return &d.Body })).
 		Multiline().Lines(6).Style(mono).Placeholder("Review {{file}} as {{agent}}.").Name(T("Template prompt")).
@@ -198,12 +236,21 @@ func templateBody(pg *templatePage, id int, mono ggui.TextStyle) ggui.Widget {
 			input.Replace(o.Name + "}}")
 		case prompttmpl.CompleteTag:
 			input.Select(q.Brace, q.Caret+prompttmpl.ClosingOne(after))
-			if o.Name == "#match" {
-				// The name it matches is picked next, from the list again.
-				input.Replace("{#match ")
+			if o.Name[0] == '/' {
+				input.Replace("{" + o.Name + "}")
+				break
+			}
+			// What the tag takes is written next; a match's name is
+			// picked from the list again.
+			input.Replace("{" + o.Name + " ")
+			return
+		case prompttmpl.CompleteArm:
+			input.Select(q.Start, q.Caret+prompttmpl.ClosingOne(after))
+			if o.Name == "else if" {
+				input.Replace("else if ")
 				return
 			}
-			input.Replace("{" + o.Name + "}")
+			input.Replace(o.Name + "}")
 		default: // a subject, an arm
 			input.Select(q.Start, q.Caret+prompttmpl.ClosingOne(after))
 			input.Replace(o.Name + "}")
@@ -234,7 +281,7 @@ func templateBody(pg *templatePage, id int, mono ggui.TextStyle) ggui.Widget {
 		if q == last {
 			return
 		}
-		if q.Start != last.Start || !q.Open {
+		if q.Start != last.Start || !q.Active {
 			dismissed.Set(false)
 		}
 		pick.Set(0)

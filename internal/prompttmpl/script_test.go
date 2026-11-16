@@ -11,7 +11,7 @@ const scripted = "---\nargs:\n  - name: depth\n    type: integer\n    default: 2
 	"```js run\nvar lines = n => n === 1 ? \"one line\" : n + \" lines\";\n```\n" +
 	"Read {{tone}}ly,\n```js\nlines(args.depth * 10)\n```\n" +
 	"as {{agent}}.\n```js\nreturn { agent: vars.agent, kind: args.tone === \"kind\" };\n```\n" +
-	"```js\nawait Promise.resolve(\"{{tone}} stays\")\n```\n" +
+	"```js\nreturn await Promise.resolve(\"{{tone}} stays\")\n```\n" +
 	"{#match tone}\n{:kind}\n```js\nconst f = a => a + 1\nf(1)\n```\n{:_}\nnone\n{/match}\n" +
 	"```go\nfmt.Println(\"{{tone}}\")\n```"
 
@@ -51,7 +51,7 @@ func TestScriptsThatFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tm.Expand(t.Context(), "", nil); err == nil || !strings.Contains(err.Error(), "block 1: Error: no") {
+	if _, err := tm.Expand(t.Context(), "", nil); err == nil || !strings.Contains(err.Error(), "block 1: no") {
 		t.Fatalf("a block that throws: %v", err)
 	}
 	loops, err := Parse("loops", []byte("```js run\nfor (;;) {}\n```\n"))
@@ -60,7 +60,7 @@ func TestScriptsThatFail(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer cancel()
-	if _, err := loops.Expand(ctx, "", nil); err == nil || !strings.Contains(err.Error(), "ran past") {
+	if _, err := loops.Expand(ctx, "", nil); err == nil || !strings.Contains(err.Error(), "ran too long") {
 		t.Fatalf("a block that never ends: %v", err)
 	}
 }

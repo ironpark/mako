@@ -358,9 +358,9 @@ files in `templates/` beside `config.json`, each named for its file:
 would read it before saving it; saving rewrites the file, so comments in
 a file written by hand are not kept. YAML front
 matter says what a template is for, which agents it is offered to and the
-arguments it takes; the rest is the prompt, where `{{name}}` stands for an
-argument or a built-in variable, a `{#match subject}` block picks text by its
-value, and a ` ```js ` block runs JavaScript.
+arguments it takes; the rest is the prompt, written as Svelte writes
+markup, its values in double braces so that the braces of JSON and code in
+a prompt stay text.
 
 ```markdown
 ---
@@ -390,14 +390,51 @@ all), `integer`, `number`, `boolean` (`true`/`false`, `yes`/`no`) or
 The built-in variables are `agent`, `profile`, `model` (as the agent's
 latest reply reports it), `project`, `branch`, `repo` and `date`.
 
-A `{#match subject}` block picks text by a value, written as Svelte writes
-its blocks and matched as Rust's `match` matches: each `{:pattern}` begins
-an arm for the values its pattern matches, `{:else}` one for the rest, and
-`{/match}` closes the block. The first arm that matches is taken; its text
-runs to the next arm, and may hold `{{name}}`s, other blocks and scripts.
-A line of tags alone goes with them, so a block over lines of its own
-leaves no blank line, and one within a line leaves the text around it. A
-`{` that begins no tag, as JSON's, is text.
+`{{name}}` is an argument's value, as the call gave it, or a built-in
+variable's; `{{expression}}` is a JavaScript expression's, which reads the
+arguments by name (numbers and booleans as their types say) or as `args`,
+and the built-in variables by name or as `vars`. Text is put in as it is,
+`undefined` and `null` as nothing, anything else as JSON. A name that is
+none of these, nor defined before it, is refused; a `{{…}}` that holds no
+JavaScript, as another template language's `{{.Field}}`, is text.
+
+The blocks are Svelte's:
+
+```markdown
+{#if args.depth > 2}
+Read every line.
+{:else if args.depth === 2}
+Read it.
+{:else}
+Skim it.
+{/if}
+
+{#each files as file, i}
+  {@const name = file.split("/").pop()}
+  {{i + 1}}. {{name}}
+{:else}
+No files.
+{/each}
+
+{#snippet rules(strict)}
+- Keep functions short.
+{#if strict}
+- No TODOs.
+{/if}
+{/snippet}
+{@render rules(true)}
+```
+
+`{#each}` takes anything `Array.from` does, or a number for that many
+indexes; `{@const}` names a value within the block it is in; a snippet is
+a function its `{@render}` calls, known throughout the block it is in. A
+line of tags alone goes with them, so blocks over lines of their own leave
+no blank line; a `{` that begins no tag, as JSON's, is text.
+
+`{#match subject}` picks text by a value as Rust's `match` does: each
+`{:pattern}` begins an arm for the values its pattern matches, `{:else}`
+one for the rest. The subject is a name, matched by its value as text, or
+a JavaScript expression.
 
 ```markdown
 {#match tone}
@@ -406,49 +443,35 @@ Be encouraging.
 {:blunt}
 Be direct.
 {/match}
-{#match depth}
-{:1..=2}
-Read it.
-{:3..}
-Read every line, and every caller.
-{:else}
-Skim it.
-{/match}
-Read it {#match args.depth > 2}{:true}closely{:false}quickly{/match}.
+Read it {#match args.depth}{:1..=2}quickly{:else}closely{/match}.
 ```
 
-The subject is an argument's name, a built-in variable's, or a JavaScript
-expression, which reads them as `args` and `vars` (see the scripts below)
-and what the scripts before it defined. A pattern is a word, as the value
-is spelt; a `"quoted"` text; a range of numbers (`1..=3` with its end,
-`1..3` without, `3..`, `..=10`); or `_`, any value, as `else` is; `|` joins
-patterns. As in Rust, a block must cover every value, or the template is
-not saved: each of a choice's options, `true` and `false`, or the rest
-with `{:else}`. A pattern its argument cannot take, as an option a choice
-does not have, is refused too.
+A pattern is a word, as the value is spelt; a `"quoted"` text; a range of
+numbers (`1..=3` with its end, `1..3` without, `3..`, `..=10`); or `_`, any
+value, as `else` is; `|` joins patterns. As in Rust, a block must cover
+every value, or the template is not saved: each of a choice's options,
+`true` and `false`, or the rest with `{:else}`. A pattern its argument
+cannot take, as an option a choice does not have, is refused too.
 
-A fenced ` ```js ` block runs its JavaScript, on QuickJS in a sandbox of its
-own ([qngg](https://github.com/ironpark/qngg): no files, no network,
-nothing printed), and gives way to the value it ends on: its last
-expression, or what it returns, awaited. A ` ```js run ` block only runs.
-The blocks of a prompt share one runtime and run in order, after the match
-blocks have picked their arms and before the names are filled in around
-them, so a block defines with `var`, or on `globalThis`, what later ones
-use. A block reads the arguments as `args`, numbers and booleans as their
-types say, and the built-in variables as `vars`. Text is put in as it is,
-`undefined` and `null` as nothing, anything else as JSON. A block that does
-not parse is refused when the template is saved; one that throws, or runs
-past five seconds, stops the call, saying which.
+A fenced ` ```js ` block runs its JavaScript where it is and gives way to
+the value it ends on: its last expression, or what it returns when it
+returns or awaits. A ` ```js run ` block only runs, in the global scope,
+so what it defines with `var` or `function` every later expression and
+block reads.
 
 ````markdown
 ```js run
 var lines = n => n === 1 ? "one line" : n + " lines";
 ```
-Review {{file}}, about
-```js
-lines(args.depth * 40)
-```
+Review {{file}}, about {{lines(depth * 40)}}.
 ````
+
+A prompt compiles to JavaScript, run on QuickJS in a sandbox of its own
+([qngg](https://github.com/ironpark/qngg): no files, no network, nothing
+printed) for at most five seconds; a prompt of text and names alone is
+filled without it. JavaScript that does not parse is refused when the
+template is saved; one that throws, or runs too long, stops the call,
+saying where.
 
 Call a template in Chat with its arguments in order, or by name, quoting
 what has spaces: `//review "src/my file.go" tone=blunt`. The line over the

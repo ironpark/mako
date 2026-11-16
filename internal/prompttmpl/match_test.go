@@ -78,7 +78,7 @@ func TestMatchRefusesWhatIsWrong(t *testing.T) {
 		"{#match tone}hello{:_}a{/match}":       "text before its first",
 		"{#match tone}{:_}a":                    "has no {/match}",
 		"{#match tone}{/match}":                 "has no arms",
-		"a {/match}":                            "{/match} with no {#match}",
+		"a {/match}":                            "{/match} with no block open",
 		"{#match tone}{:kind |}a{:_}b{/match}":  "is not a pattern",
 	} {
 		_, err := Parse("bad", []byte(front+body))

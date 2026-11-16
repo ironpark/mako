@@ -36,21 +36,33 @@ func TestPlaceholderColors(t *testing.T) {
 // built-in variable is; a block's tags for a tag begun; and for an arm, the
 // values of the block's subject, then else.
 func TestPlaceholderOptions(t *testing.T) {
-	query := func(kind, typed, block string) placeholderQuery {
-		return placeholderQuery{Open: true, Completion: prompttmpl.Completion{Kind: kind, Typed: typed, Block: block}}
+	query := func(kind, typed, open, block string) placeholderQuery {
+		return placeholderQuery{Active: true, Completion: prompttmpl.Completion{Kind: kind, Typed: typed, Open: open, Block: block}}
 	}
-	if opts := placeholderOptions(nil, query(prompttmpl.CompleteTag, "#ma", "")); len(opts) != 1 || opts[0].Shown != "{#match}" {
-		t.Fatalf("the block's tag not offered: %+v", opts)
+	shown := func(opts []placeholderOption) []string {
+		var out []string
+		for _, o := range opts {
+			out = append(out, o.Shown)
+		}
+		return out
+	}
+	if got := shown(placeholderOptions(nil, nil, query(prompttmpl.CompleteTag, "#ma", "", ""))); !slices.Equal(got, []string{"{#match …}"}) {
+		t.Fatalf("the block's tag not offered: %v", got)
+	}
+	if got := shown(placeholderOptions(nil, nil, query(prompttmpl.CompleteTag, "/", "each", ""))); len(got) == 0 || got[0] != "{/each}" {
+		t.Fatalf("the open block's end not first: %v", got)
 	}
 	tone := []argDraft{{Name: "tone", Type: prompttmpl.Choice, Options: "kind, blunt"}}
-	var arms []string
-	for _, o := range placeholderOptions(tone, query(prompttmpl.CompleteArm, "", "tone")) {
-		arms = append(arms, o.Shown)
+	if got := shown(placeholderOptions(tone, nil, query(prompttmpl.CompleteArm, "", "match", "tone"))); !slices.Equal(got, []string{"{:kind}", "{:blunt}", "{:else}"}) {
+		t.Fatalf("arms offered %v", got)
 	}
-	if !slices.Equal(arms, []string{"{:kind}", "{:blunt}", "{:else}"}) {
-		t.Fatalf("arms offered %v", arms)
+	if got := shown(placeholderOptions(nil, nil, query(prompttmpl.CompleteArm, "", "if", ""))); !slices.Equal(got, []string{"{:else if …}", "{:else}"}) {
+		t.Fatalf("an if's elses offered %v", got)
 	}
-	opts := placeholderOptions([]argDraft{{Name: "file", Type: prompttmpl.String}, {Name: "date"}}, query(prompttmpl.CompleteSubject, "D", ""))
+	if got := shown(placeholderOptions(nil, []string{"box"}, query(prompttmpl.CompleteName, "bo", "", ""))); !slices.Equal(got, []string{"{{box}}"}) {
+		t.Fatalf("a name the prompt defines not offered: %v", got)
+	}
+	opts := placeholderOptions([]argDraft{{Name: "file", Type: prompttmpl.String}, {Name: "date"}}, nil, query(prompttmpl.CompleteSubject, "D", "", ""))
 	var names []string
 	for _, o := range opts {
 		names = append(names, o.Name)
