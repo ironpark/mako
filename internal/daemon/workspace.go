@@ -83,8 +83,18 @@ func (w *workspaces) save() {
 }
 
 // handleWorkspace answers a front-end asking for the workspace, or giving
-// its own, with the one the daemon holds after.
+// its own, with the one the daemon holds after. Another node's is asked of
+// it: a node that lets this one in, which runs its programs already, shows
+// it its windows' workspace to copy from, but takes one only from its own.
 func (d *Daemon) handleWorkspace(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
+	if env.Type() == protocol.TypeGetWorkspace {
+		return serve(d, ctx, stream, env, protocol.TypeWorkspace, func(*protocol.GetWorkspace) (*protocol.Workspace, error) {
+			if cur := d.workspace.get(); cur != nil {
+				return cur, nil
+			}
+			return &protocol.Workspace{}, nil
+		})
+	}
 	if fromPeer {
 		return errors.New("the workspace is for this node's own front-ends")
 	}

@@ -2,6 +2,8 @@ package gui
 
 import (
 	"cmp"
+	"context"
+	"encoding/json"
 	"math"
 	"slices"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 
+	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -487,6 +490,8 @@ func spacesSettings(m *model) ggui.Widget {
 	general := card(
 		row(T("All sessions"), T("A space of every session, before the others. Left out, the sidebar shows only the spaces you add."),
 			ui.Switch(showAll, "").Name(T("All sessions"))),
+		row(T("Copy from another node"), T("Take the spaces, projects, names, looks and pins of a node's windows in place of these. A node shows its own only to one it lets in."),
+			copySpacesMenu(m)),
 	)
 	return page(T("Spaces"), T("Spaces divide the sidebar's projects: those of the owners a space holds, and those you put in it from a project's menu. Swipe across the sidebar with two fingers, or pick one from its title, to move between them."),
 		section(T("Every space"), general),
@@ -736,5 +741,54 @@ func spaceField(m *model, i int, field func(*space) *string) ggui.Binding[string
 			}
 			return spaces
 		})
+	})
+}
+
+// copySpacesMenu lists the nodes whose spaces can be copied: those of the
+// mesh new enough to be asked for them.
+func copySpacesMenu(m *model) ggui.Widget {
+	return ggui.View(m.Nodes, func(nodes []*protocol.Node) ggui.Widget {
+		var items []ggui.Widget
+		for _, n := range nodes {
+			if n.GetSource() == "self" || n.GetRevision() < protocol.RevisionWorkspaceOf {
+				continue
+			}
+			id, name := n.GetId(), n.GetName()
+			items = append(items, ui.MenuItem(name, func() {
+				m.askConfirm(confirmation{
+					Title:  Tf("Copy the spaces of %s?", name),
+					Body:   T("These spaces, projects, names, looks and pins are replaced, here and on the nodes that follow this one."),
+					Action: T("Copy"),
+					Run:    func() { m.copySpaces(id, name) },
+				})
+			}))
+		}
+		if len(items) == 0 {
+			return muted(ggui.Text(T("No other node to copy from")).Size(12.5))
+		}
+		return ui.MenuOf(ggui.Row(ggui.Text(T("Choose a node")).Size(13), icon("chevron-down").Size(14).Color(skin.Muted)).Gap(8).Align(ggui.AlignCenter),
+			items...).Name(T("Copy from another node"))
+	})
+}
+
+// copySpaces takes the spaces of the workspace node holds in place of
+// these, as an edit of the window's, which the nodes that follow it take
+// up in turn.
+func (m *model) copySpaces(node, name string) {
+	fetch(m, 15*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Workspace, error) {
+		return c.WorkspaceOf(ctx, node)
+	}, func(ws *protocol.Workspace, err error) {
+		var f workspaceFile
+		switch {
+		case err != nil:
+			m.toaster.Push(ui.Toast(Tf("Could not copy the spaces of %s", name), err.Error()).Destructive())
+			return
+		case len(ws.GetDoc()) == 0 || json.Unmarshal(ws.GetDoc(), &f) != nil:
+			m.toaster.Push(ui.Toast(Tf("Could not copy the spaces of %s", name), T("Its windows have kept no spaces.")).Destructive())
+			return
+		}
+		m.Spaces.Set(f.Doc.spaceList)
+		m.migrateProjectKeys()
+		m.toaster.Push(ui.Toast(Tf("Copied the spaces of %s", name), ""))
 	})
 }

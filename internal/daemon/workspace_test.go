@@ -75,3 +75,26 @@ func TestWorkspacesFollowAcrossNodesThatTrustEachOther(t *testing.T) {
 		t.Fatal("the server took up a's workspace")
 	}
 }
+
+// A window reads the workspace of a node that lets its own in, to copy
+// its spaces; one that does not let it in shows it none.
+func TestAWorkspaceIsReadFromANodeThatLetsThisOneIn(t *testing.T) {
+	a := meshDaemon(t, "a")
+	server := meshDaemon(t, "server", p2pAddr(a))
+	other := meshDaemon(t, "other", p2pAddr(a))
+	letIn(t, server, a)
+	letIn(t, a, other)
+	server.workspace.put(&protocol.Workspace{Doc: []byte("spaces"), Version: 1, NodeId: server.cfg.NodeID})
+	other.workspace.put(&protocol.Workspace{Doc: []byte("secret"), Version: 1, NodeId: other.cfg.NodeID})
+	ca := dialDaemon(t, a)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	waitFor(t, "the server among a's peers", func() bool { _, ok := a.peers.get(server.cfg.NodeID); return ok })
+	got, err := ca.WorkspaceOf(ctx, server.cfg.NodeID)
+	if err != nil || string(got.GetDoc()) != "spaces" {
+		t.Fatalf("the server's workspace: %v %v", got, err)
+	}
+	if got, err := ca.WorkspaceOf(ctx, other.cfg.NodeID); err == nil && len(got.GetDoc()) > 0 {
+		t.Fatalf("read the workspace of a node that does not let a in: %q", got.GetDoc())
+	}
+}

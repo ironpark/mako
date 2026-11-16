@@ -98,6 +98,11 @@ func (c *Client) Workspace(ctx context.Context) (*protocol.Workspace, error) {
 	return request[*protocol.Workspace](ctx, c, protocol.TypeGetWorkspace, &protocol.GetWorkspace{})
 }
 
+// WorkspaceOf is the workspace the node holds, empty for none.
+func (c *Client) WorkspaceOf(ctx context.Context, node string) (*protocol.Workspace, error) {
+	return request[*protocol.Workspace](ctx, c, protocol.TypeGetWorkspace, &protocol.GetWorkspace{NodeId: node})
+}
+
 // SetWorkspace gives the daemon a window's workspace, and returns the one
 // it holds after: ws, or a newer one.
 func (c *Client) SetWorkspace(ctx context.Context, ws *protocol.Workspace) (*protocol.Workspace, error) {

@@ -1274,4 +1274,13 @@ var catalogKo = map[string]string{
 	"Close a match block":              "match 블록 닫기",
 	"Every agent":                      "모든 에이전트",
 	"The agents and profiles it is offered to; none checked for every agent.": "이 템플릿을 쓸 수 있는 에이전트와 프로필입니다. 아무것도 고르지 않으면 모든 에이전트에서 쓸 수 있습니다.",
+	"Copy from another node": "다른 노드에서 가져오기",
+	"Take the spaces, projects, names, looks and pins of a node's windows in place of these. A node shows its own only to one it lets in.": "다른 노드 창의 스페이스, 프로젝트, 이름, 아이콘과 색, 고정 항목으로 지금 것을 바꿉니다. 노드는 자기가 들여보낸 노드에만 이를 보여줍니다.",
+	"Choose a node":                    "노드 선택",
+	"Its windows have kept no spaces.": "그 노드의 창에 저장된 스페이스가 없습니다.",
+	"These spaces, projects, names, looks and pins are replaced, here and on the nodes that follow this one.": "지금의 스페이스, 프로젝트, 이름, 아이콘과 색, 고정 항목이 바뀌고, 이 노드를 따라가는 노드에도 적용됩니다.",
+	"Copy the spaces of %s?":          "%s의 스페이스를 가져올까요?",
+	"Could not copy the spaces of %s": "%s의 스페이스를 가져오지 못했습니다",
+	"Copied the spaces of %s":         "%s의 스페이스를 가져왔습니다",
+	"No other node to copy from":      "가져올 다른 노드가 없습니다",
 }

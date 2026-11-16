@@ -21,7 +21,80 @@ public  final class GetWorkspace extends
     // @@protoc_insertion_point(message_implements:mako.v2.GetWorkspace)
     GetWorkspaceOrBuilder {
   private GetWorkspace() {
+    nodeId_ = "";
   }
+  public static final int NODE_ID_FIELD_NUMBER = 1;
+  private java.lang.String nodeId_;
+  /**
+   * <pre>
+   * node_id asks another node for the one it holds, as a node that lets
+   * this one in gives it, to copy from; "" is the daemon's own.
+   * </pre>
+   *
+   * <code>string node_id = 1 [json_name = "nodeId"];</code>
+   * @return The nodeId.
+   */
+  @java.lang.Override
+  public java.lang.String getNodeId() {
+    return nodeId_;
+  }
+  /**
+   * <pre>
+   * node_id asks another node for the one it holds, as a node that lets
+   * this one in gives it, to copy from; "" is the daemon's own.
+   * </pre>
+   *
+   * <code>string node_id = 1 [json_name = "nodeId"];</code>
+   * @return The bytes for nodeId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getNodeIdBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(nodeId_);
+  }
+  /**
+   * <pre>
+   * node_id asks another node for the one it holds, as a node that lets
+   * this one in gives it, to copy from; "" is the daemon's own.
+   * </pre>
+   *
+   * <code>string node_id = 1 [json_name = "nodeId"];</code>
+   * @param value The nodeId to set.
+   */
+  private void setNodeId(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    nodeId_ = value;
+  }
+  /**
+   * <pre>
+   * node_id asks another node for the one it holds, as a node that lets
+   * this one in gives it, to copy from; "" is the daemon's own.
+   * </pre>
+   *
+   * <code>string node_id = 1 [json_name = "nodeId"];</code>
+   */
+  private void clearNodeId() {
+
+    nodeId_ = getDefaultInstance().getNodeId();
+  }
+  /**
+   * <pre>
+   * node_id asks another node for the one it holds, as a node that lets
+   * this one in gives it, to copy from; "" is the daemon's own.
+   * </pre>
+   *
+   * <code>string node_id = 1 [json_name = "nodeId"];</code>
+   * @param value The bytes for nodeId to set.
+   */
+  private void setNodeIdBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    nodeId_ = value.toStringUtf8();
+
+  }
+
   public static dev.ironpark.mako.v2.GetWorkspace parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -125,6 +198,80 @@ public  final class GetWorkspace extends
     }
 
 
+    /**
+     * <pre>
+     * node_id asks another node for the one it holds, as a node that lets
+     * this one in gives it, to copy from; "" is the daemon's own.
+     * </pre>
+     *
+     * <code>string node_id = 1 [json_name = "nodeId"];</code>
+     * @return The nodeId.
+     */
+    @java.lang.Override
+    public java.lang.String getNodeId() {
+      return instance.getNodeId();
+    }
+    /**
+     * <pre>
+     * node_id asks another node for the one it holds, as a node that lets
+     * this one in gives it, to copy from; "" is the daemon's own.
+     * </pre>
+     *
+     * <code>string node_id = 1 [json_name = "nodeId"];</code>
+     * @return The bytes for nodeId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getNodeIdBytes() {
+      return instance.getNodeIdBytes();
+    }
+    /**
+     * <pre>
+     * node_id asks another node for the one it holds, as a node that lets
+     * this one in gives it, to copy from; "" is the daemon's own.
+     * </pre>
+     *
+     * <code>string node_id = 1 [json_name = "nodeId"];</code>
+     * @param value The nodeId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNodeId(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setNodeId(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * node_id asks another node for the one it holds, as a node that lets
+     * this one in gives it, to copy from; "" is the daemon's own.
+     * </pre>
+     *
+     * <code>string node_id = 1 [json_name = "nodeId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearNodeId() {
+      copyOnWrite();
+      instance.clearNodeId();
+      return this;
+    }
+    /**
+     * <pre>
+     * node_id asks another node for the one it holds, as a node that lets
+     * this one in gives it, to copy from; "" is the daemon's own.
+     * </pre>
+     *
+     * <code>string node_id = 1 [json_name = "nodeId"];</code>
+     * @param value The bytes for nodeId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNodeIdBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setNodeIdBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.GetWorkspace)
   }
   @java.lang.Override
@@ -140,9 +287,11 @@ public  final class GetWorkspace extends
         return new Builder();
       }
       case BUILD_MESSAGE_INFO: {
-          java.lang.Object[] objects = null;
+          java.lang.Object[] objects = new java.lang.Object[] {
+            "nodeId_",
+          };
           java.lang.String info =
-              "\u0000\u0000";
+              "\u0000\u0001\u0000\u0000\u0001\u0001\u0001\u0000\u0000\u0000\u0001\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -9,4 +9,26 @@ package dev.ironpark.mako.v2;
 public interface GetWorkspaceOrBuilder extends
     // @@protoc_insertion_point(interface_extends:mako.v2.GetWorkspace)
     com.google.protobuf.MessageLiteOrBuilder {
+
+  /**
+   * <pre>
+   * node_id asks another node for the one it holds, as a node that lets
+   * this one in gives it, to copy from; "" is the daemon's own.
+   * </pre>
+   *
+   * <code>string node_id = 1 [json_name = "nodeId"];</code>
+   * @return The nodeId.
+   */
+  java.lang.String getNodeId();
+  /**
+   * <pre>
+   * node_id asks another node for the one it holds, as a node that lets
+   * this one in gives it, to copy from; "" is the daemon's own.
+   * </pre>
+   *
+   * <code>string node_id = 1 [json_name = "nodeId"];</code>
+   * @return The bytes for nodeId.
+   */
+  com.google.protobuf.ByteString
+      getNodeIdBytes();
 }

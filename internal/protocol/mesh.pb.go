@@ -675,7 +675,10 @@ func (x *Workspace) GetNodeId() string {
 // a Workspace, empty when it holds none. A front-end sends a Workspace to
 // give the daemon its own, and hears back the one the daemon holds after.
 type GetWorkspace struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// node_id asks another node for the one it holds, as a node that lets
+	// this one in gives it, to copy from; "" is the daemon's own.
+	NodeId        string `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -708,6 +711,13 @@ func (x *GetWorkspace) ProtoReflect() protoreflect.Message {
 // Deprecated: Use GetWorkspace.ProtoReflect.Descriptor instead.
 func (*GetWorkspace) Descriptor() ([]byte, []int) {
 	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *GetWorkspace) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
 }
 
 // Watch turns a front-end's stream into a feed of changes: the daemon
@@ -1276,8 +1286,9 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\tWorkspace\x12\x10\n" +
 	"\x03doc\x18\x01 \x01(\fR\x03doc\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x17\n" +
-	"\anode_id\x18\x03 \x01(\tR\x06nodeId\"\x0e\n" +
-	"\fGetWorkspace\"%\n" +
+	"\anode_id\x18\x03 \x01(\tR\x06nodeId\"'\n" +
+	"\fGetWorkspace\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"%\n" +
 	"\x05Watch\x12\x1c\n" +
 	"\tapprovals\x18\x01 \x01(\bR\tapprovals\"\x8b\x01\n" +
 	"\aChanged\x12\x14\n" +

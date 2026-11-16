@@ -118,7 +118,11 @@ message Workspace {
 // GetWorkspace asks the daemon for the workspace it holds; it answers with
 // a Workspace, empty when it holds none. A front-end sends a Workspace to
 // give the daemon its own, and hears back the one the daemon holds after.
-message GetWorkspace {}
+message GetWorkspace {
+  // node_id asks another node for the one it holds, as a node that lets
+  // this one in gives it, to copy from; "" is the daemon's own.
+  string node_id = 1;
+}
 
 // Watch turns a front-end's stream into a feed of changes: the daemon
 // answers with a Changed whenever the mesh's nodes or sessions change.

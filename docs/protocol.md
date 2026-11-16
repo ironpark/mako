@@ -308,7 +308,7 @@ that answers on success.
 | `list_nodes` | `{}` | `nodes` | The daemon itself, then its peers, each with how the daemon stands with it. |
 | `watch` | `Watch` | `changed`, then more | Turns the stream into a feed: a `changed` at once, then one whenever the mesh's nodes or sessions, or the daemon's access, change, until the front-end closes the stream. With `approvals`, the front-end watches for [approvals](#sessions) meanwhile too. |
 | `access` | `Access` | `access_info` | Who the daemon lets in, and changes to it; see [Access](#access). From a front-end only. |
-| `get_workspace` | `{}` | `workspace` | The workspace the daemon holds, empty for none; see [Workspaces](#workspaces). From a front-end only. |
+| `get_workspace` | `GetWorkspace` | `workspace` | The workspace the daemon holds, empty for none; see [Workspaces](#workspaces). With `node_id`, the one that node holds, which a node gives one it lets in, to copy its spaces from (revision 22). |
 | `workspace` | `Workspace` | `workspace` | Gives the daemon a window's workspace, kept if it is newer than the one held; the reply is the one held after. From a front-end only. |
 
 ```proto
@@ -907,7 +907,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 21) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 22) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
