@@ -135,7 +135,9 @@ func (m *model) spaceSections(st sidebarState, i int) []sessionGroup {
 }
 
 // projectTree is the sidebar's projects in space i: those pinned, then
-// every one under its owner.
+// every other one under its owner. A project pinned shows at the top as
+// it would below, its folders under it; a folder pinned shows there on
+// its own, and neither shows again below.
 func projectTree(m *model, st sidebarState, i int) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		groups := m.spaceSections(st, i)
@@ -158,12 +160,16 @@ func projectTree(m *model, st sidebarState, i int) ggui.Widget {
 			sections = []ownerSection{{Groups: groups}}
 		}
 		for _, o := range sections {
-			if o.Owner != "" {
+			var under []ggui.Widget
+			for _, g := range o.Groups {
+				if !tree.pinned(scopeKey{Section: g.Key}) {
+					under = append(under, tree.project(g)...)
+				}
+			}
+			if o.Owner != "" && len(under) > 0 {
 				rows = append(rows, ownerHeading(m, o))
 			}
-			for _, g := range o.Groups {
-				rows = append(rows, tree.project(g)...)
-			}
+			rows = append(rows, under...)
 		}
 		return ggui.Column(rows...).Gap(1).Stretch()
 	})
@@ -177,6 +183,9 @@ type treeRows struct {
 	looks  map[string]projectLook
 	labels map[string]string
 }
+
+// pinned reports whether k is pinned.
+func (t treeRows) pinned(k scopeKey) bool { return slices.Contains(t.pins, k) }
 
 // name is how section g is named in the tree.
 func (t treeRows) name(g sessionGroup) string { return cmp.Or(g.Name, t.labels[g.Key], groupName(g)) }
@@ -237,8 +246,17 @@ func (t treeRows) project(g sessionGroup) []ggui.Widget {
 	if !g.multiRoot() {
 		return rows
 	}
+	// A folder pinned shows with the pins, unless the project is pinned
+	// too and shows there whole.
+	whole := t.pinned(key)
+	var shown []int
 	for j, r := range g.Def.Roots {
-		rows = append(rows, t.folder(g, j, r, j == len(g.Def.Roots)-1))
+		if whole || !t.pinned(scopeKey{Section: g.Key, Root: rootKey(r)}) {
+			shown = append(shown, j)
+		}
+	}
+	for n, j := range shown {
+		rows = append(rows, t.folder(g, j, g.Def.Roots[j], n == len(shown)-1))
 	}
 	return rows
 }
@@ -280,7 +298,8 @@ func (t treeRows) folder(g sessionGroup, j int, r projectRoot, last bool) ggui.W
 }
 
 // pinnedRows are the projects and folders pinned, in the order pinned, of
-// those in groups.
+// those in groups: a project as the tree shows it, its folders under it,
+// and a folder on its own, unless its project is pinned and shows it.
 func (t treeRows) pinnedRows(groups []sessionGroup) []ggui.Widget {
 	m := t.m
 	var rows []ggui.Widget
@@ -290,36 +309,37 @@ func (t treeRows) pinnedRows(groups []sessionGroup) []ggui.Widget {
 			continue
 		}
 		g := groups[i]
-		name, parent, sessions := t.name(g), "", g.Sessions
-		lead := lookOf(t.looks, g.Key).glyph(16)
-		if k.Root != "" {
-			j := -1
-			if g.Def != nil {
-				j = slices.IndexFunc(g.Def.Roots, func(r projectRoot) bool { return rootKey(r) == k.Root })
-			}
-			if j < 0 {
-				continue
-			}
-			sessions = nil
-			for _, s := range g.Sessions {
-				if at, ok := g.RootOf[s.GetId()]; ok && at == j {
-					sessions = append(sessions, s)
-				}
-			}
-			name, parent, lead = g.Def.Roots[j].label(), name, hashMark(16)
+		if k.Root == "" {
+			rows = append(rows, t.project(g)...)
+			continue
 		}
+		if t.pinned(scopeKey{Section: g.Key}) {
+			continue
+		}
+		j := -1
+		if g.Def != nil {
+			j = slices.IndexFunc(g.Def.Roots, func(r projectRoot) bool { return rootKey(r) == k.Root })
+		}
+		if j < 0 {
+			continue
+		}
+		var sessions []*protocol.SessionInfo
+		for _, s := range g.Sessions {
+			if at, ok := g.RootOf[s.GetId()]; ok && at == j {
+				sessions = append(sessions, s)
+			}
+		}
+		name, parent := g.Def.Roots[j].label(), t.name(g)
 		row := []ggui.Widget{
-			lead,
+			hashMark(16),
 			ggui.Text(name).Size(14).NoWrap(),
 			ggui.Expanded(ggui.Align(ggui.Text(parent).Size(12).Color(skin.ExtraMuted).NoWrap().Ellipsis()).Left()),
 		}
 		if working(sessions) {
 			row = append(row, workingDot())
 		}
-		if k.Root != "" {
-			row = append(row, ggui.Text(fmt.Sprint(len(sessions))).Size(12).Color(skin.ExtraMuted).NoWrap())
-		}
-		label := cmp.Or(parent+" / ", "") + name
+		row = append(row, ggui.Text(fmt.Sprint(len(sessions))).Size(12).Color(skin.ExtraMuted).NoWrap())
+		label := parent + " / " + name
 		btn := ui.ButtonOf(ggui.Row(row...).Gap(8).Align(ggui.AlignCenter), func() { m.pickScope(k) }).
 			Ghost().Pad(6, 8).Radius(7).Name(label)
 		rows = append(rows, selectedRow(ggui.Row(ggui.Expanded(btn), pinButton(m, k, label, ggui.Const(true))).Align(ggui.AlignCenter), t.scope == k))

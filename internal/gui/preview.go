@@ -512,6 +512,8 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				steps = []previewStep{
 					do(setTheme("dark")), frames(5), shot("sidebar"),
 					do(func() { m.setScope(scopeKey{Section: "xxgg"}) }), frames(5), shot("sidebar-project"),
+					do(func() { m.togglePinScope(scopeKey{Section: "xxgg"}) }), frames(5), shot("sidebar-pinned-project"),
+					do(func() { m.togglePinScope(scopeKey{Section: "xxgg"}) }),
 					do(func() { m.setAgentView(func(p *prefs) { p.AgentGroup = agentGroupMachine }) }), frames(5), shot("sidebar-machine"),
 					do(func() { m.setAgentView(func(p *prefs) { p.AgentGroup, p.AgentCompact = agentGroupNone, true }) }), frames(5), shot("sidebar-compact"),
 					do(setTheme("light")), frames(5), shot("sidebar-light"),
