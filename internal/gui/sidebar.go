@@ -124,18 +124,18 @@ func sessionList(m *model, ids []string) string {
 }
 
 // pinned reports whether the sidebar lists a session first.
-func (m *model) pinned(id string) bool { return slices.Contains(ggui.Peek(m.Prefs).Pinned, id) }
+func (m *model) pinned(id string) bool { return slices.Contains(ggui.Peek(m.Spaces).Pinned, id) }
 
 // togglePin pins a session to the top of the sidebar, or unpins it.
 func (m *model) togglePin(id string) {
-	m.Prefs.Update(func(p prefs) prefs { p.Pinned = toggled(p.Pinned, id); return p })
+	m.Spaces.Update(func(l spaceList) spaceList { l.Pinned = toggled(l.Pinned, id); return l })
 }
 
 // toggled is list with v taken out, or put at its end when it is not in
 // it: a copy, so the list a setting held stays as it was.
-func toggled(list []string, v string) []string {
+func toggled[T comparable](list []T, v T) []T {
 	if slices.Contains(list, v) {
-		return slices.DeleteFunc(slices.Clone(list), func(o string) bool { return o == v })
+		return slices.DeleteFunc(slices.Clone(list), func(o T) bool { return o == v })
 	}
 	return append(slices.Clone(list), v)
 }

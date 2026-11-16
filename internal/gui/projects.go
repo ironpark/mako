@@ -639,20 +639,20 @@ func (m *model) migrateProjectKeys() {
 
 // movePins moves the pins of each section in moved to the one it maps to.
 func (m *model) movePins(moved map[string]string) {
-	pins := ggui.Peek(m.Prefs).PinnedProjects
+	pins := ggui.Peek(m.Spaces).PinnedProjects
 	if !slices.ContainsFunc(pins, func(k scopeKey) bool { _, ok := moved[k.Section]; return ok }) {
 		return
 	}
-	m.Prefs.Update(func(p prefs) prefs {
-		out := make([]scopeKey, 0, len(p.PinnedProjects))
-		for _, k := range p.PinnedProjects {
+	m.Spaces.Update(func(l spaceList) spaceList {
+		out := make([]scopeKey, 0, len(l.PinnedProjects))
+		for _, k := range l.PinnedProjects {
 			k.Section = cmp.Or(moved[k.Section], k.Section)
 			if !slices.Contains(out, k) {
 				out = append(out, k)
 			}
 		}
-		p.PinnedProjects = out
-		return p
+		l.PinnedProjects = out
+		return l
 	})
 }
 

@@ -117,8 +117,8 @@ type sidebarState struct {
 func newSidebarState(m *model) sidebarState {
 	return sidebarState{
 		kept:           ggui.Map(m.Prefs, func(p prefs) []keptProject { return p.Projects }).WithEqual(slices.Equal),
-		pinned:         ggui.Map(m.Prefs, func(p prefs) []string { return p.Pinned }).WithEqual(slices.Equal),
-		pinnedProjects: ggui.Map(m.Prefs, func(p prefs) []scopeKey { return p.PinnedProjects }).WithEqual(slices.Equal),
+		pinned:         ggui.Map(m.Spaces, func(l spaceList) []string { return l.Pinned }).WithEqual(slices.Equal),
+		pinnedProjects: ggui.Map(m.Spaces, func(l spaceList) []scopeKey { return l.PinnedProjects }).WithEqual(slices.Equal),
 		view: ggui.Map(m.Prefs, func(p prefs) agentView {
 			return agentView{Group: p.AgentGroup, Sort: p.AgentSort, Filter: p.AgentFilter, Compact: p.AgentCompact}
 		}),

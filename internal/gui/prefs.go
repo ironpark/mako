@@ -80,16 +80,16 @@ type prefs struct {
 	AgentSort    string `json:"agent_sort"`
 	AgentCompact bool   `json:"agent_compact,omitempty"`
 	AgentFilter  string `json:"agent_filter,omitempty"`
-	// PinnedProjects are the projects, and folders of them, the sidebar
-	// lists first.
-	PinnedProjects []scopeKey `json:"pinned_projects,omitempty"`
+	// OldPinnedProjects and OldPinned are the pins as gui.json kept them
+	// before the workspace shared them (spaceList's); read to move them
+	// there, then dropped.
+	OldPinnedProjects []scopeKey `json:"pinned_projects,omitempty"`
 
 	// How diffs are drawn: side by side, and with long lines wrapped.
 	DiffSplit bool `json:"diff_split,omitempty"`
 	DiffWrap  bool `json:"diff_wrap,omitempty"`
 
-	// Pinned are the sessions the sidebar lists first.
-	Pinned []string `json:"pinned,omitempty"`
+	OldPinned []string `json:"pinned,omitempty"`
 
 	// RecentCommands are the palette's commands run lately, the latest
 	// first, by their English labels.

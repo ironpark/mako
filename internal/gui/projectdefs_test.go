@@ -175,14 +175,17 @@ func TestOldProjectKeysMove(t *testing.T) {
 	old := "project:" + dirKey("mac", "/w/server")
 	m.Prefs.Update(func(p prefs) prefs {
 		p.Projects = []keptProject{{fileRoot{Node: "mac", Path: "/w/server"}, "github.com/acme", "github.com/acme/server"}}
-		p.PinnedProjects = []scopeKey{{Section: dirKey("mac", "/w/server")}, {Section: "other"}}
 		return p
+	})
+	m.Spaces.Update(func(l spaceList) spaceList {
+		l.PinnedProjects = []scopeKey{{Section: dirKey("mac", "/w/server")}, {Section: "other"}}
+		return l
 	})
 	m.ws.layouts = map[string]*layoutNode{layoutKey("all", old): newLayout()}
 	m.ws.contexts = map[string]string{"all": old}
 	m.migrateProjectKeys()
 	now := "project:repo:github.com/acme/server"
-	if got := ggui.Peek(m.Prefs).PinnedProjects; !slices.Equal(got, []scopeKey{{Section: "repo:github.com/acme/server"}, {Section: "other"}}) {
+	if got := ggui.Peek(m.Spaces).PinnedProjects; !slices.Equal(got, []scopeKey{{Section: "repo:github.com/acme/server"}, {Section: "other"}}) {
 		t.Fatalf("pinned %v", got)
 	}
 	if _, ok := m.ws.layouts[layoutKey("all", now)]; !ok || m.ws.contexts["all"] != now {

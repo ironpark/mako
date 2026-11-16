@@ -142,6 +142,15 @@ func setupWorkspace(m *model) {
 // kept them, into the workspace, the one shown with them.
 func moveOldSpaces(m *model) {
 	p := ggui.Peek(m.Prefs)
+	if len(p.OldPinned) > 0 || len(p.OldPinnedProjects) > 0 {
+		m.Spaces.Update(func(l spaceList) spaceList {
+			if len(l.Pinned) == 0 && len(l.PinnedProjects) == 0 {
+				l.Pinned, l.PinnedProjects = p.OldPinned, p.OldPinnedProjects
+			}
+			return l
+		})
+		m.Prefs.Update(func(q prefs) prefs { q.OldPinned, q.OldPinnedProjects = nil, nil; return q })
+	}
 	if len(p.OldSpaces) == 0 {
 		return
 	}
@@ -283,8 +292,17 @@ func (m *model) saveWorkspace() {
 		return
 	}
 	m.ws.last = doc
-	m.ws.version, m.ws.node = time.Now().UnixNano(), ggui.Peek(m.Conn).Self.GetId()
+	m.ws.version, m.ws.node = editVersion(m.ws.version, time.Now()), ggui.Peek(m.Conn).Self.GetId()
 	m.giveWorkspace(m.writeWorkspace())
+}
+
+// editVersion is the version of an edit made at now of the workspace at
+// version: now, or just after version when the node that made that one
+// keeps a clock ahead of this one's. An edit is newer than what it
+// edited, so the nodes take it up, however their clocks differ; else one
+// made here would lose, and be undone, to the very workspace it changed.
+func editVersion(version int64, now time.Time) int64 {
+	return max(now.UnixNano(), version+1)
 }
 
 // writeWorkspace writes the workspace down as the edit it is, and returns

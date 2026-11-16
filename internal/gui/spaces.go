@@ -49,6 +49,10 @@ type spaceList struct {
 	// Looks are the icons and colours of the project sections, by their
 	// IDs; see projectlook.go.
 	Looks map[string]projectLook `json:"looks,omitempty"`
+	// PinnedProjects are the projects, and folders of them, and Pinned the
+	// sessions, the sidebar lists first.
+	PinnedProjects []scopeKey `json:"pinned_projects,omitempty"`
+	Pinned         []string   `json:"pinned,omitempty"`
 }
 
 // spaceSet is the spaces with the one the window shows, by index: 0 for

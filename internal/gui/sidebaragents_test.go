@@ -37,7 +37,7 @@ func TestAgentsListedByScopeStatusAndGroup(t *testing.T) {
 		run("a3", "here", "/w/a", ""),
 		run("b1", "here", "/w/b", protocol.AgentWorking),
 	})
-	m.Prefs.Update(func(p prefs) prefs { p.Pinned = []string{"b1"}; return p })
+	m.Spaces.Update(func(l spaceList) spaceList { l.Pinned = []string{"b1"}; return l })
 	st := newSidebarState(m)
 	m.setScope(scopeKey{Section: dirKey("box", "/w/a")})
 	// The clones of a folder with no remote are sections of their own:

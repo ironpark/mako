@@ -110,6 +110,22 @@ func TestANewerWorkspaceIsTakenUp(t *testing.T) {
 	}
 }
 
+// An edit of a workspace from a node whose clock runs ahead is newer still
+// than it: the nodes take it up, rather than undo it with the one it
+// changed.
+func TestAnEditOutdatesWhatItEdited(t *testing.T) {
+	m, p := workspaceModel(t)
+	p.Frame()
+	ahead := time.Now().Add(time.Hour).UnixNano()
+	body, _ := json.Marshal(workspaceFile{Version: ahead, NodeID: "b", Doc: workspaceDoc{}})
+	m.takeWorkspace(&protocol.Workspace{Doc: body, Version: ahead, NodeId: "b"})
+	m.Spaces.Update(func(l spaceList) spaceList { l.Spaces = []space{{ID: "w", Name: "work"}}; return l })
+	m.saveWorkspace()
+	if m.ws.version <= ahead {
+		t.Fatalf("an edit of %d is %d", ahead, m.ws.version)
+	}
+}
+
 // What the window writes down leaves out diffs and empty spaces' panes.
 func TestTheWorkspaceLeavesOutDiffs(t *testing.T) {
 	m, _ := workspaceModel(t)
@@ -207,5 +223,20 @@ func TestContextsAndOldSpacesCarryOver(t *testing.T) {
 	}
 	if ggui.Peek(again.Prefs).OldSpaces != nil {
 		t.Fatal("the old spaces stay in the settings")
+	}
+}
+
+// Pins gui.json kept move to the workspace, which shares them, once.
+func TestPinsMoveToTheWorkspace(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Prefs.Update(func(p prefs) prefs {
+		p.OldPinned, p.OldPinnedProjects = []string{"s1"}, []scopeKey{{Section: "x"}}
+		return p
+	})
+	moveOldSpaces(m)
+	l, p := ggui.Peek(m.Spaces), ggui.Peek(m.Prefs)
+	if !slices.Equal(l.Pinned, []string{"s1"}) || !slices.Equal(l.PinnedProjects, []scopeKey{{Section: "x"}}) || p.OldPinned != nil || p.OldPinnedProjects != nil {
+		t.Fatalf("spaces %+v, prefs pins %v %v", l, p.OldPinned, p.OldPinnedProjects)
 	}
 }

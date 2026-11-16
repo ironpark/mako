@@ -112,19 +112,15 @@ func (m *model) followScope(s *protocol.SessionInfo) {
 
 // pinnedScope reports whether the sidebar lists a project or folder first.
 func (m *model) pinnedScope(k scopeKey) bool {
-	return slices.Contains(ggui.Peek(m.Prefs).PinnedProjects, k)
+	return slices.Contains(ggui.Peek(m.Spaces).PinnedProjects, k)
 }
 
 // togglePinScope pins a project or folder to the top of the sidebar, or
 // unpins it.
 func (m *model) togglePinScope(k scopeKey) {
-	m.Prefs.Update(func(p prefs) prefs {
-		if i := slices.Index(p.PinnedProjects, k); i >= 0 {
-			p.PinnedProjects = slices.Delete(slices.Clone(p.PinnedProjects), i, i+1)
-		} else {
-			p.PinnedProjects = append(slices.Clone(p.PinnedProjects), k)
-		}
-		return p
+	m.Spaces.Update(func(l spaceList) spaceList {
+		l.PinnedProjects = toggled(l.PinnedProjects, k)
+		return l
 	})
 }
 

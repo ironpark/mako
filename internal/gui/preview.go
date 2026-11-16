@@ -801,9 +801,9 @@ func sidebarPreview(m *model) {
 	m.Sessions.Set(sessions)
 	m.Titles.Set(titles)
 	m.Printed.Set(printed)
-	m.Prefs.Update(func(p prefs) prefs {
-		p.Pinned = []string{"9593a6cb00000000"}
-		p.PinnedProjects = []scopeKey{{Section: "xxgg", Root: "github.com/xxgg/ggui"}}
-		return p
+	m.Spaces.Update(func(l spaceList) spaceList {
+		l.Pinned = []string{"9593a6cb00000000"}
+		l.PinnedProjects = []scopeKey{{Section: "xxgg", Root: "github.com/xxgg/ggui"}}
+		return l
 	})
 }
