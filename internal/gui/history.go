@@ -10,6 +10,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -252,7 +253,7 @@ func refBadges(refs []string) []ggui.Widget {
 	var out []ggui.Widget
 	for i, ref := range refs {
 		if i == 2 {
-			out = append(out, muted(ggui.Text(fmt.Sprintf("+%d", len(refs)-i)).Size(10.5)))
+			out = append(out, muted(widget.Text(fmt.Sprintf("+%d", len(refs)-i)).Size(10.5)))
 			break
 		}
 		name, fg, lead := ref, color.Color(skin.Muted), "git-branch"
@@ -264,9 +265,9 @@ func refBadges(refs []string) []ggui.Widget {
 		case strings.HasPrefix(ref, "tag: "):
 			name, lead = strings.TrimPrefix(ref, "tag: "), "tag"
 		}
-		out = append(out, ggui.Box(ggui.Row(
+		out = append(out, widget.Box(widget.Row(
 			icon(lead).Size(10).Color(fg),
-			ggui.Box(ggui.Text(name).Size(10.5).Color(fg).NoWrap().Ellipsis()).MaxWidth(90),
+			widget.Box(widget.Text(name).Size(10.5).Color(fg).NoWrap().Ellipsis()).MaxWidth(90),
 		).Gap(3)).Pad(1, 5).Radius(4).Fill(skin.Surface2))
 	}
 	return out
@@ -299,28 +300,28 @@ func historyBody(m *model) ggui.Widget {
 		case v.Err != "" && len(cs) == 0:
 			note = v.Err
 		case v.Loading:
-			return ggui.Box(ggui.Center(ui.Spinner())).Height(80)
+			return widget.Box(widget.Center(ui.Spinner())).Height(80)
 		case len(cs) == 0:
 			note = T("No commits yet.")
 		}
 		if note != "" {
-			return ggui.Box(muted(ggui.Text(note).Size(12.5))).Pad(14, 16)
+			return widget.Box(muted(widget.Text(note).Size(12.5))).Pad(14, 16)
 		}
 		graph := commitGraph(cs)
 		lanes := graphWidth(graph)
 		// Only the rows in view are built: a row is a subject, refs, a
 		// button and a menu, and a history lists up to 500 of them.
-		rows := ggui.Each(ggui.State(cs), func(row ggui.EachItem[*protocol.GitCommit]) ggui.Widget {
+		rows := widget.Each(ggui.State(cs), func(row widget.EachItem[*protocol.GitCommit]) ggui.Widget {
 			i := ggui.Peek(row.Index)
 			return commitRow(m, row.Item, graph[i], lanes)
 		}).Stretch().ItemExtent(historyRow)
 		if !v.More {
 			return rows
 		}
-		return ggui.Column(rows, ggui.Box(muted(ggui.Text(Tf("Showing the newest %d commits.", len(cs))).Size(11.5))).Pad(8, 12)).Stretch()
+		return widget.Column(rows, widget.Box(muted(widget.Text(Tf("Showing the newest %d commits.", len(cs))).Size(11.5))).Pad(8, 12)).Stretch()
 	})
 	open := ggui.Map(m.git.Commit, func(c commitView) bool { return c.Hash != "" })
-	body := ggui.Scroll(ggui.Padding(list, 0, 0, 4, 0)).Bar(skin.Surface3)
+	body := widget.Scroll(widget.Padding(list, 0, 0, 4, 0)).Bar(skin.Surface3)
 	split := ggui.State(0.5)
 	return ggui.If(open, func() ggui.Widget {
 		return ui.Resizable(split, body, commitPane(m)).Vertical().MinSizes(80, 80).Hairline().Name(T("Commit divider"))
@@ -331,19 +332,19 @@ func historyBody(m *model) ggui.Widget {
 // and refs, and who made it when.
 func commitRow(m *model, c *protocol.GitCommit, g graphRow, lanes int) ggui.Widget {
 	head := slices.ContainsFunc(c.GetRefs(), func(r string) bool { return r == "HEAD" || strings.HasPrefix(r, "HEAD -> ") })
-	top := append([]ggui.Widget{ggui.Expanded(ggui.Text(c.GetSubject()).Size(12.5).NoWrap().Ellipsis())}, refBadges(c.GetRefs())...)
-	text := ggui.Column(
-		ggui.Row(top...).Gap(5).Align(ggui.AlignCenter),
-		ggui.Row(
-			ggui.Expanded(ggui.Text(c.GetAuthor()+" · "+ago(protocol.TimeOf(c.GetTime()))).Size(11).Color(skin.ExtraMuted).NoWrap().Ellipsis()),
+	top := append([]ggui.Widget{widget.Expanded(widget.Text(c.GetSubject()).Size(12.5).NoWrap().Ellipsis())}, refBadges(c.GetRefs())...)
+	text := widget.Column(
+		widget.Row(top...).Gap(5).Align(widget.AlignCenter),
+		widget.Row(
+			widget.Expanded(widget.Text(c.GetAuthor()+" · "+ago(protocol.TimeOf(c.GetTime()))).Size(11).Color(skin.ExtraMuted).NoWrap().Ellipsis()),
 			chip(shortHash(c.GetHash())),
-		).Gap(6).Align(ggui.AlignCenter),
+		).Gap(6).Align(widget.AlignCenter),
 	).Gap(2).Stretch()
-	content := ggui.Row(&graphCell{row: g, lanes: lanes, head: head}, ggui.Expanded(text)).Gap(6).Align(ggui.AlignCenter)
+	content := widget.Row(&graphCell{row: g, lanes: lanes, head: head}, widget.Expanded(text)).Gap(6).Align(widget.AlignCenter)
 	// Only the rows chosen and no longer chosen redraw as the choice moves.
 	chosen := ggui.Map(m.git.Commit, func(cv commitView) bool { return cv.Hash == c.GetHash() })
 	row := ggui.View(chosen, func(on bool) ggui.Widget {
-		box := ggui.Box(content).Height(historyRow).Pad(0, 10, 0, 6)
+		box := widget.Box(content).Height(historyRow).Pad(0, 10, 0, 6)
 		if on {
 			box = box.Fill(skin.Surface2)
 		}
@@ -359,7 +360,7 @@ func commitPane(m *model) ggui.Widget {
 	head := ggui.View(m.git.Commit, func(cv commitView) ggui.Widget {
 		return panelHeader(
 			icon("git-commit-horizontal").Size(15),
-			ggui.Expanded(ggui.Text(shortHash(cv.Hash)).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap()),
+			widget.Expanded(widget.Text(shortHash(cv.Hash)).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap()),
 			iconButton("copy", T("Copy hash"), func() { ggui.CurrentClipboard().Write(cv.Hash) }),
 			iconButton("x", T("Close commit"), func() { m.git.Commit.Set(commitView{}) }),
 		)
@@ -367,32 +368,32 @@ func commitPane(m *model) ggui.Widget {
 	content := ggui.View(m.git.Commit, func(cv commitView) ggui.Widget {
 		switch {
 		case cv.Loading:
-			return ggui.Center(ui.Spinner())
+			return widget.Center(ui.Spinner())
 		case cv.Err != "":
 			return paneNote(cv.Err)
 		}
 		info := cv.Info
 		rows := []ggui.Widget{
-			ggui.Text(info.GetCommit().GetSubject()).Size(13).Weight(ggui.WeightSemibold).Selectable(),
+			widget.Text(info.GetCommit().GetSubject()).Size(13).Weight(ggui.WeightSemibold).Selectable(),
 		}
 		if info.GetBody() != "" {
-			rows = append(rows, ggui.Text(info.GetBody()).Size(12).Color(skin.Muted).Selectable())
+			rows = append(rows, widget.Text(info.GetBody()).Size(12).Color(skin.Muted).Selectable())
 		}
 		who := info.GetCommit().GetAuthor()
 		if info.GetEmail() != "" {
 			who += " <" + info.GetEmail() + ">"
 		}
-		rows = append(rows, ggui.Text(who+"\n"+protocol.TimeOf(info.GetCommit().GetTime()).Local().Format("2006-01-02 15:04")).Size(11.5).Color(skin.ExtraMuted).Selectable())
-		meta := ggui.Box(ggui.Column(rows...).Gap(6).Stretch()).Pad(10, 12)
+		rows = append(rows, widget.Text(who+"\n"+protocol.TimeOf(info.GetCommit().GetTime()).Local().Format("2006-01-02 15:04")).Size(11.5).Color(skin.ExtraMuted).Selectable())
+		meta := widget.Box(widget.Column(rows...).Gap(6).Stretch()).Pad(10, 12)
 		files := make([]ggui.Widget, 0, len(info.GetFiles()))
 		for _, f := range info.GetFiles() {
-			row := ggui.Row(statusIcon(f.GetStatus()), ggui.Expanded(ggui.Text(f.GetPath()).Size(12).NoWrap().Ellipsis()), fileCounts(f)).Gap(7)
+			row := widget.Row(statusIcon(f.GetStatus()), widget.Expanded(widget.Text(f.GetPath()).Size(12).NoWrap().Ellipsis()), fileCounts(f)).Gap(7)
 			files = append(files, ui.ButtonOf(row, func() { m.openCommitFile(f) }).Ghost().Pad(4, 12).Radius(0).Name(f.GetPath()))
 		}
 		if len(files) == 0 {
 			files = append(files, paneNote(T("No files changed.")))
 		}
-		return ggui.Scroll(ggui.Column(meta, hline(), ggui.Column(files...).Stretch()).Stretch()).Bar(skin.Surface3)
+		return widget.Scroll(widget.Column(meta, hline(), widget.Column(files...).Stretch()).Stretch()).Bar(skin.Surface3)
 	})
 	return lowerPane(head, content)
 }

@@ -15,6 +15,7 @@ import (
 
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -83,9 +84,9 @@ func newTestTerminal(t *testing.T) (*fakeLink, *termConn, *ggui.Probe) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := ggui.NewProbe(ggui.Column(
+	p := ggui.NewProbe(widget.Column(
 		otherTarget(), // a second focus target, which Tab must not reach
-		ggui.Expanded(newTerminalView(conn, defaultPrefs, false)),
+		widget.Expanded(newTerminalView(conn, defaultPrefs, false)),
 	).Stretch(), ggui.Sz(800, 500))
 	t.Cleanup(func() {
 		p.Close()
@@ -98,7 +99,7 @@ func newTestTerminal(t *testing.T) (*fakeLink, *termConn, *ggui.Probe) {
 
 // otherTarget is a focusable widget above the terminal.
 func otherTarget() ggui.Widget {
-	return ggui.Focus(ggui.Box().Size(800, 40))
+	return widget.Focus(widget.Box().Size(800, 40))
 }
 
 func TestTypingReachesThePTY(t *testing.T) {
@@ -498,7 +499,7 @@ func TestATerminalNotShownKeepsTheScreenItCopied(t *testing.T) {
 		t.Fatal(err)
 	}
 	view := newTerminalView(conn, defaultPrefs, false)
-	p := ggui.NewProbe(ggui.Column(otherTarget(), ggui.Expanded(view)).Stretch(), ggui.Sz(800, 400))
+	p := ggui.NewProbe(widget.Column(otherTarget(), widget.Expanded(view)).Stretch(), ggui.Sz(800, 400))
 	defer func() { p.Close(); close(link.in); conn.close() }()
 	img := ggfx.NewImage(800, 400)
 	p.Draw(img)

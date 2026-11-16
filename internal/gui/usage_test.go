@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -141,8 +142,8 @@ func TestUsageDetailOpensOnHoverAlone(t *testing.T) {
 	state.loading = true
 	u := &protocol.Usage{Input: 1000, Output: 500, Context: 50000, Window: 200000}
 	state.usage.Set(u)
-	terminal := ggui.Focus(ggui.Box().Size(800, 600))
-	p := ggui.ProbeBuilder(func() ggui.Widget { return ggui.Stack(terminal, usageOverlay(m, "s", nil, nil)).Expand() }, ggui.Sz(800, 600))
+	terminal := widget.Focus(widget.Box().Size(800, 600))
+	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Stack(terminal, usageOverlay(m, "s", nil, nil)).Expand() }, ggui.Sz(800, 600))
 	defer p.Close()
 	p.Advance(0)
 	p.Type(ggui.Mods{}, ggui.KeyTab) // the terminal takes the keyboard

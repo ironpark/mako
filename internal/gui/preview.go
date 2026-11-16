@@ -15,6 +15,7 @@ import (
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/fonts/gofont"
+	"github.com/ironpark/ggui/widget"
 	"github.com/ironpark/ggwd"
 	"google.golang.org/protobuf/proto"
 
@@ -174,7 +175,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					return feed
 				}
 				if agentsOnly {
-					return ggui.Box(ggui.Column(panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), "GitHub"), hline(), ggui.Expanded(projectAgentsBody(m, agentsRoot))).Stretch()).Fill(skin.Surface0)
+					return widget.Box(widget.Column(panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), "GitHub"), hline(), widget.Expanded(projectAgentsBody(m, agentsRoot))).Stretch()).Fill(skin.Surface0)
 				}
 				if mdSrc != "" {
 					return ggui.Provide(ggui.ReducedMotionKey, true, markdownView(m, "", mdSrc))
@@ -744,12 +745,12 @@ func railPreview(m *model) (ggui.Widget, *turnRail) {
 				"현재 남은 항목은 **C5.%d 원격 CI**, **C6.1 전체 검증**, **C6.7 종료 판정**입니다. 기능 수정과 로컬 build/check는 통과했습니다.\n\n- 대상 브랜치는 main입니다.\n- 전체 검증은 CI에서 다시 돕니다.\n- 바이너리는 릴리스에 올립니다.", i)})
 	}
 	turns := ggui.State(chatTurns(messages, nil))
-	scroll := &ggui.ScrollController{}
+	scroll := &widget.ScrollController{}
 	find := &chatFinder{turns: turns, scroll: scroll, marks: map[string]rowMark{}}
 	rail := newTurnRail(m, find, turns)
-	scrolling, feed := chatFeed(m, "preview", state, turns, ggui.Box(), find)
+	scrolling, feed := chatFeed(m, "preview", state, turns, widget.Box(), find)
 	scrolling.Controller(scroll)
-	return ggui.Box(ggui.Stack(feed, rail, &afterPaint{fn: find.painted}).Expand()).Fill(skin.Surface0), rail
+	return widget.Box(widget.Stack(feed, rail, &afterPaint{fn: find.painted}).Expand()).Fill(skin.Surface0), rail
 }
 
 // sidebarPreview gives the sidebar a mesh of four machines, a project of

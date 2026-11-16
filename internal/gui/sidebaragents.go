@@ -10,6 +10,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -303,14 +304,14 @@ func agentsPanel(m *model, st sidebarState, i int) ggui.Widget {
 	rows := ggui.Reactive(func() ggui.Widget { return agentRows(m, st.view.Get(), list.Get()) })
 	// The foot leaves room for the spaces' dots, which float over it
 	// (sidebar), staying put as a swipe moves the list.
-	body := &bottomFade{child: ggui.Scroll(ggui.Padding(rows, 0, 8, 44, 8)).Bar(skin.Surface3), width: 56}
-	return ggui.Column(head, filter, ggui.Expanded(body)).Stretch()
+	body := &bottomFade{child: widget.Scroll(widget.Padding(rows, 0, 8, 44, 8)).Bar(skin.Surface3), width: 56}
+	return widget.Column(head, filter, widget.Expanded(body)).Stretch()
 }
 
 // agentsHeading is the agents' title, how many are listed, the sort and
 // the view, and a button to start one in the scope.
 func agentsHeading(m *model, v agentView, l agentList) ggui.Widget {
-	count := ggui.Box(ggui.Text(fmt.Sprint(l.shown())).Size(11).Color(skin.Muted).NoWrap()).Pad(1, 6).Radius(9).Fill(skin.Surface2)
+	count := widget.Box(widget.Text(fmt.Sprint(l.shown())).Size(11).Color(skin.Muted).NoWrap()).Pad(1, 6).Radius(9).Fill(skin.Surface2)
 	sorts := make([]ggui.Widget, len(agentSorts))
 	for i, by := range agentSorts {
 		sorts[i] = ui.MenuItem(T(agentSortLabels[by]), func() { m.setAgentView(func(p *prefs) { p.AgentSort = by }) }).Checked(v.Sort == by)
@@ -331,15 +332,15 @@ func agentsHeading(m *model, v agentView, l agentList) ggui.Widget {
 	summary := pick(l.by == agentGroupNone, T("List"), T(agentGroupLabels[l.by]))
 	view := iconMenu(ui.MenuOf(toolFace("sliders-horizontal", ""), views...).Name(Tf("View: %s", summary)), 0)
 	add := ui.Tooltip(ui.ButtonOf(icon("plus").Size(15), func() { m.newInScope(l) }).Ghost().Pad(5).Radius(6).Name(T("New session")), T("New session"))
-	return ggui.Box(ggui.Row(
-		ggui.Text(T("Agents")).Size(13).Weight(ggui.WeightSemibold).NoWrap(),
+	return widget.Box(widget.Row(
+		widget.Text(T("Agents")).Size(13).Weight(ggui.WeightSemibold).NoWrap(),
 		count,
-		ggui.Spacer(),
+		widget.Spacer(),
 		sort,
 		view,
-		ggui.Box().Size(1, 14).Fill(skin.Border),
+		widget.Box().Size(1, 14).Fill(skin.Border),
 		add,
-	).Gap(2).Align(ggui.AlignCenter)).Pad(10, 6, 8, 16)
+	).Gap(2).Align(widget.AlignCenter)).Pad(10, 6, 8, 16)
 }
 
 // toolFace is a quiet button's face in the agents' heading: an icon, a
@@ -347,10 +348,10 @@ func agentsHeading(m *model, v agentView, l agentList) ggui.Widget {
 func toolFace(glyph, label string) ggui.Widget {
 	face := []ggui.Widget{icon(glyph).Size(13)}
 	if label != "" {
-		face = append(face, ggui.Text(label).Size(12).Color(skin.Muted).NoWrap())
+		face = append(face, widget.Text(label).Size(12).Color(skin.Muted).NoWrap())
 	}
 	face = append(face, icon("chevron-down").Size(10).Color(skin.ExtraMuted))
-	return ggui.Box(ggui.Row(face...).Gap(4).Align(ggui.AlignCenter)).Pad(0, 6).Height(26)
+	return widget.Box(widget.Row(face...).Gap(4).Align(widget.AlignCenter)).Pad(0, 6).Height(26)
 }
 
 // setAgentView changes how the sidebar lists agents.
@@ -387,26 +388,26 @@ func agentFilter(m *model, current string, counts map[string]int) ggui.Widget {
 	cells := make([]ggui.Widget, len(agentFilters))
 	for i, f := range agentFilters {
 		on := f == current
-		face := []ggui.Widget{ggui.Text(T(agentFilterLabels[f])).Size(12).Color(pick[color.Color](on, skin.Fg, skin.Muted)).NoWrap()}
+		face := []ggui.Widget{widget.Text(T(agentFilterLabels[f])).Size(12).Color(pick[color.Color](on, skin.Fg, skin.Muted)).NoWrap()}
 		if f != "" {
-			face = append(face, ggui.Text(fmt.Sprint(counts[f])).Size(11).Color(pick[color.Color](on, skin.Muted, skin.ExtraMuted)).NoWrap())
+			face = append(face, widget.Text(fmt.Sprint(counts[f])).Size(11).Color(pick[color.Color](on, skin.Muted, skin.ExtraMuted)).NoWrap())
 		}
-		btn := ui.ButtonOf(ggui.Box(ggui.Center(ggui.Row(face...).Gap(4).Align(ggui.AlignCenter))).Height(26),
+		btn := ui.ButtonOf(widget.Box(widget.Center(widget.Row(face...).Gap(4).Align(widget.AlignCenter))).Height(26),
 			func() { m.setAgentView(func(p *prefs) { p.AgentFilter = f }) }).Ghost().Pad(0).Radius(6).Name(T(agentFilterLabels[f]))
 		var cell ggui.Widget = btn
 		if on {
-			cell = ggui.Box(btn).Fill(skin.Surface3).Radius(6)
+			cell = widget.Box(btn).Fill(skin.Surface3).Radius(6)
 		}
-		cells[i] = ggui.Expanded(cell)
+		cells[i] = widget.Expanded(cell)
 	}
-	return ggui.Box(ggui.Box(ggui.Row(cells...).Gap(2)).Pad(2).Radius(8).Fill(skin.Surface2)).Pad(0, 8, 6, 8)
+	return widget.Box(widget.Box(widget.Row(cells...).Gap(2)).Pad(2).Radius(8).Fill(skin.Surface2)).Pad(0, 8, 6, 8)
 }
 
 // agentRows are the list's groups, each under a heading but the list's
 // one.
 func agentRows(m *model, v agentView, l agentList) ggui.Widget {
 	if l.shown() == 0 {
-		return ggui.Box(ggui.Center(muted(ggui.Text(T("No agents here.")).Size(12.5)))).Pad(24, 12)
+		return widget.Box(widget.Center(muted(widget.Text(T("No agents here.")).Size(12.5)))).Pad(24, 12)
 	}
 	nodes, titles, selected := m.Nodes.Get(), m.Titles.Get(), m.Selected.Get()
 	looks := m.spaces().Looks
@@ -419,7 +420,7 @@ func agentRows(m *model, v agentView, l agentList) ggui.Widget {
 			rows = append(rows, agentRow(m, s, s.GetId() == selected, titles[s.GetId()], agentTagOf(m, l, s, nodes), v.Compact))
 		}
 	}
-	return ggui.Column(rows...).Gap(1).Stretch()
+	return widget.Column(rows...).Gap(1).Stretch()
 }
 
 // agentGroupHeading names a group of the list and counts it, with a line
@@ -455,18 +456,18 @@ func agentGroupHeading(m *model, l agentList, g agentGroup, nodes []*protocol.No
 		lead, name = agentGlyph(g.Key, skin.Muted).Size(12), cmp.Or(g.Key, "shell")
 	case l.by == agentGroupStatus:
 		st, _ := strconv.Atoi(g.Key)
-		lead, name = ggui.Box().Size(7, 7).Radius(3.5).Fill(statusColor(agentStatus(st))), T(agentStatusLabels[agentStatus(st)])
+		lead, name = widget.Box().Size(7, 7).Radius(3.5).Fill(statusColor(agentStatus(st))), T(agentStatusLabels[agentStatus(st)])
 	}
 	row := []ggui.Widget{
 		lead,
-		ggui.Text(name).Size(12).Color(skin.Muted).NoWrap().Ellipsis(),
-		ggui.Text(fmt.Sprint(len(g.Sessions))).Size(12).Color(skin.ExtraMuted).NoWrap(),
-		ggui.Expanded(ggui.Box().Height(1).Fill(skin.Surface3)),
+		widget.Text(name).Size(12).Color(skin.Muted).NoWrap().Ellipsis(),
+		widget.Text(fmt.Sprint(len(g.Sessions))).Size(12).Color(skin.ExtraMuted).NoWrap(),
+		widget.Expanded(widget.Box().Height(1).Fill(skin.Surface3)),
 	}
 	if note != "" {
-		row = append(row, ggui.Text(note).Size(11).Color(skin.ExtraMuted).NoWrap())
+		row = append(row, widget.Text(note).Size(11).Color(skin.ExtraMuted).NoWrap())
 	}
-	return ggui.Box(ggui.Row(row...).Gap(6).Align(ggui.AlignCenter)).Pad(8, 10, 4, 10)
+	return widget.Box(widget.Row(row...).Gap(6).Align(widget.AlignCenter)).Pad(8, 10, 4, 10)
 }
 
 // statusColor is the colour of a status's dot.
@@ -525,81 +526,81 @@ func agentRow(m *model, s *protocol.SessionInfo, selected bool, title string, ta
 	id := s.GetId()
 	label := sessionTitle(s, title)
 	head := []ggui.Widget{
-		ggui.Padding(&busyGlyph{icon: agentGlyph(s.GetAgent(), skin.Muted).Size(15), busy: func() bool { return m.busy(id) }}, 0, 2.5, 0, 2.5),
-		ggui.Expanded(ggui.Text(label).Size(pick(compact, 13.0, 13.5)).NoWrap().Ellipsis()),
+		widget.Padding(&busyGlyph{icon: agentGlyph(s.GetAgent(), skin.Muted).Size(15), busy: func() bool { return m.busy(id) }}, 0, 2.5, 0, 2.5),
+		widget.Expanded(widget.Text(label).Size(pick(compact, 13.0, 13.5)).NoWrap().Ellipsis()),
 	}
 	if compact {
 		switch {
 		case tag.Where != "":
-			head = append(head, ggui.Box(ggui.Text(tag.Where).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()).MaxWidth(110))
+			head = append(head, widget.Box(widget.Text(tag.Where).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()).MaxWidth(110))
 		case tag.Host != "" && !tag.Here:
-			head = append(head, ggui.Box(ggui.Row(
+			head = append(head, widget.Box(widget.Row(
 				icon(osIcon(tag.OS)).Size(10).Color(skin.ExtraMuted),
-				ggui.Text(tag.Host).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis(),
-			).Gap(3).Align(ggui.AlignCenter)).MaxWidth(110))
+				widget.Text(tag.Host).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis(),
+			).Gap(3).Align(widget.AlignCenter)).MaxWidth(110))
 		}
 	}
 	head = append(head, ggui.Reactive(func() ggui.Widget {
 		m.Minute.Get()
 		t := m.Printed.Get()[id]
 		if t.IsZero() || s.GetState() != protocol.StateRunning {
-			return ggui.Box()
+			return widget.Box()
 		}
-		return ggui.Text(ago(t)).Size(11).Color(skin.ExtraMuted).NoWrap()
+		return widget.Text(ago(t)).Size(11).Color(skin.ExtraMuted).NoWrap()
 	}))
-	lines := []ggui.Widget{ggui.Row(head...).Gap(8).Align(ggui.AlignCenter)}
+	lines := []ggui.Widget{widget.Row(head...).Gap(8).Align(widget.AlignCenter)}
 	if !compact {
 		lines = append(lines, agentMeta(s, tag))
 	}
 	hover := ggui.State(false)
 	end := ggui.If(hover, func() ggui.Widget {
 		pin := pick(m.pinned(id), T("Unpin"), T("Pin to top"))
-		return ggui.Row(
+		return widget.Row(
 			ui.Tooltip(ui.ButtonOf(icon("pin").Size(13).Color(pick[color.Color](m.pinned(id), skin.DotWaiting, skin.Muted)), func() { m.togglePin(id) }).
 				Ghost().Pad(3).Radius(4).Name(pin), pin),
 			ui.ButtonOf(icon("x").Size(13), func() { m.askKill(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", label)),
-		).Gap(0).Align(ggui.AlignCenter)
+		).Gap(0).Align(widget.AlignCenter)
 	}).Else(func() ggui.Widget {
-		return ggui.Box(ggui.Center(&activityDot{state: m.dotFor(id)})).Size(19, 19)
+		return widget.Box(widget.Center(&activityDot{state: m.dotFor(id)})).Size(19, 19)
 	})
-	content := ggui.Row(
-		ggui.Expanded(ggui.Column(lines...).Gap(3).Stretch()),
+	content := widget.Row(
+		widget.Expanded(widget.Column(lines...).Gap(3).Stretch()),
 		end,
-	).Gap(6).Align(ggui.AlignCenter)
+	).Gap(6).Align(widget.AlignCenter)
 	btn := ui.ButtonOf(content, func() { m.selectSession(id) }).Ghost().Pad(pick(compact, 5.0, 8.0), 10).Radius(8).Name(label)
 	var w ggui.Widget = sessionMenu(m, btn, id, label, false)
 	if selected {
-		w = ggui.Box(w).Fill(skin.SidebarSel).Radius(8)
+		w = widget.Box(w).Fill(skin.SidebarSel).Radius(8)
 	}
 	// A row drags into a pane, or to a pane's edge, as a tab does.
-	return sessionDrag(m, ggui.Pointer(w).OnHover(hover.Set), id)
+	return sessionDrag(m, widget.Pointer(w).OnHover(hover.Set), id)
 }
 
 // agentMeta is a detailed row's second line, from its left edge: where
 // its session is, its machine and ID, and at the end its branch and its
 // tasks.
 func agentMeta(s *protocol.SessionInfo, tag agentTag) ggui.Widget {
-	quiet := func(t string) ggui.Widget { return ggui.Text(t).Size(12).Color(skin.ExtraMuted).NoWrap() }
+	quiet := func(t string) ggui.Widget { return widget.Text(t).Size(12).Color(skin.ExtraMuted).NoWrap() }
 	var where []ggui.Widget
 	if tag.Where != "" {
 		where = append(where, quiet(tag.Where+" ·"))
 	}
 	if tag.Host != "" {
 		where = append(where, icon(osIcon(tag.OS)).Size(11).Color(skin.ExtraMuted),
-			ggui.Flexible(ggui.Text(tag.Host+" ·").Size(12).Color(skin.ExtraMuted).NoWrap().Ellipsis()))
+			widget.Flexible(widget.Text(tag.Host+" ·").Size(12).Color(skin.ExtraMuted).NoWrap().Ellipsis()))
 	}
 	where = append(where, quiet(short(s.GetId())))
-	line := []ggui.Widget{ggui.Expanded(ggui.Row(where...).Gap(4).Align(ggui.AlignCenter))}
+	line := []ggui.Widget{widget.Expanded(widget.Row(where...).Gap(4).Align(widget.AlignCenter))}
 	if s.GetBranch() != "" {
-		line = append(line, ggui.Row(
+		line = append(line, widget.Row(
 			icon("git-branch").Size(11).Color(skin.ExtraMuted),
-			ggui.Box(ggui.Text(s.GetBranch()).Size(12).Color(skin.ExtraMuted).NoWrap().Ellipsis()).MaxWidth(110),
-		).Gap(3).Align(ggui.AlignCenter))
+			widget.Box(widget.Text(s.GetBranch()).Size(12).Color(skin.ExtraMuted).NoWrap().Ellipsis()).MaxWidth(110),
+		).Gap(3).Align(widget.AlignCenter))
 	}
 	if badge := tasksBadge(s); badge != nil {
 		line = append(line, badge)
 	}
-	return ggui.Box(ggui.Row(line...).Gap(8).Align(ggui.AlignCenter)).Pad(0, 0, 0, 2)
+	return widget.Box(widget.Row(line...).Gap(8).Align(widget.AlignCenter)).Pad(0, 0, 0, 2)
 }
 
 // bottomFade paints its child faded out over its last width pixels, so

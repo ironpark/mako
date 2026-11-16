@@ -7,6 +7,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 )
@@ -70,7 +71,7 @@ func findBar(m *model, id string, f finder) ggui.Widget {
 				}
 				return false
 			})
-		focus := &focusOnce{child: ggui.Box(field).Width(220), target: field.Input(), want: func() bool {
+		focus := &focusOnce{child: widget.Box(field).Width(220), target: field.Input(), want: func() bool {
 			want := m.findFocus
 			m.findFocus = false
 			return want
@@ -86,15 +87,15 @@ func findBar(m *model, id string, f finder) ggui.Widget {
 			}
 			return fmt.Sprintf("%d/%d", p.At, p.Count)
 		})
-		bar := ggui.Row(
+		bar := widget.Row(
 			icon("search").Size(14).Color(skin.Muted),
 			focus,
-			ggui.Box(muted(ggui.TextOf(count).Size(12).NoWrap())).Width(56),
+			widget.Box(muted(widget.TextOf(count).Size(12).NoWrap())).Width(56),
 			iconButton("chevron-up", T("Previous match"), func() { run(false) }),
 			iconButton("chevron-down", T("Next match"), func() { run(true) }),
 			iconButton("x", T("Close find"), closeBar),
-		).Gap(6).Align(ggui.AlignCenter)
-		return ggui.Align(ggui.Padding(ggui.Box(bar).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(4, 6, 4, 10), 8, 12)).At(1, 0)
+		).Gap(6).Align(widget.AlignCenter)
+		return widget.Align(widget.Padding(widget.Box(bar).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(4, 6, 4, 10), 8, 12)).At(1, 0)
 	})
 }
 
@@ -150,8 +151,8 @@ func chatMatches(turns []chatTurnItem, needle string) []chatMatch {
 // comes to be. New words start from the latest match.
 type chatFinder struct {
 	turns  ggui.Readable[[]chatTurnItem]
-	scroll *ggui.ScrollController
-	area   *ggui.SelectionAreaWidget
+	scroll *widget.ScrollController
+	area   *widget.SelectionAreaWidget
 
 	needle  string
 	matches []chatMatch

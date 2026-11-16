@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 )
 
 // A press over a pane makes it current even where what is under it takes
 // the press, as a chat's feed and composer do, and they still get it.
 func TestAPressAnywhereInAPaneIsSeen(t *testing.T) {
 	var watched, tapped int
-	child := ggui.Tap(ggui.Box().Size(200, 100), func() { tapped++ })
+	child := widget.Tap(widget.Box().Size(200, 100), func() { tapped++ })
 	p := ggui.NewProbe(&pressWatch{child: child, fn: func() { watched++ }}, ggui.Sz(200, 100))
 	defer p.Close()
 	p.Click(ggui.Pt(50, 50))

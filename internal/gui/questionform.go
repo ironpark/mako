@@ -8,6 +8,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -62,12 +63,12 @@ func formAnswers(n int, got ui.QuestionAnswers) []*protocol.QuestionAnswer {
 // questionCard frames a form of questions at the foot of Chat, with what
 // else answers them: the terminal, or declining.
 func questionCard(form ggui.Widget, actions ...ggui.Widget) ggui.Widget {
-	head := ggui.Row(append([]ggui.Widget{
+	head := widget.Row(append([]ggui.Widget{
 		icon("message-square").Size(16).Color(skin.DotWaiting),
-		ggui.Text(T("The agent asks")).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
-		ggui.Spacer(),
-	}, actions...)...).Gap(8).Align(ggui.AlignCenter)
-	return approvalFrame(ggui.Column(head, form).Gap(12).Stretch())
+		widget.Text(T("The agent asks")).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
+		widget.Spacer(),
+	}, actions...)...).Gap(8).Align(widget.AlignCenter)
+	return approvalFrame(widget.Column(head, form).Gap(12).Stretch())
 }
 
 // answerQuestion types answers to the questions session id's agent shows

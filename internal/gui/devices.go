@@ -11,6 +11,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/protocol"
@@ -173,7 +174,7 @@ func devicesMenu(m *model) ggui.Widget {
 			items = append(items, ui.MenuItem(Tf("Borrow %s of %s", deviceName(d), nodeName(nodes, d.GetNodeId())), func() { m.borrowDevice(d) }))
 		}
 		if len(items) == 0 {
-			return ggui.Box()
+			return widget.Box()
 		}
 		name := Tf("%d devices borrowed", len(list.Leases))
 		if len(list.Leases) == 0 {

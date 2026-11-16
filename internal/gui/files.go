@@ -443,7 +443,7 @@ func filesPanel(m *model) ggui.Widget {
 	})
 	return ggui.View(shown, func(p panelRoots) ggui.Widget {
 		if len(p.Roots) == 0 {
-			return ggui.Box(muted(ggui.Text(T("Open a session to browse its project.")).Size(13))).Pad(16)
+			return widget.Box(muted(widget.Text(T("Open a session to browse its project.")).Size(13))).Pad(16)
 		}
 		return filesView(m, p)
 	})
@@ -470,9 +470,9 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 		func(item ggui.Readable[fileItem]) ggui.Widget {
 			it := ggui.Untrack(item.Get)
 			if it.Stub {
-				return muted(ggui.Text(it.Name).Size(12.5).NoWrap().Ellipsis())
+				return muted(widget.Text(it.Name).Size(12.5).NoWrap().Ellipsis())
 			}
-			label := ggui.Text(it.Name).Size(12.5).NoWrap().Ellipsis()
+			label := widget.Text(it.Name).Size(12.5).NoWrap().Ellipsis()
 			if it.Ignored {
 				label = label.Color(skin.ExtraMuted)
 			}
@@ -487,14 +487,14 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 			if it.Dir { // a folder's icon opens with it
 				lead = ggui.View(ggui.Map(m.files.Open, func(o map[string]bool) bool { return o[it.Key] }), leadIcon)
 			}
-			var row ggui.Widget = ggui.Row(lead, ggui.Expanded(label)).Gap(7)
+			var row ggui.Widget = widget.Row(lead, widget.Expanded(label)).Gap(7)
 			if it.Dir {
 				row = folderDrop(m, row, it)
 			}
 			// Dragged to a terminal or the message box, it is typed as
 			// its path; to a folder, it moves there. A project's folder
 			// stays put, and is not to rename or delete here.
-			drag := ggui.DragSource(row, pathDrag{Node: it.Node, Path: it.Path, Dir: it.Dir})
+			drag := widget.DragSource(row, pathDrag{Node: it.Node, Path: it.Path, Dir: it.Dir})
 			if it.Root {
 				return drag
 			}
@@ -529,20 +529,20 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 	}
 	header := panelHeader(
 		icon("folder-open").Size(15),
-		ggui.Expanded(ggui.Row(
-			ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap(),
-			ggui.Expanded(ggui.Text(where).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()),
-		).Gap(8).Align(ggui.AlignBaseline)),
-		ggui.Row(
+		widget.Expanded(widget.Row(
+			widget.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap(),
+			widget.Expanded(widget.Text(where).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()),
+		).Gap(8).Align(widget.AlignBaseline)),
+		widget.Row(
 			hiddenFilesToggle(m),
 			newInRoot(m, r),
 			iconButton("refresh-cw", T("Refresh"), m.refreshFiles),
 		).Gap(2),
 	)
 	// A failed delete says why under the header.
-	header = ggui.Column(header, reveal(ggui.Map(m.files.Note, func(s string) bool { return s != "" }), func() ggui.Widget {
-		return ggui.Box(ggui.Row(
-			ggui.Expanded(ggui.TextOf(m.files.Note).Size(12).Color(skin.DotDown)),
+	header = widget.Column(header, reveal(ggui.Map(m.files.Note, func(s string) bool { return s != "" }), func() ggui.Widget {
+		return widget.Box(widget.Row(
+			widget.Expanded(widget.TextOf(m.files.Note).Size(12).Color(skin.DotDown)),
 			iconButton("x", T("Dismiss"), func() { m.files.Note.Set("") }),
 		).Gap(6)).Pad(4, 6, 4, 12)
 	})).Stretch()
@@ -550,10 +550,10 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 	// Files dropped below the folders go into the project, from the
 	// desktop and from the tab; a right click there makes or pastes there.
 	root := dirItem(r.Node, r.Path)
-	var list ggui.Widget = ggui.Pointer(ggui.Scroll(ggui.Padding(tree, 4, 4)).Bar(skin.Surface3)).OnDrop(func(ev ggui.DropEvent) {
+	var list ggui.Widget = widget.Pointer(widget.Scroll(widget.Padding(tree, 4, 4)).Bar(skin.Surface3)).OnDrop(func(ev ggui.DropEvent) {
 		m.copyInto(r.Node, r.Path, ev.Paths())
 	})
-	list = ggui.DropZone(list, func(d ggui.Dropped[pathDrag]) { m.dropInto(d.Value, root) })
+	list = widget.DropZone(list, func(d widget.Dropped[pathDrag]) { m.dropInto(d.Value, root) })
 	list = ui.ContextMenuFunc(list, func() []ggui.Widget {
 		return append(folderItems(m, root, m.askFile), ui.MenuDivider(), ui.MenuItem(T("Refresh"), m.refreshFiles))
 	}).Name(T("File actions"))
@@ -574,17 +574,17 @@ func previewPane(m *model) ggui.Widget {
 		case p.Err == "":
 			info = byteSize(p.File.GetSize())
 		}
-		var enlarge ggui.Widget = ggui.Box()
+		var enlarge ggui.Widget = widget.Box()
 		if p.Img != nil {
 			enlarge = iconButton("maximize-2", T("Enlarge"), func() { m.files.ImageOpen.Set(true) })
 		}
 		return panelHeader(
 			fileTypeIcon(p.Name, false, false).Size(14),
-			ggui.Expanded(ggui.Row(
-				ggui.Box(ggui.Text(p.Name).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).MaxWidth(170),
-				ggui.Text(info).Size(11.5).Color(skin.ExtraMuted).NoWrap(),
-			).Gap(8).Align(ggui.AlignBaseline)),
-			ggui.Row(
+			widget.Expanded(widget.Row(
+				widget.Box(widget.Text(p.Name).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).MaxWidth(170),
+				widget.Text(info).Size(11.5).Color(skin.ExtraMuted).NoWrap(),
+			).Gap(8).Align(widget.AlignBaseline)),
+			widget.Row(
 				enlarge,
 				iconButton("terminal", T("Insert path in the message"), func() { m.insertPath("", path) }),
 				iconButton("copy", T("Copy path"), func() { ggui.CurrentClipboard().Write(path) }),
@@ -596,13 +596,13 @@ func previewPane(m *model) ggui.Widget {
 		var note string
 		switch {
 		case p.Loading:
-			return ggui.Center(ui.Spinner())
+			return widget.Center(ui.Spinner())
 		case p.Err != "":
 			note = p.Err
 		case p.Img != nil:
 			// Clicked, it shows as large as the window allows.
-			img := ggui.Pointer(widget.Image(p.Img).Alt(p.Name)).OnTap(func() { m.files.ImageOpen.Set(true) })
-			return ggui.Padding(ggui.Center(img), 12)
+			img := widget.Pointer(widget.Image(p.Img).Alt(p.Name)).OnTap(func() { m.files.ImageOpen.Set(true) })
+			return widget.Padding(widget.Center(img), 12)
 		case p.File.GetTruncated():
 			note = Tf("An image of %s, too large to show.", byteSize(p.File.GetSize()))
 		default:
@@ -620,32 +620,32 @@ func imageViewer(m *model) ggui.Widget {
 	return ggui.View(img, func(*ggfx.Image) ggui.Widget {
 		p := ggui.Peek(m.files.Preview)
 		if p.Img == nil {
-			return ggui.Box()
+			return widget.Box()
 		}
 		b := p.Img.Bounds()
-		content := ggui.Column(
-			ggui.Pointer(widget.Image(p.Img).Alt(p.Name)).OnTap(func() { m.files.ImageOpen.Set(false) }),
-			muted(ggui.Text(fmt.Sprintf("%s · %d × %d", p.Name, b.Dx(), b.Dy())).Size(12)),
-		).Gap(10).Align(ggui.AlignCenter)
+		content := widget.Column(
+			widget.Pointer(widget.Image(p.Img).Alt(p.Name)).OnTap(func() { m.files.ImageOpen.Set(false) }),
+			muted(widget.Text(fmt.Sprintf("%s · %d × %d", p.Name, b.Dx(), b.Dy())).Size(12)),
+		).Gap(10).Align(widget.AlignCenter)
 		// The panel hugs the image, which shrinks to fit the window.
-		return ui.Dialog(m.files.ImageOpen, ggui.Padding(content, 12)).Name(T("Image")).Compact().Width(float64(max(b.Dx(), 240) + 24))
+		return ui.Dialog(m.files.ImageOpen, widget.Padding(content, 12)).Name(T("Image")).Compact().Width(float64(max(b.Dx(), 240) + 24))
 	})
 }
 
 // panelHeader is a side panel's top line, as tall as the panes' tab bars
 // so the line under it runs on from theirs.
 func panelHeader(children ...ggui.Widget) ggui.Widget {
-	return ggui.Box(ggui.Row(children...).Gap(8)).Height(tabBarHeight).Pad(0, 6, 0, 12)
+	return widget.Box(widget.Row(children...).Gap(8)).Height(tabBarHeight).Pad(0, 6, 0, 12)
 }
 
 // treeOverPane is a panel's header over its tree, and once open turns
 // true, the pane the tree opens under it, at ratio of the height to start.
 func treeOverPane(header, tree ggui.Widget, open ggui.Readable[bool], ratio float64, pane func() ggui.Widget, divider string) ggui.Widget {
 	split := ggui.State(ratio)
-	return ggui.Column(
+	return widget.Column(
 		header,
 		hline(),
-		ggui.Expanded(ggui.If(open, func() ggui.Widget {
+		widget.Expanded(ggui.If(open, func() ggui.Widget {
 			return ui.Resizable(split, tree, pane()).Vertical().MinSizes(80, 80).Hairline().Name(divider)
 		}).Else(func() ggui.Widget { return tree })),
 	).Stretch()
@@ -654,11 +654,13 @@ func treeOverPane(header, tree ggui.Widget, open ggui.Readable[bool], ratio floa
 // lowerPane frames the pane under a tree: its head line, then its content
 // on the sunken surface.
 func lowerPane(head, content ggui.Widget) ggui.Widget {
-	return ggui.Column(hline(), head, hline(), ggui.Expanded(ggui.Box(content).Fill(skin.Surface1))).Stretch()
+	return widget.Column(hline(), head, hline(), widget.Expanded(widget.Box(content).Fill(skin.Surface1))).Stretch()
 }
 
 // paneNote stands in a lower pane for content it has none of.
-func paneNote(text string) ggui.Widget { return ggui.Box(muted(ggui.Text(text).Size(12.5))).Pad(12) }
+func paneNote(text string) ggui.Widget {
+	return widget.Box(muted(widget.Text(text).Size(12.5))).Pad(12)
+}
 
 // byteSize writes a size as people read one.
 func byteSize(n int64) string {

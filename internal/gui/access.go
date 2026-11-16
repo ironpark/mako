@@ -6,6 +6,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/notify"
@@ -84,15 +85,15 @@ func accessSettings(m *model) ggui.Widget {
 	return page(T("Access"), T("Who this node lets in. A node it lets in can start programs and read and write files here; trust runs one way, so that node must let this one in for the reverse."),
 		ggui.View(m.AccessNote, func(s string) ggui.Widget {
 			if s == "" {
-				return ggui.Box()
+				return widget.Box()
 			}
-			return ggui.Text(s).Size(12.5).Color(skin.AccentBright)
+			return widget.Text(s).Size(12.5).Color(skin.AccentBright)
 		}),
 		ggui.View(m.Access, func(info *protocol.AccessInfo) ggui.Widget {
 			if info == nil {
-				return muted(ggui.Text(T("The daemon is not on libp2p, or cannot be reached.")).Size(13))
+				return muted(widget.Text(T("The daemon is not on libp2p, or cannot be reached.")).Size(13))
 			}
-			return ggui.Column(
+			return widget.Column(
 				section(T("Requests"), requestList(m, info.GetRequests())),
 				section(T("Pairing"), pairingSettings(m, info.GetPairing())),
 				section(T("This node"), card(
@@ -113,15 +114,15 @@ func accessSettings(m *model) ggui.Widget {
 // keyRow shows a key with a button that copies its line, for another
 // node's authorized_keys.
 func keyRow(m *model, title, hint string, key *protocol.AccessKey) ggui.Widget {
-	return row(title, hint, ggui.Row(
-		ggui.Text(key.GetFingerprint()).Size(12).Color(skin.Muted).Selectable().NoWrap().Ellipsis(),
+	return row(title, hint, widget.Row(
+		widget.Text(key.GetFingerprint()).Size(12).Color(skin.Muted).Selectable().NoWrap().Ellipsis(),
 		copyButton(m, key.GetLine()),
 	).Gap(8))
 }
 
 func ownerRow(m *model, owner *protocol.AccessKey) ggui.Widget {
 	if owner == nil {
-		return row(T("Vouched for by"), T("No SSH key vouches for this node."), ggui.Box())
+		return row(T("Vouched for by"), T("No SSH key vouches for this node."), widget.Box())
 	}
 	return keyRow(m, T("Vouched for by"), T("The SSH key that vouches for this node."), owner)
 }
@@ -129,7 +130,7 @@ func ownerRow(m *model, owner *protocol.AccessKey) ggui.Widget {
 // requestList shows the nodes asking to be let in, each with its answers.
 func requestList(m *model, requests []*protocol.AccessRequest) ggui.Widget {
 	if len(requests) == 0 {
-		return muted(ggui.Text(T("No node is asking to be let in.")).Size(13))
+		return muted(widget.Text(T("No node is asking to be let in.")).Size(13))
 	}
 	rows := make([]ggui.Widget, 0, len(requests))
 	for _, r := range requests {
@@ -139,11 +140,11 @@ func requestList(m *model, requests []*protocol.AccessRequest) ggui.Widget {
 			detail += " · " + Tf("SSH key %s", r.GetOwner().GetFingerprint())
 		}
 		text := []ggui.Widget{
-			ggui.Text(node.GetName()).Size(13.5).Weight(ggui.WeightMedium),
-			ggui.Text(detail).Size(11.5).Color(skin.ExtraMuted).Selectable(),
+			widget.Text(node.GetName()).Size(13.5).Weight(ggui.WeightMedium),
+			widget.Text(detail).Size(11.5).Color(skin.ExtraMuted).Selectable(),
 		}
 		if r.GetNote() != "" {
-			text = append(text, muted(ggui.Text("“"+r.GetNote()+"”").Size(12.5)))
+			text = append(text, muted(widget.Text("“"+r.GetNote()+"”").Size(12.5)))
 		}
 		buttons := []ggui.Widget{
 			ui.Button(T("Allow"), func() {
@@ -158,9 +159,9 @@ func requestList(m *model, requests []*protocol.AccessRequest) ggui.Widget {
 		buttons = append(buttons, ui.Button(T("Deny"), func() {
 			m.changeAccess(&protocol.Access{Op: "deny", NodeId: node.GetId()}, "")
 		}).Outline())
-		rows = append(rows, ggui.Box(ggui.Row(
-			ggui.Expanded(ggui.Column(text...).Gap(3).Stretch()),
-			ggui.Row(buttons...).Gap(6),
+		rows = append(rows, widget.Box(widget.Row(
+			widget.Expanded(widget.Column(text...).Gap(3).Stretch()),
+			widget.Row(buttons...).Gap(6),
 		).Gap(16)).Pad(14, 16))
 	}
 	return card(rows...)
@@ -177,7 +178,7 @@ func keyList(m *model, keys []*protocol.AccessKey) ggui.Widget {
 		}
 		if k.GetSource() != "" {
 			// A key of the user's own SSH file is taken out there.
-			rows = append(rows, row(name, k.GetFingerprint()+" · "+Tf("from %s", k.GetSource()), ggui.Box()))
+			rows = append(rows, row(name, k.GetFingerprint()+" · "+Tf("from %s", k.GetSource()), widget.Box()))
 			continue
 		}
 		rows = append(rows, row(name, k.GetFingerprint(), ui.Button(T("Revoke"), func() {
@@ -185,11 +186,11 @@ func keyList(m *model, keys []*protocol.AccessKey) ggui.Widget {
 		}).Outline()))
 	}
 	if len(rows) == 0 {
-		rows = append(rows, row(T("No key is let in yet."), T("Allow a request above, or add a key below."), ggui.Box()))
+		rows = append(rows, row(T("No key is let in yet."), T("Allow a request above, or add a key below."), widget.Box()))
 	}
 	add := stackedRow(T("Let a key in"), T("A public key as authorized_keys has it: another node's key, which it shows under Settings ▸ Access, or an SSH key."),
-		ggui.Row(
-			ggui.Expanded(ui.TextField(m.AccessKey).Placeholder("ssh-ed25519 AAAA… name").Name(T("Let a key in"))),
+		widget.Row(
+			widget.Expanded(ui.TextField(m.AccessKey).Placeholder("ssh-ed25519 AAAA… name").Name(T("Let a key in"))),
 			ui.Button(T("Add"), func() {
 				line := ggui.Peek(m.AccessKey)
 				m.AccessKey.Set("")

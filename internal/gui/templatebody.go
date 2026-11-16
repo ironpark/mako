@@ -186,10 +186,10 @@ func templateBody(pg *templatePage, id int, mono ggui.TextStyle) ggui.Widget {
 			for i, o := range opts {
 				rows[i] = placeholderRow(o, i == at, func() { take(o) })
 			}
-			return menuPanel(ggui.Column(rows...).Gap(2).Stretch())
+			return menuPanel(widget.Column(rows...).Gap(2).Stretch())
 		})
 	})
-	return ggui.Stack(ggui.Column(field, list).Gap(4).Stretch(), follow)
+	return widget.Stack(widget.Column(field, list).Gap(4).Stretch(), follow)
 }
 
 // memoColors colours a prompt's {{name}}s, of a template whose arguments
@@ -218,8 +218,8 @@ func memoColors(args func() []argDraft) func(string) []widget.TextColor {
 // placeholderRow is a name the list offers: {{name}}, coloured as the
 // editor colours it, and what it is.
 func placeholderRow(o placeholderOption, chosen bool, take func()) ggui.Widget {
-	return menuRowBox(ggui.Row(
-		ggui.Text("{{"+o.Name+"}}").Font(ggui.DefaultMonoFont()).Size(12.5).Color(o.Color).NoWrap(),
-		ggui.Expanded(muted(ggui.Text(o.About).Size(12).NoWrap().Ellipsis())),
-	).Gap(10).Align(ggui.AlignCenter), chosen, take)
+	return menuRowBox(widget.Row(
+		widget.Text("{{"+o.Name+"}}").Font(ggui.DefaultMonoFont()).Size(12.5).Color(o.Color).NoWrap(),
+		widget.Expanded(muted(widget.Text(o.About).Size(12).NoWrap().Ellipsis())),
+	).Gap(10).Align(widget.AlignCenter), chosen, take)
 }

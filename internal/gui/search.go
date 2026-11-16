@@ -11,6 +11,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -161,7 +162,7 @@ func (m *model) openSearch() {
 // searchDialog is the search of the project shown, over the window: a
 // line found opens its file there and closes it.
 func searchDialog(m *model) ggui.Widget {
-	content := ggui.If(m.SearchOpen, func() ggui.Widget { return ggui.Box(searchPanel(m)).Height(560) })
+	content := ggui.If(m.SearchOpen, func() ggui.Widget { return widget.Box(searchPanel(m)).Height(560) })
 	return ui.Dialog(m.SearchOpen, content).Title(T("Search the project")).Width(760)
 }
 
@@ -202,20 +203,20 @@ func searchPanel(m *model) ggui.Widget {
 	results := ggui.View(m.Search, func(v searchView) ggui.Widget {
 		switch {
 		case v.Loading:
-			return ggui.Box(ggui.Center(ui.Spinner())).Height(80)
+			return widget.Box(widget.Center(ui.Spinner())).Height(80)
 		case v.Err != "":
-			return ggui.Box(muted(ggui.Text(v.Err).Size(12.5))).Pad(14, 16)
+			return widget.Box(muted(widget.Text(v.Err).Size(12.5))).Pad(14, 16)
 		case v.Query == "":
-			return ggui.Box(muted(ggui.Text(T("Type a text and press Enter. A capital letter matches the case.")).Size(12.5))).Pad(14, 16)
+			return widget.Box(muted(widget.Text(T("Type a text and press Enter. A capital letter matches the case.")).Size(12.5))).Pad(14, 16)
 		case len(v.Result.GetMatches()) == 0:
-			return ggui.Box(muted(ggui.Text(T("Nothing found.")).Size(12.5))).Pad(14, 16)
+			return widget.Box(muted(widget.Text(T("Nothing found.")).Size(12.5))).Pad(14, 16)
 		}
 		return searchResults(m, v)
 	})
-	return ggui.Column(
-		ggui.Box(ggui.Row(ggui.Expanded(focus), iconButton("search", T("Search"), m.runSearch)).Gap(6)).Pad(8, 10),
+	return widget.Column(
+		widget.Box(widget.Row(widget.Expanded(focus), iconButton("search", T("Search"), m.runSearch)).Gap(6)).Pad(8, 10),
 		hline(),
-		ggui.Expanded(ggui.Scroll(results).Bar(skin.Surface3)),
+		widget.Expanded(widget.Scroll(results).Bar(skin.Surface3)),
 	).Stretch()
 }
 
@@ -235,18 +236,18 @@ func searchResults(m *model, v searchView) ggui.Widget {
 				}
 				n++
 			}
-			rows = append(rows, ggui.Box(ggui.Row(
+			rows = append(rows, widget.Box(widget.Row(
 				icon(fileIconName(baseName(match.GetPath()))).Size(14),
-				ggui.Expanded(ggui.Text(match.GetPath()).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
-				muted(ggui.Text(fmt.Sprint(n)).Size(11.5)),
+				widget.Expanded(widget.Text(match.GetPath()).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
+				muted(widget.Text(fmt.Sprint(n)).Size(11.5)),
 			).Gap(7)).Pad(6, 12, 2, 12))
 		}
 		it := fileItem{Key: dirKey(v.Root.Node, joinPath(v.Root.Path, match.GetPath())), Node: v.Root.Node, Path: joinPath(v.Root.Path, match.GetPath()), Name: baseName(match.GetPath())}
 		line := match.GetLine()
 		text := strings.TrimLeft(untab(match.GetText()), " ")
-		row := ggui.Row(
-			ggui.Box(ggui.Text(fmt.Sprint(match.GetLine())).Style(mono).Color(skin.ExtraMuted).NoWrap()).Width(36),
-			ggui.Expanded(markQuery(text, v.Query, fold, mono)),
+		row := widget.Row(
+			widget.Box(widget.Text(fmt.Sprint(match.GetLine())).Style(mono).Color(skin.ExtraMuted).NoWrap()).Width(36),
+			widget.Expanded(markQuery(text, v.Query, fold, mono)),
 		).Gap(4)
 		rows = append(rows, ui.ButtonOf(row, func() { m.SearchOpen.Set(false); m.openFileAt(it, int(line)) }).Ghost().Pad(2, 12, 2, 18).Radius(0).
 			Name(fmt.Sprintf("%s:%d", match.GetPath(), match.GetLine())))
@@ -255,8 +256,8 @@ func searchResults(m *model, v searchView) ggui.Widget {
 	if v.Result.GetTruncated() {
 		note = Tf("The first %d results, in %d files", len(v.Result.GetMatches()), files)
 	}
-	head := ggui.Box(muted(ggui.Text(note).Size(11.5))).Pad(8, 12, 2, 12)
-	return ggui.Column(append([]ggui.Widget{head}, rows...)...).Stretch()
+	head := widget.Box(muted(widget.Text(note).Size(11.5))).Pad(8, 12, 2, 12)
+	return widget.Column(append([]ggui.Widget{head}, rows...)...).Stretch()
 }
 
 // markQuery is a found line, the query in it marked.
@@ -267,12 +268,12 @@ func markQuery(text, q string, fold bool, mono ggui.TextStyle) ggui.Widget {
 	}
 	i := strings.Index(hay, q)
 	if i < 0 || len(hay) != len(text) {
-		return ggui.Text(text).Style(mono).NoWrap().Ellipsis()
+		return widget.Text(text).Style(mono).NoWrap().Ellipsis()
 	}
-	return ggui.RichText(
-		ggui.Span(text[:i]),
-		ggui.Span(text[i:i+len(q)]).Color(skin.AccentBright).Weight(ggui.WeightSemibold),
-		ggui.Span(text[i+len(q):]),
+	return widget.RichText(
+		widget.Span(text[:i]),
+		widget.Span(text[i:i+len(q)]).Color(skin.AccentBright).Weight(ggui.WeightSemibold),
+		widget.Span(text[i+len(q):]),
 	).Style(mono).NoWrap().Ellipsis()
 }
 

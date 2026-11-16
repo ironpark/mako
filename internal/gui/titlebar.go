@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 )
 
 // On macOS the window has no title bar of its own: its content runs to the
@@ -56,7 +57,7 @@ func titlebar(m *model, w ggui.Widget) ggui.Widget {
 		return w
 	}
 	var last time.Time
-	return ggui.Pointer(w).OnDown(func(ev ggui.PointerEvent) {
+	return widget.Pointer(w).OnDown(func(ev ggui.PointerEvent) {
 		if ev.Button != ggui.MouseButtonLeft || m.window == nil {
 			return
 		}
@@ -73,5 +74,5 @@ func titlebar(m *model, w ggui.Widget) ggui.Widget {
 // titlebarGap is the start of a header: pad wide, or as wide as the
 // traffic lights need, room, when they stand there.
 func titlebarGap(room ggui.Readable[float64], pad float64) ggui.Widget {
-	return ggui.Box().BindWidth(ggui.Map(room, func(r float64) float64 { return max(r, pad) }))
+	return widget.Box().BindWidth(ggui.Map(room, func(r float64) float64 { return max(r, pad) }))
 }

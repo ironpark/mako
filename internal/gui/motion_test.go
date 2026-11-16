@@ -5,6 +5,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 )
 
 // A fold's body is built only once it opens, eases open so that what is
@@ -13,10 +14,10 @@ func TestRevealEasesAndBuildsLate(t *testing.T) {
 	open := ggui.State(false)
 	built := 0
 	p := ggui.ProbeBuilder(func() ggui.Widget {
-		return ggui.Column(
+		return widget.Column(
 			reveal(open, func() ggui.Widget {
 				built++
-				return ggui.Box().Height(100).Width(50)
+				return widget.Box().Height(100).Width(50)
 			}),
 			ui.Button("below", func() {}),
 		)

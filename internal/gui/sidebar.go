@@ -10,6 +10,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -146,11 +147,11 @@ func sectionDrop(m *model, w ggui.Widget, nodeID, project string) ggui.Widget {
 	over := ggui.State(false)
 	marked := ggui.View(over, func(o bool) ggui.Widget {
 		if o {
-			return ggui.Box(w).Border(1, skin.AccentBright).Radius(7)
+			return widget.Box(w).Border(1, skin.AccentBright).Radius(7)
 		}
-		return ggui.Box(w).Border(1, color.Transparent).Radius(7)
+		return widget.Box(w).Border(1, color.Transparent).Radius(7)
 	})
-	return ggui.DropZone(marked, func(d ggui.Dropped[tabDrag]) {
+	return widget.DropZone(marked, func(d widget.Dropped[tabDrag]) {
 		over.Set(false)
 		m.endDrag()
 		s, ok := m.session(d.Value.ID)
@@ -204,12 +205,12 @@ func kindBadges(sessions []*protocol.SessionInfo) ggui.Widget {
 	slices.SortStableFunc(kinds, func(a, b string) int { return cmp.Compare(pick(a == "shell", 0, 1), pick(b == "shell", 0, 1)) })
 	badges := make([]ggui.Widget, len(kinds))
 	for i, k := range kinds {
-		badges[i] = ggui.Box(ggui.Row(
+		badges[i] = widget.Box(widget.Row(
 			agentGlyph(k, skin.Muted).Size(11),
-			ggui.Text(fmt.Sprint(count[k])).Size(11).Color(skin.Muted).NoWrap(),
-		).Gap(2).Align(ggui.AlignCenter)).Pad(1, 4).Radius(4).Fill(skin.Surface2)
+			widget.Text(fmt.Sprint(count[k])).Size(11).Color(skin.Muted).NoWrap(),
+		).Gap(2).Align(widget.AlignCenter)).Pad(1, 4).Radius(4).Fill(skin.Surface2)
 	}
-	return ggui.Row(badges...).Gap(2).Align(ggui.AlignCenter)
+	return widget.Row(badges...).Gap(2).Align(widget.AlignCenter)
 }
 
 // subfolder is where dir is inside root, or "" for root itself.

@@ -12,6 +12,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -193,9 +194,9 @@ func statusIcon(status string) ggui.Widget {
 
 // counts is a row's +added -removed.
 func counts(added, removed int) ggui.Widget {
-	return ggui.Row(
-		ggui.Text("+"+lineCount(added)).Size(12).Color(skin.DiffAdded).NoWrap(),
-		ggui.Text("-"+lineCount(removed)).Size(12).Color(skin.DiffRemoved).NoWrap(),
+	return widget.Row(
+		widget.Text("+"+lineCount(added)).Size(12).Color(skin.DiffAdded).NoWrap(),
+		widget.Text("-"+lineCount(removed)).Size(12).Color(skin.DiffRemoved).NoWrap(),
 	).Gap(5)
 }
 
@@ -248,7 +249,7 @@ func changesTree(m *model) ggui.Widget {
 			return ggui.Reactive(func() ggui.Widget {
 				it := item.Get()
 				lead := icon("file").Size(14)
-				var tail ggui.Widget = ggui.Box().Width(14)
+				var tail ggui.Widget = widget.Box().Width(14)
 				if it.Dir {
 					// A folder says it is open by its icon, as the file tree's does.
 					lead = icon(pick(m.git.Closed.Get()[it.Key], "folder", "folder-open")).Size(14)
@@ -259,15 +260,15 @@ func changesTree(m *model) ggui.Widget {
 				if !it.Dir {
 					numbers = fileCounts(it.File)
 				}
-				name := ggui.Text(it.Name).Size(12.5).NoWrap().Ellipsis()
+				name := widget.Text(it.Name).Size(12.5).NoWrap().Ellipsis()
 				if !it.Dir && it.File.GetStatus() == protocol.GitDeleted {
 					name = name.Color(skin.Muted)
 				}
 				if ggui.Peek(m.git.Base) != "" {
 					// Since a base, the files are the branch's work, not a commit's pick.
-					return ggui.Row(lead, ggui.Expanded(name), numbers, tail).Gap(7)
+					return widget.Row(lead, widget.Expanded(name), numbers, tail).Gap(7)
 				}
-				row := ggui.Row(pickBox(m, it), lead, ggui.Expanded(name), numbers, tail).Gap(7)
+				row := widget.Row(pickBox(m, it), lead, widget.Expanded(name), numbers, tail).Gap(7)
 				return ui.ContextMenuFunc(row, func() []ggui.Widget { return changeMenu(m, it) }).Name(Tf("%s actions", it.Name))
 			})
 		}).
@@ -294,14 +295,14 @@ func changesTree(m *model) ggui.Widget {
 		case v.Err != "" && len(v.Changes.GetFiles()) == 0:
 			note = v.Err
 		case v.Loading && v.Changes.GetRoot() == "":
-			return ggui.Box(ggui.Center(ui.Spinner())).Height(80)
+			return widget.Box(widget.Center(ui.Spinner())).Height(80)
 		case len(v.Changes.GetFiles()) == 0:
 			note = T("No changes.")
 		}
 		if note != "" {
-			return ggui.Box(muted(ggui.Text(note).Size(12.5))).Pad(6, 12, 10, 30)
+			return widget.Box(muted(widget.Text(note).Size(12.5))).Pad(6, 12, 10, 30)
 		}
-		return ggui.Padding(tree, 0, 4)
+		return widget.Padding(tree, 0, 4)
 	})
 }
 
@@ -331,7 +332,7 @@ func gitHeader(m *model) ggui.Widget {
 	header := ggui.View(head, func(h headed) ggui.Widget {
 		if !h.Repo {
 			return panelHeader(icon("git-branch").Size(15),
-				ggui.Expanded(ggui.Text(h.Branch).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
+				widget.Expanded(widget.Text(h.Branch).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
 				iconButton("refresh-cw", T("Refresh"), func() { m.loadGit(h.Root) }))
 		}
 		pull, push := T("Pull"), T("Push")
@@ -365,7 +366,7 @@ func gitHeader(m *model) ggui.Widget {
 		more := iconMenu(ui.MenuOf(icon("ellipsis"), items...).Width(220).Name(T("Git actions")), 6)
 		// A session's worktree compares with HEAD or with the branch it
 		// started from.
-		var against ggui.Widget = ggui.Box()
+		var against ggui.Widget = widget.Box()
 		if h.Worktree.GetBase() != "" {
 			base := h.Worktree.GetBase()
 			label := T("vs HEAD")
@@ -378,8 +379,8 @@ func gitHeader(m *model) ggui.Widget {
 			}).Ghost(), T("Compare with HEAD, or with the branch the worktree started from"))
 		}
 		return panelHeader(
-			ggui.Expanded(ggui.Row(branchMenu(m, h.Branch, h.Branches), against, ggui.Spacer()).Gap(4).Stretch()),
-			ggui.Row(
+			widget.Expanded(widget.Row(branchMenu(m, h.Branch, h.Branches), against, widget.Spacer()).Gap(4).Stretch()),
+			widget.Row(
 				syncButton("arrow-down", pull, h.Behind, run(protocol.GitOpPull, T("Pulling…"))),
 				syncButton("arrow-up", push, h.Ahead, run(protocol.GitOpPush, T("Pushing…"))),
 				more,
@@ -402,7 +403,7 @@ func diffHeader(f *protocol.GitFile, tail ggui.Widget, lead ...ggui.Widget) ggui
 	}
 	return panelHeader(append(lead,
 		statusIcon(f.GetStatus()),
-		ggui.Expanded(ggui.Text(name).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
+		widget.Expanded(widget.Text(name).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
 		fileCounts(f),
 		tail,
 	)...)
@@ -411,7 +412,7 @@ func diffHeader(f *protocol.GitFile, tail ggui.Widget, lead ...ggui.Widget) ggui
 // fileCounts is a changed file's +added -removed, or that it is binary.
 func fileCounts(f *protocol.GitFile) ggui.Widget {
 	if f.GetBinary() {
-		return muted(ggui.Text(T("binary")).Size(12))
+		return muted(widget.Text(T("binary")).Size(12))
 	}
 	return counts(int(f.GetAdded()), int(f.GetRemoved()))
 }
@@ -480,10 +481,10 @@ func commitBox(m *model) ggui.Widget {
 		typed := pick(r.Typed, "x", "")
 		return ui.Button(label, m.commit).Disabled(r.Busy || !canCommit(r.Files, typed, amend))
 	})
-	box := ggui.Column(
+	box := widget.Column(
 		field,
-		ggui.Row(ui.Checkbox(m.git.Amend, T("Amend")), ggui.Spacer(), button).Gap(8).Align(ggui.AlignCenter),
+		widget.Row(ui.Checkbox(m.git.Amend, T("Amend")), widget.Spacer(), button).Gap(8).Align(widget.AlignCenter),
 	).Gap(8).Stretch()
-	return ggui.If(hidden, func() ggui.Widget { return ggui.Box() }).
-		Else(func() ggui.Widget { return ggui.Column(hline(), ggui.Box(box).Pad(10, 12)).Stretch() })
+	return ggui.If(hidden, func() ggui.Widget { return widget.Box() }).
+		Else(func() ggui.Widget { return widget.Column(hline(), widget.Box(box).Pad(10, 12)).Stretch() })
 }

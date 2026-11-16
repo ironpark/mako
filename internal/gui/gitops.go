@@ -9,6 +9,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -223,9 +224,9 @@ func branchMenu(m *model, branch string, branches []string) ggui.Widget {
 		items = append(items, ui.MenuDivider())
 	}
 	items = append(items, ui.MenuItem(T("New branch…"), func() { m.askBranch("") }))
-	label := ggui.Row(
+	label := widget.Row(
 		icon("git-branch").Size(15),
-		ggui.Box(ggui.Text(branch).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).MaxWidth(130),
+		widget.Box(widget.Text(branch).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()).MaxWidth(130),
 		icon("chevron-down").Size(12).Color(skin.ExtraMuted),
 	).Gap(6)
 	return borderless(ui.MenuOf(label, items...).Name(T("Branch")))
@@ -235,9 +236,9 @@ func branchMenu(m *model, branch string, branches []string) ggui.Widget {
 func syncButton(name, label string, count int, onTap func()) ggui.Widget {
 	content := []ggui.Widget{icon(name).Size(14)}
 	if count > 0 {
-		content = append(content, ggui.Text(lineCount(count)).Size(11.5).Color(skin.Muted).NoWrap())
+		content = append(content, widget.Text(lineCount(count)).Size(11.5).Color(skin.Muted).NoWrap())
 	}
-	return ui.Tooltip(ui.ButtonOf(ggui.Row(content...).Gap(3), onTap).Ghost().Pad(5, 6).Radius(6).Name(label), label)
+	return ui.Tooltip(ui.ButtonOf(widget.Row(content...).Gap(3), onTap).Ghost().Pad(5, 6).Radius(6).Name(label), label)
 }
 
 // gitStatusLine is the operation under way, or what the last one said,
@@ -249,15 +250,15 @@ func gitStatusLine(m *model) ggui.Widget { return statusLine(m.git.Busy, m.git.N
 func statusLine(busy *ggui.StateValue[string], note *ggui.StateValue[gitNote]) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		if b := busy.Get(); b != "" {
-			return ggui.Box(ggui.Row(ui.Spinner(), muted(ggui.Text(b).Size(12))).Gap(8)).Pad(6, 12)
+			return widget.Box(widget.Row(ui.Spinner(), muted(widget.Text(b).Size(12))).Gap(8)).Pad(6, 12)
 		}
 		n := note.Get()
 		if n.Text == "" {
-			return ggui.Box()
+			return widget.Box()
 		}
-		return ggui.Column(ggui.Box(ggui.Row(
-			ggui.Expanded(ggui.Text(n.Text).Size(11.5).Color(pick[color.Color](n.Err, skin.DotDown, skin.Muted)).Font(ggui.DefaultMonoFont()).Selectable()),
+		return widget.Column(widget.Box(widget.Row(
+			widget.Expanded(widget.Text(n.Text).Size(11.5).Color(pick[color.Color](n.Err, skin.DotDown, skin.Muted)).Font(ggui.DefaultMonoFont()).Selectable()),
 			iconButton("x", T("Dismiss"), func() { note.Set(gitNote{}) }),
-		).Gap(6).Align(ggui.AlignStart)).Pad(6, 6, 6, 12), hline()).Stretch()
+		).Gap(6).Align(widget.AlignStart)).Pad(6, 6, 6, 12), hline()).Stretch()
 	})
 }

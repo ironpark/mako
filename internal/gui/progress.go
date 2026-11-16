@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -77,19 +78,19 @@ func planProgress(m *model, id string, state *chatState) ggui.Widget {
 	open := ggui.State(false)
 	return ggui.View(steps, func(steps []any) ggui.Widget {
 		if len(steps) == 0 {
-			return ggui.Box()
+			return widget.Box()
 		}
 		done, current := planStanding(steps)
-		head := ggui.Tap(ggui.Row(
+		head := widget.Tap(widget.Row(
 			icon("list").Size(13).Color(skin.AccentBright),
-			ggui.Text(Tf("%d of %d", done, len(steps))).Size(12.5).Weight(ggui.WeightMedium).Color(skin.AccentBright).NoWrap(),
-			ggui.Expanded(muted(ggui.Text(current).Size(12).NoWrap().Ellipsis())),
+			widget.Text(Tf("%d of %d", done, len(steps))).Size(12.5).Weight(ggui.WeightMedium).Color(skin.AccentBright).NoWrap(),
+			widget.Expanded(muted(widget.Text(current).Size(12).NoWrap().Ellipsis())),
 			chevron(open, 14, skin.Muted),
-		).Gap(8).Align(ggui.AlignCenter), func() { open.Set(!ggui.Peek(open)) }).Cursor(ggui.CursorShapePointer)
+		).Gap(8).Align(widget.AlignCenter), func() { open.Set(!ggui.Peek(open)) }).Cursor(ggui.CursorShapePointer)
 		rows := reveal(open, func() ggui.Widget {
-			return ggui.Column(hline(), ggui.Box(checklist(steps)).MaxHeight(240)).Gap(4).Stretch()
+			return widget.Column(hline(), widget.Box(checklist(steps)).MaxHeight(240)).Gap(4).Stretch()
 		})
-		return &lane{child: ggui.Box(ggui.Column(head, rows).Gap(6).Stretch()).
+		return &lane{child: widget.Box(widget.Column(head, rows).Gap(6).Stretch()).
 			Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(8, 12)}
 	})
 }

@@ -11,6 +11,7 @@ import (
 	ggruntime "github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/ggui/widget"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/agent"
@@ -67,7 +68,7 @@ func composerBar(m *model, id string, state *chatState, disabled ggui.Readable[b
 		left = append(left, ui.Tooltip(ui.ButtonOf(icon("square-terminal").Size(16).Color(skin.Muted), state.inTerminal).
 			Ghost().Pad(5).Radius(15).Name(T("Type in the terminal")).BindDisabled(disabled), T("Type in the terminal")))
 	}
-	return ggui.Row(append(left, mode, ggui.Spacer(), model, button)...).Gap(6).Align(ggui.AlignCenter)
+	return widget.Row(append(left, mode, widget.Spacer(), model, button)...).Gap(6).Align(widget.AlignCenter)
 }
 
 // roundButton is the composer's main button: a light disc with glyph.
@@ -104,7 +105,7 @@ func (m *model) stopTurn(id string) {
 // for an agent that says none.
 func permissionChip(mode string) ggui.Widget {
 	if mode == "" {
-		return ggui.Box()
+		return widget.Box()
 	}
 	glyph, label, tip := "lock", modeLabel(mode), T("What the agent may do without asking, as its terminal sets it.")
 	var c color.Color = skin.Muted
@@ -116,11 +117,11 @@ func permissionChip(mode string) ggui.Widget {
 	case "plan":
 		glyph, c = "list", skin.AccentBright
 	}
-	chip := ggui.Row(
+	chip := widget.Row(
 		icon(glyph).Size(15).Color(c),
-		ggui.Text(label).Size(13).Color(c).NoWrap(),
-	).Gap(5).Align(ggui.AlignCenter)
-	return ui.Tooltip(ggui.Box(chip).Pad(4, 6), tip)
+		widget.Text(label).Size(13).Color(c).NoWrap(),
+	).Gap(5).Align(widget.AlignCenter)
+	return ui.Tooltip(widget.Box(chip).Pad(4, 6), tip)
 }
 
 // modeMenu is the permission chip, which switches the agent to one of
@@ -152,7 +153,7 @@ func modelMenu(m *model, id, current, effort string, c *protocol.AgentControls) 
 		return chip
 	}
 	if current == "" {
-		chip = ggui.Box(ggui.Text(T("Model")).Size(13).Color(skin.Muted).NoWrap()).Pad(4, 6)
+		chip = widget.Box(widget.Text(T("Model")).Size(13).Color(skin.Muted).NoWrap()).Pad(4, 6)
 	}
 	var items []ggui.Widget
 	for _, to := range c.GetModels() {
@@ -218,13 +219,13 @@ func modeLabel(mode string) string {
 // effort, quieter; nothing before there is one.
 func modelChip(model, effort string) ggui.Widget {
 	if model == "" {
-		return ggui.Box()
+		return widget.Box()
 	}
-	parts := []ggui.Widget{ggui.Text(modelName(model)).Size(13).NoWrap()}
+	parts := []ggui.Widget{widget.Text(modelName(model)).Size(13).NoWrap()}
 	if effort != "" {
-		parts = append(parts, ggui.Text(capitalized(effort)).Size(13).Color(skin.Muted).NoWrap())
+		parts = append(parts, widget.Text(capitalized(effort)).Size(13).Color(skin.Muted).NoWrap())
 	}
-	return ui.Tooltip(ggui.Box(ggui.Row(parts...).Gap(5).Align(ggui.AlignCenter)).Pad(4, 6), model)
+	return ui.Tooltip(widget.Box(widget.Row(parts...).Gap(5).Align(widget.AlignCenter)).Pad(4, 6), model)
 }
 
 // modelName is a model as people say it: claude-opus-5-5 is Opus 5.5, and

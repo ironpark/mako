@@ -10,6 +10,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -79,14 +80,14 @@ func projectAgentsPanel(m *model) ggui.Widget {
 	// The chosen session itself heads its project's agents.
 	agents := ggui.Key(root, func(r fileRoot) ggui.Widget {
 		if r.Path == "" {
-			return ggui.Box(muted(ggui.Text(T("Open a session to monitor its project agents.")).Size(13))).Pad(16)
+			return widget.Box(muted(widget.Text(T("Open a session to monitor its project agents.")).Size(13))).Pad(16)
 		}
 		return projectAgentsBody(m, r)
 	})
 	// The card is as tall as what it says while that fits, and scrolls in a
 	// panel shorter than it, rather than its lines drawn over each other.
-	card := ggui.Scroll(sessionCard(m)).Shrink().Bar(skin.Surface3)
-	return ggui.Column(card, hline(), ggui.Expanded(agents)).Stretch()
+	card := widget.Scroll(sessionCard(m)).Shrink().Bar(skin.Surface3)
+	return widget.Column(card, hline(), widget.Expanded(agents)).Stretch()
 }
 
 // sessionCard is the chosen session at the top of the Agents tab: what it
@@ -96,20 +97,20 @@ func sessionCard(m *model) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get())
 		if !ok {
-			return ggui.Box(muted(ggui.Text(T("No session selected.")).Size(12.5))).Pad(10, 12)
+			return widget.Box(muted(widget.Text(T("No session selected.")).Size(12.5))).Pad(10, 12)
 		}
 		open := more.Get()
 		status, tint := projectAgentStatus(s)
 		chevron := pick(open, "chevron-down", "chevron-right")
-		head := ui.ButtonOf(ggui.Row(
+		head := ui.ButtonOf(widget.Row(
 			agentGlyph(s.GetAgent(), skin.Muted).Size(14),
-			ggui.Expanded(ggui.Text(projectAgentName(s)).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
+			widget.Expanded(widget.Text(projectAgentName(s)).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
 			dot(tint),
-			ggui.Text(status).Size(11.5).Color(skin.Muted).NoWrap(),
+			widget.Text(status).Size(11.5).Color(skin.Muted).NoWrap(),
 			icon(chevron).Size(13).Color(skin.ExtraMuted),
-		).Gap(7).Align(ggui.AlignCenter), func() { more.Set(!open) }).Ghost().Pad(5, 6).Radius(5).Name(T("Session details"))
+		).Gap(7).Align(widget.AlignCenter), func() { more.Set(!open) }).Ghost().Pad(5, 6).Radius(5).Name(T("Session details"))
 		pair := func(a, b ggui.Widget) ggui.Widget {
-			return ggui.Row(ggui.Expanded(a), ggui.Expanded(b)).Gap(12).Stretch()
+			return widget.Row(widget.Expanded(a), widget.Expanded(b)).Gap(12).Stretch()
 		}
 		where := prettyPath(s.GetProject())
 		if w := s.GetWorktree(); w != nil {
@@ -135,7 +136,7 @@ func sessionCard(m *model) ggui.Widget {
 				pair(prop(T("Size"), fmt.Sprintf("%d × %d", s.GetCols(), s.GetRows())), prop(T("Session"), s.GetId())),
 			)
 		}
-		return ggui.Box(ggui.Column(head, ggui.Box(ggui.Column(props...).Gap(10).Stretch()).Pad(2, 6, 4, 6)).Gap(4).Stretch()).Pad(6, 6, 8, 6)
+		return widget.Box(widget.Column(head, widget.Box(widget.Column(props...).Gap(10).Stretch()).Pad(2, 6, 4, 6)).Gap(4).Stretch()).Pad(6, 6, 8, 6)
 	})
 }
 
@@ -157,27 +158,27 @@ func projectAgentsBody(m *model, root fileRoot) ggui.Widget {
 		if !v.Updated.IsZero() {
 			meta = Tf("Updated %s", v.Updated.Local().Format("15:04:05"))
 		}
-		return ggui.Box(ggui.Row(
+		return widget.Box(widget.Row(
 			icon("users").Size(14).Color(skin.Muted),
-			ggui.Expanded(ggui.Text(projectName(root.Path)).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
+			widget.Expanded(widget.Text(projectName(root.Path)).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
 			ui.Tooltip(iconButton("refresh-cw", T("Refresh agents"), func() { m.loadProjectAgents(root) }), meta),
-		).Gap(7).Align(ggui.AlignCenter)).Pad(4, 6, 4, 12)
+		).Gap(7).Align(widget.AlignCenter)).Pad(4, 6, 4, 12)
 	})
 	status := ggui.Reactive(func() ggui.Widget {
 		v := m.ProjectAgents.Get()
 		if v.Root != root || v.Err == "" {
-			return ggui.Box()
+			return widget.Box()
 		}
-		return ggui.Box(ggui.Text(v.Err).Size(12).Color(skin.DotWaiting).Selectable()).Pad(6, 12)
+		return widget.Box(widget.Text(v.Err).Size(12).Color(skin.DotWaiting).Selectable()).Pad(6, 12)
 	})
 	agents := ggui.Reactive(func() ggui.Widget {
 		snapshot := data.Get()
 		if snapshot == nil {
 			v := m.ProjectAgents.Get()
 			if !v.Loaded && v.Err == "" {
-				return ggui.Box(muted(ggui.Text(T("Loading agents…")).Size(12))).Pad(12)
+				return widget.Box(muted(widget.Text(T("Loading agents…")).Size(12))).Pad(12)
 			}
-			return ggui.Box()
+			return widget.Box()
 		}
 		chosen := filter.Get()
 		byID := projectAgentsByID(snapshot)
@@ -186,13 +187,13 @@ func projectAgentsBody(m *model, root fileRoot) ggui.Widget {
 			rows = append(rows, projectAgentRow(m, row.Agent, row.Depth, chosen, filter, byID))
 		}
 		if len(rows) == 0 {
-			return ggui.Box(emptyNote("users", T("No agents in this project."))).Height(120)
+			return widget.Box(emptyNote("users", T("No agents in this project."))).Height(120)
 		}
-		return ggui.Box(ggui.Column(rows...).Stretch()).Pad(2, 0)
+		return widget.Box(widget.Column(rows...).Stretch()).Pad(2, 0)
 	})
 	agentsHead := ggui.Reactive(func() ggui.Widget {
 		working, waiting, pending := projectAgentCounts(data.Get())
-		var clear ggui.Widget = ggui.Box()
+		var clear ggui.Widget = widget.Box()
 		if filter.Get() != "" {
 			clear = ui.Button(T("All agents"), func() { filter.Set("") }).Ghost().Pad(1, 6).Name(T("All agents"))
 		}
@@ -203,17 +204,17 @@ func projectAgentsBody(m *model, root fileRoot) ggui.Widget {
 			}
 			return pill(label, c)
 		}
-		counts := ggui.Row(
+		counts := widget.Row(
 			count(working, Tf("%d working", working), skin.DotRunning),
 			count(waiting, Tf("%d waiting", waiting), skin.DotWaiting),
 			count(int(pending), Tf("%d unread", pending), skin.DotDone),
-		).Gap(4).Align(ggui.AlignCenter)
-		return panelHead(T("Agents"), ggui.Align(counts).Left(), clear)
+		).Gap(4).Align(widget.AlignCenter)
+		return panelHead(T("Agents"), widget.Align(counts).Left(), clear)
 	})
 	messages := ggui.Reactive(func() ggui.Widget {
 		snapshot := data.Get()
 		if snapshot == nil {
-			return ggui.Box()
+			return widget.Box()
 		}
 		byID := projectAgentsByID(snapshot)
 		found := projectAgentMessages(snapshot.GetMessages(), filter.Get())
@@ -222,32 +223,32 @@ func projectAgentsBody(m *model, root fileRoot) ggui.Widget {
 			rows = append(rows, projectAgentMessage(msg, byID, expanded, filter.Get()))
 		}
 		if len(rows) == 0 {
-			return ggui.Box(emptyNote("message-square", T("No messages yet."))).Height(120)
+			return widget.Box(emptyNote("message-square", T("No messages yet."))).Height(120)
 		}
-		return ggui.Box(ggui.Column(rows...).Stretch()).Pad(4, 0)
+		return widget.Box(widget.Column(rows...).Stretch()).Pad(4, 0)
 	})
 	messagesHead := ggui.Reactive(func() ggui.Widget {
 		title := T("Recent messages")
 		if a := projectAgentsByID(data.Get())[filter.Get()]; a != nil {
 			title = Tf("Messages for %s", projectAgentName(a.GetSession()))
 		}
-		return panelHead(title, ggui.Box(), ggui.Box())
+		return panelHead(title, widget.Box(), widget.Box())
 	})
-	top := ggui.Column(agentsHead, ggui.Expanded(ggui.Scroll(agents).Bar(skin.Surface3))).Stretch()
+	top := widget.Column(agentsHead, widget.Expanded(widget.Scroll(agents).Bar(skin.Surface3))).Stretch()
 	// Oldest first, as a conversation reads, kept at the newest.
-	bottom := ggui.Column(messagesHead, ggui.Expanded(ggui.Scroll(messages).FollowEnd().Bar(skin.Surface3))).Stretch()
+	bottom := widget.Column(messagesHead, widget.Expanded(widget.Scroll(messages).FollowEnd().Bar(skin.Surface3))).Stretch()
 	split := ui.Resizable(m.AgentsSplit, top, bottom).Vertical().MinSizes(60, 80).Hairline().Name(T("Messages divider"))
-	return ggui.Column(header, hline(), status, ggui.Expanded(split)).Stretch()
+	return widget.Column(header, hline(), status, widget.Expanded(split)).Stretch()
 }
 
 // panelHead is a section's heading line in the agents panel: its title,
 // what it says of the section, and an action at the end.
 func panelHead(title string, about, action ggui.Widget) ggui.Widget {
-	return ggui.Box(ggui.Row(
-		ggui.Text(title).Size(11.5).Weight(ggui.WeightSemibold).NoWrap(),
-		ggui.Expanded(about),
+	return widget.Box(widget.Row(
+		widget.Text(title).Size(11.5).Weight(ggui.WeightSemibold).NoWrap(),
+		widget.Expanded(about),
 		action,
-	).Gap(8).Align(ggui.AlignCenter)).Height(28).Pad(0, 8, 0, 12)
+	).Gap(8).Align(widget.AlignCenter)).Height(28).Pad(0, 8, 0, 12)
 }
 
 // projectAgentsByID indexes the snapshot's agents by their sessions.
@@ -359,24 +360,24 @@ func projectAgentRow(m *model, a *protocol.ProjectAgent, depth int, selected str
 	// Its name over its state, said in the state's colour.
 	line := []ggui.Widget{
 		agentGlyph(s.GetAgent(), skin.Muted).Size(15),
-		ggui.Expanded(ggui.Column(
-			ggui.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis(),
-			ggui.Text(status).Size(11).Color(tint).NoWrap().Ellipsis(),
+		widget.Expanded(widget.Column(
+			widget.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis(),
+			widget.Text(status).Size(11).Color(tint).NoWrap().Ellipsis(),
 		).Gap(1).Stretch()),
 	}
 	if n := a.GetPendingMessages(); n > 0 {
-		line = append(line, ggui.Row(icon("message-square").Size(11).Color(skin.DotWaiting),
-			ggui.Text(fmt.Sprint(n)).Size(10.5).Color(skin.DotWaiting)).Gap(2).Align(ggui.AlignCenter))
+		line = append(line, widget.Row(icon("message-square").Size(11).Color(skin.DotWaiting),
+			widget.Text(fmt.Sprint(n)).Size(10.5).Color(skin.DotWaiting)).Gap(2).Align(widget.AlignCenter))
 	}
 	line = append(line, dot(tint))
-	button := ui.ButtonOf(ggui.Row(line...).Gap(9).Align(ggui.AlignCenter),
+	button := ui.ButtonOf(widget.Row(line...).Gap(9).Align(widget.AlignCenter),
 		func() { filter.Set(pick(selected == s.GetId(), "", s.GetId())) }).Ghost().Pad(6, 8).Radius(8).Name(Tf("Filter messages for %s", name))
 	var content ggui.Widget = ui.Tooltip(button, strings.Join(about, " · "))
 	if selected == s.GetId() {
-		content = ggui.Box(content).Radius(8).Fill(skin.Surface2)
+		content = widget.Box(content).Radius(8).Fill(skin.Surface2)
 	}
 	open := ui.Tooltip(ui.ButtonOf(icon("chevron-right").Size(13), func() { m.openProjectAgent(s) }).Ghost().Pad(4).Radius(5).Name(Tf("Open session %s", name)), Tf("Open session %s", name))
-	return ggui.Box(ggui.Row(ggui.Expanded(content), open).Gap(2).Align(ggui.AlignCenter)).Pad(0, 6, 0, 6+float64(min(depth, 4))*14)
+	return widget.Box(widget.Row(widget.Expanded(content), open).Gap(2).Align(widget.AlignCenter)).Pad(0, 6, 0, 6+float64(min(depth, 4))*14)
 }
 
 func (m *model) openProjectAgent(s *protocol.SessionInfo) {
@@ -438,26 +439,26 @@ func projectAgentMessage(msg *protocol.AgentMessage, byID map[string]*protocol.P
 	return ggui.Reactive(func() ggui.Widget {
 		open := expanded.Get() == msg.GetId()
 		meta := []ggui.Widget{
-			ggui.Expanded(ggui.Text(who).Size(10.5).Weight(ggui.WeightMedium).Color(skin.Muted).NoWrap().Ellipsis().Align(pick(mine, 1.0, 0.0))),
+			widget.Expanded(widget.Text(who).Size(10.5).Weight(ggui.WeightMedium).Color(skin.Muted).NoWrap().Ellipsis().Align(pick(mine, 1.0, 0.0))),
 		}
 		if state != "" {
-			meta = append(meta, ggui.Text(state).Size(10).Color(tint).NoWrap())
+			meta = append(meta, widget.Text(state).Size(10).Color(tint).NoWrap())
 		}
-		meta = append(meta, ggui.Text(protocol.TimeOf(msg.GetCreatedAt()).Local().Format("15:04")).Size(10).Color(skin.ExtraMuted).NoWrap())
+		meta = append(meta, widget.Text(protocol.TimeOf(msg.GetCreatedAt()).Local().Format("15:04")).Size(10).Color(skin.ExtraMuted).NoWrap())
 		if long {
 			meta = append(meta, ui.ButtonOf(icon(pick(open, "chevron-up", "chevron-down")).Size(11).Color(skin.Muted),
 				func() { expanded.Set(pick(open, uint64(0), msg.GetId())) }).Ghost().Pad(1).Radius(4).Name(Tf("Toggle message %d", msg.GetId())))
 		}
-		text := ggui.Text(msg.GetText()).Size(12).Color(skin.Fg).Selectable()
+		text := widget.Text(msg.GetText()).Size(12).Color(skin.Fg).Selectable()
 		if !open {
-			text = ggui.Text(projectMessagePreview(msg.GetText())).Size(12).Color(skin.Fg).MaxLines(3).Ellipsis().Selectable()
+			text = widget.Text(projectMessagePreview(msg.GetText())).Size(12).Color(skin.Fg).MaxLines(3).Ellipsis().Selectable()
 		}
-		bubble := ggui.Box(text).Fill(pick[color.Color](mine, skin.Surface3, skin.Surface2)).Radius(10).Pad(5, 9)
-		line := ggui.Row(bubble, ggui.Spacer())
+		bubble := widget.Box(text).Fill(pick[color.Color](mine, skin.Surface3, skin.Surface2)).Radius(10).Pad(5, 9)
+		line := widget.Row(bubble, widget.Spacer())
 		if mine {
-			line = ggui.Row(ggui.Spacer(), bubble)
+			line = widget.Row(widget.Spacer(), bubble)
 		}
-		return ggui.Box(ggui.Column(ggui.Row(meta...).Gap(5).Align(ggui.AlignCenter), line.Stretch()).Gap(2).Stretch()).
+		return widget.Box(widget.Column(widget.Row(meta...).Gap(5).Align(widget.AlignCenter), line.Stretch()).Gap(2).Stretch()).
 			Pad(3, pick(mine, 12.0, 36.0), 3, pick(mine, 36.0, 12.0))
 	})
 }

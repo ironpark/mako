@@ -45,7 +45,7 @@ func chevron(open ggui.Readable[bool], size float64, c color.Color) ggui.Widget 
 
 // arrive is a card as it comes to ask something: faded in, risen a little.
 func arrive(card ggui.Widget) ggui.Widget {
-	return ggui.Transition(card).Fade().Slide(0, 10).Duration(motionDuration)
+	return widget.Transition(card).Fade().Slide(0, 10).Duration(motionDuration)
 }
 
 // crossfade shows what build makes of key's value, as ggui.Key does, one
@@ -53,5 +53,5 @@ func arrive(card ggui.Widget) ggui.Widget {
 // window into its settings. Not a session's chat and its terminal, which
 // are one thing seen two ways, and change at once.
 func crossfade[K comparable](key ggui.Readable[K], build func(K) ggui.Widget) ggui.Widget {
-	return ggui.Switcher(key, build).Fade().Duration(switchDuration)
+	return widget.Switcher(key, build).Fade().Duration(switchDuration)
 }

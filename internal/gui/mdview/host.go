@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 )
 
 // Host is what a Markdown page needs of the window around it: where
@@ -42,5 +43,5 @@ func (Base) Fold(_ int, open bool) *ggui.StateValue[bool] {
 	return ggui.State(open)
 }
 func (Base) Code(src, _ string) ggui.Widget {
-	return ggui.RichText(ggui.Span(strings.TrimSuffix(src, "\n"))).NoWrap().Selectable().Font(ggui.DefaultMonoFont())
+	return widget.RichText(widget.Span(strings.TrimSuffix(src, "\n"))).NoWrap().Selectable().Font(ggui.DefaultMonoFont())
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -192,10 +193,10 @@ func spaceSwitcher(m *model) ggui.Widget {
 			items = append(items, ui.MenuItem(p.spaceName(i), func() { m.setSpace(i) }).Checked(i == current))
 		}
 		items = append(items, ui.MenuDivider(), ui.MenuItem(T("Edit spaces…"), func() { m.openSettings("spaces") }))
-		title := ggui.Row(
-			ggui.Text(p.spaceName(current)).Size(14).Weight(ggui.WeightSemibold).NoWrap().Ellipsis(),
+		title := widget.Row(
+			widget.Text(p.spaceName(current)).Size(14).Weight(ggui.WeightSemibold).NoWrap().Ellipsis(),
 			icon("chevron-down").Size(13).Color(skin.Muted),
-		).Gap(4).Align(ggui.AlignCenter)
+		).Gap(4).Align(widget.AlignCenter)
 		return iconMenu(ui.MenuOf(title, items...).Name(T("Spaces")), 2)
 	})
 }
@@ -220,14 +221,14 @@ func spaceDots(m *model) ggui.Widget {
 	current := ggui.Derived(func() int { return m.spaces().Space })
 	return ggui.View(list, func(l dotList) ggui.Widget {
 		if len(l.Names) <= 1 {
-			return ggui.Box()
+			return widget.Box()
 		}
 		var dots []ggui.Widget
 		for j, name := range l.Names {
 			i := l.First + j
 			dots = append(dots, ui.ButtonOf(spaceDot(current, i), func() { m.setSpace(i) }).Ghost().Pad(0).Radius(6).Name(name))
 		}
-		return ggui.Row(dots...).Gap(2).Align(ggui.AlignCenter)
+		return widget.Row(dots...).Gap(2).Align(widget.AlignCenter)
 	})
 }
 
@@ -239,11 +240,11 @@ func spaceDot(current ggui.Readable[int], i int) ggui.Widget {
 		on := ggui.TweenOf(ggui.Map(current, func(c int) float64 { return pick(c == i, 1.0, 0.0) }), motionDuration).Easing(ggui.EaseOut)
 		return ggui.View(on, func(t float64) ggui.Widget {
 			w := 6 + 10*t
-			pill := ggui.Stack(
-				ggui.Box().Size(w, 6).Radius(3).Fill(skin.Surface3),
-				ggui.Opacity(ggui.Box().Size(w, 6).Radius(3).Fill(skin.Muted), t),
+			pill := widget.Stack(
+				widget.Box().Size(w, 6).Radius(3).Fill(skin.Surface3),
+				widget.Opacity(widget.Box().Size(w, 6).Radius(3).Fill(skin.Muted), t),
 			)
-			return ggui.Box(ggui.Center(pill)).Size(22, 22)
+			return widget.Box(widget.Center(pill)).Size(22, 22)
 		})
 	})
 }
@@ -497,13 +498,13 @@ func spacesSettings(m *model) ggui.Widget {
 		section(T("Every space"), general),
 		ggui.View(spaces, func(n int) ggui.Widget {
 			if n == 0 {
-				return section(T("Spaces"), muted(ggui.Text(T("No spaces yet. Add one, or pick New space with this owner from an owner's menu in the sidebar.")).Size(13)), ggui.Align(add).Left())
+				return section(T("Spaces"), muted(widget.Text(T("No spaces yet. Add one, or pick New space with this owner from an owner's menu in the sidebar.")).Size(13)), widget.Align(add).Left())
 			}
 			cards := make([]ggui.Widget, n)
 			for i := range n {
 				cards[i] = spaceCard(m, i, n, owners, sections)
 			}
-			return section(T("Spaces"), append(cards, ggui.Align(add).Left())...)
+			return section(T("Spaces"), append(cards, widget.Align(add).Left())...)
 		}),
 	)
 }
@@ -580,27 +581,27 @@ func spaceCard(m *model, i, n int, owners ggui.Readable[[]string], sections ggui
 				shown++
 			}
 		}
-		return muted(ggui.Text(Tf("%d projects", shown)).Size(12).NoWrap())
+		return muted(widget.Text(Tf("%d projects", shown)).Size(12).NoWrap())
 	})
-	head := ggui.Row(
-		ggui.Expanded(ui.TextField(name).Placeholder(Tf("Space %d", i+1)).Name(T("Space name"))),
+	head := widget.Row(
+		widget.Expanded(ui.TextField(name).Placeholder(Tf("Space %d", i+1)).Name(T("Space name"))),
 		count,
 		button("arrow-up", T("Move up"), i > 0, func() { m.reorderSpace(i, -1) }),
 		button("arrow-down", T("Move down"), i < n-1, func() { m.reorderSpace(i, 1) }),
 		button("trash-2", T("Delete space"), true, func() { m.deleteSpace(i) }),
-	).Gap(4).Align(ggui.AlignCenter)
+	).Gap(4).Align(widget.AlignCenter)
 	return card(
-		ggui.Box(head).Pad(12, 12, 12, 16),
-		ggui.Box(spaceOwners(m, i, owners)).Pad(12, 16),
-		ggui.Box(spaceProjects(m, i, sections)).Pad(12, 16),
+		widget.Box(head).Pad(12, 12, 12, 16),
+		widget.Box(spaceOwners(m, i, owners)).Pad(12, 16),
+		widget.Box(spaceProjects(m, i, sections)).Pad(12, 16),
 	)
 }
 
 // subhead is a part of a space's card: its title and what it does, over
 // its content.
 func subhead(title, hint string, content ...ggui.Widget) ggui.Widget {
-	return ggui.Column(append([]ggui.Widget{
-		ggui.Column(ggui.Text(title).Size(13).Weight(ggui.WeightMedium), muted(ggui.Text(hint).Size(12))).Gap(2).Stretch(),
+	return widget.Column(append([]ggui.Widget{
+		widget.Column(widget.Text(title).Size(13).Weight(ggui.WeightMedium), muted(widget.Text(hint).Size(12))).Gap(2).Stretch(),
 	}, content...)...).Gap(10).Stretch()
 }
 
@@ -619,7 +620,7 @@ func spaceOwners(m *model, i int, owners ggui.Readable[[]string]) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		l := m.Spaces.Get()
 		if i >= len(l.Spaces) {
-			return ggui.Box()
+			return widget.Box()
 		}
 		in := slices.Clone(l.Spaces[i].Owners)
 		slices.SortFunc(in, compareOwners)
@@ -644,7 +645,7 @@ func spaceOwners(m *model, i int, owners ggui.Readable[[]string]) ggui.Widget {
 		case len(in) == 0:
 			hint = T("No owners yet: they come from the origin remotes of the sessions' repositories.")
 		}
-		return subhead(T("Owners"), hint, ggui.Wrap(w...).Gap(6))
+		return subhead(T("Owners"), hint, widget.Wrap(w...).Gap(6))
 	})
 }
 
@@ -654,7 +655,7 @@ func spaceProjects(m *model, i int, sections ggui.Readable[[]spaceSection]) ggui
 	return ggui.Reactive(func() ggui.Widget {
 		set := m.spaces()
 		if _, ok := set.spaceOf(i + 1); !ok {
-			return ggui.Box()
+			return widget.Box()
 		}
 		var rows, rest []ggui.Widget
 		for _, sec := range sections.Get() {
@@ -667,12 +668,12 @@ func spaceProjects(m *model, i int, sections ggui.Readable[[]spaceSection]) ggui
 		}
 		var content []ggui.Widget
 		if len(rows) == 0 {
-			content = append(content, muted(ggui.Text(T("None yet: add its owners, or projects one by one.")).Size(12)))
+			content = append(content, muted(widget.Text(T("None yet: add its owners, or projects one by one.")).Size(12)))
 		} else {
-			content = append(content, ggui.Column(rows...).Gap(10).Stretch())
+			content = append(content, widget.Column(rows...).Gap(10).Stretch())
 		}
 		if len(rest) > 0 {
-			content = append(content, ggui.Align(addMenu(T("Add project"), rest)).Left())
+			content = append(content, widget.Align(addMenu(T("Add project"), rest)).Left())
 		}
 		return subhead(T("Projects"), T("Those its owners hold, and those put in or left out here or from a project's menu."), content...)
 	})
@@ -703,27 +704,27 @@ func spaceProjectRow(m *model, i int, sec spaceSection, reason sectionReason, se
 			m.toggleSection(i, sec.Key, sec.Owners)
 		}
 	})
-	text := ggui.Text(sec.Name).Size(13).NoWrap().Ellipsis()
+	text := widget.Text(sec.Name).Size(13).NoWrap().Ellipsis()
 	if reason == leftOut {
 		text = text.Color(skin.Muted)
 	}
-	return ggui.Row(
-		ggui.Expanded(ggui.Column(text, muted(ggui.Text(why).Size(11.5).NoWrap().Ellipsis())).Gap(1).Stretch()),
+	return widget.Row(
+		widget.Expanded(widget.Column(text, muted(widget.Text(why).Size(11.5).NoWrap().Ellipsis())).Gap(1).Stretch()),
 		ui.Switch(shown, "").Name(Tf("Show %s", sec.Name)),
-	).Gap(10).Align(ggui.AlignCenter)
+	).Gap(10).Align(widget.AlignCenter)
 }
 
 // removableChip is a chip of label with a cross that runs remove.
 func removableChip(label, name string, remove func()) ggui.Widget {
-	return ui.ButtonOf(ggui.Row(
-		ggui.Text(label).Size(12.5).NoWrap(),
+	return ui.ButtonOf(widget.Row(
+		widget.Text(label).Size(12.5).NoWrap(),
 		icon("x").Size(12).Color(skin.Muted),
-	).Gap(6).Align(ggui.AlignCenter), remove).Outline().Name(name)
+	).Gap(6).Align(widget.AlignCenter), remove).Outline().Name(name)
 }
 
 // addMenu is a button of label with a plus that opens items.
 func addMenu(label string, items []ggui.Widget) ggui.Widget {
-	return ui.MenuOf(ggui.Row(icon("plus").Size(13), ggui.Text(label).Size(12.5).NoWrap()).Gap(6).Align(ggui.AlignCenter), items...).Name(label)
+	return ui.MenuOf(widget.Row(icon("plus").Size(13), widget.Text(label).Size(12.5).NoWrap()).Gap(6).Align(widget.AlignCenter), items...).Name(label)
 }
 
 // spaceField binds a field of space i, as prefField does a setting's.
@@ -764,9 +765,9 @@ func copySpacesMenu(m *model) ggui.Widget {
 			}))
 		}
 		if len(items) == 0 {
-			return muted(ggui.Text(T("No other node to copy from")).Size(12.5))
+			return muted(widget.Text(T("No other node to copy from")).Size(12.5))
 		}
-		return ui.MenuOf(ggui.Row(ggui.Text(T("Choose a node")).Size(13), icon("chevron-down").Size(14).Color(skin.Muted)).Gap(8).Align(ggui.AlignCenter),
+		return ui.MenuOf(widget.Row(widget.Text(T("Choose a node")).Size(13), icon("chevron-down").Size(14).Color(skin.Muted)).Gap(8).Align(widget.AlignCenter),
 			items...).Name(T("Copy from another node"))
 	})
 }

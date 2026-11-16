@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 )
@@ -87,7 +88,7 @@ func newTurnRail(m *model, find *chatFinder, turns ggui.Readable[[]chatTurnItem]
 	rail.child = ggui.Reactive(func() ggui.Widget {
 		prompts := rail.prompts.Get()
 		if len(prompts) < 2 {
-			return ggui.Box()
+			return widget.Box()
 		}
 		ticks := make([]ggui.Widget, len(prompts))
 		rail.cards = make([]ggui.Widget, len(prompts))
@@ -95,7 +96,7 @@ func newTurnRail(m *model, find *chatFinder, turns ggui.Readable[[]chatTurnItem]
 			ticks[i] = railItem(rail, i, p)
 			rail.cards[i] = railCardOf(p)
 		}
-		return ggui.Column(ticks...)
+		return widget.Column(ticks...)
 	})
 	return rail
 }
@@ -126,7 +127,7 @@ func (r *turnRail) Paint(dst *ggui.Canvas, at ggui.Rect) {
 // paintCard floats the hovered tick's card beside it, over the feed, kept
 // in the window. It is the only card: moving from tick to tick moves it.
 func (r *turnRail) paintCard(dst *ggui.Canvas, card ggui.Widget, name string) {
-	panel := ggui.Box(card).Fill(skin.Surface2).Border(1, skin.Border).Radius(10).Pad(10, 12)
+	panel := widget.Box(card).Fill(skin.Surface2).Border(1, skin.Border).Radius(10).Pad(10, 12)
 	size := panel.Layout(ggui.Constraints{MinW: railCard, MaxW: railCard, MaxH: ggui.Unbounded}, r.env)
 	tick := r.hoveredAt
 	y := tick.Origin.Y + tick.Size.H/2 - size.H/2
@@ -184,7 +185,7 @@ func (r *turnRail) reading(view ggui.Rect) string {
 
 // railItem is the tick of prompt i, which a click goes to.
 func railItem(rail *turnRail, i int, p railTurn) ggui.Widget {
-	return ggui.Tap(&railTick{rail: rail, index: i, key: p.Key}, func() { rail.find.jumpTo(p.Key) }).
+	return widget.Tap(&railTick{rail: rail, index: i, key: p.Key}, func() { rail.find.jumpTo(p.Key) }).
 		Cursor(ggui.CursorShapePointer)
 }
 
@@ -192,12 +193,12 @@ func railItem(rail *turnRail, i int, p railTurn) ggui.Widget {
 // to it ends.
 func railCardOf(p railTurn) ggui.Widget {
 	rows := []ggui.Widget{
-		ggui.Text(firstLine(p.Prompt)).Size(14).Weight(ggui.WeightMedium).NoWrap().Ellipsis(),
+		widget.Text(firstLine(p.Prompt)).Size(14).Weight(ggui.WeightMedium).NoWrap().Ellipsis(),
 	}
 	if reply := plainPreview(p.Reply); reply != "" {
-		rows = append(rows, muted(ggui.Text(reply).Size(13)).MaxLines(3))
+		rows = append(rows, muted(widget.Text(reply).Size(13)).MaxLines(3))
 	}
-	return ggui.Column(rows...).Gap(6).Stretch()
+	return widget.Column(rows...).Gap(6).Stretch()
 }
 
 // plainPreview is the start of Markdown as plain words on one line: its

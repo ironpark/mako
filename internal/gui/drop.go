@@ -8,6 +8,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -100,16 +101,16 @@ func litDrop(w ggui.Widget, moved func(pathDrag), drop func([]string)) ggui.Widg
 	over := ggui.State(false)
 	lit := ggui.View(over, func(o bool) ggui.Widget {
 		if o {
-			return ggui.Box(w).Fill(skin.Surface3).Radius(4)
+			return widget.Box(w).Fill(skin.Surface3).Radius(4)
 		}
 		return w
 	})
-	var out ggui.Widget = ggui.Pointer(lit).OnDropHover(over.Set).OnDrop(func(ev ggui.DropEvent) {
+	var out ggui.Widget = widget.Pointer(lit).OnDropHover(over.Set).OnDrop(func(ev ggui.DropEvent) {
 		over.Set(false)
 		drop(ev.Paths())
 	})
 	if moved != nil {
-		out = ggui.DropZone(out, func(d ggui.Dropped[pathDrag]) {
+		out = widget.DropZone(out, func(d widget.Dropped[pathDrag]) {
 			over.Set(false)
 			moved(d.Value)
 		}).OnHover(over.Set)

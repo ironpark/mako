@@ -38,7 +38,7 @@ type Image struct {
 func (r *mdRenderer) image(p mdPicture) ggui.Widget {
 	label := cmp.Or(p.alt, path.Base(p.dest))
 	fallback := func() ggui.Widget {
-		return ggui.RichText(r.linked(mdStyle{r: r}, p.dest).span("🖼 " + label)).Size(mdBodySize)
+		return widget.RichText(r.linked(mdStyle{r: r}, p.dest).span("🖼 " + label)).Size(mdBodySize)
 	}
 	img := r.host.Image(p.dest)
 	if img == nil {
@@ -47,7 +47,7 @@ func (r *mdRenderer) image(p mdPicture) ggui.Widget {
 	return ggui.View(img, func(v Image) ggui.Widget {
 		switch {
 		case v.Loading:
-			return ggui.Box(ui.Spinner()).Pad(8)
+			return widget.Box(ui.Spinner()).Pad(8)
 		case v.Img == nil:
 			return fallback()
 		}

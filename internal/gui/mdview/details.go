@@ -7,6 +7,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 	"github.com/yuin/goldmark/ast"
 
 	"github.com/ironpark/mako/internal/gui/i18n"
@@ -113,9 +114,9 @@ func (r *mdRenderer) details(head string, body []ast.Node, tail string) ggui.Wid
 		content = append(content, w)
 	}
 	fold := ui.Collapsible(r.fold(openAttr.MatchString(tag)), title,
-		ggui.Padding(ggui.Column(content...).Gap(10).Stretch(), 6, 0, 0, 18))
+		widget.Padding(widget.Column(content...).Gap(10).Stretch(), 6, 0, 0, 18))
 	if w := r.html(after); w != nil {
-		return ggui.Column(fold, w).Gap(14).Stretch()
+		return widget.Column(fold, w).Gap(14).Stretch()
 	}
 	return fold
 }

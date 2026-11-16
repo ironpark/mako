@@ -147,27 +147,27 @@ func (p *picker) dialog() ggui.Widget {
 	// another.
 	list := ggui.View(p.rows, func(rows []pickRow) ggui.Widget {
 		if len(rows) == 0 {
-			return ggui.Box(muted(ggui.Text(p.Empty).Size(13))).Pad(14, 16)
+			return widget.Box(muted(widget.Text(p.Empty).Size(13))).Pad(14, 16)
 		}
 		out := make([]ggui.Widget, len(rows))
 		for i, r := range rows {
 			out[i] = p.row(i, r)
 		}
-		return ggui.Column(out...).Gap(0).Stretch()
+		return widget.Column(out...).Gap(0).Stretch()
 	})
-	scroll := ggui.Scroll(ggui.Padding(list, 6)).BindOffset(p.offset).Bar(skin.Surface3)
-	footer := ggui.Row(ggui.Spacer(),
-		ggui.Text(p.Action).Size(12.5).Color(skin.Fg).NoWrap(),
-		ggui.Text("↵").Size(12.5).Color(skin.Muted).NoWrap(),
-	).Gap(6).Align(ggui.AlignCenter)
-	body := ggui.Column(
-		ggui.Box(input).Pad(14, 16),
+	scroll := widget.Scroll(widget.Padding(list, 6)).BindOffset(p.offset).Bar(skin.Surface3)
+	footer := widget.Row(widget.Spacer(),
+		widget.Text(p.Action).Size(12.5).Color(skin.Fg).NoWrap(),
+		widget.Text("↵").Size(12.5).Color(skin.Muted).NoWrap(),
+	).Gap(6).Align(widget.AlignCenter)
+	body := widget.Column(
+		widget.Box(input).Pad(14, 16),
 		hline(),
-		ggui.Box(scroll).BindHeight(ggui.Map(p.rows, func(rows []pickRow) float64 {
+		widget.Box(scroll).BindHeight(ggui.Map(p.rows, func(rows []pickRow) float64 {
 			return min(p.Height, float64(max(len(rows), 1))*pickRowHeight) + 12
 		})),
 		hline(),
-		ggui.Box(footer).Pad(8, 16),
+		widget.Box(footer).Pad(8, 16),
 	).Gap(0).Stretch()
 	return ui.Dialog(p.open, body).Compact().Top(pickerTop).Name(p.Name).Width(p.Width)
 }
@@ -184,28 +184,28 @@ func (p *picker) row(i int, r pickRow) ggui.Widget {
 	}
 	text := []ggui.Widget{hitText(r.Label, r.Hits, fg)}
 	if r.Detail != "" {
-		text = append(text, ggui.Expanded(hitText(r.Detail, r.DetailHits, skin.Muted)))
+		text = append(text, widget.Expanded(hitText(r.Detail, r.DetailHits, skin.Muted)))
 	} else {
-		text = append(text, ggui.Spacer())
+		text = append(text, widget.Spacer())
 	}
-	line = append(line, ggui.Expanded(ggui.Row(text...).Gap(10).Align(ggui.AlignCenter)))
+	line = append(line, widget.Expanded(widget.Row(text...).Gap(10).Align(widget.AlignCenter)))
 	if r.Shortcut != "" {
 		line = append(line, keyCaps(chordLabel(r.Shortcut)))
 	}
 	if r.Recent {
 		line = append(line, icon("history").Size(14).Color(skin.ExtraMuted))
 	}
-	content := ggui.Box(ggui.Row(line...).Gap(10).Align(ggui.AlignCenter)).Height(pickRowHeight).Pad(0, 10)
+	content := widget.Box(widget.Row(line...).Gap(10).Align(widget.AlignCenter)).Height(pickRowHeight).Pad(0, 10)
 	btn := ui.ButtonOf(content, func() { p.run(i) }).Ghost().Pad(0).Radius(6).Disabled(r.Disabled).Name(r.Label)
 	picked := ggui.Map(p.sel, func(s int) bool { return s == i })
 	return ggui.View(picked, func(on bool) ggui.Widget {
-		return ggui.Box(btn).Fill(pick[color.Color](on, skin.Surface3, color.Transparent)).Radius(6)
+		return widget.Box(btn).Fill(pick[color.Color](on, skin.Surface3, color.Transparent)).Radius(6)
 	})
 }
 
 // hitText is s with the runes at hits marked as matched.
 func hitText(s string, hits []int, fg color.Color) ggui.Widget {
-	style := func(t ggui.TextSpan, hit bool) ggui.TextSpan {
+	style := func(t widget.TextSpan, hit bool) widget.TextSpan {
 		t = t.Size(13.5)
 		if hit {
 			return t.Color(skin.AccentBright).Weight(ggui.WeightSemibold)
@@ -214,7 +214,7 @@ func hitText(s string, hits []int, fg color.Color) ggui.Widget {
 	}
 	// Runs of runes alike, marked or not, are a span each; hits are in
 	// order, so one cursor walks them.
-	var spans []ggui.TextSpan
+	var spans []widget.TextSpan
 	var run strings.Builder
 	runHit, next := false, 0
 	for i, r := range []rune(s) {
@@ -223,14 +223,14 @@ func hitText(s string, hits []int, fg color.Color) ggui.Widget {
 			next++
 		}
 		if hit != runHit && run.Len() > 0 {
-			spans = append(spans, style(ggui.Span(run.String()), runHit))
+			spans = append(spans, style(widget.Span(run.String()), runHit))
 			run.Reset()
 		}
 		runHit = hit
 		run.WriteRune(r)
 	}
-	spans = append(spans, style(ggui.Span(run.String()), runHit))
-	return ggui.RichText(spans...).NoWrap().Ellipsis()
+	spans = append(spans, style(widget.Span(run.String()), runHit))
+	return widget.RichText(spans...).NoWrap().Ellipsis()
 }
 
 // chordLabel is a chord such as "cmd+shift+p" as the platform writes it,
@@ -246,9 +246,9 @@ func chordLabel(chord string) string {
 func keyCaps(label string) ggui.Widget {
 	var keys []ggui.Widget
 	for _, r := range label {
-		keys = append(keys, ggui.Text(string(r)).Size(12.5).Color(skin.Muted).NoWrap())
+		keys = append(keys, widget.Text(string(r)).Size(12.5).Color(skin.Muted).NoWrap())
 	}
-	return ggui.Row(keys...).Gap(3).Align(ggui.AlignCenter)
+	return widget.Row(keys...).Gap(3).Align(widget.AlignCenter)
 }
 
 // fuzzyMatch reports whether s holds q's runes in order, ignoring case

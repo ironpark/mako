@@ -6,6 +6,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -62,23 +63,23 @@ func agentChatView(m *model, id string, agent string) ggui.Widget {
 		})
 		return func() { unfollow(); stop() }
 	})
-	back := ui.ButtonOf(ggui.Row(icon("arrow-left").Size(14).Color(skin.Muted), muted(ggui.Text(T("Session")).Size(12.5))).Gap(6),
+	back := ui.ButtonOf(widget.Row(icon("arrow-left").Size(14).Color(skin.Muted), muted(widget.Text(T("Session")).Size(12.5))).Gap(6),
 		func() { m.openAgent(id, "") }).Ghost().Pad(4, 8).Radius(6).Name(T("Back to the session"))
 	bar := ggui.Reactive(func() ggui.Widget {
 		a := agentOf(state, agent)
 		title := cmp.Or(a.GetDescription(), a.GetKind(), T("Subagent"))
-		var status ggui.Widget = muted(ggui.Text(T("Finished")).Size(11.5).NoWrap())
+		var status ggui.Widget = muted(widget.Text(T("Finished")).Size(11.5).NoWrap())
 		if a.GetRunning() {
 			status = ui.Spinner().Size(13)
 		}
-		return ggui.Box(ggui.Row(
+		return widget.Box(widget.Row(
 			back,
-			ggui.Expanded(ggui.Column(
-				ggui.Text(title).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis(),
+			widget.Expanded(widget.Column(
+				widget.Text(title).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis(),
 				agentProgress(a),
 			).Gap(2).Stretch()),
 			status,
-		).Gap(10).Align(ggui.AlignCenter)).Pad(8, 12)
+		).Gap(10).Align(widget.AlignCenter)).Pad(8, 12)
 	})
 	logged := ggui.Derived(func() []chatTurnItem {
 		return chatTurns(sub.result.Get().Chat.GetMessages(), nil)
@@ -88,19 +89,19 @@ func agentChatView(m *model, id string, agent string) ggui.Widget {
 		v := sub.result.Get()
 		switch {
 		case v.Err != "":
-			return ggui.Text(v.Err).Size(13).Color(skin.Muted).Selectable()
+			return widget.Text(v.Err).Size(13).Color(skin.Muted).Selectable()
 		case !v.Loaded:
-			return muted(ggui.Text(T("Loading conversation…")))
+			return muted(widget.Text(T("Loading conversation…")))
 		case len(v.Chat.GetMessages()) == 0:
-			return muted(ggui.Text(T("No messages yet. The conversation updates as the agent saves it.")))
+			return muted(widget.Text(T("No messages yet. The conversation updates as the agent saves it.")))
 		}
-		return ggui.Box()
+		return widget.Box()
 	})
 	_, feed := chatFeed(m, id, sub, turns, head, nil)
-	return ggui.Column(
-		ggui.Box(bar).Fill(skin.Surface1),
+	return widget.Column(
+		widget.Box(bar).Fill(skin.Surface1),
 		hline(),
-		ggui.Expanded(feed),
+		widget.Expanded(feed),
 	).Stretch()
 }
 
@@ -110,8 +111,8 @@ func agentLink(m *model, id string, a *protocol.SubAgent, w ggui.Widget) ggui.Wi
 	if !m.nodeHas(id, protocol.RevisionAgentChat) {
 		return w
 	}
-	row := ggui.Row(ggui.Expanded(w), icon("chevron-right").Size(12).Color(skin.ExtraMuted)).Gap(6).Align(ggui.AlignCenter)
-	return ui.Tooltip(ggui.Tap(row, func() { m.openAgent(id, a.GetId()) }).Cursor(ggui.CursorShapePointer), T("Open its conversation"))
+	row := widget.Row(widget.Expanded(w), icon("chevron-right").Size(12).Color(skin.ExtraMuted)).Gap(6).Align(widget.AlignCenter)
+	return ui.Tooltip(widget.Tap(row, func() { m.openAgent(id, a.GetId()) }).Cursor(ggui.CursorShapePointer), T("Open its conversation"))
 }
 
 // nodeHas reports whether the node session id runs on is of revision or

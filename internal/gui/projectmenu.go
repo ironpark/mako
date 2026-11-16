@@ -9,6 +9,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/pathscope"
@@ -345,7 +346,7 @@ func projectDialogs(m *model) ggui.Widget {
 		Title: T("Rename project"), Field: T("Project name"), Action: T("Rename"),
 		Placeholder: T("Its folder's name"), Submit: m.submitProjectName,
 	})
-	return ggui.Stack(name, addFolderDialog(m), a.merge.dialog(), projectSettingsDialog(m))
+	return widget.Stack(name, addFolderDialog(m), a.merge.dialog(), projectSettingsDialog(m))
 }
 
 // addFolderDialog asks for a folder to add to a project: the node it is
@@ -366,20 +367,20 @@ func addFolderDialog(m *model) ggui.Widget {
 	}).Outline()
 	local := ggui.Derived(func() bool { return a.AddNode.Get() == m.Conn.Get().Self.GetId() })
 	hasErr := ggui.Map(a.AddErr, func(s string) bool { return s != "" })
-	form := ggui.Column(
-		muted(ggui.Text(T("The folder becomes one of the project's: its sessions show in the project's section, marked with the folder's name. A repository's clones on other nodes join it as they show up.")).Size(12)),
+	form := widget.Column(
+		muted(widget.Text(T("The folder becomes one of the project's: its sessions show in the project's section, marked with the folder's name. A repository's clones on other nodes join it as they show up.")).Size(12)),
 		ui.Field(T("Node"), ui.Select(a.AddNode).BindOptions(nodeIDs).Format(func(id string) string {
 			return nodeName(ggui.Peek(m.Nodes), id)
 		}).Name(T("Node"))),
-		ui.Field(T("Folder"), ggui.Row(
-			ggui.Expanded(ui.TextField(a.AddPath).Placeholder(T("Its whole path")).Name(T("Folder")).OnSubmit(func(string) { m.submitAddFolder() })),
+		ui.Field(T("Folder"), widget.Row(
+			widget.Expanded(ui.TextField(a.AddPath).Placeholder(T("Its whole path")).Name(T("Folder")).OnSubmit(func(string) { m.submitAddFolder() })),
 			ggui.If(local, func() ggui.Widget { return browse }).Else(func() ggui.Widget { return browseRemote }),
 		).Gap(8)),
-		ggui.If(hasErr, func() ggui.Widget { return ggui.TextOf(a.AddErr).Size(12).Color(skin.DotDown) }),
-		ggui.Row(
+		ggui.If(hasErr, func() ggui.Widget { return widget.TextOf(a.AddErr).Size(12).Color(skin.DotDown) }),
+		widget.Row(
 			ui.Button(T("Cancel"), func() { a.AddOpen.Set(false) }).Outline(),
 			ui.Button(T("Add folder"), m.submitAddFolder),
-		).Gap(8).Justify(ggui.JustifyEnd),
+		).Gap(8).Justify(widget.JustifyEnd),
 	).Gap(16).Stretch()
 	return ui.Dialog(a.AddOpen, form).Title(T("Add a folder to the project")).Width(460)
 }
@@ -447,23 +448,23 @@ func projectSettingsDialog(m *model) ggui.Widget {
 		a.Draft.Update(func(p project) project { p = p.clone(); p.NoJoin = !on; return p })
 	})
 	give := draftField(a, func(p *project) *bool { return &p.GiveDirs })
-	form := ggui.Column(
+	form := widget.Column(
 		ui.Field(T("Name"), ui.TextField(draftField(a, func(p *project) *string { return &p.Name })).
 			Placeholder(T("Its folder's name")).Name(T("Project name"))),
 		section(T("Folders"), folders,
-			muted(ggui.Text(T("The first folder is where its plus starts a session. Agents in any of its folders on one node see and message each other as one project's.")).Size(12))),
+			muted(widget.Text(T("The first folder is where its plus starts a session. Agents in any of its folders on one node see and message each other as one project's.")).Size(12))),
 		card(
 			row(T("Connect new clones"), T("A clone of one of its repositories, on another node or in another folder, joins the project as it shows up."),
 				ui.Switch(join, "").Name(T("Connect new clones"))),
 			row(T("Give agents its other folders"), T("An agent that works in folders besides its own, as Claude Code and Codex do, starts with the project's other folders on its node. A running agent has them once it starts again."),
 				ui.Switch(give, "").Name(T("Give agents its other folders"))),
 		),
-		ggui.Row(
+		widget.Row(
 			ui.Button(T("Cancel"), func() { a.SettingsOpen.Set(false) }).Outline(),
 			ui.Button(T("Save"), m.saveProjectSettings),
-		).Gap(8).Justify(ggui.JustifyEnd),
+		).Gap(8).Justify(widget.JustifyEnd),
 	).Gap(16).Stretch()
-	return ui.Dialog(a.SettingsOpen, ggui.Scroll(form)).Title(T("Project settings")).Width(520)
+	return ui.Dialog(a.SettingsOpen, widget.Scroll(form)).Title(T("Project settings")).Width(520)
 }
 
 // rootSettingsRow is one of the draft's folders: its label, where it is on
@@ -486,10 +487,10 @@ func rootSettingsRow(a *projectAsk, i int, r projectRoot, n int, nodes []*protoc
 	})
 	where := make([]ggui.Widget, 0, len(r.Locations))
 	for _, l := range r.Locations {
-		where = append(where, muted(ggui.Text(nodeName(nodes, l.Node)+" · "+prettyPath(l.Path)).Size(11.5).NoWrap().Ellipsis()))
+		where = append(where, muted(widget.Text(nodeName(nodes, l.Node)+" · "+prettyPath(l.Path)).Size(11.5).NoWrap().Ellipsis()))
 	}
 	if r.Remote != "" {
-		where = append(where, ggui.Text(r.Remote).Size(11).Color(skin.ExtraMuted).NoWrap().Ellipsis())
+		where = append(where, widget.Text(r.Remote).Size(11).Color(skin.ExtraMuted).NoWrap().Ellipsis())
 	}
 	buttons := []ggui.Widget{}
 	if i > 0 {
@@ -512,10 +513,10 @@ func rootSettingsRow(a *projectAsk, i int, r projectRoot, n int, nodes []*protoc
 		}))
 	}
 	field := ui.TextField(label).Placeholder(r.folderName()).Name(T("Folder label"))
-	return ggui.Box(ggui.Row(
-		ggui.Expanded(ggui.Column(append([]ggui.Widget{field}, where...)...).Gap(4).Stretch()),
-		ggui.Row(buttons...).Gap(2),
-	).Gap(8).Align(ggui.AlignStart)).Pad(10, 14)
+	return widget.Box(widget.Row(
+		widget.Expanded(widget.Column(append([]ggui.Widget{field}, where...)...).Gap(4).Stretch()),
+		widget.Row(buttons...).Gap(2),
+	).Gap(8).Align(widget.AlignStart)).Pad(10, 14)
 }
 
 // Dragging --------------------------------------------------------------------
@@ -535,10 +536,10 @@ func projectDragged(m *model, head ggui.Widget, g sessionGroup) ggui.Widget {
 		if from == "" {
 			return head
 		}
-		hint := ggui.Box(ggui.Text(Tf("Drop to merge %s into %s", from, into)).Size(11.5).Color(skin.AccentBright).NoWrap().Ellipsis()).Pad(0, 8, 4, 8)
-		return ggui.Box(ggui.Column(head, hint).Stretch()).Border(1.5, skin.AccentBright).Radius(7)
+		hint := widget.Box(widget.Text(Tf("Drop to merge %s into %s", from, into)).Size(11.5).Color(skin.AccentBright).NoWrap().Ellipsis()).Pad(0, 8, 4, 8)
+		return widget.Box(widget.Column(head, hint).Stretch()).Border(1.5, skin.AccentBright).Radius(7)
 	})
-	zone := ggui.DropZone(marked, func(d ggui.Dropped[projectDrag]) {
+	zone := widget.DropZone(marked, func(d widget.Dropped[projectDrag]) {
 		over.Set("")
 		if d.Value.Key == g.Key {
 			return
@@ -552,12 +553,12 @@ func projectDragged(m *model, head ggui.Widget, g sessionGroup) ggui.Widget {
 			over.Set("")
 		}
 	})
-	zone = zone.OnOver(func(d ggui.Dropped[projectDrag]) {
+	zone = zone.OnOver(func(d widget.Dropped[projectDrag]) {
 		if d.Value.Key != g.Key {
 			over.Set(d.Value.Name)
 		}
 	})
-	return ggui.DragSource(zone, projectDrag{Key: g.Key, Name: into})
+	return widget.DragSource(zone, projectDrag{Key: g.Key, Name: into})
 }
 
 // reachableNodeIDs are the nodes a session can start on, or a folder be

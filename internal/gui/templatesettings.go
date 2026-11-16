@@ -12,6 +12,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/config"
@@ -323,11 +324,11 @@ func templateSettings(m *model) ggui.Widget {
 	})
 	broken := ggui.View(pg.broken, func(broken []prompttmpl.Broken) ggui.Widget {
 		if len(broken) == 0 {
-			return ggui.Box()
+			return widget.Box()
 		}
 		rows := make([]ggui.Widget, len(broken))
 		for i, b := range broken {
-			rows[i] = row(b.Name+".md", b.Err.Error(), ggui.Box())
+			rows[i] = row(b.Name+".md", b.Err.Error(), widget.Box())
 		}
 		return section(T("Could not read"), card(rows...))
 	})
@@ -343,14 +344,14 @@ func templateSettings(m *model) ggui.Widget {
 		note.Set("")
 	}
 	addCard := func(compact bool) ggui.Widget {
-		files := ggui.Row(
+		files := widget.Row(
 			ui.Button(T("Open folder"), openFolder(config.TemplatesDir)).Ghost(),
 			ui.Button(T("Reload"), pg.reload).Ghost(),
 		).Gap(6)
 		hint := T("Each template is a Markdown file in the templates folder, which you can also edit by hand.")
 		var folder ggui.Widget = stackedRow(T("Template files"), hint, files)
 		if compact {
-			folder = ggui.Box(ui.Tooltip(files, hint)).Pad(6, 8)
+			folder = widget.Box(ui.Tooltip(files, hint)).Pad(6, 8)
 		}
 		return card(
 			addField(T("Add a template"), T("Called in Chat by its name after two slashes."), "review", T("New template name"), name, note, add, compact),
@@ -361,7 +362,7 @@ func templateSettings(m *model) ggui.Widget {
 		drafts := ggui.Peek(pg.drafts)
 		items := func(inline bool) ggui.Widget {
 			if len(drafts) == 0 {
-				return card(ggui.Box(muted(ggui.Text(T("No templates yet. Add one below.")).Size(13))).Pad(14, 16))
+				return card(widget.Box(muted(widget.Text(T("No templates yet. Add one below.")).Size(13))).Pad(14, 16))
 			}
 			items := make([]ggui.Widget, len(drafts))
 			for i, d := range drafts {
@@ -371,14 +372,14 @@ func templateSettings(m *model) ggui.Widget {
 		}
 		detail := ggui.Key(shown, func(id int) ggui.Widget {
 			if id == 0 {
-				return ggui.Box()
+				return widget.Box()
 			}
 			return templateDetail(m, pg, pg.draft(id))
 		})
 		return listBeside(
-			ggui.Column(items(false), broken, addCard(true)).Gap(20).Stretch(),
+			widget.Column(items(false), broken, addCard(true)).Gap(20).Stretch(),
 			detail,
-			ggui.Column(items(true), broken, addCard(false)).Gap(pageGap).Stretch(),
+			widget.Column(items(true), broken, addCard(false)).Gap(pageGap).Stretch(),
 		)
 	})
 	return listPage(T("Templates"), T("Prompts to send in Chat by typing // and a template's name, with arguments of the types you set. {{name}} in a prompt stands for an argument, or for a built-in variable: agent, profile, model, project, branch, repo or date."),
@@ -400,24 +401,24 @@ func templateItem(m *model, pg *templatePage, shown ggui.Readable[int], d templa
 		if cur.edited() {
 			text = T("Not saved") + " · " + text
 		}
-		return ggui.Text(text).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()
+		return widget.Text(text).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()
 	})
 	title := ggui.Reactive(func() ggui.Widget {
-		return ggui.Text("//" + pg.draft(id).Name).Size(13.5).Weight(ggui.WeightMedium).NoWrap()
+		return widget.Text("//" + pg.draft(id).Name).Size(13.5).Weight(ggui.WeightMedium).NoWrap()
 	})
-	label := []ggui.Widget{icon("file-text").Size(15).Color(skin.Muted), title, ggui.Expanded(summary)}
+	label := []ggui.Widget{icon("file-text").Size(15).Color(skin.Muted), title, widget.Expanded(summary)}
 	if !inline {
 		chosen := ggui.Map(shown, func(s int) bool { return s == id })
-		return ggui.Box(listItem(ggui.Row(label...).Gap(10).Align(ggui.AlignCenter), chosen,
+		return widget.Box(listItem(widget.Row(label...).Gap(10).Align(widget.AlignCenter), chosen,
 			func() { pg.open.Set(id) }, Tf("%s template", d.Name))).Pad(4, 8)
 	}
 	isOpen := ggui.Map(pg.open, func(o int) bool { return o == id })
-	head := ui.ButtonOf(ggui.Row(append(label, chevron(isOpen, 13, skin.ExtraMuted))...).Gap(10).Align(ggui.AlignCenter),
+	head := ui.ButtonOf(widget.Row(append(label, chevron(isOpen, 13, skin.ExtraMuted))...).Gap(10).Align(widget.AlignCenter),
 		func() { pg.open.Set(pick(ggui.Peek(pg.open) == id, 0, id)) }).
 		Ghost().Pad(8, 10).Radius(7).Name(Tf("%s template", d.Name))
-	return ggui.Box(ggui.Column(
+	return widget.Box(widget.Column(
 		head,
-		reveal(isOpen, func() ggui.Widget { return ggui.Padding(templateEditor(m, pg, d), 6, 10, 10, 35) }),
+		reveal(isOpen, func() ggui.Widget { return widget.Padding(templateEditor(m, pg, d), 6, 10, 10, 35) }),
 	).Stretch()).Pad(4, 8)
 }
 
@@ -425,12 +426,12 @@ func templateItem(m *model, pg *templatePage, shown ggui.Readable[int], d templa
 // its editor.
 func templateDetail(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 	id := d.ID
-	return detailCard(ggui.Row(
+	return detailCard(widget.Row(
 		icon("file-text").Size(18).Color(skin.Muted),
 		ggui.Reactive(func() ggui.Widget {
-			return ggui.Text("//" + pg.draft(id).Name).Size(16).Weight(ggui.WeightSemibold).NoWrap()
+			return widget.Text("//" + pg.draft(id).Name).Size(16).Weight(ggui.WeightSemibold).NoWrap()
 		}),
-	).Gap(10).Align(ggui.AlignCenter), templateEditor(m, pg, d))
+	).Gap(10).Align(widget.AlignCenter), templateEditor(m, pg, d))
 }
 
 // templateEditor is an unfolded template's fields, its arguments, and
@@ -439,10 +440,10 @@ func templateEditor(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 	id := d.ID
 	mono := ggui.TextStyle{Font: ggui.DefaultMonoFont()}
 	children := []ggui.Widget{
-		ggui.Row(
-			ggui.Expanded(compactField(T("Name"), T("Called as //name. Renaming it renames its file."),
+		widget.Row(
+			widget.Expanded(compactField(T("Name"), T("Called as //name. Renaming it renames its file."),
 				ui.TextField(pg.field(id, func(d *templateDraft) *string { return &d.Name })).Style(mono).Name(T("Template name")))),
-			ggui.Expanded(compactField(T("Agents"), T("The agents and profiles it is offered to; none checked for every agent."),
+			widget.Expanded(compactField(T("Agents"), T("The agents and profiles it is offered to; none checked for every agent."),
 				templateAgents(m, pg.field(id, func(d *templateDraft) *string { return &d.Agents })))),
 		).Gap(10),
 		compactField(T("Description"), T("Shown beside its name in Chat's list."),
@@ -452,23 +453,23 @@ func templateEditor(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 		children = append(children, argCard(pg, id, a, mono))
 	}
 	children = append(children,
-		ggui.Row(ui.ButtonOf(ggui.Row(icon("plus").Size(14), ggui.Text(T("Add argument")).Size(13)).Gap(6),
+		widget.Row(ui.ButtonOf(widget.Row(icon("plus").Size(14), widget.Text(T("Add argument")).Size(13)).Gap(6),
 			func() { pg.addArg(id) }).Ghost().Pad(6, 10).Radius(7).Name(T("Add argument"))),
 		compactField(T("Prompt"), T("What it sends. {{name}} stands for an argument's value or a built-in variable's, and {{match name}} picks text by it, a line pattern => text for each arm, closed by {{end}}; type {{ to pick one."),
 			templateBody(pg, id, mono)),
 		ggui.Reactive(func() ggui.Widget {
 			if e := pg.draft(id).Err; e != "" {
-				return ggui.Text(e).Size(12).Color(uitheme.Destructive)
+				return widget.Text(e).Size(12).Color(uitheme.Destructive)
 			}
-			return ggui.Box()
+			return widget.Box()
 		}),
 	)
 	edited := ggui.Derived(func() bool { return pg.draft(id).edited() })
 	revertable := ggui.Derived(func() bool { return edited.Get() && pg.draft(id).File != "" })
-	children = append(children, ggui.Row(
+	children = append(children, widget.Row(
 		ui.Button(T("Save"), func() { pg.save(id) }).BindDisabled(not(edited)),
 		ui.Button(T("Revert"), func() { pg.revert(id) }).Ghost().BindDisabled(not(revertable)),
-		ggui.Spacer(),
+		widget.Spacer(),
 		ui.Button(T("Delete template"), func() {
 			m.askConfirm(confirmation{
 				Title:  Tf("Delete //%s?", ggui.Untrack(func() string { return pg.draft(id).Name })),
@@ -477,8 +478,8 @@ func templateEditor(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 				Run:    func() { pg.remove(m, id) },
 			})
 		}).Ghost(),
-	).Gap(8).Align(ggui.AlignCenter))
-	return ggui.Column(children...).Gap(10).Stretch()
+	).Gap(8).Align(widget.AlignCenter))
+	return widget.Column(children...).Gap(10).Stretch()
 }
 
 // not is b turned over.
@@ -492,30 +493,30 @@ func argCard(pg *templatePage, id int, a argDraft, mono ggui.TextStyle) ggui.Wid
 	arg := a.ID
 	kind := argField(pg, id, arg, func(a *argDraft) *prompttmpl.Type { return &a.Type })
 	required := argField(pg, id, arg, func(a *argDraft) *bool { return &a.Required })
-	head := ggui.Row(
+	head := widget.Row(
 		icon("type").Size(14).Color(skin.Muted),
-		ggui.Box(ui.TextField(argField(pg, id, arg, func(a *argDraft) *string { return &a.Name })).
+		widget.Box(ui.TextField(argField(pg, id, arg, func(a *argDraft) *string { return &a.Name })).
 			Style(mono).Name(T("Argument name"))).Width(150),
-		ggui.Box(ui.Select(kind).Options(prompttmpl.Types).Format(func(t prompttmpl.Type) string { return T(templateTypeLabels[string(t)]) }).
+		widget.Box(ui.Select(kind).Options(prompttmpl.Types).Format(func(t prompttmpl.Type) string { return T(templateTypeLabels[string(t)]) }).
 			Name(T("Argument type"))).Width(170),
 		ui.Switch(required, T("Required")).Name(T("Required")),
-		ggui.Spacer(),
+		widget.Spacer(),
 		ui.ButtonOf(icon("trash-2").Size(14), func() { pg.removeArg(id, arg) }).Ghost().Pad(6).Radius(6).
 			Name(T("Remove argument")),
-	).Gap(8).Align(ggui.AlignCenter)
+	).Gap(8).Align(widget.AlignCenter)
 	isChoice := ggui.Map(kind, func(k prompttmpl.Type) bool { return k == prompttmpl.Choice })
-	return ggui.Box(ggui.Column(
+	return widget.Box(widget.Column(
 		head,
 		ggui.If(isChoice, func() ggui.Widget {
 			return compactField(T("Options"), T("The values it takes, with commas between."),
 				ui.TextField(argField(pg, id, arg, func(a *argDraft) *string { return &a.Options })).
 					Style(mono).Placeholder("kind, blunt").Name(T("Argument options")))
 		}),
-		ggui.Row(
-			ggui.Expanded(compactField(T("Default"), T("Its value when a call leaves it out; a required argument has none."),
+		widget.Row(
+			widget.Expanded(compactField(T("Default"), T("Its value when a call leaves it out; a required argument has none."),
 				ui.TextField(argField(pg, id, arg, func(a *argDraft) *string { return &a.Default })).
 					Style(mono).Name(T("Argument default")).BindDisabled(required))),
-			ggui.Expanded(compactField(T("Description"), T("What it is, for you to remember."),
+			widget.Expanded(compactField(T("Description"), T("What it is, for you to remember."),
 				ui.TextField(argField(pg, id, arg, func(a *argDraft) *string { return &a.Describe })).
 					Name(T("Argument description")))),
 		).Gap(10),
@@ -538,16 +539,16 @@ func templateAgents(m *model, agents ggui.Binding[string]) ggui.Widget {
 		return out
 	}
 	set := func(list []string) { agents.Set(strings.Join(list, ", ")) }
-	face := ggui.Row(
-		ggui.Expanded(ggui.Reactive(func() ggui.Widget {
+	face := widget.Row(
+		widget.Expanded(ggui.Reactive(func() ggui.Widget {
 			list := picked()
 			if len(list) == 0 {
-				return muted(ggui.Text(T("every agent")).Size(13).NoWrap())
+				return muted(widget.Text(T("every agent")).Size(13).NoWrap())
 			}
-			return ggui.Text(strings.Join(list, ", ")).Size(13).NoWrap().Ellipsis()
+			return widget.Text(strings.Join(list, ", ")).Size(13).NoWrap().Ellipsis()
 		})),
 		icon("chevron-down").Size(14).Color(skin.Muted),
-	).Gap(8).Align(ggui.AlignCenter)
+	).Gap(8).Align(widget.AlignCenter)
 	// The menu is made again as the node's agents change, not as they are
 	// checked, which would close it.
 	return ggui.View(m.Agents, func(targets []string) ggui.Widget {

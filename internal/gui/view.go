@@ -9,6 +9,7 @@ import (
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/ggui/widget"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/gui/i18n"
@@ -45,14 +46,14 @@ func build(m *model) ggui.Widget {
 func window(m *model) ggui.Widget {
 	inSettings := ggui.Map(m.Page, func(p string) bool { return p == "settings" })
 	// The side panels slide open and closed beside the workspace.
-	main := ggui.Row(
-		newDrawer(ggui.Row(ggui.Expanded(sidebar(m)), sidebarEdge(m)).Stretch(), m.SidebarOpen,
+	main := widget.Row(
+		newDrawer(widget.Row(widget.Expanded(sidebar(m)), sidebarEdge(m)).Stretch(), m.SidebarOpen,
 			ggui.Map(m.SidebarWidth, func(w float64) float64 { return w + panelEdgeWidth }), false),
-		ggui.Expanded(workspace(m)),
-		newDrawer(ggui.Row(panelEdge(m), ggui.Expanded(details(m))).Stretch(), m.DetailsOpen,
+		widget.Expanded(workspace(m)),
+		newDrawer(widget.Row(panelEdge(m), widget.Expanded(details(m))).Stretch(), m.DetailsOpen,
 			ggui.Map(m.DetailsWidth, func(w float64) float64 { return w + panelEdgeWidth }), true),
 	).Stretch()
-	return ggui.Stack(
+	return widget.Stack(
 		// The settings page takes the whole window, as Paseo's does; the
 		// sessions stay attached while it shows.
 		backdropped(m, windowBackdrop,
@@ -82,7 +83,7 @@ func window(m *model) ggui.Widget {
 }
 
 // muted is secondary text.
-func muted(t *ggui.TextWidget) *ggui.TextWidget { return t.Color(skin.Muted) }
+func muted(t *widget.TextWidget) *widget.TextWidget { return t.Color(skin.Muted) }
 
 func hline() ggui.Widget { return ui.Divider() }
 func vline() ggui.Widget { return ui.Divider().Vertical() }
@@ -98,9 +99,9 @@ func iconButton(name, label string, onTap func()) ggui.Widget {
 func hiddenFilesToggle(m *model) ggui.Widget {
 	return ggui.View(ggui.Map(m.Prefs, func(p prefs) bool { return p.ShowHidden }), func(shown bool) ggui.Widget {
 		label := pick(shown, T("Hide hidden files"), T("Show hidden files"))
-		glyph := ggui.Text(".*").Font(ggui.DefaultMonoFont()).Size(13).Weight(ggui.WeightSemibold).
+		glyph := widget.Text(".*").Font(ggui.DefaultMonoFont()).Size(13).Weight(ggui.WeightSemibold).
 			Color(pick[color.Color](shown, skin.AccentBright, skin.ExtraMuted)).NoWrap()
-		button := ui.ButtonOf(ggui.Box(ggui.Center(glyph)).Size(16, 16), m.toggleHidden).Ghost().Pad(6).Radius(6).Name(label)
+		button := ui.ButtonOf(widget.Box(widget.Center(glyph)).Size(16, 16), m.toggleHidden).Ghost().Pad(6).Radius(6).Name(label)
 		return ui.Tooltip(button, label)
 	})
 }
@@ -145,7 +146,7 @@ func linkDot(ok bool) ggui.Widget {
 	return dot(skin.DotDown)
 }
 
-func dot(c color.Color) ggui.Widget { return ggui.Box().Size(7, 7).Radius(3.5).Fill(c) }
+func dot(c color.Color) ggui.Widget { return widget.Box().Size(7, 7).Radius(3.5).Fill(c) }
 
 // Sidebar --------------------------------------------------------------------
 
@@ -154,13 +155,13 @@ func dot(c color.Color) ggui.Widget { return ggui.Box().Size(7, 7).Radius(3.5).F
 func sidebar(m *model) ggui.Widget {
 	// The traffic lights take the start of the header, where the window
 	// has no title bar of its own.
-	header := titlebar(m, ggui.Box(ggui.Row(
+	header := titlebar(m, widget.Box(widget.Row(
 		titlebarGap(m.titlebarRoom(), 10),
 		icon("messages-square").Size(17),
-		ggui.Expanded(ggui.Align(spaceSwitcher(m)).Left()),
+		widget.Expanded(widget.Align(spaceSwitcher(m)).Left()),
 		waitingPill(m),
 		iconButton("plus", T("Add a project"), m.addProjectFolder),
-	).Gap(6).Align(ggui.AlignCenter)).Pad(0, 8, 0, 0).Height(headerHeight))
+	).Gap(6).Align(widget.AlignCenter)).Pad(0, 8, 0, 0).Height(headerHeight))
 
 	st := newSidebarState(m)
 	// Two fingers across anywhere on it move the sidebar to the space
@@ -179,21 +180,21 @@ func sidebar(m *model) ggui.Widget {
 		})
 		return ggui.Key(space, func(i int) ggui.Widget {
 			if i < 0 {
-				return ggui.Box()
+				return widget.Box()
 			}
-			tree := ggui.Scroll(ggui.Padding(projectTree(m, st, i), 10, 8, 10, 8)).Bar(skin.Surface3)
+			tree := widget.Scroll(widget.Padding(projectTree(m, st, i), 10, 8, 10, 8)).Bar(skin.Surface3)
 			return &sidebarBody{top: tree, grip: sidebarGrip(m), bottom: agentsPanel(m, st, i), split: m.SidebarSplit}
 		})
 	}
 	// The menus' faces sit on the sidebar's fill, not the page's.
-	return uitheme.Override(func(t *uitheme.Theme) { t.Bg = t.Sidebar }, swipe.area(ggui.Box(ggui.Column(
+	return uitheme.Override(func(t *uitheme.Theme) { t.Bg = t.Sidebar }, swipe.area(widget.Box(widget.Column(
 		header,
 		hline(),
 		// The spaces' dots stay put over the foot of the agents as a
 		// swipe moves the sidebar under them.
-		ggui.Expanded(ggui.Stack(
+		widget.Expanded(widget.Stack(
 			swipe.slide(body(-1), body(0), body(1)),
-			ggui.Padding(ggui.Align(spaceDots(m)).Bottom(), 0, 0, 6, 0),
+			widget.Padding(widget.Align(spaceDots(m)).Bottom(), 0, 0, 6, 0),
 		).Expand()),
 		hline(),
 		sidebarFooter(m),
@@ -248,10 +249,10 @@ func sidebarGrip(m *model) ggui.Widget {
 	hover := ggui.State(false)
 	handle := ggui.View(hover, func(h bool) ggui.Widget {
 		c := pick[color.Color](h, skin.Surface3, color.Transparent)
-		return ggui.Box(ggui.Center(ggui.Box().Size(32, 3).Radius(1.5).Fill(c))).Height(8)
+		return widget.Box(widget.Center(widget.Box().Size(32, 3).Radius(1.5).Fill(c))).Height(8)
 	})
 	var from, start float64
-	return ggui.Pointer(ggui.Column(hline(), handle).Stretch()).Cursor(ggui.CursorShapeNSResize).OnHover(hover.Set).
+	return widget.Pointer(widget.Column(hline(), handle).Stretch()).Cursor(ggui.CursorShapeNSResize).OnHover(hover.Set).
 		OnDown(func(ev ggui.PointerEvent) { from, start = ev.Pos.Y, ggui.Peek(m.SidebarSplit) }).
 		OnDrag(func(ev ggui.PointerEvent) {
 			m.SidebarSplit.Set(min(max(start+ev.Pos.Y-from, minSidebarSplit), maxSidebarSplit))
@@ -305,18 +306,18 @@ func sidebarFooter(m *model) ggui.Widget {
 			name += " · in app"
 		}
 		mark := icon(osIcon(c.Self.GetOs())).Size(13)
-		row := ggui.Row(linkDot(c.OK), mark, muted(ggui.Text(name).Size(13).NoWrap().Ellipsis())).Gap(8)
+		row := widget.Row(linkDot(c.OK), mark, muted(widget.Text(name).Size(13).NoWrap().Ellipsis())).Gap(8)
 		if c.OK && outdated(c.Self) {
 			// A daemon from an older build leaves agents' state and
 			// approvals out; say so rather than show them blank.
 			warn := ui.Tooltip(icon("info").Size(14).Color(skin.DotWaiting),
 				T("This daemon is from an older mako. Restart it with this build to see agents' state and approve in the window."))
-			row = ggui.Row(linkDot(c.OK), mark, ggui.Expanded(muted(ggui.Text(name).Size(13).NoWrap().Ellipsis())), warn).Gap(8)
+			row = widget.Row(linkDot(c.OK), mark, widget.Expanded(muted(widget.Text(name).Size(13).NoWrap().Ellipsis())), warn).Gap(8)
 		}
 		return row
 	})
-	return ggui.Box(ggui.Row(
-		ggui.Expanded(host),
+	return widget.Box(widget.Row(
+		widget.Expanded(host),
 		devicesMenu(m),
 		tunnelsMenu(m),
 		iconButton("settings", T("Settings"), func() { m.openSettings("") }),
@@ -326,10 +327,10 @@ func sidebarFooter(m *model) ggui.Widget {
 // Workspace ------------------------------------------------------------------
 
 func workspace(m *model) ggui.Widget {
-	return ggui.Box(ggui.Column(
+	return widget.Box(widget.Column(
 		workspaceHeader(m),
 		hline(),
-		ggui.Expanded(layoutView(m)),
+		widget.Expanded(layoutView(m)),
 	).Stretch()).Fill(skin.Surface0)
 }
 
@@ -343,18 +344,18 @@ func workspaceHeader(m *model) ggui.Widget {
 		}
 		s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get())
 		if !ok {
-			return ggui.Text("mako").Size(14).Weight(ggui.WeightMedium)
+			return widget.Text("mako").Size(14).Weight(ggui.WeightMedium)
 		}
 		where := fmt.Sprintf("%s:%s", nodeName(m.Nodes.Get(), s.GetNodeId()), prettyPath(s.GetProject()))
 		id := s.GetId()
 		row := []ggui.Widget{
-			ggui.Text(projectName(s.GetProject())).Size(14).Weight(ggui.WeightMedium).NoWrap(),
-			muted(ggui.Text(where).Size(13).NoWrap().Ellipsis()),
+			widget.Text(projectName(s.GetProject())).Size(14).Weight(ggui.WeightMedium).NoWrap(),
+			muted(widget.Text(where).Size(13).NoWrap().Ellipsis()),
 		}
 		if tasks := tasksMenu(m, s); tasks != nil {
 			row = append(row, tasks)
 		}
-		return ggui.Row(append(row,
+		return widget.Row(append(row,
 			iconMenu(ui.MenuOf(icon("ellipsis"),
 				ui.MenuItem(T("Rename…"), func() { m.askRename(id) }),
 				ui.MenuItem(T("Detach tab"), func() { m.closeTab(id) }),
@@ -369,10 +370,10 @@ func workspaceHeader(m *model) ggui.Widget {
 	room := ggui.Combine(m.titlebarRoom(), m.SidebarOpen, func(r float64, open bool) float64 {
 		return pick(open, 0, r)
 	})
-	return titlebar(m, ggui.Box(ggui.Row(
+	return titlebar(m, widget.Box(widget.Row(
 		titlebarGap(room, 2),
 		iconButton("panel-left", T("Toggle sidebar"), func() { ggui.Toggle(m.SidebarOpen) }),
-		ggui.Expanded(title),
+		widget.Expanded(title),
 		iconButton("panel-right", T("Toggle details"), func() { ggui.Toggle(m.DetailsOpen) }),
 	).Gap(8)).Pad(0, 10, 0, 0).Height(headerHeight))
 }
@@ -410,9 +411,9 @@ func tab(m *model, s *protocol.SessionInfo, selected, focused bool, title string
 	}
 	// The tab is one flat cell: its hover, its fill and its underline share
 	// the cell's edges, with the content centred in its height.
-	content := ggui.Box(ggui.Row(
+	content := widget.Box(widget.Row(
 		&busyGlyph{icon: agentGlyph(s.GetAgent(), fg).Size(14), busy: func() bool { return m.busy(id) }},
-		ggui.Box(ggui.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(150),
+		widget.Box(widget.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(150),
 		ui.ButtonOf(icon("x").Size(13), func() { m.askKill(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", label)),
 	).Gap(8)).Height(tabBarHeight)
 	btn := ui.ButtonOf(content, func() { m.selectSession(id) }).Ghost().Pad(0, 8, 0, 12).Radius(0).Name(label)
@@ -430,8 +431,8 @@ func tabCell(btn ggui.Widget, selected, focused bool) ggui.Widget {
 	case selected:
 		underline, fill = skin.BorderAccent, skin.Surface1
 	}
-	cell := ggui.Box(&underlined{child: btn, color: underline}).Height(tabBarHeight).Fill(fill)
-	return ggui.Row(cell, vline()).Stretch()
+	cell := widget.Box(&underlined{child: btn, color: underline}).Height(tabBarHeight).Fill(fill)
+	return widget.Row(cell, vline()).Stretch()
 }
 
 // underlined draws a 2px line along the bottom of its child, as wide as the
@@ -481,13 +482,13 @@ type pane struct {
 }
 
 func emptyState(m *model) ggui.Widget {
-	return ggui.Center(ggui.Column(
+	return widget.Center(widget.Column(
 		icon("square-terminal").Size(36).Color(skin.ExtraMuted),
-		ggui.Text(T("No session open")).Size(16).Weight(ggui.WeightMedium),
-		muted(ggui.Text(T("Pick a session in the sidebar, or start an agent on any node in the mesh.")).Size(13)),
-		ggui.Box().Height(4),
+		widget.Text(T("No session open")).Size(16).Weight(ggui.WeightMedium),
+		muted(widget.Text(T("Pick a session in the sidebar, or start an agent on any node in the mesh.")).Size(13)),
+		widget.Box().Height(4),
 		ui.Button(T("New session"), func() { m.openNew("", "") }).Shortcut("cmd+t"),
-	).Gap(10).Align(ggui.AlignCenter))
+	).Gap(10).Align(widget.AlignCenter))
 }
 
 // composer is the Chat lens's message box: it types a line into that
@@ -530,9 +531,9 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 	// Files dropped on the box, from the desktop or the Files tab, go
 	// with the message.
 	over := ggui.State(false)
-	content := ggui.Column(
+	content := widget.Column(
 		attachmentStrip(m, id, state),
-		ggui.Box(inlineField(field)).MaxHeight(composerMaxHeight),
+		widget.Box(inlineField(field)).MaxHeight(composerMaxHeight),
 		composerBar(m, id, state, disabled),
 	).Gap(6).Stretch()
 	box := ggui.View(over, func(o bool) ggui.Widget {
@@ -540,17 +541,17 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 		if o {
 			border = uitheme.Ring
 		}
-		return ggui.Box(content).Fill(skin.Surface1).Border(1, border).Radius(composerRadius).Pad(12, 12, 8, 12)
+		return widget.Box(content).Fill(skin.Surface1).Border(1, border).Radius(composerRadius).Pad(12, 12, 8, 12)
 	})
-	desktop := ggui.Pointer(box).OnDropHover(over.Set).OnDrop(func(ev ggui.DropEvent) {
+	desktop := widget.Pointer(box).OnDropHover(over.Set).OnDrop(func(ev ggui.DropEvent) {
 		m.handOver(id, ev.Paths(), insert)
 	})
-	files := ggui.DropZone(desktop, func(d ggui.Dropped[pathDrag]) {
+	files := widget.DropZone(desktop, func(d widget.Dropped[pathDrag]) {
 		over.Set(false)
 		m.attachTo(id, []string{d.Value.Path})
 	}).OnHover(over.Set)
 	// In the transcript's lane, as wide as its text.
-	return &lane{child: ggui.Box(ggui.Column(composerMenu(m, id, state), files).Stretch()).Pad(10, 0, 14, 0)}
+	return &lane{child: widget.Box(widget.Column(composerMenu(m, id, state), files).Stretch()).Pad(10, 0, 14, 0)}
 }
 
 // composerMaxHeight is as tall as the composer's text grows, about ten
@@ -587,19 +588,19 @@ func details(m *model) ggui.Widget {
 		projectAgentsPanel(m),
 		forgePanel(m),
 	}
-	return ggui.Box(ggui.Column(
+	return widget.Box(widget.Column(
 		ggui.View(ggui.Derived(m.forgeOf), func(f string) ggui.Widget {
 			return panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), forgeLabel(f))
 		}),
 		hline(),
-		ggui.Expanded(ggui.Key(m.DetailTab, func(i int) ggui.Widget { return pages[min(max(i, 0), len(pages)-1)] })),
+		widget.Expanded(ggui.Key(m.DetailTab, func(i int) ggui.Widget { return pages[min(max(i, 0), len(pages)-1)] })),
 	).Stretch()).Fill(skin.Surface0)
 }
 
 // panelEdge is the right panel's left edge, which drags to resize the
 // panel; the width is kept when the drag ends.
 func panelEdge(m *model) ggui.Widget {
-	edge := ggui.Box(ggui.Row(vline(), ggui.Spacer()).Stretch()).Width(panelEdgeWidth).Fill(skin.Surface0)
+	edge := widget.Box(widget.Row(vline(), widget.Spacer()).Stretch()).Width(panelEdgeWidth).Fill(skin.Surface0)
 	return resizeEdge(m, edge, m.DetailsWidth, -1, minDetailsWidth, maxDetailsWidth,
 		func(p *prefs) *float64 { return &p.DetailsWidth })
 }
@@ -607,7 +608,7 @@ func panelEdge(m *model) ggui.Widget {
 // sidebarEdge is the sidebar's right edge, which drags to resize it as
 // panelEdge does the right panel.
 func sidebarEdge(m *model) ggui.Widget {
-	edge := ggui.Box(ggui.Row(ggui.Spacer(), vline()).Stretch()).Width(panelEdgeWidth).Fill(skin.Sidebar)
+	edge := widget.Box(widget.Row(widget.Spacer(), vline()).Stretch()).Width(panelEdgeWidth).Fill(skin.Sidebar)
 	return resizeEdge(m, edge, m.SidebarWidth, 1, minSidebarWidth, maxSidebarWidth,
 		func(p *prefs) *float64 { return &p.SidebarWidth })
 }
@@ -617,7 +618,7 @@ func sidebarEdge(m *model) ggui.Widget {
 // drag ends.
 func resizeEdge(m *model, edge ggui.Widget, width *ggui.StateValue[float64], dir, lo, hi float64, field func(*prefs) *float64) ggui.Widget {
 	var from, start float64
-	return ggui.Pointer(edge).Cursor(ggui.CursorShapeEWResize).
+	return widget.Pointer(edge).Cursor(ggui.CursorShapeEWResize).
 		OnDown(func(ev ggui.PointerEvent) { from, start = ev.Pos.X, ggui.Peek(width) }).
 		OnDrag(func(ev ggui.PointerEvent) { width.Set(min(max(start+dir*(ev.Pos.X-from), lo), hi)) }).
 		OnUp(func(ggui.PointerEvent) {
@@ -637,25 +638,25 @@ func panelTabs(chosen *ggui.StateValue[int], labels ...string) ggui.Widget {
 			if i == current {
 				fg, line = skin.Fg, skin.AccentBright
 			}
-			btn := ui.ButtonOf(ggui.Box(ggui.Row(ggui.Text(label).Size(13).Color(fg).NoWrap())).Height(headerHeight),
+			btn := ui.ButtonOf(widget.Box(widget.Row(widget.Text(label).Size(13).Color(fg).NoWrap())).Height(headerHeight),
 				func() { chosen.Set(i) }).Ghost().Pad(0, 9).Radius(0).Name(label)
 			cells[i] = &underlined{child: btn, color: line}
 		}
 		// Too narrow for them all, the tabs scroll sideways.
-		return ggui.Box(ggui.Scroll(ggui.Row(cells...)).Horizontal().Bar(color.Transparent)).Height(headerHeight).Pad(0, 4)
+		return widget.Box(widget.Scroll(widget.Row(cells...)).Horizontal().Bar(color.Transparent)).Height(headerHeight).Pad(0, 4)
 	})
 }
 
 func prop(label, value string) ggui.Widget {
-	return ggui.Column(
-		ggui.Text(label).Size(11.5).Color(skin.ExtraMuted),
-		ggui.Text(value).Size(13).Selectable(),
+	return widget.Column(
+		widget.Text(label).Size(11.5).Color(skin.ExtraMuted),
+		widget.Text(value).Size(13).Selectable(),
 	).Gap(3).Stretch()
 }
 
 func nodeList(m *model, nodes []*protocol.Node) ggui.Widget {
 	if len(nodes) == 0 {
-		return muted(ggui.Text(T("No nodes.")).Size(13))
+		return muted(widget.Text(T("No nodes.")).Size(13))
 	}
 	rows := make([]ggui.Widget, 0, len(nodes))
 	for _, n := range nodes {
@@ -663,7 +664,7 @@ func nodeList(m *model, nodes []*protocol.Node) ggui.Widget {
 		if n.GetSource() != "self" {
 			kind = "monitor"
 		}
-		var ask ggui.Widget = ggui.Box()
+		var ask ggui.Widget = widget.Box()
 		switch {
 		case reachable(n) && n.GetSource() != "self":
 			id := n.GetId()
@@ -674,7 +675,7 @@ func nodeList(m *model, nodes []*protocol.Node) ggui.Widget {
 			if linkDown(n) { // reached through another node meanwhile
 				actions = append(actions, iconButton("refresh-cw", T("Reconnect"), func() { m.relink(n) }))
 			}
-			ask = ggui.Row(actions...).Gap(2)
+			ask = widget.Row(actions...).Gap(2)
 		case linkDown(n):
 			// Not let in reads the same as not linked: only a link made
 			// says which.
@@ -682,29 +683,29 @@ func nodeList(m *model, nodes []*protocol.Node) ggui.Widget {
 		case !reachable(n) && n.GetPeerId() != "":
 			ask = ui.Button(T("Ask to be let in"), func() { m.requestAccess(n) }).Outline()
 		}
-		rows = append(rows, ggui.Box(ggui.Row(
+		rows = append(rows, widget.Box(widget.Row(
 			icon(kind).Size(16),
-			ggui.Expanded(ggui.Column(
-				ggui.Row(ggui.Text(n.GetName()).Size(13).Weight(ggui.WeightMedium), nodeDot(n), outdatedBadge(n), trustBadge(n, nodes)).Gap(8),
-				ggui.Text(joinNonEmpty(n.GetAddr(), n.Platform(), n.GetSource())).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis(),
+			widget.Expanded(widget.Column(
+				widget.Row(widget.Text(n.GetName()).Size(13).Weight(ggui.WeightMedium), nodeDot(n), outdatedBadge(n), trustBadge(n, nodes)).Gap(8),
+				widget.Text(joinNonEmpty(n.GetAddr(), n.Platform(), n.GetSource())).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis(),
 				nodeLinkLine(m, n),
 			).Gap(3).Stretch()),
 			ask,
 		).Gap(12)).Pad(10).Radius(8).Fill(skin.Surface1))
 	}
-	return ggui.Column(rows...).Gap(8).Stretch()
+	return widget.Column(rows...).Gap(8).Stretch()
 }
 
 // trustBadge says how this node and n stand: whether each lets the other
 // in, or which of nodes this one reaches n through.
 func trustBadge(n *protocol.Node, nodes []*protocol.Node) ggui.Widget {
 	if linkDown(n) && n.Standing() == protocol.StandingNone {
-		return ggui.Box() // unknown until it is linked
+		return widget.Box() // unknown until it is linked
 	}
 	var label string
 	switch n.Standing() {
 	case protocol.StandingSelf:
-		return ggui.Box()
+		return widget.Box()
 	case protocol.StandingBoth:
 		label = T("both ways")
 	case protocol.StandingUs:
@@ -716,7 +717,7 @@ func trustBadge(n *protocol.Node, nodes []*protocol.Node) ggui.Widget {
 	default:
 		label = T("no access")
 	}
-	return ggui.Box(ggui.Text(label).Size(11).Color(skin.Muted)).Pad(1, 6).Radius(4).Border(1, skin.Border)
+	return widget.Box(widget.Text(label).Size(11).Color(skin.Muted)).Pad(1, 6).Radius(4).Border(1, skin.Border)
 }
 
 // outdated reports whether a node's daemon is from an older build than
@@ -725,9 +726,9 @@ func outdated(n *protocol.Node) bool { return n.GetRevision() < protocol.Revisio
 
 func outdatedBadge(n *protocol.Node) ggui.Widget {
 	if !outdated(n) {
-		return ggui.Box()
+		return widget.Box()
 	}
-	return ggui.Box(ggui.Text(T("out of date")).Size(11).Color(skin.DotWaiting)).Pad(1, 6).Radius(4).Border(1, skin.DotWaiting)
+	return widget.Box(widget.Text(T("out of date")).Size(11).Color(skin.DotWaiting)).Pad(1, 6).Radius(4).Border(1, skin.DotWaiting)
 }
 
 // Dialogs --------------------------------------------------------------------
@@ -751,31 +752,31 @@ func newSessionDialog(m *model) ggui.Widget {
 	targets := ggui.Derived(func() []string {
 		return nodeTargets(m.Nodes.Get(), m.Form.Get().NodeID, m.Agents.Get())
 	}).WithEqual(slices.Equal)
-	form := ggui.Column(
+	form := widget.Column(
 		ui.Field(T("Agent"), ui.Select(agent).BindOptions(targets).Format(targetLabel).Name(T("Agent"))),
 		ui.Field(T("Node"), ui.Select(node).BindOptions(nodeIDs).Format(func(id string) string {
 			return nodeName(ggui.Peek(m.Nodes), id)
 		}).Name(T("Node"))),
-		ui.Field(T("Working directory"), ggui.Row(
-			ggui.Expanded(ui.TextField(project).Placeholder(T("The node's home folder")).Name(T("Working directory")).OnSubmit(func(string) { m.submitNew() })),
+		ui.Field(T("Working directory"), widget.Row(
+			widget.Expanded(ui.TextField(project).Placeholder(T("The node's home folder")).Name(T("Working directory")).OnSubmit(func(string) { m.submitNew() })),
 			ggui.If(local, func() ggui.Widget { return browse }).Else(func() ggui.Widget { return browseRemote }),
 		).Gap(8)),
 		recentChips(m),
-		ui.Field(T("Git"), ggui.Column(
+		ui.Field(T("Git"), widget.Column(
 			ui.Checkbox(worktree, T("Work in a new worktree")),
 			ggui.If(worktree, func() ggui.Widget {
 				return ui.TextField(branch).Placeholder(T("Branch, such as agent/fix-login")).Name(T("Branch")).
 					OnSubmit(func(string) { m.submitNew() })
 			}),
-			muted(ggui.Text(T("A worktree of the folder's repository, beside it, on a new branch: agents in one repository then keep out of each other's files.")).Size(11.5)),
+			muted(widget.Text(T("A worktree of the folder's repository, beside it, on a new branch: agents in one repository then keep out of each other's files.")).Size(11.5)),
 		).Gap(8).Stretch()),
 		reveal(hasErr, func() ggui.Widget {
-			return ggui.TextOf(m.FormErr).Size(12).Color(skin.DotDown)
+			return widget.TextOf(m.FormErr).Size(12).Color(skin.DotDown)
 		}),
-		ggui.Row(
+		widget.Row(
 			ui.Button(T("Cancel"), func() { m.NewOpen.Set(false) }).Outline(),
 			ui.Button(T("Start session"), m.submitNew),
-		).Gap(8).Justify(ggui.JustifyEnd),
+		).Gap(8).Justify(widget.JustifyEnd),
 	).Gap(16).Stretch()
 	return ui.Dialog(m.NewOpen, form).Title(T("New session")).Width(460)
 }

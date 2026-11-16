@@ -9,6 +9,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -267,10 +268,10 @@ func (m *model) nextWaiting() {
 func waitingPill(m *model) ggui.Widget {
 	return ggui.View(ggui.Derived(m.waitingCount), func(n int) ggui.Widget {
 		if n == 0 {
-			return ggui.Box()
+			return widget.Box()
 		}
 		tip := Tf("%d waiting for you — go to the next (%s)", n, chordLabel("cmd+shift+a"))
-		face := ggui.Row(dot(skin.DotWaiting), ggui.Text(strconv.Itoa(n)).Size(12).Weight(ggui.WeightMedium).Color(skin.DotWaiting)).Gap(5).Align(ggui.AlignCenter)
+		face := widget.Row(dot(skin.DotWaiting), widget.Text(strconv.Itoa(n)).Size(12).Weight(ggui.WeightMedium).Color(skin.DotWaiting)).Gap(5).Align(widget.AlignCenter)
 		return arrive(ui.Tooltip(ui.ButtonOf(face, m.nextWaiting).Ghost().Pad(3, 7).Radius(9).Name(T("Next waiting session")), tip))
 	})
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -199,9 +200,9 @@ func templateHint(state *chatState) ggui.Widget {
 		return nil
 	}
 	t := ggui.Peek(state.templates.templates)[i]
-	lines := []ggui.Widget{ggui.Row(
-		ggui.Text("//"+t.Name).Size(13).Weight(ggui.WeightMedium).NoWrap(),
-		ggui.Expanded(ggui.Text(t.Usage()).Size(12).Color(skin.ExtraMuted).NoWrap().Ellipsis()),
+	lines := []ggui.Widget{widget.Row(
+		widget.Text("//"+t.Name).Size(13).Weight(ggui.WeightMedium).NoWrap(),
+		widget.Expanded(widget.Text(t.Usage()).Size(12).Color(skin.ExtraMuted).NoWrap().Ellipsis()),
 	).Gap(6)}
 	why := ""
 	if f := state.templates.failed.Get(); f.draft == draft {
@@ -210,9 +211,9 @@ func templateHint(state *chatState) ggui.Widget {
 		why = templateError(err)
 	}
 	if why != "" {
-		lines = append(lines, ggui.Text(why).Size(12).Color(uitheme.Destructive))
+		lines = append(lines, widget.Text(why).Size(12).Color(uitheme.Destructive))
 	} else if t.Description != "" {
-		lines = append(lines, muted(ggui.Text(t.Description).Size(12)))
+		lines = append(lines, muted(widget.Text(t.Description).Size(12)))
 	}
-	return ggui.Box(ggui.Column(lines...).Gap(3).Stretch()).Pad(6, 10)
+	return widget.Box(widget.Column(lines...).Gap(3).Stretch()).Pad(6, 10)
 }

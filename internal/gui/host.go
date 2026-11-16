@@ -7,6 +7,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
@@ -143,10 +144,10 @@ func shellSettings(m *model) ggui.Widget {
 	return page(T("Shell"), T("The shell a new terminal starts on this node. Changes apply to the next shell started."),
 		section(T("Program"), card(
 			row(T("Program"), Tf("The shell and any arguments it always needs; empty runs your login shell, %s.", agentspec.DefaultShell()),
-				ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.ShellCommand })).
+				widget.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.ShellCommand })).
 					Style(mono).Placeholder(agentspec.DefaultShell()).Name(T("Shell program"))).Width(300)),
 			row(T("Flags"), T("Added to every shell started, such as -l for a login shell. Quote as in a shell."),
-				ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.ShellArgs })).
+				widget.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.ShellArgs })).
 					Style(mono).Placeholder("-l").Name(T("Shell flags"))).Width(300)),
 			stackedRow(T("Environment"), T("One per line as NAME=value, added to the daemon's. $NAME, ${NAME} and a leading ~ expand when a shell starts; $$ is a $."),
 				ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.ShellEnv })).

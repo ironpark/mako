@@ -62,17 +62,17 @@ func chatImage(m *model, node, path string, named bool) ggui.Widget {
 		var w ggui.Widget
 		switch {
 		case v.Loading:
-			w = ggui.Box(ui.Spinner()).Size(64, 64)
+			w = widget.Box(ui.Spinner()).Size(64, 64)
 		case v.Img == nil && named:
-			return ggui.Box()
+			return widget.Box()
 		case v.Img == nil:
-			w = ggui.Box(ggui.Row(icon("file-image").Size(14).Color(skin.Muted), muted(ggui.Text(name).Size(12).NoWrap().Ellipsis())).Gap(6)).Pad(8, 10).MaxWidth(thumbW)
+			w = widget.Box(widget.Row(icon("file-image").Size(14).Color(skin.Muted), muted(widget.Text(name).Size(12).NoWrap().Ellipsis())).Gap(6)).Pad(8, 10).MaxWidth(thumbW)
 		default:
 			// Size, not the pixels: an SVG's are drawn at twice it.
 			scale := min(1, thumbW/max(v.Size.W, 1), thumbH/max(v.Size.H, 1))
 			w = widget.Image(v.Img).Alt(name).Size(v.Size.W*scale, v.Size.H*scale)
 		}
-		return ggui.Tap(ggui.Box(w).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(2), open)
+		return widget.Tap(widget.Box(w).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(2), open)
 	})
 }
 
@@ -88,7 +88,7 @@ func chatImages(m *model, node string, held, named []string) ggui.Widget {
 			thumbs = append(thumbs, chatImage(m, node, p, true))
 		}
 	}
-	return ggui.Wrap(thumbs...).Gap(6).RunGap(6)
+	return widget.Wrap(thumbs...).Gap(6).RunGap(6)
 }
 
 // attachmentStrip shows the files a session's draft goes with, over the
@@ -97,7 +97,7 @@ func chatImages(m *model, node string, held, named []string) ggui.Widget {
 func attachmentStrip(m *model, id string, state *chatState) ggui.Widget {
 	return ggui.View(state.attached, func(paths []string) ggui.Widget {
 		if len(paths) == 0 {
-			return ggui.Box()
+			return widget.Box()
 		}
 		node := ggui.Untrack(func() string { s, _ := m.session(id); return s.GetNodeId() })
 		items := make([]ggui.Widget, len(paths))
@@ -108,15 +108,15 @@ func attachmentStrip(m *model, id string, state *chatState) ggui.Widget {
 			if isImage(p) {
 				item = chatImage(m, node, p, false)
 			} else {
-				item = ggui.Box(ggui.Row(
+				item = widget.Box(widget.Row(
 					fileTypeIcon(baseName(p), false, false).Size(14),
-					ggui.Text(baseName(p)).Size(12).NoWrap().Ellipsis(),
-					ggui.Box().Width(14), // under the corner's button
-				).Gap(6).Align(ggui.AlignCenter)).Fill(skin.Surface2).Border(1, skin.Border).Radius(8).Pad(7, 8).MaxWidth(thumbW)
+					widget.Text(baseName(p)).Size(12).NoWrap().Ellipsis(),
+					widget.Box().Width(14), // under the corner's button
+				).Gap(6).Align(widget.AlignCenter)).Fill(skin.Surface2).Border(1, skin.Border).Radius(8).Pad(7, 8).MaxWidth(thumbW)
 			}
-			items[i] = &cornered{child: item, corner: ggui.Box(remove).Fill(skin.Surface1).Radius(5)}
+			items[i] = &cornered{child: item, corner: widget.Box(remove).Fill(skin.Surface1).Radius(5)}
 		}
-		return ggui.Box(ggui.Wrap(items...).Gap(6).RunGap(6)).Pad(0, 0, 4, 0)
+		return widget.Box(widget.Wrap(items...).Gap(6).RunGap(6)).Pad(0, 0, 4, 0)
 	})
 }
 

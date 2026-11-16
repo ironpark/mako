@@ -14,6 +14,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/ggui/widget"
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/mdview"
@@ -296,7 +297,7 @@ func (m *model) readOlder(id string, state *chatState, span transcript.Span) {
 }
 
 // toLatest goes back to the latest messages alone, at the bottom.
-func (m *model) toLatest(state *chatState, scroll *ggui.ScrollController) {
+func (m *model) toLatest(state *chatState, scroll *widget.ScrollController) {
 	scroll.ScrollTo(scroll.MaxOffset())
 	state.older.Set(chatPages{})
 }
@@ -364,8 +365,8 @@ func sessionView(m *model, id string, group int) ggui.Widget {
 			OnPasteImage(func(png []byte, typed func([]string)) { m.pasteImage(id, png, typed) }).
 			OnRiskyPaste(m.confirmPaste).
 			OnLink(func(target, cwd string) { m.followLink(id, target, cwd) })
-		body := ggui.DropZone(term, func(d ggui.Dropped[pathDrag]) { term.setDropOver(false); term.typePaths([]string{d.Value.Path}) }).OnHover(term.setDropOver)
-		return ggui.Column(approvalBar(m, id), ggui.Expanded(ggui.Stack(body, usageOverlay(m, id, nil, viewChip(m, id, group)), findBar(m, id, terminalFinder(m.conns[id]))).Expand())).Stretch()
+		body := widget.DropZone(term, func(d widget.Dropped[pathDrag]) { term.setDropOver(false); term.typePaths([]string{d.Value.Path}) }).OnHover(term.setDropOver)
+		return widget.Column(approvalBar(m, id), widget.Expanded(widget.Stack(body, usageOverlay(m, id, nil, viewChip(m, id, group)), findBar(m, id, terminalFinder(m.conns[id]))).Expand())).Stretch()
 	})
 }
 
@@ -395,9 +396,9 @@ func glyphSwitch(mode ggui.Binding[bool], left, right, toRight, toLeft, tip stri
 			}
 			return icon(glyph).Size(14).Color(c)
 		})
-		return ggui.Box(ggui.Center(g)).Size(viewSideWidth+viewToggleInset, viewSideHeight+2*viewToggleInset)
+		return widget.Box(widget.Center(g)).Size(viewSideWidth+viewToggleInset, viewSideHeight+2*viewToggleInset)
 	}
-	toggle := &viewToggle{right: mode, child: ggui.Row(side(left, false), side(right, true))}
+	toggle := &viewToggle{right: mode, child: widget.Row(side(left, false), side(right, true))}
 	button := ui.ButtonOf(toggle, func() { mode.Set(!ggui.Untrack(mode.Get)) }).Variant(viewSideButton).Pad(0).
 		Radius((viewSideHeight + 2*viewToggleInset) / 2).
 		BindName(ggui.Map(mode, func(on bool) string { return pick(on, toLeft, toRight) }))
@@ -488,7 +489,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		return func() { unfollow(); stop() }
 	})
 
-	scroll := &ggui.ScrollController{}
+	scroll := &widget.ScrollController{}
 	offset := ggui.State(0.0)
 	loaded := ggui.Derived(func() []*protocol.ChatMessage {
 		return chatMessages(state.result.Get(), state.older.Get())
@@ -508,32 +509,32 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		}
 		var rows []ggui.Widget
 		if v.Err != "" {
-			rows = append(rows, ggui.Text(v.Err).Size(13).Color(skin.Muted).Selectable())
+			rows = append(rows, widget.Text(v.Err).Size(13).Color(skin.Muted).Selectable())
 		}
 		switch {
 		case !v.Loaded:
-			rows = append(rows, muted(ggui.Text(T("Loading conversation…"))))
+			rows = append(rows, muted(widget.Text(T("Loading conversation…"))))
 		case v.Err != "":
 		case !v.Chat.GetSupported():
-			rows = append(rows, muted(ggui.Text(T("This agent keeps no conversation mako can read. Use Terminal for it."))))
+			rows = append(rows, muted(widget.Text(T("This agent keeps no conversation mako can read. Use Terminal for it."))))
 		case v.Chat.GetConversation() == "":
-			rows = append(rows, muted(ggui.Text(T("Waiting for this agent to save its conversation. It will connect automatically."))))
+			rows = append(rows, muted(widget.Text(T("Waiting for this agent to save its conversation. It will connect automatically."))))
 		case len(loaded.Get()) == 0:
-			rows = append(rows, muted(ggui.Text(T("No messages yet. The conversation updates as the agent saves it."))))
+			rows = append(rows, muted(widget.Text(T("No messages yet. The conversation updates as the agent saves it."))))
 		}
 		if start > 0 {
 			// More is further back. A feed too short to scroll reads it at
 			// once, once it is laid out and its extent known.
-			rows = append(rows, &onPaint{child: ggui.Center(ui.Spinner().Size(14)), fn: func(*ggui.Canvas, ggui.Rect) {
+			rows = append(rows, &onPaint{child: widget.Center(ui.Spinner().Size(14)), fn: func(*ggui.Canvas, ggui.Rect) {
 				if scroll.MaxOffset() == 0 {
 					m.loadOlder(id, state)
 				}
 			}})
 		}
 		if len(rows) == 0 {
-			return ggui.Box()
+			return widget.Box()
 		}
-		return ggui.Padding(ggui.Column(rows...).Gap(chatGap).Stretch(), 0, 0, chatGap, 0)
+		return widget.Padding(widget.Column(rows...).Gap(chatGap).Stretch(), 0, 0, chatGap, 0)
 	})
 	find := &chatFinder{turns: turns, scroll: scroll, marks: map[string]rowMark{}}
 	scrolling, feed := chatFeed(m, id, state, turns, head, find)
@@ -553,8 +554,8 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	}).WithEqual(protocol.Same)
 	// The composer belongs to Chat alone, as in ovis: Terminal mode's grid
 	// is its own input surface, and a file view has no session to type into.
-	session := ggui.Column(
-		ggui.Expanded(ggui.Stack(feed, newTurnRail(m, find, turns), &afterPaint{fn: find.painted}, hostBadge(m, id), toLatestButton(m, state, scroll, offset),
+	session := widget.Column(
+		widget.Expanded(widget.Stack(feed, newTurnRail(m, find, turns), &afterPaint{fn: find.painted}, hostBadge(m, id), toLatestButton(m, state, scroll, offset),
 			usageOverlay(m, id, chatUsage, viewChip(m, id, group)), findBar(m, id, find.finder())).Expand()),
 		approvalCard(m, id), dialogCard(m, id), compactingRow(m, id), planProgress(m, id, state), runningAgents(m, id, state), runningTasks(m, id), chatInput(m, id, state),
 	).Stretch()
@@ -578,8 +579,8 @@ func chatView(m *model, id string, group int) ggui.Widget {
 //
 // It is the feed's scroll, to set up, and the feed to show: the scroll in
 // its selection.
-func chatFeed(m *model, id string, state *chatState, turns ggui.Readable[[]chatTurnItem], head ggui.Widget, find *chatFinder) (scroll *ggui.ScrollWidget, feed ggui.Widget) {
-	list := ggui.EachKeyed(turns, func(t chatTurnItem) string { return t.Key }, func(row ggui.EachItem[chatTurnItem]) ggui.Widget {
+func chatFeed(m *model, id string, state *chatState, turns ggui.Readable[[]chatTurnItem], head ggui.Widget, find *chatFinder) (scroll *widget.ScrollWidget, feed ggui.Widget) {
+	list := widget.EachKeyed(turns, func(t chatTurnItem) string { return t.Key }, func(row widget.EachItem[chatTurnItem]) ggui.Widget {
 		// A read of the conversation brings every message anew: a turn is
 		// drawn again only when what it holds changed.
 		turn := ggui.Map(row.Value, func(t chatTurnItem) chatTurnItem { return t }).WithEqual(deepEqual)
@@ -592,12 +593,12 @@ func chatFeed(m *model, id string, state *chatState, turns ggui.Readable[[]chatT
 		}
 		return find.mark(row.Item.Key, w)
 	}).Gap(chatGap).Stretch().EstimatedExtent(chatTurnEstimate).Retain(chatRetain)
-	content := &lane{child: ggui.Box(ggui.Column(head, list).Stretch()).Pad(18, 0)}
-	scroll = ggui.Scroll(content).FollowEnd().Bar(skin.Surface3)
+	content := &lane{child: widget.Box(widget.Column(head, list).Stretch()).Pad(18, 0)}
+	scroll = widget.Scroll(content).FollowEnd().Bar(skin.Surface3)
 	// A drag selects through the turns in view, from one message into the
 	// next, and copies them as they read; a click anywhere in the feed, on
 	// a message or the room around and below them, drops the selection.
-	area := ggui.SelectionArea(scroll)
+	area := widget.SelectionArea(scroll)
 	if find != nil {
 		find.area = area
 	}
@@ -624,25 +625,25 @@ func hostBadge(m *model, id string) ggui.Widget {
 	})
 	return ggui.View(name, func(n string) ggui.Widget {
 		if n == "" {
-			return ggui.Box()
+			return widget.Box()
 		}
-		return ggui.Padding(overlayChip(icon("server").Size(13), muted(ggui.Text(n).Size(12).NoWrap())), 10, 0, 0, 14)
+		return widget.Padding(overlayChip(icon("server").Size(13), muted(widget.Text(n).Size(12).NoWrap())), 10, 0, 0, 14)
 	})
 }
 
 // toLatestButton floats over the feed's foot while the reader is up the
 // conversation, and takes them back down to the latest.
-func toLatestButton(m *model, state *chatState, scroll *ggui.ScrollController, offset ggui.Readable[float64]) ggui.Widget {
+func toLatestButton(m *model, state *chatState, scroll *widget.ScrollController, offset ggui.Readable[float64]) ggui.Widget {
 	// A Map, so the button is built as the reader crosses the line, not on
 	// every step of the scroll.
 	far := ggui.Map(offset, func(o float64) bool { return ggui.Untrack(scroll.MaxOffset)-o >= toLatestFar })
 	return ggui.View(far, func(far bool) ggui.Widget {
 		if !far {
-			return ggui.Box()
+			return widget.Box()
 		}
 		btn := ui.ButtonOf(icon("arrow-down").Size(16).Color(skin.Fg), func() { m.toLatest(state, scroll) }).
 			Outline().Pad(8).Radius(18).Name(T("Latest"))
-		return ggui.Padding(ggui.Align(ggui.Box(btn).Radius(18).Shadow(uitheme.Use().PanelShadow)).At(0.5, 1), 0, 0, 14, 0)
+		return widget.Padding(widget.Align(widget.Box(btn).Radius(18).Shadow(uitheme.Use().PanelShadow)).At(0.5, 1), 0, 0, 14, 0)
 	})
 }
 
@@ -752,14 +753,14 @@ const (
 // a page, a run of tools as one quiet card whose rows fold.
 func chatTurnRow(m *model, id string, info *protocol.SessionInfo, state *chatState, t chatTurnItem) ggui.Widget {
 	if len(t.Messages) == 0 {
-		return ggui.Box()
+		return widget.Box()
 	}
 	if t.Thinking {
 		return thinkingRow()
 	}
 	if t.Sending {
-		label := ggui.Row(ggui.Spacer(), icon("clock").Size(11).Color(skin.ExtraMuted), ggui.Text(T("Sent")).Size(11).Color(skin.ExtraMuted)).Gap(4).Align(ggui.AlignCenter)
-		return ggui.Column(ggui.Opacity(chatTurn(m, id, info, t.Messages[0]), 0.6), label).Gap(4).Stretch()
+		label := widget.Row(widget.Spacer(), icon("clock").Size(11).Color(skin.ExtraMuted), widget.Text(T("Sent")).Size(11).Color(skin.ExtraMuted)).Gap(4).Align(widget.AlignCenter)
+		return widget.Column(widget.Opacity(chatTurn(m, id, info, t.Messages[0]), 0.6), label).Gap(4).Stretch()
 	}
 	if t.Messages[0].GetRole() != "tool" {
 		return chatTurn(m, id, info, t.Messages[0])
@@ -771,11 +772,11 @@ func chatTurnRow(m *model, id string, info *protocol.SessionInfo, state *chatSta
 		name, _, _, _, _ := toolParts(msg)
 		names = append(names, name)
 	}
-	var body ggui.Widget = ggui.Column(tools...).Gap(2).Stretch()
+	var body ggui.Widget = widget.Column(tools...).Gap(2).Stretch()
 	if len(tools) >= foldRun {
 		body = toolRun(state, chatMessageKey(t.Messages[0]), names, t.Folded, body)
 	}
-	return ggui.Box(body).Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(6, 8)
+	return widget.Box(body).Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(6, 8)
 }
 
 // foldRun is how many tool calls in a row fold into one line.
@@ -792,34 +793,34 @@ func toolRun(state *chatState, key string, names []string, folded bool, body ggu
 		}
 	}
 	title := Tf("%d tool calls", len(names))
-	header := foldHeader(open, icon("layers").Size(14).Color(skin.Muted), ggui.Text(title).Size(12.5).NoWrap(), strings.Join(distinct, ", "), title)
-	return ggui.Column(header, reveal(open, func() ggui.Widget { return body })).Gap(2).Stretch()
+	header := foldHeader(open, icon("layers").Size(14).Color(skin.Muted), widget.Text(title).Size(12.5).NoWrap(), strings.Join(distinct, ", "), title)
+	return widget.Column(header, reveal(open, func() ggui.Widget { return body })).Gap(2).Stretch()
 }
 
 // foldHeader is the line a fold opens and closes from: a glyph, a title,
 // a muted detail, and a chevron that turns as it opens.
 func foldHeader(open ggui.Binding[bool], glyph, title ggui.Widget, detail, name string) ggui.Widget {
-	return ui.ButtonOf(ggui.Row(
+	return ui.ButtonOf(widget.Row(
 		glyph,
 		title,
-		ggui.Expanded(muted(ggui.Text(detail).Size(12).NoWrap().Ellipsis())),
+		widget.Expanded(muted(widget.Text(detail).Size(12).NoWrap().Ellipsis())),
 		chevron(open, 13, skin.ExtraMuted),
 	).Gap(8).Stretch(), func() { open.Set(!ggui.Untrack(open.Get)) }).Ghost().Pad(4, 6).Radius(6).Name(name)
 }
 
 func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage) ggui.Widget {
 	if msg.GetRole() == "user" {
-		bubble := ggui.Box(ggui.Text(msg.GetText()).Size(14).Selectable()).
+		bubble := widget.Box(widget.Text(msg.GetText()).Size(14).Selectable()).
 			Fill(skin.Surface2).Radius(12).Pad(10, 14).MaxWidth(680)
-		var turn ggui.Widget = ggui.Row(ggui.Spacer(), &withCopy{content: bubble, button: copyButton(m, msg.GetText())}).Stretch()
+		var turn ggui.Widget = widget.Row(widget.Spacer(), &withCopy{content: bubble, button: copyButton(m, msg.GetText())}).Stretch()
 		// The images it holds, and those it names by their paths, over it.
 		named := imageRefs(msg.GetText(), info.GetProject())
 		if len(msg.GetImages())+len(named) > 0 {
-			thumbs := ggui.Row(ggui.Spacer(), ggui.Box(chatImages(m, info.GetNodeId(), msg.GetImages(), named)).MaxWidth(680)).Stretch()
+			thumbs := widget.Row(widget.Spacer(), widget.Box(chatImages(m, info.GetNodeId(), msg.GetImages(), named)).MaxWidth(680)).Stretch()
 			if strings.TrimSpace(msg.GetText()) == "" {
 				return thumbs
 			}
-			turn = ggui.Column(thumbs, turn).Gap(6).Stretch()
+			turn = widget.Column(thumbs, turn).Gap(6).Stretch()
 		}
 		return turn
 	}
@@ -888,13 +889,13 @@ func toolRow(m *model, id string, state *chatState, msg *protocol.ChatMessage, a
 	if detail != "" {
 		label += "  " + detail
 	}
-	header := foldHeader(open, glyph, ggui.Text(name).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap(), detail, label)
+	header := foldHeader(open, glyph, widget.Text(name).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap(), detail, label)
 	rows := []ggui.Widget{header}
 	if agent != nil {
-		rows = append(rows, ggui.Padding(agentLink(m, id, agent, agentProgress(agent)), 0, 6, 2, 28))
+		rows = append(rows, widget.Padding(agentLink(m, id, agent, agentProgress(agent)), 0, 6, 2, 28))
 	}
 	rows = append(rows, reveal(open, func() ggui.Widget { return toolBody(m, msg) }))
-	return ggui.Column(rows...).Gap(2).Stretch()
+	return widget.Column(rows...).Gap(2).Stretch()
 }
 
 // toolLive reports whether a call is at work: a subagent it started still
@@ -935,13 +936,13 @@ func agentProgress(a *protocol.SubAgent) ggui.Widget {
 		parts = append(parts, a.GetKind())
 	}
 	parts = append(parts, Tf("%d tool calls", a.GetToolCalls()))
-	line := []ggui.Widget{muted(ggui.Text(strings.Join(parts, " · ")).Size(11.5).NoWrap())}
+	line := []ggui.Widget{muted(widget.Text(strings.Join(parts, " · ")).Size(11.5).NoWrap())}
 	if a.GetTool() != "" {
 		line = append(line,
 			icon(toolGlyph(a.GetToolKind())).Size(12).Color(skin.ExtraMuted),
-			ggui.Expanded(ggui.Text(strings.TrimSpace(a.GetTool()+"  "+a.GetDetail())).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()))
+			widget.Expanded(widget.Text(strings.TrimSpace(a.GetTool()+"  "+a.GetDetail())).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()))
 	}
-	return ggui.Row(line...).Gap(6).Align(ggui.AlignCenter)
+	return widget.Row(line...).Gap(6).Align(widget.AlignCenter)
 }
 
 // compactingRow says, over the composer, that session id's agent is
@@ -952,10 +953,10 @@ func compactingRow(m *model, id string) ggui.Widget {
 		return ok && s.GetState() == protocol.StateRunning && s.GetStatus() == protocol.AgentCompacting
 	})
 	return reveal(compacting, func() ggui.Widget {
-		return &lane{child: ggui.Box(ggui.Row(
+		return &lane{child: widget.Box(widget.Row(
 			ui.Spinner().Size(13),
-			muted(ggui.Text(T("Compacting conversation…")).Size(12.5).NoWrap()),
-		).Gap(8).Align(ggui.AlignCenter)).Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(8, 12)}
+			muted(widget.Text(T("Compacting conversation…")).Size(12.5).NoWrap()),
+		).Gap(8).Align(widget.AlignCenter)).Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(8, 12)}
 	})
 }
 
@@ -978,37 +979,37 @@ func runningAgents(m *model, id string, state *chatState) ggui.Widget {
 	}).WithEqual(func(a, b []*protocol.SubAgent) bool { return slices.EqualFunc(a, b, protocol.Same[*protocol.SubAgent]) })
 	return ggui.View(running, func(agents []*protocol.SubAgent) ggui.Widget {
 		if len(agents) == 0 {
-			return ggui.Box()
+			return widget.Box()
 		}
 		rows := make([]ggui.Widget, len(agents))
 		for i, a := range agents {
 			title := cmp.Or(a.GetDescription(), a.GetKind(), T("Subagent"))
-			rows[i] = agentLink(m, id, a, ggui.Row(
+			rows[i] = agentLink(m, id, a, widget.Row(
 				ui.Spinner().Size(13),
-				ggui.Text(title).Size(12.5).Weight(ggui.WeightMedium).NoWrap(),
-				ggui.Expanded(agentProgress(a)),
+				widget.Text(title).Size(12.5).Weight(ggui.WeightMedium).NoWrap(),
+				widget.Expanded(agentProgress(a)),
 				ggui.View(m.Minute, func(now time.Time) ggui.Widget {
 					if a.GetStarted() == 0 {
-						return ggui.Box()
+						return widget.Box()
 					}
-					return muted(ggui.Text(untilText(now.Sub(time.Unix(a.GetStarted(), 0)))).Size(11.5).NoWrap())
+					return muted(widget.Text(untilText(now.Sub(time.Unix(a.GetStarted(), 0)))).Size(11.5).NoWrap())
 				}),
-			).Gap(8).Align(ggui.AlignCenter))
+			).Gap(8).Align(widget.AlignCenter))
 		}
-		return &lane{child: ggui.Box(ggui.Column(rows...).Gap(6).Stretch()).
+		return &lane{child: widget.Box(widget.Column(rows...).Gap(6).Stretch()).
 			Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(8, 12)}
 	})
 }
 
 // toolFrame is the frame of a tool's code, output or command.
-func toolFrame(w ggui.Widget) *ggui.BoxWidget {
-	return ggui.Box(w).Fill(skin.Surface0).Border(1, skin.Border).Radius(6)
+func toolFrame(w ggui.Widget) *widget.BoxWidget {
+	return widget.Box(w).Fill(skin.Surface0).Border(1, skin.Border).Radius(6)
 }
 
-func toolLabel(s string) ggui.Widget { return ggui.Text(s).Size(11).Color(skin.ExtraMuted) }
+func toolLabel(s string) ggui.Widget { return widget.Text(s).Size(11).Color(skin.ExtraMuted) }
 
 func toolBlock(text string, failed bool) ggui.Widget {
-	t := ggui.Text(strings.TrimRight(text, "\n")).Font(ggui.DefaultMonoFont()).Size(12).
+	t := widget.Text(strings.TrimRight(text, "\n")).Font(ggui.DefaultMonoFont()).Size(12).
 		LineHeight(1.4).Selectable()
 	if failed {
 		t = t.Color(skin.DotDown)

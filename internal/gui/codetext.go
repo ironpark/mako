@@ -4,11 +4,12 @@ import (
 	"strings"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 )
 
 // codeText is src as selectable lines of code, highlighted in l when has
 // is true, its tabs stopping as in the editor.
-func codeText(m *model, src string, l language, has bool, size float64) *ggui.RichTextWidget {
+func codeText(m *model, src string, l language, has bool, size float64) *widget.RichTextWidget {
 	tab := defaultTab
 	var hl *docSyntax
 	ready := ggui.State(0) // counts the highlights the worker has found
@@ -18,21 +19,21 @@ func codeText(m *model, src string, l language, has bool, size float64) *ggui.Ri
 		tab = pick(l.TabSize > 0, l.TabSize, tab)
 	}
 	src = strings.TrimSuffix(expandTabs(src, tab), "\n")
-	spans := ggui.Derived(func() []ggui.TextSpan {
+	spans := ggui.Derived(func() []widget.TextSpan {
 		ready.Get()
 		if hl == nil {
-			return []ggui.TextSpan{ggui.Span(src)}
+			return []widget.TextSpan{widget.Span(src)}
 		}
 		return colorSpans(src, hl.colors(src, m.themePalette()))
 	})
-	return ggui.RichText().BindSpans(spans).NoWrap().Selectable().
+	return widget.RichText().BindSpans(spans).NoWrap().Selectable().
 		Font(ggui.DefaultMonoFont()).Size(size).LineHeight(max(ggui.Peek(m.Prefs).LineHeight, 1.2))
 }
 
 // colorSpans is src as spans coloured by styles, in order, and the text
 // between them in the paragraph's colour.
-func colorSpans(src string, styles []styleSpan) []ggui.TextSpan {
-	var out []ggui.TextSpan
+func colorSpans(src string, styles []styleSpan) []widget.TextSpan {
+	var out []widget.TextSpan
 	at := 0
 	for _, s := range styles {
 		start, end := max(s.Start, at), min(s.End, len(src))
@@ -40,13 +41,13 @@ func colorSpans(src string, styles []styleSpan) []ggui.TextSpan {
 			continue
 		}
 		if start > at {
-			out = append(out, ggui.Span(src[at:start]))
+			out = append(out, widget.Span(src[at:start]))
 		}
-		out = append(out, ggui.Span(src[start:end]).Color(s.Color))
+		out = append(out, widget.Span(src[start:end]).Color(s.Color))
 		at = end
 	}
 	if at < len(src) {
-		out = append(out, ggui.Span(src[at:]))
+		out = append(out, widget.Span(src[at:]))
 	}
 	return out
 }

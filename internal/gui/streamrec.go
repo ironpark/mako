@@ -14,6 +14,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
 )
@@ -190,7 +191,7 @@ func developerSettings(m *model) ggui.Widget {
 	}
 	ggui.Effect(func() ggui.Cleanup { measure(); return m.every(3*time.Second, measure) })
 	usage := ggui.View(used, func(n int64) ggui.Widget {
-		return muted(ggui.Text(Tf("%s used of %s", byteSize(n), byteSize(recordMax))).Size(12.5).NoWrap())
+		return muted(widget.Text(Tf("%s used of %s", byteSize(n), byteSize(recordMax))).Size(12.5).NoWrap())
 	})
 	open := ui.Button(T("Open folder"), func() {
 		if os.MkdirAll(dir, 0o700) == nil {
@@ -202,7 +203,7 @@ func developerSettings(m *model) ggui.Widget {
 			card(
 				row(T("Record terminal streams"), T("Keep every byte the terminals of this window receive, by agent and the system of the session's node, to train compression dictionaries on. Recording stops at 10 GB."),
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.RecordStreams }), "").Name(T("Record terminal streams"))),
-				row(T("Recordings"), dir, ggui.Row(usage, open).Gap(12).Align(ggui.AlignCenter)),
+				row(T("Recordings"), dir, widget.Row(usage, open).Gap(12).Align(widget.AlignCenter)),
 			),
 		),
 	)

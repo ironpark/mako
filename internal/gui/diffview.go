@@ -7,6 +7,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/pathscope"
@@ -111,7 +112,7 @@ func diffText(l *protocol.DiffLine, span wordSpan, mode diffMode, mono ggui.Text
 	// on, and the diff scrolls sideways.
 	cut := mode.Split && !mode.Wrap
 	if span.Lo == span.Hi {
-		t := ggui.Text(prefix + text).Style(mono)
+		t := widget.Text(prefix + text).Style(mono)
 		if !mode.Wrap {
 			t = t.NoWrap()
 		}
@@ -124,10 +125,10 @@ func diffText(l *protocol.DiffLine, span wordSpan, mode diffMode, mono ggui.Text
 	if l.GetOp() == "-" {
 		mark = skin.DiffRemoved
 	}
-	t := ggui.RichText(
-		ggui.Span(prefix+text[:span.Lo]),
-		ggui.Span(text[span.Lo:span.Hi]).Color(mark).Weight(ggui.WeightSemibold),
-		ggui.Span(text[span.Hi:]),
+	t := widget.RichText(
+		widget.Span(prefix+text[:span.Lo]),
+		widget.Span(text[span.Lo:span.Hi]).Color(mark).Weight(ggui.WeightSemibold),
+		widget.Span(text[span.Hi:]),
 	).Style(mono)
 	if !mode.Wrap {
 		t = t.NoWrap()
@@ -150,9 +151,9 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 		if n > 0 {
 			s = fmt.Sprint(n)
 		}
-		return ggui.Box(ggui.Text(s).Style(mono).Color(skin.ExtraMuted).NoWrap()).Width(34)
+		return widget.Box(widget.Text(s).Style(mono).Color(skin.ExtraMuted).NoWrap()).Width(34)
 	}
-	tint := func(op string, picked bool, w *ggui.BoxWidget) ggui.Widget {
+	tint := func(op string, picked bool, w *widget.BoxWidget) ggui.Widget {
 		switch {
 		case picked:
 			return w.Fill(skin.AccentBright.Alpha(0.22))
@@ -164,7 +165,7 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 		return w
 	}
 	clickable := func(w ggui.Widget, i int) ggui.Widget {
-		return ggui.Pointer(w).OnDown(func(ev ggui.PointerEvent) { pick(i, ev.Mods.Shift) })
+		return widget.Pointer(w).OnDown(func(ev ggui.PointerEvent) { pick(i, ev.Mods.Shift) })
 	}
 	// A row is made as it comes into view: a diff of thousands of lines
 	// lays out the few dozen the pane shows.
@@ -180,7 +181,7 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 				widest, widestCells = len(rows), n
 			}
 			rows = append(rows, func() ggui.Widget {
-				row := ggui.Box(ggui.Row(num(int(l.GetOld())), num(int(l.GetNew())), ggui.Expanded(diffText(l, words[i], mode, mono, l.GetOp()+" "))).Gap(4)).Pad(1, 8)
+				row := widget.Box(widget.Row(num(int(l.GetOld())), num(int(l.GetNew())), widget.Expanded(diffText(l, words[i], mode, mono, l.GetOp()+" "))).Gap(4)).Pad(1, 8)
 				return clickable(tint(l.GetOp(), sel.has(i), row), i)
 			})
 		}
@@ -189,14 +190,14 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 		// cell where the other side has a line and this one none.
 		side := func(i int, newSide bool) ggui.Widget {
 			if i < 0 {
-				return ggui.Box(ggui.Row(num(0))).Pad(1, 8).Fill(skin.Surface2)
+				return widget.Box(widget.Row(num(0))).Pad(1, 8).Fill(skin.Surface2)
 			}
 			l := lines[i]
 			n := l.GetOld()
 			if newSide {
 				n = l.GetNew()
 			}
-			cell := ggui.Box(ggui.Row(num(int(n)), ggui.Expanded(diffText(l, words[i], mode, mono, ""))).Gap(4)).Pad(1, 8)
+			cell := widget.Box(widget.Row(num(int(n)), widget.Expanded(diffText(l, words[i], mode, mono, ""))).Gap(4)).Pad(1, 8)
 			return clickable(tint(l.GetOp(), sel.has(i), cell), i)
 		}
 		for i := 0; i < len(lines); {
@@ -209,7 +210,7 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 			case " ":
 				at := i
 				rows = append(rows, func() ggui.Widget {
-					return ggui.Row(ggui.Expanded(side(at, false)), vline(), ggui.Expanded(side(at, true))).Stretch()
+					return widget.Row(widget.Expanded(side(at, false)), vline(), widget.Expanded(side(at, true))).Stretch()
 				})
 				i++
 			default:
@@ -231,7 +232,7 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 						right = added[k]
 					}
 					rows = append(rows, func() ggui.Widget {
-						return ggui.Row(ggui.Expanded(side(left, false)), vline(), ggui.Expanded(side(right, true))).Stretch()
+						return widget.Row(widget.Expanded(side(left, false)), vline(), widget.Expanded(side(right, true))).Stretch()
 					})
 				}
 			}
@@ -239,13 +240,13 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 	}
 	if len(lines) < len(d.GetLines()) || d.GetTruncated() {
 		rows = append(rows, func() ggui.Widget {
-			return ggui.Box(muted(ggui.Text(T("The rest of the diff is not shown.")).Size(11.5))).Pad(8, 12)
+			return widget.Box(muted(widget.Text(T("The rest of the diff is not shown.")).Size(11.5))).Pad(8, 12)
 		})
 	}
-	col := ggui.Each(ggui.State(rows), func(row ggui.EachItem[func() ggui.Widget]) ggui.Widget { return row.Item() }).
+	col := widget.Each(ggui.State(rows), func(row widget.EachItem[func() ggui.Widget]) ggui.Widget { return row.Item() }).
 		Stretch().EstimatedExtent(diffRowEstimate)
 	if mode.Wrap || mode.Split {
-		return ggui.Scroll(col).Bar(skin.Surface3)
+		return widget.Scroll(col).Bar(skin.Surface3)
 	}
 	// Long lines run on, and the whole diff scrolls sideways to them, as
 	// far as the longest, which is laid out for its width alone.
@@ -253,7 +254,7 @@ func diffRows(d *protocol.Diff, mode diffMode, sel lineSel, pick func(i int, ext
 	if widest >= 0 {
 		wide = &asWideAs{like: rows[widest](), child: col}
 	}
-	return ggui.Scroll(ggui.Scroll(wide).Horizontal().Bar(skin.Surface3)).Bar(skin.Surface3)
+	return widget.Scroll(widget.Scroll(wide).Horizontal().Bar(skin.Surface3)).Bar(skin.Surface3)
 }
 
 // diffRowEstimate is how tall a diff's row is taken to be until it is laid
@@ -283,11 +284,11 @@ func (a *asWideAs) Paint(dst *ggui.Canvas, r ggui.Rect) { dst.Paint(a.child, r) 
 // hunkRow is a hunk's header line, with its actions on hover.
 func hunkRow(l *protocol.DiffLine, mono ggui.TextStyle, actions ggui.Widget) ggui.Widget {
 	hover := ggui.State(false)
-	row := ggui.Box(ggui.Row(
-		ggui.Expanded(ggui.Text(l.GetText()).Style(mono).Color(skin.Muted).NoWrap().Ellipsis()),
-		ggui.Box(ggui.If(hover, func() ggui.Widget { return actions })).Height(22),
-	).Gap(8).Align(ggui.AlignCenter)).Pad(2, 8, 2, 10).Fill(skin.Surface2)
-	return ggui.Pointer(row).OnHover(hover.Set)
+	row := widget.Box(widget.Row(
+		widget.Expanded(widget.Text(l.GetText()).Style(mono).Color(skin.Muted).NoWrap().Ellipsis()),
+		widget.Box(ggui.If(hover, func() ggui.Widget { return actions })).Height(22),
+	).Gap(8).Align(widget.AlignCenter)).Pad(2, 8, 2, 10).Fill(skin.Surface2)
+	return widget.Pointer(row).OnHover(hover.Set)
 }
 
 // hunkAt is the hunk line i is in: its header's index and the lines after
@@ -404,15 +405,15 @@ func selectionBar(m *model, root fileRoot, path string, lines []*protocol.DiffLi
 		for i, s := range agents {
 			items[i] = ui.MenuItem(sessionTitle(s, ggui.Peek(m.Titles)[s.GetId()]), send(s.GetId()))
 		}
-		target = ui.MenuOf(ggui.Text(T("Ask agent")), items...).Width(240).Name(T("Ask agent"))
+		target = ui.MenuOf(widget.Text(T("Ask agent")), items...).Width(240).Name(T("Ask agent"))
 	}
 	count := ggui.Map(sel, func(s lineSel) string {
 		return lineRef(baseName(path), lines[s.From:s.To+1])
 	})
-	return ggui.Column(hline(), ggui.Box(ggui.Row(
+	return widget.Column(hline(), widget.Box(widget.Row(
 		icon("send-horizontal").Size(14).Color(skin.Muted),
-		ggui.TextOf(count).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap(),
-		ggui.Expanded(ui.TextField(note).Placeholder(T("Note for the agent (optional)")).Name(T("Note for the agent")).
+		widget.TextOf(count).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap(),
+		widget.Expanded(ui.TextField(note).Placeholder(T("Note for the agent (optional)")).Name(T("Note for the agent")).
 			OnSubmit(func(string) {
 				if len(agents) > 0 {
 					send(agents[0].GetId())()
@@ -420,5 +421,5 @@ func selectionBar(m *model, root fileRoot, path string, lines []*protocol.DiffLi
 			})),
 		target,
 		iconButton("x", T("Clear selection"), func() { sel.Set(noSel) }),
-	).Gap(10).Align(ggui.AlignCenter)).Pad(8, 12).Fill(skin.Surface1)).Stretch()
+	).Gap(10).Align(widget.AlignCenter)).Pad(8, 12).Fill(skin.Surface1)).Stretch()
 }

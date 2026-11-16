@@ -9,6 +9,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/protocol"
@@ -153,7 +154,7 @@ func liveTurns(blocks []*protocol.LiveBlock) []chatTurnItem {
 
 // thinkingRow says the agent thinks, as its reply streams.
 func thinkingRow() ggui.Widget {
-	return ggui.Row(ui.Spinner().Size(13), muted(ggui.Text(T("Thinking…")).Size(12.5))).Gap(8).Align(ggui.AlignCenter)
+	return widget.Row(ui.Spinner().Size(13), muted(widget.Text(T("Thinking…")).Size(12.5))).Gap(8).Align(widget.AlignCenter)
 }
 
 // stringField finds the string fields of JSON that may stop short: each

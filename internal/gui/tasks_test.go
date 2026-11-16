@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
@@ -23,7 +24,7 @@ func TestShellsOpenToTheirDetails(t *testing.T) {
 		{Id: "b3", Command: "sleep 100", Running: true, Started: started + 30},
 	}}})
 	p := ggui.ProbeBuilder(func() ggui.Widget {
-		return ggui.Stack(ggui.Column(runningTasks(m, "a")).Stretch(), shellDialog(m)).Expand()
+		return widget.Stack(widget.Column(runningTasks(m, "a")).Stretch(), shellDialog(m)).Expand()
 	}, ggui.Sz(700, 600))
 	defer p.Close()
 	m.post = p.Post

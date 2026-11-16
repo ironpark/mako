@@ -9,6 +9,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 )
@@ -125,7 +126,7 @@ func (m *model) setLook(key string, look projectLook) {
 // lookButton is a section's icon, which opens the picker of its look.
 func lookButton(m *model, key, name string, look projectLook) ggui.Widget {
 	picker := ui.PopoverOf(look.glyph(16), lookPicker(m, key, look)).
-		Name(Tf("Icon of %s", name)).Width(248).Pad(10).Align(ggui.PopupStart).Key("look:" + key)
+		Name(Tf("Icon of %s", name)).Width(248).Pad(10).Align(widget.PopupStart).Key("look:" + key)
 	picker.Trigger().Ghost().Pad(5).Radius(6)
 	return borderless(picker)
 }
@@ -137,7 +138,7 @@ func lookPicker(m *model, key string, look projectLook) ggui.Widget {
 	var row []ggui.Widget
 	for _, ic := range lookIcons {
 		on := ic.Icon == look.Icon
-		face := ggui.Box(ggui.Center(icon(ic.Icon).Size(16).Color(look.color()))).Size(32, 32).Radius(6)
+		face := widget.Box(widget.Center(icon(ic.Icon).Size(16).Color(look.color()))).Size(32, 32).Radius(6)
 		if on {
 			face = face.Fill(skin.Surface3).Border(1, skin.Border)
 		}
@@ -145,16 +146,16 @@ func lookPicker(m *model, key string, look projectLook) ggui.Widget {
 		next.Icon = ic.Icon
 		row = append(row, ui.ButtonOf(face, func() { m.setLook(key, next) }).Ghost().Pad(0).Radius(6).Name(T(ic.Label)))
 		if len(row) == perRow {
-			rows = append(rows, ggui.Row(row...).Gap(4))
+			rows = append(rows, widget.Row(row...).Gap(4))
 			row = nil
 		}
 	}
 	if len(row) > 0 {
-		rows = append(rows, ggui.Row(row...).Gap(4))
+		rows = append(rows, widget.Row(row...).Gap(4))
 	}
 	swatches := make([]ggui.Widget, len(lookColors))
 	for i, c := range lookColors {
-		face := ggui.Box(ggui.Center(ggui.Box().Size(14, 14).Radius(7).Fill(c.Color))).Size(24, 24).Radius(12)
+		face := widget.Box(widget.Center(widget.Box().Size(14, 14).Radius(7).Fill(c.Color))).Size(24, 24).Radius(12)
 		if c.Name == look.Color {
 			face = face.Border(1.5, skin.Fg)
 		}
@@ -162,11 +163,11 @@ func lookPicker(m *model, key string, look projectLook) ggui.Widget {
 		next.Color = c.Name
 		swatches[i] = ui.ButtonOf(face, func() { m.setLook(key, next) }).Ghost().Pad(0).Radius(12).Name(T(c.Label))
 	}
-	heading := func(s string) ggui.Widget { return muted(ggui.Text(s).Size(11.5)) }
-	return ggui.Column(
+	heading := func(s string) ggui.Widget { return muted(widget.Text(s).Size(11.5)) }
+	return widget.Column(
 		heading(T("Icon")),
-		ggui.Column(rows...).Gap(4),
+		widget.Column(rows...).Gap(4),
 		heading(T("Colour")),
-		ggui.Row(swatches...).Gap(6),
+		widget.Row(swatches...).Gap(6),
 	).Gap(8)
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -200,23 +201,23 @@ func folderPickerDialog(m *model) ggui.Widget {
 
 func folderPicker(m *model) ggui.Widget {
 	p := m.Pick
-	toolbar := ggui.Row(
+	toolbar := widget.Row(
 		navButtons(p.navigator),
-		ggui.Expanded(ui.TextField(p.Address).Name(T("Folder")).OnSubmit(func(dir string) {
+		widget.Expanded(ui.TextField(p.Address).Name(T("Folder")).OnSubmit(func(dir string) {
 			p.goTo(strings.TrimSpace(dir))
 		})),
 		hiddenFilesToggle(m),
 	).Gap(6)
-	body := ggui.Row(
-		ggui.Box(ggui.Scroll(pickerSidebar(m))).Width(170),
+	body := widget.Row(
+		widget.Box(widget.Scroll(pickerSidebar(m))).Width(170),
 		vline(),
-		ggui.Expanded(pickerList(m)),
+		widget.Expanded(pickerList(m)),
 	).Stretch()
 	hasErr := ggui.Map(p.Err, func(s string) bool { return s != "" })
-	return ggui.Column(
+	return widget.Column(
 		toolbar,
-		ggui.Box(body).Height(340).Border(1, skin.Border).Radius(8),
-		ggui.If(hasErr, func() ggui.Widget { return ggui.TextOf(p.Err).Size(12).Color(skin.DotDown) }),
+		widget.Box(body).Height(340).Border(1, skin.Border).Radius(8),
+		ggui.If(hasErr, func() ggui.Widget { return widget.TextOf(p.Err).Size(12).Color(skin.DotDown) }),
 		pickerFooter(m),
 	).Gap(12).Stretch()
 }
@@ -232,13 +233,13 @@ func pickerSidebar(m *model) ggui.Widget {
 			if len(list) == 0 {
 				return
 			}
-			rows = append(rows, ggui.Box(ggui.Text(title).Size(11).Weight(ggui.WeightMedium).Color(skin.ExtraMuted)).Pad(10, 10, 4, 10))
+			rows = append(rows, widget.Box(widget.Text(title).Size(11).Weight(ggui.WeightMedium).Color(skin.ExtraMuted)).Pad(10, 10, 4, 10))
 			for _, pl := range list {
 				lead := icon(pl.Icon).Size(14).Color(skin.Muted)
-				var row ggui.Widget = ggui.Row(lead, ggui.Expanded(ggui.Text(pl.Name).Size(12.5).NoWrap().Ellipsis())).Gap(8)
+				var row ggui.Widget = widget.Row(lead, widget.Expanded(widget.Text(pl.Name).Size(12.5).NoWrap().Ellipsis())).Gap(8)
 				btn := ui.ButtonOf(row, func() { p.goTo(pl.Path) }).Ghost().Pad(5, 10).Radius(6).Name(pl.Path)
 				if pl.Path == cur {
-					rows = append(rows, ggui.Box(btn).Fill(skin.Surface3).Radius(6))
+					rows = append(rows, widget.Box(btn).Fill(skin.Surface3).Radius(6))
 					continue
 				}
 				rows = append(rows, btn)
@@ -247,7 +248,7 @@ func pickerSidebar(m *model) ggui.Widget {
 		section(T("Favorites"), favorites)
 		section(T("Recent"), recent)
 		section(T("Locations"), locations)
-		return ggui.Box(ggui.Column(rows...).Gap(1).Stretch()).Pad(4, 6, 8, 6)
+		return widget.Box(widget.Column(rows...).Gap(1).Stretch()).Pad(4, 6, 8, 6)
 	})
 }
 
@@ -260,22 +261,22 @@ func pickerList(m *model) ggui.Widget {
 		func(item ggui.Readable[fileItem]) ggui.Widget {
 			it := ggui.Untrack(item.Get)
 			if it.Stub {
-				return muted(ggui.Text(it.Name).Size(13).NoWrap().Ellipsis())
+				return muted(widget.Text(it.Name).Size(13).NoWrap().Ellipsis())
 			}
-			name := ggui.Text(it.Name).Size(13).NoWrap().Ellipsis()
+			name := widget.Text(it.Name).Size(13).NoWrap().Ellipsis()
 			lead := fileTypeIcon(it.Name, it.Dir, false).Size(15)
 			mod := ""
 			if !it.Mod.IsZero() {
 				mod = it.Mod.Local().Format("2006-01-02 15:04")
 			}
-			modText := ggui.Text(mod).Size(12).Color(skin.Muted).NoWrap()
+			modText := widget.Text(mod).Size(12).Color(skin.Muted).NoWrap()
 			if !it.Dir {
 				name, modText = name.Color(skin.ExtraMuted), modText.Color(skin.ExtraMuted)
 				lead = lead.Color(skin.ExtraMuted)
 			}
-			return ggui.Row(
-				ggui.Expanded(ggui.Row(lead, ggui.Expanded(name)).Gap(8)),
-				ggui.Box(modText).Width(modColumn),
+			return widget.Row(
+				widget.Expanded(widget.Row(lead, widget.Expanded(name)).Gap(8)),
+				widget.Box(modText).Width(modColumn),
 			).Gap(12)
 		}).
 		RowName(func(it fileItem) string { return it.Name }).
@@ -291,11 +292,11 @@ func pickerList(m *model) ggui.Widget {
 			}
 		}).
 		Name(T("Folders"))
-	head := ggui.Box(ggui.Row(
-		ggui.Expanded(columnHead(T("Name"), 0)),
-		ggui.Box(columnHead(T("Modified"), 0)).Width(modColumn),
+	head := widget.Box(widget.Row(
+		widget.Expanded(columnHead(T("Name"), 0)),
+		widget.Box(columnHead(T("Modified"), 0)).Width(modColumn),
 	).Gap(12)).Pad(6, 14)
-	return ggui.Column(head, hline(), ggui.Expanded(ggui.Scroll(ggui.Padding(tree, 4, 6)).Bar(skin.Surface3))).Stretch()
+	return widget.Column(head, hline(), widget.Expanded(widget.Scroll(widget.Padding(tree, 4, 6)).Bar(skin.Surface3))).Stretch()
 }
 
 // pickerFooter is New Folder on the left, and Cancel and Choose on the
@@ -307,19 +308,19 @@ func pickerFooter(m *model) ggui.Widget {
 		if !naming {
 			return ui.Button(T("New folder"), func() { p.NewName.Set(""); p.Err.Set(""); p.Naming.Set(true) }).Outline()
 		}
-		return ggui.Row(
-			ggui.Box(ui.TextField(p.NewName).Placeholder(T("Folder name")).Name(T("Folder name")).
+		return widget.Row(
+			widget.Box(ui.TextField(p.NewName).Placeholder(T("Folder name")).Name(T("Folder name")).
 				OnSubmit(func(string) { m.makeFolder() })).Width(200),
 			ui.Button(T("Create"), m.makeFolder).Outline(),
 			iconButton("x", T("Cancel"), func() { p.Naming.Set(false) }),
 		).Gap(6)
 	})
 	chosen := ggui.Derived(func() string { return baseName(p.picked()) })
-	return ggui.Row(
+	return widget.Row(
 		left,
-		ggui.Spacer(),
+		widget.Spacer(),
 		ui.Button(T("Cancel"), func() { m.closePicker("") }).Outline(),
-		ui.ButtonOf(ggui.TextOf(ggui.Map(chosen, func(name string) string { return Tf("Choose %s", name) })).Size(13).NoWrap(),
+		ui.ButtonOf(widget.TextOf(ggui.Map(chosen, func(name string) string { return Tf("Choose %s", name) })).Size(13).NoWrap(),
 			func() { m.closePicker(ggui.Untrack(p.picked)) }).Name(T("Choose")),
 	).Gap(8)
 }
@@ -343,11 +344,11 @@ func recentChips(m *model) ggui.Widget {
 		f := m.Form.Get()
 		recent := m.recentFolders(f.NodeID, 6)
 		if len(recent) == 0 {
-			return ggui.Box()
+			return widget.Box()
 		}
 		chips := make([]ggui.Widget, 0, len(recent))
 		for _, dir := range recent {
-			text := ggui.Text(path.Base(strings.ReplaceAll(dir, `\`, "/"))).Size(12).NoWrap()
+			text := widget.Text(path.Base(strings.ReplaceAll(dir, `\`, "/"))).Size(12).NoWrap()
 			if dir == f.Project {
 				text = text.Weight(ggui.WeightMedium)
 			}
@@ -355,6 +356,6 @@ func recentChips(m *model) ggui.Widget {
 				m.Form.Update(func(f newSession) newSession { f.Project = dir; return f })
 			}).Secondary().Pad(3, 9).Radius(12).Name(dir))
 		}
-		return ggui.Wrap(chips...).Gap(6)
+		return widget.Wrap(chips...).Gap(6)
 	})
 }

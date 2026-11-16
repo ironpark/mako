@@ -3,6 +3,7 @@ package gui
 import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 )
@@ -108,23 +109,23 @@ func (s *sectionLayout) Paint(dst *ggui.Canvas, r ggui.Rect) {
 // section is a heading over its cards, or beside them on a wide page.
 func section(title string, children ...ggui.Widget) ggui.Widget {
 	return &sectionLayout{
-		over:   ggui.Box(muted(ggui.Text(title).Size(12.5))).Pad(0, 4),
-		beside: ggui.Text(title).Size(13).Weight(ggui.WeightMedium).Color(skin.Muted),
-		body:   ggui.Column(children...).Gap(sectionGap).Stretch(),
+		over:   widget.Box(muted(widget.Text(title).Size(12.5))).Pad(0, 4),
+		beside: widget.Text(title).Size(13).Weight(ggui.WeightMedium).Color(skin.Muted),
+		body:   widget.Column(children...).Gap(sectionGap).Stretch(),
 	}
 }
 
 // page is a settings page: its title and what it is for, over its
 // sections.
 func page(title, description string, sections ...ggui.Widget) ggui.Widget {
-	return &settingsColumn{head: pageTitle(title, description), body: ggui.Column(sections...).Gap(pageGap).Stretch()}
+	return &settingsColumn{head: pageTitle(title, description), body: widget.Column(sections...).Gap(pageGap).Stretch()}
 }
 
 func pageTitle(title, description string) ggui.Widget {
-	return ggui.Column(
-		ggui.Text(title).Size(20).Weight(ggui.WeightSemibold),
+	return widget.Column(
+		widget.Text(title).Size(20).Weight(ggui.WeightSemibold),
 		// As wide as a line reads well, however wide the page.
-		ggui.Box(muted(ggui.Text(description).Size(13))).MaxWidth(760),
+		widget.Box(muted(widget.Text(description).Size(13))).MaxWidth(760),
 	).Gap(6).Stretch()
 }
 
@@ -132,7 +133,7 @@ func pageTitle(title, description string) ggui.Widget {
 // Extensions do: it keeps no headings' column, so a wide one has the room
 // to lay its list beside what is chosen in it (listBeside).
 func listPage(title, description string, sections ...ggui.Widget) ggui.Widget {
-	return &settingsColumn{head: pageTitle(title, description), body: ggui.Column(sections...).Gap(pageGap).Stretch(), noGutter: true}
+	return &settingsColumn{head: pageTitle(title, description), body: widget.Column(sections...).Gap(pageGap).Stretch(), noGutter: true}
 }
 
 // listBesideWidth is the width of a listBeside's list.
@@ -142,8 +143,8 @@ const listBesideWidth = 320
 // the room, and narrow, the list with what is chosen unfolded in it,
 // where there is not.
 func listBeside(list, detail, narrow ggui.Widget) ggui.Widget {
-	return ggui.Responsive(settingsWide,
-		ggui.Row(ggui.Box(list).Width(listBesideWidth), ggui.Expanded(detail)).Gap(20).Align(ggui.AlignStart),
+	return widget.Responsive(settingsWide,
+		widget.Row(widget.Box(list).Width(listBesideWidth), widget.Expanded(detail)).Gap(20).Align(widget.AlignStart),
 		narrow)
 }
 
@@ -153,7 +154,7 @@ func listItem(content ggui.Widget, chosen ggui.Readable[bool], choose func(), na
 	button := ui.ButtonOf(content, choose).Ghost().Pad(8, 10).Radius(7).Name(name)
 	return ggui.View(chosen, func(on bool) ggui.Widget {
 		if on {
-			return ggui.Box(button).Fill(skin.SidebarSel).Radius(7)
+			return widget.Box(button).Fill(skin.SidebarSel).Radius(7)
 		}
 		return button
 	})
@@ -162,7 +163,7 @@ func listItem(content ggui.Widget, chosen ggui.Readable[bool], choose func(), na
 // detailCard is the card listBeside shows what is chosen in: its
 // heading over its fields.
 func detailCard(head, body ggui.Widget) ggui.Widget {
-	return ggui.Box(ggui.Column(head, hline(), body).Gap(14).Stretch()).Pad(16, 18).
+	return widget.Box(widget.Column(head, hline(), body).Gap(14).Stretch()).Pad(16, 18).
 		Fill(skin.Surface1).Border(1, skin.Border).Radius(10)
 }
 
@@ -173,16 +174,16 @@ func addField(title, hint, placeholder, fieldName string, name, note *ggui.State
 	field := ui.TextField(name).Placeholder(placeholder).Name(fieldName).OnSubmit(func(string) { add() })
 	button := ui.Button(T("Add"), add).Outline()
 	hasNote := ggui.Map(note, func(s string) bool { return s != "" })
-	noteText := ggui.If(hasNote, func() ggui.Widget { return ggui.TextOf(note).Size(12).Color(skin.DotDown) })
+	noteText := ggui.If(hasNote, func() ggui.Widget { return widget.TextOf(note).Size(12).Color(skin.DotDown) })
 	if compact {
-		return ggui.Box(ggui.Column(
-			ui.Tooltip(ggui.Text(title).Size(13), hint),
-			ggui.Row(ggui.Expanded(field), button).Gap(8),
+		return widget.Box(widget.Column(
+			ui.Tooltip(widget.Text(title).Size(13), hint),
+			widget.Row(widget.Expanded(field), button).Gap(8),
 			noteText,
 		).Gap(8).Stretch()).Pad(12, 14)
 	}
-	return ggui.Column(
-		row(title, hint, ggui.Row(ggui.Box(field).Width(160), button).Gap(8)),
-		ggui.If(hasNote, func() ggui.Widget { return ggui.Box(noteText).Pad(0, 16, 12, 16) }),
+	return widget.Column(
+		row(title, hint, widget.Row(widget.Box(field).Width(160), button).Gap(8)),
+		ggui.If(hasNote, func() ggui.Widget { return widget.Box(noteText).Pad(0, 16, 12, 16) }),
 	).Stretch()
 }

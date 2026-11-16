@@ -7,6 +7,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
@@ -80,8 +81,8 @@ func quickLaunchers(m *model, nodeID, project string, targets []string, before f
 			target := agentspec.Target(l.Agent, p)
 			items = append(items, ui.MenuItem(targetLabel(target), start(target)))
 		}
-		face := ggui.Row(glyph, icon("chevron-down").Size(10)).Gap(1)
-		menu := ui.MenuOf(ggui.Box(face).Pad(6, 3, 6, 6), items...).Width(180).Name(label)
+		face := widget.Row(glyph, icon("chevron-down").Size(10)).Gap(1)
+		menu := ui.MenuOf(widget.Box(face).Pad(6, 3, 6, 6), items...).Width(180).Name(label)
 		menus = append(menus, menu)
 		// The face pads itself, so the trigger sits level with the buttons.
 		buttons = append(buttons, ui.Tooltip(iconMenu(menu, 0), label))
@@ -102,7 +103,7 @@ func launchButton(m *model, nodeID, project string, targets []string, before, mo
 	f := &launchFan{plus: plus, menus: menus}
 	cells := make([]ggui.Widget, len(buttons))
 	for i, b := range buttons {
-		t := ggui.Transition(b).Fade().Easing(ggui.EaseLinear)
+		t := widget.Transition(b).Fade().Easing(ggui.EaseLinear)
 		f.items = append(f.items, t)
 		cells[i] = t
 	}
@@ -110,13 +111,13 @@ func launchButton(m *model, nodeID, project string, targets []string, before, mo
 	f.rows = rows
 	lines := make([]ggui.Widget, 0, rows)
 	for i := 0; i < len(cells); i += cols {
-		lines = append(lines, ggui.Row(cells[i:min(i+cols, len(cells))]...).Gap(2))
+		lines = append(lines, widget.Row(cells[i:min(i+cols, len(cells))]...).Gap(2))
 	}
 	pill := ggui.Reactive(func() ggui.Widget {
-		return ggui.Box(ggui.Column(lines...).Gap(2)).Pad(2).
+		return widget.Box(widget.Column(lines...).Gap(2)).Pad(2).
 			Fill(skin.SolidBg).Border(1, skin.Border).Radius(8).Shadow(uitheme.Use().PanelShadow)
 	})
-	f.pill = ggui.Transition(pill).Fade().Easing(ggui.EaseLinear)
+	f.pill = widget.Transition(pill).Fade().Easing(ggui.EaseLinear)
 	return f
 }
 
@@ -137,8 +138,8 @@ func launchGrid(n int) (cols, rows int) {
 // paint as an overlay, beside the + and over whatever is there.
 type launchFan struct {
 	plus  ggui.Widget
-	pill  *ggui.TransitionWidget
-	items []*ggui.TransitionWidget
+	pill  *widget.TransitionWidget
+	items []*widget.TransitionWidget
 	menus []*ui.MenuWidget
 
 	rows               int

@@ -6,6 +6,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 	"rsc.io/qr"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -27,17 +28,17 @@ func pairingSettings(m *model, pairing *protocol.Pairing) ggui.Widget {
 	}
 	code, err := qr.Encode(pairing.GetLink(), qr.M)
 	if err != nil {
-		return card(row(T("Pair a phone"), err.Error(), ggui.Box()))
+		return card(row(T("Pair a phone"), err.Error(), widget.Box()))
 	}
 	expires := protocol.TimeOf(pairing.GetExpires()).Local().Format("15:04")
-	return card(ggui.Box(ggui.Row(
+	return card(widget.Box(widget.Row(
 		&qrWidget{code: code, size: 196},
-		ggui.Expanded(ggui.Column(
-			ggui.Text(T("Scan with the phone")).Size(13.5),
-			muted(ggui.Text(T("In mako's Android app, open Computers and tap Scan QR code. The phone that reads this code is let in, and the code is then used up.")).Size(12)),
-			muted(ggui.Text(Tf("Valid until %s.", expires)).Size(12)),
-			ggui.Box().Height(6),
-			ggui.Row(
+		widget.Expanded(widget.Column(
+			widget.Text(T("Scan with the phone")).Size(13.5),
+			muted(widget.Text(T("In mako's Android app, open Computers and tap Scan QR code. The phone that reads this code is let in, and the code is then used up.")).Size(12)),
+			muted(widget.Text(Tf("Valid until %s.", expires)).Size(12)),
+			widget.Box().Height(6),
+			widget.Row(
 				ui.Button(T("New code"), func() {
 					m.changeAccess(&protocol.Access{Op: "pair"}, "")
 				}).Outline(),

@@ -8,6 +8,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -84,16 +85,16 @@ func nameDialog(a nameAsk) ggui.Widget {
 	}
 	rows := []ggui.Widget{ui.Field(cmp.Or(a.Label, T("Name")), field)}
 	if a.Note != "" {
-		rows = append(rows, muted(ggui.Text(a.Note).Size(12)))
+		rows = append(rows, muted(widget.Text(a.Note).Size(12)))
 	}
 	rows = append(rows,
-		ggui.If(hasErr, func() ggui.Widget { return ggui.TextOf(a.Err).Size(12).Color(skin.DotDown) }),
-		ggui.Row(
+		ggui.If(hasErr, func() ggui.Widget { return widget.TextOf(a.Err).Size(12).Color(skin.DotDown) }),
+		widget.Row(
 			ui.Button(T("Cancel"), func() { a.Open.Set(false) }).Outline(),
 			ui.Button(a.Action, a.Submit),
-		).Gap(8).Justify(ggui.JustifyEnd),
+		).Gap(8).Justify(widget.JustifyEnd),
 	)
-	return ui.Dialog(a.Open, ggui.Column(rows...).Gap(16).Stretch()).Title(a.Title).Width(420)
+	return ui.Dialog(a.Open, widget.Column(rows...).Gap(16).Stretch()).Title(a.Title).Width(420)
 }
 
 // sessionMenu gives a session's tab or sidebar row a context menu; a tab's

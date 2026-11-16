@@ -3,6 +3,7 @@ package gui
 import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 )
 
 // navigator is a folder shown and where it has been, as a file manager
@@ -70,7 +71,7 @@ func navButtons(n *navigator) ggui.Widget {
 		btn := func(name, label string, off bool, fn func()) ggui.Widget {
 			return ui.ButtonOf(icon(name).Size(15), fn).Ghost().Pad(5).Radius(6).Name(label).Disabled(off)
 		}
-		return ggui.Row(
+		return widget.Row(
 			btn("arrow-left", T("Back"), len(h.Back) == 0, func() { n.goBack(false) }),
 			btn("arrow-right", T("Forward"), len(h.Ahead) == 0, func() { n.goBack(true) }),
 			btn("arrow-up-to-line", T("Enclosing folder"), false, n.goUp),

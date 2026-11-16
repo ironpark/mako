@@ -209,8 +209,8 @@ const extSearchDelay = 300 * time.Millisecond
 // the palette opens it: the search and filters stay as the list scrolls.
 func extensionsDialog(m *model) ggui.Widget {
 	content := ggui.If(m.ext.Open, func() ggui.Widget {
-		list := ggui.Scroll(ggui.Padding(extensionsList(m), 0, 12, 0, 0)).Bar(skin.Surface3)
-		return ggui.Box(ggui.Column(extensionsHeader(m), ggui.Expanded(list)).Gap(16).Stretch()).Height(600)
+		list := widget.Scroll(widget.Padding(extensionsList(m), 0, 12, 0, 0)).Bar(skin.Surface3)
+		return widget.Box(widget.Column(extensionsHeader(m), widget.Expanded(list)).Gap(16).Stretch()).Height(600)
 	})
 	return ui.Dialog(m.ext.Open, content).Title(T("Extensions")).Width(880)
 }
@@ -239,11 +239,11 @@ func extensionsHeader(m *model) ggui.Widget {
 		})
 		return func() { pending.Stop() }
 	})
-	search := ggui.Box(ggui.Row(
+	search := widget.Box(widget.Row(
 		icon("search").Size(15).Color(skin.Muted),
-		ggui.Expanded(widget.TextInput(m.ext.Query).Placeholder(T("Search extensions…")).Name(T("Search extensions")).
+		widget.Expanded(widget.TextInput(m.ext.Query).Placeholder(T("Search extensions…")).Name(T("Search extensions")).
 			Style(ggui.TextStyle{Size: 13.5}).OnSubmit(m.searchExtensions)),
-	).Gap(8).Align(ggui.AlignCenter)).Pad(8, 12).Border(1, skin.Border).Radius(8).Fill(skin.Surface0)
+	).Gap(8).Align(widget.AlignCenter)).Pad(8, 12).Border(1, skin.Border).Radius(8).Fill(skin.Surface0)
 	show := ui.ToggleGroup[string](m.ext.Show).Options([]string{extShowAll, extShowInstalled, extShowAvailable}).
 		Format(func(v string) string {
 			return T(map[string]string{extShowAll: "All", extShowInstalled: "Installed", extShowAvailable: "Not Installed"}[v])
@@ -256,19 +256,19 @@ func extensionsHeader(m *model) ggui.Widget {
 			if k.Provides == cur {
 				fg = skin.AccentBright
 			}
-			tabs = append(tabs, ui.ButtonOf(ggui.Text(T(k.Label)).Size(13.5).Color(fg).NoWrap(), func() { m.ext.Kind.Set(k.Provides) }).
+			tabs = append(tabs, ui.ButtonOf(widget.Text(T(k.Label)).Size(13.5).Color(fg).NoWrap(), func() { m.ext.Kind.Set(k.Provides) }).
 				Ghost().Pad(4, 8).Radius(6).Name(T(k.Label)))
 		}
-		return ggui.Row(tabs...).Gap(4)
+		return widget.Row(tabs...).Gap(4)
 	})
 	errNote := ggui.View(m.ext.Err, func(e string) ggui.Widget {
 		if e == "" {
-			return ggui.Box()
+			return widget.Box()
 		}
-		return ggui.Text(e).Size(12.5).Color(uitheme.Destructive)
+		return widget.Text(e).Size(12.5).Color(uitheme.Destructive)
 	})
-	return ggui.Column(
-		ggui.Row(ggui.Expanded(search), show).Gap(10).Align(ggui.AlignCenter),
+	return widget.Column(
+		widget.Row(widget.Expanded(search), show).Gap(10).Align(widget.AlignCenter),
 		kinds,
 		errNote,
 	).Gap(10).Stretch()
@@ -297,7 +297,7 @@ func extensionsList(m *model) ggui.Widget {
 		case v.Err != "":
 			return noteCard(v.Err)
 		case v.Loading:
-			return ggui.Box(ui.Spinner()).Pad(14, 16)
+			return widget.Box(ui.Spinner()).Pad(14, 16)
 		case len(v.Cards) == 0:
 			return noteCard(T("No extensions found."))
 		}
@@ -305,7 +305,7 @@ func extensionsList(m *model) ggui.Widget {
 		for i, c := range v.Cards {
 			out[i] = extensionCard(m, c)
 		}
-		return ggui.Column(out...).Gap(12).Stretch()
+		return widget.Column(out...).Gap(12).Stretch()
 	})
 }
 
@@ -315,26 +315,26 @@ func extensionsList(m *model) ggui.Widget {
 func extensionCard(m *model, c extCard) ggui.Widget {
 	id := c.ID
 	head := []ggui.Widget{
-		ggui.Text(c.Name).Size(15).Weight(ggui.WeightMedium).NoWrap(),
-		muted(ggui.Text("v" + strings.TrimPrefix(c.Version, "v")).Size(13).NoWrap()),
+		widget.Text(c.Name).Size(15).Weight(ggui.WeightMedium).NoWrap(),
+		muted(widget.Text("v" + strings.TrimPrefix(c.Version, "v")).Size(13).NoWrap()),
 	}
 	for _, p := range c.Provides {
 		head = append(head, providesBadge(p))
 	}
-	head = append(head, ggui.Spacer(), extensionAction(m, c))
+	head = append(head, widget.Spacer(), extensionAction(m, c))
 
 	description := strings.TrimSpace(c.Description)
-	second := []ggui.Widget{ggui.Expanded(ggui.Text(description).Size(13).MaxLines(2).Ellipsis())}
+	second := []ggui.Widget{widget.Expanded(widget.Text(description).Size(13).MaxLines(2).Ellipsis())}
 	if c.Downloads > 0 {
-		second = append(second, muted(ggui.Text(Tf("Downloads: %s", thousands(c.Downloads))).Size(12.5).NoWrap()))
+		second = append(second, muted(widget.Text(Tf("Downloads: %s", thousands(c.Downloads))).Size(12.5).NoWrap()))
 	}
 
 	third := []ggui.Widget{}
 	if len(c.Authors) > 0 {
 		third = append(third, icon("user").Size(13).Color(skin.ExtraMuted),
-			ggui.Expanded(ggui.Text(strings.Join(c.Authors, ", ")).Size(12.5).Color(skin.Muted).NoWrap().Ellipsis()))
+			widget.Expanded(widget.Text(strings.Join(c.Authors, ", ")).Size(12.5).Color(skin.Muted).NoWrap().Ellipsis()))
 	} else {
-		third = append(third, ggui.Spacer())
+		third = append(third, widget.Spacer())
 	}
 	open := ggui.State(false)
 	if len(c.ContextServers) > 0 {
@@ -354,21 +354,21 @@ func extensionCard(m *model, c extCard) ggui.Widget {
 	}
 
 	rows := []ggui.Widget{
-		ggui.Row(head...).Gap(8).Align(ggui.AlignCenter),
-		ggui.Row(second...).Gap(12).Align(ggui.AlignCenter),
-		ggui.Row(third...).Gap(6).Align(ggui.AlignCenter),
+		widget.Row(head...).Gap(8).Align(widget.AlignCenter),
+		widget.Row(second...).Gap(12).Align(widget.AlignCenter),
+		widget.Row(third...).Gap(6).Align(widget.AlignCenter),
 	}
 	if len(c.ContextServers) > 0 {
 		servers := c.ContextServers
 		rows = append(rows, ggui.If(open, func() ggui.Widget {
-			cards := []ggui.Widget{muted(ggui.Text(T("Sessions on this node of agents that take MCP servers get these servers. Their settings, such as keys, stay in this node's config.json.")).Size(12.5))}
+			cards := []ggui.Widget{muted(widget.Text(T("Sessions on this node of agents that take MCP servers get these servers. Their settings, such as keys, stay in this node's config.json.")).Size(12.5))}
 			for _, s := range servers {
 				cards = append(cards, mcpServerCard(m, s, c.Name))
 			}
-			return ggui.Column(cards...).Gap(10).Stretch()
+			return widget.Column(cards...).Gap(10).Stretch()
 		}))
 	}
-	return ggui.Box(ggui.Column(rows...).Gap(10).Stretch()).Pad(14, 16).Fill(skin.Surface1).Border(1, skin.Border).Radius(10)
+	return widget.Box(widget.Column(rows...).Gap(10).Stretch()).Pad(14, 16).Fill(skin.Surface1).Border(1, skin.Border).Radius(10)
 }
 
 // extensionAction is what can be done with an extension: install it,
@@ -380,7 +380,7 @@ func extensionAction(m *model, c extCard) ggui.Widget {
 		case m.ext.Busy.Get()[id]:
 			return ui.Spinner()
 		case c.Installed == "":
-			return ui.ButtonOf(ggui.Row(icon("download").Size(14), ggui.Text(T("Install")).Size(13)).Gap(6).Align(ggui.AlignCenter),
+			return ui.ButtonOf(widget.Row(icon("download").Size(14), widget.Text(T("Install")).Size(13)).Gap(6).Align(widget.AlignCenter),
 				func() { m.installExtension(id) }).Secondary().Name(Tf("Install %s", c.Name))
 		case c.Version != "" && c.Installed != c.Version:
 			return ui.Button(T("Update"), func() { m.installExtension(id) }).Secondary().Name(Tf("Update %s", c.Name))
@@ -395,13 +395,13 @@ func providesBadge(p string) ggui.Widget {
 	if l, ok := providesLabels[p]; ok {
 		label = T(l)
 	}
-	return ggui.Box(ggui.Text(label).Size(11).Font(ggui.DefaultMonoFont()).Color(skin.Muted).NoWrap()).
+	return widget.Box(widget.Text(label).Size(11).Font(ggui.DefaultMonoFont()).Color(skin.Muted).NoWrap()).
 		Pad(2, 6).Border(1, skin.Border).Radius(4)
 }
 
 // noteCard is a card holding a line of muted text.
 func noteCard(s string) ggui.Widget {
-	return card(ggui.Box(muted(ggui.Text(s).Size(13))).Pad(14, 16))
+	return card(widget.Box(muted(widget.Text(s).Size(13))).Pad(14, 16))
 }
 
 // thousands writes n with its thousands grouped, as Zed's list does.

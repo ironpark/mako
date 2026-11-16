@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
@@ -56,13 +57,13 @@ func TestTheRailFollowsTheReaderAndGoesToAPrompt(t *testing.T) {
 			&protocol.ChatMessage{Role: "assistant", Text: strings.Repeat(fmt.Sprintf("reply %d. ", i), 40), Id: fmt.Sprintf("a%d", i)})
 	}
 	turns := ggui.State(chatTurns(messages, nil))
-	scroll := &ggui.ScrollController{}
+	scroll := &widget.ScrollController{}
 	find := &chatFinder{turns: turns, scroll: scroll, marks: map[string]rowMark{}}
 	rail := newTurnRail(m, find, turns)
 	p := ggui.ProbeBuilder(func() ggui.Widget {
-		scrolling, feed := chatFeed(m, "s", state, turns, ggui.Box(), find)
+		scrolling, feed := chatFeed(m, "s", state, turns, widget.Box(), find)
 		scrolling.Controller(scroll)
-		return ggui.Stack(feed, rail, &afterPaint{fn: find.painted}).Expand()
+		return widget.Stack(feed, rail, &afterPaint{fn: find.painted}).Expand()
 	}, ggui.Sz(900, 700))
 	defer p.Close()
 	for range 10 {

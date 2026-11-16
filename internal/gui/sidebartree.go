@@ -8,6 +8,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -142,14 +143,14 @@ func projectTree(m *model, st sidebarState, i int) ggui.Widget {
 		pins := st.pinnedProjects.Get()
 		looks := m.spaces().Looks
 		if len(groups) == 0 {
-			return ggui.Box(muted(ggui.Text(T("No projects yet. Add a folder with +.")).Size(12))).Pad(8)
+			return widget.Box(muted(widget.Text(T("No projects yet. Add a folder with +.")).Size(12))).Pad(8)
 		}
 		labels := projectLabels(groups, nodes)
 		tree := treeRows{m: m, scope: scope, pins: pins, looks: looks, labels: labels}
 		var rows []ggui.Widget
 		if pinned := tree.pinnedRows(groups); len(pinned) > 0 {
-			rows = append(rows, ggui.Column(append([]ggui.Widget{treeHeading(icon("pin").Size(13), T("Pinned"), nil)}, pinned...)...).Gap(1).Stretch(),
-				ggui.Box(hline()).Pad(6, 0, 8, 0))
+			rows = append(rows, widget.Column(append([]ggui.Widget{treeHeading(icon("pin").Size(13), T("Pinned"), nil)}, pinned...)...).Gap(1).Stretch(),
+				widget.Box(hline()).Pad(6, 0, 8, 0))
 		}
 		sections := byOwner(groups)
 		if sections == nil {
@@ -167,7 +168,7 @@ func projectTree(m *model, st sidebarState, i int) ggui.Widget {
 			}
 			rows = append(rows, under...)
 		}
-		return ggui.Column(rows...).Gap(1).Stretch()
+		return widget.Column(rows...).Gap(1).Stretch()
 	})
 }
 
@@ -188,11 +189,11 @@ func (t treeRows) name(g sessionGroup) string { return cmp.Or(g.Name, t.labels[g
 
 // treeHeading is a quiet heading in the tree: an owner's, or the pins'.
 func treeHeading(lead ggui.Widget, name string, end ggui.Widget) ggui.Widget {
-	row := []ggui.Widget{lead, ggui.Expanded(ggui.Align(ggui.Text(name).Size(12).Weight(ggui.WeightMedium).Color(skin.Muted).NoWrap().Ellipsis()).Left())}
+	row := []ggui.Widget{lead, widget.Expanded(widget.Align(widget.Text(name).Size(12).Weight(ggui.WeightMedium).Color(skin.Muted).NoWrap().Ellipsis()).Left())}
 	if end != nil {
 		row = append(row, end)
 	}
-	return ggui.Box(ggui.Row(row...).Gap(8).Align(ggui.AlignCenter)).Pad(6, 8, 6, 8)
+	return widget.Box(widget.Row(row...).Gap(8).Align(widget.AlignCenter)).Pad(6, 8, 6, 8)
 }
 
 // ownerHeading names the owner of the projects under it: the name, and
@@ -202,7 +203,7 @@ func ownerHeading(m *model, o ownerSection) ggui.Widget {
 	name, host := ownerName(o.Owner)
 	var end ggui.Widget
 	if host != "" {
-		end = ggui.Text(host).Size(11.5).Color(skin.ExtraMuted).NoWrap()
+		end = widget.Text(host).Size(11.5).Color(skin.ExtraMuted).NoWrap()
 	}
 	head := treeHeading(icon(ownerGlyph(host)).Size(14), name, end)
 	return ui.ContextMenuFunc(head, func() []ggui.Widget {
@@ -218,7 +219,7 @@ func (t treeRows) project(g sessionGroup) []ggui.Widget {
 	key := scopeKey{Section: g.Key}
 	look := lookOf(t.looks, g.Key)
 	hover := ggui.State(false)
-	title := []ggui.Widget{ggui.Expanded(ggui.Align(ggui.Text(name).Size(14).
+	title := []ggui.Widget{widget.Expanded(widget.Align(widget.Text(name).Size(14).
 		Weight(pick(t.scope.Section == g.Key, ggui.WeightSemibold, ggui.WeightMedium)).NoWrap().Ellipsis()).Left())}
 	if working(g.Sessions) {
 		title = append(title, workingDot())
@@ -226,19 +227,19 @@ func (t treeRows) project(g sessionGroup) []ggui.Widget {
 	if len(g.Sessions) > 0 {
 		title = append(title, kindBadges(g.Sessions))
 	}
-	btn := ui.ButtonOf(ggui.Row(title...).Gap(6).Align(ggui.AlignCenter), func() { m.pickScope(key) }).
+	btn := ui.ButtonOf(widget.Row(title...).Gap(6).Align(widget.AlignCenter), func() { m.pickScope(key) }).
 		Ghost().Pad(6, 8, 6, 4).Radius(7).Name(name)
-	row := ggui.Row(
+	row := widget.Row(
 		lookButton(m, g.Key, name, look),
-		ggui.Expanded(btn),
+		widget.Expanded(btn),
 		pinButton(m, key, name, hover),
-	).Gap(0).Align(ggui.AlignCenter)
+	).Gap(0).Align(widget.AlignCenter)
 	var w ggui.Widget = selectedRow(row, t.scope == key)
 	w = ui.ContextMenuFunc(w, func() []ggui.Widget { return projectRowMenu(m, g, name, key) }).Name(Tf("%s actions", name))
 	// A session dropped on the row starts again there; a project dropped
 	// on it merges there.
 	w = projectDragged(m, sectionDrop(m, w, g.NodeID, g.Project), g)
-	rows := []ggui.Widget{ggui.Pointer(w).OnHover(hover.Set)}
+	rows := []ggui.Widget{widget.Pointer(w).OnHover(hover.Set)}
 	if !g.multiRoot() {
 		return rows
 	}
@@ -273,15 +274,15 @@ func (t treeRows) folder(g sessionGroup, j int, r projectRoot, last bool) ggui.W
 	selected := t.scope == key
 	title := []ggui.Widget{
 		hashMark(14),
-		ggui.Expanded(ggui.Align(ggui.Text(label).Size(13.5).Color(pick[color.Color](selected, skin.Fg, skin.Muted)).NoWrap().Ellipsis()).Left()),
+		widget.Expanded(widget.Align(widget.Text(label).Size(13.5).Color(pick[color.Color](selected, skin.Fg, skin.Muted)).NoWrap().Ellipsis()).Left()),
 	}
 	if working(in) {
 		title = append(title, workingDot())
 	}
-	title = append(title, ggui.Text(fmt.Sprint(len(in))).Size(12).Color(skin.ExtraMuted).NoWrap())
-	btn := ui.ButtonOf(ggui.Row(title...).Gap(6).Align(ggui.AlignCenter), func() { m.pickScope(key) }).
+	title = append(title, widget.Text(fmt.Sprint(len(in))).Size(12).Color(skin.ExtraMuted).NoWrap())
+	btn := ui.ButtonOf(widget.Row(title...).Gap(6).Align(widget.AlignCenter), func() { m.pickScope(key) }).
 		Ghost().Pad(5, 8, 5, 6).Radius(7).Name("#" + label)
-	row := selectedRow(ggui.Row(ggui.Expanded(btn), pinButton(m, key, "#"+label, hover)).Align(ggui.AlignCenter), selected)
+	row := selectedRow(widget.Row(widget.Expanded(btn), pinButton(m, key, "#"+label, hover)).Align(widget.AlignCenter), selected)
 	var w ggui.Widget = &treeBranch{child: row, last: last}
 	w = ui.ContextMenuFunc(w, func() []ggui.Widget {
 		items := []ggui.Widget{pinItem(m, key)}
@@ -290,7 +291,7 @@ func (t treeRows) folder(g sessionGroup, j int, r projectRoot, last bool) ggui.W
 		}
 		return append(items, ui.MenuDivider(), ui.MenuItem(Tf("Take %s out of the project", label), func() { m.removeRoot(g, j) }))
 	}).Name(Tf("%s actions", "#"+label))
-	return ggui.Pointer(w).OnHover(hover.Set)
+	return widget.Pointer(w).OnHover(hover.Set)
 }
 
 // pinnedRows are the projects and folders pinned, in the order pinned, of
@@ -328,17 +329,17 @@ func (t treeRows) pinnedRows(groups []sessionGroup) []ggui.Widget {
 		name, parent := g.Def.Roots[j].label(), t.name(g)
 		row := []ggui.Widget{
 			hashMark(16),
-			ggui.Text(name).Size(14).NoWrap(),
-			ggui.Expanded(ggui.Align(ggui.Text(parent).Size(12).Color(skin.ExtraMuted).NoWrap().Ellipsis()).Left()),
+			widget.Text(name).Size(14).NoWrap(),
+			widget.Expanded(widget.Align(widget.Text(parent).Size(12).Color(skin.ExtraMuted).NoWrap().Ellipsis()).Left()),
 		}
 		if working(sessions) {
 			row = append(row, workingDot())
 		}
-		row = append(row, ggui.Text(fmt.Sprint(len(sessions))).Size(12).Color(skin.ExtraMuted).NoWrap())
+		row = append(row, widget.Text(fmt.Sprint(len(sessions))).Size(12).Color(skin.ExtraMuted).NoWrap())
 		label := parent + " / " + name
-		btn := ui.ButtonOf(ggui.Row(row...).Gap(8).Align(ggui.AlignCenter), func() { m.pickScope(k) }).
+		btn := ui.ButtonOf(widget.Row(row...).Gap(8).Align(widget.AlignCenter), func() { m.pickScope(k) }).
 			Ghost().Pad(6, 8).Radius(7).Name(label)
-		rows = append(rows, selectedRow(ggui.Row(ggui.Expanded(btn), pinButton(m, k, label, ggui.Const(true))).Align(ggui.AlignCenter), t.scope == k))
+		rows = append(rows, selectedRow(widget.Row(widget.Expanded(btn), pinButton(m, k, label, ggui.Const(true))).Align(widget.AlignCenter), t.scope == k))
 	}
 	return rows
 }
@@ -346,9 +347,9 @@ func (t treeRows) pinnedRows(groups []sessionGroup) []ggui.Widget {
 // selectedRow marks a row of the tree as the scope picked.
 func selectedRow(row ggui.Widget, selected bool) ggui.Widget {
 	if selected {
-		return ggui.Box(row).Fill(skin.SidebarSel).Radius(7)
+		return widget.Box(row).Fill(skin.SidebarSel).Radius(7)
 	}
-	return ggui.Box(row).Radius(7)
+	return widget.Box(row).Radius(7)
 }
 
 // projectRowMenu is a project row's menu: starting a session in it, its
@@ -373,7 +374,7 @@ func pinButton(m *model, k scopeKey, name string, hover ggui.Readable[bool]) ggu
 	on := m.pinnedScope(k)
 	return ggui.View(hover, func(h bool) ggui.Widget {
 		if !h && !on {
-			return ggui.Box().Size(23, 23)
+			return widget.Box().Size(23, 23)
 		}
 		label := pick(on, Tf("Unpin %s", name), Tf("Pin %s to the top", name))
 		c := pick[color.Color](on, skin.DotWaiting, skin.Muted)
@@ -388,11 +389,11 @@ func working(sessions []*protocol.SessionInfo) bool {
 }
 
 // workingDot marks a project or folder with an agent at work.
-func workingDot() ggui.Widget { return ggui.Box().Size(6, 6).Radius(3).Fill(skin.DotRunning) }
+func workingDot() ggui.Widget { return widget.Box().Size(6, 6).Radius(3).Fill(skin.DotRunning) }
 
 // hashMark is the # a project's folder is marked with.
 func hashMark(size float64) ggui.Widget {
-	return ggui.Text("#").Size(size).Weight(ggui.WeightSemibold).Color(skin.ExtraMuted).NoWrap()
+	return widget.Text("#").Size(size).Weight(ggui.WeightSemibold).Color(skin.ExtraMuted).NoWrap()
 }
 
 // treeBranch is a folder's row hanging from its project's on a dotted

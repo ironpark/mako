@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/prompttmpl"
@@ -153,7 +154,7 @@ func TestTemplateAgentsPicker(t *testing.T) {
 	m := newModel(config.Default(), "")
 	m.Agents.Set([]string{"claude", "claude:work", "codex"})
 	agents := ggui.State("elsewhere")
-	p := ggui.NewProbe(ggui.Provide(ggui.ReducedMotionKey, true, ggui.Row(templateAgents(m, agents))), ggui.Sz(400, 500))
+	p := ggui.NewProbe(ggui.Provide(ggui.ReducedMotionKey, true, widget.Row(templateAgents(m, agents))), ggui.Sz(400, 500))
 	defer p.Close()
 	p.Tap(T("Template agents"))
 	click := func(name string) {

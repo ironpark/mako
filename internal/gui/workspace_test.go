@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
@@ -22,7 +23,7 @@ func workspaceModel(t *testing.T) (*model, *ggui.Probe) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.post = func(func()) {} // no daemon: what it would answer is dropped
-	p := ggui.ProbeBuilder(func() ggui.Widget { return ggui.Box() }, ggui.Sz(100, 100))
+	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Box() }, ggui.Sz(100, 100))
 	p.Setup(func() { setupWorkspace(m) })
 	t.Cleanup(func() { p.Close(); m.shutdown() })
 	p.Frame()
@@ -200,7 +201,7 @@ func TestContextsAndOldSpacesCarryOver(t *testing.T) {
 		again := newModel(config.Default(), "")
 		again.post = m.post
 		prep(again)
-		q := ggui.ProbeBuilder(func() ggui.Widget { return ggui.Box() }, ggui.Sz(100, 100))
+		q := ggui.ProbeBuilder(func() ggui.Widget { return widget.Box() }, ggui.Sz(100, 100))
 		q.Setup(func() { setupWorkspace(again) })
 		t.Cleanup(q.Close)
 		q.Frame()

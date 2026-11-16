@@ -11,6 +11,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/i18n"
@@ -377,7 +378,7 @@ func browserView(b *browser) ggui.Widget {
 		func(item ggui.Readable[fileItem]) ggui.Widget {
 			it := ggui.Untrack(item.Get)
 			if it.Stub {
-				return muted(ggui.Text(it.Name).Size(13).NoWrap().Ellipsis())
+				return muted(widget.Text(it.Name).Size(13).NoWrap().Ellipsis())
 			}
 			return browserRow(b, it)
 		}).
@@ -393,22 +394,22 @@ func browserView(b *browser) ggui.Widget {
 		OnSelect(b.tap).
 		Name(T("Files"))
 
-	columns := ggui.Box(ggui.Row(
-		ggui.Expanded(columnHead(T("Name"), 0)),
-		ggui.Box(columnHead(T("Size"), 1)).Width(sizeColumn),
-		ggui.Box(columnHead(T("Modified"), 0)).Width(modColumn),
+	columns := widget.Box(widget.Row(
+		widget.Expanded(columnHead(T("Name"), 0)),
+		widget.Box(columnHead(T("Size"), 1)).Width(sizeColumn),
+		widget.Box(columnHead(T("Modified"), 0)).Width(modColumn),
 	).Gap(12)).Pad(6, 16, 6, 38)
-	var list ggui.Widget = ggui.Column(columns, hline(), ggui.Expanded(ggui.Scroll(ggui.Padding(tree, 4, 8)).Bar(skin.Surface3))).Stretch()
+	var list ggui.Widget = widget.Column(columns, hline(), widget.Expanded(widget.Scroll(widget.Padding(tree, 4, 8)).Bar(skin.Surface3))).Stretch()
 	// A drop over the list says where it goes.
 	list = ggui.View(b.DropOver, func(over bool) ggui.Widget {
 		if over {
-			return ggui.Box(list).Border(2, skin.AccentBright)
+			return widget.Box(list).Border(2, skin.AccentBright)
 		}
 		return list
 	})
 	// The empty part of the list has the folder's own menu.
 	here := func() fileItem { return dirItem(b.node, ggui.Peek(b.Path)) }
-	body := ui.ContextMenuFunc(ggui.Pointer(list).OnDropHover(b.DropOver.Set).OnDrop(b.dropHere), func() []ggui.Widget {
+	body := ui.ContextMenuFunc(widget.Pointer(list).OnDropHover(b.DropOver.Set).OnDrop(b.dropHere), func() []ggui.Widget {
 		return append(folderItems(b.m, here(), b.askFile),
 			ui.MenuItem(T("Upload files…"), func() { b.uploadFrom(ggui.Peek(b.Path)) }),
 			ui.MenuDivider(),
@@ -416,11 +417,11 @@ func browserView(b *browser) ggui.Widget {
 		)
 	}).Name(T("File actions"))
 
-	return ggui.Stack(
-		ggui.Box(ggui.Column(
+	return widget.Stack(
+		widget.Box(widget.Column(
 			browserToolbar(b),
 			hline(),
-			ggui.Expanded(body),
+			widget.Expanded(body),
 			hline(),
 			browserStatus(b, rows),
 		).Stretch()).Fill(skin.SolidBg),
@@ -435,7 +436,7 @@ const (
 )
 
 func columnHead(label string, align float64) ggui.Widget {
-	return ggui.Text(label).Size(11.5).Color(skin.ExtraMuted).Weight(ggui.WeightMedium).NoWrap().Align(align)
+	return widget.Text(label).Size(11.5).Color(skin.ExtraMuted).Weight(ggui.WeightMedium).NoWrap().Align(align)
 }
 
 // browserRow is a file's row: its name, size and when it last changed, and
@@ -449,14 +450,14 @@ func browserRow(b *browser, it fileItem) ggui.Widget {
 		mod = it.Mod.Local().Format("2006-01-02 15:04")
 	}
 	lead := fileTypeIcon(it.Name, it.Dir, false).Size(15)
-	label := ggui.Text(it.Name).Size(13).NoWrap().Ellipsis()
+	label := widget.Text(it.Name).Size(13).NoWrap().Ellipsis()
 	if strings.HasPrefix(it.Name, ".") {
 		label = label.Color(skin.Muted)
 	}
-	var row ggui.Widget = ggui.Row(
-		ggui.Expanded(ggui.Row(lead, ggui.Expanded(label)).Gap(8)),
-		ggui.Box(ggui.Text(size).Size(12).Color(skin.Muted).NoWrap().Align(1)).Width(sizeColumn),
-		ggui.Box(ggui.Text(mod).Size(12).Color(skin.Muted).NoWrap()).Width(modColumn),
+	var row ggui.Widget = widget.Row(
+		widget.Expanded(widget.Row(lead, widget.Expanded(label)).Gap(8)),
+		widget.Box(widget.Text(size).Size(12).Color(skin.Muted).NoWrap().Align(1)).Width(sizeColumn),
+		widget.Box(widget.Text(mod).Size(12).Color(skin.Muted).NoWrap()).Width(modColumn),
 	).Gap(12)
 	if it.Dir {
 		row = litDrop(row, nil, func(paths []string) {
@@ -505,12 +506,12 @@ func browserToolbar(b *browser) ggui.Widget {
 	nav := navButtons(b.navigator)
 	crumbs := ggui.View(b.Path, func(p string) ggui.Widget { return pathCrumbs(p, b.goTo) })
 	hidden := hiddenFilesToggle(m)
-	where := ggui.Row(icon("hard-drive").Size(14).Color(skin.Muted),
-		muted(ggui.Text(nodeName(ggui.Peek(m.Nodes), b.node)).Size(12.5).NoWrap())).Gap(6)
-	return ggui.Box(ggui.Row(
+	where := widget.Row(icon("hard-drive").Size(14).Color(skin.Muted),
+		muted(widget.Text(nodeName(ggui.Peek(m.Nodes), b.node)).Size(12.5).NoWrap())).Gap(6)
+	return widget.Box(widget.Row(
 		nav,
 		iconButton("house", T("Home"), b.goHome),
-		ggui.Expanded(crumbs),
+		widget.Expanded(crumbs),
 		where,
 		hidden,
 		iconButton("folder-plus", T("New folder…"), func() { b.askFile(protocol.FileMkdir, dirItem(b.node, ggui.Peek(b.Path))) }),
@@ -539,10 +540,10 @@ func pathCrumbs(p string, goTo func(string)) ggui.Widget {
 			at += sep + seg
 		}
 		if i > 0 && segs[0] != "" || i > 1 {
-			parts = append(parts, muted(ggui.Text("›").Size(12.5)))
+			parts = append(parts, muted(widget.Text("›").Size(12.5)))
 		}
 		target := at
-		text := ggui.Text(seg).Size(12.5).NoWrap()
+		text := widget.Text(seg).Size(12.5).NoWrap()
 		if i == len(segs)-1 {
 			text = text.Weight(ggui.WeightMedium)
 		} else {
@@ -550,7 +551,7 @@ func pathCrumbs(p string, goTo func(string)) ggui.Widget {
 		}
 		parts = append(parts, ui.ButtonOf(text, func() { goTo(target) }).Ghost().Pad(3, 5).Radius(5).Name(target))
 	}
-	return ggui.Scroll(ggui.Row(parts...).Gap(1)).Horizontal().Bar(color.Transparent).FollowEnd()
+	return widget.Scroll(widget.Row(parts...).Gap(1)).Horizontal().Bar(color.Transparent).FollowEnd()
 }
 
 // browserStatus is the bar under the list: how many items, a copy under
@@ -563,19 +564,19 @@ func browserStatus(b *browser, rows ggui.Readable[[]fileItem]) ggui.Widget {
 		return Tf("%d items", len(r))
 	})
 	return ggui.Reactive(func() ggui.Widget {
-		var left ggui.Widget = muted(ggui.TextOf(count).Size(12).NoWrap())
+		var left ggui.Widget = muted(widget.TextOf(count).Size(12).NoWrap())
 		var right []ggui.Widget
 		switch busy, note := b.Busy.Get(), b.Status.Get(); {
 		case busy != "":
-			left = ggui.Row(icon("loader-circle").Size(13).Color(skin.Muted), muted(ggui.Text(busy).Size(12).NoWrap().Ellipsis())).Gap(6)
+			left = widget.Row(icon("loader-circle").Size(13).Color(skin.Muted), muted(widget.Text(busy).Size(12).NoWrap().Ellipsis())).Gap(6)
 			right = append(right, ui.Button(T("Cancel"), b.stop).Ghost().Pad(3, 8))
 		case note.Text != "":
-			left = ggui.Text(note.Text).Size(12).NoWrap().Ellipsis()
+			left = widget.Text(note.Text).Size(12).NoWrap().Ellipsis()
 			if note.Reveal != "" {
 				right = append(right, ui.Button(fileManagerLabel(), func() { _ = runtime.Reveal(note.Reveal) }).Ghost().Pad(3, 8))
 			}
 			right = append(right, iconButton("x", T("Dismiss"), func() { b.say("", "") }))
 		}
-		return ggui.Box(ggui.Row(append([]ggui.Widget{ggui.Expanded(left)}, right...)...).Gap(6)).Pad(4, 12).Height(32)
+		return widget.Box(widget.Row(append([]ggui.Widget{widget.Expanded(left)}, right...)...).Gap(6)).Pad(4, 12).Height(32)
 	})
 }

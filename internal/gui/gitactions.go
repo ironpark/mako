@@ -6,6 +6,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -188,14 +189,14 @@ func foldSection(open *ggui.StateValue[bool], title string, count int, actions .
 	return ggui.View(open, func(o bool) ggui.Widget {
 		label := []ggui.Widget{
 			chevron(open, 12, skin.ExtraMuted),
-			ggui.Text(title).Size(11.5).Weight(ggui.WeightSemibold).Color(skin.Muted).NoWrap(),
+			widget.Text(title).Size(11.5).Weight(ggui.WeightSemibold).Color(skin.Muted).NoWrap(),
 		}
 		if count > 0 {
-			label = append(label, ggui.Text(lineCount(count)).Size(11).Color(skin.ExtraMuted).NoWrap())
+			label = append(label, widget.Text(lineCount(count)).Size(11).Color(skin.ExtraMuted).NoWrap())
 		}
-		toggle := ui.ButtonOf(ggui.Row(append(label, ggui.Spacer())...).Gap(6).Align(ggui.AlignCenter),
+		toggle := ui.ButtonOf(widget.Row(append(label, widget.Spacer())...).Gap(6).Align(widget.AlignCenter),
 			func() { open.Set(!ggui.Peek(open)) }).Ghost().Pad(4, 8).Radius(0).Name(pick(o, Tf("Collapse %s", title), Tf("Expand %s", title)))
-		return ggui.Box(ggui.Row(append([]ggui.Widget{ggui.Expanded(toggle)}, actions...)...).Gap(2).Align(ggui.AlignCenter)).Pad(0, 6, 0, 0)
+		return widget.Box(widget.Row(append([]ggui.Widget{widget.Expanded(toggle)}, actions...)...).Gap(2).Align(widget.AlignCenter)).Pad(0, 6, 0, 0)
 	})
 }
 
@@ -206,7 +207,7 @@ func stashSection(m *model, open *ggui.StateValue[bool]) ggui.Widget {
 		head := foldSection(open, T("Stashes"), len(list), iconButton("plus", T("Stash changes…"), m.askStash))
 		rows := reveal(open, func() ggui.Widget {
 			if len(list) == 0 {
-				return ggui.Box(muted(ggui.Text(T("No stashes.")).Size(12))).Pad(4, 12, 8, 30)
+				return widget.Box(muted(widget.Text(T("No stashes.")).Size(12))).Pad(4, 12, 8, 30)
 			}
 			out := make([]ggui.Widget, len(list))
 			for i, s := range list {
@@ -218,20 +219,20 @@ func stashSection(m *model, open *ggui.StateValue[bool]) ggui.Widget {
 					m.askConfirm(confirmation{Title: T("Drop this stash?"), Body: T("Its changes are lost."), Action: T("Drop"),
 						Run: run(protocol.GitOpStashDrop, T("Dropping…"))})
 				}
-				out[i] = ggui.Box(ggui.Row(
+				out[i] = widget.Box(widget.Row(
 					icon("layers").Size(13).Color(skin.Muted),
-					ggui.Expanded(ggui.Text(s.GetMessage()).Size(12.5).NoWrap().Ellipsis()),
-					ggui.Text(ago(protocol.TimeOf(s.GetTime()))).Size(11).Color(skin.ExtraMuted).NoWrap(),
+					widget.Expanded(widget.Text(s.GetMessage()).Size(12.5).NoWrap().Ellipsis()),
+					widget.Text(ago(protocol.TimeOf(s.GetTime()))).Size(11).Color(skin.ExtraMuted).NoWrap(),
 					ui.Tooltip(ui.Button(T("Pop"), run(protocol.GitOpStashPop, T("Popping…"))).Ghost(), T("Apply the stash and drop it")),
 					iconMenu(ui.MenuOf(icon("ellipsis").Size(14),
 						ui.MenuItem(T("Apply"), run(protocol.GitOpStashApply, T("Applying…"))),
 						ui.MenuItem(T("Drop…"), drop),
 					).Name(T("Stash actions")), 3),
-				).Gap(6).Align(ggui.AlignCenter)).Pad(1, 6, 1, 30)
+				).Gap(6).Align(widget.AlignCenter)).Pad(1, 6, 1, 30)
 			}
-			return ggui.Column(out...).Stretch()
+			return widget.Column(out...).Stretch()
 		})
-		return ggui.Column(head, rows).Stretch()
+		return widget.Column(head, rows).Stretch()
 	})
 }
 
@@ -256,25 +257,25 @@ func branchSection(m *model, open *ggui.StateValue[bool]) ggui.Widget {
 				out = append(out, localBranchRow(m, name, b.Current))
 			}
 			if len(b.Remote) > 0 {
-				out = append(out, ggui.Box(ggui.Text(T("Remote")).Size(11).Color(skin.ExtraMuted)).Pad(6, 12, 2, 30))
+				out = append(out, widget.Box(widget.Text(T("Remote")).Size(11).Color(skin.ExtraMuted)).Pad(6, 12, 2, 30))
 				for _, name := range b.Remote {
 					out = append(out, remoteBranchRow(m, name, b.Current))
 				}
 			}
-			return ggui.Column(out...).Stretch()
+			return widget.Column(out...).Stretch()
 		})
-		return ggui.Column(head, rows).Stretch()
+		return widget.Column(head, rows).Stretch()
 	})
 }
 
 func localBranchRow(m *model, name, current string) ggui.Widget {
 	on := name == current
 	glyph := icon("git-branch").Size(13).Color(skin.Muted)
-	text := ggui.Text(name).Size(12.5).NoWrap().Ellipsis()
+	text := widget.Text(name).Size(12.5).NoWrap().Ellipsis()
 	if on {
 		glyph, text = icon("check").Size(13).Color(skin.AccentBright), text.Weight(ggui.WeightMedium)
 	}
-	row := ui.ButtonOf(ggui.Row(glyph, ggui.Expanded(text)).Gap(6).Align(ggui.AlignCenter), func() {
+	row := ui.ButtonOf(widget.Row(glyph, widget.Expanded(text)).Gap(6).Align(widget.AlignCenter), func() {
 		if !on {
 			m.gitRun(&protocol.GitRun{Op: protocol.GitOpCheckout, Branch: name}, T("Switching branch…"), nil)
 		}
@@ -319,10 +320,10 @@ func remoteBranchRow(m *model, name, current string) ggui.Widget {
 	track := func() {
 		m.gitRun(&protocol.GitRun{Op: protocol.GitOpTrack, Branch: name}, T("Checking out…"), nil)
 	}
-	row := ui.ButtonOf(ggui.Row(
+	row := ui.ButtonOf(widget.Row(
 		icon("cloud-download").Size(13).Color(skin.ExtraMuted),
-		ggui.Expanded(ggui.Text(name).Size(12.5).Color(skin.Muted).NoWrap().Ellipsis()),
-	).Gap(6).Align(ggui.AlignCenter), track).Ghost().Pad(4, 12, 4, 30).Radius(0).Name(name)
+		widget.Expanded(widget.Text(name).Size(12.5).Color(skin.Muted).NoWrap().Ellipsis()),
+	).Gap(6).Align(widget.AlignCenter), track).Ghost().Pad(4, 12, 4, 30).Radius(0).Name(name)
 	return ui.ContextMenuFunc(row, func() []ggui.Widget {
 		return []ggui.Widget{
 			ui.MenuItem(T("Check out as a local branch"), track),
@@ -357,7 +358,7 @@ func operationBanner(m *model) ggui.Widget {
 	})
 	return ggui.View(state, func(s stopped) ggui.Widget {
 		if s.Op == "" {
-			return ggui.Box()
+			return widget.Box()
 		}
 		what := map[string]string{"merge": T("A merge"), "rebase": T("A rebase"), "cherry-pick": T("A cherry-pick"), "revert": T("A revert")}[s.Op]
 		note := Tf("%s is under way.", what)
@@ -369,9 +370,9 @@ func operationBanner(m *model) ggui.Widget {
 			m.askConfirm(confirmation{Title: T("Abort the operation?"), Body: T("The work tree goes back to where it was before it began."),
 				Action: T("Abort"), Run: run(protocol.GitOpAbort, T("Aborting…"))})
 		}
-		return ggui.Column(ggui.Box(ggui.Column(
-			ggui.Row(icon("shield-alert").Size(15).Color(skin.DotWaiting), ggui.Expanded(ggui.Text(note).Size(12.5))).Gap(8).Align(ggui.AlignStart),
-			ggui.Row(ggui.Spacer(),
+		return widget.Column(widget.Box(widget.Column(
+			widget.Row(icon("shield-alert").Size(15).Color(skin.DotWaiting), widget.Expanded(widget.Text(note).Size(12.5))).Gap(8).Align(widget.AlignStart),
+			widget.Row(widget.Spacer(),
 				ui.Button(T("Abort"), abort).Ghost(),
 				ui.Button(T("Continue"), func() {
 					if s.Conflicts == 0 {

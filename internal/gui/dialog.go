@@ -6,6 +6,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -32,14 +33,14 @@ func (m *model) dialogOfSession(id string) ggui.Readable[*protocol.ScreenDialog]
 func dialogCard(m *model, id string) ggui.Widget {
 	return ggui.View(m.dialogOfSession(id), func(d *protocol.ScreenDialog) ggui.Widget {
 		if d == nil {
-			return ggui.Box()
+			return widget.Box()
 		}
-		head := ggui.Row(
+		head := widget.Row(
 			icon("terminal").Size(16).Color(skin.DotWaiting),
-			ggui.Text(T("The agent waits in its terminal")).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
-			ggui.Spacer(),
+			widget.Text(T("The agent waits in its terminal")).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
+			widget.Spacer(),
 			ui.Button(T("Show terminal"), func() { m.setChatMode(id, false) }).Ghost(),
-		).Gap(8).Align(ggui.AlignCenter)
+		).Gap(8).Align(widget.AlignCenter)
 		rows := []ggui.Widget{head}
 		if d.GetText() != "" {
 			rows = append(rows, scrolled(toolBlock(d.GetText(), false)))
@@ -53,8 +54,8 @@ func dialogCard(m *model, id string) ggui.Widget {
 			}
 			options = append(options, ui.Button(o, func() { m.answerDialog(id, d.GetId(), i) }).Outline())
 		}
-		rows = append(rows, ggui.Wrap(options...).Gap(8).RunGap(8))
-		return approvalFrame(ggui.Column(rows...).Gap(10).Stretch())
+		rows = append(rows, widget.Wrap(options...).Gap(8).RunGap(8))
+		return approvalFrame(widget.Column(rows...).Gap(10).Stretch())
 	})
 }
 

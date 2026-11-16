@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 	"github.com/yuin/goldmark/ast"
 	east "github.com/yuin/goldmark/extension/ast"
 )
@@ -34,10 +35,10 @@ func (r *mdRenderer) footnotes(n *east.FootnoteList) ggui.Widget {
 				}
 			}
 		}
-		mark := ggui.Box(muted(ggui.Text(strconv.Itoa(note.Index) + ".").Size(footnoteSize))).Width(22)
-		rows = append(rows, ggui.Row(mark, ggui.Expanded(ggui.Column(body...).Gap(6).Stretch())).Align(ggui.AlignStart))
+		mark := widget.Box(muted(widget.Text(strconv.Itoa(note.Index) + ".").Size(footnoteSize))).Width(22)
+		rows = append(rows, widget.Row(mark, widget.Expanded(widget.Column(body...).Gap(6).Stretch())).Align(widget.AlignStart))
 	}
-	return ggui.Column(rows...).Gap(8).Stretch()
+	return widget.Column(rows...).Gap(8).Stretch()
 }
 
 // superscript is n in raised digits, as a footnote's reference shows.

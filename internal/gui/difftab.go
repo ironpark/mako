@@ -10,6 +10,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -305,9 +306,9 @@ func diffTabFace(m *model, id string, d diffTab, selected, focused bool) ggui.Wi
 	case d.Base != "":
 		label += " ← " + d.Base
 	}
-	content := ggui.Box(ggui.Row(
+	content := widget.Box(widget.Row(
 		statusIcon(d.File.GetStatus()),
-		ggui.Box(ggui.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(190),
+		widget.Box(widget.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(190),
 		ui.ButtonOf(icon("x").Size(13), func() { m.closeDiff(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", label)),
 	).Gap(8)).Height(tabBarHeight)
 	btn := ui.ButtonOf(content, func() {
@@ -367,7 +368,7 @@ func diffTabView(m *model, id string) ggui.Widget {
 			if dt.workTree() && (dt.File.GetStatus() == protocol.GitModified || dt.File.GetStatus() == protocol.GitRenamed) {
 				actions = append(actions, iconButton("undo-2", T("Discard this hunk"), func() { m.askDiscardHunk(id, lines) }))
 			}
-			return ggui.Row(actions...).Gap(2)
+			return widget.Row(actions...).Gap(2)
 		}
 		var body ggui.Widget
 		if note := diffNote(dt.Loading, dt.Err, dt.Diff); note != nil {
@@ -378,12 +379,12 @@ func diffTabView(m *model, id string) ggui.Widget {
 		rows := []ggui.Widget{
 			diffHeader(dt.File, diffTools(m, id, dt, v.Mode)),
 			hline(),
-			ggui.Expanded(ggui.Box(body).Fill(skin.Surface1)),
+			widget.Expanded(widget.Box(body).Fill(skin.Surface1)),
 		}
 		if !v.Sel.empty() {
 			rows = append(rows, selectionBar(m, dt.Root, joinPath(subfolder(dt.Repo, dt.Root.Path), dt.File.GetPath()), dt.Diff.GetLines(), sel))
 		}
-		return ggui.Column(rows...).Stretch()
+		return widget.Column(rows...).Stretch()
 	})
 }
 
@@ -392,7 +393,7 @@ func diffTabView(m *model, id string) ggui.Widget {
 func diffNote(loading bool, err string, d *protocol.Diff) ggui.Widget {
 	switch {
 	case loading:
-		return ggui.Center(ui.Spinner())
+		return widget.Center(ui.Spinner())
 	case err != "":
 		return paneNote(err)
 	case d.GetBinary():
@@ -422,7 +423,7 @@ func diffTools(m *model, id string, d diffTab, mode diffMode) ggui.Widget {
 			iconButton("chevron-down", T("Next file (⌥⌘↓)"), func() { m.showTab(id); m.stepDiff(1) }),
 		)
 	}
-	return ggui.Row(append(tools,
+	return widget.Row(append(tools,
 		toggle("columns-2", T("Side by side"), mode.Split, func(p *prefs) { p.DiffSplit = !p.DiffSplit }),
 		toggle("wrap-text", T("Wrap long lines"), mode.Wrap, func(p *prefs) { p.DiffWrap = !p.DiffWrap }),
 		iconButton("refresh-cw", T("Refresh"), func() { m.readDiff(id) }),
@@ -453,10 +454,10 @@ func diffHeaderBar(m *model, id string, d diffTab) ggui.Widget {
 		items = append(items, ui.MenuItem(T("Keep open"), func() { m.keepDiff(id) }))
 	}
 	items = append(items, ui.MenuDivider(), ui.MenuItem(T("Close diff"), func() { m.closeDiff(id) }))
-	return ggui.Row(
-		ggui.Text(d.Name()).Size(14).Weight(ggui.WeightMedium).NoWrap(),
-		ggui.Expanded(muted(ggui.Text(where).Size(13).NoWrap().Ellipsis())),
-		muted(ggui.Text(what).Size(12.5).NoWrap()),
+	return widget.Row(
+		widget.Text(d.Name()).Size(14).Weight(ggui.WeightMedium).NoWrap(),
+		widget.Expanded(muted(widget.Text(where).Size(13).NoWrap().Ellipsis())),
+		muted(widget.Text(what).Size(12.5).NoWrap()),
 		iconMenu(ui.MenuOf(icon("ellipsis"), items...).Name(T("Diff actions")), 6),
 	).Gap(10)
 }

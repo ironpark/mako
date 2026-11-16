@@ -6,6 +6,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/pathscope"
@@ -33,7 +34,7 @@ func gitPanel(m *model) ggui.Widget {
 	pollWhileShown(m, root, gitTab, historyRefresh, m.loadHistory, stamp)
 	return withRootPicker(m, ggui.Key(root, func(r fileRoot) ggui.Widget {
 		if r.Path == "" {
-			return ggui.Box(muted(ggui.Text(T("Open a session to see its changes.")).Size(13))).Pad(16)
+			return widget.Box(muted(widget.Text(T("Open a session to see its changes.")).Size(13))).Pad(16)
 		}
 		return gitTabView(m)
 	}))
@@ -45,14 +46,14 @@ func gitTabView(m *model) ggui.Widget {
 		return foldSection(m.git.ChangesOpen, T("Changes"), n)
 	})
 	tree := changesTree(m)
-	sections := ggui.Column(
+	sections := widget.Column(
 		changesHead,
 		ggui.If(m.git.ChangesOpen, func() ggui.Widget { return tree }),
 		stashSection(m, m.git.StashOpen),
 		branchSection(m, m.git.BranchOpen),
 	).Stretch()
-	top := ggui.Column(
-		ggui.Expanded(ggui.Scroll(ggui.Padding(sections, 2, 0, 6, 0)).Bar(skin.Surface3)),
+	top := widget.Column(
+		widget.Expanded(widget.Scroll(widget.Padding(sections, 2, 0, 6, 0)).Bar(skin.Surface3)),
 		commitBox(m),
 	).Stretch()
 
@@ -61,19 +62,19 @@ func gitTabView(m *model) ggui.Widget {
 	history := historyBody(m)
 	body := ggui.View(m.git.HistoryOpen, func(open bool) ggui.Widget {
 		if !open {
-			return ggui.Column(ggui.Expanded(top), hline(), historyHead).Stretch()
+			return widget.Column(widget.Expanded(top), hline(), historyHead).Stretch()
 		}
 		// The divider between them draws the line over the history.
-		bottom := ggui.Column(historyHead, ggui.Expanded(history)).Stretch()
+		bottom := widget.Column(historyHead, widget.Expanded(history)).Stretch()
 		return ui.Resizable(m.git.Split, top, bottom).Vertical().MinSizes(140, 120).Hairline().Name(T("History divider"))
 	})
-	return ggui.Column(
+	return widget.Column(
 		gitHeader(m),
 		hline(),
 		forgeBranchLine(m),
 		gitStatusLine(m),
 		operationBanner(m),
-		ggui.Expanded(body),
+		widget.Expanded(body),
 	).Stretch()
 }
 

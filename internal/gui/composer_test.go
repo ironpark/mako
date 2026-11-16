@@ -11,6 +11,7 @@ import (
 	"github.com/ironpark/ggfx"
 	"github.com/ironpark/ggui"
 	ggruntime "github.com/ironpark/ggui/runtime"
+	"github.com/ironpark/ggui/widget"
 	"github.com/ironpark/gostty"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/mdview"
@@ -295,7 +296,7 @@ func TestADraftImageIsAThumbnail(t *testing.T) {
 	m.setComposerDraft("s", "look")
 	m.attachTo("s", []string{"/tmp/shot.png"})
 	p := ggui.ProbeBuilder(func() ggui.Widget {
-		return ggui.Column(ggui.Expanded(ggui.Text("FEED")), composer(m, "s", m.chatState("s"))).Stretch()
+		return widget.Column(widget.Expanded(widget.Text("FEED")), composer(m, "s", m.chatState("s"))).Stretch()
 	}, ggui.Sz(900, 700))
 	defer p.Close()
 	p.Frame()

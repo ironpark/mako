@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
 )
@@ -131,7 +132,7 @@ func TestClosingAnEditedFileAsksFirst(t *testing.T) {
 }
 
 func TestStatusRowLeavesOutWhatDoesNotFit(t *testing.T) {
-	item := func(w float64) ggui.Widget { return ggui.Box().Size(w, 10) }
+	item := func(w float64) ggui.Widget { return widget.Box().Size(w, 10) }
 	r := &statusRow{gap: 10, split: 2, items: []ggui.Widget{item(50), item(50), item(50), item(50), item(80)}, drop: []int{3, 2, 1, 0, 4}}
 	p := ggui.ProbeBuilder(func() ggui.Widget { return r }, ggui.Sz(280, 30))
 	defer p.Close()

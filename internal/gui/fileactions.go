@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/protocol"
@@ -151,7 +152,7 @@ func (o fileOps) dialogs(submit func()) ggui.Widget {
 		if a.Item.Dir {
 			what = T("This folder and everything in it are deleted from its node. It cannot be undone.")
 		}
-		return ggui.Stack(
+		return widget.Stack(
 			nameDialog(nameAsk{Open: o.NameOpen, Text: o.Name, Err: o.Err,
 				Title: title, Field: T("File name"), Action: action, Submit: submit}),
 			ui.AlertDialog(o.DeleteOpen, Tf("Delete %s?", a.Item.Name), what).

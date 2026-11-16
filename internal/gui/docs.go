@@ -10,6 +10,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/mdview"
@@ -329,9 +330,9 @@ func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget 
 	if d.Dirty {
 		label = name + " ●"
 	}
-	content := ggui.Box(ggui.Row(
+	content := widget.Box(widget.Row(
 		icon(fileIconName(name)).Size(14).Color(fg),
-		ggui.Box(ggui.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(170),
+		widget.Box(widget.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(170),
 		ui.ButtonOf(icon("x").Size(13), func() { m.askCloseDoc(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", name)),
 	).Gap(8)).Height(tabBarHeight)
 	btn := ui.ButtonOf(content, func() { m.showTab(id) }).Ghost().Pad(0, 8, 0, 12).Radius(0).Name(name)
@@ -362,7 +363,7 @@ func docView(m *model, id string, focus bool) ggui.Widget {
 		d := ggui.Peek(m.Docs)[id]
 		switch s {
 		case "loading":
-			return ggui.Center(ui.Spinner())
+			return widget.Center(ui.Spinner())
 		case "error":
 			return paneNote(d.Err)
 		case "binary":
@@ -390,11 +391,11 @@ func docView(m *model, id string, focus bool) ggui.Widget {
 		case d.Truncated:
 			return docBanner(Tf("Showing the first %s of %s, read-only.", byteSize(int64(len(doc.saved))), byteSize(d.Size)))
 		}
-		return ggui.Box()
+		return widget.Box()
 	})
 	// While it shows, a change on disk is followed.
 	ggui.Effect(func() ggui.Cleanup { return m.every(docCheckEvery, func() { m.checkDoc(id) }) })
-	return ggui.Column(docStatus(m, id, info, state), hline(), banner, ggui.Expanded(body)).Stretch()
+	return widget.Column(docStatus(m, id, info, state), hline(), banner, widget.Expanded(body)).Stretch()
 }
 
 // docEditor is a file's editor, made the first time it shows and kept.
@@ -426,12 +427,12 @@ func (m *model) syncEditor(id string) {
 // pane is left out, the line endings first and the caret last.
 func docStatus(m *model, id string, info ggui.Readable[docInfo], state ggui.Readable[string]) ggui.Widget {
 	doc := m.docs[id]
-	label := func(s string) ggui.Widget { return muted(ggui.Text(s).Size(12).NoWrap()) }
+	label := func(s string) ggui.Widget { return muted(widget.Text(s).Size(12).NoWrap()) }
 	// shown is an item for the states it shows in.
 	shown := func(fn func() string, states ...string) ggui.Widget {
 		return ggui.Reactive(func() ggui.Widget {
 			if !slices.Contains(states, state.Get()) {
-				return ggui.Box()
+				return widget.Box()
 			}
 			return label(fn())
 		})
@@ -470,7 +471,7 @@ func docStatus(m *model, id string, info ggui.Readable[docInfo], state ggui.Read
 	if isMarkdown(ggui.Peek(m.Docs)[id].Name()) {
 		row.items = append(row.items, glyphSwitch(doc.preview, "pencil", "book-open", T("Preview"), T("Edit"), T("Toggle edit and preview")))
 	}
-	return ggui.Box(row).Pad(0, 8, 0, 14).Height(statusHeight).Fill(skin.Surface0)
+	return widget.Box(row).Pad(0, 8, 0, 14).Height(statusHeight).Fill(skin.Surface0)
 }
 
 // statusRow lays out a status line: its items before split at the left,
@@ -557,9 +558,9 @@ func previewLabel(doc *document) string {
 }
 
 func docBanner(msg string, actions ...ggui.Widget) ggui.Widget {
-	row := append([]ggui.Widget{icon("info").Size(14), ggui.Expanded(ggui.Text(msg).Size(12.5))}, actions...)
-	return ggui.Column(
-		ggui.Box(ggui.Row(row...).Gap(10)).Pad(6, 12).Fill(skin.Surface2),
+	row := append([]ggui.Widget{icon("info").Size(14), widget.Expanded(widget.Text(msg).Size(12.5))}, actions...)
+	return widget.Column(
+		widget.Box(widget.Row(row...).Gap(10)).Pad(6, 12).Fill(skin.Surface2),
 		hline(),
 	).Stretch()
 }
@@ -586,10 +587,10 @@ func docHeader(m *model, id string, d docInfo) ggui.Widget {
 	)
 	items = append(items, m.editorItems(d.Node, d.Path, func() int { return m.docLine(id) }, nil)...)
 	items = append(items, ui.MenuDivider(), ui.MenuItem(T("Close file"), func() { m.askCloseDoc(id) }))
-	return ggui.Row(
-		ggui.Text(d.Name()).Size(14).Weight(ggui.WeightMedium).NoWrap(),
-		ggui.Expanded(muted(ggui.Text(where).Size(13).NoWrap().Ellipsis())),
-		muted(ggui.Text(state).Size(12.5).NoWrap()),
+	return widget.Row(
+		widget.Text(d.Name()).Size(14).Weight(ggui.WeightMedium).NoWrap(),
+		widget.Expanded(muted(widget.Text(where).Size(13).NoWrap().Ellipsis())),
+		muted(widget.Text(state).Size(12.5).NoWrap()),
 		iconMenu(ui.MenuOf(icon("ellipsis"), items...).Name(T("File actions")), 6),
 	).Gap(10)
 }

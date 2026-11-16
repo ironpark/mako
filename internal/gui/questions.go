@@ -6,6 +6,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -84,7 +85,7 @@ func chatInput(m *model, id string, state *chatState) ggui.Widget {
 			if !show || m.conns[id] == nil {
 				return composer(m, id, state)
 			}
-			header := &lane{child: ggui.Row(ggui.Spacer(),
+			header := &lane{child: widget.Row(widget.Spacer(),
 				ui.Button(T("Back to message"), func() { open.Set(false) }).Ghost().BindDisabled(disabled),
 			).Gap(8)}
 			return answerTerminal(m, id, header)
@@ -101,9 +102,9 @@ func answerTerminal(m *model, id string, header ggui.Widget) ggui.Widget {
 	term := newTerminalView(m.conns[id], func() prefs { return ggui.Peek(m.Prefs) }, false).
 		OnRiskyPaste(m.confirmPaste).
 		OnLink(func(target, cwd string) { m.followLink(id, target, cwd) })
-	return ggui.Column(header, &lane{child: ggui.Box(ggui.Column(
-		muted(ggui.Text(T("Click below to select options or type your answer.")).Size(12)),
-		ggui.Box(term).Height(320),
+	return widget.Column(header, &lane{child: widget.Box(widget.Column(
+		muted(widget.Text(T("Click below to select options or type your answer.")).Size(12)),
+		widget.Box(term).Height(320),
 	).Gap(6).Stretch()).Border(1, skin.DotWaiting).Radius(10).Pad(8)}).Stretch()
 }
 
@@ -119,13 +120,13 @@ func keyedQuestions(m *model, id string, questions []*protocol.Question) ggui.Wi
 	})
 	return ggui.View(inTerminal, func(terminal bool) ggui.Widget {
 		if terminal && m.conns[id] != nil {
-			return answerTerminal(m, id, &lane{child: ggui.Row(ggui.Spacer(),
+			return answerTerminal(m, id, &lane{child: widget.Row(widget.Spacer(),
 				ui.Button(T("Answer here"), func() { inTerminal.Set(false) }).Ghost(),
 			).Gap(8)})
 		}
 		body := ggui.View(sent, func(done bool) ggui.Widget {
 			if done {
-				return muted(ggui.Text(T("Answering…")).Size(12.5))
+				return muted(widget.Text(T("Answering…")).Size(12.5))
 			}
 			return form
 		})

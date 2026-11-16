@@ -11,6 +11,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/client"
@@ -181,10 +182,10 @@ func tasksBadge(s *protocol.SessionInfo) ggui.Widget {
 			titles = append(titles, taskTitle(t))
 		}
 	}
-	badge := ggui.Row(
+	badge := widget.Row(
 		icon("square-terminal").Size(11).Color(skin.AccentBright),
-		ggui.Text(fmt.Sprint(n)).Size(11.5).Color(skin.AccentBright).NoWrap(),
-	).Gap(3).Align(ggui.AlignCenter)
+		widget.Text(fmt.Sprint(n)).Size(11.5).Color(skin.AccentBright).NoWrap(),
+	).Gap(3).Align(widget.AlignCenter)
 	return ui.Tooltip(badge, Tf("Running in the background: %s", strings.Join(titles, ", ")))
 }
 
@@ -203,10 +204,10 @@ func tasksMenu(m *model, s *protocol.SessionInfo) ggui.Widget {
 	if n := s.RunningTasks(); n > 0 {
 		trigger = []ggui.Widget{
 			icon("square-terminal").Size(15).Color(skin.AccentBright),
-			ggui.Text(fmt.Sprint(n)).Size(12).Color(skin.AccentBright).NoWrap(),
+			widget.Text(fmt.Sprint(n)).Size(12).Color(skin.AccentBright).NoWrap(),
 		}
 	}
-	return ui.Tooltip(iconMenu(ui.MenuOf(ggui.Row(trigger...).Gap(4).Align(ggui.AlignCenter), items...).Name(T("Background commands")), 6), T("Background commands"))
+	return ui.Tooltip(iconMenu(ui.MenuOf(widget.Row(trigger...).Gap(4).Align(widget.AlignCenter), items...).Name(T("Background commands")), 6), T("Background commands"))
 }
 
 // runningTasks stands over the composer of session id while its agent
@@ -226,30 +227,30 @@ func runningTasks(m *model, id string) ggui.Widget {
 	open := ggui.State(false)
 	return ggui.View(tasks, func(list []*protocol.BackgroundTask) ggui.Widget {
 		if len(list) == 0 {
-			return ggui.Box()
+			return widget.Box()
 		}
 		// Those running come first.
 		running := slices.IndexFunc(list, func(t *protocol.BackgroundTask) bool { return !t.GetRunning() })
 		if running < 0 {
 			running = len(list)
 		}
-		var head ggui.Widget = ggui.Tap(ggui.Row(
+		var head ggui.Widget = widget.Tap(widget.Row(
 			icon("square-terminal").Size(13).Color(skin.AccentBright),
-			ggui.Text(shellsText(running)).Size(12.5).Weight(ggui.WeightMedium).Color(skin.AccentBright).NoWrap(),
-			ggui.Expanded(muted(ggui.Text(taskTitle(list[0])).Size(12).NoWrap().Ellipsis())),
+			widget.Text(shellsText(running)).Size(12.5).Weight(ggui.WeightMedium).Color(skin.AccentBright).NoWrap(),
+			widget.Expanded(muted(widget.Text(taskTitle(list[0])).Size(12).NoWrap().Ellipsis())),
 			ggui.View(open, func(o bool) ggui.Widget {
 				return icon(pick(o, "chevron-down", "chevron-up")).Size(14).Color(skin.Muted)
 			}),
-		).Gap(8).Align(ggui.AlignCenter), func() { open.Set(!ggui.Peek(open)) }).Cursor(ggui.CursorShapePointer)
+		).Gap(8).Align(widget.AlignCenter), func() { open.Set(!ggui.Peek(open)) }).Cursor(ggui.CursorShapePointer)
 		head = ui.Tooltip(head, T("Background commands"))
 		rows := reveal(open, func() ggui.Widget {
 			out := make([]ggui.Widget, len(list))
 			for i, t := range list {
 				out[i] = taskRow(m, id, t)
 			}
-			return ggui.Column(append([]ggui.Widget{hline()}, out...)...).Gap(4).Stretch()
+			return widget.Column(append([]ggui.Widget{hline()}, out...)...).Gap(4).Stretch()
 		})
-		return &lane{child: ggui.Box(ggui.Column(head, rows).Gap(6).Stretch()).
+		return &lane{child: widget.Box(widget.Column(head, rows).Gap(6).Stretch()).
 			Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(8, 12)}
 	})
 }
@@ -257,14 +258,14 @@ func runningTasks(m *model, id string) ggui.Widget {
 // taskRow is one of a session's commands in the list over the composer:
 // its dot, what it does, and how it is getting on, to open its details.
 func taskRow(m *model, session string, t *protocol.BackgroundTask) ggui.Widget {
-	row := ggui.Row(
+	row := widget.Row(
 		dot(taskColor(t)),
-		ggui.Expanded(ggui.Text(taskTitle(t)).Size(12.5).NoWrap().Ellipsis()),
+		widget.Expanded(widget.Text(taskTitle(t)).Size(12.5).NoWrap().Ellipsis()),
 		ggui.View(m.Minute, func(now time.Time) ggui.Widget {
-			return muted(ggui.Text(taskState(t, now)).Size(11.5).NoWrap())
+			return muted(widget.Text(taskState(t, now)).Size(11.5).NoWrap())
 		}),
-	).Gap(8).Align(ggui.AlignCenter)
-	return ui.Tooltip(ggui.Tap(row, func() { m.Shell.open(session, t.GetId()) }).Cursor(ggui.CursorShapePointer), T("Show its details"))
+	).Gap(8).Align(widget.AlignCenter)
+	return ui.Tooltip(widget.Tap(row, func() { m.Shell.open(session, t.GetId()) }).Cursor(ggui.CursorShapePointer), T("Show its details"))
 }
 
 // shellView is the details of the background command shown: which, and
@@ -392,54 +393,54 @@ func shellDialog(m *model) ggui.Widget {
 	body := ggui.View(task, func(cur shellTask) ggui.Widget {
 		t := cur.Task
 		if t == nil {
-			return muted(ggui.Text(T("This command is no longer listed.")).Size(13))
+			return muted(widget.Text(T("This command is no longer listed.")).Size(13))
 		}
 		label := func(s string) ggui.Widget {
-			return ggui.Box(ggui.Text(s).Size(12.5).Weight(ggui.WeightMedium).NoWrap()).Width(84)
+			return widget.Box(widget.Text(s).Size(12.5).Weight(ggui.WeightMedium).NoWrap()).Width(84)
 		}
 		field := func(name string, value ggui.Widget) ggui.Widget {
-			return ggui.Row(label(name), ggui.Expanded(value)).Gap(8).Align(ggui.AlignStart)
+			return widget.Row(label(name), widget.Expanded(value)).Gap(8).Align(widget.AlignStart)
 		}
 		rows := []ggui.Widget{
-			field(T("Status"), ggui.Row(
+			field(T("Status"), widget.Row(
 				dot(taskColor(t)),
-				ggui.Text(taskOutcome(t)).Size(12.5).Color(taskColor(t)),
-			).Gap(6).Align(ggui.AlignCenter)),
+				widget.Text(taskOutcome(t)).Size(12.5).Color(taskColor(t)),
+			).Gap(6).Align(widget.AlignCenter)),
 			field(T("Runtime"), ggui.View(now, func(at time.Time) ggui.Widget {
-				return ggui.Text(runtimeText(taskRuntime(t, at))).Size(12.5)
+				return widget.Text(runtimeText(taskRuntime(t, at))).Size(12.5)
 			})),
 		}
 		if d := t.GetDescription(); d != "" {
-			rows = append(rows, field(T("Description"), ggui.Text(d).Size(12.5).Selectable()))
+			rows = append(rows, field(T("Description"), widget.Text(d).Size(12.5).Selectable()))
 		}
-		rows = append(rows, field(T("Command"), ggui.Text(t.GetCommand()).Size(12).Font(ggui.DefaultMonoFont()).Selectable()))
+		rows = append(rows, field(T("Command"), widget.Text(t.GetCommand()).Size(12).Font(ggui.DefaultMonoFont()).Selectable()))
 		output := ggui.View(v.Output, func(o shellOutput) ggui.Widget {
 			var text ggui.Widget
 			switch {
 			case !o.Loaded:
-				text = muted(ggui.Text(T("Reading…")).Size(12))
+				text = muted(widget.Text(T("Reading…")).Size(12))
 			case o.Err != "":
-				text = muted(ggui.Text(o.Err).Size(12).Selectable())
+				text = muted(widget.Text(o.Err).Size(12).Selectable())
 			case o.Text == "":
-				text = muted(ggui.Text(T("No output yet.")).Size(12))
+				text = muted(widget.Text(T("No output yet.")).Size(12))
 			default:
-				lines := ggui.Text(o.Text).Size(11.5).Font(ggui.DefaultMonoFont()).Selectable()
+				lines := widget.Text(o.Text).Size(11.5).Font(ggui.DefaultMonoFont()).Selectable()
 				text = lines
 				if o.Cut {
-					text = ggui.Column(muted(ggui.Text(T("Earlier output is in the file.")).Size(11.5)), lines).Gap(6).Stretch()
+					text = widget.Column(muted(widget.Text(T("Earlier output is in the file.")).Size(11.5)), lines).Gap(6).Stretch()
 				}
 			}
 			// The end is what matters: the scroll opens there, and stays
 			// there as more is read while it is.
-			return ggui.Box(ggui.Scroll(ggui.Box(text).Pad(8, 10)).Bar(skin.Surface3).FollowEnd()).
+			return widget.Box(widget.Scroll(widget.Box(text).Pad(8, 10)).Bar(skin.Surface3).FollowEnd()).
 				Fill(skin.Surface0).Border(1, skin.Border).Radius(8).Height(260)
 		})
-		head := ggui.Row(
-			ggui.Expanded(ggui.Text(T("Output")).Size(12.5).Weight(ggui.WeightMedium)),
+		head := widget.Row(
+			widget.Expanded(widget.Text(T("Output")).Size(12.5).Weight(ggui.WeightMedium)),
 			ui.Button(T("Open in a tab"), func() { v.Open.Set(false); m.openTaskOutput(cur.Node, t) }).Ghost(),
-		).Align(ggui.AlignCenter)
-		rows = append(rows, ggui.Column(head, output).Gap(6).Stretch())
-		return ggui.Column(rows...).Gap(10).Stretch()
+		).Align(widget.AlignCenter)
+		rows = append(rows, widget.Column(head, output).Gap(6).Stretch())
+		return widget.Column(rows...).Gap(10).Stretch()
 	})
 	return ui.Dialog(v.Open, body).Title(T("Shell details")).Width(680)
 }

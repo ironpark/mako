@@ -10,6 +10,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
@@ -361,7 +362,7 @@ func agentSettings(m *model) ggui.Widget {
 			if len(missing) > 0 {
 				out = append(out, section(T("Not installed"), card(missing...)))
 			}
-			return ggui.Column(append(out, addAgent(!inline))...).Gap(pick[float64](inline, pageGap, 20)).Stretch()
+			return widget.Column(append(out, addAgent(!inline))...).Gap(pick[float64](inline, pageGap, 20)).Stretch()
 		}
 		detail := ggui.Key(shown, func(name string) ggui.Widget {
 			for _, g := range groups {
@@ -369,7 +370,7 @@ func agentSettings(m *model) ggui.Widget {
 					return agentDetail(m, g.agent, g.profiles)
 				}
 			}
-			return ggui.Box()
+			return widget.Box()
 		})
 		return listBeside(list(false), detail, list(true))
 	})
@@ -416,31 +417,31 @@ func agentItem(m *model, open *ggui.StateValue[string], shown ggui.Readable[stri
 		if n := m.profileCount(name); n > 0 {
 			text += " · " + Tf("%d profiles", n)
 		}
-		return ggui.Text(text).Size(11.5).Color(skin.ExtraMuted).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()
+		return widget.Text(text).Size(11.5).Color(skin.ExtraMuted).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()
 	})
 	label := []ggui.Widget{
 		agentGlyph(name, skin.Muted).Size(15),
-		ggui.Text(name).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
-		ggui.Expanded(summary),
+		widget.Text(name).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
+		widget.Expanded(summary),
 	}
 	if !inline {
 		chosen := ggui.Map(shown, func(s string) bool { return s == name })
-		return ggui.Box(ggui.Row(
-			ggui.Expanded(listItem(ggui.Row(label...).Gap(10).Align(ggui.AlignCenter), chosen, func() { open.Set(name) }, Tf("%s settings", name))),
+		return widget.Box(widget.Row(
+			widget.Expanded(listItem(widget.Row(label...).Gap(10).Align(widget.AlignCenter), chosen, func() { open.Set(name) }, Tf("%s settings", name))),
 			offered,
-		).Gap(10).Align(ggui.AlignCenter)).Pad(4, 8)
+		).Gap(10).Align(widget.AlignCenter)).Pad(4, 8)
 	}
 	isOpen := ggui.Map(open, func(o string) bool { return o == name })
-	head := ggui.Row(
-		ggui.Expanded(ui.ButtonOf(ggui.Row(append(label, chevron(isOpen, 13, skin.ExtraMuted))...).Gap(10).Align(ggui.AlignCenter),
+	head := widget.Row(
+		widget.Expanded(ui.ButtonOf(widget.Row(append(label, chevron(isOpen, 13, skin.ExtraMuted))...).Gap(10).Align(widget.AlignCenter),
 			func() { open.Set(pick(ggui.Peek(open) == name, "", name)) }).
 			Ghost().Pad(8, 10).Radius(7).Name(Tf("%s settings", name))),
 		offered,
-	).Gap(10).Align(ggui.AlignCenter)
-	return ggui.Box(ggui.Column(
+	).Gap(10).Align(widget.AlignCenter)
+	return widget.Box(widget.Column(
 		head,
 		reveal(isOpen, func() ggui.Widget {
-			return ggui.Padding(agentEditor(m, a, profiles), 6, 10, 10, 35)
+			return widget.Padding(agentEditor(m, a, profiles), 6, 10, 10, 35)
 		}),
 	).Stretch()).Pad(4, 8)
 }
@@ -448,10 +449,10 @@ func agentItem(m *model, open *ggui.StateValue[string], shown ggui.Readable[stri
 // agentDetail is the agent shown beside the list: its name over its
 // settings and its profiles.
 func agentDetail(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
-	return detailCard(ggui.Row(
+	return detailCard(widget.Row(
 		agentGlyph(a.Agent, skin.Muted).Size(18),
-		ggui.Text(a.Agent).Size(16).Weight(ggui.WeightSemibold).NoWrap(),
-	).Gap(10).Align(ggui.AlignCenter), agentEditor(m, a, profiles))
+		widget.Text(a.Agent).Size(16).Weight(ggui.WeightSemibold).NoWrap(),
+	).Gap(10).Align(widget.AlignCenter), agentEditor(m, a, profiles))
 }
 
 // agentEditor is an unfolded agent's settings: its command, flags and
@@ -478,23 +479,23 @@ func agentEditor(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 		children = append(children, profileCard(m, p, mono))
 	}
 	actions := []ggui.Widget{
-		ui.ButtonOf(ggui.Row(icon("plus").Size(14), ggui.Text(T("Add profile")).Size(13)).Gap(6),
+		ui.ButtonOf(widget.Row(icon("plus").Size(14), widget.Text(T("Add profile")).Size(13)).Gap(6),
 			func() { m.addProfile(a.Agent) }).Ghost().Pad(6, 10).Radius(7).Name(Tf("Add %s profile", a.Agent)),
-		ggui.Spacer(),
+		widget.Spacer(),
 	}
 	if !builtin {
 		id := a.ID
 		actions = append(actions, ui.Button(T("Remove agent"), func() { m.removeAgentRow(id) }).Ghost().Name(Tf("Remove %s", a.Agent)))
 	}
-	children = append(children, ggui.Row(actions...).Gap(8))
-	return ggui.Column(children...).Gap(10).Stretch()
+	children = append(children, widget.Row(actions...).Gap(8))
+	return widget.Column(children...).Gap(10).Stretch()
 }
 
 // compactField is a field under its label, its hint as the label's
 // tooltip, for the list's unfolded agent.
 func compactField(label, hint string, field ggui.Widget) ggui.Widget {
-	return ggui.Column(
-		ui.Tooltip(ggui.Text(label).Size(12).Color(skin.Muted), hint),
+	return widget.Column(
+		ui.Tooltip(widget.Text(label).Size(12).Color(skin.Muted), hint),
 		field,
 	).Gap(4).Stretch()
 }
@@ -571,15 +572,15 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 	target := p.Agent + ":" + p.Profile
 	nameField := ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Profile })).
 		Style(mono).Name(Tf("%s profile name", p.Agent))
-	head := ggui.Row(
+	head := widget.Row(
 		icon("layers").Size(14).Color(skin.Muted),
-		muted(ggui.Text(p.Agent+":").Size(13).Style(mono)),
-		ggui.Box(nameField).Width(180),
-		ggui.Spacer(),
+		muted(widget.Text(p.Agent+":").Size(13).Style(mono)),
+		widget.Box(nameField).Width(180),
+		widget.Spacer(),
 		ui.ButtonOf(icon("trash-2").Size(14), func() { m.removeAgentRow(id) }).Ghost().Pad(6).Radius(6).
 			Name(Tf("Remove %s", target)),
-	).Gap(8).Align(ggui.AlignCenter)
-	return ggui.Box(ggui.Column(
+	).Gap(8).Align(widget.AlignCenter)
+	return widget.Box(widget.Column(
 		head,
 		compactField(T("Description"), T("Describe its specialties and when to choose it. Agents use this to select a profile when delegating work."),
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Description })).
@@ -643,7 +644,7 @@ func profileServers(m *model, id int, name string) ggui.Widget {
 			}
 		}
 		if len(ids) == 0 {
-			return ggui.Box()
+			return widget.Box()
 		}
 		pick := ggui.Bind(func() bool { return draft().PickServers }, func(v bool) {
 			update(func(d *agentDraft) {
@@ -664,10 +665,10 @@ func profileServers(m *model, id int, name string) ggui.Widget {
 		if d.PickServers {
 			hint = T("Only the servers ticked, even one turned off for the node.")
 		}
-		rows := []ggui.Widget{ggui.Row(
-			ggui.Expanded(ui.Tooltip(ggui.Text(T("Choose its MCP servers")).Size(12).Color(skin.Muted), hint)),
+		rows := []ggui.Widget{widget.Row(
+			widget.Expanded(ui.Tooltip(widget.Text(T("Choose its MCP servers")).Size(12).Color(skin.Muted), hint)),
 			ui.Switch(pick, "").Name(Tf("%s chooses its MCP servers", name)),
-		).Gap(8).Align(ggui.AlignCenter)}
+		).Gap(8).Align(widget.AlignCenter)}
 		if d.PickServers {
 			boxes := make([]ggui.Widget, 0, len(ids))
 			for _, s := range ids {
@@ -683,9 +684,9 @@ func profileServers(m *model, id int, name string) ggui.Widget {
 				})
 				boxes = append(boxes, ui.Checkbox(on, s))
 			}
-			rows = append(rows, ggui.Column(boxes...).Gap(8).Stretch())
+			rows = append(rows, widget.Column(boxes...).Gap(8).Stretch())
 		}
-		return ggui.Column(rows...).Gap(8).Stretch()
+		return widget.Column(rows...).Gap(8).Stretch()
 	})
 }
 
@@ -695,7 +696,7 @@ func profileServers(m *model, id int, name string) ggui.Widget {
 func profileModel(m *model, p agentDraft, target string, mono ggui.TextStyle) ggui.Widget {
 	entry, _ := agents.Lookup(p.Agent)
 	if flag, ok := entry.Driver.(agent.ModelFlag); !ok || flag.ModelArgs("x") == nil {
-		return ggui.Box()
+		return widget.Box()
 	}
 	model := m.agentField(p.ID, func(d *agentDraft) *string { return &d.Model })
 	hint := T("The model its sessions start on, over the agent's default and any its flags name.")
@@ -709,7 +710,7 @@ func profileModel(m *model, p agentDraft, target string, mono ggui.TextStyle) gg
 		options = append(options, cur) // one typed into config.json
 	}
 	return compactField(T("Model"), hint,
-		ggui.Box(ui.Select(model).Options(options).Format(func(s string) string {
+		widget.Box(ui.Select(model).Options(options).Format(func(s string) string {
 			if s == "" {
 				return T("The agent's default")
 			}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -128,13 +129,13 @@ func withRootPicker(m *model, tab ggui.Widget) ggui.Widget {
 	options := ggui.Map(m.Roots, func(p panelRoots) []panelRoot { return p.Roots })
 	picker := ggui.View(ggui.Map(m.Roots, panelRoots.multi), func(multi bool) ggui.Widget {
 		if !multi {
-			return ggui.Box()
+			return widget.Box()
 		}
 		pick := ui.Select(shown).BindOptions(options).Format(func(r panelRoot) string { return r.Label }).Name(T("Repository"))
-		return ggui.Column(
-			ggui.Box(ggui.Row(icon("folder").Size(14).Color(skin.Muted), ggui.Expanded(pick)).Gap(8).Align(ggui.AlignCenter)).Pad(6, 10, 6, 12),
+		return widget.Column(
+			widget.Box(widget.Row(icon("folder").Size(14).Color(skin.Muted), widget.Expanded(pick)).Gap(8).Align(widget.AlignCenter)).Pad(6, 10, 6, 12),
 			hline(),
 		).Stretch()
 	})
-	return ggui.Column(picker, ggui.Expanded(tab)).Stretch()
+	return widget.Column(picker, widget.Expanded(tab)).Stretch()
 }

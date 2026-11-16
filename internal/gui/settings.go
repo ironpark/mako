@@ -8,6 +8,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/i18n"
@@ -67,25 +68,25 @@ var (
 
 func settingsPage(m *model) ggui.Widget {
 	content := ggui.Key(m.Section, func(id string) ggui.Widget {
-		return ggui.Scroll(ggui.Align(ggui.Box(ggui.Padding(settingsContent(m, id), 32, 40)).MaxWidth(settingsMaxWidth)).Top()).
+		return widget.Scroll(widget.Align(widget.Box(widget.Padding(settingsContent(m, id), 32, 40)).MaxWidth(settingsMaxWidth)).Top()).
 			Bar(skin.Surface3)
 	})
-	return ggui.Row(
+	return widget.Row(
 		settingsSidebar(m),
 		vline(),
-		ggui.Expanded(ggui.Box(content).Fill(skin.Surface0)),
+		widget.Expanded(widget.Box(content).Fill(skin.Surface0)),
 	).Stretch()
 }
 
 func settingsSidebar(m *model) ggui.Widget {
-	back := ui.ButtonOf(ggui.Row(icon("arrow-left").Size(16), ggui.Text(T("Back to sessions")).Size(13)).Gap(10),
+	back := ui.ButtonOf(widget.Row(icon("arrow-left").Size(16), widget.Text(T("Back to sessions")).Size(13)).Gap(10),
 		func() { m.Page.Set("workspace") }).Ghost().Pad(7, 10).Radius(7).Name(T("Back to sessions"))
-	header := titlebar(m, ggui.Box(ggui.Row(titlebarGap(m.titlebarRoom(), 8), back)).Pad(8, 8, 8, 0).Height(headerHeight))
+	header := titlebar(m, widget.Box(widget.Row(titlebarGap(m.titlebarRoom(), 8), back)).Pad(8, 8, 8, 0).Height(headerHeight))
 
 	nav := ggui.View(m.Section, func(current string) ggui.Widget {
 		var rows []ggui.Widget
 		for _, g := range settingsNav {
-			rows = append(rows, ggui.Box(ggui.Text(T(g.title)).Size(11.5).Color(skin.ExtraMuted)).Pad(14, 10, 4, 10))
+			rows = append(rows, widget.Box(widget.Text(T(g.title)).Size(11.5).Color(skin.ExtraMuted)).Pad(14, 10, 4, 10))
 			for _, s := range g.sections {
 				id := s.id
 				fg := skin.Muted
@@ -94,25 +95,25 @@ func settingsSidebar(m *model) ggui.Widget {
 				}
 				// The row runs the button's width, so its label stays at the
 				// start, as the chosen one's does, rather than centred in it.
-				item := ui.ButtonOf(ggui.Row(
+				item := ui.ButtonOf(widget.Row(
 					iconColored(s.icon, fg).Size(15),
-					ggui.Text(T(s.label)).Size(13).Color(fg),
-					ggui.Spacer(),
+					widget.Text(T(s.label)).Size(13).Color(fg),
+					widget.Spacer(),
 				).Gap(10), func() { m.Section.Set(id) }).Ghost().Pad(7, 10).Radius(7).Name(T(s.label))
 				if id == current {
-					rows = append(rows, ggui.Box(item).Fill(skin.SidebarSel).Radius(7))
+					rows = append(rows, widget.Box(item).Fill(skin.SidebarSel).Radius(7))
 				} else {
 					rows = append(rows, item)
 				}
 			}
 		}
-		return ggui.Column(rows...).Gap(2).Stretch()
+		return widget.Column(rows...).Gap(2).Stretch()
 	})
 
-	return ggui.Box(ggui.Column(
+	return widget.Box(widget.Column(
 		header,
 		hline(),
-		ggui.Expanded(ggui.Scroll(ggui.Padding(nav, 4, 8))),
+		widget.Expanded(widget.Scroll(widget.Padding(nav, 4, 8))),
 	).Stretch()).Width(sidebarWidth).Fill(skin.Sidebar)
 }
 
@@ -170,28 +171,28 @@ func cardWithTail(tail ggui.Widget, rows ...ggui.Widget) ggui.Widget {
 	if tail != nil {
 		children = append(children, tail)
 	}
-	return ggui.Box(ggui.Column(children...).Stretch()).Fill(skin.Surface1).Border(1, skin.Border).Radius(10)
+	return widget.Box(widget.Column(children...).Stretch()).Fill(skin.Surface1).Border(1, skin.Border).Radius(10)
 }
 
 // row is one setting: what it is on the left, its control on the right.
 func row(title, hint string, control ggui.Widget) ggui.Widget {
-	text := []ggui.Widget{ggui.Text(title).Size(13.5)}
+	text := []ggui.Widget{widget.Text(title).Size(13.5)}
 	if hint != "" {
-		text = append(text, muted(ggui.Text(hint).Size(12)))
+		text = append(text, muted(widget.Text(hint).Size(12)))
 	}
-	return ggui.Box(ggui.Row(
-		ggui.Expanded(ggui.Column(text...).Gap(3).Stretch()),
+	return widget.Box(widget.Row(
+		widget.Expanded(widget.Column(text...).Gap(3).Stretch()),
 		control,
 	).Gap(24)).Pad(14, 16)
 }
 
 // stackedRow puts a wide control under its title, for text areas.
 func stackedRow(title, hint string, control ggui.Widget) ggui.Widget {
-	text := []ggui.Widget{ggui.Text(title).Size(13.5)}
+	text := []ggui.Widget{widget.Text(title).Size(13.5)}
 	if hint != "" {
-		text = append(text, muted(ggui.Text(hint).Size(12)))
+		text = append(text, muted(widget.Text(hint).Size(12)))
 	}
-	return ggui.Box(ggui.Column(append(text, ggui.Box().Height(4), control)...).Gap(3).Stretch()).Pad(14, 16)
+	return widget.Box(widget.Column(append(text, widget.Box().Height(4), control)...).Gap(3).Stretch()).Pad(14, 16)
 }
 
 // browseButton is a Browse… button that sets b to what pick chooses in the
@@ -226,9 +227,9 @@ func generalSettings(m *model) ggui.Widget {
 			if c.Err != "" {
 				msg = c.Err
 			}
-			return ggui.Row(linkDot(false), muted(ggui.Text(msg).Size(12.5).NoWrap().Ellipsis())).Gap(8)
+			return widget.Row(linkDot(false), muted(widget.Text(msg).Size(12.5).NoWrap().Ellipsis())).Gap(8)
 		}
-		return ggui.Row(linkDot(true), muted(ggui.Text(Tf("Connected to %s", c.Self.GetName())).Size(12.5))).Gap(8)
+		return widget.Row(linkDot(true), muted(widget.Text(Tf("Connected to %s", c.Self.GetName())).Size(12.5))).Gap(8)
 	})
 
 	codes := make([]string, 0, len(i18n.Languages)+1)
@@ -250,18 +251,18 @@ func generalSettings(m *model) ggui.Widget {
 		section(T("Language"),
 			card(
 				row(T("Language"), T("The language the window is written in. System follows the desktop's."),
-					ggui.Box(language).Width(200)),
+					widget.Box(language).Width(200)),
 			),
 		),
 		section(T("Sessions"),
 			card(
 				row(T("Default agent"), T("Chosen first in the new-session dialog."),
-					ggui.Box(ui.Select(agent).BindOptions(m.Agents).Format(targetLabel).Name(T("Default agent"))).Width(200)),
+					widget.Box(ui.Select(agent).BindOptions(m.Agents).Format(targetLabel).Name(T("Default agent"))).Width(200)),
 				row(T("Open agents in"), T("What a session's tab shows until you switch it. Chat is for agents whose conversation mako reads; the others open in their terminals."),
 					ui.ToggleGroup(prefField(m, func(p *prefs) *string { return &p.OpenView })).Options([]string{openTerminal, openChat}).
 						Format(func(s string) string { return T(openViewLabels[s]) }).Name(T("Open agents in"))),
 				stackedRow(T("Default working directory"), T("Where a new session starts unless you pick another."),
-					ggui.Row(ggui.Expanded(ui.TextField(project).Name(T("Default working directory"))), browse).Gap(8)),
+					widget.Row(widget.Expanded(ui.TextField(project).Name(T("Default working directory"))), browse).Gap(8)),
 				row(T("Follow other nodes"), T("Keep the tabs, panes, spaces and pins the same as in the windows of the nodes this one trusts both ways."),
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.SyncWorkspace }), "").Name(T("Follow other nodes"))),
 				row(T("Confirm before killing"), T("Ask before a session is stopped from the window."),
@@ -282,16 +283,16 @@ func generalSettings(m *model) ggui.Widget {
 				row(T("Put idle agents to sleep"), T("Stop the program of an agent out of view once it has rested at its prompt, with no subagent, background task or session of its own at work and nothing asked of you, to free its memory. It picks its conversation up again when you open it."),
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.SleepIdle }), "").Name(T("Put idle agents to sleep"))),
 				row(T("After"), T("Minutes at rest before an agent is put to sleep."),
-					ggui.Box(ui.NumberInput(sleepAfter).Range(minSleepAfter, maxSleepAfter).Step(1).Name(T("Minutes before sleep")).
+					widget.Box(ui.NumberInput(sleepAfter).Range(minSleepAfter, maxSleepAfter).Step(1).Name(T("Minutes before sleep")).
 						BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return !p.SleepIdle }))).Width(120)),
 			),
 		),
 		section(T("Connection"),
 			card(
 				row(T("External daemon"), T("The socket of the makod to use when the daemon does not run in the app. Empty is this machine's; it relays to the rest of the mesh."),
-					ggui.Box(ui.TextField(daemon).Placeholder("daemon.sock").Name(T("External daemon")).
+					widget.Box(ui.TextField(daemon).Placeholder("daemon.sock").Name(T("External daemon")).
 						BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return p.DaemonMode == "embedded" }))).Width(220)),
-				ggui.Box(status).Pad(12, 16),
+				widget.Box(status).Pad(12, 16),
 			),
 		),
 	)
@@ -312,24 +313,24 @@ func terminalSettings(m *model) ggui.Widget {
 		section(T("Text"),
 			card(
 				row(T("Font size"), T("In points, for every terminal."),
-					ggui.Box(ui.NumberInput(size).Range(minFontSize, maxFontSize).Step(1).Name(T("Font size"))).Width(120)),
+					widget.Box(ui.NumberInput(size).Range(minFontSize, maxFontSize).Step(1).Name(T("Font size"))).Width(120)),
 				row(T("Line height"), T("Space between rows, as a multiple of the font size."),
-					ggui.Row(
-						ggui.Box(ui.Slider(lineHeight, minLineHeight, maxLineHeight).Step(0.05).Name(T("Line height"))).Width(160),
-						ggui.Box(ggui.Textf("%.2f×", lineHeight).Size(12.5).Color(skin.Muted)).Width(44),
+					widget.Row(
+						widget.Box(ui.Slider(lineHeight, minLineHeight, maxLineHeight).Step(0.05).Name(T("Line height"))).Width(160),
+						widget.Box(widget.Textf("%.2f×", lineHeight).Size(12.5).Color(skin.Muted)).Width(44),
 					).Gap(10)),
 			),
 		),
 		section(T("Cursor"),
 			card(
-				row(T("Style"), T("The shape shown until a program asks for its own."), ggui.Box(cursor).Width(160)),
+				row(T("Style"), T("The shape shown until a program asks for its own."), widget.Box(cursor).Width(160)),
 				row(T("Blink"), "", ui.Switch(prefField(m, func(p *prefs) *bool { return &p.CursorBlink }), "").Name(T("Cursor blink"))),
 			),
 		),
 		section(T("Behaviour"),
 			card(
 				row(T("Scrollback"), T("Lines each terminal keeps above the screen."),
-					ggui.Box(ui.NumberInput(scrollback).Range(minScrollback, maxScrollback).Step(1000).Name(T("Scrollback"))).Width(140)),
+					widget.Box(ui.NumberInput(scrollback).Range(minScrollback, maxScrollback).Step(1000).Name(T("Scrollback"))).Width(140)),
 				row(T("Copy on select"), T("Put selected text on the clipboard as soon as the drag ends."),
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.CopyOnSelect }), "").Name(T("Copy on select"))),
 			),
@@ -379,13 +380,13 @@ func saveBar(m *model) ggui.Widget {
 	})
 	note := ggui.View(m.HostNote, func(s string) ggui.Widget {
 		if s == "" {
-			return muted(ggui.Text(T("Saved to config.json. The daemon reads agents as they change and the rest when it starts.")).Size(12))
+			return muted(widget.Text(T("Saved to config.json. The daemon reads agents as they change and the rest when it starts.")).Size(12))
 		}
-		return ggui.Text(s).Size(12).Color(skin.AccentBright)
+		return widget.Text(s).Size(12).Color(skin.AccentBright)
 	})
 	embedded := ggui.Map(m.DaemonState, func(s daemonState) bool { return s.Running })
-	return ggui.Row(
-		ggui.Expanded(note),
+	return widget.Row(
+		widget.Expanded(note),
 		ggui.If(embedded, func() ggui.Widget {
 			return ui.Button(T("Restart daemon"), func() { m.guardStop(m.restartEmbedded) }).Outline()
 		}),
@@ -427,14 +428,14 @@ func daemonSettings(m *model) ggui.Widget {
 				hint += T(". Another makod runs on this configuration; choose External or Auto.")
 			}
 		}
-		text := []ggui.Widget{ggui.Row(linkDot(ok), ggui.Text(title).Size(13.5)).Gap(8)}
+		text := []ggui.Widget{widget.Row(linkDot(ok), widget.Text(title).Size(13.5)).Gap(8)}
 		if hint != "" {
-			text = append(text, ggui.Box(muted(ggui.Text(hint).Size(12))).Pad(0, 0, 0, 15))
+			text = append(text, widget.Box(muted(widget.Text(hint).Size(12))).Pad(0, 0, 0, 15))
 		}
-		var actions ggui.Widget = ggui.Box()
+		var actions ggui.Widget = widget.Box()
 		if s.Mode == "embedded" {
 			if s.Running {
-				actions = ggui.Row(
+				actions = widget.Row(
 					ui.Button(T("Restart"), func() { m.guardStop(m.restartEmbedded) }).Outline(),
 					ui.Button(T("Stop"), func() { m.guardStop(m.stopEmbedded) }).Outline(),
 				).Gap(8)
@@ -442,15 +443,15 @@ func daemonSettings(m *model) ggui.Widget {
 				actions = ui.Button(T("Start"), m.startEmbedded)
 			}
 		}
-		return ggui.Box(ggui.Row(ggui.Expanded(ggui.Column(text...).Gap(4).Stretch()), actions).Gap(16)).Pad(14, 16)
+		return widget.Box(widget.Row(widget.Expanded(widget.Column(text...).Gap(4).Stretch()), actions).Gap(16)).Pad(14, 16)
 	})
 
 	logs := ggui.View(m.DaemonLog, func(lines []string) ggui.Widget {
 		if len(lines) == 0 {
-			return muted(ggui.Text(T("Nothing logged yet.")).Size(12))
+			return muted(widget.Text(T("Nothing logged yet.")).Size(12))
 		}
 		mono := ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: 11.5}
-		return ggui.Text(strings.Join(lines, "\n")).Style(mono).Color(skin.Muted).Selectable()
+		return widget.Text(strings.Join(lines, "\n")).Style(mono).Color(skin.Muted).Selectable()
 	})
 	inApp := ggui.Map(m.DaemonState, func(s daemonState) bool { return s.Mode == "embedded" })
 
@@ -463,7 +464,7 @@ func daemonSettings(m *model) ggui.Widget {
 		section(T("Status"), card(status)),
 		ggui.If(inApp, func() ggui.Widget {
 			return section(T("Log"),
-				ggui.Box(ggui.Scroll(ggui.Padding(logs, 12, 14)).FollowEnd().Bar(skin.Surface3)).
+				widget.Box(widget.Scroll(widget.Padding(logs, 12, 14)).FollowEnd().Bar(skin.Surface3)).
 					Height(260).Fill(skin.Surface1).Border(1, skin.Border).Radius(10),
 			)
 		}),
@@ -475,15 +476,15 @@ func hostSettings(m *model) ggui.Widget {
 		section(T("Identity"),
 			card(
 				row(T("Node name"), T("How this machine appears to the others."),
-					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Name })).Name(T("Node name"))).Width(240)),
+					widget.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Name })).Name(T("Node name"))).Width(240)),
 				row(T("Node ID"), T("Generated once; the mesh tells nodes apart by it."),
-					ggui.Text(m.cfg.NodeID).Size(12).Color(skin.Muted).Selectable()),
+					widget.Text(m.cfg.NodeID).Size(12).Color(skin.Muted).Selectable()),
 			),
 		),
 		section(T("Network"),
 			card(
 				row(T("Listen address"), T("Where other daemons reach this one over libp2p, as host:port. Empty is every interface on port 4243."),
-					ggui.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Listen })).Placeholder(":4243").Name(T("Listen address"))).Width(240)),
+					widget.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Listen })).Placeholder(":4243").Name(T("Listen address"))).Width(240)),
 			),
 		),
 		section(T("libp2p"),
@@ -500,7 +501,7 @@ func hostSettings(m *model) ggui.Widget {
 						if addrs := c.Self.DialAddrs(); len(addrs) > 0 {
 							text = strings.Join(addrs, "\n")
 						}
-						return ggui.Text(text).Size(12).Color(skin.Muted).Selectable()
+						return widget.Text(text).Size(12).Color(skin.Muted).Selectable()
 					})),
 			),
 		),
@@ -544,9 +545,9 @@ func aboutSettings(m *model) ggui.Widget {
 	return page(T("About"), "mako runs terminal agents on any of your computers and drives them from one place.",
 		section(T("Build"),
 			card(
-				row(T("Version"), "", ggui.Text(config.Version).Size(13).Color(skin.Muted).Selectable()),
-				row(T("Daemon config"), "", ggui.Text(filepath.Join(dir, "config.json")).Size(12).Color(skin.Muted).Selectable()),
-				row(T("App settings"), "", ggui.Text(filepath.Join(dir, "gui.json")).Size(12).Color(skin.Muted).Selectable()),
+				row(T("Version"), "", widget.Text(config.Version).Size(13).Color(skin.Muted).Selectable()),
+				row(T("Daemon config"), "", widget.Text(filepath.Join(dir, "config.json")).Size(12).Color(skin.Muted).Selectable()),
+				row(T("App settings"), "", widget.Text(filepath.Join(dir, "gui.json")).Size(12).Color(skin.Muted).Selectable()),
 			),
 		),
 	)

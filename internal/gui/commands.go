@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -230,43 +231,43 @@ func composerMenu(m *model, id string, state *chatState) ggui.Widget {
 			for i, it := range items {
 				rows[i] = menuRow(it, i == pick)
 			}
-			content = ggui.Column(rows...).Gap(2).Stretch()
+			content = widget.Column(rows...).Gap(2).Stretch()
 		} else if content = templateHint(state); content == nil {
-			return ggui.Box()
+			return widget.Box()
 		}
-		return ggui.Box(menuPanel(content)).Pad(0, 0, 6, 0)
+		return widget.Box(menuPanel(content)).Pad(0, 0, 6, 0)
 	})
 }
 
 func menuRow(it menuItem, chosen bool) ggui.Widget {
-	name := []ggui.Widget{ggui.Text(it.name).Size(13).Weight(ggui.WeightMedium).NoWrap()}
+	name := []ggui.Widget{widget.Text(it.name).Size(13).Weight(ggui.WeightMedium).NoWrap()}
 	if it.usage != "" {
-		name = append(name, ggui.Text(it.usage).Size(12).Color(skin.ExtraMuted).NoWrap())
+		name = append(name, widget.Text(it.usage).Size(12).Color(skin.ExtraMuted).NoWrap())
 	}
 	parts := []ggui.Widget{
-		ggui.Row(name...).Gap(6),
-		ggui.Expanded(muted(ggui.Text(it.description).Size(12).NoWrap().Ellipsis())),
+		widget.Row(name...).Gap(6),
+		widget.Expanded(muted(widget.Text(it.description).Size(12).NoWrap().Ellipsis())),
 	}
 	if it.tag != "" {
-		parts = append(parts, ggui.Text(it.tag).Size(11).Color(skin.ExtraMuted).NoWrap())
+		parts = append(parts, widget.Text(it.tag).Size(11).Color(skin.ExtraMuted).NoWrap())
 	}
-	return menuRowBox(ggui.Row(parts...).Gap(12), chosen, it.take)
+	return menuRowBox(widget.Row(parts...).Gap(12), chosen, it.take)
 }
 
 // menuPanel is the box a menu's rows are listed in, as the composer's
 // and a template prompt's are.
 func menuPanel(rows ggui.Widget) ggui.Widget {
-	return ggui.Box(rows).Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(4)
+	return widget.Box(rows).Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(4)
 }
 
 // menuRowBox is a row of a menu, marked when chosen, which a tap takes.
 func menuRowBox(content ggui.Widget, chosen bool, take func()) ggui.Widget {
-	row := ggui.Box(content).Pad(6, 10).Radius(6)
+	row := widget.Box(content).Pad(6, 10).Radius(6)
 	if chosen {
 		// As plain as a selected row in the sidebar, and as plain to see.
 		row = row.Fill(skin.SidebarSel).Border(1, skin.BorderAccent)
 	}
-	return ggui.Tap(row, take)
+	return widget.Tap(row, take)
 }
 
 // commandSource names where a command comes from, for the menu.

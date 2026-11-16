@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
@@ -92,7 +93,7 @@ func TestALongDiffDrawsOnlyTheLinesInView(t *testing.T) {
 	d := &protocol.Diff{Lines: lines}
 	for _, mode := range []diffMode{{}, {Wrap: true}, {Split: true}} {
 		p := ggui.ProbeBuilder(func() ggui.Widget {
-			return diffRows(d, mode, lineSel{From: 0, To: -1}, func(int, bool) {}, func(int) ggui.Widget { return ggui.Box() })
+			return diffRows(d, mode, lineSel{From: 0, To: -1}, func(int, bool) {}, func(int) ggui.Widget { return widget.Box() })
 		}, ggui.Sz(900, 600))
 		p.Frame()
 		p.Frame()

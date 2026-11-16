@@ -8,6 +8,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -77,7 +78,7 @@ func approvalCard(m *model, id string) ggui.Widget {
 	return ggui.View(m.approvalOfSession(id), func(a *protocol.Approval) ggui.Widget {
 		switch {
 		case a == nil:
-			return ggui.Box()
+			return widget.Box()
 		case len(a.GetQuestions()) > 0:
 			return questionCard(questionForm(a.GetQuestions(), func(answers []*protocol.QuestionAnswer) {
 				m.answerApproval(id, &protocol.AnswerApproval{ApprovalId: a.GetId(), Decision: protocol.DecisionAllow, Answers: answers})
@@ -90,14 +91,14 @@ func approvalCard(m *model, id string) ggui.Widget {
 		}
 		open, why := ggui.State(false), ggui.State("")
 		body := approvalBody(m, a)
-		head := ggui.Row(
+		head := widget.Row(
 			icon("shield-alert").Size(16).Color(skin.DotWaiting),
-			ggui.Text(Tf("Allow %s?", a.GetTool())).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
-			ggui.Spacer(),
+			widget.Text(Tf("Allow %s?", a.GetTool())).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
+			widget.Spacer(),
 			ggui.If(ggui.Const(body == nil && a.GetInput() != ""), func() ggui.Widget {
 				return ui.Button(T("Arguments"), func() { open.Set(!ggui.Peek(open)) }).Ghost()
 			}),
-		).Gap(8).Align(ggui.AlignCenter)
+		).Gap(8).Align(widget.AlignCenter)
 		rows := []ggui.Widget{head}
 		if body != nil {
 			rows = append(rows, body)
@@ -117,21 +118,21 @@ func approvalCard(m *model, id string) ggui.Widget {
 		buttons = append(buttons, inTerminalButton(m.decide(id, a, protocol.DecisionTerminal)))
 		deny := func() { denyWith(m, id, a, ggui.Peek(why)) }
 		rows = append(rows,
-			reveal(open, func() ggui.Widget { return ggui.Box(toolBlock(a.GetInput(), false)).MaxHeight(260) }),
-			ggui.Wrap(buttons...).Gap(8).RunGap(8).Align(ggui.AlignCenter),
-			ggui.Row(
-				ggui.Expanded(ui.TextField(why).Placeholder(T("Tell the agent what to do instead")).Name(T("Why not")).OnSubmit(func(string) { deny() })),
+			reveal(open, func() ggui.Widget { return widget.Box(toolBlock(a.GetInput(), false)).MaxHeight(260) }),
+			widget.Wrap(buttons...).Gap(8).RunGap(8).Align(widget.AlignCenter),
+			widget.Row(
+				widget.Expanded(ui.TextField(why).Placeholder(T("Tell the agent what to do instead")).Name(T("Why not")).OnSubmit(func(string) { deny() })),
 				ui.Tooltip(ui.Button(T("Deny"), deny).Outline(), chordLabel("cmd+.")),
-			).Gap(8).Align(ggui.AlignCenter),
+			).Gap(8).Align(widget.AlignCenter),
 		)
-		return approvalFrame(ggui.Column(rows...).Gap(10).Stretch())
+		return approvalFrame(widget.Column(rows...).Gap(10).Stretch())
 	})
 }
 
 // approvalFrame frames an approval's card at the foot of Chat.
 func approvalFrame(content ggui.Widget) ggui.Widget {
-	card := ggui.Box(content).Fill(skin.Surface1).Border(1, skin.DotWaiting).Radius(12).Pad(12, 14)
-	return &lane{child: arrive(ggui.Box(card).Pad(0, 0, 8, 0))}
+	card := widget.Box(content).Fill(skin.Surface1).Border(1, skin.DotWaiting).Radius(12).Pad(12, 14)
+	return &lane{child: arrive(widget.Box(card).Pad(0, 0, 8, 0))}
 }
 
 // approvalBody is what an approval's call would do as its kind shows it,
@@ -146,7 +147,7 @@ func approvalBody(m *model, a *protocol.Approval) ggui.Widget {
 	if len(rows) == 0 {
 		return nil
 	}
-	return ggui.Column(rows...).Gap(6).Stretch()
+	return widget.Column(rows...).Gap(6).Stretch()
 }
 
 // denyWith denies approval a, telling the agent why, if the user said.
@@ -173,12 +174,12 @@ func optionLabel(o *protocol.ApprovalOption) string {
 func planCard(m *model, id string, a *protocol.Approval) ggui.Widget {
 	why := ggui.State("")
 	keep := func() { denyWith(m, id, a, ggui.Peek(why)) }
-	head := ggui.Row(
+	head := widget.Row(
 		icon("list").Size(16).Color(skin.DotWaiting),
-		ggui.Text(T("Ready to carry out the plan?")).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
-		ggui.Spacer(),
+		widget.Text(T("Ready to carry out the plan?")).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
+		widget.Spacer(),
 		inTerminalButton(m.decide(id, a, protocol.DecisionTerminal)),
-	).Gap(8).Align(ggui.AlignCenter)
+	).Gap(8).Align(widget.AlignCenter)
 	plan := approvalBody(m, a)
 	if plan == nil {
 		plan = toolBlock(a.GetDetail(), false)
@@ -193,15 +194,15 @@ func planCard(m *model, id string, a *protocol.Approval) ggui.Widget {
 		}
 		approve = append(approve, b)
 	}
-	return approvalFrame(ggui.Column(
+	return approvalFrame(widget.Column(
 		head,
 		plan,
-		ggui.Wrap(approve...).Gap(8).RunGap(8),
-		ggui.Row(
-			ggui.Expanded(ui.TextField(why).Placeholder(T("Tell the agent what to change")).Name(T("What to change")).
+		widget.Wrap(approve...).Gap(8).RunGap(8),
+		widget.Row(
+			widget.Expanded(ui.TextField(why).Placeholder(T("Tell the agent what to change")).Name(T("What to change")).
 				OnSubmit(func(string) { keep() })),
 			ui.Button(T("Keep planning"), keep).Outline(),
-		).Gap(8).Align(ggui.AlignCenter),
+		).Gap(8).Align(widget.AlignCenter),
 	).Gap(10).Stretch())
 }
 
@@ -222,7 +223,7 @@ func planOptionLabel(mode string) string {
 func approvalBar(m *model, id string) ggui.Widget {
 	return ggui.View(m.approvalOfSession(id), func(a *protocol.Approval) ggui.Widget {
 		if a == nil {
-			return ggui.Box()
+			return widget.Box()
 		}
 		what := a.GetTool()
 		if a.GetDetail() != "" {
@@ -247,11 +248,11 @@ func approvalBar(m *model, id string) ggui.Widget {
 		}
 		row := append([]ggui.Widget{
 			icon(glyph).Size(15).Color(skin.DotWaiting),
-			ggui.Text(ask).Size(12.5).Weight(ggui.WeightMedium).NoWrap(),
-			ggui.Expanded(ggui.Text(what).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()),
+			widget.Text(ask).Size(12.5).Weight(ggui.WeightMedium).NoWrap(),
+			widget.Expanded(widget.Text(what).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()),
 		}, buttons...)
-		return ggui.Column(
-			ggui.Box(ggui.Row(row...).Gap(10).Align(ggui.AlignCenter)).Pad(6, 12).Fill(skin.Surface2),
+		return widget.Column(
+			widget.Box(widget.Row(row...).Gap(10).Align(widget.AlignCenter)).Pad(6, 12).Fill(skin.Surface2),
 			hline(),
 		).Stretch()
 	})

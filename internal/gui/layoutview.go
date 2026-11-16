@@ -9,6 +9,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -68,10 +69,10 @@ func paneGroup(m *model, id int) ggui.Readable[tabGroup] {
 func paneView(m *model, id int) ggui.Widget {
 	group := paneGroup(m, id)
 	// A press anywhere in it makes the pane current, whatever takes it.
-	return &pressWatch{child: ggui.Column(
+	return &pressWatch{child: widget.Column(
 		paneTabBar(m, id, group),
 		hline(),
-		ggui.Expanded(ggui.Stack(paneBody(m, id, group), &paneGlow{on: func() bool {
+		widget.Expanded(widget.Stack(paneBody(m, id, group), &paneGlow{on: func() bool {
 			return m.Prefs.Get().PaneGlow && m.FocusGroup.Get() == id
 		}}).Expand()),
 	).Stretch(), fn: func() { m.focusGroup(id) }}
@@ -192,7 +193,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				}}
 			}
 			// Before the tab or after it, by the half it is over.
-			slot := func(d ggui.Dropped[tabDrag]) int {
+			slot := func(d widget.Dropped[tabDrag]) int {
 				if d.Pos.X >= d.Size.W/2 {
 					return at + 1
 				}
@@ -203,9 +204,9 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		}
 		children = append(children, dropSlot(m, id, len(g.Tabs)))
 		// Tabs scrolled past an end fade out there.
-		bar := ggui.Scroll(ggui.Row(children...)).Horizontal().Shrink().FadeEdges(28).Bar(color.Transparent)
+		bar := widget.Scroll(widget.Row(children...)).Horizontal().Shrink().FadeEdges(28).Bar(color.Transparent)
 		// Centred down the bar only: across, it is as wide as itself.
-		plus := ggui.Box(ggui.Column(launchButton(m, nodeID, project, targets, focus, newSession)).Justify(ggui.JustifyCenter)).
+		plus := widget.Box(widget.Column(launchButton(m, nodeID, project, targets, focus, newSession)).Justify(widget.JustifyCenter)).
 			Height(tabBarHeight).Pad(0, 4)
 
 		// Beside the tabs: the +.
@@ -215,15 +216,15 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		// lists them all.
 		need := tabsWidth(g.Tabs, sessions, titles, docs, diffs) + extra + 16
 		end := len(g.Tabs)
-		tabsAndPlus := tabDrop(m, ggui.Row(ggui.Flexible(bar), plus).Stretch(), id,
-			func(ggui.Dropped[tabDrag]) int { return end }).
+		tabsAndPlus := tabDrop(m, widget.Row(widget.Flexible(bar), plus).Stretch(), id,
+			func(widget.Dropped[tabDrag]) int { return end }).
 			OnHover(func(bool) { m.leaveHint(id) })
-		return ggui.Row(
-			ggui.Expanded(tabsAndPlus),
-			ggui.Responsive(need, ggui.Box().Size(0, 0), tabList(m, g, sessions, titles, docs, diffs)),
+		return widget.Row(
+			widget.Expanded(tabsAndPlus),
+			widget.Responsive(need, widget.Box().Size(0, 0), tabList(m, g, sessions, titles, docs, diffs)),
 		).Stretch()
 	})
-	return ggui.Box(tabs).Height(tabBarHeight)
+	return widget.Box(tabs).Height(tabBarHeight)
 }
 
 // tabWidth estimates how wide a tab is drawn: its label, capped as the tab
@@ -263,7 +264,7 @@ func tabList(m *model, g tabGroup, sessions []*protocol.SessionInfo, titles map[
 	}
 	// Centred down the bar, the size of the + and the eraser beside it.
 	menu := iconMenu(ui.MenuOf(icon("chevrons-up-down"), items...).Width(260).Name(T("All tabs")), 6)
-	return ggui.Box(ggui.Column(menu).Justify(ggui.JustifyCenter)).Height(tabBarHeight)
+	return widget.Box(widget.Column(menu).Justify(widget.JustifyCenter)).Height(tabBarHeight)
 }
 
 // paneBody is the terminal of the tab a pane shows, and while a tab is
@@ -279,7 +280,7 @@ func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			return emptyState(m)
 		case isDocTab(p.ID):
 			if m.docs[p.ID] == nil {
-				return ggui.Box()
+				return widget.Box()
 			}
 			return docView(m, p.ID, ggui.Peek(m.FocusGroup) == id)
 		case isDiffTab(p.ID):
@@ -288,19 +289,19 @@ func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			// Without a daemon there is nothing to attach to; say why.
 			return ggui.View(m.Conn, func(c connState) ggui.Widget {
 				if !c.OK && c.Err != "" {
-					return ggui.Center(ggui.Column(
+					return widget.Center(widget.Column(
 						icon("server").Size(28).Color(skin.ExtraMuted),
-						muted(ggui.Text(c.Err).Size(13)),
+						muted(widget.Text(c.Err).Size(13)),
 						ui.Button(T("Daemon settings"), func() { m.openSettings("daemon") }).Outline(),
-					).Gap(12).Align(ggui.AlignCenter))
+					).Gap(12).Align(widget.AlignCenter))
 				}
-				return ggui.Center(ggui.Column(ui.Spinner(), muted(ggui.Text(T("Attaching…")).Size(13))).Gap(12).Align(ggui.AlignCenter))
+				return widget.Center(widget.Column(ui.Spinner(), muted(widget.Text(T("Attaching…")).Size(13))).Gap(12).Align(widget.AlignCenter))
 			})
 		default:
 			return backdropped(m, sessionBackdrop, sessionView(m, p.ID, id))
 		}
 	})
-	return ggui.Stack(
+	return widget.Stack(
 		content,
 		ggui.If(m.Dragging, func() ggui.Widget { return newDropZones(m, id) }),
 	).Expand()
@@ -310,8 +311,8 @@ func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 // pane there, its middle moves the tab into it, and the part of the pane
 // the tab would take is shaded.
 type dropZones struct {
-	zones [5]*ggui.DropZoneWidget[tabDrag] // by dropEdge
-	hint  *ggui.StateValue[dropEdge]       // the zone under the drag, or -1
+	zones [5]*widget.DropZoneWidget[tabDrag] // by dropEdge
+	hint  *ggui.StateValue[dropEdge]         // the zone under the drag, or -1
 	shade ggui.Widget
 	rects [5]ggui.Rect
 }
@@ -323,7 +324,7 @@ func newDropZones(m *model, group int) *dropZones {
 	z := &dropZones{hint: ggui.State(dropEdge(-1))}
 	for e := range z.zones {
 		edge := dropEdge(e)
-		z.zones[e] = ggui.DropZone(ggui.Box(), func(d ggui.Dropped[tabDrag]) {
+		z.zones[e] = widget.DropZone(widget.Box(), func(d widget.Dropped[tabDrag]) {
 			m.endDrag()
 			m.splitTab(d.Value.ID, group, edge)
 		}).OnHover(func(over bool) {
@@ -402,7 +403,7 @@ func (s *dropShade) Paint(dst *ggui.Canvas, r ggui.Rect) {
 
 // sessionDrag lets a sidebar row be dragged into a pane like a tab.
 func sessionDrag(m *model, w ggui.Widget, id string) ggui.Widget {
-	return ggui.DragSource(w, tabDrag{ID: id}).
+	return widget.DragSource(w, tabDrag{ID: id}).
 		OnDragStart(func() { m.Dragging.Set(true) }).
 		OnDragEnd(func(bool) { m.endDrag() })
 }
@@ -424,20 +425,20 @@ func dropSlot(m *model, group, i int) ggui.Widget {
 		}
 		return 0
 	})
-	gap := ggui.AnimatedBox().BindWidth(width).Collapsible().Height(tabBarHeight).
+	gap := widget.AnimatedBox().BindWidth(width).Collapsible().Height(tabBarHeight).
 		Fill(skin.Surface2).Duration(150 * time.Millisecond).Easing(ggui.EaseOut)
 	// An open gap is where the pointer is once the tabs moved aside, so it
 	// keeps itself open, and takes the tab dropped in it.
-	return tabDrop(m, gap, group, func(ggui.Dropped[tabDrag]) int { return i })
+	return tabDrop(m, gap, group, func(widget.Dropped[tabDrag]) int { return i })
 }
 
 // tabDrop takes a tab dropped on w into a pane's bar at the place index
 // reads from the drop, and opens the gap there while one is over w.
-func tabDrop(m *model, w ggui.Widget, group int, index func(ggui.Dropped[tabDrag]) int) *ggui.DropZoneWidget[tabDrag] {
-	return ggui.DropZone(w, func(d ggui.Dropped[tabDrag]) {
+func tabDrop(m *model, w ggui.Widget, group int, index func(widget.Dropped[tabDrag]) int) *widget.DropZoneWidget[tabDrag] {
+	return widget.DropZone(w, func(d widget.Dropped[tabDrag]) {
 		m.endDrag()
 		m.moveTab(d.Value.ID, group, index(d))
-	}).OnOver(func(d ggui.Dropped[tabDrag]) { m.TabHint.Set(tabHint{Group: group, Index: index(d)}) })
+	}).OnOver(func(d widget.Dropped[tabDrag]) { m.TabHint.Set(tabHint{Group: group, Index: index(d)}) })
 }
 
 // leaveHint clears the gap a drag leaving a pane's bar had opened there.

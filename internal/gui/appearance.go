@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 )
@@ -23,7 +24,7 @@ func appearanceSettings(m *model) ggui.Widget {
 	corner := ui.Select(prefField(m, func(p *prefs) *string { return &p.UsageCorner })).
 		Options(usageCorners).Format(func(s string) string { return T(usageCornerLabels[s]) }).Name(T("Overlay position")).
 		BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return !p.UsageOverlay }))
-	actions := ggui.Row(
+	actions := widget.Row(
 		ui.Button(T("Duplicate"), m.duplicateTheme).Outline(),
 		ui.Button(T("Delete"), m.deleteTheme).Outline().BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return skin.IsBuiltin(p.Theme) })),
 		ui.Button(T("Open folder"), openFolder(themesDir)).Ghost(),
@@ -32,7 +33,7 @@ func appearanceSettings(m *model) ggui.Widget {
 	return page(T("Appearance"), T("The window's colours, after Paseo's palettes, or your own."),
 		section(T("Theme"),
 			card(
-				row(T("Theme"), T("System follows the desktop's light or dark appearance."), ggui.Box(theme).Width(200)),
+				row(T("Theme"), T("System follows the desktop's light or dark appearance."), widget.Box(theme).Width(200)),
 				stackedRow(T("Your themes"), T("A theme of your own starts as a copy of another and keeps its colours in the themes folder, as JSON you can edit or share."), actions),
 			),
 			themeEditor(m),
@@ -51,7 +52,7 @@ func appearanceSettings(m *model) ggui.Widget {
 			card(
 				row(T("Show usage overlay"), T("Float an agent session's context and its account's 5-hour and weekly limits over its terminal and chat, for agents that report them."),
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.UsageOverlay }), "").Name(T("Show usage overlay"))),
-				row(T("Overlay position"), T("The corner of the session the overlay sits in."), ggui.Box(corner).Width(160)),
+				row(T("Overlay position"), T("The corner of the session the overlay sits in."), widget.Box(corner).Width(160)),
 			),
 		),
 	)
@@ -87,7 +88,7 @@ func themeEditor(m *model) ggui.Widget {
 				rows = nil
 			}
 		}
-		return ggui.Column(groups...).Gap(20).Stretch()
+		return widget.Column(groups...).Gap(20).Stretch()
 	})
 }
 
@@ -101,7 +102,7 @@ func colorRow(m *model, theme string, c skin.Color, p skin.Palette) ggui.Widget 
 		}
 	})
 	swatch := ggui.View(value, func(s string) ggui.Widget {
-		box := ggui.Box().Size(22, 22).Radius(5).Border(1, skin.Border)
+		box := widget.Box().Size(22, 22).Radius(5).Border(1, skin.Border)
 		if v, ok := skin.ParseHex(s); ok {
 			box = box.Fill(v)
 		}
@@ -109,11 +110,11 @@ func colorRow(m *model, theme string, c skin.Color, p skin.Palette) ggui.Widget 
 	})
 	label := colorLabel(c)
 	// Tighter than a setting's row: a theme has some fifty colours.
-	return ggui.Box(ggui.Row(
-		ggui.Expanded(ggui.Text(label).Size(13)),
+	return widget.Box(widget.Row(
+		widget.Expanded(widget.Text(label).Size(13)),
 		swatch,
-		ggui.Box(ui.TextField(value).Name(label)).Width(96),
-	).Gap(8).Align(ggui.AlignCenter)).Pad(5, 12, 5, 16)
+		widget.Box(ui.TextField(value).Name(label)).Width(96),
+	).Gap(8).Align(widget.AlignCenter)).Pad(5, 12, 5, 16)
 }
 
 // colorLabel is a colour's name in the window's language.
@@ -129,15 +130,15 @@ func colorLabel(c skin.Color) string {
 func themeSwatch(p skin.Palette) ggui.Widget {
 	var surfaces []ggui.Widget
 	for _, c := range []color.RGBA{p.Sidebar, p.Surface0, p.Surface1, p.Surface2, p.Surface3} {
-		surfaces = append(surfaces, ggui.Box().Size(40, 26).Radius(6).Fill(c).Border(1, skin.Border))
+		surfaces = append(surfaces, widget.Box().Size(40, 26).Radius(6).Fill(c).Border(1, skin.Border))
 	}
 	var ansi []ggui.Widget
 	for _, c := range p.ANSI {
-		ansi = append(ansi, ggui.Box().Size(20, 20).Radius(4).Fill(skin.Hex(c)))
+		ansi = append(ansi, widget.Box().Size(20, 20).Radius(4).Fill(skin.Hex(c)))
 	}
 	return card(
-		row(T("Surfaces"), T("Duplicate the theme to change its colours."), ggui.Row(surfaces...).Gap(6)),
-		row(T("Terminal colours"), "", ggui.Row(ansi...).Gap(4)),
+		row(T("Surfaces"), T("Duplicate the theme to change its colours."), widget.Row(surfaces...).Gap(6)),
+		row(T("Terminal colours"), "", widget.Row(ansi...).Gap(4)),
 	)
 }
 
@@ -212,13 +213,13 @@ func backdropRows(m *model, title, hint string, slot backdropSlot) []ggui.Widget
 	none := ggui.Map(path, func(s string) bool { return s == "" })
 	clear := ui.Button(T("Remove"), func() { path.Set("") }).Ghost().BindDisabled(none)
 	return []ggui.Widget{
-		stackedRow(title, hint, ggui.Row(
-			ggui.Expanded(ui.TextField(path).Placeholder("~/Pictures/background.jpg").Name(title)),
+		stackedRow(title, hint, widget.Row(
+			widget.Expanded(ui.TextField(path).Placeholder("~/Pictures/background.jpg").Name(title)),
 			browse, clear,
 		).Gap(8)),
 		ggui.Reactive(func() ggui.Widget {
 			if none.Get() {
-				return ggui.Box()
+				return widget.Box()
 			}
 			return backdropPlacement(m, slot)
 		}),
@@ -252,8 +253,8 @@ func backdropPlacement(m *model, slot backdropSlot) ggui.Widget {
 		return lengthField(prefField(m, func(p *prefs) *float64 { return f(slot.of(p)) }), placeholder, name)
 	}
 	line := func(label string, controls ...ggui.Widget) ggui.Widget {
-		return ggui.Row(append([]ggui.Widget{ggui.Box(muted(ggui.Text(label).Size(12.5))).Width(52)}, controls...)...).
-			Gap(6).Align(ggui.AlignCenter)
+		return widget.Row(append([]ggui.Widget{widget.Box(muted(widget.Text(label).Size(12.5))).Width(52)}, controls...)...).
+			Gap(6).Align(widget.AlignCenter)
 	}
 	opacity := prefField(m, func(p *prefs) *float64 { return &slot.of(p).Opacity })
 	fit := ui.ToggleGroup(prefField(m, func(p *prefs) *string { return &slot.of(p).Fit })).
@@ -268,21 +269,21 @@ func backdropPlacement(m *model, slot backdropSlot) ggui.Widget {
 			return p
 		})
 	}).Ghost()
-	controls := ggui.Column(
+	controls := widget.Column(
 		line(T("Fit"), fit),
 		line(T("Size"), length(func(b *backdrop) *float64 { return &b.Width }, T("Width"), T("Width")),
 			length(func(b *backdrop) *float64 { return &b.Height }, T("Height"), T("Height")),
-			ggui.Box(muted(ggui.Text(T("Margins")).Size(12.5))).Pad(0, 0, 0, 14),
+			widget.Box(muted(widget.Text(T("Margins")).Size(12.5))).Pad(0, 0, 0, 14),
 			length(func(b *backdrop) *float64 { return &b.MarginX }, T("Horizontal"), T("Horizontal margin")),
 			length(func(b *backdrop) *float64 { return &b.MarginY }, T("Vertical"), T("Vertical margin"))),
 		line(T("Opacity"),
-			ggui.Box(ui.Slider(opacity, 0, 1).Step(0.05).Name(T("Image opacity"))).Width(200),
-			ggui.Box(ggui.View(opacity, func(o float64) ggui.Widget {
-				return muted(ggui.Text(Tf("%d%%", int(o*100+0.5))).Size(12.5))
+			widget.Box(ui.Slider(opacity, 0, 1).Step(0.05).Name(T("Image opacity"))).Width(200),
+			widget.Box(ggui.View(opacity, func(o float64) ggui.Widget {
+				return muted(widget.Text(Tf("%d%%", int(o*100+0.5))).Size(12.5))
 			})).Width(36),
-			ggui.Spacer(), reset),
+			widget.Spacer(), reset),
 	).Gap(8).Stretch()
-	return ggui.Box(ggui.Row(backdropPreview(m, slot), ggui.Expanded(controls)).Gap(20).Align(ggui.AlignCenter)).Pad(12, 16)
+	return widget.Box(widget.Row(backdropPreview(m, slot), widget.Expanded(controls)).Gap(20).Align(widget.AlignCenter)).Pad(12, 16)
 }
 
 // lengthField edits a length in pixels as plain digits, empty for 0, which
@@ -304,7 +305,7 @@ func lengthField(b ggui.Binding[float64], placeholder, name string) ggui.Widget 
 			}
 		},
 	)
-	return ggui.Box(ui.TextField(text).Placeholder(placeholder).Name(name)).Width(64)
+	return widget.Box(ui.TextField(text).Placeholder(placeholder).Name(name)).Width(64)
 }
 
 // backdropPreview is the slot's image over the theme as it would be under
@@ -318,8 +319,8 @@ func backdropPreview(m *model, slot backdropSlot) ggui.Widget {
 	scale := backdropPreviewWidth / seen.W
 	height := min(max(seen.H*scale, backdropPreviewMinHeight), backdropPreviewMaxHeight)
 	position := prefField(m, func(p *prefs) *string { return &slot.of(p).Position })
-	view := ggui.Stack(ggui.Box().Fill(skin.SolidBg), backdropLayer(m, slot, scale), backdropScrim(m, slot), positionZones(position))
-	return ggui.Box(view).Size(backdropPreviewWidth, height).Border(1, skin.Border).Radius(6)
+	view := widget.Stack(widget.Box().Fill(skin.SolidBg), backdropLayer(m, slot, scale), backdropScrim(m, slot), positionZones(position))
+	return widget.Box(view).Size(backdropPreviewWidth, height).Border(1, skin.Border).Radius(6)
 }
 
 // positionZones are nine buttons in thirds of their room, one a position,
@@ -331,10 +332,10 @@ func positionZones(value ggui.Binding[string]) ggui.Widget {
 		dot := ggui.Reactive(func() ggui.Widget {
 			on := chosen.Get()
 			d := pick(on, 9.0, 5.0)
-			return ggui.Box().Size(d, d).Radius(d/2).Border(1, color.RGBA{A: 0x70}).
+			return widget.Box().Size(d, d).Radius(d/2).Border(1, color.RGBA{A: 0x70}).
 				Fill(pick[color.Color](on, skin.AccentBright, color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xb0}))
 		})
-		b := ui.ButtonOf(ggui.Center(dot), func() { value.Set(pos) }).Ghost().Pad(0).Radius(4).
+		b := ui.ButtonOf(widget.Center(dot), func() { value.Set(pos) }).Ghost().Pad(0).Radius(4).
 			Name(T(backdropPositionLabels[pos]))
 		z[i] = ui.Tooltip(b, T(backdropPositionLabels[pos]))
 	}

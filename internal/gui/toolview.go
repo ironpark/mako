@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/gitstat"
@@ -43,9 +44,9 @@ func toolBody(m *model, msg *protocol.ChatMessage) ggui.Widget {
 		rows = append(rows, toolOutput(m, msg, in, result, failed))
 	}
 	if len(rows) == 0 {
-		return ggui.Padding(muted(ggui.Text(T("No output")).Size(12)), 4, 6, 6, 6)
+		return widget.Padding(muted(widget.Text(T("No output")).Size(12)), 4, 6, 6, 6)
 	}
-	return ggui.Padding(ggui.Column(rows...).Gap(6).Stretch(), 4, 6, 6, 18)
+	return widget.Padding(widget.Column(rows...).Gap(6).Stretch(), 4, 6, 6, 18)
 }
 
 // toolInput is what a call asked for, as its kind reads.
@@ -65,7 +66,7 @@ func toolInput(m *model, kind string, args string, in map[string]any) []ggui.Wid
 		}
 		var rows []ggui.Widget
 		if d := agent.Str(in, "description"); d != "" {
-			rows = append(rows, muted(ggui.Text(d).Size(12.5)))
+			rows = append(rows, muted(widget.Text(d).Size(12.5)))
 		}
 		return append(rows, commandBlock(cmd, agent.Str(in, "cwd")))
 	case protocol.ToolPatch:
@@ -91,7 +92,7 @@ func toolInput(m *model, kind string, args string, in map[string]any) []ggui.Wid
 	case protocol.ToolTodo, protocol.ToolPlan:
 		var rows []ggui.Widget
 		if e := agent.Str(in, "explanation"); e != "" {
-			rows = append(rows, ggui.Text(e).Size(12.5))
+			rows = append(rows, widget.Text(e).Size(12.5))
 		}
 		return append(rows, checklist(agent.List(in, "items")))
 	case protocol.ToolExitPlan:
@@ -103,7 +104,7 @@ func toolInput(m *model, kind string, args string, in map[string]any) []ggui.Wid
 	case protocol.ToolTask:
 		var rows []ggui.Widget
 		if d := agent.Str(in, "description"); d != "" {
-			rows = append(rows, ggui.Text(d).Size(13).Weight(ggui.WeightMedium))
+			rows = append(rows, widget.Text(d).Size(13).Weight(ggui.WeightMedium))
 		}
 		if a := agent.Str(in, "agent"); a != "" {
 			rows = append(rows, fieldChips(map[string]any{"agent": a}, "agent"))
@@ -123,7 +124,7 @@ func toolInput(m *model, kind string, args string, in map[string]any) []ggui.Wid
 func toolOutput(m *model, msg *protocol.ChatMessage, in map[string]any, result string, failed bool) ggui.Widget {
 	label := pick(failed, T("Error"), T("Output"))
 	if failed {
-		return ggui.Column(toolLabel(label), scrolled(toolBlock(result, true))).Gap(4).Stretch()
+		return widget.Column(toolLabel(label), scrolled(toolBlock(result, true))).Gap(4).Stretch()
 	}
 	switch msg.GetKind() {
 	case protocol.ToolShell:
@@ -133,16 +134,16 @@ func toolOutput(m *model, msg *protocol.ChatMessage, in map[string]any, result s
 			code = int(msg.GetExitCode())
 			head = append(head, exitBadge(code))
 		}
-		block := ggui.Widget(muted(ggui.Text(T("No output")).Size(12)))
+		block := ggui.Widget(muted(widget.Text(T("No output")).Size(12)))
 		if strings.TrimSpace(result) != "" {
 			block = scrolled(toolBlock(result, code > 0))
 		}
-		return ggui.Column(ggui.Row(head...).Gap(8).Align(ggui.AlignCenter), block).Gap(4).Stretch()
+		return widget.Column(widget.Row(head...).Gap(8).Align(widget.AlignCenter), block).Gap(4).Stretch()
 	case protocol.ToolRead:
 		first, _ := in["offset"].(float64)
-		return ggui.Column(toolLabel(Tf("From line %d", max(int(first), 1))), codeView(m, agent.Str(in, "path"), result)).Gap(4).Stretch()
+		return widget.Column(toolLabel(Tf("From line %d", max(int(first), 1))), codeView(m, agent.Str(in, "path"), result)).Gap(4).Stretch()
 	}
-	return ggui.Column(toolLabel(label), scrolled(toolBlock(result, false))).Gap(4).Stretch()
+	return widget.Column(toolLabel(label), scrolled(toolBlock(result, false))).Gap(4).Stretch()
 }
 
 // toolGlyph is the icon a tool row shows for its kind, one of protocol's
@@ -193,30 +194,30 @@ func textLines(s string) int {
 func pathLine(path, note string) ggui.Widget {
 	row := []ggui.Widget{
 		icon(fileIconName(baseName(path))).Size(14).Color(skin.Muted),
-		ggui.Flex(ggui.Text(path).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis().Selectable(), 1),
+		widget.Flex(widget.Text(path).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis().Selectable(), 1),
 	}
 	if note != "" {
-		row = append(row, muted(ggui.Text(note).Size(12).NoWrap()))
+		row = append(row, muted(widget.Text(note).Size(12).NoWrap()))
 	}
-	return ggui.Row(row...).Gap(6).Align(ggui.AlignCenter)
+	return widget.Row(row...).Gap(6).Align(widget.AlignCenter)
 }
 
 // commandBlock is a command as a terminal shows it, with where it runs.
 func commandBlock(cmd, dir string) ggui.Widget {
 	mono := ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: 12}
-	text := ggui.RichText(ggui.Span("$ ").Color(skin.AccentBright), ggui.Span(strings.TrimRight(cmd, "\n"))).
+	text := widget.RichText(widget.Span("$ ").Color(skin.AccentBright), widget.Span(strings.TrimRight(cmd, "\n"))).
 		Style(mono).LineHeight(1.4).Selectable()
 	rows := []ggui.Widget{text}
 	if dir != "" {
-		rows = append(rows, ggui.Text(dir).Style(mono).Color(skin.ExtraMuted).NoWrap().Ellipsis())
+		rows = append(rows, widget.Text(dir).Style(mono).Color(skin.ExtraMuted).NoWrap().Ellipsis())
 	}
-	return toolFrame(ggui.Column(rows...).Gap(4).Stretch()).Pad(8, 10)
+	return toolFrame(widget.Column(rows...).Gap(4).Stretch()).Pad(8, 10)
 }
 
 // exitBadge is a command's exit code, green for success.
 func exitBadge(code int) ggui.Widget {
 	c := pick(code == 0, skin.DiffAdded, skin.DotDown)
-	return ggui.Box(ggui.Text(Tf("exit %d", code)).Size(11).Font(ggui.DefaultMonoFont()).Color(c).NoWrap()).
+	return widget.Box(widget.Text(Tf("exit %d", code)).Size(11).Font(ggui.DefaultMonoFont()).Color(c).NoWrap()).
 		Pad(1, 6).Border(1, c).Radius(4)
 }
 
@@ -229,17 +230,17 @@ func codeView(m *model, path, src string) ggui.Widget {
 		src = strings.Join(lines[:maxToolLines], "\n")
 	}
 	l, ok := m.hl.languageFor(path, src)
-	rows := []ggui.Widget{ggui.Scroll(ggui.Padding(codeText(m, src, l, ok, 12), 8, 10)).Horizontal().Bar(skin.Surface3)}
+	rows := []ggui.Widget{widget.Scroll(widget.Padding(codeText(m, src, l, ok, 12), 8, 10)).Horizontal().Bar(skin.Surface3)}
 	if cut {
-		rows = append(rows, ggui.Box(muted(ggui.Text(Tf("%d more lines", len(lines)-maxToolLines)).Size(11.5))).Pad(4, 10, 8, 10))
+		rows = append(rows, widget.Box(muted(widget.Text(Tf("%d more lines", len(lines)-maxToolLines)).Size(11.5))).Pad(4, 10, 8, 10))
 	}
-	return scrolled(toolFrame(ggui.Column(rows...).Stretch()))
+	return scrolled(toolFrame(widget.Column(rows...).Stretch()))
 }
 
 // scrolled caps w at maxToolHeight, scrolling what is over; shorter, it
 // is as tall as it is.
 func scrolled(w ggui.Widget) ggui.Widget {
-	return &capHeight{content: w, scroll: ggui.Scroll(w).Bar(skin.Surface3), max: maxToolHeight}
+	return &capHeight{content: w, scroll: widget.Scroll(w).Bar(skin.Surface3), max: maxToolHeight}
 }
 
 // capHeight is content as tall as it is up to max, and scroll, which
@@ -273,14 +274,14 @@ func diffBlock(lines []*protocol.DiffLine) ggui.Widget {
 		switch l.GetOp() {
 		case "@":
 			if i > 0 {
-				rows = append(rows, ggui.Box(muted(ggui.Text("⋯").Style(mono))).Pad(0, 10).Fill(skin.Surface2))
+				rows = append(rows, widget.Box(muted(widget.Text("⋯").Style(mono))).Pad(0, 10).Fill(skin.Surface2))
 			}
 			continue
 		case "+", "-":
 		default:
 			l = &protocol.DiffLine{Op: " ", Text: l.GetText()}
 		}
-		row := ggui.Box(diffText(l, words[i], diffMode{Wrap: true}, mono, l.GetOp()+" ")).Pad(1, 10)
+		row := widget.Box(diffText(l, words[i], diffMode{Wrap: true}, mono, l.GetOp()+" ")).Pad(1, 10)
 		switch l.GetOp() {
 		case "+":
 			row = row.Fill(skin.DiffAddedBg)
@@ -290,12 +291,12 @@ func diffBlock(lines []*protocol.DiffLine) ggui.Widget {
 		rows = append(rows, row)
 	}
 	if len(shown) < len(lines) {
-		rows = append(rows, ggui.Box(muted(ggui.Text(T("The rest of the diff is not shown.")).Size(11.5))).Pad(4, 10))
+		rows = append(rows, widget.Box(muted(widget.Text(T("The rest of the diff is not shown.")).Size(11.5))).Pad(4, 10))
 	}
 	if len(rows) == 0 {
-		rows = append(rows, ggui.Box(muted(ggui.Text(T("No changes")).Size(12))).Pad(6, 10))
+		rows = append(rows, widget.Box(muted(widget.Text(T("No changes")).Size(12))).Pad(6, 10))
 	}
-	return scrolled(toolFrame(ggui.Column(rows...).Stretch()).Pad(4, 0))
+	return scrolled(toolFrame(widget.Column(rows...).Stretch()).Pad(4, 0))
 }
 
 // patchFile is one file of an apply_patch patch.
@@ -369,7 +370,7 @@ func checklist(items []any) ggui.Widget {
 		}
 		status := agent.Str(step, "status")
 		glyph := icon("circle").Size(14).Color(skin.ExtraMuted)
-		text := ggui.Text(agent.Str(step, "text")).Size(12.5)
+		text := widget.Text(agent.Str(step, "text")).Size(12.5)
 		switch status {
 		case "completed", "done":
 			glyph = icon("circle-check").Size(14).Color(skin.DiffAdded)
@@ -378,12 +379,12 @@ func checklist(items []any) ggui.Widget {
 			glyph = icon("circle-dot").Size(14).Color(skin.AccentBright)
 			text = text.Weight(ggui.WeightMedium)
 		}
-		rows = append(rows, ggui.Row(glyph, ggui.Expanded(text)).Gap(8).Align(ggui.AlignStart))
+		rows = append(rows, widget.Row(glyph, widget.Expanded(text)).Gap(8).Align(widget.AlignStart))
 	}
 	if len(rows) == 0 {
-		return muted(ggui.Text(T("No steps")).Size(12))
+		return muted(widget.Text(T("No steps")).Size(12))
 	}
-	return ggui.Box(ggui.Column(rows...).Gap(6).Stretch()).Pad(2, 2)
+	return widget.Box(widget.Column(rows...).Gap(6).Stretch()).Pad(2, 2)
 }
 
 // fieldChips are the arguments keys name, each a label and its value on
@@ -395,15 +396,15 @@ func fieldChips(in map[string]any, keys ...string) ggui.Widget {
 		if v == "" {
 			continue
 		}
-		chips = append(chips, ggui.Row(
-			ggui.Text(k).Size(11).Color(skin.ExtraMuted).NoWrap(),
-			ggui.Flex(ggui.Text(v).Size(12).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis().Selectable(), 1),
-		).Gap(6).Align(ggui.AlignCenter))
+		chips = append(chips, widget.Row(
+			widget.Text(k).Size(11).Color(skin.ExtraMuted).NoWrap(),
+			widget.Flex(widget.Text(v).Size(12).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis().Selectable(), 1),
+		).Gap(6).Align(widget.AlignCenter))
 	}
 	if len(chips) == 0 {
-		return ggui.Box()
+		return widget.Box()
 	}
-	return ggui.Column(chips...).Gap(4).Stretch()
+	return widget.Column(chips...).Gap(4).Stretch()
 }
 
 // scalar is a value as one line: a string, number or boolean as itself, a
@@ -433,9 +434,9 @@ func scalar(v any) string {
 // proseBlock is text the agent wrote for another, as a muted paragraph.
 func proseBlock(s string) ggui.Widget {
 	if strings.TrimSpace(s) == "" {
-		return ggui.Box()
+		return widget.Box()
 	}
-	return scrolled(toolFrame(ggui.Text(strings.TrimSpace(s)).Size(12.5).LineHeight(1.45).Selectable()).Pad(8, 10))
+	return scrolled(toolFrame(widget.Text(strings.TrimSpace(s)).Size(12.5).LineHeight(1.45).Selectable()).Pad(8, 10))
 }
 
 // fieldRows are the arguments of a tool not known here: short values a

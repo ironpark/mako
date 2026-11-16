@@ -11,6 +11,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/mcp"
@@ -118,7 +119,7 @@ func mcpServerCard(m *model, id, ext string) ggui.Widget {
 		})
 		rows := []ggui.Widget{row(id, ext, ui.Switch(on, "").Name(Tf("%s enabled", id)))}
 		if conf.Command != nil {
-			rows = append(rows, row(T("Command"), strings.Join(append([]string{conf.Command.Path}, conf.Command.Args...), " "), ggui.Box()))
+			rows = append(rows, row(T("Command"), strings.Join(append([]string{conf.Command.Path}, conf.Command.Args...), " "), widget.Box()))
 		}
 		text := m.mcpText(id)
 		defaults, placeholder, hint := "", "", ""
@@ -151,13 +152,13 @@ func mcpServerCard(m *model, id, ext string) ggui.Widget {
 			buttons = append(buttons, ui.Button(T("Fill in defaults"), func() { text.Set(defaults) }).Ghost())
 		}
 		rows = append(rows, stackedRow(T("Settings"), hint,
-			ggui.Column(field, ggui.Row(buttons...).Gap(8)).Gap(8).Stretch()))
+			widget.Column(field, widget.Row(buttons...).Gap(8)).Gap(8).Stretch()))
 		note := ggui.View(m.ext.MCPNote, func(s string) ggui.Widget {
 			if s == "" {
-				return ggui.Box()
+				return widget.Box()
 			}
-			return muted(ggui.Text(s).Size(12.5))
+			return muted(widget.Text(s).Size(12.5))
 		})
-		return ggui.Column(card(rows...), note).Gap(6).Stretch()
+		return widget.Column(card(rows...), note).Gap(6).Stretch()
 	})
 }

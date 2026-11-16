@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 	"github.com/ironpark/gostty"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
@@ -116,7 +117,7 @@ func TestChatComposerLeavesRoomForTheFeed(t *testing.T) {
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
 	m.Selected.Set("s")
 	p := ggui.ProbeBuilder(func() ggui.Widget {
-		return ggui.Column(ggui.Expanded(ggui.Text("FEEDMARKER")), composer(m, "s", m.chatState("s"))).Stretch()
+		return widget.Column(widget.Expanded(widget.Text("FEEDMARKER")), composer(m, "s", m.chatState("s"))).Stretch()
 	}, ggui.Sz(900, 600))
 	defer p.Close()
 	p.Frame()
@@ -195,7 +196,7 @@ func TestViewSwitchTogglesWhereverClicked(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
-	p := ggui.ProbeBuilder(func() ggui.Widget { return ggui.Center(viewSwitch(m, "s", 0)) }, ggui.Sz(200, 60))
+	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Center(viewSwitch(m, "s", 0)) }, ggui.Sz(200, 60))
 	defer p.Close()
 	p.Frame()
 	sw, ok := p.Find(T("Chat"))
@@ -223,9 +224,9 @@ func TestViewSwitchTogglesWhereverClicked(t *testing.T) {
 // takes no room.
 func TestCopyButtonShowsInTheMessageHovered(t *testing.T) {
 	msg := &protocol.ChatMessage{Role: "user", Text: "copy me please"}
-	content := ggui.Box(ggui.Text(msg.GetText()).Size(14).Selectable()).Pad(10, 14)
+	content := widget.Box(widget.Text(msg.GetText()).Size(14).Selectable()).Pad(10, 14)
 	w := &withCopy{content: content, button: copyButton(nil, msg.GetText())}
-	p := ggui.NewProbe(ggui.Column(w, ggui.Box().Height(60)).Stretch(), ggui.Sz(400, 200))
+	p := ggui.NewProbe(widget.Column(w, widget.Box().Height(60)).Stretch(), ggui.Sz(400, 200))
 	defer p.Close()
 	p.Frame()
 	if _, ok := p.Find(T("Copy")); ok {
@@ -439,7 +440,7 @@ func TestAChatSelectsAsOne(t *testing.T) {
 		{Role: "assistant", Text: "Last reply.", Id: "c"},
 	}, nil))
 	p := ggui.ProbeBuilder(func() ggui.Widget {
-		_, feed := chatFeed(m, "s", state, turns, ggui.Box(), nil)
+		_, feed := chatFeed(m, "s", state, turns, widget.Box(), nil)
 		return feed
 	}, ggui.Sz(800, 700))
 	defer p.Close()

@@ -17,6 +17,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transport"
@@ -281,7 +282,7 @@ func (m *model) submitTunnel() {
 func tunnelsMenu(m *model) ggui.Widget {
 	return ggui.View(m.Tunnels.List, func(list []tunnelInfo) ggui.Widget {
 		if len(list) == 0 {
-			return ggui.Box()
+			return widget.Box()
 		}
 		nodes := ggui.Peek(m.Nodes)
 		var items []ggui.Widget

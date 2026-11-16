@@ -16,6 +16,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 	"github.com/yuin/goldmark"
 	emoji "github.com/yuin/goldmark-emoji"
 	eemoji "github.com/yuin/goldmark-emoji/ast"
@@ -46,15 +47,15 @@ type mdRenderer struct {
 // page: a drag runs from one block into the next, and a click anywhere in
 // the view, a block or the space around them, drops the whole selection.
 func Page(h Host, src string) ggui.Widget {
-	page := ggui.Box(ggui.Column(render(h, src)...).Gap(14).Stretch()).MaxWidth(880)
-	scroll := ggui.Scroll(ggui.Align(ggui.Padding(page, 28, 36, 48, 36)).Top()).Bar(skin.Surface3)
-	return ggui.Box(ggui.SelectionArea(scroll)).Fill(skin.Surface0)
+	page := widget.Box(widget.Column(render(h, src)...).Gap(14).Stretch()).MaxWidth(880)
+	scroll := widget.Scroll(widget.Align(widget.Padding(page, 28, 36, 48, 36)).Top()).Bar(skin.Surface3)
+	return widget.Box(widget.SelectionArea(scroll)).Fill(skin.Surface0)
 }
 
 // Column is Markdown's blocks alone, to set in a column of their own: a
 // message, or text written somewhere other than a file, as on GitHub.
 func Column(h Host, src string) ggui.Widget {
-	return ggui.Column(render(h, src)...).Gap(10).Stretch()
+	return widget.Column(render(h, src)...).Gap(10).Stretch()
 }
 
 // render is src's blocks, parsed and laid out.
@@ -78,9 +79,9 @@ func (r *mdRenderer) block(n ast.Node) ggui.Widget {
 		sizes := [...]float64{0, 26, 21, 17.5, 15.5, 14, 13.5}
 		t := r.paragraph(n, sizes[min(n.Level, 6)]).Weight(ggui.WeightSemibold).LineHeight(1.3)
 		if n.Level <= 2 {
-			return ggui.Column(ggui.Padding(t, 6, 0, 0, 0), hline()).Gap(8).Stretch()
+			return widget.Column(widget.Padding(t, 6, 0, 0, 0), hline()).Gap(8).Stretch()
 		}
-		return ggui.Padding(t, 4, 0, 0, 0)
+		return widget.Padding(t, 4, 0, 0, 0)
 	case *ast.Paragraph, *ast.TextBlock:
 		if pics, ok := r.picturesOnly(n); ok {
 			return r.pictures(pics, false)
@@ -104,7 +105,7 @@ func (r *mdRenderer) block(n ast.Node) ggui.Widget {
 		return r.footnotes(n)
 	}
 	if n.HasChildren() {
-		return ggui.Column(r.blocks(n)...).Gap(10).Stretch()
+		return widget.Column(r.blocks(n)...).Gap(10).Stretch()
 	}
 	return nil
 }
@@ -173,25 +174,25 @@ func (r *mdRenderer) pictures(pics []mdPicture, center bool) ggui.Widget {
 		items[i] = r.image(p)
 		if p.link != "" {
 			dest := p.link
-			items[i] = ui.Tooltip(ggui.Tap(items[i], func() { r.open(dest) }).Cursor(ggui.CursorShapePointer), dest)
+			items[i] = ui.Tooltip(widget.Tap(items[i], func() { r.open(dest) }).Cursor(ggui.CursorShapePointer), dest)
 		}
 	}
 	var w ggui.Widget = items[0]
 	if len(items) > 1 {
-		w = ggui.Wrap(items...).Gap(6).RunGap(6)
+		w = widget.Wrap(items...).Gap(6).RunGap(6)
 	}
 	if center {
-		return ggui.Align(w).At(0.5, 0)
+		return widget.Align(w).At(0.5, 0)
 	}
 	return w
 }
 
 // paragraph is n's inline content as one paragraph of text at size, which
 // the reader can select and copy.
-func (r *mdRenderer) paragraph(n ast.Node, size float64) *ggui.RichTextWidget {
-	var spans []ggui.TextSpan
+func (r *mdRenderer) paragraph(n ast.Node, size float64) *widget.RichTextWidget {
+	var spans []widget.TextSpan
 	r.inline(n, mdStyle{r: r, size: size}, &spans)
-	return ggui.RichText(spans...).Size(size).LineHeight(1.55).Selectable()
+	return widget.RichText(spans...).Size(size).LineHeight(1.55).Selectable()
 }
 
 // alerts are the kinds of GitHub's alert quotes, "> [!NOTE]", and their
@@ -217,13 +218,13 @@ func (r *mdRenderer) quote(n *ast.Blockquote) ggui.Widget {
 		if kind, ok := strings.CutPrefix(line, "[!"); ok {
 			if a, ok := alerts[strings.ToUpper(strings.TrimSuffix(kind, "]"))]; ok && strings.HasSuffix(kind, "]") {
 				bar = a.Color
-				body = append(body, ggui.Row(iconset.Icon("info").Size(15).Color(a.Color),
-					ggui.Text(i18n.T(a.Title)).Size(mdBodySize).Weight(ggui.WeightSemibold).Color(a.Color)).Gap(8))
+				body = append(body, widget.Row(iconset.Icon("info").Size(15).Color(a.Color),
+					widget.Text(i18n.T(a.Title)).Size(mdBodySize).Weight(ggui.WeightSemibold).Color(a.Color)).Gap(8))
 				// The rest of the paragraph, after the line naming it.
-				var spans []ggui.TextSpan
+				var spans []widget.TextSpan
 				r.inlineAfter(p, first.Stop, &spans)
 				if len(spans) > 0 {
-					body = append(body, ggui.RichText(spans...).Size(mdBodySize).LineHeight(1.55).Selectable())
+					body = append(body, widget.RichText(spans...).Size(mdBodySize).LineHeight(1.55).Selectable())
 				}
 				for c := p.NextSibling(); c != nil; c = c.NextSibling() {
 					if w := r.block(c); w != nil {
@@ -236,7 +237,7 @@ func (r *mdRenderer) quote(n *ast.Blockquote) ggui.Widget {
 	if body == nil {
 		body = r.blocks(n)
 	}
-	return &quoteBar{child: ggui.Column(body...).Gap(10).Stretch(), color: bar}
+	return &quoteBar{child: widget.Column(body...).Gap(10).Stretch(), color: bar}
 }
 
 // quoteBar draws a bar down the left of its child, as tall as it is.
@@ -261,7 +262,7 @@ func (q *quoteBar) Paint(dst *ggui.Canvas, r ggui.Rect) {
 
 // inlineAfter is inline for the children of n that start at or after
 // the source offset from.
-func (r *mdRenderer) inlineAfter(n ast.Node, from int, out *[]ggui.TextSpan) {
+func (r *mdRenderer) inlineAfter(n ast.Node, from int, out *[]widget.TextSpan) {
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 		if t, ok := c.(*ast.Text); !ok || t.Segment.Start >= from {
 			r.inlineNode(c, mdStyle{r: r, size: mdBodySize}, out)
@@ -296,9 +297,9 @@ func (r *mdRenderer) html(s string) ggui.Widget {
 	}
 	text := strings.Join(strings.Fields(htmlTag.ReplaceAllString(s, " ")), " ")
 	if text != "" {
-		var t ggui.Widget = ggui.Text(html.UnescapeString(text)).Size(mdBodySize).LineHeight(1.55).Selectable()
+		var t ggui.Widget = widget.Text(html.UnescapeString(text)).Size(mdBodySize).LineHeight(1.55).Selectable()
 		if center {
-			t = ggui.Align(t).At(0.5, 0)
+			t = widget.Align(t).At(0.5, 0)
 		}
 		out = append(out, t)
 	}
@@ -308,7 +309,7 @@ func (r *mdRenderer) html(s string) ggui.Widget {
 	case 1:
 		return out[0]
 	}
-	return ggui.Column(out...).Gap(8).Stretch()
+	return widget.Column(out...).Gap(8).Stretch()
 }
 
 var (
@@ -363,7 +364,7 @@ type mdStyle struct {
 // larger than the text around it.
 const mdCodeScale = 0.88
 
-func (st mdStyle) span(s string) ggui.TextSpan {
+func (st mdStyle) span(s string) widget.TextSpan {
 	ts := st.text
 	sans, mono := ggui.SystemItalicFonts()
 	switch {
@@ -377,7 +378,7 @@ func (st mdStyle) span(s string) ggui.TextSpan {
 	case st.italic && ts.Weight == 0:
 		ts.Weight = ggui.WeightMedium // where the platform has no italic
 	}
-	sp := ggui.Span(s).Style(ts)
+	sp := widget.Span(s).Style(ts)
 	if st.code {
 		sp = sp.Background(skin.Surface2)
 	}
@@ -430,7 +431,7 @@ var tagName = regexp.MustCompile(`^<(/?)([A-Za-z][A-Za-z0-9]*)\b`)
 // inline appends the spans of n's inline children, each in style with
 // its own laid on. An inline HTML tag, as <b> or <kbd>, styles what
 // follows it up to the tag that closes it.
-func (r *mdRenderer) inline(n ast.Node, style mdStyle, out *[]ggui.TextSpan) {
+func (r *mdRenderer) inline(n ast.Node, style mdStyle, out *[]widget.TextSpan) {
 	var open []mdStyle // the styles the tags open replaced
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 		if raw, ok := c.(*ast.RawHTML); ok {
@@ -451,7 +452,7 @@ func (r *mdRenderer) inline(n ast.Node, style mdStyle, out *[]ggui.TextSpan) {
 }
 
 // inlineNode appends the spans of one inline node.
-func (r *mdRenderer) inlineNode(c ast.Node, style mdStyle, out *[]ggui.TextSpan) {
+func (r *mdRenderer) inlineNode(c ast.Node, style mdStyle, out *[]widget.TextSpan) {
 	add := func(s string, st mdStyle) {
 		if s != "" {
 			*out = append(*out, st.span(s))
@@ -528,7 +529,7 @@ func (r *mdRenderer) inlineNode(c ast.Node, style mdStyle, out *[]ggui.TextSpan)
 
 // altText is an image's description, or its file's name.
 func (r *mdRenderer) altText(n *ast.Image) string {
-	var alt []ggui.TextSpan
+	var alt []widget.TextSpan
 	r.inline(n, mdStyle{r: r}, &alt)
 	var b strings.Builder
 	for _, s := range alt {
@@ -560,7 +561,7 @@ func (r *mdRenderer) code(n ast.Node, lang string) ggui.Widget {
 	src := r.segmentsText(n.Lines())
 	block := func() ggui.Widget {
 		text := r.host.Code(src, lang)
-		return ggui.Box(ggui.Scroll(ggui.Padding(text, 12, 14)).Horizontal().Bar(skin.Surface3)).
+		return widget.Box(widget.Scroll(widget.Padding(text, 12, 14)).Horizontal().Bar(skin.Surface3)).
 			Fill(skin.Surface1).Border(1, skin.Border).Radius(8)
 	}
 	if lang == "" {
@@ -586,20 +587,20 @@ func (r *mdRenderer) list(n *ast.List) ggui.Widget {
 			marker = strconv.Itoa(num) + "."
 			num++
 		}
-		var mark ggui.Widget = ggui.Box(muted(ggui.Text(marker).Size(mdBodySize))).Width(22)
+		var mark ggui.Widget = widget.Box(muted(widget.Text(marker).Size(mdBodySize))).Width(22)
 		if isTask(item) {
-			mark = ggui.Box().Width(4) // the box is the item's first span
+			mark = widget.Box().Width(4) // the box is the item's first span
 		}
-		rows = append(rows, ggui.Row(
+		rows = append(rows, widget.Row(
 			mark,
-			ggui.Expanded(ggui.Column(r.blocks(item)...).Gap(6).Stretch()),
-		).Align(ggui.AlignStart).Stretch())
+			widget.Expanded(widget.Column(r.blocks(item)...).Gap(6).Stretch()),
+		).Align(widget.AlignStart).Stretch())
 	}
 	gap := 4.0
 	if !n.IsTight {
 		gap = 10
 	}
-	return ggui.Padding(ggui.Column(rows...).Gap(gap).Stretch(), 0, 0, 0, 4)
+	return widget.Padding(widget.Column(rows...).Gap(gap).Stretch(), 0, 0, 0, 4)
 }
 
 // isTask reports whether a list item starts with a task's checkbox.
@@ -621,33 +622,33 @@ func (r *mdRenderer) table(t *east.Table) ggui.Widget {
 			if head {
 				p.Weight(ggui.WeightSemibold)
 			}
-			aligned := ggui.Align(p).At(0, 0)
+			aligned := widget.Align(p).At(0, 0)
 			switch cell.(*east.TableCell).Alignment {
 			case east.AlignRight:
-				aligned = ggui.Align(p).At(1, 0)
+				aligned = widget.Align(p).At(1, 0)
 			case east.AlignCenter:
-				aligned = ggui.Align(p).At(0.5, 0)
+				aligned = widget.Align(p).At(0.5, 0)
 			}
 			if len(cells) > 0 {
 				cells = append(cells, vline())
 			}
-			cells = append(cells, ggui.Expanded(ggui.Box(aligned).Pad(7, 12)))
+			cells = append(cells, widget.Expanded(widget.Box(aligned).Pad(7, 12)))
 		}
-		var w ggui.Widget = ggui.Row(cells...).Stretch()
+		var w ggui.Widget = widget.Row(cells...).Stretch()
 		if head {
-			w = ggui.Box(w).Fill(skin.Surface1)
+			w = widget.Box(w).Fill(skin.Surface1)
 		}
 		if len(rows) > 0 {
 			rows = append(rows, hline())
 		}
 		rows = append(rows, w)
 	}
-	return ggui.Box(ggui.Column(rows...).Stretch()).Border(1, skin.Border).Radius(6)
+	return widget.Box(widget.Column(rows...).Stretch()).Border(1, skin.Border).Radius(6)
 }
 
 // hline and vline are rules between blocks, and muted is the text of
 // what is said in passing, drawn as the window's own (gui's view.go),
 // which this package cannot reach.
-func hline() ggui.Widget                        { return ui.Divider() }
-func vline() ggui.Widget                        { return ui.Divider().Vertical() }
-func muted(t *ggui.TextWidget) *ggui.TextWidget { return t.Color(skin.Muted) }
+func hline() ggui.Widget                            { return ui.Divider() }
+func vline() ggui.Widget                            { return ui.Divider().Vertical() }
+func muted(t *widget.TextWidget) *widget.TextWidget { return t.Color(skin.Muted) }

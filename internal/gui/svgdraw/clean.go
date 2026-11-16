@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 )
 
 // An SVG on a page is drawn by ggfx, which knows paths, shapes, groups,
@@ -555,7 +556,7 @@ type Labels struct {
 func (l *Labels) Layout(env ggui.Env) {
 	l.laid, l.at, l.measured = l.laid[:0], l.at[:0], l.measured[:0]
 	for _, t := range l.Texts {
-		w := ggui.Text(t.text).Size(t.size * l.Scale).Color(t.color).NoWrap().LineHeight(1)
+		w := widget.Text(t.text).Size(t.size * l.Scale).Color(t.color).NoWrap().LineHeight(1)
 		if t.bold {
 			w = w.Weight(ggui.WeightBold)
 		}

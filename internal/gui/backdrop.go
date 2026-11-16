@@ -110,7 +110,7 @@ func backdropped(m *model, slot backdropSlot, child ggui.Widget) ggui.Widget {
 func backdropScrim(m *model, slot backdropSlot) ggui.Widget {
 	alpha := ggui.Map(m.Prefs, func(p prefs) float64 { return 1 - slot.of(&p).Opacity })
 	return ggui.Reactive(func() ggui.Widget {
-		return ggui.Box().Fill(skin.SolidBg.Alpha(alpha.Get()))
+		return widget.Box().Fill(skin.SolidBg.Alpha(alpha.Get()))
 	})
 }
 
@@ -127,7 +127,7 @@ func backdropLayer(m *model, slot backdropSlot, scale float64) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		b := placement.Get()
 		if b.Image == "" {
-			return ggui.Box()
+			return widget.Box()
 		}
 		img := widget.AsyncImage(mcp.ExpandHome(b.Image)).MaxSize(backdropMaxSize).Fit(ggui.FitFill)
 		return &backdropImage{img: img, b: b.scaled(scale), scale: scale}

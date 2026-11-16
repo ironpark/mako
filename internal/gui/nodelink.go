@@ -5,6 +5,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -38,7 +39,7 @@ func nodeDot(n *protocol.Node) ggui.Widget {
 // link that is up.
 func nodeLinkLine(m *model, n *protocol.Node) ggui.Widget {
 	if !linkDown(n) {
-		return ggui.Box()
+		return widget.Box()
 	}
 	at := protocol.TimeOf(n.GetRelinkAt())
 	now := ggui.State(time.Now())
@@ -54,7 +55,7 @@ func nodeLinkLine(m *model, n *protocol.Node) ggui.Widget {
 				text = T("Offline · trying again")
 			}
 		}
-		return ggui.Text(text).Size(11.5).Color(pick(n.GetLink() == protocol.LinkLinking, skin.DotWaiting, skin.DotDown)).NoWrap().Ellipsis()
+		return widget.Text(text).Size(11.5).Color(pick(n.GetLink() == protocol.LinkLinking, skin.DotWaiting, skin.DotDown)).NoWrap().Ellipsis()
 	})
 	if n.GetLinkError() == "" {
 		return line
@@ -69,6 +70,6 @@ func (m *model) relink(node *protocol.Node) {
 
 // relinkButton tries the link to n now, while it is down.
 func relinkButton(m *model, n *protocol.Node) ggui.Widget {
-	return ui.ButtonOf(ggui.Row(icon("refresh-cw").Size(13), ggui.Text(T("Reconnect")).Size(12.5)).Gap(6),
+	return ui.ButtonOf(widget.Row(icon("refresh-cw").Size(13), widget.Text(T("Reconnect")).Size(12.5)).Gap(6),
 		func() { m.relink(n) }).Outline().Disabled(n.GetLink() == protocol.LinkLinking).Name(Tf("Reconnect to %s", n.GetName()))
 }

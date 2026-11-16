@@ -11,6 +11,7 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/ggui/widget"
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -140,14 +141,14 @@ func usageOverlay(m *model, id string, src ggui.Readable[*protocol.Usage], topRi
 	}
 	corner := ggui.Map(m.Prefs, func(p prefs) string { return p.UsageCorner })
 	return ggui.View(corner, func(c string) ggui.Widget {
-		at := func(w ggui.Widget, x, y float64) ggui.Widget { return ggui.Padding(ggui.Align(w).At(x, y), 10, 18) }
+		at := func(w ggui.Widget, x, y float64) ggui.Widget { return widget.Padding(widget.Align(w).At(x, y), 10, 18) }
 		if topRight == nil {
 			return at(chip(), pick(strings.HasSuffix(c, "left"), 0.0, 1.0), pick(strings.HasPrefix(c, "top"), 0.0, 1.0))
 		}
 		if c == "top-right" {
-			return at(ggui.Row(chip(), topRight).Gap(8).Align(ggui.AlignCenter), 1, 0)
+			return at(widget.Row(chip(), topRight).Gap(8).Align(widget.AlignCenter), 1, 0)
 		}
-		return ggui.Stack(
+		return widget.Stack(
 			at(chip(), pick(strings.HasSuffix(c, "left"), 0.0, 1.0), pick(strings.HasPrefix(c, "top"), 0.0, 1.0)),
 			at(topRight, 1, 0),
 		).Expand()
@@ -175,11 +176,11 @@ func limitName(minutes int64) string {
 // rest, open under the pointer.
 func usageCard(m *model, u *protocol.Usage) ggui.Widget {
 	if u.IsZero() {
-		return ggui.Box()
+		return widget.Box()
 	}
-	label := func(s string) ggui.Widget { return ggui.Text(s).Size(11).Color(skin.ExtraMuted).NoWrap() }
+	label := func(s string) ggui.Widget { return widget.Text(s).Size(11).Color(skin.ExtraMuted).NoWrap() }
 	pair := func(lead ggui.Widget, v string, share float64) ggui.Widget {
-		return ggui.Row(lead, ggui.Text(v).Size(11.5).Color(shareColor(share, skin.Fg)).NoWrap()).Gap(4).Align(ggui.AlignCenter)
+		return widget.Row(lead, widget.Text(v).Size(11.5).Color(shareColor(share, skin.Fg)).NoWrap()).Gap(4).Align(widget.AlignCenter)
 	}
 	var head []ggui.Widget
 	switch {
@@ -191,7 +192,7 @@ func usageCard(m *model, u *protocol.Usage) ggui.Widget {
 		head = append(head, pair(label(T("Context")), tokens(u.GetContext()), 0))
 	}
 	if len(head) > 0 {
-		head = append(head, ggui.Box(vline()).Height(10))
+		head = append(head, widget.Box(vline()).Height(10))
 	}
 	card := func(items []ggui.Widget) ggui.Widget {
 		return usageTip(m, u, ggui.Reactive(func() ggui.Widget {
@@ -256,18 +257,18 @@ func untilText(d time.Duration) string {
 // the switch's track, solid enough that what scrolls under it does not
 // read through its words.
 func overlayChip(items ...ggui.Widget) ggui.Widget {
-	row := ggui.Row(items...).Gap(8).Align(ggui.AlignCenter)
+	row := widget.Row(items...).Gap(8).Align(widget.AlignCenter)
 	const h = viewSideHeight + 2*viewToggleInset
 	return ggui.Reactive(func() ggui.Widget {
 		r, g, b, _ := uitheme.Use().Muted.RGBA()
 		fill := color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 0xE0}
-		return ggui.Box(ggui.Column(row).Justify(ggui.JustifyCenter)).Height(h).Radius(h/2).Pad(0, 10).Fill(fill)
+		return widget.Box(widget.Column(row).Justify(widget.JustifyCenter)).Height(h).Radius(h/2).Pad(0, 10).Fill(fill)
 	})
 }
 
 // raisedChip is the box the window's floating chips share: their content
 // alone, with no surface, line or shadow of its own over what is under
 // them; each sets its own radius and padding.
-func raisedChip(w ggui.Widget) *ggui.BoxWidget {
-	return ggui.Box(w)
+func raisedChip(w ggui.Widget) *widget.BoxWidget {
+	return widget.Box(w)
 }
