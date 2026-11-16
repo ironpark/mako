@@ -50,6 +50,7 @@ public  final class Envelope extends
     ANSWER_QUESTION(46),
     ANSWER_DIALOG(47),
     CONFIGURE_AGENT(48),
+    SLEEP_SESSION(49),
     ATTACH(40),
     INPUT(41),
     OUTPUT(42),
@@ -144,6 +145,7 @@ public  final class Envelope extends
         case 46: return ANSWER_QUESTION;
         case 47: return ANSWER_DIALOG;
         case 48: return CONFIGURE_AGENT;
+        case 49: return SLEEP_SESSION;
         case 40: return ATTACH;
         case 41: return INPUT;
         case 42: return OUTPUT;
@@ -1592,6 +1594,56 @@ public  final class Envelope extends
    */
   private void clearConfigureAgent() {
     if (bodyCase_ == 48) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SLEEP_SESSION_FIELD_NUMBER = 49;
+  /**
+   * <code>.mako.v2.SleepSession sleep_session = 49 [json_name = "sleepSession"];</code>
+   */
+  @java.lang.Override
+  public boolean hasSleepSession() {
+    return bodyCase_ == 49;
+  }
+  /**
+   * <code>.mako.v2.SleepSession sleep_session = 49 [json_name = "sleepSession"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.SleepSession getSleepSession() {
+    if (bodyCase_ == 49) {
+       return (dev.ironpark.mako.v2.SleepSession) body_;
+    }
+    return dev.ironpark.mako.v2.SleepSession.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.SleepSession sleep_session = 49 [json_name = "sleepSession"];</code>
+   */
+  private void setSleepSession(dev.ironpark.mako.v2.SleepSession value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 49;
+  }
+  /**
+   * <code>.mako.v2.SleepSession sleep_session = 49 [json_name = "sleepSession"];</code>
+   */
+  private void mergeSleepSession(dev.ironpark.mako.v2.SleepSession value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 49 &&
+        body_ != dev.ironpark.mako.v2.SleepSession.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.SleepSession.newBuilder((dev.ironpark.mako.v2.SleepSession) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 49;
+  }
+  /**
+   * <code>.mako.v2.SleepSession sleep_session = 49 [json_name = "sleepSession"];</code>
+   */
+  private void clearSleepSession() {
+    if (bodyCase_ == 49) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -5927,6 +5979,54 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.mako.v2.SleepSession sleep_session = 49 [json_name = "sleepSession"];</code>
+     */
+    @java.lang.Override
+    public boolean hasSleepSession() {
+      return instance.hasSleepSession();
+    }
+    /**
+     * <code>.mako.v2.SleepSession sleep_session = 49 [json_name = "sleepSession"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.SleepSession getSleepSession() {
+      return instance.getSleepSession();
+    }
+    /**
+     * <code>.mako.v2.SleepSession sleep_session = 49 [json_name = "sleepSession"];</code>
+     */
+    public Builder setSleepSession(dev.ironpark.mako.v2.SleepSession value) {
+      copyOnWrite();
+      instance.setSleepSession(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SleepSession sleep_session = 49 [json_name = "sleepSession"];</code>
+     */
+    public Builder setSleepSession(
+        dev.ironpark.mako.v2.SleepSession.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSleepSession(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SleepSession sleep_session = 49 [json_name = "sleepSession"];</code>
+     */
+    public Builder mergeSleepSession(dev.ironpark.mako.v2.SleepSession value) {
+      copyOnWrite();
+      instance.mergeSleepSession(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SleepSession sleep_session = 49 [json_name = "sleepSession"];</code>
+     */
+    public Builder clearSleepSession() {
+      copyOnWrite();
+      instance.clearSleepSession();
+      return this;
+    }
+
+    /**
      * <pre>
      * An attached session's stream.
      * </pre>
@@ -8760,6 +8860,7 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.AnswerQuestion.class,
             dev.ironpark.mako.v2.AnswerDialog.class,
             dev.ironpark.mako.v2.ConfigureAgent.class,
+            dev.ironpark.mako.v2.SleepSession.class,
             dev.ironpark.mako.v2.ListDir.class,
             dev.ironpark.mako.v2.Dir.class,
             dev.ironpark.mako.v2.ReadFile.class,
@@ -8811,16 +8912,16 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.DeviceAccept.class,
           };
           java.lang.String info =
-              "\u0000Q\u0001\u0000\u0001oQ\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000\u000b" +
+              "\u0000R\u0001\u0000\u0001oR\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000\u000b" +
               "<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000" +
               "\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000" +
               "\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000+<\u0000" +
-              ",<\u0000-<\u0000.<\u0000/<\u00000<\u00002<\u00003<\u00004<\u00005<\u00006<\u0000" +
-              "7<\u00008<\u00009<\u0000:<\u0000;<\u0000<<\u0000=<\u0000><\u0000?<\u0000@<\u0000" +
-              "A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000H<\u0000I<\u0000J<\u0000" +
-              "K<\u0000L<\u0000M<\u0000N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000T<\u0000" +
-              "Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000j<\u0000k<\u0000" +
-              "l<\u0000m<\u0000n<\u0000o<\u0000";
+              ",<\u0000-<\u0000.<\u0000/<\u00000<\u00001<\u00002<\u00003<\u00004<\u00005<\u0000" +
+              "6<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000<<\u0000=<\u0000><\u0000?<\u0000" +
+              "@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000H<\u0000I<\u0000" +
+              "J<\u0000K<\u0000L<\u0000M<\u0000N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000" +
+              "T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000j<\u0000" +
+              "k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

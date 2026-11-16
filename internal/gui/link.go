@@ -379,6 +379,7 @@ func (m *model) poll(ctx context.Context) {
 			m.Minute.Set(now)
 		}
 		m.attachVisible()
+		m.sleepIdle(time.Now())
 		m.syncTitles()
 		if ws != nil {
 			m.takeWorkspace(ws)

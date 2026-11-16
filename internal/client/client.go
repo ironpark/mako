@@ -433,6 +433,12 @@ func (c *Client) ConfigureAgent(ctx context.Context, req *protocol.ConfigureAgen
 	return request[*protocol.SessionInfo](ctx, c, protocol.TypeConfigureAgent, req)
 }
 
+// Sleep stops the program of a session whose agent rests, to resume it
+// when it is next attached, and returns the session as it is now.
+func (c *Client) Sleep(ctx context.Context, req *protocol.SleepSession) (*protocol.SessionInfo, error) {
+	return request[*protocol.SessionInfo](ctx, c, protocol.TypeSleepSession, req)
+}
+
 // AnswerDialog picks an option of the dialog a session's agent shows in
 // its terminal.
 func (c *Client) AnswerDialog(ctx context.Context, req *protocol.AnswerDialog) (*protocol.SessionInfo, error) {

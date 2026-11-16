@@ -546,3 +546,91 @@ func (d *Daemon) closeSession(id string) error {
 	}
 	return nil
 }
+
+// sleepSession stops the program of session id while its agent rests,
+// keeping the session, stopped, to resume its conversation when it is next
+// attached. It refuses a session that is not resting (restless).
+func (d *Daemon) sleepSession(id string) (*protocol.SessionInfo, error) {
+	d.sessionMu.Lock()
+	defer d.sessionMu.Unlock()
+	s, live := d.sessions.get(id)
+	entry, kept := d.saved[id]
+	if !live || !kept {
+		return nil, fmt.Errorf("session %q is not running", id)
+	}
+	info := s.Info()
+	if why := restless(s, info, d.childAtWorkLocked(id)); why != "" {
+		return nil, fmt.Errorf("session %q is not resting: %s", id, why)
+	}
+	next := entry
+	next.Info = proto.CloneOf(info)
+	next.Info.Command = nil // as a start saves it: no ephemeral paths or secrets
+	next.Info.State, next.Info.Busy, next.Info.Idle, next.Info.ExitCode = protocol.StateStopped, false, false, nil
+	next.Info.Tasks, next.Info.Dialog = nil, nil
+	d.saved[id] = next
+	if err := d.saveSessionsLocked(); err != nil {
+		d.saved[id] = entry
+		return nil, err
+	}
+	d.sessions.remove(id)
+	_ = s.Close()
+	d.live.forget(id)
+	d.log.Info("session asleep", "id", id, "agent", info.GetAgent())
+	return proto.CloneOf(next.Info), nil
+}
+
+// restless says why a session's agent is not resting, "" when it is: it
+// must have a conversation to resume, sit at its prompt with nobody
+// attached, and have nothing at work or asked of the user. child says
+// whether a session it started is at work.
+func restless(s *session.Session, info *protocol.SessionInfo, child bool) string {
+	switch {
+	case info.GetState() != protocol.StateRunning:
+		return "not running"
+	case info.GetConversationId() == "" || !resumable(info):
+		return "no conversation to resume"
+	case protocol.AtWork(info.GetStatus()) || info.GetBusy():
+		return "at work"
+	case info.GetApproval() != nil || info.GetDialog() != nil || info.GetStatus() == protocol.AgentWaiting:
+		return "waiting on the user"
+	case slices.ContainsFunc(info.GetTasks(), (*protocol.BackgroundTask).GetRunning):
+		return "a background task runs"
+	case s.SubagentsWorking():
+		return "a subagent works"
+	case child:
+		return "a session it started works"
+	case s.Watched():
+		return "attached"
+	}
+	return ""
+}
+
+// childAtWorkLocked reports whether a session that session id started
+// runs and is at work. The caller holds sessionMu.
+func (d *Daemon) childAtWorkLocked(id string) bool {
+	for child, entry := range d.saved {
+		if entry.ParentID != id {
+			continue
+		}
+		if s, ok := d.sessions.get(child); ok {
+			if info := s.Info(); info.GetState() == protocol.StateRunning && (protocol.AtWork(info.GetStatus()) || info.GetBusy()) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// resumable reports whether session info's agent resumes a conversation
+// when it starts again: one mako drives natively, run as its own program,
+// not through a wrapper of the user's.
+func resumable(info *protocol.SessionInfo) bool {
+	entry, ok := agents.Lookup(info.GetAgent())
+	_, launches := entry.Driver.(agent.Launcher)
+	_, logs := entry.Driver.(agent.Logs)
+	if !ok || !launches || !logs || len(info.GetCommand()) == 0 {
+		return false
+	}
+	runs, _ := agents.ByProgram(info.GetCommand()[0])
+	return runs.Info.Name == entry.Info.Name
+}

@@ -240,6 +240,11 @@ func generalSettings(m *model) ggui.Widget {
 	language := ui.Select(prefField(m, func(p *prefs) *string { return &p.Language })).
 		Options(codes).Format(func(code string) string { return names[code] }).Name(T("Language"))
 
+	sleepAfter := ggui.Bind(
+		func() float64 { return float64(m.Prefs.Get().SleepAfter) },
+		func(v float64) { m.Prefs.Update(func(p prefs) prefs { p.SleepAfter = int(v); return p.normalized() }) },
+	)
+
 	return page(T("General"), T("How new sessions start and which daemon this window talks to."),
 		section(T("Language"),
 			card(
@@ -266,6 +271,15 @@ func generalSettings(m *model) ggui.Widget {
 				row(T("Hide from the Dock"), T("While the window is hidden in the menu bar, the app leaves the Dock and ⌘-Tab. It comes back with the window."),
 					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.HideDock }), "").Name(T("Hide from the Dock")).
 						BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return !p.Tray }))),
+			),
+		),
+		section(T("Idle agents"),
+			card(
+				row(T("Put idle agents to sleep"), T("Stop the program of an agent out of view once it has rested at its prompt, with no subagent, background task or session of its own at work and nothing asked of you, to free its memory. It picks its conversation up again when you open it."),
+					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.SleepIdle }), "").Name(T("Put idle agents to sleep"))),
+				row(T("After"), T("Minutes at rest before an agent is put to sleep."),
+					ggui.Box(ui.NumberInput(sleepAfter).Range(minSleepAfter, maxSleepAfter).Step(1).Name(T("Minutes before sleep")).
+						BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return !p.SleepIdle }))).Width(120)),
 			),
 		),
 		section(T("Connection"),

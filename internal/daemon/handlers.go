@@ -152,6 +152,18 @@ func (d *Daemon) handleRenameSession(ctx context.Context, stream *transport.Stre
 	})
 }
 
+// handleSleepSession stops the program of a session whose agent rests,
+// keeping the session to resume when it is next attached.
+func (d *Daemon) handleSleepSession(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.SleepSession) (*protocol.SessionInfo, error) {
+		info, err := d.sleepSession(r.GetSessionId())
+		if err != nil {
+			return nil, err
+		}
+		return d.withHead(info), nil
+	})
+}
+
 // handleListCommands lists the slash commands a session's agent takes, as
 // its driver finds them on this node and its log names them.
 func (d *Daemon) handleListCommands(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {

@@ -379,6 +379,7 @@ is polled as before.
 | `answer_approval` | `AnswerApproval` | `session_info` | Answers the tool call the session's agent waits on. |
 | `send` | `Send` | `session_info` | Types into the session without attaching: `text` pasted, bracketed when its program asked for that, then `keys` as they are, such as `\r` to submit. A `text` holding a paste's end marker is refused. With `text`, an agent that shows a view over its own prompt (Claude Code's or Codex's subagent, transcript, or agents list) is first taken back to that prompt, as its screen shows, so the text reaches the agent itself. |
 | `configure_agent` | `ConfigureAgent` | `session_info` | Sets what is given of the session's agent, as `SessionInfo.controls` offers: `mode`, by the key that moves its permission mode on, pressed at its prompt until its screen names the mode; `model` and `effort`, by its own commands typed there (Claude Code's `/model` and `/effort`, which it also keeps as the user's defaults). Refused for a value not offered, or a mode the agent does not reach. |
+| `sleep_session` | `SleepSession` | `session_info` | Stops the program of a session whose agent rests, to free what it holds: running, with a `conversation_id` its agent resumes natively, not at work, waiting on nothing of the user's (`approval`, `dialog`, status `waiting`), with no background task running, no subagent at work and no session it started at work, and nothing attached to its terminal. The session stays, `stopped`, and the next `attach` starts its agent again on its conversation. Refused otherwise, saying why. Revision 21. |
 | `answer_dialog` | `AnswerDialog` | `session_info` | Picks `option`, by index, of the dialog `dialog_id` the session's agent shows in its terminal (`SessionInfo.dialog`), as the user would there: the cursor moved with the arrow keys, then Enter. Refused once the screen shows another dialog, or none. |
 | `answer_question` | `AnswerQuestion` | `session_info` | Answers the questions the session's agent asks in a dialog in its terminal, which no hook holds (Codex's `request_user_input`; agents with `CapAnswerKeys`): `answers`, one for each of `questions` in order, as `QuestionAnswer` (`picked` option indexes, `text` in the user's own words), typed into the dialog. Refused unless the screen shows the dialog and every question has an answer. |
 | `list_commands` | `ListCommands` | `commands` | The slash commands the session's agent takes, as its node finds them: the agent's own, the user's and the project's commands and skills, and its plugins'. None for an agent mako knows no commands of. |
@@ -413,7 +414,7 @@ The fields a front-end usually needs:
 | `project` | Its working directory. |
 | `repo` | The main work tree of the repository `project` is in, the same for its subfolders and its worktrees; empty outside one. |
 | `branch` | The branch checked out in `project`; empty outside a repository. |
-| `state` | `stopped` (restored, starts on attach), `starting`, `running`, `exited`. |
+| `state` | `stopped` (restored, or put to sleep; starts on attach), `starting`, `running`, `exited`. |
 | `exit_code` | Once exited. |
 | `name`, `title` | The user's name for it, and the latest terminal title its program set. |
 | `conversation_id` | The agent's own conversation, stable across restarts. |
@@ -906,7 +907,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 20) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 21) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end

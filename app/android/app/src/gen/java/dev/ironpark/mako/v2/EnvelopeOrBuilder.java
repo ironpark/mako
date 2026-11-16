@@ -333,6 +333,17 @@ public interface EnvelopeOrBuilder extends
   dev.ironpark.mako.v2.ConfigureAgent getConfigureAgent();
 
   /**
+   * <code>.mako.v2.SleepSession sleep_session = 49 [json_name = "sleepSession"];</code>
+   * @return Whether the sleepSession field is set.
+   */
+  boolean hasSleepSession();
+  /**
+   * <code>.mako.v2.SleepSession sleep_session = 49 [json_name = "sleepSession"];</code>
+   * @return The sleepSession.
+   */
+  dev.ironpark.mako.v2.SleepSession getSleepSession();
+
+  /**
    * <pre>
    * An attached session's stream.
    * </pre>

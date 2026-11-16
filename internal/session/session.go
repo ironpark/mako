@@ -798,6 +798,22 @@ func (s *Session) Subscribe() *Subscription {
 	return sub
 }
 
+// Watched reports whether anything follows what the session prints: a
+// front-end attached to its terminal, or an agent waiting on its output.
+func (s *Session) Watched() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.subs) > 0
+}
+
+// SubagentsWorking reports whether subagents the agent started are at
+// work, as its hooks and its log say.
+func (s *Session) SubagentsWorking() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.agentsWorking
+}
+
 // Done is closed once the agent process has exited.
 func (s *Session) Done() <-chan struct{} { return s.done }
 

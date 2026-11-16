@@ -195,6 +195,7 @@ type model struct {
 	revealedTab map[int]string
 	dialing     map[string]bool
 	redials     map[string]redial // see redialDue
+	sleeps      sleeps            // see sleepIdle
 
 	// recorder keeps the terminal streams the developer option records.
 	recorder *streamRecorder

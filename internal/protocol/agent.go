@@ -29,7 +29,11 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 20
+const Revision = 21
+
+// RevisionSleep adds SleepSession: a resting agent's program stopped, to
+// resume its conversation when it is next attached.
+const RevisionSleep = 21
 
 // RevisionApprovalOptions adds what an approval's call does and the ways
 // it may be allowed besides once: Approval.kind and options, chosen by

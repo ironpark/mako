@@ -252,6 +252,16 @@ message RenameSession {
   string name = 3;
 }
 
+// SleepSession stops the program of a session whose agent rests: at its
+// prompt, nobody attached to its terminal, nothing of its own at work (a
+// subagent, a background task, a session it started), and nothing it asks
+// of the user. The session stays, stopped, and its agent resumes its
+// conversation when it is next attached. The reply is its SessionInfo.
+message SleepSession {
+  string session_id = 1;
+  string node_id = 2;
+}
+
 // AnswerApproval answers the approval a session's agent waits for.
 message AnswerApproval {
   string node_id = 1;

@@ -67,7 +67,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 	settingsOnly := os.Getenv("MAKO_PREVIEW_SETTINGS") != ""
 	if settingsOnly {
 		railOnly = true // no daemon either
-		width, height = 1440, 1000
+		width, height = 1440, 1400
 	}
 	if sidebarOnly {
 		railOnly = true // no daemon either

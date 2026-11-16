@@ -24,6 +24,8 @@ import (
 // dotOf is what a session's dot shows.
 func (m *model) dotOf(s *protocol.SessionInfo) dotState {
 	switch {
+	case s.GetState() == protocol.StateStopped && m.Unread.Get()[s.GetId()]:
+		return dotDone // put to sleep before it was looked at
 	case s.GetState() == protocol.StateExited || s.GetState() == protocol.StateStopped:
 		return dotRest
 	case s.GetApproval() != nil || s.GetStatus() == protocol.AgentWaiting:

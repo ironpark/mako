@@ -1259,4 +1259,10 @@ var catalogKo = map[string]string{
 	"The repository's name":                              "저장소 이름",
 	"Today's date":                                       "오늘 날짜",
 	"What it sends. {{name}} stands for an argument's value or a built-in variable's; type {{ to pick one.": "보낼 내용입니다. {{name}}은 인자의 값이나 내장 변수의 값으로 바뀝니다. {{를 입력하면 고를 수 있습니다.",
+	"Idle agents":              "쉬는 에이전트",
+	"Put idle agents to sleep": "쉬는 에이전트 재우기",
+	"Stop the program of an agent out of view once it has rested at its prompt, with no subagent, background task or session of its own at work and nothing asked of you, to free its memory. It picks its conversation up again when you open it.": "화면에 보이지 않는 에이전트가 프롬프트에서 쉬고 있고, 일하는 서브에이전트나 백그라운드 작업, 직접 띄운 세션이 없으며 사용자에게 묻는 것도 없으면 프로그램을 멈춰 메모리를 비웁니다. 다시 열면 대화를 이어서 재개합니다.",
+	"After": "대기 시간",
+	"Minutes at rest before an agent is put to sleep.": "에이전트를 재우기 전에 쉬고 있어야 하는 시간(분)입니다.",
+	"Minutes before sleep":                             "재우기 전 대기 시간(분)",
 }

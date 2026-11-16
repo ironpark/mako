@@ -47,6 +47,10 @@ type prefs struct {
 	ApproveInApp bool `json:"approve_in_app"`
 	// Notify tells the desktop when an agent out of view finishes or asks.
 	Notify bool `json:"notify"`
+	// SleepIdle stops the programs of agents out of view that have rested
+	// SleepAfter minutes, to resume when shown; see sleep.go.
+	SleepIdle  bool `json:"sleep_idle"`
+	SleepAfter int  `json:"sleep_after"`
 	// Tray keeps the app in the menu bar when its window is closed, and
 	// HideDock takes it out of the Dock meanwhile; see tray.go.
 	Tray       bool   `json:"tray"`
@@ -130,6 +134,7 @@ func defaultPrefs() prefs {
 		SyncWorkspace:   true,
 		ApproveInApp:    true,
 		Notify:          true,
+		SleepAfter:      5,
 		DaemonMode:      "auto",
 		AgentGroup:      agentGroupFolder,
 		AgentSort:       agentSortRecent,
@@ -141,6 +146,7 @@ const (
 	minFontSize, maxFontSize     = 9, 24
 	minLineHeight, maxLineHeight = 1.0, 2.0
 	minScrollback, maxScrollback = 0, 100000
+	minSleepAfter, maxSleepAfter = 1, 240 // minutes
 	defaultBackdropOpacity       = 0.25
 )
 
@@ -186,6 +192,10 @@ func (p prefs) normalized() prefs {
 	}
 	p.LineHeight = min(max(p.LineHeight, minLineHeight), maxLineHeight)
 	p.Scrollback = min(max(p.Scrollback, minScrollback), maxScrollback)
+	if p.SleepAfter == 0 {
+		p.SleepAfter = d.SleepAfter
+	}
+	p.SleepAfter = min(max(p.SleepAfter, minSleepAfter), maxSleepAfter)
 	if p.SidebarWidth == 0 {
 		p.SidebarWidth = sidebarWidth
 	}
