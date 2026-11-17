@@ -518,7 +518,7 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 			case isImage(it.Name):
 				m.openPreview(it)
 			default:
-				m.openFile(it)
+				m.previewFile(it)
 			}
 		}).
 		Name(T("Files"))

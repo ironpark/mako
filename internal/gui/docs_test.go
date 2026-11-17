@@ -142,3 +142,54 @@ func TestStatusRowLeavesOutWhatDoesNotFit(t *testing.T) {
 		t.Fatalf("shown %v, want %v", r.shown, want)
 	}
 }
+
+// A file chosen in the Files tab previews in one tab, which the next file
+// chosen takes, until it is chosen again or edited.
+func TestPreviewTabTakesTheNextFile(t *testing.T) {
+	m, p, kept, path := docApp(t, "one\n")
+	self := ggui.Peek(m.Conn).Self.GetId()
+	dir := filepath.Dir(path)
+	file := func(name string) fileItem {
+		f := filepath.Join(dir, name)
+		if err := os.WriteFile(f, []byte(name+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return fileItem{Key: dirKey(self, f), Node: self, Path: f, Name: name}
+	}
+	a, b, c := file("a.txt"), file("b.txt"), file("c.txt")
+	idA, idB, idC := docTabID(self, a.Path), docTabID(self, b.Path), docTabID(self, c.Path)
+
+	m.previewFile(a)
+	if d, _ := m.doc(idA); !d.Preview {
+		t.Fatalf("a file chosen does not preview: %+v", d)
+	}
+	m.previewFile(b)
+	if _, ok := m.doc(idA); ok || slices.Contains(ggui.Peek(m.Tabs), idA) {
+		t.Fatal("the next file did not take the preview's tab")
+	}
+	if got := ggui.Peek(m.Tabs); !slices.Equal(got, []string{kept, idB}) {
+		t.Fatalf("tabs = %q, want the kept file and the preview", got)
+	}
+
+	// Chosen again, it is kept, and the next file opens beside it.
+	m.previewFile(b)
+	if d, _ := m.doc(idB); d.Preview {
+		t.Fatal("a preview chosen again is not kept")
+	}
+	m.previewFile(c)
+	if got := ggui.Peek(m.Tabs); !slices.Equal(got, []string{kept, idB, idC}) {
+		t.Fatalf("tabs = %q, want the kept files and the new preview", got)
+	}
+
+	// Edited, a preview is kept too.
+	probeUntil(t, p, "the preview", func() bool { d, _ := m.doc(idC); return !d.Loading })
+	m.docs[idC].text.Set("edited\n")
+	m.docEdited(idC, "edited\n")
+	if d, _ := m.doc(idC); d.Preview {
+		t.Fatal("an edited preview is not kept")
+	}
+	m.previewFile(a)
+	if got := ggui.Peek(m.Tabs); !slices.Equal(got, []string{kept, idB, idC, idA}) {
+		t.Fatalf("tabs = %q, want the edited file kept", got)
+	}
+}

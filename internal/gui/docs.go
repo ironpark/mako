@@ -52,6 +52,10 @@ type docInfo struct {
 	Size       int64
 	Dirty      bool // edited since it was read or saved
 	Saving     bool
+	// Preview says the tab only previews the file: the next file the Files
+	// tab opens takes its place, until it is edited, opened again or its
+	// tab is double-clicked, which keep it.
+	Preview bool
 }
 
 // Name is the file's name.
@@ -133,9 +137,57 @@ func (m *model) updateDoc(id string, fn func(*docInfo)) {
 	m.Docs.Set(next)
 }
 
-// openFile shows a file in a tab, reading it the first time.
+// openFile shows a file in a tab of its own, reading it the first time,
+// and keeps the tab if it was a preview.
 func (m *model) openFile(it fileItem) {
-	m.showTab(m.ensureDoc(it, ggui.Untrack(m.filesRoot)))
+	id := m.ensureDoc(it, ggui.Untrack(m.filesRoot))
+	m.keepDoc(id)
+	m.showTab(id)
+}
+
+// previewFile shows a file chosen in the Files tab, as editors do: in the
+// current pane's preview tab, which it takes from the file there unless
+// that was kept. A file opened already shows in its tab; one previewed
+// already, chosen again, is kept.
+func (m *model) previewFile(it fileItem) {
+	id := docTabID(it.Node, it.Path)
+	if d, ok := m.doc(id); ok && slices.Contains(ggui.Peek(m.Tabs), id) {
+		if d.Preview {
+			m.keepDoc(id)
+		}
+		m.showTab(id)
+		return
+	}
+	old := m.previewTab()
+	id = m.ensureDoc(it, ggui.Untrack(m.filesRoot))
+	m.updateDoc(id, func(d *docInfo) { d.Preview = true })
+	if old != "" && old != id {
+		m.replaceTab(old, id)
+		m.forgetDoc(old)
+	}
+	m.showTab(id)
+}
+
+// previewTab is the current pane's file tab that previews, "" for none.
+func (m *model) previewTab() string {
+	g := ggui.Peek(m.Layout).group(ggui.Peek(m.FocusGroup))
+	if g == nil {
+		return ""
+	}
+	docs := ggui.Peek(m.Docs)
+	for _, id := range g.Tabs {
+		if d, ok := docs[id]; ok && d.Preview && !d.Dirty {
+			return id
+		}
+	}
+	return ""
+}
+
+// keepDoc makes a file's preview tab its own.
+func (m *model) keepDoc(id string) {
+	if d, ok := m.doc(id); ok && d.Preview {
+		m.updateDoc(id, func(d *docInfo) { d.Preview = false })
+	}
 }
 
 // ensureDoc opens a file for a tab, under the project root, reading it
@@ -211,7 +263,7 @@ func (m *model) loadDoc(id string, keepEdits bool) {
 			}
 		}
 		m.updateDoc(id, func(d *docInfo) {
-			*d = docInfo{Node: d.Node, Path: d.Path, Root: d.Root, Binary: f.GetBinary(), Truncated: f.GetTruncated(), Size: f.GetSize()}
+			*d = docInfo{Node: d.Node, Path: d.Path, Root: d.Root, Preview: d.Preview, Binary: f.GetBinary(), Truncated: f.GetTruncated(), Size: f.GetSize()}
 			if err != nil {
 				d.Err = err.Error()
 			}
@@ -220,15 +272,21 @@ func (m *model) loadDoc(id string, keepEdits bool) {
 	})
 }
 
-// docEdited follows an edit, marking the file dirty or clean again.
+// docEdited follows an edit, marking the file dirty or clean again. An
+// edit keeps a preview's tab.
 func (m *model) docEdited(id, text string) {
 	doc := m.docs[id]
 	if doc == nil {
 		return
 	}
 	dirty := text != doc.saved
-	if d, ok := m.doc(id); ok && d.Dirty != dirty {
-		m.updateDoc(id, func(d *docInfo) { d.Dirty = dirty })
+	if d, ok := m.doc(id); ok && (d.Dirty != dirty || dirty && d.Preview) {
+		m.updateDoc(id, func(d *docInfo) {
+			d.Dirty = dirty
+			if dirty {
+				d.Preview = false
+			}
+		})
 	}
 }
 
@@ -291,6 +349,11 @@ func (m *model) askCloseDoc(id string) {
 // closeDoc closes a file's tab and forgets its text.
 func (m *model) closeDoc(id string) {
 	m.closeTab(id)
+	m.forgetDoc(id)
+}
+
+// forgetDoc forgets an open file whose tab has gone.
+func (m *model) forgetDoc(id string) {
 	delete(m.docs, id)
 	next := maps.Clone(ggui.Peek(m.Docs))
 	delete(next, id)
@@ -319,7 +382,8 @@ func (m *model) dirtyDocs() []string {
 // View --------------------------------------------------------------------------
 
 // docTab is a file's tab: its icon, its name, a dot while it has unsaved
-// changes, which the close button becomes on hover, as editors show it.
+// changes, which the close button becomes on hover, as editors show it. A
+// preview's name is in italics, and a double click keeps it.
 func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget {
 	fg := skin.Muted
 	if selected {
@@ -330,12 +394,26 @@ func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget 
 	if d.Dirty {
 		label = name + " ●"
 	}
+	text := widget.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()
+	if d.Preview {
+		if italic, _ := ggui.SystemItalicFonts(); italic != nil {
+			text = text.Font(italic)
+		}
+	}
 	content := widget.Box(widget.Row(
 		icon(fileIconName(name)).Size(14).Color(fg),
-		widget.Box(widget.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(170),
+		widget.Box(text).MaxWidth(170),
 		ui.ButtonOf(icon("x").Size(13), func() { m.askCloseDoc(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", name)),
 	).Gap(8)).Height(tabBarHeight)
-	btn := ui.ButtonOf(content, func() { m.showTab(id) }).Ghost().Pad(0, 8, 0, 12).Radius(0).Name(name)
+	btn := ui.ButtonOf(content, func() {
+		// The bar is drawn again as the first tap shows the tab, so the
+		// last tap is kept with the model.
+		if last := m.lastTap; last.id == id && time.Since(last.at) < doubleTap {
+			m.keepDoc(id)
+		}
+		m.lastTap = tabTap{id, time.Now()}
+		m.showTab(id)
+	}).Ghost().Pad(0, 8, 0, 12).Radius(0).Name(name)
 	return tabCell(btn, selected, focused)
 }
 

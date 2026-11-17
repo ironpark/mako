@@ -192,7 +192,7 @@ type model struct {
 	// lastSession is the session tab shown last, which a note from a diff
 	// goes to first.
 	lastSession string
-	lastTap     tabTap // the last tap on a diff's tab, which a second keeps
+	lastTap     tabTap // the last tap on a diff's or file's tab, which a second keeps
 	// revealedTab is the tab each pane last scrolled its tab bar to, so it
 	// does so once per tab it comes to show.
 	revealedTab map[int]string
