@@ -18,6 +18,7 @@ import (
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
+	shared "github.com/ironpark/mako/internal/workspace"
 )
 
 // Spaces: the sidebar's sessions divided by project, as views of them. A
@@ -920,7 +921,7 @@ func copySpacesMenu(m *model) ggui.Widget {
 	return ggui.View(m.Nodes, func(nodes []*protocol.Node) ggui.Widget {
 		var items []ggui.Widget
 		for _, n := range nodes {
-			if n.GetSource() == "self" || n.GetRevision() < protocol.RevisionWorkspaceOf {
+			if n.GetSource() == "self" || n.GetRevision() < protocol.RevisionWorkspaceCRDT {
 				continue
 			}
 			id, name := n.GetId(), n.GetName()
@@ -948,16 +949,16 @@ func (m *model) copySpaces(node, name string) {
 	fetch(m, 15*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Workspace, error) {
 		return c.WorkspaceOf(ctx, node)
 	}, func(ws *protocol.Workspace, err error) {
-		var f workspaceFile
+		var doc workspaceDoc
 		switch {
 		case err != nil:
 			m.toaster.Push(ui.Toast(Tf("Could not copy the spaces of %s", name), err.Error()).Destructive())
 			return
-		case len(ws.GetDoc()) == 0 || json.Unmarshal(ws.GetDoc(), &f) != nil:
+		case shared.Empty(ws.GetState()) || json.Unmarshal(shared.View(ws.GetState()), &doc) != nil:
 			m.toaster.Push(ui.Toast(Tf("Could not copy the spaces of %s", name), T("Its windows have kept no spaces.")).Destructive())
 			return
 		}
-		m.Spaces.Set(f.Doc.spaceList)
+		m.Spaces.Set(doc.spaceList)
 		m.migrateProjectKeys()
 		m.toaster.Push(ui.Toast(Tf("Copied the spaces of %s", name), ""))
 	})

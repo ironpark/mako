@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/widget"
@@ -75,55 +74,31 @@ func TestEachSpaceKeepsItsTabs(t *testing.T) {
 	}
 }
 
-// A newer workspace from the daemon is taken up, spaces and all; an older
-// one is not, nor one at all while the window does not follow.
-func TestANewerWorkspaceIsTakenUp(t *testing.T) {
-	m, p := workspaceModel(t)
+// The daemon's workspace is taken up, spaces and panes, but for tabs that
+// cannot come back; taking it up is no edit of the window's.
+func TestTheDaemonsWorkspaceIsTakenUp(t *testing.T) {
+	d := newFakeDaemon("me", true)
+	m, p := windowOn(t, d)
 	m.showTab("mine")
 	p.Frame()
+	m.saveWorkspace()
+	// Another window's edit, later, of the same panes and the spaces.
 	sp := space{ID: "w1", Name: "work", Owners: []string{"github.com/acme"}}
-	other := workspaceDoc{spaceList: spaceList{Spaces: []space{sp}}, Layouts: map[string]*layoutNode{
-		allSpaceID: {ID: 1, Group: &tabGroup{ID: 1, Tabs: []string{"theirs", "diff\x00x"}, Active: "theirs"}},
-	}}
-	body, _ := json.Marshal(workspaceFile{Version: 1, NodeID: "b", Doc: other})
-	m.ws.version = 2
-	m.takeWorkspace(&protocol.Workspace{Doc: body, Version: 1, NodeId: "b"})
-	if tabs := ggui.Peek(m.Tabs); !slices.Equal(tabs, []string{"mine"}) {
-		t.Fatalf("an older workspace was taken up: %v", tabs)
-	}
-	newer := time.Now().UnixNano()
-	m.takeWorkspace(&protocol.Workspace{Doc: body, Version: newer, NodeId: "b"})
+	d.edit(t, workspaceDoc{spaceList: spaceList{Spaces: []space{sp}}, Layouts: map[string]*layoutNode{
+		layoutKey(allSpaceID, ""): {ID: 1, Group: &tabGroup{ID: 1, Tabs: []string{"theirs", "diff\x00x"}, Active: "theirs"}},
+	}})
+	given := len(d.given)
+	m.takeWorkspace(d.get())
 	if tabs := ggui.Peek(m.Tabs); !slices.Equal(tabs, []string{"theirs"}) {
-		t.Fatalf("tabs after a newer workspace %v", tabs)
+		t.Fatalf("tabs after the daemon's workspace %v", tabs)
 	}
 	if got := ggui.Peek(m.Spaces).Spaces; !slicesEqual(got, []space{sp}) {
 		t.Fatalf("spaces %v", got)
 	}
-	// Taken up, it is no edit of the window's to send back.
 	p.Frame()
-	if m.ws.version != newer || m.ws.node != "b" {
-		t.Fatalf("version %v %q after taking one up", m.ws.version, m.ws.node)
-	}
-	m.Prefs.Update(func(p prefs) prefs { p.SyncWorkspace = false; return p })
-	m.takeWorkspace(&protocol.Workspace{Doc: []byte(`{"doc":{}}`), Version: newer + 1, NodeId: "c"})
-	if tabs := ggui.Peek(m.Tabs); !slices.Equal(tabs, []string{"theirs"}) {
-		t.Fatalf("taken up while not following: %v", tabs)
-	}
-}
-
-// An edit of a workspace from a node whose clock runs ahead is newer still
-// than it: the nodes take it up, rather than undo it with the one it
-// changed.
-func TestAnEditOutdatesWhatItEdited(t *testing.T) {
-	m, p := workspaceModel(t)
-	p.Frame()
-	ahead := time.Now().Add(time.Hour).UnixNano()
-	body, _ := json.Marshal(workspaceFile{Version: ahead, NodeID: "b", Doc: workspaceDoc{}})
-	m.takeWorkspace(&protocol.Workspace{Doc: body, Version: ahead, NodeId: "b"})
-	m.Spaces.Update(func(l spaceList) spaceList { l.Spaces = []space{{ID: "w", Name: "work"}}; return l })
 	m.saveWorkspace()
-	if m.ws.version <= ahead {
-		t.Fatalf("an edit of %d is %d", ahead, m.ws.version)
+	if len(d.given) != given {
+		t.Fatalf("taking it up gave %v", d.given[given:])
 	}
 }
 
@@ -242,49 +217,44 @@ func TestPinsMoveToTheWorkspace(t *testing.T) {
 	}
 }
 
-// A window that begins its workspace from nothing, as a new node's does,
-// counts its edits: the workspace the other nodes made is newer, and is
-// taken up over the tab it opened meanwhile, never the other way.
+// A window on a node new to the mesh opens a tab before its node joins:
+// its daemon counts the edit, and the workspace the other nodes made is
+// taken up over the tab, never the other way.
 func TestAWorkspaceFromNothingGivesWay(t *testing.T) {
-	m, p := workspaceModel(t)
+	fresh, mesh := newFakeDaemon("fresh", false), newFakeDaemon("old", true)
+	mesh.edit(t, workspaceDoc{Layouts: map[string]*layoutNode{
+		layoutKey(allSpaceID, ""): {ID: 1, Group: &tabGroup{ID: 1, Tabs: []string{"theirs"}, Active: "theirs"}},
+	}})
+	m, p := windowOn(t, fresh)
 	m.showTab("mine")
 	p.Frame()
 	m.saveWorkspace()
-	if m.ws.version != 1 {
-		t.Fatalf("the first edit from nothing is version %d", m.ws.version)
-	}
-	theirs := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).UnixNano()
-	doc := workspaceDoc{Layouts: map[string]*layoutNode{
-		layoutKey(allSpaceID, ""): {ID: 1, Group: &tabGroup{ID: 1, Tabs: []string{"theirs"}, Active: "theirs"}},
-	}}
-	body, _ := json.Marshal(workspaceFile{Version: theirs, NodeID: "b", Doc: doc})
-	m.takeWorkspace(&protocol.Workspace{Doc: body, Version: theirs, NodeId: "b"})
+	fresh.pull(mesh)
+	m.takeWorkspace(fresh.get())
 	if tabs := ggui.Peek(m.Tabs); !slices.Equal(tabs, []string{"theirs"}) {
 		t.Fatalf("the window kept %v over the other nodes' workspace", tabs)
 	}
-	// From then on, its edits are timed, and newer than what they edit.
+	// From then on, its edits are timed, and win.
 	m.showTab("next")
+	p.Frame()
 	m.saveWorkspace()
-	if m.ws.version <= theirs {
-		t.Fatalf("an edit of %d is %d", theirs, m.ws.version)
+	if tabs := ggui.Peek(m.Tabs); !slices.Equal(tabs, []string{"theirs", "next"}) {
+		t.Fatalf("after joining the window shows %v", tabs)
 	}
 }
 
-// The workspace the nodes share leaves out the window's own contexts,
-// which only its file keeps.
+// The window's contexts are its own: they are written down in its file,
+// and never given to the daemon.
 func TestContextsStayInTheWindow(t *testing.T) {
 	m, p := workspaceModel(t)
 	p.Frame()
 	m.ws.contexts[allSpaceID] = projectContext("p1")
-	var f workspaceFile
-	if err := json.Unmarshal(m.writeWorkspace(), &f); err != nil || f.Contexts != nil {
-		t.Fatalf("shared %+v, %v", f, err)
-	}
+	m.writeWorkspace()
 	m.ws.writer.wait()
 	path, _ := configFile("workspace.json")
 	body, _ := os.ReadFile(path)
-	f = workspaceFile{}
-	if err := json.Unmarshal(body, &f); err != nil || f.Contexts[allSpaceID] != projectContext("p1") {
+	var f workspaceFile
+	if err := json.Unmarshal(body, &f); err != nil || f.Contexts[allSpaceID] != projectContext("p1") || f.Version != 0 {
 		t.Fatalf("written down %s, %v", body, err)
 	}
 }
@@ -308,9 +278,7 @@ func TestContextsFollowTheirSections(t *testing.T) {
 			layoutKey(allSpaceID, projectContext("pj")): {ID: 1, Group: &tabGroup{ID: 1, Tabs: []string{"s1"}, Active: "s1"}},
 		},
 	}
-	version := time.Now().UnixNano()
-	body, _ := json.Marshal(workspaceFile{Version: version, NodeID: "b", Doc: doc})
-	m.takeWorkspace(&protocol.Workspace{Doc: body, Version: version, NodeId: "b"})
+	m.takeWorkspace(&protocol.Workspace{State: stateOf(t, doc)})
 	if got := m.ws.contexts[allSpaceID]; got != projectContext("pj") {
 		t.Fatalf("the context followed to %q", got)
 	}

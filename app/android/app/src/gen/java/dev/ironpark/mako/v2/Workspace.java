@@ -24,7 +24,9 @@ public  final class Workspace extends
   private Workspace() {
     doc_ = com.google.protobuf.ByteString.EMPTY;
     nodeId_ = "";
+    digest_ = com.google.protobuf.ByteString.EMPTY;
   }
+  private int bitField0_;
   public static final int DOC_FIELD_NUMBER = 1;
   private com.google.protobuf.ByteString doc_;
   /**
@@ -167,6 +169,138 @@ public  final class Workspace extends
     checkByteStringIsUtf8(value);
     nodeId_ = value.toStringUtf8();
 
+  }
+
+  public static final int STATE_FIELD_NUMBER = 4;
+  private dev.ironpark.mako.v2.WorkspaceState state_;
+  /**
+   * <pre>
+   * state is the workspace as a CRDT (workspace.proto), which every daemon
+   * reads and joins with its own field by field; a daemon that sends it
+   * leaves doc and version empty, so an older one takes nothing from it.
+   * From a front-end it is a delta: only the entries it changed, whose
+   * clocks the daemon stamps again.
+   * </pre>
+   *
+   * <code>.mako.v2.WorkspaceState state = 4 [json_name = "state"];</code>
+   */
+  @java.lang.Override
+  public boolean hasState() {
+    return ((bitField0_ & 0x00000001) != 0);
+  }
+  /**
+   * <pre>
+   * state is the workspace as a CRDT (workspace.proto), which every daemon
+   * reads and joins with its own field by field; a daemon that sends it
+   * leaves doc and version empty, so an older one takes nothing from it.
+   * From a front-end it is a delta: only the entries it changed, whose
+   * clocks the daemon stamps again.
+   * </pre>
+   *
+   * <code>.mako.v2.WorkspaceState state = 4 [json_name = "state"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.WorkspaceState getState() {
+    return state_ == null ? dev.ironpark.mako.v2.WorkspaceState.getDefaultInstance() : state_;
+  }
+  /**
+   * <pre>
+   * state is the workspace as a CRDT (workspace.proto), which every daemon
+   * reads and joins with its own field by field; a daemon that sends it
+   * leaves doc and version empty, so an older one takes nothing from it.
+   * From a front-end it is a delta: only the entries it changed, whose
+   * clocks the daemon stamps again.
+   * </pre>
+   *
+   * <code>.mako.v2.WorkspaceState state = 4 [json_name = "state"];</code>
+   */
+  private void setState(dev.ironpark.mako.v2.WorkspaceState value) {
+    java.util.Objects.requireNonNull(value);
+    state_ = value;
+    bitField0_ |= 0x00000001;
+  }
+  /**
+   * <pre>
+   * state is the workspace as a CRDT (workspace.proto), which every daemon
+   * reads and joins with its own field by field; a daemon that sends it
+   * leaves doc and version empty, so an older one takes nothing from it.
+   * From a front-end it is a delta: only the entries it changed, whose
+   * clocks the daemon stamps again.
+   * </pre>
+   *
+   * <code>.mako.v2.WorkspaceState state = 4 [json_name = "state"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeState(dev.ironpark.mako.v2.WorkspaceState value) {
+    java.util.Objects.requireNonNull(value);
+    if (state_ != null &&
+        state_ != dev.ironpark.mako.v2.WorkspaceState.getDefaultInstance()) {
+      state_ =
+        dev.ironpark.mako.v2.WorkspaceState.newBuilder(state_).mergeFrom(value).buildPartial();
+    } else {
+      state_ = value;
+    }
+    bitField0_ |= 0x00000001;
+  }
+  /**
+   * <pre>
+   * state is the workspace as a CRDT (workspace.proto), which every daemon
+   * reads and joins with its own field by field; a daemon that sends it
+   * leaves doc and version empty, so an older one takes nothing from it.
+   * From a front-end it is a delta: only the entries it changed, whose
+   * clocks the daemon stamps again.
+   * </pre>
+   *
+   * <code>.mako.v2.WorkspaceState state = 4 [json_name = "state"];</code>
+   */
+  private void clearState() {
+    state_ = null;
+    bitField0_ = (bitField0_ & ~0x00000001);
+  }
+
+  public static final int DIGEST_FIELD_NUMBER = 5;
+  private com.google.protobuf.ByteString digest_;
+  /**
+   * <pre>
+   * digest is a hash of state, for a peer to tell whether the state it
+   * holds differs without being sent it; a hint only, so it may differ
+   * between builds that serialize differently.
+   * </pre>
+   *
+   * <code>bytes digest = 5 [json_name = "digest"];</code>
+   * @return The digest.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString getDigest() {
+    return digest_;
+  }
+  /**
+   * <pre>
+   * digest is a hash of state, for a peer to tell whether the state it
+   * holds differs without being sent it; a hint only, so it may differ
+   * between builds that serialize differently.
+   * </pre>
+   *
+   * <code>bytes digest = 5 [json_name = "digest"];</code>
+   * @param value The digest to set.
+   */
+  private void setDigest(com.google.protobuf.ByteString value) {
+    java.util.Objects.requireNonNull(value);
+  
+    digest_ = value;
+  }
+  /**
+   * <pre>
+   * digest is a hash of state, for a peer to tell whether the state it
+   * holds differs without being sent it; a hint only, so it may differ
+   * between builds that serialize differently.
+   * </pre>
+   *
+   * <code>bytes digest = 5 [json_name = "digest"];</code>
+   */
+  private void clearDigest() {
+
+    digest_ = getDefaultInstance().getDigest();
   }
 
   public static dev.ironpark.mako.v2.Workspace parseFrom(
@@ -422,6 +556,147 @@ public  final class Workspace extends
       return this;
     }
 
+    /**
+     * <pre>
+     * state is the workspace as a CRDT (workspace.proto), which every daemon
+     * reads and joins with its own field by field; a daemon that sends it
+     * leaves doc and version empty, so an older one takes nothing from it.
+     * From a front-end it is a delta: only the entries it changed, whose
+     * clocks the daemon stamps again.
+     * </pre>
+     *
+     * <code>.mako.v2.WorkspaceState state = 4 [json_name = "state"];</code>
+     */
+    @java.lang.Override
+    public boolean hasState() {
+      return instance.hasState();
+    }
+    /**
+     * <pre>
+     * state is the workspace as a CRDT (workspace.proto), which every daemon
+     * reads and joins with its own field by field; a daemon that sends it
+     * leaves doc and version empty, so an older one takes nothing from it.
+     * From a front-end it is a delta: only the entries it changed, whose
+     * clocks the daemon stamps again.
+     * </pre>
+     *
+     * <code>.mako.v2.WorkspaceState state = 4 [json_name = "state"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.WorkspaceState getState() {
+      return instance.getState();
+    }
+    /**
+     * <pre>
+     * state is the workspace as a CRDT (workspace.proto), which every daemon
+     * reads and joins with its own field by field; a daemon that sends it
+     * leaves doc and version empty, so an older one takes nothing from it.
+     * From a front-end it is a delta: only the entries it changed, whose
+     * clocks the daemon stamps again.
+     * </pre>
+     *
+     * <code>.mako.v2.WorkspaceState state = 4 [json_name = "state"];</code>
+     */
+    public Builder setState(dev.ironpark.mako.v2.WorkspaceState value) {
+      copyOnWrite();
+      instance.setState(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * state is the workspace as a CRDT (workspace.proto), which every daemon
+     * reads and joins with its own field by field; a daemon that sends it
+     * leaves doc and version empty, so an older one takes nothing from it.
+     * From a front-end it is a delta: only the entries it changed, whose
+     * clocks the daemon stamps again.
+     * </pre>
+     *
+     * <code>.mako.v2.WorkspaceState state = 4 [json_name = "state"];</code>
+     */
+    public Builder setState(
+        dev.ironpark.mako.v2.WorkspaceState.Builder builderForValue) {
+      copyOnWrite();
+      instance.setState(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * state is the workspace as a CRDT (workspace.proto), which every daemon
+     * reads and joins with its own field by field; a daemon that sends it
+     * leaves doc and version empty, so an older one takes nothing from it.
+     * From a front-end it is a delta: only the entries it changed, whose
+     * clocks the daemon stamps again.
+     * </pre>
+     *
+     * <code>.mako.v2.WorkspaceState state = 4 [json_name = "state"];</code>
+     */
+    public Builder mergeState(dev.ironpark.mako.v2.WorkspaceState value) {
+      copyOnWrite();
+      instance.mergeState(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * state is the workspace as a CRDT (workspace.proto), which every daemon
+     * reads and joins with its own field by field; a daemon that sends it
+     * leaves doc and version empty, so an older one takes nothing from it.
+     * From a front-end it is a delta: only the entries it changed, whose
+     * clocks the daemon stamps again.
+     * </pre>
+     *
+     * <code>.mako.v2.WorkspaceState state = 4 [json_name = "state"];</code>
+     */
+    public Builder clearState() {  copyOnWrite();
+      instance.clearState();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * digest is a hash of state, for a peer to tell whether the state it
+     * holds differs without being sent it; a hint only, so it may differ
+     * between builds that serialize differently.
+     * </pre>
+     *
+     * <code>bytes digest = 5 [json_name = "digest"];</code>
+     * @return The digest.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getDigest() {
+      return instance.getDigest();
+    }
+    /**
+     * <pre>
+     * digest is a hash of state, for a peer to tell whether the state it
+     * holds differs without being sent it; a hint only, so it may differ
+     * between builds that serialize differently.
+     * </pre>
+     *
+     * <code>bytes digest = 5 [json_name = "digest"];</code>
+     * @param value The digest to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDigest(com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setDigest(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * digest is a hash of state, for a peer to tell whether the state it
+     * holds differs without being sent it; a hint only, so it may differ
+     * between builds that serialize differently.
+     * </pre>
+     *
+     * <code>bytes digest = 5 [json_name = "digest"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDigest() {
+      copyOnWrite();
+      instance.clearDigest();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Workspace)
   }
   @java.lang.Override
@@ -438,13 +713,16 @@ public  final class Workspace extends
       }
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
+            "bitField0_",
             "doc_",
             "version_",
             "nodeId_",
+            "state_",
+            "digest_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0000\u0000\u0001\n\u0002\u0002" +
-              "\u0003\u0208";
+              "\u0000\u0005\u0000\u0001\u0001\u0005\u0005\u0000\u0000\u0000\u0001\n\u0002\u0002" +
+              "\u0003\u0208\u0004\u1009\u0000\u0005\n";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

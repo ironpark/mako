@@ -49,6 +49,9 @@ type project struct {
 // projectRoot is one of a project's folders: one repository, or one
 // folder outside any, where it is on each node it is on.
 type projectRoot struct {
+	// ID is the root's in the workspace the daemon holds, which an edit of
+	// it is of; empty for a root made here until the daemon gives it one.
+	ID    string `json:"id,omitempty"`
 	Label string `json:"label,omitempty"` // as its sessions are marked, the folder's name when empty
 	// Remote and Owner are the repository's, host/path and host/name, as
 	// its sessions last said; "" outside a repository.
@@ -533,7 +536,6 @@ func (m *model) rekeyContexts(moved map[string]string) {
 	for space, ctx := range m.ws.contexts {
 		if to, ok := moved[ctx]; ok {
 			m.ws.contexts[space] = to
-			m.ws.contextsMoved = true
 		}
 	}
 	if space, ctx, _ := strings.Cut(m.ws.layoutKey, "|"); m.ws.layoutKey != "" {
@@ -685,7 +687,8 @@ func (m *model) pushProjects(nodes []*protocol.Node) {
 	}
 	defs := m.projectsNow()
 	for _, n := range nodes {
-		if !reachable(n) || n.GetRevision() < protocol.RevisionProjects {
+		// A daemon from revision 23 has its projects of the workspace.
+		if !reachable(n) || n.GetRevision() < protocol.RevisionProjects || n.GetRevision() >= protocol.RevisionWorkspaceCRDT {
 			continue
 		}
 		node := n.GetId()

@@ -49,4 +49,43 @@ public interface WorkspaceOrBuilder extends
    */
   com.google.protobuf.ByteString
       getNodeIdBytes();
+
+  /**
+   * <pre>
+   * state is the workspace as a CRDT (workspace.proto), which every daemon
+   * reads and joins with its own field by field; a daemon that sends it
+   * leaves doc and version empty, so an older one takes nothing from it.
+   * From a front-end it is a delta: only the entries it changed, whose
+   * clocks the daemon stamps again.
+   * </pre>
+   *
+   * <code>.mako.v2.WorkspaceState state = 4 [json_name = "state"];</code>
+   * @return Whether the state field is set.
+   */
+  boolean hasState();
+  /**
+   * <pre>
+   * state is the workspace as a CRDT (workspace.proto), which every daemon
+   * reads and joins with its own field by field; a daemon that sends it
+   * leaves doc and version empty, so an older one takes nothing from it.
+   * From a front-end it is a delta: only the entries it changed, whose
+   * clocks the daemon stamps again.
+   * </pre>
+   *
+   * <code>.mako.v2.WorkspaceState state = 4 [json_name = "state"];</code>
+   * @return The state.
+   */
+  dev.ironpark.mako.v2.WorkspaceState getState();
+
+  /**
+   * <pre>
+   * digest is a hash of state, for a peer to tell whether the state it
+   * holds differs without being sent it; a hint only, so it may differ
+   * between builds that serialize differently.
+   * </pre>
+   *
+   * <code>bytes digest = 5 [json_name = "digest"];</code>
+   * @return The digest.
+   */
+  com.google.protobuf.ByteString getDigest();
 }

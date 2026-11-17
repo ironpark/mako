@@ -26,6 +26,8 @@ type agentFile struct {
 	agents  map[string]agentspec.Agent
 	shell   agentspec.Shell
 	servers map[string]mcp.Server
+	// workspace is how the node shares its workspace.
+	workspace config.Workspace
 }
 
 // FollowAgents makes the daemon read its agents from the config file at
@@ -52,9 +54,10 @@ func (d *Daemon) contextServers() map[string]mcp.Server {
 
 // followedConfig is what the daemon follows of its config file.
 type followedConfig struct {
-	agents  map[string]agentspec.Agent
-	shell   agentspec.Shell
-	servers map[string]mcp.Server
+	agents    map[string]agentspec.Agent
+	shell     agentspec.Shell
+	servers   map[string]mcp.Server
+	workspace config.Workspace
 }
 
 func (d *Daemon) followed() followedConfig {
@@ -62,9 +65,9 @@ func (d *Daemon) followed() followedConfig {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !f.read {
-		f.agents, f.shell, f.servers, f.read = d.cfg.Agents, d.cfg.Shell, d.cfg.ContextServers, true
+		f.agents, f.shell, f.servers, f.workspace, f.read = d.cfg.Agents, d.cfg.Shell, d.cfg.ContextServers, d.cfg.Workspace, true
 	}
-	now := followedConfig{agents: f.agents, shell: f.shell, servers: f.servers}
+	now := followedConfig{agents: f.agents, shell: f.shell, servers: f.servers, workspace: f.workspace}
 	if f.path == "" {
 		return now
 	}
@@ -83,9 +86,9 @@ func (d *Daemon) followed() followedConfig {
 		return now
 	}
 	file.TakeShell()
-	f.agents, f.shell, f.servers = file.Agents, file.Shell, file.ContextServers
-	d.log.Info("agents reloaded", "path", f.path)
-	return followedConfig{agents: f.agents, shell: f.shell, servers: f.servers}
+	f.agents, f.shell, f.servers, f.workspace = file.Agents, file.Shell, file.ContextServers, file.Workspace
+	d.log.Info("configuration reloaded", "path", f.path)
+	return followedConfig{agents: f.agents, shell: f.shell, servers: f.servers, workspace: f.workspace}
 }
 
 // agentInfo lists the agents for this node's record: names and what their

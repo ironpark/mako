@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package mako.v2;
+
+option go_package = "github.com/ironpark/mako/internal/protocol";
+
+// HLC is a Hybrid Logical Clock timestamp for deterministic conflict resolution.
+message HLC {
+  int64 wall_time = 1; // Unix milliseconds
+  uint32 logical = 2;  // Monotonic logical counter
+  string node_id = 3;  // Origin node ID
+}
+
+// ElementMeta tracks membership and ordering in a CRDT set.
+message ElementMeta {
+  HLC added_at = 1;
+  HLC removed_at = 2;
+  string rank = 3;     // Optional fractional index for ordered sets
+  HLC rank_clock = 4;
+}
+
+// StringReg is a Last-Write-Wins Register holding a string.
+message StringReg {
+  string value = 1;
+  HLC clock = 2;
+}
+
+// BoolReg is a Last-Write-Wins Register holding a bool.
+message BoolReg {
+  bool value = 1;
+  HLC clock = 2;
+}
+
+// SpaceEntry is a CRDT-backed space definition. It shows while
+// created_at > deleted_at.
+message SpaceEntry {
+  string id = 1;
+  HLC created_at = 2;
+  HLC deleted_at = 3;
+  StringReg name = 4;
+  StringReg rank = 5;                 // Fractional index for space ordering
+  map<string, ElementMeta> owners = 6;   // owner -> set membership
+  map<string, ElementMeta> projects = 7; // project ID -> explicitly shown
+  map<string, ElementMeta> hidden = 8;   // project ID -> explicitly hidden
+  StringReg color = 9;                // among the look colours, by name
+  StringReg layout = 10;              // name of the window layout it uses; "" for the default
+}
+
+// ProjectRootEntry is one repository or folder root inside a project.
+message ProjectRootEntry {
+  // id is the root's remote, or without one its first location's key; it
+  // is derived once, when the root is made, and does not change after.
+  string id = 1;
+  HLC created_at = 2;
+  HLC deleted_at = 3;
+  StringReg rank = 4;
+  StringReg label = 5;
+  StringReg remote = 6;
+  StringReg owner = 7;
+  // key: node_id + "\x00" + path (a path may hold a colon)
+  map<string, ElementMeta> locations = 8;
+  map<string, ElementMeta> declined = 9;
+}
+
+// ProjectEntry is a CRDT-backed multi-folder project definition.
+message ProjectEntry {
+  string id = 1;
+  HLC created_at = 2;
+  HLC deleted_at = 3;
+  StringReg name = 4;
+  BoolReg no_join = 5;
+  BoolReg give_dirs = 6;
+  map<string, ProjectRootEntry> roots = 7;
+  StringReg rank = 8;                 // the projects' order
+}
+
+// LookEntry holds the icon and colour of a project section; "" for none.
+message LookEntry {
+  StringReg icon = 1;
+  StringReg color = 2;                // among the look colours, by name
+}
+
+// LayoutEntry is one whole document, the later edit of which wins: the
+// pane tree of one (space|context), or a named window layout. Its JSON is
+// described in protocol.md, for every front-end to read.
+message LayoutEntry {
+  bytes doc = 1;
+  map<string, string> tab_nodes = 2;  // pane trees: tabID -> nodeID
+  HLC clock = 3;                      // also the document's revision (ifRev)
+  bool deleted = 4;
+}
+
+// WorkspaceState is the workspace's CRDT state, whole or in part: a delta
+// is the same message carrying only the entries that changed.
+message WorkspaceState {
+  reserved 1;
+  BoolReg no_all = 2;
+  map<string, SpaceEntry> spaces = 3;
+  map<string, ProjectEntry> projects = 4;
+  map<string, StringReg> names = 5;             // sectionKey -> custom name
+  map<string, LookEntry> looks = 6;             // sectionKey -> icon & color
+  map<string, ElementMeta> pinned_projects = 7; // "section\x00root" -> ordered set
+  map<string, ElementMeta> pinned_sessions = 8; // sessionID -> ordered set
+  map<string, LayoutEntry> layouts = 9;         // "spaceID|context" -> pane tree
+  StringReg default_space = 10;                 // where a section nothing places goes
+  map<string, LayoutEntry> window_layouts = 11; // name -> window layout document
+}

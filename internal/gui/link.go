@@ -53,7 +53,6 @@ type daemonLink struct {
 	accessStale  atomic.Bool
 	wsStale      atomic.Bool
 	devicesStale atomic.Bool
-	syncing      atomic.Bool // the window follows the other nodes; for the poll
 }
 
 func newDaemonLink(addr, daemon string) *daemonLink {
@@ -156,6 +155,14 @@ func (l *daemonLink) swap(set func()) {
 	l.stale()
 }
 
+// generation counts the daemons the link has pointed at, so that an
+// answer of one it left can be told.
+func (l *daemonLink) generation() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.gen
+}
+
 // stale asks the next poll for Access and the workspace again.
 func (l *daemonLink) stale() {
 	l.accessStale.Store(true)
@@ -236,11 +243,13 @@ func (m *model) watch(ctx context.Context) {
 // reconnect drops the daemon link so the next request dials again, as after
 // the external address changed.
 func (m *model) reconnect(daemon string) {
+	m.leaveWorkspace()
 	m.link.setDaemon(daemon)
 }
 
 // unlink leaves the window with no daemon, as when the app's own stops.
 func (m *model) unlink(reason string) {
+	m.leaveWorkspace()
 	m.link.linked.Store(false)
 	m.link.setEmbedded("")
 	m.dropConns()
@@ -251,6 +260,7 @@ func (m *model) unlink(reason string) {
 // setLink points the window at the app's own daemon, or with "" back at the
 // external one.
 func (m *model) setLink(embedAddr string) {
+	m.leaveWorkspace()
 	m.link.setEmbedded(embedAddr)
 	m.link.linked.Store(true)
 	m.link.pollNow()
@@ -272,6 +282,7 @@ func (m *model) poll(ctx context.Context) {
 	fail := func(err error) {
 		m.post(func() { m.Conn.Set(connState{Err: err.Error()}) })
 	}
+	gen := m.link.generation()
 	c, err := m.link.client(ctx)
 	if err != nil {
 		fail(err)
@@ -297,14 +308,12 @@ func (m *model) poll(ctx context.Context) {
 	// daemon is not watched.
 	accessStale := m.link.accessStale.Swap(false)
 	fetchAccess := accessStale || !m.link.watching.Load()
-	// The workspace too: at first, and when the daemon has a newer one.
+	// The workspace too: at first, and when the daemon's changed.
 	var ws *protocol.Workspace
-	if m.link.syncing.Load() {
-		if wsStale := m.link.wsStale.Swap(false); wsStale || !m.link.watching.Load() {
-			if ws, err = c.Workspace(reqCtx); err != nil {
-				ws = nil // an older daemon
-				askAgain(&m.link.wsStale, wsStale, err)
-			}
+	if wsStale := m.link.wsStale.Swap(false); wsStale || !m.link.watching.Load() {
+		if ws, err = c.Workspace(reqCtx); err != nil {
+			ws = nil // an older daemon
+			askAgain(&m.link.wsStale, wsStale, err)
 		}
 	}
 	var access *protocol.AccessInfo
@@ -381,8 +390,8 @@ func (m *model) poll(ctx context.Context) {
 		m.attachVisible()
 		m.sleepIdle(time.Now())
 		m.syncTitles()
-		if ws != nil {
-			m.takeWorkspace(ws)
+		if ws != nil && m.link.generation() == gen {
+			m.takeWorkspace(ws) // not of a daemon the window has left
 		}
 	})
 }

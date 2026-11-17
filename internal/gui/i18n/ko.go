@@ -879,7 +879,7 @@ var catalogKo = map[string]string{
 	"Every space": "모든 스페이스",
 	"A space of every session, before the others. Left out, the sidebar shows only the spaces you add.": "다른 스페이스 앞에 모든 세션을 보여 주는 스페이스를 둡니다. 끄면 사이드바에는 추가한 스페이스만 나옵니다.",
 	"Follow other nodes": "다른 노드와 동기화",
-	"Keep the tabs, panes, spaces and pins the same as in the windows of the nodes this one trusts both ways.": "서로 신뢰하는 노드의 창과 탭, 분할 화면, 스페이스, 고정 항목을 같게 유지합니다.",
+	"Share the spaces, projects, pins, tabs and panes with the nodes this one trusts both ways. Off, this node keeps its own.": "서로 신뢰하는 노드와 스페이스, 프로젝트, 고정 항목, 탭과 분할 화면을 공유합니다. 끄면 이 노드는 자기 것만 유지합니다.",
 	"All sessions":              "모든 세션",
 	"Space %d":                  "스페이스 %d",
 	"Edit spaces…":              "스페이스 편집…",

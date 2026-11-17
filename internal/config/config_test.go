@@ -71,3 +71,34 @@ func TestTheShellLeavesTheAgents(t *testing.T) {
 		t.Fatalf("a shell of its own became %+v", cfg.Shell)
 	}
 }
+
+// A node shares its workspace unless its config says not to, or, saying
+// nothing, the window's own setting it took the place of was turned off.
+func TestWorkspaceSyncs(t *testing.T) {
+	on, off := true, false
+	tests := []struct {
+		name string
+		sync *bool
+		gui  string // gui.json; "" for none
+		want bool
+	}{
+		{"nothing said", nil, "", true},
+		{"the window followed", nil, `{"sync_workspace":true}`, true},
+		{"the window did not follow", nil, `{"sync_workspace":false}`, false},
+		{"the window said nothing", nil, `{"theme":"dark"}`, true},
+		{"gui.json unreadable", nil, `{`, true},
+		{"on, whatever the window", &on, `{"sync_workspace":false}`, true},
+		{"off", &off, "", false},
+	}
+	for _, tt := range tests {
+		dir := t.TempDir()
+		if tt.gui != "" {
+			if err := os.WriteFile(filepath.Join(dir, "gui.json"), []byte(tt.gui), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got := (Workspace{Sync: tt.sync}).Syncs(dir); got != tt.want {
+			t.Errorf("%s: %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}

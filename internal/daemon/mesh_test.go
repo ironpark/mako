@@ -28,11 +28,21 @@ import (
 // and the peers given, until the test ends.
 func meshDaemon(t *testing.T, name string, peers ...string) *Daemon {
 	t.Helper()
+	return meshDaemonWith(t, name, nil, peers...)
+}
+
+// meshDaemonWith is meshDaemon, its configuration changed by configure
+// before it starts.
+func meshDaemonWith(t *testing.T, name string, configure func(*config.Config), peers ...string) *Daemon {
+	t.Helper()
 	cfg := config.Default()
 	cfg.Name = name
 	cfg.P2P.Listen = "127.0.0.1:0"
 	cfg.Discovery = config.Discovery{}
 	cfg.Peers = peers
+	if configure != nil {
+		configure(cfg)
+	}
 	d := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	d.dir = t.TempDir()
 	d.hookBinary = ""

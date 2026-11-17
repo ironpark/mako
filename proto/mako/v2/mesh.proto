@@ -4,6 +4,7 @@ package mako.v2;
 
 import "google/protobuf/timestamp.proto";
 import "mako/v2/session.proto";
+import "mako/v2/workspace.proto";
 
 option go_package = "github.com/ironpark/mako/internal/protocol";
 
@@ -113,6 +114,16 @@ message Workspace {
   bytes doc = 1; // the front-end's, opaque to the daemon
   int64 version = 2; // when it was made, in Unix nanoseconds: the later wins
   string node_id = 3; // where it was made, which breaks a tie
+  // state is the workspace as a CRDT (workspace.proto), which every daemon
+  // reads and joins with its own field by field; a daemon that sends it
+  // leaves doc and version empty, so an older one takes nothing from it.
+  // From a front-end it is a delta: only the entries it changed, whose
+  // clocks the daemon stamps again.
+  WorkspaceState state = 4;
+  // digest is a hash of state, for a peer to tell whether the state it
+  // holds differs without being sent it; a hint only, so it may differ
+  // between builds that serialize differently.
+  bytes digest = 5;
 }
 
 // GetWorkspace asks the daemon for the workspace it holds; it answers with

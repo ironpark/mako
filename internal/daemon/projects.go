@@ -19,7 +19,8 @@ import (
 )
 
 // Projects: the folders the user put together, as far as they are on this
-// node, as a front-end last gave them (SetProjects). The agents in one
+// node, as the workspace holds them (workspace.go), or before it holds any
+// as a front-end last gave them (SetProjects). The agents in one
 // project's folders are one project's, for the agents' MCP tools and the
 // Agents panel, whatever folder each works in; outside them an agent's
 // project is its own folder, as before. A project may give an agent
@@ -216,8 +217,15 @@ func withProjectDirs(agentName string, args, dirs []string) []string {
 	return append(slices.Clone(args), takes.DirArgs(dirs)...)
 }
 
+// handleSetProjects keeps the projects a front-end gives, until the
+// workspace says what the projects are: from then on they are the
+// workspace's (syncWorkspaceProjects), whichever node edits them, and a
+// front-end giving its own is answered with those.
 func (d *Daemon) handleSetProjects(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeProjects, func(req *protocol.SetProjects) (*protocol.Projects, error) {
+		if d.workspace.holdsProjects() {
+			return &protocol.Projects{Projects: d.projects.get()}, nil
+		}
 		out := d.projects.set(req.GetProjects())
 		// The Agents panels and list_agents follow at once.
 		d.changes.fire(false, true)

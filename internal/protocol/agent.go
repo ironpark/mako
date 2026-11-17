@@ -29,7 +29,13 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 22
+const Revision = 23
+
+// RevisionWorkspaceCRDT adds Workspace.state and digest: the workspace as
+// a CRDT the daemon merges field by field, a front-end giving it deltas
+// and the daemons their whole states, and the projects coming of it.
+// Daemons share the workspace only with peers of this revision or later.
+const RevisionWorkspaceCRDT = 23
 
 // RevisionWorkspaceOf adds GetWorkspace.node_id: the workspace another
 // node holds, read to copy its spaces.

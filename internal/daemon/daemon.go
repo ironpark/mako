@@ -71,7 +71,8 @@ type Daemon struct {
 	remote               peerReports         // what peers say of their sessions and routes; see routes.go
 	changes              notifier            // tells watching front-ends what changed
 	statusPoke           chan struct{}       // a session's status changed; see watchState
-	workspace            workspaces          // the windows' tabs and panes; see workspace.go
+	workspace            workspaces          // the spaces, projects and layouts; see workspace.go
+	fetching             map[string]bool     // the peers whose workspace is being asked for
 	projects             projectStore        // the projects of several folders; see projects.go
 	linking              map[string]*linkTry // peer ID -> how its link is being made, until one holds
 	ctx                  context.Context     // Run's, for work that outlasts a request
@@ -176,8 +177,9 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if err := d.loadSessions(dir); err != nil {
 		return err
 	}
-	d.workspace.load(dir)
+	d.workspace.load(dir, d.cfg.NodeID)
 	d.projects.load(dir)
+	d.syncWorkspaceProjects()
 	defer d.sessions.closeAll()
 
 	ctx, cancel := context.WithCancel(ctx)

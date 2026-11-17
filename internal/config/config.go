@@ -58,6 +58,38 @@ type Config struct {
 	// Devices are the devices attached to this node that it lends to the
 	// nodes it lets in. See docs/devices.md.
 	Devices Devices `json:"devices,omitzero"`
+	// Workspace is how the node shares the workspace: its spaces,
+	// projects and layouts.
+	Workspace Workspace `json:"workspace,omitzero"`
+}
+
+// Workspace configures how a node shares the workspace.
+type Workspace struct {
+	// Sync shares the workspace with the peers the node and they let each
+	// other in. Off, the daemon sends its own to none of them and takes
+	// none of theirs; its front-ends still edit it, and its projects still
+	// come of it. Left out, it is as the window's "Follow other nodes" was
+	// set, which it took the place of: on, unless gui.json turned that off.
+	Sync *bool `json:"sync,omitempty"`
+}
+
+// Syncs reports whether the node shares its workspace; dir is the
+// configuration directory, where gui.json is.
+func (w Workspace) Syncs(dir string) bool {
+	if w.Sync != nil {
+		return *w.Sync
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "gui.json"))
+	if err != nil {
+		return true
+	}
+	var gui struct {
+		SyncWorkspace *bool `json:"sync_workspace"`
+	}
+	if json.Unmarshal(body, &gui) != nil || gui.SyncWorkspace == nil {
+		return true
+	}
+	return *gui.SyncWorkspace
 }
 
 // Devices configures the devices a node lends.

@@ -5,8 +5,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"os"
 	"reflect"
 	"slices"
@@ -14,20 +16,32 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/ui"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
+	shared "github.com/ironpark/mako/internal/workspace"
 )
 
-// The workspace: the window's tabs and panes in each space, and the spaces
-// themselves. The panes shown are the space shown's; moving to another
-// space puts them by and brings out that space's. The window writes the
-// workspace down in workspace.json, and, while the setting has it follow
-// the other nodes, gives it to its daemon, which shares it with the nodes
-// that trust it both ways and tells the window of a newer one from them.
-// The later edit wins, whole.
+// The workspace: the window's tabs and panes in each space, and the spaces,
+// projects, names, looks and pins. The panes shown are the space shown's;
+// moving to another space puts them by and brings out that space's.
+//
+// The daemon holds the workspace, as a CRDT it shares with the nodes that
+// trust it both ways (internal/workspace). The window holds it as its
+// document, the view of the daemon's state it last took, and edits that,
+// as it always has. Once its edits pause, the edit from the document it
+// last took or gave to the one it has goes to the daemon as a delta
+// (workspace.Diff), and the daemon's answer, the workspace after, is taken
+// up. A state the daemon has meanwhile, from another window or node, is
+// taken up as it comes, but never over an edit of the window's: an edit not
+// yet given goes first, and the answer to it, which holds both, is the one
+// taken up. The window writes its document down in workspace.json, with
+// what is the window's own, to show before the daemon answers.
 
-// workspaceDoc is the workspace as it is written down and shared.
+// workspaceDoc is the workspace as the window holds it: its document.
 type workspaceDoc struct {
 	spaceList
 	Layouts map[string]*layoutNode `json:"layouts,omitempty"` // by layoutKey
@@ -35,11 +49,21 @@ type workspaceDoc struct {
 	TabNodes map[string]string `json:"tab_nodes,omitempty"`
 }
 
-// workspaceFile is workspace.json: the workspace, and the edit it is.
+// workspaceFile is workspace.json: the window's document, as it last had
+// it, and what is the window's own.
 type workspaceFile struct {
-	Version int64        `json:"version"` // Unix nanoseconds, or counted; see editVersion
-	NodeID  string       `json:"node_id"` // where it was made
+	// Version and NodeID are those of a workspace kept before it was a
+	// CRDT, the edit it was, in Unix nanoseconds or counted, and where it
+	// was made: the daemon takes it in, stamped so, once (giveEdit). A
+	// file written since has none.
+	Version int64        `json:"version,omitempty"`
+	NodeID  string       `json:"node_id,omitempty"`
 	Doc     workspaceDoc `json:"doc"`
+	// Base is the document as the window last took it from its daemon or
+	// gave it the edit to it, while Doc holds edits the daemon has not
+	// had: the window started again gives it the edit from Base to Doc.
+	// Left out when there are none.
+	Base json.RawMessage `json:"base,omitempty"`
 	// Contexts are the window's own, not shared: by space, the owner or
 	// project whose tabs it showed last.
 	Contexts map[string]string `json:"contexts,omitempty"`
@@ -106,20 +130,31 @@ func setupWorkspace(m *model) {
 	var f workspaceFile
 	if path, err := configFile("workspace.json"); err == nil {
 		if body, err := os.ReadFile(path); err == nil && json.Unmarshal(body, &f) == nil {
-			m.ws.version, m.ws.node = f.Version, f.NodeID
 			m.ws.layouts = keyedLayouts(f.Doc.Layouts)
 			maps.Copy(m.tabNodes, f.Doc.TabNodes)
 			if f.Contexts != nil {
 				m.ws.contexts = f.Contexts
 			}
+			if f.Version != 0 {
+				m.ws.old = &workspaceFile{Version: f.Version, NodeID: f.NodeID, Doc: f.Doc}
+			}
 		}
 	}
+	if m.ws.give == nil {
+		m.ws.give = m.giveDaemon
+	}
 	m.Spaces.Set(f.Doc.spaceList)
-	moveOldSpaces(m)
-	m.migrateProjectKeys()
 	m.ws.layoutKey = m.shownKey()
 	m.setLayout(m.takeLayout(m.ws.layoutKey))
-	m.ws.last, _ = json.Marshal(m.workspaceDocNow())
+	// What the window had is what its edits are of, but for edits it had
+	// not given; what settling it in changes below is an edit like any.
+	m.ws.base, _ = json.Marshal(m.workspaceDocNow())
+	if len(f.Base) > 0 {
+		m.ws.base = slices.Clone([]byte(f.Base))
+	}
+	moveOldSpaces(m)
+	m.migrateProjectKeys()
+	m.showLayout(m.shownKey())
 	// Another space shows its own.
 	shown := ggui.Derived(func() string { p := m.spaces(); return p.spaceID(p.Space) })
 	ggui.Watch(shown, func(string) { m.showLayout(m.shownKey()) })
@@ -128,14 +163,6 @@ func setupWorkspace(m *model) {
 	projects := ggui.Map(m.Spaces, func(l spaceList) []project { return l.Projects }).WithEqual(slicesEqual)
 	ggui.Watch(projects, func([]project) { m.pushProjects(ggui.Peek(m.Nodes)) })
 	ggui.Watch(m.Layout, func(*layoutNode) { m.workspaceChanged() })
-	sync := ggui.Map(m.Prefs, func(p prefs) bool { return p.SyncWorkspace })
-	ggui.Watch(sync, func(on bool) {
-		m.link.syncing.Store(on)
-		if on {
-			m.link.wsStale.Store(true)
-			m.link.pollNow()
-		}
-	})
 }
 
 // moveOldSpaces moves the spaces the settings kept, before the workspace
@@ -199,10 +226,7 @@ func (m *model) showContext(s *protocol.SessionInfo) {
 // project section with ID section.
 func (m *model) showProjectTabs(section string) {
 	id := m.spacesNow().spaceID(m.spacesNow().Space)
-	if c := projectContext(section); c != m.ws.contexts[id] {
-		m.ws.contexts[id] = c
-		m.ws.contextsMoved = true
-	}
+	m.ws.contexts[id] = projectContext(section)
 	m.showLayout(layoutKey(id, m.ws.contexts[id]))
 }
 
@@ -264,9 +288,7 @@ func (m *model) workspaceDocNow() workspaceDoc {
 }
 
 // workspaceChanged notes that the workspace may have changed: once changes
-// pause, it is written down and given to the daemon if it differs from
-// what was, which moving to another space or taking up another node's
-// does not make it.
+// pause, it is written down and given to the daemon.
 func (m *model) workspaceChanged() {
 	post := m.post
 	if post == nil {
@@ -278,114 +300,200 @@ func (m *model) workspaceChanged() {
 	m.ws.timer = time.AfterFunc(workspaceSave, func() { post(m.saveWorkspace) })
 }
 
-// saveWorkspace writes the workspace down and gives it to the daemon, as a
-// new edit, if it is not as it was. UI goroutine.
+// saveWorkspace writes the workspace down and gives the daemon the edit it
+// is. UI goroutine.
 func (m *model) saveWorkspace() {
-	doc, err := json.Marshal(m.workspaceDocNow())
-	if err != nil {
+	m.writeWorkspace()
+	m.giveEdit()
+}
+
+// docNow is the window's document as it stands, as JSON.
+func (m *model) docNow() []byte {
+	body, _ := json.Marshal(m.workspaceDocNow())
+	return body
+}
+
+// giveEdit gives the daemon the edit the window's document is of the one
+// it last took or gave, if it is one, unless an edit is on its way, whose
+// answer gives the next. The workspace the window kept before it was a
+// CRDT goes first, whole. UI goroutine.
+func (m *model) giveEdit() {
+	if m.ws.giving || m.ws.give == nil {
 		return
 	}
-	if bytes.Equal(doc, m.ws.last) {
-		if m.ws.contextsMoved {
-			m.writeWorkspace() // the window's own, and no edit to share
+	if old := m.ws.old; old != nil {
+		body, err := json.Marshal(old)
+		if err != nil {
+			return
 		}
+		m.ws.giving = true
+		gen := m.ws.gen
+		m.ws.give(&protocol.Workspace{Doc: body}, func(ws *protocol.Workspace, err error) {
+			if gen != m.ws.gen {
+				return // an answer of the daemon the window left
+			}
+			m.ws.giving = false
+			if err == nil {
+				m.ws.old = nil
+				m.takeWorkspace(ws)
+				m.writeWorkspace()
+			}
+		})
 		return
 	}
-	m.ws.last = doc
-	m.ws.version, m.ws.node = editVersion(m.ws.version, time.Now()), ggui.Peek(m.Conn).Self.GetId()
-	m.giveWorkspace(m.writeWorkspace())
-}
-
-// editVersion is the version of an edit made at now of the workspace at
-// version: now, or just after version when the node that made that one
-// keeps a clock ahead of this one's. An edit is newer than what it
-// edited, so the nodes take it up, however their clocks differ; else one
-// made here would lose, and be undone, to the very workspace it changed.
-//
-// A workspace begun from nothing, as a new node's window begins one, its
-// edits are counted, not timed, until it takes up one from the clock: any
-// workspace made on another node is newer, so the tab or two a window
-// opens before its node is let into the mesh does not, once it is, take
-// the place of the spaces and projects the other nodes have.
-func editVersion(version int64, now time.Time) int64 {
-	if version < countedEdits {
-		return version + 1
+	now := m.docNow()
+	if bytes.Equal(now, m.ws.base) {
+		return
 	}
-	return max(now.UnixNano(), version+1)
-}
-
-// countedEdits is where versions counted from nothing end and those from
-// the clock begin: 2001, in Unix nanoseconds.
-const countedEdits = 1_000_000_000 * 1_000_000_000
-
-// writeWorkspace writes the workspace down as the edit it is, and returns
-// it as the nodes share it: without the contexts, which are the window's
-// own.
-func (m *model) writeWorkspace() []byte {
-	m.ws.contextsMoved = false
-	f := workspaceFile{Version: m.ws.version, NodeID: m.ws.node, Doc: m.workspaceDocNow()}
-	shared, err := json.Marshal(f)
+	delta, err := shared.Diff(m.ws.state, m.ws.base, now)
 	if err != nil {
-		return nil
+		return
 	}
-	f.Contexts = m.ws.contexts
+	prev := m.ws.base
+	m.ws.base = now
+	if shared.Empty(delta) {
+		return
+	}
+	m.ws.giving = true
+	gen := m.ws.gen
+	m.ws.give(&protocol.Workspace{State: delta}, func(ws *protocol.Workspace, err error) {
+		if gen != m.ws.gen {
+			return // an answer of the daemon the window left
+		}
+		m.ws.giving = false
+		if err != nil {
+			// Given again with the next, as an edit of what the daemon
+			// last had; and so written down, should the window close
+			// first.
+			m.ws.base = prev
+			m.writeWorkspace()
+			return
+		}
+		m.takeWorkspace(ws)
+		m.writeWorkspace()
+	})
+}
+
+// giveDaemon gives the window's daemon ws, and hands its answer to done on
+// the UI goroutine. A daemon from before the workspace was a CRDT takes
+// nothing.
+func (m *model) giveDaemon(ws *protocol.Workspace, done func(*protocol.Workspace, error)) {
+	if ggui.Peek(m.Conn).Self.GetRevision() < protocol.RevisionWorkspaceCRDT {
+		done(nil, errors.New("the daemon is too old to keep the workspace"))
+		return
+	}
+	fetch(m, 5*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Workspace, error) {
+		return c.SetWorkspace(ctx, ws)
+	}, done)
+}
+
+// writeWorkspace writes the window's document down, with its contexts,
+// which are its own, and the document its edits not given are of.
+func (m *model) writeWorkspace() {
+	f := workspaceFile{Doc: m.workspaceDocNow(), Contexts: m.ws.contexts}
+	if doc, _ := json.Marshal(f.Doc); !bytes.Equal(doc, m.ws.base) {
+		f.Base = m.ws.base
+	}
+	if old := m.ws.old; old != nil {
+		// Not yet taken in: still the workspace from before.
+		f.Version, f.NodeID = old.Version, old.NodeID
+	}
 	body, err := json.Marshal(f)
 	if err != nil {
-		return shared
+		return
 	}
 	// The file is found now, not in the goroutine writing it: MAKO_HOME
 	// may have changed by then, as it does when a test ends.
 	if path, err := configFile("workspace.json"); err == nil {
 		m.ws.writer.write(path, body)
 	}
-	return shared
 }
 
-// giveWorkspace gives the daemon the workspace written down as body, while
-// the window follows the other nodes, and takes up a newer one it holds.
-func (m *model) giveWorkspace(body []byte) {
-	if body == nil || !ggui.Peek(m.Prefs).SyncWorkspace || m.post == nil {
-		return
-	}
-	ws := &protocol.Workspace{Doc: body, Version: m.ws.version, NodeId: m.ws.node}
-	fetch(m, 5*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Workspace, error) {
-		return c.SetWorkspace(ctx, ws)
-	}, func(ws *protocol.Workspace, err error) {
-		if err == nil {
-			m.takeWorkspace(ws)
-		}
-	})
-}
-
-// takeWorkspace takes up a workspace from the daemon, if the window follows
-// the other nodes and it is newer than the window's own. UI goroutine.
+// takeWorkspace takes up the workspace the daemon holds, as it answered an
+// edit or the poll. A state that comes while an edit is on its way is left
+// for the edit's answer, which is newer; and an edit of the window's not
+// yet given is given first, the daemon's answer, holding both, taken up in
+// its place. Taking one up is no edit of the window's. UI goroutine.
 func (m *model) takeWorkspace(ws *protocol.Workspace) {
-	if !ggui.Peek(m.Prefs).SyncWorkspace {
+	st := ws.GetState()
+	if st == nil {
+		return // a daemon from before the workspace was a CRDT
+	}
+	if m.ws.giving {
+		m.link.wsStale.Store(true) // asked for again once the answer is in
 		return
 	}
-	switch {
-	case ws.GetVersion() < m.ws.version:
-		// The window's is newer, or the daemon holds none: it has the
-		// window's next.
-		m.giveWorkspace(m.writeWorkspace())
-		return
-	case !protocol.Newer(ws.GetVersion(), ws.GetNodeId(), m.ws.version, m.ws.node):
+	// A daemon's workspace only grows, as states merge into it: joined
+	// with the last the window took, one the poll asked for before the
+	// answer to an edit, and brings after it, changes nothing.
+	joined := proto.CloneOf(m.ws.state)
+	if joined == nil {
+		joined = &protocol.WorkspaceState{}
+	}
+	shared.Merge(joined, st, nil, math.MaxInt64)
+	m.ws.state = joined
+	if m.ws.old == nil && shared.Empty(st) && !bytes.Equal(m.ws.base, emptyDoc) {
+		// A daemon that holds nothing has lost what the window has, or
+		// never had it: it is given whole, counted, so that whatever the
+		// other nodes have of it wins.
+		var doc workspaceDoc
+		if json.Unmarshal(m.ws.base, &doc) == nil {
+			m.ws.old = &workspaceFile{Version: 1, Doc: doc}
+		}
+	}
+	if m.ws.old != nil || !bytes.Equal(m.docNow(), m.ws.base) {
+		m.giveEdit()
 		return
 	}
-	var f workspaceFile
-	if json.Unmarshal(ws.GetDoc(), &f) != nil {
+	view := shared.View(joined)
+	if bytes.Equal(view, m.ws.applied) {
 		return
 	}
-	m.ws.version, m.ws.node = ws.GetVersion(), ws.GetNodeId()
-	// The space shown is kept by its ID, and stays shown if the other node
-	// kept it.
-	m.Spaces.Set(f.Doc.spaceList)
-	m.ws.layouts = keyedLayouts(f.Doc.Layouts)
-	maps.Copy(m.tabNodes, f.Doc.TabNodes)
+	var doc workspaceDoc
+	if json.Unmarshal(view, &doc) != nil {
+		return
+	}
+	m.ws.applied = view
+	m.showDoc(doc)
+	m.ws.base = m.docNow()
+	m.writeWorkspace()
+}
+
+// leaveWorkspace forgets the workspace of the daemon the window leaves for
+// another: the window brings its workspace along to none, but takes up the
+// next daemon's, or gives it its own when it holds nothing. Edits not yet
+// given to the daemon left are dropped, as is its answer to one on its
+// way. A window that has taken nothing yet, as one just started, leaves
+// nothing, and gives its next daemon what it holds. UI goroutine.
+func (m *model) leaveWorkspace() {
+	if m.ws.state == nil && !m.ws.giving {
+		return
+	}
+	m.ws.gen++
+	m.ws.giving = false
+	m.ws.state, m.ws.applied = nil, nil
+	m.ws.base = m.docNow()
+	m.link.wsStale.Store(true)
+}
+
+// emptyDoc is an empty document, as the window writes one.
+var emptyDoc, _ = json.Marshal(workspaceDoc{})
+
+// showDoc shows the document doc in place of the window's: the space shown
+// stays shown, by its ID, if doc has it, and the panes shown are doc's for
+// it, but for files with edits not saved, which stay open. UI goroutine.
+func (m *model) showDoc(doc workspaceDoc) {
+	shownKey, shown := m.ws.layoutKey, ggui.Peek(m.Layout).clone()
+	m.Spaces.Set(doc.spaceList)
+	m.ws.layouts = keyedLayouts(doc.Layouts)
+	maps.Copy(m.tabNodes, doc.TabNodes)
 	m.migrateProjectKeys()
 	m.followSections()
 	m.ws.layoutKey = m.shownKey()
 	root := m.takeLayout(m.ws.layoutKey)
+	if m.ws.layoutKey == shownKey && sameLayout(root, shown) {
+		return // the panes shown are as they were
+	}
 	// A file with edits not saved stays open, whatever the other node had.
 	for _, id := range m.dirtyDocs() {
 		if root.groupOf(id) == nil {
@@ -394,10 +502,13 @@ func (m *model) takeWorkspace(ws *protocol.Workspace) {
 		}
 	}
 	m.setLayout(root)
-	// Written down as it came, under its own version, and no edit to give
-	// back.
-	m.ws.last, _ = json.Marshal(m.workspaceDocNow())
-	m.writeWorkspace()
+}
+
+// sameLayout reports whether two pane trees are the same, as written down.
+func sameLayout(a, b *layoutNode) bool {
+	ja, _ := json.Marshal(a)
+	jb, _ := json.Marshal(b)
+	return bytes.Equal(ja, jb)
 }
 
 // followSections points each space's context at the section it is now:
@@ -418,7 +529,6 @@ func (m *model) followSections() {
 			if to != "" {
 				m.ws.contexts[space] = projectContext(to)
 			}
-			m.ws.contextsMoved = true
 		}
 	}
 }
@@ -440,4 +550,34 @@ func sectionNow(id string, groups []sessionGroup, defs []project, kept []keptPro
 		}
 	}
 	return ""
+}
+
+// workspaceSyncs is whether the node shares its workspace, as its
+// configuration says, or, saying nothing, as the window's own setting
+// from before did.
+func workspaceSyncs(cfg *config.Config) bool {
+	dir, err := config.Dir()
+	if err != nil {
+		return true
+	}
+	return cfg.Workspace.Syncs(dir)
+}
+
+// setWorkspaceSync has the node share its workspace or not: config.json
+// says so, which the daemon follows as it changes. The window gives its
+// daemon its edits and takes its workspace either way.
+func (m *model) setWorkspaceSync(on bool) {
+	cfg, err := config.Load()
+	if err == nil {
+		cfg.Workspace.Sync = &on
+		err = config.Save(cfg)
+	}
+	if err != nil {
+		if m.toaster != nil {
+			m.toaster.Push(ui.Toast(Tf("Could not save: %v", err), "").Destructive())
+		}
+		return
+	}
+	m.cfg.Workspace = cfg.Workspace
+	m.WorkspaceSync.Set(on)
 }

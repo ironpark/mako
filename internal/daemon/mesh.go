@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"maps"
 	"net"
@@ -181,7 +182,9 @@ func (d *Daemon) onPeer(p p2p.Peer) {
 	dropped := !p.TrustedBy && d.remote.drop(p.Node)
 	d.changes.fire(true, dropped)
 	routes := d.routing()
-	shared, full, public := d.encodeState(d.state(), routes, d.meshSessions(routes))
+	// A peer just linked is sent the workspace whole: it is likely to hold
+	// another.
+	shared, full, public := d.encodeState(d.state(), routes, d.meshSessions(routes), true)
 	go d.sendState(d.ctx, p, shared, full, public)
 }
 
@@ -311,7 +314,11 @@ func (d *Daemon) state() *protocol.NodeState {
 	node.LastSeen = nil
 	sessions := d.listSessions()
 	d.shareScopes(sessions)
-	return &protocol.NodeState{Node: node, Sessions: sessions, WatchingApprovals: d.approvals.watchedHere(), Workspace: d.workspace.get()}
+	st := &protocol.NodeState{Node: node, Sessions: sessions, WatchingApprovals: d.approvals.watchedHere()}
+	if d.syncsWorkspace() {
+		st.Workspace = d.workspace.shared()
+	}
+	return st
 }
 
 // watchState sends this daemon's state to its peers, and tells watching
@@ -326,6 +333,10 @@ func (d *Daemon) watchState(ctx context.Context) {
 	var lastRoutes map[string]route
 	var lastRelayed []*protocol.SessionInfo
 	var sent time.Time
+	// sentDigest is the digest of the workspace last sent whole. A peer
+	// is sent the workspace whole when it changes, and its digest alone
+	// otherwise; one that holds another asks for it.
+	var sentDigest []byte
 	for {
 		if d.p2p != nil || d.changes.watched() {
 			st := d.state()
@@ -340,9 +351,14 @@ func (d *Daemon) watchState(ctx context.Context) {
 				d.changes.fire(false, true)
 			}
 			changed := last == nil || sessionsChanged || routesChanged || st.GetWatchingApprovals() != last.GetWatchingApprovals() || !proto.Equal(st.GetNode(), last.GetNode()) ||
-				st.GetWorkspace().GetVersion() != last.GetWorkspace().GetVersion()
+				!bytes.Equal(st.GetWorkspace().GetDigest(), last.GetWorkspace().GetDigest())
 			if d.p2p != nil && (changed || time.Since(sent) >= stateEvery) {
-				shared, full, public := d.encodeState(st, routes, relayed)
+				digest := st.GetWorkspace().GetDigest()
+				whole := !bytes.Equal(digest, sentDigest)
+				shared, full, public := d.encodeState(st, routes, relayed, whole)
+				if whole {
+					sentDigest = digest
+				}
 				for _, p := range d.p2p.Peers() {
 					go d.sendState(ctx, p, shared, full, public)
 				}
@@ -384,10 +400,11 @@ func (d *Daemon) pokeStatus() {
 
 // encodeState is st stamped now, as sent to a peer this daemon lets in,
 // with its sessions and the nodes it knows of, and the workspace for one
-// that lets it in too; and as sent to one that only lets it in, without.
+// that lets it in too, whole or, unless wholeWorkspace, its digest alone;
+// and as sent to one that only lets it in, without.
 // A peer this daemon lets in may route through it, so it has routes, how
 // this daemon reaches each node, and relayed, the sessions of those nodes.
-func (d *Daemon) encodeState(st *protocol.NodeState, routes map[string]route, relayed []*protocol.SessionInfo) (shared, full, public []byte) {
+func (d *Daemon) encodeState(st *protocol.NodeState, routes map[string]route, relayed []*protocol.SessionInfo, wholeWorkspace bool) (shared, full, public []byte) {
 	node := proto.CloneOf(st.GetNode())
 	node.LastSeen = timestamppb.Now()
 	sessions := append(slices.Clip(st.GetSessions()), relayed...)
@@ -401,6 +418,9 @@ func (d *Daemon) encodeState(st *protocol.NodeState, routes map[string]route, re
 	}
 	full = marshalState(out)
 	out.Workspace = st.GetWorkspace()
+	if ws := out.GetWorkspace(); ws != nil && !wholeWorkspace {
+		out.Workspace = &protocol.Workspace{Digest: ws.GetDigest()}
+	}
 	shared = marshalState(out)
 	node = d.publicSelf()
 	node.LastSeen = out.Node.LastSeen
@@ -477,10 +497,11 @@ func (d *Daemon) takeState(from p2p.Peer, data []byte) {
 	}
 	node.Source = "mesh"
 	d.notePeer(node)
-	// A workspace is taken up from a peer trusted both ways: one person's
-	// nodes, whose windows show each other's sessions.
-	if from.TrustedBy && from.Trusts && d.workspace.put(st.GetWorkspace()) {
-		d.changes.fireWorkspace()
+	// A workspace is merged from a peer trusted both ways: one person's
+	// nodes, whose windows show each other's sessions; and only while this
+	// node shares its own.
+	if from.TrustedBy && from.Trusts && d.syncsWorkspace() {
+		d.takeWorkspace(node.GetId(), st.GetWorkspace())
 	}
 	if from.TrustedBy {
 		for _, other := range st.GetPeers() {
@@ -517,8 +538,8 @@ func (n *notifier) fire(nodes, sessions bool) {
 // changed.
 func (n *notifier) fireAccess() { n.send(&protocol.Changed{Access: true}) }
 
-// fireWorkspace tells every watcher that the daemon holds a newer
-// workspace.
+// fireWorkspace tells every watcher that the workspace the daemon holds
+// changed.
 func (n *notifier) fireWorkspace() { n.send(&protocol.Changed{Workspace: true}) }
 
 // fireDevices tells every watcher that a device lent or borrowed here

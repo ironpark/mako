@@ -612,10 +612,20 @@ func (x *NodeState) GetWorkspace() *Workspace {
 // a front-end gave it or a peer it trusts both ways sent, and shares it
 // with those peers, so the windows of one person's nodes show the same.
 type Workspace struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Doc           []byte                 `protobuf:"bytes,1,opt,name=doc,proto3" json:"doc,omitempty"`                     // the front-end's, opaque to the daemon
-	Version       int64                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`            // when it was made, in Unix nanoseconds: the later wins
-	NodeId        string                 `protobuf:"bytes,3,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // where it was made, which breaks a tie
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Doc     []byte                 `protobuf:"bytes,1,opt,name=doc,proto3" json:"doc,omitempty"`                     // the front-end's, opaque to the daemon
+	Version int64                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`            // when it was made, in Unix nanoseconds: the later wins
+	NodeId  string                 `protobuf:"bytes,3,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // where it was made, which breaks a tie
+	// state is the workspace as a CRDT (workspace.proto), which every daemon
+	// reads and joins with its own field by field; a daemon that sends it
+	// leaves doc and version empty, so an older one takes nothing from it.
+	// From a front-end it is a delta: only the entries it changed, whose
+	// clocks the daemon stamps again.
+	State *WorkspaceState `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
+	// digest is a hash of state, for a peer to tell whether the state it
+	// holds differs without being sent it; a hint only, so it may differ
+	// between builds that serialize differently.
+	Digest        []byte `protobuf:"bytes,5,opt,name=digest,proto3" json:"digest,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -669,6 +679,20 @@ func (x *Workspace) GetNodeId() string {
 		return x.NodeId
 	}
 	return ""
+}
+
+func (x *Workspace) GetState() *WorkspaceState {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+func (x *Workspace) GetDigest() []byte {
+	if x != nil {
+		return x.Digest
+	}
+	return nil
 }
 
 // GetWorkspace asks the daemon for the workspace it holds; it answers with
@@ -1234,7 +1258,7 @@ var File_mako_v2_mesh_proto protoreflect.FileDescriptor
 
 const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\n" +
-	"\x12mako/v2/mesh.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x15mako/v2/session.proto\"~\n" +
+	"\x12mako/v2/mesh.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x15mako/v2/session.proto\x1a\x17mako/v2/workspace.proto\"~\n" +
 	"\x05Hello\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x03 \x01(\tR\aversion\x12\x12\n" +
@@ -1282,11 +1306,13 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\bsessions\x18\x02 \x03(\v2\x14.mako.v2.SessionInfoR\bsessions\x12-\n" +
 	"\x12watching_approvals\x18\x03 \x01(\bR\x11watchingApprovals\x12#\n" +
 	"\x05peers\x18\x04 \x03(\v2\r.mako.v2.NodeR\x05peers\x120\n" +
-	"\tworkspace\x18\x05 \x01(\v2\x12.mako.v2.WorkspaceR\tworkspace\"P\n" +
+	"\tworkspace\x18\x05 \x01(\v2\x12.mako.v2.WorkspaceR\tworkspace\"\x97\x01\n" +
 	"\tWorkspace\x12\x10\n" +
 	"\x03doc\x18\x01 \x01(\fR\x03doc\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x17\n" +
-	"\anode_id\x18\x03 \x01(\tR\x06nodeId\"'\n" +
+	"\anode_id\x18\x03 \x01(\tR\x06nodeId\x12-\n" +
+	"\x05state\x18\x04 \x01(\v2\x17.mako.v2.WorkspaceStateR\x05state\x12\x16\n" +
+	"\x06digest\x18\x05 \x01(\fR\x06digest\"'\n" +
 	"\fGetWorkspace\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"%\n" +
 	"\x05Watch\x12\x1c\n" +
@@ -1359,6 +1385,7 @@ var file_mako_v2_mesh_proto_goTypes = []any{
 	(*AccessRequest)(nil),         // 15: mako.v2.AccessRequest
 	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
 	(*SessionInfo)(nil),           // 17: mako.v2.SessionInfo
+	(*WorkspaceState)(nil),        // 18: mako.v2.WorkspaceState
 }
 var file_mako_v2_mesh_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Welcome.node:type_name -> mako.v2.Node
@@ -1370,21 +1397,22 @@ var file_mako_v2_mesh_proto_depIdxs = []int32{
 	17, // 6: mako.v2.NodeState.sessions:type_name -> mako.v2.SessionInfo
 	2,  // 7: mako.v2.NodeState.peers:type_name -> mako.v2.Node
 	7,  // 8: mako.v2.NodeState.workspace:type_name -> mako.v2.Workspace
-	14, // 9: mako.v2.AccessInfo.key:type_name -> mako.v2.AccessKey
-	14, // 10: mako.v2.AccessInfo.owner:type_name -> mako.v2.AccessKey
-	15, // 11: mako.v2.AccessInfo.requests:type_name -> mako.v2.AccessRequest
-	14, // 12: mako.v2.AccessInfo.keys:type_name -> mako.v2.AccessKey
-	13, // 13: mako.v2.AccessInfo.pairing:type_name -> mako.v2.Pairing
-	16, // 14: mako.v2.Pairing.expires:type_name -> google.protobuf.Timestamp
-	2,  // 15: mako.v2.AccessRequest.node:type_name -> mako.v2.Node
-	14, // 16: mako.v2.AccessRequest.key:type_name -> mako.v2.AccessKey
-	14, // 17: mako.v2.AccessRequest.owner:type_name -> mako.v2.AccessKey
-	16, // 18: mako.v2.AccessRequest.at:type_name -> google.protobuf.Timestamp
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	18, // 9: mako.v2.Workspace.state:type_name -> mako.v2.WorkspaceState
+	14, // 10: mako.v2.AccessInfo.key:type_name -> mako.v2.AccessKey
+	14, // 11: mako.v2.AccessInfo.owner:type_name -> mako.v2.AccessKey
+	15, // 12: mako.v2.AccessInfo.requests:type_name -> mako.v2.AccessRequest
+	14, // 13: mako.v2.AccessInfo.keys:type_name -> mako.v2.AccessKey
+	13, // 14: mako.v2.AccessInfo.pairing:type_name -> mako.v2.Pairing
+	16, // 15: mako.v2.Pairing.expires:type_name -> google.protobuf.Timestamp
+	2,  // 16: mako.v2.AccessRequest.node:type_name -> mako.v2.Node
+	14, // 17: mako.v2.AccessRequest.key:type_name -> mako.v2.AccessKey
+	14, // 18: mako.v2.AccessRequest.owner:type_name -> mako.v2.AccessKey
+	16, // 19: mako.v2.AccessRequest.at:type_name -> google.protobuf.Timestamp
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_mesh_proto_init() }
@@ -1393,6 +1421,7 @@ func file_mako_v2_mesh_proto_init() {
 		return
 	}
 	file_mako_v2_session_proto_init()
+	file_mako_v2_workspace_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

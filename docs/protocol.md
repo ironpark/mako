@@ -308,8 +308,8 @@ that answers on success.
 | `list_nodes` | `{}` | `nodes` | The daemon itself, then its peers, each with how the daemon stands with it. |
 | `watch` | `Watch` | `changed`, then more | Turns the stream into a feed: a `changed` at once, then one whenever the mesh's nodes or sessions, or the daemon's access, change, until the front-end closes the stream. With `approvals`, the front-end watches for [approvals](#sessions) meanwhile too. |
 | `access` | `Access` | `access_info` | Who the daemon lets in, and changes to it; see [Access](#access). From a front-end only. |
-| `get_workspace` | `GetWorkspace` | `workspace` | The workspace the daemon holds, empty for none; see [Workspaces](#workspaces). With `node_id`, the one that node holds, which a node gives one it lets in, to copy its spaces from (revision 22). |
-| `workspace` | `Workspace` | `workspace` | Gives the daemon a window's workspace, kept if it is newer than the one held; the reply is the one held after. From a front-end only. |
+| `get_workspace` | `GetWorkspace` | `workspace` | The workspace the daemon holds; see [Workspaces](#workspaces). With `node_id`, the one that node holds, which a node gives one it lets in, to copy its spaces from (revision 22), whether it shares it or not; with its `digest` only while it shares it, and a peer merges only an answer with one. |
+| `workspace` | `Workspace` | `workspace` | Gives the daemon an edit of the workspace, a delta in `state` (revision 23), or the whole `doc` a window kept before, to take in once; the reply is the workspace held after. From a front-end only. |
 
 ```proto
 message Node {
@@ -341,28 +341,95 @@ message Changed {
   bool nodes = 1;    // the nodes changed: ask list_nodes again
   bool sessions = 2; // the sessions changed: ask list_sessions again
   bool access = 3;   // a request came, or the keys changed: ask access again
-  bool workspace = 4; // a newer workspace came: ask get_workspace again
+  bool workspace = 4; // the workspace changed: ask get_workspace again
 }
 
 message Workspace {
-  bytes doc = 1;      // the front-end's, opaque to the daemon
-  int64 version = 2;  // when it was made, in Unix nanoseconds: the later wins
-  string node_id = 3; // where it was made, which breaks a tie
+  bytes doc = 1;      // a window's from before revision 23, opaque to the daemon
+  int64 version = 2;  // when doc was made, in Unix nanoseconds: the later wins
+  string node_id = 3; // where doc was made, which breaks a tie
+  WorkspaceState state = 4; // the workspace as a CRDT, or a delta of it (revision 23)
+  bytes digest = 5;   // a hash of state
 }
 ```
 
 #### Workspaces
 
-A workspace is what a window shows: its tabs and panes in each space, and
-the spaces, written down by the front-end in `doc` as it likes. The daemon
-keeps the latest it was given or sent, the later `version` winning and the
-greater `node_id` breaking a tie, in `workspace.pb` in its folder. It goes
-out in the daemon's `NodeState` to the peers it lets in, and a daemon takes
-up a peer's only when the two let each other in: one person's nodes, whose
-windows then show the same. A daemon that takes up a newer one tells its
-watching front-ends with `changed.workspace`. A front-end that does not
-follow the other nodes neither gives the daemon its workspace nor takes
-the daemon's up.
+The workspace is what the windows of one person's nodes share: the spaces,
+the projects of several folders, the names and looks given to sections,
+the pins, and the tabs and panes of each space (`layouts`, by
+`spaceID|context`). Since revision 23 it is a CRDT, `WorkspaceState`
+(`proto/mako/v2/workspace.proto`): every field a register, every list a set
+or a map of entries, each with the hybrid logical clock stamp of its last
+edit, so that two nodes' states merge field by field and nodes that merged
+the same states, in any order, hold the same. An entity, a space, project
+or root, shows while its `created_at` is later than its `deleted_at`; what
+refers to one that does not show is kept, and left out by readers. A
+list's order is its entries' `rank`s, fractional indices compared as
+strings, then their IDs.
+
+**Edits.** Only a daemon stamps: a front-end sends `workspace` with a delta
+in `state`, a `WorkspaceState` holding only what it changed, and the daemon
+stamps every clock in it with one tick of its own clock, whatever the
+front-end put there, merges it, and answers with the whole state and its
+`digest`. In a delta, a register present is written; a `created_at`,
+`deleted_at`, `added_at` or `removed_at` asks for its edit when it is not
+zero, whatever it holds (`logical: 1` will do), and an empty one is no
+edit. A `GetWorkspace` is answered the same way.
+
+**Between daemons.** The workspace goes in the daemon's `NodeState` to the
+peers it and they let each other in, with `state` and `digest` and no
+`doc`: whole when it changed since the daemon last sent it whole, and to a
+peer just linked; otherwise `digest` alone, and a peer whose own differs
+asks for it with `get_workspace` and `node_id`. The receiving daemon merges
+it. An entry stamped further ahead of its own clock than 60 seconds came
+from a node whose clock is wrong: it is left out, the rest merged, and is
+merged once real time catches up, as states keep coming. A daemon whose
+clock was wrong, and is put right, stamps its own such entries again. A
+daemon that has never merged a peer's state counts its stamps rather than
+timing them (`wall_time` 0), so that what a new node did before it joined
+gives way, on the same key, to what the mesh has; what only it had is
+kept. A daemon tells its watching front-ends of any change with
+`changed.workspace`. It keeps the state in `workspace.pb` in its folder.
+
+**Projects.** Once the state holds projects, the daemon's projects are the
+state's, as far as their roots' `locations` are on its node (keys of
+`node_id`, a NUL, and the path): its agents are grouped by them, and a
+front-end's `set_projects` is answered with them rather than kept.
+
+**Sharing.** `workspace.sync` in `config.json` turns the sharing off: the
+daemon then sends its workspace to no peer and takes none of theirs, while
+its front-ends still edit it. It still shows it to a node it lets in that
+asks (`get_workspace` with `node_id`), to copy from, but without its
+`digest`, which a peer merging asks for. Left out, it is as the window's "Follow other
+nodes" was set in `gui.json`: on, unless that was turned off.
+
+**The desktop window** holds the workspace as its document, the JSON it
+has always kept (`workspace.json`'s `doc`): the view of the state it last
+took, which it edits, and whose edit from one to the next it gives the
+daemon as a delta once its edits pause (`workspace.Diff`). A moved item's
+`rank` alone is rewritten, and a root carries its `id` in the document so
+that an edit of it is of the same one. A state the daemon has meanwhile is
+taken up as it comes, but never over an edit of the window's: one not yet
+given goes first, and the answer, holding both, is taken up. The window
+gives its daemon its edits whether or not the node shares the workspace.
+`workspace.json` also keeps the window's own: by space, the project whose
+tabs it showed last; and while it has edits its daemon has not had, the
+document they are of (`base`), so that a window started again gives them.
+A window pointed at another daemon brings its workspace to none: it takes
+up the new daemon's, or gives it its own when it holds nothing.
+
+**Before revision 23.** A daemon of an older build kept the latest
+`doc` it was given or sent, the later `version` winning, and shares only
+those. A newer daemon sends none, which an older one, keeping only a
+workspace with a `version`, leaves; and it merges no peer's `doc`, whose
+edits could not be told from what it never had, but for taking one into a
+state that holds nothing. So the workspace is shared only among nodes of
+revision 23 and later. The `doc` a daemon kept in `workspace.pb` is taken
+into its state when it first starts with one, stamped at its `version`; a
+window's `workspace.json` from before, which still has its `version`, is
+given to the daemon as `doc`, once, and taken in the same way, whatever
+the state holds, so that nothing of either is lost.
 
 A front-end that watches still polls now and then, as a check on a change
 it missed; a daemon too old to watch answers `watch` with `unsupported`, and
@@ -385,7 +452,7 @@ is polled as before.
 | `list_commands` | `ListCommands` | `commands` | The slash commands the session's agent takes, as its node finds them: the agent's own, the user's and the project's commands and skills, and its plugins'. None for an agent mako knows no commands of. |
 | `read_chat` | `ReadChat` | `chat` | The agent's native conversation, read from its log. |
 | `read_project_agents` | `ReadProjectAgents` | `project_agents` | Read-only agent and message monitor for an absolute project `path` on `node_id`. Worktrees include their repository's sessions. `message_limit` defaults to 50 and is capped at 100. Each agent has its session, parent ID, messaging availability and pending message count; recent messages include sender, recipient, timestamp, text and state (`pending`, `acknowledged`, `removed`). Monitoring never consumes messages. Requires revision 15. |
-| `set_projects` | `SetProjects` | `projects` | Gives `node_id`'s daemon the projects the user put together, each as its absolute folders on that node (`paths`): its agents in any of them are one project's, for the agents' MCP tools and `read_project_agents`. A folder holds its subfolders, but not a repository of its own inside it. `give_dirs` starts an agent in one folder with the others too, as an agent that takes `--add-dir` does. The front-end sends every project each time; the daemon keeps the last, on disk. Requires revision 16. |
+| `set_projects` | `SetProjects` | `projects` | Gives `node_id`'s daemon the projects the user put together, each as its absolute folders on that node (`paths`): its agents in any of them are one project's, for the agents' MCP tools and `read_project_agents`. A folder holds its subfolders, but not a repository of its own inside it. `give_dirs` starts an agent in one folder with the others too, as an agent that takes `--add-dir` does. The front-end sends every project each time; the daemon keeps the last, on disk, until its [workspace](#workspaces) holds projects, from revision 23: from then on it answers with the workspace's, keeping none. Requires revision 16. |
 | `relay_agent_message` | `RelayAgentMessage` | `agent_message` | Passes a message an agent sent over its MCP tools to an agent of its project on `node_id`, from one daemon to another. The receiving daemon keeps it in the recipient's inbox when `scope` (`project:` and the project's ID) is both the recipient's, there, and the sender's, as the sender's node said in its state (`SessionInfo.agent_scope`, with `agent_messaging`). |
 | `attach` | `Attach` | — | Turns the stream into a session pipe; see [Attach streams](#attach-streams). |
 | `resize` | `Resize` | `session_info` | Resizes a local session's window. |
@@ -831,7 +898,7 @@ message NodeState {
   repeated SessionInfo sessions = 2; // its own, and those of the nodes it reaches
   bool watching_approvals = 3;       // a front-end of its answers approvals
   repeated Node peers = 4;           // the other nodes it knows of, with how it reaches them
-  Workspace workspace = 5;           // the windows' latest; see Workspaces
+  Workspace workspace = 5;           // its state, or its digest; see Workspaces
 }
 ```
 
@@ -840,7 +907,8 @@ gets it all; a peer that lets the daemon in gets the node, without its
 agents, and `watching_approvals`, without the workspace; a peer with
 neither gets nothing. A state
 is taken only as its own node's: its record must name the peer that sent
-it. A daemon keeps each peer's latest sessions, and answers a front-end's
+it. A peer's workspace is taken only when the two let each other in; see
+[Workspaces](#workspaces). A daemon keeps each peer's latest sessions, and answers a front-end's
 `list_sessions` with those sent in the last 20 seconds. A peer's `watching_approvals` counts
 as a front-end watching here when this daemon lets that peer in, so an
 approval waits for an answer in a window on any node that may answer it. A
@@ -907,7 +975,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 22) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 23) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
