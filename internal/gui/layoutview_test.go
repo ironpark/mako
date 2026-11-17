@@ -12,7 +12,7 @@ import (
 func TestAPressAnywhereInAPaneIsSeen(t *testing.T) {
 	var watched, tapped int
 	child := widget.Tap(widget.Box().Size(200, 100), func() { tapped++ })
-	p := ggui.NewProbe(&pressWatch{child: child, fn: func() { watched++ }}, ggui.Sz(200, 100))
+	p := ggui.NewProbe(paneWatch(child, func() { watched++ }), ggui.Sz(200, 100))
 	defer p.Close()
 	p.Click(ggui.Pt(50, 50))
 	if watched != 1 || tapped != 1 {

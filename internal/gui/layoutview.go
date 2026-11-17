@@ -68,14 +68,15 @@ func paneGroup(m *model, id int) ggui.Readable[tabGroup] {
 
 func paneView(m *model, id int) ggui.Widget {
 	group := paneGroup(m, id)
-	// A press anywhere in it makes the pane current, whatever takes it.
-	return &pressWatch{child: widget.Column(
+	// A press anywhere in it makes the pane current, whatever takes it, as
+	// focus coming into it does.
+	return paneWatch(widget.Column(
 		paneTabBar(m, id, group),
 		hline(),
 		widget.Expanded(widget.Stack(paneBody(m, id, group), &paneGlow{on: func() bool {
 			return m.Prefs.Get().PaneGlow && m.FocusGroup.Get() == id
 		}}).Expand()),
-	).Stretch(), fn: func() { m.focusGroup(id) }}
+	).Stretch(), func() { m.focusGroup(id) })
 }
 
 // paneGlow marks the pane that has the keys, where the settings ask: the
@@ -114,31 +115,19 @@ func (g *paneGlow) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	}
 }
 
-// pressWatch runs fn as a button goes down anywhere over its child, before
+// paneWatch runs current as a button goes down anywhere over child, before
 // whatever under it takes the press, which it leaves to them: a chat's
-// text, its feed and its composer each take a press of their own. Not
-// Canvas.ObserveInput, which hears the wheel and keys too: scrolling a
+// text, its feed and its composer each take a press of their own; and as
+// the keyboard's focus comes into it. A wheel is not heard: scrolling a
 // pane beside the current one leaves it so.
-type pressWatch struct {
-	child ggui.Widget
-	fn    func()
-}
-
-func (w *pressWatch) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	return w.child.Layout(c, env)
-}
-
-func (w *pressWatch) Paint(dst *ggui.Canvas, r ggui.Rect) {
-	dst.Paint(w.child, r)
-	dst.HitPointer(r, w) // over the child, so it hears first
-}
-
-// HandlePointer implements ggui.PointerHandler, consuming nothing.
-func (w *pressWatch) HandlePointer(ev ggui.PointerEvent) bool {
-	if ev.Kind == ggui.PointerDown {
-		w.fn()
-	}
-	return false
+func paneWatch(child ggui.Widget, current func()) ggui.Widget {
+	return widget.Within(child).
+		OnDown(func(ggui.PointerEvent) { current() }).
+		OnFocus(func(in bool) {
+			if in {
+				current()
+			}
+		})
 }
 
 // paneTabBar is a pane's tabs, which drag to reorder, to another pane or to
