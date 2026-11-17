@@ -1295,4 +1295,13 @@ var catalogKo = map[string]string{
 	"Name a value within a block":            "블록 안에서 값에 이름 붙이기",
 	"Defined in this prompt":                 "이 프롬프트에서 정의함",
 	"Text for an empty list":                 "목록이 비었을 때의 글",
+	// A node's file browser: its places, sorting and filter.
+	"Places":                     "위치",
+	"Sort by %s":                 "%s 순으로 정렬",
+	"Filter":                     "필터",
+	"Filter files":               "파일 필터",
+	"Clear filter":               "필터 지우기",
+	"This folder is empty.":      "빈 폴더입니다.",
+	"No files match the filter.": "필터와 일치하는 파일이 없습니다.",
+	"%d folders, %d files":       "폴더 %d개, 파일 %d개",
 }

@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -34,6 +35,10 @@ type browser struct {
 	*navigator
 	Open *ggui.StateValue[map[string]bool] // folders open in the list, by key
 	Sel  *ggui.StateValue[string]          // the row chosen, by key
+
+	Home  *ggui.StateValue[string]      // the node's home folder, once it is known
+	Sort  *ggui.StateValue[browserSort] // how the list is sorted
+	Query *ggui.StateValue[string]      // the filter the list's names are narrowed by
 
 	Status   *ggui.StateValue[browserNote]
 	Busy     *ggui.StateValue[string] // a copy under way, as it stands
@@ -125,6 +130,9 @@ func newBrowser(m *model, node, path string) *browser {
 		m: m, node: node,
 		Open:     ggui.State(map[string]bool{}),
 		Sel:      ggui.State(""),
+		Home:     ggui.State(""),
+		Sort:     ggui.State(browserSort{}),
+		Query:    ggui.State(""),
 		Status:   ggui.State(browserNote{}),
 		Busy:     ggui.State(""),
 		DropOver: ggui.State(false),
@@ -132,9 +140,11 @@ func newBrowser(m *model, node, path string) *browser {
 	}
 	b.navigator = newNavigator(path, func(p string) {
 		b.Sel.Set("")
+		b.Query.Set("") // a filter is the folder's it was typed in
 		m.loadDir(node, p, true)
 	})
 	m.loadDir(node, path, true)
+	m.resolveHome(node, "~", b.Home.Set, func(string) {})
 	return b
 }
 
@@ -144,7 +154,16 @@ func (b *browser) title(path string) string {
 }
 
 func (b *browser) goHome() {
+	if home := ggui.Peek(b.Home); home != "" {
+		b.goTo(home)
+		return
+	}
 	b.m.resolveHome(b.node, "~", b.goTo, func(why string) { b.say(why, "") })
+}
+
+// children are the rows under a folder of the list, sorted as it is.
+func (b *browser) children(it fileItem) []fileItem {
+	return b.Sort.Get().sorted(b.m.children(it))
 }
 
 // refresh reads the folder shown again, and every folder open in it.
@@ -371,10 +390,11 @@ func browserWindow(b *browser) ggui.Widget {
 
 func browserView(b *browser) ggui.Widget {
 	m := b.m
-	rows := ggui.Derived(func() []fileItem {
-		return m.children(dirItem(b.node, b.Path.Get()))
+	all := ggui.Derived(func() []fileItem {
+		return b.children(dirItem(b.node, b.Path.Get()))
 	})
-	tree := ui.Tree(rows, func(it fileItem) string { return it.Key }, m.children,
+	rows := ggui.Derived(func() []fileItem { return matching(all.Get(), b.Query.Get()) })
+	tree := ui.Tree(rows, func(it fileItem) string { return it.Key }, b.children,
 		func(item ggui.Readable[fileItem]) ggui.Widget {
 			it := ggui.Untrack(item.Get)
 			if it.Stub {
@@ -395,11 +415,18 @@ func browserView(b *browser) ggui.Widget {
 		Name(T("Files"))
 
 	columns := widget.Box(widget.Row(
-		widget.Expanded(columnHead(T("Name"), 0)),
-		widget.Box(columnHead(T("Size"), 1)).Width(sizeColumn),
-		widget.Box(columnHead(T("Modified"), 0)).Width(modColumn),
-	).Gap(12)).Pad(6, 16, 6, 38)
-	var list ggui.Widget = widget.Column(columns, hline(), widget.Expanded(widget.Scroll(widget.Padding(tree, 4, 8)).Bar(skin.Surface3))).Stretch()
+		widget.Expanded(columnButton(b, T("Name"), sortName, 0)),
+		widget.Box(columnButton(b, T("Size"), sortSize, 1)).Width(sizeColumn),
+		widget.Box(columnButton(b, T("Modified"), sortMod, 0)).Width(modColumn),
+	).Gap(8)).Pad(3, 15, 3, 37)
+	// A folder with nothing in it, or nothing the filter matches, says so.
+	empty := ggui.Map(rows, func(r []fileItem) bool { return len(r) == 0 })
+	content := ggui.If(empty, func() ggui.Widget {
+		return emptyFolder(ggui.Peek(b.Query) != "" && len(ggui.Peek(all)) > 0)
+	}).Else(func() ggui.Widget {
+		return widget.Scroll(widget.Padding(tree, 4, 8)).Bar(skin.Surface3)
+	})
+	var list ggui.Widget = widget.Column(columns, hline(), widget.Expanded(content)).Stretch()
 	// A drop over the list says where it goes.
 	list = ggui.View(b.DropOver, func(over bool) ggui.Widget {
 		if over {
@@ -421,9 +448,9 @@ func browserView(b *browser) ggui.Widget {
 		widget.Box(widget.Column(
 			browserToolbar(b),
 			hline(),
-			widget.Expanded(body),
+			widget.Expanded(widget.Row(browserPlaces(b), vline(), widget.Expanded(body)).Stretch()),
 			hline(),
-			browserStatus(b, rows),
+			browserStatus(b, all),
 		).Stretch()).Fill(skin.SolidBg),
 		b.Ops.dialogs(b.submitFile),
 	).Expand()
@@ -458,7 +485,7 @@ func browserRow(b *browser, it fileItem) ggui.Widget {
 		widget.Expanded(widget.Row(lead, widget.Expanded(label)).Gap(8)),
 		widget.Box(widget.Text(size).Size(12).Color(skin.Muted).NoWrap().Align(1)).Width(sizeColumn),
 		widget.Box(widget.Text(mod).Size(12).Color(skin.Muted).NoWrap()).Width(modColumn),
-	).Gap(12)
+	).Gap(8)
 	if it.Dir {
 		row = litDrop(row, nil, func(paths []string) {
 			b.DropOver.Set(false)
@@ -513,6 +540,7 @@ func browserToolbar(b *browser) ggui.Widget {
 		iconButton("house", T("Home"), b.goHome),
 		widget.Expanded(crumbs),
 		where,
+		filterField(b),
 		hidden,
 		iconButton("folder-plus", T("New folder…"), func() { b.askFile(protocol.FileMkdir, dirItem(b.node, ggui.Peek(b.Path))) }),
 		iconButton("upload", T("Upload files…"), func() { b.uploadFrom(ggui.Peek(b.Path)) }),
@@ -557,11 +585,29 @@ func pathCrumbs(p string, goTo func(string)) ggui.Widget {
 // browserStatus is the bar under the list: how many items, a copy under
 // way, or what came of the last.
 func browserStatus(b *browser, rows ggui.Readable[[]fileItem]) ggui.Widget {
-	count := ggui.Map(rows, func(r []fileItem) string {
+	// How many folders and files there are, or of the row chosen, what
+	// it is.
+	count := ggui.Derived(func() string {
+		r := rows.Get()
 		if len(r) == 1 && r[0].Stub {
 			return r[0].Name
 		}
-		return Tf("%d items", len(r))
+		if sel := b.Sel.Get(); sel != "" {
+			if i := slices.IndexFunc(r, func(it fileItem) bool { return it.Key == sel }); i >= 0 {
+				it := r[i]
+				if it.Dir {
+					return it.Name
+				}
+				return it.Name + " · " + byteSize(it.Size)
+			}
+		}
+		dirs := 0
+		for _, it := range r {
+			if it.Dir {
+				dirs++
+			}
+		}
+		return Tf("%d folders, %d files", dirs, len(r)-dirs)
 	})
 	return ggui.Reactive(func() ggui.Widget {
 		var left ggui.Widget = muted(widget.TextOf(count).Size(12).NoWrap())

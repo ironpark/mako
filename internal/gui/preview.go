@@ -643,6 +643,9 @@ func browserPreview(m *model, b func() *browser, do func(func()) previewStep, un
 			}
 		}),
 		frames(30), shot("31-browser-open"),
+		do(func() { b().Sort.Set(browserSort{By: sortSize, Desc: true}); b().Query.Set("go") }), frames(5), shot("31-browser-sorted"),
+		do(func() { b().Query.Set("no such file") }), frames(5), shot("31-browser-filtered-out"),
+		do(func() { b().Sort.Set(browserSort{}); b().Query.Set("") }),
 		do(func() { b().Busy.Set(Tf("Uploading %s", "build.zip") + " · 12.4 MB / 48.0 MB") }), frames(3), shot("32-browser-busy"),
 		do(func() { b().Busy.Set(""); b().say(Tf("Downloaded to %s.", "~/Downloads/build.zip"), "/tmp") }), frames(3), shot("33-browser-done"),
 		do(func() {
