@@ -84,32 +84,41 @@ func Hex(v uint32) color.RGBA {
 // The workspace's and the sidebar's fills are variables of their own, which
 // a background image clears (gui's backdrop.go); SolidBg is the workspace's
 // colour that stays, for what must cover what is under it.
+//
+// Under a theme not made of a palette, as the default one a probe lays a
+// tree out under, the variables are the light palette's.
 var (
-	Surface0     = uitheme.Var("surface-0")
+	Surface0     = variable("surface-0", Light.Surface0)
 	Surface1     = uitheme.Card
 	Surface2     = uitheme.Muted
-	Surface3     = uitheme.Var("surface-3")
-	Sidebar      = uitheme.Var("sidebar-fill")
+	Surface3     = variable("surface-3", Light.Surface3)
+	Sidebar      = variable("sidebar-fill", Light.Sidebar)
 	SolidBg      = uitheme.Bg
-	SidebarSel   = uitheme.Var("sidebar-selected")
+	SidebarSel   = variable("sidebar-selected", Light.SidebarSelected)
 	Fg           = uitheme.Fg
 	Muted        = uitheme.MutedFg
-	ExtraMuted   = uitheme.Var("extra-muted")
+	ExtraMuted   = variable("extra-muted", Light.ExtraMuted)
 	Border       = uitheme.Border
 	BorderAccent = uitheme.InputBorder
-	AccentBright = uitheme.Var("accent-bright")
-	DotRunning   = uitheme.Var("dot-running")
-	DotExited    = uitheme.Var("dot-exited")
-	DotDown      = uitheme.Var("dot-down")
-	DotWaiting   = uitheme.Var("dot-waiting")
-	DotDone      = uitheme.Var("dot-done")
+	AccentBright = variable("accent-bright", Light.AccentBright)
+	DotRunning   = variable("dot-running", Light.DotRunning)
+	DotExited    = variable("dot-exited", Light.DotExited)
+	DotDown      = variable("dot-down", Light.DotDown)
+	DotWaiting   = variable("dot-waiting", Light.DotWaiting)
+	DotDone      = variable("dot-done", Light.DotDone)
 
-	DiffAdded     = uitheme.Var("diff-added")
-	DiffRemoved   = uitheme.Var("diff-removed")
-	DiffModified  = uitheme.Var("diff-modified")
-	DiffAddedBg   = uitheme.Var("diff-added-bg")
-	DiffRemovedBg = uitheme.Var("diff-removed-bg")
+	DiffAdded     = variable("diff-added", Light.DiffAdded)
+	DiffRemoved   = variable("diff-removed", Light.DiffRemoved)
+	DiffModified  = variable("diff-modified", Light.DiffModified)
+	DiffAddedBg   = variable("diff-added-bg", Light.DiffAddedBg)
+	DiffRemovedBg = variable("diff-removed-bg", Light.DiffRemovedBg)
 )
+
+// variable is a colour of the palette's the theme carries by name, or
+// fallback under one that carries none.
+func variable(name string, fallback color.RGBA) uitheme.Color {
+	return uitheme.Var(name).Or(fallback)
+}
 
 // Key carries the palette on the theme, for the terminal, which
 // paints with concrete colours.

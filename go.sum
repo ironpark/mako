@@ -99,6 +99,8 @@ github.com/ironpark/ggfx v0.0.0-20261116205814-f8d41f33e4c7 h1:4jaUO0iyCxqiVdau5
 github.com/ironpark/ggfx v0.0.0-20261116205814-f8d41f33e4c7/go.mod h1:8ZTjvD6rcRXz4zBcZSJUkAP2b9LLY60NU7KwExp6jhQ=
 github.com/ironpark/ggui v0.0.0-20261117103646-e52c2a7bb808 h1:VkZ6DZxtErx7UgjdZM61z5asK79o3d/nBdfKpaHJvC0=
 github.com/ironpark/ggui v0.0.0-20261117103646-e52c2a7bb808/go.mod h1:WTCOD46OaYkIbgGUPhsKNu7lrM7rCBjvovBILcS3kyk=
+github.com/ironpark/ggui v0.0.0-20261117110001-a89ca928710b h1:mbZcR1fzY7ZDPdfxzhXkzY9WENXfuIgtbYOH8nanZ2E=
+github.com/ironpark/ggui v0.0.0-20261117110001-a89ca928710b/go.mod h1:WTCOD46OaYkIbgGUPhsKNu7lrM7rCBjvovBILcS3kyk=
 github.com/ironpark/ggwd v0.0.0-20261116205503-d39bcb900225 h1:Fe1bhDYNZkhY/lSfqYt9mRyU//MYTrsd0tqDrPPURrE=
 github.com/ironpark/ggwd v0.0.0-20261116205503-d39bcb900225/go.mod h1:Y5DMejijiO0BiRt1+BNV5Wh1wLhmTGwzlql3EryWOJQ=
 github.com/ironpark/gostty v0.0.0-20261108124048-de82fbcca291 h1:hXyeHamTwG/khJnJfu7nd4n6fCeOC4CT27oA+Z42RcI=

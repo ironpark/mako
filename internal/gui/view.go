@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"cmp"
 	"fmt"
 	"image/color"
 	"slices"
@@ -488,12 +487,12 @@ type roundTab struct {
 func (t *roundTab) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	tint, ok := env.Get(tabTintKey)
 	if !ok || tint == nil {
-		tint = cmp.Or[color.Color](ggui.ResolveColor(skin.AccentBright, env), skin.Dark.AccentBright) // no theme, as in a bare probe
+		tint = ggui.ResolveColor(skin.AccentBright, env)
 	}
 	t.fill, t.ring = nil, nil
 	t.tint = withAlpha(tint, 0x44)
 	if t.selected {
-		t.fill = cmp.Or[color.Color](ggui.ResolveColor(skin.Surface2, env), skin.Dark.Surface2)
+		t.fill = ggui.ResolveColor(skin.Surface2, env)
 		t.ring = withAlpha(tint, pick[uint8](t.focused, 0x99, 0x38))
 	}
 	return t.child.Layout(c, env)

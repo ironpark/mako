@@ -402,9 +402,6 @@ type dropShade struct {
 
 func (s *dropShade) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	accent := ggui.ResolveColor(skin.AccentBright, env)
-	if accent == nil {
-		accent = skin.Dark.AccentBright // no theme, as in a bare probe
-	}
 	r, g, b, _ := accent.RGBA()
 	s.fill = color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 0x30}
 	s.border = accent
