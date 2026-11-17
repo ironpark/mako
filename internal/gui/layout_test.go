@@ -216,3 +216,31 @@ func TestTidyable(t *testing.T) {
 		}
 	}
 }
+
+// A tab's close button is there all the while, in the accessibility tree
+// and the Tab order, and shows as the pointer comes over the tab, which a
+// click on it then closes.
+func TestTabCloseIsThereAndClosesTheTab(t *testing.T) {
+	m := newModel(&config.Config{NodeID: "n1"}, "")
+	m.Titles.Set(map[string]string{"s1": "first", "s2": "second"})
+	m.SidebarOpen.Set(false)
+	m.DetailsOpen.Set(false)
+	m.showTab("s1")
+	m.showTab("s2")
+	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))
+	defer p.Close()
+	if _, ok := p.Semantics().Find(ggui.RoleButton, Tf("Close %s", "first")); !ok {
+		t.Fatal("the hidden close button is not in the accessibility tree")
+	}
+	first, _ := p.Find("first")
+	p.Move(first.Center())
+	x, ok := p.Find(Tf("Close %s", "first"))
+	if !ok {
+		t.Fatal("no close button")
+	}
+	p.Move(x.Center())
+	p.Click(x.Center())
+	if ggui.Peek(m.Confirmation).Title == "" && slices.Contains(ggui.Peek(m.Tabs), "s1") {
+		t.Fatal("the close button did not close the tab, or ask to")
+	}
+}

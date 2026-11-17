@@ -390,11 +390,8 @@ func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget 
 		fg = skin.Fg
 	}
 	name := d.Name()
-	label := name
-	if d.Dirty {
-		label = name + " ●"
-	}
-	text := widget.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()
+	hover := newTabState()
+	text := widget.Text(name).Size(13).Color(fg).NoWrap().Ellipsis()
 	if d.Preview {
 		if italic, _ := ggui.SystemItalicFonts(); italic != nil {
 			text = text.Font(italic)
@@ -403,8 +400,8 @@ func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget 
 	content := widget.Box(widget.Row(
 		icon(fileIconName(name)).Size(14).Color(fg),
 		widget.Box(text).MaxWidth(170),
-		ui.ButtonOf(icon("x").Size(13), func() { m.askCloseDoc(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", name)),
-	).Gap(8)).Height(tabBarHeight)
+		tabCloseOr(hover, name, func() { m.askCloseDoc(id) }, d.Dirty),
+	).Gap(8)).Height(tabHeight)
 	btn := ui.ButtonOf(content, func() {
 		// The bar is drawn again as the first tap shows the tab, so the
 		// last tap is kept with the model.
@@ -413,8 +410,8 @@ func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget 
 		}
 		m.lastTap = tabTap{id, time.Now()}
 		m.showTab(id)
-	}).Ghost().Pad(0, 8, 0, 12).Radius(0).Name(name)
-	return tabCell(btn, selected, focused)
+	}).Ghost().Pad(0, 4, 0, 10).Radius(tabRadius).Name(name)
+	return tabCell(btn, hover, selected, focused)
 }
 
 // docView is a file's tab content: a line about the file and the caret,

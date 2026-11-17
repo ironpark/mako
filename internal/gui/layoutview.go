@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"cmp"
 	"fmt"
 	"image/color"
 	"reflect"
@@ -134,8 +135,11 @@ func paneWatch(child ggui.Widget, current func()) ggui.Widget {
 // a pane's edge, and after them a + whose quick launchers start in the
 // project of the tab shown.
 func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
+	projectsOf := paneProjects(m, group)
 	tabs := ggui.Reactive(func() ggui.Widget {
 		g := group.Get()
+		projects := projectsOf.Get()
+		grouped := manyProjects(g.Tabs, projects)
 		sessions := m.Sessions.Get()
 		titles := m.Titles.Get()
 		focused := m.FocusGroup.Get() == id
@@ -158,8 +162,32 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		// narrow. The bar under them and the + takes a tab dropped past
 		// the last one; each tab's own zone, painted over it, takes one
 		// dropped on a tab.
-		var children []ggui.Widget
+		var children, run []ggui.Widget
+		chips := 0.0
+		// Of tabs of several projects, each project's run is headed by
+		// its name and lined in its colour.
+		endRun := func(p tabProject) {
+			if len(run) == 0 {
+				return
+			}
+			var c color.Color = skin.BorderAccent
+			if p.Key != "" {
+				c = p.Look.color()
+			}
+			children = append(children, newProjectRun(run, c))
+			run = nil
+		}
 		for i, tabID := range g.Tabs {
+			if grouped && (i == 0 || projects[tabID].Key != projects[g.Tabs[i-1]].Key) {
+				if i > 0 {
+					endRun(projects[g.Tabs[i-1]])
+				}
+				p := projects[tabID]
+				first := i
+				run = append(run, tabDrop(m, projectChip(p), id, func(widget.Dropped[tabDrag]) int { return first }).
+					OnHover(func(bool) { m.leaveHint(id) }))
+				chips += projectChipWidth(cmp.Or(p.Name, T("Other")))
+			}
 			var face ggui.Widget
 			if d, ok := docs[tabID]; ok {
 				face = docTab(m, tabID, d, tabID == g.Active, focused)
@@ -171,6 +199,10 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 					s = &protocol.SessionInfo{Id: tabID, Agent: "shell"}
 				}
 				face = tab(m, s, tabID == g.Active, focused, titles[tabID])
+			}
+			// The tab shown is ringed in its project's colour.
+			if p, ok := projects[tabID]; ok && p.Key != "" {
+				face = ggui.Provide(tabTintKey, color.Color(p.Look.color()), face)
 			}
 			at := i
 			w := sessionDrag(m, face, tabID)
@@ -188,12 +220,21 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				}
 				return at
 			}
-			children = append(children, dropSlot(m, id, i), tabDrop(m, cell, id, slot).
-				OnHover(func(bool) { m.leaveHint(id) }))
+			cells := []ggui.Widget{dropSlot(m, id, i), tabDrop(m, cell, id, slot).
+				OnHover(func(bool) { m.leaveHint(id) })}
+			if grouped {
+				run = append(run, cells...)
+			} else {
+				children = append(children, cells...)
+			}
+		}
+		if grouped {
+			endRun(projects[g.Tabs[len(g.Tabs)-1]])
 		}
 		children = append(children, dropSlot(m, id, len(g.Tabs)))
 		// Tabs scrolled past an end fade out there.
-		bar := widget.Scroll(widget.Row(children...)).Horizontal().Shrink().FadeEdges(28).Bar(color.Transparent)
+		bar := widget.Scroll(widget.Box(widget.Row(children...).Align(widget.AlignCenter)).Pad(0, 4).Height(tabBarHeight)).
+			Horizontal().Shrink().FadeEdges(28).Bar(color.Transparent)
 		// Centred down the bar only: across, it is as wide as itself.
 		plus := widget.Box(widget.Column(launchButton(m, nodeID, project, targets, focus, newSession)).Justify(widget.JustifyCenter)).
 			Height(tabBarHeight).Pad(0, 4)
@@ -203,7 +244,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		// The + follows the last tab, as far as the bar's end, where it
 		// stays in sight as the tabs scroll; and when they do, a menu
 		// lists them all.
-		need := tabsWidth(g.Tabs, sessions, titles, docs, diffs) + extra + 16
+		need := tabsWidth(g.Tabs, sessions, titles, docs, diffs) + chips + extra + 16
 		end := len(g.Tabs)
 		tabsAndPlus := tabDrop(m, widget.Row(widget.Flexible(bar), plus).Stretch(), id,
 			func(widget.Dropped[tabDrag]) int { return end }).
@@ -218,7 +259,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 
 // tabWidth estimates how wide a tab is drawn: its label, capped as the tab
 // caps it, and its glyph, close button and padding.
-func tabWidth(label string) float64 { return min(float64(len([]rune(label)))*7.2, 150) + 74 }
+func tabWidth(label string) float64 { return min(float64(len([]rune(label)))*7.2, 150) + 72 }
 
 // tabsWidth estimates a pane's tabs' width together.
 func tabsWidth(tabs []string, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) float64 {

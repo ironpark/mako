@@ -488,6 +488,11 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			if browse != "" {
 				steps = browserPreview(m, func() *browser { return b }, do, until, frames, shot)
 			}
+			// MAKO_PREVIEW_TABS names folders, as a path list, whose
+			// sessions' and files' tabs share a pane.
+			if dirs := os.Getenv("MAKO_PREVIEW_TABS"); dirs != "" {
+				steps = tabsPreview(m, func() *ggui.Probe { return p }, filepath.SplitList(dirs), do, until, frames, shot)
+			}
 			// MAKO_PREVIEW_PICK names a folder the New session dialog's
 			// picker starts in.
 			if dir := os.Getenv("MAKO_PREVIEW_PICK"); dir != "" {
@@ -615,6 +620,64 @@ func forgePreview(m *model, dir string, do func(func()) previewStep, until func(
 		frames(30), shot("23-github-branch"),
 		do(m.askPR), frames(5), shot("24-github-new-pr"),
 		do(func() { m.Forge.PROpen.Set(false) }),
+	)
+}
+
+// tabsPreview renders a pane's tabs of a project merged of the folders
+// dirs, kept together by folder: a session in each folder, and a second
+// in the first, then a file of the last previewed and one of the first
+// opened.
+func tabsPreview(m *model, p func() *ggui.Probe, dirs []string, do func(func()) previewStep, until func(string, func() bool) previewStep,
+	frames func(int) previewStep, shot func(string) previewStep) []previewStep {
+	steps := []previewStep{
+		do(func() { m.Prefs.Update(func(p prefs) prefs { p.Theme = "dark"; return p }) }),
+		until("the daemon", func() bool { return ggui.Peek(m.Conn).OK || ggui.Peek(m.Conn).Err != "" }),
+		do(func() {
+			self := ggui.Peek(m.Conn).Self.GetId()
+			p := project{ID: "preview-merged", Name: "merged"}
+			for _, dir := range dirs {
+				p.Roots = append(p.Roots, projectRoot{Locations: []fileRoot{{Node: self, Path: dir}}})
+			}
+			m.Spaces.Update(func(l spaceList) spaceList { l.Projects = setProject(l.Projects, p); return l })
+		}),
+	}
+	launch := func(dir string, n int) []previewStep {
+		return []previewStep{
+			do(func() { m.launch("shell", ggui.Peek(m.Conn).Self.GetId(), dir) }),
+			until("its session", func() bool { return len(ggui.Peek(m.Tabs)) >= n }),
+			frames(10),
+		}
+	}
+	for i, dir := range dirs {
+		steps = append(steps, launch(dir, i+1)...)
+	}
+	steps = append(steps, launch(dirs[0], len(dirs)+1)...)
+	file := func(dir, name string) fileItem {
+		self := ggui.Peek(m.Conn).Self.GetId()
+		path := joinPath(dir, name)
+		return fileItem{Key: dirKey(self, path), Node: self, Path: path, Name: name}
+	}
+	return append(steps,
+		frames(20), shot("60-tabs"),
+		do(func() { m.previewFile(file(dirs[len(dirs)-1], "README.md")) }),
+		frames(30), shot("61-tabs-preview"),
+		do(func() { m.openFile(file(dirs[0], "README.md")) }),
+		frames(30), shot("62-tabs-file"),
+		// The pointer over a tab not shown: tinted, its close button out.
+		do(func() {
+			// The sidebar names sessions too: the tab is the one in a bar.
+			for _, f := range p().FindAll("") {
+				if f.Label == "shell" && f.Rect.Origin.Y < 2*tabBarHeight && f.Rect.Origin.X > sidebarWidth {
+					p().Move(f.Center())
+					break
+				}
+			}
+		}), frames(5), shot("62-tabs-hover"),
+		do(func() { p().Move(ggui.Pt(600, 500)) }),
+		// The palette, its commands' English names after them, and found
+		// as typed with the input method left on Korean.
+		do(m.openPalette), frames(10), shot("63-palette"),
+		do(func() { m.pickers.PaletteQuery.Set("ㄴㄷㅅ샤") }), frames(5), shot("64-palette-as-typed"),
 	)
 }
 

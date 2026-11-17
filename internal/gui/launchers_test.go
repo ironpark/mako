@@ -178,13 +178,24 @@ func TestClosingATabEndsItsSession(t *testing.T) {
 	// rc file sets one, as bash's on Ubuntu does.
 	// The title may come while the test looks, so it looks again, with a
 	// frame between, until the tab drawn goes by the title it has now.
+	// Its close button shows once the pointer is over the tab.
 	id := ggui.Peek(m.Selected)
 	var x ggui.Found
 	probeUntil(t, p, "a close button on the tab", func() bool {
 		s, _ := m.session(id)
-		r, ok := p.Find(Tf("Close %s", sessionTitle(s, ggui.Peek(m.Titles)[id])))
-		x = r
-		return ok
+		label := sessionTitle(s, ggui.Peek(m.Titles)[id])
+		// The sidebar names the session too; the tab is one of those.
+		for _, f := range p.FindAll("") {
+			if f.Label != label {
+				continue
+			}
+			p.Move(f.Center())
+			if r, ok := p.Find(Tf("Close %s", label)); ok {
+				x = r
+				return true
+			}
+		}
+		return false
 	})
 	p.Click(x.Center())
 	probeUntil(t, p, "the question", func() bool { return ggui.Peek(m.Confirmation).Title != "" })

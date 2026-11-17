@@ -306,11 +306,12 @@ func diffTabFace(m *model, id string, d diffTab, selected, focused bool) ggui.Wi
 	case d.Base != "":
 		label += " ← " + d.Base
 	}
+	hover := newTabState()
 	content := widget.Box(widget.Row(
 		statusIcon(d.File.GetStatus()),
 		widget.Box(widget.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(190),
-		ui.ButtonOf(icon("x").Size(13), func() { m.closeDiff(id) }).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", label)),
-	).Gap(8)).Height(tabBarHeight)
+		tabClose(hover, label, func() { m.closeDiff(id) }),
+	).Gap(8)).Height(tabHeight)
 	btn := ui.ButtonOf(content, func() {
 		// The bar is drawn again as the first tap shows the tab, so the
 		// last tap is kept with the model.
@@ -319,8 +320,8 @@ func diffTabFace(m *model, id string, d diffTab, selected, focused bool) ggui.Wi
 		}
 		m.lastTap = tabTap{id, time.Now()}
 		m.showTab(id)
-	}).Ghost().Pad(0, 8, 0, 12).Radius(0).Name(label)
-	return tabCell(btn, selected, focused)
+	}).Ghost().Pad(0, 4, 0, 10).Radius(tabRadius).Name(label)
+	return tabCell(btn, hover, selected, focused)
 }
 
 // diffTabView is a diff tab's content: the file's line and the diff's

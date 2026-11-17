@@ -205,11 +205,20 @@ func (n *layoutNode) leaves() []*layoutNode {
 
 // editLayout changes a copy of the layout and publishes it, with the tabs
 // and the current pane's tab that follow from it. fn returns the pane to
-// make current, or 0 to keep the current one if it is still there.
+// make current, or 0 to keep the current one if it is still there. Each
+// pane's tabs of one project are then put side by side.
 func (m *model) editLayout(fn func(root *layoutNode) int) {
 	root := ggui.Peek(m.Layout).clone()
 	focus := fn(root)
 	root = root.prune()
+	var all []string
+	for _, g := range root.groups() {
+		all = append(all, g.Tabs...)
+	}
+	key := m.tabKeys(all)
+	for _, g := range root.groups() {
+		g.Tabs = tabsByProject(g.Tabs, key)
+	}
 	if focus == 0 || root.group(focus) == nil {
 		focus = ggui.Peek(m.FocusGroup)
 	}
