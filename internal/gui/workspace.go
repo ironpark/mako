@@ -37,7 +37,7 @@ type workspaceDoc struct {
 
 // workspaceFile is workspace.json: the workspace, and the edit it is.
 type workspaceFile struct {
-	Version int64        `json:"version"` // Unix nanoseconds
+	Version int64        `json:"version"` // Unix nanoseconds, or counted; see editVersion
 	NodeID  string       `json:"node_id"` // where it was made
 	Doc     workspaceDoc `json:"doc"`
 	// Contexts are the window's own, not shared: by space, the owner or
@@ -301,26 +301,44 @@ func (m *model) saveWorkspace() {
 // keeps a clock ahead of this one's. An edit is newer than what it
 // edited, so the nodes take it up, however their clocks differ; else one
 // made here would lose, and be undone, to the very workspace it changed.
+//
+// A workspace begun from nothing, as a new node's window begins one, its
+// edits are counted, not timed, until it takes up one from the clock: any
+// workspace made on another node is newer, so the tab or two a window
+// opens before its node is let into the mesh does not, once it is, take
+// the place of the spaces and projects the other nodes have.
 func editVersion(version int64, now time.Time) int64 {
+	if version < countedEdits {
+		return version + 1
+	}
 	return max(now.UnixNano(), version+1)
 }
 
+// countedEdits is where versions counted from nothing end and those from
+// the clock begin: 2001, in Unix nanoseconds.
+const countedEdits = 1_000_000_000 * 1_000_000_000
+
 // writeWorkspace writes the workspace down as the edit it is, and returns
-// what it wrote.
+// it as the nodes share it: without the contexts, which are the window's
+// own.
 func (m *model) writeWorkspace() []byte {
 	m.ws.contextsMoved = false
-	body, err := json.Marshal(workspaceFile{Version: m.ws.version, NodeID: m.ws.node, Doc: m.workspaceDocNow(), Contexts: m.ws.contexts})
+	f := workspaceFile{Version: m.ws.version, NodeID: m.ws.node, Doc: m.workspaceDocNow()}
+	shared, err := json.Marshal(f)
 	if err != nil {
 		return nil
 	}
+	f.Contexts = m.ws.contexts
+	body, err := json.Marshal(f)
+	if err != nil {
+		return shared
+	}
 	// The file is found now, not in the goroutine writing it: MAKO_HOME
 	// may have changed by then, as it does when a test ends.
-	path, err := configFile("workspace.json")
-	if err != nil {
-		return body
+	if path, err := configFile("workspace.json"); err == nil {
+		m.ws.writer.write(path, body)
 	}
-	m.ws.writer.write(path, body)
-	return body
+	return shared
 }
 
 // giveWorkspace gives the daemon the workspace written down as body, while
@@ -365,6 +383,7 @@ func (m *model) takeWorkspace(ws *protocol.Workspace) {
 	m.ws.layouts = keyedLayouts(f.Doc.Layouts)
 	maps.Copy(m.tabNodes, f.Doc.TabNodes)
 	m.migrateProjectKeys()
+	m.followSections()
 	m.ws.layoutKey = m.shownKey()
 	root := m.takeLayout(m.ws.layoutKey)
 	// A file with edits not saved stays open, whatever the other node had.
@@ -379,4 +398,46 @@ func (m *model) takeWorkspace(ws *protocol.Workspace) {
 	// back.
 	m.ws.last, _ = json.Marshal(m.workspaceDocNow())
 	m.writeWorkspace()
+}
+
+// followSections points each space's context at the section it is now:
+// the projects another node's workspace brings may have taken a section
+// in, as one merged or made there does, its tabs moving with it, or done
+// away with it.
+func (m *model) followSections() {
+	l := ggui.Peek(m.Spaces)
+	kept := ggui.Peek(m.Prefs).Projects
+	groups := groupProjects(ggui.Peek(m.Sessions), ggui.Peek(m.Nodes), kept, l.Projects, l.Names)
+	for space, ctx := range m.ws.contexts {
+		section, ok := strings.CutPrefix(ctx, "project:")
+		if !ok {
+			continue
+		}
+		if to := sectionNow(section, groups, l.Projects, kept); to != section {
+			m.ws.contexts[space] = ""
+			if to != "" {
+				m.ws.contexts[space] = projectContext(to)
+			}
+			m.ws.contextsMoved = true
+		}
+	}
+}
+
+// sectionNow is the section with ID id as the sidebar has it now: itself,
+// while it has it; else the project that holds the folder it was for;
+// else "" for none.
+func sectionNow(id string, groups []sessionGroup, defs []project, kept []keptProject) string {
+	if slices.ContainsFunc(groups, func(g sessionGroup) bool { return g.Key == id }) {
+		return id
+	}
+	key := strings.TrimPrefix(id, freePrefix)
+	for _, r := range kept {
+		if implicitKey(r.Node, r.Path, r.Remote) != key {
+			continue
+		}
+		if pl := placeKept(defs, r); pl.At >= 0 {
+			return defs[pl.At].ID
+		}
+	}
+	return ""
 }

@@ -241,3 +241,83 @@ func TestPinsMoveToTheWorkspace(t *testing.T) {
 		t.Fatalf("spaces %+v, prefs pins %v %v", l, p.OldPinned, p.OldPinnedProjects)
 	}
 }
+
+// A window that begins its workspace from nothing, as a new node's does,
+// counts its edits: the workspace the other nodes made is newer, and is
+// taken up over the tab it opened meanwhile, never the other way.
+func TestAWorkspaceFromNothingGivesWay(t *testing.T) {
+	m, p := workspaceModel(t)
+	m.showTab("mine")
+	p.Frame()
+	m.saveWorkspace()
+	if m.ws.version != 1 {
+		t.Fatalf("the first edit from nothing is version %d", m.ws.version)
+	}
+	theirs := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).UnixNano()
+	doc := workspaceDoc{Layouts: map[string]*layoutNode{
+		layoutKey(allSpaceID, ""): {ID: 1, Group: &tabGroup{ID: 1, Tabs: []string{"theirs"}, Active: "theirs"}},
+	}}
+	body, _ := json.Marshal(workspaceFile{Version: theirs, NodeID: "b", Doc: doc})
+	m.takeWorkspace(&protocol.Workspace{Doc: body, Version: theirs, NodeId: "b"})
+	if tabs := ggui.Peek(m.Tabs); !slices.Equal(tabs, []string{"theirs"}) {
+		t.Fatalf("the window kept %v over the other nodes' workspace", tabs)
+	}
+	// From then on, its edits are timed, and newer than what they edit.
+	m.showTab("next")
+	m.saveWorkspace()
+	if m.ws.version <= theirs {
+		t.Fatalf("an edit of %d is %d", theirs, m.ws.version)
+	}
+}
+
+// The workspace the nodes share leaves out the window's own contexts,
+// which only its file keeps.
+func TestContextsStayInTheWindow(t *testing.T) {
+	m, p := workspaceModel(t)
+	p.Frame()
+	m.ws.contexts[allSpaceID] = projectContext("p1")
+	var f workspaceFile
+	if err := json.Unmarshal(m.writeWorkspace(), &f); err != nil || f.Contexts != nil {
+		t.Fatalf("shared %+v, %v", f, err)
+	}
+	m.ws.writer.wait()
+	path, _ := configFile("workspace.json")
+	body, _ := os.ReadFile(path)
+	f = workspaceFile{}
+	if err := json.Unmarshal(body, &f); err != nil || f.Contexts[allSpaceID] != projectContext("p1") {
+		t.Fatalf("written down %s, %v", body, err)
+	}
+}
+
+// A section another node's workspace takes into a project, its tabs
+// with it, is followed there; one done away with leaves the space's own.
+func TestContextsFollowTheirSections(t *testing.T) {
+	m, p := workspaceModel(t)
+	p.Frame()
+	dir := keptProject{fileRoot: fileRoot{Node: "n1", Path: "/src/api"}}
+	m.Prefs.Update(func(p prefs) prefs { p.Projects = []keptProject{dir}; return p })
+	m.ws.contexts[allSpaceID] = projectContext(dirKey("n1", "/src/api"))
+	m.ws.contexts["w1"] = projectContext(dirKey("n1", "/gone"))
+	merged := project{ID: "pj", Name: "both", Roots: []projectRoot{
+		{Locations: []fileRoot{{Node: "n1", Path: "/src/api"}}},
+		{Locations: []fileRoot{{Node: "n1", Path: "/src/web"}}},
+	}}
+	doc := workspaceDoc{
+		spaceList: spaceList{Projects: []project{merged}, Spaces: []space{{ID: "w1", Name: "work"}}},
+		Layouts: map[string]*layoutNode{
+			layoutKey(allSpaceID, projectContext("pj")): {ID: 1, Group: &tabGroup{ID: 1, Tabs: []string{"s1"}, Active: "s1"}},
+		},
+	}
+	version := time.Now().UnixNano()
+	body, _ := json.Marshal(workspaceFile{Version: version, NodeID: "b", Doc: doc})
+	m.takeWorkspace(&protocol.Workspace{Doc: body, Version: version, NodeId: "b"})
+	if got := m.ws.contexts[allSpaceID]; got != projectContext("pj") {
+		t.Fatalf("the context followed to %q", got)
+	}
+	if got := m.ws.contexts["w1"]; got != "" {
+		t.Fatalf("a context of nothing is %q", got)
+	}
+	if tabs := ggui.Peek(m.Tabs); !slices.Equal(tabs, []string{"s1"}) {
+		t.Fatalf("the space shows %v", tabs)
+	}
+}
