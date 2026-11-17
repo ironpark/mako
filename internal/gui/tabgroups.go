@@ -223,7 +223,8 @@ func projectChip(p tabProject, folded int) ggui.Widget {
 	if folded > 0 {
 		parts = append(parts, widget.Text(strconv.Itoa(folded)).Size(12).Weight(ggui.WeightMedium).Color(fg).NoWrap())
 	}
-	return ui.Tooltip(widget.Box(widget.Row(parts...).Gap(5).Align(widget.AlignCenter)).Height(ui.EditorTabHeight), name)
+	// As tall as the chip the group draws it on.
+	return ui.Tooltip(widget.Row(parts...).Gap(5).Align(widget.AlignCenter), name)
 }
 
 // projectChipWidth estimates how wide a project's label is drawn, with the

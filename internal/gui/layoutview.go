@@ -314,9 +314,10 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 type tabBarKey struct{ pane int }
 
 // tabWidth estimates how wide a tab is drawn: its label, capped as the tab
-// caps it, and its glyph, close button and padding.
+// caps it, and its glyph, a status's room and padding; its close button
+// goes over its end.
 func tabWidth(label string) float64 {
-	return max(min(float64(len([]rune(label)))*7.2, 168)+83, ui.EditorTabMinWidth+4)
+	return max(min(float64(len([]rune(label)))*7.2, 168)+53, ui.EditorTabMinWidth+4)
 }
 
 // tabsWidth estimates a pane's tabs' width together.

@@ -443,8 +443,10 @@ func tab(m *model, s *protocol.SessionInfo, selected, focused bool, title string
 	id := s.GetId()
 	label := sessionTitle(s, title)
 	fg := pick[color.Color](selected, skin.Fg, skin.Muted)
+	dot := m.dotFor(id)
+	// The dot has room only while it shows, at work, waiting or done.
 	t := ui.EditorTab(label, func() { m.selectSession(id) }).
-		Status(&activityDot{state: m.dotFor(id), quiet: true}).
+		Status(&activityDot{state: dot, quiet: true}).StatusWhile(func() bool { return dot() != dotRest }).
 		Icon(agentGlyph(s.GetAgent(), fg).Size(14)).
 		MaxLabelWidth(168).Selected(selected).Current(focused).
 		OnClose(func() { m.askKill(id) }).CloseName(Tf("Close %s", label))
