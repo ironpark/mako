@@ -4,6 +4,7 @@ package skin
 
 import (
 	"image/color"
+	"time"
 
 	"github.com/ironpark/ggui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
@@ -153,6 +154,9 @@ func Theme(p Palette) uitheme.Theme {
 	t.SidebarAccent, t.SidebarAccentFg = p.SidebarHover, p.Fg
 	t.SidebarBorder = p.Border
 	t.Radius = 8
+	// A tip waits for the cursor to rest, as macOS's do, rather than
+	// opening under every pass over the chrome.
+	t.TooltipDelay = 700 * time.Millisecond
 	t.Text.Size = 13
 	t.Caption.Size = 12
 	set := func(name string, c color.Color) { t = t.Set(uitheme.CSSColor(name), c) }

@@ -196,6 +196,8 @@ type model struct {
 	// revealedTab is the tab each pane last scrolled its tab bar to, so it
 	// does so once per tab it comes to show.
 	revealedTab map[int]string
+	// tabEases is each pane's tabs' widths, easing as they come and go.
+	tabEases map[int]*tabEase
 	// FoldedTabs are the projects' runs of tabs folded away under their
 	// labels, by pane and project (foldKey); hiddenTabs how many of each
 	// pane's tabs are out of sight, scrolled or folded away.
@@ -300,6 +302,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		conns:         map[string]*termConn{},
 		killed:        map[string]time.Time{},
 		revealedTab:   map[int]string{},
+		tabEases:      map[int]*tabEase{},
 		FoldedTabs:    ggui.State(map[string]bool{}).WithEqual(maps.Equal[map[string]bool]),
 		hiddenTabs:    map[int]*ggui.StateValue[int]{},
 		dialing:       map[string]bool{},

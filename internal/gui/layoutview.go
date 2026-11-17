@@ -171,9 +171,9 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		// label of its name, over a line of its colour; a run folded away
 		// keeps only the tab shown.
 		var runProject tabProject
-		runFirst, runFolded := -1, 0
+		runStarted, runFirst, runFolded := false, -1, 0
 		endRun := func() {
-			if runFirst < 0 {
+			if !runStarted {
 				return
 			}
 			p, first := runProject, runFirst
@@ -189,17 +189,43 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			children = append(children, ui.TabGroup(run...).Label(label).Tint(c).
 				OnLabel(func() { m.toggleFold(key) }).
 				LabelName(pick(folded[key], Tf("Unfold %s", name), Tf("Fold %s", name))))
-			run, runFirst, runFolded = nil, -1, 0
+			run, runStarted, runFirst, runFolded = nil, false, -1, 0
 		}
+		// Of runs folded away, the tabs hidden, and how many each hides.
+		at := map[string]int{}
+		hidden := map[string]bool{}
+		hides := map[string]int{}
 		for i, tabID := range g.Tabs {
+			at[tabID] = i
+			if p := projects[tabID]; grouped && folded[foldKey(id, p.Key)] && tabID != g.Active {
+				hidden[tabID] = true
+				hides[p.Key]++
+			}
+		}
+		// Tabs grow in and shrink out: those leaving keep their place.
+		ease := m.tabEaseOf(id)
+		for _, slot := range ease.plan(g.Tabs, hidden, projects, grouped) {
+			tabID := slot.ID
 			p := projects[tabID]
-			if grouped && (i == 0 || p.Key != projects[g.Tabs[i-1]].Key) {
+			if slot.Gone {
+				p = ease.project(tabID)
+			}
+			if grouped && (!runStarted || p.Key != runProject.Key) {
 				endRun()
-				runProject, runFirst = p, i
+				runProject, runStarted, runFolded = p, true, hides[p.Key]
 				chips += projectChipWidth(cmp.Or(p.Name, T("Other")))
 			}
-			if grouped && folded[foldKey(id, p.Key)] && tabID != g.Active {
-				runFolded++
+			i, ok := at[tabID]
+			if ok && runFirst < 0 {
+				runFirst = i
+			}
+			if slot.Hidden {
+				cell := ease.cell(tabID, nil, nil)
+				if grouped {
+					run = append(run, cell)
+				} else {
+					children = append(children, cell)
+				}
 				continue
 			}
 			var face ggui.Widget
@@ -214,7 +240,6 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				}
 				face = tab(m, s, tabID == g.Active, focused, titles[tabID])
 			}
-			at := i
 			// A label stuck at the bar's start would cover the tab shown at
 			// its start: scrolled to, it comes clear of it.
 			clear := 0.0
@@ -222,21 +247,25 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				clear = projectChipWidth(cmp.Or(p.Name, T("Other")))
 			}
 			var cell ggui.Widget = &paintHook{child: sessionDrag(m, face, tabID), fn: func(dst *ggui.Canvas, r ggui.Rect) {
-				counter.saw(r)
+				counter.saw(r, ease.settled(tabID))
 				if tabID == g.Active && m.revealedTab[id] != tabID {
 					dst.RequestReveal(ggui.Rct(ggui.Pt(r.Origin.X-clear, r.Origin.Y), ggui.Sz(r.Size.W+clear, r.Size.H)))
-					m.revealedTab[id] = tabID
+					// Revealed again while it grows, the bar long enough
+					// for all of it only once it has.
+					if ease.settled(tabID) {
+						m.revealedTab[id] = tabID
+					}
 				}
 			}}
 			// Before the tab or after it, by the half it is over.
 			slot := func(d widget.Dropped[tabDrag]) int {
 				if d.Pos.X >= d.Size.W/2 {
-					return at + 1
+					return i + 1
 				}
-				return at
+				return i
 			}
-			cells := []ggui.Widget{dropSlot(m, id, i), tabDrop(m, cell, id, slot).
-				OnHover(func(bool) { m.leaveHint(id) })}
+			cells := []ggui.Widget{dropSlot(m, id, i), ease.cell(tabID, face, tabDrop(m, cell, id, slot).
+				OnHover(func(bool) { m.leaveHint(id) }))}
 			if grouped {
 				run = append(run, cells...)
 			} else {
@@ -358,9 +387,11 @@ func (t *tabCounter) Paint(dst *ggui.Canvas, r ggui.Rect) {
 }
 
 // saw counts a tab painted at r if it shows whole, near enough, in the
-// bar.
-func (t *tabCounter) saw(r ggui.Rect) {
-	if t.counting && r.Origin.X >= t.window.Origin.X-2 && r.Origin.X+r.Size.W <= t.window.Origin.X+t.window.Size.W+2 {
+// bar; one still growing in, which the bar is not yet long enough for, if
+// it starts there.
+func (t *tabCounter) saw(r ggui.Rect, grown bool) {
+	end := t.window.Origin.X + t.window.Size.W + 2
+	if t.counting && r.Origin.X >= t.window.Origin.X-2 && (r.Origin.X+r.Size.W <= end || !grown && r.Origin.X <= end) {
 		t.seen++
 	}
 }

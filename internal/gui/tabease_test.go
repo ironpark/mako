@@ -1,0 +1,94 @@
+package gui
+
+import (
+	"slices"
+	"testing"
+	"time"
+
+	"github.com/ironpark/ggui"
+
+	"github.com/ironpark/mako/internal/config"
+)
+
+// A tab closed shrinks out of its bar, the tabs after it easing over, and
+// one opened grows in, pushing them along.
+func TestTabsEaseInAndOutOfTheirBar(t *testing.T) {
+	m := newModel(&config.Config{NodeID: "n1"}, "")
+	m.Titles.Set(map[string]string{"s1": "first", "s2": "second", "s3": "third", "s4": "fourth"})
+	m.SidebarOpen.Set(false)
+	m.DetailsOpen.Set(false)
+	for _, id := range []string{"s1", "s2", "s3"} {
+		m.showTab(id)
+	}
+	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))
+	defer p.Close()
+	x := func(name string) float64 {
+		t.Helper()
+		r, ok := p.Find(name)
+		if !ok {
+			t.Fatalf("no %q", name)
+		}
+		return r.Rect.Origin.X
+	}
+	second, third := x("second"), x("third")
+
+	m.closeTab("s2")
+	p.Frame()
+	p.Advance(tabEaseDuration / 2)
+	if mid := x("third"); mid >= third || mid <= second {
+		t.Fatalf("halfway through closing the tab before it, third is at %v; want between %v and %v", mid, second, third)
+	}
+	p.Advance(tabEaseDuration)
+	if end := x("third"); end != second {
+		t.Fatalf("once closed, third is at %v; want %v, where second was", end, second)
+	}
+
+	// The + follows the last tab.
+	plus := x(T("New session…"))
+	m.showTab("s4")
+	p.Frame()
+	if at := x(T("New session…")); at > plus+20 {
+		t.Fatalf("a tab opened pushed the + from %v to %v at once", plus, at)
+	}
+	p.Advance(tabEaseDuration * 2)
+	if at := x(T("New session…")); at < plus+60 {
+		t.Fatalf("once the opened tab has grown, the + is at %v from %v", at, plus)
+	}
+}
+
+func TestTabEasePlansWhereTabsLeaveFrom(t *testing.T) {
+	ids := func(slots []tabSlot) (out []string) {
+		for _, s := range slots {
+			id := s.ID
+			if s.Gone {
+				id += "-"
+			} else if s.Hidden {
+				id += "_"
+			}
+			out = append(out, id)
+		}
+		return out
+	}
+	projects := map[string]tabProject{"a": {Key: "p"}, "b": {Key: "p"}, "c": {Key: "q"}, "d": {Key: "q"}, "e": {Key: "r"}}
+	e := &tabEase{tabs: map[string]*easedTab{}}
+	built := func(slots []tabSlot) {
+		for _, s := range slots {
+			if !s.Hidden {
+				e.cell(s.ID, widgetNone{}, widgetNone{})
+				e.tabs[s.ID].share.MoveTo(1, ggui.FrameTime(), time.Second) // under way
+			}
+		}
+	}
+	built(e.plan([]string{"a", "b", "c", "d", "e"}, nil, projects, true))
+
+	// b closed stays where it was; e, alone in its run, goes with it.
+	got := ids(e.plan([]string{"a", "c", "d"}, nil, projects, true))
+	if want := []string{"a", "b-", "c", "d"}; !slices.Equal(got, want) {
+		t.Fatalf("after closing b and e: %q, want %q", got, want)
+	}
+	// q folded away, the tab shown elsewhere, keeps its run at no width.
+	got = ids(e.plan([]string{"a", "c", "d"}, map[string]bool{"c": true, "d": true}, projects, true))
+	if want := []string{"a", "b-", "c_", "d_"}; !slices.Equal(got, want) {
+		t.Fatalf("with q folded: %q, want %q", got, want)
+	}
+}
