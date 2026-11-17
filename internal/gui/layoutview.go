@@ -277,7 +277,11 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		// Tabs scrolled past an end fade out there; of groups, a label
 		// sticking at the start stands in for the fade there.
 		bar := widget.Scroll(widget.Box(widget.Row(children...).Align(widget.AlignCenter)).Pad(0, 4).Height(tabBarHeight)).
-			Horizontal().Shrink().Bar(color.Transparent).Overscroll(widget.OverscrollBounce)
+			Horizontal().Shrink().Bar(color.Transparent).Overscroll(widget.OverscrollBounce).
+			// Its own identity, not the order it is built in, which tabs
+			// folded, opened or closed before it change: the bar keeps
+			// where it was scrolled to.
+			Key(tabBarKey{id})
 		if grouped {
 			bar.FadeEnds(0, 28)
 		} else {
@@ -305,6 +309,9 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 	})
 	return widget.Box(tabs).Height(tabBarHeight)
 }
+
+// tabBarKey identifies a pane's scrolling tab bar across its rebuilds.
+type tabBarKey struct{ pane int }
 
 // tabWidth estimates how wide a tab is drawn: its label, capped as the tab
 // caps it, and its glyph, close button and padding.

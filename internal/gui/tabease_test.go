@@ -92,3 +92,48 @@ func TestTabEasePlansWhereTabsLeaveFrom(t *testing.T) {
 		t.Fatalf("with q folded: %q, want %q", got, want)
 	}
 }
+
+// A bar scrolled along stays there as its tabs change: a tab closed
+// rebuilds it with fewer widgets before the scroll.
+func TestTabBarKeepsItsScrollAsItsTabsChange(t *testing.T) {
+	m := newModel(&config.Config{NodeID: "n1"}, "")
+	titles := map[string]string{}
+	var ids []string
+	for i := range 12 {
+		id := string(rune('a' + i))
+		ids = append(ids, id)
+		titles[id] = "tab " + id
+	}
+	m.Titles.Set(titles)
+	var posted []func()
+	m.post = func(f func()) { posted = append(posted, f) } // the hidden tabs' count
+	m.SidebarOpen.Set(false)
+	m.DetailsOpen.Set(false)
+	for _, id := range ids {
+		m.showTab(id)
+	}
+	m.showTab("a") // the tab shown, at the start
+	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(700, 500))
+	defer p.Close()
+	x := func(name string) float64 {
+		t.Helper()
+		r, ok := p.Find(name)
+		if !ok {
+			t.Fatalf("no %q", name)
+		}
+		return r.Rect.Origin.X
+	}
+	before := x("tab c")
+	c, _ := p.Find("tab c")
+	p.Scroll(c.Center(), ggui.Pt(-3, 0))
+	p.Advance(time.Second)
+	scrolled := x("tab c")
+	if scrolled >= before-50 {
+		t.Fatalf("scrolling the bar moved tab c from %v to %v", before, scrolled)
+	}
+	m.closeTab("l")
+	p.Advance(time.Second)
+	if got := x("tab c"); got != scrolled {
+		t.Fatalf("closing a tab out of sight moved tab c from %v to %v", scrolled, got)
+	}
+}
