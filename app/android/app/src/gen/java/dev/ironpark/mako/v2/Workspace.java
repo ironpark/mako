@@ -303,6 +303,83 @@ public  final class Workspace extends
     digest_ = getDefaultInstance().getDigest();
   }
 
+  public static final int STAGE_FIELD_NUMBER = 6;
+  private dev.ironpark.mako.v2.LayoutStage stage_;
+  /**
+   * <pre>
+   * stage is a change of a window layout an agent asked for, held on this
+   * node alone while it waits for the user (revision 24): to the daemon's
+   * own front-ends only, never in state, never to a peer.
+   * </pre>
+   *
+   * <code>.mako.v2.LayoutStage stage = 6 [json_name = "stage"];</code>
+   */
+  @java.lang.Override
+  public boolean hasStage() {
+    return ((bitField0_ & 0x00000002) != 0);
+  }
+  /**
+   * <pre>
+   * stage is a change of a window layout an agent asked for, held on this
+   * node alone while it waits for the user (revision 24): to the daemon's
+   * own front-ends only, never in state, never to a peer.
+   * </pre>
+   *
+   * <code>.mako.v2.LayoutStage stage = 6 [json_name = "stage"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.LayoutStage getStage() {
+    return stage_ == null ? dev.ironpark.mako.v2.LayoutStage.getDefaultInstance() : stage_;
+  }
+  /**
+   * <pre>
+   * stage is a change of a window layout an agent asked for, held on this
+   * node alone while it waits for the user (revision 24): to the daemon's
+   * own front-ends only, never in state, never to a peer.
+   * </pre>
+   *
+   * <code>.mako.v2.LayoutStage stage = 6 [json_name = "stage"];</code>
+   */
+  private void setStage(dev.ironpark.mako.v2.LayoutStage value) {
+    java.util.Objects.requireNonNull(value);
+    stage_ = value;
+    bitField0_ |= 0x00000002;
+  }
+  /**
+   * <pre>
+   * stage is a change of a window layout an agent asked for, held on this
+   * node alone while it waits for the user (revision 24): to the daemon's
+   * own front-ends only, never in state, never to a peer.
+   * </pre>
+   *
+   * <code>.mako.v2.LayoutStage stage = 6 [json_name = "stage"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeStage(dev.ironpark.mako.v2.LayoutStage value) {
+    java.util.Objects.requireNonNull(value);
+    if (stage_ != null &&
+        stage_ != dev.ironpark.mako.v2.LayoutStage.getDefaultInstance()) {
+      stage_ =
+        dev.ironpark.mako.v2.LayoutStage.newBuilder(stage_).mergeFrom(value).buildPartial();
+    } else {
+      stage_ = value;
+    }
+    bitField0_ |= 0x00000002;
+  }
+  /**
+   * <pre>
+   * stage is a change of a window layout an agent asked for, held on this
+   * node alone while it waits for the user (revision 24): to the daemon's
+   * own front-ends only, never in state, never to a peer.
+   * </pre>
+   *
+   * <code>.mako.v2.LayoutStage stage = 6 [json_name = "stage"];</code>
+   */
+  private void clearStage() {
+    stage_ = null;
+    bitField0_ = (bitField0_ & ~0x00000002);
+  }
+
   public static dev.ironpark.mako.v2.Workspace parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -697,6 +774,89 @@ public  final class Workspace extends
       return this;
     }
 
+    /**
+     * <pre>
+     * stage is a change of a window layout an agent asked for, held on this
+     * node alone while it waits for the user (revision 24): to the daemon's
+     * own front-ends only, never in state, never to a peer.
+     * </pre>
+     *
+     * <code>.mako.v2.LayoutStage stage = 6 [json_name = "stage"];</code>
+     */
+    @java.lang.Override
+    public boolean hasStage() {
+      return instance.hasStage();
+    }
+    /**
+     * <pre>
+     * stage is a change of a window layout an agent asked for, held on this
+     * node alone while it waits for the user (revision 24): to the daemon's
+     * own front-ends only, never in state, never to a peer.
+     * </pre>
+     *
+     * <code>.mako.v2.LayoutStage stage = 6 [json_name = "stage"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.LayoutStage getStage() {
+      return instance.getStage();
+    }
+    /**
+     * <pre>
+     * stage is a change of a window layout an agent asked for, held on this
+     * node alone while it waits for the user (revision 24): to the daemon's
+     * own front-ends only, never in state, never to a peer.
+     * </pre>
+     *
+     * <code>.mako.v2.LayoutStage stage = 6 [json_name = "stage"];</code>
+     */
+    public Builder setStage(dev.ironpark.mako.v2.LayoutStage value) {
+      copyOnWrite();
+      instance.setStage(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * stage is a change of a window layout an agent asked for, held on this
+     * node alone while it waits for the user (revision 24): to the daemon's
+     * own front-ends only, never in state, never to a peer.
+     * </pre>
+     *
+     * <code>.mako.v2.LayoutStage stage = 6 [json_name = "stage"];</code>
+     */
+    public Builder setStage(
+        dev.ironpark.mako.v2.LayoutStage.Builder builderForValue) {
+      copyOnWrite();
+      instance.setStage(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * stage is a change of a window layout an agent asked for, held on this
+     * node alone while it waits for the user (revision 24): to the daemon's
+     * own front-ends only, never in state, never to a peer.
+     * </pre>
+     *
+     * <code>.mako.v2.LayoutStage stage = 6 [json_name = "stage"];</code>
+     */
+    public Builder mergeStage(dev.ironpark.mako.v2.LayoutStage value) {
+      copyOnWrite();
+      instance.mergeStage(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * stage is a change of a window layout an agent asked for, held on this
+     * node alone while it waits for the user (revision 24): to the daemon's
+     * own front-ends only, never in state, never to a peer.
+     * </pre>
+     *
+     * <code>.mako.v2.LayoutStage stage = 6 [json_name = "stage"];</code>
+     */
+    public Builder clearStage() {  copyOnWrite();
+      instance.clearStage();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Workspace)
   }
   @java.lang.Override
@@ -719,10 +879,11 @@ public  final class Workspace extends
             "nodeId_",
             "state_",
             "digest_",
+            "stage_",
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0001\u0001\u0005\u0005\u0000\u0000\u0000\u0001\n\u0002\u0002" +
-              "\u0003\u0208\u0004\u1009\u0000\u0005\n";
+              "\u0000\u0006\u0000\u0001\u0001\u0006\u0006\u0000\u0000\u0000\u0001\n\u0002\u0002" +
+              "\u0003\u0208\u0004\u1009\u0000\u0005\n\u0006\u1009\u0001";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

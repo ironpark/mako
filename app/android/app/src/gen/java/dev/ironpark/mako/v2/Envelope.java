@@ -37,6 +37,7 @@ public  final class Envelope extends
     ACCESS_INFO(26),
     GET_WORKSPACE(27),
     WORKSPACE(28),
+    LAYOUT_DECISION(112),
     LIST_SESSIONS(30),
     SESSIONS(31),
     OPEN_SESSION(32),
@@ -132,6 +133,7 @@ public  final class Envelope extends
         case 26: return ACCESS_INFO;
         case 27: return GET_WORKSPACE;
         case 28: return WORKSPACE;
+        case 112: return LAYOUT_DECISION;
         case 30: return LIST_SESSIONS;
         case 31: return SESSIONS;
         case 32: return OPEN_SESSION;
@@ -924,6 +926,56 @@ public  final class Envelope extends
    */
   private void clearWorkspace() {
     if (bodyCase_ == 28) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int LAYOUT_DECISION_FIELD_NUMBER = 112;
+  /**
+   * <code>.mako.v2.LayoutDecision layout_decision = 112 [json_name = "layoutDecision"];</code>
+   */
+  @java.lang.Override
+  public boolean hasLayoutDecision() {
+    return bodyCase_ == 112;
+  }
+  /**
+   * <code>.mako.v2.LayoutDecision layout_decision = 112 [json_name = "layoutDecision"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.LayoutDecision getLayoutDecision() {
+    if (bodyCase_ == 112) {
+       return (dev.ironpark.mako.v2.LayoutDecision) body_;
+    }
+    return dev.ironpark.mako.v2.LayoutDecision.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.LayoutDecision layout_decision = 112 [json_name = "layoutDecision"];</code>
+   */
+  private void setLayoutDecision(dev.ironpark.mako.v2.LayoutDecision value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 112;
+  }
+  /**
+   * <code>.mako.v2.LayoutDecision layout_decision = 112 [json_name = "layoutDecision"];</code>
+   */
+  private void mergeLayoutDecision(dev.ironpark.mako.v2.LayoutDecision value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 112 &&
+        body_ != dev.ironpark.mako.v2.LayoutDecision.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.LayoutDecision.newBuilder((dev.ironpark.mako.v2.LayoutDecision) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 112;
+  }
+  /**
+   * <code>.mako.v2.LayoutDecision layout_decision = 112 [json_name = "layoutDecision"];</code>
+   */
+  private void clearLayoutDecision() {
+    if (bodyCase_ == 112) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -5331,6 +5383,54 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.mako.v2.LayoutDecision layout_decision = 112 [json_name = "layoutDecision"];</code>
+     */
+    @java.lang.Override
+    public boolean hasLayoutDecision() {
+      return instance.hasLayoutDecision();
+    }
+    /**
+     * <code>.mako.v2.LayoutDecision layout_decision = 112 [json_name = "layoutDecision"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.LayoutDecision getLayoutDecision() {
+      return instance.getLayoutDecision();
+    }
+    /**
+     * <code>.mako.v2.LayoutDecision layout_decision = 112 [json_name = "layoutDecision"];</code>
+     */
+    public Builder setLayoutDecision(dev.ironpark.mako.v2.LayoutDecision value) {
+      copyOnWrite();
+      instance.setLayoutDecision(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.LayoutDecision layout_decision = 112 [json_name = "layoutDecision"];</code>
+     */
+    public Builder setLayoutDecision(
+        dev.ironpark.mako.v2.LayoutDecision.Builder builderForValue) {
+      copyOnWrite();
+      instance.setLayoutDecision(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.LayoutDecision layout_decision = 112 [json_name = "layoutDecision"];</code>
+     */
+    public Builder mergeLayoutDecision(dev.ironpark.mako.v2.LayoutDecision value) {
+      copyOnWrite();
+      instance.mergeLayoutDecision(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.LayoutDecision layout_decision = 112 [json_name = "layoutDecision"];</code>
+     */
+    public Builder clearLayoutDecision() {
+      copyOnWrite();
+      instance.clearLayoutDecision();
+      return this;
+    }
+
+    /**
      * <pre>
      * Sessions.
      * </pre>
@@ -8910,9 +9010,10 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.DeviceConn.class,
             dev.ironpark.mako.v2.DeviceListen.class,
             dev.ironpark.mako.v2.DeviceAccept.class,
+            dev.ironpark.mako.v2.LayoutDecision.class,
           };
           java.lang.String info =
-              "\u0000R\u0001\u0000\u0001oR\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000\u000b" +
+              "\u0000S\u0001\u0000\u0001pS\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000\u000b" +
               "<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000" +
               "\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000" +
               "\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000+<\u0000" +
@@ -8921,7 +9022,7 @@ public  final class Envelope extends
               "@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000H<\u0000I<\u0000" +
               "J<\u0000K<\u0000L<\u0000M<\u0000N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000" +
               "T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000j<\u0000" +
-              "k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000";
+              "k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000p<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

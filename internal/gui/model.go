@@ -18,6 +18,7 @@ import (
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/layoutdoc"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -179,15 +180,18 @@ type model struct {
 	// one of filesTab, gitTab, agentsTab and forgeTab in the default
 	// layout.
 	DetailTab *ggui.StateValue[string]
-	// WinDoc is the window's layout document, from layout.json or the
-	// default (winlayout.go); blocks are what it can place, and winStates
-	// its nodes' state on this device, by ID (winstate.go). UI goroutine
-	// only. winDocErr is why layout.json was not used, told once the
-	// window is up.
-	WinDoc           *ggui.StateValue[*windowDoc]
+	// WinDoc is the window's layout document: the one the space shown
+	// uses, or a change of it an agent asked for, which the daemon holds
+	// staged, LayoutStage (winsync.go). blocks are what it can place, and
+	// winStates its nodes' state on this device, by ID (winstate.go). UI
+	// goroutine only. winDocBody is the JSON WinDoc was read from, and
+	// winDocBad that of the last that could not be read, told once.
+	WinDoc           *ggui.StateValue[*layoutdoc.Doc]
 	blocks           *blockRegistry
 	winStates        map[string]*nodeState
-	winDocErr        error
+	winDocBody       string
+	winDocBad        string
+	LayoutStage      *ggui.StateValue[*protocol.LayoutStage]
 	ProjectAgents    *ggui.StateValue[projectAgentsView]
 	projectAgentsGen uint64
 	Forge            forgeState                          // the GitHub tab, and the watch on the branch
@@ -237,7 +241,7 @@ func newModel(cfg *config.Config, addr string) *model {
 	}
 	p := loadPrefs()
 	blocks := builtinBlocks()
-	doc, docErr := loadWindowDoc(blocks)
+	doc := layoutdoc.Default()
 	m := &model{
 		cfg:           cfg,
 		link:          newDaemonLink(addr, p.Daemon),
@@ -313,7 +317,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		DetailTab:     ggui.State(""),
 		WinDoc:        ggui.State(doc),
 		blocks:        blocks,
-		winDocErr:     docErr,
+		LayoutStage:   ggui.State((*protocol.LayoutStage)(nil)).WithEqual(func(a, b *protocol.LayoutStage) bool { return proto.Equal(a, b) }),
 		ProjectAgents: ggui.State(projectAgentsView{}).WithEqual(deepEqual),
 		Forge:         newForgeState(),
 		Tunnels:       newTunnelState(),

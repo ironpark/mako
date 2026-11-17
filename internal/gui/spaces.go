@@ -43,6 +43,9 @@ type space struct {
 	// owner of its places there.
 	Projects []string `json:"projects,omitempty"`
 	Hidden   []string `json:"hidden,omitempty"`
+	// Layout names the window layout document the space shows; "" for
+	// the default (winsync.go).
+	Layout string `json:"layout,omitempty"`
 }
 
 // color is the space's colour; nil for none.
@@ -76,6 +79,9 @@ type spaceList struct {
 	// sessions, the sidebar lists first.
 	PinnedProjects []scopeKey `json:"pinned_projects,omitempty"`
 	Pinned         []string   `json:"pinned,omitempty"`
+	// WindowLayouts are the window layout documents, by name, as their
+	// JSON; see winsync.go.
+	WindowLayouts map[string]json.RawMessage `json:"window_layouts,omitempty"`
 }
 
 // spaceSet is the spaces with the one the window shows, by index: 0 for

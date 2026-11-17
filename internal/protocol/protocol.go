@@ -44,6 +44,7 @@ const (
 	TypeAccessInfo     Type = "access_info"
 	TypeGetWorkspace   Type = "get_workspace"
 	TypeWorkspace      Type = "workspace"
+	TypeLayoutDecision Type = "layout_decision"
 	TypeListSess       Type = "list_sessions"
 	TypeSessions       Type = "sessions"
 	TypeOpenSession    Type = "open_session"

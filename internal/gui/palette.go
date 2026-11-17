@@ -192,6 +192,7 @@ func (m *model) commands() []command {
 	return append(cmds,
 		command{ID: "Reset window layout", Category: "View", Keys: []string{"layout", "default", "panels", "restore"}, Run: m.resetWindowDoc},
 		command{ID: "Reload window layout", Category: "View", Keys: []string{"layout", "layout.json", "panels"}, Run: m.reloadWindowDoc},
+		command{ID: "Ask before agents change the window layout", Category: "View", Keys: []string{"layout", "agents", "allow", "approval"}, Run: m.forgetLayoutAllowances},
 	)
 }
 

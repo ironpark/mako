@@ -119,6 +119,16 @@ func diff(cur, p, n *protocol.WorkspaceState) *protocol.WorkspaceState {
 			put(&d.Layouts, key, &protocol.LayoutEntry{Deleted: true})
 		}
 	}
+	for name, nl := range n.GetWindowLayouts() {
+		if pl := p.GetWindowLayouts()[name]; pl == nil || !bytes.Equal(pl.GetDoc(), nl.GetDoc()) {
+			put(&d.WindowLayouts, name, &protocol.LayoutEntry{Doc: nl.GetDoc()})
+		}
+	}
+	for name := range p.GetWindowLayouts() {
+		if _, ok := n.GetWindowLayouts()[name]; !ok {
+			put(&d.WindowLayouts, name, &protocol.LayoutEntry{Deleted: true})
+		}
+	}
 	return d
 }
 

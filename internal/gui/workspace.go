@@ -163,6 +163,7 @@ func setupWorkspace(m *model) {
 	projects := ggui.Map(m.Spaces, func(l spaceList) []project { return l.Projects }).WithEqual(slicesEqual)
 	ggui.Watch(projects, func([]project) { m.pushProjects(ggui.Peek(m.Nodes)) })
 	ggui.Watch(m.Layout, func(*layoutNode) { m.workspaceChanged() })
+	followWindowLayout(m)
 }
 
 // moveOldSpaces moves the spaces the settings kept, before the workspace
@@ -419,6 +420,8 @@ func (m *model) takeWorkspace(ws *protocol.Workspace) {
 	if st == nil {
 		return // a daemon from before the workspace was a CRDT
 	}
+	// A change staged is the daemon's to say, whatever the window edits.
+	m.LayoutStage.Set(ws.GetStage())
 	if m.ws.giving {
 		m.link.wsStale.Store(true) // asked for again once the answer is in
 		return
@@ -432,6 +435,7 @@ func (m *model) takeWorkspace(ws *protocol.Workspace) {
 	}
 	shared.Merge(joined, st, nil, math.MaxInt64)
 	m.ws.state = joined
+	m.importLayoutFile(joined)
 	if m.ws.old == nil && shared.Empty(st) && !bytes.Equal(m.ws.base, emptyDoc) {
 		// A daemon that holds nothing has lost what the window has, or
 		// never had it: it is given whole, counted, so that whatever the
@@ -471,6 +475,7 @@ func (m *model) leaveWorkspace() {
 	}
 	m.ws.gen++
 	m.ws.giving = false
+	m.LayoutStage.Set(nil) // the daemon left holds it
 	m.ws.state, m.ws.applied = nil, nil
 	m.ws.base = m.docNow()
 	m.link.wsStale.Store(true)

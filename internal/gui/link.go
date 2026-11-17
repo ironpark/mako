@@ -214,7 +214,8 @@ func (m *model) watch(ctx context.Context) {
 		// Nothing is followed until the window knows which daemon it has.
 		if m.link.linked.Load() {
 			if c, err := m.link.client(ctx); err == nil {
-				err = c.Watch(ctx, func(ch *protocol.Changed) {
+				// The window shows the layout changes agents ask for.
+				err = c.WatchAs(ctx, &protocol.Watch{Layouts: true}, func(ch *protocol.Changed) {
 					if ch.GetAccess() {
 						m.link.accessStale.Store(true)
 					}

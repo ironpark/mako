@@ -88,4 +88,27 @@ public interface WorkspaceOrBuilder extends
    * @return The digest.
    */
   com.google.protobuf.ByteString getDigest();
+
+  /**
+   * <pre>
+   * stage is a change of a window layout an agent asked for, held on this
+   * node alone while it waits for the user (revision 24): to the daemon's
+   * own front-ends only, never in state, never to a peer.
+   * </pre>
+   *
+   * <code>.mako.v2.LayoutStage stage = 6 [json_name = "stage"];</code>
+   * @return Whether the stage field is set.
+   */
+  boolean hasStage();
+  /**
+   * <pre>
+   * stage is a change of a window layout an agent asked for, held on this
+   * node alone while it waits for the user (revision 24): to the daemon's
+   * own front-ends only, never in state, never to a peer.
+   * </pre>
+   *
+   * <code>.mako.v2.LayoutStage stage = 6 [json_name = "stage"];</code>
+   * @return The stage.
+   */
+  dev.ironpark.mako.v2.LayoutStage getStage();
 }

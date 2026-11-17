@@ -99,6 +99,7 @@ func convert(doc document, at crdt.HLC) *protocol.WorkspaceState {
 			Projects:  c.set(sp.Projects),
 			Hidden:    c.set(sp.Hidden),
 			Color:     c.str(sp.Color),
+			Layout:    c.str(sp.Layout),
 		}
 	}
 	ids = uniqueIDs(len(doc.Projects), func(i int) string { return doc.Projects[i].ID })
@@ -142,6 +143,14 @@ func convert(doc document, at crdt.HLC) *protocol.WorkspaceState {
 	st.PinnedProjects = c.set(pins)
 	st.PinnedSessions = c.set(doc.Pinned)
 	st.Layouts = c.layouts(doc.Layouts, doc.TabNodes)
+	for name, body := range doc.WindowLayouts {
+		if valid(name) && json.Valid(body) {
+			if st.WindowLayouts == nil {
+				st.WindowLayouts = map[string]*protocol.LayoutEntry{}
+			}
+			st.WindowLayouts[name] = &protocol.LayoutEntry{Doc: slices.Clone([]byte(body)), Clock: c.stamp()}
+		}
+	}
 	return st
 }
 

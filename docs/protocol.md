@@ -307,10 +307,11 @@ that answers on success.
 | Request | Payload | Reply | |
 |---|---|---|---|
 | `list_nodes` | `{}` | `nodes` | The daemon itself, then its peers, each with how the daemon stands with it. |
-| `watch` | `Watch` | `changed`, then more | Turns the stream into a feed: a `changed` at once, then one whenever the mesh's nodes or sessions, or the daemon's access, change, until the front-end closes the stream. With `approvals`, the front-end watches for [approvals](#sessions) meanwhile too. |
+| `watch` | `Watch` | `changed`, then more | Turns the stream into a feed: a `changed` at once, then one whenever the mesh's nodes or sessions, or the daemon's access, change, until the front-end closes the stream. With `approvals`, the front-end watches for [approvals](#sessions) meanwhile too; with `layouts`, it shows the window layout changes staged on the daemon (revision 24; see [Layout documents](#layout-documents)). |
 | `access` | `Access` | `access_info` | Who the daemon lets in, and changes to it; see [Access](#access). From a front-end only. |
 | `get_workspace` | `GetWorkspace` | `workspace` | The workspace the daemon holds; see [Workspaces](#workspaces). With `node_id`, the one that node holds, which a node gives one it lets in, to copy its spaces from (revision 22), whether it shares it or not; with its `digest` only while it shares it, and a peer merges only an answer with one. |
 | `workspace` | `Workspace` | `workspace` | Gives the daemon an edit of the workspace, a delta in `state` (revision 23), or the whole `doc` a window kept before, to take in once; the reply is the workspace held after. From a front-end only. |
+| `layout_decision` | `LayoutDecision` | `workspace` | Keeps or reverts the window layout change staged on the daemon, or forgets what the user allowed agents to change without asking (revision 24; see [Layout documents](#layout-documents)). From the node's own front-ends only. |
 
 ```proto
 message Node {
@@ -351,6 +352,25 @@ message Workspace {
   string node_id = 3; // where doc was made, which breaks a tie
   WorkspaceState state = 4; // the workspace as a CRDT, or a delta of it (revision 23)
   bytes digest = 5;   // a hash of state
+  LayoutStage stage = 6; // a window layout change held here, to the node's own front-ends (revision 24)
+}
+
+message LayoutStage {
+  string id = 1;         // also the approval's ID on the agent's session
+  string document = 2;   // the document's name
+  bytes doc = 3;         // the document proposed
+  string phase = 4;      // approve, keep
+  string session_id = 5; // the agent's session
+  string agent = 6;      // its name
+  string tool = 7;       // set_layout, patch_layout or undo_layout
+  string summary = 8;    // what it changes, in a line
+  int64 deadline = 9;    // keep: when it reverts, in Unix ms
+}
+
+message LayoutDecision {
+  string stage_id = 1;
+  string decision = 2; // keep, revert, forget
+  string node_id = 3;  // "" for the daemon's own
 }
 ```
 
@@ -976,7 +996,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 23) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 24) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
@@ -1024,12 +1044,22 @@ split of `First` and `Second`, beside each other or, with `Vertical`, one
 over the other, `First` taking `Ratio` of the room. Every node has an `ID`.
 
 **Window layout documents** lay out the whole window: the sidebar, the
-workspace and the panels, and where the pane tree goes. They will be
-shared as `WorkspaceState.window_layouts[name]`; for now the desktop
-window reads one from `layout.json` beside `gui.json`, when there is one,
-when it starts and on the palette's *Reload window layout*, and sends it
-nowhere. *Reset window layout* moves the file aside to `layout.json.bak`
-and shows the default. The window's default document:
+workspace and the panels, and where the pane tree goes. They are named,
+in `WorkspaceState.window_layouts[name]`, one register each: of two
+nodes' edits at once the later wins whole, and a document's revision is
+its entry's `clock`, written `wall_time.logical.node_id`. A space's
+`layout` names the document it shows; one that names none shows
+`default`'s, and while there is no `default`, the window's built-in
+document below. The window edits them as it edits the rest of the
+workspace, through its document (`window_layouts` and each space's
+`layout`). The desktop window takes in a `layout.json` beside `gui.json`,
+the one document it read before revision 24: once, as `default`, when
+the first workspace it takes holds none, the file then renamed
+`layout.json.imported`; and again on the palette's *Reload window
+layout*, as the document of the space shown. *Reset window layout* has
+the space shown use `default` again, or, using it, removes `default`, so
+that the built-in document shows; it takes effect in the window at once,
+whether its daemon is reachable or not. The built-in document:
 
 ```json
 {"version": 1, "root": {"id": "window", "row": [
@@ -1069,9 +1099,50 @@ A block's name is `mako.<name>` for the window's own, and will be
 toggles over the panes), `mako.files`, `mako.git`, `mako.agents` and
 `mako.forge`, none taking props. A block a window does not hold is drawn
 as missing in its place, and kept. A document that does not read, with a
-field or kind of node unknown, a value of the wrong type, sizes where they
-mean nothing, no `panes` or two, or more than 256 nodes or 16 deep, is not
-used: the window draws its default.
+value of the wrong type, sizes where they mean nothing, no `panes` or
+two, or more than 256 nodes or 16 deep, is not used: the window draws its
+default.
+
+**Versions.** A reader reads a document of its own `version` strictly: a
+field or kind of node it does not know is an error. One of a later
+version, which a newer node wrote and the workspace brought, is read
+leniently: fields it does not know are left out, and a node of a kind it
+does not know is kept as a leaf, drawn as missing; what it does know is
+checked as strictly. A node writes documents of its own version only, and
+does not patch one of a later version. So a field added later must be one
+an older window can leave out, and anything it cannot is a new version.
+
+**Changes an agent asks for** (revision 24) go through the user, on the
+node whose daemon the agent asked (see [agent-mcp.md](agent-mcp.md#the-windows-layout)):
+
+- The daemon stages the change, one at a time, in its memory alone: it is
+  in `Workspace.stage`, a `LayoutStage`, of the answers the daemon gives
+  its own front-ends, never in `state`, never to a peer, and the daemon
+  tells its front-ends with `changed.workspace` when it comes, moves on
+  or goes. A window shows `doc` in place of the document `document`
+  while the space shown uses that one, and a bar over the window, which
+  it draws itself, outside any document.
+- In phase `approve`, unless the user allowed such changes before, the
+  agent's session holds an `Approval` of kind `layout` and the stage's
+  `id`, with options `space` and `always`; it is answered with
+  `AnswerApproval`, as any is, but from a front-end of that node only.
+  `deny` (or `terminal`) turns it down. `space` allows, from then on,
+  changes of that document without asking, `always` of any; the daemon
+  keeps them in `layout-allow.json`, shares them with no node, and
+  forgets them on `LayoutDecision{decision: forget}`.
+- A whole document set (`set_layout`) is then in phase `keep` until
+  `deadline`: the window asks whether to keep it, and answers with
+  `LayoutDecision{stage_id, decision: keep}` or `revert`; at the
+  deadline it reverts by itself.
+- Only then is the change written into the state, as an edit of the
+  daemon's, and so sent to the peers; a change turned down or reverted
+  never was. It is refused if the document changed since it was read.
+- A front-end that shows the stage says so in `Watch{layouts: true}`;
+  while none watches, a change the user is to see is refused at once.
+
+A daemon keeps, for each document, the versions this node's edits
+replaced, the user's or an agent's, 20 of them, which `undo_layout` goes
+back to; it shares them with no node.
 
 A `size` is a default. What a device makes of the document stays on it,
 by node ID: the sizes its edges were dragged to (`gui.json`'s

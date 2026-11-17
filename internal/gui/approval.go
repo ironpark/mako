@@ -88,6 +88,16 @@ func approvalCard(m *model, id string) ggui.Widget {
 			)
 		case a.GetKind() == protocol.ToolExitPlan:
 			return planCard(m, id, a)
+		case a.GetKind() == protocol.ToolLayout:
+			head := widget.Row(
+				icon("layout-grid").Size(16).Color(skin.DotWaiting),
+				widget.Text(T("Allow this change of the window layout?")).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
+			).Gap(8).Align(widget.AlignCenter)
+			return approvalFrame(widget.Column(
+				head,
+				muted(widget.Text(a.GetDetail()).Size(12.5)),
+				widget.Wrap(layoutApprovalButtons(m, id, a.GetId())...).Gap(8).RunGap(8).Align(widget.AlignCenter),
+			).Gap(10).Stretch())
 		}
 		open, why := ggui.State(false), ggui.State("")
 		body := approvalBody(m, a)
@@ -230,6 +240,9 @@ func approvalBar(m *model, id string) ggui.Widget {
 			what += "  " + a.GetDetail()
 		}
 		glyph, ask, buttons := "shield-alert", T("Approve?"), approvalButtons(m, id, a)
+		if a.GetKind() == protocol.ToolLayout {
+			glyph, ask, buttons = "layout-grid", T("Change the window layout?"), layoutApprovalButtons(m, id, a.GetId())
+		}
 		if a.GetKind() == protocol.ToolExitPlan {
 			glyph, ask = "list", T("Approve the plan?")
 			buttons = []ggui.Widget{

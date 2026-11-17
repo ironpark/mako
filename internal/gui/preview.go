@@ -22,6 +22,7 @@ import (
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/layoutdoc"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -426,7 +427,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(func() { m.SearchOpen.Set(false) }),
 				do(m.openQuickOpen), do(func() { m.pickers.QuickQuery.Set("view") }), frames(30), shot("03-quick-open"),
 				do(func() { m.pickers.QuickOpen.Set(false); m.DetailTab.Set(gitTab) }),
-				do(func() { m.DetailsWidth.Set(m.restingSize(detailsNode, detailsWidth)) }),
+				do(func() { m.DetailsWidth.Set(m.restingSize(layoutdoc.DetailsNode, detailsWidth)) }),
 				do(func() { m.DetailTab.Set(agentsTab) }), frames(2), shot("03-details"),
 				do(func() { m.DetailTab.Set(filesTab); m.openNew("", "") }), frames(2), shot("04-new-session"),
 				do(func() { m.NewOpen.Set(false); m.openSettings("general") }), frames(2), shot("05-settings-general"),
@@ -471,6 +472,13 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					})
 				}), frames(40), shot("14-appearance-backdrop"),
 				do(func() { m.Prefs.Set(saved); m.reloadThemes() }), frames(2),
+			}
+			// MAKO_PREVIEW_LAYOUT renders a change of the window layout an
+			// agent asks for, as something else drives it: before, while it
+			// waits to be allowed, while it waits to be kept, and after;
+			// set to "shown", the window as the workspace lays it out.
+			if mode := os.Getenv("MAKO_PREVIEW_LAYOUT"); mode != "" {
+				steps = layoutPreview(m, mode == "shown", do, frames, shot)
 			}
 			// MAKO_PREVIEW_FORGE names a clone of a repository on a forge,
 			// whose forge tab is rendered in place of the rest.
@@ -568,6 +576,42 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 		}
 		return nil
 	}), nil)
+}
+
+// layoutPreview renders the window as an agent's change of its layout
+// goes through, waiting up to two minutes for each phase.
+func layoutPreview(m *model, shown bool, do func(func()) previewStep, frames func(int) previewStep, shot func(string) previewStep) []previewStep {
+	waitFor := func(what string, cond func() bool) previewStep {
+		var since time.Time
+		return func() (bool, error) {
+			if since.IsZero() {
+				since = time.Now()
+			}
+			if cond() {
+				return true, nil
+			}
+			if time.Since(since) > 2*time.Minute {
+				return false, fmt.Errorf("preview: timed out waiting for %s", what)
+			}
+			return false, nil
+		}
+	}
+	phase := func(p string) func() bool { return func() bool { return ggui.Peek(m.LayoutStage).GetPhase() == p } }
+	if shown {
+		return []previewStep{
+			do(func() { m.Prefs.Update(func(p prefs) prefs { p.Theme = "dark"; return p }) }),
+			waitFor("the workspace", func() bool { return m.ws.state != nil }),
+			frames(30), shot("74-layout-shown"),
+		}
+	}
+	return []previewStep{
+		do(func() { m.Prefs.Update(func(p prefs) prefs { p.Theme = "dark"; return p }) }),
+		waitFor("the daemon", func() bool { return ggui.Peek(m.Conn).OK }),
+		frames(20), shot("70-layout-before"),
+		waitFor("a change to allow", phase(protocol.LayoutApprove)), frames(20), shot("71-layout-approve"),
+		waitFor("a change to keep", phase(protocol.LayoutKeep)), frames(20), shot("72-layout-keep"),
+		waitFor("the change answered", func() bool { return ggui.Peek(m.LayoutStage) == nil }), frames(30), shot("73-layout-after"),
+	}
 }
 
 // forgePreview renders the forge tab of the repository cloned in dir:

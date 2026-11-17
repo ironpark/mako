@@ -11,7 +11,6 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 
 	"github.com/ironpark/mako/internal/config"
-	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/notify"
 )
@@ -70,12 +69,6 @@ func setup(m *model) {
 	followAttention(m)
 	followWindowFocus(m)
 	setupWorkspace(m)
-	if m.winDocErr != nil {
-		// Told before the window is first built: in the language it will
-		// be built in.
-		i18n.Set(i18n.Resolve(ggui.Peek(m.Prefs).Language))
-		m.tellWindowDoc(m.winDocErr)
-	}
 	ggui.Effect(func() ggui.Cleanup {
 		pal := m.themePalette()
 		uitheme.Set(skin.Theme(pal))

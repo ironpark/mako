@@ -124,6 +124,39 @@ message Workspace {
   // holds differs without being sent it; a hint only, so it may differ
   // between builds that serialize differently.
   bytes digest = 5;
+  // stage is a change of a window layout an agent asked for, held on this
+  // node alone while it waits for the user (revision 24): to the daemon's
+  // own front-ends only, never in state, never to a peer.
+  LayoutStage stage = 6;
+}
+
+// LayoutStage is a change of a window layout document an agent asked for,
+// which the node's windows show in place of the document while it waits:
+// for the user to allow it (phase "approve"), or, allowed and applied
+// here, to keep it (phase "keep"), which it reverts by itself at
+// deadline. Only once kept is it written into the workspace, and so sent
+// to the peers.
+message LayoutStage {
+  string id = 1;        // also the approval's ID on the agent's session
+  string document = 2;  // the document's name
+  bytes doc = 3;        // the document proposed
+  string phase = 4;     // approve, keep
+  string session_id = 5; // the agent's session
+  string agent = 6;     // its name, as the window shows it
+  string tool = 7;      // set_layout, patch_layout or undo_layout
+  string summary = 8;   // what it changes, in a line
+  int64 deadline = 9;   // keep: when it reverts, in Unix ms
+}
+
+// LayoutDecision answers a LayoutStage from a front-end of the node it is
+// held on: keep or revert one in phase keep, or forget what the user has
+// allowed agents to change without asking. Allowing or denying one in
+// phase approve is an AnswerApproval of its id, as any approval is. The
+// reply is the Workspace after.
+message LayoutDecision {
+  string stage_id = 1;
+  string decision = 2; // keep, revert, forget
+  string node_id = 3;  // "" for the daemon's own; another node refuses it
 }
 
 // GetWorkspace asks the daemon for the workspace it holds; it answers with
@@ -141,6 +174,10 @@ message Watch {
   // approvals watches for approvals too, for as long as the stream stays
   // open, as a listing with approvals does for a while.
   bool approvals = 1;
+  // layouts says the front-end shows the window layout changes agents ask
+  // for (Workspace.stage) while the stream stays open: a window the user
+  // can allow and keep them in (revision 24).
+  bool layouts = 2;
 }
 
 // Changed says what changed, for the front-end to ask for again.

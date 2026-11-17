@@ -3,8 +3,6 @@ package gui
 import (
 	"fmt"
 	"image/color"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -15,6 +13,7 @@ import (
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/layoutdoc"
 )
 
 // oldWindowMain is the window's main area as view.go built it before the
@@ -105,22 +104,15 @@ func TestTheDefaultDocumentDrawsTheWindowAsBefore(t *testing.T) {
 	}
 }
 
-// writeLayout makes the window read src as its layout file.
-func writeLayout(t *testing.T, src string) {
+// withLayout has the window draw src, as the document of the space shown.
+func withLayout(t *testing.T, src string) func(*model) {
 	t.Helper()
-	if _, err := parseWindowDoc([]byte(src), builtinBlocks()); err != nil {
+	if _, err := layoutdoc.Parse([]byte(src), builtinBlocks()); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("MAKO_HOME", t.TempDir())
-	path, err := configFile(layoutFileName)
-	if err == nil {
-		err = os.MkdirAll(filepath.Dir(path), 0o700)
-	}
-	if err == nil {
-		err = os.WriteFile(path, []byte(src), 0o600)
-	}
-	if err != nil {
-		t.Fatal(err)
+	return func(m *model) {
+		m.setWindowLayout(layoutdoc.DefaultName, []byte(src))
+		m.showWindowLayout(winSource{body: src})
 	}
 }
 
@@ -136,11 +128,11 @@ func findNode(t *testing.T, p *ggui.Probe, role ggui.Role, label string) ggui.Re
 // A document with the right panel left of the panes draws it there, its
 // edge on the side toward the panes.
 func TestARightPanelMovedLeftIsDrawnThere(t *testing.T) {
-	writeLayout(t, `{"version":1,"root":{"id":"window","row":[
+	t.Setenv("MAKO_HOME", t.TempDir())
+	_, p := windowProbe(t, windowView, withLayout(t, `{"version":1,"root":{"id":"window","row":[
 		{"id":"sidebar","block":"mako.sidebar","size":272,"collapsible":true},
 		{"id":"details","stack":["mako.files","mako.git"],"size":320,"collapsible":true},
-		{"id":"workspace","column":[{"id":"header","block":"mako.header"},{"panes":"main","grow":1}],"grow":1}]}}`)
-	_, p := windowProbe(t, windowView, nil)
+		{"id":"workspace","column":[{"id":"header","block":"mako.header"},{"panes":"main","grow":1}],"grow":1}]}}`))
 	files := findNode(t, p, ggui.RoleButton, "Files")
 	toggle := findNode(t, p, ggui.RoleButton, "Toggle sidebar")
 	if files.Origin.X < 272 || files.Origin.X > 272+20 || toggle.Origin.X < 272+320 {
@@ -155,14 +147,14 @@ func TestARightPanelMovedLeftIsDrawnThere(t *testing.T) {
 // there, and shown and polled as the panel's tab was: revealing it opens
 // it.
 func TestABlockMovedUnderThePanesIsDrawnThere(t *testing.T) {
-	writeLayout(t, `{"version":1,"root":{"id":"window","row":[
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m, p := windowProbe(t, windowView, withLayout(t, `{"version":1,"root":{"id":"window","row":[
 		{"id":"sidebar","block":"mako.sidebar","size":272,"collapsible":true},
 		{"id":"workspace","column":[
 			{"id":"header","block":"mako.header"},
 			{"panes":"main","grow":1},
 			{"id":"bottom","block":"mako.git","size":200,"collapsible":true}],"grow":1},
-		{"id":"details","stack":["mako.files","mako.agents"],"size":320,"collapsible":true}]}}`)
-	m, p := windowProbe(t, windowView, nil)
+		{"id":"details","stack":["mako.files","mako.agents"],"size":320,"collapsible":true}]}}`))
 	git := findNode(t, p, ggui.RoleText, "Open a session to see its changes.")
 	if git.Origin.Y < 800-200 || git.Origin.X < 272 || git.Origin.X > 1280-324 {
 		t.Fatalf("the git block at %v", git)
@@ -170,7 +162,7 @@ func TestABlockMovedUnderThePanesIsDrawnThere(t *testing.T) {
 	if !ggui.Untrack(func() bool { return m.blockShown(gitTab) }) || ggui.Untrack(func() bool { return m.blockShown(forgeTab) }) {
 		t.Fatal("the git block is not shown, or the forge's is")
 	}
-	bottom := m.nodeState(ggui.Peek(m.WinDoc).node("bottom"))
+	bottom := m.nodeState(ggui.Peek(m.WinDoc).Node("bottom"))
 	bottom.open.Set(false)
 	m.DetailsOpen.Set(false)
 	if ggui.Untrack(func() bool { return m.blockShown(gitTab) }) {
@@ -185,10 +177,10 @@ func TestABlockMovedUnderThePanesIsDrawnThere(t *testing.T) {
 // A block the registry does not hold is drawn as missing, in its place,
 // and named on its tab.
 func TestABlockNotRegisteredIsDrawnMissing(t *testing.T) {
-	writeLayout(t, `{"version":1,"root":{"id":"window","row":[
+	t.Setenv("MAKO_HOME", t.TempDir())
+	_, p := windowProbe(t, windowView, withLayout(t, `{"version":1,"root":{"id":"window","row":[
 		{"id":"workspace","column":[{"panes":"main","grow":1},{"id":"ci","block":"plugin:ci-status/ci","size":150}],"grow":1},
-		{"id":"details","stack":["mako.files","plugin:notes/board"],"size":320,"active":1}]}}`)
-	_, p := windowProbe(t, windowView, nil)
+		{"id":"details","stack":["mako.files","plugin:notes/board"],"size":320,"active":1}]}}`))
 	if n := strings.Count(p.Semantics().String(), `text "Missing block"`); n != 2 {
 		t.Fatalf("%d blocks drawn missing, want 2:\n%s", n, p.Semantics().String())
 	}

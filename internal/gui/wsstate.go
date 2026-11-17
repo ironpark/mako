@@ -31,6 +31,9 @@ type wsState struct {
 	// old is the workspace the window kept before it was a CRDT, to give
 	// the daemon to take in, once; nil when there is none, or once given.
 	old *workspaceFile
+	// imported says layout.json was looked at, as the window first took
+	// a workspace (winsync.go).
+	imported bool
 	// give gives the daemon a Workspace, and hands its answer to done on
 	// the UI goroutine: the window's daemon (giveDaemon), or a test's.
 	give  func(ws *protocol.Workspace, done func(*protocol.Workspace, error))

@@ -116,11 +116,26 @@ func (w *workspaces) currentDigest() []byte {
 // edit stamps a front-end's delta and merges it in, and reports whether the
 // state changed. The delta is the caller's, and is changed.
 func (w *workspaces) edit(delta *protocol.WorkspaceState) bool {
-	return w.change(func(next *protocol.WorkspaceState, now int64) bool {
+	_, changed, _ := w.editChecked(delta, nil)
+	return changed
+}
+
+// editChecked is edit, but for a delta check refuses against the state it
+// would be merged into, which it does under the same lock; it returns the
+// state before too.
+func (w *workspaces) editChecked(delta *protocol.WorkspaceState, check func(*protocol.WorkspaceState) error) (before *protocol.WorkspaceState, changed bool, err error) {
+	changed = w.change(func(next *protocol.WorkspaceState, now int64) bool {
+		before = w.state
+		if check != nil {
+			if err = check(next); err != nil {
+				return false
+			}
+		}
 		healed := workspace.Heal(next, w.clock, now)
 		workspace.Stamp(delta, w.clock, now)
 		return workspace.Merge(next, delta, w.clock, now) || healed
 	})
+	return before, changed, err
 }
 
 // takeLegacy takes in whole a workspace a window kept before it was a
@@ -306,7 +321,10 @@ func (d *Daemon) fetchWorkspace(node string) {
 func (d *Daemon) handleWorkspace(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
 	if env.Type() == protocol.TypeGetWorkspace {
 		return serve(d, ctx, stream, env, protocol.TypeWorkspace, func(*protocol.GetWorkspace) (*protocol.Workspace, error) {
-			return d.workspace.get(!fromPeer || d.syncsWorkspace()), nil
+			if !fromPeer {
+				return d.frontWorkspace(), nil
+			}
+			return d.workspace.get(d.syncsWorkspace()), nil
 		})
 	}
 	if fromPeer {
@@ -320,7 +338,7 @@ func (d *Daemon) handleWorkspace(ctx context.Context, stream *transport.Stream, 
 		changed := false
 		switch {
 		case ws.GetState() != nil:
-			changed = d.workspace.edit(ws.GetState())
+			changed, _ = d.editWorkspace(ws.GetState(), nil, true)
 		case len(ws.GetDoc()) > 0:
 			changed = d.workspace.takeLegacy(ws.GetDoc())
 		}
@@ -328,5 +346,5 @@ func (d *Daemon) handleWorkspace(ctx context.Context, stream *transport.Stream, 
 			d.workspaceChanged()
 		}
 	}
-	return stream.Send(protocol.TypeWorkspace, env.GetId(), d.workspace.get(true))
+	return stream.Send(protocol.TypeWorkspace, env.GetId(), d.frontWorkspace())
 }

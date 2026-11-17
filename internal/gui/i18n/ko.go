@@ -1322,4 +1322,15 @@ var catalogKo = map[string]string{
 	"No block of this name is registered on this node.":            "이 노드에는 이 이름의 블록이 등록되어 있지 않습니다.",
 	"Could not reset the window layout":                            "창 레이아웃을 초기화하지 못했습니다",
 	"The window layout could not be read, so the default is shown": "창 레이아웃을 읽지 못해 기본 레이아웃을 보여 줍니다",
+
+	"Ask before agents change the window layout": "에이전트가 창 레이아웃을 바꾸기 전에 묻기",
+	"Change the window layout?":                  "창 레이아웃을 바꿀까요?",
+	"Allow this change of the window layout?":    "창 레이아웃을 이렇게 바꾸도록 허용할까요?",
+	"Always allow":                                  "항상 허용",
+	"Allow in this space":                           "이 스페이스에서 허용",
+	"Keep":                                          "유지",
+	"Keep this window layout?":                      "이 창 레이아웃을 유지할까요?",
+	"It goes back in %d s unless kept":              "유지하지 않으면 %d초 뒤 되돌립니다",
+	"%s asks to change the window layout":           "%s이(가) 창 레이아웃을 바꾸려고 합니다",
+	"The window shows the change until you answer.": "답할 때까지 창에 바뀐 레이아웃을 보여 줍니다.",
 }

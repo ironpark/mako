@@ -1,13 +1,14 @@
 package gui
 
 import (
-	"os"
-	"strings"
+	"reflect"
 	"testing"
 
 	"github.com/ironpark/ggui"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/layoutdoc"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // A document's sizes are defaults: a width this device kept wins over
@@ -23,14 +24,15 @@ func TestSizesKeptOnTheDeviceOverrideTheDocuments(t *testing.T) {
 		t.Fatalf("the defaults were kept as the device's: %v, %v", p.SidebarWidth, p.DetailsWidth)
 	}
 
-	writeLayout(t, `{"version":1,"root":{"id":"window","row":[
-		{"id":"sidebar","block":"mako.sidebar","size":600,"collapsible":true},
-		{"id":"workspace","column":[{"panes":"main","grow":1},{"id":"bottom","block":"mako.git","size":200}],"grow":1},
-		{"id":"details","stack":["mako.files"],"size":400}]}}`)
+	t.Setenv("MAKO_HOME", t.TempDir())
 	if err := savePrefs(prefs{DetailsWidth: 333, LayoutSizes: map[string]float64{"bottom": 250, "gone": -1}}.normalized()); err != nil {
 		t.Fatal(err)
 	}
 	m = newModel(config.Default(), "")
+	withLayout(t, `{"version":1,"root":{"id":"window","row":[
+		{"id":"sidebar","block":"mako.sidebar","size":600,"collapsible":true},
+		{"id":"workspace","column":[{"panes":"main","grow":1},{"id":"bottom","block":"mako.git","size":200}],"grow":1},
+		{"id":"details","stack":["mako.files"],"size":400}]}}`)(m)
 	doc := ggui.Peek(m.WinDoc)
 	if ggui.Peek(m.SidebarWidth) != maxSidebarWidth {
 		t.Errorf("the sidebar is %v wide, not its widest for a document's 600", ggui.Peek(m.SidebarWidth))
@@ -38,7 +40,7 @@ func TestSizesKeptOnTheDeviceOverrideTheDocuments(t *testing.T) {
 	if ggui.Peek(m.DetailsWidth) != 333 {
 		t.Errorf("the right panel is %v wide, not as kept", ggui.Peek(m.DetailsWidth))
 	}
-	bottom := m.nodeState(doc.node("bottom"))
+	bottom := m.nodeState(doc.Node("bottom"))
 	if ggui.Peek(bottom.size) != 250 {
 		t.Errorf("the bottom block is %v tall, not as kept", ggui.Peek(bottom.size))
 	}
@@ -49,13 +51,13 @@ func TestSizesKeptOnTheDeviceOverrideTheDocuments(t *testing.T) {
 	// Dragged, a size is kept by the node's ID; the document is not
 	// written.
 	m.Prefs.Update(func(p prefs) prefs { bottom.keep(&p, 180); return p })
-	if ggui.Peek(m.Prefs).LayoutSizes["bottom"] != 180 || doc.node("bottom").Size != 200 {
-		t.Fatalf("kept %v, document %v", ggui.Peek(m.Prefs).LayoutSizes, doc.node("bottom").Size)
+	if ggui.Peek(m.Prefs).LayoutSizes["bottom"] != 180 || doc.Node("bottom").Size != 200 {
+		t.Fatalf("kept %v, document %v", ggui.Peek(m.Prefs).LayoutSizes, doc.Node("bottom").Size)
 	}
 
 	// Another document moves the sizes not kept, and only those.
 	m.Prefs.Update(func(p prefs) prefs { p.LayoutSizes = nil; return p })
-	next := defaultWindowDoc()
+	next := layoutdoc.Default()
 	next.Root.Children[0].Size = 300
 	next.Root.Children[2].Size = 500
 	m.setWindowDoc(next)
@@ -84,23 +86,29 @@ func TestDraggingAnEdgeKeepsTheSize(t *testing.T) {
 	}
 }
 
-// Resetting the layout shows the default document and moves the file
-// aside, kept.
+// Resetting the layout shows the default document at once, whether the
+// daemon is there to hear of it or not: the space shown goes back to the
+// default document, and, showing it, the default to the built-in one; a
+// change staged is turned down.
 func TestResettingTheLayoutShowsTheDefault(t *testing.T) {
-	writeLayout(t, `{"version":1,"root":{"id":"r","row":[{"panes":"main","grow":1},"mako.git"]}}`)
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
-	if ggui.Peek(m.WinDoc).node(sidebarNode) != nil {
-		t.Fatal("the file was not read")
+	withLayout(t, `{"version":1,"root":{"id":"r","row":[{"panes":"main","grow":1},"mako.git"]}}`)(m)
+	m.Spaces.Update(func(l spaceList) spaceList {
+		l.Spaces = []space{{ID: "work", Name: "Work", Layout: "focus"}}
+		l.WindowLayouts["focus"] = l.WindowLayouts[layoutdoc.DefaultName]
+		return l
+	})
+	m.setSpace(1)
+	m.LayoutStage.Set(&protocol.LayoutStage{Id: "s", Document: "focus", Phase: protocol.LayoutKeep})
+	m.resetWindowDoc()
+	l := ggui.Peek(m.Spaces)
+	if l.Spaces[0].Layout != "" || l.WindowLayouts[layoutdoc.DefaultName] == nil || ggui.Peek(m.LayoutStage) != nil {
+		t.Fatalf("reset in a space of a document of its own: %+v, stage %v", l, ggui.Peek(m.LayoutStage))
 	}
 	m.resetWindowDoc()
-	if ggui.Peek(m.WinDoc).node(sidebarNode) == nil {
-		t.Fatal("the default is not shown")
-	}
-	path, _ := configFile(layoutFileName)
-	if d, err := loadWindowDoc(m.blocks); err != nil || d.node(sidebarNode) == nil {
-		t.Fatalf("the file is still read: %v", err)
-	}
-	if data, err := os.ReadFile(path + ".bak"); err != nil || !strings.Contains(string(data), `"mako.git"`) {
-		t.Fatalf("the file was not kept aside: %v", err)
+	m.showWindowLayout(winSource{body: string(ggui.Peek(m.Spaces).WindowLayouts[layoutdoc.DefaultName])})
+	if l := ggui.Peek(m.Spaces); l.WindowLayouts[layoutdoc.DefaultName] != nil || l.WindowLayouts["focus"] == nil || !reflect.DeepEqual(ggui.Peek(m.WinDoc), layoutdoc.Default()) {
+		t.Fatalf("reset of the default: %v", l.WindowLayouts)
 	}
 }

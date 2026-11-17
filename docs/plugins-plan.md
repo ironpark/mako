@@ -322,12 +322,27 @@ reload로 바로 뜬다. manifest의 권한은 사용자가 한 번 승인해야
       (`sidebar_width`, `details_width`)과 `layout_sizes`(노드 id별)에 둔다.
       문서 파서는 모르는 필드를 거절하므로, `variants.compact` 같은 필드를
       더하기 전에 버전·허용 정책을 정해야 한다.
-2. **문서 동기화와 MCP 툴** (전제: 동기화 Phase 2·3)
+2. **문서 동기화와 MCP 툴** (전제: 동기화 Phase 2·3. 구현 완료. 툴과 흐름은
+   `docs/agent-mcp.md`의 "The window's layout", 형식은 `docs/protocol.md`)
     - 문서를 `window_layouts`에 두고 노드 간 동기화한다. `blocks.list`,
       `layout.get` / `set` / `patch` / `undo`를 추가한다. 창 문서 JSON의 형식을
       `docs/protocol.md`에 적는다.
     - 완료 기준: 에이전트가 승인을 거쳐 레이아웃을 바꾸고, undo와 자동 복구가
       동작한다. 복구되는 변경이 다른 노드에 나타나지 않는다.
+    - 구현하며 정해진 것:
+        - MCP 서버의 기존 툴이 `verb_noun`이고 툴 이름에 점을 쓸 수 없어, 툴은
+          `list_blocks`, `get_layout`, `set_layout`, `patch_layout`,
+          `undo_layout`이다. 이 문서의 `blocks.list` / `layout.*`는 이들을
+          가리킨다.
+        - 보류 중인 변경은 데몬 메모리에 한 번에 하나만 둔다. 창이 하나도
+          보고 있지 않으면 승인이 필요한 변경은 바로 거절한다.
+        - "이 스페이스에서 허용"은 그 스페이스가 쓰는 문서에 대한 허용이다.
+          허용은 데몬 폴더의 `layout-allow.json`에 두고 동기화하지 않는다.
+        - 문서 버전 정책: 자기 버전의 문서는 엄격하게, 더 높은 버전은 모르는
+          필드를 버리고 모르는 노드를 "없는 블록"으로 읽는다. 노드는 자기
+          버전만 쓰고 더 높은 버전은 patch하지 않는다.
+        - 문서 형식은 `internal/layoutdoc`에 있고, 플러그인 블록은 그
+          `Catalog` 인터페이스로 들어온다(3단계).
 3. **플러그인 런타임**
     - 데몬의 qngg 런타임, manifest 로더, 권한, Host API, UI 트리·patch protocol,
       ggui 렌더러.

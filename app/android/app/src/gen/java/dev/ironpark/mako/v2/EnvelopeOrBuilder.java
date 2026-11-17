@@ -182,6 +182,17 @@ public interface EnvelopeOrBuilder extends
   dev.ironpark.mako.v2.Workspace getWorkspace();
 
   /**
+   * <code>.mako.v2.LayoutDecision layout_decision = 112 [json_name = "layoutDecision"];</code>
+   * @return Whether the layoutDecision field is set.
+   */
+  boolean hasLayoutDecision();
+  /**
+   * <code>.mako.v2.LayoutDecision layout_decision = 112 [json_name = "layoutDecision"];</code>
+   * @return The layoutDecision.
+   */
+  dev.ironpark.mako.v2.LayoutDecision getLayoutDecision();
+
+  /**
    * <pre>
    * Sessions.
    * </pre>

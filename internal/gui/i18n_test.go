@@ -12,6 +12,7 @@ import (
 
 	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/layoutdoc"
 )
 
 // Every string the window translates has a translation in each catalog:
@@ -56,6 +57,9 @@ func TestEveryStringIsTranslated(t *testing.T) {
 	}
 	for _, s := range shortcutList {
 		want[s.Action] = "shortcutList"
+	}
+	for _, b := range layoutdoc.Builtin() {
+		want[b.Title] = "layoutdoc.Builtin"
 	}
 	for _, labels := range []map[string]string{themeLabels, cursorLabels, daemonModeLabels, openViewLabels, usageCornerLabels, templateTypeLabels, backdropFitLabels, backdropPositionLabels,
 		agentGroupLabels, agentGroupCommands, builtinLabels, agentSortLabels, agentSortButtons, agentFilterLabels} {

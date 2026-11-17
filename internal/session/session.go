@@ -385,6 +385,23 @@ func (s *Session) BeginApproval(seq int64, a *protocol.Approval) (<-chan struct{
 	return s.approvalDone, true
 }
 
+// HoldApproval shows a, an approval the daemon asks of the user on the
+// agent's behalf rather than its hook, as a newer status of its own: the
+// agent waits on the user until FinishApproval with the seq it returns,
+// or a newer status, which closes done.
+func (s *Session) HoldApproval(a *protocol.Approval) (seq int64, done <-chan struct{}, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	seq = max(time.Now().UnixNano(), s.statusSeq+1, s.workEndedAt+1)
+	if !s.reportStatusLocked(protocol.AgentWaiting, seq) {
+		return 0, nil, false
+	}
+	s.approval = a
+	s.approvalDone = make(chan struct{})
+	s.changedLocked()
+	return seq, s.approvalDone, true
+}
+
 // FinishApproval cannot clear a newer request or overwrite a newer turn.
 func (s *Session) FinishApproval(seq int64, id string, status protocol.AgentStatus) {
 	s.mu.Lock()

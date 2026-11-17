@@ -49,6 +49,7 @@ type Daemon struct {
 	sessions      *registry
 	conversations conversations
 	approvals     approvals
+	layouts       windowLayouts // the window layouts' changes staged here, and what is node-local of them; see layouts.go
 	peers         *peerTable
 
 	// ln is the socket front-ends reach the daemon on, at socket; only
@@ -178,6 +179,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return err
 	}
 	d.workspace.load(dir, d.cfg.NodeID)
+	d.layouts.load(dir)
 	d.projects.load(dir)
 	d.syncWorkspaceProjects()
 	defer d.sessions.closeAll()
@@ -290,6 +292,10 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeGetWorkspace, protocol.TypeWorkspace:
 		return d.handleWorkspace(ctx, stream, env, fromPeer)
+	case protocol.TypeLayoutDecision:
+		return serve(d, ctx, stream, env, protocol.TypeWorkspace, func(*protocol.LayoutDecision) (*protocol.Workspace, error) {
+			return d.handleLayoutDecision(ctx, env, fromPeer)
+		})
 
 	case protocol.TypeSetProjects:
 		return d.handleSetProjects(ctx, stream, env)
@@ -392,7 +398,7 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleReadProjectAgents(ctx, stream, env)
 
 	case protocol.TypeAnswerApproval:
-		return d.handleAnswerApproval(ctx, stream, env)
+		return d.handleAnswerApproval(ctx, stream, env, fromPeer)
 
 	case protocol.TypeSend:
 		return d.handleSend(ctx, stream, env)

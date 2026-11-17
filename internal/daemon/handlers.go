@@ -57,11 +57,22 @@ func (d *Daemon) handleCloseSession(ctx context.Context, stream *transport.Strea
 	})
 }
 
-func (d *Daemon) handleAnswerApproval(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+func (d *Daemon) handleAnswerApproval(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
 	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.AnswerApproval) (*protocol.SessionInfo, error) {
 		s, ok := d.sessions.get(r.GetSessionId())
 		if !ok {
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
+		}
+		// A change of the window layout is shown, and so answered, on
+		// its own node alone.
+		if d.layouts.owns(r.GetApprovalId()) {
+			if fromPeer {
+				return nil, fmt.Errorf("a layout change is answered on its own node")
+			}
+			if err := d.layouts.answer(r.GetApprovalId(), layoutAnswer{decision: r.GetDecision(), option: r.GetOption(), message: r.GetMessage()}); err != nil {
+				return nil, err
+			}
+			return s.Info(), nil
 		}
 		if err := d.approvals.answer(r.GetSessionId(), r); err != nil {
 			return nil, err

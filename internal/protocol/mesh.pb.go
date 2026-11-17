@@ -625,7 +625,11 @@ type Workspace struct {
 	// digest is a hash of state, for a peer to tell whether the state it
 	// holds differs without being sent it; a hint only, so it may differ
 	// between builds that serialize differently.
-	Digest        []byte `protobuf:"bytes,5,opt,name=digest,proto3" json:"digest,omitempty"`
+	Digest []byte `protobuf:"bytes,5,opt,name=digest,proto3" json:"digest,omitempty"`
+	// stage is a change of a window layout an agent asked for, held on this
+	// node alone while it waits for the user (revision 24): to the daemon's
+	// own front-ends only, never in state, never to a peer.
+	Stage         *LayoutStage `protobuf:"bytes,6,opt,name=stage,proto3" json:"stage,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -695,6 +699,192 @@ func (x *Workspace) GetDigest() []byte {
 	return nil
 }
 
+func (x *Workspace) GetStage() *LayoutStage {
+	if x != nil {
+		return x.Stage
+	}
+	return nil
+}
+
+// LayoutStage is a change of a window layout document an agent asked for,
+// which the node's windows show in place of the document while it waits:
+// for the user to allow it (phase "approve"), or, allowed and applied
+// here, to keep it (phase "keep"), which it reverts by itself at
+// deadline. Only once kept is it written into the workspace, and so sent
+// to the peers.
+type LayoutStage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                // also the approval's ID on the agent's session
+	Document      string                 `protobuf:"bytes,2,opt,name=document,proto3" json:"document,omitempty"`                    // the document's name
+	Doc           []byte                 `protobuf:"bytes,3,opt,name=doc,proto3" json:"doc,omitempty"`                              // the document proposed
+	Phase         string                 `protobuf:"bytes,4,opt,name=phase,proto3" json:"phase,omitempty"`                          // approve, keep
+	SessionId     string                 `protobuf:"bytes,5,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"` // the agent's session
+	Agent         string                 `protobuf:"bytes,6,opt,name=agent,proto3" json:"agent,omitempty"`                          // its name, as the window shows it
+	Tool          string                 `protobuf:"bytes,7,opt,name=tool,proto3" json:"tool,omitempty"`                            // set_layout, patch_layout or undo_layout
+	Summary       string                 `protobuf:"bytes,8,opt,name=summary,proto3" json:"summary,omitempty"`                      // what it changes, in a line
+	Deadline      int64                  `protobuf:"varint,9,opt,name=deadline,proto3" json:"deadline,omitempty"`                   // keep: when it reverts, in Unix ms
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LayoutStage) Reset() {
+	*x = LayoutStage{}
+	mi := &file_mako_v2_mesh_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LayoutStage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LayoutStage) ProtoMessage() {}
+
+func (x *LayoutStage) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_mesh_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LayoutStage.ProtoReflect.Descriptor instead.
+func (*LayoutStage) Descriptor() ([]byte, []int) {
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *LayoutStage) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *LayoutStage) GetDocument() string {
+	if x != nil {
+		return x.Document
+	}
+	return ""
+}
+
+func (x *LayoutStage) GetDoc() []byte {
+	if x != nil {
+		return x.Doc
+	}
+	return nil
+}
+
+func (x *LayoutStage) GetPhase() string {
+	if x != nil {
+		return x.Phase
+	}
+	return ""
+}
+
+func (x *LayoutStage) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *LayoutStage) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *LayoutStage) GetTool() string {
+	if x != nil {
+		return x.Tool
+	}
+	return ""
+}
+
+func (x *LayoutStage) GetSummary() string {
+	if x != nil {
+		return x.Summary
+	}
+	return ""
+}
+
+func (x *LayoutStage) GetDeadline() int64 {
+	if x != nil {
+		return x.Deadline
+	}
+	return 0
+}
+
+// LayoutDecision answers a LayoutStage from a front-end of the node it is
+// held on: keep or revert one in phase keep, or forget what the user has
+// allowed agents to change without asking. Allowing or denying one in
+// phase approve is an AnswerApproval of its id, as any approval is. The
+// reply is the Workspace after.
+type LayoutDecision struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StageId       string                 `protobuf:"bytes,1,opt,name=stage_id,json=stageId,proto3" json:"stage_id,omitempty"`
+	Decision      string                 `protobuf:"bytes,2,opt,name=decision,proto3" json:"decision,omitempty"`           // keep, revert, forget
+	NodeId        string                 `protobuf:"bytes,3,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // "" for the daemon's own; another node refuses it
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LayoutDecision) Reset() {
+	*x = LayoutDecision{}
+	mi := &file_mako_v2_mesh_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LayoutDecision) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LayoutDecision) ProtoMessage() {}
+
+func (x *LayoutDecision) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_mesh_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LayoutDecision.ProtoReflect.Descriptor instead.
+func (*LayoutDecision) Descriptor() ([]byte, []int) {
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *LayoutDecision) GetStageId() string {
+	if x != nil {
+		return x.StageId
+	}
+	return ""
+}
+
+func (x *LayoutDecision) GetDecision() string {
+	if x != nil {
+		return x.Decision
+	}
+	return ""
+}
+
+func (x *LayoutDecision) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
 // GetWorkspace asks the daemon for the workspace it holds; it answers with
 // a Workspace, empty when it holds none. A front-end sends a Workspace to
 // give the daemon its own, and hears back the one the daemon holds after.
@@ -709,7 +899,7 @@ type GetWorkspace struct {
 
 func (x *GetWorkspace) Reset() {
 	*x = GetWorkspace{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[8]
+	mi := &file_mako_v2_mesh_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -721,7 +911,7 @@ func (x *GetWorkspace) String() string {
 func (*GetWorkspace) ProtoMessage() {}
 
 func (x *GetWorkspace) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[8]
+	mi := &file_mako_v2_mesh_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -734,7 +924,7 @@ func (x *GetWorkspace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkspace.ProtoReflect.Descriptor instead.
 func (*GetWorkspace) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{8}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GetWorkspace) GetNodeId() string {
@@ -750,14 +940,18 @@ type Watch struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// approvals watches for approvals too, for as long as the stream stays
 	// open, as a listing with approvals does for a while.
-	Approvals     bool `protobuf:"varint,1,opt,name=approvals,proto3" json:"approvals,omitempty"`
+	Approvals bool `protobuf:"varint,1,opt,name=approvals,proto3" json:"approvals,omitempty"`
+	// layouts says the front-end shows the window layout changes agents ask
+	// for (Workspace.stage) while the stream stays open: a window the user
+	// can allow and keep them in (revision 24).
+	Layouts       bool `protobuf:"varint,2,opt,name=layouts,proto3" json:"layouts,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Watch) Reset() {
 	*x = Watch{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[9]
+	mi := &file_mako_v2_mesh_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -769,7 +963,7 @@ func (x *Watch) String() string {
 func (*Watch) ProtoMessage() {}
 
 func (x *Watch) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[9]
+	mi := &file_mako_v2_mesh_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -782,12 +976,19 @@ func (x *Watch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Watch.ProtoReflect.Descriptor instead.
 func (*Watch) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{9}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Watch) GetApprovals() bool {
 	if x != nil {
 		return x.Approvals
+	}
+	return false
+}
+
+func (x *Watch) GetLayouts() bool {
+	if x != nil {
+		return x.Layouts
 	}
 	return false
 }
@@ -806,7 +1007,7 @@ type Changed struct {
 
 func (x *Changed) Reset() {
 	*x = Changed{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[10]
+	mi := &file_mako_v2_mesh_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -818,7 +1019,7 @@ func (x *Changed) String() string {
 func (*Changed) ProtoMessage() {}
 
 func (x *Changed) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[10]
+	mi := &file_mako_v2_mesh_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -831,7 +1032,7 @@ func (x *Changed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Changed.ProtoReflect.Descriptor instead.
 func (*Changed) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{10}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *Changed) GetNodes() bool {
@@ -890,7 +1091,7 @@ type Access struct {
 
 func (x *Access) Reset() {
 	*x = Access{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[11]
+	mi := &file_mako_v2_mesh_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -902,7 +1103,7 @@ func (x *Access) String() string {
 func (*Access) ProtoMessage() {}
 
 func (x *Access) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[11]
+	mi := &file_mako_v2_mesh_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -915,7 +1116,7 @@ func (x *Access) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Access.ProtoReflect.Descriptor instead.
 func (*Access) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{11}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Access) GetOp() string {
@@ -972,7 +1173,7 @@ type AccessInfo struct {
 
 func (x *AccessInfo) Reset() {
 	*x = AccessInfo{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[12]
+	mi := &file_mako_v2_mesh_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -984,7 +1185,7 @@ func (x *AccessInfo) String() string {
 func (*AccessInfo) ProtoMessage() {}
 
 func (x *AccessInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[12]
+	mi := &file_mako_v2_mesh_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -997,7 +1198,7 @@ func (x *AccessInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessInfo.ProtoReflect.Descriptor instead.
 func (*AccessInfo) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{12}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *AccessInfo) GetKey() *AccessKey {
@@ -1055,7 +1256,7 @@ type Pairing struct {
 
 func (x *Pairing) Reset() {
 	*x = Pairing{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[13]
+	mi := &file_mako_v2_mesh_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1067,7 +1268,7 @@ func (x *Pairing) String() string {
 func (*Pairing) ProtoMessage() {}
 
 func (x *Pairing) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[13]
+	mi := &file_mako_v2_mesh_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1080,7 +1281,7 @@ func (x *Pairing) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pairing.ProtoReflect.Descriptor instead.
 func (*Pairing) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{13}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Pairing) GetLink() string {
@@ -1114,7 +1315,7 @@ type AccessKey struct {
 
 func (x *AccessKey) Reset() {
 	*x = AccessKey{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[14]
+	mi := &file_mako_v2_mesh_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1126,7 +1327,7 @@ func (x *AccessKey) String() string {
 func (*AccessKey) ProtoMessage() {}
 
 func (x *AccessKey) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[14]
+	mi := &file_mako_v2_mesh_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1139,7 +1340,7 @@ func (x *AccessKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessKey.ProtoReflect.Descriptor instead.
 func (*AccessKey) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{14}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *AccessKey) GetFingerprint() string {
@@ -1191,7 +1392,7 @@ type AccessRequest struct {
 
 func (x *AccessRequest) Reset() {
 	*x = AccessRequest{}
-	mi := &file_mako_v2_mesh_proto_msgTypes[15]
+	mi := &file_mako_v2_mesh_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1203,7 +1404,7 @@ func (x *AccessRequest) String() string {
 func (*AccessRequest) ProtoMessage() {}
 
 func (x *AccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_mesh_proto_msgTypes[15]
+	mi := &file_mako_v2_mesh_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1216,7 +1417,7 @@ func (x *AccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessRequest.ProtoReflect.Descriptor instead.
 func (*AccessRequest) Descriptor() ([]byte, []int) {
-	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{15}
+	return file_mako_v2_mesh_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *AccessRequest) GetNode() *Node {
@@ -1306,17 +1507,34 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\bsessions\x18\x02 \x03(\v2\x14.mako.v2.SessionInfoR\bsessions\x12-\n" +
 	"\x12watching_approvals\x18\x03 \x01(\bR\x11watchingApprovals\x12#\n" +
 	"\x05peers\x18\x04 \x03(\v2\r.mako.v2.NodeR\x05peers\x120\n" +
-	"\tworkspace\x18\x05 \x01(\v2\x12.mako.v2.WorkspaceR\tworkspace\"\x97\x01\n" +
+	"\tworkspace\x18\x05 \x01(\v2\x12.mako.v2.WorkspaceR\tworkspace\"\xc3\x01\n" +
 	"\tWorkspace\x12\x10\n" +
 	"\x03doc\x18\x01 \x01(\fR\x03doc\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x17\n" +
 	"\anode_id\x18\x03 \x01(\tR\x06nodeId\x12-\n" +
 	"\x05state\x18\x04 \x01(\v2\x17.mako.v2.WorkspaceStateR\x05state\x12\x16\n" +
-	"\x06digest\x18\x05 \x01(\fR\x06digest\"'\n" +
+	"\x06digest\x18\x05 \x01(\fR\x06digest\x12*\n" +
+	"\x05stage\x18\x06 \x01(\v2\x14.mako.v2.LayoutStageR\x05stage\"\xe0\x01\n" +
+	"\vLayoutStage\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
+	"\bdocument\x18\x02 \x01(\tR\bdocument\x12\x10\n" +
+	"\x03doc\x18\x03 \x01(\fR\x03doc\x12\x14\n" +
+	"\x05phase\x18\x04 \x01(\tR\x05phase\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x05 \x01(\tR\tsessionId\x12\x14\n" +
+	"\x05agent\x18\x06 \x01(\tR\x05agent\x12\x12\n" +
+	"\x04tool\x18\a \x01(\tR\x04tool\x12\x18\n" +
+	"\asummary\x18\b \x01(\tR\asummary\x12\x1a\n" +
+	"\bdeadline\x18\t \x01(\x03R\bdeadline\"`\n" +
+	"\x0eLayoutDecision\x12\x19\n" +
+	"\bstage_id\x18\x01 \x01(\tR\astageId\x12\x1a\n" +
+	"\bdecision\x18\x02 \x01(\tR\bdecision\x12\x17\n" +
+	"\anode_id\x18\x03 \x01(\tR\x06nodeId\"'\n" +
 	"\fGetWorkspace\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"%\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"?\n" +
 	"\x05Watch\x12\x1c\n" +
-	"\tapprovals\x18\x01 \x01(\bR\tapprovals\"\x8b\x01\n" +
+	"\tapprovals\x18\x01 \x01(\bR\tapprovals\x12\x18\n" +
+	"\alayouts\x18\x02 \x01(\bR\alayouts\"\x8b\x01\n" +
 	"\aChanged\x12\x14\n" +
 	"\x05nodes\x18\x01 \x01(\bR\x05nodes\x12\x1a\n" +
 	"\bsessions\x18\x02 \x01(\bR\bsessions\x12\x16\n" +
@@ -1365,7 +1583,7 @@ func file_mako_v2_mesh_proto_rawDescGZIP() []byte {
 	return file_mako_v2_mesh_proto_rawDescData
 }
 
-var file_mako_v2_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_mako_v2_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_mako_v2_mesh_proto_goTypes = []any{
 	(*Hello)(nil),                 // 0: mako.v2.Hello
 	(*Welcome)(nil),               // 1: mako.v2.Welcome
@@ -1375,44 +1593,47 @@ var file_mako_v2_mesh_proto_goTypes = []any{
 	(*Nodes)(nil),                 // 5: mako.v2.Nodes
 	(*NodeState)(nil),             // 6: mako.v2.NodeState
 	(*Workspace)(nil),             // 7: mako.v2.Workspace
-	(*GetWorkspace)(nil),          // 8: mako.v2.GetWorkspace
-	(*Watch)(nil),                 // 9: mako.v2.Watch
-	(*Changed)(nil),               // 10: mako.v2.Changed
-	(*Access)(nil),                // 11: mako.v2.Access
-	(*AccessInfo)(nil),            // 12: mako.v2.AccessInfo
-	(*Pairing)(nil),               // 13: mako.v2.Pairing
-	(*AccessKey)(nil),             // 14: mako.v2.AccessKey
-	(*AccessRequest)(nil),         // 15: mako.v2.AccessRequest
-	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
-	(*SessionInfo)(nil),           // 17: mako.v2.SessionInfo
-	(*WorkspaceState)(nil),        // 18: mako.v2.WorkspaceState
+	(*LayoutStage)(nil),           // 8: mako.v2.LayoutStage
+	(*LayoutDecision)(nil),        // 9: mako.v2.LayoutDecision
+	(*GetWorkspace)(nil),          // 10: mako.v2.GetWorkspace
+	(*Watch)(nil),                 // 11: mako.v2.Watch
+	(*Changed)(nil),               // 12: mako.v2.Changed
+	(*Access)(nil),                // 13: mako.v2.Access
+	(*AccessInfo)(nil),            // 14: mako.v2.AccessInfo
+	(*Pairing)(nil),               // 15: mako.v2.Pairing
+	(*AccessKey)(nil),             // 16: mako.v2.AccessKey
+	(*AccessRequest)(nil),         // 17: mako.v2.AccessRequest
+	(*timestamppb.Timestamp)(nil), // 18: google.protobuf.Timestamp
+	(*SessionInfo)(nil),           // 19: mako.v2.SessionInfo
+	(*WorkspaceState)(nil),        // 20: mako.v2.WorkspaceState
 }
 var file_mako_v2_mesh_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Welcome.node:type_name -> mako.v2.Node
-	16, // 1: mako.v2.Node.last_seen:type_name -> google.protobuf.Timestamp
+	18, // 1: mako.v2.Node.last_seen:type_name -> google.protobuf.Timestamp
 	3,  // 2: mako.v2.Node.agents:type_name -> mako.v2.AgentInfo
-	16, // 3: mako.v2.Node.relink_at:type_name -> google.protobuf.Timestamp
+	18, // 3: mako.v2.Node.relink_at:type_name -> google.protobuf.Timestamp
 	2,  // 4: mako.v2.Nodes.nodes:type_name -> mako.v2.Node
 	2,  // 5: mako.v2.NodeState.node:type_name -> mako.v2.Node
-	17, // 6: mako.v2.NodeState.sessions:type_name -> mako.v2.SessionInfo
+	19, // 6: mako.v2.NodeState.sessions:type_name -> mako.v2.SessionInfo
 	2,  // 7: mako.v2.NodeState.peers:type_name -> mako.v2.Node
 	7,  // 8: mako.v2.NodeState.workspace:type_name -> mako.v2.Workspace
-	18, // 9: mako.v2.Workspace.state:type_name -> mako.v2.WorkspaceState
-	14, // 10: mako.v2.AccessInfo.key:type_name -> mako.v2.AccessKey
-	14, // 11: mako.v2.AccessInfo.owner:type_name -> mako.v2.AccessKey
-	15, // 12: mako.v2.AccessInfo.requests:type_name -> mako.v2.AccessRequest
-	14, // 13: mako.v2.AccessInfo.keys:type_name -> mako.v2.AccessKey
-	13, // 14: mako.v2.AccessInfo.pairing:type_name -> mako.v2.Pairing
-	16, // 15: mako.v2.Pairing.expires:type_name -> google.protobuf.Timestamp
-	2,  // 16: mako.v2.AccessRequest.node:type_name -> mako.v2.Node
-	14, // 17: mako.v2.AccessRequest.key:type_name -> mako.v2.AccessKey
-	14, // 18: mako.v2.AccessRequest.owner:type_name -> mako.v2.AccessKey
-	16, // 19: mako.v2.AccessRequest.at:type_name -> google.protobuf.Timestamp
-	20, // [20:20] is the sub-list for method output_type
-	20, // [20:20] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	20, // 9: mako.v2.Workspace.state:type_name -> mako.v2.WorkspaceState
+	8,  // 10: mako.v2.Workspace.stage:type_name -> mako.v2.LayoutStage
+	16, // 11: mako.v2.AccessInfo.key:type_name -> mako.v2.AccessKey
+	16, // 12: mako.v2.AccessInfo.owner:type_name -> mako.v2.AccessKey
+	17, // 13: mako.v2.AccessInfo.requests:type_name -> mako.v2.AccessRequest
+	16, // 14: mako.v2.AccessInfo.keys:type_name -> mako.v2.AccessKey
+	15, // 15: mako.v2.AccessInfo.pairing:type_name -> mako.v2.Pairing
+	18, // 16: mako.v2.Pairing.expires:type_name -> google.protobuf.Timestamp
+	2,  // 17: mako.v2.AccessRequest.node:type_name -> mako.v2.Node
+	16, // 18: mako.v2.AccessRequest.key:type_name -> mako.v2.AccessKey
+	16, // 19: mako.v2.AccessRequest.owner:type_name -> mako.v2.AccessKey
+	18, // 20: mako.v2.AccessRequest.at:type_name -> google.protobuf.Timestamp
+	21, // [21:21] is the sub-list for method output_type
+	21, // [21:21] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_mesh_proto_init() }
@@ -1428,7 +1649,7 @@ func file_mako_v2_mesh_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_mesh_proto_rawDesc), len(file_mako_v2_mesh_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

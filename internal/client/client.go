@@ -360,7 +360,19 @@ func WindowSize() (cols, rows uint16) {
 // daemon sends, the first at once, until ctx ends or the stream breaks,
 // whose error Watch returns. A daemon too old to watch fails at once.
 func (c *Client) Watch(ctx context.Context, fn func(*protocol.Changed)) error {
-	return follow(ctx, c, protocol.TypeWatch, &protocol.Watch{}, fn)
+	return c.WatchAs(ctx, &protocol.Watch{}, fn)
+}
+
+// WatchAs is Watch, saying what of the daemon's the front-end shows.
+func (c *Client) WatchAs(ctx context.Context, req *protocol.Watch, fn func(*protocol.Changed)) error {
+	return follow(ctx, c, protocol.TypeWatch, req, fn)
+}
+
+// DecideLayout keeps or reverts a window layout change staged on the
+// daemon, or forgets what the user allowed, and returns the workspace
+// after.
+func (c *Client) DecideLayout(ctx context.Context, req *protocol.LayoutDecision) (*protocol.Workspace, error) {
+	return request[*protocol.Workspace](ctx, c, protocol.TypeLayoutDecision, req)
 }
 
 // WatchChat follows a session's conversation, calling fn with each

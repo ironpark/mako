@@ -2,20 +2,20 @@ package gui
 
 import (
 	"fmt"
-	"regexp"
-	"slices"
-	"sort"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/layoutdoc"
 )
 
 // A block is a piece of the window a layout document places by name
-// (winlayout.go). The window's own are registered here as mako.<name>;
-// plugins' will be plugin:<id>/<block> and agents' agent:<session>/<id>,
-// in the same registry, so a document names them all alike.
+// (internal/layoutdoc). The window's own are registered here as
+// mako.<name>, their names, titles and props as layoutdoc declares them,
+// with what each draws; plugins' will be plugin:<id>/<block> and agents'
+// agent:<session>/<id>, in the same registry, so a document names them
+// all alike.
 
 // blockDef is a registered block.
 type blockDef struct {
@@ -23,7 +23,7 @@ type blockDef struct {
 	Title string // in English, drawn through T
 	// Props is the JSON Schema of the block's props: an object schema whose
 	// properties each give a type. A document's props for the block are
-	// checked against it (checkProps).
+	// checked against it (layoutdoc.CheckProps).
 	Props map[string]any
 	// Label, when set, is the block's name on a stack's tab, read as it
 	// changes; otherwise the tab reads T(Title).
@@ -50,7 +50,7 @@ func newBlockRegistry() *blockRegistry { return &blockRegistry{defs: map[string]
 
 // register adds d; a name of no namespace, or one taken, is refused.
 func (r *blockRegistry) register(d blockDef) error {
-	if err := checkBlockName(d.Name); err != nil {
+	if err := layoutdoc.CheckBlockName(d.Name); err != nil {
 		return err
 	}
 	if _, ok := r.defs[d.Name]; ok {
@@ -60,7 +60,7 @@ func (r *blockRegistry) register(d blockDef) error {
 		return fmt.Errorf("block %q draws nothing", d.Name)
 	}
 	if d.Props == nil {
-		d.Props = noProps()
+		d.Props = layoutdoc.NoProps()
 	}
 	if t, _ := d.Props["type"].(string); t != "object" {
 		return fmt.Errorf("block %q: props schema is not an object schema", d.Name)
@@ -68,6 +68,15 @@ func (r *blockRegistry) register(d blockDef) error {
 	r.defs[d.Name] = &d
 	r.names = append(r.names, d.Name)
 	return nil
+}
+
+// BlockProps makes the registry a layoutdoc.Catalog.
+func (r *blockRegistry) BlockProps(name string) (map[string]any, bool) {
+	d, ok := r.defs[name]
+	if !ok {
+		return nil, false
+	}
+	return d.Props, true
 }
 
 func (r *blockRegistry) lookup(name string) (*blockDef, bool) {
@@ -83,79 +92,6 @@ func (r *blockRegistry) list() []*blockDef {
 		out[i] = r.defs[n]
 	}
 	return out
-}
-
-// Block names: the window's, a plugin's and an agent's.
-var (
-	makoBlockName   = regexp.MustCompile(`^mako\.[a-z][a-z0-9-]*$`)
-	pluginBlockName = regexp.MustCompile(`^plugin:[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$`)
-	agentBlockName  = regexp.MustCompile(`^agent:[A-Za-z0-9]+/[A-Za-z0-9][A-Za-z0-9._-]*$`)
-)
-
-// checkBlockName says whether name is in one of the three namespaces.
-func checkBlockName(name string) error {
-	if makoBlockName.MatchString(name) || pluginBlockName.MatchString(name) || agentBlockName.MatchString(name) {
-		return nil
-	}
-	return fmt.Errorf("block name %q is not mako.<name>, plugin:<id>/<block> or agent:<session>/<id>", name)
-}
-
-// noProps is the schema of a block that takes no props.
-func noProps() map[string]any {
-	return map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
-}
-
-// checkProps checks props against schema, an object schema: each prop's
-// JSON type against its property's, the required ones present, and no
-// others unless additionalProperties allows them. It reads no more of JSON
-// Schema than that.
-func checkProps(schema, props map[string]any) error {
-	declared, _ := schema["properties"].(map[string]any)
-	extra, _ := schema["additionalProperties"].(bool)
-	keys := make([]string, 0, len(props))
-	for k := range props {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		p, ok := declared[k].(map[string]any)
-		if !ok {
-			if extra {
-				continue
-			}
-			return fmt.Errorf("prop %q is not one the block takes", k)
-		}
-		if t, _ := p["type"].(string); t != "" && !jsonTypeIs(props[k], t) {
-			return fmt.Errorf("prop %q is not of type %s", k, t)
-		}
-	}
-	required, _ := schema["required"].([]any)
-	for _, r := range required {
-		if k, _ := r.(string); k != "" && !slices.Contains(keys, k) {
-			return fmt.Errorf("prop %q is required", k)
-		}
-	}
-	return nil
-}
-
-// jsonTypeIs says whether v, as encoding/json decodes into any, is of the
-// JSON Schema type t.
-func jsonTypeIs(v any, t string) bool {
-	switch v := v.(type) {
-	case string:
-		return t == "string"
-	case float64:
-		return t == "number" || t == "integer" && v == float64(int64(v))
-	case bool:
-		return t == "boolean"
-	case map[string]any:
-		return t == "object"
-	case []any:
-		return t == "array"
-	case nil:
-		return t == "null"
-	}
-	return false
 }
 
 // edgeBox is the face of a resize edge around line: panelEdgeWidth across

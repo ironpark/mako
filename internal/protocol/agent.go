@@ -29,7 +29,12 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 23
+const Revision = 24
+
+// RevisionWindowLayouts adds the window layout documents' changes an agent
+// asks for, held on the node until the user allows and keeps them:
+// Workspace.stage, LayoutDecision, and approvals of kind layout.
+const RevisionWindowLayouts = 24
 
 // RevisionWorkspaceCRDT adds Workspace.state and digest: the workspace as
 // a CRDT the daemon merges field by field, a front-end giving it deltas
@@ -190,6 +195,7 @@ const (
 	ToolTask      = "task"      // starts a subagent
 	ToolQuestion  = "question"  // asks the user
 	ToolExitPlan  = "exit_plan" // puts a plan to the user, as Claude's ExitPlanMode
+	ToolLayout    = "layout"    // changes a window layout document; see LayoutStage
 	ToolCommand   = "command"   // what a slash command the user typed printed
 	ToolSummary   = "summary"   // the summary a compaction leaves
 )
@@ -294,3 +300,15 @@ func (n *Node) Platform() string {
 	}
 	return strings.TrimSpace(os + " " + arch)
 }
+
+// A LayoutStage's phases, a LayoutDecision's decisions, and the options a
+// layout approval offers besides allowing it once: for the document the
+// space uses, or for every document, from then on on this node.
+const (
+	LayoutApprove     = "approve"
+	LayoutKeep        = "keep"
+	LayoutRevert      = "revert"
+	LayoutForget      = "forget"
+	LayoutAllowSpace  = "space"
+	LayoutAllowAlways = "always"
+)

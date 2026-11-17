@@ -26,6 +26,40 @@ initialization instructions identify your session and parent. A spawned
 task's initial prompt also names its parent and asks it to report results
 using `send_message`.
 
+## The window's layout
+
+The mako window is laid out by a window layout document, a JSON tree whose
+format is in [protocol.md](protocol.md#layout-documents), shared by the
+user's nodes. Five more tools read and change it. Their names follow the
+server's others, a verb and its object, rather than the `layout.get` of
+[plugins-plan.md](plugins-plan.md): an agent's tool names take no dots.
+
+| Tool | Arguments | Result |
+| --- | --- | --- |
+| `list_blocks` | `{}` | The `blocks` a document can place: each one's `name`, `title`, and `props` as a JSON Schema. |
+| `get_layout` | Optional `document` (`default`) | The `document`'s `doc`, its `revision` (`""` while there is none and the window draws its built-in default, then `builtin: true`), the `documents` there are, and the `spaces` with the `document` each uses. |
+| `set_layout` | `doc`, `if_rev`, optional `document` | Replaces the document whole. Refused when `if_rev` is not its revision, or the document is not one the window can draw. Returns the `revision` after. |
+| `patch_layout` | `ops`, optional `document`, `if_rev` | Applies changes by node id, in order: `{"op":"insert","parent","index","node"}`, `{"op":"remove","id"}`, `{"op":"move","id","parent","index"}`, `{"op":"resize","id","size"}` or `"grow"`, `{"op":"select","id","active"}` or `"block"`. The document after is checked whole; one the window cannot draw changes nothing. Returns the `revision` after. |
+| `undo_layout` | Optional `document` | Goes back to the version before the last change of the document made on this node, by an agent or the user, as a new change. The node keeps 20 versions of each, which it shares with no other. |
+
+A change is the user's to have. While the user has not allowed such
+changes, `set_layout`, `patch_layout` and `undo_layout` wait while the
+window shows the change and asks: allow it once, for the document the
+space uses (**Allow in this space**), or for every one (**Always allow**),
+or deny it, which the tool returns as an error. The approval shows on
+your session as any does. What the user allows is this node's, kept until
+**Ask before agents change the window layout**. A document set whole is
+then shown, and kept or reverted by the user; without an answer it reverts
+after 10 seconds, and the tool returns an error. Only a change allowed and,
+for `set_layout`, kept is written into the shared workspace, so another
+node never sees one reverted.
+
+A change the user is to see is refused at once when no window of the
+node is open; one the user allowed before needs none, but a whole
+document still waits to be kept. One change waits at a time. A change
+made of a document that another changed meanwhile is refused when it
+would be written: read it again.
+
 ## Choose a profile by its description
 
 In **Settings ▸ Agents**, add a profile and describe its specialties in

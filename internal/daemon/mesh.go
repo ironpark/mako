@@ -607,6 +607,9 @@ func (d *Daemon) handleWatch(ctx context.Context, stream *transport.Stream, env 
 	if req.GetApprovals() && !fromPeer {
 		defer d.approvals.hold()()
 	}
+	if req.GetLayouts() && !fromPeer {
+		defer d.layouts.hold()()
+	}
 	feed, stop := d.changes.watch()
 	defer stop()
 	// The first says the daemon watches, and that everything is new to

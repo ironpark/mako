@@ -28,6 +28,9 @@ type document struct {
 	// ID alone as before spaces kept them by project.
 	Layouts  map[string]*docPane `json:"layouts,omitempty"`
 	TabNodes map[string]string   `json:"tab_nodes,omitempty"`
+	// WindowLayouts are the window layout documents, by name, as their
+	// JSON (internal/layoutdoc); a space's Layout names the one it uses.
+	WindowLayouts map[string]json.RawMessage `json:"window_layouts,omitempty"`
 }
 
 type docSpace struct {
@@ -37,6 +40,7 @@ type docSpace struct {
 	Owners   []string `json:"owners,omitempty"`
 	Projects []string `json:"projects,omitempty"`
 	Hidden   []string `json:"hidden,omitempty"`
+	Layout   string   `json:"layout,omitempty"`
 }
 
 type docProject struct {
@@ -127,6 +131,7 @@ func View(st *protocol.WorkspaceState) []byte {
 			Owners:   Members(sp.GetOwners()),
 			Projects: SpaceProjects(st, sp),
 			Hidden:   SpaceHidden(st, sp),
+			Layout:   sp.GetLayout().GetValue(),
 		})
 	}
 	for _, p := range Projects(st) {
@@ -176,6 +181,16 @@ func View(st *protocol.WorkspaceState) []byte {
 			if _, ok := d.TabNodes[tab]; !ok {
 				d.TabNodes[tab] = node
 			}
+		}
+	}
+	// A document that is not JSON, which no front-end writes, is left out
+	// rather than spoil the whole.
+	for name := range st.GetWindowLayouts() {
+		if l := WindowLayout(st, name); l != nil && json.Valid(l.GetDoc()) {
+			if d.WindowLayouts == nil {
+				d.WindowLayouts = map[string]json.RawMessage{}
+			}
+			d.WindowLayouts[name] = l.GetDoc()
 		}
 	}
 	body, _ := json.Marshal(d)

@@ -20,4 +20,16 @@ public interface WatchOrBuilder extends
    * @return The approvals.
    */
   boolean getApprovals();
+
+  /**
+   * <pre>
+   * layouts says the front-end shows the window layout changes agents ask
+   * for (Workspace.stage) while the stream stays open: a window the user
+   * can allow and keep them in (revision 24).
+   * </pre>
+   *
+   * <code>bool layouts = 2 [json_name = "layouts"];</code>
+   * @return The layouts.
+   */
+  boolean getLayouts();
 }

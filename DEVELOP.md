@@ -283,9 +283,11 @@ with `MAKO_SHELL_ENV=1` set for a profile that wants to tell, so it finds
 the agents on the user's `PATH`.
 
 Its settings are kept in `gui.json` beside `config.json`. The window is
-drawn from a layout document (`internal/gui/winlayout.go`), its default
-built in code or the user's in `layout.json` beside them, whose leaves are
-blocks of a registry (`internal/gui/blocks.go`); the format is in
+drawn from a window layout document (`internal/layoutdoc`), the
+workspace's, shared by the user's nodes, or its default built in code,
+whose leaves are blocks of a registry (`internal/gui/blocks.go`); agents
+change one through the MCP tools, as the user allows
+(`internal/daemon/layoutchange.go`). The format is in
 [Layout documents](docs/protocol.md#layout-documents). The user's
 themes are in `themes/` beside them, a JSON file each (`internal/gui/themefiles.go`):
 a base, light or dark, and the colours that differ, by name. Settings ▸

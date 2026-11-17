@@ -7,13 +7,14 @@ import (
 	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/layoutdoc"
 )
 
 // windowView draws the window's layout document, again from the top when
 // it changes. The default document draws the window as it was before
-// there was one: see winlayout.go.
+// there was one: see internal/layoutdoc.
 func windowView(m *model) ggui.Widget {
-	return ggui.Key(m.WinDoc, func(d *windowDoc) ggui.Widget {
+	return ggui.Key(m.WinDoc, func(d *layoutdoc.Doc) ggui.Widget {
 		v := &layoutDraw{m: m}
 		return v.node(d.Root, true)
 	})
@@ -22,20 +23,20 @@ func windowView(m *model) ggui.Widget {
 // layoutDraw draws one document.
 type layoutDraw struct{ m *model }
 
-func (v *layoutDraw) node(n *winNode, root bool) ggui.Widget {
+func (v *layoutDraw) node(n *layoutdoc.Node, root bool) ggui.Widget {
 	switch n.Kind {
-	case nodeRow, nodeColumn:
+	case layoutdoc.KindRow, layoutdoc.KindColumn:
 		return v.line(n, root)
-	case nodeStack:
+	case layoutdoc.KindStack:
 		return v.stack(n)
-	case nodePanes:
+	case layoutdoc.KindPanes:
 		return layoutView(v.m)
 	}
 	return v.block(n).Body
 }
 
 // block draws a block, or what stands for one the registry does not hold.
-func (v *layoutDraw) block(n *winNode) blockView {
+func (v *layoutDraw) block(n *layoutdoc.Node) blockView {
 	def, ok := v.m.blocks.lookup(n.Block)
 	if !ok {
 		return blockView{Body: missingBlock(n.Block)}
@@ -49,16 +50,16 @@ func (v *layoutDraw) block(n *winNode) blockView {
 // whose edge is one. A line other than the root is drawn on the
 // workspace's surface; the root is not, so that the window's backdrop
 // shows through the sidebar.
-func (v *layoutDraw) line(n *winNode, root bool) ggui.Widget {
-	vertical := n.Kind == nodeColumn
+func (v *layoutDraw) line(n *layoutdoc.Node, root bool) ggui.Widget {
+	vertical := n.Kind == layoutdoc.KindColumn
 	kids := make([]ggui.Widget, 0, 2*len(n.Children))
 	grown := false
 	for i, c := range n.Children {
-		if i > 0 && !c.sized() && !n.Children[i-1].sized() {
+		if i > 0 && !c.Sized() && !n.Children[i-1].Sized() {
 			kids = append(kids, pick(vertical, hline(), vline()))
 		}
 		switch {
-		case c.sized():
+		case c.Sized():
 			kids = append(kids, v.panel(c, vertical, grown))
 		case c.Grow > 0:
 			grown = true
@@ -97,7 +98,7 @@ func (v *layoutDraw) line(n *winNode, root bool) ggui.Widget {
 // trailing says it comes after the growing child: on the right, or at
 // the bottom. A block is built in a component of its own, which owns
 // what it makes.
-func (v *layoutDraw) panel(n *winNode, vertical, trailing bool) ggui.Widget {
+func (v *layoutDraw) panel(n *layoutdoc.Node, vertical, trailing bool) ggui.Widget {
 	st := v.m.nodeState(n)
 	var open ggui.Readable[bool] = ggui.Const(true)
 	if n.Collapsible {
@@ -112,7 +113,7 @@ func (v *layoutDraw) panel(n *winNode, vertical, trailing bool) ggui.Widget {
 		return widget.Row(pick(trailing, []ggui.Widget{edge, body}, []ggui.Widget{body, edge})...).Stretch()
 	}
 	var child ggui.Widget
-	if n.Kind == nodeBlock {
+	if n.Kind == layoutdoc.KindBlock {
 		child = ggui.Component(func() ggui.Widget { return arrange(v.block(n)) })
 	} else {
 		child = arrange(blockView{Body: v.node(n, false)})
@@ -161,13 +162,13 @@ func resizeEdge(m *model, edge ggui.Widget, st *nodeState, dir float64, vertical
 // stack draws a stack as the right panel has always been drawn: a strip
 // of its blocks' names over the one shown. Each block is built once, so
 // it keeps its scroll and open folders across tabs.
-func (v *layoutDraw) stack(n *winNode) ggui.Widget {
+func (v *layoutDraw) stack(n *layoutdoc.Node) ggui.Widget {
 	st := v.m.nodeState(n)
 	pages := make([]ggui.Widget, len(n.Children))
 	for i, c := range n.Children {
 		pages[i] = v.block(c).Body
 	}
-	shown := ggui.Map(st.active, func(name string) int { return stackIndex(n, name) })
+	shown := ggui.Map(st.active, func(name string) int { return layoutdoc.StackIndex(n, name) })
 	labels := ggui.Derived(func() []string {
 		out := make([]string, len(n.Children))
 		for i, c := range n.Children {

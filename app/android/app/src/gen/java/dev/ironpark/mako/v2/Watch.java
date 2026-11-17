@@ -62,6 +62,50 @@ public  final class Watch extends
     approvals_ = false;
   }
 
+  public static final int LAYOUTS_FIELD_NUMBER = 2;
+  private boolean layouts_;
+  /**
+   * <pre>
+   * layouts says the front-end shows the window layout changes agents ask
+   * for (Workspace.stage) while the stream stays open: a window the user
+   * can allow and keep them in (revision 24).
+   * </pre>
+   *
+   * <code>bool layouts = 2 [json_name = "layouts"];</code>
+   * @return The layouts.
+   */
+  @java.lang.Override
+  public boolean getLayouts() {
+    return layouts_;
+  }
+  /**
+   * <pre>
+   * layouts says the front-end shows the window layout changes agents ask
+   * for (Workspace.stage) while the stream stays open: a window the user
+   * can allow and keep them in (revision 24).
+   * </pre>
+   *
+   * <code>bool layouts = 2 [json_name = "layouts"];</code>
+   * @param value The layouts to set.
+   */
+  private void setLayouts(boolean value) {
+    
+    layouts_ = value;
+  }
+  /**
+   * <pre>
+   * layouts says the front-end shows the window layout changes agents ask
+   * for (Workspace.stage) while the stream stays open: a window the user
+   * can allow and keep them in (revision 24).
+   * </pre>
+   *
+   * <code>bool layouts = 2 [json_name = "layouts"];</code>
+   */
+  private void clearLayouts() {
+
+    layouts_ = false;
+  }
+
   public static dev.ironpark.mako.v2.Watch parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -207,6 +251,52 @@ public  final class Watch extends
       return this;
     }
 
+    /**
+     * <pre>
+     * layouts says the front-end shows the window layout changes agents ask
+     * for (Workspace.stage) while the stream stays open: a window the user
+     * can allow and keep them in (revision 24).
+     * </pre>
+     *
+     * <code>bool layouts = 2 [json_name = "layouts"];</code>
+     * @return The layouts.
+     */
+    @java.lang.Override
+    public boolean getLayouts() {
+      return instance.getLayouts();
+    }
+    /**
+     * <pre>
+     * layouts says the front-end shows the window layout changes agents ask
+     * for (Workspace.stage) while the stream stays open: a window the user
+     * can allow and keep them in (revision 24).
+     * </pre>
+     *
+     * <code>bool layouts = 2 [json_name = "layouts"];</code>
+     * @param value The layouts to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLayouts(boolean value) {
+      copyOnWrite();
+      instance.setLayouts(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * layouts says the front-end shows the window layout changes agents ask
+     * for (Workspace.stage) while the stream stays open: a window the user
+     * can allow and keep them in (revision 24).
+     * </pre>
+     *
+     * <code>bool layouts = 2 [json_name = "layouts"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearLayouts() {
+      copyOnWrite();
+      instance.clearLayouts();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Watch)
   }
   @java.lang.Override
@@ -224,9 +314,11 @@ public  final class Watch extends
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
             "approvals_",
+            "layouts_",
           };
           java.lang.String info =
-              "\u0000\u0001\u0000\u0000\u0001\u0001\u0001\u0000\u0000\u0000\u0001\u0007";
+              "\u0000\u0002\u0000\u0000\u0001\u0002\u0002\u0000\u0000\u0000\u0001\u0007\u0002\u0007" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {
