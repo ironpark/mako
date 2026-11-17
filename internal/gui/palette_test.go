@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/ironpark/ggui"
+
+	"github.com/ironpark/mako/internal/gui/i18n"
 )
 
 func TestPaletteOpensExtensions(t *testing.T) {
@@ -97,6 +99,53 @@ func TestFuzzyMatchHangulAsTyped(t *testing.T) {
 		_, hits, ok := fuzzyMatch(tc.s, tc.q)
 		if ok != tc.ok || ok && !slices.Equal(hits, tc.hits) {
 			t.Errorf("fuzzyMatch(%q, %q) = %v %v, want %v %v", tc.s, tc.q, hits, ok, tc.hits, tc.ok)
+		}
+	}
+}
+
+// English typed with the input method on Korean reads as the keys that
+// typed it.
+func TestAsQwertyReadsTheKeysTyped(t *testing.T) {
+	for _, tc := range []struct {
+		q, want string
+		hangul  bool
+	}{
+		{"ㄴㄷㅅ샤ㅜㅎㄴ", "settings", true},
+		{"한글", "gksrmf", true},
+		{"쏘", "th", true},
+		{"tab 닫", "tab eke", true},
+		{"settings", "settings", false},
+	} {
+		if got, hangul := asQwerty(tc.q); got != tc.want || hangul != tc.hangul {
+			t.Errorf("asQwerty(%q) = %q, %v, want %q, %v", tc.q, got, hangul, tc.want, tc.hangul)
+		}
+	}
+}
+
+// In Korean, the palette finds a command by its English name, with its
+// category, and as typed with the input method left on Korean.
+func TestPaletteFindsEnglishInKorean(t *testing.T) {
+	m, p, _, _ := docApp(t, "x")
+	i18n.Set("ko")
+	t.Cleanup(func() { i18n.Set("en") })
+	m.openPalette()
+	p.Frame()
+	for _, q := range []string{"settings", "ㄴㄷㅅ샤ㅜㅎㄴ", "view sidebar", "퍋ㅈ 냥"} {
+		m.pickers.PaletteQuery.Set(q)
+		p.Frame()
+		rows := ggui.Peek(m.pickers.palette.rows)
+		want := map[string]string{"settings": T("App") + ": " + T("Settings"), "ㄴㄷㅅ샤ㅜㅎㄴ": T("App") + ": " + T("Settings")}[q]
+		if want == "" {
+			want = T("View") + ": " + T("Toggle sidebar")
+		}
+		i := slices.IndexFunc(rows, func(r pickRow) bool { return r.Label == want })
+		if i < 0 {
+			t.Errorf("%q does not find %q: %+v", q, want, rows)
+			continue
+		}
+		// Its English name shows after it, its letters typed marked.
+		if r := rows[i]; r.Detail == "" || len(r.DetailHits) == 0 {
+			t.Errorf("%q: %q without its English name marked: %+v", q, want, r)
 		}
 	}
 }

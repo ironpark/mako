@@ -71,18 +71,38 @@ func (m *model) paletteRows(q string) []pickRow {
 		row   pickRow
 		score int
 	}
+	// English typed with the input method left on Korean comes as
+	// Hangul, and is looked for as the keys that typed it too.
+	queries := []string{q}
+	if typed, hangul := asQwerty(q); hangul {
+		queries = append(queries, typed)
+	}
 	var out []ranked
 	for _, c := range m.pickers.commands {
 		label := T(c.Category) + ": " + T(c.ID)
+		// In another language, the English name shows after it, muted.
+		detail := c.Category + ": " + c.ID
+		if detail == label {
+			detail = ""
+		}
+		var detailHits []int
 		at := slices.Index(recent, c.ID)
 		score, hits, ok := fuzzyMatch(label, q)
 		if !ok {
-			// A command is found by its English name and its keywords
-			// as well, without marks, the name first.
-			for i, k := range append([]string{c.ID}, c.Keys...) {
-				if score, _, ok = fuzzyMatch(k, q); ok {
-					score -= pick(i == 0, 20, 30)
-					break
+			// A command is found by its English name, with its category
+			// or without, and its keywords as well, whatever language
+			// the window is in, without marks, the name first.
+			english := append([]string{c.ID, c.Category + " " + c.ID}, c.Keys...)
+		search:
+			for _, query := range queries {
+				for i, k := range english {
+					if score, _, ok = fuzzyMatch(k, query); ok {
+						score -= pick(i < 2, 20, 30)
+						if detail != "" {
+							_, detailHits, _ = fuzzyMatch(detail, query)
+						}
+						break search
+					}
 				}
 			}
 			if !ok {
@@ -96,7 +116,7 @@ func (m *model) paletteRows(q string) []pickRow {
 			score += 3
 		}
 		id, run := c.ID, c.Run
-		out = append(out, ranked{pickRow{Label: label, Hits: hits, Shortcut: c.Shortcut, Recent: at >= 0, Disabled: c.Disabled,
+		out = append(out, ranked{pickRow{Label: label, Hits: hits, Detail: detail, DetailHits: detailHits, Shortcut: c.Shortcut, Recent: at >= 0, Disabled: c.Disabled,
 			Run: func() { m.ran(id); run() }}, score})
 	}
 	for _, r := range m.pickers.tabs {

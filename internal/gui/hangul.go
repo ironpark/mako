@@ -99,3 +99,35 @@ func matchHangul(s []rune, i int, q rune, want []rune) int {
 	}
 	return pick(len(want) > n, 2, 1)
 }
+
+// qwertyKeys are the letters of the keys the 2-set Korean layout types
+// each jamo with: a query typed with the input method left on Korean,
+// meant in English, reads back as the letters pressed.
+var qwertyKeys = map[rune]rune{
+	'ㅂ': 'q', 'ㅈ': 'w', 'ㄷ': 'e', 'ㄱ': 'r', 'ㅅ': 't', 'ㅛ': 'y', 'ㅕ': 'u', 'ㅑ': 'i', 'ㅐ': 'o', 'ㅔ': 'p',
+	'ㅁ': 'a', 'ㄴ': 's', 'ㅇ': 'd', 'ㄹ': 'f', 'ㅎ': 'g', 'ㅗ': 'h', 'ㅓ': 'j', 'ㅏ': 'k', 'ㅣ': 'l',
+	'ㅋ': 'z', 'ㅌ': 'x', 'ㅊ': 'c', 'ㅍ': 'v', 'ㅠ': 'b', 'ㅜ': 'n', 'ㅡ': 'm',
+	// Shifted, and read in lower case as the rest.
+	'ㅃ': 'q', 'ㅉ': 'w', 'ㄸ': 'e', 'ㄲ': 'r', 'ㅆ': 't', 'ㅒ': 'o', 'ㅖ': 'p',
+}
+
+// asQwerty is q with its Hangul read as the keys that typed it on the
+// 2-set layout, "ㄴㄷㅅ샤" as "setti", and whether it had any.
+func asQwerty(q string) (string, bool) {
+	var out, ks []rune
+	hangul := false
+	for _, r := range q {
+		ks = keys(ks[:0], r)
+		if len(ks) == 0 {
+			out = append(out, r)
+			continue
+		}
+		hangul = true
+		for _, k := range ks {
+			if l, ok := qwertyKeys[k]; ok {
+				out = append(out, l)
+			}
+		}
+	}
+	return string(out), hangul
+}
