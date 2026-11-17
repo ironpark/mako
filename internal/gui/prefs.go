@@ -2,6 +2,8 @@ package gui
 
 import (
 	"encoding/json"
+	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -67,9 +69,13 @@ type prefs struct {
 	// option; see streamrec.go.
 	RecordStreams bool `json:"record_streams,omitempty"`
 
-	// The side panels' widths, as last dragged.
-	SidebarWidth float64 `json:"sidebar_width,omitempty"`
-	DetailsWidth float64 `json:"details_width,omitempty"`
+	// The side panels' widths, as last dragged: the sizes this device
+	// keeps of the window layout's sidebar and details nodes, 0 for the
+	// layout's own. LayoutSizes are the sizes kept of its other nodes, by
+	// ID; see winstate.go.
+	SidebarWidth float64            `json:"sidebar_width,omitempty"`
+	DetailsWidth float64            `json:"details_width,omitempty"`
+	LayoutSizes  map[string]float64 `json:"layout_sizes,omitempty"`
 	// SidebarSplit is how tall the sidebar's projects are over its
 	// agents, as last dragged.
 	SidebarSplit float64 `json:"sidebar_split,omitempty"`
@@ -203,14 +209,19 @@ func (p prefs) normalized() prefs {
 		p.SleepAfter = d.SleepAfter
 	}
 	p.SleepAfter = min(max(p.SleepAfter, minSleepAfter), maxSleepAfter)
-	if p.SidebarWidth == 0 {
-		p.SidebarWidth = sidebarWidth
+	// A width of 0 is none kept: the window layout's applies.
+	if p.SidebarWidth != 0 {
+		p.SidebarWidth = min(max(p.SidebarWidth, minSidebarWidth), maxSidebarWidth)
 	}
-	p.SidebarWidth = min(max(p.SidebarWidth, minSidebarWidth), maxSidebarWidth)
-	if p.DetailsWidth == 0 {
-		p.DetailsWidth = detailsWidth
+	if p.DetailsWidth != 0 {
+		p.DetailsWidth = min(max(p.DetailsWidth, minDetailsWidth), maxDetailsWidth)
 	}
-	p.DetailsWidth = min(max(p.DetailsWidth, minDetailsWidth), maxDetailsWidth)
+	for id, size := range p.LayoutSizes {
+		if !(size > 0) || math.IsInf(size, 0) {
+			p.LayoutSizes = maps.Clone(p.LayoutSizes)
+			delete(p.LayoutSizes, id)
+		}
+	}
 	if p.SidebarSplit == 0 {
 		p.SidebarSplit = sidebarSplit
 	}

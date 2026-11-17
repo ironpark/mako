@@ -176,7 +176,8 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					return feed
 				}
 				if agentsOnly {
-					return widget.Box(widget.Column(panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), "GitHub"), hline(), widget.Expanded(projectAgentsBody(m, agentsRoot))).Stretch()).Fill(skin.Surface0)
+					tabs := panelTabs(ggui.Const(2), func(int) {}, T("Files"), T("Git"), T("Agents"), "GitHub")
+					return widget.Box(widget.Column(tabs, hline(), widget.Expanded(projectAgentsBody(m, agentsRoot))).Stretch()).Fill(skin.Surface0)
 				}
 				if mdSrc != "" {
 					return ggui.Provide(ggui.ReducedMotionKey, true, markdownView(m, "", mdSrc))
@@ -425,7 +426,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(func() { m.SearchOpen.Set(false) }),
 				do(m.openQuickOpen), do(func() { m.pickers.QuickQuery.Set("view") }), frames(30), shot("03-quick-open"),
 				do(func() { m.pickers.QuickOpen.Set(false); m.DetailTab.Set(gitTab) }),
-				do(func() { m.DetailsWidth.Set(ggui.Peek(m.Prefs).DetailsWidth) }),
+				do(func() { m.DetailsWidth.Set(m.restingSize(detailsNode, detailsWidth)) }),
 				do(func() { m.DetailTab.Set(agentsTab) }), frames(2), shot("03-details"),
 				do(func() { m.DetailTab.Set(filesTab); m.openNew("", "") }), frames(2), shot("04-new-session"),
 				do(func() { m.NewOpen.Set(false); m.openSettings("general") }), frames(2), shot("05-settings-general"),

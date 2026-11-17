@@ -31,6 +31,7 @@ and this document describes how the messages are used.
 - [The mesh over libp2p](#the-mesh-over-libp2p)
 - [Compatibility](#compatibility)
 - [Limits](#limits)
+- [Layout documents](#layout-documents)
 - [The local hook socket](#the-local-hook-socket)
 - [Access](#access)
 - [Security](#security)
@@ -1010,6 +1011,74 @@ Within version 2, the protocol changes by addition, as protobuf allows:
 | Relinking a peer on libp2p | at most every 30 s |
 | Peer expiry | 5 minutes unseen |
 | Hook report | 1 MiB |
+
+## Layout documents
+
+Two JSON documents lay a window out. Each is carried whole, as the `doc` of
+a `LayoutEntry` in the workspace, so that every front-end reads the same.
+
+**Pane trees** (`WorkspaceState.layouts`, by `spaceID|context`) are the
+tab groups of the panes and their splits: a node is a pane when it has a
+`Group`, `{"ID": 1, "Tabs": ["<tab>", …], "Active": "<tab>"}`, or else a
+split of `First` and `Second`, beside each other or, with `Vertical`, one
+over the other, `First` taking `Ratio` of the room. Every node has an `ID`.
+
+**Window layout documents** lay out the whole window: the sidebar, the
+workspace and the panels, and where the pane tree goes. They will be
+shared as `WorkspaceState.window_layouts[name]`; for now the desktop
+window reads one from `layout.json` beside `gui.json`, when there is one,
+when it starts and on the palette's *Reload window layout*, and sends it
+nowhere. *Reset window layout* moves the file aside to `layout.json.bak`
+and shows the default. The window's default document:
+
+```json
+{"version": 1, "root": {"id": "window", "row": [
+  {"id": "sidebar", "block": "mako.sidebar", "size": 272, "collapsible": true},
+  {"id": "workspace", "column": [
+    {"id": "header", "block": "mako.header"},
+    {"id": "main", "panes": "main", "grow": 1}
+  ], "grow": 1},
+  {"id": "details", "stack": ["mako.files", "mako.git", "mako.agents", "mako.forge"],
+   "size": 320, "collapsible": true}
+]}}
+```
+
+`version` is 1. A node is an object with one of these fields, its kind,
+and an `id`, unique in the document, of letters, digits and `._:/-`, by
+which everything that edits or remembers a node finds it:
+
+| Kind | Holds | Other fields |
+|---|---|---|
+| `row` | its children, side by side | `id`, `gap`, and those of a child |
+| `column` | its children, one over another | `id`, `gap`, and those of a child |
+| `stack` | blocks over each other, one shown, picked by a strip of tabs | `id`, `active`, the index of the one shown until another is picked, and those of a child |
+| `block` | the name of a registered block | `id`, by default the name; `props`, which the block's schema checks; those of a child |
+| `panes` | `"main"`: the pane tree, held apart | `id`, by default `main`; `size`, `grow` |
+
+A row's or column's child takes `size`, its width in a row or height in a
+column, in pixels, with an edge toward the growing child that drags to
+resize it, or `grow`, a share of the room the others leave; neither, it is
+as large as it draws. A sized child that is `collapsible` slides shut and
+open again. Two children neither of which is sized are divided by a line.
+In a list of children, a block's name alone, such as `"mako.git"`, is a
+block of that name and `id`. A document holds one `panes` node.
+
+A block's name is `mako.<name>` for the window's own, and will be
+`plugin:<id>/<block>` and `agent:<session>/<id>`. The window's:
+`mako.sidebar`, `mako.header` (the session's title, menus and the panels'
+toggles over the panes), `mako.files`, `mako.git`, `mako.agents` and
+`mako.forge`, none taking props. A block a window does not hold is drawn
+as missing in its place, and kept. A document that does not read, with a
+field or kind of node unknown, a value of the wrong type, sizes where they
+mean nothing, no `panes` or two, or more than 256 nodes or 16 deep, is not
+used: the window draws its default.
+
+A `size` is a default. What a device makes of the document stays on it,
+by node ID: the sizes its edges were dragged to (`gui.json`'s
+`sidebar_width` and `details_width` for the nodes `sidebar` and `details`,
+and `layout_sizes` for the rest), which nodes are shut, and the tab a
+stack shows. The window's toggles and shortcuts for the sidebar and the
+details panel act on the nodes of those IDs.
 
 ## The local hook socket
 

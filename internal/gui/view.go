@@ -23,8 +23,8 @@ import (
 // carries the composer, and a panel on the right of the project's files and
 // the session's details.
 const (
-	sidebarWidth = 272 // the sidebar's, until dragged, and the settings page's
-	detailsWidth = 320 // the right panel's, until dragged
+	sidebarWidth = 272 // the sidebar's in the default layout, until dragged, and the settings page's
+	detailsWidth = 320 // the right panel's in the default layout, until dragged
 	headerHeight = 38
 	tabBarHeight = 38
 
@@ -46,19 +46,12 @@ func build(m *model) ggui.Widget {
 
 func window(m *model) ggui.Widget {
 	inSettings := ggui.Map(m.Page, func(p string) bool { return p == "settings" })
-	// The side panels slide open and closed beside the workspace.
-	main := widget.Row(
-		newDrawer(ggui.Component(func() ggui.Widget {
-			// The space's colour washes the sidebar and the edge beside it
-			// as one.
-			tint := spaceTint(m)
-			return widget.Row(widget.Expanded(sidebarIn(m, tint)), sidebarEdge(m, tint)).Stretch()
-		}), m.SidebarOpen,
-			ggui.Map(m.SidebarWidth, func(w float64) float64 { return w + panelEdgeWidth }), false),
-		widget.Expanded(workspace(m)),
-		newDrawer(widget.Row(panelEdge(m), widget.Expanded(details(m))).Stretch(), m.DetailsOpen,
-			ggui.Map(m.DetailsWidth, func(w float64) float64 { return w + panelEdgeWidth }), true),
-	).Stretch()
+	// The selected project's forge is followed whatever the document
+	// places: the Git tab shows its branch too.
+	watchForge(m)
+	// The side panels slide open and closed beside the workspace, as the
+	// window's layout document places them (winview.go).
+	main := windowView(m)
 	return widget.Stack(
 		// The settings page takes the whole window, as Paseo's does; the
 		// sessions stay attached while it shows.
@@ -349,14 +342,6 @@ func sidebarFooter(m *model) ggui.Widget {
 
 // Workspace ------------------------------------------------------------------
 
-func workspace(m *model) ggui.Widget {
-	return widget.Box(widget.Column(
-		workspaceHeader(m),
-		hline(),
-		widget.Expanded(layoutView(m)),
-	).Stretch()).Fill(skin.Surface0)
-}
-
 func workspaceHeader(m *model) ggui.Widget {
 	title := ggui.Reactive(func() ggui.Widget {
 		switch id := m.Selected.Get(); {
@@ -599,69 +584,10 @@ func inlineField(w ggui.Widget) ggui.Widget {
 
 // Details panel --------------------------------------------------------------
 
-// The details panel's tabs, in order.
-const (
-	filesTab = iota
-	gitTab
-	agentsTab
-	forgeTab
-)
-
-func details(m *model) ggui.Widget {
-	watchForge(m)
-	// Built once, so each keeps its scroll and open folders across tabs.
-	pages := []ggui.Widget{
-		filesPanel(m),
-		gitPanel(m),
-		projectAgentsPanel(m),
-		forgePanel(m),
-	}
-	return widget.Box(widget.Column(
-		ggui.View(ggui.Derived(m.forgeOf), func(f string) ggui.Widget {
-			return panelTabs(m.DetailTab, T("Files"), T("Git"), T("Agents"), forgeLabel(f))
-		}),
-		hline(),
-		widget.Expanded(ggui.Key(m.DetailTab, func(i int) ggui.Widget { return pages[min(max(i, 0), len(pages)-1)] })),
-	).Stretch()).Fill(skin.Surface0)
-}
-
-// panelEdge is the right panel's left edge, which drags to resize the
-// panel; the width is kept when the drag ends.
-func panelEdge(m *model) ggui.Widget {
-	edge := widget.Box(widget.Row(vline(), widget.Spacer()).Stretch()).Width(panelEdgeWidth).Fill(skin.Surface0)
-	return resizeEdge(m, edge, m.DetailsWidth, -1, minDetailsWidth, maxDetailsWidth,
-		func(p *prefs) *float64 { return &p.DetailsWidth })
-}
-
-// sidebarEdge is the sidebar's right edge, which drags to resize it as
-// panelEdge does the right panel.
-func sidebarEdge(m *model, tint ggui.Readable[color.NRGBA]) ggui.Widget {
-	line := widget.Row(widget.Spacer(), vline()).Stretch()
-	edge := ggui.View(tint, func(c color.NRGBA) ggui.Widget {
-		return widget.Box(line).Width(panelEdgeWidth).Fill(skin.Sidebar).Gradient(spaceWash(c))
-	})
-	return resizeEdge(m, edge, m.SidebarWidth, 1, minSidebarWidth, maxSidebarWidth,
-		func(p *prefs) *float64 { return &p.SidebarWidth })
-}
-
-// resizeEdge has edge drag width within [lo, hi]: wider as it moves the
-// way dir says, 1 for right, and kept in the setting field gives when the
-// drag ends.
-func resizeEdge(m *model, edge ggui.Widget, width *ggui.StateValue[float64], dir, lo, hi float64, field func(*prefs) *float64) ggui.Widget {
-	var from, start float64
-	return widget.Pointer(edge).Cursor(ggui.CursorShapeEWResize).
-		OnDown(func(ev ggui.PointerEvent) { from, start = ev.Pos.X, ggui.Peek(width) }).
-		OnDrag(func(ev ggui.PointerEvent) { width.Set(min(max(start+dir*(ev.Pos.X-from), lo), hi)) }).
-		OnUp(func(ggui.PointerEvent) {
-			w := ggui.Peek(width)
-			m.Prefs.Update(func(p prefs) prefs { *field(&p) = w; return p })
-		})
-}
-
 // panelTabs is the right panel's strip of tabs: as tall as the workspace
 // header, so the line under it runs on from the header's, and drawn as the
 // panes' tabs are, flat cells underlined when chosen.
-func panelTabs(chosen *ggui.StateValue[int], labels ...string) ggui.Widget {
+func panelTabs(chosen ggui.Readable[int], choose func(int), labels ...string) ggui.Widget {
 	return ggui.View(chosen, func(current int) ggui.Widget {
 		cells := make([]ggui.Widget, len(labels))
 		for i, label := range labels {
@@ -670,7 +596,7 @@ func panelTabs(chosen *ggui.StateValue[int], labels ...string) ggui.Widget {
 				fg, line = skin.Fg, skin.AccentBright
 			}
 			btn := ui.ButtonOf(widget.Box(widget.Row(widget.Text(label).Size(13).Color(fg).NoWrap())).Height(headerHeight),
-				func() { chosen.Set(i) }).Ghost().Pad(0, 9).Radius(0).Name(label)
+				func() { choose(i) }).Ghost().Pad(0, 9).Radius(0).Name(label)
 			cells[i] = &underlined{child: btn, color: line}
 		}
 		// Too narrow for them all, the tabs scroll sideways.

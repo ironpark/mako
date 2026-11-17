@@ -174,8 +174,20 @@ type model struct {
 	SidebarSplit *ggui.StateValue[float64] // the sidebar's projects' height, as SidebarWidth
 	// Scope is the project, or folder of one, picked in the sidebar for
 	// the agents it lists; see sidebartree.go.
-	Scope            *ggui.StateValue[sidebarScope]
-	DetailTab        *ggui.StateValue[int]
+	Scope *ggui.StateValue[sidebarScope]
+	// DetailTab is the block the right panel, the details stack, shows:
+	// one of filesTab, gitTab, agentsTab and forgeTab in the default
+	// layout.
+	DetailTab *ggui.StateValue[string]
+	// WinDoc is the window's layout document, from layout.json or the
+	// default (winlayout.go); blocks are what it can place, and winStates
+	// its nodes' state on this device, by ID (winstate.go). UI goroutine
+	// only. winDocErr is why layout.json was not used, told once the
+	// window is up.
+	WinDoc           *ggui.StateValue[*windowDoc]
+	blocks           *blockRegistry
+	winStates        map[string]*nodeState
+	winDocErr        error
 	ProjectAgents    *ggui.StateValue[projectAgentsView]
 	projectAgentsGen uint64
 	Forge            forgeState                          // the GitHub tab, and the watch on the branch
@@ -224,6 +236,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		addr, _ = config.SocketPath("")
 	}
 	p := loadPrefs()
+	blocks := builtinBlocks()
+	doc, docErr := loadWindowDoc(blocks)
 	m := &model{
 		cfg:           cfg,
 		link:          newDaemonLink(addr, p.Daemon),
@@ -292,11 +306,14 @@ func newModel(cfg *config.Config, addr string) *model {
 		AgentsSplit:   ggui.State(0.4),
 		SidebarOpen:   ggui.State(true),
 		DetailsOpen:   ggui.State(true),
-		DetailsWidth:  ggui.State(p.DetailsWidth),
-		SidebarWidth:  ggui.State(p.SidebarWidth),
+		DetailsWidth:  ggui.State(float64(detailsWidth)), // as the document and the settings say, below
+		SidebarWidth:  ggui.State(float64(sidebarWidth)),
 		SidebarSplit:  ggui.State(p.SidebarSplit),
 		Scope:         ggui.State(sidebarScope{}),
-		DetailTab:     ggui.State(0),
+		DetailTab:     ggui.State(""),
+		WinDoc:        ggui.State(doc),
+		blocks:        blocks,
+		winDocErr:     docErr,
 		ProjectAgents: ggui.State(projectAgentsView{}).WithEqual(deepEqual),
 		Forge:         newForgeState(),
 		Tunnels:       newTunnelState(),
@@ -313,6 +330,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		dialing:       map[string]bool{},
 		redials:       map[string]redial{},
 	}
+	m.winStates = m.builtinNodeStates()
+	m.setWindowDoc(doc)
 	m.link.approveInApp.Store(p.ApproveInApp)
 	m.recorder = newStreamRecorder(recordDir())
 	m.recorder.on.Store(p.RecordStreams)

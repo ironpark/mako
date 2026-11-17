@@ -171,7 +171,7 @@ func (m *model) commands() []command {
 		command{ID: "Clean tabs", Category: "Tab", Keys: []string{"clean", "tidy", "close", "idle", "shell", "files", "diffs"}, Disabled: !m.anyTidyable(),
 			Run: func() { m.tidyTabs(ggui.Peek(m.Tabs)) }},
 		command{ID: "Toggle sidebar", Category: "View", Shortcut: "cmd+b", Run: func() { ggui.Toggle(m.SidebarOpen) }},
-		command{ID: "Project agents", Category: "View", Keys: []string{"mcp", "monitor", "messages"}, Run: func() { m.DetailsOpen.Set(true); m.DetailTab.Set(agentsTab) }},
+		command{ID: "Project agents", Category: "View", Keys: []string{"mcp", "monitor", "messages"}, Run: func() { m.revealBlock(agentsTab) }},
 		command{ID: "Toggle details panel", Category: "View", Keys: []string{"files", "changes"}, Shortcut: "cmd+shift+d",
 			Run: func() { ggui.Toggle(m.DetailsOpen) }},
 		command{ID: "Extensions…", Category: "App", Keys: []string{"zed", "language", "grammar", "highlight", "mcp"},
@@ -187,7 +187,12 @@ func (m *model) commands() []command {
 			m.Prefs.Update(func(p prefs) prefs { p.Theme = t; return p })
 		}})
 	}
-	return cmds
+	// The window's layout is put right from here, outside it, whatever it
+	// has become.
+	return append(cmds,
+		command{ID: "Reset window layout", Category: "View", Keys: []string{"layout", "default", "panels", "restore"}, Run: m.resetWindowDoc},
+		command{ID: "Reload window layout", Category: "View", Keys: []string{"layout", "layout.json", "panels"}, Run: m.reloadWindowDoc},
+	)
 }
 
 // tabRows are the open tabs, then the sessions not in one, each with

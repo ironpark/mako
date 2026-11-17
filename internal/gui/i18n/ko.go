@@ -1313,4 +1313,13 @@ var catalogKo = map[string]string{
 	"1 project":     "프로젝트 1개",
 	"Unfold %s":     "%s 펼치기",
 	"Fold %s":       "%s 접기",
+
+	"Session header":       "세션 헤더",
+	"Forge":                "포지",
+	"Missing block":        "없는 블록",
+	"Reset window layout":  "창 레이아웃 초기화",
+	"Reload window layout": "창 레이아웃 다시 읽기",
+	"No block of this name is registered on this node.":            "이 노드에는 이 이름의 블록이 등록되어 있지 않습니다.",
+	"Could not reset the window layout":                            "창 레이아웃을 초기화하지 못했습니다",
+	"The window layout could not be read, so the default is shown": "창 레이아웃을 읽지 못해 기본 레이아웃을 보여 줍니다",
 }

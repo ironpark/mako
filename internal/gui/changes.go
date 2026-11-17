@@ -202,16 +202,16 @@ func counts(added, removed int) ggui.Widget {
 
 // Panel ---------------------------------------------------------------------------
 
-// pollWhileShown loads a details tab's project when the tab shows it, and
-// again every while until it does not, and at once whenever one of moved
-// does, which says the project changed.
-func pollWhileShown(m *model, root ggui.Readable[fileRoot], tab int, every time.Duration, load func(fileRoot), moved ...ggui.Readable[string]) {
+// pollWhileShown loads a details tab's project when the window shows the
+// tab's block, and again every while until it does not, and at once
+// whenever one of moved does, which says the project changed.
+func pollWhileShown(m *model, root ggui.Readable[fileRoot], tab string, every time.Duration, load func(fileRoot), moved ...ggui.Readable[string]) {
 	ggui.Effect(func() ggui.Cleanup {
 		r := root.Get()
 		for _, mv := range moved {
 			mv.Get()
 		}
-		if !m.DetailsOpen.Get() || m.DetailTab.Get() != tab {
+		if !m.blockShown(tab) {
 			return nil // nothing shows it
 		}
 		load(r)

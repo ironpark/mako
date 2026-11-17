@@ -282,8 +282,12 @@ before anything else (`internal/shellenv`): it runs `$SHELL -l -i` once,
 with `MAKO_SHELL_ENV=1` set for a profile that wants to tell, so it finds
 the agents on the user's `PATH`.
 
-Its settings are kept in `gui.json` beside `config.json`, and the user's
-themes in `themes/` beside them, a JSON file each (`internal/gui/themefiles.go`):
+Its settings are kept in `gui.json` beside `config.json`. The window is
+drawn from a layout document (`internal/gui/winlayout.go`), its default
+built in code or the user's in `layout.json` beside them, whose leaves are
+blocks of a registry (`internal/gui/blocks.go`); the format is in
+[Layout documents](docs/protocol.md#layout-documents). The user's
+themes are in `themes/` beside them, a JSON file each (`internal/gui/themefiles.go`):
 a base, light or dark, and the colours that differ, by name. Settings ▸
 Appearance makes one by duplicating the theme in use, and edits its
 colours in place. A background image goes under the whole window, under

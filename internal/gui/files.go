@@ -304,8 +304,7 @@ func winDrive(p string) bool {
 func (m *model) openItem(it fileItem, line int) {
 	switch {
 	case isImage(it.Name):
-		m.DetailsOpen.Set(true)
-		m.DetailTab.Set(filesTab)
+		m.revealBlock(filesTab)
 		m.openPreview(it)
 	case line > 0:
 		m.openFileAt(it, line)

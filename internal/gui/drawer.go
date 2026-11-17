@@ -10,13 +10,15 @@ import (
 // to all of width as open turns true, and back, and follows width as it
 // changes. The panel keeps its width
 // and is clipped as it moves, so its contents slide rather than reflow,
-// and while closed it is not painted.
+// and while closed it is not painted. A vertical drawer does the same
+// along its height, in a column.
 type drawer struct {
-	child ggui.Widget
-	open  ggui.Readable[bool]
-	width ggui.Readable[float64]
-	right bool // on the window's right edge, sliding in from it
-	shown *ggui.Tweened[float64]
+	child    ggui.Widget
+	open     ggui.Readable[bool]
+	width    ggui.Readable[float64]
+	right    bool // on the window's right edge, sliding in from it; at the bottom, for a vertical one
+	vertical bool
+	shown    *ggui.Tweened[float64]
 
 	full, w float64 // the width, and the share of it shown, as last laid out
 }
@@ -46,6 +48,12 @@ func (d *drawer) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	}
 	d.full = d.width.Get()
 	d.w = d.full * f
+	if d.vertical {
+		if d.w >= 0.5 {
+			d.child.Layout(ggui.Tight(ggui.Sz(c.MaxW, d.full)), env)
+		}
+		return c.Constrain(ggui.Sz(c.MaxW, d.w))
+	}
 	if d.w >= 0.5 { // closed, it is not painted, so needs no layout
 		d.child.Layout(ggui.Tight(ggui.Sz(d.full, c.MaxH)), env)
 	}
@@ -59,6 +67,14 @@ func (d *drawer) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	// The panel's inner edge follows the workspace: a left one shows its
 	// right part first, a right one its left part.
 	at := r.Origin
+	if d.vertical {
+		if !d.right {
+			at.Y += d.w - d.full
+		}
+		dst.Clip(ggui.Rect{Origin: r.Origin, Size: ggui.Sz(r.Size.W, d.w)}).
+			Paint(d.child, ggui.Rect{Origin: at, Size: ggui.Sz(r.Size.W, d.full)})
+		return
+	}
 	if !d.right {
 		at.X += d.w - d.full
 	}

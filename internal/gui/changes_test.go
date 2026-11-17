@@ -79,7 +79,7 @@ func TestChangesTabShowsTheWorkTree(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := newModel(cfg, "")
-	m.DetailTab.Set(1)
+	m.DetailTab.Set(gitTab)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1200, 800))

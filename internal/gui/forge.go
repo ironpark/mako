@@ -210,8 +210,7 @@ func (m *model) openForge(root fileRoot, kind string, number int64) {
 	}
 	o.Loading = o.Detail == nil
 	m.Forge.Open.Set(o)
-	m.DetailsOpen.Set(true)
-	m.DetailTab.Set(forgeTab)
+	m.revealBlock(forgeTab)
 	m.readForge()
 }
 
@@ -605,7 +604,7 @@ func forgePanel(m *model) ggui.Widget {
 		m.Forge.Kind.Get()
 		m.Forge.Filter.Get()
 		stamp.Get()
-		if r.Path == "" || !m.DetailsOpen.Get() || m.DetailTab.Get() != forgeTab {
+		if r.Path == "" || !m.blockShown(forgeTab) {
 			return nil // nothing shows it
 		}
 		m.refreshForge(r)

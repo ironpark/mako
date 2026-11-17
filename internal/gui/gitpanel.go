@@ -106,7 +106,7 @@ func repoStamp(sessions []*protocol.SessionInfo, root fileRoot, top string) stri
 func (m *model) gitTabRefresh() {
 	root := ggui.Peek(m.git.View).Root
 	m.loadGit(root)
-	if ggui.Peek(m.DetailTab) == gitTab {
+	if ggui.Untrack(func() bool { return m.blockChosen(gitTab) }) {
 		m.loadHistory(root)
 	}
 }
