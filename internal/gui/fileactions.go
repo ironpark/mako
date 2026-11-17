@@ -222,6 +222,17 @@ func fileMenu(m *model, w ggui.Widget, it fileItem) ggui.Widget {
 		}
 		items = append(items, m.editorItems(it.Node, it.Path, nil, m.files.Note.Set)...)
 		items = append(items, ui.MenuDivider())
+		if it.Root {
+			// A project's folder is the project's to keep: it is copied
+			// from, and made in, but not cut, renamed or deleted here.
+			items = append(items, ui.MenuItem(T("Copy"), func() {
+				m.files.Clip.Set(pathDrag{Node: it.Node, Path: it.Path, Dir: true})
+			}))
+			items = append(items, folderItems(m, dirItem(it.Node, it.Path), m.askFile)...)
+			return append(items, ui.MenuDivider(), ui.MenuItem(T("Refresh"), func() {
+				m.reloadOpen(it.Node, it.Path, ggui.Peek(m.files.Open))
+			}))
+		}
 		items = append(items, clipItems(m, it)...)
 		items = append(items, folderItems(m, folderOf(it), m.askFile)...)
 		items = append(items,

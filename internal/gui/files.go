@@ -493,11 +493,8 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 			}
 			// Dragged to a terminal or the message box, it is typed as
 			// its path; to a folder, it moves there. A project's folder
-			// stays put, and is not to rename or delete here.
+			// stays put, and its menu does not rename or delete it.
 			drag := widget.DragSource(row, pathDrag{Node: it.Node, Path: it.Path, Dir: it.Dir})
-			if it.Root {
-				return drag
-			}
 			return fileMenu(m, drag, it)
 		}).
 		RowName(func(it fileItem) string { return it.Name }).
