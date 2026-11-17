@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/pkg/hangul"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -74,7 +75,7 @@ func (m *model) paletteRows(q string) []pickRow {
 	// English typed with the input method left on Korean comes as
 	// Hangul, and is looked for as the keys that typed it too.
 	queries := []string{q}
-	if typed, hangul := asQwerty(q); hangul {
+	if typed, ok := hangul.Qwerty(q); ok {
 		queries = append(queries, typed)
 	}
 	var out []ranked

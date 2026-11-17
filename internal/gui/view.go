@@ -400,116 +400,18 @@ func (m *model) editSession(id string, edit func(*protocol.SessionInfo)) {
 	m.Sessions.Set(sessions)
 }
 
-// tab is one of a pane's tabs. The tab a pane shows is raised and
-// underlined, in the accent in the current pane.
-func tab(m *model, s *protocol.SessionInfo, selected, focused bool, title string) ggui.Widget {
+// tab is one of a pane's tabs: the session's program and its title, in
+// a rounded box, raised as the one the pane shows and ringed in tint, its
+// project's colour, in the current pane.
+func tab(m *model, s *protocol.SessionInfo, selected, focused bool, title string, tint color.Color) ggui.Widget {
 	id := s.GetId()
 	label := sessionTitle(s, title)
-	hover := newTabState()
-	fg := skin.Muted
-	if selected {
-		fg = skin.Fg
-	}
-	// The tab is one flat cell: its hover, its fill and its underline share
-	// the cell's edges, with the content centred in its height.
-	content := widget.Box(widget.Row(
-		&busyGlyph{icon: agentGlyph(s.GetAgent(), fg).Size(14), busy: func() bool { return m.busy(id) }},
-		widget.Box(widget.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(150),
-		tabClose(hover, label, func() { m.askKill(id) }),
-	).Gap(8)).Height(tabHeight)
-	btn := ui.ButtonOf(content, func() { m.selectSession(id) }).Ghost().Pad(0, 4, 0, 10).Radius(tabRadius).Name(label)
-	return tabCell(sessionMenu(m, btn, id, label, true), hover, selected, focused)
-}
-
-// tabCell is a tab's rounded box around its button: raised when the pane
-// shows it, and ringed in the colour of the tab's project, or the accent,
-// in the current pane; tinted in that colour while the pointer is over it,
-// as st follows.
-func tabCell(btn ggui.Widget, st tabState, selected, focused bool) ggui.Widget {
-	box := ggui.View(st.hover, func(h bool) ggui.Widget {
-		return &roundTab{child: btn, hovered: h, selected: selected, focused: focused}
-	})
-	return widget.Box(widget.Within(box).OnHover(st.hover.Set).OnFocus(st.focus.Set)).Pad(0, 2)
-}
-
-// tabState is whether the pointer is over a tab, or the keyboard's focus
-// in it, which show its close button.
-type tabState struct{ hover, focus *ggui.StateValue[bool] }
-
-func newTabState() tabState { return tabState{ggui.State(false), ggui.State(false)} }
-
-// shown is how much of a tab's close button shows: all of it while the
-// pointer is over the tab or the focus in it, else none.
-func (s tabState) shown() ggui.Readable[float64] {
-	return ggui.Combine(s.hover, s.focus, func(h, f bool) float64 { return pick(h || f, 1.0, 0.0) })
-}
-
-// tabClose is a tab's close button, which shows while the pointer is over
-// the tab or the focus in it. It is there all the while, so it keeps its
-// room, its place in the Tab order and in the accessibility tree.
-func tabClose(st tabState, label string, close func()) ggui.Widget {
-	return tabCloseOr(st, label, close, false)
-}
-
-// tabCloseOr is tabClose, where a dot stands while the button does not
-// show and dirty is set: a file's unsaved changes, as editors mark them.
-func tabCloseOr(st tabState, label string, close func(), dirty bool) ggui.Widget {
-	shown := st.shown()
-	btn := widget.Opacity(ui.ButtonOf(icon("x").Size(13), close).Ghost().Pad(3).Radius(4).Name(Tf("Close %s", label)), 0).
-		BindOpacity(shown)
-	if !dirty {
-		return btn
-	}
-	// As large as the button, an icon and its padding.
-	dot := widget.Box(widget.Center(widget.Box().Size(8, 8).Radius(4).Fill(skin.Muted))).Size(19, 19)
-	hidden := ggui.Map(shown, func(v float64) float64 { return 1 - v })
-	return widget.Stack(widget.Opacity(dot, 1).BindOpacity(hidden), btn)
-}
-
-// tabTintKey is the colour of the project the tabs under it are of, which
-// rings the tab shown in the current pane.
-var tabTintKey = ggui.NewEnvKey[color.Color]("tab tint")
-
-// The size of a tab's rounded box.
-const (
-	tabHeight = 28
-	tabRadius = 7
-)
-
-// roundTab paints a tab's box under its button: the raised fill of the tab
-// a pane shows, and its ring, or the tint of one the pointer is over.
-type roundTab struct {
-	child                      ggui.Widget
-	hovered, selected, focused bool
-	fill, ring, tint           color.Color // under the theme the tab was laid out in
-}
-
-func (t *roundTab) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	tint, ok := env.Get(tabTintKey)
-	if !ok || tint == nil {
-		tint = ggui.ResolveColor(skin.AccentBright, env)
-	}
-	t.fill, t.ring = nil, nil
-	t.tint = withAlpha(tint, 0x44)
-	if t.selected {
-		t.fill = ggui.ResolveColor(skin.Surface2, env)
-		t.ring = withAlpha(tint, pick[uint8](t.focused, 0x99, 0x38))
-	}
-	return t.child.Layout(c, env)
-}
-
-func (t *roundTab) Paint(dst *ggui.Canvas, r ggui.Rect) {
-	switch {
-	case t.fill != nil:
-		dst.FillRoundRect(r, tabRadius, t.fill)
-		if t.hovered {
-			dst.FillRoundRect(r, tabRadius, withAlpha(t.tint, 0x80))
-		}
-		dst.StrokeRoundRect(r.Grow(-0.5), tabRadius-0.5, 1, t.ring)
-	case t.hovered:
-		dst.FillRoundRect(r, tabRadius, t.tint)
-	}
-	dst.Paint(t.child, r)
+	fg := pick[color.Color](selected, skin.Fg, skin.Muted)
+	t := ui.EditorTab(label, func() { m.selectSession(id) }).
+		Icon(&busyGlyph{icon: agentGlyph(s.GetAgent(), fg).Size(14), busy: func() bool { return m.busy(id) }}).
+		MaxLabelWidth(150).Selected(selected).Current(focused).Tint(tint).
+		OnClose(func() { m.askKill(id) }).CloseName(Tf("Close %s", label))
+	return sessionMenu(m, t, id, label, true)
 }
 
 // withAlpha is c at alpha a, out of 0xff; nothing for no colour.

@@ -218,46 +218,13 @@ func projectChip(p tabProject) ggui.Widget {
 	chip := widget.Box(widget.Row(
 		glyph,
 		widget.Box(widget.Text(name).Size(12).Weight(ggui.WeightSemibold).Color(fg).NoWrap().Ellipsis()).MaxWidth(projectChipMax),
-	).Gap(4).Align(widget.AlignCenter)).Pad(0, 8, 0, 7).Height(tabHeight)
+	).Gap(4).Align(widget.AlignCenter)).Pad(0, 8, 0, 7).Height(ui.EditorTabHeight)
 	return ui.Tooltip(chip, name)
 }
 
 // projectChipWidth estimates how wide a project's chip is drawn, with the
-// room its capsule takes round the run.
+// room its group's capsule takes round the run: 3 inside it on each side,
+// and 3 outside.
 func projectChipWidth(name string) float64 {
-	return min(float64(len([]rune(name)))*7, projectChipMax) + 34 + 2*runPad + runGap
-}
-
-// The room round a project's run of tabs inside its capsule, and between
-// one capsule and the next.
-const (
-	runPad    = 3
-	runGap    = 6
-	runRadius = tabRadius + runPad
-)
-
-// projectRun is a project's run of tabs in the bar, in a capsule tinted
-// and ringed in the project's colour, as the sidebar marks it.
-type projectRun struct {
-	child      ggui.Widget
-	color      color.Color
-	fill, ring color.Color // under the theme the run was laid out in
-}
-
-// newProjectRun puts a project's chip and tabs, cells, in its capsule.
-func newProjectRun(cells []ggui.Widget, c color.Color) ggui.Widget {
-	run := &projectRun{child: widget.Box(widget.Row(cells...).Align(widget.AlignCenter)).Pad(runPad), color: c}
-	return widget.Box(run).Pad(0, runGap/2)
-}
-
-func (p *projectRun) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	tint := ggui.ResolveColor(p.color, env)
-	p.fill, p.ring = withAlpha(tint, 0x17), withAlpha(tint, 0x52)
-	return p.child.Layout(c, env)
-}
-
-func (p *projectRun) Paint(dst *ggui.Canvas, r ggui.Rect) {
-	dst.FillRoundRect(r, runRadius, p.fill)
-	dst.StrokeRoundRect(r.Grow(-0.5), runRadius-0.5, 1, p.ring)
-	dst.Paint(p.child, r)
+	return min(float64(len([]rune(name)))*7, projectChipMax) + 34 + 12
 }

@@ -174,7 +174,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			if p.Key != "" {
 				c = p.Look.color()
 			}
-			children = append(children, newProjectRun(run, c))
+			children = append(children, ui.TabGroup(run...).Tint(c))
 			run = nil
 		}
 		for i, tabID := range g.Tabs {
@@ -188,21 +188,22 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 					OnHover(func(bool) { m.leaveHint(id) }))
 				chips += projectChipWidth(cmp.Or(p.Name, T("Other")))
 			}
+			// The tab shown is ringed in its project's colour.
+			var tint color.Color = skin.AccentBright
+			if p, ok := projects[tabID]; ok && p.Key != "" {
+				tint = p.Look.color()
+			}
 			var face ggui.Widget
 			if d, ok := docs[tabID]; ok {
-				face = docTab(m, tabID, d, tabID == g.Active, focused)
+				face = docTab(m, tabID, d, tabID == g.Active, focused, tint)
 			} else if d, ok := diffs[tabID]; ok {
-				face = diffTabFace(m, tabID, d, tabID == g.Active, focused)
+				face = diffTabFace(m, tabID, d, tabID == g.Active, focused, tint)
 			} else {
 				s, ok := sessionIn(sessions, tabID)
 				if !ok {
 					s = &protocol.SessionInfo{Id: tabID, Agent: "shell"}
 				}
-				face = tab(m, s, tabID == g.Active, focused, titles[tabID])
-			}
-			// The tab shown is ringed in its project's colour.
-			if p, ok := projects[tabID]; ok && p.Key != "" {
-				face = ggui.Provide(tabTintKey, color.Color(p.Look.color()), face)
+				face = tab(m, s, tabID == g.Active, focused, titles[tabID], tint)
 			}
 			at := i
 			w := sessionDrag(m, face, tabID)

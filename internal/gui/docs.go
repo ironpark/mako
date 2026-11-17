@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"image/color"
 	"maps"
 	"math"
 	"slices"
@@ -384,25 +385,10 @@ func (m *model) dirtyDocs() []string {
 // docTab is a file's tab: its icon, its name, a dot while it has unsaved
 // changes, which the close button becomes on hover, as editors show it. A
 // preview's name is in italics, and a double click keeps it.
-func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget {
-	fg := skin.Muted
-	if selected {
-		fg = skin.Fg
-	}
+func docTab(m *model, id string, d docInfo, selected, focused bool, tint color.Color) ggui.Widget {
 	name := d.Name()
-	hover := newTabState()
-	text := widget.Text(name).Size(13).Color(fg).NoWrap().Ellipsis()
-	if d.Preview {
-		if italic, _ := ggui.SystemItalicFonts(); italic != nil {
-			text = text.Font(italic)
-		}
-	}
-	content := widget.Box(widget.Row(
-		icon(fileIconName(name)).Size(14).Color(fg),
-		widget.Box(text).MaxWidth(170),
-		tabCloseOr(hover, name, func() { m.askCloseDoc(id) }, d.Dirty),
-	).Gap(8)).Height(tabHeight)
-	btn := ui.ButtonOf(content, func() {
+	fg := pick[color.Color](selected, skin.Fg, skin.Muted)
+	return ui.EditorTab(name, func() {
 		// The bar is drawn again as the first tap shows the tab, so the
 		// last tap is kept with the model.
 		if last := m.lastTap; last.id == id && time.Since(last.at) < doubleTap {
@@ -410,8 +396,9 @@ func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget 
 		}
 		m.lastTap = tabTap{id, time.Now()}
 		m.showTab(id)
-	}).Ghost().Pad(0, 4, 0, 10).Radius(tabRadius).Name(name)
-	return tabCell(btn, hover, selected, focused)
+	}).Icon(icon(fileIconName(name)).Size(14).Color(fg)).
+		Selected(selected).Current(focused).Tint(tint).Preview(d.Preview).Dirty(d.Dirty).
+		OnClose(func() { m.askCloseDoc(id) }).CloseName(Tf("Close %s", name))
 }
 
 // docView is a file's tab content: a line about the file and the caret,

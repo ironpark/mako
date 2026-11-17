@@ -6,6 +6,7 @@ import (
 	"unicode"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/pkg/hangul"
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/widget"
 
@@ -263,13 +264,13 @@ func fuzzyMatch(s, q string) (score int, hits []int, ok bool) {
 	runes := []rune(s)
 	want := []rune(q)
 	// The last rune, maybe still being typed, matches by its keys.
-	lastKeys := keys([]rune{}, want[len(want)-1])
+	lastKeys := hangul.Keys([]rune{}, want[len(want)-1])
 	prev := -2
 	j := 0
 	for i := 0; i < len(runes) && j < len(want); i++ {
 		take := 1
 		if unicode.ToLower(runes[i]) != want[j] {
-			take = matchHangul(runes, i, want[j], pick(j == len(want)-1, lastKeys, nil))
+			take = hangul.Match(runes, i, want[j], pick(j == len(want)-1, lastKeys, nil))
 		}
 		if take == 0 {
 			continue

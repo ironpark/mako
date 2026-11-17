@@ -103,25 +103,6 @@ func TestFuzzyMatchHangulAsTyped(t *testing.T) {
 	}
 }
 
-// English typed with the input method on Korean reads as the keys that
-// typed it.
-func TestAsQwertyReadsTheKeysTyped(t *testing.T) {
-	for _, tc := range []struct {
-		q, want string
-		hangul  bool
-	}{
-		{"ㄴㄷㅅ샤ㅜㅎㄴ", "settings", true},
-		{"한글", "gksrmf", true},
-		{"쏘", "th", true},
-		{"tab 닫", "tab eke", true},
-		{"settings", "settings", false},
-	} {
-		if got, hangul := asQwerty(tc.q); got != tc.want || hangul != tc.hangul {
-			t.Errorf("asQwerty(%q) = %q, %v, want %q, %v", tc.q, got, hangul, tc.want, tc.hangul)
-		}
-	}
-}
-
 // In Korean, the palette finds a command by its English name, with its
 // category, and as typed with the input method left on Korean.
 func TestPaletteFindsEnglishInKorean(t *testing.T) {

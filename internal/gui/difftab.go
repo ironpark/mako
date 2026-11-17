@@ -3,6 +3,7 @@ package gui
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"maps"
 	"slices"
 	"strings"
@@ -290,12 +291,8 @@ func firstChange(d *protocol.Diff) int {
 }
 
 // diffTabFace is a diff's tab: how the file changed, its name, and in a
-// commit, which. A preview's name is dimmed, and a double click keeps it.
-func diffTabFace(m *model, id string, d diffTab, selected, focused bool) ggui.Widget {
-	fg := skin.Muted
-	if selected && !d.Preview {
-		fg = skin.Fg
-	}
+// commit, which. A preview's name is in italics, and a double click keeps it.
+func diffTabFace(m *model, id string, d diffTab, selected, focused bool, tint color.Color) ggui.Widget {
 	name := d.Name()
 	label := name
 	switch {
@@ -306,13 +303,7 @@ func diffTabFace(m *model, id string, d diffTab, selected, focused bool) ggui.Wi
 	case d.Base != "":
 		label += " ← " + d.Base
 	}
-	hover := newTabState()
-	content := widget.Box(widget.Row(
-		statusIcon(d.File.GetStatus()),
-		widget.Box(widget.Text(label).Size(13).Color(fg).NoWrap().Ellipsis()).MaxWidth(190),
-		tabClose(hover, label, func() { m.closeDiff(id) }),
-	).Gap(8)).Height(tabHeight)
-	btn := ui.ButtonOf(content, func() {
+	return ui.EditorTab(label, func() {
 		// The bar is drawn again as the first tap shows the tab, so the
 		// last tap is kept with the model.
 		if last := m.lastTap; last.id == id && time.Since(last.at) < doubleTap {
@@ -320,8 +311,9 @@ func diffTabFace(m *model, id string, d diffTab, selected, focused bool) ggui.Wi
 		}
 		m.lastTap = tabTap{id, time.Now()}
 		m.showTab(id)
-	}).Ghost().Pad(0, 4, 0, 10).Radius(tabRadius).Name(label)
-	return tabCell(btn, hover, selected, focused)
+	}).Icon(statusIcon(d.File.GetStatus())).MaxLabelWidth(190).
+		Selected(selected).Current(focused).Tint(tint).Preview(d.Preview).
+		OnClose(func() { m.closeDiff(id) }).CloseName(Tf("Close %s", label))
 }
 
 // diffTabView is a diff tab's content: the file's line and the diff's
