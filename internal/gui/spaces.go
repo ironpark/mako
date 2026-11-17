@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"image/color"
 	"math"
 	"slices"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/ui/icons"
 	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
@@ -19,22 +21,35 @@ import (
 )
 
 // Spaces: the sidebar's sessions divided by project, as views of them. A
-// space holds owners, host/name as the daemon gives them, and projects by
-// ID; the sidebar shows the project sections of the space chosen, whole,
-// or every section in the first, which is always there. A space holds a
-// section it names, leaves out one it hides, and else holds one of an
-// owner of its; see showsGroup. A swipe of two
-// fingers across the sidebar moves to the space beside it.
+// project section is in one space: the one it was moved to, else the
+// first holding an owner of its repositories, else the default one; see
+// placeOf. The space of every session, first unless left out, shows
+// every section. A space's colour washes the sidebar faintly while it
+// shows. A swipe of two fingers across the sidebar moves to the space
+// beside.
 
-// space is a named set of repository owners.
+// space is a named set of project sections.
 type space struct {
-	ID     string   `json:"id"` // what it is shown by, and its tabs and panes kept by
-	Name   string   `json:"name"`
+	ID    string `json:"id"` // what it is shown by, and its tabs and panes kept by
+	Name  string `json:"name"`
+	Color string `json:"color,omitempty"` // among lookColors, by name; none unless set
+	// Owners place a section none of the spaces was moved to in the first
+	// space holding one of its owners.
 	Owners []string `json:"owners,omitempty"`
-	// Projects are the sections the space shows whatever their owners,
-	// and Hidden those it leaves out though their owners are its: by ID.
+	// Projects are the sections moved to the space, by ID: in the first
+	// space listing one, whatever its owners. Hidden are those older
+	// windows left out of the space though its owners hold them, which no
+	// owner of its places there.
 	Projects []string `json:"projects,omitempty"`
 	Hidden   []string `json:"hidden,omitempty"`
+}
+
+// color is the space's colour; nil for none.
+func (sp space) color() color.Color {
+	if i := lookColorIndex(sp.Color); i >= 0 {
+		return lookColors[i].Color
+	}
+	return nil
 }
 
 // spaceList is the spaces, and whether the space of every session is among
@@ -44,6 +59,9 @@ type spaceList struct {
 	Spaces []space `json:"spaces,omitempty"`
 	// NoAll leaves the space of every session out, while there are others.
 	NoAll bool `json:"no_all,omitempty"`
+	// Default is the ID of the space a section goes to that nothing else
+	// places; the first when it names none.
+	Default string `json:"default_space,omitempty"`
 	// Projects are the folders the user put together or named; see
 	// projects.go.
 	Projects []project `json:"projects,omitempty"`
@@ -143,21 +161,61 @@ func (m *model) updateSpaces(fn func([]space) []space) {
 	})
 }
 
-// toggleOwner adds owner to space i, an index into the spaces after the
-// first, or takes it out.
-func (m *model) toggleOwner(i int, owner string) {
+// updateSpace changes the space of ID id, as updateSpaces does.
+func (m *model) updateSpace(id string, fn func(*space)) {
 	m.updateSpaces(func(spaces []space) []space {
-		spaces[i].Owners = toggled(spaces[i].Owners, owner)
+		if i := slices.IndexFunc(spaces, func(sp space) bool { return sp.ID == id }); i >= 0 {
+			fn(&spaces[i])
+		}
 		return spaces
 	})
 }
 
+// toggleOwner adds owner to the space of ID id, or takes it out.
+func (m *model) toggleOwner(id, owner string) {
+	m.updateSpace(id, func(sp *space) { sp.Owners = toggled(sp.Owners, owner) })
+}
+
 // newSpace adds a space holding owners and shows it.
-func (m *model) newSpace(name string, owners ...string) {
+func (m *model) newSpace(name string, owners ...string) { m.newSpaceOf(name, owners) }
+
+// newSpaceOf adds a space holding owners, moves groups to it and shows it.
+func (m *model) newSpaceOf(name string, owners []string, groups ...sessionGroup) {
+	id := newSpaceID()
+	keys := make([]string, len(groups))
+	for i, g := range groups {
+		keys[i] = g.Key
+	}
 	m.updateSpaces(func(spaces []space) []space {
-		return append(spaces, space{ID: newSpaceID(), Name: name, Owners: owners})
+		return placeSections(append(spaces, space{ID: id, Name: name, Owners: owners}), id, keys...)
 	})
 	m.setSpace(len(ggui.Peek(m.Spaces).Spaces))
+}
+
+// spaceMark is a dot of a space's colour, as menus and its settings mark
+// it with; room for one when it has none.
+func spaceMark(sp space) ggui.Widget {
+	c := sp.color()
+	if c == nil {
+		return widget.Box().Size(8, 8).Radius(4).Border(1.2, skin.ExtraMuted)
+	}
+	return widget.Box().Size(8, 8).Radius(4).Fill(c)
+}
+
+// spaceWash draws child, the sidebar's list in space i, on a faint wash
+// of the space's colour, strongest at its top; on nothing for a space of
+// none.
+func spaceWash(m *model, i int, child ggui.Widget) ggui.Widget {
+	tint := ggui.Derived(func() color.Color {
+		sp, _ := m.spaces().spaceOf(i)
+		return sp.color()
+	}).WithEqual(func(a, b color.Color) bool { return a == b })
+	return ggui.View(tint, func(c color.Color) ggui.Widget {
+		if c == nil {
+			return child
+		}
+		return widget.Box(child).Gradient(ggui.LinearGradient(math.Pi/2, ggui.Stops(withAlpha(c, 0x1c), withAlpha(c, 0x06))...))
+	})
 }
 
 // knownOwners are the owners the sidebar's sessions and kept folders say
@@ -190,13 +248,21 @@ func spaceSwitcher(m *model) ggui.Widget {
 		current := p.Space
 		items := make([]ggui.Widget, 0, len(p.Spaces)+3)
 		for i := p.firstSpace(); i <= len(p.Spaces); i++ {
-			items = append(items, ui.MenuItem(p.spaceName(i), func() { m.setSpace(i) }).Checked(i == current))
+			item := ui.MenuItem(p.spaceName(i), func() { m.setSpace(i) }).Checked(i == current)
+			if sp, ok := p.spaceOf(i); ok {
+				item = item.Icon(spaceMark(sp))
+			}
+			items = append(items, item)
 		}
 		items = append(items, ui.MenuDivider(), ui.MenuItem(T("Edit spaces…"), func() { m.openSettings("spaces") }))
-		title := widget.Row(
+		parts := []ggui.Widget{
 			widget.Text(p.spaceName(current)).Size(14).Weight(ggui.WeightSemibold).NoWrap().Ellipsis(),
 			icon("chevron-down").Size(13).Color(skin.Muted),
-		).Gap(4).Align(widget.AlignCenter)
+		}
+		if sp, _ := p.spaceOf(current); sp.color() != nil {
+			parts = append([]ggui.Widget{widget.Box(spaceMark(sp)).Pad(0, 2, 0, 0)}, parts...)
+		}
+		title := widget.Row(parts...).Gap(4).Align(widget.AlignCenter)
 		return iconMenu(ui.MenuOf(title, items...).Name(T("Spaces")), 2)
 	})
 }
@@ -207,14 +273,17 @@ func spaceDots(m *model) ggui.Widget {
 	// The dots are made again as spaces come, go or are renamed, not as
 	// the current one changes, which each dot follows itself.
 	type dotList struct {
-		First int
-		Names []string
+		First  int
+		Names  []string
+		Colors []color.Color
 	}
 	list := ggui.Derived(func() dotList {
 		p := m.spaces()
 		l := dotList{First: p.firstSpace()}
 		for i := l.First; i <= len(p.Spaces); i++ {
+			sp, _ := p.spaceOf(i)
 			l.Names = append(l.Names, p.spaceName(i))
+			l.Colors = append(l.Colors, sp.color())
 		}
 		return l
 	}).WithEqual(deepEqual)
@@ -226,7 +295,7 @@ func spaceDots(m *model) ggui.Widget {
 		var dots []ggui.Widget
 		for j, name := range l.Names {
 			i := l.First + j
-			dots = append(dots, ui.ButtonOf(spaceDot(current, i), func() { m.setSpace(i) }).Ghost().Pad(0).Radius(6).Name(name))
+			dots = append(dots, ui.ButtonOf(spaceDot(current, i, l.Colors[j]), func() { m.setSpace(i) }).Ghost().Pad(0).Radius(6).Name(name))
 		}
 		return widget.Row(dots...).Gap(2).Align(widget.AlignCenter)
 	})
@@ -234,15 +303,19 @@ func spaceDots(m *model) ggui.Widget {
 
 // spaceDot is space i's dot: a pill while it is the current space, which
 // grows from a dot, and brightens, as the space comes in, and shrinks back
-// as it goes.
-func spaceDot(current ggui.Readable[int], i int) ggui.Widget {
+// as it goes; in the space's colour c while it is, unless it has none.
+func spaceDot(current ggui.Readable[int], i int, c color.Color) ggui.Widget {
+	var lit color.Color = skin.Muted
+	if c != nil {
+		lit = c
+	}
 	return ggui.Component(func() ggui.Widget {
 		on := ggui.TweenOf(ggui.Map(current, func(c int) float64 { return pick(c == i, 1.0, 0.0) }), motionDuration).Easing(ggui.EaseOut)
 		return ggui.View(on, func(t float64) ggui.Widget {
 			w := 6 + 10*t
 			pill := widget.Stack(
 				widget.Box().Size(w, 6).Radius(3).Fill(skin.Surface3),
-				widget.Opacity(widget.Box().Size(w, 6).Radius(3).Fill(skin.Muted), t),
+				widget.Opacity(widget.Box().Size(w, 6).Radius(3).Fill(lit), t),
 			)
 			return widget.Box(widget.Center(pill)).Size(22, 22)
 		})
@@ -461,22 +534,22 @@ func (l *swipeSlide) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	clip.Transform(ggui.Affine{}.Translate(at, 0), func(c *ggui.Canvas) { c.Paint(beside, r) })
 }
 
-// ownerSpaceItems are an owner heading's menu entries for the spaces: one
-// to put it in each space or take it out, and one for a new space of it.
-func ownerSpaceItems(m *model, owner, name string) []ggui.Widget {
-	spaces := ggui.Peek(m.Spaces).Spaces
+// ownerSpaceItems are an owner heading's menu entries for the spaces:
+// moving its projects to one, and a new space of the owner, which they
+// move to and which new projects of the owner go to.
+func ownerSpaceItems(m *model, o ownerSection, name string) []ggui.Widget {
 	items := []ggui.Widget{ui.MenuDivider()}
-	for i, sp := range spaces {
-		label := cmp.Or(sp.Name, Tf("Space %d", i+1))
-		items = append(items, ui.MenuItem(Tf("In %s", label), func() { m.toggleOwner(i, owner) }).Checked(slices.Contains(sp.Owners, owner)))
+	if to := moveItems(m, name, o.Groups...); len(to) > 0 {
+		items = append(items, ui.MenuSub(T("Move projects to space"), to...))
 	}
-	return append(items, ui.MenuItem(T("New space with this owner"), func() { m.newSpace(name, owner) }))
+	return append(items, ui.MenuItem(T("New space with this owner"), func() { m.newSpaceOf(name, []string{o.Owner}, o.Groups...) }))
 }
 
-// spacesSettings edits the spaces: each one's name, its place among them,
-// the owners it holds and the projects it shows.
+// spacesSettings edits the spaces: which one is the default, each one's
+// name and colour, their order, dragged by their handles, the owners each
+// places new projects by, and the projects in each, dragged from one to
+// another.
 func spacesSettings(m *model) ggui.Widget {
-	spaces := ggui.Map(m.Spaces, func(l spaceList) int { return len(l.Spaces) })
 	owners := ggui.Map(m.Sessions, func(s []*protocol.SessionInfo) []string {
 		return knownOwners(s, ggui.Peek(m.Prefs).Projects)
 	}).WithEqual(slices.Equal)
@@ -491,22 +564,53 @@ func spacesSettings(m *model) ggui.Widget {
 	general := card(
 		row(T("All sessions"), T("A space of every session, before the others. Left out, the sidebar shows only the spaces you add."),
 			ui.Switch(showAll, "").Name(T("All sessions"))),
+		row(T("Default space"), T("Where a new project goes that the owners of no space place."), defaultSpaceMenu(m)),
 		row(T("Copy from another node"), T("Take the spaces, projects, names, looks and pins of a node's windows in place of these. A node shows its own only to one it lets in."),
 			copySpacesMenu(m)),
 	)
-	return page(T("Spaces"), T("Spaces divide the sidebar's projects: those of the owners a space holds, and those you put in it from a project's menu. Swipe across the sidebar with two fingers, or pick one from its title, to move between them."),
+	list := widget.Reorderable(spaceOrder(m), func(sp space) string { return sp.ID }, func(it widget.EachItem[space]) ggui.Widget {
+		return spaceCard(m, it.Item.ID, owners, sections)
+	}).Handles().Gap(sectionGap).Stretch()
+	none := ggui.Map(m.Spaces, func(l spaceList) bool { return len(l.Spaces) == 0 })
+	return page(T("Spaces"), T("Spaces divide the sidebar's projects, each project in one. A new project goes to the first space holding an owner of its repository, else to the default space; move it to another from its menu, or by dragging it here. Swipe across the sidebar with two fingers, or pick a space from its title, to move between them."),
 		section(T("Every space"), general),
-		ggui.View(spaces, func(n int) ggui.Widget {
-			if n == 0 {
-				return section(T("Spaces"), muted(widget.Text(T("No spaces yet. Add one, or pick New space with this owner from an owner's menu in the sidebar.")).Size(13)), widget.Align(add).Left())
-			}
-			cards := make([]ggui.Widget, n)
-			for i := range n {
-				cards[i] = spaceCard(m, i, n, owners, sections)
-			}
-			return section(T("Spaces"), append(cards, widget.Align(add).Left())...)
-		}),
+		section(T("Spaces"),
+			ggui.View(none, func(none bool) ggui.Widget {
+				if none {
+					return muted(widget.Text(T("No spaces yet. Add one, or pick New space with this owner from an owner's menu in the sidebar.")).Size(13))
+				}
+				return list
+			}),
+			widget.Align(add).Left(),
+		),
 	)
+}
+
+// spaceOrder binds the spaces in order, for the list that reorders them.
+func spaceOrder(m *model) ggui.Binding[[]space] {
+	return ggui.Bind(func() []space { return m.Spaces.Get().Spaces }, func(v []space) {
+		m.updateSpaces(func([]space) []space { return slices.Clone(v) })
+	})
+}
+
+// defaultSpaceMenu picks the default space.
+func defaultSpaceMenu(m *model) ggui.Widget {
+	return ggui.Reactive(func() ggui.Widget {
+		set := m.spaces()
+		if len(set.Spaces) == 0 {
+			return muted(widget.Text(T("No spaces yet")).Size(12.5))
+		}
+		at := set.defaultSpace()
+		var items []ggui.Widget
+		for i, sp := range set.Spaces {
+			items = append(items, ui.MenuItem(spaceLabel(sp, i+1), func() {
+				m.Spaces.Update(func(l spaceList) spaceList { l.Default = sp.ID; return l })
+			}).Icon(spaceMark(sp)).Checked(i+1 == at))
+		}
+		sp, _ := set.spaceOf(at)
+		face := widget.Row(spaceMark(sp), widget.Text(spaceLabel(sp, at)).Size(13).NoWrap(), icon("chevron-down").Size(14).Color(skin.Muted)).Gap(8).Align(widget.AlignCenter)
+		return ui.MenuOf(face, items...).Name(T("Default space"))
+	})
 }
 
 // spaceSection is a project section as the space settings list it: its
@@ -516,8 +620,8 @@ type spaceSection struct {
 	Owners    []string
 }
 
-// sectionsOf are the sections of groups, by name, and those the spaces of
-// l hold or hide that no group is now, as their IDs name them.
+// sectionsOf are the sections of groups, by name, and those moved to the
+// spaces of l that no group is now, as their IDs name them.
 func sectionsOf(groups []sessionGroup, l spaceList) []spaceSection {
 	out := make([]spaceSection, 0, len(groups))
 	seen := map[string]bool{}
@@ -526,7 +630,7 @@ func sectionsOf(groups []sessionGroup, l spaceList) []spaceSection {
 		seen[g.Key] = true
 	}
 	for _, sp := range l.Spaces {
-		for _, id := range append(slices.Clone(sp.Projects), sp.Hidden...) {
+		for _, id := range sp.Projects {
 			if !seen[id] {
 				out = append(out, spaceSection{Key: id, Name: projectLabel(l.Projects, id)})
 				seen[id] = true
@@ -538,63 +642,103 @@ func sectionsOf(groups []sessionGroup, l spaceList) []spaceSection {
 }
 
 // deleteSpace deletes space i, an index into the spaces after the first,
-// with a notice whose Undo brings it back, as the func returned does.
+// with a notice whose Undo brings it back, as the func returned does. Its
+// projects go where the others place them, or to the default space.
 func (m *model) deleteSpace(i int) (undo func()) {
 	before := slices.Clone(ggui.Peek(m.Spaces).Spaces)
 	if i < 0 || i >= len(before) {
 		return func() {}
 	}
-	name := cmp.Or(before[i].Name, Tf("Space %d", i+1))
+	name := spaceLabel(before[i], i+1)
 	m.updateSpaces(func(spaces []space) []space { return slices.Delete(spaces, i, i+1) })
 	undo = func() { m.updateSpaces(func([]space) []space { return slices.Clone(before) }) }
 	m.toaster.Push(ui.Toast(Tf("Deleted %s", name), "").Action(T("Undo"), undo))
 	return undo
 }
 
-// reorderSpace moves space i by places among the spaces after the first:
-// -1 before the one before it, 1 after the one after.
-func (m *model) reorderSpace(i, by int) {
-	m.updateSpaces(func(spaces []space) []space {
-		if j := i + by; i >= 0 && i < len(spaces) && j >= 0 && j < len(spaces) {
-			spaces[i], spaces[j] = spaces[j], spaces[i]
-		}
-		return spaces
-	})
+// spaceIndex is the index of the space of ID id among the spaces after
+// the first, -1 for none.
+func spaceIndex(spaces []space, id string) int {
+	return slices.IndexFunc(spaces, func(sp space) bool { return sp.ID == id })
 }
 
-// spaceCard is one space of n: its name, its place, how many projects it
-// shows, its owners and its projects.
-func spaceCard(m *model, i, n int, owners ggui.Readable[[]string], sections ggui.Readable[[]spaceSection]) ggui.Widget {
-	name := spaceField(m, i, func(sp *space) *string { return &sp.Name })
-	button := func(glyph, label string, enabled bool, fn func()) ggui.Widget {
-		face := icon(glyph).Size(14)
-		if !enabled {
-			face = face.Color(skin.ExtraMuted)
-		}
-		return ui.Tooltip(ui.ButtonOf(face, fn).Ghost().Pad(6).Radius(6).Disabled(!enabled).Name(label), label)
-	}
-	count := ggui.Reactive(func() ggui.Widget {
+// spaceCard is the space of ID id: its handle, colour, name, how many
+// projects are in it, its owners and its projects.
+func spaceCard(m *model, id string, owners ggui.Readable[[]string], sections ggui.Readable[[]spaceSection]) ggui.Widget {
+	name := spaceField(m, id, func(sp *space) *string { return &sp.Name })
+	grip := widget.ReorderHandle(widget.Box(widget.Center(ui.Icon(icons.Grip).Size(15).Color(skin.Muted))).Size(20, 30)).Name(T("Move space"))
+	trash := ui.Tooltip(ui.ButtonOf(icon("trash-2").Size(14), func() { m.deleteSpace(spaceIndex(ggui.Peek(m.Spaces).Spaces, id)) }).
+		Ghost().Pad(6).Radius(6).Name(T("Delete space")), T("Delete space"))
+	status := ggui.Reactive(func() ggui.Widget {
 		set := m.spaces()
-		shown := 0
+		i := spaceIndex(set.Spaces, id)
+		if i < 0 {
+			return widget.Box()
+		}
+		in := 0
 		for _, sec := range sections.Get() {
-			if set.showsSection(i+1, sec.Key, sec.Owners) {
-				shown++
+			if at, _ := set.placeOf(sec.Key, sec.Owners); at == i+1 {
+				in++
 			}
 		}
-		return muted(widget.Text(Tf("%d projects", shown)).Size(12).NoWrap())
+		count := muted(widget.Text(pick(in == 1, T("1 project"), Tf("%d projects", in))).Size(12).NoWrap())
+		if set.defaultSpace() != i+1 {
+			return count
+		}
+		return widget.Row(ui.Badge(T("Default")).Secondary(), count).Gap(8).Align(widget.AlignCenter)
 	})
 	head := widget.Row(
-		widget.Expanded(ui.TextField(name).Placeholder(Tf("Space %d", i+1)).Name(T("Space name"))),
-		count,
-		button("arrow-up", T("Move up"), i > 0, func() { m.reorderSpace(i, -1) }),
-		button("arrow-down", T("Move down"), i < n-1, func() { m.reorderSpace(i, 1) }),
-		button("trash-2", T("Delete space"), true, func() { m.deleteSpace(i) }),
-	).Gap(4).Align(widget.AlignCenter)
+		grip,
+		spaceColorPicker(m, id),
+		widget.Expanded(ui.TextField(name).Placeholder(T("Space name")).Name(T("Space name"))),
+		status,
+		trash,
+	).Gap(6).Align(widget.AlignCenter)
 	return card(
-		widget.Box(head).Pad(12, 12, 12, 16),
-		widget.Box(spaceOwners(m, i, owners)).Pad(12, 16),
-		widget.Box(spaceProjects(m, i, sections)).Pad(12, 16),
+		widget.Box(head).Pad(10, 12, 10, 8),
+		widget.Box(spaceOwners(m, id, owners)).Pad(12, 16),
+		widget.Box(spaceProjects(m, id, sections)).Pad(12, 16),
 	)
+}
+
+// spaceColorPicker is a swatch of the space's colour, which opens a choice
+// of the others, and of none.
+func spaceColorPicker(m *model, id string) ggui.Widget {
+	set := func(c string) func() { return func() { m.updateSpace(id, func(sp *space) { sp.Color = c }) } }
+	swatches := ggui.Reactive(func() ggui.Widget {
+		l := m.Spaces.Get()
+		i := spaceIndex(l.Spaces, id)
+		if i < 0 {
+			return widget.Box()
+		}
+		now := l.Spaces[i].Color
+		swatch := func(inner ggui.Widget, on bool, label string, fn func()) ggui.Widget {
+			face := widget.Box(widget.Center(inner)).Size(24, 24).Radius(12)
+			if on {
+				face = face.Border(1.5, skin.Fg)
+			}
+			return ui.ButtonOf(face, fn).Ghost().Pad(0).Radius(12).Name(label)
+		}
+		w := []ggui.Widget{swatch(icon("circle-slash").Size(14).Color(skin.Muted), lookColorIndex(now) < 0, T("No colour"), set(""))}
+		for _, c := range lookColors {
+			w = append(w, swatch(widget.Box().Size(14, 14).Radius(7).Fill(c.Color), c.Name == now, T(c.Label), set(c.Name)))
+		}
+		return widget.Column(muted(widget.Text(T("Colour")).Size(11.5)), widget.Row(w...).Gap(6)).Gap(8)
+	})
+	face := ggui.Reactive(func() ggui.Widget {
+		l := m.Spaces.Get()
+		var sp space
+		if i := spaceIndex(l.Spaces, id); i >= 0 {
+			sp = l.Spaces[i]
+		}
+		if c := sp.color(); c != nil {
+			return widget.Box(widget.Center(widget.Box().Size(14, 14).Radius(7).Fill(c))).Size(18, 18)
+		}
+		return widget.Box(widget.Center(icon("palette").Size(15).Color(skin.Muted))).Size(18, 18)
+	})
+	picker := ui.PopoverOf(face, swatches).Name(T("Space colour")).Pad(10).Align(widget.PopupStart)
+	picker.Trigger().Ghost().Pad(5).Radius(6)
+	return borderless(picker)
 }
 
 // subhead is a part of a space's card: its title and what it does, over
@@ -614,12 +758,13 @@ func ownerLabel(o string) string {
 	return name
 }
 
-// spaceOwners are the owners space i holds, each a chip that lets it go,
-// and a menu of the others the sidebar knows to add.
-func spaceOwners(m *model, i int, owners ggui.Readable[[]string]) ggui.Widget {
+// spaceOwners are the owners the space of ID id holds, each a chip that
+// lets it go, and a menu of the others the sidebar knows to add.
+func spaceOwners(m *model, id string, owners ggui.Readable[[]string]) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		l := m.Spaces.Get()
-		if i >= len(l.Spaces) {
+		i := spaceIndex(l.Spaces, id)
+		if i < 0 {
 			return widget.Box()
 		}
 		in := slices.Clone(l.Spaces[i].Owners)
@@ -627,21 +772,21 @@ func spaceOwners(m *model, i int, owners ggui.Readable[[]string]) ggui.Widget {
 		var w []ggui.Widget
 		for _, o := range in {
 			label := ownerLabel(o)
-			w = append(w, removableChip(label, Tf("Take %s out", label), func() { m.toggleOwner(i, o) }))
+			w = append(w, removableChip(label, Tf("Take %s out", label), func() { m.toggleOwner(id, o) }))
 		}
 		var rest []ggui.Widget
 		for _, o := range owners.Get() {
 			if !slices.Contains(in, o) {
-				rest = append(rest, ui.MenuItem(ownerLabel(o), func() { m.toggleOwner(i, o) }))
+				rest = append(rest, ui.MenuItem(ownerLabel(o), func() { m.toggleOwner(id, o) }))
 			}
 		}
 		if len(rest) > 0 {
 			w = append(w, addMenu(T("Add owner"), rest))
 		}
-		hint := T("Every project whose repository one of them owns shows here.")
+		hint := T("A project of theirs goes here unless it was moved, or an earlier space holds its owner.")
 		switch {
 		case len(in) == 0 && len(rest) > 0:
-			hint = T("Add an owner to show every project whose repository it owns.")
+			hint = T("Add an owner to put its projects here unless they were moved.")
 		case len(in) == 0:
 			hint = T("No owners yet: they come from the origin remotes of the sessions' repositories.")
 		}
@@ -649,43 +794,53 @@ func spaceOwners(m *model, i int, owners ggui.Readable[[]string]) ggui.Widget {
 	})
 }
 
-// spaceProjects are the projects space i shows, or leaves out, each with
-// why and a switch, and a menu of the others to add.
-func spaceProjects(m *model, i int, sections ggui.Readable[[]spaceSection]) ggui.Widget {
-	return ggui.Reactive(func() ggui.Widget {
+// spaceDrag is a project dragged from a space's card: its section's ID,
+// and the space it is in.
+type spaceDrag struct{ Key, From string }
+
+// spaceProjects are the projects in the space of ID id, each a chip that
+// drags to another space's card or moves there from its menu, in a well
+// the others' drop into.
+func spaceProjects(m *model, id string, sections ggui.Readable[[]spaceSection]) ggui.Widget {
+	chips := ggui.Reactive(func() ggui.Widget {
 		set := m.spaces()
-		if _, ok := set.spaceOf(i + 1); !ok {
+		i := spaceIndex(set.Spaces, id)
+		if i < 0 {
 			return widget.Box()
 		}
-		var rows, rest []ggui.Widget
+		var w []ggui.Widget
 		for _, sec := range sections.Get() {
-			reason := set.sectionIn(i+1, sec.Key, sec.Owners)
-			if reason == notShown {
-				rest = append(rest, ui.MenuItem(sec.Name, func() { m.toggleSection(i, sec.Key, sec.Owners) }))
-				continue
+			if at, why := set.placeOf(sec.Key, sec.Owners); at == i+1 {
+				w = append(w, spaceChip(m, set, i, sec, why))
 			}
-			rows = append(rows, spaceProjectRow(m, i, sec, reason, set))
 		}
-		var content []ggui.Widget
-		if len(rows) == 0 {
-			content = append(content, muted(widget.Text(T("None yet: add its owners, or projects one by one.")).Size(12)))
-		} else {
-			content = append(content, widget.Column(rows...).Gap(10).Stretch())
+		if len(w) == 0 {
+			return muted(widget.Text(T("No projects. Drag one here from another space.")).Size(12))
 		}
-		if len(rest) > 0 {
-			content = append(content, widget.Align(addMenu(T("Add project"), rest)).Left())
-		}
-		return subhead(T("Projects"), T("Those its owners hold, and those put in or left out here or from a project's menu."), content...)
+		return widget.Wrap(w...).Gap(6)
 	})
+	over := ggui.State(false)
+	zone := widget.DropZone(chips, func(d widget.Dropped[spaceDrag]) { m.moveToSpace(id, d.Value.Key) }).
+		Accept(func(d spaceDrag) bool { return d.From != id }).OnHover(over.Set)
+	well := ggui.View(over, func(on bool) ggui.Widget {
+		box := widget.Box(zone).Pad(10).Radius(8).Border(1, skin.Border)
+		if on {
+			box = box.Fill(skin.Surface3).Border(1.5, skin.Muted)
+		}
+		return box
+	})
+	return subhead(T("Projects"), T("Drag a project to another space, or move it from its menu."), well)
 }
 
-// spaceProjectRow is a project space i shows or leaves out, said why, with
-// a switch to show it or leave it out.
-func spaceProjectRow(m *model, i int, sec spaceSection, reason sectionReason, set spaceSet) ggui.Widget {
-	var why string
-	switch reason {
+// spaceChip is a project in space i, which drags to another space and
+// whose menu says why it is here and moves it to another.
+func spaceChip(m *model, set spaceSet, i int, sec spaceSection, why sectionReason) ggui.Widget {
+	sp, _ := set.spaceOf(i + 1)
+	var reason string
+	switch why {
+	case byProject:
+		reason = T("Moved here")
 	case shownByOwner:
-		sp, _ := set.spaceOf(i + 1)
 		var by []string
 		for _, o := range sec.Owners {
 			if slices.Contains(sp.Owners, o) {
@@ -693,25 +848,19 @@ func spaceProjectRow(m *model, i int, sec spaceSection, reason sectionReason, se
 				by = append(by, name)
 			}
 		}
-		why = Tf("Through %s", strings.Join(by, ", "))
-	case byProject:
-		why = T("Added to this space")
-	case leftOut:
-		why = T("Left out of this space")
+		reason = Tf("Through %s", strings.Join(by, ", "))
+	default:
+		reason = T("The default space")
 	}
-	shown := ggui.Bind(func() bool { return m.spaces().showsSection(i+1, sec.Key, sec.Owners) }, func(on bool) {
-		if on != m.spacesNow().showsSection(i+1, sec.Key, sec.Owners) {
-			m.toggleSection(i, sec.Key, sec.Owners)
+	items := []ggui.Widget{ui.MenuLabel(reason), ui.MenuDivider()}
+	for j, to := range set.Spaces {
+		if j != i {
+			items = append(items, ui.MenuItem(Tf("Move to %s", spaceLabel(to, j+1)), func() { m.moveToSpace(to.ID, sec.Key) }).Icon(spaceMark(to)))
 		}
-	})
-	text := widget.Text(sec.Name).Size(13).NoWrap().Ellipsis()
-	if reason == leftOut {
-		text = text.Color(skin.Muted)
 	}
-	return widget.Row(
-		widget.Expanded(widget.Column(text, muted(widget.Text(why).Size(11.5).NoWrap().Ellipsis())).Gap(1).Stretch()),
-		ui.Switch(shown, "").Name(Tf("Show %s", sec.Name)),
-	).Gap(10).Align(widget.AlignCenter)
+	face := widget.Row(lookOf(set.Looks, sec.Key).glyph(13), widget.Text(sec.Name).Size(12.5).NoWrap().Ellipsis()).Gap(6).Align(widget.AlignCenter)
+	chip := ui.MenuOf(widget.Box(face).MaxWidth(220), items...).Name(sec.Name)
+	return widget.DragSource(chip, spaceDrag{Key: sec.Key, From: sp.ID})
 }
 
 // removableChip is a chip of label with a cross that runs remove.
@@ -727,22 +876,16 @@ func addMenu(label string, items []ggui.Widget) ggui.Widget {
 	return ui.MenuOf(widget.Row(icon("plus").Size(13), widget.Text(label).Size(12.5).NoWrap()).Gap(6).Align(widget.AlignCenter), items...).Name(label)
 }
 
-// spaceField binds a field of space i, as prefField does a setting's.
-func spaceField(m *model, i int, field func(*space) *string) ggui.Binding[string] {
+// spaceField binds a field of the space of ID id, as prefField does a
+// setting's.
+func spaceField(m *model, id string, field func(*space) *string) ggui.Binding[string] {
 	return ggui.Bind(func() string {
-		p := m.Spaces.Get()
-		if i < len(p.Spaces) {
-			return *field(&p.Spaces[i])
+		l := m.Spaces.Get()
+		if i := spaceIndex(l.Spaces, id); i >= 0 {
+			return *field(&l.Spaces[i])
 		}
 		return ""
-	}, func(v string) {
-		m.updateSpaces(func(spaces []space) []space {
-			if i < len(spaces) {
-				*field(&spaces[i]) = v
-			}
-			return spaces
-		})
-	})
+	}, func(v string) { m.updateSpace(id, func(sp *space) { *field(sp) = v }) })
 }
 
 // copySpacesMenu lists the nodes whose spaces can be copied: those of the

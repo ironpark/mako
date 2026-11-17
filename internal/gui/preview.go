@@ -167,6 +167,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					return ggui.Provide(ggui.ReducedMotionKey, true, sidebar(m))
 				}
 				if settingsOnly {
+					sidebarPreview(m) // projects and spaces for the pages to list
 					return ggui.Provide(ggui.ReducedMotionKey, true, settingsPage(m))
 				}
 				if railOnly {
@@ -523,6 +524,9 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					do(func() { m.setAgentView(func(p *prefs) { p.AgentGroup = agentGroupMachine }) }), frames(5), shot("sidebar-machine"),
 					do(func() { m.setAgentView(func(p *prefs) { p.AgentGroup, p.AgentCompact = agentGroupNone, true }) }), frames(5), shot("sidebar-compact"),
 					do(setTheme("light")), frames(5), shot("sidebar-light"),
+					do(func() { m.setSpace(1) }), frames(5), shot("sidebar-space-light"),
+					do(setTheme("dark")), frames(5), shot("sidebar-space"),
+					do(func() { m.setSpace(2) }), frames(5), shot("sidebar-space-default"),
 				}
 			}
 			if settingsOnly {
@@ -834,7 +838,10 @@ func sidebarPreview(m *model) {
 	root := func(name string) projectRoot {
 		return projectRoot{Remote: "github.com/xxgg/" + name, Owner: "github.com/xxgg", Locations: []fileRoot{{Node: "studio", Path: "/w/" + name}}}
 	}
-	m.Spaces.Set(spaceList{Spaces: []space{{ID: "work", Name: "Work", Owners: []string{"github.com/xxgg"}}}, Projects: []project{{ID: "xxgg", Name: "XXGG/MAKO", Roots: []projectRoot{root("mako"), root("ggui"), root("ggfx"), root("ggwd")}}}})
+	m.Spaces.Set(spaceList{Default: "side", Spaces: []space{
+		{ID: "work", Name: "Work", Color: "blue", Owners: []string{"github.com/xxgg"}},
+		{ID: "side", Name: "Side projects", Color: "green"},
+	}, Projects: []project{{ID: "xxgg", Name: "XXGG/MAKO", Roots: []projectRoot{root("mako"), root("ggui"), root("ggfx"), root("ggwd")}}}})
 	type row struct{ id, node, dir, agent, title, status, branch string }
 	rows := []row{
 		{"50518a4e", "studio", "/w/mako", "claude", "메모리 개선", "", "main"},

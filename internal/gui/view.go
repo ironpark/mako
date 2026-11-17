@@ -183,7 +183,8 @@ func sidebar(m *model) ggui.Widget {
 				return widget.Box()
 			}
 			tree := widget.Scroll(widget.Padding(projectTree(m, st, i), 10, 8, 10, 8)).Bar(skin.Surface3)
-			return &sidebarBody{top: tree, grip: sidebarGrip(m), bottom: agentsPanel(m, st, i), split: m.SidebarSplit}
+			body := &sidebarBody{top: tree, grip: sidebarGrip(m), bottom: agentsPanel(m, st, i), split: m.SidebarSplit}
+			return spaceWash(m, i, body)
 		})
 	}
 	// The menus' faces sit on the sidebar's fill, not the page's.
@@ -288,6 +289,13 @@ func (m *model) addProjectFolder() {
 		key := sectionKey(defs, implicitKey(self, dir, ""))
 		if _, ok := ggui.Peek(m.Spaces).Looks[key]; !ok {
 			m.setLook(key, randomLook())
+		}
+		// Added in a space, it goes in that one, unless it was moved before.
+		set := m.spacesNow()
+		if sp, ok := set.spaceOf(set.Space); ok {
+			if _, why := set.placeOf(key, nil); why != byProject {
+				m.moveToSpace(sp.ID, key)
+			}
 		}
 		m.setScope(scopeKey{Section: key})
 	})

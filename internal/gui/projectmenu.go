@@ -115,9 +115,47 @@ func startItems(m *model, g sessionGroup, nodes []*protocol.Node) []ggui.Widget 
 
 // Spaces ----------------------------------------------------------------------
 
-// showsGroup reports whether space i shows section g: every space but the
-// first leaves out what it hides, shows what it holds, and else shows a
-// section any of whose owners it holds, the whole section.
+// A section is in one space: the first that it was moved to, else the
+// first holding an owner of its repositories, as a new project is placed,
+// else the default space. The space of every session shows every one.
+
+// sectionReason is why a section is in the space it is.
+type sectionReason int
+
+const (
+	byDefault    sectionReason = iota // no other space places it
+	byProject                         // it was moved there
+	shownByOwner                      // an owner of its repositories is the space's
+)
+
+// defaultSpace is the index of the space a section goes to that nothing
+// else places: the one chosen, else the first; allSpace with none.
+func (p spaceSet) defaultSpace() int {
+	if len(p.Spaces) == 0 {
+		return allSpace
+	}
+	return max(slices.IndexFunc(p.Spaces, func(sp space) bool { return sp.ID == p.Default }), 0) + 1
+}
+
+// placeOf is the index of the space the section of ID key, whose
+// repositories owners hold, is in, and why.
+func (p spaceSet) placeOf(key string, owners []string) (int, sectionReason) {
+	for i, sp := range p.Spaces {
+		if slices.Contains(sp.Projects, key) {
+			return i + 1, byProject
+		}
+	}
+	for i, sp := range p.Spaces {
+		// Hidden is what older windows left out of a space by its owners.
+		if !slices.Contains(sp.Hidden, key) && slices.ContainsFunc(owners, func(o string) bool { return slices.Contains(sp.Owners, o) }) {
+			return i + 1, shownByOwner
+		}
+	}
+	return p.defaultSpace(), byDefault
+}
+
+// showsGroup reports whether space i shows section g: the space of every
+// session shows every one, the others those in them.
 func (p spaceSet) showsGroup(i int, g sessionGroup) bool {
 	return p.showsSection(i, g.Key, groupOwners(g))
 }
@@ -125,35 +163,11 @@ func (p spaceSet) showsGroup(i int, g sessionGroup) bool {
 // showsSection is showsGroup for the section of ID key whose repositories
 // owners hold.
 func (p spaceSet) showsSection(i int, key string, owners []string) bool {
-	r := p.sectionIn(i, key, owners)
-	return r == shownByOwner || r == byProject
-}
-
-// sectionReason is why a space shows a section, or that it does not.
-type sectionReason int
-
-const (
-	notShown     sectionReason = iota
-	shownByOwner               // an owner it holds holds the section's repositories
-	byProject                  // it holds the section itself
-	leftOut                    // it hides the section, whatever its owners
-)
-
-// sectionIn is why space i shows the section of ID key whose repositories
-// owners hold, or that it does not, or hides it.
-func (p spaceSet) sectionIn(i int, key string, owners []string) sectionReason {
-	sp, ok := p.spaceOf(i)
-	switch {
-	case !ok:
-		return byProject
-	case slices.Contains(sp.Hidden, key):
-		return leftOut
-	case slices.Contains(sp.Projects, key):
-		return byProject
-	case slices.ContainsFunc(owners, func(o string) bool { return slices.Contains(sp.Owners, o) }):
-		return shownByOwner
+	if _, ok := p.spaceOf(i); !ok {
+		return true
 	}
-	return notShown
+	at, _ := p.placeOf(key, owners)
+	return at == i
 }
 
 // spaceGroups keeps the sections space i shows.
@@ -164,51 +178,86 @@ func (p spaceSet) spaceGroups(i int, groups []sessionGroup) []sessionGroup {
 	return slices.DeleteFunc(slices.Clone(groups), func(g sessionGroup) bool { return !p.showsGroup(i, g) })
 }
 
-// toggleProject shows section g in space i, an index into the spaces after
-// the first, or leaves it out: held or hidden as its owners do not already
-// say.
-func (m *model) toggleProject(i int, g sessionGroup) { m.toggleSection(i, g.Key, groupOwners(g)) }
-
-// toggleSection is toggleProject for the section of ID key whose
-// repositories owners hold.
-func (m *model) toggleSection(i int, key string, owners []string) {
-	m.updateSpaces(func(spaces []space) []space {
-		if i < 0 || i >= len(spaces) {
-			return spaces
-		}
+// placeSections moves the sections of IDs keys into the space of ID to,
+// out of any other, whatever their owners say.
+func placeSections(spaces []space, to string, keys ...string) []space {
+	for i := range spaces {
 		sp := &spaces[i]
-		set := spaceSet{spaceList: spaceList{Spaces: spaces}}
-		shown := set.showsSection(i+1, key, owners)
-		sp.Projects = slices.DeleteFunc(slices.Clone(sp.Projects), func(id string) bool { return id == key })
-		sp.Hidden = slices.DeleteFunc(slices.Clone(sp.Hidden), func(id string) bool { return id == key })
-		if now := set.showsSection(i+1, key, owners); now == shown {
-			// The owners say as it was: the space says otherwise itself.
-			if shown {
-				sp.Hidden = append(sp.Hidden, key)
-			} else {
-				sp.Projects = append(sp.Projects, key)
-			}
+		sp.Projects = slices.DeleteFunc(slices.Clone(sp.Projects), func(id string) bool { return slices.Contains(keys, id) })
+		sp.Hidden = slices.DeleteFunc(slices.Clone(sp.Hidden), func(id string) bool { return slices.Contains(keys, id) })
+		if sp.ID == to {
+			sp.Projects = append(sp.Projects, keys...)
 		}
-		return spaces
-	})
+	}
+	return spaces
+}
+
+// moveToSpace moves the sections of IDs keys into the space of ID to.
+func (m *model) moveToSpace(to string, keys ...string) {
+	m.updateSpaces(func(spaces []space) []space { return placeSections(spaces, to, keys...) })
+}
+
+// moveGroupsTo moves sections to space i, an index into the spaces after
+// the first, from the sidebar, with a notice that names where they went
+// and offers to put them back.
+func (m *model) moveGroupsTo(i int, name string, groups ...sessionGroup) {
+	before := ggui.Peek(m.Spaces).Spaces
+	if i < 0 || i >= len(before) {
+		return
+	}
+	keys := make([]string, len(groups))
+	for j, g := range groups {
+		keys[j] = g.Key
+	}
+	m.moveToSpace(before[i].ID, keys...)
+	undo := func() {
+		m.updateSpaces(func(spaces []space) []space {
+			// Only the moved sections, as they were; the rest as it is now.
+			for j := range spaces {
+				spaces[j].Projects = slices.DeleteFunc(spaces[j].Projects, func(id string) bool { return slices.Contains(keys, id) })
+				if k := slices.IndexFunc(before, func(sp space) bool { return sp.ID == spaces[j].ID }); k >= 0 {
+					for _, id := range before[k].Projects {
+						if slices.Contains(keys, id) {
+							spaces[j].Projects = append(spaces[j].Projects, id)
+						}
+					}
+					for _, id := range before[k].Hidden {
+						if slices.Contains(keys, id) && !slices.Contains(spaces[j].Hidden, id) {
+							spaces[j].Hidden = append(spaces[j].Hidden, id)
+						}
+					}
+				}
+			}
+			return spaces
+		})
+	}
+	m.toaster.Push(ui.Toast(Tf("Moved %s to %s", name, spaceLabel(before[i], i+1)), "").Action(T("Undo"), undo))
+}
+
+// spaceLabel is how a space at index i is named: its name, else its place.
+func spaceLabel(sp space, i int) string { return cmp.Or(sp.Name, Tf("Space %d", i)) }
+
+// moveItems are a menu's entries moving groups to each space, the one they
+// are in checked: groups, from a project's menu, or an owner's.
+func moveItems(m *model, name string, groups ...sessionGroup) []ggui.Widget {
+	set := m.spacesNow()
+	var items []ggui.Widget
+	for i, sp := range set.Spaces {
+		in := len(groups) > 0 && !slices.ContainsFunc(groups, func(g sessionGroup) bool { return !set.showsGroup(i+1, g) })
+		items = append(items, ui.MenuItem(spaceLabel(sp, i+1), func() { m.moveGroupsTo(i, name, groups...) }).
+			Icon(spaceMark(sp)).Checked(in))
+	}
+	return items
 }
 
 // projectSpaceItems are a project section's menu entries for the spaces:
-// one to show it in each space or leave it out, and one for a new space of
-// it.
+// moving it to another, and a new space of it.
 func projectSpaceItems(m *model, g sessionGroup, name string) []ggui.Widget {
-	set := m.spacesNow()
 	items := []ggui.Widget{ui.MenuDivider()}
-	for i, sp := range set.Spaces {
-		label := cmp.Or(sp.Name, Tf("Space %d", i+1))
-		items = append(items, ui.MenuItem(Tf("In %s", label), func() { m.toggleProject(i, g) }).Checked(set.showsGroup(i+1, g)))
+	if to := moveItems(m, name, g); len(to) > 0 {
+		items = append(items, ui.MenuSub(T("Move to space"), to...))
 	}
-	return append(items, ui.MenuItem(T("New space with this project"), func() {
-		m.updateSpaces(func(spaces []space) []space {
-			return append(spaces, space{ID: newSpaceID(), Name: name, Projects: []string{g.Key}})
-		})
-		m.setSpace(len(ggui.Peek(m.Spaces).Spaces))
-	}))
+	return append(items, ui.MenuItem(T("New space with this project"), func() { m.newSpaceOf(name, nil, g) }))
 }
 
 // projectLabel is how a space's settings name a section it holds by ID:

@@ -143,7 +143,11 @@ func projectTree(m *model, st sidebarState, i int) ggui.Widget {
 		pins := st.pinnedProjects.Get()
 		looks := m.spaces().Looks
 		if len(groups) == 0 {
-			return widget.Box(muted(widget.Text(T("No projects yet. Add a folder with +.")).Size(12))).Pad(8)
+			empty := T("No projects yet. Add a folder with +.")
+			if _, ok := m.spaces().spaceOf(i); ok {
+				empty = T("No projects in this space. Add a folder with +, or move a project here from its menu.")
+			}
+			return widget.Box(muted(widget.Text(empty).Size(12))).Pad(8)
 		}
 		labels := projectLabels(groups, nodes)
 		tree := treeRows{m: m, scope: scope, pins: pins, looks: looks, labels: labels}
@@ -207,7 +211,7 @@ func ownerHeading(m *model, o ownerSection) ggui.Widget {
 	}
 	head := treeHeading(icon(ownerGlyph(host)).Size(14), name, end)
 	return ui.ContextMenuFunc(head, func() []ggui.Widget {
-		return append(ownerMenu(m, o, name), ownerSpaceItems(m, o.Owner, name)...)
+		return append(ownerMenu(m, o, name), ownerSpaceItems(m, o, name)...)
 	}).Name(Tf("%s actions", name))
 }
 
