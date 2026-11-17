@@ -222,7 +222,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				clear = projectChipWidth(cmp.Or(p.Name, T("Other")))
 			}
 			var cell ggui.Widget = &paintHook{child: sessionDrag(m, face, tabID), fn: func(dst *ggui.Canvas, r ggui.Rect) {
-				counter.saw(dst, r)
+				counter.saw(r)
 				if tabID == g.Active && m.revealedTab[id] != tabID {
 					dst.RequestReveal(ggui.Rct(ggui.Pt(r.Origin.X-clear, r.Origin.Y), ggui.Sz(r.Size.W+clear, r.Size.H)))
 					m.revealedTab[id] = tabID
@@ -248,7 +248,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		// Tabs scrolled past an end fade out there; of groups, a label
 		// sticking at the start stands in for the fade there.
 		bar := widget.Scroll(widget.Box(widget.Row(children...).Align(widget.AlignCenter)).Pad(0, 4).Height(tabBarHeight)).
-			Horizontal().Shrink().Bar(color.Transparent)
+			Horizontal().Shrink().Bar(color.Transparent).Overscroll(widget.OverscrollBounce)
 		if grouped {
 			bar.FadeEnds(0, 28)
 		} else {
@@ -328,14 +328,17 @@ func tabList(m *model, pane int, g tabGroup, sessions []*protocol.SessionInfo, t
 		Height(tabBarHeight).Width(36)
 }
 
-// tabCounter counts, each frame, the tabs of a bar painted where they show,
-// and keeps how many of total are not in hidden.
+// tabCounter counts, each whole frame, the tabs of a bar painted where
+// they show, its own rect, and keeps how many of total are not in hidden.
+// A frame painted in part paints only some tabs, and is not counted.
 type tabCounter struct {
-	child  ggui.Widget
-	total  int
-	seen   int
-	hidden *ggui.StateValue[int]
-	post   func(func())
+	child    ggui.Widget
+	total    int
+	seen     int
+	counting bool
+	window   ggui.Rect
+	hidden   *ggui.StateValue[int]
+	post     func(func())
 }
 
 func (t *tabCounter) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
@@ -343,18 +346,21 @@ func (t *tabCounter) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 }
 
 func (t *tabCounter) Paint(dst *ggui.Canvas, r ggui.Rect) {
-	t.seen = 0
+	t.seen, t.window, t.counting = 0, r, dst.TakesInput()
 	dst.Paint(t.child, r)
+	if !t.counting {
+		return
+	}
+	t.counting = false
 	if n := t.total - t.seen; n != ggui.Peek(t.hidden) {
 		t.post(func() { t.hidden.Set(n) })
 	}
 }
 
-// saw counts a tab painted at r if it shows whole, near enough, in what
-// dst draws.
-func (t *tabCounter) saw(dst *ggui.Canvas, r ggui.Rect) {
-	clip, ok := dst.ClipBounds()
-	if !ok || (r.Origin.X >= clip.Origin.X-2 && r.Origin.X+r.Size.W <= clip.Origin.X+clip.Size.W+2) {
+// saw counts a tab painted at r if it shows whole, near enough, in the
+// bar.
+func (t *tabCounter) saw(r ggui.Rect) {
+	if t.counting && r.Origin.X >= t.window.Origin.X-2 && r.Origin.X+r.Size.W <= t.window.Origin.X+t.window.Size.W+2 {
 		t.seen++
 	}
 }

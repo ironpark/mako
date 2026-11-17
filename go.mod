@@ -12,7 +12,7 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/ironpark/ggfx v0.0.0-20261116205814-f8d41f33e4c7
-	github.com/ironpark/ggui v0.0.0-20261117134125-4be3504baf23
+	github.com/ironpark/ggui v0.0.0-20261117135324-212a5603deff
 	github.com/ironpark/ggwd v0.0.0-20261116205503-d39bcb900225
 	github.com/ironpark/gostty v0.0.0-20261108124048-de82fbcca291
 	github.com/ironpark/qngg v0.0.0-20261030173357-5bb022c263f0
