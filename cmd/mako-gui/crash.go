@@ -50,6 +50,21 @@ func keepCrashes() {
 	}
 }
 
+// exitWith reports err, why the app is stopping, on standard error and in
+// crash.log, where keepCrashes writes a crash: opened from the Finder, the
+// app's standard error goes nowhere, and an error the window's run ends
+// with, effects that would not settle, say, was lost there. It then exits.
+func exitWith(err error) {
+	fmt.Fprintln(os.Stderr, "mako-gui:", err)
+	if dir, derr := config.Dir(); derr == nil {
+		if f, ferr := os.OpenFile(filepath.Join(dir, "crash.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); ferr == nil {
+			fmt.Fprintf(f, "exit, pid %d, at %s: %v\n", os.Getpid(), time.Now().Format(time.RFC3339), err)
+			f.Close()
+		}
+	}
+	os.Exit(1)
+}
+
 // revision is the commit the program was built from, as the build
 // recorded it.
 func revision() string {

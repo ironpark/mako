@@ -60,7 +60,6 @@ func main() {
 		return
 	}
 	if err := gui.Run(cfg, *daemonAddr); err != nil {
-		fmt.Fprintln(os.Stderr, "mako-gui:", err)
-		os.Exit(1)
+		exitWith(err)
 	}
 }
