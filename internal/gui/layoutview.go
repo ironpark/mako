@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"reflect"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/ironpark/ggui"
@@ -164,56 +165,69 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		// dropped on a tab.
 		var children, run []ggui.Widget
 		chips := 0.0
-		// Of tabs of several projects, each project's run is headed by
-		// its name and lined in its colour.
-		endRun := func(p tabProject) {
-			if len(run) == 0 {
+		counter := &tabCounter{total: len(g.Tabs), hidden: m.hiddenTabsOf(id), post: m.post}
+		folded := m.FoldedTabs.Get()
+		// Of tabs of several projects, each project's run goes under a
+		// label of its name, over a line of its colour; a run folded away
+		// keeps only the tab shown.
+		var runProject tabProject
+		runFirst, runFolded := -1, 0
+		endRun := func() {
+			if runFirst < 0 {
 				return
 			}
+			p, first := runProject, runFirst
 			var c color.Color = skin.BorderAccent
 			if p.Key != "" {
 				c = p.Look.color()
 			}
-			children = append(children, ui.TabGroup(run...).Tint(c))
-			run = nil
+			key := foldKey(id, p.Key)
+			name := cmp.Or(p.Name, T("Other"))
+			// A tab dropped on the label goes first in the run.
+			label := tabDrop(m, projectChip(p, runFolded), id, func(widget.Dropped[tabDrag]) int { return first }).
+				OnHover(func(bool) { m.leaveHint(id) })
+			children = append(children, ui.TabGroup(run...).Label(label).Tint(c).
+				OnLabel(func() { m.toggleFold(key) }).
+				LabelName(pick(folded[key], Tf("Unfold %s", name), Tf("Fold %s", name))))
+			run, runFirst, runFolded = nil, -1, 0
 		}
 		for i, tabID := range g.Tabs {
-			if grouped && (i == 0 || projects[tabID].Key != projects[g.Tabs[i-1]].Key) {
-				if i > 0 {
-					endRun(projects[g.Tabs[i-1]])
-				}
-				p := projects[tabID]
-				first := i
-				run = append(run, tabDrop(m, projectChip(p), id, func(widget.Dropped[tabDrag]) int { return first }).
-					OnHover(func(bool) { m.leaveHint(id) }))
+			p := projects[tabID]
+			if grouped && (i == 0 || p.Key != projects[g.Tabs[i-1]].Key) {
+				endRun()
+				runProject, runFirst = p, i
 				chips += projectChipWidth(cmp.Or(p.Name, T("Other")))
 			}
-			// The tab shown is ringed in its project's colour.
-			var tint color.Color = skin.AccentBright
-			if p, ok := projects[tabID]; ok && p.Key != "" {
-				tint = p.Look.color()
+			if grouped && folded[foldKey(id, p.Key)] && tabID != g.Active {
+				runFolded++
+				continue
 			}
 			var face ggui.Widget
 			if d, ok := docs[tabID]; ok {
-				face = docTab(m, tabID, d, tabID == g.Active, focused, tint)
+				face = docTab(m, tabID, d, tabID == g.Active, focused)
 			} else if d, ok := diffs[tabID]; ok {
-				face = diffTabFace(m, tabID, d, tabID == g.Active, focused, tint)
+				face = diffTabFace(m, tabID, d, tabID == g.Active, focused)
 			} else {
 				s, ok := sessionIn(sessions, tabID)
 				if !ok {
 					s = &protocol.SessionInfo{Id: tabID, Agent: "shell"}
 				}
-				face = tab(m, s, tabID == g.Active, focused, titles[tabID], tint)
+				face = tab(m, s, tabID == g.Active, focused, titles[tabID])
 			}
 			at := i
-			w := sessionDrag(m, face, tabID)
-			var cell ggui.Widget = w
-			if tabID == g.Active && m.revealedTab[id] != tabID {
-				cell = &onPaint{child: w, fn: func(dst *ggui.Canvas, r ggui.Rect) {
-					dst.RequestReveal(r)
-					m.revealedTab[id] = tabID
-				}}
+			// A label stuck at the bar's start would cover the tab shown at
+			// its start: scrolled to, it comes clear of it.
+			clear := 0.0
+			if grouped {
+				clear = projectChipWidth(cmp.Or(p.Name, T("Other")))
 			}
+			var cell ggui.Widget = &paintHook{child: sessionDrag(m, face, tabID), fn: func(dst *ggui.Canvas, r ggui.Rect) {
+				counter.saw(dst, r)
+				if tabID == g.Active && m.revealedTab[id] != tabID {
+					dst.RequestReveal(ggui.Rct(ggui.Pt(r.Origin.X-clear, r.Origin.Y), ggui.Sz(r.Size.W+clear, r.Size.H)))
+					m.revealedTab[id] = tabID
+				}
+			}}
 			// Before the tab or after it, by the half it is over.
 			slot := func(d widget.Dropped[tabDrag]) int {
 				if d.Pos.X >= d.Size.W/2 {
@@ -229,13 +243,18 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				children = append(children, cells...)
 			}
 		}
-		if grouped {
-			endRun(projects[g.Tabs[len(g.Tabs)-1]])
-		}
+		endRun()
 		children = append(children, dropSlot(m, id, len(g.Tabs)))
-		// Tabs scrolled past an end fade out there.
+		// Tabs scrolled past an end fade out there; of groups, a label
+		// sticking at the start stands in for the fade there.
 		bar := widget.Scroll(widget.Box(widget.Row(children...).Align(widget.AlignCenter)).Pad(0, 4).Height(tabBarHeight)).
-			Horizontal().Shrink().FadeEdges(28).Bar(color.Transparent)
+			Horizontal().Shrink().Bar(color.Transparent)
+		if grouped {
+			bar.FadeEnds(0, 28)
+		} else {
+			bar.FadeEdges(28)
+		}
+		counter.child = bar
 		// Centred down the bar only: across, it is as wide as itself.
 		plus := widget.Box(widget.Column(launchButton(m, nodeID, project, targets, focus, newSession)).Justify(widget.JustifyCenter)).
 			Height(tabBarHeight).Pad(0, 4)
@@ -244,15 +263,15 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		extra := float64(34)
 		// The + follows the last tab, as far as the bar's end, where it
 		// stays in sight as the tabs scroll; and when they do, a menu
-		// lists them all.
+		// lists them all, and how many are out of sight.
 		need := tabsWidth(g.Tabs, sessions, titles, docs, diffs) + chips + extra + 16
 		end := len(g.Tabs)
-		tabsAndPlus := tabDrop(m, widget.Row(widget.Flexible(bar), plus).Stretch(), id,
+		tabsAndPlus := tabDrop(m, widget.Row(widget.Flexible(counter), plus).Stretch(), id,
 			func(widget.Dropped[tabDrag]) int { return end }).
 			OnHover(func(bool) { m.leaveHint(id) })
 		return widget.Row(
 			widget.Expanded(tabsAndPlus),
-			widget.Responsive(need, widget.Box().Size(0, 0), tabList(m, g, sessions, titles, docs, diffs)),
+			widget.Responsive(need, widget.Box().Size(0, 0), tabList(m, id, g, sessions, titles, docs, diffs)),
 		).Stretch()
 	})
 	return widget.Box(tabs).Height(tabBarHeight)
@@ -260,7 +279,9 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 
 // tabWidth estimates how wide a tab is drawn: its label, capped as the tab
 // caps it, and its glyph, close button and padding.
-func tabWidth(label string) float64 { return min(float64(len([]rune(label)))*7.2, 150) + 72 }
+func tabWidth(label string) float64 {
+	return max(min(float64(len([]rune(label)))*7.2, 168)+83, ui.EditorTabMinWidth+4)
+}
 
 // tabsWidth estimates a pane's tabs' width together.
 func tabsWidth(tabs []string, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) float64 {
@@ -283,8 +304,9 @@ func tabLabel(id string, sessions []*protocol.SessionInfo, titles map[string]str
 	return sessionTitle(s, titles[id])
 }
 
-// tabList is a menu of a pane's tabs, for when they do not all fit.
-func tabList(m *model, g tabGroup, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) ggui.Widget {
+// tabList is a menu of a pane's tabs, for when they do not all fit, with
+// how many are out of sight on it.
+func tabList(m *model, pane int, g tabGroup, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) ggui.Widget {
 	items := make([]ggui.Widget, 0, len(g.Tabs))
 	for _, id := range g.Tabs {
 		label := tabLabel(id, sessions, titles, docs, diffs)
@@ -295,7 +317,59 @@ func tabList(m *model, g tabGroup, sessions []*protocol.SessionInfo, titles map[
 	}
 	// Centred down the bar, the size of the + and the eraser beside it.
 	menu := iconMenu(ui.MenuOf(icon("chevrons-up-down"), items...).Width(260).Name(T("All tabs")), 6)
-	return widget.Box(widget.Column(menu).Justify(widget.JustifyCenter)).Height(tabBarHeight)
+	badge := ggui.View(m.hiddenTabsOf(pane), func(n int) ggui.Widget {
+		if n <= 0 {
+			return widget.Box()
+		}
+		count := widget.Text(strconv.Itoa(n)).Size(10).Weight(ggui.WeightMedium).NoWrap()
+		return widget.Align(widget.Box(count).Pad(0, 4).Height(15).Radius(7.5).Fill(skin.Surface3).Border(1, skin.Border)).At(1, 0)
+	})
+	return widget.Box(widget.Stack(widget.Column(menu).Justify(widget.JustifyCenter), widget.Box(badge).Pad(4, 0, 0, 0)).Expand()).
+		Height(tabBarHeight).Width(36)
+}
+
+// tabCounter counts, each frame, the tabs of a bar painted where they show,
+// and keeps how many of total are not in hidden.
+type tabCounter struct {
+	child  ggui.Widget
+	total  int
+	seen   int
+	hidden *ggui.StateValue[int]
+	post   func(func())
+}
+
+func (t *tabCounter) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	return t.child.Layout(c, env)
+}
+
+func (t *tabCounter) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	t.seen = 0
+	dst.Paint(t.child, r)
+	if n := t.total - t.seen; n != ggui.Peek(t.hidden) {
+		t.post(func() { t.hidden.Set(n) })
+	}
+}
+
+// saw counts a tab painted at r if it shows whole, near enough, in what
+// dst draws.
+func (t *tabCounter) saw(dst *ggui.Canvas, r ggui.Rect) {
+	clip, ok := dst.ClipBounds()
+	if !ok || (r.Origin.X >= clip.Origin.X-2 && r.Origin.X+r.Size.W <= clip.Origin.X+clip.Size.W+2) {
+		t.seen++
+	}
+}
+
+// paintHook runs fn after painting its child, each frame.
+type paintHook struct {
+	child ggui.Widget
+	fn    func(dst *ggui.Canvas, r ggui.Rect)
+}
+
+func (h *paintHook) Layout(c ggui.Constraints, env ggui.Env) ggui.Size { return h.child.Layout(c, env) }
+
+func (h *paintHook) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.Paint(h.child, r)
+	h.fn(dst, r)
 }
 
 // paneBody is the terminal of the tab a pane shows, and while a tab is
@@ -453,7 +527,7 @@ func dropSlot(m *model, group, i int) ggui.Widget {
 		}
 		return 0
 	})
-	gap := widget.AnimatedBox().BindWidth(width).Collapsible().Height(tabBarHeight).
+	gap := widget.AnimatedBox().BindWidth(width).Collapsible().Height(ui.EditorTabHeight).Radius(ui.EditorTabRadius).
 		Fill(skin.Surface2).Duration(150 * time.Millisecond).Easing(ggui.EaseOut)
 	// An open gap is where the pointer is once the tabs moved aside, so it
 	// keeps itself open, and takes the tab dropped in it.

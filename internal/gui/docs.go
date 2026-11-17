@@ -385,7 +385,7 @@ func (m *model) dirtyDocs() []string {
 // docTab is a file's tab: its icon, its name, a dot while it has unsaved
 // changes, which the close button becomes on hover, as editors show it. A
 // preview's name is in italics, and a double click keeps it.
-func docTab(m *model, id string, d docInfo, selected, focused bool, tint color.Color) ggui.Widget {
+func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget {
 	name := d.Name()
 	fg := pick[color.Color](selected, skin.Fg, skin.Muted)
 	return ui.EditorTab(name, func() {
@@ -397,7 +397,7 @@ func docTab(m *model, id string, d docInfo, selected, focused bool, tint color.C
 		m.lastTap = tabTap{id, time.Now()}
 		m.showTab(id)
 	}).Icon(icon(fileIconName(name)).Size(14).Color(fg)).
-		Selected(selected).Current(focused).Tint(tint).Preview(d.Preview).Dirty(d.Dirty).
+		Status(nil).Selected(selected).Current(focused).Preview(d.Preview).Dirty(d.Dirty).
 		OnClose(func() { m.askCloseDoc(id) }).CloseName(Tf("Close %s", name))
 }
 
@@ -630,7 +630,7 @@ func docBanner(msg string, actions ...ggui.Widget) ggui.Widget {
 // docHeader is the workspace header over a file: its name and where it
 // is, and its actions.
 func docHeader(m *model, id string, d docInfo) ggui.Widget {
-	where := nodeName(ggui.Peek(m.Nodes), d.Node) + ":" + prettyPath(d.Path)
+	host, path := nodeName(ggui.Peek(m.Nodes), d.Node), prettyPath(d.Path)
 	state := ""
 	switch {
 	case d.Saving:
@@ -650,8 +650,8 @@ func docHeader(m *model, id string, d docInfo) ggui.Widget {
 	items = append(items, m.editorItems(d.Node, d.Path, func() int { return m.docLine(id) }, nil)...)
 	items = append(items, ui.MenuDivider(), ui.MenuItem(T("Close file"), func() { m.askCloseDoc(id) }))
 	return widget.Row(
-		widget.Text(d.Name()).Size(14).Weight(ggui.WeightMedium).NoWrap(),
-		widget.Expanded(muted(widget.Text(where).Size(13).NoWrap().Ellipsis())),
+		widget.Text(d.Name()).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
+		widget.Expanded(widget.Align(whereCrumb(host, path)).Left()),
 		muted(widget.Text(state).Size(12.5).NoWrap()),
 		iconMenu(ui.MenuOf(icon("ellipsis"), items...).Name(T("File actions")), 6),
 	).Gap(10)

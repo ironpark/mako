@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"slices"
+	"strings"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
@@ -24,7 +25,7 @@ import (
 const (
 	sidebarWidth = 272 // the sidebar's, until dragged, and the settings page's
 	detailsWidth = 320 // the right panel's, until dragged
-	headerHeight = 48
+	headerHeight = 38
 	tabBarHeight = 38
 
 	minSidebarWidth, maxSidebarWidth = 200, 520
@@ -47,7 +48,12 @@ func window(m *model) ggui.Widget {
 	inSettings := ggui.Map(m.Page, func(p string) bool { return p == "settings" })
 	// The side panels slide open and closed beside the workspace.
 	main := widget.Row(
-		newDrawer(widget.Row(widget.Expanded(sidebar(m)), sidebarEdge(m)).Stretch(), m.SidebarOpen,
+		newDrawer(ggui.Component(func() ggui.Widget {
+			// The space's colour washes the sidebar and the edge beside it
+			// as one.
+			tint := spaceTint(m)
+			return widget.Row(widget.Expanded(sidebarIn(m, tint)), sidebarEdge(m, tint)).Stretch()
+		}), m.SidebarOpen,
 			ggui.Map(m.SidebarWidth, func(w float64) float64 { return w + panelEdgeWidth }), false),
 		widget.Expanded(workspace(m)),
 		newDrawer(widget.Row(panelEdge(m), widget.Expanded(details(m))).Stretch(), m.DetailsOpen,
@@ -153,6 +159,12 @@ func dot(c color.Color) ggui.Widget { return widget.Box().Size(7, 7).Radius(3.5)
 // The sidebar: the space's projects over its agents, a divider between
 // them to drag; see sidebartree.go and sidebaragents.go.
 func sidebar(m *model) ggui.Widget {
+	return ggui.Component(func() ggui.Widget { return sidebarIn(m, spaceTint(m)) })
+}
+
+// sidebarIn is the sidebar washed in tint, the colour of its space, from
+// the top of its header down.
+func sidebarIn(m *model, tint ggui.Readable[color.NRGBA]) ggui.Widget {
 	// The traffic lights take the start of the header, where the window
 	// has no title bar of its own.
 	header := titlebar(m, widget.Box(widget.Row(
@@ -183,12 +195,10 @@ func sidebar(m *model) ggui.Widget {
 				return widget.Box()
 			}
 			tree := widget.Scroll(widget.Padding(projectTree(m, st, i), 10, 8, 10, 8)).Bar(skin.Surface3)
-			body := &sidebarBody{top: tree, grip: sidebarGrip(m), bottom: agentsPanel(m, st, i), split: m.SidebarSplit}
-			return spaceWash(m, i, body)
+			return &sidebarBody{top: tree, grip: sidebarGrip(m), bottom: agentsPanel(m, st, i), split: m.SidebarSplit}
 		})
 	}
-	// The menus' faces sit on the sidebar's fill, not the page's.
-	return uitheme.Override(func(t *uitheme.Theme) { t.Bg = t.Sidebar }, swipe.area(widget.Box(widget.Column(
+	column := widget.Column(
 		header,
 		hline(),
 		// The spaces' dots stay put over the foot of the agents as a
@@ -199,7 +209,12 @@ func sidebar(m *model) ggui.Widget {
 		).Expand()),
 		hline(),
 		sidebarFooter(m),
-	).Stretch()).Fill(skin.Sidebar)))
+	).Stretch()
+	washed := ggui.View(tint, func(c color.NRGBA) ggui.Widget {
+		return widget.Box(column).Fill(skin.Sidebar).Gradient(spaceWash(c))
+	})
+	// The menus' faces sit on the sidebar's fill, not the page's.
+	return uitheme.Override(func(t *uitheme.Theme) { t.Bg = t.Sidebar }, swipe.area(washed))
 }
 
 // The sidebar's projects are sidebarSplit tall until the divider under
@@ -354,11 +369,11 @@ func workspaceHeader(m *model) ggui.Widget {
 		if !ok {
 			return widget.Text("mako").Size(14).Weight(ggui.WeightMedium)
 		}
-		where := fmt.Sprintf("%s:%s", nodeName(m.Nodes.Get(), s.GetNodeId()), prettyPath(s.GetProject()))
+		host, path := nodeName(m.Nodes.Get(), s.GetNodeId()), prettyPath(s.GetProject())
 		id := s.GetId()
 		row := []ggui.Widget{
-			widget.Text(projectName(s.GetProject())).Size(14).Weight(ggui.WeightMedium).NoWrap(),
-			muted(widget.Text(where).Size(13).NoWrap().Ellipsis()),
+			widget.Text(projectName(s.GetProject())).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
+			whereCrumb(host, path),
 		}
 		if tasks := tasksMenu(m, s); tasks != nil {
 			row = append(row, tasks)
@@ -386,6 +401,19 @@ func workspaceHeader(m *model) ggui.Widget {
 	).Gap(8)).Pad(0, 10, 0, 0).Height(headerHeight))
 }
 
+// whereCrumb is where a session runs, short: its node on a chip, and the
+// last two folders of its path, the whole in a tooltip.
+func whereCrumb(host, path string) ggui.Widget {
+	short := path
+	if parts := strings.Split(path, "/"); len(parts) > 3 {
+		short = "…/" + strings.Join(parts[len(parts)-2:], "/")
+	}
+	chip := widget.Box(muted(widget.Text(strings.TrimSuffix(host, ".local")).Size(11.5).NoWrap())).
+		Pad(2, 7).Radius(5).Fill(skin.Surface2)
+	return ui.Tooltip(widget.Row(chip, muted(widget.Text(short).Size(13).NoWrap().Ellipsis())).Gap(6).Align(widget.AlignCenter),
+		fmt.Sprintf("%s:%s", host, path))
+}
+
 func sessionIn(sessions []*protocol.SessionInfo, id string) (*protocol.SessionInfo, bool) {
 	for _, s := range sessions {
 		if s.GetId() == id {
@@ -411,13 +439,14 @@ func (m *model) editSession(id string, edit func(*protocol.SessionInfo)) {
 // tab is one of a pane's tabs: the session's program and its title, in
 // a rounded box, raised as the one the pane shows and ringed in tint, its
 // project's colour, in the current pane.
-func tab(m *model, s *protocol.SessionInfo, selected, focused bool, title string, tint color.Color) ggui.Widget {
+func tab(m *model, s *protocol.SessionInfo, selected, focused bool, title string) ggui.Widget {
 	id := s.GetId()
 	label := sessionTitle(s, title)
 	fg := pick[color.Color](selected, skin.Fg, skin.Muted)
 	t := ui.EditorTab(label, func() { m.selectSession(id) }).
-		Icon(&busyGlyph{icon: agentGlyph(s.GetAgent(), fg).Size(14), busy: func() bool { return m.busy(id) }}).
-		MaxLabelWidth(150).Selected(selected).Current(focused).Tint(tint).
+		Status(&activityDot{state: m.dotFor(id), quiet: true}).
+		Icon(agentGlyph(s.GetAgent(), fg).Size(14)).
+		MaxLabelWidth(168).Selected(selected).Current(focused).
 		OnClose(func() { m.askKill(id) }).CloseName(Tf("Close %s", label))
 	return sessionMenu(m, t, id, label, true)
 }
@@ -604,8 +633,11 @@ func panelEdge(m *model) ggui.Widget {
 
 // sidebarEdge is the sidebar's right edge, which drags to resize it as
 // panelEdge does the right panel.
-func sidebarEdge(m *model) ggui.Widget {
-	edge := widget.Box(widget.Row(widget.Spacer(), vline()).Stretch()).Width(panelEdgeWidth).Fill(skin.Sidebar)
+func sidebarEdge(m *model, tint ggui.Readable[color.NRGBA]) ggui.Widget {
+	line := widget.Row(widget.Spacer(), vline()).Stretch()
+	edge := ggui.View(tint, func(c color.NRGBA) ggui.Widget {
+		return widget.Box(line).Width(panelEdgeWidth).Fill(skin.Sidebar).Gradient(spaceWash(c))
+	})
 	return resizeEdge(m, edge, m.SidebarWidth, 1, minSidebarWidth, maxSidebarWidth,
 		func(p *prefs) *float64 { return &p.SidebarWidth })
 }

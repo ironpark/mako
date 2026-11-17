@@ -150,6 +150,7 @@ const (
 type activityDot struct {
 	state   func() dotState
 	reduced bool
+	quiet   bool // draws nothing at rest, as a tab's does
 }
 
 // glowPeriod is one breath of the dot; dotSize its diameter.
@@ -175,7 +176,9 @@ func (d *activityDot) Paint(dst *ggui.Canvas, r ggui.Rect) {
 		dst.FillCircle(center, dotSize/2+1, dotColor(skin.DotDone, 1))
 		return
 	default:
-		dst.FillCircle(center, dotSize/2, dotColor(skin.DotExited, 1))
+		if !d.quiet {
+			dst.FillCircle(center, dotSize/2, dotColor(skin.DotExited, 1))
+		}
 		return
 	}
 	glow := 1.0

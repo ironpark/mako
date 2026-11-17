@@ -3,7 +3,6 @@ package gui
 import (
 	"context"
 	"fmt"
-	"image/color"
 	"maps"
 	"slices"
 	"strings"
@@ -292,7 +291,7 @@ func firstChange(d *protocol.Diff) int {
 
 // diffTabFace is a diff's tab: how the file changed, its name, and in a
 // commit, which. A preview's name is in italics, and a double click keeps it.
-func diffTabFace(m *model, id string, d diffTab, selected, focused bool, tint color.Color) ggui.Widget {
+func diffTabFace(m *model, id string, d diffTab, selected, focused bool) ggui.Widget {
 	name := d.Name()
 	label := name
 	switch {
@@ -312,7 +311,7 @@ func diffTabFace(m *model, id string, d diffTab, selected, focused bool, tint co
 		m.lastTap = tabTap{id, time.Now()}
 		m.showTab(id)
 	}).Icon(statusIcon(d.File.GetStatus())).MaxLabelWidth(190).
-		Selected(selected).Current(focused).Tint(tint).Preview(d.Preview).
+		Status(nil).Selected(selected).Current(focused).Preview(d.Preview).
 		OnClose(func() { m.closeDiff(id) }).CloseName(Tf("Close %s", label))
 }
 
@@ -426,7 +425,7 @@ func diffTools(m *model, id string, d diffTab, mode diffMode) ggui.Widget {
 // diffHeaderBar is the workspace header over a diff tab: the file, where
 // it is, and in a commit, which.
 func diffHeaderBar(m *model, id string, d diffTab) ggui.Widget {
-	where := nodeName(ggui.Peek(m.Nodes), d.Root.Node) + ":" + prettyPath(joinPath(d.Repo, d.File.GetPath()))
+	host := nodeName(ggui.Peek(m.Nodes), d.Root.Node)
 	what := T("Changes")
 	switch {
 	case d.Commit != "":
@@ -448,8 +447,8 @@ func diffHeaderBar(m *model, id string, d diffTab) ggui.Widget {
 	}
 	items = append(items, ui.MenuDivider(), ui.MenuItem(T("Close diff"), func() { m.closeDiff(id) }))
 	return widget.Row(
-		widget.Text(d.Name()).Size(14).Weight(ggui.WeightMedium).NoWrap(),
-		widget.Expanded(muted(widget.Text(where).Size(13).NoWrap().Ellipsis())),
+		widget.Text(d.Name()).Size(13.5).Weight(ggui.WeightMedium).NoWrap(),
+		widget.Expanded(widget.Align(whereCrumb(host, prettyPath(path))).Left()),
 		muted(widget.Text(what).Size(12.5).NoWrap()),
 		iconMenu(ui.MenuOf(icon("ellipsis"), items...).Name(T("Diff actions")), 6),
 	).Gap(10)

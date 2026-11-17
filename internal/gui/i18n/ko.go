@@ -1311,4 +1311,6 @@ var catalogKo = map[string]string{
 	"Move to %s":    "%s(으)로 이동",
 	"No spaces yet": "아직 스페이스가 없습니다",
 	"1 project":     "프로젝트 1개",
+	"Unfold %s":     "%s 펼치기",
+	"Fold %s":       "%s 접기",
 }

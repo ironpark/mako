@@ -202,20 +202,46 @@ func spaceMark(sp space) ggui.Widget {
 	return widget.Box().Size(8, 8).Radius(4).Fill(c)
 }
 
-// spaceWash draws child, the sidebar's list in space i, on a faint wash
-// of the space's colour, strongest at its top; on nothing for a space of
-// none.
-func spaceWash(m *model, i int, child ggui.Widget) ggui.Widget {
-	tint := ggui.Derived(func() color.Color {
-		sp, _ := m.spaces().spaceOf(i)
-		return sp.color()
-	}).WithEqual(func(a, b color.Color) bool { return a == b })
-	return ggui.View(tint, func(c color.Color) ggui.Widget {
-		if c == nil {
-			return child
+// spaceTint is the colour of the space shown, easing from one space's to
+// the next's; clear for a space of none. It needs an owner, as a tween
+// does.
+func spaceTint(m *model) ggui.Readable[color.NRGBA] {
+	target := ggui.Derived(func() color.NRGBA {
+		p := m.spaces()
+		sp, _ := p.spaceOf(p.Space)
+		if c := sp.color(); c != nil {
+			return color.NRGBAModel.Convert(c).(color.NRGBA)
 		}
-		return widget.Box(child).Gradient(ggui.LinearGradient(math.Pi/2, ggui.Stops(withAlpha(c, 0x1c), withAlpha(c, 0x06))...))
+		return color.NRGBA{}
 	})
+	return ggui.TweenOfWith(target, motionDuration, func(a, b color.NRGBA, t float64) color.NRGBA {
+		// To or from none, only the alpha moves: the hue stays the space's.
+		if a.A == 0 {
+			a.R, a.G, a.B = b.R, b.G, b.B
+		}
+		if b.A == 0 {
+			b.R, b.G, b.B = a.R, a.G, a.B
+		}
+		at := func(x, y uint8) uint8 { return uint8(math.Round(float64(x) + (float64(y)-float64(x))*t)) }
+		return color.NRGBA{at(a.R, b.R), at(a.G, b.G), at(a.B, b.B), at(a.A, b.A)}
+	})
+}
+
+// spaceWash is the faint wash of a space's colour c down the sidebar,
+// from its very top: strongest there, thinning along a curve rather than
+// a line, so it has no edge where it fades; none for a clear c.
+func spaceWash(c color.NRGBA) ggui.Gradient {
+	if c.A == 0 {
+		return ggui.Gradient{}
+	}
+	const steps = 8
+	stops := make([]ggui.GradientStop, steps+1)
+	for i := range stops {
+		t := float64(i) / steps
+		a := float64(c.A) / 255 * 0.13 * (0.12 + 0.88*(1-t)*(1-t))
+		stops[i] = ggui.GradientStop{Offset: t, Color: color.NRGBA{c.R, c.G, c.B, uint8(math.Round(a * 255))}}
+	}
+	return ggui.LinearGradient(math.Pi/2, stops...)
 }
 
 // knownOwners are the owners the sidebar's sessions and kept folders say

@@ -196,9 +196,14 @@ type model struct {
 	// revealedTab is the tab each pane last scrolled its tab bar to, so it
 	// does so once per tab it comes to show.
 	revealedTab map[int]string
-	dialing     map[string]bool
-	redials     map[string]redial // see redialDue
-	sleeps      sleeps            // see sleepIdle
+	// FoldedTabs are the projects' runs of tabs folded away under their
+	// labels, by pane and project (foldKey); hiddenTabs how many of each
+	// pane's tabs are out of sight, scrolled or folded away.
+	FoldedTabs *ggui.StateValue[map[string]bool]
+	hiddenTabs map[int]*ggui.StateValue[int]
+	dialing    map[string]bool
+	redials    map[string]redial // see redialDue
+	sleeps     sleeps            // see sleepIdle
 
 	// recorder keeps the terminal streams the developer option records.
 	recorder *streamRecorder
@@ -295,6 +300,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		conns:         map[string]*termConn{},
 		killed:        map[string]time.Time{},
 		revealedTab:   map[int]string{},
+		FoldedTabs:    ggui.State(map[string]bool{}).WithEqual(maps.Equal[map[string]bool]),
+		hiddenTabs:    map[int]*ggui.StateValue[int]{},
 		dialing:       map[string]bool{},
 		redials:       map[string]redial{},
 	}
