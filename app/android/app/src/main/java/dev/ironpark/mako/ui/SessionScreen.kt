@@ -1,6 +1,13 @@
 package dev.ironpark.mako.ui
 
 import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.setValue
 import dev.ironpark.mako.v2.SessionInfo
 import androidx.compose.foundation.pager.rememberPagerState
@@ -14,6 +21,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
@@ -27,7 +37,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -40,7 +49,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -81,12 +89,19 @@ import kotlinx.coroutines.launch
  * its agent waits for above both. The conversation's composer types into
  * the session without the terminal, on a node that can.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun SessionScreen(
+internal fun SessionScreen(
     mesh: Mesh, node: String, id: String, onBack: () -> Unit, home: @Composable () -> Unit, onFiles: (String) -> Unit,
     onAgents: (String) -> Unit = {},
     onFile: (ChatLink.File) -> Unit = {},
+    project: ProjectItem? = null,
+    enterFrom: Int = 0,
+    onPin: ((Boolean) -> Unit)? = null,
+    pinned: Boolean = false,
+    terminalFirst: Boolean = false,
+    onView: (terminal: Boolean) -> Unit = {},
+    footer: @Composable (SessionMenu) -> Unit = {},
 ) {
     val sessions by mesh.sessions.collectAsState()
     val nodes by mesh.nodes.collectAsState()
@@ -100,8 +115,10 @@ fun SessionScreen(
     }
     val chat = session == null || session.caps and CAP_CHAT != 0
     // An agent whose conversation is not read shows its terminal alone.
-    val pager = rememberPagerState(initialPage = 1) { if (chat) 3 else 2 }
+    val pager = rememberPagerState(initialPage = if (terminalFirst && chat) 2 else 1) { if (chat) 3 else 2 }
     val terminalPage = if (chat) 2 else 1
+    // Each tab keeps the view it was left on, as a browser's tab keeps its place.
+    LaunchedEffect(pager.settledPage) { if (pager.settledPage > 0) onView(pager.settledPage == terminalPage && chat) }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(pager.settledPage) {
@@ -158,70 +175,56 @@ fun SessionScreen(
     val act = actor()
 
     val onTerminalPage = pager.currentPage == terminalPage
+    // The session's actions, which the bar at the bottom offers from its menu.
+    val menu = SessionMenu { close ->
+        DropdownMenuItem(text = { Text(stringResource(R.string.project_files)) },
+            leadingIcon = { Icon(Icons.Outlined.Folder, null) }, enabled = session != null,
+            onClick = { close(); onFiles(session?.project.orEmpty().ifBlank { "~" }) })
+        DropdownMenuItem(text = { Text(stringResource(R.string.project_agents)) },
+            leadingIcon = { Icon(Icons.Outlined.Groups, null) },
+            enabled = session != null && session.project.isNotEmpty() && mesh.readsProjectAgents(node),
+            onClick = { close(); onAgents(session?.project.orEmpty()) })
+        DropdownMenuItem(text = { Text(stringResource(R.string.answer_agent)) },
+            leadingIcon = { Icon(Icons.Outlined.QuestionAnswer, null) },
+            enabled = session?.state == "running", onClick = { close(); question = true })
+        DropdownMenuItem(text = { Text(stringResource(R.string.fit_screen)) },
+            leadingIcon = { Icon(Icons.Outlined.FitScreen, null) }, onClick = {
+                close()
+                scope.launch { pager.animateScrollToPage(terminalPage) }
+                fits++
+            })
+        HorizontalDivider()
+        if (onPin != null) DropdownMenuItem(text = { Text(stringResource(if (pinned) R.string.unpin else R.string.pin_to_top)) },
+            leadingIcon = { Icon(Icons.Outlined.PushPin, null) }, onClick = { close(); onPin(!pinned) })
+        DropdownMenuItem(text = { Text(stringResource(R.string.rename)) },
+            leadingIcon = { Icon(Icons.Outlined.Edit, null) }, enabled = session != null, onClick = {
+                close()
+                renaming = true
+            })
+        DropdownMenuItem(text = { Text(stringResource(R.string.stop_session_menu), color = MaterialTheme.colorScheme.error) },
+            leadingIcon = { Icon(Icons.Outlined.StopCircle, null, tint = MaterialTheme.colorScheme.error) },
+            enabled = session != null && !session.ended(), onClick = {
+                close()
+                stopping = true
+            })
+    }
+    val keyboardUp = WindowInsets.isImeVisible
+    // A tab opened from the one beside it comes in from that side.
+    val arrive = remember(node, id) { Animatable(if (enterFrom == 0) 1f else 0f) }
+    LaunchedEffect(arrive) { arrive.animateTo(1f, tween(220)) }
     // The insets beneath are the panes' own: the keyboard's, or the
     // navigation bar's under the bar at the bottom.
-    SessionPager(pager, onHome = onBack, modifier = Modifier.semantics { contentDescription = swipeHint }, header = {
+    SessionPager(pager, onHome = onBack, modifier = Modifier.semantics { contentDescription = swipeHint }, footer = { footer(menu) },
+        footerShown = !keyboardUp, header = {
         // One header over chat and terminal, which stays as they change.
         Surface(color = MaterialTheme.colorScheme.surface) {
             Column {
-                TopAppBar(
-                    expandedHeight = 56.dp,
-                    title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (session != null) {
-                                AgentAvatar(session.agent, agentColor(nodes, node, session.agent), session.statusColor(), size = 28.dp)
-                                Spacer(Modifier.width(8.dp))
-                            }
-                            Column {
-                                Text(
-                                    session?.label().orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.titleMedium,
-                                )
-                                Text(
-                                    dotted(mesh.nodeName(node), baseName(session?.project.orEmpty()), session?.branch),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    },
-                    actions = {
+                SessionHeader(
+                    mesh, node, session, project,
+                    switch = {
                         if (chat) SessionViewSwitch(terminal = onTerminalPage, onTerminal = { terminal ->
                             scope.launch { pager.animateScrollToPage(if (terminal) terminalPage else 1) }
                         })
-                        var menu by remember { mutableStateOf(false) }
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.session_actions)) }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.project_files)) },
-                                leadingIcon = { Icon(Icons.Outlined.Folder, null) }, enabled = session != null,
-                                onClick = { menu = false; onFiles(session?.project.orEmpty().ifBlank { "~" }) })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.project_agents)) },
-                                leadingIcon = { Icon(Icons.Outlined.Groups, null) },
-                                enabled = session != null && session.project.isNotEmpty() && mesh.readsProjectAgents(node),
-                                onClick = { menu = false; onAgents(session?.project.orEmpty()) })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.answer_agent)) },
-                                leadingIcon = { Icon(Icons.Outlined.QuestionAnswer, null) },
-                                enabled = session?.state == "running", onClick = { menu = false; question = true })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.rename)) },
-                                leadingIcon = { Icon(Icons.Outlined.Edit, null) }, onClick = {
-                                    menu = false
-                                    renaming = true
-                                })
-                            DropdownMenuItem(text = { Text(stringResource(R.string.fit_screen)) },
-                                leadingIcon = { Icon(Icons.Outlined.FitScreen, null) }, onClick = {
-                                    menu = false
-                                    scope.launch { pager.animateScrollToPage(terminalPage) }
-                                    fits++
-                                })
-                            HorizontalDivider()
-                            DropdownMenuItem(text = { Text(stringResource(R.string.stop_session), color = MaterialTheme.colorScheme.error) },
-                                leadingIcon = { Icon(Icons.Outlined.StopCircle, null, tint = MaterialTheme.colorScheme.error) },
-                                enabled = session != null && !session.ended(), onClick = {
-                                    menu = false
-                                    stopping = true
-                                })
-                        }
                     },
                 )
                 AnimatedVisibility(session != null && !session.hasApproval() && session.hasDialog()) {
@@ -251,8 +254,13 @@ fun SessionScreen(
             return@SessionPager
         }
         val pageTab = if (chat) page - 1 else 1
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.fillMaxSize().consumeWindowInsets(WindowInsets.statusBars).imePadding()) {
+        Surface(Modifier.fillMaxSize().graphicsLayer {
+            alpha = 0.4f + 0.6f * arrive.value
+            translationX = (1f - arrive.value) * enterFrom * 32.dp.toPx()
+        }, color = MaterialTheme.colorScheme.background) {
+            // The bar at the bottom stands over the navigation bar, until the keyboard takes its place.
+            val insets = if (keyboardUp) Modifier else Modifier.consumeWindowInsets(WindowInsets.navigationBars)
+            Column(Modifier.fillMaxSize().consumeWindowInsets(WindowInsets.statusBars).then(insets).imePadding()) {
                 Box(Modifier.weight(1f)) {
                     if (pageTab == 0 && session != null) ChatView(
                         mesh, session, Modifier.fillMaxSize(),
@@ -373,3 +381,36 @@ private fun QuestionCard(questions: List<Question>, onAnswer: () -> Unit, onDeci
     }
 }
 
+
+/** SessionMenu is a session's actions, as the items of a menu that close calls to close. */
+internal class SessionMenu(val items: @Composable ColumnScope.(close: () -> Unit) -> Unit)
+
+/**
+ * SessionHeader says where the session shown is: its project, by its mark
+ * and name, as home listed it, and its folder of the project, branch and
+ * computer; with the switch between its chat and its terminal.
+ */
+@Composable
+private fun SessionHeader(mesh: Mesh, node: String, session: SessionInfo?, project: ProjectItem?, switch: @Composable () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 56.dp).padding(start = 12.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (project != null) ProjectTile(project.look, Modifier.shared("tile:" + project.key), size = 32.dp)
+        else if (session != null) AgentAvatar(session.agent, agentColor(mesh.nodes.value, node, session.agent), session.statusColor(), size = 32.dp)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                project?.label ?: session?.label().orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = if (project != null) Modifier.sharedBounds("name:" + project.key) else Modifier,
+            )
+            Text(
+                dotted(session?.let { project?.tags?.get(it.id) }, session?.branch, mesh.nodeName(node)),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        switch()
+    }
+}

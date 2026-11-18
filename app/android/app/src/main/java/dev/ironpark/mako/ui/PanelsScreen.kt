@@ -73,21 +73,25 @@ internal fun panels(pages: List<dev.ironpark.mako.workspace.LayoutPage>, agents:
     return out
 }
 
+/** What the panels of a computer come from: its window's pages for the space, its agents' blocks, and why they could not be read. */
+internal data class PanelSources(
+    val pages: List<dev.ironpark.mako.workspace.LayoutPage>, val agents: List<AgentBlock>, val error: String,
+)
+
 /**
- * PanelsScreen is the panels of the computer node, whose workspace the
- * app shows, as its window lays out the space shown: each a block of a
- * plugin's or an agent's, opening a page of its own.
+ * The panels' sources of node, followed while the app shows: the pages of
+ * the window layout of space, from the workspace shown when it is node's,
+ * and its agents' blocks, asked for every few seconds.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun PanelsScreen(mesh: Mesh, node: String, space: String, onBack: () -> Unit, onOpen: (Panel) -> Unit) {
+internal fun rememberPanelSources(mesh: Mesh, node: String?, space: String): PanelSources {
     val shown by LocalContext.current.mako.foreground.collectAsState()
     val workspace by mesh.workspace.collectAsState()
-    val supported = mesh.showsBlocks(node)
+    val supported = node != null && mesh.showsBlocks(node)
     var agents by remember(node) { mutableStateOf<List<AgentBlock>>(emptyList()) }
     var error by remember(node) { mutableStateOf("") }
     LaunchedEffect(node, shown, supported) {
-        while (shown && supported) {
+        while (shown && supported && node != null) {
             try {
                 agents = mesh.daemon.agentBlocks(node)
                 error = ""
@@ -99,8 +103,21 @@ internal fun PanelsScreen(mesh: Mesh, node: String, space: String, onBack: () ->
             delay(PANELS_POLL)
         }
     }
-    val doc = if (workspace.node == node || workspace.node == null) workspace.state.windowLayout(space) else null
+    val doc = if (supported && (workspace.node == node || workspace.node == null)) workspace.state.windowLayout(space) else null
     val pages = remember(doc) { layoutPages(doc) }
+    return PanelSources(pages, agents, error)
+}
+
+/**
+ * PanelsScreen is the panels of the computer node, whose workspace the
+ * app shows, as its window lays out the space shown: each a block of a
+ * plugin's or an agent's, opening a page of its own.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun PanelsScreen(mesh: Mesh, node: String, space: String, onBack: () -> Unit, onOpen: (Panel) -> Unit) {
+    val supported = mesh.showsBlocks(node)
+    val (pages, agents, error) = rememberPanelSources(mesh, node, space)
     val list = panels(pages, agents)
 
     Scaffold(topBar = {
@@ -133,7 +150,7 @@ internal fun PanelsScreen(mesh: Mesh, node: String, space: String, onBack: () ->
 }
 
 @Composable
-private fun PanelRow(p: Panel, onClick: () -> Unit) {
+internal fun PanelRow(p: Panel, onClick: () -> Unit) {
     val agent = p.block.startsWith("agent:")
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(if (agent) Icons.Outlined.SmartToy else Icons.Outlined.Extension, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)

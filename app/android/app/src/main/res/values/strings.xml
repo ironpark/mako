@@ -38,7 +38,6 @@
     <string name="switch_session_view">Switch between Chat and Terminal</string>
     <string name="link_open_failed">Unable to open this link</string>
     <string name="fit_screen">Fit to this screen</string>
-    <string name="stop_session">Stop session</string>
     <string name="approval_title">Allow %1$s?</string>
     <string name="composer_hint">Message the agent</string>
     <string name="keyboard">Keyboard</string>
@@ -87,7 +86,6 @@
     <string name="just_now">just now</string>
     <string name="needs_you">Needs you</string>
     <string name="nothing_here">No sessions here.</string>
-    <string name="reply">Reply</string>
     <string name="in_terminal">In terminal</string>
     <string name="interrupt">Interrupt</string>
     <string name="paste">Paste</string>
@@ -232,11 +230,6 @@
     <string name="starting_node">Starting this device\'s node…</string>
     <string name="reaching_computers">Reaching your computers…</string>
     <string name="start_agent">Start %1$s</string>
-    <string name="group_by">Group by</string>
-    <string name="group_computer">Computer</string>
-    <string name="group_status">Status</string>
-    <string name="group_project">Project</string>
-    <string name="group_time">None, latest first</string>
     <string name="group_ended">Ended</string>
     <string name="draft">Draft:</string>
     <string name="expanded">Expanded</string>
@@ -300,7 +293,6 @@
     <string name="pinned">Pinned</string>
     <string name="pin_to_top">Pin to top</string>
     <string name="unpin">Unpin</string>
-    <string name="all_sessions">All sessions</string>
     <string name="space_n">Space %1$d</string>
     <!-- The panels of a computer: its plugins' and agents' blocks. -->
     <string name="panels">Panels</string>
@@ -320,4 +312,38 @@
     <string name="block_failed">The plugin failed</string>
     <string name="block_stale">The plugin\'s newer version failed; the last that worked runs</string>
     <string name="block_call_failed">The panel\'s last call failed</string>
+    <!-- Home: the projects; a project: its sessions as tabs. -->
+    <string name="projects">Projects</string>
+    <string name="pinned_projects">Pinned projects</string>
+    <string name="pinned_sessions">Pinned sessions</string>
+    <string name="show_all_n">Show all %1$d</string>
+    <string name="all_spaces">All spaces</string>
+    <string name="choose_space">Choose a space</string>
+    <string name="panels_of">Panels of %1$s</string>
+    <string name="panels_note">What its plugins and agents show</string>
+    <string name="new_session_here">New session here</string>
+    <string name="new_session_in">New session in %1$s</string>
+    <string name="no_sessions_short">No sessions</string>
+    <plurals name="n_need_you">
+        <item quantity="one">%1$d needs you</item>
+        <item quantity="other">%1$d need you</item>
+    </plurals>
+    <plurals name="n_working">
+        <item quantity="one">%1$d working</item>
+        <item quantity="other">%1$d working</item>
+    </plurals>
+    <string name="unreachable">%1$s can\'t be reached</string>
+    <string name="unreachable_body">What shows is what it last said.</string>
+    <string name="unreachable_any">Your computers can\'t be reached</string>
+    <string name="offline_body">mako may have stopped there, or the network between you is down. This phone keeps trying.</string>
+    <string name="new_tab">New tab</string>
+    <string name="tabs_of">Tab %1$d of %2$d, %3$s. Shows every tab.</string>
+    <string name="previous_tab">Previous tab</string>
+    <string name="next_tab">Next tab</string>
+    <string name="no_tabs">No sessions in %1$s</string>
+    <string name="no_tabs_body">Start one here; it opens as a tab.</string>
+    <string name="stop_session_menu">Stop session…</string>
+    <string name="status_asks">Asks you</string>
+    <string name="status_plan">Plan ready</string>
+    <string name="remove_from_list">Remove from the list</string>
 </resources>
