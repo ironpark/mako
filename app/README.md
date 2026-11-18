@@ -93,6 +93,25 @@ and opens a session's conversation and its terminal.
   (`src/test/resources/workspace`): `go test ./internal/workspace
   ./internal/gui -run Android` fails while they differ from what the Go
   code makes, and with `MAKO_ANDROID_FIXTURES=1` writes them again.
+- **Panels.** The panels button over the list opens the panels of the
+  computer whose workspace shows: the blocks its plugins draw, as its
+  window lays them out for the space shown, and the blocks its agents
+  show (`show_ui`), each opening a page of its own, framed with the
+  plugin or the agent it comes from. The phone does not lay a window
+  out: it shows the blocks of the document's `variants.compact`, or of
+  the document folded, in order (docs/protocol.md, "Layout documents");
+  it has screens of its own for the window's other panels. Taps, toggles,
+  choices and a form's submit go to the computer, and the block's
+  changes come back as they happen. The computer serves them to a node
+  it lets in from revision 30 on. Allowing a plugin, enabling it or
+  starting it again stays the computer's: a block that waits says so.
+  The ops that change a block's tree are applied with a port of the
+  daemon's (`blocks/UiOps.kt`), and the pages read with a port of
+  `internal/layoutdoc` (`workspace/WindowLayout.kt`), both checked
+  against fixtures the Go tests make (`src/test/resources/blocks`):
+  `go test ./internal/uiblock ./internal/layoutdoc -run Android` fails
+  while they differ, and with `MAKO_ANDROID_FIXTURES=1` writes them
+  again.
 - **Notifications.** The main screen's **Settings** controls approval,
   waiting and completed-turn alerts separately, including whether they appear
   while the app is open. Choices persist and take effect immediately. Android
@@ -140,10 +159,11 @@ again after a schema change. The app's sources are in
 
     MakoApp, Mesh      the node and what the app knows of the mesh
     MeshService        the foreground service, and notifications
+    blocks/            a block's tree followed, its ops applied, its form
     net/               frames on the node's socket, and its requests
     term/              an attached session, its terminal, and the keyboard
-    ui/                the screens: sessions, a session, computers, a new session
-    workspace/         the workspace as the desktop reads it, and the edits the app gives
+    ui/                the screens: sessions, a session, computers, a new session, panels
+    workspace/         the workspace as the desktop reads it, its window layouts, and the edits the app gives
 
 ## Trying it on the emulator
 

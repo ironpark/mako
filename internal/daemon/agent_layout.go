@@ -110,8 +110,8 @@ func (d *Daemon) addLayoutTools(server *sdk.Server, peer *agentPeer) {
 		if err != nil {
 			return nil, changeLayoutResult{}, fmt.Errorf("the document cannot be drawn: %w", err)
 		}
-		if parsed.Version != layoutdoc.Version {
-			return nil, changeLayoutResult{}, fmt.Errorf("this node writes documents of version %d", layoutdoc.Version)
+		if parsed.Version > layoutdoc.Version {
+			return nil, changeLayoutResult{}, fmt.Errorf("this node writes documents of version %d at most", layoutdoc.Version)
 		}
 		_, rev := d.windowLayout(name)
 		if in.IfRev != rev {

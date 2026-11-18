@@ -122,12 +122,24 @@ type PluginInfo struct {
 	// permissions are what its manifest asks for; granted those the user
 	// allowed; asked those asked for and not allowed, which the user is to
 	// answer before it runs.
-	Permissions   []string         `protobuf:"bytes,7,rep,name=permissions,proto3" json:"permissions,omitempty"`
-	Granted       []string         `protobuf:"bytes,8,rep,name=granted,proto3" json:"granted,omitempty"`
-	Asked         []string         `protobuf:"bytes,9,rep,name=asked,proto3" json:"asked,omitempty"`
-	Blocks        []*PluginBlock   `protobuf:"bytes,10,rep,name=blocks,proto3" json:"blocks,omitempty"`
-	Commands      []*PluginCommand `protobuf:"bytes,11,rep,name=commands,proto3" json:"commands,omitempty"`
-	Settings      []*PluginSetting `protobuf:"bytes,12,rep,name=settings,proto3" json:"settings,omitempty"`
+	Permissions []string         `protobuf:"bytes,7,rep,name=permissions,proto3" json:"permissions,omitempty"`
+	Granted     []string         `protobuf:"bytes,8,rep,name=granted,proto3" json:"granted,omitempty"`
+	Asked       []string         `protobuf:"bytes,9,rep,name=asked,proto3" json:"asked,omitempty"`
+	Blocks      []*PluginBlock   `protobuf:"bytes,10,rep,name=blocks,proto3" json:"blocks,omitempty"`
+	Commands    []*PluginCommand `protobuf:"bytes,11,rep,name=commands,proto3" json:"commands,omitempty"`
+	Settings    []*PluginSetting `protobuf:"bytes,12,rep,name=settings,proto3" json:"settings,omitempty"`
+	// installed says the plugin was installed from a registry's package,
+	// not written into its folder by hand (revision 29); source is that
+	// registry's URL, key the publisher key pinned at its first install
+	// (pluginstore.proto's PublisherKey form), update a newer version its
+	// registry lists, signed by that key.
+	Installed bool   `protobuf:"varint,13,opt,name=installed,proto3" json:"installed,omitempty"`
+	Source    string `protobuf:"bytes,14,opt,name=source,proto3" json:"source,omitempty"`
+	Key       string `protobuf:"bytes,15,opt,name=key,proto3" json:"key,omitempty"`
+	Update    string `protobuf:"bytes,16,opt,name=update,proto3" json:"update,omitempty"`
+	// blocked is why a registry of this node's blocks the plugin: state is
+	// then "blocked", and it cannot be enabled while it stands.
+	Blocked       string `protobuf:"bytes,17,opt,name=blocked,proto3" json:"blocked,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -244,6 +256,41 @@ func (x *PluginInfo) GetSettings() []*PluginSetting {
 		return x.Settings
 	}
 	return nil
+}
+
+func (x *PluginInfo) GetInstalled() bool {
+	if x != nil {
+		return x.Installed
+	}
+	return false
+}
+
+func (x *PluginInfo) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *PluginInfo) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *PluginInfo) GetUpdate() string {
+	if x != nil {
+		return x.Update
+	}
+	return ""
+}
+
+func (x *PluginInfo) GetBlocked() string {
+	if x != nil {
+		return x.Blocked
+	}
+	return ""
 }
 
 // PluginBlock is a block a plugin contributes.
@@ -592,8 +639,11 @@ func (x *PluginDone) GetOpenUrl() string {
 // changes, until the stream closes. A block is running while a front-end
 // watches it.
 type WatchBlock struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Block         string                 `protobuf:"bytes,1,opt,name=block,proto3" json:"block,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Block string                 `protobuf:"bytes,1,opt,name=block,proto3" json:"block,omitempty"`
+	// node_id is the node whose block it is, routed as a request's: a node
+	// let in watches the blocks of the node that lets it in (revision 30).
+	NodeId        string `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -631,6 +681,13 @@ func (*WatchBlock) Descriptor() ([]byte, []int) {
 func (x *WatchBlock) GetBlock() string {
 	if x != nil {
 		return x.Block
+	}
+	return ""
+}
+
+func (x *WatchBlock) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
 	}
 	return ""
 }
@@ -793,7 +850,9 @@ type BlockEvent struct {
 	// values are the block's inputs', toggles' and selects' values as the
 	// front-end has them, by node id, typed or not yet sent: a form's
 	// submit carries every field (revision 27).
-	Values        map[string]string `protobuf:"bytes,5,rep,name=values,proto3" json:"values,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Values map[string]string `protobuf:"bytes,5,rep,name=values,proto3" json:"values,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// node_id is the node whose block it is, as WatchBlock's (revision 30).
+	NodeId        string `protobuf:"bytes,6,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -861,6 +920,13 @@ func (x *BlockEvent) GetValues() map[string]string {
 		return x.Values
 	}
 	return nil
+}
+
+func (x *BlockEvent) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
 }
 
 // UiNode is a node of a plugin block's tree. The kinds are a fixed set
@@ -1147,7 +1213,10 @@ func (x *UiOp) GetNode() *UiNode {
 // (show_ui), and where each goes; answered by AgentBlocks (revision 27).
 // They are the node's alone: no other node has them.
 type ListAgentBlocks struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// node_id is the node whose agents' blocks are asked for, routed as a
+	// request's (revision 30).
+	NodeId        string `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1180,6 +1249,13 @@ func (x *ListAgentBlocks) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ListAgentBlocks.ProtoReflect.Descriptor instead.
 func (*ListAgentBlocks) Descriptor() ([]byte, []int) {
 	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ListAgentBlocks) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
 }
 
 // AgentBlocks are the agents' blocks, in the order shown.
@@ -1340,7 +1416,7 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x15mako/v2/plugins.proto\x12\amako.v2\"\r\n" +
 	"\vListPlugins\"8\n" +
 	"\aPlugins\x12-\n" +
-	"\aplugins\x18\x01 \x03(\v2\x13.mako.v2.PluginInfoR\aplugins\"\xfe\x02\n" +
+	"\aplugins\x18\x01 \x03(\v2\x13.mako.v2.PluginInfoR\aplugins\"\xf8\x03\n" +
 	"\n" +
 	"PluginInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
@@ -1355,7 +1431,12 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x06blocks\x18\n" +
 	" \x03(\v2\x14.mako.v2.PluginBlockR\x06blocks\x122\n" +
 	"\bcommands\x18\v \x03(\v2\x16.mako.v2.PluginCommandR\bcommands\x122\n" +
-	"\bsettings\x18\f \x03(\v2\x16.mako.v2.PluginSettingR\bsettings\"M\n" +
+	"\bsettings\x18\f \x03(\v2\x16.mako.v2.PluginSettingR\bsettings\x12\x1c\n" +
+	"\tinstalled\x18\r \x01(\bR\tinstalled\x12\x16\n" +
+	"\x06source\x18\x0e \x01(\tR\x06source\x12\x10\n" +
+	"\x03key\x18\x0f \x01(\tR\x03key\x12\x16\n" +
+	"\x06update\x18\x10 \x01(\tR\x06update\x12\x18\n" +
+	"\ablocked\x18\x11 \x01(\tR\ablocked\"M\n" +
 	"\vPluginBlock\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
@@ -1379,10 +1460,11 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x05value\x18\x05 \x01(\tR\x05value\"'\n" +
 	"\n" +
 	"PluginDone\x12\x19\n" +
-	"\bopen_url\x18\x01 \x01(\tR\aopenUrl\"\"\n" +
+	"\bopen_url\x18\x01 \x01(\tR\aopenUrl\";\n" +
 	"\n" +
 	"WatchBlock\x12\x14\n" +
-	"\x05block\x18\x01 \x01(\tR\x05block\"\xb4\x02\n" +
+	"\x05block\x18\x01 \x01(\tR\x05block\x12\x17\n" +
+	"\anode_id\x18\x02 \x01(\tR\x06nodeId\"\xb4\x02\n" +
 	"\vBlockUpdate\x12\x14\n" +
 	"\x05block\x18\x01 \x01(\tR\x05block\x12\x10\n" +
 	"\x03seq\x18\x02 \x01(\x04R\x03seq\x12#\n" +
@@ -1397,14 +1479,15 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"session_id\x18\n" +
 	" \x01(\tR\tsessionId\x12\x14\n" +
 	"\x05agent\x18\v \x01(\tR\x05agent\x12\x12\n" +
-	"\x04gone\x18\f \x01(\bR\x04gone\"\xd4\x01\n" +
+	"\x04gone\x18\f \x01(\bR\x04gone\"\xed\x01\n" +
 	"\n" +
 	"BlockEvent\x12\x14\n" +
 	"\x05block\x18\x01 \x01(\tR\x05block\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\tR\x04node\x12\x12\n" +
 	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x14\n" +
 	"\x05value\x18\x04 \x01(\tR\x05value\x127\n" +
-	"\x06values\x18\x05 \x03(\v2\x1f.mako.v2.BlockEvent.ValuesEntryR\x06values\x1a9\n" +
+	"\x06values\x18\x05 \x03(\v2\x1f.mako.v2.BlockEvent.ValuesEntryR\x06values\x12\x17\n" +
+	"\anode_id\x18\x06 \x01(\tR\x06nodeId\x1a9\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xaf\x03\n" +
@@ -1433,8 +1516,9 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x16\n" +
 	"\x06parent\x18\x03 \x01(\tR\x06parent\x12\x14\n" +
 	"\x05index\x18\x04 \x01(\x05R\x05index\x12#\n" +
-	"\x04node\x18\x05 \x01(\v2\x0f.mako.v2.UiNodeR\x04node\"\x11\n" +
-	"\x0fListAgentBlocks\":\n" +
+	"\x04node\x18\x05 \x01(\v2\x0f.mako.v2.UiNodeR\x04node\"*\n" +
+	"\x0fListAgentBlocks\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\":\n" +
 	"\vAgentBlocks\x12+\n" +
 	"\x06blocks\x18\x01 \x03(\v2\x13.mako.v2.AgentBlockR\x06blocks\"\xc9\x01\n" +
 	"\n" +

@@ -824,16 +824,24 @@ checks, and a draft is one titled `WIP:`.
 
 ### Plugins
 
-A node's daemon runs its plugins ([docs/plugins.md](plugins.md)); these
-requests reach them from the node's own front-ends, and a peer is refused
-(revision 26). `changed` has `plugins` set when a plugin comes, goes, or
-changes how it stands, for the front-end to list them again.
+A node's daemon runs its plugins ([docs/plugins.md](plugins.md)).
+`list_plugins` and `plugin_action` reach them from the node's own
+front-ends alone, and a peer is refused (revision 26): what a plugin is
+allowed, and whether it runs, is the user's to say on the node it runs
+on. The blocks plugins and agents draw, `watch_block`, `block_event` and
+`list_agent_blocks`, are routed by `node_id` as any request, and served
+to a node let in as to the node's own front-ends (revision 30): a node
+let in starts sessions there already, which run any program, so seeing
+a block and tapping it gives it nothing it lacked. That is how the
+Android app shows the blocks of the computer it shows. `changed` has
+`plugins` set when a plugin comes, goes, or changes how it stands, for
+the front-end to list them again.
 
 | Request | Payload | Reply | |
 |---|---|---|---|
-| `list_plugins` | `ListPlugins` | `plugins` | The node's plugins, by ID: each one's manifest (version, publisher, blocks, commands, settings and their values, a secret's never), the permissions it asks for, those allowed, those still `asked`, and its `state` (`waiting`, `denied`, `ready`, `running`, `failed`, `disabled`) with an `error`; `stale` when the version running is the last that worked and `error` says why the folder's newer one did not. |
+| `list_plugins` | `ListPlugins` | `plugins` | The node's plugins, by ID: each one's manifest (version, publisher, blocks, commands, settings and their values, a secret's never), the permissions it asks for, those allowed, those still `asked`, and its `state` (`waiting`, `denied`, `ready`, `running`, `failed`, `disabled`, and from revision 29 `blocked`) with an `error`; `stale` when the version running is the last that worked and `error` says why the folder's newer one did not. From revision 29, `installed` when it came from a registry's package, with `source`, that registry, `key`, the publisher key pinned at its first install, `update`, a newer version that registry lists signed by that key, and `blocked`, why a registry's blocklist stops it. |
 | `plugin_action` | `PluginAction` | `plugin_done` | Acts for the user: `grant` allows what the plugin asks for, `deny` refuses it and stops the plugin, `enable` / `disable`, `reload` reads its folder again, `run` runs its `command`, `set` sets its setting `key` to `value` ("" unsets). `open_url` in the reply is a link the plugin asked, in answer, to open: the front-end that asked opens it. |
-| `watch_block` | `WatchBlock` | `block_update`, then more | Follows a plugin's block, `plugin:<id>/<block>`: the tree whole, then the changes. The block is shown, and its plugin started, while a front-end watches it; see [Plugin blocks](#plugin-blocks). |
+| `watch_block` | `WatchBlock` | `block_update`, then more | Follows a plugin's block, `plugin:<id>/<block>`: the tree whole, then the changes. The block is shown, and its plugin started, while a front-end watches it; see [Plugin blocks](#plugin-blocks). A block of another node, `node_id`, is relayed as an `attach` is: the daemon passes the request on and copies what comes back, in plain frames to its socket. |
 | `block_event` | `BlockEvent` | `plugin_done` | The user acting on a node of a block's tree: `tap`, or `change` / `submit` with the value, and `values`, the block's inputs', toggles' and selects' values as the front-end has them, by node id (revision 27). The daemon looks up what the node's last render said to send; a front-end names only the node. |
 | `list_agent_blocks` | `ListAgentBlocks` | `agent_blocks` | The blocks the node's agents show (`show_ui`, [agent-mcp.md](agent-mcp.md#ui-of-your-own)), in the order shown, each its `name`, `agent:<session>/<id>`, `session_id`, `agent`, `title`, and where it goes: none, the right panel's last tab; or `document`, `parent`, `index` (-1 for the last) and `size`, which the user allowed (revision 27). `changed` has `agent_blocks` set as one comes, goes or moves. |
 
@@ -842,9 +850,36 @@ changes how it stands, for the front-end to list them again.
 format, one stream. An agent's block's `block_update` names its
 `session_id` and `agent` in place of `plugin`, and the last update of a
 block closed has `gone`. An event of an agent's block goes to the agent
-as a message from `window`. A front-end lays the agents' blocks over the
-layout document it draws, never into it; they are the node's alone, and
-a peer is refused all four requests.
+as a message from `window`, whichever node's front-end sent it. A
+front-end lays the agents' blocks over the layout document it draws,
+never into it; they are the node's alone, never in its workspace nor its
+state, and a node let in reads them by asking, with `node_id`. Allowing
+what a plugin asks for stays the node's own: a node let in sees a
+plugin's block `waiting`, or `denied`, and cannot answer it, as it
+cannot answer a [layout change](#layout-documents) an agent asks for.
+
+#### The plugin store
+
+A node installs plugins from registries (revision 29): git repositories
+anyone keeps, each an index of signed `.makoplugin` packages and a
+blocklist, which nobody reviews ([plugins.md](plugins.md#publishing)).
+Installing is each node's own: these requests come from the node's own
+front-ends, and a peer, let in or not, is refused all four.
+
+| Request | Payload | Reply | |
+|---|---|---|---|
+| `list_registries` | `ListRegistries` | `registries` | The registries the node reads, the one mako comes with first (`builtin`): each one's `url`, the `name` its index gives itself, when it was last read (`fetched_at`, Unix seconds, 0 for never), the `error` of the last reading, with what it gave before standing meanwhile, and how many `plugins` it lists and entries its blocklist has (`blocked`). |
+| `registry_action` | `RegistryAction` | `registries` | `add` a registry by `url`, read at once (one that cannot be read is added all the same, its error beside it); `remove` one, its listings and blocklist with it, the built-in one too; `refresh` reads them all again now. |
+| `search_plugins` | `SearchPlugins` | `plugin_listings` | The plugins the registries list matching `query`, by ID, name, description and publisher, or the plugin `id` alone: one `PluginListing` for each registry listing it, by ID and then registry, its newest version for this node's Host API, with the registry, the publisher's name (which nobody checked), its `key` and `fingerprint`, the permissions the index says it asks for, the version `installed` here (`dev` for a folder in development) and where from, `other_key` when this node pinned another key for the ID, and `blocked`. A registry not read in the last 10 minutes is read first. |
+| `install_plugin` | `InstallPlugin` | `plugin_installed` | `install` the plugin `id` from `registry` (which may be left out when one registry alone lists it), `update` it from the registry it came from, or `remove` it with what it was allowed and kept on the node, and its pin. The reply's `added` are the permissions the version installed asks for beyond the one it replaced, which the user is then asked for as a plugin's are. |
+
+An install is refused, with nothing changed, for: a package whose
+SHA-256 or size is not the index's; a signature that does not hold, or is
+not by the key the index lists; an ID or version other than the index's;
+a manifest that does not read (one asking for `exec` among them); a key
+other than the one pinned for the ID, from any registry; a version not
+newer than the one installed; a version a blocklist names; and a folder of
+`plugins/` written by hand under the ID, which an install never replaces.
 
 ## Attach streams
 
@@ -1058,7 +1093,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 28) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 30) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
@@ -1097,6 +1132,8 @@ Within version 2, the protocol changes by addition, as protobuf allows:
 | A plugin block's updates | one each 100 ms on a stream, the renders between sent as one change |
 | A plugin's events | 20 a second from the front-ends, a value 8 KiB |
 | An agent's blocks | 4 a session, updated 10 times a second, 20 events a second each; an event's values 32 KiB |
+| A registry's index | 4 MiB, 20 s to read; 5 000 plugins, 64 versions each, 5 000 blocklist entries; 32 registries a node |
+| A plugin package | 8 MiB, 60 s to download, 3 redirects, each https; 256 files, 2 MiB each and 8 MiB in all once read, 8 folders deep |
 
 ## Layout documents
 
@@ -1139,7 +1176,8 @@ whether its daemon is reachable or not. The built-in document:
 ]}}
 ```
 
-`version` is 1. A node is an object with one of these fields, its kind,
+`version` is 1, or 2 for a document with `variants` (below). A node is
+an object with one of these fields, its kind,
 and an `id`, unique in the document, of letters, digits and `._:/-`, by
 which everything that edits or remembers a node finds it:
 
@@ -1157,7 +1195,7 @@ resize it, or `grow`, a share of the room the others leave; neither, it is
 as large as it draws. A sized child that is `collapsible` slides shut and
 open again. Two children neither of which is sized are divided by a line.
 In a list of children, a block's name alone, such as `"mako.git"`, is a
-block of that name and `id`. A document holds one `panes` node.
+block of that name and `id`. A document's root holds one `panes` node.
 
 A block's name is `mako.<name>` for the window's own, and will be
 `plugin:<id>/<block>` and `agent:<session>/<id>`. The window's:
@@ -1169,14 +1207,49 @@ value of the wrong type, sizes where they mean nothing, no `panes` or
 two, or more than 256 nodes or 16 deep, is not used: the window draws its
 default.
 
-**Versions.** A reader reads a document of its own `version` strictly: a
-field or kind of node it does not know is an error. One of a later
-version, which a newer node wrote and the workspace brought, is read
-leniently: fields it does not know are left out, and a node of a kind it
-does not know is kept as a leaf, drawn as missing; what it does know is
-checked as strictly. A node writes documents of its own version only, and
-does not patch one of a later version. So a field added later must be one
-an older window can leave out, and anything it cannot is a new version.
+**Versions.** A reader reads a document of its own `version`, or an
+earlier one, strictly: a field or kind of node it does not know at that
+version is an error. One of a later version, which a newer node wrote
+and the workspace brought, is read leniently: fields it does not know
+are left out, and a node of a kind it does not know is kept as a leaf,
+drawn as missing; what it does know is checked as strictly. A node
+writes documents of its own version at most, each at the earliest
+version that holds it, and does not patch one of a later version. So a
+field added later must be one an older window can leave out, and
+anything it cannot is a new version.
+
+**Variants** (version 2, revision 30). A device whose screen is narrow,
+the Android app, does not lay the window out: it shows blocks a page
+each. A document may say which, in `variants`:
+
+```json
+{"version": 2, "root": {…},
+ "variants": {"compact": {"id": "phone", "column": [
+   {"id": "ci", "block": "plugin:ci-status/ci"}, "mako.git"]}}}
+```
+
+`compact` is a root of the same nodes, checked as the root is, its IDs
+unique within it (it may use the root's again), but for the panes, of
+which it holds one or none. A document with variants is written at
+version 2, one without at version 1, so a window of a build before
+revision 30, which reads version 1 strictly, reads a document with
+variants leniently, as a later version: it leaves `variants` out and
+draws the root as ever, and does not patch the document. A window draws
+`root`, and `patch_layout` changes it alone; the compact root changes
+with the document whole. A later version's variant a reader cannot read,
+or that does not check, is left out, as any field it does not know.
+
+The **pages** of a document are those of its compact root, or, without
+one, of its root folded: its blocks in document order, depth first, a
+row's or column's children in turn and a stack's blocks in the order of
+its tabs; but for the panes, which a narrow screen shows in its own way,
+the window's own frame (`mako.sidebar`, `mako.header`), and nodes of a
+kind the reader does not know. A size, `grow`, collapsing and a stack's
+`active` mean nothing on a page. A document a window would not draw has
+the default's pages, as the window draws the default (`internal/layoutdoc`,
+`Pages`). The app shows those it can draw, plugins' blocks, and after
+them the agents' blocks of the same node (`list_agent_blocks`): it has
+screens of its own for the window's other blocks.
 
 **Changes an agent asks for** (revision 24) go through the user, on the
 node whose daemon the agent asked (see [agent-mcp.md](agent-mcp.md#the-windows-layout)):
@@ -1254,7 +1327,10 @@ siblings is moved, not drawn again. An update with neither `tree` nor
 front-end frames the block with, `state`, `error` and `stale`, as in
 `list_plugins`. A front-end that cannot apply an op starts the stream
 again, for a whole tree. Updates come at most every 100 ms; renders in
-between go as one change.
+between go as one change. A front-end of another node watches and acts
+on a block with `node_id` set, through its own daemon (revision 30); the
+Android app applies the ops with a port of the daemon's own
+(`protocol.ApplyUi`), checked against what the Go makes.
 
 ## The local hook socket
 

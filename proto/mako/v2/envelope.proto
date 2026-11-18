@@ -15,6 +15,7 @@ import "mako/v2/git.proto";
 import "mako/v2/forge.proto";
 import "mako/v2/mesh.proto";
 import "mako/v2/plugins.proto";
+import "mako/v2/pluginstore.proto";
 import "mako/v2/session.proto";
 import "mako/v2/project_agents.proto";
 
@@ -144,6 +145,15 @@ message Envelope {
     BlockEvent block_event = 126;
     ListAgentBlocks list_agent_blocks = 127;
     AgentBlocks agent_blocks = 128;
+
+    // Registries and the plugins installed from them (revision 29).
+    ListRegistries list_registries = 130;
+    Registries registries = 131;
+    RegistryAction registry_action = 132;
+    SearchPlugins search_plugins = 133;
+    PluginListings plugin_listings = 134;
+    InstallPlugin install_plugin = 135;
+    PluginInstalled plugin_installed = 136;
   }
 }
 

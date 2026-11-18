@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package mako.v2;
+
+option go_package = "github.com/ironpark/mako/internal/protocol";
+
+// Registries are git repositories anyone keeps, holding an index of
+// signed plugin packages (docs/plugins.md, "Publishing"). A node reads the
+// registries its user added, and the one mako comes with; nobody reviews
+// what any of them lists. Installing is each node's own: these requests
+// come from the node's own front-ends, and a peer is refused
+// (revision 29).
+//
+// A publisher key is written "ed25519:" and the key's 32 bytes in
+// unpadded base64url; its fingerprint, which the front-ends show, is the
+// first 16 bytes of the key's SHA-256 in hex, in groups of four joined
+// by hyphens.
+
+// ListRegistries asks for the node's registries; answered by Registries.
+message ListRegistries {}
+
+// Registries are the node's registries, the one mako comes with first.
+message Registries {
+  repeated RegistryInfo registries = 1;
+}
+
+// RegistryInfo is a registry as the node last read it.
+message RegistryInfo {
+  // url is the registry as the user added it.
+  string url = 1;
+  // builtin says it is the registry mako comes with.
+  bool builtin = 2;
+  // name is the name its index gives itself.
+  string name = 3;
+  // fetched_at is when its index was last read, Unix seconds; 0, never.
+  int64 fetched_at = 4;
+  // error is why it was not read the last time; the index read before,
+  // if any, stands meanwhile.
+  string error = 5;
+  // plugins counts what it lists; blocked the entries of its blocklist.
+  int32 plugins = 6;
+  int32 blocked = 7;
+}
+
+// RegistryAction changes the node's registries: op "add" adds url,
+// "remove" removes it, its blocklist with it, and "refresh" reads every
+// registry again now. Answered by Registries.
+message RegistryAction {
+  string op = 1;
+  string url = 2;
+}
+
+// SearchPlugins asks the node's registries for the plugins matching
+// query, by ID, name and description; with id, for that plugin alone.
+// Answered by PluginListings.
+message SearchPlugins {
+  string query = 1;
+  string id = 2;
+}
+
+// PluginListings are the plugins found, an entry for each plugin of each
+// registry, by ID and then registry.
+message PluginListings {
+  repeated PluginListing listings = 1;
+}
+
+// PluginListing is a plugin's newest version as a registry lists it, and
+// how it stands on this node.
+message PluginListing {
+  string id = 1;
+  // registry is the URL of the registry listing it.
+  string registry = 2;
+  string version = 3;
+  // publisher is the name the publisher gives itself, which nobody
+  // checked; key is its publisher key and fingerprint its fingerprint.
+  string publisher = 4;
+  string key = 5;
+  string fingerprint = 6;
+  string name = 7;
+  string description = 8;
+  string homepage = 9;
+  // permissions are what its manifest asks for, as the index says; the
+  // package's own manifest is what the user is asked to allow.
+  repeated string permissions = 10;
+  // installed is the version installed on this node, "" for none, from
+  // installed_from; a folder of a plugin in development says "dev".
+  string installed = 11;
+  string installed_from = 12;
+  // other_key says this node pinned another publisher key for the ID:
+  // this listing cannot be installed over it.
+  bool other_key = 13;
+  // blocked is why one of this node's registries blocks it.
+  string blocked = 14;
+}
+
+// InstallPlugin installs plugin id from registry (op "install"), updates
+// it from the registry it was installed from ("update"), or removes it
+// ("remove"). Answered by PluginInstalled.
+message InstallPlugin {
+  string op = 1;
+  string id = 2;
+  string registry = 3;
+}
+
+// PluginInstalled answers InstallPlugin.
+message PluginInstalled {
+  string id = 1;
+  string version = 2;
+  // added are the permissions the version installed asks for that the
+  // one it replaced did not: the user is asked for them before it runs.
+  repeated string added = 3;
+}

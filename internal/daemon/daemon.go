@@ -23,6 +23,7 @@ import (
 	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/p2p"
 	"github.com/ironpark/mako/internal/plugin"
+	"github.com/ironpark/mako/internal/plugin/store"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transport"
 )
@@ -88,6 +89,7 @@ type Daemon struct {
 	agentFile     agentFile
 	plugins       *plugin.Manager // the node's plugins; see plugins.go
 	pluginsDir    string          // the folder they are read from
+	store         *store.Store    // the registries the plugins are installed from; see pluginstore.go
 	agentUI       *agentui.Store  // the blocks agents show; see agent_ui.go
 	uiWatched     onceSet         // the sessions whose end closes their blocks
 	mcp           *mcp.Resolver   // nil without a configuration directory
@@ -442,6 +444,8 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleBlockEvent(ctx, stream, env, fromPeer)
 	case protocol.TypeListAgentBlocks:
 		return d.handleListAgentBlocks(ctx, stream, env, fromPeer)
+	case protocol.TypeListRegistries, protocol.TypeRegistryAction, protocol.TypeSearchPlugins, protocol.TypeInstallPlugin:
+		return d.handlePluginStore(ctx, stream, env, fromPeer)
 
 	case protocol.TypeResize:
 		payload, err := protocol.Body[*protocol.Resize](env)

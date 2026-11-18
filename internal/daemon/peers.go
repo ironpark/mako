@@ -73,8 +73,9 @@ func (d *Daemon) node(nodeID string) (*protocol.Node, error) {
 
 // relayToPeer hands a front-end's stream to the daemon of the node req
 // names, as a request of type typ whose stream then carries what that
-// daemon says: an attached session, or a tunnel. The relay copies the
-// bytes both ways without reading them, as both legs speak the same.
+// daemon says: an attached session, a tunnel, or a block's updates. The
+// relay copies the bytes both ways without reading them, as both legs
+// speak the same.
 func (d *Daemon) relayToPeer(ctx context.Context, typ protocol.Type, req routed, client *transport.Stream) error {
 	node, err := d.node(req.GetNodeId())
 	if err != nil {
@@ -95,8 +96,10 @@ func (d *Daemon) relayToPeer(ctx context.Context, typ protocol.Type, req routed,
 		return err
 	}
 	splice := transport.Splice
-	if typ == protocol.TypeAttach && !client.Packs() {
-		// The socket carries frames plain; a tunnel's bytes are no frames.
+	if (typ == protocol.TypeAttach || typ == protocol.TypeWatchBlock) && !client.Packs() {
+		// The socket carries frames plain. An attached session's and a
+		// block's streams are frames; a tunnel's and a device's bytes are
+		// not, and are copied as they come.
 		splice = transport.SpliceUnpacking
 	}
 	if err := splice(ctx, client, peer); err != nil && !isClosed(err) {

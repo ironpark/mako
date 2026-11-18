@@ -50,6 +50,9 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 		p.status(func() {})
 	case protocol.PluginDisable, protocol.PluginEnable:
 		off := a.GetOp() == protocol.PluginDisable
+		if st := p.installStatus(); !off && st.Blocked != "" {
+			return nil, fmt.Errorf("the plugin cannot be enabled while it is blocked: %s", st.Blocked)
+		}
 		if err := m.grant.update(p.id, func(e *grantEntry) { e.Disabled = off }); err != nil {
 			return nil, err
 		}

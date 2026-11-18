@@ -77,6 +77,7 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                 onNew = { nav.navigate("new") },
                 onSettings = { nav.navigate("settings") },
                 onScan = { nav.navigate("scan") },
+                onPanels = { node -> nav.navigate("panels/${Uri.encode(node)}") },
                 last = last,
                 onLast = { last?.let { openSession(it.nodeId, it.id) } },
                 screenState = homeState,
@@ -142,6 +143,18 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                     if (link.folder) nav.navigate("files/${Uri.encode(node)}/${Uri.encode(link.path)}")
                     else nav.navigate("file/${Uri.encode(node)}/${Uri.encode(a?.getString("root").orEmpty())}/${Uri.encode(link.path)}?line=${link.line}")
                 })
+        }
+        // The panels of a computer, and one of them a page of its own.
+        composable("panels/{node}") { entry ->
+            val node = entry.arguments?.getString("node").orEmpty()
+            PanelsScreen(mesh, node, homeState.space.value, onBack = { nav.popBackStack() }, onOpen = { p ->
+                nav.navigate("block/${Uri.encode(node)}/${Uri.encode(p.block)}?title=${Uri.encode(p.title)}")
+            })
+        }
+        composable("block/{node}/{block}?title={title}") { entry ->
+            val a = entry.arguments
+            BlockScreen(mesh, a?.getString("node").orEmpty(), a?.getString("block").orEmpty(), a?.getString("title").orEmpty(),
+                onBack = { nav.popBackStack() })
         }
         composable("settings") {
             SettingsScreen(onBack = { nav.popBackStack() }, onNotifications = { nav.navigate("notifications") }, onUpdates = { nav.navigate("updates") })

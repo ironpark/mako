@@ -8,6 +8,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/plugin/pack"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -21,14 +22,21 @@ func plugins(ctx context.Context, c *client.Client, args []string) error {
 			return err
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tVERSION\tSTATE\tASKS FOR\tGRANTED\tERROR")
+		fmt.Fprintln(w, "ID\tVERSION\tSTATE\tASKS FOR\tGRANTED\tFROM\tUPDATE\tERROR")
 		for _, p := range list.GetPlugins() {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", p.GetId(), p.GetVersion(), p.GetState(),
-				strings.Join(p.GetAsked(), ","), strings.Join(p.GetGranted(), ","), p.GetError())
+			from := "folder"
+			if p.GetInstalled() {
+				from = p.GetSource() + " " + pack.Fingerprint(p.GetKey())
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", p.GetId(), p.GetVersion(), p.GetState(),
+				strings.Join(p.GetAsked(), ","), strings.Join(p.GetGranted(), ","), from, p.GetUpdate(), p.GetError())
 		}
 		return w.Flush()
 	}
 	op, rest := args[0], args[1:]
+	if storeOps[op] {
+		return pluginStore(ctx, c, op, rest)
+	}
 	if len(rest) == 0 {
 		return fmt.Errorf("plugins %s needs a plugin's ID", op)
 	}

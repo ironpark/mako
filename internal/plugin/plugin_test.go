@@ -227,3 +227,27 @@ func TestOpenURLOnlyForTheUser(t *testing.T) {
 		t.Fatalf("open %q", done.GetOpenUrl())
 	}
 }
+
+// A version asking for more while its block shows and the last version
+// runs does not start, nor leave the last running in its place: it asks,
+// for what is new alone, and runs once allowed.
+func TestMorePermissionsAskAgainWhileShown(t *testing.T) {
+	r := newRig(t, testLimits, nil)
+	v := func(text string) string {
+		return `export default { activate(m) { m.blocks.register("ui", { state: {}, render: (s, ui) => ui.text("` + text + `") }) } }`
+	}
+	r.write("p", map[string]string{ManifestName: manifest("p", []string{"storage"}, ""), "main.js": v("one")})
+	r.state("p", protocol.PluginWaiting)
+	r.grant("p")
+	w := r.watch("plugin:p/ui")
+	w.until("one", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return hasText(n, "one") })
+	r.state("p", protocol.PluginRunning)
+	r.write("p", map[string]string{ManifestName: manifest("p", []string{"storage", "sessions:read"}, ""), "main.js": v("two")})
+	info := r.state("p", protocol.PluginWaiting)
+	if strings.Join(info.GetAsked(), ",") != "sessions:read" || info.GetStale() {
+		t.Fatalf("after asking for more: %v", info)
+	}
+	w.until("that it waits", func(_ *protocol.UiNode, u *protocol.BlockUpdate) bool { return u.GetState() == protocol.PluginWaiting })
+	r.grant("p")
+	w.until("two", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return hasText(n, "two") })
+}

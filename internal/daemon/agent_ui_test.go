@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -162,7 +161,8 @@ func TestPlacingABlockElsewhereIsAllowedFirst(t *testing.T) {
 	}
 }
 
-// Agents' blocks never reach the workspace, nor what peers are told.
+// Agents' blocks never reach the workspace, nor what peers are told of
+// their own accord; a node let in asks for them (peer_blocks_test.go).
 func TestAgentBlocksStayOnTheirNode(t *testing.T) {
 	l := newLayoutDaemon(t)
 	l.d.layouts.allow(protocol.LayoutAllowAlways, "default")
@@ -176,20 +176,6 @@ func TestAgentBlocksStayOnTheirNode(t *testing.T) {
 		data, _ := proto.Marshal(m)
 		if strings.Contains(string(data), "agent:") {
 			t.Errorf("the %s holds an agent's block", what)
-		}
-	}
-	env, _ := protocol.Encode(protocol.TypeListAgentBlocks, "1", &protocol.ListAgentBlocks{})
-	if err := l.d.dispatch(context.Background(), nil, env, true); err == nil {
-		t.Error("a peer listed the agents' blocks")
-	}
-	for _, typ := range []protocol.Type{protocol.TypeWatchBlock, protocol.TypeBlockEvent} {
-		var body proto.Message = &protocol.WatchBlock{Block: agentui.Name(l.s.ID(), "board")}
-		if typ == protocol.TypeBlockEvent {
-			body = &protocol.BlockEvent{Block: agentui.Name(l.s.ID(), "board"), Node: "/send", Kind: protocol.UiTap}
-		}
-		env, _ := protocol.Encode(typ, "1", body)
-		if err := l.d.dispatch(context.Background(), nil, env, true); err == nil {
-			t.Errorf("a peer's %s went through", typ)
 		}
 	}
 }

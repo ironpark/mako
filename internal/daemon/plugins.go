@@ -16,14 +16,16 @@ import (
 
 // The node's plugins run here (internal/plugin), each a folder of
 // plugins/ beside config.json; what each keeps on this node, and what the
-// user allowed them, is in plugin-data/. A node's front-ends list them,
-// act on them, and watch their blocks; a peer may not: plugins are a
-// node's own, as its sessions' processes are.
+// user allowed them, is in plugin-data/. A node's front-ends list them and
+// act on them; a peer may not: what a plugin is allowed is the user's to
+// say on the node it runs on. The blocks plugins and agents draw are
+// served to a node let in as well (watch_block, block_event,
+// list_agent_blocks, revision 30), routed by node_id: a node let in starts
+// sessions there already, which run any program, so seeing a block and
+// tapping it gives it nothing it lacked. A phone shows the blocks of the
+// computer it shows so.
 
-var (
-	errPluginPeer = errors.New("a node's plugins are its own front-ends' alone")
-	errBlocksPeer = errors.New("a node's blocks are its own front-ends' alone")
-)
+var errPluginPeer = errors.New("a node's plugins are its own front-ends' alone")
 
 // blockSource serves the blocks of a namespace to the front-ends: a
 // plugin's, plugin:<id>/<block>, or an agent's, agent:<session>/<id>. Both
@@ -61,17 +63,21 @@ func (d *Daemon) blockSource(name string) (blockSource, error) {
 // ctx ends.
 func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan struct{}) {
 	d.pluginsDir = filepath.Join(dir, "plugins")
+	d.store = newPluginStore(filepath.Join(dir, "plugin-data"), d.log)
 	d.plugins = plugin.New(plugin.Config{
 		Dir:      d.pluginsDir,
 		DataDir:  filepath.Join(dir, "plugin-data"),
 		Log:      d.log,
 		Sessions: d.listSessions,
 		Changed:  d.changes.firePlugins,
+		Installs: d.store,
 		NetTest:  netTestHosts(os.Getenv("MAKO_PLUGIN_NET_TEST")),
 	})
+	d.store.Attach(d.plugins)
 	ch := make(chan struct{})
 	go func() {
 		defer close(ch)
+		go d.store.Run(ctx)
 		d.plugins.Run(ctx)
 	}()
 	return ch
@@ -150,33 +156,27 @@ func (d *Daemon) handlePluginAction(ctx context.Context, stream *transport.Strea
 	return stream.Send(protocol.TypePluginDone, env.GetId(), done)
 }
 
-func (d *Daemon) handleBlockEvent(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
-	if fromPeer {
-		return errBlocksPeer
-	}
-	req, err := protocol.Body[*protocol.BlockEvent](env)
-	if err != nil {
-		return err
-	}
-	src, err := d.blockSource(req.GetBlock())
-	if err != nil {
-		return err
-	}
-	done, err := src.Event(ctx, req)
-	if err != nil {
-		return err
-	}
-	return stream.Send(protocol.TypePluginDone, env.GetId(), done)
+// handleBlockEvent gives the block's source the user's action on a node
+// of its tree, on the node the block is on.
+func (d *Daemon) handleBlockEvent(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, _ bool) error {
+	return serve(d, ctx, stream, env, protocol.TypePluginDone, func(req *protocol.BlockEvent) (*protocol.PluginDone, error) {
+		src, err := d.blockSource(req.GetBlock())
+		if err != nil {
+			return nil, err
+		}
+		return src.Event(ctx, req)
+	})
 }
 
-// handleWatchBlock streams a block's tree until the front-end hangs up.
-func (d *Daemon) handleWatchBlock(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
-	if fromPeer {
-		return errBlocksPeer
-	}
+// handleWatchBlock streams a block's tree until the front-end hangs up: a
+// block of this node's, or, relayed, of the node the request names.
+func (d *Daemon) handleWatchBlock(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, _ bool) error {
 	req, err := protocol.Body[*protocol.WatchBlock](env)
 	if err != nil {
 		return err
+	}
+	if !d.local(req.GetNodeId()) {
+		return d.relayToPeer(ctx, protocol.TypeWatchBlock, req, stream)
 	}
 	src, err := d.blockSource(req.GetBlock())
 	if err != nil {

@@ -296,4 +296,20 @@
     <string name="unpin">고정 해제</string>
     <string name="all_sessions">모든 세션</string>
     <string name="space_n">스페이스 %1$d</string>
+    <!-- The panels of a computer: its plugins' and agents' blocks. -->
+    <string name="panels">패널</string>
+    <string name="panels_unsupported">여기서 패널을 보려면 %1$s의 Mako를 업데이트하세요.</string>
+    <string name="panels_none">%1$s의 창에 플러그인 패널이 없고, 에이전트가 띄운 패널도 없습니다.</string>
+    <string name="block_plugin">플러그인</string>
+    <string name="block_agent">에이전트</string>
+    <string name="block_unreachable">패널에 연결하지 못했습니다. 다시 시도하는 중…</string>
+    <string name="block_reconnecting">다시 연결하는 중…</string>
+    <string name="block_closed">이 패널은 닫혔습니다.</string>
+    <string name="block_waiting">이 플러그인은 허용을 기다립니다. %1$s에서 허용하세요.</string>
+    <string name="block_denied">이 플러그인이 요청한 권한은 %1$s에서 거절되었습니다.</string>
+    <string name="block_disabled">이 플러그인은 %1$s에서 꺼져 있습니다.</string>
+    <string name="block_blocked">%1$s의 레지스트리가 이 플러그인을 차단했습니다.</string>
+    <string name="block_failed">플러그인이 실패했습니다</string>
+    <string name="block_stale">플러그인의 새 버전이 실패해 마지막으로 동작한 버전이 실행 중입니다</string>
+    <string name="block_call_failed">패널의 마지막 호출이 실패했습니다</string>
 </resources>

@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Badge
@@ -168,6 +169,7 @@ internal fun rememberSessionsScreenState(source: SessionsScreenState? = null): S
 internal fun SessionsScreen(
     mesh: Mesh, onOpen: (SessionInfo) -> Unit, onMesh: () -> Unit, onNew: () -> Unit, onSettings: () -> Unit,
     onScan: () -> Unit = onMesh,
+    onPanels: ((String) -> Unit)? = null,
     last: SessionInfo? = null, onLast: () -> Unit = {},
     screenState: SessionsScreenState = rememberSessionsScreenState(),
 ) {
@@ -231,6 +233,11 @@ internal fun SessionsScreen(
                 },
                 actions = {
                     if (linked > 0 || sessions.isNotEmpty()) GroupingMenu(screenState.grouping.value) { screenState.grouping.value = it }
+                    // The plugins' and agents' panels of the computer whose workspace shows.
+                    val panels = remember(workspace, nodes) { mesh.panelsNode() }
+                    if (onPanels != null && panels != null) {
+                        IconButton(onClick = { onPanels(panels) }) { Icon(Icons.Outlined.Dashboard, stringResource(R.string.panels)) }
+                    }
                     IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, stringResource(R.string.settings)) }
                     IconButton(onClick = onMesh) {
                         BadgedBox(badge = { if (linked == 0) Badge() }) {

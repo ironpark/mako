@@ -30,6 +30,7 @@ type plugin struct {
 	id       string
 	jobs     chan func()
 	done     chan struct{}
+	exited   chan struct{} // closed once the actor has stopped
 	quitOnce sync.Once
 	settings *settingsStore
 	store    *kvStore
@@ -78,6 +79,7 @@ func newPlugin(m *Manager, id string) *plugin {
 		m: m, id: id,
 		jobs:     make(chan func(), 32),
 		done:     make(chan struct{}),
+		exited:   make(chan struct{}),
 		settings: newSettingsStore(filepath.Join(data, "settings.json")),
 		store:    newKVStore(filepath.Join(data, "storage.json"), m.lim.Storage),
 		logRate:  newRateLimit(m.lim.Logs, time.Minute),
@@ -92,6 +94,7 @@ func newPlugin(m *Manager, id string) *plugin {
 // run is the actor: it runs jobs until the plugin is removed or the
 // manager stops, and stops an idle runtime and reloads blocks on time.
 func (p *plugin) run(ctx context.Context) {
+	defer close(p.exited)
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	defer p.closeRuntime()
@@ -195,11 +198,14 @@ func (p *plugin) current() *version {
 	return p.v
 }
 
-// stateLocked is how the plugin stands, and why.
-func (p *plugin) stateLocked(g grantEntry) (string, string) {
+// stateLocked is how the plugin stands, and why: a plugin blocked stands
+// so before anything else it might, and whatever the user said.
+func (p *plugin) stateLocked(g grantEntry, st InstallStatus) (string, string) {
 	switch {
 	case p.v == nil:
 		return protocol.PluginFailed, cmpOr(p.loadErr, "its folder has not been read")
+	case st.Blocked != "":
+		return protocol.PluginBlocked, st.Blocked
 	case g.Disabled:
 		return protocol.PluginDisabled, ""
 	}
@@ -221,19 +227,20 @@ func (p *plugin) stateLocked(g grantEntry) (string, string) {
 }
 
 func (p *plugin) state() (string, string) {
-	g := p.m.grant.get(p.id)
+	g, st := p.m.grant.get(p.id), p.installStatus()
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.stateLocked(g)
+	return p.stateLocked(g, st)
 }
 
 // info is the plugin as a listing shows it.
 func (p *plugin) info() *protocol.PluginInfo {
-	g := p.m.grant.get(p.id)
+	g, st := p.m.grant.get(p.id), p.installStatus()
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	state, err := p.stateLocked(g)
-	out := &protocol.PluginInfo{Id: p.id, State: state, Error: err, Stale: p.stale}
+	state, err := p.stateLocked(g, st)
+	out := &protocol.PluginInfo{Id: p.id, State: state, Error: err, Stale: p.stale,
+		Installed: st.Installed, Source: st.Source, Key: st.Key, Update: st.Update, Blocked: st.Blocked}
 	if p.stale && err == "" {
 		out.Error = p.loadErr
 	}

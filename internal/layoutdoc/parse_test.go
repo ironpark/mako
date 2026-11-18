@@ -117,7 +117,7 @@ func TestMalformedDocumentsAreRefused(t *testing.T) {
 // what it knows is checked as strictly, and it is not patched here. The
 // same document at this version is refused.
 func TestALaterVersionIsReadLeniently(t *testing.T) {
-	later := `{"version":2,"variants":{"compact":{}},"root":{"id":"w","row":[
+	later := `{"version":3,"variants":{"compact":{},"wide":{}},"layers":[],"root":{"id":"w","row":[
 		{"id":"sidebar","block":"mako.sidebar","size":272,"pinned":true},
 		{"id":"chart","canvas":{"ops":[]},"size":200},
 		{"panes":"main","grow":1}]}}`
@@ -135,11 +135,16 @@ func TestALaterVersionIsReadLeniently(t *testing.T) {
 	if err != nil || !strings.Contains(string(canon), `"variants"`) {
 		t.Fatalf("a later version was not kept as it came: %s, %v", canon, err)
 	}
-	if _, err := Parse([]byte(strings.Replace(later, `"version":2`, `"version":1`, 1)), BuiltinCatalog()); err == nil {
-		t.Fatal("unknown fields read at this version")
+	if d.Compact != nil {
+		t.Fatalf("a compact variant this version cannot read was kept: %+v", d.Compact)
+	}
+	for _, v := range []string{`"version":1`, `"version":2`} {
+		if _, err := Parse([]byte(strings.Replace(later, `"version":3`, v, 1)), BuiltinCatalog()); err == nil {
+			t.Fatalf("unknown fields read at %s", v)
+		}
 	}
 	// What a later version is read for is still checked.
-	broken := `{"version":2,"root":{"id":"w","row":[{"id":"x","stack":[]},{"panes":"main"}]}}`
+	broken := `{"version":3,"root":{"id":"w","row":[{"id":"x","stack":[]},{"panes":"main"}]}}`
 	if _, err := Parse([]byte(broken), BuiltinCatalog()); err == nil || !strings.Contains(err.Error(), "no children") {
 		t.Fatalf("a later version's broken tree: %v", err)
 	}

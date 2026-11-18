@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/plugin/pack"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -38,16 +39,31 @@ func settingsGroups(hasPlugins bool) []settingsGroup {
 }
 
 func pluginSettings(m *model) ggui.Widget {
-	return ggui.View(m.plugins.List, func(list []*protocol.PluginInfo) ggui.Widget {
-		sections := make([]ggui.Widget, 0, len(list))
+	installed := ggui.View(m.plugins.List, func(list []*protocol.PluginInfo) ggui.Widget {
+		cards := make([]ggui.Widget, 0, len(list))
 		for _, p := range list {
-			sections = append(sections, pluginCard(m, p))
+			if m.storeOpen() {
+				// Under the store's headings, a card is named by its own
+				// head, not by a heading of its own.
+				cards = append(cards, pluginCardBody(m, p))
+			} else {
+				cards = append(cards, pluginCard(m, p))
+			}
 		}
 		if len(list) == 0 {
-			sections = append(sections, card(widget.Box(muted(widget.Text(T("No plugins are in this node's plugins folder.")).Size(12.5))).Pad(14, 16)))
+			cards = append(cards, card(widget.Box(muted(widget.Text(T("No plugins are in this node's plugins folder.")).Size(12.5))).Pad(14, 16)))
 		}
-		return page(T("Plugins"), T("The plugins this node's daemon runs, each in a sandbox of its own, from the plugins folder beside its configuration. A plugin runs once you allow what it asks for."), sections...)
+		return widget.Column(cards...).Gap(sectionGap).Stretch()
 	})
+	about := T("The plugins this node's daemon runs, each in a sandbox of its own, from the plugins folder beside its configuration. A plugin runs once you allow what it asks for.")
+	if !m.storeOpen() {
+		return page(T("Plugins"), about, installed)
+	}
+	return page(T("Plugins"), about+" "+T("Installing is this node's own: another of your computers installs for itself."),
+		section(T("Installed"), installed),
+		section(T("Find plugins"), storeSection(m)),
+		section(T("Registries"), registriesSection(m)),
+	)
 }
 
 // stateLabels name a plugin's states.
@@ -58,6 +74,7 @@ var stateLabels = map[string]string{
 	protocol.PluginRunning:  "Running",
 	protocol.PluginFailed:   "Failed",
 	protocol.PluginDisabled: "Disabled",
+	protocol.PluginBlocked:  "Blocked",
 }
 
 func stateTone(state string) string {
@@ -66,14 +83,19 @@ func stateTone(state string) string {
 		return "success"
 	case protocol.PluginWaiting:
 		return "warning"
-	case protocol.PluginFailed, protocol.PluginDenied:
+	case protocol.PluginFailed, protocol.PluginDenied, protocol.PluginBlocked:
 		return "danger"
 	}
 	return "muted"
 }
 
-// pluginCard is a plugin's card.
+// pluginCard is a plugin's card, under a heading of its ID.
 func pluginCard(m *model, p *protocol.PluginInfo) ggui.Widget {
+	return section(p.GetId(), pluginCardBody(m, p))
+}
+
+// pluginCardBody is a plugin's card.
+func pluginCardBody(m *model, p *protocol.PluginInfo) ggui.Widget {
 	id := p.GetId()
 	act := func(op string) func() {
 		return func() { m.actOnPlugin(&protocol.PluginAction{PluginId: id, Op: op}) }
@@ -82,18 +104,41 @@ func pluginCard(m *model, p *protocol.PluginInfo) ggui.Widget {
 	if p.GetState() == protocol.PluginDisabled || p.GetState() == protocol.PluginFailed {
 		toggle = ui.Button(T("Enable"), act(protocol.PluginEnable)).Outline()
 	}
+	buttons := []ggui.Widget{pill(T(stateLabels[p.GetState()]), toneColor(stateTone(p.GetState())))}
+	if p.GetInstalled() {
+		// What it is, and whose, is the package's: there is nothing to
+		// read again by hand.
+		if p.GetUpdate() != "" {
+			buttons = append(buttons, ui.Button(Tf("Update to %s", p.GetUpdate()), func() { m.installPlugin(protocol.UpdateOp, id, "") }).Secondary())
+		}
+		buttons = append(buttons, ui.Button(T("Remove"), func() { m.installPlugin(protocol.RemoveOp, id, "") }).Outline())
+	} else {
+		buttons = append(buttons, ui.Button(T("Reload"), act(protocol.PluginReload)).Outline())
+	}
+	if p.GetState() != protocol.PluginBlocked {
+		buttons = append(buttons, toggle)
+	}
+	origin := muted(widget.Text(Tf("by %s", p.GetPublisher())).Size(12))
+	var originRow ggui.Widget = origin
+	if p.GetInstalled() {
+		originRow = originLine(p.GetPublisher(), pack.Fingerprint(p.GetKey()), p.GetSource(), "")
+	} else if m.storeOpen() {
+		originRow = muted(widget.Text(Tf("by %s · a folder of plugins/, in development", p.GetPublisher())).Size(12))
+	}
 	head := widget.Box(widget.Row(
 		icon("package").Size(18).Color(skin.Muted),
 		widget.Expanded(widget.Column(
 			widget.Row(widget.Text(id).Size(13.5).Weight(ggui.WeightMedium), muted(widget.Text(p.GetVersion()).Size(12))).Gap(8),
-			muted(widget.Text(Tf("by %s", p.GetPublisher())).Size(12)),
+			originRow,
 		).Gap(3).Stretch()),
-		pill(T(stateLabels[p.GetState()]), toneColor(stateTone(p.GetState()))),
-		ui.Button(T("Reload"), act(protocol.PluginReload)).Outline(),
-		toggle,
+		widget.Row(buttons...).Gap(10).Align(widget.AlignCenter),
 	).Gap(10).Align(widget.AlignCenter)).Pad(14, 16)
 	rows := []ggui.Widget{head}
-	if p.GetError() != "" {
+	if p.GetBlocked() != "" {
+		rows = append(rows, widget.Box(warnLine("circle-slash", skin.DiffRemoved,
+			Tf("It does not run: %s. It cannot be enabled while the registry blocks it; removing that registry lifts its list.", p.GetBlocked()))).Pad(12, 16))
+	}
+	if p.GetError() != "" && p.GetState() != protocol.PluginBlocked {
 		label := pick(p.GetStale(), T("Its newer version failed; the last that worked runs:"), T("It stopped:"))
 		rows = append(rows, widget.Box(widget.Column(
 			widget.Text(label).Size(12.5).Color(pick[color.Color](p.GetStale(), skin.DotWaiting, skin.DiffRemoved)),
@@ -104,7 +149,7 @@ func pluginCard(m *model, p *protocol.PluginInfo) ggui.Widget {
 	for _, s := range p.GetSettings() {
 		rows = append(rows, pluginSettingRow(m, id, s))
 	}
-	return section(id, card(rows...))
+	return card(rows...)
 }
 
 // pluginPermissions lists what a plugin asks for, those allowed marked,
@@ -209,10 +254,20 @@ func pluginAskBar(m *model) ggui.Widget {
 		for _, perm := range p.GetAsked() {
 			asks = append(asks, permissionText(perm))
 		}
+		head := Tf("The plugin %s %s asks to:", id, p.GetVersion())
+		if len(p.GetGranted()) > 0 {
+			// An update asks for what it adds alone.
+			head = Tf("The plugin %s %s now also asks to:", id, p.GetVersion())
+		}
+		by := Tf("By %s. It does not run until you allow it.", p.GetPublisher())
+		if p.GetInstalled() {
+			by = Tf("By %s, key %s, from %s. It does not run until you allow it.", p.GetPublisher(),
+				shortFingerprint(pack.Fingerprint(p.GetKey())), registryLabel(p.GetSource()))
+		}
 		body := widget.Column(
-			widget.Text(Tf("The plugin %s %s asks to:", id, p.GetVersion())).Size(13.5).Weight(ggui.WeightMedium),
+			widget.Text(head).Size(13.5).Weight(ggui.WeightMedium),
 			muted(widget.Text(strings.Join(asks, " · ")).Size(12.5)),
-			muted(widget.Text(Tf("By %s. It does not run until you allow it.", p.GetPublisher())).Size(12.5)),
+			muted(widget.Text(by).Size(12.5)),
 		).Gap(3).Stretch()
 		later := func() {
 			m.plugins.Later.Update(func(l map[string]bool) map[string]bool {

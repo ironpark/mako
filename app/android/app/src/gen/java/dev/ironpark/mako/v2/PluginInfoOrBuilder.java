@@ -243,4 +243,76 @@ public interface PluginInfoOrBuilder extends
    * <code>repeated .mako.v2.PluginSetting settings = 12 [json_name = "settings"];</code>
    */
   int getSettingsCount();
+
+  /**
+   * <pre>
+   * installed says the plugin was installed from a registry's package,
+   * not written into its folder by hand (revision 29); source is that
+   * registry's URL, key the publisher key pinned at its first install
+   * (pluginstore.proto's PublisherKey form), update a newer version its
+   * registry lists, signed by that key.
+   * </pre>
+   *
+   * <code>bool installed = 13 [json_name = "installed"];</code>
+   * @return The installed.
+   */
+  boolean getInstalled();
+
+  /**
+   * <code>string source = 14 [json_name = "source"];</code>
+   * @return The source.
+   */
+  java.lang.String getSource();
+  /**
+   * <code>string source = 14 [json_name = "source"];</code>
+   * @return The bytes for source.
+   */
+  com.google.protobuf.ByteString
+      getSourceBytes();
+
+  /**
+   * <code>string key = 15 [json_name = "key"];</code>
+   * @return The key.
+   */
+  java.lang.String getKey();
+  /**
+   * <code>string key = 15 [json_name = "key"];</code>
+   * @return The bytes for key.
+   */
+  com.google.protobuf.ByteString
+      getKeyBytes();
+
+  /**
+   * <code>string update = 16 [json_name = "update"];</code>
+   * @return The update.
+   */
+  java.lang.String getUpdate();
+  /**
+   * <code>string update = 16 [json_name = "update"];</code>
+   * @return The bytes for update.
+   */
+  com.google.protobuf.ByteString
+      getUpdateBytes();
+
+  /**
+   * <pre>
+   * blocked is why a registry of this node's blocks the plugin: state is
+   * then "blocked", and it cannot be enabled while it stands.
+   * </pre>
+   *
+   * <code>string blocked = 17 [json_name = "blocked"];</code>
+   * @return The blocked.
+   */
+  java.lang.String getBlocked();
+  /**
+   * <pre>
+   * blocked is why a registry of this node's blocks the plugin: state is
+   * then "blocked", and it cannot be enabled while it stands.
+   * </pre>
+   *
+   * <code>string blocked = 17 [json_name = "blocked"];</code>
+   * @return The bytes for blocked.
+   */
+  com.google.protobuf.ByteString
+      getBlockedBytes();
 }

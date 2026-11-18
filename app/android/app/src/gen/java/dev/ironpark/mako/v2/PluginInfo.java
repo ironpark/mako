@@ -30,6 +30,10 @@ public  final class PluginInfo extends
     blocks_ = emptyProtobufList();
     commands_ = emptyProtobufList();
     settings_ = emptyProtobufList();
+    source_ = "";
+    key_ = "";
+    update_ = "";
+    blocked_ = "";
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -975,6 +979,269 @@ public  final class PluginInfo extends
   private void removeSettings(int index) {
     ensureSettingsIsMutable();
     settings_.remove(index);
+  }
+
+  public static final int INSTALLED_FIELD_NUMBER = 13;
+  private boolean installed_;
+  /**
+   * <pre>
+   * installed says the plugin was installed from a registry's package,
+   * not written into its folder by hand (revision 29); source is that
+   * registry's URL, key the publisher key pinned at its first install
+   * (pluginstore.proto's PublisherKey form), update a newer version its
+   * registry lists, signed by that key.
+   * </pre>
+   *
+   * <code>bool installed = 13 [json_name = "installed"];</code>
+   * @return The installed.
+   */
+  @java.lang.Override
+  public boolean getInstalled() {
+    return installed_;
+  }
+  /**
+   * <pre>
+   * installed says the plugin was installed from a registry's package,
+   * not written into its folder by hand (revision 29); source is that
+   * registry's URL, key the publisher key pinned at its first install
+   * (pluginstore.proto's PublisherKey form), update a newer version its
+   * registry lists, signed by that key.
+   * </pre>
+   *
+   * <code>bool installed = 13 [json_name = "installed"];</code>
+   * @param value The installed to set.
+   */
+  private void setInstalled(boolean value) {
+    
+    installed_ = value;
+  }
+  /**
+   * <pre>
+   * installed says the plugin was installed from a registry's package,
+   * not written into its folder by hand (revision 29); source is that
+   * registry's URL, key the publisher key pinned at its first install
+   * (pluginstore.proto's PublisherKey form), update a newer version its
+   * registry lists, signed by that key.
+   * </pre>
+   *
+   * <code>bool installed = 13 [json_name = "installed"];</code>
+   */
+  private void clearInstalled() {
+
+    installed_ = false;
+  }
+
+  public static final int SOURCE_FIELD_NUMBER = 14;
+  private java.lang.String source_;
+  /**
+   * <code>string source = 14 [json_name = "source"];</code>
+   * @return The source.
+   */
+  @java.lang.Override
+  public java.lang.String getSource() {
+    return source_;
+  }
+  /**
+   * <code>string source = 14 [json_name = "source"];</code>
+   * @return The bytes for source.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getSourceBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(source_);
+  }
+  /**
+   * <code>string source = 14 [json_name = "source"];</code>
+   * @param value The source to set.
+   */
+  private void setSource(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    source_ = value;
+  }
+  /**
+   * <code>string source = 14 [json_name = "source"];</code>
+   */
+  private void clearSource() {
+
+    source_ = getDefaultInstance().getSource();
+  }
+  /**
+   * <code>string source = 14 [json_name = "source"];</code>
+   * @param value The bytes for source to set.
+   */
+  private void setSourceBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    source_ = value.toStringUtf8();
+
+  }
+
+  public static final int KEY_FIELD_NUMBER = 15;
+  private java.lang.String key_;
+  /**
+   * <code>string key = 15 [json_name = "key"];</code>
+   * @return The key.
+   */
+  @java.lang.Override
+  public java.lang.String getKey() {
+    return key_;
+  }
+  /**
+   * <code>string key = 15 [json_name = "key"];</code>
+   * @return The bytes for key.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getKeyBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(key_);
+  }
+  /**
+   * <code>string key = 15 [json_name = "key"];</code>
+   * @param value The key to set.
+   */
+  private void setKey(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    key_ = value;
+  }
+  /**
+   * <code>string key = 15 [json_name = "key"];</code>
+   */
+  private void clearKey() {
+
+    key_ = getDefaultInstance().getKey();
+  }
+  /**
+   * <code>string key = 15 [json_name = "key"];</code>
+   * @param value The bytes for key to set.
+   */
+  private void setKeyBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    key_ = value.toStringUtf8();
+
+  }
+
+  public static final int UPDATE_FIELD_NUMBER = 16;
+  private java.lang.String update_;
+  /**
+   * <code>string update = 16 [json_name = "update"];</code>
+   * @return The update.
+   */
+  @java.lang.Override
+  public java.lang.String getUpdate() {
+    return update_;
+  }
+  /**
+   * <code>string update = 16 [json_name = "update"];</code>
+   * @return The bytes for update.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getUpdateBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(update_);
+  }
+  /**
+   * <code>string update = 16 [json_name = "update"];</code>
+   * @param value The update to set.
+   */
+  private void setUpdate(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    update_ = value;
+  }
+  /**
+   * <code>string update = 16 [json_name = "update"];</code>
+   */
+  private void clearUpdate() {
+
+    update_ = getDefaultInstance().getUpdate();
+  }
+  /**
+   * <code>string update = 16 [json_name = "update"];</code>
+   * @param value The bytes for update to set.
+   */
+  private void setUpdateBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    update_ = value.toStringUtf8();
+
+  }
+
+  public static final int BLOCKED_FIELD_NUMBER = 17;
+  private java.lang.String blocked_;
+  /**
+   * <pre>
+   * blocked is why a registry of this node's blocks the plugin: state is
+   * then "blocked", and it cannot be enabled while it stands.
+   * </pre>
+   *
+   * <code>string blocked = 17 [json_name = "blocked"];</code>
+   * @return The blocked.
+   */
+  @java.lang.Override
+  public java.lang.String getBlocked() {
+    return blocked_;
+  }
+  /**
+   * <pre>
+   * blocked is why a registry of this node's blocks the plugin: state is
+   * then "blocked", and it cannot be enabled while it stands.
+   * </pre>
+   *
+   * <code>string blocked = 17 [json_name = "blocked"];</code>
+   * @return The bytes for blocked.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getBlockedBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(blocked_);
+  }
+  /**
+   * <pre>
+   * blocked is why a registry of this node's blocks the plugin: state is
+   * then "blocked", and it cannot be enabled while it stands.
+   * </pre>
+   *
+   * <code>string blocked = 17 [json_name = "blocked"];</code>
+   * @param value The blocked to set.
+   */
+  private void setBlocked(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    blocked_ = value;
+  }
+  /**
+   * <pre>
+   * blocked is why a registry of this node's blocks the plugin: state is
+   * then "blocked", and it cannot be enabled while it stands.
+   * </pre>
+   *
+   * <code>string blocked = 17 [json_name = "blocked"];</code>
+   */
+  private void clearBlocked() {
+
+    blocked_ = getDefaultInstance().getBlocked();
+  }
+  /**
+   * <pre>
+   * blocked is why a registry of this node's blocks the plugin: state is
+   * then "blocked", and it cannot be enabled while it stands.
+   * </pre>
+   *
+   * <code>string blocked = 17 [json_name = "blocked"];</code>
+   * @param value The bytes for blocked to set.
+   */
+  private void setBlockedBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    blocked_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.PluginInfo parseFrom(
@@ -2057,6 +2324,279 @@ public  final class PluginInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * installed says the plugin was installed from a registry's package,
+     * not written into its folder by hand (revision 29); source is that
+     * registry's URL, key the publisher key pinned at its first install
+     * (pluginstore.proto's PublisherKey form), update a newer version its
+     * registry lists, signed by that key.
+     * </pre>
+     *
+     * <code>bool installed = 13 [json_name = "installed"];</code>
+     * @return The installed.
+     */
+    @java.lang.Override
+    public boolean getInstalled() {
+      return instance.getInstalled();
+    }
+    /**
+     * <pre>
+     * installed says the plugin was installed from a registry's package,
+     * not written into its folder by hand (revision 29); source is that
+     * registry's URL, key the publisher key pinned at its first install
+     * (pluginstore.proto's PublisherKey form), update a newer version its
+     * registry lists, signed by that key.
+     * </pre>
+     *
+     * <code>bool installed = 13 [json_name = "installed"];</code>
+     * @param value The installed to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInstalled(boolean value) {
+      copyOnWrite();
+      instance.setInstalled(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * installed says the plugin was installed from a registry's package,
+     * not written into its folder by hand (revision 29); source is that
+     * registry's URL, key the publisher key pinned at its first install
+     * (pluginstore.proto's PublisherKey form), update a newer version its
+     * registry lists, signed by that key.
+     * </pre>
+     *
+     * <code>bool installed = 13 [json_name = "installed"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearInstalled() {
+      copyOnWrite();
+      instance.clearInstalled();
+      return this;
+    }
+
+    /**
+     * <code>string source = 14 [json_name = "source"];</code>
+     * @return The source.
+     */
+    @java.lang.Override
+    public java.lang.String getSource() {
+      return instance.getSource();
+    }
+    /**
+     * <code>string source = 14 [json_name = "source"];</code>
+     * @return The bytes for source.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getSourceBytes() {
+      return instance.getSourceBytes();
+    }
+    /**
+     * <code>string source = 14 [json_name = "source"];</code>
+     * @param value The source to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSource(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setSource(value);
+      return this;
+    }
+    /**
+     * <code>string source = 14 [json_name = "source"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSource() {
+      copyOnWrite();
+      instance.clearSource();
+      return this;
+    }
+    /**
+     * <code>string source = 14 [json_name = "source"];</code>
+     * @param value The bytes for source to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSourceBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setSourceBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string key = 15 [json_name = "key"];</code>
+     * @return The key.
+     */
+    @java.lang.Override
+    public java.lang.String getKey() {
+      return instance.getKey();
+    }
+    /**
+     * <code>string key = 15 [json_name = "key"];</code>
+     * @return The bytes for key.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getKeyBytes() {
+      return instance.getKeyBytes();
+    }
+    /**
+     * <code>string key = 15 [json_name = "key"];</code>
+     * @param value The key to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKey(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setKey(value);
+      return this;
+    }
+    /**
+     * <code>string key = 15 [json_name = "key"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearKey() {
+      copyOnWrite();
+      instance.clearKey();
+      return this;
+    }
+    /**
+     * <code>string key = 15 [json_name = "key"];</code>
+     * @param value The bytes for key to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKeyBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setKeyBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string update = 16 [json_name = "update"];</code>
+     * @return The update.
+     */
+    @java.lang.Override
+    public java.lang.String getUpdate() {
+      return instance.getUpdate();
+    }
+    /**
+     * <code>string update = 16 [json_name = "update"];</code>
+     * @return The bytes for update.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getUpdateBytes() {
+      return instance.getUpdateBytes();
+    }
+    /**
+     * <code>string update = 16 [json_name = "update"];</code>
+     * @param value The update to set.
+     * @return This builder for chaining.
+     */
+    public Builder setUpdate(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setUpdate(value);
+      return this;
+    }
+    /**
+     * <code>string update = 16 [json_name = "update"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearUpdate() {
+      copyOnWrite();
+      instance.clearUpdate();
+      return this;
+    }
+    /**
+     * <code>string update = 16 [json_name = "update"];</code>
+     * @param value The bytes for update to set.
+     * @return This builder for chaining.
+     */
+    public Builder setUpdateBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setUpdateBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * blocked is why a registry of this node's blocks the plugin: state is
+     * then "blocked", and it cannot be enabled while it stands.
+     * </pre>
+     *
+     * <code>string blocked = 17 [json_name = "blocked"];</code>
+     * @return The blocked.
+     */
+    @java.lang.Override
+    public java.lang.String getBlocked() {
+      return instance.getBlocked();
+    }
+    /**
+     * <pre>
+     * blocked is why a registry of this node's blocks the plugin: state is
+     * then "blocked", and it cannot be enabled while it stands.
+     * </pre>
+     *
+     * <code>string blocked = 17 [json_name = "blocked"];</code>
+     * @return The bytes for blocked.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getBlockedBytes() {
+      return instance.getBlockedBytes();
+    }
+    /**
+     * <pre>
+     * blocked is why a registry of this node's blocks the plugin: state is
+     * then "blocked", and it cannot be enabled while it stands.
+     * </pre>
+     *
+     * <code>string blocked = 17 [json_name = "blocked"];</code>
+     * @param value The blocked to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBlocked(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setBlocked(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * blocked is why a registry of this node's blocks the plugin: state is
+     * then "blocked", and it cannot be enabled while it stands.
+     * </pre>
+     *
+     * <code>string blocked = 17 [json_name = "blocked"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBlocked() {
+      copyOnWrite();
+      instance.clearBlocked();
+      return this;
+    }
+    /**
+     * <pre>
+     * blocked is why a registry of this node's blocks the plugin: state is
+     * then "blocked", and it cannot be enabled while it stands.
+     * </pre>
+     *
+     * <code>string blocked = 17 [json_name = "blocked"];</code>
+     * @param value The bytes for blocked to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBlockedBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setBlockedBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginInfo)
   }
   @java.lang.Override
@@ -2088,11 +2628,16 @@ public  final class PluginInfo extends
             dev.ironpark.mako.v2.PluginCommand.class,
             "settings_",
             dev.ironpark.mako.v2.PluginSetting.class,
+            "installed_",
+            "source_",
+            "key_",
+            "update_",
+            "blocked_",
           };
           java.lang.String info =
-              "\u0000\f\u0000\u0000\u0001\f\f\u0000\u0006\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
-              "\u0004\u0208\u0005\u0208\u0006\u0007\u0007\u021a\b\u021a\t\u021a\n\u001b\u000b\u001b" +
-              "\f\u001b";
+              "\u0000\u0011\u0000\u0000\u0001\u0011\u0011\u0000\u0006\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0007\u0007\u021a\b\u021a\t\u021a\n\u001b" +
+              "\u000b\u001b\f\u001b\r\u0007\u000e\u0208\u000f\u0208\u0010\u0208\u0011\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

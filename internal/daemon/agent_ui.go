@@ -264,9 +264,10 @@ func (o *onceSet) Forget(key string) {
 	o.mu.Unlock()
 }
 
-func (d *Daemon) handleListAgentBlocks(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
-	if fromPeer {
-		return errBlocksPeer
-	}
-	return stream.Send(protocol.TypeAgentBlocks, env.GetId(), &protocol.AgentBlocks{Blocks: d.agentUI.List()})
+// handleListAgentBlocks lists the blocks the agents of the node the
+// request names show, this one's by default.
+func (d *Daemon) handleListAgentBlocks(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, _ bool) error {
+	return serve(d, ctx, stream, env, protocol.TypeAgentBlocks, func(*protocol.ListAgentBlocks) (*protocol.AgentBlocks, error) {
+		return &protocol.AgentBlocks{Blocks: d.agentUI.List()}, nil
+	})
 }

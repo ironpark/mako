@@ -19,10 +19,10 @@ import (
 
 // view is a block of the plugin's as a stream sends it.
 func (p *plugin) view(block string) uiblock.View {
-	g := p.m.grant.get(p.id)
+	g, st := p.m.grant.get(p.id), p.installStatus()
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	state, why := p.stateLocked(g)
+	state, why := p.stateLocked(g, st)
 	v := uiblock.View{Plugin: p.id, State: state, Err: why, Stale: p.stale, Changed: p.changed}
 	if p.stale && v.Err == "" {
 		v.Err = p.loadErr

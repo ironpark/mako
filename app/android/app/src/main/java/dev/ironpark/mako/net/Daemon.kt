@@ -7,15 +7,20 @@ import dev.ironpark.mako.v2.AnswerApproval
 import dev.ironpark.mako.v2.AnswerDialog
 import dev.ironpark.mako.v2.ConfigureAgent
 import dev.ironpark.mako.v2.AnswerQuestion
+import dev.ironpark.mako.v2.AgentBlock
+import dev.ironpark.mako.v2.BlockEvent
+import dev.ironpark.mako.v2.BlockUpdate
 import dev.ironpark.mako.v2.Changed
 import dev.ironpark.mako.v2.Chat
 import dev.ironpark.mako.v2.CloseSession
 import dev.ironpark.mako.v2.Envelope
 import dev.ironpark.mako.v2.GetWorkspace
+import dev.ironpark.mako.v2.ListAgentBlocks
 import dev.ironpark.mako.v2.ListNodes
 import dev.ironpark.mako.v2.ListSessions
 import dev.ironpark.mako.v2.Node
 import dev.ironpark.mako.v2.OpenSession
+import dev.ironpark.mako.v2.PluginDone
 import dev.ironpark.mako.v2.ProjectAgents
 import dev.ironpark.mako.v2.ReadProjectAgents
 import dev.ironpark.mako.v2.ReadChat
@@ -24,6 +29,7 @@ import dev.ironpark.mako.v2.Send
 import dev.ironpark.mako.v2.StageFile
 import dev.ironpark.mako.v2.SessionInfo
 import dev.ironpark.mako.v2.Watch
+import dev.ironpark.mako.v2.WatchBlock
 import dev.ironpark.mako.v2.Workspace
 import dev.ironpark.mako.v2.WorkspaceState
 import kotlinx.coroutines.Dispatchers
@@ -187,6 +193,45 @@ class Daemon(private val socket: () -> String?) {
         reader.start()
         awaitClose { s.close() }
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * The updates of node's block, a plugin's, plugin:<id>/<block>, or an
+     * agent's, agent:<session>/<id>: the tree whole, then the ops that
+     * change it (docs/protocol.md, Plugin blocks), until the flow is
+     * cancelled; a stream that breaks ends it with the error. Nodes from
+     * [dev.ironpark.mako.Mesh.REVISION_PEER_BLOCKS] on serve a node they
+     * let in.
+     */
+    fun watchBlock(node: String, block: String): Flow<BlockUpdate> = callbackFlow {
+        val s = open()
+        s.send(envelope { watchBlock = WatchBlock.newBuilder().setNodeId(node).setBlock(block).build() })
+        val reader = Thread {
+            try {
+                while (true) {
+                    val u = s.recv().blockUpdate
+                    trySend(u)
+                    if (u.gone) break
+                }
+                close()
+            } catch (e: IOException) {
+                close(e)
+            }
+        }
+        reader.isDaemon = true
+        reader.start()
+        awaitClose { s.close() }
+    }.flowOn(Dispatchers.IO)
+
+    /**
+     * Tells a block of the user acting on its node, on the node ev names:
+     * the block's source looks up what to send. The answer's open_url is
+     * a link the plugin asked, in answer, to open.
+     */
+    suspend fun blockEvent(ev: BlockEvent): PluginDone = call(envelope { blockEvent = ev }).pluginDone
+
+    /** The blocks node's agents show, in the order shown. */
+    suspend fun agentBlocks(node: String): List<AgentBlock> =
+        call(envelope { listAgentBlocks = ListAgentBlocks.newBuilder().setNodeId(node).build() }).agentBlocks.blocksList
 
     companion object {
         /** How much of a file one staged piece carries, well inside a frame. */

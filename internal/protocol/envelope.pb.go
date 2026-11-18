@@ -132,6 +132,13 @@ type Envelope struct {
 	//	*Envelope_BlockEvent
 	//	*Envelope_ListAgentBlocks
 	//	*Envelope_AgentBlocks
+	//	*Envelope_ListRegistries
+	//	*Envelope_Registries
+	//	*Envelope_RegistryAction
+	//	*Envelope_SearchPlugins
+	//	*Envelope_PluginListings
+	//	*Envelope_InstallPlugin
+	//	*Envelope_PluginInstalled
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -998,6 +1005,69 @@ func (x *Envelope) GetAgentBlocks() *AgentBlocks {
 	return nil
 }
 
+func (x *Envelope) GetListRegistries() *ListRegistries {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_ListRegistries); ok {
+			return x.ListRegistries
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetRegistries() *Registries {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Registries); ok {
+			return x.Registries
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetRegistryAction() *RegistryAction {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_RegistryAction); ok {
+			return x.RegistryAction
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetSearchPlugins() *SearchPlugins {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SearchPlugins); ok {
+			return x.SearchPlugins
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetPluginListings() *PluginListings {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_PluginListings); ok {
+			return x.PluginListings
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetInstallPlugin() *InstallPlugin {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_InstallPlugin); ok {
+			return x.InstallPlugin
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetPluginInstalled() *PluginInstalled {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_PluginInstalled); ok {
+			return x.PluginInstalled
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1372,6 +1442,35 @@ type Envelope_AgentBlocks struct {
 	AgentBlocks *AgentBlocks `protobuf:"bytes,128,opt,name=agent_blocks,json=agentBlocks,proto3,oneof"`
 }
 
+type Envelope_ListRegistries struct {
+	// Registries and the plugins installed from them (revision 29).
+	ListRegistries *ListRegistries `protobuf:"bytes,130,opt,name=list_registries,json=listRegistries,proto3,oneof"`
+}
+
+type Envelope_Registries struct {
+	Registries *Registries `protobuf:"bytes,131,opt,name=registries,proto3,oneof"`
+}
+
+type Envelope_RegistryAction struct {
+	RegistryAction *RegistryAction `protobuf:"bytes,132,opt,name=registry_action,json=registryAction,proto3,oneof"`
+}
+
+type Envelope_SearchPlugins struct {
+	SearchPlugins *SearchPlugins `protobuf:"bytes,133,opt,name=search_plugins,json=searchPlugins,proto3,oneof"`
+}
+
+type Envelope_PluginListings struct {
+	PluginListings *PluginListings `protobuf:"bytes,134,opt,name=plugin_listings,json=pluginListings,proto3,oneof"`
+}
+
+type Envelope_InstallPlugin struct {
+	InstallPlugin *InstallPlugin `protobuf:"bytes,135,opt,name=install_plugin,json=installPlugin,proto3,oneof"`
+}
+
+type Envelope_PluginInstalled struct {
+	PluginInstalled *PluginInstalled `protobuf:"bytes,136,opt,name=plugin_installed,json=pluginInstalled,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -1552,6 +1651,20 @@ func (*Envelope_ListAgentBlocks) isEnvelope_Body() {}
 
 func (*Envelope_AgentBlocks) isEnvelope_Body() {}
 
+func (*Envelope_ListRegistries) isEnvelope_Body() {}
+
+func (*Envelope_Registries) isEnvelope_Body() {}
+
+func (*Envelope_RegistryAction) isEnvelope_Body() {}
+
+func (*Envelope_SearchPlugins) isEnvelope_Body() {}
+
+func (*Envelope_PluginListings) isEnvelope_Body() {}
+
+func (*Envelope_InstallPlugin) isEnvelope_Body() {}
+
+func (*Envelope_PluginInstalled) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -1610,7 +1723,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xbe%\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\x91)\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -1721,7 +1834,16 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\vblock_event\x18~ \x01(\v2\x13.mako.v2.BlockEventH\x00R\n" +
 	"blockEvent\x12F\n" +
 	"\x11list_agent_blocks\x18\x7f \x01(\v2\x18.mako.v2.ListAgentBlocksH\x00R\x0flistAgentBlocks\x12:\n" +
-	"\fagent_blocks\x18\x80\x01 \x01(\v2\x14.mako.v2.AgentBlocksH\x00R\vagentBlocksB\x06\n" +
+	"\fagent_blocks\x18\x80\x01 \x01(\v2\x14.mako.v2.AgentBlocksH\x00R\vagentBlocks\x12C\n" +
+	"\x0flist_registries\x18\x82\x01 \x01(\v2\x17.mako.v2.ListRegistriesH\x00R\x0elistRegistries\x126\n" +
+	"\n" +
+	"registries\x18\x83\x01 \x01(\v2\x13.mako.v2.RegistriesH\x00R\n" +
+	"registries\x12C\n" +
+	"\x0fregistry_action\x18\x84\x01 \x01(\v2\x17.mako.v2.RegistryActionH\x00R\x0eregistryAction\x12@\n" +
+	"\x0esearch_plugins\x18\x85\x01 \x01(\v2\x16.mako.v2.SearchPluginsH\x00R\rsearchPlugins\x12C\n" +
+	"\x0fplugin_listings\x18\x86\x01 \x01(\v2\x17.mako.v2.PluginListingsH\x00R\x0epluginListings\x12@\n" +
+	"\x0einstall_plugin\x18\x87\x01 \x01(\v2\x16.mako.v2.InstallPluginH\x00R\rinstallPlugin\x12F\n" +
+	"\x10plugin_installed\x18\x88\x01 \x01(\v2\x18.mako.v2.PluginInstalledH\x00R\x0fpluginInstalledB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"5\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -1832,6 +1954,13 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*BlockEvent)(nil),        // 88: mako.v2.BlockEvent
 	(*ListAgentBlocks)(nil),   // 89: mako.v2.ListAgentBlocks
 	(*AgentBlocks)(nil),       // 90: mako.v2.AgentBlocks
+	(*ListRegistries)(nil),    // 91: mako.v2.ListRegistries
+	(*Registries)(nil),        // 92: mako.v2.Registries
+	(*RegistryAction)(nil),    // 93: mako.v2.RegistryAction
+	(*SearchPlugins)(nil),     // 94: mako.v2.SearchPlugins
+	(*PluginListings)(nil),    // 95: mako.v2.PluginListings
+	(*InstallPlugin)(nil),     // 96: mako.v2.InstallPlugin
+	(*PluginInstalled)(nil),   // 97: mako.v2.PluginInstalled
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -1924,11 +2053,18 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	88, // 87: mako.v2.Envelope.block_event:type_name -> mako.v2.BlockEvent
 	89, // 88: mako.v2.Envelope.list_agent_blocks:type_name -> mako.v2.ListAgentBlocks
 	90, // 89: mako.v2.Envelope.agent_blocks:type_name -> mako.v2.AgentBlocks
-	90, // [90:90] is the sub-list for method output_type
-	90, // [90:90] is the sub-list for method input_type
-	90, // [90:90] is the sub-list for extension type_name
-	90, // [90:90] is the sub-list for extension extendee
-	0,  // [0:90] is the sub-list for field type_name
+	91, // 90: mako.v2.Envelope.list_registries:type_name -> mako.v2.ListRegistries
+	92, // 91: mako.v2.Envelope.registries:type_name -> mako.v2.Registries
+	93, // 92: mako.v2.Envelope.registry_action:type_name -> mako.v2.RegistryAction
+	94, // 93: mako.v2.Envelope.search_plugins:type_name -> mako.v2.SearchPlugins
+	95, // 94: mako.v2.Envelope.plugin_listings:type_name -> mako.v2.PluginListings
+	96, // 95: mako.v2.Envelope.install_plugin:type_name -> mako.v2.InstallPlugin
+	97, // 96: mako.v2.Envelope.plugin_installed:type_name -> mako.v2.PluginInstalled
+	97, // [97:97] is the sub-list for method output_type
+	97, // [97:97] is the sub-list for method input_type
+	97, // [97:97] is the sub-list for extension type_name
+	97, // [97:97] is the sub-list for extension extendee
+	0,  // [0:97] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -1943,6 +2079,7 @@ func file_mako_v2_envelope_proto_init() {
 	file_mako_v2_forge_proto_init()
 	file_mako_v2_mesh_proto_init()
 	file_mako_v2_plugins_proto_init()
+	file_mako_v2_pluginstore_proto_init()
 	file_mako_v2_session_proto_init()
 	file_mako_v2_project_agents_proto_init()
 	file_mako_v2_envelope_proto_msgTypes[0].OneofWrappers = []any{
@@ -2036,6 +2173,13 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_BlockEvent)(nil),
 		(*Envelope_ListAgentBlocks)(nil),
 		(*Envelope_AgentBlocks)(nil),
+		(*Envelope_ListRegistries)(nil),
+		(*Envelope_Registries)(nil),
+		(*Envelope_RegistryAction)(nil),
+		(*Envelope_SearchPlugins)(nil),
+		(*Envelope_PluginListings)(nil),
+		(*Envelope_InstallPlugin)(nil),
+		(*Envelope_PluginInstalled)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

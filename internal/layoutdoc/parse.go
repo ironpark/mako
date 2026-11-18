@@ -23,6 +23,12 @@ import (
 // own: a later one is not patched here. A block the catalog does not hold
 // is not an error in either: it is drawn as missing, and the document
 // keeps it.
+//
+// Version 2 adds variants: {"compact": <node>}, a root of the same nodes
+// for a narrow screen. A window of version 1 reads a document of version
+// 2 leniently, leaving the variants out, and draws its root as it would
+// the same document of version 1; so a document is written at version 2
+// only when it holds variants (Doc.Written).
 
 // Bounds on a document, so that one written by a program cannot make the
 // window build without end.
@@ -58,7 +64,7 @@ func Parse(data []byte, cat Catalog) (*Doc, error) {
 	p := parser{lenient: version > Version}
 	if !p.lenient {
 		for k := range top {
-			if k != "version" && k != "root" {
+			if k != "version" && k != "root" && (k != "variants" || version < VersionVariants) {
 				return nil, fmt.Errorf("unknown field %q", k)
 			}
 		}
@@ -72,10 +78,43 @@ func Parse(data []byte, cat Catalog) (*Doc, error) {
 		return nil, err
 	}
 	d := &Doc{Version: version, Root: root}
+	if raw, ok := top["variants"]; ok && version >= VersionVariants {
+		if d.Compact, err = p.variants(raw); err != nil {
+			if !p.lenient {
+				return nil, err
+			}
+			d.Compact = nil // a later version's, which this one cannot read, left out
+		}
+	}
 	if err := d.Check(cat); err != nil {
-		return nil, err
+		if !p.lenient || d.Compact == nil || d.checkRoot(cat) != nil {
+			return nil, err
+		}
+		d.Compact = nil
 	}
 	return d, nil
+}
+
+// variants reads a document's variants: its compact root alone, by now.
+func (p *parser) variants(raw json.RawMessage) (*Node, error) {
+	var vs map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &vs); err != nil {
+		return nil, fmt.Errorf("variants are not an object: %s", clip(raw))
+	}
+	for k := range vs {
+		if k != "compact" && !p.lenient {
+			return nil, fmt.Errorf("no variant %q: there is compact", k)
+		}
+	}
+	compact, ok := vs["compact"]
+	if !ok || string(compact) == "null" {
+		return nil, nil
+	}
+	n, err := p.node(compact, 1)
+	if err != nil {
+		return nil, fmt.Errorf("variants.compact: %w", err)
+	}
+	return n, nil
 }
 
 // oneJSON decodes the one JSON value data holds into v.
@@ -230,18 +269,59 @@ func clip(raw json.RawMessage) string {
 // alone; a single main panes; block names of the three namespaces; the
 // props of a block cat holds, against its schema; and the bounds on the
 // document's size. Nodes of kinds this version does not know pass only in
-// a document of a later version.
+// a document of a later version. The compact root is checked the same,
+// its IDs apart from the root's, but for the panes, which it may leave
+// out: a phone shows the sessions in its own way.
 func (d *Doc) Check(cat Catalog) error {
-	if d.Root == nil {
-		return errors.New("no root")
+	if err := d.checkRoot(cat); err != nil {
+		return err
 	}
-	if d.Root.Size > 0 || d.Root.Grow > 0 || d.Root.Collapsible {
-		return errors.New("the root is not a row's or column's child, to have a size, grow or collapse")
+	if d.Compact == nil {
+		return nil
+	}
+	count, panes, err := d.checkTree(d.Compact, cat)
+	switch {
+	case err != nil:
+		return fmt.Errorf("variants.compact: %w", err)
+	case panes > 1:
+		return fmt.Errorf("variants.compact: %d panes nodes, where a document has one at most, %q", panes, MainPanes)
+	case d.count(d.Root)+count > MaxNodes:
+		return fmt.Errorf("more than %d nodes", MaxNodes)
+	}
+	return nil
+}
+
+// checkRoot is Check of the document's root alone, as a window that does not
+// read variants checks it.
+func (d *Doc) checkRoot(cat Catalog) error {
+	_, panes, err := d.checkTree(d.Root, cat)
+	if err != nil {
+		return err
+	}
+	if panes != 1 {
+		return fmt.Errorf("%d panes nodes, where the window has one, %q", panes, MainPanes)
+	}
+	return nil
+}
+
+// count is the nodes of the tree under root.
+func (d *Doc) count(root *Node) int {
+	n := 0
+	root.Walk(nil, func([]*Node) bool { n++; return true })
+	return n
+}
+
+// checkTree checks the tree under root, a root of d, and counts its nodes
+// and its panes.
+func (d *Doc) checkTree(root *Node, cat Catalog) (count, panes int, err error) {
+	if root == nil {
+		return 0, 0, errors.New("no root")
+	}
+	if root.Size > 0 || root.Grow > 0 || root.Collapsible {
+		return 0, 0, errors.New("the root is not a row's or column's child, to have a size, grow or collapse")
 	}
 	seen := map[string]bool{}
-	panes, count := 0, 0
-	var err error
-	d.Root.Walk(nil, func(path []*Node) bool {
+	root.Walk(nil, func(path []*Node) bool {
 		n := path[len(path)-1]
 		count++
 		switch {
@@ -263,13 +343,7 @@ func (d *Doc) Check(cat Catalog) error {
 		}
 		return err == nil
 	})
-	if err != nil {
-		return err
-	}
-	if panes != 1 {
-		return fmt.Errorf("%d panes nodes, where the window has one, %q", panes, MainPanes)
-	}
-	return nil
+	return count, panes, err
 }
 
 // check checks n by itself and its children's places in it.
@@ -322,12 +396,21 @@ func (n *Node) check(cat Catalog) error {
 	return nil
 }
 
-// MarshalJSON writes d as Parse reads it.
+// MarshalJSON writes d as Parse reads it, at the version it is written at
+// (Written).
 func (d *Doc) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Version int   `json:"version"`
-		Root    *Node `json:"root"`
-	}{d.Version, d.Root})
+	type variants struct {
+		Compact *Node `json:"compact,omitempty"`
+	}
+	out := struct {
+		Version  int       `json:"version"`
+		Root     *Node     `json:"root"`
+		Variants *variants `json:"variants,omitempty"`
+	}{Version: d.Written(), Root: d.Root}
+	if d.Compact != nil {
+		out.Variants = &variants{Compact: d.Compact}
+	}
+	return json.Marshal(out)
 }
 
 // MarshalJSON writes n with its ID first, then its kind's field, then the
@@ -362,8 +445,9 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 }
 
 // Canonical is a document written as this version writes it: data parsed
-// and written again, so that two writings of one document are the same
-// bytes. A document of a later version is kept as it came, compacted.
+// and written again, at the earliest version that holds it, so that two
+// writings of one document are the same bytes. A document of a later
+// version is kept as it came, compacted.
 func Canonical(data []byte, cat Catalog) ([]byte, *Doc, error) {
 	d, err := Parse(data, cat)
 	if err != nil {

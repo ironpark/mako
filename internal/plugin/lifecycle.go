@@ -49,6 +49,14 @@ func (p *plugin) reload() {
 	if !wasRunning && !p.watched() {
 		return
 	}
+	if state, _ := p.state(); state != protocol.PluginReady {
+		// The newer version waits for the user to allow what it asks for
+		// anew, or is refused, disabled or blocked: it does not start, and
+		// the last does not run on in its place, which would run a version
+		// the user did not allow as if it were this one.
+		p.showAll()
+		return
+	}
 	if err := p.ensure(); err != nil && prev != nil {
 		// The newer version does not start: the last that did runs on.
 		p.m.cfg.Log.Warn("plugin's new version did not start; the last runs on", "plugin", p.id, "err", err)
@@ -117,6 +125,8 @@ func (p *plugin) ensure() error {
 		return errors.New("you refused what the plugin asks for")
 	case protocol.PluginDisabled:
 		return errors.New("the plugin is disabled")
+	case protocol.PluginBlocked:
+		return errors.New(why)
 	default:
 		return errors.New(cmpOr(why, "the plugin cannot run"))
 	}

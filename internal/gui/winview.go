@@ -44,7 +44,7 @@ func (v *layoutDraw) block(n *layoutdoc.Node) blockView {
 		return blockView{Body: ggui.View(v.m.blocks.rev, func(int) ggui.Widget {
 			def, ok := v.m.blocks.lookup(n.Block)
 			if !ok {
-				return missingBlock(n.Block)
+				return missingPluginBlock(v.m, n.Block)
 			}
 			return def.Build(v.m, n.Props).Body
 		})}

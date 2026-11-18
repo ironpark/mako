@@ -1,0 +1,1187 @@
+[
+  {
+    "name": "none",
+    "doc": "",
+    "refused": false,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "default",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"window\",\"row\":[{\"id\":\"sidebar\",\"block\":\"mako.sidebar\",\"size\":272,\"collapsible\":true},{\"id\":\"workspace\",\"column\":[{\"id\":\"header\",\"block\":\"mako.header\"},{\"id\":\"main\",\"panes\":\"main\",\"grow\":1}],\"grow\":1},{\"id\":\"details\",\"stack\":[\"mako.files\",\"mako.git\",\"mako.agents\",\"mako.forge\"],\"size\":320,\"collapsible\":true}]}}",
+    "refused": false,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "plugins in a row, a column and a stack",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"w\",\"row\":[\n\t\t{\"block\":\"mako.sidebar\",\"size\":260},\n\t\t{\"id\":\"c\",\"column\":[{\"id\":\"h\",\"block\":\"mako.header\"},{\"panes\":\"main\",\"grow\":1},\n\t\t\t{\"id\":\"ci\",\"block\":\"plugin:ci-status/ci\",\"size\":180,\"collapsible\":true,\"props\":{\"branch\":\"main\"}}],\"grow\":1},\n\t\t{\"id\":\"right\",\"stack\":[\"mako.git\",\"plugin:notes/board\",\"agent:abc/form\"],\"size\":320,\"active\":2}]}}",
+    "refused": false,
+    "pages": [
+      {
+        "id": "ci",
+        "block": "plugin:ci-status/ci"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "plugin:notes/board",
+        "block": "plugin:notes/board"
+      },
+      {
+        "id": "agent:abc/form",
+        "block": "agent:abc/form"
+      }
+    ]
+  },
+  {
+    "name": "a compact root",
+    "doc": "{\"version\":2,\"root\":{\"id\":\"window\",\"row\":[\n\t{\"id\":\"sidebar\",\"block\":\"mako.sidebar\",\"size\":272,\"collapsible\":true},\n\t{\"id\":\"main\",\"panes\":\"main\",\"grow\":1},\n\t{\"id\":\"details\",\"stack\":[\"mako.files\",\"plugin:ci-status/ci\"],\"size\":320,\"collapsible\":true}]},\n\t\"variants\":{\"compact\":{\"id\":\"phone\",\"column\":[{\"id\":\"ci\",\"block\":\"plugin:ci-status/ci\",\"props\":{\"branch\":\"main\"}},\"mako.git\"]}}}",
+    "refused": false,
+    "pages": [
+      {
+        "id": "ci",
+        "block": "plugin:ci-status/ci"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      }
+    ]
+  },
+  {
+    "name": "a compact root holding the panes",
+    "doc": "{\"version\":2,\"root\":{\"id\":\"w\",\"row\":[{\"panes\":\"main\"},\"plugin:a/one\"]},\n\t\t\"variants\":{\"compact\":{\"id\":\"c\",\"column\":[{\"panes\":\"main\"},\"plugin:a/two\",{\"id\":\"s\",\"stack\":[\"plugin:a/three\",\"mako.forge\"]}]}}}",
+    "refused": false,
+    "pages": [
+      {
+        "id": "plugin:a/two",
+        "block": "plugin:a/two"
+      },
+      {
+        "id": "plugin:a/three",
+        "block": "plugin:a/three"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "version 2 without variants",
+    "doc": "{\"version\":2,\"root\":{\"id\":\"w\",\"row\":[{\"panes\":\"main\"},\"plugin:a/one\"]},\"variants\":{}}",
+    "refused": false,
+    "pages": [
+      {
+        "id": "plugin:a/one",
+        "block": "plugin:a/one"
+      }
+    ]
+  },
+  {
+    "name": "a compact root of null",
+    "doc": "{\"version\":2,\"root\":{\"id\":\"w\",\"row\":[{\"panes\":\"main\"},\"plugin:a/one\"]},\"variants\":{\"compact\":null}}",
+    "refused": false,
+    "pages": [
+      {
+        "id": "plugin:a/one",
+        "block": "plugin:a/one"
+      }
+    ]
+  },
+  {
+    "name": "a later version",
+    "doc": "{\"version\":3,\"layers\":[1],\"variants\":{\"wide\":{\"id\":\"x\",\"grid\":[]}},\"root\":{\"id\":\"w\",\"column\":[\n\t\t{\"id\":\"top\",\"row\":[{\"id\":\"chart\",\"canvas\":{\"ops\":[]},\"size\":200},\"plugin:a/one\",{\"id\":\"h\",\"block\":\"mako.header\",\"pinned\":true}]},\n\t\t{\"panes\":\"main\"},{\"id\":\"s\",\"stack\":[\"plugin:b/two\",\"plugin:a/one2\"],\"active\":1}]}}",
+    "refused": false,
+    "pages": [
+      {
+        "id": "plugin:a/one",
+        "block": "plugin:a/one"
+      },
+      {
+        "id": "plugin:b/two",
+        "block": "plugin:b/two"
+      },
+      {
+        "id": "plugin:a/one2",
+        "block": "plugin:a/one2"
+      }
+    ]
+  },
+  {
+    "name": "a later version's compact root",
+    "doc": "{\"version\":3,\"root\":{\"id\":\"w\",\"row\":[{\"panes\":\"main\"}]},\n\t\t\"variants\":{\"compact\":{\"id\":\"c\",\"column\":[\"plugin:a/one\",{\"id\":\"g\",\"grid\":[]},\"plugin:a/two\"]}}}",
+    "refused": false,
+    "pages": [
+      {
+        "id": "plugin:a/one",
+        "block": "plugin:a/one"
+      },
+      {
+        "id": "plugin:a/two",
+        "block": "plugin:a/two"
+      }
+    ]
+  },
+  {
+    "name": "a later version's compact root that does not read",
+    "doc": "{\"version\":3,\"root\":{\"id\":\"w\",\"row\":[{\"panes\":\"main\"},\"plugin:a/one\"]},\n\t\t\"variants\":{\"compact\":{}}}",
+    "refused": false,
+    "pages": [
+      {
+        "id": "plugin:a/one",
+        "block": "plugin:a/one"
+      }
+    ]
+  },
+  {
+    "name": "a later version's compact root that does not check",
+    "doc": "{\"version\":3,\"root\":{\"id\":\"w\",\"row\":[{\"panes\":\"main\"},\"plugin:a/one\"]},\n\t\t\"variants\":{\"compact\":{\"id\":\"c\",\"column\":[\"plugin:a/two\",\"plugin:a/two\"]}}}",
+    "refused": false,
+    "pages": [
+      {
+        "id": "plugin:a/one",
+        "block": "plugin:a/one"
+      }
+    ]
+  },
+  {
+    "name": "a later version's root that does not check",
+    "doc": "{\"version\":3,\"root\":{\"id\":\"w\",\"row\":[{\"panes\":\"main\"},{\"id\":\"e\",\"row\":[]}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "blocks named twice by other ids",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"w\",\"row\":[{\"panes\":\"main\"},{\"id\":\"a\",\"block\":\"plugin:x/y\"},{\"id\":\"b\",\"block\":\"plugin:x/y\"}]}}",
+    "refused": false,
+    "pages": [
+      {
+        "id": "a",
+        "block": "plugin:x/y"
+      },
+      {
+        "id": "b",
+        "block": "plugin:x/y"
+      }
+    ]
+  },
+  {
+    "name": "not JSON",
+    "doc": "{\"version\":1,",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "two values",
+    "doc": "{\"version\":1,\"root\":{\"panes\":\"main\"}}{}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "an array",
+    "doc": "[1]",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "no version",
+    "doc": "{\"root\":{\"panes\":\"main\"}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "version 0",
+    "doc": "{\"version\":0,\"root\":{\"panes\":\"main\"}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a version of a string",
+    "doc": "{\"version\":\"1\",\"root\":{\"panes\":\"main\"}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "no root",
+    "doc": "{\"version\":1}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "variants at version 1",
+    "doc": "{\"version\":1,\"root\":{\"panes\":\"main\"},\"variants\":{\"compact\":\"plugin:a/one\"}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a variant unknown",
+    "doc": "{\"version\":2,\"root\":{\"panes\":\"main\"},\"variants\":{\"wide\":\"plugin:a/one\"}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "variants of a list",
+    "doc": "{\"version\":2,\"root\":{\"panes\":\"main\"},\"variants\":[]}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a field unknown at the top",
+    "doc": "{\"version\":2,\"root\":{\"panes\":\"main\"},\"layers\":[]}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a kind unknown",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"id\":\"g\",\"grid\":[]}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "two kinds",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"id\":\"x\",\"row\":[\"plugin:a/b\"],\"column\":[\"plugin:a/c\"]}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a field unknown",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"block\":\"plugin:a/b\",\"width\":3}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a field of another kind",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"block\":\"plugin:a/b\",\"active\":1}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a size of a string",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"block\":\"plugin:a/b\",\"size\":\"big\"}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a size of 0",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"block\":\"plugin:a/b\",\"size\":0}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a size too large",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"block\":\"plugin:a/b\",\"size\":99999}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a size and grow",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\",\"grow\":1,\"size\":3}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "collapsible without a size",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"block\":\"plugin:a/b\",\"collapsible\":true}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "an id of a number",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"id\":3,\"block\":\"plugin:a/b\"}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a row without an id",
+    "doc": "{\"version\":1,\"root\":{\"row\":[{\"panes\":\"main\"}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "an id of a space",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"a b\",\"row\":[{\"panes\":\"main\"}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "an id twice",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},\"plugin:a/b\",\"plugin:a/b\"]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "no panes",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[\"plugin:a/b\"]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "two panes",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"id\":\"p2\",\"panes\":\"main\"}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "panes of another name",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"side\"}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "an empty row",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"id\":\"e\",\"row\":[]}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "children not a list",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":{\"panes\":\"main\"}}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a stack of a row",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"id\":\"s\",\"stack\":[{\"id\":\"x\",\"row\":[\"plugin:a/b\"]}]}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a sized child of a stack",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"id\":\"s\",\"stack\":[{\"block\":\"plugin:a/b\",\"size\":3}]}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "active out of the stack",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"id\":\"s\",\"stack\":[\"plugin:a/b\"],\"active\":1}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a block of no namespace",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},\"git\"]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a node of a number",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},4]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "props a window's block does not take",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},{\"block\":\"mako.git\",\"props\":{\"root\":\"/\"}}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a sized root",
+    "doc": "{\"version\":1,\"root\":{\"panes\":\"main\",\"size\":3}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "too deep",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"id\":\"x\",\"row\":[{\"panes\":\"main\"}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "too many nodes",
+    "doc": "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},\"plugin:many/ba\",\"plugin:many/bb\",\"plugin:many/bc\",\"plugin:many/bd\",\"plugin:many/be\",\"plugin:many/bf\",\"plugin:many/bg\",\"plugin:many/bh\",\"plugin:many/bi\",\"plugin:many/bj\",\"plugin:many/bk\",\"plugin:many/bl\",\"plugin:many/bm\",\"plugin:many/bn\",\"plugin:many/bo\",\"plugin:many/bp\",\"plugin:many/bq\",\"plugin:many/br\",\"plugin:many/bs\",\"plugin:many/bt\",\"plugin:many/bu\",\"plugin:many/bv\",\"plugin:many/bw\",\"plugin:many/bx\",\"plugin:many/by\",\"plugin:many/bz\",\"plugin:many/bxa\",\"plugin:many/bxb\",\"plugin:many/bxc\",\"plugin:many/bxd\",\"plugin:many/bxe\",\"plugin:many/bxf\",\"plugin:many/bxg\",\"plugin:many/bxh\",\"plugin:many/bxi\",\"plugin:many/bxj\",\"plugin:many/bxk\",\"plugin:many/bxl\",\"plugin:many/bxm\",\"plugin:many/bxn\",\"plugin:many/bxo\",\"plugin:many/bxp\",\"plugin:many/bxq\",\"plugin:many/bxr\",\"plugin:many/bxs\",\"plugin:many/bxt\",\"plugin:many/bxu\",\"plugin:many/bxv\",\"plugin:many/bxw\",\"plugin:many/bxx\",\"plugin:many/bxy\",\"plugin:many/bxz\",\"plugin:many/bxxa\",\"plugin:many/bxxb\",\"plugin:many/bxxc\",\"plugin:many/bxxd\",\"plugin:many/bxxe\",\"plugin:many/bxxf\",\"plugin:many/bxxg\",\"plugin:many/bxxh\",\"plugin:many/bxxi\",\"plugin:many/bxxj\",\"plugin:many/bxxk\",\"plugin:many/bxxl\",\"plugin:many/bxxm\",\"plugin:many/bxxn\",\"plugin:many/bxxo\",\"plugin:many/bxxp\",\"plugin:many/bxxq\",\"plugin:many/bxxr\",\"plugin:many/bxxs\",\"plugin:many/bxxt\",\"plugin:many/bxxu\",\"plugin:many/bxxv\",\"plugin:many/bxxw\",\"plugin:many/bxxx\",\"plugin:many/bxxy\",\"plugin:many/bxxz\",\"plugin:many/bxxxa\",\"plugin:many/bxxxb\",\"plugin:many/bxxxc\",\"plugin:many/bxxxd\",\"plugin:many/bxxxe\",\"plugin:many/bxxxf\",\"plugin:many/bxxxg\",\"plugin:many/bxxxh\",\"plugin:many/bxxxi\",\"plugin:many/bxxxj\",\"plugin:many/bxxxk\",\"plugin:many/bxxxl\",\"plugin:many/bxxxm\",\"plugin:many/bxxxn\",\"plugin:many/bxxxo\",\"plugin:many/bxxxp\",\"plugin:many/bxxxq\",\"plugin:many/bxxxr\",\"plugin:many/bxxxs\",\"plugin:many/bxxxt\",\"plugin:many/bxxxu\",\"plugin:many/bxxxv\",\"plugin:many/bxxxw\",\"plugin:many/bxxxx\",\"plugin:many/bxxxy\",\"plugin:many/bxxxz\",\"plugin:many/bxxxxa\",\"plugin:many/bxxxxb\",\"plugin:many/bxxxxc\",\"plugin:many/bxxxxd\",\"plugin:many/bxxxxe\",\"plugin:many/bxxxxf\",\"plugin:many/bxxxxg\",\"plugin:many/bxxxxh\",\"plugin:many/bxxxxi\",\"plugin:many/bxxxxj\",\"plugin:many/bxxxxk\",\"plugin:many/bxxxxl\",\"plugin:many/bxxxxm\",\"plugin:many/bxxxxn\",\"plugin:many/bxxxxo\",\"plugin:many/bxxxxp\",\"plugin:many/bxxxxq\",\"plugin:many/bxxxxr\",\"plugin:many/bxxxxs\",\"plugin:many/bxxxxt\",\"plugin:many/bxxxxu\",\"plugin:many/bxxxxv\",\"plugin:many/bxxxxw\",\"plugin:many/bxxxxx\",\"plugin:many/bxxxxy\",\"plugin:many/bxxxxz\",\"plugin:many/bxxxxxa\",\"plugin:many/bxxxxxb\",\"plugin:many/bxxxxxc\",\"plugin:many/bxxxxxd\",\"plugin:many/bxxxxxe\",\"plugin:many/bxxxxxf\",\"plugin:many/bxxxxxg\",\"plugin:many/bxxxxxh\",\"plugin:many/bxxxxxi\",\"plugin:many/bxxxxxj\",\"plugin:many/bxxxxxk\",\"plugin:many/bxxxxxl\",\"plugin:many/bxxxxxm\",\"plugin:many/bxxxxxn\",\"plugin:many/bxxxxxo\",\"plugin:many/bxxxxxp\",\"plugin:many/bxxxxxq\",\"plugin:many/bxxxxxr\",\"plugin:many/bxxxxxs\",\"plugin:many/bxxxxxt\",\"plugin:many/bxxxxxu\",\"plugin:many/bxxxxxv\",\"plugin:many/bxxxxxw\",\"plugin:many/bxxxxxx\",\"plugin:many/bxxxxxy\",\"plugin:many/bxxxxxz\",\"plugin:many/bxxxxxxa\",\"plugin:many/bxxxxxxb\",\"plugin:many/bxxxxxxc\",\"plugin:many/bxxxxxxd\",\"plugin:many/bxxxxxxe\",\"plugin:many/bxxxxxxf\",\"plugin:many/bxxxxxxg\",\"plugin:many/bxxxxxxh\",\"plugin:many/bxxxxxxi\",\"plugin:many/bxxxxxxj\",\"plugin:many/bxxxxxxk\",\"plugin:many/bxxxxxxl\",\"plugin:many/bxxxxxxm\",\"plugin:many/bxxxxxxn\",\"plugin:many/bxxxxxxo\",\"plugin:many/bxxxxxxp\",\"plugin:many/bxxxxxxq\",\"plugin:many/bxxxxxxr\",\"plugin:many/bxxxxxxs\",\"plugin:many/bxxxxxxt\",\"plugin:many/bxxxxxxu\",\"plugin:many/bxxxxxxv\",\"plugin:many/bxxxxxxw\",\"plugin:many/bxxxxxxx\",\"plugin:many/bxxxxxxy\",\"plugin:many/bxxxxxxz\",\"plugin:many/bxxxxxxxa\",\"plugin:many/bxxxxxxxb\",\"plugin:many/bxxxxxxxc\",\"plugin:many/bxxxxxxxd\",\"plugin:many/bxxxxxxxe\",\"plugin:many/bxxxxxxxf\",\"plugin:many/bxxxxxxxg\",\"plugin:many/bxxxxxxxh\",\"plugin:many/bxxxxxxxi\",\"plugin:many/bxxxxxxxj\",\"plugin:many/bxxxxxxxk\",\"plugin:many/bxxxxxxxl\",\"plugin:many/bxxxxxxxm\",\"plugin:many/bxxxxxxxn\",\"plugin:many/bxxxxxxxo\",\"plugin:many/bxxxxxxxp\",\"plugin:many/bxxxxxxxq\",\"plugin:many/bxxxxxxxr\",\"plugin:many/bxxxxxxxs\",\"plugin:many/bxxxxxxxt\",\"plugin:many/bxxxxxxxu\",\"plugin:many/bxxxxxxxv\",\"plugin:many/bxxxxxxxw\",\"plugin:many/bxxxxxxxx\",\"plugin:many/bxxxxxxxy\",\"plugin:many/bxxxxxxxz\",\"plugin:many/bxxxxxxxxa\",\"plugin:many/bxxxxxxxxb\",\"plugin:many/bxxxxxxxxc\",\"plugin:many/bxxxxxxxxd\",\"plugin:many/bxxxxxxxxe\",\"plugin:many/bxxxxxxxxf\",\"plugin:many/bxxxxxxxxg\",\"plugin:many/bxxxxxxxxh\",\"plugin:many/bxxxxxxxxi\",\"plugin:many/bxxxxxxxxj\",\"plugin:many/bxxxxxxxxk\",\"plugin:many/bxxxxxxxxl\",\"plugin:many/bxxxxxxxxm\",\"plugin:many/bxxxxxxxxn\",\"plugin:many/bxxxxxxxxo\",\"plugin:many/bxxxxxxxxp\",\"plugin:many/bxxxxxxxxq\",\"plugin:many/bxxxxxxxxr\",\"plugin:many/bxxxxxxxxs\",\"plugin:many/bxxxxxxxxt\",\"plugin:many/bxxxxxxxxu\",\"plugin:many/bxxxxxxxxv\",\"plugin:many/bxxxxxxxxw\",\"plugin:many/bxxxxxxxxx\",\"plugin:many/bxxxxxxxxy\",\"plugin:many/bxxxxxxxxz\",\"plugin:many/bxxxxxxxxxa\",\"plugin:many/bxxxxxxxxxb\",\"plugin:many/bxxxxxxxxxc\",\"plugin:many/bxxxxxxxxxd\",\"plugin:many/bxxxxxxxxxe\",\"plugin:many/bxxxxxxxxxf\",\"plugin:many/bxxxxxxxxxg\",\"plugin:many/bxxxxxxxxxh\",\"plugin:many/bxxxxxxxxxi\",\"plugin:many/bxxxxxxxxxj\",\"plugin:many/bxxxxxxxxxk\",\"plugin:many/bxxxxxxxxxl\",\"plugin:many/bxxxxxxxxxm\",\"plugin:many/bxxxxxxxxxn\",\"plugin:many/bxxxxxxxxxo\",\"plugin:many/bxxxxxxxxxp\",\"plugin:many/bxxxxxxxxxq\",\"plugin:many/bxxxxxxxxxr\",\"plugin:many/bxxxxxxxxxs\",\"plugin:many/bxxxxxxxxxt\",\"plugin:many/bxxxxxxxxxu\",\"plugin:many/bxxxxxxxxxv\"]}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "two panes in the compact root",
+    "doc": "{\"version\":2,\"root\":{\"id\":\"w\",\"row\":[{\"panes\":\"main\"}]},\"variants\":{\"compact\":{\"id\":\"c\",\"column\":[{\"panes\":\"main\"},{\"id\":\"p2\",\"panes\":\"main\"}]}}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "a compact root of no kind",
+    "doc": "{\"version\":2,\"root\":{\"id\":\"w\",\"row\":[{\"panes\":\"main\"}]},\"variants\":{\"compact\":{}}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "an id twice in the compact root",
+    "doc": "{\"version\":2,\"root\":{\"id\":\"w\",\"row\":[{\"panes\":\"main\"}]},\"variants\":{\"compact\":{\"id\":\"c\",\"column\":[\"plugin:a/b\",\"plugin:a/b\"]}}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  },
+  {
+    "name": "too many nodes in two roots",
+    "doc": "{\"version\":2,\"root\":{\"id\":\"w\",\"row\":[{\"panes\":\"main\"},\"plugin:many/ba\",\"plugin:many/bb\",\"plugin:many/bc\",\"plugin:many/bd\",\"plugin:many/be\",\"plugin:many/bf\",\"plugin:many/bg\",\"plugin:many/bh\",\"plugin:many/bi\",\"plugin:many/bj\",\"plugin:many/bk\",\"plugin:many/bl\",\"plugin:many/bm\",\"plugin:many/bn\",\"plugin:many/bo\",\"plugin:many/bp\",\"plugin:many/bq\",\"plugin:many/br\",\"plugin:many/bs\",\"plugin:many/bt\",\"plugin:many/bu\",\"plugin:many/bv\",\"plugin:many/bw\",\"plugin:many/bx\",\"plugin:many/by\",\"plugin:many/bz\",\"plugin:many/bxa\",\"plugin:many/bxb\",\"plugin:many/bxc\",\"plugin:many/bxd\",\"plugin:many/bxe\",\"plugin:many/bxf\",\"plugin:many/bxg\",\"plugin:many/bxh\",\"plugin:many/bxi\",\"plugin:many/bxj\",\"plugin:many/bxk\",\"plugin:many/bxl\",\"plugin:many/bxm\",\"plugin:many/bxn\",\"plugin:many/bxo\",\"plugin:many/bxp\",\"plugin:many/bxq\",\"plugin:many/bxr\",\"plugin:many/bxs\",\"plugin:many/bxt\",\"plugin:many/bxu\",\"plugin:many/bxv\",\"plugin:many/bxw\",\"plugin:many/bxx\",\"plugin:many/bxy\",\"plugin:many/bxz\",\"plugin:many/bxxa\",\"plugin:many/bxxb\",\"plugin:many/bxxc\",\"plugin:many/bxxd\",\"plugin:many/bxxe\",\"plugin:many/bxxf\",\"plugin:many/bxxg\",\"plugin:many/bxxh\",\"plugin:many/bxxi\",\"plugin:many/bxxj\",\"plugin:many/bxxk\",\"plugin:many/bxxl\",\"plugin:many/bxxm\",\"plugin:many/bxxn\",\"plugin:many/bxxo\",\"plugin:many/bxxp\",\"plugin:many/bxxq\",\"plugin:many/bxxr\",\"plugin:many/bxxs\",\"plugin:many/bxxt\",\"plugin:many/bxxu\",\"plugin:many/bxxv\",\"plugin:many/bxxw\",\"plugin:many/bxxx\",\"plugin:many/bxxy\",\"plugin:many/bxxz\",\"plugin:many/bxxxa\",\"plugin:many/bxxxb\",\"plugin:many/bxxxc\",\"plugin:many/bxxxd\",\"plugin:many/bxxxe\",\"plugin:many/bxxxf\",\"plugin:many/bxxxg\",\"plugin:many/bxxxh\",\"plugin:many/bxxxi\",\"plugin:many/bxxxj\",\"plugin:many/bxxxk\",\"plugin:many/bxxxl\",\"plugin:many/bxxxm\",\"plugin:many/bxxxn\",\"plugin:many/bxxxo\",\"plugin:many/bxxxp\",\"plugin:many/bxxxq\",\"plugin:many/bxxxr\",\"plugin:many/bxxxs\",\"plugin:many/bxxxt\",\"plugin:many/bxxxu\",\"plugin:many/bxxxv\",\"plugin:many/bxxxw\",\"plugin:many/bxxxx\",\"plugin:many/bxxxy\",\"plugin:many/bxxxz\",\"plugin:many/bxxxxa\",\"plugin:many/bxxxxb\",\"plugin:many/bxxxxc\",\"plugin:many/bxxxxd\",\"plugin:many/bxxxxe\",\"plugin:many/bxxxxf\",\"plugin:many/bxxxxg\",\"plugin:many/bxxxxh\",\"plugin:many/bxxxxi\",\"plugin:many/bxxxxj\",\"plugin:many/bxxxxk\",\"plugin:many/bxxxxl\",\"plugin:many/bxxxxm\",\"plugin:many/bxxxxn\",\"plugin:many/bxxxxo\",\"plugin:many/bxxxxp\",\"plugin:many/bxxxxq\",\"plugin:many/bxxxxr\",\"plugin:many/bxxxxs\",\"plugin:many/bxxxxt\",\"plugin:many/bxxxxu\",\"plugin:many/bxxxxv\",\"plugin:many/bxxxxw\",\"plugin:many/bxxxxx\"]},\"variants\":{\"compact\":{\"id\":\"c\",\"column\":[\"plugin:a/x\",\"plugin:many/ba\",\"plugin:many/bb\",\"plugin:many/bc\",\"plugin:many/bd\",\"plugin:many/be\",\"plugin:many/bf\",\"plugin:many/bg\",\"plugin:many/bh\",\"plugin:many/bi\",\"plugin:many/bj\",\"plugin:many/bk\",\"plugin:many/bl\",\"plugin:many/bm\",\"plugin:many/bn\",\"plugin:many/bo\",\"plugin:many/bp\",\"plugin:many/bq\",\"plugin:many/br\",\"plugin:many/bs\",\"plugin:many/bt\",\"plugin:many/bu\",\"plugin:many/bv\",\"plugin:many/bw\",\"plugin:many/bx\",\"plugin:many/by\",\"plugin:many/bz\",\"plugin:many/bxa\",\"plugin:many/bxb\",\"plugin:many/bxc\",\"plugin:many/bxd\",\"plugin:many/bxe\",\"plugin:many/bxf\",\"plugin:many/bxg\",\"plugin:many/bxh\",\"plugin:many/bxi\",\"plugin:many/bxj\",\"plugin:many/bxk\",\"plugin:many/bxl\",\"plugin:many/bxm\",\"plugin:many/bxn\",\"plugin:many/bxo\",\"plugin:many/bxp\",\"plugin:many/bxq\",\"plugin:many/bxr\",\"plugin:many/bxs\",\"plugin:many/bxt\",\"plugin:many/bxu\",\"plugin:many/bxv\",\"plugin:many/bxw\",\"plugin:many/bxx\",\"plugin:many/bxy\",\"plugin:many/bxz\",\"plugin:many/bxxa\",\"plugin:many/bxxb\",\"plugin:many/bxxc\",\"plugin:many/bxxd\",\"plugin:many/bxxe\",\"plugin:many/bxxf\",\"plugin:many/bxxg\",\"plugin:many/bxxh\",\"plugin:many/bxxi\",\"plugin:many/bxxj\",\"plugin:many/bxxk\",\"plugin:many/bxxl\",\"plugin:many/bxxm\",\"plugin:many/bxxn\",\"plugin:many/bxxo\",\"plugin:many/bxxp\",\"plugin:many/bxxq\",\"plugin:many/bxxr\",\"plugin:many/bxxs\",\"plugin:many/bxxt\",\"plugin:many/bxxu\",\"plugin:many/bxxv\",\"plugin:many/bxxw\",\"plugin:many/bxxx\",\"plugin:many/bxxy\",\"plugin:many/bxxz\",\"plugin:many/bxxxa\",\"plugin:many/bxxxb\",\"plugin:many/bxxxc\",\"plugin:many/bxxxd\",\"plugin:many/bxxxe\",\"plugin:many/bxxxf\",\"plugin:many/bxxxg\",\"plugin:many/bxxxh\",\"plugin:many/bxxxi\",\"plugin:many/bxxxj\",\"plugin:many/bxxxk\",\"plugin:many/bxxxl\",\"plugin:many/bxxxm\",\"plugin:many/bxxxn\",\"plugin:many/bxxxo\",\"plugin:many/bxxxp\",\"plugin:many/bxxxq\",\"plugin:many/bxxxr\",\"plugin:many/bxxxs\",\"plugin:many/bxxxt\",\"plugin:many/bxxxu\",\"plugin:many/bxxxv\",\"plugin:many/bxxxw\",\"plugin:many/bxxxx\",\"plugin:many/bxxxy\",\"plugin:many/bxxxz\",\"plugin:many/bxxxxa\",\"plugin:many/bxxxxb\",\"plugin:many/bxxxxc\",\"plugin:many/bxxxxd\",\"plugin:many/bxxxxe\",\"plugin:many/bxxxxf\",\"plugin:many/bxxxxg\",\"plugin:many/bxxxxh\",\"plugin:many/bxxxxi\",\"plugin:many/bxxxxj\",\"plugin:many/bxxxxk\",\"plugin:many/bxxxxl\",\"plugin:many/bxxxxm\",\"plugin:many/bxxxxn\",\"plugin:many/bxxxxo\",\"plugin:many/bxxxxp\",\"plugin:many/bxxxxq\",\"plugin:many/bxxxxr\",\"plugin:many/bxxxxs\",\"plugin:many/bxxxxt\",\"plugin:many/bxxxxu\",\"plugin:many/bxxxxv\",\"plugin:many/bxxxxw\",\"plugin:many/bxxxxx\"]}}}",
+    "refused": true,
+    "pages": [
+      {
+        "id": "mako.files",
+        "block": "mako.files"
+      },
+      {
+        "id": "mako.git",
+        "block": "mako.git"
+      },
+      {
+        "id": "mako.agents",
+        "block": "mako.agents"
+      },
+      {
+        "id": "mako.forge",
+        "block": "mako.forge"
+      }
+    ]
+  }
+]

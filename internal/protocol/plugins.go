@@ -12,6 +12,14 @@ const (
 
 	TypeListAgentBlocks Type = "list_agent_blocks"
 	TypeAgentBlocks     Type = "agent_blocks"
+
+	TypeListRegistries  Type = "list_registries"
+	TypeRegistries      Type = "registries"
+	TypeRegistryAction  Type = "registry_action"
+	TypeSearchPlugins   Type = "search_plugins"
+	TypePluginListings  Type = "plugin_listings"
+	TypeInstallPlugin   Type = "install_plugin"
+	TypePluginInstalled Type = "plugin_installed"
 )
 
 // The states of a plugin, PluginInfo.state.
@@ -22,6 +30,18 @@ const (
 	PluginRunning  = "running"  // its runtime is up
 	PluginFailed   = "failed"   // stopped, as error says, until its folder changes or it is enabled
 	PluginDisabled = "disabled" // by the user
+	PluginBlocked  = "blocked"  // by a registry's blocklist, until it is lifted
+)
+
+// The ops of InstallPlugin and RegistryAction.
+const (
+	InstallOp = "install"
+	UpdateOp  = "update"
+	RemoveOp  = "remove"
+
+	RegistryAdd     = "add"
+	RegistryRemove  = "remove"
+	RegistryRefresh = "refresh"
 )
 
 // The ops of PluginAction.

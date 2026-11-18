@@ -116,6 +116,13 @@ public  final class Envelope extends
     BLOCK_EVENT(126),
     LIST_AGENT_BLOCKS(127),
     AGENT_BLOCKS(128),
+    LIST_REGISTRIES(130),
+    REGISTRIES(131),
+    REGISTRY_ACTION(132),
+    SEARCH_PLUGINS(133),
+    PLUGIN_LISTINGS(134),
+    INSTALL_PLUGIN(135),
+    PLUGIN_INSTALLED(136),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -221,6 +228,13 @@ public  final class Envelope extends
         case 126: return BLOCK_EVENT;
         case 127: return LIST_AGENT_BLOCKS;
         case 128: return AGENT_BLOCKS;
+        case 130: return LIST_REGISTRIES;
+        case 131: return REGISTRIES;
+        case 132: return REGISTRY_ACTION;
+        case 133: return SEARCH_PLUGINS;
+        case 134: return PLUGIN_LISTINGS;
+        case 135: return INSTALL_PLUGIN;
+        case 136: return PLUGIN_INSTALLED;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -5059,6 +5073,376 @@ public  final class Envelope extends
     }
   }
 
+  public static final int LIST_REGISTRIES_FIELD_NUMBER = 130;
+  /**
+   * <pre>
+   * Registries and the plugins installed from them (revision 29).
+   * </pre>
+   *
+   * <code>.mako.v2.ListRegistries list_registries = 130 [json_name = "listRegistries"];</code>
+   */
+  @java.lang.Override
+  public boolean hasListRegistries() {
+    return bodyCase_ == 130;
+  }
+  /**
+   * <pre>
+   * Registries and the plugins installed from them (revision 29).
+   * </pre>
+   *
+   * <code>.mako.v2.ListRegistries list_registries = 130 [json_name = "listRegistries"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ListRegistries getListRegistries() {
+    if (bodyCase_ == 130) {
+       return (dev.ironpark.mako.v2.ListRegistries) body_;
+    }
+    return dev.ironpark.mako.v2.ListRegistries.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * Registries and the plugins installed from them (revision 29).
+   * </pre>
+   *
+   * <code>.mako.v2.ListRegistries list_registries = 130 [json_name = "listRegistries"];</code>
+   */
+  private void setListRegistries(dev.ironpark.mako.v2.ListRegistries value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 130;
+  }
+  /**
+   * <pre>
+   * Registries and the plugins installed from them (revision 29).
+   * </pre>
+   *
+   * <code>.mako.v2.ListRegistries list_registries = 130 [json_name = "listRegistries"];</code>
+   */
+  private void mergeListRegistries(dev.ironpark.mako.v2.ListRegistries value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 130 &&
+        body_ != dev.ironpark.mako.v2.ListRegistries.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ListRegistries.newBuilder((dev.ironpark.mako.v2.ListRegistries) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 130;
+  }
+  /**
+   * <pre>
+   * Registries and the plugins installed from them (revision 29).
+   * </pre>
+   *
+   * <code>.mako.v2.ListRegistries list_registries = 130 [json_name = "listRegistries"];</code>
+   */
+  private void clearListRegistries() {
+    if (bodyCase_ == 130) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int REGISTRIES_FIELD_NUMBER = 131;
+  /**
+   * <code>.mako.v2.Registries registries = 131 [json_name = "registries"];</code>
+   */
+  @java.lang.Override
+  public boolean hasRegistries() {
+    return bodyCase_ == 131;
+  }
+  /**
+   * <code>.mako.v2.Registries registries = 131 [json_name = "registries"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Registries getRegistries() {
+    if (bodyCase_ == 131) {
+       return (dev.ironpark.mako.v2.Registries) body_;
+    }
+    return dev.ironpark.mako.v2.Registries.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.Registries registries = 131 [json_name = "registries"];</code>
+   */
+  private void setRegistries(dev.ironpark.mako.v2.Registries value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 131;
+  }
+  /**
+   * <code>.mako.v2.Registries registries = 131 [json_name = "registries"];</code>
+   */
+  private void mergeRegistries(dev.ironpark.mako.v2.Registries value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 131 &&
+        body_ != dev.ironpark.mako.v2.Registries.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Registries.newBuilder((dev.ironpark.mako.v2.Registries) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 131;
+  }
+  /**
+   * <code>.mako.v2.Registries registries = 131 [json_name = "registries"];</code>
+   */
+  private void clearRegistries() {
+    if (bodyCase_ == 131) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int REGISTRY_ACTION_FIELD_NUMBER = 132;
+  /**
+   * <code>.mako.v2.RegistryAction registry_action = 132 [json_name = "registryAction"];</code>
+   */
+  @java.lang.Override
+  public boolean hasRegistryAction() {
+    return bodyCase_ == 132;
+  }
+  /**
+   * <code>.mako.v2.RegistryAction registry_action = 132 [json_name = "registryAction"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.RegistryAction getRegistryAction() {
+    if (bodyCase_ == 132) {
+       return (dev.ironpark.mako.v2.RegistryAction) body_;
+    }
+    return dev.ironpark.mako.v2.RegistryAction.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.RegistryAction registry_action = 132 [json_name = "registryAction"];</code>
+   */
+  private void setRegistryAction(dev.ironpark.mako.v2.RegistryAction value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 132;
+  }
+  /**
+   * <code>.mako.v2.RegistryAction registry_action = 132 [json_name = "registryAction"];</code>
+   */
+  private void mergeRegistryAction(dev.ironpark.mako.v2.RegistryAction value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 132 &&
+        body_ != dev.ironpark.mako.v2.RegistryAction.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.RegistryAction.newBuilder((dev.ironpark.mako.v2.RegistryAction) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 132;
+  }
+  /**
+   * <code>.mako.v2.RegistryAction registry_action = 132 [json_name = "registryAction"];</code>
+   */
+  private void clearRegistryAction() {
+    if (bodyCase_ == 132) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SEARCH_PLUGINS_FIELD_NUMBER = 133;
+  /**
+   * <code>.mako.v2.SearchPlugins search_plugins = 133 [json_name = "searchPlugins"];</code>
+   */
+  @java.lang.Override
+  public boolean hasSearchPlugins() {
+    return bodyCase_ == 133;
+  }
+  /**
+   * <code>.mako.v2.SearchPlugins search_plugins = 133 [json_name = "searchPlugins"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.SearchPlugins getSearchPlugins() {
+    if (bodyCase_ == 133) {
+       return (dev.ironpark.mako.v2.SearchPlugins) body_;
+    }
+    return dev.ironpark.mako.v2.SearchPlugins.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.SearchPlugins search_plugins = 133 [json_name = "searchPlugins"];</code>
+   */
+  private void setSearchPlugins(dev.ironpark.mako.v2.SearchPlugins value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 133;
+  }
+  /**
+   * <code>.mako.v2.SearchPlugins search_plugins = 133 [json_name = "searchPlugins"];</code>
+   */
+  private void mergeSearchPlugins(dev.ironpark.mako.v2.SearchPlugins value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 133 &&
+        body_ != dev.ironpark.mako.v2.SearchPlugins.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.SearchPlugins.newBuilder((dev.ironpark.mako.v2.SearchPlugins) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 133;
+  }
+  /**
+   * <code>.mako.v2.SearchPlugins search_plugins = 133 [json_name = "searchPlugins"];</code>
+   */
+  private void clearSearchPlugins() {
+    if (bodyCase_ == 133) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PLUGIN_LISTINGS_FIELD_NUMBER = 134;
+  /**
+   * <code>.mako.v2.PluginListings plugin_listings = 134 [json_name = "pluginListings"];</code>
+   */
+  @java.lang.Override
+  public boolean hasPluginListings() {
+    return bodyCase_ == 134;
+  }
+  /**
+   * <code>.mako.v2.PluginListings plugin_listings = 134 [json_name = "pluginListings"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.PluginListings getPluginListings() {
+    if (bodyCase_ == 134) {
+       return (dev.ironpark.mako.v2.PluginListings) body_;
+    }
+    return dev.ironpark.mako.v2.PluginListings.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.PluginListings plugin_listings = 134 [json_name = "pluginListings"];</code>
+   */
+  private void setPluginListings(dev.ironpark.mako.v2.PluginListings value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 134;
+  }
+  /**
+   * <code>.mako.v2.PluginListings plugin_listings = 134 [json_name = "pluginListings"];</code>
+   */
+  private void mergePluginListings(dev.ironpark.mako.v2.PluginListings value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 134 &&
+        body_ != dev.ironpark.mako.v2.PluginListings.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.PluginListings.newBuilder((dev.ironpark.mako.v2.PluginListings) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 134;
+  }
+  /**
+   * <code>.mako.v2.PluginListings plugin_listings = 134 [json_name = "pluginListings"];</code>
+   */
+  private void clearPluginListings() {
+    if (bodyCase_ == 134) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int INSTALL_PLUGIN_FIELD_NUMBER = 135;
+  /**
+   * <code>.mako.v2.InstallPlugin install_plugin = 135 [json_name = "installPlugin"];</code>
+   */
+  @java.lang.Override
+  public boolean hasInstallPlugin() {
+    return bodyCase_ == 135;
+  }
+  /**
+   * <code>.mako.v2.InstallPlugin install_plugin = 135 [json_name = "installPlugin"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.InstallPlugin getInstallPlugin() {
+    if (bodyCase_ == 135) {
+       return (dev.ironpark.mako.v2.InstallPlugin) body_;
+    }
+    return dev.ironpark.mako.v2.InstallPlugin.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.InstallPlugin install_plugin = 135 [json_name = "installPlugin"];</code>
+   */
+  private void setInstallPlugin(dev.ironpark.mako.v2.InstallPlugin value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 135;
+  }
+  /**
+   * <code>.mako.v2.InstallPlugin install_plugin = 135 [json_name = "installPlugin"];</code>
+   */
+  private void mergeInstallPlugin(dev.ironpark.mako.v2.InstallPlugin value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 135 &&
+        body_ != dev.ironpark.mako.v2.InstallPlugin.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.InstallPlugin.newBuilder((dev.ironpark.mako.v2.InstallPlugin) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 135;
+  }
+  /**
+   * <code>.mako.v2.InstallPlugin install_plugin = 135 [json_name = "installPlugin"];</code>
+   */
+  private void clearInstallPlugin() {
+    if (bodyCase_ == 135) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PLUGIN_INSTALLED_FIELD_NUMBER = 136;
+  /**
+   * <code>.mako.v2.PluginInstalled plugin_installed = 136 [json_name = "pluginInstalled"];</code>
+   */
+  @java.lang.Override
+  public boolean hasPluginInstalled() {
+    return bodyCase_ == 136;
+  }
+  /**
+   * <code>.mako.v2.PluginInstalled plugin_installed = 136 [json_name = "pluginInstalled"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.PluginInstalled getPluginInstalled() {
+    if (bodyCase_ == 136) {
+       return (dev.ironpark.mako.v2.PluginInstalled) body_;
+    }
+    return dev.ironpark.mako.v2.PluginInstalled.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.PluginInstalled plugin_installed = 136 [json_name = "pluginInstalled"];</code>
+   */
+  private void setPluginInstalled(dev.ironpark.mako.v2.PluginInstalled value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 136;
+  }
+  /**
+   * <code>.mako.v2.PluginInstalled plugin_installed = 136 [json_name = "pluginInstalled"];</code>
+   */
+  private void mergePluginInstalled(dev.ironpark.mako.v2.PluginInstalled value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 136 &&
+        body_ != dev.ironpark.mako.v2.PluginInstalled.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.PluginInstalled.newBuilder((dev.ironpark.mako.v2.PluginInstalled) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 136;
+  }
+  /**
+   * <code>.mako.v2.PluginInstalled plugin_installed = 136 [json_name = "pluginInstalled"];</code>
+   */
+  private void clearPluginInstalled() {
+    if (bodyCase_ == 136) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -9854,6 +10238,366 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Registries and the plugins installed from them (revision 29).
+     * </pre>
+     *
+     * <code>.mako.v2.ListRegistries list_registries = 130 [json_name = "listRegistries"];</code>
+     */
+    @java.lang.Override
+    public boolean hasListRegistries() {
+      return instance.hasListRegistries();
+    }
+    /**
+     * <pre>
+     * Registries and the plugins installed from them (revision 29).
+     * </pre>
+     *
+     * <code>.mako.v2.ListRegistries list_registries = 130 [json_name = "listRegistries"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ListRegistries getListRegistries() {
+      return instance.getListRegistries();
+    }
+    /**
+     * <pre>
+     * Registries and the plugins installed from them (revision 29).
+     * </pre>
+     *
+     * <code>.mako.v2.ListRegistries list_registries = 130 [json_name = "listRegistries"];</code>
+     */
+    public Builder setListRegistries(dev.ironpark.mako.v2.ListRegistries value) {
+      copyOnWrite();
+      instance.setListRegistries(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Registries and the plugins installed from them (revision 29).
+     * </pre>
+     *
+     * <code>.mako.v2.ListRegistries list_registries = 130 [json_name = "listRegistries"];</code>
+     */
+    public Builder setListRegistries(
+        dev.ironpark.mako.v2.ListRegistries.Builder builderForValue) {
+      copyOnWrite();
+      instance.setListRegistries(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Registries and the plugins installed from them (revision 29).
+     * </pre>
+     *
+     * <code>.mako.v2.ListRegistries list_registries = 130 [json_name = "listRegistries"];</code>
+     */
+    public Builder mergeListRegistries(dev.ironpark.mako.v2.ListRegistries value) {
+      copyOnWrite();
+      instance.mergeListRegistries(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Registries and the plugins installed from them (revision 29).
+     * </pre>
+     *
+     * <code>.mako.v2.ListRegistries list_registries = 130 [json_name = "listRegistries"];</code>
+     */
+    public Builder clearListRegistries() {
+      copyOnWrite();
+      instance.clearListRegistries();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.Registries registries = 131 [json_name = "registries"];</code>
+     */
+    @java.lang.Override
+    public boolean hasRegistries() {
+      return instance.hasRegistries();
+    }
+    /**
+     * <code>.mako.v2.Registries registries = 131 [json_name = "registries"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Registries getRegistries() {
+      return instance.getRegistries();
+    }
+    /**
+     * <code>.mako.v2.Registries registries = 131 [json_name = "registries"];</code>
+     */
+    public Builder setRegistries(dev.ironpark.mako.v2.Registries value) {
+      copyOnWrite();
+      instance.setRegistries(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Registries registries = 131 [json_name = "registries"];</code>
+     */
+    public Builder setRegistries(
+        dev.ironpark.mako.v2.Registries.Builder builderForValue) {
+      copyOnWrite();
+      instance.setRegistries(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Registries registries = 131 [json_name = "registries"];</code>
+     */
+    public Builder mergeRegistries(dev.ironpark.mako.v2.Registries value) {
+      copyOnWrite();
+      instance.mergeRegistries(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Registries registries = 131 [json_name = "registries"];</code>
+     */
+    public Builder clearRegistries() {
+      copyOnWrite();
+      instance.clearRegistries();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.RegistryAction registry_action = 132 [json_name = "registryAction"];</code>
+     */
+    @java.lang.Override
+    public boolean hasRegistryAction() {
+      return instance.hasRegistryAction();
+    }
+    /**
+     * <code>.mako.v2.RegistryAction registry_action = 132 [json_name = "registryAction"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.RegistryAction getRegistryAction() {
+      return instance.getRegistryAction();
+    }
+    /**
+     * <code>.mako.v2.RegistryAction registry_action = 132 [json_name = "registryAction"];</code>
+     */
+    public Builder setRegistryAction(dev.ironpark.mako.v2.RegistryAction value) {
+      copyOnWrite();
+      instance.setRegistryAction(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RegistryAction registry_action = 132 [json_name = "registryAction"];</code>
+     */
+    public Builder setRegistryAction(
+        dev.ironpark.mako.v2.RegistryAction.Builder builderForValue) {
+      copyOnWrite();
+      instance.setRegistryAction(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RegistryAction registry_action = 132 [json_name = "registryAction"];</code>
+     */
+    public Builder mergeRegistryAction(dev.ironpark.mako.v2.RegistryAction value) {
+      copyOnWrite();
+      instance.mergeRegistryAction(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RegistryAction registry_action = 132 [json_name = "registryAction"];</code>
+     */
+    public Builder clearRegistryAction() {
+      copyOnWrite();
+      instance.clearRegistryAction();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.SearchPlugins search_plugins = 133 [json_name = "searchPlugins"];</code>
+     */
+    @java.lang.Override
+    public boolean hasSearchPlugins() {
+      return instance.hasSearchPlugins();
+    }
+    /**
+     * <code>.mako.v2.SearchPlugins search_plugins = 133 [json_name = "searchPlugins"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.SearchPlugins getSearchPlugins() {
+      return instance.getSearchPlugins();
+    }
+    /**
+     * <code>.mako.v2.SearchPlugins search_plugins = 133 [json_name = "searchPlugins"];</code>
+     */
+    public Builder setSearchPlugins(dev.ironpark.mako.v2.SearchPlugins value) {
+      copyOnWrite();
+      instance.setSearchPlugins(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SearchPlugins search_plugins = 133 [json_name = "searchPlugins"];</code>
+     */
+    public Builder setSearchPlugins(
+        dev.ironpark.mako.v2.SearchPlugins.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSearchPlugins(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SearchPlugins search_plugins = 133 [json_name = "searchPlugins"];</code>
+     */
+    public Builder mergeSearchPlugins(dev.ironpark.mako.v2.SearchPlugins value) {
+      copyOnWrite();
+      instance.mergeSearchPlugins(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SearchPlugins search_plugins = 133 [json_name = "searchPlugins"];</code>
+     */
+    public Builder clearSearchPlugins() {
+      copyOnWrite();
+      instance.clearSearchPlugins();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.PluginListings plugin_listings = 134 [json_name = "pluginListings"];</code>
+     */
+    @java.lang.Override
+    public boolean hasPluginListings() {
+      return instance.hasPluginListings();
+    }
+    /**
+     * <code>.mako.v2.PluginListings plugin_listings = 134 [json_name = "pluginListings"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.PluginListings getPluginListings() {
+      return instance.getPluginListings();
+    }
+    /**
+     * <code>.mako.v2.PluginListings plugin_listings = 134 [json_name = "pluginListings"];</code>
+     */
+    public Builder setPluginListings(dev.ironpark.mako.v2.PluginListings value) {
+      copyOnWrite();
+      instance.setPluginListings(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginListings plugin_listings = 134 [json_name = "pluginListings"];</code>
+     */
+    public Builder setPluginListings(
+        dev.ironpark.mako.v2.PluginListings.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPluginListings(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginListings plugin_listings = 134 [json_name = "pluginListings"];</code>
+     */
+    public Builder mergePluginListings(dev.ironpark.mako.v2.PluginListings value) {
+      copyOnWrite();
+      instance.mergePluginListings(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginListings plugin_listings = 134 [json_name = "pluginListings"];</code>
+     */
+    public Builder clearPluginListings() {
+      copyOnWrite();
+      instance.clearPluginListings();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.InstallPlugin install_plugin = 135 [json_name = "installPlugin"];</code>
+     */
+    @java.lang.Override
+    public boolean hasInstallPlugin() {
+      return instance.hasInstallPlugin();
+    }
+    /**
+     * <code>.mako.v2.InstallPlugin install_plugin = 135 [json_name = "installPlugin"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.InstallPlugin getInstallPlugin() {
+      return instance.getInstallPlugin();
+    }
+    /**
+     * <code>.mako.v2.InstallPlugin install_plugin = 135 [json_name = "installPlugin"];</code>
+     */
+    public Builder setInstallPlugin(dev.ironpark.mako.v2.InstallPlugin value) {
+      copyOnWrite();
+      instance.setInstallPlugin(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.InstallPlugin install_plugin = 135 [json_name = "installPlugin"];</code>
+     */
+    public Builder setInstallPlugin(
+        dev.ironpark.mako.v2.InstallPlugin.Builder builderForValue) {
+      copyOnWrite();
+      instance.setInstallPlugin(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.InstallPlugin install_plugin = 135 [json_name = "installPlugin"];</code>
+     */
+    public Builder mergeInstallPlugin(dev.ironpark.mako.v2.InstallPlugin value) {
+      copyOnWrite();
+      instance.mergeInstallPlugin(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.InstallPlugin install_plugin = 135 [json_name = "installPlugin"];</code>
+     */
+    public Builder clearInstallPlugin() {
+      copyOnWrite();
+      instance.clearInstallPlugin();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.PluginInstalled plugin_installed = 136 [json_name = "pluginInstalled"];</code>
+     */
+    @java.lang.Override
+    public boolean hasPluginInstalled() {
+      return instance.hasPluginInstalled();
+    }
+    /**
+     * <code>.mako.v2.PluginInstalled plugin_installed = 136 [json_name = "pluginInstalled"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.PluginInstalled getPluginInstalled() {
+      return instance.getPluginInstalled();
+    }
+    /**
+     * <code>.mako.v2.PluginInstalled plugin_installed = 136 [json_name = "pluginInstalled"];</code>
+     */
+    public Builder setPluginInstalled(dev.ironpark.mako.v2.PluginInstalled value) {
+      copyOnWrite();
+      instance.setPluginInstalled(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginInstalled plugin_installed = 136 [json_name = "pluginInstalled"];</code>
+     */
+    public Builder setPluginInstalled(
+        dev.ironpark.mako.v2.PluginInstalled.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPluginInstalled(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginInstalled plugin_installed = 136 [json_name = "pluginInstalled"];</code>
+     */
+    public Builder mergePluginInstalled(dev.ironpark.mako.v2.PluginInstalled value) {
+      copyOnWrite();
+      instance.mergePluginInstalled(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginInstalled plugin_installed = 136 [json_name = "pluginInstalled"];</code>
+     */
+    public Builder clearPluginInstalled() {
+      copyOnWrite();
+      instance.clearPluginInstalled();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -9964,9 +10708,16 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.BlockEvent.class,
             dev.ironpark.mako.v2.ListAgentBlocks.class,
             dev.ironpark.mako.v2.AgentBlocks.class,
+            dev.ironpark.mako.v2.ListRegistries.class,
+            dev.ironpark.mako.v2.Registries.class,
+            dev.ironpark.mako.v2.RegistryAction.class,
+            dev.ironpark.mako.v2.SearchPlugins.class,
+            dev.ironpark.mako.v2.PluginListings.class,
+            dev.ironpark.mako.v2.InstallPlugin.class,
+            dev.ironpark.mako.v2.PluginInstalled.class,
           };
           java.lang.String info =
-              "\u0000\\\u0001\u0000\u0001\u0080\\\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
+              "\u0000c\u0001\u0000\u0001\u0088c\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
               "\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019" +
               "<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000" +
               "!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000" +
@@ -9976,7 +10727,8 @@ public  final class Envelope extends
               "I<\u0000J<\u0000K<\u0000L<\u0000M<\u0000N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000" +
               "S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000" +
               "j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000p<\u0000x<\u0000y<\u0000z<\u0000" +
-              "{<\u0000|<\u0000}<\u0000~<\u0000<\u0000\u0080<\u0000";
+              "{<\u0000|<\u0000}<\u0000~<\u0000<\u0000\u0080<\u0000\u0082<\u0000\u0083<\u0000\u0084" +
+              "<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000\u0088<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

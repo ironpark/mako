@@ -29,7 +29,19 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 28
+const Revision = 30
+
+// RevisionPeerBlocks adds node_id to WatchBlock, BlockEvent and
+// ListAgentBlocks, and serves them to a node let in: a phone watches and
+// acts on the blocks of the computer it shows, which it could already
+// start sessions on.
+const RevisionPeerBlocks = 30
+
+// RevisionPluginStore adds registries and installing signed plugin
+// packages from them: ListRegistries, RegistryAction, SearchPlugins,
+// InstallPlugin, PluginInfo's installed, source, key, update and
+// blocked, and the plugin state blocked.
+const RevisionPluginStore = 29
 
 // RevisionTemplates adds the approvals of kind template, which ask the
 // window to save a prompt template an agent wrote (save_template), and

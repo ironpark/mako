@@ -20,6 +20,8 @@ plugin. The design, and what is still to come, is in
 - [Permissions](#permissions)
 - [Limits](#limits)
 - [Developing one](#developing-one)
+- [Installing from a registry](#installing-from-a-registry)
+- [Publishing](#publishing)
 - [For mako's developers](#for-makos-developers)
 
 ## A plugin's folder
@@ -35,8 +37,10 @@ daemon's `config.json` (`~/.config/mako/plugins/<id>/`, or
         lib/runs.js      (any .js file the entry imports)
 
 The daemon reads the folder again whenever a file in it changes, as in
-development (see [Developing one](#developing-one)). Signed packages, a
-registry and installing from it come later.
+development (see [Developing one](#developing-one)). A folder is written
+there by hand, or by the daemon installing a signed package from a
+registry ([Installing](#installing-from-a-registry)); the daemon runs both
+alike, and tells them apart by what it installed.
 
 [examples/plugins/ci-status](../examples/plugins/ci-status) is a complete
 plugin: a block of a GitHub repository's latest Actions runs, kept in its
@@ -277,7 +281,155 @@ and request.
 
 Plugins are a node's own: a block of a plugin another node has, in a
 document shared between nodes, shows as missing where the plugin is not
-installed.
+installed, with *Install on this node* when a registry of the node lists
+it.
+
+## Installing from a registry
+
+A registry is a git repository anyone keeps, listing plugins' signed
+packages. Nobody reviews what a registry lists, the one mako comes with
+included, so the node keeps itself safe:
+
+- **What you see.** Settings ▸ Plugins searches every registry the node
+  reads. Each plugin found says which registry lists it, the name its
+  publisher gives itself (which nobody checked), the fingerprint of the
+  key that signs it, and what it asks for. Nothing in the store reads as
+  "verified": nobody verified it. `mako plugins search`, `install`,
+  `update`, `remove` and `registries` do the same from a terminal.
+- **What is installed.** The daemon downloads the package the registry's
+  index lists, checks its SHA-256 and size against the index, its
+  signature against the publisher key the index lists, and its manifest
+  (the ID and version listed, read strictly: no `exec`), and only then
+  puts its files in `plugins/<id>/`. It runs once you allow what it asks
+  for, as any plugin.
+- **The publisher's key is pinned** at the first install, with the
+  registry it came from, on this node (`plugin-data/installs.json`). A
+  version signed by another key is never taken as an update, from that
+  registry or any other. Removing the plugin forgets the pin, what it was
+  allowed and what it kept: installing another publisher's plugin of that
+  ID is then a first install, which starts with nothing allowed.
+- **The same ID in several registries** is several listings. An install
+  names the registry when more than one lists the ID, and the plugin then
+  follows that registry, and its key, for updates; another registry's
+  listing is never taken in its place because of the order of the
+  registries.
+- **Updates go forward.** An update must be a newer version; to go back,
+  remove the plugin and install it again. An update asking for more than
+  the version it replaces shows what it adds, and the plugin waits for
+  you to allow it; until then neither version runs.
+- **Blocklists.** Every registry's index carries a blocklist, by ID, ID
+  and version, or publisher key. The node merges the lists of all its
+  registries and applies them to every plugin it has, whichever registry
+  it came from, and to a folder in development by its ID: a plugin
+  blocked stops, says why and by which registry, and can be neither
+  enabled nor updated while it is. Removing a registry lifts its list.
+  The lists are read at every install and every 6 hours while a plugin
+  is installed; out of reach, a registry's last list stands.
+- **Each node installs for itself.** A layout document placing a plugin's
+  block on a node that lacks the plugin shows, in its place, *Install on
+  this node* for each registry of the node that lists it.
+- **A folder in development is yours.** An install never replaces a
+  folder written by hand, and `remove` does not delete one.
+
+The node starts with one registry, the project's own, which you may
+remove (Settings ▸ Plugins ▸ Registries, or `mako plugins registries
+remove <url>`). A node reads no registry until you open the store or
+install from one.
+
+## Publishing
+
+**A key.** `mako plugins keygen ~/keys/mako-publisher.key` makes an
+ed25519 key: its private half in that file, readable by you alone,
+which never leaves your machine; it prints the public key
+(`ed25519:` and 32 bytes in unpadded base64url) and its fingerprint.
+Every version of a plugin must be signed by the same key: a node that
+installed it takes no other.
+
+**A package.** `mako plugins pack <folder> -key <key-file>` packs and
+signs the folder as `<id>-<version>.makoplugin`; `mako plugins verify
+<package>` checks one and says what it is; `mako plugins sign <package>
+-key <key-file>` signs a package again. The same folder always packs to
+the same bytes.
+
+A `.makoplugin` is a zip archive:
+
+- Regular files only, stored or deflated, nothing encrypted: the folder's
+  files by their paths there, leaving out names starting with a dot and
+  `node_modules`, and the signature, `mako-signature.json`, at the root.
+- A path is 1 to 8 parts joined by `/`, each of letters, digits and
+  `._-`, not starting with `.` or `-`; 255 bytes at most. No two paths
+  differ only in case.
+- At most 256 files, 2 MiB each and 8 MiB in all once read, the archive
+  8 MiB.
+- **The contents' digest** is the SHA-256 of `mako-plugin-contents/1\n`
+  followed, for each file but the signature, in the byte order of their
+  paths, by the path, `\n`, its size in decimal, `\n`, and its bytes;
+  written `sha256:<hex>`.
+- **The signature** file is JSON:
+
+  ```json
+  {"format": "mako-plugin-signature/1", "id": "ci-status", "version": "0.1.0",
+   "key": "ed25519:…", "contents": "sha256:…", "signature": "…"}
+  ```
+
+  `signature` is the ed25519 signature, in unpadded base64url, of the
+  statement `mako-plugin-signature/1\nid <id>\nversion
+  <version>\ncontents sha256:<hex>\n`.
+- Packing writes the files in the order of their paths, stored, dated
+  1980-01-01, the signature last.
+
+A node refuses a package that breaks any of these, and one whose
+signature does not hold for its contents, or whose manifest is not the
+signed ID and version. The package's own SHA-256, which the index lists,
+covers every byte of it.
+
+**A registry** is a git repository with `mako-registry.json` at its root,
+on its default branch. A node reads that one file, through the forge's
+raw files, by https: `https://github.com/<owner>/<repo>` is read at
+`https://raw.githubusercontent.com/<owner>/<repo>/HEAD/mako-registry.json`,
+`https://gitlab.com/<group>/<repo>` at `…/-/raw/HEAD/mako-registry.json`,
+and any other https URL ending in `.json` is taken as the index itself.
+A URL with a user, a port, an IP address, a query, or any scheme but
+https is refused, as are paths on the machine.
+
+```json
+{
+  "format": "mako-registry/1",
+  "name": "ironpark's plugins",
+  "plugins": [
+    {
+      "id": "ci-status",
+      "name": "CI status",
+      "description": "The latest GitHub Actions runs of a repository",
+      "homepage": "https://github.com/ironpark/mako",
+      "publisher": "ironpark",
+      "key": "ed25519:…",
+      "versions": [
+        {"version": "0.1.0", "api": 1,
+         "url": "https://github.com/…/releases/download/v0.1.0/ci-status-0.1.0.makoplugin",
+         "sha256": "…", "size": 5062,
+         "permissions": ["net:api.github.com", "storage", "sessions:read"]}
+      ]
+    }
+  ],
+  "blocklist": [
+    {"id": "evil", "reason": "sends tokens away"},
+    {"id": "ok-mostly", "version": "1.2.3", "reason": "a bad build"},
+    {"key": "ed25519:…", "reason": "the key was stolen"}
+  ]
+}
+```
+
+The index is read strictly: a field it does not know, an ID twice, a
+version, key, hash, URL (https, a host name) or permission out of its
+grammar, or text with control or reordering characters is refused, and
+the registry shows the error, keeping what it gave before. `mako plugins
+index <checkout> <package> -url <download URL>` adds a package's version
+to a checkout's index (making one if there is none), writing it sorted
+and indented so that the change is small to review; it refuses a key
+other than the one the index lists for the ID, and a version listed
+already. Push the change and the package; the URL may redirect, to https,
+3 times at most.
 
 ## For mako's developers
 
@@ -288,7 +440,11 @@ installed.
 | `internal/plugin/hostapi` | Generated: the messages, the dispatcher that checks a permission before reading a call (`dispatch_gen.go`), `mako.js`, `mako.d.ts`, `mako.wit`, and the schema kept (`hostapi.binpb`), from which a test generates everything again and fails on a difference. |
 | `internal/plugin` | Manifests, the runtime (qngg), limits, the Host API's handlers, trees and the folder's reading. |
 | `internal/daemon/plugins.go` | The requests of [protocol.md](protocol.md#plugins). |
-| `internal/gui/plugin*.go` | The blocks' frames and trees, the bar asking, Settings ▸ Plugins. |
+| `internal/gui/plugin*.go` | The blocks' frames and trees, the bar asking, Settings ▸ Plugins, the store (`pluginstore*.go`) and the placeholder offering to install (`pluginmissing.go`). |
+| `internal/plugin/pack` | The `.makoplugin` package: packing, signing, opening, keys. |
+| `internal/plugin/registry` | A registry's index, its URL, and the fetcher of indexes and packages. |
+| `internal/plugin/store` | Registries, installs, pins and blocklists on a node (`plugin.Installs`). |
+| `internal/daemon/pluginstore.go` | The store's requests of [protocol.md](protocol.md#the-plugin-store). |
 
 To add a method: add it to the schema with its permission, run `make
 proto`, and implement it on the handler (`internal/plugin/host.go`); the
@@ -296,4 +452,6 @@ build fails until you do. The WIT is checked by a small parser in the
 tests, not by a WIT toolchain: none is to be had from Go without cgo.
 `MAKO_PLUGIN_NET_TEST=host=http://127.0.0.1:port` sends a granted host's
 requests to a test's server, for end-to-end runs; the daemon logs that it
-does.
+does. `MAKO_PLUGIN_REGISTRY_TEST=1` lets registries and packages be on
+loopback by http, and leaves the default registry out, so that a test
+reaches no registry on the internet.

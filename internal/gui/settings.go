@@ -83,7 +83,11 @@ func settingsSidebar(m *model) ggui.Widget {
 		func() { m.Page.Set("workspace") }).Ghost().Pad(7, 10).Radius(7).Name(T("Back to sessions"))
 	header := titlebar(m, widget.Box(widget.Row(titlebarGap(m.titlebarRoom(), 8), back)).Pad(8, 8, 8, 0).Height(headerHeight))
 
-	hasPlugins := ggui.Map(m.plugins.List, func(l []*protocol.PluginInfo) bool { return len(l) > 0 })
+	// Plugins is listed while the daemon has one, or registries to
+	// install one from.
+	hasPlugins := ggui.Derived(func() bool {
+		return len(m.plugins.List.Get()) > 0 || m.Conn.Get().Self.GetRevision() >= protocol.RevisionPluginStore
+	})
 	nav := ggui.View(hasPlugins, func(plugins bool) ggui.Widget { return settingsNavList(m, settingsGroups(plugins)) })
 
 	return widget.Box(widget.Column(

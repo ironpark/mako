@@ -131,4 +131,24 @@ java.lang.String defaultValue);
 
   java.lang.String getValuesOrThrow(
       java.lang.String key);
+
+  /**
+   * <pre>
+   * node_id is the node whose block it is, as WatchBlock's (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 6 [json_name = "nodeId"];</code>
+   * @return The nodeId.
+   */
+  java.lang.String getNodeId();
+  /**
+   * <pre>
+   * node_id is the node whose block it is, as WatchBlock's (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 6 [json_name = "nodeId"];</code>
+   * @return The bytes for nodeId.
+   */
+  com.google.protobuf.ByteString
+      getNodeIdBytes();
 }

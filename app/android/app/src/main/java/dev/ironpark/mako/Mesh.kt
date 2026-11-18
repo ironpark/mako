@@ -426,6 +426,17 @@ class Mesh(
         refreshNodes()
     }
 
+    /** Whether node shows this device its blocks, plugins' and agents'. */
+    fun showsBlocks(node: String): Boolean = revision(node) >= REVISION_PEER_BLOCKS
+
+    /**
+     * The computer whose panels the app shows: the one whose workspace it
+     * shows, or, while this device's own node holds the workspace, the
+     * first that lets it in, by node ID; null for none.
+     */
+    fun panelsNode(): String? =
+        _workspace.value.node ?: workspaceComputers(_nodes.value).firstOrNull { it.trustsUs || it.hops > 0 }?.id
+
     /** Whether node reads a project's agents. */
     fun readsProjectAgents(node: String): Boolean = revision(node) >= REVISION_PROJECT_AGENTS
 
@@ -497,6 +508,9 @@ class Mesh(
 
         /** The first protocol revision whose daemon takes a workspace edit from a node it lets in (protocol.RevisionPeerWorkspace). */
         const val REVISION_PEER_WORKSPACE = 25L
+
+        /** The first protocol revision whose daemon serves its blocks to a node it lets in (protocol.RevisionPeerBlocks). */
+        const val REVISION_PEER_BLOCKS = 30L
 
         /** How a node's link stands, as Node.link says (protocol.Link*). */
         const val LINK_LINKING = "linking"

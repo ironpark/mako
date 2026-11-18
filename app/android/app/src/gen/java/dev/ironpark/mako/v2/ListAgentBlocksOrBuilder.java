@@ -9,4 +9,26 @@ package dev.ironpark.mako.v2;
 public interface ListAgentBlocksOrBuilder extends
     // @@protoc_insertion_point(interface_extends:mako.v2.ListAgentBlocks)
     com.google.protobuf.MessageLiteOrBuilder {
+
+  /**
+   * <pre>
+   * node_id is the node whose agents' blocks are asked for, routed as a
+   * request's (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 1 [json_name = "nodeId"];</code>
+   * @return The nodeId.
+   */
+  java.lang.String getNodeId();
+  /**
+   * <pre>
+   * node_id is the node whose agents' blocks are asked for, routed as a
+   * request's (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 1 [json_name = "nodeId"];</code>
+   * @return The bytes for nodeId.
+   */
+  com.google.protobuf.ByteString
+      getNodeIdBytes();
 }

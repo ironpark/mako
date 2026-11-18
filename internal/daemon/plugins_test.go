@@ -118,7 +118,9 @@ func blockNames(bs []layoutdoc.Block) string {
 	return strings.Join(names, " ")
 }
 
-// TestPeersReachNoPlugins: a node's plugins are its own front-ends'.
+// TestPeersReachNoPlugins: a node's plugins are its own front-ends' to
+// list and act on; their blocks a node let in reaches too
+// (peer_blocks_test.go).
 func TestPeersReachNoPlugins(t *testing.T) {
 	d := meshDaemon(t, "a")
 	env, err := protocol.Encode(protocol.TypeListPlugins, "1", &protocol.ListPlugins{})
@@ -133,14 +135,14 @@ func TestPeersReachNoPlugins(t *testing.T) {
 		body proto.Message
 	}{
 		{protocol.TypePluginAction, &protocol.PluginAction{PluginId: "x", Op: protocol.PluginGrant}},
-		{protocol.TypeWatchBlock, &protocol.WatchBlock{Block: "plugin:x/y"}},
-		{protocol.TypeBlockEvent, &protocol.BlockEvent{Block: "plugin:x/y"}},
+		{protocol.TypePluginAction, &protocol.PluginAction{PluginId: "x", Op: protocol.PluginEnable}},
+		{protocol.TypePluginAction, &protocol.PluginAction{PluginId: "x", Op: protocol.PluginSet, Key: "token", Value: "t"}},
 	} {
 		env, err := protocol.Encode(msg.typ, "1", msg.body)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := d.dispatch(context.Background(), nil, env, true); !errors.Is(err, errPluginPeer) && !errors.Is(err, errBlocksPeer) {
+		if err := d.dispatch(context.Background(), nil, env, true); !errors.Is(err, errPluginPeer) {
 			t.Fatalf("a peer's %s: %v", msg.typ, err)
 		}
 	}

@@ -137,6 +137,9 @@ func blockBody(m *model, name string, origin blockOrigin, u *protocol.BlockUpdat
 	case protocol.PluginDenied:
 		return pluginNote(T("You refused what this plugin asks for."),
 			ui.Button(T("Review in Settings"), func() { m.openSettings("plugins") }).Outline())
+	case protocol.PluginBlocked:
+		return pluginNote(Tf("This plugin is stopped: %s.", u.GetError()),
+			ui.Button(T("Review in Settings"), func() { m.openSettings("plugins") }).Outline())
 	case protocol.PluginDisabled:
 		return pluginNote(T("This plugin is disabled."),
 			ui.Button(T("Enable"), func() { m.actOnPlugin(&protocol.PluginAction{PluginId: id, Op: protocol.PluginEnable}) }).Outline())

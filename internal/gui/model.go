@@ -153,6 +153,9 @@ type model struct {
 	ext *extState    // the extensions and MCP servers; see extstate.go
 	// plugins are the daemon's plugins; see plugins.go.
 	plugins *pluginsState
+	// store is the plugin store's: the registries' listings and the
+	// registries themselves; see pluginstore.go.
+	store *storeState
 	// AgentBlocks are the blocks the daemon's agents show, and winBase the
 	// document the window draws them over; see agentblocks.go.
 	AgentBlocks *ggui.StateValue[[]*protocol.AgentBlock]
@@ -275,6 +278,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		pickers:       newPickerState(),
 		ext:           newExtState(cfg),
 		plugins:       newPluginsState(),
+		store:         newStoreState(),
 		AgentBlocks:   ggui.State([]*protocol.AgentBlock(nil)),
 		files:         newFilesState(),
 		ws:            newWsState(),

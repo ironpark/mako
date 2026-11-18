@@ -64,6 +64,24 @@ Plugins (docs/plugins.md; each a folder of plugins/ in the configuration directo
   mako plugins run <id> <command>   run a plugin's command
   mako plugins set <id> <key> [value]
                                      set a plugin's setting (no value unsets it)
+  mako plugins search [query]       search this node's registries
+  mako plugins install <id> [-registry <url>]
+                                     install a plugin from a registry, which must be
+                                     named when several list it
+  mako plugins update|remove <id>   update or remove a plugin installed from one
+  mako plugins registries [add <url>|remove <url>|refresh]
+                                     list or change the registries this node reads
+
+Publishing plugins (no daemon needed; docs/plugins.md, "Publishing"):
+  mako plugins keygen <key-file>    make a publisher key, its private half in key-file
+  mako plugins pack <folder> -key <key-file> [-o <package>]
+                                     pack and sign a plugin's folder
+  mako plugins sign <package> -key <key-file> [-o <package>]
+                                     sign a package again with this key
+  mako plugins verify <package> [-key <public key>]
+                                     check a package and say what it is
+  mako plugins index <registry-folder> <package> -url <download URL>
+                                     list a package in a registry's index
 
 Flags:
   -daemon <path>   the daemon's socket (default: the configuration directory's)
@@ -95,6 +113,9 @@ func main() {
 }
 
 func run(args []string, daemonAddr, nodeID, project string, devices []string) error {
+	if args[0] == "plugins" && len(args) > 1 && publishOps[args[1]] {
+		return publish(args[1], args[2:])
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return err

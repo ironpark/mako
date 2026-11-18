@@ -1114,5 +1114,90 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.AgentBlocks getAgentBlocks();
 
+  /**
+   * <pre>
+   * Registries and the plugins installed from them (revision 29).
+   * </pre>
+   *
+   * <code>.mako.v2.ListRegistries list_registries = 130 [json_name = "listRegistries"];</code>
+   * @return Whether the listRegistries field is set.
+   */
+  boolean hasListRegistries();
+  /**
+   * <pre>
+   * Registries and the plugins installed from them (revision 29).
+   * </pre>
+   *
+   * <code>.mako.v2.ListRegistries list_registries = 130 [json_name = "listRegistries"];</code>
+   * @return The listRegistries.
+   */
+  dev.ironpark.mako.v2.ListRegistries getListRegistries();
+
+  /**
+   * <code>.mako.v2.Registries registries = 131 [json_name = "registries"];</code>
+   * @return Whether the registries field is set.
+   */
+  boolean hasRegistries();
+  /**
+   * <code>.mako.v2.Registries registries = 131 [json_name = "registries"];</code>
+   * @return The registries.
+   */
+  dev.ironpark.mako.v2.Registries getRegistries();
+
+  /**
+   * <code>.mako.v2.RegistryAction registry_action = 132 [json_name = "registryAction"];</code>
+   * @return Whether the registryAction field is set.
+   */
+  boolean hasRegistryAction();
+  /**
+   * <code>.mako.v2.RegistryAction registry_action = 132 [json_name = "registryAction"];</code>
+   * @return The registryAction.
+   */
+  dev.ironpark.mako.v2.RegistryAction getRegistryAction();
+
+  /**
+   * <code>.mako.v2.SearchPlugins search_plugins = 133 [json_name = "searchPlugins"];</code>
+   * @return Whether the searchPlugins field is set.
+   */
+  boolean hasSearchPlugins();
+  /**
+   * <code>.mako.v2.SearchPlugins search_plugins = 133 [json_name = "searchPlugins"];</code>
+   * @return The searchPlugins.
+   */
+  dev.ironpark.mako.v2.SearchPlugins getSearchPlugins();
+
+  /**
+   * <code>.mako.v2.PluginListings plugin_listings = 134 [json_name = "pluginListings"];</code>
+   * @return Whether the pluginListings field is set.
+   */
+  boolean hasPluginListings();
+  /**
+   * <code>.mako.v2.PluginListings plugin_listings = 134 [json_name = "pluginListings"];</code>
+   * @return The pluginListings.
+   */
+  dev.ironpark.mako.v2.PluginListings getPluginListings();
+
+  /**
+   * <code>.mako.v2.InstallPlugin install_plugin = 135 [json_name = "installPlugin"];</code>
+   * @return Whether the installPlugin field is set.
+   */
+  boolean hasInstallPlugin();
+  /**
+   * <code>.mako.v2.InstallPlugin install_plugin = 135 [json_name = "installPlugin"];</code>
+   * @return The installPlugin.
+   */
+  dev.ironpark.mako.v2.InstallPlugin getInstallPlugin();
+
+  /**
+   * <code>.mako.v2.PluginInstalled plugin_installed = 136 [json_name = "pluginInstalled"];</code>
+   * @return Whether the pluginInstalled field is set.
+   */
+  boolean hasPluginInstalled();
+  /**
+   * <code>.mako.v2.PluginInstalled plugin_installed = 136 [json_name = "pluginInstalled"];</code>
+   * @return The pluginInstalled.
+   */
+  dev.ironpark.mako.v2.PluginInstalled getPluginInstalled();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

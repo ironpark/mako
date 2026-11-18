@@ -105,6 +105,9 @@ type Config struct {
 	// Poll is how often the folder is read for changes; 0 for a second.
 	Poll   time.Duration
 	Limits Limits
+	// Installs says which plugins were installed from a registry, and
+	// which a registry blocks; nil for none.
+	Installs Installs
 	// NetTest sends the requests for a host to another base URL, a test's
 	// server on loopback (MAKO_PLUGIN_NET_TEST). The host must still be
 	// granted. It is for development and tests alone.
@@ -119,6 +122,11 @@ type Manager struct {
 	ctx   context.Context
 	stop  context.CancelFunc
 	grant *grantStore
+	// installs is Config.Installs, or none.
+	installs Installs
+	// scanMu keeps the folder's readings, and its changes by Replace and
+	// Remove, one at a time.
+	scanMu sync.Mutex
 
 	mu      sync.Mutex
 	plugins map[string]*plugin
@@ -139,10 +147,13 @@ func New(cfg Config) *Manager {
 	if cfg.Changed == nil {
 		cfg.Changed = func() {}
 	}
+	if cfg.Installs == nil {
+		cfg.Installs = noInstalls{}
+	}
 	lim := cfg.Limits.withDefaults()
 	ctx, stop := context.WithCancel(context.Background())
 	return &Manager{
-		cfg: cfg, lim: lim, ctx: ctx, stop: stop,
+		cfg: cfg, lim: lim, ctx: ctx, stop: stop, installs: cfg.Installs,
 		net:     newFetcher(lim, cfg.Log, cfg.NetTest),
 		grant:   loadGrants(filepath.Join(cfg.DataDir, "grants.json")),
 		plugins: map[string]*plugin{},
@@ -177,6 +188,8 @@ func (m *Manager) shutdown() {
 // scan reads the folder: a plugin new to it is started, one whose files
 // changed is read again, and one gone is stopped.
 func (m *Manager) scan() {
+	m.scanMu.Lock()
+	defer m.scanMu.Unlock()
 	entries, _ := os.ReadDir(m.cfg.Dir)
 	seen := map[string]bool{}
 	for _, e := range entries {

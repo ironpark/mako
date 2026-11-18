@@ -25,6 +25,7 @@ public  final class BlockEvent extends
     node_ = "";
     kind_ = "";
     value_ = "";
+    nodeId_ = "";
   }
   public static final int BLOCK_FIELD_NUMBER = 1;
   private java.lang.String block_;
@@ -359,6 +360,73 @@ java.lang.String defaultValue) {
   private java.util.Map<java.lang.String, java.lang.String>
   getMutableValuesMap() {
     return internalGetMutableValues();
+  }
+
+  public static final int NODE_ID_FIELD_NUMBER = 6;
+  private java.lang.String nodeId_;
+  /**
+   * <pre>
+   * node_id is the node whose block it is, as WatchBlock's (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 6 [json_name = "nodeId"];</code>
+   * @return The nodeId.
+   */
+  @java.lang.Override
+  public java.lang.String getNodeId() {
+    return nodeId_;
+  }
+  /**
+   * <pre>
+   * node_id is the node whose block it is, as WatchBlock's (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 6 [json_name = "nodeId"];</code>
+   * @return The bytes for nodeId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getNodeIdBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(nodeId_);
+  }
+  /**
+   * <pre>
+   * node_id is the node whose block it is, as WatchBlock's (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 6 [json_name = "nodeId"];</code>
+   * @param value The nodeId to set.
+   */
+  private void setNodeId(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    nodeId_ = value;
+  }
+  /**
+   * <pre>
+   * node_id is the node whose block it is, as WatchBlock's (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 6 [json_name = "nodeId"];</code>
+   */
+  private void clearNodeId() {
+
+    nodeId_ = getDefaultInstance().getNodeId();
+  }
+  /**
+   * <pre>
+   * node_id is the node whose block it is, as WatchBlock's (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 6 [json_name = "nodeId"];</code>
+   * @param value The bytes for nodeId to set.
+   */
+  private void setNodeIdBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    nodeId_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.BlockEvent parseFrom(
@@ -822,6 +890,75 @@ java.lang.String defaultValue) {
       return this;
     }
 
+    /**
+     * <pre>
+     * node_id is the node whose block it is, as WatchBlock's (revision 30).
+     * </pre>
+     *
+     * <code>string node_id = 6 [json_name = "nodeId"];</code>
+     * @return The nodeId.
+     */
+    @java.lang.Override
+    public java.lang.String getNodeId() {
+      return instance.getNodeId();
+    }
+    /**
+     * <pre>
+     * node_id is the node whose block it is, as WatchBlock's (revision 30).
+     * </pre>
+     *
+     * <code>string node_id = 6 [json_name = "nodeId"];</code>
+     * @return The bytes for nodeId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getNodeIdBytes() {
+      return instance.getNodeIdBytes();
+    }
+    /**
+     * <pre>
+     * node_id is the node whose block it is, as WatchBlock's (revision 30).
+     * </pre>
+     *
+     * <code>string node_id = 6 [json_name = "nodeId"];</code>
+     * @param value The nodeId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNodeId(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setNodeId(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * node_id is the node whose block it is, as WatchBlock's (revision 30).
+     * </pre>
+     *
+     * <code>string node_id = 6 [json_name = "nodeId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearNodeId() {
+      copyOnWrite();
+      instance.clearNodeId();
+      return this;
+    }
+    /**
+     * <pre>
+     * node_id is the node whose block it is, as WatchBlock's (revision 30).
+     * </pre>
+     *
+     * <code>string node_id = 6 [json_name = "nodeId"];</code>
+     * @param value The bytes for nodeId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNodeIdBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setNodeIdBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.BlockEvent)
   }
   @java.lang.Override
@@ -844,10 +981,11 @@ java.lang.String defaultValue) {
             "value_",
             "values_",
             ValuesDefaultEntryHolder.defaultEntry,
+            "nodeId_",
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0001\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u00052";
+              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0001\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u00052\u0006\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

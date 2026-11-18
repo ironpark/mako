@@ -21,4 +21,26 @@ public interface WatchBlockOrBuilder extends
    */
   com.google.protobuf.ByteString
       getBlockBytes();
+
+  /**
+   * <pre>
+   * node_id is the node whose block it is, routed as a request's: a node
+   * let in watches the blocks of the node that lets it in (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 2 [json_name = "nodeId"];</code>
+   * @return The nodeId.
+   */
+  java.lang.String getNodeId();
+  /**
+   * <pre>
+   * node_id is the node whose block it is, routed as a request's: a node
+   * let in watches the blocks of the node that lets it in (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 2 [json_name = "nodeId"];</code>
+   * @return The bytes for nodeId.
+   */
+  com.google.protobuf.ByteString
+      getNodeIdBytes();
 }

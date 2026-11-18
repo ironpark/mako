@@ -23,6 +23,7 @@ public  final class WatchBlock extends
     WatchBlockOrBuilder {
   private WatchBlock() {
     block_ = "";
+    nodeId_ = "";
   }
   public static final int BLOCK_FIELD_NUMBER = 1;
   private java.lang.String block_;
@@ -68,6 +69,78 @@ public  final class WatchBlock extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     block_ = value.toStringUtf8();
+
+  }
+
+  public static final int NODE_ID_FIELD_NUMBER = 2;
+  private java.lang.String nodeId_;
+  /**
+   * <pre>
+   * node_id is the node whose block it is, routed as a request's: a node
+   * let in watches the blocks of the node that lets it in (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 2 [json_name = "nodeId"];</code>
+   * @return The nodeId.
+   */
+  @java.lang.Override
+  public java.lang.String getNodeId() {
+    return nodeId_;
+  }
+  /**
+   * <pre>
+   * node_id is the node whose block it is, routed as a request's: a node
+   * let in watches the blocks of the node that lets it in (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 2 [json_name = "nodeId"];</code>
+   * @return The bytes for nodeId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getNodeIdBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(nodeId_);
+  }
+  /**
+   * <pre>
+   * node_id is the node whose block it is, routed as a request's: a node
+   * let in watches the blocks of the node that lets it in (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 2 [json_name = "nodeId"];</code>
+   * @param value The nodeId to set.
+   */
+  private void setNodeId(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    nodeId_ = value;
+  }
+  /**
+   * <pre>
+   * node_id is the node whose block it is, routed as a request's: a node
+   * let in watches the blocks of the node that lets it in (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 2 [json_name = "nodeId"];</code>
+   */
+  private void clearNodeId() {
+
+    nodeId_ = getDefaultInstance().getNodeId();
+  }
+  /**
+   * <pre>
+   * node_id is the node whose block it is, routed as a request's: a node
+   * let in watches the blocks of the node that lets it in (revision 30).
+   * </pre>
+   *
+   * <code>string node_id = 2 [json_name = "nodeId"];</code>
+   * @param value The bytes for nodeId to set.
+   */
+  private void setNodeIdBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    nodeId_ = value.toStringUtf8();
 
   }
 
@@ -224,6 +297,80 @@ public  final class WatchBlock extends
       return this;
     }
 
+    /**
+     * <pre>
+     * node_id is the node whose block it is, routed as a request's: a node
+     * let in watches the blocks of the node that lets it in (revision 30).
+     * </pre>
+     *
+     * <code>string node_id = 2 [json_name = "nodeId"];</code>
+     * @return The nodeId.
+     */
+    @java.lang.Override
+    public java.lang.String getNodeId() {
+      return instance.getNodeId();
+    }
+    /**
+     * <pre>
+     * node_id is the node whose block it is, routed as a request's: a node
+     * let in watches the blocks of the node that lets it in (revision 30).
+     * </pre>
+     *
+     * <code>string node_id = 2 [json_name = "nodeId"];</code>
+     * @return The bytes for nodeId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getNodeIdBytes() {
+      return instance.getNodeIdBytes();
+    }
+    /**
+     * <pre>
+     * node_id is the node whose block it is, routed as a request's: a node
+     * let in watches the blocks of the node that lets it in (revision 30).
+     * </pre>
+     *
+     * <code>string node_id = 2 [json_name = "nodeId"];</code>
+     * @param value The nodeId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNodeId(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setNodeId(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * node_id is the node whose block it is, routed as a request's: a node
+     * let in watches the blocks of the node that lets it in (revision 30).
+     * </pre>
+     *
+     * <code>string node_id = 2 [json_name = "nodeId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearNodeId() {
+      copyOnWrite();
+      instance.clearNodeId();
+      return this;
+    }
+    /**
+     * <pre>
+     * node_id is the node whose block it is, routed as a request's: a node
+     * let in watches the blocks of the node that lets it in (revision 30).
+     * </pre>
+     *
+     * <code>string node_id = 2 [json_name = "nodeId"];</code>
+     * @param value The bytes for nodeId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNodeIdBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setNodeIdBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.WatchBlock)
   }
   @java.lang.Override
@@ -241,9 +388,11 @@ public  final class WatchBlock extends
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
             "block_",
+            "nodeId_",
           };
           java.lang.String info =
-              "\u0000\u0001\u0000\u0000\u0001\u0001\u0001\u0000\u0000\u0000\u0001\u0208";
+              "\u0000\u0002\u0000\u0000\u0001\u0002\u0002\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -42,6 +42,18 @@ message PluginInfo {
   repeated PluginBlock blocks = 10;
   repeated PluginCommand commands = 11;
   repeated PluginSetting settings = 12;
+  // installed says the plugin was installed from a registry's package,
+  // not written into its folder by hand (revision 29); source is that
+  // registry's URL, key the publisher key pinned at its first install
+  // (pluginstore.proto's PublisherKey form), update a newer version its
+  // registry lists, signed by that key.
+  bool installed = 13;
+  string source = 14;
+  string key = 15;
+  string update = 16;
+  // blocked is why a registry of this node's blocks the plugin: state is
+  // then "blocked", and it cannot be enabled while it stands.
+  string blocked = 17;
 }
 
 // PluginBlock is a block a plugin contributes.
@@ -100,6 +112,9 @@ message PluginDone {
 // watches it.
 message WatchBlock {
   string block = 1;
+  // node_id is the node whose block it is, routed as a request's: a node
+  // let in watches the blocks of the node that lets it in (revision 30).
+  string node_id = 2;
 }
 
 // BlockUpdate is a block's tree, whole or as the changes since the last.
@@ -143,6 +158,8 @@ message BlockEvent {
   // front-end has them, by node id, typed or not yet sent: a form's
   // submit carries every field (revision 27).
   map<string, string> values = 5;
+  // node_id is the node whose block it is, as WatchBlock's (revision 30).
+  string node_id = 6;
 }
 
 // UiNode is a node of a plugin block's tree. The kinds are a fixed set
@@ -201,7 +218,11 @@ message UiOp {
 // ListAgentBlocks asks for the blocks agents of this node's show
 // (show_ui), and where each goes; answered by AgentBlocks (revision 27).
 // They are the node's alone: no other node has them.
-message ListAgentBlocks {}
+message ListAgentBlocks {
+  // node_id is the node whose agents' blocks are asked for, routed as a
+  // request's (revision 30).
+  string node_id = 1;
+}
 
 // AgentBlocks are the agents' blocks, in the order shown.
 message AgentBlocks {

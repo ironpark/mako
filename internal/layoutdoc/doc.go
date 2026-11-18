@@ -7,17 +7,44 @@
 // format.
 package layoutdoc
 
-// Version is the version of the format this build reads strictly and
-// writes. A document of a later version is read leniently (Parse).
-const Version = 1
+// Version is the latest version of the format this build reads strictly
+// and writes. A document of a later version is read leniently (Parse).
+// A document is written at the earliest version that holds it, so that a
+// window of an older build reads one that holds nothing newer as it
+// always has: version 1, but for a document with variants.
+const Version = 2
+
+// VersionVariants is the version that adds variants: a document holding
+// one is written at it. An older window reads such a document leniently,
+// leaving the variants out, and draws its root.
+const VersionVariants = 2
 
 // DefaultName is the name of the document a space that names none uses.
 const DefaultName = "default"
 
 // Doc is a layout document.
 type Doc struct {
+	// Version is the version the document was written at, which it is
+	// written at again when later than this build's; otherwise it is
+	// written at the earliest that holds it (Written).
 	Version int
 	Root    *Node
+	// Compact is variants.compact: the root a narrow screen, a phone,
+	// shows in place of Root, nil for none (Pages). Every node has its
+	// own place in it: an ID unique within it, as Root's are within Root.
+	Compact *Node
+}
+
+// Written is the version d is written at: its own, of a later version;
+// else the earliest that holds what it holds.
+func (d *Doc) Written() int {
+	switch {
+	case d.Version > Version:
+		return d.Version
+	case d.Compact != nil:
+		return VersionVariants
+	}
+	return 1
 }
 
 // The kinds of node this version knows. A document of a later version
@@ -82,7 +109,7 @@ const (
 // tabs, the files first. A space that names no document, where the
 // workspace holds none of DefaultName, shows it.
 func Default() *Doc {
-	return &Doc{Version: Version, Root: &Node{Kind: KindRow, ID: "window", Children: []*Node{
+	return &Doc{Version: 1, Root: &Node{Kind: KindRow, ID: "window", Children: []*Node{
 		{Kind: KindBlock, ID: SidebarNode, Block: BlockSidebar, Size: DefaultSidebarSize, Collapsible: true},
 		{Kind: KindColumn, ID: "workspace", Grow: 1, Children: []*Node{
 			{Kind: KindBlock, ID: "header", Block: BlockHeader},
@@ -174,7 +201,7 @@ func (d *Doc) Clone() *Doc {
 	if d == nil {
 		return nil
 	}
-	return &Doc{Version: d.Version, Root: d.Root.clone()}
+	return &Doc{Version: d.Version, Root: d.Root.clone(), Compact: d.Compact.clone()}
 }
 
 func (n *Node) clone() *Node {
