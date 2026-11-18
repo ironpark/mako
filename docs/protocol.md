@@ -259,6 +259,32 @@ error { message: "unknown session \"7f3a…\"", code: "" }
 | `unsupported` | The daemon does not know the request's type; it predates the caller. |
 | `no_plugin` | A `watch_block` or `block_event` of a plugin the node does not have, or a node that runs no plugins: asking again changes nothing until the plugin is installed (revision 31). |
 
+From revision 34, the plugin store's refusals, and a plugin enabled while
+it is blocked, carry a code and `args`, what its sentence names, in
+order, so that a front-end says it in its user's language; `message`
+stays the daemon's English, for a terminal and for a front-end that does
+not know the code:
+
+| Code | `args` | Meaning |
+|---|---|---|
+| `registry_unreachable` | registry | The registry could not be read: out of reach, or not an index mako reads. |
+| `registry_needed` | id | Several registries list the ID: the install must name one. |
+| `not_listed` | id | No registry of the node lists the ID. |
+| `api_mismatch` | id, registry | The registry lists no version for this mako's Host API. |
+| `plugin_blocked` | id, version, why | A blocklist blocks it: not installed, updated or enabled. |
+| `pinned_key` | id, registry | Signed by another key than the one pinned at its first install. |
+| `installed_already` | id, version | That version is installed. |
+| `downgrade` | id, version, installed | Older than the version installed: mako does not go back. |
+| `dev_folder` | id | `plugins/<id>` is a folder in development: neither replaced nor removed. |
+| `package_unreachable` | id, version | The package did not download. |
+| `timed_out` | id, version | Its download ran out of time. |
+| `too_large` | id, version | It is larger than a package may be. |
+| `hash_mismatch` | id, version, registry | Not the package the index lists (SHA-256 or size). |
+| `bad_package` | id, version | Not a valid package, or not of the ID and version listed. |
+| `signature_mismatch` | id, version, registry | Not signed by the key the index lists. |
+| `permissions_differ` | id, version, registry | Its manifest asks for other permissions than the listing shows. |
+| `not_installed` | id | A removal of what is not installed. |
+
 A daemon forwarding a request to a peer passes the peer's `code` back
 unchanged. The message gains a `remote: ` prefix at each hop. A message
 may quote what another party wrote, a registry, a package, a plugin or
@@ -317,7 +343,7 @@ that answers on success.
 | `access` | `Access` | `access_info` | Who the daemon lets in, and changes to it; see [Access](#access). From a front-end only. |
 | `get_workspace` | `GetWorkspace` | `workspace` | The workspace the daemon holds; see [Workspaces](#workspaces). With `node_id`, the one that node holds, which a node gives one it lets in, to copy its spaces from (revision 22), whether it shares it or not; with its `digest` only while it shares it, and a peer merges only an answer with one. |
 | `workspace` | `Workspace` | `workspace` | Gives the daemon an edit of the workspace, a delta in `state` (revision 23), or the whole `doc` a window kept before, to take in once; the reply is the workspace held after. With `to_node`, the edit is given to that node, routed as a request's `node_id` is; a node takes a delta, never a `doc`, from a node it lets in (revision 25). |
-| `layout_decision` | `LayoutDecision` | `workspace` | Keeps or reverts the window layout change staged on the daemon, or forgets what the user allowed agents to change without asking (revision 24; see [Layout documents](#layout-documents)). From the node's own front-ends only. |
+| `layout_decision` | `LayoutDecision` | `workspace` | Keeps or reverts the window layout change staged on the daemon, or forgets what the user allowed agents to change without asking (revision 24; see [Layout documents](#layout-documents)); from revision 32 allows (with `option`) or denies a plugin's change, which no session holds an approval of. From the node's own front-ends only. |
 
 ```proto
 message Node {
@@ -376,12 +402,14 @@ message LayoutStage {
   string tool = 7;       // set_layout, patch_layout or undo_layout
   string summary = 8;    // what it changes, in a line
   int64 deadline = 9;    // keep: when it reverts, in Unix ms
+  string plugin_id = 10; // a plugin's change: no session; revision 32
 }
 
 message LayoutDecision {
   string stage_id = 1;
-  string decision = 2; // keep, revert, forget
+  string decision = 2; // keep, revert, forget; allow, deny (revision 32)
   string node_id = 3;  // "" for the daemon's own
+  string option = 4;   // an allow's: space, always; "" for once
 }
 ```
 
@@ -844,11 +872,12 @@ the front-end to list them again.
 
 | Request | Payload | Reply | |
 |---|---|---|---|
-| `list_plugins` | `ListPlugins` | `plugins` | The node's plugins, by ID: each one's manifest (version, publisher, blocks, commands, settings and their values, a secret's never), the permissions it asks for, those allowed, those still `asked`, and its `state` (`waiting`, `denied`, `ready`, `running`, `failed`, `disabled`, and from revision 29 `blocked`) with an `error`; `stale` when the version running is the last that worked and `error` says why the folder's newer one did not. From revision 29, `installed` when it came from a registry's package, with `source`, that registry, `key`, the publisher key pinned at its first install, `update`, a newer version that registry lists signed by that key, and `blocked`, why a registry's blocklist stops it. |
-| `plugin_action` | `PluginAction` | `plugin_done` | Acts for the user: `grant` allows what the plugin asks for, `deny` refuses it and stops the plugin, `enable` / `disable`, `reload` reads its folder again, `run` runs its `command`, `set` sets its setting `key` to `value` ("" unsets). `open_url` in the reply is a link the plugin asked, in answer, to open: the front-end that asked opens it. |
+| `list_plugins` | `ListPlugins` | `plugins` | The node's plugins, by ID: each one's manifest (version, publisher, blocks, commands, settings and their values, a secret's never), the permissions it asks for, those allowed, those still `asked`, and its `state` (`waiting`, `denied`, `ready`, `running`, `failed`, `disabled`, and from revision 29 `blocked`) with an `error`; `stale` when the version running is the last that worked and `error` says why the folder's newer one did not. From revision 29, `installed` when it came from a registry's package, with `source`, that registry, `key`, the publisher key pinned at its first install, `update`, a newer version that registry lists signed by that key, and `blocked`, why a registry's blocklist stops it. From revision 32, `secrets`, where the node keeps its plugins' secrets: the system keychain's name, or `file` when it reaches none, with `secrets_note` saying why; and each plugin's `agent_ask`, an agent it asks to start (`sessions:write`) waiting for the user to allow it, with the agent, profile, project's name, folder, the session's name and the first 2 KiB of the prompt, and `agents_allowed` when the user let it start agents without asking. |
+| `plugin_action` | `PluginAction` | `plugin_done` | Acts for the user: `grant` allows what the plugin asks for, `deny` refuses it and stops the plugin, `enable` / `disable`, `reload` reads its folder again, `run` runs its `command`, `set` sets its setting `key` to `value` ("" unsets); from revision 32, `allow_agent` lets the agent start that the plugin's `agent_ask` of id `key` asks for, `value` `once` or `always` (for this plugin from then on, on this node), `deny_agent` refuses it, and `forget_agents` has the plugin ask again before every start. `open_url` in the reply is a link the plugin asked, in answer, to open: the front-end that asked opens it. |
 | `watch_block` | `WatchBlock` | `block_update`, then more | Follows a plugin's block, `plugin:<id>/<block>`: the tree whole, then the changes. The block is shown, and its plugin started, while a front-end watches it; see [Plugin blocks](#plugin-blocks). A block of another node, `node_id`, is relayed as an `attach` is: the daemon passes the request on and copies what comes back, in plain frames to its socket. |
 | `block_event` | `BlockEvent` | `plugin_done` | The user acting on a node of a block's tree: `tap`, or `change` / `submit` with the value, and `values`, the block's inputs', toggles' and selects' values as the front-end has them, by node id (revision 27): 32 KiB of ids and values in all, and no more values than a tree holds nodes; a value of a node the daemon's tree no longer holds is left out, while the event's own node must be the tree's. The daemon looks up what the node's last render said to send; a front-end names only the node. |
 | `list_agent_blocks` | `ListAgentBlocks` | `agent_blocks` | The blocks the node's agents show (`show_ui`, [agent-mcp.md](agent-mcp.md#ui-of-your-own)), in the order shown, each its `name`, `agent:<session>/<id>`, `session_id`, `agent`, `title`, and where it goes: none, the right panel's last tab; or `document`, `parent`, `index` (-1 for the last) and `size`, which the user allowed (revision 27). `changed` has `agent_blocks` set as one comes, goes or moves. |
+| `list_panels` | `ListPanels` | `panels` | The blocks the node's window layout documents place (the default first, then by name, each depth first, its compact root after its root) and then its agents' blocks, each once: its `block` name, its `title` (a plugin's manifest's, an agent's block's, the window's English for its own; `""` for a plugin's block the node lacks) and `kind`, `builtin`, `plugin`, `agent` or `missing`, a hint for its icon. Nothing else of a plugin: not its permissions, settings, registry, nor a plugin no document places. Routed by `node_id`, and served to a node let in, as `watch_block` is: what a phone lists a computer's panels by before opening one (revision 35). |
 
 `watch_block` and `block_event` serve both kinds of block, a plugin's,
 `plugin:<id>/<block>`, and an agent's, `agent:<session>/<id>`: one tree
@@ -1098,7 +1127,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 31) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 35) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
@@ -1257,7 +1286,13 @@ kind the reader does not know. A size, `grow`, collapsing and a stack's
 the default's pages, as the window draws the default (`internal/layoutdoc`,
 `Pages`). The app shows those it can draw, plugins' blocks, and after
 them the agents' blocks of the same node (`list_agent_blocks`): it has
-screens of its own for the window's other blocks.
+screens of its own for the window's other blocks. The desktop window lists the
+pages of the document of the space it shows in Settings ▸ Spaces, *On a
+phone*, as the phone lists them, and lets the user move a page, hide one
+or show it again: the window writes the order as the document's compact
+root (`{"id": "phone", "column": [...]}`, its pages' own IDs), an edit of
+the workspace as any other of the user's, and takes the compact root
+away again when the order is the root's own (*Use the window's order*).
 
 **Changes an agent asks for** (revision 24) go through the user, on the
 node whose daemon the agent asked (see [agent-mcp.md](agent-mcp.md#the-windows-layout)):
@@ -1286,6 +1321,16 @@ node whose daemon the agent asked (see [agent-mcp.md](agent-mcp.md#the-windows-l
   never was. It is refused if the document changed since it was read.
 - A front-end that shows the stage says so in `Watch{layouts: true}`;
   while none watches, a change the user is to see is refused at once.
+- **A plugin's change** (`layout:write`, revision 32) takes the same
+  flow, `patch_layout`'s alone: the stage has `plugin_id` and no
+  `session_id`, `agent` naming the plugin for an older window. No session
+  holds an approval of it: a front-end allows or denies it with
+  `LayoutDecision{stage_id, decision: allow|deny, option}`. What the user
+  allows a plugin, `space` or `always`, is that plugin's alone, apart from
+  what agents and other plugins are allowed (`layout-allow.json`'s
+  `plugins`), forgotten with the plugin or its permissions, and on
+  `forget`. A plugin, as an agent, changes the root alone, never
+  `variants`.
 
 A daemon keeps, for each document, the versions this node's edits
 replaced, the user's or an agent's, 20 of them, which `undo_layout` goes
@@ -1303,7 +1348,7 @@ details panel act on the nodes of those IDs.
 A plugin draws a block, and an agent shows one, as a tree of `UiNode`s, of a fixed vocabulary:
 `column`, `row`, `stack`, `list` (which hold children), `text`, `icon`,
 `pill`, `chip`, `button`, `input`, `toggle`, `select`, `markdown`, `code`,
-`progress` and `divider`. A colour is a token (`tone`: `muted`, `faint`,
+`progress`, `divider`, and from revision 33 `chart`. A colour is a token (`tone`: `muted`, `faint`,
 `accent`, `success`, `warning`, `danger`), never a value; the front-end
 draws each kind with its own components in its own theme. The daemon reads
 what the plugin's render returned strictly, and refuses a tree with an
@@ -1316,6 +1361,13 @@ ancestors' keys (a child without a key has `#` and its index): `""` for the
 root, `/runs/1234/#0` for the first child of the child keyed `1234` of the
 child keyed `runs`. A node that answers a tap has `tap`; one whose value
 changing is answered, `change`. What it sends is the daemon's to know.
+
+A `chart` node (revision 33) has `chart`, `line`, `bar` or `sparkline`;
+`series`, 1 to 4 `UiSeries` of a `name`, a `tone` and 1 to 200 finite
+`values` (600 in all); and `labels`, the points' names, as many as each
+series's values, or none. Its `text` is a caption. It sends nothing. A
+front-end that does not know a kind draws nothing in its place, so a
+daemon may send a chart to an older window or phone.
 
 `watch_block` answers with a `block_update` holding the `tree`, then one
 whenever the block changes, holding `ops` that make the tree the last

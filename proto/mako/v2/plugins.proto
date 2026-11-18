@@ -16,6 +16,13 @@ message ListPlugins {}
 // Plugins are the node's plugins, in the order of their IDs.
 message Plugins {
   repeated PluginInfo plugins = 1;
+  // secrets is where the node keeps its plugins' secrets: the name of the
+  // system's keychain ("macOS Keychain", "Secret Service", "Windows
+  // Credential Manager"), or "file" when it reaches none, a file of each
+  // plugin's only the user may read, secrets_note saying why (revision
+  // 32). "" from an older daemon.
+  string secrets = 2;
+  string secrets_note = 3;
 }
 
 // PluginInfo is a plugin as its manifest declares it, and how it stands.
@@ -54,6 +61,27 @@ message PluginInfo {
   // blocked is why a registry of this node's blocks the plugin: state is
   // then "blocked", and it cannot be enabled while it stands.
   string blocked = 17;
+  // agent_ask is an agent the plugin asks to start, which waits for the
+  // user to allow it, once or always for this plugin (revision 32): a
+  // PluginAction "allow_agent" or "deny_agent" with key its id answers.
+  PluginAgentAsk agent_ask = 18;
+  // agents_allowed says the user let the plugin start agents without
+  // asking; "forget_agents" has it ask again.
+  bool agents_allowed = 19;
+}
+
+// PluginAgentAsk is an agent a plugin asks to start (sessions:write):
+// which agent and profile, in which folder of which project, named what,
+// and the first 2 KiB of the prompt it would start with.
+message PluginAgentAsk {
+  string id = 1;
+  string agent = 2;
+  string profile = 3;
+  string project = 4; // the project's name
+  string root = 5;    // the folder it would run in
+  string name = 6;
+  string prompt = 7;
+  int64 since = 8; // Unix ms
 }
 
 // PluginBlock is a block a plugin contributes.
@@ -89,8 +117,11 @@ message PluginSetting {
 // PluginAction acts on a plugin, for the user: op "grant" allows what it
 // asks for, "deny" refuses it, "enable" and "disable" start and stop it
 // being used, "reload" reads its folder again, "run" runs its command
-// command, and "set" sets its setting key to value ("" unsets it).
-// Answered by PluginDone.
+// command, and "set" sets its setting key to value ("" unsets it). From
+// revision 32, "allow_agent" lets the agent start that the ask of id key
+// asks for, value "once" or "always" (for this plugin from then on),
+// "deny_agent" refuses it, and "forget_agents" has the plugin ask again
+// before every agent it starts. Answered by PluginDone.
 message PluginAction {
   string plugin_id = 1;
   string op = 2;
@@ -164,8 +195,8 @@ message BlockEvent {
 
 // UiNode is a node of a plugin block's tree. The kinds are a fixed set
 // (docs/plugins.md): column, row, stack, text, icon, pill, chip, button,
-// list, input, toggle, select, markdown, code, progress and divider; a
-// colour is a token, never a value.
+// list, input, toggle, select, markdown, code, progress, divider, and
+// from revision 33 chart; a colour is a token, never a value.
 message UiNode {
   // id is the node's path from the root by its own and its ancestors'
   // keys, which patches find it by: unique in the tree.
@@ -200,6 +231,21 @@ message UiNode {
   bool tap = 16;
   bool change = 17;
   repeated UiNode children = 18;
+  // chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+  // (revision 33). Its series are numbers, each series's colour a token;
+  // labels name the points along its axis; text is its caption. A front-end
+  // that does not know the kind draws nothing in its place.
+  string chart = 19;
+  repeated UiSeries series = 20;
+  repeated string labels = 21;
+}
+
+// UiSeries is a series of a chart node: its name, colour token and values,
+// finite numbers, as many as its chart's labels when it has them.
+message UiSeries {
+  string name = 1;
+  string tone = 2;
+  repeated double values = 3;
 }
 
 // UiOp is a change of a tree. op "replace" puts node in place of the node
@@ -244,4 +290,35 @@ message AgentBlock {
   string parent = 6;
   int32 index = 7;
   double size = 8;
+}
+
+// ListPanels asks a node for the blocks its window layout documents place,
+// and its agents' blocks, each by name with its title and a hint of its
+// kind (revision 35): what a node let in, a phone, lists the node's
+// panels by before it opens one, as it may not list the node's plugins.
+// It says nothing of permissions, settings, registries, or of a plugin no
+// document places. Answered by Panels; routed by node_id, as WatchBlock.
+message ListPanels {
+  string node_id = 1;
+}
+
+// Panels are a node's panels, in the order of its documents (the default
+// first, then by name, each depth first) and then its agents' blocks,
+// each block once.
+message Panels {
+  repeated Panel panels = 1;
+}
+
+// Panel is a block a node's documents place, or one of its agents shows.
+message Panel {
+  // block is its registered name: mako.<name>, plugin:<id>/<block> or
+  // agent:<session>/<id>.
+  string block = 1;
+  // title is the block's own: a plugin's manifest's, an agent's block's,
+  // the window's for its own (in English); "" for a plugin's block this
+  // node lacks.
+  string title = 2;
+  // kind is "builtin", "plugin", "agent", or "missing" for a plugin's
+  // block this node lacks: a hint for the icon to list it with.
+  string kind = 3;
 }

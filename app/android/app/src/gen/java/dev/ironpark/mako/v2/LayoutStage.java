@@ -32,6 +32,7 @@ public  final class LayoutStage extends
     agent_ = "";
     tool_ = "";
     summary_ = "";
+    pluginId_ = "";
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -577,6 +578,88 @@ public  final class LayoutStage extends
   private void clearDeadline() {
 
     deadline_ = 0L;
+  }
+
+  public static final int PLUGIN_ID_FIELD_NUMBER = 10;
+  private java.lang.String pluginId_;
+  /**
+   * <pre>
+   * plugin_id is the plugin that asked, for a change of a plugin's
+   * (layout:write), which no session asks for: session_id is then empty,
+   * and agent names the plugin for an older window. Such a change is
+   * allowed or denied with a LayoutDecision (revision 32).
+   * </pre>
+   *
+   * <code>string plugin_id = 10 [json_name = "pluginId"];</code>
+   * @return The pluginId.
+   */
+  @java.lang.Override
+  public java.lang.String getPluginId() {
+    return pluginId_;
+  }
+  /**
+   * <pre>
+   * plugin_id is the plugin that asked, for a change of a plugin's
+   * (layout:write), which no session asks for: session_id is then empty,
+   * and agent names the plugin for an older window. Such a change is
+   * allowed or denied with a LayoutDecision (revision 32).
+   * </pre>
+   *
+   * <code>string plugin_id = 10 [json_name = "pluginId"];</code>
+   * @return The bytes for pluginId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getPluginIdBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(pluginId_);
+  }
+  /**
+   * <pre>
+   * plugin_id is the plugin that asked, for a change of a plugin's
+   * (layout:write), which no session asks for: session_id is then empty,
+   * and agent names the plugin for an older window. Such a change is
+   * allowed or denied with a LayoutDecision (revision 32).
+   * </pre>
+   *
+   * <code>string plugin_id = 10 [json_name = "pluginId"];</code>
+   * @param value The pluginId to set.
+   */
+  private void setPluginId(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    pluginId_ = value;
+  }
+  /**
+   * <pre>
+   * plugin_id is the plugin that asked, for a change of a plugin's
+   * (layout:write), which no session asks for: session_id is then empty,
+   * and agent names the plugin for an older window. Such a change is
+   * allowed or denied with a LayoutDecision (revision 32).
+   * </pre>
+   *
+   * <code>string plugin_id = 10 [json_name = "pluginId"];</code>
+   */
+  private void clearPluginId() {
+
+    pluginId_ = getDefaultInstance().getPluginId();
+  }
+  /**
+   * <pre>
+   * plugin_id is the plugin that asked, for a change of a plugin's
+   * (layout:write), which no session asks for: session_id is then empty,
+   * and agent names the plugin for an older window. Such a change is
+   * allowed or denied with a LayoutDecision (revision 32).
+   * </pre>
+   *
+   * <code>string plugin_id = 10 [json_name = "pluginId"];</code>
+   * @param value The bytes for pluginId to set.
+   */
+  private void setPluginIdBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    pluginId_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.LayoutStage parseFrom(
@@ -1248,6 +1331,90 @@ public  final class LayoutStage extends
       return this;
     }
 
+    /**
+     * <pre>
+     * plugin_id is the plugin that asked, for a change of a plugin's
+     * (layout:write), which no session asks for: session_id is then empty,
+     * and agent names the plugin for an older window. Such a change is
+     * allowed or denied with a LayoutDecision (revision 32).
+     * </pre>
+     *
+     * <code>string plugin_id = 10 [json_name = "pluginId"];</code>
+     * @return The pluginId.
+     */
+    @java.lang.Override
+    public java.lang.String getPluginId() {
+      return instance.getPluginId();
+    }
+    /**
+     * <pre>
+     * plugin_id is the plugin that asked, for a change of a plugin's
+     * (layout:write), which no session asks for: session_id is then empty,
+     * and agent names the plugin for an older window. Such a change is
+     * allowed or denied with a LayoutDecision (revision 32).
+     * </pre>
+     *
+     * <code>string plugin_id = 10 [json_name = "pluginId"];</code>
+     * @return The bytes for pluginId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getPluginIdBytes() {
+      return instance.getPluginIdBytes();
+    }
+    /**
+     * <pre>
+     * plugin_id is the plugin that asked, for a change of a plugin's
+     * (layout:write), which no session asks for: session_id is then empty,
+     * and agent names the plugin for an older window. Such a change is
+     * allowed or denied with a LayoutDecision (revision 32).
+     * </pre>
+     *
+     * <code>string plugin_id = 10 [json_name = "pluginId"];</code>
+     * @param value The pluginId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPluginId(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setPluginId(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * plugin_id is the plugin that asked, for a change of a plugin's
+     * (layout:write), which no session asks for: session_id is then empty,
+     * and agent names the plugin for an older window. Such a change is
+     * allowed or denied with a LayoutDecision (revision 32).
+     * </pre>
+     *
+     * <code>string plugin_id = 10 [json_name = "pluginId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPluginId() {
+      copyOnWrite();
+      instance.clearPluginId();
+      return this;
+    }
+    /**
+     * <pre>
+     * plugin_id is the plugin that asked, for a change of a plugin's
+     * (layout:write), which no session asks for: session_id is then empty,
+     * and agent names the plugin for an older window. Such a change is
+     * allowed or denied with a LayoutDecision (revision 32).
+     * </pre>
+     *
+     * <code>string plugin_id = 10 [json_name = "pluginId"];</code>
+     * @param value The bytes for pluginId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPluginIdBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setPluginIdBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.LayoutStage)
   }
   @java.lang.Override
@@ -1273,10 +1440,11 @@ public  final class LayoutStage extends
             "tool_",
             "summary_",
             "deadline_",
+            "pluginId_",
           };
           java.lang.String info =
-              "\u0000\t\u0000\u0000\u0001\t\t\u0000\u0000\u0000\u0001\u0208\u0002\u0208\u0003\n" +
-              "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0002";
+              "\u0000\n\u0000\u0000\u0001\n\n\u0000\u0000\u0000\u0001\u0208\u0002\u0208\u0003\n" +
+              "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0002\n\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

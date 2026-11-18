@@ -251,3 +251,16 @@ func TestMorePermissionsAskAgainWhileShown(t *testing.T) {
 	r.grant("p")
 	w.until("two", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return hasText(n, "two") })
 }
+
+// A chart is built as the vocabulary's other nodes are, and drawn.
+func TestAPluginDrawsAChart(t *testing.T) {
+	r := newRig(t, testLimits, nil)
+	r.write("charts", map[string]string{ManifestName: manifest("charts", nil, ""),
+		"main.js": block(``, `ui.column([ui.chart("bar", [{ name: "passed", tone: "success", values: [3, 5] }], { key: "c", labels: ["mon", 2] })])`)})
+	tree := r.watch("plugin:charts/ui").until("the chart", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return n != nil })
+	c := tree.GetChildren()[0]
+	if c.GetKind() != "chart" || c.GetChart() != "bar" || c.GetId() != "/c" || strings.Join(c.GetLabels(), ",") != "mon,2" ||
+		c.GetSeries()[0].GetName() != "passed" || len(c.GetSeries()[0].GetValues()) != 2 {
+		t.Fatalf("the chart is %v", c)
+	}
+}

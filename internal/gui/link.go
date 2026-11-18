@@ -424,7 +424,7 @@ func (m *model) poll(ctx context.Context) {
 			m.takeWorkspace(ws) // not of a daemon the window has left
 		}
 		if plugins != nil && m.link.generation() == gen {
-			m.setPlugins(plugins.GetPlugins())
+			m.setPluginList(plugins)
 		}
 		if agentBlocks != nil && m.link.generation() == gen {
 			m.setAgentBlocks(agentBlocks.GetBlocks())

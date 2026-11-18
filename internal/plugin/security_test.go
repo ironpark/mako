@@ -44,11 +44,19 @@ func healthy(t *testing.T, r *rig) {
 func TestCallsWithoutPermissionAreRefused(t *testing.T) {
 	r := newRig(t, testLimits, nil)
 	cases := map[string]string{
-		"storage":       `await mako.storage.setItem({ key: "k", value: "v" })`,
-		"sessions:read": `await mako.sessions.listSessions()`,
-		"net":           `await mako.http.fetch({ url: "https://api.github.com/" })`,
-		"exec":          `await mako.exec.runProcess({ argv: ["sh"] })`,
-		"secrets":       `await mako.secrets.getSecret({ name: "x" })`,
+		"storage":          `await mako.storage.setItem({ key: "k", value: "v" })`,
+		"sessions:read":    `await mako.sessions.listSessions()`,
+		"net":              `await mako.http.fetch({ url: "https://api.github.com/" })`,
+		"exec":             `await mako.exec.runProcess({ argv: ["sh"] })`,
+		"secrets":          `await mako.secrets.getSecret({ name: "x" })`,
+		"secrets-set":      `await mako.secrets.setSecret({ name: "x", value: "v" })`,
+		"fs:project":       `await mako.files.listProjects({})`,
+		"fs:project:write": `await mako.files.writeFile({ project: "p", root: "/", path: "x", text: "x" })`,
+		"transcript":       `await mako.sessions.readTranscript({ sessionId: "s1" })`,
+		"subscribe":        `await mako.sessions.subscribe({ events: ["sessionStarted"] })`,
+		"sessions:write":   `await mako.messages.sendMessage({ sessionId: "s1", text: "hi" })`,
+		"start":            `await mako.messages.startAgent({ agent: "claude", project: "p", root: "/", prompt: "x" })`,
+		"layout:write":     `await mako.layout.patchLayout({ ops: "[]" })`,
 	}
 	for perm, call := range cases {
 		id := "p" + strings.NewReplacer(":", "").Replace(perm)
@@ -59,14 +67,14 @@ func TestCallsWithoutPermissionAreRefused(t *testing.T) {
 			t.Errorf("%s: %v", perm, texts(tree))
 		}
 	}
-	// A permission granted for a method this version does not carry out
-	// is not available.
+	// A permission granted does not reach past what its method takes: a
+	// file outside every project.
 	r.write("fs", map[string]string{ManifestName: manifest("fs", []string{"fs:project"}, ""),
 		"main.js": block(`await mako.files.readFile({ path: "/etc/passwd" }); s.msg = "got through"`, `ui.text(s.msg)`)})
 	r.state("fs", protocol.PluginWaiting)
 	r.grant("fs")
 	w := r.watch("plugin:fs/ui")
-	w.until("not available", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return hasText(n, "not available") })
+	w.until("refused", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return hasText(n, "not a path relative") })
 	// The bridge itself is out of reach once the prelude ran.
 	r.write("raw", map[string]string{ManifestName: manifest("raw", nil, ""),
 		"main.js": block(`s.msg = typeof globalThis.__makoCall + " " + typeof setTimeout`, `ui.text(s.msg)`)})
@@ -123,6 +131,10 @@ func TestTreesOutOfBoundsAreRefused(t *testing.T) {
 		"tap input":  {`ui.input("x", { onTap: ["go"] })`, "takes onChange"},
 		"text kids":  {`({ kind: "text", text: "x", children: [{ kind: "text" }] })`, "holds no children"},
 		"long text":  {`ui.text("x".repeat(100000))`, "over 8 KiB"},
+		"chart nan":  {`ui.chart("line", [{ values: [1, "x"] }])`, "finite"},
+		"chart kind": {`ui.chart("pie", [{ values: [1] }])`, "not one of"},
+		"chart big":  {`ui.chart("line", [{ values: Array.from({ length: 300 }, (_, i) => i) }])`, "1 to 200 values"},
+		"labels":     {`ui.text("x", { labels: ["a"] })`, "only a chart"},
 	}
 	for id, c := range cases {
 		id = strings.ReplaceAll(id, " ", "-")

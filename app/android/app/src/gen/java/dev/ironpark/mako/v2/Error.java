@@ -21,6 +21,7 @@ public  final class Error extends
   private Error() {
     message_ = "";
     code_ = "";
+    args_ = emptyProtobufList();
   }
   public static final int MESSAGE_FIELD_NUMBER = 1;
   private java.lang.String message_;
@@ -134,6 +135,153 @@ public  final class Error extends
     checkByteStringIsUtf8(value);
     code_ = value.toStringUtf8();
 
+  }
+
+  public static final int ARGS_FIELD_NUMBER = 3;
+  private com.google.protobuf.Internal.ProtobufList<java.lang.String> args_;
+  /**
+   * <pre>
+   * args are what the code's sentence names, in order (an ID, a version,
+   * a registry), for a front-end to say it in its user's language, the
+   * message kept for one that does not know the code (revision 34).
+   * </pre>
+   *
+   * <code>repeated string args = 3 [json_name = "args"];</code>
+   * @return A list containing the args.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.String> getArgsList() {
+    return args_;
+  }
+  /**
+   * <pre>
+   * args are what the code's sentence names, in order (an ID, a version,
+   * a registry), for a front-end to say it in its user's language, the
+   * message kept for one that does not know the code (revision 34).
+   * </pre>
+   *
+   * <code>repeated string args = 3 [json_name = "args"];</code>
+   * @return The count of args.
+   */
+  @java.lang.Override
+  public int getArgsCount() {
+    return args_.size();
+  }
+  /**
+   * <pre>
+   * args are what the code's sentence names, in order (an ID, a version,
+   * a registry), for a front-end to say it in its user's language, the
+   * message kept for one that does not know the code (revision 34).
+   * </pre>
+   *
+   * <code>repeated string args = 3 [json_name = "args"];</code>
+   * @param index The index of the element to return.
+   * @return The args at the given index.
+   */
+  @java.lang.Override
+  public java.lang.String getArgs(int index) {
+    return args_.get(index);
+  }
+  /**
+   * <pre>
+   * args are what the code's sentence names, in order (an ID, a version,
+   * a registry), for a front-end to say it in its user's language, the
+   * message kept for one that does not know the code (revision 34).
+   * </pre>
+   *
+   * <code>repeated string args = 3 [json_name = "args"];</code>
+   * @param index The index of the value to return.
+   * @return The bytes of the args at the given index.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getArgsBytes(int index) {
+    return com.google.protobuf.ByteString.copyFromUtf8(
+        args_.get(index));
+  }
+  private void ensureArgsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<java.lang.String> tmp =
+        args_;  if (!tmp.isModifiable()) {
+      args_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+  /**
+   * <pre>
+   * args are what the code's sentence names, in order (an ID, a version,
+   * a registry), for a front-end to say it in its user's language, the
+   * message kept for one that does not know the code (revision 34).
+   * </pre>
+   *
+   * <code>repeated string args = 3 [json_name = "args"];</code>
+   * @param index The index to set the value at.
+   * @param value The args to set.
+   */
+  private void setArgs(
+      int index, java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureArgsIsMutable();
+    args_.set(index, value);
+  }
+  /**
+   * <pre>
+   * args are what the code's sentence names, in order (an ID, a version,
+   * a registry), for a front-end to say it in its user's language, the
+   * message kept for one that does not know the code (revision 34).
+   * </pre>
+   *
+   * <code>repeated string args = 3 [json_name = "args"];</code>
+   * @param value The args to add.
+   */
+  private void addArgs(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureArgsIsMutable();
+    args_.add(value);
+  }
+  /**
+   * <pre>
+   * args are what the code's sentence names, in order (an ID, a version,
+   * a registry), for a front-end to say it in its user's language, the
+   * message kept for one that does not know the code (revision 34).
+   * </pre>
+   *
+   * <code>repeated string args = 3 [json_name = "args"];</code>
+   * @param values The args to add.
+   */
+  private void addAllArgs(
+      java.lang.Iterable<java.lang.String> values) {
+    ensureArgsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, args_);
+  }
+  /**
+   * <pre>
+   * args are what the code's sentence names, in order (an ID, a version,
+   * a registry), for a front-end to say it in its user's language, the
+   * message kept for one that does not know the code (revision 34).
+   * </pre>
+   *
+   * <code>repeated string args = 3 [json_name = "args"];</code>
+   */
+  private void clearArgs() {
+    args_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * args are what the code's sentence names, in order (an ID, a version,
+   * a registry), for a front-end to say it in its user's language, the
+   * message kept for one that does not know the code (revision 34).
+   * </pre>
+   *
+   * <code>repeated string args = 3 [json_name = "args"];</code>
+   * @param value The bytes of the args to add.
+   */
+  private void addArgsBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    ensureArgsIsMutable();
+    args_.add(value.toStringUtf8());
   }
 
   public static dev.ironpark.mako.v2.Error parseFrom(
@@ -355,6 +503,152 @@ public  final class Error extends
       return this;
     }
 
+    /**
+     * <pre>
+     * args are what the code's sentence names, in order (an ID, a version,
+     * a registry), for a front-end to say it in its user's language, the
+     * message kept for one that does not know the code (revision 34).
+     * </pre>
+     *
+     * <code>repeated string args = 3 [json_name = "args"];</code>
+     * @return A list containing the args.
+     */
+    @java.lang.Override
+    public java.util.List<java.lang.String>
+        getArgsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getArgsList());
+    }
+    /**
+     * <pre>
+     * args are what the code's sentence names, in order (an ID, a version,
+     * a registry), for a front-end to say it in its user's language, the
+     * message kept for one that does not know the code (revision 34).
+     * </pre>
+     *
+     * <code>repeated string args = 3 [json_name = "args"];</code>
+     * @return The count of args.
+     */
+    @java.lang.Override
+    public int getArgsCount() {
+      return instance.getArgsCount();
+    }
+    /**
+     * <pre>
+     * args are what the code's sentence names, in order (an ID, a version,
+     * a registry), for a front-end to say it in its user's language, the
+     * message kept for one that does not know the code (revision 34).
+     * </pre>
+     *
+     * <code>repeated string args = 3 [json_name = "args"];</code>
+     * @param index The index of the element to return.
+     * @return The args at the given index.
+     */
+    @java.lang.Override
+    public java.lang.String getArgs(int index) {
+      return instance.getArgs(index);
+    }
+    /**
+     * <pre>
+     * args are what the code's sentence names, in order (an ID, a version,
+     * a registry), for a front-end to say it in its user's language, the
+     * message kept for one that does not know the code (revision 34).
+     * </pre>
+     *
+     * <code>repeated string args = 3 [json_name = "args"];</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the args at the given index.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getArgsBytes(int index) {
+      return instance.getArgsBytes(index);
+    }
+    /**
+     * <pre>
+     * args are what the code's sentence names, in order (an ID, a version,
+     * a registry), for a front-end to say it in its user's language, the
+     * message kept for one that does not know the code (revision 34).
+     * </pre>
+     *
+     * <code>repeated string args = 3 [json_name = "args"];</code>
+     * @param index The index to set the value at.
+     * @param value The args to set.
+     * @return This builder for chaining.
+     */
+    public Builder setArgs(
+        int index, java.lang.String value) {
+      copyOnWrite();
+      instance.setArgs(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * args are what the code's sentence names, in order (an ID, a version,
+     * a registry), for a front-end to say it in its user's language, the
+     * message kept for one that does not know the code (revision 34).
+     * </pre>
+     *
+     * <code>repeated string args = 3 [json_name = "args"];</code>
+     * @param value The args to add.
+     * @return This builder for chaining.
+     */
+    public Builder addArgs(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.addArgs(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * args are what the code's sentence names, in order (an ID, a version,
+     * a registry), for a front-end to say it in its user's language, the
+     * message kept for one that does not know the code (revision 34).
+     * </pre>
+     *
+     * <code>repeated string args = 3 [json_name = "args"];</code>
+     * @param values The args to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllArgs(
+        java.lang.Iterable<java.lang.String> values) {
+      copyOnWrite();
+      instance.addAllArgs(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * args are what the code's sentence names, in order (an ID, a version,
+     * a registry), for a front-end to say it in its user's language, the
+     * message kept for one that does not know the code (revision 34).
+     * </pre>
+     *
+     * <code>repeated string args = 3 [json_name = "args"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearArgs() {
+      copyOnWrite();
+      instance.clearArgs();
+      return this;
+    }
+    /**
+     * <pre>
+     * args are what the code's sentence names, in order (an ID, a version,
+     * a registry), for a front-end to say it in its user's language, the
+     * message kept for one that does not know the code (revision 34).
+     * </pre>
+     *
+     * <code>repeated string args = 3 [json_name = "args"];</code>
+     * @param value The bytes of the args to add.
+     * @return This builder for chaining.
+     */
+    public Builder addArgsBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.addArgsBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Error)
   }
   @java.lang.Override
@@ -373,10 +667,11 @@ public  final class Error extends
           java.lang.Object[] objects = new java.lang.Object[] {
             "message_",
             "code_",
+            "args_",
           };
           java.lang.String info =
-              "\u0000\u0002\u0000\u0000\u0001\u0002\u0002\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "";
+              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u021a";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -77,7 +77,7 @@ func (m *model) searchStore(query string) {
 		}
 		r := storeSearch{Query: query, Listings: found.GetListings()}
 		if err != nil {
-			r.Err = err.Error()
+			r.Err = errorText(err)
 		}
 		m.store.Results.Set(r)
 		m.loadRegistries() // reading them may have failed, or come back
@@ -109,7 +109,7 @@ func (m *model) changeRegistry(op, url string) {
 		return c.RegistryAction(ctx, &protocol.RegistryAction{Op: op, Url: url})
 	}, func(regs *protocol.Registries, err error) {
 		if err != nil {
-			m.store.Err.Set(err.Error())
+			m.store.Err.Set(errorText(err))
 			return
 		}
 		if op == protocol.RegistryAdd {
@@ -144,7 +144,7 @@ func (m *model) installPlugin(op, id, registry string) {
 	}, func(done *protocol.PluginInstalled, err error) {
 		busy(false)
 		if err != nil {
-			m.store.Err.Set(err.Error())
+			m.store.Err.Set(errorText(err))
 		}
 		m.store.NewKey.Update(func(k map[string][2]string) map[string][2]string {
 			next := maps.Clone(k)

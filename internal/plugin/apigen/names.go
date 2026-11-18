@@ -68,9 +68,12 @@ func validKebab(name string) bool {
 }
 
 // witKeywords are WIT's keywords, which an identifier spelled as one
-// escapes with %.
+// escapes with %: those wasm-tools 1.263 refuses bare as a field's name,
+// map among them (WIT's map type), and float32 and float64, which it
+// takes now, escaped all the same, as an escape is good for any name.
 var witKeywords = map[string]bool{
-	"as": true, "async": true, "bool": true, "borrow": true, "char": true, "constructor": true,
+	"map": true,
+	"as":  true, "async": true, "bool": true, "borrow": true, "char": true, "constructor": true,
 	"enum": true, "export": true, "f32": true, "f64": true, "flags": true, "float32": true,
 	"float64": true, "from": true, "func": true, "future": true, "import": true, "include": true,
 	"interface": true, "list": true, "option": true, "own": true, "package": true, "record": true,

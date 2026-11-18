@@ -65,7 +65,7 @@ func (s *Store) Install(ctx context.Context, op, id, registryURL string) (*proto
 	var v *registry.Version
 	if err == nil {
 		if v = e.Newest(plugin.APIVersion); v == nil {
-			err = fmt.Errorf("%s lists no version of %s for this mako, which carries out Host API %d", r.url, id, plugin.APIVersion)
+			err = coded(protocol.CodeAPIMismatch, fmt.Errorf("%s lists no version of %s for this mako, which carries out Host API %d", r.url, id, plugin.APIVersion), id, r.url)
 		}
 	}
 	if err == nil {
@@ -81,7 +81,7 @@ func (s *Store) Install(ctx context.Context, op, id, registryURL string) (*proto
 		return nil, err
 	}
 	if had && !pack.SameKey(pkg.Key, prev.Key) {
-		return nil, fmt.Errorf("the package is signed by %s, not by the key pinned for %s", pack.Fingerprint(pkg.Key), id)
+		return nil, coded(protocol.CodePinnedKey, fmt.Errorf("the package is signed by %s, not by the key pinned for %s", pack.Fingerprint(pkg.Key), id), id, prev.Registry)
 	}
 	// A folder written meanwhile, while the package downloaded.
 	if s.devFolder(id) {
@@ -163,7 +163,7 @@ func (s *Store) pickLocked(id, registryURL string) (*reg, *registry.Entry, error
 		case r == nil:
 			return nil, nil, fmt.Errorf("%s is not a registry of this node: add it first", registryURL)
 		case r.idx == nil:
-			return nil, nil, fmt.Errorf("%s could not be read: %s", r.url, cmpOr(r.err, "not read yet"))
+			return nil, nil, coded(protocol.CodeRegistryUnreachable, fmt.Errorf("%s could not be read: %s", r.url, cmpOr(r.err, "not read yet")), r.url)
 		}
 		e := r.idx.Find(id)
 		if e == nil {
@@ -179,7 +179,7 @@ func (s *Store) pickLocked(id, registryURL string) (*reg, *registry.Entry, error
 	}
 	switch len(found) {
 	case 0:
-		return nil, nil, fmt.Errorf("no registry of this node lists %s", id)
+		return nil, nil, coded(protocol.CodeNotListed, fmt.Errorf("no registry of this node lists %s", id), id)
 	case 1:
 		return found[0], found[0].idx.Find(id), nil
 	}
@@ -187,8 +187,8 @@ func (s *Store) pickLocked(id, registryURL string) (*reg, *registry.Entry, error
 	for i, r := range found {
 		urls[i] = r.url
 	}
-	return nil, nil, fmt.Errorf("%s is listed by %d registries, perhaps by different publishers: name the one to install from (%s)",
-		id, len(found), strings.Join(urls, ", "))
+	return nil, nil, coded(protocol.CodeRegistryNeeded, fmt.Errorf("%s is listed by %d registries, perhaps by different publishers: name the one to install from (%s)",
+		id, len(found), strings.Join(urls, ", ")), id)
 }
 
 // checkListingLocked refuses what may not be installed: a version blocked,
@@ -196,28 +196,28 @@ func (s *Store) pickLocked(id, registryURL string) (*reg, *registry.Entry, error
 // the one installed.
 func (s *Store) checkListingLocked(id string, r *reg, e *registry.Entry, v *registry.Version, prev Install, had bool) error {
 	if why := s.blockedLocked(id, v.Version, e.Key); why != "" {
-		return fmt.Errorf("%s %s is %s", id, v.Version, why)
+		return coded(protocol.CodePluginBlocked, fmt.Errorf("%s %s is %s", id, v.Version, why), id, v.Version, why)
 	}
 	if !had {
 		return nil
 	}
 	if !pack.SameKey(e.Key, prev.Key) {
-		return fmt.Errorf("%s lists %s signed by the publisher key %s, but this node pinned %s when it installed it from %s: "+
+		return coded(protocol.CodePinnedKey, fmt.Errorf("%s lists %s signed by the publisher key %s, but this node pinned %s when it installed it from %s: "+
 			"an update must be signed by the same key. To install the other publisher's, remove the plugin first",
-			r.url, id, pack.Fingerprint(e.Key), pack.Fingerprint(prev.Key), prev.Registry)
+			r.url, id, pack.Fingerprint(e.Key), pack.Fingerprint(prev.Key), prev.Registry), id, r.url)
 	}
 	switch c := plugin.CompareVersions(v.Version, prev.Version); {
 	case c == 0:
-		return fmt.Errorf("%s %s is installed already", id, prev.Version)
+		return coded(protocol.CodeInstalledAlready, fmt.Errorf("%s %s is installed already", id, prev.Version), id, prev.Version)
 	case c < 0:
-		return fmt.Errorf("%s lists %s %s, older than the %s installed: mako does not go back a version; remove the plugin and install it again to",
-			r.url, id, v.Version, prev.Version)
+		return coded(protocol.CodeDowngrade, fmt.Errorf("%s lists %s %s, older than the %s installed: mako does not go back a version; remove the plugin and install it again to",
+			r.url, id, v.Version, prev.Version), id, v.Version, prev.Version)
 	}
 	return nil
 }
 
 func devFolderErr(id string) error {
-	return fmt.Errorf("plugins/%s is a folder of a plugin in development, not installed from a registry: an install never replaces one. Move it away first", id)
+	return coded(protocol.CodeDevFolder, fmt.Errorf("plugins/%s is a folder of a plugin in development, not installed from a registry: an install never replaces one. Move it away first", id), id)
 }
 
 // download fetches a version's package and checks it: its SHA-256 and
@@ -226,25 +226,32 @@ func devFolderErr(id string) error {
 func (s *Store) download(ctx context.Context, r *reg, e *registry.Entry, v *registry.Version) (*pack.Package, []byte, error) {
 	data, err := s.fetch.Get(ctx, v.URL, pack.MaxPackageBytes, downloadWithin)
 	if err != nil {
-		return nil, nil, fmt.Errorf("the package of %s %s did not download: %w", e.ID, v.Version, err)
+		code := protocol.CodePackageUnreachable
+		switch {
+		case errors.Is(err, registry.ErrTimeout):
+			code = protocol.CodeTimedOut
+		case errors.Is(err, registry.ErrTooLarge):
+			code = protocol.CodeTooLarge
+		}
+		return nil, nil, coded(code, fmt.Errorf("the package of %s %s did not download: %w", e.ID, v.Version, err), e.ID, v.Version)
 	}
 	sum := sha256.Sum256(data)
 	if hex.EncodeToString(sum[:]) != v.SHA256 || int64(len(data)) != v.Size {
-		return nil, nil, fmt.Errorf("the package of %s %s downloaded is not the one %s lists (its SHA-256 or size differs): "+
-			"it was changed on the server or on the way. Nothing was installed", e.ID, v.Version, r.url)
+		return nil, nil, coded(protocol.CodeHashMismatch, fmt.Errorf("the package of %s %s downloaded is not the one %s lists (its SHA-256 or size differs): "+
+			"it was changed on the server or on the way. Nothing was installed", e.ID, v.Version, r.url), e.ID, v.Version, r.url)
 	}
 	pkg, err := pack.Open(data)
 	if err != nil {
-		return nil, nil, fmt.Errorf("the package of %s %s does not check: %w", e.ID, v.Version, err)
+		return nil, nil, coded(protocol.CodeBadPackage, fmt.Errorf("the package of %s %s does not check: %w", e.ID, v.Version, err), e.ID, v.Version)
 	}
 	switch {
 	case !pack.SameKey(pkg.Key, e.Key):
-		return nil, nil, fmt.Errorf("the package of %s %s is signed by %s, not by the publisher key %s lists, %s",
-			e.ID, v.Version, pack.Fingerprint(pkg.Key), r.url, pack.Fingerprint(e.Key))
+		return nil, nil, coded(protocol.CodeSignatureMismatch, fmt.Errorf("the package of %s %s is signed by %s, not by the publisher key %s lists, %s",
+			e.ID, v.Version, pack.Fingerprint(pkg.Key), r.url, pack.Fingerprint(e.Key)), e.ID, v.Version, r.url)
 	case pkg.Manifest.ID != e.ID:
-		return nil, nil, fmt.Errorf("%s lists a package of the plugin %s as %s", r.url, pkg.Manifest.ID, e.ID)
+		return nil, nil, coded(protocol.CodeBadPackage, fmt.Errorf("%s lists a package of the plugin %s as %s", r.url, pkg.Manifest.ID, e.ID), e.ID, v.Version)
 	case pkg.Manifest.Version != v.Version:
-		return nil, nil, fmt.Errorf("%s lists a package of %s %s as %s", r.url, e.ID, pkg.Manifest.Version, v.Version)
+		return nil, nil, coded(protocol.CodeBadPackage, fmt.Errorf("%s lists a package of %s %s as %s", r.url, e.ID, pkg.Manifest.Version, v.Version), e.ID, v.Version)
 	}
 	// The listing's permissions are what the store showed before the
 	// package was fetched: a package asking for others is not the one
@@ -257,8 +264,8 @@ func (s *Store) download(ctx context.Context, r *reg, e *registry.Entry, v *regi
 		if len(fewer) > 0 {
 			why = append(why, fmt.Sprintf("does not ask for %s, which the listing shows", strings.Join(fewer, ", ")))
 		}
-		return nil, nil, fmt.Errorf("the package of %s %s %s: it is not what %s lists. Nothing was installed",
-			e.ID, v.Version, strings.Join(why, " and "), r.url)
+		return nil, nil, coded(protocol.CodePermissionsDiffer, fmt.Errorf("the package of %s %s %s: it is not what %s lists. Nothing was installed",
+			e.ID, v.Version, strings.Join(why, " and "), r.url), e.ID, v.Version, r.url)
 	}
 	return pkg, data, nil
 }
@@ -312,9 +319,9 @@ func (s *Store) Remove(id string) error {
 	s.reconcileLocked()
 	if _, ok := s.Installed(id); !ok || s.devFolder(id) {
 		if s.devFolder(id) {
-			return fmt.Errorf("plugins/%s is a folder of a plugin in development: mako removes only what it installed. Delete the folder yourself", id)
+			return coded(protocol.CodeDevFolder, fmt.Errorf("plugins/%s is a folder of a plugin in development: mako removes only what it installed. Delete the folder yourself", id), id)
 		}
-		return fmt.Errorf("%s is not installed", id)
+		return coded(protocol.CodeNotInstalled, fmt.Errorf("%s is not installed", id), id)
 	}
 	if err := s.man.Remove(id); err != nil && !os.IsNotExist(err) {
 		return err
@@ -338,4 +345,10 @@ func cmpOr(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// coded is err with a code and what its sentence names, for a front-end
+// to say it in its user's language (protocol's Code constants).
+func coded(code string, err error, args ...string) error {
+	return &protocol.CodedError{Code: code, Message: err.Error(), Args: args}
 }

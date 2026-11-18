@@ -33,6 +33,20 @@ func layoutApprovalButtons(m *model, id, approval string) []ggui.Widget {
 	}
 }
 
+// pluginLayoutButtons are the answers to a plugin's change of the layout,
+// which the user allows for that plugin alone.
+func pluginLayoutButtons(m *model, st *protocol.LayoutStage) []ggui.Widget {
+	answer := func(decision, option string) func() {
+		return func() { m.decideLayout(st.GetId(), decision, option) }
+	}
+	return []ggui.Widget{
+		ui.Button(T("Deny"), answer(protocol.DecisionDeny, "")).Outline(),
+		ui.Button(T("Always allow"), answer(protocol.DecisionAllow, protocol.LayoutAllowAlways)).Outline(),
+		ui.Button(T("Allow in this space"), answer(protocol.DecisionAllow, protocol.LayoutAllowSpace)).Outline(),
+		ui.Button(T("Allow"), answer(protocol.DecisionAllow, "")),
+	}
+}
+
 // layoutBar is the change staged, over the window: nothing while there is
 // none.
 func layoutBar(m *model) ggui.Widget {
@@ -66,6 +80,11 @@ func layoutBar(m *model) ggui.Widget {
 		title = Tf("%s asks to change the window layout", st.GetAgent())
 		detail = st.GetDocument() + ": " + st.GetSummary()
 		buttons = layoutApprovalButtons(m, st.GetSessionId(), st.GetId())
+		if st.GetPluginId() != "" {
+			// A plugin's change is no session's approval: the bar answers it.
+			title = Tf("The plugin %s asks to change the window layout", st.GetPluginId())
+			buttons = pluginLayoutButtons(m, st)
+		}
 		body := widget.Column(
 			widget.Text(title).Size(13.5).Weight(ggui.WeightMedium),
 			muted(widget.Text(detail).Size(12.5).NoWrap().Ellipsis()),

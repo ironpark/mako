@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -65,6 +66,11 @@ title = "Hello"
 			t.Fatal(err)
 		}
 		if len(list.GetPlugins()) == 1 && list.GetPlugins()[0].GetState() == protocol.PluginWaiting {
+			// A test reaches no keychain: the listing says secrets are
+			// kept in files, and why.
+			if list.GetSecrets() != "file" || list.GetSecretsNote() == "" {
+				t.Fatalf("secrets %q, %q", list.GetSecrets(), list.GetSecretsNote())
+			}
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -178,5 +184,148 @@ func TestWatchBlockServesAgentsBlocks(t *testing.T) {
 	}
 	if _, err := c.BlockEvent(ctx, &protocol.BlockEvent{Block: "mako.sidebar", Node: "/", Kind: protocol.UiTap}); err == nil {
 		t.Fatal("an event of the window's own block went through")
+	}
+}
+
+// writePlugin puts a plugin's folder in d's plugins folder whole, made
+// beside it and moved in, so that the manager never reads it half
+// written.
+func writePlugin(t *testing.T, d *Daemon, id string, files map[string]string) {
+	t.Helper()
+	stage := filepath.Join(d.dir, "stage-"+id)
+	if err := os.MkdirAll(stage, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(stage, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(d.dir, "plugins"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(stage, filepath.Join(d.dir, "plugins", id)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A plugin subscribed to sessions' events hears of this node's sessions
+// starting and of messages for its agents, through the notifier and the
+// mailbox; of a peer's sessions, which this node lists, nothing.
+func TestPluginEventsAreOfThisNodesSessions(t *testing.T) {
+	a := meshDaemon(t, "a")
+	b := meshDaemon(t, "b", p2pAddr(a))
+	letIn(t, a, b)
+	letIn(t, b, a)
+	ca := dialDaemon(t, a)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	writePlugin(t, a, "ears", map[string]string{
+		"plugin.toml": `id = "ears"
+version = "1.0.0"
+publisher = "test"
+api = 1
+entry = "main.js"
+permissions = ["sessions:read", "storage"]
+
+[[contributes.command]]
+id = "go"
+title = "Go"
+`,
+		"main.js": `let mako;
+async function note(line) {
+  const kept = await mako.storage.getItem({ key: "seen" });
+  await mako.storage.setItem({ key: "seen", value: (kept.found ? kept.value + ";" : "") + line });
+}
+export default {
+  activate(m) { mako = m; m.commands.register("go", () => mako.sessions.subscribe({ events: ["sessionStarted", "agentMessage"] })); },
+  on: {
+    sessionStarted: (e) => note("started " + e.session.id + "@" + e.session.nodeId),
+    agentMessage: (e) => note("message " + e.message.toSessionId + " " + e.message.text),
+  },
+};`,
+	})
+	waitFor(t, "the plugin to be listed", func() bool {
+		list, err := ca.Plugins(ctx)
+		return err == nil && len(list.GetPlugins()) == 1
+	})
+	if _, err := ca.PluginAction(ctx, &protocol.PluginAction{PluginId: "ears", Op: protocol.PluginGrant}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ca.PluginAction(ctx, &protocol.PluginAction{PluginId: "ears", Op: protocol.PluginRun, Command: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	seen := func() string {
+		data, _ := os.ReadFile(filepath.Join(a.dir, "plugin-data", "ears", "storage.json"))
+		var kv map[string]string
+		_ = json.Unmarshal(data, &kv)
+		return kv["seen"]
+	}
+	// A peer's session, which a lists, is not a's to tell of.
+	addSession(t, b, "peer-session")
+	waitForWithin(t, 20*time.Second, "a to list b's session", func() bool { return lists(ctx, ca, "peer-session") })
+	addSession(t, a, "own-session")
+	waitForWithin(t, 10*time.Second, "the plugin to hear of a's session", func() bool { return strings.Contains(seen(), "started own-session@") })
+	if _, err := a.projectAgents.messages.send("someone", "own-session", "hello there", ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the plugin to hear of the message", func() bool { return strings.Contains(seen(), "message own-session hello there") })
+	if strings.Contains(seen(), "peer-session") {
+		t.Fatalf("the plugin heard of a peer's session: %s", seen())
+	}
+}
+
+// The Host API's groups that reach the daemon are wired to it: the
+// projects it knows, its sessions' transcripts, and its agents.
+func TestPluginHostReachesTheDaemon(t *testing.T) {
+	d := meshDaemon(t, "a")
+	c := dialDaemon(t, d)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	root := t.TempDir()
+	d.projects.set([]*protocol.ProjectScope{{Id: "p1", Name: "One", Paths: []string{root}}})
+	addSession(t, d, "s1")
+	writePlugin(t, d, "wired", map[string]string{
+		"plugin.toml": `id = "wired"
+version = "1.0.0"
+publisher = "test"
+api = 1
+entry = "main.js"
+permissions = ["sessions:read", "sessions:write", "fs:project", "storage"]
+
+[[contributes.command]]
+id = "go"
+title = "Go"
+`,
+		"main.js": `let mako;
+export default {
+  activate(m) {
+    mako = m;
+    m.commands.register("go", async () => {
+      const { projects } = await mako.files.listProjects({});
+      const page = await mako.sessions.readTranscript({ sessionId: "s1" });
+      let sent = "";
+      try { await mako.messages.sendMessage({ sessionId: "s1", text: "hi" }); } catch (e) { sent = e.message; }
+      await mako.storage.setItem({ key: "seen", value: JSON.stringify([projects, page.messages.length, sent]) });
+    });
+  },
+};`,
+	})
+	waitFor(t, "the plugin to be listed", func() bool {
+		list, err := c.Plugins(ctx)
+		return err == nil && len(list.GetPlugins()) == 1
+	})
+	if _, err := c.PluginAction(ctx, &protocol.PluginAction{PluginId: "wired", Op: protocol.PluginGrant}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PluginAction(ctx, &protocol.PluginAction{PluginId: "wired", Op: protocol.PluginRun, Command: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(d.dir, "plugin-data", "wired", "storage.json"))
+	var kv map[string]string
+	_ = json.Unmarshal(data, &kv)
+	want := `[[{"id":"p1","name":"One","roots":["` + root + `"]}],0,"the agent of session s1 takes no messages"]`
+	if kv["seen"] != want {
+		t.Fatalf("the plugin saw %s\nwant %s", kv["seen"], want)
 	}
 }

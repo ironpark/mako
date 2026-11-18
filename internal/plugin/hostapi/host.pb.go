@@ -780,6 +780,632 @@ func (x *ListKeysResponse) GetKeys() []string {
 	return nil
 }
 
+// ReadTranscriptRequest names a session, and the page.
+type ReadTranscriptRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// before is the cursor a page gave, to read the messages before it;
+	// "" reads the latest.
+	Before string `protobuf:"bytes,2,opt,name=before,proto3" json:"before,omitempty"`
+	// limit is the most messages a page holds, at most 50; 0 is 20.
+	Limit         uint32 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReadTranscriptRequest) Reset() {
+	*x = ReadTranscriptRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReadTranscriptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReadTranscriptRequest) ProtoMessage() {}
+
+func (x *ReadTranscriptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReadTranscriptRequest.ProtoReflect.Descriptor instead.
+func (*ReadTranscriptRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ReadTranscriptRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *ReadTranscriptRequest) GetBefore() string {
+	if x != nil {
+		return x.Before
+	}
+	return ""
+}
+
+func (x *ReadTranscriptRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+// ReadTranscriptResponse is a page of the conversation.
+type ReadTranscriptResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// supported says mako reads the conversation its agent keeps.
+	Supported bool `protobuf:"varint,1,opt,name=supported,proto3" json:"supported,omitempty"`
+	// messages are the page's, oldest first.
+	Messages []*TranscriptMessage `protobuf:"bytes,2,rep,name=messages,proto3" json:"messages,omitempty"`
+	// before is the cursor of the page before this one; "" when this one
+	// is the first.
+	Before string `protobuf:"bytes,3,opt,name=before,proto3" json:"before,omitempty"`
+	// truncated says text was cut: a message's, or the page's at 256 KiB.
+	Truncated     bool `protobuf:"varint,4,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReadTranscriptResponse) Reset() {
+	*x = ReadTranscriptResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReadTranscriptResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReadTranscriptResponse) ProtoMessage() {}
+
+func (x *ReadTranscriptResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReadTranscriptResponse.ProtoReflect.Descriptor instead.
+func (*ReadTranscriptResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ReadTranscriptResponse) GetSupported() bool {
+	if x != nil {
+		return x.Supported
+	}
+	return false
+}
+
+func (x *ReadTranscriptResponse) GetMessages() []*TranscriptMessage {
+	if x != nil {
+		return x.Messages
+	}
+	return nil
+}
+
+func (x *ReadTranscriptResponse) GetBefore() string {
+	if x != nil {
+		return x.Before
+	}
+	return ""
+}
+
+func (x *ReadTranscriptResponse) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+// TranscriptMessage is a message of a conversation.
+type TranscriptMessage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// role is "user", "assistant" or "tool".
+	Role string `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
+	// text is at most 8 KiB.
+	Text string `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
+	// tool is the tool a call called; detail what it was given, at most 1
+	// KiB, and result what it gave back, at most 2 KiB.
+	Tool   string `protobuf:"bytes,3,opt,name=tool,proto3" json:"tool,omitempty"`
+	Detail string `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"`
+	Result string `protobuf:"bytes,5,opt,name=result,proto3" json:"result,omitempty"`
+	// kind is what the tool does, whatever its agent calls it.
+	Kind  string `protobuf:"bytes,6,opt,name=kind,proto3" json:"kind,omitempty"`
+	Error bool   `protobuf:"varint,7,opt,name=error,proto3" json:"error,omitempty"`
+	// pending says a call was not answered yet.
+	Pending       bool `protobuf:"varint,8,opt,name=pending,proto3" json:"pending,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TranscriptMessage) Reset() {
+	*x = TranscriptMessage{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TranscriptMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TranscriptMessage) ProtoMessage() {}
+
+func (x *TranscriptMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TranscriptMessage.ProtoReflect.Descriptor instead.
+func (*TranscriptMessage) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *TranscriptMessage) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *TranscriptMessage) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *TranscriptMessage) GetTool() string {
+	if x != nil {
+		return x.Tool
+	}
+	return ""
+}
+
+func (x *TranscriptMessage) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *TranscriptMessage) GetResult() string {
+	if x != nil {
+		return x.Result
+	}
+	return ""
+}
+
+func (x *TranscriptMessage) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *TranscriptMessage) GetError() bool {
+	if x != nil {
+		return x.Error
+	}
+	return false
+}
+
+func (x *TranscriptMessage) GetPending() bool {
+	if x != nil {
+		return x.Pending
+	}
+	return false
+}
+
+// SubscribeRequest names kinds of event: "sessionStarted", "sessionEnded",
+// "sessionSlept", "sessionStatus" and "agentMessage".
+type SubscribeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []string               `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubscribeRequest) Reset() {
+	*x = SubscribeRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubscribeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubscribeRequest) ProtoMessage() {}
+
+func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubscribeRequest.ProtoReflect.Descriptor instead.
+func (*SubscribeRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *SubscribeRequest) GetEvents() []string {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+// SubscribeResponse is the kinds the plugin is subscribed to after.
+type SubscribeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []string               `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubscribeResponse) Reset() {
+	*x = SubscribeResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubscribeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubscribeResponse) ProtoMessage() {}
+
+func (x *SubscribeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubscribeResponse.ProtoReflect.Descriptor instead.
+func (*SubscribeResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *SubscribeResponse) GetEvents() []string {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+// UnsubscribeRequest names kinds of event; none names every one.
+type UnsubscribeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []string               `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnsubscribeRequest) Reset() {
+	*x = UnsubscribeRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnsubscribeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnsubscribeRequest) ProtoMessage() {}
+
+func (x *UnsubscribeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnsubscribeRequest.ProtoReflect.Descriptor instead.
+func (*UnsubscribeRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *UnsubscribeRequest) GetEvents() []string {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+// UnsubscribeResponse is the kinds the plugin is subscribed to after.
+type UnsubscribeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []string               `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnsubscribeResponse) Reset() {
+	*x = UnsubscribeResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnsubscribeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnsubscribeResponse) ProtoMessage() {}
+
+func (x *UnsubscribeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnsubscribeResponse.ProtoReflect.Descriptor instead.
+func (*UnsubscribeResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *UnsubscribeResponse) GetEvents() []string {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+// SessionEvent is what a plugin subscribed to a kind of event is told,
+// as a call of the handler of its kind in its default export's on, as a
+// block's on is called for a message: on.sessionStarted(event), ...
+// Events are of this node's sessions alone, at most 10 a second to a
+// plugin, the rest dropped; none comes while the plugin lacks
+// sessions:read, is disabled, refused or blocked.
+type SessionEvent struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// kind is "sessionStarted", "sessionEnded", "sessionSlept" (its
+	// program stopped, to start again on its conversation),
+	// "sessionStatus" (its agent's status changed) or "agentMessage".
+	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	// session is the session, as it stands after.
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
+	// previous_status is its agent's status before, for sessionStatus.
+	PreviousStatus string `protobuf:"bytes,3,opt,name=previous_status,json=previousStatus,proto3" json:"previous_status,omitempty"`
+	// message is the message, for agentMessage.
+	Message *AgentMessage `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	// request_id is a StartAgent's, for "agentStarted", when the agent it
+	// asked for started (session is it), and "agentRefused", when the user
+	// refused it or it did not start (error says why). These two come to
+	// a plugin that asked, without a subscription.
+	RequestId string `protobuf:"bytes,5,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Error     string `protobuf:"bytes,6,opt,name=error,proto3" json:"error,omitempty"`
+	// document and revision are, for "layoutChanged", the window layout
+	// document a PatchLayout changed and its revision after; a
+	// "layoutRefused" tells why it did not change in error. These two come
+	// to a plugin that asked, without a subscription.
+	Document      string `protobuf:"bytes,7,opt,name=document,proto3" json:"document,omitempty"`
+	Revision      string `protobuf:"bytes,8,opt,name=revision,proto3" json:"revision,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionEvent) Reset() {
+	*x = SessionEvent{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionEvent) ProtoMessage() {}
+
+func (x *SessionEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionEvent.ProtoReflect.Descriptor instead.
+func (*SessionEvent) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *SessionEvent) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetSession() *Session {
+	if x != nil {
+		return x.Session
+	}
+	return nil
+}
+
+func (x *SessionEvent) GetPreviousStatus() string {
+	if x != nil {
+		return x.PreviousStatus
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetMessage() *AgentMessage {
+	if x != nil {
+		return x.Message
+	}
+	return nil
+}
+
+func (x *SessionEvent) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetDocument() string {
+	if x != nil {
+		return x.Document
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetRevision() string {
+	if x != nil {
+		return x.Revision
+	}
+	return ""
+}
+
+// AgentMessage is a message one agent sent another of this node's, as
+// send_message does, or the window or mako left it.
+type AgentMessage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	FromSessionId string                 `protobuf:"bytes,2,opt,name=from_session_id,json=fromSessionId,proto3" json:"from_session_id,omitempty"`
+	ToSessionId   string                 `protobuf:"bytes,3,opt,name=to_session_id,json=toSessionId,proto3" json:"to_session_id,omitempty"`
+	// text is at most 4 KiB.
+	Text string `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"`
+	// note says mako wrote it, of the agent from: not one it sent.
+	Note          bool `protobuf:"varint,5,opt,name=note,proto3" json:"note,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentMessage) Reset() {
+	*x = AgentMessage{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentMessage) ProtoMessage() {}
+
+func (x *AgentMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentMessage.ProtoReflect.Descriptor instead.
+func (*AgentMessage) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *AgentMessage) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AgentMessage) GetFromSessionId() string {
+	if x != nil {
+		return x.FromSessionId
+	}
+	return ""
+}
+
+func (x *AgentMessage) GetToSessionId() string {
+	if x != nil {
+		return x.ToSessionId
+	}
+	return ""
+}
+
+func (x *AgentMessage) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *AgentMessage) GetNote() bool {
+	if x != nil {
+		return x.Note
+	}
+	return false
+}
+
 // ListSessionsRequest asks for the sessions.
 type ListSessionsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -789,7 +1415,7 @@ type ListSessionsRequest struct {
 
 func (x *ListSessionsRequest) Reset() {
 	*x = ListSessionsRequest{}
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[15]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -801,7 +1427,7 @@ func (x *ListSessionsRequest) String() string {
 func (*ListSessionsRequest) ProtoMessage() {}
 
 func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[15]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -814,7 +1440,7 @@ func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{15}
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{24}
 }
 
 // ListSessionsResponse is the sessions, oldest first.
@@ -827,7 +1453,7 @@ type ListSessionsResponse struct {
 
 func (x *ListSessionsResponse) Reset() {
 	*x = ListSessionsResponse{}
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[16]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -839,7 +1465,7 @@ func (x *ListSessionsResponse) String() string {
 func (*ListSessionsResponse) ProtoMessage() {}
 
 func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[16]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -852,7 +1478,7 @@ func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{16}
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ListSessionsResponse) GetSessions() []*Session {
@@ -872,7 +1498,7 @@ type GetSessionRequest struct {
 
 func (x *GetSessionRequest) Reset() {
 	*x = GetSessionRequest{}
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[17]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -884,7 +1510,7 @@ func (x *GetSessionRequest) String() string {
 func (*GetSessionRequest) ProtoMessage() {}
 
 func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[17]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -897,7 +1523,7 @@ func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionRequest.ProtoReflect.Descriptor instead.
 func (*GetSessionRequest) Descriptor() ([]byte, []int) {
-	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{17}
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *GetSessionRequest) GetId() string {
@@ -919,7 +1545,7 @@ type GetSessionResponse struct {
 
 func (x *GetSessionResponse) Reset() {
 	*x = GetSessionResponse{}
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[18]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -931,7 +1557,7 @@ func (x *GetSessionResponse) String() string {
 func (*GetSessionResponse) ProtoMessage() {}
 
 func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[18]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -944,7 +1570,7 @@ func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionResponse.ProtoReflect.Descriptor instead.
 func (*GetSessionResponse) Descriptor() ([]byte, []int) {
-	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{18}
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *GetSessionResponse) GetFound() bool {
@@ -961,7 +1587,8 @@ func (x *GetSessionResponse) GetSession() *Session {
 	return nil
 }
 
-// Session is a session as a plugin sees it: no terminal, no transcript.
+// Session is a session as a plugin sees it: no terminal; its transcript
+// is ReadTranscript's.
 type Session struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -970,7 +1597,8 @@ type Session struct {
 	Agent string `protobuf:"bytes,3,opt,name=agent,proto3" json:"agent,omitempty"`
 	// project is its working folder.
 	Project string `protobuf:"bytes,4,opt,name=project,proto3" json:"project,omitempty"`
-	// state is its process's: "running", "exited" or "asleep".
+	// state is its process's: "starting", "running", "exited", or
+	// "stopped", asleep, to start again on its conversation.
 	State string `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
 	// status is its agent's: "idle", "working", "waiting" or "done".
 	Status        string `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
@@ -981,7 +1609,7 @@ type Session struct {
 
 func (x *Session) Reset() {
 	*x = Session{}
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[19]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -993,7 +1621,7 @@ func (x *Session) String() string {
 func (*Session) ProtoMessage() {}
 
 func (x *Session) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[19]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1006,7 +1634,7 @@ func (x *Session) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Session.ProtoReflect.Descriptor instead.
 func (*Session) Descriptor() ([]byte, []int) {
-	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{19}
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *Session) GetId() string {
@@ -1074,7 +1702,7 @@ type FetchRequest struct {
 
 func (x *FetchRequest) Reset() {
 	*x = FetchRequest{}
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[20]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1086,7 +1714,7 @@ func (x *FetchRequest) String() string {
 func (*FetchRequest) ProtoMessage() {}
 
 func (x *FetchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[20]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1099,7 +1727,7 @@ func (x *FetchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchRequest.ProtoReflect.Descriptor instead.
 func (*FetchRequest) Descriptor() ([]byte, []int) {
-	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{20}
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *FetchRequest) GetUrl() string {
@@ -1143,7 +1771,7 @@ type FetchResponse struct {
 
 func (x *FetchResponse) Reset() {
 	*x = FetchResponse{}
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[21]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1155,7 +1783,7 @@ func (x *FetchResponse) String() string {
 func (*FetchResponse) ProtoMessage() {}
 
 func (x *FetchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[21]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1168,7 +1796,7 @@ func (x *FetchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchResponse.ProtoReflect.Descriptor instead.
 func (*FetchResponse) Descriptor() ([]byte, []int) {
-	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{21}
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *FetchResponse) GetStatus() uint32 {
@@ -1203,7 +1831,7 @@ type RunCommandRequest struct {
 
 func (x *RunCommandRequest) Reset() {
 	*x = RunCommandRequest{}
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[22]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1215,7 +1843,7 @@ func (x *RunCommandRequest) String() string {
 func (*RunCommandRequest) ProtoMessage() {}
 
 func (x *RunCommandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[22]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1228,7 +1856,7 @@ func (x *RunCommandRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunCommandRequest.ProtoReflect.Descriptor instead.
 func (*RunCommandRequest) Descriptor() ([]byte, []int) {
-	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{22}
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RunCommandRequest) GetId() string {
@@ -1254,7 +1882,7 @@ type RunCommandResponse struct {
 
 func (x *RunCommandResponse) Reset() {
 	*x = RunCommandResponse{}
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[23]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1266,7 +1894,7 @@ func (x *RunCommandResponse) String() string {
 func (*RunCommandResponse) ProtoMessage() {}
 
 func (x *RunCommandResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_plugin_v1_host_proto_msgTypes[23]
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1279,7 +1907,7 @@ func (x *RunCommandResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunCommandResponse.ProtoReflect.Descriptor instead.
 func (*RunCommandResponse) Descriptor() ([]byte, []int) {
-	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{23}
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{32}
 }
 
 var File_mako_plugin_v1_host_proto protoreflect.FileDescriptor
@@ -1323,7 +1951,50 @@ const file_mako_plugin_v1_host_proto_rawDesc = "" +
 	"\x0fListKeysRequest\x12\x16\n" +
 	"\x06prefix\x18\x01 \x01(\tR\x06prefix\"&\n" +
 	"\x10ListKeysResponse\x12\x12\n" +
-	"\x04keys\x18\x01 \x03(\tR\x04keys\"\x15\n" +
+	"\x04keys\x18\x01 \x03(\tR\x04keys\"d\n" +
+	"\x15ReadTranscriptRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x16\n" +
+	"\x06before\x18\x02 \x01(\tR\x06before\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\rR\x05limit\"\xab\x01\n" +
+	"\x16ReadTranscriptResponse\x12\x1c\n" +
+	"\tsupported\x18\x01 \x01(\bR\tsupported\x12=\n" +
+	"\bmessages\x18\x02 \x03(\v2!.mako.plugin.v1.TranscriptMessageR\bmessages\x12\x16\n" +
+	"\x06before\x18\x03 \x01(\tR\x06before\x12\x1c\n" +
+	"\ttruncated\x18\x04 \x01(\bR\ttruncated\"\xc3\x01\n" +
+	"\x11TranscriptMessage\x12\x12\n" +
+	"\x04role\x18\x01 \x01(\tR\x04role\x12\x12\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\x12\x12\n" +
+	"\x04tool\x18\x03 \x01(\tR\x04tool\x12\x16\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\x12\x16\n" +
+	"\x06result\x18\x05 \x01(\tR\x06result\x12\x12\n" +
+	"\x04kind\x18\x06 \x01(\tR\x04kind\x12\x14\n" +
+	"\x05error\x18\a \x01(\bR\x05error\x12\x18\n" +
+	"\apending\x18\b \x01(\bR\apending\"*\n" +
+	"\x10SubscribeRequest\x12\x16\n" +
+	"\x06events\x18\x01 \x03(\tR\x06events\"+\n" +
+	"\x11SubscribeResponse\x12\x16\n" +
+	"\x06events\x18\x01 \x03(\tR\x06events\",\n" +
+	"\x12UnsubscribeRequest\x12\x16\n" +
+	"\x06events\x18\x01 \x03(\tR\x06events\"-\n" +
+	"\x13UnsubscribeResponse\x12\x16\n" +
+	"\x06events\x18\x01 \x03(\tR\x06events\"\xa3\x02\n" +
+	"\fSessionEvent\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x121\n" +
+	"\asession\x18\x02 \x01(\v2\x17.mako.plugin.v1.SessionR\asession\x12'\n" +
+	"\x0fprevious_status\x18\x03 \x01(\tR\x0epreviousStatus\x126\n" +
+	"\amessage\x18\x04 \x01(\v2\x1c.mako.plugin.v1.AgentMessageR\amessage\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x05 \x01(\tR\trequestId\x12\x14\n" +
+	"\x05error\x18\x06 \x01(\tR\x05error\x12\x1a\n" +
+	"\bdocument\x18\a \x01(\tR\bdocument\x12\x1a\n" +
+	"\brevision\x18\b \x01(\tR\brevision\"\x92\x01\n" +
+	"\fAgentMessage\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12&\n" +
+	"\x0ffrom_session_id\x18\x02 \x01(\tR\rfromSessionId\x12\"\n" +
+	"\rto_session_id\x18\x03 \x01(\tR\vtoSessionId\x12\x12\n" +
+	"\x04text\x18\x04 \x01(\tR\x04text\x12\x12\n" +
+	"\x04note\x18\x05 \x01(\bR\x04note\"\x15\n" +
 	"\x13ListSessionsRequest\"K\n" +
 	"\x14ListSessionsResponse\x123\n" +
 	"\bsessions\x18\x01 \x03(\v2\x17.mako.plugin.v1.SessionR\bsessions\"#\n" +
@@ -1371,11 +2042,14 @@ const file_mako_plugin_v1_host_proto_rawDesc = "" +
 	"\aSetItem\x12\x1e.mako.plugin.v1.SetItemRequest\x1a\x1f.mako.plugin.v1.SetItemResponse\"\v\xca\xf3\x18\astorage\x12`\n" +
 	"\n" +
 	"DeleteItem\x12!.mako.plugin.v1.DeleteItemRequest\x1a\".mako.plugin.v1.DeleteItemResponse\"\v\xca\xf3\x18\astorage\x12Z\n" +
-	"\bListKeys\x12\x1f.mako.plugin.v1.ListKeysRequest\x1a .mako.plugin.v1.ListKeysResponse\"\v\xca\xf3\x18\astorage2\xe7\x01\n" +
+	"\bListKeys\x12\x1f.mako.plugin.v1.ListKeysRequest\x1a .mako.plugin.v1.ListKeysResponse\"\v\xca\xf3\x18\astorage2\xab\x04\n" +
 	"\x0fSessionsService\x12l\n" +
 	"\fListSessions\x12#.mako.plugin.v1.ListSessionsRequest\x1a$.mako.plugin.v1.ListSessionsResponse\"\x11\xca\xf3\x18\rsessions:read\x12f\n" +
 	"\n" +
-	"GetSession\x12!.mako.plugin.v1.GetSessionRequest\x1a\".mako.plugin.v1.GetSessionResponse\"\x11\xca\xf3\x18\rsessions:read2\\\n" +
+	"GetSession\x12!.mako.plugin.v1.GetSessionRequest\x1a\".mako.plugin.v1.GetSessionResponse\"\x11\xca\xf3\x18\rsessions:read\x12r\n" +
+	"\x0eReadTranscript\x12%.mako.plugin.v1.ReadTranscriptRequest\x1a&.mako.plugin.v1.ReadTranscriptResponse\"\x11\xca\xf3\x18\rsessions:read\x12c\n" +
+	"\tSubscribe\x12 .mako.plugin.v1.SubscribeRequest\x1a!.mako.plugin.v1.SubscribeResponse\"\x11\xca\xf3\x18\rsessions:read\x12i\n" +
+	"\vUnsubscribe\x12\".mako.plugin.v1.UnsubscribeRequest\x1a#.mako.plugin.v1.UnsubscribeResponse\"\x11\xca\xf3\x18\rsessions:read2\\\n" +
 	"\vHttpService\x12M\n" +
 	"\x05Fetch\x12\x1c.mako.plugin.v1.FetchRequest\x1a\x1d.mako.plugin.v1.FetchResponse\"\a\xca\xf3\x18\x03net2p\n" +
 	"\x0fCommandsService\x12]\n" +
@@ -1394,69 +2068,87 @@ func file_mako_plugin_v1_host_proto_rawDescGZIP() []byte {
 	return file_mako_plugin_v1_host_proto_rawDescData
 }
 
-var file_mako_plugin_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_mako_plugin_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_mako_plugin_v1_host_proto_goTypes = []any{
-	(*WriteRequest)(nil),         // 0: mako.plugin.v1.WriteRequest
-	(*WriteResponse)(nil),        // 1: mako.plugin.v1.WriteResponse
-	(*GetSettingRequest)(nil),    // 2: mako.plugin.v1.GetSettingRequest
-	(*GetSettingResponse)(nil),   // 3: mako.plugin.v1.GetSettingResponse
-	(*ListSettingsRequest)(nil),  // 4: mako.plugin.v1.ListSettingsRequest
-	(*ListSettingsResponse)(nil), // 5: mako.plugin.v1.ListSettingsResponse
-	(*Setting)(nil),              // 6: mako.plugin.v1.Setting
-	(*GetItemRequest)(nil),       // 7: mako.plugin.v1.GetItemRequest
-	(*GetItemResponse)(nil),      // 8: mako.plugin.v1.GetItemResponse
-	(*SetItemRequest)(nil),       // 9: mako.plugin.v1.SetItemRequest
-	(*SetItemResponse)(nil),      // 10: mako.plugin.v1.SetItemResponse
-	(*DeleteItemRequest)(nil),    // 11: mako.plugin.v1.DeleteItemRequest
-	(*DeleteItemResponse)(nil),   // 12: mako.plugin.v1.DeleteItemResponse
-	(*ListKeysRequest)(nil),      // 13: mako.plugin.v1.ListKeysRequest
-	(*ListKeysResponse)(nil),     // 14: mako.plugin.v1.ListKeysResponse
-	(*ListSessionsRequest)(nil),  // 15: mako.plugin.v1.ListSessionsRequest
-	(*ListSessionsResponse)(nil), // 16: mako.plugin.v1.ListSessionsResponse
-	(*GetSessionRequest)(nil),    // 17: mako.plugin.v1.GetSessionRequest
-	(*GetSessionResponse)(nil),   // 18: mako.plugin.v1.GetSessionResponse
-	(*Session)(nil),              // 19: mako.plugin.v1.Session
-	(*FetchRequest)(nil),         // 20: mako.plugin.v1.FetchRequest
-	(*FetchResponse)(nil),        // 21: mako.plugin.v1.FetchResponse
-	(*RunCommandRequest)(nil),    // 22: mako.plugin.v1.RunCommandRequest
-	(*RunCommandResponse)(nil),   // 23: mako.plugin.v1.RunCommandResponse
-	nil,                          // 24: mako.plugin.v1.FetchRequest.HeadersEntry
-	nil,                          // 25: mako.plugin.v1.FetchResponse.HeadersEntry
+	(*WriteRequest)(nil),           // 0: mako.plugin.v1.WriteRequest
+	(*WriteResponse)(nil),          // 1: mako.plugin.v1.WriteResponse
+	(*GetSettingRequest)(nil),      // 2: mako.plugin.v1.GetSettingRequest
+	(*GetSettingResponse)(nil),     // 3: mako.plugin.v1.GetSettingResponse
+	(*ListSettingsRequest)(nil),    // 4: mako.plugin.v1.ListSettingsRequest
+	(*ListSettingsResponse)(nil),   // 5: mako.plugin.v1.ListSettingsResponse
+	(*Setting)(nil),                // 6: mako.plugin.v1.Setting
+	(*GetItemRequest)(nil),         // 7: mako.plugin.v1.GetItemRequest
+	(*GetItemResponse)(nil),        // 8: mako.plugin.v1.GetItemResponse
+	(*SetItemRequest)(nil),         // 9: mako.plugin.v1.SetItemRequest
+	(*SetItemResponse)(nil),        // 10: mako.plugin.v1.SetItemResponse
+	(*DeleteItemRequest)(nil),      // 11: mako.plugin.v1.DeleteItemRequest
+	(*DeleteItemResponse)(nil),     // 12: mako.plugin.v1.DeleteItemResponse
+	(*ListKeysRequest)(nil),        // 13: mako.plugin.v1.ListKeysRequest
+	(*ListKeysResponse)(nil),       // 14: mako.plugin.v1.ListKeysResponse
+	(*ReadTranscriptRequest)(nil),  // 15: mako.plugin.v1.ReadTranscriptRequest
+	(*ReadTranscriptResponse)(nil), // 16: mako.plugin.v1.ReadTranscriptResponse
+	(*TranscriptMessage)(nil),      // 17: mako.plugin.v1.TranscriptMessage
+	(*SubscribeRequest)(nil),       // 18: mako.plugin.v1.SubscribeRequest
+	(*SubscribeResponse)(nil),      // 19: mako.plugin.v1.SubscribeResponse
+	(*UnsubscribeRequest)(nil),     // 20: mako.plugin.v1.UnsubscribeRequest
+	(*UnsubscribeResponse)(nil),    // 21: mako.plugin.v1.UnsubscribeResponse
+	(*SessionEvent)(nil),           // 22: mako.plugin.v1.SessionEvent
+	(*AgentMessage)(nil),           // 23: mako.plugin.v1.AgentMessage
+	(*ListSessionsRequest)(nil),    // 24: mako.plugin.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),   // 25: mako.plugin.v1.ListSessionsResponse
+	(*GetSessionRequest)(nil),      // 26: mako.plugin.v1.GetSessionRequest
+	(*GetSessionResponse)(nil),     // 27: mako.plugin.v1.GetSessionResponse
+	(*Session)(nil),                // 28: mako.plugin.v1.Session
+	(*FetchRequest)(nil),           // 29: mako.plugin.v1.FetchRequest
+	(*FetchResponse)(nil),          // 30: mako.plugin.v1.FetchResponse
+	(*RunCommandRequest)(nil),      // 31: mako.plugin.v1.RunCommandRequest
+	(*RunCommandResponse)(nil),     // 32: mako.plugin.v1.RunCommandResponse
+	nil,                            // 33: mako.plugin.v1.FetchRequest.HeadersEntry
+	nil,                            // 34: mako.plugin.v1.FetchResponse.HeadersEntry
 }
 var file_mako_plugin_v1_host_proto_depIdxs = []int32{
 	6,  // 0: mako.plugin.v1.GetSettingResponse.setting:type_name -> mako.plugin.v1.Setting
 	6,  // 1: mako.plugin.v1.ListSettingsResponse.settings:type_name -> mako.plugin.v1.Setting
-	19, // 2: mako.plugin.v1.ListSessionsResponse.sessions:type_name -> mako.plugin.v1.Session
-	19, // 3: mako.plugin.v1.GetSessionResponse.session:type_name -> mako.plugin.v1.Session
-	24, // 4: mako.plugin.v1.FetchRequest.headers:type_name -> mako.plugin.v1.FetchRequest.HeadersEntry
-	25, // 5: mako.plugin.v1.FetchResponse.headers:type_name -> mako.plugin.v1.FetchResponse.HeadersEntry
-	0,  // 6: mako.plugin.v1.LogService.Write:input_type -> mako.plugin.v1.WriteRequest
-	2,  // 7: mako.plugin.v1.SettingsService.GetSetting:input_type -> mako.plugin.v1.GetSettingRequest
-	4,  // 8: mako.plugin.v1.SettingsService.ListSettings:input_type -> mako.plugin.v1.ListSettingsRequest
-	7,  // 9: mako.plugin.v1.StorageService.GetItem:input_type -> mako.plugin.v1.GetItemRequest
-	9,  // 10: mako.plugin.v1.StorageService.SetItem:input_type -> mako.plugin.v1.SetItemRequest
-	11, // 11: mako.plugin.v1.StorageService.DeleteItem:input_type -> mako.plugin.v1.DeleteItemRequest
-	13, // 12: mako.plugin.v1.StorageService.ListKeys:input_type -> mako.plugin.v1.ListKeysRequest
-	15, // 13: mako.plugin.v1.SessionsService.ListSessions:input_type -> mako.plugin.v1.ListSessionsRequest
-	17, // 14: mako.plugin.v1.SessionsService.GetSession:input_type -> mako.plugin.v1.GetSessionRequest
-	20, // 15: mako.plugin.v1.HttpService.Fetch:input_type -> mako.plugin.v1.FetchRequest
-	22, // 16: mako.plugin.v1.CommandsService.RunCommand:input_type -> mako.plugin.v1.RunCommandRequest
-	1,  // 17: mako.plugin.v1.LogService.Write:output_type -> mako.plugin.v1.WriteResponse
-	3,  // 18: mako.plugin.v1.SettingsService.GetSetting:output_type -> mako.plugin.v1.GetSettingResponse
-	5,  // 19: mako.plugin.v1.SettingsService.ListSettings:output_type -> mako.plugin.v1.ListSettingsResponse
-	8,  // 20: mako.plugin.v1.StorageService.GetItem:output_type -> mako.plugin.v1.GetItemResponse
-	10, // 21: mako.plugin.v1.StorageService.SetItem:output_type -> mako.plugin.v1.SetItemResponse
-	12, // 22: mako.plugin.v1.StorageService.DeleteItem:output_type -> mako.plugin.v1.DeleteItemResponse
-	14, // 23: mako.plugin.v1.StorageService.ListKeys:output_type -> mako.plugin.v1.ListKeysResponse
-	16, // 24: mako.plugin.v1.SessionsService.ListSessions:output_type -> mako.plugin.v1.ListSessionsResponse
-	18, // 25: mako.plugin.v1.SessionsService.GetSession:output_type -> mako.plugin.v1.GetSessionResponse
-	21, // 26: mako.plugin.v1.HttpService.Fetch:output_type -> mako.plugin.v1.FetchResponse
-	23, // 27: mako.plugin.v1.CommandsService.RunCommand:output_type -> mako.plugin.v1.RunCommandResponse
-	17, // [17:28] is the sub-list for method output_type
-	6,  // [6:17] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	17, // 2: mako.plugin.v1.ReadTranscriptResponse.messages:type_name -> mako.plugin.v1.TranscriptMessage
+	28, // 3: mako.plugin.v1.SessionEvent.session:type_name -> mako.plugin.v1.Session
+	23, // 4: mako.plugin.v1.SessionEvent.message:type_name -> mako.plugin.v1.AgentMessage
+	28, // 5: mako.plugin.v1.ListSessionsResponse.sessions:type_name -> mako.plugin.v1.Session
+	28, // 6: mako.plugin.v1.GetSessionResponse.session:type_name -> mako.plugin.v1.Session
+	33, // 7: mako.plugin.v1.FetchRequest.headers:type_name -> mako.plugin.v1.FetchRequest.HeadersEntry
+	34, // 8: mako.plugin.v1.FetchResponse.headers:type_name -> mako.plugin.v1.FetchResponse.HeadersEntry
+	0,  // 9: mako.plugin.v1.LogService.Write:input_type -> mako.plugin.v1.WriteRequest
+	2,  // 10: mako.plugin.v1.SettingsService.GetSetting:input_type -> mako.plugin.v1.GetSettingRequest
+	4,  // 11: mako.plugin.v1.SettingsService.ListSettings:input_type -> mako.plugin.v1.ListSettingsRequest
+	7,  // 12: mako.plugin.v1.StorageService.GetItem:input_type -> mako.plugin.v1.GetItemRequest
+	9,  // 13: mako.plugin.v1.StorageService.SetItem:input_type -> mako.plugin.v1.SetItemRequest
+	11, // 14: mako.plugin.v1.StorageService.DeleteItem:input_type -> mako.plugin.v1.DeleteItemRequest
+	13, // 15: mako.plugin.v1.StorageService.ListKeys:input_type -> mako.plugin.v1.ListKeysRequest
+	24, // 16: mako.plugin.v1.SessionsService.ListSessions:input_type -> mako.plugin.v1.ListSessionsRequest
+	26, // 17: mako.plugin.v1.SessionsService.GetSession:input_type -> mako.plugin.v1.GetSessionRequest
+	15, // 18: mako.plugin.v1.SessionsService.ReadTranscript:input_type -> mako.plugin.v1.ReadTranscriptRequest
+	18, // 19: mako.plugin.v1.SessionsService.Subscribe:input_type -> mako.plugin.v1.SubscribeRequest
+	20, // 20: mako.plugin.v1.SessionsService.Unsubscribe:input_type -> mako.plugin.v1.UnsubscribeRequest
+	29, // 21: mako.plugin.v1.HttpService.Fetch:input_type -> mako.plugin.v1.FetchRequest
+	31, // 22: mako.plugin.v1.CommandsService.RunCommand:input_type -> mako.plugin.v1.RunCommandRequest
+	1,  // 23: mako.plugin.v1.LogService.Write:output_type -> mako.plugin.v1.WriteResponse
+	3,  // 24: mako.plugin.v1.SettingsService.GetSetting:output_type -> mako.plugin.v1.GetSettingResponse
+	5,  // 25: mako.plugin.v1.SettingsService.ListSettings:output_type -> mako.plugin.v1.ListSettingsResponse
+	8,  // 26: mako.plugin.v1.StorageService.GetItem:output_type -> mako.plugin.v1.GetItemResponse
+	10, // 27: mako.plugin.v1.StorageService.SetItem:output_type -> mako.plugin.v1.SetItemResponse
+	12, // 28: mako.plugin.v1.StorageService.DeleteItem:output_type -> mako.plugin.v1.DeleteItemResponse
+	14, // 29: mako.plugin.v1.StorageService.ListKeys:output_type -> mako.plugin.v1.ListKeysResponse
+	25, // 30: mako.plugin.v1.SessionsService.ListSessions:output_type -> mako.plugin.v1.ListSessionsResponse
+	27, // 31: mako.plugin.v1.SessionsService.GetSession:output_type -> mako.plugin.v1.GetSessionResponse
+	16, // 32: mako.plugin.v1.SessionsService.ReadTranscript:output_type -> mako.plugin.v1.ReadTranscriptResponse
+	19, // 33: mako.plugin.v1.SessionsService.Subscribe:output_type -> mako.plugin.v1.SubscribeResponse
+	21, // 34: mako.plugin.v1.SessionsService.Unsubscribe:output_type -> mako.plugin.v1.UnsubscribeResponse
+	30, // 35: mako.plugin.v1.HttpService.Fetch:output_type -> mako.plugin.v1.FetchResponse
+	32, // 36: mako.plugin.v1.CommandsService.RunCommand:output_type -> mako.plugin.v1.RunCommandResponse
+	23, // [23:37] is the sub-list for method output_type
+	9,  // [9:23] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_mako_plugin_v1_host_proto_init() }
@@ -1471,7 +2163,7 @@ func file_mako_plugin_v1_host_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_plugin_v1_host_proto_rawDesc), len(file_mako_plugin_v1_host_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   26,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   6,
 		},

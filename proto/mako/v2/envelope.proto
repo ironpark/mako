@@ -154,6 +154,10 @@ message Envelope {
     PluginListings plugin_listings = 134;
     InstallPlugin install_plugin = 135;
     PluginInstalled plugin_installed = 136;
+
+    // A node's panels' names and titles, for a peer (revision 35).
+    ListPanels list_panels = 137;
+    Panels panels = 138;
   }
 }
 
@@ -162,4 +166,8 @@ message Error {
   string message = 1;
   // code is for programs: "changed", "unsupported".
   string code = 2;
+  // args are what the code's sentence names, in order (an ID, a version,
+  // a registry), for a front-end to say it in its user's language, the
+  // message kept for one that does not know the code (revision 34).
+  repeated string args = 3;
 }

@@ -28,6 +28,7 @@ func TestEveryTypeHasABody(t *testing.T) {
 		TypeListDevices, TypeDevices, TypeBorrow, TypeLease, TypeGiveBack, TypeListLeases, TypeLeases, TypeClaim, TypeClaimed, TypeDeviceConn, TypeDeviceListen, TypeDeviceAccept,
 		TypeListPlugins, TypePlugins, TypePluginAction, TypePluginDone, TypeWatchBlock, TypeBlockUpdate, TypeBlockEvent, TypeListAgentBlocks, TypeAgentBlocks,
 		TypeListRegistries, TypeRegistries, TypeRegistryAction, TypeSearchPlugins, TypePluginListings, TypeInstallPlugin, TypePluginInstalled,
+		TypeListPanels, TypePanels,
 	}
 	for _, typ := range types {
 		if _, ok := bodyFields[typ]; !ok {

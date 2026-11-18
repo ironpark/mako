@@ -24,7 +24,7 @@ public interface LayoutDecisionOrBuilder extends
 
   /**
    * <pre>
-   * keep, revert, forget
+   * keep, revert, forget; allow or deny (revision 32)
    * </pre>
    *
    * <code>string decision = 2 [json_name = "decision"];</code>
@@ -33,7 +33,7 @@ public interface LayoutDecisionOrBuilder extends
   java.lang.String getDecision();
   /**
    * <pre>
-   * keep, revert, forget
+   * keep, revert, forget; allow or deny (revision 32)
    * </pre>
    *
    * <code>string decision = 2 [json_name = "decision"];</code>
@@ -61,4 +61,26 @@ public interface LayoutDecisionOrBuilder extends
    */
   com.google.protobuf.ByteString
       getNodeIdBytes();
+
+  /**
+   * <pre>
+   * option is an allow's, as an approval's: allow_space or allow_always,
+   * "" for once (revision 32).
+   * </pre>
+   *
+   * <code>string option = 4 [json_name = "option"];</code>
+   * @return The option.
+   */
+  java.lang.String getOption();
+  /**
+   * <pre>
+   * option is an allow's, as an approval's: allow_space or allow_always,
+   * "" for once (revision 32).
+   * </pre>
+   *
+   * <code>string option = 4 [json_name = "option"];</code>
+   * @return The bytes for option.
+   */
+  com.google.protobuf.ByteString
+      getOptionBytes();
 }

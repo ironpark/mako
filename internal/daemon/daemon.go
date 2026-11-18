@@ -444,6 +444,8 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleBlockEvent(ctx, stream, env, fromPeer)
 	case protocol.TypeListAgentBlocks:
 		return d.handleListAgentBlocks(ctx, stream, env, fromPeer)
+	case protocol.TypeListPanels:
+		return d.handleListPanels(ctx, stream, env)
 	case protocol.TypeListRegistries, protocol.TypeRegistryAction, protocol.TypeSearchPlugins, protocol.TypeInstallPlugin:
 		return d.handlePluginStore(ctx, stream, env, fromPeer)
 

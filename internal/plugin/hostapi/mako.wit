@@ -93,6 +93,111 @@ interface types {
     keys: list<string>,
   }
 
+  /// ReadTranscriptRequest names a session, and the page.
+  record read-transcript-request {
+    session-id: string,
+    /// before is the cursor a page gave, to read the messages before it;
+    /// "" reads the latest.
+    before: string,
+    /// limit is the most messages a page holds, at most 50; 0 is 20.
+    limit: u32,
+  }
+
+  /// ReadTranscriptResponse is a page of the conversation.
+  record read-transcript-response {
+    /// supported says mako reads the conversation its agent keeps.
+    supported: bool,
+    /// messages are the page's, oldest first.
+    messages: list<transcript-message>,
+    /// before is the cursor of the page before this one; "" when this one
+    /// is the first.
+    before: string,
+    /// truncated says text was cut: a message's, or the page's at 256 KiB.
+    truncated: bool,
+  }
+
+  /// TranscriptMessage is a message of a conversation.
+  record transcript-message {
+    /// role is "user", "assistant" or "tool".
+    role: string,
+    /// text is at most 8 KiB.
+    text: string,
+    /// tool is the tool a call called; detail what it was given, at most 1
+    /// KiB, and result what it gave back, at most 2 KiB.
+    tool: string,
+    detail: string,
+    %result: string,
+    /// kind is what the tool does, whatever its agent calls it.
+    kind: string,
+    error: bool,
+    /// pending says a call was not answered yet.
+    pending: bool,
+  }
+
+  /// SubscribeRequest names kinds of event: "sessionStarted", "sessionEnded",
+  /// "sessionSlept", "sessionStatus" and "agentMessage".
+  record subscribe-request {
+    events: list<string>,
+  }
+
+  /// SubscribeResponse is the kinds the plugin is subscribed to after.
+  record subscribe-response {
+    events: list<string>,
+  }
+
+  /// UnsubscribeRequest names kinds of event; none names every one.
+  record unsubscribe-request {
+    events: list<string>,
+  }
+
+  /// UnsubscribeResponse is the kinds the plugin is subscribed to after.
+  record unsubscribe-response {
+    events: list<string>,
+  }
+
+  /// SessionEvent is what a plugin subscribed to a kind of event is told,
+  /// as a call of the handler of its kind in its default export's on, as a
+  /// block's on is called for a message: on.sessionStarted(event), ...
+  /// Events are of this node's sessions alone, at most 10 a second to a
+  /// plugin, the rest dropped; none comes while the plugin lacks
+  /// sessions:read, is disabled, refused or blocked.
+  record session-event {
+    /// kind is "sessionStarted", "sessionEnded", "sessionSlept" (its
+    /// program stopped, to start again on its conversation),
+    /// "sessionStatus" (its agent's status changed) or "agentMessage".
+    kind: string,
+    /// session is the session, as it stands after.
+    session: option<session>,
+    /// previous_status is its agent's status before, for sessionStatus.
+    previous-status: string,
+    /// message is the message, for agentMessage.
+    message: option<agent-message>,
+    /// request_id is a StartAgent's, for "agentStarted", when the agent it
+    /// asked for started (session is it), and "agentRefused", when the user
+    /// refused it or it did not start (error says why). These two come to
+    /// a plugin that asked, without a subscription.
+    request-id: string,
+    error: string,
+    /// document and revision are, for "layoutChanged", the window layout
+    /// document a PatchLayout changed and its revision after; a
+    /// "layoutRefused" tells why it did not change in error. These two come
+    /// to a plugin that asked, without a subscription.
+    document: string,
+    revision: string,
+  }
+
+  /// AgentMessage is a message one agent sent another of this node's, as
+  /// send_message does, or the window or mako left it.
+  record agent-message {
+    id: string,
+    from-session-id: string,
+    to-session-id: string,
+    /// text is at most 4 KiB.
+    text: string,
+    /// note says mako wrote it, of the agent from: not one it sent.
+    note: bool,
+  }
+
   /// ListSessionsResponse is the sessions, oldest first.
   record list-sessions-response {
     sessions: list<session>,
@@ -110,7 +215,8 @@ interface types {
     session: option<session>,
   }
 
-  /// Session is a session as a plugin sees it: no terminal, no transcript.
+  /// Session is a session as a plugin sees it: no terminal; its transcript
+  /// is ReadTranscript's.
   record session {
     id: string,
     name: string,
@@ -118,7 +224,8 @@ interface types {
     agent: string,
     /// project is its working folder.
     project: string,
-    /// state is its process's: "running", "exited" or "asleep".
+    /// state is its process's: "starting", "running", "exited", or
+    /// "stopped", asleep, to start again on its conversation.
     state: string,
     /// status is its agent's: "idle", "working", "waiting" or "done".
     status: string,
@@ -153,21 +260,129 @@ interface types {
   /// SendMessageRequest is a message for a session.
   record send-message-request {
     session-id: string,
+    /// text is at most 32 KiB.
     text: string,
   }
 
-  /// ReadFileRequest names a file, relative to the project's folder.
+  /// SendMessageResponse says it was left.
+  record send-message-response {
+    /// id is the message's.
+    id: string,
+  }
+
+  /// StartAgentRequest is an agent to start.
+  record start-agent-request {
+    /// agent is an agent of this node's ("claude", "codex", ...), and
+    /// profile one of its profiles, "" for none.
+    agent: string,
+    profile: string,
+    /// project is a project's ID, and root one of its folders, as
+    /// FilesService.ListProjects gives them: where the agent runs.
+    project: string,
+    root: string,
+    /// prompt is the task it starts with, at most 64 KiB.
+    prompt: string,
+    /// name is the session's, "" for its agent's.
+    name: string,
+  }
+
+  /// StartAgentResponse says the start was taken.
+  record start-agent-response {
+    /// request_id names the start in the event that tells its outcome.
+    request-id: string,
+    /// asked says the user is asked first; else it starts at once.
+    asked: bool,
+  }
+
+  /// StopAgentRequest names a session the plugin started.
+  record stop-agent-request {
+    session-id: string,
+  }
+
+  /// ReadFileRequest names a file, and the piece of it to read.
   record read-file-request {
+    /// path is the file's, relative to root: no "..", no leading /.
+    path: string,
+    /// project is a project's ID, and root one of its folders, as
+    /// ListProjects gives them.
+    project: string,
+    root: string,
+    /// offset is where the piece starts, in bytes; length its most, 0 and at
+    /// most 1 MiB.
+    offset: f64,
+    length: u32,
+  }
+
+  /// ReadFileResponse is the piece read.
+  record read-file-response {
+    /// text is the piece as text, when it is UTF-8; "" otherwise.
+    text: string,
+    /// data is the piece's bytes, whatever they are.
+    data: list<u8>,
+    /// size is the whole file's, in bytes.
+    size: f64,
+    /// eof says the piece reaches the file's end.
+    eof: bool,
+    /// binary says the piece is not UTF-8 text.
+    binary: bool,
+  }
+
+  /// ListProjectsResponse is the projects.
+  record list-projects-response {
+    projects: list<project>,
+  }
+
+  /// Project is a project this node knows, and its folders on this node.
+  record project {
+    id: string,
+    name: string,
+    roots: list<string>,
+  }
+
+  /// ListDirRequest names a folder: "" or "." for root itself.
+  record list-dir-request {
+    project: string,
+    root: string,
     path: string,
   }
 
-  /// ReadFileResponse is the file's text.
-  record read-file-response {
+  /// ListDirResponse is the folder's entries, by name.
+  record list-dir-response {
+    entries: list<dir-entry>,
+    /// truncated says there were more than 2000.
+    truncated: bool,
+  }
+
+  /// DirEntry is an entry of a folder.
+  record dir-entry {
+    name: string,
+    dir: bool,
+    /// link says it is a symbolic link.
+    link: bool,
+    size: f64,
+  }
+
+  /// WriteFileRequest is a file's new contents: data, or text.
+  record write-file-request {
+    project: string,
+    root: string,
+    path: string,
+    data: list<u8>,
     text: string,
+    /// make_dirs makes the folders the path names that are not there, in
+    /// root.
+    make-dirs: bool,
+  }
+
+  /// WriteFileResponse is the file written.
+  record write-file-response {
+    size: f64,
   }
 
   /// GetSecretRequest names a secret.
   record get-secret-request {
+    /// name is letters, digits and ._-, starting with a letter or digit, at
+    /// most 64.
     name: string,
   }
 
@@ -177,14 +392,49 @@ interface types {
     value: string,
   }
 
-  /// PatchLayoutRequest is the operations, as patch_layout's JSON.
-  record patch-layout-request {
-    ops: string,
+  /// SetSecretRequest is a secret and its name.
+  record set-secret-request {
+    name: string,
+    /// value is UTF-8 of at most 2048 bytes.
+    value: string,
   }
 
-  /// PatchLayoutResponse is the document's revision after.
+  /// DeleteSecretRequest names a secret.
+  record delete-secret-request {
+    name: string,
+  }
+
+  /// DeleteSecretResponse says whether there was one.
+  record delete-secret-response {
+    found: bool,
+  }
+
+  /// ListSecretsResponse is the names, sorted.
+  record list-secrets-response {
+    names: list<string>,
+  }
+
+  /// PatchLayoutRequest is the operations, as patch_layout's JSON.
+  record patch-layout-request {
+    /// ops is the JSON array of operations patch_layout takes: insert,
+    /// remove, move, resize, select, by node id.
+    ops: string,
+    /// document is the document's name; "" is default.
+    document: string,
+    /// if_rev is the revision the ops were made against, "" for none: the
+    /// change is refused if the document changed since.
+    if-rev: string,
+  }
+
+  /// PatchLayoutResponse says the change was taken.
   record patch-layout-response {
+    /// revision is always "": the document's revision after comes with the
+    /// event that tells the outcome.
     revision: string,
+    /// request_id names the change in that event.
+    request-id: string,
+    /// asked says the user is asked to allow it.
+    asked: bool,
   }
 
   /// RunProcessRequest is a program and its arguments.
@@ -244,7 +494,7 @@ interface storage {
 
 /// SessionsService reads this node's sessions.
 interface sessions {
-  use types.{list-sessions-response, get-session-request, get-session-response};
+  use types.{list-sessions-response, get-session-request, get-session-response, read-transcript-request, read-transcript-response, subscribe-request, subscribe-response, unsubscribe-request, unsubscribe-response};
 
   /// ListSessions lists the node's sessions.
   /// Needs the permission sessions:read.
@@ -253,6 +503,25 @@ interface sessions {
   /// GetSession reads one session.
   /// Needs the permission sessions:read.
   get-session: func(req: get-session-request) -> result<get-session-response, string>;
+
+  /// ReadTranscript reads a page of a session's conversation, as its agent
+  /// logged it: the latest messages, or those before a cursor an earlier
+  /// page gave. A session of this node's alone, at most 30 pages a minute.
+  /// Needs the permission sessions:read.
+  read-transcript: func(req: read-transcript-request) -> result<read-transcript-response, string>;
+
+  /// Subscribe has the plugin told of the events of the kinds named, as
+  /// calls of its default export's on handlers (see SessionEvent): the
+  /// daemon starts the plugin for one when it is not running. What a
+  /// plugin subscribed to stays, kept on this node, until it unsubscribes,
+  /// or is removed.
+  /// Needs the permission sessions:read.
+  subscribe: func(req: subscribe-request) -> result<subscribe-response, string>;
+
+  /// Unsubscribe stops the events of the kinds named; none named stops
+  /// every one.
+  /// Needs the permission sessions:read.
+  unsubscribe: func(req: unsubscribe-request) -> result<unsubscribe-response, string>;
 }
 
 /// HttpService makes HTTP requests for the plugin, to the hosts its
@@ -277,39 +546,105 @@ interface commands {
   run-command: func(req: run-command-request) -> result<_, string>;
 }
 
-/// MessagesService acts on sessions: sends them messages, starts and stops
-/// agents.
+/// MessagesService acts on this node's sessions: sends their agents
+/// messages, starts agents and stops those the plugin started. A message
+/// is headed as the plugin's, so that the agent cannot take it for the
+/// user's or mako's. Starting an agent runs a program that costs money:
+/// the user is asked the first time, and may allow the plugin from then
+/// on; the start is carried out after the call returns, and its outcome
+/// comes to the default export's on.agentStarted or on.agentRefused, as a
+/// SessionEvent with the request's id.
 interface messages {
-  use types.{send-message-request};
+  use types.{send-message-request, send-message-response, start-agent-request, start-agent-response, stop-agent-request};
 
-  /// SendMessage types a message into a session's agent.
+  /// SendMessage leaves a message for a session's agent, typed into its
+  /// terminal once it waits at its prompt, as send_message does: a session
+  /// of this node's whose agent takes messages. 30 a minute.
   /// Needs the permission sessions:write.
-  send-message: func(req: send-message-request) -> result<_, string>;
+  send-message: func(req: send-message-request) -> result<send-message-response, string>;
+
+  /// StartAgent asks to start an agent with a prompt in a folder of a
+  /// project this node knows (FilesService.ListProjects). At most 3 of a
+  /// plugin's run at once, and it starts 10 an hour.
+  /// Needs the permission sessions:write.
+  start-agent: func(req: start-agent-request) -> result<start-agent-response, string>;
+
+  /// StopAgent stops a session the plugin started.
+  /// Needs the permission sessions:write.
+  stop-agent: func(req: stop-agent-request) -> result<_, string>;
 }
 
-/// FilesService reads the current project's folder.
+/// FilesService reads the files of the projects this node knows, and
+/// with fs:project:write writes them. A project is named by its ID and one
+/// of its folders by its path, as ListProjects gives them, and a file by
+/// its path in that folder: relative, without "..". Nothing outside a
+/// project's folders is reached, by a path or through a symbolic link;
+/// nothing but regular files is read or written; a write replaces the file
+/// whole, atomically, and never under a folder named .git. A plugin reads
+/// 120 times a minute and writes 30, at most 1 MiB a call.
 interface files {
-  use types.{read-file-request, read-file-response};
+  use types.{read-file-request, read-file-response, list-projects-response, list-dir-request, list-dir-response, write-file-request, write-file-response};
 
-  /// ReadFile reads a file of the project.
+  /// ReadFile reads a file of a project's folder, or a piece of it.
   /// Needs the permission fs:project.
   read-file: func(req: read-file-request) -> result<read-file-response, string>;
+
+  /// ListProjects lists the projects this node knows, and their folders
+  /// on it.
+  /// Needs the permission fs:project.
+  list-projects: func() -> result<list-projects-response, string>;
+
+  /// ListDir lists a folder of a project's folder.
+  /// Needs the permission fs:project.
+  list-dir: func(req: list-dir-request) -> result<list-dir-response, string>;
+
+  /// WriteFile writes a file of a project's folder whole, in place of what
+  /// was there.
+  /// Needs the permission fs:project:write.
+  write-file: func(req: write-file-request) -> result<write-file-response, string>;
 }
 
-/// SecretsService keeps the plugin's own secrets in the system's keychain.
+/// SecretsService keeps the plugin's own secrets in the system's keychain
+/// (the macOS Keychain, the Secret Service, Windows' Credential Manager),
+/// on this node alone: never synced, never logged, removed with the
+/// plugin. A node whose system has none keeps them in a file only the user
+/// may read, and says so to the user. A plugin keeps at most 32, and calls
+/// the group at most 60 times a minute.
 interface secrets {
-  use types.{get-secret-request, get-secret-response};
+  use types.{get-secret-request, get-secret-response, set-secret-request, delete-secret-request, delete-secret-response, list-secrets-response};
 
   /// GetSecret reads a secret.
   /// Needs the permission secrets.
   get-secret: func(req: get-secret-request) -> result<get-secret-response, string>;
+
+  /// SetSecret keeps a secret, replacing one of its name.
+  /// Needs the permission secrets.
+  set-secret: func(req: set-secret-request) -> result<_, string>;
+
+  /// DeleteSecret removes a secret.
+  /// Needs the permission secrets.
+  delete-secret: func(req: delete-secret-request) -> result<delete-secret-response, string>;
+
+  /// ListSecrets lists the names of the secrets kept, not their values.
+  /// Needs the permission secrets.
+  list-secrets: func() -> result<list-secrets-response, string>;
 }
 
-/// LayoutService changes the window's layout, as the user allows.
+/// LayoutService changes the window's layout, as the user allows, through
+/// the very flow an agent's patch_layout takes: the change is staged on
+/// this node and shown, the user is asked unless they allowed this
+/// plugin such changes before (for the document, or every one), and only
+/// then is it written into the workspace the user's nodes share. The
+/// window names the plugin as the change's origin. A plugin changes a
+/// document's root alone, never its variants. The answer may take
+/// minutes, so the call returns at once; the outcome comes to the default
+/// export's on.layoutChanged or on.layoutRefused, as a SessionEvent with
+/// the request's id.
 interface layout {
   use types.{patch-layout-request, patch-layout-response};
 
-  /// PatchLayout changes the window layout document, as patch_layout does.
+  /// PatchLayout changes a window layout document by node id, as
+  /// patch_layout does. 10 a minute, one waiting at a time.
   /// Needs the permission layout:write.
   patch-layout: func(req: patch-layout-request) -> result<patch-layout-response, string>;
 }

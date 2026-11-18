@@ -180,7 +180,7 @@ func Reply[R proto.Message](env *protocol.Envelope) (R, error) {
 	if e := env.GetError(); e != nil {
 		// A CodedError, its code "" for none, so a caller tells the
 		// daemon's answer from a request failing on the way.
-		return zero, &protocol.CodedError{Code: e.GetCode(), Message: "remote: " + e.GetMessage()}
+		return zero, &protocol.CodedError{Code: e.GetCode(), Message: "remote: " + e.GetMessage(), Args: e.GetArgs()}
 	}
 	return protocol.Body[R](env)
 }

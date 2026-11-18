@@ -173,6 +173,9 @@ func (p *plugin) disown() error {
 	err := p.m.forget(p.id)
 	p.store.reset()
 	p.settings.reset()
+	p.vault.reset()
+	p.subs.reset()
+	p.m.subsChanged()
 	p.status(func() { p.running = false })
 	return err
 }
@@ -180,6 +183,15 @@ func (p *plugin) disown() error {
 func (m *Manager) forget(id string) error {
 	if err := m.grant.update(id, func(e *grantEntry) { *e = grantEntry{} }); err != nil {
 		return err
+	}
+	if m.cfg.Layout != nil {
+		m.cfg.Layout.Forget(id)
+	}
+	// The secrets in the keychain go first, by the names the data folder
+	// lists; a secret not removed is said, its index kept to try again.
+	if err := newVault(m, id).purge(); err != nil {
+		m.cfg.Log.Warn("plugin's secrets were not all removed from the keychain", "plugin", id, "err", err)
+		return fmt.Errorf("the plugin's secrets were not all removed from the keychain: %w", err)
 	}
 	return os.RemoveAll(filepath.Join(m.cfg.DataDir, id))
 }

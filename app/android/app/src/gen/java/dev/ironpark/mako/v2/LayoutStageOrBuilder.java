@@ -169,4 +169,30 @@ public interface LayoutStageOrBuilder extends
    * @return The deadline.
    */
   long getDeadline();
+
+  /**
+   * <pre>
+   * plugin_id is the plugin that asked, for a change of a plugin's
+   * (layout:write), which no session asks for: session_id is then empty,
+   * and agent names the plugin for an older window. Such a change is
+   * allowed or denied with a LayoutDecision (revision 32).
+   * </pre>
+   *
+   * <code>string plugin_id = 10 [json_name = "pluginId"];</code>
+   * @return The pluginId.
+   */
+  java.lang.String getPluginId();
+  /**
+   * <pre>
+   * plugin_id is the plugin that asked, for a change of a plugin's
+   * (layout:write), which no session asks for: session_id is then empty,
+   * and agent names the plugin for an older window. Such a change is
+   * allowed or denied with a LayoutDecision (revision 32).
+   * </pre>
+   *
+   * <code>string plugin_id = 10 [json_name = "pluginId"];</code>
+   * @return The bytes for pluginId.
+   */
+  com.google.protobuf.ByteString
+      getPluginIdBytes();
 }

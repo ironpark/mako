@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -240,6 +241,14 @@ func (r *rig) refused(op, id, reg, want string) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		r.t.Fatalf("%s %s from %s: %v; want an error saying %q", op, id, reg, err, want)
 	}
+	// Every refusal of the store's has its code, for a window to say it in
+	// its user's language, naming the plugin first.
+	if code, ok := refusalCodes[want]; ok {
+		var ce *protocol.CodedError
+		if !errors.As(err, &ce) || ce.Code != code || len(ce.Args) == 0 || (code != protocol.CodeRegistryUnreachable && ce.Args[0] != id) {
+			r.t.Fatalf("%s %s: %#v; want code %s naming %s", op, id, err, code, id)
+		}
+	}
 	if after := r.snapshot(id); after != before {
 		r.t.Fatalf("a refused %s changed the plugin's folder or install:\n%s\nto\n%s", op, before, after)
 	}
@@ -398,4 +407,22 @@ func text(n *protocol.UiNode) string {
 func get(t *testing.T, f *registry.Fetcher, url string, max int64, within time.Duration) ([]byte, error) {
 	t.Helper()
 	return f.Get(context.Background(), url, max, within)
+}
+
+// refusalCodes are the codes of the refusals the tests make, by what
+// their message says.
+var refusalCodes = map[string]string{
+	"blocked by the registry":                                        protocol.CodePluginBlocked,
+	"a folder of a plugin in development":                            protocol.CodeDevFolder,
+	"an update must be signed by the same key":                       protocol.CodePinnedKey,
+	"not by the publisher key":                                       protocol.CodeSignatureMismatch,
+	"listed by 2 registries":                                         protocol.CodeRegistryNeeded,
+	"SHA-256 or size differs":                                        protocol.CodeHashMismatch,
+	"lists a package of the plugin another as pkg":                   protocol.CodeBadPackage,
+	"lists a package of pkg 1.0.1 as 1.0.0":                          protocol.CodeBadPackage,
+	"is installed already":                                           protocol.CodeInstalledAlready,
+	"mako does not go back a version":                                protocol.CodeDowngrade,
+	"asks for net:attacker.example, which the listing does not show": protocol.CodePermissionsDiffer,
+	"does not ask for sessions:read, which the listing shows":        protocol.CodePermissionsDiffer,
+	"could not be read":                                              protocol.CodeRegistryUnreachable,
 }

@@ -202,7 +202,9 @@ func (m *model) answerStage(st *protocol.LayoutStage, yes bool) {
 	if m.post == nil {
 		return // not started, as in a test
 	}
-	if st.GetPhase() == protocol.LayoutApprove {
+	if st.GetPhase() == protocol.LayoutApprove && st.GetPluginId() != "" {
+		m.decideLayout(st.GetId(), pick(yes, protocol.DecisionAllow, protocol.DecisionDeny), "")
+	} else if st.GetPhase() == protocol.LayoutApprove {
 		m.answerLayoutApproval(st.GetSessionId(), st.GetId(), pick(yes, protocol.DecisionAllow, protocol.DecisionDeny), "")
 	} else {
 		decision := pick(yes, protocol.LayoutKeep, protocol.LayoutRevert)
@@ -228,6 +230,25 @@ func (m *model) answerLayoutApproval(id, approval, decision, option string) {
 	if decision != protocol.DecisionAllow {
 		m.LayoutStage.Set(nil)
 	}
+}
+
+// decideLayout answers a plugin's change of the window layout, which no
+// session holds an approval of.
+func (m *model) decideLayout(stage, decision, option string) {
+	if m.post == nil {
+		return // not started, as in a test
+	}
+	if decision != protocol.DecisionAllow {
+		m.LayoutStage.Set(nil)
+	}
+	fetch(m, 5*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Workspace, error) {
+		return c.DecideLayout(ctx, &protocol.LayoutDecision{StageId: stage, Decision: decision, Option: option})
+	}, func(ws *protocol.Workspace, err error) {
+		if err != nil {
+			m.connErr(err)
+		}
+		m.link.pollNow()
+	})
 }
 
 // forgetLayoutAllowances has agents ask again before every change of the

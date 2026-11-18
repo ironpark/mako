@@ -29,7 +29,30 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 31
+const Revision = 35
+
+// RevisionPanels adds ListPanels, which a node let in, a phone, asks for
+// the names, titles and kinds of the blocks the node's layout documents
+// place and its agents show, routed by node_id.
+const RevisionPanels = 35
+
+// RevisionCodedErrors adds Error.args and the codes of the plugin
+// store's refusals (CodeRegistryUnreachable, ...), which a front-end says
+// in its user's language.
+const RevisionCodedErrors = 34
+
+// RevisionUiChart adds the UI vocabulary's chart node: UiNode.chart,
+// series and labels, a line, bar or sparkline of a few series of numbers.
+const RevisionUiChart = 33
+
+// RevisionPluginGroups adds what the Host API's groups opened then show
+// a front-end: Plugins.secrets and secrets_note, where the node keeps its
+// plugins' secrets (the system's keychain, or a file when it has none);
+// PluginInfo.agent_ask and agents_allowed, and the PluginAction ops
+// allow_agent, deny_agent and forget_agents, for the agents a plugin
+// asks to start; LayoutStage.plugin_id, and LayoutDecision allow and
+// deny with option, for a plugin's change of the window layout.
+const RevisionPluginGroups = 32
 
 // RevisionKnownPublisher adds PluginListing's and PluginInstalled's
 // previous_fingerprint, and PluginInstalled's fingerprint, saying that a plugin's ID was installed before

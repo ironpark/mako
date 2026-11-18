@@ -60,8 +60,15 @@ func (*ListPlugins) Descriptor() ([]byte, []int) {
 
 // Plugins are the node's plugins, in the order of their IDs.
 type Plugins struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Plugins       []*PluginInfo          `protobuf:"bytes,1,rep,name=plugins,proto3" json:"plugins,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Plugins []*PluginInfo          `protobuf:"bytes,1,rep,name=plugins,proto3" json:"plugins,omitempty"`
+	// secrets is where the node keeps its plugins' secrets: the name of the
+	// system's keychain ("macOS Keychain", "Secret Service", "Windows
+	// Credential Manager"), or "file" when it reaches none, a file of each
+	// plugin's only the user may read, secrets_note saying why (revision
+	// 32). "" from an older daemon.
+	Secrets       string `protobuf:"bytes,2,opt,name=secrets,proto3" json:"secrets,omitempty"`
+	SecretsNote   string `protobuf:"bytes,3,opt,name=secrets_note,json=secretsNote,proto3" json:"secrets_note,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -103,6 +110,20 @@ func (x *Plugins) GetPlugins() []*PluginInfo {
 	return nil
 }
 
+func (x *Plugins) GetSecrets() string {
+	if x != nil {
+		return x.Secrets
+	}
+	return ""
+}
+
+func (x *Plugins) GetSecretsNote() string {
+	if x != nil {
+		return x.SecretsNote
+	}
+	return ""
+}
+
 // PluginInfo is a plugin as its manifest declares it, and how it stands.
 type PluginInfo struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
@@ -139,7 +160,14 @@ type PluginInfo struct {
 	Update    string `protobuf:"bytes,16,opt,name=update,proto3" json:"update,omitempty"`
 	// blocked is why a registry of this node's blocks the plugin: state is
 	// then "blocked", and it cannot be enabled while it stands.
-	Blocked       string `protobuf:"bytes,17,opt,name=blocked,proto3" json:"blocked,omitempty"`
+	Blocked string `protobuf:"bytes,17,opt,name=blocked,proto3" json:"blocked,omitempty"`
+	// agent_ask is an agent the plugin asks to start, which waits for the
+	// user to allow it, once or always for this plugin (revision 32): a
+	// PluginAction "allow_agent" or "deny_agent" with key its id answers.
+	AgentAsk *PluginAgentAsk `protobuf:"bytes,18,opt,name=agent_ask,json=agentAsk,proto3" json:"agent_ask,omitempty"`
+	// agents_allowed says the user let the plugin start agents without
+	// asking; "forget_agents" has it ask again.
+	AgentsAllowed bool `protobuf:"varint,19,opt,name=agents_allowed,json=agentsAllowed,proto3" json:"agents_allowed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -293,6 +321,123 @@ func (x *PluginInfo) GetBlocked() string {
 	return ""
 }
 
+func (x *PluginInfo) GetAgentAsk() *PluginAgentAsk {
+	if x != nil {
+		return x.AgentAsk
+	}
+	return nil
+}
+
+func (x *PluginInfo) GetAgentsAllowed() bool {
+	if x != nil {
+		return x.AgentsAllowed
+	}
+	return false
+}
+
+// PluginAgentAsk is an agent a plugin asks to start (sessions:write):
+// which agent and profile, in which folder of which project, named what,
+// and the first 2 KiB of the prompt it would start with.
+type PluginAgentAsk struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Agent         string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
+	Profile       string                 `protobuf:"bytes,3,opt,name=profile,proto3" json:"profile,omitempty"`
+	Project       string                 `protobuf:"bytes,4,opt,name=project,proto3" json:"project,omitempty"` // the project's name
+	Root          string                 `protobuf:"bytes,5,opt,name=root,proto3" json:"root,omitempty"`       // the folder it would run in
+	Name          string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
+	Prompt        string                 `protobuf:"bytes,7,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Since         int64                  `protobuf:"varint,8,opt,name=since,proto3" json:"since,omitempty"` // Unix ms
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PluginAgentAsk) Reset() {
+	*x = PluginAgentAsk{}
+	mi := &file_mako_v2_plugins_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PluginAgentAsk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PluginAgentAsk) ProtoMessage() {}
+
+func (x *PluginAgentAsk) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_plugins_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PluginAgentAsk.ProtoReflect.Descriptor instead.
+func (*PluginAgentAsk) Descriptor() ([]byte, []int) {
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *PluginAgentAsk) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PluginAgentAsk) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *PluginAgentAsk) GetProfile() string {
+	if x != nil {
+		return x.Profile
+	}
+	return ""
+}
+
+func (x *PluginAgentAsk) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *PluginAgentAsk) GetRoot() string {
+	if x != nil {
+		return x.Root
+	}
+	return ""
+}
+
+func (x *PluginAgentAsk) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *PluginAgentAsk) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *PluginAgentAsk) GetSince() int64 {
+	if x != nil {
+		return x.Since
+	}
+	return 0
+}
+
 // PluginBlock is a block a plugin contributes.
 type PluginBlock struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -308,7 +453,7 @@ type PluginBlock struct {
 
 func (x *PluginBlock) Reset() {
 	*x = PluginBlock{}
-	mi := &file_mako_v2_plugins_proto_msgTypes[3]
+	mi := &file_mako_v2_plugins_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -320,7 +465,7 @@ func (x *PluginBlock) String() string {
 func (*PluginBlock) ProtoMessage() {}
 
 func (x *PluginBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_plugins_proto_msgTypes[3]
+	mi := &file_mako_v2_plugins_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -333,7 +478,7 @@ func (x *PluginBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginBlock.ProtoReflect.Descriptor instead.
 func (*PluginBlock) Descriptor() ([]byte, []int) {
-	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{3}
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PluginBlock) GetName() string {
@@ -368,7 +513,7 @@ type PluginCommand struct {
 
 func (x *PluginCommand) Reset() {
 	*x = PluginCommand{}
-	mi := &file_mako_v2_plugins_proto_msgTypes[4]
+	mi := &file_mako_v2_plugins_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -380,7 +525,7 @@ func (x *PluginCommand) String() string {
 func (*PluginCommand) ProtoMessage() {}
 
 func (x *PluginCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_plugins_proto_msgTypes[4]
+	mi := &file_mako_v2_plugins_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -393,7 +538,7 @@ func (x *PluginCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginCommand.ProtoReflect.Descriptor instead.
 func (*PluginCommand) Descriptor() ([]byte, []int) {
-	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{4}
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PluginCommand) GetId() string {
@@ -429,7 +574,7 @@ type PluginSetting struct {
 
 func (x *PluginSetting) Reset() {
 	*x = PluginSetting{}
-	mi := &file_mako_v2_plugins_proto_msgTypes[5]
+	mi := &file_mako_v2_plugins_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -441,7 +586,7 @@ func (x *PluginSetting) String() string {
 func (*PluginSetting) ProtoMessage() {}
 
 func (x *PluginSetting) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_plugins_proto_msgTypes[5]
+	mi := &file_mako_v2_plugins_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -454,7 +599,7 @@ func (x *PluginSetting) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginSetting.ProtoReflect.Descriptor instead.
 func (*PluginSetting) Descriptor() ([]byte, []int) {
-	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{5}
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *PluginSetting) GetKey() string {
@@ -509,8 +654,11 @@ func (x *PluginSetting) GetSet() bool {
 // PluginAction acts on a plugin, for the user: op "grant" allows what it
 // asks for, "deny" refuses it, "enable" and "disable" start and stop it
 // being used, "reload" reads its folder again, "run" runs its command
-// command, and "set" sets its setting key to value ("" unsets it).
-// Answered by PluginDone.
+// command, and "set" sets its setting key to value ("" unsets it). From
+// revision 32, "allow_agent" lets the agent start that the ask of id key
+// asks for, value "once" or "always" (for this plugin from then on),
+// "deny_agent" refuses it, and "forget_agents" has the plugin ask again
+// before every agent it starts. Answered by PluginDone.
 type PluginAction struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PluginId      string                 `protobuf:"bytes,1,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
@@ -524,7 +672,7 @@ type PluginAction struct {
 
 func (x *PluginAction) Reset() {
 	*x = PluginAction{}
-	mi := &file_mako_v2_plugins_proto_msgTypes[6]
+	mi := &file_mako_v2_plugins_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -536,7 +684,7 @@ func (x *PluginAction) String() string {
 func (*PluginAction) ProtoMessage() {}
 
 func (x *PluginAction) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_plugins_proto_msgTypes[6]
+	mi := &file_mako_v2_plugins_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -549,7 +697,7 @@ func (x *PluginAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginAction.ProtoReflect.Descriptor instead.
 func (*PluginAction) Descriptor() ([]byte, []int) {
-	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{6}
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PluginAction) GetPluginId() string {
@@ -599,7 +747,7 @@ type PluginDone struct {
 
 func (x *PluginDone) Reset() {
 	*x = PluginDone{}
-	mi := &file_mako_v2_plugins_proto_msgTypes[7]
+	mi := &file_mako_v2_plugins_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -611,7 +759,7 @@ func (x *PluginDone) String() string {
 func (*PluginDone) ProtoMessage() {}
 
 func (x *PluginDone) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_plugins_proto_msgTypes[7]
+	mi := &file_mako_v2_plugins_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -624,7 +772,7 @@ func (x *PluginDone) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginDone.ProtoReflect.Descriptor instead.
 func (*PluginDone) Descriptor() ([]byte, []int) {
-	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{7}
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PluginDone) GetOpenUrl() string {
@@ -650,7 +798,7 @@ type WatchBlock struct {
 
 func (x *WatchBlock) Reset() {
 	*x = WatchBlock{}
-	mi := &file_mako_v2_plugins_proto_msgTypes[8]
+	mi := &file_mako_v2_plugins_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -662,7 +810,7 @@ func (x *WatchBlock) String() string {
 func (*WatchBlock) ProtoMessage() {}
 
 func (x *WatchBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_plugins_proto_msgTypes[8]
+	mi := &file_mako_v2_plugins_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -675,7 +823,7 @@ func (x *WatchBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchBlock.ProtoReflect.Descriptor instead.
 func (*WatchBlock) Descriptor() ([]byte, []int) {
-	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{8}
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *WatchBlock) GetBlock() string {
@@ -726,7 +874,7 @@ type BlockUpdate struct {
 
 func (x *BlockUpdate) Reset() {
 	*x = BlockUpdate{}
-	mi := &file_mako_v2_plugins_proto_msgTypes[9]
+	mi := &file_mako_v2_plugins_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -738,7 +886,7 @@ func (x *BlockUpdate) String() string {
 func (*BlockUpdate) ProtoMessage() {}
 
 func (x *BlockUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_plugins_proto_msgTypes[9]
+	mi := &file_mako_v2_plugins_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -751,7 +899,7 @@ func (x *BlockUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockUpdate.ProtoReflect.Descriptor instead.
 func (*BlockUpdate) Descriptor() ([]byte, []int) {
-	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{9}
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *BlockUpdate) GetBlock() string {
@@ -859,7 +1007,7 @@ type BlockEvent struct {
 
 func (x *BlockEvent) Reset() {
 	*x = BlockEvent{}
-	mi := &file_mako_v2_plugins_proto_msgTypes[10]
+	mi := &file_mako_v2_plugins_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -871,7 +1019,7 @@ func (x *BlockEvent) String() string {
 func (*BlockEvent) ProtoMessage() {}
 
 func (x *BlockEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_plugins_proto_msgTypes[10]
+	mi := &file_mako_v2_plugins_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -884,7 +1032,7 @@ func (x *BlockEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockEvent.ProtoReflect.Descriptor instead.
 func (*BlockEvent) Descriptor() ([]byte, []int) {
-	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{10}
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *BlockEvent) GetBlock() string {
@@ -931,8 +1079,8 @@ func (x *BlockEvent) GetNodeId() string {
 
 // UiNode is a node of a plugin block's tree. The kinds are a fixed set
 // (docs/plugins.md): column, row, stack, text, icon, pill, chip, button,
-// list, input, toggle, select, markdown, code, progress and divider; a
-// colour is a token, never a value.
+// list, input, toggle, select, markdown, code, progress, divider, and
+// from revision 33 chart; a colour is a token, never a value.
 type UiNode struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// id is the node's path from the root by its own and its ancestors'
@@ -965,16 +1113,23 @@ type UiNode struct {
 	Gap  float64 `protobuf:"fixed64,15,opt,name=gap,proto3" json:"gap,omitempty"`
 	// tap says tapping the node is answered; change that its value
 	// changing is.
-	Tap           bool      `protobuf:"varint,16,opt,name=tap,proto3" json:"tap,omitempty"`
-	Change        bool      `protobuf:"varint,17,opt,name=change,proto3" json:"change,omitempty"`
-	Children      []*UiNode `protobuf:"bytes,18,rep,name=children,proto3" json:"children,omitempty"`
+	Tap      bool      `protobuf:"varint,16,opt,name=tap,proto3" json:"tap,omitempty"`
+	Change   bool      `protobuf:"varint,17,opt,name=change,proto3" json:"change,omitempty"`
+	Children []*UiNode `protobuf:"bytes,18,rep,name=children,proto3" json:"children,omitempty"`
+	// chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+	// (revision 33). Its series are numbers, each series's colour a token;
+	// labels name the points along its axis; text is its caption. A front-end
+	// that does not know the kind draws nothing in its place.
+	Chart         string      `protobuf:"bytes,19,opt,name=chart,proto3" json:"chart,omitempty"`
+	Series        []*UiSeries `protobuf:"bytes,20,rep,name=series,proto3" json:"series,omitempty"`
+	Labels        []string    `protobuf:"bytes,21,rep,name=labels,proto3" json:"labels,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UiNode) Reset() {
 	*x = UiNode{}
-	mi := &file_mako_v2_plugins_proto_msgTypes[11]
+	mi := &file_mako_v2_plugins_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -986,7 +1141,7 @@ func (x *UiNode) String() string {
 func (*UiNode) ProtoMessage() {}
 
 func (x *UiNode) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_plugins_proto_msgTypes[11]
+	mi := &file_mako_v2_plugins_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -999,7 +1154,7 @@ func (x *UiNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UiNode.ProtoReflect.Descriptor instead.
 func (*UiNode) Descriptor() ([]byte, []int) {
-	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{11}
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *UiNode) GetId() string {
@@ -1128,6 +1283,89 @@ func (x *UiNode) GetChildren() []*UiNode {
 	return nil
 }
 
+func (x *UiNode) GetChart() string {
+	if x != nil {
+		return x.Chart
+	}
+	return ""
+}
+
+func (x *UiNode) GetSeries() []*UiSeries {
+	if x != nil {
+		return x.Series
+	}
+	return nil
+}
+
+func (x *UiNode) GetLabels() []string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+// UiSeries is a series of a chart node: its name, colour token and values,
+// finite numbers, as many as its chart's labels when it has them.
+type UiSeries struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Tone          string                 `protobuf:"bytes,2,opt,name=tone,proto3" json:"tone,omitempty"`
+	Values        []float64              `protobuf:"fixed64,3,rep,packed,name=values,proto3" json:"values,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UiSeries) Reset() {
+	*x = UiSeries{}
+	mi := &file_mako_v2_plugins_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UiSeries) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UiSeries) ProtoMessage() {}
+
+func (x *UiSeries) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_plugins_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UiSeries.ProtoReflect.Descriptor instead.
+func (*UiSeries) Descriptor() ([]byte, []int) {
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *UiSeries) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UiSeries) GetTone() string {
+	if x != nil {
+		return x.Tone
+	}
+	return ""
+}
+
+func (x *UiSeries) GetValues() []float64 {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
 // UiOp is a change of a tree. op "replace" puts node in place of the node
 // of id; "update" sets the fields of the node of id to node's, its
 // children kept; "insert" puts node in as parent's index-th child;
@@ -1146,7 +1384,7 @@ type UiOp struct {
 
 func (x *UiOp) Reset() {
 	*x = UiOp{}
-	mi := &file_mako_v2_plugins_proto_msgTypes[12]
+	mi := &file_mako_v2_plugins_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1158,7 +1396,7 @@ func (x *UiOp) String() string {
 func (*UiOp) ProtoMessage() {}
 
 func (x *UiOp) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_plugins_proto_msgTypes[12]
+	mi := &file_mako_v2_plugins_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1171,7 +1409,7 @@ func (x *UiOp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UiOp.ProtoReflect.Descriptor instead.
 func (*UiOp) Descriptor() ([]byte, []int) {
-	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{12}
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *UiOp) GetOp() string {
@@ -1223,7 +1461,7 @@ type ListAgentBlocks struct {
 
 func (x *ListAgentBlocks) Reset() {
 	*x = ListAgentBlocks{}
-	mi := &file_mako_v2_plugins_proto_msgTypes[13]
+	mi := &file_mako_v2_plugins_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1235,7 +1473,7 @@ func (x *ListAgentBlocks) String() string {
 func (*ListAgentBlocks) ProtoMessage() {}
 
 func (x *ListAgentBlocks) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_plugins_proto_msgTypes[13]
+	mi := &file_mako_v2_plugins_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1248,7 +1486,7 @@ func (x *ListAgentBlocks) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentBlocks.ProtoReflect.Descriptor instead.
 func (*ListAgentBlocks) Descriptor() ([]byte, []int) {
-	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{13}
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ListAgentBlocks) GetNodeId() string {
@@ -1268,7 +1506,7 @@ type AgentBlocks struct {
 
 func (x *AgentBlocks) Reset() {
 	*x = AgentBlocks{}
-	mi := &file_mako_v2_plugins_proto_msgTypes[14]
+	mi := &file_mako_v2_plugins_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1280,7 +1518,7 @@ func (x *AgentBlocks) String() string {
 func (*AgentBlocks) ProtoMessage() {}
 
 func (x *AgentBlocks) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_plugins_proto_msgTypes[14]
+	mi := &file_mako_v2_plugins_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1293,7 +1531,7 @@ func (x *AgentBlocks) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentBlocks.ProtoReflect.Descriptor instead.
 func (*AgentBlocks) Descriptor() ([]byte, []int) {
-	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{14}
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *AgentBlocks) GetBlocks() []*AgentBlock {
@@ -1325,7 +1563,7 @@ type AgentBlock struct {
 
 func (x *AgentBlock) Reset() {
 	*x = AgentBlock{}
-	mi := &file_mako_v2_plugins_proto_msgTypes[15]
+	mi := &file_mako_v2_plugins_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1337,7 +1575,7 @@ func (x *AgentBlock) String() string {
 func (*AgentBlock) ProtoMessage() {}
 
 func (x *AgentBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_mako_v2_plugins_proto_msgTypes[15]
+	mi := &file_mako_v2_plugins_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1350,7 +1588,7 @@ func (x *AgentBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentBlock.ProtoReflect.Descriptor instead.
 func (*AgentBlock) Descriptor() ([]byte, []int) {
-	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{15}
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *AgentBlock) GetName() string {
@@ -1409,14 +1647,181 @@ func (x *AgentBlock) GetSize() float64 {
 	return 0
 }
 
+// ListPanels asks a node for the blocks its window layout documents place,
+// and its agents' blocks, each by name with its title and a hint of its
+// kind (revision 35): what a node let in, a phone, lists the node's
+// panels by before it opens one, as it may not list the node's plugins.
+// It says nothing of permissions, settings, registries, or of a plugin no
+// document places. Answered by Panels; routed by node_id, as WatchBlock.
+type ListPanels struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPanels) Reset() {
+	*x = ListPanels{}
+	mi := &file_mako_v2_plugins_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPanels) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPanels) ProtoMessage() {}
+
+func (x *ListPanels) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_plugins_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPanels.ProtoReflect.Descriptor instead.
+func (*ListPanels) Descriptor() ([]byte, []int) {
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ListPanels) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+// Panels are a node's panels, in the order of its documents (the default
+// first, then by name, each depth first) and then its agents' blocks,
+// each block once.
+type Panels struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Panels        []*Panel               `protobuf:"bytes,1,rep,name=panels,proto3" json:"panels,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Panels) Reset() {
+	*x = Panels{}
+	mi := &file_mako_v2_plugins_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Panels) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Panels) ProtoMessage() {}
+
+func (x *Panels) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_plugins_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Panels.ProtoReflect.Descriptor instead.
+func (*Panels) Descriptor() ([]byte, []int) {
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *Panels) GetPanels() []*Panel {
+	if x != nil {
+		return x.Panels
+	}
+	return nil
+}
+
+// Panel is a block a node's documents place, or one of its agents shows.
+type Panel struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// block is its registered name: mako.<name>, plugin:<id>/<block> or
+	// agent:<session>/<id>.
+	Block string `protobuf:"bytes,1,opt,name=block,proto3" json:"block,omitempty"`
+	// title is the block's own: a plugin's manifest's, an agent's block's,
+	// the window's for its own (in English); "" for a plugin's block this
+	// node lacks.
+	Title string `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	// kind is "builtin", "plugin", "agent", or "missing" for a plugin's
+	// block this node lacks: a hint for the icon to list it with.
+	Kind          string `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Panel) Reset() {
+	*x = Panel{}
+	mi := &file_mako_v2_plugins_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Panel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Panel) ProtoMessage() {}
+
+func (x *Panel) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_plugins_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Panel.ProtoReflect.Descriptor instead.
+func (*Panel) Descriptor() ([]byte, []int) {
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *Panel) GetBlock() string {
+	if x != nil {
+		return x.Block
+	}
+	return ""
+}
+
+func (x *Panel) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *Panel) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
 var File_mako_v2_plugins_proto protoreflect.FileDescriptor
 
 const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\n" +
 	"\x15mako/v2/plugins.proto\x12\amako.v2\"\r\n" +
-	"\vListPlugins\"8\n" +
+	"\vListPlugins\"u\n" +
 	"\aPlugins\x12-\n" +
-	"\aplugins\x18\x01 \x03(\v2\x13.mako.v2.PluginInfoR\aplugins\"\xf8\x03\n" +
+	"\aplugins\x18\x01 \x03(\v2\x13.mako.v2.PluginInfoR\aplugins\x12\x18\n" +
+	"\asecrets\x18\x02 \x01(\tR\asecrets\x12!\n" +
+	"\fsecrets_note\x18\x03 \x01(\tR\vsecretsNote\"\xd5\x04\n" +
 	"\n" +
 	"PluginInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
@@ -1436,7 +1841,18 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x06source\x18\x0e \x01(\tR\x06source\x12\x10\n" +
 	"\x03key\x18\x0f \x01(\tR\x03key\x12\x16\n" +
 	"\x06update\x18\x10 \x01(\tR\x06update\x12\x18\n" +
-	"\ablocked\x18\x11 \x01(\tR\ablocked\"M\n" +
+	"\ablocked\x18\x11 \x01(\tR\ablocked\x124\n" +
+	"\tagent_ask\x18\x12 \x01(\v2\x17.mako.v2.PluginAgentAskR\bagentAsk\x12%\n" +
+	"\x0eagents_allowed\x18\x13 \x01(\bR\ragentsAllowed\"\xc0\x01\n" +
+	"\x0ePluginAgentAsk\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x18\n" +
+	"\aprofile\x18\x03 \x01(\tR\aprofile\x12\x18\n" +
+	"\aproject\x18\x04 \x01(\tR\aproject\x12\x12\n" +
+	"\x04root\x18\x05 \x01(\tR\x04root\x12\x12\n" +
+	"\x04name\x18\x06 \x01(\tR\x04name\x12\x16\n" +
+	"\x06prompt\x18\a \x01(\tR\x06prompt\x12\x14\n" +
+	"\x05since\x18\b \x01(\x03R\x05since\"M\n" +
 	"\vPluginBlock\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
@@ -1490,7 +1906,7 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\anode_id\x18\x06 \x01(\tR\x06nodeId\x1a9\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xaf\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x88\x04\n" +
 	"\x06UiNode\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
@@ -1510,7 +1926,14 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x03gap\x18\x0f \x01(\x01R\x03gap\x12\x10\n" +
 	"\x03tap\x18\x10 \x01(\bR\x03tap\x12\x16\n" +
 	"\x06change\x18\x11 \x01(\bR\x06change\x12+\n" +
-	"\bchildren\x18\x12 \x03(\v2\x0f.mako.v2.UiNodeR\bchildren\"y\n" +
+	"\bchildren\x18\x12 \x03(\v2\x0f.mako.v2.UiNodeR\bchildren\x12\x14\n" +
+	"\x05chart\x18\x13 \x01(\tR\x05chart\x12)\n" +
+	"\x06series\x18\x14 \x03(\v2\x11.mako.v2.UiSeriesR\x06series\x12\x16\n" +
+	"\x06labels\x18\x15 \x03(\tR\x06labels\"J\n" +
+	"\bUiSeries\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04tone\x18\x02 \x01(\tR\x04tone\x12\x16\n" +
+	"\x06values\x18\x03 \x03(\x01R\x06values\"y\n" +
 	"\x04UiOp\x12\x0e\n" +
 	"\x02op\x18\x01 \x01(\tR\x02op\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x16\n" +
@@ -1531,7 +1954,16 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\bdocument\x18\x05 \x01(\tR\bdocument\x12\x16\n" +
 	"\x06parent\x18\x06 \x01(\tR\x06parent\x12\x14\n" +
 	"\x05index\x18\a \x01(\x05R\x05index\x12\x12\n" +
-	"\x04size\x18\b \x01(\x01R\x04sizeB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
+	"\x04size\x18\b \x01(\x01R\x04size\"%\n" +
+	"\n" +
+	"ListPanels\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"0\n" +
+	"\x06Panels\x12&\n" +
+	"\x06panels\x18\x01 \x03(\v2\x0e.mako.v2.PanelR\x06panels\"G\n" +
+	"\x05Panel\x12\x14\n" +
+	"\x05block\x18\x01 \x01(\tR\x05block\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x12\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kindB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
 	file_mako_v2_plugins_proto_rawDescOnce sync.Once
@@ -1545,42 +1977,50 @@ func file_mako_v2_plugins_proto_rawDescGZIP() []byte {
 	return file_mako_v2_plugins_proto_rawDescData
 }
 
-var file_mako_v2_plugins_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_mako_v2_plugins_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_mako_v2_plugins_proto_goTypes = []any{
 	(*ListPlugins)(nil),     // 0: mako.v2.ListPlugins
 	(*Plugins)(nil),         // 1: mako.v2.Plugins
 	(*PluginInfo)(nil),      // 2: mako.v2.PluginInfo
-	(*PluginBlock)(nil),     // 3: mako.v2.PluginBlock
-	(*PluginCommand)(nil),   // 4: mako.v2.PluginCommand
-	(*PluginSetting)(nil),   // 5: mako.v2.PluginSetting
-	(*PluginAction)(nil),    // 6: mako.v2.PluginAction
-	(*PluginDone)(nil),      // 7: mako.v2.PluginDone
-	(*WatchBlock)(nil),      // 8: mako.v2.WatchBlock
-	(*BlockUpdate)(nil),     // 9: mako.v2.BlockUpdate
-	(*BlockEvent)(nil),      // 10: mako.v2.BlockEvent
-	(*UiNode)(nil),          // 11: mako.v2.UiNode
-	(*UiOp)(nil),            // 12: mako.v2.UiOp
-	(*ListAgentBlocks)(nil), // 13: mako.v2.ListAgentBlocks
-	(*AgentBlocks)(nil),     // 14: mako.v2.AgentBlocks
-	(*AgentBlock)(nil),      // 15: mako.v2.AgentBlock
-	nil,                     // 16: mako.v2.BlockEvent.ValuesEntry
+	(*PluginAgentAsk)(nil),  // 3: mako.v2.PluginAgentAsk
+	(*PluginBlock)(nil),     // 4: mako.v2.PluginBlock
+	(*PluginCommand)(nil),   // 5: mako.v2.PluginCommand
+	(*PluginSetting)(nil),   // 6: mako.v2.PluginSetting
+	(*PluginAction)(nil),    // 7: mako.v2.PluginAction
+	(*PluginDone)(nil),      // 8: mako.v2.PluginDone
+	(*WatchBlock)(nil),      // 9: mako.v2.WatchBlock
+	(*BlockUpdate)(nil),     // 10: mako.v2.BlockUpdate
+	(*BlockEvent)(nil),      // 11: mako.v2.BlockEvent
+	(*UiNode)(nil),          // 12: mako.v2.UiNode
+	(*UiSeries)(nil),        // 13: mako.v2.UiSeries
+	(*UiOp)(nil),            // 14: mako.v2.UiOp
+	(*ListAgentBlocks)(nil), // 15: mako.v2.ListAgentBlocks
+	(*AgentBlocks)(nil),     // 16: mako.v2.AgentBlocks
+	(*AgentBlock)(nil),      // 17: mako.v2.AgentBlock
+	(*ListPanels)(nil),      // 18: mako.v2.ListPanels
+	(*Panels)(nil),          // 19: mako.v2.Panels
+	(*Panel)(nil),           // 20: mako.v2.Panel
+	nil,                     // 21: mako.v2.BlockEvent.ValuesEntry
 }
 var file_mako_v2_plugins_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Plugins.plugins:type_name -> mako.v2.PluginInfo
-	3,  // 1: mako.v2.PluginInfo.blocks:type_name -> mako.v2.PluginBlock
-	4,  // 2: mako.v2.PluginInfo.commands:type_name -> mako.v2.PluginCommand
-	5,  // 3: mako.v2.PluginInfo.settings:type_name -> mako.v2.PluginSetting
-	11, // 4: mako.v2.BlockUpdate.tree:type_name -> mako.v2.UiNode
-	12, // 5: mako.v2.BlockUpdate.ops:type_name -> mako.v2.UiOp
-	16, // 6: mako.v2.BlockEvent.values:type_name -> mako.v2.BlockEvent.ValuesEntry
-	11, // 7: mako.v2.UiNode.children:type_name -> mako.v2.UiNode
-	11, // 8: mako.v2.UiOp.node:type_name -> mako.v2.UiNode
-	15, // 9: mako.v2.AgentBlocks.blocks:type_name -> mako.v2.AgentBlock
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	4,  // 1: mako.v2.PluginInfo.blocks:type_name -> mako.v2.PluginBlock
+	5,  // 2: mako.v2.PluginInfo.commands:type_name -> mako.v2.PluginCommand
+	6,  // 3: mako.v2.PluginInfo.settings:type_name -> mako.v2.PluginSetting
+	3,  // 4: mako.v2.PluginInfo.agent_ask:type_name -> mako.v2.PluginAgentAsk
+	12, // 5: mako.v2.BlockUpdate.tree:type_name -> mako.v2.UiNode
+	14, // 6: mako.v2.BlockUpdate.ops:type_name -> mako.v2.UiOp
+	21, // 7: mako.v2.BlockEvent.values:type_name -> mako.v2.BlockEvent.ValuesEntry
+	12, // 8: mako.v2.UiNode.children:type_name -> mako.v2.UiNode
+	13, // 9: mako.v2.UiNode.series:type_name -> mako.v2.UiSeries
+	12, // 10: mako.v2.UiOp.node:type_name -> mako.v2.UiNode
+	17, // 11: mako.v2.AgentBlocks.blocks:type_name -> mako.v2.AgentBlock
+	20, // 12: mako.v2.Panels.panels:type_name -> mako.v2.Panel
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_plugins_proto_init() }
@@ -1594,7 +2034,7 @@ func file_mako_v2_plugins_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_plugins_proto_rawDesc), len(file_mako_v2_plugins_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

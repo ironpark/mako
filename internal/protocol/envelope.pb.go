@@ -139,6 +139,8 @@ type Envelope struct {
 	//	*Envelope_PluginListings
 	//	*Envelope_InstallPlugin
 	//	*Envelope_PluginInstalled
+	//	*Envelope_ListPanels
+	//	*Envelope_Panels
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1068,6 +1070,24 @@ func (x *Envelope) GetPluginInstalled() *PluginInstalled {
 	return nil
 }
 
+func (x *Envelope) GetListPanels() *ListPanels {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_ListPanels); ok {
+			return x.ListPanels
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetPanels() *Panels {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Panels); ok {
+			return x.Panels
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1471,6 +1491,15 @@ type Envelope_PluginInstalled struct {
 	PluginInstalled *PluginInstalled `protobuf:"bytes,136,opt,name=plugin_installed,json=pluginInstalled,proto3,oneof"`
 }
 
+type Envelope_ListPanels struct {
+	// A node's panels' names and titles, for a peer (revision 35).
+	ListPanels *ListPanels `protobuf:"bytes,137,opt,name=list_panels,json=listPanels,proto3,oneof"`
+}
+
+type Envelope_Panels struct {
+	Panels *Panels `protobuf:"bytes,138,opt,name=panels,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -1665,12 +1694,20 @@ func (*Envelope_InstallPlugin) isEnvelope_Body() {}
 
 func (*Envelope_PluginInstalled) isEnvelope_Body() {}
 
+func (*Envelope_ListPanels) isEnvelope_Body() {}
+
+func (*Envelope_Panels) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Message string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
 	// code is for programs: "changed", "unsupported".
-	Code          string `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
+	Code string `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
+	// args are what the code's sentence names, in order (an ID, a version,
+	// a registry), for a front-end to say it in its user's language, the
+	// message kept for one that does not know the code (revision 34).
+	Args          []string `protobuf:"bytes,3,rep,name=args,proto3" json:"args,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1719,11 +1756,18 @@ func (x *Error) GetCode() string {
 	return ""
 }
 
+func (x *Error) GetArgs() []string {
+	if x != nil {
+		return x.Args
+	}
+	return nil
+}
+
 var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\x91)\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xf6)\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -1843,11 +1887,15 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\x0esearch_plugins\x18\x85\x01 \x01(\v2\x16.mako.v2.SearchPluginsH\x00R\rsearchPlugins\x12C\n" +
 	"\x0fplugin_listings\x18\x86\x01 \x01(\v2\x17.mako.v2.PluginListingsH\x00R\x0epluginListings\x12@\n" +
 	"\x0einstall_plugin\x18\x87\x01 \x01(\v2\x16.mako.v2.InstallPluginH\x00R\rinstallPlugin\x12F\n" +
-	"\x10plugin_installed\x18\x88\x01 \x01(\v2\x18.mako.v2.PluginInstalledH\x00R\x0fpluginInstalledB\x06\n" +
-	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"5\n" +
+	"\x10plugin_installed\x18\x88\x01 \x01(\v2\x18.mako.v2.PluginInstalledH\x00R\x0fpluginInstalled\x127\n" +
+	"\vlist_panels\x18\x89\x01 \x01(\v2\x13.mako.v2.ListPanelsH\x00R\n" +
+	"listPanels\x12*\n" +
+	"\x06panels\x18\x8a\x01 \x01(\v2\x0f.mako.v2.PanelsH\x00R\x06panelsB\x06\n" +
+	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"I\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
-	"\x04code\x18\x02 \x01(\tR\x04codeB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
+	"\x04code\x18\x02 \x01(\tR\x04code\x12\x12\n" +
+	"\x04args\x18\x03 \x03(\tR\x04argsB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
 	file_mako_v2_envelope_proto_rawDescOnce sync.Once
@@ -1961,6 +2009,8 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*PluginListings)(nil),    // 95: mako.v2.PluginListings
 	(*InstallPlugin)(nil),     // 96: mako.v2.InstallPlugin
 	(*PluginInstalled)(nil),   // 97: mako.v2.PluginInstalled
+	(*ListPanels)(nil),        // 98: mako.v2.ListPanels
+	(*Panels)(nil),            // 99: mako.v2.Panels
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -2060,11 +2110,13 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	95, // 94: mako.v2.Envelope.plugin_listings:type_name -> mako.v2.PluginListings
 	96, // 95: mako.v2.Envelope.install_plugin:type_name -> mako.v2.InstallPlugin
 	97, // 96: mako.v2.Envelope.plugin_installed:type_name -> mako.v2.PluginInstalled
-	97, // [97:97] is the sub-list for method output_type
-	97, // [97:97] is the sub-list for method input_type
-	97, // [97:97] is the sub-list for extension type_name
-	97, // [97:97] is the sub-list for extension extendee
-	0,  // [0:97] is the sub-list for field type_name
+	98, // 97: mako.v2.Envelope.list_panels:type_name -> mako.v2.ListPanels
+	99, // 98: mako.v2.Envelope.panels:type_name -> mako.v2.Panels
+	99, // [99:99] is the sub-list for method output_type
+	99, // [99:99] is the sub-list for method input_type
+	99, // [99:99] is the sub-list for extension type_name
+	99, // [99:99] is the sub-list for extension extendee
+	0,  // [0:99] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -2180,6 +2232,8 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_PluginListings)(nil),
 		(*Envelope_InstallPlugin)(nil),
 		(*Envelope_PluginInstalled)(nil),
+		(*Envelope_ListPanels)(nil),
+		(*Envelope_Panels)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

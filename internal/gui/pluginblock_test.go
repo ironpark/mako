@@ -72,17 +72,21 @@ func TestPluginTreeIsDrawn(t *testing.T) {
 		{Id: "/g", Kind: "progress", Progress: 0.4},
 		{Id: "/d", Kind: "divider"},
 		{Id: "/x", Kind: "stack", Children: []*protocol.UiNode{{Id: "/x/a", Kind: "text", Text: "under"}}},
+		{Id: "/ch", Kind: "chart", Chart: "bar", Text: "Builds a day", Labels: []string{"mon", "tue"},
+			Series: []*protocol.UiSeries{{Name: "passed", Tone: "success", Values: []float64{3, 5}}, {Name: "failed", Values: []float64{1, 0}}}},
+		{Id: "/cl", Kind: "chart", Chart: "line", Series: []*protocol.UiSeries{{Values: []float64{1, 4, 2}}}},
+		{Id: "/cs", Kind: "chart", Chart: "sparkline", Text: "Load", Series: []*protocol.UiSeries{{Tone: "accent", Values: []float64{1, 4, 2, 8}}}},
 	}}
 	m := newModel(config.Default(), "")
 	p := ggui.ProbeBuilder(func() ggui.Widget {
 		return pluginFrame(m, "plugin:ci-status/ci", "ci-status", "CI", &protocol.BlockUpdate{Title: "CI", State: protocol.PluginRunning, Tree: tree})
-	}, ggui.Sz(420, 700))
+	}, ggui.Sz(420, 1100))
 	defer p.Close()
 	for range 3 {
 		p.Frame()
 	}
 	sem := p.Semantics().String()
-	for _, want := range []string{"CI", "ci-status", "Latest runs", "Refresh", "failure", "main", "Only failures", "bold", "go test"} {
+	for _, want := range []string{"CI", "ci-status", "Latest runs", "Refresh", "failure", "main", "Only failures", "bold", "go test", "Builds a day", "Load"} {
 		if !strings.Contains(sem, want) {
 			t.Errorf("no %q in:\n%s", want, sem)
 		}

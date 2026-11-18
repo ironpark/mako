@@ -10,8 +10,11 @@ package dev.ironpark.mako.v2;
  * PluginAction acts on a plugin, for the user: op "grant" allows what it
  * asks for, "deny" refuses it, "enable" and "disable" start and stop it
  * being used, "reload" reads its folder again, "run" runs its command
- * command, and "set" sets its setting key to value ("" unsets it).
- * Answered by PluginDone.
+ * command, and "set" sets its setting key to value ("" unsets it). From
+ * revision 32, "allow_agent" lets the agent start that the ask of id key
+ * asks for, value "once" or "always" (for this plugin from then on),
+ * "deny_agent" refuses it, and "forget_agents" has the plugin ask again
+ * before every agent it starts. Answered by PluginDone.
  * </pre>
  *
  * Protobuf type {@code mako.v2.PluginAction}
@@ -352,8 +355,11 @@ public  final class PluginAction extends
    * PluginAction acts on a plugin, for the user: op "grant" allows what it
    * asks for, "deny" refuses it, "enable" and "disable" start and stop it
    * being used, "reload" reads its folder again, "run" runs its command
-   * command, and "set" sets its setting key to value ("" unsets it).
-   * Answered by PluginDone.
+   * command, and "set" sets its setting key to value ("" unsets it). From
+   * revision 32, "allow_agent" lets the agent start that the ask of id key
+   * asks for, value "once" or "always" (for this plugin from then on),
+   * "deny_agent" refuses it, and "forget_agents" has the plugin ask again
+   * before every agent it starts. Answered by PluginDone.
    * </pre>
    *
    * Protobuf type {@code mako.v2.PluginAction}

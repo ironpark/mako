@@ -78,6 +78,7 @@ take it out before you commit.
     internal/gui/mdview  a Markdown page laid out as widgets; the window is its Host
     internal/gui/svgdraw a Markdown page's SVGs, drawn, with their text set apart
     internal/notify      desktop notifications, each platform's own way
+    internal/keychain    the system's keychain without cgo: macOS's Security framework, the Secret Service, the Credential Manager
     internal/shellenv    the login shell's environment, for an app the desktop started
     internal/syntax      tree-sitter compiled to wasm, under wasmtime
     internal/zed         Zed extensions: the store, manifests and languages
@@ -275,10 +276,20 @@ the schema differ. The user allows what a plugin asks for in a bar the
 window draws, in Settings ▸ Plugins, or with `mako plugins grant`. A
 block's tree goes to the window whole, then as keyed patches, and the
 window draws it with its own components inside a frame naming the plugin.
+A plugin's secrets, its secret settings and what it keeps through the
+`secrets` group, go in the system's keychain (`internal/keychain`: the
+Security framework through purego on macOS, the Secret Service over
+D-Bus on Linux, the Credential Manager on Windows), or, on a node with
+none, in a file of the plugin's only the user may read; a test binary
+never reaches the user's keychain (`keychain.System` answers none under
+`go test`), and `MAKO_KEYCHAIN=file` keeps a harness off it too.
 How to write one is [docs/plugins.md](docs/plugins.md); the messages are in
 [protocol.md](docs/protocol.md#plugin-blocks). `MAKO_PREVIEW_PLUGINS` with
 `-render-dir` renders a plugin's way through the window, as a driver
-answers it (`internal/gui/preview_plugins.go`).
+answers it (`internal/gui/preview_plugins.go`). `MAKO_PREVIEW_DRIVE` names a folder a
+driver writes commands into, a file `cmd` at a time (a theme, a page of
+Settings, a text to wait for, a shot), for a harness that brings the
+daemon to what is to be rendered (`internal/gui/preview_drive.go`).
 
 An agent shows a block of the same vocabulary with the `show_ui` tool
 (`internal/daemon/agent_ui.go`, `internal/agentui`): its session's own,

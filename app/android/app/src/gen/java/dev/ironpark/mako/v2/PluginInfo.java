@@ -35,6 +35,7 @@ public  final class PluginInfo extends
     update_ = "";
     blocked_ = "";
   }
+  private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
   /**
@@ -1242,6 +1243,124 @@ public  final class PluginInfo extends
     checkByteStringIsUtf8(value);
     blocked_ = value.toStringUtf8();
 
+  }
+
+  public static final int AGENT_ASK_FIELD_NUMBER = 18;
+  private dev.ironpark.mako.v2.PluginAgentAsk agentAsk_;
+  /**
+   * <pre>
+   * agent_ask is an agent the plugin asks to start, which waits for the
+   * user to allow it, once or always for this plugin (revision 32): a
+   * PluginAction "allow_agent" or "deny_agent" with key its id answers.
+   * </pre>
+   *
+   * <code>.mako.v2.PluginAgentAsk agent_ask = 18 [json_name = "agentAsk"];</code>
+   */
+  @java.lang.Override
+  public boolean hasAgentAsk() {
+    return ((bitField0_ & 0x00000001) != 0);
+  }
+  /**
+   * <pre>
+   * agent_ask is an agent the plugin asks to start, which waits for the
+   * user to allow it, once or always for this plugin (revision 32): a
+   * PluginAction "allow_agent" or "deny_agent" with key its id answers.
+   * </pre>
+   *
+   * <code>.mako.v2.PluginAgentAsk agent_ask = 18 [json_name = "agentAsk"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.PluginAgentAsk getAgentAsk() {
+    return agentAsk_ == null ? dev.ironpark.mako.v2.PluginAgentAsk.getDefaultInstance() : agentAsk_;
+  }
+  /**
+   * <pre>
+   * agent_ask is an agent the plugin asks to start, which waits for the
+   * user to allow it, once or always for this plugin (revision 32): a
+   * PluginAction "allow_agent" or "deny_agent" with key its id answers.
+   * </pre>
+   *
+   * <code>.mako.v2.PluginAgentAsk agent_ask = 18 [json_name = "agentAsk"];</code>
+   */
+  private void setAgentAsk(dev.ironpark.mako.v2.PluginAgentAsk value) {
+    java.util.Objects.requireNonNull(value);
+    agentAsk_ = value;
+    bitField0_ |= 0x00000001;
+  }
+  /**
+   * <pre>
+   * agent_ask is an agent the plugin asks to start, which waits for the
+   * user to allow it, once or always for this plugin (revision 32): a
+   * PluginAction "allow_agent" or "deny_agent" with key its id answers.
+   * </pre>
+   *
+   * <code>.mako.v2.PluginAgentAsk agent_ask = 18 [json_name = "agentAsk"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeAgentAsk(dev.ironpark.mako.v2.PluginAgentAsk value) {
+    java.util.Objects.requireNonNull(value);
+    if (agentAsk_ != null &&
+        agentAsk_ != dev.ironpark.mako.v2.PluginAgentAsk.getDefaultInstance()) {
+      agentAsk_ =
+        dev.ironpark.mako.v2.PluginAgentAsk.newBuilder(agentAsk_).mergeFrom(value).buildPartial();
+    } else {
+      agentAsk_ = value;
+    }
+    bitField0_ |= 0x00000001;
+  }
+  /**
+   * <pre>
+   * agent_ask is an agent the plugin asks to start, which waits for the
+   * user to allow it, once or always for this plugin (revision 32): a
+   * PluginAction "allow_agent" or "deny_agent" with key its id answers.
+   * </pre>
+   *
+   * <code>.mako.v2.PluginAgentAsk agent_ask = 18 [json_name = "agentAsk"];</code>
+   */
+  private void clearAgentAsk() {
+    agentAsk_ = null;
+    bitField0_ = (bitField0_ & ~0x00000001);
+  }
+
+  public static final int AGENTS_ALLOWED_FIELD_NUMBER = 19;
+  private boolean agentsAllowed_;
+  /**
+   * <pre>
+   * agents_allowed says the user let the plugin start agents without
+   * asking; "forget_agents" has it ask again.
+   * </pre>
+   *
+   * <code>bool agents_allowed = 19 [json_name = "agentsAllowed"];</code>
+   * @return The agentsAllowed.
+   */
+  @java.lang.Override
+  public boolean getAgentsAllowed() {
+    return agentsAllowed_;
+  }
+  /**
+   * <pre>
+   * agents_allowed says the user let the plugin start agents without
+   * asking; "forget_agents" has it ask again.
+   * </pre>
+   *
+   * <code>bool agents_allowed = 19 [json_name = "agentsAllowed"];</code>
+   * @param value The agentsAllowed to set.
+   */
+  private void setAgentsAllowed(boolean value) {
+    
+    agentsAllowed_ = value;
+  }
+  /**
+   * <pre>
+   * agents_allowed says the user let the plugin start agents without
+   * asking; "forget_agents" has it ask again.
+   * </pre>
+   *
+   * <code>bool agents_allowed = 19 [json_name = "agentsAllowed"];</code>
+   */
+  private void clearAgentsAllowed() {
+
+    agentsAllowed_ = false;
   }
 
   public static dev.ironpark.mako.v2.PluginInfo parseFrom(
@@ -2597,6 +2716,132 @@ public  final class PluginInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * agent_ask is an agent the plugin asks to start, which waits for the
+     * user to allow it, once or always for this plugin (revision 32): a
+     * PluginAction "allow_agent" or "deny_agent" with key its id answers.
+     * </pre>
+     *
+     * <code>.mako.v2.PluginAgentAsk agent_ask = 18 [json_name = "agentAsk"];</code>
+     */
+    @java.lang.Override
+    public boolean hasAgentAsk() {
+      return instance.hasAgentAsk();
+    }
+    /**
+     * <pre>
+     * agent_ask is an agent the plugin asks to start, which waits for the
+     * user to allow it, once or always for this plugin (revision 32): a
+     * PluginAction "allow_agent" or "deny_agent" with key its id answers.
+     * </pre>
+     *
+     * <code>.mako.v2.PluginAgentAsk agent_ask = 18 [json_name = "agentAsk"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.PluginAgentAsk getAgentAsk() {
+      return instance.getAgentAsk();
+    }
+    /**
+     * <pre>
+     * agent_ask is an agent the plugin asks to start, which waits for the
+     * user to allow it, once or always for this plugin (revision 32): a
+     * PluginAction "allow_agent" or "deny_agent" with key its id answers.
+     * </pre>
+     *
+     * <code>.mako.v2.PluginAgentAsk agent_ask = 18 [json_name = "agentAsk"];</code>
+     */
+    public Builder setAgentAsk(dev.ironpark.mako.v2.PluginAgentAsk value) {
+      copyOnWrite();
+      instance.setAgentAsk(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * agent_ask is an agent the plugin asks to start, which waits for the
+     * user to allow it, once or always for this plugin (revision 32): a
+     * PluginAction "allow_agent" or "deny_agent" with key its id answers.
+     * </pre>
+     *
+     * <code>.mako.v2.PluginAgentAsk agent_ask = 18 [json_name = "agentAsk"];</code>
+     */
+    public Builder setAgentAsk(
+        dev.ironpark.mako.v2.PluginAgentAsk.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAgentAsk(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * agent_ask is an agent the plugin asks to start, which waits for the
+     * user to allow it, once or always for this plugin (revision 32): a
+     * PluginAction "allow_agent" or "deny_agent" with key its id answers.
+     * </pre>
+     *
+     * <code>.mako.v2.PluginAgentAsk agent_ask = 18 [json_name = "agentAsk"];</code>
+     */
+    public Builder mergeAgentAsk(dev.ironpark.mako.v2.PluginAgentAsk value) {
+      copyOnWrite();
+      instance.mergeAgentAsk(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * agent_ask is an agent the plugin asks to start, which waits for the
+     * user to allow it, once or always for this plugin (revision 32): a
+     * PluginAction "allow_agent" or "deny_agent" with key its id answers.
+     * </pre>
+     *
+     * <code>.mako.v2.PluginAgentAsk agent_ask = 18 [json_name = "agentAsk"];</code>
+     */
+    public Builder clearAgentAsk() {  copyOnWrite();
+      instance.clearAgentAsk();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * agents_allowed says the user let the plugin start agents without
+     * asking; "forget_agents" has it ask again.
+     * </pre>
+     *
+     * <code>bool agents_allowed = 19 [json_name = "agentsAllowed"];</code>
+     * @return The agentsAllowed.
+     */
+    @java.lang.Override
+    public boolean getAgentsAllowed() {
+      return instance.getAgentsAllowed();
+    }
+    /**
+     * <pre>
+     * agents_allowed says the user let the plugin start agents without
+     * asking; "forget_agents" has it ask again.
+     * </pre>
+     *
+     * <code>bool agents_allowed = 19 [json_name = "agentsAllowed"];</code>
+     * @param value The agentsAllowed to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAgentsAllowed(boolean value) {
+      copyOnWrite();
+      instance.setAgentsAllowed(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * agents_allowed says the user let the plugin start agents without
+     * asking; "forget_agents" has it ask again.
+     * </pre>
+     *
+     * <code>bool agents_allowed = 19 [json_name = "agentsAllowed"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAgentsAllowed() {
+      copyOnWrite();
+      instance.clearAgentsAllowed();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginInfo)
   }
   @java.lang.Override
@@ -2613,6 +2858,7 @@ public  final class PluginInfo extends
       }
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
+            "bitField0_",
             "id_",
             "version_",
             "publisher_",
@@ -2633,11 +2879,14 @@ public  final class PluginInfo extends
             "key_",
             "update_",
             "blocked_",
+            "agentAsk_",
+            "agentsAllowed_",
           };
           java.lang.String info =
-              "\u0000\u0011\u0000\u0000\u0001\u0011\u0011\u0000\u0006\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0013\u0000\u0001\u0001\u0013\u0013\u0000\u0006\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0007\u0007\u021a\b\u021a\t\u021a\n\u001b" +
-              "\u000b\u001b\f\u001b\r\u0007\u000e\u0208\u000f\u0208\u0010\u0208\u0011\u0208";
+              "\u000b\u001b\f\u001b\r\u0007\u000e\u0208\u000f\u0208\u0010\u0208\u0011\u0208\u0012" +
+              "\u1009\u0000\u0013\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

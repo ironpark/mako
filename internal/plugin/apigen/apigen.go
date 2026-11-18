@@ -21,7 +21,14 @@
 //   - no oneofs, groups, extensions, or types from other packages, such as
 //     google.protobuf.Any or Timestamp;
 //   - unary methods only, each with a permission (options.proto), and
-//     names that stay distinct as WIT's kebab case.
+//     names that stay distinct as WIT's kebab case, a method's from the
+//     types its interface uses too.
+//
+// The WIT written was checked once with wasm-tools 1.263 (component wit,
+// and a component made of a dummy module of the world, validated), which
+// found two things a schema could do that it refuses and this now does
+// too: a name spelled as WIT's keyword map unescaped, and a method of the
+// name of a type it uses.
 package apigen
 
 import (
@@ -455,6 +462,13 @@ func (a *api) check() error {
 				return fmt.Errorf("%s: two methods are %q in WIT", s.name, kebab(m.name))
 			}
 			names[kebab(m.name)] = true
+		}
+		// A function and a type its interface uses share one namespace:
+		// wasm-tools refuses the two of a name.
+		for _, u := range s.uses() {
+			if names[u] {
+				return fmt.Errorf("%s: a method and a type it uses are both %q in WIT", s.name, u)
+			}
 		}
 	}
 	return nil

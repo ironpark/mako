@@ -616,6 +616,7 @@ func spacesSettings(m *model) ggui.Widget {
 			}),
 			widget.Align(add).Left(),
 		),
+		section(T("On a phone"), compactSection(m)),
 	)
 }
 

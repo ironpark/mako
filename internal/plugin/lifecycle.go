@@ -48,6 +48,7 @@ func (p *plugin) reload() {
 		p.syncInstancesLocked()
 	})
 	p.failures, p.renderFailures = 0, 0
+	p.settings.migrateAll(next.man)
 	p.m.cfg.Log.Info("plugin loaded", "plugin", p.id, "version", next.man.Version)
 	if !wasRunning && !p.watched() {
 		return

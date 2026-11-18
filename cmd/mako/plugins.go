@@ -31,7 +31,23 @@ func plugins(ctx context.Context, c *client.Client, args []string) error {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", p.GetId(), p.GetVersion(), p.GetState(),
 				strings.Join(p.GetAsked(), ","), strings.Join(p.GetGranted(), ","), from, p.GetUpdate(), p.GetError())
 		}
-		return w.Flush()
+		if err := w.Flush(); err != nil {
+			return err
+		}
+		for _, p := range list.GetPlugins() {
+			if a := p.GetAgentAsk(); a != nil {
+				fmt.Printf("\n%s asks to start %s in %s (%s): %s\n  mako plugins allow-agent %s once|always, or deny-agent %s\n",
+					p.GetId(), a.GetAgent(), a.GetProject(), a.GetRoot(), oneLine(a.GetPrompt(), 200), p.GetId(), p.GetId())
+			}
+		}
+		switch store := list.GetSecrets(); store {
+		case "":
+		case "file":
+			fmt.Printf("\nSecrets: kept in a file of each plugin's that only you can read; this node has no keychain (%s).\n", list.GetSecretsNote())
+		default:
+			fmt.Printf("\nSecrets: kept in %s.\n", store)
+		}
+		return nil
 	}
 	op, rest := args[0], args[1:]
 	if storeOps[op] {
@@ -53,6 +69,21 @@ func plugins(ctx context.Context, c *client.Client, args []string) error {
 			return fmt.Errorf("plugins set needs a setting's key")
 		}
 		req.Key, req.Value = rest[1], strings.Join(rest[2:], " ")
+	case "allow-agent", "deny-agent":
+		// The ask answered is the one the plugin has waiting now.
+		ask, err := waitingAsk(ctx, c, rest[0])
+		if err != nil {
+			return err
+		}
+		req.Op, req.Key = protocol.PluginDenyAgent, ask
+		if op == "allow-agent" {
+			if len(rest) < 2 || (rest[1] != protocol.AgentOnce && rest[1] != protocol.AgentAlways) {
+				return fmt.Errorf("plugins allow-agent <id> once|always")
+			}
+			req.Op, req.Value = protocol.PluginAllowAgent, rest[1]
+		}
+	case "forget-agents":
+		req.Op = protocol.PluginForgetAgents
 	default:
 		return fmt.Errorf("unknown plugins command %q", op)
 	}
@@ -64,4 +95,27 @@ func plugins(ctx context.Context, c *client.Client, args []string) error {
 		fmt.Println(done.GetOpenUrl())
 	}
 	return nil
+}
+
+// waitingAsk is the ID of the agent the plugin asks to start now.
+func waitingAsk(ctx context.Context, c *client.Client, id string) (string, error) {
+	list, err := c.Plugins(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, p := range list.GetPlugins() {
+		if p.GetId() == id && p.GetAgentAsk() != nil {
+			return p.GetAgentAsk().GetId(), nil
+		}
+	}
+	return "", fmt.Errorf("the plugin %s asks to start no agent now", id)
+}
+
+// oneLine is s on one line, cut at n bytes.
+func oneLine(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if len(s) > n {
+		s = s[:n] + "…"
+	}
+	return s
 }

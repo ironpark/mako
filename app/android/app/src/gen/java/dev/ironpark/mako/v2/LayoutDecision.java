@@ -9,9 +9,11 @@ package dev.ironpark.mako.v2;
  * <pre>
  * LayoutDecision answers a LayoutStage from a front-end of the node it is
  * held on: keep or revert one in phase keep, or forget what the user has
- * allowed agents to change without asking. Allowing or denying one in
- * phase approve is an AnswerApproval of its id, as any approval is. The
- * reply is the Workspace after.
+ * allowed agents and plugins to change without asking. Allowing or
+ * denying an agent's in phase approve is an AnswerApproval of its id, as
+ * any approval is; a plugin's, which no session holds, is a
+ * LayoutDecision allow or deny (revision 32). The reply is the Workspace
+ * after.
  * </pre>
  *
  * Protobuf type {@code mako.v2.LayoutDecision}
@@ -26,6 +28,7 @@ public  final class LayoutDecision extends
     stageId_ = "";
     decision_ = "";
     nodeId_ = "";
+    option_ = "";
   }
   public static final int STAGE_ID_FIELD_NUMBER = 1;
   private java.lang.String stageId_;
@@ -78,7 +81,7 @@ public  final class LayoutDecision extends
   private java.lang.String decision_;
   /**
    * <pre>
-   * keep, revert, forget
+   * keep, revert, forget; allow or deny (revision 32)
    * </pre>
    *
    * <code>string decision = 2 [json_name = "decision"];</code>
@@ -90,7 +93,7 @@ public  final class LayoutDecision extends
   }
   /**
    * <pre>
-   * keep, revert, forget
+   * keep, revert, forget; allow or deny (revision 32)
    * </pre>
    *
    * <code>string decision = 2 [json_name = "decision"];</code>
@@ -103,7 +106,7 @@ public  final class LayoutDecision extends
   }
   /**
    * <pre>
-   * keep, revert, forget
+   * keep, revert, forget; allow or deny (revision 32)
    * </pre>
    *
    * <code>string decision = 2 [json_name = "decision"];</code>
@@ -117,7 +120,7 @@ public  final class LayoutDecision extends
   }
   /**
    * <pre>
-   * keep, revert, forget
+   * keep, revert, forget; allow or deny (revision 32)
    * </pre>
    *
    * <code>string decision = 2 [json_name = "decision"];</code>
@@ -128,7 +131,7 @@ public  final class LayoutDecision extends
   }
   /**
    * <pre>
-   * keep, revert, forget
+   * keep, revert, forget; allow or deny (revision 32)
    * </pre>
    *
    * <code>string decision = 2 [json_name = "decision"];</code>
@@ -205,6 +208,78 @@ public  final class LayoutDecision extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     nodeId_ = value.toStringUtf8();
+
+  }
+
+  public static final int OPTION_FIELD_NUMBER = 4;
+  private java.lang.String option_;
+  /**
+   * <pre>
+   * option is an allow's, as an approval's: allow_space or allow_always,
+   * "" for once (revision 32).
+   * </pre>
+   *
+   * <code>string option = 4 [json_name = "option"];</code>
+   * @return The option.
+   */
+  @java.lang.Override
+  public java.lang.String getOption() {
+    return option_;
+  }
+  /**
+   * <pre>
+   * option is an allow's, as an approval's: allow_space or allow_always,
+   * "" for once (revision 32).
+   * </pre>
+   *
+   * <code>string option = 4 [json_name = "option"];</code>
+   * @return The bytes for option.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getOptionBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(option_);
+  }
+  /**
+   * <pre>
+   * option is an allow's, as an approval's: allow_space or allow_always,
+   * "" for once (revision 32).
+   * </pre>
+   *
+   * <code>string option = 4 [json_name = "option"];</code>
+   * @param value The option to set.
+   */
+  private void setOption(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    option_ = value;
+  }
+  /**
+   * <pre>
+   * option is an allow's, as an approval's: allow_space or allow_always,
+   * "" for once (revision 32).
+   * </pre>
+   *
+   * <code>string option = 4 [json_name = "option"];</code>
+   */
+  private void clearOption() {
+
+    option_ = getDefaultInstance().getOption();
+  }
+  /**
+   * <pre>
+   * option is an allow's, as an approval's: allow_space or allow_always,
+   * "" for once (revision 32).
+   * </pre>
+   *
+   * <code>string option = 4 [json_name = "option"];</code>
+   * @param value The bytes for option to set.
+   */
+  private void setOptionBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    option_ = value.toStringUtf8();
 
   }
 
@@ -295,9 +370,11 @@ public  final class LayoutDecision extends
    * <pre>
    * LayoutDecision answers a LayoutStage from a front-end of the node it is
    * held on: keep or revert one in phase keep, or forget what the user has
-   * allowed agents to change without asking. Allowing or denying one in
-   * phase approve is an AnswerApproval of its id, as any approval is. The
-   * reply is the Workspace after.
+   * allowed agents and plugins to change without asking. Allowing or
+   * denying an agent's in phase approve is an AnswerApproval of its id, as
+   * any approval is; a plugin's, which no session holds, is a
+   * LayoutDecision allow or deny (revision 32). The reply is the Workspace
+   * after.
    * </pre>
    *
    * Protobuf type {@code mako.v2.LayoutDecision}
@@ -364,7 +441,7 @@ public  final class LayoutDecision extends
 
     /**
      * <pre>
-     * keep, revert, forget
+     * keep, revert, forget; allow or deny (revision 32)
      * </pre>
      *
      * <code>string decision = 2 [json_name = "decision"];</code>
@@ -376,7 +453,7 @@ public  final class LayoutDecision extends
     }
     /**
      * <pre>
-     * keep, revert, forget
+     * keep, revert, forget; allow or deny (revision 32)
      * </pre>
      *
      * <code>string decision = 2 [json_name = "decision"];</code>
@@ -389,7 +466,7 @@ public  final class LayoutDecision extends
     }
     /**
      * <pre>
-     * keep, revert, forget
+     * keep, revert, forget; allow or deny (revision 32)
      * </pre>
      *
      * <code>string decision = 2 [json_name = "decision"];</code>
@@ -404,7 +481,7 @@ public  final class LayoutDecision extends
     }
     /**
      * <pre>
-     * keep, revert, forget
+     * keep, revert, forget; allow or deny (revision 32)
      * </pre>
      *
      * <code>string decision = 2 [json_name = "decision"];</code>
@@ -417,7 +494,7 @@ public  final class LayoutDecision extends
     }
     /**
      * <pre>
-     * keep, revert, forget
+     * keep, revert, forget; allow or deny (revision 32)
      * </pre>
      *
      * <code>string decision = 2 [json_name = "decision"];</code>
@@ -500,6 +577,80 @@ public  final class LayoutDecision extends
       return this;
     }
 
+    /**
+     * <pre>
+     * option is an allow's, as an approval's: allow_space or allow_always,
+     * "" for once (revision 32).
+     * </pre>
+     *
+     * <code>string option = 4 [json_name = "option"];</code>
+     * @return The option.
+     */
+    @java.lang.Override
+    public java.lang.String getOption() {
+      return instance.getOption();
+    }
+    /**
+     * <pre>
+     * option is an allow's, as an approval's: allow_space or allow_always,
+     * "" for once (revision 32).
+     * </pre>
+     *
+     * <code>string option = 4 [json_name = "option"];</code>
+     * @return The bytes for option.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getOptionBytes() {
+      return instance.getOptionBytes();
+    }
+    /**
+     * <pre>
+     * option is an allow's, as an approval's: allow_space or allow_always,
+     * "" for once (revision 32).
+     * </pre>
+     *
+     * <code>string option = 4 [json_name = "option"];</code>
+     * @param value The option to set.
+     * @return This builder for chaining.
+     */
+    public Builder setOption(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setOption(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * option is an allow's, as an approval's: allow_space or allow_always,
+     * "" for once (revision 32).
+     * </pre>
+     *
+     * <code>string option = 4 [json_name = "option"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearOption() {
+      copyOnWrite();
+      instance.clearOption();
+      return this;
+    }
+    /**
+     * <pre>
+     * option is an allow's, as an approval's: allow_space or allow_always,
+     * "" for once (revision 32).
+     * </pre>
+     *
+     * <code>string option = 4 [json_name = "option"];</code>
+     * @param value The bytes for option to set.
+     * @return This builder for chaining.
+     */
+    public Builder setOptionBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setOptionBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.LayoutDecision)
   }
   @java.lang.Override
@@ -519,10 +670,11 @@ public  final class LayoutDecision extends
             "stageId_",
             "decision_",
             "nodeId_",
+            "option_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208";
+              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

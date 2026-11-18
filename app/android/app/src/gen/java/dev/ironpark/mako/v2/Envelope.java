@@ -123,6 +123,8 @@ public  final class Envelope extends
     PLUGIN_LISTINGS(134),
     INSTALL_PLUGIN(135),
     PLUGIN_INSTALLED(136),
+    LIST_PANELS(137),
+    PANELS(138),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -235,6 +237,8 @@ public  final class Envelope extends
         case 134: return PLUGIN_LISTINGS;
         case 135: return INSTALL_PLUGIN;
         case 136: return PLUGIN_INSTALLED;
+        case 137: return LIST_PANELS;
+        case 138: return PANELS;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -5443,6 +5447,126 @@ public  final class Envelope extends
     }
   }
 
+  public static final int LIST_PANELS_FIELD_NUMBER = 137;
+  /**
+   * <pre>
+   * A node's panels' names and titles, for a peer (revision 35).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPanels list_panels = 137 [json_name = "listPanels"];</code>
+   */
+  @java.lang.Override
+  public boolean hasListPanels() {
+    return bodyCase_ == 137;
+  }
+  /**
+   * <pre>
+   * A node's panels' names and titles, for a peer (revision 35).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPanels list_panels = 137 [json_name = "listPanels"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ListPanels getListPanels() {
+    if (bodyCase_ == 137) {
+       return (dev.ironpark.mako.v2.ListPanels) body_;
+    }
+    return dev.ironpark.mako.v2.ListPanels.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * A node's panels' names and titles, for a peer (revision 35).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPanels list_panels = 137 [json_name = "listPanels"];</code>
+   */
+  private void setListPanels(dev.ironpark.mako.v2.ListPanels value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 137;
+  }
+  /**
+   * <pre>
+   * A node's panels' names and titles, for a peer (revision 35).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPanels list_panels = 137 [json_name = "listPanels"];</code>
+   */
+  private void mergeListPanels(dev.ironpark.mako.v2.ListPanels value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 137 &&
+        body_ != dev.ironpark.mako.v2.ListPanels.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ListPanels.newBuilder((dev.ironpark.mako.v2.ListPanels) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 137;
+  }
+  /**
+   * <pre>
+   * A node's panels' names and titles, for a peer (revision 35).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPanels list_panels = 137 [json_name = "listPanels"];</code>
+   */
+  private void clearListPanels() {
+    if (bodyCase_ == 137) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PANELS_FIELD_NUMBER = 138;
+  /**
+   * <code>.mako.v2.Panels panels = 138 [json_name = "panels"];</code>
+   */
+  @java.lang.Override
+  public boolean hasPanels() {
+    return bodyCase_ == 138;
+  }
+  /**
+   * <code>.mako.v2.Panels panels = 138 [json_name = "panels"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Panels getPanels() {
+    if (bodyCase_ == 138) {
+       return (dev.ironpark.mako.v2.Panels) body_;
+    }
+    return dev.ironpark.mako.v2.Panels.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.Panels panels = 138 [json_name = "panels"];</code>
+   */
+  private void setPanels(dev.ironpark.mako.v2.Panels value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 138;
+  }
+  /**
+   * <code>.mako.v2.Panels panels = 138 [json_name = "panels"];</code>
+   */
+  private void mergePanels(dev.ironpark.mako.v2.Panels value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 138 &&
+        body_ != dev.ironpark.mako.v2.Panels.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Panels.newBuilder((dev.ironpark.mako.v2.Panels) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 138;
+  }
+  /**
+   * <code>.mako.v2.Panels panels = 138 [json_name = "panels"];</code>
+   */
+  private void clearPanels() {
+    if (bodyCase_ == 138) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -10598,6 +10722,126 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * A node's panels' names and titles, for a peer (revision 35).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPanels list_panels = 137 [json_name = "listPanels"];</code>
+     */
+    @java.lang.Override
+    public boolean hasListPanels() {
+      return instance.hasListPanels();
+    }
+    /**
+     * <pre>
+     * A node's panels' names and titles, for a peer (revision 35).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPanels list_panels = 137 [json_name = "listPanels"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ListPanels getListPanels() {
+      return instance.getListPanels();
+    }
+    /**
+     * <pre>
+     * A node's panels' names and titles, for a peer (revision 35).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPanels list_panels = 137 [json_name = "listPanels"];</code>
+     */
+    public Builder setListPanels(dev.ironpark.mako.v2.ListPanels value) {
+      copyOnWrite();
+      instance.setListPanels(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * A node's panels' names and titles, for a peer (revision 35).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPanels list_panels = 137 [json_name = "listPanels"];</code>
+     */
+    public Builder setListPanels(
+        dev.ironpark.mako.v2.ListPanels.Builder builderForValue) {
+      copyOnWrite();
+      instance.setListPanels(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * A node's panels' names and titles, for a peer (revision 35).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPanels list_panels = 137 [json_name = "listPanels"];</code>
+     */
+    public Builder mergeListPanels(dev.ironpark.mako.v2.ListPanels value) {
+      copyOnWrite();
+      instance.mergeListPanels(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * A node's panels' names and titles, for a peer (revision 35).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPanels list_panels = 137 [json_name = "listPanels"];</code>
+     */
+    public Builder clearListPanels() {
+      copyOnWrite();
+      instance.clearListPanels();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.Panels panels = 138 [json_name = "panels"];</code>
+     */
+    @java.lang.Override
+    public boolean hasPanels() {
+      return instance.hasPanels();
+    }
+    /**
+     * <code>.mako.v2.Panels panels = 138 [json_name = "panels"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Panels getPanels() {
+      return instance.getPanels();
+    }
+    /**
+     * <code>.mako.v2.Panels panels = 138 [json_name = "panels"];</code>
+     */
+    public Builder setPanels(dev.ironpark.mako.v2.Panels value) {
+      copyOnWrite();
+      instance.setPanels(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Panels panels = 138 [json_name = "panels"];</code>
+     */
+    public Builder setPanels(
+        dev.ironpark.mako.v2.Panels.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPanels(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Panels panels = 138 [json_name = "panels"];</code>
+     */
+    public Builder mergePanels(dev.ironpark.mako.v2.Panels value) {
+      copyOnWrite();
+      instance.mergePanels(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Panels panels = 138 [json_name = "panels"];</code>
+     */
+    public Builder clearPanels() {
+      copyOnWrite();
+      instance.clearPanels();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -10715,9 +10959,11 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.PluginListings.class,
             dev.ironpark.mako.v2.InstallPlugin.class,
             dev.ironpark.mako.v2.PluginInstalled.class,
+            dev.ironpark.mako.v2.ListPanels.class,
+            dev.ironpark.mako.v2.Panels.class,
           };
           java.lang.String info =
-              "\u0000c\u0001\u0000\u0001\u0088c\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
+              "\u0000e\u0001\u0000\u0001\u008ae\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
               "\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019" +
               "<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000" +
               "!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000" +
@@ -10728,7 +10974,8 @@ public  final class Envelope extends
               "S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000" +
               "j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000p<\u0000x<\u0000y<\u0000z<\u0000" +
               "{<\u0000|<\u0000}<\u0000~<\u0000<\u0000\u0080<\u0000\u0082<\u0000\u0083<\u0000\u0084" +
-              "<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000\u0088<\u0000";
+              "<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000\u0088<\u0000\u0089<\u0000\u008a<\u0000" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

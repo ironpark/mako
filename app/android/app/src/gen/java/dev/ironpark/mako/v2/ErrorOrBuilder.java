@@ -41,4 +41,53 @@ public interface ErrorOrBuilder extends
    */
   com.google.protobuf.ByteString
       getCodeBytes();
+
+  /**
+   * <pre>
+   * args are what the code's sentence names, in order (an ID, a version,
+   * a registry), for a front-end to say it in its user's language, the
+   * message kept for one that does not know the code (revision 34).
+   * </pre>
+   *
+   * <code>repeated string args = 3 [json_name = "args"];</code>
+   * @return A list containing the args.
+   */
+  java.util.List<java.lang.String>
+      getArgsList();
+  /**
+   * <pre>
+   * args are what the code's sentence names, in order (an ID, a version,
+   * a registry), for a front-end to say it in its user's language, the
+   * message kept for one that does not know the code (revision 34).
+   * </pre>
+   *
+   * <code>repeated string args = 3 [json_name = "args"];</code>
+   * @return The count of args.
+   */
+  int getArgsCount();
+  /**
+   * <pre>
+   * args are what the code's sentence names, in order (an ID, a version,
+   * a registry), for a front-end to say it in its user's language, the
+   * message kept for one that does not know the code (revision 34).
+   * </pre>
+   *
+   * <code>repeated string args = 3 [json_name = "args"];</code>
+   * @param index The index of the element to return.
+   * @return The args at the given index.
+   */
+  java.lang.String getArgs(int index);
+  /**
+   * <pre>
+   * args are what the code's sentence names, in order (an ID, a version,
+   * a registry), for a front-end to say it in its user's language, the
+   * message kept for one that does not know the code (revision 34).
+   * </pre>
+   *
+   * <code>repeated string args = 3 [json_name = "args"];</code>
+   * @param index The index of the element to return.
+   * @return The args at the given index.
+   */
+  com.google.protobuf.ByteString
+      getArgsBytes(int index);
 }

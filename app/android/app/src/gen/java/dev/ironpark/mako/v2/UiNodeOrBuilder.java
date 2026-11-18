@@ -292,4 +292,69 @@ public interface UiNodeOrBuilder extends
    * <code>repeated .mako.v2.UiNode children = 18 [json_name = "children"];</code>
    */
   int getChildrenCount();
+
+  /**
+   * <pre>
+   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+   * (revision 33). Its series are numbers, each series's colour a token;
+   * labels name the points along its axis; text is its caption. A front-end
+   * that does not know the kind draws nothing in its place.
+   * </pre>
+   *
+   * <code>string chart = 19 [json_name = "chart"];</code>
+   * @return The chart.
+   */
+  java.lang.String getChart();
+  /**
+   * <pre>
+   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+   * (revision 33). Its series are numbers, each series's colour a token;
+   * labels name the points along its axis; text is its caption. A front-end
+   * that does not know the kind draws nothing in its place.
+   * </pre>
+   *
+   * <code>string chart = 19 [json_name = "chart"];</code>
+   * @return The bytes for chart.
+   */
+  com.google.protobuf.ByteString
+      getChartBytes();
+
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.UiSeries> 
+      getSeriesList();
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  dev.ironpark.mako.v2.UiSeries getSeries(int index);
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  int getSeriesCount();
+
+  /**
+   * <code>repeated string labels = 21 [json_name = "labels"];</code>
+   * @return A list containing the labels.
+   */
+  java.util.List<java.lang.String>
+      getLabelsList();
+  /**
+   * <code>repeated string labels = 21 [json_name = "labels"];</code>
+   * @return The count of labels.
+   */
+  int getLabelsCount();
+  /**
+   * <code>repeated string labels = 21 [json_name = "labels"];</code>
+   * @param index The index of the element to return.
+   * @return The labels at the given index.
+   */
+  java.lang.String getLabels(int index);
+  /**
+   * <code>repeated string labels = 21 [json_name = "labels"];</code>
+   * @param index The index of the element to return.
+   * @return The labels at the given index.
+   */
+  com.google.protobuf.ByteString
+      getLabelsBytes(int index);
 }

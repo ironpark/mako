@@ -736,16 +736,21 @@ func (x *Workspace) GetToNode() string {
 // deadline. Only once kept is it written into the workspace, and so sent
 // to the peers.
 type LayoutStage struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                // also the approval's ID on the agent's session
-	Document      string                 `protobuf:"bytes,2,opt,name=document,proto3" json:"document,omitempty"`                    // the document's name
-	Doc           []byte                 `protobuf:"bytes,3,opt,name=doc,proto3" json:"doc,omitempty"`                              // the document proposed
-	Phase         string                 `protobuf:"bytes,4,opt,name=phase,proto3" json:"phase,omitempty"`                          // approve, keep
-	SessionId     string                 `protobuf:"bytes,5,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"` // the agent's session
-	Agent         string                 `protobuf:"bytes,6,opt,name=agent,proto3" json:"agent,omitempty"`                          // its name, as the window shows it
-	Tool          string                 `protobuf:"bytes,7,opt,name=tool,proto3" json:"tool,omitempty"`                            // set_layout, patch_layout or undo_layout
-	Summary       string                 `protobuf:"bytes,8,opt,name=summary,proto3" json:"summary,omitempty"`                      // what it changes, in a line
-	Deadline      int64                  `protobuf:"varint,9,opt,name=deadline,proto3" json:"deadline,omitempty"`                   // keep: when it reverts, in Unix ms
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                // also the approval's ID on the agent's session
+	Document  string                 `protobuf:"bytes,2,opt,name=document,proto3" json:"document,omitempty"`                    // the document's name
+	Doc       []byte                 `protobuf:"bytes,3,opt,name=doc,proto3" json:"doc,omitempty"`                              // the document proposed
+	Phase     string                 `protobuf:"bytes,4,opt,name=phase,proto3" json:"phase,omitempty"`                          // approve, keep
+	SessionId string                 `protobuf:"bytes,5,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"` // the agent's session
+	Agent     string                 `protobuf:"bytes,6,opt,name=agent,proto3" json:"agent,omitempty"`                          // its name, as the window shows it
+	Tool      string                 `protobuf:"bytes,7,opt,name=tool,proto3" json:"tool,omitempty"`                            // set_layout, patch_layout or undo_layout
+	Summary   string                 `protobuf:"bytes,8,opt,name=summary,proto3" json:"summary,omitempty"`                      // what it changes, in a line
+	Deadline  int64                  `protobuf:"varint,9,opt,name=deadline,proto3" json:"deadline,omitempty"`                   // keep: when it reverts, in Unix ms
+	// plugin_id is the plugin that asked, for a change of a plugin's
+	// (layout:write), which no session asks for: session_id is then empty,
+	// and agent names the plugin for an older window. Such a change is
+	// allowed or denied with a LayoutDecision (revision 32).
+	PluginId      string `protobuf:"bytes,10,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -843,16 +848,28 @@ func (x *LayoutStage) GetDeadline() int64 {
 	return 0
 }
 
+func (x *LayoutStage) GetPluginId() string {
+	if x != nil {
+		return x.PluginId
+	}
+	return ""
+}
+
 // LayoutDecision answers a LayoutStage from a front-end of the node it is
 // held on: keep or revert one in phase keep, or forget what the user has
-// allowed agents to change without asking. Allowing or denying one in
-// phase approve is an AnswerApproval of its id, as any approval is. The
-// reply is the Workspace after.
+// allowed agents and plugins to change without asking. Allowing or
+// denying an agent's in phase approve is an AnswerApproval of its id, as
+// any approval is; a plugin's, which no session holds, is a
+// LayoutDecision allow or deny (revision 32). The reply is the Workspace
+// after.
 type LayoutDecision struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	StageId       string                 `protobuf:"bytes,1,opt,name=stage_id,json=stageId,proto3" json:"stage_id,omitempty"`
-	Decision      string                 `protobuf:"bytes,2,opt,name=decision,proto3" json:"decision,omitempty"`           // keep, revert, forget
-	NodeId        string                 `protobuf:"bytes,3,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // "" for the daemon's own; another node refuses it
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	StageId  string                 `protobuf:"bytes,1,opt,name=stage_id,json=stageId,proto3" json:"stage_id,omitempty"`
+	Decision string                 `protobuf:"bytes,2,opt,name=decision,proto3" json:"decision,omitempty"`           // keep, revert, forget; allow or deny (revision 32)
+	NodeId   string                 `protobuf:"bytes,3,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // "" for the daemon's own; another node refuses it
+	// option is an allow's, as an approval's: allow_space or allow_always,
+	// "" for once (revision 32).
+	Option        string `protobuf:"bytes,4,opt,name=option,proto3" json:"option,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -904,6 +921,13 @@ func (x *LayoutDecision) GetDecision() string {
 func (x *LayoutDecision) GetNodeId() string {
 	if x != nil {
 		return x.NodeId
+	}
+	return ""
+}
+
+func (x *LayoutDecision) GetOption() string {
+	if x != nil {
+		return x.Option
 	}
 	return ""
 }
@@ -1555,7 +1579,7 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\x05state\x18\x04 \x01(\v2\x17.mako.v2.WorkspaceStateR\x05state\x12\x16\n" +
 	"\x06digest\x18\x05 \x01(\fR\x06digest\x12*\n" +
 	"\x05stage\x18\x06 \x01(\v2\x14.mako.v2.LayoutStageR\x05stage\x12\x17\n" +
-	"\ato_node\x18\a \x01(\tR\x06toNode\"\xe0\x01\n" +
+	"\ato_node\x18\a \x01(\tR\x06toNode\"\xfd\x01\n" +
 	"\vLayoutStage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bdocument\x18\x02 \x01(\tR\bdocument\x12\x10\n" +
@@ -1566,11 +1590,14 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\x05agent\x18\x06 \x01(\tR\x05agent\x12\x12\n" +
 	"\x04tool\x18\a \x01(\tR\x04tool\x12\x18\n" +
 	"\asummary\x18\b \x01(\tR\asummary\x12\x1a\n" +
-	"\bdeadline\x18\t \x01(\x03R\bdeadline\"`\n" +
+	"\bdeadline\x18\t \x01(\x03R\bdeadline\x12\x1b\n" +
+	"\tplugin_id\x18\n" +
+	" \x01(\tR\bpluginId\"x\n" +
 	"\x0eLayoutDecision\x12\x19\n" +
 	"\bstage_id\x18\x01 \x01(\tR\astageId\x12\x1a\n" +
 	"\bdecision\x18\x02 \x01(\tR\bdecision\x12\x17\n" +
-	"\anode_id\x18\x03 \x01(\tR\x06nodeId\"'\n" +
+	"\anode_id\x18\x03 \x01(\tR\x06nodeId\x12\x16\n" +
+	"\x06option\x18\x04 \x01(\tR\x06option\"'\n" +
 	"\fGetWorkspace\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"?\n" +
 	"\x05Watch\x12\x1c\n" +

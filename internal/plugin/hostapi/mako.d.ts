@@ -7,6 +7,21 @@
 export interface Plugin {
   /** Runs when the plugin starts: register the blocks and commands here. */
   activate(mako: Mako): void | Promise<void>;
+  /**
+   * The handlers of the events the plugin subscribed to with
+   * mako.sessions.subscribe, by kind: the daemon calls the one of an
+   * event's kind, starting the plugin for it if it is not running.
+   */
+  on?: PluginEvents;
+}
+
+/** What a plugin does on each kind of event it subscribed to. */
+export interface PluginEvents {
+  sessionStarted?(event: SessionEvent): void | Promise<void>;
+  sessionEnded?(event: SessionEvent): void | Promise<void>;
+  sessionSlept?(event: SessionEvent): void | Promise<void>;
+  sessionStatus?(event: SessionEvent): void | Promise<void>;
+  agentMessage?(event: SessionEvent): void | Promise<void>;
 }
 
 /** What activate is given: the Host API, and the plugin's blocks and commands. */
@@ -68,6 +83,15 @@ export interface NodeOptions {
   /** Sent with an input's text last when Return is pressed. */
   onSubmit?: Message;
   placeholder?: string;
+  /** A chart's names of its points, as many as each series has values. */
+  labels?: (string | number)[];
+}
+
+/** A series of a chart: at most 200 finite numbers, its colour a token. */
+export interface ChartSeries {
+  name?: string;
+  values: number[];
+  tone?: Tone;
 }
 
 /** A node of a block's tree; its methods set what NodeOptions do. */
@@ -102,6 +126,8 @@ export interface Ui {
   code(text: string, language?: string, opts?: NodeOptions): UiNode;
   progress(value: number, opts?: NodeOptions): UiNode;
   divider(opts?: NodeOptions): UiNode;
+  /** A line, bar or sparkline chart of 1 to 4 series; 600 points in all. */
+  chart(type: "line" | "bar" | "sparkline", series: ChartSeries[], opts?: NodeOptions): UiNode;
 }
 
 // The Host API, from proto/mako/plugin/v1. A method that needs a permission
@@ -120,13 +146,13 @@ export interface HostApi {
   readonly http: HttpApi;
   /** CommandsService runs the window's commands a plugin may use. */
   readonly commands: CommandsApi;
-  /** MessagesService acts on sessions: sends them messages, starts and stops */
+  /** MessagesService acts on this node's sessions: sends their agents */
   readonly messages: MessagesApi;
-  /** FilesService reads the current project's folder. */
+  /** FilesService reads the files of the projects this node knows, and */
   readonly files: FilesApi;
-  /** SecretsService keeps the plugin's own secrets in the system's keychain. */
+  /** SecretsService keeps the plugin's own secrets in the system's keychain */
   readonly secrets: SecretsApi;
-  /** LayoutService changes the window's layout, as the user allows. */
+  /** LayoutService changes the window's layout, as the user allows, through */
   readonly layout: LayoutApi;
   /** ExecService runs programs. No plugin is granted exec in this version: */
   readonly exec: ExecApi;
@@ -207,6 +233,31 @@ export interface SessionsApi {
    * Needs sessions:read.
    */
   getSession(req?: GetSessionRequest): Promise<GetSessionResponse>;
+  /**
+   * ReadTranscript reads a page of a session's conversation, as its agent
+   * logged it: the latest messages, or those before a cursor an earlier
+   * page gave. A session of this node's alone, at most 30 pages a minute.
+   *
+   * Needs sessions:read.
+   */
+  readTranscript(req?: ReadTranscriptRequest): Promise<ReadTranscriptResponse>;
+  /**
+   * Subscribe has the plugin told of the events of the kinds named, as
+   * calls of its default export's on handlers (see SessionEvent): the
+   * daemon starts the plugin for one when it is not running. What a
+   * plugin subscribed to stays, kept on this node, until it unsubscribes,
+   * or is removed.
+   *
+   * Needs sessions:read.
+   */
+  subscribe(req?: SubscribeRequest): Promise<SubscribeResponse>;
+  /**
+   * Unsubscribe stops the events of the kinds named; none named stops
+   * every one.
+   *
+   * Needs sessions:read.
+   */
+  unsubscribe(req?: UnsubscribeRequest): Promise<UnsubscribeResponse>;
 }
 
 /**
@@ -237,44 +288,132 @@ export interface CommandsApi {
 }
 
 /**
- * MessagesService acts on sessions: sends them messages, starts and stops
- * agents.
+ * MessagesService acts on this node's sessions: sends their agents
+ * messages, starts agents and stops those the plugin started. A message
+ * is headed as the plugin's, so that the agent cannot take it for the
+ * user's or mako's. Starting an agent runs a program that costs money:
+ * the user is asked the first time, and may allow the plugin from then
+ * on; the start is carried out after the call returns, and its outcome
+ * comes to the default export's on.agentStarted or on.agentRefused, as a
+ * SessionEvent with the request's id.
  */
 export interface MessagesApi {
   /**
-   * SendMessage types a message into a session's agent.
+   * SendMessage leaves a message for a session's agent, typed into its
+   * terminal once it waits at its prompt, as send_message does: a session
+   * of this node's whose agent takes messages. 30 a minute.
    *
-   * Needs sessions:write. Not available in this version of mako: it fails.
+   * Needs sessions:write.
    */
   sendMessage(req?: SendMessageRequest): Promise<SendMessageResponse>;
+  /**
+   * StartAgent asks to start an agent with a prompt in a folder of a
+   * project this node knows (FilesService.ListProjects). At most 3 of a
+   * plugin's run at once, and it starts 10 an hour.
+   *
+   * Needs sessions:write.
+   */
+  startAgent(req?: StartAgentRequest): Promise<StartAgentResponse>;
+  /**
+   * StopAgent stops a session the plugin started.
+   *
+   * Needs sessions:write.
+   */
+  stopAgent(req?: StopAgentRequest): Promise<StopAgentResponse>;
 }
 
-/** FilesService reads the current project's folder. */
+/**
+ * FilesService reads the files of the projects this node knows, and
+ * with fs:project:write writes them. A project is named by its ID and one
+ * of its folders by its path, as ListProjects gives them, and a file by
+ * its path in that folder: relative, without "..". Nothing outside a
+ * project's folders is reached, by a path or through a symbolic link;
+ * nothing but regular files is read or written; a write replaces the file
+ * whole, atomically, and never under a folder named .git. A plugin reads
+ * 120 times a minute and writes 30, at most 1 MiB a call.
+ */
 export interface FilesApi {
   /**
-   * ReadFile reads a file of the project.
+   * ReadFile reads a file of a project's folder, or a piece of it.
    *
-   * Needs fs:project. Not available in this version of mako: it fails.
+   * Needs fs:project.
    */
   readFile(req?: ReadFileRequest): Promise<ReadFileResponse>;
+  /**
+   * ListProjects lists the projects this node knows, and their folders
+   * on it.
+   *
+   * Needs fs:project.
+   */
+  listProjects(req?: ListProjectsRequest): Promise<ListProjectsResponse>;
+  /**
+   * ListDir lists a folder of a project's folder.
+   *
+   * Needs fs:project.
+   */
+  listDir(req?: ListDirRequest): Promise<ListDirResponse>;
+  /**
+   * WriteFile writes a file of a project's folder whole, in place of what
+   * was there.
+   *
+   * Needs fs:project:write.
+   */
+  writeFile(req?: WriteFileRequest): Promise<WriteFileResponse>;
 }
 
-/** SecretsService keeps the plugin's own secrets in the system's keychain. */
+/**
+ * SecretsService keeps the plugin's own secrets in the system's keychain
+ * (the macOS Keychain, the Secret Service, Windows' Credential Manager),
+ * on this node alone: never synced, never logged, removed with the
+ * plugin. A node whose system has none keeps them in a file only the user
+ * may read, and says so to the user. A plugin keeps at most 32, and calls
+ * the group at most 60 times a minute.
+ */
 export interface SecretsApi {
   /**
    * GetSecret reads a secret.
    *
-   * Needs secrets. Not available in this version of mako: it fails.
+   * Needs secrets.
    */
   getSecret(req?: GetSecretRequest): Promise<GetSecretResponse>;
+  /**
+   * SetSecret keeps a secret, replacing one of its name.
+   *
+   * Needs secrets.
+   */
+  setSecret(req?: SetSecretRequest): Promise<SetSecretResponse>;
+  /**
+   * DeleteSecret removes a secret.
+   *
+   * Needs secrets.
+   */
+  deleteSecret(req?: DeleteSecretRequest): Promise<DeleteSecretResponse>;
+  /**
+   * ListSecrets lists the names of the secrets kept, not their values.
+   *
+   * Needs secrets.
+   */
+  listSecrets(req?: ListSecretsRequest): Promise<ListSecretsResponse>;
 }
 
-/** LayoutService changes the window's layout, as the user allows. */
+/**
+ * LayoutService changes the window's layout, as the user allows, through
+ * the very flow an agent's patch_layout takes: the change is staged on
+ * this node and shown, the user is asked unless they allowed this
+ * plugin such changes before (for the document, or every one), and only
+ * then is it written into the workspace the user's nodes share. The
+ * window names the plugin as the change's origin. A plugin changes a
+ * document's root alone, never its variants. The answer may take
+ * minutes, so the call returns at once; the outcome comes to the default
+ * export's on.layoutChanged or on.layoutRefused, as a SessionEvent with
+ * the request's id.
+ */
 export interface LayoutApi {
   /**
-   * PatchLayout changes the window layout document, as patch_layout does.
+   * PatchLayout changes a window layout document by node id, as
+   * patch_layout does. 10 a minute, one waiting at a time.
    *
-   * Needs layout:write. Not available in this version of mako: it fails.
+   * Needs layout:write.
    */
   patchLayout(req?: PatchLayoutRequest): Promise<PatchLayoutResponse>;
 }
@@ -393,6 +532,129 @@ export interface ListKeysResponse {
   keys?: string[];
 }
 
+/** ReadTranscriptRequest names a session, and the page. */
+export interface ReadTranscriptRequest {
+  sessionId?: string;
+  /**
+   * before is the cursor a page gave, to read the messages before it;
+   * "" reads the latest.
+   */
+  before?: string;
+  /** limit is the most messages a page holds, at most 50; 0 is 20. */
+  limit?: number;
+}
+
+/** ReadTranscriptResponse is a page of the conversation. */
+export interface ReadTranscriptResponse {
+  /** supported says mako reads the conversation its agent keeps. */
+  supported?: boolean;
+  /** messages are the page's, oldest first. */
+  messages?: TranscriptMessage[];
+  /**
+   * before is the cursor of the page before this one; "" when this one
+   * is the first.
+   */
+  before?: string;
+  /** truncated says text was cut: a message's, or the page's at 256 KiB. */
+  truncated?: boolean;
+}
+
+/** TranscriptMessage is a message of a conversation. */
+export interface TranscriptMessage {
+  /** role is "user", "assistant" or "tool". */
+  role?: string;
+  /** text is at most 8 KiB. */
+  text?: string;
+  /**
+   * tool is the tool a call called; detail what it was given, at most 1
+   * KiB, and result what it gave back, at most 2 KiB.
+   */
+  tool?: string;
+  detail?: string;
+  result?: string;
+  /** kind is what the tool does, whatever its agent calls it. */
+  kind?: string;
+  error?: boolean;
+  /** pending says a call was not answered yet. */
+  pending?: boolean;
+}
+
+/**
+ * SubscribeRequest names kinds of event: "sessionStarted", "sessionEnded",
+ * "sessionSlept", "sessionStatus" and "agentMessage".
+ */
+export interface SubscribeRequest {
+  events?: string[];
+}
+
+/** SubscribeResponse is the kinds the plugin is subscribed to after. */
+export interface SubscribeResponse {
+  events?: string[];
+}
+
+/** UnsubscribeRequest names kinds of event; none names every one. */
+export interface UnsubscribeRequest {
+  events?: string[];
+}
+
+/** UnsubscribeResponse is the kinds the plugin is subscribed to after. */
+export interface UnsubscribeResponse {
+  events?: string[];
+}
+
+/**
+ * SessionEvent is what a plugin subscribed to a kind of event is told,
+ * as a call of the handler of its kind in its default export's on, as a
+ * block's on is called for a message: on.sessionStarted(event), ...
+ * Events are of this node's sessions alone, at most 10 a second to a
+ * plugin, the rest dropped; none comes while the plugin lacks
+ * sessions:read, is disabled, refused or blocked.
+ */
+export interface SessionEvent {
+  /**
+   * kind is "sessionStarted", "sessionEnded", "sessionSlept" (its
+   * program stopped, to start again on its conversation),
+   * "sessionStatus" (its agent's status changed) or "agentMessage".
+   */
+  kind?: string;
+  /** session is the session, as it stands after. */
+  session?: Session | null;
+  /** previous_status is its agent's status before, for sessionStatus. */
+  previousStatus?: string;
+  /** message is the message, for agentMessage. */
+  message?: AgentMessage | null;
+  /**
+   * request_id is a StartAgent's, for "agentStarted", when the agent it
+   * asked for started (session is it), and "agentRefused", when the user
+   * refused it or it did not start (error says why). These two come to
+   * a plugin that asked, without a subscription.
+   */
+  requestId?: string;
+  error?: string;
+  /**
+   * document and revision are, for "layoutChanged", the window layout
+   * document a PatchLayout changed and its revision after; a
+   * "layoutRefused" tells why it did not change in error. These two come
+   * to a plugin that asked, without a subscription.
+   */
+  document?: string;
+  revision?: string;
+}
+
+/**
+ * AgentMessage is a message one agent sent another of this node's, as
+ * send_message does, or the window or mako left it.
+ */
+export interface AgentMessage {
+  id?: string;
+  fromSessionId?: string;
+  toSessionId?: string;
+  /** text is at most 4 KiB. */
+  text?: string;
+  /** note says mako wrote it, of the agent from: not one it sent. */
+  note?: boolean;
+}
+
 /** ListSessionsRequest asks for the sessions. */
 export interface ListSessionsRequest {
 }
@@ -414,7 +676,10 @@ export interface GetSessionResponse {
   session?: Session | null;
 }
 
-/** Session is a session as a plugin sees it: no terminal, no transcript. */
+/**
+ * Session is a session as a plugin sees it: no terminal; its transcript
+ * is ReadTranscript's.
+ */
 export interface Session {
   id?: string;
   name?: string;
@@ -422,7 +687,10 @@ export interface Session {
   agent?: string;
   /** project is its working folder. */
   project?: string;
-  /** state is its process's: "running", "exited" or "asleep". */
+  /**
+   * state is its process's: "starting", "running", "exited", or
+   * "stopped", asleep, to start again on its conversation.
+   */
   state?: string;
   /** status is its agent's: "idle", "working", "waiting" or "done". */
   status?: string;
@@ -461,25 +729,149 @@ export interface RunCommandResponse {
 /** SendMessageRequest is a message for a session. */
 export interface SendMessageRequest {
   sessionId?: string;
+  /** text is at most 32 KiB. */
   text?: string;
 }
 
-/** SendMessageResponse says it was sent. */
+/** SendMessageResponse says it was left. */
 export interface SendMessageResponse {
+  /** id is the message's. */
+  id?: string;
 }
 
-/** ReadFileRequest names a file, relative to the project's folder. */
+/** StartAgentRequest is an agent to start. */
+export interface StartAgentRequest {
+  /**
+   * agent is an agent of this node's ("claude", "codex", ...), and
+   * profile one of its profiles, "" for none.
+   */
+  agent?: string;
+  profile?: string;
+  /**
+   * project is a project's ID, and root one of its folders, as
+   * FilesService.ListProjects gives them: where the agent runs.
+   */
+  project?: string;
+  root?: string;
+  /** prompt is the task it starts with, at most 64 KiB. */
+  prompt?: string;
+  /** name is the session's, "" for its agent's. */
+  name?: string;
+}
+
+/** StartAgentResponse says the start was taken. */
+export interface StartAgentResponse {
+  /** request_id names the start in the event that tells its outcome. */
+  requestId?: string;
+  /** asked says the user is asked first; else it starts at once. */
+  asked?: boolean;
+}
+
+/** StopAgentRequest names a session the plugin started. */
+export interface StopAgentRequest {
+  sessionId?: string;
+}
+
+/** StopAgentResponse says it was stopped. */
+export interface StopAgentResponse {
+}
+
+/** ReadFileRequest names a file, and the piece of it to read. */
 export interface ReadFileRequest {
+  /** path is the file's, relative to root: no "..", no leading /. */
+  path?: string;
+  /**
+   * project is a project's ID, and root one of its folders, as
+   * ListProjects gives them.
+   */
+  project?: string;
+  root?: string;
+  /**
+   * offset is where the piece starts, in bytes; length its most, 0 and at
+   * most 1 MiB.
+   */
+  offset?: number;
+  length?: number;
+}
+
+/** ReadFileResponse is the piece read. */
+export interface ReadFileResponse {
+  /** text is the piece as text, when it is UTF-8; "" otherwise. */
+  text?: string;
+  /** data is the piece's bytes, whatever they are. */
+  data?: string /* base64 */;
+  /** size is the whole file's, in bytes. */
+  size?: number;
+  /** eof says the piece reaches the file's end. */
+  eof?: boolean;
+  /** binary says the piece is not UTF-8 text. */
+  binary?: boolean;
+}
+
+/** ListProjectsRequest asks for the projects. */
+export interface ListProjectsRequest {
+}
+
+/** ListProjectsResponse is the projects. */
+export interface ListProjectsResponse {
+  projects?: Project[];
+}
+
+/** Project is a project this node knows, and its folders on this node. */
+export interface Project {
+  id?: string;
+  name?: string;
+  roots?: string[];
+}
+
+/** ListDirRequest names a folder: "" or "." for root itself. */
+export interface ListDirRequest {
+  project?: string;
+  root?: string;
   path?: string;
 }
 
-/** ReadFileResponse is the file's text. */
-export interface ReadFileResponse {
+/** ListDirResponse is the folder's entries, by name. */
+export interface ListDirResponse {
+  entries?: DirEntry[];
+  /** truncated says there were more than 2000. */
+  truncated?: boolean;
+}
+
+/** DirEntry is an entry of a folder. */
+export interface DirEntry {
+  name?: string;
+  dir?: boolean;
+  /** link says it is a symbolic link. */
+  link?: boolean;
+  size?: number;
+}
+
+/** WriteFileRequest is a file's new contents: data, or text. */
+export interface WriteFileRequest {
+  project?: string;
+  root?: string;
+  path?: string;
+  data?: string /* base64 */;
   text?: string;
+  /**
+   * make_dirs makes the folders the path names that are not there, in
+   * root.
+   */
+  makeDirs?: boolean;
+}
+
+/** WriteFileResponse is the file written. */
+export interface WriteFileResponse {
+  size?: number;
 }
 
 /** GetSecretRequest names a secret. */
 export interface GetSecretRequest {
+  /**
+   * name is letters, digits and ._-, starting with a letter or digit, at
+   * most 64.
+   */
   name?: string;
 }
 
@@ -489,14 +881,63 @@ export interface GetSecretResponse {
   value?: string;
 }
 
-/** PatchLayoutRequest is the operations, as patch_layout's JSON. */
-export interface PatchLayoutRequest {
-  ops?: string;
+/** SetSecretRequest is a secret and its name. */
+export interface SetSecretRequest {
+  name?: string;
+  /** value is UTF-8 of at most 2048 bytes. */
+  value?: string;
 }
 
-/** PatchLayoutResponse is the document's revision after. */
+/** SetSecretResponse says the secret was kept. */
+export interface SetSecretResponse {
+}
+
+/** DeleteSecretRequest names a secret. */
+export interface DeleteSecretRequest {
+  name?: string;
+}
+
+/** DeleteSecretResponse says whether there was one. */
+export interface DeleteSecretResponse {
+  found?: boolean;
+}
+
+/** ListSecretsRequest asks for the names. */
+export interface ListSecretsRequest {
+}
+
+/** ListSecretsResponse is the names, sorted. */
+export interface ListSecretsResponse {
+  names?: string[];
+}
+
+/** PatchLayoutRequest is the operations, as patch_layout's JSON. */
+export interface PatchLayoutRequest {
+  /**
+   * ops is the JSON array of operations patch_layout takes: insert,
+   * remove, move, resize, select, by node id.
+   */
+  ops?: string;
+  /** document is the document's name; "" is default. */
+  document?: string;
+  /**
+   * if_rev is the revision the ops were made against, "" for none: the
+   * change is refused if the document changed since.
+   */
+  ifRev?: string;
+}
+
+/** PatchLayoutResponse says the change was taken. */
 export interface PatchLayoutResponse {
+  /**
+   * revision is always "": the document's revision after comes with the
+   * event that tells the outcome.
+   */
   revision?: string;
+  /** request_id names the change in that event. */
+  requestId?: string;
+  /** asked says the user is asked to allow it. */
+  asked?: boolean;
 }
 
 /** RunProcessRequest is a program and its arguments. */

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ironpark/mako/internal/keychain"
 	"github.com/ironpark/mako/internal/layoutdoc"
 	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -67,23 +68,39 @@ func (d *Daemon) blockSource(name string) (blockSource, error) {
 func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan struct{}) {
 	d.pluginsDir = filepath.Join(dir, "plugins")
 	d.store = newPluginStore(filepath.Join(dir, "plugin-data"), d.log)
+	// Plugins' secrets go in the system's keychain; a node without one
+	// keeps them in a file of each plugin's, and says so.
+	kc, why := keychain.System()
+	note := ""
+	if why != nil {
+		note = why.Error()
+		d.log.Info("plugins' secrets are kept in files: no keychain", "why", note)
+	}
 	d.plugins = plugin.New(plugin.Config{
-		Dir:      d.pluginsDir,
-		DataDir:  filepath.Join(dir, "plugin-data"),
-		Log:      d.log,
-		Sessions: d.listSessions,
-		Changed:  d.changes.firePlugins,
-		Installs: d.store,
-		NetTest:  testhooks.NetTest(),
+		Keychain:     kc,
+		KeychainNote: note,
+		Dir:          d.pluginsDir,
+		DataDir:      filepath.Join(dir, "plugin-data"),
+		Log:          d.log,
+		Sessions:     d.listSessions,
+		Transcript:   d.pluginTranscript,
+		Projects:     d.pluginProjects,
+		Agents:       pluginAgents{d},
+		Layout:       pluginLayout{d},
+		Changed:      d.changes.firePlugins,
+		Installs:     d.store,
+		NetTest:      testhooks.NetTest(),
 	})
 	d.store.Attach(d.plugins)
 	// What a daemon stopped midway through an install left is settled
 	// before the folder is first read.
 	d.store.Reconcile()
 	ch := make(chan struct{})
+	d.projectAgents.messages.added = d.pluginMessage
 	go func() {
 		defer close(ch)
 		go d.store.Run(ctx)
+		go d.feedPluginEvents(ctx)
 		d.plugins.Run(ctx)
 	}()
 	return ch
@@ -131,7 +148,8 @@ func (d *Daemon) handleListPlugins(ctx context.Context, stream *transport.Stream
 	if fromPeer || d.plugins == nil {
 		return errPluginPeer
 	}
-	return stream.Send(protocol.TypePlugins, env.GetId(), &protocol.Plugins{Plugins: d.plugins.List()})
+	store, note := d.plugins.SecretStore()
+	return stream.Send(protocol.TypePlugins, env.GetId(), &protocol.Plugins{Plugins: d.plugins.List(), Secrets: store, SecretsNote: note})
 }
 
 func (d *Daemon) handlePluginAction(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ironpark/mako/internal/uiblock"
@@ -26,18 +27,31 @@ const minRefresh = 15 * time.Second
 var errGone = errors.New("the plugin was removed")
 
 type plugin struct {
-	m        *Manager
-	id       string
-	jobs     chan func()
-	recheck  chan struct{} // how the plugin stands as installed may have changed
-	done     chan struct{}
-	exited   chan struct{} // closed once the actor has stopped
-	quitOnce sync.Once
-	settings *settingsStore
-	store    *kvStore
-	logRate  *rateLimit
-	netRate  *rateLimit
-	evRate   *rateLimit
+	m           *Manager
+	id          string
+	jobs        chan func()
+	recheck     chan struct{} // how the plugin stands as installed may have changed
+	done        chan struct{}
+	exited      chan struct{} // closed once the actor has stopped
+	quitOnce    sync.Once
+	settings    *settingsStore
+	vault       *vault
+	store       *kvStore
+	logRate     *rateLimit
+	netRate     *rateLimit
+	evRate      *rateLimit
+	secRate     *rateLimit
+	trRate      *rateLimit
+	fsRate      *rateLimit
+	fsWriteRate *rateLimit
+	subRate     *rateLimit
+	dropLog     *rateLimit
+	subs        *subscriptions
+	asks        asks
+	msgRate     *rateLimit
+	startRate   *rateLimit
+	layoutRate  *rateLimit
+	layoutBusy  atomic.Bool // a change of the layout of the plugin's is under way
 
 	mu      sync.Mutex
 	folder  string // the folder's fingerprint last seen
@@ -76,20 +90,32 @@ type instance struct {
 
 func newPlugin(m *Manager, id string) *plugin {
 	data := filepath.Join(m.cfg.DataDir, id)
+	v := newVault(m, id)
 	return &plugin{
 		m: m, id: id,
-		jobs:     make(chan func(), 32),
-		recheck:  make(chan struct{}, 1),
-		done:     make(chan struct{}),
-		exited:   make(chan struct{}),
-		settings: newSettingsStore(filepath.Join(data, "settings.json")),
-		store:    newKVStore(filepath.Join(data, "storage.json"), m.lim.Storage),
-		logRate:  newRateLimit(m.lim.Logs, time.Minute),
-		netRate:  newRateLimit(m.lim.HTTPPerMinute, time.Minute),
-		evRate:   newRateLimit(m.lim.Events, time.Second),
-		inst:     map[string]*instance{},
-		changed:  make(chan struct{}),
-		saved:    map[string]string{},
+		jobs:        make(chan func(), 32),
+		recheck:     make(chan struct{}, 1),
+		done:        make(chan struct{}),
+		exited:      make(chan struct{}),
+		settings:    newSettingsStore(filepath.Join(data, "settings.json"), v),
+		vault:       v,
+		store:       newKVStore(filepath.Join(data, "storage.json"), m.lim.Storage),
+		logRate:     newRateLimit(m.lim.Logs, time.Minute),
+		netRate:     newRateLimit(m.lim.HTTPPerMinute, time.Minute),
+		evRate:      newRateLimit(m.lim.Events, time.Second),
+		secRate:     newRateLimit(secretsPerMinute, time.Minute),
+		trRate:      newRateLimit(transcriptsPerMin, time.Minute),
+		fsRate:      newRateLimit(fsReadsPerMin, time.Minute),
+		fsWriteRate: newRateLimit(fsWritesPerMin, time.Minute),
+		subRate:     newRateLimit(eventsPerSecond, time.Second),
+		dropLog:     newRateLimit(1, time.Minute),
+		msgRate:     newRateLimit(messagesPerMin, time.Minute),
+		startRate:   newRateLimit(agentStartsPerHr, time.Hour),
+		layoutRate:  newRateLimit(layoutPatchesPerMin, time.Minute),
+		subs:        &subscriptions{path: filepath.Join(data, "subscriptions.json")},
+		inst:        map[string]*instance{},
+		changed:     make(chan struct{}),
+		saved:       map[string]string{},
 	}
 }
 
@@ -257,6 +283,7 @@ func (p *plugin) info() *protocol.PluginInfo {
 	out.Version, out.Publisher = man.Version, man.Publisher
 	out.Permissions = man.Permissions
 	out.Granted = grantsOf(man, g.Granted).list(man)
+	out.AgentAsk, out.AgentsAllowed = p.asks.get().info(), g.AgentsAllowed
 	out.Asked = asked(man, g.Granted)
 	for _, b := range man.Blocks {
 		out.Blocks = append(out.Blocks, &protocol.PluginBlock{Name: blockName(p.id, b.ID), Title: b.Title, Slots: b.Slots})

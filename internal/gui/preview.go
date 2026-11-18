@@ -486,6 +486,12 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			if sig := os.Getenv("MAKO_PREVIEW_PLUGINS"); sig != "" {
 				steps = pluginsPreview(m, "ci-status", func() string { return p.Semantics().String() }, sig, do, frames, shot)
 			}
+			// MAKO_PREVIEW_DRIVE names a folder of commands from a driver,
+			// which brings the daemon to what is to be rendered; see
+			// drivePreview.
+			if sig := os.Getenv("MAKO_PREVIEW_DRIVE"); sig != "" {
+				steps = drivePreview(m, func() *ggui.Probe { return p }, sig, do, frames, shot)
+			}
 			// MAKO_PREVIEW_STORE names a folder of signals between this and
 			// the driver of a registry listing ci-status; see storePreview.
 			if sig := os.Getenv("MAKO_PREVIEW_STORE"); sig != "" {

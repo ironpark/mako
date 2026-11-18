@@ -42,8 +42,12 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 		if v != nil {
 			perms = v.man.Permissions
 		}
-		if err := m.grant.update(p.id, func(e *grantEntry) { e.Granted, e.Denied = nil, perms }); err != nil {
+		if err := m.grant.update(p.id, func(e *grantEntry) { e.Granted, e.Denied, e.AgentsAllowed = nil, perms, false }); err != nil {
 			return nil, err
+		}
+		p.dropAsk("the user refused the plugin's permissions")
+		if m.cfg.Layout != nil {
+			m.cfg.Layout.Forget(p.id)
 		}
 		m.cfg.Log.Info("plugin's permissions refused", "plugin", p.id)
 		p.post(func() { p.closeRuntime(); p.status(func() { p.running = false }) })
@@ -51,10 +55,18 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 	case protocol.PluginDisable, protocol.PluginEnable:
 		off := a.GetOp() == protocol.PluginDisable
 		if st := p.installStatus(); !off && st.Blocked != "" {
-			return nil, fmt.Errorf("the plugin cannot be enabled while it is blocked: %s", st.Blocked)
+			version := ""
+			if v != nil {
+				version = v.man.Version
+			}
+			return nil, &protocol.CodedError{Code: protocol.CodePluginBlocked, Args: []string{p.id, version, st.Blocked},
+				Message: fmt.Sprintf("the plugin cannot be enabled while it is blocked: %s", st.Blocked)}
 		}
 		if err := m.grant.update(p.id, func(e *grantEntry) { e.Disabled = off }); err != nil {
 			return nil, err
+		}
+		if off {
+			p.dropAsk("the plugin was disabled")
 		}
 		p.post(func() {
 			p.failures, p.renderFailures = 0, 0
@@ -126,6 +138,15 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 			}
 			p.renderAll()
 		})
+	case protocol.PluginAllowAgent, protocol.PluginDenyAgent:
+		if err := p.answerAgent(a.GetKey(), a.GetOp(), a.GetValue()); err != nil {
+			return nil, err
+		}
+	case protocol.PluginForgetAgents:
+		if err := m.grant.update(p.id, func(e *grantEntry) { e.AgentsAllowed = false }); err != nil {
+			return nil, err
+		}
+		p.status(func() {})
 	default:
 		return nil, fmt.Errorf("unknown op %q", a.GetOp())
 	}

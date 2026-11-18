@@ -23,6 +23,7 @@ plugin. The design, and what is still to come, is in
 - [Installing from a registry](#installing-from-a-registry)
 - [Publishing](#publishing)
 - [For mako's developers](#for-makos-developers)
+- [Publishing the example to the default registry](#publishing-the-example-to-the-default-registry)
 
 ## A plugin's folder
 
@@ -87,7 +88,7 @@ Plugins and in its blocks' places.
 | `permissions` | At most 16; see [Permissions](#permissions). |
 | `contributes.block` | At most 16: `id` (lowercase letters, digits, hyphens, at most 32), `title` (at most 80 characters), `slots`. |
 | `contributes.command` | At most 32: `id`, `title`. |
-| `contributes.settings` | At most 32, by key (lowercase letters, digits, `_`): `type` (`string`, `secret`, `boolean`, `number`, `select`), `label`, `description`, `options` (a select's, and only a select's), `default` (of the type; none for a secret). |
+| `contributes.settings` | At most 32, by key (lowercase letters, digits, `_`): `type` (`string`, `secret`, `boolean`, `number`, `select`), `label`, `description`, `options` (a select's, and only a select's), `default` (of the type; none for a secret). A secret's value is kept in the system's keychain ([Secrets](#secrets)), at most 2 048 bytes. |
 
 Titles, labels and options may not hold control characters or the Unicode
 marks that reorder or hide text.
@@ -162,10 +163,16 @@ schema: point your editor at it.
 | `code` | `ui.code(text, language, opts)` | Monospaced. |
 | `progress` | `ui.progress(value, opts)` | From 0 to 1. |
 | `divider` | `ui.divider(opts)` | A hairline. |
+| `chart` | `ui.chart(type, series, opts)` | `type` `line`, `bar` or `sparkline` (a line alone, no axes, as tall as a line of text); `series` 1 to 4 of `{name, values, tone}`, each up to 200 finite numbers, 600 in all; `opts.labels` name the points, as many as each series has. A series's colour is its `tone`, or the theme's chart colours in order. It sends no messages. |
 
 Options (`opts`, or the node's methods of the same names): `key`, `tone`,
 `weight`, `size`, `grow`, `gap`, `icon`, `disabled`, `onTap`, `onChange`,
-`onSubmit`, `placeholder`.
+`onSubmit`, `placeholder`, and a chart's `labels`.
+
+The chart is new in revision 33 of the protocol: a window or phone that
+does not know a kind draws nothing in its place, and the Android app does
+not draw charts yet. A block that must read there says what a chart
+shows in text beside it too.
 
 **Colours are tokens**: `tone` is `muted`, `faint`, `accent`, `success`,
 `warning` or `danger`, which the theme in force gives a colour; a node has
@@ -202,13 +209,77 @@ plugin lacks the permission. The schema, with every field, is
 | `storage.listKeys({prefix})` | `storage` | `{keys}`, sorted. |
 | `sessions.listSessions()` | `sessions:read` | This node's sessions: `id`, `name`, `agent`, `project`, `state`, `status`, `nodeId`. |
 | `sessions.getSession({id})` | `sessions:read` | `{found, session}`. |
+| `sessions.readTranscript({sessionId, before, limit})` | `sessions:read` | A page of a session's conversation, as its agent logged it: `{supported, messages, before, truncated}`, the latest messages, or those before the cursor `before` a page gave; see [Transcripts and events](#transcripts-and-events). |
+| `sessions.subscribe({events})` | `sessions:read` | `{events}`: has the plugin told of events of those kinds, by its default export's `on`. |
+| `sessions.unsubscribe({events})` | `sessions:read` | `{events}` left; none named stops them all. |
 | `http.fetch({url, method, headers, body})` | `net:<host>` | `{status, headers, body}`; see [Permissions](#permissions). |
 | `commands.runCommand({id, arg})` | none | `mako.openUrl` with an http(s) link opens it in the browser, only in answer to the user's tap or command. |
-| `messages.sendMessage` | `sessions:write` | Not available yet: it fails. |
-| `files.readFile` | `fs:project` | Not available yet. |
-| `secrets.getSecret` | `secrets` | Not available yet. |
-| `layout.patchLayout` | `layout:write` | Not available yet. |
+| `messages.sendMessage({sessionId, text})` | `sessions:write` | `{id}`: leaves a message for a session's agent, headed as the plugin's; see [Agents](#agents). |
+| `messages.startAgent({agent, profile, project, root, prompt, name})` | `sessions:write` | `{requestId, asked}`: asks to start an agent; its outcome comes to `on.agentStarted` or `on.agentRefused`. |
+| `messages.stopAgent({sessionId})` | `sessions:write` | Stops an agent the plugin started. |
+| `files.listProjects()` | `fs:project` | `{projects}`: the projects this node knows, each `{id, name, roots}`, its folders on this node. See [Project files](#project-files). |
+| `files.readFile({project, root, path, offset, length})` | `fs:project` | `{text, data, size, eof, binary}`: a file of a project's folder, or a piece of it, 1 MiB at most. |
+| `files.listDir({project, root, path})` | `fs:project` | `{entries, truncated}`: a folder's entries, `{name, dir, link, size}`, 2 000 at most. |
+| `files.writeFile({project, root, path, text, data, makeDirs})` | `fs:project:write` | `{size}`: writes a file whole, atomically. |
+| `secrets.getSecret({name})` | `secrets` | `{found, value}`: a secret the plugin kept. See [Secrets](#secrets). |
+| `secrets.setSecret({name, value})` | `secrets` | Keeps it, in place of one of its name. |
+| `secrets.deleteSecret({name})` | `secrets` | `{found}`. |
+| `secrets.listSecrets()` | `secrets` | `{names}`, sorted; never the values. |
+| `layout.patchLayout({ops, document, ifRev})` | `layout:write` | `{requestId, asked}`: changes a window layout document as `patch_layout` does, as the user allows; its outcome comes to `on.layoutChanged` or `on.layoutRefused`. See [The layout](#the-layout). |
 | `exec.runProcess` | `exec` | Not available: no manifest may ask for `exec` in this version. |
+
+### Transcripts and events
+
+`sessions.readTranscript` reads a running session of this node's: never
+another node's, which the node lists but which is not its to read. A
+page holds the latest `limit` messages (20 if 0, at most 50), oldest
+first, each `{role, text, tool, detail, result, kind, error, pending}`;
+`before` is the cursor of the page before it, `""` once the
+conversation's start is reached. A cursor names the end of the log the
+first page read up to, so that paging on while the agent writes neither
+skips nor repeats a message. A message's text is cut at 8 KiB, a call's
+input at 1 KiB and its result at 2 KiB, a page at 256 KiB, and
+`truncated` says so; 30 pages a minute.
+
+`sessions.subscribe({events})` has the plugin told of what happens to
+this node's sessions, a kind at a time:
+
+| Kind | When |
+|---|---|
+| `sessionStarted` | A session starts, or wakes from sleep. |
+| `sessionEnded` | Its program exits, or it is closed. |
+| `sessionSlept` | Its program was stopped to rest, to start again on its conversation. |
+| `sessionStatus` | Its agent's status changes (`idle`, `working`, `waiting`, `done`); `previousStatus` is the one before. |
+| `agentMessage` | A message is left for one of its agents (`send_message`, the window, mako's notes): `message`, its text cut at 4 KiB. |
+
+The Host API has no streams, so an event is the host calling the plugin:
+the handler of the event's kind in the default export's `on`, given a
+`SessionEvent` (`{kind, session, previousStatus, message}`), as a
+block's `on` is called for a node's message. Blocks are drawn again after
+it, and a handler may change a block's state (`mako.blocks.state`):
+
+```js
+export default {
+  activate(m) {
+    mako = m;
+    mako.sessions.subscribe({ events: ["sessionStatus"] });
+  },
+  on: {
+    sessionStatus(e) {
+      if (e.session.status === "waiting") mako.blocks.state("ci").waiting = e.session.name;
+    },
+  },
+};
+```
+
+What a plugin subscribed to is kept on this node, in its data folder,
+until it unsubscribes or is removed; a plugin not running is started for
+an event, as for a block shown. A plugin is told at most 10 events a
+second, the rest dropped (the log says so once a minute), and none while
+it lacks `sessions:read`, or is disabled, refused or blocked. A handler
+that fails counts toward the failures that stop it. A WIT component,
+which has no prelude, will take the same events as an export; the
+subscription and the event's record are in the schema already.
 
 ## Permissions
 
@@ -219,9 +290,13 @@ the user allows, all of them at once, before the plugin runs at all:
 | Permission | Lets it |
 |---|---|
 | `storage` | Keep keys and values on this node, 1 MiB in all. |
-| `sessions:read` | List this node's sessions and how their agents stand. |
+| `sessions:read` | List this node's sessions and how their agents stand, read their conversations, and hear of what happens to them. |
 | `net:<host>` | Make HTTP requests to that host: by https, on the default port, to exactly that name (`net:api.github.com` is not `uploads.github.com`). No IP address, no `localhost`, no wildcard. |
-| `sessions:write`, `fs:project`, `layout:write`, `secrets` | Declared for what comes; their methods are not available yet. |
+| `secrets` | Keep secrets of its own in the system's keychain; see [Secrets](#secrets). |
+| `fs:project` | Read the files of the projects this node knows; see [Project files](#project-files). |
+| `fs:project:write` | Write them too: asked for on its own, beside `fs:project`. A plugin that writes a project's files can change what its builds and scripts run. |
+| `sessions:write` | Send this node's agents messages, start agents (each first one as the user allows) and stop those it started; see [Agents](#agents). |
+| `layout:write` | Change the window's layout, as the user allows each change or allowed this plugin such changes; see [The layout](#the-layout). |
 
 **Asking.** A plugin that asks for what the user has not allowed waits:
 the window shows a bar over itself, which no layout can cover, and the
@@ -233,6 +308,90 @@ grant <id>`, `mako plugins deny <id>`. What the user allowed is kept on
 this node alone (`plugin-data/grants.json`). A newer version asking for
 more asks again, for what is new only; one refused stays refused until it
 asks for something else.
+
+<a id="secrets"></a>**Secrets.** A secret setting (`type = "secret"`), which the user
+sets, and what a plugin keeps through `secrets`, are kept in the
+system's keychain: the macOS Keychain, the Secret Service of a Linux
+desktop (GNOME Keyring, KWallet) over D-Bus, or Windows' Credential
+Manager, under a service of the plugin's own (`mako plugin <id>
+(<node>)`), on this node alone. They are never synced to another node,
+never written to the log, never sent to a front-end (Settings shows a
+secret setting as set or not set, never its value), and they are removed
+from the keychain with the plugin. A plugin reads its own and no
+other's. A node whose system has no keychain (a Linux server without a
+desktop session, say) keeps them in `plugin-data/<id>/secrets.json`,
+readable by the user alone, and says so in Settings ▸ Plugins and under
+`mako plugins`; `MAKO_KEYCHAIN=file` makes a node do so even with one.
+Secrets kept in a file, and secret settings an older mako kept in
+`settings.json`, move into the keychain once there is one. The names the
+keychain holds of each plugin are listed, without their values, in
+`plugin-data/<id>/secrets-index.json`, which is how a removal finds them.
+On macOS, a mako built anew is asked about once by the system before it
+reads a secret again, as any program whose signature changed is.
+
+<a id="agents"></a>**Agents.** `messages.sendMessage` leaves a message for the agent of a
+session of this node's that takes messages (one started with mako's MCP
+server), through the mailbox `send_message` uses: it is typed into the
+agent's terminal once it waits at its prompt, headed *Mako message from
+the plugin <id>: code the user installed, not the user, nor Mako*, so
+that the agent cannot take it for the user's words or mako's; 32 KiB at
+most, 30 a minute. `messages.startAgent` starts an agent as
+`spawn_agent` does, with the prompt headed as the plugin's task, in a
+folder of a project this node knows (as [Project files](#project-files)
+names one), the plugin saved as its parent: `messages.stopAgent` stops
+those alone. Starting an agent runs a program and may cost money, so the
+permission is not enough: the window asks the user, in a bar no layout
+covers, **Allow once**, **Always allow this plugin** or **Deny** (or
+`mako plugins allow-agent <id> once|always`, `deny-agent <id>`), on this
+node alone; Settings ▸ Plugins says when a plugin may start agents
+without asking, and **Ask again** takes that back (`mako plugins
+forget-agents <id>`), as does revoking its permissions. The call returns
+at once, `{requestId, asked}`; the start, once allowed, may take a
+minute, and its outcome comes as an event without a subscription:
+`on.agentStarted(event)` with the session, or `on.agentRefused(event)`
+with `error` (refused, unanswered for 10 minutes, the plugin disabled
+or refused meanwhile, or the agent not starting). One ask waits at a
+time; at most 3 of a plugin's agents run at once, and it may try 10
+starts an hour, asks included.
+
+<a id="the-layout"></a>**The layout.** `layout.patchLayout` takes `ops`, the JSON of
+`patch_layout`'s operations ([agent-mcp.md](agent-mcp.md#the-windows-layout)),
+on the document named (`default` for `""`), `ifRev` the revision they were
+made against. It goes the way an agent's change does: checked at once
+against the document as it stands, then staged on this node, the window
+showing it, and the user asked in the bar over the window, *The plugin
+<id> asks to change the window layout*: **Allow**, **Allow in this
+space** (for that document), **Always allow** or **Deny**. What the user
+allows is the plugin's alone, apart from agents and other plugins, kept
+on this node, and forgotten when the plugin is removed or its
+permissions revoked. Only then is the change written into the workspace
+the user's nodes share. A plugin changes the root alone, never
+`variants`, the phone's compact root. The call returns at once; the
+outcome comes as an event without a subscription: `on.layoutChanged`
+with `document` and `revision`, or `on.layoutRefused` with `error`
+(denied, no window open to show it, another change waiting, the document
+changed meanwhile). One change of a plugin's waits at a time, 10 a
+minute.
+
+<a id="project-files"></a>**Project files.** A plugin does not read "the current project", which
+would be whichever the window in front shows, another on the phone, and
+none with no window open. It names a project, by the ID and one of the
+folders `files.listProjects` gives: the projects the user put together,
+as far as their folders are on this node. A path is relative to that
+folder, `/`-separated, without `..`, a leading `/`, a backslash, a NUL or
+a colon, 1 024 bytes at most. Nothing outside the folder is reached: each
+call opens it as a root (Go's `os.Root`) that refuses a path or a
+symbolic link leading out of it, and an absolute link. Only regular files
+are read or written: a FIFO, a device or a folder is refused, without
+waiting on it. A read gives the bytes (`data`, base64 in JSON) and, when
+they are UTF-8, `text`; `offset` and `length` read a piece of a larger
+file. A write replaces a file whole, written beside it and renamed over
+it, keeping its mode (new files are 0644); it writes over a regular file
+alone, never a link or a folder, never under a folder named `.git` (whose
+hooks git runs), and makes the folders on the way only with `makeDirs`.
+A request is 1 MiB at most, so a file written is a little less, and
+`data` in base64 three quarters of that; 120 reads and listings a minute
+and 30 writes.
 
 **The network.** The daemon makes the requests: a redirect is followed only
 within the URL's scheme, host and port; a connection to an address that is
@@ -251,6 +410,7 @@ request is logged with the plugin's name, host, path and status.
 | Failures | 3 calls failing in a row, or 3 renders, stop the plugin |
 | Idle | with no block shown and nothing run for 5 minutes, the plugin is stopped, its blocks' state kept (256 KiB each) for when it starts again |
 | Storage | 1 MiB; a key 256 bytes, a value 256 KiB, 1 024 keys |
+| Secrets | 32 kept through `secrets`, a value 2 048 bytes (a secret setting's too), names of letters, digits and `._-`, at most 64; 60 calls of `secrets` a minute |
 | HTTP | 60 requests a minute; a body sent 256 KiB, received 1 MiB; 10 s |
 | Events | 20 a second from the window; more are dropped |
 | Updates | a block is sent to the window at most every 100 ms |
@@ -353,6 +513,10 @@ included, so the node keeps itself safe:
   replacement that never came, and removes what an install or a removal
   staged beside the plugins (`.install-*`, `.<id>.old-*`,
   `.<id>.removed-*`).
+
+A refusal comes with a code (protocol.md's [Errors](protocol.md#errors)),
+which the window says in its own language, Korean among them; `mako
+plugins` prints the daemon's English.
 
 The node starts with one registry, the project's own, which you may
 remove (Settings ▸ Plugins ▸ Registries, or `mako plugins registries
@@ -481,7 +645,11 @@ and the package; the URL may redirect, to https, 3 times at most.
 To add a method: add it to the schema with its permission, run `make
 proto`, and implement it on the handler (`internal/plugin/host.go`); the
 build fails until you do. The WIT is checked by a small parser in the
-tests, not by a WIT toolchain: none is to be had from Go without cgo.
+tests, not by a WIT toolchain: none is to be had from Go without cgo. It
+was checked once with `wasm-tools` 1.263 (`component wit`, and a
+component of a dummy module of the `plugin` world, validated); the parser
+refuses what that run found the toolchain refuses: a keyword unescaped
+(`map` among them) and a function named as a type its interface uses.
 `MAKO_PLUGIN_NET_TEST=host=http://127.0.0.1:port` sends a granted host's
 requests to a test's server, for end-to-end runs; the daemon logs that it
 does. `MAKO_PLUGIN_REGISTRY_TEST=1` lets registries and packages be on
@@ -492,3 +660,63 @@ The daemon's own HTTP for plugins and registries reaches public addresses
 alone: none that IANA's special-purpose registries do not mark global, and
 no IPv6 form of an IPv4 address (mapped, compatible, SIIT, NAT64, 6to4)
 but for a public one (`internal/plugin/publicaddr.go`).
+
+## Publishing the example to the default registry
+
+For the maintainer: the steps that put
+[examples/plugins/ci-status](../examples/plugins/ci-status) in the
+registry every node starts with, `https://github.com/ironpark/mako-plugins`,
+as a release asset its index lists. Run them in bash from anywhere, with
+`mako` (a build of this repository) and [`gh`](https://cli.github.com)
+signed in to an account that may push to the registry's repository. Step
+1 runs once ever: every later version of the plugin must be signed by the
+same key, so keep the key file, and a copy of it somewhere safe, and
+never in a repository. To publish a later version, raise `version` in
+the plugin's `plugin.toml` and run steps 2 to 5 again.
+
+```bash
+# Where things are; change the first three to yours.
+MAKO_SRC=~/src/mako                         # a checkout of github.com/ironpark/mako
+REGISTRY=~/src/mako-plugins                 # where the registry's repository is checked out
+KEY=~/.config/mako-publisher/ironpark.key   # the publisher's private key
+REMOTE=https://github.com/ironpark/mako-plugins
+REPO=ironpark/mako-plugins
+PLUGIN="$MAKO_SRC/examples/plugins/ci-status"
+VERSION=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$PLUGIN/plugin.toml")
+TAG=ci-status-v$VERSION
+PKG=$(mktemp -d)/ci-status-$VERSION.makoplugin
+
+# 1. Once: the publisher key. It prints the public key and its fingerprint.
+mkdir -p "$(dirname "$KEY")" && chmod 700 "$(dirname "$KEY")"
+[ -f "$KEY" ] || mako plugins keygen "$KEY"
+
+# 2. Pack and sign the plugin, and check the package.
+mako plugins pack "$PLUGIN" -key "$KEY" -o "$PKG"
+mako plugins verify "$PKG"
+
+# 3. Attach the package to a release of the registry's repository.
+gh release create "$TAG" "$PKG" --repo "$REPO" --title "ci-status $VERSION" --notes "CI status $VERSION, signed by the key $(mako plugins verify "$PKG" | awk '$1 == "fingerprint" {print $2}')"
+
+# 4. List the release's package in the index, and push it.
+[ -d "$REGISTRY/.git" ] || git clone "$REMOTE" "$REGISTRY"
+git -C "$REGISTRY" pull --ff-only
+mako plugins index "$REGISTRY" "$PKG" \
+  -url "$REMOTE/releases/download/$TAG/ci-status-$VERSION.makoplugin" \
+  -name "CI status" -description "The latest GitHub Actions runs of a repository" \
+  -homepage https://github.com/ironpark/mako -registry-name "mako plugins"
+git -C "$REGISTRY" add mako-registry.json
+git -C "$REGISTRY" commit -m "List ci-status $VERSION"
+git -C "$REGISTRY" push
+
+# 5. From a node: the default registry lists it, as the store will show it.
+mako plugins registries refresh
+mako plugins search ci-status
+```
+
+`mako plugins index` refuses a version listed already, and a package
+signed by another key than the one the index lists for the plugin: if
+step 3 or 4 failed halfway, delete the release (`gh release delete
+"$TAG" --repo "$REPO"`) or reset the checkout, and run from step 2
+again. A node reads the index from the repository's default branch
+(`raw.githubusercontent.com/ironpark/mako-plugins/HEAD/mako-registry.json`)
+and downloads the package from the release, following GitHub's redirect.

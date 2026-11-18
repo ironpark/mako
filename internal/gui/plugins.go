@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -26,7 +27,13 @@ type pluginsState struct {
 	List *ggui.StateValue[[]*protocol.PluginInfo]
 	// Later are the plugins whose asking the user put off in this window.
 	Later *ggui.StateValue[map[string]bool]
+	// Secrets is where the daemon keeps its plugins' secrets: the
+	// keychain's name, or "file" with why; "" from an older daemon.
+	Secrets *ggui.StateValue[secretStore]
 }
+
+// secretStore is where a node keeps its plugins' secrets.
+type secretStore struct{ Store, Note string }
 
 func newPluginsState() *pluginsState {
 	return &pluginsState{
@@ -41,12 +48,21 @@ func newPluginsState() *pluginsState {
 			}
 			return true
 		}),
-		Later: ggui.State(map[string]bool{}),
+		Later:   ggui.State(map[string]bool{}),
+		Secrets: ggui.State(secretStore{}),
 	}
 }
 
 // setPlugins takes the daemon's listing in, registering their blocks.
 func (m *model) setPlugins(list []*protocol.PluginInfo) {
+	m.setPluginList(&protocol.Plugins{Plugins: list})
+}
+
+// setPluginList takes the daemon's listing in, with where it keeps the
+// plugins' secrets.
+func (m *model) setPluginList(pl *protocol.Plugins) {
+	m.plugins.Secrets.Set(secretStore{pl.GetSecrets(), pl.GetSecretsNote()})
+	list := pl.GetPlugins()
 	m.plugins.List.Set(list)
 	var defs []blockDef
 	for _, p := range list {
@@ -79,7 +95,7 @@ func (m *model) actOnPlugin(req *protocol.PluginAction) {
 		return c.PluginAction(ctx, req)
 	}, func(done *protocol.PluginDone, err error) {
 		if err != nil {
-			m.connErr(err)
+			m.connErr(errors.New(errorText(err)))
 		} else {
 			openPluginLink(done.GetOpenUrl())
 		}
@@ -129,7 +145,9 @@ func permissionText(p string) string {
 	case "sessions:write":
 		return T("Send messages to sessions, and start and stop agents")
 	case "fs:project":
-		return T("Read the current project's files")
+		return T("Read the files of this node's projects")
+	case "fs:project:write":
+		return T("Change the files of this node's projects, which can change what their builds run")
 	case "layout:write":
 		return T("Change the window layout")
 	case "secrets":

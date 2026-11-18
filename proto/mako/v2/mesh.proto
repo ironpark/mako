@@ -155,17 +155,27 @@ message LayoutStage {
   string tool = 7;      // set_layout, patch_layout or undo_layout
   string summary = 8;   // what it changes, in a line
   int64 deadline = 9;   // keep: when it reverts, in Unix ms
+  // plugin_id is the plugin that asked, for a change of a plugin's
+  // (layout:write), which no session asks for: session_id is then empty,
+  // and agent names the plugin for an older window. Such a change is
+  // allowed or denied with a LayoutDecision (revision 32).
+  string plugin_id = 10;
 }
 
 // LayoutDecision answers a LayoutStage from a front-end of the node it is
 // held on: keep or revert one in phase keep, or forget what the user has
-// allowed agents to change without asking. Allowing or denying one in
-// phase approve is an AnswerApproval of its id, as any approval is. The
-// reply is the Workspace after.
+// allowed agents and plugins to change without asking. Allowing or
+// denying an agent's in phase approve is an AnswerApproval of its id, as
+// any approval is; a plugin's, which no session holds, is a
+// LayoutDecision allow or deny (revision 32). The reply is the Workspace
+// after.
 message LayoutDecision {
   string stage_id = 1;
-  string decision = 2; // keep, revert, forget
+  string decision = 2; // keep, revert, forget; allow or deny (revision 32)
   string node_id = 3;  // "" for the daemon's own; another node refuses it
+  // option is an allow's, as an approval's: allow_space or allow_always,
+  // "" for once (revision 32).
+  string option = 4;
 }
 
 // GetWorkspace asks the daemon for the workspace it holds; it answers with

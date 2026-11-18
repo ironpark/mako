@@ -23,4 +23,44 @@ public interface PluginsOrBuilder extends
    * <code>repeated .mako.v2.PluginInfo plugins = 1 [json_name = "plugins"];</code>
    */
   int getPluginsCount();
+
+  /**
+   * <pre>
+   * secrets is where the node keeps its plugins' secrets: the name of the
+   * system's keychain ("macOS Keychain", "Secret Service", "Windows
+   * Credential Manager"), or "file" when it reaches none, a file of each
+   * plugin's only the user may read, secrets_note saying why (revision
+   * 32). "" from an older daemon.
+   * </pre>
+   *
+   * <code>string secrets = 2 [json_name = "secrets"];</code>
+   * @return The secrets.
+   */
+  java.lang.String getSecrets();
+  /**
+   * <pre>
+   * secrets is where the node keeps its plugins' secrets: the name of the
+   * system's keychain ("macOS Keychain", "Secret Service", "Windows
+   * Credential Manager"), or "file" when it reaches none, a file of each
+   * plugin's only the user may read, secrets_note saying why (revision
+   * 32). "" from an older daemon.
+   * </pre>
+   *
+   * <code>string secrets = 2 [json_name = "secrets"];</code>
+   * @return The bytes for secrets.
+   */
+  com.google.protobuf.ByteString
+      getSecretsBytes();
+
+  /**
+   * <code>string secrets_note = 3 [json_name = "secretsNote"];</code>
+   * @return The secretsNote.
+   */
+  java.lang.String getSecretsNote();
+  /**
+   * <code>string secrets_note = 3 [json_name = "secretsNote"];</code>
+   * @return The bytes for secretsNote.
+   */
+  com.google.protobuf.ByteString
+      getSecretsNoteBytes();
 }

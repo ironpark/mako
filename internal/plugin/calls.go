@@ -34,7 +34,7 @@ func (p *plugin) invoke(method string, gesture bool, args ...any) (string, error
 	switch {
 	case errors.As(err, &over):
 		p.kill(over.msg)
-	case method == "load" || method == "event" || method == "command":
+	case method == "load" || method == "event" || method == "command" || method == "sessionEvent":
 		p.count(&p.failures, "calls", err)
 	}
 	return out, err
@@ -173,6 +173,7 @@ func (p *plugin) load(in *instance) {
 // tick stops an idle runtime, and loads again the blocks that showing
 // ask to be loaded every so often.
 func (p *plugin) tick() {
+	p.expireAsk(time.Now())
 	if p.rt == nil {
 		return
 	}

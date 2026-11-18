@@ -44,10 +44,26 @@ func (p *witParser) expect(want string) {
 	}
 }
 
+// realKeywords are the words wasm-tools 1.263 refuses bare as an
+// identifier, as found by running it over a field of each: an
+// identifier spelled as one is escaped with %.
+var realKeywords = map[string]bool{}
+
+func init() {
+	for _, k := range strings.Fields(`as async bool borrow char constructor enum export f32 f64 flags from func future
+		import include interface list option own package record resource result s16 s32 s64 s8 static stream string
+		tuple type u16 u32 u64 u8 use variant with world error-context map`) {
+		realKeywords[k] = true
+	}
+}
+
 func (p *witParser) ident() string {
 	t := p.next()
 	if !regexp.MustCompile(`^%?[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$`).MatchString(t) && p.err == nil {
 		p.err = fmt.Errorf("token %d: %q is not a WIT identifier", p.i, t)
+	}
+	if realKeywords[t] && p.err == nil {
+		p.err = fmt.Errorf("token %d: %q is a keyword of WIT, which an identifier escapes as %%%s", p.i, t, t)
 	}
 	return strings.TrimPrefix(t, "%")
 }
@@ -83,10 +99,11 @@ func (p *witParser) typ(use func(string)) {
 		p.typ(use)
 		p.expect(">")
 	default:
-		name := p.ident()
-		if !witBuiltins[name] {
-			use(name)
+		if witBuiltins[p.peek()] {
+			p.next() // a type's name, not an identifier
+			return
 		}
+		use(p.ident())
 	}
 }
 
@@ -168,6 +185,9 @@ func TestWITIsWellFormed(t *testing.T) {
 					p.expect(";")
 				default:
 					fn := p.ident()
+					if scope[fn] {
+						t.Errorf("%s.%s is the name of a type it uses, which wasm-tools refuses", name, fn)
+					}
 					p.expect(":")
 					p.expect("func")
 					p.expect("(")

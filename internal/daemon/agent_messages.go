@@ -74,6 +74,9 @@ type agentMessages struct {
 	path    string
 	data    messageFile
 	changed chan struct{}
+	// added, if set, is told of each message left, outside the lock: the
+	// plugins subscribed to agents' messages hear of it.
+	added func(agentMessage)
 }
 
 func (m *agentMessages) load(dir string) error {
@@ -179,6 +182,14 @@ func (m *agentMessages) sentSince(from, to string, t time.Time) bool {
 }
 
 func (m *agentMessages) add(msg agentMessage, project string) (agentMessage, error) {
+	msg, err := m.addLocked(msg, project)
+	if err == nil && m.added != nil {
+		m.added(msg)
+	}
+	return msg, err
+}
+
+func (m *agentMessages) addLocked(msg agentMessage, project string) (agentMessage, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	to := msg.To

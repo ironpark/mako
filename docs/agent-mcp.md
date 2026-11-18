@@ -62,7 +62,11 @@ your session as any does. What the user allows is this node's, kept until
 then shown, and kept or reverted by the user; without an answer it reverts
 after 10 seconds, and the tool returns an error. Only a change allowed and,
 for `set_layout`, kept is written into the shared workspace, so another
-node never sees one reverted.
+node never sees one reverted. A plugin with `layout:write` changes the layout through the same
+flow, named as the plugin; what the user allows a plugin is that plugin's
+alone, and allowing agents allows no plugin
+([plugins.md](plugins.md#the-layout)). A block's tree may hold a
+`chart` too (revision 33).
 
 A change the user is to see is refused at once when no window of the
 node is open; one the user allowed before needs none, but a whole

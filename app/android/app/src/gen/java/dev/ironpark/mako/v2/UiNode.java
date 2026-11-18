@@ -9,8 +9,8 @@ package dev.ironpark.mako.v2;
  * <pre>
  * UiNode is a node of a plugin block's tree. The kinds are a fixed set
  * (docs/plugins.md): column, row, stack, text, icon, pill, chip, button,
- * list, input, toggle, select, markdown, code, progress and divider; a
- * colour is a token, never a value.
+ * list, input, toggle, select, markdown, code, progress, divider, and
+ * from revision 33 chart; a colour is a token, never a value.
  * </pre>
  *
  * Protobuf type {@code mako.v2.UiNode}
@@ -33,6 +33,9 @@ public  final class UiNode extends
     options_ = emptyProtobufList();
     language_ = "";
     children_ = emptyProtobufList();
+    chart_ = "";
+    series_ = emptyProtobufList();
+    labels_ = emptyProtobufList();
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -1064,6 +1067,275 @@ public  final class UiNode extends
     children_.remove(index);
   }
 
+  public static final int CHART_FIELD_NUMBER = 19;
+  private java.lang.String chart_;
+  /**
+   * <pre>
+   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+   * (revision 33). Its series are numbers, each series's colour a token;
+   * labels name the points along its axis; text is its caption. A front-end
+   * that does not know the kind draws nothing in its place.
+   * </pre>
+   *
+   * <code>string chart = 19 [json_name = "chart"];</code>
+   * @return The chart.
+   */
+  @java.lang.Override
+  public java.lang.String getChart() {
+    return chart_;
+  }
+  /**
+   * <pre>
+   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+   * (revision 33). Its series are numbers, each series's colour a token;
+   * labels name the points along its axis; text is its caption. A front-end
+   * that does not know the kind draws nothing in its place.
+   * </pre>
+   *
+   * <code>string chart = 19 [json_name = "chart"];</code>
+   * @return The bytes for chart.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getChartBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(chart_);
+  }
+  /**
+   * <pre>
+   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+   * (revision 33). Its series are numbers, each series's colour a token;
+   * labels name the points along its axis; text is its caption. A front-end
+   * that does not know the kind draws nothing in its place.
+   * </pre>
+   *
+   * <code>string chart = 19 [json_name = "chart"];</code>
+   * @param value The chart to set.
+   */
+  private void setChart(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    chart_ = value;
+  }
+  /**
+   * <pre>
+   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+   * (revision 33). Its series are numbers, each series's colour a token;
+   * labels name the points along its axis; text is its caption. A front-end
+   * that does not know the kind draws nothing in its place.
+   * </pre>
+   *
+   * <code>string chart = 19 [json_name = "chart"];</code>
+   */
+  private void clearChart() {
+
+    chart_ = getDefaultInstance().getChart();
+  }
+  /**
+   * <pre>
+   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+   * (revision 33). Its series are numbers, each series's colour a token;
+   * labels name the points along its axis; text is its caption. A front-end
+   * that does not know the kind draws nothing in its place.
+   * </pre>
+   *
+   * <code>string chart = 19 [json_name = "chart"];</code>
+   * @param value The bytes for chart to set.
+   */
+  private void setChartBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    chart_ = value.toStringUtf8();
+
+  }
+
+  public static final int SERIES_FIELD_NUMBER = 20;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiSeries> series_;
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.UiSeries> getSeriesList() {
+    return series_;
+  }
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.UiSeriesOrBuilder> 
+      getSeriesOrBuilderList() {
+    return series_;
+  }
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  @java.lang.Override
+  public int getSeriesCount() {
+    return series_.size();
+  }
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.UiSeries getSeries(int index) {
+    return series_.get(index);
+  }
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  public dev.ironpark.mako.v2.UiSeriesOrBuilder getSeriesOrBuilder(
+      int index) {
+    return series_.get(index);
+  }
+  private void ensureSeriesIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiSeries> tmp = series_;
+    if (!tmp.isModifiable()) {
+      series_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  private void setSeries(
+      int index, dev.ironpark.mako.v2.UiSeries value) {
+    java.util.Objects.requireNonNull(value);
+    ensureSeriesIsMutable();
+    series_.set(index, value);
+  }
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  private void addSeries(dev.ironpark.mako.v2.UiSeries value) {
+    java.util.Objects.requireNonNull(value);
+    ensureSeriesIsMutable();
+    series_.add(value);
+  }
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  private void addSeries(
+      int index, dev.ironpark.mako.v2.UiSeries value) {
+    java.util.Objects.requireNonNull(value);
+    ensureSeriesIsMutable();
+    series_.add(index, value);
+  }
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  private void addAllSeries(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.UiSeries> values) {
+    ensureSeriesIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, series_);
+  }
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  private void clearSeries() {
+    series_ = emptyProtobufList();
+  }
+  /**
+   * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+   */
+  private void removeSeries(int index) {
+    ensureSeriesIsMutable();
+    series_.remove(index);
+  }
+
+  public static final int LABELS_FIELD_NUMBER = 21;
+  private com.google.protobuf.Internal.ProtobufList<java.lang.String> labels_;
+  /**
+   * <code>repeated string labels = 21 [json_name = "labels"];</code>
+   * @return A list containing the labels.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.String> getLabelsList() {
+    return labels_;
+  }
+  /**
+   * <code>repeated string labels = 21 [json_name = "labels"];</code>
+   * @return The count of labels.
+   */
+  @java.lang.Override
+  public int getLabelsCount() {
+    return labels_.size();
+  }
+  /**
+   * <code>repeated string labels = 21 [json_name = "labels"];</code>
+   * @param index The index of the element to return.
+   * @return The labels at the given index.
+   */
+  @java.lang.Override
+  public java.lang.String getLabels(int index) {
+    return labels_.get(index);
+  }
+  /**
+   * <code>repeated string labels = 21 [json_name = "labels"];</code>
+   * @param index The index of the value to return.
+   * @return The bytes of the labels at the given index.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getLabelsBytes(int index) {
+    return com.google.protobuf.ByteString.copyFromUtf8(
+        labels_.get(index));
+  }
+  private void ensureLabelsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<java.lang.String> tmp =
+        labels_;  if (!tmp.isModifiable()) {
+      labels_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+  /**
+   * <code>repeated string labels = 21 [json_name = "labels"];</code>
+   * @param index The index to set the value at.
+   * @param value The labels to set.
+   */
+  private void setLabels(
+      int index, java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureLabelsIsMutable();
+    labels_.set(index, value);
+  }
+  /**
+   * <code>repeated string labels = 21 [json_name = "labels"];</code>
+   * @param value The labels to add.
+   */
+  private void addLabels(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureLabelsIsMutable();
+    labels_.add(value);
+  }
+  /**
+   * <code>repeated string labels = 21 [json_name = "labels"];</code>
+   * @param values The labels to add.
+   */
+  private void addAllLabels(
+      java.lang.Iterable<java.lang.String> values) {
+    ensureLabelsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, labels_);
+  }
+  /**
+   * <code>repeated string labels = 21 [json_name = "labels"];</code>
+   */
+  private void clearLabels() {
+    labels_ = emptyProtobufList();
+  }
+  /**
+   * <code>repeated string labels = 21 [json_name = "labels"];</code>
+   * @param value The bytes of the labels to add.
+   */
+  private void addLabelsBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    ensureLabelsIsMutable();
+    labels_.add(value.toStringUtf8());
+  }
+
   public static dev.ironpark.mako.v2.UiNode parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1151,8 +1423,8 @@ public  final class UiNode extends
    * <pre>
    * UiNode is a node of a plugin block's tree. The kinds are a fixed set
    * (docs/plugins.md): column, row, stack, text, icon, pill, chip, button,
-   * list, input, toggle, select, markdown, code, progress and divider; a
-   * colour is a token, never a value.
+   * list, input, toggle, select, markdown, code, progress, divider, and
+   * from revision 33 chart; a colour is a token, never a value.
    * </pre>
    *
    * Protobuf type {@code mako.v2.UiNode}
@@ -2237,6 +2509,284 @@ public  final class UiNode extends
       return this;
     }
 
+    /**
+     * <pre>
+     * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+     * (revision 33). Its series are numbers, each series's colour a token;
+     * labels name the points along its axis; text is its caption. A front-end
+     * that does not know the kind draws nothing in its place.
+     * </pre>
+     *
+     * <code>string chart = 19 [json_name = "chart"];</code>
+     * @return The chart.
+     */
+    @java.lang.Override
+    public java.lang.String getChart() {
+      return instance.getChart();
+    }
+    /**
+     * <pre>
+     * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+     * (revision 33). Its series are numbers, each series's colour a token;
+     * labels name the points along its axis; text is its caption. A front-end
+     * that does not know the kind draws nothing in its place.
+     * </pre>
+     *
+     * <code>string chart = 19 [json_name = "chart"];</code>
+     * @return The bytes for chart.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getChartBytes() {
+      return instance.getChartBytes();
+    }
+    /**
+     * <pre>
+     * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+     * (revision 33). Its series are numbers, each series's colour a token;
+     * labels name the points along its axis; text is its caption. A front-end
+     * that does not know the kind draws nothing in its place.
+     * </pre>
+     *
+     * <code>string chart = 19 [json_name = "chart"];</code>
+     * @param value The chart to set.
+     * @return This builder for chaining.
+     */
+    public Builder setChart(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setChart(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+     * (revision 33). Its series are numbers, each series's colour a token;
+     * labels name the points along its axis; text is its caption. A front-end
+     * that does not know the kind draws nothing in its place.
+     * </pre>
+     *
+     * <code>string chart = 19 [json_name = "chart"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearChart() {
+      copyOnWrite();
+      instance.clearChart();
+      return this;
+    }
+    /**
+     * <pre>
+     * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
+     * (revision 33). Its series are numbers, each series's colour a token;
+     * labels name the points along its axis; text is its caption. A front-end
+     * that does not know the kind draws nothing in its place.
+     * </pre>
+     *
+     * <code>string chart = 19 [json_name = "chart"];</code>
+     * @param value The bytes for chart to set.
+     * @return This builder for chaining.
+     */
+    public Builder setChartBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setChartBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.UiSeries> getSeriesList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getSeriesList());
+    }
+    /**
+     * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+     */
+    @java.lang.Override
+    public int getSeriesCount() {
+      return instance.getSeriesCount();
+    }/**
+     * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.UiSeries getSeries(int index) {
+      return instance.getSeries(index);
+    }
+    /**
+     * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+     */
+    public Builder setSeries(
+        int index, dev.ironpark.mako.v2.UiSeries value) {
+      copyOnWrite();
+      instance.setSeries(index, value);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+     */
+    public Builder setSeries(
+        int index, dev.ironpark.mako.v2.UiSeries.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSeries(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+     */
+    public Builder addSeries(dev.ironpark.mako.v2.UiSeries value) {
+      copyOnWrite();
+      instance.addSeries(value);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+     */
+    public Builder addSeries(
+        int index, dev.ironpark.mako.v2.UiSeries value) {
+      copyOnWrite();
+      instance.addSeries(index, value);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+     */
+    public Builder addSeries(
+        dev.ironpark.mako.v2.UiSeries.Builder builderForValue) {
+      copyOnWrite();
+      instance.addSeries(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+     */
+    public Builder addSeries(
+        int index, dev.ironpark.mako.v2.UiSeries.Builder builderForValue) {
+      copyOnWrite();
+      instance.addSeries(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+     */
+    public Builder addAllSeries(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.UiSeries> values) {
+      copyOnWrite();
+      instance.addAllSeries(values);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+     */
+    public Builder clearSeries() {
+      copyOnWrite();
+      instance.clearSeries();
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiSeries series = 20 [json_name = "series"];</code>
+     */
+    public Builder removeSeries(int index) {
+      copyOnWrite();
+      instance.removeSeries(index);
+      return this;
+    }
+
+    /**
+     * <code>repeated string labels = 21 [json_name = "labels"];</code>
+     * @return A list containing the labels.
+     */
+    @java.lang.Override
+    public java.util.List<java.lang.String>
+        getLabelsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getLabelsList());
+    }
+    /**
+     * <code>repeated string labels = 21 [json_name = "labels"];</code>
+     * @return The count of labels.
+     */
+    @java.lang.Override
+    public int getLabelsCount() {
+      return instance.getLabelsCount();
+    }
+    /**
+     * <code>repeated string labels = 21 [json_name = "labels"];</code>
+     * @param index The index of the element to return.
+     * @return The labels at the given index.
+     */
+    @java.lang.Override
+    public java.lang.String getLabels(int index) {
+      return instance.getLabels(index);
+    }
+    /**
+     * <code>repeated string labels = 21 [json_name = "labels"];</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the labels at the given index.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getLabelsBytes(int index) {
+      return instance.getLabelsBytes(index);
+    }
+    /**
+     * <code>repeated string labels = 21 [json_name = "labels"];</code>
+     * @param index The index to set the value at.
+     * @param value The labels to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLabels(
+        int index, java.lang.String value) {
+      copyOnWrite();
+      instance.setLabels(index, value);
+      return this;
+    }
+    /**
+     * <code>repeated string labels = 21 [json_name = "labels"];</code>
+     * @param value The labels to add.
+     * @return This builder for chaining.
+     */
+    public Builder addLabels(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.addLabels(value);
+      return this;
+    }
+    /**
+     * <code>repeated string labels = 21 [json_name = "labels"];</code>
+     * @param values The labels to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllLabels(
+        java.lang.Iterable<java.lang.String> values) {
+      copyOnWrite();
+      instance.addAllLabels(values);
+      return this;
+    }
+    /**
+     * <code>repeated string labels = 21 [json_name = "labels"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearLabels() {
+      copyOnWrite();
+      instance.clearLabels();
+      return this;
+    }
+    /**
+     * <code>repeated string labels = 21 [json_name = "labels"];</code>
+     * @param value The bytes of the labels to add.
+     * @return This builder for chaining.
+     */
+    public Builder addLabelsBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.addLabelsBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.UiNode)
   }
   @java.lang.Override
@@ -2272,12 +2822,16 @@ public  final class UiNode extends
             "change_",
             "children_",
             dev.ironpark.mako.v2.UiNode.class,
+            "chart_",
+            "series_",
+            dev.ironpark.mako.v2.UiSeries.class,
+            "labels_",
           };
           java.lang.String info =
-              "\u0000\u0012\u0000\u0000\u0001\u0012\u0012\u0000\u0002\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0015\u0000\u0000\u0001\u0015\u0015\u0000\u0004\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007\n\u021a" +
               "\u000b\u0000\f\u0208\r\u0007\u000e\u0000\u000f\u0000\u0010\u0007\u0011\u0007\u0012" +
-              "\u001b";
+              "\u001b\u0013\u0208\u0014\u001b\u0015\u021a";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

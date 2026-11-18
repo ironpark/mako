@@ -58,14 +58,22 @@ func (h *host) SettingsGetSetting(_ context.Context, req *hostapi.GetSettingRequ
 	if err != nil {
 		return nil, err
 	}
-	return &hostapi.GetSettingResponse{Setting: h.p.settings.forHost(d)}, nil
+	set, err := h.p.settings.forHost(d)
+	if err != nil {
+		return nil, err
+	}
+	return &hostapi.GetSettingResponse{Setting: set}, nil
 }
 
 func (h *host) SettingsListSettings(context.Context, *hostapi.ListSettingsRequest) (*hostapi.ListSettingsResponse, error) {
 	out := &hostapi.ListSettingsResponse{}
 	if v := h.p.current(); v != nil {
 		for _, s := range v.man.Settings {
-			out.Settings = append(out.Settings, h.p.settings.forHost(s))
+			set, err := h.p.settings.forHost(s)
+			if err != nil {
+				return nil, err
+			}
+			out.Settings = append(out.Settings, set)
 		}
 	}
 	return out, nil
@@ -146,4 +154,63 @@ func (h *host) CommandsRunCommand(_ context.Context, req *hostapi.RunCommandRequ
 		return &hostapi.RunCommandResponse{}, nil
 	}
 	return nil, fmt.Errorf("command %q is not one a plugin may run", req.GetId())
+}
+
+// secretKey is the vault's name of a secret the plugin names, checked.
+func (h *host) secretKey(name string) (string, error) {
+	if !h.p.secRate.take() {
+		return "", fmt.Errorf("the plugin called secrets more than %d times a minute", secretsPerMinute)
+	}
+	if !secretName.MatchString(name) {
+		return "", fmt.Errorf("a secret's name is letters, digits and ._-, starting with a letter or digit, at most 64")
+	}
+	return vaultSecret + name, nil
+}
+
+func (h *host) SecretsGetSecret(_ context.Context, req *hostapi.GetSecretRequest) (*hostapi.GetSecretResponse, error) {
+	key, err := h.secretKey(req.GetName())
+	if err != nil {
+		return nil, err
+	}
+	v, ok, err := h.p.vault.get(key)
+	if err != nil {
+		return nil, err
+	}
+	return &hostapi.GetSecretResponse{Found: ok, Value: v}, nil
+}
+
+func (h *host) SecretsSetSecret(_ context.Context, req *hostapi.SetSecretRequest) (*hostapi.SetSecretResponse, error) {
+	key, err := h.secretKey(req.GetName())
+	if err != nil {
+		return nil, err
+	}
+	if err := checkSecret("a secret", req.GetValue()); err != nil {
+		return nil, err
+	}
+	if !h.p.vault.has(key) && len(h.p.vault.list(vaultSecret)) >= maxSecrets {
+		return nil, fmt.Errorf("the plugin keeps %d secrets, its most", maxSecrets)
+	}
+	if err := h.p.vault.set(key, req.GetValue()); err != nil {
+		return nil, err
+	}
+	return &hostapi.SetSecretResponse{}, nil
+}
+
+func (h *host) SecretsDeleteSecret(_ context.Context, req *hostapi.DeleteSecretRequest) (*hostapi.DeleteSecretResponse, error) {
+	key, err := h.secretKey(req.GetName())
+	if err != nil {
+		return nil, err
+	}
+	found, err := h.p.vault.del(key)
+	if err != nil {
+		return nil, err
+	}
+	return &hostapi.DeleteSecretResponse{Found: found}, nil
+}
+
+func (h *host) SecretsListSecrets(context.Context, *hostapi.ListSecretsRequest) (*hostapi.ListSecretsResponse, error) {
+	if !h.p.secRate.take() {
+		return nil, fmt.Errorf("the plugin called secrets more than %d times a minute", secretsPerMinute)
+	}
+	return &hostapi.ListSecretsResponse{Names: h.p.vault.list(vaultSecret)}, nil
 }

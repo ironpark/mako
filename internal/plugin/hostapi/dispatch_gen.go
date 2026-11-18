@@ -7,19 +7,20 @@ import "context"
 // The permissions the Host API's methods take, as manifests name them;
 // PermNet stands for net:<host>, the host the call names.
 const (
-	PermNone          = "none"
-	PermExec          = "exec"
-	PermFsProject     = "fs:project"
-	PermLayoutWrite   = "layout:write"
-	PermNet           = "net"
-	PermSecrets       = "secrets"
-	PermSessionsRead  = "sessions:read"
-	PermSessionsWrite = "sessions:write"
-	PermStorage       = "storage"
+	PermNone           = "none"
+	PermExec           = "exec"
+	PermFsProject      = "fs:project"
+	PermFsProjectWrite = "fs:project:write"
+	PermLayoutWrite    = "layout:write"
+	PermNet            = "net"
+	PermSecrets        = "secrets"
+	PermSessionsRead   = "sessions:read"
+	PermSessionsWrite  = "sessions:write"
+	PermStorage        = "storage"
 )
 
 // Permissions are those a manifest may ask for, by the names above.
-var Permissions = []string{PermExec, PermFsProject, PermLayoutWrite, PermNet, PermSecrets, PermSessionsRead, PermSessionsWrite, PermStorage}
+var Permissions = []string{PermExec, PermFsProject, PermFsProjectWrite, PermLayoutWrite, PermNet, PermSecrets, PermSessionsRead, PermSessionsWrite, PermStorage}
 
 // Handler carries out the Host API's methods that are available; Dispatch
 // calls one only once the caller's permission for it is checked.
@@ -52,6 +53,22 @@ type Handler interface {
 	// SessionsGetSession carries out sessions.getSession.
 	// GetSession reads one session.
 	SessionsGetSession(ctx context.Context, req *GetSessionRequest) (*GetSessionResponse, error)
+	// SessionsReadTranscript carries out sessions.readTranscript.
+	// ReadTranscript reads a page of a session's conversation, as its agent
+	// logged it: the latest messages, or those before a cursor an earlier
+	// page gave. A session of this node's alone, at most 30 pages a minute.
+	SessionsReadTranscript(ctx context.Context, req *ReadTranscriptRequest) (*ReadTranscriptResponse, error)
+	// SessionsSubscribe carries out sessions.subscribe.
+	// Subscribe has the plugin told of the events of the kinds named, as
+	// calls of its default export's on handlers (see SessionEvent): the
+	// daemon starts the plugin for one when it is not running. What a
+	// plugin subscribed to stays, kept on this node, until it unsubscribes,
+	// or is removed.
+	SessionsSubscribe(ctx context.Context, req *SubscribeRequest) (*SubscribeResponse, error)
+	// SessionsUnsubscribe carries out sessions.unsubscribe.
+	// Unsubscribe stops the events of the kinds named; none named stops
+	// every one.
+	SessionsUnsubscribe(ctx context.Context, req *UnsubscribeRequest) (*UnsubscribeResponse, error)
 	// HttpFetch carries out http.fetch.
 	// Fetch makes a request and reads the response.
 	HttpFetch(ctx context.Context, req *FetchRequest) (*FetchResponse, error)
@@ -60,6 +77,49 @@ type Handler interface {
 	// URL as its argument, opens an http or https link in the browser, and
 	// only in answer to the user's tap or command.
 	CommandsRunCommand(ctx context.Context, req *RunCommandRequest) (*RunCommandResponse, error)
+	// MessagesSendMessage carries out messages.sendMessage.
+	// SendMessage leaves a message for a session's agent, typed into its
+	// terminal once it waits at its prompt, as send_message does: a session
+	// of this node's whose agent takes messages. 30 a minute.
+	MessagesSendMessage(ctx context.Context, req *SendMessageRequest) (*SendMessageResponse, error)
+	// MessagesStartAgent carries out messages.startAgent.
+	// StartAgent asks to start an agent with a prompt in a folder of a
+	// project this node knows (FilesService.ListProjects). At most 3 of a
+	// plugin's run at once, and it starts 10 an hour.
+	MessagesStartAgent(ctx context.Context, req *StartAgentRequest) (*StartAgentResponse, error)
+	// MessagesStopAgent carries out messages.stopAgent.
+	// StopAgent stops a session the plugin started.
+	MessagesStopAgent(ctx context.Context, req *StopAgentRequest) (*StopAgentResponse, error)
+	// FilesReadFile carries out files.readFile.
+	// ReadFile reads a file of a project's folder, or a piece of it.
+	FilesReadFile(ctx context.Context, req *ReadFileRequest) (*ReadFileResponse, error)
+	// FilesListProjects carries out files.listProjects.
+	// ListProjects lists the projects this node knows, and their folders
+	// on it.
+	FilesListProjects(ctx context.Context, req *ListProjectsRequest) (*ListProjectsResponse, error)
+	// FilesListDir carries out files.listDir.
+	// ListDir lists a folder of a project's folder.
+	FilesListDir(ctx context.Context, req *ListDirRequest) (*ListDirResponse, error)
+	// FilesWriteFile carries out files.writeFile.
+	// WriteFile writes a file of a project's folder whole, in place of what
+	// was there.
+	FilesWriteFile(ctx context.Context, req *WriteFileRequest) (*WriteFileResponse, error)
+	// SecretsGetSecret carries out secrets.getSecret.
+	// GetSecret reads a secret.
+	SecretsGetSecret(ctx context.Context, req *GetSecretRequest) (*GetSecretResponse, error)
+	// SecretsSetSecret carries out secrets.setSecret.
+	// SetSecret keeps a secret, replacing one of its name.
+	SecretsSetSecret(ctx context.Context, req *SetSecretRequest) (*SetSecretResponse, error)
+	// SecretsDeleteSecret carries out secrets.deleteSecret.
+	// DeleteSecret removes a secret.
+	SecretsDeleteSecret(ctx context.Context, req *DeleteSecretRequest) (*DeleteSecretResponse, error)
+	// SecretsListSecrets carries out secrets.listSecrets.
+	// ListSecrets lists the names of the secrets kept, not their values.
+	SecretsListSecrets(ctx context.Context, req *ListSecretsRequest) (*ListSecretsResponse, error)
+	// LayoutPatchLayout carries out layout.patchLayout.
+	// PatchLayout changes a window layout document by node id, as
+	// patch_layout does. 10 a minute, one waiting at a time.
+	LayoutPatchLayout(ctx context.Context, req *PatchLayoutRequest) (*PatchLayoutResponse, error)
 }
 
 // Methods are the Host API's methods, as the bindings name them, in the
@@ -74,12 +134,23 @@ var Methods = []Method{
 	{Name: "storage.listKeys", Permission: PermStorage},
 	{Name: "sessions.listSessions", Permission: PermSessionsRead},
 	{Name: "sessions.getSession", Permission: PermSessionsRead},
+	{Name: "sessions.readTranscript", Permission: PermSessionsRead},
+	{Name: "sessions.subscribe", Permission: PermSessionsRead},
+	{Name: "sessions.unsubscribe", Permission: PermSessionsRead},
 	{Name: "http.fetch", Permission: PermNet},
 	{Name: "commands.runCommand", Permission: PermNone},
-	{Name: "messages.sendMessage", Permission: PermSessionsWrite, Unavailable: true},
-	{Name: "files.readFile", Permission: PermFsProject, Unavailable: true},
-	{Name: "secrets.getSecret", Permission: PermSecrets, Unavailable: true},
-	{Name: "layout.patchLayout", Permission: PermLayoutWrite, Unavailable: true},
+	{Name: "messages.sendMessage", Permission: PermSessionsWrite},
+	{Name: "messages.startAgent", Permission: PermSessionsWrite},
+	{Name: "messages.stopAgent", Permission: PermSessionsWrite},
+	{Name: "files.readFile", Permission: PermFsProject},
+	{Name: "files.listProjects", Permission: PermFsProject},
+	{Name: "files.listDir", Permission: PermFsProject},
+	{Name: "files.writeFile", Permission: PermFsProjectWrite},
+	{Name: "secrets.getSecret", Permission: PermSecrets},
+	{Name: "secrets.setSecret", Permission: PermSecrets},
+	{Name: "secrets.deleteSecret", Permission: PermSecrets},
+	{Name: "secrets.listSecrets", Permission: PermSecrets},
+	{Name: "layout.patchLayout", Permission: PermLayoutWrite},
 	{Name: "exec.runProcess", Permission: PermExec, Unavailable: true},
 }
 
@@ -125,6 +196,21 @@ func Dispatch(ctx context.Context, grants Grants, h Handler, name string, req []
 			return nil, &DeniedError{Method: name, Permission: PermSessionsRead}
 		}
 		return call(ctx, req, new(GetSessionRequest), h.SessionsGetSession)
+	case "sessions.readTranscript":
+		if !grants.Has(PermSessionsRead) {
+			return nil, &DeniedError{Method: name, Permission: PermSessionsRead}
+		}
+		return call(ctx, req, new(ReadTranscriptRequest), h.SessionsReadTranscript)
+	case "sessions.subscribe":
+		if !grants.Has(PermSessionsRead) {
+			return nil, &DeniedError{Method: name, Permission: PermSessionsRead}
+		}
+		return call(ctx, req, new(SubscribeRequest), h.SessionsSubscribe)
+	case "sessions.unsubscribe":
+		if !grants.Has(PermSessionsRead) {
+			return nil, &DeniedError{Method: name, Permission: PermSessionsRead}
+		}
+		return call(ctx, req, new(UnsubscribeRequest), h.SessionsUnsubscribe)
 	case "http.fetch":
 		if !grants.Has(PermNet) {
 			return nil, &DeniedError{Method: name, Permission: PermNet}
@@ -136,22 +222,62 @@ func Dispatch(ctx context.Context, grants Grants, h Handler, name string, req []
 		if !grants.Has(PermSessionsWrite) {
 			return nil, &DeniedError{Method: name, Permission: PermSessionsWrite}
 		}
-		return nil, &UnavailableError{Method: name}
+		return call(ctx, req, new(SendMessageRequest), h.MessagesSendMessage)
+	case "messages.startAgent":
+		if !grants.Has(PermSessionsWrite) {
+			return nil, &DeniedError{Method: name, Permission: PermSessionsWrite}
+		}
+		return call(ctx, req, new(StartAgentRequest), h.MessagesStartAgent)
+	case "messages.stopAgent":
+		if !grants.Has(PermSessionsWrite) {
+			return nil, &DeniedError{Method: name, Permission: PermSessionsWrite}
+		}
+		return call(ctx, req, new(StopAgentRequest), h.MessagesStopAgent)
 	case "files.readFile":
 		if !grants.Has(PermFsProject) {
 			return nil, &DeniedError{Method: name, Permission: PermFsProject}
 		}
-		return nil, &UnavailableError{Method: name}
+		return call(ctx, req, new(ReadFileRequest), h.FilesReadFile)
+	case "files.listProjects":
+		if !grants.Has(PermFsProject) {
+			return nil, &DeniedError{Method: name, Permission: PermFsProject}
+		}
+		return call(ctx, req, new(ListProjectsRequest), h.FilesListProjects)
+	case "files.listDir":
+		if !grants.Has(PermFsProject) {
+			return nil, &DeniedError{Method: name, Permission: PermFsProject}
+		}
+		return call(ctx, req, new(ListDirRequest), h.FilesListDir)
+	case "files.writeFile":
+		if !grants.Has(PermFsProjectWrite) {
+			return nil, &DeniedError{Method: name, Permission: PermFsProjectWrite}
+		}
+		return call(ctx, req, new(WriteFileRequest), h.FilesWriteFile)
 	case "secrets.getSecret":
 		if !grants.Has(PermSecrets) {
 			return nil, &DeniedError{Method: name, Permission: PermSecrets}
 		}
-		return nil, &UnavailableError{Method: name}
+		return call(ctx, req, new(GetSecretRequest), h.SecretsGetSecret)
+	case "secrets.setSecret":
+		if !grants.Has(PermSecrets) {
+			return nil, &DeniedError{Method: name, Permission: PermSecrets}
+		}
+		return call(ctx, req, new(SetSecretRequest), h.SecretsSetSecret)
+	case "secrets.deleteSecret":
+		if !grants.Has(PermSecrets) {
+			return nil, &DeniedError{Method: name, Permission: PermSecrets}
+		}
+		return call(ctx, req, new(DeleteSecretRequest), h.SecretsDeleteSecret)
+	case "secrets.listSecrets":
+		if !grants.Has(PermSecrets) {
+			return nil, &DeniedError{Method: name, Permission: PermSecrets}
+		}
+		return call(ctx, req, new(ListSecretsRequest), h.SecretsListSecrets)
 	case "layout.patchLayout":
 		if !grants.Has(PermLayoutWrite) {
 			return nil, &DeniedError{Method: name, Permission: PermLayoutWrite}
 		}
-		return nil, &UnavailableError{Method: name}
+		return call(ctx, req, new(PatchLayoutRequest), h.LayoutPatchLayout)
 	case "exec.runProcess":
 		if !grants.Has(PermExec) {
 			return nil, &DeniedError{Method: name, Permission: PermExec}

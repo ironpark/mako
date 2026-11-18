@@ -1,7 +1,8 @@
-// The groups of the Host API whose permissions are declared, so that the
-// schema, the bindings and the WIT have their shape, but which this
-// version of mako does not carry out: a call fails, saying the method is
-// not available. See host.proto.
+// The groups of the Host API declared after the first version's, their
+// permissions named from the start so that the schema, the bindings and
+// the WIT had their shape. A method marked unavailable is one this
+// version of mako does not carry out: a call fails, saying so. See
+// host.proto.
 syntax = "proto3";
 
 package mako.plugin.v1;
@@ -10,55 +11,219 @@ import "mako/plugin/v1/options.proto";
 
 option go_package = "github.com/ironpark/mako/internal/plugin/hostapi";
 
-// MessagesService acts on sessions: sends them messages, starts and stops
-// agents.
+// MessagesService acts on this node's sessions: sends their agents
+// messages, starts agents and stops those the plugin started. A message
+// is headed as the plugin's, so that the agent cannot take it for the
+// user's or mako's. Starting an agent runs a program that costs money:
+// the user is asked the first time, and may allow the plugin from then
+// on; the start is carried out after the call returns, and its outcome
+// comes to the default export's on.agentStarted or on.agentRefused, as a
+// SessionEvent with the request's id.
 service MessagesService {
-  // SendMessage types a message into a session's agent.
+  // SendMessage leaves a message for a session's agent, typed into its
+  // terminal once it waits at its prompt, as send_message does: a session
+  // of this node's whose agent takes messages. 30 a minute.
   rpc SendMessage(SendMessageRequest) returns (SendMessageResponse) {
     option (permission) = "sessions:write";
-    option (unavailable) = true;
+  }
+  // StartAgent asks to start an agent with a prompt in a folder of a
+  // project this node knows (FilesService.ListProjects). At most 3 of a
+  // plugin's run at once, and it starts 10 an hour.
+  rpc StartAgent(StartAgentRequest) returns (StartAgentResponse) {
+    option (permission) = "sessions:write";
+  }
+  // StopAgent stops a session the plugin started.
+  rpc StopAgent(StopAgentRequest) returns (StopAgentResponse) {
+    option (permission) = "sessions:write";
   }
 }
 
 // SendMessageRequest is a message for a session.
 message SendMessageRequest {
   string session_id = 1;
+  // text is at most 32 KiB.
   string text = 2;
 }
 
-// SendMessageResponse says it was sent.
-message SendMessageResponse {}
+// SendMessageResponse says it was left.
+message SendMessageResponse {
+  // id is the message's.
+  string id = 1;
+}
 
-// FilesService reads the current project's folder.
+// StartAgentRequest is an agent to start.
+message StartAgentRequest {
+  // agent is an agent of this node's ("claude", "codex", ...), and
+  // profile one of its profiles, "" for none.
+  string agent = 1;
+  string profile = 2;
+  // project is a project's ID, and root one of its folders, as
+  // FilesService.ListProjects gives them: where the agent runs.
+  string project = 3;
+  string root = 4;
+  // prompt is the task it starts with, at most 64 KiB.
+  string prompt = 5;
+  // name is the session's, "" for its agent's.
+  string name = 6;
+}
+
+// StartAgentResponse says the start was taken.
+message StartAgentResponse {
+  // request_id names the start in the event that tells its outcome.
+  string request_id = 1;
+  // asked says the user is asked first; else it starts at once.
+  bool asked = 2;
+}
+
+// StopAgentRequest names a session the plugin started.
+message StopAgentRequest {
+  string session_id = 1;
+}
+
+// StopAgentResponse says it was stopped.
+message StopAgentResponse {}
+
+// FilesService reads the files of the projects this node knows, and
+// with fs:project:write writes them. A project is named by its ID and one
+// of its folders by its path, as ListProjects gives them, and a file by
+// its path in that folder: relative, without "..". Nothing outside a
+// project's folders is reached, by a path or through a symbolic link;
+// nothing but regular files is read or written; a write replaces the file
+// whole, atomically, and never under a folder named .git. A plugin reads
+// 120 times a minute and writes 30, at most 1 MiB a call.
 service FilesService {
-  // ReadFile reads a file of the project.
+  // ReadFile reads a file of a project's folder, or a piece of it.
   rpc ReadFile(ReadFileRequest) returns (ReadFileResponse) {
     option (permission) = "fs:project";
-    option (unavailable) = true;
+  }
+  // ListProjects lists the projects this node knows, and their folders
+  // on it.
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
+    option (permission) = "fs:project";
+  }
+  // ListDir lists a folder of a project's folder.
+  rpc ListDir(ListDirRequest) returns (ListDirResponse) {
+    option (permission) = "fs:project";
+  }
+  // WriteFile writes a file of a project's folder whole, in place of what
+  // was there.
+  rpc WriteFile(WriteFileRequest) returns (WriteFileResponse) {
+    option (permission) = "fs:project:write";
   }
 }
 
-// ReadFileRequest names a file, relative to the project's folder.
+// ReadFileRequest names a file, and the piece of it to read.
 message ReadFileRequest {
+  // path is the file's, relative to root: no "..", no leading /.
   string path = 1;
+  // project is a project's ID, and root one of its folders, as
+  // ListProjects gives them.
+  string project = 2;
+  string root = 3;
+  // offset is where the piece starts, in bytes; length its most, 0 and at
+  // most 1 MiB.
+  double offset = 4;
+  uint32 length = 5;
 }
 
-// ReadFileResponse is the file's text.
+// ReadFileResponse is the piece read.
 message ReadFileResponse {
+  // text is the piece as text, when it is UTF-8; "" otherwise.
   string text = 1;
+  // data is the piece's bytes, whatever they are.
+  bytes data = 2;
+  // size is the whole file's, in bytes.
+  double size = 3;
+  // eof says the piece reaches the file's end.
+  bool eof = 4;
+  // binary says the piece is not UTF-8 text.
+  bool binary = 5;
 }
 
-// SecretsService keeps the plugin's own secrets in the system's keychain.
+// ListProjectsRequest asks for the projects.
+message ListProjectsRequest {}
+
+// ListProjectsResponse is the projects.
+message ListProjectsResponse {
+  repeated Project projects = 1;
+}
+
+// Project is a project this node knows, and its folders on this node.
+message Project {
+  string id = 1;
+  string name = 2;
+  repeated string roots = 3;
+}
+
+// ListDirRequest names a folder: "" or "." for root itself.
+message ListDirRequest {
+  string project = 1;
+  string root = 2;
+  string path = 3;
+}
+
+// ListDirResponse is the folder's entries, by name.
+message ListDirResponse {
+  repeated DirEntry entries = 1;
+  // truncated says there were more than 2000.
+  bool truncated = 2;
+}
+
+// DirEntry is an entry of a folder.
+message DirEntry {
+  string name = 1;
+  bool dir = 2;
+  // link says it is a symbolic link.
+  bool link = 3;
+  double size = 4;
+}
+
+// WriteFileRequest is a file's new contents: data, or text.
+message WriteFileRequest {
+  string project = 1;
+  string root = 2;
+  string path = 3;
+  bytes data = 4;
+  string text = 5;
+  // make_dirs makes the folders the path names that are not there, in
+  // root.
+  bool make_dirs = 6;
+}
+
+// WriteFileResponse is the file written.
+message WriteFileResponse {
+  double size = 1;
+}
+
+// SecretsService keeps the plugin's own secrets in the system's keychain
+// (the macOS Keychain, the Secret Service, Windows' Credential Manager),
+// on this node alone: never synced, never logged, removed with the
+// plugin. A node whose system has none keeps them in a file only the user
+// may read, and says so to the user. A plugin keeps at most 32, and calls
+// the group at most 60 times a minute.
 service SecretsService {
   // GetSecret reads a secret.
   rpc GetSecret(GetSecretRequest) returns (GetSecretResponse) {
     option (permission) = "secrets";
-    option (unavailable) = true;
+  }
+  // SetSecret keeps a secret, replacing one of its name.
+  rpc SetSecret(SetSecretRequest) returns (SetSecretResponse) {
+    option (permission) = "secrets";
+  }
+  // DeleteSecret removes a secret.
+  rpc DeleteSecret(DeleteSecretRequest) returns (DeleteSecretResponse) {
+    option (permission) = "secrets";
+  }
+  // ListSecrets lists the names of the secrets kept, not their values.
+  rpc ListSecrets(ListSecretsRequest) returns (ListSecretsResponse) {
+    option (permission) = "secrets";
   }
 }
 
 // GetSecretRequest names a secret.
 message GetSecretRequest {
+  // name is letters, digits and ._-, starting with a letter or digit, at
+  // most 64.
   string name = 1;
 }
 
@@ -68,23 +233,73 @@ message GetSecretResponse {
   string value = 2;
 }
 
-// LayoutService changes the window's layout, as the user allows.
+// SetSecretRequest is a secret and its name.
+message SetSecretRequest {
+  string name = 1;
+  // value is UTF-8 of at most 2048 bytes.
+  string value = 2;
+}
+
+// SetSecretResponse says the secret was kept.
+message SetSecretResponse {}
+
+// DeleteSecretRequest names a secret.
+message DeleteSecretRequest {
+  string name = 1;
+}
+
+// DeleteSecretResponse says whether there was one.
+message DeleteSecretResponse {
+  bool found = 1;
+}
+
+// ListSecretsRequest asks for the names.
+message ListSecretsRequest {}
+
+// ListSecretsResponse is the names, sorted.
+message ListSecretsResponse {
+  repeated string names = 1;
+}
+
+// LayoutService changes the window's layout, as the user allows, through
+// the very flow an agent's patch_layout takes: the change is staged on
+// this node and shown, the user is asked unless they allowed this
+// plugin such changes before (for the document, or every one), and only
+// then is it written into the workspace the user's nodes share. The
+// window names the plugin as the change's origin. A plugin changes a
+// document's root alone, never its variants. The answer may take
+// minutes, so the call returns at once; the outcome comes to the default
+// export's on.layoutChanged or on.layoutRefused, as a SessionEvent with
+// the request's id.
 service LayoutService {
-  // PatchLayout changes the window layout document, as patch_layout does.
+  // PatchLayout changes a window layout document by node id, as
+  // patch_layout does. 10 a minute, one waiting at a time.
   rpc PatchLayout(PatchLayoutRequest) returns (PatchLayoutResponse) {
     option (permission) = "layout:write";
-    option (unavailable) = true;
   }
 }
 
 // PatchLayoutRequest is the operations, as patch_layout's JSON.
 message PatchLayoutRequest {
+  // ops is the JSON array of operations patch_layout takes: insert,
+  // remove, move, resize, select, by node id.
   string ops = 1;
+  // document is the document's name; "" is default.
+  string document = 2;
+  // if_rev is the revision the ops were made against, "" for none: the
+  // change is refused if the document changed since.
+  string if_rev = 3;
 }
 
-// PatchLayoutResponse is the document's revision after.
+// PatchLayoutResponse says the change was taken.
 message PatchLayoutResponse {
+  // revision is always "": the document's revision after comes with the
+  // event that tells the outcome.
   string revision = 1;
+  // request_id names the change in that event.
+  string request_id = 2;
+  // asked says the user is asked to allow it.
+  bool asked = 3;
 }
 
 // ExecService runs programs. No plugin is granted exec in this version:

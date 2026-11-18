@@ -92,7 +92,7 @@ func (f *Fetcher) Get(ctx context.Context, raw string, max int64, timeout time.D
 			err = uerr.Err
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, fmt.Errorf("%s did not answer within %s", host(raw), timeout)
+			return nil, &LimitError{ErrTimeout, fmt.Sprintf("%s did not answer within %s", host(raw), timeout)}
 		}
 		return nil, fmt.Errorf("%s: %w", host(raw), err)
 	}
@@ -103,17 +103,17 @@ func (f *Fetcher) Get(ctx context.Context, raw string, max int64, timeout time.D
 		return nil, fmt.Errorf("%s answered %d %s", host(raw), resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 	if resp.ContentLength > max {
-		return nil, fmt.Errorf("%s sent %d bytes, over the %d KiB taken", host(raw), resp.ContentLength, max>>10)
+		return nil, &LimitError{ErrTooLarge, fmt.Sprintf("%s sent %d bytes, over the %d KiB taken", host(raw), resp.ContentLength, max>>10)}
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, max+1))
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
-			return nil, fmt.Errorf("%s did not finish within %s", host(raw), timeout)
+			return nil, &LimitError{ErrTimeout, fmt.Sprintf("%s did not finish within %s", host(raw), timeout)}
 		}
 		return nil, fmt.Errorf("%s: %w", host(raw), err)
 	}
 	if int64(len(b)) > max {
-		return nil, fmt.Errorf("%s sent more than the %d KiB taken", host(raw), max>>10)
+		return nil, &LimitError{ErrTooLarge, fmt.Sprintf("%s sent more than the %d KiB taken", host(raw), max>>10)}
 	}
 	return b, nil
 }
@@ -124,3 +124,19 @@ func host(raw string) string {
 	}
 	return short(raw)
 }
+
+// The bounds a fetch is stopped by, which a LimitError is.
+var (
+	ErrTimeout  = errors.New("timed out")
+	ErrTooLarge = errors.New("too large")
+)
+
+// LimitError is a fetch stopped by one of its bounds, Kind: ErrTimeout
+// or ErrTooLarge, which errors.Is finds.
+type LimitError struct {
+	Kind error
+	msg  string
+}
+
+func (e *LimitError) Error() string        { return e.msg }
+func (e *LimitError) Is(target error) bool { return target == e.Kind }

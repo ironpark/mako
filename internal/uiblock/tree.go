@@ -41,11 +41,15 @@ const (
 	KindCode     = "code"
 	KindProgress = "progress"
 	KindDivider  = "divider"
+	KindChart    = "chart"
 )
 
 // Kinds are the vocabulary, in the order docs/plugins.md lists it.
 var Kinds = []string{KindColumn, KindRow, KindStack, KindText, KindIcon, KindPill, KindChip, KindButton,
-	KindList, KindInput, KindToggle, KindSelect, KindMarkdown, KindCode, KindProgress, KindDivider}
+	KindList, KindInput, KindToggle, KindSelect, KindMarkdown, KindCode, KindProgress, KindDivider, KindChart}
+
+// Charts are the kinds of chart a chart node draws.
+var Charts = []string{"line", "bar", "sparkline"}
 
 // Tones are the colour tokens a node may take.
 var Tones = []string{"", "muted", "faint", "accent", "success", "warning", "danger"}
@@ -63,6 +67,14 @@ const (
 	maxMessage   = 4 << 10
 	maxGap, maxG = 64, 100
 	maxOption    = 320
+	// A chart's bounds: a few series of a few hundred points, labels as
+	// short as an axis shows them.
+	maxSeries      = 4
+	maxPoints      = 200
+	maxChartPoints = 600
+	maxLabel       = 32
+	maxSeriesName  = 64
+	maxChartValue  = 1e15
 )
 
 var (
@@ -93,6 +105,16 @@ type jsNode struct {
 	OnChange    json.RawMessage `json:"onChange"`
 	OnSubmit    json.RawMessage `json:"onSubmit"`
 	Children    []*jsNode       `json:"children"`
+	Chart       string          `json:"chart"`
+	Series      []*jsSeries     `json:"series"`
+	Labels      []string        `json:"labels"`
+}
+
+// jsSeries is a chart's series as the prelude writes it.
+type jsSeries struct {
+	Name   string     `json:"name"`
+	Tone   string     `json:"tone"`
+	Values []*float64 `json:"values"`
 }
 
 // actions are what a node's events send: each a message, the JSON array
@@ -203,6 +225,9 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 	if j.Kind == KindInput && n.Text == "" {
 		n.Text = j.Placeholder
 	}
+	if err := r.chart(j, n, id); err != nil {
+		return nil, err
+	}
 	var a actions
 	var err error
 	if a.tap, err = message(j.OnTap); err != nil {
@@ -219,7 +244,7 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 		if a.tap != nil {
 			return nil, fmt.Errorf("%s: a %s takes onChange, not onTap", where(id), j.Kind)
 		}
-	case KindDivider, KindProgress, KindMarkdown, KindCode:
+	case KindDivider, KindProgress, KindMarkdown, KindCode, KindChart:
 		if a.tap != nil || a.change != nil || a.submit != nil {
 			return nil, fmt.Errorf("%s: a %s sends no messages", where(id), j.Kind)
 		}
@@ -261,6 +286,71 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 		n.Children = append(n.Children, child)
 	}
 	return n, nil
+}
+
+// chart reads a chart node's chart, series and labels into n, and
+// refuses them on any other node: a kind of chart, at most maxSeries
+// series of maxPoints finite numbers each, maxChartPoints in all, each
+// series's colour a token, and its labels short text, as many as the
+// points.
+func (r *treeReader) chart(j *jsNode, n *protocol.UiNode, id string) error {
+	if j.Kind != KindChart {
+		if j.Chart != "" || len(j.Series) > 0 || len(j.Labels) > 0 {
+			return fmt.Errorf("%s: only a chart has chart, series or labels", where(id))
+		}
+		return nil
+	}
+	if !slices.Contains(Charts, j.Chart) {
+		return fmt.Errorf("%s: chart %q is not one of %s", where(id), j.Chart, strings.Join(Charts, ", "))
+	}
+	if len(j.Series) == 0 || len(j.Series) > maxSeries {
+		return fmt.Errorf("%s: a chart has 1 to %d series", where(id), maxSeries)
+	}
+	points := 0
+	for i, sj := range j.Series {
+		if sj == nil {
+			return fmt.Errorf("%s: series %d is null", where(id), i)
+		}
+		if !slices.Contains(Tones, sj.Tone) {
+			return fmt.Errorf("%s: series %d: tone %q is not a colour token", where(id), i, sj.Tone)
+		}
+		if len(sj.Name) > maxSeriesName || strings.ContainsFunc(sj.Name, Spoofing) {
+			return fmt.Errorf("%s: series %d: a name is at most %d bytes, without control or reordering characters", where(id), i, maxSeriesName)
+		}
+		if len(sj.Values) == 0 || len(sj.Values) > maxPoints {
+			return fmt.Errorf("%s: series %d has 1 to %d values", where(id), i, maxPoints)
+		}
+		if len(j.Labels) > 0 && len(sj.Values) != len(j.Labels) {
+			return fmt.Errorf("%s: series %d has %d values for %d labels", where(id), i, len(sj.Values), len(j.Labels))
+		}
+		points += len(sj.Values)
+		s := &protocol.UiSeries{Name: sj.Name, Tone: sj.Tone, Values: make([]float64, len(sj.Values))}
+		for k, v := range sj.Values {
+			if v == nil || !finite(*v, -maxChartValue, maxChartValue) {
+				return fmt.Errorf("%s: series %d: value %d is not a finite number", where(id), i, k)
+			}
+			s.Values[k] = *v
+		}
+		r.text += len(sj.Name)
+		n.Series = append(n.Series, s)
+	}
+	if points > maxChartPoints {
+		return fmt.Errorf("%s: a chart has at most %d points in all", where(id), maxChartPoints)
+	}
+	if len(j.Labels) > maxPoints {
+		return fmt.Errorf("%s: a chart has at most %d labels", where(id), maxPoints)
+	}
+	for _, l := range j.Labels {
+		if len(l) > maxLabel || strings.ContainsFunc(l, Spoofing) {
+			return fmt.Errorf("%s: a label is at most %d bytes, without control or reordering characters", where(id), maxLabel)
+		}
+		r.text += len(l)
+	}
+	if r.text > maxTreeText {
+		return fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
+	}
+	n.Chart, n.Labels = j.Chart, j.Labels
+	return nil
 }
 
 // message reads a node's message: null, or an array of a name and up to

@@ -20,6 +20,9 @@ export function hostApi(call) {
     sessions: Object.freeze({
       listSessions: (req) => call("sessions.listSessions", req),
       getSession: (req) => call("sessions.getSession", req),
+      readTranscript: (req) => call("sessions.readTranscript", req),
+      subscribe: (req) => call("sessions.subscribe", req),
+      unsubscribe: (req) => call("sessions.unsubscribe", req),
     }),
     http: Object.freeze({
       fetch: (req) => call("http.fetch", req),
@@ -29,12 +32,20 @@ export function hostApi(call) {
     }),
     messages: Object.freeze({
       sendMessage: (req) => call("messages.sendMessage", req),
+      startAgent: (req) => call("messages.startAgent", req),
+      stopAgent: (req) => call("messages.stopAgent", req),
     }),
     files: Object.freeze({
       readFile: (req) => call("files.readFile", req),
+      listProjects: (req) => call("files.listProjects", req),
+      listDir: (req) => call("files.listDir", req),
+      writeFile: (req) => call("files.writeFile", req),
     }),
     secrets: Object.freeze({
       getSecret: (req) => call("secrets.getSecret", req),
+      setSecret: (req) => call("secrets.setSecret", req),
+      deleteSecret: (req) => call("secrets.deleteSecret", req),
+      listSecrets: (req) => call("secrets.listSecrets", req),
     }),
     layout: Object.freeze({
       patchLayout: (req) => call("layout.patchLayout", req),

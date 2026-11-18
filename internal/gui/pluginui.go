@@ -158,6 +158,8 @@ func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
 		return ui.Progress(ggui.Const(n.GetProgress()))
 	case "divider":
 		return hline()
+	case "chart":
+		return chartNode(n)
 	}
 	return widget.Box() // the daemon sends no other kind
 }

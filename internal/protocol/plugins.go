@@ -13,6 +13,9 @@ const (
 	TypeListAgentBlocks Type = "list_agent_blocks"
 	TypeAgentBlocks     Type = "agent_blocks"
 
+	TypeListPanels Type = "list_panels"
+	TypePanels     Type = "panels"
+
 	TypeListRegistries  Type = "list_registries"
 	TypeRegistries      Type = "registries"
 	TypeRegistryAction  Type = "registry_action"
@@ -53,6 +56,13 @@ const (
 	PluginReload  = "reload"
 	PluginRun     = "run"
 	PluginSet     = "set"
+	// An agent a plugin asks to start (revision 32): allowed with value
+	// AgentOnce or AgentAlways, refused, or asked of again every time.
+	PluginAllowAgent   = "allow_agent"
+	PluginDenyAgent    = "deny_agent"
+	PluginForgetAgents = "forget_agents"
+	AgentOnce          = "once"
+	AgentAlways        = "always"
 )
 
 // The kinds of BlockEvent.
@@ -60,4 +70,36 @@ const (
 	UiTap    = "tap"
 	UiChange = "change"
 	UiSubmit = "submit"
+)
+
+// The codes of the errors the plugin store and plugins' actions return
+// (revision 34), with the args each names, in order, for a front-end to
+// say them in its user's language; the message stays the daemon's
+// English.
+const (
+	CodeRegistryUnreachable = "registry_unreachable" // registry
+	CodeRegistryNeeded      = "registry_needed"      // id
+	CodeNotListed           = "not_listed"           // id
+	CodeAPIMismatch         = "api_mismatch"         // id, registry
+	CodePluginBlocked       = "plugin_blocked"       // id, version, why
+	CodePinnedKey           = "pinned_key"           // id, registry
+	CodeInstalledAlready    = "installed_already"    // id, version
+	CodeDowngrade           = "downgrade"            // id, version, installed version
+	CodeDevFolder           = "dev_folder"           // id
+	CodePackageUnreachable  = "package_unreachable"  // id, version
+	CodeTimedOut            = "timed_out"            // id, version
+	CodeTooLarge            = "too_large"            // id, version
+	CodeHashMismatch        = "hash_mismatch"        // id, version, registry
+	CodeBadPackage          = "bad_package"          // id, version
+	CodeSignatureMismatch   = "signature_mismatch"   // id, version, registry
+	CodePermissionsDiffer   = "permissions_differ"   // id, version, registry
+	CodeNotInstalled        = "not_installed"        // id
+)
+
+// The kinds of a Panel.
+const (
+	PanelBuiltin = "builtin"
+	PanelPlugin  = "plugin"
+	PanelAgent   = "agent"
+	PanelMissing = "missing"
 )

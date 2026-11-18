@@ -346,6 +346,9 @@ func UnpackFrames(dst io.Writer, src io.Reader) error {
 type CodedError struct {
 	Code    string
 	Message string
+	// Args are what the code's sentence names, for a front-end to say it
+	// in its user's language.
+	Args []string
 }
 
 func (e *CodedError) Error() string { return e.Message }
@@ -363,6 +366,9 @@ func WriteError(w io.Writer, id string, err error) error {
 	var ce *CodedError
 	if errors.As(err, &ce) {
 		e.Code = ce.Code
+		for _, a := range ce.Args {
+			e.Args = append(e.Args, Printable(a))
+		}
 	}
 	env, encErr := Encode(TypeError, id, e)
 	if encErr != nil {

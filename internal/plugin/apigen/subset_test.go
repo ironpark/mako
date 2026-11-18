@@ -118,6 +118,9 @@ func TestRefusesWhatWITCannotSay(t *testing.T) {
 			req(f).Field = append(req(f).Field, scalarField("text_", 2, descriptorpb.FieldDescriptorProto_TYPE_STRING))
 		}},
 		{"proto2", "proto3", func(f *descriptorpb.FileDescriptorProto) { f.Syntax = proto.String("proto2") }},
+		{"method of a type's name", "a method and a type it uses", func(f *descriptorpb.FileDescriptorProto) {
+			meth(f).Name = proto.String("PingRequest")
+		}},
 		{"WIT name collision", "both", func(f *descriptorpb.FileDescriptorProto) {
 			f.MessageType = append(f.MessageType, &descriptorpb.DescriptorProto{Name: proto.String("PingREQUEST"),
 				Field: []*descriptorpb.FieldDescriptorProto{scalarField("x", 1, descriptorpb.FieldDescriptorProto_TYPE_STRING)}})
@@ -144,6 +147,26 @@ func TestKebab(t *testing.T) {
 	} {
 		if got := kebab(in); got != want {
 			t.Errorf("kebab(%q) = %q; want %q", in, got, want)
+		}
+	}
+}
+
+// A field spelled as one of WIT's keywords is escaped, as wasm-tools
+// takes it: map among them, WIT's map type.
+func TestKeywordsAreEscaped(t *testing.T) {
+	f := sample()
+	f.MessageType[0].Field = append(f.MessageType[0].Field, scalarField("map", 2, descriptorpb.FieldDescriptorProto_TYPE_STRING),
+		scalarField("type", 3, descriptorpb.FieldDescriptorProto_TYPE_STRING))
+	files, err := Generate([]*descriptorpb.FileDescriptorProto{f})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, out := range files {
+		if strings.HasSuffix(out.Name, ".wit") {
+			wit := string(out.Content)
+			if !strings.Contains(wit, "%map: string") || !strings.Contains(wit, "%type: string") {
+				t.Fatalf("keywords not escaped:\n%s", wit)
+			}
 		}
 	}
 }

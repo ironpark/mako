@@ -169,6 +169,9 @@ func TestASetLayoutIsAllowedThenKept(t *testing.T) {
 	l := newLayoutDaemon(t)
 	done := l.callLater(t, toolSetLayout, setLayoutArgs{Doc: movedDetailsDoc(t), IfRev: ""})
 	st := l.waitStage(t, protocol.LayoutApprove)
+	// The stage is told the windows a moment before the session holds its
+	// approval.
+	waitFor(t, "the session's approval", func() bool { return l.s.Info().GetApproval() != nil })
 	if a := l.s.Info().GetApproval(); a.GetId() != st.GetId() || a.GetKind() != protocol.ToolLayout || len(a.GetOptions()) != 2 {
 		t.Fatalf("the session's approval: %v", a)
 	}

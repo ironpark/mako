@@ -166,6 +166,130 @@ service SessionsService {
   rpc GetSession(GetSessionRequest) returns (GetSessionResponse) {
     option (permission) = "sessions:read";
   }
+  // ReadTranscript reads a page of a session's conversation, as its agent
+  // logged it: the latest messages, or those before a cursor an earlier
+  // page gave. A session of this node's alone, at most 30 pages a minute.
+  rpc ReadTranscript(ReadTranscriptRequest) returns (ReadTranscriptResponse) {
+    option (permission) = "sessions:read";
+  }
+  // Subscribe has the plugin told of the events of the kinds named, as
+  // calls of its default export's on handlers (see SessionEvent): the
+  // daemon starts the plugin for one when it is not running. What a
+  // plugin subscribed to stays, kept on this node, until it unsubscribes,
+  // or is removed.
+  rpc Subscribe(SubscribeRequest) returns (SubscribeResponse) {
+    option (permission) = "sessions:read";
+  }
+  // Unsubscribe stops the events of the kinds named; none named stops
+  // every one.
+  rpc Unsubscribe(UnsubscribeRequest) returns (UnsubscribeResponse) {
+    option (permission) = "sessions:read";
+  }
+}
+
+// ReadTranscriptRequest names a session, and the page.
+message ReadTranscriptRequest {
+  string session_id = 1;
+  // before is the cursor a page gave, to read the messages before it;
+  // "" reads the latest.
+  string before = 2;
+  // limit is the most messages a page holds, at most 50; 0 is 20.
+  uint32 limit = 3;
+}
+
+// ReadTranscriptResponse is a page of the conversation.
+message ReadTranscriptResponse {
+  // supported says mako reads the conversation its agent keeps.
+  bool supported = 1;
+  // messages are the page's, oldest first.
+  repeated TranscriptMessage messages = 2;
+  // before is the cursor of the page before this one; "" when this one
+  // is the first.
+  string before = 3;
+  // truncated says text was cut: a message's, or the page's at 256 KiB.
+  bool truncated = 4;
+}
+
+// TranscriptMessage is a message of a conversation.
+message TranscriptMessage {
+  // role is "user", "assistant" or "tool".
+  string role = 1;
+  // text is at most 8 KiB.
+  string text = 2;
+  // tool is the tool a call called; detail what it was given, at most 1
+  // KiB, and result what it gave back, at most 2 KiB.
+  string tool = 3;
+  string detail = 4;
+  string result = 5;
+  // kind is what the tool does, whatever its agent calls it.
+  string kind = 6;
+  bool error = 7;
+  // pending says a call was not answered yet.
+  bool pending = 8;
+}
+
+// SubscribeRequest names kinds of event: "sessionStarted", "sessionEnded",
+// "sessionSlept", "sessionStatus" and "agentMessage".
+message SubscribeRequest {
+  repeated string events = 1;
+}
+
+// SubscribeResponse is the kinds the plugin is subscribed to after.
+message SubscribeResponse {
+  repeated string events = 1;
+}
+
+// UnsubscribeRequest names kinds of event; none names every one.
+message UnsubscribeRequest {
+  repeated string events = 1;
+}
+
+// UnsubscribeResponse is the kinds the plugin is subscribed to after.
+message UnsubscribeResponse {
+  repeated string events = 1;
+}
+
+// SessionEvent is what a plugin subscribed to a kind of event is told,
+// as a call of the handler of its kind in its default export's on, as a
+// block's on is called for a message: on.sessionStarted(event), ...
+// Events are of this node's sessions alone, at most 10 a second to a
+// plugin, the rest dropped; none comes while the plugin lacks
+// sessions:read, is disabled, refused or blocked.
+message SessionEvent {
+  // kind is "sessionStarted", "sessionEnded", "sessionSlept" (its
+  // program stopped, to start again on its conversation),
+  // "sessionStatus" (its agent's status changed) or "agentMessage".
+  string kind = 1;
+  // session is the session, as it stands after.
+  Session session = 2;
+  // previous_status is its agent's status before, for sessionStatus.
+  string previous_status = 3;
+  // message is the message, for agentMessage.
+  AgentMessage message = 4;
+  // request_id is a StartAgent's, for "agentStarted", when the agent it
+  // asked for started (session is it), and "agentRefused", when the user
+  // refused it or it did not start (error says why). These two come to
+  // a plugin that asked, without a subscription.
+  string request_id = 5;
+  string error = 6;
+  // document and revision are, for "layoutChanged", the window layout
+  // document a PatchLayout changed and its revision after; a
+  // "layoutRefused" tells why it did not change in error. These two come
+  // to a plugin that asked, without a subscription.
+  string document = 7;
+  string revision = 8;
+}
+
+// AgentMessage is a message one agent sent another of this node's, as
+// send_message does, or the window or mako left it.
+message AgentMessage {
+  string id = 1;
+  string from_session_id = 2;
+  string to_session_id = 3;
+  // text is at most 4 KiB.
+  string text = 4;
+  // note says mako wrote it, of the agent from: not one it sent.
+  bool note = 5;
 }
 
 // ListSessionsRequest asks for the sessions.
@@ -188,7 +312,8 @@ message GetSessionResponse {
   Session session = 2;
 }
 
-// Session is a session as a plugin sees it: no terminal, no transcript.
+// Session is a session as a plugin sees it: no terminal; its transcript
+// is ReadTranscript's.
 message Session {
   string id = 1;
   string name = 2;
@@ -196,7 +321,8 @@ message Session {
   string agent = 3;
   // project is its working folder.
   string project = 4;
-  // state is its process's: "running", "exited" or "asleep".
+  // state is its process's: "starting", "running", "exited", or
+  // "stopped", asleep, to start again on its conversation.
   string state = 5;
   // status is its agent's: "idle", "working", "waiting" or "done".
   string status = 6;

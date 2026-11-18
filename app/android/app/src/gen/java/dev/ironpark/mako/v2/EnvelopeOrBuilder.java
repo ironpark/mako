@@ -1199,5 +1199,35 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.PluginInstalled getPluginInstalled();
 
+  /**
+   * <pre>
+   * A node's panels' names and titles, for a peer (revision 35).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPanels list_panels = 137 [json_name = "listPanels"];</code>
+   * @return Whether the listPanels field is set.
+   */
+  boolean hasListPanels();
+  /**
+   * <pre>
+   * A node's panels' names and titles, for a peer (revision 35).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPanels list_panels = 137 [json_name = "listPanels"];</code>
+   * @return The listPanels.
+   */
+  dev.ironpark.mako.v2.ListPanels getListPanels();
+
+  /**
+   * <code>.mako.v2.Panels panels = 138 [json_name = "panels"];</code>
+   * @return Whether the panels field is set.
+   */
+  boolean hasPanels();
+  /**
+   * <code>.mako.v2.Panels panels = 138 [json_name = "panels"];</code>
+   * @return The panels.
+   */
+  dev.ironpark.mako.v2.Panels getPanels();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

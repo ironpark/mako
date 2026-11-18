@@ -64,6 +64,11 @@ Plugins (docs/plugins.md; each a folder of plugins/ in the configuration directo
   mako plugins run <id> <command>   run a plugin's command
   mako plugins set <id> <key> [value]
                                      set a plugin's setting (no value unsets it)
+  mako plugins allow-agent <id> once|always
+                                     let the agent a plugin asks to start start,
+                                     or every one it starts from now on
+  mako plugins deny-agent <id>      refuse the agent it asks to start
+  mako plugins forget-agents <id>   have it ask again before every agent
   mako plugins search [query]       search this node's registries
   mako plugins install <id> [-registry <url>]
                                      install a plugin from a registry, which must be

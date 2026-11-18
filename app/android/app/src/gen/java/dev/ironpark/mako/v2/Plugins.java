@@ -20,6 +20,8 @@ public  final class Plugins extends
     PluginsOrBuilder {
   private Plugins() {
     plugins_ = emptyProtobufList();
+    secrets_ = "";
+    secretsNote_ = "";
   }
   public static final int PLUGINS_FIELD_NUMBER = 1;
   private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.PluginInfo> plugins_;
@@ -113,6 +115,140 @@ public  final class Plugins extends
   private void removePlugins(int index) {
     ensurePluginsIsMutable();
     plugins_.remove(index);
+  }
+
+  public static final int SECRETS_FIELD_NUMBER = 2;
+  private java.lang.String secrets_;
+  /**
+   * <pre>
+   * secrets is where the node keeps its plugins' secrets: the name of the
+   * system's keychain ("macOS Keychain", "Secret Service", "Windows
+   * Credential Manager"), or "file" when it reaches none, a file of each
+   * plugin's only the user may read, secrets_note saying why (revision
+   * 32). "" from an older daemon.
+   * </pre>
+   *
+   * <code>string secrets = 2 [json_name = "secrets"];</code>
+   * @return The secrets.
+   */
+  @java.lang.Override
+  public java.lang.String getSecrets() {
+    return secrets_;
+  }
+  /**
+   * <pre>
+   * secrets is where the node keeps its plugins' secrets: the name of the
+   * system's keychain ("macOS Keychain", "Secret Service", "Windows
+   * Credential Manager"), or "file" when it reaches none, a file of each
+   * plugin's only the user may read, secrets_note saying why (revision
+   * 32). "" from an older daemon.
+   * </pre>
+   *
+   * <code>string secrets = 2 [json_name = "secrets"];</code>
+   * @return The bytes for secrets.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getSecretsBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(secrets_);
+  }
+  /**
+   * <pre>
+   * secrets is where the node keeps its plugins' secrets: the name of the
+   * system's keychain ("macOS Keychain", "Secret Service", "Windows
+   * Credential Manager"), or "file" when it reaches none, a file of each
+   * plugin's only the user may read, secrets_note saying why (revision
+   * 32). "" from an older daemon.
+   * </pre>
+   *
+   * <code>string secrets = 2 [json_name = "secrets"];</code>
+   * @param value The secrets to set.
+   */
+  private void setSecrets(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    secrets_ = value;
+  }
+  /**
+   * <pre>
+   * secrets is where the node keeps its plugins' secrets: the name of the
+   * system's keychain ("macOS Keychain", "Secret Service", "Windows
+   * Credential Manager"), or "file" when it reaches none, a file of each
+   * plugin's only the user may read, secrets_note saying why (revision
+   * 32). "" from an older daemon.
+   * </pre>
+   *
+   * <code>string secrets = 2 [json_name = "secrets"];</code>
+   */
+  private void clearSecrets() {
+
+    secrets_ = getDefaultInstance().getSecrets();
+  }
+  /**
+   * <pre>
+   * secrets is where the node keeps its plugins' secrets: the name of the
+   * system's keychain ("macOS Keychain", "Secret Service", "Windows
+   * Credential Manager"), or "file" when it reaches none, a file of each
+   * plugin's only the user may read, secrets_note saying why (revision
+   * 32). "" from an older daemon.
+   * </pre>
+   *
+   * <code>string secrets = 2 [json_name = "secrets"];</code>
+   * @param value The bytes for secrets to set.
+   */
+  private void setSecretsBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    secrets_ = value.toStringUtf8();
+
+  }
+
+  public static final int SECRETS_NOTE_FIELD_NUMBER = 3;
+  private java.lang.String secretsNote_;
+  /**
+   * <code>string secrets_note = 3 [json_name = "secretsNote"];</code>
+   * @return The secretsNote.
+   */
+  @java.lang.Override
+  public java.lang.String getSecretsNote() {
+    return secretsNote_;
+  }
+  /**
+   * <code>string secrets_note = 3 [json_name = "secretsNote"];</code>
+   * @return The bytes for secretsNote.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getSecretsNoteBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(secretsNote_);
+  }
+  /**
+   * <code>string secrets_note = 3 [json_name = "secretsNote"];</code>
+   * @param value The secretsNote to set.
+   */
+  private void setSecretsNote(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    secretsNote_ = value;
+  }
+  /**
+   * <code>string secrets_note = 3 [json_name = "secretsNote"];</code>
+   */
+  private void clearSecretsNote() {
+
+    secretsNote_ = getDefaultInstance().getSecretsNote();
+  }
+  /**
+   * <code>string secrets_note = 3 [json_name = "secretsNote"];</code>
+   * @param value The bytes for secretsNote to set.
+   */
+  private void setSecretsNoteBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    secretsNote_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.Plugins parseFrom(
@@ -318,6 +454,144 @@ public  final class Plugins extends
       return this;
     }
 
+    /**
+     * <pre>
+     * secrets is where the node keeps its plugins' secrets: the name of the
+     * system's keychain ("macOS Keychain", "Secret Service", "Windows
+     * Credential Manager"), or "file" when it reaches none, a file of each
+     * plugin's only the user may read, secrets_note saying why (revision
+     * 32). "" from an older daemon.
+     * </pre>
+     *
+     * <code>string secrets = 2 [json_name = "secrets"];</code>
+     * @return The secrets.
+     */
+    @java.lang.Override
+    public java.lang.String getSecrets() {
+      return instance.getSecrets();
+    }
+    /**
+     * <pre>
+     * secrets is where the node keeps its plugins' secrets: the name of the
+     * system's keychain ("macOS Keychain", "Secret Service", "Windows
+     * Credential Manager"), or "file" when it reaches none, a file of each
+     * plugin's only the user may read, secrets_note saying why (revision
+     * 32). "" from an older daemon.
+     * </pre>
+     *
+     * <code>string secrets = 2 [json_name = "secrets"];</code>
+     * @return The bytes for secrets.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getSecretsBytes() {
+      return instance.getSecretsBytes();
+    }
+    /**
+     * <pre>
+     * secrets is where the node keeps its plugins' secrets: the name of the
+     * system's keychain ("macOS Keychain", "Secret Service", "Windows
+     * Credential Manager"), or "file" when it reaches none, a file of each
+     * plugin's only the user may read, secrets_note saying why (revision
+     * 32). "" from an older daemon.
+     * </pre>
+     *
+     * <code>string secrets = 2 [json_name = "secrets"];</code>
+     * @param value The secrets to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSecrets(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setSecrets(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * secrets is where the node keeps its plugins' secrets: the name of the
+     * system's keychain ("macOS Keychain", "Secret Service", "Windows
+     * Credential Manager"), or "file" when it reaches none, a file of each
+     * plugin's only the user may read, secrets_note saying why (revision
+     * 32). "" from an older daemon.
+     * </pre>
+     *
+     * <code>string secrets = 2 [json_name = "secrets"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSecrets() {
+      copyOnWrite();
+      instance.clearSecrets();
+      return this;
+    }
+    /**
+     * <pre>
+     * secrets is where the node keeps its plugins' secrets: the name of the
+     * system's keychain ("macOS Keychain", "Secret Service", "Windows
+     * Credential Manager"), or "file" when it reaches none, a file of each
+     * plugin's only the user may read, secrets_note saying why (revision
+     * 32). "" from an older daemon.
+     * </pre>
+     *
+     * <code>string secrets = 2 [json_name = "secrets"];</code>
+     * @param value The bytes for secrets to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSecretsBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setSecretsBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string secrets_note = 3 [json_name = "secretsNote"];</code>
+     * @return The secretsNote.
+     */
+    @java.lang.Override
+    public java.lang.String getSecretsNote() {
+      return instance.getSecretsNote();
+    }
+    /**
+     * <code>string secrets_note = 3 [json_name = "secretsNote"];</code>
+     * @return The bytes for secretsNote.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getSecretsNoteBytes() {
+      return instance.getSecretsNoteBytes();
+    }
+    /**
+     * <code>string secrets_note = 3 [json_name = "secretsNote"];</code>
+     * @param value The secretsNote to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSecretsNote(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setSecretsNote(value);
+      return this;
+    }
+    /**
+     * <code>string secrets_note = 3 [json_name = "secretsNote"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSecretsNote() {
+      copyOnWrite();
+      instance.clearSecretsNote();
+      return this;
+    }
+    /**
+     * <code>string secrets_note = 3 [json_name = "secretsNote"];</code>
+     * @param value The bytes for secretsNote to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSecretsNoteBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setSecretsNoteBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Plugins)
   }
   @java.lang.Override
@@ -336,9 +610,12 @@ public  final class Plugins extends
           java.lang.Object[] objects = new java.lang.Object[] {
             "plugins_",
             dev.ironpark.mako.v2.PluginInfo.class,
+            "secrets_",
+            "secretsNote_",
           };
           java.lang.String info =
-              "\u0000\u0001\u0000\u0000\u0001\u0001\u0001\u0000\u0001\u0000\u0001\u001b";
+              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0001\u0000\u0001\u001b\u0002\u0208" +
+              "\u0003\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

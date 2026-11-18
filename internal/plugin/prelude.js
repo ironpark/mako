@@ -113,13 +113,13 @@ class UiNode {
   }
 }
 
-const options = ["key", "tone", "weight", "size", "grow", "gap", "icon", "disabled", "onTap", "onChange", "onSubmit", "placeholder"];
+const options = ["key", "tone", "weight", "size", "grow", "gap", "icon", "disabled", "onTap", "onChange", "onSubmit", "placeholder", "labels"];
 
 function node(kind, fields, opts) {
   const n = new UiNode(kind, fields);
   for (const [k, v] of Object.entries(opts || {})) {
     if (!options.includes(k)) throw new Error(`${k} is not an option of a node`);
-    n.n[k] = k === "key" ? String(v) : v;
+    n.n[k] = k === "key" ? String(v) : k === "labels" ? children(v).map(String) : v;
   }
   return n;
 }
@@ -146,6 +146,12 @@ const ui = Object.freeze({
   code: (t, language, o) => node("code", { text: String(t), language: language ?? "" }, o),
   progress: (v, o) => node("progress", { progress: Number(v) }, o),
   divider: (o) => node("divider", {}, o),
+  // A chart: "line", "bar" or "sparkline", of series [{ name, values,
+  // tone }], its points named by opts.labels.
+  chart: (type, series, o) => node("chart", {
+    chart: String(type),
+    series: children(series).map((s) => ({ name: String(s.name ?? ""), tone: s.tone ?? "", values: children(s.values ?? []).map(Number) })),
+  }, o),
 });
 
 // What the daemon calls.
@@ -179,6 +185,14 @@ const R = {
     const run = commands.get(id);
     if (!run) throw new Error(`the plugin registered nothing for command ${id}`);
     await run();
+  },
+  // An event a plugin subscribed to: the handler of its kind in the
+  // default export's on, if it has one.
+  async sessionEvent(json) {
+    const ev = JSON.parse(json);
+    const on = (plugin && plugin.on) || {};
+    const h = Object.prototype.hasOwnProperty.call(on, ev.kind) ? on[ev.kind] : undefined;
+    if (typeof h === "function") await h.call(plugin, ev);
   },
   save: (id) => JSON.stringify(states.has(id) ? states.get(id) : null),
   restore(id, json) {

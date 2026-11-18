@@ -55,6 +55,7 @@ func pluginSettings(m *model) ggui.Widget {
 		}
 		return widget.Column(cards...).Gap(sectionGap).Stretch()
 	})
+	installed = widget.Column(secretsNote(m), installed).Gap(sectionGap).Stretch()
 	about := T("The plugins this node's daemon runs, each in a sandbox of its own, from the plugins folder beside its configuration. A plugin runs once you allow what it asks for.")
 	if !m.storeOpen() {
 		return page(T("Plugins"), about, installed)
@@ -64,6 +65,32 @@ func pluginSettings(m *model) ggui.Widget {
 		section(T("Find plugins"), storeSection(m)),
 		section(T("Registries"), registriesSection(m)),
 	)
+}
+
+// secretsNote says, over the plugins, that this node keeps their secrets
+// in files, having no keychain: nothing while it has one.
+func secretsNote(m *model) ggui.Widget {
+	return ggui.View(m.plugins.Secrets, func(st secretStore) ggui.Widget {
+		if st.Store != "file" {
+			return widget.Box()
+		}
+		text := T("This node has no system keychain, so plugins' secrets are kept in a file of each plugin's that only you can read.")
+		if st.Note != "" {
+			text += " (" + st.Note + ")"
+		}
+		return card(widget.Box(warnLine("key-round", skin.DotWaiting, text)).Pad(12, 16))
+	})
+}
+
+// secretWhere says where a secret setting is kept, under its label.
+func secretWhere(st secretStore) string {
+	switch st.Store {
+	case "":
+		return ""
+	case "file":
+		return T("Kept in a file only you can read: this node has no keychain.")
+	}
+	return Tf("Kept in %s, on this computer alone.", st.Store)
 }
 
 // stateLabels name a plugin's states.
@@ -146,6 +173,10 @@ func pluginCardBody(m *model, p *protocol.PluginInfo) ggui.Widget {
 		).Gap(4).Stretch()).Pad(12, 16))
 	}
 	rows = append(rows, pluginPermissions(m, p, act))
+	if p.GetAgentsAllowed() {
+		rows = append(rows, row(T("Agents"), T("You let it start agents without asking."),
+			ui.Button(T("Ask again"), act(protocol.PluginForgetAgents)).Outline()))
+	}
 	for _, s := range p.GetSettings() {
 		rows = append(rows, pluginSettingRow(m, id, s))
 	}
@@ -217,6 +248,8 @@ func pluginSettingRow(m *model, id string, s *protocol.PluginSetting) ggui.Widge
 			parts = append(parts, ui.Button(T("Clear"), func() { set("") }).Outline())
 		}
 		control = widget.Row(parts...).Gap(8)
+		desc := strings.TrimSpace(s.GetDescription() + " " + secretWhere(ggui.Peek(m.plugins.Secrets)))
+		return row(s.GetLabel(), desc, control)
 	default:
 		draft := ggui.State(s.GetValue())
 		save := func(v string) {
@@ -288,6 +321,63 @@ func pluginAskBar(m *model) ggui.Widget {
 			ui.Button(T("Allow"), func() { m.actOnPlugin(&protocol.PluginAction{PluginId: id, Op: protocol.PluginGrant}) }),
 		}
 		return askBarFrame("package", body, buttons)
+	})
+}
+
+// pluginAgentBar asks, over the window, to allow an agent a plugin asks
+// to start: starting one runs a program that costs money, so the first
+// is the user's to allow, once or for the plugin from then on. It waits
+// behind a layout change and a plugin asking for its permissions, which
+// take the same place.
+func pluginAgentBar(m *model) ggui.Widget {
+	asking := ggui.Derived(func() *protocol.PluginInfo {
+		if m.LayoutStage.Get() != nil {
+			return nil
+		}
+		later := m.plugins.Later.Get()
+		list := m.plugins.List.Get()
+		for _, p := range list {
+			if p.GetState() == protocol.PluginWaiting && !later[p.GetId()] {
+				return nil
+			}
+		}
+		for _, p := range list {
+			if p.GetAgentAsk() != nil {
+				return p
+			}
+		}
+		return nil
+	})
+	return ggui.View(asking, func(p *protocol.PluginInfo) ggui.Widget {
+		if p == nil {
+			return widget.Box()
+		}
+		id, ask := p.GetId(), p.GetAgentAsk()
+		answer := func(op, value string) func() {
+			return func() {
+				m.actOnPlugin(&protocol.PluginAction{PluginId: id, Op: op, Key: ask.GetId(), Value: value})
+			}
+		}
+		agent := ask.GetAgent()
+		if ask.GetProfile() != "" {
+			agent += " · " + ask.GetProfile()
+		}
+		where := Tf("%s in %s (%s)", agent, ask.GetProject(), ask.GetRoot())
+		if ask.GetName() != "" {
+			where = ask.GetName() + " — " + where
+		}
+		body := widget.Column(
+			widget.Text(Tf("The plugin %s asks to start an agent", id)).Size(13.5).Weight(ggui.WeightMedium),
+			muted(widget.Text(where).Size(12.5).NoWrap().Ellipsis()),
+			muted(widget.Text(strings.Join(strings.Fields(ask.GetPrompt()), " ")).Size(12.5).NoWrap().Ellipsis()),
+			muted(widget.Text(T("An agent runs programs on this computer and may cost money.")).Size(12.5)),
+		).Gap(3).Stretch()
+		buttons := []ggui.Widget{
+			ui.Button(T("Deny"), answer(protocol.PluginDenyAgent, "")).Outline(),
+			ui.Button(T("Always allow this plugin"), answer(protocol.PluginAllowAgent, protocol.AgentAlways)).Outline(),
+			ui.Button(T("Allow once"), answer(protocol.PluginAllowAgent, protocol.AgentOnce)),
+		}
+		return askBarFrame("bot", body, buttons)
 	})
 }
 

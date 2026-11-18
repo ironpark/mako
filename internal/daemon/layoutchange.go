@@ -41,24 +41,50 @@ func (d *Daemon) windowLayout(name string) ([]byte, string) {
 	return l.GetDoc(), layoutRev(l)
 }
 
+// layoutOrigin is who asks for a change: the agent of a session, or a
+// plugin, which no session holds and which the user allows apart.
+type layoutOrigin struct {
+	session *session.Session
+	plugin  string
+}
+
+// allowed says the user lets the origin change the document without
+// asking.
+func (d *Daemon) layoutAllowed(o layoutOrigin, name string) bool {
+	if o.plugin != "" {
+		return d.layouts.allowsPlugin(o.plugin, name)
+	}
+	return d.layouts.allows(name)
+}
+
 // changeLayout makes the change the agent of session s asks for, as the
-// user has it: at once, when they allowed such changes; else once they
-// allow it, the window showing it meanwhile. A whole document set waits
+// user has it; see changeLayoutFor.
+func (d *Daemon) changeLayout(ctx context.Context, s *session.Session, c layoutChange) (string, error) {
+	return d.changeLayoutFor(ctx, layoutOrigin{session: s}, c)
+}
+
+// changeLayoutFor makes the change the origin asks for, as the user has
+// it: at once, when they allowed it such changes; else once they allow
+// it, the window showing it meanwhile. A whole document set waits
 // besides, shown, for the user to keep it, and is reverted after
 // layoutKeepFor without an answer. With no window of this node's open to
 // show it, a change the user is to see is refused. It returns the
 // document's revision after.
-func (d *Daemon) changeLayout(ctx context.Context, s *session.Session, c layoutChange) (string, error) {
-	allowed := d.layouts.allows(c.name)
+func (d *Daemon) changeLayoutFor(ctx context.Context, o layoutOrigin, c layoutChange) (string, error) {
+	allowed := d.layoutAllowed(o, c.name)
 	keep := c.tool == toolSetLayout
 	if (!allowed || keep) && !d.layouts.watched() {
 		return "", errLayoutNoWindow
 	}
-	info := s.Info()
-	staged, err := d.layouts.begin(&protocol.LayoutStage{
-		Id: approvalID(), Document: c.name, Doc: c.doc, SessionId: s.ID(),
-		Agent: cmpOr(info.GetName(), info.GetAgent()), Tool: c.tool, Summary: c.summary,
-	})
+	pb := &protocol.LayoutStage{Id: approvalID(), Document: c.name, Doc: c.doc, Tool: c.tool, Summary: c.summary}
+	if o.plugin != "" {
+		// An older window names the plugin as it would an agent.
+		pb.PluginId, pb.Agent = o.plugin, "plugin "+o.plugin
+	} else {
+		info := o.session.Info()
+		pb.SessionId, pb.Agent = o.session.ID(), cmpOr(info.GetName(), info.GetAgent())
+	}
+	staged, err := d.layouts.begin(pb)
 	if err != nil {
 		return "", err
 	}
@@ -70,11 +96,15 @@ func (d *Daemon) changeLayout(ctx context.Context, s *session.Session, c layoutC
 	if !allowed {
 		d.layouts.setPhase(staged, protocol.LayoutApprove, time.Time{})
 		d.changes.fireWorkspace()
-		option, err := d.askLayout(ctx, s, staged, c, after)
+		option, err := d.askLayout(ctx, o, staged, c, after)
 		if err != nil {
 			return "", err
 		}
-		d.layouts.allow(option, c.name)
+		if o.plugin != "" {
+			d.layouts.allowPlugin(o.plugin, option, c.name)
+		} else {
+			d.layouts.allow(option, c.name)
+		}
 	}
 	if keep {
 		d.layouts.setPhase(staged, protocol.LayoutKeep, now().Add(layoutKeepFor))
@@ -93,23 +123,27 @@ func (d *Daemon) changeLayout(ctx context.Context, s *session.Session, c layoutC
 	return d.commitLayout(c)
 }
 
-// askLayout asks the user to allow the change, as an approval on the
-// agent's session as well as the windows' bar, and returns the option it
-// was allowed with: "" for once.
-func (d *Daemon) askLayout(ctx context.Context, s *session.Session, staged *stagedLayout, c layoutChange, after func(time.Duration) <-chan time.Time) (string, error) {
+// askLayout asks the user to allow the change, in the windows' bar, and
+// for an agent's as an approval on its session too, and returns the
+// option it was allowed with: "" for once.
+func (d *Daemon) askLayout(ctx context.Context, o layoutOrigin, staged *stagedLayout, c layoutChange, after func(time.Duration) <-chan time.Time) (string, error) {
 	id := staged.pb.GetId()
-	input := ""
-	if c.doc != nil {
-		input = indentInput(c.doc)
+	var sessionDone <-chan struct{} // a plugin's change waits on no session
+	if s := o.session; s != nil {
+		input := ""
+		if c.doc != nil {
+			input = indentInput(c.doc)
+		}
+		seq, _, ok := s.HoldApproval(&protocol.Approval{
+			Id: id, Tool: c.tool, Detail: c.summary, Input: input, Since: timestamppb.Now(), Kind: protocol.ToolLayout,
+			Options: []*protocol.ApprovalOption{{Id: protocol.LayoutAllowSpace}, {Id: protocol.LayoutAllowAlways}},
+		})
+		if !ok {
+			return "", fmt.Errorf("the session cannot ask the user now")
+		}
+		defer s.FinishApproval(seq, id, protocol.AgentWorking)
+		sessionDone = s.Done()
 	}
-	seq, _, ok := s.HoldApproval(&protocol.Approval{
-		Id: id, Tool: c.tool, Detail: c.summary, Input: input, Since: timestamppb.Now(), Kind: protocol.ToolLayout,
-		Options: []*protocol.ApprovalOption{{Id: protocol.LayoutAllowSpace}, {Id: protocol.LayoutAllowAlways}},
-	})
-	if !ok {
-		return "", fmt.Errorf("the session cannot ask the user now")
-	}
-	defer s.FinishApproval(seq, id, protocol.AgentWorking)
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	give := after(layoutAskFor)
@@ -129,7 +163,7 @@ func (d *Daemon) askLayout(ctx context.Context, s *session.Session, staged *stag
 			}
 		case <-give:
 			return "", fmt.Errorf("the user did not answer within %v; nothing was changed", layoutAskFor)
-		case <-s.Done():
+		case <-sessionDone:
 			return "", fmt.Errorf("the session ended")
 		case <-ctx.Done():
 			return "", ctx.Err()
@@ -211,8 +245,8 @@ func (d *Daemon) handleLayoutDecision(ctx context.Context, env *protocol.Envelop
 	switch r.GetDecision() {
 	case protocol.LayoutForget:
 		d.layouts.forget()
-	case protocol.LayoutKeep, protocol.LayoutRevert:
-		if err := d.layouts.answer(r.GetStageId(), layoutAnswer{decision: r.GetDecision()}); err != nil {
+	case protocol.LayoutKeep, protocol.LayoutRevert, protocol.DecisionAllow, protocol.DecisionDeny:
+		if err := d.layouts.answer(r.GetStageId(), layoutAnswer{decision: r.GetDecision(), option: r.GetOption()}); err != nil {
 			return nil, err
 		}
 	default:

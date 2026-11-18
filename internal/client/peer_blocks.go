@@ -20,3 +20,11 @@ func (c *Client) WatchBlockOn(ctx context.Context, node, block string, fn func(*
 func (c *Client) AgentBlocksOn(ctx context.Context, node string) (*protocol.AgentBlocks, error) {
 	return request[*protocol.AgentBlocks](ctx, c, protocol.TypeListAgentBlocks, &protocol.ListAgentBlocks{NodeId: node})
 }
+
+// Panels lists the blocks the layout documents of the node place, and
+// its agents' blocks, by name, title and kind ("" for the daemon's own):
+// what a node let in lists a computer's panels by before opening one
+// (revision 35).
+func (c *Client) Panels(ctx context.Context, node string) (*protocol.Panels, error) {
+	return request[*protocol.Panels](ctx, c, protocol.TypeListPanels, &protocol.ListPanels{NodeId: node})
+}

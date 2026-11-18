@@ -315,4 +315,38 @@ public interface PluginInfoOrBuilder extends
    */
   com.google.protobuf.ByteString
       getBlockedBytes();
+
+  /**
+   * <pre>
+   * agent_ask is an agent the plugin asks to start, which waits for the
+   * user to allow it, once or always for this plugin (revision 32): a
+   * PluginAction "allow_agent" or "deny_agent" with key its id answers.
+   * </pre>
+   *
+   * <code>.mako.v2.PluginAgentAsk agent_ask = 18 [json_name = "agentAsk"];</code>
+   * @return Whether the agentAsk field is set.
+   */
+  boolean hasAgentAsk();
+  /**
+   * <pre>
+   * agent_ask is an agent the plugin asks to start, which waits for the
+   * user to allow it, once or always for this plugin (revision 32): a
+   * PluginAction "allow_agent" or "deny_agent" with key its id answers.
+   * </pre>
+   *
+   * <code>.mako.v2.PluginAgentAsk agent_ask = 18 [json_name = "agentAsk"];</code>
+   * @return The agentAsk.
+   */
+  dev.ironpark.mako.v2.PluginAgentAsk getAgentAsk();
+
+  /**
+   * <pre>
+   * agents_allowed says the user let the plugin start agents without
+   * asking; "forget_agents" has it ask again.
+   * </pre>
+   *
+   * <code>bool agents_allowed = 19 [json_name = "agentsAllowed"];</code>
+   * @return The agentsAllowed.
+   */
+  boolean getAgentsAllowed();
 }

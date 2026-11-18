@@ -60,7 +60,13 @@ func newRig(t *testing.T, lim Limits, netTest map[string]string, sessions ...*pr
 // startRig runs a Manager of cfg over a test's folders.
 func startRig(t *testing.T, cfg Config) *rig {
 	t.Helper()
-	base := t.TempDir()
+	return startRigIn(t, t.TempDir(), cfg)
+}
+
+// startRigIn runs a Manager of cfg over folders in base, which a test may
+// have filled first.
+func startRigIn(t *testing.T, base string, cfg Config) *rig {
+	t.Helper()
 	r := &rig{t: t, dir: filepath.Join(base, "plugins"), data: filepath.Join(base, "plugin-data"), done: make(chan struct{}), logs: &logBuffer{}}
 	if err := os.MkdirAll(r.dir, 0o755); err != nil {
 		t.Fatal(err)

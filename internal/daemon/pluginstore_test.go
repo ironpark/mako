@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -89,6 +90,13 @@ func TestPluginStoreOverTheSocket(t *testing.T) {
 	}
 	if list, _ := c.Plugins(ctx); len(list.GetPlugins()) != 0 {
 		t.Fatalf("after removing: %v", list)
+	}
+	// A refusal comes over the socket with its code and what it names,
+	// for a window to say it in its user's language.
+	_, err = c.InstallPlugin(ctx, &protocol.InstallPlugin{Op: protocol.RemoveOp, Id: "hello"})
+	var ce *protocol.CodedError
+	if !errors.As(err, &ce) || ce.Code != protocol.CodeNotInstalled || strings.Join(ce.Args, ",") != "hello" {
+		t.Fatalf("removing twice: %#v", err)
 	}
 }
 

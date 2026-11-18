@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/atomicfile"
+	"github.com/ironpark/mako/internal/keychain"
 	"github.com/ironpark/mako/internal/layoutdoc"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -100,6 +101,16 @@ type Config struct {
 	Log     *slog.Logger
 	// Sessions lists the node's sessions, for sessions:read.
 	Sessions func() []*protocol.SessionInfo
+	// Transcript reads a page of a session's conversation, for
+	// sessions:read; nil reads none.
+	Transcript TranscriptFunc
+	// Projects lists the projects this node knows, and their folders on
+	// it, for fs:project; nil knows none.
+	Projects func() []ProjectRoots
+	// Agents carries out sessions:write; nil for none.
+	Agents AgentHost
+	// Layout carries out layout:write; nil for none.
+	Layout LayoutHost
 	// Changed is told when the list of plugins, or how one stands, changes.
 	Changed func()
 	// Poll is how often the folder is read for changes; 0 for a second.
@@ -108,6 +119,10 @@ type Config struct {
 	// Installs says which plugins were installed from a registry, and
 	// which a registry blocks; nil for none.
 	Installs Installs
+	// Keychain is the system's store the plugins' secrets are kept in;
+	// nil keeps them in a file of each plugin's, KeychainNote saying why.
+	Keychain     keychain.Keychain
+	KeychainNote string
 	// NetTest sends the requests for a host to another base URL, a test's
 	// server on loopback (internal/testhooks). The host must still be
 	// granted. It is for tests alone.
@@ -131,6 +146,7 @@ type Manager struct {
 	mu      sync.Mutex
 	plugins map[string]*plugin
 	wg      sync.WaitGroup
+	events  eventFeed
 }
 
 // New makes a Manager; Run starts it.
@@ -225,6 +241,7 @@ func (m *Manager) scan() {
 		p.quit()
 	}
 	if len(gone) > 0 {
+		m.subsChanged()
 		m.cfg.Changed()
 	}
 }
@@ -328,6 +345,9 @@ type grantEntry struct {
 	Denied []string `json:"denied,omitempty"`
 	// Disabled says the user turned the plugin off.
 	Disabled bool `json:"disabled,omitempty"`
+	// AgentsAllowed says the user let the plugin start agents without
+	// asking each time.
+	AgentsAllowed bool `json:"agents_allowed,omitempty"`
 }
 
 func loadGrants(path string) *grantStore {
@@ -351,7 +371,7 @@ func (g *grantStore) update(id string, fn func(*grantEntry)) error {
 	defer g.mu.Unlock()
 	e := g.data[id]
 	fn(&e)
-	if len(e.Granted) == 0 && len(e.Denied) == 0 && !e.Disabled {
+	if len(e.Granted) == 0 && len(e.Denied) == 0 && !e.Disabled && !e.AgentsAllowed {
 		delete(g.data, id)
 	} else {
 		g.data[id] = e

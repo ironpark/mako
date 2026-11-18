@@ -207,7 +207,7 @@ func (d *Daemon) placeAgentBlock(ctx context.Context, s *session.Session, id str
 		d.layouts.setPhase(staged, protocol.LayoutApprove, time.Time{})
 		d.changes.fireWorkspace()
 		_, after := d.layouts.clock()
-		option, err := d.askLayout(ctx, s, staged, layoutChange{tool: toolShowUI, name: name, doc: doc, summary: summary}, after)
+		option, err := d.askLayout(ctx, layoutOrigin{session: s}, staged, layoutChange{tool: toolShowUI, name: name, doc: doc, summary: summary}, after)
 		if err != nil {
 			return err
 		}

@@ -65,6 +65,7 @@ func window(m *model) ggui.Widget {
 		// Outside the document, so that no layout hides it.
 		layoutBar(m),
 		pluginAskBar(m),
+		pluginAgentBar(m),
 		newSessionDialog(m),
 		folderPickerDialog(m),
 		renameDialog(m),

@@ -150,6 +150,21 @@ const dtsPreamble = `//
 export interface Plugin {
   /** Runs when the plugin starts: register the blocks and commands here. */
   activate(mako: Mako): void | Promise<void>;
+  /**
+   * The handlers of the events the plugin subscribed to with
+   * mako.sessions.subscribe, by kind: the daemon calls the one of an
+   * event's kind, starting the plugin for it if it is not running.
+   */
+  on?: PluginEvents;
+}
+
+/** What a plugin does on each kind of event it subscribed to. */
+export interface PluginEvents {
+  sessionStarted?(event: SessionEvent): void | Promise<void>;
+  sessionEnded?(event: SessionEvent): void | Promise<void>;
+  sessionSlept?(event: SessionEvent): void | Promise<void>;
+  sessionStatus?(event: SessionEvent): void | Promise<void>;
+  agentMessage?(event: SessionEvent): void | Promise<void>;
 }
 
 /** What activate is given: the Host API, and the plugin's blocks and commands. */
@@ -211,6 +226,15 @@ export interface NodeOptions {
   /** Sent with an input's text last when Return is pressed. */
   onSubmit?: Message;
   placeholder?: string;
+  /** A chart's names of its points, as many as each series has values. */
+  labels?: (string | number)[];
+}
+
+/** A series of a chart: at most 200 finite numbers, its colour a token. */
+export interface ChartSeries {
+  name?: string;
+  values: number[];
+  tone?: Tone;
 }
 
 /** A node of a block's tree; its methods set what NodeOptions do. */
@@ -245,5 +269,7 @@ export interface Ui {
   code(text: string, language?: string, opts?: NodeOptions): UiNode;
   progress(value: number, opts?: NodeOptions): UiNode;
   divider(opts?: NodeOptions): UiNode;
+  /** A line, bar or sparkline chart of 1 to 4 series; 600 points in all. */
+  chart(type: "line" | "bar" | "sparkline", series: ChartSeries[], opts?: NodeOptions): UiNode;
 }
 `

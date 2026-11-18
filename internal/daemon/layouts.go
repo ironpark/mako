@@ -68,10 +68,12 @@ type windowLayouts struct {
 type layoutVersion struct{ doc []byte }
 
 // layoutAllowances is what the user allowed agents to change without
-// asking: every document, or those named, as a space uses one.
+// asking: every document, or those named, as a space uses one; and what
+// each plugin may, apart, as the user allowed it.
 type layoutAllowances struct {
-	Always    bool     `json:"always,omitempty"`
-	Documents []string `json:"documents,omitempty"`
+	Always    bool                        `json:"always,omitempty"`
+	Documents []string                    `json:"documents,omitempty"`
+	Plugins   map[string]layoutAllowances `json:"plugins,omitempty"`
 }
 
 // stagedLayout is a change waiting for the user: what the windows are
@@ -154,7 +156,50 @@ func (w *windowLayouts) allow(option, name string) {
 	w.mu.Unlock()
 }
 
-// forget has agents ask again for every change.
+// allowsPlugin reports whether the plugin may change the document without
+// asking.
+func (w *windowLayouts) allowsPlugin(id, name string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	a := w.allowed.Plugins[id]
+	return a.Always || slices.Contains(a.Documents, name)
+}
+
+// allowPlugin lets the plugin change the document, or every one, without
+// asking from now on, as the user's option says; "" allows nothing more.
+func (w *windowLayouts) allowPlugin(id, option, name string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	a := w.allowed.Plugins[id]
+	switch option {
+	case protocol.LayoutAllowAlways:
+		a.Always = true
+	case protocol.LayoutAllowSpace:
+		if !slices.Contains(a.Documents, name) {
+			a.Documents = append(a.Documents, name)
+		}
+	default:
+		return
+	}
+	if w.allowed.Plugins == nil {
+		w.allowed.Plugins = map[string]layoutAllowances{}
+	}
+	w.allowed.Plugins[id] = a
+	w.saveLocked()
+}
+
+// forgetPlugin has the plugin ask again for every change, as it is
+// removed: another of its ID is not given what it was.
+func (w *windowLayouts) forgetPlugin(id string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if _, ok := w.allowed.Plugins[id]; ok {
+		delete(w.allowed.Plugins, id)
+		w.saveLocked()
+	}
+}
+
+// forget has agents and plugins ask again for every change.
 func (w *windowLayouts) forget() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
