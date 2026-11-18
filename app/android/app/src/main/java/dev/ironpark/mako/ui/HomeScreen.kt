@@ -265,8 +265,8 @@ internal fun HomeScreen(
                 Mesh.State.Running -> when {
                     !loaded && sessions.isEmpty() -> PlaceholderRows(5, stringResource(R.string.reaching_computers))
                     // Computers known but not reached now: say so, not that there are none.
-                    linked.isEmpty() && sessions.isEmpty() && (nodes.any { it.linkDown() } || peers.isNotEmpty()) -> {
-                        val down = nodes.filter { it.linkDown() }
+                    linked.isEmpty() && sessions.isEmpty() && (nodes.any { it.unreachable() } || peers.isNotEmpty()) -> {
+                        val down = nodes.filter { it.unreachable() }
                         if (down.isEmpty()) Message(
                             stringResource(R.string.unreachable_any), stringResource(R.string.offline_body),
                             stringResource(R.string.computers), onMesh, icon = Icons.Outlined.CloudOff,
@@ -335,7 +335,7 @@ private fun ProjectList(
         view.pinnedSessions.mapNotNull { id -> sessions.firstOrNull { it.id == id } }
     }
     val manyNodes = nodes.count { it.trustsUs } > 1 || sessions.map { it.nodeId }.distinct().size > 1
-    val down = nodes.filter { it.linkDown() }
+    val down = nodes.filter { it.unreachable() }
     val prefs = LocalContext.current.getSharedPreferences("home", android.content.Context.MODE_PRIVATE)
     var trayOpen by remember { mutableStateOf(!prefs.getBoolean("trayFolded", false)) }
     var trayAll by rememberSaveable { mutableStateOf(false) }
@@ -412,7 +412,8 @@ private fun ProjectList(
             }
         }
         val (pinned, rest) = shown.partition { it.pinned }
-        for ((label, list) in listOf(R.string.pinned to pinned, R.string.projects to rest)) {
+        val pinnedLabel = if (filter == Filter.All && pinnedSessions.isNotEmpty()) R.string.pinned_projects else R.string.pinned
+        for ((label, list) in listOf(pinnedLabel to pinned, R.string.projects to rest)) {
             if (list.isEmpty()) continue
             item(key = "h:$label") {
                 Label(stringResource(label), Modifier.animateItem(),
@@ -470,6 +471,12 @@ private fun ProjectList(
         }
     }
 }
+
+/**
+ * Whether n is a computer this device cannot reach now: one that could run
+ * sessions, not another phone the computers know, whose link is down.
+ */
+internal fun Node.unreachable(): Boolean = linkDown() && os != "android"
 
 /** How many of the sessions waiting for you the tray shows before it offers the rest. */
 private const val TRAY_CAP = 3

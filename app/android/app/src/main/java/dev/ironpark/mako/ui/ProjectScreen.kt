@@ -92,6 +92,10 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -201,8 +205,8 @@ internal fun ProjectScreen(
     val act = actor()
     val elsewhere = needYouElsewhere(sessions, project)
     // No tab to show because the computers they are on cannot be reached, rather than none being there.
-    val offline = tabs.isEmpty() && nodes.any { it.linkDown() } &&
-        (project == null || project.nodes.any { n -> nodes.any { it.id == n && it.linkDown() } })
+    val offline = tabs.isEmpty() && nodes.any { it.unreachable() } &&
+        (project == null || project.nodes.any { n -> nodes.any { it.id == n && it.unreachable() } })
     val noTabs = loaded && tabs.isEmpty() && !offline
 
     BackHandler(overview && shown != null) { overview = false }
@@ -227,7 +231,7 @@ internal fun ProjectScreen(
                 },
             )
         } else if (offline) {
-            val down = nodes.filter { it.linkDown() }
+            val down = nodes.filter { it.unreachable() }
             Message(
                 stringResource(R.string.unreachable, down.joinToString(", ") { it.name }), stringResource(R.string.offline_body),
                 stringResource(R.string.reconnect), { act { down.forEach { mesh.relink(it.id) } } },
@@ -466,6 +470,8 @@ private fun TabCard(
     var stopping by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     val act = actor()
+    // What was typed and not sent shows in the card's stead, as messengers have it.
+    val draft = rememberDrafts()[s.nodeId, s.id].trim().replace(Regex("\\s+"), " ")
     val preview = rememberPreview(mesh, s)
     val shape = RoundedCornerShape(16.dp)
     val outline = when {
@@ -496,9 +502,16 @@ private fun TabCard(
                 }
                 Text(s.label(), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 4.dp, end = 8.dp))
+                val error = MaterialTheme.colorScheme.error
+                val draftLabel = stringResource(R.string.draft)
                 Text(
-                    preview.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = if (preview.code) FontFamily.Monospace else null,
+                    if (draft.isNotEmpty() && !s.needsYou()) buildAnnotatedString {
+                        withStyle(SpanStyle(color = error, fontWeight = FontWeight.Medium)) { append(draftLabel) }
+                        append(" ")
+                        append(draft)
+                    } else AnnotatedString(preview.text),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontFamily = if (preview.code && (draft.isEmpty() || s.needsYou())) FontFamily.Monospace else null,
                     maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp, end = 8.dp).weight(1f),
                 )
                 Text(dotted(project?.tags?.get(s.id), s.agent, ago(s.lastActive())), style = MaterialTheme.typography.labelSmall,

@@ -63,16 +63,35 @@ and opens a session's conversation and its terminal.
   a content match opens at its line. **Git changes** lists changed files and
   opens a colored diff, including renames and deletions. Large text files and
   images have explicit preview limits.
-- **Spaces and projects.** The list sorts sessions as the desktop's
-  sidebar does, where a workspace (docs/protocol.md, Workspaces) holds
-  spaces, projects, names, looks and pins: grouped by project, a project
-  of several folders is one section, its sessions marked with their
-  folder (`#web`), named and marked with the icon and colour given on the
-  desktop; what is pinned comes first; and the spaces are chips over the
-  list, every session's first unless the workspace leaves it out. A
-  space shows the sections the desktop places in it, and every session
-  that needs you. A long press pins or unpins a session, or a project
-  from its heading.
+- **Projects first.** Home lists the projects on your computers, as the
+  desktop's sidebar has them where a workspace (docs/protocol.md,
+  Workspaces) holds spaces, projects, names, looks and pins: a project of
+  several folders is one, named and marked with the icon and colour given
+  on the desktop; pinned projects and sessions come first; the rest go by
+  name. Each row says how many of its sessions need you and how many
+  work, how many there are and on which computers, and names the session
+  it would open on. Over the list, **Needs you** gathers the sessions
+  waiting for you from every space, an approval answered on its row; the
+  title is the space shown, a menu of the others; **All**, **Needs you**
+  and **Working** filter the projects. A long press pins or unpins a
+  project, or starts a session in it. A computer that cannot be reached
+  says so over the list, or in its place when none can.
+- **A project is a workspace of tabs.** Opening a project shows one of its
+  sessions, the one waiting for you, else the one looked at last, with a
+  bar at the bottom as a phone's browser has: back to the projects
+  (marked when a session elsewhere waits), the tab shown with how many
+  there are (marked when another waits), a new tab, and the session's
+  actions. Swipe along the bar's tab for the one beside it. Tap it for
+  every tab as a card, saying what its session waits on or last said,
+  and for the panels beside the project. The tabs are the sessions on
+  the computers, in the order they started, pinned first, those ended
+  last: a tab is not closed from the phone but by **Stop session…**,
+  which ends its agent on its computer, after asking. Each tab opens on
+  the view it was left on.
+- **Spaces and projects, as the desktop reads them.** Without a
+  workspace, or one new enough, the projects are the folders and
+  repositories the sessions are in, each marked with the look its key
+  draws.
   The phone's node lets no one in, so it shares no computer's workspace:
   the app reads one through it (`get_workspace` with the computer's
   `node_id`), and gives its pins to that computer (`workspace` with
@@ -81,20 +100,22 @@ and opens a session's conversation and its terminal.
   let the phone in, the first by node ID holding a workspace is shown;
   they normally hold the same one. If the phone's own node holds one, as
   it does once someone has made it and a computer let each other in,
-  that comes first. With none, or none new enough, the list is as it
-  always was. The app reads the workspace again when the computers come
+  that comes first. With none, or none new enough, the projects are the
+  folders, as above. The app reads the workspace again when the computers come
   or go, and when one's record says its workspace changed; a computer
   that does not say, reached through another or older, is read again
   with the sessions while the app is on screen.
   The reading is a port of `internal/workspace/view.go` and the
-  desktop's grouping (`workspace/`, `ui/SessionGroups.kt`), and the pins
+  desktop's grouping (`workspace/`, `ui/SessionGroups.kt`), the projects
+  and tabs made of it are `ui/Projects.kt`, and the pins
   are the deltas a desktop window gives; the computer stamps them. The
   unit tests check both against fixtures the Go tests make
   (`src/test/resources/workspace`): `go test ./internal/workspace
   ./internal/gui -run Android` fails while they differ from what the Go
   code makes, and with `MAKO_ANDROID_FIXTURES=1` writes them again.
-- **Panels.** The panels button over the list opens the panels of the
-  computer whose workspace shows: the blocks its plugins draw, as its
+- **Panels.** A project's tabs list the panels beside it, the plugins'
+  of the space shown and those its sessions' agents show, and home ends
+  with **Panels of** the computer whose workspace shows, for them all: the blocks its plugins draw, as its
   window lays them out for the space shown, and the blocks its agents
   show (`show_ui`), each opening a page of its own, framed with the
   plugin or the agent it comes from: the page's top bar holds the app's
@@ -130,7 +151,7 @@ and opens a session's conversation and its terminal.
   updated with the differently signed release APK.
 - **Touch controls.** Swipe horizontally between Chat and Terminal; the
   next view follows your finger before you release. Swipe right again
-  from Chat to reveal the main session list with its filter and scroll
+  from Chat to reveal the projects with their filter and scroll
   position preserved. A compact switch in the session toolbar also changes
   views, replacing the back arrow and separate tab strip. The toolbar stays
   in place between Chat and Terminal; only the view under it moves. The terminal scrolls back with one finger vertically;
@@ -169,7 +190,7 @@ again after a schema change. The app's sources are in
     blocks/            a block's tree followed, its ops applied, its form
     net/               frames on the node's socket, and its requests
     term/              an attached session, its terminal, and the keyboard
-    ui/                the screens: sessions, a session, computers, a new session, panels
+    ui/                the screens: projects, a project's tabs, a session, computers, a new session, panels
     workspace/         the workspace as the desktop reads it, its window layouts, and the edits the app gives
 
 ## Trying it on the emulator
