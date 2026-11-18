@@ -207,7 +207,9 @@ internal fun ProjectScreen(
     // No tab to show because the computers they are on cannot be reached, rather than none being there.
     val offline = tabs.isEmpty() && nodes.any { it.unreachable() } &&
         (project == null || project.nodes.any { n -> nodes.any { it.id == n && it.unreachable() } })
-    val noTabs = loaded && tabs.isEmpty() && !offline
+    val noTabs = loaded && tabs.isEmpty() && !offline && project != null
+    // A project, or a session a notification named, that is no longer there.
+    val gone = loaded && project == null && !offline && sessions.isNotEmpty()
 
     BackHandler(overview && shown != null) { overview = false }
     Box(Modifier.fillMaxSize()) {
@@ -237,7 +239,8 @@ internal fun ProjectScreen(
                 stringResource(R.string.reconnect), { act { down.forEach { mesh.relink(it.id) } } },
                 icon = Icons.Outlined.CloudOff, secondary = stringResource(R.string.back), onSecondary = onBack,
             )
-        } else if (!noTabs) Loading(stringResource(R.string.reaching_computers))
+        } else if (gone) Message(stringResource(R.string.nothing_here), "", stringResource(R.string.back), onBack, icon = Icons.Outlined.Inbox)
+        else if (!noTabs) Loading(stringResource(R.string.reaching_computers))
         AnimatedVisibility(
             (overview || noTabs) && !offline,
             enter = fadeIn(spring(stiffness = 600f)) + scaleIn(spring(stiffness = 600f), initialScale = 1.06f),
@@ -277,9 +280,12 @@ private fun TabBar(
                 Modifier.fillMaxWidth().navigationBarsPadding().height(60.dp).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Back says, to TalkBack too, when a session elsewhere waits for you.
+                val back = stringResource(R.string.projects) +
+                    (if (elsewhere > 0) ", " + pluralStringResource(R.plurals.n_need_you, elsewhere, elsewhere) else "")
                 IconButton(onClick = onBack) {
                     BadgedBox(badge = { if (elsewhere > 0) Badge(containerColor = StatusColors.Approval) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.projects))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, back)
                     }
                 }
                 // As wide as the bar allows on a phone, not wider than reads on a tablet or turned.
