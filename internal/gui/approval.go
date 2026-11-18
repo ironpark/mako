@@ -88,6 +88,8 @@ func approvalCard(m *model, id string) ggui.Widget {
 			)
 		case a.GetKind() == protocol.ToolExitPlan:
 			return planCard(m, id, a)
+		case a.GetKind() == protocol.ToolTemplate:
+			return templateApprovalCard(m, id, a)
 		case a.GetKind() == protocol.ToolLayout:
 			head := widget.Row(
 				icon("layout-grid").Size(16).Color(skin.DotWaiting),
@@ -242,6 +244,14 @@ func approvalBar(m *model, id string) ggui.Widget {
 		glyph, ask, buttons := "shield-alert", T("Approve?"), approvalButtons(m, id, a)
 		if a.GetKind() == protocol.ToolLayout {
 			glyph, ask, buttons = "layout-grid", T("Change the window layout?"), layoutApprovalButtons(m, id, a.GetId())
+		}
+		if a.GetKind() == protocol.ToolTemplate {
+			// The template is read in Chat before it is saved.
+			glyph, ask = "file-text", T("Save a template?")
+			buttons = []ggui.Widget{
+				ui.Button(T("Review in Chat"), func() { m.setChatMode(id, true) }).Outline(),
+				ui.Button(T("Decline"), m.decide(id, a, protocol.DecisionDeny)).Outline(),
+			}
 		}
 		if a.GetKind() == protocol.ToolExitPlan {
 			glyph, ask = "list", T("Approve the plan?")

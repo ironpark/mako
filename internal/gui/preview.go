@@ -491,6 +491,11 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			if sig := os.Getenv("MAKO_PREVIEW_AGENTUI"); sig != "" {
 				steps = agentUIPreview(m, func() *ggui.Probe { return p }, sig, do, frames, shot)
 			}
+			// MAKO_PREVIEW_TEMPLATE names a folder of signals between this
+			// and an agent answering //template; see templatePreview.
+			if sig := os.Getenv("MAKO_PREVIEW_TEMPLATE"); sig != "" {
+				steps = templatePreview(m, func() *ggui.Probe { return p }, sig, os.Getenv("MAKO_PREVIEW_TEMPLATE_CALL"), do, frames, shot)
+			}
 			// MAKO_PREVIEW_FORGE names a clone of a repository on a forge,
 			// whose forge tab is rendered in place of the rest.
 			if dir := os.Getenv("MAKO_PREVIEW_FORGE"); dir != "" {

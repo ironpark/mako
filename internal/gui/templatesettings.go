@@ -25,12 +25,18 @@ import (
 // arguments it takes and their types, and its prompt. A template is saved
 // to its file on its own, and checked as the composer would read it
 // first. A file that does not read is listed with why, to fix by hand.
+// The built-in templates are listed too, to read: Copy to edit makes a
+// template of the user's of the name, which stands in for the built-in
+// until it is deleted.
 
 // templateDraft is a template as the page edits it.
 type templateDraft struct {
 	ID int
 	// File is the name the template was saved under, "" until it is.
 	File string
+	// From is the built-in it stands in for, "" for none: one it was
+	// copied from, or whose name its file has.
+	From string
 	templateFields
 	// Saved is the template as it was last read or written, to tell
 	// edits by.
@@ -52,7 +58,7 @@ type argDraft struct {
 	ID                               int
 	Name, Default, Options, Describe string
 	Type                             prompttmpl.Type
-	Required                         bool
+	Required, Rest                   bool
 }
 
 // templateTypeLabels name the types, in English for T.
@@ -64,9 +70,17 @@ var templateTypeLabels = map[string]string{
 // templatePage is the page's state while it is shown.
 type templatePage struct {
 	drafts *ggui.StateValue[[]templateDraft]
-	broken *ggui.StateValue[[]prompttmpl.Broken]
-	open   *ggui.StateValue[int] // the draft unfolded, 0 for none
-	nextID int
+	// builtins are the built-in templates, each with the ID of its line.
+	builtins []builtinLine
+	broken   *ggui.StateValue[[]prompttmpl.Broken]
+	open     *ggui.StateValue[int] // the draft unfolded, 0 for none
+	nextID   int
+}
+
+// builtinLine is a built-in template as the page lists it.
+type builtinLine struct {
+	ID int
+	T  *prompttmpl.Template
 }
 
 func newTemplatePage() *templatePage {
@@ -75,8 +89,45 @@ func newTemplatePage() *templatePage {
 		broken: ggui.State[[]prompttmpl.Broken](nil).WithEqual(deepEqual),
 		open:   ggui.State(0),
 	}
+	for _, b := range prompttmpl.BuiltinTemplates() {
+		pg.builtins = append(pg.builtins, builtinLine{ID: pg.id(), T: b})
+	}
 	pg.reload()
 	return pg
+}
+
+// shownBuiltins are the built-in templates no template of the user's, nor
+// a file that does not read, stands in for. Reactive.
+func (pg *templatePage) shownBuiltins() []builtinLine {
+	drafts, broken := pg.drafts.Get(), pg.broken.Get()
+	var out []builtinLine
+	for _, b := range pg.builtins {
+		name := b.T.Name
+		if !slices.ContainsFunc(drafts, func(d templateDraft) bool { return d.File == name || d.From == name }) &&
+			!slices.ContainsFunc(broken, func(x prompttmpl.Broken) bool { return x.Name == name }) {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// builtin is the built-in template whose line is id, nil for none.
+func (pg *templatePage) builtin(id int) *prompttmpl.Template {
+	for _, b := range pg.builtins {
+		if b.ID == id {
+			return b.T
+		}
+	}
+	return nil
+}
+
+// copyBuiltin starts a template of the user's as a copy of the built-in
+// t, unsaved, standing in for it once saved, and unfolds it.
+func (pg *templatePage) copyBuiltin(t *prompttmpl.Template) {
+	d := pg.draftOf(t)
+	d.File, d.From = "", t.Name
+	pg.drafts.Set(append(slices.Clone(ggui.Peek(pg.drafts)), d))
+	pg.open.Set(d.ID)
 }
 
 func (pg *templatePage) id() int { pg.nextID++; return pg.nextID }
@@ -101,9 +152,12 @@ func (pg *templatePage) draftOf(t *prompttmpl.Template) templateDraft {
 	d := templateDraft{ID: pg.id(), File: t.Name, templateFields: templateFields{
 		Name: t.Name, Description: t.Description, Agents: strings.Join(t.Agents, ", "), Body: t.Body,
 	}}
+	if prompttmpl.BuiltinTemplate(t.Name) != nil {
+		d.From = t.Name
+	}
 	for _, a := range t.Args {
 		ad := argDraft{ID: pg.id(), Name: a.Name, Type: a.Type, Options: strings.Join(a.Options, ", "),
-			Describe: a.Description, Required: a.Required}
+			Describe: a.Description, Required: a.Required, Rest: a.Rest}
 		if a.Default != nil {
 			ad.Default = *a.Default
 		}
@@ -121,7 +175,8 @@ func (d templateFields) template() *prompttmpl.Template {
 	}
 	for _, a := range d.Args {
 		arg := prompttmpl.Arg{Name: strings.TrimSpace(a.Name), Type: a.Type,
-			Description: strings.TrimSpace(a.Describe), Required: a.Required}
+			Description: strings.TrimSpace(a.Describe), Required: a.Required,
+			Rest: a.Rest && (a.Type == prompttmpl.String || a.Type == prompttmpl.Text || a.Type == "")}
 		if arg.Type == prompttmpl.Choice {
 			arg.Options = splitList(a.Options)
 		}
@@ -209,6 +264,10 @@ func (pg *templatePage) checkName(id int, name string) error {
 	if !prompttmpl.ValidName(name) {
 		return errors.New(T("A template's name has no spaces, slashes or colons"))
 	}
+	// A built-in's name is taken but by a copy of it, made to stand in.
+	if prompttmpl.BuiltinTemplate(name) != nil && !slices.ContainsFunc(ggui.Peek(pg.drafts), func(d templateDraft) bool { return d.ID == id && d.From == name }) {
+		return fmt.Errorf(T("There is a built-in template named %s; copy it to edit it"), name)
+	}
 	for _, d := range ggui.Peek(pg.drafts) {
 		if d.ID != id && (strings.TrimSpace(d.Name) == name || d.File == name) {
 			return fmt.Errorf(T("There is already a template named %s"), name)
@@ -251,6 +310,9 @@ func (pg *templatePage) save(id int) {
 	}
 	pg.update(id, func(d *templateDraft) {
 		d.File, d.Name, d.Err = t.Name, t.Name, ""
+		if d.From != t.Name {
+			d.From = "" // renamed, it stands in for none
+		}
 		d.Saved = d.templateFields
 	})
 }
@@ -311,16 +373,25 @@ func templateSettings(m *model) ggui.Widget {
 			}
 			b.WriteString(")")
 		}
+		for _, l := range pg.shownBuiltins() {
+			fmt.Fprintf(&b, "b%d", l.ID)
+		}
 		return b.String()
 	})
 	// Beside the list, on a wide page, the template open shows, or the
 	// first while none is.
 	shown := ggui.Derived(func() int {
-		drafts, o := pg.drafts.Get(), pg.open.Get()
-		if slices.ContainsFunc(drafts, func(d templateDraft) bool { return d.ID == o }) || len(drafts) == 0 {
+		drafts, builtins, o := pg.drafts.Get(), pg.shownBuiltins(), pg.open.Get()
+		switch {
+		case slices.ContainsFunc(drafts, func(d templateDraft) bool { return d.ID == o }),
+			slices.ContainsFunc(builtins, func(l builtinLine) bool { return l.ID == o }):
 			return o
+		case len(drafts) > 0:
+			return drafts[0].ID
+		case len(builtins) > 0:
+			return builtins[0].ID
 		}
-		return drafts[0].ID
+		return o
 	})
 	broken := ggui.View(pg.broken, func(broken []prompttmpl.Broken) ggui.Widget {
 		if len(broken) == 0 {
@@ -360,17 +431,24 @@ func templateSettings(m *model) ggui.Widget {
 	}
 	list := ggui.Key(shape, func(string) ggui.Widget {
 		drafts := ggui.Peek(pg.drafts)
+		builtins := ggui.Untrack(pg.shownBuiltins)
 		items := func(inline bool) ggui.Widget {
+			var items []ggui.Widget
 			if len(drafts) == 0 {
-				return card(widget.Box(muted(widget.Text(T("No templates yet. Add one below.")).Size(13))).Pad(14, 16))
+				items = append(items, widget.Box(muted(widget.Text(T("No templates of yours yet. Add one below.")).Size(13))).Pad(14, 16))
 			}
-			items := make([]ggui.Widget, len(drafts))
-			for i, d := range drafts {
-				items[i] = templateItem(m, pg, shown, d, inline)
+			for _, d := range drafts {
+				items = append(items, templateItem(m, pg, shown, d, inline))
+			}
+			for _, l := range builtins {
+				items = append(items, builtinItem(m, pg, shown, l, inline))
 			}
 			return card(items...)
 		}
 		detail := ggui.Key(shown, func(id int) ggui.Widget {
+			if b := pg.builtin(id); b != nil {
+				return builtinDetail(m, pg, b)
+			}
 			if id == 0 {
 				return widget.Box()
 			}
@@ -449,8 +527,11 @@ func templateEditor(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 		compactField(T("Description"), T("Shown beside its name in Chat's list."),
 			ui.TextField(pg.field(id, func(d *templateDraft) *string { return &d.Description })).Name(T("Template description"))),
 	}
-	for _, a := range d.Args {
-		children = append(children, argCard(pg, id, a, mono))
+	if d.From != "" {
+		children = append(children, muted(widget.Text(Tf("Stands in for the built-in //%s; deleting it brings the built-in back.", d.From)).Size(12)))
+	}
+	for i, a := range d.Args {
+		children = append(children, argCard(pg, id, a, i == len(d.Args)-1, mono))
 	}
 	children = append(children,
 		widget.Row(ui.ButtonOf(widget.Row(icon("plus").Size(14), widget.Text(T("Add argument")).Size(13)).Gap(6),
@@ -471,9 +552,13 @@ func templateEditor(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 		ui.Button(T("Revert"), func() { pg.revert(id) }).Ghost().BindDisabled(not(revertable)),
 		widget.Spacer(),
 		ui.Button(T("Delete template"), func() {
+			body := T("Its file is deleted from the templates folder.")
+			if from := ggui.Untrack(func() string { return pg.draft(id).From }); from != "" {
+				body = Tf("Its file is deleted from the templates folder, and the built-in //%s is used again.", from)
+			}
 			m.askConfirm(confirmation{
 				Title:  Tf("Delete //%s?", ggui.Untrack(func() string { return pg.draft(id).Name })),
-				Body:   T("Its file is deleted from the templates folder."),
+				Body:   body,
 				Action: T("Delete"),
 				Run:    func() { pg.remove(m, id) },
 			})
@@ -488,8 +573,9 @@ func not(b ggui.Readable[bool]) ggui.Readable[bool] {
 }
 
 // argCard is an argument of an unfolded template: its name, type,
-// whether it is required, its default, a choice's options and what it is.
-func argCard(pg *templatePage, id int, a argDraft, mono ggui.TextStyle) ggui.Widget {
+// whether it is required, its default, a choice's options and what it is;
+// the last, if it is text, whether it takes the rest of a call.
+func argCard(pg *templatePage, id int, a argDraft, last bool, mono ggui.TextStyle) ggui.Widget {
 	arg := a.ID
 	kind := argField(pg, id, arg, func(a *argDraft) *prompttmpl.Type { return &a.Type })
 	required := argField(pg, id, arg, func(a *argDraft) *bool { return &a.Required })
@@ -505,8 +591,13 @@ func argCard(pg *templatePage, id int, a argDraft, mono ggui.TextStyle) ggui.Wid
 			Name(T("Remove argument")),
 	).Gap(8).Align(widget.AlignCenter)
 	isChoice := ggui.Map(kind, func(k prompttmpl.Type) bool { return k == prompttmpl.Choice })
+	isText := ggui.Map(kind, func(k prompttmpl.Type) bool { return last && (k == prompttmpl.String || k == prompttmpl.Text) })
 	return widget.Box(widget.Column(
 		head,
+		ggui.If(isText, func() ggui.Widget {
+			return ui.Switch(argField(pg, id, arg, func(a *argDraft) *bool { return &a.Rest }),
+				T("Takes the rest of the call as typed, unquoted")).Name(T("Takes the rest"))
+		}),
 		ggui.If(isChoice, func() ggui.Widget {
 			return compactField(T("Options"), T("The values it takes, with commas between."),
 				ui.TextField(argField(pg, id, arg, func(a *argDraft) *string { return &a.Options })).

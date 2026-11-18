@@ -105,11 +105,15 @@ func placeholderOptions(args []argDraft, locals []string, q placeholderQuery) []
 		if q.Open != "" {
 			all = append(all, tag("/"+q.Open, T("Close the block")))
 		}
+		if q.Open == prompttmpl.TagRaw {
+			break // what it holds is text, up to its end
+		}
 		all = append(all,
 			tag("#if", T("Show text while a condition holds")),
 			tag("#each", T("Repeat text for each item of a list")),
 			tag("#match", T("Pick text by a value, arm by arm")),
 			tag("#snippet", T("Define text to render again")),
+			tag("#raw", T("Keep text as it is written, tags and all")),
 			tag("@const", T("Name a value within a block")),
 			tag("@render", T("Put a snippet's text here")))
 	case prompttmpl.CompleteArm:
@@ -236,8 +240,8 @@ func templateBody(pg *templatePage, id int, mono ggui.TextStyle) ggui.Widget {
 			input.Replace(o.Name + "}}")
 		case prompttmpl.CompleteTag:
 			input.Select(q.Brace, q.Caret+prompttmpl.ClosingOne(after))
-			if o.Name[0] == '/' {
-				input.Replace("{" + o.Name + "}")
+			if o.Name[0] == '/' || o.Name == "#raw" {
+				input.Replace("{" + o.Name + "}") // it takes nothing
 				break
 			}
 			// What the tag takes is written next; a match's name is

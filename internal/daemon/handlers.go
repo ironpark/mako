@@ -63,6 +63,14 @@ func (d *Daemon) handleAnswerApproval(ctx context.Context, stream *transport.Str
 		if !ok {
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
 		}
+		// A template is saved by the window that allows it, on whichever
+		// node that is.
+		if d.templateAsks.owns(r.GetApprovalId()) {
+			if err := d.templateAsks.answer(r.GetApprovalId(), templateAnswer{decision: r.GetDecision(), option: r.GetOption(), message: r.GetMessage()}); err != nil {
+				return nil, err
+			}
+			return s.Info(), nil
+		}
 		// A change of the window layout is shown, and so answered, on
 		// its own node alone.
 		if d.layouts.owns(r.GetApprovalId()) {

@@ -52,6 +52,7 @@ type Daemon struct {
 	conversations conversations
 	approvals     approvals
 	layouts       windowLayouts // the window layouts' changes staged here, and what is node-local of them; see layouts.go
+	templateAsks  templateAsks  // the templates agents ask the user to save; see agent_templates.go
 	peers         *peerTable
 
 	// ln is the socket front-ends reach the daemon on, at socket; only

@@ -9,6 +9,7 @@ import (
 	"github.com/ironpark/ggui"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/prompttmpl"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -62,8 +63,8 @@ func TestTheComposerSendsATemplatesPrompt(t *testing.T) {
 		}
 		return names
 	})
-	if strings.Join(got, ",") != "//review" {
-		t.Fatalf("listed %v, want only the template for Claude", got)
+	if strings.Join(got, ",") != "//review,//"+prompttmpl.MakerName {
+		t.Fatalf("listed %v, want only the template for Claude, and the built-in", got)
 	}
 	p.Type(ggui.Mods{}, ggui.KeyTab)
 	p.Frame()

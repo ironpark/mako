@@ -286,5 +286,12 @@ func (m *model) answerSelected(decision string) {
 	if !ok || a == nil || len(a.GetQuestions()) > 0 || a.GetKind() == protocol.ToolExitPlan {
 		return
 	}
+	if a.GetKind() == protocol.ToolTemplate && decision == protocol.DecisionAllow {
+		// Allowed, it is this window's to save.
+		if r := readTemplateRequest(a); r.err == nil && !r.taken() {
+			m.saveTemplateApproval(id, a)
+		}
+		return
+	}
 	m.decide(id, a, decision)()
 }

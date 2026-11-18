@@ -18,7 +18,8 @@ import (
 )
 
 // Prompt templates: Markdown files in the templates folder beside
-// gui.json (see internal/prompttmpl). A composer's draft that begins with
+// gui.json (see internal/prompttmpl), and those mako comes with, which a
+// file of the name stands in for. A composer's draft that begins with
 // two slashes, and has no space yet, lists the templates for the session's
 // agent in the composer's menu (commands.go). Once a template's name is
 // followed by a space, the menu's place shows the arguments it takes, and
@@ -62,7 +63,7 @@ func (m *model) readTemplates(state *chatState, force bool) {
 	if err != nil {
 		return
 	}
-	got, _ := prompttmpl.LoadDir(dir)
+	got, _ := prompttmpl.LoadAll(dir)
 	menu.templates.Set(got)
 }
 
@@ -83,8 +84,12 @@ func (m *model) templateItems(id string, state *chatState, draft string) []menuI
 	matches := matchByName(ours, strings.ToLower(call.Name), func(t *prompttmpl.Template) string { return t.Name })
 	items := make([]menuItem, len(matches))
 	for i, t := range matches {
+		tag := T("template")
+		if t.Builtin {
+			tag = T("built-in")
+		}
 		items[i] = menuItem{
-			name: "//" + t.Name, usage: t.Usage(), description: t.Description, tag: T("template"),
+			name: "//" + t.Name, usage: t.Usage(), description: t.Description, tag: tag,
 			complete: "//" + t.Name + " ", take: func() { m.takeTemplate(id, t) },
 		}
 	}
@@ -103,8 +108,9 @@ func (m *model) takeTemplate(id string, t *prompttmpl.Template) {
 }
 
 // expandDraft gives send what session id's draft sends: the prompt its
-// template makes, when it calls one, read from its file as it is now;
-// otherwise, and for a name no file has, the draft as it is. A template
+// template makes, when it calls one, read from its file as it is now, or
+// the built-in of the name; otherwise, and for a name neither has, the
+// draft as it is. A template
 // that runs JavaScript makes its prompt off the UI goroutine, and sends
 // once it has. A wrong call sends nothing, saying why over the composer.
 func (m *model) expandDraft(id string, state *chatState, draft string, send func(string)) {
@@ -119,7 +125,7 @@ func (m *model) expandDraft(id string, state *chatState, draft string, send func
 		send(draft)
 		return
 	}
-	t, err := prompttmpl.Load(dir, call.Name)
+	t, err := prompttmpl.Find(dir, call.Name)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		send(draft)

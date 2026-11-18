@@ -576,6 +576,18 @@ work goes on in; `allow` with no option goes on in `default`, asking before
 edits; `deny` with a `message` keeps the agent planning, told what to
 change.
 
+A prompt template an agent asks to save (kind `template`, the MCP tool
+`save_template`, revision 28) is the window's to keep: its `input` is
+`{"name", "content", "replace"}`, the template's name and whole file, and
+`detail` how it is called. Any window on a node that may answer it shows
+it; the one the user allows it in saves the file in its own `templates/`
+folder, refusing a name it has a template of, or a built-in's, unless
+`replace` is set, and then answers `allow` with `option` `saved`. An
+`allow` without that option, from a front-end that saves no templates,
+saves nothing and is refused to the agent; `deny`'s `message` reaches it.
+The daemon asks only while a front-end watches for approvals, here or on
+a peer, and has checked the template as the window reads one.
+
 When nobody is watching, the agent asks in its terminal, as it would without
 mako.
 
@@ -1046,7 +1058,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 27) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 28) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end

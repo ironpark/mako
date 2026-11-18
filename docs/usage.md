@@ -82,6 +82,7 @@ mako allow <node>             # let in a machine that asked
 - **Prompt templates.** Type `//` in Chat's composer to pick one of your
   [prompt templates](#prompt-templates) by name; Tab completes it, and
   Enter sends the prompt it makes from the arguments after it.
+  `//template` and a description has the agent write one for you.
 
 ## The Android app
 
@@ -264,14 +265,37 @@ on it, and add the address it prints to the other nodes' `p2p.relays`.
 ### Prompt templates
 
 Prompt templates are edited in Settings ▸ Templates, and kept as Markdown
-files in `templates/` beside `config.json`, each named for its file:
-`templates/review.md` is `//review`. The page checks a template as Chat
-would read it before saving it; saving rewrites the file, so comments in
-a file written by hand are not kept. YAML front
-matter says what a template is for, which agents it is offered to and the
-arguments it takes; the rest is the prompt, written as Svelte writes
-markup, its values in double braces so that the braces of JSON and code in
-a prompt stay text.
+files in `templates/` beside `config.json`: the window's own, which fills
+a template in and sends the prompt to whichever node the session is on.
+The page checks a template as Chat would read it before saving it; saving
+rewrites the file, so comments in a file written by hand are not kept.
+
+mako also comes with **built-in templates**, listed in Chat and in
+Settings ▸ Templates as built in. A file of yours of the same name stands
+in for one: **Copy to edit** on its page makes that file, and deleting it
+brings the built-in back. There is one so far, `//template`, which has the
+session's agent write a template from what you describe after it, no
+quotes needed:
+
+```
+//template review a Go file for data races, with how strict as a choice
+```
+
+The agent saves it with the mako MCP server's
+[`save_template`](agent-mcp.md#prompt-templates), which checks it as this
+page does. Chat shows you the template, and replacing one of yours shows
+what changes; it is saved among your templates, in the folder of the
+window you allow it in, only once you do, and is in `//` at once. It is
+offered to the agents that get the mako MCP server. What it tells the
+agent of the language is the reference below, word for word.
+
+<!-- prompttmpl:reference: the built-in //template's own, in internal/prompttmpl/builtin/maker.md; go test ./internal/prompttmpl -run TestReferenceInDocs -update writes it here -->
+A template is a Markdown file named for it: `review.md` is `//review`. A
+name has no spaces, slashes, backslashes or colons, and does not begin
+with a dot. YAML front matter says what a template is for, which agents
+it is offered to and the arguments it takes; the rest is the prompt,
+written as Svelte writes markup, its values in double braces so that the
+braces of JSON and code in a prompt stay text.
 
 ```markdown
 ---
@@ -281,6 +305,7 @@ args:
   - name: file
     type: string
     required: true
+    description: The file to review
   - name: depth
     type: integer
     default: 2
@@ -293,10 +318,18 @@ Review {{file}} {{depth}} levels deep, in a {{tone}} tone.
 You are {{agent}} ({{model}}) working in {{project}} on {{branch}}.
 ```
 
-An argument's `type` is `string` (one line, the default), `text` (lines and
-all), `integer`, `number`, `boolean` (`true`/`false`, `yes`/`no`) or
+The front matter has `description`, `agents` and `args`, and an argument
+`name`, `type`, `description`, `required`, `default`, `options` and
+`rest`; a field of another name is refused. An argument's name is letters,
+digits, `_` and `-`, beginning with a letter or `_`, and is not a built-in
+variable's. Its `type` is `string` (one line, the default), `text` (lines
+and all), `integer`, `number`, `boolean` (`true`/`false`, `yes`/`no`) or
 `choice` (one of its `options`). It can be `required`, or have a
-`default`; otherwise it is empty when left out.
+`default`; otherwise it is empty when left out. The last argument, if it
+is a `string` or `text`, can take the `rest` of a call as it is typed,
+spaces and quotes and all, once those before it are given: with `rest:
+true` on an argument `ask` after `file`, `//explain main.go why it leaks`
+gives `ask` the text `why it leaks`.
 
 The built-in variables are `agent`, `profile`, `model` (as the agent's
 latest reply reports it), `project`, `branch`, `repo` and `date`.
@@ -377,18 +410,24 @@ var lines = n => n === 1 ? "one line" : n + " lines";
 Review {{file}}, about {{lines(depth * 40)}}.
 ````
 
+`{#raw}` … `{/raw}` keeps the text it holds as it is written: its `{{…}}`s,
+tags and ` ```js ` fences are text, for a prompt that shows an agent
+another template. A raw block in it pairs with its own end, so one can
+show one too.
+
 A prompt compiles to JavaScript, run on QuickJS in a sandbox of its own
 ([qngg](https://github.com/ironpark/qngg): no files, no network, nothing
-printed) for at most five seconds; a prompt of text and names alone is
-filled without it. JavaScript that does not parse is refused when the
-template is saved; one that throws, or runs too long, stops the call,
-saying where.
+printed) for at most five seconds and in 64 MiB; a prompt of text and
+names alone is filled without it. JavaScript that does not parse is
+refused when the template is saved; one that throws, or runs too long,
+stops the call, saying where.
 
 Call a template in Chat with its arguments in order, or by name, quoting
 what has spaces: `//review "src/my file.go" tone=blunt`. The line over the
 composer shows the arguments the template takes and what is wrong with
 those given, and a wrong call is not sent. A template not for the session's
 agent is not listed, and a `//` draft naming no template is sent as typed.
+<!-- /prompttmpl:reference -->
 
 ## Security
 

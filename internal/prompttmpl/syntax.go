@@ -19,12 +19,17 @@ import (
 //	{#snippet name(params)} … {/snippet}  {@render name(args)}
 //	```js … ```                    a script, its value in its place
 //	```js run … ```                a script that only runs
+//	{#raw} … {/raw}                text kept as it is written
 //
 // Expressions are JavaScript, run on QuickJS in a sandbox (run.go). They
 // read the arguments by name, or as args, and the built-in variables by
 // name, or as vars; a {{name}} of an argument is its value as the call
 // gave it. A line of tags alone goes with them, so blocks over lines of
 // their own leave no blank lines; a { that begins no tag is text.
+//
+// A raw block holds text as it is written, tags, braces and fences and
+// all, for a prompt that shows another its syntax; the raw blocks within
+// it pair up, so that one can show a raw block too.
 
 // Tag kinds.
 const (
@@ -38,6 +43,7 @@ const (
 	TagEnd     = "end"     // {/if}, {/each}, {/match}, {/snippet}
 	TagConst   = "const"   // {@const declaration}
 	TagRender  = "render"  // {@render call}
+	TagRaw     = "raw"     // {#raw}, text up to its {/raw} as it is
 )
 
 // Tag is a tag of a prompt: its kind; the block it opens, closes or is
@@ -53,17 +59,21 @@ type Tag struct {
 }
 
 var (
-	openTagRe  = regexp.MustCompile(`^#(if|each|match|snippet)(?:\s+(.*?))?\s*$`)
-	closeTagRe = regexp.MustCompile(`^/(if|each|match|snippet)\s*$`)
+	openTagRe  = regexp.MustCompile(`^#(if|each|match|snippet|raw)(?:\s+(.*?))?\s*$`)
+	closeTagRe = regexp.MustCompile(`^/(if|each|match|snippet|raw)\s*$`)
 	atTagRe    = regexp.MustCompile(`^@(const|render)(?:\s+(.*?))?\s*$`)
 	elseTagRe  = regexp.MustCompile(`^:else(?:\s+if(?:\s+(.*?))?)?\s*$`)
 )
 
-// scan finds body's tags and its {{…}}s, but for those in a script's code.
-func scan(body string) ([]Tag, []Placeholder) {
+// rawTagRe is a raw block's start or end, which pair up within one.
+var rawTagRe = regexp.MustCompile(`\{([#/])raw\s*\}`)
+
+// scan finds body's tags and its {{…}}s, but for those in a script's code
+// or a raw block, and its scripts, but for those in a raw block.
+func scan(body string) ([]Tag, []Placeholder, []Script) {
 	var tags []Tag
 	var holes []Placeholder
-	scripts := Scripts(body)
+	scripts := fences(body)
 	var open []string
 	for i := 0; i < len(body); i++ {
 		if body[i] != '{' {
@@ -100,6 +110,20 @@ func scan(body string) ([]Tag, []Placeholder) {
 			continue
 		}
 		t.Start, t.End = i, end+1
+		if t.Kind == TagRaw {
+			// What it holds is text, up to the end that pairs with it, or
+			// the prompt's end, which the parser refuses.
+			tags = append(tags, t)
+			from, to := rawEnd(body, t.End)
+			if from < 0 {
+				from, to = len(body), len(body)
+			} else {
+				tags = append(tags, Tag{Kind: TagEnd, Block: TagRaw, Start: from, End: to})
+			}
+			scripts = slices.DeleteFunc(scripts, func(s Script) bool { return s.Start >= t.End && s.Start < from })
+			i = to - 1
+			continue
+		}
 		switch t.Kind {
 		case TagIf, TagEach, TagMatch, TagSnippet:
 			open = append(open, t.Block)
@@ -120,7 +144,21 @@ func scan(body string) ([]Tag, []Placeholder) {
 		}
 	}
 	standalone(body, tags, holes, scripts)
-	return tags, holes
+	return tags, holes, scripts
+}
+
+// rawEnd is where the {/raw} that ends the raw block whose start ends at
+// from is, [start, end); -1s when none does.
+func rawEnd(body string, from int) (int, int) {
+	depth := 1
+	for _, m := range rawTagRe.FindAllStringSubmatchIndex(body[from:], -1) {
+		if body[from+m[2]] == '#' {
+			depth++
+		} else if depth--; depth == 0 {
+			return from + m[0], from + m[1]
+		}
+	}
+	return -1, -1
 }
 
 // tagOf reads what a tag holds between its braces, within the blocks
@@ -131,7 +169,7 @@ func tagOf(in string, open []string) (Tag, bool) {
 		inner = open[len(open)-1]
 	}
 	if m := openTagRe.FindStringSubmatch(in); m != nil {
-		return Tag{Kind: map[string]string{"if": TagIf, "each": TagEach, "match": TagMatch, "snippet": TagSnippet}[m[1]], Block: m[1], Arg: m[2]}, true
+		return Tag{Kind: map[string]string{"if": TagIf, "each": TagEach, "match": TagMatch, "snippet": TagSnippet, "raw": TagRaw}[m[1]], Block: m[1], Arg: m[2]}, true
 	}
 	if m := closeTagRe.FindStringSubmatch(in); m != nil {
 		return Tag{Kind: TagEnd, Block: m[1]}, true
@@ -245,11 +283,15 @@ func closingDouble(s string, from int) int {
 }
 
 // Tags are body's tags, in order.
-func Tags(body string) []Tag { tags, _ := scan(body); return tags }
+func Tags(body string) []Tag { tags, _, _ := scan(body); return tags }
 
 // Placeholders are body's {{…}}s, in order, but for those in a script's
-// code.
-func Placeholders(body string) []Placeholder { _, holes := scan(body); return holes }
+// code or a raw block.
+func Placeholders(body string) []Placeholder { _, holes, _ := scan(body); return holes }
+
+// Scripts are the fenced blocks of JavaScript in body, in order, but for
+// those in a raw block.
+func Scripts(body string) []Script { _, _, scripts := scan(body); return scripts }
 
 // node is a piece of a prompt read: text, a {{…}}, a script, a tag of its
 // own or a block with what it holds.
@@ -289,7 +331,7 @@ type piece struct {
 
 // parseBody reads body into what it holds.
 func parseBody(body string) ([]*node, error) {
-	tags, holes := scan(body)
+	tags, holes, scripts := scan(body)
 	var pieces []piece
 	for i := range tags {
 		pieces = append(pieces, piece{from: tags[i].From, to: tags[i].To, tag: &tags[i]})
@@ -297,7 +339,6 @@ func parseBody(body string) ([]*node, error) {
 	for i := range holes {
 		pieces = append(pieces, piece{from: holes[i].Start, to: holes[i].End, hole: &holes[i]})
 	}
-	scripts := Scripts(body)
 	for i := range scripts {
 		pieces = append(pieces, piece{from: scripts[i].Start, to: scripts[i].End, script: &scripts[i]})
 	}
@@ -366,7 +407,10 @@ func (p *parser) run() ([]*node, *Tag, error) {
 // block reads the block open opens, up to its end, which it takes.
 func (p *parser) block(open *Tag) (*node, error) {
 	n := &node{kind: open.Kind}
-	if open.Arg == "" {
+	if open.Kind == TagRaw && open.Arg != "" {
+		return nil, fmt.Errorf("%s: a raw block takes nothing after raw", tagText(open))
+	}
+	if open.Arg == "" && open.Kind != TagRaw {
 		return nil, fmt.Errorf("%s needs %s", tagText(open), map[string]string{"if": "a condition", "each": "a list", "match": "what to match", "snippet": "a name"}[open.Block])
 	}
 	body, stop, err := p.run()
@@ -441,6 +485,9 @@ func (p *parser) block(open *Tag) (*node, error) {
 			return nil, fmt.Errorf("%s: a snippet is name(params)", tagText(open))
 		}
 		n.expr, n.as, n.body = m[1], m[2], body
+	case TagRaw:
+		// It is the text it holds, which the scan left as text.
+		n.kind, n.text = "text", nodesText(body)
 	}
 	if err := end(stop); err != nil {
 		return nil, err
@@ -537,5 +584,5 @@ func tagText(t *Tag) string {
 	case TagRender:
 		return "{@render " + t.Arg + "}"
 	}
-	return strings.TrimSpace("{#" + t.Block + " " + t.Arg + "}")
+	return strings.TrimSpace("{#"+t.Block+" "+t.Arg) + "}"
 }

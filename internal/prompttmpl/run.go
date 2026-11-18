@@ -43,8 +43,9 @@ type Script struct {
 	Run        bool
 }
 
-// Scripts are the fenced blocks of JavaScript in body, in order.
-func Scripts(body string) []Script {
+// fences are the fenced blocks of JavaScript in body, in order, raw
+// blocks or not.
+func fences(body string) []Script {
 	var out []Script
 	for _, m := range scriptFence.FindAllStringSubmatchIndex(body, -1) {
 		out = append(out, Script{Start: m[0], End: m[1], Code: body[m[4]:m[5]], Run: m[2] >= 0})

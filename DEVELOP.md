@@ -289,6 +289,16 @@ writes into it. A block's events go to the agent as messages from
 form through the window, filled in and sent as the user would
 (`internal/gui/preview_agentui.go`).
 
+Prompt templates (`internal/prompttmpl`) are the window's, kept beside
+its `config.json`, with built-ins embedded in the binary
+(`internal/prompttmpl/builtin`). The built-in `//template` has the agent
+call `save_template` (`internal/daemon/agent_templates.go`), which checks
+the template and asks for it as an approval on the session; the window
+the user allows it in saves it (`internal/gui/templateapproval.go`).
+`MAKO_PREVIEW_TEMPLATE` with `-render-dir` renders that way through the
+window, as an agent driven by something else answers it
+(`internal/gui/preview_template.go`).
+
 ## The desktop app
 
 `mako-gui` is built with ggui (`internal/gui`) and laid out after

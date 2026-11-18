@@ -29,7 +29,12 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 27
+const Revision = 28
+
+// RevisionTemplates adds the approvals of kind template, which ask the
+// window to save a prompt template an agent wrote (save_template), and
+// the option TemplateSaved, with which a window answers one it saved.
+const RevisionTemplates = 28
 
 // RevisionAgentUI adds the blocks agents show in the window (show_ui):
 // agent:<session>/<id> on watch_block and block_event, ListAgentBlocks,
@@ -213,6 +218,7 @@ const (
 	ToolQuestion  = "question"  // asks the user
 	ToolExitPlan  = "exit_plan" // puts a plan to the user, as Claude's ExitPlanMode
 	ToolLayout    = "layout"    // changes a window layout document; see LayoutStage
+	ToolTemplate  = "template"  // saves a prompt template in the window; see TemplateSaved
 	ToolCommand   = "command"   // what a slash command the user typed printed
 	ToolSummary   = "summary"   // the summary a compaction leaves
 )

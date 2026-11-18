@@ -386,6 +386,7 @@ func (d *Daemon) projectAgentServer(peer *agentPeer) *sdk.Server {
 	})
 	d.addLayoutTools(server, peer)
 	d.addUITools(server, peer)
+	d.addTemplateTools(server, peer)
 	return server
 }
 

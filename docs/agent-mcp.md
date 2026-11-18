@@ -151,6 +151,37 @@ reads it within a second; the window asks the user to allow what it asks
 for, and it runs in the same sandbox as any plugin. Its block goes into
 the layout with `patch_layout`, which the user allows as any change.
 
+## Prompt templates
+
+The user's [prompt templates](usage.md#prompt-templates), called in Chat
+as `//name`, are the window's: Markdown files in the `templates/` folder
+beside the window's `config.json`, filled in there whichever node your
+session is on. So you do not write one into a folder; you hand it to the
+user's window with one more tool, as the built-in `//template` asks.
+
+| Tool | Arguments | Result |
+| --- | --- | --- |
+| `save_template` | `name`, `content`, optional `replace` | The template's `name` and `call`, how the user calls it: `//name` and the arguments it takes. |
+
+`name` is letters, digits, `.`, `_` and `-`, beginning with a letter or
+digit, at most 64; `content` is the whole file, front matter and prompt,
+at most 32 KiB. The template is checked first as mako reads templates, and
+what is wrong is returned as the error, word for word, as the window says
+it: an unknown front matter field, an argument's unknown type, a
+`{#match}` that misses a value, a name defined nowhere, JavaScript that
+does not parse. Fix it and call again.
+
+Then the user is asked, as an approval on your session that every window
+watching may show: Chat shows the template, or what it changes in one of
+the user's it replaces. The template is saved in the folder of the window
+the user allows it in, and is in that window's `//` at once; declined,
+the tool returns an error with what the user said. A name the user has a
+template of is declined by the window unless `replace` is set, and a
+built-in template's name is refused unless it is, when the file stands in
+for the built-in. With no window watching, the tool is refused at once,
+and it gives up after 10 minutes without an answer. Nothing is saved
+without the user.
+
 ## Choose a profile by its description
 
 In **Settings ▸ Agents**, add a profile and describe its specialties in

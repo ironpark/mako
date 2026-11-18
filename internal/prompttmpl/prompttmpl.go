@@ -71,12 +71,17 @@ type Arg struct {
 	Required    bool     `yaml:"required,omitempty"`
 	Default     *string  `yaml:"default,omitempty"`
 	Options     []string `yaml:"options,omitempty,flow"`
+	// Rest has the last argument take the rest of a call as it is typed,
+	// spaces and quotes and all, so free text needs no quotes.
+	Rest bool `yaml:"rest,omitempty"`
 }
 
 // Template is a prompt template.
 type Template struct {
-	Name        string `yaml:"-"`
-	Path        string `yaml:"-"`
+	Name string `yaml:"-"`
+	Path string `yaml:"-"` // "" for a built-in
+	// Builtin is set for a template mako comes with (builtin.go).
+	Builtin     bool   `yaml:"-"`
 	Description string `yaml:"description,omitempty"`
 	// Agents are the agents the template is for, by name or as
 	// agent:profile; none for every agent.
@@ -144,6 +149,13 @@ func Complete(before string) (c Completion, ok bool) {
 		}
 		return c, true
 	}
+	if open, _ := openBlock(before); open == TagRaw {
+		// What a raw block holds is text: all it can take is its end.
+		if m := openTag.FindStringSubmatchIndex(before); m != nil && strings.HasPrefix(before[m[2]:], "/") {
+			return found(CompleteTag, m)
+		}
+		return Completion{}, false
+	}
 	if m := openArm.FindStringSubmatchIndex(before); m != nil {
 		if open, _ := openBlock(before[:m[0]]); open != "" && open != "snippet" {
 			return found(CompleteArm, m)
@@ -167,7 +179,7 @@ func openBlock(s string) (block, subject string) {
 	var open []Tag
 	for _, t := range Tags(s) {
 		switch t.Kind {
-		case TagIf, TagEach, TagMatch, TagSnippet:
+		case TagIf, TagEach, TagMatch, TagSnippet, TagRaw:
 			open = append(open, t)
 		case TagEnd:
 			if len(open) > 0 {
@@ -282,6 +294,12 @@ func (t *Template) check() error {
 		if a.Type != Choice && len(a.Options) > 0 {
 			return fmt.Errorf("argument %q: only a choice has options", a.Name)
 		}
+		if a.Rest && i != len(t.Args)-1 {
+			return fmt.Errorf("argument %q: only the last argument takes the rest", a.Name)
+		}
+		if a.Rest && a.Type != String && a.Type != Text {
+			return fmt.Errorf("argument %q: only a string or text takes the rest", a.Name)
+		}
 		if a.Default != nil {
 			v, err := a.convert(*a.Default)
 			if err != nil {
@@ -320,6 +338,9 @@ func (t *Template) Usage() string {
 		kind := string(a.Type)
 		if a.Type == Choice {
 			kind = strings.Join(a.Options, "|")
+		}
+		if a.Rest {
+			kind += "…"
 		}
 		switch {
 		case a.Required:
@@ -433,25 +454,22 @@ func ParseCall(draft string) (Call, bool) {
 
 // Bind gives each of the template's arguments its value from a call's
 // arguments, split as a shell splits words: each a value in turn, or
-// name=value for an argument by its name. An argument not given takes its
-// default, or nothing.
+// name=value for an argument by its name. An argument that takes the rest
+// is given what follows once those before it are, as it is typed. An
+// argument not given takes its default, or nothing.
 func (t *Template) Bind(args string) (map[string]string, error) {
-	words, err := agentspec.SplitArgs(args)
-	if err != nil {
-		return nil, &ArgError{Kind: Unquoted}
-	}
 	values := map[string]string{}
+	rest := t.restArg()
 	next := 0 // the argument the next positional value is for
-	for _, w := range words {
+	take := func(w string) error {
 		if name, v, ok := strings.Cut(w, "="); ok {
-			if a := t.arg(name); a != nil {
+			if a := t.arg(name); a != nil && !a.Rest {
 				if _, given := values[name]; given {
-					return nil, &ArgError{Kind: Twice, Arg: name}
+					return &ArgError{Kind: Twice, Arg: name}
 				}
-				if values[name], err = a.convert(v); err != nil {
-					return nil, err
-				}
-				continue
+				var err error
+				values[name], err = a.convert(v)
+				return err
 			}
 		}
 		for next < len(t.Args) {
@@ -461,13 +479,45 @@ func (t *Template) Bind(args string) (map[string]string, error) {
 			next++
 		}
 		if next >= len(t.Args) {
-			return nil, &ArgError{Kind: Extra, Value: w}
+			return &ArgError{Kind: Extra, Value: w}
 		}
 		a := &t.Args[next]
-		if values[a.Name], err = a.convert(w); err != nil {
-			return nil, err
-		}
+		var err error
+		values[a.Name], err = a.convert(w)
 		next++
+		return err
+	}
+	if rest == nil {
+		words, err := agentspec.SplitArgs(args)
+		if err != nil {
+			return nil, &ArgError{Kind: Unquoted}
+		}
+		for _, w := range words {
+			if err := take(w); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		for t.waiting(values, rest) {
+			end := wordsEnd(args)
+			words, err := agentspec.SplitArgs(args[:end])
+			if err != nil {
+				return nil, &ArgError{Kind: Unquoted}
+			}
+			if len(words) == 0 {
+				break
+			}
+			if err := take(words[0]); err != nil {
+				return nil, err
+			}
+			args = args[end:]
+		}
+		if v := strings.TrimSpace(args); v != "" {
+			var err error
+			if values[rest.Name], err = rest.convert(v); err != nil {
+				return nil, err
+			}
+		}
 	}
 	for _, a := range t.Args {
 		if _, given := values[a.Name]; given {
@@ -483,6 +533,61 @@ func (t *Template) Bind(args string) (map[string]string, error) {
 		}
 	}
 	return values, nil
+}
+
+// restArg is the argument that takes the rest of a call, nil for none.
+func (t *Template) restArg() *Arg {
+	if n := len(t.Args); n > 0 && t.Args[n-1].Rest {
+		return &t.Args[n-1]
+	}
+	return nil
+}
+
+// waiting reports whether an argument before rest has no value yet.
+func (t *Template) waiting(values map[string]string, rest *Arg) bool {
+	for _, a := range t.Args {
+		if a.Name == rest.Name {
+			return false
+		}
+		if _, given := values[a.Name]; !given {
+			return true
+		}
+	}
+	return false
+}
+
+// wordsEnd is where the first word of s ends, as agentspec.SplitArgs
+// splits words: at the blank after it, outside quotes, or s's end.
+func wordsEnd(s string) int {
+	var quote byte
+	in := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case quote == '\'':
+			if c == '\'' {
+				quote = 0
+			}
+		case quote == '"':
+			if c == '\\' && i+1 < len(s) && strings.IndexByte(`"\$`, s[i+1]) >= 0 {
+				i++
+			} else if c == '"' {
+				quote = 0
+			}
+		case c == '\'' || c == '"':
+			quote, in = c, true
+		case c == '\\' && i+1 < len(s) && strings.IndexByte(" \t\n'\"$", s[i+1]) >= 0:
+			i++
+			in = true
+		case c == ' ' || c == '\t' || c == '\n':
+			if in {
+				return i
+			}
+		default:
+			in = true
+		}
+	}
+	return len(s)
 }
 
 func (t *Template) arg(name string) *Arg {
