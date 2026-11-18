@@ -314,4 +314,33 @@
     <string name="block_failed">플러그인이 실패했습니다</string>
     <string name="block_stale">플러그인의 새 버전이 실패해 마지막으로 동작한 버전이 실행 중입니다</string>
     <string name="block_call_failed">패널의 마지막 호출이 실패했습니다</string>
+    <!-- Home: the projects; a project: its sessions as tabs. -->
+    <string name="projects">프로젝트</string>
+    <string name="pinned_sessions">고정된 세션</string>
+    <string name="show_all_n">%1$d개 모두 보기</string>
+    <string name="all_spaces">모든 스페이스</string>
+    <string name="choose_space">스페이스 선택</string>
+    <string name="panels_of">%1$s의 패널</string>
+    <string name="panels_note">플러그인과 에이전트가 띄운 패널</string>
+    <string name="new_session_here">여기서 새 세션</string>
+    <string name="new_session_in">%1$s에서 새 세션</string>
+    <string name="no_sessions_short">세션 없음</string>
+    <plurals name="n_need_you">
+        <item quantity="other">응답 필요 %1$d</item>
+    </plurals>
+    <plurals name="n_working">
+        <item quantity="other">작업 중 %1$d</item>
+    </plurals>
+    <string name="unreachable">%1$s에 연결할 수 없습니다</string>
+    <string name="unreachable_body">마지막으로 받은 상태를 보여 줍니다.</string>
+    <string name="new_tab">새 탭</string>
+    <string name="tabs_of">탭 %2$d개 중 %1$d번째, %3$s. 모든 탭을 봅니다.</string>
+    <string name="previous_tab">이전 탭</string>
+    <string name="next_tab">다음 탭</string>
+    <string name="no_tabs">%1$s에 세션이 없습니다</string>
+    <string name="no_tabs_body">여기서 시작하면 탭으로 열립니다.</string>
+    <string name="stop_session_menu">세션 중지…</string>
+    <string name="status_asks">질문 있음</string>
+    <string name="status_plan">계획 검토</string>
+    <string name="remove_from_list">목록에서 제거</string>
 </resources>

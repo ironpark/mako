@@ -324,7 +324,7 @@ internal class SessionWorkspace(val view: WorkspaceView, sessions: List<SessionI
      * one folder name the desktop names by more of their paths, or by
      * their computers when even that does not set them apart.
      */
-    private fun labels(nodeName: (String) -> String): Map<String, String> {
+    internal fun labels(nodeName: (String) -> String): Map<String, String> {
         val out = sections.associate { it.key to it.label }.toMutableMap()
         val twins = sections.filter { it.folder.isNotEmpty() && it.name.isEmpty() }.groupBy { folderName(it.folder) }
         for ((name, same) in twins) {

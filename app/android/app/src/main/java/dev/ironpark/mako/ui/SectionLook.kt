@@ -18,6 +18,11 @@ import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -81,4 +86,17 @@ internal fun LookGlyph(look: Look, modifier: Modifier = Modifier, size: Dp = 16.
         path.close()
         drawPath(path, tint, style = Stroke(width = 2 * unit, join = StrokeJoin.Round))
     }
+}
+
+/**
+ * ProjectTile is a project's mark at the size of a row's leading icon: its
+ * look's glyph on a tile of its colour, faint, so that the colour leads
+ * without filling.
+ */
+@Composable
+internal fun ProjectTile(look: Look, modifier: Modifier = Modifier, size: Dp = 40.dp) {
+    Box(
+        modifier.size(size).clip(RoundedCornerShape(size * 0.3f)).background(look.tint().copy(alpha = 0.16f)),
+        contentAlignment = Alignment.Center,
+    ) { LookGlyph(look, size = size * 0.5f) }
 }
