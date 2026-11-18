@@ -1,9 +1,7 @@
 package dev.ironpark.mako.ui
 
-import dev.ironpark.mako.v2.AgentBlock
 import dev.ironpark.mako.v2.SessionInfo
 import dev.ironpark.mako.workspace.Folder
-import dev.ironpark.mako.workspace.LayoutPage
 import dev.ironpark.mako.workspace.Look
 import dev.ironpark.mako.workspace.Scope
 import dev.ironpark.mako.workspace.WorkspaceView
@@ -141,6 +139,17 @@ internal fun homeProjects(items: List<ProjectItem>, space: Int, filter: Filter, 
 internal fun needingYou(sessions: List<SessionInfo>): List<SessionInfo> =
     sessions.filter { it.needsYou() }.sortedByDescending { it.waitingSince() }
 
+/**
+ * now, in the order before has their IDs, those new to it first in now's
+ * own order: a list that keeps still under a finger and takes in what
+ * comes, where now alone would move a row each time it re-sorts.
+ */
+internal fun <T> keptOrder(before: List<String>, now: List<T>, id: (T) -> String): List<T> {
+    val at = before.withIndex().associate { it.value to it.index }
+    val (known, fresh) = now.partition { id(it) in at }
+    return fresh + known.sortedBy { at.getValue(id(it)) }
+}
+
 /** The project session id is in; null for one in none listed. */
 internal fun List<ProjectItem>.projectOf(id: String): ProjectItem? = firstOrNull { p -> p.sessions.any { it.id == id } }
 
@@ -204,8 +213,8 @@ internal fun needYouElsewhere(sessions: List<SessionInfo>, project: ProjectItem?
  * out for the space shown, which the desktop draws beside every project,
  * and the blocks its own sessions' agents show.
  */
-internal fun projectPanels(pages: List<LayoutPage>, agents: List<AgentBlock>, sessions: Set<String>): List<Panel> =
-    panels(pages, agents.filter { it.sessionId in sessions })
+internal fun projectPanels(sources: PanelSources, sessions: Set<String>): List<Panel> =
+    sources.panels.filter { it.kind != KIND_AGENT || it.session in sessions }
 
 /**
  * A project key as a route carries it: base64 of its UTF-8, safe in a path

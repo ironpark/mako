@@ -429,6 +429,9 @@ class Mesh(
     /** Whether node shows this device its blocks, plugins' and agents'. */
     fun showsBlocks(node: String): Boolean = revision(node) >= REVISION_PEER_BLOCKS
 
+    /** Whether node lists its panels, with their titles, for this device (protocol.RevisionPanels). */
+    fun listsPanels(node: String): Boolean = revision(node) >= REVISION_PANELS
+
     /**
      * The computer whose panels the app shows: the one whose workspace it
      * shows, or, while this device's own node holds the workspace, the
@@ -511,6 +514,9 @@ class Mesh(
 
         /** The first protocol revision whose daemon serves its blocks to a node it lets in (protocol.RevisionPeerBlocks). */
         const val REVISION_PEER_BLOCKS = 30L
+
+        /** The first protocol revision whose daemon lists its panels, titled, to a node it lets in (protocol.RevisionPanels). */
+        const val REVISION_PANELS = 35L
 
         /** How a node's link stands, as Node.link says (protocol.Link*). */
         const val LINK_LINKING = "linking"

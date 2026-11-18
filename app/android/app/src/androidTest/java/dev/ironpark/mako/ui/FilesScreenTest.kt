@@ -8,6 +8,8 @@ import com.google.protobuf.ByteString
 import dev.ironpark.mako.R
 import dev.ironpark.mako.net.ProjectFiles
 import dev.ironpark.mako.v2.*
+// The test sits in ui, whose DiffLine is an approval's: the diff's is the protocol's.
+import dev.ironpark.mako.v2.DiffLine
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test

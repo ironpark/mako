@@ -346,4 +346,11 @@
     <string name="status_asks">Asks you</string>
     <string name="status_plan">Plan ready</string>
     <string name="remove_from_list">Remove from the list</string>
+    <string name="chart_line">Line chart</string>
+    <string name="chart_bar">Bar chart</string>
+    <string name="chart_sparkline">Sparkline</string>
+    <string name="chart_series">Series %d</string>
+    <string name="chart_no_data">No data</string>
+    <string name="block_unknown_kind">Can\'t be shown in this version of the app</string>
+    <string name="panel_missing">Not installed on %1$s</string>
 </resources>

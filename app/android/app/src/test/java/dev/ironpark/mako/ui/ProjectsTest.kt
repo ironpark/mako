@@ -170,9 +170,25 @@ class ProjectsTest {
             AgentBlock.newBuilder().setName("agent:w1/board").setSessionId("w1").setTitle("Board").setAgent("claude").build(),
             AgentBlock.newBuilder().setName("agent:zz/form").setSessionId("zz").setTitle("Form").build(),
         )
-        val got = projectPanels(pages, agents, setOf("a1", "w1"))
+        val got = projectPanels(PanelSources(pages, agents, ""), setOf("a1", "w1"))
         assertEquals(listOf("plugin:ci-status/ci", "agent:w1/board"), got.map { it.block })
         assertEquals("Board", got[1].title)
+        // From revision 35 the computer's own list titles them, its agents' blocks among them.
+        val listed = listOf(
+            dev.ironpark.mako.v2.Panel.newBuilder().setBlock("plugin:ci-status/ci").setTitle("CI").setKind("plugin").build(),
+            dev.ironpark.mako.v2.Panel.newBuilder().setBlock("agent:w1/board").setTitle("Board").setKind("agent").build(),
+            dev.ironpark.mako.v2.Panel.newBuilder().setBlock("agent:zz/form").setTitle("Form").setKind("agent").build(),
+        )
+        val titled = projectPanels(PanelSources(pages, emptyList(), "", listed), setOf("a1", "w1"))
+        assertEquals(listOf("CI", "Board"), titled.map { it.title })
+    }
+
+    @Test fun theTrayKeepsItsOrderAndTakesInWhatComes() {
+        val before = listOf("b", "a", "c")
+        // Re-sorted now as a, b, d, with c gone: d is new and goes first, the rest keep their places.
+        assertEquals(listOf("d", "b", "a"), keptOrder(before, listOf("a", "b", "d")) { it })
+        assertEquals(listOf("x", "y"), keptOrder(emptyList(), listOf("x", "y")) { it })
+        assertEquals(emptyList<String>(), keptOrder(before, emptyList<String>()) { it })
     }
 
     @Test fun aRouteCarriesAnyKey() {

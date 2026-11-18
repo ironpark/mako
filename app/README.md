@@ -120,7 +120,13 @@ and opens a session's conversation and its terminal.
   show (`show_ui`), each opening a page of its own, framed with the
   plugin or the agent it comes from: the page's top bar holds the app's
   own words, and the block's title, the block's to choose, sits in the
-  frame's strip after its origin. A page coming back from the background
+  frame's strip after its origin. A computer from revision 35 on lists its
+  panels by their titles (`list_panels`), which the lists, home's row and
+  a page's frame show before the block says its own; a plugin the computer
+  lacks is listed last, dimmed, saying so. A block's charts, line, bar and
+  sparkline, are drawn on the phone, their bounds checked again there
+  (`ui/BlockChart.kt`); a kind newer than the app says it cannot be shown
+  rather than leave a hole. A page coming back from the background
   with the link down keeps the tree it showed, under a note that it is
   reconnecting; a block whose plugin the computer does not have says so,
   and is not tried again until the page shows anew. The phone does not

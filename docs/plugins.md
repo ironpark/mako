@@ -163,15 +163,16 @@ schema: point your editor at it.
 | `code` | `ui.code(text, language, opts)` | Monospaced. |
 | `progress` | `ui.progress(value, opts)` | From 0 to 1. |
 | `divider` | `ui.divider(opts)` | A hairline. |
-| `chart` | `ui.chart(type, series, opts)` | `type` `line`, `bar` or `sparkline` (a line alone, no axes, as tall as a line of text); `series` 1 to 4 of `{name, values, tone}`, each up to 200 finite numbers, 600 in all; `opts.labels` name the points, as many as each series has. A series's colour is its `tone`, or the theme's chart colours in order. It sends no messages. |
+| `chart` | `ui.chart(type, series, opts)` | `type` `line`, `bar` or `sparkline` (a line alone, no axes, as tall as a line of text); `series` 1 to 4 of `{name, values, tone}`, each up to 200 finite numbers, 600 in all; `opts.labels` name the points, as many as each series has, and `opts.caption` the chart. A series's colour is its `tone`, or the theme's chart colours in order. It sends no messages. |
 
 Options (`opts`, or the node's methods of the same names): `key`, `tone`,
 `weight`, `size`, `grow`, `gap`, `icon`, `disabled`, `onTap`, `onChange`,
 `onSubmit`, `placeholder`, and a chart's `labels`.
 
 The chart is new in revision 33 of the protocol: a window or phone that
-does not know a kind draws nothing in its place, and the Android app does
-not draw charts yet. A block that must read there says what a chart
+does not know a kind draws nothing in its place (the Android app, from
+the release after 0.5.0, draws charts, and says it cannot show a kind it
+does not know). A block that must read on older ones says what a chart
 shows in text beside it too.
 
 **Colours are tokens**: `tone` is `muted`, `faint`, `accent`, `success`,

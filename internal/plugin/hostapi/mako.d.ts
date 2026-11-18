@@ -83,6 +83,8 @@ export interface NodeOptions {
   /** Sent with an input's text last when Return is pressed. */
   onSubmit?: Message;
   placeholder?: string;
+  /** A chart's caption, said above it and read out with it. */
+  caption?: string;
   /** A chart's names of its points, as many as each series has values. */
   labels?: (string | number)[];
 }

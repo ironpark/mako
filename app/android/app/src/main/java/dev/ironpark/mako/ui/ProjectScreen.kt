@@ -201,7 +201,7 @@ internal fun ProjectScreen(
     val shown = tabs.firstOrNull { it.id == current }
     val panelsNode = remember(view, nodes) { mesh.panelsNode() }
     val sources = rememberPanelSources(mesh, panelsNode, space)
-    val panels = remember(sources, tabs) { projectPanels(sources.pages, sources.agents, tabs.map { it.id }.toSet()) }
+    val panels = remember(sources, tabs) { projectPanels(sources, tabs.map { it.id }.toSet()) }
     val act = actor()
     val elsewhere = needYouElsewhere(sessions, project)
     // No tab to show because the computers they are on cannot be reached, rather than none being there.
@@ -448,7 +448,7 @@ private fun TabOverview(
                                     if (i > 0) HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant)
                                     // An agent's panel is named by its session rather than its ID.
                                     val owner = tabs.firstOrNull { p.block.startsWith("agent:" + it.id + "/") }
-                                    PanelRow(if (owner != null) p.copy(detail = dotted(owner.agent, owner.label())) else p) { onPanel(p) }
+                                    PanelRow(if (owner != null) p.copy(detail = dotted(owner.agent, owner.label())) else p, mesh.nodeName(panelsNode)) { onPanel(p) }
                                 }
                             }
                         }
@@ -481,14 +481,14 @@ private fun TabCard(
     val preview = rememberPreview(mesh, s)
     val shape = RoundedCornerShape(16.dp)
     val outline = when {
-        current -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+        current -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
         s.needsYou() -> s.statusColor().copy(alpha = 0.5f)
         else -> Color.Transparent
     }
     Box(modifier) {
         Surface(
             shape = shape, color = MaterialTheme.colorScheme.surfaceContainerLow,
-            modifier = Modifier.fillMaxWidth().height(172.dp).border(if (current) 2.dp else 1.dp, outline, shape).clip(shape)
+            modifier = Modifier.fillMaxWidth().height(172.dp).border(if (current) 1.5.dp else 1.dp, outline, shape).clip(shape)
                 .semantics { selected = current; role = Role.Button }
                 .combinedClickable(onClick = onClick, onLongClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)

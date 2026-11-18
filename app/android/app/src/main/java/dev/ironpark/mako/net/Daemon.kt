@@ -211,6 +211,14 @@ class Daemon(private val socket: () -> String?) {
     suspend fun agentBlocks(node: String): List<AgentBlock> =
         call(envelope { listAgentBlocks = ListAgentBlocks.newBuilder().setNodeId(node).build() }).agentBlocks.blocksList
 
+    /**
+     * node's panels, as it lists them for a node it lets in (revision 35):
+     * the blocks its window's layouts place and its agents show, each by
+     * name, with its title and kind.
+     */
+    suspend fun panels(node: String): List<dev.ironpark.mako.v2.Panel> =
+        call(envelope { listPanels = dev.ironpark.mako.v2.ListPanels.newBuilder().setNodeId(node).build() }).panels.panelsList
+
     companion object {
         /** How much of a file one staged piece carries, well inside a frame. */
         const val STAGE_CHUNK = 4 shl 20

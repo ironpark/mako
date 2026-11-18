@@ -328,7 +328,11 @@ private fun ProjectList(
     var filter by state.filter
     val items = remember(view, sessions, nodes) { projectIndex(view, sessions, mesh::nodeName) }
     val inSpace = remember(items, spaceAt) { items.filter { spaceAt == 0 || it.space == 0 || it.space == spaceAt } }
-    val tray = remember(sessions) { needingYou(sessions) }
+    // The tray keeps its order while it shows, so a row does not move under a finger: what comes in
+    // goes on top, what is answered leaves; it sorts afresh when home is opened again.
+    var trayOrder by remember { mutableStateOf(emptyList<String>()) }
+    val tray = remember(sessions, trayOrder) { keptOrder(trayOrder, needingYou(sessions)) { it.id } }
+    LaunchedEffect(tray.map { it.id }) { trayOrder = tray.map { it.id } }
     val working = inSpace.sumOf { p -> p.sessions.count { it.working() } }
     val shown = remember(items, spaceAt, filter, view) { homeProjects(items, spaceAt, filter, view.pinnedProjects) }
     val pinnedSessions = remember(view, sessions) {
@@ -341,6 +345,9 @@ private fun ProjectList(
     var trayAll by rememberSaveable { mutableStateOf(false) }
     val act = actor()
     val panelsNode = remember(view, nodes) { mesh.panelsNode() }
+    // The computer's panels by their titles, asked for now and then: home names them, the panels' page follows them.
+    val homePanels = rememberPanelSources(mesh, panelsNode.takeIf { onPanels != null }, view.spaceId(spaceAt), poll = HOME_PANELS_POLL)
+    val panelTitles = homePanels.listed?.let { homePanels.panels.filter { it.kind != KIND_MISSING }.map { it.title } }
 
     LazyColumn(state = state.list, contentPadding = PaddingValues(bottom = 112.dp), modifier = Modifier.fillMaxSize()) {
         if (down.isNotEmpty()) item(key = "down") {
@@ -448,7 +455,9 @@ private fun ProjectList(
             )
         }
         // The computer's panels, for those beside no project in view.
-        if (onPanels != null && panelsNode != null && mesh.showsBlocks(panelsNode) && filter == Filter.All) item(key = "panels") {
+        // A computer that lists its panels and has none offers none; an older one is offered, as it cannot say.
+        val anyPanels = panelTitles == null || homePanels.panels.isNotEmpty()
+        if (onPanels != null && panelsNode != null && mesh.showsBlocks(panelsNode) && anyPanels && filter == Filter.All) item(key = "panels") {
             Column(Modifier.animateItem().padding(top = 8.dp)) {
                 Surface(
                     onClick = { onPanels(panelsNode) },
@@ -461,8 +470,11 @@ private fun ProjectList(
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
                             Text(stringResource(R.string.panels_of, mesh.nodeName(panelsNode)), style = MaterialTheme.typography.bodyLarge)
-                            Text(stringResource(R.string.panels_note), style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                panelTitles?.takeIf { it.isNotEmpty() }?.joinToString(" · ") ?: stringResource(R.string.panels_note),
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
                         }
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.outline)
                     }
@@ -477,6 +489,9 @@ private fun ProjectList(
  * sessions, not another phone the computers know, whose link is down.
  */
 internal fun Node.unreachable(): Boolean = linkDown() && os != "android"
+
+/** How often home asks the computer for its panels' titles: they change seldom, and home is on screen long. */
+private const val HOME_PANELS_POLL = 20_000L
 
 /** How many of the sessions waiting for you the tray shows before it offers the rest. */
 private const val TRAY_CAP = 3

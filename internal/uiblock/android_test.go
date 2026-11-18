@@ -72,11 +72,30 @@ var uiCases = []uiCase{
 		{"kind":"code","key":"c","text":"go test ./...","language":"sh"}]}`},
 	{name: "stack-and-row", before: `{"kind":"stack","children":[{"kind":"row","key":"r","children":[{"kind":"text","text":"a","grow":1},{"kind":"button","key":"go","text":"Go","onTap":["go"]}]}]}`,
 		next: `{"kind":"stack","children":[{"kind":"row","key":"r","gap":12,"children":[{"kind":"button","key":"go","text":"Go","icon":"play","onTap":["go"],"disabled":true},{"kind":"text","text":"a","grow":1}]}]}`},
+	// Charts (revision 33): their series and labels change by update, as
+	// any field does, and a chart comes and goes as any node.
+	{name: "chart-points", before: `{"kind":"column","children":[{"kind":"chart","key":"lat","chart":"line","text":"Latency",
+		"labels":["09","10","11"],"series":[{"name":"p50","values":[3,4.5,5]},{"name":"p95","tone":"warning","values":[9,12,11]}]}]}`,
+		next: `{"kind":"column","children":[{"kind":"chart","key":"lat","chart":"line","text":"Latency",
+		"labels":["10","11","12","13"],"series":[{"name":"p50","values":[4.5,5,3,6]},{"name":"p95","tone":"danger","values":[12,11,14,-2]}]}]}`},
+	{name: "chart-kind-and-series", before: `{"kind":"column","children":[{"kind":"chart","key":"c","chart":"line",
+		"series":[{"name":"a","values":[1,2,3]},{"name":"b","values":[3,2,1]}]}]}`,
+		next: `{"kind":"column","children":[{"kind":"chart","key":"c","chart":"bar","text":"Builds","size":"small",
+		"labels":["mon","tue","wed"],"series":[{"name":"passed","tone":"success","values":[5,0,7]}]}]}`},
+	{name: "chart-insert-remove", before: `{"kind":"column","children":[
+		{"kind":"text","key":"t","text":"CPU"},{"kind":"chart","key":"spark","chart":"sparkline","series":[{"values":[0.1,0.4,0.2,0.9]}]}]}`,
+		next: `{"kind":"column","children":[
+		{"kind":"chart","key":"bars","chart":"bar","labels":["a"],"series":[{"name":"one","values":[42]}]},
+		{"kind":"text","key":"t","text":"CPU","tone":"muted"}]}`},
 
 	// Ops written by hand: what a front-end must do with them, or refuse.
 	{name: "update-keeps-children", before: `{"kind":"column","children":[{"kind":"row","key":"r","children":[{"kind":"text","text":"kept"}]}]}`,
 		ops: []*protocol.UiOp{{Op: protocol.UiUpdate, Id: "/r", Node: &protocol.UiNode{Id: "/r", Kind: "row", Gap: 3,
 			Children: []*protocol.UiNode{{Id: "/r/#9", Kind: "text", Text: "ignored"}}}}}},
+	{name: "update-chart-series", before: `{"kind":"column","children":[{"kind":"chart","key":"c","chart":"bar","labels":["x","y"],
+		"series":[{"name":"a","values":[1,2]},{"name":"b","values":[2,1]}]}]}`,
+		ops: []*protocol.UiOp{{Op: protocol.UiUpdate, Id: "/c", Node: &protocol.UiNode{Id: "/c", Kind: "chart", Chart: "line",
+			Labels: []string{"x"}, Series: []*protocol.UiSeries{{Name: "only", Tone: "accent", Values: []float64{0.5}}}}}}},
 	{name: "insert-at-end", before: `{"kind":"column","children":[{"kind":"text","key":"a","text":"A"}]}`,
 		ops: []*protocol.UiOp{{Op: protocol.UiInsert, Parent: "", Index: 1, Node: &protocol.UiNode{Id: "/b", Kind: "text", Text: "B"}}}},
 	{name: "replace-root-by-id", before: `{"kind":"text","text":"old"}`,

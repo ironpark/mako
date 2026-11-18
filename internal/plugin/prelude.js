@@ -147,11 +147,16 @@ const ui = Object.freeze({
   progress: (v, o) => node("progress", { progress: Number(v) }, o),
   divider: (o) => node("divider", {}, o),
   // A chart: "line", "bar" or "sparkline", of series [{ name, values,
-  // tone }], its points named by opts.labels.
-  chart: (type, series, o) => node("chart", {
-    chart: String(type),
-    series: children(series).map((s) => ({ name: String(s.name ?? ""), tone: s.tone ?? "", values: children(s.values ?? []).map(Number) })),
-  }, o),
+  // tone }], its points named by opts.labels and itself by opts.caption,
+  // which is the node's text.
+  chart: (type, series, o) => {
+    const { caption, ...rest } = o || {};
+    return node("chart", {
+      chart: String(type),
+      text: String(caption ?? ""),
+      series: children(series).map((s) => ({ name: String(s.name ?? ""), tone: s.tone ?? "", values: children(s.values ?? []).map(Number) })),
+    }, rest);
+  },
 });
 
 // What the daemon calls.

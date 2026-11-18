@@ -177,7 +177,9 @@ internal fun UiTree(n: UiNode, form: BlockForm, events: BlockEvents, inLine: Boo
         }
         "progress" -> LinearProgressIndicator(progress = { n.progress.toFloat() }, modifier = modifier.fillMaxWidth().padding(vertical = 4.dp))
         "divider" -> HorizontalDivider(modifier.padding(vertical = 2.dp))
-        else -> Box(modifier) // the daemon sends no other kind
+        "chart" -> UiChart(n, modifier)
+        // A kind newer than the app: said quietly, rather than left a hole.
+        else -> UnknownNode(modifier)
     }
 }
 
