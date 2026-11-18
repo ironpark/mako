@@ -428,8 +428,9 @@ reload로 바로 뜬다. manifest의 권한은 사용자가 한 번 승인해야
         - `variants.compact`가 있는 문서는 `version: 2`로 쓴다. 이전 창은
           느슨하게 읽어 `root`를 그린다. 폰은 compact 루트(없으면 기본 루트)를
           깊이 우선으로 걸어 블록을 페이지로 늘어놓는다.
-        - 기본 레지스트리 URL은 `internal/plugin/store`의 `DefaultRegistry`
-          상수이고 아직 자리표시자다. 실제 저장소를 만들어야 한다.
+        - 기본 레지스트리는 `https://github.com/ironpark/mako-plugins`이다
+          (`internal/plugin/store`의 `DefaultRegistry`). 아직 올라온 플러그인은
+          없다.
         - 프로토콜 리비전 29(스토어), 30(피어의 블록).
 
 ## 열린 질문

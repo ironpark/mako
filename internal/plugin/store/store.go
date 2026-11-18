@@ -40,11 +40,9 @@ import (
 )
 
 // DefaultRegistry is the registry every node starts with, which the
-// project's owner keeps. It is reviewed no more than any other.
-//
-// PLACEHOLDER: the repository does not exist yet. Until the owner makes
-// it, reading it fails quietly: only when the user opens the store, or
-// has installed a plugin, and then as an error beside it in Settings.
+// project's owner keeps. It is reviewed no more than any other. It is
+// read only when the user opens the store or has installed a plugin, and
+// failing to read it is an error beside it in Settings, no more.
 const DefaultRegistry = "https://github.com/ironpark/mako-plugins"
 
 // RefreshEvery is how often the registries are read again while a
