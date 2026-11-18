@@ -97,9 +97,15 @@ and opens a session's conversation and its terminal.
   computer whose workspace shows: the blocks its plugins draw, as its
   window lays them out for the space shown, and the blocks its agents
   show (`show_ui`), each opening a page of its own, framed with the
-  plugin or the agent it comes from. The phone does not lay a window
-  out: it shows the blocks of the document's `variants.compact`, or of
-  the document folded, in order (docs/protocol.md, "Layout documents");
+  plugin or the agent it comes from: the page's top bar holds the app's
+  own words, and the block's title, the block's to choose, sits in the
+  frame's strip after its origin. A page coming back from the background
+  with the link down keeps the tree it showed, under a note that it is
+  reconnecting; a block whose plugin the computer does not have says so,
+  and is not tried again until the page shows anew. The phone does not
+  lay a window out: it shows the blocks of the document's
+  `variants.compact`, or of the document folded, in order
+  (docs/protocol.md, "Layout documents");
   it has screens of its own for the window's other panels. Taps, toggles,
   choices and a form's submit go to the computer, and the block's
   changes come back as they happen. The computer serves them to a node
@@ -107,7 +113,8 @@ and opens a session's conversation and its terminal.
   starting it again stays the computer's: a block that waits says so.
   The ops that change a block's tree are applied with a port of the
   daemon's (`blocks/UiOps.kt`), and the pages read with a port of
-  `internal/layoutdoc` (`workspace/WindowLayout.kt`), both checked
+  `internal/layoutdoc` (`workspace/WindowLayout.kt`, its JSON read as
+  Go's encoding/json reads it, `workspace/Json.kt`), both checked
   against fixtures the Go tests make (`src/test/resources/blocks`):
   `go test ./internal/uiblock ./internal/layoutdoc -run Android` fails
   while they differ, and with `MAKO_ANDROID_FIXTURES=1` writes them

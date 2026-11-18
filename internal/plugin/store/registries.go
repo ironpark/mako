@@ -224,7 +224,10 @@ func (s *Store) refreshOlder(ctx context.Context, age time.Duration) {
 }
 
 // read fetches a registry's index and keeps it, or keeps the error and
-// the index read before.
+// the index read before. An index whose blocklist is not the one kept
+// has every plugin look again at once, whatever asked for the reading (a
+// search, an install, the timer), so that a plugin newly blocked runs no
+// further.
 func (s *Store) read(ctx context.Context, r *reg) {
 	data, err := s.fetch.Get(ctx, r.index, registry.MaxIndexBytes, fetchIndexWithin)
 	var idx *registry.Index
@@ -233,21 +236,33 @@ func (s *Store) read(ctx context.Context, r *reg) {
 	}
 	now := s.cfg.Now()
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.regLocked(r.url) != r {
+		s.mu.Unlock()
 		return // removed meanwhile
 	}
 	if err != nil {
-		r.err = err.Error()
+		r.err = protocol.Printable(err.Error())
+		s.mu.Unlock()
 		// A registry that is not there yet, the default one among them,
 		// is an error beside it in Settings, not a warning in the log.
 		s.cfg.Log.Debug("plugin registry not read", "registry", r.url, "err", err)
 		return
 	}
+	changed := r.idx == nil && len(idx.Blocklist) > 0 || r.idx != nil && !sameBlocklist(r.idx.Blocklist, idx.Blocklist)
 	r.idx, r.fetched, r.err = idx, now, ""
 	if err := writeJSON(s.cachePath(r.url), cached{URL: r.url, Fetched: now, Index: data}); err != nil {
 		s.cfg.Log.Warn("plugin registry's index not kept", "registry", r.url, "err", err)
 	}
+	s.mu.Unlock()
+	if changed {
+		s.recheck()
+	}
+}
+
+// sameBlocklist says two blocklists hold the same entries in the same
+// order.
+func sameBlocklist(a, b []*registry.Block) bool {
+	return slices.EqualFunc(a, b, func(x, y *registry.Block) bool { return *x == *y })
 }
 
 // blockedLocked is why a registry blocks a plugin of the ID, version and

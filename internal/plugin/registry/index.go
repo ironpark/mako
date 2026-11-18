@@ -215,9 +215,11 @@ func (b *Block) check() error {
 }
 
 // Matches says the entry blocks a plugin of the ID, version and
-// publisher key ("" for a folder in development, which has none).
+// publisher key ("" for a folder in development, which has none). Keys
+// are compared by their bytes, so that no spelling of a key escapes an
+// entry naming it.
 func (b *Block) Matches(id, version, key string) bool {
-	return (b.ID == "" || b.ID == id) && (b.Version == "" || b.Version == version) && (b.Key == "" || b.Key == key)
+	return (b.ID == "" || b.ID == id) && (b.Version == "" || b.Version == version) && (b.Key == "" || pack.SameKey(b.Key, key))
 }
 
 // Newest is the entry's newest version for the Host API api, nil if none.

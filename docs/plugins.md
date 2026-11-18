@@ -299,15 +299,21 @@ included, so the node keeps itself safe:
 - **What is installed.** The daemon downloads the package the registry's
   index lists, checks its SHA-256 and size against the index, its
   signature against the publisher key the index lists, and its manifest
-  (the ID and version listed, read strictly: no `exec`), and only then
-  puts its files in `plugins/<id>/`. It runs once you allow what it asks
-  for, as any plugin.
+  (the ID and version listed, read strictly: no `exec`; the permissions
+  it asks for the set the index lists, which is what the store showed),
+  and only then puts its files in `plugins/<id>/`. It runs once you allow
+  what it asks for, as any plugin.
 - **The publisher's key is pinned** at the first install, with the
   registry it came from, on this node (`plugin-data/installs.json`). A
   version signed by another key is never taken as an update, from that
   registry or any other. Removing the plugin forgets the pin, what it was
   allowed and what it kept: installing another publisher's plugin of that
-  ID is then a first install, which starts with nothing allowed.
+  ID is then a first install, which starts with nothing allowed. The node
+  remembers the key it last installed each ID by (the last 256 IDs, in
+  `plugin-data/publishers.json`), and a first install by another key says
+  so, in the store and where the plugin asks to be allowed: *published by
+  a different key than the one you had before*, with both fingerprints.
+  It is a note: nothing is refused for it.
 - **The same ID in several registries** is several listings. An install
   names the registry when more than one lists the ID, and the plugin then
   follows that registry, and its key, for updates; another registry's
@@ -321,15 +327,32 @@ included, so the node keeps itself safe:
   and version, or publisher key. The node merges the lists of all its
   registries and applies them to every plugin it has, whichever registry
   it came from, and to a folder in development by its ID: a plugin
-  blocked stops, says why and by which registry, and can be neither
-  enabled nor updated while it is. Removing a registry lifts its list.
-  The lists are read at every install and every 6 hours while a plugin
-  is installed; out of reach, a registry's last list stands.
+  blocked stops at once, says why and by which registry, and can be
+  neither enabled nor updated while it is; none of its code runs from
+  then on, whatever asks it to (a block shown, an event, a command, a
+  setting, its folder read again). Removing a registry lifts its list.
+  The lists are read at every install, as the store is searched, and
+  every 6 hours while a plugin is installed; out of reach, a registry's
+  last list stands.
 - **Each node installs for itself.** A layout document placing a plugin's
   block on a node that lacks the plugin shows, in its place, *Install on
   this node* for each registry of the node that lists it.
 - **A folder in development is yours.** An install never replaces a
-  folder written by hand, and `remove` does not delete one.
+  folder written by hand, and `remove` does not delete one. Whether
+  `plugins/<id>/` is still the one installed is read from the folder: its
+  `mako-signature.json` and its contents' digest must be those pinned
+  (names starting with a dot, which no package holds, aside). A folder
+  written by hand in its place, or edited in place, is a folder in
+  development: its install is forgotten, with what the plugin installed
+  was allowed and kept, which the folder written in its place is not
+  given.
+- **An install cut short is settled.** An install pins the version it
+  puts in place as pending before it swaps the folder, and as installed
+  after. A daemon starting again, or another install, settles a pin to
+  the folder found, by its digest, puts back a folder moved aside for a
+  replacement that never came, and removes what an install or a removal
+  staged beside the plugins (`.install-*`, `.<id>.old-*`,
+  `.<id>.removed-*`).
 
 The node starts with one registry, the project's own, which you may
 remove (Settings ▸ Plugins ▸ Registries, or `mako plugins registries
@@ -423,13 +446,22 @@ https is refused, as are paths on the machine.
 The index is read strictly: a field it does not know, an ID twice, a
 version, key, hash, URL (https, a host name) or permission out of its
 grammar, or text with control or reordering characters is refused, and
-the registry shows the error, keeping what it gave before. `mako plugins
-index <checkout> <package> -url <download URL>` adds a package's version
-to a checkout's index (making one if there is none), writing it sorted
-and indented so that the change is small to review; it refuses a key
-other than the one the index lists for the ID, and a version listed
-already. Push the change and the package; the URL may redirect, to https,
-3 times at most.
+the registry shows the error, keeping what it gave before. A key is
+written in one way alone, as `keygen` writes it: base64url leaves the
+last character's low bits unused, and a key written with them set,
+though it reads as the same bytes, is refused in an index, a blocklist,
+a signature and `verify -key`. Text a registry, a package or a server
+writes reaches a terminal or the window with its control and reordering
+characters escaped (`\x1b`), and an error quotes no server's status
+text.
+
+`mako plugins index <checkout> <package> -url <download URL>` adds a
+package's version to a checkout's index (making one if there is none),
+writing it sorted and indented so that the change is small to review,
+with the permissions the package's manifest asks for, which a node
+checks the package against; it refuses a key other than the one the
+index lists for the ID, and a version listed already. Push the change
+and the package; the URL may redirect, to https, 3 times at most.
 
 ## For mako's developers
 
@@ -454,4 +486,9 @@ tests, not by a WIT toolchain: none is to be had from Go without cgo.
 requests to a test's server, for end-to-end runs; the daemon logs that it
 does. `MAKO_PLUGIN_REGISTRY_TEST=1` lets registries and packages be on
 loopback by http, and leaves the default registry out, so that a test
-reaches no registry on the internet.
+reaches no registry on the internet. Both are read only by a build with
+the `makotest` tag (`internal/testhooks`); any other build ignores them.
+The daemon's own HTTP for plugins and registries reaches public addresses
+alone: none that IANA's special-purpose registries do not mark global, and
+no IPv6 form of an IPv4 address (mapped, compatible, SIIT, NAT64, 6to4)
+but for a public one (`internal/plugin/publicaddr.go`).

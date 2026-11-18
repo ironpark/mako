@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ironpark/mako/internal/plugin"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // A registry is a git repository, added by its URL. A node reads only
@@ -65,6 +66,9 @@ func CheckURL(raw string, loopback bool) error {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return fmt.Errorf("%q is not an https URL", short(raw))
+	}
+	if strings.ContainsFunc(raw, protocol.Spoofing) {
+		return fmt.Errorf("%q holds control or reordering characters", short(raw))
 	}
 	host := u.Hostname()
 	local := loopback && isLoopback(host)

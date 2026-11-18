@@ -257,9 +257,14 @@ error { message: "unknown session \"7f3a…\"", code: "" }
 |---|---|
 | `changed` | A `write_file` was refused because the file changed since the writer read it. |
 | `unsupported` | The daemon does not know the request's type; it predates the caller. |
+| `no_plugin` | A `watch_block` or `block_event` of a plugin the node does not have, or a node that runs no plugins: asking again changes nothing until the plugin is installed (revision 31). |
 
 A daemon forwarding a request to a peer passes the peer's `code` back
-unchanged. The message gains a `remote: ` prefix at each hop.
+unchanged. The message gains a `remote: ` prefix at each hop. A message
+may quote what another party wrote, a registry, a package, a plugin or
+a server; its control and reordering characters but for a line break
+and a tab are sent escaped (`\x1b`, `\u202e`), so that a terminal
+printing it takes none as its own.
 
 An `error` does not end the stream: the daemon goes on reading requests.
 
@@ -842,7 +847,7 @@ the front-end to list them again.
 | `list_plugins` | `ListPlugins` | `plugins` | The node's plugins, by ID: each one's manifest (version, publisher, blocks, commands, settings and their values, a secret's never), the permissions it asks for, those allowed, those still `asked`, and its `state` (`waiting`, `denied`, `ready`, `running`, `failed`, `disabled`, and from revision 29 `blocked`) with an `error`; `stale` when the version running is the last that worked and `error` says why the folder's newer one did not. From revision 29, `installed` when it came from a registry's package, with `source`, that registry, `key`, the publisher key pinned at its first install, `update`, a newer version that registry lists signed by that key, and `blocked`, why a registry's blocklist stops it. |
 | `plugin_action` | `PluginAction` | `plugin_done` | Acts for the user: `grant` allows what the plugin asks for, `deny` refuses it and stops the plugin, `enable` / `disable`, `reload` reads its folder again, `run` runs its `command`, `set` sets its setting `key` to `value` ("" unsets). `open_url` in the reply is a link the plugin asked, in answer, to open: the front-end that asked opens it. |
 | `watch_block` | `WatchBlock` | `block_update`, then more | Follows a plugin's block, `plugin:<id>/<block>`: the tree whole, then the changes. The block is shown, and its plugin started, while a front-end watches it; see [Plugin blocks](#plugin-blocks). A block of another node, `node_id`, is relayed as an `attach` is: the daemon passes the request on and copies what comes back, in plain frames to its socket. |
-| `block_event` | `BlockEvent` | `plugin_done` | The user acting on a node of a block's tree: `tap`, or `change` / `submit` with the value, and `values`, the block's inputs', toggles' and selects' values as the front-end has them, by node id (revision 27). The daemon looks up what the node's last render said to send; a front-end names only the node. |
+| `block_event` | `BlockEvent` | `plugin_done` | The user acting on a node of a block's tree: `tap`, or `change` / `submit` with the value, and `values`, the block's inputs', toggles' and selects' values as the front-end has them, by node id (revision 27): 32 KiB of ids and values in all, and no more values than a tree holds nodes; a value of a node the daemon's tree no longer holds is left out, while the event's own node must be the tree's. The daemon looks up what the node's last render said to send; a front-end names only the node. |
 | `list_agent_blocks` | `ListAgentBlocks` | `agent_blocks` | The blocks the node's agents show (`show_ui`, [agent-mcp.md](agent-mcp.md#ui-of-your-own)), in the order shown, each its `name`, `agent:<session>/<id>`, `session_id`, `agent`, `title`, and where it goes: none, the right panel's last tab; or `document`, `parent`, `index` (-1 for the last) and `size`, which the user allowed (revision 27). `changed` has `agent_blocks` set as one comes, goes or moves. |
 
 `watch_block` and `block_event` serve both kinds of block, a plugin's,
@@ -870,8 +875,8 @@ front-ends, and a peer, let in or not, is refused all four.
 |---|---|---|---|
 | `list_registries` | `ListRegistries` | `registries` | The registries the node reads, the one mako comes with first (`builtin`): each one's `url`, the `name` its index gives itself, when it was last read (`fetched_at`, Unix seconds, 0 for never), the `error` of the last reading, with what it gave before standing meanwhile, and how many `plugins` it lists and entries its blocklist has (`blocked`). |
 | `registry_action` | `RegistryAction` | `registries` | `add` a registry by `url`, read at once (one that cannot be read is added all the same, its error beside it); `remove` one, its listings and blocklist with it, the built-in one too; `refresh` reads them all again now. |
-| `search_plugins` | `SearchPlugins` | `plugin_listings` | The plugins the registries list matching `query`, by ID, name, description and publisher, or the plugin `id` alone: one `PluginListing` for each registry listing it, by ID and then registry, its newest version for this node's Host API, with the registry, the publisher's name (which nobody checked), its `key` and `fingerprint`, the permissions the index says it asks for, the version `installed` here (`dev` for a folder in development) and where from, `other_key` when this node pinned another key for the ID, and `blocked`. A registry not read in the last 10 minutes is read first. |
-| `install_plugin` | `InstallPlugin` | `plugin_installed` | `install` the plugin `id` from `registry` (which may be left out when one registry alone lists it), `update` it from the registry it came from, or `remove` it with what it was allowed and kept on the node, and its pin. The reply's `added` are the permissions the version installed asks for beyond the one it replaced, which the user is then asked for as a plugin's are. |
+| `search_plugins` | `SearchPlugins` | `plugin_listings` | The plugins the registries list matching `query`, by ID, name, description and publisher, or the plugin `id` alone: one `PluginListing` for each registry listing it, by ID and then registry, its newest version for this node's Host API, with the registry, the publisher's name (which nobody checked), its `key` and `fingerprint`, the permissions the index says it asks for, the version `installed` here (`dev` for a folder in development) and where from, `other_key` when this node pinned another key for the ID, and `blocked`; from revision 31, `previous_fingerprint`, for an ID not installed now that this node last installed by another key, that key's fingerprint. A registry not read in the last 10 minutes is read first. |
+| `install_plugin` | `InstallPlugin` | `plugin_installed` | `install` the plugin `id` from `registry` (which may be left out when one registry alone lists it), `update` it from the registry it came from, or `remove` it with what it was allowed and kept on the node, and its pin. The reply's `added` are the permissions the version installed asks for beyond the one it replaced, which the user is then asked for as a plugin's are; from revision 31, `fingerprint`, the key's it is installed by, and for a first install by another key than the one this node last installed the ID by, `previous_fingerprint`, that key's, which a front-end says before the user is asked. A package asking for other permissions than its listing's is refused. |
 
 An install is refused, with nothing changed, for: a package whose
 SHA-256 or size is not the index's; a signature that does not hold, or is
@@ -1093,7 +1098,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 30) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 31) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
@@ -1236,7 +1241,10 @@ revision 30, which reads version 1 strictly, reads a document with
 variants leniently, as a later version: it leaves `variants` out and
 draws the root as ever, and does not patch the document. A window draws
 `root`, and `patch_layout` changes it alone; the compact root changes
-with the document whole. A later version's variant a reader cannot read,
+with the document whole, as the user writes it: an agent's `set_layout`
+keeps the compact root the document has and may not bring another
+([agent-mcp.md](agent-mcp.md)), since the window asking the user to allow
+a change draws the root alone. A later version's variant a reader cannot read,
 or that does not check, is left out, as any field it does not know.
 
 The **pages** of a document are those of its compact root, or, without

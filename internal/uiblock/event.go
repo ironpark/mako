@@ -8,11 +8,12 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// The bounds of an event from a front-end.
+// The bounds of an event from a front-end. Its values are as many as a
+// tree has nodes at most, a front-end sending every field of the tree it
+// has, so they are bounded by their bytes.
 const (
 	MaxEventValue = 8 << 10  // the value a change carries
-	maxValues     = 64       // the block's values an event carries
-	maxValuesSize = 32 << 10 // all of them
+	maxValuesSize = 32 << 10 // the block's values an event carries, ids and values
 )
 
 // Message is what a node sends for an event: the message its tree gave
@@ -79,24 +80,45 @@ func (t *Tree) Message(ev *protocol.BlockEvent) (Message, error) {
 
 // Values are the values of an event's block, as the front-end has them,
 // kept to the tree's inputs, toggles and selects, by node id: what a
-// form's submit carries. A value of a node not of those kinds is refused,
-// as are too many or too much.
+// form's submit carries. Too many, more than a tree holds nodes, or too
+// much is refused, as is a value of a node of another kind. A value of a
+// node the tree no longer holds is left out: the front-end's tree may be
+// a render behind the daemon's, and the rest of the form is still the
+// user's.
 func (t *Tree) Values(in map[string]string) (map[string]string, error) {
 	if len(in) == 0 {
 		return nil, nil
 	}
-	if len(in) > maxValues {
-		return nil, fmt.Errorf("an event carries at most %d values", maxValues)
+	if len(in) > maxNodes {
+		return nil, fmt.Errorf("an event carries at most %d values", maxNodes)
 	}
-	out := make(map[string]string, len(in))
 	size := 0
 	for id, v := range in {
 		size += len(id) + len(v)
 		if len(v) > MaxEventValue || size > maxValuesSize {
 			return nil, fmt.Errorf("an event's values are at most %d KiB", maxValuesSize>>10)
 		}
-		n := nodeOf(t.Root, id)
-		if n == nil || (n.GetKind() != KindInput && n.GetKind() != KindToggle && n.GetKind() != KindSelect) {
+	}
+	kinds := map[string]string{}
+	var walk func(n *protocol.UiNode)
+	walk = func(n *protocol.UiNode) {
+		if n == nil {
+			return
+		}
+		kinds[n.GetId()] = n.GetKind()
+		for _, c := range n.GetChildren() {
+			walk(c)
+		}
+	}
+	if t != nil {
+		walk(t.Root)
+	}
+	out := make(map[string]string, len(in))
+	for id, v := range in {
+		switch kind, ok := kinds[id]; {
+		case !ok:
+			continue
+		case kind != KindInput && kind != KindToggle && kind != KindSelect:
 			return nil, fmt.Errorf("node %q is no input, toggle or select of the block", id)
 		}
 		out[id] = v

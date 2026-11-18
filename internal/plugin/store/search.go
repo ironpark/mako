@@ -23,6 +23,7 @@ const maxListings = 200
 func (s *Store) Search(ctx context.Context, query, id string) []*protocol.PluginListing {
 	s.refreshOlder(ctx, searchStale)
 	query = strings.ToLower(strings.TrimSpace(query))
+	dev := s.devFolders()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var out []*protocol.PluginListing
@@ -47,10 +48,15 @@ func (s *Store) Search(ctx context.Context, query, id string) []*protocol.Plugin
 				Fingerprint: pack.Fingerprint(e.Key), Name: e.Name, Description: e.Description, Homepage: e.Homepage,
 				Permissions: v.Permissions, Blocked: s.blockedLocked(e.ID, v.Version, e.Key),
 			}
-			if in, ok := s.installs[e.ID]; ok {
-				l.Installed, l.InstalledFrom, l.OtherKey = in.Version, in.Registry, in.Key != e.Key
-			} else if s.devFolderLocked(e.ID) {
+			switch in, ok := s.installedLocked(e.ID); {
+			case dev[e.ID]:
 				l.Installed = "dev"
+			case ok:
+				l.Installed, l.InstalledFrom, l.OtherKey = in.Version, in.Registry, !pack.SameKey(in.Key, e.Key)
+			default:
+				if k, ok := s.known[e.ID]; ok && !pack.SameKey(k.Key, e.Key) {
+					l.PreviousFingerprint = pack.Fingerprint(k.Key)
+				}
 			}
 			out = append(out, l)
 		}
@@ -71,21 +77,34 @@ func (s *Store) Search(ctx context.Context, query, id string) []*protocol.Plugin
 	return out
 }
 
-// devFolder says the plugins' folder has a folder of the ID that was not
-// installed from a registry: written by hand, in development.
+// devFolder says the plugins' folder has a folder of the ID that is not
+// the one installed from a registry: written by hand, in development,
+// whatever a pin says.
 func (s *Store) devFolder(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.devFolderLocked(id)
-}
-
-func (s *Store) devFolderLocked(id string) bool {
 	if s.man == nil {
 		return false
 	}
-	if _, ok := s.installs[id]; ok {
-		return false
+	s.mu.Lock()
+	in, ok := s.installs[id]
+	s.mu.Unlock()
+	if !ok {
+		_, err := os.Lstat(filepath.Join(s.man.Dir(), id))
+		return err == nil
 	}
-	_, err := os.Lstat(filepath.Join(s.man.Dir(), id))
-	return err == nil
+	return s.examine(id, in) == handWritten
+}
+
+// devFolders are the plugins' folders of plugins in development, by ID.
+func (s *Store) devFolders() map[string]bool {
+	out := map[string]bool{}
+	if s.man == nil {
+		return out
+	}
+	entries, _ := os.ReadDir(s.man.Dir())
+	for _, e := range entries {
+		if id := e.Name(); plugin.ValidID(id) && s.devFolder(id) {
+			out[id] = true
+		}
+	}
+	return out
 }

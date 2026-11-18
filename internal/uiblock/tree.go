@@ -19,7 +19,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"unicode"
 
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -291,18 +290,8 @@ func spoofingInline(r rune) bool { return r != '\n' && r != '\t' && Spoofing(r) 
 
 // Spoofing says r is a control character or one of Unicode's marks that
 // reorder or hide text, which could make a title or a label read as
-// something else.
-func Spoofing(r rune) bool {
-	switch {
-	case unicode.IsControl(r):
-		return true
-	case r >= 0x202A && r <= 0x202E, r >= 0x2066 && r <= 0x2069, r == 0x200E, r == 0x200F, r == 0x061C:
-		return true
-	case r == 0x200B || r == 0x200C || r == 0x200D || r == 0xFEFF:
-		return true
-	}
-	return false
-}
+// something else (protocol.Spoofing).
+func Spoofing(r rune) bool { return protocol.Spoofing(r) }
 
 func where(id string) string {
 	if id == "" {

@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -160,13 +161,17 @@ func build(t *testing.T, f map[string][]byte, priv ed25519.PrivateKey) []byte {
 }
 
 // publish serves a package and returns the index's version for it: its
-// manifest's, or 1.0.0 for a package that does not open.
+// manifest's version and permissions, as an honest publisher lists them,
+// unless perms are given; or 1.0.0 for a package that does not open.
 func (r *rig) publish(name string, data []byte, perms ...string) *registry.Version {
 	r.t.Helper()
 	pkg, err := pack.Open(data)
 	version := "1.0.0"
 	if err == nil {
 		version = pkg.Manifest.Version
+		if perms == nil {
+			perms = pkg.Manifest.Permissions
+		}
 	}
 	path := "/pkg/" + name
 	r.serve(path, data)
@@ -185,6 +190,21 @@ func (r *rig) index(name string, idx *registry.Index) {
 		idx.Name = name
 	}
 	b, err := idx.Marshal(true)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	r.serve("/"+name+"/"+registry.IndexName, b)
+}
+
+// serveRaw serves a registry's index as given, unchecked: one a node
+// must refuse.
+func (r *rig) serveRaw(name string, idx *registry.Index) {
+	r.t.Helper()
+	idx.Format = registry.Format
+	if idx.Name == "" {
+		idx.Name = name
+	}
+	b, err := json.Marshal(idx)
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -272,6 +292,42 @@ func (r *rig) act(id, op string) error {
 	defer cancel()
 	_, err := r.m.Act(ctx, &protocol.PluginAction{PluginId: id, Op: op})
 	return err
+}
+
+// writeFolder writes a plugin's folder by hand, as a developer would, and
+// whole: made beside the plugins' folder and moved into it, so that the
+// manager, which reads the folder every Poll, never reads it half
+// written. A folder there already is moved away first.
+func (r *rig) writeFolder(id string, f map[string][]byte) {
+	r.t.Helper()
+	stage := r.t.TempDir()
+	dir := filepath.Join(stage, id)
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		r.t.Fatal(err)
+	}
+	for name, b := range f {
+		if err := os.WriteFile(filepath.Join(dir, name), b, 0o644); err != nil {
+			r.t.Fatal(err)
+		}
+	}
+	if err := os.Rename(filepath.Join(r.dir, id), filepath.Join(stage, "gone")); err != nil && !os.IsNotExist(err) {
+		r.t.Fatal(err)
+	}
+	if err := os.Rename(dir, filepath.Join(r.dir, id)); err != nil {
+		r.t.Fatal(err)
+	}
+}
+
+// logged waits for the log to say want.
+func (r *rig) logged(t *testing.T, want string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for !strings.Contains(r.logs.String(), want) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the log never said %q", want)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // watcher follows a block as a front-end would.

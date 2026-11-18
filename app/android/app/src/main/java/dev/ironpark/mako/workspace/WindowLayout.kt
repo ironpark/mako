@@ -56,7 +56,7 @@ internal class LNode(
     val gap: Double = 0.0,
     val collapsible: Boolean = false,
     val active: Int = 0,
-    val props: Map<*, *>? = null,
+    val props: Map<String, Json.Raw>? = null,
 )
 
 /** A document read: its root, and its compact root, if any. */
@@ -96,11 +96,16 @@ internal class LayoutDoc(val root: LNode, val compact: LNode?) {
                 children = listOf("mako.files", "mako.git", "mako.agents", "mako.forge").map(::short)),
         ))
 
-        /** Reads text as layoutdoc.Parse does, throwing what it refuses. */
+        /**
+         * Reads text as layoutdoc.Parse does, throwing what it refuses: the
+         * JSON as encoding/json reads it, and of it only what Parse decodes,
+         * typed as Go types it, so that what Go skips, however deep or odd,
+         * is skipped here too.
+         */
         fun parse(text: String): LayoutDoc {
-            val top = Json.parse(text) as? Map<*, *> ?: fail("not an object")
-            val v = top["version"] ?: fail("no version")
-            val version = (v as? Double)?.takeIf { it >= 1 && it % 1.0 == 0.0 && it < Int.MAX_VALUE }?.toInt() ?: fail("not a version")
+            val top = Json.raw(text).members() ?: fail("not an object")
+            val version = whole(top["version"] ?: fail("no version"), "version") ?: 0L
+            if (version < 1) fail("not a version")
             val r = Reader(version > VERSION)
             if (!r.lenient) top.keys.forEach { k ->
                 if (k != "version" && k != "root" && (k != "variants" || version < 2)) fail("unknown field $k")
@@ -109,7 +114,7 @@ internal class LayoutDoc(val root: LNode, val compact: LNode?) {
             var compact: LNode? = null
             if (version >= 2 && top.containsKey("variants")) {
                 compact = try {
-                    r.variants(top["variants"])
+                    r.variants(top.getValue("variants"))
                 } catch (e: IllegalArgumentException) {
                     if (!r.lenient) throw e
                     null // a later version's, which this cannot read, left out
@@ -132,23 +137,37 @@ internal class LayoutDoc(val root: LNode, val compact: LNode?) {
 
         private fun count(n: LNode): Int = 1 + n.children.sumOf(::count)
 
+        /**
+         * A whole number as Go decodes one into an int: null for JSON's null,
+         * else a literal of no fraction or exponent within 64 bits, so that 1.0
+         * or 1e0 is refused, as Go refuses it.
+         */
+        private fun whole(r: Json.Raw, what: String): Long? {
+            if (r.isNull) return null
+            val literal = r.number() ?: fail("$what is not a number")
+            return literal.toLongOrNull() ?: fail("$what is not a whole number: $literal")
+        }
+
         private class Reader(val lenient: Boolean) {
             var count = 0
 
-            fun variants(raw: Any?): LNode? {
-                if (raw == null) return null
-                val vs = raw as? Map<*, *> ?: fail("variants are not an object")
+            fun variants(raw: Json.Raw): LNode? {
+                if (raw.isNull) return null
+                val vs = raw.members() ?: fail("variants are not an object")
                 if (!lenient) vs.keys.forEach { if (it != "compact") fail("no variant $it") }
                 val compact = vs["compact"] ?: return null
+                if (compact.isNull) return null
                 return node(compact, 1)
             }
 
-            fun node(raw: Any?, depth: Int): LNode {
+            fun node(raw: Json.Raw, depth: Int): LNode {
                 if (++count > MAX_NODES) fail("more than $MAX_NODES nodes")
                 if (depth > MAX_DEPTH) fail("nested deeper than $MAX_DEPTH")
-                if (raw is String) return short(raw)
-                val fields = raw as? Map<*, *> ?: fail("a node is neither an object nor a block's name")
-                val keys = fields.keys.map { it as String }
+                // Go reads null as a block's name, "", which no check passes.
+                if (raw.isNull) return short("")
+                raw.string()?.let { return short(it) }
+                val fields = raw.members() ?: fail("a node is neither an object nor a block's name")
+                val keys = fields.keys
                 val present = KINDS.filter { it in keys }
                 if (present.size > 1) fail("a node of two kinds")
                 if (present.isEmpty()) {
@@ -164,24 +183,40 @@ internal class LayoutDoc(val root: LNode, val compact: LNode?) {
                 }
                 val children = when (kind) {
                     "block", "panes" -> emptyList()
-                    else -> (fields[kind] as? List<*> ?: fail("a $kind's children are not a list")).map { node(it, depth + 1) }
+                    else -> fields.getValue(kind).let { list ->
+                        if (list.isNull) emptyList()
+                        else (list.items() ?: fail("a $kind's children are not a list")).map { node(it, depth + 1) }
+                    }
                 }
                 return place(kind, fields, children)
             }
 
             /** The node of kind of fields, those of its kind's read and typed as the Go reads them. */
-            private fun place(kind: String, fields: Map<*, *>, children: List<LNode>): LNode {
+            private fun place(kind: String, fields: Map<String, Json.Raw>, children: List<LNode>): LNode {
                 val own = FIELDS[kind] ?: listOf("id", "size", "grow", "collapsible")
-                fun has(k: String) = k in own && fields[k] != null
-                fun string(k: String): String = if (fields[k] == null) "" else fields[k] as? String ?: fail("$k is not a string")
-                fun number(k: String): Double? = if (!has(k)) null else fields[k] as? Double ?: fail("$k is not a number")
+                fun field(k: String): Json.Raw? = fields[k]?.takeIf { k in own && !it.isNull }
+                fun string(k: String): String {
+                    val r = fields[k] ?: return ""
+                    return if (r.isNull) "" else r.string() ?: fail("$k is not a string")
+                }
+                fun number(k: String): Double? = field(k)?.let { r ->
+                    val n = (r.number() ?: fail("$k is not a number")).toDouble()
+                    // Go fails to decode a number beyond a double.
+                    if (n.isInfinite()) fail("$k is beyond a double")
+                    n
+                }
                 val size = number("size")?.also { if (it <= 0) fail("size not above 0") } ?: 0.0
                 val grow = number("grow")?.also { if (it <= 0) fail("grow not above 0") } ?: 0.0
                 val gap = number("gap") ?: 0.0
-                val collapsible = if (has("collapsible")) fields["collapsible"] as? Boolean ?: fail("collapsible is not a boolean") else false
-                val active = number("active")?.also { if (it % 1.0 != 0.0) fail("active is not a whole number") }?.toInt() ?: 0
-                val props = if (has("props")) fields["props"] as? Map<*, *> ?: fail("props are not an object") else null
-                val id = if (has("id")) string("id") else ""
+                val collapsible = field("collapsible")?.let { it.bool() ?: fail("collapsible is not a boolean") } ?: false
+                // An active beyond an Int is beyond any stack, which the check refuses.
+                val active = field("active")?.let { whole(it, "active") }?.let { if (it in 0..Int.MAX_VALUE) it.toInt() else -1 } ?: 0
+                val props = field("props")?.let { p ->
+                    val members = p.members() ?: fail("props are not an object")
+                    if (p.overflows()) fail("a prop is a number beyond a double")
+                    members
+                }
+                val id = if ("id" in own) string("id") else ""
                 return when (kind) {
                     "block" -> string("block").let { LNode(kind, id.ifEmpty { it }, block = it, size = size, grow = grow, collapsible = collapsible, props = props) }
                     "panes" -> string("panes").let { LNode(kind, id.ifEmpty { it }, panes = it, size = size, grow = grow) }
@@ -191,7 +226,7 @@ internal class LayoutDoc(val root: LNode, val compact: LNode?) {
         }
 
         /** Checks a root as layoutdoc's Check does, with panes nodes among it. */
-        private fun check(root: LNode, panes: IntRange, version: Int) {
+        private fun check(root: LNode, panes: IntRange, version: Long) {
             if (root.size > 0 || root.grow > 0 || root.collapsible) fail("the root has a size, grow or collapses")
             val seen = mutableSetOf<String>()
             var count = 0

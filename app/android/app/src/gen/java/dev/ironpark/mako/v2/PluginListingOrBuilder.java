@@ -245,4 +245,30 @@ public interface PluginListingOrBuilder extends
    */
   com.google.protobuf.ByteString
       getBlockedBytes();
+
+  /**
+   * <pre>
+   * previous_fingerprint is the fingerprint of the publisher key this
+   * node last installed the ID by, when it is not key's and the ID is not
+   * installed now: the plugin of the ID the user had before was another
+   * publisher's. "" otherwise.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 15 [json_name = "previousFingerprint"];</code>
+   * @return The previousFingerprint.
+   */
+  java.lang.String getPreviousFingerprint();
+  /**
+   * <pre>
+   * previous_fingerprint is the fingerprint of the publisher key this
+   * node last installed the ID by, when it is not key's and the ID is not
+   * installed now: the plugin of the ID the user had before was another
+   * publisher's. "" otherwise.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 15 [json_name = "previousFingerprint"];</code>
+   * @return The bytes for previousFingerprint.
+   */
+  com.google.protobuf.ByteString
+      getPreviousFingerprintBytes();
 }

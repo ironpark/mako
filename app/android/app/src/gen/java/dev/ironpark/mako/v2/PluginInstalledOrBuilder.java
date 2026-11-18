@@ -78,4 +78,42 @@ public interface PluginInstalledOrBuilder extends
    */
   com.google.protobuf.ByteString
       getAddedBytes(int index);
+
+  /**
+   * <pre>
+   * previous_fingerprint is, for a first install whose publisher key is
+   * not the one this node last installed the ID by, that key's
+   * fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+   * it is installed by.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 4 [json_name = "previousFingerprint"];</code>
+   * @return The previousFingerprint.
+   */
+  java.lang.String getPreviousFingerprint();
+  /**
+   * <pre>
+   * previous_fingerprint is, for a first install whose publisher key is
+   * not the one this node last installed the ID by, that key's
+   * fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+   * it is installed by.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 4 [json_name = "previousFingerprint"];</code>
+   * @return The bytes for previousFingerprint.
+   */
+  com.google.protobuf.ByteString
+      getPreviousFingerprintBytes();
+
+  /**
+   * <code>string fingerprint = 5 [json_name = "fingerprint"];</code>
+   * @return The fingerprint.
+   */
+  java.lang.String getFingerprint();
+  /**
+   * <code>string fingerprint = 5 [json_name = "fingerprint"];</code>
+   * @return The bytes for fingerprint.
+   */
+  com.google.protobuf.ByteString
+      getFingerprintBytes();
 }

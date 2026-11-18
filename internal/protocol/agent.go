@@ -29,7 +29,12 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 30
+const Revision = 31
+
+// RevisionKnownPublisher adds PluginListing's and PluginInstalled's
+// previous_fingerprint, and PluginInstalled's fingerprint, saying that a plugin's ID was installed before
+// by another publisher key, and the error code CodeNoPlugin.
+const RevisionKnownPublisher = 31
 
 // RevisionPeerBlocks adds node_id to WatchBlock, BlockEvent and
 // ListAgentBlocks, and serves them to a node let in: a phone watches and

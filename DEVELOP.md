@@ -372,6 +372,15 @@ would. Two need Zed extensions downloaded first, and are skipped otherwise:
 Tests set `MAKO_HOME` to a temporary folder, so they never touch your own
 configuration.
 
+An end-to-end harness that points a daemon at its own servers on loopback,
+plugin registries and packages (`MAKO_PLUGIN_REGISTRY_TEST=1`) or a
+plugin's HTTP (`MAKO_PLUGIN_NET_TEST=host=http://127.0.0.1:port`), builds
+the daemon with the `makotest` tag: `go build -tags makotest ./cmd/...`.
+Those variables relax what keeps a node's requests on the internet, so a
+build without the tag, a release among them, ignores them
+(`internal/testhooks`, whose test checks it); unit tests set the same hooks
+in the packages' own variables, as `internal/daemon`'s `testRegistries`.
+
 ## Debugging
 
 | | |

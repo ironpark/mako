@@ -113,9 +113,15 @@ func (d *Daemon) addLayoutTools(server *sdk.Server, peer *agentPeer) {
 		if parsed.Version > layoutdoc.Version {
 			return nil, changeLayoutResult{}, fmt.Errorf("this node writes documents of version %d at most", layoutdoc.Version)
 		}
-		_, rev := d.windowLayout(name)
+		cur, rev, _, err := d.layoutNow(name)
+		if err != nil {
+			return nil, changeLayoutResult{}, err
+		}
 		if in.IfRev != rev {
 			return nil, changeLayoutResult{}, fmt.Errorf("the document's revision is %q, not %q: read it again with get_layout", rev, in.IfRev)
+		}
+		if doc, err = keepVariants(parsed, cur, d.blockCatalog()); err != nil {
+			return nil, changeLayoutResult{}, err
 		}
 		rev, err = d.changeLayout(ctx, s, layoutChange{tool: toolSetLayout, name: name, doc: doc, base: rev, summary: "replace the whole document"})
 		return nil, changeLayoutResult{Document: name, Revision: rev}, err
@@ -159,6 +165,37 @@ func (d *Daemon) addLayoutTools(server *sdk.Server, peer *agentPeer) {
 		rev, err := d.undoLayout(ctx, s, name)
 		return nil, changeLayoutResult{Document: name, Revision: rev}, err
 	})
+}
+
+// An agent does not write a document's variants. The window that asks
+// the user to allow a change draws the document's root, never its
+// compact root, so a compact root an agent wrote would reach the user's
+// phone unseen. A whole document an agent sets takes the compact root the
+// document has, the user's, as it is, if the two still make a document
+// the window can draw; a patch changes the root alone (layoutdoc.Apply).
+
+// keepVariants is the document an agent's set, next, makes of cur: next
+// with cur's variants, written. next may repeat cur's variants, as
+// get_layout gave them, but not hold others.
+func keepVariants(next, cur *layoutdoc.Doc, cat layoutdoc.Catalog) ([]byte, error) {
+	if next.Compact != nil && !sameNode(next.Compact, cur.Compact) {
+		return nil, errors.New("an agent does not write a document's variants (variants.compact, the root a phone shows): " +
+			"the user sees the window's root alone when asked to allow a change. Leave variants out; the document keeps the one it has")
+	}
+	out := *next
+	out.Compact = cur.Compact
+	if err := out.Check(cat); err != nil {
+		return nil, fmt.Errorf("the document's compact root, which the user wrote and an agent does not change, does not hold with this root: %w; "+
+			"change the root so that it does, or ask the user to change the compact root", err)
+	}
+	return json.Marshal(&out)
+}
+
+// sameNode says two trees are written alike.
+func sameNode(a, b *layoutdoc.Node) bool {
+	ja, errA := json.Marshal(a)
+	jb, errB := json.Marshal(b)
+	return errA == nil && errB == nil && string(ja) == string(jb)
 }
 
 // layoutName is the document a tool names, the default for none.

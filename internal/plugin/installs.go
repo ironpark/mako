@@ -1,8 +1,10 @@
 package plugin
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,6 +25,12 @@ type Installs interface {
 	// Status is how the plugin of the ID, at the version read from its
 	// folder ("" if none was), stands.
 	Status(id, version string) InstallStatus
+	// Settle is told the plugin's folder changed, before it is read
+	// again; it says the folder is no longer the one installed (written
+	// over by hand), whose install it forgot: the manager then forgets
+	// what the plugin was allowed and kept, which the folder written in
+	// its place is not given.
+	Settle(id string) (disowned bool)
 }
 
 // InstallStatus is how a plugin stands as installed.
@@ -41,6 +49,7 @@ type InstallStatus struct {
 type noInstalls struct{}
 
 func (noInstalls) Status(string, string) InstallStatus { return InstallStatus{} }
+func (noInstalls) Settle(string) bool                  { return false }
 
 // installStatus is how the plugin stands as installed, as its version
 // read says.
@@ -136,6 +145,38 @@ func (m *Manager) Forget(id string) error {
 	return m.forget(id)
 }
 
+// Disown forgets what the plugin of the ID was allowed and kept on this
+// node, its folder there or not, for a folder no longer the one
+// installed: a runtime up is closed first, without the save that would
+// keep its blocks' states for the folder now in its place.
+func (m *Manager) Disown(id string) error {
+	if !ValidID(id) {
+		return fmt.Errorf("%q is not a plugin's ID", id)
+	}
+	p, ok := m.plugin(id)
+	if !ok {
+		return m.forget(id)
+	}
+	ctx, cancel := context.WithTimeout(m.ctx, m.lim.Wall+5*time.Second)
+	defer cancel()
+	err := p.do(ctx, func() error { return p.disown() })
+	if errors.Is(err, errGone) {
+		return m.forget(id)
+	}
+	return err
+}
+
+// disown is Disown on the plugin's actor.
+func (p *plugin) disown() error {
+	p.closeRuntime()
+	p.saved = map[string]string{}
+	err := p.m.forget(p.id)
+	p.store.reset()
+	p.settings.reset()
+	p.status(func() { p.running = false })
+	return err
+}
+
 func (m *Manager) forget(id string) error {
 	if err := m.grant.update(id, func(e *grantEntry) { *e = grantEntry{} }); err != nil {
 		return err
@@ -145,23 +186,31 @@ func (m *Manager) forget(id string) error {
 
 // Recheck has every plugin look again at how it stands as installed: a
 // plugin newly blocked stops, and one no longer blocked starts if one of
-// its blocks shows.
+// its blocks shows. Each plugin is told by a signal of its own, which a
+// full queue of jobs cannot drop, and which a second Recheck before the
+// first is taken joins.
 func (m *Manager) Recheck() {
 	for _, p := range m.all() {
-		p.post(func() {
-			if state, _ := p.state(); state == protocol.PluginBlocked {
-				if p.rt != nil {
-					p.closeRuntime()
-					m.cfg.Log.Warn("plugin stopped: blocked", "plugin", p.id)
-				}
-				p.status(func() { p.running = false })
-				return
-			}
-			p.status(func() {})
-			p.showAll()
-		})
+		select {
+		case p.recheck <- struct{}{}:
+		default:
+		}
 	}
 	m.cfg.Changed()
+}
+
+// restand is a Recheck on the plugin's actor.
+func (p *plugin) restand() {
+	if state, _ := p.state(); state == protocol.PluginBlocked {
+		if p.rt != nil {
+			p.closeRuntime()
+			p.m.cfg.Log.Warn("plugin stopped: blocked", "plugin", p.id)
+		}
+		p.status(func() { p.running = false })
+		return
+	}
+	p.status(func() {})
+	p.showAll()
 }
 
 func nonce() string {

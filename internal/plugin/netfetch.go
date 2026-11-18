@@ -101,24 +101,6 @@ func newFetcher(lim Limits, log *slog.Logger, testMap map[string]string) *fetche
 	return f
 }
 
-// publicAddr says an address is one of the internet's: not loopback,
-// private, link-local, multicast, unspecified, shared (100.64/10) or
-// documentation space.
-func publicAddr(a netip.Addr) bool {
-	a = a.Unmap()
-	if !a.IsValid() || a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() ||
-		a.IsMulticast() || a.IsUnspecified() || a.IsInterfaceLocalMulticast() {
-		return false
-	}
-	for _, p := range []string{"100.64.0.0/10", "0.0.0.0/8", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15",
-		"198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4", "2001:db8::/32", "64:ff9b::/96"} {
-		if netip.MustParsePrefix(p).Contains(a) {
-			return false
-		}
-	}
-	return true
-}
-
 // checkURL reads a request's URL and says which granted host it is for,
 // or why it may not be made.
 func checkURL(raw string, g grants) (*url.URL, string, error) {

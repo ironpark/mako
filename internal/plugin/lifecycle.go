@@ -17,6 +17,9 @@ import (
 // not start, leaves the last that did running, the error shown beside it;
 // with none, the plugin has failed.
 func (p *plugin) reload() {
+	if p.m.installs.Settle(p.id) {
+		_ = p.disown()
+	}
 	next, err := readVersion(p.m.cfg.Dir, p.id)
 	if err == nil {
 		err = p.check(next)
@@ -111,12 +114,21 @@ func (p *plugin) watched() bool {
 	return false
 }
 
-// ensure starts the runtime, if the plugin may run and it is not up.
+// ensure starts the runtime, if the plugin may run and it is not up. It
+// is the gate every entry into the plugin's code passes, a runtime up or
+// not: how the plugin stands is asked anew each time, so that a plugin
+// blocked, refused or disabled since it started runs nothing more, and
+// its runtime is closed (without the save that would run its code).
 func (p *plugin) ensure() error {
-	if p.rt != nil {
-		return nil
-	}
 	state, why := p.state()
+	if p.rt != nil {
+		if state == protocol.PluginReady || state == protocol.PluginRunning {
+			return nil
+		}
+		p.closeRuntime()
+		p.m.cfg.Log.Warn("plugin stopped", "plugin", p.id, "state", state, "why", why)
+		p.status(func() { p.running = false })
+	}
 	switch state {
 	case protocol.PluginReady:
 	case protocol.PluginWaiting:
@@ -175,9 +187,16 @@ func (p *plugin) closeRuntime() {
 }
 
 // sleep stops a runtime that is up, for why, keeping its blocks' states
-// for the next.
+// for the next. A plugin blocked meanwhile is stopped without saving,
+// which would run its code.
 func (p *plugin) sleep(why string) {
 	if p.rt == nil {
+		return
+	}
+	if p.installStatus().Blocked != "" {
+		p.closeRuntime()
+		p.status(func() { p.running = false })
+		p.m.cfg.Log.Warn("plugin stopped: blocked", "plugin", p.id, "why", why)
 		return
 	}
 	p.mu.Lock()

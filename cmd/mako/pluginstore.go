@@ -35,6 +35,8 @@ func pluginStore(ctx context.Context, c *client.Client, op string, args []string
 				here = "BLOCKED: " + l.GetBlocked()
 			case l.GetOtherKey():
 				here += " (by another key)"
+			case l.GetPreviousFingerprint() != "":
+				here = "BY A DIFFERENT KEY THAN BEFORE: " + l.GetPreviousFingerprint() + " → " + l.GetFingerprint()
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", l.GetId(), l.GetVersion(), l.GetPublisher(), l.GetFingerprint(),
 				l.GetRegistry(), strings.Join(l.GetPermissions(), ","), here)
@@ -61,6 +63,10 @@ func pluginStore(ctx context.Context, c *client.Client, op string, args []string
 			return nil
 		}
 		fmt.Printf("%s %s installed\n", done.GetId(), done.GetVersion())
+		if prev := done.GetPreviousFingerprint(); prev != "" {
+			fmt.Printf("NOTE: %s is published by a different key than the one you had before: %s → %s\n",
+				done.GetId(), prev, done.GetFingerprint())
+		}
 		if len(done.GetAdded()) > 0 {
 			fmt.Printf("It asks for %s, which it does not have: allow it with `mako plugins grant %s`, or in the window\n",
 				strings.Join(done.GetAdded(), ", "), done.GetId())

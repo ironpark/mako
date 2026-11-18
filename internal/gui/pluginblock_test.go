@@ -1,8 +1,10 @@
 package gui
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ironpark/ggui"
 
@@ -168,5 +170,48 @@ func TestPluginMarkdownFetchesNothing(t *testing.T) {
 	}
 	if host.Diagram("graph TD; a-->b", "mermaid") != nil {
 		t.Error("a diagram was drawn")
+	}
+}
+
+// An op that does not apply to the tree held closes the block's stream
+// and opens it again at once, for a whole tree, rather than going on
+// with a stream that will send only ops.
+func TestABlockStreamStartsAgainAfterAnOpThatDoesNotApply(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	opened := make(chan int, 4)
+	n := 0
+	watch := func(ctx context.Context, each func(*protocol.BlockUpdate)) error {
+		n++
+		opened <- n
+		switch n {
+		case 1:
+			each(&protocol.BlockUpdate{Tree: &protocol.UiNode{Kind: "column", Children: []*protocol.UiNode{{Id: "/a", Kind: "text", Text: "one"}}}})
+			each(&protocol.BlockUpdate{Ops: []*protocol.UiOp{{Op: protocol.UiRemove, Id: "/missing"}}})
+			each(&protocol.BlockUpdate{Ops: []*protocol.UiOp{{Op: protocol.UiRemove, Id: "/a"}}})
+		case 2:
+			each(&protocol.BlockUpdate{Tree: &protocol.UiNode{Kind: "column", Children: []*protocol.UiNode{{Id: "/b", Kind: "text", Text: "two"}}}})
+		}
+		<-ctx.Done() // a stream sends until it is closed
+		return ctx.Err()
+	}
+	var trees []string
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		followStream(ctx, watch, time.Hour, func(u *protocol.BlockUpdate) {
+			trees = append(trees, u.GetTree().GetChildren()[0].GetText())
+			if len(trees) == 2 {
+				cancel()
+			}
+		})
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("the stream was not opened again; opened %d times", len(opened))
+	}
+	if strings.Join(trees, ",") != "one,two" || len(opened) != 2 {
+		t.Fatalf("trees %v, opened %d times", trees, len(opened))
 	}
 }

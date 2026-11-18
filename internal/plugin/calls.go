@@ -143,7 +143,7 @@ func (p *plugin) showAll() {
 	for _, id := range ids {
 		p.show(id)
 	}
-	if len(ids) == 0 && p.rt != nil {
+	if len(ids) == 0 && p.rt != nil && p.ensure() == nil {
 		p.renderAll()
 	}
 }
@@ -177,6 +177,10 @@ func (p *plugin) tick() {
 		return
 	}
 	if !p.watched() {
+		if p.installStatus().Blocked != "" {
+			_ = p.ensure() // closes it
+			return
+		}
 		if time.Since(p.lastUsed) > p.m.lim.Idle {
 			p.sleep("idle")
 		}
@@ -190,12 +194,13 @@ func (p *plugin) tick() {
 		}
 	}
 	p.mu.Unlock()
+	if len(due) == 0 || p.ensure() != nil {
+		return
+	}
 	for _, in := range due {
 		p.load(in)
 	}
-	if len(due) > 0 {
-		p.renderAll()
-	}
+	p.renderAll()
 }
 
 // afterCall loads the blocks the call asked to be loaded again, and

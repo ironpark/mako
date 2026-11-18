@@ -54,16 +54,20 @@ var runawayLimits = Limits{CPU: 400 * time.Millisecond, Wall: 5 * time.Second, M
 
 func newRig(t *testing.T, lim Limits, netTest map[string]string, sessions ...*protocol.SessionInfo) *rig {
 	t.Helper()
+	return startRig(t, Config{Limits: lim, NetTest: netTest, Sessions: func() []*protocol.SessionInfo { return sessions }})
+}
+
+// startRig runs a Manager of cfg over a test's folders.
+func startRig(t *testing.T, cfg Config) *rig {
+	t.Helper()
 	base := t.TempDir()
 	r := &rig{t: t, dir: filepath.Join(base, "plugins"), data: filepath.Join(base, "plugin-data"), done: make(chan struct{}), logs: &logBuffer{}}
 	if err := os.MkdirAll(r.dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	r.m = New(Config{
-		Dir: r.dir, DataDir: r.data, Poll: 30 * time.Millisecond, Limits: lim, NetTest: netTest,
-		Log:      slog.New(slog.NewTextHandler(io.MultiWriter(r.logs), &slog.HandlerOptions{Level: slog.LevelDebug})),
-		Sessions: func() []*protocol.SessionInfo { return sessions },
-	})
+	cfg.Dir, cfg.DataDir, cfg.Poll = r.dir, r.data, 30*time.Millisecond
+	cfg.Log = slog.New(slog.NewTextHandler(io.MultiWriter(r.logs), &slog.HandlerOptions{Level: slog.LevelDebug}))
+	r.m = New(cfg)
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
 	go func() { defer close(r.done); r.m.Run(ctx) }()

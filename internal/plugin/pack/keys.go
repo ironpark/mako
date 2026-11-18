@@ -28,8 +28,24 @@ func EncodeKey(pub ed25519.PublicKey) string {
 	return keyPrefix + base64.RawURLEncoding.EncodeToString(pub)
 }
 
-// ParseKey reads a public key written by EncodeKey.
+// ParseKey reads a public key written by EncodeKey, in that spelling
+// alone. Base64url leaves the last character's low bits unused, so one
+// key could be written several ways; a key is compared as written in many
+// places (a blocklist's entry, a pin, an index against a signature), so
+// a spelling other than EncodeKey's is refused rather than read.
 func ParseKey(s string) (ed25519.PublicKey, error) {
+	pub, err := decodeKey(s)
+	if err != nil {
+		return nil, err
+	}
+	if EncodeKey(pub) != s {
+		return nil, errors.New("a publisher key is written as mako writes it: this one is another spelling of a key, which is refused")
+	}
+	return pub, nil
+}
+
+// decodeKey reads a key's 32 bytes in any spelling base64url decodes.
+func decodeKey(s string) (ed25519.PublicKey, error) {
 	rest, ok := strings.CutPrefix(s, keyPrefix)
 	if !ok {
 		return nil, fmt.Errorf("a publisher key starts %q", keyPrefix)
@@ -41,9 +57,30 @@ func ParseKey(s string) (ed25519.PublicKey, error) {
 	return ed25519.PublicKey(b), nil
 }
 
+// SameKey says a and b are the same publisher key, by their bytes, so
+// that a key kept before ParseKey refused other spellings (a pin of an
+// older mako) is still the key it names. A key that does not read is no
+// key: it is the same as none, not even itself.
+func SameKey(a, b string) bool {
+	ka, errA := decodeKey(a)
+	kb, errB := decodeKey(b)
+	return errA == nil && errB == nil && ka.Equal(kb)
+}
+
+// CanonicalKey is a key in EncodeKey's spelling, read in any spelling;
+// for keys kept before other spellings were refused.
+func CanonicalKey(s string) (string, error) {
+	pub, err := decodeKey(s)
+	if err != nil {
+		return "", err
+	}
+	return EncodeKey(pub), nil
+}
+
 // Fingerprint is a key's fingerprint, or "" for one that does not read.
+// Every spelling of a key has the key's fingerprint.
 func Fingerprint(key string) string {
-	pub, err := ParseKey(key)
+	pub, err := decodeKey(key)
 	if err != nil {
 		return ""
 	}

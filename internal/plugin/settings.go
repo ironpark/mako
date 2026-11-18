@@ -36,6 +36,13 @@ type settingsStore struct {
 
 func newSettingsStore(path string) *settingsStore { return &settingsStore{path: path} }
 
+// reset forgets what was read, for settings whose file was removed.
+func (s *settingsStore) reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.values, s.loaded = nil, false
+}
+
 func (s *settingsStore) loadLocked() {
 	if s.loaded {
 		return

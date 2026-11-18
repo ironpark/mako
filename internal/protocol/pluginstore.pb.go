@@ -386,9 +386,14 @@ type PluginListing struct {
 	// this listing cannot be installed over it.
 	OtherKey bool `protobuf:"varint,13,opt,name=other_key,json=otherKey,proto3" json:"other_key,omitempty"`
 	// blocked is why one of this node's registries blocks it.
-	Blocked       string `protobuf:"bytes,14,opt,name=blocked,proto3" json:"blocked,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Blocked string `protobuf:"bytes,14,opt,name=blocked,proto3" json:"blocked,omitempty"`
+	// previous_fingerprint is the fingerprint of the publisher key this
+	// node last installed the ID by, when it is not key's and the ID is not
+	// installed now: the plugin of the ID the user had before was another
+	// publisher's. "" otherwise.
+	PreviousFingerprint string `protobuf:"bytes,15,opt,name=previous_fingerprint,json=previousFingerprint,proto3" json:"previous_fingerprint,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *PluginListing) Reset() {
@@ -519,6 +524,13 @@ func (x *PluginListing) GetBlocked() string {
 	return ""
 }
 
+func (x *PluginListing) GetPreviousFingerprint() string {
+	if x != nil {
+		return x.PreviousFingerprint
+	}
+	return ""
+}
+
 // InstallPlugin installs plugin id from registry (op "install"), updates
 // it from the registry it was installed from ("update"), or removes it
 // ("remove"). Answered by PluginInstalled.
@@ -589,9 +601,15 @@ type PluginInstalled struct {
 	Version string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
 	// added are the permissions the version installed asks for that the
 	// one it replaced did not: the user is asked for them before it runs.
-	Added         []string `protobuf:"bytes,3,rep,name=added,proto3" json:"added,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Added []string `protobuf:"bytes,3,rep,name=added,proto3" json:"added,omitempty"`
+	// previous_fingerprint is, for a first install whose publisher key is
+	// not the one this node last installed the ID by, that key's
+	// fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+	// it is installed by.
+	PreviousFingerprint string `protobuf:"bytes,4,opt,name=previous_fingerprint,json=previousFingerprint,proto3" json:"previous_fingerprint,omitempty"`
+	Fingerprint         string `protobuf:"bytes,5,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *PluginInstalled) Reset() {
@@ -645,6 +663,20 @@ func (x *PluginInstalled) GetAdded() []string {
 	return nil
 }
 
+func (x *PluginInstalled) GetPreviousFingerprint() string {
+	if x != nil {
+		return x.PreviousFingerprint
+	}
+	return ""
+}
+
+func (x *PluginInstalled) GetFingerprint() string {
+	if x != nil {
+		return x.Fingerprint
+	}
+	return ""
+}
+
 var File_mako_v2_pluginstore_proto protoreflect.FileDescriptor
 
 const file_mako_v2_pluginstore_proto_rawDesc = "" +
@@ -672,7 +704,7 @@ const file_mako_v2_pluginstore_proto_rawDesc = "" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\"D\n" +
 	"\x0ePluginListings\x122\n" +
-	"\blistings\x18\x01 \x03(\v2\x16.mako.v2.PluginListingR\blistings\"\x97\x03\n" +
+	"\blistings\x18\x01 \x03(\v2\x16.mako.v2.PluginListingR\blistings\"\xca\x03\n" +
 	"\rPluginListing\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bregistry\x18\x02 \x01(\tR\bregistry\x12\x18\n" +
@@ -688,15 +720,18 @@ const file_mako_v2_pluginstore_proto_rawDesc = "" +
 	"\tinstalled\x18\v \x01(\tR\tinstalled\x12%\n" +
 	"\x0einstalled_from\x18\f \x01(\tR\rinstalledFrom\x12\x1b\n" +
 	"\tother_key\x18\r \x01(\bR\botherKey\x12\x18\n" +
-	"\ablocked\x18\x0e \x01(\tR\ablocked\"K\n" +
+	"\ablocked\x18\x0e \x01(\tR\ablocked\x121\n" +
+	"\x14previous_fingerprint\x18\x0f \x01(\tR\x13previousFingerprint\"K\n" +
 	"\rInstallPlugin\x12\x0e\n" +
 	"\x02op\x18\x01 \x01(\tR\x02op\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x1a\n" +
-	"\bregistry\x18\x03 \x01(\tR\bregistry\"Q\n" +
+	"\bregistry\x18\x03 \x01(\tR\bregistry\"\xa6\x01\n" +
 	"\x0fPluginInstalled\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x14\n" +
-	"\x05added\x18\x03 \x03(\tR\x05addedB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
+	"\x05added\x18\x03 \x03(\tR\x05added\x121\n" +
+	"\x14previous_fingerprint\x18\x04 \x01(\tR\x13previousFingerprint\x12 \n" +
+	"\vfingerprint\x18\x05 \x01(\tR\vfingerprintB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
 	file_mako_v2_pluginstore_proto_rawDescOnce sync.Once

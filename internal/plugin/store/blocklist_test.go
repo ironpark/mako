@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -137,5 +138,39 @@ func TestBlocklistsOutlastOutages(t *testing.T) {
 	again := New(Config{DataDir: r.data, Loopback: true})
 	if st := again.Status("p", "1.0.0"); !strings.Contains(st.Blocked, "bad") {
 		t.Fatalf("after a restart: %v", st)
+	}
+}
+
+// A blocklist read by whatever reads a registry, here a search as the
+// store opens, stops a plugin it blocks at once: no event, command or
+// timer is needed for its runtime to close.
+func TestABlocklistLearntBySearchStopsThePlugin(t *testing.T) {
+	r := newRig(t, "")
+	a := newKey(t)
+	f := files("victim", "1.0.0")
+	f["main.js"] = []byte(`export default { activate(m) { m.blocks.register("ui", { state: { n: 0 },
+  render: (s, ui) => ui.column([ui.text("n=" + s.n, { key: "count" }), ui.button("Add", { key: "add", onTap: ["add"] })]),
+  on: { add(s) { s.n++; } } }) } }`)
+	v1 := r.publish("1.makoplugin", build(t, f, a))
+	r.index("home", &registry.Index{Plugins: []*registry.Entry{entry("victim", a, v1)}})
+	r.addRegistry("home")
+	// "other" is out of reach when added, so that a search reads it again.
+	r.hook("/other/"+registry.IndexName, func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "down", http.StatusServiceUnavailable) })
+	r.addRegistry("other")
+	if _, err := r.install(protocol.InstallOp, "victim", "home"); err != nil {
+		t.Fatal(err)
+	}
+	w := r.watch("plugin:victim/ui")
+	w.until(t, "n=0", func(_ *protocol.BlockUpdate, n *protocol.UiNode) bool { return text(n) == "n=0Add" })
+	r.state("victim", protocol.PluginRunning)
+
+	r.hook("/other/"+registry.IndexName, nil)
+	r.index("other", &registry.Index{Blocklist: []*registry.Block{{ID: "victim", Reason: "steals tokens"}}})
+	r.s.Search(context.Background(), "", "")
+	r.state("victim", protocol.PluginBlocked)
+	r.logged(t, "plugin stopped: blocked")
+	if _, err := r.m.Event(context.Background(), &protocol.BlockEvent{Block: "plugin:victim/ui", Node: "/add", Kind: protocol.UiTap}); err == nil ||
+		!strings.Contains(err.Error(), "steals tokens") {
+		t.Fatalf("an event of the blocked plugin: %v", err)
 	}
 }

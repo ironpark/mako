@@ -36,7 +36,13 @@ func (s *Store) Install(ctx context.Context, op, id, registryURL string) (*proto
 	}
 	s.installMu.Lock()
 	defer s.installMu.Unlock()
+	// What a daemon stopped midway left is settled first, so that an
+	// install cut short is retried as what it was.
+	s.reconcileLocked()
 	prev, had := s.Installed(id)
+	if s.devFolder(id) {
+		return nil, devFolderErr(id)
+	}
 	if op == protocol.UpdateOp && !had {
 		return nil, fmt.Errorf("%s was not installed from a registry: there is nothing to update", id)
 	}
@@ -74,10 +80,11 @@ func (s *Store) Install(ctx context.Context, op, id, registryURL string) (*proto
 	if err != nil {
 		return nil, err
 	}
-	if had && pkg.Key != prev.Key {
+	if had && !pack.SameKey(pkg.Key, prev.Key) {
 		return nil, fmt.Errorf("the package is signed by %s, not by the key pinned for %s", pack.Fingerprint(pkg.Key), id)
 	}
-	if !had && s.devFolder(id) {
+	// A folder written meanwhile, while the package downloaded.
+	if s.devFolder(id) {
 		return nil, devFolderErr(id)
 	}
 	if err := os.MkdirAll(s.man.Dir(), 0o755); err != nil {
@@ -99,7 +106,15 @@ func (s *Store) Install(ctx context.Context, op, id, registryURL string) (*proto
 	sum := sha256.Sum256(data)
 	next := Install{Registry: r.url, Key: pkg.Key, Version: pkg.Manifest.Version, SHA256: hex.EncodeToString(sum[:]),
 		Contents: pkg.Digest, Permissions: pkg.Manifest.Permissions, At: s.cfg.Now().UTC()}
-	if err := s.putInstall(id, &next); err != nil {
+	// The version is pinned as pending before the folder is swapped, and
+	// as installed after: a crash between leaves a pin naming the folder
+	// in place, whichever it is (folder.go).
+	pending := Install{Pending: &next}
+	if had {
+		pending = prev
+		pending.Pending = &next
+	}
+	if err := s.putInstall(id, &pending); err != nil {
 		_ = os.RemoveAll(stage)
 		return nil, err
 	}
@@ -112,6 +127,16 @@ func (s *Store) Install(ctx context.Context, op, id, registryURL string) (*proto
 		}
 		return nil, fmt.Errorf("the plugin was not put in place: %w", err)
 	}
+	if err := s.putInstall(id, &next); err != nil {
+		// The folder is in place and its pin pending: the manager, as it
+		// reads the folder, or the next start settles it.
+		s.cfg.Log.Warn("plugin's install not kept; it is settled as its folder is read", "plugin", id, "err", err)
+	}
+	previous := ""
+	if !had {
+		previous = s.previousKey(id, next.Key)
+	}
+	s.rememberKey(id, next.Key)
 	var added []string
 	for _, p := range pkg.Manifest.Permissions {
 		if !had || !slices.Contains(prev.Permissions, p) {
@@ -120,8 +145,13 @@ func (s *Store) Install(ctx context.Context, op, id, registryURL string) (*proto
 	}
 	s.cfg.Log.Info("plugin installed", "plugin", id, "version", next.Version, "registry", r.url,
 		"key", pack.Fingerprint(next.Key), "asks", added)
+	if previous != "" {
+		s.cfg.Log.Warn("plugin installed by another publisher key than the one this node had for it",
+			"plugin", id, "before", previous, "now", pack.Fingerprint(next.Key))
+	}
 	s.recheck()
-	return &protocol.PluginInstalled{Id: id, Version: next.Version, Added: added}, nil
+	return &protocol.PluginInstalled{Id: id, Version: next.Version, Added: added, PreviousFingerprint: previous,
+		Fingerprint: pack.Fingerprint(next.Key)}, nil
 }
 
 // pickLocked finds the registry and entry to install from: the one named,
@@ -162,19 +192,16 @@ func (s *Store) pickLocked(id, registryURL string) (*reg, *registry.Entry, error
 }
 
 // checkListingLocked refuses what may not be installed: a version blocked,
-// one signed by another key than the one pinned, one not newer than the
-// one installed, or one over a folder in development.
+// one signed by another key than the one pinned, or one not newer than
+// the one installed.
 func (s *Store) checkListingLocked(id string, r *reg, e *registry.Entry, v *registry.Version, prev Install, had bool) error {
 	if why := s.blockedLocked(id, v.Version, e.Key); why != "" {
 		return fmt.Errorf("%s %s is %s", id, v.Version, why)
 	}
 	if !had {
-		if s.devFolderLocked(id) {
-			return devFolderErr(id)
-		}
 		return nil
 	}
-	if e.Key != prev.Key {
+	if !pack.SameKey(e.Key, prev.Key) {
 		return fmt.Errorf("%s lists %s signed by the publisher key %s, but this node pinned %s when it installed it from %s: "+
 			"an update must be signed by the same key. To install the other publisher's, remove the plugin first",
 			r.url, id, pack.Fingerprint(e.Key), pack.Fingerprint(prev.Key), prev.Registry)
@@ -211,7 +238,7 @@ func (s *Store) download(ctx context.Context, r *reg, e *registry.Entry, v *regi
 		return nil, nil, fmt.Errorf("the package of %s %s does not check: %w", e.ID, v.Version, err)
 	}
 	switch {
-	case pkg.Key != e.Key:
+	case !pack.SameKey(pkg.Key, e.Key):
 		return nil, nil, fmt.Errorf("the package of %s %s is signed by %s, not by the publisher key %s lists, %s",
 			e.ID, v.Version, pack.Fingerprint(pkg.Key), r.url, pack.Fingerprint(e.Key))
 	case pkg.Manifest.ID != e.ID:
@@ -219,7 +246,39 @@ func (s *Store) download(ctx context.Context, r *reg, e *registry.Entry, v *regi
 	case pkg.Manifest.Version != v.Version:
 		return nil, nil, fmt.Errorf("%s lists a package of %s %s as %s", r.url, e.ID, pkg.Manifest.Version, v.Version)
 	}
+	// The listing's permissions are what the store showed before the
+	// package was fetched: a package asking for others is not the one
+	// the user looked at.
+	if more, fewer := permDiff(pkg.Manifest.Permissions, v.Permissions); len(more)+len(fewer) > 0 {
+		var why []string
+		if len(more) > 0 {
+			why = append(why, fmt.Sprintf("asks for %s, which the listing does not show", strings.Join(more, ", ")))
+		}
+		if len(fewer) > 0 {
+			why = append(why, fmt.Sprintf("does not ask for %s, which the listing shows", strings.Join(fewer, ", ")))
+		}
+		return nil, nil, fmt.Errorf("the package of %s %s %s: it is not what %s lists. Nothing was installed",
+			e.ID, v.Version, strings.Join(why, " and "), r.url)
+	}
 	return pkg, data, nil
+}
+
+// permDiff compares two sets of permissions: those of got that want does
+// not hold, and those of want that got does not, each sorted.
+func permDiff(got, want []string) (more, fewer []string) {
+	for _, p := range got {
+		if !slices.Contains(want, p) && !slices.Contains(more, p) {
+			more = append(more, p)
+		}
+	}
+	for _, p := range want {
+		if !slices.Contains(got, p) && !slices.Contains(fewer, p) {
+			fewer = append(fewer, p)
+		}
+	}
+	slices.Sort(more)
+	slices.Sort(fewer)
+	return more, fewer
 }
 
 // putInstall keeps an install, or forgets it with nil.
@@ -250,7 +309,8 @@ func (s *Store) Remove(id string) error {
 	}
 	s.installMu.Lock()
 	defer s.installMu.Unlock()
-	if _, ok := s.Installed(id); !ok {
+	s.reconcileLocked()
+	if _, ok := s.Installed(id); !ok || s.devFolder(id) {
 		if s.devFolder(id) {
 			return fmt.Errorf("plugins/%s is a folder of a plugin in development: mako removes only what it installed. Delete the folder yourself", id)
 		}

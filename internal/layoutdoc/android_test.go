@@ -87,6 +87,29 @@ var pageCases = []struct {
 	{"a sized root", `{"version":1,"root":{"panes":"main","size":3}}`, true},
 	{"too deep", `{"version":1,"root":` + strings.Repeat(`{"id":"x","row":[`, 20) + `{"panes":"main"}` + strings.Repeat(`]}`, 20) + `}`, true},
 	{"too many nodes", `{"version":1,"root":{"id":"r","row":[{"panes":"main"}` + manyBlocks(MaxNodes) + `]}}`, true},
+	{"props nested deep", deepProps(200), false},
+	{"props nested as deep as encoding/json reads", deepProps(maxJSONDepth), false},
+	{"props nested deeper than encoding/json reads", deepProps(maxJSONDepth + 1), true},
+	{"a later version's field nested deep", `{"version":3,"layers":` + strings.Repeat(`[`, 500) + strings.Repeat(`]`, 500) + `,"root":{"id":"w","row":[{"panes":"main"},"plugin:a/one"]}}`, false},
+	{"a later version's node field nested deep", `{"version":3,"root":{"id":"w","row":[{"panes":"main"},{"block":"plugin:a/one","pin":` + strings.Repeat(`{"a":`, 300) + `1` + strings.Repeat(`}`, 300) + `}]}}`, false},
+	{"a version of 1.0", `{"version":1.0,"root":{"panes":"main"}}`, true},
+	{"a version of 1e0", `{"version":1e0,"root":{"panes":"main"}}`, true},
+	{"a version beyond 32 bits", `{"version":4294967296,"root":{"id":"w","row":[{"panes":"main"},"plugin:a/one"]}}`, false},
+	{"a size of .5", `{"version":1,"root":{"id":"r","row":[{"panes":"main"},{"block":"plugin:a/b","size":.5}]}}`, true},
+	{"a size of 1.", `{"version":1,"root":{"id":"r","row":[{"panes":"main"},{"block":"plugin:a/b","size":1.}]}}`, true},
+	{"a size of 01", `{"version":1,"root":{"id":"r","row":[{"panes":"main"},{"block":"plugin:a/b","size":01}]}}`, true},
+	{"a size of +1", `{"version":1,"root":{"id":"r","row":[{"panes":"main"},{"block":"plugin:a/b","size":+1}]}}`, true},
+	{"a size of 5e1", `{"version":1,"root":{"id":"r","row":[{"panes":"main"},{"block":"plugin:a/b","size":5e1}]}}`, false},
+	{"a size beyond a double", `{"version":1,"root":{"id":"r","row":[{"panes":"main"},{"block":"plugin:a/b","size":1e400}]}}`, true},
+	{"a prop beyond a double", `{"version":1,"root":{"id":"r","row":[{"panes":"main"},{"block":"plugin:a/b","props":{"x":[1,{"y":-1e400}]}}]}}`, true},
+	{"a later version's field beyond a double", `{"version":3,"far":1e400,"root":{"id":"r","row":[{"panes":"main"},"plugin:a/b"]}}`, false},
+	{"active of 1.0", `{"version":1,"root":{"id":"r","row":[{"panes":"main"},{"id":"s","stack":["plugin:a/b","plugin:a/c"],"active":1.0}]}}`, true},
+	{"active of a whole number", `{"version":1,"root":{"id":"r","row":[{"panes":"main"},{"id":"s","stack":["plugin:a/b","plugin:a/c"],"active":1}]}}`, false},
+	{"a control character in a string", "{\"version\":1,\"root\":{\"id\":\"r\",\"row\":[{\"panes\":\"main\"},\"plugin:a/b\t\"]}}", true},
+	{"an escape of a plus", `{"version":1,"root":{"id":"r","row":[{"panes":"main"},"plugin:a/\u+062"]}}`, true},
+	{"a name escaped", `{"version":1,"root":{"id":"r","row":[{"panes":"main"},"\u0070lugin:a\/b"]}}`, false},
+	{"a root of null", `{"version":1,"root":null}`, true},
+	{"children of null", `{"version":1,"root":{"id":"r","row":null}}`, true},
 	{"two panes in the compact root", `{"version":2,"root":{"id":"w","row":[{"panes":"main"}]},"variants":{"compact":{"id":"c","column":[{"panes":"main"},{"id":"p2","panes":"main"}]}}}`, true},
 	{"a compact root of no kind", `{"version":2,"root":{"id":"w","row":[{"panes":"main"}]},"variants":{"compact":{}}}`, true},
 	{"an id twice in the compact root", `{"version":2,"root":{"id":"w","row":[{"panes":"main"}]},"variants":{"compact":{"id":"c","column":["plugin:a/b","plugin:a/b"]}}}`, true},
@@ -96,6 +119,17 @@ var pageCases = []struct {
 func mustDefault() string {
 	data, _ := json.Marshal(Default())
 	return string(data)
+}
+
+// maxJSONDepth is how deep encoding/json reads objects and arrays nested.
+const maxJSONDepth = 10000
+
+// deepProps is a document whose block's props nest arrays to depth, the
+// document's own objects and arrays counted.
+func deepProps(depth int) string {
+	n := depth - 5 // the document's object, the root, its row, the block and its props
+	return `{"version":1,"root":{"id":"w","row":[{"panes":"main"},{"block":"plugin:a/b","props":{"x":` +
+		strings.Repeat(`[`, n) + strings.Repeat(`]`, n) + `}}]}}`
 }
 
 // manyBlocks is n blocks of their own names, each after a comma.

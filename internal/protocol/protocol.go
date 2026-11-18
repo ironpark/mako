@@ -358,7 +358,8 @@ func HasCode(err error, code string) bool {
 
 // WriteError is a shorthand for sending a TypeError frame.
 func WriteError(w io.Writer, id string, err error) error {
-	e := &Error{Message: err.Error()}
+	// An error may quote what a server, a registry or a plugin wrote.
+	e := &Error{Message: Printable(err.Error())}
 	var ce *CodedError
 	if errors.As(err, &ce) {
 		e.Code = ce.Code
@@ -378,6 +379,9 @@ const (
 	// CodeUnsupported is a request its daemon does not know, being older
 	// than the requester.
 	CodeUnsupported = "unsupported"
+	// CodeNoPlugin is a block of a plugin the node does not have, which
+	// asking again will not change until the plugin is installed.
+	CodeNoPlugin = "no_plugin"
 )
 
 // HasFeature reports whether a node speaks a protocol extension.

@@ -112,6 +112,8 @@ func listingCard(m *model, l *protocol.PluginListing) ggui.Widget {
 			Tf("Installed here from %s, signed by another publisher key: this one cannot replace it. Remove that one first to install this.", registryLabel(l.GetInstalledFrom()))))
 	case l.GetInstalled() == "dev":
 		rows = append(rows, warnLine("folder", skin.DotWaiting, T("A plugin in development has this ID on this node: an install never replaces its folder.")))
+	case l.GetPreviousFingerprint() != "":
+		rows = append(rows, newKeyLine(l.GetPreviousFingerprint(), l.GetFingerprint()))
 	}
 	return widget.Box(widget.Column(rows...).Gap(9).Stretch()).Pad(14, 16).Fill(skin.Surface1).Border(1, skin.Border).Radius(10)
 }
@@ -149,6 +151,12 @@ func asksLine(perms []string) ggui.Widget {
 		icon("lock").Size(13).Color(skin.ExtraMuted),
 		widget.Expanded(widget.Text(Tf("Asks to: %s", strings.Join(texts, " · "))).Size(12.5)),
 	).Gap(6).Align(widget.AlignStart)
+}
+
+// newKeyLine says a plugin's ID was installed on this node before by
+// another publisher's key than the one it is, or would be, installed by.
+func newKeyLine(before, now string) ggui.Widget {
+	return warnLine("key-round", skin.DotWaiting, Tf("Published by a different key than the one you had before: %s → %s", before, now))
 }
 
 // warnLine is a line that stops the eye, in a colour of warning.

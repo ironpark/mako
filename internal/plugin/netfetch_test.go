@@ -129,13 +129,36 @@ func TestNetRefusesPrivateAddresses(t *testing.T) {
 		resp.Body.Close()
 		t.Fatal("a loopback address was dialed")
 	}
-	for addr, public := range map[string]bool{
-		"127.0.0.1": false, "10.1.2.3": false, "192.168.1.1": false, "172.16.0.1": false, "169.254.169.254": false,
-		"100.64.0.1": false, "0.0.0.0": false, "::1": false, "fe80::1": false, "fd00::1": false, "::ffff:127.0.0.1": false,
-		"8.8.8.8": true, "140.82.112.6": true, "2606:4700::1111": true,
+}
+
+// Only the internet's addresses are public: none IANA's special-purpose
+// registries do not mark global, and none of IPv6's forms of an IPv4
+// address but for a public one.
+func TestPublicAddresses(t *testing.T) {
+	for _, c := range []struct {
+		addr   string
+		public bool
+	}{
+		{"8.8.8.8", true}, {"140.82.112.6", true}, {"2606:4700::1111", true}, {"2a00:1450:4001::200e", true},
+		{"127.0.0.1", false}, {"10.1.2.3", false}, {"192.168.1.1", false}, {"172.16.0.1", false},
+		{"169.254.169.254", false}, {"100.64.0.1", false}, {"0.0.0.0", false}, {"0.1.2.3", false},
+		{"192.0.0.8", false}, {"192.0.2.1", false}, {"192.88.99.1", false}, {"198.18.0.1", false},
+		{"198.51.100.1", false}, {"203.0.113.1", false}, {"224.0.0.1", false}, {"240.0.0.1", false},
+		{"255.255.255.255", false},
+		{"::", false}, {"::1", false}, {"fe80::1", false}, {"fe80::1%en0", false}, {"fd00::1", false},
+		{"fd00:ec2::254", false}, {"fec0::1", false}, {"ff02::1", false}, {"100::1", false},
+		{"100:0:0:1::1", false}, {"2001::1", false}, {"2001:0:4136:e378:8000:63bf:3fff:fdd2", false},
+		{"2001:2::1", false}, {"2001:db8::1", false}, {"3fff::1", false}, {"5f00::1", false},
+		{"64:ff9b:1::a00:1", false},
+		// IPv4 in IPv6: as public as the IPv4 address it carries.
+		{"::ffff:127.0.0.1", false}, {"::ffff:8.8.8.8", true},
+		{"::127.0.0.1", false}, {"::10.0.0.1", false}, {"::8.8.8.8", true},
+		{"::ffff:0:a00:1", false}, {"::ffff:0:808:808", true},
+		{"64:ff9b::a00:1", false}, {"64:ff9b::a9fe:a9fe", false}, {"64:ff9b::808:808", true},
+		{"2002:7f00:1::1", false}, {"2002:a9fe:a9fe::1", false}, {"2002:c0a8:101::1", false}, {"2002:808:808::1", true},
 	} {
-		if got := publicAddr(netip.MustParseAddr(addr)); got != public {
-			t.Errorf("publicAddr(%s) = %v", addr, got)
+		if got := publicAddr(netip.MustParseAddr(c.addr)); got != c.public {
+			t.Errorf("publicAddr(%s) = %v; want %v", c.addr, got, c.public)
 		}
 	}
 }

@@ -33,6 +33,7 @@ public  final class PluginListing extends
     installed_ = "";
     installedFrom_ = "";
     blocked_ = "";
+    previousFingerprint_ = "";
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -864,6 +865,88 @@ public  final class PluginListing extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     blocked_ = value.toStringUtf8();
+
+  }
+
+  public static final int PREVIOUS_FINGERPRINT_FIELD_NUMBER = 15;
+  private java.lang.String previousFingerprint_;
+  /**
+   * <pre>
+   * previous_fingerprint is the fingerprint of the publisher key this
+   * node last installed the ID by, when it is not key's and the ID is not
+   * installed now: the plugin of the ID the user had before was another
+   * publisher's. "" otherwise.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 15 [json_name = "previousFingerprint"];</code>
+   * @return The previousFingerprint.
+   */
+  @java.lang.Override
+  public java.lang.String getPreviousFingerprint() {
+    return previousFingerprint_;
+  }
+  /**
+   * <pre>
+   * previous_fingerprint is the fingerprint of the publisher key this
+   * node last installed the ID by, when it is not key's and the ID is not
+   * installed now: the plugin of the ID the user had before was another
+   * publisher's. "" otherwise.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 15 [json_name = "previousFingerprint"];</code>
+   * @return The bytes for previousFingerprint.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getPreviousFingerprintBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(previousFingerprint_);
+  }
+  /**
+   * <pre>
+   * previous_fingerprint is the fingerprint of the publisher key this
+   * node last installed the ID by, when it is not key's and the ID is not
+   * installed now: the plugin of the ID the user had before was another
+   * publisher's. "" otherwise.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 15 [json_name = "previousFingerprint"];</code>
+   * @param value The previousFingerprint to set.
+   */
+  private void setPreviousFingerprint(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    previousFingerprint_ = value;
+  }
+  /**
+   * <pre>
+   * previous_fingerprint is the fingerprint of the publisher key this
+   * node last installed the ID by, when it is not key's and the ID is not
+   * installed now: the plugin of the ID the user had before was another
+   * publisher's. "" otherwise.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 15 [json_name = "previousFingerprint"];</code>
+   */
+  private void clearPreviousFingerprint() {
+
+    previousFingerprint_ = getDefaultInstance().getPreviousFingerprint();
+  }
+  /**
+   * <pre>
+   * previous_fingerprint is the fingerprint of the publisher key this
+   * node last installed the ID by, when it is not key's and the ID is not
+   * installed now: the plugin of the ID the user had before was another
+   * publisher's. "" otherwise.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 15 [json_name = "previousFingerprint"];</code>
+   * @param value The bytes for previousFingerprint to set.
+   */
+  private void setPreviousFingerprintBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    previousFingerprint_ = value.toStringUtf8();
 
   }
 
@@ -1827,6 +1910,90 @@ public  final class PluginListing extends
       return this;
     }
 
+    /**
+     * <pre>
+     * previous_fingerprint is the fingerprint of the publisher key this
+     * node last installed the ID by, when it is not key's and the ID is not
+     * installed now: the plugin of the ID the user had before was another
+     * publisher's. "" otherwise.
+     * </pre>
+     *
+     * <code>string previous_fingerprint = 15 [json_name = "previousFingerprint"];</code>
+     * @return The previousFingerprint.
+     */
+    @java.lang.Override
+    public java.lang.String getPreviousFingerprint() {
+      return instance.getPreviousFingerprint();
+    }
+    /**
+     * <pre>
+     * previous_fingerprint is the fingerprint of the publisher key this
+     * node last installed the ID by, when it is not key's and the ID is not
+     * installed now: the plugin of the ID the user had before was another
+     * publisher's. "" otherwise.
+     * </pre>
+     *
+     * <code>string previous_fingerprint = 15 [json_name = "previousFingerprint"];</code>
+     * @return The bytes for previousFingerprint.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getPreviousFingerprintBytes() {
+      return instance.getPreviousFingerprintBytes();
+    }
+    /**
+     * <pre>
+     * previous_fingerprint is the fingerprint of the publisher key this
+     * node last installed the ID by, when it is not key's and the ID is not
+     * installed now: the plugin of the ID the user had before was another
+     * publisher's. "" otherwise.
+     * </pre>
+     *
+     * <code>string previous_fingerprint = 15 [json_name = "previousFingerprint"];</code>
+     * @param value The previousFingerprint to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPreviousFingerprint(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setPreviousFingerprint(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * previous_fingerprint is the fingerprint of the publisher key this
+     * node last installed the ID by, when it is not key's and the ID is not
+     * installed now: the plugin of the ID the user had before was another
+     * publisher's. "" otherwise.
+     * </pre>
+     *
+     * <code>string previous_fingerprint = 15 [json_name = "previousFingerprint"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPreviousFingerprint() {
+      copyOnWrite();
+      instance.clearPreviousFingerprint();
+      return this;
+    }
+    /**
+     * <pre>
+     * previous_fingerprint is the fingerprint of the publisher key this
+     * node last installed the ID by, when it is not key's and the ID is not
+     * installed now: the plugin of the ID the user had before was another
+     * publisher's. "" otherwise.
+     * </pre>
+     *
+     * <code>string previous_fingerprint = 15 [json_name = "previousFingerprint"];</code>
+     * @param value The bytes for previousFingerprint to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPreviousFingerprintBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setPreviousFingerprintBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginListing)
   }
   @java.lang.Override
@@ -1857,11 +2024,12 @@ public  final class PluginListing extends
             "installedFrom_",
             "otherKey_",
             "blocked_",
+            "previousFingerprint_",
           };
           java.lang.String info =
-              "\u0000\u000e\u0000\u0000\u0001\u000e\u000e\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u000f\u0000\u0000\u0001\u000f\u000f\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0208\n\u021a" +
-              "\u000b\u0208\f\u0208\r\u0007\u000e\u0208";
+              "\u000b\u0208\f\u0208\r\u0007\u000e\u0208\u000f\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

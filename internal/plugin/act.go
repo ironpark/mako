@@ -110,7 +110,7 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 		p.status(func() {})
 		// A block drawn from the settings is loaded again with them.
 		p.post(func() {
-			if p.rt == nil {
+			if p.rt == nil || p.ensure() != nil {
 				return
 			}
 			p.mu.Lock()

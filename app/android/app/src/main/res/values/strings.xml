@@ -306,10 +306,12 @@
     <string name="panels">Panels</string>
     <string name="panels_unsupported">Update Mako on %1$s to see its panels here.</string>
     <string name="panels_none">%1$s\'s window shows no plugin\'s panel, and its agents show none.</string>
+    <string name="panel">Panel</string>
     <string name="block_plugin">Plugin</string>
     <string name="block_agent">Agent</string>
     <string name="block_unreachable">The panel could not be reached. Trying again…</string>
     <string name="block_reconnecting">Reconnecting…</string>
+    <string name="block_missing">This plugin is not installed on %1$s.</string>
     <string name="block_closed">This panel was closed.</string>
     <string name="block_waiting">This plugin waits to be allowed. Allow it on %1$s.</string>
     <string name="block_denied">What this plugin asks for was refused on %1$s.</string>

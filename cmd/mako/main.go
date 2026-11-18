@@ -107,7 +107,7 @@ func main() {
 	}
 
 	if err := run(args, *daemonAddr, *nodeID, *project, devices); err != nil {
-		fmt.Fprintln(os.Stderr, "mako:", err)
+		fmt.Fprintln(os.Stderr, "mako:", protocol.Printable(err.Error()))
 		os.Exit(1)
 	}
 }

@@ -196,15 +196,7 @@ func TestDevFoldersAreLeftAlone(t *testing.T) {
 	a := newKey(t)
 	r.index("reg", &registry.Index{Plugins: []*registry.Entry{entry("mine", a, r.publish("mine.makoplugin", build(t, files("mine", "9.0.0"), a)))}})
 	r.addRegistry("reg")
-	dev := filepath.Join(r.dir, "mine")
-	if err := os.MkdirAll(dev, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for name, b := range files("mine", "0.0.1") {
-		if err := os.WriteFile(filepath.Join(dev, name), b, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
+	r.writeFolder("mine", files("mine", "0.0.1"))
 	r.state("mine", protocol.PluginReady)
 	r.refused(protocol.InstallOp, "mine", "reg", "a folder of a plugin in development")
 	if err := r.s.Remove("mine"); err == nil || !strings.Contains(err.Error(), "Delete the folder yourself") {
@@ -256,4 +248,37 @@ func signedRaw(t *testing.T, priv ed25519.PrivateKey, id, version string, f map[
 		t.Fatal(err)
 	}
 	return buf.Bytes()
+}
+
+// The permissions a listing shows, before its package is fetched, are
+// the package's: one asking for more, or for others, is refused, saying
+// which; the same set in another order is the same.
+func TestListedPermissionsAreThePackages(t *testing.T) {
+	r := newRig(t, "")
+	a := newKey(t)
+	data := build(t, files("quiet", "1.0.0", "net:attacker.example", "storage"), a)
+	v := r.publish("q.makoplugin", data)
+	v.Permissions = []string{"storage"}
+	r.index("reg", &registry.Index{Plugins: []*registry.Entry{entry("quiet", a, v)}})
+	r.addRegistry("reg")
+	if found := r.s.Search(context.Background(), "", "quiet"); len(found) != 1 || !slices.Equal(found[0].GetPermissions(), []string{"storage"}) {
+		t.Fatalf("listed as %v", found)
+	}
+	r.refused(protocol.InstallOp, "quiet", "", "asks for net:attacker.example, which the listing does not show")
+
+	v.Permissions = []string{"storage", "net:attacker.example", "sessions:read"}
+	r.index("reg", &registry.Index{Plugins: []*registry.Entry{entry("quiet", a, v)}})
+	r.s.Refresh(context.Background())
+	r.refused(protocol.InstallOp, "quiet", "", "does not ask for sessions:read, which the listing shows")
+
+	v.Permissions = []string{"storage", "net:attacker.example"}
+	r.index("reg", &registry.Index{Plugins: []*registry.Entry{entry("quiet", a, v)}})
+	r.s.Refresh(context.Background())
+	done, err := r.install(protocol.InstallOp, "quiet", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(done.GetAdded(), []string{"net:attacker.example", "storage"}) {
+		t.Fatalf("installed asking for %v", done.GetAdded())
+	}
 }

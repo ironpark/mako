@@ -58,34 +58,57 @@ func treeBlock(m *model, name string, origin blockOrigin, title string) ggui.Wid
 }
 
 // followBlock watches a block on the daemon, applying each update to the
-// tree it holds and handing on the whole, until ctx ends; a stream that
-// breaks, or an update that does not apply, starts again from the tree.
+// tree it holds and handing on the whole, until ctx ends.
 func (m *model) followBlock(ctx context.Context, name string, fn func(*protocol.BlockUpdate)) {
+	followStream(ctx, func(ctx context.Context, each func(*protocol.BlockUpdate)) error {
+		c, err := m.link.client(ctx)
+		if err != nil {
+			return err
+		}
+		return c.WatchBlock(ctx, name, each)
+	}, time.Second, fn)
+}
+
+// followStream follows a block's stream, which watch opens, as
+// docs/protocol.md says: the first update holds the tree whole, those
+// after it the ops from one render to the next. An op that does not apply
+// to the tree held, or an op before any tree, leaves the tree unknown,
+// which the stream will never send whole again: the stream is closed and
+// opened again at once, for a whole tree. A stream that breaks is opened
+// again after retry.
+func followStream(ctx context.Context, watch func(context.Context, func(*protocol.BlockUpdate)) error, retry time.Duration, fn func(*protocol.BlockUpdate)) {
 	for ctx.Err() == nil {
 		var tree *protocol.UiNode
-		c, err := m.link.client(ctx)
-		if err == nil {
-			err = c.WatchBlock(ctx, name, func(u *protocol.BlockUpdate) {
-				switch {
-				case u.GetTree() != nil:
-					tree = u.GetTree()
-				case len(u.GetOps()) > 0 && tree != nil:
-					next, err := protocol.ApplyUi(tree, u.GetOps())
-					if err != nil {
-						tree = nil
-						return // dropped: the next whole tree comes after a restart
-					}
-					tree = next
+		stream, restart := context.WithCancel(ctx)
+		lost := false
+		_ = watch(stream, func(u *protocol.BlockUpdate) {
+			if lost {
+				return
+			}
+			switch {
+			case u.GetTree() != nil:
+				tree = u.GetTree()
+			case len(u.GetOps()) > 0:
+				next, err := protocol.ApplyUi(tree, u.GetOps())
+				if tree == nil || err != nil {
+					lost = true
+					restart()
+					return
 				}
-				whole := &protocol.BlockUpdate{Block: u.GetBlock(), Seq: u.GetSeq(), Tree: tree, Plugin: u.GetPlugin(),
-					SessionId: u.GetSessionId(), Agent: u.GetAgent(), Title: u.GetTitle(), State: u.GetState(),
-					Error: u.GetError(), Stale: u.GetStale(), Gone: u.GetGone()}
-				fn(whole)
-			})
+				tree = next
+			}
+			whole := &protocol.BlockUpdate{Block: u.GetBlock(), Seq: u.GetSeq(), Tree: tree, Plugin: u.GetPlugin(),
+				SessionId: u.GetSessionId(), Agent: u.GetAgent(), Title: u.GetTitle(), State: u.GetState(),
+				Error: u.GetError(), Stale: u.GetStale(), Gone: u.GetGone()}
+			fn(whole)
+		})
+		restart()
+		if lost {
+			continue
 		}
 		select {
 		case <-ctx.Done():
-		case <-time.After(time.Second):
+		case <-time.After(retry):
 		}
 	}
 }

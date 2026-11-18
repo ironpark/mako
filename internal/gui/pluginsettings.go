@@ -264,11 +264,15 @@ func pluginAskBar(m *model) ggui.Widget {
 			by = Tf("By %s, key %s, from %s. It does not run until you allow it.", p.GetPublisher(),
 				shortFingerprint(pack.Fingerprint(p.GetKey())), registryLabel(p.GetSource()))
 		}
-		body := widget.Column(
+		lines := []ggui.Widget{
 			widget.Text(head).Size(13.5).Weight(ggui.WeightMedium),
 			muted(widget.Text(strings.Join(asks, " · ")).Size(12.5)),
 			muted(widget.Text(by).Size(12.5)),
-		).Gap(3).Stretch()
+		}
+		if k, ok := ggui.Peek(m.store.NewKey)[id]; ok && p.GetInstalled() {
+			lines = append([]ggui.Widget{newKeyLine(k[0], k[1])}, lines...)
+		}
+		body := widget.Column(lines...).Gap(3).Stretch()
 		later := func() {
 			m.plugins.Later.Update(func(l map[string]bool) map[string]bool {
 				next := map[string]bool{id: true}

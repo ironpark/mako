@@ -24,6 +24,13 @@ func key(t *testing.T) string {
 	return pack.EncodeKey(pub)
 }
 
+// alias writes a key with its last character's unused low bit flipped:
+// the same key's bytes, in a spelling mako does not write.
+func alias(key string) string {
+	const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+	return key[:len(key)-1] + string(alpha[strings.IndexByte(alpha, key[len(key)-1])^0x1])
+}
+
 func goodIndex(t *testing.T) *Index {
 	return &Index{Format: Format, Name: "test", Plugins: []*Entry{{
 		ID: "hello", Publisher: "someone", Key: key(t), Name: "Hello", Description: "says hello",
@@ -78,6 +85,8 @@ func TestIndexesThatDoNotCheckAreRefused(t *testing.T) {
 		{"bad id", mutate(func(i *Index) { i.Plugins[0].ID = "../evil" }), "not a plugin's ID"},
 		{"mako id", mutate(func(i *Index) { i.Plugins[0].ID = "mako-core" }), "not a plugin's ID"},
 		{"bad key", mutate(func(i *Index) { i.Plugins[0].Key = "rsa:abc" }), "publisher key"},
+		{"key spelt otherwise", mutate(func(i *Index) { i.Plugins[0].Key = alias(i.Plugins[0].Key) }), "another spelling"},
+		{"blocked key spelt otherwise", mutate(func(i *Index) { i.Blocklist = []*Block{{Key: alias(key(t)), Reason: "x"}} }), "another spelling"},
 		{"bad sha", mutate(func(i *Index) { i.Plugins[0].Versions[0].SHA256 = "ABC" }), "64 lowercase hex"},
 		{"http", mutate(func(i *Index) { i.Plugins[0].Versions[0].URL = "http://example.com/x" }), "not an https URL"},
 		{"file", mutate(func(i *Index) { i.Plugins[0].Versions[0].URL = "file:///etc/passwd" }), "not an https URL"},

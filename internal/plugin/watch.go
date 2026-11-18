@@ -51,6 +51,8 @@ func (p *plugin) view(block string) uiblock.View {
 	if !declared && v.Err == "" {
 		v.Err = fmt.Sprintf("the plugin declares no block %s", block)
 	}
+	// An error may quote what the plugin's code threw.
+	v.Err = protocol.Printable(v.Err)
 	return v
 }
 
@@ -74,6 +76,12 @@ func (p *plugin) unsubscribe(block string) {
 	p.post(func() { p.lastUsed = time.Now() })
 }
 
+// noPlugin is the error of a block of a plugin the node does not have,
+// coded so that a front-end says so rather than trying again.
+func noPlugin(id string) error {
+	return &protocol.CodedError{Code: protocol.CodeNoPlugin, Message: fmt.Sprintf("no plugin %s on this node", id)}
+}
+
 // Watch follows the block of the name, calling send with each update,
 // until ctx ends, send fails, or the plugin is removed.
 func (m *Manager) Watch(ctx context.Context, name string, send func(*protocol.BlockUpdate) error) error {
@@ -83,7 +91,7 @@ func (m *Manager) Watch(ctx context.Context, name string, send func(*protocol.Bl
 	}
 	p, ok := m.plugin(id)
 	if !ok {
-		return fmt.Errorf("no plugin %s on this node", id)
+		return noPlugin(id)
 	}
 	p.subscribe(block)
 	defer p.unsubscribe(block)
@@ -104,7 +112,7 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	}
 	p, ok := m.plugin(id)
 	if !ok {
-		return nil, fmt.Errorf("no plugin %s on this node", id)
+		return nil, noPlugin(id)
 	}
 	if !p.evRate.take() {
 		return nil, errors.New("events come faster than the plugin takes them; this one was dropped")
@@ -117,6 +125,11 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	p.mu.Unlock()
 	msg, err := tree.Message(ev)
 	if err != nil {
+		return nil, err
+	}
+	// A plugin reads its fields from its own state, not from the
+	// event's values, but they are bounded as an agent's block's are.
+	if _, err := tree.Values(ev.GetValues()); err != nil {
 		return nil, err
 	}
 	name := msg.Name

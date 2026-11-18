@@ -109,8 +109,8 @@ type Config struct {
 	// which a registry blocks; nil for none.
 	Installs Installs
 	// NetTest sends the requests for a host to another base URL, a test's
-	// server on loopback (MAKO_PLUGIN_NET_TEST). The host must still be
-	// granted. It is for development and tests alone.
+	// server on loopback (internal/testhooks). The host must still be
+	// granted. It is for tests alone.
 	NetTest map[string]string
 }
 

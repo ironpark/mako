@@ -35,6 +35,13 @@ type kvStore struct {
 
 func newKVStore(path string, quota int) *kvStore { return &kvStore{path: path, quota: quota} }
 
+// reset forgets what was read, for a store whose file was removed.
+func (s *kvStore) reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data, s.loaded = nil, false
+}
+
 func (s *kvStore) load() {
 	if s.loaded {
 		return

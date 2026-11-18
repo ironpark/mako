@@ -30,7 +30,7 @@ type Fetcher struct {
 const maxRedirects = 3
 
 // NewFetcher makes a Fetcher. loopback lets it reach http servers on
-// this machine's loopback, for tests alone (MAKO_PLUGIN_REGISTRY_TEST).
+// this machine's loopback, for tests alone (internal/testhooks).
 func NewFetcher(loopback bool) *Fetcher {
 	f := &Fetcher{loopback: loopback}
 	dialer := &net.Dialer{Timeout: 10 * time.Second, Control: func(network, address string, _ syscall.RawConn) error {
@@ -98,7 +98,9 @@ func (f *Fetcher) Get(ctx context.Context, raw string, max int64, timeout time.D
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s answered %s", host(raw), resp.Status)
+		// The status's text is the server's to write, and an error is
+		// printed in a terminal: the code alone is taken from it.
+		return nil, fmt.Errorf("%s answered %d %s", host(raw), resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 	if resp.ContentLength > max {
 		return nil, fmt.Errorf("%s sent %d bytes, over the %d KiB taken", host(raw), resp.ContentLength, max>>10)

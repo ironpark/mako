@@ -23,7 +23,8 @@ import (
 // A front-end adds a registry, searches it, installs from it and removes
 // what it installed, over the daemon's socket.
 func TestPluginStoreOverTheSocket(t *testing.T) {
-	t.Setenv(registryTestEnv, "1")
+	testRegistries = true
+	t.Cleanup(func() { testRegistries = false })
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	data, _, err := pack.Build(map[string][]byte{
 		"plugin.toml": []byte("id = \"hello\"\nversion = \"1.0.0\"\npublisher = \"test\"\napi = 1\nentry = \"main.js\"\npermissions = [\"storage\"]\n\n[[contributes.block]]\nid = \"hi\"\ntitle = \"Hello\"\n"),

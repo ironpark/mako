@@ -35,6 +35,7 @@ import (
 
 	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/plugin"
+	"github.com/ironpark/mako/internal/plugin/pack"
 	"github.com/ironpark/mako/internal/plugin/registry"
 )
 
@@ -62,7 +63,7 @@ type Config struct {
 	// Default is the registry every node starts with; "" for none.
 	Default string
 	// Loopback lets registries and packages be on this machine's
-	// loopback, by http: for tests alone (MAKO_PLUGIN_REGISTRY_TEST).
+	// loopback, by http: for tests alone (internal/testhooks).
 	Loopback bool
 	Log      *slog.Logger
 	// Now is the clock; nil for time.Now.
@@ -82,6 +83,7 @@ type Store struct {
 	settings registrySettings
 	regs     []*reg
 	installs map[string]Install
+	known    map[string]knownKey // publishers.json
 }
 
 // registrySettings are the registries the user added, kept in
@@ -92,16 +94,23 @@ type registrySettings struct {
 }
 
 // Install is a plugin installed from a registry, kept in installs.json:
-// what was pinned, and what the package was.
+// what was pinned, and what the package was. Pending is the version an
+// install is putting in place, kept while it does (folder.go); a first
+// install's pin is its pending version alone until the folder is in
+// place, and is no install meanwhile.
 type Install struct {
-	Registry    string    `json:"registry"`
-	Key         string    `json:"key"`
-	Version     string    `json:"version"`
-	SHA256      string    `json:"sha256"`
-	Contents    string    `json:"contents"`
+	Registry    string    `json:"registry,omitempty"`
+	Key         string    `json:"key,omitempty"`
+	Version     string    `json:"version,omitempty"`
+	SHA256      string    `json:"sha256,omitempty"`
+	Contents    string    `json:"contents,omitempty"`
 	Permissions []string  `json:"permissions,omitempty"`
-	At          time.Time `json:"at"`
+	At          time.Time `json:"at,omitzero"`
+	Pending     *Install  `json:"pending,omitempty"`
 }
+
+// settled says the pin names a version in place, not only one pending.
+func (in Install) settled() bool { return in.Contents != "" }
 
 // New makes a Store, reading what it kept; Attach gives it the manager.
 func New(cfg Config) *Store {
@@ -111,9 +120,18 @@ func New(cfg Config) *Store {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	s := &Store{cfg: cfg, fetch: registry.NewFetcher(cfg.Loopback), installs: map[string]Install{}}
+	s := &Store{cfg: cfg, fetch: registry.NewFetcher(cfg.Loopback), installs: map[string]Install{}, known: map[string]knownKey{}}
 	readJSON(s.path("registries.json"), &s.settings)
 	readJSON(s.path("installs.json"), &s.installs)
+	readJSON(s.path(knownFile), &s.known)
+	// A pin an older mako kept may spell its key otherwise: it is kept
+	// as the key, written as mako writes it now.
+	for id, in := range s.installs {
+		if k, err := pack.CanonicalKey(in.Key); err == nil {
+			in.Key = k
+			s.installs[id] = in
+		}
+	}
 	s.regs = s.loadRegs()
 	return s
 }
@@ -152,6 +170,15 @@ func (s *Store) anyInstalled() bool {
 	return len(s.installs) > 0
 }
 
+// installedLocked is the plugin's pin, if it names a version in place.
+func (s *Store) installedLocked(id string) (Install, bool) {
+	in, ok := s.installs[id]
+	if !ok || !in.settled() {
+		return Install{}, false
+	}
+	return in, true
+}
+
 // recheck has the manager look again at what is blocked and updated.
 func (s *Store) recheck() {
 	if s.man != nil {
@@ -182,7 +209,7 @@ func writeJSON(path string, v any) error {
 func (s *Store) Status(id, version string) plugin.InstallStatus {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	in, ok := s.installs[id]
+	in, ok := s.installedLocked(id)
 	st := plugin.InstallStatus{Installed: ok, Source: in.Registry, Key: in.Key}
 	if version == "" {
 		version = in.Version
@@ -190,7 +217,7 @@ func (s *Store) Status(id, version string) plugin.InstallStatus {
 	st.Blocked = s.blockedLocked(id, version, in.Key)
 	if ok {
 		if r := s.regLocked(in.Registry); r != nil && r.idx != nil {
-			if e := r.idx.Find(id); e != nil && e.Key == in.Key {
+			if e := r.idx.Find(id); e != nil && pack.SameKey(e.Key, in.Key) {
 				if v := e.Newest(plugin.APIVersion); v != nil && plugin.CompareVersions(v.Version, in.Version) > 0 &&
 					s.blockedLocked(id, v.Version, e.Key) == "" {
 					st.Update = v.Version
@@ -205,6 +232,5 @@ func (s *Store) Status(id, version string) plugin.InstallStatus {
 func (s *Store) Installed(id string) (Install, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	in, ok := s.installs[id]
-	return in, ok
+	return s.installedLocked(id)
 }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -54,6 +55,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -62,6 +64,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -134,7 +141,10 @@ internal fun UiTree(n: UiNode, form: BlockForm, events: BlockEvents, inLine: Boo
             n.text, tappable(modifier, tap), color = toneColor(n.tone), style = textStyle(n.size), fontWeight = weight(n.weight),
             maxLines = if (inLine) 1 else Int.MAX_VALUE, overflow = if (inLine) TextOverflow.Ellipsis else TextOverflow.Clip,
         )
-        "icon" -> Icon(blockIcon(n.icon), null, tappable(modifier, tap).size(if (n.size == "large") 22.dp else if (n.size == "small") 14.dp else 18.dp),
+        // A tappable icon is named, by its text or else its icon's name, for
+        // a screen reader to say what is tapped.
+        "icon" -> Icon(blockIcon(n.icon), if (tap == null) null else n.text.ifEmpty { n.icon },
+            tappable(modifier, tap).size(if (n.size == "large") 22.dp else if (n.size == "small") 14.dp else 18.dp),
             tint = toneColor(n.tone.ifEmpty { "muted" }))
         "pill" -> Pill(n.text, toneColor(n.tone.ifEmpty { "muted" }), tappable(modifier, tap))
         "chip" -> Surface(
@@ -145,15 +155,19 @@ internal fun UiTree(n: UiNode, form: BlockForm, events: BlockEvents, inLine: Boo
         }
         "button" -> UiButton(n, modifier, tap)
         "input" -> UiInput(n, form, events, modifier)
-        "toggle" -> Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(n.text, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-            Switch(
-                checked = form.value(n) == "true", enabled = !n.disabled,
-                onCheckedChange = { on ->
+        // The row is the switch, its label the switch's, as a screen reader says it.
+        "toggle" -> Row(
+            modifier.fillMaxWidth().toggleable(
+                value = form.value(n) == "true", enabled = !n.disabled, role = Role.Switch,
+                onValueChange = { on ->
                     form.set(n.id, on.toString())
                     if (n.change) events.send(n.id, "change", on.toString())
                 },
-            )
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(n.text, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Switch(checked = form.value(n) == "true", onCheckedChange = null, enabled = !n.disabled)
         }
         "select" -> UiSelect(n, form, events, modifier)
         "markdown" -> BlockMarkdown(n.text, modifier)
@@ -169,7 +183,12 @@ internal fun UiTree(n: UiNode, form: BlockForm, events: BlockEvents, inLine: Boo
 
 private fun tappable(m: Modifier, tap: (() -> Unit)?): Modifier = if (tap == null) m else m.clickable(onClick = tap)
 
-/** A column, row, stack or list; in a row, a child that grows takes its share of the width left. */
+/**
+ * A column, row, stack or list; in a row, a child that grows takes its
+ * share of the width left. Each child is drawn under its id, so that what
+ * it keeps, an input's focus and cursor, a select's menu, follows the node
+ * as siblings come, go and move, not its place.
+ */
 @Composable
 private fun UiContainer(n: UiNode, form: BlockForm, events: BlockEvents, modifier: Modifier) {
     val box = tappable(modifier, if (n.tap) ({ events.send(n.id, "tap", "") }) else null)
@@ -178,19 +197,21 @@ private fun UiContainer(n: UiNode, form: BlockForm, events: BlockEvents, modifie
             box.fillMaxWidth().then(if (n.tap) Modifier.padding(vertical = 6.dp) else Modifier),
             horizontalArrangement = Arrangement.spacedBy((if (n.gap > 0) n.gap else 8.0).dp),
             verticalAlignment = Alignment.CenterVertically,
-        ) { n.childrenList.forEach { c -> RowChild(c, form, events) } }
-        "stack" -> Box(box) { n.childrenList.forEach { UiTree(it, form, events) } }
+        ) { n.childrenList.forEach { c -> key(c.id) { RowChild(c, form, events) } } }
+        "stack" -> Box(box) { n.childrenList.forEach { c -> key(c.id) { UiTree(c, form, events) } } }
         else -> Column(
             box.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy((if (n.gap > 0) n.gap else if (n.kind == "list") 0.0 else 6.0).dp),
         ) {
             n.childrenList.forEach { c ->
-                if (n.kind == "list" && c.tap) {
-                    // The list's row answers the tap, as the desktop's rows do.
-                    Box(Modifier.fillMaxWidth().clickable { events.send(c.id, "tap", "") }.padding(vertical = 6.dp)) {
-                        UiTree(c.toBuilder().setTap(false).build(), form, events)
-                    }
-                } else UiTree(c, form, events)
+                key(c.id) {
+                    if (n.kind == "list" && c.tap) {
+                        // The list's row answers the tap, as the desktop's rows do.
+                        Box(Modifier.fillMaxWidth().clickable { events.send(c.id, "tap", "") }.padding(vertical = 6.dp)) {
+                            UiTree(c.toBuilder().setTap(false).build(), form, events)
+                        }
+                    } else UiTree(c, form, events)
+                }
             }
         }
     }
@@ -222,39 +243,46 @@ private fun UiButton(n: UiNode, modifier: Modifier, tap: (() -> Unit)?) {
     }
 }
 
-/** An input: its text is the form's; Enter submits it, and leaving it changes it, where the node answers. */
+/**
+ * An input: its text is the form's; Enter submits it, and leaving it
+ * changes it, where the node answers, if the user changed it (BlockForm.leave).
+ * Its placeholder is its label too, which a screen reader says once text
+ * hides the placeholder.
+ */
 @Composable
 private fun UiInput(n: UiNode, form: BlockForm, events: BlockEvents, modifier: Modifier) {
-    var sent by remember(n.id) { mutableStateOf(form.value(n)) }
     OutlinedTextField(
         value = form.value(n),
         onValueChange = { form.set(n.id, it) },
-        modifier = modifier.fillMaxWidth().onFocusChanged { f ->
-            val now = form.value(n)
-            if (!f.isFocused && n.change && now != sent) {
-                sent = now
-                events.send(n.id, "change", now)
-            }
-        },
+        modifier = modifier.fillMaxWidth()
+            .then(if (n.text.isEmpty()) Modifier else Modifier.semantics { contentDescription = n.text })
+            .onFocusChanged { f ->
+                if (!f.isFocused && n.change) form.leave(n)?.let { events.send(n.id, "change", it) }
+            },
         enabled = !n.disabled,
         singleLine = true,
         placeholder = if (n.text.isEmpty()) null else ({ Text(n.text) }),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = {
-            if (n.change) {
-                sent = form.value(n)
-                events.send(n.id, "submit", sent)
-            }
+            if (n.change) events.send(n.id, "submit", form.submit(n))
         }),
     )
 }
 
+/** A select: a screen reader says its label, its text, if any, then its value. */
 @Composable
 private fun UiSelect(n: UiNode, form: BlockForm, events: BlockEvents, modifier: Modifier) {
     var open by remember { mutableStateOf(false) }
+    val value = form.value(n).ifEmpty { "—" }
     Box(modifier) {
-        OutlinedButton(onClick = { open = true }, enabled = !n.disabled) {
-            Text(form.value(n).ifEmpty { "—" }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        OutlinedButton(onClick = { open = true }, Modifier.semantics {
+            role = Role.DropdownList
+            if (n.text.isNotEmpty()) {
+                contentDescription = n.text
+                stateDescription = value
+            }
+        }, enabled = !n.disabled) {
+            Text(value, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Icon(Icons.Filled.ArrowDropDown, null)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {

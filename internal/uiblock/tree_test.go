@@ -100,6 +100,39 @@ func TestMovedKeyedChildIsMoved(t *testing.T) {
 	}
 }
 
+// A form of many fields sends them all: values are bounded by their
+// bytes, and by the nodes a tree holds, not by a count of their own.
+func TestALargeFormsValuesAreTaken(t *testing.T) {
+	var fields []string
+	in := map[string]string{}
+	for i := range 200 {
+		key := fmt.Sprintf("f%d", i)
+		fields = append(fields, `{"kind":"input","key":"`+key+`","value":""}`)
+		in["/"+key] = "some text"
+	}
+	tr, err := Read([]byte(`{"kind":"column","children":[` + strings.Join(fields, ",") + `]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	vals, err := tr.Values(in)
+	if err != nil || len(vals) != 200 {
+		t.Fatalf("200 fields: %d taken, %v", len(vals), err)
+	}
+	for id := range in {
+		in[id] = strings.Repeat("x", 200)
+	}
+	if _, err := tr.Values(in); err == nil || !strings.Contains(err.Error(), "32 KiB") {
+		t.Fatalf("40 KiB of values: %v", err)
+	}
+	many := map[string]string{}
+	for i := range maxNodes + 1 {
+		many[fmt.Sprintf("/x%d", i)] = ""
+	}
+	if _, err := tr.Values(many); err == nil {
+		t.Fatal("more values than a tree holds nodes were taken")
+	}
+}
+
 func TestApplyRefusesOpsOfAnotherTree(t *testing.T) {
 	root := &protocol.UiNode{Kind: "column", Children: []*protocol.UiNode{{Id: "/a", Kind: "text"}}}
 	for _, op := range []*protocol.UiOp{
@@ -138,10 +171,15 @@ func TestEventsCarryTheirMessageAndValues(t *testing.T) {
 	if err != nil || vals["/name"] != "Ada" || len(vals) != 2 {
 		t.Fatalf("%v %v", vals, err)
 	}
-	for _, bad := range []map[string]string{{"/note": "x"}, {"/missing": "x"}, {"/name": strings.Repeat("x", MaxEventValue+1)}} {
+	for _, bad := range []map[string]string{{"/note": "x"}, {"/name": strings.Repeat("x", MaxEventValue+1)}} {
 		if _, err := tr.Values(bad); err == nil {
 			t.Errorf("%v was taken", bad)
 		}
+	}
+	// A field the daemon's tree no longer has, the front-end's a render
+	// behind, is left out; the rest of the form stands.
+	if vals, err := tr.Values(map[string]string{"/name": "Ada", "/gone": "x"}); err != nil || len(vals) != 1 || vals["/name"] != "Ada" {
+		t.Fatalf("with a field gone: %v %v", vals, err)
 	}
 	if _, err := tr.Message(&protocol.BlockEvent{Node: "/note", Kind: protocol.UiTap}); err == nil {
 		t.Error("a tap on text that sends nothing was taken")

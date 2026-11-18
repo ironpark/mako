@@ -31,7 +31,11 @@ type storeState struct {
 	RegistryURL *ggui.StateValue[string]
 	// Known are the listings of plugins whose blocks a document places
 	// but this node lacks, by ID, for their placeholders to offer them.
-	Known  *ggui.StateValue[map[string][]*protocol.PluginListing]
+	Known *ggui.StateValue[map[string][]*protocol.PluginListing]
+	// NewKey are the plugins installed by another publisher key than the
+	// one this node had for their IDs, by ID: the fingerprints before and
+	// now, said where the plugin asks to be allowed.
+	NewKey *ggui.StateValue[map[string][2]string]
 	asking map[string]bool
 }
 
@@ -52,6 +56,7 @@ func newStoreState() *storeState {
 		Registries:  ggui.State([]*protocol.RegistryInfo(nil)).WithEqual(deepEqual),
 		RegistryURL: ggui.State(""),
 		Known:       ggui.State(map[string][]*protocol.PluginListing{}).WithEqual(deepEqual),
+		NewKey:      ggui.State(map[string][2]string{}).WithEqual(maps.Equal),
 		asking:      map[string]bool{},
 	}
 }
@@ -136,11 +141,19 @@ func (m *model) installPlugin(op, id, registry string) {
 	m.store.Err.Set("")
 	fetch(m, 3*time.Minute, func(ctx context.Context, c *client.Client) (*protocol.PluginInstalled, error) {
 		return c.InstallPlugin(ctx, &protocol.InstallPlugin{Op: op, Id: id, Registry: registry})
-	}, func(_ *protocol.PluginInstalled, err error) {
+	}, func(done *protocol.PluginInstalled, err error) {
 		busy(false)
 		if err != nil {
 			m.store.Err.Set(err.Error())
 		}
+		m.store.NewKey.Update(func(k map[string][2]string) map[string][2]string {
+			next := maps.Clone(k)
+			delete(next, id)
+			if prev := done.GetPreviousFingerprint(); err == nil && prev != "" {
+				next[id] = [2]string{prev, done.GetFingerprint()}
+			}
+			return next
+		})
 		// What is asked for is asked at once, whatever was put off before.
 		m.plugins.Later.Update(func(l map[string]bool) map[string]bool {
 			next := maps.Clone(l)

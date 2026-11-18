@@ -59,7 +59,9 @@ import kotlinx.coroutines.launch
 
 // A block of a computer's, a plugin's or an agent's, a page of its own.
 // The app draws its frame, over the tree, naming the block and where it
-// comes from, so that nothing the block draws passes for the app's own;
+// comes from, so that nothing the block draws passes for the app's own:
+// the top bar holds the app's words alone, and the block's title, which
+// is the block's to choose, goes in the frame's strip, by its origin;
 // and in the tree's place, how a plugin stands when it does not run,
 // which the phone can only tell of: allowing a plugin, enabling it or
 // starting it again is the computer's.
@@ -73,7 +75,11 @@ private object PluginState {
     const val BLOCKED = "blocked"
 }
 
-/** BlockScreen is node's block, followed while it shows; title is its name until the block says. */
+/**
+ * BlockScreen is node's block, followed while it shows; title is its name
+ * until the block says. Coming back to the page, the tree last shown
+ * stays, with why the link is down, until the stream gives it anew.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BlockScreen(mesh: Mesh, node: String, block: String, title: String, onBack: () -> Unit) {
@@ -82,7 +88,7 @@ internal fun BlockScreen(mesh: Mesh, node: String, block: String, title: String,
     val form = remember(node, block) { BlockForm() }
     LaunchedEffect(node, block, shown) {
         if (!shown) return@LaunchedEffect
-        followBlock(mesh.daemon, node, block).collect {
+        followBlock(mesh.daemon, node, block, from = state).collect {
             form.sync(it.tree)
             state = it
         }
@@ -110,14 +116,13 @@ internal fun BlockScreen(mesh: Mesh, node: String, block: String, title: String,
             }
         }
     }
-    val u = state.update
-    val name = u?.title?.ifEmpty { null } ?: title.ifEmpty { block }
+    val name = state.update?.title?.ifEmpty { null } ?: title.ifEmpty { block }
 
     Scaffold(topBar = {
         TopAppBar(
             title = {
                 Column {
-                    Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stringResource(R.string.panel), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(mesh.nodeName(node), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -126,7 +131,7 @@ internal fun BlockScreen(mesh: Mesh, node: String, block: String, title: String,
         )
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).imePadding()) {
-            BlockOrigin(block, state)
+            BlockOrigin(block, name, state)
             HorizontalDivider()
             Box(Modifier.fillMaxSize()) { BlockBody(state, mesh.nodeName(node), form, events) }
         }
@@ -135,10 +140,11 @@ internal fun BlockScreen(mesh: Mesh, node: String, block: String, title: String,
 
 /**
  * BlockOrigin is the frame's strip, the app's own: whose block it is, a
- * plugin by its ID, an agent by its name and its session's.
+ * plugin by its ID, an agent by its name and its session's; then the
+ * block's name, as the block gives it, after its origin.
  */
 @Composable
-internal fun BlockOrigin(block: String, state: BlockState) {
+internal fun BlockOrigin(block: String, name: String, state: BlockState) {
     val u = state.update
     val agent = block.startsWith("agent:")
     val who = when {
@@ -154,10 +160,12 @@ internal fun BlockOrigin(block: String, state: BlockState) {
             Text(stringResource(if (agent) R.string.block_agent else R.string.block_plugin), style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.width(8.dp))
-            Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+            Surface(Modifier.weight(1f, fill = false), shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
                 Text(who, Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall,
                     fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            Spacer(Modifier.width(8.dp))
+            Text(name, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -167,6 +175,7 @@ internal fun BlockOrigin(block: String, state: BlockState) {
 private fun BlockBody(state: BlockState, computer: String, form: BlockForm, events: BlockEvents) {
     val u = state.update
     when {
+        state.missing -> Note(stringResource(R.string.block_missing, computer), "")
         u == null && state.broken.isNotEmpty() -> Note(stringResource(R.string.block_unreachable), state.broken)
         u == null -> CircularProgressIndicator(Modifier.padding(32.dp).size(32.dp))
         u.gone -> Note(stringResource(R.string.block_closed), "")

@@ -38,9 +38,19 @@ server's others, a verb and its object, rather than the `layout.get` of
 | --- | --- | --- |
 | `list_blocks` | `{}` | The `blocks` a document can place: each one's `name`, `title`, and `props` as a JSON Schema: the window's own, `mako.*`, those of the node's plugins, `plugin:<id>/<block>` ([plugins](plugins.md)), and the agents' shown now, `agent:<session>/<id>`. And `plugin_dir`, the folder a plugin in development is written into (see [UI of your own](#ui-of-your-own)). |
 | `get_layout` | Optional `document` (`default`) | The `document`'s `doc`, its `revision` (`""` while there is none and the window draws its built-in default, then `builtin: true`), the `documents` there are, and the `spaces` with the `document` each uses. |
-| `set_layout` | `doc`, `if_rev`, optional `document` | Replaces the document whole. Refused when `if_rev` is not its revision, or the document is not one the window can draw. Returns the `revision` after. |
+| `set_layout` | `doc`, `if_rev`, optional `document` | Replaces the document's root. Refused when `if_rev` is not its revision, the document is not one the window can draw, or it holds `variants` other than those the document has (see below). Returns the `revision` after. |
 | `patch_layout` | `ops`, optional `document`, `if_rev` | Applies changes by node id, in order: `{"op":"insert","parent","index","node"}`, `{"op":"remove","id"}`, `{"op":"move","id","parent","index"}`, `{"op":"resize","id","size"}` or `"grow"`, `{"op":"select","id","active"}` or `"block"`. The document after is checked whole; one the window cannot draw changes nothing. Returns the `revision` after. |
 | `undo_layout` | Optional `document` | Goes back to the version before the last change of the document made on this node, by an agent or the user, as a new change. The node keeps 20 versions of each, which it shares with no other. |
+
+An agent does not write a document's `variants`, the compact root a
+phone shows in place of the window's ([protocol.md](protocol.md#layout-documents)):
+the window that asks the user to allow a change draws the root alone, so
+a compact root an agent wrote would reach the phone unseen. `set_layout`
+refuses a document whose `variants` are not the document's own; one that
+leaves them out, or repeats them as `get_layout` gave them, keeps the
+compact root the user wrote, unless the two no longer make a document the
+window can draw, which is refused, saying so. `patch_layout` changes the
+root alone.
 
 A change is the user's to have. While the user has not allowed such
 changes, `set_layout`, `patch_layout` and `undo_layout` wait while the

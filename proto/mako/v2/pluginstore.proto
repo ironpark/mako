@@ -91,6 +91,11 @@ message PluginListing {
   bool other_key = 13;
   // blocked is why one of this node's registries blocks it.
   string blocked = 14;
+  // previous_fingerprint is the fingerprint of the publisher key this
+  // node last installed the ID by, when it is not key's and the ID is not
+  // installed now: the plugin of the ID the user had before was another
+  // publisher's. "" otherwise.
+  string previous_fingerprint = 15;
 }
 
 // InstallPlugin installs plugin id from registry (op "install"), updates
@@ -109,4 +114,10 @@ message PluginInstalled {
   // added are the permissions the version installed asks for that the
   // one it replaced did not: the user is asked for them before it runs.
   repeated string added = 3;
+  // previous_fingerprint is, for a first install whose publisher key is
+  // not the one this node last installed the ID by, that key's
+  // fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+  // it is installed by.
+  string previous_fingerprint = 4;
+  string fingerprint = 5;
 }

@@ -12,8 +12,19 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
 
-/** MakoException is a request the node refused, or a stream that broke. */
-class MakoException(message: String) : IOException(message)
+/**
+ * MakoException is a request the node refused, or a stream that broke;
+ * code is the refusal's Error.code, for the app to act on, "" for none.
+ */
+class MakoException(message: String, val code: String = "") : IOException(message) {
+    companion object {
+        /**
+         * The code of a watch of a plugin's block whose plugin the computer
+         * does not have (protocol.CodeNoPlugin), which waiting does not mend.
+         */
+        const val NO_PLUGIN = "no_plugin"
+    }
+}
 
 /**
  * Stream is one connection to the node's socket, greeted: it carries
@@ -41,7 +52,7 @@ class Stream private constructor(private val socket: LocalSocket) : Closeable {
         val bytes = ByteArray(n)
         input.readFully(bytes)
         val env = Envelope.parseFrom(bytes)
-        if (env.hasError()) throw MakoException(env.error.message)
+        if (env.hasError()) throw MakoException(env.error.message, env.error.code)
         return env
     }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/ironpark/mako/internal/layoutdoc"
 	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/testhooks"
 	"github.com/ironpark/mako/internal/transport"
 )
 
@@ -55,6 +56,8 @@ func (d *Daemon) blockSource(name string) (blockSource, error) {
 		return d.plugins, nil
 	case strings.HasPrefix(name, "agent:"):
 		return agentBlocks{d}, nil
+	case strings.HasPrefix(name, "plugin:"):
+		return nil, &protocol.CodedError{Code: protocol.CodeNoPlugin, Message: "this node runs no plugins"}
 	}
 	return nil, fmt.Errorf("%q is no plugin's or agent's block", name)
 }
@@ -71,9 +74,12 @@ func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan stru
 		Sessions: d.listSessions,
 		Changed:  d.changes.firePlugins,
 		Installs: d.store,
-		NetTest:  netTestHosts(os.Getenv("MAKO_PLUGIN_NET_TEST")),
+		NetTest:  testhooks.NetTest(),
 	})
 	d.store.Attach(d.plugins)
+	// What a daemon stopped midway through an install left is settled
+	// before the folder is first read.
+	d.store.Reconcile()
 	ch := make(chan struct{})
 	go func() {
 		defer close(ch)
@@ -91,19 +97,6 @@ func (d *Daemon) pluginDir() string {
 	}
 	_ = os.MkdirAll(d.pluginsDir, 0o755)
 	return d.pluginsDir
-}
-
-// netTestHosts reads MAKO_PLUGIN_NET_TEST, host=base URL pairs separated
-// by commas, which send a granted host's requests to a test's server: a
-// development aid, logged as it is used.
-func netTestHosts(v string) map[string]string {
-	out := map[string]string{}
-	for _, pair := range strings.Split(v, ",") {
-		if host, base, ok := strings.Cut(strings.TrimSpace(pair), "="); ok && host != "" && base != "" {
-			out[host] = base
-		}
-	}
-	return out
 }
 
 // blockCatalog is every block a layout document may place on this node:

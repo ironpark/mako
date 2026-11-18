@@ -22,6 +22,8 @@ public  final class PluginInstalled extends
     id_ = "";
     version_ = "";
     added_ = emptyProtobufList();
+    previousFingerprint_ = "";
+    fingerprint_ = "";
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -253,6 +255,135 @@ public  final class PluginInstalled extends
     checkByteStringIsUtf8(value);
     ensureAddedIsMutable();
     added_.add(value.toStringUtf8());
+  }
+
+  public static final int PREVIOUS_FINGERPRINT_FIELD_NUMBER = 4;
+  private java.lang.String previousFingerprint_;
+  /**
+   * <pre>
+   * previous_fingerprint is, for a first install whose publisher key is
+   * not the one this node last installed the ID by, that key's
+   * fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+   * it is installed by.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 4 [json_name = "previousFingerprint"];</code>
+   * @return The previousFingerprint.
+   */
+  @java.lang.Override
+  public java.lang.String getPreviousFingerprint() {
+    return previousFingerprint_;
+  }
+  /**
+   * <pre>
+   * previous_fingerprint is, for a first install whose publisher key is
+   * not the one this node last installed the ID by, that key's
+   * fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+   * it is installed by.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 4 [json_name = "previousFingerprint"];</code>
+   * @return The bytes for previousFingerprint.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getPreviousFingerprintBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(previousFingerprint_);
+  }
+  /**
+   * <pre>
+   * previous_fingerprint is, for a first install whose publisher key is
+   * not the one this node last installed the ID by, that key's
+   * fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+   * it is installed by.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 4 [json_name = "previousFingerprint"];</code>
+   * @param value The previousFingerprint to set.
+   */
+  private void setPreviousFingerprint(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    previousFingerprint_ = value;
+  }
+  /**
+   * <pre>
+   * previous_fingerprint is, for a first install whose publisher key is
+   * not the one this node last installed the ID by, that key's
+   * fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+   * it is installed by.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 4 [json_name = "previousFingerprint"];</code>
+   */
+  private void clearPreviousFingerprint() {
+
+    previousFingerprint_ = getDefaultInstance().getPreviousFingerprint();
+  }
+  /**
+   * <pre>
+   * previous_fingerprint is, for a first install whose publisher key is
+   * not the one this node last installed the ID by, that key's
+   * fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+   * it is installed by.
+   * </pre>
+   *
+   * <code>string previous_fingerprint = 4 [json_name = "previousFingerprint"];</code>
+   * @param value The bytes for previousFingerprint to set.
+   */
+  private void setPreviousFingerprintBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    previousFingerprint_ = value.toStringUtf8();
+
+  }
+
+  public static final int FINGERPRINT_FIELD_NUMBER = 5;
+  private java.lang.String fingerprint_;
+  /**
+   * <code>string fingerprint = 5 [json_name = "fingerprint"];</code>
+   * @return The fingerprint.
+   */
+  @java.lang.Override
+  public java.lang.String getFingerprint() {
+    return fingerprint_;
+  }
+  /**
+   * <code>string fingerprint = 5 [json_name = "fingerprint"];</code>
+   * @return The bytes for fingerprint.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getFingerprintBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(fingerprint_);
+  }
+  /**
+   * <code>string fingerprint = 5 [json_name = "fingerprint"];</code>
+   * @param value The fingerprint to set.
+   */
+  private void setFingerprint(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    fingerprint_ = value;
+  }
+  /**
+   * <code>string fingerprint = 5 [json_name = "fingerprint"];</code>
+   */
+  private void clearFingerprint() {
+
+    fingerprint_ = getDefaultInstance().getFingerprint();
+  }
+  /**
+   * <code>string fingerprint = 5 [json_name = "fingerprint"];</code>
+   * @param value The bytes for fingerprint to set.
+   */
+  private void setFingerprintBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    fingerprint_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.PluginInstalled parseFrom(
@@ -591,6 +722,139 @@ public  final class PluginInstalled extends
       return this;
     }
 
+    /**
+     * <pre>
+     * previous_fingerprint is, for a first install whose publisher key is
+     * not the one this node last installed the ID by, that key's
+     * fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+     * it is installed by.
+     * </pre>
+     *
+     * <code>string previous_fingerprint = 4 [json_name = "previousFingerprint"];</code>
+     * @return The previousFingerprint.
+     */
+    @java.lang.Override
+    public java.lang.String getPreviousFingerprint() {
+      return instance.getPreviousFingerprint();
+    }
+    /**
+     * <pre>
+     * previous_fingerprint is, for a first install whose publisher key is
+     * not the one this node last installed the ID by, that key's
+     * fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+     * it is installed by.
+     * </pre>
+     *
+     * <code>string previous_fingerprint = 4 [json_name = "previousFingerprint"];</code>
+     * @return The bytes for previousFingerprint.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getPreviousFingerprintBytes() {
+      return instance.getPreviousFingerprintBytes();
+    }
+    /**
+     * <pre>
+     * previous_fingerprint is, for a first install whose publisher key is
+     * not the one this node last installed the ID by, that key's
+     * fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+     * it is installed by.
+     * </pre>
+     *
+     * <code>string previous_fingerprint = 4 [json_name = "previousFingerprint"];</code>
+     * @param value The previousFingerprint to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPreviousFingerprint(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setPreviousFingerprint(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * previous_fingerprint is, for a first install whose publisher key is
+     * not the one this node last installed the ID by, that key's
+     * fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+     * it is installed by.
+     * </pre>
+     *
+     * <code>string previous_fingerprint = 4 [json_name = "previousFingerprint"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPreviousFingerprint() {
+      copyOnWrite();
+      instance.clearPreviousFingerprint();
+      return this;
+    }
+    /**
+     * <pre>
+     * previous_fingerprint is, for a first install whose publisher key is
+     * not the one this node last installed the ID by, that key's
+     * fingerprint; "" otherwise. fingerprint is the fingerprint of the key
+     * it is installed by.
+     * </pre>
+     *
+     * <code>string previous_fingerprint = 4 [json_name = "previousFingerprint"];</code>
+     * @param value The bytes for previousFingerprint to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPreviousFingerprintBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setPreviousFingerprintBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string fingerprint = 5 [json_name = "fingerprint"];</code>
+     * @return The fingerprint.
+     */
+    @java.lang.Override
+    public java.lang.String getFingerprint() {
+      return instance.getFingerprint();
+    }
+    /**
+     * <code>string fingerprint = 5 [json_name = "fingerprint"];</code>
+     * @return The bytes for fingerprint.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getFingerprintBytes() {
+      return instance.getFingerprintBytes();
+    }
+    /**
+     * <code>string fingerprint = 5 [json_name = "fingerprint"];</code>
+     * @param value The fingerprint to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFingerprint(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setFingerprint(value);
+      return this;
+    }
+    /**
+     * <code>string fingerprint = 5 [json_name = "fingerprint"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFingerprint() {
+      copyOnWrite();
+      instance.clearFingerprint();
+      return this;
+    }
+    /**
+     * <code>string fingerprint = 5 [json_name = "fingerprint"];</code>
+     * @param value The bytes for fingerprint to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFingerprintBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setFingerprintBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginInstalled)
   }
   @java.lang.Override
@@ -610,10 +874,12 @@ public  final class PluginInstalled extends
             "id_",
             "version_",
             "added_",
+            "previousFingerprint_",
+            "fingerprint_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u021a";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u021a\u0004\u0208\u0005\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

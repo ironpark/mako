@@ -12,6 +12,7 @@ import (
 
 	"github.com/ironpark/mako/internal/plugin/pack"
 	"github.com/ironpark/mako/internal/plugin/registry"
+	"github.com/ironpark/mako/internal/testhooks"
 )
 
 // A publisher's tools, which need no daemon: they make a publisher key,
@@ -96,8 +97,13 @@ func publish(op string, args []string) error {
 		if err != nil {
 			return err
 		}
-		if *want != "" && pkg.Key != *want {
-			return fmt.Errorf("signed by %s (%s), not by %s", pkg.Key, pack.Fingerprint(pkg.Key), *want)
+		if *want != "" {
+			if _, err := pack.ParseKey(*want); err != nil {
+				return fmt.Errorf("-key: %w", err)
+			}
+			if !pack.SameKey(pkg.Key, *want) {
+				return fmt.Errorf("signed by %s (%s), not by %s", pkg.Key, pack.Fingerprint(pkg.Key), *want)
+			}
 		}
 		return describe(in[0], data, pkg)
 	case "index":
@@ -124,7 +130,7 @@ func indexPackage(args []string) error {
 	if len(in) != 2 || *url == "" {
 		return errors.New("plugins index takes the registry's folder, a package and -url")
 	}
-	loopback := os.Getenv("MAKO_PLUGIN_REGISTRY_TEST") == "1"
+	loopback := testhooks.RegistryLoopback()
 	data, err := readPackage(in[1])
 	if err != nil {
 		return err
@@ -148,7 +154,7 @@ func indexPackage(args []string) error {
 		e = &registry.Entry{ID: man.ID, Publisher: man.Publisher, Key: pkg.Key}
 		idx.Plugins = append(idx.Plugins, e)
 	}
-	if e.Key != pkg.Key {
+	if !pack.SameKey(e.Key, pkg.Key) {
 		return fmt.Errorf("the index lists %s under the key %s; this package is signed by %s, which no node that installed it takes as an update",
 			man.ID, pack.Fingerprint(e.Key), pack.Fingerprint(pkg.Key))
 	}

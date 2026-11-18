@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/ironpark/mako/internal/plugin/store"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/testhooks"
 	"github.com/ironpark/mako/internal/transport"
 )
 
@@ -19,10 +19,11 @@ import (
 
 var errStorePeer = errors.New("a node's plugins are installed by its own front-ends alone")
 
-// registryTestEnv lets registries and packages be on loopback, by http,
-// and leaves the default registry out: for end-to-end tests alone, which
-// must reach no registry on the internet.
-const registryTestEnv = "MAKO_PLUGIN_REGISTRY_TEST"
+// testRegistries lets registries and packages be on loopback, by http,
+// and leaves the default registry out: for tests alone, which must reach
+// no registry on the internet. A test sets it; a build with the makotest
+// tag takes it from MAKO_PLUGIN_REGISTRY_TEST (internal/testhooks).
+var testRegistries = testhooks.RegistryLoopback()
 
 // Within how long the store's requests are answered.
 const (
@@ -32,7 +33,7 @@ const (
 
 func newPluginStore(dataDir string, log *slog.Logger) *store.Store {
 	cfg := store.Config{DataDir: dataDir, Default: store.DefaultRegistry, Log: log}
-	if os.Getenv(registryTestEnv) == "1" {
+	if testRegistries {
 		cfg.Loopback, cfg.Default = true, ""
 	}
 	return store.New(cfg)

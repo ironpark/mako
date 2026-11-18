@@ -34,10 +34,12 @@ import dev.ironpark.mako.v2.Workspace
 import dev.ironpark.mako.v2.WorkspaceState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import java.io.Closeable
 import java.io.IOException
 
 /**
@@ -179,20 +181,10 @@ class Daemon(private val socket: () -> String?) {
      * breaks ends it with the error. While it is collected, this device
      * answers approvals: an agent asking for one waits for its answer.
      */
-    fun watch(): Flow<Changed> = callbackFlow {
-        val s = open()
-        s.send(envelope { watch = Watch.newBuilder().setApprovals(true).build() })
-        val reader = Thread {
-            try {
-                while (true) trySend(s.recv().changed)
-            } catch (e: IOException) {
-                close(e)
-            }
-        }
-        reader.isDaemon = true
-        reader.start()
-        awaitClose { s.close() }
-    }.flowOn(Dispatchers.IO)
+    fun watch(): Flow<Changed> = readFlow(
+        open = { open().also { it.send(envelope { watch = Watch.newBuilder().setApprovals(true).build() }) } },
+        read = { it.recv().changed },
+    )
 
     /**
      * The updates of node's block, a plugin's, plugin:<id>/<block>, or an
@@ -202,25 +194,11 @@ class Daemon(private val socket: () -> String?) {
      * [dev.ironpark.mako.Mesh.REVISION_PEER_BLOCKS] on serve a node they
      * let in.
      */
-    fun watchBlock(node: String, block: String): Flow<BlockUpdate> = callbackFlow {
-        val s = open()
-        s.send(envelope { watchBlock = WatchBlock.newBuilder().setNodeId(node).setBlock(block).build() })
-        val reader = Thread {
-            try {
-                while (true) {
-                    val u = s.recv().blockUpdate
-                    trySend(u)
-                    if (u.gone) break
-                }
-                close()
-            } catch (e: IOException) {
-                close(e)
-            }
-        }
-        reader.isDaemon = true
-        reader.start()
-        awaitClose { s.close() }
-    }.flowOn(Dispatchers.IO)
+    fun watchBlock(node: String, block: String): Flow<BlockUpdate> = readFlow(
+        open = { open().also { it.send(envelope { watchBlock = WatchBlock.newBuilder().setNodeId(node).setBlock(block).build() }) } },
+        read = { it.recv().blockUpdate },
+        last = { it.gone },
+    )
 
     /**
      * Tells a block of the user acting on its node, on the node ev names:
@@ -238,3 +216,31 @@ class Daemon(private val socket: () -> String?) {
         const val STAGE_CHUNK = 4 shl 20
     }
 }
+
+/**
+ * What read reads, one value at a time, from the stream open opens, as a
+ * flow: on a thread of its own, the reads block, until a value is the
+ * last, the stream breaks, which ends the flow with the error, or the flow
+ * is cancelled, which closes the stream. A value waits for the collector
+ * to take the one before rather than be dropped: a stream's values build
+ * on each other, and a lost patch would leave a block's tree wrong, a
+ * lost gone the block followed for ever.
+ */
+internal fun <S : Closeable, T> readFlow(open: () -> S, read: (S) -> T, last: (T) -> Boolean = { false }): Flow<T> = callbackFlow {
+    val s = open()
+    val reader = Thread {
+        try {
+            while (true) {
+                val v = read(s)
+                // Fails only once the flow is cancelled, and nothing waits for more.
+                if (trySendBlocking(v).isFailure || last(v)) break
+            }
+            close()
+        } catch (e: IOException) {
+            close(e)
+        }
+    }
+    reader.isDaemon = true
+    reader.start()
+    awaitClose { s.close() }
+}.flowOn(Dispatchers.IO)

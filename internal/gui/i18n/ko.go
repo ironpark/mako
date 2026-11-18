@@ -1398,6 +1398,7 @@ var catalogKo = map[string]string{
 	"%s · %d plugins · %d blocked · read %s":                               "%s · 플러그인 %d개 · 차단 %d개 · %s에 읽음",
 	"%s %s from %s, key %s":                                                "%s %s, %s에서, 키 %s",
 	"A plugin in development has this ID on this node: an install never replaces its folder.": "이 노드에 같은 ID의 개발 중인 플러그인이 있습니다. 설치는 그 폴더를 바꾸지 않습니다.",
+	"Published by a different key than the one you had before: %s → %s":                       "이전에 설치했던 것과 다른 키로 게시되었습니다: %s → %s",
 	"A registry is a git repository anyone can make. Nobody reviews what one lists, the one mako comes with included: a plugin may do only what you allow it, and a registry's blocklist stops what it names on this node, whichever registry it came from.": "레지스트리는 누구나 만들 수 있는 git 저장소입니다. mako에 들어 있는 레지스트리를 포함해 아무도 올라온 것을 심사하지 않습니다. 플러그인은 허용한 것만 할 수 있고, 레지스트리의 차단 목록은 어느 레지스트리에서 왔든 이 노드에서 해당 플러그인을 멈춥니다.",
 	"A registry's URL": "레지스트리 URL",
 	"Asks for nothing beyond its blocks, its own settings and the log.": "블록, 자신의 설정, 로그 외에는 요청하지 않습니다.",

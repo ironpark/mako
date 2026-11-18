@@ -29,6 +29,7 @@ type plugin struct {
 	m        *Manager
 	id       string
 	jobs     chan func()
+	recheck  chan struct{} // how the plugin stands as installed may have changed
 	done     chan struct{}
 	exited   chan struct{} // closed once the actor has stopped
 	quitOnce sync.Once
@@ -78,6 +79,7 @@ func newPlugin(m *Manager, id string) *plugin {
 	return &plugin{
 		m: m, id: id,
 		jobs:     make(chan func(), 32),
+		recheck:  make(chan struct{}, 1),
 		done:     make(chan struct{}),
 		exited:   make(chan struct{}),
 		settings: newSettingsStore(filepath.Join(data, "settings.json")),
@@ -102,6 +104,8 @@ func (p *plugin) run(ctx context.Context) {
 		select {
 		case job := <-p.jobs:
 			job()
+		case <-p.recheck:
+			p.restand()
 		case <-tick.C:
 			p.tick()
 		case <-p.done:
@@ -244,6 +248,8 @@ func (p *plugin) info() *protocol.PluginInfo {
 	if p.stale && err == "" {
 		out.Error = p.loadErr
 	}
+	// Both may quote what the plugin's package or its code wrote.
+	out.Error, out.Blocked = protocol.Printable(out.Error), protocol.Printable(out.Blocked)
 	if p.v == nil {
 		return out
 	}
