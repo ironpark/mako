@@ -173,6 +173,7 @@ internal fun HomeScreen(
     val nodes by mesh.nodes.collectAsState()
     val loaded by mesh.loaded.collectAsState()
     val workspace by mesh.workspace.collectAsState()
+    val peers by mesh.peers.collectAsState()
     val linked = nodes.filter { it.trustsUs }
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -240,7 +241,8 @@ internal fun HomeScreen(
             )
         },
         floatingActionButton = {
-            if (linked.isNotEmpty()) {
+            // With nothing listed, the empty list's own button starts one.
+            if (linked.isNotEmpty() && (sessions.isNotEmpty() || view.projects.isNotEmpty())) {
                 // Out at the top of the list, an icon alone once it scrolls.
                 val top by remember { derivedStateOf { state.list.firstVisibleItemIndex == 0 } }
                 ExtendedFloatingActionButton(
@@ -262,6 +264,20 @@ internal fun HomeScreen(
                 )
                 Mesh.State.Running -> when {
                     !loaded && sessions.isEmpty() -> PlaceholderRows(5, stringResource(R.string.reaching_computers))
+                    // Computers known but not reached now: say so, not that there are none.
+                    linked.isEmpty() && sessions.isEmpty() && (nodes.any { it.linkDown() } || peers.isNotEmpty()) -> {
+                        val down = nodes.filter { it.linkDown() }
+                        if (down.isEmpty()) Message(
+                            stringResource(R.string.unreachable_any), stringResource(R.string.offline_body),
+                            stringResource(R.string.computers), onMesh, icon = Icons.Outlined.CloudOff,
+                        ) else Message(
+                            stringResource(R.string.unreachable, down.joinToString(", ") { it.name }),
+                            stringResource(R.string.offline_body),
+                            stringResource(R.string.reconnect), { scope.launch { down.forEach { runCatching { mesh.relink(it.id) } } } },
+                            icon = Icons.Outlined.CloudOff,
+                            secondary = stringResource(R.string.computers), onSecondary = onMesh,
+                        )
+                    }
                     linked.isEmpty() && sessions.isEmpty() -> Message(
                         stringResource(R.string.connect_title), stringResource(R.string.connect_body),
                         stringResource(R.string.scan_qr), onScan, icon = Icons.Outlined.Lan,
@@ -319,7 +335,7 @@ private fun ProjectList(
         view.pinnedSessions.mapNotNull { id -> sessions.firstOrNull { it.id == id } }
     }
     val manyNodes = nodes.count { it.trustsUs } > 1 || sessions.map { it.nodeId }.distinct().size > 1
-    val down = nodes.filter { it.trustsUs && it.linkDown() }
+    val down = nodes.filter { it.linkDown() }
     val prefs = LocalContext.current.getSharedPreferences("home", android.content.Context.MODE_PRIVATE)
     var trayOpen by remember { mutableStateOf(!prefs.getBoolean("trayFolded", false)) }
     var trayAll by rememberSaveable { mutableStateOf(false) }
@@ -330,7 +346,7 @@ private fun ProjectList(
         if (down.isNotEmpty()) item(key = "down") {
             LinkBanner(down, Modifier.animateItem()) { node -> act { mesh.relink(node) } }
         }
-        item(key = "filters") {
+        if (sessions.isNotEmpty()) item(key = "filters") {
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

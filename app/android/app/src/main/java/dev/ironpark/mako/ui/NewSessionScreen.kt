@@ -171,7 +171,8 @@ internal fun NewSessionScreen(mesh: Mesh, project: ProjectItem? = null, onBack: 
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                 modifier = Modifier.fillMaxWidth(),
             )
-            val recent = (own + sessions.filter { it.nodeId == node.id && it.project.isNotEmpty() }
+            // In a project, its own folders; else those the computer's sessions worked in last.
+            val recent = if (own.isNotEmpty()) own else (sessions.filter { it.nodeId == node.id && it.project.isNotEmpty() }
                 .sortedByDescending { it.startedAt.seconds }
                 .map { it.worktree.repo.ifEmpty { it.project } })
                 .distinct()

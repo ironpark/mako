@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Inbox
@@ -198,7 +200,10 @@ internal fun ProjectScreen(
     val panels = remember(sources, tabs) { projectPanels(sources.pages, sources.agents, tabs.map { it.id }.toSet()) }
     val act = actor()
     val elsewhere = needYouElsewhere(sessions, project)
-    val noTabs = loaded && tabs.isEmpty()
+    // No tab to show because the computers they are on cannot be reached, rather than none being there.
+    val offline = tabs.isEmpty() && nodes.any { it.linkDown() } &&
+        (project == null || project.nodes.any { n -> nodes.any { it.id == n && it.linkDown() } })
+    val noTabs = loaded && tabs.isEmpty() && !offline
 
     BackHandler(overview && shown != null) { overview = false }
     Box(Modifier.fillMaxSize()) {
@@ -221,9 +226,16 @@ internal fun ProjectScreen(
                     )
                 },
             )
+        } else if (offline) {
+            val down = nodes.filter { it.linkDown() }
+            Message(
+                stringResource(R.string.unreachable, down.joinToString(", ") { it.name }), stringResource(R.string.offline_body),
+                stringResource(R.string.reconnect), { act { down.forEach { mesh.relink(it.id) } } },
+                icon = Icons.Outlined.CloudOff, secondary = stringResource(R.string.back), onSecondary = onBack,
+            )
         } else if (!noTabs) Loading(stringResource(R.string.reaching_computers))
         AnimatedVisibility(
-            overview || noTabs,
+            (overview || noTabs) && !offline,
             enter = fadeIn(spring(stiffness = 600f)) + scaleIn(spring(stiffness = 600f), initialScale = 1.06f),
             exit = fadeOut(spring(stiffness = 600f)) + scaleOut(spring(stiffness = 600f), targetScale = 1.06f),
         ) {
@@ -266,7 +278,8 @@ private fun TabBar(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.projects))
                     }
                 }
-                TabPill(tabs, shown, nodes, Modifier.weight(1f), onOverview, onStep)
+                // As wide as the bar allows on a phone, not wider than reads on a tablet or turned.
+                Box(Modifier.weight(1f)) { TabPill(tabs, shown, nodes, Modifier.widthIn(max = 520.dp).fillMaxWidth(), onOverview, onStep) }
                 IconButton(onClick = onNew) { Icon(Icons.Filled.Add, stringResource(R.string.new_tab)) }
                 Box {
                     IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.session_actions)) }
