@@ -182,8 +182,20 @@ token = { type = "secret", label = "GitHub token" }
   오류를 표시한다.
 - 개발 모드에서는 폴더를 감시해 hot reload한다. 잘못된 코드는 마지막으로 성공한
   버전을 유지하고 오류만 보여 준다.
-- Host API는 스키마(proto 또는 WIT)로 한 번 정의하고, JS 바인딩과 타입
-  정의(`mako.d.ts`)를 생성한다. 나중에 wasm 런타임도 같은 스키마를 쓴다.
+- Host API는 proto 한 곳에 정의하고 나머지를 모두 생성한다.
+    - 원본: `proto/mako/plugin/v1`의 service(메서드마다 필요한 권한을 옵션으로
+      적는다)와 메시지.
+    - 생성물: 권한 검사가 들어간 Go 호스트 디스패처, JS 바인딩과 타입
+      정의(`mako.d.ts`), wasm 런타임용 WIT.
+    - 방향은 proto → WIT 한쪽이다. 기존 buf 파이프라인과 Android 코드 생성을
+      그대로 쓰고, WIT의 resource·borrow처럼 proto로 되돌릴 수 없는 것을
+      원본에 두지 않기 위해서다.
+    - 생성기는 WIT로 옮길 수 있는 부분집합만 받는다(스트리밍 rpc, `Any`,
+      `map`의 메시지 키 등은 거절). 그래서 스키마를 고칠 때마다 WIT 호환이
+      깨지지 않았는지 검사된다.
+    - 맞추는 것은 스키마이지 전송 형식이 아니다. QuickJS 경계는 JSON으로,
+      wasm 컴포넌트는 canonical ABI로 넘긴다.
+    - 생성된 파일은 커밋하고, 원본과 어긋나면 테스트가 실패한다.
 
 ### Host API (권한별)
 
@@ -343,11 +355,27 @@ reload로 바로 뜬다. manifest의 권한은 사용자가 한 번 승인해야
           버전만 쓰고 더 높은 버전은 patch하지 않는다.
         - 문서 형식은 `internal/layoutdoc`에 있고, 플러그인 블록은 그
           `Catalog` 인터페이스로 들어온다(3단계).
-3. **플러그인 런타임**
+3. **플러그인 런타임** (구현 완료. 작성법과 한도는 `docs/plugins.md`)
     - 데몬의 qngg 런타임, manifest 로더, 권한, Host API, UI 트리·patch protocol,
       ggui 렌더러.
     - 완료 기준: 로컬 폴더의 예제 플러그인(CI 상태)이 블록, 커맨드, 설정을
       기여하고 hot reload된다.
+    - 구현하며 정해진 것:
+        - 플러그인은 `$MAKO_HOME/plugins/<id>/`에 두고 1초마다 폴링해 다시
+          읽는다. 허용과 데이터는 `plugin-data/`에 노드별로 둔다.
+        - 구현된 Host API: `log`, 설정, `storage`, `sessions:read`(목록·상태),
+          `net:<host>`, `commands`. `sessions:write`, `fs:project`, `secrets`,
+          `layout:write`, `exec`는 스키마에 선언만 있고 "not available"로
+          답한다. manifest의 `exec`는 거절한다.
+        - 권한 승인은 세션이 없어 기존 approval 대신 레이아웃 변경과 같은
+          방식(데몬이 상태를 들고 창이 바를 그림)을 쓴다. `mako plugins
+          grant|deny`로도 답한다.
+        - 생성된 WIT는 실제 WIT 도구로 검증하지 못했다(cgo 없는 Go 파서가
+          없고 `wasm-tools`가 없다). 생성기가 쓰는 부분집합만 테스트가
+          확인한다. wasm 런타임을 붙일 때 먼저 검증한다.
+        - secret 설정은 아직 키체인이 아니라 0600 파일에 있다.
+        - 창은 갱신마다 블록 전체를 다시 그린다. patch는 전송에서만 쓴다.
+        - 프로토콜 리비전 26.
 4. **에이전트 생성형 UI**
     - `ui.show` / `update` / `close`와, 에이전트가 직접 쓰는 플러그인(개발 모드).
     - 완료 기준: 에이전트가 폼을 띄우고, 사용자의 선택을 메시지로 돌려받는다.
@@ -359,8 +387,8 @@ reload로 바로 뜬다. manifest의 권한은 사용자가 한 번 승인해야
 
 ## 열린 질문
 
-- [ ] Host API 스키마를 proto로 쓸지 WIT로 쓸지. proto는 기존 protocol과
-      어울리고, WIT는 wasm 런타임으로 가기 쉽다.
+- [x] Host API 스키마를 proto로 쓸지 WIT로 쓸지. → proto를 원본으로 두고 WIT,
+      JS 바인딩, 호스트 디스패처를 생성한다("런타임").
 - [x] 레이아웃 문서를 노드 간에 통째로 동기화할지, 스페이스별 레이아웃만
       동기화할지. → 이름 있는 문서 단위로 동기화하고, 스페이스는 문서 이름을
       가리킨다("저장과 동기화").

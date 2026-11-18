@@ -107,6 +107,13 @@ public  final class Envelope extends
     DEVICE_CONN(109),
     DEVICE_LISTEN(110),
     DEVICE_ACCEPT(111),
+    LIST_PLUGINS(120),
+    PLUGINS(121),
+    PLUGIN_ACTION(122),
+    PLUGIN_DONE(123),
+    WATCH_BLOCK(124),
+    BLOCK_UPDATE(125),
+    BLOCK_EVENT(126),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -203,6 +210,13 @@ public  final class Envelope extends
         case 109: return DEVICE_CONN;
         case 110: return DEVICE_LISTEN;
         case 111: return DEVICE_ACCEPT;
+        case 120: return LIST_PLUGINS;
+        case 121: return PLUGINS;
+        case 122: return PLUGIN_ACTION;
+        case 123: return PLUGIN_DONE;
+        case 124: return WATCH_BLOCK;
+        case 125: return BLOCK_UPDATE;
+        case 126: return BLOCK_EVENT;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -4571,6 +4585,376 @@ public  final class Envelope extends
     }
   }
 
+  public static final int LIST_PLUGINS_FIELD_NUMBER = 120;
+  /**
+   * <pre>
+   * Plugins, a node's own (revision 26).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPlugins list_plugins = 120 [json_name = "listPlugins"];</code>
+   */
+  @java.lang.Override
+  public boolean hasListPlugins() {
+    return bodyCase_ == 120;
+  }
+  /**
+   * <pre>
+   * Plugins, a node's own (revision 26).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPlugins list_plugins = 120 [json_name = "listPlugins"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ListPlugins getListPlugins() {
+    if (bodyCase_ == 120) {
+       return (dev.ironpark.mako.v2.ListPlugins) body_;
+    }
+    return dev.ironpark.mako.v2.ListPlugins.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * Plugins, a node's own (revision 26).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPlugins list_plugins = 120 [json_name = "listPlugins"];</code>
+   */
+  private void setListPlugins(dev.ironpark.mako.v2.ListPlugins value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 120;
+  }
+  /**
+   * <pre>
+   * Plugins, a node's own (revision 26).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPlugins list_plugins = 120 [json_name = "listPlugins"];</code>
+   */
+  private void mergeListPlugins(dev.ironpark.mako.v2.ListPlugins value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 120 &&
+        body_ != dev.ironpark.mako.v2.ListPlugins.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ListPlugins.newBuilder((dev.ironpark.mako.v2.ListPlugins) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 120;
+  }
+  /**
+   * <pre>
+   * Plugins, a node's own (revision 26).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPlugins list_plugins = 120 [json_name = "listPlugins"];</code>
+   */
+  private void clearListPlugins() {
+    if (bodyCase_ == 120) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PLUGINS_FIELD_NUMBER = 121;
+  /**
+   * <code>.mako.v2.Plugins plugins = 121 [json_name = "plugins"];</code>
+   */
+  @java.lang.Override
+  public boolean hasPlugins() {
+    return bodyCase_ == 121;
+  }
+  /**
+   * <code>.mako.v2.Plugins plugins = 121 [json_name = "plugins"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Plugins getPlugins() {
+    if (bodyCase_ == 121) {
+       return (dev.ironpark.mako.v2.Plugins) body_;
+    }
+    return dev.ironpark.mako.v2.Plugins.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.Plugins plugins = 121 [json_name = "plugins"];</code>
+   */
+  private void setPlugins(dev.ironpark.mako.v2.Plugins value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 121;
+  }
+  /**
+   * <code>.mako.v2.Plugins plugins = 121 [json_name = "plugins"];</code>
+   */
+  private void mergePlugins(dev.ironpark.mako.v2.Plugins value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 121 &&
+        body_ != dev.ironpark.mako.v2.Plugins.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Plugins.newBuilder((dev.ironpark.mako.v2.Plugins) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 121;
+  }
+  /**
+   * <code>.mako.v2.Plugins plugins = 121 [json_name = "plugins"];</code>
+   */
+  private void clearPlugins() {
+    if (bodyCase_ == 121) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PLUGIN_ACTION_FIELD_NUMBER = 122;
+  /**
+   * <code>.mako.v2.PluginAction plugin_action = 122 [json_name = "pluginAction"];</code>
+   */
+  @java.lang.Override
+  public boolean hasPluginAction() {
+    return bodyCase_ == 122;
+  }
+  /**
+   * <code>.mako.v2.PluginAction plugin_action = 122 [json_name = "pluginAction"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.PluginAction getPluginAction() {
+    if (bodyCase_ == 122) {
+       return (dev.ironpark.mako.v2.PluginAction) body_;
+    }
+    return dev.ironpark.mako.v2.PluginAction.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.PluginAction plugin_action = 122 [json_name = "pluginAction"];</code>
+   */
+  private void setPluginAction(dev.ironpark.mako.v2.PluginAction value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 122;
+  }
+  /**
+   * <code>.mako.v2.PluginAction plugin_action = 122 [json_name = "pluginAction"];</code>
+   */
+  private void mergePluginAction(dev.ironpark.mako.v2.PluginAction value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 122 &&
+        body_ != dev.ironpark.mako.v2.PluginAction.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.PluginAction.newBuilder((dev.ironpark.mako.v2.PluginAction) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 122;
+  }
+  /**
+   * <code>.mako.v2.PluginAction plugin_action = 122 [json_name = "pluginAction"];</code>
+   */
+  private void clearPluginAction() {
+    if (bodyCase_ == 122) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PLUGIN_DONE_FIELD_NUMBER = 123;
+  /**
+   * <code>.mako.v2.PluginDone plugin_done = 123 [json_name = "pluginDone"];</code>
+   */
+  @java.lang.Override
+  public boolean hasPluginDone() {
+    return bodyCase_ == 123;
+  }
+  /**
+   * <code>.mako.v2.PluginDone plugin_done = 123 [json_name = "pluginDone"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.PluginDone getPluginDone() {
+    if (bodyCase_ == 123) {
+       return (dev.ironpark.mako.v2.PluginDone) body_;
+    }
+    return dev.ironpark.mako.v2.PluginDone.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.PluginDone plugin_done = 123 [json_name = "pluginDone"];</code>
+   */
+  private void setPluginDone(dev.ironpark.mako.v2.PluginDone value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 123;
+  }
+  /**
+   * <code>.mako.v2.PluginDone plugin_done = 123 [json_name = "pluginDone"];</code>
+   */
+  private void mergePluginDone(dev.ironpark.mako.v2.PluginDone value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 123 &&
+        body_ != dev.ironpark.mako.v2.PluginDone.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.PluginDone.newBuilder((dev.ironpark.mako.v2.PluginDone) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 123;
+  }
+  /**
+   * <code>.mako.v2.PluginDone plugin_done = 123 [json_name = "pluginDone"];</code>
+   */
+  private void clearPluginDone() {
+    if (bodyCase_ == 123) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int WATCH_BLOCK_FIELD_NUMBER = 124;
+  /**
+   * <code>.mako.v2.WatchBlock watch_block = 124 [json_name = "watchBlock"];</code>
+   */
+  @java.lang.Override
+  public boolean hasWatchBlock() {
+    return bodyCase_ == 124;
+  }
+  /**
+   * <code>.mako.v2.WatchBlock watch_block = 124 [json_name = "watchBlock"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.WatchBlock getWatchBlock() {
+    if (bodyCase_ == 124) {
+       return (dev.ironpark.mako.v2.WatchBlock) body_;
+    }
+    return dev.ironpark.mako.v2.WatchBlock.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.WatchBlock watch_block = 124 [json_name = "watchBlock"];</code>
+   */
+  private void setWatchBlock(dev.ironpark.mako.v2.WatchBlock value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 124;
+  }
+  /**
+   * <code>.mako.v2.WatchBlock watch_block = 124 [json_name = "watchBlock"];</code>
+   */
+  private void mergeWatchBlock(dev.ironpark.mako.v2.WatchBlock value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 124 &&
+        body_ != dev.ironpark.mako.v2.WatchBlock.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.WatchBlock.newBuilder((dev.ironpark.mako.v2.WatchBlock) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 124;
+  }
+  /**
+   * <code>.mako.v2.WatchBlock watch_block = 124 [json_name = "watchBlock"];</code>
+   */
+  private void clearWatchBlock() {
+    if (bodyCase_ == 124) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BLOCK_UPDATE_FIELD_NUMBER = 125;
+  /**
+   * <code>.mako.v2.BlockUpdate block_update = 125 [json_name = "blockUpdate"];</code>
+   */
+  @java.lang.Override
+  public boolean hasBlockUpdate() {
+    return bodyCase_ == 125;
+  }
+  /**
+   * <code>.mako.v2.BlockUpdate block_update = 125 [json_name = "blockUpdate"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.BlockUpdate getBlockUpdate() {
+    if (bodyCase_ == 125) {
+       return (dev.ironpark.mako.v2.BlockUpdate) body_;
+    }
+    return dev.ironpark.mako.v2.BlockUpdate.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.BlockUpdate block_update = 125 [json_name = "blockUpdate"];</code>
+   */
+  private void setBlockUpdate(dev.ironpark.mako.v2.BlockUpdate value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 125;
+  }
+  /**
+   * <code>.mako.v2.BlockUpdate block_update = 125 [json_name = "blockUpdate"];</code>
+   */
+  private void mergeBlockUpdate(dev.ironpark.mako.v2.BlockUpdate value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 125 &&
+        body_ != dev.ironpark.mako.v2.BlockUpdate.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.BlockUpdate.newBuilder((dev.ironpark.mako.v2.BlockUpdate) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 125;
+  }
+  /**
+   * <code>.mako.v2.BlockUpdate block_update = 125 [json_name = "blockUpdate"];</code>
+   */
+  private void clearBlockUpdate() {
+    if (bodyCase_ == 125) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BLOCK_EVENT_FIELD_NUMBER = 126;
+  /**
+   * <code>.mako.v2.BlockEvent block_event = 126 [json_name = "blockEvent"];</code>
+   */
+  @java.lang.Override
+  public boolean hasBlockEvent() {
+    return bodyCase_ == 126;
+  }
+  /**
+   * <code>.mako.v2.BlockEvent block_event = 126 [json_name = "blockEvent"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.BlockEvent getBlockEvent() {
+    if (bodyCase_ == 126) {
+       return (dev.ironpark.mako.v2.BlockEvent) body_;
+    }
+    return dev.ironpark.mako.v2.BlockEvent.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.BlockEvent block_event = 126 [json_name = "blockEvent"];</code>
+   */
+  private void setBlockEvent(dev.ironpark.mako.v2.BlockEvent value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 126;
+  }
+  /**
+   * <code>.mako.v2.BlockEvent block_event = 126 [json_name = "blockEvent"];</code>
+   */
+  private void mergeBlockEvent(dev.ironpark.mako.v2.BlockEvent value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 126 &&
+        body_ != dev.ironpark.mako.v2.BlockEvent.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.BlockEvent.newBuilder((dev.ironpark.mako.v2.BlockEvent) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 126;
+  }
+  /**
+   * <code>.mako.v2.BlockEvent block_event = 126 [json_name = "blockEvent"];</code>
+   */
+  private void clearBlockEvent() {
+    if (bodyCase_ == 126) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -8910,6 +9294,366 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Plugins, a node's own (revision 26).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPlugins list_plugins = 120 [json_name = "listPlugins"];</code>
+     */
+    @java.lang.Override
+    public boolean hasListPlugins() {
+      return instance.hasListPlugins();
+    }
+    /**
+     * <pre>
+     * Plugins, a node's own (revision 26).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPlugins list_plugins = 120 [json_name = "listPlugins"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ListPlugins getListPlugins() {
+      return instance.getListPlugins();
+    }
+    /**
+     * <pre>
+     * Plugins, a node's own (revision 26).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPlugins list_plugins = 120 [json_name = "listPlugins"];</code>
+     */
+    public Builder setListPlugins(dev.ironpark.mako.v2.ListPlugins value) {
+      copyOnWrite();
+      instance.setListPlugins(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Plugins, a node's own (revision 26).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPlugins list_plugins = 120 [json_name = "listPlugins"];</code>
+     */
+    public Builder setListPlugins(
+        dev.ironpark.mako.v2.ListPlugins.Builder builderForValue) {
+      copyOnWrite();
+      instance.setListPlugins(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Plugins, a node's own (revision 26).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPlugins list_plugins = 120 [json_name = "listPlugins"];</code>
+     */
+    public Builder mergeListPlugins(dev.ironpark.mako.v2.ListPlugins value) {
+      copyOnWrite();
+      instance.mergeListPlugins(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Plugins, a node's own (revision 26).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPlugins list_plugins = 120 [json_name = "listPlugins"];</code>
+     */
+    public Builder clearListPlugins() {
+      copyOnWrite();
+      instance.clearListPlugins();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.Plugins plugins = 121 [json_name = "plugins"];</code>
+     */
+    @java.lang.Override
+    public boolean hasPlugins() {
+      return instance.hasPlugins();
+    }
+    /**
+     * <code>.mako.v2.Plugins plugins = 121 [json_name = "plugins"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Plugins getPlugins() {
+      return instance.getPlugins();
+    }
+    /**
+     * <code>.mako.v2.Plugins plugins = 121 [json_name = "plugins"];</code>
+     */
+    public Builder setPlugins(dev.ironpark.mako.v2.Plugins value) {
+      copyOnWrite();
+      instance.setPlugins(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Plugins plugins = 121 [json_name = "plugins"];</code>
+     */
+    public Builder setPlugins(
+        dev.ironpark.mako.v2.Plugins.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPlugins(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Plugins plugins = 121 [json_name = "plugins"];</code>
+     */
+    public Builder mergePlugins(dev.ironpark.mako.v2.Plugins value) {
+      copyOnWrite();
+      instance.mergePlugins(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Plugins plugins = 121 [json_name = "plugins"];</code>
+     */
+    public Builder clearPlugins() {
+      copyOnWrite();
+      instance.clearPlugins();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.PluginAction plugin_action = 122 [json_name = "pluginAction"];</code>
+     */
+    @java.lang.Override
+    public boolean hasPluginAction() {
+      return instance.hasPluginAction();
+    }
+    /**
+     * <code>.mako.v2.PluginAction plugin_action = 122 [json_name = "pluginAction"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.PluginAction getPluginAction() {
+      return instance.getPluginAction();
+    }
+    /**
+     * <code>.mako.v2.PluginAction plugin_action = 122 [json_name = "pluginAction"];</code>
+     */
+    public Builder setPluginAction(dev.ironpark.mako.v2.PluginAction value) {
+      copyOnWrite();
+      instance.setPluginAction(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginAction plugin_action = 122 [json_name = "pluginAction"];</code>
+     */
+    public Builder setPluginAction(
+        dev.ironpark.mako.v2.PluginAction.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPluginAction(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginAction plugin_action = 122 [json_name = "pluginAction"];</code>
+     */
+    public Builder mergePluginAction(dev.ironpark.mako.v2.PluginAction value) {
+      copyOnWrite();
+      instance.mergePluginAction(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginAction plugin_action = 122 [json_name = "pluginAction"];</code>
+     */
+    public Builder clearPluginAction() {
+      copyOnWrite();
+      instance.clearPluginAction();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.PluginDone plugin_done = 123 [json_name = "pluginDone"];</code>
+     */
+    @java.lang.Override
+    public boolean hasPluginDone() {
+      return instance.hasPluginDone();
+    }
+    /**
+     * <code>.mako.v2.PluginDone plugin_done = 123 [json_name = "pluginDone"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.PluginDone getPluginDone() {
+      return instance.getPluginDone();
+    }
+    /**
+     * <code>.mako.v2.PluginDone plugin_done = 123 [json_name = "pluginDone"];</code>
+     */
+    public Builder setPluginDone(dev.ironpark.mako.v2.PluginDone value) {
+      copyOnWrite();
+      instance.setPluginDone(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginDone plugin_done = 123 [json_name = "pluginDone"];</code>
+     */
+    public Builder setPluginDone(
+        dev.ironpark.mako.v2.PluginDone.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPluginDone(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginDone plugin_done = 123 [json_name = "pluginDone"];</code>
+     */
+    public Builder mergePluginDone(dev.ironpark.mako.v2.PluginDone value) {
+      copyOnWrite();
+      instance.mergePluginDone(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginDone plugin_done = 123 [json_name = "pluginDone"];</code>
+     */
+    public Builder clearPluginDone() {
+      copyOnWrite();
+      instance.clearPluginDone();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.WatchBlock watch_block = 124 [json_name = "watchBlock"];</code>
+     */
+    @java.lang.Override
+    public boolean hasWatchBlock() {
+      return instance.hasWatchBlock();
+    }
+    /**
+     * <code>.mako.v2.WatchBlock watch_block = 124 [json_name = "watchBlock"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.WatchBlock getWatchBlock() {
+      return instance.getWatchBlock();
+    }
+    /**
+     * <code>.mako.v2.WatchBlock watch_block = 124 [json_name = "watchBlock"];</code>
+     */
+    public Builder setWatchBlock(dev.ironpark.mako.v2.WatchBlock value) {
+      copyOnWrite();
+      instance.setWatchBlock(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.WatchBlock watch_block = 124 [json_name = "watchBlock"];</code>
+     */
+    public Builder setWatchBlock(
+        dev.ironpark.mako.v2.WatchBlock.Builder builderForValue) {
+      copyOnWrite();
+      instance.setWatchBlock(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.WatchBlock watch_block = 124 [json_name = "watchBlock"];</code>
+     */
+    public Builder mergeWatchBlock(dev.ironpark.mako.v2.WatchBlock value) {
+      copyOnWrite();
+      instance.mergeWatchBlock(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.WatchBlock watch_block = 124 [json_name = "watchBlock"];</code>
+     */
+    public Builder clearWatchBlock() {
+      copyOnWrite();
+      instance.clearWatchBlock();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.BlockUpdate block_update = 125 [json_name = "blockUpdate"];</code>
+     */
+    @java.lang.Override
+    public boolean hasBlockUpdate() {
+      return instance.hasBlockUpdate();
+    }
+    /**
+     * <code>.mako.v2.BlockUpdate block_update = 125 [json_name = "blockUpdate"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.BlockUpdate getBlockUpdate() {
+      return instance.getBlockUpdate();
+    }
+    /**
+     * <code>.mako.v2.BlockUpdate block_update = 125 [json_name = "blockUpdate"];</code>
+     */
+    public Builder setBlockUpdate(dev.ironpark.mako.v2.BlockUpdate value) {
+      copyOnWrite();
+      instance.setBlockUpdate(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.BlockUpdate block_update = 125 [json_name = "blockUpdate"];</code>
+     */
+    public Builder setBlockUpdate(
+        dev.ironpark.mako.v2.BlockUpdate.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBlockUpdate(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.BlockUpdate block_update = 125 [json_name = "blockUpdate"];</code>
+     */
+    public Builder mergeBlockUpdate(dev.ironpark.mako.v2.BlockUpdate value) {
+      copyOnWrite();
+      instance.mergeBlockUpdate(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.BlockUpdate block_update = 125 [json_name = "blockUpdate"];</code>
+     */
+    public Builder clearBlockUpdate() {
+      copyOnWrite();
+      instance.clearBlockUpdate();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.BlockEvent block_event = 126 [json_name = "blockEvent"];</code>
+     */
+    @java.lang.Override
+    public boolean hasBlockEvent() {
+      return instance.hasBlockEvent();
+    }
+    /**
+     * <code>.mako.v2.BlockEvent block_event = 126 [json_name = "blockEvent"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.BlockEvent getBlockEvent() {
+      return instance.getBlockEvent();
+    }
+    /**
+     * <code>.mako.v2.BlockEvent block_event = 126 [json_name = "blockEvent"];</code>
+     */
+    public Builder setBlockEvent(dev.ironpark.mako.v2.BlockEvent value) {
+      copyOnWrite();
+      instance.setBlockEvent(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.BlockEvent block_event = 126 [json_name = "blockEvent"];</code>
+     */
+    public Builder setBlockEvent(
+        dev.ironpark.mako.v2.BlockEvent.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBlockEvent(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.BlockEvent block_event = 126 [json_name = "blockEvent"];</code>
+     */
+    public Builder mergeBlockEvent(dev.ironpark.mako.v2.BlockEvent value) {
+      copyOnWrite();
+      instance.mergeBlockEvent(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.BlockEvent block_event = 126 [json_name = "blockEvent"];</code>
+     */
+    public Builder clearBlockEvent() {
+      copyOnWrite();
+      instance.clearBlockEvent();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -9011,9 +9755,16 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.DeviceListen.class,
             dev.ironpark.mako.v2.DeviceAccept.class,
             dev.ironpark.mako.v2.LayoutDecision.class,
+            dev.ironpark.mako.v2.ListPlugins.class,
+            dev.ironpark.mako.v2.Plugins.class,
+            dev.ironpark.mako.v2.PluginAction.class,
+            dev.ironpark.mako.v2.PluginDone.class,
+            dev.ironpark.mako.v2.WatchBlock.class,
+            dev.ironpark.mako.v2.BlockUpdate.class,
+            dev.ironpark.mako.v2.BlockEvent.class,
           };
           java.lang.String info =
-              "\u0000S\u0001\u0000\u0001pS\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000\u000b" +
+              "\u0000Z\u0001\u0000\u0001~Z\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000\u000b" +
               "<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000" +
               "\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000" +
               "\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000+<\u0000" +
@@ -9022,7 +9773,8 @@ public  final class Envelope extends
               "@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000H<\u0000I<\u0000" +
               "J<\u0000K<\u0000L<\u0000M<\u0000N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000" +
               "T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000j<\u0000" +
-              "k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000p<\u0000";
+              "k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000p<\u0000x<\u0000y<\u0000z<\u0000{<\u0000" +
+              "|<\u0000}<\u0000~<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

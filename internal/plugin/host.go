@@ -1,0 +1,149 @@
+package plugin
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net/url"
+	"slices"
+	"strings"
+
+	"github.com/ironpark/mako/internal/plugin/hostapi"
+	"github.com/ironpark/mako/internal/protocol"
+)
+
+// host carries out a plugin's calls of the Host API. The dispatcher has
+// checked the permission each takes before any method here runs; what is
+// checked here is what a permission alone does not say, as the host of a
+// URL, a key's size or a setting's name. Its methods run on the plugin's
+// goroutine, inside the call into its JavaScript.
+type host struct{ p *plugin }
+
+var _ hostapi.Handler = (*host)(nil)
+
+const maxLogLine = 4 << 10
+
+func (h *host) LogWrite(_ context.Context, req *hostapi.WriteRequest) (*hostapi.WriteResponse, error) {
+	if !h.p.logRate.take() {
+		return &hostapi.WriteResponse{}, nil // the rest of the minute's lines are dropped
+	}
+	level := map[string]slog.Level{"debug": slog.LevelDebug, "": slog.LevelInfo, "info": slog.LevelInfo,
+		"warn": slog.LevelWarn, "error": slog.LevelError}
+	l, ok := level[req.GetLevel()]
+	if !ok {
+		return nil, fmt.Errorf("level %q is not debug, info, warn or error", req.GetLevel())
+	}
+	msg := req.GetMessage()
+	if len(msg) > maxLogLine {
+		msg = msg[:maxLogLine]
+	}
+	h.p.m.cfg.Log.Log(context.Background(), l, "plugin: "+strings.ToValidUTF8(msg, "?"), "plugin", h.p.id)
+	return &hostapi.WriteResponse{}, nil
+}
+
+func (h *host) decl(key string) (SettingDecl, error) {
+	v := h.p.current()
+	if v != nil {
+		for _, s := range v.man.Settings {
+			if s.Key == key {
+				return s, nil
+			}
+		}
+	}
+	return SettingDecl{}, fmt.Errorf("the manifest declares no setting %q", key)
+}
+
+func (h *host) SettingsGetSetting(_ context.Context, req *hostapi.GetSettingRequest) (*hostapi.GetSettingResponse, error) {
+	d, err := h.decl(req.GetKey())
+	if err != nil {
+		return nil, err
+	}
+	return &hostapi.GetSettingResponse{Setting: h.p.settings.forHost(d)}, nil
+}
+
+func (h *host) SettingsListSettings(context.Context, *hostapi.ListSettingsRequest) (*hostapi.ListSettingsResponse, error) {
+	out := &hostapi.ListSettingsResponse{}
+	if v := h.p.current(); v != nil {
+		for _, s := range v.man.Settings {
+			out.Settings = append(out.Settings, h.p.settings.forHost(s))
+		}
+	}
+	return out, nil
+}
+
+func (h *host) StorageGetItem(_ context.Context, req *hostapi.GetItemRequest) (*hostapi.GetItemResponse, error) {
+	if err := checkKey(req.GetKey()); err != nil {
+		return nil, err
+	}
+	v, ok := h.p.store.get(req.GetKey())
+	return &hostapi.GetItemResponse{Found: ok, Value: v}, nil
+}
+
+func (h *host) StorageSetItem(_ context.Context, req *hostapi.SetItemRequest) (*hostapi.SetItemResponse, error) {
+	used, err := h.p.store.set(req.GetKey(), req.GetValue())
+	if err != nil {
+		return nil, err
+	}
+	return &hostapi.SetItemResponse{Used: uint32(used), Quota: uint32(h.p.m.lim.Storage)}, nil
+}
+
+func (h *host) StorageDeleteItem(_ context.Context, req *hostapi.DeleteItemRequest) (*hostapi.DeleteItemResponse, error) {
+	if err := checkKey(req.GetKey()); err != nil {
+		return nil, err
+	}
+	found, err := h.p.store.del(req.GetKey())
+	if err != nil {
+		return nil, err
+	}
+	return &hostapi.DeleteItemResponse{Found: found}, nil
+}
+
+func (h *host) StorageListKeys(_ context.Context, req *hostapi.ListKeysRequest) (*hostapi.ListKeysResponse, error) {
+	return &hostapi.ListKeysResponse{Keys: h.p.store.keys(req.GetPrefix())}, nil
+}
+
+// session is a session as a plugin sees it.
+func session(s *protocol.SessionInfo) *hostapi.Session {
+	return &hostapi.Session{Id: s.GetId(), Name: s.GetName(), Agent: s.GetAgent(), Project: s.GetProject(),
+		State: s.GetState(), Status: s.GetStatus(), NodeId: s.GetNodeId()}
+}
+
+func (h *host) SessionsListSessions(context.Context, *hostapi.ListSessionsRequest) (*hostapi.ListSessionsResponse, error) {
+	out := &hostapi.ListSessionsResponse{}
+	for _, s := range h.p.m.cfg.Sessions() {
+		out.Sessions = append(out.Sessions, session(s))
+	}
+	return out, nil
+}
+
+func (h *host) SessionsGetSession(_ context.Context, req *hostapi.GetSessionRequest) (*hostapi.GetSessionResponse, error) {
+	for _, s := range h.p.m.cfg.Sessions() {
+		if s.GetId() == req.GetId() {
+			return &hostapi.GetSessionResponse{Found: true, Session: session(s)}, nil
+		}
+	}
+	return &hostapi.GetSessionResponse{}, nil
+}
+
+func (h *host) HttpFetch(ctx context.Context, req *hostapi.FetchRequest) (*hostapi.FetchResponse, error) {
+	return h.p.m.net.fetch(ctx, h.p.id, h.p.grants(), h.p.netRate, req)
+}
+
+// The window's commands a plugin may run.
+const cmdOpenURL = "mako.openUrl"
+
+func (h *host) CommandsRunCommand(_ context.Context, req *hostapi.RunCommandRequest) (*hostapi.RunCommandResponse, error) {
+	switch req.GetId() {
+	case cmdOpenURL:
+		if !h.p.gesture {
+			return nil, fmt.Errorf("%s opens a link only in answer to the user's tap or command", cmdOpenURL)
+		}
+		u, err := url.Parse(req.GetArg())
+		if err != nil || !slices.Contains([]string{"http", "https"}, u.Scheme) || u.Host == "" || u.User != nil || len(req.GetArg()) > 2048 {
+			return nil, fmt.Errorf("%s opens an http or https link, without a user in it", cmdOpenURL)
+		}
+		h.p.openURL = u.String()
+		return &hostapi.RunCommandResponse{}, nil
+	}
+	return nil, fmt.Errorf("command %q is not one a plugin may run", req.GetId())
+}

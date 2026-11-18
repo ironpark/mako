@@ -80,7 +80,7 @@ func (d *Daemon) addLayoutTools(server *sdk.Server, peer *agentPeer) {
 		if _, err := d.projectCaller(peer); err != nil {
 			return nil, listBlocksResult{}, err
 		}
-		return nil, listBlocksResult{Blocks: layoutdoc.Builtin()}, nil
+		return nil, listBlocksResult{Blocks: d.blocks()}, nil
 	})
 	sdk.AddTool(server, &sdk.Tool{Name: toolGetLayout, Description: "Read a window layout document of the mako window, shared by the user's nodes, with its revision, and which document each space uses. The document is a tree of row, column and stack nodes whose leaves are blocks (list_blocks) and the panes; every node has an id.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, in layoutArgs) (*sdk.CallToolResult, getLayoutResult, error) {
 		if _, err := d.projectCaller(peer); err != nil {
@@ -102,7 +102,7 @@ func (d *Daemon) addLayoutTools(server *sdk.Server, peer *agentPeer) {
 		if err != nil {
 			return nil, changeLayoutResult{}, err
 		}
-		doc, parsed, err := layoutdoc.Canonical(body, layoutdoc.BuiltinCatalog())
+		doc, parsed, err := layoutdoc.Canonical(body, d.blockCatalog())
 		if err != nil {
 			return nil, changeLayoutResult{}, fmt.Errorf("the document cannot be drawn: %w", err)
 		}
@@ -132,7 +132,7 @@ func (d *Daemon) addLayoutTools(server *sdk.Server, peer *agentPeer) {
 		if in.IfRev != nil && *in.IfRev != rev {
 			return nil, changeLayoutResult{}, fmt.Errorf("the document's revision is %q, not %q: read it again with get_layout", rev, *in.IfRev)
 		}
-		next, err := layoutdoc.Apply(cur, in.Ops, layoutdoc.BuiltinCatalog())
+		next, err := layoutdoc.Apply(cur, in.Ops, d.blockCatalog())
 		if err != nil {
 			return nil, changeLayoutResult{}, err
 		}
@@ -175,7 +175,7 @@ func (d *Daemon) layoutNow(name string) (*layoutdoc.Doc, string, bool, error) {
 	if body == nil {
 		return layoutdoc.Default(), "", true, nil
 	}
-	doc, err := layoutdoc.Parse(body, layoutdoc.BuiltinCatalog())
+	doc, err := layoutdoc.Parse(body, d.blockCatalog())
 	if err != nil {
 		// A window draws the default for it, which a change starts from.
 		return layoutdoc.Default(), rev, true, nil

@@ -14,6 +14,7 @@ import "mako/v2/files.proto";
 import "mako/v2/git.proto";
 import "mako/v2/forge.proto";
 import "mako/v2/mesh.proto";
+import "mako/v2/plugins.proto";
 import "mako/v2/session.proto";
 import "mako/v2/project_agents.proto";
 
@@ -132,6 +133,15 @@ message Envelope {
     DeviceConn device_conn = 109;
     DeviceListen device_listen = 110;
     DeviceAccept device_accept = 111;
+
+    // Plugins, a node's own (revision 26).
+    ListPlugins list_plugins = 120;
+    Plugins plugins = 121;
+    PluginAction plugin_action = 122;
+    PluginDone plugin_done = 123;
+    WatchBlock watch_block = 124;
+    BlockUpdate block_update = 125;
+    BlockEvent block_event = 126;
   }
 }
 

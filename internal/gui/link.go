@@ -53,6 +53,8 @@ type daemonLink struct {
 	accessStale  atomic.Bool
 	wsStale      atomic.Bool
 	devicesStale atomic.Bool
+	// pluginsStale says the next poll lists the plugins again.
+	pluginsStale atomic.Bool
 }
 
 func newDaemonLink(addr, daemon string) *daemonLink {
@@ -167,6 +169,7 @@ func (l *daemonLink) generation() int {
 func (l *daemonLink) stale() {
 	l.accessStale.Store(true)
 	l.wsStale.Store(true)
+	l.pluginsStale.Store(true)
 }
 
 // pollNow has the poll run now rather than at its next tick.
@@ -224,6 +227,9 @@ func (m *model) watch(ctx context.Context) {
 					}
 					if ch.GetDevices() {
 						m.link.devicesStale.Store(true)
+					}
+					if ch.GetPlugins() {
+						m.link.pluginsStale.Store(true)
 					}
 					m.link.watching.Store(true)
 					m.link.pollNow()
@@ -326,6 +332,15 @@ func (m *model) poll(ctx context.Context) {
 			}
 		}
 	}
+	// The plugins too, as the daemon says they changed; a daemon older
+	// than plugins has none.
+	var plugins *protocol.Plugins
+	if pluginsStale := m.link.pluginsStale.Swap(false); pluginsStale || !m.link.watching.Load() {
+		if plugins, err = c.Plugins(reqCtx); err != nil {
+			plugins = nil
+			askAgain(&m.link.pluginsStale, pluginsStale, err)
+		}
+	}
 	self := c.Node()
 	now := time.Now()
 	live := liveNodes(self, nodes, now)
@@ -393,6 +408,9 @@ func (m *model) poll(ctx context.Context) {
 		m.syncTitles()
 		if ws != nil && m.link.generation() == gen {
 			m.takeWorkspace(ws) // not of a daemon the window has left
+		}
+		if plugins != nil && m.link.generation() == gen {
+			m.setPlugins(plugins.GetPlugins())
 		}
 	})
 }

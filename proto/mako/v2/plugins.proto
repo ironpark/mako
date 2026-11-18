@@ -1,0 +1,187 @@
+syntax = "proto3";
+
+package mako.v2;
+
+option go_package = "github.com/ironpark/mako/internal/protocol";
+
+// Plugins run in the daemon (docs/plugins.md). A front-end lists them,
+// answers what they ask for, runs their commands and sets their settings
+// with these messages, and draws their blocks from the trees the daemon
+// sends: the tree first, then patches to it. Plugins are a node's own: a
+// peer is refused (revision 26).
+
+// ListPlugins asks for the node's plugins; answered by Plugins.
+message ListPlugins {}
+
+// Plugins are the node's plugins, in the order of their IDs.
+message Plugins {
+  repeated PluginInfo plugins = 1;
+}
+
+// PluginInfo is a plugin as its manifest declares it, and how it stands.
+message PluginInfo {
+  string id = 1;
+  string version = 2;
+  string publisher = 3;
+  // state is protocol's PluginState: "waiting" for the user to allow what
+  // it asks for, "denied", "ready" (allowed, not running), "running",
+  // "failed" (stopped: error says why) or "disabled" by the user.
+  string state = 4;
+  // error is why it is not running, or, stale, why its newer version
+  // could not replace the one running.
+  string error = 5;
+  // stale says the version running is the last that worked, the folder's
+  // newer one having failed.
+  bool stale = 6;
+  // permissions are what its manifest asks for; granted those the user
+  // allowed; asked those asked for and not allowed, which the user is to
+  // answer before it runs.
+  repeated string permissions = 7;
+  repeated string granted = 8;
+  repeated string asked = 9;
+  repeated PluginBlock blocks = 10;
+  repeated PluginCommand commands = 11;
+  repeated PluginSetting settings = 12;
+}
+
+// PluginBlock is a block a plugin contributes.
+message PluginBlock {
+  // name is the block's registered name, plugin:<id>/<block>.
+  string name = 1;
+  string title = 2;
+  // slots are where the manifest suggests placing it: "left", "right",
+  // "top", "bottom".
+  repeated string slots = 3;
+}
+
+// PluginCommand is a command a plugin contributes to the palette.
+message PluginCommand {
+  string id = 1;
+  string title = 2;
+}
+
+// PluginSetting is a setting a plugin declares, and its value.
+message PluginSetting {
+  string key = 1;
+  // type is "string", "secret", "boolean", "number" or "select".
+  string type = 2;
+  string label = 3;
+  string description = 4;
+  repeated string options = 5; // a select's
+  // value is the setting as text: "true" or "false" for a boolean, a
+  // number in decimal; never a secret's, which set alone tells of.
+  string value = 6;
+  bool set = 7;
+}
+
+// PluginAction acts on a plugin, for the user: op "grant" allows what it
+// asks for, "deny" refuses it, "enable" and "disable" start and stop it
+// being used, "reload" reads its folder again, "run" runs its command
+// command, and "set" sets its setting key to value ("" unsets it).
+// Answered by PluginDone.
+message PluginAction {
+  string plugin_id = 1;
+  string op = 2;
+  string command = 3;
+  string key = 4;
+  string value = 5;
+}
+
+// PluginDone answers PluginAction and BlockEvent.
+message PluginDone {
+  // open_url is a link the plugin asked, in answer to this, to open in
+  // the browser: the front-end that sent the request opens it.
+  string open_url = 1;
+}
+
+// WatchBlock follows a plugin's block, plugin:<id>/<block>: the daemon
+// answers with a BlockUpdate holding the tree, then one whenever it
+// changes, until the stream closes. A block is running while a front-end
+// watches it.
+message WatchBlock {
+  string block = 1;
+}
+
+// BlockUpdate is a block's tree, whole or as the changes since the last.
+message BlockUpdate {
+  string block = 1;
+  // seq counts the updates on the stream from 1.
+  uint64 seq = 2;
+  // tree is the whole tree, in the first update and whenever the
+  // front-end is to start again; nil with ops, or with no tree yet.
+  UiNode tree = 3;
+  // ops change the tree the last update left, in order.
+  repeated UiOp ops = 4;
+  // plugin is the ID of the plugin that draws the block, and title the
+  // block's, which the front-end frames it with.
+  string plugin = 5;
+  string title = 6;
+  // state is the plugin's, as PluginInfo.state; error and stale as
+  // there, or an error of the block's own last call.
+  string state = 7;
+  string error = 8;
+  bool stale = 9;
+}
+
+// BlockEvent is the user acting on a node of a block's tree: kind "tap",
+// or "change" or "submit" with the input's, toggle's or select's value.
+// Answered by PluginDone.
+message BlockEvent {
+  string block = 1;
+  string node = 2; // the node's id
+  string kind = 3;
+  string value = 4;
+}
+
+// UiNode is a node of a plugin block's tree. The kinds are a fixed set
+// (docs/plugins.md): column, row, stack, text, icon, pill, chip, button,
+// list, input, toggle, select, markdown, code, progress and divider; a
+// colour is a token, never a value.
+message UiNode {
+  // id is the node's path from the root by its own and its ancestors'
+  // keys, which patches find it by: unique in the tree.
+  string id = 1;
+  string kind = 2;
+  // text is what a text, pill, chip, button, markdown or code node
+  // shows; an input's placeholder; a toggle's label.
+  string text = 3;
+  // tone is the colour token: "", "muted", "faint", "accent", "success",
+  // "warning", "danger".
+  string tone = 4;
+  // icon is a bundled icon's name, for an icon node or beside a button's
+  // text.
+  string icon = 5;
+  // weight is "", "medium" or "semibold"; size "", "small" or "large".
+  string weight = 6;
+  string size = 7;
+  // value is an input's text or a select's choice; checked a toggle's.
+  string value = 8;
+  bool checked = 9;
+  repeated string options = 10; // a select's
+  // progress is a progress bar's, from 0 to 1.
+  double progress = 11;
+  string language = 12; // a code node's
+  bool disabled = 13;
+  // grow shares out a row's or column's room left among the children
+  // that set it; gap is the room between a row's or column's children.
+  double grow = 14;
+  double gap = 15;
+  // tap says tapping the node is answered; change that its value
+  // changing is.
+  bool tap = 16;
+  bool change = 17;
+  repeated UiNode children = 18;
+}
+
+// UiOp is a change of a tree. op "replace" puts node in place of the node
+// of id; "update" sets the fields of the node of id to node's, its
+// children kept; "insert" puts node in as parent's index-th child;
+// "remove" takes the node of id out; "move" moves the node of id to be
+// its parent's index-th child.
+message UiOp {
+  string op = 1;
+  string id = 2;
+  string parent = 3;
+  int32 index = 4;
+  UiNode node = 5;
+}

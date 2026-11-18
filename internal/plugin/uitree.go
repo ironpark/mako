@@ -1,0 +1,293 @@
+package plugin
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"math"
+	"regexp"
+	"slices"
+	"strings"
+
+	"github.com/ironpark/mako/internal/protocol"
+)
+
+// A block's render returns a tree of the fixed UI vocabulary, as JSON the
+// runtime's prelude writes. It is read here strictly, as untrusted: an
+// unknown kind or field (a raw colour, say) is refused, as is a tone that
+// is not a token, a tree too large or too deep, and text that could pass
+// for something else. What survives is the protocol's tree, which the
+// front-ends draw with their own components, and the messages its nodes
+// send, which stay in the daemon: a front-end reports only which node the
+// user acted on.
+
+// The UI vocabulary's kinds.
+const (
+	KindColumn   = "column"
+	KindRow      = "row"
+	KindStack    = "stack"
+	KindText     = "text"
+	KindIcon     = "icon"
+	KindPill     = "pill"
+	KindChip     = "chip"
+	KindButton   = "button"
+	KindList     = "list"
+	KindInput    = "input"
+	KindToggle   = "toggle"
+	KindSelect   = "select"
+	KindMarkdown = "markdown"
+	KindCode     = "code"
+	KindProgress = "progress"
+	KindDivider  = "divider"
+)
+
+// Kinds are the vocabulary, in the order docs/plugins.md lists it.
+var Kinds = []string{KindColumn, KindRow, KindStack, KindText, KindIcon, KindPill, KindChip, KindButton,
+	KindList, KindInput, KindToggle, KindSelect, KindMarkdown, KindCode, KindProgress, KindDivider}
+
+// Tones are the colour tokens a node may take.
+var Tones = []string{"", "muted", "faint", "accent", "success", "warning", "danger"}
+
+// The bounds of a tree.
+const (
+	maxTreeJSON  = 512 << 10
+	maxNodes     = 2000
+	maxDepth     = 24
+	maxNodeText  = 8 << 10
+	maxLongText  = 32 << 10 // a markdown's or code's
+	maxTreeText  = 256 << 10
+	maxKey       = 128
+	maxNodeOpts  = 64
+	maxMessage   = 4 << 10
+	maxGap, maxG = 64, 100
+)
+
+var (
+	iconName    = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+	messageName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
+	languageTag = regexp.MustCompile(`^[a-z0-9+#-]{0,24}$`)
+)
+
+// jsNode is a node as the prelude writes it.
+type jsNode struct {
+	Kind        string          `json:"kind"`
+	Key         string          `json:"key"`
+	Text        string          `json:"text"`
+	Tone        string          `json:"tone"`
+	Icon        string          `json:"icon"`
+	Weight      string          `json:"weight"`
+	Size        string          `json:"size"`
+	Value       string          `json:"value"`
+	Checked     bool            `json:"checked"`
+	Options     []string        `json:"options"`
+	Progress    float64         `json:"progress"`
+	Language    string          `json:"language"`
+	Placeholder string          `json:"placeholder"`
+	Disabled    bool            `json:"disabled"`
+	Grow        float64         `json:"grow"`
+	Gap         float64         `json:"gap"`
+	OnTap       json.RawMessage `json:"onTap"`
+	OnChange    json.RawMessage `json:"onChange"`
+	OnSubmit    json.RawMessage `json:"onSubmit"`
+	Children    []*jsNode       `json:"children"`
+}
+
+// actions are what a node's events send: each a message, the JSON array
+// of its name and arguments.
+type actions struct{ tap, change, submit json.RawMessage }
+
+// tree is a render, read: the protocol's tree and its nodes' messages by
+// node id.
+type tree struct {
+	root    *protocol.UiNode
+	actions map[string]actions
+}
+
+// readTree reads a render's JSON.
+func readTree(data []byte) (*tree, error) {
+	if len(data) > maxTreeJSON {
+		return nil, fmt.Errorf("the tree is over %d KiB of JSON", maxTreeJSON>>10)
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	var root jsNode
+	if err := dec.Decode(&root); err != nil {
+		return nil, fmt.Errorf("the tree does not read: %w", err)
+	}
+	if dec.More() {
+		return nil, fmt.Errorf("the tree does not read: more after it")
+	}
+	r := &treeReader{t: &tree{actions: map[string]actions{}}}
+	n, err := r.node(&root, "", 1)
+	if err != nil {
+		return nil, err
+	}
+	r.t.root = n
+	return r.t, nil
+}
+
+type treeReader struct {
+	t     *tree
+	nodes int
+	text  int
+}
+
+func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, error) {
+	if j == nil {
+		return nil, fmt.Errorf("%s: a node is null", where(id))
+	}
+	r.nodes++
+	if r.nodes > maxNodes {
+		return nil, fmt.Errorf("the tree has more than %d nodes", maxNodes)
+	}
+	if depth > maxDepth {
+		return nil, fmt.Errorf("the tree is deeper than %d", maxDepth)
+	}
+	if !slices.Contains(Kinds, j.Kind) {
+		return nil, fmt.Errorf("%s: %q is not a kind of node (%s)", where(id), j.Kind, strings.Join(Kinds, ", "))
+	}
+	if !slices.Contains(Tones, j.Tone) {
+		return nil, fmt.Errorf("%s: tone %q is not a colour token (%s)", where(id), j.Tone, strings.Join(Tones[1:], ", "))
+	}
+	if j.Weight != "" && j.Weight != "medium" && j.Weight != "semibold" {
+		return nil, fmt.Errorf("%s: weight %q is not medium or semibold", where(id), j.Weight)
+	}
+	if j.Size != "" && j.Size != "small" && j.Size != "large" {
+		return nil, fmt.Errorf("%s: size %q is not small or large", where(id), j.Size)
+	}
+	if j.Icon != "" && (len(j.Icon) > 48 || !iconName.MatchString(j.Icon)) {
+		return nil, fmt.Errorf("%s: icon %q is not an icon's name", where(id), j.Icon)
+	}
+	if j.Kind == KindIcon && j.Icon == "" {
+		return nil, fmt.Errorf("%s: an icon names its icon", where(id))
+	}
+	if !languageTag.MatchString(j.Language) {
+		return nil, fmt.Errorf("%s: language %q is not a language's name", where(id), j.Language)
+	}
+	if !finite(j.Progress, 0, 1) || !finite(j.Grow, 0, maxG) || !finite(j.Gap, 0, maxGap) {
+		return nil, fmt.Errorf("%s: progress is from 0 to 1, grow from 0 to %d, gap from 0 to %d", where(id), maxG, maxGap)
+	}
+	limit := maxNodeText
+	if j.Kind == KindMarkdown || j.Kind == KindCode {
+		limit = maxLongText
+	}
+	for _, s := range []string{j.Text, j.Value, j.Placeholder} {
+		if len(s) > limit {
+			return nil, fmt.Errorf("%s: text over %d KiB", where(id), limit>>10)
+		}
+		r.text += len(s)
+	}
+	if len(j.Options) > maxNodeOpts {
+		return nil, fmt.Errorf("%s: more than %d options", where(id), maxNodeOpts)
+	}
+	for _, o := range j.Options {
+		if len(o) > maxTitle*4 {
+			return nil, fmt.Errorf("%s: an option is too long", where(id))
+		}
+		r.text += len(o)
+	}
+	if r.text > maxTreeText {
+		return nil, fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
+	}
+	if j.Kind != KindMarkdown && j.Kind != KindCode && strings.ContainsFunc(j.Text, spoofingInline) {
+		return nil, fmt.Errorf("%s: text holds control or reordering characters", where(id))
+	}
+	n := &protocol.UiNode{
+		Id: id, Kind: j.Kind, Text: j.Text, Tone: j.Tone, Icon: j.Icon, Weight: j.Weight, Size: j.Size,
+		Value: j.Value, Checked: j.Checked, Options: j.Options, Progress: j.Progress, Language: j.Language,
+		Disabled: j.Disabled, Grow: j.Grow, Gap: j.Gap,
+	}
+	if j.Kind == KindInput && n.Text == "" {
+		n.Text = j.Placeholder
+	}
+	var a actions
+	var err error
+	if a.tap, err = message(j.OnTap); err != nil {
+		return nil, fmt.Errorf("%s: onTap: %w", where(id), err)
+	}
+	if a.change, err = message(j.OnChange); err != nil {
+		return nil, fmt.Errorf("%s: onChange: %w", where(id), err)
+	}
+	if a.submit, err = message(j.OnSubmit); err != nil {
+		return nil, fmt.Errorf("%s: onSubmit: %w", where(id), err)
+	}
+	switch j.Kind {
+	case KindInput, KindToggle, KindSelect:
+		if a.tap != nil {
+			return nil, fmt.Errorf("%s: a %s takes onChange, not onTap", where(id), j.Kind)
+		}
+	case KindDivider, KindProgress, KindMarkdown, KindCode:
+		if a.tap != nil || a.change != nil || a.submit != nil {
+			return nil, fmt.Errorf("%s: a %s sends no messages", where(id), j.Kind)
+		}
+	default:
+		if a.change != nil || a.submit != nil {
+			return nil, fmt.Errorf("%s: a %s takes onTap, not onChange", where(id), j.Kind)
+		}
+	}
+	if a.submit != nil && j.Kind != KindInput {
+		return nil, fmt.Errorf("%s: only an input takes onSubmit", where(id))
+	}
+	n.Tap, n.Change = a.tap != nil, a.change != nil || a.submit != nil
+	if n.Tap || n.Change {
+		r.t.actions[id] = a
+	}
+	container := j.Kind == KindColumn || j.Kind == KindRow || j.Kind == KindStack || j.Kind == KindList
+	if !container && len(j.Children) > 0 {
+		return nil, fmt.Errorf("%s: a %s holds no children", where(id), j.Kind)
+	}
+	keys := map[string]bool{}
+	for i, c := range j.Children {
+		if c == nil {
+			return nil, fmt.Errorf("%s: child %d is null", where(id), i)
+		}
+		k := c.Key
+		if k == "" {
+			k = fmt.Sprintf("#%d", i)
+		} else if len(k) > maxKey || strings.ContainsAny(k, "/#") || strings.ContainsFunc(k, spoofing) {
+			return nil, fmt.Errorf("%s: key %q is over %d bytes or holds / or #", where(id), k, maxKey)
+		}
+		if keys[k] {
+			return nil, fmt.Errorf("%s: two children have the key %q", where(id), k)
+		}
+		keys[k] = true
+		child, err := r.node(c, id+"/"+k, depth+1)
+		if err != nil {
+			return nil, err
+		}
+		n.Children = append(n.Children, child)
+	}
+	return n, nil
+}
+
+// message reads a node's message: null, or an array of a name and up to
+// a few KiB of arguments.
+func message(raw json.RawMessage) (json.RawMessage, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	if len(raw) > maxMessage {
+		return nil, fmt.Errorf("over %d KiB", maxMessage>>10)
+	}
+	var parts []json.RawMessage
+	if err := json.Unmarshal(raw, &parts); err != nil || len(parts) == 0 {
+		return nil, fmt.Errorf("a message is [name, ...arguments]")
+	}
+	var name string
+	if err := json.Unmarshal(parts[0], &name); err != nil || !messageName.MatchString(name) {
+		return nil, fmt.Errorf("a message's name is a word")
+	}
+	return raw, nil
+}
+
+func finite(v, lo, hi float64) bool { return !math.IsNaN(v) && v >= lo && v <= hi }
+
+// spoofingInline is spoofing but for a line break, which text may hold.
+func spoofingInline(r rune) bool { return r != '\n' && r != '\t' && spoofing(r) }
+
+func where(id string) string {
+	if id == "" {
+		return "the root"
+	}
+	return "node " + id
+}

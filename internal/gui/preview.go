@@ -480,6 +480,12 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 			if mode := os.Getenv("MAKO_PREVIEW_LAYOUT"); mode != "" {
 				steps = layoutPreview(m, mode == "shown", do, frames, shot)
 			}
+			// MAKO_PREVIEW_PLUGINS names a folder of signals between this
+			// and the driver of a plugin, ci-status, in the daemon's
+			// plugins folder; see pluginsPreview.
+			if sig := os.Getenv("MAKO_PREVIEW_PLUGINS"); sig != "" {
+				steps = pluginsPreview(m, "ci-status", func() string { return p.Semantics().String() }, sig, do, frames, shot)
+			}
 			// MAKO_PREVIEW_FORGE names a clone of a repository on a forge,
 			// whose forge tab is rendered in place of the rest.
 			if dir := os.Getenv("MAKO_PREVIEW_FORGE"); dir != "" {

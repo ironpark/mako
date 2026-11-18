@@ -123,6 +123,13 @@ type Envelope struct {
 	//	*Envelope_DeviceConn
 	//	*Envelope_DeviceListen
 	//	*Envelope_DeviceAccept
+	//	*Envelope_ListPlugins
+	//	*Envelope_Plugins
+	//	*Envelope_PluginAction
+	//	*Envelope_PluginDone
+	//	*Envelope_WatchBlock
+	//	*Envelope_BlockUpdate
+	//	*Envelope_BlockEvent
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -908,6 +915,69 @@ func (x *Envelope) GetDeviceAccept() *DeviceAccept {
 	return nil
 }
 
+func (x *Envelope) GetListPlugins() *ListPlugins {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_ListPlugins); ok {
+			return x.ListPlugins
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetPlugins() *Plugins {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Plugins); ok {
+			return x.Plugins
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetPluginAction() *PluginAction {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_PluginAction); ok {
+			return x.PluginAction
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetPluginDone() *PluginDone {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_PluginDone); ok {
+			return x.PluginDone
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetWatchBlock() *WatchBlock {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_WatchBlock); ok {
+			return x.WatchBlock
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetBlockUpdate() *BlockUpdate {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_BlockUpdate); ok {
+			return x.BlockUpdate
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetBlockEvent() *BlockEvent {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_BlockEvent); ok {
+			return x.BlockEvent
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1245,6 +1315,35 @@ type Envelope_DeviceAccept struct {
 	DeviceAccept *DeviceAccept `protobuf:"bytes,111,opt,name=device_accept,json=deviceAccept,proto3,oneof"`
 }
 
+type Envelope_ListPlugins struct {
+	// Plugins, a node's own (revision 26).
+	ListPlugins *ListPlugins `protobuf:"bytes,120,opt,name=list_plugins,json=listPlugins,proto3,oneof"`
+}
+
+type Envelope_Plugins struct {
+	Plugins *Plugins `protobuf:"bytes,121,opt,name=plugins,proto3,oneof"`
+}
+
+type Envelope_PluginAction struct {
+	PluginAction *PluginAction `protobuf:"bytes,122,opt,name=plugin_action,json=pluginAction,proto3,oneof"`
+}
+
+type Envelope_PluginDone struct {
+	PluginDone *PluginDone `protobuf:"bytes,123,opt,name=plugin_done,json=pluginDone,proto3,oneof"`
+}
+
+type Envelope_WatchBlock struct {
+	WatchBlock *WatchBlock `protobuf:"bytes,124,opt,name=watch_block,json=watchBlock,proto3,oneof"`
+}
+
+type Envelope_BlockUpdate struct {
+	BlockUpdate *BlockUpdate `protobuf:"bytes,125,opt,name=block_update,json=blockUpdate,proto3,oneof"`
+}
+
+type Envelope_BlockEvent struct {
+	BlockEvent *BlockEvent `protobuf:"bytes,126,opt,name=block_event,json=blockEvent,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -1407,6 +1506,20 @@ func (*Envelope_DeviceListen) isEnvelope_Body() {}
 
 func (*Envelope_DeviceAccept) isEnvelope_Body() {}
 
+func (*Envelope_ListPlugins) isEnvelope_Body() {}
+
+func (*Envelope_Plugins) isEnvelope_Body() {}
+
+func (*Envelope_PluginAction) isEnvelope_Body() {}
+
+func (*Envelope_PluginDone) isEnvelope_Body() {}
+
+func (*Envelope_WatchBlock) isEnvelope_Body() {}
+
+func (*Envelope_BlockUpdate) isEnvelope_Body() {}
+
+func (*Envelope_BlockEvent) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -1465,7 +1578,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xb0!\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xba$\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -1564,7 +1677,17 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\vdevice_conn\x18m \x01(\v2\x13.mako.v2.DeviceConnH\x00R\n" +
 	"deviceConn\x12<\n" +
 	"\rdevice_listen\x18n \x01(\v2\x15.mako.v2.DeviceListenH\x00R\fdeviceListen\x12<\n" +
-	"\rdevice_accept\x18o \x01(\v2\x15.mako.v2.DeviceAcceptH\x00R\fdeviceAcceptB\x06\n" +
+	"\rdevice_accept\x18o \x01(\v2\x15.mako.v2.DeviceAcceptH\x00R\fdeviceAccept\x129\n" +
+	"\flist_plugins\x18x \x01(\v2\x14.mako.v2.ListPluginsH\x00R\vlistPlugins\x12,\n" +
+	"\aplugins\x18y \x01(\v2\x10.mako.v2.PluginsH\x00R\aplugins\x12<\n" +
+	"\rplugin_action\x18z \x01(\v2\x15.mako.v2.PluginActionH\x00R\fpluginAction\x126\n" +
+	"\vplugin_done\x18{ \x01(\v2\x13.mako.v2.PluginDoneH\x00R\n" +
+	"pluginDone\x126\n" +
+	"\vwatch_block\x18| \x01(\v2\x13.mako.v2.WatchBlockH\x00R\n" +
+	"watchBlock\x129\n" +
+	"\fblock_update\x18} \x01(\v2\x14.mako.v2.BlockUpdateH\x00R\vblockUpdate\x126\n" +
+	"\vblock_event\x18~ \x01(\v2\x13.mako.v2.BlockEventH\x00R\n" +
+	"blockEventB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"5\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -1666,6 +1789,13 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*DeviceConn)(nil),        // 79: mako.v2.DeviceConn
 	(*DeviceListen)(nil),      // 80: mako.v2.DeviceListen
 	(*DeviceAccept)(nil),      // 81: mako.v2.DeviceAccept
+	(*ListPlugins)(nil),       // 82: mako.v2.ListPlugins
+	(*Plugins)(nil),           // 83: mako.v2.Plugins
+	(*PluginAction)(nil),      // 84: mako.v2.PluginAction
+	(*PluginDone)(nil),        // 85: mako.v2.PluginDone
+	(*WatchBlock)(nil),        // 86: mako.v2.WatchBlock
+	(*BlockUpdate)(nil),       // 87: mako.v2.BlockUpdate
+	(*BlockEvent)(nil),        // 88: mako.v2.BlockEvent
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -1749,11 +1879,18 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	79, // 78: mako.v2.Envelope.device_conn:type_name -> mako.v2.DeviceConn
 	80, // 79: mako.v2.Envelope.device_listen:type_name -> mako.v2.DeviceListen
 	81, // 80: mako.v2.Envelope.device_accept:type_name -> mako.v2.DeviceAccept
-	81, // [81:81] is the sub-list for method output_type
-	81, // [81:81] is the sub-list for method input_type
-	81, // [81:81] is the sub-list for extension type_name
-	81, // [81:81] is the sub-list for extension extendee
-	0,  // [0:81] is the sub-list for field type_name
+	82, // 81: mako.v2.Envelope.list_plugins:type_name -> mako.v2.ListPlugins
+	83, // 82: mako.v2.Envelope.plugins:type_name -> mako.v2.Plugins
+	84, // 83: mako.v2.Envelope.plugin_action:type_name -> mako.v2.PluginAction
+	85, // 84: mako.v2.Envelope.plugin_done:type_name -> mako.v2.PluginDone
+	86, // 85: mako.v2.Envelope.watch_block:type_name -> mako.v2.WatchBlock
+	87, // 86: mako.v2.Envelope.block_update:type_name -> mako.v2.BlockUpdate
+	88, // 87: mako.v2.Envelope.block_event:type_name -> mako.v2.BlockEvent
+	88, // [88:88] is the sub-list for method output_type
+	88, // [88:88] is the sub-list for method input_type
+	88, // [88:88] is the sub-list for extension type_name
+	88, // [88:88] is the sub-list for extension extendee
+	0,  // [0:88] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -1767,6 +1904,7 @@ func file_mako_v2_envelope_proto_init() {
 	file_mako_v2_git_proto_init()
 	file_mako_v2_forge_proto_init()
 	file_mako_v2_mesh_proto_init()
+	file_mako_v2_plugins_proto_init()
 	file_mako_v2_session_proto_init()
 	file_mako_v2_project_agents_proto_init()
 	file_mako_v2_envelope_proto_msgTypes[0].OneofWrappers = []any{
@@ -1851,6 +1989,13 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_DeviceConn)(nil),
 		(*Envelope_DeviceListen)(nil),
 		(*Envelope_DeviceAccept)(nil),
+		(*Envelope_ListPlugins)(nil),
+		(*Envelope_Plugins)(nil),
+		(*Envelope_PluginAction)(nil),
+		(*Envelope_PluginDone)(nil),
+		(*Envelope_WatchBlock)(nil),
+		(*Envelope_BlockUpdate)(nil),
+		(*Envelope_BlockEvent)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

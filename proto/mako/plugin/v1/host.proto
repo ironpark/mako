@@ -1,0 +1,253 @@
+// The Host API: what a plugin, run in the daemon's sandbox, may ask of
+// mako. This schema is the only definition of it; `make proto` generates
+// from it the daemon's dispatcher, which checks each call's permission
+// before anything else, the JavaScript bindings a plugin calls with their
+// types (mako.d.ts), and the WIT a wasm runtime will take (mako.wit). See
+// docs/plugins.md.
+//
+// A service is a group of the API, which a plugin reaches as
+// mako.<group>, the service's name without "Service" in lower camel case;
+// each method takes and returns one message, as JSON over the JavaScript
+// boundary. The generator takes only what WIT can say as well, and
+// refuses the rest: see internal/plugin/apigen.
+syntax = "proto3";
+
+package mako.plugin.v1;
+
+import "mako/plugin/v1/options.proto";
+
+option go_package = "github.com/ironpark/mako/internal/plugin/hostapi";
+
+// LogService writes to the daemon's log, under the plugin's name.
+service LogService {
+  // Write puts a line in the daemon's log.
+  rpc Write(WriteRequest) returns (WriteResponse) {
+    option (permission) = "none";
+  }
+}
+
+// WriteRequest is a line for the log.
+message WriteRequest {
+  // level is "debug", "info", "warn" or "error"; "" is "info".
+  string level = 1;
+  // message is the line, cut at 4 KiB.
+  string message = 2;
+}
+
+// WriteResponse says the line was written.
+message WriteResponse {}
+
+// SettingsService reads the plugin's own settings, which its manifest
+// declares and the user sets in Settings ▸ Plugins.
+service SettingsService {
+  // GetSetting reads one setting.
+  rpc GetSetting(GetSettingRequest) returns (GetSettingResponse) {
+    option (permission) = "none";
+  }
+  // ListSettings reads every setting the manifest declares.
+  rpc ListSettings(ListSettingsRequest) returns (ListSettingsResponse) {
+    option (permission) = "none";
+  }
+}
+
+// GetSettingRequest names a setting.
+message GetSettingRequest {
+  // key is the setting's key in the manifest.
+  string key = 1;
+}
+
+// GetSettingResponse is a setting's value.
+message GetSettingResponse {
+  Setting setting = 1;
+}
+
+// ListSettingsRequest asks for every setting.
+message ListSettingsRequest {}
+
+// ListSettingsResponse is every setting, in the manifest's order.
+message ListSettingsResponse {
+  repeated Setting settings = 1;
+}
+
+// Setting is a setting and its value: the user's, else the manifest's
+// default, else empty.
+message Setting {
+  string key = 1;
+  // type is the manifest's: "string", "secret", "boolean", "number" or
+  // "select".
+  string type = 2;
+  // text is the value of a string, secret or select setting.
+  string text = 3;
+  // flag is the value of a boolean setting.
+  bool flag = 4;
+  // number is the value of a number setting.
+  double number = 5;
+  // set says the user set it, rather than leaving the default.
+  bool set = 6;
+}
+
+// StorageService is the plugin's own store of keys and values, on this
+// node, within a quota.
+service StorageService {
+  // GetItem reads the value of a key.
+  rpc GetItem(GetItemRequest) returns (GetItemResponse) {
+    option (permission) = "storage";
+  }
+  // SetItem writes the value of a key, unless it would take the store
+  // over its quota.
+  rpc SetItem(SetItemRequest) returns (SetItemResponse) {
+    option (permission) = "storage";
+  }
+  // DeleteItem removes a key.
+  rpc DeleteItem(DeleteItemRequest) returns (DeleteItemResponse) {
+    option (permission) = "storage";
+  }
+  // ListKeys lists the keys that start with a prefix, in order.
+  rpc ListKeys(ListKeysRequest) returns (ListKeysResponse) {
+    option (permission) = "storage";
+  }
+}
+
+// GetItemRequest names a key.
+message GetItemRequest {
+  string key = 1;
+}
+
+// GetItemResponse is a key's value.
+message GetItemResponse {
+  // found says the key has a value.
+  bool found = 1;
+  string value = 2;
+}
+
+// SetItemRequest gives a key a value.
+message SetItemRequest {
+  // key is at most 256 bytes.
+  string key = 1;
+  // value is at most 256 KiB.
+  string value = 2;
+}
+
+// SetItemResponse is the store after the write.
+message SetItemResponse {
+  // used is the bytes of every key and value the store holds.
+  uint32 used = 1;
+  // quota is the most it may hold.
+  uint32 quota = 2;
+}
+
+// DeleteItemRequest names a key.
+message DeleteItemRequest {
+  string key = 1;
+}
+
+// DeleteItemResponse says whether there was a value.
+message DeleteItemResponse {
+  bool found = 1;
+}
+
+// ListKeysRequest gives the start of the keys to list.
+message ListKeysRequest {
+  string prefix = 1;
+}
+
+// ListKeysResponse is the keys.
+message ListKeysResponse {
+  repeated string keys = 1;
+}
+
+// SessionsService reads this node's sessions.
+service SessionsService {
+  // ListSessions lists the node's sessions.
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse) {
+    option (permission) = "sessions:read";
+  }
+  // GetSession reads one session.
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse) {
+    option (permission) = "sessions:read";
+  }
+}
+
+// ListSessionsRequest asks for the sessions.
+message ListSessionsRequest {}
+
+// ListSessionsResponse is the sessions, oldest first.
+message ListSessionsResponse {
+  repeated Session sessions = 1;
+}
+
+// GetSessionRequest names a session.
+message GetSessionRequest {
+  string id = 1;
+}
+
+// GetSessionResponse is the session.
+message GetSessionResponse {
+  // found says there is a session of the ID.
+  bool found = 1;
+  Session session = 2;
+}
+
+// Session is a session as a plugin sees it: no terminal, no transcript.
+message Session {
+  string id = 1;
+  string name = 2;
+  // agent is what runs in it: "claude", "codex", "shell", ...
+  string agent = 3;
+  // project is its working folder.
+  string project = 4;
+  // state is its process's: "running", "exited" or "asleep".
+  string state = 5;
+  // status is its agent's: "idle", "working", "waiting" or "done".
+  string status = 6;
+  string node_id = 7;
+}
+
+// HttpService makes HTTP requests for the plugin, to the hosts its
+// manifest names as net:<host> and the user allowed: by https, on the
+// default port, following redirects only within the host. Each request
+// is logged under the plugin's name.
+service HttpService {
+  // Fetch makes a request and reads the response.
+  rpc Fetch(FetchRequest) returns (FetchResponse) {
+    option (permission) = "net";
+  }
+}
+
+// FetchRequest is a request.
+message FetchRequest {
+  // url is an https URL of a host the plugin may reach.
+  string url = 1;
+  // method is GET, HEAD, POST, PUT, PATCH or DELETE; "" is GET.
+  string method = 2;
+  map<string, string> headers = 3;
+  // body is at most 256 KiB.
+  string body = 4;
+}
+
+// FetchResponse is the response.
+message FetchResponse {
+  uint32 status = 1;
+  map<string, string> headers = 2;
+  // body is at most 1 MiB; a larger one fails the call.
+  string body = 3;
+}
+
+// CommandsService runs the window's commands a plugin may use.
+service CommandsService {
+  // RunCommand runs a command of the window's: "mako.openUrl", with the
+  // URL as its argument, opens an http or https link in the browser, and
+  // only in answer to the user's tap or command.
+  rpc RunCommand(RunCommandRequest) returns (RunCommandResponse) {
+    option (permission) = "none";
+  }
+}
+
+// RunCommandRequest names a command and its argument.
+message RunCommandRequest {
+  string id = 1;
+  string arg = 2;
+}
+
+// RunCommandResponse says the command was run.
+message RunCommandResponse {}

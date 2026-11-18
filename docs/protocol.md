@@ -32,6 +32,7 @@ and this document describes how the messages are used.
 - [Compatibility](#compatibility)
 - [Limits](#limits)
 - [Layout documents](#layout-documents)
+- [Plugin blocks](#plugin-blocks)
 - [The local hook socket](#the-local-hook-socket)
 - [Access](#access)
 - [Security](#security)
@@ -345,6 +346,8 @@ message Changed {
   bool sessions = 2; // the sessions changed: ask list_sessions again
   bool access = 3;   // a request came, or the keys changed: ask access again
   bool workspace = 4; // the workspace changed: ask get_workspace again
+  bool devices = 5;   // a device lent or borrowed here changed
+  bool plugins = 6;   // a plugin came, went or changed: ask list_plugins again (revision 26)
 }
 
 message Workspace {
@@ -806,6 +809,20 @@ A run's `number` is its ID. `forge_run` operations (`op`):
 On a Forgejo or Gitea a run has no jobs, a pull request in a list no
 checks, and a draft is one titled `WIP:`.
 
+### Plugins
+
+A node's daemon runs its plugins ([docs/plugins.md](plugins.md)); these
+requests reach them from the node's own front-ends, and a peer is refused
+(revision 26). `changed` has `plugins` set when a plugin comes, goes, or
+changes how it stands, for the front-end to list them again.
+
+| Request | Payload | Reply | |
+|---|---|---|---|
+| `list_plugins` | `ListPlugins` | `plugins` | The node's plugins, by ID: each one's manifest (version, publisher, blocks, commands, settings and their values, a secret's never), the permissions it asks for, those allowed, those still `asked`, and its `state` (`waiting`, `denied`, `ready`, `running`, `failed`, `disabled`) with an `error`; `stale` when the version running is the last that worked and `error` says why the folder's newer one did not. |
+| `plugin_action` | `PluginAction` | `plugin_done` | Acts for the user: `grant` allows what the plugin asks for, `deny` refuses it and stops the plugin, `enable` / `disable`, `reload` reads its folder again, `run` runs its `command`, `set` sets its setting `key` to `value` ("" unsets). `open_url` in the reply is a link the plugin asked, in answer, to open: the front-end that asked opens it. |
+| `watch_block` | `WatchBlock` | `block_update`, then more | Follows a plugin's block, `plugin:<id>/<block>`: the tree whole, then the changes. The block is shown, and its plugin started, while a front-end watches it; see [Plugin blocks](#plugin-blocks). |
+| `block_event` | `BlockEvent` | `plugin_done` | The user acting on a node of a block's tree: `tap`, or `change` / `submit` with the value. The daemon looks up what the node's last render said to send; a front-end names only the node. |
+
 ## Attach streams
 
 An `attach` request turns its stream into a live pipe to one session:
@@ -1018,7 +1035,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 24) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 26) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
@@ -1053,6 +1070,9 @@ Within version 2, the protocol changes by addition, as protobuf allows:
 | Relinking a peer on libp2p | at most every 30 s |
 | Peer expiry | 5 minutes unseen |
 | Hook report | 1 MiB |
+| A plugin block's tree | 2 000 nodes, 24 deep, 512 KiB of JSON, 256 KiB of text (8 KiB a node, 32 KiB a markdown or code node) |
+| A plugin block's updates | one each 100 ms on a stream, the renders between sent as one change |
+| A plugin's events | 20 a second from the front-ends, a value 8 KiB |
 
 ## Layout documents
 
@@ -1172,6 +1192,45 @@ by node ID: the sizes its edges were dragged to (`gui.json`'s
 and `layout_sizes` for the rest), which nodes are shut, and the tab a
 stack shows. The window's toggles and shortcuts for the sidebar and the
 details panel act on the nodes of those IDs.
+
+## Plugin blocks
+
+A plugin draws a block as a tree of `UiNode`s, of a fixed vocabulary:
+`column`, `row`, `stack`, `list` (which hold children), `text`, `icon`,
+`pill`, `chip`, `button`, `input`, `toggle`, `select`, `markdown`, `code`,
+`progress` and `divider`. A colour is a token (`tone`: `muted`, `faint`,
+`accent`, `success`, `warning`, `danger`), never a value; the front-end
+draws each kind with its own components in its own theme. The daemon reads
+what the plugin's render returned strictly, and refuses a tree with an
+unknown kind or field, a tone not a token, more nodes or depth than
+[Limits](#limits) allows, or text holding control or reordering
+characters; the block then shows the error, and the last tree that read.
+
+Every node has an `id`, its path from the root by its own and its
+ancestors' keys (a child without a key has `#` and its index): `""` for the
+root, `/runs/1234/#0` for the first child of the child keyed `1234` of the
+child keyed `runs`. A node that answers a tap has `tap`; one whose value
+changing is answered, `change`. What it sends is the daemon's to know.
+
+`watch_block` answers with a `block_update` holding the `tree`, then one
+whenever the block changes, holding `ops` that make the tree the last
+update left into the new one, in order:
+
+| `op` | |
+|---|---|
+| `replace` | `node` in place of the node of `id` (the root's, `""`, too) |
+| `update` | the fields of the node of `id` set to `node`'s, its children kept |
+| `insert` | `node` as the `index`-th child of the node of `parent` |
+| `remove` | the node of `id` taken out |
+| `move` | the node of `id` moved to be the `index`-th child of its parent |
+
+A child is matched by id, so a keyed child that moves among its
+siblings is moved, not drawn again. An update with neither `tree` nor
+`ops` changes only how the block stands: `plugin` and `title`, which the
+front-end frames the block with, `state`, `error` and `stale`, as in
+`list_plugins`. A front-end that cannot apply an op starts the stream
+again, for a whole tree. Updates come at most every 100 ms; renders in
+between go as one change.
 
 ## The local hook socket
 

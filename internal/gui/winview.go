@@ -2,6 +2,7 @@ package gui
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/widget"
@@ -36,7 +37,17 @@ func (v *layoutDraw) node(n *layoutdoc.Node, root bool) ggui.Widget {
 }
 
 // block draws a block, or what stands for one the registry does not hold.
+// A plugin's block follows the registry, as its plugin comes and goes.
 func (v *layoutDraw) block(n *layoutdoc.Node) blockView {
+	if strings.HasPrefix(n.Block, "plugin:") {
+		return blockView{Body: ggui.View(v.m.blocks.rev, func(int) ggui.Widget {
+			def, ok := v.m.blocks.lookup(n.Block)
+			if !ok {
+				return missingBlock(n.Block)
+			}
+			return def.Build(v.m, n.Props).Body
+		})}
+	}
 	def, ok := v.m.blocks.lookup(n.Block)
 	if !ok {
 		return blockView{Body: missingBlock(n.Block)}
@@ -170,6 +181,7 @@ func (v *layoutDraw) stack(n *layoutdoc.Node) ggui.Widget {
 	}
 	shown := ggui.Map(st.active, func(name string) int { return layoutdoc.StackIndex(n, name) })
 	labels := ggui.Derived(func() []string {
+		v.m.blocks.rev.Get() // a plugin's block's title comes with it
 		out := make([]string, len(n.Children))
 		for i, c := range n.Children {
 			switch def, ok := v.m.blocks.lookup(c.Block); {

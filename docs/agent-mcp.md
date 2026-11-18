@@ -36,7 +36,7 @@ server's others, a verb and its object, rather than the `layout.get` of
 
 | Tool | Arguments | Result |
 | --- | --- | --- |
-| `list_blocks` | `{}` | The `blocks` a document can place: each one's `name`, `title`, and `props` as a JSON Schema. |
+| `list_blocks` | `{}` | The `blocks` a document can place: each one's `name`, `title`, and `props` as a JSON Schema: the window's own, `mako.*`, and those of the node's plugins, `plugin:<id>/<block>` ([plugins](plugins.md)). |
 | `get_layout` | Optional `document` (`default`) | The `document`'s `doc`, its `revision` (`""` while there is none and the window draws its built-in default, then `builtin: true`), the `documents` there are, and the `spaces` with the `document` each uses. |
 | `set_layout` | `doc`, `if_rev`, optional `document` | Replaces the document whole. Refused when `if_rev` is not its revision, or the document is not one the window can draw. Returns the `revision` after. |
 | `patch_layout` | `ops`, optional `document`, `if_rev` | Applies changes by node id, in order: `{"op":"insert","parent","index","node"}`, `{"op":"remove","id"}`, `{"op":"move","id","parent","index"}`, `{"op":"resize","id","size"}` or `"grow"`, `{"op":"select","id","active"}` or `"block"`. The document after is checked whole; one the window cannot draw changes nothing. Returns the `revision` after. |

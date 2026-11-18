@@ -2,6 +2,9 @@ package gui
 
 import (
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/widget"
@@ -40,13 +43,55 @@ type blockView struct {
 	Edge func(line ggui.Widget, vertical bool) ggui.Widget
 }
 
-// blockRegistry holds the blocks by name, in the order registered.
+// blockRegistry holds the blocks by name, in the order registered. The
+// window's own are there from the start; plugins' come and go as the
+// daemon runs them, and rev counts the changes, for what draws them to
+// follow.
 type blockRegistry struct {
 	defs  map[string]*blockDef
 	names []string
+	rev   *ggui.StateValue[int]
 }
 
-func newBlockRegistry() *blockRegistry { return &blockRegistry{defs: map[string]*blockDef{}} }
+func newBlockRegistry() *blockRegistry {
+	return &blockRegistry{defs: map[string]*blockDef{}, rev: ggui.State(0)}
+}
+
+// replacePlugins makes the plugins' blocks those of defs, by name, each
+// named plugin:<id>/<block>: the others go. It reports whether any came,
+// went or changed its title.
+func (r *blockRegistry) replacePlugins(defs []blockDef) bool {
+	want := map[string]blockDef{}
+	for _, d := range defs {
+		if strings.HasPrefix(d.Name, "plugin:") && layoutdoc.CheckBlockName(d.Name) == nil {
+			want[d.Name] = d
+		}
+	}
+	changed := false
+	for _, name := range slices.Clone(r.names) {
+		if !strings.HasPrefix(name, "plugin:") {
+			continue
+		}
+		d, keep := want[name]
+		if keep && d.Title == r.defs[name].Title {
+			delete(want, name)
+			continue
+		}
+		delete(r.defs, name)
+		r.names = slices.DeleteFunc(r.names, func(n string) bool { return n == name })
+		changed = true
+	}
+	added := slices.Sorted(maps.Keys(want))
+	for _, name := range added {
+		if err := r.register(want[name]); err == nil {
+			changed = true
+		}
+	}
+	if changed {
+		r.rev.Update(func(n int) int { return n + 1 })
+	}
+	return changed
+}
 
 // register adds d; a name of no namespace, or one taken, is refused.
 func (r *blockRegistry) register(d blockDef) error {

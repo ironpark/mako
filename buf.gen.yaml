@@ -3,3 +3,8 @@ plugins:
   - local: protoc-gen-go
     out: .
     opt: module=github.com/ironpark/mako
+  # The plugin Host API's dispatcher, bindings, types and WIT, from
+  # proto/mako/plugin/v1 (internal/plugin/apigen).
+  - local: ["go", "run", "./internal/plugin/apigen/protoc-gen-makoplugin"]
+    out: .
+    strategy: all

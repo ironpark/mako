@@ -1,0 +1,109 @@
+// The groups of the Host API whose permissions are declared, so that the
+// schema, the bindings and the WIT have their shape, but which this
+// version of mako does not carry out: a call fails, saying the method is
+// not available. See host.proto.
+syntax = "proto3";
+
+package mako.plugin.v1;
+
+import "mako/plugin/v1/options.proto";
+
+option go_package = "github.com/ironpark/mako/internal/plugin/hostapi";
+
+// MessagesService acts on sessions: sends them messages, starts and stops
+// agents.
+service MessagesService {
+  // SendMessage types a message into a session's agent.
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse) {
+    option (permission) = "sessions:write";
+    option (unavailable) = true;
+  }
+}
+
+// SendMessageRequest is a message for a session.
+message SendMessageRequest {
+  string session_id = 1;
+  string text = 2;
+}
+
+// SendMessageResponse says it was sent.
+message SendMessageResponse {}
+
+// FilesService reads the current project's folder.
+service FilesService {
+  // ReadFile reads a file of the project.
+  rpc ReadFile(ReadFileRequest) returns (ReadFileResponse) {
+    option (permission) = "fs:project";
+    option (unavailable) = true;
+  }
+}
+
+// ReadFileRequest names a file, relative to the project's folder.
+message ReadFileRequest {
+  string path = 1;
+}
+
+// ReadFileResponse is the file's text.
+message ReadFileResponse {
+  string text = 1;
+}
+
+// SecretsService keeps the plugin's own secrets in the system's keychain.
+service SecretsService {
+  // GetSecret reads a secret.
+  rpc GetSecret(GetSecretRequest) returns (GetSecretResponse) {
+    option (permission) = "secrets";
+    option (unavailable) = true;
+  }
+}
+
+// GetSecretRequest names a secret.
+message GetSecretRequest {
+  string name = 1;
+}
+
+// GetSecretResponse is the secret.
+message GetSecretResponse {
+  bool found = 1;
+  string value = 2;
+}
+
+// LayoutService changes the window's layout, as the user allows.
+service LayoutService {
+  // PatchLayout changes the window layout document, as patch_layout does.
+  rpc PatchLayout(PatchLayoutRequest) returns (PatchLayoutResponse) {
+    option (permission) = "layout:write";
+    option (unavailable) = true;
+  }
+}
+
+// PatchLayoutRequest is the operations, as patch_layout's JSON.
+message PatchLayoutRequest {
+  string ops = 1;
+}
+
+// PatchLayoutResponse is the document's revision after.
+message PatchLayoutResponse {
+  string revision = 1;
+}
+
+// ExecService runs programs. No plugin is granted exec in this version:
+// a manifest that asks for it is refused.
+service ExecService {
+  // RunProcess runs a program.
+  rpc RunProcess(RunProcessRequest) returns (RunProcessResponse) {
+    option (permission) = "exec";
+    option (unavailable) = true;
+  }
+}
+
+// RunProcessRequest is a program and its arguments.
+message RunProcessRequest {
+  repeated string argv = 1;
+}
+
+// RunProcessResponse is what it printed and how it ended.
+message RunProcessResponse {
+  string output = 1;
+  int32 exit_code = 2;
+}

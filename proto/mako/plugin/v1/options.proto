@@ -1,0 +1,22 @@
+// The options the plugin Host API's schema marks its methods with. See
+// host.proto, and docs/plugins.md for the API as a plugin sees it.
+syntax = "proto3";
+
+package mako.plugin.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/ironpark/mako/internal/plugin/hostapi";
+
+extend google.protobuf.MethodOptions {
+  // permission is what a plugin must hold to call the method: "none" for
+  // what every plugin may call, "net" for net:<host> of the host the call
+  // names, or a permission a manifest asks for by name ("storage",
+  // "sessions:read", ...). The generator refuses a method without one, so
+  // no method of the API can be called unchecked.
+  string permission = 51001;
+  // unavailable declares a method this version of mako does not carry
+  // out: the dispatcher answers it with an error, and the host has no
+  // handler to write for it.
+  bool unavailable = 51002;
+}

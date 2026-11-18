@@ -51,4 +51,14 @@ public interface ChangedOrBuilder extends
    * @return The devices.
    */
   boolean getDevices();
+
+  /**
+   * <pre>
+   * a plugin came, went, or changed how it stands (revision 26)
+   * </pre>
+   *
+   * <code>bool plugins = 6 [json_name = "plugins"];</code>
+   * @return The plugins.
+   */
+  boolean getPlugins();
 }

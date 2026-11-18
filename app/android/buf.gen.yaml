@@ -13,3 +13,9 @@ plugins:
   - protoc_builtin: java
     out: app/android/app/src/gen/java
     opt: lite
+# The plugin Host API is the daemon's and plugins' business, not the app's:
+# its schema is left out here.
+inputs:
+  - directory: proto
+    exclude_paths:
+      - proto/mako/plugin

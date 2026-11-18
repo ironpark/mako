@@ -83,9 +83,21 @@ func settingsSidebar(m *model) ggui.Widget {
 		func() { m.Page.Set("workspace") }).Ghost().Pad(7, 10).Radius(7).Name(T("Back to sessions"))
 	header := titlebar(m, widget.Box(widget.Row(titlebarGap(m.titlebarRoom(), 8), back)).Pad(8, 8, 8, 0).Height(headerHeight))
 
-	nav := ggui.View(m.Section, func(current string) ggui.Widget {
+	hasPlugins := ggui.Map(m.plugins.List, func(l []*protocol.PluginInfo) bool { return len(l) > 0 })
+	nav := ggui.View(hasPlugins, func(plugins bool) ggui.Widget { return settingsNavList(m, settingsGroups(plugins)) })
+
+	return widget.Box(widget.Column(
+		header,
+		hline(),
+		widget.Expanded(widget.Scroll(widget.Padding(nav, 4, 8))),
+	).Stretch()).Width(sidebarWidth).Fill(skin.Sidebar)
+}
+
+// settingsNavList is the settings' sections, the one shown marked.
+func settingsNavList(m *model, groups []settingsGroup) ggui.Widget {
+	return ggui.View(m.Section, func(current string) ggui.Widget {
 		var rows []ggui.Widget
-		for _, g := range settingsNav {
+		for _, g := range groups {
 			rows = append(rows, widget.Box(widget.Text(T(g.title)).Size(11.5).Color(skin.ExtraMuted)).Pad(14, 10, 4, 10))
 			for _, s := range g.sections {
 				id := s.id
@@ -109,12 +121,6 @@ func settingsSidebar(m *model) ggui.Widget {
 		}
 		return widget.Column(rows...).Gap(2).Stretch()
 	})
-
-	return widget.Box(widget.Column(
-		header,
-		hline(),
-		widget.Expanded(widget.Scroll(widget.Padding(nav, 4, 8))),
-	).Stretch()).Width(sidebarWidth).Fill(skin.Sidebar)
 }
 
 func settingsContent(m *model, id string) ggui.Widget {
@@ -149,6 +155,8 @@ func settingsContent(m *model, id string) ggui.Widget {
 		return aboutSettings(m)
 	case "developer":
 		return developerSettings(m)
+	case pluginsSection.id:
+		return pluginSettings(m)
 	}
 	return generalSettings(m)
 }

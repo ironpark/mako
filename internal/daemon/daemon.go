@@ -21,6 +21,7 @@ import (
 	"github.com/ironpark/mako/internal/device"
 	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/p2p"
+	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transport"
 )
@@ -83,7 +84,8 @@ type Daemon struct {
 	leases leases                 // the devices this node borrows
 
 	agentFile     agentFile
-	mcp           *mcp.Resolver // nil without a configuration directory
+	plugins       *plugin.Manager // the node's plugins; see plugins.go
+	mcp           *mcp.Resolver   // nil without a configuration directory
 	projectAgents projectAgents
 
 	hookBinary  string // the program agents run as their hook; see HookMain
@@ -199,6 +201,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if err := d.listenAgentMCP(ctx, run); err != nil {
 		return err
 	}
+	pluginsDone := d.startPlugins(ctx, dir)
+	defer func() {
+		cancel()
+		<-pluginsDone
+	}()
 	if !d.cfg.P2P.Disabled {
 		if err := d.startP2P(ctx, dir); err != nil {
 			d.log.Warn("libp2p did not start; this daemon has no peers", "err", err)
@@ -417,6 +424,15 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeSearch:
 		return d.handleSearch(ctx, stream, env)
+
+	case protocol.TypeListPlugins:
+		return d.handleListPlugins(ctx, stream, env, fromPeer)
+	case protocol.TypePluginAction:
+		return d.handlePluginAction(ctx, stream, env, fromPeer)
+	case protocol.TypeWatchBlock:
+		return d.handleWatchBlock(ctx, stream, env, fromPeer)
+	case protocol.TypeBlockEvent:
+		return d.handleBlockEvent(ctx, stream, env, fromPeer)
 
 	case protocol.TypeResize:
 		payload, err := protocol.Body[*protocol.Resize](env)

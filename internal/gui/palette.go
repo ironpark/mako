@@ -187,6 +187,7 @@ func (m *model) commands() []command {
 			m.Prefs.Update(func(p prefs) prefs { p.Theme = t; return p })
 		}})
 	}
+	cmds = append(cmds, m.pluginCommands()...)
 	// The window's layout is put right from here, outside it, whatever it
 	// has become.
 	return append(cmds,

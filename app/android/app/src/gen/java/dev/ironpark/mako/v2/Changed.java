@@ -186,6 +186,44 @@ public  final class Changed extends
     devices_ = false;
   }
 
+  public static final int PLUGINS_FIELD_NUMBER = 6;
+  private boolean plugins_;
+  /**
+   * <pre>
+   * a plugin came, went, or changed how it stands (revision 26)
+   * </pre>
+   *
+   * <code>bool plugins = 6 [json_name = "plugins"];</code>
+   * @return The plugins.
+   */
+  @java.lang.Override
+  public boolean getPlugins() {
+    return plugins_;
+  }
+  /**
+   * <pre>
+   * a plugin came, went, or changed how it stands (revision 26)
+   * </pre>
+   *
+   * <code>bool plugins = 6 [json_name = "plugins"];</code>
+   * @param value The plugins to set.
+   */
+  private void setPlugins(boolean value) {
+    
+    plugins_ = value;
+  }
+  /**
+   * <pre>
+   * a plugin came, went, or changed how it stands (revision 26)
+   * </pre>
+   *
+   * <code>bool plugins = 6 [json_name = "plugins"];</code>
+   */
+  private void clearPlugins() {
+
+    plugins_ = false;
+  }
+
   public static dev.ironpark.mako.v2.Changed parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -463,6 +501,46 @@ public  final class Changed extends
       return this;
     }
 
+    /**
+     * <pre>
+     * a plugin came, went, or changed how it stands (revision 26)
+     * </pre>
+     *
+     * <code>bool plugins = 6 [json_name = "plugins"];</code>
+     * @return The plugins.
+     */
+    @java.lang.Override
+    public boolean getPlugins() {
+      return instance.getPlugins();
+    }
+    /**
+     * <pre>
+     * a plugin came, went, or changed how it stands (revision 26)
+     * </pre>
+     *
+     * <code>bool plugins = 6 [json_name = "plugins"];</code>
+     * @param value The plugins to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPlugins(boolean value) {
+      copyOnWrite();
+      instance.setPlugins(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * a plugin came, went, or changed how it stands (revision 26)
+     * </pre>
+     *
+     * <code>bool plugins = 6 [json_name = "plugins"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPlugins() {
+      copyOnWrite();
+      instance.clearPlugins();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Changed)
   }
   @java.lang.Override
@@ -484,10 +562,11 @@ public  final class Changed extends
             "access_",
             "workspace_",
             "devices_",
+            "plugins_",
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0007\u0002\u0007" +
-              "\u0003\u0007\u0004\u0007\u0005\u0007";
+              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0007\u0002\u0007" +
+              "\u0003\u0007\u0004\u0007\u0005\u0007\u0006\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

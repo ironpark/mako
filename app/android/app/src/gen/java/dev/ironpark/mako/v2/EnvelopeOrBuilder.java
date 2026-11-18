@@ -1007,5 +1007,90 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.DeviceAccept getDeviceAccept();
 
+  /**
+   * <pre>
+   * Plugins, a node's own (revision 26).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPlugins list_plugins = 120 [json_name = "listPlugins"];</code>
+   * @return Whether the listPlugins field is set.
+   */
+  boolean hasListPlugins();
+  /**
+   * <pre>
+   * Plugins, a node's own (revision 26).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPlugins list_plugins = 120 [json_name = "listPlugins"];</code>
+   * @return The listPlugins.
+   */
+  dev.ironpark.mako.v2.ListPlugins getListPlugins();
+
+  /**
+   * <code>.mako.v2.Plugins plugins = 121 [json_name = "plugins"];</code>
+   * @return Whether the plugins field is set.
+   */
+  boolean hasPlugins();
+  /**
+   * <code>.mako.v2.Plugins plugins = 121 [json_name = "plugins"];</code>
+   * @return The plugins.
+   */
+  dev.ironpark.mako.v2.Plugins getPlugins();
+
+  /**
+   * <code>.mako.v2.PluginAction plugin_action = 122 [json_name = "pluginAction"];</code>
+   * @return Whether the pluginAction field is set.
+   */
+  boolean hasPluginAction();
+  /**
+   * <code>.mako.v2.PluginAction plugin_action = 122 [json_name = "pluginAction"];</code>
+   * @return The pluginAction.
+   */
+  dev.ironpark.mako.v2.PluginAction getPluginAction();
+
+  /**
+   * <code>.mako.v2.PluginDone plugin_done = 123 [json_name = "pluginDone"];</code>
+   * @return Whether the pluginDone field is set.
+   */
+  boolean hasPluginDone();
+  /**
+   * <code>.mako.v2.PluginDone plugin_done = 123 [json_name = "pluginDone"];</code>
+   * @return The pluginDone.
+   */
+  dev.ironpark.mako.v2.PluginDone getPluginDone();
+
+  /**
+   * <code>.mako.v2.WatchBlock watch_block = 124 [json_name = "watchBlock"];</code>
+   * @return Whether the watchBlock field is set.
+   */
+  boolean hasWatchBlock();
+  /**
+   * <code>.mako.v2.WatchBlock watch_block = 124 [json_name = "watchBlock"];</code>
+   * @return The watchBlock.
+   */
+  dev.ironpark.mako.v2.WatchBlock getWatchBlock();
+
+  /**
+   * <code>.mako.v2.BlockUpdate block_update = 125 [json_name = "blockUpdate"];</code>
+   * @return Whether the blockUpdate field is set.
+   */
+  boolean hasBlockUpdate();
+  /**
+   * <code>.mako.v2.BlockUpdate block_update = 125 [json_name = "blockUpdate"];</code>
+   * @return The blockUpdate.
+   */
+  dev.ironpark.mako.v2.BlockUpdate getBlockUpdate();
+
+  /**
+   * <code>.mako.v2.BlockEvent block_event = 126 [json_name = "blockEvent"];</code>
+   * @return Whether the blockEvent field is set.
+   */
+  boolean hasBlockEvent();
+  /**
+   * <code>.mako.v2.BlockEvent block_event = 126 [json_name = "blockEvent"];</code>
+   * @return The blockEvent.
+   */
+  dev.ironpark.mako.v2.BlockEvent getBlockEvent();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

@@ -56,6 +56,15 @@ Access (trust runs one way: a node you let in can drive this one):
   mako trust <public key line>      let a key in, as authorized_keys writes it
   mako revoke <fingerprint>         take a key out
 
+Plugins (docs/plugins.md; each a folder of plugins/ in the configuration directory):
+  mako plugins                      list this node's plugins and how they stand
+  mako plugins grant <id>           allow what a plugin asks for
+  mako plugins deny <id>            refuse it, and stop the plugin
+  mako plugins enable|disable|reload <id>
+  mako plugins run <id> <command>   run a plugin's command
+  mako plugins set <id> <key> [value]
+                                     set a plugin's setting (no value unsets it)
+
 Flags:
   -daemon <path>   the daemon's socket (default: the configuration directory's)
   -node <id>       run on / target this node instead of the local one
@@ -203,6 +212,8 @@ func run(args []string, daemonAddr, nodeID, project string, devices []string) er
 		}
 		_, err := c.Rename(ctx, &protocol.RenameSession{SessionId: args[1], NodeId: nodeID, Name: strings.Join(args[2:], " ")})
 		return err
+	case "plugins":
+		return plugins(ctx, c, args[1:])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}

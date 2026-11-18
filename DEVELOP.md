@@ -55,6 +55,8 @@ take it out before you commit.
     cmd/mako             the CLI front-end
     cmd/mako-gui         the desktop front-end
     proto/mako/v2        the protocol's protobuf schema
+    proto/mako/plugin/v1 the plugin Host API's schema, which generates its dispatcher, bindings and WIT
+    examples/plugins     plugins to try and to copy: ci-status
     app                  the Android app: the node by gomobile, and Kotlin around it
 
     internal/protocol    the generated messages, their framing and constants
@@ -81,6 +83,9 @@ take it out before you commit.
     internal/zed         Zed extensions: the store, manifests and languages
     internal/zedhost     Zed extensions' own wasm components, under wasmtime's C API
     internal/mcp         MCP servers for the agents, from extensions or the config
+    internal/plugin      plugins: manifests, their sandboxed runtime and limits, the Host API, block trees
+    internal/plugin/apigen   the Host API's generator (protoc-gen-makoplugin)
+    internal/plugin/hostapi  the Host API, generated: messages, dispatcher, mako.js, mako.d.ts, mako.wit
     internal/device      the kinds of device a node lends: adb's proxy (docs/devices.md)
     internal/config      the node's identity and configuration
 
@@ -255,6 +260,24 @@ missing what it needs is left out, with the reason in the daemon's log.
 Claude gets the servers in an `--mcp-config` file under `run/`, removed when
 the session ends; Codex gets them as `-c mcp_servers.…` overrides.
 
+### Plugins
+
+A node's daemon runs the plugins in `plugins/` beside `config.json`, each
+in a QuickJS runtime of its own (qngg, on wasmtime), started when one of
+its blocks shows or a command of its runs, stopped once idle, or for
+going over a limit. A plugin reaches mako only through the Host API, whose
+schema in `proto/mako/plugin/v1` generates the dispatcher that checks the
+permission of every call, the JavaScript bindings and their types, and the
+WIT a wasm runtime will take; a test fails when the generated files and
+the schema differ. The user allows what a plugin asks for in a bar the
+window draws, in Settings ▸ Plugins, or with `mako plugins grant`. A
+block's tree goes to the window whole, then as keyed patches, and the
+window draws it with its own components inside a frame naming the plugin.
+How to write one is [docs/plugins.md](docs/plugins.md); the messages are in
+[protocol.md](docs/protocol.md#plugin-blocks). `MAKO_PREVIEW_PLUGINS` with
+`-render-dir` renders a plugin's way through the window, as a driver
+answers it (`internal/gui/preview_plugins.go`).
+
 ## The desktop app
 
 `mako-gui` is built with ggui (`internal/gui`) and laid out after
@@ -304,7 +327,9 @@ The schema in `proto/mako/v2` is the only definition of the messages; the
 generated Go in `internal/protocol` is committed.
 
 1. Edit the `.proto` files. Add fields and message types only; never reuse
-   or renumber a field.
+   or renumber a field. The plugin Host API's schema, `proto/mako/plugin/v1`,
+   goes through its own generator too, which refuses what WIT cannot say
+   (`internal/plugin/apigen`).
 2. Run `make proto`, then `buf breaking --against '.git#branch=main'`.
 3. For a new request, add its constant to `protocol.Type` and its case to the
    daemon's dispatch, and describe it in `docs/protocol.md`.

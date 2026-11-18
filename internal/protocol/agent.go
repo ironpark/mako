@@ -29,7 +29,12 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 25
+const Revision = 26
+
+// RevisionPlugins adds plugins, run by a node's daemon: ListPlugins,
+// PluginAction, WatchBlock with the trees of their blocks, BlockEvent, and
+// Changed.plugins.
+const RevisionPlugins = 26
 
 // RevisionPeerWorkspace adds edits of the workspace given by a node let in,
 // Workspace.to_node routing one to another node, and Node.workspace_digest:

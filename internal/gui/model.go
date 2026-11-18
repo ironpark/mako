@@ -151,6 +151,8 @@ type model struct {
 
 	hl  *highlighter // highlighting, which takes languages from ext; see highlight.go
 	ext *extState    // the extensions and MCP servers; see extstate.go
+	// plugins are the daemon's plugins; see plugins.go.
+	plugins *pluginsState
 
 	git      *gitState // the Git panel's; see gitstate.go
 	RepoPick *ggui.StateValue[repoPick]
@@ -268,6 +270,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Diffs:         ggui.State(map[string]diffTab{}).WithEqual(deepEqual),
 		pickers:       newPickerState(),
 		ext:           newExtState(cfg),
+		plugins:       newPluginsState(),
 		files:         newFilesState(),
 		ws:            newWsState(),
 		prefsWriter:   &fileWriter{what: "settings"},

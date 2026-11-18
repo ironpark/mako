@@ -196,6 +196,7 @@ message Changed {
   bool access = 3; // an access request came, or the keys changed
   bool workspace = 4; // a newer workspace came from a peer, or a window
   bool devices = 5; // a device lent or borrowed here changed
+  bool plugins = 6; // a plugin came, went, or changed how it stands (revision 26)
 }
 
 // Access asks the daemon about who it lets in, or changes it. Only a
