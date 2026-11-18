@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ironpark/mako/internal/plugin/hostapi"
+	"github.com/ironpark/mako/internal/uiblock"
 )
 
 // docs/plugins.md lists every method of the Host API and every kind of
@@ -21,7 +22,7 @@ func TestDocsListTheAPI(t *testing.T) {
 			t.Errorf("docs/plugins.md does not list %s", m.Name)
 		}
 	}
-	for _, k := range Kinds {
+	for _, k := range uiblock.Kinds {
 		if !strings.Contains(doc, "`"+k+"`") {
 			t.Errorf("docs/plugins.md does not list the kind %s", k)
 		}

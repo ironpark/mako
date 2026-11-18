@@ -121,6 +121,14 @@ message BlockUpdate {
   string state = 7;
   string error = 8;
   bool stale = 9;
+  // session_id and agent are, for an agent's block, agent:<session>/<id>,
+  // the session that shows it and its agent's name, which the front-end
+  // frames it with in place of a plugin's (revision 27).
+  string session_id = 10;
+  string agent = 11;
+  // gone says the block was closed, or its plugin removed: the last
+  // update of the stream.
+  bool gone = 12;
 }
 
 // BlockEvent is the user acting on a node of a block's tree: kind "tap",
@@ -131,6 +139,10 @@ message BlockEvent {
   string node = 2; // the node's id
   string kind = 3;
   string value = 4;
+  // values are the block's inputs', toggles' and selects' values as the
+  // front-end has them, by node id, typed or not yet sent: a form's
+  // submit carries every field (revision 27).
+  map<string, string> values = 5;
 }
 
 // UiNode is a node of a plugin block's tree. The kinds are a fixed set
@@ -184,4 +196,31 @@ message UiOp {
   string parent = 3;
   int32 index = 4;
   UiNode node = 5;
+}
+
+// ListAgentBlocks asks for the blocks agents of this node's show
+// (show_ui), and where each goes; answered by AgentBlocks (revision 27).
+// They are the node's alone: no other node has them.
+message ListAgentBlocks {}
+
+// AgentBlocks are the agents' blocks, in the order shown.
+message AgentBlocks {
+  repeated AgentBlock blocks = 1;
+}
+
+// AgentBlock is a block an agent shows, agent:<session>/<id>. A front-end
+// places it over the layout document it draws, never writing it there:
+// by default as the last of the right panel's tabs (the stack "details"),
+// shown; with parent set, and the document the window draws the one
+// named, as the index-th child of that node (-1 for the last), size px
+// along it, as the user allowed.
+message AgentBlock {
+  string name = 1;
+  string session_id = 2;
+  string agent = 3;
+  string title = 4;
+  string document = 5;
+  string parent = 6;
+  int32 index = 7;
+  double size = 8;
 }

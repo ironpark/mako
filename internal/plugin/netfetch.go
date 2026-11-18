@@ -240,14 +240,17 @@ type rateLimit struct {
 	n      int
 	window time.Duration
 	times  []time.Time
+	now    func() time.Time // the clock; tests stop it
 }
 
-func newRateLimit(n int, window time.Duration) *rateLimit { return &rateLimit{n: n, window: window} }
+func newRateLimit(n int, window time.Duration) *rateLimit {
+	return &rateLimit{n: n, window: window, now: time.Now}
+}
 
 func (r *rateLimit) take() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := time.Now()
+	now := r.now()
 	for len(r.times) > 0 && now.Sub(r.times[0]) > r.window {
 		r.times = r.times[1:]
 	}

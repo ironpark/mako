@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ironpark/mako/internal/uiblock"
+
 	"github.com/ironpark/mako/internal/plugin/hostapi"
 )
 
@@ -73,10 +75,10 @@ func (p *plugin) renderAll() {
 
 func (p *plugin) render(id string) {
 	out, err := p.invoke("render", false, id)
-	var t *tree
+	var t *uiblock.Tree
 	var over *limitError
 	if err == nil {
-		t, err = readTree([]byte(out))
+		t, err = uiblock.Read([]byte(out))
 	}
 	if !errors.As(err, &over) && p.rt != nil {
 		p.count(&p.renderFailures, "renders", err)

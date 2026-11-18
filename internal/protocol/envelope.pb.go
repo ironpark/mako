@@ -130,6 +130,8 @@ type Envelope struct {
 	//	*Envelope_WatchBlock
 	//	*Envelope_BlockUpdate
 	//	*Envelope_BlockEvent
+	//	*Envelope_ListAgentBlocks
+	//	*Envelope_AgentBlocks
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -978,6 +980,24 @@ func (x *Envelope) GetBlockEvent() *BlockEvent {
 	return nil
 }
 
+func (x *Envelope) GetListAgentBlocks() *ListAgentBlocks {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_ListAgentBlocks); ok {
+			return x.ListAgentBlocks
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetAgentBlocks() *AgentBlocks {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_AgentBlocks); ok {
+			return x.AgentBlocks
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1344,6 +1364,14 @@ type Envelope_BlockEvent struct {
 	BlockEvent *BlockEvent `protobuf:"bytes,126,opt,name=block_event,json=blockEvent,proto3,oneof"`
 }
 
+type Envelope_ListAgentBlocks struct {
+	ListAgentBlocks *ListAgentBlocks `protobuf:"bytes,127,opt,name=list_agent_blocks,json=listAgentBlocks,proto3,oneof"`
+}
+
+type Envelope_AgentBlocks struct {
+	AgentBlocks *AgentBlocks `protobuf:"bytes,128,opt,name=agent_blocks,json=agentBlocks,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -1520,6 +1548,10 @@ func (*Envelope_BlockUpdate) isEnvelope_Body() {}
 
 func (*Envelope_BlockEvent) isEnvelope_Body() {}
 
+func (*Envelope_ListAgentBlocks) isEnvelope_Body() {}
+
+func (*Envelope_AgentBlocks) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -1578,7 +1610,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xba$\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xbe%\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -1687,7 +1719,9 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"watchBlock\x129\n" +
 	"\fblock_update\x18} \x01(\v2\x14.mako.v2.BlockUpdateH\x00R\vblockUpdate\x126\n" +
 	"\vblock_event\x18~ \x01(\v2\x13.mako.v2.BlockEventH\x00R\n" +
-	"blockEventB\x06\n" +
+	"blockEvent\x12F\n" +
+	"\x11list_agent_blocks\x18\x7f \x01(\v2\x18.mako.v2.ListAgentBlocksH\x00R\x0flistAgentBlocks\x12:\n" +
+	"\fagent_blocks\x18\x80\x01 \x01(\v2\x14.mako.v2.AgentBlocksH\x00R\vagentBlocksB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"5\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -1796,6 +1830,8 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*WatchBlock)(nil),        // 86: mako.v2.WatchBlock
 	(*BlockUpdate)(nil),       // 87: mako.v2.BlockUpdate
 	(*BlockEvent)(nil),        // 88: mako.v2.BlockEvent
+	(*ListAgentBlocks)(nil),   // 89: mako.v2.ListAgentBlocks
+	(*AgentBlocks)(nil),       // 90: mako.v2.AgentBlocks
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -1886,11 +1922,13 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	86, // 85: mako.v2.Envelope.watch_block:type_name -> mako.v2.WatchBlock
 	87, // 86: mako.v2.Envelope.block_update:type_name -> mako.v2.BlockUpdate
 	88, // 87: mako.v2.Envelope.block_event:type_name -> mako.v2.BlockEvent
-	88, // [88:88] is the sub-list for method output_type
-	88, // [88:88] is the sub-list for method input_type
-	88, // [88:88] is the sub-list for extension type_name
-	88, // [88:88] is the sub-list for extension extendee
-	0,  // [0:88] is the sub-list for field type_name
+	89, // 88: mako.v2.Envelope.list_agent_blocks:type_name -> mako.v2.ListAgentBlocks
+	90, // 89: mako.v2.Envelope.agent_blocks:type_name -> mako.v2.AgentBlocks
+	90, // [90:90] is the sub-list for method output_type
+	90, // [90:90] is the sub-list for method input_type
+	90, // [90:90] is the sub-list for extension type_name
+	90, // [90:90] is the sub-list for extension extendee
+	0,  // [0:90] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -1996,6 +2034,8 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_WatchBlock)(nil),
 		(*Envelope_BlockUpdate)(nil),
 		(*Envelope_BlockEvent)(nil),
+		(*Envelope_ListAgentBlocks)(nil),
+		(*Envelope_AgentBlocks)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

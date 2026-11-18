@@ -153,6 +153,10 @@ type model struct {
 	ext *extState    // the extensions and MCP servers; see extstate.go
 	// plugins are the daemon's plugins; see plugins.go.
 	plugins *pluginsState
+	// AgentBlocks are the blocks the daemon's agents show, and winBase the
+	// document the window draws them over; see agentblocks.go.
+	AgentBlocks *ggui.StateValue[[]*protocol.AgentBlock]
+	winBase     *layoutdoc.Doc
 
 	git      *gitState // the Git panel's; see gitstate.go
 	RepoPick *ggui.StateValue[repoPick]
@@ -271,6 +275,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		pickers:       newPickerState(),
 		ext:           newExtState(cfg),
 		plugins:       newPluginsState(),
+		AgentBlocks:   ggui.State([]*protocol.AgentBlock(nil)),
 		files:         newFilesState(),
 		ws:            newWsState(),
 		prefsWriter:   &fileWriter{what: "settings"},
@@ -338,7 +343,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		redials:       map[string]redial{},
 	}
 	m.winStates = m.builtinNodeStates()
-	m.setWindowDoc(doc)
+	m.drawWindowDoc(doc)
 	m.link.approveInApp.Store(p.ApproveInApp)
 	m.recorder = newStreamRecorder(recordDir())
 	m.recorder.on.Store(p.RecordStreams)

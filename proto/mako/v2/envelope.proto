@@ -142,6 +142,8 @@ message Envelope {
     WatchBlock watch_block = 124;
     BlockUpdate block_update = 125;
     BlockEvent block_event = 126;
+    ListAgentBlocks list_agent_blocks = 127;
+    AgentBlocks agent_blocks = 128;
   }
 }
 

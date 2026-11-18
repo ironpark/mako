@@ -555,6 +555,10 @@ func (n *notifier) fireWorkspace() { n.send(&protocol.Changed{Workspace: true}) 
 // how it stands.
 func (n *notifier) firePlugins() { n.send(&protocol.Changed{Plugins: true}) }
 
+// fireAgentBlocks tells every watcher that an agent's block came, went or
+// moved.
+func (n *notifier) fireAgentBlocks() { n.send(&protocol.Changed{AgentBlocks: true}) }
+
 // fireDevices tells every watcher that a device lent or borrowed here
 // changed.
 func (n *notifier) fireDevices() { n.send(&protocol.Changed{Devices: true}) }
@@ -573,6 +577,7 @@ func (n *notifier) send(c *protocol.Changed) {
 			next.Workspace = next.Workspace || pending.GetWorkspace()
 			next.Devices = next.Devices || pending.GetDevices()
 			next.Plugins = next.Plugins || pending.GetPlugins()
+			next.AgentBlocks = next.AgentBlocks || pending.GetAgentBlocks()
 		default:
 		}
 		ch <- next

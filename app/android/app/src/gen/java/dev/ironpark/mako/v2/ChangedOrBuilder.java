@@ -61,4 +61,14 @@ public interface ChangedOrBuilder extends
    * @return The plugins.
    */
   boolean getPlugins();
+
+  /**
+   * <pre>
+   * an agent's block came, went or moved (revision 27)
+   * </pre>
+   *
+   * <code>bool agent_blocks = 7 [json_name = "agentBlocks"];</code>
+   * @return The agentBlocks.
+   */
+  boolean getAgentBlocks();
 }

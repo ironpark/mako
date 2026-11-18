@@ -114,6 +114,8 @@ public  final class Envelope extends
     WATCH_BLOCK(124),
     BLOCK_UPDATE(125),
     BLOCK_EVENT(126),
+    LIST_AGENT_BLOCKS(127),
+    AGENT_BLOCKS(128),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -217,6 +219,8 @@ public  final class Envelope extends
         case 124: return WATCH_BLOCK;
         case 125: return BLOCK_UPDATE;
         case 126: return BLOCK_EVENT;
+        case 127: return LIST_AGENT_BLOCKS;
+        case 128: return AGENT_BLOCKS;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -4955,6 +4959,106 @@ public  final class Envelope extends
     }
   }
 
+  public static final int LIST_AGENT_BLOCKS_FIELD_NUMBER = 127;
+  /**
+   * <code>.mako.v2.ListAgentBlocks list_agent_blocks = 127 [json_name = "listAgentBlocks"];</code>
+   */
+  @java.lang.Override
+  public boolean hasListAgentBlocks() {
+    return bodyCase_ == 127;
+  }
+  /**
+   * <code>.mako.v2.ListAgentBlocks list_agent_blocks = 127 [json_name = "listAgentBlocks"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ListAgentBlocks getListAgentBlocks() {
+    if (bodyCase_ == 127) {
+       return (dev.ironpark.mako.v2.ListAgentBlocks) body_;
+    }
+    return dev.ironpark.mako.v2.ListAgentBlocks.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.ListAgentBlocks list_agent_blocks = 127 [json_name = "listAgentBlocks"];</code>
+   */
+  private void setListAgentBlocks(dev.ironpark.mako.v2.ListAgentBlocks value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 127;
+  }
+  /**
+   * <code>.mako.v2.ListAgentBlocks list_agent_blocks = 127 [json_name = "listAgentBlocks"];</code>
+   */
+  private void mergeListAgentBlocks(dev.ironpark.mako.v2.ListAgentBlocks value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 127 &&
+        body_ != dev.ironpark.mako.v2.ListAgentBlocks.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ListAgentBlocks.newBuilder((dev.ironpark.mako.v2.ListAgentBlocks) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 127;
+  }
+  /**
+   * <code>.mako.v2.ListAgentBlocks list_agent_blocks = 127 [json_name = "listAgentBlocks"];</code>
+   */
+  private void clearListAgentBlocks() {
+    if (bodyCase_ == 127) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int AGENT_BLOCKS_FIELD_NUMBER = 128;
+  /**
+   * <code>.mako.v2.AgentBlocks agent_blocks = 128 [json_name = "agentBlocks"];</code>
+   */
+  @java.lang.Override
+  public boolean hasAgentBlocks() {
+    return bodyCase_ == 128;
+  }
+  /**
+   * <code>.mako.v2.AgentBlocks agent_blocks = 128 [json_name = "agentBlocks"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.AgentBlocks getAgentBlocks() {
+    if (bodyCase_ == 128) {
+       return (dev.ironpark.mako.v2.AgentBlocks) body_;
+    }
+    return dev.ironpark.mako.v2.AgentBlocks.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.AgentBlocks agent_blocks = 128 [json_name = "agentBlocks"];</code>
+   */
+  private void setAgentBlocks(dev.ironpark.mako.v2.AgentBlocks value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 128;
+  }
+  /**
+   * <code>.mako.v2.AgentBlocks agent_blocks = 128 [json_name = "agentBlocks"];</code>
+   */
+  private void mergeAgentBlocks(dev.ironpark.mako.v2.AgentBlocks value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 128 &&
+        body_ != dev.ironpark.mako.v2.AgentBlocks.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.AgentBlocks.newBuilder((dev.ironpark.mako.v2.AgentBlocks) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 128;
+  }
+  /**
+   * <code>.mako.v2.AgentBlocks agent_blocks = 128 [json_name = "agentBlocks"];</code>
+   */
+  private void clearAgentBlocks() {
+    if (bodyCase_ == 128) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -9654,6 +9758,102 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.mako.v2.ListAgentBlocks list_agent_blocks = 127 [json_name = "listAgentBlocks"];</code>
+     */
+    @java.lang.Override
+    public boolean hasListAgentBlocks() {
+      return instance.hasListAgentBlocks();
+    }
+    /**
+     * <code>.mako.v2.ListAgentBlocks list_agent_blocks = 127 [json_name = "listAgentBlocks"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ListAgentBlocks getListAgentBlocks() {
+      return instance.getListAgentBlocks();
+    }
+    /**
+     * <code>.mako.v2.ListAgentBlocks list_agent_blocks = 127 [json_name = "listAgentBlocks"];</code>
+     */
+    public Builder setListAgentBlocks(dev.ironpark.mako.v2.ListAgentBlocks value) {
+      copyOnWrite();
+      instance.setListAgentBlocks(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ListAgentBlocks list_agent_blocks = 127 [json_name = "listAgentBlocks"];</code>
+     */
+    public Builder setListAgentBlocks(
+        dev.ironpark.mako.v2.ListAgentBlocks.Builder builderForValue) {
+      copyOnWrite();
+      instance.setListAgentBlocks(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ListAgentBlocks list_agent_blocks = 127 [json_name = "listAgentBlocks"];</code>
+     */
+    public Builder mergeListAgentBlocks(dev.ironpark.mako.v2.ListAgentBlocks value) {
+      copyOnWrite();
+      instance.mergeListAgentBlocks(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ListAgentBlocks list_agent_blocks = 127 [json_name = "listAgentBlocks"];</code>
+     */
+    public Builder clearListAgentBlocks() {
+      copyOnWrite();
+      instance.clearListAgentBlocks();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.AgentBlocks agent_blocks = 128 [json_name = "agentBlocks"];</code>
+     */
+    @java.lang.Override
+    public boolean hasAgentBlocks() {
+      return instance.hasAgentBlocks();
+    }
+    /**
+     * <code>.mako.v2.AgentBlocks agent_blocks = 128 [json_name = "agentBlocks"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.AgentBlocks getAgentBlocks() {
+      return instance.getAgentBlocks();
+    }
+    /**
+     * <code>.mako.v2.AgentBlocks agent_blocks = 128 [json_name = "agentBlocks"];</code>
+     */
+    public Builder setAgentBlocks(dev.ironpark.mako.v2.AgentBlocks value) {
+      copyOnWrite();
+      instance.setAgentBlocks(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentBlocks agent_blocks = 128 [json_name = "agentBlocks"];</code>
+     */
+    public Builder setAgentBlocks(
+        dev.ironpark.mako.v2.AgentBlocks.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAgentBlocks(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentBlocks agent_blocks = 128 [json_name = "agentBlocks"];</code>
+     */
+    public Builder mergeAgentBlocks(dev.ironpark.mako.v2.AgentBlocks value) {
+      copyOnWrite();
+      instance.mergeAgentBlocks(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentBlocks agent_blocks = 128 [json_name = "agentBlocks"];</code>
+     */
+    public Builder clearAgentBlocks() {
+      copyOnWrite();
+      instance.clearAgentBlocks();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -9762,19 +9962,21 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.WatchBlock.class,
             dev.ironpark.mako.v2.BlockUpdate.class,
             dev.ironpark.mako.v2.BlockEvent.class,
+            dev.ironpark.mako.v2.ListAgentBlocks.class,
+            dev.ironpark.mako.v2.AgentBlocks.class,
           };
           java.lang.String info =
-              "\u0000Z\u0001\u0000\u0001~Z\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000\u000b" +
-              "<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000" +
-              "\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000!<\u0000" +
-              "\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000+<\u0000" +
-              ",<\u0000-<\u0000.<\u0000/<\u00000<\u00001<\u00002<\u00003<\u00004<\u00005<\u0000" +
-              "6<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000<<\u0000=<\u0000><\u0000?<\u0000" +
-              "@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000H<\u0000I<\u0000" +
-              "J<\u0000K<\u0000L<\u0000M<\u0000N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000" +
-              "T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000j<\u0000" +
-              "k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000p<\u0000x<\u0000y<\u0000z<\u0000{<\u0000" +
-              "|<\u0000}<\u0000~<\u0000";
+              "\u0000\\\u0001\u0000\u0001\u0080\\\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
+              "\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019" +
+              "<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000" +
+              "!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000" +
+              "+<\u0000,<\u0000-<\u0000.<\u0000/<\u00000<\u00001<\u00002<\u00003<\u00004<\u0000" +
+              "5<\u00006<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000<<\u0000=<\u0000><\u0000" +
+              "?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000H<\u0000" +
+              "I<\u0000J<\u0000K<\u0000L<\u0000M<\u0000N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000" +
+              "S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000" +
+              "j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000p<\u0000x<\u0000y<\u0000z<\u0000" +
+              "{<\u0000|<\u0000}<\u0000~<\u0000<\u0000\u0080<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

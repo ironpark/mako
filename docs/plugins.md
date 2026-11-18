@@ -174,6 +174,11 @@ characters.
 `#`): a node's id is its path by keys, so a row that moves is moved, not
 redrawn, and a message's node is the one the user saw.
 
+An agent can show a block of this vocabulary without writing a plugin:
+the `show_ui` tool takes a tree in the very JSON a render returns
+([agent-mcp.md](agent-mcp.md#ui-of-your-own)), and the user's actions on
+it come back to the agent as messages.
+
 ## The Host API
 
 Everything a plugin may ask of mako. Every method takes one object and

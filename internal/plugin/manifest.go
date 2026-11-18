@@ -7,9 +7,10 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"unicode"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/ironpark/mako/internal/uiblock"
 )
 
 // APIVersion is the Host API version this build carries out; a manifest's
@@ -285,22 +286,8 @@ func checkText(what, s string, max int, required bool) error {
 	if len([]rune(s)) > max {
 		return fmt.Errorf("%s is over %d characters", what, max)
 	}
-	if strings.ContainsFunc(s, spoofing) {
+	if strings.ContainsFunc(s, uiblock.Spoofing) {
 		return fmt.Errorf("%s holds control or reordering characters", what)
 	}
 	return nil
-}
-
-// spoofing says r is a control character or one of Unicode's marks that
-// reorder or hide text.
-func spoofing(r rune) bool {
-	switch {
-	case unicode.IsControl(r):
-		return true
-	case r >= 0x202A && r <= 0x202E, r >= 0x2066 && r <= 0x2069, r == 0x200E, r == 0x200F, r == 0x061C:
-		return true
-	case r == 0x200B || r == 0x200C || r == 0x200D || r == 0xFEFF:
-		return true
-	}
-	return false
 }

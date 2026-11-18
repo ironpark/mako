@@ -34,6 +34,10 @@ var layoutNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 type listBlocksResult struct {
 	Blocks []layoutdoc.Block `json:"blocks"`
+	// PluginDir is the folder a plugin in development is written into, a
+	// folder of it each (docs/plugins.md); the daemon reads it again as
+	// it changes, and the user allows what a plugin asks for.
+	PluginDir string `json:"plugin_dir,omitempty"`
 }
 
 type layoutArgs struct {
@@ -80,7 +84,7 @@ func (d *Daemon) addLayoutTools(server *sdk.Server, peer *agentPeer) {
 		if _, err := d.projectCaller(peer); err != nil {
 			return nil, listBlocksResult{}, err
 		}
-		return nil, listBlocksResult{Blocks: d.blocks()}, nil
+		return nil, listBlocksResult{Blocks: d.blocks(), PluginDir: d.pluginDir()}, nil
 	})
 	sdk.AddTool(server, &sdk.Tool{Name: toolGetLayout, Description: "Read a window layout document of the mako window, shared by the user's nodes, with its revision, and which document each space uses. The document is a tree of row, column and stack nodes whose leaves are blocks (list_blocks) and the panes; every node has an id.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, in layoutArgs) (*sdk.CallToolResult, getLayoutResult, error) {
 		if _, err := d.projectCaller(peer); err != nil {

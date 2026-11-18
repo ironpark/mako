@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,13 +20,49 @@ import (
 // act on them, and watch their blocks; a peer may not: plugins are a
 // node's own, as its sessions' processes are.
 
-var errPluginPeer = errors.New("a node's plugins are its own front-ends' alone")
+var (
+	errPluginPeer = errors.New("a node's plugins are its own front-ends' alone")
+	errBlocksPeer = errors.New("a node's blocks are its own front-ends' alone")
+)
+
+// blockSource serves the blocks of a namespace to the front-ends: a
+// plugin's, plugin:<id>/<block>, or an agent's, agent:<session>/<id>. Both
+// are trees of one vocabulary (internal/uiblock), sent whole and then as
+// patches; the window draws them alike, framed with where they come from.
+type blockSource interface {
+	Watch(ctx context.Context, name string, send func(*protocol.BlockUpdate) error) error
+	Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol.PluginDone, error)
+}
+
+// agentBlocks makes the agents' blocks a blockSource: an event goes to
+// the agent as a message.
+type agentBlocks struct{ d *Daemon }
+
+func (a agentBlocks) Watch(ctx context.Context, name string, send func(*protocol.BlockUpdate) error) error {
+	return a.d.agentUI.Watch(ctx, name, send)
+}
+
+func (a agentBlocks) Event(_ context.Context, ev *protocol.BlockEvent) (*protocol.PluginDone, error) {
+	return a.d.agentUIEvent(ev)
+}
+
+// blockSource is the source of the block of the name.
+func (d *Daemon) blockSource(name string) (blockSource, error) {
+	switch {
+	case strings.HasPrefix(name, "plugin:") && d.plugins != nil:
+		return d.plugins, nil
+	case strings.HasPrefix(name, "agent:"):
+		return agentBlocks{d}, nil
+	}
+	return nil, fmt.Errorf("%q is no plugin's or agent's block", name)
+}
 
 // startPlugins makes the manager of the plugins in dir, and runs it until
 // ctx ends.
 func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan struct{}) {
+	d.pluginsDir = filepath.Join(dir, "plugins")
 	d.plugins = plugin.New(plugin.Config{
-		Dir:      filepath.Join(dir, "plugins"),
+		Dir:      d.pluginsDir,
 		DataDir:  filepath.Join(dir, "plugin-data"),
 		Log:      d.log,
 		Sessions: d.listSessions,
@@ -38,6 +75,16 @@ func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan stru
 		d.plugins.Run(ctx)
 	}()
 	return ch
+}
+
+// pluginDir is where a plugin in development is written: a folder of
+// the daemon's, made if need be, so that an agent can write one into it.
+func (d *Daemon) pluginDir() string {
+	if d.pluginsDir == "" {
+		return ""
+	}
+	_ = os.MkdirAll(d.pluginsDir, 0o755)
+	return d.pluginsDir
 }
 
 // netTestHosts reads MAKO_PLUGIN_NET_TEST, host=base URL pairs separated
@@ -61,6 +108,9 @@ type catalog struct{ d *Daemon }
 
 func (c catalog) BlockProps(name string) (map[string]any, bool) {
 	if props, ok := layoutdoc.BuiltinCatalog().BlockProps(name); ok {
+		return props, true
+	}
+	if props, ok := c.d.agentUI.BlockProps(name); ok {
 		return props, true
 	}
 	if c.d.plugins != nil {
@@ -101,14 +151,18 @@ func (d *Daemon) handlePluginAction(ctx context.Context, stream *transport.Strea
 }
 
 func (d *Daemon) handleBlockEvent(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
-	if fromPeer || d.plugins == nil {
-		return errPluginPeer
+	if fromPeer {
+		return errBlocksPeer
 	}
 	req, err := protocol.Body[*protocol.BlockEvent](env)
 	if err != nil {
 		return err
 	}
-	done, err := d.plugins.Event(ctx, req)
+	src, err := d.blockSource(req.GetBlock())
+	if err != nil {
+		return err
+	}
+	done, err := src.Event(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -117,10 +171,14 @@ func (d *Daemon) handleBlockEvent(ctx context.Context, stream *transport.Stream,
 
 // handleWatchBlock streams a block's tree until the front-end hangs up.
 func (d *Daemon) handleWatchBlock(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
-	if fromPeer || d.plugins == nil {
-		return errPluginPeer
+	if fromPeer {
+		return errBlocksPeer
 	}
 	req, err := protocol.Body[*protocol.WatchBlock](env)
+	if err != nil {
+		return err
+	}
+	src, err := d.blockSource(req.GetBlock())
 	if err != nil {
 		return err
 	}
@@ -131,7 +189,7 @@ func (d *Daemon) handleWatchBlock(ctx context.Context, stream *transport.Stream,
 		<-gone
 		cancel()
 	}()
-	err = d.plugins.Watch(ctx, req.GetBlock(), func(u *protocol.BlockUpdate) error {
+	err = src.Watch(ctx, req.GetBlock(), func(u *protocol.BlockUpdate) error {
 		return stream.Send(protocol.TypeBlockUpdate, env.GetId(), u)
 	})
 	if ctx.Err() != nil {

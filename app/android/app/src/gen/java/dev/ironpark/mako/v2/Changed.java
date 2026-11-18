@@ -224,6 +224,44 @@ public  final class Changed extends
     plugins_ = false;
   }
 
+  public static final int AGENT_BLOCKS_FIELD_NUMBER = 7;
+  private boolean agentBlocks_;
+  /**
+   * <pre>
+   * an agent's block came, went or moved (revision 27)
+   * </pre>
+   *
+   * <code>bool agent_blocks = 7 [json_name = "agentBlocks"];</code>
+   * @return The agentBlocks.
+   */
+  @java.lang.Override
+  public boolean getAgentBlocks() {
+    return agentBlocks_;
+  }
+  /**
+   * <pre>
+   * an agent's block came, went or moved (revision 27)
+   * </pre>
+   *
+   * <code>bool agent_blocks = 7 [json_name = "agentBlocks"];</code>
+   * @param value The agentBlocks to set.
+   */
+  private void setAgentBlocks(boolean value) {
+    
+    agentBlocks_ = value;
+  }
+  /**
+   * <pre>
+   * an agent's block came, went or moved (revision 27)
+   * </pre>
+   *
+   * <code>bool agent_blocks = 7 [json_name = "agentBlocks"];</code>
+   */
+  private void clearAgentBlocks() {
+
+    agentBlocks_ = false;
+  }
+
   public static dev.ironpark.mako.v2.Changed parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -541,6 +579,46 @@ public  final class Changed extends
       return this;
     }
 
+    /**
+     * <pre>
+     * an agent's block came, went or moved (revision 27)
+     * </pre>
+     *
+     * <code>bool agent_blocks = 7 [json_name = "agentBlocks"];</code>
+     * @return The agentBlocks.
+     */
+    @java.lang.Override
+    public boolean getAgentBlocks() {
+      return instance.getAgentBlocks();
+    }
+    /**
+     * <pre>
+     * an agent's block came, went or moved (revision 27)
+     * </pre>
+     *
+     * <code>bool agent_blocks = 7 [json_name = "agentBlocks"];</code>
+     * @param value The agentBlocks to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAgentBlocks(boolean value) {
+      copyOnWrite();
+      instance.setAgentBlocks(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * an agent's block came, went or moved (revision 27)
+     * </pre>
+     *
+     * <code>bool agent_blocks = 7 [json_name = "agentBlocks"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAgentBlocks() {
+      copyOnWrite();
+      instance.clearAgentBlocks();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Changed)
   }
   @java.lang.Override
@@ -563,10 +641,11 @@ public  final class Changed extends
             "workspace_",
             "devices_",
             "plugins_",
+            "agentBlocks_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0007\u0002\u0007" +
-              "\u0003\u0007\u0004\u0007\u0005\u0007\u0006\u0007";
+              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0000\u0000\u0000\u0001\u0007\u0002\u0007" +
+              "\u0003\u0007\u0004\u0007\u0005\u0007\u0006\u0007\u0007\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

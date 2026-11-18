@@ -9,6 +9,9 @@ const (
 	TypeWatchBlock   Type = "watch_block"
 	TypeBlockUpdate  Type = "block_update"
 	TypeBlockEvent   Type = "block_event"
+
+	TypeListAgentBlocks Type = "list_agent_blocks"
+	TypeAgentBlocks     Type = "agent_blocks"
 )
 
 // The states of a plugin, PluginInfo.state.

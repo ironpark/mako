@@ -44,9 +44,9 @@ type blockView struct {
 }
 
 // blockRegistry holds the blocks by name, in the order registered. The
-// window's own are there from the start; plugins' come and go as the
-// daemon runs them, and rev counts the changes, for what draws them to
-// follow.
+// window's own are there from the start; plugins' and agents' come and
+// go as the daemon has them, and rev counts the changes, for what draws
+// them to follow.
 type blockRegistry struct {
 	defs  map[string]*blockDef
 	names []string
@@ -57,19 +57,19 @@ func newBlockRegistry() *blockRegistry {
 	return &blockRegistry{defs: map[string]*blockDef{}, rev: ggui.State(0)}
 }
 
-// replacePlugins makes the plugins' blocks those of defs, by name, each
-// named plugin:<id>/<block>: the others go. It reports whether any came,
+// replaceOf makes the blocks of a namespace, "plugin:" or "agent:", those
+// of defs, by name: the others of it go. It reports whether any came,
 // went or changed its title.
-func (r *blockRegistry) replacePlugins(defs []blockDef) bool {
+func (r *blockRegistry) replaceOf(prefix string, defs []blockDef) bool {
 	want := map[string]blockDef{}
 	for _, d := range defs {
-		if strings.HasPrefix(d.Name, "plugin:") && layoutdoc.CheckBlockName(d.Name) == nil {
+		if strings.HasPrefix(d.Name, prefix) && layoutdoc.CheckBlockName(d.Name) == nil {
 			want[d.Name] = d
 		}
 	}
 	changed := false
 	for _, name := range slices.Clone(r.names) {
-		if !strings.HasPrefix(name, "plugin:") {
+		if !strings.HasPrefix(name, prefix) {
 			continue
 		}
 		d, keep := want[name]

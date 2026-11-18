@@ -43,8 +43,14 @@ func (l *logBuffer) String() string {
 	return l.b.String()
 }
 
-// testLimits are short, so that a test of a limit ends soon.
-var testLimits = Limits{CPU: 400 * time.Millisecond, Wall: 5 * time.Second, Memory: 16 << 20, Updates: 20 * time.Millisecond}
+// testLimits bound a test's plugins as the daemon's are, but for a small
+// heap, quick updates, and time enough for a call that a slow machine,
+// busy with other tests, does not stop a well plugin for its time.
+var testLimits = Limits{CPU: 10 * time.Second, Wall: 20 * time.Second, Memory: 16 << 20, Updates: 20 * time.Millisecond}
+
+// runawayLimits are testLimits with a short time for a call, for the
+// tests of what goes over it.
+var runawayLimits = Limits{CPU: 400 * time.Millisecond, Wall: 5 * time.Second, Memory: 16 << 20, Updates: 20 * time.Millisecond}
 
 func newRig(t *testing.T, lim Limits, netTest map[string]string, sessions ...*protocol.SessionInfo) *rig {
 	t.Helper()
@@ -71,18 +77,55 @@ func newRig(t *testing.T, lim Limits, netTest map[string]string, sessions ...*pr
 	return r
 }
 
-// write puts a plugin's files in its folder.
+// write puts a plugin's files in its folder, as an editor saving them
+// would, so that the manager, which reads the folder every Poll, never
+// reads one half written: a new folder is made whole elsewhere and moved
+// into the plugins folder, and a file of one there is written beside it
+// and renamed over it.
 func (r *rig) write(id string, files map[string]string) {
 	r.t.Helper()
-	for name, content := range files {
-		p := filepath.Join(r.dir, id, name)
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	dir := filepath.Join(r.dir, id)
+	if _, err := os.Lstat(dir); os.IsNotExist(err) {
+		stage, err := os.MkdirTemp(filepath.Dir(r.dir), "stage-")
+		if err != nil {
 			r.t.Fatal(err)
 		}
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		writeFiles(r.t, stage, files)
+		if err := os.Rename(stage, dir); err != nil {
 			r.t.Fatal(err)
+		}
+		return
+	}
+	writeFiles(r.t, dir, files)
+}
+
+// writeFiles writes each file of files under dir, through a file of its
+// own renamed over it.
+func writeFiles(t *testing.T, dir string, files map[string]string) {
+	t.Helper()
+	for name, content := range files {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		// Named with a dot first, it is no module the manager reads.
+		tmp := filepath.Join(filepath.Dir(p), ".saving-"+filepath.Base(p))
+		if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(tmp, p); err != nil {
+			t.Fatal(err)
 		}
 	}
+}
+
+// fails waits for the plugin to stand failed for a reason that says want,
+// not for another, as a folder read midway through a change might give.
+func (r *rig) fails(id, want string) *protocol.PluginInfo {
+	r.t.Helper()
+	return r.info(id, func(p *protocol.PluginInfo) bool {
+		return p.GetState() == protocol.PluginFailed && strings.Contains(p.GetError(), want)
+	})
 }
 
 // manifest is a manifest of the ID with permissions and one block, ui,

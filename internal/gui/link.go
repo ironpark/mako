@@ -53,8 +53,10 @@ type daemonLink struct {
 	accessStale  atomic.Bool
 	wsStale      atomic.Bool
 	devicesStale atomic.Bool
-	// pluginsStale says the next poll lists the plugins again.
-	pluginsStale atomic.Bool
+	// pluginsStale and agentBlocksStale say the next poll lists the
+	// plugins, and the agents' blocks, again.
+	pluginsStale     atomic.Bool
+	agentBlocksStale atomic.Bool
 }
 
 func newDaemonLink(addr, daemon string) *daemonLink {
@@ -170,6 +172,7 @@ func (l *daemonLink) stale() {
 	l.accessStale.Store(true)
 	l.wsStale.Store(true)
 	l.pluginsStale.Store(true)
+	l.agentBlocksStale.Store(true)
 }
 
 // pollNow has the poll run now rather than at its next tick.
@@ -230,6 +233,9 @@ func (m *model) watch(ctx context.Context) {
 					}
 					if ch.GetPlugins() {
 						m.link.pluginsStale.Store(true)
+					}
+					if ch.GetAgentBlocks() {
+						m.link.agentBlocksStale.Store(true)
 					}
 					m.link.watching.Store(true)
 					m.link.pollNow()
@@ -341,6 +347,14 @@ func (m *model) poll(ctx context.Context) {
 			askAgain(&m.link.pluginsStale, pluginsStale, err)
 		}
 	}
+	// And the blocks its agents show.
+	var agentBlocks *protocol.AgentBlocks
+	if stale := m.link.agentBlocksStale.Swap(false); stale || !m.link.watching.Load() {
+		if agentBlocks, err = c.AgentBlocks(reqCtx); err != nil {
+			agentBlocks = nil
+			askAgain(&m.link.agentBlocksStale, stale, err)
+		}
+	}
 	self := c.Node()
 	now := time.Now()
 	live := liveNodes(self, nodes, now)
@@ -411,6 +425,9 @@ func (m *model) poll(ctx context.Context) {
 		}
 		if plugins != nil && m.link.generation() == gen {
 			m.setPlugins(plugins.GetPlugins())
+		}
+		if agentBlocks != nil && m.link.generation() == gen {
+			m.setAgentBlocks(agentBlocks.GetBlocks())
 		}
 	})
 }

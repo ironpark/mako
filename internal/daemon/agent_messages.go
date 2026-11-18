@@ -35,7 +35,13 @@ type agentMessage struct {
 	Created time.Time `json:"created_at"`
 	// Note is Mako's own word about the agent From, not one it sent.
 	Note bool `json:"note,omitempty"`
+	// Event is the user's action on a block the agent shows, from the
+	// window (From is windowSender): one line of JSON (agentui.Event).
+	Event bool `json:"event,omitempty"`
 }
+
+// windowSender is who an event on an agent's block is from.
+const windowSender = "window"
 
 type messageFile struct {
 	Next    uint64                    `json:"next_id"`
@@ -150,6 +156,14 @@ func (m *agentMessages) send(from, to, text, project string) (agentMessage, erro
 // note leaves to a note about the agent from, as a message from it.
 func (m *agentMessages) note(from, to, text, project string) (agentMessage, error) {
 	return m.add(agentMessage{From: from, To: to, Text: text, Note: true}, project)
+}
+
+// event leaves to the user's action on one of its blocks, from the window.
+func (m *agentMessages) event(to, text, project string) (agentMessage, error) {
+	if len(text) > maxAgentMessage {
+		return agentMessage{}, fmt.Errorf("the event is over %d KiB", maxAgentMessage>>10)
+	}
+	return m.add(agentMessage{From: windowSender, To: to, Text: text, Event: true}, project)
 }
 
 // sentSince reports whether from sent to a message, not a note, after t.

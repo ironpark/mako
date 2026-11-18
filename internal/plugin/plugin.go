@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ironpark/mako/internal/uiblock"
+
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -61,9 +63,9 @@ type plugin struct {
 // tree, last error and watchers here.
 type instance struct {
 	id   string
-	tree *tree  // the last render that read; guarded by plugin.mu
-	err  string // the last call's error; guarded by plugin.mu
-	subs int    // the streams watching it; guarded by plugin.mu
+	tree *uiblock.Tree // the last render that read; guarded by plugin.mu
+	err  string        // the last call's error; guarded by plugin.mu
+	subs int           // the streams watching it; guarded by plugin.mu
 
 	loaded   bool // the actor's: load ran since the runtime started
 	lastLoad time.Time

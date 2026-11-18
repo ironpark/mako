@@ -29,7 +29,13 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 26
+const Revision = 27
+
+// RevisionAgentUI adds the blocks agents show in the window (show_ui):
+// agent:<session>/<id> on watch_block and block_event, ListAgentBlocks,
+// Changed.agent_blocks, BlockUpdate.session_id, agent and gone, and
+// BlockEvent.values, the fields of a form.
+const RevisionAgentUI = 27
 
 // RevisionPlugins adds plugins, run by a node's daemon: ListPlugins,
 // PluginAction, WatchBlock with the trees of their blocks, BlockEvent, and

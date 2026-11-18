@@ -348,6 +348,7 @@ message Changed {
   bool workspace = 4; // the workspace changed: ask get_workspace again
   bool devices = 5;   // a device lent or borrowed here changed
   bool plugins = 6;   // a plugin came, went or changed: ask list_plugins again (revision 26)
+  bool agent_blocks = 7; // an agent's block came, went or moved: ask list_agent_blocks again (revision 27)
 }
 
 message Workspace {
@@ -821,7 +822,17 @@ changes how it stands, for the front-end to list them again.
 | `list_plugins` | `ListPlugins` | `plugins` | The node's plugins, by ID: each one's manifest (version, publisher, blocks, commands, settings and their values, a secret's never), the permissions it asks for, those allowed, those still `asked`, and its `state` (`waiting`, `denied`, `ready`, `running`, `failed`, `disabled`) with an `error`; `stale` when the version running is the last that worked and `error` says why the folder's newer one did not. |
 | `plugin_action` | `PluginAction` | `plugin_done` | Acts for the user: `grant` allows what the plugin asks for, `deny` refuses it and stops the plugin, `enable` / `disable`, `reload` reads its folder again, `run` runs its `command`, `set` sets its setting `key` to `value` ("" unsets). `open_url` in the reply is a link the plugin asked, in answer, to open: the front-end that asked opens it. |
 | `watch_block` | `WatchBlock` | `block_update`, then more | Follows a plugin's block, `plugin:<id>/<block>`: the tree whole, then the changes. The block is shown, and its plugin started, while a front-end watches it; see [Plugin blocks](#plugin-blocks). |
-| `block_event` | `BlockEvent` | `plugin_done` | The user acting on a node of a block's tree: `tap`, or `change` / `submit` with the value. The daemon looks up what the node's last render said to send; a front-end names only the node. |
+| `block_event` | `BlockEvent` | `plugin_done` | The user acting on a node of a block's tree: `tap`, or `change` / `submit` with the value, and `values`, the block's inputs', toggles' and selects' values as the front-end has them, by node id (revision 27). The daemon looks up what the node's last render said to send; a front-end names only the node. |
+| `list_agent_blocks` | `ListAgentBlocks` | `agent_blocks` | The blocks the node's agents show (`show_ui`, [agent-mcp.md](agent-mcp.md#ui-of-your-own)), in the order shown, each its `name`, `agent:<session>/<id>`, `session_id`, `agent`, `title`, and where it goes: none, the right panel's last tab; or `document`, `parent`, `index` (-1 for the last) and `size`, which the user allowed (revision 27). `changed` has `agent_blocks` set as one comes, goes or moves. |
+
+`watch_block` and `block_event` serve both kinds of block, a plugin's,
+`plugin:<id>/<block>`, and an agent's, `agent:<session>/<id>`: one tree
+format, one stream. An agent's block's `block_update` names its
+`session_id` and `agent` in place of `plugin`, and the last update of a
+block closed has `gone`. An event of an agent's block goes to the agent
+as a message from `window`. A front-end lays the agents' blocks over the
+layout document it draws, never into it; they are the node's alone, and
+a peer is refused all four requests.
 
 ## Attach streams
 
@@ -1035,7 +1046,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 26) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 27) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
@@ -1073,6 +1084,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
 | A plugin block's tree | 2 000 nodes, 24 deep, 512 KiB of JSON, 256 KiB of text (8 KiB a node, 32 KiB a markdown or code node) |
 | A plugin block's updates | one each 100 ms on a stream, the renders between sent as one change |
 | A plugin's events | 20 a second from the front-ends, a value 8 KiB |
+| An agent's blocks | 4 a session, updated 10 times a second, 20 events a second each; an event's values 32 KiB |
 
 ## Layout documents
 
@@ -1195,7 +1207,7 @@ details panel act on the nodes of those IDs.
 
 ## Plugin blocks
 
-A plugin draws a block as a tree of `UiNode`s, of a fixed vocabulary:
+A plugin draws a block, and an agent shows one, as a tree of `UiNode`s, of a fixed vocabulary:
 `column`, `row`, `stack`, `list` (which hold children), `text`, `icon`,
 `pill`, `chip`, `button`, `input`, `toggle`, `select`, `markdown`, `code`,
 `progress` and `divider`. A colour is a token (`tone`: `muted`, `faint`,

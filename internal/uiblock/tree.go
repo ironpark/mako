@@ -1,4 +1,15 @@
-package plugin
+// Package uiblock is the blocks drawn from trees of a fixed vocabulary:
+// a plugin's (internal/plugin) and an agent's (the show_ui tool). A tree
+// comes as JSON, a plugin's render result or an agent's tool call, and is
+// read here strictly, as untrusted: an unknown kind or field (a raw
+// colour, say) is refused, as is a tone that is not a token, a tree too
+// large or too deep, and text that could pass for something else. What
+// survives is the protocol's tree, which the front-ends draw with their
+// own components, and the messages its nodes send, which stay in the
+// daemon: a front-end reports only which node the user acted on. A block,
+// of either kind, goes to the front-ends watching it whole, then as
+// patches (Follow).
+package uiblock
 
 import (
 	"bytes"
@@ -8,18 +19,10 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/ironpark/mako/internal/protocol"
 )
-
-// A block's render returns a tree of the fixed UI vocabulary, as JSON the
-// runtime's prelude writes. It is read here strictly, as untrusted: an
-// unknown kind or field (a raw colour, say) is refused, as is a tone that
-// is not a token, a tree too large or too deep, and text that could pass
-// for something else. What survives is the protocol's tree, which the
-// front-ends draw with their own components, and the messages its nodes
-// send, which stay in the daemon: a front-end reports only which node the
-// user acted on.
 
 // The UI vocabulary's kinds.
 const (
@@ -60,6 +63,7 @@ const (
 	maxNodeOpts  = 64
 	maxMessage   = 4 << 10
 	maxGap, maxG = 64, 100
+	maxOption    = 320
 )
 
 var (
@@ -96,15 +100,15 @@ type jsNode struct {
 // of its name and arguments.
 type actions struct{ tap, change, submit json.RawMessage }
 
-// tree is a render, read: the protocol's tree and its nodes' messages by
+// Tree is a tree, read: the protocol's tree and its nodes' messages by
 // node id.
-type tree struct {
-	root    *protocol.UiNode
+type Tree struct {
+	Root    *protocol.UiNode
 	actions map[string]actions
 }
 
-// readTree reads a render's JSON.
-func readTree(data []byte) (*tree, error) {
+// Read reads a tree's JSON.
+func Read(data []byte) (*Tree, error) {
 	if len(data) > maxTreeJSON {
 		return nil, fmt.Errorf("the tree is over %d KiB of JSON", maxTreeJSON>>10)
 	}
@@ -117,17 +121,17 @@ func readTree(data []byte) (*tree, error) {
 	if dec.More() {
 		return nil, fmt.Errorf("the tree does not read: more after it")
 	}
-	r := &treeReader{t: &tree{actions: map[string]actions{}}}
+	r := &treeReader{t: &Tree{actions: map[string]actions{}}}
 	n, err := r.node(&root, "", 1)
 	if err != nil {
 		return nil, err
 	}
-	r.t.root = n
+	r.t.Root = n
 	return r.t, nil
 }
 
 type treeReader struct {
-	t     *tree
+	t     *Tree
 	nodes int
 	text  int
 }
@@ -181,7 +185,7 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 		return nil, fmt.Errorf("%s: more than %d options", where(id), maxNodeOpts)
 	}
 	for _, o := range j.Options {
-		if len(o) > maxTitle*4 {
+		if len(o) > maxOption {
 			return nil, fmt.Errorf("%s: an option is too long", where(id))
 		}
 		r.text += len(o)
@@ -244,7 +248,7 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 		k := c.Key
 		if k == "" {
 			k = fmt.Sprintf("#%d", i)
-		} else if len(k) > maxKey || strings.ContainsAny(k, "/#") || strings.ContainsFunc(k, spoofing) {
+		} else if len(k) > maxKey || strings.ContainsAny(k, "/#") || strings.ContainsFunc(k, Spoofing) {
 			return nil, fmt.Errorf("%s: key %q is over %d bytes or holds / or #", where(id), k, maxKey)
 		}
 		if keys[k] {
@@ -282,8 +286,23 @@ func message(raw json.RawMessage) (json.RawMessage, error) {
 
 func finite(v, lo, hi float64) bool { return !math.IsNaN(v) && v >= lo && v <= hi }
 
-// spoofingInline is spoofing but for a line break, which text may hold.
-func spoofingInline(r rune) bool { return r != '\n' && r != '\t' && spoofing(r) }
+// spoofingInline is Spoofing but for a line break, which text may hold.
+func spoofingInline(r rune) bool { return r != '\n' && r != '\t' && Spoofing(r) }
+
+// Spoofing says r is a control character or one of Unicode's marks that
+// reorder or hide text, which could make a title or a label read as
+// something else.
+func Spoofing(r rune) bool {
+	switch {
+	case unicode.IsControl(r):
+		return true
+	case r >= 0x202A && r <= 0x202E, r >= 0x2066 && r <= 0x2069, r == 0x200E, r == 0x200F, r == 0x061C:
+		return true
+	case r == 0x200B || r == 0x200C || r == 0x200D || r == 0xFEFF:
+		return true
+	}
+	return false
+}
 
 func where(id string) string {
 	if id == "" {

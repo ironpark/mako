@@ -27,3 +27,9 @@ func (c *Client) BlockEvent(ctx context.Context, req *protocol.BlockEvent) (*pro
 func (c *Client) WatchBlock(ctx context.Context, block string, fn func(*protocol.BlockUpdate)) error {
 	return follow(ctx, c, protocol.TypeWatchBlock, &protocol.WatchBlock{Block: block}, fn)
 }
+
+// AgentBlocks lists the blocks the daemon's agents show; see
+// protocol.ListAgentBlocks.
+func (c *Client) AgentBlocks(ctx context.Context) (*protocol.AgentBlocks, error) {
+	return request[*protocol.AgentBlocks](ctx, c, protocol.TypeListAgentBlocks, &protocol.ListAgentBlocks{})
+}

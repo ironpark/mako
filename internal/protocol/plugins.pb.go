@@ -652,9 +652,17 @@ type BlockUpdate struct {
 	Title  string `protobuf:"bytes,6,opt,name=title,proto3" json:"title,omitempty"`
 	// state is the plugin's, as PluginInfo.state; error and stale as
 	// there, or an error of the block's own last call.
-	State         string `protobuf:"bytes,7,opt,name=state,proto3" json:"state,omitempty"`
-	Error         string `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
-	Stale         bool   `protobuf:"varint,9,opt,name=stale,proto3" json:"stale,omitempty"`
+	State string `protobuf:"bytes,7,opt,name=state,proto3" json:"state,omitempty"`
+	Error string `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
+	Stale bool   `protobuf:"varint,9,opt,name=stale,proto3" json:"stale,omitempty"`
+	// session_id and agent are, for an agent's block, agent:<session>/<id>,
+	// the session that shows it and its agent's name, which the front-end
+	// frames it with in place of a plugin's (revision 27).
+	SessionId string `protobuf:"bytes,10,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Agent     string `protobuf:"bytes,11,opt,name=agent,proto3" json:"agent,omitempty"`
+	// gone says the block was closed, or its plugin removed: the last
+	// update of the stream.
+	Gone          bool `protobuf:"varint,12,opt,name=gone,proto3" json:"gone,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -752,15 +760,40 @@ func (x *BlockUpdate) GetStale() bool {
 	return false
 }
 
+func (x *BlockUpdate) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *BlockUpdate) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *BlockUpdate) GetGone() bool {
+	if x != nil {
+		return x.Gone
+	}
+	return false
+}
+
 // BlockEvent is the user acting on a node of a block's tree: kind "tap",
 // or "change" or "submit" with the input's, toggle's or select's value.
 // Answered by PluginDone.
 type BlockEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Block         string                 `protobuf:"bytes,1,opt,name=block,proto3" json:"block,omitempty"`
-	Node          string                 `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"` // the node's id
-	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
-	Value         string                 `protobuf:"bytes,4,opt,name=value,proto3" json:"value,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Block string                 `protobuf:"bytes,1,opt,name=block,proto3" json:"block,omitempty"`
+	Node  string                 `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"` // the node's id
+	Kind  string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
+	Value string                 `protobuf:"bytes,4,opt,name=value,proto3" json:"value,omitempty"`
+	// values are the block's inputs', toggles' and selects' values as the
+	// front-end has them, by node id, typed or not yet sent: a form's
+	// submit carries every field (revision 27).
+	Values        map[string]string `protobuf:"bytes,5,rep,name=values,proto3" json:"values,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -821,6 +854,13 @@ func (x *BlockEvent) GetValue() string {
 		return x.Value
 	}
 	return ""
+}
+
+func (x *BlockEvent) GetValues() map[string]string {
+	if x != nil {
+		return x.Values
+	}
+	return nil
 }
 
 // UiNode is a node of a plugin block's tree. The kinds are a fixed set
@@ -1103,6 +1143,196 @@ func (x *UiOp) GetNode() *UiNode {
 	return nil
 }
 
+// ListAgentBlocks asks for the blocks agents of this node's show
+// (show_ui), and where each goes; answered by AgentBlocks (revision 27).
+// They are the node's alone: no other node has them.
+type ListAgentBlocks struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentBlocks) Reset() {
+	*x = ListAgentBlocks{}
+	mi := &file_mako_v2_plugins_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentBlocks) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentBlocks) ProtoMessage() {}
+
+func (x *ListAgentBlocks) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_plugins_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentBlocks.ProtoReflect.Descriptor instead.
+func (*ListAgentBlocks) Descriptor() ([]byte, []int) {
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{13}
+}
+
+// AgentBlocks are the agents' blocks, in the order shown.
+type AgentBlocks struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Blocks        []*AgentBlock          `protobuf:"bytes,1,rep,name=blocks,proto3" json:"blocks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentBlocks) Reset() {
+	*x = AgentBlocks{}
+	mi := &file_mako_v2_plugins_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentBlocks) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentBlocks) ProtoMessage() {}
+
+func (x *AgentBlocks) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_plugins_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentBlocks.ProtoReflect.Descriptor instead.
+func (*AgentBlocks) Descriptor() ([]byte, []int) {
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *AgentBlocks) GetBlocks() []*AgentBlock {
+	if x != nil {
+		return x.Blocks
+	}
+	return nil
+}
+
+// AgentBlock is a block an agent shows, agent:<session>/<id>. A front-end
+// places it over the layout document it draws, never writing it there:
+// by default as the last of the right panel's tabs (the stack "details"),
+// shown; with parent set, and the document the window draws the one
+// named, as the index-th child of that node (-1 for the last), size px
+// along it, as the user allowed.
+type AgentBlock struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Agent         string                 `protobuf:"bytes,3,opt,name=agent,proto3" json:"agent,omitempty"`
+	Title         string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
+	Document      string                 `protobuf:"bytes,5,opt,name=document,proto3" json:"document,omitempty"`
+	Parent        string                 `protobuf:"bytes,6,opt,name=parent,proto3" json:"parent,omitempty"`
+	Index         int32                  `protobuf:"varint,7,opt,name=index,proto3" json:"index,omitempty"`
+	Size          float64                `protobuf:"fixed64,8,opt,name=size,proto3" json:"size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentBlock) Reset() {
+	*x = AgentBlock{}
+	mi := &file_mako_v2_plugins_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentBlock) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentBlock) ProtoMessage() {}
+
+func (x *AgentBlock) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_plugins_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentBlock.ProtoReflect.Descriptor instead.
+func (*AgentBlock) Descriptor() ([]byte, []int) {
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *AgentBlock) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AgentBlock) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *AgentBlock) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *AgentBlock) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *AgentBlock) GetDocument() string {
+	if x != nil {
+		return x.Document
+	}
+	return ""
+}
+
+func (x *AgentBlock) GetParent() string {
+	if x != nil {
+		return x.Parent
+	}
+	return ""
+}
+
+func (x *AgentBlock) GetIndex() int32 {
+	if x != nil {
+		return x.Index
+	}
+	return 0
+}
+
+func (x *AgentBlock) GetSize() float64 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
 var File_mako_v2_plugins_proto protoreflect.FileDescriptor
 
 const file_mako_v2_plugins_proto_rawDesc = "" +
@@ -1152,7 +1382,7 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\bopen_url\x18\x01 \x01(\tR\aopenUrl\"\"\n" +
 	"\n" +
 	"WatchBlock\x12\x14\n" +
-	"\x05block\x18\x01 \x01(\tR\x05block\"\xeb\x01\n" +
+	"\x05block\x18\x01 \x01(\tR\x05block\"\xb4\x02\n" +
 	"\vBlockUpdate\x12\x14\n" +
 	"\x05block\x18\x01 \x01(\tR\x05block\x12\x10\n" +
 	"\x03seq\x18\x02 \x01(\x04R\x03seq\x12#\n" +
@@ -1162,13 +1392,22 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x05title\x18\x06 \x01(\tR\x05title\x12\x14\n" +
 	"\x05state\x18\a \x01(\tR\x05state\x12\x14\n" +
 	"\x05error\x18\b \x01(\tR\x05error\x12\x14\n" +
-	"\x05stale\x18\t \x01(\bR\x05stale\"`\n" +
+	"\x05stale\x18\t \x01(\bR\x05stale\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\n" +
+	" \x01(\tR\tsessionId\x12\x14\n" +
+	"\x05agent\x18\v \x01(\tR\x05agent\x12\x12\n" +
+	"\x04gone\x18\f \x01(\bR\x04gone\"\xd4\x01\n" +
 	"\n" +
 	"BlockEvent\x12\x14\n" +
 	"\x05block\x18\x01 \x01(\tR\x05block\x12\x12\n" +
 	"\x04node\x18\x02 \x01(\tR\x04node\x12\x12\n" +
 	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x14\n" +
-	"\x05value\x18\x04 \x01(\tR\x05value\"\xaf\x03\n" +
+	"\x05value\x18\x04 \x01(\tR\x05value\x127\n" +
+	"\x06values\x18\x05 \x03(\v2\x1f.mako.v2.BlockEvent.ValuesEntryR\x06values\x1a9\n" +
+	"\vValuesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xaf\x03\n" +
 	"\x06UiNode\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
@@ -1194,7 +1433,21 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x16\n" +
 	"\x06parent\x18\x03 \x01(\tR\x06parent\x12\x14\n" +
 	"\x05index\x18\x04 \x01(\x05R\x05index\x12#\n" +
-	"\x04node\x18\x05 \x01(\v2\x0f.mako.v2.UiNodeR\x04nodeB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
+	"\x04node\x18\x05 \x01(\v2\x0f.mako.v2.UiNodeR\x04node\"\x11\n" +
+	"\x0fListAgentBlocks\":\n" +
+	"\vAgentBlocks\x12+\n" +
+	"\x06blocks\x18\x01 \x03(\v2\x13.mako.v2.AgentBlockR\x06blocks\"\xc9\x01\n" +
+	"\n" +
+	"AgentBlock\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x14\n" +
+	"\x05agent\x18\x03 \x01(\tR\x05agent\x12\x14\n" +
+	"\x05title\x18\x04 \x01(\tR\x05title\x12\x1a\n" +
+	"\bdocument\x18\x05 \x01(\tR\bdocument\x12\x16\n" +
+	"\x06parent\x18\x06 \x01(\tR\x06parent\x12\x14\n" +
+	"\x05index\x18\a \x01(\x05R\x05index\x12\x12\n" +
+	"\x04size\x18\b \x01(\x01R\x04sizeB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
 	file_mako_v2_plugins_proto_rawDescOnce sync.Once
@@ -1208,21 +1461,25 @@ func file_mako_v2_plugins_proto_rawDescGZIP() []byte {
 	return file_mako_v2_plugins_proto_rawDescData
 }
 
-var file_mako_v2_plugins_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_mako_v2_plugins_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_mako_v2_plugins_proto_goTypes = []any{
-	(*ListPlugins)(nil),   // 0: mako.v2.ListPlugins
-	(*Plugins)(nil),       // 1: mako.v2.Plugins
-	(*PluginInfo)(nil),    // 2: mako.v2.PluginInfo
-	(*PluginBlock)(nil),   // 3: mako.v2.PluginBlock
-	(*PluginCommand)(nil), // 4: mako.v2.PluginCommand
-	(*PluginSetting)(nil), // 5: mako.v2.PluginSetting
-	(*PluginAction)(nil),  // 6: mako.v2.PluginAction
-	(*PluginDone)(nil),    // 7: mako.v2.PluginDone
-	(*WatchBlock)(nil),    // 8: mako.v2.WatchBlock
-	(*BlockUpdate)(nil),   // 9: mako.v2.BlockUpdate
-	(*BlockEvent)(nil),    // 10: mako.v2.BlockEvent
-	(*UiNode)(nil),        // 11: mako.v2.UiNode
-	(*UiOp)(nil),          // 12: mako.v2.UiOp
+	(*ListPlugins)(nil),     // 0: mako.v2.ListPlugins
+	(*Plugins)(nil),         // 1: mako.v2.Plugins
+	(*PluginInfo)(nil),      // 2: mako.v2.PluginInfo
+	(*PluginBlock)(nil),     // 3: mako.v2.PluginBlock
+	(*PluginCommand)(nil),   // 4: mako.v2.PluginCommand
+	(*PluginSetting)(nil),   // 5: mako.v2.PluginSetting
+	(*PluginAction)(nil),    // 6: mako.v2.PluginAction
+	(*PluginDone)(nil),      // 7: mako.v2.PluginDone
+	(*WatchBlock)(nil),      // 8: mako.v2.WatchBlock
+	(*BlockUpdate)(nil),     // 9: mako.v2.BlockUpdate
+	(*BlockEvent)(nil),      // 10: mako.v2.BlockEvent
+	(*UiNode)(nil),          // 11: mako.v2.UiNode
+	(*UiOp)(nil),            // 12: mako.v2.UiOp
+	(*ListAgentBlocks)(nil), // 13: mako.v2.ListAgentBlocks
+	(*AgentBlocks)(nil),     // 14: mako.v2.AgentBlocks
+	(*AgentBlock)(nil),      // 15: mako.v2.AgentBlock
+	nil,                     // 16: mako.v2.BlockEvent.ValuesEntry
 }
 var file_mako_v2_plugins_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Plugins.plugins:type_name -> mako.v2.PluginInfo
@@ -1231,13 +1488,15 @@ var file_mako_v2_plugins_proto_depIdxs = []int32{
 	5,  // 3: mako.v2.PluginInfo.settings:type_name -> mako.v2.PluginSetting
 	11, // 4: mako.v2.BlockUpdate.tree:type_name -> mako.v2.UiNode
 	12, // 5: mako.v2.BlockUpdate.ops:type_name -> mako.v2.UiOp
-	11, // 6: mako.v2.UiNode.children:type_name -> mako.v2.UiNode
-	11, // 7: mako.v2.UiOp.node:type_name -> mako.v2.UiNode
-	8,  // [8:8] is the sub-list for method output_type
-	8,  // [8:8] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	16, // 6: mako.v2.BlockEvent.values:type_name -> mako.v2.BlockEvent.ValuesEntry
+	11, // 7: mako.v2.UiNode.children:type_name -> mako.v2.UiNode
+	11, // 8: mako.v2.UiOp.node:type_name -> mako.v2.UiNode
+	15, // 9: mako.v2.AgentBlocks.blocks:type_name -> mako.v2.AgentBlock
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_plugins_proto_init() }
@@ -1251,7 +1510,7 @@ func file_mako_v2_plugins_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_plugins_proto_rawDesc), len(file_mako_v2_plugins_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

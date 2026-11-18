@@ -1373,4 +1373,5 @@ var catalogKo = map[string]string{
 	"Refused":                                                              "거절됨",
 	"Ready":                                                                "준비됨",
 	"Disabled":                                                             "꺼짐",
+	"This block was closed.":                                               "이 블록은 닫혔습니다.",
 }

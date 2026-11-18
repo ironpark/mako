@@ -25,6 +25,8 @@ public  final class BlockUpdate extends
     title_ = "";
     state_ = "";
     error_ = "";
+    sessionId_ = "";
+    agent_ = "";
   }
   private int bitField0_;
   public static final int BLOCK_FIELD_NUMBER = 1;
@@ -584,6 +586,171 @@ public  final class BlockUpdate extends
   private void clearStale() {
 
     stale_ = false;
+  }
+
+  public static final int SESSION_ID_FIELD_NUMBER = 10;
+  private java.lang.String sessionId_;
+  /**
+   * <pre>
+   * session_id and agent are, for an agent's block, agent:&lt;session&gt;/&lt;id&gt;,
+   * the session that shows it and its agent's name, which the front-end
+   * frames it with in place of a plugin's (revision 27).
+   * </pre>
+   *
+   * <code>string session_id = 10 [json_name = "sessionId"];</code>
+   * @return The sessionId.
+   */
+  @java.lang.Override
+  public java.lang.String getSessionId() {
+    return sessionId_;
+  }
+  /**
+   * <pre>
+   * session_id and agent are, for an agent's block, agent:&lt;session&gt;/&lt;id&gt;,
+   * the session that shows it and its agent's name, which the front-end
+   * frames it with in place of a plugin's (revision 27).
+   * </pre>
+   *
+   * <code>string session_id = 10 [json_name = "sessionId"];</code>
+   * @return The bytes for sessionId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getSessionIdBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(sessionId_);
+  }
+  /**
+   * <pre>
+   * session_id and agent are, for an agent's block, agent:&lt;session&gt;/&lt;id&gt;,
+   * the session that shows it and its agent's name, which the front-end
+   * frames it with in place of a plugin's (revision 27).
+   * </pre>
+   *
+   * <code>string session_id = 10 [json_name = "sessionId"];</code>
+   * @param value The sessionId to set.
+   */
+  private void setSessionId(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    sessionId_ = value;
+  }
+  /**
+   * <pre>
+   * session_id and agent are, for an agent's block, agent:&lt;session&gt;/&lt;id&gt;,
+   * the session that shows it and its agent's name, which the front-end
+   * frames it with in place of a plugin's (revision 27).
+   * </pre>
+   *
+   * <code>string session_id = 10 [json_name = "sessionId"];</code>
+   */
+  private void clearSessionId() {
+
+    sessionId_ = getDefaultInstance().getSessionId();
+  }
+  /**
+   * <pre>
+   * session_id and agent are, for an agent's block, agent:&lt;session&gt;/&lt;id&gt;,
+   * the session that shows it and its agent's name, which the front-end
+   * frames it with in place of a plugin's (revision 27).
+   * </pre>
+   *
+   * <code>string session_id = 10 [json_name = "sessionId"];</code>
+   * @param value The bytes for sessionId to set.
+   */
+  private void setSessionIdBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    sessionId_ = value.toStringUtf8();
+
+  }
+
+  public static final int AGENT_FIELD_NUMBER = 11;
+  private java.lang.String agent_;
+  /**
+   * <code>string agent = 11 [json_name = "agent"];</code>
+   * @return The agent.
+   */
+  @java.lang.Override
+  public java.lang.String getAgent() {
+    return agent_;
+  }
+  /**
+   * <code>string agent = 11 [json_name = "agent"];</code>
+   * @return The bytes for agent.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getAgentBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(agent_);
+  }
+  /**
+   * <code>string agent = 11 [json_name = "agent"];</code>
+   * @param value The agent to set.
+   */
+  private void setAgent(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    agent_ = value;
+  }
+  /**
+   * <code>string agent = 11 [json_name = "agent"];</code>
+   */
+  private void clearAgent() {
+
+    agent_ = getDefaultInstance().getAgent();
+  }
+  /**
+   * <code>string agent = 11 [json_name = "agent"];</code>
+   * @param value The bytes for agent to set.
+   */
+  private void setAgentBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    agent_ = value.toStringUtf8();
+
+  }
+
+  public static final int GONE_FIELD_NUMBER = 12;
+  private boolean gone_;
+  /**
+   * <pre>
+   * gone says the block was closed, or its plugin removed: the last
+   * update of the stream.
+   * </pre>
+   *
+   * <code>bool gone = 12 [json_name = "gone"];</code>
+   * @return The gone.
+   */
+  @java.lang.Override
+  public boolean getGone() {
+    return gone_;
+  }
+  /**
+   * <pre>
+   * gone says the block was closed, or its plugin removed: the last
+   * update of the stream.
+   * </pre>
+   *
+   * <code>bool gone = 12 [json_name = "gone"];</code>
+   * @param value The gone to set.
+   */
+  private void setGone(boolean value) {
+    
+    gone_ = value;
+  }
+  /**
+   * <pre>
+   * gone says the block was closed, or its plugin removed: the last
+   * update of the stream.
+   * </pre>
+   *
+   * <code>bool gone = 12 [json_name = "gone"];</code>
+   */
+  private void clearGone() {
+
+    gone_ = false;
   }
 
   public static dev.ironpark.mako.v2.BlockUpdate parseFrom(
@@ -1277,6 +1444,177 @@ public  final class BlockUpdate extends
       return this;
     }
 
+    /**
+     * <pre>
+     * session_id and agent are, for an agent's block, agent:&lt;session&gt;/&lt;id&gt;,
+     * the session that shows it and its agent's name, which the front-end
+     * frames it with in place of a plugin's (revision 27).
+     * </pre>
+     *
+     * <code>string session_id = 10 [json_name = "sessionId"];</code>
+     * @return The sessionId.
+     */
+    @java.lang.Override
+    public java.lang.String getSessionId() {
+      return instance.getSessionId();
+    }
+    /**
+     * <pre>
+     * session_id and agent are, for an agent's block, agent:&lt;session&gt;/&lt;id&gt;,
+     * the session that shows it and its agent's name, which the front-end
+     * frames it with in place of a plugin's (revision 27).
+     * </pre>
+     *
+     * <code>string session_id = 10 [json_name = "sessionId"];</code>
+     * @return The bytes for sessionId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getSessionIdBytes() {
+      return instance.getSessionIdBytes();
+    }
+    /**
+     * <pre>
+     * session_id and agent are, for an agent's block, agent:&lt;session&gt;/&lt;id&gt;,
+     * the session that shows it and its agent's name, which the front-end
+     * frames it with in place of a plugin's (revision 27).
+     * </pre>
+     *
+     * <code>string session_id = 10 [json_name = "sessionId"];</code>
+     * @param value The sessionId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSessionId(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setSessionId(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * session_id and agent are, for an agent's block, agent:&lt;session&gt;/&lt;id&gt;,
+     * the session that shows it and its agent's name, which the front-end
+     * frames it with in place of a plugin's (revision 27).
+     * </pre>
+     *
+     * <code>string session_id = 10 [json_name = "sessionId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSessionId() {
+      copyOnWrite();
+      instance.clearSessionId();
+      return this;
+    }
+    /**
+     * <pre>
+     * session_id and agent are, for an agent's block, agent:&lt;session&gt;/&lt;id&gt;,
+     * the session that shows it and its agent's name, which the front-end
+     * frames it with in place of a plugin's (revision 27).
+     * </pre>
+     *
+     * <code>string session_id = 10 [json_name = "sessionId"];</code>
+     * @param value The bytes for sessionId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSessionIdBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setSessionIdBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string agent = 11 [json_name = "agent"];</code>
+     * @return The agent.
+     */
+    @java.lang.Override
+    public java.lang.String getAgent() {
+      return instance.getAgent();
+    }
+    /**
+     * <code>string agent = 11 [json_name = "agent"];</code>
+     * @return The bytes for agent.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getAgentBytes() {
+      return instance.getAgentBytes();
+    }
+    /**
+     * <code>string agent = 11 [json_name = "agent"];</code>
+     * @param value The agent to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAgent(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setAgent(value);
+      return this;
+    }
+    /**
+     * <code>string agent = 11 [json_name = "agent"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAgent() {
+      copyOnWrite();
+      instance.clearAgent();
+      return this;
+    }
+    /**
+     * <code>string agent = 11 [json_name = "agent"];</code>
+     * @param value The bytes for agent to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAgentBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setAgentBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * gone says the block was closed, or its plugin removed: the last
+     * update of the stream.
+     * </pre>
+     *
+     * <code>bool gone = 12 [json_name = "gone"];</code>
+     * @return The gone.
+     */
+    @java.lang.Override
+    public boolean getGone() {
+      return instance.getGone();
+    }
+    /**
+     * <pre>
+     * gone says the block was closed, or its plugin removed: the last
+     * update of the stream.
+     * </pre>
+     *
+     * <code>bool gone = 12 [json_name = "gone"];</code>
+     * @param value The gone to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGone(boolean value) {
+      copyOnWrite();
+      instance.setGone(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * gone says the block was closed, or its plugin removed: the last
+     * update of the stream.
+     * </pre>
+     *
+     * <code>bool gone = 12 [json_name = "gone"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearGone() {
+      copyOnWrite();
+      instance.clearGone();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.BlockUpdate)
   }
   @java.lang.Override
@@ -1304,10 +1642,14 @@ public  final class BlockUpdate extends
             "state_",
             "error_",
             "stale_",
+            "sessionId_",
+            "agent_",
+            "gone_",
           };
           java.lang.String info =
-              "\u0000\t\u0000\u0001\u0001\t\t\u0000\u0001\u0000\u0001\u0208\u0002\u0003\u0003\u1009" +
-              "\u0000\u0004\u001b\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007";
+              "\u0000\f\u0000\u0001\u0001\f\f\u0000\u0001\u0000\u0001\u0208\u0002\u0003\u0003\u1009" +
+              "\u0000\u0004\u001b\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007\n\u0208\u000b" +
+              "\u0208\f\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

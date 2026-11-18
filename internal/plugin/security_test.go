@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -74,26 +75,37 @@ func TestCallsWithoutPermissionAreRefused(t *testing.T) {
 }
 
 func TestRunawayPluginsAreStopped(t *testing.T) {
-	r := newRig(t, testLimits, nil)
-	cases := map[string]struct{ load, render, want string }{
-		"loop":         {`for (;;) {}`, `ui.text("x")`, "ran longer"},
-		"render-loop":  {``, `(() => { for (;;) {} })()`, "ran longer"},
-		"busy-host":    {`for (;;) { await mako.log.write({ message: "x" }) }`, `ui.text("x")`, "ran longer"},
-		"memory":       {`const a = []; for (;;) a.push("x".repeat(1 << 20))`, `ui.text("x")`, "more memory"},
-		"memory-catch": {`const a = []; for (;;) { try { a.push("x".repeat(1 << 20)) } catch (e) {} }`, `ui.text("x")`, ""},
-		"recursion":    {`const f = (n) => f(n + 1) + 1; f(0)`, `ui.text("x")`, ""},
-	}
-	for id, c := range cases {
-		r.write(id, map[string]string{ManifestName: manifest(id, nil, ""), "main.js": rawBlock(c.load, c.render)})
-		r.state(id, protocol.PluginReady)
-		w := r.watch("plugin:" + id + "/ui")
-		u := w.until("it stopped", func(_ *protocol.UiNode, u *protocol.BlockUpdate) bool { return u.GetState() == protocol.PluginFailed })
-		_ = u
-		info := r.state(id, protocol.PluginFailed)
-		if !strings.Contains(info.GetError(), c.want) {
-			t.Errorf("%s stopped with %q; want %q", id, info.GetError(), c.want)
+	type runaway struct{ load, render, want string }
+	run := func(r *rig, cases map[string]runaway) {
+		for id, c := range cases {
+			r.write(id, map[string]string{ManifestName: manifest(id, nil, ""), "main.js": rawBlock(c.load, c.render)})
+			r.state(id, protocol.PluginReady)
+			r.watch("plugin:" + id + "/ui")
+			r.fails(id, c.want)
 		}
 	}
+	// Going over the time a call may take.
+	r := newRig(t, runawayLimits, nil)
+	run(r, map[string]runaway{
+		"loop":        {`for (;;) {}`, `ui.text("x")`, "ran longer"},
+		"render-loop": {``, `(() => { for (;;) {} })()`, "ran longer"},
+		"busy-host":   {`for (;;) { await mako.log.write({ message: "x" }) }`, `ui.text("x")`, "ran longer"},
+	})
+	healthy(t, r)
+	// Going over the memory or the stack, with time enough that a slow
+	// machine cannot stop them for their time first.
+	r = newRig(t, testLimits, nil)
+	run(r, map[string]runaway{
+		"memory":    {`const a = []; for (;;) a.push("x".repeat(1 << 20))`, `ui.text("x")`, "more memory"},
+		"recursion": {`const f = (n) => f(n + 1) + 1; f(0)`, `ui.text("x")`, "nested too deep"},
+	})
+	healthy(t, r)
+	// A bomb that catches its own out-of-memory errors stays within the
+	// heap, and loops until its time is up.
+	r = newRig(t, runawayLimits, nil)
+	run(r, map[string]runaway{
+		"memory-catch": {`const a = []; for (;;) { try { a.push("x".repeat(1 << 20)) } catch (e) {} }`, `ui.text("x")`, "ran longer"},
+	})
 	healthy(t, r)
 }
 
@@ -132,15 +144,11 @@ func TestPathTricksAreRefused(t *testing.T) {
 	good := block(`s.msg = "x"`, `ui.text(s.msg)`)
 	for id, entry := range map[string]string{"dots": "../outside.js", "abs": "/etc/x.js", "unclean": "lib/../main.js", "backslash": `lib\\main.js`} {
 		r.write(id, map[string]string{ManifestName: strings.Replace(manifest(id, nil, ""), `entry = "main.js"`, `entry = "`+entry+`"`, 1), "main.js": good})
-		if info := r.state(id, protocol.PluginFailed); !strings.Contains(info.GetError(), "entry") {
-			t.Errorf("%s: %v", id, info.GetError())
-		}
+		r.fails(id, "entry")
 	}
 	// A folder whose manifest names another ID.
 	r.write("named", map[string]string{ManifestName: manifest("other", nil, ""), "main.js": good})
-	if info := r.state("named", protocol.PluginFailed); !strings.Contains(info.GetError(), "folder's name") {
-		t.Errorf("named: %v", info.GetError())
-	}
+	r.fails("named", "folder's name")
 	// Symbolic links: a plugin's folder, or a file in it.
 	target := filepath.Join(filepath.Dir(r.dir), "elsewhere")
 	if err := os.MkdirAll(target, 0o755); err != nil {
@@ -155,16 +163,12 @@ func TestPathTricksAreRefused(t *testing.T) {
 	if err := os.Symlink(target, filepath.Join(r.dir, "linked")); err != nil {
 		t.Fatal(err)
 	}
-	if info := r.state("linked", protocol.PluginFailed); !strings.Contains(info.GetError(), "symbolic link") {
-		t.Errorf("linked: %v", info.GetError())
-	}
+	r.fails("linked", "symbolic link")
 	r.write("filelink", map[string]string{ManifestName: manifest("filelink", nil, "")})
 	if err := os.Symlink(outside, filepath.Join(r.dir, "filelink", "main.js")); err != nil {
 		t.Fatal(err)
 	}
-	if info := r.state("filelink", protocol.PluginFailed); !strings.Contains(info.GetError(), "symbolic link") {
-		t.Errorf("filelink: %v", info.GetError())
-	}
+	r.fails("filelink", "symbolic link")
 	// Imports reach the plugin's own modules alone; the runtime has no
 	// files.
 	for id, imp := range map[string]string{
@@ -172,8 +176,9 @@ func TestPathTricksAreRefused(t *testing.T) {
 		"importabs": `import { secret } from "` + outside + `";`,
 	} {
 		r.write(id, map[string]string{ManifestName: manifest(id, nil, ""), "main.js": imp + "\n" + block(`s.msg = secret`, `ui.text(s.msg)`)})
-		info := r.state(id, protocol.PluginFailed)
-		if strings.Contains(info.GetError(), "outside") && !strings.Contains(info.GetError(), "outside.js") {
+		// The import of a module the plugin does not have fails its check.
+		info := r.fails(id, "outside.js")
+		if strings.Contains(info.GetError(), "\"outside\"") {
 			t.Errorf("%s read the file outside: %v", id, info.GetError())
 		}
 	}
@@ -200,9 +205,7 @@ func TestNamespacesAreThePluginsOwn(t *testing.T) {
 		r.write(id, map[string]string{ManifestName: manifest(id, nil, ""), "main.js": `export default { activate(m) {
 			m.blocks.register("` + name + `", { state: {}, render: (s, ui) => ui.text("mine") }) } }`})
 		r.watch("plugin:" + id + "/ui")
-		if info := r.state(id, protocol.PluginFailed); !strings.Contains(info.GetError(), "not declared") {
-			t.Errorf("%s registered %s: %v", id, name, info.GetError())
-		}
+		r.fails(id, "not declared")
 	}
 	// A manifest cannot declare such a block either.
 	for _, decl := range []string{"mako.sidebar", "../victim", "victim/ui", "UI"} {
@@ -246,6 +249,13 @@ func TestFloodingIsRefused(t *testing.T) {
 	r.write("flood", map[string]string{ManifestName: manifest("flood", nil, ""), "main.js": counter})
 	w := r.watch("plugin:flood/ui")
 	w.until("the count", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return hasText(n, "count 0") })
+	// The events' clock stops, so that however slowly the machine takes
+	// them, they come within the second the limit counts.
+	p, _ := r.m.plugin("flood")
+	p.evRate.mu.Lock()
+	at := time.Now()
+	p.evRate.now = func() time.Time { return at }
+	p.evRate.mu.Unlock()
 	var refused, taken atomic.Int32
 	var wg sync.WaitGroup
 	for range 300 {
@@ -260,8 +270,8 @@ func TestFloodingIsRefused(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	if refused.Load() == 0 {
-		t.Fatalf("300 events at once were all taken")
+	if taken.Load() != int32(testLimits.withDefaults().Events) {
+		t.Fatalf("%d of 300 events in a second were taken; want %d", taken.Load(), testLimits.withDefaults().Events)
 	}
 	w.mu.Lock()
 	updates := w.updates
@@ -289,10 +299,7 @@ func TestRepeatedFailuresStopThePlugin(t *testing.T) {
 			t.Fatalf("the failing handler answered %v", err)
 		}
 	}
-	info := r.state("bad", protocol.PluginFailed)
-	if !strings.Contains(info.GetError(), "3 times") {
-		t.Fatalf("stopped with %q", info.GetError())
-	}
+	r.fails("bad", "3 times")
 	// Enabled again, it runs.
 	if _, err := r.act(&protocol.PluginAction{PluginId: "bad", Op: protocol.PluginEnable}); err != nil {
 		t.Fatal(err)

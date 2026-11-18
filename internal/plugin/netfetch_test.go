@@ -172,11 +172,11 @@ func TestPluginFetchesThroughTheHost(t *testing.T) {
 // its CPU time: the wait is the host's, and the plugin is not stopped.
 func TestHostTimeIsNotThePlugins(t *testing.T) {
 	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(3 * testLimits.CPU)
+		time.Sleep(3 * runawayLimits.CPU)
 		io.WriteString(w, "late")
 	}))
 	defer slow.Close()
-	r := newRig(t, testLimits, map[string]string{"api.example.com": slow.URL})
+	r := newRig(t, runawayLimits, map[string]string{"api.example.com": slow.URL})
 	r.write("slow", map[string]string{ManifestName: manifest("slow", []string{"net:api.example.com"}, ""),
 		"main.js": block(`s.msg = "got " + (await mako.http.fetch({ url: "https://api.example.com/" })).body`, `ui.text(s.msg)`)})
 	r.state("slow", protocol.PluginWaiting)

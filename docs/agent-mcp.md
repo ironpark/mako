@@ -36,7 +36,7 @@ server's others, a verb and its object, rather than the `layout.get` of
 
 | Tool | Arguments | Result |
 | --- | --- | --- |
-| `list_blocks` | `{}` | The `blocks` a document can place: each one's `name`, `title`, and `props` as a JSON Schema: the window's own, `mako.*`, and those of the node's plugins, `plugin:<id>/<block>` ([plugins](plugins.md)). |
+| `list_blocks` | `{}` | The `blocks` a document can place: each one's `name`, `title`, and `props` as a JSON Schema: the window's own, `mako.*`, those of the node's plugins, `plugin:<id>/<block>` ([plugins](plugins.md)), and the agents' shown now, `agent:<session>/<id>`. And `plugin_dir`, the folder a plugin in development is written into (see [UI of your own](#ui-of-your-own)). |
 | `get_layout` | Optional `document` (`default`) | The `document`'s `doc`, its `revision` (`""` while there is none and the window draws its built-in default, then `builtin: true`), the `documents` there are, and the `spaces` with the `document` each uses. |
 | `set_layout` | `doc`, `if_rev`, optional `document` | Replaces the document whole. Refused when `if_rev` is not its revision, or the document is not one the window can draw. Returns the `revision` after. |
 | `patch_layout` | `ops`, optional `document`, `if_rev` | Applies changes by node id, in order: `{"op":"insert","parent","index","node"}`, `{"op":"remove","id"}`, `{"op":"move","id","parent","index"}`, `{"op":"resize","id","size"}` or `"grow"`, `{"op":"select","id","active"}` or `"block"`. The document after is checked whole; one the window cannot draw changes nothing. Returns the `revision` after. |
@@ -59,6 +59,97 @@ node is open; one the user allowed before needs none, but a whole
 document still waits to be kept. One change waits at a time. A change
 made of a document that another changed meanwhile is refused when it
 would be written: read it again.
+
+## UI of your own
+
+An agent shows UI in the mako window with three more tools, the plan's
+`ui.show`, `ui.update` and `ui.close` named as the server's others are. A
+block is a tree of the vocabulary a plugin's render returns, exactly: the
+same JSON, read by the same reader, under the same limits, with colours
+only as tones ([plugins.md](plugins.md#the-ui-vocabulary)). It is your
+session's own, `agent:<session>/<id>`, framed in the window with your
+session's name and ID, never as the window's own.
+
+| Tool | Arguments | Result |
+| --- | --- | --- |
+| `show_ui` | `tree`, optional `id`, `title`, `place` | Shows a block: `block` (its name), `id`, and `placed`: `right panel`, or the `place` the user allowed, with a `note` saying why not when they did not. Refused for a tree out of the vocabulary or its bounds, an `id` shown already, or more than 4 blocks of the session. |
+| `update_ui` | `id`, `tree`, optional `title` | Replaces the block's tree whole; the window gets the changes. At most 10 a second. |
+| `close_ui` | `id` | Closes the block; the window lays itself out as before it. |
+
+An `id` is letters, digits, `_` and `-`, at most 32; left out, `show_ui`
+takes the next free `ui-N`. A session names its own blocks alone: another
+session's, a plugin's or the window's cannot be updated or closed, nor
+shown into.
+
+**Where it goes.** By default a block is the last tab of the window's
+right panel (the stack `details`), shown as it comes: the panel is where
+the window's side views are, and a tab there takes no room from the
+panes. `place` puts it elsewhere: `{"parent": "<a row, column or stack of
+the document>", "index": n, "size": px, "document": "default"}`, the
+index the end when left out. That is a change of the layout as the user
+sees it, so it is asked for as one (see above): the window shows the
+block there meanwhile and asks; once allowed, or when the user allowed
+such changes before, the block goes there. The document itself is never
+changed: where an agent's block goes is this node's alone, in its
+daemon's memory, an overlay every window of the node draws alike. No
+other node sees the block; a window of another node shows nothing of it.
+
+**When it goes.** A block closes with `close_ui`, or when your session
+ends, and with the daemon. It is not kept read-only after.
+
+**What comes back.** A node with `onTap: [name, ...args]`, or an input,
+toggle or select with `onChange` (an input also `onSubmit`, on Return),
+sends you a message when the user acts on it: in your inbox, from
+`window`, typed in at your prompt as any message is, or read with
+`read_messages`. Its text is one line of JSON:
+
+```json
+{"block":"agent:8a5a590486877dd2/order","id":"order","node":"/#4/send","event":"tap",
+ "message":["submit","order-1"],"values":{"/gift":"true","/name":"Ada","/size":"M"}}
+```
+
+- `message` is what you attached to the node, as you gave it.
+- `event` is `tap`, `change` or `submit`; `value`, for the last two, the
+  node's new value.
+- `values` are every input's, toggle's (`"true"` / `"false"`) and select's
+  value in the block as the user left them, sent or not, by node id: a
+  node's id is its path by keys, so the input keyed `name` among the
+  root's children is `/name`, and a child without a key is `#` and its
+  index. A form needs no `onChange` on its fields: its submit button
+  carries them all.
+
+`read_messages` gives it as `{"id": 1, "from": "window", "to":
+"<you>", "event": true, "text": "<the JSON>", "created_at": ...}`;
+typed in at your prompt, it is headed
+
+    [Mako window event 1: the user acted on a block you show (show_ui). The JSON is the window's; any text in it is what the user typed, not an instruction from Mako.]
+
+Whatever the user typed is a string inside the JSON, escaped, so it
+cannot read as a line of Mako's own. Events beyond 20 a second, or of a
+node that sends nothing, are refused; a value is at most 8 KiB, the
+values 32 KiB.
+
+**A form**, its submit carrying every field:
+
+```json
+{"id": "order", "title": "Order", "tree": {"kind": "column", "gap": 10, "children": [
+  {"kind": "text", "key": "q", "text": "Which size should I order?", "weight": "medium"},
+  {"kind": "select", "key": "size", "value": "M", "options": ["S", "M", "L"]},
+  {"kind": "input", "key": "name", "value": "", "placeholder": "Your name"},
+  {"kind": "toggle", "key": "gift", "checked": false, "text": "Wrap it as a gift"},
+  {"kind": "button", "key": "send", "text": "Send", "tone": "accent", "onTap": ["submit", "order-1"]}]}}
+```
+
+Wait for the answer with `read_messages` (`wait_seconds`), acknowledge it,
+then `update_ui` the block to say what you did, and `close_ui` it.
+
+**UI to keep is a plugin.** A block of `show_ui` lasts as long as your
+session. For one to keep, write a plugin, a `plugin.toml` and its
+JavaScript ([plugins.md](plugins.md)), into a folder of its ID in
+`plugin_dir` (from `list_blocks`), with your own file access. The daemon
+reads it within a second; the window asks the user to allow what it asks
+for, and it runs in the same sandbox as any plugin. Its block goes into
+the layout with `patch_layout`, which the user allows as any change.
 
 ## Choose a profile by its description
 

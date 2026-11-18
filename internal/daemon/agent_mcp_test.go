@@ -102,7 +102,7 @@ func TestProjectMCPSpawnMessageAndStop(t *testing.T) {
 	d, parent := projectMCPDaemon(t)
 	client := projectMCPClient(t, d, parent)
 	tools, err := client.ListTools(t.Context(), nil)
-	if err != nil || len(tools.Tools) != 11 {
+	if err != nil || len(tools.Tools) != 14 {
 		t.Fatalf("tools: %v, %v", tools, err)
 	}
 	if !strings.Contains(client.InitializeResult().Instructions, parent.ID()) {

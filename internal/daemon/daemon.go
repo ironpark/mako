@@ -17,6 +17,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/ironpark/mako/internal/agentui"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/device"
 	"github.com/ironpark/mako/internal/mcp"
@@ -85,6 +86,9 @@ type Daemon struct {
 
 	agentFile     agentFile
 	plugins       *plugin.Manager // the node's plugins; see plugins.go
+	pluginsDir    string          // the folder they are read from
+	agentUI       *agentui.Store  // the blocks agents show; see agent_ui.go
+	uiWatched     onceSet         // the sessions whose end closes their blocks
 	mcp           *mcp.Resolver   // nil without a configuration directory
 	projectAgents projectAgents
 
@@ -103,7 +107,7 @@ func New(cfg *config.Config, log *slog.Logger) *Daemon {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Daemon{
+	d := &Daemon{
 		cfg:      cfg,
 		log:      log,
 		sessions: newRegistry(),
@@ -119,6 +123,8 @@ func New(cfg *config.Config, log *slog.Logger) *Daemon {
 
 		hookBinary: hookProgram,
 	}
+	d.agentUI = agentui.New(d.changes.fireAgentBlocks)
+	return d
 }
 
 // Ready is closed once Run is listening, after which Addr is valid. A Run
@@ -433,6 +439,8 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleWatchBlock(ctx, stream, env, fromPeer)
 	case protocol.TypeBlockEvent:
 		return d.handleBlockEvent(ctx, stream, env, fromPeer)
+	case protocol.TypeListAgentBlocks:
+		return d.handleListAgentBlocks(ctx, stream, env, fromPeer)
 
 	case protocol.TypeResize:
 		payload, err := protocol.Body[*protocol.Resize](env)

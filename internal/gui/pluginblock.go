@@ -12,12 +12,12 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// A plugin's block is drawn inside a frame the window draws, naming the
-// block and the plugin it comes from, so that nothing a plugin draws can
-// pass for the window's own. Inside, the window draws the plugin's tree
-// with its own components, in its theme's colours; and in the tree's
-// place, how the plugin stands when it does not run: what it asks for, to
-// allow it here, or why it stopped.
+// A plugin's or an agent's block is drawn inside a frame the window
+// draws, naming the block and where it comes from, the plugin or the
+// agent's session, so that nothing either draws can pass for the window's
+// own. Inside, the window draws the tree with its own components, in its
+// theme's colours; and in the tree's place, how a plugin stands when it
+// does not run: what it asks for, to allow it here, or why it stopped.
 
 // blockFeed is a block as its stream last had it.
 type blockFeed struct {
@@ -25,11 +25,24 @@ type blockFeed struct {
 	Seq    int                   // counts the feeds, so each is new
 }
 
+// blockOrigin is where a block comes from, which its frame names: a
+// plugin, or an agent's session.
+type blockOrigin struct {
+	plugin         string
+	session, agent string
+}
+
 // pluginBlock follows the block of the name, of plugin id, while it is
 // drawn; title is its title as listed, until the daemon sends one.
 func pluginBlock(m *model, name, id, title string) ggui.Widget {
+	return treeBlock(m, name, blockOrigin{plugin: id}, title)
+}
+
+// treeBlock follows a block of a tree while it is drawn.
+func treeBlock(m *model, name string, origin blockOrigin, title string) ggui.Widget {
 	return ggui.Component(func() ggui.Widget {
 		feed := ggui.State(blockFeed{})
+		form := newBlockForm()
 		ggui.Effect(func() ggui.Cleanup {
 			if m.post == nil {
 				return nil // not started, as under a test
@@ -40,7 +53,7 @@ func pluginBlock(m *model, name, id, title string) ggui.Widget {
 			})
 			return cancel
 		})
-		return ggui.View(feed, func(f blockFeed) ggui.Widget { return pluginFrame(m, name, id, title, f.Update) })
+		return ggui.View(feed, func(f blockFeed) ggui.Widget { return blockFrame(m, name, origin, title, f.Update, form) })
 	})
 }
 
@@ -65,7 +78,8 @@ func (m *model) followBlock(ctx context.Context, name string, fn func(*protocol.
 					tree = next
 				}
 				whole := &protocol.BlockUpdate{Block: u.GetBlock(), Seq: u.GetSeq(), Tree: tree, Plugin: u.GetPlugin(),
-					Title: u.GetTitle(), State: u.GetState(), Error: u.GetError(), Stale: u.GetStale()}
+					SessionId: u.GetSessionId(), Agent: u.GetAgent(), Title: u.GetTitle(), State: u.GetState(),
+					Error: u.GetError(), Stale: u.GetStale(), Gone: u.GetGone()}
 				fn(whole)
 			})
 		}
@@ -76,33 +90,47 @@ func (m *model) followBlock(ctx context.Context, name string, fn func(*protocol.
 	}
 }
 
-// pluginFrame is a block's frame: a strip naming it and its plugin over
-// what the plugin draws, or how it stands.
+// pluginFrame is a plugin's block's frame, for a tree drawn once.
 func pluginFrame(m *model, name, id, title string, u *protocol.BlockUpdate) ggui.Widget {
+	return blockFrame(m, name, blockOrigin{plugin: id}, title, u, newBlockForm())
+}
+
+// blockFrame is a block's frame: a strip naming it and where it comes
+// from over what it draws, or how its plugin stands.
+func blockFrame(m *model, name string, origin blockOrigin, title string, u *protocol.BlockUpdate, form *blockForm) ggui.Widget {
 	if title == "" {
 		title = name
 	}
 	if u != nil && u.GetTitle() != "" {
 		title = u.GetTitle()
 	}
+	glyph, kind, who := "package", T("Plugin"), origin.plugin
+	if origin.plugin == "" {
+		glyph, kind = "bot", T("Agent")
+		who = cmpTone(origin.agent, T("Agent")) + " · " + short(origin.session)
+	}
 	head := widget.Box(widget.Row(
-		icon("package").Size(14).Color(skin.Muted),
+		icon(glyph).Size(14).Color(skin.Muted),
 		widget.Expanded(widget.Text(title).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
-		muted(widget.Text(T("Plugin")).Size(11).NoWrap()),
-		chip(id),
+		muted(widget.Text(kind).Size(11).NoWrap()),
+		chip(who),
 	).Gap(6).Align(widget.AlignCenter)).Pad(6, 10).Fill(skin.Surface1)
 	return widget.Box(widget.Box(widget.Column(
 		head,
 		hline(),
-		widget.Expanded(pluginBody(m, name, id, u)),
+		widget.Expanded(blockBody(m, name, origin, u, form)),
 	).Stretch()).Border(1, skin.Border).Radius(8)).Pad(6).Fill(skin.Surface0)
 }
 
-// pluginBody is what goes in the frame.
-func pluginBody(m *model, name, id string, u *protocol.BlockUpdate) ggui.Widget {
+// blockBody is what goes in the frame.
+func blockBody(m *model, name string, origin blockOrigin, u *protocol.BlockUpdate, form *blockForm) ggui.Widget {
 	if u == nil {
 		return emptyNote("loader-circle", T("Starting…"))
 	}
+	if u.GetGone() {
+		return emptyNote("circle-slash", T("This block was closed."))
+	}
+	id := origin.plugin
 	switch u.GetState() {
 	case protocol.PluginWaiting:
 		return pluginAsks(m, m.pluginOf(id))
@@ -118,7 +146,9 @@ func pluginBody(m *model, name, id string, u *protocol.BlockUpdate) ggui.Widget 
 		rows = append(rows, pluginError(m, id, u))
 	}
 	if u.GetTree() != nil {
-		rows = append(rows, widget.Expanded(widget.Scroll(widget.Padding(uiNodeView(m, name, u.GetTree(), false), 10, 12)).Bar(skin.Surface3)))
+		form.redraw()
+		v := &treeView{m: m, block: name, form: form}
+		rows = append(rows, widget.Expanded(widget.Scroll(widget.Padding(v.node(u.GetTree(), false), 10, 12)).Bar(skin.Surface3)))
 	} else if u.GetError() == "" {
 		rows = append(rows, widget.Expanded(emptyNote("loader-circle", T("Starting…"))))
 	} else {

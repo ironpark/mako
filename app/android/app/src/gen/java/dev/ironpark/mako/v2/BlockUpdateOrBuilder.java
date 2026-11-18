@@ -152,4 +152,51 @@ public interface BlockUpdateOrBuilder extends
    * @return The stale.
    */
   boolean getStale();
+
+  /**
+   * <pre>
+   * session_id and agent are, for an agent's block, agent:&lt;session&gt;/&lt;id&gt;,
+   * the session that shows it and its agent's name, which the front-end
+   * frames it with in place of a plugin's (revision 27).
+   * </pre>
+   *
+   * <code>string session_id = 10 [json_name = "sessionId"];</code>
+   * @return The sessionId.
+   */
+  java.lang.String getSessionId();
+  /**
+   * <pre>
+   * session_id and agent are, for an agent's block, agent:&lt;session&gt;/&lt;id&gt;,
+   * the session that shows it and its agent's name, which the front-end
+   * frames it with in place of a plugin's (revision 27).
+   * </pre>
+   *
+   * <code>string session_id = 10 [json_name = "sessionId"];</code>
+   * @return The bytes for sessionId.
+   */
+  com.google.protobuf.ByteString
+      getSessionIdBytes();
+
+  /**
+   * <code>string agent = 11 [json_name = "agent"];</code>
+   * @return The agent.
+   */
+  java.lang.String getAgent();
+  /**
+   * <code>string agent = 11 [json_name = "agent"];</code>
+   * @return The bytes for agent.
+   */
+  com.google.protobuf.ByteString
+      getAgentBytes();
+
+  /**
+   * <pre>
+   * gone says the block was closed, or its plugin removed: the last
+   * update of the stream.
+   * </pre>
+   *
+   * <code>bool gone = 12 [json_name = "gone"];</code>
+   * @return The gone.
+   */
+  boolean getGone();
 }

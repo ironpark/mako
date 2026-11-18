@@ -30,6 +30,10 @@ const (
 	preludeModule = "@mako/prelude.js"
 )
 
+// hostDelay, set by a test, stands for a slow machine's making of a
+// runtime.
+var hostDelay func()
+
 // bridgeFunc carries out a call of the Host API: the method's name and
 // its request as JSON, to the response as JSON.
 type bridgeFunc func(ctx context.Context, method string, req []byte) ([]byte, error)
@@ -51,6 +55,24 @@ func (e *limitError) Error() string { return e.msg }
 // modules, without running activate.
 func startRuntime(ctx context.Context, v *version, lim Limits, bridge bridgeFunc) (_ *jsRuntime, err error) {
 	defer trapped(&err)
+	// Making the runtime and loading mako's own modules is the host's
+	// work, not the plugin's: the first runtime of a process compiles
+	// QuickJS, which on a slow machine takes longer than a call may.
+	b, _ := ctx.(*budget)
+	if b != nil {
+		b.pause()
+	}
+	resumed := false
+	resume := func() {
+		if b != nil && !resumed {
+			resumed = true
+			b.resume()
+		}
+	}
+	defer resume()
+	if hostDelay != nil {
+		hostDelay()
+	}
 	rt, err := qngg.New(qngg.Config{MemoryLimit: lim.Memory, MaxStackSize: lim.Stack})
 	if err != nil {
 		return nil, fmt.Errorf("JavaScript: %w", err)
@@ -94,6 +116,7 @@ func startRuntime(ctx context.Context, v *version, lim Limits, bridge bridgeFunc
 	if err := rt.LoadModule(ctx, preludeModule, preludeJS); err != nil {
 		return nil, fmt.Errorf("the prelude: %w", err)
 	}
+	resume() // the plugin's own modules are its
 	for _, name := range v.order {
 		if err := rt.LoadModule(ctx, name, v.src[name]); err != nil {
 			return nil, fmt.Errorf("%s: %w", name, jsError(err))

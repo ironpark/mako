@@ -65,4 +65,70 @@ public interface BlockEventOrBuilder extends
    */
   com.google.protobuf.ByteString
       getValueBytes();
+
+  /**
+   * <pre>
+   * values are the block's inputs', toggles' and selects' values as the
+   * front-end has them, by node id, typed or not yet sent: a form's
+   * submit carries every field (revision 27).
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+   */
+  int getValuesCount();
+  /**
+   * <pre>
+   * values are the block's inputs', toggles' and selects' values as the
+   * front-end has them, by node id, typed or not yet sent: a form's
+   * submit carries every field (revision 27).
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+   */
+  boolean containsValues(
+      java.lang.String key);
+  /**
+   * Use {@link #getValuesMap()} instead.
+   */
+  @java.lang.Deprecated
+  java.util.Map<java.lang.String, java.lang.String>
+  getValues();
+  /**
+   * <pre>
+   * values are the block's inputs', toggles' and selects' values as the
+   * front-end has them, by node id, typed or not yet sent: a form's
+   * submit carries every field (revision 27).
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+   */
+  java.util.Map<java.lang.String, java.lang.String>
+  getValuesMap();
+  /**
+   * <pre>
+   * values are the block's inputs', toggles' and selects' values as the
+   * front-end has them, by node id, typed or not yet sent: a form's
+   * submit carries every field (revision 27).
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+   */
+
+  /* nullable */
+java.lang.String getValuesOrDefault(
+      java.lang.String key,
+      /* nullable */
+java.lang.String defaultValue);
+  /**
+   * <pre>
+   * values are the block's inputs', toggles' and selects' values as the
+   * front-end has them, by node id, typed or not yet sent: a form's
+   * submit carries every field (revision 27).
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+   */
+
+  java.lang.String getValuesOrThrow(
+      java.lang.String key);
 }

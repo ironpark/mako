@@ -87,7 +87,7 @@ func (m *model) showWindowLayout(src winSource) {
 			m.tellWindowDoc(err)
 		}
 	}
-	m.setWindowDoc(d)
+	m.drawWindowDoc(d)
 }
 
 // tellWindowDoc says why the window's layout is the default rather than

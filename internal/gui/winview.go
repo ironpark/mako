@@ -37,9 +37,10 @@ func (v *layoutDraw) node(n *layoutdoc.Node, root bool) ggui.Widget {
 }
 
 // block draws a block, or what stands for one the registry does not hold.
-// A plugin's block follows the registry, as its plugin comes and goes.
+// A plugin's or an agent's block follows the registry, as it comes and
+// goes.
 func (v *layoutDraw) block(n *layoutdoc.Node) blockView {
-	if strings.HasPrefix(n.Block, "plugin:") {
+	if strings.HasPrefix(n.Block, "plugin:") || strings.HasPrefix(n.Block, "agent:") {
 		return blockView{Body: ggui.View(v.m.blocks.rev, func(int) ggui.Widget {
 			def, ok := v.m.blocks.lookup(n.Block)
 			if !ok {

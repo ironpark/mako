@@ -1092,5 +1092,27 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.BlockEvent getBlockEvent();
 
+  /**
+   * <code>.mako.v2.ListAgentBlocks list_agent_blocks = 127 [json_name = "listAgentBlocks"];</code>
+   * @return Whether the listAgentBlocks field is set.
+   */
+  boolean hasListAgentBlocks();
+  /**
+   * <code>.mako.v2.ListAgentBlocks list_agent_blocks = 127 [json_name = "listAgentBlocks"];</code>
+   * @return The listAgentBlocks.
+   */
+  dev.ironpark.mako.v2.ListAgentBlocks getListAgentBlocks();
+
+  /**
+   * <code>.mako.v2.AgentBlocks agent_blocks = 128 [json_name = "agentBlocks"];</code>
+   * @return Whether the agentBlocks field is set.
+   */
+  boolean hasAgentBlocks();
+  /**
+   * <code>.mako.v2.AgentBlocks agent_blocks = 128 [json_name = "agentBlocks"];</code>
+   * @return The agentBlocks.
+   */
+  dev.ironpark.mako.v2.AgentBlocks getAgentBlocks();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

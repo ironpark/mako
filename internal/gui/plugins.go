@@ -56,7 +56,7 @@ func (m *model) setPlugins(list []*protocol.PluginInfo) {
 				Build: func(m *model, _ map[string]any) blockView { return blockView{Body: pluginBlock(m, name, id, title)} }})
 		}
 	}
-	m.blocks.replacePlugins(defs)
+	m.blocks.replaceOf("plugin:", defs)
 }
 
 // pluginOf is the plugin of the ID as listed, nil for none.
@@ -88,12 +88,13 @@ func (m *model) actOnPlugin(req *protocol.PluginAction) {
 	})
 }
 
-// blockEvent tells a plugin of the user acting on a node of its block.
-func (m *model) blockEvent(block, node, kind, value string) {
+// blockEvent tells a block's plugin or agent of the user acting on a node
+// of it, with the block's fields as they stand.
+func (m *model) blockEvent(block, node, kind, value string, values map[string]string) {
 	if m.post == nil {
 		return
 	}
-	req := &protocol.BlockEvent{Block: block, Node: node, Kind: kind, Value: value}
+	req := &protocol.BlockEvent{Block: block, Node: node, Kind: kind, Value: value, Values: values}
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (*protocol.PluginDone, error) {
 		return c.BlockEvent(ctx, req)
 	}, func(done *protocol.PluginDone, err error) {

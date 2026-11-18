@@ -83,7 +83,9 @@ take it out before you commit.
     internal/zed         Zed extensions: the store, manifests and languages
     internal/zedhost     Zed extensions' own wasm components, under wasmtime's C API
     internal/mcp         MCP servers for the agents, from extensions or the config
-    internal/plugin      plugins: manifests, their sandboxed runtime and limits, the Host API, block trees
+    internal/plugin      plugins: manifests, their sandboxed runtime and limits, the Host API
+    internal/uiblock     blocks drawn from trees of the UI vocabulary, a plugin's or an agent's: reading, events, streams
+    internal/agentui     the blocks agents show with show_ui, and where each goes, on this node alone
     internal/plugin/apigen   the Host API's generator (protoc-gen-makoplugin)
     internal/plugin/hostapi  the Host API, generated: messages, dispatcher, mako.js, mako.d.ts, mako.wit
     internal/device      the kinds of device a node lends: adb's proxy (docs/devices.md)
@@ -277,6 +279,15 @@ How to write one is [docs/plugins.md](docs/plugins.md); the messages are in
 [protocol.md](docs/protocol.md#plugin-blocks). `MAKO_PREVIEW_PLUGINS` with
 `-render-dir` renders a plugin's way through the window, as a driver
 answers it (`internal/gui/preview_plugins.go`).
+
+An agent shows a block of the same vocabulary with the `show_ui` tool
+(`internal/daemon/agent_ui.go`, `internal/agentui`): its session's own,
+kept in the daemon's memory with where it goes, which the window lays over
+the document it draws, the right panel's last tab by default, and never
+writes into it. A block's events go to the agent as messages from
+`window`. `MAKO_PREVIEW_AGENTUI` with `-render-dir` renders an agent's
+form through the window, filled in and sent as the user would
+(`internal/gui/preview_agentui.go`).
 
 ## The desktop app
 

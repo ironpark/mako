@@ -140,8 +140,41 @@ func TestPeersReachNoPlugins(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := d.dispatch(context.Background(), nil, env, true); !errors.Is(err, errPluginPeer) {
+		if err := d.dispatch(context.Background(), nil, env, true); !errors.Is(err, errPluginPeer) && !errors.Is(err, errBlocksPeer) {
 			t.Fatalf("a peer's %s: %v", msg.typ, err)
 		}
+	}
+}
+
+// One watch_block serves both kinds of block: an agent's, here, as a
+// plugin's above, and its event goes to the agent, not to a plugin.
+func TestWatchBlockServesAgentsBlocks(t *testing.T) {
+	d := meshDaemon(t, "a")
+	c := dialDaemon(t, d)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := d.agentUI.Show("s1", "claude", "b", "Board", []byte(`{"kind":"column","children":[{"kind":"button","key":"go","text":"Go","onTap":["go"]}]}`)); err != nil {
+		t.Fatal(err)
+	}
+	list, err := c.AgentBlocks(ctx)
+	if err != nil || len(list.GetBlocks()) != 1 || list.GetBlocks()[0].GetName() != "agent:s1/b" {
+		t.Fatalf("%v %v", list, err)
+	}
+	got := make(chan *protocol.BlockUpdate, 4)
+	go func() { _ = c.WatchBlock(ctx, "agent:s1/b", func(u *protocol.BlockUpdate) { got <- u }) }()
+	select {
+	case u := <-got:
+		if u.GetTree() == nil || u.GetSessionId() != "s1" || u.GetAgent() != "claude" || u.GetTitle() != "Board" || u.GetPlugin() != "" {
+			t.Fatalf("%v", u)
+		}
+	case <-ctx.Done():
+		t.Fatal("no update")
+	}
+	_, err = c.BlockEvent(ctx, &protocol.BlockEvent{Block: "agent:s1/b", Node: "/go", Kind: protocol.UiTap})
+	if err == nil || !strings.Contains(err.Error(), "session is gone") {
+		t.Fatalf("an event of a session not running: %v", err)
+	}
+	if _, err := c.BlockEvent(ctx, &protocol.BlockEvent{Block: "mako.sidebar", Node: "/", Kind: protocol.UiTap}); err == nil {
+		t.Fatal("an event of the window's own block went through")
 	}
 }

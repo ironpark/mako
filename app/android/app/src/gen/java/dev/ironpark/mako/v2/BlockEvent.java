@@ -234,6 +234,133 @@ public  final class BlockEvent extends
 
   }
 
+  public static final int VALUES_FIELD_NUMBER = 5;
+  private static final class ValuesDefaultEntryHolder {
+    static final com.google.protobuf.MapEntryLite<
+        java.lang.String, java.lang.String> defaultEntry =
+            com.google.protobuf.MapEntryLite
+            .<java.lang.String, java.lang.String>newDefaultInstance(
+                com.google.protobuf.WireFormat.FieldType.STRING,
+                "",
+                com.google.protobuf.WireFormat.FieldType.STRING,
+                "");
+  }
+  private com.google.protobuf.MapFieldLite<
+      java.lang.String, java.lang.String> values_ =
+          com.google.protobuf.MapFieldLite.emptyMapField();
+  private com.google.protobuf.MapFieldLite<java.lang.String, java.lang.String>
+  internalGetValues() {
+    return values_;
+  }
+  private com.google.protobuf.MapFieldLite<java.lang.String, java.lang.String>
+  internalGetMutableValues() {
+    if (!values_.isMutable()) {
+      values_ = values_.mutableCopy();
+    }
+    return values_;
+  }
+  @java.lang.Override
+
+  public int getValuesCount() {
+    return internalGetValues().size();
+  }
+  /**
+   * <pre>
+   * values are the block's inputs', toggles' and selects' values as the
+   * front-end has them, by node id, typed or not yet sent: a form's
+   * submit carries every field (revision 27).
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+   */
+  @java.lang.Override
+
+  public boolean containsValues(
+      java.lang.String key) {
+    java.util.Objects.requireNonNull(key);
+    return internalGetValues().containsKey(key);
+  }
+  /**
+   * Use {@link #getValuesMap()} instead.
+   */
+  @java.lang.Override
+  @java.lang.Deprecated
+  public java.util.Map<java.lang.String, java.lang.String> getValues() {
+    return getValuesMap();
+  }
+  /**
+   * <pre>
+   * values are the block's inputs', toggles' and selects' values as the
+   * front-end has them, by node id, typed or not yet sent: a form's
+   * submit carries every field (revision 27).
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+   */
+  @java.lang.Override
+
+  public java.util.Map<java.lang.String, java.lang.String> getValuesMap() {
+    return java.util.Collections.unmodifiableMap(
+        internalGetValues());
+  }
+  /**
+   * <pre>
+   * values are the block's inputs', toggles' and selects' values as the
+   * front-end has them, by node id, typed or not yet sent: a form's
+   * submit carries every field (revision 27).
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+   */
+  @java.lang.Override
+
+  public /* nullable */
+java.lang.String getValuesOrDefault(
+      java.lang.String key,
+      /* nullable */
+java.lang.String defaultValue) {
+    java.util.Objects.requireNonNull(key);
+    java.util.Map<java.lang.String, java.lang.String> map =
+        internalGetValues();
+    java.lang.String v = map.get(key);
+    return v != null ? v : defaultValue;
+  }
+  /**
+   * <pre>
+   * values are the block's inputs', toggles' and selects' values as the
+   * front-end has them, by node id, typed or not yet sent: a form's
+   * submit carries every field (revision 27).
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+   */
+  @java.lang.Override
+
+  public java.lang.String getValuesOrThrow(
+      java.lang.String key) {
+    java.util.Objects.requireNonNull(key);
+    java.util.Map<java.lang.String, java.lang.String> map =
+        internalGetValues();
+    java.lang.String v = map.get(key);
+    if (v == null) {
+      throw new java.lang.IllegalArgumentException();
+    }
+    return v;
+  }
+  /**
+   * <pre>
+   * values are the block's inputs', toggles' and selects' values as the
+   * front-end has them, by node id, typed or not yet sent: a form's
+   * submit carries every field (revision 27).
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+   */
+  private java.util.Map<java.lang.String, java.lang.String>
+  getMutableValuesMap() {
+    return internalGetMutableValues();
+  }
+
   public static dev.ironpark.mako.v2.BlockEvent parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -553,6 +680,148 @@ public  final class BlockEvent extends
       return this;
     }
 
+    @java.lang.Override
+
+    public int getValuesCount() {
+      return instance.getValuesMap().size();
+    }
+    /**
+     * <pre>
+     * values are the block's inputs', toggles' and selects' values as the
+     * front-end has them, by node id, typed or not yet sent: a form's
+     * submit carries every field (revision 27).
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+     */
+    @java.lang.Override
+
+    public boolean containsValues(
+        java.lang.String key) {
+      java.util.Objects.requireNonNull(key);
+      return instance.getValuesMap().containsKey(key);
+    }
+
+    public Builder clearValues() {
+      copyOnWrite();
+      instance.getMutableValuesMap().clear();
+      return this;
+    }
+    /**
+     * <pre>
+     * values are the block's inputs', toggles' and selects' values as the
+     * front-end has them, by node id, typed or not yet sent: a form's
+     * submit carries every field (revision 27).
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+     */
+
+    public Builder removeValues(
+        java.lang.String key) {
+      java.util.Objects.requireNonNull(key);
+      copyOnWrite();
+      instance.getMutableValuesMap().remove(key);
+      return this;
+    }
+    /**
+     * Use {@link #getValuesMap()} instead.
+     */
+    @java.lang.Override
+    @java.lang.Deprecated
+    public java.util.Map<java.lang.String, java.lang.String> getValues() {
+      return getValuesMap();
+    }
+    /**
+     * <pre>
+     * values are the block's inputs', toggles' and selects' values as the
+     * front-end has them, by node id, typed or not yet sent: a form's
+     * submit carries every field (revision 27).
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+     */
+    @java.lang.Override
+    public java.util.Map<java.lang.String, java.lang.String> getValuesMap() {
+      return java.util.Collections.unmodifiableMap(
+          instance.getValuesMap());
+    }
+    /**
+     * <pre>
+     * values are the block's inputs', toggles' and selects' values as the
+     * front-end has them, by node id, typed or not yet sent: a form's
+     * submit carries every field (revision 27).
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+     */
+    @java.lang.Override
+
+    public /* nullable */
+java.lang.String getValuesOrDefault(
+        java.lang.String key,
+        /* nullable */
+java.lang.String defaultValue) {
+      java.util.Objects.requireNonNull(key);
+      java.util.Map<java.lang.String, java.lang.String> map =
+          instance.getValuesMap();
+      return map.containsKey(key) ? map.get(key) : defaultValue;
+    }
+    /**
+     * <pre>
+     * values are the block's inputs', toggles' and selects' values as the
+     * front-end has them, by node id, typed or not yet sent: a form's
+     * submit carries every field (revision 27).
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+     */
+    @java.lang.Override
+
+    public java.lang.String getValuesOrThrow(
+        java.lang.String key) {
+      java.util.Objects.requireNonNull(key);
+      java.util.Map<java.lang.String, java.lang.String> map =
+          instance.getValuesMap();
+      if (!map.containsKey(key)) {
+        throw new java.lang.IllegalArgumentException();
+      }
+      return map.get(key);
+    }
+    /**
+     * <pre>
+     * values are the block's inputs', toggles' and selects' values as the
+     * front-end has them, by node id, typed or not yet sent: a form's
+     * submit carries every field (revision 27).
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+     */
+    public Builder putValues(
+        java.lang.String key,
+        java.lang.String value) {
+      java.util.Objects.requireNonNull(key);
+      java.util.Objects.requireNonNull(value);
+      copyOnWrite();
+      instance.getMutableValuesMap().put(key, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * values are the block's inputs', toggles' and selects' values as the
+     * front-end has them, by node id, typed or not yet sent: a form's
+     * submit carries every field (revision 27).
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; values = 5 [json_name = "values"];</code>
+     */
+    public Builder putAllValues(
+        java.util.Map<java.lang.String, java.lang.String> values) {
+      copyOnWrite();
+      instance.getMutableValuesMap().putAll(values);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.BlockEvent)
   }
   @java.lang.Override
@@ -573,10 +842,12 @@ public  final class BlockEvent extends
             "node_",
             "kind_",
             "value_",
+            "values_",
+            ValuesDefaultEntryHolder.defaultEntry,
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0001\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u00052";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {
