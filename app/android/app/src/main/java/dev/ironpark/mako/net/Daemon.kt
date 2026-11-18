@@ -11,6 +11,7 @@ import dev.ironpark.mako.v2.Changed
 import dev.ironpark.mako.v2.Chat
 import dev.ironpark.mako.v2.CloseSession
 import dev.ironpark.mako.v2.Envelope
+import dev.ironpark.mako.v2.GetWorkspace
 import dev.ironpark.mako.v2.ListNodes
 import dev.ironpark.mako.v2.ListSessions
 import dev.ironpark.mako.v2.Node
@@ -23,6 +24,8 @@ import dev.ironpark.mako.v2.Send
 import dev.ironpark.mako.v2.StageFile
 import dev.ironpark.mako.v2.SessionInfo
 import dev.ironpark.mako.v2.Watch
+import dev.ironpark.mako.v2.Workspace
+import dev.ironpark.mako.v2.WorkspaceState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -107,6 +110,28 @@ class Daemon(private val socket: () -> String?) {
         call(envelope {
             listCommands = dev.ironpark.mako.v2.ListCommands.newBuilder().setNodeId(node).setSessionId(id).build()
         }).commands.commandsList
+
+    /**
+     * The workspace the node holds: its spaces, projects, names, looks and
+     * pins, as a CRDT the node merges with the computers it and they let
+     * each other in (docs/protocol.md, Workspaces). A node from before
+     * revision 23 answers with no state, which reads as none.
+     */
+    suspend fun workspace(): Workspace = call(envelope { getWorkspace = GetWorkspace.getDefaultInstance() }).workspace
+
+    /** The workspace node holds, which a node that lets this device in shows it, whether it shares it or not. */
+    suspend fun workspaceOf(node: String): Workspace =
+        call(envelope { getWorkspace = GetWorkspace.newBuilder().setNodeId(node).build() }).workspace
+
+    /**
+     * Gives an edit of the workspace to node, "" for this device's own,
+     * delta holding only what changed; the node stamps the delta's clocks
+     * itself, whatever they hold, and answers with the workspace it holds
+     * after. Another node takes it from revision 25 on, if it lets this
+     * device in.
+     */
+    suspend fun updateWorkspace(delta: WorkspaceState, node: String = ""): Workspace =
+        call(envelope { workspace = Workspace.newBuilder().setState(delta).setToNode(node).build() }).workspace
 
     suspend fun chat(req: ReadChat): Chat = call(envelope { readChat = req }).chat
 

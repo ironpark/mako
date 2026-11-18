@@ -111,4 +111,28 @@ public interface WorkspaceOrBuilder extends
    * @return The stage.
    */
   dev.ironpark.mako.v2.LayoutStage getStage();
+
+  /**
+   * <pre>
+   * to_node is the node an edit is given to, routed as a request's node_id
+   * is; "" for the daemon given it (revision 25). node_id above is not an
+   * address: a window from before revision 23 set it to where it was.
+   * </pre>
+   *
+   * <code>string to_node = 7 [json_name = "toNode"];</code>
+   * @return The toNode.
+   */
+  java.lang.String getToNode();
+  /**
+   * <pre>
+   * to_node is the node an edit is given to, routed as a request's node_id
+   * is; "" for the daemon given it (revision 25). node_id above is not an
+   * address: a window from before revision 23 set it to where it was.
+   * </pre>
+   *
+   * <code>string to_node = 7 [json_name = "toNode"];</code>
+   * @return The bytes for toNode.
+   */
+  com.google.protobuf.ByteString
+      getToNodeBytes();
 }

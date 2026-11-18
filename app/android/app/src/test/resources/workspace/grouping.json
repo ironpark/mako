@@ -1,0 +1,410 @@
+{
+ "sections": [
+  {
+   "key": "pApi",
+   "label": "API",
+   "owners": [
+    "github.com/acme"
+   ],
+   "sessions": [
+    "a",
+    "b",
+    "d"
+   ],
+   "roots": [
+    0,
+    0,
+    1
+   ],
+   "space": 1
+  },
+  {
+   "key": "repo:github.com/me/blog",
+   "label": "Blog",
+   "owners": [
+    "github.com/me"
+   ],
+   "sessions": [
+    "n",
+    "o"
+   ],
+   "roots": [
+    -1,
+    -1
+   ],
+   "space": 1
+  },
+  {
+   "key": "pHome",
+   "label": "Home",
+   "owners": [],
+   "sessions": [
+    "k"
+   ],
+   "roots": [
+    0
+   ],
+   "space": 3
+  },
+  {
+   "key": "pNotes",
+   "label": "Notes",
+   "owners": [],
+   "sessions": [
+    "i"
+   ],
+   "roots": [
+    0
+   ],
+   "space": 3
+  },
+  {
+   "key": "n3\u0000/scratch",
+   "label": "Scratch",
+   "owners": [],
+   "sessions": [
+    "m"
+   ],
+   "roots": [
+    -1
+   ],
+   "space": 3
+  },
+  {
+   "key": "pTwinA",
+   "label": "TwinA",
+   "owners": [
+    "github.com/me"
+   ],
+   "sessions": [],
+   "roots": [],
+   "space": 2
+  },
+  {
+   "key": "pTwinB",
+   "label": "TwinB",
+   "owners": [
+    "github.com/me"
+   ],
+   "sessions": [
+    "t"
+   ],
+   "roots": [
+    0
+   ],
+   "space": 2
+  },
+  {
+   "key": "n3\u0000/tmp/x",
+   "label": "Was x",
+   "owners": [],
+   "sessions": [],
+   "roots": [],
+   "space": 3
+  },
+  {
+   "key": "n2\u0000/home/me/src/app",
+   "label": "app",
+   "owners": [],
+   "sessions": [
+    "j"
+   ],
+   "roots": [
+    -1
+   ],
+   "space": 3
+  },
+  {
+   "key": "n1\u0000/a/app",
+   "label": "app",
+   "owners": [],
+   "sessions": [
+    "r"
+   ],
+   "roots": [
+    -1
+   ],
+   "space": 3
+  },
+  {
+   "key": "n2\u0000/b/app",
+   "label": "app",
+   "owners": [],
+   "sessions": [
+    "s"
+   ],
+   "roots": [
+    -1
+   ],
+   "space": 3
+  },
+  {
+   "key": "n1\u0000/w/gone",
+   "label": "gone",
+   "owners": [],
+   "sessions": [
+    "q"
+   ],
+   "roots": [
+    -1
+   ],
+   "space": 3
+  },
+  {
+   "key": "repo:github.com/acme/legacy",
+   "label": "legacy",
+   "owners": [
+    "github.com/acme"
+   ],
+   "sessions": [
+    "p"
+   ],
+   "roots": [
+    -1
+   ],
+   "space": 2
+  },
+  {
+   "key": "repo:github.com/acme/lib",
+   "label": "lib",
+   "owners": [
+    "github.com/acme"
+   ],
+   "sessions": [
+    "g"
+   ],
+   "roots": [
+    -1
+   ],
+   "space": 1
+  },
+  {
+   "key": "pLib",
+   "label": "lib",
+   "owners": [
+    "github.com/acme"
+   ],
+   "sessions": [
+    "f"
+   ],
+   "roots": [
+    0
+   ],
+   "space": 1
+  },
+  {
+   "key": "repo:github.com/acme/server",
+   "label": "server",
+   "owners": [
+    "github.com/acme"
+   ],
+   "sessions": [
+    "c"
+   ],
+   "roots": [
+    -1
+   ],
+   "space": 1
+  },
+  {
+   "key": "repo:github.com/me/twin",
+   "label": "twin",
+   "owners": [
+    "github.com/me"
+   ],
+   "sessions": [
+    "h"
+   ],
+   "roots": [
+    -1
+   ],
+   "space": 2
+  },
+  {
+   "key": "n2\u0000/w/web",
+   "label": "web",
+   "owners": [],
+   "sessions": [
+    "e"
+   ],
+   "roots": [
+    -1
+   ],
+   "space": 3
+  },
+  {
+   "key": "free:n3\u0000/tmp/x",
+   "label": "x",
+   "owners": [],
+   "sessions": [
+    "l"
+   ],
+   "roots": [
+    -1
+   ],
+   "space": 3
+  }
+ ],
+ "sessions": [
+  {
+   "ID": "a",
+   "Node": "n1",
+   "Project": "/w/server/cmd",
+   "Repo": "/w/server",
+   "Remote": "github.com/acme/server",
+   "Owner": "github.com/acme"
+  },
+  {
+   "ID": "b",
+   "Node": "n2",
+   "Project": "/srv/server",
+   "Repo": "/srv/server",
+   "Remote": "github.com/acme/server",
+   "Owner": "github.com/acme"
+  },
+  {
+   "ID": "c",
+   "Node": "n4",
+   "Project": "/x/server",
+   "Repo": "/x/server",
+   "Remote": "github.com/acme/server",
+   "Owner": "github.com/acme"
+  },
+  {
+   "ID": "d",
+   "Node": "n1",
+   "Project": "/w/web/src",
+   "Repo": "",
+   "Remote": "",
+   "Owner": ""
+  },
+  {
+   "ID": "e",
+   "Node": "n2",
+   "Project": "/tmp/web-fix",
+   "Repo": "/w/web",
+   "Remote": "",
+   "Owner": ""
+  },
+  {
+   "ID": "f",
+   "Node": "n1",
+   "Project": "/w/lib",
+   "Repo": "/w/lib",
+   "Remote": "github.com/acme/lib",
+   "Owner": "github.com/acme"
+  },
+  {
+   "ID": "g",
+   "Node": "n2",
+   "Project": "/w/lib",
+   "Repo": "/w/lib",
+   "Remote": "github.com/acme/lib",
+   "Owner": "github.com/acme"
+  },
+  {
+   "ID": "h",
+   "Node": "n3",
+   "Project": "/w/twin",
+   "Repo": "/w/twin",
+   "Remote": "github.com/me/twin",
+   "Owner": "github.com/me"
+  },
+  {
+   "ID": "i",
+   "Node": "n2",
+   "Project": "/home/me/notes/2026",
+   "Repo": "",
+   "Remote": "",
+   "Owner": ""
+  },
+  {
+   "ID": "j",
+   "Node": "n2",
+   "Project": "/home/me/src/app",
+   "Repo": "/home/me/src/app",
+   "Remote": "",
+   "Owner": ""
+  },
+  {
+   "ID": "k",
+   "Node": "n2",
+   "Project": "/home/me/Downloads",
+   "Repo": "",
+   "Remote": "",
+   "Owner": ""
+  },
+  {
+   "ID": "l",
+   "Node": "n3",
+   "Project": "/tmp/x",
+   "Repo": "",
+   "Remote": "",
+   "Owner": ""
+  },
+  {
+   "ID": "m",
+   "Node": "n3",
+   "Project": "/scratch",
+   "Repo": "",
+   "Remote": "",
+   "Owner": ""
+  },
+  {
+   "ID": "n",
+   "Node": "n1",
+   "Project": "/b/blog",
+   "Repo": "/b/blog",
+   "Remote": "github.com/me/blog",
+   "Owner": "github.com/me"
+  },
+  {
+   "ID": "o",
+   "Node": "n2",
+   "Project": "/c/blog",
+   "Repo": "/c/blog",
+   "Remote": "github.com/me/blog",
+   "Owner": "github.com/me"
+  },
+  {
+   "ID": "p",
+   "Node": "n1",
+   "Project": "/w/legacy",
+   "Repo": "/w/legacy",
+   "Remote": "github.com/acme/legacy",
+   "Owner": "github.com/acme"
+  },
+  {
+   "ID": "q",
+   "Node": "n1",
+   "Project": "/w/gone",
+   "Repo": "",
+   "Remote": "",
+   "Owner": ""
+  },
+  {
+   "ID": "r",
+   "Node": "n1",
+   "Project": "/a/app",
+   "Repo": "",
+   "Remote": "",
+   "Owner": ""
+  },
+  {
+   "ID": "s",
+   "Node": "n2",
+   "Project": "/b/app",
+   "Repo": "",
+   "Remote": "",
+   "Owner": ""
+  },
+  {
+   "ID": "t",
+   "Node": "n2",
+   "Project": "/w/twin",
+   "Repo": "/w/twin",
+   "Remote": "github.com/me/twin",
+   "Owner": "github.com/me"
+  }
+ ]
+}

@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -447,5 +448,102 @@ func TestAWorkspaceNotSharedIsStillShown(t *testing.T) {
 	time.Sleep(time.Second)
 	if !workspace.Empty(a.workspace.get(true).GetState()) {
 		t.Fatal("a merged the workspace of a node not sharing it")
+	}
+}
+
+// A node that lets a phone in takes the phone's edits of its workspace,
+// given through the phone's daemon by to_node, as its own front-ends':
+// stamped by its own clock, merged and kept. The phone, which lets no one
+// in, keeps none of it itself.
+func TestANodeLetInEditsTheWorkspace(t *testing.T) {
+	phone := meshDaemon(t, "phone")
+	server := meshDaemon(t, "server", p2pAddr(phone))
+	letIn(t, server, phone)
+	server.workspace.edit(newSpace("s", "Server's"))
+	c := dialDaemon(t, phone)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	waitFor(t, "the server among the phone's peers", func() bool { _, ok := phone.peers.get(server.cfg.NodeID); return ok })
+	delta := newSpace("p", "Phone's")
+	delta.Spaces["p"].Name.Clock = &protocol.HLC{WallTime: 1 << 60, NodeId: "phone's window"}
+	got, err := c.SetWorkspace(ctx, &protocol.Workspace{State: delta, ToNode: server.cfg.NodeID})
+	if err != nil || !slices.Equal(spaceNames(got.GetState()), []string{"Phone's", "Server's"}) {
+		t.Fatalf("the answer: %v %v", got.GetState(), err)
+	}
+	if !proto.Equal(got.GetState(), server.workspace.get(false).GetState()) {
+		t.Fatal("the answer is not the state the server holds")
+	}
+	if clock := got.GetState().GetSpaces()["p"].GetName().GetClock(); clock.GetNodeId() != server.cfg.NodeID || clock.GetWallTime() == 1<<60 {
+		t.Errorf("stamped %v: not by the server's clock", clock)
+	}
+	var kept workspaces
+	kept.load(server.workspace.dir, server.cfg.NodeID)
+	if !slices.Equal(spaceNames(kept.get(false).GetState()), []string{"Phone's", "Server's"}) {
+		t.Errorf("kept on disk: %v", spaceNames(kept.get(false).GetState()))
+	}
+	if !workspace.Empty(phone.workspace.get(false).GetState()) {
+		t.Errorf("the phone kept %v", phone.workspace.get(false).GetState())
+	}
+	// The phone learns of the server's changes from its record.
+	waitFor(t, "the server's digest in the phone's record of it", func() bool {
+		n, _ := phone.peers.get(server.cfg.NodeID)
+		return len(n.GetWorkspaceDigest()) > 0 && bytes.Equal(n.GetWorkspaceDigest(), server.workspace.currentDigest())
+	})
+}
+
+// A node takes no edit from a node it does not let in, and from a peer it
+// lets in a delta only: the document of a window from before the CRDT is
+// its own front-ends' to give.
+func TestOnlyANodeLetInGivesADelta(t *testing.T) {
+	phone := meshDaemon(t, "phone")
+	server := meshDaemon(t, "server", p2pAddr(phone))
+	stranger := meshDaemon(t, "stranger", p2pAddr(phone))
+	letIn(t, server, phone)
+	c := dialDaemon(t, phone)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	waitFor(t, "both among the phone's peers", func() bool {
+		_, a := phone.peers.get(server.cfg.NodeID)
+		_, b := phone.peers.get(stranger.cfg.NodeID)
+		return a && b
+	})
+	if _, err := c.SetWorkspace(ctx, &protocol.Workspace{State: newSpace("p", "Phone's"), ToNode: stranger.cfg.NodeID}); err == nil {
+		t.Error("a node that does not let the phone in took its edit")
+	}
+	if !workspace.Empty(stranger.workspace.get(false).GetState()) {
+		t.Errorf("the stranger holds %v", stranger.workspace.get(false).GetState())
+	}
+	if _, err := c.SetWorkspace(ctx, &protocol.Workspace{Doc: legacyDoc(5, "phone", "Old"), ToNode: server.cfg.NodeID}); err == nil {
+		t.Error("the server took a peer's old document")
+	}
+	if _, err := c.SetWorkspace(ctx, &protocol.Workspace{State: newSpace("p", "Phone's"), Doc: legacyDoc(5, "phone", "Old"), ToNode: server.cfg.NodeID}); err == nil {
+		t.Error("the server took a peer's old document with a delta")
+	}
+	if !workspace.Empty(server.workspace.get(false).GetState()) {
+		t.Errorf("the server holds %v", server.workspace.get(false).GetState())
+	}
+}
+
+// An edit goes down a chain of nodes each letting in the one before, as
+// any request does.
+func TestAnEditIsRoutedAlongAChain(t *testing.T) {
+	phone := meshDaemon(t, "phone")
+	server := meshDaemon(t, "server", p2pAddr(phone))
+	box := meshDaemon(t, "box", p2pAddr(server))
+	letIn(t, server, phone)
+	letIn(t, box, server)
+	c := dialDaemon(t, phone)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	waitFor(t, "a route to the box", func() bool {
+		n, ok := phone.peers.get(box.cfg.NodeID)
+		return ok && phone.routing()[n.GetId()].via == server.cfg.NodeID
+	})
+	got, err := c.SetWorkspace(ctx, &protocol.Workspace{State: newSpace("p", "Phone's"), ToNode: box.cfg.NodeID})
+	if err != nil || !slices.Equal(spaceNames(box.workspace.get(false).GetState()), []string{"Phone's"}) || !proto.Equal(got.GetState(), box.workspace.get(false).GetState()) {
+		t.Fatalf("the box after: %v, answered %v %v", box.workspace.get(false).GetState(), got.GetState(), err)
+	}
+	if !workspace.Empty(server.workspace.get(false).GetState()) {
+		t.Errorf("the server on the way kept %v", server.workspace.get(false).GetState())
 	}
 }

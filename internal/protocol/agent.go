@@ -29,7 +29,13 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 24
+const Revision = 25
+
+// RevisionPeerWorkspace adds edits of the workspace given by a node let in,
+// Workspace.to_node routing one to another node, and Node.workspace_digest:
+// a phone, which lets no one in, shows and edits the workspace of a
+// computer that lets it in.
+const RevisionPeerWorkspace = 25
 
 // RevisionWindowLayouts adds the window layout documents' changes an agent
 // asks for, held on the node until the user allows and keeps them:

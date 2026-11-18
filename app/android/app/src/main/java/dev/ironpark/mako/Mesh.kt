@@ -15,6 +15,13 @@ import dev.ironpark.mako.v2.Question
 import dev.ironpark.mako.v2.QuestionAnswer
 import dev.ironpark.mako.v2.Node
 import dev.ironpark.mako.v2.SessionInfo
+import dev.ironpark.mako.v2.WorkspaceState
+import dev.ironpark.mako.workspace.Scope
+import dev.ironpark.mako.workspace.ShownWorkspace
+import dev.ironpark.mako.workspace.chooseWorkspace
+import dev.ironpark.mako.workspace.pinScopeDelta
+import dev.ironpark.mako.workspace.pinSessionDelta
+import dev.ironpark.mako.workspace.workspaceComputers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,7 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Mesh is what the app knows of the mesh, through the node it runs: the
- * nodes, their sessions, and who lets this device in. It starts the node,
+ * nodes, their sessions, who lets this device in, and the workspace. It starts the node,
  * then follows the node's watch, asking again for what changed; the watch
  * also keeps the daemons waiting for this device's answers to approvals.
  * While the app is on screen, the sessions are asked for now and then
@@ -71,6 +78,16 @@ class Mesh(
     private val _access = MutableStateFlow<AccessInfo?>(null)
     val access: StateFlow<AccessInfo?> = _access.asStateFlow()
 
+    private val _workspace = MutableStateFlow(ShownWorkspace())
+    /**
+     * The workspace shown: this device's node's, or a computer's, as
+     * [chooseWorkspace] picks it. Asked for as the watch starts, when this
+     * node's changes, and when the computers that may be shown, or what
+     * their records say of their workspaces, change. Empty while none
+     * holds one, or none is new enough to say.
+     */
+    val workspace: StateFlow<ShownWorkspace> = _workspace.asStateFlow()
+
     private val _peers = MutableStateFlow<List<String>>(emptyList())
     /** The addresses this device always links to. */
     val peers: StateFlow<List<String>> = _peers.asStateFlow()
@@ -106,6 +123,9 @@ class Mesh(
             foreground.collectLatest { shown ->
                 while (shown) {
                     refreshSessions()
+                    // A computer whose record says nothing of its workspace,
+                    // reached through another or too old, is asked again too.
+                    if (workspaceUnheard()) refreshWorkspace()
                     delay(POLL)
                 }
             }
@@ -135,14 +155,18 @@ class Mesh(
                         for (w in wake) {
                             val c = changed.getAndSet(0)
                             if (c and NODES != 0) refreshNodes()
+                            // A computer that came or went, or says its workspace changed.
+                            val workspace = c and WORKSPACE != 0 || computersNow() != workspaceAskedOf
                             if (c and SESSIONS != 0) refreshSessions()
                             if (c and ACCESS != 0) refreshAccess()
+                            if (workspace) refreshWorkspace()
                         }
                     }
                     try {
                         daemon.watch().collect { c ->
                             changed.updateAndGet {
-                                it or (if (c.nodes) NODES else 0) or (if (c.sessions) SESSIONS else 0) or (if (c.access) ACCESS else 0)
+                                it or (if (c.nodes) NODES else 0) or (if (c.sessions) SESSIONS else 0) or
+                                    (if (c.access) ACCESS else 0) or (if (c.workspace) WORKSPACE else 0)
                             }
                             wake.trySend(Unit)
                         }
@@ -163,6 +187,7 @@ class Mesh(
         refreshNodes()
         refreshSessions()
         refreshAccess()
+        refreshWorkspace()
     }
 
     suspend fun refreshNodes() {
@@ -172,6 +197,23 @@ class Mesh(
             _self.value = me
             _nodes.value = all.filter { it.source != "self" }.sortedBy { it.name.lowercase() }
         }
+    }
+
+    /**
+     * The computers whose workspace may be shown, with the digest each
+     * one's record gives of it: when these change, the workspace is asked
+     * for again. [workspaceAskedOf] is theirs as the last ask found them.
+     */
+    private fun computersNow(): List<Pair<String, String>> = workspaceComputers(_nodes.value).map { n ->
+        n.id to n.workspaceDigest.toByteArray().joinToString("") { "%02x".format(it) }
+    }
+
+    @Volatile private var workspaceAskedOf: List<Pair<String, String>>? = null
+
+    /** Whether the computer whose workspace is shown says nothing of it in its record, which then cannot say it changed. */
+    private fun workspaceUnheard(): Boolean {
+        val node = _workspace.value.node ?: return false
+        return _nodes.value.firstOrNull { it.id == node }?.workspaceDigest?.isEmpty ?: true
     }
 
     private val closed = ClosedSessions()
@@ -201,6 +243,62 @@ class Mesh(
     suspend fun refreshAccess() {
         quietly { _access.value = daemon.access(Access.getDefaultInstance()) }
     }
+
+    private val workspaceAsked = java.util.concurrent.atomic.AtomicLong()
+    private var workspaceShown = 0L
+
+    /**
+     * Asks for the workspace again. As with the sessions, only an answer
+     * to a request made after the one shown replaces it, so an edit's
+     * answer and a watch's are taken in the order they were asked.
+     */
+    suspend fun refreshWorkspace() {
+        quietly {
+            workspaceAskedOf = computersNow()
+            showWorkspace {
+                val own = daemon.workspace().state
+                chooseWorkspace(own, workspaceComputers(_nodes.value), _workspace.value) { node ->
+                    try {
+                        daemon.workspaceOf(node).state
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.d(TAG, "workspace of $node: ${e.message}")
+                        null
+                    }
+                }
+            }
+        }
+    }
+
+    /** Shows the workspace ask gives, unless an answer to a later request is shown already. */
+    private suspend fun showWorkspace(ask: suspend () -> ShownWorkspace) {
+        val asked = workspaceAsked.incrementAndGet()
+        val shown = ask()
+        synchronized(workspaceAsked) {
+            if (asked > workspaceShown) {
+                workspaceShown = asked
+                _workspace.value = shown
+            }
+        }
+    }
+
+    /**
+     * Gives the node holding the workspace shown the edit delta makes of
+     * its state, and shows what it holds after.
+     */
+    private suspend fun edit(delta: (WorkspaceState) -> WorkspaceState) {
+        val shown = _workspace.value
+        if (!shown.editable) return
+        val d = delta(shown.state)
+        if (d.serializedSize > 0) showWorkspace { shown.copy(state = daemon.updateWorkspace(d, shown.node.orEmpty()).state) }
+    }
+
+    /** Pins a session to the top of the list on every node sharing the workspace, or unpins it. */
+    suspend fun pinSession(s: SessionInfo, pin: Boolean) = edit { pinSessionDelta(it, s.id, pin) }
+
+    /** Pins a project, or a folder of one, to the top of the list, or unpins it. */
+    suspend fun pinScope(scope: Scope, pin: Boolean) = edit { pinScopeDelta(it, scope, pin) }
 
     private fun refreshPeers() {
         _peers.value = runCatching { Mobile.peers().lines().filter { it.isNotBlank() } }.getOrDefault(emptyList())
@@ -394,6 +492,12 @@ class Mesh(
         /** The first protocol revision whose daemon asks and answers questions in the app (protocol.RevisionQuestions). */
         const val REVISION_QUESTIONS = 19L
 
+        /** The first protocol revision whose daemon holds the workspace as a CRDT (protocol.RevisionWorkspaceCRDT). */
+        const val REVISION_WORKSPACE = 23L
+
+        /** The first protocol revision whose daemon takes a workspace edit from a node it lets in (protocol.RevisionPeerWorkspace). */
+        const val REVISION_PEER_WORKSPACE = 25L
+
         /** How a node's link stands, as Node.link says (protocol.Link*). */
         const val LINK_LINKING = "linking"
         const val LINK_DOWN = "down"
@@ -405,6 +509,7 @@ class Mesh(
         private const val NODES = 1
         private const val SESSIONS = 2
         private const val ACCESS = 4
+        private const val WORKSPACE = 8
 
         fun deviceName(): String {
             val model = Build.MODEL.orEmpty()

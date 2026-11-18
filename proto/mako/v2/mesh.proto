@@ -70,6 +70,11 @@ message Node {
   string link = 20;
   string link_error = 21;
   google.protobuf.Timestamp relink_at = 22;
+  // workspace_digest is the digest of the workspace the node holds, as it
+  // says of itself to the nodes it lets in (revision 25): a hint that it
+  // changed, for a node that reads it without merging it, never a reason
+  // to merge. Empty from an older daemon, and to a node it does not let in.
+  bytes workspace_digest = 23;
 }
 
 // AgentInfo names an agent a node can launch and its profiles, and what
@@ -128,6 +133,10 @@ message Workspace {
   // node alone while it waits for the user (revision 24): to the daemon's
   // own front-ends only, never in state, never to a peer.
   LayoutStage stage = 6;
+  // to_node is the node an edit is given to, routed as a request's node_id
+  // is; "" for the daemon given it (revision 25). node_id above is not an
+  // address: a window from before revision 23 set it to where it was.
+  string to_node = 7;
 }
 
 // LayoutStage is a change of a window layout document an agent asked for,

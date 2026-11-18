@@ -35,6 +35,7 @@ public  final class Node extends
     via_ = "";
     link_ = "";
     linkError_ = "";
+    workspaceDigest_ = com.google.protobuf.ByteString.EMPTY;
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -1366,6 +1367,54 @@ public  final class Node extends
   private void clearRelinkAt() {
     relinkAt_ = null;
     bitField0_ = (bitField0_ & ~0x00000002);
+  }
+
+  public static final int WORKSPACE_DIGEST_FIELD_NUMBER = 23;
+  private com.google.protobuf.ByteString workspaceDigest_;
+  /**
+   * <pre>
+   * workspace_digest is the digest of the workspace the node holds, as it
+   * says of itself to the nodes it lets in (revision 25): a hint that it
+   * changed, for a node that reads it without merging it, never a reason
+   * to merge. Empty from an older daemon, and to a node it does not let in.
+   * </pre>
+   *
+   * <code>bytes workspace_digest = 23 [json_name = "workspaceDigest"];</code>
+   * @return The workspaceDigest.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString getWorkspaceDigest() {
+    return workspaceDigest_;
+  }
+  /**
+   * <pre>
+   * workspace_digest is the digest of the workspace the node holds, as it
+   * says of itself to the nodes it lets in (revision 25): a hint that it
+   * changed, for a node that reads it without merging it, never a reason
+   * to merge. Empty from an older daemon, and to a node it does not let in.
+   * </pre>
+   *
+   * <code>bytes workspace_digest = 23 [json_name = "workspaceDigest"];</code>
+   * @param value The workspaceDigest to set.
+   */
+  private void setWorkspaceDigest(com.google.protobuf.ByteString value) {
+    java.util.Objects.requireNonNull(value);
+  
+    workspaceDigest_ = value;
+  }
+  /**
+   * <pre>
+   * workspace_digest is the digest of the workspace the node holds, as it
+   * says of itself to the nodes it lets in (revision 25): a hint that it
+   * changed, for a node that reads it without merging it, never a reason
+   * to merge. Empty from an older daemon, and to a node it does not let in.
+   * </pre>
+   *
+   * <code>bytes workspace_digest = 23 [json_name = "workspaceDigest"];</code>
+   */
+  private void clearWorkspaceDigest() {
+
+    workspaceDigest_ = getDefaultInstance().getWorkspaceDigest();
   }
 
   public static dev.ironpark.mako.v2.Node parseFrom(
@@ -2844,6 +2893,55 @@ public  final class Node extends
       return this;
     }
 
+    /**
+     * <pre>
+     * workspace_digest is the digest of the workspace the node holds, as it
+     * says of itself to the nodes it lets in (revision 25): a hint that it
+     * changed, for a node that reads it without merging it, never a reason
+     * to merge. Empty from an older daemon, and to a node it does not let in.
+     * </pre>
+     *
+     * <code>bytes workspace_digest = 23 [json_name = "workspaceDigest"];</code>
+     * @return The workspaceDigest.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getWorkspaceDigest() {
+      return instance.getWorkspaceDigest();
+    }
+    /**
+     * <pre>
+     * workspace_digest is the digest of the workspace the node holds, as it
+     * says of itself to the nodes it lets in (revision 25): a hint that it
+     * changed, for a node that reads it without merging it, never a reason
+     * to merge. Empty from an older daemon, and to a node it does not let in.
+     * </pre>
+     *
+     * <code>bytes workspace_digest = 23 [json_name = "workspaceDigest"];</code>
+     * @param value The workspaceDigest to set.
+     * @return This builder for chaining.
+     */
+    public Builder setWorkspaceDigest(com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setWorkspaceDigest(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * workspace_digest is the digest of the workspace the node holds, as it
+     * says of itself to the nodes it lets in (revision 25): a hint that it
+     * changed, for a node that reads it without merging it, never a reason
+     * to merge. Empty from an older daemon, and to a node it does not let in.
+     * </pre>
+     *
+     * <code>bytes workspace_digest = 23 [json_name = "workspaceDigest"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearWorkspaceDigest() {
+      copyOnWrite();
+      instance.clearWorkspaceDigest();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Node)
   }
   @java.lang.Override
@@ -2884,12 +2982,13 @@ public  final class Node extends
             "link_",
             "linkError_",
             "relinkAt_",
+            "workspaceDigest_",
           };
           java.lang.String info =
-              "\u0000\u0016\u0000\u0001\u0001\u0016\u0016\u0000\u0003\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0017\u0000\u0001\u0001\u0017\u0017\u0000\u0003\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u1009\u0000\t\u021a" +
               "\n\u001b\u000b\u0002\f\u0208\r\u021a\u000e\u0007\u000f\u0007\u0010\u0208\u0011\u0208" +
-              "\u0012\u000b\u0013\u0208\u0014\u0208\u0015\u0208\u0016\u1009\u0001";
+              "\u0012\u000b\u0013\u0208\u0014\u0208\u0015\u0208\u0016\u1009\u0001\u0017\n";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

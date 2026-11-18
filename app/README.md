@@ -63,6 +63,36 @@ and opens a session's conversation and its terminal.
   a content match opens at its line. **Git changes** lists changed files and
   opens a colored diff, including renames and deletions. Large text files and
   images have explicit preview limits.
+- **Spaces and projects.** The list sorts sessions as the desktop's
+  sidebar does, where a workspace (docs/protocol.md, Workspaces) holds
+  spaces, projects, names, looks and pins: grouped by project, a project
+  of several folders is one section, its sessions marked with their
+  folder (`#web`), named and marked with the icon and colour given on the
+  desktop; what is pinned comes first; and the spaces are chips over the
+  list, every session's first unless the workspace leaves it out. A
+  space shows the sections the desktop places in it, and every session
+  that needs you. A long press pins or unpins a session, or a project
+  from its heading.
+  The phone's node lets no one in, so it shares no computer's workspace:
+  the app reads one through it (`get_workspace` with the computer's
+  `node_id`), and gives its pins to that computer (`workspace` with
+  `to_node`), which takes edits from a node it lets in from revision 25
+  on; against an older one the pins are read only. Of the computers that
+  let the phone in, the first by node ID holding a workspace is shown;
+  they normally hold the same one. If the phone's own node holds one, as
+  it does once someone has made it and a computer let each other in,
+  that comes first. With none, or none new enough, the list is as it
+  always was. The app reads the workspace again when the computers come
+  or go, and when one's record says its workspace changed; a computer
+  that does not say, reached through another or older, is read again
+  with the sessions while the app is on screen.
+  The reading is a port of `internal/workspace/view.go` and the
+  desktop's grouping (`workspace/`, `ui/SessionGroups.kt`), and the pins
+  are the deltas a desktop window gives; the computer stamps them. The
+  unit tests check both against fixtures the Go tests make
+  (`src/test/resources/workspace`): `go test ./internal/workspace
+  ./internal/gui -run Android` fails while they differ from what the Go
+  code makes, and with `MAKO_ANDROID_FIXTURES=1` writes them again.
 - **Notifications.** The main screen's **Settings** controls approval,
   waiting and completed-turn alerts separately, including whether they appear
   while the app is open. Choices persist and take effect immediately. Android
@@ -101,6 +131,7 @@ Go, gomobile (`go install golang.org/x/mobile/cmd/gomobile@latest`), a JDK
 ```sh
 make android     # the node's AAR, then the debug APK
 make install     # and onto the connected device
+(cd android && ./gradlew :app:testDebugUnitTest)   # the unit tests, on the JVM
 ```
 
 `make core` builds the node alone and `make proto` generates the messages
@@ -112,6 +143,7 @@ again after a schema change. The app's sources are in
     net/               frames on the node's socket, and its requests
     term/              an attached session, its terminal, and the keyboard
     ui/                the screens: sessions, a session, computers, a new session
+    workspace/         the workspace as the desktop reads it, and the edits the app gives
 
 ## Trying it on the emulator
 

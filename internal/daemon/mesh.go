@@ -496,7 +496,16 @@ func (d *Daemon) takeState(from p2p.Peer, data []byte) {
 		return
 	}
 	node.Source = "mesh"
+	var digest []byte
+	if prev, ok := d.peers.get(node.GetId()); ok {
+		digest = prev.GetWorkspaceDigest()
+	}
 	d.notePeer(node)
+	// A node that reads this peer's workspace without merging it, as a
+	// phone does, learns from the nodes changing that it may read it again.
+	if from.TrustedBy && len(node.GetWorkspaceDigest()) > 0 && !bytes.Equal(digest, node.GetWorkspaceDigest()) {
+		d.changes.fire(true, false)
+	}
 	// A workspace is merged from a peer trusted both ways: one person's
 	// nodes, whose windows show each other's sessions; and only while this
 	// node shares its own.

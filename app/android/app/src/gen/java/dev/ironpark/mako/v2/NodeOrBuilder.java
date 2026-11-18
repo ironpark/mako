@@ -364,4 +364,17 @@ public interface NodeOrBuilder extends
    * @return The relinkAt.
    */
   com.google.protobuf.Timestamp getRelinkAt();
+
+  /**
+   * <pre>
+   * workspace_digest is the digest of the workspace the node holds, as it
+   * says of itself to the nodes it lets in (revision 25): a hint that it
+   * changed, for a node that reads it without merging it, never a reason
+   * to merge. Empty from an older daemon, and to a node it does not let in.
+   * </pre>
+   *
+   * <code>bytes workspace_digest = 23 [json_name = "workspaceDigest"];</code>
+   * @return The workspaceDigest.
+   */
+  com.google.protobuf.ByteString getWorkspaceDigest();
 }

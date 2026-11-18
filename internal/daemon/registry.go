@@ -108,6 +108,9 @@ func (p *peerTable) upsert(node *protocol.Node) bool {
 		if node.GetAgents() == nil {
 			node.Agents = prev.GetAgents()
 		}
+		if node.GetWorkspaceDigest() == nil {
+			node.WorkspaceDigest = prev.GetWorkspaceDigest()
+		}
 		if node.GetPeerId() == "" {
 			node.PeerId, node.Multiaddrs = prev.GetPeerId(), prev.GetMultiaddrs()
 		}

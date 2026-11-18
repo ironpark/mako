@@ -291,4 +291,9 @@
     <string name="model">모델</string>
     <string name="effort_level">%1$s effort</string>
     <string name="kept_as_default">에이전트가 이 값을 기본값으로 저장합니다</string>
+    <string name="pinned">고정됨</string>
+    <string name="pin_to_top">맨 위에 고정</string>
+    <string name="unpin">고정 해제</string>
+    <string name="all_sessions">모든 세션</string>
+    <string name="space_n">스페이스 %1$d</string>
 </resources>

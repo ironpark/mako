@@ -1,6 +1,6 @@
 # 스페이스·프로젝트·워크스페이스 동기화 아키텍처 개선 및 Pure-Go Delta CRDT 설계안
 
-작성 기준일: 2026년 11월 17일. 개정: 2026년 11월 18일 ([plugins-plan.md](plugins-plan.md)와의 정합 검토 반영, §6). 상태: Phase 1~3 구현 완료(미커밋, 실제 창에서의 수동 확인 전). Phase 4(Android)와 Tombstone GC는 남아 있다. 구현하며 정해진 세부는 `docs/protocol.md`의 Workspaces 절이 기준이다.
+작성 기준일: 2026년 11월 17일. 개정: 2026년 11월 18일 ([plugins-plan.md](plugins-plan.md)와의 정합 검토 반영, §6). 상태: Phase 1~4 구현 완료. Tombstone GC는 남아 있다. 구현하며 정해진 세부는 `docs/protocol.md`의 Workspaces 절이 기준이다.
 
 Mako의 다중 노드(데스크탑 GUI, 백그라운드 데몬, Android 모바일 앱) 간 워크스페이스·스페이스·프로젝트·레이아웃 동기화 구조를 진단하고, 물리적 수정 시간(`UnixNano`) 기반 전체 덮어쓰기(Blind LWW)가 야기하는 데이터 유실과 동시 편집 충돌 문제를 근본적으로 해결하기 위한 **Pure-Go (Zero-CGO) 기반 HLC + Delta-State CRDT 아키텍처**와 단계별 구현 계획을 정의한다.
 
@@ -474,6 +474,11 @@ sequenceDiagram
   * GUI 단위 테스트로 오프라인 동시 수정, 탭 이동 중 원격 스페이스 추가, 미래 시간 피어 수신 시나리오.
 
 ### Phase 4: Android 모바일 클라이언트 연동 (`app/android`)
+* **구현하며 바뀐 전제**: 폰은 컴퓨터에 들여질 뿐 컴퓨터를 들이지 않아(단방향), 폰의 내장 데몬은 워크스페이스를 병합할 상대가 없다. 폰의 신뢰 범위는 그대로 두고 다음으로 풀었다.
+  * 읽기: 앱이 자기를 들인 컴퓨터의 워크스페이스를 `get_workspace{node_id}`로 가져온다. 각 데몬이 노드 레코드에 다이제스트(`Node.workspace_digest`)를 실어, 들인 노드가 바뀐 것을 알고 다시 가져온다.
+  * 쓰기: 노드가 들인 피어는 Delta를 줄 수 있다(`Workspace.to_node`, 리비전 25 `RevisionPeerWorkspace`). 들인 피어는 이미 그 노드에서 세션을 시작할 수 있으므로 권한이 늘지 않는다. 레거시 `doc`은 피어에게서 받지 않는다.
+  * 컴퓨터가 여럿이면 노드 ID 순으로 첫 번째, 비어 있지 않은 워크스페이스를 보여 준다. Kotlin에는 병합이 없다.
+  * Kotlin 투영·그룹핑·핀 Delta는 Go가 만든 픽스처와 대조한다(`MAKO_ANDROID_FIXTURES=1 go test ./internal/workspace ./internal/gui`로 다시 만든다).
 * **목표**: 모바일 앱에서도 데스크탑과 동일한 스페이스, 다중 폴더 프로젝트, 커스텀 이름, 핀 고정, 아이콘/색상을 공유.
 * **작업 파일**:
   * `app/android/app/src/main/java/dev/ironpark/mako/net/Daemon.kt`:

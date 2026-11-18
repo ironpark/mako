@@ -25,6 +25,7 @@ public  final class Workspace extends
     doc_ = com.google.protobuf.ByteString.EMPTY;
     nodeId_ = "";
     digest_ = com.google.protobuf.ByteString.EMPTY;
+    toNode_ = "";
   }
   private int bitField0_;
   public static final int DOC_FIELD_NUMBER = 1;
@@ -378,6 +379,83 @@ public  final class Workspace extends
   private void clearStage() {
     stage_ = null;
     bitField0_ = (bitField0_ & ~0x00000002);
+  }
+
+  public static final int TO_NODE_FIELD_NUMBER = 7;
+  private java.lang.String toNode_;
+  /**
+   * <pre>
+   * to_node is the node an edit is given to, routed as a request's node_id
+   * is; "" for the daemon given it (revision 25). node_id above is not an
+   * address: a window from before revision 23 set it to where it was.
+   * </pre>
+   *
+   * <code>string to_node = 7 [json_name = "toNode"];</code>
+   * @return The toNode.
+   */
+  @java.lang.Override
+  public java.lang.String getToNode() {
+    return toNode_;
+  }
+  /**
+   * <pre>
+   * to_node is the node an edit is given to, routed as a request's node_id
+   * is; "" for the daemon given it (revision 25). node_id above is not an
+   * address: a window from before revision 23 set it to where it was.
+   * </pre>
+   *
+   * <code>string to_node = 7 [json_name = "toNode"];</code>
+   * @return The bytes for toNode.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getToNodeBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(toNode_);
+  }
+  /**
+   * <pre>
+   * to_node is the node an edit is given to, routed as a request's node_id
+   * is; "" for the daemon given it (revision 25). node_id above is not an
+   * address: a window from before revision 23 set it to where it was.
+   * </pre>
+   *
+   * <code>string to_node = 7 [json_name = "toNode"];</code>
+   * @param value The toNode to set.
+   */
+  private void setToNode(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    toNode_ = value;
+  }
+  /**
+   * <pre>
+   * to_node is the node an edit is given to, routed as a request's node_id
+   * is; "" for the daemon given it (revision 25). node_id above is not an
+   * address: a window from before revision 23 set it to where it was.
+   * </pre>
+   *
+   * <code>string to_node = 7 [json_name = "toNode"];</code>
+   */
+  private void clearToNode() {
+
+    toNode_ = getDefaultInstance().getToNode();
+  }
+  /**
+   * <pre>
+   * to_node is the node an edit is given to, routed as a request's node_id
+   * is; "" for the daemon given it (revision 25). node_id above is not an
+   * address: a window from before revision 23 set it to where it was.
+   * </pre>
+   *
+   * <code>string to_node = 7 [json_name = "toNode"];</code>
+   * @param value The bytes for toNode to set.
+   */
+  private void setToNodeBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    toNode_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.Workspace parseFrom(
@@ -857,6 +935,85 @@ public  final class Workspace extends
       return this;
     }
 
+    /**
+     * <pre>
+     * to_node is the node an edit is given to, routed as a request's node_id
+     * is; "" for the daemon given it (revision 25). node_id above is not an
+     * address: a window from before revision 23 set it to where it was.
+     * </pre>
+     *
+     * <code>string to_node = 7 [json_name = "toNode"];</code>
+     * @return The toNode.
+     */
+    @java.lang.Override
+    public java.lang.String getToNode() {
+      return instance.getToNode();
+    }
+    /**
+     * <pre>
+     * to_node is the node an edit is given to, routed as a request's node_id
+     * is; "" for the daemon given it (revision 25). node_id above is not an
+     * address: a window from before revision 23 set it to where it was.
+     * </pre>
+     *
+     * <code>string to_node = 7 [json_name = "toNode"];</code>
+     * @return The bytes for toNode.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getToNodeBytes() {
+      return instance.getToNodeBytes();
+    }
+    /**
+     * <pre>
+     * to_node is the node an edit is given to, routed as a request's node_id
+     * is; "" for the daemon given it (revision 25). node_id above is not an
+     * address: a window from before revision 23 set it to where it was.
+     * </pre>
+     *
+     * <code>string to_node = 7 [json_name = "toNode"];</code>
+     * @param value The toNode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setToNode(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setToNode(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * to_node is the node an edit is given to, routed as a request's node_id
+     * is; "" for the daemon given it (revision 25). node_id above is not an
+     * address: a window from before revision 23 set it to where it was.
+     * </pre>
+     *
+     * <code>string to_node = 7 [json_name = "toNode"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearToNode() {
+      copyOnWrite();
+      instance.clearToNode();
+      return this;
+    }
+    /**
+     * <pre>
+     * to_node is the node an edit is given to, routed as a request's node_id
+     * is; "" for the daemon given it (revision 25). node_id above is not an
+     * address: a window from before revision 23 set it to where it was.
+     * </pre>
+     *
+     * <code>string to_node = 7 [json_name = "toNode"];</code>
+     * @param value The bytes for toNode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setToNodeBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setToNodeBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Workspace)
   }
   @java.lang.Override
@@ -880,10 +1037,11 @@ public  final class Workspace extends
             "state_",
             "digest_",
             "stage_",
+            "toNode_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0001\u0001\u0006\u0006\u0000\u0000\u0000\u0001\n\u0002\u0002" +
-              "\u0003\u0208\u0004\u1009\u0000\u0005\n\u0006\u1009\u0001";
+              "\u0000\u0007\u0000\u0001\u0001\u0007\u0007\u0000\u0000\u0000\u0001\n\u0002\u0002" +
+              "\u0003\u0208\u0004\u1009\u0000\u0005\n\u0006\u1009\u0001\u0007\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

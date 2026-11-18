@@ -117,6 +117,9 @@ import dev.ironpark.mako.Mesh
 import dev.ironpark.mako.R
 import dev.ironpark.mako.v2.Node
 import dev.ironpark.mako.v2.SessionInfo
+import dev.ironpark.mako.workspace.view
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -129,6 +132,8 @@ internal class SessionsScreenState(
     val bar: TopAppBarState,
     val filter: MutableState<Filter>,
     val grouping: MutableState<Grouping>,
+    /** The space of the workspace shown, by ID; "" for every session's. */
+    val space: MutableState<String>,
 )
 
 /** A separate snapshot gives the swipe preview the same filter and scroll without sharing a layout. */
@@ -148,7 +153,10 @@ internal fun rememberSessionsScreenState(source: SessionsScreenState? = null): S
         mutableStateOf(source?.grouping?.value ?: runCatching { Grouping.valueOf(prefs.getString("grouping", null)!!) }.getOrDefault(Grouping.Computer))
     }
     LaunchedEffect(grouping.value) { prefs.edit { putString("grouping", grouping.value.name) } }
-    return remember(list, bar, filter, grouping) { SessionsScreenState(list, bar, filter, grouping) }
+    // And so is the space shown, which the desktop's window keeps by ID too.
+    val space = remember { mutableStateOf(source?.space?.value ?: prefs.getString("space", null).orEmpty()) }
+    LaunchedEffect(space.value) { prefs.edit { putString("space", space.value) } }
+    return remember(list, bar, filter, grouping, space) { SessionsScreenState(list, bar, filter, grouping, space) }
 }
 
 /**
@@ -167,6 +175,7 @@ internal fun SessionsScreen(
     val sessions by mesh.sessions.collectAsState()
     val nodes by mesh.nodes.collectAsState()
     val loaded by mesh.loaded.collectAsState()
+    val workspace by mesh.workspace.collectAsState()
     val linked = nodes.count { it.trustsUs }
     var filter by screenState.filter
     var refreshing by remember { mutableStateOf(false) }
@@ -270,7 +279,8 @@ internal fun SessionsScreen(
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         SessionList(mesh, nodes, sessions, filter, onFilter = { filter = it }, onOpen, screenState.list,
-                            grouping = screenState.grouping.value, onNew = onNew.takeIf { linked > 0 })
+                            grouping = screenState.grouping.value, onNew = onNew.takeIf { linked > 0 },
+                            workspace = workspace, space = screenState.space.value, onSpace = { screenState.space.value = it })
                     }
                 }
             }
@@ -290,6 +300,9 @@ private fun SessionList(
     listState: LazyListState,
     grouping: Grouping = Grouping.Computer,
     onNew: (() -> Unit)? = null,
+    workspace: dev.ironpark.mako.workspace.ShownWorkspace = dev.ironpark.mako.workspace.ShownWorkspace(),
+    space: String = "",
+    onSpace: (String) -> Unit = {},
 ) {
     // Times shown as "ago" move on with the clock.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -299,17 +312,29 @@ private fun SessionList(
             now = System.currentTimeMillis()
         }
     }
-    val waiting = remember(sessions) { sessions.filter { it.needsYou() }.sortedByDescending { it.lastActive() } }
-    val shown = remember(sessions, waiting, filter) {
+    // With a workspace, this device's node's or a computer's, the sessions
+    // sort as the desktop's sidebar sorts them, into its sections and
+    // spaces; without one, as they always have.
+    val view = remember(workspace.state) { workspace.state.view() }
+    val sorted = remember(view, sessions) { if (view.held) SessionWorkspace(view, sessions) else null }
+    val spaceAt = if (sorted == null) 0 else view.spaceIndex(space)
+    // A space shows its sections' sessions, and every session that needs you.
+    val scoped = remember(sessions, sorted, spaceAt) {
+        if (sorted == null) sessions else sessions.filter { it.needsYou() || sorted.inSpace(it, spaceAt) }
+    }
+    val waiting = remember(scoped) { scoped.filter { it.needsYou() }.sortedByDescending { it.lastActive() } }
+    val shown = remember(scoped, waiting, filter) {
         when (filter) {
-            Filter.All -> sessions
+            Filter.All -> scoped
             Filter.NeedsYou -> waiting
-            Filter.Working -> sessions.filter { it.working() }
+            Filter.Working -> scoped.filter { it.working() }
         }
     }
-    val groups = remember(shown, filter, nodes, grouping) {
-        groupSessions(shown.filter { filter != Filter.All || !it.needsYou() }, grouping, mesh::nodeName)
+    val groups = remember(shown, filter, nodes, grouping, sorted) {
+        val listed = shown.filter { filter != Filter.All || !it.needsYou() }
+        sorted?.groups(listed, grouping, mesh::nodeName) ?: groupSessions(listed, grouping, mesh::nodeName)
     }
+    val pinned = view.pinnedSessions.toSet()
     // A row names its computer where the group does not and there is more than one.
     val manyNodes = remember(sessions) { sessions.map { it.nodeId }.distinct().size > 1 }
     // Groups folded away stay so, by their keys, until opened again.
@@ -320,6 +345,7 @@ private fun SessionList(
         prefs.edit { putStringSet("folded", folded) }
     }
     val drafts = rememberDrafts()
+    val act = actor()
 
     LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 96.dp), modifier = Modifier.fillMaxSize()) {
         item(key = "filters") {
@@ -331,7 +357,7 @@ private fun SessionList(
                     val (label, count) = when (f) {
                         Filter.All -> stringResource(R.string.filter_all) to 0
                         Filter.NeedsYou -> stringResource(R.string.filter_needs_you) to waiting.size
-                        Filter.Working -> stringResource(R.string.filter_working) to sessions.count { it.working() }
+                        Filter.Working -> stringResource(R.string.filter_working) to scoped.count { it.working() }
                     }
                     // A count only where there is one, in the colour of what it counts.
                     FilterChip(filter == f, { onFilter(f) }, { Text(label) }, trailingIcon = if (count == 0) null else ({
@@ -339,6 +365,9 @@ private fun SessionList(
                     }))
                 }
             }
+        }
+        if (sorted != null && view.spaces.isNotEmpty()) item(key = "spaces") {
+            SpaceChips(view, spaceAt) { onSpace(view.spaceId(it)) }
         }
         if (filter == Filter.All && waiting.isNotEmpty()) {
             val open = "waiting" !in folded
@@ -362,9 +391,12 @@ private fun SessionList(
         }
         for (group in groups) {
             val list = group.sessions
-            // By time there is one group and no heading to fold it by.
-            val open = grouping == Grouping.Time || group.key !in folded
-            item(key = group.key) { GroupHeader(group, grouping, nodes, open, Modifier.animateItem()) { fold(group.key) } }
+            // By time there is one group and no heading to fold it by, but for the pins'.
+            val open = grouping == Grouping.Time && group.key != PINNED || group.key !in folded
+            item(key = group.key) {
+                GroupHeader(group, grouping, nodes, open, Modifier.animateItem(),
+                    onPin = group.pin?.takeIf { workspace.editable }?.let { pin -> { act { mesh.pinScope(pin, !group.pinned) } } }) { fold(group.key) }
+            }
             // A group's sessions are one card, its rows joined by hairlines.
             if (open) itemsIndexed(list, key = { _, s -> group.key + "/" + s.id }) { i, s ->
                 val shape = groupShape(i, list.size)
@@ -373,8 +405,10 @@ private fun SessionList(
                     SessionRow(
                         mesh, nodes, s, now, onClick = { onOpen(s) },
                         node = if (grouping != Grouping.Computer && manyNodes) mesh.nodeName(s.nodeId) else null,
-                        showProject = grouping != Grouping.Project,
+                        showProject = grouping != Grouping.Project || group.key == PINNED,
                         draft = drafts[s.nodeId, s.id],
+                        tag = group.tags[s.id],
+                        pinned = (s.id in pinned).takeIf { sorted != null && workspace.editable },
                     )
                 }
             }
@@ -420,6 +454,7 @@ private fun FoldChevron(open: Boolean) {
 private fun SessionRow(
     mesh: Mesh, nodes: List<Node>, s: SessionInfo, now: Long, onClick: () -> Unit,
     node: String? = null, showProject: Boolean = true, draft: String = "",
+    tag: String? = null, pinned: Boolean? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
@@ -464,7 +499,7 @@ private fun SessionRow(
                 // The agent, unless the session goes by its name already.
                 val where = dotted(
                     s.agent.takeUnless { s.label().equals(it, ignoreCase = true) }, node,
-                    baseName(s.project).takeIf { showProject }, s.branch,
+                    baseName(s.project).takeIf { showProject }, tag, s.branch,
                 )
                 // A draft not yet sent shows in its stead, as messengers have it.
                 val draftLabel = stringResource(R.string.draft)
@@ -497,6 +532,12 @@ private fun SessionRow(
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            // Pins are the workspace's, shared with the desktop's windows.
+            if (pinned != null) DropdownMenuItem(text = { Text(stringResource(if (pinned) R.string.unpin else R.string.pin_to_top)) },
+                leadingIcon = { Icon(Icons.Outlined.PushPin, null) }, onClick = {
+                    menu = false
+                    act { mesh.pinSession(s, !pinned) }
+                })
             DropdownMenuItem(text = { Text(stringResource(R.string.rename)) },
                 leadingIcon = { Icon(Icons.Outlined.Edit, null) }, onClick = {
                     menu = false
@@ -713,33 +754,105 @@ private fun Loading(what: String) {
     }
 }
 
-/** GroupHeader names a group of the list: its computer, its project or its status. */
+/**
+ * GroupHeader names a group of the list: its computer, its project or its
+ * status, or the sessions pinned. A project of the workspace's is marked
+ * with its look, and pinned or unpinned from a long press, onPin.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GroupHeader(group: SessionGroup, by: Grouping, nodes: List<Node>, open: Boolean, modifier: Modifier = Modifier, onToggle: () -> Unit) {
+private fun GroupHeader(
+    group: SessionGroup, by: Grouping, nodes: List<Node>, open: Boolean, modifier: Modifier = Modifier,
+    onPin: (() -> Unit)? = null, onToggle: () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
-    if (by == Grouping.Time) {
+    val pins = group.key == PINNED
+    if (by == Grouping.Time && !pins) {
         Spacer(modifier.height(8.dp))
         return
     }
+    var menu by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
+    val state = stringResource(if (open) R.string.expanded else R.string.collapsed)
+    Box {
+        Row(
+            modifier.fillMaxWidth().semantics { stateDescription = state }
+                .combinedClickable(role = Role.Button, onClick = onToggle, onLongClick = onPin?.let {
+                    {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        menu = true
+                    }
+                })
+                .padding(start = 28.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val status = if (by == Grouping.Status && !pins) StatusGroup.valueOf(group.label) else null
+            when {
+                pins -> Icon(Icons.Outlined.PushPin, null, Modifier.size(16.dp), tint = colors.onSurfaceVariant)
+                group.look != null -> LookGlyph(group.look)
+                by == Grouping.Computer -> Icon(osIcon(nodes.firstOrNull { it.id == group.sessions.first().nodeId }?.os.orEmpty()), null,
+                    Modifier.size(16.dp), tint = colors.onSurfaceVariant)
+                by == Grouping.Project -> Icon(Icons.Outlined.Folder, null, Modifier.size(16.dp), tint = colors.onSurfaceVariant)
+                else -> Dot(status?.color() ?: colors.onSurfaceVariant, size = 8.dp)
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                when {
+                    pins -> stringResource(R.string.pinned)
+                    status != null -> status.label()
+                    else -> group.label
+                },
+                style = MaterialTheme.typography.labelLarge,
+                color = if (status == StatusGroup.NeedsYou) StatusColors.Approval else colors.onSurfaceVariant,
+                modifier = Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            // A project pinned to the top says so, in the amber the desktop pins in.
+            if (group.pinned) PinMark(Modifier.padding(start = 6.dp))
+            Spacer(Modifier.weight(1f))
+            Text("${group.sessions.size}", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+            FoldChevron(open)
+        }
+        if (onPin != null) DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text(stringResource(if (group.pinned) R.string.unpin else R.string.pin_to_top)) },
+                leadingIcon = { Icon(Icons.Outlined.PushPin, null) }, onClick = {
+                    menu = false
+                    onPin()
+                })
+        }
+    }
+}
+
+/** The mark of what is pinned to the top. */
+@Composable
+private fun PinMark(modifier: Modifier = Modifier, size: Dp = 14.dp) {
+    Icon(Icons.Outlined.PushPin, stringResource(R.string.pinned), modifier.size(size), tint = StatusColors.Waiting)
+}
+
+/**
+ * SpaceChips choose the space of the workspace the list shows, as the
+ * desktop's sidebar does: every session's first, unless the workspace
+ * leaves it out, then each space, marked with its colour.
+ */
+@Composable
+private fun SpaceChips(view: dev.ironpark.mako.workspace.WorkspaceView, current: Int, onChoose: (Int) -> Unit) {
     Row(
-        modifier.fillMaxWidth().foldable(open, onToggle).padding(start = 28.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val status = if (by == Grouping.Status) StatusGroup.valueOf(group.label) else null
-        when (by) {
-            Grouping.Computer -> Icon(osIcon(nodes.firstOrNull { it.id == group.sessions.first().nodeId }?.os.orEmpty()), null,
-                Modifier.size(16.dp), tint = colors.onSurfaceVariant)
-            Grouping.Project -> Icon(Icons.Outlined.Folder, null, Modifier.size(16.dp), tint = colors.onSurfaceVariant)
-            else -> Dot(status?.color() ?: colors.onSurfaceVariant, size = 8.dp)
+        for (i in view.firstSpace()..view.spaces.size) {
+            val sp = view.spaces.getOrNull(i - 1)
+            val label = when {
+                sp == null -> stringResource(R.string.all_sessions)
+                sp.name.isNotEmpty() -> sp.name
+                else -> stringResource(R.string.space_n, i)
+            }
+            val color = sp?.color?.takeIf { c -> dev.ironpark.mako.workspace.LOOK_COLORS.any { it.first == c } }
+            FilterChip(
+                i == current, { onChoose(i) }, { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                leadingIcon = color?.let { c -> { Dot(dev.ironpark.mako.workspace.Look("", c).tint(), size = 8.dp) } },
+            )
         }
-        Spacer(Modifier.width(8.dp))
-        Text(
-            if (status != null) status.label() else group.label, style = MaterialTheme.typography.labelLarge,
-            color = if (status == StatusGroup.NeedsYou) StatusColors.Approval else colors.onSurfaceVariant,
-            modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-        )
-        Text("${group.sessions.size}", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
-        FoldChevron(open)
     }
 }
 

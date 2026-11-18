@@ -315,9 +315,17 @@ func (d *Daemon) fetchWorkspace(node string) {
 // an edit of it, or the workspace it kept before it was a CRDT, with the
 // one the daemon holds after. Another node's is asked of it: a node that
 // lets this one in, which runs its programs already, shows it its
-// workspace to copy from, whether it shares it or not; but takes an edit
-// only from its own front-ends. Its digest goes with it only while the
-// node shares it: a peer merges only what comes with one (fetchWorkspace).
+// workspace to copy from, whether it shares it or not. Its digest goes
+// with it only while the node shares it: a peer merges only what comes
+// with one (fetchWorkspace).
+//
+// An edit is given to another node as a request is, by to_node. A node
+// takes one from a peer it lets in as from its own front-ends, stamped by
+// its own clock and merged: a node let in starts sessions and runs
+// programs here already, so editing the workspace is no more than it can
+// do. A phone, which lets no one in and so merges no computer's
+// workspace, shows and edits a computer's this way. A peer gives a delta
+// only, never a document from before the CRDT.
 func (d *Daemon) handleWorkspace(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
 	if env.Type() == protocol.TypeGetWorkspace {
 		return serve(d, ctx, stream, env, protocol.TypeWorkspace, func(*protocol.GetWorkspace) (*protocol.Workspace, error) {
@@ -327,24 +335,44 @@ func (d *Daemon) handleWorkspace(ctx context.Context, stream *transport.Stream, 
 			return d.workspace.get(d.syncsWorkspace()), nil
 		})
 	}
-	if fromPeer {
-		return errors.New("the workspace is for this node's own front-ends")
+	ws, err := protocol.Body[*protocol.Workspace](env)
+	if err != nil {
+		return err
 	}
-	if env.Type() == protocol.TypeWorkspace {
-		ws, err := protocol.Body[*protocol.Workspace](env)
+	if !d.local(ws.GetToNode()) {
+		// The asker's bound goes on with it, as serve passes it on.
+		if within := transport.Within(env); within > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, within)
+			defer cancel()
+		}
+		reply, err := forward[*protocol.Workspace](ctx, d, env.Type(), givenTo{ws})
 		if err != nil {
 			return err
 		}
-		changed := false
-		switch {
-		case ws.GetState() != nil:
-			changed, _ = d.editWorkspace(ws.GetState(), nil, true)
-		case len(ws.GetDoc()) > 0:
-			changed = d.workspace.takeLegacy(ws.GetDoc())
-		}
-		if changed {
-			d.workspaceChanged()
-		}
+		return stream.Send(protocol.TypeWorkspace, env.GetId(), reply)
+	}
+	if fromPeer && (ws.GetState() == nil || len(ws.GetDoc()) > 0) {
+		return errors.New("a peer gives the workspace a delta only")
+	}
+	changed := false
+	switch {
+	case ws.GetState() != nil:
+		changed, _ = d.editWorkspace(ws.GetState(), nil, true)
+	case len(ws.GetDoc()) > 0:
+		changed = d.workspace.takeLegacy(ws.GetDoc())
+	}
+	if changed {
+		d.workspaceChanged()
+	}
+	if fromPeer {
+		return stream.Send(protocol.TypeWorkspace, env.GetId(), d.workspace.get(d.syncsWorkspace()))
 	}
 	return stream.Send(protocol.TypeWorkspace, env.GetId(), d.frontWorkspace())
 }
+
+// givenTo is an edit of the workspace as it is routed: by to_node, as
+// other requests are by node_id, which Workspace holds for another use.
+type givenTo struct{ *protocol.Workspace }
+
+func (w givenTo) GetNodeId() string { return w.GetToNode() }

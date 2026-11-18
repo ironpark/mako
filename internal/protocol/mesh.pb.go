@@ -172,11 +172,16 @@ type Node struct {
 	// "linking" while it tries; "down" while it waits to try again, at
 	// relink_at, link_error saying why the last try failed. Empty for
 	// itself, a node without a libp2p identity, and a daemon too old to say.
-	Link          string                 `protobuf:"bytes,20,opt,name=link,proto3" json:"link,omitempty"`
-	LinkError     string                 `protobuf:"bytes,21,opt,name=link_error,json=linkError,proto3" json:"link_error,omitempty"`
-	RelinkAt      *timestamppb.Timestamp `protobuf:"bytes,22,opt,name=relink_at,json=relinkAt,proto3" json:"relink_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Link      string                 `protobuf:"bytes,20,opt,name=link,proto3" json:"link,omitempty"`
+	LinkError string                 `protobuf:"bytes,21,opt,name=link_error,json=linkError,proto3" json:"link_error,omitempty"`
+	RelinkAt  *timestamppb.Timestamp `protobuf:"bytes,22,opt,name=relink_at,json=relinkAt,proto3" json:"relink_at,omitempty"`
+	// workspace_digest is the digest of the workspace the node holds, as it
+	// says of itself to the nodes it lets in (revision 25): a hint that it
+	// changed, for a node that reads it without merging it, never a reason
+	// to merge. Empty from an older daemon, and to a node it does not let in.
+	WorkspaceDigest []byte `protobuf:"bytes,23,opt,name=workspace_digest,json=workspaceDigest,proto3" json:"workspace_digest,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Node) Reset() {
@@ -359,6 +364,13 @@ func (x *Node) GetLinkError() string {
 func (x *Node) GetRelinkAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.RelinkAt
+	}
+	return nil
+}
+
+func (x *Node) GetWorkspaceDigest() []byte {
+	if x != nil {
+		return x.WorkspaceDigest
 	}
 	return nil
 }
@@ -629,7 +641,11 @@ type Workspace struct {
 	// stage is a change of a window layout an agent asked for, held on this
 	// node alone while it waits for the user (revision 24): to the daemon's
 	// own front-ends only, never in state, never to a peer.
-	Stage         *LayoutStage `protobuf:"bytes,6,opt,name=stage,proto3" json:"stage,omitempty"`
+	Stage *LayoutStage `protobuf:"bytes,6,opt,name=stage,proto3" json:"stage,omitempty"`
+	// to_node is the node an edit is given to, routed as a request's node_id
+	// is; "" for the daemon given it (revision 25). node_id above is not an
+	// address: a window from before revision 23 set it to where it was.
+	ToNode        string `protobuf:"bytes,7,opt,name=to_node,json=toNode,proto3" json:"to_node,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -704,6 +720,13 @@ func (x *Workspace) GetStage() *LayoutStage {
 		return x.Stage
 	}
 	return nil
+}
+
+func (x *Workspace) GetToNode() string {
+	if x != nil {
+		return x.ToNode
+	}
+	return ""
 }
 
 // LayoutStage is a change of a window layout document an agent asked for,
@@ -1465,7 +1488,7 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\aversion\x18\x03 \x01(\tR\aversion\x12\x12\n" +
 	"\x04hops\x18\x06 \x01(\rR\x04hopsJ\x04\b\x01\x10\x02J\x04\b\x04\x10\x05J\x04\b\x05\x10\x06R\anode_idR\ais_peerR\bauth_tagR\x05token\",\n" +
 	"\aWelcome\x12!\n" +
-	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\"\xdb\x04\n" +
+	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\"\x86\x05\n" +
 	"\x04Node\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -1492,7 +1515,8 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\x04link\x18\x14 \x01(\tR\x04link\x12\x1d\n" +
 	"\n" +
 	"link_error\x18\x15 \x01(\tR\tlinkError\x127\n" +
-	"\trelink_at\x18\x16 \x01(\v2\x1a.google.protobuf.TimestampR\brelinkAt\"y\n" +
+	"\trelink_at\x18\x16 \x01(\v2\x1a.google.protobuf.TimestampR\brelinkAt\x12)\n" +
+	"\x10workspace_digest\x18\x17 \x01(\fR\x0fworkspaceDigest\"y\n" +
 	"\tAgentInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bprofiles\x18\x02 \x03(\tR\bprofiles\x12\x12\n" +
@@ -1507,14 +1531,15 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\bsessions\x18\x02 \x03(\v2\x14.mako.v2.SessionInfoR\bsessions\x12-\n" +
 	"\x12watching_approvals\x18\x03 \x01(\bR\x11watchingApprovals\x12#\n" +
 	"\x05peers\x18\x04 \x03(\v2\r.mako.v2.NodeR\x05peers\x120\n" +
-	"\tworkspace\x18\x05 \x01(\v2\x12.mako.v2.WorkspaceR\tworkspace\"\xc3\x01\n" +
+	"\tworkspace\x18\x05 \x01(\v2\x12.mako.v2.WorkspaceR\tworkspace\"\xdc\x01\n" +
 	"\tWorkspace\x12\x10\n" +
 	"\x03doc\x18\x01 \x01(\fR\x03doc\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x17\n" +
 	"\anode_id\x18\x03 \x01(\tR\x06nodeId\x12-\n" +
 	"\x05state\x18\x04 \x01(\v2\x17.mako.v2.WorkspaceStateR\x05state\x12\x16\n" +
 	"\x06digest\x18\x05 \x01(\fR\x06digest\x12*\n" +
-	"\x05stage\x18\x06 \x01(\v2\x14.mako.v2.LayoutStageR\x05stage\"\xe0\x01\n" +
+	"\x05stage\x18\x06 \x01(\v2\x14.mako.v2.LayoutStageR\x05stage\x12\x17\n" +
+	"\ato_node\x18\a \x01(\tR\x06toNode\"\xe0\x01\n" +
 	"\vLayoutStage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bdocument\x18\x02 \x01(\tR\bdocument\x12\x10\n" +

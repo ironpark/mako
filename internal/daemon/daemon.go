@@ -143,14 +143,18 @@ func (d *Daemon) Self() *protocol.Node {
 		Multiaddrs: d.multiaddrs(),
 		Key:        d.keyPrint,
 		Owner:      d.ownerPrint,
+		// What tells a node that reads the workspace here, without merging
+		// it, that it changed: a phone, which lets no one in.
+		WorkspaceDigest: d.workspace.currentDigest(),
 	}
 }
 
 // publicSelf is this daemon as it shows itself to a node it does not let
-// in: without the agents it can launch.
+// in: without the agents it can launch, or its workspace's digest.
 func (d *Daemon) publicSelf() *protocol.Node {
 	self := d.Self()
 	self.Agents = nil
+	self.WorkspaceDigest = nil
 	return self
 }
 

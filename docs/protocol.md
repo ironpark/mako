@@ -310,7 +310,7 @@ that answers on success.
 | `watch` | `Watch` | `changed`, then more | Turns the stream into a feed: a `changed` at once, then one whenever the mesh's nodes or sessions, or the daemon's access, change, until the front-end closes the stream. With `approvals`, the front-end watches for [approvals](#sessions) meanwhile too; with `layouts`, it shows the window layout changes staged on the daemon (revision 24; see [Layout documents](#layout-documents)). |
 | `access` | `Access` | `access_info` | Who the daemon lets in, and changes to it; see [Access](#access). From a front-end only. |
 | `get_workspace` | `GetWorkspace` | `workspace` | The workspace the daemon holds; see [Workspaces](#workspaces). With `node_id`, the one that node holds, which a node gives one it lets in, to copy its spaces from (revision 22), whether it shares it or not; with its `digest` only while it shares it, and a peer merges only an answer with one. |
-| `workspace` | `Workspace` | `workspace` | Gives the daemon an edit of the workspace, a delta in `state` (revision 23), or the whole `doc` a window kept before, to take in once; the reply is the workspace held after. From a front-end only. |
+| `workspace` | `Workspace` | `workspace` | Gives the daemon an edit of the workspace, a delta in `state` (revision 23), or the whole `doc` a window kept before, to take in once; the reply is the workspace held after. With `to_node`, the edit is given to that node, routed as a request's `node_id` is; a node takes a delta, never a `doc`, from a node it lets in (revision 25). |
 | `layout_decision` | `LayoutDecision` | `workspace` | Keeps or reverts the window layout change staged on the daemon, or forgets what the user allowed agents to change without asking (revision 24; see [Layout documents](#layout-documents)). From the node's own front-ends only. |
 
 ```proto
@@ -337,6 +337,7 @@ message Node {
   string link = 20;    // the daemon's own libp2p link to it: up, linking, down; "" for itself or none
   string link_error = 21; // why the last try at a link down failed
   google.protobuf.Timestamp relink_at = 22; // when a link down is tried again
+  bytes workspace_digest = 23; // its workspace's digest, as it tells the nodes it lets in (revision 25)
 }
 
 message Changed {
@@ -353,6 +354,7 @@ message Workspace {
   WorkspaceState state = 4; // the workspace as a CRDT, or a delta of it (revision 23)
   bytes digest = 5;   // a hash of state
   LayoutStage stage = 6; // a window layout change held here, to the node's own front-ends (revision 24)
+  string to_node = 7; // the node an edit is given to, "" for the daemon's own (revision 25); node_id is no address
 }
 
 message LayoutStage {
@@ -412,6 +414,26 @@ timing them (`wall_time` 0), so that what a new node did before it joined
 gives way, on the same key, to what the mesh has; what only it had is
 kept. A daemon tells its watching front-ends of any change with
 `changed.workspace`. It keeps the state in `workspace.pb` in its folder.
+
+**From a node let in.** A node takes an edit of its workspace from a node
+it lets in as from its own front-ends: the front-end gives `workspace`
+to its daemon with `to_node`, the daemon routes it as any request (a
+chain of nodes each letting in the one before carries it on), and the
+node addressed stamps it with its own clock, merges it, and answers with
+the state it holds after, with its `digest` while it shares the
+workspace. A node let in starts sessions and runs programs there
+already, so editing the workspace is no more than it can do. A peer
+gives a delta only; a `doc` from a peer is refused.
+
+This is how a node that merges no one's workspace shows and edits one: the
+Android app's node lets no one in, so it shares with no computer, and the
+app reads a computer that lets it in with `get_workspace` and `node_id`
+and gives its edits to it. Each node puts its workspace's digest in its
+own record, `Node.workspace_digest`, in the state it sends the nodes it
+lets in, and a daemon tells its front-ends `changed.nodes` when a peer's
+record says it changed: the front-end lists the nodes and reads the
+workspace again. The digest there is a hint that it changed, never a
+reason to merge; a daemon merges only what comes as described above.
 
 **Projects.** Once the state holds projects, the daemon's projects are the
 state's, as far as their roots' `locations` are on its node (keys of
