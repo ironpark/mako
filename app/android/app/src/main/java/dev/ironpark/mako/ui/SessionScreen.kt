@@ -392,12 +392,14 @@ internal class SessionMenu(val items: @Composable ColumnScope.(close: () -> Unit
  */
 @Composable
 private fun SessionHeader(mesh: Mesh, node: String, session: SessionInfo?, project: ProjectItem?, switch: @Composable () -> Unit) {
+    // Collected, not read: an agent's colour may come after the header.
+    val nodes by mesh.nodes.collectAsState()
     Row(
         Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 56.dp).padding(start = 12.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (project != null) ProjectTile(project.look, Modifier.shared("tile:" + project.key), size = 32.dp)
-        else if (session != null) AgentAvatar(session.agent, agentColor(mesh.nodes.value, node, session.agent), session.statusColor(), size = 32.dp)
+        else if (session != null) AgentAvatar(session.agent, agentColor(nodes, node, session.agent), session.statusColor(), size = 32.dp)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
