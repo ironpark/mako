@@ -543,4 +543,28 @@ public interface SessionInfoOrBuilder extends
    * @return The controls.
    */
   dev.ironpark.mako.v2.AgentControls getControls();
+
+  /**
+   * <pre>
+   * parent_session_id is the session whose agent spawned this one through
+   * Mako's spawn_agent, on the same node; "" for one the user started. A
+   * front-end shows a spawned session with the one that spawned it.
+   * </pre>
+   *
+   * <code>string parent_session_id = 37 [json_name = "parentSessionId"];</code>
+   * @return The parentSessionId.
+   */
+  java.lang.String getParentSessionId();
+  /**
+   * <pre>
+   * parent_session_id is the session whose agent spawned this one through
+   * Mako's spawn_agent, on the same node; "" for one the user started. A
+   * front-end shows a spawned session with the one that spawned it.
+   * </pre>
+   *
+   * <code>string parent_session_id = 37 [json_name = "parentSessionId"];</code>
+   * @return The bytes for parentSessionId.
+   */
+  com.google.protobuf.ByteString
+      getParentSessionIdBytes();
 }

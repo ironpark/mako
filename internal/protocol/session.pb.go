@@ -130,7 +130,18 @@ type OpenSession struct {
 	// Borrow.device names one: the session starts with the environment that
 	// lends each to its programs, holds them until it ends, and borrows
 	// them again when it starts again.
-	Devices       []string `protobuf:"bytes,10,rep,name=devices,proto3" json:"devices,omitempty"`
+	Devices []string `protobuf:"bytes,10,rep,name=devices,proto3" json:"devices,omitempty"`
+	// prompt is the agent's first prompt, given as it starts, as an agent
+	// given a task by spawn_agent gets it; an agent that takes none at
+	// start is not started.
+	Prompt string `protobuf:"bytes,11,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	// parent_session_id starts the session as an agent the one it names
+	// spawned, on this node, as spawn_agent does: told its parent, given
+	// Mako's tools to report to it, and shown with it. A front-end starts a
+	// team's agents so.
+	ParentSessionId string `protobuf:"bytes,12,opt,name=parent_session_id,json=parentSessionId,proto3" json:"parent_session_id,omitempty"`
+	// name names the session as it starts.
+	Name          string `protobuf:"bytes,13,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -233,6 +244,27 @@ func (x *OpenSession) GetDevices() []string {
 		return x.Devices
 	}
 	return nil
+}
+
+func (x *OpenSession) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *OpenSession) GetParentSessionId() string {
+	if x != nil {
+		return x.ParentSessionId
+	}
+	return ""
+}
+
+func (x *OpenSession) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
 }
 
 // Worktree is a git worktree made for one session.
@@ -383,9 +415,13 @@ type SessionInfo struct {
 	Dialog *ScreenDialog `protobuf:"bytes,35,opt,name=dialog,proto3" json:"dialog,omitempty"`
 	// controls are what ConfigureAgent may set of the session's agent; unset
 	// for an agent with none.
-	Controls      *AgentControls `protobuf:"bytes,36,opt,name=controls,proto3" json:"controls,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Controls *AgentControls `protobuf:"bytes,36,opt,name=controls,proto3" json:"controls,omitempty"`
+	// parent_session_id is the session whose agent spawned this one through
+	// Mako's spawn_agent, on the same node; "" for one the user started. A
+	// front-end shows a spawned session with the one that spawned it.
+	ParentSessionId string `protobuf:"bytes,37,opt,name=parent_session_id,json=parentSessionId,proto3" json:"parent_session_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *SessionInfo) Reset() {
@@ -668,6 +704,13 @@ func (x *SessionInfo) GetControls() *AgentControls {
 		return x.Controls
 	}
 	return nil
+}
+
+func (x *SessionInfo) GetParentSessionId() string {
+	if x != nil {
+		return x.ParentSessionId
+	}
+	return ""
 }
 
 // AgentControls are the permission modes, models and efforts a session's
@@ -2634,7 +2677,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\fListSessions\x12\x1c\n" +
 	"\tapprovals\x18\x01 \x01(\bR\tapprovals\"<\n" +
 	"\bSessions\x120\n" +
-	"\bsessions\x18\x01 \x03(\v2\x14.mako.v2.SessionInfoR\bsessions\"\xde\x02\n" +
+	"\bsessions\x18\x01 \x03(\v2\x14.mako.v2.SessionInfoR\bsessions\"\xb6\x03\n" +
 	"\vOpenSession\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x18\n" +
@@ -2646,7 +2689,10 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x04rows\x18\b \x01(\rR\x04rows\x12-\n" +
 	"\bworktree\x18\t \x01(\v2\x11.mako.v2.WorktreeR\bworktree\x12\x18\n" +
 	"\adevices\x18\n" +
-	" \x03(\tR\adevices\x1a6\n" +
+	" \x03(\tR\adevices\x12\x16\n" +
+	"\x06prompt\x18\v \x01(\tR\x06prompt\x12*\n" +
+	"\x11parent_session_id\x18\f \x01(\tR\x0fparentSessionId\x12\x12\n" +
+	"\x04name\x18\r \x01(\tR\x04name\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"t\n" +
@@ -2655,7 +2701,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x12\n" +
 	"\x04base\x18\x04 \x01(\tR\x04base\x12\x14\n" +
-	"\x05start\x18\x05 \x01(\tR\x05start\"\xa5\t\n" +
+	"\x05start\x18\x05 \x01(\tR\x05start\"\xd1\t\n" +
 	"\vSessionInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x14\n" +
@@ -2696,7 +2742,8 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x06notice\x18! \x01(\v2\x0f.mako.v2.NoticeR\x06notice\x12\x14\n" +
 	"\x05bells\x18\" \x01(\x04R\x05bells\x12-\n" +
 	"\x06dialog\x18# \x01(\v2\x15.mako.v2.ScreenDialogR\x06dialog\x122\n" +
-	"\bcontrols\x18$ \x01(\v2\x16.mako.v2.AgentControlsR\bcontrolsB\f\n" +
+	"\bcontrols\x18$ \x01(\v2\x16.mako.v2.AgentControlsR\bcontrols\x12*\n" +
+	"\x11parent_session_id\x18% \x01(\tR\x0fparentSessionIdB\f\n" +
 	"\n" +
 	"_exit_code\"W\n" +
 	"\rAgentControls\x12\x14\n" +

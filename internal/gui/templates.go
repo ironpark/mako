@@ -145,6 +145,11 @@ func (m *model) expandDraft(id string, state *chatState, draft string, send func
 			fail(templateError(err))
 			return
 		}
+		// Headed by what made it, which Chat shows it under (chatmarks.go);
+		// not a prompt that is the agent's command, which must come first.
+		if !strings.HasPrefix(strings.TrimSpace(out), "/") {
+			out = templateMark(t.Name) + "\n" + out
+		}
 		send(out)
 	}
 	if !t.HasScripts() {

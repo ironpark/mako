@@ -243,16 +243,22 @@ func (m *model) focusGroup(id int) {
 }
 
 // showTab shows tab in its pane and makes that pane current, opening it
-// in the current pane when it is in none.
+// in the current pane when it is in none; an agent another spawned, in
+// the pane of the tab it shows in, after the last of that tab's agents.
 func (m *model) showTab(id string) {
 	m.editLayout(func(root *layoutNode) int {
 		g := root.groupOf(id)
 		if g == nil {
-			g = root.group(ggui.Peek(m.FocusGroup))
+			var at int
+			g, at = indexSessions(ggui.Peek(m.Sessions)).familyPlace(root, id)
 			if g == nil {
-				g = root.groups()[0]
+				g = root.group(ggui.Peek(m.FocusGroup))
+				if g == nil {
+					g = root.groups()[0]
+				}
+				at = slices.Index(g.Tabs, g.Active) + 1
 			}
-			g.insert(id, slices.Index(g.Tabs, g.Active)+1)
+			g.insert(id, at)
 		}
 		g.Active = id
 		return g.ID

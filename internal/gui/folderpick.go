@@ -2,7 +2,6 @@ package gui
 
 import (
 	"context"
-	"path"
 	"slices"
 	"strings"
 	"time"
@@ -58,15 +57,12 @@ func newFolderPick(m *model) *folderPick {
 	return p
 }
 
-// pickFolder shows the picker over the New session dialog, for the node
-// the form names, at the folder it names, else the node's home.
-func (m *model) pickFolder() {
-	f := ggui.Peek(m.Form)
-	m.pickFolderFor(m.NewOpen, f.NodeID, f.Project, m.FormErr.Set, func(dir string) {
-		if dir != "" {
-			m.Form.Update(func(f newSession) newSession { f.Project = dir; return f })
-		}
-	})
+// pickFolder shows the picker for the folder of l's session, through the
+// daemons, for the node l names, at the folder it names, else the node's
+// home.
+func (m *model) pickFolder(l *launchState) {
+	f := ggui.Peek(l.Form)
+	m.pickFolderFor(ggui.State(false), f.NodeID, f.Project, l.Err.Set, l.setProject)
 }
 
 // pickFolderFor shows the picker for a folder on node, at start, else the
@@ -336,26 +332,4 @@ func (m *model) recentFolders(node string, max int) []string {
 		}
 	}
 	return out
-}
-
-// recentChips offers the folders the form's node has run sessions in.
-func recentChips(m *model) ggui.Widget {
-	return ggui.Reactive(func() ggui.Widget {
-		f := m.Form.Get()
-		recent := m.recentFolders(f.NodeID, 6)
-		if len(recent) == 0 {
-			return widget.Box()
-		}
-		chips := make([]ggui.Widget, 0, len(recent))
-		for _, dir := range recent {
-			text := widget.Text(path.Base(strings.ReplaceAll(dir, `\`, "/"))).Size(12).NoWrap()
-			if dir == f.Project {
-				text = text.Weight(ggui.WeightMedium)
-			}
-			chips = append(chips, ui.ButtonOf(text, func() {
-				m.Form.Update(func(f newSession) newSession { f.Project = dir; return f })
-			}).Secondary().Pad(3, 9).Radius(12).Name(dir))
-		}
-		return widget.Wrap(chips...).Gap(6)
-	})
 }

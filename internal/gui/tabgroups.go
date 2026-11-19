@@ -55,6 +55,13 @@ func tabProjects(tabs []string, groups []sessionGroup, nodes []*protocol.Node, l
 		}
 		out[id] = tabProject{Key: tabProjectKey(g, root), Name: name, Look: look, Root: root >= 0}
 	}
+	// A new session's tab goes with the tab it opened after, rather than
+	// in a run of its own.
+	for i, id := range tabs {
+		if p, ok := out[tabs[max(i-1, 0)]]; ok && i > 0 && isLaunchTab(id) {
+			out[id] = p
+		}
+	}
 	return out
 }
 

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/ironpark/ggui"
-	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/ggui/widget"
@@ -66,7 +65,6 @@ func window(m *model) ggui.Widget {
 		layoutBar(m),
 		pluginAskBar(m),
 		pluginAgentBar(m),
-		newSessionDialog(m),
 		folderPickerDialog(m),
 		renameDialog(m),
 		projectDialogs(m),
@@ -428,15 +426,21 @@ func (m *model) editSession(id string, edit func(*protocol.SessionInfo)) {
 // tab is one of a pane's tabs: the session's program and its title, in
 // a rounded box, raised as the one the pane shows and ringed in tint, its
 // project's colour, in the current pane.
-func tab(m *model, s *protocol.SessionInfo, selected, focused bool, title string) ggui.Widget {
+//
+// kids are the agents it spawned, shown in it, marked after its glyph.
+func tab(m *model, s *protocol.SessionInfo, selected, focused bool, title string, kids []*protocol.SessionInfo) ggui.Widget {
 	id := s.GetId()
 	label := sessionTitle(s, title)
 	fg := pick[color.Color](selected, skin.Fg, skin.Muted)
 	dot := m.dotFor(id)
+	var glyph ggui.Widget = agentGlyph(s.GetAgent(), fg).Size(14)
+	if len(kids) > 0 {
+		glyph = widget.Row(glyph, familyMarks(m, kids)).Gap(6).Align(widget.AlignCenter)
+	}
 	// The dot has room only while it shows, at work, waiting or done.
 	t := ui.EditorTab(label, func() { m.selectSession(id) }).
 		Status(&activityDot{state: dot, quiet: true}).StatusWhile(func() bool { return dot() != dotRest }).
-		Icon(agentGlyph(s.GetAgent(), fg).Size(14)).
+		Icon(glyph).
 		MaxLabelWidth(168).Selected(selected).Current(focused).
 		OnClose(func() { m.askKill(id) }).CloseName(Tf("Close %s", label))
 	return sessionMenu(m, t, id, label, true)
@@ -690,54 +694,4 @@ func outdatedBadge(n *protocol.Node) ggui.Widget {
 		return widget.Box()
 	}
 	return widget.Box(widget.Text(T("out of date")).Size(11).Color(skin.DotWaiting)).Pad(1, 6).Radius(4).Border(1, skin.DotWaiting)
-}
-
-// Dialogs --------------------------------------------------------------------
-
-func newSessionDialog(m *model) ggui.Widget {
-	agent := m.Form.Field(func(f *newSession) *string { return &f.Agent })
-	node := m.Form.Field(func(f *newSession) *string { return &f.NodeID })
-	project := m.Form.Field(func(f *newSession) *string { return &f.Project })
-	worktree := m.Form.Field(func(f *newSession) *bool { return &f.Worktree })
-	branch := m.Form.Field(func(f *newSession) *string { return &f.Branch })
-	nodeIDs := reachableNodeIDs(m)
-	// This machine's folders are picked in its own dialog; another node's
-	// in the dialog, through the daemons.
-	browse := browseButton(project, func(d runtime.Dialogs) (string, error) {
-		return d.PickFolder(runtime.FileDialog{Title: T("Working directory"), Directory: ggui.Peek(project)})
-	})
-	browseRemote := ui.Button(T("Browse…"), m.pickFolder).Outline()
-	local := ggui.Derived(func() bool { return m.Form.Get().NodeID == m.Conn.Get().Self.GetId() })
-	hasErr := ggui.Map(m.FormErr, func(s string) bool { return s != "" })
-	// What the chosen node can launch, profiles included.
-	targets := ggui.Derived(func() []string {
-		return nodeTargets(m.Nodes.Get(), m.Form.Get().NodeID, m.Agents.Get())
-	}).WithEqual(slices.Equal)
-	form := widget.Column(
-		ui.Field(T("Agent"), ui.Select(agent).BindOptions(targets).Format(targetLabel).Name(T("Agent"))),
-		ui.Field(T("Node"), ui.Select(node).BindOptions(nodeIDs).Format(func(id string) string {
-			return nodeName(ggui.Peek(m.Nodes), id)
-		}).Name(T("Node"))),
-		ui.Field(T("Working directory"), widget.Row(
-			widget.Expanded(ui.TextField(project).Placeholder(T("The node's home folder")).Name(T("Working directory")).OnSubmit(func(string) { m.submitNew() })),
-			ggui.If(local, func() ggui.Widget { return browse }).Else(func() ggui.Widget { return browseRemote }),
-		).Gap(8)),
-		recentChips(m),
-		ui.Field(T("Git"), widget.Column(
-			ui.Checkbox(worktree, T("Work in a new worktree")),
-			ggui.If(worktree, func() ggui.Widget {
-				return ui.TextField(branch).Placeholder(T("Branch, such as agent/fix-login")).Name(T("Branch")).
-					OnSubmit(func(string) { m.submitNew() })
-			}),
-			muted(widget.Text(T("A worktree of the folder's repository, beside it, on a new branch: agents in one repository then keep out of each other's files.")).Size(11.5)),
-		).Gap(8).Stretch()),
-		reveal(hasErr, func() ggui.Widget {
-			return widget.TextOf(m.FormErr).Size(12).Color(skin.DotDown)
-		}),
-		widget.Row(
-			ui.Button(T("Cancel"), func() { m.NewOpen.Set(false) }).Outline(),
-			ui.Button(T("Start session"), m.submitNew),
-		).Gap(8).Justify(widget.JustifyEnd),
-	).Gap(16).Stretch()
-	return ui.Dialog(m.NewOpen, form).Title(T("New session")).Width(460)
 }

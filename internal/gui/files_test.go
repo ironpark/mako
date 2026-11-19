@@ -151,8 +151,8 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 	p.OnDrop(m.dropFolder)
 	p.DropPaths(ggui.Pt(120, 500), filepath.Join(project, "src"))
 	p.Frame()
-	if !ggui.Peek(m.NewOpen) || ggui.Peek(m.Form).Project != filepath.Join(project, "src") {
-		t.Fatalf("dialog open %v on %q", ggui.Peek(m.NewOpen), ggui.Peek(m.Form).Project)
+	if l := m.launchShown(); l == nil || ggui.Peek(l.Form).Project != filepath.Join(project, "src") {
+		t.Fatalf("new session's tab shown: %v", l)
 	}
 }
 

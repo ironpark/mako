@@ -75,6 +75,7 @@ func paneView(m *model, id int) ggui.Widget {
 	return paneWatch(widget.Column(
 		paneTabBar(m, id, group),
 		hline(),
+		agentLane(m, id, group),
 		widget.Expanded(widget.Stack(paneBody(m, id, group), &paneGlow{on: func() bool {
 			return m.Prefs.Get().PaneGlow && m.FocusGroup.Get() == id
 		}}).Expand()),
@@ -191,13 +192,31 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				LabelName(pick(folded[key], Tf("Unfold %s", name), Tf("Fold %s", name))))
 			run, runStarted, runFirst, runFolded = nil, false, -1, 0
 		}
+		// The tabs of agents another spawned show in its tab, which is
+		// the one shown while any of them is.
+		index := indexSessions(sessions)
+		hosts := index.tabHosts(g.Tabs)
+		active := cmp.Or(hosts[g.Active], g.Active)
+		// What the bar draws, and the agents each session's tab shows.
+		var shown []string
+		kids := map[string][]*protocol.SessionInfo{}
+		for _, tabID := range g.Tabs {
+			if hosts[tabID] == "" {
+				shown = append(shown, tabID)
+				kids[tabID] = index.spawned(tabID)
+			}
+		}
 		// Of runs folded away, the tabs hidden, and how many each hides.
 		at := map[string]int{}
 		hidden := map[string]bool{}
 		hides := map[string]int{}
 		for i, tabID := range g.Tabs {
 			at[tabID] = i
-			if p := projects[tabID]; grouped && folded[foldKey(id, p.Key)] && tabID != g.Active {
+			if hosts[tabID] != "" {
+				hidden[tabID] = true
+				continue
+			}
+			if p := projects[tabID]; grouped && folded[foldKey(id, p.Key)] && tabID != active {
 				hidden[tabID] = true
 				hides[p.Key]++
 			}
@@ -229,7 +248,9 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				continue
 			}
 			var face ggui.Widget
-			if d, ok := docs[tabID]; ok {
+			if isLaunchTab(tabID) {
+				face = launchTabFace(m, tabID, tabID == active, focused)
+			} else if d, ok := docs[tabID]; ok {
 				face = docTab(m, tabID, d, tabID == g.Active, focused)
 			} else if d, ok := diffs[tabID]; ok {
 				face = diffTabFace(m, tabID, d, tabID == g.Active, focused)
@@ -238,7 +259,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				if !ok {
 					s = &protocol.SessionInfo{Id: tabID, Agent: "shell"}
 				}
-				face = tab(m, s, tabID == g.Active, focused, titles[tabID])
+				face = tab(m, s, tabID == active, focused, titles[tabID], kids[tabID])
 			}
 			// A label stuck at the bar's start would cover the tab shown at
 			// its start: scrolled to, it comes clear of it.
@@ -248,7 +269,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			}
 			var cell ggui.Widget = &paintHook{child: sessionDrag(m, face, tabID), fn: func(dst *ggui.Canvas, r ggui.Rect) {
 				counter.saw(r, ease.settled(tabID))
-				if tabID == g.Active && m.revealedTab[id] != tabID {
+				if tabID == active && m.revealedTab[id] != tabID {
 					dst.RequestReveal(ggui.Rct(ggui.Pt(r.Origin.X-clear, r.Origin.Y), ggui.Sz(r.Size.W+clear, r.Size.H)))
 					// Revealed again while it grows, the bar long enough
 					// for all of it only once it has.
@@ -297,7 +318,10 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		// The + follows the last tab, as far as the bar's end, where it
 		// stays in sight as the tabs scroll; and when they do, a menu
 		// lists them all, and how many are out of sight.
-		need := tabsWidth(g.Tabs, sessions, titles, docs, diffs) + chips + extra + 16
+		need := tabsWidth(shown, sessions, titles, docs, diffs) + chips + extra + 16
+		for _, k := range kids {
+			need += familyMarksWidth(len(k))
+		}
 		end := len(g.Tabs)
 		tabsAndPlus := tabDrop(m, widget.Row(widget.Flexible(counter), plus).Stretch(), id,
 			func(widget.Dropped[tabDrag]) int { return end }).
@@ -331,6 +355,9 @@ func tabsWidth(tabs []string, sessions []*protocol.SessionInfo, titles map[strin
 
 // tabLabel is what a tab is called.
 func tabLabel(id string, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) string {
+	if isLaunchTab(id) {
+		return T("New session")
+	}
 	if d, ok := docs[id]; ok {
 		return d.Name()
 	}
@@ -435,6 +462,8 @@ func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			return docView(m, p.ID, ggui.Peek(m.FocusGroup) == id)
 		case isDiffTab(p.ID):
 			return diffTabView(m, p.ID)
+		case isLaunchTab(p.ID):
+			return launchView(m, p.ID)
 		case !p.Ready:
 			// Without a daemon there is nothing to attach to; say why.
 			return ggui.View(m.Conn, func(c connState) ggui.Widget {

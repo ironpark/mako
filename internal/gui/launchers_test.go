@@ -93,12 +93,12 @@ func TestQuickLauncherStartsAProfileWithoutAsking(t *testing.T) {
 	if s.GetAgent() != "claude" || s.GetProfile() != "opus" || s.GetProject() != home {
 		t.Fatalf("started %s:%s in %q, want claude:opus in %q", s.GetAgent(), s.GetProfile(), s.GetProject(), home)
 	}
-	if ggui.Peek(m.NewOpen) {
-		t.Fatal("the launcher opened the new-session dialog")
+	if m.launching() {
+		t.Fatal("the launcher opened the new session's tab")
 	}
 }
 
-// A click on the + opens the new-session dialog, as it always has; the
+// A click on the + opens the new session's tab; the
 // launchers it fans out go back in once the pointer leaves.
 func TestPlusOpensTheDialogAndFoldsItsLaunchers(t *testing.T) {
 	m, p := launcherApp(t, prefs{DefaultProject: t.TempDir()})
@@ -125,8 +125,8 @@ func TestPlusOpensTheDialogAndFoldsItsLaunchers(t *testing.T) {
 	}
 	p.Click(plus.Center())
 	p.Frame()
-	if !ggui.Peek(m.NewOpen) {
-		t.Fatal("a click on the + did not open the new-session dialog")
+	if !isLaunchTab(ggui.Peek(m.Selected)) {
+		t.Fatal("a click on the + did not show the new session's tab")
 	}
 }
 

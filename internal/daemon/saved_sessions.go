@@ -145,6 +145,10 @@ func (d *Daemon) listSessions() []*protocol.SessionInfo {
 			out = append(out, proto.CloneOf(entry.Info)) // the listing fills in its git
 		}
 	}
+	// Each says the session that spawned it, which only the daemon keeps.
+	for _, info := range out {
+		info.ParentSessionId = d.saved[info.GetId()].ParentID
+	}
 	d.sessionMu.Unlock()
 	sortByStart(out)
 	// The repositories are read from disk, outside the lock, once a project
@@ -202,7 +206,52 @@ func (h *heads) of(project string) projectHead {
 }
 
 func (d *Daemon) openSession(ctx context.Context, req *protocol.OpenSession) (*session.Session, error) {
-	return d.startSession(ctx, newSessionID(), req)
+	parent, name, prompt := req.GetParentSessionId(), req.GetName(), req.GetPrompt()
+	req = proto.CloneOf(req)
+	req.ParentSessionId, req.Name, req.Prompt = "", "", ""
+	if parent != "" {
+		if _, ok := d.sessions.get(parent); !ok {
+			return nil, fmt.Errorf("unknown session %q", parent)
+		}
+		// Told of its parent as an agent spawn_agent starts is.
+		prompt = projectTaskPrompt(parent, prompt)
+	}
+	if prompt != "" {
+		args, err := d.promptArgs(req.GetAgent(), prompt)
+		if err != nil {
+			return nil, err
+		}
+		req.Args = append(req.Args, args...)
+	}
+	s, err := d.startSessionAs(ctx, newSessionID(), req, parent)
+	if err != nil || name == "" {
+		return s, err
+	}
+	if _, err := d.renameSession(s.ID(), name); err != nil {
+		return nil, fmt.Errorf("session %s started but could not be named: %w", s.ID(), err)
+	}
+	return s, nil
+}
+
+// promptArgs are the arguments the agent of the name takes prompt by as
+// it starts, as spawn_agent, a plugin and OpenSession give one.
+func (d *Daemon) promptArgs(name, prompt string) ([]string, error) {
+	configured, ok := agentspec.Lookup(name, d.agents())
+	if !ok || len(configured.Command) == 0 {
+		return nil, fmt.Errorf("no agent %q on this node", name)
+	}
+	driver, ok := agents.ByProgram(configured.Command[0])
+	prompter, takes := driver.Driver.(agent.Prompter)
+	if !ok || !takes {
+		return nil, fmt.Errorf("agent %s takes no prompt to start with", name)
+	}
+	return prompter.PromptArgs(prompt), nil
+}
+
+// projectTaskPrompt is prompt as an agent session parent spawned is
+// given it: headed by who its parent is, and how to report.
+func projectTaskPrompt(parent, prompt string) string {
+	return fmt.Sprintf("[Mako project task: parent session %s. Use the mako MCP tools to coordinate and send_message to report results to the parent.]\n\n%s", parent, prompt)
 }
 
 func (d *Daemon) attachSession(ctx context.Context, id string) (*session.Session, error) {

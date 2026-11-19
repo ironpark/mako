@@ -41,6 +41,7 @@ var settingsNav = []settingsGroup{
 		{"terminal", "Terminal", "square-terminal"},
 		{"shortcuts", "Shortcuts", "keyboard"},
 		{"templates", "Templates", "file-text"},
+		{"teams", "Teams", "users"},
 		{"extensions", "Extensions", "layers"},
 		{"developer", "Developer", "code-xml"},
 	}},
@@ -139,6 +140,8 @@ func settingsContent(m *model, id string) ggui.Widget {
 		return shortcutSettings()
 	case "templates":
 		return templateSettings(m)
+	case "teams":
+		return teamSettings(m)
 	case "extensions":
 		return extensionSettings(m)
 	case "daemon":
@@ -210,14 +213,18 @@ func stackedRow(title, hint string, control ggui.Widget) ggui.Widget {
 // browseButton is a Browse… button that sets b to what pick chooses in the
 // platform's dialog, unless the dialog is cancelled.
 func browseButton(b ggui.Binding[string], pick func(runtime.Dialogs) (string, error)) *ui.ButtonWidget {
-	return ui.Button(T("Browse…"), func() {
-		dialogs := ggui.UseHost().Dialogs()
-		ggui.Async(func() (string, error) { return pick(dialogs) }, func(v string, err error) {
-			if err == nil && v != "" {
-				b.Set(v)
-			}
-		})
-	}).Outline()
+	return ui.Button(T("Browse…"), func() { browseInto(b.Set, pick) }).Outline()
+}
+
+// browseInto gives set what pick chooses in the host's dialogs, unless it
+// is nothing.
+func browseInto(set func(string), pick func(runtime.Dialogs) (string, error)) {
+	dialogs := ggui.UseHost().Dialogs()
+	ggui.Async(func() (string, error) { return pick(dialogs) }, func(v string, err error) {
+		if err == nil && v != "" {
+			set(v)
+		}
+	})
 }
 
 func prefField[T any](m *model, f func(*prefs) *T) ggui.Binding[T] {

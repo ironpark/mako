@@ -88,7 +88,7 @@ func TestTheComposerSendsATemplatesPrompt(t *testing.T) {
 	m.setComposerDraft("s", `//review "my file.go" 3`)
 	p.Frame()
 	p.Type(ggui.Mods{}, ggui.KeyEnter)
-	if got, want := sentThrough(p, link), "Review my file.go 3 deep as claude in /tmp/p.\r"; got != want {
+	if got, want := sentThrough(p, link), "[Mako template //review]\rReview my file.go 3 deep as claude in /tmp/p.\r"; got != want {
 		t.Fatalf("sent %q, want %q", got, want)
 	}
 

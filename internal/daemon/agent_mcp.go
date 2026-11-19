@@ -521,7 +521,7 @@ func (d *Daemon) spawnProjectAgent(ctx context.Context, peer *agentPeer, in spaw
 	if err := ctx.Err(); err != nil {
 		return agentSummary{}, err
 	}
-	prompt := fmt.Sprintf("[Mako project task: parent session %s. Use the mako MCP tools to coordinate and send_message to report results to the parent.]\n\n%s", peer.id, in.Prompt)
+	prompt := projectTaskPrompt(peer.id, in.Prompt)
 	prompter, ok := driver.Driver.(agent.Prompter)
 	if !ok {
 		return agentSummary{}, errors.New("this agent has no interactive startup prompt")
