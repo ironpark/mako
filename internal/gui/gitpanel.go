@@ -30,8 +30,18 @@ func gitPanel(m *model) ggui.Widget {
 	stamp := ggui.Derived(func() string {
 		return repoStamp(m.Sessions.Get(), root.Get(), m.git.View.Get().Changes.GetRoot())
 	})
-	pollWhileShown(m, root, gitTab, gitRefresh, m.loadGit, stamp)
-	pollWhileShown(m, root, gitTab, historyRefresh, m.loadHistory, stamp)
+	// The changes are polled only of a node that does not tell of them:
+	// one that does tells of a change in the work tree, and in its index,
+	// as it comes.
+	rest := func(r fileRoot) bool { return m.fileWatched(r.Node) }
+	pollWhileShown(m, root, gitTab, gitRefresh, m.loadGit, rest, stamp)
+	pollWhileShown(m, root, gitTab, historyRefresh, m.loadHistory, nil, stamp)
+	ggui.Effect(func() ggui.Cleanup {
+		if r := root.Get(); r.Path != "" && m.blockShown(gitTab) {
+			return m.watchTree(r)
+		}
+		return nil
+	})
 	return withRootPicker(m, ggui.Key(root, func(r fileRoot) ggui.Widget {
 		if r.Path == "" {
 			return widget.Box(muted(widget.Text(T("Open a session to see its changes.")).Size(13))).Pad(16)

@@ -213,8 +213,8 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				until("a session", func() bool { return len(ggui.Peek(m.Sessions)) > 0 }),
 				do(func() {
 					sessions := ggui.Peek(m.Sessions)
-					for i := len(sessions) - 1; i >= 0; i-- {
-						m.selectSession(sessions[i].GetId())
+					for _, session := range slices.Backward(sessions) {
+						m.selectSession(session.GetId())
 					}
 				}),
 				until("a terminal", func() bool { return slices.Contains(ggui.Peek(m.Attached), ggui.Peek(m.Selected)) }),

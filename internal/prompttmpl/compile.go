@@ -381,7 +381,7 @@ func jsName(name string) bool { return jsNameRe.MatchString(name) && !reserved[n
 var reserved = map[string]bool{}
 
 func init() {
-	for _, w := range strings.Fields("break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof new null return super switch this throw true try typeof var void while with yield let static implements interface package private protected public await async arguments eval undefined NaN Infinity args vars") {
+	for w := range strings.FieldsSeq("break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof new null return super switch this throw true try typeof var void while with yield let static implements interface package private protected public await async arguments eval undefined NaN Infinity args vars") {
 		reserved[w] = true
 	}
 }

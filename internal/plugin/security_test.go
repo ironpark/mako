@@ -271,15 +271,13 @@ func TestFloodingIsRefused(t *testing.T) {
 	var refused, taken atomic.Int32
 	var wg sync.WaitGroup
 	for range 300 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if _, err := r.event("plugin:flood/ui", "/on", protocol.UiChange, "true"); err != nil {
 				refused.Add(1)
 			} else {
 				taken.Add(1)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if taken.Load() != int32(testLimits.withDefaults().Events) {

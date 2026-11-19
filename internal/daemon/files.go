@@ -269,7 +269,7 @@ func markIgnored(dir string, entries []*protocol.DirEntry) {
 	cmd.Stdin = &in
 	out, _ := cmd.Output() // it exits 1 when none is ignored, 128 outside a repository
 	ignored := map[string]bool{}
-	for _, name := range strings.Split(string(out), "\x00") {
+	for name := range strings.SplitSeq(string(out), "\x00") {
 		ignored[strings.TrimSuffix(name, "/")] = true
 	}
 	for i := range entries {

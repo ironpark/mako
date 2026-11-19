@@ -33,8 +33,8 @@ func questionPrompt(s *protocol.SessionInfo, messages []*protocol.ChatMessage) s
 // pendingQuestionCall is the question call the agent waits on, the last of
 // the trailing calls; nil when it asks none.
 func pendingQuestionCall(messages []*protocol.ChatMessage) *protocol.ChatMessage {
-	for i := len(messages) - 1; i >= 0; i-- {
-		msg := messages[i]
+	for _, msg := range slices.Backward(messages) {
+
 		if msg.GetRole() != "tool" {
 			break
 		}

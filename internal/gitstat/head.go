@@ -163,6 +163,13 @@ func commonDir(gitDir string) string {
 	return filepath.Clean(common)
 }
 
+// GitDir is the git directory of the work tree dir is in, "" outside one:
+// a .git folder, or where a .git file, as a linked work tree has, points.
+func GitDir(dir string) string {
+	gitDir, _ := findGitDir(dir)
+	return gitDir
+}
+
 // findGitDir is the git directory of the work tree dir is in, a .git
 // folder or where a .git file, as a linked work tree or submodule has,
 // points, and the top of that work tree.

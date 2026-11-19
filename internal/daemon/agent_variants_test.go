@@ -92,7 +92,7 @@ func TestAnAgentDoesNotWriteVariants(t *testing.T) {
 	}
 
 	// A patch changes the root alone.
-	if _, why := l.call(t, toolPatchLayout, patchLayoutArgs{Ops: []layoutdoc.Op{{Op: "resize", ID: "sidebar", Size: ptrTo(300.0)}}}); why != "" {
+	if _, why := l.call(t, toolPatchLayout, patchLayoutArgs{Ops: []layoutdoc.Op{{Op: "resize", ID: "sidebar", Size: new(300.0)}}}); why != "" {
 		t.Fatal(why)
 	}
 	if c := compactOf(t, l); c != want {

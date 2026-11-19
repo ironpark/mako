@@ -31,7 +31,7 @@ func snakeToKebab(name string) string { return strings.ReplaceAll(name, "_", "-"
 // snakeToCamel is node_id as NodeId.
 func snakeToCamel(name string) string {
 	var b strings.Builder
-	for _, w := range strings.Split(name, "_") {
+	for w := range strings.SplitSeq(name, "_") {
 		if w == "" {
 			continue
 		}
@@ -54,7 +54,7 @@ func validKebab(name string) bool {
 	if name == "" {
 		return false
 	}
-	for _, w := range strings.Split(name, "-") {
+	for w := range strings.SplitSeq(name, "-") {
 		if w == "" || w[0] < 'a' || w[0] > 'z' {
 			return false
 		}
@@ -96,7 +96,7 @@ func witIdent(name string) string {
 func goPermName(p string) string {
 	var b strings.Builder
 	b.WriteString("Perm")
-	for _, w := range strings.Split(p, ":") {
+	for w := range strings.SplitSeq(p, ":") {
 		b.WriteString(strings.ToUpper(w[:1]) + w[1:])
 	}
 	return b.String()

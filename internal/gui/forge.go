@@ -16,7 +16,6 @@ import (
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
-	"github.com/ironpark/mako/internal/notify"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -434,7 +433,7 @@ func (m *model) noteRuns(b forgeBranch) {
 	for _, r := range b.Runs {
 		names = append(names, r.GetWorkflow())
 	}
-	go notify.Post(title, projectName(b.Root.Path)+" · "+strings.Join(names, ", "), forgeTarget(b.Root, run.GetNumber()))
+	m.notify(title, projectName(b.Root.Path)+" · "+strings.Join(names, ", "), forgeTarget(b.Root, run.GetNumber()))
 }
 
 // seenRuns is the state a commit's runs were last seen in.

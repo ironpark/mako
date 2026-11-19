@@ -90,7 +90,7 @@ func (d hostDraft) apply(cfg config.Config) (config.Config, error) {
 // lines splits text into its non-blank, trimmed lines.
 func lines(s string) []string {
 	var out []string
-	for _, l := range strings.Split(s, "\n") {
+	for l := range strings.SplitSeq(s, "\n") {
 		if l = strings.TrimSpace(l); l != "" {
 			out = append(out, l)
 		}

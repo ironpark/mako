@@ -60,7 +60,7 @@ func procLogs(pid int) []string {
 			continue
 		}
 		data, _ := os.ReadFile(fmt.Sprintf("/proc/%d/fdinfo/%s", pid, filepath.Base(fd)))
-		for _, line := range strings.Split(string(data), "\n") {
+		for line := range strings.SplitSeq(string(data), "\n") {
 			fields := strings.Fields(line)
 			if len(fields) == 2 && fields[0] == "flags:" {
 				flags, _ := strconv.ParseUint(fields[1], 8, 64)
@@ -103,7 +103,7 @@ func writablePaths(output string) map[int][]string {
 	paths := map[int][]string{}
 	pid := 0
 	writable := false
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		switch {
 		case strings.HasPrefix(line, "p"):
 			pid, _ = strconv.Atoi(line[1:])
@@ -122,7 +122,7 @@ func writablePaths(output string) map[int][]string {
 // root it runs under.
 func descendants(roots []int, output string) map[int]int {
 	children := map[int][]int{}
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) != 2 {
 			continue

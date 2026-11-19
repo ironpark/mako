@@ -220,8 +220,7 @@ func (m *Manager) scan() {
 		if !ok {
 			p = newPlugin(m, name)
 			m.plugins[name] = p
-			m.wg.Add(1)
-			go func() { defer m.wg.Done(); p.run(m.ctx) }()
+			m.wg.Go(func() { ; p.run(m.ctx) })
 		}
 		m.mu.Unlock()
 		if p.noteFolder(print) {

@@ -346,6 +346,8 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 	case protocol.TypeAttach:
 		return d.handleAttach(ctx, stream, env)
 
+	case protocol.TypeWatchFiles:
+		return d.handleWatchFiles(ctx, stream, env)
 	case protocol.TypeListDir:
 		return d.handleListDir(ctx, stream, env)
 
@@ -426,6 +428,8 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleAnswerQuestion(ctx, stream, env)
 	case protocol.TypeAnswerDialog:
 		return d.handleAnswerDialog(ctx, stream, env)
+	case protocol.TypeSeeSession:
+		return d.handleSeeSession(ctx, stream, env)
 	case protocol.TypeConfigureAgent:
 		return d.handleConfigureAgent(ctx, stream, env)
 	case protocol.TypeSleepSession:

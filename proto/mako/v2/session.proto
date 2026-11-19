@@ -131,6 +131,18 @@ message SessionInfo {
   // Mako's spawn_agent, on the same node; "" for one the user started. A
   // front-end shows a spawned session with the one that spawned it.
   string parent_session_id = 37;
+  // state_seq numbers the changes to the session's status and approval,
+  // as the daemon that runs it works them out (revision 36). attention_seq
+  // is the state_seq of the last change that asks for the user: a turn
+  // done, a request for an answer. seen_seq is the attention a front-end
+  // said the user has looked at, with SeeSession. A front-end shows the
+  // session unread while attention_seq is past seen_seq, and tells the
+  // user of an attention_seq it had not seen before: every front-end, on
+  // every node, so, the same. The numbers start again with the session's
+  // program.
+  uint64 state_seq = 38;
+  uint64 attention_seq = 39;
+  uint64 seen_seq = 40;
 }
 
 // AgentControls are the permission modes, models and efforts a session's
@@ -275,6 +287,15 @@ message RenameSession {
 message SleepSession {
   string session_id = 1;
   string node_id = 2;
+}
+
+// SeeSession says the user has looked at a session's attention up to seq,
+// SessionInfo.attention_seq, as the front-end showing it saw it; the reply
+// is its SessionInfo. Revision 36.
+message SeeSession {
+  string node_id = 1;
+  string session_id = 2;
+  uint64 seq = 3;
 }
 
 // AnswerApproval answers the approval a session's agent waits for.

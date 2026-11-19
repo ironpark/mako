@@ -9,10 +9,20 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 )
 
+// pubOf is what the session last published.
+func pubOf(s *Session) published {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pub
+}
+
+// statusOf is what the session makes of its evidence now, as its timer
+// or the next report would.
 func statusOf(s *Session) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	status, _ := s.statusLocked()
+	s.recomputeLocked(time.Now())
+	status := s.pub.status
 	return status
 }
 
@@ -186,5 +196,112 @@ func TestBackgroundTasksOfAnEarlierProcessAreStopped(t *testing.T) {
 	s.state = protocol.StateExited
 	if s.tasksLocked() != nil {
 		t.Fatal("an ended session kept its tasks")
+	}
+}
+
+// Work gone quiet ends as time passes, announced as any change is, and
+// numbered: not only once something reads the status.
+func TestTimeAloneAnnouncesItsChanges(t *testing.T) {
+	s := &Session{state: protocol.StateRunning}
+	s.ReportStatus(protocol.AgentWorking, 10)
+	s.mu.Lock()
+	s.statusAt = time.Now().Add(-2 * staleWork)
+	seq := s.pub.seq
+	status := s.pub.status
+	s.mu.Unlock()
+	if status != protocol.AgentWorking {
+		t.Fatal("reading the status changed it")
+	}
+	changed := s.Changed()
+	s.mu.Lock()
+	s.recomputeLocked(time.Now())
+	s.mu.Unlock()
+	select {
+	case <-changed:
+	default:
+		t.Fatal("work gone quiet ended unannounced")
+	}
+	if p := pubOf(s); p.status != protocol.AgentIdle || p.seq != seq+1 || p.turns != 1 {
+		t.Fatalf("after quiet: %+v", p)
+	}
+}
+
+// A turn done and a request for the user ask for attention, numbered;
+// saying a status again, or work, does not. What the user saw is the
+// session's, whichever front-end said it.
+func TestAttentionIsNumberedAndSeen(t *testing.T) {
+	s := &Session{state: protocol.StateRunning}
+	attention := func() (uint64, uint64) {
+		p := pubOf(s)
+		return p.attention, p.seen
+	}
+	s.ReportStatus(protocol.AgentWorking, 10)
+	if a, _ := attention(); a != 0 {
+		t.Fatal("work asked for attention")
+	}
+	s.ReportStatus(protocol.AgentDone, 20)
+	done, _ := attention()
+	if done == 0 {
+		t.Fatal("a turn done asked for no attention")
+	}
+	s.ReportStatus(protocol.AgentDone, 25)
+	if a, _ := attention(); a != done {
+		t.Fatal("a completion said again asked again")
+	}
+	if !s.See(done+100) || s.See(done) {
+		t.Fatal("seeing it was not news once")
+	}
+	if a, seen := attention(); seen != done || a != done {
+		t.Fatalf("seen %d of %d, want all of it", seen, a)
+	}
+	s.ReportStatus(protocol.AgentWaiting, 30)
+	s.BeginApproval(30, &protocol.Approval{Id: "a"})
+	asked, seen := attention()
+	if asked <= done || seen != done {
+		t.Fatal("a request did not ask anew")
+	}
+	s.HoldApproval(&protocol.Approval{Id: "b"})
+	if a, _ := attention(); a <= asked {
+		t.Fatal("another request did not ask anew")
+	}
+}
+
+// A turn ends once its subagents have: a parent done while one still
+// works has not ended its turn.
+func TestATurnEndsWithItsLastChild(t *testing.T) {
+	s := &Session{state: protocol.StateRunning, conversationID: "c"}
+	base := time.Now().UnixNano()
+	s.ReportStatus(protocol.AgentWorking, base)
+	s.ReportSubagent("c", "a", true, base+1)
+	s.ReportStatus(protocol.AgentDone, base+2)
+	if s.Turns() != 0 || pubOf(s).attention != 0 {
+		t.Fatal("the turn ended while a child worked")
+	}
+	s.ReportSubagent("c", "a", false, base+3)
+	if p := pubOf(s); p.turns != 1 || p.status != protocol.AgentDone || p.attention == 0 {
+		t.Fatalf("the last child's end did not end the turn: %+v", p)
+	}
+}
+
+// A tool's end says work goes on, or resumes from a request answered in
+// the terminal, but never revives a turn that ended: a tool an
+// interruption left running ends after the turn.
+func TestAToolsEndNeverRevivesAnEndedTurn(t *testing.T) {
+	s := &Session{state: protocol.StateRunning}
+	s.ReportStatus(protocol.AgentWorking, 10)
+	if !s.ReportToolDone(20) {
+		t.Fatal("a tool's end did not renew work")
+	}
+	s.ReportStatus(protocol.AgentWaiting, 30)
+	if !s.ReportToolDone(40) || statusOf(s) != protocol.AgentWorking {
+		t.Fatal("a request answered in the terminal did not resume work")
+	}
+	s.ReportStatus(protocol.AgentIdle, 50) // interrupted
+	if s.ReportToolDone(60) || statusOf(s) != protocol.AgentIdle {
+		t.Fatal("a tool ending after the interruption revived the turn")
+	}
+	s.ReportStatus(protocol.AgentDone, 70)
+	if s.ReportToolDone(80) || statusOf(s) != protocol.AgentDone {
+		t.Fatal("a tool's end revived a turn done")
 	}
 }

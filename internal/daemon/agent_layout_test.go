@@ -254,7 +254,7 @@ func TestALayoutChangeWithNoWindow(t *testing.T) {
 	if _, why := l.call(t, toolSetLayout, setLayoutArgs{Doc: movedDetailsDoc(t), IfRev: ""}); !strings.Contains(why, "no window") {
 		t.Fatalf("set with no window: %s", why)
 	}
-	resize := patchLayoutArgs{Ops: []layoutdoc.Op{{Op: "resize", ID: "sidebar", Size: ptrTo(300.0)}}}
+	resize := patchLayoutArgs{Ops: []layoutdoc.Op{{Op: "resize", ID: "sidebar", Size: new(300.0)}}}
 	if _, why := l.call(t, toolPatchLayout, resize); !strings.Contains(why, "no window") {
 		t.Fatalf("patch with no window: %s", why)
 	}
@@ -267,7 +267,8 @@ func TestALayoutChangeWithNoWindow(t *testing.T) {
 	}
 }
 
-func ptrTo[T any](v T) *T { return &v }
+//go:fix inline
+func ptrTo[T any](v T) *T { return new(v) }
 
 // The allowances are node-local and scoped: once allows the one change; a
 // space's allows changes of its document alone; always allows every one;
@@ -275,7 +276,7 @@ func ptrTo[T any](v T) *T { return &v }
 func TestLayoutAllowancesAreScoped(t *testing.T) {
 	l := newLayoutDaemon(t)
 	resize := func(doc string, size float64) patchLayoutArgs {
-		return patchLayoutArgs{Document: doc, Ops: []layoutdoc.Op{{Op: "resize", ID: "sidebar", Size: ptrTo(size)}}}
+		return patchLayoutArgs{Document: doc, Ops: []layoutdoc.Op{{Op: "resize", ID: "sidebar", Size: new(size)}}}
 	}
 	ask := func(args patchLayoutArgs, option string) {
 		t.Helper()
@@ -323,7 +324,7 @@ func TestUndoGoesBackThroughThisNodesVersions(t *testing.T) {
 		return doc.Node("sidebar").Size
 	}
 	for _, s := range []float64{300, 400} {
-		if _, why := l.call(t, toolPatchLayout, patchLayoutArgs{Ops: []layoutdoc.Op{{Op: "resize", ID: "sidebar", Size: ptrTo(s)}}}); why != "" {
+		if _, why := l.call(t, toolPatchLayout, patchLayoutArgs{Ops: []layoutdoc.Op{{Op: "resize", ID: "sidebar", Size: new(s)}}}); why != "" {
 			t.Fatal(why)
 		}
 	}
@@ -350,7 +351,7 @@ func TestUndoGoesBackThroughThisNodesVersions(t *testing.T) {
 // when it would be written.
 func TestALayoutChangedMeanwhileIsRefused(t *testing.T) {
 	l := newLayoutDaemon(t)
-	done := l.callLater(t, toolPatchLayout, patchLayoutArgs{Ops: []layoutdoc.Op{{Op: "resize", ID: "sidebar", Size: ptrTo(300.0)}}})
+	done := l.callLater(t, toolPatchLayout, patchLayoutArgs{Ops: []layoutdoc.Op{{Op: "resize", ID: "sidebar", Size: new(300.0)}}})
 	st := l.waitStage(t, protocol.LayoutApprove)
 	other, _ := json.Marshal(layoutdoc.Default())
 	if _, err := l.d.editWorkspace(&protocol.WorkspaceState{WindowLayouts: map[string]*protocol.LayoutEntry{"default": {Doc: other}}}, nil, true); err != nil {

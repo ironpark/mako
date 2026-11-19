@@ -236,7 +236,7 @@ func modelName(id string) string {
 		return id
 	}
 	var name, version []string
-	for _, part := range strings.Split(rest, "-") {
+	for part := range strings.SplitSeq(rest, "-") {
 		switch {
 		case part == "":
 		case isDigits(part) && len(part) >= 8: // a date

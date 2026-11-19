@@ -35,7 +35,7 @@ func (*Agent) LogCommands(line []byte) []agent.Command {
 	}
 	// Each skill's line: "- name: what it does".
 	described := map[string]string{}
-	for _, l := range strings.Split(r.Attachment.Content, "\n") {
+	for l := range strings.SplitSeq(r.Attachment.Content, "\n") {
 		if name, desc, ok := strings.Cut(strings.TrimPrefix(l, "- "), ": "); ok && strings.HasPrefix(l, "- ") {
 			described[name] = agent.Clip(strings.TrimSpace(desc), maxListedDescription)
 		}

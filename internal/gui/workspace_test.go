@@ -84,7 +84,7 @@ func TestTheDaemonsWorkspaceIsTakenUp(t *testing.T) {
 	m.saveWorkspace()
 	// Another window's edit, later, of the same panes and the spaces.
 	sp := space{ID: "w1", Name: "work", Owners: []string{"github.com/acme"}}
-	d.edit(t, workspaceDoc{spaceList: spaceList{Spaces: []space{sp}}, Layouts: map[string]*layoutNode{
+	d.edit(t, workspaceDoc{Spaces: []space{sp}, Layouts: map[string]*layoutNode{
 		layoutKey(allSpaceID, ""): {ID: 1, Group: &tabGroup{ID: 1, Tabs: []string{"theirs", "diff\x00x"}, Active: "theirs"}},
 	}})
 	given := len(d.given)
@@ -264,7 +264,7 @@ func TestContextsStayInTheWindow(t *testing.T) {
 func TestContextsFollowTheirSections(t *testing.T) {
 	m, p := workspaceModel(t)
 	p.Frame()
-	dir := keptProject{fileRoot: fileRoot{Node: "n1", Path: "/src/api"}}
+	dir := keptProject{Node: "n1", Path: "/src/api"}
 	m.Prefs.Update(func(p prefs) prefs { p.Projects = []keptProject{dir}; return p })
 	m.ws.contexts[allSpaceID] = projectContext(dirKey("n1", "/src/api"))
 	m.ws.contexts["w1"] = projectContext(dirKey("n1", "/gone"))
@@ -273,7 +273,7 @@ func TestContextsFollowTheirSections(t *testing.T) {
 		{Locations: []fileRoot{{Node: "n1", Path: "/src/web"}}},
 	}}
 	doc := workspaceDoc{
-		spaceList: spaceList{Projects: []project{merged}, Spaces: []space{{ID: "w1", Name: "work"}}},
+		Projects: []project{merged}, Spaces: []space{{ID: "w1", Name: "work"}},
 		Layouts: map[string]*layoutNode{
 			layoutKey(allSpaceID, projectContext("pj")): {ID: 1, Group: &tabGroup{ID: 1, Tabs: []string{"s1"}, Active: "s1"}},
 		},

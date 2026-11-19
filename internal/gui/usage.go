@@ -38,21 +38,22 @@ func trimZero(s string) string {
 // usageDetail is a conversation's tokens in full, and the account's limits
 // as they stand at now, with when each starts over.
 func usageDetail(u *protocol.Usage, now time.Time) string {
-	s := Tf("Input %s (cached %s) · output %s", tokens(u.GetInput()+u.GetCachedInput()), tokens(u.GetCachedInput()), tokens(u.GetOutput()))
+	var s strings.Builder
+	s.WriteString(Tf("Input %s (cached %s) · output %s", tokens(u.GetInput()+u.GetCachedInput()), tokens(u.GetCachedInput()), tokens(u.GetOutput())))
 	if u.GetContext() > 0 {
-		s += "\n" + Tf("Latest prompt %s tokens", tokens(u.GetContext()))
+		s.WriteString("\n" + Tf("Latest prompt %s tokens", tokens(u.GetContext())))
 		if u.GetWindow() > 0 {
-			s += Tf(" of %s", tokens(u.GetWindow()))
+			s.WriteString(Tf(" of %s", tokens(u.GetWindow())))
 		}
 	}
 	for _, l := range u.GetLimits() {
 		used, resets := limitNow(l, now)
-		s += "\n" + Tf("%s limit %d%% used", limitName(l.GetMinutes()), int(used+0.5))
+		s.WriteString("\n" + Tf("%s limit %d%% used", limitName(l.GetMinutes()), int(used+0.5)))
 		if resets > 0 {
-			s += Tf(", resets in %s (%s)", untilText(resets), time.Unix(l.GetResets(), 0).Format("01-02 15:04"))
+			s.WriteString(Tf(", resets in %s (%s)", untilText(resets), time.Unix(l.GetResets(), 0).Format("01-02 15:04")))
 		}
 	}
-	return s
+	return s.String()
 }
 
 // usageTip shows the usage's detail under the pointer over w, written as

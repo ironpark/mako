@@ -30,8 +30,8 @@ The native code mako uses is called through
 [gostty](https://github.com/ironpark/gostty), and wasmtime, through
 [wasmtime-pure-go](https://github.com/ironpark/wasmtime-pure-go), each embed
 their shared library for macOS, Linux and Windows on x86-64 and arm64 and
-unpack it into the user cache on first use; macOS's notifications and Dock
-badge go through the Objective-C runtime.
+unpack it into the user cache on first use; macOS's Dock badge goes through
+the Objective-C runtime.
 
 | Target | |
 |---|---|
@@ -83,7 +83,6 @@ take it out before you commit.
     internal/gui/boxdraw the terminal's box drawing and block elements, as shapes
     internal/gui/mdview  a Markdown page laid out as widgets; the window is its Host
     internal/gui/svgdraw a Markdown page's SVGs, drawn, with their text set apart
-    internal/notify      desktop notifications, each platform's own way
     internal/keychain    the system's keychain without cgo: macOS's Security framework, the Secret Service, the Credential Manager
     internal/shellenv    the login shell's environment, for an app the desktop started
     internal/syntax      tree-sitter compiled to wasm, under wasmtime
@@ -155,12 +154,46 @@ has hooks. Each hook runs the daemon's own program, which reports to the
 daemon on a private Unix socket; see
 [the local hook socket](docs/protocol.md#the-local-hook-socket).
 
-Status reports are ordered by when their hooks ran. An explicit OSC 9;4
-progress removal ends work even when an interruption runs no Stop hook;
-Codex's logged turn boundaries also report starts, completion and cancellation.
-Without further evidence, work that prints nothing for a minute falls back
-to idle and stays idle until a new work event. OSC progress reports expire
-after 15 seconds without a refresh, as Ghostty's do.
+A session's status is made in one place, `recomputeLocked` in
+`internal/session/status.go`. What tells of the agent only records its
+evidence: its hooks, ordered by when each ran; its log, by when each
+record was written; approvals; subagents; its screen; its terminal's
+progress. These share one clock, the wall clock of the session's node,
+which runs them all. The reducer then works out the status by a fixed
+order: an ended session has none; an approval held is waiting; a dialog
+on screen newer than the reports is waiting; work shown outright on screen
+for a second since the reports said a turn ended is working, as a turn
+whose prompt no hook told of; a turn done while subagents work is working;
+otherwise what was reported. Reading a status changes nothing: a
+per-session timer recomputes for what time alone changes, and announces it
+as any change.
+
+Each change to the status or approval is numbered, `SessionInfo.state_seq`,
+and one that asks for the user, a turn done or a request, is its
+`attention_seq`. The daemon keeps what the user saw, `seen_seq`, which a
+window showing the session says with `see_session`. Every window and the
+phone then show the same sessions unread, and none misses a turn that ended
+between two of its polls. A window falls back to comparing polls only for a
+daemon older than revision 36.
+
+The hooks keep the roles only they can fill: the conversation's identity,
+approvals and questions (`PermissionRequest`), subagents' lifecycles, and
+the turn's start and end at low latency. A tool's end (`PostToolUse`)
+renews work, or resumes it from a request answered in the terminal, but
+never starts a turn: a tool an interruption left running ends after the
+turn did. The end of a turn no hook reports is seen elsewhere: an explicit
+OSC 9;4 progress removal; the prompt shown on screen for 1.5s, the turn
+ending when it first showed; Codex's logged turn boundaries, which also
+report starts, completion and cancellation; or, without further evidence,
+work that prints nothing for a minute, which falls back to idle and stays
+idle until a new work event. OSC progress reports expire after 15 seconds
+without a refresh, as Ghostty's do.
+
+The screen rules (`internal/detect`, a driver's `ScreenRules`) follow
+herdr's agent detection. Claude's, Codex's and agy's are written; agy,
+whose hooks say nothing of its approvals, questions or interruptions,
+depends on them most. A driver's rules are checked against its agent's
+real screens, kept in its `testdata`.
 
 The daemon follows subagents independently of chat readers, scanning task
 calls across the whole conversation rather than only the latest chat page.
@@ -329,12 +362,13 @@ one in the app, **In this app** always does, and **External** only talks to
 a `makod` started some other way. A daemon in the app listens like any
 other, but its sessions end when the app quits.
 
-It notifies the desktop through `internal/notify`, and a click on a
-notification opens the session it is about, or Settings ▸ Access for a
-request to be let in. On macOS that takes the bundle (`make app`):
-UserNotifications posts only for an app with a bundle identifier, and a
-bare `mako-gui` falls back to `osascript`, whose notifications come from
-Script Editor and open nothing. Linux and the BSDs use the freedesktop
+It notifies the desktop through ggui's notifications (`Host.Notify`), and
+a click on a notification opens the session it is about, a check's run, or
+Settings ▸ Access for a request to be let in; a later notification about
+the same thing takes the place of the last. On macOS that takes the bundle
+(`make app`): UserNotifications posts only for an app with a bundle
+identifier, and a bare `mako-gui` falls back to `osascript`, whose
+notifications open nothing. Linux and the BSDs use the freedesktop
 notification service over D-Bus, and Windows toasts.
 
 Opened from the Finder or a desktop's menu, without `TERM`, the app (and
@@ -342,6 +376,17 @@ Opened from the Finder or a desktop's menu, without `TERM`, the app (and
 before anything else (`internal/shellenv`): it runs `$SHELL -l -i` once,
 with `MAKO_SHELL_ENV=1` set for a profile that wants to tell, so it finds
 the agents on the user's `PATH`.
+
+The window does not poll the files it shows. It has each node follow,
+with `watch_files`, the folders it lists, in the Files tab and the file
+browsers, the files open in its editor and preview, and the work tree the
+Git tab shows (`internal/gui/filewatch.go`); the node watches them with
+ggui's `pkg/fswatch` (`internal/daemon/watchfiles.go`), and the window
+reads again what it is told changed. A work tree is followed with its git
+directory's `index` and `HEAD`, as a file staged changes nothing in the
+tree; the window's own `git status` runs with `--no-optional-locks`, which
+never rewrites the index, so following it cannot feed itself. A node older
+than revision 37 is polled as before.
 
 Its settings are kept in `gui.json` beside `config.json`. The window is
 drawn from a window layout document (`internal/layoutdoc`), the

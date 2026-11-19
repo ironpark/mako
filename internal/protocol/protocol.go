@@ -57,6 +57,7 @@ const (
 	TypeAnswerDialog   Type = "answer_dialog"
 	TypeConfigureAgent Type = "configure_agent"
 	TypeSleepSession   Type = "sleep_session"
+	TypeSeeSession     Type = "see_session"
 	TypeAttach         Type = "attach"
 	TypeInput          Type = "input"
 	TypeOutput         Type = "output"
@@ -65,6 +66,8 @@ const (
 	TypeExited         Type = "exited"
 	TypeListDir        Type = "list_dir"
 	TypeDir            Type = "dir"
+	TypeWatchFiles     Type = "watch_files"
+	TypeFilesChanged   Type = "files_changed"
 	TypeReadFile       Type = "read_file"
 	TypeFile           Type = "file"
 	TypeWriteFile      Type = "write_file"
@@ -363,8 +366,7 @@ func HasCode(err error, code string) bool {
 func WriteError(w io.Writer, id string, err error) error {
 	// An error may quote what a server, a registry or a plugin wrote.
 	e := &Error{Message: Printable(err.Error())}
-	var ce *CodedError
-	if errors.As(err, &ce) {
+	if ce, ok := errors.AsType[*CodedError](err); ok {
 		e.Code = ce.Code
 		for _, a := range ce.Args {
 			e.Args = append(e.Args, Printable(a))

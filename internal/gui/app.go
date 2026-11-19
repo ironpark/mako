@@ -12,7 +12,6 @@ import (
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/skin"
-	"github.com/ironpark/mako/internal/notify"
 )
 
 // Run opens the window and blocks until it closes. addr is the daemon to
@@ -43,7 +42,6 @@ func Run(cfg *config.Config, addr string) error {
 		setup(m)
 		trayMode(app, m)
 		m.start(ctx, app.Post)
-		notify.Init(func(target string) { app.Post(func() { m.reveal(target) }) })
 	})
 	shortcuts(app, m)
 	app.OnDrop(m.dropFolder)
@@ -66,7 +64,15 @@ func Run(cfg *config.Config, addr string) error {
 // and the daemon link. It runs under the app's (or a probe's) owner.
 func setup(m *model) {
 	m.window = ggui.UseWindow()
+	m.host = ggui.UseHost()
+	// A click on a notification opens what it was about.
+	m.host.OnNotification(func(r ggui.NotificationResponse) {
+		if r.Action == "" {
+			m.reveal(r.Data)
+		}
+	})
 	followAttention(m)
+	followFiles(m)
 	followWindowFocus(m)
 	setupWorkspace(m)
 	ggui.Effect(func() ggui.Cleanup {
@@ -83,7 +89,7 @@ func setup(m *model) {
 		}
 		prev := last
 		last = p
-		m.link.approveInApp.Store(p.ApproveInApp)
+		m.link.setApproveInApp(p.ApproveInApp)
 		m.recorder.on.Store(p.RecordStreams)
 		if p.Daemon != prev.Daemon {
 			m.reconnect(p.Daemon)
@@ -139,4 +145,17 @@ var shortcutList = []struct{ Chord, Action string }{
 	{"cmd+f", "Find in the session"},
 	{"alt+cmd+down", "Next changed file"},
 	{"alt+cmd+up", "Previous changed file"},
+}
+
+// notify tells the desktop of what target is about, as the platform shows
+// notifications, with its sound; a later one about the same target takes
+// its place, and a click on it reveals target. It may be called from any
+// goroutine, and returns at once.
+func (m *model) notify(title, body, target string) {
+	if m.host == nil {
+		return
+	}
+	if err := m.host.Notify(ggui.Notification{ID: target, Title: title, Body: body, Sound: true, Data: target}); err != nil {
+		m.notifyFailed.Do(func() { log.Printf("mako: notifications: %v", err) })
+	}
 }

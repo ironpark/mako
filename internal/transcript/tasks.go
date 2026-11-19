@@ -53,8 +53,8 @@ func (b *backgroundTasks) take(ev agent.TaskEvent) {
 func (b *backgroundTasks) list() []*protocol.BackgroundTask {
 	ended := 0
 	var out []*protocol.BackgroundTask
-	for i := len(b.tasks) - 1; i >= 0; i-- {
-		t := b.tasks[i]
+	for _, t := range slices.Backward(b.tasks) {
+
 		if !t.GetRunning() {
 			if ended++; ended > keptTasks {
 				continue

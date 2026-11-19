@@ -123,8 +123,8 @@ func (m *agentMessages) copyLocked() messageFile {
 func trimAgentHistory(history []agentMessageRecord) []agentMessageRecord {
 	counts := map[string]int{}
 	kept := make([]agentMessageRecord, 0, len(history))
-	for i := len(history) - 1; i >= 0; i-- {
-		record := history[i]
+	for _, record := range slices.Backward(history) {
+
 		if counts[record.Project] < maxAgentHistory {
 			kept = append(kept, record)
 			counts[record.Project]++

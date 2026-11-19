@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -161,9 +162,7 @@ func (s *Store) reconcileLocked() {
 	}
 	s.mu.Lock()
 	pins := make(map[string]Install, len(s.installs))
-	for id, in := range s.installs {
-		pins[id] = in
-	}
+	maps.Copy(pins, s.installs)
 	s.mu.Unlock()
 	for id, in := range pins {
 		switch s.examine(id, in) {

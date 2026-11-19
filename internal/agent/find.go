@@ -103,7 +103,7 @@ func fnmDir(goos, home string, env func(string) string) string {
 // [22 1 0].
 func nodeVersion(bin string) []int {
 	var v []int
-	for _, part := range strings.Split(strings.TrimPrefix(filepath.Base(filepath.Dir(bin)), "v"), ".") {
+	for part := range strings.SplitSeq(strings.TrimPrefix(filepath.Base(filepath.Dir(bin)), "v"), ".") {
 		n, _ := strconv.Atoi(part)
 		v = append(v, n)
 	}

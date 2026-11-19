@@ -55,13 +55,28 @@ internal fun SessionInfo.noticeKind(): NoticeKind? = when {
  * it works again. A node older than turns counts none, and its idle
  * agents call for nothing.
  */
-internal fun SessionInfo.noticeKind(old: SessionInfo?, oldKind: NoticeKind?): NoticeKind? =
-    noticeKind() ?: when {
+internal fun SessionInfo.noticeKind(old: SessionInfo?, oldKind: NoticeKind?): NoticeKind? = when {
+    // Looked at in a window, or here, as its node says: nothing to tell.
+    seenElsewhere() -> null
+    else -> noticeKind() ?: when {
         state != "running" || status != "idle" -> null
         old != null && turns > old.turns -> NoticeKind.Done
         old?.status == "idle" && oldKind == NoticeKind.Done -> NoticeKind.Done
         else -> null
     }
+}
+
+/**
+ * Whether a node that numbers its sessions' status (revision 36) says the
+ * user has seen all this one asked for: a turn done or a question, though
+ * not an approval, which waits on an answer however long it is looked at.
+ */
+internal fun SessionInfo.seenElsewhere(): Boolean =
+    stateSeq > 0 && attentionSeq <= seenSeq && noticeKind() != NoticeKind.Approval
+
+/** Whether session asked for the user since old, as its node numbers it. */
+private fun SessionInfo.askedSince(old: SessionInfo): Boolean =
+    stateSeq > 0 && attentionSeq > seenSeq && (startedAt != old.startedAt || attentionSeq > old.attentionSeq)
 
 internal data class NoticeChange(val session: SessionInfo, val kind: NoticeKind?)
 
@@ -84,7 +99,7 @@ internal class NoticeTracker {
             if (old == null) continue
             // Another turn ended while the last one's notice stood, between
             // two looks, is news too.
-            val again = kind == NoticeKind.Done && session.turns > old.turns
+            val again = kind == NoticeKind.Done && (session.turns > old.turns || session.askedSince(old))
             if (old.approval.id != session.approval.id || kinds[key] != kind || again) {
                 changes += NoticeChange(session, kind)
             }

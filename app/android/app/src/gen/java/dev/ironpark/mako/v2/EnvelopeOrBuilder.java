@@ -1229,5 +1229,54 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.Panels getPanels();
 
+  /**
+   * <pre>
+   * What the user has looked at of a session (revision 36).
+   * </pre>
+   *
+   * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+   * @return Whether the seeSession field is set.
+   */
+  boolean hasSeeSession();
+  /**
+   * <pre>
+   * What the user has looked at of a session (revision 36).
+   * </pre>
+   *
+   * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+   * @return The seeSession.
+   */
+  dev.ironpark.mako.v2.SeeSession getSeeSession();
+
+  /**
+   * <pre>
+   * Changes to a node's files, as they come (revision 37).
+   * </pre>
+   *
+   * <code>.mako.v2.WatchFiles watch_files = 140 [json_name = "watchFiles"];</code>
+   * @return Whether the watchFiles field is set.
+   */
+  boolean hasWatchFiles();
+  /**
+   * <pre>
+   * Changes to a node's files, as they come (revision 37).
+   * </pre>
+   *
+   * <code>.mako.v2.WatchFiles watch_files = 140 [json_name = "watchFiles"];</code>
+   * @return The watchFiles.
+   */
+  dev.ironpark.mako.v2.WatchFiles getWatchFiles();
+
+  /**
+   * <code>.mako.v2.FilesChanged files_changed = 141 [json_name = "filesChanged"];</code>
+   * @return Whether the filesChanged field is set.
+   */
+  boolean hasFilesChanged();
+  /**
+   * <code>.mako.v2.FilesChanged files_changed = 141 [json_name = "filesChanged"];</code>
+   * @return The filesChanged.
+   */
+  dev.ironpark.mako.v2.FilesChanged getFilesChanged();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

@@ -1,0 +1,19 @@
+
+      ▄▀▀▄
+     ▀▀▀▀▀▀
+    ▀▀▀▀▀▀▀▀
+   ▄▀▀    ▀▀▄
+  ▄▀▀      ▀▀▄
+
+  Antigravity CLI 1.5.12
+  user@example.com (Google AI Pro)
+  Gemini 4 Hydrogen (Medium)
+  /home/user/project
+
+────────────────────────────────────────────────────────────
+> Run the shell command `date` and tell me the output. Do nothing else.
+⣾  Generating...
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+esc to cancel                                                                  accept-edits · Gemini 4 Hydrogen · medium

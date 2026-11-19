@@ -362,8 +362,7 @@ func LoadSigner(pubPath string) (ssh.Signer, error) {
 	}
 	signer, err := ssh.ParsePrivateKey(priv)
 	if err != nil {
-		var missing *ssh.PassphraseMissingError
-		if errors.As(err, &missing) {
+		if _, ok := errors.AsType[*ssh.PassphraseMissingError](err); ok {
 			return nil, fmt.Errorf("%s has a passphrase; add it to the SSH agent", strings.TrimSuffix(pubPath, ".pub"))
 		}
 		return nil, err

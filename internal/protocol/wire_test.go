@@ -18,9 +18,9 @@ import (
 func TestEveryTypeHasABody(t *testing.T) {
 	types := []Type{
 		TypeHello, TypeWelcome, TypeError, TypeListNodes, TypeNodes, TypeWatch, TypeChanged, TypeAccess, TypeAccessInfo, TypeGetWorkspace, TypeWorkspace, TypeLayoutDecision,
-		TypeListSess, TypeSessions, TypeOpenSession, TypeSessionInfo, TypeCloseSess, TypeRenameSess, TypeAnswerApproval, TypeSend, TypeAnswerQuestion, TypeAnswerDialog, TypeConfigureAgent, TypeSleepSession, TypeListCommands, TypeCommands,
+		TypeListSess, TypeSessions, TypeOpenSession, TypeSessionInfo, TypeCloseSess, TypeRenameSess, TypeAnswerApproval, TypeSend, TypeAnswerQuestion, TypeAnswerDialog, TypeConfigureAgent, TypeSleepSession, TypeSeeSession, TypeListCommands, TypeCommands,
 		TypeAttach, TypeInput, TypeOutput, TypeResize, TypeSnapshot, TypeExited,
-		TypeListDir, TypeDir, TypeReadFile, TypeFile, TypeWriteFile, TypeFileOp, TypeSearch, TypeSearchResult, TypeStageFile, TypeStaged, TypeTunnel, TypeTunneled,
+		TypeListDir, TypeDir, TypeWatchFiles, TypeFilesChanged, TypeReadFile, TypeFile, TypeWriteFile, TypeFileOp, TypeSearch, TypeSearchResult, TypeStageFile, TypeStaged, TypeTunnel, TypeTunneled,
 		TypeGitStatus, TypeGitChanges, TypeGitDiff, TypeDiff, TypeGitLog, TypeGitHistory, TypeGitShow,
 		TypeGitCommitInfo, TypeGitRun, TypeGitResult, TypeReadChat, TypeChat,
 		TypeReadProjectAgents, TypeProjectAgents, TypeSetProjects, TypeProjects, TypeRelayAgentMessage, TypeAgentMessage, TypeWatchChat, TypeChatLive,

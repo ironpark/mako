@@ -1,0 +1,14 @@
+Accessing workspace:
+
+/home/user/project
+/home/user/project
+
+Do you trust the contents of this project?
+
+Antigravity CLI requires permission to read, edit, and execute files here.
+
+> Yes, I trust this folder
+  No, exit
+
+  ↑/↓ Navigate · enter Confirm
+                                                                                       auto · Gemini 4 Hydrogen · medium

@@ -2,18 +2,20 @@ package gui
 
 import (
 	"cmp"
+	"context"
 	"maps"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/widget"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
-	"github.com/ironpark/mako/internal/notify"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -21,6 +23,14 @@ import (
 // session that finishes or asks while not in view is unread: its dot turns
 // blue, or amber while it waits, until it is looked at; the Dock counts the
 // unread, and the desktop is told unless the settings say not to.
+//
+// The daemon that runs a session numbers what asks for the user
+// (SessionInfo.attention_seq) and keeps what the user has looked at
+// (seen_seq), which a window showing the session says with SeeSession: so
+// every window and the phone show it unread the same, and none misses a
+// turn ended between two of its polls. A session of an older daemon, which
+// numbers nothing, is followed as before, by comparing one poll's statuses
+// with the next.
 
 // dotOf is what a session's dot shows.
 func (m *model) dotOf(s *protocol.SessionInfo) dotState {
@@ -31,7 +41,9 @@ func (m *model) dotOf(s *protocol.SessionInfo) dotState {
 		return dotRest
 	case s.GetApproval() != nil || s.GetStatus() == protocol.AgentWaiting:
 		return dotWaiting
-	case protocol.AtWork(s.GetStatus()) || ((s.GetStatus() == "" || s.GetStatus() == protocol.AgentIdle) && m.busy(s.GetId())):
+	// Work its terminal reports, as the daemon read it: not as this
+	// window's own terminal did, which a window without it would not show.
+	case protocol.AtWork(s.GetStatus()) || ((s.GetStatus() == "" || s.GetStatus() == protocol.AgentIdle) && s.GetBusy()):
 		return dotWorking
 	case m.Unread.Get()[s.GetId()]:
 		return dotDone
@@ -70,14 +82,29 @@ func (m *model) noteStatus(next []*protocol.SessionInfo) {
 	prev := ggui.Peek(m.Sessions)
 	unread := ggui.Peek(m.Unread)
 	changed := false
+	// set marks id unread or not, on a copy of the marks taken once.
+	set := func(id string, on bool) {
+		if unread[id] == on {
+			return
+		}
+		if !changed {
+			unread = maps.Clone(unread)
+			changed = true
+		}
+		if on {
+			unread[id] = true
+		} else {
+			delete(unread, id)
+		}
+	}
 	for _, s := range next {
 		old, known := sessionIn(prev, s.GetId())
-		if known && m.noteProgram(old, s) && !unread[s.GetId()] {
-			if !changed {
-				unread = maps.Clone(unread)
-				changed = true
-			}
-			unread[s.GetId()] = true
+		if known && m.noteProgram(old, s) {
+			set(s.GetId(), true)
+		}
+		if numbered(s) {
+			m.noteAttention(old, known, s, func(on bool) { set(s.GetId(), on) })
+			continue
 		}
 		if !known || !attends(s) || (old.GetStatus() == s.GetStatus() && proto.Equal(old.GetStatusAt(), s.GetStatusAt()) && old.GetApproval().GetId() == s.GetApproval().GetId()) {
 			continue
@@ -85,28 +112,72 @@ func (m *model) noteStatus(next []*protocol.SessionInfo) {
 		if m.inView(s.GetId()) {
 			continue
 		}
-		if !unread[s.GetId()] {
-			if !changed {
-				unread = maps.Clone(unread)
-				changed = true
-			}
-			unread[s.GetId()] = true
-		}
+		set(s.GetId(), true)
 		m.announce(s)
 	}
 	// A session gone takes its mark with it.
 	for id := range unread {
 		if _, ok := sessionIn(next, id); !ok {
-			if !changed {
-				unread = maps.Clone(unread)
-				changed = true
-			}
-			delete(unread, id)
+			set(id, false)
 		}
 	}
 	if changed {
 		m.Unread.Set(unread)
 	}
+}
+
+// numbered reports whether the daemon running s numbers its status, which
+// says then what is unread.
+func numbered(s *protocol.SessionInfo) bool { return s.GetStateSeq() > 0 }
+
+// noteAttention marks s, of a daemon that numbers its status, unread as
+// that daemon says, and tells the desktop of an attention new since the
+// last poll; one in view the user is seeing, which the daemon is told.
+func (m *model) noteAttention(old *protocol.SessionInfo, known bool, s *protocol.SessionInfo, mark func(bool)) {
+	unseen := s.GetAttentionSeq() > s.GetSeenSeq()
+	switch {
+	case unseen && m.inView(s.GetId()):
+		m.see(s)
+		mark(false)
+		return
+	case unseen:
+		mark(true)
+	case !known || s.GetSeenSeq() > old.GetSeenSeq():
+		mark(false) // seen, here or in another window
+	}
+	if !known || !unseen {
+		return
+	}
+	// The numbers start again with the session's program.
+	before := old.GetAttentionSeq()
+	if !old.GetStartedAt().AsTime().Equal(s.GetStartedAt().AsTime()) {
+		before = 0
+	}
+	if s.GetAttentionSeq() > before {
+		m.announce(s)
+	}
+}
+
+// see tells the daemon running s that the user has looked at its
+// attention, once for each.
+func (m *model) see(s *protocol.SessionInfo) {
+	seq := s.GetAttentionSeq()
+	if m.post == nil || seq <= s.GetSeenSeq() || m.seeing[s.GetId()] >= seq {
+		return
+	}
+	if m.seeing == nil {
+		m.seeing = map[string]uint64{}
+	}
+	id := s.GetId()
+	m.seeing[id] = seq
+	req := &protocol.SeeSession{NodeId: m.remoteID(s.GetNodeId()), SessionId: id, Seq: seq}
+	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SessionInfo, error) {
+		return c.SeeSession(ctx, req)
+	}, func(_ *protocol.SessionInfo, err error) {
+		if err != nil && m.seeing[id] == seq {
+			delete(m.seeing, id) // asked again when next seen
+		}
+	})
 }
 
 // attends reports whether a session's state asks for the user.
@@ -129,6 +200,9 @@ func (m *model) seen() {
 	unread = maps.Clone(unread)
 	for _, id := range drop {
 		delete(unread, id)
+		if s, ok := m.session(id); ok && numbered(s) {
+			m.see(s)
+		}
 	}
 	m.Unread.Set(unread)
 }
@@ -151,7 +225,7 @@ func (m *model) announce(s *protocol.SessionInfo) {
 	default:
 		body = T("Finished its turn")
 	}
-	go notify.Post(title, projectName(s.GetProject())+" · "+body, sessionTarget(s.GetId()))
+	m.notify(title, projectName(s.GetProject())+" · "+body, sessionTarget(s.GetId()))
 }
 
 // noteProgram passes on what a session's program asked of the terminal
@@ -175,7 +249,7 @@ func (m *model) noteProgram(old, s *protocol.SessionInfo) bool {
 	if ggui.Peek(m.Prefs).Notify {
 		n := s.GetNotice()
 		title := cmp.Or(n.GetTitle(), sessionTitle(s, ggui.Peek(m.Titles)[s.GetId()]))
-		go notify.Post(title, projectName(s.GetProject())+" · "+n.GetBody(), sessionTarget(s.GetId()))
+		m.notify(title, projectName(s.GetProject())+" · "+n.GetBody(), sessionTarget(s.GetId()))
 	}
 	return true
 }

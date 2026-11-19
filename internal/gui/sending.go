@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -59,9 +60,9 @@ func loadedMessages(state *chatState) []*protocol.ChatMessage {
 // of the user messages of that key it is, from 1.
 func latestUser(messages []*protocol.ChatMessage) (string, int) {
 	key := ""
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].GetRole() == "user" {
-			key = chatMessageKey(messages[i])
+	for _, message := range slices.Backward(messages) {
+		if message.GetRole() == "user" {
+			key = chatMessageKey(message)
 			break
 		}
 	}

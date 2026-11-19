@@ -310,7 +310,7 @@ type patchFile struct {
 // begun with "@@", their lines with " ", "-" or "+".
 func parsePatch(patch string) []patchFile {
 	var files []patchFile
-	for _, l := range strings.Split(patch, "\n") {
+	for l := range strings.SplitSeq(patch, "\n") {
 		switch {
 		case strings.HasPrefix(l, "*** Begin Patch"), strings.HasPrefix(l, "*** End Patch"), strings.HasPrefix(l, "*** End of File"):
 		case strings.HasPrefix(l, "*** Add File: "):

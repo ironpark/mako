@@ -295,8 +295,7 @@ func (a *ADB) Serve(ctx context.Context, serial string, conn io.ReadWriteCloser)
 // an error.
 func relayStatus(client io.Writer, server io.Reader) error {
 	if err := readStatus(server); err != nil {
-		var f failure
-		if errors.As(err, &f) {
+		if f, ok := errors.AsType[failure](err); ok {
 			_ = writeFail(client, string(f))
 		}
 		return err

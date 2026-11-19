@@ -16,10 +16,10 @@ import (
 // holding one of its owners, else the default one; the first space shows
 // every one.
 func TestAProjectIsInOneSpace(t *testing.T) {
-	p := spaceSet{spaceList: spaceList{Default: "home", Spaces: []space{
+	p := spaceSet{Default: "home", Spaces: []space{
 		{ID: "work", Owners: []string{"github.com/acme"}, Projects: []string{"notes"}, Hidden: []string{"repo:github.com/acme/old"}},
 		{ID: "home", Owners: []string{"github.com/acme"}, Projects: []string{"notes", "repo:github.com/acme/moved"}},
-	}}}
+	}}
 	groups := []sessionGroup{
 		{Key: "repo:github.com/acme/api", Owner: "github.com/acme"},
 		{Key: "repo:github.com/acme/old", Owner: "github.com/acme"},

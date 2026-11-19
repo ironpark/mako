@@ -46,6 +46,9 @@ type daemonLink struct {
 	watching atomic.Bool
 	// approveInApp mirrors the setting for the polling worker.
 	approveInApp atomic.Bool
+	// endWatch ends the watch stream open, nil for none, so the next asks
+	// again whether this window holds approvals, as the setting changed.
+	endWatch atomic.Pointer[context.CancelFunc]
 	// accessStale, wsStale and devicesStale say the next poll asks for
 	// Access, the workspace and the devices again, as the daemon says they
 	// changed; the first two start set, and the devices are first asked
@@ -175,6 +178,17 @@ func (l *daemonLink) stale() {
 	l.agentBlocksStale.Store(true)
 }
 
+// setApproveInApp mirrors the setting, and has the watch stream asked
+// again once it changes.
+func (l *daemonLink) setApproveInApp(on bool) {
+	if l.approveInApp.Swap(on) == on {
+		return
+	}
+	if end := l.endWatch.Load(); end != nil {
+		(*end)()
+	}
+}
+
 // pollNow has the poll run now rather than at its next tick.
 func (l *daemonLink) pollNow() {
 	select {
@@ -220,8 +234,17 @@ func (m *model) watch(ctx context.Context) {
 		// Nothing is followed until the window knows which daemon it has.
 		if m.link.linked.Load() {
 			if c, err := m.link.client(ctx); err == nil {
+				// The stream holds the daemon's approvals for this window
+				// for as long as it stays open, rather than for a while
+				// after each poll, which a quiet spell between two polls
+				// outlasts: an approval asked then went to the terminal.
+				// The stream's end is kept before the setting is read: a
+				// change after ends the stream, and one before is read.
+				wctx, cancel := context.WithCancel(ctx)
+				m.link.endWatch.Store(&cancel)
+				req := &protocol.Watch{Layouts: true, Approvals: m.link.approveInApp.Load()}
 				// The window shows the layout changes agents ask for.
-				err = c.WatchAs(ctx, &protocol.Watch{Layouts: true}, func(ch *protocol.Changed) {
+				err = c.WatchAs(wctx, req, func(ch *protocol.Changed) {
 					if ch.GetAccess() {
 						m.link.accessStale.Store(true)
 					}
@@ -240,8 +263,14 @@ func (m *model) watch(ctx context.Context) {
 					m.link.watching.Store(true)
 					m.link.pollNow()
 				})
-				if protocol.HasCode(err, protocol.CodeUnsupported) {
+				m.link.endWatch.Store(nil)
+				rewatched := wctx.Err() != nil && ctx.Err() == nil
+				cancel()
+				switch {
+				case protocol.HasCode(err, protocol.CodeUnsupported):
 					wait = time.Minute // an older daemon, which may be updated
+				case rewatched:
+					wait = 0
 				}
 			}
 		}
@@ -437,8 +466,7 @@ func (m *model) poll(ctx context.Context) {
 // cannot serve: it is asked again at the next poll. It reports whether
 // the request failed on the way.
 func askAgain(stale *atomic.Bool, was bool, err error) bool {
-	var refused *protocol.CodedError // the daemon's answer; see transport.Reply
-	if errors.As(err, &refused) {
+	if _, ok := errors.AsType[*protocol.CodedError](err); ok {
 		return false
 	}
 	if was {

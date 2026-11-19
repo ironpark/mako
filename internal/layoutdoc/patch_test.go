@@ -6,7 +6,8 @@ import (
 	"testing"
 )
 
-func ptr[T any](v T) *T { return &v }
+//go:fix inline
+func ptr[T any](v T) *T { return new(v) }
 
 func ids(d *Doc) string {
 	var out []string
@@ -29,15 +30,15 @@ func TestEachChangeOfAPatch(t *testing.T) {
 	}{
 		{"insert at the end", []Op{{Op: "insert", Parent: "workspace", Node: json.RawMessage(`{"id":"bottom","block":"mako.git","size":200,"collapsible":true}`)}},
 			"window sidebar workspace header main bottom details mako.files mako.git mako.agents mako.forge", nil},
-		{"insert at an index", []Op{{Op: "insert", Parent: "window", Index: ptr(0), Node: json.RawMessage(`{"id":"left","block":"mako.agents","size":200}`)}},
+		{"insert at an index", []Op{{Op: "insert", Parent: "window", Index: new(0), Node: json.RawMessage(`{"id":"left","block":"mako.agents","size":200}`)}},
 			"window left sidebar workspace header main details mako.files mako.git mako.agents mako.forge", nil},
 		{"remove", []Op{{Op: "remove", ID: "mako.forge"}},
 			"window sidebar workspace header main details mako.files mako.git mako.agents", nil},
-		{"move left of the panes", []Op{{Op: "move", ID: "details", Parent: "window", Index: ptr(1)}},
+		{"move left of the panes", []Op{{Op: "move", ID: "details", Parent: "window", Index: new(1)}},
 			"window sidebar details mako.files mako.git mako.agents mako.forge workspace header main", nil},
 		{"move out of a stack, and size it", []Op{
 			{Op: "move", ID: "mako.git", Parent: "workspace"},
-			{Op: "resize", ID: "mako.git", Size: ptr(240.0)},
+			{Op: "resize", ID: "mako.git", Size: new(240.0)},
 		}, "window sidebar workspace header main mako.git details mako.files mako.agents mako.forge", func(d *Doc) string {
 			if n := d.Node("mako.git"); n.Size != 240 {
 				return "not sized"
@@ -47,7 +48,7 @@ func TestEachChangeOfAPatch(t *testing.T) {
 			}
 			return ""
 		}},
-		{"resize to grow", []Op{{Op: "resize", ID: "sidebar", Grow: ptr(1.0)}}, "", func(d *Doc) string {
+		{"resize to grow", []Op{{Op: "resize", ID: "sidebar", Grow: new(1.0)}}, "", func(d *Doc) string {
 			if n := d.Node("sidebar"); n.Size != 0 || n.Grow != 1 || n.Collapsible {
 				return "sidebar not growing"
 			}
@@ -59,7 +60,7 @@ func TestEachChangeOfAPatch(t *testing.T) {
 			}
 			return ""
 		}},
-		{"select by index", []Op{{Op: "select", ID: "details", Active: ptr(3)}}, "", func(d *Doc) string {
+		{"select by index", []Op{{Op: "select", ID: "details", Active: new(3)}}, "", func(d *Doc) string {
 			if d.Node("details").ActiveBlock() != "mako.forge" {
 				return "not on forge"
 			}
@@ -68,7 +69,7 @@ func TestEachChangeOfAPatch(t *testing.T) {
 		{"a stack shows what it did as children come and go", []Op{
 			{Op: "select", ID: "details", Block: "mako.git"},
 			{Op: "remove", ID: "mako.files"},
-			{Op: "insert", Parent: "details", Index: ptr(0), Node: json.RawMessage(`"mako.header"`)},
+			{Op: "insert", Parent: "details", Index: new(0), Node: json.RawMessage(`"mako.header"`)},
 		}, "", func(d *Doc) string {
 			if d.Node("details").ActiveBlock() != "mako.git" {
 				return "shows " + d.Node("details").ActiveBlock()
@@ -112,14 +113,14 @@ func TestAPatchThatBreaksTheDocumentIsRefused(t *testing.T) {
 		{"a node not there", []Op{{Op: "remove", ID: "nope"}}, "no node"},
 		{"an ID twice", []Op{{Op: "insert", Parent: "window", Node: json.RawMessage(`{"id":"sidebar","block":"mako.git"}`)}}, "two nodes"},
 		{"into a block", []Op{{Op: "insert", Parent: "sidebar", Node: json.RawMessage(`"mako.git"`)}}, "no row"},
-		{"past the end", []Op{{Op: "insert", Parent: "window", Index: ptr(9), Node: json.RawMessage(`"mako.git"`)}}, "index 9"},
+		{"past the end", []Op{{Op: "insert", Parent: "window", Index: new(9), Node: json.RawMessage(`"mako.git"`)}}, "index 9"},
 		{"a node not read", []Op{{Op: "insert", Parent: "window", Node: json.RawMessage(`{"id":"g","grid":[]}`)}}, "no kind"},
 		{"inside itself", []Op{{Op: "move", ID: "workspace", Parent: "workspace"}}, "inside itself"},
-		{"a size in a stack", []Op{{Op: "resize", ID: "mako.git", Size: ptr(100.0)}}, "has a size"},
-		{"both a size and grow", []Op{{Op: "resize", ID: "sidebar", Size: ptr(1.0), Grow: ptr(1.0)}}, "one of them"},
+		{"a size in a stack", []Op{{Op: "resize", ID: "mako.git", Size: new(100.0)}}, "has a size"},
+		{"both a size and grow", []Op{{Op: "resize", ID: "sidebar", Size: new(1.0), Grow: new(1.0)}}, "one of them"},
 		{"a block not in the stack", []Op{{Op: "select", ID: "details", Block: "mako.header"}}, "holds no"},
-		{"select out of the stack", []Op{{Op: "select", ID: "details", Active: ptr(7)}}, "active 7"},
-		{"select a row", []Op{{Op: "select", ID: "window", Active: ptr(0)}}, "no stack"},
+		{"select out of the stack", []Op{{Op: "select", ID: "details", Active: new(7)}}, "active 7"},
+		{"select a row", []Op{{Op: "select", ID: "window", Active: new(0)}}, "no stack"},
 		{"props a block does not take", []Op{{Op: "insert", Parent: "window", Node: json.RawMessage(`{"block":"mako.git","props":{"x":1}}`)}}, `prop "x"`},
 	} {
 		_, err := Apply(Default(), c.ops, cat)

@@ -28,6 +28,7 @@ func TestTurnsAreCounted(t *testing.T) {
 	s.SetStatus(protocol.AgentCompacting)
 	s.mu.Lock()
 	s.endWorkLocked(time.Now())
+	s.recomputeLocked(time.Now())
 	s.mu.Unlock()
 	if s.Turns() != 2 {
 		t.Fatalf("turns %d after a turn ended unreported", s.Turns())

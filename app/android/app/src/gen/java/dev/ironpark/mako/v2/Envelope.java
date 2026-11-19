@@ -125,6 +125,9 @@ public  final class Envelope extends
     PLUGIN_INSTALLED(136),
     LIST_PANELS(137),
     PANELS(138),
+    SEE_SESSION(139),
+    WATCH_FILES(140),
+    FILES_CHANGED(141),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -239,6 +242,9 @@ public  final class Envelope extends
         case 136: return PLUGIN_INSTALLED;
         case 137: return LIST_PANELS;
         case 138: return PANELS;
+        case 139: return SEE_SESSION;
+        case 140: return WATCH_FILES;
+        case 141: return FILES_CHANGED;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -5567,6 +5573,196 @@ public  final class Envelope extends
     }
   }
 
+  public static final int SEE_SESSION_FIELD_NUMBER = 139;
+  /**
+   * <pre>
+   * What the user has looked at of a session (revision 36).
+   * </pre>
+   *
+   * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+   */
+  @java.lang.Override
+  public boolean hasSeeSession() {
+    return bodyCase_ == 139;
+  }
+  /**
+   * <pre>
+   * What the user has looked at of a session (revision 36).
+   * </pre>
+   *
+   * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.SeeSession getSeeSession() {
+    if (bodyCase_ == 139) {
+       return (dev.ironpark.mako.v2.SeeSession) body_;
+    }
+    return dev.ironpark.mako.v2.SeeSession.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * What the user has looked at of a session (revision 36).
+   * </pre>
+   *
+   * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+   */
+  private void setSeeSession(dev.ironpark.mako.v2.SeeSession value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 139;
+  }
+  /**
+   * <pre>
+   * What the user has looked at of a session (revision 36).
+   * </pre>
+   *
+   * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+   */
+  private void mergeSeeSession(dev.ironpark.mako.v2.SeeSession value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 139 &&
+        body_ != dev.ironpark.mako.v2.SeeSession.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.SeeSession.newBuilder((dev.ironpark.mako.v2.SeeSession) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 139;
+  }
+  /**
+   * <pre>
+   * What the user has looked at of a session (revision 36).
+   * </pre>
+   *
+   * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+   */
+  private void clearSeeSession() {
+    if (bodyCase_ == 139) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int WATCH_FILES_FIELD_NUMBER = 140;
+  /**
+   * <pre>
+   * Changes to a node's files, as they come (revision 37).
+   * </pre>
+   *
+   * <code>.mako.v2.WatchFiles watch_files = 140 [json_name = "watchFiles"];</code>
+   */
+  @java.lang.Override
+  public boolean hasWatchFiles() {
+    return bodyCase_ == 140;
+  }
+  /**
+   * <pre>
+   * Changes to a node's files, as they come (revision 37).
+   * </pre>
+   *
+   * <code>.mako.v2.WatchFiles watch_files = 140 [json_name = "watchFiles"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.WatchFiles getWatchFiles() {
+    if (bodyCase_ == 140) {
+       return (dev.ironpark.mako.v2.WatchFiles) body_;
+    }
+    return dev.ironpark.mako.v2.WatchFiles.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * Changes to a node's files, as they come (revision 37).
+   * </pre>
+   *
+   * <code>.mako.v2.WatchFiles watch_files = 140 [json_name = "watchFiles"];</code>
+   */
+  private void setWatchFiles(dev.ironpark.mako.v2.WatchFiles value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 140;
+  }
+  /**
+   * <pre>
+   * Changes to a node's files, as they come (revision 37).
+   * </pre>
+   *
+   * <code>.mako.v2.WatchFiles watch_files = 140 [json_name = "watchFiles"];</code>
+   */
+  private void mergeWatchFiles(dev.ironpark.mako.v2.WatchFiles value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 140 &&
+        body_ != dev.ironpark.mako.v2.WatchFiles.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.WatchFiles.newBuilder((dev.ironpark.mako.v2.WatchFiles) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 140;
+  }
+  /**
+   * <pre>
+   * Changes to a node's files, as they come (revision 37).
+   * </pre>
+   *
+   * <code>.mako.v2.WatchFiles watch_files = 140 [json_name = "watchFiles"];</code>
+   */
+  private void clearWatchFiles() {
+    if (bodyCase_ == 140) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int FILES_CHANGED_FIELD_NUMBER = 141;
+  /**
+   * <code>.mako.v2.FilesChanged files_changed = 141 [json_name = "filesChanged"];</code>
+   */
+  @java.lang.Override
+  public boolean hasFilesChanged() {
+    return bodyCase_ == 141;
+  }
+  /**
+   * <code>.mako.v2.FilesChanged files_changed = 141 [json_name = "filesChanged"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.FilesChanged getFilesChanged() {
+    if (bodyCase_ == 141) {
+       return (dev.ironpark.mako.v2.FilesChanged) body_;
+    }
+    return dev.ironpark.mako.v2.FilesChanged.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.FilesChanged files_changed = 141 [json_name = "filesChanged"];</code>
+   */
+  private void setFilesChanged(dev.ironpark.mako.v2.FilesChanged value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 141;
+  }
+  /**
+   * <code>.mako.v2.FilesChanged files_changed = 141 [json_name = "filesChanged"];</code>
+   */
+  private void mergeFilesChanged(dev.ironpark.mako.v2.FilesChanged value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 141 &&
+        body_ != dev.ironpark.mako.v2.FilesChanged.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.FilesChanged.newBuilder((dev.ironpark.mako.v2.FilesChanged) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 141;
+  }
+  /**
+   * <code>.mako.v2.FilesChanged files_changed = 141 [json_name = "filesChanged"];</code>
+   */
+  private void clearFilesChanged() {
+    if (bodyCase_ == 141) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -10842,6 +11038,198 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * What the user has looked at of a session (revision 36).
+     * </pre>
+     *
+     * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+     */
+    @java.lang.Override
+    public boolean hasSeeSession() {
+      return instance.hasSeeSession();
+    }
+    /**
+     * <pre>
+     * What the user has looked at of a session (revision 36).
+     * </pre>
+     *
+     * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.SeeSession getSeeSession() {
+      return instance.getSeeSession();
+    }
+    /**
+     * <pre>
+     * What the user has looked at of a session (revision 36).
+     * </pre>
+     *
+     * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+     */
+    public Builder setSeeSession(dev.ironpark.mako.v2.SeeSession value) {
+      copyOnWrite();
+      instance.setSeeSession(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * What the user has looked at of a session (revision 36).
+     * </pre>
+     *
+     * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+     */
+    public Builder setSeeSession(
+        dev.ironpark.mako.v2.SeeSession.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSeeSession(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * What the user has looked at of a session (revision 36).
+     * </pre>
+     *
+     * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+     */
+    public Builder mergeSeeSession(dev.ironpark.mako.v2.SeeSession value) {
+      copyOnWrite();
+      instance.mergeSeeSession(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * What the user has looked at of a session (revision 36).
+     * </pre>
+     *
+     * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+     */
+    public Builder clearSeeSession() {
+      copyOnWrite();
+      instance.clearSeeSession();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * Changes to a node's files, as they come (revision 37).
+     * </pre>
+     *
+     * <code>.mako.v2.WatchFiles watch_files = 140 [json_name = "watchFiles"];</code>
+     */
+    @java.lang.Override
+    public boolean hasWatchFiles() {
+      return instance.hasWatchFiles();
+    }
+    /**
+     * <pre>
+     * Changes to a node's files, as they come (revision 37).
+     * </pre>
+     *
+     * <code>.mako.v2.WatchFiles watch_files = 140 [json_name = "watchFiles"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.WatchFiles getWatchFiles() {
+      return instance.getWatchFiles();
+    }
+    /**
+     * <pre>
+     * Changes to a node's files, as they come (revision 37).
+     * </pre>
+     *
+     * <code>.mako.v2.WatchFiles watch_files = 140 [json_name = "watchFiles"];</code>
+     */
+    public Builder setWatchFiles(dev.ironpark.mako.v2.WatchFiles value) {
+      copyOnWrite();
+      instance.setWatchFiles(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Changes to a node's files, as they come (revision 37).
+     * </pre>
+     *
+     * <code>.mako.v2.WatchFiles watch_files = 140 [json_name = "watchFiles"];</code>
+     */
+    public Builder setWatchFiles(
+        dev.ironpark.mako.v2.WatchFiles.Builder builderForValue) {
+      copyOnWrite();
+      instance.setWatchFiles(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Changes to a node's files, as they come (revision 37).
+     * </pre>
+     *
+     * <code>.mako.v2.WatchFiles watch_files = 140 [json_name = "watchFiles"];</code>
+     */
+    public Builder mergeWatchFiles(dev.ironpark.mako.v2.WatchFiles value) {
+      copyOnWrite();
+      instance.mergeWatchFiles(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Changes to a node's files, as they come (revision 37).
+     * </pre>
+     *
+     * <code>.mako.v2.WatchFiles watch_files = 140 [json_name = "watchFiles"];</code>
+     */
+    public Builder clearWatchFiles() {
+      copyOnWrite();
+      instance.clearWatchFiles();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.FilesChanged files_changed = 141 [json_name = "filesChanged"];</code>
+     */
+    @java.lang.Override
+    public boolean hasFilesChanged() {
+      return instance.hasFilesChanged();
+    }
+    /**
+     * <code>.mako.v2.FilesChanged files_changed = 141 [json_name = "filesChanged"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.FilesChanged getFilesChanged() {
+      return instance.getFilesChanged();
+    }
+    /**
+     * <code>.mako.v2.FilesChanged files_changed = 141 [json_name = "filesChanged"];</code>
+     */
+    public Builder setFilesChanged(dev.ironpark.mako.v2.FilesChanged value) {
+      copyOnWrite();
+      instance.setFilesChanged(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.FilesChanged files_changed = 141 [json_name = "filesChanged"];</code>
+     */
+    public Builder setFilesChanged(
+        dev.ironpark.mako.v2.FilesChanged.Builder builderForValue) {
+      copyOnWrite();
+      instance.setFilesChanged(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.FilesChanged files_changed = 141 [json_name = "filesChanged"];</code>
+     */
+    public Builder mergeFilesChanged(dev.ironpark.mako.v2.FilesChanged value) {
+      copyOnWrite();
+      instance.mergeFilesChanged(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.FilesChanged files_changed = 141 [json_name = "filesChanged"];</code>
+     */
+    public Builder clearFilesChanged() {
+      copyOnWrite();
+      instance.clearFilesChanged();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -10961,9 +11349,12 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.PluginInstalled.class,
             dev.ironpark.mako.v2.ListPanels.class,
             dev.ironpark.mako.v2.Panels.class,
+            dev.ironpark.mako.v2.SeeSession.class,
+            dev.ironpark.mako.v2.WatchFiles.class,
+            dev.ironpark.mako.v2.FilesChanged.class,
           };
           java.lang.String info =
-              "\u0000e\u0001\u0000\u0001\u008ae\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
+              "\u0000h\u0001\u0000\u0001\u008dh\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
               "\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019" +
               "<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000" +
               "!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000" +
@@ -10975,7 +11366,7 @@ public  final class Envelope extends
               "j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000p<\u0000x<\u0000y<\u0000z<\u0000" +
               "{<\u0000|<\u0000}<\u0000~<\u0000<\u0000\u0080<\u0000\u0082<\u0000\u0083<\u0000\u0084" +
               "<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000\u0088<\u0000\u0089<\u0000\u008a<\u0000" +
-              "";
+              "\u008b<\u0000\u008c<\u0000\u008d<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

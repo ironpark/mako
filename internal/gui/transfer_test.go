@@ -178,7 +178,7 @@ func TestThePickerChoosesAFolderOnTheNode(t *testing.T) {
 	}
 	self := ggui.Peek(m.Conn).Self.GetId()
 	m.Prefs.Update(func(pr prefs) prefs {
-		pr.Projects = append(pr.Projects, keptProject{fileRoot: fileRoot{Node: self, Path: dir}})
+		pr.Projects = append(pr.Projects, keptProject{Node: self, Path: dir})
 		return pr
 	})
 	l := m.openNew(self, dir)

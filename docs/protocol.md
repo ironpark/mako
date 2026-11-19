@@ -527,6 +527,7 @@ is polled as before.
 | `send` | `Send` | `session_info` | Types into the session without attaching: `text` pasted, bracketed when its program asked for that, then `keys` as they are, such as `\r` to submit. A `text` holding a paste's end marker is refused. With `text`, an agent that shows a view over its own prompt (Claude Code's or Codex's subagent, transcript, or agents list) is first taken back to that prompt, as its screen shows, so the text reaches the agent itself. |
 | `configure_agent` | `ConfigureAgent` | `session_info` | Sets what is given of the session's agent, as `SessionInfo.controls` offers: `mode`, by the key that moves its permission mode on, pressed at its prompt until its screen names the mode; `model` and `effort`, by its own commands typed there (Claude Code's `/model` and `/effort`, which it also keeps as the user's defaults). Refused for a value not offered, or a mode the agent does not reach. |
 | `sleep_session` | `SleepSession` | `session_info` | Stops the program of a session whose agent rests, to free what it holds: running, with a `conversation_id` its agent resumes natively, not at work, waiting on nothing of the user's (`approval`, `dialog`, status `waiting`), with no background task running, no subagent at work and no session it started at work, and nothing attached to its terminal. The session stays, `stopped`, and the next `attach` starts its agent again on its conversation. Refused otherwise, saying why. Revision 21. |
+| `see_session` | `SeeSession` | `session_info` | Says the user has looked at the session's attention up to `seq` (`SessionInfo.attention_seq`), as the front-end showing it saw: its `seen_seq` moves there, never past its `attention_seq`, and never back. Routed by `node_id`. Revision 36. |
 | `answer_dialog` | `AnswerDialog` | `session_info` | Picks `option`, by index, of the dialog `dialog_id` the session's agent shows in its terminal (`SessionInfo.dialog`), as the user would there: the cursor moved with the arrow keys, then Enter. Refused once the screen shows another dialog, or none. |
 | `answer_question` | `AnswerQuestion` | `session_info` | Answers the questions the session's agent asks in a dialog in its terminal, which no hook holds (Codex's `request_user_input`; agents with `CapAnswerKeys`): `answers`, one for each of `questions` in order, as `QuestionAnswer` (`picked` option indexes, `text` in the user's own words), typed into the dialog. Refused unless the screen shows the dialog and every question has an answer. |
 | `list_commands` | `ListCommands` | `commands` | The slash commands the session's agent takes, as its node finds them: the agent's own, the user's and the project's commands and skills, and its plugins'. None for an agent mako knows no commands of. |
@@ -566,7 +567,9 @@ The fields a front-end usually needs:
 | `name`, `title` | The user's name for it, and the latest terminal title its program set. |
 | `conversation_id` | The agent's own conversation, stable across restarts. |
 | `busy`, `idle` | Printing on its own, as an agent at work does; nothing running in front of its program, as a shell at its prompt. |
-| `status`, `status_at` | Reconciled agent activity: `idle`, `working`, `compacting`, `waiting`, `done`, from hooks, terminal progress and supported log events. Running subagents defer a parent's `done` until they finish. Empty when no status is known. |
+| `status`, `status_at` | Reconciled agent activity: `idle`, `working`, `compacting`, `waiting`, `done`, from hooks, terminal progress, the screen and supported log events, worked out in one place by the daemon running the session. Running subagents defer a parent's `done` until they finish. Empty when no status is known. |
+| `turns` | The turns the agent has ended: work gone `idle` or `done`, its subagents' included. |
+| `state_seq`, `attention_seq`, `seen_seq` | `state_seq` numbers the changes to `status` and `approval`. `attention_seq` is the `state_seq` of the last change that asks for the user: a turn `done`, a `waiting`, a new `approval`. `seen_seq` is the attention a front-end said the user has looked at, with `see_session`. A front-end shows the session unread while `attention_seq` is past `seen_seq`, and tells the user of an `attention_seq` it had not seen before, so every front-end, on any node, shows the same. The numbers start again with the session's program (`started_at`). 0 from a daemon before revision 36. |
 | `controls` | What `configure_agent` may set of the agent (`AgentControls`: `modes`, as `Usage.permission_mode` names them, `models`, `efforts`); unset for an agent with none. |
 | `dialog` | A dialog of options the agent's terminal shows while it waits there on one no hook holds, as a folder's trust or a permission asked while nobody watched (`ScreenDialog`: `id`, `text`, `options`, `selected`, the option its cursor is on); unset otherwise. Answered by `answer_dialog`. |
 | `approval` | The tool call the agent waits to have approved: its `kind` and the `options` to allow it with (see Approvals). A question tool's (Claude Code's `AskUserQuestion`) carries its `questions` (`Question`: `question`, `header`, `options` of `label` and `description`, `multi_select`). |
@@ -581,7 +584,10 @@ The fields a front-end usually needs:
 daemon only while some front-end is watching for approvals. A front-end
 watches by keeping a `watch` with `approvals` open, or by sending
 `list_sessions` with `"approvals": true` at least every 15 seconds; either
-counts for 15 seconds after it stops. While a session waits, its `approval` is set. `answer_approval`
+counts for 15 seconds after it stops. A front-end that polls should keep the
+`watch` open: a poll every 15 seconds leaves gaps, the time each poll takes,
+in which an approval asked goes to the terminal, and one already shown is
+taken back there. While a session waits, its `approval` is set. `answer_approval`
 gives a `decision`:
 
 | Decision | |
@@ -677,6 +683,7 @@ for. A daemon that predates the flag ignores it and sends the messages too.
 | Request | Payload | Reply | |
 |---|---|---|---|
 | `list_dir` | `ListDir` | `dir` | A directory's entries, directories first, then by name. |
+| `watch_files` | `WatchFiles` | `files_changed`, a stream | Follows `paths`, files and folders, a folder for its entries, and `trees`, folders with all below them but for what git ignores, version control's folders and editors' temporary files, and with their git directory's `index` and `HEAD`, so that a file staged or a checkout counts as a change in the tree. The first `FilesChanged` is empty and says the node watches; each after names the `paths` changed (added, written or removed) and the `trees` something changed in, gathered as they come. Another `WatchFiles` sent on the stream takes the place of what is followed. A change is found by a stat of what is followed, woken by the system's notifications (FSEvents, inotify, ReadDirectoryChangesW) and run every 2 seconds besides, so a late or lost notification costs time, never a change. Routed by `node_id`. Revision 37. |
 | `read_file` | `ReadFile` | `file` | The start of a file, or with `image` the whole of an image, or with `raw` a piece of any file from `offset`. |
 | `write_file` | `WriteFile` | `file` | Replaces a file's contents, keeping its mode, or with an `offset` adds a piece to its end. |
 | `file_op` | `FileOp` | `file` | `create`, `mkdir`, `rename` (to `to`), `copy` (to `to`, a folder with all it holds) or `delete`. None replaces what exists. |

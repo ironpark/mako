@@ -26,6 +26,11 @@ type filesState struct {
 	// browsing counts the file browser windows open on each node, whose
 	// folders pruneDirs keeps.
 	browsing map[string]int
+	// Trees counts the views showing what changed in a work tree, by
+	// dirKey, which the window has the tree's node follow.
+	Trees *ggui.StateValue[map[string]int]
+	// watches are the nodes followed, by node ID; UI goroutine only.
+	watches map[string]*nodeWatch
 }
 
 func newFilesState() *filesState {
@@ -39,5 +44,7 @@ func newFilesState() *filesState {
 		Note:      ggui.State(""),
 		Clip:      ggui.State(pathDrag{}),
 		browsing:  map[string]int{},
+		Trees:     ggui.State(map[string]int{}).WithEqual(maps.Equal),
+		watches:   map[string]*nodeWatch{},
 	}
 }

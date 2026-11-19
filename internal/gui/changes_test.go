@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -80,8 +79,7 @@ func TestChangesTabShowsTheWorkTree(t *testing.T) {
 	}
 	m := newModel(cfg, "")
 	m.DetailTab.Set(gitTab)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1200, 800))
 	p.Setup(func() {
 		setup(m)

@@ -14,8 +14,8 @@ func TestExtensionCardsFollowTheFilters(t *testing.T) {
 		{ID: "ctx", Name: "Context7", Version: "1.0.0", Provides: []string{"context-servers"}},
 	}}
 	installed := []zed.Extension{
-		{Manifest: zed.Manifest{ID: "html", Name: "HTML", Version: "0.3.1"}},
-		{Manifest: zed.Manifest{ID: "toml", Name: "TOML", Version: "1.1.0", Languages: []string{"languages/toml"}}},
+		{ID: "html", Name: "HTML", Version: "0.3.1"},
+		{ID: "toml", Name: "TOML", Version: "1.1.0", Languages: []string{"languages/toml"}},
 	}
 	ids := func(cards []extCard) []string {
 		var out []string
@@ -66,7 +66,7 @@ func TestExtensionFiltersComeBeforeTheCut(t *testing.T) {
 	if got := len(extCards(r, nil, extShowAll, "")); got != maxListings {
 		t.Fatalf("%d listed, want %d", got, maxListings)
 	}
-	installed := []zed.Extension{{Manifest: zed.Manifest{ID: "lang44", Name: "Lang 44", Version: "1.0.0", Languages: []string{"languages/x"}}}}
+	installed := []zed.Extension{{ID: "lang44", Name: "Lang 44", Version: "1.0.0", Languages: []string{"languages/x"}}}
 	cards := extCards(r, installed, extShowInstalled, "")
 	if len(cards) != 1 || cards[0].ID != "lang44" {
 		t.Fatalf("installed past the cut: %+v", cards)

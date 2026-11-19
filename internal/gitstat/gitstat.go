@@ -370,12 +370,7 @@ func readRegular(full string, max int64) ([]byte, error) {
 
 // Binary reports a NUL in a file's first 8000 bytes, as git decides.
 func Binary[T string | []byte](s T) bool {
-	for _, c := range []byte(s[:min(len(s), 8000)]) {
-		if c == 0 {
-			return true
-		}
-	}
-	return false
+	return slices.Contains([]byte(s[:min(len(s), 8000)]), 0)
 }
 
 // count is the lines added and removed between two texts.

@@ -76,7 +76,26 @@ type Input struct {
 }
 
 // Rules are an agent's rules, compiled, highest priority first.
-type Rules struct{ rules []compiled }
+type Rules struct {
+	rules   []compiled
+	cursors *cursors // the cursors its agent's dialogs draw
+}
+
+// WithCursors has the agent's dialogs read with cursors of glyphs as well
+// as those most agents draw, as agy's ">".
+func (r *Rules) WithCursors(glyphs string) *Rules {
+	r.cursors = newCursors("❯›" + glyphs)
+	return r
+}
+
+// ParseChoice is ParseChoice of the dialog the agent's screen shows, with
+// the cursors its dialogs draw.
+func (r *Rules) ParseChoice(screen string, cols int) (Choice, bool) {
+	if r == nil || r.cursors == nil {
+		return ParseChoice(screen, cols)
+	}
+	return r.cursors.parse(screen, cols)
+}
 
 type compiled struct {
 	Rule

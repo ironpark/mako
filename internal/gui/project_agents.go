@@ -76,7 +76,7 @@ func (m *model) loadProjectAgents(root fileRoot) {
 
 func projectAgentsPanel(m *model) ggui.Widget {
 	root := ggui.Derived(m.filesRoot)
-	pollWhileShown(m, root, agentsTab, 2*time.Second, m.loadProjectAgents)
+	pollWhileShown(m, root, agentsTab, 2*time.Second, m.loadProjectAgents, nil)
 	// The chosen session itself heads its project's agents.
 	agents := ggui.Key(root, func(r fileRoot) ggui.Widget {
 		if r.Path == "" {

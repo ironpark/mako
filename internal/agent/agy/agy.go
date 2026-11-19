@@ -17,13 +17,12 @@ type Agent struct {
 
 // New is the agy driver. agy picks a new conversation's ID itself.
 func New() *Agent {
-	return &Agent{Flags: agent.Flags{
+	return &Agent{
 		ResumeFlags: []string{"--conversation"},
 		PickerFlags: []string{"--continue", "-c"},
 		// What starts the conversation, which a resumed one already has.
 		Inputs: strings.Fields("--prompt-interactive -i --print -p --prompt"),
-		Values: strings.Fields("--add-dir --agent --effort --mode --model --project --log-file --print-timeout --input-format --output-format --json-schema"),
-	}}
+		Values: strings.Fields("--add-dir --agent --effort --mode --model --project --log-file --print-timeout --input-format --output-format --json-schema")}
 }
 
 func (*Agent) Info() agent.Info {

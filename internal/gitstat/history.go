@@ -107,7 +107,7 @@ func parseCommit(f []string) (*protocol.GitCommit, bool) {
 	}
 	at, _ := strconv.ParseInt(f[3], 10, 64)
 	c := &protocol.GitCommit{Hash: f[0], Parents: strings.Fields(f[1]), Author: f[2], Time: timestamppb.New(time.Unix(at, 0)), Subject: f[5]}
-	for _, ref := range strings.Split(f[4], ", ") {
+	for ref := range strings.SplitSeq(f[4], ", ") {
 		if ref != "" {
 			c.Refs = append(c.Refs, ref)
 		}
@@ -143,7 +143,7 @@ func Log(ctx context.Context, root string, max int, known string) (*protocol.Git
 	if err != nil {
 		return out, err
 	}
-	for _, r := range strings.Split(string(log), "\x00") {
+	for r := range strings.SplitSeq(string(log), "\x00") {
 		if c, ok := parseCommit(strings.Split(strings.TrimPrefix(r, "\n"), "\x1f")); ok {
 			out.Commits = append(out.Commits, c)
 		}

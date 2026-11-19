@@ -52,7 +52,7 @@ func (d *Daemon) handleSearch(ctx context.Context, stream *transport.Stream, env
 func listFiles(ctx context.Context, root string) (*protocol.SearchResult, error) {
 	out := &protocol.SearchResult{}
 	if git, err := exec.CommandContext(ctx, "git", "-C", root, "ls-files", "-co", "--exclude-standard", "-z").Output(); err == nil {
-		for _, p := range strings.Split(string(git), "\x00") {
+		for p := range strings.SplitSeq(string(git), "\x00") {
 			if p == "" {
 				continue
 			}

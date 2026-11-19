@@ -9,7 +9,7 @@ import (
 
 // Every combination of flags a program can push reads back as itself.
 func TestFlagsReadBackAsPushed(t *testing.T) {
-	for pushed := KeyFlags(0); pushed < 32; pushed++ {
+	for pushed := range KeyFlags(32) {
 		vt, err := gostty.New(20, 5)
 		if err != nil {
 			t.Fatal(err)

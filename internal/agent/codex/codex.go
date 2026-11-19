@@ -21,13 +21,12 @@ type Agent struct {
 
 // New is the Codex driver.
 func New() *Agent {
-	return &Agent{Flags: agent.Flags{
+	return &Agent{
 		ResumeFlags: []string{"resume"}, ForkFlag: "--fork",
 		PickerFlags: []string{"--last", "--all"},
 		Inputs:      []string{"--image", "-i"},
 		Values:      strings.Fields("--model -m --config -c --profile -p --sandbox -s --ask-for-approval -a --cd -C --add-dir --enable --disable --local-provider --remote --remote-auth-token-env"),
-		IsolateFlag: "--no-daemon",
-	}}
+		IsolateFlag: "--no-daemon"}
 }
 
 func (*Agent) Info() agent.Info {

@@ -158,6 +158,13 @@ message Envelope {
     // A node's panels' names and titles, for a peer (revision 35).
     ListPanels list_panels = 137;
     Panels panels = 138;
+
+    // What the user has looked at of a session (revision 36).
+    SeeSession see_session = 139;
+
+    // Changes to a node's files, as they come (revision 37).
+    WatchFiles watch_files = 140;
+    FilesChanged files_changed = 141;
   }
 }
 

@@ -222,7 +222,7 @@ func Resolve(name, profile string, args []string, env map[string]string, agents 
 	}
 	command = append(command, modelArgs(name, path, p.Model)...)
 	command = append(command, args...)
-	return Launch{Launch: agent.Launch{Command: command, Env: merged}, ContextServers: p.ContextServers}, nil
+	return Launch{Command: command, Env: merged, ContextServers: p.ContextServers}, nil
 }
 
 // expand writes $NAME, ${NAME} and a leading ~ out, and $$ as $.

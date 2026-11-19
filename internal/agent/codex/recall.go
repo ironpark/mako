@@ -29,16 +29,16 @@ var recallRules = detect.MustCompile([]detect.Rule{
 	transcriptViewer,
 	{
 		ID: "command_center", Priority: 900, Region: detect.Whole,
-		Gate: detect.Gate{Regex: []string{`\A\s*Agent command center\b`, `esc back[^\n]*\z`}},
+		Regex: []string{`\A\s*Agent command center\b`, `esc back[^\n]*\z`},
 	},
 	{
 		ID: "shortcuts", Priority: 900, Region: detect.Bottom(1),
-		Gate: detect.Gate{Regex: []string{`^\s*\?\s*/\s*esc close\s*\z`}},
+		Regex: []string{`^\s*\?\s*/\s*esc close\s*\z`},
 	},
 	{
 		// The empty prompt of a sub-agent's thread.
 		ID: "sub_agent", Priority: 900, Region: detect.Bottom(6),
-		Gate: detect.Gate{Lines: []string{`^\s*›\s*Viewing sub-agent\b.*direct input is disabled`}},
+		Lines: []string{`^\s*›\s*Viewing sub-agent\b.*direct input is disabled`},
 	},
 })
 
@@ -51,7 +51,7 @@ var recallKeys = map[string]string{
 }
 
 // askingRules tell request_user_input's dialog.
-var askingRules = detect.MustCompile([]detect.Rule{{ID: "asking", Region: detect.Bottom(3), Gate: detect.Gate{Any: questionDialog}}})
+var askingRules = detect.MustCompile([]detect.Rule{{ID: "asking", Region: detect.Bottom(3), Any: questionDialog}})
 
 // Recall is what takes Codex a step back to its own prompt from the
 // screen shown.

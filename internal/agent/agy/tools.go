@@ -116,7 +116,7 @@ func (*Agent) Output(kind, text string) (string, int) {
 	case protocol.ToolRead:
 		if loc := numbered.FindStringIndex(text); loc != nil {
 			var lines []string
-			for _, l := range strings.Split(text[loc[1]:], "\n") {
+			for l := range strings.SplitSeq(text[loc[1]:], "\n") {
 				num, rest, ok := strings.Cut(l, ":")
 				if _, err := strconv.Atoi(num); !ok || err != nil {
 					break // the note after the lines

@@ -444,7 +444,7 @@ func TestAWindowNotFollowingStillHasItsDaemon(t *testing.T) {
 	if len(d.st.GetSpaces()) != 1 {
 		t.Fatal("the edit did not reach the daemon")
 	}
-	d.edit(t, workspaceDoc{spaceList: spaceList{Spaces: append(ggui.Peek(m.Spaces).Spaces, space{ID: "other", Name: "other"})}})
+	d.edit(t, workspaceDoc{Spaces: append(ggui.Peek(m.Spaces).Spaces, space{ID: "other", Name: "other"})})
 	m.takeWorkspace(d.get())
 	if got := spaceNames(m); !slices.Equal(got, []string{"mine", "other"}) {
 		t.Fatalf("the window shows %v", got)
@@ -515,7 +515,7 @@ func TestTheLastEditOutlivesTheWindow(t *testing.T) {
 // and a daemon that holds nothing is given the window's.
 func TestAWindowLeavesItsDaemonsWorkspace(t *testing.T) {
 	da, db := newFakeDaemon("a", true), newFakeDaemon("b", true)
-	db.edit(t, workspaceDoc{spaceList: spaceList{Spaces: []space{{ID: "b", Name: "B's"}}}})
+	db.edit(t, workspaceDoc{Spaces: []space{{ID: "b", Name: "B's"}}})
 	m, p := windowOn(t, da)
 	m.newSpace("A's")
 	p.Frame()

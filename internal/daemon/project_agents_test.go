@@ -81,7 +81,7 @@ func TestProjectMonitorKeepsAcknowledgedMessagesAndDoesNotConsumeInboxes(t *test
 
 func TestProjectMonitorBoundsHistoryAndSeparatesProjects(t *testing.T) {
 	var store agentMessages
-	for i := 0; i < maxAgentHistory+5; i++ {
+	for range maxAgentHistory + 5 {
 		if _, err := store.send("a", "b", "review", "/a"); err != nil {
 			t.Fatal(err)
 		}

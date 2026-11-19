@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -63,6 +64,41 @@ func TestStatusOutOfViewIsUnread(t *testing.T) {
 	m.noteStatus(next)
 	if len(ggui.Peek(m.Unread)) != 0 {
 		t.Fatalf("unread %v", ggui.Peek(m.Unread))
+	}
+}
+
+// A session whose daemon numbers its status is unread as that daemon
+// says, whatever this window saw of it between its polls; looked at in
+// another window, it is read here too.
+func TestNumberedAttentionIsTheDaemons(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Prefs.Update(func(p prefs) prefs { p.Notify = false; return p })
+	started := timestamppb.Now()
+	s := &protocol.SessionInfo{Id: "b", State: protocol.StateRunning, Status: protocol.AgentWorking, StartedAt: started, StateSeq: 1}
+	m.Sessions.Set([]*protocol.SessionInfo{s})
+	// Done and at work again between two polls: the work is all the poll
+	// shows, and the turn done unread all the same.
+	next := proto.CloneOf(s)
+	next.StateSeq, next.AttentionSeq = 3, 2
+	m.noteStatus([]*protocol.SessionInfo{next})
+	m.Sessions.Set([]*protocol.SessionInfo{next})
+	if !ggui.Peek(m.Unread)["b"] {
+		t.Fatal("a turn done between polls was missed")
+	}
+	// Seen in another window.
+	seen := proto.CloneOf(next)
+	seen.SeenSeq = 2
+	m.noteStatus([]*protocol.SessionInfo{seen})
+	m.Sessions.Set([]*protocol.SessionInfo{seen})
+	if ggui.Peek(m.Unread)["b"] {
+		t.Fatal("seen elsewhere, still unread here")
+	}
+	// A window opened after sees what the daemon says is unread.
+	fresh := newModel(config.Default(), "")
+	fresh.noteStatus([]*protocol.SessionInfo{next})
+	if !ggui.Peek(fresh.Unread)["b"] {
+		t.Fatal("a new window lost what is unread")
 	}
 }
 
@@ -163,5 +199,27 @@ func TestAProgramsOwnNotificationIsUnread(t *testing.T) {
 	m.noteStatus(next)
 	if u := ggui.Peek(m.Unread); len(u) != 0 {
 		t.Fatalf("unread %v", u)
+	}
+}
+
+// A session out of view tells the desktop, one notification for each
+// session, and a click on it opens the session.
+func TestNotificationsOpenTheirSession(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Box() }, ggui.Sz(200, 100))
+	defer p.Close()
+	p.Setup(func() { setup(m) })
+	p.Frame()
+	s := &protocol.SessionInfo{Id: "s", State: protocol.StateRunning, Status: protocol.AgentDone}
+	m.announce(s)
+	m.announce(s)
+	shown := p.Notifications()
+	if len(shown) != 1 || shown[0].ID != sessionTarget("s") || shown[0].Body == "" {
+		t.Fatalf("notifications %+v", shown)
+	}
+	p.ClickNotification(sessionTarget("s"), "")
+	if ggui.Peek(m.Page) != "workspace" || ggui.Peek(m.Selected) != "s" {
+		t.Fatalf("a click opened %q, %q", ggui.Peek(m.Page), ggui.Peek(m.Selected))
 	}
 }

@@ -2,6 +2,8 @@ package gui
 
 import (
 	"image/color"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -309,9 +311,7 @@ func pluginAskBar(m *model) ggui.Widget {
 		later := func() {
 			m.plugins.Later.Update(func(l map[string]bool) map[string]bool {
 				next := map[string]bool{id: true}
-				for k, v := range l {
-					next[k] = v
-				}
+				maps.Copy(next, l)
 				return next
 			})
 		}
@@ -394,10 +394,5 @@ func askBarFrame(glyph string, body ggui.Widget, buttons []ggui.Widget) ggui.Wid
 }
 
 func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, s)
 }

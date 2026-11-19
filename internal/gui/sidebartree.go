@@ -107,7 +107,7 @@ func (m *model) followScope(s *protocol.SessionInfo) {
 		return
 	}
 	if in := sessionScope(p.Projects, s); !cur.holds(in) {
-		m.Scope.Set(sidebarScope{Space: cur.Space, scopeKey: scopeKey{Section: in.Section}})
+		m.Scope.Set(sidebarScope{Space: cur.Space, Section: in.Section})
 	}
 }
 
