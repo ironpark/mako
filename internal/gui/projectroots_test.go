@@ -31,3 +31,28 @@ func TestPanelsShowTheProjectsFolders(t *testing.T) {
 		t.Fatalf("a lone folder: %+v", got)
 	}
 }
+
+// A folder shows once though it is placed at one root and is another's:
+// the Files tree keys its rows by folder, and a folder twice crashes it.
+func TestPanelsShowAFolderOnce(t *testing.T) {
+	defs := []project{{ID: "gg", Name: "GG", Roots: []projectRoot{
+		{Locations: []fileRoot{{"mac", "/src/ggui"}}},
+		{Locations: []fileRoot{{"mac", "/src/mako"}}},
+		{Locations: []fileRoot{{"mac", "/src/ggui"}}},
+	}}}
+	reach := func(string) bool { return true }
+	own := fileRoot{"mac", "/src/ggui"}
+	// Placed at mako's root, as a session's placement would, it still
+	// shows only once.
+	got := projectRoots(defs, nil, own, placement{At: 0, Root: 1}, reach)
+	seen := map[fileRoot]bool{}
+	for _, r := range got.Roots {
+		if seen[r.fileRoot] {
+			t.Fatalf("%v shows twice: %+v", r.fileRoot, got.Roots)
+		}
+		seen[r.fileRoot] = true
+	}
+	if got.own() != own {
+		t.Fatalf("own is %+v", got.own())
+	}
+}

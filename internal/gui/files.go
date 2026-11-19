@@ -476,7 +476,22 @@ func (m *model) rootItems(p panelRoots) []fileItem {
 func filesView(m *model, p panelRoots) ggui.Widget {
 	r := p.own()
 	roots := ggui.Derived(func() []fileItem { return m.rootItems(p) })
-	tree := ui.Tree(roots, func(it fileItem) string { return it.Key }, m.children,
+	// A folder of the project inside another is shown at the top, and not
+	// again in the one it is in: the tree keys a folder by where it is.
+	tops := map[string]bool{}
+	if p.multi() {
+		for _, r := range p.Roots {
+			tops[dirKey(r.Node, r.Path)] = true
+		}
+	}
+	children := func(it fileItem) []fileItem {
+		kids := m.children(it)
+		if len(tops) == 0 {
+			return kids
+		}
+		return slices.DeleteFunc(kids, func(k fileItem) bool { return tops[k.Key] })
+	}
+	tree := ui.Tree(roots, func(it fileItem) string { return it.Key }, children,
 		func(item ggui.Readable[fileItem]) ggui.Widget {
 			it := ggui.Untrack(item.Get)
 			if it.Stub {

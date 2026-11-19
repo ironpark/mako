@@ -61,6 +61,12 @@ func projectRoots(defs []project, nodes []*protocol.Node, own fileRoot, pl place
 			continue // on no node this window reaches
 		}
 		l := r.Locations[at]
+		if l == own {
+			continue // own is shown already, at its own root
+		}
+		if slices.ContainsFunc(out.Roots, func(o panelRoot) bool { return o.fileRoot == l }) {
+			continue // two roots at one folder show it once
+		}
 		label := r.label()
 		if l.Node != own.Node {
 			label += " · " + nodeName(nodes, l.Node)
@@ -76,7 +82,10 @@ func (m *model) panelRoots() panelRoots {
 	own := m.filesRoot()
 	defs := m.Spaces.Get().Projects
 	var pl placement
-	if s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get()); ok {
+	// The selected session places the folder only when the folder is its:
+	// a scope's folder, or a tab's, is placed by where it is, or it would
+	// take the session's root and show twice.
+	if s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get()); ok && s.GetNodeId() == own.Node && s.GetProject() == own.Path {
 		pl = placeSession(defs, s) // its repository places a worktree
 	} else {
 		pl = placeIn(defs, own.Node, own.Path, "", "")
