@@ -208,6 +208,7 @@ func TestNotificationsOpenTheirSession(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Box() }, ggui.Sz(200, 100))
+	defer m.shutdown()
 	defer p.Close()
 	p.Setup(func() { setup(m) })
 	p.Frame()

@@ -103,6 +103,45 @@ func TestAutoPrefersARunningDaemon(t *testing.T) {
 	}
 }
 
+func TestAutoFallsBackWhenProbedDaemonExits(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	cfg := config.Default()
+	cfg.Name = "inside"
+	cfg.P2P.Listen = "127.0.0.1:0"
+	cfg.Discovery = config.Discovery{}
+
+	// Simulate a previous app instance's daemon still running during startup
+	// probe, then exiting right after.
+	other := newEmbeddedDaemon()
+	ready := make(chan string, 1)
+	outside := *cfg
+	outside.Name = "outside"
+	other.start(outside, func(addr string) { ready <- addr }, func(error) {})
+	addr := <-ready
+
+	m := newModel(cfg, addr)
+	ctx := t.Context()
+	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))
+	p.Setup(func() {
+		setup(m)
+		m.start(ctx, p.Post)
+	})
+	defer p.Close()
+	defer m.shutdown()
+
+	probeUntil(t, p, "initial external link", func() bool {
+		return ggui.Peek(m.DaemonState).Mode == "external" && ggui.Peek(m.Conn).OK
+	})
+
+	// Previous instance finishes shutting down.
+	other.stop()
+
+	probeUntil(t, p, "fallback to embedded daemon", func() bool {
+		s := ggui.Peek(m.DaemonState)
+		return s.Mode == "embedded" && s.Running && ggui.Peek(m.Conn).OK && ggui.Peek(m.Conn).Self.GetName() == "inside"
+	})
+}
+
 // Restart restores both tabs, but only the visible one starts its process.
 func TestRestartResumesOnlyVisibleSession(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())

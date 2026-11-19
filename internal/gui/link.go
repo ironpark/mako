@@ -271,6 +271,11 @@ func (m *model) watch(ctx context.Context) {
 					wait = time.Minute // an older daemon, which may be updated
 				case rewatched:
 					wait = 0
+				default:
+					m.link.drop(c)
+					if m.link.watching.Swap(false) {
+						m.link.pollNow()
+					}
 				}
 			}
 		}
@@ -327,7 +332,15 @@ func (m *model) poll(ctx context.Context) {
 	gen := m.link.generation()
 	c, err := m.link.client(ctx)
 	if err != nil {
-		fail(err)
+		m.post(func() {
+			if m.link.generation() != gen {
+				return
+			}
+			if m.fallbackToEmbedded() {
+				return
+			}
+			m.Conn.Set(connState{Err: err.Error()})
+		})
 		return
 	}
 	reqCtx, cancel := context.WithTimeout(ctx, 8*time.Second)

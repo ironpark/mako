@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/runtime"
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/widget"
 
@@ -233,11 +234,15 @@ func (t treeRows) project(g sessionGroup) []ggui.Widget {
 	}
 	btn := ui.ButtonOf(widget.Row(title...).Gap(6).Align(widget.AlignCenter), func() { m.pickScope(key) }).
 		Ghost().Pad(6, 8, 6, 4).Radius(7).Name(name)
-	row := widget.Row(
+	cells := []ggui.Widget{
 		lookButton(m, g.Key, name, look),
 		widget.Expanded(btn),
 		pinButton(m, key, name, hover),
-	).Gap(0).Align(widget.AlignCenter)
+	}
+	if !g.multiRoot() {
+		cells = append(cells, newSessionButton(name, hover, func() { m.openNew(g.NodeID, g.Project) }))
+	}
+	row := widget.Row(cells...).Gap(0).Align(widget.AlignCenter)
 	var w ggui.Widget = selectedRow(row, t.scope == key)
 	w = ui.ContextMenuFunc(w, func() []ggui.Widget { return projectRowMenu(m, g, name, key) }).Name(Tf("%s actions", name))
 	// A session dropped on the row starts again there; a project dropped
@@ -286,14 +291,14 @@ func (t treeRows) folder(g sessionGroup, j int, r projectRoot, last bool) ggui.W
 	title = append(title, widget.Text(fmt.Sprint(len(in))).Size(12).Color(skin.ExtraMuted).NoWrap())
 	btn := ui.ButtonOf(widget.Row(title...).Gap(6).Align(widget.AlignCenter), func() { m.pickScope(key) }).
 		Ghost().Pad(5, 8, 5, 6).Radius(7).Name("#" + label)
-	row := selectedRow(widget.Row(widget.Expanded(btn), pinButton(m, key, "#"+label, hover)).Align(widget.AlignCenter), selected)
+	row := selectedRow(widget.Row(
+		widget.Expanded(btn),
+		pinButton(m, key, "#"+label, hover),
+		newSessionButton("#"+label, hover, func() { m.openNewInRoot(g, r) }),
+	).Align(widget.AlignCenter), selected)
 	var w ggui.Widget = &treeBranch{child: row, last: last}
 	w = ui.ContextMenuFunc(w, func() []ggui.Widget {
-		items := []ggui.Widget{pinItem(m, key)}
-		for _, l := range r.Locations {
-			items = append(items, ui.MenuItem(Tf("New session on %s", nodeName(ggui.Peek(m.Nodes), l.Node)), func() { m.openNew(l.Node, l.Path) }))
-		}
-		return append(items, ui.MenuDivider(), ui.MenuItem(Tf("Take %s out of the project", label), func() { m.removeRoot(g, j) }))
+		return folderRowMenu(m, g, j, r)
 	}).Name(Tf("%s actions", "#"+label))
 	return widget.Pointer(w).OnHover(hover.Set)
 }
@@ -330,7 +335,9 @@ func (t treeRows) pinnedRows(groups []sessionGroup) []ggui.Widget {
 				sessions = append(sessions, s)
 			}
 		}
-		name, parent := g.Def.Roots[j].label(), t.name(g)
+		r := g.Def.Roots[j]
+		name, parent := r.label(), t.name(g)
+		hover := ggui.State(false)
 		row := []ggui.Widget{
 			hashMark(16),
 			widget.Text(name).Size(14).NoWrap(),
@@ -343,7 +350,15 @@ func (t treeRows) pinnedRows(groups []sessionGroup) []ggui.Widget {
 		label := parent + " / " + name
 		btn := ui.ButtonOf(widget.Row(row...).Gap(8).Align(widget.AlignCenter), func() { m.pickScope(k) }).
 			Ghost().Pad(6, 8).Radius(7).Name(label)
-		rows = append(rows, selectedRow(widget.Row(widget.Expanded(btn), pinButton(m, k, label, ggui.Const(true))).Align(widget.AlignCenter), t.scope == k))
+		var w ggui.Widget = selectedRow(widget.Row(
+			widget.Expanded(btn),
+			pinButton(m, k, label, ggui.Const(true)),
+			newSessionButton(label, hover, func() { m.openNewInRoot(g, r) }),
+		).Align(widget.AlignCenter), t.scope == k)
+		w = ui.ContextMenuFunc(w, func() []ggui.Widget {
+			return folderRowMenu(m, g, j, r)
+		}).Name(Tf("%s actions", label))
+		rows = append(rows, widget.Pointer(w).OnHover(hover.Set))
 	}
 	return rows
 }
@@ -356,15 +371,106 @@ func selectedRow(row ggui.Widget, selected bool) ggui.Widget {
 	return widget.Box(row).Radius(7)
 }
 
-// projectRowMenu is a project row's menu: starting a session in it, its
-// pin, and the project's own entries.
+// projectRowMenu is a project row's menu: starting a session in it,
+// opening its folder, its pin, and the project's own entries.
 func projectRowMenu(m *model, g sessionGroup, name string, key scopeKey) []ggui.Widget {
 	items := []ggui.Widget{ui.MenuItem(T("New session here"), func() { m.openNew(g.NodeID, g.Project) })}
 	if len(g.Roots) > 1 {
 		items = append(items, ui.MenuSub(T("New session in…"), startItems(m, g, ggui.Peek(m.Nodes))...))
 	}
+	if item := projectLocationItem(m, g); item != nil {
+		items = append(items, item)
+	}
 	items = append(items, pinItem(m, key), ui.MenuDivider())
 	return append(items, projectMenu(m, g, name)...)
+}
+
+// folderRowMenu is a sub-project row's context menu.
+func folderRowMenu(m *model, g sessionGroup, j int, r projectRoot) []ggui.Widget {
+	label := r.label()
+	key := scopeKey{Section: g.Key, Root: rootKey(r)}
+	items := []ggui.Widget{pinItem(m, key)}
+	for _, l := range r.Locations {
+		items = append(items, ui.MenuItem(Tf("New session on %s", nodeName(ggui.Peek(m.Nodes), l.Node)), func() { m.openNew(l.Node, l.Path) }))
+	}
+	if node, path := m.rootLocation(g, r); path != "" {
+		items = append(items, openLocationItem(m, node, path))
+	}
+	return append(items, ui.MenuDivider(), ui.MenuItem(Tf("Take %s out of the project", label), func() { m.removeRoot(g, j) }))
+}
+
+// rootLocation picks where a sub-project root lives: on this machine when
+// it is here, else its first location, else the section's own.
+func (m *model) rootLocation(g sessionGroup, r projectRoot) (node, path string) {
+	if k := slices.IndexFunc(r.Locations, func(f fileRoot) bool { return m.onThisMachine(f.Node) }); k >= 0 {
+		return r.Locations[k].Node, r.Locations[k].Path
+	}
+	if len(r.Locations) > 0 {
+		return r.Locations[0].Node, r.Locations[0].Path
+	}
+	return g.NodeID, g.Project
+}
+
+// openNewInRoot opens the new-session tab for a merged project's sub-project.
+func (m *model) openNewInRoot(g sessionGroup, r projectRoot) {
+	m.openNew(m.rootLocation(g, r))
+}
+
+// openLocationItem opens path in the desktop's file manager when on this
+// machine, or in mako's remote file browser otherwise.
+func openLocationItem(m *model, node, path string) ggui.Widget {
+	if m.onThisMachine(node) {
+		return ui.MenuItem(fileManagerLabel(), func() { _ = runtime.OpenURL(path) })
+	}
+	return ui.MenuItem(Tf("Show in %s's files", nodeName(ggui.Peek(m.Nodes), node)), func() {
+		m.openBrowser(node, path, "")
+	})
+}
+
+// projectLocationItem is a project row's menu item (or submenu for a
+// merged project) that opens its folder in the desktop's file manager.
+func projectLocationItem(m *model, g sessionGroup) ggui.Widget {
+	if g.multiRoot() {
+		var sub []ggui.Widget
+		for _, r := range g.Def.Roots {
+			node, path := m.rootLocation(g, r)
+			if path == "" {
+				continue
+			}
+			if m.onThisMachine(node) {
+				sub = append(sub, ui.MenuItem(r.label(), func() { _ = runtime.OpenURL(path) }))
+			} else {
+				sub = append(sub, ui.MenuItem(Tf("%s on %s", r.label(), nodeName(ggui.Peek(m.Nodes), node)), func() {
+					m.openBrowser(node, path, "")
+				}))
+			}
+		}
+		if len(sub) == 0 {
+			return nil
+		}
+		return ui.MenuSub(fileManagerLabel(), sub...)
+	}
+	node, path := g.NodeID, g.Project
+	if k := slices.IndexFunc(g.Roots, func(r fileRoot) bool { return m.onThisMachine(r.Node) && r.Path != "" }); k >= 0 {
+		node, path = g.Roots[k].Node, g.Roots[k].Path
+	}
+	if path == "" {
+		return nil
+	}
+	return openLocationItem(m, node, path)
+}
+
+// newSessionButton starts a new session in a project or sub-project row,
+// shown while the pointer is over the row.
+func newSessionButton(name string, hover ggui.Readable[bool], run func()) ggui.Widget {
+	return ggui.View(hover, func(h bool) ggui.Widget {
+		if !h {
+			return widget.Box()
+		}
+		label := Tf("New session in %s", name)
+		return ui.Tooltip(ui.ButtonOf(icon("plus").Size(13).Color(skin.Muted), run).
+			Ghost().Pad(5).Radius(6).Name(label), label)
+	})
 }
 
 // pinItem pins or unpins a project or folder, from its menu.

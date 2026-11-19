@@ -54,6 +54,7 @@ func TestProfileDescriptionEditor(t *testing.T) {
 		}
 	}
 	p := ggui.ProbeBuilder(func() ggui.Widget { return profileCard(m, profile, ggui.TextStyle{}) }, ggui.Sz(800, 700))
+	defer m.shutdown()
 	defer p.Close()
 	p.Setup(func() { setup(m) })
 	p.Frame()

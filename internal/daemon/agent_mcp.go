@@ -27,6 +27,7 @@ import (
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 const agentMCPName = "mako"
@@ -155,8 +156,9 @@ func (d *Daemon) listenAgentMCP(ctx context.Context, dir string) error {
 	if err != nil {
 		return fmt.Errorf("agent MCP: %w", err)
 	}
+	ln = transport.OwnListener(ln, path)
 	d.projectAgents.socket = path
-	context.AfterFunc(ctx, func() { _ = ln.Close(); _ = os.Remove(path) })
+	context.AfterFunc(ctx, func() { _ = ln.Close() })
 	go func() {
 		for {
 			conn, err := ln.Accept()

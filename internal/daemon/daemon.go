@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -189,7 +188,6 @@ func (d *Daemon) Run(ctx context.Context) error {
 	}
 	d.socket = socket
 	defer d.ln.Close()
-	defer os.Remove(socket)
 	if err := d.loadSessions(dir); err != nil {
 		return err
 	}

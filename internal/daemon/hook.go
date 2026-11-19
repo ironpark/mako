@@ -16,6 +16,7 @@ import (
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // hookArg, as a program's first argument, runs it as an agent's hook.
@@ -248,7 +249,10 @@ func listenUnix(dir, name string) (net.Listener, string, error) {
 	path := filepath.Join(dir, name)
 	_ = os.Remove(path)
 	ln, err := net.Listen("unix", path)
-	return ln, path, err
+	if err != nil {
+		return nil, path, err
+	}
+	return transport.OwnListener(ln, path), path, nil
 }
 
 func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {

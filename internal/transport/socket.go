@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -35,11 +36,44 @@ func Listen(path string) (net.Listener, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listen %s: %w", path, err)
 	}
+	owned := OwnListener(ln, path)
 	if err := os.Chmod(path, 0o600); err != nil {
-		ln.Close()
+		owned.Close()
 		return nil, err
 	}
-	return ln, nil
+	return owned, nil
+}
+
+// OwnListener wraps a Unix listener so Close removes path only when it
+// still names the socket this listener created. A daemon finishing its
+// shutdown after a newer daemon took over the path will not unlink the
+// newer daemon's socket.
+func OwnListener(ln net.Listener, path string) net.Listener {
+	if uln, ok := ln.(*net.UnixListener); ok {
+		uln.SetUnlinkOnClose(false)
+	}
+	info, _ := os.Lstat(path)
+	return &ownedListener{Listener: ln, path: path, info: info}
+}
+
+type ownedListener struct {
+	net.Listener
+	path string
+	info os.FileInfo
+	once sync.Once
+	err  error
+}
+
+func (l *ownedListener) Close() error {
+	l.once.Do(func() {
+		l.err = l.Listener.Close()
+		if l.info != nil {
+			if cur, err := os.Lstat(l.path); err == nil && os.SameFile(l.info, cur) {
+				_ = os.Remove(l.path)
+			}
+		}
+	})
+	return l.err
 }
 
 // Dial opens a greeted stream to the daemon on the socket at path, and

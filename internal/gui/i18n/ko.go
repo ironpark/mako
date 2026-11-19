@@ -1492,6 +1492,7 @@ var catalogKo = map[string]string{
 	"%s · %d agents": "%s · 에이전트 %d개",
 	"Team":           "팀",
 	"Team %d":        "팀 %d",
-	"Add team %s":    "팀 %s 추가",
-	"Add agent":      "에이전트 추가",
+	"Add team %s":       "팀 %s 추가",
+	"Add agent":         "에이전트 추가",
+	"New session in %s": "%s에서 새 세션",
 }
