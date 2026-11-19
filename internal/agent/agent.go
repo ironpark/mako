@@ -8,6 +8,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"image/color"
 	"time"
@@ -242,6 +243,28 @@ type Models interface {
 // takes none.
 type ModelFlag interface {
 	ModelArgs(model string) []string
+}
+
+// EffortFlag is an agent started with a reasoning effort of the user's
+// choosing by its flags: EffortArgs are those that start it on effort, nil
+// for an agent that takes none.
+type EffortFlag interface {
+	EffortArgs(effort string) []string
+}
+
+// ModelInfo describes one model offered by an agent's catalog.
+type ModelInfo struct {
+	ID       string   `json:"id"`
+	Name     string   `json:"name,omitempty"`
+	Efforts  []string `json:"efforts,omitempty"`
+	Overflow bool     `json:"overflow,omitempty"`
+}
+
+// ModelCatalog dynamically discovers the models and supported effort levels
+// an agent offers, using env (e.g. CLAUDE_CONFIG_DIR, CODEX_HOME, HOME) and
+// bypassing caches when refresh is true.
+type ModelCatalog interface {
+	Catalog(ctx context.Context, env map[string]string, refresh bool) ([]ModelInfo, error)
 }
 
 // Keystroke is a step of typing into an agent's terminal: Text pasted, if

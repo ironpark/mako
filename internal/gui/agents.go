@@ -1,16 +1,19 @@
 package gui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/widget"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
@@ -38,6 +41,7 @@ type agentDraft struct {
 	PickServers bool
 	Servers     string
 	Model       string // a profile's; "" for the agent's default
+	Effort      string // a profile's; "" for the agent's default
 }
 
 // draftAgents lays out cfg's agents for editing: every agent the node can
@@ -54,7 +58,8 @@ func draftAgents(agents map[string]agentspec.Agent) []agentDraft {
 		out = append(out, d)
 		for _, p := range a.Profiles {
 			d := agentDraft{ID: len(out) + 1, Agent: name, Profile: p.Name, IsProfile: true,
-				Description: p.Description, Args: agentspec.JoinArgs(p.Args), Env: envText(p.Env), Model: p.Model}
+				Description: p.Description, Args: agentspec.JoinArgs(p.Args), Env: envText(p.Env),
+				Model: p.Model, Effort: p.Effort}
 			if p.ContextServers != nil {
 				d.PickServers, d.Servers = true, strings.Join(*p.ContextServers, "\n")
 			}
@@ -127,7 +132,7 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 		if err != nil {
 			return nil, fmt.Errorf(T("%s, environment: %v"), where, err)
 		}
-		p := agentspec.Profile{Name: r.Profile, Description: r.Description, Args: args, Env: env, Model: strings.TrimSpace(r.Model)}
+		p := agentspec.Profile{Name: r.Profile, Description: r.Description, Args: args, Env: env, Model: strings.TrimSpace(r.Model), Effort: strings.TrimSpace(r.Effort)}
 		if r.PickServers {
 			ids := lines(r.Servers)
 			if ids == nil {
@@ -376,6 +381,7 @@ func agentSettings(m *model) ggui.Widget {
 	})
 
 	return listPage(T("Agents"), T("The programs a session can start on this node, the flags and environment each starts with, and profiles: named variations of an agent, such as claude on another model or account. A session picks one as agent:profile. Changes apply to the next session started."),
+		isolateHomeCard(m),
 		agents,
 		saveBar(m),
 	)
@@ -458,6 +464,7 @@ func agentDetail(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 // agentEditor is an unfolded agent's settings: its command, flags and
 // environment, then its profiles, and what adds a profile or removes it.
 func agentEditor(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
+	m.ensureAgentCatalog(a.Agent)
 	_, builtin := agentspec.Builtin[a.Agent]
 	commandHint := T("The program and any arguments it always needs.")
 	if builtin {
@@ -586,7 +593,7 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Description })).
 				Multiline().Lines(2).Placeholder(T("For example: Reviews Go concurrency, cancellation and race conditions.")).
 				Name(Tf("%s description", target))),
-		profileModel(m, p, target, mono),
+		profileModelAndEffort(m, p, target, mono),
 		compactField(T("Flags"), T("Added after the agent's own."),
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Args })).
 				Style(mono).Placeholder("--flag value").Name(Tf("%s flags", target))),
@@ -690,30 +697,298 @@ func profileServers(m *model, id int, name string) ggui.Widget {
 	})
 }
 
-// profileModel is the model a profile's sessions start on: picked from
-// those its agent offers, or typed for an agent mako knows no models of;
-// none for an agent mako starts on no model of its own.
-func profileModel(m *model, p agentDraft, target string, mono ggui.TextStyle) ggui.Widget {
+func equalCatalogMaps(a, b map[string][]*protocol.AgentModel) bool {
+	return maps.EqualFunc(a, b, func(xs, ys []*protocol.AgentModel) bool {
+		return slices.EqualFunc(xs, ys, func(x, y *protocol.AgentModel) bool { return proto.Equal(x, y) })
+	})
+}
+
+func (m *model) ensureAgentCatalog(agentName string) {
+	if agentName == "" {
+		return
+	}
+	if len(ggui.Peek(m.AgentCatalogs)[agentName]) > 0 {
+		return
+	}
+	if m.catalogAsked[agentName] {
+		return
+	}
+	entry, ok := agents.Lookup(agentName)
+	if !ok {
+		return
+	}
+	if _, hasCat := entry.Driver.(agent.ModelCatalog); !hasCat {
+		if _, hasModels := entry.Driver.(agent.Models); !hasModels {
+			return
+		}
+	}
+	m.catalogAsked[agentName] = true
+	m.loadAgentCatalog(agentName, false)
+}
+
+func (m *model) loadAgentCatalog(agentName string, refresh bool) {
+	if agentName == "" {
+		return
+	}
+	m.catalogAsked[agentName] = true
+	if refresh {
+		m.setCatalogLoading(agentName, true)
+	}
+	linked := m.link != nil && m.link.isLinked()
+	cfgAgents := maps.Clone(m.cfg.Agents)
+	isolate := ggui.Peek(m.IsolateHome)
+	ggui.Async(func() ([]*protocol.AgentModel, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+		defer cancel()
+		if linked {
+			c, err := m.link.client(ctx)
+			if err == nil {
+				res, err := c.ListAgentModels(ctx, &protocol.ListAgentModels{Agent: agentName, Refresh: refresh})
+				if err == nil {
+					return res.GetModels(), nil
+				}
+			}
+		}
+		return localAgentCatalog(ctx, agentName, isolate, cfgAgents, refresh)
+	}, func(models []*protocol.AgentModel, err error) {
+		if refresh {
+			m.setCatalogLoading(agentName, false)
+		}
+		if err != nil {
+			if refresh {
+				m.toaster.Push(ui.Toast(Tf("Could not load %s models", agentName), err.Error()).Destructive())
+			}
+			return
+		}
+		m.AgentCatalogs.Update(func(prev map[string][]*protocol.AgentModel) map[string][]*protocol.AgentModel {
+			next := maps.Clone(prev)
+			if next == nil {
+				next = map[string][]*protocol.AgentModel{}
+			}
+			next[agentName] = models
+			return next
+		})
+	})
+}
+
+func (m *model) setCatalogLoading(agentName string, loading bool) {
+	m.AgentCatalogLoading.Update(func(prev map[string]bool) map[string]bool {
+		next := maps.Clone(prev)
+		if next == nil {
+			next = map[string]bool{}
+		}
+		if loading {
+			next[agentName] = true
+		} else {
+			delete(next, agentName)
+		}
+		return next
+	})
+}
+
+func localAgentCatalog(ctx context.Context, agentName string, isolate bool, configured map[string]agentspec.Agent, refresh bool) ([]*protocol.AgentModel, error) {
+	entry, ok := agents.Lookup(agentName)
+	if !ok {
+		return nil, nil
+	}
+	env := agentspec.IsolatedHomeEnvForAgent(agentName, isolate, configured)
+	if cat, ok := entry.Driver.(agent.ModelCatalog); ok {
+		got, err := cat.Catalog(ctx, env, refresh)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]*protocol.AgentModel, len(got))
+		for i, info := range got {
+			out[i] = &protocol.AgentModel{
+				Id:       info.ID,
+				Name:     info.Name,
+				Efforts:  slices.Clone(info.Efforts),
+				Overflow: info.Overflow,
+			}
+		}
+		return out, nil
+	}
+	if known, ok := entry.Driver.(agent.Models); ok {
+		efforts := known.Efforts()
+		var out []*protocol.AgentModel
+		for _, id := range known.Models() {
+			out = append(out, &protocol.AgentModel{Id: id, Name: id, Efforts: slices.Clone(efforts)})
+		}
+		return out, nil
+	}
+	return nil, nil
+}
+
+// profileModelAndEffort is the model and reasoning effort a profile's
+// sessions start with.
+func profileModelAndEffort(m *model, p agentDraft, target string, mono ggui.TextStyle) ggui.Widget {
 	entry, _ := agents.Lookup(p.Agent)
-	if flag, ok := entry.Driver.(agent.ModelFlag); !ok || flag.ModelArgs("x") == nil {
+	modelFlag, okModel := entry.Driver.(agent.ModelFlag)
+	hasModel := okModel && modelFlag.ModelArgs("x") != nil
+	effortFlag, okEffort := entry.Driver.(agent.EffortFlag)
+	hasEffort := okEffort && effortFlag.EffortArgs("high") != nil
+	if !hasModel && !hasEffort {
 		return widget.Box()
 	}
-	model := m.agentField(p.ID, func(d *agentDraft) *string { return &d.Model })
-	hint := T("The model its sessions start on, over the agent's default and any its flags name.")
-	known, ok := entry.Driver.(agent.Models)
-	if !ok {
-		return compactField(T("Model"), hint,
-			ui.TextField(model).Style(mono).Placeholder(T("The agent's default")).Name(Tf("%s model", target)))
-	}
-	options := append([]string{""}, known.Models()...)
-	if cur := ggui.Peek(model); cur != "" && !slices.Contains(options, cur) {
-		options = append(options, cur) // one typed into config.json
-	}
-	return compactField(T("Model"), hint,
-		widget.Box(ui.Select(model).Options(options).Format(func(s string) string {
-			if s == "" {
-				return T("The agent's default")
+	_, hasCatalog := entry.Driver.(agent.ModelCatalog)
+
+	return ggui.Reactive(func() ggui.Widget {
+		catalog := m.AgentCatalogs.Get()[p.Agent]
+		loading := m.AgentCatalogLoading.Get()[p.Agent]
+		row := m.agentRow(p.ID)
+		if row.ID == 0 {
+			return widget.Box()
+		}
+		models := catalog
+		if len(models) == 0 {
+			if known, ok := entry.Driver.(agent.Models); ok {
+				efforts := known.Efforts()
+				for _, id := range known.Models() {
+					models = append(models, &protocol.AgentModel{Id: id, Name: id, Efforts: efforts})
+				}
 			}
-			return s
-		}).Name(Tf("%s model", target))).Width(220))
+		}
+
+		var modelCol, effortCol ggui.Widget
+		if hasModel {
+			hint := T("The model its sessions start on, over the agent's default and any its flags name.")
+			var modelCtrl ggui.Widget
+			if len(models) == 0 {
+				modelBind := m.agentField(p.ID, func(d *agentDraft) *string { return &d.Model })
+				modelCtrl = ui.TextField(modelBind).Style(mono).Placeholder(T("The agent's default")).Name(Tf("%s model", target))
+			} else {
+				options := []string{""}
+				labels := map[string]string{"": T("The agent's default")}
+				var overflow []string
+				for _, am := range models {
+					id := am.GetId()
+					if id == "" {
+						continue
+					}
+					label := id
+					if am.GetName() != "" && am.GetName() != id {
+						label = am.GetName()
+					}
+					labels[id] = label
+					if am.GetOverflow() {
+						overflow = append(overflow, id)
+					} else if !slices.Contains(options, id) {
+						options = append(options, id)
+					}
+				}
+				for _, id := range overflow {
+					if !slices.Contains(options, id) {
+						options = append(options, id)
+					}
+				}
+				if row.Model != "" && !slices.Contains(options, row.Model) {
+					options = append(options, row.Model)
+					labels[row.Model] = row.Model
+				}
+				modelBind := ggui.Bind(func() string {
+					return m.agentRow(p.ID).Model
+				}, func(v string) {
+					rows := slices.Clone(ggui.Peek(m.AgentDraft))
+					for i := range rows {
+						if rows[i].ID == p.ID {
+							rows[i].Model = v
+							if v != "" {
+								if found := findAgentModel(models, v); found != nil {
+									if len(found.GetEfforts()) == 0 || (rows[i].Effort != "" && !slices.Contains(found.GetEfforts(), rows[i].Effort)) {
+										rows[i].Effort = ""
+									}
+								}
+							}
+						}
+					}
+					m.AgentDraft.Set(rows)
+				})
+				modelCtrl = ui.Select(modelBind).Options(options).Format(func(s string) string {
+					if l, ok := labels[s]; ok {
+						return l
+					}
+					return s
+				}).Name(Tf("%s model", target))
+			}
+			var ctrlRow ggui.Widget = modelCtrl
+			if hasCatalog {
+				refreshBtn := ui.Tooltip(ui.ButtonOf(icon("refresh-cw").Size(13).Color(skin.Muted), func() {
+					m.loadAgentCatalog(p.Agent, true)
+				}).Ghost().Pad(6).Radius(6).BindDisabled(ggui.Const(loading)).Name(Tf("Refresh %s models", p.Agent)), T("Refresh models"))
+				ctrlRow = widget.Row(widget.Expanded(modelCtrl), refreshBtn).Gap(4).Align(widget.AlignCenter)
+			}
+			modelCol = compactField(T("Model"), hint, ctrlRow)
+		}
+
+		if hasEffort {
+			efforts := effortChoices(models, row.Model, entry.Driver)
+			if len(efforts) > 0 || row.Effort != "" {
+				options := append([]string{""}, efforts...)
+				if row.Effort != "" && !slices.Contains(options, row.Effort) {
+					options = append(options, row.Effort)
+				}
+				effortBind := m.agentField(p.ID, func(d *agentDraft) *string { return &d.Effort })
+				effortHint := T("The reasoning effort its sessions start with, over the agent's default.")
+				effortCtrl := ui.Select(effortBind).Options(options).Format(func(s string) string {
+					if s == "" {
+						return T("The agent's default")
+					}
+					return capitalized(s)
+				}).Name(Tf("%s effort", target))
+				effortCol = compactField(T("Effort"), effortHint, effortCtrl)
+			}
+		}
+
+		switch {
+		case modelCol != nil && effortCol != nil:
+			return widget.Row(
+				widget.Expanded(modelCol),
+				widget.Box(effortCol).Width(180),
+			).Gap(12).Align(widget.AlignStart)
+		case modelCol != nil:
+			return widget.Box(modelCol).MaxWidth(280)
+		case effortCol != nil:
+			return widget.Box(effortCol).Width(180)
+		default:
+			return widget.Box()
+		}
+	})
+}
+
+func findAgentModel(models []*protocol.AgentModel, id string) *protocol.AgentModel {
+	for _, am := range models {
+		if am.GetId() == id {
+			return am
+		}
+	}
+	return nil
+}
+
+func effortChoices(models []*protocol.AgentModel, selectedModel string, driver agent.Driver) []string {
+	if selectedModel != "" {
+		if found := findAgentModel(models, selectedModel); found != nil {
+			return slices.Clone(found.GetEfforts())
+		}
+	}
+	var out []string
+	// Collect efforts from main models first, then overflow models.
+	for _, pass := range []bool{false, true} {
+		for _, am := range models {
+			if am.GetOverflow() != pass {
+				continue
+			}
+			for _, e := range am.GetEfforts() {
+				if e != "" && !slices.Contains(out, e) {
+					out = append(out, e)
+				}
+			}
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	if known, ok := driver.(agent.Models); ok {
+		return slices.Clone(known.Efforts())
+	}
+	return []string{"low", "medium", "high", "xhigh", "max"}
 }

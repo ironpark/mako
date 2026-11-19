@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/ironpark/ggui"
-	"github.com/ironpark/ggui/ui"
 )
 
 // confirmation is an operation that loses work, asking to be sure.
@@ -38,14 +37,13 @@ func confirmDialog(m *model) ggui.Widget {
 		}
 	})
 	return ggui.View(m.Confirmation, func(c confirmation) ggui.Widget {
-		d := ui.AlertDialog(open, c.Title, c.Body).Confirm(c.Action, func() {
-			if c.Run != nil {
-				c.Run()
-			}
+		return alertDialog(alertAsk{
+			Open:        open,
+			Title:       c.Title,
+			Body:        c.Body,
+			Action:      c.Action,
+			Destructive: !c.Safe,
+			Confirm:     c.Run,
 		})
-		if c.Safe {
-			return d
-		}
-		return d.Destructive()
 	})
 }

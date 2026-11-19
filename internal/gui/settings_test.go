@@ -124,3 +124,204 @@ func TestAddingAndRemovingProfiles(t *testing.T) {
 		t.Fatal("removing an agent left its profiles")
 	}
 }
+
+func TestSettingsDeveloperPinnedAtBottom(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	last := settingsNav[len(settingsNav)-1]
+	if !last.bottom || len(last.sections) != 1 || last.sections[0].id != "developer" {
+		t.Fatalf("expected Developer as the bottom-pinned last nav group, got %+v", last)
+	}
+	m := newModel(&config.Config{NodeID: "n1", Agents: agentspec.Defaults()}, "")
+	m.Page.Set("settings")
+	m.Section.Set("general")
+
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		return ggui.Provide(ggui.ReducedMotionKey, true, settingsPage(m))
+	}, ggui.Sz(1600, 900))
+	defer p.Close()
+	for range 3 {
+		p.Frame()
+	}
+
+	dev, ok := p.Semantics().Find(ggui.RoleButton, T("Developer"))
+	if !ok {
+		t.Fatalf("Developer button missing from settings sidebar:\n%s", p.Semantics().String())
+	}
+	about, ok := p.Semantics().Find(ggui.RoleButton, T("About"))
+	if !ok {
+		t.Fatalf("About button missing from settings sidebar:\n%s", p.Semantics().String())
+	}
+	if dev.Rect.Origin.Y <= about.Rect.Origin.Y {
+		t.Fatalf("Developer (y=%.1f) should sit below About (y=%.1f)", dev.Rect.Origin.Y, about.Rect.Origin.Y)
+	}
+	if dev.Rect.Origin.Y < 800 {
+		t.Fatalf("Developer (y=%.1f) should be pinned near the bottom of a 900px sidebar", dev.Rect.Origin.Y)
+	}
+
+	p.Tap(T("Developer"))
+	for range 3 {
+		p.Frame()
+	}
+	if got := ggui.Peek(m.Section); got != "developer" {
+		t.Fatalf("tapping Developer selected %q, want developer", got)
+	}
+}
+
+func TestSettingsWideScreenLayout(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(&config.Config{NodeID: "n1", Agents: agentspec.Defaults()}, "")
+	m.Page.Set("settings")
+	m.Section.Set("general")
+
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		return ggui.Provide(ggui.ReducedMotionKey, true, settingsPage(m))
+	}, ggui.Sz(1680, 960))
+	defer p.Close()
+	step := func() {
+		for range 3 {
+			p.Frame()
+		}
+	}
+	step()
+
+	// On a wide screen, General places Sessions on the left and Language /
+	// Idle agents / Connection on the right, spanning wider than the old 1120px cap.
+	defAgent, ok := p.Semantics().Find(ggui.RoleSelect, T("Default agent"))
+	if !ok {
+		t.Fatalf("Default agent control missing:\n%s", p.Semantics().String())
+	}
+	lang, ok := p.Semantics().Find(ggui.RoleSelect, T("Language"))
+	if !ok {
+		t.Fatalf("Language control missing:\n%s", p.Semantics().String())
+	}
+	if lang.Rect.Origin.X <= defAgent.Rect.Origin.X+defAgent.Rect.Size.W {
+		t.Fatalf("wide General should place Language (x=%.1f) to the right of Default agent (right=%.1f)",
+			lang.Rect.Origin.X, defAgent.Rect.Origin.X+defAgent.Rect.Size.W)
+	}
+	// Content area runs well past sidebar (272) + old 1120 cap on a 1680px window.
+	if right := lang.Rect.Origin.X + lang.Rect.Size.W; right <= sidebarWidth+1120 {
+		t.Fatalf("wide settings content right edge %.1f did not expand beyond old 1120 cap", right)
+	}
+
+	// On a narrow screen, General collapses back to a single vertical column.
+	p.Resize(ggui.Sz(900, 960))
+	step()
+	defAgentNarrow, ok := p.Semantics().Find(ggui.RoleSelect, T("Default agent"))
+	if !ok {
+		t.Fatalf("Default agent control missing when narrow:\n%s", p.Semantics().String())
+	}
+	langNarrow, ok := p.Semantics().Find(ggui.RoleSelect, T("Language"))
+	if !ok {
+		t.Fatalf("Language control missing when narrow:\n%s", p.Semantics().String())
+	}
+	if langNarrow.Rect.Origin.Y >= defAgentNarrow.Rect.Origin.Y {
+		t.Fatalf("narrow General should stack Language (y=%.1f) above Default agent (y=%.1f)",
+			langNarrow.Rect.Origin.Y, defAgentNarrow.Rect.Origin.Y)
+	}
+
+	// Switch back to wide and verify Appearance, Terminal, Host, Discovery, and Shell use two columns.
+	p.Resize(ggui.Sz(1680, 960))
+
+	m.Section.Set("appearance")
+	step()
+	paneGlow, ok := p.Semantics().Find(ggui.RoleSwitch, T("Glow round the current pane"))
+	if !ok {
+		t.Fatalf("Glow round the current pane missing:\n%s", p.Semantics().String())
+	}
+	usageOverlay, ok := p.Semantics().Find(ggui.RoleSwitch, T("Show usage overlay"))
+	if !ok {
+		t.Fatalf("Show usage overlay missing:\n%s", p.Semantics().String())
+	}
+	if usageOverlay.Rect.Origin.X <= paneGlow.Rect.Origin.X+paneGlow.Rect.Size.W {
+		t.Fatalf("wide Appearance should place Agent usage (x=%.1f) beside Panes (right=%.1f)",
+			usageOverlay.Rect.Origin.X, paneGlow.Rect.Origin.X+paneGlow.Rect.Size.W)
+	}
+
+	m.Section.Set("terminal")
+	step()
+	cursorStyle, ok := p.Semantics().Find(ggui.RoleSelect, T("Cursor style"))
+	if !ok {
+		t.Fatalf("Cursor style missing:\n%s", p.Semantics().String())
+	}
+	lineHeight, ok := p.Semantics().Find(ggui.RoleSlider, T("Line height"))
+	if !ok {
+		t.Fatalf("Line height missing:\n%s", p.Semantics().String())
+	}
+	if cursorStyle.Rect.Origin.X <= lineHeight.Rect.Origin.X+lineHeight.Rect.Size.W {
+		t.Fatalf("wide Terminal should place Cursor (x=%.1f) beside Text (right=%.1f)",
+			cursorStyle.Rect.Origin.X, lineHeight.Rect.Origin.X+lineHeight.Rect.Size.W)
+	}
+
+	m.Section.Set("host")
+	step()
+	nodeName, ok := p.Semantics().Find(ggui.RoleTextField, T("Node name"))
+	if !ok {
+		t.Fatalf("Node name missing:\n%s", p.Semantics().String())
+	}
+	p2pSwitch, ok := p.Semantics().Find(ggui.RoleSwitch, T("Link over libp2p"))
+	if !ok {
+		t.Fatalf("Link over libp2p missing:\n%s", p.Semantics().String())
+	}
+	if p2pSwitch.Rect.Origin.X <= nodeName.Rect.Origin.X+nodeName.Rect.Size.W {
+		t.Fatalf("wide Host should place libp2p (x=%.1f) beside Identity (right=%.1f)",
+			p2pSwitch.Rect.Origin.X, nodeName.Rect.Origin.X+nodeName.Rect.Size.W)
+	}
+
+	m.Section.Set("discovery")
+	step()
+	bonjour, ok := p.Semantics().Find(ggui.RoleSwitch, T("Bonjour"))
+	if !ok {
+		t.Fatalf("Bonjour missing:\n%s", p.Semantics().String())
+	}
+	peers, ok := p.Semantics().Find(ggui.RoleTextField, T("Peers"))
+	if !ok {
+		t.Fatalf("Peers missing:\n%s", p.Semantics().String())
+	}
+	if peers.Rect.Origin.X <= bonjour.Rect.Origin.X+bonjour.Rect.Size.W {
+		t.Fatalf("wide Discovery should place Static (x=%.1f) beside Automatic (right=%.1f)",
+			peers.Rect.Origin.X, bonjour.Rect.Origin.X+bonjour.Rect.Size.W)
+	}
+
+	m.Section.Set("shell")
+	step()
+	shellProg, ok := p.Semantics().Find(ggui.RoleTextField, T("Shell program"))
+	if !ok {
+		t.Fatalf("Shell program missing:\n%s", p.Semantics().String())
+	}
+	shellEnv, ok := p.Semantics().Find(ggui.RoleTextField, T("Shell environment"))
+	if !ok {
+		t.Fatalf("Shell environment missing:\n%s", p.Semantics().String())
+	}
+	if shellEnv.Rect.Origin.X <= shellProg.Rect.Origin.X+shellProg.Rect.Size.W {
+		t.Fatalf("wide Shell should place Environment (x=%.1f) beside Program (right=%.1f)",
+			shellEnv.Rect.Origin.X, shellProg.Rect.Origin.X+shellProg.Rect.Size.W)
+	}
+}
+
+func TestSettingsListBesideScalesWidth(t *testing.T) {
+	var listW, detailW float64
+	lb := &listBesideLayout{
+		list: ggui.FromFuncs(func(c ggui.Constraints, _ ggui.Env) ggui.Size {
+			listW = c.MaxW
+			return ggui.Sz(c.MaxW, 100)
+		}, func(*ggui.Canvas, ggui.Rect) {}),
+		detail: ggui.FromFuncs(func(c ggui.Constraints, _ ggui.Env) ggui.Size {
+			detailW = c.MaxW
+			return ggui.Sz(c.MaxW, 200)
+		}, func(*ggui.Canvas, ggui.Rect) {}),
+		narrow: ggui.FromFuncs(func(c ggui.Constraints, _ ggui.Env) ggui.Size {
+			return ggui.Sz(c.MaxW, 300)
+		}, func(*ggui.Canvas, ggui.Rect) {}),
+	}
+	env := ggui.Env{}
+	// Below settingsWide: narrow branch.
+	sz := lb.Layout(ggui.Constraints{MinW: 700, MaxW: 700, MaxH: ggui.Unbounded}, env)
+	if lb.wide || sz.H != 300 {
+		t.Fatalf("at 700px expected narrow (h=300), got wide=%v sz=%+v", lb.wide, sz)
+	}
+	// At 1500px: list scales proportionally up to listBesideMaxWidth (440), detail gets the rest.
+	sz = lb.Layout(ggui.Constraints{MinW: 1500, MaxW: 1500, MaxH: ggui.Unbounded}, env)
+	if !lb.wide || listW != listBesideMaxWidth || detailW != 1500-listBesideMaxWidth-settingsColumnGap || sz.H != 200 {
+		t.Fatalf("at 1500px got wide=%v listW=%.1f detailW=%.1f sz=%+v", lb.wide, listW, detailW, sz)
+	}
+}

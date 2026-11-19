@@ -29,7 +29,11 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 37
+const Revision = 38
+
+// RevisionAgentHomeAndModels adds ListAgentModels, InspectAgentHome, and
+// MigrateAgentHome for dynamic agent model catalogs and Mako home isolation.
+const RevisionAgentHomeAndModels = 38
 
 // RevisionWatchFiles adds watch_files, which follows a node's files and
 // folders as they change, for a window to show them as they are without

@@ -1133,7 +1133,7 @@ func forgeBranchLine(m *model) ggui.Widget {
 
 // forgeDialogs is the new pull request dialog.
 func forgeDialogs(m *model) ggui.Widget {
-	return ui.Dialog(m.Forge.PROpen, widget.Column(
+	return keyedDialog(m.Forge.PROpen, widget.Column(
 		ui.Field(T("Title"), ui.TextField(m.Forge.PRTitle).Placeholder(T("From the commits, when left empty")).Name(T("Title"))),
 		ui.Field(T("Description"), ui.TextField(m.Forge.PRBody).Multiline().Lines(5).Name(T("Description"))),
 		ui.Field(T("Base branch"), ui.TextField(m.Forge.PRBase).Placeholder(T("The repository's default branch")).Name(T("Base branch"))),

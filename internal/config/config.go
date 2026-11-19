@@ -48,6 +48,9 @@ type Config struct {
 	// default flags and environment, and its profiles. A built-in left out
 	// launches with its default command.
 	Agents map[string]agentspec.Agent `json:"agents,omitempty"`
+	// IsolateHome puts every supported agent's settings and Mako sessions
+	// under ~/.mako/home/<agent> instead of the user's default home directory.
+	IsolateHome bool `json:"isolate_home,omitempty"`
 	// Shell is how this node starts its shell, which is not an agent:
 	// the user's login shell unless it names another program.
 	Shell agentspec.Shell `json:"shell,omitzero"`

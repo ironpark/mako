@@ -128,6 +128,12 @@ public  final class Envelope extends
     SEE_SESSION(139),
     WATCH_FILES(140),
     FILES_CHANGED(141),
+    LIST_AGENT_MODELS(142),
+    AGENT_MODELS(143),
+    INSPECT_AGENT_HOME(144),
+    AGENT_HOME_INFO(145),
+    MIGRATE_AGENT_HOME(146),
+    AGENT_HOME_MIGRATED(147),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -245,6 +251,12 @@ public  final class Envelope extends
         case 139: return SEE_SESSION;
         case 140: return WATCH_FILES;
         case 141: return FILES_CHANGED;
+        case 142: return LIST_AGENT_MODELS;
+        case 143: return AGENT_MODELS;
+        case 144: return INSPECT_AGENT_HOME;
+        case 145: return AGENT_HOME_INFO;
+        case 146: return MIGRATE_AGENT_HOME;
+        case 147: return AGENT_HOME_MIGRATED;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -5763,6 +5775,326 @@ public  final class Envelope extends
     }
   }
 
+  public static final int LIST_AGENT_MODELS_FIELD_NUMBER = 142;
+  /**
+   * <pre>
+   * Agent dynamic models and home isolation migration (revision 38).
+   * </pre>
+   *
+   * <code>.mako.v2.ListAgentModels list_agent_models = 142 [json_name = "listAgentModels"];</code>
+   */
+  @java.lang.Override
+  public boolean hasListAgentModels() {
+    return bodyCase_ == 142;
+  }
+  /**
+   * <pre>
+   * Agent dynamic models and home isolation migration (revision 38).
+   * </pre>
+   *
+   * <code>.mako.v2.ListAgentModels list_agent_models = 142 [json_name = "listAgentModels"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ListAgentModels getListAgentModels() {
+    if (bodyCase_ == 142) {
+       return (dev.ironpark.mako.v2.ListAgentModels) body_;
+    }
+    return dev.ironpark.mako.v2.ListAgentModels.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * Agent dynamic models and home isolation migration (revision 38).
+   * </pre>
+   *
+   * <code>.mako.v2.ListAgentModels list_agent_models = 142 [json_name = "listAgentModels"];</code>
+   */
+  private void setListAgentModels(dev.ironpark.mako.v2.ListAgentModels value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 142;
+  }
+  /**
+   * <pre>
+   * Agent dynamic models and home isolation migration (revision 38).
+   * </pre>
+   *
+   * <code>.mako.v2.ListAgentModels list_agent_models = 142 [json_name = "listAgentModels"];</code>
+   */
+  private void mergeListAgentModels(dev.ironpark.mako.v2.ListAgentModels value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 142 &&
+        body_ != dev.ironpark.mako.v2.ListAgentModels.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ListAgentModels.newBuilder((dev.ironpark.mako.v2.ListAgentModels) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 142;
+  }
+  /**
+   * <pre>
+   * Agent dynamic models and home isolation migration (revision 38).
+   * </pre>
+   *
+   * <code>.mako.v2.ListAgentModels list_agent_models = 142 [json_name = "listAgentModels"];</code>
+   */
+  private void clearListAgentModels() {
+    if (bodyCase_ == 142) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int AGENT_MODELS_FIELD_NUMBER = 143;
+  /**
+   * <code>.mako.v2.AgentModels agent_models = 143 [json_name = "agentModels"];</code>
+   */
+  @java.lang.Override
+  public boolean hasAgentModels() {
+    return bodyCase_ == 143;
+  }
+  /**
+   * <code>.mako.v2.AgentModels agent_models = 143 [json_name = "agentModels"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.AgentModels getAgentModels() {
+    if (bodyCase_ == 143) {
+       return (dev.ironpark.mako.v2.AgentModels) body_;
+    }
+    return dev.ironpark.mako.v2.AgentModels.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.AgentModels agent_models = 143 [json_name = "agentModels"];</code>
+   */
+  private void setAgentModels(dev.ironpark.mako.v2.AgentModels value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 143;
+  }
+  /**
+   * <code>.mako.v2.AgentModels agent_models = 143 [json_name = "agentModels"];</code>
+   */
+  private void mergeAgentModels(dev.ironpark.mako.v2.AgentModels value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 143 &&
+        body_ != dev.ironpark.mako.v2.AgentModels.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.AgentModels.newBuilder((dev.ironpark.mako.v2.AgentModels) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 143;
+  }
+  /**
+   * <code>.mako.v2.AgentModels agent_models = 143 [json_name = "agentModels"];</code>
+   */
+  private void clearAgentModels() {
+    if (bodyCase_ == 143) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int INSPECT_AGENT_HOME_FIELD_NUMBER = 144;
+  /**
+   * <code>.mako.v2.InspectAgentHome inspect_agent_home = 144 [json_name = "inspectAgentHome"];</code>
+   */
+  @java.lang.Override
+  public boolean hasInspectAgentHome() {
+    return bodyCase_ == 144;
+  }
+  /**
+   * <code>.mako.v2.InspectAgentHome inspect_agent_home = 144 [json_name = "inspectAgentHome"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.InspectAgentHome getInspectAgentHome() {
+    if (bodyCase_ == 144) {
+       return (dev.ironpark.mako.v2.InspectAgentHome) body_;
+    }
+    return dev.ironpark.mako.v2.InspectAgentHome.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.InspectAgentHome inspect_agent_home = 144 [json_name = "inspectAgentHome"];</code>
+   */
+  private void setInspectAgentHome(dev.ironpark.mako.v2.InspectAgentHome value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 144;
+  }
+  /**
+   * <code>.mako.v2.InspectAgentHome inspect_agent_home = 144 [json_name = "inspectAgentHome"];</code>
+   */
+  private void mergeInspectAgentHome(dev.ironpark.mako.v2.InspectAgentHome value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 144 &&
+        body_ != dev.ironpark.mako.v2.InspectAgentHome.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.InspectAgentHome.newBuilder((dev.ironpark.mako.v2.InspectAgentHome) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 144;
+  }
+  /**
+   * <code>.mako.v2.InspectAgentHome inspect_agent_home = 144 [json_name = "inspectAgentHome"];</code>
+   */
+  private void clearInspectAgentHome() {
+    if (bodyCase_ == 144) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int AGENT_HOME_INFO_FIELD_NUMBER = 145;
+  /**
+   * <code>.mako.v2.AgentHomeInfo agent_home_info = 145 [json_name = "agentHomeInfo"];</code>
+   */
+  @java.lang.Override
+  public boolean hasAgentHomeInfo() {
+    return bodyCase_ == 145;
+  }
+  /**
+   * <code>.mako.v2.AgentHomeInfo agent_home_info = 145 [json_name = "agentHomeInfo"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.AgentHomeInfo getAgentHomeInfo() {
+    if (bodyCase_ == 145) {
+       return (dev.ironpark.mako.v2.AgentHomeInfo) body_;
+    }
+    return dev.ironpark.mako.v2.AgentHomeInfo.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.AgentHomeInfo agent_home_info = 145 [json_name = "agentHomeInfo"];</code>
+   */
+  private void setAgentHomeInfo(dev.ironpark.mako.v2.AgentHomeInfo value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 145;
+  }
+  /**
+   * <code>.mako.v2.AgentHomeInfo agent_home_info = 145 [json_name = "agentHomeInfo"];</code>
+   */
+  private void mergeAgentHomeInfo(dev.ironpark.mako.v2.AgentHomeInfo value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 145 &&
+        body_ != dev.ironpark.mako.v2.AgentHomeInfo.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.AgentHomeInfo.newBuilder((dev.ironpark.mako.v2.AgentHomeInfo) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 145;
+  }
+  /**
+   * <code>.mako.v2.AgentHomeInfo agent_home_info = 145 [json_name = "agentHomeInfo"];</code>
+   */
+  private void clearAgentHomeInfo() {
+    if (bodyCase_ == 145) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int MIGRATE_AGENT_HOME_FIELD_NUMBER = 146;
+  /**
+   * <code>.mako.v2.MigrateAgentHome migrate_agent_home = 146 [json_name = "migrateAgentHome"];</code>
+   */
+  @java.lang.Override
+  public boolean hasMigrateAgentHome() {
+    return bodyCase_ == 146;
+  }
+  /**
+   * <code>.mako.v2.MigrateAgentHome migrate_agent_home = 146 [json_name = "migrateAgentHome"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.MigrateAgentHome getMigrateAgentHome() {
+    if (bodyCase_ == 146) {
+       return (dev.ironpark.mako.v2.MigrateAgentHome) body_;
+    }
+    return dev.ironpark.mako.v2.MigrateAgentHome.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.MigrateAgentHome migrate_agent_home = 146 [json_name = "migrateAgentHome"];</code>
+   */
+  private void setMigrateAgentHome(dev.ironpark.mako.v2.MigrateAgentHome value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 146;
+  }
+  /**
+   * <code>.mako.v2.MigrateAgentHome migrate_agent_home = 146 [json_name = "migrateAgentHome"];</code>
+   */
+  private void mergeMigrateAgentHome(dev.ironpark.mako.v2.MigrateAgentHome value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 146 &&
+        body_ != dev.ironpark.mako.v2.MigrateAgentHome.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.MigrateAgentHome.newBuilder((dev.ironpark.mako.v2.MigrateAgentHome) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 146;
+  }
+  /**
+   * <code>.mako.v2.MigrateAgentHome migrate_agent_home = 146 [json_name = "migrateAgentHome"];</code>
+   */
+  private void clearMigrateAgentHome() {
+    if (bodyCase_ == 146) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int AGENT_HOME_MIGRATED_FIELD_NUMBER = 147;
+  /**
+   * <code>.mako.v2.AgentHomeMigrated agent_home_migrated = 147 [json_name = "agentHomeMigrated"];</code>
+   */
+  @java.lang.Override
+  public boolean hasAgentHomeMigrated() {
+    return bodyCase_ == 147;
+  }
+  /**
+   * <code>.mako.v2.AgentHomeMigrated agent_home_migrated = 147 [json_name = "agentHomeMigrated"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.AgentHomeMigrated getAgentHomeMigrated() {
+    if (bodyCase_ == 147) {
+       return (dev.ironpark.mako.v2.AgentHomeMigrated) body_;
+    }
+    return dev.ironpark.mako.v2.AgentHomeMigrated.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.AgentHomeMigrated agent_home_migrated = 147 [json_name = "agentHomeMigrated"];</code>
+   */
+  private void setAgentHomeMigrated(dev.ironpark.mako.v2.AgentHomeMigrated value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 147;
+  }
+  /**
+   * <code>.mako.v2.AgentHomeMigrated agent_home_migrated = 147 [json_name = "agentHomeMigrated"];</code>
+   */
+  private void mergeAgentHomeMigrated(dev.ironpark.mako.v2.AgentHomeMigrated value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 147 &&
+        body_ != dev.ironpark.mako.v2.AgentHomeMigrated.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.AgentHomeMigrated.newBuilder((dev.ironpark.mako.v2.AgentHomeMigrated) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 147;
+  }
+  /**
+   * <code>.mako.v2.AgentHomeMigrated agent_home_migrated = 147 [json_name = "agentHomeMigrated"];</code>
+   */
+  private void clearAgentHomeMigrated() {
+    if (bodyCase_ == 147) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -11230,6 +11562,318 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Agent dynamic models and home isolation migration (revision 38).
+     * </pre>
+     *
+     * <code>.mako.v2.ListAgentModels list_agent_models = 142 [json_name = "listAgentModels"];</code>
+     */
+    @java.lang.Override
+    public boolean hasListAgentModels() {
+      return instance.hasListAgentModels();
+    }
+    /**
+     * <pre>
+     * Agent dynamic models and home isolation migration (revision 38).
+     * </pre>
+     *
+     * <code>.mako.v2.ListAgentModels list_agent_models = 142 [json_name = "listAgentModels"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ListAgentModels getListAgentModels() {
+      return instance.getListAgentModels();
+    }
+    /**
+     * <pre>
+     * Agent dynamic models and home isolation migration (revision 38).
+     * </pre>
+     *
+     * <code>.mako.v2.ListAgentModels list_agent_models = 142 [json_name = "listAgentModels"];</code>
+     */
+    public Builder setListAgentModels(dev.ironpark.mako.v2.ListAgentModels value) {
+      copyOnWrite();
+      instance.setListAgentModels(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Agent dynamic models and home isolation migration (revision 38).
+     * </pre>
+     *
+     * <code>.mako.v2.ListAgentModels list_agent_models = 142 [json_name = "listAgentModels"];</code>
+     */
+    public Builder setListAgentModels(
+        dev.ironpark.mako.v2.ListAgentModels.Builder builderForValue) {
+      copyOnWrite();
+      instance.setListAgentModels(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Agent dynamic models and home isolation migration (revision 38).
+     * </pre>
+     *
+     * <code>.mako.v2.ListAgentModels list_agent_models = 142 [json_name = "listAgentModels"];</code>
+     */
+    public Builder mergeListAgentModels(dev.ironpark.mako.v2.ListAgentModels value) {
+      copyOnWrite();
+      instance.mergeListAgentModels(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Agent dynamic models and home isolation migration (revision 38).
+     * </pre>
+     *
+     * <code>.mako.v2.ListAgentModels list_agent_models = 142 [json_name = "listAgentModels"];</code>
+     */
+    public Builder clearListAgentModels() {
+      copyOnWrite();
+      instance.clearListAgentModels();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.AgentModels agent_models = 143 [json_name = "agentModels"];</code>
+     */
+    @java.lang.Override
+    public boolean hasAgentModels() {
+      return instance.hasAgentModels();
+    }
+    /**
+     * <code>.mako.v2.AgentModels agent_models = 143 [json_name = "agentModels"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.AgentModels getAgentModels() {
+      return instance.getAgentModels();
+    }
+    /**
+     * <code>.mako.v2.AgentModels agent_models = 143 [json_name = "agentModels"];</code>
+     */
+    public Builder setAgentModels(dev.ironpark.mako.v2.AgentModels value) {
+      copyOnWrite();
+      instance.setAgentModels(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentModels agent_models = 143 [json_name = "agentModels"];</code>
+     */
+    public Builder setAgentModels(
+        dev.ironpark.mako.v2.AgentModels.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAgentModels(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentModels agent_models = 143 [json_name = "agentModels"];</code>
+     */
+    public Builder mergeAgentModels(dev.ironpark.mako.v2.AgentModels value) {
+      copyOnWrite();
+      instance.mergeAgentModels(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentModels agent_models = 143 [json_name = "agentModels"];</code>
+     */
+    public Builder clearAgentModels() {
+      copyOnWrite();
+      instance.clearAgentModels();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.InspectAgentHome inspect_agent_home = 144 [json_name = "inspectAgentHome"];</code>
+     */
+    @java.lang.Override
+    public boolean hasInspectAgentHome() {
+      return instance.hasInspectAgentHome();
+    }
+    /**
+     * <code>.mako.v2.InspectAgentHome inspect_agent_home = 144 [json_name = "inspectAgentHome"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.InspectAgentHome getInspectAgentHome() {
+      return instance.getInspectAgentHome();
+    }
+    /**
+     * <code>.mako.v2.InspectAgentHome inspect_agent_home = 144 [json_name = "inspectAgentHome"];</code>
+     */
+    public Builder setInspectAgentHome(dev.ironpark.mako.v2.InspectAgentHome value) {
+      copyOnWrite();
+      instance.setInspectAgentHome(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.InspectAgentHome inspect_agent_home = 144 [json_name = "inspectAgentHome"];</code>
+     */
+    public Builder setInspectAgentHome(
+        dev.ironpark.mako.v2.InspectAgentHome.Builder builderForValue) {
+      copyOnWrite();
+      instance.setInspectAgentHome(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.InspectAgentHome inspect_agent_home = 144 [json_name = "inspectAgentHome"];</code>
+     */
+    public Builder mergeInspectAgentHome(dev.ironpark.mako.v2.InspectAgentHome value) {
+      copyOnWrite();
+      instance.mergeInspectAgentHome(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.InspectAgentHome inspect_agent_home = 144 [json_name = "inspectAgentHome"];</code>
+     */
+    public Builder clearInspectAgentHome() {
+      copyOnWrite();
+      instance.clearInspectAgentHome();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.AgentHomeInfo agent_home_info = 145 [json_name = "agentHomeInfo"];</code>
+     */
+    @java.lang.Override
+    public boolean hasAgentHomeInfo() {
+      return instance.hasAgentHomeInfo();
+    }
+    /**
+     * <code>.mako.v2.AgentHomeInfo agent_home_info = 145 [json_name = "agentHomeInfo"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.AgentHomeInfo getAgentHomeInfo() {
+      return instance.getAgentHomeInfo();
+    }
+    /**
+     * <code>.mako.v2.AgentHomeInfo agent_home_info = 145 [json_name = "agentHomeInfo"];</code>
+     */
+    public Builder setAgentHomeInfo(dev.ironpark.mako.v2.AgentHomeInfo value) {
+      copyOnWrite();
+      instance.setAgentHomeInfo(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentHomeInfo agent_home_info = 145 [json_name = "agentHomeInfo"];</code>
+     */
+    public Builder setAgentHomeInfo(
+        dev.ironpark.mako.v2.AgentHomeInfo.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAgentHomeInfo(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentHomeInfo agent_home_info = 145 [json_name = "agentHomeInfo"];</code>
+     */
+    public Builder mergeAgentHomeInfo(dev.ironpark.mako.v2.AgentHomeInfo value) {
+      copyOnWrite();
+      instance.mergeAgentHomeInfo(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentHomeInfo agent_home_info = 145 [json_name = "agentHomeInfo"];</code>
+     */
+    public Builder clearAgentHomeInfo() {
+      copyOnWrite();
+      instance.clearAgentHomeInfo();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.MigrateAgentHome migrate_agent_home = 146 [json_name = "migrateAgentHome"];</code>
+     */
+    @java.lang.Override
+    public boolean hasMigrateAgentHome() {
+      return instance.hasMigrateAgentHome();
+    }
+    /**
+     * <code>.mako.v2.MigrateAgentHome migrate_agent_home = 146 [json_name = "migrateAgentHome"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.MigrateAgentHome getMigrateAgentHome() {
+      return instance.getMigrateAgentHome();
+    }
+    /**
+     * <code>.mako.v2.MigrateAgentHome migrate_agent_home = 146 [json_name = "migrateAgentHome"];</code>
+     */
+    public Builder setMigrateAgentHome(dev.ironpark.mako.v2.MigrateAgentHome value) {
+      copyOnWrite();
+      instance.setMigrateAgentHome(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.MigrateAgentHome migrate_agent_home = 146 [json_name = "migrateAgentHome"];</code>
+     */
+    public Builder setMigrateAgentHome(
+        dev.ironpark.mako.v2.MigrateAgentHome.Builder builderForValue) {
+      copyOnWrite();
+      instance.setMigrateAgentHome(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.MigrateAgentHome migrate_agent_home = 146 [json_name = "migrateAgentHome"];</code>
+     */
+    public Builder mergeMigrateAgentHome(dev.ironpark.mako.v2.MigrateAgentHome value) {
+      copyOnWrite();
+      instance.mergeMigrateAgentHome(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.MigrateAgentHome migrate_agent_home = 146 [json_name = "migrateAgentHome"];</code>
+     */
+    public Builder clearMigrateAgentHome() {
+      copyOnWrite();
+      instance.clearMigrateAgentHome();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.AgentHomeMigrated agent_home_migrated = 147 [json_name = "agentHomeMigrated"];</code>
+     */
+    @java.lang.Override
+    public boolean hasAgentHomeMigrated() {
+      return instance.hasAgentHomeMigrated();
+    }
+    /**
+     * <code>.mako.v2.AgentHomeMigrated agent_home_migrated = 147 [json_name = "agentHomeMigrated"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.AgentHomeMigrated getAgentHomeMigrated() {
+      return instance.getAgentHomeMigrated();
+    }
+    /**
+     * <code>.mako.v2.AgentHomeMigrated agent_home_migrated = 147 [json_name = "agentHomeMigrated"];</code>
+     */
+    public Builder setAgentHomeMigrated(dev.ironpark.mako.v2.AgentHomeMigrated value) {
+      copyOnWrite();
+      instance.setAgentHomeMigrated(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentHomeMigrated agent_home_migrated = 147 [json_name = "agentHomeMigrated"];</code>
+     */
+    public Builder setAgentHomeMigrated(
+        dev.ironpark.mako.v2.AgentHomeMigrated.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAgentHomeMigrated(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentHomeMigrated agent_home_migrated = 147 [json_name = "agentHomeMigrated"];</code>
+     */
+    public Builder mergeAgentHomeMigrated(dev.ironpark.mako.v2.AgentHomeMigrated value) {
+      copyOnWrite();
+      instance.mergeAgentHomeMigrated(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentHomeMigrated agent_home_migrated = 147 [json_name = "agentHomeMigrated"];</code>
+     */
+    public Builder clearAgentHomeMigrated() {
+      copyOnWrite();
+      instance.clearAgentHomeMigrated();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -11352,9 +11996,15 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.SeeSession.class,
             dev.ironpark.mako.v2.WatchFiles.class,
             dev.ironpark.mako.v2.FilesChanged.class,
+            dev.ironpark.mako.v2.ListAgentModels.class,
+            dev.ironpark.mako.v2.AgentModels.class,
+            dev.ironpark.mako.v2.InspectAgentHome.class,
+            dev.ironpark.mako.v2.AgentHomeInfo.class,
+            dev.ironpark.mako.v2.MigrateAgentHome.class,
+            dev.ironpark.mako.v2.AgentHomeMigrated.class,
           };
           java.lang.String info =
-              "\u0000h\u0001\u0000\u0001\u008dh\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
+              "\u0000n\u0001\u0000\u0001\u0093n\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
               "\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019" +
               "<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000" +
               "!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000" +
@@ -11366,7 +12016,8 @@ public  final class Envelope extends
               "j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000p<\u0000x<\u0000y<\u0000z<\u0000" +
               "{<\u0000|<\u0000}<\u0000~<\u0000<\u0000\u0080<\u0000\u0082<\u0000\u0083<\u0000\u0084" +
               "<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000\u0088<\u0000\u0089<\u0000\u008a<\u0000" +
-              "\u008b<\u0000\u008c<\u0000\u008d<\u0000";
+              "\u008b<\u0000\u008c<\u0000\u008d<\u0000\u008e<\u0000\u008f<\u0000\u0090<\u0000\u0091" +
+              "<\u0000\u0092<\u0000\u0093<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

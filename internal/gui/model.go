@@ -73,20 +73,25 @@ type model struct {
 	// WorkspaceSync is whether this node shares its workspace with its
 	// peers: its daemon's setting (config.Workspace), which Settings
 	// changes.
-	WorkspaceSync *ggui.StateValue[bool]
-	AgentDraft    *ggui.StateValue[[]agentDraft]
-	HostNote      *ggui.StateValue[string]
-	RenameOpen    *ggui.StateValue[bool]
-	RenameText    *ggui.StateValue[string]
-	RenameErr     *ggui.StateValue[string]
-	renaming      string                   // the session RenameOpen names
-	FindOpen      *ggui.StateValue[bool]   // the find bar is over the selected session; see find.go
-	FindText      *ggui.StateValue[string] // the words it finds
-	findFocus     bool                     // the find bar's field takes the focus as it is painted
-	quitting      bool
-	quitAsked     bool       // a quit, not the close button, is closing the window; see tray.go
-	tray          *ggui.Tray // the menu bar's icon, in tray mode
-	badge         string     // the count of sessions waiting, as the Dock's badge shows it
+	WorkspaceSync       *ggui.StateValue[bool]
+	IsolateHome         *ggui.StateValue[bool]
+	AgentDraft          *ggui.StateValue[[]agentDraft]
+	AgentCatalogs       *ggui.StateValue[map[string][]*protocol.AgentModel]
+	AgentCatalogLoading *ggui.StateValue[map[string]bool]
+	catalogAsked        map[string]bool // UI goroutine only
+	HomeMigrate         *homeMigrateState
+	HostNote            *ggui.StateValue[string]
+	RenameOpen          *ggui.StateValue[bool]
+	RenameText          *ggui.StateValue[string]
+	RenameErr           *ggui.StateValue[string]
+	renaming            string                   // the session RenameOpen names
+	FindOpen            *ggui.StateValue[bool]   // the find bar is over the selected session; see find.go
+	FindText            *ggui.StateValue[string] // the words it finds
+	findFocus           bool                     // the find bar's field takes the focus as it is painted
+	quitting            bool
+	quitAsked           bool       // a quit, not the close button, is closing the window; see tray.go
+	tray                *ggui.Tray // the menu bar's icon, in tray mode
+	badge               string     // the count of sessions waiting, as the Dock's badge shows it
 
 	pickers *pickerState      // the command palette and quick open; see pickers.go
 	toaster *ui.ToasterWidget // notices over the window, such as a dropped file sent
@@ -266,71 +271,76 @@ func newModel(cfg *config.Config, addr string) *model {
 	blocks := builtinBlocks()
 	doc := layoutdoc.Default()
 	m := &model{
-		cfg:           cfg,
-		link:          newDaemonLink(addr, p.Daemon),
-		Prefs:         ggui.State(p),
-		Spaces:        ggui.State(spaceList{}).WithEqual(func(a, b spaceList) bool { return reflect.DeepEqual(a, b) }),
-		Themes:        ggui.State(loadThemes()).WithEqual(maps.Equal),
-		ThemesRead:    ggui.State(0),
-		Page:          ggui.State("workspace"),
-		Section:       ggui.State("general"),
-		Host:          ggui.State(draftFrom(cfg)),
-		WorkspaceSync: ggui.State(workspaceSyncs(cfg)),
-		AgentDraft:    ggui.State(draftAgents(cfg.Agents)).WithEqual(slices.Equal),
-		HostNote:      ggui.State(""),
-		RenameOpen:    ggui.State(false),
-		RenameText:    ggui.State(""),
-		RenameErr:     ggui.State(""),
-		FindOpen:      ggui.State(false),
-		FindText:      ggui.State(""),
-		SearchQuery:   ggui.State(""),
-		SearchOpen:    ggui.State(false),
-		Search:        ggui.State(searchView{}).WithEqual(deepEqual),
-		Docs:          ggui.State(map[string]docInfo{}).WithEqual(maps.Equal),
-		docs:          map[string]*document{},
-		Diffs:         ggui.State(map[string]diffTab{}).WithEqual(deepEqual),
-		pickers:       newPickerState(),
-		ext:           newExtState(cfg),
-		plugins:       newPluginsState(),
-		store:         newStoreState(),
-		AgentBlocks:   ggui.State([]*protocol.AgentBlock(nil)),
-		files:         newFilesState(),
-		ws:            newWsState(),
-		prefsWriter:   &fileWriter{what: "settings"},
-		titleCache:    loadTitleCache(time.Now()),
-		hl:            newHighlighter(),
-		DaemonState:   ggui.State(daemonState{}),
-		DaemonLog:     ggui.State([]string(nil)).WithEqual(slices.Equal),
-		embedded:      newEmbeddedDaemon(),
-		toaster:       ui.NewToaster(),
-		tabNodes:      map[string]string{},
-		missing:       map[string]time.Time{},
-		Conn:          ggui.State(connState{}).WithEqual(deepEqual),
-		Nodes:         ggui.State([]*protocol.Node(nil)).WithEqual(protocol.Equal),
-		Access:        ggui.State((*protocol.AccessInfo)(nil)).WithEqual(func(a, b *protocol.AccessInfo) bool { return proto.Equal(a, b) }),
-		Devices:       ggui.State(deviceList{}).WithEqual(deepEqual[deviceList]),
-		AccessNote:    ggui.State(""),
-		AccessKey:     ggui.State(""),
-		asked:         map[string]ui.ToastID{},
-		Sessions:      ggui.State([]*protocol.SessionInfo(nil)).WithEqual(protocol.Equal),
-		Agents:        ggui.State(agentspec.Targets(cfg.Agents)).WithEqual(slices.Equal),
-		Selected:      ggui.State(""),
-		Tabs:          ggui.State([]string(nil)).WithEqual(slices.Equal),
-		Layout:        ggui.State(newLayout()).WithEqual(func(a, b *layoutNode) bool { return reflect.DeepEqual(a, b) }),
-		FocusGroup:    ggui.State(1),
-		Dragging:      ggui.State(false),
-		TabHint:       ggui.State(tabHint{}),
-		Attached:      ggui.State([]string(nil)).WithEqual(slices.Equal),
-		Titles:        ggui.State(map[string]string{}).WithEqual(func(a, b map[string]string) bool { return reflect.DeepEqual(a, b) }),
-		Unread:        ggui.State(map[string]bool{}).WithEqual(maps.Equal),
-		Printed:       ggui.State(map[string]time.Time{}).WithEqual(func(a, b map[string]time.Time) bool { return reflect.DeepEqual(a, b) }),
-		Minute:        ggui.State(time.Now().Truncate(time.Minute)),
-		ChatModes:     ggui.State(map[string]bool{}).WithEqual(maps.Equal),
-		chats:         map[string]*chatState{},
-		chatImages:    newImageCache(),
-		usages:        map[string]*usageState{},
-		git:           newGitState(),
-		RepoPick:      ggui.State(repoPick{}),
+		cfg:                 cfg,
+		link:                newDaemonLink(addr, p.Daemon),
+		Prefs:               ggui.State(p),
+		Spaces:              ggui.State(spaceList{}).WithEqual(func(a, b spaceList) bool { return reflect.DeepEqual(a, b) }),
+		Themes:              ggui.State(loadThemes()).WithEqual(maps.Equal),
+		ThemesRead:          ggui.State(0),
+		Page:                ggui.State("workspace"),
+		Section:             ggui.State("general"),
+		Host:                ggui.State(draftFrom(cfg)),
+		WorkspaceSync:       ggui.State(workspaceSyncs(cfg)),
+		IsolateHome:         ggui.State(cfg.IsolateHome),
+		AgentDraft:          ggui.State(draftAgents(cfg.Agents)).WithEqual(slices.Equal),
+		AgentCatalogs:       ggui.State(map[string][]*protocol.AgentModel{}).WithEqual(equalCatalogMaps),
+		AgentCatalogLoading: ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		catalogAsked:        map[string]bool{},
+		HomeMigrate:         newHomeMigrateState(),
+		HostNote:            ggui.State(""),
+		RenameOpen:          ggui.State(false),
+		RenameText:          ggui.State(""),
+		RenameErr:           ggui.State(""),
+		FindOpen:            ggui.State(false),
+		FindText:            ggui.State(""),
+		SearchQuery:         ggui.State(""),
+		SearchOpen:          ggui.State(false),
+		Search:              ggui.State(searchView{}).WithEqual(deepEqual),
+		Docs:                ggui.State(map[string]docInfo{}).WithEqual(maps.Equal),
+		docs:                map[string]*document{},
+		Diffs:               ggui.State(map[string]diffTab{}).WithEqual(deepEqual),
+		pickers:             newPickerState(),
+		ext:                 newExtState(cfg),
+		plugins:             newPluginsState(),
+		store:               newStoreState(),
+		AgentBlocks:         ggui.State([]*protocol.AgentBlock(nil)),
+		files:               newFilesState(),
+		ws:                  newWsState(),
+		prefsWriter:         &fileWriter{what: "settings"},
+		titleCache:          loadTitleCache(time.Now()),
+		hl:                  newHighlighter(),
+		DaemonState:         ggui.State(daemonState{}),
+		DaemonLog:           ggui.State([]string(nil)).WithEqual(slices.Equal),
+		embedded:            newEmbeddedDaemon(),
+		toaster:             ui.NewToaster(),
+		tabNodes:            map[string]string{},
+		missing:             map[string]time.Time{},
+		Conn:                ggui.State(connState{}).WithEqual(deepEqual),
+		Nodes:               ggui.State([]*protocol.Node(nil)).WithEqual(protocol.Equal),
+		Access:              ggui.State((*protocol.AccessInfo)(nil)).WithEqual(func(a, b *protocol.AccessInfo) bool { return proto.Equal(a, b) }),
+		Devices:             ggui.State(deviceList{}).WithEqual(deepEqual[deviceList]),
+		AccessNote:          ggui.State(""),
+		AccessKey:           ggui.State(""),
+		asked:               map[string]ui.ToastID{},
+		Sessions:            ggui.State([]*protocol.SessionInfo(nil)).WithEqual(protocol.Equal),
+		Agents:              ggui.State(agentspec.Targets(cfg.Agents)).WithEqual(slices.Equal),
+		Selected:            ggui.State(""),
+		Tabs:                ggui.State([]string(nil)).WithEqual(slices.Equal),
+		Layout:              ggui.State(newLayout()).WithEqual(func(a, b *layoutNode) bool { return reflect.DeepEqual(a, b) }),
+		FocusGroup:          ggui.State(1),
+		Dragging:            ggui.State(false),
+		TabHint:             ggui.State(tabHint{}),
+		Attached:            ggui.State([]string(nil)).WithEqual(slices.Equal),
+		Titles:              ggui.State(map[string]string{}).WithEqual(func(a, b map[string]string) bool { return reflect.DeepEqual(a, b) }),
+		Unread:              ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		Printed:             ggui.State(map[string]time.Time{}).WithEqual(func(a, b map[string]time.Time) bool { return reflect.DeepEqual(a, b) }),
+		Minute:              ggui.State(time.Now().Truncate(time.Minute)),
+		ChatModes:           ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		chats:               map[string]*chatState{},
+		chatImages:          newImageCache(),
+		usages:              map[string]*usageState{},
+		git:                 newGitState(),
+		RepoPick:            ggui.State(repoPick{}),
 		// Its functions do not compare: each asking is new.
 		Confirmation:  ggui.State(confirmation{}).WithEqual(func(a, b confirmation) bool { return false }),
 		AgentsSplit:   ggui.State(0.4),

@@ -431,7 +431,7 @@ func addFolderDialog(m *model) ggui.Widget {
 			ui.Button(T("Add folder"), m.submitAddFolder),
 		).Gap(8).Justify(widget.JustifyEnd),
 	).Gap(16).Stretch()
-	return ui.Dialog(a.AddOpen, form).Title(T("Add a folder to the project")).Width(460)
+	return keyedDialog(a.AddOpen, form).Title(T("Add a folder to the project")).Width(460)
 }
 
 // Settings --------------------------------------------------------------------
@@ -513,7 +513,7 @@ func projectSettingsDialog(m *model) ggui.Widget {
 			ui.Button(T("Save"), m.saveProjectSettings),
 		).Gap(8).Justify(widget.JustifyEnd),
 	).Gap(16).Stretch()
-	return ui.Dialog(a.SettingsOpen, widget.Scroll(form)).Title(T("Project settings")).Width(520)
+	return keyedDialog(a.SettingsOpen, widget.Scroll(form)).Title(T("Project settings")).Width(520)
 }
 
 // rootSettingsRow is one of the draft's folders: its label, where it is on

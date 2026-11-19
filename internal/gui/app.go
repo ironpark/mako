@@ -6,6 +6,7 @@ package gui
 import (
 	"context"
 	"log"
+	"maps"
 
 	"github.com/ironpark/ggui"
 	uitheme "github.com/ironpark/ggui/ui/theme"
@@ -97,54 +98,27 @@ func setup(m *model) {
 		if p.DaemonMode != prev.DaemonMode || (p.Daemon != prev.Daemon && p.DaemonMode != "embedded") {
 			m.applyDaemonMode()
 		}
+		if !maps.Equal(p.Shortcuts, prev.Shortcuts) {
+			m.syncShortcuts()
+		}
+	})
+	ggui.Watch(m.Page, func(page string) {
+		if page != "settings" {
+			m.stopRecordingShortcut()
+		}
+	})
+	ggui.Watch(m.Section, func(section string) {
+		if section != "shortcuts" {
+			m.stopRecordingShortcut()
+		}
+	})
+	ggui.Effect(func() ggui.Cleanup {
+		return func() { m.cleanupShortcuts() }
 	})
 }
 
 func shortcuts(host ggui.Host, m *model) {
-	host.Shortcut("cmd+t", func() { m.openNew("", "") })
-	host.Shortcut("cmd+w", func() {
-		if id := ggui.Peek(m.Selected); id != "" {
-			m.askKill(id)
-		}
-	})
-	host.Shortcut("cmd+s", m.saveSelected)
-	host.Shortcut("cmd+k", m.openPalette)
-	host.Shortcut("cmd+shift+p", m.openPalette)
-	host.Shortcut("cmd+shift+v", m.toggleSelectedPreview)
-	host.Shortcut("cmd+shift+j", m.toggleChat)
-	host.Shortcut("cmd+shift+a", m.nextWaiting)
-	host.Shortcut("cmd+enter", func() { m.answerSelected("allow") })
-	host.Shortcut("cmd+.", func() { m.answerSelected("deny") })
-	host.Shortcut("cmd+b", func() { ggui.Toggle(m.SidebarOpen) })
-	host.Shortcut("cmd+shift+d", func() { ggui.Toggle(m.DetailsOpen) })
-	host.Shortcut("cmd+,", func() { m.openSettings("") })
-	host.Shortcut("cmd+p", m.openQuickOpen)
-	host.Shortcut("cmd+shift+f", m.openSearch)
-	host.Shortcut("cmd+f", m.openFind)
-	host.Shortcut("alt+cmd+down", func() { m.stepDiff(1) })
-	host.Shortcut("alt+cmd+up", func() { m.stepDiff(-1) })
-}
-
-// shortcutList is what the settings page shows under Shortcuts, written as
-// the chords above are registered.
-var shortcutList = []struct{ Chord, Action string }{
-	{"cmd+t", "New session"},
-	{"cmd+w", "Close tab and session"},
-	{"cmd+s", "Save file"},
-	{"cmd+k", "Command palette"},
-	{"cmd+shift+v", "Toggle Markdown preview"},
-	{"cmd+shift+j", "Toggle chat and terminal"},
-	{"cmd+shift+a", "Next waiting session"},
-	{"cmd+enter", "Allow the approval asked for"},
-	{"cmd+.", "Deny the approval asked for"},
-	{"cmd+b", "Toggle sidebar"},
-	{"cmd+shift+d", "Toggle details panel"},
-	{"cmd+,", "Open settings"},
-	{"cmd+p", "Go to file"},
-	{"cmd+shift+f", "Search the project"},
-	{"cmd+f", "Find in the session"},
-	{"alt+cmd+down", "Next changed file"},
-	{"alt+cmd+up", "Previous changed file"},
+	bindShortcuts(host, m)
 }
 
 // notify tells the desktop of what target is about, as the platform shows

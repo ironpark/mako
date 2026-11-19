@@ -155,8 +155,14 @@ func (o fileOps) dialogs(submit func()) ggui.Widget {
 		return widget.Stack(
 			nameDialog(nameAsk{Open: o.NameOpen, Text: o.Name, Err: o.Err,
 				Title: title, Field: T("File name"), Action: action, Submit: submit}),
-			ui.AlertDialog(o.DeleteOpen, Tf("Delete %s?", a.Item.Name), what).
-				Confirm(T("Delete"), submit).Destructive(),
+			alertDialog(alertAsk{
+				Open:        o.DeleteOpen,
+				Title:       Tf("Delete %s?", a.Item.Name),
+				Body:        what,
+				Action:      T("Delete"),
+				Destructive: true,
+				Confirm:     submit,
+			}),
 		)
 	})
 }

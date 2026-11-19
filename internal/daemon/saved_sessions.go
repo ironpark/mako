@@ -347,6 +347,11 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 	if err != nil {
 		return nil, err
 	}
+	if d.isolateHome() {
+		if err := agentspec.ApplyIsolatedHome(req.GetAgent(), &launch); err != nil {
+			return nil, err
+		}
+	}
 	if req.GetProject() == "" {
 		req.Project, err = os.UserHomeDir()
 		if err != nil {

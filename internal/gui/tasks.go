@@ -442,7 +442,7 @@ func shellDialog(m *model) ggui.Widget {
 		rows = append(rows, widget.Column(head, output).Gap(6).Stretch())
 		return widget.Column(rows...).Gap(10).Stretch()
 	})
-	return ui.Dialog(v.Open, body).Title(T("Shell details")).Width(680)
+	return keyedDialog(v.Open, body).Title(T("Shell details")).Width(680)
 }
 
 // shellTask is a background command with the node of its session.

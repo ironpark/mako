@@ -326,6 +326,119 @@ func TestAMessageNamesItsFilesAfterItsText(t *testing.T) {
 	}
 }
 
+// Once a composer's text exceeds composerMaxHeight, the input caps its
+// viewport height, follows typing and caret movement, and scrolls with the
+// mouse wheel — in both the Chat composer and the New Session prompt box.
+func TestComposerScrollsPastMaxHeight(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+
+	verifyScroll := func(t *testing.T, build func() ggui.Widget, fieldName string, binding ggui.Binding[string]) {
+		t.Helper()
+		p := ggui.ProbeBuilder(build, ggui.Sz(640, 480))
+		defer p.Close()
+		p.Frame()
+
+		field, ok := p.Semantics().Find(ggui.RoleTextField, fieldName)
+		if !ok {
+			t.Fatalf("no field %q:\n%s", fieldName, p.Semantics().String())
+		}
+		shortH := field.Rect.Size.H
+		if shortH >= composerMaxHeight {
+			t.Fatalf("empty field height %v, want < %v", shortH, composerMaxHeight)
+		}
+
+		// Click to focus and type 20 lines with Shift+Enter.
+		p.Click(field.Rect.Origin.Add(ggui.Pt(10, field.Rect.Size.H/2)))
+		const totalLines = 20
+		for i := 1; i <= totalLines; i++ {
+			if i > 1 {
+				p.Type(ggui.Mods{Shift: true}, ggui.KeyEnter)
+			}
+			p.Text(strings.Repeat("a", 4) + string(rune('A'+i-1)))
+		}
+		p.Frame()
+
+		field, ok = p.Semantics().Find(ggui.RoleTextField, fieldName)
+		if !ok {
+			t.Fatalf("no field %q after typing", fieldName)
+		}
+		if field.Rect.Size.H > composerMaxHeight+1 {
+			t.Fatalf("tall field height %v exceeded composerMaxHeight %v", field.Rect.Size.H, composerMaxHeight)
+		}
+		if field.Rect.Size.H <= shortH+40 {
+			t.Fatalf("tall field height %v did not grow from %v", field.Rect.Size.H, shortH)
+		}
+
+		// Caret followed typing to the bottom, so clicking near the top edge
+		// of the viewport lands below line 1 (line 1 scrolled above view).
+		topClick := field.Rect.Origin.Add(ggui.Pt(4, 12))
+		p.Click(topClick)
+		p.Text("!")
+		lines := strings.Split(ggui.Peek(binding), "\n")
+		if len(lines) != totalLines {
+			t.Fatalf("got %d lines, want %d", len(lines), totalLines)
+		}
+		if strings.Contains(lines[0], "!") {
+			t.Fatalf("line 1 got click at top without scrolling up (viewport did not follow typing to bottom): line 1 = %q", lines[0])
+		}
+		p.Type(ggui.Mods{}, ggui.KeyBackspace) // remove "!"
+
+		// Mouse wheel scrolling up brings line 1 back to the top of the viewport.
+		center := field.Rect.Center()
+		p.Scroll(center, ggui.Pt(0, 40))
+		p.Frame()
+		p.Click(topClick)
+		p.Text("*")
+		lines = strings.Split(ggui.Peek(binding), "\n")
+		if !strings.Contains(lines[0], "*") {
+			t.Fatalf("after scrolling up, click at top did not hit line 1: line 1 = %q, all = %q", lines[0], ggui.Peek(binding))
+		}
+		p.Type(ggui.Mods{}, ggui.KeyBackspace) // remove "*"
+
+		// Moving the caret down with ArrowDown scrolls the viewport back down
+		// to keep the bottom line in view.
+		for range totalLines {
+			p.Type(ggui.Mods{}, ggui.KeyArrowDown)
+		}
+		p.Frame()
+		p.Click(topClick)
+		p.Text("#")
+		lines = strings.Split(ggui.Peek(binding), "\n")
+		if strings.Contains(lines[0], "#") {
+			t.Fatalf("after ArrowDown to bottom, line 1 was still at the top: line 1 = %q", lines[0])
+		}
+		p.Type(ggui.Mods{}, ggui.KeyBackspace) // remove "#"
+
+		// Moving the caret back up to line 1 with ArrowUp scrolls the viewport
+		// back up to the top.
+		for range totalLines {
+			p.Type(ggui.Mods{}, ggui.KeyArrowUp)
+		}
+		p.Frame()
+		p.Click(topClick)
+		p.Text("@")
+		lines = strings.Split(ggui.Peek(binding), "\n")
+		if !strings.Contains(lines[0], "@") {
+			t.Fatalf("after ArrowUp to top, click at top did not hit line 1: line 1 = %q", lines[0])
+		}
+	}
+
+	t.Run("chat composer", func(t *testing.T) {
+		m := newModel(config.Default(), "")
+		m.Attached.Set([]string{"s"})
+		m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
+		st := m.chatState("s")
+		verifyScroll(t, func() ggui.Widget { return composer(m, "s", st) }, T("Message"), st.draft)
+	})
+
+	t.Run("launch composer", func(t *testing.T) {
+		m := newModel(config.Default(), "")
+		id, l := m.newLaunch(newSession{Agent: "claude", Project: "/tmp"})
+		prompt := l.Form.Field(func(f *newSession) *string { return &f.Prompt })
+		verifyScroll(t, func() ggui.Widget { return launchBox(m, id, l) }, T("First prompt"), prompt)
+	})
+}
+
 // sentThrough is what reached the terminal of a message sent, up to the
 // Enter that ends it; it waits through frames, in which a send that found
 // no node goes through the terminal.

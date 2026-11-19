@@ -119,6 +119,10 @@ type prefs struct {
 
 	// Teams are the agent teams the user put together; see teams.go.
 	Teams []agentTeam `json:"teams,omitempty"`
+
+	// Shortcuts overrides default window keyboard shortcuts, keyed by
+	// shortcut action ID; see shortcuts.go.
+	Shortcuts map[string]string `json:"shortcuts,omitempty"`
 }
 
 // Equal compares settings by value, projects included, so the prefs signal
@@ -244,6 +248,7 @@ func (p prefs) normalized() prefs {
 		}
 		p.Projects = projects
 	}
+	p.Shortcuts = normalizeShortcuts(p.Shortcuts)
 	return p
 }
 

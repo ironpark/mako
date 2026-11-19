@@ -44,6 +44,9 @@ type Profile struct {
 	// own model flag takes; "" leaves the agent's default. An agent mako
 	// starts no model of its own on (agent.ModelFlag) ignores it.
 	Model string `json:"model,omitempty"`
+	// Effort is the reasoning effort its sessions start with; "" leaves the
+	// agent's default. An agent without agent.EffortFlag ignores it.
+	Effort string `json:"effort,omitempty"`
 	// ContextServers picks the MCP servers its sessions get, by ID, an
 	// empty list none; unset, they get every server enabled. A server
 	// picked here is given even when turned off for the node.
@@ -221,6 +224,7 @@ func Resolve(name, profile string, args []string, env map[string]string, agents 
 		command = append(command, expand(arg, lookup))
 	}
 	command = append(command, modelArgs(name, path, p.Model)...)
+	command = append(command, effortArgs(name, path, p.Effort)...)
 	command = append(command, args...)
 	return Launch{Command: command, Env: merged, ContextServers: p.ContextServers}, nil
 }
@@ -388,6 +392,19 @@ func modelArgs(name, program, model string) []string {
 	e, ok := agents.Native(name, program)
 	if flag, flags := e.Driver.(agent.ModelFlag); ok && flags {
 		return flag.ModelArgs(model)
+	}
+	return nil
+}
+
+// effortArgs are the flags that start the agent called name, run as
+// program, with effort, after its own flags, its profile's, and its model.
+func effortArgs(name, program, effort string) []string {
+	if effort == "" {
+		return nil
+	}
+	e, ok := agents.Native(name, program)
+	if flag, flags := e.Driver.(agent.EffortFlag); ok && flags {
+		return flag.EffortArgs(effort)
 	}
 	return nil
 }

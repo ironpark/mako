@@ -114,7 +114,7 @@ func launchBox(m *model, id string, l *launchState) ggui.Widget {
 		return launchWhere{f.NodeID, f.Project, f.Agent, f.Team}
 	}).WithEqual(func(a, b launchWhere) bool { return a == b })
 	shell := ggui.Map(where, func(w launchWhere) bool { return w.Agent == "shell" })
-	field := ggui.View(shell, func(sh bool) ggui.Widget { return launchField(prompt, sh, start) })
+	field := ggui.View(shell, func(sh bool) ggui.Widget { return composerField(launchField(prompt, sh, start)) })
 	targets := ggui.Derived(func() []string {
 		return nodeTargets(m.Nodes.Get(), where.Get().NodeID, m.Agents.Get())
 	}).WithEqual(slices.Equal)
@@ -135,7 +135,7 @@ func launchBox(m *model, id string, l *launchState) ggui.Widget {
 	})
 	content := widget.Column(
 		top,
-		widget.Box(inlineField(field)).MaxHeight(composerMaxHeight),
+		field,
 		branchRow,
 		widget.Row(agents, launchTeamMenu(m, l, where), widget.Spacer(),
 			roundButton("arrow-up", T("Start session"), start, l.Starting)).Gap(6).Align(widget.AlignCenter),
@@ -215,7 +215,7 @@ func (m *model) browseLaunchFolder(l *launchState) {
 
 // launchField is the new session's first prompt, which Enter starts it
 // with: an agent's, or a command a shell gets typed at its prompt.
-func launchField(prompt ggui.Binding[string], shell bool, start func()) ggui.Widget {
+func launchField(prompt ggui.Binding[string], shell bool, start func()) *ui.TextFieldWidget {
 	hint := T("Ask the agent anything. Enter starts the session, Shift+Enter adds a line")
 	if shell {
 		hint = T("A command for the shell, typed at its prompt. Enter starts it")

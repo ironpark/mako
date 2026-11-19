@@ -94,7 +94,7 @@ func nameDialog(a nameAsk) ggui.Widget {
 			ui.Button(a.Action, a.Submit),
 		).Gap(8).Justify(widget.JustifyEnd),
 	)
-	return ui.Dialog(a.Open, widget.Column(rows...).Gap(16).Stretch()).Title(a.Title).Width(420)
+	return keyedDialog(a.Open, widget.Column(rows...).Gap(16).Stretch()).Title(a.Title).Width(420)
 }
 
 // sessionMenu gives a session's tab or sidebar row a context menu; a tab's

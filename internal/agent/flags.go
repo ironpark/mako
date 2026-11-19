@@ -40,6 +40,15 @@ func (f *Flags) ModelArgs(model string) []string {
 	return nil
 }
 
+// EffortArgs starts the agent on effort through its --effort option, which
+// implements EffortFlag; nil for an agent with none.
+func (f *Flags) EffortArgs(effort string) []string {
+	if slices.Contains(f.Values, "--effort") {
+		return []string{"--effort", effort}
+	}
+	return nil
+}
+
 // DirArgs gives the agent folders besides its own through its --add-dir
 // option, in the = form where the option takes any number of values, so
 // it does not take the arguments after it; none for an agent without one.

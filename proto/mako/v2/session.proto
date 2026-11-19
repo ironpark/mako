@@ -429,3 +429,59 @@ message Command {
   string args = 3; // the arguments it takes, as its hint says them
   string source = 4; // "" for the agent's own; "user", "project", or a plugin's name
 }
+
+// ListAgentModels asks a node for the models an agent supports, and
+// each model's effort levels. Revision 38.
+message ListAgentModels {
+  string node_id = 1;
+  string agent = 2;
+  bool refresh = 3;
+}
+
+// AgentModel describes one model an agent supports.
+message AgentModel {
+  string id = 1;
+  string name = 2;
+  repeated string efforts = 3;
+  bool overflow = 4;
+}
+
+// AgentModels answers ListAgentModels.
+message AgentModels {
+  repeated AgentModel models = 1;
+}
+
+// InspectAgentHome checks what migrating an agent's data directory to or
+// from Mako's isolated home involves on a node. Revision 38.
+message InspectAgentHome {
+  string node_id = 1;
+  string agent = 2;
+  bool isolate = 3;
+}
+
+// AgentHomeInfo answers InspectAgentHome.
+message AgentHomeInfo {
+  bool supported = 1;
+  string from_dir = 2;
+  string to_dir = 3;
+  int32 running_sessions = 4;
+  int32 saved_sessions = 5;
+  bool has_config = 6;
+}
+
+// MigrateAgentHome copies configuration and/or moves Mako-tracked
+// sessions between an agent's default directory and Mako's isolated
+// home. Revision 38.
+message MigrateAgentHome {
+  string node_id = 1;
+  string agent = 2;
+  bool isolate = 3;
+  bool copy_config = 4;
+  bool move_sessions = 5;
+}
+
+// AgentHomeMigrated answers MigrateAgentHome.
+message AgentHomeMigrated {
+  int32 moved_sessions = 1;
+  bool copied_config = 2;
+}

@@ -150,33 +150,33 @@ func (m *model) commands() []command {
 	docs := ggui.Peek(m.Docs)
 	d, onDoc := docs[selected]
 	cmds := []command{
-		{ID: "New session…", Category: "Session", Keys: []string{"terminal", "agent"}, Shortcut: "cmd+t", Run: func() { m.openNew("", "") }},
+		{ID: "New session…", Category: "Session", Keys: []string{"terminal", "agent"}, Shortcut: m.shortcutChord("new_session"), Run: func() { m.openNew("", "") }},
 		{ID: "Rename session…", Category: "Session", Keys: []string{"name", "title"}, Disabled: !isSessionTab(selected), Run: func() { m.askRename(selected) }},
 		{ID: pick(m.pinned(selected), "Unpin session", "Pin session to the top"), Category: "Session", Keys: []string{"pin", "favorite"},
 			Disabled: !isSessionTab(selected), Run: func() { m.togglePin(selected) }},
-		{ID: "Toggle chat and terminal", Category: "Session", Keys: []string{"conversation"}, Shortcut: "cmd+shift+j",
+		{ID: "Toggle chat and terminal", Category: "Session", Keys: []string{"conversation"}, Shortcut: m.shortcutChord("toggle_chat"),
 			Disabled: selected == "" || onDoc || !m.chatCapable(selected), Run: m.toggleChat},
-		{ID: "Next waiting session", Category: "Session", Keys: []string{"approval", "question", "attention", "needs"}, Shortcut: "cmd+shift+a",
+		{ID: "Next waiting session", Category: "Session", Keys: []string{"approval", "question", "attention", "needs"}, Shortcut: m.shortcutChord("next_waiting"),
 			Disabled: m.waitingCount() == 0, Run: m.nextWaiting},
-		{ID: "Go to file…", Category: "File", Keys: []string{"open", "find", "quick"}, Shortcut: "cmd+p", Run: m.openQuickOpen},
-		{ID: "Save file", Category: "File", Shortcut: "cmd+s", Disabled: !onDoc || d.ReadOnly(), Run: m.saveSelected},
-		{ID: "Search the project…", Category: "File", Keys: []string{"find", "grep", "text"}, Shortcut: "cmd+shift+f", Run: m.openSearch},
+		{ID: "Go to file…", Category: "File", Keys: []string{"open", "find", "quick"}, Shortcut: m.shortcutChord("quick_open"), Run: m.openQuickOpen},
+		{ID: "Save file", Category: "File", Shortcut: m.shortcutChord("save_file"), Disabled: !onDoc || d.ReadOnly(), Run: m.saveSelected},
+		{ID: "Search the project…", Category: "File", Keys: []string{"find", "grep", "text"}, Shortcut: m.shortcutChord("search_project"), Run: m.openSearch},
 	}
 	if onDoc && isMarkdown(d.Name()) {
 		cmds = append(cmds, command{ID: previewLabel(m.docs[selected]), Category: "File", Keys: []string{"markdown", "preview"},
-			Shortcut: "cmd+shift+v", Run: m.toggleSelectedPreview})
+			Shortcut: m.shortcutChord("toggle_preview"), Run: m.toggleSelectedPreview})
 	}
 	cmds = append(cmds,
-		command{ID: "Close tab", Category: "Tab", Shortcut: "cmd+w", Disabled: selected == "", Run: func() { m.askKill(selected) }},
+		command{ID: "Close tab", Category: "Tab", Shortcut: m.shortcutChord("close_tab"), Disabled: selected == "", Run: func() { m.askKill(selected) }},
 		command{ID: "Clean tabs", Category: "Tab", Keys: []string{"clean", "tidy", "close", "idle", "shell", "files", "diffs"}, Disabled: !m.anyTidyable(),
 			Run: func() { m.tidyTabs(ggui.Peek(m.Tabs)) }},
-		command{ID: "Toggle sidebar", Category: "View", Shortcut: "cmd+b", Run: func() { ggui.Toggle(m.SidebarOpen) }},
+		command{ID: "Toggle sidebar", Category: "View", Shortcut: m.shortcutChord("toggle_sidebar"), Run: func() { ggui.Toggle(m.SidebarOpen) }},
 		command{ID: "Project agents", Category: "View", Keys: []string{"mcp", "monitor", "messages"}, Run: func() { m.revealBlock(agentsTab) }},
-		command{ID: "Toggle details panel", Category: "View", Keys: []string{"files", "changes"}, Shortcut: "cmd+shift+d",
+		command{ID: "Toggle details panel", Category: "View", Keys: []string{"files", "changes"}, Shortcut: m.shortcutChord("toggle_details"),
 			Run: func() { ggui.Toggle(m.DetailsOpen) }},
 		command{ID: "Extensions…", Category: "App", Keys: []string{"zed", "language", "grammar", "highlight", "mcp"},
 			Run: func() { m.ext.Open.Set(true) }},
-		command{ID: "Settings", Category: "App", Keys: []string{"preferences"}, Shortcut: "cmd+,", Run: func() { m.openSettings("") }},
+		command{ID: "Settings", Category: "App", Keys: []string{"preferences"}, Shortcut: m.shortcutChord("open_settings"), Run: func() { m.openSettings("") }},
 	)
 	for _, by := range agentGroups {
 		cmds = append(cmds, command{ID: agentGroupCommands[by], Category: "Sidebar", Keys: []string{"group", "agents", "sessions"},

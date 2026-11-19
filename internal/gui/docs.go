@@ -388,7 +388,7 @@ func (m *model) dirtyDocs() []string {
 func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget {
 	name := d.Name()
 	fg := pick[color.Color](selected, skin.Fg, skin.Muted)
-	return ui.EditorTab(name, func() {
+	t := ui.EditorTab(name, func() {
 		// The bar is drawn again as the first tap shows the tab, so the
 		// last tap is kept with the model.
 		if last := m.lastTap; last.id == id && time.Since(last.at) < doubleTap {
@@ -398,7 +398,8 @@ func docTab(m *model, id string, d docInfo, selected, focused bool) ggui.Widget 
 		m.showTab(id)
 	}).Icon(icon(fileIconName(name)).Size(14).Color(fg)).
 		Status(nil).Selected(selected).Current(focused).Preview(d.Preview).Dirty(d.Dirty).
-		OnClose(func() { m.askCloseDoc(id) }).CloseName(Tf("Close %s", name))
+		OnClose(func() { m.closeTabButton(id) }).CloseName(Tf("Close %s", name))
+	return tabCloseMod(m, id, t)
 }
 
 // docView is a file's tab content: a line about the file and the caret,

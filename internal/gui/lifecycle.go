@@ -3,12 +3,78 @@ package gui
 import (
 	"context"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/protocol"
 )
+
+// forceCloseTab tracks the tab whose close press was started with Ctrl held,
+// keyed by model so a tab bar rebuild between press and release keeps it.
+var forceCloseTab sync.Map // *model -> string
+
+func (m *model) takeForceClose(id string) bool {
+	v, ok := forceCloseTab.LoadAndDelete(m)
+	return ok && v == id
+}
+
+// tabCloseMod wraps a tab widget so a left-click started with Ctrl held
+// records that tab for closeTabButton to close without confirmation, while
+// any other press, wheel or keyboard input clears the pending state.
+func tabCloseMod(m *model, id string, child ggui.Widget) ggui.Widget {
+	return &tabCloseWatcher{m: m, id: id, child: child}
+}
+
+type tabCloseWatcher struct {
+	m     *model
+	id    string
+	child ggui.Widget
+}
+
+func (w *tabCloseWatcher) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	return w.child.Layout(c, env)
+}
+
+func (w *tabCloseWatcher) Baseline() (float64, bool) { return ggui.BaselineOf(w.child) }
+
+func (w *tabCloseWatcher) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.ObserveInput(r, func() { forceCloseTab.Delete(w.m) })
+	dst.HitWithin(r, w)
+	dst.Paint(w.child, r)
+}
+
+func (w *tabCloseWatcher) HandlePointerWithin(ev ggui.PointerEvent) bool {
+	if ev.Kind == ggui.PointerDown && ev.Button == ggui.MouseButtonLeft && ev.Mods.Ctrl {
+		forceCloseTab.Store(w.m, w.id)
+	}
+	return false
+}
+
+// closeTabButton closes a tab from its close button: holding Ctrl skips any
+// confirmation dialog and closes the tab (and kills its session) at once.
+func (m *model) closeTabButton(id string) {
+	if m.takeForceClose(id) {
+		m.forceCloseTab(id)
+		return
+	}
+	m.askKill(id)
+}
+
+// forceCloseTab closes tab id immediately without asking for confirmation.
+func (m *model) forceCloseTab(id string) {
+	switch {
+	case isDocTab(id):
+		m.closeDoc(id)
+	case isDiffTab(id):
+		m.closeDiff(id)
+	case isLaunchTab(id):
+		m.closeLaunch(id)
+	default:
+		m.kill(id)
+	}
+}
 
 // Killing sessions and tidying the tabs they leave.
 

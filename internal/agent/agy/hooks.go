@@ -26,8 +26,11 @@ var hookEvents = []agent.HookEvent{
 	{Name: "PostToolUse", Timeout: agent.HookTimeout}, {Name: "Stop", Timeout: agent.HookTimeout},
 }
 
-// hooksFile is agy's global hooks.json.
-func hooksFile() (string, error) {
+// hooksFile is agy's global hooks.json, honoring HOME in env when set.
+func hooksFile(env map[string]string) (string, error) {
+	if home := env["HOME"]; home != "" {
+		return filepath.Join(home, ".gemini", "config", "hooks.json"), nil
+	}
 	home, err := os.UserHomeDir()
 	return filepath.Join(home, ".gemini", "config", "hooks.json"), err
 }
@@ -36,8 +39,12 @@ func hooksFile() (string, error) {
 // leaves the command as it is. Each hook command has an entry of its own,
 // so the daemons of several nodes on one machine each hear their own
 // sessions. The status line is Claude's alone.
-func (*Agent) WithHooks(_ *agent.Launch, hook, _, _ string) bool {
-	path, err := hooksFile()
+func (*Agent) WithHooks(l *agent.Launch, hook, _, _ string) bool {
+	var env map[string]string
+	if l != nil {
+		env = l.Env
+	}
+	path, err := hooksFile(env)
 	return err == nil && writeHooks(path, hook) == nil
 }
 

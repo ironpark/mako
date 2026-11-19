@@ -244,3 +244,100 @@ func TestTabCloseIsThereAndClosesTheTab(t *testing.T) {
 		t.Fatal("the close button did not close the tab, or ask to")
 	}
 }
+
+// Holding Ctrl while clicking a tab's close button closes the tab without
+// opening a confirmation dialog, while a normal click still asks when needed.
+func TestCtrlClickTabCloseSkipsConfirmation(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(&config.Config{NodeID: "n1"}, "")
+	m.Prefs.Update(func(p prefs) prefs { p.ConfirmKill = true; p.Language = "en"; return p })
+	m.Sessions.Set([]*protocol.SessionInfo{
+		{Id: "s1", NodeId: "n1", Agent: "claude", Project: "/tmp", State: protocol.StateRunning},
+		{Id: "s2", NodeId: "n1", Agent: "claude", Project: "/tmp", State: protocol.StateRunning},
+	})
+	m.Titles.Set(map[string]string{"s1": "first", "s2": "second"})
+	docID := docTabID("n1", "/tmp/dirty.go")
+	m.Docs.Set(map[string]docInfo{
+		docID: {Node: "n1", Path: "/tmp/dirty.go", Root: fileRoot{Node: "n1", Path: "/tmp"}, Dirty: true},
+	})
+	m.docs[docID] = &document{text: ggui.State("edited"), saved: "orig", preview: ggui.State(false)}
+	m.SidebarOpen.Set(false)
+	m.DetailsOpen.Set(false)
+	m.selectSession("s1")
+	m.showTab("s2")
+	m.showTab(docID)
+
+	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))
+	defer p.Close()
+	p.Frame()
+
+	clickClose := func(tabLabel, closeLabel string, mods ggui.Mods) {
+		t.Helper()
+		f, ok := p.Find(tabLabel)
+		if !ok {
+			t.Fatalf("no tab %q:\n%s", tabLabel, p.Semantics().String())
+		}
+		p.Move(f.Center())
+		x, ok := p.Find(closeLabel)
+		if !ok {
+			t.Fatalf("no close button %q", closeLabel)
+		}
+		p.Move(x.Center())
+		p.ClickWith(x.Center(), mods)
+		p.Frame()
+	}
+
+	// Normal click on a running session tab asks for confirmation.
+	clickClose("first", Tf("Close %s", "first"), ggui.Mods{})
+	if ggui.Peek(m.Confirmation).Title == "" {
+		t.Fatal("normal click on running session tab did not open confirmation")
+	}
+	if !slices.Contains(ggui.Peek(m.Tabs), "s1") {
+		t.Fatal("normal click closed s1 before confirmation")
+	}
+	m.Confirmation.Set(confirmation{})
+	p.Frame()
+
+	// Ctrl+click on the tab body (selecting it) followed by a normal click on
+	// its close button must still ask for confirmation.
+	first, _ := p.Find("first")
+	p.ClickWith(first.Center(), ggui.Mods{Ctrl: true})
+	p.Frame()
+	clickClose("first", Tf("Close %s", "first"), ggui.Mods{})
+	if ggui.Peek(m.Confirmation).Title == "" {
+		t.Fatal("normal close click after Ctrl+click on tab body skipped confirmation")
+	}
+	m.Confirmation.Set(confirmation{})
+	p.Frame()
+
+	// Ctrl+click on the session tab's close button closes it immediately
+	// without opening a confirmation dialog.
+	clickClose("first", Tf("Close %s", "first"), ggui.Mods{Ctrl: true})
+	if got := ggui.Peek(m.Confirmation).Title; got != "" {
+		t.Fatalf("Ctrl+click on session close button opened confirmation %q", got)
+	}
+	if slices.Contains(ggui.Peek(m.Tabs), "s1") {
+		t.Fatal("Ctrl+click on session close button did not close s1")
+	}
+
+	// Normal click on a dirty file tab asks for confirmation.
+	clickClose("dirty.go", Tf("Close %s", "dirty.go"), ggui.Mods{})
+	if ggui.Peek(m.Confirmation).Title == "" {
+		t.Fatal("normal click on dirty doc tab did not open confirmation")
+	}
+	if !slices.Contains(ggui.Peek(m.Tabs), docID) {
+		t.Fatal("normal click closed dirty doc tab before confirmation")
+	}
+	m.Confirmation.Set(confirmation{})
+	p.Frame()
+
+	// Ctrl+click on the dirty file tab's close button closes it immediately
+	// without opening a confirmation dialog.
+	clickClose("dirty.go", Tf("Close %s", "dirty.go"), ggui.Mods{Ctrl: true})
+	if got := ggui.Peek(m.Confirmation).Title; got != "" {
+		t.Fatalf("Ctrl+click on dirty doc close button opened confirmation %q", got)
+	}
+	if slices.Contains(ggui.Peek(m.Tabs), docID) {
+		t.Fatal("Ctrl+click on dirty doc close button did not close dirty.go")
+	}
+}

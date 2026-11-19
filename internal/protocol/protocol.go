@@ -120,6 +120,12 @@ const (
 	TypeAgentMessage      Type = "agent_message"
 	TypeWatchChat         Type = "watch_chat"
 	TypeChatLive          Type = "chat_live"
+	TypeListAgentModels   Type = "list_agent_models"
+	TypeAgentModels       Type = "agent_models"
+	TypeInspectAgentHome  Type = "inspect_agent_home"
+	TypeAgentHomeInfo     Type = "agent_home_info"
+	TypeMigrateAgentHome  Type = "migrate_agent_home"
+	TypeAgentHomeMigrated Type = "agent_home_migrated"
 )
 
 // Newer reports whether the edit made at version v on node is newer than

@@ -180,3 +180,19 @@ func TestResume(t *testing.T) {
 		t.Errorf("resume %q", got)
 	}
 }
+
+// WithHooks writes to the launch's HOME when overridden, for isolated homes.
+func TestWithHooksHonorsLaunchHome(t *testing.T) {
+	home := t.TempDir()
+	l := &agent.Launch{
+		Command: []string{"agy"},
+		Env:     map[string]string{"HOME": home},
+	}
+	if !New().WithHooks(l, "/bin/mako hook /s", "", "") {
+		t.Fatal("WithHooks returned false")
+	}
+	wantPath := filepath.Join(home, ".gemini", "config", "hooks.json")
+	if _, err := os.Stat(wantPath); err != nil {
+		t.Fatalf("expected hooks.json at %s: %v", wantPath, err)
+	}
+}

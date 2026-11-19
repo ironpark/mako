@@ -30,7 +30,7 @@ func appearanceSettings(m *model) ggui.Widget {
 		ui.Button(T("Open folder"), openFolder(themesDir)).Ghost(),
 		ui.Button(T("Reload"), m.reloadThemes).Ghost(),
 	).Gap(6)
-	return page(T("Appearance"), T("The window's colours, after Paseo's palettes, or your own."),
+	return widePage(T("Appearance"), T("The window's colours, after Paseo's palettes, or your own."),
 		section(T("Theme"),
 			card(
 				row(T("Theme"), T("System follows the desktop's light or dark appearance."), widget.Box(theme).Width(200)),
@@ -38,21 +38,25 @@ func appearanceSettings(m *model) ggui.Widget {
 			),
 			themeEditor(m),
 		),
-		section(T("Panes"),
-			card(
-				row(T("Glow round the current pane"), T("A faint glow of the accent round the edge of the pane you are in, under its tabs, to tell it at a glance among split panes."),
-					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.PaneGlow }), "").Name(T("Glow round the current pane"))),
+		responsiveGrid(settingsTwoCol, 2, settingsColumnGap, pageGap,
+			section(T("Panes"),
+				card(
+					row(T("Glow round the current pane"), T("A faint glow of the accent round the edge of the pane you are in, under its tabs, to tell it at a glance among split panes."),
+						ui.Switch(prefField(m, func(p *prefs) *bool { return &p.PaneGlow }), "").Name(T("Glow round the current pane"))),
+				),
+			),
+			section(T("Agent usage"),
+				card(
+					row(T("Show usage overlay"), T("Float an agent session's context and its account's 5-hour and weekly limits over its terminal and chat, for agents that report them."),
+						ui.Switch(prefField(m, func(p *prefs) *bool { return &p.UsageOverlay }), "").Name(T("Show usage overlay"))),
+					row(T("Overlay position"), T("The corner of the session the overlay sits in."), widget.Box(corner).Width(160)),
+				),
 			),
 		),
 		section(T("Background"),
-			card(backdropRows(m, T("Window"), T("Behind the whole window: the sidebar, the workspace and the settings."), windowBackdrop)...),
-			card(backdropRows(m, T("Sessions"), T("Behind each session's terminal and chat, over the window's."), sessionBackdrop)...),
-		),
-		section(T("Agent usage"),
-			card(
-				row(T("Show usage overlay"), T("Float an agent session's context and its account's 5-hour and weekly limits over its terminal and chat, for agents that report them."),
-					ui.Switch(prefField(m, func(p *prefs) *bool { return &p.UsageOverlay }), "").Name(T("Show usage overlay"))),
-				row(T("Overlay position"), T("The corner of the session the overlay sits in."), widget.Box(corner).Width(160)),
+			responsiveGrid(1140, 2, settingsColumnGap, sectionGap,
+				card(backdropRows(m, T("Window"), T("Behind the whole window: the sidebar, the workspace and the settings."), windowBackdrop)...),
+				card(backdropRows(m, T("Sessions"), T("Behind each session's terminal and chat, over the window's."), sessionBackdrop)...),
 			),
 		),
 	)
@@ -84,12 +88,28 @@ func themeEditor(m *model) ggui.Widget {
 		for i, c := range skin.Colors {
 			rows = append(rows, colorRow(m, theme, c, p))
 			if i == len(skin.Colors)-1 || skin.Colors[i+1].Group != c.Group {
-				groups = append(groups, section(T(c.Group), card(rows...)))
+				groups = append(groups, section(T(c.Group), colorCard(rows...)))
 				rows = nil
 			}
 		}
-		return widget.Column(groups...).Gap(20).Stretch()
+		return ggui.Provide(settingsGutterKey, float64(0), widget.Column(groups...).Gap(20).Stretch())
 	})
+}
+
+// colorCard lays out a theme group's colour rows in one column when narrow,
+// two columns on medium widths, and three columns on wide screens.
+func colorCard(rows ...ggui.Widget) ggui.Widget {
+	grid := responsiveColumns(func(w float64) int {
+		switch {
+		case w >= 1120:
+			return 3
+		case w >= 680:
+			return 2
+		default:
+			return 1
+		}
+	}, 12, 2, rows...)
+	return widget.Box(grid).Pad(6, 4).Fill(skin.Surface1).Border(1, skin.Border).Radius(10)
 }
 
 // colorRow is one colour of a theme: its swatch and its hex, saved to the
@@ -271,17 +291,18 @@ func backdropPlacement(m *model, slot backdropSlot) ggui.Widget {
 	}).Ghost()
 	controls := widget.Column(
 		line(T("Fit"), fit),
-		line(T("Size"), length(func(b *backdrop) *float64 { return &b.Width }, T("Width"), T("Width")),
-			length(func(b *backdrop) *float64 { return &b.Height }, T("Height"), T("Height")),
-			widget.Box(muted(widget.Text(T("Margins")).Size(12.5))).Pad(0, 0, 0, 14),
+		line(T("Size"),
+			length(func(b *backdrop) *float64 { return &b.Width }, T("Width"), T("Width")),
+			length(func(b *backdrop) *float64 { return &b.Height }, T("Height"), T("Height"))),
+		line(T("Margins"),
 			length(func(b *backdrop) *float64 { return &b.MarginX }, T("Horizontal"), T("Horizontal margin")),
 			length(func(b *backdrop) *float64 { return &b.MarginY }, T("Vertical"), T("Vertical margin"))),
 		line(T("Opacity"),
-			widget.Box(ui.Slider(opacity, 0, 1).Step(0.05).Name(T("Image opacity"))).Width(200),
+			widget.Expanded(widget.Box(ui.Slider(opacity, 0, 1).Step(0.05).Name(T("Image opacity"))).MaxWidth(200)),
 			widget.Box(ggui.View(opacity, func(o float64) ggui.Widget {
 				return muted(widget.Text(Tf("%d%%", int(o*100+0.5))).Size(12.5))
 			})).Width(36),
-			widget.Spacer(), reset),
+			reset),
 	).Gap(8).Stretch()
 	return widget.Box(widget.Row(backdropPreview(m, slot), widget.Expanded(controls)).Gap(20).Align(widget.AlignCenter)).Pad(12, 16)
 }

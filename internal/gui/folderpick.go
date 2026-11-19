@@ -190,7 +190,7 @@ func folderPickerDialog(m *model) ggui.Widget {
 		was = on
 	})
 	return ggui.If(p.On, func() ggui.Widget {
-		return ui.Dialog(p.On, folderPicker(m)).
+		return keyedDialog(p.On, folderPicker(m)).
 			Title(Tf("Choose a folder on %s", nodeName(ggui.Peek(m.Nodes), p.Node))).Width(760)
 	})
 }
@@ -300,13 +300,27 @@ func pickerList(m *model) ggui.Widget {
 // its field takes the left.
 func pickerFooter(m *model) ggui.Widget {
 	p := m.Pick
+	var nameFocus ggui.FocusRef
 	left := ggui.View(p.Naming, func(naming bool) ggui.Widget {
 		if !naming {
-			return ui.Button(T("New folder"), func() { p.NewName.Set(""); p.Err.Set(""); p.Naming.Set(true) }).Outline()
+			return ui.Button(T("New folder"), func() {
+				p.NewName.Set("")
+				p.Err.Set("")
+				p.Naming.Set(true)
+				nameFocus.Focus()
+			}).Outline()
 		}
+		field := ui.TextField(p.NewName).Placeholder(T("Folder name")).Name(T("Folder name")).
+			OnKey(func(ev ggui.KeyEvent) bool {
+				if ev.Key == ggui.KeyEscape && ev.Mods == (ggui.Mods{}) {
+					p.Naming.Set(false)
+					return true
+				}
+				return false
+			}).
+			OnSubmit(func(string) { m.makeFolder() })
 		return widget.Row(
-			widget.Box(ui.TextField(p.NewName).Placeholder(T("Folder name")).Name(T("Folder name")).
-				OnSubmit(func(string) { m.makeFolder() })).Width(200),
+			widget.Box(nameFocus.Attach(field)).Width(200),
 			ui.Button(T("Create"), m.makeFolder).Outline(),
 			iconButton("x", T("Cancel"), func() { p.Naming.Set(false) }),
 		).Gap(6)

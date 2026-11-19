@@ -18,14 +18,15 @@ import (
 // edited there applies to the next session without a restart. Everything
 // else in the file is read at start.
 type agentFile struct {
-	mu      sync.Mutex
-	path    string
-	mod     time.Time
-	size    int64
-	read    bool
-	agents  map[string]agentspec.Agent
-	shell   agentspec.Shell
-	servers map[string]mcp.Server
+	mu          sync.Mutex
+	path        string
+	mod         time.Time
+	size        int64
+	read        bool
+	agents      map[string]agentspec.Agent
+	isolateHome bool
+	shell       agentspec.Shell
+	servers     map[string]mcp.Server
 	// workspace is how the node shares its workspace.
 	workspace config.Workspace
 }
@@ -47,6 +48,11 @@ func (d *Daemon) agents() map[string]agentspec.Agent {
 	return agentspec.WithShell(f.agents, f.shell)
 }
 
+// isolateHome reports whether Mako's global isolated home is enabled.
+func (d *Daemon) isolateHome() bool {
+	return d.followed().isolateHome
+}
+
 // contextServers are the MCP servers configured now.
 func (d *Daemon) contextServers() map[string]mcp.Server {
 	return d.followed().servers
@@ -54,10 +60,11 @@ func (d *Daemon) contextServers() map[string]mcp.Server {
 
 // followedConfig is what the daemon follows of its config file.
 type followedConfig struct {
-	agents    map[string]agentspec.Agent
-	shell     agentspec.Shell
-	servers   map[string]mcp.Server
-	workspace config.Workspace
+	agents      map[string]agentspec.Agent
+	isolateHome bool
+	shell       agentspec.Shell
+	servers     map[string]mcp.Server
+	workspace   config.Workspace
 }
 
 func (d *Daemon) followed() followedConfig {
@@ -65,9 +72,9 @@ func (d *Daemon) followed() followedConfig {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !f.read {
-		f.agents, f.shell, f.servers, f.workspace, f.read = d.cfg.Agents, d.cfg.Shell, d.cfg.ContextServers, d.cfg.Workspace, true
+		f.agents, f.isolateHome, f.shell, f.servers, f.workspace, f.read = d.cfg.Agents, d.cfg.IsolateHome, d.cfg.Shell, d.cfg.ContextServers, d.cfg.Workspace, true
 	}
-	now := followedConfig{agents: f.agents, shell: f.shell, servers: f.servers, workspace: f.workspace}
+	now := followedConfig{agents: f.agents, isolateHome: f.isolateHome, shell: f.shell, servers: f.servers, workspace: f.workspace}
 	if f.path == "" {
 		return now
 	}
@@ -86,9 +93,9 @@ func (d *Daemon) followed() followedConfig {
 		return now
 	}
 	file.TakeShell()
-	f.agents, f.shell, f.servers, f.workspace = file.Agents, file.Shell, file.ContextServers, file.Workspace
+	f.agents, f.isolateHome, f.shell, f.servers, f.workspace = file.Agents, file.IsolateHome, file.Shell, file.ContextServers, file.Workspace
 	d.log.Info("configuration reloaded", "path", f.path)
-	return followedConfig{agents: f.agents, shell: f.shell, servers: f.servers, workspace: f.workspace}
+	return followedConfig{agents: f.agents, isolateHome: f.isolateHome, shell: f.shell, servers: f.servers, workspace: f.workspace}
 }
 
 // agentInfo lists the agents for this node's record: names and what their

@@ -141,18 +141,24 @@ func (m *model) revertHost() {
 // a session of it is a terminal of the user's own.
 func shellSettings(m *model) ggui.Widget {
 	mono := ggui.TextStyle{Font: ggui.DefaultMonoFont()}
-	return page(T("Shell"), T("The shell a new terminal starts on this node. Changes apply to the next shell started."),
-		section(T("Program"), card(
-			row(T("Program"), Tf("The shell and any arguments it always needs; empty runs your login shell, %s.", agentspec.DefaultShell()),
-				widget.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.ShellCommand })).
-					Style(mono).Placeholder(agentspec.DefaultShell()).Name(T("Shell program"))).Width(300)),
-			row(T("Flags"), T("Added to every shell started, such as -l for a login shell. Quote as in a shell."),
-				widget.Box(ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.ShellArgs })).
-					Style(mono).Placeholder("-l").Name(T("Shell flags"))).Width(300)),
-			stackedRow(T("Environment"), T("One per line as NAME=value, added to the daemon's. $NAME, ${NAME} and a leading ~ expand when a shell starts; $$ is a $."),
-				ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.ShellEnv })).
-					Multiline().Lines(3).Style(mono).Name(T("Shell environment"))),
-		)),
+	return widePage(T("Shell"), T("The shell a new terminal starts on this node. Changes apply to the next shell started."),
+		responsiveGrid(settingsTwoCol, 2, settingsColumnGap, pageGap,
+			section(T("Program"), card(
+				stackedRow(T("Program"), Tf("The shell and any arguments it always needs; empty runs your login shell, %s.", agentspec.DefaultShell()),
+					ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.ShellCommand })).
+						Style(mono).Placeholder(agentspec.DefaultShell()).Name(T("Shell program"))),
+				stackedRow(T("Flags"), T("Added to every shell started, such as -l for a login shell. Quote as in a shell."),
+					ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.ShellArgs })).
+						Style(mono).Placeholder("-l").Name(T("Shell flags"))),
+			)),
+			section(T("Environment"), card(
+				widget.Box(widget.Column(
+					muted(widget.Text(T("One per line as NAME=value, added to the daemon's. $NAME, ${NAME} and a leading ~ expand when a shell starts; $$ is a $.")).Size(12)),
+					ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.ShellEnv })).
+						Multiline().Lines(5).Style(mono).Name(T("Shell environment")),
+				).Gap(8).Stretch()).Pad(14, 16),
+			)),
+		),
 		saveBar(m),
 	)
 }

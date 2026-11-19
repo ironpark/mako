@@ -165,6 +165,14 @@ message Envelope {
     // Changes to a node's files, as they come (revision 37).
     WatchFiles watch_files = 140;
     FilesChanged files_changed = 141;
+
+    // Agent dynamic models and home isolation migration (revision 38).
+    ListAgentModels list_agent_models = 142;
+    AgentModels agent_models = 143;
+    InspectAgentHome inspect_agent_home = 144;
+    AgentHomeInfo agent_home_info = 145;
+    MigrateAgentHome migrate_agent_home = 146;
+    AgentHomeMigrated agent_home_migrated = 147;
   }
 }
 

@@ -73,6 +73,7 @@ func window(m *model) ggui.Widget {
 		forgeDialogs(m),
 		gitAskDialog(m),
 		confirmDialog(m),
+		homeMigrateDialog(m),
 		imageViewer(m),
 		shellDialog(m),
 		searchDialog(m),
@@ -442,8 +443,8 @@ func tab(m *model, s *protocol.SessionInfo, selected, focused bool, title string
 		Status(&activityDot{state: dot, quiet: true}).StatusWhile(func() bool { return dot() != dotRest }).
 		Icon(glyph).
 		MaxLabelWidth(168).Selected(selected).Current(focused).
-		OnClose(func() { m.askKill(id) }).CloseName(Tf("Close %s", label))
-	return sessionMenu(m, t, id, label, true)
+		OnClose(func() { m.closeTabButton(id) }).CloseName(Tf("Close %s", label))
+	return sessionMenu(m, tabCloseMod(m, id, t), id, label, true)
 }
 
 // withAlpha is c at alpha a, out of 0xff; nothing for no colour.
@@ -554,7 +555,7 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 	over := ggui.State(false)
 	content := widget.Column(
 		attachmentStrip(m, id, state),
-		widget.Box(inlineField(field)).MaxHeight(composerMaxHeight),
+		composerField(field),
 		composerBar(m, id, state, disabled),
 	).Gap(6).Stretch()
 	box := ggui.View(over, func(o bool) ggui.Widget {
@@ -578,6 +579,101 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 // composerMaxHeight is as tall as the composer's text grows, about ten
 // lines, before it scrolls.
 const composerMaxHeight = 220
+
+// composerField wraps a multiline text field so it grows up to
+// composerMaxHeight and scrolls smoothly beyond that, both with the mouse
+// wheel / scrollbar and as typing or cursor movement moves the caret.
+func composerField(field *ui.TextFieldWidget) ggui.Widget {
+	tracked := &caretFollow{child: field, input: field.Input()}
+	body := widget.Padding(inlineField(tracked), 0, 6, 0, 0)
+	return widget.Box(widget.Scroll(body).Shrink().Bar(skin.Surface3)).MaxHeight(composerMaxHeight)
+}
+
+// caretFollow observes a multiline TextInputWidget inside a ScrollWidget and
+// asks the enclosing Scroll to reveal the caret line whenever the text,
+// caret, focus, or layout size changes while focused.
+type caretFollow struct {
+	child ggui.Widget
+	input *widget.TextInputWidget
+	env   ggui.Env
+
+	lastText    string
+	lastCaret   int
+	lastFocused bool
+	lastSize    ggui.Size
+}
+
+func (w *caretFollow) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	w.env = env
+	return w.child.Layout(c, env)
+}
+
+func (w *caretFollow) Baseline() (float64, bool) { return ggui.BaselineOf(w.child) }
+
+func (w *caretFollow) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.Paint(w.child, r)
+	st := w.input.EditingState()
+	changed := st.Text != w.lastText || st.Caret != w.lastCaret || st.Focused != w.lastFocused || r.Size != w.lastSize
+	w.lastText, w.lastCaret, w.lastFocused, w.lastSize = st.Text, st.Caret, st.Focused, r.Size
+	if !st.Focused || !changed {
+		return
+	}
+	win, ok := widget.ScrollWindowOf(w.env)
+	if !ok || r.Size.H <= win.Size.H+0.5 {
+		return
+	}
+	top, bot := caretBand(st.Text, st.Caret, r.Size, w.env)
+	dst.RequestReveal(ggui.Rct(ggui.Pt(r.Origin.X, r.Origin.Y+top), ggui.Sz(r.Size.W, bot-top)))
+}
+
+// caretBand returns the vertical span [top, bot] of the caret's line inside a
+// multiline ui.TextField of size, relative to the field's top edge.
+func caretBand(text string, caret int, size ggui.Size, env ggui.Env) (top, bot float64) {
+	t := uitheme.Of(env)
+	padTop, padBottom, padX := t.Space, t.Space, t.FieldPad.Left
+	textW := max(size.W-2*padX, 1)
+	caret = min(max(caret, 0), len(text))
+	prefix := caretPrefix(text, caret, textW, env)
+	oneH := widget.Text("M").Layout(ggui.Constraints{MaxW: ggui.Unbounded, MaxH: ggui.Unbounded}, env).H
+	prefixH := oneH
+	if prefix != "" {
+		prefixH = widget.Text(prefix).Layout(ggui.Constraints{MaxW: textW, MaxH: ggui.Unbounded}, env).H
+	}
+	top = padTop + max(prefixH-oneH, 0)
+	bot = padTop + prefixH
+	if top <= padTop+1 {
+		top = 0
+	}
+	if bot >= size.H-padBottom-1 {
+		bot = size.H
+	}
+	top = min(max(top, 0), max(size.H-1, 0))
+	bot = min(max(bot, top+1), size.H)
+	return top, bot
+}
+
+// caretPrefix returns the prefix of text whose last wrapped line is the line
+// the caret sits on when wrapped at textW.
+func caretPrefix(text string, caret int, textW float64, env ggui.Env) string {
+	if caret >= len(text) {
+		return text
+	}
+	if text[caret] == '\n' || text[caret] == ' ' || text[caret] == '\t' {
+		return text[:caret]
+	}
+	start := caret
+	for start > 0 && text[start-1] != '\n' && text[start-1] != ' ' && text[start-1] != '\t' {
+		start--
+	}
+	end := caret
+	for end < len(text) && text[end] != '\n' && text[end] != ' ' && text[end] != '\t' {
+		end++
+	}
+	if widget.Text(text[start:end]).Layout(ggui.Constraints{MaxW: ggui.Unbounded, MaxH: ggui.Unbounded}, env).W <= textW {
+		return text[:end]
+	}
+	return text[:caret]
+}
 
 // inlineField drops a text field's own chrome inside the composer box, so
 // the box is the one surface, as in Paseo.

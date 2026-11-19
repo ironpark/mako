@@ -1278,5 +1278,79 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.FilesChanged getFilesChanged();
 
+  /**
+   * <pre>
+   * Agent dynamic models and home isolation migration (revision 38).
+   * </pre>
+   *
+   * <code>.mako.v2.ListAgentModels list_agent_models = 142 [json_name = "listAgentModels"];</code>
+   * @return Whether the listAgentModels field is set.
+   */
+  boolean hasListAgentModels();
+  /**
+   * <pre>
+   * Agent dynamic models and home isolation migration (revision 38).
+   * </pre>
+   *
+   * <code>.mako.v2.ListAgentModels list_agent_models = 142 [json_name = "listAgentModels"];</code>
+   * @return The listAgentModels.
+   */
+  dev.ironpark.mako.v2.ListAgentModels getListAgentModels();
+
+  /**
+   * <code>.mako.v2.AgentModels agent_models = 143 [json_name = "agentModels"];</code>
+   * @return Whether the agentModels field is set.
+   */
+  boolean hasAgentModels();
+  /**
+   * <code>.mako.v2.AgentModels agent_models = 143 [json_name = "agentModels"];</code>
+   * @return The agentModels.
+   */
+  dev.ironpark.mako.v2.AgentModels getAgentModels();
+
+  /**
+   * <code>.mako.v2.InspectAgentHome inspect_agent_home = 144 [json_name = "inspectAgentHome"];</code>
+   * @return Whether the inspectAgentHome field is set.
+   */
+  boolean hasInspectAgentHome();
+  /**
+   * <code>.mako.v2.InspectAgentHome inspect_agent_home = 144 [json_name = "inspectAgentHome"];</code>
+   * @return The inspectAgentHome.
+   */
+  dev.ironpark.mako.v2.InspectAgentHome getInspectAgentHome();
+
+  /**
+   * <code>.mako.v2.AgentHomeInfo agent_home_info = 145 [json_name = "agentHomeInfo"];</code>
+   * @return Whether the agentHomeInfo field is set.
+   */
+  boolean hasAgentHomeInfo();
+  /**
+   * <code>.mako.v2.AgentHomeInfo agent_home_info = 145 [json_name = "agentHomeInfo"];</code>
+   * @return The agentHomeInfo.
+   */
+  dev.ironpark.mako.v2.AgentHomeInfo getAgentHomeInfo();
+
+  /**
+   * <code>.mako.v2.MigrateAgentHome migrate_agent_home = 146 [json_name = "migrateAgentHome"];</code>
+   * @return Whether the migrateAgentHome field is set.
+   */
+  boolean hasMigrateAgentHome();
+  /**
+   * <code>.mako.v2.MigrateAgentHome migrate_agent_home = 146 [json_name = "migrateAgentHome"];</code>
+   * @return The migrateAgentHome.
+   */
+  dev.ironpark.mako.v2.MigrateAgentHome getMigrateAgentHome();
+
+  /**
+   * <code>.mako.v2.AgentHomeMigrated agent_home_migrated = 147 [json_name = "agentHomeMigrated"];</code>
+   * @return Whether the agentHomeMigrated field is set.
+   */
+  boolean hasAgentHomeMigrated();
+  /**
+   * <code>.mako.v2.AgentHomeMigrated agent_home_migrated = 147 [json_name = "agentHomeMigrated"];</code>
+   * @return The agentHomeMigrated.
+   */
+  dev.ironpark.mako.v2.AgentHomeMigrated getAgentHomeMigrated();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

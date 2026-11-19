@@ -2765,6 +2765,461 @@ func (x *Command) GetSource() string {
 	return ""
 }
 
+// ListAgentModels asks a node for the models an agent supports, and
+// each model's effort levels. Revision 38.
+type ListAgentModels struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Agent         string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
+	Refresh       bool                   `protobuf:"varint,3,opt,name=refresh,proto3" json:"refresh,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentModels) Reset() {
+	*x = ListAgentModels{}
+	mi := &file_mako_v2_session_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentModels) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentModels) ProtoMessage() {}
+
+func (x *ListAgentModels) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentModels.ProtoReflect.Descriptor instead.
+func (*ListAgentModels) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *ListAgentModels) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *ListAgentModels) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *ListAgentModels) GetRefresh() bool {
+	if x != nil {
+		return x.Refresh
+	}
+	return false
+}
+
+// AgentModel describes one model an agent supports.
+type AgentModel struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Efforts       []string               `protobuf:"bytes,3,rep,name=efforts,proto3" json:"efforts,omitempty"`
+	Overflow      bool                   `protobuf:"varint,4,opt,name=overflow,proto3" json:"overflow,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentModel) Reset() {
+	*x = AgentModel{}
+	mi := &file_mako_v2_session_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentModel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentModel) ProtoMessage() {}
+
+func (x *AgentModel) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentModel.ProtoReflect.Descriptor instead.
+func (*AgentModel) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *AgentModel) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AgentModel) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AgentModel) GetEfforts() []string {
+	if x != nil {
+		return x.Efforts
+	}
+	return nil
+}
+
+func (x *AgentModel) GetOverflow() bool {
+	if x != nil {
+		return x.Overflow
+	}
+	return false
+}
+
+// AgentModels answers ListAgentModels.
+type AgentModels struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Models        []*AgentModel          `protobuf:"bytes,1,rep,name=models,proto3" json:"models,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentModels) Reset() {
+	*x = AgentModels{}
+	mi := &file_mako_v2_session_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentModels) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentModels) ProtoMessage() {}
+
+func (x *AgentModels) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentModels.ProtoReflect.Descriptor instead.
+func (*AgentModels) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *AgentModels) GetModels() []*AgentModel {
+	if x != nil {
+		return x.Models
+	}
+	return nil
+}
+
+// InspectAgentHome checks what migrating an agent's data directory to or
+// from Mako's isolated home involves on a node. Revision 38.
+type InspectAgentHome struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Agent         string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
+	Isolate       bool                   `protobuf:"varint,3,opt,name=isolate,proto3" json:"isolate,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InspectAgentHome) Reset() {
+	*x = InspectAgentHome{}
+	mi := &file_mako_v2_session_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InspectAgentHome) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InspectAgentHome) ProtoMessage() {}
+
+func (x *InspectAgentHome) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InspectAgentHome.ProtoReflect.Descriptor instead.
+func (*InspectAgentHome) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *InspectAgentHome) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *InspectAgentHome) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *InspectAgentHome) GetIsolate() bool {
+	if x != nil {
+		return x.Isolate
+	}
+	return false
+}
+
+// AgentHomeInfo answers InspectAgentHome.
+type AgentHomeInfo struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Supported       bool                   `protobuf:"varint,1,opt,name=supported,proto3" json:"supported,omitempty"`
+	FromDir         string                 `protobuf:"bytes,2,opt,name=from_dir,json=fromDir,proto3" json:"from_dir,omitempty"`
+	ToDir           string                 `protobuf:"bytes,3,opt,name=to_dir,json=toDir,proto3" json:"to_dir,omitempty"`
+	RunningSessions int32                  `protobuf:"varint,4,opt,name=running_sessions,json=runningSessions,proto3" json:"running_sessions,omitempty"`
+	SavedSessions   int32                  `protobuf:"varint,5,opt,name=saved_sessions,json=savedSessions,proto3" json:"saved_sessions,omitempty"`
+	HasConfig       bool                   `protobuf:"varint,6,opt,name=has_config,json=hasConfig,proto3" json:"has_config,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *AgentHomeInfo) Reset() {
+	*x = AgentHomeInfo{}
+	mi := &file_mako_v2_session_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentHomeInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentHomeInfo) ProtoMessage() {}
+
+func (x *AgentHomeInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentHomeInfo.ProtoReflect.Descriptor instead.
+func (*AgentHomeInfo) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *AgentHomeInfo) GetSupported() bool {
+	if x != nil {
+		return x.Supported
+	}
+	return false
+}
+
+func (x *AgentHomeInfo) GetFromDir() string {
+	if x != nil {
+		return x.FromDir
+	}
+	return ""
+}
+
+func (x *AgentHomeInfo) GetToDir() string {
+	if x != nil {
+		return x.ToDir
+	}
+	return ""
+}
+
+func (x *AgentHomeInfo) GetRunningSessions() int32 {
+	if x != nil {
+		return x.RunningSessions
+	}
+	return 0
+}
+
+func (x *AgentHomeInfo) GetSavedSessions() int32 {
+	if x != nil {
+		return x.SavedSessions
+	}
+	return 0
+}
+
+func (x *AgentHomeInfo) GetHasConfig() bool {
+	if x != nil {
+		return x.HasConfig
+	}
+	return false
+}
+
+// MigrateAgentHome copies configuration and/or moves Mako-tracked
+// sessions between an agent's default directory and Mako's isolated
+// home. Revision 38.
+type MigrateAgentHome struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Agent         string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
+	Isolate       bool                   `protobuf:"varint,3,opt,name=isolate,proto3" json:"isolate,omitempty"`
+	CopyConfig    bool                   `protobuf:"varint,4,opt,name=copy_config,json=copyConfig,proto3" json:"copy_config,omitempty"`
+	MoveSessions  bool                   `protobuf:"varint,5,opt,name=move_sessions,json=moveSessions,proto3" json:"move_sessions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MigrateAgentHome) Reset() {
+	*x = MigrateAgentHome{}
+	mi := &file_mako_v2_session_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MigrateAgentHome) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MigrateAgentHome) ProtoMessage() {}
+
+func (x *MigrateAgentHome) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MigrateAgentHome.ProtoReflect.Descriptor instead.
+func (*MigrateAgentHome) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *MigrateAgentHome) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *MigrateAgentHome) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *MigrateAgentHome) GetIsolate() bool {
+	if x != nil {
+		return x.Isolate
+	}
+	return false
+}
+
+func (x *MigrateAgentHome) GetCopyConfig() bool {
+	if x != nil {
+		return x.CopyConfig
+	}
+	return false
+}
+
+func (x *MigrateAgentHome) GetMoveSessions() bool {
+	if x != nil {
+		return x.MoveSessions
+	}
+	return false
+}
+
+// AgentHomeMigrated answers MigrateAgentHome.
+type AgentHomeMigrated struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MovedSessions int32                  `protobuf:"varint,1,opt,name=moved_sessions,json=movedSessions,proto3" json:"moved_sessions,omitempty"`
+	CopiedConfig  bool                   `protobuf:"varint,2,opt,name=copied_config,json=copiedConfig,proto3" json:"copied_config,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentHomeMigrated) Reset() {
+	*x = AgentHomeMigrated{}
+	mi := &file_mako_v2_session_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentHomeMigrated) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentHomeMigrated) ProtoMessage() {}
+
+func (x *AgentHomeMigrated) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentHomeMigrated.ProtoReflect.Descriptor instead.
+func (*AgentHomeMigrated) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *AgentHomeMigrated) GetMovedSessions() int32 {
+	if x != nil {
+		return x.MovedSessions
+	}
+	return 0
+}
+
+func (x *AgentHomeMigrated) GetCopiedConfig() bool {
+	if x != nil {
+		return x.CopiedConfig
+	}
+	return false
+}
+
 var File_mako_v2_session_proto protoreflect.FileDescriptor
 
 const file_mako_v2_session_proto_rawDesc = "" +
@@ -3013,7 +3468,41 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x12\n" +
 	"\x04args\x18\x03 \x01(\tR\x04args\x12\x16\n" +
-	"\x06source\x18\x04 \x01(\tR\x06sourceB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
+	"\x06source\x18\x04 \x01(\tR\x06source\"Z\n" +
+	"\x0fListAgentModels\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x14\n" +
+	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x18\n" +
+	"\arefresh\x18\x03 \x01(\bR\arefresh\"f\n" +
+	"\n" +
+	"AgentModel\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
+	"\aefforts\x18\x03 \x03(\tR\aefforts\x12\x1a\n" +
+	"\boverflow\x18\x04 \x01(\bR\boverflow\":\n" +
+	"\vAgentModels\x12+\n" +
+	"\x06models\x18\x01 \x03(\v2\x13.mako.v2.AgentModelR\x06models\"[\n" +
+	"\x10InspectAgentHome\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x14\n" +
+	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x18\n" +
+	"\aisolate\x18\x03 \x01(\bR\aisolate\"\xd0\x01\n" +
+	"\rAgentHomeInfo\x12\x1c\n" +
+	"\tsupported\x18\x01 \x01(\bR\tsupported\x12\x19\n" +
+	"\bfrom_dir\x18\x02 \x01(\tR\afromDir\x12\x15\n" +
+	"\x06to_dir\x18\x03 \x01(\tR\x05toDir\x12)\n" +
+	"\x10running_sessions\x18\x04 \x01(\x05R\x0frunningSessions\x12%\n" +
+	"\x0esaved_sessions\x18\x05 \x01(\x05R\rsavedSessions\x12\x1d\n" +
+	"\n" +
+	"has_config\x18\x06 \x01(\bR\thasConfig\"\xa1\x01\n" +
+	"\x10MigrateAgentHome\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x14\n" +
+	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x18\n" +
+	"\aisolate\x18\x03 \x01(\bR\aisolate\x12\x1f\n" +
+	"\vcopy_config\x18\x04 \x01(\bR\n" +
+	"copyConfig\x12#\n" +
+	"\rmove_sessions\x18\x05 \x01(\bR\fmoveSessions\"_\n" +
+	"\x11AgentHomeMigrated\x12%\n" +
+	"\x0emoved_sessions\x18\x01 \x01(\x05R\rmovedSessions\x12#\n" +
+	"\rcopied_config\x18\x02 \x01(\bR\fcopiedConfigB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
 	file_mako_v2_session_proto_rawDescOnce sync.Once
@@ -3027,7 +3516,7 @@ func file_mako_v2_session_proto_rawDescGZIP() []byte {
 	return file_mako_v2_session_proto_rawDescData
 }
 
-var file_mako_v2_session_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
+var file_mako_v2_session_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
 var file_mako_v2_session_proto_goTypes = []any{
 	(*ListSessions)(nil),          // 0: mako.v2.ListSessions
 	(*Sessions)(nil),              // 1: mako.v2.Sessions
@@ -3063,24 +3552,31 @@ var file_mako_v2_session_proto_goTypes = []any{
 	(*ListCommands)(nil),          // 31: mako.v2.ListCommands
 	(*Commands)(nil),              // 32: mako.v2.Commands
 	(*Command)(nil),               // 33: mako.v2.Command
-	nil,                           // 34: mako.v2.OpenSession.EnvEntry
-	(*timestamppb.Timestamp)(nil), // 35: google.protobuf.Timestamp
+	(*ListAgentModels)(nil),       // 34: mako.v2.ListAgentModels
+	(*AgentModel)(nil),            // 35: mako.v2.AgentModel
+	(*AgentModels)(nil),           // 36: mako.v2.AgentModels
+	(*InspectAgentHome)(nil),      // 37: mako.v2.InspectAgentHome
+	(*AgentHomeInfo)(nil),         // 38: mako.v2.AgentHomeInfo
+	(*MigrateAgentHome)(nil),      // 39: mako.v2.MigrateAgentHome
+	(*AgentHomeMigrated)(nil),     // 40: mako.v2.AgentHomeMigrated
+	nil,                           // 41: mako.v2.OpenSession.EnvEntry
+	(*timestamppb.Timestamp)(nil), // 42: google.protobuf.Timestamp
 }
 var file_mako_v2_session_proto_depIdxs = []int32{
 	4,  // 0: mako.v2.Sessions.sessions:type_name -> mako.v2.SessionInfo
-	34, // 1: mako.v2.OpenSession.env:type_name -> mako.v2.OpenSession.EnvEntry
+	41, // 1: mako.v2.OpenSession.env:type_name -> mako.v2.OpenSession.EnvEntry
 	3,  // 2: mako.v2.OpenSession.worktree:type_name -> mako.v2.Worktree
-	35, // 3: mako.v2.SessionInfo.started_at:type_name -> google.protobuf.Timestamp
-	35, // 4: mako.v2.SessionInfo.status_at:type_name -> google.protobuf.Timestamp
-	35, // 5: mako.v2.SessionInfo.last_output:type_name -> google.protobuf.Timestamp
+	42, // 3: mako.v2.SessionInfo.started_at:type_name -> google.protobuf.Timestamp
+	42, // 4: mako.v2.SessionInfo.status_at:type_name -> google.protobuf.Timestamp
+	42, // 5: mako.v2.SessionInfo.last_output:type_name -> google.protobuf.Timestamp
 	11, // 6: mako.v2.SessionInfo.approval:type_name -> mako.v2.Approval
 	3,  // 7: mako.v2.SessionInfo.worktree:type_name -> mako.v2.Worktree
-	35, // 8: mako.v2.SessionInfo.last_message:type_name -> google.protobuf.Timestamp
+	42, // 8: mako.v2.SessionInfo.last_message:type_name -> google.protobuf.Timestamp
 	10, // 9: mako.v2.SessionInfo.tasks:type_name -> mako.v2.BackgroundTask
 	9,  // 10: mako.v2.SessionInfo.notice:type_name -> mako.v2.Notice
 	7,  // 11: mako.v2.SessionInfo.dialog:type_name -> mako.v2.ScreenDialog
 	5,  // 12: mako.v2.SessionInfo.controls:type_name -> mako.v2.AgentControls
-	35, // 13: mako.v2.Approval.since:type_name -> google.protobuf.Timestamp
+	42, // 13: mako.v2.Approval.since:type_name -> google.protobuf.Timestamp
 	13, // 14: mako.v2.Approval.questions:type_name -> mako.v2.Question
 	12, // 15: mako.v2.Approval.options:type_name -> mako.v2.ApprovalOption
 	14, // 16: mako.v2.Question.options:type_name -> mako.v2.QuestionOption
@@ -3090,11 +3586,12 @@ var file_mako_v2_session_proto_depIdxs = []int32{
 	27, // 20: mako.v2.Resize.colors:type_name -> mako.v2.TerminalColors
 	28, // 21: mako.v2.Snapshot.progress:type_name -> mako.v2.ProgressReport
 	33, // 22: mako.v2.Commands.commands:type_name -> mako.v2.Command
-	23, // [23:23] is the sub-list for method output_type
-	23, // [23:23] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	35, // 23: mako.v2.AgentModels.models:type_name -> mako.v2.AgentModel
+	24, // [24:24] is the sub-list for method output_type
+	24, // [24:24] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_session_proto_init() }
@@ -3110,7 +3607,7 @@ func file_mako_v2_session_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_session_proto_rawDesc), len(file_mako_v2_session_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   35,
+			NumMessages:   42,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -144,6 +144,12 @@ type Envelope struct {
 	//	*Envelope_SeeSession
 	//	*Envelope_WatchFiles
 	//	*Envelope_FilesChanged
+	//	*Envelope_ListAgentModels
+	//	*Envelope_AgentModels
+	//	*Envelope_InspectAgentHome
+	//	*Envelope_AgentHomeInfo
+	//	*Envelope_MigrateAgentHome
+	//	*Envelope_AgentHomeMigrated
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1118,6 +1124,60 @@ func (x *Envelope) GetFilesChanged() *FilesChanged {
 	return nil
 }
 
+func (x *Envelope) GetListAgentModels() *ListAgentModels {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_ListAgentModels); ok {
+			return x.ListAgentModels
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetAgentModels() *AgentModels {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_AgentModels); ok {
+			return x.AgentModels
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetInspectAgentHome() *InspectAgentHome {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_InspectAgentHome); ok {
+			return x.InspectAgentHome
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetAgentHomeInfo() *AgentHomeInfo {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_AgentHomeInfo); ok {
+			return x.AgentHomeInfo
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetMigrateAgentHome() *MigrateAgentHome {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_MigrateAgentHome); ok {
+			return x.MigrateAgentHome
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetAgentHomeMigrated() *AgentHomeMigrated {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_AgentHomeMigrated); ok {
+			return x.AgentHomeMigrated
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1544,6 +1604,31 @@ type Envelope_FilesChanged struct {
 	FilesChanged *FilesChanged `protobuf:"bytes,141,opt,name=files_changed,json=filesChanged,proto3,oneof"`
 }
 
+type Envelope_ListAgentModels struct {
+	// Agent dynamic models and home isolation migration (revision 38).
+	ListAgentModels *ListAgentModels `protobuf:"bytes,142,opt,name=list_agent_models,json=listAgentModels,proto3,oneof"`
+}
+
+type Envelope_AgentModels struct {
+	AgentModels *AgentModels `protobuf:"bytes,143,opt,name=agent_models,json=agentModels,proto3,oneof"`
+}
+
+type Envelope_InspectAgentHome struct {
+	InspectAgentHome *InspectAgentHome `protobuf:"bytes,144,opt,name=inspect_agent_home,json=inspectAgentHome,proto3,oneof"`
+}
+
+type Envelope_AgentHomeInfo struct {
+	AgentHomeInfo *AgentHomeInfo `protobuf:"bytes,145,opt,name=agent_home_info,json=agentHomeInfo,proto3,oneof"`
+}
+
+type Envelope_MigrateAgentHome struct {
+	MigrateAgentHome *MigrateAgentHome `protobuf:"bytes,146,opt,name=migrate_agent_home,json=migrateAgentHome,proto3,oneof"`
+}
+
+type Envelope_AgentHomeMigrated struct {
+	AgentHomeMigrated *AgentHomeMigrated `protobuf:"bytes,147,opt,name=agent_home_migrated,json=agentHomeMigrated,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -1748,6 +1833,18 @@ func (*Envelope_WatchFiles) isEnvelope_Body() {}
 
 func (*Envelope_FilesChanged) isEnvelope_Body() {}
 
+func (*Envelope_ListAgentModels) isEnvelope_Body() {}
+
+func (*Envelope_AgentModels) isEnvelope_Body() {}
+
+func (*Envelope_InspectAgentHome) isEnvelope_Body() {}
+
+func (*Envelope_AgentHomeInfo) isEnvelope_Body() {}
+
+func (*Envelope_MigrateAgentHome) isEnvelope_Body() {}
+
+func (*Envelope_AgentHomeMigrated) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -1817,7 +1914,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xa7+\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xd6.\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -1945,7 +2042,13 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"seeSession\x127\n" +
 	"\vwatch_files\x18\x8c\x01 \x01(\v2\x13.mako.v2.WatchFilesH\x00R\n" +
 	"watchFiles\x12=\n" +
-	"\rfiles_changed\x18\x8d\x01 \x01(\v2\x15.mako.v2.FilesChangedH\x00R\ffilesChangedB\x06\n" +
+	"\rfiles_changed\x18\x8d\x01 \x01(\v2\x15.mako.v2.FilesChangedH\x00R\ffilesChanged\x12G\n" +
+	"\x11list_agent_models\x18\x8e\x01 \x01(\v2\x18.mako.v2.ListAgentModelsH\x00R\x0flistAgentModels\x12:\n" +
+	"\fagent_models\x18\x8f\x01 \x01(\v2\x14.mako.v2.AgentModelsH\x00R\vagentModels\x12J\n" +
+	"\x12inspect_agent_home\x18\x90\x01 \x01(\v2\x19.mako.v2.InspectAgentHomeH\x00R\x10inspectAgentHome\x12A\n" +
+	"\x0fagent_home_info\x18\x91\x01 \x01(\v2\x16.mako.v2.AgentHomeInfoH\x00R\ragentHomeInfo\x12J\n" +
+	"\x12migrate_agent_home\x18\x92\x01 \x01(\v2\x19.mako.v2.MigrateAgentHomeH\x00R\x10migrateAgentHome\x12M\n" +
+	"\x13agent_home_migrated\x18\x93\x01 \x01(\v2\x1a.mako.v2.AgentHomeMigratedH\x00R\x11agentHomeMigratedB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"I\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -2069,6 +2172,12 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*SeeSession)(nil),        // 100: mako.v2.SeeSession
 	(*WatchFiles)(nil),        // 101: mako.v2.WatchFiles
 	(*FilesChanged)(nil),      // 102: mako.v2.FilesChanged
+	(*ListAgentModels)(nil),   // 103: mako.v2.ListAgentModels
+	(*AgentModels)(nil),       // 104: mako.v2.AgentModels
+	(*InspectAgentHome)(nil),  // 105: mako.v2.InspectAgentHome
+	(*AgentHomeInfo)(nil),     // 106: mako.v2.AgentHomeInfo
+	(*MigrateAgentHome)(nil),  // 107: mako.v2.MigrateAgentHome
+	(*AgentHomeMigrated)(nil), // 108: mako.v2.AgentHomeMigrated
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,   // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -2173,11 +2282,17 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	100, // 99: mako.v2.Envelope.see_session:type_name -> mako.v2.SeeSession
 	101, // 100: mako.v2.Envelope.watch_files:type_name -> mako.v2.WatchFiles
 	102, // 101: mako.v2.Envelope.files_changed:type_name -> mako.v2.FilesChanged
-	102, // [102:102] is the sub-list for method output_type
-	102, // [102:102] is the sub-list for method input_type
-	102, // [102:102] is the sub-list for extension type_name
-	102, // [102:102] is the sub-list for extension extendee
-	0,   // [0:102] is the sub-list for field type_name
+	103, // 102: mako.v2.Envelope.list_agent_models:type_name -> mako.v2.ListAgentModels
+	104, // 103: mako.v2.Envelope.agent_models:type_name -> mako.v2.AgentModels
+	105, // 104: mako.v2.Envelope.inspect_agent_home:type_name -> mako.v2.InspectAgentHome
+	106, // 105: mako.v2.Envelope.agent_home_info:type_name -> mako.v2.AgentHomeInfo
+	107, // 106: mako.v2.Envelope.migrate_agent_home:type_name -> mako.v2.MigrateAgentHome
+	108, // 107: mako.v2.Envelope.agent_home_migrated:type_name -> mako.v2.AgentHomeMigrated
+	108, // [108:108] is the sub-list for method output_type
+	108, // [108:108] is the sub-list for method input_type
+	108, // [108:108] is the sub-list for extension type_name
+	108, // [108:108] is the sub-list for extension extendee
+	0,   // [0:108] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -2298,6 +2413,12 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_SeeSession)(nil),
 		(*Envelope_WatchFiles)(nil),
 		(*Envelope_FilesChanged)(nil),
+		(*Envelope_ListAgentModels)(nil),
+		(*Envelope_AgentModels)(nil),
+		(*Envelope_InspectAgentHome)(nil),
+		(*Envelope_AgentHomeInfo)(nil),
+		(*Envelope_MigrateAgentHome)(nil),
+		(*Envelope_AgentHomeMigrated)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

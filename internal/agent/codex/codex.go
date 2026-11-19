@@ -38,6 +38,11 @@ func (*Agent) Info() agent.Info {
 	}
 }
 
+// EffortArgs starts Codex with model_reasoning_effort overridden to effort.
+func (*Agent) EffortArgs(effort string) []string {
+	return []string{"-c", "model_reasoning_effort=" + jsonString(effort)}
+}
+
 // WithServers gives the servers as -c overrides of Codex's mcp_servers
 // table, each value TOML, which a JSON string or array of strings also is.
 // A server at a URL is given its token in Codex's environment, which only

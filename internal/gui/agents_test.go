@@ -146,3 +146,122 @@ func TestTheAgentsListUnfoldsOneAgent(t *testing.T) {
 		t.Fatal("codex's settings did not unfold")
 	}
 }
+
+func TestProfileEffortRoundTrip(t *testing.T) {
+	in := map[string]agentspec.Agent{
+		"claude": {
+			Profiles: []agentspec.Profile{
+				{Name: "deep", Model: "claude-opus-5-5", Effort: "xhigh"},
+			},
+		},
+		"codex": {
+			Profiles: []agentspec.Profile{
+				{Name: "sol", Model: "gpt-6.2-sol", Effort: "ultra"},
+			},
+		},
+	}
+	got, err := applyAgents(draftAgents(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = nil
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if cp := got["claude"].Profiles[0]; cp.Model != "claude-opus-5-5" || cp.Effort != "xhigh" {
+		t.Fatalf("claude profile = %+v", cp)
+	}
+	if xp := got["codex"].Profiles[0]; xp.Model != "gpt-6.2-sol" || xp.Effort != "ultra" {
+		t.Fatalf("codex profile = %+v", xp)
+	}
+}
+
+func TestProfileCardShowsDynamicModelsAndEfforts(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	for _, tc := range []struct {
+		agent  string
+		model  string
+		effort string
+	}{
+		{"claude", "claude-opus-5-5", "high"},
+		{"codex", "gpt-6.2-sol", "ultra"},
+		{"agy", "gemini-4-neon-high", "xhigh"},
+	} {
+		t.Run(tc.agent, func(t *testing.T) {
+			m := newModel(&config.Config{Agents: map[string]agentspec.Agent{
+				tc.agent: {Profiles: []agentspec.Profile{{Name: "p", Model: tc.model, Effort: tc.effort}}},
+			}}, "")
+			m.AgentCatalogs.Set(map[string][]*protocol.AgentModel{
+				tc.agent: {
+					{Id: tc.model, Name: tc.model, Efforts: []string{"low", tc.effort}},
+				},
+			})
+			var profile agentDraft
+			for _, r := range ggui.Peek(m.AgentDraft) {
+				if r.Agent == tc.agent && r.IsProfile {
+					profile = r
+				}
+			}
+			const cardW = 540
+			p := ggui.ProbeBuilder(func() ggui.Widget { return profileCard(m, profile, ggui.TextStyle{}) }, ggui.Sz(cardW, 700))
+			defer p.Close()
+			p.Frame()
+			target := tc.agent + ":p"
+			modelNode, ok := p.Find(Tf("%s model", target))
+			if !ok {
+				t.Fatalf("missing model selector for %s:\n%s", target, p.Semantics().String())
+			}
+			effortNode, ok := p.Find(Tf("%s effort", target))
+			if !ok {
+				t.Fatalf("missing effort selector for %s:\n%s", target, p.Semantics().String())
+			}
+			// Verify Model and Effort sit side-by-side cleanly inside the card without overflowing.
+			mr, er := modelNode.Rect, effortNode.Rect
+			if mr.Size.W < 100 || er.Size.W < 100 {
+				t.Fatalf("collapsed selector width: model=%+v effort=%+v", mr, er)
+			}
+			if mr.Origin.X+mr.Size.W > er.Origin.X {
+				t.Fatalf("model overlaps effort: model=%+v effort=%+v", mr, er)
+			}
+			if er.Origin.X+er.Size.W > cardW {
+				t.Fatalf("effort overflows card (%dpx): effort=%+v", cardW, er)
+			}
+			if mr.Origin.Y != er.Origin.Y {
+				t.Fatalf("model and effort misaligned vertically: model=%+v effort=%+v", mr, er)
+			}
+		})
+	}
+}
+
+func TestHomeMigrateDialogRenders(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.HomeMigrate.TargetIsolate.Set(true)
+	m.HomeMigrate.Info.Set(&protocol.AgentHomeInfo{
+		Supported:     true,
+		FromDir:       "/Users/me",
+		ToDir:         "/Users/me/.mako/home",
+		SavedSessions: 2,
+		HasConfig:     true,
+	})
+	m.HomeMigrate.Open.Set(true)
+
+	p := ggui.ProbeBuilder(func() ggui.Widget { return homeMigrateDialog(m) }, ggui.Sz(800, 600))
+	defer p.Close()
+	p.Frame()
+	for _, want := range []string{
+		T("Migrate & apply"),
+		T("Switch without migrating"),
+		T("Cancel"),
+		T("Copy configuration and credentials"),
+		Tf("Move Mako sessions (%d)", 2),
+	} {
+		if _, ok := p.Find(want); !ok {
+			t.Fatalf("missing %q in homeMigrateDialog:\n%s", want, p.Semantics().String())
+		}
+	}
+}

@@ -197,19 +197,31 @@ func TestResolveGivesAProfilesModel(t *testing.T) {
 	if err := os.WriteFile(claude, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	profiles := []Profile{{Name: "p", Args: []string{"--b"}, Model: "opus"}}
+	profiles := []Profile{{Name: "p", Args: []string{"--b"}, Model: "opus", Effort: "high"}}
 	l, err := Resolve("claude", "p", []string{"req"}, nil, map[string]Agent{"claude": {Command: []string{claude}, Args: []string{"--a"}, Profiles: profiles}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(l.Command[1:], " "); got != "--a --b --model opus req" {
+	if got := strings.Join(l.Command[1:], " "); got != "--a --b --model opus --effort high req" {
 		t.Fatalf("command %q", got)
 	}
 	l, err = Resolve("claude", "p", nil, nil, map[string]Agent{"claude": {Command: []string{"/bin/sh", "-c", "claude"}, Profiles: profiles}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(l.Command, "--model") {
+	if slices.Contains(l.Command, "--model") || slices.Contains(l.Command, "--effort") {
 		t.Fatalf("a wrapper given %q", l.Command)
+	}
+
+	codex := filepath.Join(t.TempDir(), "codex")
+	if err := os.WriteFile(codex, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lc, err := Resolve("codex", "p", nil, nil, map[string]Agent{"codex": {Command: []string{codex}, Profiles: []Profile{{Name: "p", Model: "gpt-6.2-sol", Effort: "xhigh"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(lc.Command[1:], " "); got != `--model gpt-6.2-sol -c model_reasoning_effort="xhigh"` {
+		t.Fatalf("codex command %q", got)
 	}
 }

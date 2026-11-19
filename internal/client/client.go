@@ -251,6 +251,21 @@ func (c *Client) Send(ctx context.Context, req *protocol.Send) (*protocol.Sessio
 	return request[*protocol.SessionInfo](ctx, c, protocol.TypeSend, req)
 }
 
+// ListAgentModels returns the dynamic model and effort catalog an agent supports on a node.
+func (c *Client) ListAgentModels(ctx context.Context, req *protocol.ListAgentModels) (*protocol.AgentModels, error) {
+	return request[*protocol.AgentModels](ctx, c, protocol.TypeListAgentModels, req)
+}
+
+// InspectAgentHome inspects what migrating an agent's data directory involves.
+func (c *Client) InspectAgentHome(ctx context.Context, req *protocol.InspectAgentHome) (*protocol.AgentHomeInfo, error) {
+	return request[*protocol.AgentHomeInfo](ctx, c, protocol.TypeInspectAgentHome, req)
+}
+
+// MigrateAgentHome copies config and/or moves Mako-tracked sessions for an agent's home setting.
+func (c *Client) MigrateAgentHome(ctx context.Context, req *protocol.MigrateAgentHome) (*protocol.AgentHomeMigrated, error) {
+	return request[*protocol.AgentHomeMigrated](ctx, c, protocol.TypeMigrateAgentHome, req)
+}
+
 // Kill terminates a session.
 func (c *Client) Kill(ctx context.Context, req *protocol.CloseSession) error {
 	_, err := request[*protocol.Exited](ctx, c, protocol.TypeCloseSess, req)

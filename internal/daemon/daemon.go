@@ -432,6 +432,12 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleConfigureAgent(ctx, stream, env)
 	case protocol.TypeSleepSession:
 		return d.handleSleepSession(ctx, stream, env)
+	case protocol.TypeListAgentModels:
+		return d.handleListAgentModels(ctx, stream, env)
+	case protocol.TypeInspectAgentHome:
+		return d.handleInspectAgentHome(ctx, stream, env)
+	case protocol.TypeMigrateAgentHome:
+		return d.handleMigrateAgentHome(ctx, stream, env)
 
 	case protocol.TypeSearch:
 		return d.handleSearch(ctx, stream, env)
