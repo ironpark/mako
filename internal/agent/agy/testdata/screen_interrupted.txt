@@ -1,0 +1,27 @@
+
+      ▄▀▀▄
+     ▀▀▀▀▀▀
+    ▀▀▀▀▀▀▀▀
+   ▄▀▀    ▀▀▄
+  ▄▀▀      ▀▀▄
+
+  Antigravity CLI 1.5.12
+  user@example.com (Google AI Pro)
+  Gemini 4 Hydrogen (Medium)
+  /home/user/project
+
+────────────────────────────────────────────────────────────
+> Run the shell command `date` and tell me the output. Do nothing else.
+
+● Ran (date) (ctrl+o to expand)
+
+  Thu Nov 19 13:42:33 KST 2026
+
+────────────────────────────────────────────────────────────
+> Write a 300 word essay about rivers.
+
+  ⎿  Interrupted · What should Antigravity CLI do instead?
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+? for shortcuts                                                                accept-edits · Gemini 4 Hydrogen · medium

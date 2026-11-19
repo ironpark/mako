@@ -143,6 +143,19 @@ func (d *Daemon) handleAnswerDialog(ctx context.Context, stream *transport.Strea
 	})
 }
 
+// handleSeeSession records what of a session's attention the user has
+// looked at, which every front-end then shows as seen.
+func (d *Daemon) handleSeeSession(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.SeeSession) (*protocol.SessionInfo, error) {
+		s, ok := d.sessions.get(r.GetSessionId())
+		if !ok {
+			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
+		}
+		s.See(r.GetSeq())
+		return s.Info(), nil
+	})
+}
+
 // handleConfigureAgent sets a session's agent's mode, model or effort, at
 // its prompt, as its driver says to.
 func (d *Daemon) handleConfigureAgent(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {

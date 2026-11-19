@@ -426,6 +426,8 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleAnswerQuestion(ctx, stream, env)
 	case protocol.TypeAnswerDialog:
 		return d.handleAnswerDialog(ctx, stream, env)
+	case protocol.TypeSeeSession:
+		return d.handleSeeSession(ctx, stream, env)
 	case protocol.TypeConfigureAgent:
 		return d.handleConfigureAgent(ctx, stream, env)
 	case protocol.TypeSleepSession:

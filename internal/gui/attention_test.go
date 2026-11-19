@@ -66,6 +66,41 @@ func TestStatusOutOfViewIsUnread(t *testing.T) {
 	}
 }
 
+// A session whose daemon numbers its status is unread as that daemon
+// says, whatever this window saw of it between its polls; looked at in
+// another window, it is read here too.
+func TestNumberedAttentionIsTheDaemons(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Prefs.Update(func(p prefs) prefs { p.Notify = false; return p })
+	started := timestamppb.Now()
+	s := &protocol.SessionInfo{Id: "b", State: protocol.StateRunning, Status: protocol.AgentWorking, StartedAt: started, StateSeq: 1}
+	m.Sessions.Set([]*protocol.SessionInfo{s})
+	// Done and at work again between two polls: the work is all the poll
+	// shows, and the turn done unread all the same.
+	next := proto.CloneOf(s)
+	next.StateSeq, next.AttentionSeq = 3, 2
+	m.noteStatus([]*protocol.SessionInfo{next})
+	m.Sessions.Set([]*protocol.SessionInfo{next})
+	if !ggui.Peek(m.Unread)["b"] {
+		t.Fatal("a turn done between polls was missed")
+	}
+	// Seen in another window.
+	seen := proto.CloneOf(next)
+	seen.SeenSeq = 2
+	m.noteStatus([]*protocol.SessionInfo{seen})
+	m.Sessions.Set([]*protocol.SessionInfo{seen})
+	if ggui.Peek(m.Unread)["b"] {
+		t.Fatal("seen elsewhere, still unread here")
+	}
+	// A window opened after sees what the daemon says is unread.
+	fresh := newModel(config.Default(), "")
+	fresh.noteStatus([]*protocol.SessionInfo{next})
+	if !ggui.Peek(fresh.Unread)["b"] {
+		t.Fatal("a new window lost what is unread")
+	}
+}
+
 func TestCompletedSessionIgnoresOldTerminalProgress(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")

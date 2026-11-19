@@ -96,7 +96,6 @@ type Session struct {
 	// for; guarded by mu.
 	status        protocol.AgentStatus
 	statusAt      time.Time
-	turns         uint64 // turns ended: work that went idle or done
 	changed       chan struct{}
 	statusSeq     int64
 	workEndedAt   int64 // explicit terminal inactivity, for late work hooks
@@ -110,6 +109,9 @@ type Session struct {
 	// screen is what the agent's screen shows, read by its driver's
 	// rules; nil for an agent whose screen is not read.
 	screen *screenWatch
+	// pub is what recomputeLocked last made of all the above, the status
+	// the session's readers see; guarded by mu.
+	pub published
 	// reported is what the agent's status line last said of its tokens:
 	// the context window and the account's limits; guarded by mu.
 	reported *protocol.Usage
@@ -126,8 +128,8 @@ type childStatus struct {
 }
 
 // live is a child its hooks say runs, unless they fell silent too long ago.
-func (c childStatus) live() bool {
-	return c.running && time.Since(time.Unix(0, c.seq)) < agent.StaleAgent
+func (c childStatus) live(now time.Time) bool {
+	return c.running && now.Sub(time.Unix(0, c.seq)) < agent.StaleAgent
 }
 
 // Start launches the agent on a PTY.
@@ -179,6 +181,9 @@ func Start(spec Spec) (*Session, error) {
 	}
 	go s.pump()
 	go s.writeReplies()
+	if s.screen == nil {
+		go s.watchTime()
+	}
 	return s, nil
 }
 
@@ -192,7 +197,7 @@ func (s *Session) Agent() string { return s.spec.Agent }
 func (s *Session) Info() *protocol.SessionInfo {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	status, statusAt := s.statusLocked()
+	status, statusAt := s.pub.status, s.pub.at
 	return &protocol.SessionInfo{
 		Id:             s.spec.ID,
 		NodeId:         s.spec.NodeID,
@@ -218,7 +223,10 @@ func (s *Session) Info() *protocol.SessionInfo {
 		Approval:       s.approval,
 		Worktree:       s.spec.Worktree,
 		Tasks:          s.tasksLocked(),
-		Turns:          s.turns,
+		Turns:          s.pub.turns,
+		StateSeq:       s.pub.seq,
+		AttentionSeq:   s.pub.attention,
+		SeenSeq:        s.pub.seen,
 		Notice:         s.notice,
 		Bells:          s.bells,
 		Dialog:         s.dialogLocked(),
@@ -282,29 +290,6 @@ func (s *Session) shown() []string {
 	return s.spec.Command
 }
 
-// statusLocked is what the agent is doing, as far as its hooks said and
-// its screen shows over them, and since when.
-func (s *Session) statusLocked() (protocol.AgentStatus, time.Time) {
-	s.updateChildrenLocked()
-	if s.state == protocol.StateExited {
-		return "", s.statusAt
-	}
-	if s.approval != nil {
-		return protocol.AgentWaiting, s.statusAt
-	}
-	if status, at, ok := s.screenStatusLocked(); ok {
-		return status, at
-	}
-	switch {
-	case s.agentsWorking && s.status != protocol.AgentWaiting && !protocol.AtWork(s.status):
-		return protocol.AgentWorking, s.statusAt
-	case !s.agentsWorking && protocol.AtWork(s.status) && time.Since(s.LastOutput()) > staleWork && time.Since(s.statusAt) > staleWork:
-		// Latch the fallback: an unrelated redraw must not revive a turn.
-		s.endWorkLocked(time.Now())
-	}
-	return s.status, s.statusAt
-}
-
 // SetStatus records what the agent's hooks report it is doing.
 func (s *Session) SetStatus(status protocol.AgentStatus) {
 	s.mu.Lock()
@@ -324,11 +309,30 @@ func (s *Session) ReportStatus(status protocol.AgentStatus, seq int64) bool {
 	return s.reportStatusLocked(status, seq)
 }
 
-// ReportToolStatus cannot withdraw a request while another concurrent
-// tool finishes. Turn boundaries still supersede requests via ReportStatus.
+// ReportToolDone is a tool's end, which says the agent works on: renewing
+// a turn at work, or resuming one from a request the user answered in its
+// terminal. It never starts a turn: a tool an interruption left running
+// ends after the turn did, and its hook, run then, is newer than the end.
+// A turn whose prompt no hook told of is the screen's to see.
+func (s *Session) ReportToolDone(seq int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.status == protocol.AgentIdle || s.status == protocol.AgentDone {
+		return false
+	}
+	return s.reportToolLocked(protocol.AgentWorking, seq)
+}
+
+// ReportToolStatus is what the agent says within a turn, compacting or
+// waiting on the user, which cannot withdraw a request it holds: turn
+// boundaries supersede requests, through ReportStatus.
 func (s *Session) ReportToolStatus(status protocol.AgentStatus, seq int64) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.reportToolLocked(status, seq)
+}
+
+func (s *Session) reportToolLocked(status protocol.AgentStatus, seq int64) bool {
 	if s.approval != nil {
 		return false
 	}
@@ -345,8 +349,9 @@ func (s *Session) reportStatusLocked(status protocol.AgentStatus, seq int64) boo
 	if s.status != status || status != protocol.AgentDone {
 		s.statusAt = time.Now()
 	}
-	s.setStatusLocked(status)
+	s.status = status
 	s.statusSeq = seq
+	s.recomputeLocked(time.Now())
 	return true
 }
 
@@ -381,7 +386,7 @@ func (s *Session) BeginApproval(seq int64, a *protocol.Approval) (<-chan struct{
 	s.clearApprovalLocked()
 	s.approval = a
 	s.approvalDone = make(chan struct{})
-	s.changedLocked()
+	s.recomputeLocked(time.Now())
 	return s.approvalDone, true
 }
 
@@ -398,7 +403,7 @@ func (s *Session) HoldApproval(a *protocol.Approval) (seq int64, done <-chan str
 	}
 	s.approval = a
 	s.approvalDone = make(chan struct{})
-	s.changedLocked()
+	s.recomputeLocked(time.Now())
 	return seq, s.approvalDone, true
 }
 
@@ -408,46 +413,31 @@ func (s *Session) FinishApproval(seq int64, id string, status protocol.AgentStat
 	defer s.mu.Unlock()
 	if s.statusSeq == seq && s.approval.GetId() == id {
 		s.clearApprovalLocked()
-		s.setStatusLocked(status)
-		s.statusAt = time.Now()
+		s.status, s.statusAt = status, time.Now()
+		s.recomputeLocked(s.statusAt)
 	}
 }
 
 // endWorkLocked records that the turn ended at, and refuses work reported
-// from before it.
+// from before it. The caller recomputes.
 func (s *Session) endWorkLocked(at time.Time) {
-	s.workEndedAt = at.UnixNano()
+	s.workEndedAt = max(s.workEndedAt, at.UnixNano())
 	if protocol.AtWork(s.status) {
-		s.setStatusLocked(protocol.AgentIdle)
-		s.statusAt = at
+		s.status, s.statusAt = protocol.AgentIdle, at
 	}
-}
-
-// setStatusLocked records the agent's status, counting the end of a turn
-// it makes.
-func (s *Session) setStatusLocked(next protocol.AgentStatus) {
-	if next == s.status {
-		return
-	}
-	if protocol.AtWork(s.status) && (next == protocol.AgentIdle || next == protocol.AgentDone) {
-		s.turns++
-	}
-	s.status = next
-	s.changedLocked()
 }
 
 // Turns is how many turns the agent has ended.
 func (s *Session) Turns() uint64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.turns
+	return s.pub.turns
 }
 
+// clearApprovalLocked withdraws the approval held; the caller recomputes,
+// which announces it.
 func (s *Session) clearApprovalLocked() {
-	if s.approval != nil {
-		s.approval = nil
-		s.changedLocked()
-	}
+	s.approval = nil
 	if s.approvalDone != nil {
 		close(s.approvalDone)
 		s.approvalDone = nil
@@ -468,7 +458,7 @@ func (s *Session) ReportActivity(id string, status protocol.AgentStatus, at, sai
 	}
 	s.lastMessage = said
 	s.childLogs = children
-	s.updateChildrenLocked()
+	s.recomputeLocked(time.Now())
 }
 
 // ReportSubagent is a child's own lifecycle, ordered independently of its
@@ -483,26 +473,23 @@ func (s *Session) ReportSubagent(conversation, id string, running bool, seq int6
 		s.childHooks = map[string]childStatus{}
 	}
 	s.childHooks[id] = childStatus{running, seq}
-	s.updateChildrenLocked()
+	s.recomputeLocked(time.Now())
 }
 
-func (s *Session) updateChildrenLocked() {
+func (s *Session) updateChildrenLocked(now time.Time) {
 	running := false
 	for _, child := range s.childHooks {
-		running = running || child.live()
+		running = running || child.live(now)
 	}
 	for _, child := range s.childLogs {
-		if hook, hooked := s.childHooks[child.GetId()]; !hooked || (hook.running && !hook.live()) {
+		if hook, hooked := s.childHooks[child.GetId()]; !hooked || (hook.running && !hook.live(now)) {
 			running = running || child.GetRunning()
 		}
 	}
 	if s.agentsWorking && !running && s.status == protocol.AgentDone {
-		s.statusAt = time.Now()
+		s.statusAt = now
 	}
-	if s.agentsWorking != running {
-		s.agentsWorking = running
-		s.changedLocked()
-	}
+	s.agentsWorking = running
 }
 
 // LastOutput is when the program last printed; zero before it has.
@@ -548,16 +535,14 @@ func (s *Session) LastInput() time.Time {
 func (s *Session) AtPrompt() (bool, time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.statusLocked() // latches the end of a turn gone quiet
-	if s.state != protocol.StateRunning || s.approval != nil {
+	now := time.Now()
+	s.recomputeLocked(now)
+	if s.state != protocol.StateRunning {
 		return false, time.Time{}
 	}
-	// The screen, where it outweighs the hooks: a dialog it shows is not a
-	// prompt, which typing would answer.
-	status, at, ok := s.screenStatusLocked()
-	if !ok {
-		status, at = s.status, s.statusAt
-	}
+	// As the status is made, but for its subagents: a dialog the screen
+	// shows is not a prompt, which typing would answer.
+	status, at := s.deriveLocked(now, false)
 	return status == protocol.AgentIdle || status == protocol.AgentDone, at
 }
 
@@ -906,6 +891,7 @@ func (s *Session) pump() {
 	s.finalPlain, _ = s.snapshotLocked(false)
 	s.finalStyled, _ = s.snapshotLocked(true)
 	s.term.Close()
+	s.recomputeLocked(time.Now())
 	s.changedLocked()
 	s.mu.Unlock()
 }
@@ -946,6 +932,7 @@ func (s *Session) feed(chunk []byte) {
 		// evidence that the terminal's turn ended; silence alone is not.
 		if ev.Kind == gostty.StreamEventProgressReport && ev.ProgressState == gostty.ProgressStateRemove {
 			s.endWorkLocked(now)
+			s.recomputeLocked(now)
 		}
 	}
 	s.pushLocked(chunk)

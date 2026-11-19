@@ -29,7 +29,13 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 35
+const Revision = 36
+
+// RevisionSeen adds what the daemon numbers of a session's status:
+// SessionInfo.state_seq, attention_seq and seen_seq, and SeeSession, which
+// says the user has looked at it, so that every front-end shows a session
+// unread, and tells of it, the same.
+const RevisionSeen = 36
 
 // RevisionPanels adds ListPanels, which a node let in, a phone, asks for
 // the names, titles and kinds of the blocks the node's layout documents

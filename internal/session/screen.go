@@ -30,6 +30,10 @@ const (
 	// screenSettle is how long the screen shows a prompt, read after the
 	// hooks last said work, before the turn is taken to have ended.
 	screenSettle = 1500 * time.Millisecond
+	// screenWorkSettle is how long the screen shows the agent at work,
+	// read after the hooks last said its turn ended, before it is taken to
+	// work on another the hooks did not tell of.
+	screenWorkSettle = time.Second
 )
 
 // screenWatch is what an agent's screen last showed; guarded by its
@@ -81,16 +85,13 @@ func (s *Session) scanScreen(now time.Time) time.Duration {
 			return screenTick
 		}
 		w.scanned, w.seen, w.title = true, n, s.title
-		was, wasVisible := w.state, w.visible
 		w.observe(w.rules.Detect(detect.Input{Screen: text, Title: s.title}), now)
-		if s.status == "" && was == detect.Working && w.state == detect.Idle {
-			s.turns++ // a turn no hook told of, as the screen shows it
-		}
-		if dialog := s.readDialogLocked(); dialog || w.state != was || w.visible != wasVisible {
+		if s.readDialogLocked() {
 			s.changedLocked()
 		}
 	}
-	s.screenEndsTurnLocked(now)
+	// What the screen showed changes the status there, announced.
+	s.recomputeLocked(now)
 	if !w.pendingAt.IsZero() {
 		return screenRecheck
 	}
@@ -122,22 +123,27 @@ func (w *screenWatch) observe(r detect.Rule, now time.Time) {
 
 // screenEndsTurnLocked ends a turn the hooks left at work once the screen
 // has shown the agent at its prompt, since after they last said work, for
-// screenSettle: an interrupted turn runs no Stop hook.
+// screenSettle: an interrupted turn runs no Stop hook. The turn ended when
+// the screen first showed the prompt, not once that was sure: a prompt
+// the user gave meanwhile, whose hook ran after the turn's end but came
+// in after the settling, starts the next turn rather than being refused
+// as the last one's.
 func (s *Session) screenEndsTurnLocked(now time.Time) {
 	w := s.screen
 	if w.state != detect.Idle || !w.visible || !protocol.AtWork(s.status) || s.approval != nil {
 		return
 	}
 	if w.at.After(s.statusAt) && now.Sub(w.at) >= screenSettle {
-		s.endWorkLocked(now)
+		s.endWorkLocked(w.at)
 	}
 }
 
-// screenStatusLocked is what the screen says over the hooks, and since
-// when: waiting at a dialog shown since they last reported; for an agent
-// they never reported on, whatever it shows. ok is false where the hooks
-// say.
-func (s *Session) screenStatusLocked() (status protocol.AgentStatus, at time.Time, ok bool) {
+// screenStatusLocked is what the screen says over the hooks as of now, and
+// since when: waiting at a dialog shown since they last reported; at work,
+// shown outright for screenWorkSettle since they said a turn ended or a
+// request, as a turn whose prompt no hook told of; for an agent they never
+// reported on, whatever it shows. ok is false where the hooks say.
+func (s *Session) screenStatusLocked(now time.Time) (status protocol.AgentStatus, at time.Time, ok bool) {
 	w := s.screen
 	if w == nil {
 		return "", time.Time{}, false
@@ -146,6 +152,9 @@ func (s *Session) screenStatusLocked() (status protocol.AgentStatus, at time.Tim
 	switch {
 	case w.state == detect.Blocked && (w.visible || unheard) && !w.at.Before(s.statusAt):
 		return protocol.AgentWaiting, w.at, true
+	case w.state == detect.Working && w.visible && !unheard && !protocol.AtWork(s.status) &&
+		w.at.After(s.statusAt) && now.Sub(w.at) >= screenWorkSettle:
+		return protocol.AgentWorking, w.at, true
 	case unheard && w.state == detect.Working:
 		return protocol.AgentWorking, w.at, true
 	case unheard && w.state == detect.Idle:

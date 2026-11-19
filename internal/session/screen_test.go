@@ -113,3 +113,42 @@ func TestThePromptOnScreenEndsAnUnreportedTurn(t *testing.T) {
 		t.Fatal("a prompt older than the turn ended it")
 	}
 }
+
+// The turn the screen ends ended when it first showed the prompt: a
+// prompt given while that settled starts the next turn, though its hook
+// comes in after.
+func TestAPromptGivenAsTheScreenSettlesStartsATurn(t *testing.T) {
+	now := time.Now()
+	s := &Session{state: protocol.StateRunning, status: protocol.AgentWorking, statusAt: now}
+	shown := now.Add(time.Second)
+	s.screen = &screenWatch{scanned: true, state: detect.Idle, visible: true, at: shown}
+	s.screenEndsTurnLocked(shown.Add(screenSettle))
+	if s.status != protocol.AgentIdle {
+		t.Fatal("a settled prompt did not end the turn")
+	}
+	if s.ReportStatus(protocol.AgentWorking, shown.Add(-time.Millisecond).UnixNano()) {
+		t.Fatal("a hook of the turn ended revived it")
+	}
+	if !s.ReportStatus(protocol.AgentWorking, shown.Add(screenSettle/2).UnixNano()) {
+		t.Fatal("a prompt given as the screen settled was refused")
+	}
+}
+
+// Work the screen shows outright, for a while since the hooks said the
+// turn ended, is a turn they did not tell of; a glimpse of it is not.
+func TestWorkOnScreenOutweighsAnEndedTurn(t *testing.T) {
+	now := time.Now()
+	s := &Session{state: protocol.StateRunning, status: protocol.AgentDone, statusAt: now}
+	s.screen = &screenWatch{scanned: true, state: detect.Working, visible: true, at: now.Add(time.Second)}
+	if status, _ := s.deriveLocked(now.Add(time.Second+screenWorkSettle/2), true); status != protocol.AgentDone {
+		t.Fatal("a glimpse of work on screen outweighed the hooks")
+	}
+	if status, _ := s.deriveLocked(now.Add(time.Second+screenWorkSettle), true); status != protocol.AgentWorking {
+		t.Fatal("work shown on screen since the turn ended was not taken")
+	}
+	// Work shown before the hooks said the turn ended is that turn's.
+	s.screen.at = now.Add(-time.Second)
+	if status, _ := s.deriveLocked(now.Add(time.Minute), true); status != protocol.AgentDone {
+		t.Fatal("the screen's last turn outweighed its end")
+	}
+}

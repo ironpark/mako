@@ -1,0 +1,35 @@
+
+      ▄▀▀▄
+     ▀▀▀▀▀▀
+    ▀▀▀▀▀▀▀▀
+   ▄▀▀    ▀▀▄
+  ▄▀▀      ▀▀▄
+
+  Antigravity CLI 1.5.12
+  user@example.com (Google AI Pro)
+  Gemini 4 Hydrogen (Medium)
+  /home/user/project
+
+────────────────────────────────────────────────────────────
+> Run the shell command `date` and tell me the output. Do nothing else.
+
+● Ran (date) (ctrl+o to expand)
+
+  Thu Nov 19 13:42:33 KST 2026
+
+────────────────────────────────────────────────────────────
+> Write a 300 word essay about rivers.
+
+  ⎿  Interrupted · What should Antigravity CLI do instead?
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> /
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> /add-dir                     Add a directory to the workspace
+  /agents                      List available custom agents
+  /artifact                    View and review artifacts
+  /btw                         Ask a side question without interrupting the current task
+  /changelog                   Show release notes and changes
+   ↓ 46 more
+
+  ↑/↓ Navigate · enter Select · tab Complete
+esc to cancel                                                                  accept-edits · Gemini 4 Hydrogen · medium

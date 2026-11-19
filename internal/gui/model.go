@@ -130,6 +130,9 @@ type model struct {
 	// Unread are the sessions that finished or asked out of view; see
 	// attention.go.
 	Unread *ggui.StateValue[map[string]bool]
+	// seeing is the attention, by session, the window last told a daemon
+	// the user saw, so it tells each once; UI goroutine only.
+	seeing map[string]uint64
 	// Printed is when each session last said something, its conversation's
 	// last message or else its last print, to the minute, kept apart
 	// from Sessions so a busy program does not redraw every list of them;
@@ -352,7 +355,7 @@ func newModel(cfg *config.Config, addr string) *model {
 	}
 	m.winStates = m.builtinNodeStates()
 	m.drawWindowDoc(doc)
-	m.link.approveInApp.Store(p.ApproveInApp)
+	m.link.setApproveInApp(p.ApproveInApp)
 	m.recorder = newStreamRecorder(recordDir())
 	m.recorder.on.Store(p.RecordStreams)
 	m.Roots = ggui.Derived(m.panelRoots).WithEqual(deepEqual)

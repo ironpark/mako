@@ -155,12 +155,46 @@ has hooks. Each hook runs the daemon's own program, which reports to the
 daemon on a private Unix socket; see
 [the local hook socket](docs/protocol.md#the-local-hook-socket).
 
-Status reports are ordered by when their hooks ran. An explicit OSC 9;4
-progress removal ends work even when an interruption runs no Stop hook;
-Codex's logged turn boundaries also report starts, completion and cancellation.
-Without further evidence, work that prints nothing for a minute falls back
-to idle and stays idle until a new work event. OSC progress reports expire
-after 15 seconds without a refresh, as Ghostty's do.
+A session's status is made in one place, `recomputeLocked` in
+`internal/session/status.go`. What tells of the agent only records its
+evidence: its hooks, ordered by when each ran; its log, by when each
+record was written; approvals; subagents; its screen; its terminal's
+progress. These share one clock, the wall clock of the session's node,
+which runs them all. The reducer then works out the status by a fixed
+order: an ended session has none; an approval held is waiting; a dialog
+on screen newer than the reports is waiting; work shown outright on screen
+for a second since the reports said a turn ended is working, as a turn
+whose prompt no hook told of; a turn done while subagents work is working;
+otherwise what was reported. Reading a status changes nothing: a
+per-session timer recomputes for what time alone changes, and announces it
+as any change.
+
+Each change to the status or approval is numbered, `SessionInfo.state_seq`,
+and one that asks for the user, a turn done or a request, is its
+`attention_seq`. The daemon keeps what the user saw, `seen_seq`, which a
+window showing the session says with `see_session`. Every window and the
+phone then show the same sessions unread, and none misses a turn that ended
+between two of its polls. A window falls back to comparing polls only for a
+daemon older than revision 36.
+
+The hooks keep the roles only they can fill: the conversation's identity,
+approvals and questions (`PermissionRequest`), subagents' lifecycles, and
+the turn's start and end at low latency. A tool's end (`PostToolUse`)
+renews work, or resumes it from a request answered in the terminal, but
+never starts a turn: a tool an interruption left running ends after the
+turn did. The end of a turn no hook reports is seen elsewhere: an explicit
+OSC 9;4 progress removal; the prompt shown on screen for 1.5s, the turn
+ending when it first showed; Codex's logged turn boundaries, which also
+report starts, completion and cancellation; or, without further evidence,
+work that prints nothing for a minute, which falls back to idle and stays
+idle until a new work event. OSC progress reports expire after 15 seconds
+without a refresh, as Ghostty's do.
+
+The screen rules (`internal/detect`, a driver's `ScreenRules`) follow
+herdr's agent detection. Claude's, Codex's and agy's are written; agy,
+whose hooks say nothing of its approvals, questions or interruptions,
+depends on them most. A driver's rules are checked against its agent's
+real screens, kept in its `testdata`.
 
 The daemon follows subagents independently of chat readers, scanning task
 calls across the whole conversation rather than only the latest chat page.

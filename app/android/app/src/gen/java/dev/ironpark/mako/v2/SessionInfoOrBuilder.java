@@ -567,4 +567,34 @@ public interface SessionInfoOrBuilder extends
    */
   com.google.protobuf.ByteString
       getParentSessionIdBytes();
+
+  /**
+   * <pre>
+   * state_seq numbers the changes to the session's status and approval,
+   * as the daemon that runs it works them out (revision 36). attention_seq
+   * is the state_seq of the last change that asks for the user: a turn
+   * done, a request for an answer. seen_seq is the attention a front-end
+   * said the user has looked at, with SeeSession. A front-end shows the
+   * session unread while attention_seq is past seen_seq, and tells the
+   * user of an attention_seq it had not seen before: every front-end, on
+   * every node, so, the same. The numbers start again with the session's
+   * program.
+   * </pre>
+   *
+   * <code>uint64 state_seq = 38 [json_name = "stateSeq"];</code>
+   * @return The stateSeq.
+   */
+  long getStateSeq();
+
+  /**
+   * <code>uint64 attention_seq = 39 [json_name = "attentionSeq"];</code>
+   * @return The attentionSeq.
+   */
+  long getAttentionSeq();
+
+  /**
+   * <code>uint64 seen_seq = 40 [json_name = "seenSeq"];</code>
+   * @return The seenSeq.
+   */
+  long getSeenSeq();
 }

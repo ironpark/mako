@@ -1229,5 +1229,24 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.Panels getPanels();
 
+  /**
+   * <pre>
+   * What the user has looked at of a session (revision 36).
+   * </pre>
+   *
+   * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+   * @return Whether the seeSession field is set.
+   */
+  boolean hasSeeSession();
+  /**
+   * <pre>
+   * What the user has looked at of a session (revision 36).
+   * </pre>
+   *
+   * <code>.mako.v2.SeeSession see_session = 139 [json_name = "seeSession"];</code>
+   * @return The seeSession.
+   */
+  dev.ironpark.mako.v2.SeeSession getSeeSession();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

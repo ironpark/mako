@@ -23,10 +23,10 @@ import (
 // dialogMoves bounds the moves made to bring the cursor to an option.
 const dialogMoves = 4
 
-// screenDialog is the dialog of options screen shows, cols wide, nil for
-// none.
-func screenDialog(screen string, cols int) *protocol.ScreenDialog {
-	c, ok := detect.ParseChoice(screen, cols)
+// screenDialog is the dialog of options screen shows, cols wide, read by
+// rules, nil for none.
+func screenDialog(rules *detect.Rules, screen string, cols int) *protocol.ScreenDialog {
+	c, ok := rules.ParseChoice(screen, cols)
 	if !ok {
 		return nil
 	}
@@ -46,7 +46,7 @@ func (s *Session) readDialogLocked() bool {
 	var d *protocol.ScreenDialog
 	if w.state == detect.Blocked && w.visible && s.approval == nil {
 		if text, err := s.term.Terminal().PlainString(); err == nil {
-			d = screenDialog(text, int(s.spec.Cols))
+			d = screenDialog(w.rules, text, int(s.spec.Cols))
 		}
 	}
 	if proto.Equal(d, w.dialog) {
@@ -70,13 +70,17 @@ func (s *Session) dialogLocked() *protocol.ScreenDialog {
 func (s *Session) AnswerDialog(id string, option int) error {
 	s.mu.Lock()
 	cols := int(s.spec.Cols)
+	var rules *detect.Rules
+	if s.screen != nil {
+		rules = s.screen.rules
+	}
 	s.mu.Unlock()
 	for range dialogMoves {
 		screen, seen, ok := s.recallScreen()
 		if !ok {
 			return errors.New("session: exited")
 		}
-		d := screenDialog(screen, cols)
+		d := screenDialog(rules, screen, cols)
 		if d == nil || d.GetId() != id {
 			return errors.New("the agent no longer shows that dialog")
 		}

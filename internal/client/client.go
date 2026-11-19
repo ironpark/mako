@@ -456,6 +456,12 @@ func (c *Client) Sleep(ctx context.Context, req *protocol.SleepSession) (*protoc
 	return request[*protocol.SessionInfo](ctx, c, protocol.TypeSleepSession, req)
 }
 
+// SeeSession says the user has looked at a session's attention up to
+// req.Seq; see protocol.SeeSession.
+func (c *Client) SeeSession(ctx context.Context, req *protocol.SeeSession) (*protocol.SessionInfo, error) {
+	return request[*protocol.SessionInfo](ctx, c, protocol.TypeSeeSession, req)
+}
+
 // AnswerDialog picks an option of the dialog a session's agent shows in
 // its terminal.
 func (c *Client) AnswerDialog(ctx context.Context, req *protocol.AnswerDialog) (*protocol.SessionInfo, error) {

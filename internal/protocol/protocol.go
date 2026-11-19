@@ -57,6 +57,7 @@ const (
 	TypeAnswerDialog   Type = "answer_dialog"
 	TypeConfigureAgent Type = "configure_agent"
 	TypeSleepSession   Type = "sleep_session"
+	TypeSeeSession     Type = "see_session"
 	TypeAttach         Type = "attach"
 	TypeInput          Type = "input"
 	TypeOutput         Type = "output"

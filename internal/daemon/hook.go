@@ -294,17 +294,15 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		if err := d.reportConversation(s, msg.Seq, ev); err != nil {
 			d.log.Warn("hooks: report dropped", "session", msg.Session, "err", err)
 		}
-	case agent.Prompted, agent.ToolDone:
-		report := s.ReportStatus
-		if ev.Kind == agent.ToolDone {
-			report = s.ReportToolStatus
-		}
-		if !report(protocol.AgentWorking, msg.Seq) {
+	case agent.ToolDone:
+		s.ReportToolDone(msg.Seq)
+	case agent.Prompted:
+		if !s.ReportStatus(protocol.AgentWorking, msg.Seq) {
 			return
 		}
 		// A conversation whose start went unheard, as a resumed one's may,
 		// is told by its prompts.
-		if ev.Kind == agent.Prompted && ev.SessionID != "" && ev.SessionID != s.Info().GetConversationId() {
+		if ev.SessionID != "" && ev.SessionID != s.Info().GetConversationId() {
 			if err := d.reportConversation(s, msg.Seq, ev); err != nil {
 				d.log.Warn("hooks: report dropped", "session", msg.Session, "err", err)
 			}

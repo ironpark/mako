@@ -50,6 +50,18 @@ class NotificationPreferencesTest {
         assertTrue(tracker.update(listOf(turn("done", 2))).isEmpty())
     }
 
+    private fun numbered(status: String, attention: Long, seen: Long) =
+        session(status).toBuilder().setStateSeq(attention + 1).setAttentionSeq(attention).setSeenSeq(seen).build()
+
+    @Test fun aTurnSeenInAWindowCancelsItsNotice() {
+        val tracker = NoticeTracker()
+        tracker.update(listOf(numbered("working", 0, 0)))
+        assertEquals(NoticeKind.Done, tracker.update(listOf(numbered("done", 2, 0))).single().kind)
+        assertNull(tracker.update(listOf(numbered("done", 2, 2))).single().kind)
+        // Done again between two looks, as its node numbers it.
+        assertEquals(NoticeKind.Done, tracker.update(listOf(numbered("done", 4, 2))).single().kind)
+    }
+
     @Test fun observingWhileDisabledDoesNotReplayOldEventsAfterReenabling() {
         val tracker = NoticeTracker()
         tracker.update(listOf(session("working")))

@@ -2115,6 +2115,120 @@ public  final class SessionInfo extends
 
   }
 
+  public static final int STATE_SEQ_FIELD_NUMBER = 38;
+  private long stateSeq_;
+  /**
+   * <pre>
+   * state_seq numbers the changes to the session's status and approval,
+   * as the daemon that runs it works them out (revision 36). attention_seq
+   * is the state_seq of the last change that asks for the user: a turn
+   * done, a request for an answer. seen_seq is the attention a front-end
+   * said the user has looked at, with SeeSession. A front-end shows the
+   * session unread while attention_seq is past seen_seq, and tells the
+   * user of an attention_seq it had not seen before: every front-end, on
+   * every node, so, the same. The numbers start again with the session's
+   * program.
+   * </pre>
+   *
+   * <code>uint64 state_seq = 38 [json_name = "stateSeq"];</code>
+   * @return The stateSeq.
+   */
+  @java.lang.Override
+  public long getStateSeq() {
+    return stateSeq_;
+  }
+  /**
+   * <pre>
+   * state_seq numbers the changes to the session's status and approval,
+   * as the daemon that runs it works them out (revision 36). attention_seq
+   * is the state_seq of the last change that asks for the user: a turn
+   * done, a request for an answer. seen_seq is the attention a front-end
+   * said the user has looked at, with SeeSession. A front-end shows the
+   * session unread while attention_seq is past seen_seq, and tells the
+   * user of an attention_seq it had not seen before: every front-end, on
+   * every node, so, the same. The numbers start again with the session's
+   * program.
+   * </pre>
+   *
+   * <code>uint64 state_seq = 38 [json_name = "stateSeq"];</code>
+   * @param value The stateSeq to set.
+   */
+  private void setStateSeq(long value) {
+    
+    stateSeq_ = value;
+  }
+  /**
+   * <pre>
+   * state_seq numbers the changes to the session's status and approval,
+   * as the daemon that runs it works them out (revision 36). attention_seq
+   * is the state_seq of the last change that asks for the user: a turn
+   * done, a request for an answer. seen_seq is the attention a front-end
+   * said the user has looked at, with SeeSession. A front-end shows the
+   * session unread while attention_seq is past seen_seq, and tells the
+   * user of an attention_seq it had not seen before: every front-end, on
+   * every node, so, the same. The numbers start again with the session's
+   * program.
+   * </pre>
+   *
+   * <code>uint64 state_seq = 38 [json_name = "stateSeq"];</code>
+   */
+  private void clearStateSeq() {
+
+    stateSeq_ = 0L;
+  }
+
+  public static final int ATTENTION_SEQ_FIELD_NUMBER = 39;
+  private long attentionSeq_;
+  /**
+   * <code>uint64 attention_seq = 39 [json_name = "attentionSeq"];</code>
+   * @return The attentionSeq.
+   */
+  @java.lang.Override
+  public long getAttentionSeq() {
+    return attentionSeq_;
+  }
+  /**
+   * <code>uint64 attention_seq = 39 [json_name = "attentionSeq"];</code>
+   * @param value The attentionSeq to set.
+   */
+  private void setAttentionSeq(long value) {
+    
+    attentionSeq_ = value;
+  }
+  /**
+   * <code>uint64 attention_seq = 39 [json_name = "attentionSeq"];</code>
+   */
+  private void clearAttentionSeq() {
+
+    attentionSeq_ = 0L;
+  }
+
+  public static final int SEEN_SEQ_FIELD_NUMBER = 40;
+  private long seenSeq_;
+  /**
+   * <code>uint64 seen_seq = 40 [json_name = "seenSeq"];</code>
+   * @return The seenSeq.
+   */
+  @java.lang.Override
+  public long getSeenSeq() {
+    return seenSeq_;
+  }
+  /**
+   * <code>uint64 seen_seq = 40 [json_name = "seenSeq"];</code>
+   * @param value The seenSeq to set.
+   */
+  private void setSeenSeq(long value) {
+    
+    seenSeq_ = value;
+  }
+  /**
+   * <code>uint64 seen_seq = 40 [json_name = "seenSeq"];</code>
+   */
+  private void clearSeenSeq() {
+
+    seenSeq_ = 0L;
+  }
+
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -4376,6 +4490,126 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * state_seq numbers the changes to the session's status and approval,
+     * as the daemon that runs it works them out (revision 36). attention_seq
+     * is the state_seq of the last change that asks for the user: a turn
+     * done, a request for an answer. seen_seq is the attention a front-end
+     * said the user has looked at, with SeeSession. A front-end shows the
+     * session unread while attention_seq is past seen_seq, and tells the
+     * user of an attention_seq it had not seen before: every front-end, on
+     * every node, so, the same. The numbers start again with the session's
+     * program.
+     * </pre>
+     *
+     * <code>uint64 state_seq = 38 [json_name = "stateSeq"];</code>
+     * @return The stateSeq.
+     */
+    @java.lang.Override
+    public long getStateSeq() {
+      return instance.getStateSeq();
+    }
+    /**
+     * <pre>
+     * state_seq numbers the changes to the session's status and approval,
+     * as the daemon that runs it works them out (revision 36). attention_seq
+     * is the state_seq of the last change that asks for the user: a turn
+     * done, a request for an answer. seen_seq is the attention a front-end
+     * said the user has looked at, with SeeSession. A front-end shows the
+     * session unread while attention_seq is past seen_seq, and tells the
+     * user of an attention_seq it had not seen before: every front-end, on
+     * every node, so, the same. The numbers start again with the session's
+     * program.
+     * </pre>
+     *
+     * <code>uint64 state_seq = 38 [json_name = "stateSeq"];</code>
+     * @param value The stateSeq to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStateSeq(long value) {
+      copyOnWrite();
+      instance.setStateSeq(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * state_seq numbers the changes to the session's status and approval,
+     * as the daemon that runs it works them out (revision 36). attention_seq
+     * is the state_seq of the last change that asks for the user: a turn
+     * done, a request for an answer. seen_seq is the attention a front-end
+     * said the user has looked at, with SeeSession. A front-end shows the
+     * session unread while attention_seq is past seen_seq, and tells the
+     * user of an attention_seq it had not seen before: every front-end, on
+     * every node, so, the same. The numbers start again with the session's
+     * program.
+     * </pre>
+     *
+     * <code>uint64 state_seq = 38 [json_name = "stateSeq"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStateSeq() {
+      copyOnWrite();
+      instance.clearStateSeq();
+      return this;
+    }
+
+    /**
+     * <code>uint64 attention_seq = 39 [json_name = "attentionSeq"];</code>
+     * @return The attentionSeq.
+     */
+    @java.lang.Override
+    public long getAttentionSeq() {
+      return instance.getAttentionSeq();
+    }
+    /**
+     * <code>uint64 attention_seq = 39 [json_name = "attentionSeq"];</code>
+     * @param value The attentionSeq to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAttentionSeq(long value) {
+      copyOnWrite();
+      instance.setAttentionSeq(value);
+      return this;
+    }
+    /**
+     * <code>uint64 attention_seq = 39 [json_name = "attentionSeq"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAttentionSeq() {
+      copyOnWrite();
+      instance.clearAttentionSeq();
+      return this;
+    }
+
+    /**
+     * <code>uint64 seen_seq = 40 [json_name = "seenSeq"];</code>
+     * @return The seenSeq.
+     */
+    @java.lang.Override
+    public long getSeenSeq() {
+      return instance.getSeenSeq();
+    }
+    /**
+     * <code>uint64 seen_seq = 40 [json_name = "seenSeq"];</code>
+     * @param value The seenSeq to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSeenSeq(long value) {
+      copyOnWrite();
+      instance.setSeenSeq(value);
+      return this;
+    }
+    /**
+     * <code>uint64 seen_seq = 40 [json_name = "seenSeq"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSeenSeq() {
+      copyOnWrite();
+      instance.clearSeenSeq();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -4431,14 +4665,18 @@ public  final class SessionInfo extends
             "dialog_",
             "controls_",
             "parentSessionId_",
+            "stateSeq_",
+            "attentionSeq_",
+            "seenSeq_",
           };
           java.lang.String info =
-              "\u0000%\u0000\u0001\u0001%%\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0000(\u0000\u0001\u0001((\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
               "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208\u000b\u000b" +
               "\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011\u0208\u0012" +
               "\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004\u0017\u1009" +
               "\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006\u001c\u0208\u001d\u0007" +
-              "\u001e\u001b\u001f\u0208 \u0003!\u1009\u0007\"\u0003#\u1009\b$\u1009\t%\u0208";
+              "\u001e\u001b\u001f\u0208 \u0003!\u1009\u0007\"\u0003#\u1009\b$\u1009\t%\u0208&\u0003" +
+              "\'\u0003(\u0003";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

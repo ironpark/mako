@@ -83,7 +83,7 @@ func setup(m *model) {
 		}
 		prev := last
 		last = p
-		m.link.approveInApp.Store(p.ApproveInApp)
+		m.link.setApproveInApp(p.ApproveInApp)
 		m.recorder.on.Store(p.RecordStreams)
 		if p.Daemon != prev.Daemon {
 			m.reconnect(p.Daemon)
