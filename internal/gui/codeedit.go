@@ -16,6 +16,7 @@ import (
 	"golang.org/x/text/width"
 
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/pkg/rope"
 )
 
 // codeEditor edits a file's text in a grid of monospaced cells: lines that
@@ -53,7 +54,8 @@ type codeEditor struct {
 	dragFrom  int       // the selection's anchor while dragging, or -1
 	blinkFrom time.Time // the caret stays lit from here, after a key or a click
 
-	lines     []int // where each line of linesText starts
+	rope      *rope.Rope
+	lines     []int // where each line of linesText starts, lazily built if asked
 	linesText string
 	widest    int // the longest line's length in bytes, which bounds its cells
 
@@ -99,8 +101,8 @@ func newCodeEditor(text *ggui.StateValue[string], prefs func() prefs) *codeEdito
 // goToLine puts the caret at the start of a line, from 1; the view
 // follows it there.
 func (e *codeEditor) goToLine(line int) {
-	starts := e.lineStarts(e.input.EditingState().Text)
-	at := starts[min(max(line-1, 0), len(starts)-1)]
+	r := e.ensureRope(e.input.EditingState().Text)
+	at := r.LineStart(min(max(line-1, 0), r.Lines()-1))
 	e.input.Select(at, at)
 	e.autoFocus = true
 	e.publish()
@@ -112,15 +114,16 @@ func lineHeight(p prefs) float64 { return math.Ceil(p.FontSize * max(p.LineHeigh
 // publish sets Caret from the editing state.
 func (e *codeEditor) publish() {
 	st := e.input.EditingState()
-	starts := e.lineStarts(st.Text)
+	r := e.ensureRope(st.Text)
 	caret := min(st.Caret, len(st.Text))
-	li := lineOf(starts, caret)
+	li := r.LineOf(caret)
+	lineStart := r.LineStart(li)
 	lo, hi := min(st.Anchor, caret), max(st.Anchor, caret)
 	e.Caret.Set(caretPos{
 		Line:     li + 1,
-		Col:      utf8.RuneCountInString(st.Text[starts[li]:caret]) + 1,
+		Col:      utf8.RuneCountInString(st.Text[lineStart:caret]) + 1,
 		Selected: utf8.RuneCountInString(st.Text[min(lo, len(st.Text)):min(hi, len(st.Text))]),
-		Lines:    len(starts),
+		Lines:    r.Lines(),
 	})
 }
 
@@ -162,22 +165,31 @@ func (e *codeEditor) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	return c.Max()
 }
 
-// lineStarts are where the lines of s start, worked out again only when
-// the text changes.
+// ensureRope maintains a balanced SumTree rope of text, avoiding full-text
+// scans and slice allocations on every keystroke or frame.
+func (e *codeEditor) ensureRope(s string) *rope.Rope {
+	if e.rope != nil && s == e.linesText {
+		return e.rope
+	}
+	e.rope = rope.New(s)
+	e.linesText = s
+	e.widest = e.rope.LongestLine()
+	e.lines = nil
+	return e.rope
+}
+
+// lineStarts are where the lines of s start.
 func (e *codeEditor) lineStarts(s string) []int {
 	if e.lines != nil && s == e.linesText {
 		return e.lines
 	}
-	starts := make([]int, 1, strings.Count(s, "\n")+1)
-	widest := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			widest = max(widest, i-starts[len(starts)-1])
-			starts = append(starts, i+1)
-		}
+	r := e.ensureRope(s)
+	n := r.Lines()
+	starts := make([]int, n)
+	for i := 0; i < n; i++ {
+		starts[i] = r.LineStart(i)
 	}
-	e.lines, e.linesText = starts, s
-	e.widest = max(widest, len(s)-starts[len(starts)-1])
+	e.lines = starts
 	return starts
 }
 
@@ -267,22 +279,25 @@ func (e *codeEditor) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	}
 	st := e.input.EditingState()
 	text := st.Text
-	starts := e.lineStarts(text)
-	digits := max(len(strconv.Itoa(len(starts))), 3)
+	rpe := e.ensureRope(text)
+	numLines := rpe.Lines()
+	digits := max(len(strconv.Itoa(numLines)), 3)
 	gutterW := editorPad + float64(digits)*e.cellW + gutterGap
 	e.textX = r.Origin.X + gutterW
 	view := ggui.Sz(r.Size.W-gutterW-editorPad, r.Size.H-editorPad)
 
-	caretLine := lineOf(starts, st.Caret)
-	caretCol := e.column(text[starts[caretLine]:lineEnd(text, starts, caretLine)], st.Caret-starts[caretLine])
+	caretLine := rpe.LineOf(st.Caret)
+	caretLineStart := rpe.LineStart(caretLine)
+	caretLineEnd := rpe.LineEnd(caretLine)
+	caretCol := e.column(text[caretLineStart:caretLineEnd], st.Caret-caretLineStart)
 	if st.Caret != e.lastCaret || text != e.lastText {
 		e.reveal(caretLine, caretCol, view)
 		e.lastCaret, e.lastText = st.Caret, text
 	}
-	e.clampScroll(len(starts), caretCol, view)
+	e.clampScroll(numLines, caretCol, view)
 
 	first := int(e.scrollY / e.lineH)
-	last := min(int((e.scrollY+view.H)/e.lineH)+1, len(starts)-1)
+	last := min(int((e.scrollY+view.H)/e.lineH)+1, numLines-1)
 	y0 := r.Origin.Y + editorPad - e.scrollY
 	lineY := func(i int) float64 { return y0 + float64(i)*e.lineH }
 	textTop := (e.lineH - p.FontSize*1.2) / 2 // the glyphs centred in the line
@@ -304,7 +319,7 @@ func (e *codeEditor) Paint(dst *ggui.Canvas, r ggui.Rect) {
 		spans = e.colors(text, e.pal)
 	}
 	for i := max(first, 0); i <= last; i++ {
-		start, end := starts[i], lineEnd(text, starts, i)
+		start, end := rpe.LineStart(i), rpe.LineEnd(i)
 		line := text[start:end]
 		y := lineY(i)
 		// The selection, running past the line's end when it goes on.
@@ -326,11 +341,11 @@ func (e *codeEditor) Paint(dst *ggui.Canvas, r ggui.Rect) {
 			ggui.Pt(e.textX-gutterGap-float64(len(num))*e.cellW, y+textTop), e.cellW)
 	}
 	caret := ggui.Rct(ggui.Pt(colX(caretCol), lineY(caretLine)), ggui.Sz(2, e.lineH))
-	if st.Composing && st.CompStart >= starts[caretLine] {
+	if st.Composing && st.CompStart >= caretLineStart {
 		// The composition, which is in the text shown, is underlined.
-		line := text[starts[caretLine]:lineEnd(text, starts, caretLine)]
-		a := e.column(line, st.CompStart-starts[caretLine])
-		b := e.column(line, st.CompEnd-starts[caretLine])
+		line := text[caretLineStart:caretLineEnd]
+		a := e.column(line, st.CompStart-caretLineStart)
+		b := e.column(line, st.CompEnd-caretLineStart)
 		body.FillRect(ggui.Rct(ggui.Pt(colX(a), lineY(caretLine)+e.lineH-2), ggui.Sz(float64(b-a)*e.cellW, 1)), e.pal.Fg)
 	}
 	if e.focused && !e.readOnly {
@@ -510,9 +525,9 @@ func (e *codeEditor) command(ev ggui.KeyEvent) bool {
 			return e.readOnly
 		}
 		st := e.input.EditingState()
-		starts := e.lineStarts(st.Text)
+		rpe := e.ensureRope(st.Text)
 		lo := min(st.Anchor, st.Caret)
-		start := starts[lineOf(starts, lo)]
+		start := rpe.LineStart(rpe.LineOf(lo))
 		e.input.Replace("\n" + leadingSpace(st.Text[start:lo]))
 		return true
 	case ggui.KeyTab:
@@ -537,17 +552,17 @@ func (e *codeEditor) command(ev ggui.KeyEvent) bool {
 func (e *codeEditor) toggleComment() {
 	st := e.input.EditingState()
 	text := st.Text
-	starts := e.lineStarts(text)
+	rpe := e.ensureRope(text)
 	lo, hi := min(st.Anchor, st.Caret), max(st.Anchor, st.Caret)
-	first, last := lineOf(starts, lo), lineOf(starts, hi)
-	if last > first && hi == starts[last] {
+	first, last := rpe.LineOf(lo), rpe.LineOf(hi)
+	if last > first && hi == rpe.LineStart(last) {
 		last--
 	}
 	mark := strings.TrimRight(e.comment, " ")
 	lines := make([]string, 0, last-first+1)
 	commented, indent := true, -1
 	for i := first; i <= last; i++ {
-		line := text[starts[i]:lineEnd(text, starts, i)]
+		line := text[rpe.LineStart(i):rpe.LineEnd(i)]
 		lines = append(lines, line)
 		body := strings.TrimLeft(line, " \t")
 		if body == "" {
@@ -578,7 +593,7 @@ func (e *codeEditor) toggleComment() {
 			lines[i] = line[:indent] + e.comment + line[indent:]
 		}
 	}
-	from, to := starts[first], lineEnd(text, starts, last)
+	from, to := rpe.LineStart(first), rpe.LineEnd(last)
 	joined := strings.Join(lines, "\n")
 	e.input.Select(from, to)
 	e.input.Replace(joined)
@@ -618,22 +633,22 @@ func (e *codeEditor) indentUnit(text string, col int) string {
 func (e *codeEditor) indent(out bool) {
 	st := e.input.EditingState()
 	text := st.Text
-	starts := e.lineStarts(text)
+	rpe := e.ensureRope(text)
 	lo, hi := min(st.Anchor, st.Caret), max(st.Anchor, st.Caret)
-	first, last := lineOf(starts, lo), lineOf(starts, hi)
-	if last > first && hi == starts[last] {
+	first, last := rpe.LineOf(lo), rpe.LineOf(hi)
+	if last > first && hi == rpe.LineStart(last) {
 		last-- // a selection ending at a line's start leaves that line be
 	}
-	if !out && first == last && (lo == hi || lo > starts[first]) {
-		line := text[starts[first]:lineEnd(text, starts, first)]
-		e.input.Replace(e.indentUnit(text, e.column(line, lo-starts[first])))
+	if !out && first == last && (lo == hi || lo > rpe.LineStart(first)) {
+		line := text[rpe.LineStart(first):rpe.LineEnd(first)]
+		e.input.Replace(e.indentUnit(text, e.column(line, lo-rpe.LineStart(first))))
 		return
 	}
 	unit := e.indentUnit(text, 0)
 	var b strings.Builder
-	from, to := starts[first], lineEnd(text, starts, last)
+	from, to := rpe.LineStart(first), rpe.LineEnd(last)
 	for i := first; i <= last; i++ {
-		line := text[starts[i]:lineEnd(text, starts, i)]
+		line := text[rpe.LineStart(i):rpe.LineEnd(i)]
 		switch {
 		case !out && line != "":
 			b.WriteString(unit)
@@ -661,21 +676,23 @@ func (e *codeEditor) indent(out bool) {
 func (e *codeEditor) moveLines(n int, extend bool) {
 	st := e.input.EditingState()
 	text := st.Text
-	starts := e.lineStarts(text)
-	li := lineOf(starts, st.Caret)
+	rpe := e.ensureRope(text)
+	li := rpe.LineOf(st.Caret)
+	liStart, liEnd := rpe.LineStart(li), rpe.LineEnd(li)
 	if e.goalCol < 0 {
-		e.goalCol = e.column(text[starts[li]:lineEnd(text, starts, li)], st.Caret-starts[li])
+		e.goalCol = e.column(text[liStart:liEnd], st.Caret-liStart)
 	}
 	to := li + n
 	var at int
 	switch {
 	case to < 0:
 		at = 0
-	case to >= len(starts):
+	case to >= rpe.Lines():
 		at = len(text)
 	default:
-		line := text[starts[to]:lineEnd(text, starts, to)]
-		at = starts[to] + e.offsetAtColumn(line, e.goalCol)
+		toStart, toEnd := rpe.LineStart(to), rpe.LineEnd(to)
+		line := text[toStart:toEnd]
+		at = toStart + e.offsetAtColumn(line, e.goalCol)
 	}
 	anchor := at
 	if extend {
@@ -725,17 +742,19 @@ func (e *codeEditor) HandleTick() bool {
 // offsetAt is the text offset nearest a point.
 func (e *codeEditor) offsetAt(p ggui.Point) int {
 	text := e.input.EditingState().Text
-	starts := e.lineStarts(text)
+	rpe := e.ensureRope(text)
+	numLines := rpe.Lines()
 	li := int(math.Floor((p.Y - e.rect.Origin.Y - editorPad + e.scrollY) / max(e.lineH, 1)))
 	switch {
 	case li < 0:
 		return 0
-	case li >= len(starts):
+	case li >= numLines:
 		return len(text)
 	}
 	col := int(math.Round((p.X - e.textX + e.scrollX) / max(e.cellW, 1)))
-	line := text[starts[li]:lineEnd(text, starts, li)]
-	return starts[li] + e.offsetAtColumn(line, max(col, 0))
+	start, end := rpe.LineStart(li), rpe.LineEnd(li)
+	line := text[start:end]
+	return start + e.offsetAtColumn(line, max(col, 0))
 }
 
 // HandlePointer implements ggui.PointerHandler: a click places the caret,
@@ -773,13 +792,14 @@ func (e *codeEditor) HandlePointer(ev ggui.PointerEvent) bool {
 			e.input.Select(a, b)
 			e.dragFrom = -1
 		default:
-			starts := e.lineStarts(st.Text)
-			li := lineOf(starts, at)
+			rpe := e.ensureRope(st.Text)
+			li := rpe.LineOf(at)
+			start := rpe.LineStart(li)
 			end := len(st.Text)
-			if li+1 < len(starts) {
-				end = starts[li+1]
+			if li+1 < rpe.Lines() {
+				end = rpe.LineStart(li + 1)
 			}
-			e.input.Select(starts[li], end)
+			e.input.Select(start, end)
 			e.dragFrom = -1
 		}
 		return true

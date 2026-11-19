@@ -2,6 +2,7 @@ package gui
 
 import (
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/ironpark/ggui"
@@ -122,4 +123,33 @@ func TestCommentToggle(t *testing.T) {
 	if got := ggui.Peek(v); got != "\tif x {\n\t\ty()\n\t}" {
 		t.Fatalf("uncommented %q", got)
 	}
+}
+
+func TestLargeFileNavigationAndEditing(t *testing.T) {
+	lines := make([]string, 1000)
+	for i := range lines {
+		lines[i] = "fmt.Println(\"line\")"
+	}
+	text := strings.Join(lines, "\n")
+	e, v, p := editorProbe(t, text)
+
+	// goToLine to line 500
+	e.goToLine(500)
+	p.Frame()
+	if c := e.Caret.Get(); c.Line != 500 || c.Lines != 1000 {
+		t.Fatalf("expected caret at line 500 (total 1000), got %+v", c)
+	}
+
+	// Press Enter to split line
+	p.Type(ggui.Mods{}, ggui.KeyEnter)
+	p.Frame()
+	if c := e.Caret.Get(); c.Line != 501 || c.Lines != 1001 {
+		t.Fatalf("after Enter, expected line 501 / total 1001, got %+v", c)
+	}
+
+	// Verify Rope state is synchronized
+	if e.rope.Lines() != 1001 {
+		t.Fatalf("expected rope lines 1001, got %d", e.rope.Lines())
+	}
+	_ = v
 }
