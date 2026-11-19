@@ -24,6 +24,9 @@ func (m *model) askKill(id string) {
 	case isDiffTab(id):
 		m.closeDiff(id)
 		return
+	case isLaunchTab(id):
+		m.closeLaunch(id)
+		return
 	}
 	s, ok := m.session(id)
 	if !ggui.Peek(m.Prefs).ConfirmKill || (ok && (s.GetState() == protocol.StateExited || s.GetState() == protocol.StateStopped)) {
@@ -139,7 +142,7 @@ func tidyable(id string, sessions []*protocol.SessionInfo, docs map[string]docIn
 	switch {
 	case isDocTab(id):
 		return !docs[id].Dirty
-	case isDiffTab(id):
+	case isDiffTab(id), isLaunchTab(id):
 		return true
 	}
 	s, ok := sessionIn(sessions, id)
@@ -166,6 +169,8 @@ func (m *model) tidyTabs(ids []string) {
 			}
 		case isDiffTab(id):
 			m.closeDiff(id)
+		case isLaunchTab(id):
+			m.closeLaunch(id)
 		default:
 			if s, ok := m.session(id); ok && s.GetAgent() == "shell" {
 				shells = append(shells, id)

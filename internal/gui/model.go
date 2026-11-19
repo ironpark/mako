@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"cmp"
 	"context"
 	"maps"
 	"os"
@@ -32,9 +33,11 @@ type newSession struct {
 	Branch   string
 	Base     string // the branch the worktree merges into, "" for the one checked out
 	Start    string // the commit it starts at, when not Base
-	// Prompt is put in the new session's message box, to send once its
-	// agent is ready.
+	// Prompt is the agent's first prompt.
 	Prompt string
+	// Team is the name of the team the agent leads, started with it; ""
+	// for none.
+	Team string
 }
 
 // model is the GUI's state. Signals are touched on the UI goroutine only;
@@ -209,9 +212,12 @@ type model struct {
 	Proj             *projectAsk                         // the project dialogs; see projectmenu.go
 	projectsSent     map[string][]*protocol.ProjectScope // by node, the projects its daemon was last told; UI goroutine only
 	Shell            *shellView                          // a background command shown in full; see tasks.go
-	NewOpen          *ggui.StateValue[bool]
-	Form             *ggui.StateValue[newSession]
-	FormErr          *ggui.StateValue[string]
+	// launches are the new sessions' tabs' states, by tab; launchSeq
+	// numbers the next, and lastAgent is the agent the last one started.
+	// UI goroutine only.
+	launches  map[string]*launchState
+	launchSeq int
+	lastAgent string
 
 	conns map[string]*termConn // UI goroutine only
 	// killed are the sessions killed here, by when, which a poll begun
@@ -334,9 +340,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Forge:         newForgeState(),
 		Tunnels:       newTunnelState(),
 		Shell:         newShellView(),
-		NewOpen:       ggui.State(false),
-		Form:          ggui.State(newSession{Agent: p.DefaultAgent, Project: p.DefaultProject}),
-		FormErr:       ggui.State(""),
+		launches:      map[string]*launchState{},
 		conns:         map[string]*termConn{},
 		killed:        map[string]time.Time{},
 		revealedTab:   map[int]string{},
@@ -608,6 +612,7 @@ func (m *model) forgetTabs(gone func(id string) bool) {
 		}
 	}
 	maps.DeleteFunc(m.chats, func(id string, _ *chatState) bool { return gone(id) })
+	maps.DeleteFunc(m.launches, func(id string, _ *launchState) bool { return gone(id) })
 	maps.DeleteFunc(m.usages, func(id string, _ *usageState) bool { return gone(id) })
 	maps.DeleteFunc(m.redials, func(id string, _ redial) bool { return gone(id) })
 	for id := range ggui.Peek(m.ChatModes) {
@@ -623,41 +628,63 @@ func (m *model) forgetTabs(gone func(id string) bool) {
 	}
 }
 
-// openNew shows the new-session dialog, prefilled for a node and project.
-func (m *model) openNew(nodeID, project string) {
-	p := ggui.Peek(m.Prefs)
-	f := newSession{Agent: p.DefaultAgent, NodeID: nodeID, Project: project}
-	if prev := ggui.Peek(m.Form); prev.Agent != "" {
-		f.Agent = prev.Agent // the last choice, within one run
-	}
+// openNew opens another new session's tab, prefilled for a node and
+// project, and gives its state.
+func (m *model) openNew(nodeID, project string) *launchState {
+	f := newSession{Agent: cmp.Or(m.lastAgent, ggui.Peek(m.Prefs).DefaultAgent), NodeID: nodeID, Project: project}
 	if f.NodeID == "" {
 		f.NodeID = ggui.Peek(m.Conn).Self.GetId()
 	}
 	if f.Project == "" {
 		f.Project = m.launchProject(f.NodeID)
 	}
-	m.Form.Set(f)
-	m.FormErr.Set("")
-	m.NewOpen.Set(true)
+	_, l := m.newLaunch(f)
+	return l
 }
+
+// launching reports whether a new session's tab is open.
+func (m *model) launching() bool { return slices.ContainsFunc(ggui.Peek(m.Tabs), isLaunchTab) }
 
 // launch starts a session directly, as the tab bar's quick buttons do.
 func (m *model) launch(agent, nodeID, project string) {
-	m.Form.Set(newSession{Agent: agent, NodeID: nodeID, Project: project})
-	m.submitNew()
+	m.startSession("", newSession{Agent: agent, NodeID: nodeID, Project: project})
 }
 
-// submitNew starts the session the dialog describes.
-func (m *model) submitNew() {
+// submitLaunch starts the session new session's tab id describes.
+func (m *model) submitLaunch(id string) {
+	m.startSession(id, ggui.Peek(m.launchOf(id).Form))
+}
+
+// startSession starts the session f describes, with its prompt and its
+// team: in the place of new session's tab tab, or of none, in a tab of
+// its own. A session that does not start says why in its tab, opened for
+// one started from none.
+func (m *model) startSession(tab string, f newSession) {
+	fail := func(why string) {
+		if tab == "" || m.launches[tab] == nil {
+			tab, _ = m.newLaunch(f)
+		}
+		m.launchOf(tab).Err.Set(why)
+	}
+	if tab != "" {
+		m.launchOf(tab).Err.Set("")
+	}
 	// Without a working directory the node starts the session in its home.
-	f := ggui.Peek(m.Form)
 	nodeID := m.remoteID(f.NodeID)
 	agent, profile := agentspec.SplitTarget(f.Agent)
 	req := &protocol.OpenSession{NodeId: nodeID, Agent: agent, Profile: profile, Project: f.Project, Cols: 120, Rows: 36}
+	prompt := strings.TrimSpace(f.Prompt)
+	var team agentTeam // the one the agent leads
+	if agent != "shell" {
+		req.Prompt = prompt
+		if t, ok := m.teamNamed(f.Team); ok && len(t.Members) > 0 {
+			team, req.Prompt = t, strings.TrimSpace(teamBrief(t)+"\n"+prompt)
+		}
+	}
 	if f.Worktree {
 		branch := strings.TrimSpace(f.Branch)
 		if branch == "" {
-			m.FormErr.Set(T("Name the branch the worktree is made on."))
+			fail(T("Name the branch the worktree is made on."))
 			return
 		}
 		req.Worktree = &protocol.Worktree{Branch: branch, Base: f.Base, Start: f.Start}
@@ -672,17 +699,25 @@ func (m *model) submitNew() {
 		return c.Open(ctx, req)
 	}, func(info *protocol.SessionInfo, err error) {
 		if err != nil {
-			m.FormErr.Set(err.Error())
-			m.NewOpen.Set(true)
+			fail(err.Error())
 			return
 		}
-		m.NewOpen.Set(false)
+		m.lastAgent = f.Agent
 		sessions := slices.Clone(ggui.Peek(m.Sessions))
 		m.Sessions.Set(append(sessions, info))
+		if slices.Contains(ggui.Peek(m.Tabs), tab) {
+			m.replaceTab(tab, info.GetId())
+		}
+		delete(m.launches, tab)
 		m.selectSession(info.GetId())
-		if f.Prompt != "" {
+		if len(team.Members) > 0 {
+			m.startTeam(info.GetId(), team, prompt)
+		}
+		switch {
+		case req.GetPrompt() != "":
 			m.setChatMode(info.GetId(), true)
-			m.setComposerDraft(info.GetId(), f.Prompt)
+		case prompt != "": // a shell's: typed at its prompt, to run when Enter is pressed
+			m.setComposerDraft(info.GetId(), prompt)
 		}
 	})
 }

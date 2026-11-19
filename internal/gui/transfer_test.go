@@ -181,8 +181,8 @@ func TestThePickerChoosesAFolderOnTheNode(t *testing.T) {
 		pr.Projects = append(pr.Projects, keptProject{fileRoot: fileRoot{Node: self, Path: dir}})
 		return pr
 	})
-	m.openNew(self, dir)
-	m.pickFolder()
+	l := m.openNew(self, dir)
+	m.pickFolder(l)
 	listed := func() []string {
 		var names []string
 		for _, it := range m.children(dirItem(self, ggui.Peek(m.Pick.Path))) {
@@ -196,9 +196,6 @@ func TestThePickerChoosesAFolderOnTheNode(t *testing.T) {
 	if got := listed(); got[0] != "app" || got[1] != "lib" {
 		t.Fatalf("folders = %v", got)
 	}
-	if ggui.Peek(m.NewOpen) {
-		t.Fatal("the form shows under the picker")
-	}
 	m.Pick.goTo(filepath.Join(dir, "app"))
 	m.Pick.goBack(false)
 	if ggui.Peek(m.Pick.Path) != dir || len(ggui.Peek(m.Pick.History).Ahead) != 1 {
@@ -207,7 +204,7 @@ func TestThePickerChoosesAFolderOnTheNode(t *testing.T) {
 	m.Pick.Sel.Set(dirKey(self, filepath.Join(dir, "lib")))
 	m.closePicker(ggui.Untrack(m.Pick.picked))
 	p.Frame()
-	if f := ggui.Peek(m.Form); f.Project != filepath.Join(dir, "lib") || ggui.Peek(m.Pick.On) || !ggui.Peek(m.NewOpen) {
+	if f := ggui.Peek(l.Form); f.Project != filepath.Join(dir, "lib") || ggui.Peek(m.Pick.On) || !m.launching() {
 		t.Fatalf("form = %+v", f)
 	}
 	if got := m.recentFolders(self, 6); len(got) == 0 || got[0] != dir {

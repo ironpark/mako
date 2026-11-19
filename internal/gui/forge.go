@@ -479,8 +479,7 @@ func (m *model) sendToSession(text string) {
 // startOn opens the new session dialog in the project, its message box to
 // hold prompt.
 func (m *model) startOn(root fileRoot, prompt string) {
-	m.openNew(root.Node, root.Path)
-	m.Form.Update(func(f newSession) newSession { f.Prompt = prompt; return f })
+	m.openNew(root.Node, root.Path).Form.Update(func(f newSession) newSession { f.Prompt = prompt; return f })
 }
 
 // issuePrompt asks an agent to resolve an issue.
@@ -531,8 +530,7 @@ func (m *model) sendFailedLogs(root fileRoot, run *protocol.ForgeItem) {
 // its own that merges into the pull request's base.
 func (m *model) newPRSession(root fileRoot, pr *protocol.ForgeItem) {
 	m.forgeRun(root, &protocol.ForgeRun{Op: protocol.ForgeOpFetchPR, Number: pr.GetNumber()}, T("Fetching the pull request…"), func(head string) {
-		m.openNew(root.Node, root.Path)
-		m.Form.Update(func(f newSession) newSession {
+		m.openNew(root.Node, root.Path).Form.Update(func(f newSession) newSession {
 			f.Worktree, f.Branch, f.Base, f.Start = true, fmt.Sprintf("pr-%d", pr.GetNumber()), pr.GetBase(), strings.TrimSpace(head)
 			return f
 		})

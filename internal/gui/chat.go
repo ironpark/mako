@@ -810,6 +810,9 @@ func foldHeader(open ggui.Binding[bool], glyph, title ggui.Widget, detail, name 
 
 func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage) ggui.Widget {
 	if msg.GetRole() == "user" {
+		if marks := chatMarks(msg.GetText()); marks != nil {
+			return markedTurn(m, id, info, msg, marks)
+		}
 		bubble := widget.Box(widget.Text(msg.GetText()).Size(14).Selectable()).
 			Fill(skin.Surface2).Radius(12).Pad(10, 14).MaxWidth(680)
 		var turn ggui.Widget = widget.Row(widget.Spacer(), &withCopy{content: bubble, button: copyButton(m, msg.GetText())}).Stretch()

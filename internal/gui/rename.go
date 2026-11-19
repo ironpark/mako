@@ -116,6 +116,9 @@ func sessionMenu(m *model, w ggui.Widget, id, label string, isTab bool) ggui.Wid
 				ui.MenuItem(T("Browse files"), func() { m.openBrowser(node, cmp.Or(project, "~"), "") }),
 				ui.MenuItem(T("Forward a port…"), func() { m.askTunnel(node) }))
 		}
+		if teams := teamItems(m, id); len(teams) > 0 {
+			items = append(append(items, ui.MenuDivider()), teams...)
+		}
 		return append(items, ui.MenuDivider(), ui.MenuItem(T("Kill session"), func() { m.askKill(id) }))
 	}).Name(Tf("%s actions", label))
 }

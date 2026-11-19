@@ -430,7 +430,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 				do(func() { m.DetailsWidth.Set(m.restingSize(layoutdoc.DetailsNode, detailsWidth)) }),
 				do(func() { m.DetailTab.Set(agentsTab) }), frames(2), shot("03-details"),
 				do(func() { m.DetailTab.Set(filesTab); m.openNew("", "") }), frames(2), shot("04-new-session"),
-				do(func() { m.NewOpen.Set(false); m.openSettings("general") }), frames(2), shot("05-settings-general"),
+				do(func() { m.closeLaunch(ggui.Peek(m.Selected)); m.openSettings("general") }), frames(2), shot("05-settings-general"),
 				do(func() { m.Section.Set("appearance") }), frames(2), shot("06-settings-appearance"),
 				do(func() { m.Section.Set("terminal") }), frames(2), shot("07-settings-terminal"),
 				do(func() { m.Section.Set("daemon") }), frames(2), shot("08-settings-daemon"),
@@ -537,7 +537,7 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					do(setTheme("dark")),
 					until("the daemon", func() bool { return ggui.Peek(m.Conn).OK }),
 					do(func() { m.openNew("", dir) }), frames(20), shot("40-new-session"),
-					do(m.pickFolder), until("the picker", func() bool { return ggui.Peek(m.Pick.On) }), frames(20), shot("41-pick-folder"),
+					do(func() { m.pickFolder(m.launchShown()) }), until("the picker", func() bool { return ggui.Peek(m.Pick.On) }), frames(20), shot("41-pick-folder"),
 				}
 			}
 			if railOnly && !sidebarOnly && !settingsOnly {

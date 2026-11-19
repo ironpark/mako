@@ -116,6 +116,9 @@ type prefs struct {
 	// SyncWorkspace has the window follow, and be followed by, the
 	// windows of the nodes it trusts both ways: tabs, panes and spaces.
 	SyncWorkspace bool `json:"sync_workspace"`
+
+	// Teams are the agent teams the user put together; see teams.go.
+	Teams []agentTeam `json:"teams,omitempty"`
 }
 
 // Equal compares settings by value, projects included, so the prefs signal
