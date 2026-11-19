@@ -86,4 +86,40 @@ public interface AgentInfoOrBuilder extends
    * @return The caps.
    */
   int getCaps();
+
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.AgentProfileInfo> 
+      getProfileDetailsList();
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  dev.ironpark.mako.v2.AgentProfileInfo getProfileDetails(int index);
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  int getProfileDetailsCount();
+
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>bool yolo = 7 [json_name = "yolo"];</code>
+   * @return The yolo.
+   */
+  boolean getYolo();
 }

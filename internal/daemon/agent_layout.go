@@ -78,14 +78,18 @@ type changeLayoutResult struct {
 	Revision string `json:"revision"`
 }
 
-// addLayoutTools gives the agent's server the window layout tools.
-func (d *Daemon) addLayoutTools(server *sdk.Server, peer *agentPeer) {
-	sdk.AddTool(server, &sdk.Tool{Name: toolListBlocks, Description: "List the blocks a window layout document can place, with each one's props as a JSON Schema: the catalog to build a document from. A document's leaves are these blocks and the panes, which hold the session tabs.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, listBlocksResult, error) {
+// addListBlocksTool registers (or refreshes) list_blocks with its current description.
+func (d *Daemon) addListBlocksTool(server *sdk.Server, peer *agentPeer, desc string) {
+	sdk.AddTool(server, &sdk.Tool{Name: toolListBlocks, Description: desc, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, listBlocksResult, error) {
 		if _, err := d.projectCaller(peer); err != nil {
 			return nil, listBlocksResult{}, err
 		}
 		return nil, listBlocksResult{Blocks: d.blocks(), PluginDir: d.pluginDir()}, nil
 	})
+}
+
+// addStaticLayoutTools gives the agent's server the window layout mutation/read tools.
+func (d *Daemon) addStaticLayoutTools(server *sdk.Server, peer *agentPeer) {
 	sdk.AddTool(server, &sdk.Tool{Name: toolGetLayout, Description: "Read a window layout document of the mako window, shared by the user's nodes, with its revision, and which document each space uses. The document is a tree of row, column and stack nodes whose leaves are blocks (list_blocks) and the panes; every node has an id.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, in layoutArgs) (*sdk.CallToolResult, getLayoutResult, error) {
 		if _, err := d.projectCaller(peer); err != nil {
 			return nil, getLayoutResult{}, err

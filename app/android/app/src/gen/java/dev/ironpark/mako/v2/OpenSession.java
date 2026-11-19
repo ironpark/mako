@@ -28,6 +28,8 @@ public  final class OpenSession extends
     prompt_ = "";
     parentSessionId_ = "";
     name_ = "";
+    model_ = "";
+    effort_ = "";
   }
   private int bitField0_;
   public static final int NODE_ID_FIELD_NUMBER = 1;
@@ -947,6 +949,159 @@ java.lang.String defaultValue) {
     checkByteStringIsUtf8(value);
     name_ = value.toStringUtf8();
 
+  }
+
+  public static final int MODEL_FIELD_NUMBER = 14;
+  private java.lang.String model_;
+  /**
+   * <pre>
+   * model, effort, and yolo override the profile's or agent's defaults for
+   * this launch. Revision 39.
+   * </pre>
+   *
+   * <code>string model = 14 [json_name = "model"];</code>
+   * @return The model.
+   */
+  @java.lang.Override
+  public java.lang.String getModel() {
+    return model_;
+  }
+  /**
+   * <pre>
+   * model, effort, and yolo override the profile's or agent's defaults for
+   * this launch. Revision 39.
+   * </pre>
+   *
+   * <code>string model = 14 [json_name = "model"];</code>
+   * @return The bytes for model.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getModelBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(model_);
+  }
+  /**
+   * <pre>
+   * model, effort, and yolo override the profile's or agent's defaults for
+   * this launch. Revision 39.
+   * </pre>
+   *
+   * <code>string model = 14 [json_name = "model"];</code>
+   * @param value The model to set.
+   */
+  private void setModel(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    model_ = value;
+  }
+  /**
+   * <pre>
+   * model, effort, and yolo override the profile's or agent's defaults for
+   * this launch. Revision 39.
+   * </pre>
+   *
+   * <code>string model = 14 [json_name = "model"];</code>
+   */
+  private void clearModel() {
+
+    model_ = getDefaultInstance().getModel();
+  }
+  /**
+   * <pre>
+   * model, effort, and yolo override the profile's or agent's defaults for
+   * this launch. Revision 39.
+   * </pre>
+   *
+   * <code>string model = 14 [json_name = "model"];</code>
+   * @param value The bytes for model to set.
+   */
+  private void setModelBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    model_ = value.toStringUtf8();
+
+  }
+
+  public static final int EFFORT_FIELD_NUMBER = 15;
+  private java.lang.String effort_;
+  /**
+   * <code>string effort = 15 [json_name = "effort"];</code>
+   * @return The effort.
+   */
+  @java.lang.Override
+  public java.lang.String getEffort() {
+    return effort_;
+  }
+  /**
+   * <code>string effort = 15 [json_name = "effort"];</code>
+   * @return The bytes for effort.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getEffortBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(effort_);
+  }
+  /**
+   * <code>string effort = 15 [json_name = "effort"];</code>
+   * @param value The effort to set.
+   */
+  private void setEffort(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    effort_ = value;
+  }
+  /**
+   * <code>string effort = 15 [json_name = "effort"];</code>
+   */
+  private void clearEffort() {
+
+    effort_ = getDefaultInstance().getEffort();
+  }
+  /**
+   * <code>string effort = 15 [json_name = "effort"];</code>
+   * @param value The bytes for effort to set.
+   */
+  private void setEffortBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    effort_ = value.toStringUtf8();
+
+  }
+
+  public static final int YOLO_FIELD_NUMBER = 16;
+  private boolean yolo_;
+  /**
+   * <code>optional bool yolo = 16 [json_name = "yolo"];</code>
+   * @return Whether the yolo field is set.
+   */
+  @java.lang.Override
+  public boolean hasYolo() {
+    return ((bitField0_ & 0x00000002) != 0);
+  }
+  /**
+   * <code>optional bool yolo = 16 [json_name = "yolo"];</code>
+   * @return The yolo.
+   */
+  @java.lang.Override
+  public boolean getYolo() {
+    return yolo_;
+  }
+  /**
+   * <code>optional bool yolo = 16 [json_name = "yolo"];</code>
+   * @param value The yolo to set.
+   */
+  private void setYolo(boolean value) {
+    bitField0_ |= 0x00000002;
+    yolo_ = value;
+  }
+  /**
+   * <code>optional bool yolo = 16 [json_name = "yolo"];</code>
+   */
+  private void clearYolo() {
+    bitField0_ = (bitField0_ & ~0x00000002);
+    yolo_ = false;
   }
 
   public static dev.ironpark.mako.v2.OpenSession parseFrom(
@@ -1992,6 +2147,165 @@ java.lang.String defaultValue) {
       return this;
     }
 
+    /**
+     * <pre>
+     * model, effort, and yolo override the profile's or agent's defaults for
+     * this launch. Revision 39.
+     * </pre>
+     *
+     * <code>string model = 14 [json_name = "model"];</code>
+     * @return The model.
+     */
+    @java.lang.Override
+    public java.lang.String getModel() {
+      return instance.getModel();
+    }
+    /**
+     * <pre>
+     * model, effort, and yolo override the profile's or agent's defaults for
+     * this launch. Revision 39.
+     * </pre>
+     *
+     * <code>string model = 14 [json_name = "model"];</code>
+     * @return The bytes for model.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getModelBytes() {
+      return instance.getModelBytes();
+    }
+    /**
+     * <pre>
+     * model, effort, and yolo override the profile's or agent's defaults for
+     * this launch. Revision 39.
+     * </pre>
+     *
+     * <code>string model = 14 [json_name = "model"];</code>
+     * @param value The model to set.
+     * @return This builder for chaining.
+     */
+    public Builder setModel(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setModel(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * model, effort, and yolo override the profile's or agent's defaults for
+     * this launch. Revision 39.
+     * </pre>
+     *
+     * <code>string model = 14 [json_name = "model"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearModel() {
+      copyOnWrite();
+      instance.clearModel();
+      return this;
+    }
+    /**
+     * <pre>
+     * model, effort, and yolo override the profile's or agent's defaults for
+     * this launch. Revision 39.
+     * </pre>
+     *
+     * <code>string model = 14 [json_name = "model"];</code>
+     * @param value The bytes for model to set.
+     * @return This builder for chaining.
+     */
+    public Builder setModelBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setModelBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string effort = 15 [json_name = "effort"];</code>
+     * @return The effort.
+     */
+    @java.lang.Override
+    public java.lang.String getEffort() {
+      return instance.getEffort();
+    }
+    /**
+     * <code>string effort = 15 [json_name = "effort"];</code>
+     * @return The bytes for effort.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getEffortBytes() {
+      return instance.getEffortBytes();
+    }
+    /**
+     * <code>string effort = 15 [json_name = "effort"];</code>
+     * @param value The effort to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEffort(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setEffort(value);
+      return this;
+    }
+    /**
+     * <code>string effort = 15 [json_name = "effort"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearEffort() {
+      copyOnWrite();
+      instance.clearEffort();
+      return this;
+    }
+    /**
+     * <code>string effort = 15 [json_name = "effort"];</code>
+     * @param value The bytes for effort to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEffortBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setEffortBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>optional bool yolo = 16 [json_name = "yolo"];</code>
+     * @return Whether the yolo field is set.
+     */
+    @java.lang.Override
+    public boolean hasYolo() {
+      return instance.hasYolo();
+    }
+    /**
+     * <code>optional bool yolo = 16 [json_name = "yolo"];</code>
+     * @return The yolo.
+     */
+    @java.lang.Override
+    public boolean getYolo() {
+      return instance.getYolo();
+    }
+    /**
+     * <code>optional bool yolo = 16 [json_name = "yolo"];</code>
+     * @param value The yolo to set.
+     * @return This builder for chaining.
+     */
+    public Builder setYolo(boolean value) {
+      copyOnWrite();
+      instance.setYolo(value);
+      return this;
+    }
+    /**
+     * <code>optional bool yolo = 16 [json_name = "yolo"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearYolo() {
+      copyOnWrite();
+      instance.clearYolo();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.OpenSession)
   }
   @java.lang.Override
@@ -2023,11 +2337,14 @@ java.lang.String defaultValue) {
             "prompt_",
             "parentSessionId_",
             "name_",
+            "model_",
+            "effort_",
+            "yolo_",
           };
           java.lang.String info =
-              "\u0000\r\u0000\u0001\u0001\r\r\u0001\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
-              "\u0004\u0208\u0005\u021a\u00062\u0007\u000b\b\u000b\t\u1009\u0000\n\u021a\u000b\u0208" +
-              "\f\u0208\r\u0208";
+              "\u0000\u0010\u0000\u0001\u0001\u0010\u0010\u0001\u0002\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u021a\u00062\u0007\u000b\b\u000b\t\u1009\u0000\n\u021a" +
+              "\u000b\u0208\f\u0208\r\u0208\u000e\u0208\u000f\u0208\u0010\u1007\u0001";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

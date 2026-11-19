@@ -76,6 +76,9 @@ func (m *model) saveMCPServer(id string, s mcp.Server) {
 	}
 	*m.cfg = next
 	m.ext.MCPServers.Set(maps.Clone(next.ContextServers))
+	if m.link != nil {
+		m.link.pollNow()
+	}
 	m.ext.MCPNote.Set(T("Saved. Sessions of agents that take MCP servers use it from now on."))
 }
 

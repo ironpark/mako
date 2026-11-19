@@ -168,7 +168,8 @@ type model struct {
 	hl  *highlighter // highlighting, which takes languages from ext; see highlight.go
 	ext *extState    // the extensions and MCP servers; see extstate.go
 	// plugins are the daemon's plugins; see plugins.go.
-	plugins *pluginsState
+	plugins   *pluginsState
+	providers *providersState // decision-model & API keys; see providers.go
 	// store is the plugin store's: the registries' listings and the
 	// registries themselves; see pluginstore.go.
 	store *storeState
@@ -302,6 +303,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		pickers:             newPickerState(),
 		ext:                 newExtState(cfg),
 		plugins:             newPluginsState(),
+		providers:           newProvidersState(),
 		store:               newStoreState(),
 		AgentBlocks:         ggui.State([]*protocol.AgentBlock(nil)),
 		files:               newFilesState(),

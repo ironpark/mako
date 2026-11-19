@@ -517,3 +517,23 @@ func (c *Client) AnswerDialog(ctx context.Context, req *protocol.AnswerDialog) (
 func (c *Client) AnswerQuestion(ctx context.Context, req *protocol.AnswerQuestion) (*protocol.SessionInfo, error) {
 	return request[*protocol.SessionInfo](ctx, c, protocol.TypeAnswerQuestion, req)
 }
+
+// RunAgentPrompt executes a single non-interactive prompt on a node's agent.
+func (c *Client) RunAgentPrompt(ctx context.Context, req *protocol.RunAgentPrompt) (*protocol.AgentPromptResult, error) {
+	return request[*protocol.AgentPromptResult](ctx, c, protocol.TypeRunAgentPrompt, req)
+}
+
+// ListProviders returns which decision model provider API keys are configured on this daemon.
+func (c *Client) ListProviders(ctx context.Context) (*protocol.Providers, error) {
+	return request[*protocol.Providers](ctx, c, protocol.TypeListProviders, &protocol.ListProviders{})
+}
+
+// ActProvider sets or clears a provider API key or updates decision model defaults.
+func (c *Client) ActProvider(ctx context.Context, req *protocol.ProviderAction) (*protocol.Providers, error) {
+	return request[*protocol.Providers](ctx, c, protocol.TypeProviderAction, req)
+}
+
+// RunDecision evaluates structured decision questions via the daemon's configured decision provider.
+func (c *Client) RunDecision(ctx context.Context, req *protocol.RunDecision) (*protocol.DecisionResult, error) {
+	return request[*protocol.DecisionResult](ctx, c, protocol.TypeRunDecision, req)
+}

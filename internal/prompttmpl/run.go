@@ -122,7 +122,7 @@ func exprHoles(nodes []*node) bool {
 func demote(rt *qngg.Runtime, nodes []*node) {
 	walkNodes(nodes, func(n *node) {
 		if n.kind == "hole" && !n.name {
-			if _, err := rt.Compile("hole", "("+n.text+")"); err != nil {
+			if _, err := rt.Compile("hole", "("+n.text+")", qngg.TopLevelAwait()); err != nil {
 				n.kind, n.text = "text", n.raw
 			}
 		}
@@ -148,6 +148,11 @@ func walkNodes(nodes []*node, fn func(*node)) {
 // values and a built-in variable's from builtins; its JavaScript runs for
 // as long as ctx and scriptTimeout allow.
 func (t *Template) Fill(ctx context.Context, values, builtins map[string]string) (string, error) {
+	return t.FillWith(ctx, values, builtins, nil)
+}
+
+// FillWith fills the template with an optional host bridge for mako.* calls.
+func (t *Template) FillWith(ctx context.Context, values, builtins map[string]string, host Host) (string, error) {
 	nodes, err := t.read()
 	if err != nil {
 		return "", err
@@ -171,30 +176,13 @@ func (t *Template) Fill(ctx context.Context, values, builtins map[string]string)
 			return "", err
 		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, scriptTimeout)
-	defer cancel()
-	rt, err := qngg.New(qngg.Config{MemoryLimit: scriptMemory})
-	if err != nil {
-		return "", fmt.Errorf("JavaScript: %w", err)
+	wallTimeout := scriptTimeout
+	if host != nil {
+		wallTimeout = hostWallTimeout
 	}
-	defer rt.Close()
-	if values == nil {
-		values = map[string]string{}
-	}
-	if builtins == nil {
-		builtins = map[string]string{}
-	}
-	for name, v := range map[string]any{"args": t.typedArgs(values), "vars": builtins, "__raw": values} {
-		if err := rt.Set(name, v); err != nil {
-			return "", err
-		}
-	}
-	v, err := rt.Eval(ctx, t.Name+".md", comp.program, qngg.TopLevelAwait())
-	if err != nil {
-		return "", scriptError(err)
-	}
-	defer v.Free()
-	return strings.TrimRight(v.String(), "\n"), nil
+	budget := newBudget(ctx, scriptTimeout, wallTimeout)
+	defer budget.release()
+	return evalPromptJS(budget, t, comp.program, values, builtins, host)
 }
 
 // scriptError says what went wrong in a prompt's JavaScript, its error's
@@ -244,7 +232,11 @@ func checkJS(comp *compiled) error {
 	}
 	defer rt.Close()
 	for _, ch := range comp.checks {
-		if _, err := rt.Compile(ch.what, ch.code); err != nil {
+		var opts []qngg.EvalOption
+		if ch.await {
+			opts = append(opts, qngg.TopLevelAwait())
+		}
+		if _, err := rt.Compile(ch.what, ch.code, opts...); err != nil {
 			return fmt.Errorf("%s: %w", ch.what, scriptError(err))
 		}
 	}
@@ -301,7 +293,7 @@ func (a *Arg) values() []string {
 	}
 	var out []string
 	switch a.Type {
-	case Choice:
+	case Choice, Select:
 		out = slices.Clone(a.Options)
 	case Boolean:
 		out = []string{"true", "false"}

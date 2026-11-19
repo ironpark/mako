@@ -45,6 +45,11 @@ message OpenSession {
   string parent_session_id = 12;
   // name names the session as it starts.
   string name = 13;
+  // model, effort, and yolo override the profile's or agent's defaults for
+  // this launch. Revision 39.
+  string model = 14;
+  string effort = 15;
+  optional bool yolo = 16;
 }
 
 // Worktree is a git worktree made for one session.
@@ -484,4 +489,25 @@ message MigrateAgentHome {
 message AgentHomeMigrated {
   int32 moved_sessions = 1;
   bool copied_config = 2;
+}
+
+// RunAgentPrompt runs a single non-interactive prompt on a node's agent and
+// returns its reply without keeping a session. Revision 39.
+message RunAgentPrompt {
+  string node_id = 1;
+  string agent = 2;
+  string profile = 3;
+  string model = 4;
+  string effort = 5;
+  optional bool yolo = 6;
+  string project = 7;
+  string prompt = 8;
+  string format = 9; // "text" or "json"
+  string json_schema = 10;
+}
+
+// AgentPromptResult answers RunAgentPrompt.
+message AgentPromptResult {
+  string output = 1;
+  string format = 2;
 }

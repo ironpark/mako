@@ -25,6 +25,7 @@ public  final class AgentInfo extends
     name_ = "";
     profiles_ = emptyProtobufList();
     icon_ = "";
+    profileDetails_ = emptyProtobufList();
   }
   public static final int NAME_FIELD_NUMBER = 1;
   private java.lang.String name_;
@@ -307,6 +308,182 @@ public  final class AgentInfo extends
   private void clearCaps() {
 
     caps_ = 0;
+  }
+
+  public static final int PROFILE_DETAILS_FIELD_NUMBER = 6;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.AgentProfileInfo> profileDetails_;
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.AgentProfileInfo> getProfileDetailsList() {
+    return profileDetails_;
+  }
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.AgentProfileInfoOrBuilder> 
+      getProfileDetailsOrBuilderList() {
+    return profileDetails_;
+  }
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  @java.lang.Override
+  public int getProfileDetailsCount() {
+    return profileDetails_.size();
+  }
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.AgentProfileInfo getProfileDetails(int index) {
+    return profileDetails_.get(index);
+  }
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  public dev.ironpark.mako.v2.AgentProfileInfoOrBuilder getProfileDetailsOrBuilder(
+      int index) {
+    return profileDetails_.get(index);
+  }
+  private void ensureProfileDetailsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.AgentProfileInfo> tmp = profileDetails_;
+    if (!tmp.isModifiable()) {
+      profileDetails_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  private void setProfileDetails(
+      int index, dev.ironpark.mako.v2.AgentProfileInfo value) {
+    java.util.Objects.requireNonNull(value);
+    ensureProfileDetailsIsMutable();
+    profileDetails_.set(index, value);
+  }
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  private void addProfileDetails(dev.ironpark.mako.v2.AgentProfileInfo value) {
+    java.util.Objects.requireNonNull(value);
+    ensureProfileDetailsIsMutable();
+    profileDetails_.add(value);
+  }
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  private void addProfileDetails(
+      int index, dev.ironpark.mako.v2.AgentProfileInfo value) {
+    java.util.Objects.requireNonNull(value);
+    ensureProfileDetailsIsMutable();
+    profileDetails_.add(index, value);
+  }
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  private void addAllProfileDetails(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.AgentProfileInfo> values) {
+    ensureProfileDetailsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, profileDetails_);
+  }
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  private void clearProfileDetails() {
+    profileDetails_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+   */
+  private void removeProfileDetails(int index) {
+    ensureProfileDetailsIsMutable();
+    profileDetails_.remove(index);
+  }
+
+  public static final int YOLO_FIELD_NUMBER = 7;
+  private boolean yolo_;
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>bool yolo = 7 [json_name = "yolo"];</code>
+   * @return The yolo.
+   */
+  @java.lang.Override
+  public boolean getYolo() {
+    return yolo_;
+  }
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>bool yolo = 7 [json_name = "yolo"];</code>
+   * @param value The yolo to set.
+   */
+  private void setYolo(boolean value) {
+    
+    yolo_ = value;
+  }
+  /**
+   * <pre>
+   * Revision 39
+   * </pre>
+   *
+   * <code>bool yolo = 7 [json_name = "yolo"];</code>
+   */
+  private void clearYolo() {
+
+    yolo_ = false;
   }
 
   public static dev.ironpark.mako.v2.AgentInfo parseFrom(
@@ -703,6 +880,196 @@ public  final class AgentInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.AgentProfileInfo> getProfileDetailsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getProfileDetailsList());
+    }
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+     */
+    @java.lang.Override
+    public int getProfileDetailsCount() {
+      return instance.getProfileDetailsCount();
+    }/**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.AgentProfileInfo getProfileDetails(int index) {
+      return instance.getProfileDetails(index);
+    }
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+     */
+    public Builder setProfileDetails(
+        int index, dev.ironpark.mako.v2.AgentProfileInfo value) {
+      copyOnWrite();
+      instance.setProfileDetails(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+     */
+    public Builder setProfileDetails(
+        int index, dev.ironpark.mako.v2.AgentProfileInfo.Builder builderForValue) {
+      copyOnWrite();
+      instance.setProfileDetails(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+     */
+    public Builder addProfileDetails(dev.ironpark.mako.v2.AgentProfileInfo value) {
+      copyOnWrite();
+      instance.addProfileDetails(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+     */
+    public Builder addProfileDetails(
+        int index, dev.ironpark.mako.v2.AgentProfileInfo value) {
+      copyOnWrite();
+      instance.addProfileDetails(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+     */
+    public Builder addProfileDetails(
+        dev.ironpark.mako.v2.AgentProfileInfo.Builder builderForValue) {
+      copyOnWrite();
+      instance.addProfileDetails(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+     */
+    public Builder addProfileDetails(
+        int index, dev.ironpark.mako.v2.AgentProfileInfo.Builder builderForValue) {
+      copyOnWrite();
+      instance.addProfileDetails(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+     */
+    public Builder addAllProfileDetails(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.AgentProfileInfo> values) {
+      copyOnWrite();
+      instance.addAllProfileDetails(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+     */
+    public Builder clearProfileDetails() {
+      copyOnWrite();
+      instance.clearProfileDetails();
+      return this;
+    }
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>repeated .mako.v2.AgentProfileInfo profile_details = 6 [json_name = "profileDetails"];</code>
+     */
+    public Builder removeProfileDetails(int index) {
+      copyOnWrite();
+      instance.removeProfileDetails(index);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>bool yolo = 7 [json_name = "yolo"];</code>
+     * @return The yolo.
+     */
+    @java.lang.Override
+    public boolean getYolo() {
+      return instance.getYolo();
+    }
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>bool yolo = 7 [json_name = "yolo"];</code>
+     * @param value The yolo to set.
+     * @return This builder for chaining.
+     */
+    public Builder setYolo(boolean value) {
+      copyOnWrite();
+      instance.setYolo(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Revision 39
+     * </pre>
+     *
+     * <code>bool yolo = 7 [json_name = "yolo"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearYolo() {
+      copyOnWrite();
+      instance.clearYolo();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.AgentInfo)
   }
   @java.lang.Override
@@ -724,10 +1091,13 @@ public  final class AgentInfo extends
             "icon_",
             "color_",
             "caps_",
+            "profileDetails_",
+            dev.ironpark.mako.v2.AgentProfileInfo.class,
+            "yolo_",
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0001\u0000\u0001\u0208\u0002\u021a" +
-              "\u0003\u0208\u0004\u000b\u0005\u000b";
+              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0000\u0002\u0000\u0001\u0208\u0002\u021a" +
+              "\u0003\u0208\u0004\u000b\u0005\u000b\u0006\u001b\u0007\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

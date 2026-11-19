@@ -141,7 +141,12 @@ type OpenSession struct {
 	// team's agents so.
 	ParentSessionId string `protobuf:"bytes,12,opt,name=parent_session_id,json=parentSessionId,proto3" json:"parent_session_id,omitempty"`
 	// name names the session as it starts.
-	Name          string `protobuf:"bytes,13,opt,name=name,proto3" json:"name,omitempty"`
+	Name string `protobuf:"bytes,13,opt,name=name,proto3" json:"name,omitempty"`
+	// model, effort, and yolo override the profile's or agent's defaults for
+	// this launch. Revision 39.
+	Model         string `protobuf:"bytes,14,opt,name=model,proto3" json:"model,omitempty"`
+	Effort        string `protobuf:"bytes,15,opt,name=effort,proto3" json:"effort,omitempty"`
+	Yolo          *bool  `protobuf:"varint,16,opt,name=yolo,proto3,oneof" json:"yolo,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -265,6 +270,27 @@ func (x *OpenSession) GetName() string {
 		return x.Name
 	}
 	return ""
+}
+
+func (x *OpenSession) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *OpenSession) GetEffort() string {
+	if x != nil {
+		return x.Effort
+	}
+	return ""
+}
+
+func (x *OpenSession) GetYolo() bool {
+	if x != nil && x.Yolo != nil {
+		return *x.Yolo
+	}
+	return false
 }
 
 // Worktree is a git worktree made for one session.
@@ -3220,6 +3246,177 @@ func (x *AgentHomeMigrated) GetCopiedConfig() bool {
 	return false
 }
 
+// RunAgentPrompt runs a single non-interactive prompt on a node's agent and
+// returns its reply without keeping a session. Revision 39.
+type RunAgentPrompt struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Agent         string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
+	Profile       string                 `protobuf:"bytes,3,opt,name=profile,proto3" json:"profile,omitempty"`
+	Model         string                 `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
+	Effort        string                 `protobuf:"bytes,5,opt,name=effort,proto3" json:"effort,omitempty"`
+	Yolo          *bool                  `protobuf:"varint,6,opt,name=yolo,proto3,oneof" json:"yolo,omitempty"`
+	Project       string                 `protobuf:"bytes,7,opt,name=project,proto3" json:"project,omitempty"`
+	Prompt        string                 `protobuf:"bytes,8,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Format        string                 `protobuf:"bytes,9,opt,name=format,proto3" json:"format,omitempty"` // "text" or "json"
+	JsonSchema    string                 `protobuf:"bytes,10,opt,name=json_schema,json=jsonSchema,proto3" json:"json_schema,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunAgentPrompt) Reset() {
+	*x = RunAgentPrompt{}
+	mi := &file_mako_v2_session_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunAgentPrompt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunAgentPrompt) ProtoMessage() {}
+
+func (x *RunAgentPrompt) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunAgentPrompt.ProtoReflect.Descriptor instead.
+func (*RunAgentPrompt) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *RunAgentPrompt) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *RunAgentPrompt) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *RunAgentPrompt) GetProfile() string {
+	if x != nil {
+		return x.Profile
+	}
+	return ""
+}
+
+func (x *RunAgentPrompt) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *RunAgentPrompt) GetEffort() string {
+	if x != nil {
+		return x.Effort
+	}
+	return ""
+}
+
+func (x *RunAgentPrompt) GetYolo() bool {
+	if x != nil && x.Yolo != nil {
+		return *x.Yolo
+	}
+	return false
+}
+
+func (x *RunAgentPrompt) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *RunAgentPrompt) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *RunAgentPrompt) GetFormat() string {
+	if x != nil {
+		return x.Format
+	}
+	return ""
+}
+
+func (x *RunAgentPrompt) GetJsonSchema() string {
+	if x != nil {
+		return x.JsonSchema
+	}
+	return ""
+}
+
+// AgentPromptResult answers RunAgentPrompt.
+type AgentPromptResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Output        string                 `protobuf:"bytes,1,opt,name=output,proto3" json:"output,omitempty"`
+	Format        string                 `protobuf:"bytes,2,opt,name=format,proto3" json:"format,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentPromptResult) Reset() {
+	*x = AgentPromptResult{}
+	mi := &file_mako_v2_session_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentPromptResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentPromptResult) ProtoMessage() {}
+
+func (x *AgentPromptResult) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_session_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentPromptResult.ProtoReflect.Descriptor instead.
+func (*AgentPromptResult) Descriptor() ([]byte, []int) {
+	return file_mako_v2_session_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *AgentPromptResult) GetOutput() string {
+	if x != nil {
+		return x.Output
+	}
+	return ""
+}
+
+func (x *AgentPromptResult) GetFormat() string {
+	if x != nil {
+		return x.Format
+	}
+	return ""
+}
+
 var File_mako_v2_session_proto protoreflect.FileDescriptor
 
 const file_mako_v2_session_proto_rawDesc = "" +
@@ -3228,7 +3425,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\fListSessions\x12\x1c\n" +
 	"\tapprovals\x18\x01 \x01(\bR\tapprovals\"<\n" +
 	"\bSessions\x120\n" +
-	"\bsessions\x18\x01 \x03(\v2\x14.mako.v2.SessionInfoR\bsessions\"\xb6\x03\n" +
+	"\bsessions\x18\x01 \x03(\v2\x14.mako.v2.SessionInfoR\bsessions\"\x86\x04\n" +
 	"\vOpenSession\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x18\n" +
@@ -3243,10 +3440,14 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	" \x03(\tR\adevices\x12\x16\n" +
 	"\x06prompt\x18\v \x01(\tR\x06prompt\x12*\n" +
 	"\x11parent_session_id\x18\f \x01(\tR\x0fparentSessionId\x12\x12\n" +
-	"\x04name\x18\r \x01(\tR\x04name\x1a6\n" +
+	"\x04name\x18\r \x01(\tR\x04name\x12\x14\n" +
+	"\x05model\x18\x0e \x01(\tR\x05model\x12\x16\n" +
+	"\x06effort\x18\x0f \x01(\tR\x06effort\x12\x17\n" +
+	"\x04yolo\x18\x10 \x01(\bH\x00R\x04yolo\x88\x01\x01\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"t\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\a\n" +
+	"\x05_yolo\"t\n" +
 	"\bWorktree\x12\x12\n" +
 	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
@@ -3502,7 +3703,24 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\rmove_sessions\x18\x05 \x01(\bR\fmoveSessions\"_\n" +
 	"\x11AgentHomeMigrated\x12%\n" +
 	"\x0emoved_sessions\x18\x01 \x01(\x05R\rmovedSessions\x12#\n" +
-	"\rcopied_config\x18\x02 \x01(\bR\fcopiedConfigB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
+	"\rcopied_config\x18\x02 \x01(\bR\fcopiedConfig\"\x94\x02\n" +
+	"\x0eRunAgentPrompt\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x14\n" +
+	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x18\n" +
+	"\aprofile\x18\x03 \x01(\tR\aprofile\x12\x14\n" +
+	"\x05model\x18\x04 \x01(\tR\x05model\x12\x16\n" +
+	"\x06effort\x18\x05 \x01(\tR\x06effort\x12\x17\n" +
+	"\x04yolo\x18\x06 \x01(\bH\x00R\x04yolo\x88\x01\x01\x12\x18\n" +
+	"\aproject\x18\a \x01(\tR\aproject\x12\x16\n" +
+	"\x06prompt\x18\b \x01(\tR\x06prompt\x12\x16\n" +
+	"\x06format\x18\t \x01(\tR\x06format\x12\x1f\n" +
+	"\vjson_schema\x18\n" +
+	" \x01(\tR\n" +
+	"jsonSchemaB\a\n" +
+	"\x05_yolo\"C\n" +
+	"\x11AgentPromptResult\x12\x16\n" +
+	"\x06output\x18\x01 \x01(\tR\x06output\x12\x16\n" +
+	"\x06format\x18\x02 \x01(\tR\x06formatB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
 	file_mako_v2_session_proto_rawDescOnce sync.Once
@@ -3516,7 +3734,7 @@ func file_mako_v2_session_proto_rawDescGZIP() []byte {
 	return file_mako_v2_session_proto_rawDescData
 }
 
-var file_mako_v2_session_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
+var file_mako_v2_session_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_mako_v2_session_proto_goTypes = []any{
 	(*ListSessions)(nil),          // 0: mako.v2.ListSessions
 	(*Sessions)(nil),              // 1: mako.v2.Sessions
@@ -3559,24 +3777,26 @@ var file_mako_v2_session_proto_goTypes = []any{
 	(*AgentHomeInfo)(nil),         // 38: mako.v2.AgentHomeInfo
 	(*MigrateAgentHome)(nil),      // 39: mako.v2.MigrateAgentHome
 	(*AgentHomeMigrated)(nil),     // 40: mako.v2.AgentHomeMigrated
-	nil,                           // 41: mako.v2.OpenSession.EnvEntry
-	(*timestamppb.Timestamp)(nil), // 42: google.protobuf.Timestamp
+	(*RunAgentPrompt)(nil),        // 41: mako.v2.RunAgentPrompt
+	(*AgentPromptResult)(nil),     // 42: mako.v2.AgentPromptResult
+	nil,                           // 43: mako.v2.OpenSession.EnvEntry
+	(*timestamppb.Timestamp)(nil), // 44: google.protobuf.Timestamp
 }
 var file_mako_v2_session_proto_depIdxs = []int32{
 	4,  // 0: mako.v2.Sessions.sessions:type_name -> mako.v2.SessionInfo
-	41, // 1: mako.v2.OpenSession.env:type_name -> mako.v2.OpenSession.EnvEntry
+	43, // 1: mako.v2.OpenSession.env:type_name -> mako.v2.OpenSession.EnvEntry
 	3,  // 2: mako.v2.OpenSession.worktree:type_name -> mako.v2.Worktree
-	42, // 3: mako.v2.SessionInfo.started_at:type_name -> google.protobuf.Timestamp
-	42, // 4: mako.v2.SessionInfo.status_at:type_name -> google.protobuf.Timestamp
-	42, // 5: mako.v2.SessionInfo.last_output:type_name -> google.protobuf.Timestamp
+	44, // 3: mako.v2.SessionInfo.started_at:type_name -> google.protobuf.Timestamp
+	44, // 4: mako.v2.SessionInfo.status_at:type_name -> google.protobuf.Timestamp
+	44, // 5: mako.v2.SessionInfo.last_output:type_name -> google.protobuf.Timestamp
 	11, // 6: mako.v2.SessionInfo.approval:type_name -> mako.v2.Approval
 	3,  // 7: mako.v2.SessionInfo.worktree:type_name -> mako.v2.Worktree
-	42, // 8: mako.v2.SessionInfo.last_message:type_name -> google.protobuf.Timestamp
+	44, // 8: mako.v2.SessionInfo.last_message:type_name -> google.protobuf.Timestamp
 	10, // 9: mako.v2.SessionInfo.tasks:type_name -> mako.v2.BackgroundTask
 	9,  // 10: mako.v2.SessionInfo.notice:type_name -> mako.v2.Notice
 	7,  // 11: mako.v2.SessionInfo.dialog:type_name -> mako.v2.ScreenDialog
 	5,  // 12: mako.v2.SessionInfo.controls:type_name -> mako.v2.AgentControls
-	42, // 13: mako.v2.Approval.since:type_name -> google.protobuf.Timestamp
+	44, // 13: mako.v2.Approval.since:type_name -> google.protobuf.Timestamp
 	13, // 14: mako.v2.Approval.questions:type_name -> mako.v2.Question
 	12, // 15: mako.v2.Approval.options:type_name -> mako.v2.ApprovalOption
 	14, // 16: mako.v2.Question.options:type_name -> mako.v2.QuestionOption
@@ -3599,15 +3819,17 @@ func file_mako_v2_session_proto_init() {
 	if File_mako_v2_session_proto != nil {
 		return
 	}
+	file_mako_v2_session_proto_msgTypes[2].OneofWrappers = []any{}
 	file_mako_v2_session_proto_msgTypes[4].OneofWrappers = []any{}
 	file_mako_v2_session_proto_msgTypes[10].OneofWrappers = []any{}
+	file_mako_v2_session_proto_msgTypes[41].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_session_proto_rawDesc), len(file_mako_v2_session_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   42,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -76,6 +76,7 @@ func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan stru
 		note = why.Error()
 		d.log.Info("plugins' secrets are kept in files: no keychain", "why", note)
 	}
+	d.initDecisionStore(dir, kc, note)
 	d.plugins = plugin.New(plugin.Config{
 		Keychain:     kc,
 		KeychainNote: note,
@@ -87,7 +88,7 @@ func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan stru
 		Projects:     d.pluginProjects,
 		Agents:       pluginAgents{d},
 		Layout:       pluginLayout{d},
-		Changed:      d.changes.firePlugins,
+		Changed:      func() { d.changes.firePlugins(); d.syncProjectAgents() },
 		Installs:     d.store,
 		NetTest:      testhooks.NetTest(),
 	})

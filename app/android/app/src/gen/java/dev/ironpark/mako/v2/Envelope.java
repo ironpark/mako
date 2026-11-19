@@ -134,6 +134,13 @@ public  final class Envelope extends
     AGENT_HOME_INFO(145),
     MIGRATE_AGENT_HOME(146),
     AGENT_HOME_MIGRATED(147),
+    RUN_AGENT_PROMPT(148),
+    AGENT_PROMPT_RESULT(149),
+    LIST_PROVIDERS(150),
+    PROVIDERS(151),
+    PROVIDER_ACTION(152),
+    RUN_DECISION(153),
+    DECISION_RESULT(154),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -257,6 +264,13 @@ public  final class Envelope extends
         case 145: return AGENT_HOME_INFO;
         case 146: return MIGRATE_AGENT_HOME;
         case 147: return AGENT_HOME_MIGRATED;
+        case 148: return RUN_AGENT_PROMPT;
+        case 149: return AGENT_PROMPT_RESULT;
+        case 150: return LIST_PROVIDERS;
+        case 151: return PROVIDERS;
+        case 152: return PROVIDER_ACTION;
+        case 153: return RUN_DECISION;
+        case 154: return DECISION_RESULT;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -6095,6 +6109,376 @@ public  final class Envelope extends
     }
   }
 
+  public static final int RUN_AGENT_PROMPT_FIELD_NUMBER = 148;
+  /**
+   * <pre>
+   * One-shot agent prompts and decision model providers (revision 39).
+   * </pre>
+   *
+   * <code>.mako.v2.RunAgentPrompt run_agent_prompt = 148 [json_name = "runAgentPrompt"];</code>
+   */
+  @java.lang.Override
+  public boolean hasRunAgentPrompt() {
+    return bodyCase_ == 148;
+  }
+  /**
+   * <pre>
+   * One-shot agent prompts and decision model providers (revision 39).
+   * </pre>
+   *
+   * <code>.mako.v2.RunAgentPrompt run_agent_prompt = 148 [json_name = "runAgentPrompt"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.RunAgentPrompt getRunAgentPrompt() {
+    if (bodyCase_ == 148) {
+       return (dev.ironpark.mako.v2.RunAgentPrompt) body_;
+    }
+    return dev.ironpark.mako.v2.RunAgentPrompt.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * One-shot agent prompts and decision model providers (revision 39).
+   * </pre>
+   *
+   * <code>.mako.v2.RunAgentPrompt run_agent_prompt = 148 [json_name = "runAgentPrompt"];</code>
+   */
+  private void setRunAgentPrompt(dev.ironpark.mako.v2.RunAgentPrompt value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 148;
+  }
+  /**
+   * <pre>
+   * One-shot agent prompts and decision model providers (revision 39).
+   * </pre>
+   *
+   * <code>.mako.v2.RunAgentPrompt run_agent_prompt = 148 [json_name = "runAgentPrompt"];</code>
+   */
+  private void mergeRunAgentPrompt(dev.ironpark.mako.v2.RunAgentPrompt value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 148 &&
+        body_ != dev.ironpark.mako.v2.RunAgentPrompt.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.RunAgentPrompt.newBuilder((dev.ironpark.mako.v2.RunAgentPrompt) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 148;
+  }
+  /**
+   * <pre>
+   * One-shot agent prompts and decision model providers (revision 39).
+   * </pre>
+   *
+   * <code>.mako.v2.RunAgentPrompt run_agent_prompt = 148 [json_name = "runAgentPrompt"];</code>
+   */
+  private void clearRunAgentPrompt() {
+    if (bodyCase_ == 148) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int AGENT_PROMPT_RESULT_FIELD_NUMBER = 149;
+  /**
+   * <code>.mako.v2.AgentPromptResult agent_prompt_result = 149 [json_name = "agentPromptResult"];</code>
+   */
+  @java.lang.Override
+  public boolean hasAgentPromptResult() {
+    return bodyCase_ == 149;
+  }
+  /**
+   * <code>.mako.v2.AgentPromptResult agent_prompt_result = 149 [json_name = "agentPromptResult"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.AgentPromptResult getAgentPromptResult() {
+    if (bodyCase_ == 149) {
+       return (dev.ironpark.mako.v2.AgentPromptResult) body_;
+    }
+    return dev.ironpark.mako.v2.AgentPromptResult.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.AgentPromptResult agent_prompt_result = 149 [json_name = "agentPromptResult"];</code>
+   */
+  private void setAgentPromptResult(dev.ironpark.mako.v2.AgentPromptResult value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 149;
+  }
+  /**
+   * <code>.mako.v2.AgentPromptResult agent_prompt_result = 149 [json_name = "agentPromptResult"];</code>
+   */
+  private void mergeAgentPromptResult(dev.ironpark.mako.v2.AgentPromptResult value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 149 &&
+        body_ != dev.ironpark.mako.v2.AgentPromptResult.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.AgentPromptResult.newBuilder((dev.ironpark.mako.v2.AgentPromptResult) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 149;
+  }
+  /**
+   * <code>.mako.v2.AgentPromptResult agent_prompt_result = 149 [json_name = "agentPromptResult"];</code>
+   */
+  private void clearAgentPromptResult() {
+    if (bodyCase_ == 149) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int LIST_PROVIDERS_FIELD_NUMBER = 150;
+  /**
+   * <code>.mako.v2.ListProviders list_providers = 150 [json_name = "listProviders"];</code>
+   */
+  @java.lang.Override
+  public boolean hasListProviders() {
+    return bodyCase_ == 150;
+  }
+  /**
+   * <code>.mako.v2.ListProviders list_providers = 150 [json_name = "listProviders"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ListProviders getListProviders() {
+    if (bodyCase_ == 150) {
+       return (dev.ironpark.mako.v2.ListProviders) body_;
+    }
+    return dev.ironpark.mako.v2.ListProviders.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.ListProviders list_providers = 150 [json_name = "listProviders"];</code>
+   */
+  private void setListProviders(dev.ironpark.mako.v2.ListProviders value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 150;
+  }
+  /**
+   * <code>.mako.v2.ListProviders list_providers = 150 [json_name = "listProviders"];</code>
+   */
+  private void mergeListProviders(dev.ironpark.mako.v2.ListProviders value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 150 &&
+        body_ != dev.ironpark.mako.v2.ListProviders.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ListProviders.newBuilder((dev.ironpark.mako.v2.ListProviders) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 150;
+  }
+  /**
+   * <code>.mako.v2.ListProviders list_providers = 150 [json_name = "listProviders"];</code>
+   */
+  private void clearListProviders() {
+    if (bodyCase_ == 150) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PROVIDERS_FIELD_NUMBER = 151;
+  /**
+   * <code>.mako.v2.Providers providers = 151 [json_name = "providers"];</code>
+   */
+  @java.lang.Override
+  public boolean hasProviders() {
+    return bodyCase_ == 151;
+  }
+  /**
+   * <code>.mako.v2.Providers providers = 151 [json_name = "providers"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Providers getProviders() {
+    if (bodyCase_ == 151) {
+       return (dev.ironpark.mako.v2.Providers) body_;
+    }
+    return dev.ironpark.mako.v2.Providers.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.Providers providers = 151 [json_name = "providers"];</code>
+   */
+  private void setProviders(dev.ironpark.mako.v2.Providers value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 151;
+  }
+  /**
+   * <code>.mako.v2.Providers providers = 151 [json_name = "providers"];</code>
+   */
+  private void mergeProviders(dev.ironpark.mako.v2.Providers value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 151 &&
+        body_ != dev.ironpark.mako.v2.Providers.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Providers.newBuilder((dev.ironpark.mako.v2.Providers) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 151;
+  }
+  /**
+   * <code>.mako.v2.Providers providers = 151 [json_name = "providers"];</code>
+   */
+  private void clearProviders() {
+    if (bodyCase_ == 151) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PROVIDER_ACTION_FIELD_NUMBER = 152;
+  /**
+   * <code>.mako.v2.ProviderAction provider_action = 152 [json_name = "providerAction"];</code>
+   */
+  @java.lang.Override
+  public boolean hasProviderAction() {
+    return bodyCase_ == 152;
+  }
+  /**
+   * <code>.mako.v2.ProviderAction provider_action = 152 [json_name = "providerAction"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ProviderAction getProviderAction() {
+    if (bodyCase_ == 152) {
+       return (dev.ironpark.mako.v2.ProviderAction) body_;
+    }
+    return dev.ironpark.mako.v2.ProviderAction.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.ProviderAction provider_action = 152 [json_name = "providerAction"];</code>
+   */
+  private void setProviderAction(dev.ironpark.mako.v2.ProviderAction value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 152;
+  }
+  /**
+   * <code>.mako.v2.ProviderAction provider_action = 152 [json_name = "providerAction"];</code>
+   */
+  private void mergeProviderAction(dev.ironpark.mako.v2.ProviderAction value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 152 &&
+        body_ != dev.ironpark.mako.v2.ProviderAction.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ProviderAction.newBuilder((dev.ironpark.mako.v2.ProviderAction) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 152;
+  }
+  /**
+   * <code>.mako.v2.ProviderAction provider_action = 152 [json_name = "providerAction"];</code>
+   */
+  private void clearProviderAction() {
+    if (bodyCase_ == 152) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int RUN_DECISION_FIELD_NUMBER = 153;
+  /**
+   * <code>.mako.v2.RunDecision run_decision = 153 [json_name = "runDecision"];</code>
+   */
+  @java.lang.Override
+  public boolean hasRunDecision() {
+    return bodyCase_ == 153;
+  }
+  /**
+   * <code>.mako.v2.RunDecision run_decision = 153 [json_name = "runDecision"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.RunDecision getRunDecision() {
+    if (bodyCase_ == 153) {
+       return (dev.ironpark.mako.v2.RunDecision) body_;
+    }
+    return dev.ironpark.mako.v2.RunDecision.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.RunDecision run_decision = 153 [json_name = "runDecision"];</code>
+   */
+  private void setRunDecision(dev.ironpark.mako.v2.RunDecision value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 153;
+  }
+  /**
+   * <code>.mako.v2.RunDecision run_decision = 153 [json_name = "runDecision"];</code>
+   */
+  private void mergeRunDecision(dev.ironpark.mako.v2.RunDecision value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 153 &&
+        body_ != dev.ironpark.mako.v2.RunDecision.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.RunDecision.newBuilder((dev.ironpark.mako.v2.RunDecision) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 153;
+  }
+  /**
+   * <code>.mako.v2.RunDecision run_decision = 153 [json_name = "runDecision"];</code>
+   */
+  private void clearRunDecision() {
+    if (bodyCase_ == 153) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int DECISION_RESULT_FIELD_NUMBER = 154;
+  /**
+   * <code>.mako.v2.DecisionResult decision_result = 154 [json_name = "decisionResult"];</code>
+   */
+  @java.lang.Override
+  public boolean hasDecisionResult() {
+    return bodyCase_ == 154;
+  }
+  /**
+   * <code>.mako.v2.DecisionResult decision_result = 154 [json_name = "decisionResult"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.DecisionResult getDecisionResult() {
+    if (bodyCase_ == 154) {
+       return (dev.ironpark.mako.v2.DecisionResult) body_;
+    }
+    return dev.ironpark.mako.v2.DecisionResult.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.DecisionResult decision_result = 154 [json_name = "decisionResult"];</code>
+   */
+  private void setDecisionResult(dev.ironpark.mako.v2.DecisionResult value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 154;
+  }
+  /**
+   * <code>.mako.v2.DecisionResult decision_result = 154 [json_name = "decisionResult"];</code>
+   */
+  private void mergeDecisionResult(dev.ironpark.mako.v2.DecisionResult value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 154 &&
+        body_ != dev.ironpark.mako.v2.DecisionResult.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.DecisionResult.newBuilder((dev.ironpark.mako.v2.DecisionResult) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 154;
+  }
+  /**
+   * <code>.mako.v2.DecisionResult decision_result = 154 [json_name = "decisionResult"];</code>
+   */
+  private void clearDecisionResult() {
+    if (bodyCase_ == 154) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -11874,6 +12258,366 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * One-shot agent prompts and decision model providers (revision 39).
+     * </pre>
+     *
+     * <code>.mako.v2.RunAgentPrompt run_agent_prompt = 148 [json_name = "runAgentPrompt"];</code>
+     */
+    @java.lang.Override
+    public boolean hasRunAgentPrompt() {
+      return instance.hasRunAgentPrompt();
+    }
+    /**
+     * <pre>
+     * One-shot agent prompts and decision model providers (revision 39).
+     * </pre>
+     *
+     * <code>.mako.v2.RunAgentPrompt run_agent_prompt = 148 [json_name = "runAgentPrompt"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.RunAgentPrompt getRunAgentPrompt() {
+      return instance.getRunAgentPrompt();
+    }
+    /**
+     * <pre>
+     * One-shot agent prompts and decision model providers (revision 39).
+     * </pre>
+     *
+     * <code>.mako.v2.RunAgentPrompt run_agent_prompt = 148 [json_name = "runAgentPrompt"];</code>
+     */
+    public Builder setRunAgentPrompt(dev.ironpark.mako.v2.RunAgentPrompt value) {
+      copyOnWrite();
+      instance.setRunAgentPrompt(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * One-shot agent prompts and decision model providers (revision 39).
+     * </pre>
+     *
+     * <code>.mako.v2.RunAgentPrompt run_agent_prompt = 148 [json_name = "runAgentPrompt"];</code>
+     */
+    public Builder setRunAgentPrompt(
+        dev.ironpark.mako.v2.RunAgentPrompt.Builder builderForValue) {
+      copyOnWrite();
+      instance.setRunAgentPrompt(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * One-shot agent prompts and decision model providers (revision 39).
+     * </pre>
+     *
+     * <code>.mako.v2.RunAgentPrompt run_agent_prompt = 148 [json_name = "runAgentPrompt"];</code>
+     */
+    public Builder mergeRunAgentPrompt(dev.ironpark.mako.v2.RunAgentPrompt value) {
+      copyOnWrite();
+      instance.mergeRunAgentPrompt(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * One-shot agent prompts and decision model providers (revision 39).
+     * </pre>
+     *
+     * <code>.mako.v2.RunAgentPrompt run_agent_prompt = 148 [json_name = "runAgentPrompt"];</code>
+     */
+    public Builder clearRunAgentPrompt() {
+      copyOnWrite();
+      instance.clearRunAgentPrompt();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.AgentPromptResult agent_prompt_result = 149 [json_name = "agentPromptResult"];</code>
+     */
+    @java.lang.Override
+    public boolean hasAgentPromptResult() {
+      return instance.hasAgentPromptResult();
+    }
+    /**
+     * <code>.mako.v2.AgentPromptResult agent_prompt_result = 149 [json_name = "agentPromptResult"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.AgentPromptResult getAgentPromptResult() {
+      return instance.getAgentPromptResult();
+    }
+    /**
+     * <code>.mako.v2.AgentPromptResult agent_prompt_result = 149 [json_name = "agentPromptResult"];</code>
+     */
+    public Builder setAgentPromptResult(dev.ironpark.mako.v2.AgentPromptResult value) {
+      copyOnWrite();
+      instance.setAgentPromptResult(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentPromptResult agent_prompt_result = 149 [json_name = "agentPromptResult"];</code>
+     */
+    public Builder setAgentPromptResult(
+        dev.ironpark.mako.v2.AgentPromptResult.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAgentPromptResult(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentPromptResult agent_prompt_result = 149 [json_name = "agentPromptResult"];</code>
+     */
+    public Builder mergeAgentPromptResult(dev.ironpark.mako.v2.AgentPromptResult value) {
+      copyOnWrite();
+      instance.mergeAgentPromptResult(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentPromptResult agent_prompt_result = 149 [json_name = "agentPromptResult"];</code>
+     */
+    public Builder clearAgentPromptResult() {
+      copyOnWrite();
+      instance.clearAgentPromptResult();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.ListProviders list_providers = 150 [json_name = "listProviders"];</code>
+     */
+    @java.lang.Override
+    public boolean hasListProviders() {
+      return instance.hasListProviders();
+    }
+    /**
+     * <code>.mako.v2.ListProviders list_providers = 150 [json_name = "listProviders"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ListProviders getListProviders() {
+      return instance.getListProviders();
+    }
+    /**
+     * <code>.mako.v2.ListProviders list_providers = 150 [json_name = "listProviders"];</code>
+     */
+    public Builder setListProviders(dev.ironpark.mako.v2.ListProviders value) {
+      copyOnWrite();
+      instance.setListProviders(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ListProviders list_providers = 150 [json_name = "listProviders"];</code>
+     */
+    public Builder setListProviders(
+        dev.ironpark.mako.v2.ListProviders.Builder builderForValue) {
+      copyOnWrite();
+      instance.setListProviders(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ListProviders list_providers = 150 [json_name = "listProviders"];</code>
+     */
+    public Builder mergeListProviders(dev.ironpark.mako.v2.ListProviders value) {
+      copyOnWrite();
+      instance.mergeListProviders(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ListProviders list_providers = 150 [json_name = "listProviders"];</code>
+     */
+    public Builder clearListProviders() {
+      copyOnWrite();
+      instance.clearListProviders();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.Providers providers = 151 [json_name = "providers"];</code>
+     */
+    @java.lang.Override
+    public boolean hasProviders() {
+      return instance.hasProviders();
+    }
+    /**
+     * <code>.mako.v2.Providers providers = 151 [json_name = "providers"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Providers getProviders() {
+      return instance.getProviders();
+    }
+    /**
+     * <code>.mako.v2.Providers providers = 151 [json_name = "providers"];</code>
+     */
+    public Builder setProviders(dev.ironpark.mako.v2.Providers value) {
+      copyOnWrite();
+      instance.setProviders(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Providers providers = 151 [json_name = "providers"];</code>
+     */
+    public Builder setProviders(
+        dev.ironpark.mako.v2.Providers.Builder builderForValue) {
+      copyOnWrite();
+      instance.setProviders(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Providers providers = 151 [json_name = "providers"];</code>
+     */
+    public Builder mergeProviders(dev.ironpark.mako.v2.Providers value) {
+      copyOnWrite();
+      instance.mergeProviders(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Providers providers = 151 [json_name = "providers"];</code>
+     */
+    public Builder clearProviders() {
+      copyOnWrite();
+      instance.clearProviders();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.ProviderAction provider_action = 152 [json_name = "providerAction"];</code>
+     */
+    @java.lang.Override
+    public boolean hasProviderAction() {
+      return instance.hasProviderAction();
+    }
+    /**
+     * <code>.mako.v2.ProviderAction provider_action = 152 [json_name = "providerAction"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ProviderAction getProviderAction() {
+      return instance.getProviderAction();
+    }
+    /**
+     * <code>.mako.v2.ProviderAction provider_action = 152 [json_name = "providerAction"];</code>
+     */
+    public Builder setProviderAction(dev.ironpark.mako.v2.ProviderAction value) {
+      copyOnWrite();
+      instance.setProviderAction(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ProviderAction provider_action = 152 [json_name = "providerAction"];</code>
+     */
+    public Builder setProviderAction(
+        dev.ironpark.mako.v2.ProviderAction.Builder builderForValue) {
+      copyOnWrite();
+      instance.setProviderAction(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ProviderAction provider_action = 152 [json_name = "providerAction"];</code>
+     */
+    public Builder mergeProviderAction(dev.ironpark.mako.v2.ProviderAction value) {
+      copyOnWrite();
+      instance.mergeProviderAction(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.ProviderAction provider_action = 152 [json_name = "providerAction"];</code>
+     */
+    public Builder clearProviderAction() {
+      copyOnWrite();
+      instance.clearProviderAction();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.RunDecision run_decision = 153 [json_name = "runDecision"];</code>
+     */
+    @java.lang.Override
+    public boolean hasRunDecision() {
+      return instance.hasRunDecision();
+    }
+    /**
+     * <code>.mako.v2.RunDecision run_decision = 153 [json_name = "runDecision"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.RunDecision getRunDecision() {
+      return instance.getRunDecision();
+    }
+    /**
+     * <code>.mako.v2.RunDecision run_decision = 153 [json_name = "runDecision"];</code>
+     */
+    public Builder setRunDecision(dev.ironpark.mako.v2.RunDecision value) {
+      copyOnWrite();
+      instance.setRunDecision(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RunDecision run_decision = 153 [json_name = "runDecision"];</code>
+     */
+    public Builder setRunDecision(
+        dev.ironpark.mako.v2.RunDecision.Builder builderForValue) {
+      copyOnWrite();
+      instance.setRunDecision(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RunDecision run_decision = 153 [json_name = "runDecision"];</code>
+     */
+    public Builder mergeRunDecision(dev.ironpark.mako.v2.RunDecision value) {
+      copyOnWrite();
+      instance.mergeRunDecision(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RunDecision run_decision = 153 [json_name = "runDecision"];</code>
+     */
+    public Builder clearRunDecision() {
+      copyOnWrite();
+      instance.clearRunDecision();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.DecisionResult decision_result = 154 [json_name = "decisionResult"];</code>
+     */
+    @java.lang.Override
+    public boolean hasDecisionResult() {
+      return instance.hasDecisionResult();
+    }
+    /**
+     * <code>.mako.v2.DecisionResult decision_result = 154 [json_name = "decisionResult"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.DecisionResult getDecisionResult() {
+      return instance.getDecisionResult();
+    }
+    /**
+     * <code>.mako.v2.DecisionResult decision_result = 154 [json_name = "decisionResult"];</code>
+     */
+    public Builder setDecisionResult(dev.ironpark.mako.v2.DecisionResult value) {
+      copyOnWrite();
+      instance.setDecisionResult(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.DecisionResult decision_result = 154 [json_name = "decisionResult"];</code>
+     */
+    public Builder setDecisionResult(
+        dev.ironpark.mako.v2.DecisionResult.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDecisionResult(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.DecisionResult decision_result = 154 [json_name = "decisionResult"];</code>
+     */
+    public Builder mergeDecisionResult(dev.ironpark.mako.v2.DecisionResult value) {
+      copyOnWrite();
+      instance.mergeDecisionResult(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.DecisionResult decision_result = 154 [json_name = "decisionResult"];</code>
+     */
+    public Builder clearDecisionResult() {
+      copyOnWrite();
+      instance.clearDecisionResult();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -12002,9 +12746,16 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.AgentHomeInfo.class,
             dev.ironpark.mako.v2.MigrateAgentHome.class,
             dev.ironpark.mako.v2.AgentHomeMigrated.class,
+            dev.ironpark.mako.v2.RunAgentPrompt.class,
+            dev.ironpark.mako.v2.AgentPromptResult.class,
+            dev.ironpark.mako.v2.ListProviders.class,
+            dev.ironpark.mako.v2.Providers.class,
+            dev.ironpark.mako.v2.ProviderAction.class,
+            dev.ironpark.mako.v2.RunDecision.class,
+            dev.ironpark.mako.v2.DecisionResult.class,
           };
           java.lang.String info =
-              "\u0000n\u0001\u0000\u0001\u0093n\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
+              "\u0000u\u0001\u0000\u0001\u009au\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
               "\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019" +
               "<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000" +
               "!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000" +
@@ -12017,7 +12768,8 @@ public  final class Envelope extends
               "{<\u0000|<\u0000}<\u0000~<\u0000<\u0000\u0080<\u0000\u0082<\u0000\u0083<\u0000\u0084" +
               "<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000\u0088<\u0000\u0089<\u0000\u008a<\u0000" +
               "\u008b<\u0000\u008c<\u0000\u008d<\u0000\u008e<\u0000\u008f<\u0000\u0090<\u0000\u0091" +
-              "<\u0000\u0092<\u0000\u0093<\u0000";
+              "<\u0000\u0092<\u0000\u0093<\u0000\u0094<\u0000\u0095<\u0000\u0096<\u0000\u0097<\u0000" +
+              "\u0098<\u0000\u0099<\u0000\u009a<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

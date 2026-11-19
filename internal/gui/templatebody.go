@@ -144,6 +144,16 @@ func placeholderOptions(args []argDraft, locals []string, q placeholderQuery) []
 				all = append(all, placeholderOption{Name: l, About: T("Defined in this prompt"), Color: localColor})
 			}
 		}
+		if q.Kind == prompttmpl.CompleteName && strings.HasPrefix(strings.ToLower(q.Typed), "ma") {
+			all = append(all,
+				placeholderOption{Name: `await mako.agents()`, About: T("List offered agents, models, efforts, and profiles"), Color: localColor},
+				placeholderOption{Name: `await mako.spawn({ prompt: "" })`, About: T("Spawn a Mako sub-agent session"), Color: localColor},
+				placeholderOption{Name: `await mako.ask({ prompt: "", format: "text" })`, About: T("Run a one-off agent prompt (text or json)"), Color: localColor},
+				placeholderOption{Name: `await mako.decide.choice(state, [])`, About: T("Pick an option using a decision model"), Color: localColor},
+				placeholderOption{Name: `await mako.decide.yes(state, "")`, About: T("Ask a yes/no decision question"), Color: localColor},
+				placeholderOption{Name: `await mako.decide.score(state, [])`, About: T("Score state across criteria levels"), Color: localColor},
+			)
+		}
 	}
 	out := matchByName(all, strings.ToLower(q.Typed), func(o placeholderOption) string { return o.Name })
 	for i := range out {
@@ -184,8 +194,8 @@ func armValues(args []argDraft, subject string) []string {
 		return nil
 	}
 	switch args[i].Type {
-	case prompttmpl.Choice:
-		return splitList(args[i].Options)
+	case prompttmpl.Choice, prompttmpl.Select:
+		return splitOptions(args[i].Options)
 	case prompttmpl.Boolean:
 		return []string{"true", "false"}
 	}

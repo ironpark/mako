@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -401,9 +402,7 @@ func (d *Daemon) moveAgentSessionsLocked(agentName, fromDir, toDir string) (int,
 	moved := 0
 	agyConvIDs := map[string]bool{}
 	previous := make(map[string]savedSession, len(d.saved))
-	for id, entry := range d.saved {
-		previous[id] = entry
-	}
+	maps.Copy(previous, d.saved)
 	liveUpdated := map[*session.Session]string{}
 
 	for id, entry := range d.saved {

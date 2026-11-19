@@ -40,6 +40,35 @@ func (*Agent) Info() agent.Info {
 	}
 }
 
+// WithYolo allows all tool permissions in OpenCode's config environment.
+func (*Agent) WithYolo(l *agent.Launch) {
+	_ = withConfig(l, "permission", map[string]any{"*": "allow"})
+}
+
+// YoloFlags lists standalone flags that legacy configs may have used.
+func (*Agent) YoloFlags() []string {
+	return []string{"--yolo", "--dangerously-skip-permissions"}
+}
+
+// PrepareOneShot runs opencode non-interactively via the `run` subcommand.
+func (*Agent) PrepareOneShot(l *agent.Launch, req agent.OneShotRequest, _, _ string) (agent.OneShotPrepared, error) {
+	prompt := agent.JSONPromptSuffix(req.Prompt, req.Format, req.JSONSchema)
+	cmd := make([]string, 0, len(l.Command)+2)
+	cmd = append(cmd, l.Command[0], "run")
+	cmd = append(cmd, l.Command[1:]...)
+	cmd = append(cmd, prompt)
+	l.Command = cmd
+	return agent.OneShotPrepared{
+		Parse: func(stdout, _ []byte) (string, error) {
+			clean := strings.TrimSpace(agent.StripANSI(string(stdout)))
+			if req.Format == "json" {
+				return agent.ExtractJSON(clean)
+			}
+			return clean, nil
+		},
+	}, nil
+}
+
 // configEnv is the variable OpenCode reads a configuration from that it
 // merges over the user's own, its lists added to theirs.
 const configEnv = "OPENCODE_CONFIG_CONTENT"

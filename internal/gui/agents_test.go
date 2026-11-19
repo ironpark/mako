@@ -265,3 +265,94 @@ func TestHomeMigrateDialogRenders(t *testing.T) {
 		}
 	}
 }
+
+func TestYoloFlagsLiftAndRoundTrip(t *testing.T) {
+	in := map[string]agentspec.Agent{
+		"claude": {
+			Args: []string{"--dangerously-skip-permissions", "--verbose"},
+			Profiles: []agentspec.Profile{
+				{Name: "p1", Args: []string{"--dangerously-skip-permissions"}},
+			},
+		},
+		"codex": {
+			Yolo: true,
+			Profiles: []agentspec.Profile{
+				{Name: "safe", Yolo: new(false)},
+			},
+		},
+	}
+	drafts := draftAgents(in)
+	got, err := applyAgents(drafts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got["claude"].Yolo || !slices.Equal(got["claude"].Args, []string{"--verbose"}) {
+		t.Fatalf("claude = %+v", got["claude"])
+	}
+	if cp := got["claude"].Profiles[0]; cp.Yolo == nil || !*cp.Yolo || len(cp.Args) != 0 {
+		t.Fatalf("claude profile = %+v", cp)
+	}
+	if !got["codex"].Yolo {
+		t.Fatalf("codex Yolo should be true")
+	}
+	if xp := got["codex"].Profiles[0]; xp.Yolo == nil || *xp.Yolo {
+		t.Fatalf("codex safe profile = %+v", xp)
+	}
+}
+
+func TestAgentEditorShowsYoloSwitch(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(&config.Config{Agents: map[string]agentspec.Agent{
+		"claude": {Profiles: []agentspec.Profile{{Name: "p"}}},
+	}}, "")
+	var claudeDraft agentDraft
+	var profiles []agentDraft
+	for _, r := range ggui.Peek(m.AgentDraft) {
+		if r.Agent == "claude" {
+			if r.IsProfile {
+				profiles = append(profiles, r)
+			} else {
+				claudeDraft = r
+			}
+		}
+	}
+	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Scroll(agentEditor(m, claudeDraft, profiles)) }, ggui.Sz(700, 900))
+	defer p.Close()
+	p.Frame()
+	if _, ok := p.Find(Tf("%s YOLO", "claude")); !ok {
+		t.Fatalf("missing YOLO switch for claude:\n%s", p.Semantics().String())
+	}
+	if _, ok := p.Find(Tf("%s YOLO", "claude:p")); !ok {
+		t.Fatalf("missing YOLO override selector for claude:p:\n%s", p.Semantics().String())
+	}
+}
+
+func TestBuiltinMCPToggleAndProfileServersIncludeMako(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	ids := m.mcpServerIDs()
+	if !slices.Contains(ids, "mako") {
+		t.Fatalf("mcpServerIDs() = %v, want built-in mako included", ids)
+	}
+	p := ggui.ProbeBuilder(func() ggui.Widget { return builtinMCPCard(m) }, ggui.Sz(700, 200))
+	defer p.Close()
+	p.Frame()
+	sw, ok := p.Find(T("Built-in Mako MCP"))
+	if !ok {
+		t.Fatalf("missing Built-in Mako MCP switch:\n%s", p.Semantics().String())
+	}
+	if !ggui.Peek(m.ext.MCPServers)["mako"].On() {
+		t.Fatal("expected built-in mako MCP enabled by default")
+	}
+	p.Click(sw.Center())
+	p.Frame()
+	srv, ok := m.cfg.ContextServers["mako"]
+	if !ok || srv.On() {
+		t.Fatalf("expected context_servers.mako disabled after toggle, got %+v (ok=%v)", srv, ok)
+	}
+	p.Click(sw.Center())
+	p.Frame()
+	if !m.cfg.ContextServers["mako"].On() {
+		t.Fatalf("expected context_servers.mako re-enabled after second toggle, got %+v", m.cfg.ContextServers["mako"])
+	}
+}

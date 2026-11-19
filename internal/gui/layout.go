@@ -42,9 +42,24 @@ const (
 	dropBottom
 )
 
-// tabDrag is what a dragged tab, or a session dragged from the sidebar,
-// carries.
-type tabDrag struct{ ID string }
+// tabDrag is what a dragged tab, a session dragged from the sidebar, or a
+// project chip's run of tabs carries.
+type tabDrag struct {
+	ID        string
+	Tabs      []string
+	FromGroup string
+	Project   string
+}
+
+func (d tabDrag) ids() []string {
+	if len(d.Tabs) > 0 {
+		return d.Tabs
+	}
+	if d.ID != "" {
+		return []string{d.ID}
+	}
+	return nil
+}
 
 func newLayout() *layoutNode {
 	return &layoutNode{ID: 1, Group: &tabGroup{ID: 1}}
@@ -172,8 +187,58 @@ func (g *tabGroup) insert(tab string, i int) {
 	g.Active = tab
 }
 
-// split puts tab in a new pane at edge of the pane with ID target.
+func (g *tabGroup) insertAll(tabs []string, i int, active string) {
+	if len(tabs) == 0 {
+		return
+	}
+	i = min(max(i, 0), len(g.Tabs))
+	g.Tabs = slices.Insert(g.Tabs, i, tabs...)
+	if active != "" && slices.Contains(tabs, active) {
+		g.Active = active
+	} else {
+		g.Active = tabs[0]
+	}
+}
+
+// removeSet drops every tab in drop from every pane while keeping a
+// neighbouring active tab in panes that retain other tabs.
+func (n *layoutNode) removeSet(drop map[string]bool) {
+	for _, g := range n.groups() {
+		activeIdx := slices.Index(g.Tabs, g.Active)
+		activeDropped := g.Active != "" && drop[g.Active]
+		kept := make([]string, 0, len(g.Tabs))
+		nextActive := ""
+		for i, id := range g.Tabs {
+			if drop[id] {
+				continue
+			}
+			if activeDropped && i > activeIdx && nextActive == "" {
+				nextActive = id
+			}
+			kept = append(kept, id)
+		}
+		g.Tabs = kept
+		if len(kept) == 0 {
+			g.Active = ""
+		} else if activeDropped || !slices.Contains(kept, g.Active) {
+			if nextActive != "" {
+				g.Active = nextActive
+			} else {
+				g.Active = kept[len(kept)-1]
+			}
+		}
+	}
+}
+
 func (n *layoutNode) split(tab string, target int, edge dropEdge) {
+	n.splitAll([]string{tab}, tab, target, edge)
+}
+
+// splitAll puts tabs in a new pane at edge of the pane with ID target.
+func (n *layoutNode) splitAll(tabs []string, active string, target int, edge dropEdge) {
+	if len(tabs) == 0 {
+		return
+	}
 	leaves := n.leaves()
 	i := slices.IndexFunc(leaves, func(l *layoutNode) bool { return l.Group.ID == target })
 	if i < 0 {
@@ -181,7 +246,11 @@ func (n *layoutNode) split(tab string, target int, edge dropEdge) {
 	}
 	leaf := leaves[i]
 	id := n.maxID() + 1
-	fresh := &layoutNode{ID: id, Group: &tabGroup{ID: id + 1, Tabs: []string{tab}, Active: tab}}
+	act := tabs[0]
+	if active != "" && slices.Contains(tabs, active) {
+		act = active
+	}
+	fresh := &layoutNode{ID: id, Group: &tabGroup{ID: id + 1, Tabs: slices.Clone(tabs), Active: act}}
 	old := &layoutNode{ID: id + 2, Group: leaf.Group}
 	*leaf = layoutNode{ID: leaf.ID, Ratio: 0.5, Vertical: edge == dropTop || edge == dropBottom}
 	if edge == dropLeft || edge == dropTop {
@@ -302,6 +371,60 @@ func (m *model) moveTab(id string, group, i int) {
 	m.attach(id)
 }
 
+func cleanTabIDs(ids []string) ([]string, map[string]bool) {
+	out := make([]string, 0, len(ids))
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out, seen
+}
+
+func preferredActiveTab(root *layoutNode, focusGroup int, idSet map[string]bool) string {
+	if g := root.group(focusGroup); g != nil && idSet[g.Active] {
+		return g.Active
+	}
+	for _, g := range root.groups() {
+		if idSet[g.Active] {
+			return g.Active
+		}
+	}
+	return ""
+}
+
+// moveTabs moves a group of tabs (such as a project chip's run) in order into
+// pane group before index i of its current tabs.
+func (m *model) moveTabs(ids []string, group, i int) {
+	clean, idSet := cleanTabIDs(ids)
+	if len(clean) == 0 {
+		return
+	}
+	focus := ggui.Peek(m.FocusGroup)
+	m.editLayout(func(root *layoutNode) int {
+		target := root.group(group)
+		if target == nil {
+			return 0
+		}
+		active := preferredActiveTab(root, focus, idSet)
+		limit := min(max(i, 0), len(target.Tabs))
+		shift := 0
+		for _, id := range target.Tabs[:limit] {
+			if idSet[id] {
+				shift++
+			}
+		}
+		i = max(0, i-shift)
+		root.removeSet(idSet)
+		target.insertAll(clean, i, active)
+		return group
+	})
+	m.attachVisible()
+}
+
 // splitTab moves a tab into a new pane at edge of pane group. A pane's only
 // tab has nothing to split from, so it stays.
 func (m *model) splitTab(id string, group int, edge dropEdge) {
@@ -321,6 +444,43 @@ func (m *model) splitTab(id string, group int, edge dropEdge) {
 		return root.groupOf(id).ID
 	})
 	m.attach(id)
+}
+
+// splitTabs moves a project chip's run of tabs into a new split pane at edge of
+// pane group. Splitting all of a pane's own tabs from itself is a no-op.
+func (m *model) splitTabs(ids []string, group int, edge dropEdge) {
+	clean, idSet := cleanTabIDs(ids)
+	if len(clean) == 0 {
+		return
+	}
+	if edge == dropCenter {
+		if g := ggui.Peek(m.Layout).group(group); g != nil {
+			m.moveTabs(clean, group, len(g.Tabs))
+		}
+		return
+	}
+	g := ggui.Peek(m.Layout).group(group)
+	if g == nil {
+		return
+	}
+	hasOther := false
+	for _, t := range g.Tabs {
+		if !idSet[t] {
+			hasOther = true
+			break
+		}
+	}
+	if !hasOther {
+		return
+	}
+	focus := ggui.Peek(m.FocusGroup)
+	m.editLayout(func(root *layoutNode) int {
+		active := preferredActiveTab(root, focus, idSet)
+		root.removeSet(idSet)
+		root.splitAll(clean, active, group, edge)
+		return root.groupOf(clean[0]).ID
+	})
+	m.attachVisible()
 }
 
 // setRatio is a split's divider moving.

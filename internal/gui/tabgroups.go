@@ -168,7 +168,13 @@ func (m *model) tabKeys(tabs []string) func(string) string {
 	groups := groupProjects(ggui.Peek(m.Sessions), ggui.Peek(m.Nodes), ggui.Peek(m.Prefs).Projects, l.Projects, l.Names)
 	docs, diffs := ggui.Peek(m.Docs), ggui.Peek(m.Diffs)
 	keys := make(map[string]string, len(tabs))
-	for _, id := range tabs {
+	for idx, id := range tabs {
+		if idx > 0 && isLaunchTab(id) {
+			if prev, ok := keys[tabs[idx-1]]; ok {
+				keys[id] = prev
+				continue
+			}
+		}
 		if i, root := tabPlace(id, groups, docs, diffs); i >= 0 {
 			keys[id] = tabProjectKey(groups[i], root)
 		}
@@ -254,6 +260,17 @@ func (m *model) toggleFold(key string) {
 		} else {
 			f[key] = true
 		}
+		return f
+	})
+}
+
+func (m *model) clearFold(key string) {
+	if !ggui.Peek(m.FoldedTabs)[key] {
+		return
+	}
+	m.FoldedTabs.Update(func(f map[string]bool) map[string]bool {
+		f = maps.Clone(f)
+		delete(f, key)
 		return f
 	})
 }

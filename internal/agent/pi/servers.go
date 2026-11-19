@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // servers is the source of an extension that adds MCP servers for the
@@ -45,7 +46,7 @@ func (p *Pi) WithServers(l *agent.Launch, list []agent.Server, dir, session stri
 		return nil, err
 	}
 	path := filepath.Join(dir, "pi-mcp-"+session+".js")
-	if err := os.WriteFile(path, fmt.Appendf(nil, servers, b), 0o600); err != nil {
+	if err := fsutil.Write(path, fmt.Appendf(nil, servers, b)); err != nil {
 		return nil, err
 	}
 	l.Command = withExtension(l.Command, path)

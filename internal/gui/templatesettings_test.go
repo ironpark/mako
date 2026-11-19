@@ -174,3 +174,36 @@ func TestTemplateAgentsPicker(t *testing.T) {
 		t.Fatalf("every agent left %q", got)
 	}
 }
+
+func TestSelectArgumentEditorRoundTripAndOptionChips(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	dir, _ := config.TemplatesDir()
+	_ = os.MkdirAll(dir, 0o700)
+	_ = os.WriteFile(filepath.Join(dir, "deploy.md"), []byte("---\nargs:\n  - name: env\n    type: select\n    options: [dev, fast mode, prod]\n    default: fast mode\n---\n{{env}}\n"), 0o600)
+
+	m := newModel(config.Default(), "")
+	pg := newTemplatePage()
+	drafts := ggui.Peek(pg.drafts)
+	if len(drafts) != 1 || drafts[0].Args[0].Type != prompttmpl.Select || drafts[0].Args[0].Default != "fast mode" {
+		t.Fatalf("loaded drafts = %+v", drafts)
+	}
+	id := drafts[0].ID
+	pg.open.Set(id)
+
+	// Reordering arguments moves args up/down cleanly.
+	pg.addArg(id)
+	pg.update(id, func(d *templateDraft) { d.Args[1].Name = "region" })
+	pg.moveArg(id, ggui.Peek(pg.drafts)[0].Args[1].ID, -1)
+	if got := ggui.Peek(pg.drafts)[0].Args[0].Name; got != "region" {
+		t.Fatalf("after moveArg up first = %q", got)
+	}
+	pg.moveArg(id, ggui.Peek(pg.drafts)[0].Args[0].ID, 1)
+	pg.removeArg(id, ggui.Peek(pg.drafts)[0].Args[1].ID)
+
+	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Scroll(templateEditor(m, pg, pg.draft(id))) }, ggui.Sz(800, 1200))
+	defer p.Close()
+	p.Frame()
+	if _, ok := p.Semantics().Find(ggui.RoleButton, Tf("Remove option %s", "fast mode")); !ok {
+		t.Fatalf("missing interactive option chip remove button:\n%s", p.Semantics().String())
+	}
+}

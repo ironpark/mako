@@ -9,6 +9,7 @@ syntax = "proto3";
 package mako.v2;
 
 import "mako/v2/chat.proto";
+import "mako/v2/decision.proto";
 import "mako/v2/devices.proto";
 import "mako/v2/files.proto";
 import "mako/v2/git.proto";
@@ -173,6 +174,15 @@ message Envelope {
     AgentHomeInfo agent_home_info = 145;
     MigrateAgentHome migrate_agent_home = 146;
     AgentHomeMigrated agent_home_migrated = 147;
+
+    // One-shot agent prompts and decision model providers (revision 39).
+    RunAgentPrompt run_agent_prompt = 148;
+    AgentPromptResult agent_prompt_result = 149;
+    ListProviders list_providers = 150;
+    Providers providers = 151;
+    ProviderAction provider_action = 152;
+    RunDecision run_decision = 153;
+    DecisionResult decision_result = 154;
   }
 }
 

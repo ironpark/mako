@@ -263,6 +263,7 @@ func (d *Daemon) syncWorkspaceProjects() {
 	if !slices.EqualFunc(before, after, func(a, b *protocol.ProjectScope) bool { return proto.Equal(a, b) }) {
 		// The Agents panels and list_agents follow at once.
 		d.changes.fire(false, true)
+		d.syncProjectAgents()
 	}
 }
 

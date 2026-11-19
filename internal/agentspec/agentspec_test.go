@@ -225,3 +225,97 @@ func TestResolveGivesAProfilesModel(t *testing.T) {
 		t.Fatalf("codex command %q", got)
 	}
 }
+
+func TestResolveYoloAndOverrides(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"claude", "codex", "agy", "omp", "opencode"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir)
+
+	no := false
+	yes := true
+	agentsMap := map[string]Agent{
+		"claude": {
+			Yolo: true,
+			Profiles: []Profile{
+				{Name: "safe", Yolo: &no},
+				{Name: "inherit"},
+			},
+		},
+		"codex": {
+			Profiles: []Profile{{Name: "fast", Yolo: &yes}},
+		},
+		"agy":      {Yolo: true},
+		"omp":      {Yolo: true},
+		"opencode": {Yolo: true},
+	}
+
+	// Agent YOLO applies and stays before request args.
+	l, err := Resolve("claude", "inherit", []string{"do work"}, nil, agentsMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(l.Command[1:], " "); got != "--dangerously-skip-permissions do work" {
+		t.Fatalf("claude inherit = %q", got)
+	}
+
+	// Profile YOLO false overrides agent YOLO true.
+	l, err = Resolve("claude", "safe", []string{"do work"}, nil, agentsMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(l.Command, "--dangerously-skip-permissions") {
+		t.Fatalf("claude safe kept skip-permissions: %q", l.Command)
+	}
+
+	// Launch options override profile settings.
+	l, err = ResolveWith("claude", "safe", []string{"hi"}, nil, ResolveOptions{Model: "sonnet", Effort: "low", Yolo: &yes}, agentsMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(l.Command[1:], " "); got != "--model sonnet --effort low --dangerously-skip-permissions hi" {
+		t.Fatalf("claude override = %q", got)
+	}
+
+	// Codex, agy, omp, opencode YOLO behavior.
+	l, err = Resolve("codex", "fast", nil, nil, agentsMap)
+	if err != nil || !slices.Contains(l.Command, "--dangerously-bypass-approvals-and-sandbox") {
+		t.Fatalf("codex = %q, %v", l.Command, err)
+	}
+	l, err = Resolve("agy", "", nil, nil, agentsMap)
+	if err != nil || !slices.Contains(l.Command, "--dangerously-skip-permissions") {
+		t.Fatalf("agy = %q, %v", l.Command, err)
+	}
+	l, err = Resolve("omp", "", nil, nil, agentsMap)
+	if err != nil || !slices.Contains(l.Command, "--yolo") {
+		t.Fatalf("omp = %q, %v", l.Command, err)
+	}
+	t.Setenv("OPENCODE_CONFIG_CONTENT", `{"theme":"dark"}`)
+	l, err = Resolve("opencode", "", nil, nil, agentsMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Theme      string            `json:"theme"`
+		Permission map[string]string `json:"permission"`
+	}
+	if err := json.Unmarshal([]byte(l.Env["OPENCODE_CONFIG_CONTENT"]), &doc); err != nil {
+		t.Fatalf("opencode env %q: %v", l.Env["OPENCODE_CONFIG_CONTENT"], err)
+	}
+	if doc.Theme != "dark" || doc.Permission["*"] != "allow" {
+		t.Fatalf("opencode config = %+v", doc)
+	}
+
+	// LiftYoloArgs removes standalone YOLO flags cleanly.
+	cleaned, lifted := LiftYoloArgs("claude", []string{"--verbose", "--dangerously-skip-permissions", "--model", "opus"})
+	if !lifted || !slices.Equal(cleaned, []string{"--verbose", "--model", "opus"}) {
+		t.Fatalf("lifted=%v cleaned=%q", lifted, cleaned)
+	}
+	cleaned, lifted = LiftYoloArgs("codex", []string{"--yolo", "-m", "o3"})
+	if !lifted || !slices.Equal(cleaned, []string{"-m", "o3"}) {
+		t.Fatalf("codex lifted=%v cleaned=%q", lifted, cleaned)
+	}
+}

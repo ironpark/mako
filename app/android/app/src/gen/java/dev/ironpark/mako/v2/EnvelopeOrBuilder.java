@@ -1352,5 +1352,90 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.AgentHomeMigrated getAgentHomeMigrated();
 
+  /**
+   * <pre>
+   * One-shot agent prompts and decision model providers (revision 39).
+   * </pre>
+   *
+   * <code>.mako.v2.RunAgentPrompt run_agent_prompt = 148 [json_name = "runAgentPrompt"];</code>
+   * @return Whether the runAgentPrompt field is set.
+   */
+  boolean hasRunAgentPrompt();
+  /**
+   * <pre>
+   * One-shot agent prompts and decision model providers (revision 39).
+   * </pre>
+   *
+   * <code>.mako.v2.RunAgentPrompt run_agent_prompt = 148 [json_name = "runAgentPrompt"];</code>
+   * @return The runAgentPrompt.
+   */
+  dev.ironpark.mako.v2.RunAgentPrompt getRunAgentPrompt();
+
+  /**
+   * <code>.mako.v2.AgentPromptResult agent_prompt_result = 149 [json_name = "agentPromptResult"];</code>
+   * @return Whether the agentPromptResult field is set.
+   */
+  boolean hasAgentPromptResult();
+  /**
+   * <code>.mako.v2.AgentPromptResult agent_prompt_result = 149 [json_name = "agentPromptResult"];</code>
+   * @return The agentPromptResult.
+   */
+  dev.ironpark.mako.v2.AgentPromptResult getAgentPromptResult();
+
+  /**
+   * <code>.mako.v2.ListProviders list_providers = 150 [json_name = "listProviders"];</code>
+   * @return Whether the listProviders field is set.
+   */
+  boolean hasListProviders();
+  /**
+   * <code>.mako.v2.ListProviders list_providers = 150 [json_name = "listProviders"];</code>
+   * @return The listProviders.
+   */
+  dev.ironpark.mako.v2.ListProviders getListProviders();
+
+  /**
+   * <code>.mako.v2.Providers providers = 151 [json_name = "providers"];</code>
+   * @return Whether the providers field is set.
+   */
+  boolean hasProviders();
+  /**
+   * <code>.mako.v2.Providers providers = 151 [json_name = "providers"];</code>
+   * @return The providers.
+   */
+  dev.ironpark.mako.v2.Providers getProviders();
+
+  /**
+   * <code>.mako.v2.ProviderAction provider_action = 152 [json_name = "providerAction"];</code>
+   * @return Whether the providerAction field is set.
+   */
+  boolean hasProviderAction();
+  /**
+   * <code>.mako.v2.ProviderAction provider_action = 152 [json_name = "providerAction"];</code>
+   * @return The providerAction.
+   */
+  dev.ironpark.mako.v2.ProviderAction getProviderAction();
+
+  /**
+   * <code>.mako.v2.RunDecision run_decision = 153 [json_name = "runDecision"];</code>
+   * @return Whether the runDecision field is set.
+   */
+  boolean hasRunDecision();
+  /**
+   * <code>.mako.v2.RunDecision run_decision = 153 [json_name = "runDecision"];</code>
+   * @return The runDecision.
+   */
+  dev.ironpark.mako.v2.RunDecision getRunDecision();
+
+  /**
+   * <code>.mako.v2.DecisionResult decision_result = 154 [json_name = "decisionResult"];</code>
+   * @return Whether the decisionResult field is set.
+   */
+  boolean hasDecisionResult();
+  /**
+   * <code>.mako.v2.DecisionResult decision_result = 154 [json_name = "decisionResult"];</code>
+   * @return The decisionResult.
+   */
+  dev.ironpark.mako.v2.DecisionResult getDecisionResult();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

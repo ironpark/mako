@@ -119,6 +119,9 @@ func (m *model) saveHost() {
 	*m.cfg = next
 	m.Agents.Set(agentspec.Targets(next.Agents))
 	m.AgentDraft.Set(draftAgents(next.Agents))
+	if m.link != nil {
+		m.link.pollNow()
+	}
 	if agentsOnly {
 		m.HostNote.Set(T("Saved. Sessions started from now on use it."))
 		return

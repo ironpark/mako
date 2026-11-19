@@ -213,8 +213,12 @@ func (d *Daemon) openSession(ctx context.Context, req *protocol.OpenSession) (*s
 		if _, ok := d.sessions.get(parent); !ok {
 			return nil, fmt.Errorf("unknown session %q", parent)
 		}
-		// Told of its parent as an agent spawn_agent starts is.
-		prompt = projectTaskPrompt(parent, prompt)
+		if d.supportsAgentMCP(req.GetAgent(), req.GetProfile()) {
+			// Told of its parent as an agent spawn_agent starts is.
+			prompt = projectTaskPrompt(parent, prompt)
+		} else if prompt != "" {
+			prompt = fmt.Sprintf("[Mako project task: parent session %s.]\n\n%s", parent, prompt)
+		}
 	}
 	s, err := d.startSessionAs(ctx, newSessionID(), req, parent)
 	if err != nil {
@@ -343,7 +347,11 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 		}
 		maps.Copy(env, lent)
 	}
-	launch, err := agentspec.Resolve(req.GetAgent(), req.GetProfile(), req.GetArgs(), env, d.agents())
+	launch, err := agentspec.ResolveWith(req.GetAgent(), req.GetProfile(), req.GetArgs(), env, agentspec.ResolveOptions{
+		Model:  req.GetModel(),
+		Effort: req.GetEffort(),
+		Yolo:   req.Yolo,
+	}, d.agents())
 	if err != nil {
 		return nil, err
 	}

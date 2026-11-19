@@ -535,6 +535,10 @@ is polled as before.
 | `read_project_agents` | `ReadProjectAgents` | `project_agents` | Read-only agent and message monitor for an absolute project `path` on `node_id`. Worktrees include their repository's sessions. `message_limit` defaults to 50 and is capped at 100. Each agent has its session, parent ID, messaging availability and pending message count; recent messages include sender, recipient, timestamp, text and state (`pending`, `acknowledged`, `removed`). Monitoring never consumes messages. Requires revision 15. |
 | `set_projects` | `SetProjects` | `projects` | Gives `node_id`'s daemon the projects the user put together, each as its absolute folders on that node (`paths`): its agents in any of them are one project's, for the agents' MCP tools and `read_project_agents`. A folder holds its subfolders, but not a repository of its own inside it. `give_dirs` starts an agent in one folder with the others too, as an agent that takes `--add-dir` does. The front-end sends every project each time; the daemon keeps the last, on disk, until its [workspace](#workspaces) holds projects, from revision 23: from then on it answers with the workspace's, keeping none. Requires revision 16. |
 | `relay_agent_message` | `RelayAgentMessage` | `agent_message` | Passes a message an agent sent over its MCP tools to an agent of its project on `node_id`, from one daemon to another. The receiving daemon keeps it in the recipient's inbox when `scope` (`project:` and the project's ID) is both the recipient's, there, and the sender's, as the sender's node said in its state (`SessionInfo.agent_scope`, with `agent_messaging`). |
+| `run_agent_prompt` | `RunAgentPrompt` | `agent_prompt_result` | Runs a single non-interactive prompt on `node_id`'s agent (`text` or `json` output, optionally validated by `json_schema`) and returns its output without creating a saved session. Requires revision 39. |
+| `list_providers` | `ListProviders` | `providers` | Lists the local daemon's decision model providers (`openrouter`, `typesafe`, `openai`, `google`), whether each has a stored or environment key (never raw secrets), secret storage backend, and default provider/model. Local front-ends only. Requires revision 39. |
+| `provider_action` | `ProviderAction` | `providers` | Sets or clears a provider API key (`set_key`, `clear_key`) or updates decision defaults (`set_defaults`) on the local daemon. Local front-ends only. Requires revision 39. |
+| `run_decision` | `RunDecision` | `decision_result` | Evaluates structured decision questions (`request_json` -> `response_json`) on the local daemon using the configured decision provider. Local front-ends only. Requires revision 39. |
 | `attach` | `Attach` | — | Turns the stream into a session pipe; see [Attach streams](#attach-streams). |
 | `resize` | `Resize` | `session_info` | Resizes a local session's window. |
 | `input` | `Input` | — | Writes to a local session's PTY. No reply. |
@@ -544,7 +548,9 @@ sessions and are not forwarded. Front-ends send them on an attach stream
 instead, which is routed.
 
 **`OpenSession`.** `agent` names a program the node has configured (`claude`,
-`codex`, `agy`, `shell`, …) and `profile` one of its profiles there. `project`
+`codex`, `agy`, `shell`, …) and `profile` one of its profiles there. `model`,
+`effort`, and `yolo` (revision 39) override the profile's or agent's defaults
+for that launch. `project`
 is the working directory; empty starts in the node's home. `args` and `env` add
 to the node's own. `cols` and `rows` size the PTY. With `worktree` set, the
 daemon first makes a git worktree on a new `branch` from `base` (the

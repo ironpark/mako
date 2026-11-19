@@ -150,6 +150,13 @@ type Envelope struct {
 	//	*Envelope_AgentHomeInfo
 	//	*Envelope_MigrateAgentHome
 	//	*Envelope_AgentHomeMigrated
+	//	*Envelope_RunAgentPrompt
+	//	*Envelope_AgentPromptResult
+	//	*Envelope_ListProviders
+	//	*Envelope_Providers
+	//	*Envelope_ProviderAction
+	//	*Envelope_RunDecision
+	//	*Envelope_DecisionResult
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1178,6 +1185,69 @@ func (x *Envelope) GetAgentHomeMigrated() *AgentHomeMigrated {
 	return nil
 }
 
+func (x *Envelope) GetRunAgentPrompt() *RunAgentPrompt {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_RunAgentPrompt); ok {
+			return x.RunAgentPrompt
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetAgentPromptResult() *AgentPromptResult {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_AgentPromptResult); ok {
+			return x.AgentPromptResult
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetListProviders() *ListProviders {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_ListProviders); ok {
+			return x.ListProviders
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetProviders() *Providers {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_Providers); ok {
+			return x.Providers
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetProviderAction() *ProviderAction {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_ProviderAction); ok {
+			return x.ProviderAction
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetRunDecision() *RunDecision {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_RunDecision); ok {
+			return x.RunDecision
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetDecisionResult() *DecisionResult {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_DecisionResult); ok {
+			return x.DecisionResult
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1629,6 +1699,35 @@ type Envelope_AgentHomeMigrated struct {
 	AgentHomeMigrated *AgentHomeMigrated `protobuf:"bytes,147,opt,name=agent_home_migrated,json=agentHomeMigrated,proto3,oneof"`
 }
 
+type Envelope_RunAgentPrompt struct {
+	// One-shot agent prompts and decision model providers (revision 39).
+	RunAgentPrompt *RunAgentPrompt `protobuf:"bytes,148,opt,name=run_agent_prompt,json=runAgentPrompt,proto3,oneof"`
+}
+
+type Envelope_AgentPromptResult struct {
+	AgentPromptResult *AgentPromptResult `protobuf:"bytes,149,opt,name=agent_prompt_result,json=agentPromptResult,proto3,oneof"`
+}
+
+type Envelope_ListProviders struct {
+	ListProviders *ListProviders `protobuf:"bytes,150,opt,name=list_providers,json=listProviders,proto3,oneof"`
+}
+
+type Envelope_Providers struct {
+	Providers *Providers `protobuf:"bytes,151,opt,name=providers,proto3,oneof"`
+}
+
+type Envelope_ProviderAction struct {
+	ProviderAction *ProviderAction `protobuf:"bytes,152,opt,name=provider_action,json=providerAction,proto3,oneof"`
+}
+
+type Envelope_RunDecision struct {
+	RunDecision *RunDecision `protobuf:"bytes,153,opt,name=run_decision,json=runDecision,proto3,oneof"`
+}
+
+type Envelope_DecisionResult struct {
+	DecisionResult *DecisionResult `protobuf:"bytes,154,opt,name=decision_result,json=decisionResult,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -1845,6 +1944,20 @@ func (*Envelope_MigrateAgentHome) isEnvelope_Body() {}
 
 func (*Envelope_AgentHomeMigrated) isEnvelope_Body() {}
 
+func (*Envelope_RunAgentPrompt) isEnvelope_Body() {}
+
+func (*Envelope_AgentPromptResult) isEnvelope_Body() {}
+
+func (*Envelope_ListProviders) isEnvelope_Body() {}
+
+func (*Envelope_Providers) isEnvelope_Body() {}
+
+func (*Envelope_ProviderAction) isEnvelope_Body() {}
+
+func (*Envelope_RunDecision) isEnvelope_Body() {}
+
+func (*Envelope_DecisionResult) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -1914,7 +2027,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xd6.\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xa82\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -2048,7 +2161,14 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\x12inspect_agent_home\x18\x90\x01 \x01(\v2\x19.mako.v2.InspectAgentHomeH\x00R\x10inspectAgentHome\x12A\n" +
 	"\x0fagent_home_info\x18\x91\x01 \x01(\v2\x16.mako.v2.AgentHomeInfoH\x00R\ragentHomeInfo\x12J\n" +
 	"\x12migrate_agent_home\x18\x92\x01 \x01(\v2\x19.mako.v2.MigrateAgentHomeH\x00R\x10migrateAgentHome\x12M\n" +
-	"\x13agent_home_migrated\x18\x93\x01 \x01(\v2\x1a.mako.v2.AgentHomeMigratedH\x00R\x11agentHomeMigratedB\x06\n" +
+	"\x13agent_home_migrated\x18\x93\x01 \x01(\v2\x1a.mako.v2.AgentHomeMigratedH\x00R\x11agentHomeMigrated\x12D\n" +
+	"\x10run_agent_prompt\x18\x94\x01 \x01(\v2\x17.mako.v2.RunAgentPromptH\x00R\x0erunAgentPrompt\x12M\n" +
+	"\x13agent_prompt_result\x18\x95\x01 \x01(\v2\x1a.mako.v2.AgentPromptResultH\x00R\x11agentPromptResult\x12@\n" +
+	"\x0elist_providers\x18\x96\x01 \x01(\v2\x16.mako.v2.ListProvidersH\x00R\rlistProviders\x123\n" +
+	"\tproviders\x18\x97\x01 \x01(\v2\x12.mako.v2.ProvidersH\x00R\tproviders\x12C\n" +
+	"\x0fprovider_action\x18\x98\x01 \x01(\v2\x17.mako.v2.ProviderActionH\x00R\x0eproviderAction\x12:\n" +
+	"\frun_decision\x18\x99\x01 \x01(\v2\x14.mako.v2.RunDecisionH\x00R\vrunDecision\x12C\n" +
+	"\x0fdecision_result\x18\x9a\x01 \x01(\v2\x17.mako.v2.DecisionResultH\x00R\x0edecisionResultB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"I\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -2178,6 +2298,13 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*AgentHomeInfo)(nil),     // 106: mako.v2.AgentHomeInfo
 	(*MigrateAgentHome)(nil),  // 107: mako.v2.MigrateAgentHome
 	(*AgentHomeMigrated)(nil), // 108: mako.v2.AgentHomeMigrated
+	(*RunAgentPrompt)(nil),    // 109: mako.v2.RunAgentPrompt
+	(*AgentPromptResult)(nil), // 110: mako.v2.AgentPromptResult
+	(*ListProviders)(nil),     // 111: mako.v2.ListProviders
+	(*Providers)(nil),         // 112: mako.v2.Providers
+	(*ProviderAction)(nil),    // 113: mako.v2.ProviderAction
+	(*RunDecision)(nil),       // 114: mako.v2.RunDecision
+	(*DecisionResult)(nil),    // 115: mako.v2.DecisionResult
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,   // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -2288,11 +2415,18 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	106, // 105: mako.v2.Envelope.agent_home_info:type_name -> mako.v2.AgentHomeInfo
 	107, // 106: mako.v2.Envelope.migrate_agent_home:type_name -> mako.v2.MigrateAgentHome
 	108, // 107: mako.v2.Envelope.agent_home_migrated:type_name -> mako.v2.AgentHomeMigrated
-	108, // [108:108] is the sub-list for method output_type
-	108, // [108:108] is the sub-list for method input_type
-	108, // [108:108] is the sub-list for extension type_name
-	108, // [108:108] is the sub-list for extension extendee
-	0,   // [0:108] is the sub-list for field type_name
+	109, // 108: mako.v2.Envelope.run_agent_prompt:type_name -> mako.v2.RunAgentPrompt
+	110, // 109: mako.v2.Envelope.agent_prompt_result:type_name -> mako.v2.AgentPromptResult
+	111, // 110: mako.v2.Envelope.list_providers:type_name -> mako.v2.ListProviders
+	112, // 111: mako.v2.Envelope.providers:type_name -> mako.v2.Providers
+	113, // 112: mako.v2.Envelope.provider_action:type_name -> mako.v2.ProviderAction
+	114, // 113: mako.v2.Envelope.run_decision:type_name -> mako.v2.RunDecision
+	115, // 114: mako.v2.Envelope.decision_result:type_name -> mako.v2.DecisionResult
+	115, // [115:115] is the sub-list for method output_type
+	115, // [115:115] is the sub-list for method input_type
+	115, // [115:115] is the sub-list for extension type_name
+	115, // [115:115] is the sub-list for extension extendee
+	0,   // [0:115] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -2301,6 +2435,7 @@ func file_mako_v2_envelope_proto_init() {
 		return
 	}
 	file_mako_v2_chat_proto_init()
+	file_mako_v2_decision_proto_init()
 	file_mako_v2_devices_proto_init()
 	file_mako_v2_files_proto_init()
 	file_mako_v2_git_proto_init()
@@ -2419,6 +2554,13 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_AgentHomeInfo)(nil),
 		(*Envelope_MigrateAgentHome)(nil),
 		(*Envelope_AgentHomeMigrated)(nil),
+		(*Envelope_RunAgentPrompt)(nil),
+		(*Envelope_AgentPromptResult)(nil),
+		(*Envelope_ListProviders)(nil),
+		(*Envelope_Providers)(nil),
+		(*Envelope_ProviderAction)(nil),
+		(*Envelope_RunDecision)(nil),
+		(*Envelope_DecisionResult)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

@@ -252,6 +252,35 @@ type EffortFlag interface {
 	EffortArgs(effort string) []string
 }
 
+// YoloFlag is an agent that can start with permission and sandbox checks
+// bypassed ("YOLO" mode). WithYolo adds the flags or environment variables
+// that enable it on l, and YoloFlags lists standalone CLI flags that turn
+// it on so legacy flag configurations can be lifted into the YOLO switch.
+type YoloFlag interface {
+	WithYolo(l *Launch)
+	YoloFlags() []string
+}
+
+// OneShotRequest configures a single non-interactive prompt invocation.
+type OneShotRequest struct {
+	Prompt     string
+	Format     string // "text" (default) or "json"
+	JSONSchema string // optional JSON Schema string when Format == "json"
+}
+
+// OneShotPrepared describes how to run a prepared non-interactive command.
+type OneShotPrepared struct {
+	Stdin   string // optional text fed on stdin
+	Cleanup func()
+	Parse   func(stdout, stderr []byte) (string, error)
+}
+
+// OneShot is an agent that can answer a single non-interactive prompt and
+// exit without keeping a session alive.
+type OneShot interface {
+	PrepareOneShot(l *Launch, req OneShotRequest, workDir, tempDir string) (OneShotPrepared, error)
+}
+
 // ModelInfo describes one model offered by an agent's catalog.
 type ModelInfo struct {
 	ID       string   `json:"id"`

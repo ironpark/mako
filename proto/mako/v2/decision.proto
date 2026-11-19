@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package mako.v2;
+
+option go_package = "github.com/ironpark/mako/internal/protocol";
+
+// ListProviders asks this node's daemon which AI API keys are set and what
+// default decision model is configured. Local front-ends only. Revision 39.
+message ListProviders {}
+
+message ProviderInfo {
+  string id = 1; // openrouter, typesafe, openai, google
+  bool set = 2; // stored in keychain/file
+  bool env_set = 3; // present in daemon environment
+  string default_model = 4;
+}
+
+message Providers {
+  repeated ProviderInfo providers = 1;
+  string secrets = 2; // keychain name or "file"
+  string secrets_note = 3;
+  string default_provider = 4;
+  string default_model = 5;
+}
+
+// ProviderAction sets or clears a provider API key or updates decision
+// defaults on this node's daemon. Local front-ends only. Revision 39.
+message ProviderAction {
+  string op = 1; // set_key, clear_key, set_defaults
+  string provider = 2;
+  string value = 3;
+  string default_provider = 4;
+  string default_model = 5;
+}
+
+// RunDecision evaluates structured decision questions on this node's
+// configured decision model provider. Local front-ends only. Revision 39.
+message RunDecision {
+  string request_json = 1;
+}
+
+message DecisionResult {
+  string response_json = 1;
+}

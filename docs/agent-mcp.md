@@ -351,7 +351,9 @@ disables all MCP servers for the profile. For example:
 As with explicitly selected extension servers, selecting `mako` in a
 profile enables it even if it is disabled at node level. `spawn_agent`
 rejects a profile that would disable the child's communication tools.
-Changes apply when a session is started or restored.
+Saved changes to agent profiles and to the built-in `mako` server apply to
+running sessions at once, updating their available tools and messaging state
+on existing MCP connections.
 
 Claude Code and Codex reach the server over streamable HTTP on a loopback
 port the daemon picks, with no process per session: every request carries

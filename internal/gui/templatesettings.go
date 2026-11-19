@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
@@ -64,7 +67,7 @@ type argDraft struct {
 // templateTypeLabels name the types, in English for T.
 var templateTypeLabels = map[string]string{
 	"string": "Text, one line", "text": "Text, several lines", "integer": "Whole number",
-	"number": "Number", "boolean": "True or false", "choice": "Choice",
+	"number": "Number", "boolean": "True or false", "choice": "Choice", "select": "Select",
 }
 
 // templatePage is the page's state while it is shown.
@@ -74,6 +77,7 @@ type templatePage struct {
 	builtins []builtinLine
 	broken   *ggui.StateValue[[]prompttmpl.Broken]
 	open     *ggui.StateValue[int] // the draft unfolded, 0 for none
+	onChange func()
 	nextID   int
 }
 
@@ -176,8 +180,8 @@ func (d templateFields) template() *prompttmpl.Template {
 		arg := prompttmpl.Arg{Name: strings.TrimSpace(a.Name), Type: a.Type,
 			Description: strings.TrimSpace(a.Describe), Required: a.Required,
 			Rest: a.Rest && (a.Type == prompttmpl.String || a.Type == prompttmpl.Text || a.Type == "")}
-		if arg.Type == prompttmpl.Choice {
-			arg.Options = splitList(a.Options)
+		if arg.Type.HasOptions() {
+			arg.Options = splitOptions(a.Options)
 		}
 		if v := a.Default; strings.TrimSpace(v) != "" && !a.Required {
 			arg.Default = &v
@@ -195,6 +199,18 @@ func (d templateDraft) edited() bool {
 // splitList splits a list written with commas or spaces between.
 func splitList(s string) []string {
 	return strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' || r == '\n' })
+}
+
+// splitOptions splits select/choice options on commas or newlines so values
+// with spaces stay intact.
+func splitOptions(s string) []string {
+	var out []string
+	for part := range strings.FieldsFuncSeq(s, func(r rune) bool { return r == ',' || r == '\n' || r == '\r' }) {
+		if part = strings.TrimSpace(part); part != "" && !slices.Contains(out, part) {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 // update changes the draft id with f.
@@ -314,6 +330,9 @@ func (pg *templatePage) save(id int) {
 		}
 		d.Saved = d.templateFields
 	})
+	if pg.onChange != nil {
+		pg.onChange()
+	}
 }
 
 // revert puts the draft id back as its file has it.
@@ -338,6 +357,12 @@ func (pg *templatePage) remove(m *model, id int) {
 		}
 	}
 	pg.drafts.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(pg.drafts)), func(x templateDraft) bool { return x.ID == id }))
+	if m != nil {
+		m.invalidateSessionTemplates()
+	}
+	if pg.onChange != nil {
+		pg.onChange()
+	}
 }
 
 // addArg adds an argument to the draft id, named so it does not clash.
@@ -357,10 +382,23 @@ func (pg *templatePage) removeArg(id, arg int) {
 	})
 }
 
+func (pg *templatePage) moveArg(id, arg, delta int) {
+	pg.update(id, func(d *templateDraft) {
+		i := slices.IndexFunc(d.Args, func(a argDraft) bool { return a.ID == arg })
+		j := i + delta
+		if i >= 0 && j >= 0 && j < len(d.Args) {
+			d.Args[i], d.Args[j] = d.Args[j], d.Args[i]
+		}
+	})
+}
+
 // Page ------------------------------------------------------------------------
 
 func templateSettings(m *model) ggui.Widget {
 	pg := newTemplatePage()
+	if m != nil {
+		pg.onChange = m.invalidateSessionTemplates
+	}
 	// The editors are rebuilt when templates or arguments come or go, not
 	// as their text is typed, so a field keeps its focus.
 	shape := ggui.Derived(func() string {
@@ -516,7 +554,24 @@ func templateDetail(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 func templateEditor(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 	id := d.ID
 	mono := ggui.TextStyle{Font: ggui.DefaultMonoFont()}
+	previewOpen := ggui.State(false)
+	metaBar := ggui.Reactive(func() ggui.Widget {
+		cur := pg.draft(id)
+		usage := strings.TrimSpace("//" + cur.Name + " " + cur.template().Usage())
+		badges := []ggui.Widget{
+			widget.Expanded(widget.Text(usage).Size(12).Font(ggui.DefaultMonoFont()).Color(skin.Muted).NoWrap().Ellipsis()),
+		}
+		if cur.Body != "" && (strings.Contains(cur.Body, "```js") || strings.Contains(cur.Body, "{#") || strings.Contains(cur.Body, "{@")) {
+			badges = append(badges, pill(T("Script"), skin.DotDone))
+		}
+		if strings.Contains(cur.Body, "mako.") {
+			badges = append(badges, ui.Button(T("API keys…"), func() { m.Section.Set("apikeys") }).Ghost().Pad(4, 8).Name(T("Open API keys settings")))
+		}
+		return widget.Box(widget.Row(badges...).Gap(8).Align(widget.AlignCenter)).
+			Fill(skin.Surface0).Border(1, skin.Border).Radius(7).Pad(6, 10)
+	})
 	children := []ggui.Widget{
+		metaBar,
 		widget.Row(
 			widget.Expanded(compactField(T("Name"), T("Called as //name. Renaming it renames its file."),
 				ui.TextField(pg.field(id, func(d *templateDraft) *string { return &d.Name })).Style(mono).Name(T("Template name")))),
@@ -530,13 +585,14 @@ func templateEditor(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 		children = append(children, muted(widget.Text(Tf("Stands in for the built-in //%s; deleting it brings the built-in back.", d.From)).Size(12)))
 	}
 	for i, a := range d.Args {
-		children = append(children, argCard(pg, id, a, i == len(d.Args)-1, mono))
+		children = append(children, argCard(pg, id, a, i == 0, i == len(d.Args)-1, mono))
 	}
 	children = append(children,
 		widget.Row(ui.ButtonOf(widget.Row(icon("plus").Size(14), widget.Text(T("Add argument")).Size(13)).Gap(6),
 			func() { pg.addArg(id) }).Ghost().Pad(6, 10).Radius(7).Name(T("Add argument"))),
 		compactField(T("Prompt"), T("What it sends, written as Svelte writes markup: {{name}} or {{expression}} for a value, and the blocks {#if}, {#each}, {#match} and {#snippet}, with {@const} and {@render}; type {{ or { to pick. A ```js block gives way to the value its JavaScript ends on; a ```js run block only runs, defining what later pieces read."),
 			templateBody(pg, id, mono)),
+		templatePreviewCard(pg, id, previewOpen, mono),
 		ggui.Reactive(func() ggui.Widget {
 			if e := pg.draft(id).Err; e != "" {
 				return widget.Text(e).Size(12).Color(uitheme.Destructive)
@@ -572,45 +628,170 @@ func not(b ggui.Readable[bool]) ggui.Readable[bool] {
 }
 
 // argCard is an argument of an unfolded template: its name, type,
-// whether it is required, its default, a choice's options and what it is;
+// whether it is required, its default, a select/choice's options and what it is;
 // the last, if it is text, whether it takes the rest of a call.
-func argCard(pg *templatePage, id int, a argDraft, last bool, mono ggui.TextStyle) ggui.Widget {
+func argCard(pg *templatePage, id int, a argDraft, first, last bool, mono ggui.TextStyle) ggui.Widget {
 	arg := a.ID
 	kind := argField(pg, id, arg, func(a *argDraft) *prompttmpl.Type { return &a.Type })
 	required := argField(pg, id, arg, func(a *argDraft) *bool { return &a.Required })
+	optionsBind := argField(pg, id, arg, func(a *argDraft) *string { return &a.Options })
+	defaultBind := argField(pg, id, arg, func(a *argDraft) *string { return &a.Default })
+
+	typeChoices := ggui.Map(kind, func(k prompttmpl.Type) []prompttmpl.Type {
+		if k == prompttmpl.Choice {
+			return append(slices.Clone(prompttmpl.Types), prompttmpl.Choice)
+		}
+		return prompttmpl.Types
+	})
+	typeSelect := ggui.View(typeChoices, func(opts []prompttmpl.Type) ggui.Widget {
+		return widget.Box(ui.Select(kind).Options(opts).Format(func(t prompttmpl.Type) string { return T(templateTypeLabels[string(t)]) }).
+			Name(T("Argument type"))).Width(170)
+	})
+
 	head := widget.Row(
 		icon("type").Size(14).Color(skin.Muted),
 		widget.Box(ui.TextField(argField(pg, id, arg, func(a *argDraft) *string { return &a.Name })).
 			Style(mono).Name(T("Argument name"))).Width(150),
-		widget.Box(ui.Select(kind).Options(prompttmpl.Types).Format(func(t prompttmpl.Type) string { return T(templateTypeLabels[string(t)]) }).
-			Name(T("Argument type"))).Width(170),
+		typeSelect,
 		ui.Switch(required, T("Required")).Name(T("Required")),
 		widget.Spacer(),
+		ui.Tooltip(ui.ButtonOf(icon("chevron-up").Size(14), func() { pg.moveArg(id, arg, -1) }).
+			Ghost().Pad(4).Radius(6).BindDisabled(ggui.Const(first)).Name(T("Move argument up")), T("Move up")),
+		ui.Tooltip(ui.ButtonOf(icon("chevron-down").Size(14), func() { pg.moveArg(id, arg, 1) }).
+			Ghost().Pad(4).Radius(6).BindDisabled(ggui.Const(last)).Name(T("Move argument down")), T("Move down")),
 		ui.ButtonOf(icon("trash-2").Size(14), func() { pg.removeArg(id, arg) }).Ghost().Pad(6).Radius(6).
 			Name(T("Remove argument")),
-	).Gap(8).Align(widget.AlignCenter)
-	isChoice := ggui.Map(kind, func(k prompttmpl.Type) bool { return k == prompttmpl.Choice })
+	).Gap(6).Align(widget.AlignCenter)
+
+	hasOptions := ggui.Map(kind, func(k prompttmpl.Type) bool { return k.HasOptions() })
 	isText := ggui.Map(kind, func(k prompttmpl.Type) bool { return last && (k == prompttmpl.String || k == prompttmpl.Text) })
+
+	optionChips := ggui.Reactive(func() ggui.Widget {
+		opts := splitOptions(optionsBind.Get())
+		if len(opts) == 0 {
+			return widget.Box()
+		}
+		chips := make([]ggui.Widget, 0, len(opts))
+		for _, opt := range opts {
+			val := opt
+			rm := ui.ButtonOf(icon("x").Size(11).Color(skin.Muted), func() {
+				next := slices.DeleteFunc(splitOptions(ggui.Peek(optionsBind)), func(x string) bool { return x == val })
+				optionsBind.Set(strings.Join(next, ", "))
+			}).Ghost().Pad(2).Radius(4).Name(Tf("Remove option %s", val))
+			chips = append(chips, widget.Box(widget.Row(
+				widget.Text(val).Size(12).Font(mono.Font).NoWrap(),
+				rm,
+			).Gap(4).Align(widget.AlignCenter)).Pad(2, 6).Radius(5).Fill(skin.Surface2).Border(1, skin.Border))
+		}
+		return widget.Wrap(chips...).Gap(6).RunGap(6)
+	})
+
+	defaultControl := ggui.Reactive(func() ggui.Widget {
+		k := kind.Get()
+		req := required.Get()
+		switch {
+		case k.HasOptions():
+			opts := append([]string{""}, splitOptions(optionsBind.Get())...)
+			if cur := defaultBind.Get(); cur != "" && !slices.Contains(opts, cur) {
+				opts = append(opts, cur)
+			}
+			return ui.Select(defaultBind).Options(opts).Format(func(v string) string {
+				if v == "" {
+					return T("None")
+				}
+				return v
+			}).BindDisabled(ggui.Const(req)).Name(T("Argument default"))
+		case k == prompttmpl.Boolean:
+			return ui.Select(defaultBind).Options([]string{"", "true", "false"}).Format(func(v string) string {
+				if v == "" {
+					return T("None")
+				}
+				return v
+			}).BindDisabled(ggui.Const(req)).Name(T("Argument default"))
+		default:
+			return ui.TextField(defaultBind).Style(mono).Name(T("Argument default")).BindDisabled(ggui.Const(req))
+		}
+	})
+
 	return widget.Box(widget.Column(
 		head,
 		ggui.If(isText, func() ggui.Widget {
 			return ui.Switch(argField(pg, id, arg, func(a *argDraft) *bool { return &a.Rest }),
 				T("Takes the rest of the call as typed, unquoted")).Name(T("Takes the rest"))
 		}),
-		ggui.If(isChoice, func() ggui.Widget {
-			return compactField(T("Options"), T("The values it takes, with commas between."),
-				ui.TextField(argField(pg, id, arg, func(a *argDraft) *string { return &a.Options })).
-					Style(mono).Placeholder("kind, blunt").Name(T("Argument options")))
+		ggui.If(hasOptions, func() ggui.Widget {
+			return compactField(T("Options"), T("Predefined choices separated by commas."),
+				widget.Column(
+					optionChips,
+					ui.TextField(optionsBind).Style(mono).Placeholder("dev, staging, prod").Name(T("Argument options")),
+				).Gap(6).Stretch())
 		}),
 		widget.Row(
-			widget.Expanded(compactField(T("Default"), T("Its value when a call leaves it out; a required argument has none."),
-				ui.TextField(argField(pg, id, arg, func(a *argDraft) *string { return &a.Default })).
-					Style(mono).Name(T("Argument default")).BindDisabled(required))),
+			widget.Expanded(compactField(T("Default"), T("Its value when a call leaves it out; a required argument has none."), defaultControl)),
 			widget.Expanded(compactField(T("Description"), T("What it is, for you to remember."),
 				ui.TextField(argField(pg, id, arg, func(a *argDraft) *string { return &a.Describe })).
 					Name(T("Argument description")))),
 		).Gap(10),
 	).Gap(8).Stretch()).Border(1, skin.Border).Radius(8).Pad(10, 12)
+}
+
+func templatePreviewCard(pg *templatePage, id int, open *ggui.StateValue[bool], mono ggui.TextStyle) ggui.Widget {
+	toggle := ui.ButtonOf(
+		widget.Row(
+			icon("flask-conical").Size(14).Color(skin.Muted),
+			widget.Expanded(widget.Text(T("Preview")).Size(13).Weight(ggui.WeightMedium)),
+			chevron(open, 14, skin.Muted),
+		).Gap(8).Align(widget.AlignCenter),
+		func() { open.Set(!ggui.Peek(open)) },
+	).Ghost().Pad(6, 10).Radius(7).Name(T("Toggle template preview"))
+
+	body := reveal(open, func() ggui.Widget {
+		return ggui.Reactive(func() ggui.Widget {
+			cur := pg.draft(id)
+			t := cur.template()
+			data := prompttmpl.Format(t)
+			parsed, err := prompttmpl.Parse(cmp.Or(t.Name, "preview"), data)
+			if err != nil {
+				return widget.Box(widget.Text(err.Error()).Size(12).Color(uitheme.Destructive)).
+					Pad(10, 12).Radius(7).Fill(skin.Surface0).Border(1, skin.Border)
+			}
+			if strings.Contains(cur.Body, "mako.") {
+				return widget.Box(muted(widget.Text(T("This template calls live session scripts (mako.*), which execute when sent in Chat.")).Size(12))).
+					Pad(10, 12).Radius(7).Fill(skin.Surface0).Border(1, skin.Border)
+			}
+			vals := map[string]string{}
+			for _, a := range parsed.Args {
+				switch {
+				case a.Default != nil:
+					vals[a.Name] = *a.Default
+				case a.Type.HasOptions() && len(a.Options) > 0:
+					vals[a.Name] = a.Options[0]
+				case a.Type == prompttmpl.Boolean:
+					vals[a.Name] = "false"
+				case a.Type == prompttmpl.Integer, a.Type == prompttmpl.Number:
+					vals[a.Name] = "1"
+				default:
+					vals[a.Name] = "<" + a.Name + ">"
+				}
+			}
+			builtins := map[string]string{
+				"agent": "claude", "profile": "default", "model": "sonnet",
+				"project": "/path/to/project", "branch": "main", "repo": "mako",
+				"date": time.Now().Format(time.DateOnly),
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			out, err := parsed.Fill(ctx, vals, builtins)
+			if err != nil {
+				return widget.Box(widget.Text(err.Error()).Size(12).Color(uitheme.Destructive)).
+					Pad(10, 12).Radius(7).Fill(skin.Surface0).Border(1, skin.Border)
+			}
+			return widget.Box(widget.Text(out).Size(12).Style(mono)).
+				Pad(10, 12).Radius(7).Fill(skin.Surface0).Border(1, skin.Border)
+		})
+	})
+
+	return widget.Column(toggle, body).Gap(4).Stretch()
 }
 
 // templateAgents picks the agents a template is offered to, checked in a

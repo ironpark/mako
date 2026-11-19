@@ -5,16 +5,19 @@ import (
 	"cmp"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +28,7 @@ import (
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/layoutdoc"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transport"
@@ -35,6 +39,7 @@ const agentMCPArg = "agent-mcp"
 const agentMCPTokenEnv = "MAKO_AGENT_MCP_TOKEN"
 
 type projectAgents struct {
+	syncMu   sync.Mutex // serializes live MCP tool and file sync across peers
 	mu       sync.Mutex
 	socket   string // the stdio bridge's, for an agent that cannot reach url
 	url      string // where the agents reach the server over HTTP
@@ -48,8 +53,11 @@ type agentPeer struct {
 	ctx               context.Context
 	cancel            context.CancelFunc
 	ready             chan struct{}
-	session           *session.Session // guarded by projectAgents.mu
-	http              http.Handler     // its sessions over HTTP, made at the first; guarded by projectAgents.mu
+	session           *session.Session                             // guarded by projectAgents.mu
+	http              http.Handler                                 // its sessions over HTTP, made at the first; guarded by projectAgents.mu
+	httpServer        *sdk.Server                                  // backing server for http; guarded by projectAgents.mu
+	servers           map[*sdk.Server]string                       // live SDK servers -> last synced signature or "disabled"; guarded by projectAgents.mu
+	refresh           func(context.Context, *protocol.SessionInfo) // rewrites per-session MCP files on config change; guarded by projectAgents.mu
 }
 
 func (p *projectAgents) server(ctx context.Context, binary, id, parent string) (agent.Server, func()) {
@@ -98,6 +106,29 @@ func (p *projectAgents) peer(id string) *agentPeer {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.peers[id]
+}
+
+func (p *projectAgents) setRefresh(id string, fn func(context.Context, *protocol.SessionInfo)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if peer := p.peers[id]; peer != nil && peer.ctx.Err() == nil {
+		peer.refresh = fn
+	}
+}
+
+func (p *projectAgents) trackServer(peer *agentPeer, srv *sdk.Server, sig string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if peer.servers == nil {
+		peer.servers = map[*sdk.Server]string{}
+	}
+	peer.servers[srv] = sig
+}
+
+func (p *projectAgents) untrackServer(peer *agentPeer, srv *sdk.Server) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(peer.servers, srv)
 }
 
 // byToken is the live session whose token is token, nil for none.
@@ -207,20 +238,59 @@ func (d *Daemon) serveAgentMCPHTTP(w http.ResponseWriter, r *http.Request) {
 	case <-r.Context().Done():
 		return
 	}
+	if _, err := d.peerRunningSession(peer); err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	h, err := d.ensureHTTPPeerHandler(peer)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	h.ServeHTTP(w, r)
+}
+
+func (d *Daemon) ensureHTTPPeerHandler(peer *agentPeer) (http.Handler, error) {
+	s, err := d.peerRunningSession(peer)
+	if err != nil {
+		return nil, err
+	}
+	snap := d.agentMCPSnapshot()
+	enabled := d.sessionAgentMCPEnabled(s.Info())
+
+	d.projectAgents.syncMu.Lock()
+	defer d.projectAgents.syncMu.Unlock()
+
+	d.projectAgents.mu.Lock()
+	h := peer.http
+	srv := peer.httpServer
+	d.projectAgents.mu.Unlock()
+
+	if h != nil {
+		d.syncPeerServerLocked(peer, srv, snap, enabled)
+		return h, nil
+	}
+	srv, sig := d.newProjectAgentServer(peer, snap, enabled)
+	h = sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return srv }, &sdk.StreamableHTTPOptions{SessionTimeout: agentMCPIdle})
+	// The session's end ends its MCP sessions, as it closes a bridge's.
+	context.AfterFunc(peer.ctx, func() {
+		for ss := range srv.Sessions() {
+			_ = ss.Close()
+		}
+	})
 	d.projectAgents.mu.Lock()
 	if peer.http == nil {
-		server := d.projectAgentServer(peer)
-		peer.http = sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, &sdk.StreamableHTTPOptions{SessionTimeout: agentMCPIdle})
-		// The session's end ends its MCP sessions, as it closes a bridge's.
-		context.AfterFunc(peer.ctx, func() {
-			for ss := range server.Sessions() {
-				_ = ss.Close()
-			}
-		})
+		peer.http = h
+		peer.httpServer = srv
+		if peer.servers == nil {
+			peer.servers = map[*sdk.Server]string{}
+		}
+		peer.servers[srv] = sig
+	} else {
+		h = peer.http
 	}
-	h := peer.http
 	d.projectAgents.mu.Unlock()
-	h.ServeHTTP(w, r)
+	return h, nil
 }
 
 // agentMCPIdle is how long an MCP session over HTTP lasts unused: an agent
@@ -254,8 +324,20 @@ func (d *Daemon) serveAgentMCP(ctx context.Context, conn net.Conn) {
 	case <-ctx.Done():
 		return
 	}
+	s, err := d.peerRunningSession(peer)
+	if err != nil {
+		return
+	}
+	snap := d.agentMCPSnapshot()
+	enabled := d.sessionAgentMCPEnabled(s.Info())
 	_ = conn.SetReadDeadline(time.Time{})
-	server := d.projectAgentServer(peer)
+
+	d.projectAgents.syncMu.Lock()
+	server, sig := d.newProjectAgentServer(peer, snap, enabled)
+	d.projectAgents.trackServer(peer, server, sig)
+	d.projectAgents.syncMu.Unlock()
+	defer d.projectAgents.untrackServer(peer, server)
+
 	ss, err := server.Connect(peer.ctx, &sdk.IOTransport{Reader: io.NopCloser(reader), Writer: conn, MaxLineLength: 1 << 20}, nil)
 	if err != nil {
 		return
@@ -327,19 +409,129 @@ type stopAgentResult struct {
 	Stopped bool `json:"stopped"`
 }
 
-func (d *Daemon) projectAgentServer(peer *agentPeer) *sdk.Server {
+const agentMCPSigDisabled = "disabled"
+
+var agentMCPToolNames = []string{
+	"list_agents", "spawn_agent", "send_message", "read_messages", "wait_agent", "stop_agent",
+	toolListBlocks, toolGetLayout, toolSetLayout, toolPatchLayout, toolUndoLayout,
+	toolShowUI, toolUpdateUI, toolCloseUI, toolSaveTemplate,
+}
+
+type agentMCPSnapshot struct {
+	available      []availableAgent
+	blocks         []layoutdoc.Block
+	listAgentsDesc string
+	spawnAgentDesc string
+	listBlocksDesc string
+	signature      string
+}
+
+func (d *Daemon) agentMCPSnapshot() agentMCPSnapshot {
+	available := d.availableAgents()
+	blocks := d.blocks()
+	sigPayload, _ := json.Marshal(struct {
+		Available []availableAgent  `json:"available"`
+		Blocks    []layoutdoc.Block `json:"blocks"`
+	}{available, blocks})
+	sum := sha256.Sum256(sigPayload)
+	agentSummaryText := summarizeAvailableForSchema(available)
+	listAgentsDesc := "List sessions in this project, on this node and, for a project of several folders, on other nodes, their IDs, status and messaging support, plus available agent types and profiles with descriptions and spawnable flags. Read the profile descriptions to select the best match for a task before calling spawn_agent. Only spawnable choices can receive the required Mako MCP tools."
+	spawnAgentDesc := "Start a new Mako agent session in the current project with a task. First inspect list_agents and choose a spawnable profile by its description; supply its agent and profile names. The session is visible in Mako and has its own MCP mailbox. Returns its session ID; use send_message/read_messages to coordinate."
+	if agentSummaryText != "" {
+		listAgentsDesc += " Current agents: " + agentSummaryText
+		spawnAgentDesc += " Current choices: " + agentSummaryText
+	}
+	listBlocksDesc := "List the blocks a window layout document can place, with each one's props as a JSON Schema: the catalog to build a document from. A document's leaves are these blocks and the panes, which hold the session tabs."
+	if blocksSummaryText := summarizeBlocksForSchema(blocks); blocksSummaryText != "" {
+		listBlocksDesc += " Current blocks: " + blocksSummaryText
+	}
+	return agentMCPSnapshot{
+		available:      available,
+		blocks:         blocks,
+		listAgentsDesc: listAgentsDesc,
+		spawnAgentDesc: spawnAgentDesc,
+		listBlocksDesc: listBlocksDesc,
+		signature:      hex.EncodeToString(sum[:8]),
+	}
+}
+
+func summarizeAvailableForSchema(list []availableAgent) string {
+	var parts []string
+	for _, a := range list {
+		state := "disabled"
+		if a.Spawnable {
+			state = "spawnable"
+		}
+		entry := a.Name + "(" + state + ")"
+		if len(a.Profiles) > 0 {
+			var profiles []string
+			for _, p := range a.Profiles {
+				pState := "disabled"
+				if p.Spawnable {
+					pState = "spawnable"
+				}
+				pText := p.Name + "(" + pState + ")"
+				if desc := strings.Join(strings.Fields(p.Description), " "); desc != "" {
+					pText += ": " + clipRunes(desc, 60)
+				}
+				profiles = append(profiles, pText)
+			}
+			entry += "[" + strings.Join(profiles, "; ") + "]"
+		}
+		parts = append(parts, entry)
+	}
+	return clipRunes(strings.Join(parts, "; "), 1200)
+}
+
+func summarizeBlocksForSchema(blocks []layoutdoc.Block) string {
+	names := make([]string, 0, len(blocks))
+	for _, b := range blocks {
+		if b.Name != "" {
+			names = append(names, b.Name)
+		}
+	}
+	return clipRunes(strings.Join(names, ", "), 600)
+}
+
+func clipRunes(s string, maxRunes int) string {
+	r := []rune(s)
+	if len(r) <= maxRunes {
+		return s
+	}
+	return string(r[:maxRunes-1]) + "…"
+}
+
+func (d *Daemon) newProjectAgentServer(peer *agentPeer, snap agentMCPSnapshot, enabled bool) (*sdk.Server, string) {
 	server := sdk.NewServer(&sdk.Implementation{Name: "mako", Version: config.Version}, &sdk.ServerOptions{
-		Logger:       d.log,
+		Logger: d.log,
+		Capabilities: &sdk.ServerCapabilities{
+			Logging: &sdk.LoggingCapabilities{},
+			Tools:   &sdk.ToolCapabilities{ListChanged: true},
+		},
+		SetCacheable: func(_ context.Context, _ sdk.Request, c *sdk.Cacheable) { c.TTLMs = 0 },
 		Instructions: fmt.Sprintf("You are Mako session %s in project %s. Parent session: %s. Before delegating, use list_agents to inspect available agents and their profile descriptions. Choose a spawnable profile whose specialties match the task, then pass its owning agent name and exact profile name to spawn_agent. If no profile is needed, omit profile and use a spawnable agent default. Use send_message to communicate, with agents of this project on other nodes too, which list_agents lists with their node. A message is typed into its recipient's terminal as a new prompt, headed with its sender, once that agent waits at its prompt, so it never interrupts a turn; messages to you arrive the same way. Until then a message waits in the recipient's inbox: to wait for a reply within a turn, use read_messages and acknowledge what you processed with ack_through, or it will be typed in later as well. Report results to the parent with send_message. To wait for an agent's turn to end, use wait_agent rather than asking list_agents again and again. Of an agent you spawned that waits on the user, or exits without reporting, you hear in a Mako note, typed in as messages are. stop_agent only stops agents you spawned. The mako window's layout is a document you read with get_layout and list_blocks; set_layout, patch_layout and undo_layout change it once the user allows, and only what the user keeps stays. show_ui shows a block of UI of yours in the window, a form say, and the user's taps on it come back to you as messages from the window; update_ui and close_ui change and close it. A UI to keep is a plugin: list_blocks names the folder to write one into.", peer.id, peer.session.Info().GetProject(), peer.parent),
 	})
-	sdk.AddTool(server, &sdk.Tool{Name: "list_agents", Description: "List sessions in this project, on this node and, for a project of several folders, on other nodes, their IDs, status and messaging support, plus available agent types and profiles with descriptions and spawnable flags. Read the profile descriptions to select the best match for a task before calling spawn_agent. Only spawnable choices can receive the required Mako MCP tools.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, listAgentsResult, error) {
+	if !enabled {
+		return server, agentMCPSigDisabled
+	}
+	d.registerProjectAgentTools(server, peer, snap)
+	return server, snap.signature
+}
+
+func (d *Daemon) addDynamicAgentTools(server *sdk.Server, peer *agentPeer, snap agentMCPSnapshot) {
+	sdk.AddTool(server, &sdk.Tool{Name: "list_agents", Description: snap.listAgentsDesc, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, listAgentsResult, error) {
 		out, err := d.listProjectAgents(peer)
 		return nil, out, err
 	})
-	sdk.AddTool(server, &sdk.Tool{Name: "spawn_agent", Description: "Start a new Mako agent session in the current project with a task. First inspect list_agents and choose a spawnable profile by its description; supply its agent and profile names. The session is visible in Mako and has its own MCP mailbox. Returns its session ID; use send_message/read_messages to coordinate."}, func(ctx context.Context, _ *sdk.CallToolRequest, in spawnAgentArgs) (*sdk.CallToolResult, agentSummary, error) {
+	sdk.AddTool(server, &sdk.Tool{Name: "spawn_agent", Description: snap.spawnAgentDesc}, func(ctx context.Context, _ *sdk.CallToolRequest, in spawnAgentArgs) (*sdk.CallToolResult, agentSummary, error) {
 		out, err := d.spawnProjectAgent(ctx, peer, in)
 		return nil, out, err
 	})
+	d.addListBlocksTool(server, peer, snap.listBlocksDesc)
+}
+
+func (d *Daemon) registerProjectAgentTools(server *sdk.Server, peer *agentPeer, snap agentMCPSnapshot) {
+	d.addDynamicAgentTools(server, peer, snap)
 	sdk.AddTool(server, &sdk.Tool{Name: "send_message", Description: "Send a message to another active agent in this project, on this node or another. It is typed into the recipient's terminal as a new prompt once that agent waits at its prompt, never interrupting a turn; until then it waits in the recipient's inbox, which read_messages reads."}, func(ctx context.Context, _ *sdk.CallToolRequest, in sendMessageArgs) (*sdk.CallToolResult, agentMessage, error) {
 		if _, err := d.projectCaller(peer); err != nil {
 			return nil, agentMessage{}, err
@@ -386,19 +578,110 @@ func (d *Daemon) projectAgentServer(peer *agentPeer) *sdk.Server {
 		err := d.closeSession(in.SessionID)
 		return nil, stopAgentResult{Stopped: err == nil}, err
 	})
-	d.addLayoutTools(server, peer)
+	d.addStaticLayoutTools(server, peer)
 	d.addUITools(server, peer)
 	d.addTemplateTools(server, peer)
-	return server
 }
 
-func (d *Daemon) projectCaller(peer *agentPeer) (*session.Session, error) {
+func (d *Daemon) syncPeerServerLocked(peer *agentPeer, srv *sdk.Server, snap agentMCPSnapshot, enabled bool) {
+	d.projectAgents.mu.Lock()
+	prev, tracked := peer.servers[srv]
+	d.projectAgents.mu.Unlock()
+	if !tracked {
+		return
+	}
+	var nextSig string
+	switch {
+	case !enabled && prev == agentMCPSigDisabled:
+		return
+	case !enabled:
+		srv.RemoveTools(agentMCPToolNames...)
+		nextSig = agentMCPSigDisabled
+	case prev == agentMCPSigDisabled:
+		d.registerProjectAgentTools(srv, peer, snap)
+		nextSig = snap.signature
+	case prev != snap.signature:
+		d.addDynamicAgentTools(srv, peer, snap)
+		nextSig = snap.signature
+	default:
+		return
+	}
+	d.projectAgents.mu.Lock()
+	if d.projectAgents.peers[peer.id] == peer && peer.ctx.Err() == nil {
+		if _, ok := peer.servers[srv]; ok {
+			peer.servers[srv] = nextSig
+		}
+	}
+	d.projectAgents.mu.Unlock()
+}
+
+// syncProjectAgents updates every running session's built-in MCP server
+// tools, descriptions and per-session MCP configuration files in real time.
+func (d *Daemon) syncProjectAgents() {
+	d.projectAgents.syncMu.Lock()
+	defer d.projectAgents.syncMu.Unlock()
+
+	snap := d.agentMCPSnapshot()
+	type tracked struct {
+		peer    *agentPeer
+		session *session.Session
+		servers []*sdk.Server
+		refresh func(context.Context, *protocol.SessionInfo)
+	}
+	var list []tracked
+	d.projectAgents.mu.Lock()
+	for _, peer := range d.projectAgents.peers {
+		if peer == nil || peer.ctx.Err() != nil || peer.session == nil {
+			continue
+		}
+		if peer.session.Info().GetState() != protocol.StateRunning {
+			continue
+		}
+		list = append(list, tracked{
+			peer:    peer,
+			session: peer.session,
+			servers: slices.Collect(maps.Keys(peer.servers)),
+			refresh: peer.refresh,
+		})
+	}
+	d.projectAgents.mu.Unlock()
+
+	baseCtx := d.ctx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	for _, item := range list {
+		info := item.session.Info()
+		enabled := d.sessionAgentMCPEnabled(info)
+		for _, srv := range item.servers {
+			d.syncPeerServerLocked(item.peer, srv, snap, enabled)
+		}
+		if item.refresh != nil {
+			rctx, cancel := context.WithTimeout(baseCtx, 5*time.Second)
+			item.refresh(rctx, info)
+			cancel()
+		}
+	}
+}
+
+func (d *Daemon) peerRunningSession(peer *agentPeer) (*session.Session, error) {
 	d.projectAgents.mu.Lock()
 	s := peer.session
 	current := d.projectAgents.peers[peer.id] == peer
 	d.projectAgents.mu.Unlock()
 	if !current || peer.ctx.Err() != nil || s == nil || s.Info().GetState() != protocol.StateRunning {
 		return nil, errors.New("the calling session is no longer running")
+	}
+	return s, nil
+}
+
+func (d *Daemon) projectCaller(peer *agentPeer) (*session.Session, error) {
+	s, err := d.peerRunningSession(peer)
+	if err != nil {
+		return nil, err
+	}
+	if !d.sessionAgentMCPEnabled(s.Info()) {
+		return nil, errors.New("the mako MCP server is disabled for this session")
 	}
 	return s, nil
 }
@@ -429,6 +712,36 @@ func summarizeAgent(info *protocol.SessionInfo, parent string, messaging bool) a
 	return agentSummary{ID: info.GetId(), Agent: info.GetAgent(), Profile: info.GetProfile(), Name: info.GetName(), State: info.GetState(), Status: info.GetStatus(), ParentID: parent, Messaging: messaging, Folder: info.GetProject()}
 }
 
+func (d *Daemon) availableAgents() []availableAgent {
+	configured := d.agents()
+	var out []availableAgent
+	// What an agent may spawn: those this node offers, installed or on.
+	for _, name := range agentspec.Offered(configured) {
+		a, _ := agentspec.Lookup(name, configured)
+		if len(a.Command) == 0 {
+			continue
+		}
+		driver, ok := agents.ByProgram(a.Command[0])
+		if !ok {
+			continue
+		}
+		if _, ok := driver.Driver.(agent.Servers); !ok {
+			continue
+		}
+		if _, ok := driver.Driver.(agent.Prompter); !ok {
+			continue
+		}
+		available := availableAgent{Name: name, Spawnable: d.agentMCPEnabled(nil), Profiles: []availableProfile{}}
+		for _, p := range a.Profiles {
+			available.Profiles = append(available.Profiles, availableProfile{
+				Name: p.Name, Description: p.Description, Spawnable: d.agentMCPEnabled(p.ContextServers),
+			})
+		}
+		out = append(out, available)
+	}
+	return out
+}
+
 func (d *Daemon) listProjectAgents(peer *agentPeer) (listAgentsResult, error) {
 	s, err := d.projectCaller(peer)
 	if err != nil {
@@ -454,31 +767,7 @@ func (d *Daemon) listProjectAgents(peer *agentPeer) (listAgentsResult, error) {
 	for _, other := range d.remoteAgents(self) {
 		out.Agents = append(out.Agents, d.remoteSummary(other))
 	}
-	configured := d.agents()
-	// What an agent may spawn: those this node offers, installed or on.
-	for _, name := range agentspec.Offered(configured) {
-		a, _ := agentspec.Lookup(name, configured)
-		if len(a.Command) == 0 {
-			continue
-		}
-		driver, ok := agents.ByProgram(a.Command[0])
-		if !ok {
-			continue
-		}
-		if _, ok := driver.Driver.(agent.Servers); !ok {
-			continue
-		}
-		if _, ok := driver.Driver.(agent.Prompter); !ok {
-			continue
-		}
-		available := availableAgent{Name: name, Spawnable: d.agentMCPEnabled(nil), Profiles: []availableProfile{}}
-		for _, p := range a.Profiles {
-			available.Profiles = append(available.Profiles, availableProfile{
-				Name: p.Name, Description: p.Description, Spawnable: d.agentMCPEnabled(p.ContextServers),
-			})
-		}
-		out.Available = append(out.Available, available)
-	}
+	out.Available = append(out.Available, d.availableAgents()...)
 	return out, nil
 }
 

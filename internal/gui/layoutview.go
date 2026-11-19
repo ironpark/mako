@@ -194,25 +194,46 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		// label of its name, over a line of its colour; a run folded away
 		// keeps only the tab shown.
 		var runProject tabProject
+		var runIDs []string
 		runStarted, runFirst, runFolded := false, -1, 0
 		endRun := func() {
 			if !runStarted {
 				return
 			}
 			p, first := runProject, runFirst
+			ids := slices.Clone(runIDs)
 			var c color.Color = skin.BorderAccent
 			if p.Key != "" {
 				c = p.Look.color()
 			}
 			key := foldKey(id, p.Key)
 			name := cmp.Or(p.Name, T("Other"))
-			// A tab dropped on the label goes first in the run.
-			label := tabDrop(m, projectChip(p, runFolded), id, func(widget.Dropped[tabDrag]) int { return first }).
+			chip := projectChip(p, runFolded)
+			if len(ids) > 0 {
+				chip = chipDrag(m, chip, ids, key, name, c)
+			}
+			// A tab or chip dropped on the label goes first in the run.
+			label := tabDrop(m, chip, id, func(widget.Dropped[tabDrag]) int { return first }).
 				OnHover(func(bool) { m.leaveHint(id) })
 			children = append(children, ui.TabGroup(run...).Label(label).Tint(c).
 				OnLabel(func() { m.toggleFold(key) }).
 				LabelName(pick(folded[key], Tf("Unfold %s", name), Tf("Fold %s", name))))
-			run, runStarted, runFirst, runFolded = nil, false, -1, 0
+			run, runIDs, runStarted, runFirst, runFolded = nil, nil, false, -1, 0
+		}
+		type runSpan struct{ first, end int }
+		spanByTab := make(map[string]runSpan, len(g.Tabs))
+		if grouped {
+			for idx := 0; idx < len(g.Tabs); {
+				k := projects[g.Tabs[idx]].Key
+				j := idx + 1
+				for j < len(g.Tabs) && projects[g.Tabs[j]].Key == k {
+					j++
+				}
+				for tIdx := idx; tIdx < j; tIdx++ {
+					spanByTab[g.Tabs[tIdx]] = runSpan{first: idx, end: j}
+				}
+				idx = j
+			}
 		}
 		// The tabs of agents another spawned show in its tab, which is
 		// the one shown while any of them is.
@@ -257,8 +278,11 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				chips += projectChipWidth(cmp.Or(p.Name, T("Other")))
 			}
 			i, ok := at[tabID]
-			if ok && runFirst < 0 {
-				runFirst = i
+			if ok {
+				if runFirst < 0 {
+					runFirst = i
+				}
+				runIDs = append(runIDs, tabID)
 			}
 			if slot.Hidden {
 				cell := ease.cell(tabID, nil, nil)
@@ -300,8 +324,17 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 					}
 				}
 			}}
-			// Before the tab or after it, by the half it is over.
+			// Before the tab or after it, by the half it is over; when
+			// dragging a whole project chip over a grouped bar, snap to
+			// that project run's boundary so the gap matches tabsByProject.
+			span := spanByTab[tabID]
 			slot := func(d widget.Dropped[tabDrag]) int {
+				if grouped && len(d.Value.Tabs) > 0 {
+					if d.Pos.X >= d.Size.W/2 {
+						return span.end
+					}
+					return span.first
+				}
 				if d.Pos.X >= d.Size.W/2 {
 					return i + 1
 				}
@@ -438,7 +471,7 @@ func (t *tabCounter) Paint(dst *ggui.Canvas, r ggui.Rect) {
 		return
 	}
 	t.counting = false
-	if n := t.total - t.seen; n != ggui.Peek(t.hidden) {
+	if n := t.total - t.seen; t.post != nil && n != ggui.Peek(t.hidden) {
 		t.post(func() { t.hidden.Set(n) })
 	}
 }
@@ -527,8 +560,15 @@ func newDropZones(m *model, group int) *dropZones {
 		edge := dropEdge(e)
 		z.zones[e] = widget.DropZone(widget.Box(), func(d widget.Dropped[tabDrag]) {
 			m.endDrag()
+			if len(d.Value.Tabs) > 0 {
+				m.splitTabs(d.Value.Tabs, group, edge)
+				if d.Value.FromGroup != "" {
+					m.clearFold(d.Value.FromGroup)
+				}
+				return
+			}
 			m.splitTab(d.Value.ID, group, edge)
-		}).OnHover(func(over bool) {
+		}).Accept(func(d tabDrag) bool { return len(d.ids()) > 0 }).OnHover(func(over bool) {
 			if over {
 				z.hint.Set(edge)
 			} else if ggui.Peek(z.hint) == edge {
@@ -606,6 +646,19 @@ func sessionDrag(m *model, w ggui.Widget, id string) ggui.Widget {
 		OnDragEnd(func(bool) { m.endDrag() })
 }
 
+// chipDrag lets a project or sub-project chip drag all of its tabs at once.
+func chipDrag(m *model, w ggui.Widget, tabs []string, foldKey, name string, c color.Color) ggui.Widget {
+	preview := widget.Box(widget.Row(
+		widget.Text(name).Size(12.5).Weight(ggui.WeightSemibold).Color(c).NoWrap(),
+		widget.Box(widget.Text(strconv.Itoa(len(tabs))).Size(11).Weight(ggui.WeightMedium).Color(skin.Muted).NoWrap()).
+			Pad(1, 5).Radius(6).Fill(skin.Surface2),
+	).Gap(6).Align(widget.AlignCenter)).Pad(5, 10).Radius(8).Fill(skin.Surface1).Border(1, c)
+	return widget.DragSource(w, tabDrag{Tabs: tabs, FromGroup: foldKey, Project: name}).
+		Preview(preview).
+		OnDragStart(func() { m.Dragging.Set(true) }).
+		OnDragEnd(func(bool) { m.endDrag() })
+}
+
 // tabHint is where in a pane's tab bar a dragged tab would drop: before
 // the tab at Index, or after the last. Group 0 is nowhere.
 type tabHint struct{ Group, Index int }
@@ -630,13 +683,22 @@ func dropSlot(m *model, group, i int) ggui.Widget {
 	return tabDrop(m, gap, group, func(widget.Dropped[tabDrag]) int { return i })
 }
 
-// tabDrop takes a tab dropped on w into a pane's bar at the place index
-// reads from the drop, and opens the gap there while one is over w.
+// tabDrop takes a tab or project chip dropped on w into a pane's bar at the
+// place index reads from the drop, and opens the gap there while one is over w.
 func tabDrop(m *model, w ggui.Widget, group int, index func(widget.Dropped[tabDrag]) int) *widget.DropZoneWidget[tabDrag] {
 	return widget.DropZone(w, func(d widget.Dropped[tabDrag]) {
 		m.endDrag()
-		m.moveTab(d.Value.ID, group, index(d))
-	}).OnOver(func(d widget.Dropped[tabDrag]) { m.TabHint.Set(tabHint{Group: group, Index: index(d)}) })
+		idx := index(d)
+		if len(d.Value.Tabs) > 0 {
+			m.moveTabs(d.Value.Tabs, group, idx)
+			if d.Value.FromGroup != "" {
+				m.clearFold(d.Value.FromGroup)
+			}
+			return
+		}
+		m.moveTab(d.Value.ID, group, idx)
+	}).Accept(func(d tabDrag) bool { return len(d.ids()) > 0 }).
+		OnOver(func(d widget.Dropped[tabDrag]) { m.TabHint.Set(tabHint{Group: group, Index: index(d)}) })
 }
 
 // leaveHint clears the gap a drag leaving a pane's bar had opened there.

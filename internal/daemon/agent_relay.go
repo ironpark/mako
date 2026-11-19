@@ -67,7 +67,7 @@ func isAgent(info *protocol.SessionInfo) bool {
 // takes messages over its MCP tools now.
 func (d *Daemon) takesMessages(info *protocol.SessionInfo) bool {
 	peer := d.projectAgents.peer(info.GetId())
-	return peer != nil && peer.ctx.Err() == nil && info.GetState() == protocol.StateRunning
+	return peer != nil && peer.ctx.Err() == nil && d.sessionAgentMCPEnabled(info)
 }
 
 // remoteAgents are the sessions on other nodes whose agents are in scope,

@@ -288,4 +288,49 @@ java.lang.String defaultValue);
    */
   com.google.protobuf.ByteString
       getNameBytes();
+
+  /**
+   * <pre>
+   * model, effort, and yolo override the profile's or agent's defaults for
+   * this launch. Revision 39.
+   * </pre>
+   *
+   * <code>string model = 14 [json_name = "model"];</code>
+   * @return The model.
+   */
+  java.lang.String getModel();
+  /**
+   * <pre>
+   * model, effort, and yolo override the profile's or agent's defaults for
+   * this launch. Revision 39.
+   * </pre>
+   *
+   * <code>string model = 14 [json_name = "model"];</code>
+   * @return The bytes for model.
+   */
+  com.google.protobuf.ByteString
+      getModelBytes();
+
+  /**
+   * <code>string effort = 15 [json_name = "effort"];</code>
+   * @return The effort.
+   */
+  java.lang.String getEffort();
+  /**
+   * <code>string effort = 15 [json_name = "effort"];</code>
+   * @return The bytes for effort.
+   */
+  com.google.protobuf.ByteString
+      getEffortBytes();
+
+  /**
+   * <code>optional bool yolo = 16 [json_name = "yolo"];</code>
+   * @return Whether the yolo field is set.
+   */
+  boolean hasYolo();
+  /**
+   * <code>optional bool yolo = 16 [json_name = "yolo"];</code>
+   * @return The yolo.
+   */
+  boolean getYolo();
 }

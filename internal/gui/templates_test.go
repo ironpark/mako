@@ -100,3 +100,126 @@ func TestTheComposerSendsATemplatesPrompt(t *testing.T) {
 		t.Fatalf("sent %q, want %q", got, want)
 	}
 }
+
+func TestComposerSelectArgumentAutocompleteAndSubmit(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	dir, err := config.TemplatesDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src := `---
+description: Deploy app
+args:
+  - name: env
+    type: select
+    required: true
+    description: Target environment
+    options: [dev, staging, prod]
+  - name: dry_run
+    type: boolean
+    default: "false"
+---
+Deploy to {{env}} (dry={{dry_run}}).
+`
+	if err := os.WriteFile(filepath.Join(dir, "deploy.md"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m := newModel(config.Default(), "")
+	link := newFakeLink()
+	conn, err := newTermConn("s", link, 80, 24, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { close(link.in); conn.close() }()
+	m.conns["s"] = conn
+	m.Attached.Set([]string{"s"})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp/p"}})
+	state := m.chatState("s")
+	p := ggui.ProbeBuilder(func() ggui.Widget { return composer(m, "s", state) }, ggui.Sz(700, 480))
+	defer p.Close()
+	p.Frame()
+
+	field, ok := p.Semantics().Find(ggui.RoleTextField, T("Message"))
+	if !ok {
+		t.Fatal("no message field")
+	}
+	p.Click(field.Rect.Origin.Add(ggui.Pt(10, field.Rect.Size.H/2)))
+
+	p.Text("//dep")
+	p.Frame()
+	p.Type(ggui.Mods{}, ggui.KeyTab)
+	p.Frame()
+	if d := ggui.Peek(state.draft); d != "//deploy " {
+		t.Fatalf("template Tab completed to %q", d)
+	}
+
+	// Typing partial prefix narrows select options, and Tab completes to staging.
+	p.Text("st")
+	p.Frame()
+	items := ggui.Untrack(func() []menuItem { return m.menuItems("s", state) })
+	if len(items) == 0 || items[0].name != "staging" {
+		t.Fatalf("expected staging option first, got %+v", items)
+	}
+	p.Type(ggui.Mods{}, ggui.KeyTab)
+	p.Frame()
+	if d := ggui.Peek(state.draft); d != "//deploy staging " {
+		t.Fatalf("select Tab completed to %q", d)
+	}
+
+	// Now all required args are satisfied: typing Enter without navigating arrows submits immediately.
+	p.Type(ggui.Mods{}, ggui.KeyEnter)
+	if got, want := sentThrough(p, link), "[Mako template //deploy]\rDeploy to staging (dry=false).\r"; got != want {
+		t.Fatalf("sent %q, want %q", got, want)
+	}
+
+	// Named arg completion: typing dry_ completes dry_run=, then Tab picks true.
+	m.setComposerDraft("s", "//deploy prod dry_")
+	p.Frame()
+	p.Type(ggui.Mods{}, ggui.KeyTab)
+	p.Frame()
+	if d := ggui.Peek(state.draft); d != "//deploy prod dry_run=" {
+		t.Fatalf("named arg completion = %q", d)
+	}
+	p.Type(ggui.Mods{}, ggui.KeyTab)
+	p.Frame()
+	if d := ggui.Peek(state.draft); d != "//deploy prod dry_run=true " {
+		t.Fatalf("boolean completion after dry_run= = %q", d)
+	}
+}
+
+func TestTemplateHostAgentsCatalogSnapshot(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", NodeId: "n1", Agent: "claude", Project: "/tmp/p"}})
+	m.Nodes.Set([]*protocol.Node{{
+		Id: "n1",
+		Agents: []*protocol.AgentInfo{{
+			Name: "claude",
+			Yolo: true,
+			ProfileDetails: []*protocol.AgentProfileInfo{{
+				Name:        "reviewer",
+				Description: "Reviews PRs",
+				Model:       "claude-opus-4-6",
+				Effort:      "high",
+				Yolo:        true,
+				Spawnable:   true,
+			}},
+		}},
+	}})
+	m.AgentCatalogs.Set(map[string][]*protocol.AgentModel{
+		"claude": {{Id: "claude-opus-4-6", Name: "Opus", Efforts: []string{"medium", "high"}}},
+	})
+
+	host := m.templateHost("s")
+	cat, err := host.Agents(t.Context(), "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cat.NodeID != "n1" || len(cat.Agents) != 1 || !cat.Agents[0].Yolo || len(cat.Agents[0].Profiles) != 1 || !cat.Agents[0].Profiles[0].Spawnable || len(cat.Agents[0].Models) != 1 {
+		t.Fatalf("unexpected catalog = %+v", cat)
+	}
+}

@@ -24,8 +24,8 @@ How to go about it:
   `-`, beginning with a letter or digit, at most 64 characters.
 - Give it a one-line `description`, shown beside its name in Chat's list.
 - Make what changes from one call to the next its arguments, few, each
-  with a `description` and the type that fits: a `choice` for a set of
-  values, `integer`, `number` or `boolean` where they apply. Make
+  with a `description` and the type that fits: `select` (or `choice`)
+  for a set of values, `integer`, `number` or `boolean` where they apply. Make
   `required` what the prompt cannot do without, and give the rest a
   sensible `default`. What the agent can find out for itself is no
   argument. When the last argument is free text, give it `rest: true`,
@@ -68,7 +68,7 @@ args:
     type: integer
     default: 2
   - name: tone
-    type: choice
+    type: select
     options: [kind, blunt]
     default: kind
 ---
@@ -82,7 +82,7 @@ The front matter has `description`, `agents` and `args`, and an argument
 digits, `_` and `-`, beginning with a letter or `_`, and is not a built-in
 variable's. Its `type` is `string` (one line, the default), `text` (lines
 and all), `integer`, `number`, `boolean` (`true`/`false`, `yes`/`no`) or
-`choice` (one of its `options`). It can be `required`, or have a
+`select` (one of its `options`; `choice` is accepted as an alias). It can be `required`, or have a
 `default`; otherwise it is empty when left out. The last argument, if it
 is a `string` or `text`, can take the `rest` of a call as it is typed,
 spaces and quotes and all, once those before it are given: with `rest:
@@ -167,6 +167,29 @@ var lines = n => n === 1 ? "one line" : n + " lines";
 ```
 Review {{file}}, about {{lines(depth * 40)}}.
 ````
+
+Inside scripts, `{@const ...}`, `{#if ...}`, `{#each ...}`, `{#match ...}`, and
+`{{...}}` expressions, a frozen `mako` host object is available for multi-agent
+and decision workflows (with `await`):
+
+- `await mako.agents(agentOrOpts?)` — lists offered agents (`agy`, `claude`,
+  `codex`, `pi`, `omp`, `omo`, `opencode`, etc.), their profiles, models, and
+  effort levels (`{ nodeId, agents }`). Pass `"claude"` or
+  `{ agent: "claude", refresh: true }` to inspect a specific agent's models.
+- `await mako.spawn(optsOrPrompt)` — spawns a new Mako sub-agent session and
+  returns `{ sessionId, agent, profile, name, project }`. Pass
+  `{ agent, model, effort, yolo, name, project, prompt }` or
+  `{ profile, target: "claude:reviewer", prompt }`.
+- `await mako.ask(optsOrPrompt)` (alias `mako.prompt`) — runs a one-off
+  non-interactive prompt without keeping a session alive. Accepts
+  `{ agent, profile, target, model, effort, yolo, project, prompt, format, schema }`.
+  Set `format: "json"` (or provide `schema`) to get a parsed JSON value back,
+  or `"text"` (default) for a string.
+- `await mako.decide(opts)` — calls the configured decision model (TypeSafe AI,
+  OpenRouter, OpenAI, or Google AI Studio) with `{ state, type, options, criteria, levels, questions, provider, model }`.
+  Shorthand helpers: `await mako.decide.choice(state, optionsOrCriteria, extra?)`,
+  `await mako.decide.yes(state, instructions?, extra?)`,
+  `await mako.decide.score(state, levelsOrCriteria, extra?)`.
 
 `{#raw}` … `{/raw}` keeps the text it holds as it is written: its `{{…}}`s,
 tags and ` ```js ` fences are text, for a prompt that shows an agent

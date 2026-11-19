@@ -17,6 +17,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/mcp"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // Version is the build version, overridable at link time.
@@ -64,6 +65,16 @@ type Config struct {
 	// Workspace is how the node shares the workspace: its spaces,
 	// projects and layouts.
 	Workspace Workspace `json:"workspace,omitzero"`
+	// Decision configures the default provider and model used by decision
+	// model calls in prompt templates.
+	Decision Decision `json:"decision,omitzero"`
+}
+
+// Decision configures the default provider and model for decision calls.
+type Decision struct {
+	Provider string            `json:"provider,omitempty"`
+	Model    string            `json:"model,omitempty"`
+	Models   map[string]string `json:"models,omitempty"`
 }
 
 // Workspace configures how a node shares the workspace.
@@ -350,7 +361,7 @@ func Save(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(body, '\n'), 0o600)
+	return fsutil.Write(path, append(body, '\n'))
 }
 
 func newNodeID() string {

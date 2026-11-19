@@ -166,7 +166,7 @@ func sectionDrop(m *model, w ggui.Widget, nodeID, project string) ggui.Widget {
 			return // where it already is
 		}
 		m.launch(agentspec.Target(s.GetAgent(), s.GetProfile()), nodeID, dir)
-	}).OnHover(over.Set)
+	}).Accept(func(d tabDrag) bool { return d.ID != "" }).OnHover(over.Set)
 }
 
 // ownerName splits an owner as the daemon gives it, host/name, into the

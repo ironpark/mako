@@ -186,7 +186,7 @@ func (e *codeEditor) lineStarts(s string) []int {
 	r := e.ensureRope(s)
 	n := r.Lines()
 	starts := make([]int, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		starts[i] = r.LineStart(i)
 	}
 	e.lines = starts

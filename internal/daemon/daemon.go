@@ -18,6 +18,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agentui"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/decision"
 	"github.com/ironpark/mako/internal/device"
 	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/p2p"
@@ -89,6 +90,8 @@ type Daemon struct {
 	plugins       *plugin.Manager // the node's plugins; see plugins.go
 	pluginsDir    string          // the folder they are read from
 	store         *store.Store    // the registries the plugins are installed from; see pluginstore.go
+	decisionsMu   sync.Mutex
+	decisions     *decision.Store // provider API keys & decision models; see decisions.go
 	agentUI       *agentui.Store  // the blocks agents show; see agent_ui.go
 	uiWatched     onceSet         // the sessions whose end closes their blocks
 	mcp           *mcp.Resolver   // nil without a configuration directory
@@ -148,7 +151,7 @@ func (d *Daemon) Self() *protocol.Node {
 		Source:     "self",
 		LastSeen:   timestamppb.Now(),
 		Revision:   protocol.Revision,
-		Agents:     agentInfo(d.agents()),
+		Agents:     d.agentInfo(),
 		PeerId:     d.peerID(),
 		Multiaddrs: d.multiaddrs(),
 		Key:        d.keyPrint,
@@ -438,6 +441,14 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleInspectAgentHome(ctx, stream, env)
 	case protocol.TypeMigrateAgentHome:
 		return d.handleMigrateAgentHome(ctx, stream, env)
+	case protocol.TypeRunAgentPrompt:
+		return d.handleRunAgentPrompt(ctx, stream, env)
+	case protocol.TypeListProviders:
+		return d.handleListProviders(ctx, stream, env, fromPeer)
+	case protocol.TypeProviderAction:
+		return d.handleProviderAction(ctx, stream, env, fromPeer)
+	case protocol.TypeRunDecision:
+		return d.handleRunDecision(ctx, stream, env, fromPeer)
 
 	case protocol.TypeSearch:
 		return d.handleSearch(ctx, stream, env)

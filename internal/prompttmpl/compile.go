@@ -123,8 +123,8 @@ func (c *compiler) node(n *node) error {
 		c.line("__o += " + js(n.text) + ";")
 	case "hole":
 		if !n.name {
-			c.check("{{"+n.text+"}}", "("+n.text+")", false)
-			c.guard("{{"+n.text+"}}", "__o += __s("+n.text+");")
+			c.check("{{"+n.text+"}}", "("+n.text+")", true)
+			c.guard("{{"+n.text+"}}", "__o += __s(await ("+n.text+"));")
 			return nil
 		}
 		v, err := c.name(n.text, "{{"+n.text+"}}")
@@ -135,7 +135,7 @@ func (c *compiler) node(n *node) error {
 	case "script":
 		c.script(n)
 	case TagConst:
-		c.check("{@const "+n.text+"}", "{ const "+n.text+"; }", false)
+		c.check("{@const "+n.text+"}", "{ const "+n.text+"; }", true)
 		c.line("const " + n.text + ";")
 		lhs := n.text
 		if eq := firstTopLevel(lhs, "="); eq >= 0 {
@@ -143,16 +143,16 @@ func (c *compiler) node(n *node) error {
 		}
 		c.declare(identifiers(lhs)...)
 	case TagRender:
-		c.check("{@render "+n.text+"}", "("+n.text+")", false)
+		c.check("{@render "+n.text+"}", "("+n.text+")", true)
 		c.guard("{@render "+n.text+"}", "__o += __s(await ("+n.text+"));")
 	case TagIf:
 		for i, br := range n.branches {
 			switch {
 			case i == 0:
-				c.check("{#if "+br.cond+"}", "("+br.cond+")", false)
+				c.check("{#if "+br.cond+"}", "("+br.cond+")", true)
 				c.b.WriteString("if (" + br.cond + ") ")
 			case br.cond != "":
-				c.check("{:else if "+br.cond+"}", "("+br.cond+")", false)
+				c.check("{:else if "+br.cond+"}", "("+br.cond+")", true)
 				c.b.WriteString("else if (" + br.cond + ") ")
 			default:
 				c.b.WriteString("else ")
@@ -163,7 +163,7 @@ func (c *compiler) node(n *node) error {
 		}
 	case TagEach:
 		what := "{#each " + n.expr + " as " + n.as + "}"
-		c.check(what, "("+n.expr+")", false)
+		c.check(what, "("+n.expr+")", true)
 		c.check(what, "{ const "+n.as+" = 0; }", false)
 		c.line("{ const __a = __list(" + n.expr + ");")
 		c.line("if (__a.length > 0) for (let __i = 0; __i < __a.length; __i++) {")
@@ -285,8 +285,8 @@ func (c *compiler) match(n *node) error {
 			arg = c.t.arg(n.expr)
 		}
 	} else {
-		c.check(what, "("+n.expr+")", false)
-		value = "__s(" + n.expr + ")"
+		c.check(what, "("+n.expr+")", true)
+		value = "__s(await (" + n.expr + "))"
 	}
 	var covered []string
 	for _, a := range n.arms {
@@ -381,7 +381,7 @@ func jsName(name string) bool { return jsNameRe.MatchString(name) && !reserved[n
 var reserved = map[string]bool{}
 
 func init() {
-	for w := range strings.FieldsSeq("break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof new null return super switch this throw true try typeof var void while with yield let static implements interface package private protected public await async arguments eval undefined NaN Infinity args vars") {
+	for w := range strings.FieldsSeq("break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof new null return super switch this throw true try typeof var void while with yield let static implements interface package private protected public await async arguments eval undefined NaN Infinity args vars mako") {
 		reserved[w] = true
 	}
 }

@@ -43,7 +43,7 @@ func TestSmallRope(t *testing.T) {
 	}
 
 	lines := strings.Split(text, "\n")
-	for i := 0; i < len(lines); i++ {
+	for i := range lines {
 		line := r.Line(i)
 		if line != lines[i] {
 			t.Errorf("Line(%d) = %q, want %q", i, line, lines[i])
@@ -64,7 +64,7 @@ func TestLargeRopeMultiChunk(t *testing.T) {
 	var sb strings.Builder
 	var expectedLines []string
 	maxLen := 0
-	for i := 0; i < 5000; i++ {
+	for i := range 5000 {
 		line := fmt.Sprintf("line %04d: %s (some text here for padding chunk)", i, strings.Repeat("x", i%100))
 		sb.WriteString(line)
 		sb.WriteByte('\n')
@@ -179,7 +179,7 @@ func TestRopeSpliceReplace(t *testing.T) {
 
 func BenchmarkRopeVsLinearLineOf(b *testing.B) {
 	var sb strings.Builder
-	for i := 0; i < 20000; i++ {
+	for range 20000 {
 		sb.WriteString("hello world this is a sample line in a large document\n")
 	}
 	text := sb.String()

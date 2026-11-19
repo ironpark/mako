@@ -341,3 +341,99 @@ func TestCtrlClickTabCloseSkipsConfirmation(t *testing.T) {
 		t.Fatal("Ctrl+click on dirty doc close button did not close dirty.go")
 	}
 }
+
+func TestSplitAndMoveTabsPreserveActiveAndGuardSelfSplit(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(&config.Config{NodeID: "n1"}, "")
+	m.Sessions.Set([]*protocol.SessionInfo{
+		{Id: "a1", NodeId: "n1", Agent: "claude", Project: "/w/api"},
+		{Id: "a2", NodeId: "n1", Agent: "claude", Project: "/w/api"},
+		{Id: "w1", NodeId: "n1", Agent: "codex", Project: "/w/web"},
+		{Id: "w2", NodeId: "n1", Agent: "codex", Project: "/w/web"},
+	})
+	for _, id := range []string{"a1", "a2", "w1", "w2"} {
+		m.showTab(id)
+	}
+	// Make a2 active in the focused pane before splitting off api tabs.
+	m.showTab("a2")
+	pane1 := ggui.Peek(m.FocusGroup)
+	m.splitTabs([]string{"a1", "a2"}, pane1, dropRight)
+	if got := paneTabs(m); !samePanes(got, []string{"w1", "w2"}, []string{"a1", "a2"}) {
+		t.Fatalf("after splitTabs = %q", got)
+	}
+	if ggui.Peek(m.Selected) != "a2" {
+		t.Fatalf("expected active moved tab a2 selected, got %q", ggui.Peek(m.Selected))
+	}
+
+	// Self-split guard: splitting web's tabs from a pane that only has web's tabs is a no-op.
+	webPane := ggui.Peek(m.Layout).groupOf("w1").ID
+	m.splitTabs([]string{"w1", "w2"}, webPane, dropBottom)
+	if got := paneTabs(m); !samePanes(got, []string{"w1", "w2"}, []string{"a1", "a2"}) {
+		t.Fatalf("self-split guard failed = %q", got)
+	}
+
+	// Moving a1, a2 back into webPane closes the second pane.
+	m.moveTabs([]string{"a1", "a2"}, webPane, 2)
+	if got := paneTabs(m); !samePanes(got, []string{"w1", "w2", "a1", "a2"}) {
+		t.Fatalf("after moveTabs = %q", got)
+	}
+}
+
+func TestDraggingProjectChipMovesSubprojectTabsAndPreservesClickToFold(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(&config.Config{NodeID: "n1"}, "")
+	m.Spaces.Set(spaceList{
+		Projects: []project{{
+			ID: "mono", Name: "mono",
+			Roots: []projectRoot{
+				{Locations: []fileRoot{{Node: "n1", Path: "/w/mono/api"}}},
+				{Locations: []fileRoot{{Node: "n1", Path: "/w/mono/web"}}},
+			},
+		}},
+	})
+	m.Sessions.Set([]*protocol.SessionInfo{
+		{Id: "a1", NodeId: "n1", Agent: "claude", Project: "/w/mono/api", State: protocol.StateRunning},
+		{Id: "a2", NodeId: "n1", Agent: "claude", Project: "/w/mono/api", State: protocol.StateRunning},
+		{Id: "w1", NodeId: "n1", Agent: "codex", Project: "/w/mono/web", State: protocol.StateRunning},
+	})
+	m.Titles.Set(map[string]string{"a1": "api-1", "a2": "api-2", "w1": "web-1"})
+	m.SidebarOpen.Set(false)
+	m.DetailsOpen.Set(false)
+	for _, id := range []string{"a1", "a2", "w1"} {
+		m.showTab(id)
+	}
+	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))
+	defer p.Close()
+	p.Frame()
+
+	// Clicking the sub-project chip still folds/unfolds it.
+	foldBtn, ok := p.Find(Tf("Fold %s", "api"))
+	if !ok {
+		t.Fatalf("missing Fold api chip:\n%s", p.Semantics().String())
+	}
+	p.Click(foldBtn.Center())
+	p.Frame()
+	if _, ok := p.Find(Tf("Unfold %s", "api")); !ok {
+		t.Fatalf("clicking chip did not fold api:\n%s", p.Semantics().String())
+	}
+	unfoldBtn, _ := p.Find(Tf("Unfold %s", "api"))
+	p.Click(unfoldBtn.Center())
+	p.Frame()
+
+	// Dragging the api sub-project chip to the right edge moves BOTH a1 and a2 at once.
+	chip, ok := p.Find(Tf("Fold %s", "api"))
+	if !ok {
+		t.Fatalf("missing Fold api chip after unfold")
+	}
+	from := chip.Center()
+	to := ggui.Pt(990, 400)
+	p.Press(from)
+	p.Move(ggui.Pt(from.X+12, from.Y+8))
+	p.Move(to)
+	p.Move(to)
+	p.Release(to)
+	p.Frame()
+	if got := paneTabs(m); !samePanes(got, []string{"w1"}, []string{"a1", "a2"}) {
+		t.Fatalf("after dragging api chip to right edge: %q", got)
+	}
+}

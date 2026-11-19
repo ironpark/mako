@@ -161,7 +161,20 @@ func TestProjectMCPSpawnMessageAndStop(t *testing.T) {
 
 func TestProjectMCPDiscoverAndSpawnDescribedProfile(t *testing.T) {
 	d, parent := projectMCPDaemon(t)
-	client := projectMCPClient(t, d, parent)
+	claudeAgent := d.cfg.Agents["claude"]
+	claudeAgent.Profiles = []agentspec.Profile{
+		{Name: "lead", Description: "Coordinator with explicit MCP access", ContextServers: new([]string{"mako"})},
+	}
+	d.cfg.Agents["claude"] = claudeAgent
+	d.agentFile.mu.Lock()
+	d.agentFile.read = false
+	d.agentFile.mu.Unlock()
+
+	lead, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Profile: "lead", Project: parent.Info().GetProject()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := projectMCPClient(t, d, lead)
 	path := filepath.Join(t.TempDir(), "config.json")
 	d.FollowAgents(path)
 	specialist := d.cfg.Agents["claude"]
@@ -176,7 +189,7 @@ func TestProjectMCPDiscoverAndSpawnDescribedProfile(t *testing.T) {
 		t.Helper()
 		specialist.Profiles[0].Description = description
 		cfg := *d.cfg
-		cfg.Agents = map[string]agentspec.Agent{"claude": d.cfg.Agents["claude"], "specialist": specialist}
+		cfg.Agents = map[string]agentspec.Agent{"claude": claudeAgent, "specialist": specialist}
 		cfg.ContextServers = map[string]mcp.Server{"mako": {Enabled: new(false)}}
 		body, err := json.Marshal(cfg)
 		if err != nil {
@@ -187,6 +200,12 @@ func TestProjectMCPDiscoverAndSpawnDescribedProfile(t *testing.T) {
 		}
 	}
 	write(specialist.Profiles[0].Description)
+	if d.takesMessages(parent.Info()) {
+		t.Fatal("default-profile session remained enabled after node-level mako MCP was disabled")
+	}
+	if !d.takesMessages(lead.Info()) {
+		t.Fatal("profile explicitly selecting mako lost messaging when node-level mako MCP was disabled")
+	}
 	listed := callProjectTool[listAgentsResult](t, client, "list_agents", struct{}{})
 	i := slices.IndexFunc(listed.Available, func(a availableAgent) bool { return a.Name == "specialist" })
 	if i < 0 {
@@ -218,7 +237,7 @@ func TestProjectMCPDiscoverAndSpawnDescribedProfile(t *testing.T) {
 	d.sessionMu.Lock()
 	saved := d.saved[childInfo.ID]
 	d.sessionMu.Unlock()
-	if saved.Request.GetProfile() != "reviewer" || saved.ParentID != parent.ID() {
+	if saved.Request.GetProfile() != "reviewer" || saved.ParentID != lead.ID() {
 		t.Fatalf("profile not saved for restore: %+v", saved)
 	}
 	result, err := client.CallTool(t.Context(), &sdk.CallToolParams{Name: "spawn_agent", Arguments: spawnAgentArgs{
@@ -228,10 +247,6 @@ func TestProjectMCPDiscoverAndSpawnDescribedProfile(t *testing.T) {
 		t.Fatal("a non-spawnable profile was accepted")
 	}
 	write("Frontend accessibility reviews")
-	later := time.Now().Add(time.Second)
-	if err := os.Chtimes(path, later, later); err != nil {
-		t.Fatal(err)
-	}
 	listed = callProjectTool[listAgentsResult](t, client, "list_agents", struct{}{})
 	i = slices.IndexFunc(listed.Available, func(a availableAgent) bool { return a.Name == "specialist" })
 	if i < 0 || listed.Available[i].Profiles[0].Description != "Frontend accessibility reviews" {
@@ -515,5 +530,146 @@ func TestProjectMCPOverHTTP(t *testing.T) {
 	}
 	if _, err := projectMCPHTTPClient(t, d, peer.token); err == nil {
 		t.Fatal("an ended session's token was accepted")
+	}
+}
+
+func TestProjectMCPSettingsReflectLiveAcrossSessions(t *testing.T) {
+	d, httpSess := projectMCPDaemon(t)
+	stdioSess, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: httpSess.Info().GetProject()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(t.TempDir(), "config.json")
+	writeConfig := func(desc string, makoEnabled bool) {
+		t.Helper()
+		claudeAgent := d.cfg.Agents["claude"]
+		claudeAgent.Profiles = []agentspec.Profile{
+			{Name: "reviewer", Description: desc},
+		}
+		cfg := *d.cfg
+		cfg.Agents = map[string]agentspec.Agent{"claude": claudeAgent}
+		cfg.ContextServers = map[string]mcp.Server{"mako": {Enabled: &makoEnabled}}
+		body, err := json.Marshal(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(cfgPath, body, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeConfig("Initial security review", true)
+	d.FollowAgents(cfgPath)
+
+	httpPeer := d.projectAgents.peer(httpSess.ID())
+	httpClient, err := projectMCPHTTPClient(t, d, httpPeer.token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	toolChanged := make(chan struct{}, 8)
+	stdioPeer := d.projectAgents.peer(stdioSess.ID())
+	conn, err := net.Dial("unix", d.projectAgents.socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	if err := json.NewEncoder(conn).Encode(agentMCPHello{Session: stdioSess.ID(), Token: stdioPeer.token}); err != nil {
+		t.Fatal(err)
+	}
+	stdioSDK := sdk.NewClient(&sdk.Implementation{Name: "test-stdio", Version: "1"}, &sdk.ClientOptions{
+		ToolListChangedHandler: func(context.Context, *sdk.ToolListChangedRequest) {
+			select {
+			case toolChanged <- struct{}{}:
+			default:
+			}
+		},
+	})
+	stdioClient, err := stdioSDK.Connect(t.Context(), &sdk.IOTransport{Reader: conn, Writer: conn}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stdioClient.Close() })
+
+	// 1. Update profile description without touching mtime; existing MCP connections update live.
+	writeConfig("Updated race detection", true)
+	_ = d.agents()
+	select {
+	case <-toolChanged:
+	case <-time.After(2 * time.Second):
+		t.Fatal("existing stdio MCP connection did not receive tools/list_changed on config reload")
+	}
+	tools, err := httpClient.ListTools(t.Context(), nil)
+	if err != nil || len(tools.Tools) != 15 {
+		t.Fatalf("http tools before disable: %+v, %v", tools, err)
+	}
+	listed := callProjectTool[listAgentsResult](t, httpClient, "list_agents", struct{}{})
+	if len(listed.Available) == 0 || listed.Available[0].Profiles[0].Description != "Updated race detection" {
+		t.Fatalf("http session did not reflect live profile edit: %+v", listed.Available)
+	}
+	for _, tl := range tools.Tools {
+		if tl.Name == "list_agents" && !strings.Contains(tl.Description, "Updated race detection") {
+			t.Fatalf("list_agents schema description stayed stale: %q", tl.Description)
+		}
+	}
+
+	// 2. Disable built-in mako MCP at node level; both running sessions reflect it immediately.
+	for len(toolChanged) > 0 {
+		<-toolChanged
+	}
+	writeConfig("Updated race detection", false)
+	if d.takesMessages(httpSess.Info()) || d.takesMessages(stdioSess.Info()) {
+		t.Fatal("running sessions still accepted messages after mako MCP was disabled")
+	}
+	select {
+	case <-toolChanged:
+	case <-time.After(2 * time.Second):
+		t.Fatal("existing stdio MCP connection did not receive tools/list_changed when disabled")
+	}
+	if gotTools, err := stdioClient.ListTools(t.Context(), nil); err != nil || len(gotTools.Tools) != 0 {
+		t.Fatalf("stdio tools after disable = %d (err=%v), want 0", len(gotTools.Tools), err)
+	}
+	if gotTools, err := httpClient.ListTools(t.Context(), nil); err != nil || len(gotTools.Tools) != 0 {
+		t.Fatalf("http tools after disable = %d (err=%v), want 0", len(gotTools.Tools), err)
+	}
+	if res, err := httpClient.CallTool(t.Context(), &sdk.CallToolParams{Name: "list_agents"}); err == nil && !res.IsError {
+		t.Fatal("http client called tool while mako MCP was disabled")
+	}
+	runDir := filepath.Dir(d.projectAgents.socket)
+	mcpCfgBody, err := os.ReadFile(filepath.Join(runDir, "mcp-"+httpSess.ID()+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mcpFile struct {
+		Servers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(mcpCfgBody, &mcpFile); err != nil {
+		t.Fatal(err)
+	}
+	if mcpFile.Servers["mako"] != nil {
+		t.Fatalf("mcp-%s.json retained mako after disable: %s", httpSess.ID(), mcpCfgBody)
+	}
+
+	// 3. Re-enable built-in mako MCP; existing sessions recover all 15 tools and config without restart.
+	for len(toolChanged) > 0 {
+		<-toolChanged
+	}
+	writeConfig("Re-enabled specialist", true)
+	if !d.takesMessages(httpSess.Info()) || !d.takesMessages(stdioSess.Info()) {
+		t.Fatal("running sessions did not recover messaging after mako MCP was re-enabled")
+	}
+	select {
+	case <-toolChanged:
+	case <-time.After(2 * time.Second):
+		t.Fatal("existing stdio MCP connection did not receive tools/list_changed when re-enabled")
+	}
+	if gotTools, err := httpClient.ListTools(t.Context(), nil); err != nil || len(gotTools.Tools) != 15 {
+		t.Fatalf("http tools after re-enable = %d (err=%v), want 15", len(gotTools.Tools), err)
+	}
+	if res := callProjectTool[listAgentsResult](t, stdioClient, "list_agents", struct{}{}); len(res.Available) == 0 || res.Available[0].Profiles[0].Description != "Re-enabled specialist" {
+		t.Fatalf("stdio session did not recover updated state: %+v", res.Available)
+	}
+	mcpCfgBody, err = os.ReadFile(filepath.Join(runDir, "mcp-"+httpSess.ID()+".json"))
+	if err != nil || !strings.Contains(string(mcpCfgBody), `"mako"`) {
+		t.Fatalf("mcp-%s.json did not restore mako on re-enable: %s (%v)", httpSess.ID(), mcpCfgBody, err)
 	}
 }

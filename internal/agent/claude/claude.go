@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // Agent is Claude Code.
@@ -76,7 +77,7 @@ func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, dir, session 
 		return nil, err
 	}
 	path := filepath.Join(dir, "mcp-"+session+".json")
-	if err := os.WriteFile(path, b, 0o600); err != nil {
+	if err := fsutil.Write(path, b); err != nil {
 		return nil, err
 	}
 	// The = form, as the flag takes any number of values otherwise and

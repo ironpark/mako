@@ -174,6 +174,9 @@ func (m *model) persistIsolateHome(isolate bool) {
 	}
 	*m.cfg = next
 	m.IsolateHome.Set(isolate)
+	if m.link != nil {
+		m.link.pollNow()
+	}
 	for agentName := range ggui.Peek(m.AgentCatalogs) {
 		m.loadAgentCatalog(agentName, true)
 	}

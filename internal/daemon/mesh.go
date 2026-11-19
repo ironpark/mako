@@ -338,6 +338,7 @@ func (d *Daemon) watchState(ctx context.Context) {
 	// otherwise; one that holds another asks for it.
 	var sentDigest []byte
 	for {
+		_ = d.followed()
 		if d.p2p != nil || d.changes.watched() {
 			st := d.state()
 			// A route that changed goes on at once, as do the sessions of the
@@ -346,11 +347,12 @@ func (d *Daemon) watchState(ctx context.Context) {
 			relayed := d.meshSessions(routes)
 			routesChanged := !maps.Equal(routes, lastRoutes) || !sameSessions(relayed, lastRelayed)
 			lastRoutes, lastRelayed = routes, relayed
+			nodesChanged := last != nil && !proto.Equal(st.GetNode(), last.GetNode())
 			sessionsChanged := last != nil && !sameSessions(st.GetSessions(), last.GetSessions())
-			if sessionsChanged {
-				d.changes.fire(false, true)
+			if nodesChanged || sessionsChanged {
+				d.changes.fire(nodesChanged, sessionsChanged)
 			}
-			changed := last == nil || sessionsChanged || routesChanged || st.GetWatchingApprovals() != last.GetWatchingApprovals() || !proto.Equal(st.GetNode(), last.GetNode()) ||
+			changed := last == nil || nodesChanged || sessionsChanged || routesChanged || st.GetWatchingApprovals() != last.GetWatchingApprovals() ||
 				!bytes.Equal(st.GetWorkspace().GetDigest(), last.GetWorkspace().GetDigest())
 			if d.p2p != nil && (changed || time.Since(sent) >= stateEvery) {
 				digest := st.GetWorkspace().GetDigest()

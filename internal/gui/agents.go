@@ -35,6 +35,7 @@ type agentDraft struct {
 	// Enabled is "on" or "off" as the user set it, or "" for while the
 	// program is installed.
 	Enabled   string
+	Yolo      bool // bypass permission prompts when the agent supports it
 	IsProfile bool // a profile's name may be blank while it is typed
 	// PickServers gives a profile's sessions the MCP servers in Servers,
 	// one ID a line, rather than every one enabled.
@@ -42,6 +43,7 @@ type agentDraft struct {
 	Servers     string
 	Model       string // a profile's; "" for the agent's default
 	Effort      string // a profile's; "" for the agent's default
+	ProfileYolo string // "", "on", or "off" (profile override of agent Yolo)
 }
 
 // draftAgents lays out cfg's agents for editing: every agent the node can
@@ -50,16 +52,25 @@ func draftAgents(agents map[string]agentspec.Agent) []agentDraft {
 	var out []agentDraft
 	for _, name := range agentspec.Names(agents) {
 		a, _ := agentspec.Lookup(name, agents)
+		agentArgs, lifted := agentspec.LiftYoloArgs(name, a.Args)
 		d := agentDraft{ID: len(out) + 1, Agent: name,
-			Command: agentspec.JoinArgs(a.Command), Args: agentspec.JoinArgs(a.Args), Env: envText(a.Env)}
+			Command: agentspec.JoinArgs(a.Command), Args: agentspec.JoinArgs(agentArgs), Env: envText(a.Env),
+			Yolo: a.Yolo || lifted}
 		if a.Enabled != nil {
 			d.Enabled = pick(*a.Enabled, "on", "off")
 		}
 		out = append(out, d)
 		for _, p := range a.Profiles {
+			pArgs, pLifted := agentspec.LiftYoloArgs(name, p.Args)
+			var profYolo string
+			if p.Yolo != nil {
+				profYolo = pick(*p.Yolo, "on", "off")
+			} else if pLifted {
+				profYolo = "on"
+			}
 			d := agentDraft{ID: len(out) + 1, Agent: name, Profile: p.Name, IsProfile: true,
-				Description: p.Description, Args: agentspec.JoinArgs(p.Args), Env: envText(p.Env),
-				Model: p.Model, Effort: p.Effort}
+				Description: p.Description, Args: agentspec.JoinArgs(pArgs), Env: envText(p.Env),
+				Model: p.Model, Effort: p.Effort, ProfileYolo: profYolo}
 			if p.ContextServers != nil {
 				d.PickServers, d.Servers = true, strings.Join(*p.ContextServers, "\n")
 			}
@@ -104,7 +115,8 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 		if err != nil {
 			return nil, fmt.Errorf(T("%s, environment: %v"), r.Agent, err)
 		}
-		a := agentspec.Agent{Command: command, Args: args, Env: env}
+		args, lifted := agentspec.LiftYoloArgs(r.Agent, args)
+		a := agentspec.Agent{Command: command, Args: args, Env: env, Yolo: r.Yolo || lifted}
 		if r.Enabled != "" {
 			on := r.Enabled == "on"
 			a.Enabled = &on
@@ -132,7 +144,21 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 		if err != nil {
 			return nil, fmt.Errorf(T("%s, environment: %v"), where, err)
 		}
+		args, lifted := agentspec.LiftYoloArgs(r.Agent, args)
 		p := agentspec.Profile{Name: r.Profile, Description: r.Description, Args: args, Env: env, Model: strings.TrimSpace(r.Model), Effort: strings.TrimSpace(r.Effort)}
+		switch r.ProfileYolo {
+		case "on":
+			on := true
+			p.Yolo = &on
+		case "off":
+			off := false
+			p.Yolo = &off
+		default:
+			if lifted {
+				on := true
+				p.Yolo = &on
+			}
+		}
 		if r.PickServers {
 			ids := lines(r.Servers)
 			if ids == nil {
@@ -231,6 +257,25 @@ func (m *model) agentField(id int, f func(*agentDraft) *string) ggui.Binding[str
 		}
 		return ""
 	}, func(v string) {
+		rows := slices.Clone(ggui.Peek(m.AgentDraft))
+		for i := range rows {
+			if rows[i].ID == id {
+				*f(&rows[i]) = v
+			}
+		}
+		m.AgentDraft.Set(rows)
+	})
+}
+
+func (m *model) agentBoolField(id int, f func(*agentDraft) *bool) ggui.Binding[bool] {
+	return ggui.Bind(func() bool {
+		for _, r := range m.AgentDraft.Get() {
+			if r.ID == id {
+				return *f(&r)
+			}
+		}
+		return false
+	}, func(v bool) {
 		rows := slices.Clone(ggui.Peek(m.AgentDraft))
 		for i := range rows {
 			if rows[i].ID == id {
@@ -382,9 +427,28 @@ func agentSettings(m *model) ggui.Widget {
 
 	return listPage(T("Agents"), T("The programs a session can start on this node, the flags and environment each starts with, and profiles: named variations of an agent, such as claude on another model or account. A session picks one as agent:profile. Changes apply to the next session started."),
 		isolateHomeCard(m),
+		builtinMCPCard(m),
 		agents,
 		saveBar(m),
 	)
+}
+
+func builtinMCPCard(m *model) ggui.Widget {
+	on := ggui.Bind(func() bool {
+		return m.ext.MCPServers.Get()["mako"].On()
+	}, func(v bool) {
+		next := ggui.Peek(m.ext.MCPServers)["mako"]
+		next.Enabled = nil
+		if !v {
+			next.Enabled = &v
+		}
+		m.saveMCPServer("mako", next)
+	})
+	return card(row(
+		T("Built-in Mako MCP"),
+		T("Give supported agents built-in tools to spawn teammates, exchange messages, show UI blocks and propose layouts. Changes apply immediately to running sessions unless a profile overrides MCP servers."),
+		ui.Switch(on, "").Name(T("Built-in Mako MCP")),
+	))
 }
 
 // agentEntry is an agent's row of the draft and its profiles' after it.
@@ -422,6 +486,9 @@ func agentItem(m *model, open *ggui.StateValue[string], shown ggui.Readable[stri
 		}
 		if n := m.profileCount(name); n > 0 {
 			text += " · " + Tf("%d profiles", n)
+		}
+		if d.Yolo {
+			text += " · YOLO"
 		}
 		return widget.Text(text).Size(11.5).Color(skin.ExtraMuted).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()
 	})
@@ -481,6 +548,19 @@ func agentEditor(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 		compactField(T("Environment"), T("One per line as NAME=value, added to the daemon's. $NAME, ${NAME} and a leading ~ expand when a session starts; $$ is a $."),
 			ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Env })).
 				Multiline().Lines(2).Style(mono).Name(Tf("%s environment", a.Agent))),
+	}
+	if _, supportsYolo := agents.As[agent.YoloFlag](a.Agent); supportsYolo {
+		yoloSwitch := ui.Switch(m.agentBoolField(a.ID, func(d *agentDraft) *bool { return &d.Yolo }), "").
+			Name(Tf("%s YOLO", a.Agent))
+		yoloRow := widget.Box(widget.Row(
+			icon("shield-alert").Size(15).Color(skin.DotWaiting),
+			widget.Expanded(widget.Column(
+				widget.Text(T("YOLO mode")).Size(13).Weight(ggui.WeightMedium),
+				muted(widget.Text(T("Bypass permission prompts and sandbox confirmations automatically.")).Size(11.5)),
+			).Gap(2).Stretch()),
+			yoloSwitch,
+		).Gap(10).Align(widget.AlignCenter)).Fill(skin.Surface0).Border(1, skin.Border).Radius(8).Pad(10, 12)
+		children = append(children, yoloRow)
 	}
 	for _, p := range profiles {
 		children = append(children, profileCard(m, p, mono))
@@ -594,6 +674,7 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 				Multiline().Lines(2).Placeholder(T("For example: Reviews Go concurrency, cancellation and race conditions.")).
 				Name(Tf("%s description", target))),
 		profileModelAndEffort(m, p, target, mono),
+		profileYoloRow(m, id, p.Agent, target),
 		compactField(T("Flags"), T("Added after the agent's own."),
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Args })).
 				Style(mono).Placeholder("--flag value").Name(Tf("%s flags", target))),
@@ -604,10 +685,30 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 	).Gap(10).Stretch()).Border(1, skin.Border).Radius(8).Pad(10, 12)
 }
 
-// mcpServerIDs are the MCP servers this node has: the installed
-// extensions' and those configured with a command, sorted.
+func profileYoloRow(m *model, id int, agentName, target string) ggui.Widget {
+	if _, ok := agents.As[agent.YoloFlag](agentName); !ok {
+		return widget.Box()
+	}
+	ctrl := widget.Box(ui.Select(m.agentField(id, func(d *agentDraft) *string { return &d.ProfileYolo })).
+		Options([]string{"", "on", "off"}).
+		Format(func(v string) string {
+			switch v {
+			case "on":
+				return T("Enabled")
+			case "off":
+				return T("Disabled")
+			default:
+				return T("Inherit from agent")
+			}
+		}).
+		Name(Tf("%s YOLO", target))).Width(200)
+	return compactField(T("YOLO mode"), T("Override the agent's YOLO setting for this profile."), ctrl)
+}
+
+// mcpServerIDs are the MCP servers this node has: the built-in mako server,
+// installed extensions' servers, and those configured with a command, sorted.
 func (m *model) mcpServerIDs() []string {
-	var ids []string
+	ids := []string{"mako"}
 	for _, e := range m.ext.Installed.Get() {
 		ids = append(ids, e.ContextServerIDs()...)
 	}

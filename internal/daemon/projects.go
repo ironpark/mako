@@ -229,6 +229,7 @@ func (d *Daemon) handleSetProjects(ctx context.Context, stream *transport.Stream
 		out := d.projects.set(req.GetProjects())
 		// The Agents panels and list_agents follow at once.
 		d.changes.fire(false, true)
+		d.syncProjectAgents()
 		return out, nil
 	})
 }

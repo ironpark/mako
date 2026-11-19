@@ -57,11 +57,15 @@ const (
 	Integer Type = "integer" // a whole number
 	Number  Type = "number"  // any number
 	Boolean Type = "boolean" // true or false, yes or no
-	Choice  Type = "choice"  // one of its options
+	Choice  Type = "choice"  // legacy name for select (one of its options)
+	Select  Type = "select"  // one of its options
 )
 
-// Types are the types an argument can take.
-var Types = []Type{String, Text, Integer, Number, Boolean, Choice}
+// HasOptions reports whether t picks one value from predefined options.
+func (t Type) HasOptions() bool { return t == Choice || t == Select }
+
+// Types are the types an argument can take in UI pickers and documentation.
+var Types = []Type{String, Text, Integer, Number, Boolean, Select}
 
 // Arg is an argument a template takes.
 type Arg struct {
@@ -278,6 +282,9 @@ func (t *Template) check() error {
 		if IsBuiltin(a.Name) {
 			return fmt.Errorf("argument %q: a built-in variable has that name", a.Name)
 		}
+		if a.Name == "mako" {
+			return fmt.Errorf("argument %q: reserved for mako host scripts", a.Name)
+		}
 		seen[a.Name] = true
 		if a.Type == "" {
 			a.Type = String
@@ -285,14 +292,14 @@ func (t *Template) check() error {
 				a.Type = Choice
 			}
 		}
-		if !slices.Contains(Types, a.Type) {
+		if !slices.Contains(Types, a.Type) && a.Type != Choice {
 			return fmt.Errorf("argument %q: no type %q", a.Name, a.Type)
 		}
-		if a.Type == Choice && len(a.Options) == 0 {
-			return fmt.Errorf("argument %q: a choice needs options", a.Name)
+		if a.Type.HasOptions() && len(a.Options) == 0 {
+			return fmt.Errorf("argument %q: a %s needs options", a.Name, a.Type)
 		}
-		if a.Type != Choice && len(a.Options) > 0 {
-			return fmt.Errorf("argument %q: only a choice has options", a.Name)
+		if !a.Type.HasOptions() && len(a.Options) > 0 {
+			return fmt.Errorf("argument %q: only a select or choice has options", a.Name)
 		}
 		if a.Rest && i != len(t.Args)-1 {
 			return fmt.Errorf("argument %q: only the last argument takes the rest", a.Name)
@@ -336,7 +343,7 @@ func (t *Template) Usage() string {
 	parts := make([]string, len(t.Args))
 	for i, a := range t.Args {
 		kind := string(a.Type)
-		if a.Type == Choice {
+		if a.Type.HasOptions() {
 			kind = strings.Join(a.Options, "|")
 		}
 		if a.Rest {
@@ -384,7 +391,7 @@ func (e *ArgError) Error() string {
 	case Twice:
 		return fmt.Sprintf("%s: given twice", e.Arg)
 	case BadValue:
-		if e.Type == Choice {
+		if e.Type.HasOptions() {
 			return fmt.Sprintf("%s: %q is not one of %s", e.Arg, e.Value, strings.Join(e.Options, ", "))
 		}
 		return fmt.Sprintf("%s: %q is not a valid %s", e.Arg, e.Value, e.Type)
@@ -421,7 +428,7 @@ func (a *Arg) convert(v string) (string, error) {
 			return "false", nil
 		}
 		return "", bad
-	case Choice:
+	case Choice, Select:
 		for _, o := range a.Options {
 			if strings.EqualFold(o, strings.TrimSpace(v)) {
 				return o, nil
@@ -602,11 +609,16 @@ func (t *Template) arg(name string) *Arg {
 // Expand is what a call of the template sends: its arguments bound and
 // its prompt filled.
 func (t *Template) Expand(ctx context.Context, args string, builtins map[string]string) (string, error) {
+	return t.ExpandWith(ctx, args, builtins, nil)
+}
+
+// ExpandWith expands the template with an optional host bridge for mako.* calls.
+func (t *Template) ExpandWith(ctx context.Context, args string, builtins map[string]string, host Host) (string, error) {
 	values, err := t.Bind(args)
 	if err != nil {
 		return "", err
 	}
-	return t.Fill(ctx, values, builtins)
+	return t.FillWith(ctx, values, builtins, host)
 }
 
 // Broken is a template file that did not read, and why.

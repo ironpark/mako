@@ -28,6 +28,8 @@ type commandMenu struct {
 	read     time.Time // when the commands were last asked for
 	reading  bool
 	pick     *ggui.StateValue[int] // the one chosen, of those matched
+	// navigated is set once ↑ or ↓ moves the pick on the current draft.
+	navigated bool
 	// closed is the draft Escape closed the menu over; it opens again
 	// once the draft changes.
 	closed *ggui.StateValue[string]
@@ -77,10 +79,11 @@ func matchByName[T any](items []T, query string, name func(T) string) []T {
 	return out
 }
 
-// menuItem is a line of the composer's menu: a command or a template.
+// menuItem is a line of the composer's menu: a command, template, or arg value.
 type menuItem struct {
 	name, usage, description, tag string
 	complete                      string // the draft Tab completes to
+	passEnter                     bool   // plain Enter submits when not navigated via arrows
 	take                          func() // what Enter or a click does
 }
 
@@ -146,11 +149,15 @@ func (m *model) menuKey(id string, state *chatState, ev ggui.KeyEvent) bool {
 		return false
 	}
 	if stepPick(state.menu.pick, len(items), ev.Key) {
+		state.menu.navigated = true
 		return true
 	}
 	pick := min(ggui.Peek(state.menu.pick), len(items)-1)
 	switch ev.Key {
 	case ggui.KeyEnter, ggui.KeyNumpadEnter:
+		if items[pick].passEnter && !state.menu.navigated {
+			return false
+		}
 		items[pick].take()
 	case ggui.KeyTab:
 		m.setComposerDraft(id, items[pick].complete)
@@ -222,6 +229,7 @@ func composerMenu(m *model, id string, state *chatState) ggui.Widget {
 			m.readCommands(id, state)
 		}
 		state.menu.pick.Set(0)
+		state.menu.navigated = false
 	})
 	return ggui.Reactive(func() ggui.Widget {
 		var content ggui.Widget
@@ -231,7 +239,12 @@ func composerMenu(m *model, id string, state *chatState) ggui.Widget {
 			for i, it := range items {
 				rows[i] = menuRow(it, i == pick)
 			}
-			content = widget.Column(rows...).Gap(2).Stretch()
+			rowsCol := widget.Column(rows...).Gap(2).Stretch()
+			if hint := templateHint(state); hint != nil {
+				content = widget.Column(hint, hline(), rowsCol).Gap(4).Stretch()
+			} else {
+				content = rowsCol
+			}
 		} else if content = templateHint(state); content == nil {
 			return widget.Box()
 		}

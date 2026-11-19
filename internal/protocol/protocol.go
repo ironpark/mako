@@ -126,6 +126,13 @@ const (
 	TypeAgentHomeInfo     Type = "agent_home_info"
 	TypeMigrateAgentHome  Type = "migrate_agent_home"
 	TypeAgentHomeMigrated Type = "agent_home_migrated"
+	TypeRunAgentPrompt    Type = "run_agent_prompt"
+	TypeAgentPromptResult Type = "agent_prompt_result"
+	TypeListProviders     Type = "list_providers"
+	TypeProviders         Type = "providers"
+	TypeProviderAction    Type = "provider_action"
+	TypeRunDecision       Type = "run_decision"
+	TypeDecisionResult    Type = "decision_result"
 )
 
 // Newer reports whether the edit made at version v on node is newer than

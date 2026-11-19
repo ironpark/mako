@@ -29,7 +29,11 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 38
+const Revision = 39
+
+// RevisionTemplatesAndDecisions adds OpenSession model/effort/yolo overrides,
+// RunAgentPrompt one-shot prompts, and local provider keys / RunDecision.
+const RevisionTemplatesAndDecisions = 39
 
 // RevisionAgentHomeAndModels adds ListAgentModels, InspectAgentHome, and
 // MigrateAgentHome for dynamic agent model catalogs and Mako home isolation.

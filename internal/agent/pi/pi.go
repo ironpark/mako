@@ -7,6 +7,7 @@ package pi
 import (
 	"image/color"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/ironpark/mako/internal/agent"
@@ -25,6 +26,34 @@ type Agent struct {
 
 // Pi is pi, or omo, which also take MCP servers from an extension.
 type Pi struct{ *Agent }
+
+// OMP is oh-my-pi, which has a YOLO approval mode flag.
+type OMP struct{ *Agent }
+
+// WithYolo adds --yolo for oh-my-pi.
+func (*OMP) WithYolo(l *agent.Launch) {
+	l.Command = agent.AppendFlagOnce(l.Command, "--yolo")
+}
+
+// YoloFlags lists the CLI flags that enable YOLO mode on omp.
+func (*OMP) YoloFlags() []string {
+	return []string{"--yolo", "--auto-approve"}
+}
+
+// PrepareOneShot runs pi, omo, or omp non-interactively with -p and --no-session.
+func (*Agent) PrepareOneShot(l *agent.Launch, req agent.OneShotRequest, _, _ string) (agent.OneShotPrepared, error) {
+	prompt := agent.JSONPromptSuffix(req.Prompt, req.Format, req.JSONSchema)
+	l.Command = append(slices.Clone(l.Command), "--no-session", "-p", prompt)
+	return agent.OneShotPrepared{
+		Parse: func(stdout, _ []byte) (string, error) {
+			clean := strings.TrimSpace(agent.StripANSI(string(stdout)))
+			if req.Format == "json" {
+				return agent.ExtractJSON(clean)
+			}
+			return clean, nil
+		},
+	}, nil
+}
 
 // newAgent is the agent called name, with its options, keeping its state
 // in ~/.<name>/agent unless rootEnv says.
@@ -62,12 +91,12 @@ func NewOMO() *Pi {
 // no event after the last of a prompt's runs. On Linux and macOS a
 // $XDG_DATA_HOME/omp that exists holds its sessions instead, which mako
 // does not follow.
-func NewOMP() *Agent {
-	return newAgent("omp", "PI_CODING_AGENT_DIR", color.NRGBA{0xe0, 0x6c, 0x9f, 0xff}, agent.Flags{
+func NewOMP() *OMP {
+	return &OMP{newAgent("omp", "PI_CODING_AGENT_DIR", color.NRGBA{0xe0, 0x6c, 0x9f, 0xff}, agent.Flags{
 		ResumeFlags:  []string{"--resume", "-r", "--session"},
 		PickerValues: []string{"--fork", "--restore"}, PickerFlags: []string{"--continue", "-c", "--no-session"},
 		Values: strings.Fields("--cwd --config --add-dir --mode --provider --model --smol --slow --goal --plan --max-time --warn-cost --max-cost --service-tier --api-key --system-prompt --system-prompt-template --append-system-prompt --provider-session-id --prompt-cache-key --session-dir --models --tools --thinking --hook --extension -e --trusted-extension --plugin-dir --skills --approval-mode --profile --alias"),
-	}, "agent_end")
+	}, "agent_end")}
 }
 
 func (a *Agent) Info() agent.Info { return a.info }

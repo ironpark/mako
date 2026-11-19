@@ -3,6 +3,7 @@
 package agentspec
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -26,6 +27,9 @@ type Agent struct {
 	Args     []string          `json:"args,omitempty"`
 	Env      map[string]string `json:"env,omitempty"`
 	Profiles []Profile         `json:"profiles,omitempty"`
+	// Yolo skips permission prompts and sandboxing when the agent's driver
+	// supports it.
+	Yolo bool `json:"yolo,omitempty"`
 	// Enabled offers the agent to start sessions with, or not; unset, it
 	// is offered while its program is installed.
 	Enabled *bool `json:"enabled,omitempty"`
@@ -47,6 +51,8 @@ type Profile struct {
 	// Effort is the reasoning effort its sessions start with; "" leaves the
 	// agent's default. An agent without agent.EffortFlag ignores it.
 	Effort string `json:"effort,omitempty"`
+	// Yolo overrides the agent's YOLO switch for this profile when set.
+	Yolo *bool `json:"yolo,omitempty"`
 	// ContextServers picks the MCP servers its sessions get, by ID, an
 	// empty list none; unset, they get every server enabled. A server
 	// picked here is given even when turned off for the node.
@@ -165,6 +171,14 @@ type Launch struct {
 	Shown []string
 }
 
+// ResolveOptions overrides a profile's or agent's model, effort, and YOLO
+// settings for a single launch.
+type ResolveOptions struct {
+	Model  string
+	Effort string
+	Yolo   *bool
+}
+
 // Resolve turns an agent name, a profile of it ("" for none) and extra
 // arguments and environment into a command. Flags go agent, profile, then
 // the request's, so a later one can override an earlier where the program
@@ -177,10 +191,16 @@ type Launch struct {
 // home directory, and $$ to a $. The request's own are taken as they are, as a
 // shell has expanded them already.
 func Resolve(name, profile string, args []string, env map[string]string, agents map[string]Agent) (Launch, error) {
+	return ResolveWith(name, profile, args, env, ResolveOptions{}, agents)
+}
+
+// ResolveWith resolves a launch with optional per-launch overrides for model,
+// effort, and YOLO mode.
+func ResolveWith(name, profile string, args []string, env map[string]string, opts ResolveOptions, configured map[string]Agent) (Launch, error) {
 	if name == "" {
 		name = ShellName
 	}
-	a, ok := Lookup(name, agents)
+	a, ok := Lookup(name, configured)
 	if !ok {
 		return Launch{}, fmt.Errorf("unknown agent %q", name)
 	}
@@ -219,14 +239,57 @@ func Resolve(name, profile string, args []string, env map[string]string, agents 
 	}
 	maps.Copy(merged, env)
 
+	effectiveModel := cmp.Or(opts.Model, p.Model)
+	effectiveEffort := cmp.Or(opts.Effort, p.Effort)
+	effectiveYolo := a.Yolo
+	if p.Yolo != nil {
+		effectiveYolo = *p.Yolo
+	}
+	if opts.Yolo != nil {
+		effectiveYolo = *opts.Yolo
+	}
+
 	command := append([]string{path}, a.Command[1:]...)
 	for _, arg := range slices.Concat(a.Args, p.Args) {
 		command = append(command, expand(arg, lookup))
 	}
-	command = append(command, modelArgs(name, path, p.Model)...)
-	command = append(command, effortArgs(name, path, p.Effort)...)
-	command = append(command, args...)
-	return Launch{Command: command, Env: merged, ContextServers: p.ContextServers}, nil
+	command = append(command, modelArgs(name, path, effectiveModel)...)
+	command = append(command, effortArgs(name, path, effectiveEffort)...)
+
+	launch := Launch{ContextServers: p.ContextServers,
+		Command: command,
+		Env:     merged}
+	if effectiveYolo {
+		if e, ok := agents.Native(name, path); ok {
+			if yf, ok := e.Driver.(agent.YoloFlag); ok {
+				yf.WithYolo(&launch.Launch)
+			}
+		}
+	}
+	launch.Command = append(launch.Command, args...)
+	return launch, nil
+}
+
+// LiftYoloArgs removes known standalone YOLO flags for name from args and
+// reports whether any were present.
+func LiftYoloArgs(name string, args []string) (cleaned []string, lifted bool) {
+	yf, ok := agents.As[agent.YoloFlag](name)
+	if !ok {
+		return slices.Clone(args), false
+	}
+	flags := yf.YoloFlags()
+	if len(flags) == 0 {
+		return slices.Clone(args), false
+	}
+	out := make([]string, 0, len(args))
+	for _, a := range args {
+		if slices.Contains(flags, a) {
+			lifted = true
+			continue
+		}
+		out = append(out, a)
+	}
+	return out, lifted
 }
 
 // expand writes $NAME, ${NAME} and a leading ~ out, and $$ as $.
