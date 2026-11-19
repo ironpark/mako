@@ -14,10 +14,10 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/ggui/widget"
 
-	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/prompttmpl"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // Settings ▸ Templates edits the prompt templates in the templates folder:
@@ -296,7 +296,7 @@ func (pg *templatePage) save(id int) {
 		err = os.MkdirAll(dir, 0o700)
 	}
 	if err == nil {
-		err = atomicfile.Write(filepath.Join(dir, t.Name+".md"), data)
+		err = fsutil.Write(filepath.Join(dir, t.Name+".md"), data)
 	}
 	if err == nil && d.File != "" && d.File != t.Name {
 		err = os.Remove(filepath.Join(dir, d.File+".md"))

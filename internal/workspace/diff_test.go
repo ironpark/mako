@@ -7,8 +7,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ironpark/mako/internal/crdt"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/pkg/crdt"
 )
 
 // docOf is a window's document of the spaces, projects and pins given.

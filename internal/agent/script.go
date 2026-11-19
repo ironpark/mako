@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // WriteOnce writes source in dir as name-<its hash><ext>, unless it is
@@ -25,7 +25,7 @@ func WriteOnce(dir, name, ext, source string) (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
-	return path, atomicfile.Write(path, []byte(source))
+	return path, fsutil.Write(path, []byte(source))
 }
 
 // HookScript is JavaScript, for the extensions and plugins mako writes for

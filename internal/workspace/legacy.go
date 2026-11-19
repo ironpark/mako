@@ -10,8 +10,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/ironpark/mako/internal/crdt"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/pkg/crdt"
 )
 
 // A workspace kept before it was a CRDT: the window's document (see

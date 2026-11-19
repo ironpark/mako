@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ironpark/mako/internal/crdt"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/pkg/crdt"
 )
 
 // The scenarios of docs/workspace-sync-plan.md §4: two nodes edit apart,

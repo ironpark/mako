@@ -13,9 +13,9 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/config"
-	"github.com/ironpark/mako/internal/crdt"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/workspace"
+	"github.com/ironpark/mako/pkg/crdt"
 )
 
 // mark asks for a creation or an add in a front-end's delta.

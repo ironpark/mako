@@ -4,8 +4,8 @@ import (
 	"cmp"
 	"slices"
 
-	"github.com/ironpark/mako/internal/crdt"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/pkg/crdt"
 )
 
 // Stamp stamps a front-end's delta with one fresh stamp of the daemon's

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/ironpark/mako/internal/agent"
-	"github.com/ironpark/mako/internal/atomicfile"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // agy takes hooks from no command line, only from the hooks.json files of
@@ -74,7 +74,7 @@ func writeHooks(path, hook string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return atomicfile.Write(path, append(out, '\n'))
+	return fsutil.Write(path, append(out, '\n'))
 }
 
 // hookEntry is mako's entry in hooks.json: hook on each event, the event

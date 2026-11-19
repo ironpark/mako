@@ -10,7 +10,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/ironpark/mako/internal/atomicfile"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // A plugin with the storage permission has a store of its own, a JSON
@@ -145,7 +145,7 @@ func (s *kvStore) saveLocked() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return err
 	}
-	return atomicfile.Write(s.path, b)
+	return fsutil.Write(s.path, b)
 }
 
 func checkKey(key string) error {

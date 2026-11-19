@@ -16,8 +16,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/keychain"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // A plugin's secrets are its secret settings, which the user sets, and
@@ -150,7 +150,7 @@ func (v *vault) saveIndexLocked() error {
 	if err := os.MkdirAll(filepath.Dir(v.index), 0o700); err != nil {
 		return err
 	}
-	return atomicfile.Write(v.index, b)
+	return fsutil.Write(v.index, b)
 }
 
 // writeFileLocked writes the file's secrets, or removes it with none.
@@ -168,7 +168,7 @@ func (v *vault) writeFileLocked(values map[string]string) error {
 	if err := os.MkdirAll(filepath.Dir(v.file), 0o700); err != nil {
 		return err
 	}
-	return atomicfile.Write(v.file, b) // 0600
+	return fsutil.Write(v.file, b) // 0600
 }
 
 // has says the vault holds name, without reading its value.

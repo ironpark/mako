@@ -33,10 +33,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/plugin/pack"
 	"github.com/ironpark/mako/internal/plugin/registry"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // DefaultRegistry is the registry every node starts with, which the
@@ -200,7 +200,7 @@ func writeJSON(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	return atomicfile.Write(path, append(b, '\n'))
+	return fsutil.Write(path, append(b, '\n'))
 }
 
 // Status makes the store the manager's plugin.Installs.

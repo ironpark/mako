@@ -7,8 +7,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ironpark/mako/internal/crdt"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/pkg/crdt"
 )
 
 // never is a time no stamp is too far ahead of.

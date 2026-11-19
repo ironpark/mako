@@ -11,8 +11,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // The window layout documents are the workspace's (window_layouts, one
@@ -212,7 +212,7 @@ func (w *windowLayouts) saveLocked() {
 		return
 	}
 	if data, err := json.Marshal(w.allowed); err == nil {
-		_ = atomicfile.Write(w.path, data)
+		_ = fsutil.Write(w.path, data)
 	}
 }
 

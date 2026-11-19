@@ -1,6 +1,6 @@
-// Package atomicfile replaces a file whole: whoever reads it, a crash
-// included, finds the old file or the new, never half of one.
-package atomicfile
+// Package fsutil holds file helpers. Write replaces a file whole: whoever
+// reads it, a crash included, finds the old file or the new, never half of one.
+package fsutil
 
 import (
 	"os"

@@ -13,9 +13,9 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/plugin/hostapi"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // A plugin with sessions:read may subscribe to what happens to this
@@ -126,7 +126,7 @@ func (s *subscriptions) change(kinds []string, add bool) ([]string, error) {
 		if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 			return nil, err
 		}
-		if err := atomicfile.Write(s.path, b); err != nil {
+		if err := fsutil.Write(s.path, b); err != nil {
 			return nil, err
 		}
 	}

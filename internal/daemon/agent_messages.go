@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 const maxAgentMessage = 32 << 10
@@ -140,7 +140,7 @@ func (m *agentMessages) saveLocked(next messageFile) error {
 		if err != nil {
 			return err
 		}
-		if err := atomicfile.Write(m.path, data); err != nil {
+		if err := fsutil.Write(m.path, data); err != nil {
 			return err
 		}
 	}

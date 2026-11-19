@@ -22,10 +22,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/keychain"
 	"github.com/ironpark/mako/internal/layoutdoc"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // Limits bound what a plugin may use. The zero value of a field takes its
@@ -383,5 +383,5 @@ func (g *grantStore) update(id string, fn func(*grantEntry)) error {
 	if err := os.MkdirAll(filepath.Dir(g.path), 0o700); err != nil {
 		return err
 	}
-	return atomicfile.Write(g.path, b)
+	return fsutil.Write(g.path, b)
 }

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ironpark/mako/internal/atomicfile"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // Images a log holds inline, as base64, are kept as files on the node, so
@@ -95,7 +95,7 @@ func keepImage(ext, data string) (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
-	if err := atomicfile.Write(path, raw); err != nil {
+	if err := fsutil.Write(path, raw); err != nil {
 		return "", err
 	}
 	return path, nil

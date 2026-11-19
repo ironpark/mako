@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ironpark/mako/internal/crdt"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/pkg/crdt"
 )
 
 // Reading the state. An entity shows while it was created later than it

@@ -15,9 +15,9 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/config"
-	"github.com/ironpark/mako/internal/crdt"
 	"github.com/ironpark/mako/internal/protocol"
 	shared "github.com/ironpark/mako/internal/workspace"
+	"github.com/ironpark/mako/pkg/crdt"
 )
 
 // fakeDaemon keeps a workspace as a daemon does: it stamps what a window

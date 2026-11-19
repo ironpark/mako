@@ -12,11 +12,11 @@ import (
 	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/ggui/widget"
 
-	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/prompttmpl"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // A prompt template an agent wrote (save_template, as the built-in
@@ -91,7 +91,7 @@ func (r templateRequest) save() error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	return atomicfile.Write(filepath.Join(dir, r.Name+".md"), []byte(r.Content))
+	return fsutil.Write(filepath.Join(dir, r.Name+".md"), []byte(r.Content))
 }
 
 // saveTemplateApproval saves the template approval a of session id's

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/ironpark/mako/internal/atomicfile"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // fileWriter writes a file of the window's off the UI goroutine, as a
@@ -69,5 +69,5 @@ func writeWindowFile(path string, body []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	return atomicfile.Write(path, body)
+	return fsutil.Write(path, body)
 }

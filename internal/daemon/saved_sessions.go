@@ -17,12 +17,12 @@ import (
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
-	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transcript"
+	"github.com/ironpark/mako/pkg/fsutil"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -130,7 +130,7 @@ func (d *Daemon) saveSessionsLocked() error {
 	if err != nil {
 		return err
 	}
-	return atomicfile.Write(d.sessionPath, data)
+	return fsutil.Write(d.sessionPath, data)
 }
 
 func (d *Daemon) listSessions() []*protocol.SessionInfo {

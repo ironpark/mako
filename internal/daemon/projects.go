@@ -12,10 +12,10 @@ import (
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
-	"github.com/ironpark/mako/internal/atomicfile"
 	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transport"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // Projects: the folders the user put together, as far as they are on this
@@ -83,7 +83,7 @@ func (p *projectStore) set(list []*protocol.ProjectScope) *protocol.Projects {
 	path := p.path
 	p.mu.Unlock()
 	if path != "" {
-		_ = atomicfile.Write(path, data)
+		_ = fsutil.Write(path, data)
 	}
 	return out
 }

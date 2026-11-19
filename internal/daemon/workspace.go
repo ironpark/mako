@@ -12,11 +12,11 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ironpark/mako/internal/atomicfile"
-	"github.com/ironpark/mako/internal/crdt"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transport"
 	"github.com/ironpark/mako/internal/workspace"
+	"github.com/ironpark/mako/pkg/crdt"
+	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 // The workspace: the spaces, projects, names, looks, pins and layouts of
@@ -233,7 +233,7 @@ func (w *workspaces) save() {
 	w.mu.Unlock()
 	data, err := proto.Marshal(kept)
 	if path != "" && err == nil {
-		_ = atomicfile.Write(path, data)
+		_ = fsutil.Write(path, data)
 	}
 }
 
