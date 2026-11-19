@@ -36,12 +36,18 @@ badge go through the Objective-C runtime.
 | Target | |
 |---|---|
 | `make build` | `bin/mako`, `bin/makod` and `bin/mako-gui`, stamped with `git describe` as their version |
-| `make app` | `bin/mako.app`, the desktop app bundled for macOS and signed ad hoc |
+| `make app` | `bin/mako.app`, the desktop app bundled for macOS by `ggui build` from `ggui.toml` and signed ad hoc |
+| `make dev` | Runs the desktop app with `ggui dev`, rebuilding and restarting it whenever its code changes |
 | `make test` | `go test ./...` |
 | `make vet` | `go vet ./...` |
 | `make fmt` | `gofmt` over the tree |
 | `make proto` | Lints the schema in `proto/` and generates `internal/protocol` |
 | `make clean` | Removes `bin/` |
+
+`make app` and `make dev` take the [ggui command](https://github.com/ironpark/ggui/blob/main/docs/cli.md):
+`go install github.com/ironpark/ggui/cmd/ggui@latest`, or
+`brew install ironpark/tap/ggui`. The bundle's identifier, name and version
+are in `ggui.toml`; `make app` sets the version from the latest tag.
 
 The UI comes from [ggui](https://github.com/ironpark/ggui) and
 [ggfx](https://github.com/ironpark/ggfx), and the terminal from

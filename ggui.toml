@@ -1,0 +1,12 @@
+# ggui.toml: how the ggui command (github.com/ironpark/ggui/cmd/ggui) builds
+# and runs the desktop app. `make app` builds it with app.version taken from
+# the latest tag; `ggui build` alone uses the version below.
+
+[app]
+name = "mako"
+id = "dev.ironpark.mako"
+version = "0.6.0"
+package = "./cmd/mako-gui"
+
+[build]
+output = "bin"
