@@ -387,7 +387,7 @@ func validPerm(p string) bool {
 	if p == "" {
 		return false
 	}
-	for _, w := range strings.Split(p, ":") {
+	for w := range strings.SplitSeq(p, ":") {
 		if w == "" {
 			return false
 		}

@@ -139,7 +139,7 @@ func readTree(t *testing.T, src string) *protocol.UiNode {
 // fails, none and its error.
 func TestApplyUiFixtureForAndroid(t *testing.T) {
 	var out bytes.Buffer
-	opts := protodelim.MarshalOptions{MarshalOptions: proto.MarshalOptions{Deterministic: true}}
+	opts := protodelim.MarshalOptions{Deterministic: true}
 	write := func(u *protocol.BlockUpdate) {
 		if _, err := opts.MarshalTo(&out, u); err != nil {
 			t.Fatal(err)

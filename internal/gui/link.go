@@ -466,8 +466,7 @@ func (m *model) poll(ctx context.Context) {
 // cannot serve: it is asked again at the next poll. It reports whether
 // the request failed on the way.
 func askAgain(stale *atomic.Bool, was bool, err error) bool {
-	var refused *protocol.CodedError // the daemon's answer; see transport.Reply
-	if errors.As(err, &refused) {
+	if _, ok := errors.AsType[*protocol.CodedError](err); ok {
 		return false
 	}
 	if was {

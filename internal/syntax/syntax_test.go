@@ -372,9 +372,7 @@ func TestConcurrentUse(t *testing.T) {
 	q := highlights(t, l)
 	var wg sync.WaitGroup
 	for range 8 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 20 {
 				tree, err := l.Parse([]byte(htmlSrc), nil)
 				if err != nil {
@@ -386,7 +384,7 @@ func TestConcurrentUse(t *testing.T) {
 				}
 				tree.Close()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

@@ -27,29 +27,29 @@ func methodOpts(perm string, unavailable bool) *descriptorpb.MethodOptions {
 }
 
 func scalarField(name string, num int32, typ descriptorpb.FieldDescriptorProto_Type) *descriptorpb.FieldDescriptorProto {
-	return &descriptorpb.FieldDescriptorProto{Name: proto.String(name), Number: proto.Int32(num), Type: typ.Enum(),
+	return &descriptorpb.FieldDescriptorProto{Name: new(name), Number: new(num), Type: typ.Enum(),
 		Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum()}
 }
 
 func msgField(name string, num int32, typeName string) *descriptorpb.FieldDescriptorProto {
 	f := scalarField(name, num, descriptorpb.FieldDescriptorProto_TYPE_MESSAGE)
-	f.TypeName = proto.String(typeName)
+	f.TypeName = new(typeName)
 	return f
 }
 
 // sample is a schema the generator takes: one service of one method.
 func sample() *descriptorpb.FileDescriptorProto {
 	return &descriptorpb.FileDescriptorProto{
-		Name: proto.String("mako/plugin/v1/t.proto"), Package: proto.String(Package), Syntax: proto.String("proto3"),
+		Name: new("mako/plugin/v1/t.proto"), Package: new(Package), Syntax: new("proto3"),
 		MessageType: []*descriptorpb.DescriptorProto{
-			{Name: proto.String("PingRequest"), Field: []*descriptorpb.FieldDescriptorProto{scalarField("text", 1, descriptorpb.FieldDescriptorProto_TYPE_STRING)}},
-			{Name: proto.String("PingResponse")},
+			{Name: new("PingRequest"), Field: []*descriptorpb.FieldDescriptorProto{scalarField("text", 1, descriptorpb.FieldDescriptorProto_TYPE_STRING)}},
+			{Name: new("PingResponse")},
 		},
 		Service: []*descriptorpb.ServiceDescriptorProto{{
-			Name: proto.String("PingService"),
+			Name: new("PingService"),
 			Method: []*descriptorpb.MethodDescriptorProto{{
-				Name: proto.String("Ping"), InputType: proto.String(".mako.plugin.v1.PingRequest"),
-				OutputType: proto.String(".mako.plugin.v1.PingResponse"), Options: methodOpts("none", false),
+				Name: new("Ping"), InputType: new(".mako.plugin.v1.PingRequest"),
+				OutputType: new(".mako.plugin.v1.PingResponse"), Options: methodOpts("none", false),
 			}},
 		}},
 	}
@@ -80,8 +80,8 @@ func TestRefusesWhatWITCannotSay(t *testing.T) {
 	}{
 		{"no permission", "declares the permission", func(f *descriptorpb.FileDescriptorProto) { meth(f).Options = nil }},
 		{"bad permission", "not a word", func(f *descriptorpb.FileDescriptorProto) { meth(f).Options = methodOpts("Net!", false) }},
-		{"server streaming", "streaming", func(f *descriptorpb.FileDescriptorProto) { meth(f).ServerStreaming = proto.Bool(true) }},
-		{"client streaming", "streaming", func(f *descriptorpb.FileDescriptorProto) { meth(f).ClientStreaming = proto.Bool(true) }},
+		{"server streaming", "streaming", func(f *descriptorpb.FileDescriptorProto) { meth(f).ServerStreaming = new(true) }},
+		{"client streaming", "streaming", func(f *descriptorpb.FileDescriptorProto) { meth(f).ClientStreaming = new(true) }},
 		{"Any", "not of package", func(f *descriptorpb.FileDescriptorProto) {
 			req(f).Field = append(req(f).Field, msgField("any", 2, ".google.protobuf.Any"))
 		}},
@@ -89,22 +89,22 @@ func TestRefusesWhatWITCannotSay(t *testing.T) {
 			req(f).Field = append(req(f).Field, scalarField("n", 2, descriptorpb.FieldDescriptorProto_TYPE_INT64))
 		}},
 		{"oneof", "oneofs", func(f *descriptorpb.FileDescriptorProto) {
-			req(f).OneofDecl = []*descriptorpb.OneofDescriptorProto{{Name: proto.String("o")}}
+			req(f).OneofDecl = []*descriptorpb.OneofDescriptorProto{{Name: new("o")}}
 			req(f).Field[0].OneofIndex = proto.Int32(0)
 		}},
 		{"recursion", "holds itself", func(f *descriptorpb.FileDescriptorProto) {
 			req(f).Field = append(req(f).Field, msgField("next", 2, ".mako.plugin.v1.PingRequest"))
 		}},
 		{"indirect recursion", "holds itself", func(f *descriptorpb.FileDescriptorProto) {
-			f.MessageType = append(f.MessageType, &descriptorpb.DescriptorProto{Name: proto.String("Node"),
+			f.MessageType = append(f.MessageType, &descriptorpb.DescriptorProto{Name: new("Node"),
 				Field: []*descriptorpb.FieldDescriptorProto{msgField("back", 1, ".mako.plugin.v1.PingRequest")}})
 			req(f).Field = append(req(f).Field, msgField("node", 2, ".mako.plugin.v1.Node"))
 		}},
 		{"nested type", "top level", func(f *descriptorpb.FileDescriptorProto) {
-			req(f).NestedType = []*descriptorpb.DescriptorProto{{Name: proto.String("Inner")}}
+			req(f).NestedType = []*descriptorpb.DescriptorProto{{Name: new("Inner")}}
 		}},
 		{"map of int keys", "keys must be strings", func(f *descriptorpb.FileDescriptorProto) {
-			req(f).NestedType = []*descriptorpb.DescriptorProto{{Name: proto.String("MEntry"), Options: &descriptorpb.MessageOptions{MapEntry: proto.Bool(true)},
+			req(f).NestedType = []*descriptorpb.DescriptorProto{{Name: new("MEntry"), Options: &descriptorpb.MessageOptions{MapEntry: new(true)},
 				Field: []*descriptorpb.FieldDescriptorProto{scalarField("key", 1, descriptorpb.FieldDescriptorProto_TYPE_INT32), scalarField("value", 2, descriptorpb.FieldDescriptorProto_TYPE_STRING)}}}
 			m := msgField("m", 2, ".mako.plugin.v1.PingRequest.MEntry")
 			m.Label = descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum()
@@ -113,16 +113,16 @@ func TestRefusesWhatWITCannotSay(t *testing.T) {
 		{"field of an empty message", "no empty record", func(f *descriptorpb.FileDescriptorProto) {
 			req(f).Field = append(req(f).Field, msgField("e", 2, ".mako.plugin.v1.PingResponse"))
 		}},
-		{"service name", "<Group>Service", func(f *descriptorpb.FileDescriptorProto) { f.Service[0].Name = proto.String("Ping") }},
+		{"service name", "<Group>Service", func(f *descriptorpb.FileDescriptorProto) { f.Service[0].Name = new("Ping") }},
 		{"not a WIT name", "not a WIT name", func(f *descriptorpb.FileDescriptorProto) {
 			req(f).Field = append(req(f).Field, scalarField("text_", 2, descriptorpb.FieldDescriptorProto_TYPE_STRING))
 		}},
-		{"proto2", "proto3", func(f *descriptorpb.FileDescriptorProto) { f.Syntax = proto.String("proto2") }},
+		{"proto2", "proto3", func(f *descriptorpb.FileDescriptorProto) { f.Syntax = new("proto2") }},
 		{"method of a type's name", "a method and a type it uses", func(f *descriptorpb.FileDescriptorProto) {
-			meth(f).Name = proto.String("PingRequest")
+			meth(f).Name = new("PingRequest")
 		}},
 		{"WIT name collision", "both", func(f *descriptorpb.FileDescriptorProto) {
-			f.MessageType = append(f.MessageType, &descriptorpb.DescriptorProto{Name: proto.String("PingREQUEST"),
+			f.MessageType = append(f.MessageType, &descriptorpb.DescriptorProto{Name: new("PingREQUEST"),
 				Field: []*descriptorpb.FieldDescriptorProto{scalarField("x", 1, descriptorpb.FieldDescriptorProto_TYPE_STRING)}})
 		}},
 	}

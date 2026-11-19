@@ -55,7 +55,7 @@ func TestAHomeFolderDoesNotSwallowItsProjects(t *testing.T) {
 		{Id: "toy", NodeId: "n1", Project: "/home/me/toys/rabbithole", Repo: "/home/me/toys/rabbithole"},
 		{Id: "notes", NodeId: "n1", Project: "/home/me/notes"},
 	}
-	kept := []keptProject{{fileRoot: fileRoot{Node: "n1", Path: "/home/me"}}}
+	kept := []keptProject{{Node: "n1", Path: "/home/me"}}
 	got := map[string][]string{}
 	for _, g := range groupSessions(sessions, nil, kept) {
 		for _, s := range g.Sessions {
@@ -79,7 +79,7 @@ func TestSidebarShowsKeptFolders(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Prefs.Update(func(p prefs) prefs {
-		p.Projects = []keptProject{{fileRoot: fileRoot{Node: "n1", Path: "/src/mako"}}}
+		p.Projects = []keptProject{{Node: "n1", Path: "/src/mako"}}
 		return p
 	})
 	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))

@@ -39,8 +39,7 @@ func TestAttachCarriesSnapshotOutputAndExit(t *testing.T) {
 	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	d.sessions.add(s)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	serveErr := make(chan error, 1)
 	go func() {

@@ -2,7 +2,6 @@ package gui
 
 import (
 	"bytes"
-	"context"
 	"image"
 	pngenc "image/png"
 	"maps"
@@ -46,8 +45,7 @@ func TestFilesTabBrowsesTheProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := newModel(cfg, "")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1200, 800))
 	p.Setup(func() {
 		setup(m)

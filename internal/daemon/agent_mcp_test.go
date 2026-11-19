@@ -18,7 +18,6 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/mcp"
@@ -320,7 +319,7 @@ func TestProjectMCPRespectsProfilesAndKeepsExternalServers(t *testing.T) {
 		{"external", new([]string{"custom"}), false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			launch := &agentspec.Launch{Launch: agent.Launch{Command: []string{"claude"}}, ContextServers: tc.picks}
+			launch := &agentspec.Launch{Command: []string{"claude"}, ContextServers: tc.picks}
 			cleanup := d.withContextServers(t.Context(), launch, "config-"+tc.name, "")
 			defer cleanup()
 			if !tc.builtin && !tc.custom {

@@ -50,7 +50,7 @@ func (p *witParser) expect(want string) {
 var realKeywords = map[string]bool{}
 
 func init() {
-	for _, k := range strings.Fields(`as async bool borrow char constructor enum export f32 f64 flags from func future
+	for k := range strings.FieldsSeq(`as async bool borrow char constructor enum export f32 f64 flags from func future
 		import include interface list option own package record resource result s16 s32 s64 s8 static stream string
 		tuple type u16 u32 u64 u8 use variant with world error-context map`) {
 		realKeywords[k] = true
@@ -113,7 +113,7 @@ func TestWITIsWellFormed(t *testing.T) {
 		t.Fatal(err)
 	}
 	var lines []string
-	for _, l := range strings.Split(string(data), "\n") {
+	for l := range strings.SplitSeq(string(data), "\n") {
 		if !strings.HasPrefix(strings.TrimSpace(l), "//") {
 			lines = append(lines, l)
 		}

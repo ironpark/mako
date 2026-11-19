@@ -1,5 +1,7 @@
 package detect
 
+import "slices"
+
 import "strings"
 
 // Region is the part of a screen a rule reads.
@@ -43,8 +45,8 @@ func Top(n int) Region {
 // under a divider is.
 func AfterRule(in Input) string {
 	lines := lines(in.Screen)
-	for i := len(lines) - 1; i >= 0; i-- {
-		if horizontalRule(lines[i]) {
+	for i, line := range slices.Backward(lines) {
+		if horizontalRule(line) {
 			return join(lines[i+1:])
 		}
 	}
@@ -76,9 +78,9 @@ func LastAbovePromptBox(in Input) string {
 	if top, ok := promptBoxTop(lines); ok {
 		lines = lines[:top]
 	}
-	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.TrimSpace(lines[i]) != "" {
-			return lines[i]
+	for _, line := range slices.Backward(lines) {
+		if strings.TrimSpace(line) != "" {
+			return line
 		}
 	}
 	return ""
@@ -106,8 +108,8 @@ func horizontalRule(line string) bool {
 // whose bottom is the last.
 func promptBoxTop(lines []string) (int, bool) {
 	seen := 0
-	for i := len(lines) - 1; i >= 0; i-- {
-		if horizontalRule(lines[i]) {
+	for i, line := range slices.Backward(lines) {
+		if horizontalRule(line) {
 			if seen++; seen == 2 {
 				return i, true
 			}

@@ -14,7 +14,7 @@ import "strings"
 // separated by commas.
 func parseNetTest(v string) map[string]string {
 	out := map[string]string{}
-	for _, pair := range strings.Split(v, ",") {
+	for pair := range strings.SplitSeq(v, ",") {
 		if host, base, ok := strings.Cut(strings.TrimSpace(pair), "="); ok && host != "" && base != "" {
 			out[host] = base
 		}

@@ -317,7 +317,7 @@ func (r *logRead) add(at int64, parsed []*protocol.ChatMessage) {
 					result, exit := r.tools.Output(call.GetKind(), call.GetResult())
 					call.Result = result
 					if exit >= 0 {
-						call.ExitCode = proto.Int32(int32(exit))
+						call.ExitCode = new(int32(exit))
 					}
 				}
 				r.size += len(m.GetText())
@@ -431,7 +431,7 @@ func Upgrade(chat *protocol.Chat) {
 		if m.GetResult() != "" {
 			var exit int
 			if m.Result, exit = tools.Output(m.GetKind(), m.GetResult()); exit >= 0 {
-				m.ExitCode = proto.Int32(int32(exit))
+				m.ExitCode = new(int32(exit))
 			}
 		}
 	}

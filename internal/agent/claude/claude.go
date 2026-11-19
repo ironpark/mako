@@ -21,12 +21,11 @@ type Agent struct {
 
 // New is the Claude Code driver.
 func New() *Agent {
-	return &Agent{Flags: agent.Flags{
+	return &Agent{
 		PinFlag: "--session-id", ResumeFlags: []string{"--resume", "-r"}, ForkFlag: "--fork-session",
 		PickerValues: []string{"--from-pr"}, PickerFlags: []string{"--continue", "-c"},
 		Values:   strings.Fields("--model --effort --settings --setting-sources --system-prompt --system-prompt-file --append-system-prompt --append-system-prompt-file --permission-mode --permission-prompts --permission-prompt-tool --plugin-dir --plugin-url --agent --agents --name -n --debug-file --input-format --output-format --json-schema --max-budget-usd --max-turns --fallback-model --system-prompt-snapshot --remote-control-session-name-prefix"),
-		Variadic: strings.Fields("--add-dir --allowedTools --allowed-tools --disallowedTools --disallowed-tools --tools --mcp-config --betas --file"),
-	}}
+		Variadic: strings.Fields("--add-dir --allowedTools --allowed-tools --disallowedTools --disallowed-tools --tools --mcp-config --betas --file")}
 }
 
 func (*Agent) Info() agent.Info {

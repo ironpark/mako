@@ -39,8 +39,7 @@ var codedErrors = map[string]string{
 // errorText is err as the window says it: a coded error in the window's
 // language, any other as the daemon wrote it.
 func errorText(err error) string {
-	var ce *protocol.CodedError
-	if errors.As(err, &ce) {
+	if ce, ok := errors.AsType[*protocol.CodedError](err); ok {
 		if tmpl, ok := codedErrors[ce.Code]; ok && verbs(tmpl) == len(ce.Args) {
 			args := make([]any, len(ce.Args))
 			for i, a := range ce.Args {

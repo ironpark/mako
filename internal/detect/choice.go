@@ -2,6 +2,7 @@ package detect
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -80,10 +81,8 @@ func (cur *cursors) parse(screen string, cols int) (Choice, bool) {
 	if len(c.Options) < 2 {
 		return Choice{}, false
 	}
-	for _, o := range c.Options {
-		if checkboxes.MatchString(o) {
-			return Choice{}, false
-		}
+	if slices.ContainsFunc(c.Options, checkboxes.MatchString) {
+		return Choice{}, false
 	}
 	c.Text = choiceAbove(lines, first)
 	return c, true

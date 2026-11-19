@@ -164,7 +164,7 @@ func ignore(root string, paths []string) error {
 		return err
 	}
 	have := map[string]bool{}
-	for _, l := range strings.Split(string(old), "\n") {
+	for l := range strings.SplitSeq(string(old), "\n") {
 		have[strings.TrimSpace(l)] = true
 	}
 	var b strings.Builder
@@ -252,7 +252,7 @@ func conflicted(ctx context.Context, root string) map[string]bool {
 		return nil
 	}
 	files := map[string]bool{}
-	for _, p := range strings.Split(string(out), "\x00") {
+	for p := range strings.SplitSeq(string(out), "\x00") {
 		if p != "" {
 			files[p] = true
 		}
@@ -267,7 +267,7 @@ func stashes(ctx context.Context, root string) []*protocol.GitStash {
 		return nil
 	}
 	var list []*protocol.GitStash
-	for _, l := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+	for l := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
 		f := strings.SplitN(l, "\x00", 3)
 		if len(f) < 3 {
 			continue

@@ -6,13 +6,12 @@ import "testing"
 // holds when each of its parts does.
 func TestTheRuleOfHighestPrioritySays(t *testing.T) {
 	rules := MustCompile([]Rule{
-		{ID: "prompt", State: Idle, Priority: 10, Region: Whole, Gate: Gate{Lines: []string{`^> `}}},
-		{ID: "dialog", State: Blocked, Priority: 20, Region: Whole, Gate: Gate{
+		{ID: "prompt", State: Idle, Priority: 10, Region: Whole, Lines: []string{`^> `}},
+		{ID: "dialog", State: Blocked, Priority: 20, Region: Whole,
 			Contains: []string{"PROCEED?"},
 			Any:      []Gate{{Contains: []string{"1. yes"}}, {Contains: []string{"y/n"}}},
-			Not:      []Gate{{Contains: []string{"cancelled"}}},
-		}},
-		{ID: "spinner", State: Working, Priority: 30, Region: Title, Gate: Gate{Regex: []string{`^⠋`}}},
+			Not:      []Gate{{Contains: []string{"cancelled"}}}},
+		{ID: "spinner", State: Working, Priority: 30, Region: Title, Regex: []string{`^⠋`}},
 	})
 	for _, c := range []struct {
 		in   Input
@@ -54,7 +53,7 @@ func TestRegions(t *testing.T) {
 }
 
 func TestARulesPatternMustCompile(t *testing.T) {
-	if _, err := compile([]Rule{{ID: "bad", Region: Whole, Gate: Gate{Any: []Gate{{Regex: []string{`(?!x)`}}}}}}); err == nil {
+	if _, err := compile([]Rule{{ID: "bad", Region: Whole, Any: []Gate{{Regex: []string{`(?!x)`}}}}}); err == nil {
 		t.Error("a pattern Go cannot read compiled")
 	}
 	if _, err := compile([]Rule{{ID: "nowhere"}}); err == nil {

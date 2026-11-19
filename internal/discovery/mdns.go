@@ -131,8 +131,8 @@ func firstAddr(entry *zeroconf.ServiceEntry) string {
 func txtLookup(txt []string, key string) string {
 	prefix := key + "="
 	for _, kv := range txt {
-		if strings.HasPrefix(kv, prefix) {
-			return strings.TrimPrefix(kv, prefix)
+		if after, ok := strings.CutPrefix(kv, prefix); ok {
+			return after
 		}
 	}
 	return ""

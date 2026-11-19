@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -188,10 +189,8 @@ func (m *Manager) project(id, root string) (ProjectRoots, bool) {
 	}
 	for _, pr := range m.cfg.Projects() {
 		if pr.ID == id {
-			for _, r := range pr.Roots {
-				if r == root {
-					return pr, true
-				}
+			if slices.Contains(pr.Roots, root) {
+				return pr, true
 			}
 		}
 	}

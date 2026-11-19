@@ -149,9 +149,8 @@ func (pg *templatePage) reload() {
 
 // draftOf is a template read as the page edits it.
 func (pg *templatePage) draftOf(t *prompttmpl.Template) templateDraft {
-	d := templateDraft{ID: pg.id(), File: t.Name, templateFields: templateFields{
-		Name: t.Name, Description: t.Description, Agents: strings.Join(t.Agents, ", "), Body: t.Body,
-	}}
+	d := templateDraft{ID: pg.id(), File: t.Name,
+		Name: t.Name, Description: t.Description, Agents: strings.Join(t.Agents, ", "), Body: t.Body}
 	if prompttmpl.BuiltinTemplate(t.Name) != nil {
 		d.From = t.Name
 	}

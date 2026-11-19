@@ -178,8 +178,7 @@ func (f *fetcher) fetch(ctx context.Context, plugin string, g grants, rate *rate
 	resp, err := f.client.Do(hreq)
 	if err != nil {
 		f.log.Warn("plugin net failed", "plugin", plugin, "method", method, "host", host, "path", u.Path, "err", err)
-		var uerr *url.Error
-		if errors.As(err, &uerr) {
+		if uerr, ok := errors.AsType[*url.Error](err); ok {
 			err = uerr.Err
 		}
 		return nil, fmt.Errorf("%s %s: %w", method, host, err)

@@ -49,10 +49,10 @@ func run(in io.Reader, out io.Writer) error {
 	if mine {
 		gen, err := apigen.Generate(files)
 		if err != nil {
-			resp.Error = proto.String(err.Error())
+			resp.Error = new(err.Error())
 		}
 		for _, f := range gen {
-			resp.File = append(resp.File, &pluginpb.CodeGeneratorResponse_File{Name: proto.String(f.Name), Content: proto.String(string(f.Content))})
+			resp.File = append(resp.File, &pluginpb.CodeGeneratorResponse_File{Name: new(f.Name), Content: new(string(f.Content))})
 		}
 	}
 	b, err := proto.Marshal(resp)

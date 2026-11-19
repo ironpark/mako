@@ -26,7 +26,7 @@ import (
 // own, each once, those relative to project resolved against it.
 func imageRefs(text, project string) []string {
 	var out []string
-	for _, word := range strings.Fields(text) {
+	for word := range strings.FieldsSeq(text) {
 		bare := strings.Trim(word, "\"'`()[]<>,;")
 		if !isImage(bare) {
 			continue

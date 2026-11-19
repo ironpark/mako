@@ -87,8 +87,7 @@ func (f *Fetcher) Get(ctx context.Context, raw string, max int64, timeout time.D
 	req.Header.Set("User-Agent", "mako-plugins")
 	resp, err := f.client.Do(req)
 	if err != nil {
-		var uerr *url.Error
-		if errors.As(err, &uerr) {
+		if uerr, ok := errors.AsType[*url.Error](err); ok {
 			err = uerr.Err
 		}
 		if errors.Is(err, context.DeadlineExceeded) {

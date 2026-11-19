@@ -30,7 +30,7 @@ func parse(out []byte) map[string]string {
 		return nil
 	}
 	vars := map[string]string{}
-	for _, kv := range strings.Split(string(body), "\x00") {
+	for kv := range strings.SplitSeq(string(body), "\x00") {
 		k, v, ok := strings.Cut(kv, "=")
 		if !ok || k == "" || skip[k] {
 			continue

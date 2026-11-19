@@ -39,9 +39,7 @@ func (w *fileWriter) write(path string, body []byte) {
 		return
 	}
 	w.writing = true
-	w.wg.Add(1)
-	go func() {
-		defer w.wg.Done()
+	w.wg.Go(func() {
 		for {
 			w.mu.Lock()
 			p := w.next
@@ -56,7 +54,7 @@ func (w *fileWriter) write(path string, body []byte) {
 				log.Printf("mako: save %s: %v", w.what, err)
 			}
 		}
-	}()
+	})
 }
 
 // wait returns once every write asked for has reached disk.

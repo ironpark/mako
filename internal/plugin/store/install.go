@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -293,9 +294,7 @@ func (s *Store) putInstall(id string, in *Install) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	next := map[string]Install{}
-	for k, v := range s.installs {
-		next[k] = v
-	}
+	maps.Copy(next, s.installs)
 	if in == nil {
 		delete(next, id)
 	} else {

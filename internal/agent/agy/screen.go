@@ -25,40 +25,38 @@ func (*Agent) ScreenRules() *detect.Rules { return screenRules }
 var screenRules = detect.MustCompile([]detect.Rule{
 	{
 		ID: "permission_prompt", State: detect.Blocked, Priority: 300, Region: detect.Bottom(2),
-		Gate: detect.Gate{Contains: []string{"navigate", "tab amend"}},
+		Contains: []string{"navigate", "tab amend"},
 	},
 	{
 		ID: "question_prompt", State: detect.Blocked, Priority: 290, Region: detect.Bottom(2),
-		Gate: detect.Gate{Contains: []string{"navigate", "esc skip"}},
+		Contains: []string{"navigate", "esc skip"},
 	},
 	{
 		ID: "trust_prompt", State: detect.Blocked, Priority: 280, Region: detect.Bottom(8),
-		Gate: detect.Gate{Contains: []string{"do you trust the contents of this project?", "yes, i trust this folder", "enter confirm"}},
+		Contains: []string{"do you trust the contents of this project?", "yes, i trust this folder", "enter confirm"},
 	},
 	{
 		// Before 1.1.28 a permission was asked without the row of keys.
 		ID: "legacy_permission_prompt", State: detect.Blocked, Priority: 270, Region: detect.Bottom(20),
-		Gate: detect.Gate{
-			Contains: []string{"requesting permission for:"},
-			Any:      []detect.Gate{{Contains: []string{"do you want to proceed?"}}, {Contains: []string{"tab amend", "edit command"}}},
-		},
+		Contains: []string{"requesting permission for:"},
+		Any:      []detect.Gate{{Contains: []string{"do you want to proceed?"}}, {Contains: []string{"tab amend", "edit command"}}},
 	},
 	{
 		// The slash commands' menu over the footer, at the prompt.
 		ID: "slash_menu", State: detect.Idle, Priority: 200, Region: detect.Bottom(2),
-		Gate: detect.Gate{Contains: []string{"navigate", "tab complete"}},
+		Contains: []string{"navigate", "tab complete"},
 	},
 	{
 		ID: "esc_cancel_footer_working", State: detect.Working, Priority: 110, Region: detect.Bottom(2),
-		Gate: detect.Gate{Regex: []string{`(?m)^\s*─{3,}\s*esc to cancel\b`}},
+		Regex: []string{`(?m)^\s*─{3,}\s*esc to cancel\b`},
 	},
 	{
 		ID: "spinner_working", State: detect.Working, Priority: 100, Region: detect.Bottom(12),
-		Gate: detect.Gate{Lines: []string{`^\s*[\x{2801}-\x{28FF}]+\s+\S`}},
+		Lines: []string{`^\s*[\x{2801}-\x{28FF}]+\s+\S`},
 	},
 	{
 		ID: "prompt_footer", State: detect.Idle, Priority: 90, Region: detect.Bottom(1),
-		Gate: detect.Gate{Lines: []string{`^\s*\? for shortcuts\b`}},
+		Lines: []string{`^\s*\? for shortcuts\b`},
 	},
 	// Its dialogs mark the option picked with ">".
 }).WithCursors(">")

@@ -118,7 +118,7 @@ func BaseStatus(ctx context.Context, root, base string) (*protocol.GitChanges, e
 	out := &protocol.GitChanges{Root: root, Branch: Branch(root), Files: treeChanges(string(names), string(nums))}
 	untracked, err := gitOut(ctx, root, nil, "ls-files", "--others", "--exclude-standard", "-z")
 	if err == nil {
-		for _, p := range strings.Split(string(untracked), "\x00") {
+		for p := range strings.SplitSeq(string(untracked), "\x00") {
 			if p == "" {
 				continue
 			}

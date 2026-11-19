@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -35,8 +34,7 @@ func TestAppRunsItsOwnDaemon(t *testing.T) {
 	}
 
 	m := newModel(cfg, "")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))
 	p.Setup(func() {
 		setup(m)
@@ -86,8 +84,7 @@ func TestAutoPrefersARunningDaemon(t *testing.T) {
 	addr := <-ready
 
 	m := newModel(cfg, addr)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))
 	p.Setup(func() {
 		setup(m)
@@ -116,8 +113,7 @@ func TestRestartResumesOnlyVisibleSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := newModel(cfg, "")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))
 	p.Setup(func() { setup(m); m.start(ctx, p.Post) })
 	defer p.Close()

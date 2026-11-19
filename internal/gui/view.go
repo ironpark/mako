@@ -284,7 +284,7 @@ func (m *model) addProjectFolder() {
 		if dir == "" {
 			return
 		}
-		r := keptProject{fileRoot: fileRoot{Node: self, Path: dir}}
+		r := keptProject{Node: self, Path: dir}
 		m.Prefs.Update(func(p prefs) prefs {
 			if !slices.ContainsFunc(p.Projects, func(o keptProject) bool { return o.fileRoot == r.fileRoot }) {
 				p.Projects = append(slices.Clone(p.Projects), r)

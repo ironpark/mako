@@ -7,6 +7,8 @@
 // format.
 package layoutdoc
 
+import "slices"
+
 // Version is the latest version of the format this build reads strictly
 // and writes. A document of a later version is read leniently (Parse).
 // A document is written at the earliest version that holds it, so that a
@@ -61,12 +63,7 @@ var kinds = []string{KindRow, KindColumn, KindStack, KindBlock, KindPanes}
 
 // Known says whether this version knows the kind of node.
 func Known(kind string) bool {
-	for _, k := range kinds {
-		if k == kind {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(kinds, kind)
 }
 
 // Node is a node of the document. Size, Grow and Collapsible place a

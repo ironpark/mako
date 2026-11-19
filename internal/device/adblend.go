@@ -387,8 +387,7 @@ func (l *adbLent) reverseForward(ctx context.Context, conn, up io.ReadWriteClose
 func relayOkays(conn io.Writer, up io.Reader, port bool) (string, error) {
 	for range 2 {
 		if err := readStatus(up); err != nil {
-			var f failure
-			if errors.As(err, &f) {
+			if f, ok := errors.AsType[failure](err); ok {
 				_ = writeFail(conn, string(f))
 			}
 			return "", err

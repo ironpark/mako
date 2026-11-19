@@ -203,8 +203,7 @@ func classify(b *budget, err error) error {
 		}
 		return &limitError{msg: over.Error()}
 	}
-	var jsErr *qngg.Error
-	if errors.As(err, &jsErr) {
+	if jsErr, ok := errors.AsType[*qngg.Error](err); ok {
 		msg := jsErr.Message
 		if jsErr.Name == "InternalError" && strings.Contains(msg, "out of memory") {
 			return &limitError{msg: "the plugin used more memory than it may"}
@@ -219,8 +218,7 @@ func classify(b *budget, err error) error {
 // jsError is a JavaScript exception as a line: its name and message,
 // without the stack.
 func jsError(err error) error {
-	var jsErr *qngg.Error
-	if errors.As(err, &jsErr) {
+	if jsErr, ok := errors.AsType[*qngg.Error](err); ok {
 		if jsErr.Name == "" {
 			return errors.New(jsErr.Message)
 		}

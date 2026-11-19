@@ -175,7 +175,7 @@ func NewRuntime(ctx context.Context) (*Runtime, error) {
 // grammars that take their address (GOT.func imports).
 func (r *Runtime) readLibc() error {
 	var names []string
-	for _, l := range strings.Split(libcSymbolsTxt, "\n") {
+	for l := range strings.SplitSeq(libcSymbolsTxt, "\n") {
 		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "#") {
 			names = append(names, l)
 		}

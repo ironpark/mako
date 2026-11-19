@@ -37,8 +37,8 @@ func taskTitle(t *protocol.BackgroundTask) string {
 // firstLine is s up to its first line break, marked as cut short when
 // there is more.
 func firstLine(s string) string {
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		return s[:i] + " …"
+	if before, _, ok := strings.Cut(s, "\n"); ok {
+		return before + " …"
 	}
 	return s
 }

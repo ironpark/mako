@@ -153,7 +153,7 @@ func patchOf(changes map[string]change) string {
 		switch c.Type {
 		case "add":
 			fmt.Fprintf(&b, "*** Add File: %s\n", p)
-			for _, l := range strings.Split(strings.TrimSuffix(c.Content, "\n"), "\n") {
+			for l := range strings.SplitSeq(strings.TrimSuffix(c.Content, "\n"), "\n") {
 				b.WriteString("+" + l + "\n")
 			}
 		case "delete":
@@ -163,7 +163,7 @@ func patchOf(changes map[string]change) string {
 			if c.Move != "" {
 				fmt.Fprintf(&b, "*** Move to: %s\n", c.Move)
 			}
-			for _, l := range strings.Split(strings.TrimSuffix(c.Diff, "\n"), "\n") {
+			for l := range strings.SplitSeq(strings.TrimSuffix(c.Diff, "\n"), "\n") {
 				// The diff's own headers are the file's line above.
 				if !strings.HasPrefix(l, "--- ") && !strings.HasPrefix(l, "+++ ") {
 					b.WriteString(l + "\n")

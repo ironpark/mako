@@ -181,7 +181,7 @@ func (h *host) FilesWriteFile(_ context.Context, req *hostapi.WriteFileRequest) 
 	}
 	// A folder named .git is the repository's own: its hooks and config
 	// run programs when git runs, as the window's git does.
-	for _, part := range strings.Split(req.GetPath(), "/") {
+	for part := range strings.SplitSeq(req.GetPath(), "/") {
 		if strings.EqualFold(part, ".git") {
 			return nil, errors.New("a plugin does not write under a .git folder")
 		}
@@ -243,12 +243,10 @@ func (h *host) FilesWriteFile(_ context.Context, req *hostapi.WriteFileRequest) 
 // pathError is an error of a path in a root, without the root's own
 // path, which a plugin need not learn more of than ListProjects says.
 func pathError(err error) error {
-	var pe *fs.PathError
-	if errors.As(err, &pe) {
+	if pe, ok := errors.AsType[*fs.PathError](err); ok {
 		return fmt.Errorf("%s: %w", filepath.ToSlash(pe.Path), pe.Err)
 	}
-	var le *os.LinkError
-	if errors.As(err, &le) {
+	if le, ok := errors.AsType[*os.LinkError](err); ok {
 		return fmt.Errorf("%s: %w", filepath.ToSlash(le.New), le.Err)
 	}
 	return err

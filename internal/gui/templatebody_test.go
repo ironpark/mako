@@ -37,7 +37,7 @@ func TestPlaceholderColors(t *testing.T) {
 // values of the block's subject, then else.
 func TestPlaceholderOptions(t *testing.T) {
 	query := func(kind, typed, open, block string) placeholderQuery {
-		return placeholderQuery{Active: true, Completion: prompttmpl.Completion{Kind: kind, Typed: typed, Open: open, Block: block}}
+		return placeholderQuery{Active: true, Kind: kind, Typed: typed, Open: open, Block: block}
 	}
 	shown := func(opts []placeholderOption) []string {
 		var out []string

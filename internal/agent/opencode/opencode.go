@@ -25,13 +25,12 @@ type Agent struct {
 // New is the OpenCode driver. OpenCode picks a new session's ID itself,
 // once its first prompt is sent.
 func New() *Agent {
-	return &Agent{Flags: agent.Flags{
+	return &Agent{
 		PromptFlag:  "--prompt",
 		ResumeFlags: []string{"--session", "-s"}, ForkFlag: "--fork",
 		PickerFlags: []string{"--continue", "-c"},
 		Inputs:      []string{"--prompt"},
-		Values:      strings.Fields("--model -m --agent --port --hostname --mdns-domain --cors --replay-limit --log-level"),
-	}}
+		Values:      strings.Fields("--model -m --agent --port --hostname --mdns-domain --cors --replay-limit --log-level")}
 }
 
 func (*Agent) Info() agent.Info {
