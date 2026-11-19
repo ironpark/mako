@@ -38,9 +38,12 @@ type daemonLink struct {
 	gen       int    // counts the swaps, so a dial can tell it was outrun
 
 	// linked says the window knows which daemon to talk to; until then a
-	// poll would dial an address nothing may answer and wait out its timeout.
-	linked atomic.Bool
-	kick   chan struct{} // polls now rather than at the next tick
+	// poll or request waits rather than dialing an address nothing may answer.
+	statusMu sync.RWMutex
+	linked   bool
+	unlinked bool
+	wakeCh   chan struct{}
+	kick     chan struct{} // polls now rather than at the next tick
 	// watching is set while the daemon tells the GUI of changes, which
 	// then polls seldom.
 	watching atomic.Bool
@@ -63,9 +66,78 @@ type daemonLink struct {
 }
 
 func newDaemonLink(addr, daemon string) *daemonLink {
-	l := &daemonLink{addr: addr, daemon: daemon, kick: make(chan struct{}, 1)}
+	l := &daemonLink{
+		addr:   addr,
+		daemon: daemon,
+		kick:   make(chan struct{}, 1),
+		wakeCh: make(chan struct{}),
+	}
 	l.stale()
 	return l
+}
+
+func (l *daemonLink) setLinked(ok bool) {
+	l.statusMu.Lock()
+	defer l.statusMu.Unlock()
+	if l.linked == ok && !l.unlinked {
+		return
+	}
+	l.linked = ok
+	l.unlinked = false
+	close(l.wakeCh)
+	l.wakeCh = make(chan struct{})
+}
+
+func (l *daemonLink) setPending() {
+	l.statusMu.Lock()
+	defer l.statusMu.Unlock()
+	if !l.linked && !l.unlinked {
+		return
+	}
+	l.linked = false
+	l.unlinked = false
+	close(l.wakeCh)
+	l.wakeCh = make(chan struct{})
+}
+
+func (l *daemonLink) setUnlinked() {
+	l.statusMu.Lock()
+	defer l.statusMu.Unlock()
+	if !l.linked && l.unlinked {
+		return
+	}
+	l.linked = false
+	l.unlinked = true
+	close(l.wakeCh)
+	l.wakeCh = make(chan struct{})
+}
+
+func (l *daemonLink) isLinked() bool {
+	l.statusMu.RLock()
+	defer l.statusMu.RUnlock()
+	return l.linked
+}
+
+func (l *daemonLink) waitLinked(ctx context.Context) error {
+	for {
+		l.statusMu.RLock()
+		linked := l.linked
+		unlinked := l.unlinked
+		wake := l.wakeCh
+		l.statusMu.RUnlock()
+
+		if linked {
+			return nil
+		}
+		if unlinked {
+			return errors.New("daemon is not connected")
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-wake:
+		}
+	}
 }
 
 // target is the daemon the GUI talks through: the app's own when it runs
@@ -94,6 +166,9 @@ func (l *daemonLink) targetLocked() string {
 // closed and the new one dialed, and one dialed while another worker's
 // was kept gives way to it.
 func (l *daemonLink) client(ctx context.Context) (*client.Client, error) {
+	if err := l.waitLinked(ctx); err != nil {
+		return nil, err
+	}
 	for {
 		l.mu.Lock()
 		if c := l.cli; c != nil {
@@ -232,7 +307,7 @@ func (m *model) watch(ctx context.Context) {
 	for ctx.Err() == nil {
 		wait := time.Second
 		// Nothing is followed until the window knows which daemon it has.
-		if m.link.linked.Load() {
+		if m.link.isLinked() {
 			if c, err := m.link.client(ctx); err == nil {
 				// The stream holds the daemon's approvals for this window
 				// for as long as it stays open, rather than for a while
@@ -297,7 +372,7 @@ func (m *model) reconnect(daemon string) {
 // unlink leaves the window with no daemon, as when the app's own stops.
 func (m *model) unlink(reason string) {
 	m.leaveWorkspace()
-	m.link.linked.Store(false)
+	m.link.setUnlinked()
 	m.link.setEmbedded("")
 	m.dropConns()
 	m.Attached.Set(nil)
@@ -309,7 +384,12 @@ func (m *model) unlink(reason string) {
 func (m *model) setLink(embedAddr string) {
 	m.leaveWorkspace()
 	m.link.setEmbedded(embedAddr)
-	m.link.linked.Store(true)
+	m.link.setLinked(true)
+	c := ggui.Peek(m.Conn)
+	if c.Err != "" {
+		m.Conn.Set(connState{OK: c.OK, Self: c.Self})
+	}
+	clear(m.redials)
 	m.link.pollNow()
 	// Terminals attached through the old link went with it.
 	for _, id := range ggui.Peek(m.Tabs) {
@@ -323,11 +403,16 @@ func (m *model) setLink(embedAddr string) {
 func (m *model) poll(ctx context.Context) {
 	logs := m.embedded.logs.snapshot()
 	m.post(func() { m.DaemonLog.Set(logs) })
-	if !m.link.linked.Load() {
+	if !m.link.isLinked() {
 		return // still deciding, or starting, which daemon to talk to
 	}
 	fail := func(err error) {
-		m.post(func() { m.Conn.Set(connState{Err: err.Error()}) })
+		m.post(func() {
+			if m.fallbackToEmbedded() {
+				return
+			}
+			m.Conn.Set(connState{Err: err.Error()})
+		})
 	}
 	gen := m.link.generation()
 	c, err := m.link.client(ctx)

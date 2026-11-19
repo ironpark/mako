@@ -639,12 +639,22 @@ func (m *model) forgetTabs(gone func(id string) bool) {
 // openNew opens another new session's tab, prefilled for a node and
 // project, and gives its state.
 func (m *model) openNew(nodeID, project string) *launchState {
+	if nodeID == "" && project == "" {
+		if n, d, ok := m.scopeLocation(); ok {
+			nodeID, project = n, d
+		}
+	}
 	f := newSession{Agent: cmp.Or(m.lastAgent, ggui.Peek(m.Prefs).DefaultAgent), NodeID: nodeID, Project: project}
 	if f.NodeID == "" {
 		f.NodeID = ggui.Peek(m.Conn).Self.GetId()
 	}
 	if f.Project == "" {
 		f.Project = m.launchProject(f.NodeID)
+	}
+	if f.Project != "" {
+		if pl := placeIn(m.projectsNow(), f.NodeID, f.Project, "", ""); pl.At >= 0 {
+			m.showProjectTabs(m.projectsNow()[pl.At].ID)
+		}
 	}
 	_, l := m.newLaunch(f)
 	return l
@@ -660,7 +670,11 @@ func (m *model) launch(agent, nodeID, project string) {
 
 // submitLaunch starts the session new session's tab id describes.
 func (m *model) submitLaunch(id string) {
-	m.startSession(id, ggui.Peek(m.launchOf(id).Form))
+	l := m.launchOf(id)
+	if ggui.Peek(l.Starting) {
+		return
+	}
+	m.startSession(id, ggui.Peek(l.Form))
 }
 
 // startSession starts the session f describes, with its prompt and its
@@ -672,19 +686,22 @@ func (m *model) startSession(tab string, f newSession) {
 		if tab == "" || m.launches[tab] == nil {
 			tab, _ = m.newLaunch(f)
 		}
-		m.launchOf(tab).Err.Set(why)
+		l := m.launchOf(tab)
+		l.Starting.Set(false)
+		l.Err.Set(why)
 	}
 	if tab != "" {
-		m.launchOf(tab).Err.Set("")
+		l := m.launchOf(tab)
+		l.Err.Set("")
+		l.Starting.Set(true)
 	}
 	// Without a working directory the node starts the session in its home.
 	nodeID := m.remoteID(f.NodeID)
 	agent, profile := agentspec.SplitTarget(f.Agent)
-	req := &protocol.OpenSession{NodeId: nodeID, Agent: agent, Profile: profile, Project: f.Project, Cols: 120, Rows: 36}
 	prompt := strings.TrimSpace(f.Prompt)
+	req := &protocol.OpenSession{NodeId: nodeID, Agent: agent, Profile: profile, Project: f.Project, Prompt: prompt, Cols: 120, Rows: 36}
 	var team agentTeam // the one the agent leads
 	if agent != "shell" {
-		req.Prompt = prompt
 		if t, ok := m.teamNamed(f.Team); ok && len(t.Members) > 0 {
 			team, req.Prompt = t, strings.TrimSpace(teamBrief(t)+"\n"+prompt)
 		}
@@ -713,19 +730,21 @@ func (m *model) startSession(tab string, f newSession) {
 		m.lastAgent = f.Agent
 		sessions := slices.Clone(ggui.Peek(m.Sessions))
 		m.Sessions.Set(append(sessions, info))
+		targetKey := layoutKey(m.spacesNow().spaceID(m.spacesNow().Space), projectContext(sectionID(m.projectsNow(), info)))
 		if slices.Contains(ggui.Peek(m.Tabs), tab) {
-			m.replaceTab(tab, info.GetId())
+			if m.ws.layoutKey == targetKey {
+				m.replaceTab(tab, info.GetId())
+			} else {
+				m.closeTab(tab)
+			}
 		}
 		delete(m.launches, tab)
 		m.selectSession(info.GetId())
 		if len(team.Members) > 0 {
 			m.startTeam(info.GetId(), team, prompt)
 		}
-		switch {
-		case req.GetPrompt() != "":
+		if agent != "shell" && req.GetPrompt() != "" {
 			m.setChatMode(info.GetId(), true)
-		case prompt != "": // a shell's: typed at its prompt, to run when Enter is pressed
-			m.setComposerDraft(info.GetId(), prompt)
 		}
 	})
 }
@@ -788,6 +807,7 @@ func (m *model) openSettings(section string) {
 // shutdown detaches every terminal, hangs up, and stops the app's daemon
 // with the sessions it runs.
 func (m *model) shutdown() {
+	m.embedded.stop()
 	if m.ws.timer != nil {
 		m.ws.timer.Stop()
 	}
@@ -800,9 +820,8 @@ func (m *model) shutdown() {
 	m.prefsWriter.wait()
 	m.titleCache.flush(time.Now())
 	m.titleCache.writer.wait()
-	defer m.embedded.stop()
-	defer m.hl.close()
-	defer m.closeTunnels()
+	m.hl.close()
+	m.closeTunnels()
 	m.dropConns()
 	m.link.hangUp()
 }

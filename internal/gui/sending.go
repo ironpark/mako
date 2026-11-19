@@ -156,7 +156,7 @@ func pendingTurns(pending []pendingMessage) []chatTurnItem {
 func (m *model) submit(id string, conn *termConn, text string) {
 	s, ok := m.session(id)
 	enter := conn.enter()
-	if !ok || enter == nil {
+	if !ok || enter == nil || !m.link.isLinked() {
 		conn.sendText(text)
 		return
 	}

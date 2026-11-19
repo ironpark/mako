@@ -14,6 +14,7 @@ import (
 var tools = map[string]string{
 	"run_command":                protocol.ToolShell,
 	"replace_file_content":       protocol.ToolEdit,
+	"edit_file":                  protocol.ToolEdit,
 	"multi_replace_file_content": protocol.ToolMultiEdit,
 	"write_to_file":              protocol.ToolWrite, "write_file": protocol.ToolWrite,
 	"view_file": protocol.ToolRead, "read_file": protocol.ToolRead,
@@ -36,17 +37,27 @@ func (*Agent) Tool(name string, args json.RawMessage) (string, map[string]any) {
 	case protocol.ToolShell:
 		return kind, agent.Canon(map[string]any{"command": agent.Str(in, "CommandLine"), "cwd": agent.Str(in, "Cwd"), "description": agent.Str(in, "toolSummary")})
 	case protocol.ToolEdit:
-		return kind, agent.Canon(map[string]any{"path": path, "old": agent.Str(in, "TargetContent"), "new": agent.Str(in, "ReplacementContent")})
+		return kind, agent.Canon(map[string]any{
+			"path": path,
+			"old":  agent.Str(in, "TargetContent", "Target", "old", "old_string"),
+			"new":  agent.Str(in, "ReplacementContent", "Replacement", "new", "new_string"),
+		})
 	case protocol.ToolMultiEdit:
 		var edits []any
 		for _, e := range agent.List(in, "ReplacementChunks") {
 			if e, ok := e.(map[string]any); ok {
-				edits = append(edits, map[string]any{"old": agent.Str(e, "TargetContent"), "new": agent.Str(e, "ReplacementContent")})
+				edits = append(edits, map[string]any{
+					"old": agent.Str(e, "TargetContent", "Target", "old"),
+					"new": agent.Str(e, "ReplacementContent", "Replacement", "new"),
+				})
 			}
 		}
 		return kind, agent.Canon(map[string]any{"path": path, "edits": edits})
 	case protocol.ToolWrite:
-		return kind, agent.Canon(map[string]any{"path": path, "content": agent.Str(in, "CodeContent", "Content")})
+		return kind, agent.Canon(map[string]any{
+			"path":    path,
+			"content": agent.Str(in, "CodeContent", "Content", "content", "file_text"),
+		})
 	case protocol.ToolRead:
 		var offset, limit float64
 		if start, ok := in["StartLine"].(float64); ok {

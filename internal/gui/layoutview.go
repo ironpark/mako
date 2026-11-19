@@ -147,15 +147,37 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		focused := m.FocusGroup.Get() == id
 		docs, diffs := m.Docs.Get(), m.Diffs.Get()
 		// The launchers start in the project of the tab shown, or without
-		// one, in the default place on this node.
+		// one (or when scoped to a sub-project whose tab is not shown), in
+		// the sidebar's selected scope, else the default place on this node.
+		scope := m.Scope.Get()
+		spaces := m.spaces()
+		scopedHere := scope.Section != "" && scope.Space == spaces.spaceID(spaces.Space)
 		nodeID := m.Conn.Get().Self.GetId()
 		project := m.launchProject(nodeID)
+		tabLocated := false
 		if cur, ok := sessionIn(sessions, g.Active); ok {
-			nodeID, project = cur.GetNodeId(), cur.GetProject()
+			nodeID, project, tabLocated = cur.GetNodeId(), cur.GetProject(), true
+			if scopedHere && !scope.scopeKey.holds(sessionScope(spaces.Projects, cur)) {
+				tabLocated = false
+			}
 		} else if d, ok := docs[g.Active]; ok && d.Root.Path != "" {
-			nodeID, project = d.Root.Node, d.Root.Path
+			nodeID, project, tabLocated = d.Root.Node, d.Root.Path, true
+			if scopedHere && !scope.scopeKey.holds(rootScope(spaces.Projects, d.Root)) {
+				tabLocated = false
+			}
 		} else if d, ok := diffs[g.Active]; ok && d.Root.Path != "" {
-			nodeID, project = d.Root.Node, d.Root.Path
+			nodeID, project, tabLocated = d.Root.Node, d.Root.Path, true
+			if scopedHere && !scope.scopeKey.holds(rootScope(spaces.Projects, d.Root)) {
+				tabLocated = false
+			}
+		}
+		if !tabLocated {
+			if n, d, ok := m.scopeLocation(); ok {
+				nodeID, project = n, d
+			} else {
+				nodeID = m.Conn.Get().Self.GetId()
+				project = m.launchProject(nodeID)
+			}
 		}
 		targets := nodeTargets(m.Nodes.Get(), nodeID, m.Agents.Get())
 		focus := func() { m.focusGroup(id) }
@@ -467,7 +489,7 @@ func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		case !p.Ready:
 			// Without a daemon there is nothing to attach to; say why.
 			return ggui.View(m.Conn, func(c connState) ggui.Widget {
-				if !c.OK && c.Err != "" {
+				if !c.OK && c.Err != "" && !ggui.Peek(m.DaemonState).Starting {
 					return widget.Center(widget.Column(
 						icon("server").Size(28).Color(skin.ExtraMuted),
 						muted(widget.Text(c.Err).Size(13)),

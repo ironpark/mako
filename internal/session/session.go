@@ -546,6 +546,13 @@ func (s *Session) AtPrompt() (bool, time.Time) {
 	return status == protocol.AgentIdle || status == protocol.AgentDone, at
 }
 
+// BracketedPaste reports whether the program currently asks for bracketed paste.
+func (s *Session) BracketedPaste() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.state == protocol.StateRunning && s.term.Terminal().ModeEnabled(gostty.ModeBracketedPaste)
+}
+
 // Prompt gives the agent text as the composer does: pasted, then Enter.
 // Text of several lines needs a program that takes bracketed pastes, which
 // would otherwise run each line as a prompt of its own.

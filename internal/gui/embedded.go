@@ -134,7 +134,7 @@ func (m *model) applyDaemonMode() {
 			return // already ours; probing its socket would find it
 		}
 		addr := m.externalAddr()
-		m.link.linked.Store(false)
+		m.link.setPending()
 		m.setDaemonState(func(s *daemonState) { s.Mode, s.Err = "", "" })
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
@@ -157,28 +157,23 @@ func (m *model) applyDaemonMode() {
 	}
 }
 
-// autoFallbackWindow is how long after auto mode picks an external daemon
-// that losing it starts the app's own instead: a previous app instance
-// still shutting down can answer the startup probe and exit right after.
-const autoFallbackWindow = 10 * time.Second
-
 func (m *model) useExternal() {
 	addr := m.externalAddr()
 	m.setDaemonState(func(s *daemonState) { *s = daemonState{Mode: "external", Addr: addr, Since: time.Now()} })
 	m.setLink("")
 }
 
-// fallbackToEmbedded starts the app's own daemon when auto mode recently
-// attached to an external one that has since vanished (such as a previous
-// app instance finishing its shutdown). UI goroutine.
+// fallbackToEmbedded starts the app's own daemon when auto mode
+// attached to an external daemon that has since vanished or failed. UI goroutine.
 func (m *model) fallbackToEmbedded() bool {
 	if ggui.Peek(m.Prefs).DaemonMode != "auto" || m.embedded.running() {
 		return false
 	}
 	s := ggui.Peek(m.DaemonState)
-	if s.Mode != "external" || time.Since(s.Since) > autoFallbackWindow {
+	if s.Mode != "external" {
 		return false
 	}
+	m.Conn.Set(connState{})
 	m.startEmbedded()
 	return true
 }
@@ -189,7 +184,7 @@ func (m *model) startEmbedded() {
 	if m.embedded.running() {
 		return
 	}
-	m.link.linked.Store(false)
+	m.link.setPending()
 	m.setDaemonState(func(s *daemonState) { *s = daemonState{Mode: "embedded", Starting: true} })
 	m.link.hangUp()
 	// A daemon stopped for a restart reports its exit after the next one

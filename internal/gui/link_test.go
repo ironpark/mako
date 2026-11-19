@@ -42,6 +42,7 @@ func TestRetargetingDoesNotWaitOutADial(t *testing.T) {
 	}()
 
 	l := newDaemonLink(sock, "")
+	l.setLinked(true)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	done := make(chan error, 1)
@@ -137,5 +138,65 @@ func TestRedialsBackOff(t *testing.T) {
 	m.heldUp("s")
 	if _, ok := m.redials["s"]; ok {
 		t.Fatal("a terminal that held kept its wait")
+	}
+}
+
+// client waits while link is pending rather than dialing a non-existent socket,
+// then dials once linked is set.
+func TestClientWaitsForLinkedBeforeDialing(t *testing.T) {
+	dir, err := os.MkdirTemp("", "mk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	sock := filepath.Join(dir, "d.sock")
+
+	l := newDaemonLink(sock, "")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := l.client(ctx)
+		done <- err
+	}()
+
+	// The client dial should be waiting on linkPending, not failing immediately.
+	select {
+	case err := <-done:
+		t.Fatalf("client did not wait for linked: got %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Now bring up listener and set linked.
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				s := transport.NewStream(c)
+				_, _ = s.Recv()
+				_ = s.Send(protocol.TypeWelcome, "", &protocol.Welcome{Node: &protocol.Node{Id: "test"}})
+			}(c)
+		}
+	}()
+
+	l.setLinked(true)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("client failed after setLinked: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("client timed out waiting for dial")
 	}
 }

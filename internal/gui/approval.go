@@ -59,6 +59,13 @@ func (m *model) decide(id string, a *protocol.Approval, decision string) func() 
 
 // connErr shows err, as the connection's last error.
 func (m *model) connErr(err error) {
+	if m.fallbackToEmbedded() {
+		return
+	}
+	s := ggui.Peek(m.DaemonState)
+	if s.Starting || s.Mode == "" {
+		return
+	}
 	c := ggui.Peek(m.Conn)
 	m.Conn.Set(connState{OK: c.OK, Self: c.Self, Err: err.Error()})
 }

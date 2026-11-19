@@ -139,7 +139,9 @@ func (m *model) remoteID(node string) string {
 }
 
 // filesRoot is the selected session's project, or the one the selected
-// file or diff was opened from.
+// file or diff was opened from. If no session is selected or the selected
+// session is from another project, it falls back to the sidebar's selected
+// project/sub-project.
 func (m *model) filesRoot() fileRoot {
 	switch id := m.Selected.Get(); {
 	case isDocTab(id):
@@ -147,11 +149,20 @@ func (m *model) filesRoot() fileRoot {
 	case isDiffTab(id):
 		return m.Diffs.Get()[id].Root
 	}
-	s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get())
-	if !ok {
-		return fileRoot{}
+	curScope := m.Scope.Get()
+	defs := m.Spaces.Get().Projects
+	if s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get()); ok {
+		if curScope.Section == "" || curScope.holds(sessionScope(defs, s)) {
+			return fileRoot{Node: s.GetNodeId(), Path: s.GetProject()}
+		}
 	}
-	return fileRoot{Node: s.GetNodeId(), Path: s.GetProject()}
+	if node, dir, ok := m.scopeLocation(); ok && dir != "" {
+		return fileRoot{Node: node, Path: dir}
+	}
+	if s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get()); ok {
+		return fileRoot{Node: s.GetNodeId(), Path: s.GetProject()}
+	}
+	return fileRoot{}
 }
 
 // loadDir reads a directory unless it has been, or always when force is

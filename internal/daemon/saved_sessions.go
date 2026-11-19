@@ -216,36 +216,81 @@ func (d *Daemon) openSession(ctx context.Context, req *protocol.OpenSession) (*s
 		// Told of its parent as an agent spawn_agent starts is.
 		prompt = projectTaskPrompt(parent, prompt)
 	}
-	if prompt != "" {
-		args, err := d.promptArgs(req.GetAgent(), prompt)
-		if err != nil {
-			return nil, err
-		}
-		req.Args = append(req.Args, args...)
-	}
 	s, err := d.startSessionAs(ctx, newSessionID(), req, parent)
-	if err != nil || name == "" {
-		return s, err
+	if err != nil {
+		return nil, err
 	}
-	if _, err := d.renameSession(s.ID(), name); err != nil {
-		return nil, fmt.Errorf("session %s started but could not be named: %w", s.ID(), err)
+	if name != "" {
+		if _, err := d.renameSession(s.ID(), name); err != nil {
+			return nil, fmt.Errorf("session %s started but could not be named: %w", s.ID(), err)
+		}
+	}
+	if prompt != "" {
+		go d.deliverInitialPrompt(s, prompt)
 	}
 	return s, nil
 }
 
-// promptArgs are the arguments the agent of the name takes prompt by as
-// it starts, as spawn_agent, a plugin and OpenSession give one.
-func (d *Daemon) promptArgs(name, prompt string) ([]string, error) {
-	configured, ok := agentspec.Lookup(name, d.agents())
-	if !ok || len(configured.Command) == 0 {
-		return nil, fmt.Errorf("no agent %q on this node", name)
+const (
+	initialPromptPoll       = 100 * time.Millisecond
+	initialPromptIdleSettle = 400 * time.Millisecond
+	initialPromptPasteQuiet = 800 * time.Millisecond
+	initialPromptQuiet      = 1500 * time.Millisecond
+	initialPromptShellQuiet = 400 * time.Millisecond
+	initialPromptTimeout    = 2 * time.Minute
+)
+
+// deliverInitialPrompt waits until a newly started session is ready at its
+// prompt, then types prompt and Enter into its terminal.
+func (d *Daemon) deliverInitialPrompt(s *session.Session, prompt string) {
+	var ctxDone <-chan struct{}
+	if d.ctx != nil {
+		ctxDone = d.ctx.Done()
 	}
-	driver, ok := agents.ByProgram(configured.Command[0])
-	prompter, takes := driver.Driver.(agent.Prompter)
-	if !ok || !takes {
-		return nil, fmt.Errorf("agent %s takes no prompt to start with", name)
+	deadline := time.NewTimer(initialPromptTimeout)
+	defer deadline.Stop()
+	tick := time.NewTicker(initialPromptPoll)
+	defer tick.Stop()
+	for {
+		if d.initialPromptReady(s, time.Now()) {
+			if err := s.Send(prompt, []byte{'\r'}); err != nil {
+				d.log.Warn("initial prompt: not typed", "session", s.ID(), "err", err)
+			}
+			return
+		}
+		select {
+		case <-s.Done():
+			return
+		case <-ctxDone:
+			return
+		case <-deadline.C:
+			d.log.Warn("initial prompt: timed out waiting for prompt", "session", s.ID())
+			return
+		case <-tick.C:
+		}
 	}
-	return prompter.PromptArgs(prompt), nil
+}
+
+// initialPromptReady reports whether a newly started session is at its prompt
+// and quiet enough to receive its first prompt.
+func (d *Daemon) initialPromptReady(s *session.Session, now time.Time) bool {
+	lastOut := s.LastOutput()
+	if lastOut.IsZero() {
+		return false
+	}
+	if s.Agent() == agentspec.ShellName {
+		return now.Sub(lastOut) >= initialPromptShellQuiet
+	}
+	if at, since := s.AtPrompt(); at {
+		return now.Sub(since) >= initialPromptIdleSettle && now.Sub(lastOut) >= initialPromptIdleSettle
+	}
+	if status := s.Info().GetStatus(); status == protocol.AgentWaiting || protocol.AtWork(status) {
+		return false
+	}
+	if s.BracketedPaste() {
+		return now.Sub(lastOut) >= initialPromptPasteQuiet
+	}
+	return now.Sub(lastOut) >= initialPromptQuiet
 }
 
 // projectTaskPrompt is prompt as an agent session parent spawned is

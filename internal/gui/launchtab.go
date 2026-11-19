@@ -31,8 +31,9 @@ func isLaunchTab(id string) bool { return strings.HasPrefix(id, launchPrefix) }
 // launchState is what a new session's tab picks, and why the session it
 // started did not start. UI goroutine.
 type launchState struct {
-	Form *ggui.StateValue[newSession]
-	Err  *ggui.StateValue[string]
+	Form     *ggui.StateValue[newSession]
+	Err      *ggui.StateValue[string]
+	Starting *ggui.StateValue[bool]
 }
 
 // launchOf is the state of new session's tab id, made for one it has none
@@ -40,7 +41,7 @@ type launchState struct {
 func (m *model) launchOf(id string) *launchState {
 	l := m.launches[id]
 	if l == nil {
-		l = &launchState{Form: ggui.State(newSession{}), Err: ggui.State("")}
+		l = &launchState{Form: ggui.State(newSession{}), Err: ggui.State(""), Starting: ggui.State(false)}
 		m.launches[id] = l
 	}
 	return l
@@ -137,7 +138,7 @@ func launchBox(m *model, id string, l *launchState) ggui.Widget {
 		widget.Box(inlineField(field)).MaxHeight(composerMaxHeight),
 		branchRow,
 		widget.Row(agents, launchTeamMenu(m, l, where), widget.Spacer(),
-			roundButton("arrow-up", T("Start session"), start, ggui.Const(false))).Gap(6).Align(widget.AlignCenter),
+			roundButton("arrow-up", T("Start session"), start, l.Starting)).Gap(6).Align(widget.AlignCenter),
 		errLine,
 	).Gap(6).Stretch()
 	box := widget.Box(content).Fill(skin.Surface1).Border(1, skin.Border).Radius(composerRadius).Pad(8, 12, 8, 12)

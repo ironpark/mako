@@ -18,6 +18,7 @@ type Agent struct {
 // New is the agy driver. agy picks a new conversation's ID itself.
 func New() *Agent {
 	return &Agent{
+		PromptFlag:  "--prompt-interactive",
 		ResumeFlags: []string{"--conversation"},
 		PickerFlags: []string{"--continue", "-c"},
 		// What starts the conversation, which a resumed one already has.

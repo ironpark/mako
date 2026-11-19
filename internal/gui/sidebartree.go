@@ -61,6 +61,46 @@ func sessionScope(defs []project, s *protocol.SessionInfo) scopeKey {
 	return scopeKey{Section: sectionID(defs, s)}
 }
 
+// rootScope is the scope a file root is in: its section, and its folder
+// when the section is a project of several.
+func rootScope(defs []project, r fileRoot) scopeKey {
+	if pl := placeIn(defs, r.Node, r.Path, "", ""); pl.At >= 0 {
+		k := scopeKey{Section: defs[pl.At].ID}
+		if len(defs[pl.At].Roots) > 1 {
+			k.Root = rootKey(defs[pl.At].Roots[pl.Root])
+		}
+		return k
+	}
+	return scopeKey{Section: sectionKey(defs, implicitKey(r.Node, r.Path, ""))}
+}
+
+// scopeLocation is the node and folder of the sidebar's selected project or
+// sub-project in the space shown, or ("", "", false) when none is picked.
+func (m *model) scopeLocation() (node, dir string, ok bool) {
+	p := m.spaces()
+	cur := m.Scope.Get()
+	if cur.Section == "" || cur.Space != p.spaceID(p.Space) {
+		return "", "", false
+	}
+	nodes := m.Nodes.Get()
+	if i := projectByID(p.Projects, cur.Section); i >= 0 {
+		g := projectGroup(p.Projects[i], nodes)
+		if cur.Root != "" {
+			if j := slices.IndexFunc(g.Def.Roots, func(r projectRoot) bool { return rootKey(r) == cur.Root }); j >= 0 {
+				node, dir = m.rootLocation(g, g.Def.Roots[j])
+				return node, dir, node != "" || dir != ""
+			}
+		}
+		return g.NodeID, g.Project, g.NodeID != "" || g.Project != ""
+	}
+	groups := groupProjects(m.Sessions.Get(), nodes, m.Prefs.Get().Projects, p.Projects, p.Names)
+	if i := slices.IndexFunc(groups, func(g sessionGroup) bool { return g.Key == cur.Section }); i >= 0 {
+		g := groups[i]
+		return g.NodeID, g.Project, g.NodeID != "" || g.Project != ""
+	}
+	return "", "", false
+}
+
 // holds reports whether scope k takes in what is in scope in.
 func (k scopeKey) holds(in scopeKey) bool {
 	return k.Section == "" || k.Section == in.Section && (k.Root == "" || k.Root == in.Root)
@@ -89,12 +129,43 @@ func (m *model) pickScope(k scopeKey) {
 }
 
 // setScope scopes the agents to k in the space shown, and shows the tabs
-// of its project.
+// of its project. If a sub-project (or project) is picked and the currently
+// active tab is not in it, it activates an agent of that project if available.
 func (m *model) setScope(k scopeKey) {
 	p := m.spacesNow()
 	m.Scope.Set(sidebarScope{Space: p.spaceID(p.Space), scopeKey: k})
 	if k.Section != "" {
 		m.showProjectTabs(k.Section)
+		m.activateScopedSession(k)
+	}
+}
+
+// activateScopedSession switches the active tab in the layout to an agent
+// of scope k, if the active tab is not already in k and an agent of k exists.
+func (m *model) activateScopedSession(k scopeKey) {
+	if k.Section == "" {
+		return
+	}
+	defs := m.spacesNow().Projects
+	curTab := ggui.Peek(m.Selected)
+	if s, ok := m.session(curTab); ok && k.holds(sessionScope(defs, s)) {
+		return // already active in k
+	}
+	// 1. Look for a tab already in the layout that belongs to k.
+	for _, g := range ggui.Peek(m.Layout).groups() {
+		for _, id := range g.Tabs {
+			if s, ok := m.session(id); ok && k.holds(sessionScope(defs, s)) {
+				m.showTab(id)
+				return
+			}
+		}
+	}
+	// 2. Look for any existing session of k.
+	for _, s := range ggui.Peek(m.Sessions) {
+		if k.holds(sessionScope(defs, s)) {
+			m.showTab(s.GetId())
+			return
+		}
 	}
 }
 
@@ -151,7 +222,11 @@ func projectTree(m *model, st sidebarState, i int) ggui.Widget {
 			return widget.Box(muted(widget.Text(empty).Size(12))).Pad(8)
 		}
 		labels := projectLabels(groups, nodes)
-		tree := treeRows{m: m, scope: scope, pins: pins, looks: looks, labels: labels}
+		var spColor color.Color
+		if sp, ok := m.spaces().spaceOf(i); ok {
+			spColor = sp.color()
+		}
+		tree := treeRows{m: m, scope: scope, pins: pins, looks: looks, labels: labels, spaceColor: spColor}
 		var rows []ggui.Widget
 		if pinned := tree.pinnedRows(groups); len(pinned) > 0 {
 			rows = append(rows, widget.Column(append([]ggui.Widget{treeHeading(icon("pin").Size(13), T("Pinned"), nil)}, pinned...)...).Gap(1).Stretch(),
@@ -179,11 +254,12 @@ func projectTree(m *model, st sidebarState, i int) ggui.Widget {
 
 // treeRows draws the rows of the sidebar's projects.
 type treeRows struct {
-	m      *model
-	scope  scopeKey
-	pins   []scopeKey
-	looks  map[string]projectLook
-	labels map[string]string
+	m          *model
+	scope      scopeKey
+	pins       []scopeKey
+	looks      map[string]projectLook
+	labels     map[string]string
+	spaceColor color.Color
 }
 
 // pinned reports whether k is pinned.
@@ -225,7 +301,8 @@ func (t treeRows) project(g sessionGroup) []ggui.Widget {
 	look := lookOf(t.looks, g.Key)
 	hover := ggui.State(false)
 	title := []ggui.Widget{widget.Expanded(widget.Align(widget.Text(name).Size(14).
-		Weight(pick(t.scope.Section == g.Key, ggui.WeightSemibold, ggui.WeightMedium)).NoWrap().Ellipsis()).Left())}
+		Weight(pick(t.scope.Section == g.Key, ggui.WeightSemibold, ggui.WeightMedium)).
+		Color(pick[color.Color](t.scope.Section == g.Key, skin.Fg, skin.Muted)).NoWrap().Ellipsis()).Left())}
 	if working(g.Sessions) {
 		title = append(title, workingDot())
 	}
@@ -243,7 +320,7 @@ func (t treeRows) project(g sessionGroup) []ggui.Widget {
 		cells = append(cells, newSessionButton(name, hover, func() { m.openNew(g.NodeID, g.Project) }))
 	}
 	row := widget.Row(cells...).Gap(0).Align(widget.AlignCenter)
-	var w ggui.Widget = selectedRow(row, t.scope == key)
+	var w ggui.Widget = t.selectedRow(row, t.scope == key)
 	w = ui.ContextMenuFunc(w, func() []ggui.Widget { return projectRowMenu(m, g, name, key) }).Name(Tf("%s actions", name))
 	// A session dropped on the row starts again there; a project dropped
 	// on it merges there.
@@ -291,7 +368,7 @@ func (t treeRows) folder(g sessionGroup, j int, r projectRoot, last bool) ggui.W
 	title = append(title, widget.Text(fmt.Sprint(len(in))).Size(12).Color(skin.ExtraMuted).NoWrap())
 	btn := ui.ButtonOf(widget.Row(title...).Gap(6).Align(widget.AlignCenter), func() { m.pickScope(key) }).
 		Ghost().Pad(5, 8, 5, 6).Radius(7).Name("#" + label)
-	row := selectedRow(widget.Row(
+	row := t.selectedRow(widget.Row(
 		widget.Expanded(btn),
 		pinButton(m, key, "#"+label, hover),
 		newSessionButton("#"+label, hover, func() { m.openNewInRoot(g, r) }),
@@ -340,7 +417,7 @@ func (t treeRows) pinnedRows(groups []sessionGroup) []ggui.Widget {
 		hover := ggui.State(false)
 		row := []ggui.Widget{
 			hashMark(16),
-			widget.Text(name).Size(14).NoWrap(),
+			widget.Text(name).Size(14).Color(pick[color.Color](t.scope == k, skin.Fg, skin.Muted)).NoWrap(),
 			widget.Expanded(widget.Align(widget.Text(parent).Size(12).Color(skin.ExtraMuted).NoWrap().Ellipsis()).Left()),
 		}
 		if working(sessions) {
@@ -350,7 +427,7 @@ func (t treeRows) pinnedRows(groups []sessionGroup) []ggui.Widget {
 		label := parent + " / " + name
 		btn := ui.ButtonOf(widget.Row(row...).Gap(8).Align(widget.AlignCenter), func() { m.pickScope(k) }).
 			Ghost().Pad(6, 8).Radius(7).Name(label)
-		var w ggui.Widget = selectedRow(widget.Row(
+		var w ggui.Widget = t.selectedRow(widget.Row(
 			widget.Expanded(btn),
 			pinButton(m, k, label, ggui.Const(true)),
 			newSessionButton(label, hover, func() { m.openNewInRoot(g, r) }),
@@ -364,11 +441,20 @@ func (t treeRows) pinnedRows(groups []sessionGroup) []ggui.Widget {
 }
 
 // selectedRow marks a row of the tree as the scope picked.
-func selectedRow(row ggui.Widget, selected bool) ggui.Widget {
+func (t treeRows) selectedRow(row ggui.Widget, selected bool) ggui.Widget {
 	if selected {
-		return widget.Box(row).Fill(skin.SidebarSel).Radius(7)
+		var spNRGBA color.NRGBA
+		if t.spaceColor != nil {
+			spNRGBA = color.NRGBAModel.Convert(t.spaceColor).(color.NRGBA)
+		}
+		if spNRGBA.A > 0 {
+			fill := color.NRGBA{R: spNRGBA.R, G: spNRGBA.G, B: spNRGBA.B, A: 0x3c}
+			border := color.NRGBA{R: spNRGBA.R, G: spNRGBA.G, B: spNRGBA.B, A: 0x70}
+			return widget.Box(row).Fill(fill).Border(1, border).Radius(7)
+		}
+		return widget.Box(row).Fill(skin.SidebarSel).Border(1, color.Transparent).Radius(7)
 	}
-	return widget.Box(row).Radius(7)
+	return widget.Box(row).Border(1, color.Transparent).Radius(7)
 }
 
 // projectRowMenu is a project row's menu: starting a session in it,
