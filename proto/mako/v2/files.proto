@@ -12,6 +12,30 @@ message ListDir {
   string path = 2; // absolute
 }
 
+// WatchFiles follows changes on a node, answered by a FilesChanged each
+// time some come, the first, empty, once it watches. Another WatchFiles
+// sent on the same stream takes the place of what was followed. Revision
+// 37.
+message WatchFiles {
+  string node_id = 1;
+  // paths are files and folders, absolute: a folder for its entries, added,
+  // written or removed, and not for those below them.
+  repeated string paths = 2;
+  // trees are folders followed with all below them, but for what git
+  // ignores, version control's own folders and editors' temporary files:
+  // a work tree, for what git status would say.
+  repeated string trees = 3;
+}
+
+// FilesChanged answers WatchFiles: what changed since the last.
+message FilesChanged {
+  // paths are those changed of WatchFiles.paths and of the entries of its
+  // folders: added, written or removed.
+  repeated string paths = 1;
+  // trees are those of WatchFiles.trees something below changed in.
+  repeated string trees = 2;
+}
+
 // DirEntry is one entry of a directory.
 message DirEntry {
   string name = 1;

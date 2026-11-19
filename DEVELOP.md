@@ -30,8 +30,8 @@ The native code mako uses is called through
 [gostty](https://github.com/ironpark/gostty), and wasmtime, through
 [wasmtime-pure-go](https://github.com/ironpark/wasmtime-pure-go), each embed
 their shared library for macOS, Linux and Windows on x86-64 and arm64 and
-unpack it into the user cache on first use; macOS's notifications and Dock
-badge go through the Objective-C runtime.
+unpack it into the user cache on first use; macOS's Dock badge goes through
+the Objective-C runtime.
 
 | Target | |
 |---|---|
@@ -83,7 +83,6 @@ take it out before you commit.
     internal/gui/boxdraw the terminal's box drawing and block elements, as shapes
     internal/gui/mdview  a Markdown page laid out as widgets; the window is its Host
     internal/gui/svgdraw a Markdown page's SVGs, drawn, with their text set apart
-    internal/notify      desktop notifications, each platform's own way
     internal/keychain    the system's keychain without cgo: macOS's Security framework, the Secret Service, the Credential Manager
     internal/shellenv    the login shell's environment, for an app the desktop started
     internal/syntax      tree-sitter compiled to wasm, under wasmtime
@@ -363,12 +362,13 @@ one in the app, **In this app** always does, and **External** only talks to
 a `makod` started some other way. A daemon in the app listens like any
 other, but its sessions end when the app quits.
 
-It notifies the desktop through `internal/notify`, and a click on a
-notification opens the session it is about, or Settings ▸ Access for a
-request to be let in. On macOS that takes the bundle (`make app`):
-UserNotifications posts only for an app with a bundle identifier, and a
-bare `mako-gui` falls back to `osascript`, whose notifications come from
-Script Editor and open nothing. Linux and the BSDs use the freedesktop
+It notifies the desktop through ggui's notifications (`Host.Notify`), and
+a click on a notification opens the session it is about, a check's run, or
+Settings ▸ Access for a request to be let in; a later notification about
+the same thing takes the place of the last. On macOS that takes the bundle
+(`make app`): UserNotifications posts only for an app with a bundle
+identifier, and a bare `mako-gui` falls back to `osascript`, whose
+notifications open nothing. Linux and the BSDs use the freedesktop
 notification service over D-Bus, and Windows toasts.
 
 Opened from the Finder or a desktop's menu, without `TERM`, the app (and
@@ -376,6 +376,17 @@ Opened from the Finder or a desktop's menu, without `TERM`, the app (and
 before anything else (`internal/shellenv`): it runs `$SHELL -l -i` once,
 with `MAKO_SHELL_ENV=1` set for a profile that wants to tell, so it finds
 the agents on the user's `PATH`.
+
+The window does not poll the files it shows. It has each node follow,
+with `watch_files`, the folders it lists, in the Files tab and the file
+browsers, the files open in its editor and preview, and the work tree the
+Git tab shows (`internal/gui/filewatch.go`); the node watches them with
+ggui's `pkg/fswatch` (`internal/daemon/watchfiles.go`), and the window
+reads again what it is told changed. A work tree is followed with its git
+directory's `index` and `HEAD`, as a file staged changes nothing in the
+tree; the window's own `git status` runs with `--no-optional-locks`, which
+never rewrites the index, so following it cannot feed itself. A node older
+than revision 37 is polled as before.
 
 Its settings are kept in `gui.json` beside `config.json`. The window is
 drawn from a window layout document (`internal/layoutdoc`), the

@@ -9,7 +9,6 @@ import (
 	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
-	"github.com/ironpark/mako/internal/notify"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -70,7 +69,7 @@ func (m *model) noteRequests(info *protocol.AccessInfo) {
 			})
 		}))
 		if ggui.Peek(m.Prefs).Notify {
-			go notify.Post(T("Access requested"), body, settingsTarget("access"))
+			m.notify(T("Access requested"), body, settingsTarget("access"))
 		}
 	}
 	for id, toast := range m.asked {

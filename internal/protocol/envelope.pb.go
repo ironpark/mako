@@ -142,6 +142,8 @@ type Envelope struct {
 	//	*Envelope_ListPanels
 	//	*Envelope_Panels
 	//	*Envelope_SeeSession
+	//	*Envelope_WatchFiles
+	//	*Envelope_FilesChanged
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1098,6 +1100,24 @@ func (x *Envelope) GetSeeSession() *SeeSession {
 	return nil
 }
 
+func (x *Envelope) GetWatchFiles() *WatchFiles {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_WatchFiles); ok {
+			return x.WatchFiles
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetFilesChanged() *FilesChanged {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_FilesChanged); ok {
+			return x.FilesChanged
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1515,6 +1535,15 @@ type Envelope_SeeSession struct {
 	SeeSession *SeeSession `protobuf:"bytes,139,opt,name=see_session,json=seeSession,proto3,oneof"`
 }
 
+type Envelope_WatchFiles struct {
+	// Changes to a node's files, as they come (revision 37).
+	WatchFiles *WatchFiles `protobuf:"bytes,140,opt,name=watch_files,json=watchFiles,proto3,oneof"`
+}
+
+type Envelope_FilesChanged struct {
+	FilesChanged *FilesChanged `protobuf:"bytes,141,opt,name=files_changed,json=filesChanged,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -1715,6 +1744,10 @@ func (*Envelope_Panels) isEnvelope_Body() {}
 
 func (*Envelope_SeeSession) isEnvelope_Body() {}
 
+func (*Envelope_WatchFiles) isEnvelope_Body() {}
+
+func (*Envelope_FilesChanged) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -1784,7 +1817,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xaf*\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xa7+\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -1909,7 +1942,10 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"listPanels\x12*\n" +
 	"\x06panels\x18\x8a\x01 \x01(\v2\x0f.mako.v2.PanelsH\x00R\x06panels\x127\n" +
 	"\vsee_session\x18\x8b\x01 \x01(\v2\x13.mako.v2.SeeSessionH\x00R\n" +
-	"seeSessionB\x06\n" +
+	"seeSession\x127\n" +
+	"\vwatch_files\x18\x8c\x01 \x01(\v2\x13.mako.v2.WatchFilesH\x00R\n" +
+	"watchFiles\x12=\n" +
+	"\rfiles_changed\x18\x8d\x01 \x01(\v2\x15.mako.v2.FilesChangedH\x00R\ffilesChangedB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"I\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -2031,6 +2067,8 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*ListPanels)(nil),        // 98: mako.v2.ListPanels
 	(*Panels)(nil),            // 99: mako.v2.Panels
 	(*SeeSession)(nil),        // 100: mako.v2.SeeSession
+	(*WatchFiles)(nil),        // 101: mako.v2.WatchFiles
+	(*FilesChanged)(nil),      // 102: mako.v2.FilesChanged
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,   // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -2133,11 +2171,13 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	98,  // 97: mako.v2.Envelope.list_panels:type_name -> mako.v2.ListPanels
 	99,  // 98: mako.v2.Envelope.panels:type_name -> mako.v2.Panels
 	100, // 99: mako.v2.Envelope.see_session:type_name -> mako.v2.SeeSession
-	100, // [100:100] is the sub-list for method output_type
-	100, // [100:100] is the sub-list for method input_type
-	100, // [100:100] is the sub-list for extension type_name
-	100, // [100:100] is the sub-list for extension extendee
-	0,   // [0:100] is the sub-list for field type_name
+	101, // 100: mako.v2.Envelope.watch_files:type_name -> mako.v2.WatchFiles
+	102, // 101: mako.v2.Envelope.files_changed:type_name -> mako.v2.FilesChanged
+	102, // [102:102] is the sub-list for method output_type
+	102, // [102:102] is the sub-list for method input_type
+	102, // [102:102] is the sub-list for extension type_name
+	102, // [102:102] is the sub-list for extension extendee
+	0,   // [0:102] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -2256,6 +2296,8 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_ListPanels)(nil),
 		(*Envelope_Panels)(nil),
 		(*Envelope_SeeSession)(nil),
+		(*Envelope_WatchFiles)(nil),
+		(*Envelope_FilesChanged)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

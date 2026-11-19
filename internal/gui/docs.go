@@ -455,8 +455,15 @@ func docView(m *model, id string, focus bool) ggui.Widget {
 		}
 		return widget.Box()
 	})
-	// While it shows, a change on disk is followed.
-	ggui.Effect(func() ggui.Cleanup { return m.every(docCheckEvery, func() { m.checkDoc(id) }) })
+	// While it shows, a change on disk is followed: told of by its node,
+	// or else looked for.
+	ggui.Effect(func() ggui.Cleanup {
+		return m.every(docCheckEvery, func() {
+			if d, ok := m.doc(id); ok && !m.fileWatched(d.Node) {
+				m.checkDoc(id)
+			}
+		})
+	})
 	return widget.Column(docStatus(m, id, info, state), hline(), banner, widget.Expanded(body)).Stretch()
 }
 

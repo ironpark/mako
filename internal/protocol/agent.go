@@ -29,7 +29,12 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 36
+const Revision = 37
+
+// RevisionWatchFiles adds watch_files, which follows a node's files and
+// folders as they change, for a window to show them as they are without
+// reading them again and again.
+const RevisionWatchFiles = 37
 
 // RevisionSeen adds what the daemon numbers of a session's status:
 // SessionInfo.state_seq, attention_seq and seen_seq, and SeeSession, which

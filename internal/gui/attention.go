@@ -16,7 +16,6 @@ import (
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
-	"github.com/ironpark/mako/internal/notify"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -226,7 +225,7 @@ func (m *model) announce(s *protocol.SessionInfo) {
 	default:
 		body = T("Finished its turn")
 	}
-	go notify.Post(title, projectName(s.GetProject())+" · "+body, sessionTarget(s.GetId()))
+	m.notify(title, projectName(s.GetProject())+" · "+body, sessionTarget(s.GetId()))
 }
 
 // noteProgram passes on what a session's program asked of the terminal
@@ -250,7 +249,7 @@ func (m *model) noteProgram(old, s *protocol.SessionInfo) bool {
 	if ggui.Peek(m.Prefs).Notify {
 		n := s.GetNotice()
 		title := cmp.Or(n.GetTitle(), sessionTitle(s, ggui.Peek(m.Titles)[s.GetId()]))
-		go notify.Post(title, projectName(s.GetProject())+" · "+n.GetBody(), sessionTarget(s.GetId()))
+		m.notify(title, projectName(s.GetProject())+" · "+n.GetBody(), sessionTarget(s.GetId()))
 	}
 	return true
 }

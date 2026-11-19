@@ -33,7 +33,8 @@ type gitView struct {
 	Loading bool
 }
 
-// gitRefresh is how often the shown changes are read again.
+// gitRefresh is how often the shown changes are read again, of a work
+// tree its node does not follow.
 const gitRefresh = 5 * time.Second
 
 // changesKey is what a read of the changes is of.
@@ -203,9 +204,10 @@ func counts(added, removed int) ggui.Widget {
 // Panel ---------------------------------------------------------------------------
 
 // pollWhileShown loads a details tab's project when the window shows the
-// tab's block, and again every while until it does not, and at once
-// whenever one of moved does, which says the project changed.
-func pollWhileShown(m *model, root ggui.Readable[fileRoot], tab string, every time.Duration, load func(fileRoot), moved ...ggui.Readable[string]) {
+// tab's block, and again every while until it does not, unless rest says
+// to rest this time, and at once whenever one of moved does, which says
+// the project changed.
+func pollWhileShown(m *model, root ggui.Readable[fileRoot], tab string, every time.Duration, load func(fileRoot), rest func(fileRoot) bool, moved ...ggui.Readable[string]) {
 	ggui.Effect(func() ggui.Cleanup {
 		r := root.Get()
 		for _, mv := range moved {
@@ -215,7 +217,11 @@ func pollWhileShown(m *model, root ggui.Readable[fileRoot], tab string, every ti
 			return nil // nothing shows it
 		}
 		load(r)
-		return m.every(every, func() { load(r) })
+		return m.every(every, func() {
+			if rest == nil || !rest(r) {
+				load(r)
+			}
+		})
 	})
 }
 

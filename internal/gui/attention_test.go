@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -198,5 +199,27 @@ func TestAProgramsOwnNotificationIsUnread(t *testing.T) {
 	m.noteStatus(next)
 	if u := ggui.Peek(m.Unread); len(u) != 0 {
 		t.Fatalf("unread %v", u)
+	}
+}
+
+// A session out of view tells the desktop, one notification for each
+// session, and a click on it opens the session.
+func TestNotificationsOpenTheirSession(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Box() }, ggui.Sz(200, 100))
+	defer p.Close()
+	p.Setup(func() { setup(m) })
+	p.Frame()
+	s := &protocol.SessionInfo{Id: "s", State: protocol.StateRunning, Status: protocol.AgentDone}
+	m.announce(s)
+	m.announce(s)
+	shown := p.Notifications()
+	if len(shown) != 1 || shown[0].ID != sessionTarget("s") || shown[0].Body == "" {
+		t.Fatalf("notifications %+v", shown)
+	}
+	p.ClickNotification(sessionTarget("s"), "")
+	if ggui.Peek(m.Page) != "workspace" || ggui.Peek(m.Selected) != "s" {
+		t.Fatalf("a click opened %q, %q", ggui.Peek(m.Page), ggui.Peek(m.Selected))
 	}
 }

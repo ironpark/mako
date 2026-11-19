@@ -384,6 +384,12 @@ func (c *Client) WatchChat(ctx context.Context, req *protocol.WatchChat, fn func
 // follow sends req, as typ, over a stream of its own, and calls fn with
 // each reply until ctx ends or the stream does.
 func follow[R proto.Message](ctx context.Context, c *Client, typ protocol.Type, req proto.Message, fn func(R)) error {
+	return followSending(ctx, c, typ, req, (<-chan proto.Message)(nil), fn)
+}
+
+// followSending is follow, sending on the stream, as typ too, each request
+// more gives meanwhile.
+func followSending[M, R proto.Message](ctx context.Context, c *Client, typ protocol.Type, req proto.Message, more <-chan M, fn func(R)) error {
 	s, err := c.stream(ctx)
 	if err != nil {
 		return err
@@ -393,6 +399,22 @@ func follow[R proto.Message](ctx context.Context, c *Client, typ protocol.Type, 
 	defer stop()
 	if err := s.Send(typ, "", req); err != nil {
 		return err
+	}
+	if more != nil {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		go func() {
+			for {
+				select {
+				case m := <-more:
+					if s.Send(typ, "", m) != nil {
+						return // the stream's end says why
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
 	}
 	for {
 		env, err := s.Recv()
@@ -454,6 +476,13 @@ func (c *Client) ConfigureAgent(ctx context.Context, req *protocol.ConfigureAgen
 // when it is next attached, and returns the session as it is now.
 func (c *Client) Sleep(ctx context.Context, req *protocol.SleepSession) (*protocol.SessionInfo, error) {
 	return request[*protocol.SessionInfo](ctx, c, protocol.TypeSleepSession, req)
+}
+
+// WatchFiles follows the files and folders req names on its node, calling
+// fn with each FilesChanged until ctx ends or the stream does, the first
+// once the node watches; each WatchFiles from more takes req's place.
+func (c *Client) WatchFiles(ctx context.Context, req *protocol.WatchFiles, more <-chan *protocol.WatchFiles, fn func(*protocol.FilesChanged)) error {
+	return followSending(ctx, c, protocol.TypeWatchFiles, req, more, fn)
 }
 
 // SeeSession says the user has looked at a session's attention up to

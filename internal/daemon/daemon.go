@@ -346,6 +346,8 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 	case protocol.TypeAttach:
 		return d.handleAttach(ctx, stream, env)
 
+	case protocol.TypeWatchFiles:
+		return d.handleWatchFiles(ctx, stream, env)
 	case protocol.TypeListDir:
 		return d.handleListDir(ctx, stream, env)
 

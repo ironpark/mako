@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ironpark/ggui"
@@ -45,6 +46,10 @@ type newSession struct {
 type model struct {
 	cfg  *config.Config
 	post func(func())
+	// host is the app's, or a probe's, which shows the notifications;
+	// notifyFailed says once why one could not be shown.
+	host         ggui.Host
+	notifyFailed sync.Once
 	// link is the daemon the window talks to, shared with the workers
 	// that poll it; see link.go.
 	link *daemonLink
