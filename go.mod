@@ -12,7 +12,7 @@ require (
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/ironpark/ggfx v0.0.0-20261116205814-f8d41f33e4c7
 	github.com/ironpark/ggui v0.5.1
-	github.com/ironpark/ggui/pkg/fswatch v0.1.0
+	github.com/ironpark/ggui/pkg/fswatch v0.1.1
 	github.com/ironpark/ggwd v0.0.0-20261118100719-fb680057ba36
 	github.com/ironpark/gostty v0.0.0-20261108124048-de82fbcca291
 	github.com/ironpark/qngg v0.0.0-20261030173357-5bb022c263f0
