@@ -101,6 +101,7 @@ func diagnose() {
 				fmt.Fprintln(log, "# moving:", motionLine(inspect.ReadMotionReport()))
 			}
 			fmt.Fprintln(log, "# atlas:", r.atlas)
+			fmt.Fprintln(log, "# textures:", texturesLine(r.textures, r.screen))
 			fmt.Fprintln(log, "# terminals:", terminalLine(r.terms))
 			if d.troubled() && now.Sub(lastIncident) >= incidentGap {
 				lastIncident = now
@@ -147,6 +148,8 @@ type diagReading struct {
 	frameBusy                      time.Duration
 	flushes, commands, vertices    int64
 	atlas                          string // the GPU's images: see atlasLine
+	textures                       inspect.TextureBytes
+	screen                         int64 // the bytes of the windows' screens
 	terms                          gui.TerminalMemory
 }
 
@@ -165,8 +168,10 @@ func readDiag(s []metrics.Sample, at time.Time) diagReading {
 		skipped:   frames.Skipped,
 		contained: frames.Contained,
 		flushes:   gpu.Flushes, commands: gpu.Commands, vertices: gpu.Vertices,
-		atlas: atlasLine(gpu),
-		terms: gui.ReadTerminalMemory(),
+		atlas:    atlasLine(gpu),
+		textures: inspect.ReadTextureBytes(),
+		screen:   gpu.ScreenBytes,
+		terms:    gui.ReadTerminalMemory(),
 	}
 }
 
@@ -206,6 +211,15 @@ func atlasLine(gpu ggfx.DebugInfo) string {
 	}
 	fmt.Fprintf(&b, "; own %.1f MB in %d", mb(uint64(gpu.Isolated.Bytes)), gpu.Isolated.Images)
 	return b.String()
+}
+
+// texturesLine tells the GPU's images apart by what the window makes them
+// for: the layers its effects paint through, the backbuffer a backdrop blur
+// keeps, path masks, icons, images and stencils; and the window's screen,
+// the frames it shows.
+func texturesLine(t inspect.TextureBytes, screen int64) string {
+	return fmt.Sprintf("layers %.1f MB, backbuffer %.1f MB, path masks %.1f MB, icons %.1f MB, images %.1f MB, stencils %.1f MB; screen %.1f MB",
+		mb(uint64(t.Layers)), mb(uint64(t.Backbuffer)), mb(uint64(t.PathMasks)), mb(uint64(t.Icons)), mb(uint64(t.Images)), mb(uint64(t.Stencils)), mb(uint64(screen)))
 }
 
 func percent(part, whole int64) float64 {

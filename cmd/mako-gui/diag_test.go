@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/ironpark/ggfx"
+	"github.com/ironpark/ggui/inspect"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -70,5 +71,13 @@ func TestTheDirtiersLineNamesTheMostFirst(t *testing.T) {
 	}, 2)
 	if want := "dirty(anim) ggui/ui.b=9 dirty(signal) mako/internal/gui.a=3"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestTheTexturesLineTellsKindsApart(t *testing.T) {
+	got := texturesLine(inspect.TextureBytes{Layers: 78 << 20, Icons: 1 << 19}, 78<<20)
+	want := "layers 78.0 MB, backbuffer 0.0 MB, path masks 0.0 MB, icons 0.5 MB, images 0.0 MB, stencils 0.0 MB; screen 78.0 MB"
+	if got != want {
+		t.Fatalf("got %q\nwant %q", got, want)
 	}
 }
