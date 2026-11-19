@@ -34,6 +34,17 @@ message OpenSession {
   // lends each to its programs, holds them until it ends, and borrows
   // them again when it starts again.
   repeated string devices = 10;
+  // prompt is the agent's first prompt, given as it starts, as an agent
+  // given a task by spawn_agent gets it; an agent that takes none at
+  // start is not started.
+  string prompt = 11;
+  // parent_session_id starts the session as an agent the one it names
+  // spawned, on this node, as spawn_agent does: told its parent, given
+  // Mako's tools to report to it, and shown with it. A front-end starts a
+  // team's agents so.
+  string parent_session_id = 12;
+  // name names the session as it starts.
+  string name = 13;
 }
 
 // Worktree is a git worktree made for one session.
@@ -116,6 +127,10 @@ message SessionInfo {
   // controls are what ConfigureAgent may set of the session's agent; unset
   // for an agent with none.
   AgentControls controls = 36;
+  // parent_session_id is the session whose agent spawned this one through
+  // Mako's spawn_agent, on the same node; "" for one the user started. A
+  // front-end shows a spawned session with the one that spawned it.
+  string parent_session_id = 37;
 }
 
 // AgentControls are the permission modes, models and efforts a session's

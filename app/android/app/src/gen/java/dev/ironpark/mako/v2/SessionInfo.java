@@ -37,6 +37,7 @@ public  final class SessionInfo extends
     agentScope_ = "";
     tasks_ = emptyProtobufList();
     gitStamp_ = "";
+    parentSessionId_ = "";
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -2035,6 +2036,83 @@ public  final class SessionInfo extends
   private void clearControls() {
     controls_ = null;
     bitField0_ = (bitField0_ & ~0x00000200);
+  }
+
+  public static final int PARENT_SESSION_ID_FIELD_NUMBER = 37;
+  private java.lang.String parentSessionId_;
+  /**
+   * <pre>
+   * parent_session_id is the session whose agent spawned this one through
+   * Mako's spawn_agent, on the same node; "" for one the user started. A
+   * front-end shows a spawned session with the one that spawned it.
+   * </pre>
+   *
+   * <code>string parent_session_id = 37 [json_name = "parentSessionId"];</code>
+   * @return The parentSessionId.
+   */
+  @java.lang.Override
+  public java.lang.String getParentSessionId() {
+    return parentSessionId_;
+  }
+  /**
+   * <pre>
+   * parent_session_id is the session whose agent spawned this one through
+   * Mako's spawn_agent, on the same node; "" for one the user started. A
+   * front-end shows a spawned session with the one that spawned it.
+   * </pre>
+   *
+   * <code>string parent_session_id = 37 [json_name = "parentSessionId"];</code>
+   * @return The bytes for parentSessionId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getParentSessionIdBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(parentSessionId_);
+  }
+  /**
+   * <pre>
+   * parent_session_id is the session whose agent spawned this one through
+   * Mako's spawn_agent, on the same node; "" for one the user started. A
+   * front-end shows a spawned session with the one that spawned it.
+   * </pre>
+   *
+   * <code>string parent_session_id = 37 [json_name = "parentSessionId"];</code>
+   * @param value The parentSessionId to set.
+   */
+  private void setParentSessionId(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    parentSessionId_ = value;
+  }
+  /**
+   * <pre>
+   * parent_session_id is the session whose agent spawned this one through
+   * Mako's spawn_agent, on the same node; "" for one the user started. A
+   * front-end shows a spawned session with the one that spawned it.
+   * </pre>
+   *
+   * <code>string parent_session_id = 37 [json_name = "parentSessionId"];</code>
+   */
+  private void clearParentSessionId() {
+
+    parentSessionId_ = getDefaultInstance().getParentSessionId();
+  }
+  /**
+   * <pre>
+   * parent_session_id is the session whose agent spawned this one through
+   * Mako's spawn_agent, on the same node; "" for one the user started. A
+   * front-end shows a spawned session with the one that spawned it.
+   * </pre>
+   *
+   * <code>string parent_session_id = 37 [json_name = "parentSessionId"];</code>
+   * @param value The bytes for parentSessionId to set.
+   */
+  private void setParentSessionIdBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    parentSessionId_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
@@ -4219,6 +4297,85 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * parent_session_id is the session whose agent spawned this one through
+     * Mako's spawn_agent, on the same node; "" for one the user started. A
+     * front-end shows a spawned session with the one that spawned it.
+     * </pre>
+     *
+     * <code>string parent_session_id = 37 [json_name = "parentSessionId"];</code>
+     * @return The parentSessionId.
+     */
+    @java.lang.Override
+    public java.lang.String getParentSessionId() {
+      return instance.getParentSessionId();
+    }
+    /**
+     * <pre>
+     * parent_session_id is the session whose agent spawned this one through
+     * Mako's spawn_agent, on the same node; "" for one the user started. A
+     * front-end shows a spawned session with the one that spawned it.
+     * </pre>
+     *
+     * <code>string parent_session_id = 37 [json_name = "parentSessionId"];</code>
+     * @return The bytes for parentSessionId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getParentSessionIdBytes() {
+      return instance.getParentSessionIdBytes();
+    }
+    /**
+     * <pre>
+     * parent_session_id is the session whose agent spawned this one through
+     * Mako's spawn_agent, on the same node; "" for one the user started. A
+     * front-end shows a spawned session with the one that spawned it.
+     * </pre>
+     *
+     * <code>string parent_session_id = 37 [json_name = "parentSessionId"];</code>
+     * @param value The parentSessionId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParentSessionId(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setParentSessionId(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * parent_session_id is the session whose agent spawned this one through
+     * Mako's spawn_agent, on the same node; "" for one the user started. A
+     * front-end shows a spawned session with the one that spawned it.
+     * </pre>
+     *
+     * <code>string parent_session_id = 37 [json_name = "parentSessionId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearParentSessionId() {
+      copyOnWrite();
+      instance.clearParentSessionId();
+      return this;
+    }
+    /**
+     * <pre>
+     * parent_session_id is the session whose agent spawned this one through
+     * Mako's spawn_agent, on the same node; "" for one the user started. A
+     * front-end shows a spawned session with the one that spawned it.
+     * </pre>
+     *
+     * <code>string parent_session_id = 37 [json_name = "parentSessionId"];</code>
+     * @param value The bytes for parentSessionId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParentSessionIdBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setParentSessionIdBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -4273,14 +4430,15 @@ public  final class SessionInfo extends
             "bells_",
             "dialog_",
             "controls_",
+            "parentSessionId_",
           };
           java.lang.String info =
-              "\u0000$\u0000\u0001\u0001$$\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0000%\u0000\u0001\u0001%%\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
               "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208\u000b\u000b" +
               "\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011\u0208\u0012" +
               "\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004\u0017\u1009" +
               "\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006\u001c\u0208\u001d\u0007" +
-              "\u001e\u001b\u001f\u0208 \u0003!\u1009\u0007\"\u0003#\u1009\b$\u1009\t";
+              "\u001e\u001b\u001f\u0208 \u0003!\u1009\u0007\"\u0003#\u1009\b$\u1009\t%\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

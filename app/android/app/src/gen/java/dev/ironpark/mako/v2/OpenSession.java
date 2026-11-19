@@ -25,6 +25,9 @@ public  final class OpenSession extends
     project_ = "";
     args_ = emptyProtobufList();
     devices_ = emptyProtobufList();
+    prompt_ = "";
+    parentSessionId_ = "";
+    name_ = "";
   }
   private int bitField0_;
   public static final int NODE_ID_FIELD_NUMBER = 1;
@@ -718,6 +721,232 @@ java.lang.String defaultValue) {
     checkByteStringIsUtf8(value);
     ensureDevicesIsMutable();
     devices_.add(value.toStringUtf8());
+  }
+
+  public static final int PROMPT_FIELD_NUMBER = 11;
+  private java.lang.String prompt_;
+  /**
+   * <pre>
+   * prompt is the agent's first prompt, given as it starts, as an agent
+   * given a task by spawn_agent gets it; an agent that takes none at
+   * start is not started.
+   * </pre>
+   *
+   * <code>string prompt = 11 [json_name = "prompt"];</code>
+   * @return The prompt.
+   */
+  @java.lang.Override
+  public java.lang.String getPrompt() {
+    return prompt_;
+  }
+  /**
+   * <pre>
+   * prompt is the agent's first prompt, given as it starts, as an agent
+   * given a task by spawn_agent gets it; an agent that takes none at
+   * start is not started.
+   * </pre>
+   *
+   * <code>string prompt = 11 [json_name = "prompt"];</code>
+   * @return The bytes for prompt.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getPromptBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(prompt_);
+  }
+  /**
+   * <pre>
+   * prompt is the agent's first prompt, given as it starts, as an agent
+   * given a task by spawn_agent gets it; an agent that takes none at
+   * start is not started.
+   * </pre>
+   *
+   * <code>string prompt = 11 [json_name = "prompt"];</code>
+   * @param value The prompt to set.
+   */
+  private void setPrompt(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    prompt_ = value;
+  }
+  /**
+   * <pre>
+   * prompt is the agent's first prompt, given as it starts, as an agent
+   * given a task by spawn_agent gets it; an agent that takes none at
+   * start is not started.
+   * </pre>
+   *
+   * <code>string prompt = 11 [json_name = "prompt"];</code>
+   */
+  private void clearPrompt() {
+
+    prompt_ = getDefaultInstance().getPrompt();
+  }
+  /**
+   * <pre>
+   * prompt is the agent's first prompt, given as it starts, as an agent
+   * given a task by spawn_agent gets it; an agent that takes none at
+   * start is not started.
+   * </pre>
+   *
+   * <code>string prompt = 11 [json_name = "prompt"];</code>
+   * @param value The bytes for prompt to set.
+   */
+  private void setPromptBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    prompt_ = value.toStringUtf8();
+
+  }
+
+  public static final int PARENT_SESSION_ID_FIELD_NUMBER = 12;
+  private java.lang.String parentSessionId_;
+  /**
+   * <pre>
+   * parent_session_id starts the session as an agent the one it names
+   * spawned, on this node, as spawn_agent does: told its parent, given
+   * Mako's tools to report to it, and shown with it. A front-end starts a
+   * team's agents so.
+   * </pre>
+   *
+   * <code>string parent_session_id = 12 [json_name = "parentSessionId"];</code>
+   * @return The parentSessionId.
+   */
+  @java.lang.Override
+  public java.lang.String getParentSessionId() {
+    return parentSessionId_;
+  }
+  /**
+   * <pre>
+   * parent_session_id starts the session as an agent the one it names
+   * spawned, on this node, as spawn_agent does: told its parent, given
+   * Mako's tools to report to it, and shown with it. A front-end starts a
+   * team's agents so.
+   * </pre>
+   *
+   * <code>string parent_session_id = 12 [json_name = "parentSessionId"];</code>
+   * @return The bytes for parentSessionId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getParentSessionIdBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(parentSessionId_);
+  }
+  /**
+   * <pre>
+   * parent_session_id starts the session as an agent the one it names
+   * spawned, on this node, as spawn_agent does: told its parent, given
+   * Mako's tools to report to it, and shown with it. A front-end starts a
+   * team's agents so.
+   * </pre>
+   *
+   * <code>string parent_session_id = 12 [json_name = "parentSessionId"];</code>
+   * @param value The parentSessionId to set.
+   */
+  private void setParentSessionId(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    parentSessionId_ = value;
+  }
+  /**
+   * <pre>
+   * parent_session_id starts the session as an agent the one it names
+   * spawned, on this node, as spawn_agent does: told its parent, given
+   * Mako's tools to report to it, and shown with it. A front-end starts a
+   * team's agents so.
+   * </pre>
+   *
+   * <code>string parent_session_id = 12 [json_name = "parentSessionId"];</code>
+   */
+  private void clearParentSessionId() {
+
+    parentSessionId_ = getDefaultInstance().getParentSessionId();
+  }
+  /**
+   * <pre>
+   * parent_session_id starts the session as an agent the one it names
+   * spawned, on this node, as spawn_agent does: told its parent, given
+   * Mako's tools to report to it, and shown with it. A front-end starts a
+   * team's agents so.
+   * </pre>
+   *
+   * <code>string parent_session_id = 12 [json_name = "parentSessionId"];</code>
+   * @param value The bytes for parentSessionId to set.
+   */
+  private void setParentSessionIdBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    parentSessionId_ = value.toStringUtf8();
+
+  }
+
+  public static final int NAME_FIELD_NUMBER = 13;
+  private java.lang.String name_;
+  /**
+   * <pre>
+   * name names the session as it starts.
+   * </pre>
+   *
+   * <code>string name = 13 [json_name = "name"];</code>
+   * @return The name.
+   */
+  @java.lang.Override
+  public java.lang.String getName() {
+    return name_;
+  }
+  /**
+   * <pre>
+   * name names the session as it starts.
+   * </pre>
+   *
+   * <code>string name = 13 [json_name = "name"];</code>
+   * @return The bytes for name.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getNameBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(name_);
+  }
+  /**
+   * <pre>
+   * name names the session as it starts.
+   * </pre>
+   *
+   * <code>string name = 13 [json_name = "name"];</code>
+   * @param value The name to set.
+   */
+  private void setName(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    name_ = value;
+  }
+  /**
+   * <pre>
+   * name names the session as it starts.
+   * </pre>
+   *
+   * <code>string name = 13 [json_name = "name"];</code>
+   */
+  private void clearName() {
+
+    name_ = getDefaultInstance().getName();
+  }
+  /**
+   * <pre>
+   * name names the session as it starts.
+   * </pre>
+   *
+   * <code>string name = 13 [json_name = "name"];</code>
+   * @param value The bytes for name to set.
+   */
+  private void setNameBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    name_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.OpenSession parseFrom(
@@ -1531,6 +1760,238 @@ java.lang.String defaultValue) {
       return this;
     }
 
+    /**
+     * <pre>
+     * prompt is the agent's first prompt, given as it starts, as an agent
+     * given a task by spawn_agent gets it; an agent that takes none at
+     * start is not started.
+     * </pre>
+     *
+     * <code>string prompt = 11 [json_name = "prompt"];</code>
+     * @return The prompt.
+     */
+    @java.lang.Override
+    public java.lang.String getPrompt() {
+      return instance.getPrompt();
+    }
+    /**
+     * <pre>
+     * prompt is the agent's first prompt, given as it starts, as an agent
+     * given a task by spawn_agent gets it; an agent that takes none at
+     * start is not started.
+     * </pre>
+     *
+     * <code>string prompt = 11 [json_name = "prompt"];</code>
+     * @return The bytes for prompt.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getPromptBytes() {
+      return instance.getPromptBytes();
+    }
+    /**
+     * <pre>
+     * prompt is the agent's first prompt, given as it starts, as an agent
+     * given a task by spawn_agent gets it; an agent that takes none at
+     * start is not started.
+     * </pre>
+     *
+     * <code>string prompt = 11 [json_name = "prompt"];</code>
+     * @param value The prompt to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPrompt(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setPrompt(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * prompt is the agent's first prompt, given as it starts, as an agent
+     * given a task by spawn_agent gets it; an agent that takes none at
+     * start is not started.
+     * </pre>
+     *
+     * <code>string prompt = 11 [json_name = "prompt"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPrompt() {
+      copyOnWrite();
+      instance.clearPrompt();
+      return this;
+    }
+    /**
+     * <pre>
+     * prompt is the agent's first prompt, given as it starts, as an agent
+     * given a task by spawn_agent gets it; an agent that takes none at
+     * start is not started.
+     * </pre>
+     *
+     * <code>string prompt = 11 [json_name = "prompt"];</code>
+     * @param value The bytes for prompt to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPromptBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setPromptBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * parent_session_id starts the session as an agent the one it names
+     * spawned, on this node, as spawn_agent does: told its parent, given
+     * Mako's tools to report to it, and shown with it. A front-end starts a
+     * team's agents so.
+     * </pre>
+     *
+     * <code>string parent_session_id = 12 [json_name = "parentSessionId"];</code>
+     * @return The parentSessionId.
+     */
+    @java.lang.Override
+    public java.lang.String getParentSessionId() {
+      return instance.getParentSessionId();
+    }
+    /**
+     * <pre>
+     * parent_session_id starts the session as an agent the one it names
+     * spawned, on this node, as spawn_agent does: told its parent, given
+     * Mako's tools to report to it, and shown with it. A front-end starts a
+     * team's agents so.
+     * </pre>
+     *
+     * <code>string parent_session_id = 12 [json_name = "parentSessionId"];</code>
+     * @return The bytes for parentSessionId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getParentSessionIdBytes() {
+      return instance.getParentSessionIdBytes();
+    }
+    /**
+     * <pre>
+     * parent_session_id starts the session as an agent the one it names
+     * spawned, on this node, as spawn_agent does: told its parent, given
+     * Mako's tools to report to it, and shown with it. A front-end starts a
+     * team's agents so.
+     * </pre>
+     *
+     * <code>string parent_session_id = 12 [json_name = "parentSessionId"];</code>
+     * @param value The parentSessionId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParentSessionId(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setParentSessionId(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * parent_session_id starts the session as an agent the one it names
+     * spawned, on this node, as spawn_agent does: told its parent, given
+     * Mako's tools to report to it, and shown with it. A front-end starts a
+     * team's agents so.
+     * </pre>
+     *
+     * <code>string parent_session_id = 12 [json_name = "parentSessionId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearParentSessionId() {
+      copyOnWrite();
+      instance.clearParentSessionId();
+      return this;
+    }
+    /**
+     * <pre>
+     * parent_session_id starts the session as an agent the one it names
+     * spawned, on this node, as spawn_agent does: told its parent, given
+     * Mako's tools to report to it, and shown with it. A front-end starts a
+     * team's agents so.
+     * </pre>
+     *
+     * <code>string parent_session_id = 12 [json_name = "parentSessionId"];</code>
+     * @param value The bytes for parentSessionId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParentSessionIdBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setParentSessionIdBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * name names the session as it starts.
+     * </pre>
+     *
+     * <code>string name = 13 [json_name = "name"];</code>
+     * @return The name.
+     */
+    @java.lang.Override
+    public java.lang.String getName() {
+      return instance.getName();
+    }
+    /**
+     * <pre>
+     * name names the session as it starts.
+     * </pre>
+     *
+     * <code>string name = 13 [json_name = "name"];</code>
+     * @return The bytes for name.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getNameBytes() {
+      return instance.getNameBytes();
+    }
+    /**
+     * <pre>
+     * name names the session as it starts.
+     * </pre>
+     *
+     * <code>string name = 13 [json_name = "name"];</code>
+     * @param value The name to set.
+     * @return This builder for chaining.
+     */
+    public Builder setName(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setName(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * name names the session as it starts.
+     * </pre>
+     *
+     * <code>string name = 13 [json_name = "name"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearName() {
+      copyOnWrite();
+      instance.clearName();
+      return this;
+    }
+    /**
+     * <pre>
+     * name names the session as it starts.
+     * </pre>
+     *
+     * <code>string name = 13 [json_name = "name"];</code>
+     * @param value The bytes for name to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNameBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setNameBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.OpenSession)
   }
   @java.lang.Override
@@ -1559,10 +2020,14 @@ java.lang.String defaultValue) {
             "rows_",
             "worktree_",
             "devices_",
+            "prompt_",
+            "parentSessionId_",
+            "name_",
           };
           java.lang.String info =
-              "\u0000\n\u0000\u0001\u0001\n\n\u0001\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
-              "\u0004\u0208\u0005\u021a\u00062\u0007\u000b\b\u000b\t\u1009\u0000\n\u021a";
+              "\u0000\r\u0000\u0001\u0001\r\r\u0001\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0004\u0208\u0005\u021a\u00062\u0007\u000b\b\u000b\t\u1009\u0000\n\u021a\u000b\u0208" +
+              "\f\u0208\r\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

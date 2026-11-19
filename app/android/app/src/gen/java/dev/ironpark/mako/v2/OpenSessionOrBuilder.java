@@ -218,4 +218,74 @@ java.lang.String defaultValue);
    */
   com.google.protobuf.ByteString
       getDevicesBytes(int index);
+
+  /**
+   * <pre>
+   * prompt is the agent's first prompt, given as it starts, as an agent
+   * given a task by spawn_agent gets it; an agent that takes none at
+   * start is not started.
+   * </pre>
+   *
+   * <code>string prompt = 11 [json_name = "prompt"];</code>
+   * @return The prompt.
+   */
+  java.lang.String getPrompt();
+  /**
+   * <pre>
+   * prompt is the agent's first prompt, given as it starts, as an agent
+   * given a task by spawn_agent gets it; an agent that takes none at
+   * start is not started.
+   * </pre>
+   *
+   * <code>string prompt = 11 [json_name = "prompt"];</code>
+   * @return The bytes for prompt.
+   */
+  com.google.protobuf.ByteString
+      getPromptBytes();
+
+  /**
+   * <pre>
+   * parent_session_id starts the session as an agent the one it names
+   * spawned, on this node, as spawn_agent does: told its parent, given
+   * Mako's tools to report to it, and shown with it. A front-end starts a
+   * team's agents so.
+   * </pre>
+   *
+   * <code>string parent_session_id = 12 [json_name = "parentSessionId"];</code>
+   * @return The parentSessionId.
+   */
+  java.lang.String getParentSessionId();
+  /**
+   * <pre>
+   * parent_session_id starts the session as an agent the one it names
+   * spawned, on this node, as spawn_agent does: told its parent, given
+   * Mako's tools to report to it, and shown with it. A front-end starts a
+   * team's agents so.
+   * </pre>
+   *
+   * <code>string parent_session_id = 12 [json_name = "parentSessionId"];</code>
+   * @return The bytes for parentSessionId.
+   */
+  com.google.protobuf.ByteString
+      getParentSessionIdBytes();
+
+  /**
+   * <pre>
+   * name names the session as it starts.
+   * </pre>
+   *
+   * <code>string name = 13 [json_name = "name"];</code>
+   * @return The name.
+   */
+  java.lang.String getName();
+  /**
+   * <pre>
+   * name names the session as it starts.
+   * </pre>
+   *
+   * <code>string name = 13 [json_name = "name"];</code>
+   * @return The bytes for name.
+   */
+  com.google.protobuf.ByteString
+      getNameBytes();
 }
