@@ -30,10 +30,10 @@ func gitPanel(m *model) ggui.Widget {
 	stamp := ggui.Derived(func() string {
 		return repoStamp(m.Sessions.Get(), root.Get(), m.git.View.Get().Changes.GetRoot())
 	})
-	// The changes are polled only of a node that does not tell of them:
-	// one that does tells of a change in the work tree, and in its index,
-	// as it comes.
-	rest := func(r fileRoot) bool { return m.fileWatched(r.Node) }
+	// The changes are polled only of a tree whose node does not tell of
+	// them: one that does tells of a change in the work tree, and in its
+	// index, as it comes.
+	rest := m.treeWatched
 	pollWhileShown(m, root, gitTab, gitRefresh, m.loadGit, rest, stamp)
 	pollWhileShown(m, root, gitTab, historyRefresh, m.loadHistory, nil, stamp)
 	ggui.Effect(func() ggui.Cleanup {

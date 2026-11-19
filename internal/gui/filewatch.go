@@ -28,6 +28,10 @@ type nodeWatch struct {
 	want   atomic.Pointer[protocol.WatchFiles] // what to follow, the latest
 	more   chan *protocol.WatchFiles           // what changed of it, for the stream
 	live   atomic.Bool                         // the node watches now
+	// unwatched are the work trees the node said it cannot follow, which
+	// the window polls; UI goroutine only. Asked again, they are tried
+	// again.
+	unwatched map[string]bool
 }
 
 // fileWatchRetry is how long a stream that ended waits to be opened again.
@@ -109,6 +113,7 @@ func (m *model) watchFiles(want map[string]*protocol.WatchFiles) {
 			continue
 		}
 		w.want.Store(r)
+		w.unwatched = nil
 		// Only the latest waits to be sent.
 		select {
 		case <-w.more:
@@ -130,9 +135,13 @@ func (m *model) runFileWatch(ctx context.Context, node string, w *nodeWatch) {
 			}
 			_ = c.WatchFiles(ctx, w.want.Load(), w.more, func(ch *protocol.FilesChanged) {
 				if !w.live.Swap(true) {
-					if opened {
-						m.post(func() { m.rereadNode(node) })
-					}
+					again := opened
+					m.post(func() {
+						w.unwatched = nil
+						if again {
+							m.rereadNode(node)
+						}
+					})
 					opened = true
 					return
 				}
@@ -152,6 +161,13 @@ func (m *model) runFileWatch(ctx context.Context, node string, w *nodeWatch) {
 func (m *model) fileWatched(node string) bool {
 	w := m.files.watches[node]
 	return w != nil && w.live.Load()
+}
+
+// treeWatched reports whether root's node follows the changes in its work
+// tree now: it watches, and has not said it cannot follow this one.
+func (m *model) treeWatched(root fileRoot) bool {
+	w := m.files.watches[root.Node]
+	return w != nil && w.live.Load() && !w.unwatched[root.Path]
 }
 
 // watchTree has root's node follow the changes in its work tree while a
@@ -174,6 +190,14 @@ func (m *model) watchTree(root fileRoot) ggui.Cleanup {
 // filesChanged reads again what node says changed: the folders listed
 // that it changed in, the files open, the work tree shown.
 func (m *model) filesChanged(node string, ch *protocol.FilesChanged) {
+	if w := m.files.watches[node]; w != nil && len(ch.GetUnwatched()) > 0 {
+		if w.unwatched == nil {
+			w.unwatched = map[string]bool{}
+		}
+		for _, t := range ch.GetUnwatched() {
+			w.unwatched[t] = true
+		}
+	}
 	if paths := ch.GetPaths(); len(paths) > 0 {
 		dirs := ggui.Peek(m.files.Dirs)
 		reread := map[string]bool{}

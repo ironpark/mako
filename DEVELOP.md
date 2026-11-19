@@ -382,11 +382,21 @@ with `watch_files`, the folders it lists, in the Files tab and the file
 browsers, the files open in its editor and preview, and the work tree the
 Git tab shows (`internal/gui/filewatch.go`); the node watches them with
 ggui's `pkg/fswatch` (`internal/daemon/watchfiles.go`), and the window
-reads again what it is told changed. A work tree is followed with its git
-directory's `index` and `HEAD`, as a file staged changes nothing in the
-tree; the window's own `git status` runs with `--no-optional-locks`, which
-never rewrites the index, so following it cannot feed itself. A node older
-than revision 37 is polled as before.
+reads again what it is told changed. The folders and files are stamped
+and stated by fswatch's `Watcher`, a few of them at a time. A work tree is
+not: it may hold millions of files, as a home folder kept in git does,
+and a `Watcher` keeps every path and stats each every 2 seconds, which
+once held a gigabyte and kept the collector busy. A work tree is followed
+by fswatch's `Tree`, which keeps no path and is woken by the system's
+notifications alone, whole from the top on macOS and Windows, a folder at
+a time on Linux up to a bound; `git status` says what changed. A folder
+outside a work tree is not followed, having no status, and a tree the
+node cannot follow, past Linux's bound or without notifications, it names
+in `FilesChanged.unwatched`, which the window polls. A work tree is also
+followed by its git directory's `index` and `HEAD`, as a file staged
+changes nothing in the tree; the window's own `git status` runs with
+`--no-optional-locks`, which never rewrites the index, so following it
+cannot feed itself. A node older than revision 37 is polled as before.
 
 Its settings are kept in `gui.json` beside `config.json`. The window is
 drawn from a window layout document (`internal/layoutdoc`), the

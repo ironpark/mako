@@ -21,7 +21,7 @@ func TestWatchingFiles(t *testing.T) {
 	letIn(t, a, b)
 	waitFor(t, "the nodes linked", func() bool { _, err := a.node(b.cfg.NodeID); return err == nil })
 	for _, node := range []string{"", b.cfg.NodeID} {
-		dir, tree := t.TempDir(), t.TempDir()
+		dir, tree := t.TempDir(), gitTree(t)
 		if err := os.MkdirAll(filepath.Join(tree, "src"), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -109,5 +109,38 @@ func TestStagingChangesTheTree(t *testing.T) {
 		case <-ctx.Done():
 			t.Fatal("staging told of no change")
 		}
+	}
+}
+
+// gitTree is a new git work tree, or the test is skipped without git.
+func gitTree(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	tree := t.TempDir()
+	if out, err := exec.Command("git", "-C", tree, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	return tree
+}
+
+// A folder outside a work tree has no status to read again: it is not
+// followed, whatever is written in it, and not said to be unwatched.
+func TestAFolderOutsideAWorkTreeIsNotFollowed(t *testing.T) {
+	d := meshDaemon(t, "watch-plain")
+	plain := t.TempDir()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	changes := make(chan *protocol.FilesChanged, 16)
+	go dialDaemon(t, d).WatchFiles(ctx, &protocol.WatchFiles{Trees: []string{plain}}, nil, func(c *protocol.FilesChanged) { changes <- c })
+	<-changes // it watches
+	if err := os.WriteFile(filepath.Join(plain, "x"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case c := <-changes:
+		t.Fatalf("told of %v", c)
+	case <-time.After(2 * time.Second):
 	}
 }

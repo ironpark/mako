@@ -73,3 +73,26 @@ func TestAListedFolderFollowsItsNode(t *testing.T) {
 		return slices.ContainsFunc(ggui.Peek(m.files.Dirs)[key].Entries, func(e *protocol.DirEntry) bool { return e.GetName() == "made.txt" })
 	})
 }
+
+// A work tree its node cannot follow is polled again; asking the node
+// anew tries it again.
+func TestAnUnwatchedTreeIsPolled(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	w := &nodeWatch{cancel: func() {}, more: make(chan *protocol.WatchFiles, 1)}
+	w.want.Store(&protocol.WatchFiles{Trees: []string{"/w"}})
+	w.live.Store(true)
+	m.files.watches["n"] = w
+	root := fileRoot{Node: "n", Path: "/w"}
+	if !m.treeWatched(root) {
+		t.Fatal("a tree followed is polled")
+	}
+	m.filesChanged("n", &protocol.FilesChanged{Unwatched: []string{"/w"}})
+	if m.treeWatched(root) {
+		t.Fatal("a tree its node cannot follow is not polled")
+	}
+	m.watchFiles(map[string]*protocol.WatchFiles{"n": {Trees: []string{"/w", "/v"}}})
+	if !m.treeWatched(root) {
+		t.Fatal("asked anew, the tree is not tried again")
+	}
+}

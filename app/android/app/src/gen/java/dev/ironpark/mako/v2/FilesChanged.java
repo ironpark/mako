@@ -21,6 +21,7 @@ public  final class FilesChanged extends
   private FilesChanged() {
     paths_ = emptyProtobufList();
     trees_ = emptyProtobufList();
+    unwatched_ = emptyProtobufList();
   }
   public static final int PATHS_FIELD_NUMBER = 1;
   private com.google.protobuf.Internal.ProtobufList<java.lang.String> paths_;
@@ -287,6 +288,171 @@ public  final class FilesChanged extends
     checkByteStringIsUtf8(value);
     ensureTreesIsMutable();
     trees_.add(value.toStringUtf8());
+  }
+
+  public static final int UNWATCHED_FIELD_NUMBER = 3;
+  private com.google.protobuf.Internal.ProtobufList<java.lang.String> unwatched_;
+  /**
+   * <pre>
+   * unwatched are those of WatchFiles.trees the node cannot follow, as
+   * when the system's notifications cannot, or for more folders than it
+   * follows: the front-end looks for their changes itself, until a later
+   * WatchFiles names them again. A tree outside a git work tree is not
+   * followed, and not named here: it has no changes to read.
+   * </pre>
+   *
+   * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+   * @return A list containing the unwatched.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.String> getUnwatchedList() {
+    return unwatched_;
+  }
+  /**
+   * <pre>
+   * unwatched are those of WatchFiles.trees the node cannot follow, as
+   * when the system's notifications cannot, or for more folders than it
+   * follows: the front-end looks for their changes itself, until a later
+   * WatchFiles names them again. A tree outside a git work tree is not
+   * followed, and not named here: it has no changes to read.
+   * </pre>
+   *
+   * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+   * @return The count of unwatched.
+   */
+  @java.lang.Override
+  public int getUnwatchedCount() {
+    return unwatched_.size();
+  }
+  /**
+   * <pre>
+   * unwatched are those of WatchFiles.trees the node cannot follow, as
+   * when the system's notifications cannot, or for more folders than it
+   * follows: the front-end looks for their changes itself, until a later
+   * WatchFiles names them again. A tree outside a git work tree is not
+   * followed, and not named here: it has no changes to read.
+   * </pre>
+   *
+   * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+   * @param index The index of the element to return.
+   * @return The unwatched at the given index.
+   */
+  @java.lang.Override
+  public java.lang.String getUnwatched(int index) {
+    return unwatched_.get(index);
+  }
+  /**
+   * <pre>
+   * unwatched are those of WatchFiles.trees the node cannot follow, as
+   * when the system's notifications cannot, or for more folders than it
+   * follows: the front-end looks for their changes itself, until a later
+   * WatchFiles names them again. A tree outside a git work tree is not
+   * followed, and not named here: it has no changes to read.
+   * </pre>
+   *
+   * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+   * @param index The index of the value to return.
+   * @return The bytes of the unwatched at the given index.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getUnwatchedBytes(int index) {
+    return com.google.protobuf.ByteString.copyFromUtf8(
+        unwatched_.get(index));
+  }
+  private void ensureUnwatchedIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<java.lang.String> tmp =
+        unwatched_;  if (!tmp.isModifiable()) {
+      unwatched_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+  /**
+   * <pre>
+   * unwatched are those of WatchFiles.trees the node cannot follow, as
+   * when the system's notifications cannot, or for more folders than it
+   * follows: the front-end looks for their changes itself, until a later
+   * WatchFiles names them again. A tree outside a git work tree is not
+   * followed, and not named here: it has no changes to read.
+   * </pre>
+   *
+   * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+   * @param index The index to set the value at.
+   * @param value The unwatched to set.
+   */
+  private void setUnwatched(
+      int index, java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureUnwatchedIsMutable();
+    unwatched_.set(index, value);
+  }
+  /**
+   * <pre>
+   * unwatched are those of WatchFiles.trees the node cannot follow, as
+   * when the system's notifications cannot, or for more folders than it
+   * follows: the front-end looks for their changes itself, until a later
+   * WatchFiles names them again. A tree outside a git work tree is not
+   * followed, and not named here: it has no changes to read.
+   * </pre>
+   *
+   * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+   * @param value The unwatched to add.
+   */
+  private void addUnwatched(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureUnwatchedIsMutable();
+    unwatched_.add(value);
+  }
+  /**
+   * <pre>
+   * unwatched are those of WatchFiles.trees the node cannot follow, as
+   * when the system's notifications cannot, or for more folders than it
+   * follows: the front-end looks for their changes itself, until a later
+   * WatchFiles names them again. A tree outside a git work tree is not
+   * followed, and not named here: it has no changes to read.
+   * </pre>
+   *
+   * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+   * @param values The unwatched to add.
+   */
+  private void addAllUnwatched(
+      java.lang.Iterable<java.lang.String> values) {
+    ensureUnwatchedIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, unwatched_);
+  }
+  /**
+   * <pre>
+   * unwatched are those of WatchFiles.trees the node cannot follow, as
+   * when the system's notifications cannot, or for more folders than it
+   * follows: the front-end looks for their changes itself, until a later
+   * WatchFiles names them again. A tree outside a git work tree is not
+   * followed, and not named here: it has no changes to read.
+   * </pre>
+   *
+   * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+   */
+  private void clearUnwatched() {
+    unwatched_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * unwatched are those of WatchFiles.trees the node cannot follow, as
+   * when the system's notifications cannot, or for more folders than it
+   * follows: the front-end looks for their changes itself, until a later
+   * WatchFiles names them again. A tree outside a git work tree is not
+   * followed, and not named here: it has no changes to read.
+   * </pre>
+   *
+   * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+   * @param value The bytes of the unwatched to add.
+   */
+  private void addUnwatchedBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    ensureUnwatchedIsMutable();
+    unwatched_.add(value.toStringUtf8());
   }
 
   public static dev.ironpark.mako.v2.FilesChanged parseFrom(
@@ -655,6 +821,170 @@ public  final class FilesChanged extends
       return this;
     }
 
+    /**
+     * <pre>
+     * unwatched are those of WatchFiles.trees the node cannot follow, as
+     * when the system's notifications cannot, or for more folders than it
+     * follows: the front-end looks for their changes itself, until a later
+     * WatchFiles names them again. A tree outside a git work tree is not
+     * followed, and not named here: it has no changes to read.
+     * </pre>
+     *
+     * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+     * @return A list containing the unwatched.
+     */
+    @java.lang.Override
+    public java.util.List<java.lang.String>
+        getUnwatchedList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getUnwatchedList());
+    }
+    /**
+     * <pre>
+     * unwatched are those of WatchFiles.trees the node cannot follow, as
+     * when the system's notifications cannot, or for more folders than it
+     * follows: the front-end looks for their changes itself, until a later
+     * WatchFiles names them again. A tree outside a git work tree is not
+     * followed, and not named here: it has no changes to read.
+     * </pre>
+     *
+     * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+     * @return The count of unwatched.
+     */
+    @java.lang.Override
+    public int getUnwatchedCount() {
+      return instance.getUnwatchedCount();
+    }
+    /**
+     * <pre>
+     * unwatched are those of WatchFiles.trees the node cannot follow, as
+     * when the system's notifications cannot, or for more folders than it
+     * follows: the front-end looks for their changes itself, until a later
+     * WatchFiles names them again. A tree outside a git work tree is not
+     * followed, and not named here: it has no changes to read.
+     * </pre>
+     *
+     * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+     * @param index The index of the element to return.
+     * @return The unwatched at the given index.
+     */
+    @java.lang.Override
+    public java.lang.String getUnwatched(int index) {
+      return instance.getUnwatched(index);
+    }
+    /**
+     * <pre>
+     * unwatched are those of WatchFiles.trees the node cannot follow, as
+     * when the system's notifications cannot, or for more folders than it
+     * follows: the front-end looks for their changes itself, until a later
+     * WatchFiles names them again. A tree outside a git work tree is not
+     * followed, and not named here: it has no changes to read.
+     * </pre>
+     *
+     * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the unwatched at the given index.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getUnwatchedBytes(int index) {
+      return instance.getUnwatchedBytes(index);
+    }
+    /**
+     * <pre>
+     * unwatched are those of WatchFiles.trees the node cannot follow, as
+     * when the system's notifications cannot, or for more folders than it
+     * follows: the front-end looks for their changes itself, until a later
+     * WatchFiles names them again. A tree outside a git work tree is not
+     * followed, and not named here: it has no changes to read.
+     * </pre>
+     *
+     * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+     * @param index The index to set the value at.
+     * @param value The unwatched to set.
+     * @return This builder for chaining.
+     */
+    public Builder setUnwatched(
+        int index, java.lang.String value) {
+      copyOnWrite();
+      instance.setUnwatched(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * unwatched are those of WatchFiles.trees the node cannot follow, as
+     * when the system's notifications cannot, or for more folders than it
+     * follows: the front-end looks for their changes itself, until a later
+     * WatchFiles names them again. A tree outside a git work tree is not
+     * followed, and not named here: it has no changes to read.
+     * </pre>
+     *
+     * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+     * @param value The unwatched to add.
+     * @return This builder for chaining.
+     */
+    public Builder addUnwatched(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.addUnwatched(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * unwatched are those of WatchFiles.trees the node cannot follow, as
+     * when the system's notifications cannot, or for more folders than it
+     * follows: the front-end looks for their changes itself, until a later
+     * WatchFiles names them again. A tree outside a git work tree is not
+     * followed, and not named here: it has no changes to read.
+     * </pre>
+     *
+     * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+     * @param values The unwatched to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllUnwatched(
+        java.lang.Iterable<java.lang.String> values) {
+      copyOnWrite();
+      instance.addAllUnwatched(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * unwatched are those of WatchFiles.trees the node cannot follow, as
+     * when the system's notifications cannot, or for more folders than it
+     * follows: the front-end looks for their changes itself, until a later
+     * WatchFiles names them again. A tree outside a git work tree is not
+     * followed, and not named here: it has no changes to read.
+     * </pre>
+     *
+     * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearUnwatched() {
+      copyOnWrite();
+      instance.clearUnwatched();
+      return this;
+    }
+    /**
+     * <pre>
+     * unwatched are those of WatchFiles.trees the node cannot follow, as
+     * when the system's notifications cannot, or for more folders than it
+     * follows: the front-end looks for their changes itself, until a later
+     * WatchFiles names them again. A tree outside a git work tree is not
+     * followed, and not named here: it has no changes to read.
+     * </pre>
+     *
+     * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+     * @param value The bytes of the unwatched to add.
+     * @return This builder for chaining.
+     */
+    public Builder addUnwatchedBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.addUnwatchedBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.FilesChanged)
   }
   @java.lang.Override
@@ -673,10 +1003,11 @@ public  final class FilesChanged extends
           java.lang.Object[] objects = new java.lang.Object[] {
             "paths_",
             "trees_",
+            "unwatched_",
           };
           java.lang.String info =
-              "\u0000\u0002\u0000\u0000\u0001\u0002\u0002\u0000\u0002\u0000\u0001\u021a\u0002\u021a" +
-              "";
+              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0003\u0000\u0001\u021a\u0002\u021a" +
+              "\u0003\u021a";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -95,4 +95,61 @@ public interface FilesChangedOrBuilder extends
    */
   com.google.protobuf.ByteString
       getTreesBytes(int index);
+
+  /**
+   * <pre>
+   * unwatched are those of WatchFiles.trees the node cannot follow, as
+   * when the system's notifications cannot, or for more folders than it
+   * follows: the front-end looks for their changes itself, until a later
+   * WatchFiles names them again. A tree outside a git work tree is not
+   * followed, and not named here: it has no changes to read.
+   * </pre>
+   *
+   * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+   * @return A list containing the unwatched.
+   */
+  java.util.List<java.lang.String>
+      getUnwatchedList();
+  /**
+   * <pre>
+   * unwatched are those of WatchFiles.trees the node cannot follow, as
+   * when the system's notifications cannot, or for more folders than it
+   * follows: the front-end looks for their changes itself, until a later
+   * WatchFiles names them again. A tree outside a git work tree is not
+   * followed, and not named here: it has no changes to read.
+   * </pre>
+   *
+   * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+   * @return The count of unwatched.
+   */
+  int getUnwatchedCount();
+  /**
+   * <pre>
+   * unwatched are those of WatchFiles.trees the node cannot follow, as
+   * when the system's notifications cannot, or for more folders than it
+   * follows: the front-end looks for their changes itself, until a later
+   * WatchFiles names them again. A tree outside a git work tree is not
+   * followed, and not named here: it has no changes to read.
+   * </pre>
+   *
+   * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+   * @param index The index of the element to return.
+   * @return The unwatched at the given index.
+   */
+  java.lang.String getUnwatched(int index);
+  /**
+   * <pre>
+   * unwatched are those of WatchFiles.trees the node cannot follow, as
+   * when the system's notifications cannot, or for more folders than it
+   * follows: the front-end looks for their changes itself, until a later
+   * WatchFiles names them again. A tree outside a git work tree is not
+   * followed, and not named here: it has no changes to read.
+   * </pre>
+   *
+   * <code>repeated string unwatched = 3 [json_name = "unwatched"];</code>
+   * @param index The index of the element to return.
+   * @return The unwatched at the given index.
+   */
+  com.google.protobuf.ByteString
+      getUnwatchedBytes(int index);
 }

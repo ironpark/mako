@@ -215,9 +215,10 @@ public  final class WatchFiles extends
   private com.google.protobuf.Internal.ProtobufList<java.lang.String> trees_;
   /**
    * <pre>
-   * trees are folders followed with all below them, but for what git
-   * ignores, version control's own folders and editors' temporary files:
-   * a work tree, for what git status would say.
+   * trees are git work trees, followed with all below them, but for what
+   * git ignores, version control's own folders and editors' temporary
+   * files, for what git status would say: as the system tells of
+   * changes, with nothing kept of each file.
    * </pre>
    *
    * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -229,9 +230,10 @@ public  final class WatchFiles extends
   }
   /**
    * <pre>
-   * trees are folders followed with all below them, but for what git
-   * ignores, version control's own folders and editors' temporary files:
-   * a work tree, for what git status would say.
+   * trees are git work trees, followed with all below them, but for what
+   * git ignores, version control's own folders and editors' temporary
+   * files, for what git status would say: as the system tells of
+   * changes, with nothing kept of each file.
    * </pre>
    *
    * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -243,9 +245,10 @@ public  final class WatchFiles extends
   }
   /**
    * <pre>
-   * trees are folders followed with all below them, but for what git
-   * ignores, version control's own folders and editors' temporary files:
-   * a work tree, for what git status would say.
+   * trees are git work trees, followed with all below them, but for what
+   * git ignores, version control's own folders and editors' temporary
+   * files, for what git status would say: as the system tells of
+   * changes, with nothing kept of each file.
    * </pre>
    *
    * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -258,9 +261,10 @@ public  final class WatchFiles extends
   }
   /**
    * <pre>
-   * trees are folders followed with all below them, but for what git
-   * ignores, version control's own folders and editors' temporary files:
-   * a work tree, for what git status would say.
+   * trees are git work trees, followed with all below them, but for what
+   * git ignores, version control's own folders and editors' temporary
+   * files, for what git status would say: as the system tells of
+   * changes, with nothing kept of each file.
    * </pre>
    *
    * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -282,9 +286,10 @@ public  final class WatchFiles extends
   }
   /**
    * <pre>
-   * trees are folders followed with all below them, but for what git
-   * ignores, version control's own folders and editors' temporary files:
-   * a work tree, for what git status would say.
+   * trees are git work trees, followed with all below them, but for what
+   * git ignores, version control's own folders and editors' temporary
+   * files, for what git status would say: as the system tells of
+   * changes, with nothing kept of each file.
    * </pre>
    *
    * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -299,9 +304,10 @@ public  final class WatchFiles extends
   }
   /**
    * <pre>
-   * trees are folders followed with all below them, but for what git
-   * ignores, version control's own folders and editors' temporary files:
-   * a work tree, for what git status would say.
+   * trees are git work trees, followed with all below them, but for what
+   * git ignores, version control's own folders and editors' temporary
+   * files, for what git status would say: as the system tells of
+   * changes, with nothing kept of each file.
    * </pre>
    *
    * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -315,9 +321,10 @@ public  final class WatchFiles extends
   }
   /**
    * <pre>
-   * trees are folders followed with all below them, but for what git
-   * ignores, version control's own folders and editors' temporary files:
-   * a work tree, for what git status would say.
+   * trees are git work trees, followed with all below them, but for what
+   * git ignores, version control's own folders and editors' temporary
+   * files, for what git status would say: as the system tells of
+   * changes, with nothing kept of each file.
    * </pre>
    *
    * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -331,9 +338,10 @@ public  final class WatchFiles extends
   }
   /**
    * <pre>
-   * trees are folders followed with all below them, but for what git
-   * ignores, version control's own folders and editors' temporary files:
-   * a work tree, for what git status would say.
+   * trees are git work trees, followed with all below them, but for what
+   * git ignores, version control's own folders and editors' temporary
+   * files, for what git status would say: as the system tells of
+   * changes, with nothing kept of each file.
    * </pre>
    *
    * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -343,9 +351,10 @@ public  final class WatchFiles extends
   }
   /**
    * <pre>
-   * trees are folders followed with all below them, but for what git
-   * ignores, version control's own folders and editors' temporary files:
-   * a work tree, for what git status would say.
+   * trees are git work trees, followed with all below them, but for what
+   * git ignores, version control's own folders and editors' temporary
+   * files, for what git status would say: as the system tells of
+   * changes, with nothing kept of each file.
    * </pre>
    *
    * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -650,9 +659,10 @@ public  final class WatchFiles extends
 
     /**
      * <pre>
-     * trees are folders followed with all below them, but for what git
-     * ignores, version control's own folders and editors' temporary files:
-     * a work tree, for what git status would say.
+     * trees are git work trees, followed with all below them, but for what
+     * git ignores, version control's own folders and editors' temporary
+     * files, for what git status would say: as the system tells of
+     * changes, with nothing kept of each file.
      * </pre>
      *
      * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -666,9 +676,10 @@ public  final class WatchFiles extends
     }
     /**
      * <pre>
-     * trees are folders followed with all below them, but for what git
-     * ignores, version control's own folders and editors' temporary files:
-     * a work tree, for what git status would say.
+     * trees are git work trees, followed with all below them, but for what
+     * git ignores, version control's own folders and editors' temporary
+     * files, for what git status would say: as the system tells of
+     * changes, with nothing kept of each file.
      * </pre>
      *
      * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -680,9 +691,10 @@ public  final class WatchFiles extends
     }
     /**
      * <pre>
-     * trees are folders followed with all below them, but for what git
-     * ignores, version control's own folders and editors' temporary files:
-     * a work tree, for what git status would say.
+     * trees are git work trees, followed with all below them, but for what
+     * git ignores, version control's own folders and editors' temporary
+     * files, for what git status would say: as the system tells of
+     * changes, with nothing kept of each file.
      * </pre>
      *
      * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -695,9 +707,10 @@ public  final class WatchFiles extends
     }
     /**
      * <pre>
-     * trees are folders followed with all below them, but for what git
-     * ignores, version control's own folders and editors' temporary files:
-     * a work tree, for what git status would say.
+     * trees are git work trees, followed with all below them, but for what
+     * git ignores, version control's own folders and editors' temporary
+     * files, for what git status would say: as the system tells of
+     * changes, with nothing kept of each file.
      * </pre>
      *
      * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -711,9 +724,10 @@ public  final class WatchFiles extends
     }
     /**
      * <pre>
-     * trees are folders followed with all below them, but for what git
-     * ignores, version control's own folders and editors' temporary files:
-     * a work tree, for what git status would say.
+     * trees are git work trees, followed with all below them, but for what
+     * git ignores, version control's own folders and editors' temporary
+     * files, for what git status would say: as the system tells of
+     * changes, with nothing kept of each file.
      * </pre>
      *
      * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -729,9 +743,10 @@ public  final class WatchFiles extends
     }
     /**
      * <pre>
-     * trees are folders followed with all below them, but for what git
-     * ignores, version control's own folders and editors' temporary files:
-     * a work tree, for what git status would say.
+     * trees are git work trees, followed with all below them, but for what
+     * git ignores, version control's own folders and editors' temporary
+     * files, for what git status would say: as the system tells of
+     * changes, with nothing kept of each file.
      * </pre>
      *
      * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -746,9 +761,10 @@ public  final class WatchFiles extends
     }
     /**
      * <pre>
-     * trees are folders followed with all below them, but for what git
-     * ignores, version control's own folders and editors' temporary files:
-     * a work tree, for what git status would say.
+     * trees are git work trees, followed with all below them, but for what
+     * git ignores, version control's own folders and editors' temporary
+     * files, for what git status would say: as the system tells of
+     * changes, with nothing kept of each file.
      * </pre>
      *
      * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -763,9 +779,10 @@ public  final class WatchFiles extends
     }
     /**
      * <pre>
-     * trees are folders followed with all below them, but for what git
-     * ignores, version control's own folders and editors' temporary files:
-     * a work tree, for what git status would say.
+     * trees are git work trees, followed with all below them, but for what
+     * git ignores, version control's own folders and editors' temporary
+     * files, for what git status would say: as the system tells of
+     * changes, with nothing kept of each file.
      * </pre>
      *
      * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -778,9 +795,10 @@ public  final class WatchFiles extends
     }
     /**
      * <pre>
-     * trees are folders followed with all below them, but for what git
-     * ignores, version control's own folders and editors' temporary files:
-     * a work tree, for what git status would say.
+     * trees are git work trees, followed with all below them, but for what
+     * git ignores, version control's own folders and editors' temporary
+     * files, for what git status would say: as the system tells of
+     * changes, with nothing kept of each file.
      * </pre>
      *
      * <code>repeated string trees = 3 [json_name = "trees"];</code>

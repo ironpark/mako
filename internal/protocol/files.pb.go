@@ -85,9 +85,10 @@ type WatchFiles struct {
 	// paths are files and folders, absolute: a folder for its entries, added,
 	// written or removed, and not for those below them.
 	Paths []string `protobuf:"bytes,2,rep,name=paths,proto3" json:"paths,omitempty"`
-	// trees are folders followed with all below them, but for what git
-	// ignores, version control's own folders and editors' temporary files:
-	// a work tree, for what git status would say.
+	// trees are git work trees, followed with all below them, but for what
+	// git ignores, version control's own folders and editors' temporary
+	// files, for what git status would say: as the system tells of
+	// changes, with nothing kept of each file.
 	Trees         []string `protobuf:"bytes,3,rep,name=trees,proto3" json:"trees,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -151,7 +152,13 @@ type FilesChanged struct {
 	// folders: added, written or removed.
 	Paths []string `protobuf:"bytes,1,rep,name=paths,proto3" json:"paths,omitempty"`
 	// trees are those of WatchFiles.trees something below changed in.
-	Trees         []string `protobuf:"bytes,2,rep,name=trees,proto3" json:"trees,omitempty"`
+	Trees []string `protobuf:"bytes,2,rep,name=trees,proto3" json:"trees,omitempty"`
+	// unwatched are those of WatchFiles.trees the node cannot follow, as
+	// when the system's notifications cannot, or for more folders than it
+	// follows: the front-end looks for their changes itself, until a later
+	// WatchFiles names them again. A tree outside a git work tree is not
+	// followed, and not named here: it has no changes to read.
+	Unwatched     []string `protobuf:"bytes,3,rep,name=unwatched,proto3" json:"unwatched,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -196,6 +203,13 @@ func (x *FilesChanged) GetPaths() []string {
 func (x *FilesChanged) GetTrees() []string {
 	if x != nil {
 		return x.Trees
+	}
+	return nil
+}
+
+func (x *FilesChanged) GetUnwatched() []string {
+	if x != nil {
+		return x.Unwatched
 	}
 	return nil
 }
@@ -1106,10 +1120,11 @@ const file_mako_v2_files_proto_rawDesc = "" +
 	"WatchFiles\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x14\n" +
 	"\x05paths\x18\x02 \x03(\tR\x05paths\x12\x14\n" +
-	"\x05trees\x18\x03 \x03(\tR\x05trees\":\n" +
+	"\x05trees\x18\x03 \x03(\tR\x05trees\"X\n" +
 	"\fFilesChanged\x12\x14\n" +
 	"\x05paths\x18\x01 \x03(\tR\x05paths\x12\x14\n" +
-	"\x05trees\x18\x02 \x03(\tR\x05trees\"\xa9\x01\n" +
+	"\x05trees\x18\x02 \x03(\tR\x05trees\x12\x1c\n" +
+	"\tunwatched\x18\x03 \x03(\tR\tunwatched\"\xa9\x01\n" +
 	"\bDirEntry\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
 	"\x03dir\x18\x02 \x01(\bR\x03dir\x12\x12\n" +

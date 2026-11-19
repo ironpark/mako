@@ -69,9 +69,10 @@ public interface WatchFilesOrBuilder extends
 
   /**
    * <pre>
-   * trees are folders followed with all below them, but for what git
-   * ignores, version control's own folders and editors' temporary files:
-   * a work tree, for what git status would say.
+   * trees are git work trees, followed with all below them, but for what
+   * git ignores, version control's own folders and editors' temporary
+   * files, for what git status would say: as the system tells of
+   * changes, with nothing kept of each file.
    * </pre>
    *
    * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -81,9 +82,10 @@ public interface WatchFilesOrBuilder extends
       getTreesList();
   /**
    * <pre>
-   * trees are folders followed with all below them, but for what git
-   * ignores, version control's own folders and editors' temporary files:
-   * a work tree, for what git status would say.
+   * trees are git work trees, followed with all below them, but for what
+   * git ignores, version control's own folders and editors' temporary
+   * files, for what git status would say: as the system tells of
+   * changes, with nothing kept of each file.
    * </pre>
    *
    * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -92,9 +94,10 @@ public interface WatchFilesOrBuilder extends
   int getTreesCount();
   /**
    * <pre>
-   * trees are folders followed with all below them, but for what git
-   * ignores, version control's own folders and editors' temporary files:
-   * a work tree, for what git status would say.
+   * trees are git work trees, followed with all below them, but for what
+   * git ignores, version control's own folders and editors' temporary
+   * files, for what git status would say: as the system tells of
+   * changes, with nothing kept of each file.
    * </pre>
    *
    * <code>repeated string trees = 3 [json_name = "trees"];</code>
@@ -104,9 +107,10 @@ public interface WatchFilesOrBuilder extends
   java.lang.String getTrees(int index);
   /**
    * <pre>
-   * trees are folders followed with all below them, but for what git
-   * ignores, version control's own folders and editors' temporary files:
-   * a work tree, for what git status would say.
+   * trees are git work trees, followed with all below them, but for what
+   * git ignores, version control's own folders and editors' temporary
+   * files, for what git status would say: as the system tells of
+   * changes, with nothing kept of each file.
    * </pre>
    *
    * <code>repeated string trees = 3 [json_name = "trees"];</code>

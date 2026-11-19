@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ironpark/ggui/pkg/fswatch"
 
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/mcp"
-	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transport"
 )
@@ -44,22 +44,33 @@ func (d *Daemon) handleWatchFiles(ctx context.Context, stream *transport.Stream,
 	defer cancel()
 
 	files := fswatch.New(fswatch.Options{Logf: d.fswatchLog})
-	trees := fswatch.New(fswatch.Options{
-		Recursive: true,
-		Ignore:    fswatch.NewIgnore(fswatch.IgnoreConfig{Patterns: fswatch.DefaultPatterns, Git: true}).Match,
-		Logf:      d.fswatchLog,
+	// A tree is followed as the system tells of changes below it, with
+	// nothing kept of each file: what it costs does not grow with the
+	// tree, as a home folder followed as a work tree once had it hold
+	// millions of paths.
+	trees := fswatch.NewTree(fswatch.TreeOptions{
+		Ignore: fswatch.NewIgnore(fswatch.IgnoreConfig{Patterns: fswatch.DefaultPatterns, Git: true}).Match,
+		Settle: treeSettle,
 	})
+	changedFiles, changedTrees := make(chan fswatch.Batch), make(chan []string)
+	// treesEnded says the trees' Run returned; nil while it runs.
+	treesEnded := make(chan error, 1)
+	treesRunning := false
+	runTrees := func() {
+		treesRunning = true
+		go func() { treesEnded <- trees.Run(ctx, changedTrees) }()
+	}
 	var names watchNames
 	follow := func(r *protocol.WatchFiles) {
 		names = newWatchNames(r)
 		files.Set(slices.Concat(names.expand(r.GetPaths()), slices.Collect(maps.Keys(names.gitFiles))))
-		trees.Set(names.expand(r.GetTrees()))
+		trees.Set(names.trees)
+		if !treesRunning && len(names.trees) > 0 {
+			runTrees() // once more, as what is followed changed
+		}
 	}
 	follow(req)
-
-	changedFiles, changedTrees := make(chan fswatch.Batch), make(chan fswatch.Batch)
 	go files.Run(ctx, changedFiles)
-	go trees.Run(ctx, changedTrees)
 	// What the front-end sends after: what to follow now, until it hangs up.
 	next, gone := make(chan *protocol.WatchFiles), make(chan error, 1)
 	go func() {
@@ -89,8 +100,15 @@ func (d *Daemon) handleWatchFiles(ctx context.Context, stream *transport.Stream,
 		case b := <-changedFiles:
 			paths, trees := names.split(b.Paths())
 			out = &protocol.FilesChanged{Paths: names.shown(paths), Trees: trees}
-		case b := <-changedTrees:
-			out = &protocol.FilesChanged{Trees: names.treesOf(b.Paths())}
+		case changed := <-changedTrees:
+			out = &protocol.FilesChanged{Trees: names.shown(changed)}
+		case err := <-treesEnded:
+			treesRunning = false
+			if err == nil {
+				continue // ended with the stream
+			}
+			d.log.Info("watching files: work trees left to the window", "err", err)
+			out = &protocol.FilesChanged{Unwatched: names.shown(names.trees)}
 		case r := <-next:
 			follow(r)
 			continue
@@ -99,7 +117,7 @@ func (d *Daemon) handleWatchFiles(ctx context.Context, stream *transport.Stream,
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		if len(out.GetPaths()) == 0 && len(out.GetTrees()) == 0 {
+		if len(out.GetPaths()) == 0 && len(out.GetTrees()) == 0 && len(out.GetUnwatched()) == 0 {
 			continue
 		}
 		if err := stream.Send(protocol.TypeFilesChanged, env.GetId(), out); err != nil {
@@ -107,6 +125,12 @@ func (d *Daemon) handleWatchFiles(ctx context.Context, stream *transport.Stream,
 		}
 	}
 }
+
+// treeSettle is how long a tree's changes are gathered before they are
+// told: a build or a checkout writing thousands of files is told of once,
+// and a tree that never rests, as a home folder's caches, has its status
+// read at most a few times a second.
+const treeSettle = 300 * time.Millisecond
 
 // fswatchLog passes on what a watcher says that is the user's to know,
 // as running out of the system's watches.
@@ -130,13 +154,16 @@ func newWatchNames(r *protocol.WatchFiles) watchNames {
 			n.written[e] = p
 		}
 	}
+	// A tree outside a work tree has no status to read again.
 	for _, t := range r.GetTrees() {
 		tree := filepath.Clean(mcp.ExpandHome(t))
-		n.trees = append(n.trees, tree)
-		if gitDir := gitstat.GitDir(tree); gitDir != "" {
-			n.gitFiles[filepath.Join(gitDir, "index")] = t
-			n.gitFiles[filepath.Join(gitDir, "HEAD")] = t
+		gitDir := gitstat.GitDir(tree)
+		if gitDir == "" {
+			continue
 		}
+		n.trees = append(n.trees, tree)
+		n.gitFiles[filepath.Join(gitDir, "index")] = t
+		n.gitFiles[filepath.Join(gitDir, "HEAD")] = t
 	}
 	return n
 }
@@ -180,18 +207,6 @@ func (n watchNames) shown(paths []string) []string {
 				out[i] = written + filepath.ToSlash(rest)
 				break
 			}
-		}
-	}
-	return out
-}
-
-// treesOf is the trees paths are under, as the front-end wrote them,
-// each once.
-func (n watchNames) treesOf(paths []string) []string {
-	var out []string
-	for _, t := range n.trees {
-		if slices.ContainsFunc(paths, func(p string) bool { return pathscope.Within(p, t) }) {
-			out = append(out, n.shown([]string{t})[0])
 		}
 	}
 	return out

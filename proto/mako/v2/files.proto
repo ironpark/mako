@@ -21,9 +21,10 @@ message WatchFiles {
   // paths are files and folders, absolute: a folder for its entries, added,
   // written or removed, and not for those below them.
   repeated string paths = 2;
-  // trees are folders followed with all below them, but for what git
-  // ignores, version control's own folders and editors' temporary files:
-  // a work tree, for what git status would say.
+  // trees are git work trees, followed with all below them, but for what
+  // git ignores, version control's own folders and editors' temporary
+  // files, for what git status would say: as the system tells of
+  // changes, with nothing kept of each file.
   repeated string trees = 3;
 }
 
@@ -34,6 +35,12 @@ message FilesChanged {
   repeated string paths = 1;
   // trees are those of WatchFiles.trees something below changed in.
   repeated string trees = 2;
+  // unwatched are those of WatchFiles.trees the node cannot follow, as
+  // when the system's notifications cannot, or for more folders than it
+  // follows: the front-end looks for their changes itself, until a later
+  // WatchFiles names them again. A tree outside a git work tree is not
+  // followed, and not named here: it has no changes to read.
+  repeated string unwatched = 3;
 }
 
 // DirEntry is one entry of a directory.
