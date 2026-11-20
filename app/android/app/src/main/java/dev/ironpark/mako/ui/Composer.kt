@@ -5,41 +5,43 @@ import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.outlined.AttachFile
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalResources
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.ironpark.mako.Mesh
 import dev.ironpark.mako.R
 import dev.ironpark.mako.v2.Command
 import dev.ironpark.mako.v2.SessionInfo
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** A file on its way to the session's node, and how much of it has gone. */
 private data class Upload(val id: Long, val name: String, val size: Long, val sent: Long = 0)
@@ -105,55 +107,81 @@ internal fun Composer(
             }
         }
     }
+    val showAttachments = attached.isNotEmpty() || uploads.isNotEmpty()
+    val showCommands = text.startsWith('/') && !text.any { it.isWhitespace() }
+    val showInterrupt = session.working() && text.isBlank() && uploads.isEmpty()
+
     Surface(color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.navigationBarsPadding()) {
-            if (attached.isNotEmpty() || uploads.isNotEmpty()) Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom,
+            AnimatedVisibility(
+                visible = showAttachments,
+                enter = MakoMotion.cardEnter,
+                exit = MakoMotion.cardExit,
             ) {
-                for (a in attached) key(a.path) {
-                    val remove: () -> Unit = { set(withoutWord(editing.text, a.word)) }
-                    if (a.image) Box {
-                        RemoteThumbnail(mesh.daemon, session.nodeId, a.path, named = false, onOpen = { onOpen(a.path) })
-                        Surface(Modifier.align(Alignment.TopEnd).padding(3.dp).size(24.dp).clickable(onClick = remove),
-                            shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.9f)) {
-                            Icon(Icons.Filled.Close, stringResource(R.string.attach_remove), Modifier.padding(4.dp))
-                        }
-                    } else FileChip(baseName(a.path), onClick = { onOpen(a.path) }) {
-                        IconButton(onClick = remove, modifier = Modifier.size(28.dp)) {
-                            Icon(Icons.Filled.Close, stringResource(R.string.attach_remove), Modifier.size(16.dp))
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom,
+                ) {
+                    for (a in attached) key(a.path) {
+                        val remove: () -> Unit = { set(withoutWord(editing.text, a.word)) }
+                        if (a.image) Box {
+                            RemoteThumbnail(mesh.daemon, session.nodeId, a.path, named = false, onOpen = { onOpen(a.path) })
+                            Surface(Modifier.align(Alignment.TopEnd).padding(3.dp).size(24.dp).clickable(onClick = remove),
+                                shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.9f)) {
+                                Icon(Icons.Filled.Close, stringResource(R.string.attach_remove), Modifier.padding(4.dp))
+                            }
+                        } else FileChip(baseName(a.path), onClick = { onOpen(a.path) }) {
+                            IconButton(onClick = remove, modifier = Modifier.size(28.dp)) {
+                                Icon(Icons.Filled.Close, stringResource(R.string.attach_remove), Modifier.size(16.dp))
+                            }
                         }
                     }
-                }
-                for (u in uploads) key(u.id) {
-                    FileChip(u.name) {
-                        val progress = if (u.size > 0) (u.sent.toFloat() / u.size).coerceIn(0f, 1f) else null
-                        Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
-                            if (progress != null) CircularProgressIndicator(progress = { progress }, Modifier.size(16.dp), strokeWidth = 2.dp)
-                            else CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    for (u in uploads) key(u.id) {
+                        FileChip(u.name) {
+                            val progress = if (u.size > 0) (u.sent.toFloat() / u.size).coerceIn(0f, 1f) else null
+                            Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+                                if (progress != null) CircularProgressIndicator(progress = { progress }, Modifier.size(16.dp), strokeWidth = 2.dp)
+                                else CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                            }
                         }
                     }
                 }
             }
-            if (text.startsWith('/') && !text.any { it.isWhitespace() }) {
-                if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-                if (failed) TextButton(onClick = { attempt++ }, enabled = !loading) { Text(stringResource(R.string.commands_retry)) }
-                if (!loading && !failed && matches.isEmpty()) Text(stringResource(R.string.commands_empty),
-                    Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
-                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 200.dp)) {
-                    items(matches, key = { it.name }) { command ->
-                        ListItem(
-                            modifier = Modifier.clickable { set("/${command.name} ") },
-                            headlineContent = { Text("/${command.name}" + command.args.takeIf { it.isNotBlank() }?.let { " $it" }.orEmpty()) },
-                            supportingContent = { Text(dotted(command.description, command.source), maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                        )
+            AnimatedVisibility(
+                visible = showCommands,
+                enter = MakoMotion.cardEnter,
+                exit = MakoMotion.cardExit,
+            ) {
+                Column(Modifier.fillMaxWidth()) {
+                    HorizontalDivider(color = MakoColors.subtleDivider)
+                    if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    if (failed) TextButton(onClick = { attempt++ }, enabled = !loading) { Text(stringResource(R.string.commands_retry)) }
+                    if (!loading && !failed && matches.isEmpty()) Text(
+                        stringResource(R.string.commands_empty),
+                        Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 200.dp)) {
+                        items(matches, key = { it.name }) { command ->
+                            ListItem(
+                                modifier = Modifier.clickable { set("/${command.name} ") },
+                                headlineContent = { Text("/${command.name}" + command.args.takeIf { it.isNotBlank() }?.let { " $it" }.orEmpty()) },
+                                supportingContent = { Text(dotted(command.description, command.source), maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                            )
+                        }
                     }
                 }
             }
             Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // One pill holds the field and what it attaches, as messengers have it.
-                Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(26.dp), modifier = Modifier.weight(1f)) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = RoundedCornerShape(26.dp),
+                    border = MakoColors.cardBorderStroke,
+                    modifier = Modifier.weight(1f),
+                ) {
                     Row(verticalAlignment = Alignment.Bottom) {
                         IconButton(
                             onClick = { pick.launch("*/*") },
@@ -180,27 +208,44 @@ internal fun Composer(
                     }
                 }
                 // While the agent works and nothing is typed, the button stops it instead.
-                if (session.working() && text.isBlank() && uploads.isEmpty()) FilledTonalIconButton(
-                    onClick = onInterrupt,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                    ),
-                    modifier = Modifier.size(52.dp),
-                ) { Icon(Icons.Filled.Stop, stringResource(R.string.interrupt)) }
-                else FilledIconButton(enabled = text.isNotBlank() && !sending && uploads.isEmpty() && session.state == "running",
-                    modifier = Modifier.size(52.dp), onClick = {
-                    val submitted = text
-                    sending = true
-                    act {
-                        try {
-                            onSend(submitted)
-                            if (editing.text == submitted) set("")
-                        } finally { sending = false }
+                AnimatedContent(
+                    targetState = showInterrupt,
+                    transitionSpec = { MakoMotion.scaleFadeEnter togetherWith MakoMotion.scaleFadeExit },
+                    label = "composerAction",
+                ) { interrupt ->
+                    if (interrupt) {
+                        val stopInteraction = remember { MutableInteractionSource() }
+                        FilledTonalIconButton(
+                            onClick = onInterrupt,
+                            interactionSource = stopInteraction,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            ),
+                            modifier = Modifier.size(52.dp).pressScale(stopInteraction, pressedScale = 0.94f),
+                        ) { Icon(Icons.Filled.Stop, stringResource(R.string.interrupt)) }
+                    } else {
+                        val sendEnabled = text.isNotBlank() && !sending && uploads.isEmpty() && session.state == "running"
+                        val sendInteraction = remember { MutableInteractionSource() }
+                        FilledIconButton(
+                            enabled = sendEnabled,
+                            interactionSource = sendInteraction,
+                            modifier = Modifier.size(52.dp).pressScale(sendInteraction, pressedScale = 0.94f, enabled = sendEnabled),
+                            onClick = {
+                                val submitted = text
+                                sending = true
+                                act {
+                                    try {
+                                        onSend(submitted)
+                                        if (editing.text == submitted) set("")
+                                    } finally { sending = false }
+                                }
+                            },
+                        ) {
+                            if (sending) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                            else Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.send))
+                        }
                     }
-                }) {
-                    if (sending) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    else Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.send))
                 }
             }
         }

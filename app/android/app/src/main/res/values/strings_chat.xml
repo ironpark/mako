@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_thinking">Thinking…</string>
+    <string name="chat_sending">Sending…</string>
+    <string name="chat_compacting">Compacting conversation…</string>
+
+    <string name="usage_quota">Quota</string>
+    <string name="usage_left_pct">%1$d%% left</string>
+    <string name="usage_toggle_mode">Switch between used and remaining percentage</string>
+
+    <string name="sleep_session_menu">Sleep session</string>
+
+    <plurals name="tasks_running_count">
+        <item quantity="one">%1$d running task</item>
+        <item quantity="other">%1$d running tasks</item>
+    </plurals>
+    <plurals name="tasks_total_count">
+        <item quantity="one">%1$d background task</item>
+        <item quantity="other">%1$d background tasks</item>
+    </plurals>
+    <string name="tasks_expand">Show background tasks</string>
+    <string name="tasks_collapse">Hide background tasks</string>
+    <string name="task_running">Running</string>
+    <string name="task_finished">Finished</string>
+    <string name="task_failed">Failed</string>
+    <string name="task_killed">Killed</string>
+    <string name="task_stopped">Stopped</string>
+    <string name="task_exit_code">exit %1$d</string>
+</resources>

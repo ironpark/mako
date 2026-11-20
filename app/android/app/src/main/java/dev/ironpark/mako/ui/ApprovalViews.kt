@@ -1,6 +1,7 @@
 package dev.ironpark.mako.ui
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -19,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Terminal
@@ -42,6 +42,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -176,11 +177,17 @@ internal fun ApprovalCard(
     val a = s.approval
     val colors = MaterialTheme.colorScheme
     var why by rememberSaveable(a.id) { mutableStateOf("") }
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = MakoMotion.SnappySpring,
+        label = "approvalChevron",
+    )
     WaitCard(Icons.Outlined.Shield, stringResource(R.string.approval_title, a.tool), onTerminal = { onAnswer("terminal", "", "") }) {
         val more = a.input.isNotEmpty() || a.detail.lines().size > 4 || a.detail.length > 160
         if (a.detail.isNotEmpty() || more) Surface(
             color = colors.surfaceContainerHighest,
             shape = RoundedCornerShape(10.dp),
+            border = MakoColors.cardBorderStroke,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         ) {
             Column(
@@ -188,7 +195,7 @@ internal fun ApprovalCard(
                     role = Role.Button,
                     onClickLabel = stringResource(if (expanded) R.string.less else R.string.details),
                     onClick = onExpand,
-                ) else Modifier).animateContentSize().padding(10.dp),
+                ) else Modifier).animateContentSize(animationSpec = MakoMotion.GentleIntSizeSpring).padding(10.dp),
             ) {
                 Row(verticalAlignment = Alignment.Top) {
                     Text(
@@ -197,12 +204,12 @@ internal fun ApprovalCard(
                         modifier = Modifier.weight(1f),
                     )
                     if (more) Icon(
-                        if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, null,
-                        Modifier.size(18.dp), tint = colors.onSurfaceVariant,
+                        Icons.Filled.KeyboardArrowDown, null,
+                        Modifier.size(18.dp).rotate(chevronRotation), tint = colors.onSurfaceVariant,
                     )
                 }
                 if (expanded && a.input.isNotEmpty()) {
-                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MakoColors.subtleDivider)
                     ApprovalBody(a)
                 }
             }
@@ -213,13 +220,15 @@ internal fun ApprovalCard(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
         Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { onAnswer("deny", "", why.trim()) }, modifier = Modifier.weight(1f)) {
+            OutlinedButton(onClick = { onAnswer("deny", "", why.trim()) }, modifier = Modifier.weight(1f).pressScale()) {
                 Text(stringResource(R.string.deny))
             }
-            Button(onClick = { onAnswer("allow", "", "") }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.allow)) }
+            Button(onClick = { onAnswer("allow", "", "") }, modifier = Modifier.weight(1f).pressScale()) {
+                Text(stringResource(R.string.allow))
+            }
         }
         a.optionsList.forEach { o ->
-            OutlinedButton(onClick = { onAnswer("allow", o.id, "") }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+            OutlinedButton(onClick = { onAnswer("allow", o.id, "") }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp).pressScale()) {
                 Text(optionLabel(o), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -232,11 +241,10 @@ internal fun ApprovalCard(
  */
 @Composable
 internal fun PlanCard(a: Approval, onReview: () -> Unit, onTerminal: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
     WaitCard(Icons.Outlined.Checklist, stringResource(R.string.plan_ready), onTerminal = onTerminal) {
         if (a.detail.isNotEmpty()) Text(a.detail, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
-            Button(onClick = onReview) { Text(stringResource(R.string.review)) }
+            Button(onClick = onReview, modifier = Modifier.pressScale()) { Text(stringResource(R.string.review)) }
         }
     }
 }
@@ -251,22 +259,24 @@ internal fun PlanReview(a: Approval, onApprove: (option: String) -> Unit, onKeep
     var why by rememberSaveable(a.id) { mutableStateOf("") }
     Column(modifier) {
         Surface(
-            color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shape = RoundedCornerShape(12.dp),
+            border = MakoColors.cardBorderStroke,
             modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
         ) {
             MarkdownMessage(plan, Modifier.verticalScroll(rememberScrollState()).padding(12.dp))
         }
         a.optionsList.forEachIndexed { i, o ->
             val label = planOptionLabel(o.mode)
-            if (i == 0) Button(onClick = { onApprove(o.id) }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) { Text(label) }
-            else OutlinedButton(onClick = { onApprove(o.id) }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text(label) }
+            if (i == 0) Button(onClick = { onApprove(o.id) }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp).pressScale()) { Text(label) }
+            else OutlinedButton(onClick = { onApprove(o.id) }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp).pressScale()) { Text(label) }
         }
         OutlinedTextField(
             why, { why = it },
             placeholder = { Text(stringResource(R.string.plan_change_hint)) },
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp), maxLines = 4,
         )
-        OutlinedButton(onClick = { onKeepPlanning(why.trim()) }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        OutlinedButton(onClick = { onKeepPlanning(why.trim()) }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp).pressScale()) {
             Text(stringResource(R.string.keep_planning))
         }
     }
@@ -287,7 +297,7 @@ internal fun DialogCard(d: ScreenDialog, onTerminal: () -> Unit, onPick: (Int) -
             maxLines = 6, overflow = TextOverflow.Ellipsis,
         )
         d.optionsList.forEachIndexed { i, o ->
-            OutlinedButton(onClick = { onPick(i) }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+            OutlinedButton(onClick = { onPick(i) }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp).pressScale()) {
                 Text(if (i == d.selected) "❯ $o" else o, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -305,12 +315,15 @@ internal fun WaitCard(icon: ImageVector, title: String, onTerminal: () -> Unit, 
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerHigh),
         shape = RoundedCornerShape(20.dp),
+        border = MakoColors.cardBorderStroke,
     ) {
         Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, null, tint = StatusColors.Approval, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                PulsingStatusDot(StatusColors.Approval, active = true, size = 7.dp)
+                Spacer(Modifier.width(4.dp))
                 IconButton(onClick = onTerminal) {
                     Icon(Icons.Outlined.Terminal, stringResource(R.string.in_terminal), tint = colors.onSurfaceVariant)
                 }

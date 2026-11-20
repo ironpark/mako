@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_thinking">생각하는 중…</string>
+    <string name="chat_sending">전송 중…</string>
+    <string name="chat_compacting">대화를 압축하는 중…</string>
+
+    <string name="usage_quota">할당량</string>
+    <string name="usage_left_pct">%1$d%% 남음</string>
+    <string name="usage_toggle_mode">사용률·잔여율 전환</string>
+
+    <string name="sleep_session_menu">세션 재우기</string>
+
+    <plurals name="tasks_running_count">
+        <item quantity="other">실행 중인 작업 %1$d개</item>
+    </plurals>
+    <plurals name="tasks_total_count">
+        <item quantity="other">백그라운드 작업 %1$d개</item>
+    </plurals>
+    <string name="tasks_expand">백그라운드 작업 펼치기</string>
+    <string name="tasks_collapse">백그라운드 작업 접기</string>
+    <string name="task_running">실행 중</string>
+    <string name="task_finished">완료</string>
+    <string name="task_failed">실패</string>
+    <string name="task_killed">강제 종료</string>
+    <string name="task_stopped">중지됨</string>
+    <string name="task_exit_code">종료 %1$d</string>
+</resources>

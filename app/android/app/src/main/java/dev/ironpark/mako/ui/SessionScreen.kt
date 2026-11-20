@@ -1,86 +1,91 @@
 package dev.ironpark.mako.ui
 
-import androidx.compose.runtime.getValue
+import android.content.ClipData
+import android.content.ClipboardManager
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.isImeVisible
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.material.icons.outlined.PushPin
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.runtime.setValue
-import dev.ironpark.mako.v2.SessionInfo
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bedtime
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FitScreen
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.QuestionAnswer
+import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.FitScreen
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.QuestionAnswer
-import androidx.compose.material.icons.outlined.StopCircle
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
-import android.content.ClipData
-import android.content.ClipboardManager
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import dev.ironpark.mako.Mesh
 import dev.ironpark.mako.R
 import dev.ironpark.mako.term.TermSession
+import dev.ironpark.mako.v2.ChatMessage
 import dev.ironpark.mako.v2.Question
+import dev.ironpark.mako.v2.ScreenDialog
+import dev.ironpark.mako.v2.SessionInfo
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -108,6 +113,7 @@ internal fun SessionScreen(
     val session = sessions.firstOrNull { it.id == id }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current
     val term = remember(node, id) {
         TermSession(mesh.daemon, id, node, scope, onCopy = { text ->
             context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("mako", text))
@@ -127,7 +133,30 @@ internal fun SessionScreen(
     }
     // An older node takes typing only on an attach, which the composer then
     // needs as well.
-    val canSend = mesh.canSend(node)
+    val canSend = remember(nodes, node) { mesh.canSend(node) }
+    val canSee = remember(nodes, node) { mesh.seesSession(node) }
+    val canSleep = remember(nodes, node) { mesh.sleepsSession(node) }
+
+    // Mark session attention as seen across the mesh while this screen is visible.
+    LaunchedEffect(lifecycle, session?.id, session?.attentionSeq, session?.seenSeq, canSee) {
+        lifecycle.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            val current = session
+            if (current != null && canSee && current.attentionSeq > current.seenSeq) {
+                mesh.seeSession(current)
+            }
+        }
+    }
+
+    // Optimistic pending user messages for this session until logged or expired.
+    var pendingMessages by remember(node, id) { mutableStateOf<List<PendingMessage>>(emptyList()) }
+    var latestMessages by remember(node, id) { mutableStateOf<List<ChatMessage>>(emptyList()) }
+    var pendingSeq by remember(node, id) { mutableLongStateOf(0L) }
+    LaunchedEffect(pendingMessages) {
+        val waitMs = nextPendingExpiryDelayMs(pendingMessages, System.currentTimeMillis()) ?: return@LaunchedEffect
+        delay(waitMs)
+        pendingMessages = settlePending(pendingMessages, latestMessages, System.currentTimeMillis())
+    }
+
     // What was typed and not sent outlasts this screen and the app.
     val drafts = rememberDrafts()
     val draft = drafts[node, id]
@@ -174,6 +203,12 @@ internal fun SessionScreen(
     }
     val act = actor()
 
+    // Preserve last dialog/approval snapshot so cardExit collapses smoothly instead of snapping empty.
+    var lastDialog by remember(node, id) { mutableStateOf<ScreenDialog?>(null) }
+    if (session != null && session.hasDialog()) lastDialog = session.dialog
+    var lastApprovalSession by remember(node, id) { mutableStateOf<SessionInfo?>(null) }
+    if (session != null && session.hasApproval()) lastApprovalSession = session
+
     val onTerminalPage = pager.currentPage == terminalPage
     // The session's actions, which the bar at the bottom offers from its menu.
     val menu = SessionMenu { close ->
@@ -201,6 +236,16 @@ internal fun SessionScreen(
                 close()
                 renaming = true
             })
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.sleep_session_menu)) },
+            leadingIcon = { Icon(Icons.Outlined.Bedtime, null) },
+            enabled = session != null && session.state == "running" && canSleep,
+            onClick = {
+                close()
+                val target = session ?: return@DropdownMenuItem
+                act { mesh.sleepSession(target) }
+            },
+        )
         DropdownMenuItem(text = { Text(stringResource(R.string.stop_session_menu), color = MaterialTheme.colorScheme.error) },
             leadingIcon = { Icon(Icons.Outlined.StopCircle, null, tint = MaterialTheme.colorScheme.error) },
             enabled = session != null && !session.ended(), onClick = {
@@ -227,21 +272,54 @@ internal fun SessionScreen(
                         })
                     },
                 )
-                AnimatedVisibility(session != null && !session.hasApproval() && session.hasDialog()) {
-                    if (session != null && session.hasDialog()) {
-                        DialogCard(session.dialog, onTerminal = { question = true }) { option -> act { mesh.answerDialog(session, option) } }
+                val showDialog = session != null && !session.hasApproval() && session.hasDialog()
+                AnimatedVisibility(
+                    visible = showDialog,
+                    enter = MakoMotion.cardEnter,
+                    exit = MakoMotion.cardExit,
+                ) {
+                    val activeDialog = if (showDialog) session.dialog else lastDialog
+                    if (activeDialog != null) {
+                        DialogCard(
+                            activeDialog,
+                            onTerminal = { if (showDialog) question = true },
+                        ) { option ->
+                            if (showDialog) act { mesh.answerDialog(session, option) }
+                        }
                     }
                 }
-                AnimatedVisibility(session != null && session.hasApproval()) {
-                    if (session != null && session.hasApproval()) {
+                val showApproval = session != null && session.hasApproval()
+                AnimatedVisibility(
+                    visible = showApproval,
+                    enter = MakoMotion.cardEnter,
+                    exit = MakoMotion.cardExit,
+                ) {
+                    val active = if (showApproval) session else lastApprovalSession
+                    if (active != null && active.hasApproval()) {
                         val decide = { decision: String ->
-                            act { mesh.answer(session, decision); if (decision == "terminal") question = true }
+                            if (showApproval) {
+                                act { mesh.answer(session, decision); if (decision == "terminal") question = true }
+                            }
                         }
                         when {
-                            session.asks() -> QuestionCard(session.approval.questionsList, onAnswer = { form = true }, onDecision = decide)
-                            session.plans() -> PlanCard(session.approval, onReview = { planning = true }, onTerminal = { decide("terminal") })
-                            else -> ApprovalCard(session, approvalExpanded, onExpand = { approvalExpanded = !approvalExpanded }) { decision, option, message ->
-                                act { mesh.answer(session, decision, option = option, message = message); if (decision == "terminal") question = true }
+                            active.asks() -> QuestionCard(
+                                active.approval.questionsList,
+                                onAnswer = { if (showApproval) form = true },
+                                onDecision = decide,
+                            )
+                            active.plans() -> PlanCard(
+                                active.approval,
+                                onReview = { if (showApproval) planning = true },
+                                onTerminal = { decide("terminal") },
+                            )
+                            else -> ApprovalCard(
+                                active,
+                                approvalExpanded,
+                                onExpand = { approvalExpanded = !approvalExpanded },
+                            ) { decision, option, message ->
+                                if (showApproval) {
+                                    act { mesh.answer(session, decision, option = option, message = message); if (decision == "terminal") question = true }
+                                }
                             }
                         }
                     }
@@ -265,14 +343,30 @@ internal fun SessionScreen(
                     if (pageTab == 0 && session != null) ChatView(
                         mesh, session, Modifier.fillMaxSize(),
                         onQuestion = { r, qs -> request = r; keyed = qs },
-                        onAnswer = { if (keyed.isNotEmpty()) form = true else question = true }, onFile = onFile,
+                        onAnswer = { if (keyed.isNotEmpty()) form = true else question = true },
+                        onFile = onFile,
+                        pending = pendingMessages,
+                        onMessages = { msgs ->
+                            latestMessages = msgs
+                            pendingMessages = settlePending(pendingMessages, msgs, System.currentTimeMillis())
+                        },
                     )
                     else if (pageTab == 1) TerminalTab(term, fits, Modifier.fillMaxSize())
                 }
                 if (pageTab == 0 && session != null) {
                     Composer(
                         mesh = mesh, session = session, text = draft, onText = { drafts[node, id] = it },
-                        onSend = { text -> if (canSend) mesh.send(session, text, keys = "\r") else term.submit(text) },
+                        onSend = { text ->
+                            val now = System.currentTimeMillis()
+                            val msgId = ++pendingSeq
+                            pendingMessages = notePending(pendingMessages, latestMessages, text, nowMs = now, id = msgId)
+                            try {
+                                if (canSend) mesh.send(session, text, keys = "\r") else term.submit(text)
+                            } catch (e: Throwable) {
+                                pendingMessages = pendingMessages.filterNot { it.id == msgId }
+                                throw e
+                            }
+                        },
                         onInterrupt = { if (canSend) act { mesh.send(session, keys = "\u001b") } else term.send("\u001b") },
                         onOpen = { path -> onFile(ChatLink.File(path)) },
                     )
@@ -375,8 +469,8 @@ private fun QuestionCard(questions: List<Question>, onAnswer: () -> Unit, onDeci
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { onDecision("deny") }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.decline)) }
-            Button(onClick = onAnswer, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.answer)) }
+            OutlinedButton(onClick = { onDecision("deny") }, modifier = Modifier.weight(1f).pressScale()) { Text(stringResource(R.string.decline)) }
+            Button(onClick = onAnswer, modifier = Modifier.weight(1f).pressScale()) { Text(stringResource(R.string.answer)) }
         }
     }
 }
