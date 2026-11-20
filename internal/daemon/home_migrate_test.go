@@ -19,6 +19,14 @@ func TestMigrateAgentHomeClaudeAndReverse(t *testing.T) {
 	makoHome := t.TempDir()
 	t.Setenv("HOME", realHome)
 	t.Setenv("MAKO_HOME", makoHome)
+	// Provide a stub `claude` binary on PATH so this test does not require a
+	// real Claude CLI installation (e.g. on CI runners).
+	stubBin := t.TempDir()
+	stubClaude := filepath.Join(stubBin, "claude")
+	if err := os.WriteFile(stubClaude, []byte("#!/bin/sh\ncase \"$1\" in --help|-h|plugin|mcp) exit 1 ;; esac\nexec sleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", stubBin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	claudeDefault := filepath.Join(realHome, ".claude")
 	claudeProj := filepath.Join(claudeDefault, "projects", "-w-app")
