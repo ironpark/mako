@@ -15,14 +15,61 @@ import (
 
 // Codex takes hooks as -c overrides of its hooks table, which it trusts
 // only by each one's hash, and only in versions with the hooks feature.
+// Older Codex versions ignore unknown event keys under hooks.*.
 
 // hookEvents are the events mako hooks. Codex has no Notification: it asks
 // the user only for approvals.
 var hookEvents = []agent.HookEvent{
-	{Name: "SessionStart", Timeout: agent.HookTimeout}, {Name: "UserPromptSubmit", Timeout: agent.HookTimeout},
-	{Name: "PostToolUse", Timeout: agent.HookTimeout}, {Name: "PermissionRequest", Timeout: agent.ApprovalTimeout},
-	{Name: "PreCompact", Timeout: agent.HookTimeout}, {Name: "Stop", Timeout: agent.HookTimeout},
+	{Name: "SessionStart", Timeout: agent.HookTimeout},
+	{Name: "UserPromptSubmit", Timeout: agent.HookTimeout},
+	{Name: "PostToolUse", Timeout: agent.HookTimeout},
+	{Name: "PermissionRequest", Timeout: agent.ApprovalTimeout},
+	{Name: "PreCompact", Timeout: agent.HookTimeout},
+	{Name: "PostCompact", Timeout: agent.HookTimeout},
+	{Name: "Stop", Timeout: agent.HookTimeout},
 	{Name: "SessionEnd", Timeout: 3},
+	{Name: "Interrupt", Timeout: agent.HookTimeout},
+	{Name: "SubagentStart", Timeout: agent.HookTimeout},
+	{Name: "SubagentStop", Timeout: agent.HookTimeout},
+}
+
+// hookInput extends agent.HookInput with Codex-specific hook fields.
+type hookInput struct {
+	agent.HookInput
+	// Trigger is "manual" or "auto" on PreCompact / PostCompact hooks.
+	Trigger string `json:"trigger"`
+}
+
+// Event parses Codex's hook payloads, extending agent.CommonHooks with
+// Interrupt, PostCompact, SubagentStart, and SubagentStop.
+func (*Agent) Event(input []byte) (agent.Event, bool) {
+	var in hookInput
+	if json.Unmarshal(input, &in) != nil || in.Event == "" {
+		return agent.Event{}, false
+	}
+	// A subagent's own session is not the terminal's; only its lifecycle,
+	// as the parent reports it, is followed.
+	if in.AgentID != "" {
+		switch in.Event {
+		case "SubagentStart":
+			return agent.Event{Kind: agent.ChildStarted, SessionID: in.SessionID, AgentID: in.AgentID}, true
+		case "SubagentStop":
+			return agent.Event{Kind: agent.ChildStopped, SessionID: in.SessionID, AgentID: in.AgentID}, true
+		}
+		return agent.Event{}, false
+	}
+	switch in.Event {
+	case "Interrupt":
+		return agent.Event{Kind: agent.Idle, SessionID: in.SessionID, Transcript: in.TranscriptPath}, true
+	case "PostCompact":
+		// Manual /compact returns to the prompt; auto compaction resumes the active turn.
+		kind := agent.ToolDone
+		if in.Trigger == "manual" {
+			kind = agent.Idle
+		}
+		return agent.Event{Kind: kind, SessionID: in.SessionID, Transcript: in.TranscriptPath}, true
+	}
+	return in.Base()
 }
 
 // HookFeature is the listing that says whether this version has hooks.
