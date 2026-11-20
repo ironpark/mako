@@ -399,20 +399,38 @@ cannot take, as an option a choice does not have, is refused too.
 
 A fenced ` ```js ` block runs its JavaScript where it is and gives way to
 the value it ends on: its last expression, or what it returns when it
-returns or awaits. A ` ```js run ` block only runs, in the global scope,
-so what it defines with `var` or `function` every later expression and
-block reads.
+returns or awaits outside the functions it defines. A ` ```js run ` block
+only runs, in the global scope, so what it defines with `var` or
+`function` every later expression and block reads; what it defines with
+`let`, `const` or `class` only it sees. One that returns or awaits runs as
+a function, whose names are all its own: it shares what it sets as
+`globalThis.name = …`. A later piece that reads a name a run block keeps to
+itself is refused when the template is saved, saying how to share it.
 
 ````markdown
 ```js run
 var lines = n => n === 1 ? "one line" : n + " lines";
 ```
 Review {{file}}, about {{lines(depth * 40)}}.
+
+```js run
+globalThis.plan = await mako.ask("claude", `Plan a review of ${file} in three steps.`);
+```
+Follow this plan: {{plan}}
 ````
+
+A script's `{{…}}` is not filled in: it reads the arguments and built-in
+variables by name, or as `args` and `vars`. An argument whose name
+JavaScript cannot spell as a variable's, as `my-file` or `default`, is
+read as `args["my-file"]`.
 
 Inside scripts, `{@const ...}`, `{#if ...}`, `{#each ...}`, `{#match ...}`, and
 `{{...}}` expressions, a frozen `mako` host object is available for multi-agent
-and decision workflows (with `await`):
+and decision workflows (with `await`). It works when the template is sent
+to a session; Settings ▸ Templates' preview has none to call. An agent is
+named as `agent`, `profile` and `target` (`"agent:profile"`), and a call
+takes the target and the prompt as two strings for short:
+`mako.ask("claude:fast", "…")`.
 
 - `await mako.agents(agentOrOpts?)` — lists offered agents (`agy`, `claude`,
   `codex`, `pi`, `omp`, `omo`, `opencode`, etc.), their profiles, models, and
@@ -429,9 +447,14 @@ and decision workflows (with `await`):
   or `"text"` (default) for a string.
 - `await mako.decide(opts)` — calls the configured decision model (TypeSafe AI,
   OpenRouter, OpenAI, or Google AI Studio) with `{ state, type, options, criteria, levels, questions, provider, model }`.
-  Shorthand helpers: `await mako.decide.choice(state, optionsOrCriteria, extra?)`,
-  `await mako.decide.yes(state, instructions?, extra?)`,
-  `await mako.decide.score(state, levelsOrCriteria, extra?)`.
+  It answers `{ provider, model, answers, choice, yes, score, level, label,
+  probability, confidence, probabilities }`, the last fields for a single
+  question; `type` is `choice`, `noul` (yes or no) or `score`, or left out
+  for one by what is given. Shorthand helpers:
+  `await mako.decide.choice(state, optionsOrCriteria, extra?)` gives the
+  option chosen, `await mako.decide.yes(state, instructions?, extra?)`
+  `true` or `false`, and `await mako.decide.score(state, levelsOrCriteria, extra?)`
+  the whole answer.
 
 `{#raw}` … `{/raw}` keeps the text it holds as it is written: its `{{…}}`s,
 tags and ` ```js ` fences are text, for a prompt that shows an agent
@@ -440,8 +463,9 @@ show one too.
 
 A prompt compiles to JavaScript, run on QuickJS in a sandbox of its own
 ([qngg](https://github.com/ironpark/qngg): no files, no network, nothing
-printed) for at most five seconds and in 64 MiB; a prompt of text and
-names alone is filled without it. JavaScript that does not parse is
+printed) for at most five seconds and in 64 MiB, the time it waits on
+`mako` aside, and five minutes in all; a prompt of text and names alone
+is filled without it. JavaScript that does not parse is
 refused when the template is saved; one that throws, or runs too long,
 stops the call, saying where.
 

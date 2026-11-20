@@ -43,23 +43,35 @@ type compiler struct {
 	scopes  []map[string]bool
 	checks  []jsCheck
 	scripts map[string]bool // what scripts define with var or function
+	// unshared are the names a ```js run block defines that no later
+	// piece sees, with why, so that a piece that reads one is refused
+	// saying how to share it rather than failing as it runs.
+	unshared map[string]string
 }
 
 // compile writes the program nodes, read from the template's prompt, fill
 // it in with, or finds what is wrong with them.
 func (t *Template) compile(nodes []*node) (*compiled, error) {
-	c := &compiler{t: t, scopes: []map[string]bool{{}}, scripts: scriptNames(nodes)}
+	c := &compiler{t: t, scopes: []map[string]bool{{}}, scripts: scriptNames(nodes), unshared: map[string]string{}}
 	c.line(`let __o = "";`)
-	// An argument and a built-in variable are names an expression reads.
+	// An argument and a built-in variable are names an expression reads,
+	// and a ```js run block, which runs in the global scope, reads them on
+	// it: those of a name JavaScript's own globals do not have.
+	var names []string
 	for _, a := range t.Args {
 		if jsName(a.Name) {
 			c.line(fmt.Sprintf("let %s = args[%s];", a.Name, js(a.Name)))
+			names = append(names, a.Name)
 		}
 	}
 	for _, b := range Builtins {
 		if t.arg(b) == nil && jsName(b) {
 			c.line(fmt.Sprintf("let %s = vars[%s];", b, js(b)))
+			names = append(names, b)
 		}
+	}
+	if hasRunScript(nodes) && len(names) > 0 {
+		c.line("for (const [__k, __v] of Object.entries({" + strings.Join(names, ", ") + "})) if (!(__k in globalThis)) globalThis[__k] = __v;")
 	}
 	if err := c.nodes(nodes); err != nil {
 		return nil, err
@@ -123,6 +135,9 @@ func (c *compiler) node(n *node) error {
 		c.line("__o += " + js(n.text) + ";")
 	case "hole":
 		if !n.name {
+			if err := c.reads("{{"+n.text+"}}", n.text, nil); err != nil {
+				return err
+			}
 			c.check("{{"+n.text+"}}", "("+n.text+")", true)
 			c.guard("{{"+n.text+"}}", "__o += __s(await ("+n.text+"));")
 			return nil
@@ -133,20 +148,35 @@ func (c *compiler) node(n *node) error {
 		}
 		c.line("__o += " + v + ";")
 	case "script":
-		c.script(n)
+		return c.script(n)
 	case TagConst:
+		lhs, rhs := n.text, ""
+		if eq := firstTopLevel(lhs, "="); eq >= 0 {
+			lhs, rhs = lhs[:eq], lhs[eq+1:]
+		}
+		if err := c.reads("{@const "+n.text+"}", rhs, nil); err != nil {
+			return err
+		}
 		c.check("{@const "+n.text+"}", "{ const "+n.text+"; }", true)
 		c.line("const " + n.text + ";")
-		lhs := n.text
-		if eq := firstTopLevel(lhs, "="); eq >= 0 {
-			lhs = lhs[:eq]
-		}
 		c.declare(identifiers(lhs)...)
 	case TagRender:
+		if err := c.reads("{@render "+n.text+"}", n.text, nil); err != nil {
+			return err
+		}
 		c.check("{@render "+n.text+"}", "("+n.text+")", true)
 		c.guard("{@render "+n.text+"}", "__o += __s(await ("+n.text+"));")
 	case TagIf:
 		for i, br := range n.branches {
+			if br.cond != "" {
+				what := "{#if " + br.cond + "}"
+				if i > 0 {
+					what = "{:else if " + br.cond + "}"
+				}
+				if err := c.reads(what, br.cond, nil); err != nil {
+					return err
+				}
+			}
 			switch {
 			case i == 0:
 				c.check("{#if "+br.cond+"}", "("+br.cond+")", true)
@@ -163,6 +193,9 @@ func (c *compiler) node(n *node) error {
 		}
 	case TagEach:
 		what := "{#each " + n.expr + " as " + n.as + "}"
+		if err := c.reads(what, n.expr, nil); err != nil {
+			return err
+		}
 		c.check(what, "("+n.expr+")", true)
 		c.check(what, "{ const "+n.as+" = 0; }", false)
 		c.line("{ const __a = __list(" + n.expr + ");")
@@ -220,7 +253,28 @@ func (c *compiler) name(name, what string) (string, error) {
 	case IsBuiltin(name):
 		return "__s(vars[" + js(name) + "])", nil
 	}
+	if why, ok := c.unshared[name]; ok {
+		return "", fmt.Errorf("%s: %s", what, why)
+	}
 	return "", fmt.Errorf("%s: no argument, built-in variable or name defined before it is called %s", what, name)
+}
+
+// reads finds a name code reads that a ```js run block before it defined
+// where no later piece sees it, but for those in skip and those a block it
+// is in, an argument or a built-in variable has.
+func (c *compiler) reads(what, code string, skip map[string]bool) error {
+	if len(c.unshared) == 0 {
+		return nil
+	}
+	own := boundNames(code)
+	for _, id := range readNames(code) {
+		why, ok := c.unshared[id]
+		if !ok || skip[id] || own[id] || c.local(id) || c.t.arg(id) != nil || IsBuiltin(id) {
+			continue
+		}
+		return fmt.Errorf("%s: %s", what, why)
+	}
+	return nil
 }
 
 // script writes a script. One run only runs in the global scope, so that
@@ -228,10 +282,30 @@ func (c *compiler) name(name, what string) (string, error) {
 // value runs where it is, reading the names of the blocks it is in, its
 // value the last expression's, or, when it returns or awaits, as a
 // function's body, what it returns.
-func (c *compiler) script(n *node) {
+//
+// What a run block defines that no later piece sees, as let and const do
+// in it, or anything one that awaits or returns does, as it runs as a
+// function, is kept, so that a piece after it that reads the name is
+// refused, saying how to share it.
+func (c *compiler) script(n *node) error {
 	nl := strconv.FormatBool(n.nl)
 	what := fmt.Sprintf("block %d", len(c.scriptChecks())+1)
 	fn := needsFunction(n.text)
+	decls := declarations(n.text)
+	if err := c.reads(what, n.text, nil); err != nil {
+		return err
+	}
+	if n.run {
+		for _, d := range decls {
+			switch {
+			case c.scripts[d.name]:
+			case fn:
+				c.unshared[d.name] = fmt.Sprintf("%s awaits or returns, so it runs as a function and its %s %s is its own; set globalThis.%s = … in it to share it", what, d.kind, d.name, d.name)
+			case d.kind != "var" && d.kind != "function":
+				c.unshared[d.name] = fmt.Sprintf("%s defines %s with %s, which only that block sees; define it with var, or set globalThis.%s = …", what, d.name, d.kind, d.name)
+			}
+		}
+	}
 	if fn {
 		c.check(what, "(async () => {\n"+n.text+"\n})", false)
 	} else {
@@ -247,6 +321,7 @@ func (c *compiler) script(n *node) {
 	default:
 		c.guard(what, "__o += __val(eval("+js(n.text)+"), "+nl+");")
 	}
+	return nil
 }
 
 // guard writes stmt so that what it throws says it is what's.
@@ -264,11 +339,74 @@ func (c *compiler) scriptChecks() []jsCheck {
 	return out
 }
 
-var functionWords = regexp.MustCompile(`\b(return|await)\b`)
-
 // needsFunction reports whether a script returns or awaits, which eval
-// cannot.
-func needsFunction(code string) bool { return functionWords.MatchString(code) }
+// cannot: at its top, outside the functions it defines and its strings
+// and comments, as a function's return is its own.
+func needsFunction(code string) bool {
+	s := codeOnly(code)
+	var braces []bool // each { open: whether it begins a function's body
+	inFunction := func() bool { return slices.Contains(braces, true) }
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case c == '{':
+			braces = append(braces, bodyBrace(s[:i]))
+		case c == '}':
+			if len(braces) > 0 {
+				braces = braces[:len(braces)-1]
+			}
+		case isIdentStart(c) && (i == 0 || !isIdentByte(s[i-1])):
+			j := i + 1
+			for j < len(s) && isIdentByte(s[j]) {
+				j++
+			}
+			word := s[i:j]
+			if (word == "return" || word == "await") && !strings.HasSuffix(strings.TrimRight(s[:i], " \t\n"), ".") && !inFunction() {
+				return true
+			}
+			i = j - 1
+		}
+	}
+	return false
+}
+
+// blockWords are the words whose (…) a block's {, not a function's, follows.
+var blockWords = map[string]bool{"if": true, "for": true, "while": true, "switch": true, "catch": true, "with": true, "await": true}
+
+// bodyBrace reports whether a { after before begins a function's body: an
+// arrow's, or one after the (…) of a function or method, not of an if,
+// for, while, switch or catch.
+func bodyBrace(before string) bool {
+	before = strings.TrimRight(before, " \t\n")
+	switch {
+	case strings.HasSuffix(before, "=>"):
+		return true
+	case !strings.HasSuffix(before, ")"):
+		return false
+	}
+	depth := 0
+	for k := len(before) - 1; k >= 0; k-- {
+		switch before[k] {
+		case ')':
+			depth++
+		case '(':
+			if depth--; depth == 0 {
+				head := strings.TrimRight(before[:k], " \t\n")
+				w := len(head)
+				for w > 0 && isIdentByte(head[w-1]) {
+					w--
+				}
+				return !blockWords[head[w:]]
+			}
+		}
+	}
+	return false
+}
+
+func isIdentStart(c byte) bool {
+	return c == '_' || c == '$' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+func isIdentByte(c byte) bool { return isIdentStart(c) || c >= '0' && c <= '9' }
 
 // match writes a match block: its subject's value as text, and an if for
 // each arm; and checks its patterns and that its arms cover its values.
@@ -285,6 +423,9 @@ func (c *compiler) match(n *node) error {
 			arg = c.t.arg(n.expr)
 		}
 	} else {
+		if err := c.reads(what, n.expr, nil); err != nil {
+			return err
+		}
 		c.check(what, "("+n.expr+")", true)
 		value = "__s(await (" + n.expr + "))"
 	}
@@ -401,15 +542,20 @@ func identifiers(pattern string) []string {
 }
 
 // scriptNames are what the scripts of nodes run only define with var or
-// function, or on globalThis, which every later piece reads.
+// function, or on globalThis, which every later piece reads. One that
+// awaits or returns runs as a function, whose var and function are its
+// own: it shares only what it sets on globalThis.
 func scriptNames(nodes []*node) map[string]bool {
 	out := map[string]bool{}
 	var walk func([]*node)
 	walk = func(ns []*node) {
 		for _, n := range ns {
 			if n.kind == "script" && n.run {
-				for _, m := range scriptVarRe.FindAllStringSubmatch(n.text, -1) {
-					out[m[1]+m[2]] = true
+				fn := needsFunction(n.text)
+				for _, m := range scriptVarRe.FindAllStringSubmatch(codeOnly(n.text), -1) {
+					if m[2] != "" || !fn {
+						out[m[1]+m[2]] = true
+					}
 				}
 			}
 			for _, b := range n.branches {
@@ -424,6 +570,162 @@ func scriptNames(nodes []*node) map[string]bool {
 	}
 	walk(nodes)
 	return out
+}
+
+// hasRunScript reports whether nodes hold a ```js run block.
+func hasRunScript(nodes []*node) bool {
+	found := false
+	walkNodes(nodes, func(n *node) { found = found || n.kind == "script" && n.run })
+	return found
+}
+
+// decl is a name a script declares, and the word it declares it with.
+type decl struct{ name, kind string }
+
+var declRe = regexp.MustCompile(`\b(var|let|const|function|class)\b\s*\*?\s*([A-Za-z_$][\w$]*|\{[^{}]*\}|\[[^\[\]]*\])`)
+
+// declarations are the names code declares, with var, let, const,
+// function or class, outside its strings and comments.
+func declarations(code string) []decl {
+	var out []decl
+	for _, m := range declRe.FindAllStringSubmatch(codeOnly(code), -1) {
+		names := []string{m[2]}
+		if m[2][0] == '{' || m[2][0] == '[' {
+			names = identifiers(strings.Trim(m[2], "{}[]"))
+		}
+		for _, n := range names {
+			if !reserved[n] {
+				out = append(out, decl{n, m[1]})
+			}
+		}
+	}
+	return out
+}
+
+var (
+	arrowParam   = regexp.MustCompile(`([A-Za-z_$][\w$]*)\s*=>`)
+	arrowParams  = regexp.MustCompile(`\(([^()]*)\)\s*=>`)
+	headedParams = regexp.MustCompile(`\b(?:function\b\s*\*?\s*[\w$]*|catch)\s*\(([^()]*)\)`)
+)
+
+// boundNames are the names code binds itself, as its declarations, its
+// functions' and arrows' parameters and its catches' do, which it reads
+// as its own rather than as a name of the prompt's. It does not tell one
+// scope of code from another, so it errs on the side of a name bound.
+func boundNames(code string) map[string]bool {
+	s := codeOnly(code)
+	out := map[string]bool{}
+	for _, d := range declarations(s) {
+		out[d.name] = true
+	}
+	for _, m := range arrowParam.FindAllStringSubmatch(s, -1) {
+		out[m[1]] = true
+	}
+	for _, re := range []*regexp.Regexp{arrowParams, headedParams} {
+		for _, m := range re.FindAllStringSubmatch(s, -1) {
+			for _, p := range topLevelParts(m[1], ",") {
+				if eq := firstTopLevel(p, "="); eq >= 0 {
+					p = p[:eq]
+				}
+				for _, id := range identifiers(p) {
+					out[id] = true
+				}
+			}
+		}
+	}
+	return out
+}
+
+// readNames are the names code reads: its identifiers outside its strings
+// and comments, but for a property's after a dot and an object's key.
+func readNames(code string) []string {
+	s := codeOnly(code)
+	var out []string
+	for _, m := range identifierRe.FindAllStringIndex(s, -1) {
+		before := strings.TrimRight(s[:m[0]], " \t\n")
+		after := strings.TrimLeft(s[m[1]:], " \t\n")
+		switch {
+		case m[0] > 0 && s[m[0]-1] >= '0' && s[m[0]-1] <= '9':
+			continue // a number's, as 1e5's
+		case strings.HasSuffix(before, ".") && !strings.HasSuffix(before, "..."):
+			continue // a property
+		case (strings.HasSuffix(before, "{") || strings.HasSuffix(before, ",")) && strings.HasPrefix(after, ":"):
+			continue // an object's key
+		}
+		out = append(out, s[m[0]:m[1]])
+	}
+	return out
+}
+
+// codeOnly is code with what its strings and comments hold blanked, but
+// for what a template literal's ${…} holds, which is code.
+func codeOnly(code string) string {
+	b := []byte(code)
+	var holes []int // the braces open in each ${…} open
+	inTemplate := false
+	blank := func(from, to int) {
+		for k := from; k < to && k < len(b); k++ {
+			if b[k] != '\n' {
+				b[k] = ' '
+			}
+		}
+	}
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		if inTemplate {
+			switch {
+			case c == '\\':
+				blank(i, i+2)
+				i++
+			case c == '`':
+				inTemplate = false
+			case c == '$' && i+1 < len(b) && b[i+1] == '{':
+				holes = append(holes, 0)
+				inTemplate = false
+				i++
+			default:
+				blank(i, i+1)
+			}
+			continue
+		}
+		switch {
+		case c == '/' && i+1 < len(b) && b[i+1] == '/':
+			end := strings.IndexByte(string(b[i:]), '\n')
+			if end < 0 {
+				end = len(b) - i
+			}
+			blank(i, i+end)
+			i += end - 1
+		case c == '/' && i+1 < len(b) && b[i+1] == '*':
+			end := strings.Index(string(b[i+2:]), "*/")
+			if end < 0 {
+				end = len(b) - i - 2
+			}
+			blank(i, i+2+end+2)
+			i += 2 + end + 1
+		case c == '\'' || c == '"':
+			j := i + 1
+			for ; j < len(b) && b[j] != c && b[j] != '\n'; j++ {
+				if b[j] == '\\' {
+					j++
+				}
+			}
+			blank(i+1, j)
+			i = j
+		case c == '`':
+			inTemplate = true
+		case c == '{' && len(holes) > 0:
+			holes[len(holes)-1]++
+		case c == '}' && len(holes) > 0:
+			if holes[len(holes)-1] == 0 {
+				holes = holes[:len(holes)-1]
+				inTemplate = true
+			} else {
+				holes[len(holes)-1]--
+			}
+		}
+	}
+	return string(b)
 }
 
 // firstTopLevel is the index of the first sep in s outside brackets and
