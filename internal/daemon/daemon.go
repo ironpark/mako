@@ -50,6 +50,8 @@ type Daemon struct {
 	starting map[string]chan struct{}
 
 	sessions      *registry
+	codexMu       sync.Mutex
+	codexBridges  map[string]*codexBridge
 	conversations conversations
 	approvals     approvals
 	layouts       windowLayouts // the window layouts' changes staged here, and what is node-local of them; see layouts.go
@@ -199,6 +201,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	d.projects.load(dir)
 	d.syncWorkspaceProjects()
 	defer d.sessions.closeAll()
+	defer d.closeAllCodexBridges()
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

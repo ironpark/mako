@@ -451,6 +451,16 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 	if d.clipTools != "" {
 		launch.SetEnv("PATH", d.clipTools+string(os.PathListSeparator)+cmp.Or(launch.Env["PATH"], os.Getenv("PATH")))
 	}
+	var codexBridge *codexBridge
+	if req.GetAgent() == "codex" {
+		var stopCodex func()
+		codexBridge, stopCodex = d.prepareCodexAppServer(ctx, id, req.GetProject(), &launch, &conversationID, &transcriptPath)
+		prevCleanup := cleanup
+		cleanup = func() {
+			stopCodex()
+			prevCleanup()
+		}
+	}
 
 	d.sessionMu.Lock()
 	defer d.sessionMu.Unlock()
@@ -494,6 +504,9 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 		return nil, fmt.Errorf("save session: %w", err)
 	}
 	d.sessions.add(s)
+	if codexBridge != nil {
+		d.attachCodexBridge(s, codexBridge)
+	}
 	if peer := d.projectAgents.activate(s); peer != nil {
 		go d.deliverAgentMessages(peer)
 	}

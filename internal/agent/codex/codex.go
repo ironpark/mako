@@ -105,3 +105,167 @@ func jsonString(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
+
+// RemoteLaunchSplit partitions a resolved Codex CLI command line into arguments
+// for a managed `codex app-server` process and arguments for the `codex --remote`
+// TUI process connecting to it.
+type RemoteLaunchSplit struct {
+	Program        string
+	ServerArgs     []string // -c, --enable, --disable, --strict-config, plus writable_roots from --add-dir
+	TUIArgs        []string // TUI-safe flags (no --no-daemon, no --add-dir, no server -c, no resume <id>)
+	Model          string   // -m / --model (forwarded to thread/start & TUI)
+	ApprovalPolicy string   // -a / --ask-for-approval, or "never" for YOLO
+	Sandbox        string   // -s / --sandbox, or "danger-full-access" for YOLO
+	Cwd            string   // -C / --cd if explicitly supplied
+	ResumeID       string   // thread ID from `resume <id>` if present
+	Prompt         string   // optional positional prompt
+	HasPrompt      bool
+	SkipRemote     bool // true for non-TUI subcommands, interactive pickers, or explicit --remote
+}
+
+// nonRemoteSubcommands are Codex subcommands that are not interactive TUI sessions.
+var nonRemoteSubcommands = map[string]bool{
+	"agents": true, "exec": true, "e": true, "review": true, "login": true, "logout": true,
+	"mcp": true, "plugin": true, "app-server": true, "remote-control": true, "app": true,
+	"completion": true, "update": true, "doctor": true, "sandbox": true, "debug": true,
+	"apply": true, "a": true, "queue": true, "archive": true, "delete": true,
+	"migrate-rollouts": true, "migrate-nfs-db": true, "unarchive": true, "fork": true,
+	"cloud": true, "exec-server": true, "features": true, "help": true,
+}
+
+// SplitRemoteLaunch splits a resolved Codex command line between `codex app-server`
+// and `codex --remote`, stripping `--no-daemon` (rejected by `--remote`),
+// translating `--add-dir` into `-c sandbox_workspace_write.writable_roots=[...]`
+// on the server, and moving `-c`/`--config`/`--enable`/`--disable`/`--strict-config`
+// to the server so MCP servers, hooks, and config overrides apply where turns execute.
+func SplitRemoteLaunch(command []string) RemoteLaunchSplit {
+	var out RemoteLaunchSplit
+	if len(command) == 0 {
+		out.SkipRemote = true
+		return out
+	}
+	out.Program = command[0]
+
+	var addDirs []string
+	var sawResume bool
+	var positional []string
+	var afterDoubleDash bool
+
+	for i := 1; i < len(command); i++ {
+		arg := command[i]
+		if afterDoubleDash {
+			positional = append(positional, arg)
+			continue
+		}
+		if arg == "--" {
+			afterDoubleDash = true
+			continue
+		}
+		if !strings.HasPrefix(arg, "-") {
+			if !sawResume && len(positional) == 0 {
+				if arg == "resume" {
+					sawResume = true
+					continue
+				}
+				if nonRemoteSubcommands[arg] {
+					out.SkipRemote = true
+					return out
+				}
+			}
+			positional = append(positional, arg)
+			continue
+		}
+
+		name, val, hasEq := strings.Cut(arg, "=")
+		nextVal := func() (string, bool) {
+			if hasEq {
+				return val, true
+			}
+			if i+1 < len(command) {
+				i++
+				return command[i], true
+			}
+			return "", false
+		}
+
+		switch name {
+		case "--remote", "--remote-auth-token-env", "--fork", "--last", "--all", "--worktree", "-h", "--help", "-V", "--version":
+			out.SkipRemote = true
+			return out
+		case "--no-daemon":
+			// Rejected by `codex --remote`.
+			continue
+		case "-c", "--config":
+			if v, ok := nextVal(); ok {
+				out.ServerArgs = append(out.ServerArgs, "-c", v)
+			}
+		case "--enable", "--disable":
+			if v, ok := nextVal(); ok {
+				out.ServerArgs = append(out.ServerArgs, name, v)
+			}
+		case "--strict-config":
+			out.ServerArgs = append(out.ServerArgs, name)
+		case "--add-dir":
+			if v, ok := nextVal(); ok && v != "" {
+				addDirs = append(addDirs, v)
+			}
+		case "-m", "--model":
+			if v, ok := nextVal(); ok {
+				out.Model = v
+				out.TUIArgs = append(out.TUIArgs, "--model", v)
+			}
+		case "-a", "--ask-for-approval":
+			if v, ok := nextVal(); ok {
+				out.ApprovalPolicy = v
+				out.TUIArgs = append(out.TUIArgs, "-a", v)
+			}
+		case "-s", "--sandbox":
+			if v, ok := nextVal(); ok {
+				out.Sandbox = v
+				out.TUIArgs = append(out.TUIArgs, "-s", v)
+			}
+		case "-C", "--cd":
+			if v, ok := nextVal(); ok {
+				out.Cwd = v
+				out.TUIArgs = append(out.TUIArgs, "-C", v)
+			}
+		case "--approve-for-me":
+			if out.Sandbox == "" {
+				out.Sandbox = "workspace-write"
+			}
+			out.TUIArgs = append(out.TUIArgs, arg)
+		case "--dangerously-bypass-approvals-and-sandbox", "--yolo":
+			out.ApprovalPolicy = "never"
+			out.Sandbox = "danger-full-access"
+			out.TUIArgs = append(out.TUIArgs, arg)
+		case "-p", "--profile", "--local-provider", "-i", "--image":
+			if v, ok := nextVal(); ok {
+				out.TUIArgs = append(out.TUIArgs, name, v)
+			}
+		default:
+			out.TUIArgs = append(out.TUIArgs, arg)
+		}
+	}
+
+	if len(addDirs) > 0 {
+		out.ServerArgs = append(out.ServerArgs, "-c", "sandbox_workspace_write.writable_roots="+jsonString(addDirs))
+	}
+
+	if sawResume {
+		if len(positional) == 0 || !agent.ValidID.MatchString(positional[0]) {
+			// Bare `codex resume` picker or non-UUID name: let direct TUI handle it.
+			out.SkipRemote = true
+			return out
+		}
+		out.ResumeID = positional[0]
+		if len(positional) > 1 {
+			out.Prompt = positional[1]
+			out.HasPrompt = true
+		}
+	} else if len(positional) > 0 {
+		out.Prompt = positional[0]
+		out.HasPrompt = true
+	}
+
+	return out
+}

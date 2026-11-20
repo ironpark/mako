@@ -42,3 +42,94 @@ func TestServerAtAURLKeepsItsTokenOffTheCommandLine(t *testing.T) {
 		t.Fatalf("environment %v lacks the token", l.Env)
 	}
 }
+
+func TestSplitRemoteLaunch(t *testing.T) {
+	cmd := []string{
+		"/usr/local/bin/codex",
+		"-c", `mcp_servers.mako.url="http://127.0.0.1:9/mcp"`,
+		"-c", `hooks.Stop=[{hooks=[{type="command",command="mako hook",timeout=5}]}]`,
+		"--enable", "hooks",
+		"--disable", "foo",
+		"--strict-config",
+		"--model", "gpt-6.2-sol",
+		"-c", `model_reasoning_effort="high"`,
+		"--dangerously-bypass-approvals-and-sandbox",
+		"-C", "/work/proj",
+		"--add-dir", "/work/shared-a",
+		"--add-dir=/work/shared-b",
+		"--no-daemon",
+		"fix the tests",
+	}
+	got := SplitRemoteLaunch(cmd)
+	if got.SkipRemote {
+		t.Fatal("unexpected SkipRemote")
+	}
+	if got.Program != "/usr/local/bin/codex" {
+		t.Fatalf("Program = %q", got.Program)
+	}
+	wantServer := []string{
+		"-c", `mcp_servers.mako.url="http://127.0.0.1:9/mcp"`,
+		"-c", `hooks.Stop=[{hooks=[{type="command",command="mako hook",timeout=5}]}]`,
+		"--enable", "hooks",
+		"--disable", "foo",
+		"--strict-config",
+		"-c", `model_reasoning_effort="high"`,
+		"-c", `sandbox_workspace_write.writable_roots=["/work/shared-a","/work/shared-b"]`,
+	}
+	if !slices.Equal(got.ServerArgs, wantServer) {
+		t.Fatalf("ServerArgs = %q\nwant %q", got.ServerArgs, wantServer)
+	}
+	wantTUI := []string{
+		"--model", "gpt-6.2-sol",
+		"--dangerously-bypass-approvals-and-sandbox",
+		"-C", "/work/proj",
+	}
+	if !slices.Equal(got.TUIArgs, wantTUI) {
+		t.Fatalf("TUIArgs = %q\nwant %q", got.TUIArgs, wantTUI)
+	}
+	if got.Model != "gpt-6.2-sol" || got.ApprovalPolicy != "never" || got.Sandbox != "danger-full-access" || got.Cwd != "/work/proj" {
+		t.Fatalf("extracted settings = %+v", got)
+	}
+	if !got.HasPrompt || got.Prompt != "fix the tests" {
+		t.Fatalf("prompt = (%v, %q)", got.HasPrompt, got.Prompt)
+	}
+
+	// Resumed launch preserves thread ID and strips resume from TUIArgs.
+	resumed := SplitRemoteLaunch([]string{
+		"codex", "-c", `model_reasoning_effort="low"`, "resume", "01a1fa9c-4bba-78b2-8feb-b560a85e0978",
+		"-a", "on-request", "-s", "workspace-write", "--no-daemon",
+	})
+	if resumed.SkipRemote || resumed.ResumeID != "01a1fa9c-4bba-78b2-8feb-b560a85e0978" {
+		t.Fatalf("resumed = %+v", resumed)
+	}
+	if resumed.ApprovalPolicy != "on-request" || resumed.Sandbox != "workspace-write" {
+		t.Fatalf("resumed policies = %+v", resumed)
+	}
+	if !slices.Equal(resumed.TUIArgs, []string{"-a", "on-request", "-s", "workspace-write"}) {
+		t.Fatalf("resumed TUIArgs = %q", resumed.TUIArgs)
+	}
+
+	// --approve-for-me implies workspace-write sandbox when unset, and `--` preserves dash-prefixed prompts.
+	afm := SplitRemoteLaunch([]string{"codex", "--approve-for-me", "--", "-fix-me"})
+	if afm.SkipRemote || afm.Sandbox != "workspace-write" || !afm.HasPrompt || afm.Prompt != "-fix-me" {
+		t.Fatalf("approve-for-me + dash prompt = %+v", afm)
+	}
+
+	// Non-TUI subcommands, pickers, worktree, help/version, and explicit --remote skip managed app-server.
+	for _, skip := range [][]string{
+		{"codex", "exec", "hello"},
+		{"codex", "resume"},
+		{"codex", "resume", "--last"},
+		{"codex", "--remote", "ws://127.0.0.1:9999"},
+		{"codex", "--fork"},
+		{"codex", "--worktree"},
+		{"codex", "-h"},
+		{"codex", "--help"},
+		{"codex", "-V"},
+		{"codex", "--version"},
+	} {
+		if s := SplitRemoteLaunch(skip); !s.SkipRemote {
+			t.Fatalf("expected SkipRemote for %q, got %+v", skip, s)
+		}
+	}
+}

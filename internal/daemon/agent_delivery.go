@@ -84,6 +84,9 @@ func (d *Daemon) deliverNativeMessage(peer *agentPeer, batch []agentMessage) boo
 		return false
 	}
 	info := s.Info()
+	if info.GetAgent() == "codex" {
+		return d.deliverViaCodexBridge(peer.ctx, peer.id, d.agentPrompt(batch))
+	}
 	convID := info.GetConversationId()
 	if convID == "" {
 		return false
