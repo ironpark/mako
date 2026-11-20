@@ -50,6 +50,7 @@ type projectAgents struct {
 	watchSeq     uint64               // monotonic watch_agent ID counter
 	watches      map[string]int       // active watch_agent count per caller session
 	cliWaiters   map[string]int       // active `mako-msg wait` / mod long-poll waiters per session (suppress PTY fallback)
+	modPollers   map[string]int       // active Claude mako-live /messages/poll handlers per session
 	modPollUntil map[string]time.Time // grace window between mod long-poll cycles so PTY fallback never races
 	agySidecar   *agySidecarClient
 }
@@ -70,6 +71,22 @@ func (p *projectAgents) addCLIWaiter(id string) func() {
 	}
 }
 
+func (p *projectAgents) addModPoller(id string) func() {
+	p.mu.Lock()
+	if p.modPollers == nil {
+		p.modPollers = map[string]int{}
+	}
+	p.modPollers[id]++
+	p.mu.Unlock()
+	return func() {
+		p.mu.Lock()
+		if p.modPollers[id]--; p.modPollers[id] <= 0 {
+			delete(p.modPollers, id)
+		}
+		p.mu.Unlock()
+	}
+}
+
 func (p *projectAgents) markModActive(id string, ttl time.Duration) {
 	p.mu.Lock()
 	if p.modPollUntil == nil {
@@ -80,6 +97,21 @@ func (p *projectAgents) markModActive(id string, ttl time.Duration) {
 		p.modPollUntil[id] = until
 	}
 	p.mu.Unlock()
+}
+
+func (p *projectAgents) isModActive(id string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.modPollers[id] > 0 {
+		return true
+	}
+	if until, ok := p.modPollUntil[id]; ok {
+		if time.Now().Before(until) {
+			return true
+		}
+		delete(p.modPollUntil, id)
+	}
+	return false
 }
 
 func (p *projectAgents) hasCLIWaiter(id string) bool {

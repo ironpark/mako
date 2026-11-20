@@ -17,6 +17,7 @@ import (
 
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 // texts are the blocks' texts, joined, each a tool's name for a call.
@@ -326,5 +327,132 @@ func TestLiveModMessagesPollAndAck(t *testing.T) {
 	}
 	if statusOut.ChildStatus != "1 subagent working" || !strings.Contains(statusOut.Summary, "claude-child") || !strings.Contains(statusOut.Summary, "[child]") {
 		t.Fatalf("unexpected /mako/status: %+v", statusOut)
+	}
+}
+
+func TestHandleSendRoutesClaudeUserPromptViaLiveModWithFallback(t *testing.T) {
+	d := meshDaemon(t, "live-send")
+	dir := t.TempDir()
+	ptyOut := filepath.Join(dir, "pty.out")
+	s, err := session.Start(session.Spec{
+		ID: "claude-gui", NodeID: d.cfg.NodeID, Agent: "claude", Project: dir,
+		Command: []string{"sh", "-c", `stty -echo; printf '\033[?2004h'; while IFS= read -r line; do printf '%s\n' "$line" >> pty.out; done`},
+		Cols:    80, Rows: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	d.sessions.add(s)
+	waitFor(t, "pty never enabled bracketed paste", func() bool {
+		snap, err := s.Snapshot(true)
+		return err == nil && strings.Contains(snap.GetText(), "\x1b[?2004h")
+	})
+
+	hc := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", d.liveSocket)
+	}}}
+	post := func(path string, body any) *http.Response {
+		t.Helper()
+		b, _ := json.Marshal(body)
+		resp, err := hc.Post("http://mako"+path, "application/json", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	token := d.liveToken("claude-gui")
+
+	// Simulate an active mako-live mod long-polling and acking user prompts.
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	modReceived := make(chan string, 4)
+	go func() {
+		for ctx.Err() == nil {
+			b, _ := json.Marshal(liveMessagesPollReq{Session: "claude-gui", Token: token, WaitSeconds: 5})
+			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "http://mako/messages/poll", bytes.NewReader(b))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := hc.Do(req)
+			if err != nil {
+				return
+			}
+			var out liveMessagesPollResp
+			_ = json.NewDecoder(resp.Body).Decode(&out)
+			resp.Body.Close()
+			if out.HasUserPrompt && out.UserPromptID > 0 {
+				modReceived <- out.UserPrompt
+				ack := livePromptAckReq{Session: "claude-gui", Token: token, PromptID: out.UserPromptID, OK: true}
+				if out.UserPrompt == "drop-me" {
+					ack.OK = false
+					ack.Error = "dropped by mod"
+				}
+				ab, _ := json.Marshal(ack)
+				ar, _ := http.NewRequestWithContext(ctx, http.MethodPost, "http://mako/prompt/ack", bytes.NewReader(ab))
+				ar.Header.Set("Content-Type", "application/json")
+				if aresp, err := hc.Do(ar); err == nil {
+					aresp.Body.Close()
+				}
+			}
+		}
+	}()
+	waitForWithin(t, 3*time.Second, "mod never became active", func() bool {
+		return d.projectAgents.isModActive("claude-gui")
+	})
+
+	send := func(text string, keys []byte) {
+		t.Helper()
+		st, done := ask(t, func(st *transport.Stream, env *protocol.Envelope) error {
+			return d.handleSend(t.Context(), st, env)
+		}, protocol.TypeSend, &protocol.Send{SessionId: "claude-gui", Text: text, Keys: keys})
+		env, err := st.Recv()
+		if err != nil || env.Type() != protocol.TypeSessionInfo {
+			t.Fatalf("handleSend(%q): %v, %v", text, env, err)
+		}
+		if err := <-done; err != nil {
+			t.Fatalf("handleSend(%q) err: %v", text, err)
+		}
+	}
+
+	// 1. Normal GUI prompt (including Kitty CSI-u Enter) goes natively through the mod (not PTY).
+	send("explain this diff", []byte("\x1b[13u"))
+	select {
+	case got := <-modReceived:
+		if got != "explain this diff" {
+			t.Fatalf("mod received %q, want %q", got, "explain this diff")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for mod prompt")
+	}
+	if b, _ := os.ReadFile(ptyOut); len(b) != 0 {
+		t.Fatalf("expected PTY untouched for native prompt, got %q", string(b))
+	}
+
+	// 2. Slash command bypasses mod and goes directly to PTY.
+	send("/clear", []byte("\r"))
+	waitFor(t, "slash command never reached PTY", func() bool {
+		b, _ := os.ReadFile(ptyOut)
+		return strings.Contains(string(b), "/clear")
+	})
+
+	// 3. Explicit drop from mod falls back cleanly to PTY.
+	send("drop-me", []byte("\r"))
+	select {
+	case got := <-modReceived:
+		if got != "drop-me" {
+			t.Fatalf("mod received %q, want drop-me", got)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for mod drop-me")
+	}
+	waitFor(t, "dropped prompt never fell back to PTY", func() bool {
+		b, _ := os.ReadFile(ptyOut)
+		return strings.Contains(string(b), "drop-me")
+	})
+
+	// 4. Forged /prompt/ack is rejected.
+	r := post("/prompt/ack", livePromptAckReq{Session: "claude-gui", Token: "forged", PromptID: 1, OK: true})
+	r.Body.Close()
+	if r.StatusCode != http.StatusForbidden {
+		t.Fatalf("forged /prompt/ack status = %d, want 403", r.StatusCode)
 	}
 }

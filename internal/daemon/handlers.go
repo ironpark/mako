@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -95,11 +96,70 @@ func (d *Daemon) handleSend(ctx context.Context, stream *transport.Stream, env *
 		if !ok {
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
 		}
+		if d.deliverNativeUserPrompt(ctx, s, r.GetText(), r.GetKeys()) {
+			return s.Info(), nil
+		}
 		if err := s.Send(r.GetText(), r.GetKeys()); err != nil {
 			return nil, err
 		}
 		return s.Info(), nil
 	})
+}
+
+// isSubmitKeys reports whether keys is a plain Enter submission from the
+// composer (standard CR/LF or Kitty CSI-u Enter).
+func isSubmitKeys(keys []byte) bool {
+	return bytes.Equal(keys, []byte("\r")) ||
+		bytes.Equal(keys, []byte("\n")) ||
+		bytes.Equal(keys, []byte("\x1b[13u")) ||
+		bytes.Equal(keys, []byte("\x1b[13;1u"))
+}
+
+// canDeliverUserPromptNatively reports whether a Send request is a regular
+// composer user prompt safe to route through an agent's native prompt API
+// instead of typing into the PTY. Slash commands, shell escapes, bare keys,
+// paste-only writes, and interactive TUI dialogs stay on the PTY.
+func canDeliverUserPromptNatively(s *session.Session, text string, keys []byte) bool {
+	if !isSubmitKeys(keys) {
+		return false
+	}
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" || strings.Contains(text, "\x1b[201~") {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, "!") {
+		return false
+	}
+	info := s.Info()
+	if info.GetState() != protocol.StateRunning || info.GetDialog() != nil {
+		return false
+	}
+	// If the agent is waiting on an interactive terminal prompt (not an
+	// approval card handled out-of-band), let the PTY receive the input.
+	if info.GetStatus() == protocol.AgentWaiting && info.GetApproval() == nil {
+		return false
+	}
+	return true
+}
+
+// deliverNativeUserPrompt submits a GUI composer prompt through the agent's
+// native prompt API when available (Codex app-server thread/queue/add or
+// Claude mako-live $.prompt.submit), returning false to fall back to PTY.
+// Antigravity (agy) stays on PTY for GUI user prompts because its agentapi
+// send-message delivers async notification messages rather than normal user
+// turns and requires an already-established conversation ID.
+func (d *Daemon) deliverNativeUserPrompt(ctx context.Context, s *session.Session, text string, keys []byte) bool {
+	if !canDeliverUserPromptNatively(s, text, keys) {
+		return false
+	}
+	switch s.Info().GetAgent() {
+	case "codex":
+		return d.deliverViaCodexBridge(ctx, s.ID(), text)
+	case "claude":
+		return d.deliverViaClaudeMod(ctx, s.ID(), text)
+	default:
+		return false
+	}
 }
 
 // handleAnswerQuestion answers the questions a session's agent shows in

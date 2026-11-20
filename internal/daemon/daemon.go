@@ -37,10 +37,11 @@ type Daemon struct {
 	log *slog.Logger
 	dir string // the configuration directory, config.Dir() when empty
 
-	loggedCommands loggedCommands // the commands agents' logs name
-	live           liveHub        // the replies streaming, by session
-	liveSocket     string         // where they are posted; "" before it listens
-	liveSecret     []byte         // what each session's posts are signed by
+	loggedCommands loggedCommands  // the commands agents' logs name
+	live           liveHub         // the replies streaming, by session
+	livePrompts    livePromptQueue // direct GUI user prompts routed through Claude's live mod
+	liveSocket     string          // where they are posted; "" before it listens
+	liveSecret     []byte          // what each session's posts are signed by
 
 	sessionMu   sync.Mutex // protects saved launches and activation
 	saved       map[string]savedSession

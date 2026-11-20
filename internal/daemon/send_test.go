@@ -1,17 +1,21 @@
 package daemon
 
 import (
+	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ironpark/mako/internal/agent/codex"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
@@ -191,4 +195,121 @@ func TestAnswerQuestionTypesTheAnswers(t *testing.T) {
 	if string(got) != want {
 		t.Fatalf("typed %q, want %q", got, want)
 	}
+}
+
+func TestHandleSendRoutesCodexUserPromptViaBridgeWithFallback(t *testing.T) {
+	dir := t.TempDir()
+	ptyOut := filepath.Join(dir, "pty.out")
+	s, err := session.Start(session.Spec{
+		ID: "codex-gui", NodeID: "test-node", Agent: "codex", Project: dir,
+		Command: []string{"sh", "-c", `stty -echo; printf '\033[?2004h'; while IFS= read -r line; do printf '%s\n' "$line" >> pty.out; done`},
+		Cols:    80, Rows: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	waitFor(t, "pty never enabled bracketed paste", func() bool {
+		snap, err := s.Snapshot(true)
+		return err == nil && strings.Contains(snap.GetText(), "\x1b[?2004h")
+	})
+
+	var mu sync.Mutex
+	var queued []string
+	failRPC := false
+	srv := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+		if method == "thread/queue/add" {
+			mu.Lock()
+			fail := failRPC
+			mu.Unlock()
+			if fail {
+				reply(map[string]any{"id": id, "error": map[string]any{"code": -32000, "message": "temporary failure"}})
+				return
+			}
+			var p struct {
+				Input []struct {
+					Text string `json:"text"`
+				} `json:"input"`
+			}
+			_ = json.Unmarshal(params, &p)
+			if len(p.Input) > 0 {
+				mu.Lock()
+				queued = append(queued, p.Input[0].Text)
+				mu.Unlock()
+			}
+			reply(map[string]any{"id": id, "result": map[string]any{"queuedSubmission": map[string]any{"id": "q1"}}})
+		}
+	})
+
+	client, err := codex.DialAppServerWS(t.Context(), srv.wsURL(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d.sessions.add(s)
+	bctx, bcancel := context.WithCancel(t.Context())
+	defer bcancel()
+	d.attachCodexBridge(s, &codexBridge{
+		sessionID: "codex-gui",
+		client:    client,
+		ctx:       bctx,
+		cancel:    bcancel,
+		tid:       "thread-1",
+	})
+
+	send := func(text string, keys []byte) {
+		t.Helper()
+		st, done := ask(t, func(st *transport.Stream, env *protocol.Envelope) error {
+			return d.handleSend(t.Context(), st, env)
+		}, protocol.TypeSend, &protocol.Send{SessionId: "codex-gui", Text: text, Keys: keys})
+		env, err := st.Recv()
+		if err != nil || env.Type() != protocol.TypeSessionInfo {
+			t.Fatalf("handleSend(%q): %v, %v", text, env, err)
+		}
+		if err := <-done; err != nil {
+			t.Fatalf("handleSend(%q) err: %v", text, err)
+		}
+	}
+
+	// 1. Standard CR and Kitty CSI-u Enter route natively to thread/queue/add.
+	send("hello codex", []byte("\r"))
+	send("second prompt", []byte("\x1b[13u"))
+	mu.Lock()
+	gotQueued := append([]string(nil), queued...)
+	mu.Unlock()
+	if len(gotQueued) != 2 || gotQueued[0] != "hello codex" || gotQueued[1] != "second prompt" {
+		t.Fatalf("queued = %v, want [hello codex, second prompt]", gotQueued)
+	}
+	if b, _ := os.ReadFile(ptyOut); len(b) != 0 {
+		t.Fatalf("expected PTY untouched for native codex prompts, got %q", string(b))
+	}
+
+	// 2. Slash commands and !shell escapes bypass bridge and go to PTY.
+	send("/model", []byte("\r"))
+	send("!ls", []byte("\r"))
+	waitFor(t, "slash/shell commands never reached PTY", func() bool {
+		b, _ := os.ReadFile(ptyOut)
+		return strings.Contains(string(b), "/model") && strings.Contains(string(b), "!ls")
+	})
+
+	// 3. AgentWaiting without approval card (interactive terminal prompt) bypasses bridge.
+	s.SetStatus(protocol.AgentWaiting)
+	send("manual terminal answer", []byte("\r"))
+	waitFor(t, "AgentWaiting input never reached PTY", func() bool {
+		b, _ := os.ReadFile(ptyOut)
+		return strings.Contains(string(b), "manual terminal answer")
+	})
+	s.SetStatus(protocol.AgentIdle)
+
+	// 4. Bridge RPC error falls back cleanly to PTY.
+	mu.Lock()
+	failRPC = true
+	mu.Unlock()
+	send("fallback prompt", []byte("\r"))
+	waitFor(t, "failed bridge prompt never fell back to PTY", func() bool {
+		b, _ := os.ReadFile(ptyOut)
+		return strings.Contains(string(b), "fallback prompt")
+	})
 }

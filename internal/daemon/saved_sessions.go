@@ -680,6 +680,7 @@ func (d *Daemon) closeSession(id string) error {
 		d.sessions.remove(id)
 	}
 	d.live.forget(id)
+	d.livePrompts.forget(id)
 	d.loggedCommands.forget(id)
 	if err := d.projectAgents.messages.remove(id); err != nil {
 		d.log.Warn("agent inbox could not be removed", "session", id, "err", err)
@@ -715,6 +716,7 @@ func (d *Daemon) sleepSession(id string) (*protocol.SessionInfo, error) {
 	d.sessions.remove(id)
 	_ = s.Close()
 	d.live.forget(id)
+	d.livePrompts.forget(id)
 	d.log.Info("session asleep", "id", id, "agent", info.GetAgent())
 	return proto.CloneOf(next.Info), nil
 }
