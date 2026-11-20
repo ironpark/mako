@@ -339,3 +339,176 @@ func TestCommandsAndInvokeSubagentTool(t *testing.T) {
 		t.Fatalf("invoke_subagent tool: kind=%q canon=%+v", kind, canon)
 	}
 }
+
+func TestWithHooksStatusLine(t *testing.T) {
+	home := t.TempDir()
+	l := &agent.Launch{
+		Command: []string{"agy"},
+		Env:     map[string]string{"HOME": home},
+	}
+	if !New().WithHooks(l, "/bin/mako hook /s", "/bin/mako statusline /s", "") {
+		t.Fatal("WithHooks returned false")
+	}
+	idx := slices.Index(l.Command, "--settings")
+	if idx < 0 || idx+1 >= len(l.Command) {
+		t.Fatalf("expected --settings in command: %q", l.Command)
+	}
+	var cfg struct {
+		StatusLine struct {
+			Type             string `json:"type"`
+			Command          string `json:"command"`
+			Enabled          bool   `json:"enabled"`
+			StackWithDefault bool   `json:"stack_with_default"`
+		} `json:"statusLine"`
+	}
+	if err := json.Unmarshal([]byte(l.Command[idx+1]), &cfg); err != nil {
+		t.Fatalf("invalid --settings JSON %q: %v", l.Command[idx+1], err)
+	}
+	if cfg.StatusLine.Type != "command" || cfg.StatusLine.Command != "/bin/mako statusline /s" || !cfg.StatusLine.Enabled || !cfg.StatusLine.StackWithDefault {
+		t.Fatalf("unexpected statusLine config: %+v", cfg.StatusLine)
+	}
+
+	// Existing --settings must not be duplicated.
+	l2 := &agent.Launch{
+		Command: []string{"agy", "--settings", "/custom.json"},
+		Env:     map[string]string{"HOME": home},
+	}
+	if !New().WithHooks(l2, "/bin/mako hook /s", "/bin/mako statusline /s", "") {
+		t.Fatal("WithHooks returned false")
+	}
+	if len(l2.Command) != 3 {
+		t.Fatalf("expected existing --settings untouched, got %q", l2.Command)
+	}
+}
+
+func TestStatusLineParsesContextAndQuota(t *testing.T) {
+	a := New()
+	payload := `{
+		"model": {"id": "Gemini 4 Neon (High)", "display_name": "Gemini 4 Neon (High)", "effort": "high"},
+		"context_window": {
+			"total_input_tokens": 88244,
+			"total_output_tokens": 61074,
+			"context_window_size": 1048576,
+			"used_percentage": 14.24,
+			"current_usage": {
+				"input_tokens": 63382,
+				"cache_creation_input_tokens": 100,
+				"cache_read_input_tokens": 20857
+			}
+		},
+		"quota": {
+			"gemini-5h": {"remaining_fraction": 0.72, "reset_in_seconds": 3600},
+			"gemini-weekly": {"remaining_fraction": 0.9378, "reset_time": "2026-07-06T07:50:32Z"},
+			"claude-5h": {"remaining_fraction": 0.10, "reset_in_seconds": 1800},
+			"gemini-daily": {"remaining_fraction": 0.50, "disabled": true}
+		}
+	}`
+	u := a.Status([]byte(payload))
+	if u.GetModel() != "Gemini 4 Neon (High)" || u.GetEffort() != "high" {
+		t.Fatalf("model/effort = %q / %q", u.GetModel(), u.GetEffort())
+	}
+	if u.GetWindow() != 1048576 || u.GetContext() != 63382+100+20857 || u.GetInput() != 88244 || u.GetOutput() != 61074 {
+		t.Fatalf("context/tokens = %+v", u)
+	}
+	if len(u.GetLimits()) != 2 {
+		t.Fatalf("expected 2 active limits (5h + weekly, disabled skipped), got %+v", u.GetLimits())
+	}
+	var fiveH, week *protocol.RateLimit
+	for _, l := range u.GetLimits() {
+		switch l.GetMinutes() {
+		case protocol.FiveHours:
+			fiveH = l
+		case protocol.Week:
+			week = l
+		}
+	}
+	if fiveH == nil || int(fiveH.GetUsed()+0.5) != 28 || fiveH.GetResets() == 0 {
+		t.Fatalf("unexpected gemini-5h limit (should pick gemini over claude): %+v", fiveH)
+	}
+	wantReset, _ := time.Parse(time.RFC3339, "2026-07-06T07:50:32Z")
+	if week == nil || int(week.GetUsed()+0.5) != 6 || week.GetResets() != wantReset.Unix() {
+		t.Fatalf("unexpected gemini-weekly limit: %+v", week)
+	}
+
+	// UserStatusLine reads ~/.gemini/antigravity-cli/settings.json.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	settingsPath := filepath.Join(home, ".gemini", "antigravity-cli", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(settingsPath, []byte(`{"statusLine":{"type":"command","command":"~/.gemini/status.sh"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.UserStatusLine(nil); got != "~/.gemini/status.sh" {
+		t.Fatalf("UserStatusLine = %q", got)
+	}
+	if err := os.WriteFile(settingsPath, []byte(`{"statusLine":{"type":"command","command":"~/.gemini/status.sh","enabled":false}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.UserStatusLine(nil); got != "" {
+		t.Fatalf("disabled UserStatusLine = %q, want empty", got)
+	}
+}
+
+func TestEnsureSidecarAndDeliverMessage(t *testing.T) {
+	home := t.TempDir()
+	env := map[string]string{"HOME": home}
+	if err := EnsureSidecar(env, "/bin/makod", []string{"agy-sidecar", "/run/agent-cli.sock"}); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(home, ".gemini", "config", "sidecars", "mako-bridge", "sidecar.json")
+	body, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest map[string]any
+	if err := json.Unmarshal(body, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if manifest["command"] != "/bin/makod" || manifest["restart_policy"] != "always" {
+		t.Fatalf("unexpected sidecar manifest: %+v", manifest)
+	}
+	cfgPath := filepath.Join(home, ".gemini", "config", "config.json")
+	cfgBody, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(cfgBody), `"mako-bridge"`) || !strings.Contains(string(cfgBody), `"enabled": true`) {
+		t.Fatalf("expected mako-bridge enabled in config.json: %s", cfgBody)
+	}
+
+	// Explicit user disable in config.json must not be overwritten.
+	if err := os.WriteFile(cfgPath, []byte(`{"sidecars":{"mako-bridge":{"enabled":false}},"other":1}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureSidecar(env, "/bin/makod", []string{"agy-sidecar", "/run/agent-cli.sock"}); err != nil {
+		t.Fatal(err)
+	}
+	cfgBody, _ = os.ReadFile(cfgPath)
+	if !strings.Contains(string(cfgBody), `"enabled":false`) {
+		t.Fatalf("EnsureSidecar overwrote explicit disable: %s", cfgBody)
+	}
+
+	// DeliverMessage prefers $HOME/.gemini/antigravity-cli/bin/agentapi.
+	outFile := filepath.Join(home, "delivered.txt")
+	binPath := filepath.Join(home, ".gemini", "antigravity-cli", "bin", "agentapi")
+	if err := os.MkdirAll(filepath.Dir(binPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"" + outFile + "\"\n"
+	if err := os.WriteFile(binPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := New().DeliverMessage(t.Context(), "conv-123", "Mako message from worker", "Build passed", env); err != nil {
+		t.Fatalf("DeliverMessage: %v", err)
+	}
+	got, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "send-message\n--title=Mako message from worker\nconv-123\nBuild passed\n"
+	if string(got) != want {
+		t.Fatalf("agentapi args = %q, want %q", string(got), want)
+	}
+}

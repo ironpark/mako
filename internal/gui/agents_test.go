@@ -356,3 +356,67 @@ func TestBuiltinMCPToggleAndProfileServersIncludeMako(t *testing.T) {
 		t.Fatalf("expected context_servers.mako re-enabled after second toggle, got %+v", m.cfg.ContextServers["mako"])
 	}
 }
+
+func TestProfileExecutionSwitchesRoundTripAndToggle(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	off := false
+	in := map[string]agentspec.Agent{
+		"claude": {
+			Profiles: []agentspec.Profile{
+				{Name: "default-on"},
+				{Name: "restricted", AllowAgent: &off, AllowTemplate: &off},
+			},
+		},
+	}
+	got, err := applyAgents(draftAgents(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = nil
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	ps := got["claude"].Profiles
+	if len(ps) != 2 || !ps[0].AgentAllowed() || !ps[0].TemplateAllowed() || ps[1].AgentAllowed() || ps[1].TemplateAllowed() {
+		t.Fatalf("round-trip profiles = %+v", ps)
+	}
+
+	m := newModel(&config.Config{Agents: map[string]agentspec.Agent{
+		"claude": {Profiles: []agentspec.Profile{{Name: "reviewer"}}},
+	}}, "")
+	var profile agentDraft
+	for _, r := range ggui.Peek(m.AgentDraft) {
+		if r.Agent == "claude" && r.IsProfile {
+			profile = r
+		}
+	}
+	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Scroll(profileCard(m, profile, ggui.TextStyle{})) }, ggui.Sz(700, 1200))
+	defer p.Close()
+	p.Frame()
+
+	agentSw, ok := p.Find(Tf("%s allow agent spawning", "claude:reviewer"))
+	if !ok {
+		t.Fatalf("missing allow for agents switch:\n%s", p.Semantics().String())
+	}
+	tmplSw, ok := p.Find(Tf("%s allow in templates", "claude:reviewer"))
+	if !ok {
+		t.Fatalf("missing allow in templates switch:\n%s", p.Semantics().String())
+	}
+	p.Click(agentSw.Center())
+	p.Frame()
+	p.Click(tmplSw.Center())
+	p.Frame()
+
+	after, err := applyAgents(ggui.Peek(m.AgentDraft))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rp := after["claude"].Profiles[0]
+	if rp.AgentAllowed() || rp.TemplateAllowed() {
+		t.Fatalf("expected both switches off after toggling, got %+v", rp)
+	}
+}

@@ -57,7 +57,19 @@ type Profile struct {
 	// empty list none; unset, they get every server enabled. A server
 	// picked here is given even when turned off for the node.
 	ContextServers *[]string `json:"context_servers,omitempty"`
+	// AllowAgent controls whether AI models/agents may delegate to this profile
+	// via MCP (spawn_agent / list_agent_profiles). Nil defaults to true.
+	AllowAgent *bool `json:"allow_agent,omitempty"`
+	// AllowTemplate controls whether prompt templates may run this profile via
+	// mako.ask / mako.spawn. Nil defaults to true.
+	AllowTemplate *bool `json:"allow_template,omitempty"`
 }
+
+// AgentAllowed reports whether models/agents may spawn this profile via MCP.
+func (p Profile) AgentAllowed() bool { return p.AllowAgent == nil || *p.AllowAgent }
+
+// TemplateAllowed reports whether prompt templates may execute this profile.
+func (p Profile) TemplateAllowed() bool { return p.AllowTemplate == nil || *p.AllowTemplate }
 
 // UnmarshalJSON also reads an agent written as its command alone, as
 // configurations did before agents had flags and profiles.

@@ -405,6 +405,19 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 		claimed = d.claimedLocked(id)
 	}
 	d.sessionMu.Unlock()
+
+	// Populate standard Mako session environment variables for all agent runs.
+	mode := "main"
+	if parent != "" {
+		mode = "subagent"
+	}
+	launch.SetEnv("AGENT_MAKO_SESSION", id)
+	launch.SetEnv("AGENT_MAKO_PROJECT", req.GetProject())
+	launch.SetEnv("AGENT_MAKO_MODE", mode)
+	if parent != "" {
+		launch.SetEnv("AGENT_MAKO_PARENT", parent)
+	}
+
 	conversationID, transcriptPath, err := d.conversationFor(ctx, req, &launch, previous, existed, claimed)
 	if err != nil {
 		return nil, err

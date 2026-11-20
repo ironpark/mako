@@ -25,6 +25,7 @@ public  final class AgentProfileInfo extends
     model_ = "";
     effort_ = "";
   }
+  private int bitField0_;
   public static final int NAME_FIELD_NUMBER = 1;
   private java.lang.String name_;
   /**
@@ -263,6 +264,74 @@ public  final class AgentProfileInfo extends
   private void clearSpawnable() {
 
     spawnable_ = false;
+  }
+
+  public static final int ALLOW_AGENT_FIELD_NUMBER = 7;
+  private boolean allowAgent_;
+  /**
+   * <code>optional bool allow_agent = 7 [json_name = "allowAgent"];</code>
+   * @return Whether the allowAgent field is set.
+   */
+  @java.lang.Override
+  public boolean hasAllowAgent() {
+    return ((bitField0_ & 0x00000001) != 0);
+  }
+  /**
+   * <code>optional bool allow_agent = 7 [json_name = "allowAgent"];</code>
+   * @return The allowAgent.
+   */
+  @java.lang.Override
+  public boolean getAllowAgent() {
+    return allowAgent_;
+  }
+  /**
+   * <code>optional bool allow_agent = 7 [json_name = "allowAgent"];</code>
+   * @param value The allowAgent to set.
+   */
+  private void setAllowAgent(boolean value) {
+    bitField0_ |= 0x00000001;
+    allowAgent_ = value;
+  }
+  /**
+   * <code>optional bool allow_agent = 7 [json_name = "allowAgent"];</code>
+   */
+  private void clearAllowAgent() {
+    bitField0_ = (bitField0_ & ~0x00000001);
+    allowAgent_ = false;
+  }
+
+  public static final int ALLOW_TEMPLATE_FIELD_NUMBER = 8;
+  private boolean allowTemplate_;
+  /**
+   * <code>optional bool allow_template = 8 [json_name = "allowTemplate"];</code>
+   * @return Whether the allowTemplate field is set.
+   */
+  @java.lang.Override
+  public boolean hasAllowTemplate() {
+    return ((bitField0_ & 0x00000002) != 0);
+  }
+  /**
+   * <code>optional bool allow_template = 8 [json_name = "allowTemplate"];</code>
+   * @return The allowTemplate.
+   */
+  @java.lang.Override
+  public boolean getAllowTemplate() {
+    return allowTemplate_;
+  }
+  /**
+   * <code>optional bool allow_template = 8 [json_name = "allowTemplate"];</code>
+   * @param value The allowTemplate to set.
+   */
+  private void setAllowTemplate(boolean value) {
+    bitField0_ |= 0x00000002;
+    allowTemplate_ = value;
+  }
+  /**
+   * <code>optional bool allow_template = 8 [json_name = "allowTemplate"];</code>
+   */
+  private void clearAllowTemplate() {
+    bitField0_ = (bitField0_ & ~0x00000002);
+    allowTemplate_ = false;
   }
 
   public static dev.ironpark.mako.v2.AgentProfileInfo parseFrom(
@@ -619,6 +688,78 @@ public  final class AgentProfileInfo extends
       return this;
     }
 
+    /**
+     * <code>optional bool allow_agent = 7 [json_name = "allowAgent"];</code>
+     * @return Whether the allowAgent field is set.
+     */
+    @java.lang.Override
+    public boolean hasAllowAgent() {
+      return instance.hasAllowAgent();
+    }
+    /**
+     * <code>optional bool allow_agent = 7 [json_name = "allowAgent"];</code>
+     * @return The allowAgent.
+     */
+    @java.lang.Override
+    public boolean getAllowAgent() {
+      return instance.getAllowAgent();
+    }
+    /**
+     * <code>optional bool allow_agent = 7 [json_name = "allowAgent"];</code>
+     * @param value The allowAgent to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAllowAgent(boolean value) {
+      copyOnWrite();
+      instance.setAllowAgent(value);
+      return this;
+    }
+    /**
+     * <code>optional bool allow_agent = 7 [json_name = "allowAgent"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAllowAgent() {
+      copyOnWrite();
+      instance.clearAllowAgent();
+      return this;
+    }
+
+    /**
+     * <code>optional bool allow_template = 8 [json_name = "allowTemplate"];</code>
+     * @return Whether the allowTemplate field is set.
+     */
+    @java.lang.Override
+    public boolean hasAllowTemplate() {
+      return instance.hasAllowTemplate();
+    }
+    /**
+     * <code>optional bool allow_template = 8 [json_name = "allowTemplate"];</code>
+     * @return The allowTemplate.
+     */
+    @java.lang.Override
+    public boolean getAllowTemplate() {
+      return instance.getAllowTemplate();
+    }
+    /**
+     * <code>optional bool allow_template = 8 [json_name = "allowTemplate"];</code>
+     * @param value The allowTemplate to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAllowTemplate(boolean value) {
+      copyOnWrite();
+      instance.setAllowTemplate(value);
+      return this;
+    }
+    /**
+     * <code>optional bool allow_template = 8 [json_name = "allowTemplate"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAllowTemplate() {
+      copyOnWrite();
+      instance.clearAllowTemplate();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.AgentProfileInfo)
   }
   @java.lang.Override
@@ -635,16 +776,19 @@ public  final class AgentProfileInfo extends
       }
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
+            "bitField0_",
             "name_",
             "description_",
             "model_",
             "effort_",
             "yolo_",
             "spawnable_",
+            "allowAgent_",
+            "allowTemplate_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0007\u0006\u0007";
+              "\u0000\b\u0000\u0001\u0001\b\b\u0000\u0000\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0004\u0208\u0005\u0007\u0006\u0007\u0007\u1007\u0000\b\u1007\u0001";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

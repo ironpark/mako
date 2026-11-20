@@ -1592,4 +1592,13 @@ var catalogKo = map[string]string{
 	"Pick an option using a decision model":              "디시전 모델로 선택지 고르기",
 	"Ask a yes/no decision question":                     "디시전 모델에 예/아니오 질문하기",
 	"Score state across criteria levels":                 "기준 단계별로 상태 점수 매기기",
+
+	// Profile execution switches
+	"Allow agent spawning": "에이전트/모델에서 실행 허용",
+	"Let AI models discover and spawn this profile via MCP.": "AI 모델이 MCP를 통해 이 프로필을 조회하고 서브 에이전트로 실행할 수 있게 합니다.",
+	"%s allow agent spawning": "%s 에이전트 실행 허용",
+	"Allow in templates":      "템플릿에서 실행 허용",
+	"Let prompt templates execute this profile via mako.ask or mako.spawn.": "프롬프트 템플릿에서 mako.ask 또는 mako.spawn으로 이 프로필을 실행할 수 있게 합니다.",
+	"%s allow in templates": "%s 템플릿 실행 허용",
+	" (%d%% left)":          " (%d%% 남음)",
 }

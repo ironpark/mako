@@ -206,13 +206,17 @@ func (d *Daemon) agentInfo() []*protocol.AgentInfo {
 				if p.Yolo != nil {
 					yolo = *p.Yolo
 				}
+				allowAgent := p.AgentAllowed()
+				allowTemplate := p.TemplateAllowed()
 				details[j] = &protocol.AgentProfileInfo{
-					Name:        p.Name,
-					Description: p.Description,
-					Model:       p.Model,
-					Effort:      p.Effort,
-					Yolo:        yolo,
-					Spawnable:   hasServers && hasPrompter && d.agentMCPEnabled(p.ContextServers),
+					Name:          p.Name,
+					Description:   p.Description,
+					Model:         p.Model,
+					Effort:        p.Effort,
+					Yolo:          yolo,
+					Spawnable:     hasServers && hasPrompter && d.agentMCPEnabled(p.ContextServers) && allowAgent,
+					AllowAgent:    &allowAgent,
+					AllowTemplate: &allowTemplate,
 				}
 			}
 			info.ProfileDetails = details

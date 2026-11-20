@@ -74,11 +74,19 @@ func (d *Daemon) runAgentPrompt(ctx context.Context, req *protocol.RunAgentPromp
 	if agentName == "" {
 		return nil, errors.New("agent is required")
 	}
+	configured := d.agents()
+	if profName := strings.TrimSpace(req.GetProfile()); profName != "" {
+		if a, ok := agentspec.Lookup(agentName, configured); ok {
+			if p, ok := a.Profile(profName); ok && !p.TemplateAllowed() {
+				return nil, fmt.Errorf("profile %q is not enabled for prompt templates", profName)
+			}
+		}
+	}
 	launch, err := agentspec.ResolveWith(agentName, req.GetProfile(), nil, nil, agentspec.ResolveOptions{
 		Model:  req.GetModel(),
 		Effort: req.GetEffort(),
 		Yolo:   req.Yolo,
-	}, d.agents())
+	}, configured)
 	if err != nil {
 		return nil, err
 	}
@@ -102,6 +110,8 @@ func (d *Daemon) runAgentPrompt(ctx context.Context, req *protocol.RunAgentPromp
 	if realDir, err := filepath.EvalSymlinks(workDir); runtime.GOOS == "windows" && err == nil && strings.EqualFold(realDir, workDir) {
 		workDir = realDir
 	}
+	launch.SetEnv("AGENT_MAKO_PROJECT", workDir)
+	launch.SetEnv("AGENT_MAKO_MODE", "subagent")
 	launch.Command = withProjectDirs(agentName, launch.Command, d.projectDirs(workDir))
 
 	if len(launch.Command) == 0 {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agent/agy"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
@@ -80,6 +81,17 @@ func (d *Daemon) withContextServers(ctx context.Context, launch *agentspec.Launc
 		builtin, release = d.projectAgents.server(d.ctx, d.hookBinary, session, parent)
 		if d.agentMCPEnabled(launch.ContextServers) {
 			servers = append(servers, builtin)
+			// Expose session messaging token and CLI socket so agents (such as
+			// Claude Code via background Bash) can use `mako-msg wait` directly.
+			if builtin.BearerToken != "" {
+				launch.SetEnv(agentMCPTokenEnv, builtin.BearerToken)
+			}
+			if d.projectAgents.cliSocket != "" {
+				launch.SetEnv("AGENT_MAKO_SOCKET", d.projectAgents.cliSocket)
+			}
+			if _, isAgy := takes.(*agy.Agent); isAgy && d.hookBinary != "" && d.projectAgents.cliSocket != "" {
+				_ = agy.EnsureSidecar(launch.Env, d.hookBinary, []string{agySidecarArg, d.projectAgents.cliSocket})
+			}
 		}
 	}
 	if len(servers) == 0 {

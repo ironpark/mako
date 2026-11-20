@@ -41,9 +41,11 @@ type agentDraft struct {
 	// one ID a line, rather than every one enabled.
 	PickServers bool
 	Servers     string
-	Model       string // a profile's; "" for the agent's default
-	Effort      string // a profile's; "" for the agent's default
-	ProfileYolo string // "", "on", or "off" (profile override of agent Yolo)
+	Model         string // a profile's; "" for the agent's default
+	Effort        string // a profile's; "" for the agent's default
+	ProfileYolo   string // "", "on", or "off" (profile override of agent Yolo)
+	AllowAgent    bool   // profile: allow models/agents to spawn this profile via MCP
+	AllowTemplate bool   // profile: allow prompt templates to run this profile
 }
 
 // draftAgents lays out cfg's agents for editing: every agent the node can
@@ -70,7 +72,8 @@ func draftAgents(agents map[string]agentspec.Agent) []agentDraft {
 			}
 			d := agentDraft{ID: len(out) + 1, Agent: name, Profile: p.Name, IsProfile: true,
 				Description: p.Description, Args: agentspec.JoinArgs(pArgs), Env: envText(p.Env),
-				Model: p.Model, Effort: p.Effort, ProfileYolo: profYolo}
+				Model: p.Model, Effort: p.Effort, ProfileYolo: profYolo,
+				AllowAgent: p.AgentAllowed(), AllowTemplate: p.TemplateAllowed()}
 			if p.ContextServers != nil {
 				d.PickServers, d.Servers = true, strings.Join(*p.ContextServers, "\n")
 			}
@@ -146,6 +149,14 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 		}
 		args, lifted := agentspec.LiftYoloArgs(r.Agent, args)
 		p := agentspec.Profile{Name: r.Profile, Description: r.Description, Args: args, Env: env, Model: strings.TrimSpace(r.Model), Effort: strings.TrimSpace(r.Effort)}
+		if !r.AllowAgent {
+			off := false
+			p.AllowAgent = &off
+		}
+		if !r.AllowTemplate {
+			off := false
+			p.AllowTemplate = &off
+		}
 		switch r.ProfileYolo {
 		case "on":
 			on := true
@@ -309,7 +320,7 @@ func (m *model) addProfile(agent string) {
 	for n := 2; taken[name]; n++ {
 		name = "profile" + strconv.Itoa(n)
 	}
-	row := agentDraft{ID: m.nextAgentID(), Agent: agent, Profile: name, IsProfile: true}
+	row := agentDraft{ID: m.nextAgentID(), Agent: agent, Profile: name, IsProfile: true, AllowAgent: true, AllowTemplate: true}
 	m.AgentDraft.Set(slices.Insert(rows, at, row))
 }
 
@@ -675,6 +686,7 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 				Name(Tf("%s description", target))),
 		profileModelAndEffort(m, p, target, mono),
 		profileYoloRow(m, id, p.Agent, target),
+		profileExecutionSwitches(m, id, target),
 		compactField(T("Flags"), T("Added after the agent's own."),
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Args })).
 				Style(mono).Placeholder("--flag value").Name(Tf("%s flags", target))),
@@ -703,6 +715,27 @@ func profileYoloRow(m *model, id int, agentName, target string) ggui.Widget {
 		}).
 		Name(Tf("%s YOLO", target))).Width(200)
 	return compactField(T("YOLO mode"), T("Override the agent's YOLO setting for this profile."), ctrl)
+}
+
+func profileExecutionSwitches(m *model, id int, target string) ggui.Widget {
+	agentSwitch := widget.Row(
+		widget.Expanded(widget.Column(
+			widget.Text(T("Allow agent spawning")).Size(12.5).Weight(ggui.WeightMedium),
+			muted(widget.Text(T("Let AI models discover and spawn this profile via MCP.")).Size(11.5)),
+		).Gap(2).Stretch()),
+		ui.Switch(m.agentBoolField(id, func(d *agentDraft) *bool { return &d.AllowAgent }), "").
+			Name(Tf("%s allow agent spawning", target)),
+	).Gap(10).Align(widget.AlignCenter)
+	templateSwitch := widget.Row(
+		widget.Expanded(widget.Column(
+			widget.Text(T("Allow in templates")).Size(12.5).Weight(ggui.WeightMedium),
+			muted(widget.Text(T("Let prompt templates execute this profile via mako.ask or mako.spawn.")).Size(11.5)),
+		).Gap(2).Stretch()),
+		ui.Switch(m.agentBoolField(id, func(d *agentDraft) *bool { return &d.AllowTemplate }), "").
+			Name(Tf("%s allow in templates", target)),
+	).Gap(10).Align(widget.AlignCenter)
+	return widget.Box(widget.Column(agentSwitch, hline(), templateSwitch).Gap(8).Stretch()).
+		Fill(skin.Surface0).Border(1, skin.Border).Radius(8).Pad(10, 12)
 }
 
 // mcpServerIDs are the MCP servers this node has: the built-in mako server,

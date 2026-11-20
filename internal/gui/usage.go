@@ -48,7 +48,9 @@ func usageDetail(u *protocol.Usage, now time.Time) string {
 	}
 	for _, l := range u.GetLimits() {
 		used, resets := limitNow(l, now)
-		s.WriteString("\n" + Tf("%s limit %d%% used", limitName(l.GetMinutes()), int(used+0.5)))
+		usedPct := min(max(int(used+0.5), 0), 100)
+		leftPct := 100 - usedPct
+		s.WriteString("\n" + Tf("%s limit %d%% used", limitName(l.GetMinutes()), usedPct) + Tf(" (%d%% left)", leftPct))
 		if resets > 0 {
 			s.WriteString(Tf(", resets in %s (%s)", untilText(resets), time.Unix(l.GetResets(), 0).Format("01-02 15:04")))
 		}

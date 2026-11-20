@@ -223,3 +223,46 @@ func TestTemplateHostAgentsCatalogSnapshot(t *testing.T) {
 		t.Fatalf("unexpected catalog = %+v", cat)
 	}
 }
+
+func TestTemplateHostRejectsDisallowedProfile(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	off := false
+	on := true
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", NodeId: "n1", Agent: "claude", Project: "/tmp/p"}})
+	m.Nodes.Set([]*protocol.Node{{
+		Id: "n1",
+		Agents: []*protocol.AgentInfo{{
+			Name: "claude",
+			ProfileDetails: []*protocol.AgentProfileInfo{{
+				Name:          "manual-only",
+				AllowAgent:    &off,
+				AllowTemplate: &off,
+				Spawnable:     false,
+			}, {
+				Name:          "auto",
+				AllowAgent:    &on,
+				AllowTemplate: &on,
+				Spawnable:     true,
+			}},
+		}},
+	}})
+
+	host := m.templateHost("s")
+	cat, err := host.Agents(t.Context(), "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cat.Agents) != 1 || len(cat.Agents[0].Profiles) != 2 {
+		t.Fatalf("unexpected catalog: %+v", cat)
+	}
+	if cat.Agents[0].Profiles[0].AllowAgent || cat.Agents[0].Profiles[0].AllowTemplate {
+		t.Fatalf("manual-only flags should be false: %+v", cat.Agents[0].Profiles[0])
+	}
+	if _, err := host.Spawn(t.Context(), prompttmpl.SpawnRequest{Agent: "claude", Profile: "manual-only", Prompt: "run"}); err == nil || !strings.Contains(err.Error(), "not enabled for prompt templates") {
+		t.Fatalf("Spawn allowed disallowed profile: %v", err)
+	}
+	if _, err := host.Ask(t.Context(), prompttmpl.AskRequest{Agent: "claude", Profile: "manual-only", Prompt: "hi"}); err == nil || !strings.Contains(err.Error(), "not enabled for prompt templates") {
+		t.Fatalf("Ask allowed disallowed profile: %v", err)
+	}
+}

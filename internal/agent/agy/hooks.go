@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/pkg/fsutil"
@@ -36,16 +38,42 @@ func hooksFile(env map[string]string) (string, error) {
 }
 
 // WithHooks keeps mako's entry, for hook, in agy's global hooks.json, and
-// leaves the command as it is. Each hook command has an entry of its own,
-// so the daemons of several nodes on one machine each hear their own
-// sessions. The status line is Claude's alone.
-func (*Agent) WithHooks(l *agent.Launch, hook, _, _ string) bool {
+// attaches mako's statusLine via --settings when status is given and the launch
+// does not already pass --settings, so agy reports its context window and
+// remaining quota limits without modifying settings.json on disk.
+func (*Agent) WithHooks(l *agent.Launch, hook, status, _ string) bool {
 	var env map[string]string
 	if l != nil {
 		env = l.Env
 	}
 	path, err := hooksFile(env)
-	return err == nil && writeHooks(path, hook) == nil
+	if err != nil || writeHooks(path, hook) != nil {
+		return false
+	}
+	if l != nil && status != "" && !hasSettingsFlag(l.Command) {
+		doc := map[string]any{
+			"statusLine": map[string]any{
+				"type":               "command",
+				"command":            status,
+				"enabled":            true,
+				"stack_with_default": true,
+			},
+		}
+		if b, err := json.Marshal(doc); err == nil {
+			l.Command = append(l.Command, "--settings", string(b))
+		}
+	}
+	return true
+}
+
+func hasSettingsFlag(command []string) bool {
+	if len(command) <= 1 {
+		return false
+	}
+	return slices.ContainsFunc(command[1:], func(arg string) bool {
+		name, _, _ := strings.Cut(arg, "=")
+		return name == "--settings"
+	})
 }
 
 // writeHooks writes mako's entry for hook into the hooks.json at path,

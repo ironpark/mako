@@ -39,13 +39,15 @@ const agentMCPArg = "agent-mcp"
 const agentMCPTokenEnv = "MAKO_AGENT_MCP_TOKEN"
 
 type projectAgents struct {
-	syncMu   sync.Mutex // serializes live MCP tool and file sync across peers
-	mu       sync.Mutex
-	socket   string // the stdio bridge's, for an agent that cannot reach url
-	url      string // where the agents reach the server over HTTP
-	peers    map[string]*agentPeer
-	messages agentMessages
-	waits    map[string]int // the agents waited on with wait_agent, how many times each
+	syncMu     sync.Mutex // serializes live MCP tool and file sync across peers
+	mu         sync.Mutex
+	socket     string // the stdio bridge's, for an agent that cannot reach url
+	cliSocket  string // agent-cli.sock for mako-msg CLI & agy-sidecar
+	url        string // where the agents reach the server over HTTP
+	peers      map[string]*agentPeer
+	messages   agentMessages
+	waits      map[string]int // the agents waited on with wait_agent, how many times each
+	agySidecar *agySidecarClient
 }
 
 type agentPeer struct {
@@ -177,6 +179,9 @@ type agentMCPHello struct {
 func (d *Daemon) listenAgentMCP(ctx context.Context, dir string) error {
 	if err := d.listenAgentMCPHTTP(ctx); err != nil {
 		return err
+	}
+	if err := d.listenAgentCLI(ctx, dir); err != nil {
+		d.log.Warn("agent CLI: not listening", "err", err)
 	}
 	if d.hookBinary == "" {
 		return nil
@@ -409,7 +414,7 @@ type readMessagesArgs struct {
 	AfterID     uint64 `json:"after_id,omitempty" jsonschema:"Return messages newer than this cursor. Reading does not consume messages."`
 	AckThrough  uint64 `json:"ack_through,omitempty" jsonschema:"Acknowledge messages through this ID from a previous successful read."`
 	Limit       int    `json:"limit,omitempty" jsonschema:"Maximum messages, 1 to 100; defaults to 50."`
-	WaitSeconds int    `json:"wait_seconds,omitempty" jsonschema:"Wait up to 30 seconds for a message when the inbox is empty."`
+	WaitSeconds int    `json:"wait_seconds,omitempty" jsonschema:"Optional short wait (0 to 120 seconds); prefer ending your turn or running 'mako-msg wait' in the background instead of polling."`
 }
 type readMessagesResult struct {
 	Messages    []agentMessage `json:"messages"`
@@ -549,6 +554,23 @@ func clipRunes(s string, maxRunes int) string {
 	return string(r[:maxRunes-1]) + "…"
 }
 
+func (d *Daemon) agentInstructions(peer *agentPeer) string {
+	info := peer.session.Info()
+	mode := "main"
+	if peer.parent != "" {
+		mode = "subagent"
+	}
+	var waitGuidance string
+	switch info.GetAgent() {
+	case "agy":
+		waitGuidance = "Incoming Mako messages are pushed directly into your Antigravity conversation via agentapi/sidecar and wake you automatically. NEVER poll read_messages in a timeout loop: after spawning or messaging a teammate, continue other work or end your turn and you will be woken up when a reply arrives. You can also use `mako-msg wait` in a background shell command if you need to stay in-turn."
+	default:
+		waitGuidance = "NEVER poll read_messages in a repeated timeout loop. Messages are automatically delivered to you as a new prompt once your turn ends. If you want to wait asynchronously without blocking or timing out, run `mako-msg wait` (or `mako-msg wait --session <child-id>`) as a background shell command (e.g. Bash with run_in_background=true); it blocks event-driven with zero polling and exits with the message JSON as soon as a reply arrives or the child finishes. Use read_messages (wait_seconds=0) only for a quick non-blocking inbox check, and acknowledge processed messages with ack_through."
+	}
+	return fmt.Sprintf("You are Mako session %s (mode=%s, AGENT_MAKO_SESSION=%s, AGENT_MAKO_MODE=%s) in project %s. Parent session: %s. Before delegating, use list_agent_profiles to inspect spawnable agent configurations and profile presets (with descriptions, models, efforts and YOLO settings), or list_agents to inspect active project sessions. Choose a spawnable preset whose specialties match the task, then pass its agent and profile names to spawn_agent (omit profile for an agent default). Use send_message to communicate, with agents of this project on other nodes too, which list_agents lists with their node. %s Report results to the parent with send_message. Of an agent you spawned that waits on the user, or exits without reporting, you hear in a Mako note. stop_agent only stops agents you spawned. The mako window's layout is a document you read with get_layout and list_blocks; set_layout, patch_layout and undo_layout change it once the user allows, and only what the user keeps stays. show_ui shows a block of UI of yours in the window, a form say, and the user's taps on it come back to you as messages from the window; update_ui and close_ui change and close it. A UI to keep is a plugin: list_blocks names the folder to write one into.",
+		peer.id, mode, peer.id, mode, info.GetProject(), peer.parent, waitGuidance)
+}
+
 func (d *Daemon) newProjectAgentServer(peer *agentPeer, snap agentMCPSnapshot, enabled bool) (*sdk.Server, string) {
 	server := sdk.NewServer(&sdk.Implementation{Name: "mako", Version: config.Version}, &sdk.ServerOptions{
 		Logger: d.log,
@@ -557,7 +579,7 @@ func (d *Daemon) newProjectAgentServer(peer *agentPeer, snap agentMCPSnapshot, e
 			Tools:   &sdk.ToolCapabilities{ListChanged: true},
 		},
 		SetCacheable: func(_ context.Context, _ sdk.Request, c *sdk.Cacheable) { c.TTLMs = 0 },
-		Instructions: fmt.Sprintf("You are Mako session %s in project %s. Parent session: %s. Before delegating, use list_agent_profiles to inspect spawnable agent configurations and profile presets (with descriptions, models, efforts and YOLO settings), or list_agents to inspect active project sessions. Choose a spawnable preset whose specialties match the task, then pass its agent and profile names to spawn_agent (omit profile for an agent default). Use send_message to communicate, with agents of this project on other nodes too, which list_agents lists with their node. A message is typed into its recipient's terminal as a new prompt, headed with its sender, once that agent waits at its prompt, so it never interrupts a turn; messages to you arrive the same way. Until then a message waits in the recipient's inbox: to wait for a reply within a turn, use read_messages and acknowledge what you processed with ack_through, or it will be typed in later as well. Report results to the parent with send_message. To wait for an agent's turn to end, use wait_agent rather than asking list_agents again and again. Of an agent you spawned that waits on the user, or exits without reporting, you hear in a Mako note, typed in as messages are. stop_agent only stops agents you spawned. The mako window's layout is a document you read with get_layout and list_blocks; set_layout, patch_layout and undo_layout change it once the user allows, and only what the user keeps stays. show_ui shows a block of UI of yours in the window, a form say, and the user's taps on it come back to you as messages from the window; update_ui and close_ui change and close it. A UI to keep is a plugin: list_blocks names the folder to write one into.", peer.id, peer.session.Info().GetProject(), peer.parent),
+		Instructions: d.agentInstructions(peer),
 	})
 	if !enabled {
 		return server, agentMCPSigDisabled
@@ -594,15 +616,15 @@ func (d *Daemon) registerProjectAgentTools(server *sdk.Server, peer *agentPeer, 
 		msg, err := d.sendAgentMessage(ctx, peer, in.To, in.Text)
 		return nil, msg, err
 	})
-	sdk.AddTool(server, &sdk.Tool{Name: "read_messages", Description: "Read your own inbox, optionally waiting for messages. Messages also reach you as prompts once you are at your prompt; use this to wait for a reply within a turn. Use after_id for pagination. Messages remain available across reconnects and daemon restarts until you acknowledge them with ack_through or they are typed into your terminal."}, func(ctx context.Context, _ *sdk.CallToolRequest, in readMessagesArgs) (*sdk.CallToolResult, readMessagesResult, error) {
+	sdk.AddTool(server, &sdk.Tool{Name: "read_messages", Description: "Read your own inbox. Prefer ending your turn (messages are pushed automatically) or running `mako-msg wait` in a background shell command instead of polling read_messages in a timeout loop. Use after_id for pagination and ack_through to acknowledge processed messages."}, func(ctx context.Context, _ *sdk.CallToolRequest, in readMessagesArgs) (*sdk.CallToolResult, readMessagesResult, error) {
 		if _, err := d.projectCaller(peer); err != nil {
 			return nil, readMessagesResult{}, err
 		}
 		if in.Limit == 0 {
 			in.Limit = 50
 		}
-		if in.Limit < 1 || in.Limit > 100 || in.WaitSeconds < 0 || in.WaitSeconds > 30 {
-			return nil, readMessagesResult{}, errors.New("limit must be 1..100 and wait_seconds 0..30")
+		if in.Limit < 1 || in.Limit > 100 || in.WaitSeconds < 0 || in.WaitSeconds > 120 {
+			return nil, readMessagesResult{}, errors.New("limit must be 1..100 and wait_seconds 0..120")
 		}
 		messages, err := d.projectAgents.messages.read(ctx, peer.id, in.AfterID, in.AckThrough, in.Limit, time.Duration(in.WaitSeconds)*time.Second)
 		next := max(in.AfterID, in.AckThrough)
@@ -786,7 +808,7 @@ func (d *Daemon) availableAgents() []availableAgent {
 		available := availableAgent{Name: name, Spawnable: d.agentMCPEnabled(nil), Profiles: []availableProfile{}}
 		for _, p := range a.Profiles {
 			available.Profiles = append(available.Profiles, availableProfile{
-				Name: p.Name, Description: p.Description, Spawnable: d.agentMCPEnabled(p.ContextServers),
+				Name: p.Name, Description: p.Description, Spawnable: p.AgentAllowed() && d.agentMCPEnabled(p.ContextServers),
 			})
 		}
 		out = append(out, available)
@@ -820,7 +842,7 @@ func (d *Daemon) spawnablePresets() []spawnablePreset {
 			})
 		}
 		for _, p := range a.Profiles {
-			if !d.agentMCPEnabled(p.ContextServers) {
+			if !p.AgentAllowed() || !d.agentMCPEnabled(p.ContextServers) {
 				continue
 			}
 			yolo := a.Yolo
@@ -930,6 +952,9 @@ func (d *Daemon) spawnProjectAgent(ctx context.Context, peer *agentPeer, in spaw
 		profile, ok := configured.Profile(in.Profile)
 		if !ok {
 			return agentSummary{}, errors.New("unknown agent profile")
+		}
+		if !profile.AgentAllowed() {
+			return agentSummary{}, errors.New("this profile is not enabled for agent spawning")
 		}
 		picks = profile.ContextServers
 	}

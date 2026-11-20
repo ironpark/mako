@@ -110,6 +110,12 @@ type Servers interface {
 	WithServers(l *Launch, servers []Server, dir, session string) (func(), error)
 }
 
+// MessageDeliverer is an agent that can receive incoming messages natively
+// without typing into its PTY (for example, via agy's agentapi send-message).
+type MessageDeliverer interface {
+	DeliverMessage(ctx context.Context, conversationID, title, text string, env map[string]string) error
+}
+
 // Hooks has the agent run mako's hook on the events mako follows it by.
 type Hooks interface {
 	// WithHooks has l run the shell command hook on the agent's events,

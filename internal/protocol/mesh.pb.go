@@ -481,6 +481,8 @@ type AgentProfileInfo struct {
 	Effort        string                 `protobuf:"bytes,4,opt,name=effort,proto3" json:"effort,omitempty"`
 	Yolo          bool                   `protobuf:"varint,5,opt,name=yolo,proto3" json:"yolo,omitempty"`
 	Spawnable     bool                   `protobuf:"varint,6,opt,name=spawnable,proto3" json:"spawnable,omitempty"`
+	AllowAgent    *bool                  `protobuf:"varint,7,opt,name=allow_agent,json=allowAgent,proto3,oneof" json:"allow_agent,omitempty"`
+	AllowTemplate *bool                  `protobuf:"varint,8,opt,name=allow_template,json=allowTemplate,proto3,oneof" json:"allow_template,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -553,6 +555,20 @@ func (x *AgentProfileInfo) GetYolo() bool {
 func (x *AgentProfileInfo) GetSpawnable() bool {
 	if x != nil {
 		return x.Spawnable
+	}
+	return false
+}
+
+func (x *AgentProfileInfo) GetAllowAgent() bool {
+	if x != nil && x.AllowAgent != nil {
+		return *x.AllowAgent
+	}
+	return false
+}
+
+func (x *AgentProfileInfo) GetAllowTemplate() bool {
+	if x != nil && x.AllowTemplate != nil {
+		return *x.AllowTemplate
 	}
 	return false
 }
@@ -1666,14 +1682,19 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\x05color\x18\x04 \x01(\rR\x05color\x12\x12\n" +
 	"\x04caps\x18\x05 \x01(\rR\x04caps\x12B\n" +
 	"\x0fprofile_details\x18\x06 \x03(\v2\x19.mako.v2.AgentProfileInfoR\x0eprofileDetails\x12\x12\n" +
-	"\x04yolo\x18\a \x01(\bR\x04yolo\"\xa8\x01\n" +
+	"\x04yolo\x18\a \x01(\bR\x04yolo\"\x9d\x02\n" +
 	"\x10AgentProfileInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x14\n" +
 	"\x05model\x18\x03 \x01(\tR\x05model\x12\x16\n" +
 	"\x06effort\x18\x04 \x01(\tR\x06effort\x12\x12\n" +
 	"\x04yolo\x18\x05 \x01(\bR\x04yolo\x12\x1c\n" +
-	"\tspawnable\x18\x06 \x01(\bR\tspawnable\"\v\n" +
+	"\tspawnable\x18\x06 \x01(\bR\tspawnable\x12$\n" +
+	"\vallow_agent\x18\a \x01(\bH\x00R\n" +
+	"allowAgent\x88\x01\x01\x12*\n" +
+	"\x0eallow_template\x18\b \x01(\bH\x01R\rallowTemplate\x88\x01\x01B\x0e\n" +
+	"\f_allow_agentB\x11\n" +
+	"\x0f_allow_template\"\v\n" +
 	"\tListNodes\",\n" +
 	"\x05Nodes\x12#\n" +
 	"\x05nodes\x18\x01 \x03(\v2\r.mako.v2.NodeR\x05nodes\"\xe6\x01\n" +
@@ -1826,6 +1847,7 @@ func file_mako_v2_mesh_proto_init() {
 	}
 	file_mako_v2_session_proto_init()
 	file_mako_v2_workspace_proto_init()
+	file_mako_v2_mesh_proto_msgTypes[4].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

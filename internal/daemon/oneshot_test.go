@@ -113,3 +113,53 @@ func TestRunAgentPromptValidation(t *testing.T) {
 		t.Fatalf("unsupported agent err = %v", err)
 	}
 }
+
+func TestRunAgentPromptAllowTemplateAndEnv(t *testing.T) {
+	binDir := t.TempDir()
+	workDir := t.TempDir()
+	claudeBin := filepath.Join(binDir, "claude")
+	script := `#!/bin/sh
+cat >/dev/null
+printf 'proj=%s;mode=%s' "$AGENT_MAKO_PROJECT" "$AGENT_MAKO_MODE"
+`
+	if err := os.WriteFile(claudeBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	d := meshDaemonWith(t, "oneshot-switch", func(cfg *config.Config) {
+		on := true
+		off := false
+		cfg.Agents = map[string]agentspec.Agent{
+			"claude": {
+				Command: []string{claudeBin},
+				Enabled: &on,
+				Profiles: []agentspec.Profile{
+					{Name: "tmpl-ok", Model: "sonnet"},
+					{Name: "no-tmpl", Model: "sonnet", AllowTemplate: &off},
+				},
+			},
+		}
+	})
+	c := dialDaemon(t, d)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	// Disallowed profile is rejected.
+	if _, err := c.RunAgentPrompt(ctx, &protocol.RunAgentPrompt{
+		Agent: "claude", Profile: "no-tmpl", Project: workDir, Prompt: "hi",
+	}); err == nil || !strings.Contains(err.Error(), "not enabled for prompt templates") {
+		t.Fatalf("expected template restriction error, got %v", err)
+	}
+
+	// Allowed profile runs with AGENT_MAKO_PROJECT and AGENT_MAKO_MODE=subagent.
+	res, err := c.RunAgentPrompt(ctx, &protocol.RunAgentPrompt{
+		Agent: "claude", Profile: "tmpl-ok", Project: workDir, Prompt: "hi",
+	})
+	if err != nil {
+		t.Fatalf("RunAgentPrompt: %v", err)
+	}
+	want := "proj=" + workDir + ";mode=subagent"
+	if res.GetOutput() != want {
+		t.Fatalf("output = %q, want %q", res.GetOutput(), want)
+	}
+}

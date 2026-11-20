@@ -318,6 +318,15 @@ func (u *Usage) Merge(r *Usage) {
 	if r.GetWindow() != 0 {
 		u.Window = r.GetWindow()
 	}
+	if u.Context == 0 && r.GetContext() != 0 {
+		u.Context = r.GetContext()
+	}
+	if u.Model == "" && r.GetModel() != "" {
+		u.Model = r.GetModel()
+	}
+	if u.Effort == "" && r.GetEffort() != "" {
+		u.Effort = r.GetEffort()
+	}
 	for _, l := range r.GetLimits() {
 		u.SetLimit(l)
 	}

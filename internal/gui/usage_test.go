@@ -167,3 +167,34 @@ func TestUsageDetailOpensOnHoverAlone(t *testing.T) {
 		t.Fatalf("detail not open under the pointer:\n%s", p.Semantics().String())
 	}
 }
+
+func TestUsageOverlayAgyRemainingQuota(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "a", Agent: "agy", Project: "/tmp"}})
+	now := time.Unix(1_800_000_000, 0)
+	m.Minute.Set(now)
+	state := m.usageState("a")
+	state.loading = true
+	state.usage.Set(&protocol.Usage{
+		Input: 4000, Output: 1200, Context: 150000, Window: 1000000,
+		Limits: []*protocol.RateLimit{
+			{Minutes: protocol.FiveHours, Used: 28, Resets: now.Add(time.Hour).Unix()},
+			{Minutes: protocol.Week, Used: 6, Resets: now.Add(48 * time.Hour).Unix()},
+		},
+	})
+	p := ggui.ProbeBuilder(func() ggui.Widget { return usageOverlay(m, "a", nil, nil) }, ggui.Sz(800, 600))
+	defer p.Close()
+	p.Frame()
+	for _, want := range []string{Tf("%d%%", 15), Tf("%dh", 5), Tf("%d%%", 28), T("Week"), Tf("%d%%", 6)} {
+		if _, ok := p.Semantics().Find(ggui.RoleText, want); !ok {
+			t.Errorf("agy usage overlay missing %q:\n%s", want, p.Semantics().String())
+		}
+	}
+	detail := usageDetail(ggui.Peek(state.usage), now)
+	for _, want := range []string{Tf(" (%d%% left)", 72), Tf(" (%d%% left)", 94)} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("agy usage detail %q missing %q", detail, want)
+		}
+	}
+}

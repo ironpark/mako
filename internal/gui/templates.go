@@ -500,13 +500,17 @@ func (h *guiTemplateHost) localAgentInfos() []*protocol.AgentInfo {
 			if p.Yolo != nil {
 				y = *p.Yolo
 			}
+			allowAgent := p.AgentAllowed()
+			allowTemplate := p.TemplateAllowed()
 			info.ProfileDetails = append(info.ProfileDetails, &protocol.AgentProfileInfo{
-				Name:        p.Name,
-				Description: p.Description,
-				Model:       p.Model,
-				Effort:      p.Effort,
-				Yolo:        y,
-				Spawnable:   hasServers && hasPrompter && agentMCPEnabled(p.ContextServers),
+				Name:          p.Name,
+				Description:   p.Description,
+				Model:         p.Model,
+				Effort:        p.Effort,
+				Yolo:          y,
+				Spawnable:     hasServers && hasPrompter && agentMCPEnabled(p.ContextServers) && allowAgent,
+				AllowAgent:    &allowAgent,
+				AllowTemplate: &allowTemplate,
 			})
 		}
 		infos = append(infos, info)
@@ -563,18 +567,22 @@ func (h *guiTemplateHost) Agents(ctx context.Context, agentName string, refresh 
 
 		if details := ai.GetProfileDetails(); len(details) > 0 {
 			for _, p := range details {
+				allowAgent := p.AllowAgent == nil || p.GetAllowAgent()
+				allowTemplate := p.AllowTemplate == nil || p.GetAllowTemplate()
 				ae.Profiles = append(ae.Profiles, prompttmpl.ProfileEntry{
-					Name:        p.GetName(),
-					Description: p.GetDescription(),
-					Model:       p.GetModel(),
-					Effort:      p.GetEffort(),
-					Yolo:        p.GetYolo(),
-					Spawnable:   p.GetSpawnable(),
+					Name:          p.GetName(),
+					Description:   p.GetDescription(),
+					Model:         p.GetModel(),
+					Effort:        p.GetEffort(),
+					Yolo:          p.GetYolo(),
+					Spawnable:     p.GetSpawnable(),
+					AllowAgent:    allowAgent,
+					AllowTemplate: allowTemplate,
 				})
 			}
 		} else {
 			for _, pName := range ai.GetProfiles() {
-				ae.Profiles = append(ae.Profiles, prompttmpl.ProfileEntry{Name: pName})
+				ae.Profiles = append(ae.Profiles, prompttmpl.ProfileEntry{Name: pName, AllowAgent: true, AllowTemplate: true})
 			}
 		}
 
@@ -608,6 +616,34 @@ func (h *guiTemplateHost) Agents(ctx context.Context, agentName string, refresh 
 	return out, nil
 }
 
+func (h *guiTemplateHost) checkTemplateProfileAllowed(agentName, profile string) error {
+	if profile == "" {
+		return nil
+	}
+	var infos []*protocol.AgentInfo
+	if h.remoteNode == "" && len(h.cfgAgents) > 0 {
+		infos = h.localAgentInfos()
+	} else {
+		for _, n := range h.nodes {
+			if n.GetId() == h.nodeID {
+				infos = n.GetAgents()
+				break
+			}
+		}
+	}
+	for _, ai := range infos {
+		if ai.GetName() != agentName {
+			continue
+		}
+		for _, p := range ai.GetProfileDetails() {
+			if p.GetName() == profile && p.AllowTemplate != nil && !p.GetAllowTemplate() {
+				return errors.New("profile " + agentspec.Target(agentName, profile) + " is not enabled for prompt templates")
+			}
+		}
+	}
+	return nil
+}
+
 func (h *guiTemplateHost) Spawn(ctx context.Context, req prompttmpl.SpawnRequest) (prompttmpl.SpawnResult, error) {
 	if h.m == nil || h.m.link == nil {
 		return prompttmpl.SpawnResult{}, errors.New("daemon link is unavailable")
@@ -621,6 +657,9 @@ func (h *guiTemplateHost) Spawn(ctx context.Context, req prompttmpl.SpawnRequest
 	}
 	if agentName == "" {
 		return prompttmpl.SpawnResult{}, errors.New("spawn requires an agent")
+	}
+	if err := h.checkTemplateProfileAllowed(agentName, profile); err != nil {
+		return prompttmpl.SpawnResult{}, err
 	}
 	project := cmp.Or(strings.TrimSpace(req.Project), h.defProject)
 	c, err := h.m.link.client(ctx)
@@ -675,6 +714,9 @@ func (h *guiTemplateHost) Ask(ctx context.Context, req prompttmpl.AskRequest) (p
 	}
 	if agentName == "" {
 		return prompttmpl.AskResult{}, errors.New("ask requires an agent")
+	}
+	if err := h.checkTemplateProfileAllowed(agentName, profile); err != nil {
+		return prompttmpl.AskResult{}, err
 	}
 	schemaJSON, err := prompttmpl.SchemaJSON(req.Schema)
 	if err != nil {

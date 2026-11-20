@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 )
@@ -28,14 +30,23 @@ const (
 	deliveryPoll = 500 * time.Millisecond
 )
 
-// deliverAgentMessages types peer's mail into its terminal for as long as
-// it serves MCP.
+// deliverAgentMessages delivers peer's mail to its agent: natively via
+// agent.MessageDeliverer (e.g. agy sidecar / agentapi send-message) when the
+// agent supports it and has a conversation ID, otherwise typed into its
+// terminal as a prompt once it waits at its prompt.
 func (d *Daemon) deliverAgentMessages(peer *agentPeer) {
 	var delivered time.Time
 	for {
 		inbox, changed := d.projectAgents.messages.pending(peer.id)
 		var poll <-chan time.Time
 		if len(inbox) > 0 {
+			if batch := deliveryOf(inbox); d.deliverNativeMessage(peer, batch) {
+				delivered = time.Now()
+				if err := d.projectAgents.messages.delivered(peer.id, batch[len(batch)-1].ID); err != nil {
+					d.log.Warn("agent messages: native delivery not recorded", "session", peer.id, "err", err)
+				}
+				continue
+			}
 			if s, ok := d.readyForMessages(peer, delivered); ok {
 				batch := deliveryOf(inbox)
 				if err := s.Prompt(d.agentPrompt(batch)); err != nil {
@@ -57,6 +68,57 @@ func (d *Daemon) deliverAgentMessages(peer *agentPeer) {
 			return
 		}
 	}
+}
+
+// deliverNativeMessage delivers batch through the agent's native messaging API
+// (preferring a live agy sidecar when connected, then direct agentapi) so
+// agents like agy wake reactively without PTY typing or polling loops.
+func (d *Daemon) deliverNativeMessage(peer *agentPeer, batch []agentMessage) bool {
+	if len(batch) == 0 {
+		return false
+	}
+	s, err := d.projectCaller(peer)
+	if err != nil {
+		return false
+	}
+	info := s.Info()
+	convID := info.GetConversationId()
+	if convID == "" {
+		return false
+	}
+	deliverer, ok := agents.As[agent.MessageDeliverer](info.GetAgent())
+	if !ok {
+		return false
+	}
+	title := "Mako message"
+	if len(batch) == 1 {
+		var mesh []*protocol.SessionInfo
+		switch {
+		case batch[0].Event:
+			title = "Mako window event"
+		case batch[0].Note:
+			title = "Mako note about " + d.agentLabel(batch[0].From, &mesh)
+		default:
+			title = "Mako message from " + d.agentLabel(batch[0].From, &mesh)
+		}
+	}
+	body := d.agentPrompt(batch)
+	env := s.TranscriptEnv()
+	if info.GetAgent() == "agy" && d.deliverViaAgySidecar(peer.ctx, sidecarPush{
+		ID:             batch[len(batch)-1].ID,
+		SessionID:      peer.id,
+		ConversationID: convID,
+		Title:          title,
+		Text:           body,
+		Home:           env["HOME"],
+	}) {
+		return true
+	}
+	if err := deliverer.DeliverMessage(peer.ctx, convID, title, body, env); err != nil {
+		d.log.Warn("agent messages: native delivery failed; falling back to PTY", "session", peer.id, "agent", info.GetAgent(), "err", err)
+		return false
+	}
+	return true
 }
 
 // readyForMessages reports whether peer's agent has waited at its prompt a

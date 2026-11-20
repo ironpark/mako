@@ -100,6 +100,8 @@ message AgentProfileInfo {
   string effort = 4;
   bool yolo = 5;
   bool spawnable = 6;
+  optional bool allow_agent = 7;
+  optional bool allow_template = 8;
 }
 
 // ListNodes asks for the daemon and its peers.

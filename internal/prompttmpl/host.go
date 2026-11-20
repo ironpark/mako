@@ -41,12 +41,14 @@ type AgentEntry struct {
 
 // ProfileEntry describes one configured profile of an agent.
 type ProfileEntry struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Model       string `json:"model,omitempty"`
-	Effort      string `json:"effort,omitempty"`
-	Yolo        bool   `json:"yolo"`
-	Spawnable   bool   `json:"spawnable"`
+	Name          string `json:"name"`
+	Description   string `json:"description,omitempty"`
+	Model         string `json:"model,omitempty"`
+	Effort        string `json:"effort,omitempty"`
+	Yolo          bool   `json:"yolo"`
+	Spawnable     bool   `json:"spawnable"`
+	AllowAgent    bool   `json:"allowAgent"`
+	AllowTemplate bool   `json:"allowTemplate"`
 }
 
 // ModelEntry describes a model offered by an agent and its supported efforts.

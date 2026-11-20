@@ -41,6 +41,16 @@ func HookMain() bool {
 		}
 		return true
 	}
+	if len(os.Args) > 1 && os.Args[1] == agentMsgArg {
+		os.Exit(runAgentMsg(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	}
+	if len(os.Args) > 1 && os.Args[1] == agySidecarArg {
+		if err := runAgySidecar(os.Args[2:], os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "mako agy-sidecar:", err)
+			os.Exit(1)
+		}
+		return true
+	}
 	if len(os.Args) > 1 && os.Args[1] == hookArg {
 		runHook(os.Args[2:], os.Stdin, os.Stdout)
 		return true

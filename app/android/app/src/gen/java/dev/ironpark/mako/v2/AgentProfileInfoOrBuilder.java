@@ -69,4 +69,26 @@ public interface AgentProfileInfoOrBuilder extends
    * @return The spawnable.
    */
   boolean getSpawnable();
+
+  /**
+   * <code>optional bool allow_agent = 7 [json_name = "allowAgent"];</code>
+   * @return Whether the allowAgent field is set.
+   */
+  boolean hasAllowAgent();
+  /**
+   * <code>optional bool allow_agent = 7 [json_name = "allowAgent"];</code>
+   * @return The allowAgent.
+   */
+  boolean getAllowAgent();
+
+  /**
+   * <code>optional bool allow_template = 8 [json_name = "allowTemplate"];</code>
+   * @return Whether the allowTemplate field is set.
+   */
+  boolean hasAllowTemplate();
+  /**
+   * <code>optional bool allow_template = 8 [json_name = "allowTemplate"];</code>
+   * @return The allowTemplate.
+   */
+  boolean getAllowTemplate();
 }

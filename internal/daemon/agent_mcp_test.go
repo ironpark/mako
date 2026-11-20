@@ -792,3 +792,89 @@ func TestProjectMCPListAgentProfilesAndSpawnAgy(t *testing.T) {
 		t.Fatalf("expected agy mcp_config.json with mako server at %s: %s (%v)", mcpPath, mcpBody, err)
 	}
 }
+
+func TestProfileAllowAgentSwitch(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	claudeCmd, claudeRoot := fakeAgent(t, "claude")
+	cfg := &config.Config{
+		NodeID: "node",
+		Agents: map[string]agentspec.Agent{
+			"claude": {
+				Command: []string{claudeCmd},
+				Env:     map[string]string{"MAKO_FAKE_AGENT": "claude", "MAKO_FAKE_ROOT": claudeRoot, "CLAUDE_CONFIG_DIR": claudeRoot},
+				Profiles: []agentspec.Profile{
+					{Name: "allowed", Description: "Allowed for agents"},
+					{Name: "manual-only", Description: "Manual only", AllowAgent: new(false)},
+				},
+			},
+		},
+	}
+	d := New(cfg, slog.New(slog.DiscardHandler))
+	d.dir, d.ctx, d.mcp, d.hookBinary = t.TempDir(), t.Context(), nil, "/bin/makod"
+	if err := d.loadSessions(d.dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.projectAgents.messages.load(d.dir); err != nil {
+		t.Fatal(err)
+	}
+	run, err := config.RunDir(d.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.listenAgentMCP(t.Context(), run); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(d.sessions.closeAll)
+
+	parent, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := projectMCPClient(t, d, parent)
+
+	// list_agent_profiles omits manual-only.
+	profiles := callProjectTool[listAgentProfilesResult](t, client, "list_agent_profiles", struct{}{})
+	data, _ := json.Marshal(profiles)
+	if strings.Contains(string(data), "manual-only") || !strings.Contains(string(data), "claude:allowed") {
+		t.Fatalf("unexpected profiles: %s", data)
+	}
+
+	// list_agents marks manual-only spawnable=false.
+	listed := callProjectTool[listAgentsResult](t, client, "list_agents", struct{}{})
+	var sawManual, sawAllowed bool
+	for _, av := range listed.Available {
+		if av.Name != "claude" {
+			continue
+		}
+		for _, p := range av.Profiles {
+			if p.Name == "manual-only" {
+				sawManual = true
+				if p.Spawnable {
+					t.Fatalf("manual-only should not be spawnable: %+v", p)
+				}
+			}
+			if p.Name == "allowed" {
+				sawAllowed = true
+				if !p.Spawnable {
+					t.Fatalf("allowed should be spawnable: %+v", p)
+				}
+			}
+		}
+	}
+	if !sawManual || !sawAllowed {
+		t.Fatalf("missing expected profiles in list_agents: %+v", listed.Available)
+	}
+
+	// spawn_agent rejects manual-only.
+	res, err := client.CallTool(t.Context(), &sdk.CallToolParams{
+		Name:      "spawn_agent",
+		Arguments: spawnAgentArgs{Agent: "claude", Profile: "manual-only", Prompt: "hello"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawRes, _ := json.Marshal(res.Content)
+	if !res.IsError || !strings.Contains(string(rawRes), "not enabled for agent spawning") {
+		t.Fatalf("expected error spawning disallowed profile, got isError=%v content=%s", res.IsError, rawRes)
+	}
+}

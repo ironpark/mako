@@ -240,24 +240,32 @@ Use the returned session ID to send more context:
 {"to":"<child-session-id>","text":"Please include the case where background agents are still running."}
 ```
 
-The child replies to the parent ID with `send_message`. Once the parent's
-turn has ended, the reply is typed into its terminal as a new prompt. To
-wait for it within a turn instead, the parent uses `read_messages`:
+The child replies to the parent ID with `send_message`.
+
+### Event-driven message delivery (`agy` sidecar / `mako-msg`)
+
+To avoid repeated `read_messages` timeout polling loops:
+
+- **Antigravity (`agy`)**: Mako writes a `mako-bridge` sidecar manifest under `~/.gemini/config/sidecars/mako-bridge/sidecar.json` (and enables it in `~/.gemini/config/config.json`) and pushes incoming messages directly into the target conversation via `agy agentapi send-message` (preferring the live sidecar when connected, falling back to direct `agentapi`, then PTY). The conversation wakes reactively with no polling.
+- **Claude Code and CLI agents (`mako-msg`)**: Mako places a `mako-msg` command on every session's `PATH` backed by the daemon's `agent-cli.sock`. An agent can wait asynchronously without polling by running `mako-msg wait` (or `mako-msg wait --session <child-id>`) as a background shell command (e.g., `Bash` with `run_in_background=true`): it blocks event-driven and exits with the message JSON (auto-acknowledging unless `--no-ack` is set) as soon as a reply arrives or the watched child finishes. Subcommands: `mako-msg wait`, `mako-msg read`, `mako-msg send <to> <text>`, `mako-msg list`, `mako-msg profiles`.
+- **Default session environment variables**: Every agent session receives `AGENT_MAKO_SESSION` (session ID), `AGENT_MAKO_PROJECT` (project path), `AGENT_MAKO_MODE` (`main` or `subagent`), plus `AGENT_MAKO_PARENT` for spawned subagents and `AGENT_MAKO_SOCKET` / `MAKO_AGENT_MCP_TOKEN` when messaging is active.
+
+When a quick non-blocking inbox check or short wait is needed, `read_messages` supports `wait_seconds` `0..120` and `ack_through`:
 
 ```json
-{"after_id":0,"wait_seconds":30}
+{"after_id":0,"wait_seconds":0}
 ```
 
 After processing a batch, acknowledge its last message ID:
 
 ```json
-{"ack_through":42,"after_id":42,"wait_seconds":30}
+{"ack_through":42,"after_id":42}
 ```
 
 Reading is non-destructive. Repeating a read after a lost connection returns
 the same messages until they are acknowledged. IDs increase across the
 daemon's mailboxes, so a cursor may have gaps. A read returns up to 50
-messages by default; `limit` can be 1–100 and `wait_seconds` 0–30. Waiting
+messages by default; `limit` can be 1–100 and `wait_seconds` 0–120. Waiting
 can be cancelled through MCP without disconnecting other tool calls.
 
 Each message is at most 32 KiB. An inbox holds 256 unacknowledged messages;
@@ -351,7 +359,16 @@ disables all MCP servers for the profile. For example:
 
 As with explicitly selected extension servers, selecting `mako` in a
 profile enables it even if it is disabled at node level. `spawn_agent`
-rejects a profile that would disable the child's communication tools.
+rejects a profile that would disable the child's communication tools or
+whose `allow_agent` switch is `false`. Likewise, prompt templates
+(`mako.ask` / `mako.spawn`) reject a profile whose `allow_template` switch
+is `false`. Both switches default to `true` when omitted and can be toggled
+per profile in **Settings ▸ Agents**:
+
+```json
+{"name":"manual-only","allow_agent":false,"allow_template":false}
+```
+
 Saved changes to agent profiles and to the built-in `mako` server apply to
 running sessions at once, updating their available tools and messaging state
 on existing MCP connections.
