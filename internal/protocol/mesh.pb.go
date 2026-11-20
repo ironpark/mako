@@ -383,11 +383,13 @@ type AgentInfo struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Profiles       []string               `protobuf:"bytes,2,rep,name=profiles,proto3" json:"profiles,omitempty"`
-	Icon           string                 `protobuf:"bytes,3,opt,name=icon,proto3" json:"icon,omitempty"`                                           // the glyph's name
-	Color          uint32                 `protobuf:"varint,4,opt,name=color,proto3" json:"color,omitempty"`                                        // 0xRRGGBBAA, 0 for none
-	Caps           uint32                 `protobuf:"varint,5,opt,name=caps,proto3" json:"caps,omitempty"`                                          // protocol's Cap bits
-	ProfileDetails []*AgentProfileInfo    `protobuf:"bytes,6,rep,name=profile_details,json=profileDetails,proto3" json:"profile_details,omitempty"` // Revision 39
-	Yolo           bool                   `protobuf:"varint,7,opt,name=yolo,proto3" json:"yolo,omitempty"`                                          // Revision 39
+	Icon           string                 `protobuf:"bytes,3,opt,name=icon,proto3" json:"icon,omitempty"`                                               // the glyph's name
+	Color          uint32                 `protobuf:"varint,4,opt,name=color,proto3" json:"color,omitempty"`                                            // 0xRRGGBBAA, 0 for none
+	Caps           uint32                 `protobuf:"varint,5,opt,name=caps,proto3" json:"caps,omitempty"`                                              // protocol's Cap bits
+	ProfileDetails []*AgentProfileInfo    `protobuf:"bytes,6,rep,name=profile_details,json=profileDetails,proto3" json:"profile_details,omitempty"`     // Revision 39
+	Yolo           bool                   `protobuf:"varint,7,opt,name=yolo,proto3" json:"yolo,omitempty"`                                              // Revision 39
+	AllowAgent     *bool                  `protobuf:"varint,8,opt,name=allow_agent,json=allowAgent,proto3,oneof" json:"allow_agent,omitempty"`          // Revision 39: allow AI models to spawn default (no-profile) agent via MCP
+	AllowTemplate  *bool                  `protobuf:"varint,9,opt,name=allow_template,json=allowTemplate,proto3,oneof" json:"allow_template,omitempty"` // Revision 39: allow prompt templates to run default (no-profile) agent
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -467,6 +469,20 @@ func (x *AgentInfo) GetProfileDetails() []*AgentProfileInfo {
 func (x *AgentInfo) GetYolo() bool {
 	if x != nil {
 		return x.Yolo
+	}
+	return false
+}
+
+func (x *AgentInfo) GetAllowAgent() bool {
+	if x != nil && x.AllowAgent != nil {
+		return *x.AllowAgent
+	}
+	return false
+}
+
+func (x *AgentInfo) GetAllowTemplate() bool {
+	if x != nil && x.AllowTemplate != nil {
+		return *x.AllowTemplate
 	}
 	return false
 }
@@ -1674,7 +1690,7 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\n" +
 	"link_error\x18\x15 \x01(\tR\tlinkError\x127\n" +
 	"\trelink_at\x18\x16 \x01(\v2\x1a.google.protobuf.TimestampR\brelinkAt\x12)\n" +
-	"\x10workspace_digest\x18\x17 \x01(\fR\x0fworkspaceDigest\"\xd1\x01\n" +
+	"\x10workspace_digest\x18\x17 \x01(\fR\x0fworkspaceDigest\"\xc6\x02\n" +
 	"\tAgentInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bprofiles\x18\x02 \x03(\tR\bprofiles\x12\x12\n" +
@@ -1682,7 +1698,12 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\x05color\x18\x04 \x01(\rR\x05color\x12\x12\n" +
 	"\x04caps\x18\x05 \x01(\rR\x04caps\x12B\n" +
 	"\x0fprofile_details\x18\x06 \x03(\v2\x19.mako.v2.AgentProfileInfoR\x0eprofileDetails\x12\x12\n" +
-	"\x04yolo\x18\a \x01(\bR\x04yolo\"\x9d\x02\n" +
+	"\x04yolo\x18\a \x01(\bR\x04yolo\x12$\n" +
+	"\vallow_agent\x18\b \x01(\bH\x00R\n" +
+	"allowAgent\x88\x01\x01\x12*\n" +
+	"\x0eallow_template\x18\t \x01(\bH\x01R\rallowTemplate\x88\x01\x01B\x0e\n" +
+	"\f_allow_agentB\x11\n" +
+	"\x0f_allow_template\"\x9d\x02\n" +
 	"\x10AgentProfileInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x14\n" +
@@ -1847,6 +1868,7 @@ func file_mako_v2_mesh_proto_init() {
 	}
 	file_mako_v2_session_proto_init()
 	file_mako_v2_workspace_proto_init()
+	file_mako_v2_mesh_proto_msgTypes[3].OneofWrappers = []any{}
 	file_mako_v2_mesh_proto_msgTypes[4].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

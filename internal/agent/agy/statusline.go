@@ -1,6 +1,7 @@
 package agy
 
 import (
+	"cmp"
 	"encoding/json"
 	"math"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -49,16 +51,24 @@ func (*Agent) Status(input []byte) *protocol.Usage {
 			FiveHour *quotaBucket `json:"five_hour"`
 			SevenDay *quotaBucket `json:"seven_day"`
 		} `json:"rate_limits"`
+		CycleMode string `json:"cycle_mode"`
+		Cost      *struct {
+			TotalUSD float64 `json:"total_usd"`
+		} `json:"cost"`
 	}
 	if json.Unmarshal(input, &state) != nil {
 		return &protocol.Usage{}
 	}
 	u := &protocol.Usage{
-		Input:  state.Context.TotalInput,
-		Output: state.Context.TotalOutput,
-		Window: state.Context.Size,
-		Model:  state.Model.DisplayName,
-		Effort: state.Model.Effort,
+		Input:          state.Context.TotalInput,
+		Output:         state.Context.TotalOutput,
+		Window:         state.Context.Size,
+		Model:          state.Model.DisplayName,
+		Effort:         state.Model.Effort,
+		PermissionMode: agyCyclePermissionMode(state.CycleMode),
+	}
+	if state.Cost != nil && state.Cost.TotalUSD > 0 {
+		u.CostUsd = state.Cost.TotalUSD
 	}
 	if u.Model == "" {
 		u.Model = state.Model.ID
@@ -227,4 +237,45 @@ func (*Agent) UserStatusLine(_ []byte) string {
 		return ""
 	}
 	return settings.StatusLine.Command
+}
+
+func agyCyclePermissionMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "accept-edits", "acceptedits":
+		return "acceptEdits"
+	case "auto":
+		return "auto"
+	case "plan":
+		return "plan"
+	}
+	return ""
+}
+
+// StatusHookEvent extracts live conversation identity and waiting/working state
+// from agy's statusLine JSON payload, supplementing hooks.json (which does not
+// fire on tool confirmation prompts).
+func (*Agent) StatusHookEvent(input []byte) (agent.Event, bool) {
+	var state struct {
+		ConversationID          string `json:"conversation_id"`
+		SessionID               string `json:"session_id"`
+		TranscriptPath          string `json:"transcript_path"`
+		AgentState              string `json:"agent_state"`
+		ToolConfirmationPending bool   `json:"tool_confirmation_pending"`
+	}
+	if json.Unmarshal(input, &state) != nil {
+		return agent.Event{}, false
+	}
+	convID := cmp.Or(strings.TrimSpace(state.ConversationID), strings.TrimSpace(state.SessionID))
+	transcript := strings.TrimSpace(state.TranscriptPath)
+	switch {
+	case state.ToolConfirmationPending || state.AgentState == "reviewing":
+		return agent.Event{Kind: agent.Waiting, SessionID: convID, Transcript: transcript}, true
+	case state.AgentState == "working" || state.AgentState == "tool_use":
+		return agent.Event{Kind: agent.Prompted, SessionID: convID, Transcript: transcript}, true
+	case state.AgentState == "idle":
+		return agent.Event{Kind: agent.Idle, SessionID: convID, Transcript: transcript}, true
+	case convID != "":
+		return agent.Event{Kind: agent.Started, SessionID: convID, Transcript: transcript}, true
+	}
+	return agent.Event{}, false
 }

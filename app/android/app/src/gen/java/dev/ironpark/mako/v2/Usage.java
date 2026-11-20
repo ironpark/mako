@@ -488,6 +488,44 @@ public  final class Usage extends
 
   }
 
+  public static final int COST_USD_FIELD_NUMBER = 10;
+  private double costUsd_;
+  /**
+   * <pre>
+   * cost_usd is the estimated spend in US dollars when the agent reports one.
+   * </pre>
+   *
+   * <code>double cost_usd = 10 [json_name = "costUsd"];</code>
+   * @return The costUsd.
+   */
+  @java.lang.Override
+  public double getCostUsd() {
+    return costUsd_;
+  }
+  /**
+   * <pre>
+   * cost_usd is the estimated spend in US dollars when the agent reports one.
+   * </pre>
+   *
+   * <code>double cost_usd = 10 [json_name = "costUsd"];</code>
+   * @param value The costUsd to set.
+   */
+  private void setCostUsd(double value) {
+    
+    costUsd_ = value;
+  }
+  /**
+   * <pre>
+   * cost_usd is the estimated spend in US dollars when the agent reports one.
+   * </pre>
+   *
+   * <code>double cost_usd = 10 [json_name = "costUsd"];</code>
+   */
+  private void clearCostUsd() {
+
+    costUsd_ = 0D;
+  }
+
   public static dev.ironpark.mako.v2.Usage parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1081,6 +1119,46 @@ public  final class Usage extends
       return this;
     }
 
+    /**
+     * <pre>
+     * cost_usd is the estimated spend in US dollars when the agent reports one.
+     * </pre>
+     *
+     * <code>double cost_usd = 10 [json_name = "costUsd"];</code>
+     * @return The costUsd.
+     */
+    @java.lang.Override
+    public double getCostUsd() {
+      return instance.getCostUsd();
+    }
+    /**
+     * <pre>
+     * cost_usd is the estimated spend in US dollars when the agent reports one.
+     * </pre>
+     *
+     * <code>double cost_usd = 10 [json_name = "costUsd"];</code>
+     * @param value The costUsd to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCostUsd(double value) {
+      copyOnWrite();
+      instance.setCostUsd(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * cost_usd is the estimated spend in US dollars when the agent reports one.
+     * </pre>
+     *
+     * <code>double cost_usd = 10 [json_name = "costUsd"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCostUsd() {
+      copyOnWrite();
+      instance.clearCostUsd();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Usage)
   }
   @java.lang.Override
@@ -1107,10 +1185,11 @@ public  final class Usage extends
             "model_",
             "effort_",
             "permissionMode_",
+            "costUsd_",
           };
           java.lang.String info =
-              "\u0000\t\u0000\u0000\u0001\t\t\u0000\u0001\u0000\u0001\u0002\u0002\u0002\u0003\u0002" +
-              "\u0004\u0002\u0005\u0002\u0006\u001b\u0007\u0208\b\u0208\t\u0208";
+              "\u0000\n\u0000\u0000\u0001\n\n\u0000\u0001\u0000\u0001\u0002\u0002\u0002\u0003\u0002" +
+              "\u0004\u0002\u0005\u0002\u0006\u001b\u0007\u0208\b\u0208\t\u0208\n\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

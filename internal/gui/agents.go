@@ -57,7 +57,7 @@ func draftAgents(agents map[string]agentspec.Agent) []agentDraft {
 		agentArgs, lifted := agentspec.LiftYoloArgs(name, a.Args)
 		d := agentDraft{ID: len(out) + 1, Agent: name,
 			Command: agentspec.JoinArgs(a.Command), Args: agentspec.JoinArgs(agentArgs), Env: envText(a.Env),
-			Yolo: a.Yolo || lifted}
+			Yolo: a.Yolo || lifted, AllowAgent: a.AgentAllowed(), AllowTemplate: a.TemplateAllowed()}
 		if a.Enabled != nil {
 			d.Enabled = pick(*a.Enabled, "on", "off")
 		}
@@ -123,6 +123,14 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 		if r.Enabled != "" {
 			on := r.Enabled == "on"
 			a.Enabled = &on
+		}
+		if !r.AllowAgent {
+			off := false
+			a.AllowAgent = &off
+		}
+		if !r.AllowTemplate {
+			off := false
+			a.AllowTemplate = &off
 		}
 		out[r.Agent] = a
 		order = append(order, r.Agent)
@@ -334,7 +342,7 @@ func (m *model) addAgent(name string) error {
 	if slices.ContainsFunc(rows, func(r agentDraft) bool { return r.Agent == name }) {
 		return fmt.Errorf(T("there is already an agent named %s"), name)
 	}
-	m.AgentDraft.Set(append(slices.Clone(rows), agentDraft{ID: m.nextAgentID(), Agent: name, Command: name}))
+	m.AgentDraft.Set(append(slices.Clone(rows), agentDraft{ID: m.nextAgentID(), Agent: name, Command: name, AllowAgent: true, AllowTemplate: true}))
 	return nil
 }
 
@@ -573,6 +581,7 @@ func agentEditor(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 		).Gap(10).Align(widget.AlignCenter)).Fill(skin.Surface0).Border(1, skin.Border).Radius(8).Pad(10, 12)
 		children = append(children, yoloRow)
 	}
+	children = append(children, executionSwitches(m, a.ID, a.Agent, false))
 	for _, p := range profiles {
 		children = append(children, profileCard(m, p, mono))
 	}
@@ -686,7 +695,7 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 				Name(Tf("%s description", target))),
 		profileModelAndEffort(m, p, target, mono),
 		profileYoloRow(m, id, p.Agent, target),
-		profileExecutionSwitches(m, id, target),
+		executionSwitches(m, id, target, true),
 		compactField(T("Flags"), T("Added after the agent's own."),
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Args })).
 				Style(mono).Placeholder("--flag value").Name(Tf("%s flags", target))),
@@ -717,11 +726,17 @@ func profileYoloRow(m *model, id int, agentName, target string) ggui.Widget {
 	return compactField(T("YOLO mode"), T("Override the agent's YOLO setting for this profile."), ctrl)
 }
 
-func profileExecutionSwitches(m *model, id int, target string) ggui.Widget {
+func executionSwitches(m *model, id int, target string, isProfile bool) ggui.Widget {
+	agentDesc := T("Let AI models discover and spawn this agent's default configuration via MCP.")
+	tmplDesc := T("Let prompt templates execute this agent's default configuration via mako.ask or mako.spawn.")
+	if isProfile {
+		agentDesc = T("Let AI models discover and spawn this profile via MCP.")
+		tmplDesc = T("Let prompt templates execute this profile via mako.ask or mako.spawn.")
+	}
 	agentSwitch := widget.Row(
 		widget.Expanded(widget.Column(
 			widget.Text(T("Allow agent spawning")).Size(12.5).Weight(ggui.WeightMedium),
-			muted(widget.Text(T("Let AI models discover and spawn this profile via MCP.")).Size(11.5)),
+			muted(widget.Text(agentDesc).Size(11.5)),
 		).Gap(2).Stretch()),
 		ui.Switch(m.agentBoolField(id, func(d *agentDraft) *bool { return &d.AllowAgent }), "").
 			Name(Tf("%s allow agent spawning", target)),
@@ -729,7 +744,7 @@ func profileExecutionSwitches(m *model, id int, target string) ggui.Widget {
 	templateSwitch := widget.Row(
 		widget.Expanded(widget.Column(
 			widget.Text(T("Allow in templates")).Size(12.5).Weight(ggui.WeightMedium),
-			muted(widget.Text(T("Let prompt templates execute this profile via mako.ask or mako.spawn.")).Size(11.5)),
+			muted(widget.Text(tmplDesc).Size(11.5)),
 		).Gap(2).Stretch()),
 		ui.Switch(m.agentBoolField(id, func(d *agentDraft) *bool { return &d.AllowTemplate }), "").
 			Name(Tf("%s allow in templates", target)),

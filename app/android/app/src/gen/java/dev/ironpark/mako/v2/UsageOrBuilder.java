@@ -123,4 +123,14 @@ public interface UsageOrBuilder extends
    */
   com.google.protobuf.ByteString
       getPermissionModeBytes();
+
+  /**
+   * <pre>
+   * cost_usd is the estimated spend in US dollars when the agent reports one.
+   * </pre>
+   *
+   * <code>double cost_usd = 10 [json_name = "costUsd"];</code>
+   * @return The costUsd.
+   */
+  double getCostUsd();
 }

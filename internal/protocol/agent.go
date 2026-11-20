@@ -318,6 +318,10 @@ func (u *Usage) Merge(r *Usage) {
 	if r.GetWindow() != 0 {
 		u.Window = r.GetWindow()
 	}
+	if u.Input == 0 && u.Output == 0 && (r.GetInput() != 0 || r.GetOutput() != 0) {
+		u.Input = r.GetInput()
+		u.Output = r.GetOutput()
+	}
 	if u.Context == 0 && r.GetContext() != 0 {
 		u.Context = r.GetContext()
 	}
@@ -326,6 +330,12 @@ func (u *Usage) Merge(r *Usage) {
 	}
 	if u.Effort == "" && r.GetEffort() != "" {
 		u.Effort = r.GetEffort()
+	}
+	if u.PermissionMode == "" && r.GetPermissionMode() != "" {
+		u.PermissionMode = r.GetPermissionMode()
+	}
+	if r.GetCostUsd() > 0 {
+		u.CostUsd = r.GetCostUsd()
 	}
 	for _, l := range r.GetLimits() {
 		u.SetLimit(l)

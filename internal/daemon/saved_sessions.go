@@ -414,6 +414,12 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 	launch.SetEnv("AGENT_MAKO_SESSION", id)
 	launch.SetEnv("AGENT_MAKO_PROJECT", req.GetProject())
 	launch.SetEnv("AGENT_MAKO_MODE", mode)
+	if d.cfg != nil && d.cfg.NodeID != "" {
+		launch.SetEnv("AGENT_MAKO_NODE", d.cfg.NodeID)
+	}
+	if req.GetProfile() != "" {
+		launch.SetEnv("AGENT_MAKO_PROFILE", req.GetProfile())
+	}
 	if parent != "" {
 		launch.SetEnv("AGENT_MAKO_PARENT", parent)
 	}

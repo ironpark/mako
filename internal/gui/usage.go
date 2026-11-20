@@ -55,6 +55,9 @@ func usageDetail(u *protocol.Usage, now time.Time) string {
 			s.WriteString(Tf(", resets in %s (%s)", untilText(resets), time.Unix(l.GetResets(), 0).Format("01-02 15:04")))
 		}
 	}
+	if u.GetCostUsd() > 0 {
+		s.WriteString("\n" + Tf("Estimated cost $%.2f", u.GetCostUsd()))
+	}
 	return s.String()
 }
 
@@ -74,6 +77,13 @@ var usageCornerLabels = map[string]string{
 }
 
 var usageCorners = []string{"top-left", "top-right", "bottom-left", "bottom-right"}
+
+var usageDisplayLabels = map[string]string{
+	"used":      "Used %",
+	"remaining": "Remaining %",
+}
+
+var usageDisplays = []string{"used", "remaining"}
 
 type usageState struct {
 	usage   *ggui.StateValue[*protocol.Usage]
@@ -206,13 +216,21 @@ func usageCard(m *model, u *protocol.Usage) ggui.Widget {
 		return card(append(head, label(Tf("%s in · %s out", tokens(u.GetInput()+u.GetCachedInput()), tokens(u.GetOutput())))))
 	}
 	// Only the limits age, as their resets come nearer.
+	display := ggui.Map(m.Prefs, func(p prefs) string { return p.UsageDisplay })
 	return ggui.View(m.Minute, func(now time.Time) ggui.Widget {
-		items := slices.Clone(head)
-		for _, l := range u.GetLimits() {
-			used, _ := limitNow(l, now)
-			items = append(items, pair(label(limitName(l.GetMinutes())), Tf("%d%%", int(used+0.5)), used/100))
-		}
-		return card(items)
+		return ggui.View(display, func(mode string) ggui.Widget {
+			items := slices.Clone(head)
+			for _, l := range u.GetLimits() {
+				used, _ := limitNow(l, now)
+				usedPct := min(max(int(used+0.5), 0), 100)
+				val := Tf("%d%%", usedPct)
+				if mode == "remaining" {
+					val = Tf("%d%% left", 100-usedPct)
+				}
+				items = append(items, pair(label(limitName(l.GetMinutes())), val, used/100))
+			}
+			return card(items)
+		})
 	})
 }
 

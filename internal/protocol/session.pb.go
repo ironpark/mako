@@ -3249,19 +3249,20 @@ func (x *AgentHomeMigrated) GetCopiedConfig() bool {
 // RunAgentPrompt runs a single non-interactive prompt on a node's agent and
 // returns its reply without keeping a session. Revision 39.
 type RunAgentPrompt struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Agent         string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
-	Profile       string                 `protobuf:"bytes,3,opt,name=profile,proto3" json:"profile,omitempty"`
-	Model         string                 `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
-	Effort        string                 `protobuf:"bytes,5,opt,name=effort,proto3" json:"effort,omitempty"`
-	Yolo          *bool                  `protobuf:"varint,6,opt,name=yolo,proto3,oneof" json:"yolo,omitempty"`
-	Project       string                 `protobuf:"bytes,7,opt,name=project,proto3" json:"project,omitempty"`
-	Prompt        string                 `protobuf:"bytes,8,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	Format        string                 `protobuf:"bytes,9,opt,name=format,proto3" json:"format,omitempty"` // "text" or "json"
-	JsonSchema    string                 `protobuf:"bytes,10,opt,name=json_schema,json=jsonSchema,proto3" json:"json_schema,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	NodeId          string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Agent           string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
+	Profile         string                 `protobuf:"bytes,3,opt,name=profile,proto3" json:"profile,omitempty"`
+	Model           string                 `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
+	Effort          string                 `protobuf:"bytes,5,opt,name=effort,proto3" json:"effort,omitempty"`
+	Yolo            *bool                  `protobuf:"varint,6,opt,name=yolo,proto3,oneof" json:"yolo,omitempty"`
+	Project         string                 `protobuf:"bytes,7,opt,name=project,proto3" json:"project,omitempty"`
+	Prompt          string                 `protobuf:"bytes,8,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Format          string                 `protobuf:"bytes,9,opt,name=format,proto3" json:"format,omitempty"` // "text" or "json"
+	JsonSchema      string                 `protobuf:"bytes,10,opt,name=json_schema,json=jsonSchema,proto3" json:"json_schema,omitempty"`
+	ParentSessionId string                 `protobuf:"bytes,11,opt,name=parent_session_id,json=parentSessionId,proto3" json:"parent_session_id,omitempty"` // calling session ID, if any (sets AGENT_MAKO_PARENT)
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RunAgentPrompt) Reset() {
@@ -3360,6 +3361,13 @@ func (x *RunAgentPrompt) GetFormat() string {
 func (x *RunAgentPrompt) GetJsonSchema() string {
 	if x != nil {
 		return x.JsonSchema
+	}
+	return ""
+}
+
+func (x *RunAgentPrompt) GetParentSessionId() string {
+	if x != nil {
+		return x.ParentSessionId
 	}
 	return ""
 }
@@ -3703,7 +3711,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\rmove_sessions\x18\x05 \x01(\bR\fmoveSessions\"_\n" +
 	"\x11AgentHomeMigrated\x12%\n" +
 	"\x0emoved_sessions\x18\x01 \x01(\x05R\rmovedSessions\x12#\n" +
-	"\rcopied_config\x18\x02 \x01(\bR\fcopiedConfig\"\x94\x02\n" +
+	"\rcopied_config\x18\x02 \x01(\bR\fcopiedConfig\"\xc0\x02\n" +
 	"\x0eRunAgentPrompt\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x18\n" +
@@ -3716,7 +3724,8 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x06format\x18\t \x01(\tR\x06format\x12\x1f\n" +
 	"\vjson_schema\x18\n" +
 	" \x01(\tR\n" +
-	"jsonSchemaB\a\n" +
+	"jsonSchema\x12*\n" +
+	"\x11parent_session_id\x18\v \x01(\tR\x0fparentSessionIdB\a\n" +
 	"\x05_yolo\"C\n" +
 	"\x11AgentPromptResult\x12\x16\n" +
 	"\x06output\x18\x01 \x01(\tR\x06output\x12\x16\n" +

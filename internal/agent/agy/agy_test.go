@@ -368,16 +368,51 @@ func TestWithHooksStatusLine(t *testing.T) {
 		t.Fatalf("unexpected statusLine config: %+v", cfg.StatusLine)
 	}
 
-	// Existing --settings must not be duplicated.
+	// Existing --settings JSON without statusLine gets merged cleanly.
 	l2 := &agent.Launch{
-		Command: []string{"agy", "--settings", "/custom.json"},
+		Command: []string{"agy", "--settings", `{"verbosity":"high"}`},
 		Env:     map[string]string{"HOME": home},
 	}
 	if !New().WithHooks(l2, "/bin/mako hook /s", "/bin/mako statusline /s", "") {
 		t.Fatal("WithHooks returned false")
 	}
 	if len(l2.Command) != 3 {
-		t.Fatalf("expected existing --settings untouched, got %q", l2.Command)
+		t.Fatalf("expected merged --settings in place, got %q", l2.Command)
+	}
+	var merged map[string]any
+	if err := json.Unmarshal([]byte(l2.Command[2]), &merged); err != nil {
+		t.Fatalf("merged --settings invalid JSON: %v", err)
+	}
+	if merged["verbosity"] != "high" || merged["statusLine"] == nil {
+		t.Fatalf("expected verbosity preserved and statusLine merged: %+v", merged)
+	}
+
+	// Existing --settings file path without statusLine gets read and merged.
+	customFile := filepath.Join(home, "custom.json")
+	if err := os.WriteFile(customFile, []byte(`{"copyOnSelect":false}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l3 := &agent.Launch{
+		Command: []string{"agy", "--settings=" + customFile},
+		Env:     map[string]string{"HOME": home},
+	}
+	if !New().WithHooks(l3, "/bin/mako hook /s", "/bin/mako statusline /s", "") {
+		t.Fatal("WithHooks returned false")
+	}
+	if !strings.HasPrefix(l3.Command[1], "--settings=") || !strings.Contains(l3.Command[1], `"copyOnSelect":false`) || !strings.Contains(l3.Command[1], `"statusLine"`) {
+		t.Fatalf("expected file --settings merged, got %q", l3.Command)
+	}
+
+	// Explicit statusLine in --settings is respected and not overwritten.
+	l4 := &agent.Launch{
+		Command: []string{"agy", "--settings", `{"statusLine":{"type":"command","command":"echo hi"}}`},
+		Env:     map[string]string{"HOME": home},
+	}
+	if !New().WithHooks(l4, "/bin/mako hook /s", "/bin/mako statusline /s", "") {
+		t.Fatal("WithHooks returned false")
+	}
+	if l4.Command[2] != `{"statusLine":{"type":"command","command":"echo hi"}}` {
+		t.Fatalf("overwrote explicit user statusLine: %q", l4.Command)
 	}
 }
 
@@ -401,11 +436,26 @@ func TestStatusLineParsesContextAndQuota(t *testing.T) {
 			"gemini-weekly": {"remaining_fraction": 0.9378, "reset_time": "2026-07-06T07:50:32Z"},
 			"claude-5h": {"remaining_fraction": 0.10, "reset_in_seconds": 1800},
 			"gemini-daily": {"remaining_fraction": 0.50, "disabled": true}
-		}
+		},
+		"cycle_mode": "accept-edits",
+		"cost": {"total_usd": 0.42},
+		"conversation_id": "conv-99",
+		"transcript_path": "/tmp/conv-99.jsonl",
+		"agent_state": "working",
+		"tool_confirmation_pending": true
 	}`
 	u := a.Status([]byte(payload))
-	if u.GetModel() != "Gemini 4 Neon (High)" || u.GetEffort() != "high" {
-		t.Fatalf("model/effort = %q / %q", u.GetModel(), u.GetEffort())
+	if u.GetModel() != "Gemini 4 Neon (High)" || u.GetEffort() != "high" || u.GetPermissionMode() != "acceptEdits" || u.GetCostUsd() != 0.42 {
+		t.Fatalf("model/effort/mode/cost = %q / %q / %q / %v", u.GetModel(), u.GetEffort(), u.GetPermissionMode(), u.GetCostUsd())
+	}
+	if ev, ok := a.StatusHookEvent([]byte(payload)); !ok || ev.Kind != agent.Waiting || ev.SessionID != "conv-99" || ev.Transcript != "/tmp/conv-99.jsonl" {
+		t.Fatalf("StatusHookEvent waiting = %+v (%v)", ev, ok)
+	}
+	if ev, ok := a.StatusHookEvent([]byte(`{"conversation_id":"conv-99","agent_state":"tool_use"}`)); !ok || ev.Kind != agent.Prompted {
+		t.Fatalf("StatusHookEvent working = %+v (%v)", ev, ok)
+	}
+	if ev, ok := a.StatusHookEvent([]byte(`{"conversation_id":"conv-99","agent_state":"idle"}`)); !ok || ev.Kind != agent.Idle {
+		t.Fatalf("StatusHookEvent idle = %+v (%v)", ev, ok)
 	}
 	if u.GetWindow() != 1048576 || u.GetContext() != 63382+100+20857 || u.GetInput() != 88244 || u.GetOutput() != 61074 {
 		t.Fatalf("context/tokens = %+v", u)

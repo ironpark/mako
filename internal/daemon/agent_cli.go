@@ -11,6 +11,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -35,6 +37,10 @@ func writeAgentMsgTool(dir, program, socket string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
+	if runtime.GOOS == "windows" {
+		script := fmt.Sprintf("@echo off\r\n\"%s\" %s \"%s\" %%*\r\n", program, agentMsgArg, socket)
+		return os.WriteFile(filepath.Join(dir, "mako-msg.cmd"), []byte(script), 0o700)
+	}
 	script := "#!/bin/sh\nexec " + agentspec.JoinArgs([]string{program, agentMsgArg, socket}) + " \"$@\"\n"
 	return os.WriteFile(filepath.Join(dir, "mako-msg"), []byte(script), 0o700)
 }
@@ -45,14 +51,16 @@ type agentCLIRequest struct {
 	Op      string `json:"op"` // wait, read, send, list, profiles, sidecar_subscribe
 
 	// wait / read options:
-	AfterID    uint64 `json:"after_id,omitempty"`
-	AckThrough uint64 `json:"ack_through,omitempty"`
-	From       string `json:"from,omitempty"`
-	WatchID    string `json:"watch_session_id,omitempty"`
-	Limit      int    `json:"limit,omitempty"`
-	TimeoutSec int    `json:"timeout_seconds,omitempty"`
-	NoTimeout  bool   `json:"no_timeout,omitempty"`
-	Ack        bool   `json:"ack,omitempty"`
+	AfterID       uint64   `json:"after_id,omitempty"`
+	AckThrough    uint64   `json:"ack_through,omitempty"`
+	From          string   `json:"from,omitempty"`
+	WatchID       string   `json:"watch_session_id,omitempty"`
+	WatchIDs      []string `json:"watch_session_ids,omitempty"`
+	WatchChildren bool     `json:"watch_children,omitempty"`
+	Limit         int      `json:"limit,omitempty"`
+	TimeoutSec    int      `json:"timeout_seconds,omitempty"`
+	NoTimeout     bool     `json:"no_timeout,omitempty"`
+	Ack           bool     `json:"ack,omitempty"`
 
 	// send options:
 	To   string `json:"to,omitempty"`
@@ -63,6 +71,7 @@ type agentCLIResponse struct {
 	OK          bool                     `json:"ok"`
 	Error       string                   `json:"error,omitempty"`
 	Reason      string                   `json:"reason,omitempty"` // message, turn_ended, idle, waiting, exited, gone, timeout
+	SessionID   string                   `json:"session_id,omitempty"`
 	Messages    []agentMessage           `json:"messages,omitempty"`
 	NextAfterID uint64                   `json:"next_after_id,omitempty"`
 	Sent        *agentMessage            `json:"sent,omitempty"`
@@ -260,6 +269,8 @@ func (d *Daemon) cliWait(ctx context.Context, peer *agentPeer, req agentCLIReque
 	if err != nil {
 		return agentCLIResponse{Error: err.Error()}
 	}
+	defer d.projectAgents.addCLIWaiter(peer.id)()
+
 	if !req.NoTimeout {
 		sec := req.TimeoutSec
 		if sec <= 0 {
@@ -270,32 +281,69 @@ func (d *Daemon) cliWait(ctx context.Context, peer *agentPeer, req agentCLIReque
 		defer cancel()
 	}
 
-	var target *waited
-	var initialTurns uint64
-	var worked bool
-	if req.WatchID != "" {
-		if req.WatchID == peer.id {
+	watchIDs := slices.Clone(req.WatchIDs)
+	if req.WatchID != "" && !slices.Contains(watchIDs, req.WatchID) {
+		watchIDs = append(watchIDs, req.WatchID)
+	}
+	scope := d.projectScope(caller.Info())
+	if req.WatchChildren {
+		d.sessionMu.Lock()
+		for id, saved := range d.saved {
+			if saved.ParentID == peer.id && !slices.Contains(watchIDs, id) {
+				if s, ok := d.sessions.get(id); ok && s.Info().GetState() == protocol.StateRunning && d.inProject(scope, s.Info()) {
+					watchIDs = append(watchIDs, id)
+				}
+			}
+		}
+		d.sessionMu.Unlock()
+	}
+
+	type watchedTarget struct {
+		id           string
+		target       *waited
+		initialTurns uint64
+		worked       bool
+		lastCh       <-chan struct{}
+	}
+	var targets []*watchedTarget
+	for _, wid := range watchIDs {
+		wid = strings.TrimSpace(wid)
+		if wid == "" {
+			continue
+		}
+		if wid == peer.id {
 			return agentCLIResponse{Error: "an agent cannot wait on itself"}
 		}
-		scope := d.projectScope(caller.Info())
-		if s, ok := d.sessions.get(req.WatchID); ok && d.inProject(scope, s.Info()) {
-			target = &waited{info: s.Info, changed: s.Changed}
-		} else if d.remoteAgent(scope, req.WatchID) != nil {
-			target = &waited{info: func() *protocol.SessionInfo { return d.remoteAgent(scope, req.WatchID) }}
+		var wt *waited
+		if s, ok := d.sessions.get(wid); ok && d.inProject(scope, s.Info()) {
+			wt = &waited{info: s.Info, changed: s.Changed}
+		} else if d.remoteAgent(scope, wid) != nil {
+			idCopy := wid
+			wt = &waited{info: func() *protocol.SessionInfo { return d.remoteAgent(scope, idCopy) }}
 		} else {
 			return agentCLIResponse{Error: errNotInProject.Error()}
 		}
-		release := d.projectAgents.waitOn(req.WatchID)
+		release := d.projectAgents.waitOn(wid)
 		defer release()
-		initialTurns = target.info().GetTurns()
+		targets = append(targets, &watchedTarget{
+			id:           wid,
+			target:       wt,
+			initialTurns: wt.info().GetTurns(),
+		})
 	}
 
 	var recheck <-chan time.Time
 	var ticker *time.Ticker
-	if target != nil {
+	if len(targets) > 0 {
 		ticker = time.NewTicker(waitRecheck)
 		defer ticker.Stop()
 		recheck = ticker.C
+	}
+
+	// Fan-in change notifications for multiple watched sessions into one channel.
+	var anySessChanged chan struct{}
+	if len(targets) > 0 {
+		anySessChanged = make(chan struct{}, 1)
 	}
 
 	for {
@@ -323,29 +371,50 @@ func (d *Daemon) cliWait(ctx context.Context, peer *agentPeer, req agentCLIReque
 			}
 		}
 
-		var sessChanged <-chan struct{}
-		if target != nil {
-			if target.changed != nil {
-				sessChanged = target.changed()
+		var singleChanged <-chan struct{}
+		for _, wt := range targets {
+			if len(targets) == 1 && wt.target.changed != nil {
+				singleChanged = wt.target.changed()
+			} else if wt.target.changed != nil {
+				if ch := wt.target.changed(); ch != wt.lastCh {
+					wt.lastCh = ch
+					go func() {
+						select {
+						case <-ch:
+							select {
+							case anySessChanged <- struct{}{}:
+							default:
+							}
+						case <-ctx.Done():
+						}
+					}()
+				}
 			}
-			info := target.info()
+			info := wt.target.info()
 			status := info.GetStatus()
-			worked = worked || protocol.AtWork(status)
+			wt.worked = wt.worked || protocol.AtWork(status)
 			switch {
 			case info == nil:
-				return agentCLIResponse{OK: true, Reason: "gone"}
+				return agentCLIResponse{OK: true, Reason: "gone", SessionID: wt.id}
 			case info.GetState() == protocol.StateExited:
-				return agentCLIResponse{OK: true, Reason: "exited", Status: status, State: info.GetState()}
+				return agentCLIResponse{OK: true, Reason: "exited", SessionID: wt.id, Status: status, State: info.GetState()}
 			case status == protocol.AgentWaiting:
-				return agentCLIResponse{OK: true, Reason: "waiting", Status: status, State: info.GetState()}
-			case info.GetTurns() > initialTurns || (initialTurns == 0 && worked && !protocol.AtWork(status)):
-				return agentCLIResponse{OK: true, Reason: "turn_ended", Status: status, State: info.GetState()}
+				return agentCLIResponse{OK: true, Reason: "waiting", SessionID: wt.id, Status: status, State: info.GetState()}
+			case info.GetTurns() > wt.initialTurns || (wt.initialTurns == 0 && wt.worked && !protocol.AtWork(status)):
+				return agentCLIResponse{OK: true, Reason: "turn_ended", SessionID: wt.id, Status: status, State: info.GetState()}
 			}
+		}
+
+		var sessWake <-chan struct{}
+		if len(targets) == 1 {
+			sessWake = singleChanged
+		} else if len(targets) > 1 {
+			sessWake = anySessChanged
 		}
 
 		select {
 		case <-changed:
-		case <-sessChanged:
+		case <-sessWake:
 		case <-recheck:
 		case <-ctx.Done():
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -475,7 +544,8 @@ func runAgentMsg(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fs.SetOutput(stderr)
 		after := fs.Uint64("after", 0, "only return messages with id > after")
 		from := fs.String("from", "", "only wake on messages from this session ID")
-		watch := fs.String("session", "", "also wake when this child session finishes, waits, or exits")
+		watch := fs.String("session", "", "also wake when these child session ID(s) finish, wait, or exit (comma-separated)")
+		allChildren := fs.Bool("all-children", false, "also wake when any running child session spawned by this session finishes, waits, or exits")
 		timeout := fs.Int("timeout", 600, "timeout in seconds (0 waits indefinitely)")
 		noAck := fs.Bool("no-ack", false, "do not acknowledge returned messages")
 		if err := fs.Parse(rest); err != nil {
@@ -483,7 +553,12 @@ func runAgentMsg(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		req.AfterID = *after
 		req.From = strings.TrimSpace(*from)
-		req.WatchID = strings.TrimSpace(*watch)
+		for _, part := range strings.Split(*watch, ",") {
+			if id := strings.TrimSpace(part); id != "" {
+				req.WatchIDs = append(req.WatchIDs, id)
+			}
+		}
+		req.WatchChildren = *allChildren
 		req.TimeoutSec = *timeout
 		req.NoTimeout = *timeout == 0
 		req.Ack = !*noAck

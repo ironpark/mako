@@ -1593,12 +1593,20 @@ var catalogKo = map[string]string{
 	"Ask a yes/no decision question":                     "디시전 모델에 예/아니오 질문하기",
 	"Score state across criteria levels":                 "기준 단계별로 상태 점수 매기기",
 
-	// Profile execution switches
+	// Profile & agent execution switches and usage display
 	"Allow agent spawning": "에이전트/모델에서 실행 허용",
 	"Let AI models discover and spawn this profile via MCP.": "AI 모델이 MCP를 통해 이 프로필을 조회하고 서브 에이전트로 실행할 수 있게 합니다.",
+	"Let AI models discover and spawn this agent's default configuration via MCP.": "AI 모델이 MCP를 통해 이 에이전트의 기본 설정을 조회하고 서브 에이전트로 실행할 수 있게 합니다.",
 	"%s allow agent spawning": "%s 에이전트 실행 허용",
 	"Allow in templates":      "템플릿에서 실행 허용",
 	"Let prompt templates execute this profile via mako.ask or mako.spawn.": "프롬프트 템플릿에서 mako.ask 또는 mako.spawn으로 이 프로필을 실행할 수 있게 합니다.",
+	"Let prompt templates execute this agent's default configuration via mako.ask or mako.spawn.": "프롬프트 템플릿에서 mako.ask 또는 mako.spawn으로 이 에이전트의 기본 설정을 실행할 수 있게 합니다.",
 	"%s allow in templates": "%s 템플릿 실행 허용",
 	" (%d%% left)":          " (%d%% 남음)",
+	"%d%% left":             "%d%% 남음",
+	"Limit display":         "한도 표시 방식",
+	"Show account limits as percentage used or remaining.": "계정 한도를 사용량(%) 또는 남은량(%) 기준으로 표시합니다.",
+	"Used %":                 "사용량 %",
+	"Remaining %":            "남은량 %",
+	"Estimated cost $%.2f":   "예상 비용 $%.2f",
 }

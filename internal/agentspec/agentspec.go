@@ -33,7 +33,19 @@ type Agent struct {
 	// Enabled offers the agent to start sessions with, or not; unset, it
 	// is offered while its program is installed.
 	Enabled *bool `json:"enabled,omitempty"`
+	// AllowAgent controls whether AI models/agents may delegate to the default
+	// (no-profile) agent configuration via MCP. Nil defaults to true.
+	AllowAgent *bool `json:"allow_agent,omitempty"`
+	// AllowTemplate controls whether prompt templates may run the default
+	// (no-profile) agent configuration via mako.ask / mako.spawn. Nil defaults to true.
+	AllowTemplate *bool `json:"allow_template,omitempty"`
 }
+
+// AgentAllowed reports whether models/agents may spawn this agent's default configuration via MCP.
+func (a Agent) AgentAllowed() bool { return a.AllowAgent == nil || *a.AllowAgent }
+
+// TemplateAllowed reports whether prompt templates may execute this agent's default configuration.
+func (a Agent) TemplateAllowed() bool { return a.AllowTemplate == nil || *a.AllowTemplate }
 
 // Profile is a named set of flags and environment for an agent, such as a
 // claude that runs another model or with another account's key.

@@ -37,6 +37,8 @@ type AgentEntry struct {
 	SupportsEffort  bool           `json:"supportsEffort"`
 	SupportsOneShot bool           `json:"supportsOneShot"`
 	SupportsSpawn   bool           `json:"supportsSpawn"`
+	AllowAgent      bool           `json:"allowAgent"`
+	AllowTemplate   bool           `json:"allowTemplate"`
 }
 
 // ProfileEntry describes one configured profile of an agent.

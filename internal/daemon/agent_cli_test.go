@@ -30,9 +30,9 @@ func TestAgentCLIMsgAndDefaultEnv(t *testing.T) {
 	binDir := t.TempDir()
 	fakeClaude := filepath.Join(binDir, "claude")
 	script := `#!/bin/sh
-printf 'session=%s|project=%s|mode=%s|parent=%s|socket=%s|token=%s\n' \
+printf 'session=%s|project=%s|mode=%s|parent=%s|node=%s|profile=%s|socket=%s|token=%s\n' \
   "$AGENT_MAKO_SESSION" "$AGENT_MAKO_PROJECT" "$AGENT_MAKO_MODE" \
-  "$AGENT_MAKO_PARENT" "$AGENT_MAKO_SOCKET" "$MAKO_AGENT_MCP_TOKEN" >> "` + envOut + `"
+  "$AGENT_MAKO_PARENT" "$AGENT_MAKO_NODE" "$AGENT_MAKO_PROFILE" "$AGENT_MAKO_SOCKET" "$MAKO_AGENT_MCP_TOKEN" >> "` + envOut + `"
 sleep 30
 `
 	if err := os.WriteFile(fakeClaude, []byte(script), 0o755); err != nil {
@@ -89,10 +89,10 @@ sleep 30
 	})
 	rawEnvs, _ := os.ReadFile(envOut)
 	envText := string(rawEnvs)
-	if !strings.Contains(envText, "session="+parent.ID()+"|project="+project+"|mode=main|parent=|socket="+d.projectAgents.cliSocket+"|token=") {
+	if !strings.Contains(envText, "session="+parent.ID()+"|project="+project+"|mode=main|parent=|node=node|profile=|socket="+d.projectAgents.cliSocket+"|token=") {
 		t.Fatalf("unexpected parent env line:\n%s", envText)
 	}
-	if !strings.Contains(envText, "session="+child.ID()+"|project="+project+"|mode=subagent|parent="+parent.ID()+"|socket="+d.projectAgents.cliSocket+"|token=") {
+	if !strings.Contains(envText, "session="+child.ID()+"|project="+project+"|mode=subagent|parent="+parent.ID()+"|node=node|profile=worker|socket="+d.projectAgents.cliSocket+"|token=") {
 		t.Fatalf("unexpected child env line:\n%s", envText)
 	}
 
@@ -199,12 +199,56 @@ sleep 30
 
 	select {
 	case resp := <-turnDone:
-		if !resp.OK || resp.Reason != "turn_ended" {
-			t.Fatalf("expected turn_ended, got %+v", resp)
+		if !resp.OK || resp.Reason != "turn_ended" || resp.SessionID != child.ID() {
+			t.Fatalf("expected turn_ended for child %s, got %+v", child.ID(), resp)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("mako-msg wait --session timed out")
 	}
+
+	// 4. `mako-msg wait --all-children` watches multiple children and reports whichever finishes first,
+	//    and registers an active CLI waiter while blocked.
+	child2, err := d.startSessionAs(t.Context(), newSessionID(), &protocol.OpenSession{Agent: "claude", Profile: "worker", Project: project}, parent.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	child.SetStatus(protocol.AgentWorking)
+	child2.SetStatus(protocol.AgentWorking)
+	allDone := make(chan agentCLIResponse, 1)
+	go func() {
+		conn, err := net.DialTimeout("unix", d.projectAgents.cliSocket, 3*time.Second)
+		if err != nil {
+			allDone <- agentCLIResponse{Error: err.Error()}
+			return
+		}
+		defer conn.Close()
+		_ = json.NewEncoder(conn).Encode(agentCLIRequest{
+			Session:       parentPeer.id,
+			Token:         parentPeer.token,
+			Op:            "wait",
+			WatchChildren: true,
+			TimeoutSec:    10,
+			Ack:           true,
+		})
+		var resp agentCLIResponse
+		_ = json.NewDecoder(conn).Decode(&resp)
+		allDone <- resp
+	}()
+	waitForWithin(t, 3*time.Second, "cli waiter never registered", func() bool {
+		return d.projectAgents.hasCLIWaiter(parent.ID())
+	})
+	child2.SetStatus(protocol.AgentDone)
+	select {
+	case resp := <-allDone:
+		if !resp.OK || resp.Reason != "turn_ended" || resp.SessionID != child2.ID() {
+			t.Fatalf("expected turn_ended for child2 %s, got %+v", child2.ID(), resp)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("mako-msg wait --all-children timed out")
+	}
+	waitForWithin(t, 3*time.Second, "cli waiter not released", func() bool {
+		return !d.projectAgents.hasCLIWaiter(parent.ID())
+	})
 }
 
 func TestAgySidecarNativeDelivery(t *testing.T) {

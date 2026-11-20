@@ -767,8 +767,10 @@ type Usage struct {
 	// prompt, as it names it: "default", "acceptEdits", "plan",
 	// "bypassPermissions"; "" where it says none.
 	PermissionMode string `protobuf:"bytes,9,opt,name=permission_mode,json=permissionMode,proto3" json:"permission_mode,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// cost_usd is the estimated spend in US dollars when the agent reports one.
+	CostUsd       float64 `protobuf:"fixed64,10,opt,name=cost_usd,json=costUsd,proto3" json:"cost_usd,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Usage) Reset() {
@@ -862,6 +864,13 @@ func (x *Usage) GetPermissionMode() string {
 		return x.PermissionMode
 	}
 	return ""
+}
+
+func (x *Usage) GetCostUsd() float64 {
+	if x != nil {
+		return x.CostUsd
+	}
+	return 0
 }
 
 // RateLimit is how much of one of an account's limits is spent.
@@ -999,7 +1008,7 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\aupdated\x18\n" +
 	" \x01(\x03R\aupdated\x12\x1b\n" +
 	"\ttool_kind\x18\v \x01(\tR\btoolKind\x12\x10\n" +
-	"\x03log\x18\f \x01(\tR\x03log\"\x8d\x02\n" +
+	"\x03log\x18\f \x01(\tR\x03log\"\xa8\x02\n" +
 	"\x05Usage\x12\x14\n" +
 	"\x05input\x18\x01 \x01(\x03R\x05input\x12!\n" +
 	"\fcached_input\x18\x02 \x01(\x03R\vcachedInput\x12\x16\n" +
@@ -1009,7 +1018,9 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\x06limits\x18\x06 \x03(\v2\x12.mako.v2.RateLimitR\x06limits\x12\x14\n" +
 	"\x05model\x18\a \x01(\tR\x05model\x12\x16\n" +
 	"\x06effort\x18\b \x01(\tR\x06effort\x12'\n" +
-	"\x0fpermission_mode\x18\t \x01(\tR\x0epermissionMode\"Q\n" +
+	"\x0fpermission_mode\x18\t \x01(\tR\x0epermissionMode\x12\x19\n" +
+	"\bcost_usd\x18\n" +
+	" \x01(\x01R\acostUsd\"Q\n" +
 	"\tRateLimit\x12\x18\n" +
 	"\aminutes\x18\x01 \x01(\x03R\aminutes\x12\x12\n" +
 	"\x04used\x18\x02 \x01(\x01R\x04used\x12\x16\n" +

@@ -136,4 +136,24 @@ public interface RunAgentPromptOrBuilder extends
    */
   com.google.protobuf.ByteString
       getJsonSchemaBytes();
+
+  /**
+   * <pre>
+   * calling session ID, if any (sets AGENT_MAKO_PARENT)
+   * </pre>
+   *
+   * <code>string parent_session_id = 11 [json_name = "parentSessionId"];</code>
+   * @return The parentSessionId.
+   */
+  java.lang.String getParentSessionId();
+  /**
+   * <pre>
+   * calling session ID, if any (sets AGENT_MAKO_PARENT)
+   * </pre>
+   *
+   * <code>string parent_session_id = 11 [json_name = "parentSessionId"];</code>
+   * @return The bytes for parentSessionId.
+   */
+  com.google.protobuf.ByteString
+      getParentSessionIdBytes();
 }

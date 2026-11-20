@@ -24,6 +24,9 @@ func appearanceSettings(m *model) ggui.Widget {
 	corner := ui.Select(prefField(m, func(p *prefs) *string { return &p.UsageCorner })).
 		Options(usageCorners).Format(func(s string) string { return T(usageCornerLabels[s]) }).Name(T("Overlay position")).
 		BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return !p.UsageOverlay }))
+	usageMode := ui.Select(prefField(m, func(p *prefs) *string { return &p.UsageDisplay })).
+		Options(usageDisplays).Format(func(s string) string { return T(usageDisplayLabels[s]) }).Name(T("Limit display")).
+		BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return !p.UsageOverlay }))
 	actions := widget.Row(
 		ui.Button(T("Duplicate"), m.duplicateTheme).Outline(),
 		ui.Button(T("Delete"), m.deleteTheme).Outline().BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return skin.IsBuiltin(p.Theme) })),
@@ -50,6 +53,7 @@ func appearanceSettings(m *model) ggui.Widget {
 					row(T("Show usage overlay"), T("Float an agent session's context and its account's 5-hour and weekly limits over its terminal and chat, for agents that report them."),
 						ui.Switch(prefField(m, func(p *prefs) *bool { return &p.UsageOverlay }), "").Name(T("Show usage overlay"))),
 					row(T("Overlay position"), T("The corner of the session the overlay sits in."), widget.Box(corner).Width(160)),
+					row(T("Limit display"), T("Show account limits as percentage used or remaining."), widget.Box(usageMode).Width(160)),
 				),
 			),
 		),

@@ -362,6 +362,8 @@ func TestProfileExecutionSwitchesRoundTripAndToggle(t *testing.T) {
 	off := false
 	in := map[string]agentspec.Agent{
 		"claude": {
+			AllowAgent:    &off,
+			AllowTemplate: &off,
 			Profiles: []agentspec.Profile{
 				{Name: "default-on"},
 				{Name: "restricted", AllowAgent: &off, AllowTemplate: &off},
@@ -380,6 +382,9 @@ func TestProfileExecutionSwitchesRoundTripAndToggle(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatal(err)
 	}
+	if got["claude"].AgentAllowed() || got["claude"].TemplateAllowed() {
+		t.Fatalf("agent-level switches lost in round-trip: %+v", got["claude"])
+	}
 	ps := got["claude"].Profiles
 	if len(ps) != 2 || !ps[0].AgentAllowed() || !ps[0].TemplateAllowed() || ps[1].AgentAllowed() || ps[1].TemplateAllowed() {
 		t.Fatalf("round-trip profiles = %+v", ps)
@@ -388,35 +393,42 @@ func TestProfileExecutionSwitchesRoundTripAndToggle(t *testing.T) {
 	m := newModel(&config.Config{Agents: map[string]agentspec.Agent{
 		"claude": {Profiles: []agentspec.Profile{{Name: "reviewer"}}},
 	}}, "")
-	var profile agentDraft
+	var agentRow, profile agentDraft
 	for _, r := range ggui.Peek(m.AgentDraft) {
+		if r.Agent == "claude" && !r.IsProfile {
+			agentRow = r
+		}
 		if r.Agent == "claude" && r.IsProfile {
 			profile = r
 		}
 	}
-	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Scroll(profileCard(m, profile, ggui.TextStyle{})) }, ggui.Sz(700, 1200))
+	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Scroll(agentEditor(m, agentRow, []agentDraft{profile})) }, ggui.Sz(700, 1600))
 	defer p.Close()
 	p.Frame()
 
-	agentSw, ok := p.Find(Tf("%s allow agent spawning", "claude:reviewer"))
-	if !ok {
-		t.Fatalf("missing allow for agents switch:\n%s", p.Semantics().String())
+	for _, label := range []string{
+		Tf("%s allow agent spawning", "claude"),
+		Tf("%s allow in templates", "claude"),
+		Tf("%s allow agent spawning", "claude:reviewer"),
+		Tf("%s allow in templates", "claude:reviewer"),
+	} {
+		sw, ok := p.Find(label)
+		if !ok {
+			t.Fatalf("missing switch %q:\n%s", label, p.Semantics().String())
+		}
+		p.Click(sw.Center())
+		p.Frame()
 	}
-	tmplSw, ok := p.Find(Tf("%s allow in templates", "claude:reviewer"))
-	if !ok {
-		t.Fatalf("missing allow in templates switch:\n%s", p.Semantics().String())
-	}
-	p.Click(agentSw.Center())
-	p.Frame()
-	p.Click(tmplSw.Center())
-	p.Frame()
 
 	after, err := applyAgents(ggui.Peek(m.AgentDraft))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if after["claude"].AgentAllowed() || after["claude"].TemplateAllowed() {
+		t.Fatalf("expected agent-level switches off after toggling, got %+v", after["claude"])
+	}
 	rp := after["claude"].Profiles[0]
 	if rp.AgentAllowed() || rp.TemplateAllowed() {
-		t.Fatalf("expected both switches off after toggling, got %+v", rp)
+		t.Fatalf("expected both profile switches off after toggling, got %+v", rp)
 	}
 }

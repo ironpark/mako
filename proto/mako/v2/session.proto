@@ -504,6 +504,7 @@ message RunAgentPrompt {
   string prompt = 8;
   string format = 9; // "text" or "json"
   string json_schema = 10;
+  string parent_session_id = 11; // calling session ID, if any (sets AGENT_MAKO_PARENT)
 }
 
 // AgentPromptResult answers RunAgentPrompt.

@@ -75,11 +75,13 @@ func (d *Daemon) runAgentPrompt(ctx context.Context, req *protocol.RunAgentPromp
 		return nil, errors.New("agent is required")
 	}
 	configured := d.agents()
-	if profName := strings.TrimSpace(req.GetProfile()); profName != "" {
-		if a, ok := agentspec.Lookup(agentName, configured); ok {
+	if a, ok := agentspec.Lookup(agentName, configured); ok {
+		if profName := strings.TrimSpace(req.GetProfile()); profName != "" {
 			if p, ok := a.Profile(profName); ok && !p.TemplateAllowed() {
 				return nil, fmt.Errorf("profile %q is not enabled for prompt templates", profName)
 			}
+		} else if !a.TemplateAllowed() {
+			return nil, fmt.Errorf("agent %q default configuration is not enabled for prompt templates", agentName)
 		}
 	}
 	launch, err := agentspec.ResolveWith(agentName, req.GetProfile(), nil, nil, agentspec.ResolveOptions{
@@ -112,6 +114,15 @@ func (d *Daemon) runAgentPrompt(ctx context.Context, req *protocol.RunAgentPromp
 	}
 	launch.SetEnv("AGENT_MAKO_PROJECT", workDir)
 	launch.SetEnv("AGENT_MAKO_MODE", "subagent")
+	if d.cfg != nil && d.cfg.NodeID != "" {
+		launch.SetEnv("AGENT_MAKO_NODE", d.cfg.NodeID)
+	}
+	if profName := strings.TrimSpace(req.GetProfile()); profName != "" {
+		launch.SetEnv("AGENT_MAKO_PROFILE", profName)
+	}
+	if parentID := strings.TrimSpace(req.GetParentSessionId()); parentID != "" {
+		launch.SetEnv("AGENT_MAKO_PARENT", parentID)
+	}
 	launch.Command = withProjectDirs(agentName, launch.Command, d.projectDirs(workDir))
 
 	if len(launch.Command) == 0 {

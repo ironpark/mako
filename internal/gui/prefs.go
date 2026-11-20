@@ -22,9 +22,10 @@ type prefs struct {
 	Language string `json:"language"` // system, en or ko; see i18n.go
 	// UsageOverlay shows an agent's token usage over its session, in the
 	// corner UsageCorner names: top-left, top-right, bottom-left or
-	// bottom-right.
+	// bottom-right. UsageDisplay is "used" (default) or "remaining".
 	UsageOverlay bool   `json:"usage_overlay"`
 	UsageCorner  string `json:"usage_corner"`
+	UsageDisplay string `json:"usage_display,omitempty"`
 	// PaneGlow marks the pane that has the keys with the accent round the
 	// edge of what it shows, fading inward.
 	PaneGlow bool `json:"pane_glow"`
@@ -136,6 +137,7 @@ func defaultPrefs() prefs {
 		Language:        "system",
 		UsageOverlay:    true,
 		UsageCorner:     "top-right",
+		UsageDisplay:    "used",
 		WindowBackdrop:  defaultBackdrop(),
 		SessionBackdrop: defaultBackdrop(),
 		FontSize:        13,
@@ -180,6 +182,9 @@ func (p prefs) normalized() prefs {
 	}
 	if _, ok := usageCornerLabels[p.UsageCorner]; !ok {
 		p.UsageCorner = d.UsageCorner
+	}
+	if _, ok := usageDisplayLabels[p.UsageDisplay]; !ok {
+		p.UsageDisplay = d.UsageDisplay
 	}
 	switch p.DaemonMode {
 	case "auto", "embedded", "external":

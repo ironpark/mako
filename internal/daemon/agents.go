@@ -181,10 +181,14 @@ func (d *Daemon) agentInfo() []*protocol.AgentInfo {
 	out := make([]*protocol.AgentInfo, len(names))
 	for i, name := range names {
 		a, _ := agentspec.Lookup(name, configured)
+		allowAgent := a.AgentAllowed()
+		allowTemplate := a.TemplateAllowed()
 		info := &protocol.AgentInfo{
-			Name:     name,
-			Profiles: a.ProfileNames(),
-			Yolo:     a.Yolo,
+			Name:          name,
+			Profiles:      a.ProfileNames(),
+			Yolo:          a.Yolo,
+			AllowAgent:    &allowAgent,
+			AllowTemplate: &allowTemplate,
 		}
 		var hasServers, hasPrompter bool
 		if e, ok := agents.Lookup(name); ok {

@@ -148,6 +148,14 @@ type StatusLine interface {
 	UserStatusLine(input []byte) string
 }
 
+// StatusLineEvents is an optional interface for StatusLine drivers whose
+// status line payload also reports live agent state (such as tool confirmation
+// pending, working/idle state, or conversation/transcript IDs) that lifecycle
+// hooks may not emit.
+type StatusLineEvents interface {
+	StatusHookEvent(input []byte) (Event, bool)
+}
+
 // Logs is an agent that writes its conversations down, a JSON record a
 // line, one conversation a file.
 type Logs interface {

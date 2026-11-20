@@ -47,7 +47,30 @@ type projectAgents struct {
 	peers      map[string]*agentPeer
 	messages   agentMessages
 	waits      map[string]int // the agents waited on with wait_agent, how many times each
+	cliWaiters map[string]int // active `mako-msg wait` waiters per session (suppress PTY fallback)
 	agySidecar *agySidecarClient
+}
+
+func (p *projectAgents) addCLIWaiter(id string) func() {
+	p.mu.Lock()
+	if p.cliWaiters == nil {
+		p.cliWaiters = map[string]int{}
+	}
+	p.cliWaiters[id]++
+	p.mu.Unlock()
+	return func() {
+		p.mu.Lock()
+		if p.cliWaiters[id]--; p.cliWaiters[id] <= 0 {
+			delete(p.cliWaiters, id)
+		}
+		p.mu.Unlock()
+	}
+}
+
+func (p *projectAgents) hasCLIWaiter(id string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.cliWaiters[id] > 0
 }
 
 type agentPeer struct {
@@ -805,7 +828,7 @@ func (d *Daemon) availableAgents() []availableAgent {
 		if _, ok := driver.Driver.(agent.Prompter); !ok {
 			continue
 		}
-		available := availableAgent{Name: name, Spawnable: d.agentMCPEnabled(nil), Profiles: []availableProfile{}}
+		available := availableAgent{Name: name, Spawnable: a.AgentAllowed() && d.agentMCPEnabled(nil), Profiles: []availableProfile{}}
 		for _, p := range a.Profiles {
 			available.Profiles = append(available.Profiles, availableProfile{
 				Name: p.Name, Description: p.Description, Spawnable: p.AgentAllowed() && d.agentMCPEnabled(p.ContextServers),
@@ -834,7 +857,7 @@ func (d *Daemon) spawnablePresets() []spawnablePreset {
 		if _, ok := driver.Driver.(agent.Prompter); !ok {
 			continue
 		}
-		if d.agentMCPEnabled(nil) {
+		if a.AgentAllowed() && d.agentMCPEnabled(nil) {
 			out = append(out, spawnablePreset{
 				Agent:  name,
 				Target: agentspec.Target(name, ""),
@@ -957,6 +980,8 @@ func (d *Daemon) spawnProjectAgent(ctx context.Context, peer *agentPeer, in spaw
 			return agentSummary{}, errors.New("this profile is not enabled for agent spawning")
 		}
 		picks = profile.ContextServers
+	} else if !configured.AgentAllowed() {
+		return agentSummary{}, errors.New("this agent default configuration is not enabled for agent spawning")
 	}
 	if !d.agentMCPEnabled(picks) {
 		return agentSummary{}, errors.New("the mako MCP server is disabled for this profile")

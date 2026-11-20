@@ -47,16 +47,18 @@ func (d *Daemon) deliverAgentMessages(peer *agentPeer) {
 				}
 				continue
 			}
-			if s, ok := d.readyForMessages(peer, delivered); ok {
-				batch := deliveryOf(inbox)
-				if err := s.Prompt(d.agentPrompt(batch)); err != nil {
-					d.log.Warn("agent messages: not typed", "session", peer.id, "err", err)
-				} else {
-					delivered = time.Now()
-					if err := d.projectAgents.messages.delivered(peer.id, batch[len(batch)-1].ID); err != nil {
-						d.log.Warn("agent messages: delivery not recorded", "session", peer.id, "err", err)
+			if !d.projectAgents.hasCLIWaiter(peer.id) {
+				if s, ok := d.readyForMessages(peer, delivered); ok {
+					batch := deliveryOf(inbox)
+					if err := s.Prompt(d.agentPrompt(batch)); err != nil {
+						d.log.Warn("agent messages: not typed", "session", peer.id, "err", err)
+					} else {
+						delivered = time.Now()
+						if err := d.projectAgents.messages.delivered(peer.id, batch[len(batch)-1].ID); err != nil {
+							d.log.Warn("agent messages: delivery not recorded", "session", peer.id, "err", err)
+						}
+						continue
 					}
-					continue
 				}
 			}
 			poll = time.After(deliveryPoll)

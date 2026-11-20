@@ -122,4 +122,42 @@ public interface AgentInfoOrBuilder extends
    * @return The yolo.
    */
   boolean getYolo();
+
+  /**
+   * <pre>
+   * Revision 39: allow AI models to spawn default (no-profile) agent via MCP
+   * </pre>
+   *
+   * <code>optional bool allow_agent = 8 [json_name = "allowAgent"];</code>
+   * @return Whether the allowAgent field is set.
+   */
+  boolean hasAllowAgent();
+  /**
+   * <pre>
+   * Revision 39: allow AI models to spawn default (no-profile) agent via MCP
+   * </pre>
+   *
+   * <code>optional bool allow_agent = 8 [json_name = "allowAgent"];</code>
+   * @return The allowAgent.
+   */
+  boolean getAllowAgent();
+
+  /**
+   * <pre>
+   * Revision 39: allow prompt templates to run default (no-profile) agent
+   * </pre>
+   *
+   * <code>optional bool allow_template = 9 [json_name = "allowTemplate"];</code>
+   * @return Whether the allowTemplate field is set.
+   */
+  boolean hasAllowTemplate();
+  /**
+   * <pre>
+   * Revision 39: allow prompt templates to run default (no-profile) agent
+   * </pre>
+   *
+   * <code>optional bool allow_template = 9 [json_name = "allowTemplate"];</code>
+   * @return The allowTemplate.
+   */
+  boolean getAllowTemplate();
 }

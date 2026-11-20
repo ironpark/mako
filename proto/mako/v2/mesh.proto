@@ -89,6 +89,8 @@ message AgentInfo {
   uint32 caps = 5; // protocol's Cap bits
   repeated AgentProfileInfo profile_details = 6; // Revision 39
   bool yolo = 7; // Revision 39
+  optional bool allow_agent = 8; // Revision 39: allow AI models to spawn default (no-profile) agent via MCP
+  optional bool allow_template = 9; // Revision 39: allow prompt templates to run default (no-profile) agent
 }
 
 // AgentProfileInfo describes a configured agent profile for callers choosing

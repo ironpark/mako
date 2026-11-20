@@ -142,6 +142,8 @@ message Usage {
   // prompt, as it names it: "default", "acceptEdits", "plan",
   // "bypassPermissions"; "" where it says none.
   string permission_mode = 9;
+  // cost_usd is the estimated spend in US dollars when the agent reports one.
+  double cost_usd = 10;
 }
 
 // RateLimit is how much of one of an account's limits is spent.

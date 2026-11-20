@@ -800,8 +800,9 @@ func TestProfileAllowAgentSwitch(t *testing.T) {
 		NodeID: "node",
 		Agents: map[string]agentspec.Agent{
 			"claude": {
-				Command: []string{claudeCmd},
-				Env:     map[string]string{"MAKO_FAKE_AGENT": "claude", "MAKO_FAKE_ROOT": claudeRoot, "CLAUDE_CONFIG_DIR": claudeRoot},
+				Command:    []string{claudeCmd},
+				AllowAgent: new(false),
+				Env:        map[string]string{"MAKO_FAKE_AGENT": "claude", "MAKO_FAKE_ROOT": claudeRoot, "CLAUDE_CONFIG_DIR": claudeRoot},
 				Profiles: []agentspec.Profile{
 					{Name: "allowed", Description: "Allowed for agents"},
 					{Name: "manual-only", Description: "Manual only", AllowAgent: new(false)},
@@ -832,19 +833,27 @@ func TestProfileAllowAgentSwitch(t *testing.T) {
 	}
 	client := projectMCPClient(t, d, parent)
 
-	// list_agent_profiles omits manual-only.
+	// list_agent_profiles omits both manual-only profile and bare claude default, keeping claude:allowed.
 	profiles := callProjectTool[listAgentProfilesResult](t, client, "list_agent_profiles", struct{}{})
 	data, _ := json.Marshal(profiles)
 	if strings.Contains(string(data), "manual-only") || !strings.Contains(string(data), "claude:allowed") {
 		t.Fatalf("unexpected profiles: %s", data)
 	}
+	for _, p := range profiles.Presets {
+		if p.Target == "claude" {
+			t.Fatalf("disallowed bare agent default leaked into list_agent_profiles: %+v", profiles.Presets)
+		}
+	}
 
-	// list_agents marks manual-only spawnable=false.
+	// list_agents marks bare claude and manual-only spawnable=false, allowed=true.
 	listed := callProjectTool[listAgentsResult](t, client, "list_agents", struct{}{})
 	var sawManual, sawAllowed bool
 	for _, av := range listed.Available {
 		if av.Name != "claude" {
 			continue
+		}
+		if av.Spawnable {
+			t.Fatalf("bare claude default should not be spawnable: %+v", av)
 		}
 		for _, p := range av.Profiles {
 			if p.Name == "manual-only" {
@@ -865,7 +874,19 @@ func TestProfileAllowAgentSwitch(t *testing.T) {
 		t.Fatalf("missing expected profiles in list_agents: %+v", listed.Available)
 	}
 
-	// spawn_agent rejects manual-only.
+	// spawn_agent rejects bare default and manual-only.
+	bareRes, err := client.CallTool(t.Context(), &sdk.CallToolParams{
+		Name:      "spawn_agent",
+		Arguments: spawnAgentArgs{Agent: "claude", Prompt: "hello"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawBare, _ := json.Marshal(bareRes.Content)
+	if !bareRes.IsError || !strings.Contains(string(rawBare), "not enabled for agent spawning") {
+		t.Fatalf("expected error spawning disallowed bare default, got isError=%v content=%s", bareRes.IsError, rawBare)
+	}
+
 	res, err := client.CallTool(t.Context(), &sdk.CallToolParams{
 		Name:      "spawn_agent",
 		Arguments: spawnAgentArgs{Agent: "claude", Profile: "manual-only", Prompt: "hello"},

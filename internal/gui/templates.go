@@ -483,7 +483,15 @@ func (h *guiTemplateHost) localAgentInfos() []*protocol.AgentInfo {
 	infos := make([]*protocol.AgentInfo, 0, len(names))
 	for _, name := range names {
 		a, _ := agentspec.Lookup(name, h.cfgAgents)
-		info := &protocol.AgentInfo{Name: name, Profiles: a.ProfileNames(), Yolo: a.Yolo}
+		allowAgent := a.AgentAllowed()
+		allowTemplate := a.TemplateAllowed()
+		info := &protocol.AgentInfo{
+			Name:          name,
+			Profiles:      a.ProfileNames(),
+			Yolo:          a.Yolo,
+			AllowAgent:    &allowAgent,
+			AllowTemplate: &allowTemplate,
+		}
 		var hasServers, hasPrompter bool
 		if e, ok := agents.Lookup(name); ok {
 			_, hasServers = e.Driver.(agent.Servers)
@@ -543,8 +551,10 @@ func (h *guiTemplateHost) Agents(ctx context.Context, agentName string, refresh 
 			continue
 		}
 		ae := prompttmpl.AgentEntry{
-			Name: name,
-			Yolo: ai.GetYolo(),
+			Name:          name,
+			Yolo:          ai.GetYolo(),
+			AllowAgent:    ai.AllowAgent == nil || ai.GetAllowAgent(),
+			AllowTemplate: ai.AllowTemplate == nil || ai.GetAllowTemplate(),
 		}
 		if a, ok := agentspec.Lookup(name, h.cfgAgents); ok && len(a.Command) > 0 {
 			ae.Command = a.Command[0]
@@ -617,9 +627,6 @@ func (h *guiTemplateHost) Agents(ctx context.Context, agentName string, refresh 
 }
 
 func (h *guiTemplateHost) checkTemplateProfileAllowed(agentName, profile string) error {
-	if profile == "" {
-		return nil
-	}
 	var infos []*protocol.AgentInfo
 	if h.remoteNode == "" && len(h.cfgAgents) > 0 {
 		infos = h.localAgentInfos()
@@ -634,6 +641,12 @@ func (h *guiTemplateHost) checkTemplateProfileAllowed(agentName, profile string)
 	for _, ai := range infos {
 		if ai.GetName() != agentName {
 			continue
+		}
+		if profile == "" {
+			if ai.AllowTemplate != nil && !ai.GetAllowTemplate() {
+				return errors.New("agent " + agentName + " default configuration is not enabled for prompt templates")
+			}
+			return nil
 		}
 		for _, p := range ai.GetProfileDetails() {
 			if p.GetName() == profile && p.AllowTemplate != nil && !p.GetAllowTemplate() {
@@ -735,16 +748,17 @@ func (h *guiTemplateHost) Ask(ctx context.Context, req prompttmpl.AskRequest) (p
 	defer c.Close()
 
 	res, err := c.RunAgentPrompt(ctx, &protocol.RunAgentPrompt{
-		NodeId:     h.remoteNode,
-		Agent:      agentName,
-		Profile:    profile,
-		Model:      strings.TrimSpace(req.Model),
-		Effort:     strings.TrimSpace(req.Effort),
-		Yolo:       req.Yolo,
-		Project:    project,
-		Prompt:     req.Prompt,
-		Format:     format,
-		JsonSchema: schemaJSON,
+		NodeId:          h.remoteNode,
+		Agent:           agentName,
+		Profile:         profile,
+		Model:           strings.TrimSpace(req.Model),
+		Effort:          strings.TrimSpace(req.Effort),
+		Yolo:            req.Yolo,
+		Project:         project,
+		Prompt:          req.Prompt,
+		Format:          format,
+		JsonSchema:      schemaJSON,
+		ParentSessionId: h.sessionID,
 	})
 	if err != nil {
 		return prompttmpl.AskResult{}, err

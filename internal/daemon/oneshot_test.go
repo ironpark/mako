@@ -120,7 +120,7 @@ func TestRunAgentPromptAllowTemplateAndEnv(t *testing.T) {
 	claudeBin := filepath.Join(binDir, "claude")
 	script := `#!/bin/sh
 cat >/dev/null
-printf 'proj=%s;mode=%s' "$AGENT_MAKO_PROJECT" "$AGENT_MAKO_MODE"
+printf 'proj=%s;mode=%s;node=%s;prof=%s;parent=%s' "$AGENT_MAKO_PROJECT" "$AGENT_MAKO_MODE" "$AGENT_MAKO_NODE" "$AGENT_MAKO_PROFILE" "$AGENT_MAKO_PARENT"
 `
 	if err := os.WriteFile(claudeBin, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -131,8 +131,9 @@ printf 'proj=%s;mode=%s' "$AGENT_MAKO_PROJECT" "$AGENT_MAKO_MODE"
 		off := false
 		cfg.Agents = map[string]agentspec.Agent{
 			"claude": {
-				Command: []string{claudeBin},
-				Enabled: &on,
+				Command:       []string{claudeBin},
+				Enabled:       &on,
+				AllowTemplate: &off,
 				Profiles: []agentspec.Profile{
 					{Name: "tmpl-ok", Model: "sonnet"},
 					{Name: "no-tmpl", Model: "sonnet", AllowTemplate: &off},
@@ -144,6 +145,13 @@ printf 'proj=%s;mode=%s' "$AGENT_MAKO_PROJECT" "$AGENT_MAKO_MODE"
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
+	// Disallowed bare agent default is rejected.
+	if _, err := c.RunAgentPrompt(ctx, &protocol.RunAgentPrompt{
+		Agent: "claude", Project: workDir, Prompt: "hi",
+	}); err == nil || !strings.Contains(err.Error(), "not enabled for prompt templates") {
+		t.Fatalf("expected agent default template restriction error, got %v", err)
+	}
+
 	// Disallowed profile is rejected.
 	if _, err := c.RunAgentPrompt(ctx, &protocol.RunAgentPrompt{
 		Agent: "claude", Profile: "no-tmpl", Project: workDir, Prompt: "hi",
@@ -151,14 +159,14 @@ printf 'proj=%s;mode=%s' "$AGENT_MAKO_PROJECT" "$AGENT_MAKO_MODE"
 		t.Fatalf("expected template restriction error, got %v", err)
 	}
 
-	// Allowed profile runs with AGENT_MAKO_PROJECT and AGENT_MAKO_MODE=subagent.
+	// Allowed profile runs with full AGENT_MAKO_* env vars including parent & profile.
 	res, err := c.RunAgentPrompt(ctx, &protocol.RunAgentPrompt{
-		Agent: "claude", Profile: "tmpl-ok", Project: workDir, Prompt: "hi",
+		Agent: "claude", Profile: "tmpl-ok", Project: workDir, Prompt: "hi", ParentSessionId: "sess-parent-1",
 	})
 	if err != nil {
 		t.Fatalf("RunAgentPrompt: %v", err)
 	}
-	want := "proj=" + workDir + ";mode=subagent"
+	want := "proj=" + workDir + ";mode=subagent;node=" + d.cfg.NodeID + ";prof=tmpl-ok;parent=sess-parent-1"
 	if res.GetOutput() != want {
 		t.Fatalf("output = %q, want %q", res.GetOutput(), want)
 	}

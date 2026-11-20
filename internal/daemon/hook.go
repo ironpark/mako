@@ -290,6 +290,27 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		if line, ok := agents.As[agent.StatusLine](name); ok {
 			s.Report(line.Status(msg.Input))
 		}
+		if events, ok := agents.As[agent.StatusLineEvents](name); ok {
+			if ev, ok := events.StatusHookEvent(msg.Input); ok {
+				if ev.SessionID != "" && ev.SessionID != s.Info().GetConversationId() {
+					if err := d.reportConversation(s, msg.Seq, ev); err != nil {
+						d.log.Warn("statusline: conversation report dropped", "session", msg.Session, "err", err)
+					}
+				}
+				switch ev.Kind {
+				case agent.Waiting:
+					s.ReportToolStatus(protocol.AgentWaiting, msg.Seq)
+				case agent.Prompted:
+					s.ReportStatus(protocol.AgentWorking, msg.Seq)
+				case agent.Idle:
+					// Clear waiting state once a confirmation finishes, but never
+					// overwrite AgentDone (unread finished turn) back to idle.
+					if s.Info().GetStatus() == protocol.AgentWaiting {
+						s.ReportStatus(protocol.AgentIdle, msg.Seq)
+					}
+				}
+			}
+		}
 		return
 	}
 	hooks, ok := agents.As[agent.Hooks](name)

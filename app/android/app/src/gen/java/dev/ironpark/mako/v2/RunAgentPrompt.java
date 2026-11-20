@@ -29,6 +29,7 @@ public  final class RunAgentPrompt extends
     prompt_ = "";
     format_ = "";
     jsonSchema_ = "";
+    parentSessionId_ = "";
   }
   private int bitField0_;
   public static final int NODE_ID_FIELD_NUMBER = 1;
@@ -505,6 +506,73 @@ public  final class RunAgentPrompt extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     jsonSchema_ = value.toStringUtf8();
+
+  }
+
+  public static final int PARENT_SESSION_ID_FIELD_NUMBER = 11;
+  private java.lang.String parentSessionId_;
+  /**
+   * <pre>
+   * calling session ID, if any (sets AGENT_MAKO_PARENT)
+   * </pre>
+   *
+   * <code>string parent_session_id = 11 [json_name = "parentSessionId"];</code>
+   * @return The parentSessionId.
+   */
+  @java.lang.Override
+  public java.lang.String getParentSessionId() {
+    return parentSessionId_;
+  }
+  /**
+   * <pre>
+   * calling session ID, if any (sets AGENT_MAKO_PARENT)
+   * </pre>
+   *
+   * <code>string parent_session_id = 11 [json_name = "parentSessionId"];</code>
+   * @return The bytes for parentSessionId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getParentSessionIdBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(parentSessionId_);
+  }
+  /**
+   * <pre>
+   * calling session ID, if any (sets AGENT_MAKO_PARENT)
+   * </pre>
+   *
+   * <code>string parent_session_id = 11 [json_name = "parentSessionId"];</code>
+   * @param value The parentSessionId to set.
+   */
+  private void setParentSessionId(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    parentSessionId_ = value;
+  }
+  /**
+   * <pre>
+   * calling session ID, if any (sets AGENT_MAKO_PARENT)
+   * </pre>
+   *
+   * <code>string parent_session_id = 11 [json_name = "parentSessionId"];</code>
+   */
+  private void clearParentSessionId() {
+
+    parentSessionId_ = getDefaultInstance().getParentSessionId();
+  }
+  /**
+   * <pre>
+   * calling session ID, if any (sets AGENT_MAKO_PARENT)
+   * </pre>
+   *
+   * <code>string parent_session_id = 11 [json_name = "parentSessionId"];</code>
+   * @param value The bytes for parentSessionId to set.
+   */
+  private void setParentSessionIdBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    parentSessionId_ = value.toStringUtf8();
 
   }
 
@@ -1107,6 +1175,75 @@ public  final class RunAgentPrompt extends
       return this;
     }
 
+    /**
+     * <pre>
+     * calling session ID, if any (sets AGENT_MAKO_PARENT)
+     * </pre>
+     *
+     * <code>string parent_session_id = 11 [json_name = "parentSessionId"];</code>
+     * @return The parentSessionId.
+     */
+    @java.lang.Override
+    public java.lang.String getParentSessionId() {
+      return instance.getParentSessionId();
+    }
+    /**
+     * <pre>
+     * calling session ID, if any (sets AGENT_MAKO_PARENT)
+     * </pre>
+     *
+     * <code>string parent_session_id = 11 [json_name = "parentSessionId"];</code>
+     * @return The bytes for parentSessionId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getParentSessionIdBytes() {
+      return instance.getParentSessionIdBytes();
+    }
+    /**
+     * <pre>
+     * calling session ID, if any (sets AGENT_MAKO_PARENT)
+     * </pre>
+     *
+     * <code>string parent_session_id = 11 [json_name = "parentSessionId"];</code>
+     * @param value The parentSessionId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParentSessionId(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setParentSessionId(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * calling session ID, if any (sets AGENT_MAKO_PARENT)
+     * </pre>
+     *
+     * <code>string parent_session_id = 11 [json_name = "parentSessionId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearParentSessionId() {
+      copyOnWrite();
+      instance.clearParentSessionId();
+      return this;
+    }
+    /**
+     * <pre>
+     * calling session ID, if any (sets AGENT_MAKO_PARENT)
+     * </pre>
+     *
+     * <code>string parent_session_id = 11 [json_name = "parentSessionId"];</code>
+     * @param value The bytes for parentSessionId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParentSessionIdBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setParentSessionIdBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.RunAgentPrompt)
   }
   @java.lang.Override
@@ -1134,10 +1271,12 @@ public  final class RunAgentPrompt extends
             "prompt_",
             "format_",
             "jsonSchema_",
+            "parentSessionId_",
           };
           java.lang.String info =
-              "\u0000\n\u0000\u0001\u0001\n\n\u0000\u0000\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
-              "\u0004\u0208\u0005\u0208\u0006\u1007\u0000\u0007\u0208\b\u0208\t\u0208\n\u0208";
+              "\u0000\u000b\u0000\u0001\u0001\u000b\u000b\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u1007\u0000\u0007\u0208\b\u0208\t\u0208" +
+              "\n\u0208\u000b\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

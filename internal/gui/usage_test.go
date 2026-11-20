@@ -177,7 +177,7 @@ func TestUsageOverlayAgyRemainingQuota(t *testing.T) {
 	state := m.usageState("a")
 	state.loading = true
 	state.usage.Set(&protocol.Usage{
-		Input: 4000, Output: 1200, Context: 150000, Window: 1000000,
+		Input: 4000, Output: 1200, Context: 150000, Window: 1000000, CostUsd: 0.42,
 		Limits: []*protocol.RateLimit{
 			{Minutes: protocol.FiveHours, Used: 28, Resets: now.Add(time.Hour).Unix()},
 			{Minutes: protocol.Week, Used: 6, Resets: now.Add(48 * time.Hour).Unix()},
@@ -191,8 +191,16 @@ func TestUsageOverlayAgyRemainingQuota(t *testing.T) {
 			t.Errorf("agy usage overlay missing %q:\n%s", want, p.Semantics().String())
 		}
 	}
+	// Switching UsageDisplay to "remaining" renders "%d%% left" directly in the overlay card.
+	m.Prefs.Update(func(v prefs) prefs { v.UsageDisplay = "remaining"; return v })
+	p.Frame()
+	for _, want := range []string{Tf("%d%% left", 72), Tf("%d%% left", 94)} {
+		if _, ok := p.Semantics().Find(ggui.RoleText, want); !ok {
+			t.Errorf("agy remaining usage overlay missing %q:\n%s", want, p.Semantics().String())
+		}
+	}
 	detail := usageDetail(ggui.Peek(state.usage), now)
-	for _, want := range []string{Tf(" (%d%% left)", 72), Tf(" (%d%% left)", 94)} {
+	for _, want := range []string{Tf(" (%d%% left)", 72), Tf(" (%d%% left)", 94), Tf("Estimated cost $%.2f", 0.42)} {
 		if !strings.Contains(detail, want) {
 			t.Errorf("agy usage detail %q missing %q", detail, want)
 		}

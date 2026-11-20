@@ -38,9 +38,10 @@ func hooksFile(env map[string]string) (string, error) {
 }
 
 // WithHooks keeps mako's entry, for hook, in agy's global hooks.json, and
-// attaches mako's statusLine via --settings when status is given and the launch
-// does not already pass --settings, so agy reports its context window and
-// remaining quota limits without modifying settings.json on disk.
+// attaches mako's statusLine via --settings when status is given, merging into
+// any existing --settings JSON/file (unless it already sets statusLine) so agy
+// reports its context window, state, and remaining quota without modifying
+// settings.json on disk.
 func (*Agent) WithHooks(l *agent.Launch, hook, status, _ string) bool {
 	var env map[string]string
 	if l != nil {
@@ -50,30 +51,93 @@ func (*Agent) WithHooks(l *agent.Launch, hook, status, _ string) bool {
 	if err != nil || writeHooks(path, hook) != nil {
 		return false
 	}
-	if l != nil && status != "" && !hasSettingsFlag(l.Command) {
-		doc := map[string]any{
-			"statusLine": map[string]any{
-				"type":               "command",
-				"command":            status,
-				"enabled":            true,
-				"stack_with_default": true,
-			},
+	if l != nil && status != "" {
+		statusCfg := map[string]any{
+			"type":               "command",
+			"command":            status,
+			"enabled":            true,
+			"stack_with_default": true,
 		}
-		if b, err := json.Marshal(doc); err == nil {
-			l.Command = append(l.Command, "--settings", string(b))
-		}
+		l.Command = attachSettingsStatusLine(l.Command, statusCfg, env)
 	}
 	return true
 }
 
-func hasSettingsFlag(command []string) bool {
-	if len(command) <= 1 {
-		return false
+func attachSettingsStatusLine(command []string, statusCfg map[string]any, env map[string]string) []string {
+	if len(command) == 0 {
+		return command
 	}
-	return slices.ContainsFunc(command[1:], func(arg string) bool {
-		name, _, _ := strings.Cut(arg, "=")
-		return name == "--settings"
-	})
+	for i := 1; i < len(command); i++ {
+		arg := command[i]
+		var raw string
+		inlineEq := false
+		switch {
+		case arg == "--settings" && i+1 < len(command):
+			raw = command[i+1]
+		case strings.HasPrefix(arg, "--settings="):
+			raw = strings.TrimPrefix(arg, "--settings=")
+			inlineEq = true
+		default:
+			continue
+		}
+		doc, ok := loadSettingsObject(raw, env)
+		if !ok {
+			return command // leave unrecognized/unreadable --settings untouched
+		}
+		if _, has := doc["statusLine"]; has {
+			return command // respect explicit user statusLine in --settings
+		}
+		doc["statusLine"] = statusCfg
+		merged, err := json.Marshal(doc)
+		if err != nil {
+			return command
+		}
+		out := slices.Clone(command)
+		if inlineEq {
+			out[i] = "--settings=" + string(merged)
+		} else {
+			out[i+1] = string(merged)
+		}
+		return out
+	}
+	doc := map[string]any{"statusLine": statusCfg}
+	b, err := json.Marshal(doc)
+	if err != nil {
+		return command
+	}
+	return append(command, "--settings", string(b))
+}
+
+func loadSettingsObject(raw string, env map[string]string) (map[string]any, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, false
+	}
+	var body []byte
+	if strings.HasPrefix(trimmed, "{") {
+		body = []byte(trimmed)
+	} else {
+		p := trimmed
+		if strings.HasPrefix(p, "~/") {
+			home := env["HOME"]
+			if home == "" {
+				home, _ = os.UserHomeDir()
+			}
+			if home != "" {
+				p = filepath.Join(home, p[2:])
+			}
+		}
+		var err error
+		body, err = os.ReadFile(p)
+		if err != nil {
+			return nil, false
+		}
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(bytes.TrimPrefix(body, []byte("\xef\xbb\xbf")), &doc); err != nil || doc == nil {
+		return nil, false
+	}
+	return doc, true
 }
 
 // writeHooks writes mako's entry for hook into the hooks.json at path,
