@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/pkg/fsutil"
@@ -27,10 +28,16 @@ func (*Agent) LiveMod(dir string) (string, error) {
 			return err
 		}
 		rel, _ := filepath.Rel("mod", path)
-		to := filepath.Join(folder, rel)
 		if e.IsDir() {
-			return os.MkdirAll(to, 0o700)
+			if rel == "tests" {
+				return fs.SkipDir
+			}
+			return os.MkdirAll(filepath.Join(folder, rel), 0o700)
 		}
+		if strings.HasSuffix(rel, ".test.ts") {
+			return nil
+		}
+		to := filepath.Join(folder, rel)
 		data, err := mod.ReadFile(path)
 		if err != nil {
 			return err

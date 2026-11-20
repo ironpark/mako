@@ -1,10 +1,10 @@
 package claude
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/ironpark/mako/internal/agent"
@@ -26,15 +26,12 @@ var hookEvents = []agent.HookEvent{
 // them, alongside the user's own.
 const settingsFlag = "--settings"
 
-// WithHooks gives the hooks, and the status line, as a --settings
-// document; a command with settings of its own keeps them, without mako's.
+// WithHooks gives the hooks, and the status line, as a --settings document.
+// If the command already passes --settings pointing to readable JSON or an
+// inline JSON object, mako merges its hooks (preserving existing matchers) and
+// sets statusLine unless already configured; an unreadable --settings is left
+// untouched and WithHooks returns false.
 func (*Agent) WithHooks(l *agent.Launch, hook, status, _ string) bool {
-	if slices.ContainsFunc(l.Command[1:], func(arg string) bool {
-		name, _, _ := strings.Cut(arg, "=")
-		return name == settingsFlag
-	}) {
-		return false
-	}
 	type handler struct {
 		Type    string `json:"type"`
 		Command string `json:"command"`
@@ -43,15 +40,66 @@ func (*Agent) WithHooks(l *agent.Launch, hook, status, _ string) bool {
 	type matcher struct {
 		Hooks []handler `json:"hooks"`
 	}
-	hooks := map[string][]matcher{}
+	makoHooks := map[string][]matcher{}
 	for _, e := range hookEvents {
 		h := handler{Type: "command", Command: hook}
 		if e.Timeout != agent.HookTimeout {
 			h.Timeout = e.Timeout
 		}
-		hooks[e.Name] = []matcher{{Hooks: []handler{h}}}
+		makoHooks[e.Name] = []matcher{{Hooks: []handler{h}}}
 	}
-	doc := map[string]any{"hooks": hooks}
+
+	// Check if --settings is already present in l.Command.
+	for i := 1; i < len(l.Command); i++ {
+		arg := l.Command[i]
+		var raw string
+		inlineEq := false
+		switch {
+		case arg == settingsFlag && i+1 < len(l.Command):
+			raw = l.Command[i+1]
+		case strings.HasPrefix(arg, settingsFlag+"="):
+			raw = strings.TrimPrefix(arg, settingsFlag+"=")
+			inlineEq = true
+		default:
+			continue
+		}
+		doc, ok := loadSettingsJSON(raw, l.Env)
+		if !ok {
+			return false
+		}
+		existingHooks, _ := doc["hooks"].(map[string]any)
+		if existingHooks == nil {
+			existingHooks = map[string]any{}
+		}
+		for name, added := range makoHooks {
+			var list []any
+			if cur, ok := existingHooks[name].([]any); ok {
+				list = append(list, cur...)
+			}
+			for _, m := range added {
+				list = append(list, m)
+			}
+			existingHooks[name] = list
+		}
+		doc["hooks"] = existingHooks
+		if status != "" {
+			if _, has := doc["statusLine"]; !has {
+				doc["statusLine"] = map[string]any{"type": "command", "command": status}
+			}
+		}
+		merged, err := json.Marshal(doc)
+		if err != nil {
+			return false
+		}
+		if inlineEq {
+			l.Command[i] = settingsFlag + "=" + string(merged)
+		} else {
+			l.Command[i+1] = string(merged)
+		}
+		return true
+	}
+
+	doc := map[string]any{"hooks": makoHooks}
 	if status != "" {
 		doc["statusLine"] = map[string]any{"type": "command", "command": status}
 	}
@@ -61,6 +109,38 @@ func (*Agent) WithHooks(l *agent.Launch, hook, status, _ string) bool {
 	}
 	l.Command = append(l.Command, settingsFlag, string(settings))
 	return true
+}
+
+func loadSettingsJSON(raw string, env map[string]string) (map[string]any, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, false
+	}
+	var body []byte
+	if strings.HasPrefix(trimmed, "{") {
+		body = []byte(trimmed)
+	} else {
+		p := trimmed
+		if strings.HasPrefix(p, "~/") {
+			home := env["HOME"]
+			if home == "" {
+				home, _ = os.UserHomeDir()
+			}
+			if home != "" {
+				p = filepath.Join(home, p[2:])
+			}
+		}
+		var err error
+		body, err = os.ReadFile(p)
+		if err != nil {
+			return nil, false
+		}
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(bytes.TrimPrefix(body, []byte("\xef\xbb\xbf")), &doc); err != nil || doc == nil {
+		return nil, false
+	}
+	return doc, true
 }
 
 // Event also reads a Notification, by which Claude says it asks the user

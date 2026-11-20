@@ -3,7 +3,9 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"os"
@@ -14,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/session"
 )
 
 // texts are the blocks' texts, joined, each a tool's name for a call.
@@ -179,4 +182,149 @@ func TestAChatIsFollowedAcrossNodes(t *testing.T) {
 	f.WriteString(`{"type":"assistant"}` + "\n")
 	f.Close()
 	next("word of the log", func(l *protocol.ChatLive) bool { return l.GetLogged() && len(l.GetBlocks()) == 0 })
+}
+
+func TestLiveModMessagesPollAndAck(t *testing.T) {
+	d := meshDaemon(t, "live-msg")
+	addSessionOf(t, d, "claude-main", "claude")
+	if d.liveSocket == "" {
+		t.Fatal("no live socket")
+	}
+	hc := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", d.liveSocket)
+	}}}
+	post := func(path string, body any) *http.Response {
+		t.Helper()
+		b, _ := json.Marshal(body)
+		resp, err := hc.Post("http://mako"+path, "application/json", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	// Forged token and unknown session are rejected.
+	r := post("/messages/poll", liveMessagesPollReq{Session: "claude-main", Token: "forged", WaitSeconds: 1})
+	r.Body.Close()
+	if r.StatusCode != http.StatusForbidden {
+		t.Fatalf("forged poll status = %d, want 403", r.StatusCode)
+	}
+	r = post("/messages/poll", liveMessagesPollReq{Session: "missing", Token: "x", WaitSeconds: 1})
+	r.Body.Close()
+	if r.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing session poll status = %d, want 404", r.StatusCode)
+	}
+
+	token := d.liveToken("claude-main")
+
+	// Start a blocking long-poll from the mod; verify it wakes immediately on send
+	// and registers an active waiter to suppress PTY fallback.
+	pollCh := make(chan liveMessagesPollResp, 1)
+	go func() {
+		resp := post("/messages/poll", liveMessagesPollReq{
+			Session:     "claude-main",
+			Token:       token,
+			AfterID:     0,
+			WaitSeconds: 10,
+		})
+		defer resp.Body.Close()
+		var out liveMessagesPollResp
+		_ = json.NewDecoder(resp.Body).Decode(&out)
+		pollCh <- out
+	}()
+	waitForWithin(t, 3*time.Second, "mod poll never registered active waiter", func() bool {
+		return d.projectAgents.hasCLIWaiter("claude-main")
+	})
+
+	first, err := d.projectAgents.messages.send("worker-1", "claude-main", "build is green", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got liveMessagesPollResp
+	select {
+	case got = <-pollCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("mod long-poll timed out")
+	}
+	if !got.HasMessages || got.LastID != first.ID || got.Count != 1 || !strings.Contains(got.Prompt, "build is green") || !strings.Contains(got.Summary, "worker-1") {
+		t.Fatalf("unexpected poll response: %+v", got)
+	}
+	// Grace window keeps PTY fallback suppressed between poll return and ack/next poll.
+	if !d.projectAgents.hasCLIWaiter("claude-main") {
+		t.Fatal("expected mod grace window to keep PTY fallback suppressed")
+	}
+
+	// Polling with after_id = first.ID waits for newer messages only.
+	poll2Ch := make(chan liveMessagesPollResp, 1)
+	go func() {
+		resp := post("/messages/poll", liveMessagesPollReq{
+			Session:     "claude-main",
+			Token:       token,
+			AfterID:     first.ID,
+			WaitSeconds: 10,
+		})
+		defer resp.Body.Close()
+		var out liveMessagesPollResp
+		_ = json.NewDecoder(resp.Body).Decode(&out)
+		poll2Ch <- out
+	}()
+	time.Sleep(100 * time.Millisecond)
+	second, err := d.projectAgents.messages.send("worker-2", "claude-main", "lint passed", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got2 := <-poll2Ch:
+		if !got2.HasMessages || got2.LastID != second.ID || !strings.Contains(got2.Prompt, "lint passed") {
+			t.Fatalf("unexpected second poll response: %+v", got2)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("second mod long-poll timed out")
+	}
+
+	// Acking marks both messages delivered and empties the inbox.
+	ackResp := post("/messages/ack", liveMessagesAckReq{
+		Session:    "claude-main",
+		Token:      token,
+		AckThrough: second.ID,
+	})
+	ackResp.Body.Close()
+	if ackResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("ack status = %d, want 204", ackResp.StatusCode)
+	}
+	if inbox, _ := d.projectAgents.messages.pending("claude-main"); len(inbox) != 0 {
+		t.Fatalf("expected empty inbox after mod ack, got %+v", inbox)
+	}
+
+	// /mako/status reports project sessions and child status summary.
+	mainSess, _ := d.sessions.get("claude-main")
+	childSess, err := session.Start(session.Spec{
+		ID: "claude-child", NodeID: d.cfg.NodeID, Agent: "claude", Project: mainSess.Info().GetProject(),
+		Command: []string{"sh", "-c", "sleep 30"}, Cols: 80, Rows: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = childSess.Close() })
+	d.sessions.add(childSess)
+	childSess.SetStatus(protocol.AgentWorking)
+	d.sessionMu.Lock()
+	if d.saved == nil {
+		d.saved = map[string]savedSession{}
+	}
+	d.saved["claude-child"] = savedSession{ParentID: "claude-main"}
+	d.sessionMu.Unlock()
+
+	statusResp := post("/mako/status", liveMakoStatusReq{Session: "claude-main", Token: token})
+	defer statusResp.Body.Close()
+	if statusResp.StatusCode != http.StatusOK {
+		t.Fatalf("/mako/status status = %d", statusResp.StatusCode)
+	}
+	var statusOut liveMakoStatusResp
+	if err := json.NewDecoder(statusResp.Body).Decode(&statusOut); err != nil {
+		t.Fatal(err)
+	}
+	if statusOut.ChildStatus != "1 subagent working" || !strings.Contains(statusOut.Summary, "claude-child") || !strings.Contains(statusOut.Summary, "[child]") {
+		t.Fatalf("unexpected /mako/status: %+v", statusOut)
+	}
 }

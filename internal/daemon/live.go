@@ -302,10 +302,261 @@ func (d *Daemon) listenLive(ctx context.Context, dir string) {
 		d.log.Warn("live replies: not listening", "err", err)
 		return
 	}
-	srv := &http.Server{Handler: http.HandlerFunc(d.serveLive), ReadHeaderTimeout: 5 * time.Second}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/live", d.serveLive)
+	mux.HandleFunc("/messages/poll", d.serveLiveMessagesPoll)
+	mux.HandleFunc("/messages/ack", d.serveLiveMessagesAck)
+	mux.HandleFunc("/mako/status", d.serveLiveMakoStatus)
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	context.AfterFunc(ctx, func() { _ = srv.Close() })
 	d.liveSocket = path
 	go func() { _ = srv.Serve(ln) }()
+}
+
+type liveMessagesPollReq struct {
+	Session     string `json:"session"`
+	Token       string `json:"token"`
+	AfterID     uint64 `json:"after_id,omitempty"`
+	WaitSeconds int    `json:"wait_seconds,omitempty"`
+}
+
+type liveMessagesPollResp struct {
+	HasMessages bool   `json:"has_messages"`
+	LastID      uint64 `json:"last_id,omitempty"`
+	Count       int    `json:"count,omitempty"`
+	Prompt      string `json:"prompt,omitempty"`
+	Summary     string `json:"summary,omitempty"`
+	ChildStatus string `json:"child_status,omitempty"`
+}
+
+type liveMessagesAckReq struct {
+	Session    string `json:"session"`
+	Token      string `json:"token"`
+	AckThrough uint64 `json:"ack_through"`
+}
+
+type liveMakoStatusReq struct {
+	Session string `json:"session"`
+	Token   string `json:"token"`
+}
+
+type liveMakoStatusResp struct {
+	Summary     string `json:"summary"`
+	ChildStatus string `json:"child_status,omitempty"`
+}
+
+const (
+	liveMsgDefaultWait = 20 * time.Second
+	liveMsgMaxWait     = 25 * time.Second
+	liveMsgModGrace    = 3 * time.Second
+)
+
+func (d *Daemon) serveLiveMessagesPoll(w http.ResponseWriter, r *http.Request) {
+	var req liveMessagesPollReq
+	if r.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req) != nil {
+		http.Error(w, "a messages poll request", http.StatusBadRequest)
+		return
+	}
+	if _, ok := d.sessions.get(req.Session); !ok {
+		http.Error(w, "no such session", http.StatusNotFound)
+		return
+	}
+	if !hmac.Equal([]byte(req.Token), []byte(d.liveToken(req.Session))) {
+		http.Error(w, "not this session's", http.StatusForbidden)
+		return
+	}
+	release := d.projectAgents.addCLIWaiter(req.Session)
+	d.projectAgents.markModActive(req.Session, liveMsgModGrace)
+	defer func() {
+		d.projectAgents.markModActive(req.Session, liveMsgModGrace)
+		release()
+	}()
+
+	wait := liveMsgDefaultWait
+	if req.WaitSeconds > 0 {
+		wait = min(time.Duration(req.WaitSeconds)*time.Second, liveMsgMaxWait)
+	} else if req.WaitSeconds < 0 {
+		wait = 0
+	}
+	deadline := time.NewTimer(wait)
+	defer deadline.Stop()
+
+	writeJSON := func(resp liveMessagesPollResp) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}
+
+	for {
+		inbox, changed := d.projectAgents.messages.pending(req.Session)
+		var filtered []agentMessage
+		for _, m := range inbox {
+			if m.ID > req.AfterID {
+				filtered = append(filtered, m)
+			}
+		}
+		if len(filtered) > 0 {
+			batch := deliveryOf(filtered)
+			summary := fmt.Sprintf("%d Mako messages", len(batch))
+			if len(batch) == 1 {
+				var mesh []*protocol.SessionInfo
+				switch {
+				case batch[0].Event:
+					summary = "Mako window event"
+				case batch[0].Note:
+					summary = "Mako note about " + d.agentLabel(batch[0].From, &mesh)
+				default:
+					summary = "Mako message from " + d.agentLabel(batch[0].From, &mesh)
+				}
+			}
+			writeJSON(liveMessagesPollResp{
+				HasMessages: true,
+				LastID:      batch[len(batch)-1].ID,
+				Count:       len(batch),
+				Prompt:      d.agentPrompt(batch),
+				Summary:     summary,
+				ChildStatus: d.childStatusSummary(req.Session),
+			})
+			return
+		}
+		select {
+		case <-changed:
+		case <-deadline.C:
+			writeJSON(liveMessagesPollResp{
+				HasMessages: false,
+				ChildStatus: d.childStatusSummary(req.Session),
+			})
+			return
+		case <-r.Context().Done():
+			return
+		case <-d.ctx.Done():
+			return
+		}
+	}
+}
+
+func (d *Daemon) childStatusSummary(parentID string) string {
+	d.sessionMu.Lock()
+	var childIDs []string
+	for id, saved := range d.saved {
+		if saved.ParentID == parentID {
+			childIDs = append(childIDs, id)
+		}
+	}
+	d.sessionMu.Unlock()
+	if len(childIDs) == 0 {
+		return ""
+	}
+	var working, waiting int
+	for _, id := range childIDs {
+		s, ok := d.sessions.get(id)
+		if !ok {
+			continue
+		}
+		info := s.Info()
+		if info.GetState() != protocol.StateRunning {
+			continue
+		}
+		switch info.GetStatus() {
+		case protocol.AgentWaiting:
+			waiting++
+		case protocol.AgentWorking, protocol.AgentCompacting:
+			working++
+		}
+	}
+	var parts []string
+	if working == 1 {
+		parts = append(parts, "1 subagent working")
+	} else if working > 1 {
+		parts = append(parts, fmt.Sprintf("%d subagents working", working))
+	}
+	if waiting > 0 {
+		parts = append(parts, fmt.Sprintf("%d waiting", waiting))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func (d *Daemon) serveLiveMakoStatus(w http.ResponseWriter, r *http.Request) {
+	var req liveMakoStatusReq
+	if r.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req) != nil {
+		http.Error(w, "a status request", http.StatusBadRequest)
+		return
+	}
+	s, ok := d.sessions.get(req.Session)
+	if !ok {
+		http.Error(w, "no such session", http.StatusNotFound)
+		return
+	}
+	if !hmac.Equal([]byte(req.Token), []byte(d.liveToken(req.Session))) {
+		http.Error(w, "not this session's", http.StatusForbidden)
+		return
+	}
+	info := s.Info()
+	scope := d.projectScope(info)
+	d.sessionMu.Lock()
+	parents := map[string]string{}
+	for id, saved := range d.saved {
+		parents[id] = saved.ParentID
+	}
+	d.sessionMu.Unlock()
+
+	var b strings.Builder
+	inbox, _ := d.projectAgents.messages.pending(req.Session)
+	fmt.Fprintf(&b, "Mako session %s (%s) · %d pending message(s)", req.Session, info.GetProject(), len(inbox))
+	for _, other := range d.listSessions() {
+		if !d.inProject(scope, other) {
+			continue
+		}
+		role := ""
+		switch {
+		case other.GetId() == req.Session:
+			role = " [self]"
+		case parents[other.GetId()] == req.Session:
+			role = " [child]"
+		case parents[req.Session] == other.GetId():
+			role = " [parent]"
+		}
+		target := other.GetAgent()
+		if other.GetProfile() != "" {
+			target += ":" + other.GetProfile()
+		}
+		name := ""
+		if other.GetName() != "" {
+			name = " (" + other.GetName() + ")"
+		}
+		status := other.GetStatus()
+		if status == "" || other.GetState() != protocol.StateRunning {
+			status = other.GetState()
+		}
+		fmt.Fprintf(&b, "\n- %s %s%s%s: %s", other.GetId(), target, name, role, status)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(liveMakoStatusResp{
+		Summary:     b.String(),
+		ChildStatus: d.childStatusSummary(req.Session),
+	})
+}
+
+func (d *Daemon) serveLiveMessagesAck(w http.ResponseWriter, r *http.Request) {
+	var req liveMessagesAckReq
+	if r.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req) != nil {
+		http.Error(w, "a messages ack request", http.StatusBadRequest)
+		return
+	}
+	if _, ok := d.sessions.get(req.Session); !ok {
+		http.Error(w, "no such session", http.StatusNotFound)
+		return
+	}
+	if !hmac.Equal([]byte(req.Token), []byte(d.liveToken(req.Session))) {
+		http.Error(w, "not this session's", http.StatusForbidden)
+		return
+	}
+	d.projectAgents.markModActive(req.Session, liveMsgModGrace)
+	if req.AckThrough > 0 {
+		if err := d.projectAgents.messages.delivered(req.Session, req.AckThrough); err != nil {
+			d.log.Warn("live messages: ack not recorded", "session", req.Session, "err", err)
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (d *Daemon) serveLive(w http.ResponseWriter, r *http.Request) {

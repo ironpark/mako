@@ -2,6 +2,9 @@ package claude
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ironpark/mako/internal/agent"
@@ -76,5 +79,49 @@ func TestClaudeHooksAreSettings(t *testing.T) {
 		if _, ok := claude.Event([]byte(other)); ok {
 			t.Errorf("%s taken", other)
 		}
+	}
+}
+
+func TestClaudeWithHooksMergesExistingSettings(t *testing.T) {
+	c := New()
+	// Inline JSON --settings merges Mako hooks alongside user hooks and sets statusLine.
+	l1 := agent.Launch{Command: []string{"claude", "--settings", `{"model":"opus","hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo user"}]}]}}`}}
+	if !c.WithHooks(&l1, "/bin/makod hook /s", "/bin/makod statusline /s", "") {
+		t.Fatal("WithHooks returned false for valid inline --settings")
+	}
+	var merged map[string]any
+	if err := json.Unmarshal([]byte(l1.Command[2]), &merged); err != nil {
+		t.Fatalf("invalid merged JSON: %v", err)
+	}
+	if merged["model"] != "opus" {
+		t.Fatalf("lost user setting: %+v", merged)
+	}
+	hooksMap, _ := merged["hooks"].(map[string]any)
+	stopList, _ := hooksMap["Stop"].([]any)
+	if len(stopList) != 2 {
+		t.Fatalf("expected user Stop hook preserved alongside Mako's, got %+v", stopList)
+	}
+	if merged["statusLine"] == nil {
+		t.Fatalf("expected statusLine added: %+v", merged)
+	}
+
+	// File path --settings with explicit user statusLine preserves user statusLine.
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "custom.json")
+	if err := os.WriteFile(cfgPath, []byte(`{"statusLine":{"type":"command","command":"my-status"},"theme":"dark"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l2 := agent.Launch{Command: []string{"claude", "--settings=" + cfgPath}}
+	if !c.WithHooks(&l2, "/bin/makod hook /s", "/bin/makod statusline /s", "") {
+		t.Fatal("WithHooks returned false for readable --settings file")
+	}
+	raw := strings.TrimPrefix(l2.Command[1], "--settings=")
+	var merged2 map[string]any
+	if err := json.Unmarshal([]byte(raw), &merged2); err != nil {
+		t.Fatalf("invalid merged file JSON: %v", err)
+	}
+	sl, _ := merged2["statusLine"].(map[string]any)
+	if sl["command"] != "my-status" || merged2["theme"] != "dark" || merged2["hooks"] == nil {
+		t.Fatalf("unexpected merged2: %+v", merged2)
 	}
 }

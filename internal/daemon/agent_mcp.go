@@ -44,11 +44,12 @@ type projectAgents struct {
 	socket     string // the stdio bridge's, for an agent that cannot reach url
 	cliSocket  string // agent-cli.sock for mako-msg CLI & agy-sidecar
 	url        string // where the agents reach the server over HTTP
-	peers      map[string]*agentPeer
-	messages   agentMessages
-	waits      map[string]int // the agents waited on with wait_agent, how many times each
-	cliWaiters map[string]int // active `mako-msg wait` waiters per session (suppress PTY fallback)
-	agySidecar *agySidecarClient
+	peers        map[string]*agentPeer
+	messages     agentMessages
+	waits        map[string]int       // the agents waited on with wait_agent, how many times each
+	cliWaiters   map[string]int       // active `mako-msg wait` / mod long-poll waiters per session (suppress PTY fallback)
+	modPollUntil map[string]time.Time // grace window between mod long-poll cycles so PTY fallback never races
+	agySidecar   *agySidecarClient
 }
 
 func (p *projectAgents) addCLIWaiter(id string) func() {
@@ -67,10 +68,31 @@ func (p *projectAgents) addCLIWaiter(id string) func() {
 	}
 }
 
+func (p *projectAgents) markModActive(id string, ttl time.Duration) {
+	p.mu.Lock()
+	if p.modPollUntil == nil {
+		p.modPollUntil = map[string]time.Time{}
+	}
+	until := time.Now().Add(ttl)
+	if until.After(p.modPollUntil[id]) {
+		p.modPollUntil[id] = until
+	}
+	p.mu.Unlock()
+}
+
 func (p *projectAgents) hasCLIWaiter(id string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.cliWaiters[id] > 0
+	if p.cliWaiters[id] > 0 {
+		return true
+	}
+	if until, ok := p.modPollUntil[id]; ok {
+		if time.Now().Before(until) {
+			return true
+		}
+		delete(p.modPollUntil, id)
+	}
+	return false
 }
 
 type agentPeer struct {
@@ -587,8 +609,10 @@ func (d *Daemon) agentInstructions(peer *agentPeer) string {
 	switch info.GetAgent() {
 	case "agy":
 		waitGuidance = "Incoming Mako messages are pushed directly into your Antigravity conversation via agentapi/sidecar and wake you automatically. NEVER poll read_messages in a timeout loop: after spawning or messaging a teammate, continue other work or end your turn and you will be woken up when a reply arrives. You can also use `mako-msg wait` in a background shell command if you need to stay in-turn."
+	case "claude":
+		waitGuidance = "Incoming Mako messages are pushed natively into your Claude Code session by the Mako mod as soon as your turn is idle (no PTY typing or polling needed). NEVER poll read_messages in a timeout loop: after spawning or messaging a teammate, continue other work or end your turn and you will be woken automatically when a reply arrives. If you want to wait concurrently while staying in-turn (or watch specific children), you can also run `mako-msg wait` / `mako-msg wait --all-children` via Bash(run_in_background=true). Use read_messages (wait_seconds=0) only for a quick non-blocking check."
 	default:
-		waitGuidance = "NEVER poll read_messages in a repeated timeout loop. Messages are automatically delivered to you as a new prompt once your turn ends. If you want to wait asynchronously without blocking or timing out, run `mako-msg wait` (or `mako-msg wait --session <child-id>`) as a background shell command (e.g. Bash with run_in_background=true); it blocks event-driven with zero polling and exits with the message JSON as soon as a reply arrives or the child finishes. Use read_messages (wait_seconds=0) only for a quick non-blocking inbox check, and acknowledge processed messages with ack_through."
+		waitGuidance = "NEVER poll read_messages in a repeated timeout loop. Messages are automatically delivered to you as a new prompt once your turn ends. If you want to wait asynchronously without blocking or timing out, run `mako-msg wait` (or `mako-msg wait --session <child-id>` / `--all-children`) as a background shell command; it blocks event-driven with zero polling and exits with the message JSON as soon as a reply arrives or a child finishes. Use read_messages (wait_seconds=0) only for a quick non-blocking inbox check, and acknowledge processed messages with ack_through."
 	}
 	return fmt.Sprintf("You are Mako session %s (mode=%s, AGENT_MAKO_SESSION=%s, AGENT_MAKO_MODE=%s) in project %s. Parent session: %s. Before delegating, use list_agent_profiles to inspect spawnable agent configurations and profile presets (with descriptions, models, efforts and YOLO settings), or list_agents to inspect active project sessions. Choose a spawnable preset whose specialties match the task, then pass its agent and profile names to spawn_agent (omit profile for an agent default). Use send_message to communicate, with agents of this project on other nodes too, which list_agents lists with their node. %s Report results to the parent with send_message. Of an agent you spawned that waits on the user, or exits without reporting, you hear in a Mako note. stop_agent only stops agents you spawned. The mako window's layout is a document you read with get_layout and list_blocks; set_layout, patch_layout and undo_layout change it once the user allows, and only what the user keeps stays. show_ui shows a block of UI of yours in the window, a form say, and the user's taps on it come back to you as messages from the window; update_ui and close_ui change and close it. A UI to keep is a plugin: list_blocks names the folder to write one into.",
 		peer.id, mode, peer.id, mode, info.GetProject(), peer.parent, waitGuidance)
