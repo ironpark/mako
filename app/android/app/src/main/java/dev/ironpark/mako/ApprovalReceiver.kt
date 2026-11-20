@@ -23,7 +23,7 @@ class ApprovalReceiver : BroadcastReceiver() {
         app.scope.launch {
             try {
                 app.mesh.answer(node, id, approval, decision)
-                NotificationManagerCompat.from(context).cancel(id.hashCode())
+                NotificationManagerCompat.from(context).cancel(id, MeshService.AGENT_NOTICE_ID)
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(context, e.message, Toast.LENGTH_LONG).show()

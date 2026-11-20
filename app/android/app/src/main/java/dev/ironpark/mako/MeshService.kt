@@ -17,6 +17,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import dev.ironpark.mako.ui.label
 import dev.ironpark.mako.ui.plans
+import dev.ironpark.mako.v2.Node
 import dev.ironpark.mako.v2.SessionInfo
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
@@ -48,7 +49,6 @@ class MeshService : Service() {
         )
         multicast = (getSystemService(WIFI_SERVICE) as WifiManager).createMulticastLock("mako").apply {
             setReferenceCounted(false)
-            acquire()
         }
         val app = mako
         app.mesh.start()
@@ -56,6 +56,13 @@ class MeshService : Service() {
             launch {
                 app.mesh.nodes.map { nodes -> nodes.count { it.trustsUs } }.distinctUntilChanged().collect {
                     notify(NotificationManagerCompat.from(this@MeshService), ONGOING, ongoing(it))
+                }
+            }
+            launch {
+                combine(app.foreground, app.mesh.nodes) { fg, nodes ->
+                    needsMulticastLock(fg, nodes)
+                }.distinctUntilChanged().collect { need ->
+                    updateMulticastLock(need)
                 }
             }
             combine(app.mesh.sessions, app.foreground, app.notificationPreferences.options) { sessions, fg, options ->
@@ -74,8 +81,24 @@ class MeshService : Service() {
 
     override fun onDestroy() {
         job?.cancel()
-        multicast?.release()
+        multicast?.let { lock ->
+            synchronized(lock) {
+                if (lock.isHeld) lock.release()
+            }
+        }
+        multicast = null
         super.onDestroy()
+    }
+
+    private fun updateMulticastLock(acquire: Boolean) {
+        val lock = multicast ?: return
+        synchronized(lock) {
+            if (acquire) {
+                if (!lock.isHeld) lock.acquire()
+            } else {
+                if (lock.isHeld) lock.release()
+            }
+        }
     }
 
     /** Notifies of the approvals asked for, and the turns ended, since last. */
@@ -84,22 +107,27 @@ class MeshService : Service() {
         for (change in seen.update(sessions)) {
             val s = change.session
             val kind = change.kind
-            if (kind == null || !options.allows(kind, foreground)) nm.cancel(s.id.hashCode())
-            else notify(nm, s.id.hashCode(), if (kind == NoticeKind.Approval) approvalNotice(s) else turnNotice(s))
+            if (kind == null || !options.allows(kind, foreground)) nm.cancel(s.id, AGENT_NOTICE_ID)
+            else notify(nm, s.id, AGENT_NOTICE_ID, if (kind == NoticeKind.Approval) approvalNotice(s) else turnNotice(s))
         }
         // Applying a setting also removes an alert that was already visible.
         for (s in sessions) {
             val kind = seen.kind(s)
-            if (!options.enabled || kind != null && !options.allows(kind, foreground)) nm.cancel(s.id.hashCode())
+            if (!options.enabled || kind != null && !options.allows(kind, foreground)) nm.cancel(s.id, AGENT_NOTICE_ID)
         }
     }
 
     private fun notify(nm: NotificationManagerCompat, id: Int, n: Notification) {
-        if (Build.VERSION.SDK_INT < 33 ||
-            ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) nm.notify(id, n)
+        if (canPostNotifications()) nm.notify(id, n)
     }
+
+    private fun notify(nm: NotificationManagerCompat, tag: String, id: Int, n: Notification) {
+        if (canPostNotifications()) nm.notify(tag, id, n)
+    }
+
+    private fun canPostNotifications(): Boolean = Build.VERSION.SDK_INT < 33 ||
+        ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED
 
     /**
      * The approval asked for: allowed or denied from the notice, or, for
@@ -164,9 +192,17 @@ class MeshService : Service() {
 
     companion object {
         private const val ONGOING = 1
+        internal const val AGENT_NOTICE_ID = 2
         private const val LINK = "link"
         private const val AGENTS = "agents"
         private const val ACTION_STOP = "dev.ironpark.mako.STOP"
+
+        /**
+         * Holds the Wi-Fi multicast lock only while the app is foregrounded or
+         * no trusted computer is linked yet (still discovering peers via mDNS).
+         */
+        internal fun needsMulticastLock(foreground: Boolean, nodes: List<Node>): Boolean =
+            foreground || nodes.none { it.trustsUs }
 
         fun start(context: Context) {
             ContextCompat.startForegroundService(context, Intent(context, MeshService::class.java))

@@ -12,6 +12,7 @@ import dev.ironpark.mako.v2.BlockEvent
 import dev.ironpark.mako.v2.BlockUpdate
 import dev.ironpark.mako.v2.Changed
 import dev.ironpark.mako.v2.Chat
+import dev.ironpark.mako.v2.ChatLive
 import dev.ironpark.mako.v2.CloseSession
 import dev.ironpark.mako.v2.Envelope
 import dev.ironpark.mako.v2.GetWorkspace
@@ -25,11 +26,14 @@ import dev.ironpark.mako.v2.ProjectAgents
 import dev.ironpark.mako.v2.ReadProjectAgents
 import dev.ironpark.mako.v2.ReadChat
 import dev.ironpark.mako.v2.RenameSession
+import dev.ironpark.mako.v2.SeeSession
 import dev.ironpark.mako.v2.Send
+import dev.ironpark.mako.v2.SleepSession
 import dev.ironpark.mako.v2.StageFile
 import dev.ironpark.mako.v2.SessionInfo
 import dev.ironpark.mako.v2.Watch
 import dev.ironpark.mako.v2.WatchBlock
+import dev.ironpark.mako.v2.WatchChat
 import dev.ironpark.mako.v2.Workspace
 import dev.ironpark.mako.v2.WorkspaceState
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +81,26 @@ class Daemon(private val socket: () -> String?) {
     suspend fun renameSession(node: String, id: String, name: String): SessionInfo =
         call(envelope {
             renameSession = RenameSession.newBuilder().setNodeId(node).setSessionId(id).setName(name).build()
+        }).sessionInfo
+
+    /**
+     * Stops the program of a resting agent's session, keeping the session to
+     * resume when it is next attached. Nodes from
+     * [dev.ironpark.mako.Mesh.REVISION_SLEEP] on take it.
+     */
+    suspend fun sleepSession(node: String, id: String): SessionInfo =
+        call(envelope {
+            sleepSession = SleepSession.newBuilder().setNodeId(node).setSessionId(id).build()
+        }).sessionInfo
+
+    /**
+     * Records that the user has looked at a session's attention up to [seq],
+     * so every front-end on the mesh clears its unread state and alerts.
+     * Nodes from [dev.ironpark.mako.Mesh.REVISION_SEE_SESSION] on take it.
+     */
+    suspend fun seeSession(node: String, id: String, seq: Long): SessionInfo =
+        call(envelope {
+            seeSession = SeeSession.newBuilder().setNodeId(node).setSessionId(id).setSeq(seq).build()
         }).sessionInfo
 
     suspend fun answer(req: AnswerApproval) {
@@ -142,6 +166,15 @@ class Daemon(private val socket: () -> String?) {
         call(envelope { workspace = Workspace.newBuilder().setState(delta).setToNode(node).build() }).workspace
 
     suspend fun chat(req: ReadChat): Chat = call(envelope { readChat = req }).chat
+
+    /**
+     * Follows a session's conversation as its log grows and its agent's
+     * reply streams, until the flow is cancelled; a stream that breaks ends
+     * it with the error. Nodes from [dev.ironpark.mako.Mesh.REVISION_LIVE_CHAT]
+     * on serve it.
+     */
+    fun watchChat(node: String, sessionId: String, agent: String = ""): Flow<ChatLive> =
+        watchChatFlow(open = ::open, send = Stream::send, recv = Stream::recv, node = node, sessionId = sessionId, agent = agent)
 
     /** The agents of the project path is in on node, and their latest messages to each other. */
     suspend fun projectAgents(node: String, path: String): ProjectAgents =
@@ -224,6 +257,31 @@ class Daemon(private val socket: () -> String?) {
         const val STAGE_CHUNK = 4 shl 20
     }
 }
+
+internal fun <S : Closeable> watchChatFlow(
+    open: () -> S,
+    send: (S, Envelope) -> Unit,
+    recv: (S) -> Envelope,
+    node: String,
+    sessionId: String,
+    agent: String = "",
+): Flow<ChatLive> = readFlow(
+    open = {
+        open().also {
+            send(
+                it,
+                envelope {
+                    watchChat = WatchChat.newBuilder()
+                        .setNodeId(node)
+                        .setSessionId(sessionId)
+                        .setAgent(agent)
+                        .build()
+                },
+            )
+        }
+    },
+    read = { recv(it).chatLive },
+)
 
 /**
  * What read reads, one value at a time, from the stream open opens, as a

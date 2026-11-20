@@ -217,6 +217,7 @@ class Mesh(
     }
 
     private val closed = ClosedSessions()
+    private val seenTracker = SeenTracker()
     private val sessionsAsked = java.util.concurrent.atomic.AtomicLong()
     private var sessionsShown = 0L
 
@@ -236,6 +237,7 @@ class Mesh(
                     _sessions.value = closed.filter(list, System.currentTimeMillis())
                 }
             }
+            seenTracker.retain(list)
             if (_sessions.value.isNotEmpty()) _loaded.value = true
         }
     }
@@ -443,6 +445,18 @@ class Mesh(
     /** Whether node reads a project's agents. */
     fun readsProjectAgents(node: String): Boolean = revision(node) >= REVISION_PROJECT_AGENTS
 
+    /** Whether node streams a session's conversation live with WatchChat (protocol.RevisionLiveChat). */
+    fun watchesChat(node: String): Boolean = revision(node) >= REVISION_LIVE_CHAT
+
+    /** Whether node puts a resting agent to sleep with SleepSession (protocol.RevisionSleep). */
+    fun sleepsSession(node: String): Boolean = revision(node) >= REVISION_SLEEP
+
+    /** Whether node numbers session attention and takes SeeSession (protocol.RevisionSeen). */
+    fun seesSession(node: String): Boolean = revision(node) >= REVISION_SEE_SESSION
+
+    /** Whether node takes OpenSession model, effort and yolo overrides (protocol.RevisionTemplatesAndDecisions). */
+    fun supportsOpenOverrides(node: String): Boolean = revision(node) >= REVISION_OPEN_OVERRIDES
+
     /** Types into a session: text pasted as its program asked for pastes, then keys as they are. */
     suspend fun send(s: SessionInfo, text: String = "", keys: String = "") = daemon.send(s.nodeId, s.id, text, keys)
 
@@ -450,6 +464,82 @@ class Mesh(
     suspend fun renameSession(s: SessionInfo, name: String) {
         daemon.renameSession(s.nodeId, s.id, name)
         refreshSessions()
+    }
+
+    /** Stops a resting agent's program while keeping the session to resume when next attached. */
+    suspend fun sleepSession(s: SessionInfo): SessionInfo {
+        val updated = daemon.sleepSession(s.nodeId, s.id)
+        if (updated.id.isNotEmpty()) replaceSession(updated)
+        refreshSessions()
+        return updated
+    }
+
+    /**
+     * Tells the session's node that the user has looked at its attention up to
+     * [SessionInfo.getAttentionSeq], clearing unread state and alerts across
+     * the mesh. A no-op on older nodes, when already seen, or when the same
+     * seq is already in flight or sent.
+     */
+    suspend fun seeSession(s: SessionInfo) {
+        if (!seesSession(s.nodeId)) return
+        if (!seenTracker.tryStart(s)) return
+        val seq = s.attentionSeq
+        // Optimistically advance seenSeq so local unread badges and alerts clear immediately.
+        var previousSeenSeq: Long? = null
+        synchronized(closed) {
+            val cur = _sessions.value
+            val idx = cur.indexOfFirst { it.nodeId == s.nodeId && it.id == s.id }
+            if (idx >= 0 && cur[idx].seenSeq < seq && cur[idx].startedAt == s.startedAt) {
+                previousSeenSeq = cur[idx].seenSeq
+                val updated = cur[idx].toBuilder().setSeenSeq(seq).build()
+                _sessions.value = cur.toMutableList().apply { this[idx] = updated }
+            }
+        }
+        try {
+            val updated = daemon.seeSession(s.nodeId, s.id, seq)
+            if (updated.id.isNotEmpty()) {
+                synchronized(closed) {
+                    val cur = _sessions.value
+                    val idx = cur.indexOfFirst { it.nodeId == updated.nodeId && it.id == updated.id }
+                    if (idx >= 0) {
+                        val merged = mergeSeenSession(cur[idx], updated)
+                        if (merged !== cur[idx]) {
+                            _sessions.value = cur.toMutableList().apply { this[idx] = merged }
+                        }
+                    }
+                }
+            }
+        } catch (e: CancellationException) {
+            rollbackSeen(s, seq, previousSeenSeq)
+            throw e
+        } catch (e: Exception) {
+            rollbackSeen(s, seq, previousSeenSeq)
+            Log.d(TAG, "seeSession ${s.id}: ${e.message}")
+            refreshSessions()
+        }
+    }
+
+    private fun rollbackSeen(s: SessionInfo, seq: Long, previousSeenSeq: Long?) {
+        seenTracker.cancel(s)
+        if (previousSeenSeq == null) return
+        synchronized(closed) {
+            val cur = _sessions.value
+            val idx = cur.indexOfFirst { it.nodeId == s.nodeId && it.id == s.id }
+            if (idx >= 0 && cur[idx].startedAt == s.startedAt && cur[idx].seenSeq == seq) {
+                val reverted = cur[idx].toBuilder().setSeenSeq(previousSeenSeq).build()
+                _sessions.value = cur.toMutableList().apply { this[idx] = reverted }
+            }
+        }
+    }
+
+    private fun replaceSession(updated: SessionInfo) {
+        synchronized(closed) {
+            val cur = _sessions.value
+            val idx = cur.indexOfFirst { it.nodeId == updated.nodeId && it.id == updated.id }
+            if (idx >= 0) {
+                _sessions.value = cur.toMutableList().apply { this[idx] = updated }
+            }
+        }
     }
 
     /** Closes s, gone from the list at once and kept gone; back if the close fails. */
@@ -500,11 +590,17 @@ class Mesh(
         /** The first protocol revision whose daemon reads a project's agents (protocol.RevisionProjectAgents). */
         const val REVISION_PROJECT_AGENTS = 15L
 
+        /** The first protocol revision whose daemon streams a conversation live with WatchChat (protocol.RevisionLiveChat). */
+        const val REVISION_LIVE_CHAT = 17L
+
         /** The first protocol revision whose daemon copies files and says how its links stand (protocol.RevisionLinks). */
         const val REVISION_LINKS = 18L
 
         /** The first protocol revision whose daemon asks and answers questions in the app (protocol.RevisionQuestions). */
         const val REVISION_QUESTIONS = 19L
+
+        /** The first protocol revision whose daemon puts a resting agent to sleep with SleepSession (protocol.RevisionSleep). */
+        const val REVISION_SLEEP = 21L
 
         /** The first protocol revision whose daemon holds the workspace as a CRDT (protocol.RevisionWorkspaceCRDT). */
         const val REVISION_WORKSPACE = 23L
@@ -517,6 +613,12 @@ class Mesh(
 
         /** The first protocol revision whose daemon lists its panels, titled, to a node it lets in (protocol.RevisionPanels). */
         const val REVISION_PANELS = 35L
+
+        /** The first protocol revision whose daemon numbers session attention and takes SeeSession (protocol.RevisionSeen). */
+        const val REVISION_SEE_SESSION = 36L
+
+        /** The first protocol revision whose daemon takes OpenSession model, effort and yolo overrides (protocol.RevisionTemplatesAndDecisions). */
+        const val REVISION_OPEN_OVERRIDES = 39L
 
         /** How a node's link stands, as Node.link says (protocol.Link*). */
         const val LINK_LINKING = "linking"
@@ -537,4 +639,70 @@ class Mesh(
             return if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model".trim()
         }
     }
+}
+
+/**
+ * Deduplicates in-flight and already-sent SeeSession RPCs per session run so
+ * staying on a session screen never spams the daemon. Sequence numbers restart
+ * when a session's program restarts, so reservations also track startedAt.
+ */
+internal class SeenTracker {
+    private data class Key(val nodeId: String, val sessionId: String)
+    private data class Mark(val startedAtSeconds: Long, val startedAtNanos: Int, val seq: Long)
+
+    private val sent = HashMap<Key, Mark>()
+
+    @Synchronized
+    fun tryStart(s: SessionInfo): Boolean {
+        val seq = s.attentionSeq
+        if (seq <= 0L || seq <= s.seenSeq) return false
+        val key = Key(s.nodeId, s.id)
+        val sec = s.startedAt.seconds
+        val nanos = s.startedAt.nanos
+        val prev = sent[key]
+        if (prev != null && prev.startedAtSeconds == sec && prev.startedAtNanos == nanos && seq <= prev.seq) {
+            return false
+        }
+        sent[key] = Mark(sec, nanos, seq)
+        return true
+    }
+
+    @Synchronized
+    fun cancel(s: SessionInfo) {
+        val key = Key(s.nodeId, s.id)
+        val prev = sent[key] ?: return
+        if (prev.startedAtSeconds == s.startedAt.seconds &&
+            prev.startedAtNanos == s.startedAt.nanos &&
+            prev.seq == s.attentionSeq
+        ) {
+            sent.remove(key)
+        }
+    }
+
+    @Synchronized
+    fun retain(sessions: List<SessionInfo>) {
+        if (sent.isEmpty()) return
+        val active = sessions.mapTo(HashSet(sessions.size)) { Key(it.nodeId, it.id) }
+        sent.keys.retainAll(active)
+    }
+}
+
+/**
+ * Merges only sequence counters from a SeeSession reply onto the enriched
+ * SessionInfo already held in memory, preserving fields that handleSeeSession
+ * omits (git branch/repo/owner/remote/stamp, lastMessage, tasks, agentScope).
+ */
+internal fun mergeSeenSession(current: SessionInfo, updated: SessionInfo): SessionInfo {
+    if (current.startedAt != updated.startedAt) return current
+    val nextSeen = maxOf(current.seenSeq, updated.seenSeq)
+    val nextState = maxOf(current.stateSeq, updated.stateSeq)
+    val nextAttention = maxOf(current.attentionSeq, updated.attentionSeq)
+    if (nextSeen == current.seenSeq && nextState == current.stateSeq && nextAttention == current.attentionSeq) {
+        return current
+    }
+    return current.toBuilder()
+        .setSeenSeq(nextSeen)
+        .setStateSeq(nextState)
+        .setAttentionSeq(nextAttention)
+        .build()
 }

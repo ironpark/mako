@@ -60,7 +60,7 @@ internal fun SessionInfo.noticeKind(old: SessionInfo?, oldKind: NoticeKind?): No
     seenElsewhere() -> null
     else -> noticeKind() ?: when {
         state != "running" || status != "idle" -> null
-        old != null && turns > old.turns -> NoticeKind.Done
+        old != null && (turns > old.turns || askedSince(old)) -> NoticeKind.Done
         old?.status == "idle" && oldKind == NoticeKind.Done -> NoticeKind.Done
         else -> null
     }
@@ -70,13 +70,16 @@ internal fun SessionInfo.noticeKind(old: SessionInfo?, oldKind: NoticeKind?): No
  * Whether a node that numbers its sessions' status (revision 36) says the
  * user has seen all this one asked for: a turn done or a question, though
  * not an approval, which waits on an answer however long it is looked at.
+ * Keeps backward compatibility with older nodes where stateSeq == 0 and
+ * attentionSeq == 0.
  */
 internal fun SessionInfo.seenElsewhere(): Boolean =
-    stateSeq > 0 && attentionSeq <= seenSeq && noticeKind() != NoticeKind.Approval
+    (stateSeq > 0L || attentionSeq > 0L) && attentionSeq <= seenSeq && noticeKind() != NoticeKind.Approval
 
 /** Whether session asked for the user since old, as its node numbers it. */
 private fun SessionInfo.askedSince(old: SessionInfo): Boolean =
-    stateSeq > 0 && attentionSeq > seenSeq && (startedAt != old.startedAt || attentionSeq > old.attentionSeq)
+    (stateSeq > 0L || attentionSeq > 0L) && attentionSeq > seenSeq &&
+        (startedAt != old.startedAt || attentionSeq > old.attentionSeq)
 
 internal data class NoticeChange(val session: SessionInfo, val kind: NoticeKind?)
 
@@ -97,9 +100,10 @@ internal class NoticeTracker {
             val kind = session.noticeKind(old, kinds[key])
             nextKinds[key] = kind
             if (old == null) continue
-            // Another turn ended while the last one's notice stood, between
-            // two looks, is news too.
-            val again = kind == NoticeKind.Done && (session.turns > old.turns || session.askedSince(old))
+            // Another turn ended or question asked while the last one's notice stood,
+            // between two looks, is news too.
+            val again = (kind == NoticeKind.Done && session.turns > old.turns) ||
+                (kind != null && kind != NoticeKind.Approval && session.askedSince(old))
             if (old.approval.id != session.approval.id || kinds[key] != kind || again) {
                 changes += NoticeChange(session, kind)
             }
