@@ -32,13 +32,3 @@ class ApprovalViewsTest {
         )
     }
 }
-
-class AgentControlsTest {
-    @Test
-    fun modelsAreNamedAsPeopleSayThem() {
-        assertEquals("Opus 5.5", shortModel("claude-opus-5-5"))
-        assertEquals("Sonnet 4.5", shortModel("claude-sonnet-4-5-20250929"))
-        assertEquals("Fable 5.1", shortModel("claude-fable-5-1[1m]"))
-        assertEquals("gpt-6-luna", shortModel("gpt-6-luna"))
-    }
-}

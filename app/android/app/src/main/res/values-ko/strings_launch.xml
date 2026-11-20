@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="launch_prompt">첫 프롬프트</string>
+    <string name="launch_prompt_hint">세션이 시작되자마자 실행할 작업을 입력하세요 (선택)</string>
+    <string name="launch_start_and_send">시작하고 보내기</string>
+    <string name="launch_model_effort">모델 및 추론 강도</string>
+    <string name="launch_effort">추론 강도</string>
+    <string name="launch_default">기본</string>
+    <string name="launch_default_named">기본 (%1$s)</string>
+    <string name="launch_more_models">더 보기 (%1$d)</string>
+    <string name="launch_fewer_models">접기</string>
+    <string name="launch_loading_models">모델 불러오는 중…</string>
+    <string name="launch_refresh_models">모델 새로고침</string>
+    <string name="launch_options">실행 옵션</string>
+    <string name="launch_session_name">세션 이름</string>
+    <string name="launch_session_name_hint">이 세션의 이름 (선택)</string>
+    <string name="launch_yolo">YOLO 모드</string>
+    <string name="launch_yolo_body">도구 실행 권한을 묻지 않고 바로 진행합니다</string>
+    <string name="launch_yolo_badge">YOLO</string>
+    <string name="launch_worktree">새 Git 워크트리</string>
+    <string name="launch_worktree_body">독립된 브랜치와 작업 복사본에서 시작합니다</string>
+    <string name="launch_worktree_badge">워크트리</string>
+    <string name="launch_branch_name">브랜치 이름</string>
+    <string name="launch_branch_hint">비워 두면 브랜치 이름을 자동으로 만듭니다</string>
+    <string name="controls_permission_mode">권한 모드</string>
+    <string name="controls_model_effort">모델 및 추론 강도</string>
+    <string name="controls_models_header">모델</string>
+    <string name="controls_efforts_header">추론 강도</string>
+    <string name="mode_dont_ask">묻지 않음</string>
+</resources>

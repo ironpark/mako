@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="launch_prompt">First prompt</string>
+    <string name="launch_prompt_hint">Describe a task to run as soon as the session starts (optional)</string>
+    <string name="launch_start_and_send">Start &amp; send</string>
+    <string name="launch_model_effort">Model &amp; effort</string>
+    <string name="launch_effort">Effort</string>
+    <string name="launch_default">Default</string>
+    <string name="launch_default_named">Default (%1$s)</string>
+    <string name="launch_more_models">More (%1$d)</string>
+    <string name="launch_fewer_models">Show less</string>
+    <string name="launch_loading_models">Loading models…</string>
+    <string name="launch_refresh_models">Refresh models</string>
+    <string name="launch_options">Launch options</string>
+    <string name="launch_session_name">Session name</string>
+    <string name="launch_session_name_hint">Optional label for this session</string>
+    <string name="launch_yolo">YOLO mode</string>
+    <string name="launch_yolo_body">Run without asking for tool permissions</string>
+    <string name="launch_yolo_badge">YOLO</string>
+    <string name="launch_worktree">New Git worktree</string>
+    <string name="launch_worktree_body">Start in an isolated branch and working copy</string>
+    <string name="launch_worktree_badge">Worktree</string>
+    <string name="launch_branch_name">Branch name</string>
+    <string name="launch_branch_hint">Leave empty to generate a branch name</string>
+    <string name="controls_permission_mode">Permission mode</string>
+    <string name="controls_model_effort">Model and effort</string>
+    <string name="controls_models_header">Model</string>
+    <string name="controls_efforts_header">Effort</string>
+    <string name="mode_dont_ask">Don\'t ask</string>
+</resources>
