@@ -49,13 +49,13 @@ type tabSlot struct {
 	Gone   bool // no longer in the pane
 }
 
-// plan orders a pane's tabs, those of hidden folded away, with those gone
-// from it that have yet to shrink away: each where it was, after the tab
-// it followed. Of tabs grouped under their projects, one gone stays only
-// beside a tab of its project, so its run, whose label it would otherwise
-// keep, goes with it. A tab folded away keeps its place, at no width, for
-// its run's label.
-func (e *tabEase) plan(tabs []string, hidden map[string]bool, projects map[string]tabProject, grouped bool) []tabSlot {
+// plan orders a pane's tabs, those of hidden folded away and those of lifted
+// omitted immediately while being dragged, with those gone from it that have
+// yet to shrink away: each where it was, after the tab it followed. Of tabs
+// grouped under their projects, one gone stays only beside a tab of its
+// project, so its run, whose label it would otherwise keep, goes with it. A
+// tab folded away keeps its place, at no width, for its run's label.
+func (e *tabEase) plan(tabs []string, hidden, lifted map[string]bool, projects map[string]tabProject, grouped bool) []tabSlot {
 	now := ggui.FrameTime()
 	in := make(map[string]bool, len(tabs))
 	slots := make([]tabSlot, 0, len(tabs))
@@ -69,12 +69,20 @@ func (e *tabEase) plan(tabs []string, hidden map[string]bool, projects map[strin
 			t.share.Easing(ggui.EaseInOut).MoveTo(pick(!e.built && !hidden[id], 1.0, 0.0), now, 0)
 			e.tabs[id] = t
 		}
+		if lifted[id] {
+			// Lifted out of the bar while dragging: omit immediately without
+			// shrinking or keeping a leaving ghost, and reset its share so a
+			// cancelled drag restores cleanly.
+			t.leaving, t.project = false, projects[id]
+			t.share.Easing(ggui.EaseInOut).MoveTo(1.0, now, 0)
+			continue
+		}
 		t.leaving, t.project = hidden[id], projects[id]
 		slots = append(slots, tabSlot{ID: id, Hidden: hidden[id]})
 	}
 	for i, id := range e.order {
 		t := e.tabs[id]
-		if in[id] || t == nil {
+		if in[id] || lifted[id] || t == nil {
 			continue
 		}
 		if v, moving := t.share.At(now); t.face == nil || v <= 0 && !moving {
@@ -117,8 +125,15 @@ func (e *tabEase) plan(tabs []string, hidden map[string]bool, projects map[strin
 		}
 	}
 	e.order = e.order[:0]
+	kept := make(map[string]bool, len(slots))
 	for _, s := range slots {
 		e.order = append(e.order, s.ID)
+		kept[s.ID] = true
+	}
+	for id := range e.tabs {
+		if !kept[id] && !in[id] {
+			delete(e.tabs, id)
+		}
 	}
 	e.built = true
 	return slots

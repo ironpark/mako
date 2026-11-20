@@ -79,17 +79,22 @@ func TestTabEasePlansWhereTabsLeaveFrom(t *testing.T) {
 			}
 		}
 	}
-	built(e.plan([]string{"a", "b", "c", "d", "e"}, nil, projects, true))
+	built(e.plan([]string{"a", "b", "c", "d", "e"}, nil, nil, projects, true))
 
 	// b closed stays where it was; e, alone in its run, goes with it.
-	got := ids(e.plan([]string{"a", "c", "d"}, nil, projects, true))
+	got := ids(e.plan([]string{"a", "c", "d"}, nil, nil, projects, true))
 	if want := []string{"a", "b-", "c", "d"}; !slices.Equal(got, want) {
 		t.Fatalf("after closing b and e: %q, want %q", got, want)
 	}
 	// q folded away, the tab shown elsewhere, keeps its run at no width.
-	got = ids(e.plan([]string{"a", "c", "d"}, map[string]bool{"c": true, "d": true}, projects, true))
+	got = ids(e.plan([]string{"a", "c", "d"}, map[string]bool{"c": true, "d": true}, nil, projects, true))
 	if want := []string{"a", "b-", "c_", "d_"}; !slices.Equal(got, want) {
 		t.Fatalf("with q folded: %q, want %q", got, want)
+	}
+	// Lifted tabs (being dragged) are omitted immediately with no leaving slot.
+	got = ids(e.plan([]string{"a", "c", "d"}, nil, map[string]bool{"c": true, "d": true}, projects, true))
+	if want := []string{"a", "b-"}; !slices.Equal(got, want) {
+		t.Fatalf("with q lifted: %q, want %q", got, want)
 	}
 }
 

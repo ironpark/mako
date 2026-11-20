@@ -436,4 +436,154 @@ func TestDraggingProjectChipMovesSubprojectTabsAndPreservesClickToFold(t *testin
 	if got := paneTabs(m); !samePanes(got, []string{"w1"}, []string{"a1", "a2"}) {
 		t.Fatalf("after dragging api chip to right edge: %q", got)
 	}
+	// Sub-project chips remain visible even when each pane holds only one sub-project.
+	if _, ok := p.Find(Tf("Fold %s", "web")); !ok {
+		t.Fatalf("web sub-project chip disappeared when alone in its pane:\n%s", p.Semantics().String())
+	}
+	if _, ok := p.Find(Tf("Fold %s", "api")); !ok {
+		t.Fatalf("api sub-project chip disappeared when alone in its pane:\n%s", p.Semantics().String())
+	}
+}
+
+func TestDraggedTabIsRemovedFromTabBarDuringDrag(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(&config.Config{NodeID: "n1"}, "")
+	m.Titles.Set(map[string]string{"s1": "first", "s2": "second", "s3": "third"})
+	m.SidebarOpen.Set(false)
+	m.DetailsOpen.Set(false)
+	for _, id := range []string{"s1", "s2", "s3"} {
+		m.showTab(id)
+	}
+	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))
+	defer p.Close()
+	p.Frame()
+
+	second, ok := p.Find("second")
+	if !ok {
+		t.Fatal("missing second tab")
+	}
+	first, _ := p.Find("first")
+	from := second.Center()
+	p.Press(from)
+	p.Move(ggui.Pt(from.X-12, from.Y))
+	p.Frame()
+
+	// While dragging, the dragged tab itself is absent from the tab bar.
+	if !ggui.Peek(m.Dragging) {
+		t.Fatal("expected drag to be active")
+	}
+	if _, found := p.Find("second"); found {
+		t.Fatalf("dragged tab 'second' should not appear inside tab bar while dragging:\n%s", p.Semantics().String())
+	}
+	if _, found := p.Find("first"); !found {
+		t.Fatal("remaining tab 'first' disappeared during drag")
+	}
+	if _, found := p.Find("third"); !found {
+		t.Fatal("remaining tab 'third' disappeared during drag")
+	}
+
+	// Dropping onto first's left half reorders cleanly and restores the tab.
+	over := ggui.Pt(first.Rect.Origin.X+8, first.Center().Y)
+	p.Move(over)
+	p.Move(over)
+	p.Release(over)
+	p.Frame()
+	if got := paneTabs(m); !samePanes(got, []string{"s2", "s1", "s3"}) {
+		t.Fatalf("after drop: %q", got)
+	}
+	if _, found := p.Find("second"); !found {
+		t.Fatal("dropped tab 'second' did not reappear in tab bar")
+	}
+}
+
+func TestProjectChipHoldHidesAllTabsAndDragLiftsWholeGroup(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(&config.Config{NodeID: "n1"}, "")
+	m.Spaces.Set(spaceList{
+		Projects: []project{{
+			ID: "mono", Name: "mono",
+			Roots: []projectRoot{
+				{Locations: []fileRoot{{Node: "n1", Path: "/w/mono/api"}}},
+				{Locations: []fileRoot{{Node: "n1", Path: "/w/mono/web"}}},
+			},
+		}},
+	})
+	m.Sessions.Set([]*protocol.SessionInfo{
+		{Id: "a1", NodeId: "n1", Agent: "claude", Project: "/w/mono/api", State: protocol.StateRunning},
+		{Id: "a2", NodeId: "n1", Agent: "claude", Project: "/w/mono/api", State: protocol.StateRunning},
+		{Id: "w1", NodeId: "n1", Agent: "codex", Project: "/w/mono/web", State: protocol.StateRunning},
+	})
+	m.Titles.Set(map[string]string{"a1": "api-1", "a2": "api-2", "w1": "web-1"})
+	m.SidebarOpen.Set(false)
+	m.DetailsOpen.Set(false)
+	for _, id := range []string{"a1", "a2", "w1"} {
+		m.showTab(id)
+	}
+	// Make a1 (inside api) active to verify holding api chip hides even the active tab.
+	m.showTab("a1")
+
+	p := ggui.ProbeBuilder(func() ggui.Widget { return build(m) }, ggui.Sz(1000, 700))
+	defer p.Close()
+	p.Frame()
+
+	chip, ok := p.Find(Tf("Fold %s", "api"))
+	if !ok {
+		t.Fatalf("missing Fold api chip:\n%s", p.Semantics().String())
+	}
+
+	// Pressing and holding the project chip hides ALL tabs of that project (including active a1).
+	from := chip.Center()
+	p.Press(from)
+	p.Advance(tabEaseDuration * 2)
+	if ggui.Peek(m.ChipHeld) == "" {
+		t.Fatal("expected ChipHeld to be set while holding project chip")
+	}
+	if _, found := p.Find("api-1"); found {
+		t.Fatalf("active tab api-1 should be hidden while holding api chip:\n%s", p.Semantics().String())
+	}
+	if _, found := p.Find("api-2"); found {
+		t.Fatalf("tab api-2 should be hidden while holding api chip:\n%s", p.Semantics().String())
+	}
+	if _, found := p.Find("web-1"); !found {
+		t.Fatal("unrelated tab web-1 should remain visible while holding api chip")
+	}
+	if _, found := p.Find(Tf("Fold %s", "api")); !found {
+		t.Fatal("api chip itself should remain visible while held before drag")
+	}
+
+	// Dragging from the held state lifts the chip and its tabs out of the tab bar like a regular tab.
+	p.Move(ggui.Pt(from.X+12, from.Y))
+	p.Frame()
+	if !ggui.Peek(m.Dragging) {
+		t.Fatal("expected dragging state after moving held chip")
+	}
+	if _, found := p.Find(Tf("Fold %s", "api")); found {
+		t.Fatalf("dragged api chip should not remain inside tab bar during drag:\n%s", p.Semantics().String())
+	}
+	if _, found := p.Find("api-1"); found {
+		t.Fatal("api-1 should not appear in tab bar during chip drag")
+	}
+	if _, found := p.Find("api-2"); found {
+		t.Fatal("api-2 should not appear in tab bar during chip drag")
+	}
+
+	// Drop onto web-1's right half (at its shifted position) to move the api group after web.
+	webTab, ok := p.Find("web-1")
+	if !ok {
+		t.Fatal("missing web-1 tab during chip drag")
+	}
+	over := ggui.Pt(webTab.Rect.Origin.X+webTab.Rect.Size.W-6, webTab.Center().Y)
+	p.Move(over)
+	p.Move(over)
+	if h := ggui.Peek(m.TabHint); h != (tabHint{Group: ggui.Peek(m.FocusGroup), Index: 3}) {
+		t.Fatalf("expected drop hint at end (index 3) over web-1's right half, got %+v", h)
+	}
+	p.Release(over)
+	p.Frame()
+	if got := paneTabs(m); !samePanes(got, []string{"w1", "a1", "a2"}) {
+		t.Fatalf("after dropping api chip after web-1: %q", got)
+	}
+	if ggui.Peek(m.Dragging) || ggui.Peek(m.ChipHeld) != "" {
+		t.Fatalf("drag/hold state not cleared after drop: dragging=%v held=%q", ggui.Peek(m.Dragging), ggui.Peek(m.ChipHeld))
+	}
 }

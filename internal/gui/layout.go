@@ -61,6 +61,10 @@ func (d tabDrag) ids() []string {
 	return nil
 }
 
+func tabDragEqual(a, b tabDrag) bool {
+	return a.ID == b.ID && a.FromGroup == b.FromGroup && a.Project == b.Project && slices.Equal(a.Tabs, b.Tabs)
+}
+
 func newLayout() *layoutNode {
 	return &layoutNode{ID: 1, Group: &tabGroup{ID: 1}}
 }

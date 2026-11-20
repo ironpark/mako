@@ -65,3 +65,29 @@ func TestRootColorsTurnPastTheGrey(t *testing.T) {
 		t.Fatal("the first folder is not in the project's colour")
 	}
 }
+
+func TestShowProjectChipsAlwaysShowsForSubProjects(t *testing.T) {
+	singleNormal := map[string]tabProject{
+		"s1": {Key: "p1", Name: "app", Root: false},
+		"s2": {Key: "p1", Name: "app", Root: false},
+	}
+	if showProjectChips([]string{"s1", "s2"}, singleNormal) {
+		t.Fatal("single non-sub-project should not force project chips")
+	}
+
+	singleSubProject := map[string]tabProject{
+		"a1": {Key: "mono\x000", Name: "api", Root: true},
+		"a2": {Key: "mono\x000", Name: "api", Root: true},
+	}
+	if !showProjectChips([]string{"a1", "a2"}, singleSubProject) {
+		t.Fatal("sub-project tabs must always show their project chip")
+	}
+
+	multiNormal := map[string]tabProject{
+		"s1": {Key: "p1", Name: "app"},
+		"s2": {Key: "p2", Name: "lib"},
+	}
+	if !showProjectChips([]string{"s1", "s2"}, multiNormal) {
+		t.Fatal("multiple projects must show project chips")
+	}
+}

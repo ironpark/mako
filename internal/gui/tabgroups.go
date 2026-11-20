@@ -213,6 +213,21 @@ func manyProjects(tabs []string, projects map[string]tabProject) bool {
 	return false
 }
 
+// showProjectChips reports whether a pane's tab bar should display project
+// chips: whenever tabs span multiple projects, or any tab belongs to a
+// sub-project (a folder root of a multi-root project).
+func showProjectChips(tabs []string, projects map[string]tabProject) bool {
+	if manyProjects(tabs, projects) {
+		return true
+	}
+	for _, id := range tabs {
+		if projects[id].Root {
+			return true
+		}
+	}
+	return false
+}
+
 // projectChipMax is the widest a project's name in the tab bar is drawn.
 const projectChipMax = 120
 

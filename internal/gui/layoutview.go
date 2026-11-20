@@ -22,7 +22,10 @@ import (
 // dragging update the panes in place, so terminals keep their state.
 func layoutView(m *model) ggui.Widget {
 	shape := ggui.Map(m.Layout, layoutShape)
-	return ggui.Key(shape, func(string) ggui.Widget { return layoutNodeView(m, ggui.Peek(m.Layout)) })
+	return widget.Stack(
+		ggui.Key(shape, func(string) ggui.Widget { return layoutNodeView(m, ggui.Peek(m.Layout)) }),
+		&dragGhostOverlay{m: m},
+	).Expand()
 }
 
 // layoutShape writes the tree's splits and panes, without what changes
@@ -141,7 +144,19 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 	tabs := ggui.Reactive(func() ggui.Widget {
 		g := group.Get()
 		projects := projectsOf.Get()
-		grouped := manyProjects(g.Tabs, projects)
+		grouped := showProjectChips(g.Tabs, projects)
+		dragItem := m.DragItem.Get()
+		chipHeld := m.ChipHeld.Get()
+		lifted := make(map[string]bool, len(dragItem.ids()))
+		for _, did := range dragItem.ids() {
+			lifted[did] = true
+		}
+		liftedCount := 0
+		for _, tabID := range g.Tabs {
+			if lifted[tabID] {
+				liftedCount++
+			}
+		}
 		sessions := m.Sessions.Get()
 		titles := m.Titles.Get()
 		focused := m.FocusGroup.Get() == id
@@ -188,19 +203,24 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		// dropped on a tab.
 		var children, run []ggui.Widget
 		chips := 0.0
-		counter := &tabCounter{total: len(g.Tabs), hidden: m.hiddenTabsOf(id), post: m.post}
+		counter := &tabCounter{total: len(g.Tabs) - liftedCount, hidden: m.hiddenTabsOf(id), post: m.post}
 		folded := m.FoldedTabs.Get()
-		// Of tabs of several projects, each project's run goes under a
-		// label of its name, over a line of its colour; a run folded away
-		// keeps only the tab shown.
+		// Of tabs of several projects or sub-projects, each project's run goes
+		// under a label of its name, over a line of its colour; a run folded
+		// away keeps only the tab shown, while holding the chip hides all of
+		// its tabs until released or dragged.
 		var runProject tabProject
 		var runIDs []string
-		runStarted, runFirst, runFolded := false, -1, 0
+		runStarted, runFirst, runFirstVisible, runFolded := false, -1, -1, 0
 		endRun := func() {
 			if !runStarted {
 				return
 			}
-			p, first := runProject, runFirst
+			p := runProject
+			first := runFirstVisible
+			if first < 0 {
+				first = runFirst
+			}
 			ids := slices.Clone(runIDs)
 			var c color.Color = skin.BorderAccent
 			if p.Key != "" {
@@ -208,7 +228,12 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			}
 			key := foldKey(id, p.Key)
 			name := cmp.Or(p.Name, T("Other"))
-			chip := projectChip(p, runFolded)
+			var chip ggui.Widget = &chipPress{
+				m:     m,
+				key:   key,
+				child: projectChip(p, runFolded),
+				onTap: func() { m.toggleFold(key) },
+			}
 			if len(ids) > 0 {
 				chip = chipDrag(m, chip, ids, key, name, c)
 			}
@@ -218,7 +243,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			children = append(children, ui.TabGroup(run...).Label(label).Tint(c).
 				OnLabel(func() { m.toggleFold(key) }).
 				LabelName(pick(folded[key], Tf("Unfold %s", name), Tf("Fold %s", name))))
-			run, runIDs, runStarted, runFirst, runFolded = nil, nil, false, -1, 0
+			run, runIDs, runStarted, runFirst, runFirstVisible, runFolded = nil, nil, false, -1, -1, 0
 		}
 		type runSpan struct{ first, end int }
 		spanByTab := make(map[string]runSpan, len(g.Tabs))
@@ -244,29 +269,47 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		var shown []string
 		kids := map[string][]*protocol.SessionInfo{}
 		for _, tabID := range g.Tabs {
-			if hosts[tabID] == "" {
+			if hosts[tabID] == "" && !lifted[tabID] {
 				shown = append(shown, tabID)
 				kids[tabID] = index.spawned(tabID)
 			}
 		}
-		// Of runs folded away, the tabs hidden, and how many each hides.
+		// Of runs folded away or held, the tabs hidden, and how many each hides.
 		at := map[string]int{}
 		hidden := map[string]bool{}
 		hides := map[string]int{}
+		var visibleIndices []int
 		for i, tabID := range g.Tabs {
 			at[tabID] = i
 			if hosts[tabID] != "" {
 				hidden[tabID] = true
 				continue
 			}
-			if p := projects[tabID]; grouped && folded[foldKey(id, p.Key)] && tabID != active {
-				hidden[tabID] = true
-				hides[p.Key]++
+			if lifted[tabID] {
+				continue
 			}
+			if p := projects[tabID]; grouped {
+				key := foldKey(id, p.Key)
+				if chipHeld == key || (folded[key] && tabID != active) {
+					hidden[tabID] = true
+					hides[p.Key]++
+					continue
+				}
+			}
+			visibleIndices = append(visibleIndices, i)
 		}
-		// Tabs grow in and shrink out: those leaving keep their place.
+		nextVisibleFrom := func(from int) int {
+			for _, vi := range visibleIndices {
+				if vi >= from {
+					return vi
+				}
+			}
+			return len(g.Tabs)
+		}
+		// Tabs grow in and shrink out: those leaving keep their place, while
+		// tabs being dragged are omitted immediately.
 		ease := m.tabEaseOf(id)
-		for _, slot := range ease.plan(g.Tabs, hidden, projects, grouped) {
+		for _, slot := range ease.plan(g.Tabs, hidden, lifted, projects, grouped) {
 			tabID := slot.ID
 			p := projects[tabID]
 			if slot.Gone {
@@ -281,6 +324,9 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			if ok {
 				if runFirst < 0 {
 					runFirst = i
+				}
+				if !slot.Hidden && runFirstVisible < 0 {
+					runFirstVisible = i
 				}
 				runIDs = append(runIDs, tabID)
 			}
@@ -313,7 +359,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			if grouped {
 				clear = projectChipWidth(cmp.Or(p.Name, T("Other")))
 			}
-			var cell ggui.Widget = &paintHook{child: sessionDrag(m, face, tabID), fn: func(dst *ggui.Canvas, r ggui.Rect) {
+			var cell ggui.Widget = &paintHook{child: tabBarDrag(m, face, tabID), fn: func(dst *ggui.Canvas, r ggui.Rect) {
 				counter.saw(r, ease.settled(tabID))
 				if tabID == active && m.revealedTab[id] != tabID {
 					dst.RequestReveal(ggui.Rct(ggui.Pt(r.Origin.X-clear, r.Origin.Y), ggui.Sz(r.Size.W+clear, r.Size.H)))
@@ -328,19 +374,22 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			// dragging a whole project chip over a grouped bar, snap to
 			// that project run's boundary so the gap matches tabsByProject.
 			span := spanByTab[tabID]
-			slot := func(d widget.Dropped[tabDrag]) int {
+			nextSlot := nextVisibleFrom(i + 1)
+			spanFirstSlot := nextVisibleFrom(span.first)
+			spanEndSlot := nextVisibleFrom(span.end)
+			slotFn := func(d widget.Dropped[tabDrag]) int {
 				if grouped && len(d.Value.Tabs) > 0 {
 					if d.Pos.X >= d.Size.W/2 {
-						return span.end
+						return spanEndSlot
 					}
-					return span.first
+					return spanFirstSlot
 				}
 				if d.Pos.X >= d.Size.W/2 {
-					return i + 1
+					return nextSlot
 				}
 				return i
 			}
-			cells := []ggui.Widget{dropSlot(m, id, i), ease.cell(tabID, face, tabDrop(m, cell, id, slot).
+			cells := []ggui.Widget{dropSlot(m, id, i), ease.cell(tabID, face, tabDrop(m, cell, id, slotFn).
 				OnHover(func(bool) { m.leaveHint(id) }))}
 			if grouped {
 				run = append(run, cells...)
@@ -646,17 +695,169 @@ func sessionDrag(m *model, w ggui.Widget, id string) ggui.Widget {
 		OnDragEnd(func(bool) { m.endDrag() })
 }
 
-// chipDrag lets a project or sub-project chip drag all of its tabs at once.
+// tabBarDrag lets a tab in a pane's tab bar be dragged while lifting it out
+// of the bar so only its floating preview follows the pointer.
+func tabBarDrag(m *model, w ggui.Widget, id string) ggui.Widget {
+	return &tabDragSource{
+		m:     m,
+		child: w,
+		value: tabDrag{ID: id},
+	}
+}
+
+// chipDrag lets a project or sub-project chip drag all of its tabs at once,
+// lifting the chip and its tabs out of the bar just like a regular tab.
 func chipDrag(m *model, w ggui.Widget, tabs []string, foldKey, name string, c color.Color) ggui.Widget {
 	preview := widget.Box(widget.Row(
 		widget.Text(name).Size(12.5).Weight(ggui.WeightSemibold).Color(c).NoWrap(),
 		widget.Box(widget.Text(strconv.Itoa(len(tabs))).Size(11).Weight(ggui.WeightMedium).Color(skin.Muted).NoWrap()).
 			Pad(1, 5).Radius(6).Fill(skin.Surface2),
 	).Gap(6).Align(widget.AlignCenter)).Pad(5, 10).Radius(8).Fill(skin.Surface1).Border(1, c)
-	return widget.DragSource(w, tabDrag{Tabs: tabs, FromGroup: foldKey, Project: name}).
-		Preview(preview).
-		OnDragStart(func() { m.Dragging.Set(true) }).
-		OnDragEnd(func(bool) { m.endDrag() })
+	return &tabDragSource{
+		m:       m,
+		child:   w,
+		preview: preview,
+		value:   tabDrag{Tabs: tabs, FromGroup: foldKey, Project: name},
+	}
+}
+
+// dragGhost holds the floating preview for a tab or project chip lifted out
+// of a tab bar during a drag.
+type dragGhost struct {
+	widget ggui.Widget
+	size   ggui.Size
+	grab   ggui.Point
+}
+
+// dragGhostOverlay paints the lifted tab or chip ghost under the pointer so
+// the preview remains visible even while its source is absent from the tab bar.
+type dragGhostOverlay struct {
+	m    *model
+	last *dragGhost
+	size ggui.Size
+}
+
+func (o *dragGhostOverlay) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	g := o.m.DragGhost.Get()
+	o.last = g
+	if g != nil && g.widget != nil {
+		if g.size.W > 0 && g.size.H > 0 {
+			o.size = g.widget.Layout(ggui.Tight(g.size), env)
+		} else {
+			o.size = g.widget.Layout(ggui.Constraints{MaxW: 320, MaxH: tabBarHeight}, env)
+		}
+	} else {
+		o.size = ggui.Size{}
+	}
+	return c.Constrain(ggui.Sz(c.MaxW, c.MaxH))
+}
+
+func (o *dragGhostOverlay) Paint(dst *ggui.Canvas, _ ggui.Rect) {
+	g := o.last
+	if g == nil || g.widget == nil || o.size.W <= 0 || o.size.H <= 0 {
+		return
+	}
+	ptr, ok := dst.Pointer()
+	if !ok {
+		return
+	}
+	grabX := min(max(g.grab.X, 0), o.size.W)
+	grabY := min(max(g.grab.Y, 0), o.size.H)
+	at := ggui.Rct(ggui.Pt(ptr.X-grabX, ptr.Y-grabY), o.size)
+	dst.Overlay(func(dst *ggui.Canvas) {
+		dst.Inert().Layer(ggui.LayerOptions{Fade: 0.3}, func(layer *ggui.Canvas) {
+			layer.Paint(g.widget, at)
+		})
+	})
+}
+
+// tabDragSource is a Draggable for a tab or project chip that lifts the source
+// out of the tab bar on drag start and renders its preview via dragGhostOverlay.
+type tabDragSource struct {
+	m        *model
+	child    ggui.Widget
+	preview  ggui.Widget
+	value    tabDrag
+	size     ggui.Size
+	dragging bool
+}
+
+func (d *tabDragSource) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	d.size = d.child.Layout(c, env)
+	return d.size
+}
+
+func (d *tabDragSource) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.HitDrag(r, d)
+	dst.Paint(d.child, r)
+}
+
+func (d *tabDragSource) DragValue() any { return d.value }
+
+func (d *tabDragSource) DragMoved(_, grab ggui.Point) {
+	if !d.dragging {
+		d.dragging = true
+		ghost := &dragGhost{widget: d.child, size: d.size, grab: grab}
+		if d.preview != nil {
+			ghost = &dragGhost{widget: d.preview, grab: grab}
+		}
+		d.m.startTabDrag(d.value, ghost)
+	}
+}
+
+func (d *tabDragSource) DragEnded(bool) {
+	d.dragging = false
+	d.m.endDrag()
+}
+
+// chipPress tracks pressing and holding a project chip so all of its tabs
+// collapse under the chip while held, while preserving tap-to-fold and drag.
+type chipPressKey string
+
+type chipPress struct {
+	m     *model
+	key   string
+	child ggui.Widget
+	onTap func()
+}
+
+func (c *chipPress) HitID() any { return chipPressKey(c.key) }
+
+func (c *chipPress) Layout(cs ggui.Constraints, env ggui.Env) ggui.Size {
+	return c.child.Layout(cs, env)
+}
+
+func (c *chipPress) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.HitPointer(r, c)
+	dst.Paint(c.child, r)
+}
+
+func (c *chipPress) HandlePointer(ev ggui.PointerEvent) bool {
+	switch ev.Kind {
+	case ggui.PointerDown:
+		if ev.Button == ggui.MouseButtonLeft {
+			c.m.ChipHeld.Set(c.key)
+			return true
+		}
+		return false
+	case ggui.PointerUp:
+		if ev.Button == ggui.MouseButtonLeft {
+			if ggui.Peek(c.m.ChipHeld) == c.key {
+				c.m.ChipHeld.Set("")
+			}
+			return true
+		}
+		return false
+	case ggui.PointerTap:
+		if ev.Button == ggui.MouseButtonLeft && c.onTap != nil {
+			c.onTap()
+			return true
+		}
+		return false
+	case ggui.PointerDrag:
+		return true
+	}
+	return false
 }
 
 // tabHint is where in a pane's tab bar a dragged tab would drop: before
@@ -708,8 +909,19 @@ func (m *model) leaveHint(group int) {
 	}
 }
 
+// startTabDrag marks val as actively dragged from a tab bar and sets its ghost.
+func (m *model) startTabDrag(val tabDrag, ghost *dragGhost) {
+	m.ChipHeld.Set("")
+	m.DragItem.Set(val)
+	m.DragGhost.Set(ghost)
+	m.Dragging.Set(true)
+}
+
 // endDrag clears what a tab drag showed.
 func (m *model) endDrag() {
 	m.Dragging.Set(false)
+	m.DragItem.Set(tabDrag{})
+	m.DragGhost.Set(nil)
+	m.ChipHeld.Set("")
 	m.TabHint.Set(tabHint{})
 }
