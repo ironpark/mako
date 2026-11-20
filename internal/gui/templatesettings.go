@@ -18,6 +18,7 @@ import (
 	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/mdview"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/prompttmpl"
 	"github.com/ironpark/mako/pkg/fsutil"
@@ -76,7 +77,8 @@ type templatePage struct {
 	// builtins are the built-in templates, each with the ID of its line.
 	builtins []builtinLine
 	broken   *ggui.StateValue[[]prompttmpl.Broken]
-	open     *ggui.StateValue[int] // the draft unfolded, 0 for none
+	open     *ggui.StateValue[int]  // the draft unfolded, 0 for none
+	help     *ggui.StateValue[bool] // the language's reference is open
 	onChange func()
 	nextID   int
 }
@@ -92,6 +94,7 @@ func newTemplatePage() *templatePage {
 		drafts: ggui.State[[]templateDraft](nil),
 		broken: ggui.State[[]prompttmpl.Broken](nil).WithEqual(deepEqual),
 		open:   ggui.State(0),
+		help:   ggui.State(false),
 	}
 	for _, b := range prompttmpl.BuiltinTemplates() {
 		pg.builtins = append(pg.builtins, builtinLine{ID: pg.id(), T: b})
@@ -455,6 +458,7 @@ func templateSettings(m *model) ggui.Widget {
 		files := widget.Row(
 			ui.Button(T("Open folder"), openFolder(config.TemplatesDir)).Ghost(),
 			ui.Button(T("Reload"), pg.reload).Ghost(),
+			ui.Button(T("Language reference"), func() { pg.help.Set(true) }).Ghost(),
 		).Gap(6)
 		hint := T("Each template is a Markdown file in the templates folder, which you can also edit by hand.")
 		var folder ggui.Widget = stackedRow(T("Template files"), hint, files)
@@ -498,8 +502,28 @@ func templateSettings(m *model) ggui.Widget {
 		)
 	})
 	return listPage(T("Templates"), T("Prompts to send in Chat by typing // and a template's name, with arguments of the types you set. {{name}} in a prompt stands for an argument, or for a built-in variable: agent, profile, model, project, branch, repo or date."),
-		list,
+		widget.Stack(list, templateReference(m, pg.help)),
 	)
+}
+
+// templateReference is the template language's reference over the page:
+// what the built-in //template tells the agent of it, word for word, as
+// docs/usage.md has it too.
+func templateReference(m *model, open *ggui.StateValue[bool]) ggui.Widget {
+	content := ggui.If(open, func() ggui.Widget {
+		var page ggui.Widget
+		if m != nil {
+			page = markdownText(m, prompttmpl.Reference())
+		} else {
+			page = mdview.Column(mdview.Base{}, prompttmpl.Reference())
+		}
+		scroll := widget.Scroll(widget.Padding(page, 0, 14, 0, 0)).Bar(skin.Surface3)
+		return widget.Box(widget.SelectionArea(scroll)).Height(600)
+	})
+	return keyedDialog(open, content).
+		Title(T("Template language")).
+		Description(T("Front matter, variables, blocks, scripts and the mako object, as the built-in //template teaches agents.")).
+		Width(820)
 }
 
 // templateItem is a template's line in the list: its name and what it is
@@ -567,6 +591,7 @@ func templateEditor(m *model, pg *templatePage, d templateDraft) ggui.Widget {
 		if strings.Contains(cur.Body, "mako.") {
 			badges = append(badges, ui.Button(T("API keys…"), func() { m.Section.Set("apikeys") }).Ghost().Pad(4, 8).Name(T("Open API keys settings")))
 		}
+		badges = append(badges, iconButton("book-open", T("Language reference"), func() { pg.help.Set(true) }))
 		return widget.Box(widget.Row(badges...).Gap(8).Align(widget.AlignCenter)).
 			Fill(skin.Surface0).Border(1, skin.Border).Radius(7).Pad(6, 10)
 	})

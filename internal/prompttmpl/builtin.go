@@ -71,6 +71,19 @@ func BuiltinSource(name string) []byte {
 	return data
 }
 
+// Reference is the template language's reference, in Markdown: what the
+// built-in //template tells the agent of it, in its raw block, and what
+// docs/usage.md and Settings ▸ Templates show, word for word.
+func Reference() string {
+	src := string(BuiltinSource(MakerName))
+	start := strings.Index(src, "\n{#raw}\n")
+	end := strings.LastIndex(src, "{/raw}\n")
+	if start < 0 || end < start {
+		return ""
+	}
+	return src[start+len("\n{#raw}\n") : end]
+}
+
 // Find reads the template called name: the user's, from dir, or the
 // built-in of the name when dir has none.
 func Find(dir, name string) (*Template, error) {

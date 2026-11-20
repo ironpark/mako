@@ -207,3 +207,35 @@ func TestSelectArgumentEditorRoundTripAndOptionChips(t *testing.T) {
 		t.Fatalf("missing interactive option chip remove button:\n%s", p.Semantics().String())
 	}
 }
+
+// Language reference, beside a template's usage and by the templates
+// folder, opens the language's reference over the page: the built-in
+// //template's, word for word.
+func TestTemplateSettingsOpenTheReference(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	dir, _ := config.TemplatesDir()
+	_ = os.MkdirAll(dir, 0o700)
+	_ = os.WriteFile(filepath.Join(dir, "a.md"), []byte("{{date}}\n"), 0o600)
+	m := newModel(config.Default(), "")
+	p := ggui.ProbeBuilder(func() ggui.Widget { return settingsContent(m, "templates") }, ggui.Sz(1100, 1000))
+	defer p.Close()
+	m.post = p.Post // the reference's code is highlighted off the frame
+	p.Frame()
+	if strings.Contains(p.Semantics().String(), T("Template language")) {
+		t.Fatal("the reference shows before it is asked for")
+	}
+	open, ok := p.Semantics().Find(ggui.RoleButton, T("Language reference"))
+	if !ok {
+		t.Fatalf("no Language reference button:\n%s", p.Semantics().String())
+	}
+	p.Click(open.Rect.Center())
+	for range 30 {
+		p.Frame()
+	}
+	sem := p.Semantics().String()
+	for _, want := range []string{T("Template language"), "globalThis.name = …", "mako.decide.choice"} {
+		if !strings.Contains(sem, want) {
+			t.Fatalf("no %q in the reference:\n%s", want, sem)
+		}
+	}
+}

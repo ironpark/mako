@@ -56,13 +56,11 @@ func TestMakerExpands(t *testing.T) {
 // reference is the language reference the built-in //template gives the
 // agent: what its raw block holds.
 func reference(t *testing.T) string {
-	src := string(BuiltinSource(MakerName))
-	start := strings.Index(src, "\n{#raw}\n")
-	end := strings.LastIndex(src, "{/raw}\n")
-	if start < 0 || end < start {
+	ref := Reference()
+	if ref == "" {
 		t.Fatal("the built-in //template has no raw block of the reference")
 	}
-	return src[start+len("\n{#raw}\n") : end]
+	return ref
 }
 
 // docs/usage.md has the reference the built-in //template gives the agent,
