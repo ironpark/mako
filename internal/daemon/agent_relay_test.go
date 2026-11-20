@@ -101,16 +101,25 @@ func TestWaitingOnAnotherNodesAgent(t *testing.T) {
 		return protocol.AtWork(a.remoteAgent("project:product", "web-agent").GetStatus())
 	})
 
-	time.AfterFunc(300*time.Millisecond, func() { web.SetStatus(protocol.AgentDone) })
-	got, err := a.waitProjectAgent(t.Context(), server, waitAgentArgs{SessionID: "web-agent", Timeout: 10})
-	if err != nil || got.Reason != "turn_ended" || got.Status != protocol.AgentDone {
-		t.Fatalf("waiting on its turn: %+v %v", got, err)
+	got, err := a.watchProjectAgent(server, watchAgentArgs{SessionID: "web-agent"})
+	if err != nil || got.WatchID == "" || got.AlreadyMatched {
+		t.Fatalf("watching its turn: %+v %v", got, err)
 	}
+	time.AfterFunc(300*time.Millisecond, func() { web.SetStatus(protocol.AgentDone) })
+	waitForWithin(t, 10*time.Second, "remote turn_ended watch notification never arrived", func() bool {
+		inbox, _ := a.projectAgents.messages.pending(server.id)
+		for _, m := range inbox {
+			if m.Note && m.From == "web-agent" && strings.Contains(m.Text, got.WatchID) && strings.Contains(m.Text, "turn ended") {
+				return true
+			}
+		}
+		return false
+	})
 	if r := a.remoteAgent("project:product", "web-agent"); r.GetTurns() != 1 {
 		t.Fatalf("turns as shared: %d", r.GetTurns())
 	}
-	if _, err := a.waitProjectAgent(t.Context(), server, waitAgentArgs{SessionID: "web-agent", Until: "output", Text: "ok", Timeout: 1}); err == nil {
-		t.Fatal("waited on another node's output")
+	if _, err := a.watchProjectAgent(server, watchAgentArgs{SessionID: "web-agent", Until: "output", Text: "ok"}); err == nil {
+		t.Fatal("watched another node's output")
 	}
 }
 

@@ -18,8 +18,8 @@ support do not receive these tools.
 | `list_agent_profiles` | `{}` | Only the spawnable agent configurations and profile presets on this node (`presets` with `agent`, `profile`, `target`, `description`, `model`, `effort`, `yolo`, plus grouped `agents`). |
 | `spawn_agent` | `prompt`, optional `agent`, `profile`, `name` | Starts a new session in your working directory, with the same worktree metadata. Defaults to your agent type. Returns its session `id`. |
 | `send_message` | `to`, `text` | Sends a message: typed into the recipient's terminal as a prompt once it waits at its prompt, kept in its inbox until then. Returns its `id`, authenticated `from`, `to`, text and creation time. |
-| `read_messages` | Optional `after_id`, `ack_through`, `limit`, `wait_seconds` | Reads your own inbox, for waiting on a reply within a turn. Returns `messages` and `next_after_id`. |
-| `wait_agent` | `session_id`, optional `until` (`turn` or `output`), `text`, `timeout_seconds` | Waits until an agent of the project ends its turn, or, with `until=output`, an agent of this node prints `text`. Returns a `reason`: `turn_ended`, `idle` (its turns were done, nothing sent to it pending), `waiting` (on the user), `exited`, `gone`, `output`, `message` (one reached you) or `timeout`, with its `status` and `state`. |
+| `read_messages` | Optional `after_id`, `ack_through`, `limit` | Instant, non-blocking snapshot of pending messages in your inbox. Returns `messages` and `next_after_id`. |
+| `watch_agent` | `session_id`, optional `until` (`turn` or `output`), `text` | Registers a non-blocking one-shot notification for another agent in the project: Mako pushes a note into your session when its turn ends (`until=turn`, default), when its terminal prints `text` (`until=output`, this node only), or early if it waits on the user or exits. Returns immediately (`watch_id` or `already_matched: true`). |
 | `stop_agent` | `session_id` | Terminates and removes a session you spawned directly, including a child whose process has already exited. |
 
 The MCP client may prefix tool names with the server name. The server's
@@ -155,7 +155,7 @@ values 32 KiB.
   {"kind": "button", "key": "send", "text": "Send", "tone": "accent", "onTap": ["submit", "order-1"]}]}}
 ```
 
-Wait for the answer with `read_messages` (`wait_seconds`), acknowledge it,
+End your turn (Mako pushes the form submission automatically as a window event), or read it with `read_messages`, acknowledge it,
 then `update_ui` the block to say what you did, and `close_ui` it.
 
 **UI to keep is a plugin.** A block of `show_ui` lasts as long as your
@@ -251,10 +251,10 @@ To avoid repeated `read_messages` timeout polling loops:
 - **CLI agents & fallback (`mako-msg`)**: Mako places a `mako-msg` command (`mako-msg.cmd` on Windows) on every session's `PATH` backed by the daemon's `agent-cli.sock`. An agent can wait asynchronously without polling by running `mako-msg wait`, `mako-msg wait --session id1,id2`, or `mako-msg wait --all-children` as a background shell command (e.g., `Bash` with `run_in_background=true`): it blocks event-driven (suppressing PTY fallback typing while waiting to prevent duplicate delivery) and exits with the message JSON (auto-acknowledging unless `--no-ack` is set) as soon as a reply arrives or any watched child finishes. Subcommands: `mako-msg wait`, `mako-msg read`, `mako-msg send <to> <text>`, `mako-msg list`, `mako-msg profiles`.
 - **Default session environment variables**: Every agent session receives `AGENT_MAKO_SESSION` (session ID), `AGENT_MAKO_PROJECT` (project path), `AGENT_MAKO_MODE` (`main` or `subagent`), `AGENT_MAKO_NODE` (node ID), plus `AGENT_MAKO_PROFILE` (when using a profile), `AGENT_MAKO_PARENT` (for spawned subagents and one-shot calls from a session), and `AGENT_MAKO_SOCKET` / `MAKO_AGENT_MCP_TOKEN` when messaging is active.
 
-When a quick non-blocking inbox check or short wait is needed, `read_messages` supports `wait_seconds` `0..120` and `ack_through`:
+When an immediate non-blocking inbox snapshot is needed, call `read_messages` and acknowledge processed messages with `ack_through`:
 
 ```json
-{"after_id":0,"wait_seconds":0}
+{"after_id":0}
 ```
 
 After processing a batch, acknowledge its last message ID:
@@ -263,11 +263,10 @@ After processing a batch, acknowledge its last message ID:
 {"ack_through":42,"after_id":42}
 ```
 
-Reading is non-destructive. Repeating a read after a lost connection returns
+Reading is non-destructive and always returns immediately (no blocking wait). Repeating a read after a lost connection returns
 the same messages until they are acknowledged. IDs increase across the
 daemon's mailboxes, so a cursor may have gaps. A read returns up to 50
-messages by default; `limit` can be 1–100 and `wait_seconds` 0–120. Waiting
-can be cancelled through MCP without disconnecting other tool calls.
+messages by default; `limit` can be 1–100.
 
 Each message is at most 32 KiB. An inbox holds 256 unacknowledged messages;
 a full inbox rejects new messages until its owner acknowledges a batch.
@@ -310,9 +309,9 @@ would run together with a delivered message.
 An agent that spawned another hears from Mako, in a note typed in as a
 message is, when its child has waited on the user for ten seconds, or
 exits without having sent it a message since its last turn began; not
-while it waits on that child with `wait_agent`, whose result says as much.
+while it watches that child with `watch_agent` or `mako-msg wait`, which notifies it directly.
 A note names the child it is about; the window's project panel shows it as Mako's, and `ReadProjectAgents` marks it `note`.
-`wait_agent` on an agent of another node follows its turns as that node's
+`watch_agent` on an agent of another node follows its turns as that node's
 state, which it sends its peers as the turn ends, says.
 Messages can be sent to active messaging sessions in the same project,
 including siblings. In a project of several folders, and in clones of one

@@ -46,7 +46,9 @@ type projectAgents struct {
 	url        string // where the agents reach the server over HTTP
 	peers        map[string]*agentPeer
 	messages     agentMessages
-	waits        map[string]int       // the agents waited on with wait_agent, how many times each
+	waits        map[string]int       // the agents watched with watch_agent / mako-msg wait, how many times each
+	watchSeq     uint64               // monotonic watch_agent ID counter
+	watches      map[string]int       // active watch_agent count per caller session
 	cliWaiters   map[string]int       // active `mako-msg wait` / mod long-poll waiters per session (suppress PTY fallback)
 	modPollUntil map[string]time.Time // grace window between mod long-poll cycles so PTY fallback never races
 	agySidecar   *agySidecarClient
@@ -93,6 +95,35 @@ func (p *projectAgents) hasCLIWaiter(id string) bool {
 		delete(p.modPollUntil, id)
 	}
 	return false
+}
+
+const maxWatchesPerSession = 16
+
+func (p *projectAgents) claimWatch(callerID string) (string, func(), bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.watches == nil {
+		p.watches = map[string]int{}
+	}
+	if p.watches[callerID] >= maxWatchesPerSession {
+		return "", nil, false
+	}
+	p.watchSeq++
+	id := fmt.Sprintf("w-%d", p.watchSeq)
+	p.watches[callerID]++
+	released := false
+	release := func() {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		if released {
+			return
+		}
+		released = true
+		if p.watches[callerID]--; p.watches[callerID] <= 0 {
+			delete(p.watches, callerID)
+		}
+	}
+	return id, release, true
 }
 
 type agentPeer struct {
@@ -411,6 +442,7 @@ type agentSummary struct {
 	// Node names the node it is on when it is another's: an agent of the
 	// project there.
 	Node string `json:"node,omitempty"`
+	Hint string `json:"hint,omitempty"`
 }
 
 type availableAgent struct {
@@ -456,10 +488,9 @@ type sendMessageArgs struct {
 	Text string `json:"text"`
 }
 type readMessagesArgs struct {
-	AfterID     uint64 `json:"after_id,omitempty" jsonschema:"Return messages newer than this cursor. Reading does not consume messages."`
-	AckThrough  uint64 `json:"ack_through,omitempty" jsonschema:"Acknowledge messages through this ID from a previous successful read."`
-	Limit       int    `json:"limit,omitempty" jsonschema:"Maximum messages, 1 to 100; defaults to 50."`
-	WaitSeconds int    `json:"wait_seconds,omitempty" jsonschema:"Optional short wait (0 to 120 seconds); prefer ending your turn or running 'mako-msg wait' in the background instead of polling."`
+	AfterID    uint64 `json:"after_id,omitempty" jsonschema:"Return messages newer than this cursor. Reading does not consume messages."`
+	AckThrough uint64 `json:"ack_through,omitempty" jsonschema:"Acknowledge messages through this ID from a previous successful read."`
+	Limit      int    `json:"limit,omitempty" jsonschema:"Maximum messages, 1 to 100; defaults to 50."`
 }
 type readMessagesResult struct {
 	Messages    []agentMessage `json:"messages"`
@@ -475,7 +506,7 @@ type stopAgentResult struct {
 const agentMCPSigDisabled = "disabled"
 
 var agentMCPToolNames = []string{
-	"list_agents", "list_agent_profiles", "spawn_agent", "send_message", "read_messages", "wait_agent", "stop_agent",
+	"list_agents", "list_agent_profiles", "spawn_agent", "send_message", "read_messages", "watch_agent", "stop_agent",
 	toolListBlocks, toolGetLayout, toolSetLayout, toolPatchLayout, toolUndoLayout,
 	toolShowUI, toolUpdateUI, toolCloseUI, toolSaveTemplate,
 }
@@ -504,7 +535,7 @@ func (d *Daemon) agentMCPSnapshot() agentMCPSnapshot {
 	agentSummaryText := summarizeAvailableForSchema(available)
 	listAgentsDesc := "List active and saved agent sessions in this project, on this node and, for a project of several folders, on other nodes, with their IDs, status and messaging support, plus available agent types and profiles."
 	listAgentProfilesDesc := "List only the spawnable agent configurations and profile presets available on this node, with each preset's target, description, model, effort and YOLO setting. Call this before spawn_agent to pick the best configuration for a task."
-	spawnAgentDesc := "Start a new Mako agent session in the current project with a task. First inspect list_agent_profiles and choose a spawnable preset by its description and settings; supply its agent and profile names. The session is visible in Mako and has its own MCP mailbox. Returns its session ID; use send_message/read_messages to coordinate."
+	spawnAgentDesc := "Start a new Mako agent session in the current project with a task. First inspect list_agent_profiles and choose a spawnable preset by its description and settings; supply its agent and profile names. The spawned agent runs asynchronously and reports results back via send_message, which Mako pushes into your session automatically. After spawning, continue other work or end your turn to receive its reply (or register a one-shot notification with watch_agent)."
 	if agentSummaryText != "" {
 		listAgentsDesc += " Current agents: " + agentSummaryText
 		spawnAgentDesc += " Current choices: " + agentSummaryText
@@ -608,11 +639,11 @@ func (d *Daemon) agentInstructions(peer *agentPeer) string {
 	var waitGuidance string
 	switch info.GetAgent() {
 	case "agy":
-		waitGuidance = "Incoming Mako messages are pushed directly into your Antigravity conversation via agentapi/sidecar and wake you automatically. NEVER poll read_messages in a timeout loop: after spawning or messaging a teammate, continue other work or end your turn and you will be woken up when a reply arrives. You can also use `mako-msg wait` in a background shell command if you need to stay in-turn."
+		waitGuidance = "Incoming Mako messages, child status notes, and watch_agent notifications are pushed directly into your Antigravity conversation via agentapi/sidecar and wake you automatically. NEVER poll read_messages in a loop: after spawning or messaging a teammate, continue other work or end your turn and you will be woken up when replies arrive. Use watch_agent (non-blocking) if you want a push notification when an agent's turn ends or prints specific terminal text."
 	case "claude":
-		waitGuidance = "Incoming Mako messages are pushed natively into your Claude Code session by the Mako mod as soon as your turn is idle (no PTY typing or polling needed). NEVER poll read_messages in a timeout loop: after spawning or messaging a teammate, continue other work or end your turn and you will be woken automatically when a reply arrives. If you want to wait concurrently while staying in-turn (or watch specific children), you can also run `mako-msg wait` / `mako-msg wait --all-children` via Bash(run_in_background=true). Use read_messages (wait_seconds=0) only for a quick non-blocking check."
+		waitGuidance = "Incoming Mako messages, child status notes, and watch_agent notifications are pushed natively into your Claude Code session by the Mako mod as soon as your turn is idle (no PTY typing or polling needed). NEVER poll read_messages in a loop: once you have delegated work, simply report what you spawned and END YOUR TURN—Mako will automatically start a new turn with the child's reply or notification. Use watch_agent (non-blocking) to register a push notification for a turn ending or terminal output matching text, or `mako-msg wait --all-children` via Bash(run_in_background=true) if you must wait while staying in-turn."
 	default:
-		waitGuidance = "NEVER poll read_messages in a repeated timeout loop. Messages are automatically delivered to you as a new prompt once your turn ends. If you want to wait asynchronously without blocking or timing out, run `mako-msg wait` (or `mako-msg wait --session <child-id>` / `--all-children`) as a background shell command; it blocks event-driven with zero polling and exits with the message JSON as soon as a reply arrives or a child finishes. Use read_messages (wait_seconds=0) only for a quick non-blocking inbox check, and acknowledge processed messages with ack_through."
+		waitGuidance = "NEVER poll read_messages in a loop. Incoming messages, child status notes, and watch_agent notifications are delivered automatically once your turn ends. Use watch_agent (non-blocking) to register a one-shot push notification when another agent finishes a turn or prints specific terminal text, or run `mako-msg wait --all-children` as a background shell command for event-driven waiting."
 	}
 	return fmt.Sprintf("You are Mako session %s (mode=%s, AGENT_MAKO_SESSION=%s, AGENT_MAKO_MODE=%s) in project %s. Parent session: %s. Before delegating, use list_agent_profiles to inspect spawnable agent configurations and profile presets (with descriptions, models, efforts and YOLO settings), or list_agents to inspect active project sessions. Choose a spawnable preset whose specialties match the task, then pass its agent and profile names to spawn_agent (omit profile for an agent default). Use send_message to communicate, with agents of this project on other nodes too, which list_agents lists with their node. %s Report results to the parent with send_message. Of an agent you spawned that waits on the user, or exits without reporting, you hear in a Mako note. stop_agent only stops agents you spawned. The mako window's layout is a document you read with get_layout and list_blocks; set_layout, patch_layout and undo_layout change it once the user allows, and only what the user keeps stays. show_ui shows a block of UI of yours in the window, a form say, and the user's taps on it come back to you as messages from the window; update_ui and close_ui change and close it. A UI to keep is a plugin: list_blocks names the folder to write one into.",
 		peer.id, mode, peer.id, mode, info.GetProject(), peer.parent, waitGuidance)
@@ -653,7 +684,7 @@ func (d *Daemon) addDynamicAgentTools(server *sdk.Server, peer *agentPeer, snap 
 
 func (d *Daemon) registerProjectAgentTools(server *sdk.Server, peer *agentPeer, snap agentMCPSnapshot) {
 	d.addDynamicAgentTools(server, peer, snap)
-	sdk.AddTool(server, &sdk.Tool{Name: "send_message", Description: "Send a message to another active agent in this project, on this node or another. It is typed into the recipient's terminal as a new prompt once that agent waits at its prompt, never interrupting a turn; until then it waits in the recipient's inbox, which read_messages reads."}, func(ctx context.Context, _ *sdk.CallToolRequest, in sendMessageArgs) (*sdk.CallToolResult, agentMessage, error) {
+	sdk.AddTool(server, &sdk.Tool{Name: "send_message", Description: "Send a message to another active agent in this project, on this node or another. Mako delivers it automatically to the recipient (via native push on Claude Code/Antigravity or as a prompt when idle). Replies are pushed back to you automatically once your turn ends—do not poll afterwards."}, func(ctx context.Context, _ *sdk.CallToolRequest, in sendMessageArgs) (*sdk.CallToolResult, agentMessage, error) {
 		if _, err := d.projectCaller(peer); err != nil {
 			return nil, agentMessage{}, err
 		}
@@ -663,25 +694,25 @@ func (d *Daemon) registerProjectAgentTools(server *sdk.Server, peer *agentPeer, 
 		msg, err := d.sendAgentMessage(ctx, peer, in.To, in.Text)
 		return nil, msg, err
 	})
-	sdk.AddTool(server, &sdk.Tool{Name: "read_messages", Description: "Read your own inbox. Prefer ending your turn (messages are pushed automatically) or running `mako-msg wait` in a background shell command instead of polling read_messages in a timeout loop. Use after_id for pagination and ack_through to acknowledge processed messages."}, func(ctx context.Context, _ *sdk.CallToolRequest, in readMessagesArgs) (*sdk.CallToolResult, readMessagesResult, error) {
+	sdk.AddTool(server, &sdk.Tool{Name: "read_messages", Description: "Read pending messages currently in your inbox (instant, non-blocking snapshot). Incoming messages and watch_agent notifications are pushed into your session automatically once your turn ends; do not poll read_messages in a loop. Use after_id for pagination and ack_through to acknowledge processed messages.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, in readMessagesArgs) (*sdk.CallToolResult, readMessagesResult, error) {
 		if _, err := d.projectCaller(peer); err != nil {
 			return nil, readMessagesResult{}, err
 		}
 		if in.Limit == 0 {
 			in.Limit = 50
 		}
-		if in.Limit < 1 || in.Limit > 100 || in.WaitSeconds < 0 || in.WaitSeconds > 120 {
-			return nil, readMessagesResult{}, errors.New("limit must be 1..100 and wait_seconds 0..120")
+		if in.Limit < 1 || in.Limit > 100 {
+			return nil, readMessagesResult{}, errors.New("limit must be 1..100")
 		}
-		messages, err := d.projectAgents.messages.read(ctx, peer.id, in.AfterID, in.AckThrough, in.Limit, time.Duration(in.WaitSeconds)*time.Second)
+		messages, err := d.projectAgents.messages.read(ctx, peer.id, in.AfterID, in.AckThrough, in.Limit, 0)
 		next := max(in.AfterID, in.AckThrough)
 		if len(messages) > 0 {
 			next = messages[len(messages)-1].ID
 		}
 		return nil, readMessagesResult{Messages: messages, NextAfterID: next}, err
 	})
-	sdk.AddTool(server, &sdk.Tool{Name: "wait_agent", Description: "Wait until an agent of this project, on any node, ends its turn, or, with until=output, one of this node prints a text; the wait ends early when it waits on the user, exits, or a message reaches you. Right after send_message to it, this waits for the turn the message starts. A timeout is a check-in: wait again while it works.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, in waitAgentArgs) (*sdk.CallToolResult, waitAgentResult, error) {
-		out, err := d.waitProjectAgent(ctx, peer, in)
+	sdk.AddTool(server, &sdk.Tool{Name: "watch_agent", Description: "Register a non-blocking one-shot notification for another agent in this project: Mako pushes a note into your session when its current turn ends (until=turn, default) or when its terminal prints matching text (until=output, this node only), or early if it waits on the user or exits. Returns immediately—continue other work or end your turn to receive the notification."}, func(ctx context.Context, _ *sdk.CallToolRequest, in watchAgentArgs) (*sdk.CallToolResult, watchAgentResult, error) {
+		out, err := d.watchProjectAgent(peer, in)
 		return nil, out, err
 	})
 	sdk.AddTool(server, &sdk.Tool{Name: "stop_agent", Description: "Terminate and remove an agent session spawned directly by you. Other project sessions cannot be stopped with this tool."}, func(ctx context.Context, _ *sdk.CallToolRequest, in stopAgentArgs) (*sdk.CallToolResult, stopAgentResult, error) {
@@ -1032,7 +1063,9 @@ func (d *Daemon) spawnProjectAgent(ctx context.Context, peer *agentPeer, in spaw
 		}
 	}
 	info = child.Info()
-	return summarizeAgent(info, peer.id, d.takesMessages(info)), nil
+	summary := summarizeAgent(info, peer.id, d.takesMessages(info))
+	summary.Hint = "Spawned asynchronously. Continue other work or end your turn—Mako will push its reply automatically (or use non-blocking watch_agent to get a note when its turn ends)."
+	return summary, nil
 }
 
 // Project agents are sessions of their own. Keep the parent's aggregate

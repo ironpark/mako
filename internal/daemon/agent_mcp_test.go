@@ -405,15 +405,30 @@ func TestProjectAgentParentSurvivesRestore(t *testing.T) {
 	}
 }
 
-func TestProjectMCPCancelledInboxWait(t *testing.T) {
+func TestProjectMCPReadMessagesIsNonBlockingAndReplacesWaitAgent(t *testing.T) {
 	d, s := projectMCPDaemon(t)
 	client := projectMCPClient(t, d, s)
-	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
-	defer cancel()
-	if _, err := client.CallTool(ctx, &sdk.CallToolParams{Name: "read_messages", Arguments: readMessagesArgs{WaitSeconds: 30}}); err == nil {
-		t.Fatal("cancelled read did not return")
+	tools, err := client.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	callProjectTool[listAgentsResult](t, client, "list_agents", struct{}{})
+	var hasWatch, hasWait bool
+	for _, tool := range tools.Tools {
+		if tool.Name == "watch_agent" {
+			hasWatch = true
+		}
+		if tool.Name == "wait_agent" {
+			hasWait = true
+		}
+	}
+	if !hasWatch || hasWait {
+		t.Fatalf("expected watch_agent registered and wait_agent removed: hasWatch=%v hasWait=%v", hasWatch, hasWait)
+	}
+	start := time.Now()
+	got := callProjectTool[readMessagesResult](t, client, "read_messages", readMessagesArgs{})
+	if len(got.Messages) != 0 || time.Since(start) > time.Second {
+		t.Fatalf("non-blocking read_messages took %v or returned %+v", time.Since(start), got)
+	}
 }
 
 func TestProjectMCPNegotiatesLegacyStdioClients(t *testing.T) {

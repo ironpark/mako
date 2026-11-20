@@ -14,53 +14,94 @@ import (
 	"github.com/ironpark/mako/internal/session"
 )
 
-// wait_agent ends with the turn the agent is on, at once for one that
-// ended its turns, and early when it waits on the user, a message reaches
-// the waiter, or the wait times out.
-func TestWaitAgent(t *testing.T) {
+// watch_agent registers a non-blocking one-shot notification and pushes a Mako
+// note into the caller's inbox once the watched condition triggers, returning
+// immediately if the agent is already idle/waiting/exited.
+func TestWatchAgent(t *testing.T) {
 	d, parent := projectMCPDaemon(t)
 	client := projectMCPClient(t, d, parent)
 	childInfo := callProjectTool[agentSummary](t, client, "spawn_agent", spawnAgentArgs{Prompt: "Review the tests"})
 	child, _ := d.sessions.get(childInfo.ID)
-	childClient := projectMCPClient(t, d, child)
-	wait := func(args waitAgentArgs) waitAgentResult {
+	watch := func(args watchAgentArgs) watchAgentResult {
 		args.SessionID = child.ID()
-		return callProjectTool[waitAgentResult](t, client, "wait_agent", args)
+		return callProjectTool[watchAgentResult](t, client, "watch_agent", args)
 	}
 
+	// 1. Registering while child is working returns immediately and pushes a note when turn ends.
 	child.SetStatus(protocol.AgentWorking)
-	time.AfterFunc(300*time.Millisecond, func() { child.SetStatus(protocol.AgentDone) })
-	if got := wait(waitAgentArgs{}); got.Reason != "turn_ended" || got.Status != protocol.AgentDone {
-		t.Fatalf("a turn ending: %+v", got)
+	got := watch(watchAgentArgs{})
+	if got.WatchID == "" || got.AlreadyMatched || got.Until != "turn" {
+		t.Fatalf("watch working child: %+v", got)
 	}
-	if got := wait(waitAgentArgs{}); got.Reason != "idle" {
-		t.Fatalf("a turn ended before the wait: %+v", got)
-	}
-
-	child.SetStatus(protocol.AgentWorking)
-	if got := wait(waitAgentArgs{Timeout: 1}); got.Reason != "timeout" || got.Status != protocol.AgentWorking {
-		t.Fatalf("a turn going on: %+v", got)
-	}
-	time.AfterFunc(300*time.Millisecond, func() {
-		callProjectTool[agentMessage](t, childClient, "send_message", sendMessageArgs{To: parent.ID(), Text: "halfway"})
+	child.SetStatus(protocol.AgentDone)
+	waitForWithin(t, 3*time.Second, "turn_ended watch notification never arrived", func() bool {
+		inbox, _ := d.projectAgents.messages.pending(parent.ID())
+		for _, m := range inbox {
+			if m.Note && m.From == child.ID() && strings.Contains(m.Text, got.WatchID) && strings.Contains(m.Text, "turn ended") {
+				return true
+			}
+		}
+		return false
 	})
-	if got := wait(waitAgentArgs{}); got.Reason != "message" {
-		t.Fatalf("a message to the waiter: %+v", got)
+
+	// 2. Watching an already-idle child matches immediately without registering a background watch.
+	if idle := watch(watchAgentArgs{}); !idle.AlreadyMatched || idle.Reason != "idle" || idle.WatchID != "" {
+		t.Fatalf("watch already-idle child: %+v", idle)
+	}
+
+	// 3. Watching a working child that transitions to waiting pushes a waiting note.
+	child.SetStatus(protocol.AgentWorking)
+	gotWait := watch(watchAgentArgs{})
+	if gotWait.WatchID == "" || gotWait.AlreadyMatched {
+		t.Fatalf("watch before waiting: %+v", gotWait)
 	}
 	child.SetStatus(protocol.AgentWaiting)
-	if got := wait(waitAgentArgs{}); got.Reason != "waiting" {
-		t.Fatalf("waiting on the user: %+v", got)
+	waitForWithin(t, 3*time.Second, "waiting watch notification never arrived", func() bool {
+		inbox, _ := d.projectAgents.messages.pending(parent.ID())
+		for _, m := range inbox {
+			if m.Note && strings.Contains(m.Text, gotWait.WatchID) && strings.Contains(m.Text, "waits on the user") {
+				return true
+			}
+		}
+		return false
+	})
+
+	// 4. Watching self is rejected.
+	result, err := client.CallTool(t.Context(), &sdk.CallToolParams{Name: "watch_agent", Arguments: watchAgentArgs{SessionID: parent.ID()}})
+	if err != nil || !result.IsError {
+		t.Fatal("an agent watched itself")
 	}
 
-	result, err := client.CallTool(t.Context(), &sdk.CallToolParams{Name: "wait_agent", Arguments: waitAgentArgs{SessionID: parent.ID()}})
-	if err != nil || !result.IsError {
-		t.Fatal("an agent waited on itself")
+	// 5. Output watch triggers a pushed note when matching terminal text appears.
+	outSess, err := session.Start(session.Spec{
+		ID: "out-peer", NodeID: d.cfg.NodeID, Agent: "claude", Project: parent.Info().GetProject(),
+		Command: []string{"sh", "-c", `sleep 0.3; printf '\033[1mREADY_TOKEN\033[0m\n'; sleep 5`},
+		Cols:    80, Rows: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer outSess.Close()
+	d.sessions.add(outSess)
+	gotOut := callProjectTool[watchAgentResult](t, client, "watch_agent", watchAgentArgs{
+		SessionID: outSess.ID(), Until: "output", Text: "READY_TOKEN",
+	})
+	if gotOut.WatchID == "" || gotOut.AlreadyMatched || gotOut.Until != "output" {
+		t.Fatalf("output watch: %+v", gotOut)
+	}
+	waitForWithin(t, 5*time.Second, "output watch notification never arrived", func() bool {
+		inbox, _ := d.projectAgents.messages.pending(parent.ID())
+		for _, m := range inbox {
+			if m.Note && m.From == outSess.ID() && strings.Contains(m.Text, gotOut.WatchID) && strings.Contains(m.Text, "READY_TOKEN") {
+				return true
+			}
+		}
+		return false
+	})
 }
 
 // A note tells the parent of a child that waits on the user a while, once,
-// unless the parent waits on it; and of a child that exits without
-// reporting.
+// unless the parent watches it; and of a child that exits without reporting.
 func TestTheParentHearsOfAChildStuckOrGone(t *testing.T) {
 	d, parent := projectMCPDaemon(t)
 	client := projectMCPClient(t, d, parent)
@@ -85,7 +126,7 @@ func TestTheParentHearsOfAChildStuckOrGone(t *testing.T) {
 	d.noteChild(child.Info(), parent.ID(), &w, now.Add(noteWaitingAfter))
 	release()
 	if len(notes()) != 0 {
-		t.Fatal("a parent waiting on its child was told it waits")
+		t.Fatal("a parent watching its child was told it waits")
 	}
 	w = childWatch{}
 	d.noteChild(child.Info(), parent.ID(), &w, now)

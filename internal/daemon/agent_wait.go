@@ -14,98 +14,152 @@ import (
 	"github.com/ironpark/mako/internal/session"
 )
 
-// An agent waits on another of the project with wait_agent rather than
-// asking list_agents again and again; and an agent that spawned others
-// hears of one that stops where it cannot report, waiting on the user or
-// gone, in a note typed in as its messages are.
+// An agent registers a non-blocking one-shot notification on another project
+// agent with watch_agent (returning immediately; Mako pushes a note when the
+// condition triggers), and an agent that spawned others also hears in a note
+// if a child waits on the user or exits without reporting.
 
-type waitAgentArgs struct {
-	SessionID string `json:"session_id" jsonschema:"The agent to wait on, of this project, on any node."`
-	Until     string `json:"until,omitempty" jsonschema:"turn (the default): until the turn it is on, or the next, ends. output: until text shows in what it prints from now on, for an agent of this node. Either way, the wait ends when the agent waits on the user or exits."`
-	Text      string `json:"text,omitempty" jsonschema:"With until=output, the text to wait for, in its output with terminal escapes removed."`
-	Timeout   int    `json:"timeout_seconds,omitempty" jsonschema:"1 to 300; defaults to 120. A timeout is a check-in, not a failure: wait again while it works."`
+type watchAgentArgs struct {
+	SessionID string `json:"session_id" jsonschema:"The agent to watch, of this project, on any node."`
+	Until     string `json:"until,omitempty" jsonschema:"turn (default): notify once its current or next turn ends. output: notify once text appears in its terminal output on this node. Either way, you are also notified if it waits on the user or exits."`
+	Text      string `json:"text,omitempty" jsonschema:"With until=output, the text to match in its terminal output (ANSI escapes removed)."`
 }
 
-type waitAgentResult struct {
-	Reason string `json:"reason" jsonschema:"turn_ended: it ended a turn. idle: it was at its prompt, its turns done and nothing sent to it pending. waiting: it waits on the user, an approval or a question in its terminal. exited. gone: it is no longer listed, closed or its node out of reach. output: the text showed. message: a message reached you, which read_messages reads. timeout."`
-	Status string `json:"status,omitempty"`
-	State  string `json:"state"`
+type watchAgentResult struct {
+	WatchID        string `json:"watch_id,omitempty"`
+	SessionID      string `json:"session_id"`
+	Until          string `json:"until"`
+	AlreadyMatched bool   `json:"already_matched,omitempty"`
+	Reason         string `json:"reason,omitempty"`
+	Status         string `json:"status,omitempty"`
+	State          string `json:"state"`
+	Hint           string `json:"hint,omitempty"`
 }
 
 const (
-	waitDefault = 120 * time.Second
-	waitMax     = 300 * time.Second
-	// waitRecheck is how often the agent waited on is looked at besides
-	// when it changes: for status gone stale as it is read, and an agent
-	// of another node, whose state comes as its daemon sends it.
+	// waitRecheck is how often a watched agent is looked at besides when its
+	// state changes: for status gone stale as it is read, and an agent of
+	// another node, whose state comes as its daemon sends it.
 	waitRecheck = time.Second
 	// waitOutputKept is how much of what it printed is kept to match in.
 	waitOutputKept = 64 << 10
 )
 
-// waited is the agent a wait_agent waits on, of this node or another.
+// waited is an agent observed by watch_agent or mako-msg wait, local or remote.
 type waited struct {
 	info    func() *protocol.SessionInfo // nil once it is gone
 	changed func() <-chan struct{}       // nil for one never announced
 }
 
-func (d *Daemon) waitProjectAgent(ctx context.Context, peer *agentPeer, in waitAgentArgs) (waitAgentResult, error) {
+func (d *Daemon) watchProjectAgent(peer *agentPeer, in watchAgentArgs) (watchAgentResult, error) {
 	caller, err := d.projectCaller(peer)
 	if err != nil {
-		return waitAgentResult{}, err
+		return watchAgentResult{}, err
 	}
-	timeout := waitDefault
-	if in.Timeout != 0 {
-		timeout = time.Duration(in.Timeout) * time.Second
-	}
-	byTurn := cmp.Or(in.Until, "turn") == "turn"
+	until := cmp.Or(strings.TrimSpace(in.Until), "turn")
+	byTurn := until == "turn"
 	switch {
-	case timeout < time.Second || timeout > waitMax:
-		return waitAgentResult{}, errors.New("timeout_seconds must be 1..300")
-	case !byTurn && in.Until != "output":
-		return waitAgentResult{}, errors.New("until must be turn or output")
+	case !byTurn && until != "output":
+		return watchAgentResult{}, errors.New("until must be turn or output")
 	case !byTurn && strings.TrimSpace(in.Text) == "":
-		return waitAgentResult{}, errors.New("until=output needs text to wait for")
+		return watchAgentResult{}, errors.New("until=output needs text to wait for")
 	case in.SessionID == peer.id:
-		return waitAgentResult{}, errors.New("an agent cannot wait on itself")
+		return watchAgentResult{}, errors.New("an agent cannot watch itself")
 	}
-	scope := d.projectScope(caller.Info())
+
+	callerInfo := caller.Info()
+	scope := d.projectScope(callerInfo)
 	var target waited
-	var printed <-chan struct{}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+	var localTarget *session.Session
 	if s, ok := d.sessions.get(in.SessionID); ok && d.inProject(scope, s.Info()) {
+		localTarget = s
 		target = waited{info: s.Info, changed: s.Changed}
-		if !byTurn {
-			printed = watchOutput(ctx, s, in.Text)
-		}
 	} else if d.remoteAgent(scope, in.SessionID) != nil {
 		if !byTurn {
-			return waitAgentResult{}, errors.New("until=output waits on agents of this node; wait for another's turn instead")
+			return watchAgentResult{}, errors.New("until=output watches agents of this node; watch for another's turn instead")
 		}
 		target = waited{info: func() *protocol.SessionInfo { return d.remoteAgent(scope, in.SessionID) }}
 	} else {
-		return waitAgentResult{}, errNotInProject
+		return watchAgentResult{}, errNotInProject
 	}
-	release := d.projectAgents.waitOn(in.SessionID)
-	defer release()
 
-	mine, _ := d.projectAgents.messages.pending(peer.id)
-	seen := lastID(mine)
-	result := func(info *protocol.SessionInfo, reason string) waitAgentResult {
-		return waitAgentResult{Reason: reason, Status: info.GetStatus(), State: info.GetState()}
-	}
 	info := target.info()
 	turns := info.GetTurns()
-	if byTurn && turns > 0 && !protocol.AtWork(info.GetStatus()) && info.GetStatus() != protocol.AgentWaiting && info.GetState() != protocol.StateExited {
-		// Its turn ended before the wait, unless a message waits to start
-		// it on another. One sent to another node's waits there, and so
-		// is not seen: the wait then ends at once, as it would had the
-		// message started no turn.
-		if inbox, _ := d.projectAgents.messages.pending(in.SessionID); len(inbox) == 0 {
-			return result(info, "idle"), nil
+	status := info.GetStatus()
+	state := info.GetState()
+	if byTurn {
+		switch {
+		case state == protocol.StateExited:
+			return watchAgentResult{
+				SessionID: in.SessionID, Until: until, AlreadyMatched: true,
+				Reason: "exited", Status: status, State: state,
+			}, nil
+		case status == protocol.AgentWaiting:
+			return watchAgentResult{
+				SessionID: in.SessionID, Until: until, AlreadyMatched: true,
+				Reason: "waiting", Status: status, State: state,
+			}, nil
+		case turns > 0 && !protocol.AtWork(status):
+			if inbox, _ := d.projectAgents.messages.pending(in.SessionID); len(inbox) == 0 {
+				return watchAgentResult{
+					SessionID: in.SessionID, Until: until, AlreadyMatched: true,
+					Reason: "idle", Status: status, State: state,
+				}, nil
+			}
 		}
 	}
+
+	watchID, releaseWatch, ok := d.projectAgents.claimWatch(peer.id)
+	if !ok {
+		return watchAgentResult{}, fmt.Errorf("too many active watches (limit %d)", maxWatchesPerSession)
+	}
+	releaseWait := d.projectAgents.waitOn(in.SessionID)
+	watchCtx, cancel := context.WithCancel(peer.ctx)
+	var printed <-chan struct{}
+	if !byTurn && localTarget != nil {
+		printed = watchOutput(watchCtx, localTarget, in.Text)
+	}
+
+	go func() {
+		defer cancel()
+		defer releaseWait()
+		defer releaseWatch()
+
+		reason := d.runAgentWatch(watchCtx, target, byTurn, turns, printed)
+		if reason == "" || peer.ctx.Err() != nil {
+			return
+		}
+		var text string
+		switch reason {
+		case "turn_ended":
+			text = fmt.Sprintf("Watch %s triggered: its turn ended.", watchID)
+		case "output":
+			text = fmt.Sprintf("Watch %s triggered: terminal output matched %q.", watchID, in.Text)
+		case "waiting":
+			text = fmt.Sprintf("Watch %s triggered: it waits on the user (approval or question in its terminal).", watchID)
+		case "exited":
+			text = fmt.Sprintf("Watch %s triggered: it exited.", watchID)
+		case "gone":
+			text = fmt.Sprintf("Watch %s triggered: it is no longer listed or reachable.", watchID)
+		default:
+			text = fmt.Sprintf("Watch %s triggered (%s).", watchID, reason)
+		}
+		if _, err := d.projectAgents.messages.note(in.SessionID, peer.id, text, callerInfo.GetProject()); err != nil {
+			d.log.Warn("agent watch: notification not sent", "watch", watchID, "to", peer.id, "target", in.SessionID, "err", err)
+		}
+	}()
+
+	return watchAgentResult{
+		WatchID:   watchID,
+		SessionID: in.SessionID,
+		Until:     until,
+		Status:    status,
+		State:     state,
+		Hint:      "Notification registered. Continue other work or end your turn—Mako will push a note into your session as soon as it triggers.",
+	}, nil
+}
+
+func (d *Daemon) runAgentWatch(ctx context.Context, target waited, byTurn bool, turns uint64, printed <-chan struct{}) string {
 	recheck := time.NewTicker(waitRecheck)
 	defer recheck.Stop()
 	worked := false
@@ -119,41 +173,23 @@ func (d *Daemon) waitProjectAgent(ctx context.Context, peer *agentPeer, in waitA
 		worked = worked || protocol.AtWork(status)
 		switch {
 		case info == nil:
-			return result(info, "gone"), nil
+			return "gone"
 		case info.GetState() == protocol.StateExited:
-			return result(info, "exited"), nil
+			return "exited"
 		case status == protocol.AgentWaiting:
-			return result(info, "waiting"), nil
-		// A daemon older than turns counts none: the turn ends as its
-		// work, seen in the wait, does.
+			return "waiting"
 		case byTurn && (info.GetTurns() > turns || turns == 0 && worked && !protocol.AtWork(status)):
-			return result(info, "turn_ended"), nil
-		}
-		inbox, messaged := d.projectAgents.messages.pending(peer.id)
-		if lastID(inbox) > seen {
-			return result(info, "message"), nil
+			return "turn_ended"
 		}
 		select {
 		case <-printed:
-			return result(target.info(), "output"), nil
+			return "output"
 		case <-changed:
-		case <-messaged:
 		case <-recheck.C:
 		case <-ctx.Done():
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return result(target.info(), "timeout"), nil
-			}
-			return waitAgentResult{}, ctx.Err()
+			return ""
 		}
 	}
-}
-
-// lastID is the id of inbox's last message, 0 for none.
-func lastID(inbox []agentMessage) uint64 {
-	if len(inbox) == 0 {
-		return 0
-	}
-	return inbox[len(inbox)-1].ID
 }
 
 // watchOutput is a channel closed once text shows in what s prints, its
@@ -189,8 +225,8 @@ func watchOutput(ctx context.Context, s *session.Session, text string) <-chan st
 	return found
 }
 
-// waitOn counts an agent waited on until release, which keeps the note of
-// its waiting from its parent, who hears of it from the wait.
+// waitOn counts an agent watched until release, which keeps the duplicate note
+// of its waiting from its parent, who hears of it from the watch or CLI wait.
 func (p *projectAgents) waitOn(id string) (release func()) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -226,7 +262,7 @@ type childWatch struct {
 }
 
 // noteChild tells the parent of the agent info of a wait on the user that
-// lasts, once for each, unless the parent is waiting on it.
+// lasts, once for each, unless the parent is watching it.
 func (d *Daemon) noteChild(info *protocol.SessionInfo, parentID string, w *childWatch, now time.Time) {
 	status := info.GetStatus()
 	work := protocol.AtWork(status)
@@ -251,7 +287,7 @@ func (d *Daemon) noteChild(info *protocol.SessionInfo, parentID string, w *child
 }
 
 // noteExit tells the parent of the agent info that it exited, unless it
-// was stopped, the parent waits on it, or it reported to the parent since
+// was stopped, the parent watches it, or it reported to the parent since
 // its last turn began, at turnBegan.
 func (d *Daemon) noteExit(info *protocol.SessionInfo, parentID string, turnBegan time.Time) {
 	if d.ctx.Err() != nil {
@@ -271,10 +307,7 @@ func (d *Daemon) noteExit(info *protocol.SessionInfo, parentID string, turnBegan
 }
 
 func (d *Daemon) noteParent(info *protocol.SessionInfo, parentID, text string) {
-	if d.projectAgents.peer(parentID) == nil {
-		return // the parent is gone, or takes no messages
-	}
-	if _, err := d.projectAgents.messages.note(info.GetId(), parentID, text, d.projectScope(info)); err != nil {
-		d.log.Warn("agent note dropped", "session", info.GetId(), "parent", parentID, "err", err)
+	if _, err := d.projectAgents.messages.note(info.GetId(), parentID, text, info.GetProject()); err != nil {
+		d.log.Warn("agent note: not sent", "parent", parentID, "child", info.GetId(), "err", err)
 	}
 }
