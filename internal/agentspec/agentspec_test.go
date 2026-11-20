@@ -289,6 +289,15 @@ func TestResolveYoloAndOverrides(t *testing.T) {
 	if err != nil || !slices.Contains(l.Command, "--dangerously-skip-permissions") {
 		t.Fatalf("agy = %q, %v", l.Command, err)
 	}
+	// agy normalizes legacy variant model IDs so --model and --effort never conflict.
+	l, err = ResolveWith("agy", "", nil, nil, ResolveOptions{Model: "gemini-4-neon-high", Effort: "low"}, agentsMap)
+	if err != nil || !strings.Contains(strings.Join(l.Command[1:], " "), "--model gemini-4-neon --effort low") {
+		t.Fatalf("agy normalized conflicting variant = %q, %v", l.Command, err)
+	}
+	l, err = ResolveWith("agy", "", nil, nil, ResolveOptions{Model: "gemini-4-neon-high", Effort: "high"}, agentsMap)
+	if err != nil || !strings.Contains(strings.Join(l.Command[1:], " "), "--model gemini-4-neon-high") || slices.Contains(l.Command, "--effort") {
+		t.Fatalf("agy normalized matching variant = %q, %v", l.Command, err)
+	}
 	l, err = Resolve("omp", "", nil, nil, agentsMap)
 	if err != nil || !slices.Contains(l.Command, "--yolo") {
 		t.Fatalf("omp = %q, %v", l.Command, err)

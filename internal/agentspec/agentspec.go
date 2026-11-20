@@ -265,6 +265,11 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 
 	effectiveModel := cmp.Or(opts.Model, p.Model)
 	effectiveEffort := cmp.Or(opts.Effort, p.Effort)
+	if e, ok := agents.Native(name, path); ok {
+		if norm, ok := e.Driver.(agent.ModelEffortNormalizer); ok {
+			effectiveModel, effectiveEffort = norm.NormalizeModelEffort(effectiveModel, effectiveEffort)
+		}
+	}
 	effectiveYolo := a.Yolo
 	if p.Yolo != nil {
 		effectiveYolo = *p.Yolo

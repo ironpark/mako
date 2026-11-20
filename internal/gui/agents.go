@@ -1118,6 +1118,16 @@ func effortChoices(models []*protocol.AgentModel, selectedModel string, driver a
 		if found := findAgentModel(models, selectedModel); found != nil {
 			return slices.Clone(found.GetEfforts())
 		}
+		if norm, ok := driver.(agent.ModelEffortNormalizer); ok {
+			for _, probe := range []string{"low", "high"} {
+				if base, _ := norm.NormalizeModelEffort(selectedModel, probe); base != "" && base != selectedModel {
+					if found := findAgentModel(models, base); found != nil {
+						return slices.Clone(found.GetEfforts())
+					}
+					break
+				}
+			}
+		}
 	}
 	var out []string
 	// Collect efforts from main models first, then overflow models.

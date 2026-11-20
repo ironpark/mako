@@ -266,6 +266,13 @@ type EffortFlag interface {
 	EffortArgs(effort string) []string
 }
 
+// ModelEffortNormalizer is an optional interface for agents where a model ID
+// may already encode a reasoning effort suffix (such as agy's variant IDs) so
+// passing both --model and --effort would conflict unless normalized first.
+type ModelEffortNormalizer interface {
+	NormalizeModelEffort(model, effort string) (string, string)
+}
+
 // YoloFlag is an agent that can start with permission and sandbox checks
 // bypassed ("YOLO" mode). WithYolo adds the flags or environment variables
 // that enable it on l, and YoloFlags lists standalone CLI flags that turn
