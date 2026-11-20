@@ -1,7 +1,11 @@
 package dev.ironpark.mako.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Code
@@ -17,15 +21,13 @@ import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.background
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -84,19 +86,29 @@ internal fun LookGlyph(look: Look, modifier: Modifier = Modifier, size: Dp = 16.
             if (k == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
         }
         path.close()
-        drawPath(path, tint, style = Stroke(width = 2 * unit, join = StrokeJoin.Round))
+        drawPath(
+            path,
+            tint,
+            style = Stroke(width = 2 * unit, cap = StrokeCap.Round, join = StrokeJoin.Round),
+        )
     }
 }
 
 /**
  * ProjectTile is a project's mark at the size of a row's leading icon: its
- * look's glyph on a tile of its colour, faint, so that the colour leads
- * without filling.
+ * look's glyph on a tile of its colour, faint with a hairline edge, so that
+ * the colour leads without filling.
  */
 @Composable
 internal fun ProjectTile(look: Look, modifier: Modifier = Modifier, size: Dp = 40.dp) {
+    val tint = look.tint()
+    val shape = RoundedCornerShape(size * 0.3f)
     Box(
-        modifier.size(size).clip(RoundedCornerShape(size * 0.3f)).background(look.tint().copy(alpha = 0.16f)),
+        modifier
+            .size(size)
+            .clip(shape)
+            .background(tint.copy(alpha = 0.14f))
+            .border(MakoColors.hairlineWidth, tint.copy(alpha = 0.22f), shape),
         contentAlignment = Alignment.Center,
     ) { LookGlyph(look, size = size * 0.5f) }
 }

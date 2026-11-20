@@ -6,11 +6,6 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -34,6 +29,12 @@ import dev.ironpark.mako.net.NodeProjectFiles
 import dev.ironpark.mako.workspace.view
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+
+private fun NavBackStackEntry.isProjectRoute(): Boolean =
+    destination.route?.startsWith("project") == true
+
+private fun NavBackStackEntry.isModalRoute(): Boolean =
+    destination.route == "scan" || destination.route?.startsWith("new") == true
 
 /**
  * MakoNav is the app's screens: home, the projects; a project, its tabs;
@@ -83,25 +84,45 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
     fun newSession(project: ProjectItem?) =
         nav.navigate("new?project=${routeKey(project?.key.orEmpty())}")
 
-    val slideIn: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition =
-        { slideInHorizontally(tween(260)) { it / 3 } + fadeIn(tween(200)) }
-    val slideOut: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition =
-        { slideOutHorizontally(tween(260)) { -it / 6 } + fadeOut(tween(160)) }
-    val popIn: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition =
-        { slideInHorizontally(tween(260)) { -it / 6 } + fadeIn(tween(200)) }
-    val popOut: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition =
-        { slideOutHorizontally(tween(260)) { it / 3 } + fadeOut(tween(160)) }
+    val drillEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = { MakoMotion.drillEnter() }
+    val drillExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+        if (targetState.isModalRoute()) MakoMotion.modalBackgroundExit() else MakoMotion.drillExit()
+    }
+    val drillPopEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+        if (initialState.isModalRoute()) MakoMotion.modalBackgroundPopEnter() else MakoMotion.drillPopEnter()
+    }
+    val drillPopExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = { MakoMotion.drillPopExit() }
+
+    val modalEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = { MakoMotion.modalEnter() }
+    val modalExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = { MakoMotion.modalPopExit() }
 
     SharedTransitionLayout {
         CompositionLocalProvider(LocalSharedScope provides this) {
             NavHost(
-                nav, startDestination = "home",
-                enterTransition = slideIn, exitTransition = slideOut, popEnterTransition = popIn, popExitTransition = popOut,
+                nav,
+                startDestination = "home",
+                enterTransition = drillEnter,
+                exitTransition = drillExit,
+                popEnterTransition = drillPopEnter,
+                popExitTransition = drillPopExit,
             ) {
-                screen("home",
-                    // Home opens into a project: the row's mark and name travel, the rest fades.
-                    exit = { if (targetState.destination.route?.startsWith("project") == true) fadeOut(tween(220)) else slideOut() },
-                    popEnter = { if (initialState.destination.route?.startsWith("project") == true) fadeIn(tween(220)) else popIn() },
+                screen(
+                    "home",
+                    // Home opens into a project: the row's mark and name travel, the rest cross-fades cleanly.
+                    exit = {
+                        when {
+                            targetState.isProjectRoute() -> MakoMotion.sharedExit()
+                            targetState.isModalRoute() -> MakoMotion.modalBackgroundExit()
+                            else -> MakoMotion.drillExit()
+                        }
+                    },
+                    popEnter = {
+                        when {
+                            initialState.isProjectRoute() -> MakoMotion.sharedEnter()
+                            initialState.isModalRoute() -> MakoMotion.modalBackgroundPopEnter()
+                            else -> MakoMotion.drillPopEnter()
+                        }
+                    },
                 ) {
                     HomeScreen(
                         mesh,
@@ -116,9 +137,12 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                         state = homeState,
                     )
                 }
-                screen("project?key={key}&tab={tab}",
-                    enter = { if (initialState.destination.route == "home") fadeIn(tween(260)) else slideIn() },
-                    popExit = { if (targetState.destination.route == "home") fadeOut(tween(200)) else popOut() },
+                screen(
+                    "project?key={key}&tab={tab}",
+                    enter = { if (initialState.destination.route == "home") MakoMotion.sharedEnter() else MakoMotion.drillEnter() },
+                    exit = drillExit,
+                    popEnter = drillPopEnter,
+                    popExit = { if (targetState.destination.route == "home") MakoMotion.sharedExit() else MakoMotion.drillPopExit() },
                 ) { entry ->
                     val key = keyOfRoute(entry.arguments?.getString("key").orEmpty())
                     val tab = entry.arguments?.getString("tab").orEmpty().ifEmpty { null }
@@ -202,8 +226,10 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                     UpdatesScreen(updates, onBack = { nav.popBackStack() })
                 }
                 screen("mesh") { MeshScreen(mesh, onBack = { nav.popBackStack() }, onScan = { nav.navigate("scan") }) }
-                screen("scan") { ScanScreen(mesh, onBack = { nav.popBackStack() }) }
-                screen("new?project={project}") { entry ->
+                screen("scan", enter = modalEnter, exit = modalExit, popEnter = modalEnter, popExit = modalExit) {
+                    ScanScreen(mesh, onBack = { nav.popBackStack() })
+                }
+                screen("new?project={project}", enter = modalEnter, exit = modalExit, popEnter = modalEnter, popExit = modalExit) { entry ->
                     val key = keyOfRoute(entry.arguments?.getString("project").orEmpty())
                     val workspace by mesh.workspace.collectAsState()
                     val view = remember(workspace.state) { workspace.state.view() }

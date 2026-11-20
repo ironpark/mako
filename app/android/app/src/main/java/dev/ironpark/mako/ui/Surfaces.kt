@@ -26,6 +26,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -37,12 +38,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 // The app's shared surfaces: what a screen with nothing to show says, a
@@ -72,7 +81,12 @@ fun EmptyState(
 ) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         if (icon != null) {
-            Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.size(64.dp)) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                border = MakoColors.cardBorderStroke,
+                modifier = Modifier.size(64.dp),
+            ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(icon, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -104,8 +118,10 @@ fun Section(title: String, modifier: Modifier = Modifier, content: @Composable (
     Column(modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (title.isNotEmpty()) SectionLabel(title, Modifier.padding(start = 4.dp, bottom = 8.dp))
         Card(
-            Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            border = MakoColors.cardBorderStroke,
         ) { content() }
     }
 }
@@ -129,13 +145,76 @@ internal fun groupShape(i: Int, n: Int): RoundedCornerShape {
     )
 }
 
+/**
+ * Draws a seamless hairline perimeter border around an [index]-th item of a [count]-row
+ * grouped list card without double horizontal seams between adjacent rows.
+ */
+fun Modifier.groupedCardBorder(
+    index: Int,
+    count: Int,
+    color: Color,
+    cornerRadius: Dp = 16.dp,
+    width: Dp = MakoColors.hairlineWidth,
+): Modifier = drawWithContent {
+    drawContent()
+    val stroke = width.toPx()
+    val half = stroke / 2f
+    val r = cornerRadius.toPx().coerceAtMost(minOf(size.width, size.height) / 2f)
+    val left = half
+    val right = size.width - half
+    val top = half
+    val bottom = size.height - half
+    val style = Stroke(width = stroke)
+    when {
+        count <= 1 -> {
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(left, top),
+                size = Size(size.width - stroke, size.height - stroke),
+                cornerRadius = CornerRadius(r, r),
+                style = style,
+            )
+        }
+        index == 0 -> {
+            val path = Path().apply {
+                moveTo(left, size.height)
+                lineTo(left, top + r)
+                arcTo(Rect(left, top, left + 2 * r, top + 2 * r), 180f, 90f, false)
+                lineTo(right - r, top)
+                arcTo(Rect(right - 2 * r, top, right, top + 2 * r), 270f, 90f, false)
+                lineTo(right, size.height)
+            }
+            drawPath(path, color = color, style = style)
+        }
+        index == count - 1 -> {
+            val path = Path().apply {
+                moveTo(left, 0f)
+                lineTo(left, bottom - r)
+                arcTo(Rect(left, bottom - 2 * r, left + 2 * r, bottom), 180f, -90f, false)
+                lineTo(right - r, bottom)
+                arcTo(Rect(right - 2 * r, bottom - 2 * r, right, bottom), 90f, -90f, false)
+                lineTo(right, 0f)
+            }
+            drawPath(path, color = color, style = style)
+        }
+        else -> {
+            drawLine(color, Offset(left, 0f), Offset(left, size.height), strokeWidth = stroke)
+            drawLine(color, Offset(right, 0f), Offset(right, size.height), strokeWidth = stroke)
+        }
+    }
+}
+
 /** CountBadge is a count in a dot of its colour. */
 @Composable
 internal fun CountBadge(count: Int, color: Color, modifier: Modifier = Modifier) {
     Surface(color = color, shape = CircleShape, modifier = modifier.heightIn(min = 18.dp)) {
         Text(
-            "$count", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp), textAlign = TextAlign.Center,
+            "$count",
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall.tabular(),
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 5.5.dp, vertical = 1.dp),
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -157,19 +236,45 @@ internal fun Loading(what: String) {
 @Composable
 internal fun PlaceholderRows(count: Int = 4, label: String = "", modifier: Modifier = Modifier) {
     val pulse = rememberInfiniteTransition(label = "placeholder")
-    val a by pulse.animateFloat(0.45f, 0.9f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "alpha")
+    val a by pulse.animateFloat(
+        initialValue = 0.42f,
+        targetValue = 0.88f,
+        animationSpec = infiniteRepeatable(
+            tween(1050, easing = MakoMotion.EmphasizedEasing),
+            RepeatMode.Reverse,
+        ),
+        label = "alpha",
+    )
     val shade = MaterialTheme.colorScheme.surfaceContainerHigh
-    Column(modifier.padding(horizontal = 16.dp, vertical = 8.dp).alpha(a)) {
-        if (label.isNotEmpty()) Text(label, style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
-        repeat(count) {
-            Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(shade))
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Box(Modifier.fillMaxWidth(0.5f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(shade))
-                    Spacer(Modifier.height(8.dp))
-                    Box(Modifier.fillMaxWidth(0.8f).height(10.dp).clip(RoundedCornerShape(4.dp)).background(shade))
+    val divider = MakoColors.subtleDivider
+    Column(modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        if (label.isNotEmpty()) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, bottom = 10.dp),
+            )
+        }
+        Card(
+            Modifier.fillMaxWidth().alpha(a),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            border = MakoColors.cardBorderStroke,
+        ) {
+            repeat(count) { i ->
+                if (i > 0) HorizontalDivider(Modifier.padding(start = 66.dp), color = divider)
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(shade))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Box(Modifier.fillMaxWidth(0.46f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(shade))
+                        Spacer(Modifier.height(8.dp))
+                        Box(Modifier.fillMaxWidth(0.76f).height(10.dp).clip(RoundedCornerShape(4.dp)).background(shade))
+                    }
                 }
             }
         }

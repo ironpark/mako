@@ -3,14 +3,17 @@ package dev.ironpark.mako.ui
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,7 +29,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -51,7 +53,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -74,6 +75,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -120,6 +122,12 @@ import kotlinx.coroutines.launch
 
 /** What home shows of the projects: all, those with a session waiting for you, or one at work. */
 internal enum class Filter { All, NeedsYou, Working }
+
+/**
+ * Whether this session has unread attention from its daemon.
+ * Older nodes leave [SessionInfo.getAttentionSeq] at 0, so this safely returns false for them.
+ */
+internal fun SessionInfo.isUnread(): Boolean = attentionSeq > 0L && attentionSeq > seenSeq
 
 @OptIn(ExperimentalMaterial3Api::class)
 internal class HomeState(
@@ -223,7 +231,7 @@ internal fun HomeScreen(
                                 if (linked.size == 1) linked[0].name else pluralStringResource(R.plurals.computers_count, linked.size, linked.size),
                                 pluralStringResource(R.plurals.sessions_count, sessions.size, sessions.size),
                             ),
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodySmall.tabular(),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -244,7 +252,11 @@ internal fun HomeScreen(
             // With nothing listed, the empty list's own button starts one.
             if (linked.isNotEmpty() && (sessions.isNotEmpty() || view.projects.isNotEmpty())) {
                 // Out at the top of the list, an icon alone once it scrolls.
-                val top by remember { derivedStateOf { state.list.firstVisibleItemIndex == 0 } }
+                val hasHeader = sessions.isNotEmpty() || nodes.any { it.unreachable() }
+                val firstContentIndex = if (hasHeader) 0 else 2
+                val top by remember(firstContentIndex) {
+                    derivedStateOf { state.list.firstVisibleItemIndex <= firstContentIndex }
+                }
                 ExtendedFloatingActionButton(
                     onClick = { onNew(null) }, expanded = top,
                     icon = { Icon(Icons.Filled.Add, null) },
@@ -348,70 +360,143 @@ private fun ProjectList(
     // The computer's panels by their titles, asked for now and then: home names them, the panels' page follows them.
     val homePanels = rememberPanelSources(mesh, panelsNode.takeIf { onPanels != null }, view.spaceId(spaceAt), poll = HOME_PANELS_POLL)
     val panelTitles = homePanels.listed?.let { homePanels.panels.filter { it.kind != KIND_MISSING }.map { it.title } }
+    val cardBorder = MakoColors.cardBorder
+    val subtleDivider = MakoColors.subtleDivider
+    // Cache last non-empty lists so AnimatedVisibility exit transitions stay populated while shrinking out.
+    var lastDown by remember { mutableStateOf(down) }
+    if (down.isNotEmpty()) lastDown = down
+    var lastTray by remember { mutableStateOf(tray) }
+    if (tray.isNotEmpty()) lastTray = tray
 
     LazyColumn(state = state.list, contentPadding = PaddingValues(bottom = 112.dp), modifier = Modifier.fillMaxSize()) {
-        if (down.isNotEmpty()) item(key = "down") {
-            LinkBanner(down, Modifier.animateItem()) { node -> act { mesh.relink(node) } }
-        }
-        if (sessions.isNotEmpty()) item(key = "filters") {
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                for (f in Filter.entries) {
-                    val (label, count) = when (f) {
-                        Filter.All -> stringResource(R.string.filter_all) to 0
-                        Filter.NeedsYou -> stringResource(R.string.filter_needs_you) to tray.size
-                        Filter.Working -> stringResource(R.string.filter_working) to working
+        item(key = "header") {
+            Column(Modifier.fillMaxWidth()) {
+                AnimatedVisibility(
+                    visible = down.isNotEmpty(),
+                    enter = MakoMotion.cardEnter,
+                    exit = MakoMotion.cardExit,
+                ) {
+                    val shownDown = if (down.isNotEmpty()) down else lastDown
+                    if (shownDown.isNotEmpty()) {
+                        LinkBanner(shownDown) { node -> act { mesh.relink(node) } }
                     }
-                    FilterChip(
-                        filter == f, { filter = f }, { Text(label) },
-                        trailingIcon = if (count == 0) null else ({
-                            Text("$count", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
-                                color = if (f == Filter.NeedsYou) StatusColors.Approval else StatusColors.Working)
-                        }),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        ),
-                    )
+                }
+                if (sessions.isNotEmpty()) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        for (f in Filter.entries) {
+                            val (label, count) = when (f) {
+                                Filter.All -> stringResource(R.string.filter_all) to 0
+                                Filter.NeedsYou -> stringResource(R.string.filter_needs_you) to tray.size
+                                Filter.Working -> stringResource(R.string.filter_working) to working
+                            }
+                            AnimatedFilterChip(
+                                selected = filter == f,
+                                label = label,
+                                count = count,
+                                accent = if (f == Filter.NeedsYou) StatusColors.Approval else StatusColors.Working,
+                                pulsing = count > 0 && f != Filter.All,
+                                onClick = { filter = f },
+                            )
+                        }
+                    }
                 }
             }
         }
         // What waits for you, from every space, answerable here.
-        if (filter != Filter.Working && tray.isNotEmpty()) {
-            item(key = "tray") {
-                FoldHeading(
-                    stringResource(R.string.needs_you), tray.size, trayOpen, Modifier.animateItem(), color = StatusColors.Approval,
-                ) {
-                    trayOpen = !trayOpen
-                    prefs.edit { putBoolean("trayFolded", !trayOpen) }
-                }
-            }
-            if (trayOpen) {
-                val cap = if (trayAll || filter == Filter.NeedsYou) tray.size else TRAY_CAP
-                val list = tray.take(cap)
-                itemsIndexed(list, key = { _, s -> "w:" + s.id }) { i, s ->
-                    val p = items.projectOf(s.id)
-                    Column(Modifier.animateItem().padding(horizontal = 16.dp).clip(groupShape(i, list.size))
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-                        if (i > 0) HorizontalDivider(Modifier.padding(start = 62.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                        AttentionRow(mesh, nodes, s, p, now, onOpen = { if (p != null) onProject(p, s.id) })
-                    }
-                }
-                if (tray.size > cap) item(key = "tray-more") {
-                    TextButton(onClick = { trayAll = true }, modifier = Modifier.padding(start = 8.dp).animateItem()) {
-                        Text(stringResource(R.string.show_all_n, tray.size))
+        item(key = "tray-section") {
+            val showTray = filter != Filter.Working && tray.isNotEmpty()
+            AnimatedVisibility(
+                visible = showTray,
+                enter = MakoMotion.cardEnter,
+                exit = MakoMotion.cardExit,
+            ) {
+                val visibleTray = if (tray.isNotEmpty()) tray else lastTray
+                if (visibleTray.isNotEmpty()) {
+                    Column(Modifier.fillMaxWidth()) {
+                        FoldHeading(
+                            stringResource(R.string.needs_you),
+                            visibleTray.size,
+                            trayOpen,
+                            color = StatusColors.Approval,
+                            pulsing = true,
+                        ) {
+                            trayOpen = !trayOpen
+                            prefs.edit { putBoolean("trayFolded", !trayOpen) }
+                        }
+                        AnimatedVisibility(
+                            visible = trayOpen,
+                            enter = MakoMotion.cardEnter,
+                            exit = MakoMotion.cardExit,
+                        ) {
+                            val cap = if (trayAll || filter == Filter.NeedsYou) visibleTray.size else TRAY_CAP
+                            val list = visibleTray.take(cap)
+                            Column(Modifier.fillMaxWidth()) {
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    border = MakoColors.cardBorderStroke,
+                                    modifier = Modifier
+                                        .padding(horizontal = 16.dp)
+                                        .fillMaxWidth()
+                                        .animateContentSize(animationSpec = MakoMotion.GentleIntSizeSpring),
+                                ) {
+                                    Column {
+                                        list.forEachIndexed { i, s ->
+                                            key(s.id) {
+                                                val p = items.projectOf(s.id)
+                                                if (i > 0) HorizontalDivider(Modifier.padding(start = 62.dp), color = subtleDivider)
+                                                AttentionRow(mesh, nodes, s, p, now, onOpen = { if (p != null) onProject(p, s.id) })
+                                            }
+                                        }
+                                    }
+                                }
+                                if (visibleTray.size > cap) {
+                                    TextButton(
+                                        onClick = { trayAll = true },
+                                        modifier = Modifier.padding(start = 12.dp, top = 2.dp),
+                                    ) {
+                                        Text(stringResource(R.string.show_all_n, visibleTray.size))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
         if (filter == Filter.All && pinnedSessions.isNotEmpty()) {
-            item(key = "pinned-sessions") { Label(stringResource(R.string.pinned_sessions), Modifier.animateItem()) }
+            item(key = "pinned-sessions") {
+                Label(
+                    stringResource(R.string.pinned_sessions),
+                    Modifier.animateItem(
+                        fadeInSpec = MakoMotion.standardTween(),
+                        placementSpec = MakoMotion.SnappyIntOffsetSpring,
+                        fadeOutSpec = MakoMotion.fastTween(),
+                    ),
+                )
+            }
             itemsIndexed(pinnedSessions, key = { _, s -> "ps:" + s.id }) { i, s ->
                 val p = items.projectOf(s.id)
-                Column(Modifier.animateItem().padding(horizontal = 16.dp).clip(groupShape(i, pinnedSessions.size))
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-                    if (i > 0) HorizontalDivider(Modifier.padding(start = 68.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                val shape = groupShape(i, pinnedSessions.size)
+                Column(
+                    Modifier
+                        .animateItem(
+                            fadeInSpec = MakoMotion.standardTween(),
+                            placementSpec = MakoMotion.SnappyIntOffsetSpring,
+                            fadeOutSpec = MakoMotion.fastTween(),
+                        )
+                        .padding(horizontal = 16.dp)
+                        .clip(shape)
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .groupedCardBorder(i, pinnedSessions.size, cardBorder),
+                ) {
+                    if (i > 0) HorizontalDivider(Modifier.padding(start = 68.dp), color = subtleDivider)
                     PinnedSessionRow(mesh, nodes, s, p, now,
                         onClick = { if (p != null) onProject(p, s.id) },
                         onUnpin = { act { mesh.pinSession(s, false) } }.takeIf { workspaceEditable })
@@ -423,13 +508,31 @@ private fun ProjectList(
         for ((label, list) in listOf(pinnedLabel to pinned, R.string.projects to rest)) {
             if (list.isEmpty()) continue
             item(key = "h:$label") {
-                Label(stringResource(label), Modifier.animateItem(),
-                    count = if (label == R.string.projects && list.size > 1) list.size else null)
+                Label(
+                    stringResource(label),
+                    Modifier.animateItem(
+                        fadeInSpec = MakoMotion.standardTween(),
+                        placementSpec = MakoMotion.SnappyIntOffsetSpring,
+                        fadeOutSpec = MakoMotion.fastTween(),
+                    ),
+                    count = if (label == R.string.projects && list.size > 1) list.size else null,
+                )
             }
             itemsIndexed(list, key = { _, p -> "p:" + p.key }) { i, p ->
-                Column(Modifier.animateItem().padding(horizontal = 16.dp).clip(groupShape(i, list.size))
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-                    if (i > 0) HorizontalDivider(Modifier.padding(start = 70.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                val shape = groupShape(i, list.size)
+                Column(
+                    Modifier
+                        .animateItem(
+                            fadeInSpec = MakoMotion.standardTween(),
+                            placementSpec = MakoMotion.SnappyIntOffsetSpring,
+                            fadeOutSpec = MakoMotion.fastTween(),
+                        )
+                        .padding(horizontal = 16.dp)
+                        .clip(shape)
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .groupedCardBorder(i, list.size, cardBorder),
+                ) {
+                    if (i > 0) HorizontalDivider(Modifier.padding(start = 70.dp), color = subtleDivider)
                     ProjectRow(
                         mesh, p, now, manyNodes,
                         onClick = { onProject(p, null) },
@@ -451,19 +554,40 @@ private fun ProjectList(
                 action = if (all && onNew != null) stringResource(R.string.new_session) else null,
                 onAction = { onNew?.invoke(null) },
                 icon = Icons.Outlined.Inbox,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 56.dp),
+                modifier = Modifier
+                    .animateItem(
+                        fadeInSpec = MakoMotion.standardTween(),
+                        placementSpec = MakoMotion.SnappyIntOffsetSpring,
+                        fadeOutSpec = MakoMotion.fastTween(),
+                    )
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp, vertical = 56.dp),
             )
         }
         // The computer's panels, for those beside no project in view.
         // A computer that lists its panels and has none offers none; an older one is offered, as it cannot say.
         val anyPanels = panelTitles == null || homePanels.panels.isNotEmpty()
         if (onPanels != null && panelsNode != null && mesh.showsBlocks(panelsNode) && anyPanels && filter == Filter.All) item(key = "panels") {
-            Column(Modifier.animateItem().padding(top = 8.dp)) {
+            val panelsInteraction = remember { MutableInteractionSource() }
+            Column(
+                Modifier
+                    .animateItem(
+                        fadeInSpec = MakoMotion.standardTween(),
+                        placementSpec = MakoMotion.SnappyIntOffsetSpring,
+                        fadeOutSpec = MakoMotion.fastTween(),
+                    )
+                    .padding(top = 8.dp),
+            ) {
                 Surface(
                     onClick = { onPanels(panelsNode) },
+                    interactionSource = panelsInteraction,
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
+                    border = MakoColors.cardBorderStroke,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .fillMaxWidth()
+                        .pressScale(interactionSource = panelsInteraction),
                 ) {
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Dashboard, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -484,6 +608,65 @@ private fun ProjectList(
     }
 }
 
+@Composable
+private fun AnimatedFilterChip(
+    selected: Boolean,
+    label: String,
+    count: Int,
+    accent: Color,
+    pulsing: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val containerColor by animateColorAsState(
+        targetValue = if (selected) colors.secondaryContainer else colors.surfaceContainerLow,
+        animationSpec = MakoMotion.fastTween(),
+        label = "chipContainer",
+    )
+    val labelColor by animateColorAsState(
+        targetValue = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant,
+        animationSpec = MakoMotion.fastTween(),
+        label = "chipLabel",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) colors.outline.copy(alpha = 0.55f) else MakoColors.cardBorder,
+        animationSpec = MakoMotion.fastTween(),
+        label = "chipBorder",
+    )
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = {
+            Text(
+                label,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            )
+        },
+        trailingIcon = if (count == 0) null else ({
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (pulsing) {
+                    PulsingStatusDot(accent, active = true, size = 6.dp)
+                    Spacer(Modifier.width(5.dp))
+                }
+                Text(
+                    "$count",
+                    style = MaterialTheme.typography.labelMedium.tabular(),
+                    fontWeight = FontWeight.SemiBold,
+                    color = accent,
+                )
+            }
+        }),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(MakoColors.hairlineWidth, borderColor),
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = containerColor,
+            selectedContainerColor = containerColor,
+            labelColor = labelColor,
+            selectedLabelColor = labelColor,
+        ),
+    )
+}
+
 /**
  * Whether n is a computer this device cannot reach now: one that could run
  * sessions, not another phone the computers know, whose link is down.
@@ -500,27 +683,49 @@ private const val TRAY_CAP = 3
 private fun Label(text: String, modifier: Modifier = Modifier, count: Int? = null) {
     Row(modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         SectionLabel(text, Modifier.weight(1f))
-        if (count != null) Text("$count", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (count != null) {
+            Text(
+                "$count",
+                style = MaterialTheme.typography.labelMedium.tabular(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
 /** A heading that folds what is under it away when tapped, and says whether it has. */
 @Composable
-internal fun FoldHeading(text: String, count: Int, open: Boolean, modifier: Modifier = Modifier, color: Color? = null, onToggle: () -> Unit) {
+internal fun FoldHeading(
+    text: String,
+    count: Int,
+    open: Boolean,
+    modifier: Modifier = Modifier,
+    color: Color? = null,
+    pulsing: Boolean = false,
+    onToggle: () -> Unit,
+) {
     val state = stringResource(if (open) R.string.expanded else R.string.collapsed)
-    val turn by animateFloatAsState(if (open) 0f else -90f, label = "fold")
+    val turn by animateFloatAsState(
+        targetValue = if (open) 0f else -90f,
+        animationSpec = MakoMotion.SnappySpring,
+        label = "fold",
+    )
     Row(
         modifier.fillMaxWidth().semantics { stateDescription = state }.clickable(role = Role.Button, onClick = onToggle)
             .padding(start = 20.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (color != null) {
-            Dot(color, size = 8.dp)
+            PulsingStatusDot(color, active = pulsing, size = 8.dp)
             Spacer(Modifier.width(8.dp))
         }
         SectionLabel(text)
         Spacer(Modifier.width(6.dp))
-        Text("$count", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            "$count",
+            style = MaterialTheme.typography.labelLarge.tabular(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Spacer(Modifier.weight(1f))
         Icon(Icons.Filled.KeyboardArrowDown, null, Modifier.size(20.dp).rotate(turn), tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -538,17 +743,26 @@ private fun ProjectRow(
     onClick: () -> Unit, onPin: (() -> Unit)?, onNew: (() -> Unit)?,
 ) {
     val sum = remember(p) { p.summary() }
+    val hasUnread = remember(p.sessions) { p.sessions.any { it.isUnread() } }
     var menu by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     val empty = sum.total == 0
+    val interaction = remember { MutableInteractionSource() }
     Box {
         Row(
-            Modifier.fillMaxWidth()
-                .combinedClickable(onClick = onClick, onLongClick = if (onPin != null || onNew != null) ({
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    menu = true
-                }) else null)
-                .padding(start = 12.dp, end = 16.dp, top = 10.dp, bottom = 12.dp)
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    interactionSource = interaction,
+                    indication = androidx.compose.material3.ripple(),
+                    onClick = onClick,
+                    onLongClick = if (onPin != null || onNew != null) ({
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        menu = true
+                    }) else null,
+                )
+                .pressScale(interactionSource = interaction, pressedScale = 0.99f)
+                .padding(start = 12.dp, end = 16.dp, top = 11.dp, bottom = 12.dp)
                 .alpha(if (empty) 0.6f else 1f),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -558,15 +772,38 @@ private fun ProjectRow(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            p.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            p.label,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (hasUnread || sum.needsYou > 0) FontWeight.SemiBold else FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false).sharedBounds("name:" + p.key),
                         )
-                        if (p.pinned) Icon(Icons.Outlined.PushPin, stringResource(R.string.pinned), Modifier.padding(start = 6.dp).size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (p.pinned) {
+                            Icon(
+                                Icons.Outlined.PushPin,
+                                stringResource(R.string.pinned),
+                                Modifier.padding(start = 6.dp).size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    if (hasUnread) {
+                        Spacer(Modifier.width(8.dp))
+                        Dot(
+                            color = if (sum.needsYou > 0) StatusColors.Approval else StatusColors.Unread,
+                            size = 7.dp,
+                        )
                     }
                     now // the time below follows the clock
-                    if (sum.latest > 0) Text(ago(sum.latest), style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
+                    if (sum.latest > 0) {
+                        Text(
+                            ago(sum.latest),
+                            style = MaterialTheme.typography.labelSmall.tabular(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
                 }
                 Spacer(Modifier.height(2.dp))
                 StatusLine(sum, if (manyNodes) p.nodes.map(mesh::nodeName) else emptyList())
@@ -597,17 +834,30 @@ internal fun StatusLine(sum: ProjectSummary, nodes: List<String>, modifier: Modi
     val working = if (sum.working > 0) pluralStringResource(R.plurals.n_working, sum.working, sum.working) else null
     val total = if (sum.total == 0) stringResource(R.string.no_sessions_short)
     else pluralStringResource(R.plurals.sessions_count, sum.total, sum.total)
-    Text(
-        buildAnnotatedString {
-            fun sep() { if (length > 0) append("  ·  ") }
-            if (needs != null) withStyle(SpanStyle(color = StatusColors.Approval, fontWeight = FontWeight.SemiBold)) { append(needs) }
-            if (working != null) { sep(); withStyle(SpanStyle(color = StatusColors.Working, fontWeight = FontWeight.Medium)) { append(working) } }
-            sep(); append(total)
-            if (nodes.isNotEmpty()) { sep(); append(nodes.joinToString(", ")) }
-        },
-        style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        modifier = modifier,
-    )
+    val liveColor = when {
+        sum.needsYou > 0 -> StatusColors.Approval
+        sum.working > 0 -> StatusColors.Working
+        else -> null
+    }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        if (liveColor != null) {
+            PulsingStatusDot(liveColor, active = true, size = 6.dp)
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(
+            buildAnnotatedString {
+                fun sep() { if (length > 0) append("  ·  ") }
+                if (needs != null) withStyle(SpanStyle(color = StatusColors.Approval, fontWeight = FontWeight.SemiBold)) { append(needs) }
+                if (working != null) { sep(); withStyle(SpanStyle(color = StatusColors.Working, fontWeight = FontWeight.Medium)) { append(working) } }
+                sep(); append(total)
+                if (nodes.isNotEmpty()) { sep(); append(nodes.joinToString(", ")) }
+            },
+            style = MaterialTheme.typography.bodySmall.tabular(),
+            color = muted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 /** PinnedSessionRow is a session pinned to the top of home, opening its project at it. */
@@ -618,25 +868,56 @@ private fun PinnedSessionRow(
 ) {
     var menu by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
+    val interaction = remember { MutableInteractionSource() }
+    val unread = s.isUnread()
     Box {
         Row(
-            Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onUnpin?.let { {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                menu = true
-            } }).padding(horizontal = 14.dp, vertical = 12.dp),
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    interactionSource = interaction,
+                    indication = androidx.compose.material3.ripple(),
+                    onClick = onClick,
+                    onLongClick = onUnpin?.let {
+                        {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            menu = true
+                        }
+                    },
+                )
+                .pressScale(interactionSource = interaction, pressedScale = 0.99f)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AgentAvatar(s.agent, agentColor(nodes, s.nodeId, s.agent), s.statusColor().takeIf { !s.ended() }, size = 36.dp)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(s.label(), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        s.label(),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (unread) {
+                        Spacer(Modifier.width(6.dp))
+                        Dot(if (s.needsYou()) StatusColors.Approval else StatusColors.Unread, size = 6.5.dp)
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (p != null) {
                         LookGlyph(p.look, size = 12.dp)
                         Spacer(Modifier.width(4.dp))
                     }
-                    Text(dotted(p?.label, s.agent.takeUnless { s.label().equals(it, true) }), style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        dotted(p?.label, s.agent.takeUnless { s.label().equals(it, true) }),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
             Spacer(Modifier.width(8.dp))
@@ -653,10 +934,28 @@ private fun PinnedSessionRow(
 /** A session's status as a word in its colour; an idle one says when it last did anything instead. */
 @Composable
 internal fun StatusText(s: SessionInfo) {
-    if (s.hasApproval() || s.ended() || s.status in setOf("working", "waiting", "done")) Text(
-        s.statusText(), style = MaterialTheme.typography.labelMedium, color = s.statusColor(),
-        fontWeight = if (s.working() || s.needsYou()) FontWeight.SemiBold else FontWeight.Normal,
-    ) else Text(ago(s.lastActive()), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (s.hasApproval() || s.ended() || s.status in setOf("working", "waiting", "done")) {
+        val active = s.hasActivePulse()
+        val tone = s.statusColor()
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (active) {
+                PulsingStatusDot(tone, active = true, size = 6.dp)
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                s.statusText(),
+                style = MaterialTheme.typography.labelMedium,
+                color = tone,
+                fontWeight = if (s.working() || s.needsYou()) FontWeight.SemiBold else FontWeight.Normal,
+            )
+        }
+    } else {
+        Text(
+            ago(s.lastActive()),
+            style = MaterialTheme.typography.labelSmall.tabular(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 /**
@@ -669,16 +968,47 @@ private fun AttentionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, p: Proje
     val act = actor()
     val tone = s.statusColor()
     val approves = s.hasApproval() && !s.asks() && !s.plans()
-    Column(Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)) {
+    val unread = s.isUnread()
+    val interaction = remember { MutableInteractionSource() }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = interaction,
+                indication = androidx.compose.material3.ripple(),
+                onClick = onOpen,
+            )
+            .pressScale(interactionSource = interaction, pressedScale = 0.99f)
+            .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             AgentAvatar(s.agent, agentColor(nodes, s.nodeId, s.agent), tone, size = 36.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(s.label(), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(s.waitText(), style = MaterialTheme.typography.labelMedium, color = tone, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 8.dp))
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            s.label(),
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (unread) {
+                            Spacer(Modifier.width(6.dp))
+                            Dot(tone, size = 6.5.dp)
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    PulsingStatusDot(tone, active = true, size = 6.5.dp)
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        s.waitText(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = tone,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (p != null) {
@@ -686,9 +1016,13 @@ private fun AttentionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, p: Proje
                         Spacer(Modifier.width(4.dp))
                     }
                     now
-                    Text(dotted(p?.label ?: baseName(s.project), ago(s.waitingSince())),
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        dotted(p?.label ?: baseName(s.project), ago(s.waitingSince())),
+                        style = MaterialTheme.typography.bodySmall.tabular(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
@@ -700,8 +1034,12 @@ private fun AttentionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, p: Proje
         if (ask.isNotEmpty()) Text(ask, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 48.dp, top = 6.dp))
         if (approves) {
-            Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.padding(start = 48.dp, top = 8.dp).fillMaxWidth()) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(10.dp),
+                border = MakoColors.cardBorderStroke,
+                modifier = Modifier.padding(start = 48.dp, top = 8.dp).fillMaxWidth(),
+            ) {
                 Text(
                     dotted(s.approval.tool, s.approval.detail.lineSequence().firstOrNull().orEmpty()),
                     style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -734,7 +1072,9 @@ internal fun SessionInfo.waitText(): String = when {
 @Composable
 private fun LinkBanner(down: List<Node>, modifier: Modifier = Modifier, onRetry: (String) -> Unit) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(16.dp),
+        border = MakoColors.cardBorderStroke,
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -761,6 +1101,11 @@ private fun LinkBanner(down: List<Node>, modifier: Modifier = Modifier, onRetry:
 @Composable
 private fun SpaceSwitcher(view: WorkspaceView, current: Int, onChoose: (Int) -> Unit) {
     var open by remember { mutableStateOf(false) }
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (open) 180f else 0f,
+        animationSpec = MakoMotion.SnappySpring,
+        label = "spaceChevron",
+    )
     @Composable
     fun name(i: Int): String {
         val sp = view.spaces.getOrNull(i - 1)
@@ -786,7 +1131,7 @@ private fun SpaceSwitcher(view: WorkspaceView, current: Int, onChoose: (Int) -> 
                 Spacer(Modifier.width(10.dp))
             }
             Text(label, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Icon(Icons.Filled.ArrowDropDown, null)
+            Icon(Icons.Filled.ArrowDropDown, null, Modifier.rotate(chevronRotation))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             for (i in view.firstSpace()..view.spaces.size) {

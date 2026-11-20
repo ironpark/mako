@@ -1,12 +1,20 @@
 package dev.ironpark.mako.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 // The app's colours are the desktop's: neutral greys, a near-black or
 // near-white for what acts, and no tint of the wallpaper's, so that the
@@ -57,10 +65,117 @@ private val Dark: ColorScheme = darkColorScheme(
     scrim = Color(0xFF000000),
 )
 
+private val BaseTypography = Typography()
+
+/**
+ * Mako's tuned typography: tighter tracking on titles and crisp label
+ * hierarchy matching the desktop workspace's quiet precision.
+ */
+val MakoTypography: Typography = BaseTypography.copy(
+    headlineSmall = BaseTypography.headlineSmall.copy(
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = (-0.35).sp,
+    ),
+    titleLarge = BaseTypography.titleLarge.copy(
+        fontSize = 21.sp,
+        lineHeight = 27.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = (-0.3).sp,
+    ),
+    titleMedium = BaseTypography.titleMedium.copy(
+        fontSize = 16.sp,
+        lineHeight = 22.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = (-0.2).sp,
+    ),
+    titleSmall = BaseTypography.titleSmall.copy(
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = (-0.1).sp,
+    ),
+    bodyLarge = BaseTypography.bodyLarge.copy(
+        fontSize = 15.5.sp,
+        lineHeight = 22.sp,
+        letterSpacing = 0.sp,
+    ),
+    bodyMedium = BaseTypography.bodyMedium.copy(
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.sp,
+    ),
+    bodySmall = BaseTypography.bodySmall.copy(
+        fontSize = 12.5.sp,
+        lineHeight = 17.sp,
+        letterSpacing = 0.1.sp,
+    ),
+    labelLarge = BaseTypography.labelLarge.copy(
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = 0.05.sp,
+    ),
+    labelMedium = BaseTypography.labelMedium.copy(
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = 0.15.sp,
+    ),
+    labelSmall = BaseTypography.labelSmall.copy(
+        fontSize = 11.sp,
+        lineHeight = 14.sp,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = 0.2.sp,
+    ),
+)
+
+/** Enables tabular (monospaced) digits so live counts, percentages, and timers never jitter horizontally. */
+fun TextStyle.tabular(): TextStyle = copy(fontFeatureSettings = "tnum")
+
 /** MakoTheme is Material's, in the desktop's greys, light or dark as the phone is. */
 @Composable
 fun MakoTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) Dark else Light, content = content)
+    MaterialTheme(
+        colorScheme = if (isSystemInDarkTheme()) Dark else Light,
+        typography = MakoTypography,
+        content = content,
+    )
+}
+
+/**
+ * Semantic neutral surface and hairline border helpers that adapt cleanly
+ * between light and dark modes while preserving Mako's monochrome palette.
+ */
+object MakoColors {
+    val hairlineWidth: Dp = 1.dp
+
+    /** Subtle 1dp hairline outline for cards, pills, and grouped containers. */
+    val cardBorder: Color
+        @Composable @ReadOnlyComposable
+        get() = MaterialTheme.colorScheme.outlineVariant.copy(
+            alpha = if (isSystemInDarkTheme()) 0.72f else 0.85f,
+        )
+
+    /** Soft interior divider between rows inside a grouped card. */
+    val subtleDivider: Color
+        @Composable @ReadOnlyComposable
+        get() = MaterialTheme.colorScheme.outlineVariant.copy(
+            alpha = if (isSystemInDarkTheme()) 0.55f else 0.7f,
+        )
+
+    /** Slightly lifted neutral card surface for banners, sheets, and highlighted blocks. */
+    val elevatedCard: Color
+        @Composable @ReadOnlyComposable
+        get() = if (isSystemInDarkTheme()) {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLowest
+        }
+
+    /** Ready-to-use 1dp hairline [BorderStroke] for cards and surfaces. */
+    val cardBorderStroke: BorderStroke
+        @Composable @ReadOnlyComposable
+        get() = BorderStroke(hairlineWidth, cardBorder)
 }
 
 /** The colours of a session's status, as the desktop's window shows them. */
@@ -70,4 +185,7 @@ object StatusColors {
     val Done = Color(0xFF22C55E)
     val Idle = Color(0xFF9CA3AF)
     val Approval = Color(0xFFEF4444)
+    val Compacting = Color(0xFF8B5CF6)
+    val Muted = Color(0xFF71717A)
+    val Unread = Color(0xFF3B82F6)
 }
