@@ -108,7 +108,7 @@ class MeshService : Service() {
             val s = change.session
             val kind = change.kind
             if (kind == null || !options.allows(kind, foreground)) nm.cancel(s.id, AGENT_NOTICE_ID)
-            else notify(nm, s.id, AGENT_NOTICE_ID, if (kind == NoticeKind.Approval) approvalNotice(s) else turnNotice(s))
+            else notify(nm, AGENT_NOTICE_ID, if (kind == NoticeKind.Approval) approvalNotice(s) else turnNotice(s), tag = s.id)
         }
         // Applying a setting also removes an alert that was already visible.
         for (s in sessions) {
@@ -117,17 +117,14 @@ class MeshService : Service() {
         }
     }
 
-    private fun notify(nm: NotificationManagerCompat, id: Int, n: Notification) {
-        if (canPostNotifications()) nm.notify(id, n)
+    private fun notify(nm: NotificationManagerCompat, id: Int, n: Notification, tag: String? = null) {
+        if (Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            if (tag != null) nm.notify(tag, id, n) else nm.notify(id, n)
+        }
     }
-
-    private fun notify(nm: NotificationManagerCompat, tag: String, id: Int, n: Notification) {
-        if (canPostNotifications()) nm.notify(tag, id, n)
-    }
-
-    private fun canPostNotifications(): Boolean = Build.VERSION.SDK_INT < 33 ||
-        ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) ==
-        android.content.pm.PackageManager.PERMISSION_GRANTED
 
     /**
      * The approval asked for: allowed or denied from the notice, or, for
