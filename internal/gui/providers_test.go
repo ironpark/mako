@@ -24,8 +24,8 @@ func TestProviderSettingsRendersAllFourProviders(t *testing.T) {
 		Providers: []*protocol.ProviderInfo{
 			{Id: decision.ProviderOpenRouter, Set: true, DefaultModel: "typesafe/jev-latest"},
 			{Id: decision.ProviderTypeSafe, EnvSet: true, DefaultModel: "jev-latest"},
-			{Id: decision.ProviderOpenAI, DefaultModel: "gpt-4.1-mini"},
-			{Id: decision.ProviderGoogle, DefaultModel: "gemini-2.5-flash"},
+			{Id: decision.ProviderOpenAI, DefaultModel: "gpt-6-luna"},
+			{Id: decision.ProviderGoogle, DefaultModel: "gemini-decision-1"},
 		},
 	})
 	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Scroll(providerSettings(m)) }, ggui.Sz(900, 1000))
@@ -33,7 +33,7 @@ func TestProviderSettingsRendersAllFourProviders(t *testing.T) {
 	p.Frame()
 
 	sem := p.Semantics().String()
-	for _, want := range []string{"OpenRouter", "TypeSafe AI", "OpenAI", "Google AI Studio", "OPENROUTER_API_KEY", "TYPESAFE_API_KEY"} {
+	for _, want := range []string{"OpenRouter", "TypeSafe AI", "OpenAI", "Google AI Studio", "OPENROUTER_API_KEY", "TYPESAFE_API_KEY", "gpt-6-luna", "gemini-decision-1"} {
 		if !strings.Contains(sem, want) {
 			t.Fatalf("missing %q in provider settings:\n%s", want, sem)
 		}

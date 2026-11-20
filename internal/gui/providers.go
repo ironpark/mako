@@ -172,7 +172,7 @@ func decisionDefaultsCard(m *model, info *protocol.Providers) ggui.Widget {
 		if def := decision.DefaultModels[id]; def != "" {
 			return def
 		}
-		return "jev-latest / gpt-4.1-mini / gemini-2.5-flash"
+		return "jev-latest / gpt-6-luna / gemini-decision-1"
 	})
 
 	modelField := ggui.View(placeholder, func(ph string) ggui.Widget {

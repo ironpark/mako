@@ -63,7 +63,20 @@ func isOpenRouterDecisionModel(model string) bool {
 	if m == "typesafe/jev-router" {
 		return false
 	}
-	return strings.HasPrefix(m, "typesafe/") || strings.HasPrefix(m, "cloudflare/clef")
+	return strings.HasPrefix(m, "typesafe/") ||
+		strings.HasPrefix(m, "cloudflare/clef") ||
+		strings.HasPrefix(m, "google/gemini-decision") ||
+		strings.HasPrefix(m, "openai/gpt-6-luna")
+}
+
+func isOpenAIDecisionModel(model string) bool {
+	m := strings.ToLower(strings.TrimSpace(model))
+	return strings.HasPrefix(m, "gpt-6-luna") || strings.Contains(m, "decision")
+}
+
+func isGoogleDecisionModel(model string) bool {
+	m := strings.ToLower(strings.TrimSpace(model))
+	return strings.HasPrefix(m, "gemini-decision")
 }
 
 func (s *Store) callOpenRouter(ctx context.Context, apiKey, model string, state any, questions []normQuestion) (map[string]Answer, error) {
@@ -261,8 +274,198 @@ func (s *Store) callOpenAICompat(ctx context.Context, endpoint, apiKey, model st
 	return parseGenerativeAnswers([]byte(rawJSON), questions)
 }
 
+func (s *Store) callOpenAI(ctx context.Context, apiKey, model string, state any, questions []normQuestion) (map[string]Answer, error) {
+	base := strings.TrimRight(s.Endpoints.OpenAI, "/")
+	if isOpenAIDecisionModel(model) {
+		return s.callOpenAIDecisions(ctx, base+"/v1/decisions", apiKey, model, state, questions)
+	}
+	return s.callOpenAICompat(ctx, base+"/v1/chat/completions", apiKey, model, state, questions)
+}
+
+func (s *Store) callOpenAIDecisions(ctx context.Context, endpoint, apiKey, model string, state any, questions []normQuestion) (map[string]Answer, error) {
+	qs := make([]map[string]any, 0, len(questions))
+	for _, q := range questions {
+		entry := map[string]any{
+			"name":         q.Key,
+			"instructions": q.Instructions,
+		}
+		switch q.Kind {
+		case "noul":
+			entry["type"] = "predicate"
+			if len(q.CriteriaMap) > 0 {
+				var notes []string
+				if t := strings.TrimSpace(q.CriteriaMap["true"]); t != "" {
+					notes = append(notes, "true: "+t)
+				}
+				if f := strings.TrimSpace(q.CriteriaMap["false"]); f != "" {
+					notes = append(notes, "false: "+f)
+				}
+				if len(notes) > 0 {
+					entry["instructions"] = q.Instructions + " (" + strings.Join(notes, "; ") + ")"
+				}
+			}
+		case "choice":
+			entry["type"] = "choice"
+			choices := make([]map[string]string, 0, len(q.Options))
+			for _, opt := range q.Options {
+				c := map[string]string{"value": opt}
+				if desc := strings.TrimSpace(q.CriteriaMap[opt]); desc != "" {
+					c["description"] = desc
+				}
+				choices = append(choices, c)
+			}
+			entry["choices"] = choices
+		case "score":
+			entry["type"] = "score"
+			levels := make([]map[string]string, 0, len(q.Levels))
+			for i, lvl := range q.Levels {
+				levels = append(levels, map[string]string{
+					"value":       strconv.Itoa(i),
+					"description": lvl,
+				})
+			}
+			entry["levels"] = levels
+		}
+		qs = append(qs, entry)
+	}
+	payload := map[string]any{
+		"model":     model,
+		"input":     decisionInputText(state),
+		"questions": qs,
+	}
+	body, err := s.postJSON(ctx, endpoint, map[string]string{
+		"Authorization": "Bearer " + apiKey,
+	}, payload)
+	if err != nil {
+		return nil, fmt.Errorf("openai: %w", err)
+	}
+	return parseOpenAIDecisionAnswers(body, questions)
+}
+
+func decisionInputText(state any) string {
+	switch v := state.(type) {
+	case string:
+		return v
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprint(v)
+		}
+		return string(b)
+	}
+}
+
+func parseOpenAIDecisionAnswers(body []byte, questions []normQuestion) (map[string]Answer, error) {
+	var env struct {
+		Answers json.RawMessage `json:"answers"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil {
+		return nil, fmt.Errorf("openai: invalid decision response JSON: %w", err)
+	}
+	trimmed := bytes.TrimSpace(env.Answers)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return nil, fmt.Errorf("openai: decision API returned no answers: %s", agent.Clip(string(body), 200))
+	}
+	if trimmed[0] == '{' {
+		return parseSystemOneAnswers(body, questions)
+	}
+	var list []struct {
+		Name          string          `json:"name"`
+		Type          string          `json:"type"`
+		Value         string          `json:"value"`
+		Choice        string          `json:"choice"`
+		Score         *float64        `json:"score"`
+		Legend        string          `json:"legend"`
+		Noul          *float64        `json:"noul"`
+		Probability   *float64        `json:"probability"`
+		Confidence    *float64        `json:"confidence"`
+		Probabilities json.RawMessage `json:"probabilities"`
+		Message       string          `json:"message"`
+		Reason        string          `json:"reason"`
+	}
+	if err := json.Unmarshal(trimmed, &list); err != nil {
+		return nil, fmt.Errorf("openai: invalid answers array: %w", err)
+	}
+	byName := make(map[string]int, len(list))
+	for i, item := range list {
+		byName[item.Name] = i
+	}
+	out := make(map[string]Answer, len(questions))
+	for _, q := range questions {
+		idx, ok := byName[q.Key]
+		if !ok {
+			return nil, fmt.Errorf("openai: decision API omitted answer for %q", q.Key)
+		}
+		item := list[idx]
+		if item.Type == "refusal" {
+			out[q.Key] = Answer{
+				Type:    "refusal",
+				Refusal: cmp.Or(item.Message, item.Reason, "refused"),
+			}
+			continue
+		}
+		ans := Answer{
+			Type:       q.Kind,
+			Confidence: item.Confidence,
+		}
+		switch q.Kind {
+		case "choice":
+			choice := cmp.Or(item.Value, item.Choice)
+			ans.Choice = choice
+			ans.Value = choice
+			ans.Probabilities = parseChoiceProbabilities(item.Probabilities)
+		case "score":
+			ans.Score = item.Score
+			if item.Score != nil {
+				lvl := clampLevel(int(math.Round(*item.Score)), len(q.Levels))
+				ans.Level = &lvl
+				ans.Label = cmp.Or(strings.TrimSpace(item.Legend), q.Levels[lvl])
+				ans.Value = *item.Score
+			} else {
+				ans.Label = strings.TrimSpace(item.Legend)
+			}
+			ans.Probabilities = parseScoreProbabilities(item.Probabilities)
+			if ans.Probabilities == nil {
+				ans.Probabilities = parseChoiceProbabilities(item.Probabilities)
+			}
+		case "noul":
+			p := item.Probability
+			if p == nil {
+				p = item.Noul
+			}
+			if p != nil {
+				clamped := clamp01(*p)
+				yes := clamped >= 0.5
+				ans.Probability = &clamped
+				ans.Yes = &yes
+				ans.Value = yes
+			}
+		}
+		out[q.Key] = ans
+	}
+	return out, nil
+}
+
 func (s *Store) callGoogle(ctx context.Context, apiKey, model string, state any, questions []normQuestion) (map[string]Answer, error) {
 	base := strings.TrimRight(s.Endpoints.Google, "/")
+	if isGoogleDecisionModel(model) {
+		payload := map[string]any{
+			"model":     model,
+			"input":     decisionInputText(state),
+			"questions": buildSystemOneQuestions(questions),
+		}
+		body, err := s.postJSON(ctx, base+"/v1beta/decisions", map[string]string{
+			"x-goog-api-key": apiKey,
+		}, payload)
+		if err != nil {
+			return nil, fmt.Errorf("google: %w", err)
+		}
+		return parseSystemOneAnswers(body, questions)
+	}
+	return s.callGoogleGenerative(ctx, base, apiKey, model, state, questions)
+}
+
+func (s *Store) callGoogleGenerative(ctx context.Context, base, apiKey, model string, state any, questions []normQuestion) (map[string]Answer, error) {
 	endpoint := base + "/v1beta/models/" + url.PathEscape(model) + ":generateContent"
 	sysPrompt, userPrompt := buildGenerativePrompts(state, questions)
 	payload := map[string]any{

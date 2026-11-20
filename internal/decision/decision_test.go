@@ -151,6 +151,27 @@ func TestTypeSafeAndOpenRouterProviders(t *testing.T) {
 		t.Fatalf("openrouter decision = %+v (calls=%d)", res, orDecisionCalls)
 	}
 
+	// OpenRouter routes Google & OpenAI native decision models to /api/alpha/decisions too.
+	for _, model := range []string{"google/gemini-decision-1", "openai/gpt-6-luna"} {
+		res, err = store.EvaluateRequest(t.Context(), Request{
+			Provider:     "openrouter",
+			Model:        model,
+			State:        "Rename typo in README",
+			Type:         "choice",
+			Instructions: "Complexity",
+			Options:      []string{"fast", "deep"},
+		}, config.Decision{})
+		if err != nil {
+			t.Fatalf("%s: %v", model, err)
+		}
+		if res.Choice != "fast" {
+			t.Fatalf("%s choice = %q, want fast", model, res.Choice)
+		}
+	}
+	if orDecisionCalls != 3 {
+		t.Fatalf("openrouter decision calls = %d, want 3", orDecisionCalls)
+	}
+
 	// OpenRouter generative model routes to /api/v1/chat/completions.
 	res, err = store.EvaluateRequest(t.Context(), Request{
 		Provider:     "openrouter",
@@ -169,18 +190,40 @@ func TestTypeSafeAndOpenRouterProviders(t *testing.T) {
 }
 
 func TestOpenAIAndGoogleProviders(t *testing.T) {
+	var oaDecisionCalls, oaChatCalls int
 	oaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer oa-key" {
-			http.Error(w, "bad request", http.StatusBadRequest)
+		if r.Header.Get("Authorization") != "Bearer oa-key" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"decision\":{\"yes\":true,\"probability\":0.87}}"}}]}`))
+		switch r.URL.Path {
+		case "/v1/decisions":
+			oaDecisionCalls++
+			var req map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req["model"] != "gpt-6-luna" {
+				http.Error(w, "bad decision request", http.StatusBadRequest)
+				return
+			}
+			_, _ = w.Write([]byte(`{
+				"id": "dec_1",
+				"model": "gpt-6-luna",
+				"answers": [
+					{"name": "decision", "type": "predicate", "probability": 0.94, "confidence": 0.94}
+				]
+			}`))
+		case "/v1/chat/completions":
+			oaChatCalls++
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"decision\":{\"yes\":true,\"probability\":0.87}}"}}]}`))
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	defer oaSrv.Close()
 
+	var gemDecisionCalls, gemGenCalls int
 	gemSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1beta/models/gemini-2.5-flash:generateContent" || r.URL.RawQuery != "" || r.Header.Get("x-goog-api-key") != "gem-key" {
-			http.Error(w, "bad google request: "+r.URL.String(), http.StatusBadRequest)
+		if r.URL.RawQuery != "" || r.Header.Get("x-goog-api-key") != "gem-key" {
+			http.Error(w, "bad google headers/query: "+r.URL.String(), http.StatusBadRequest)
 			return
 		}
 		body, _ := io.ReadAll(r.Body)
@@ -188,7 +231,25 @@ func TestOpenAIAndGoogleProviders(t *testing.T) {
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
-		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"{\"decision\":{\"level\":1,\"confidence\":0.9}}"}]}}]}`))
+		switch r.URL.Path {
+		case "/v1beta/decisions":
+			gemDecisionCalls++
+			var req map[string]any
+			if err := json.Unmarshal(body, &req); err != nil || req["model"] != "gemini-decision-1" {
+				http.Error(w, "bad google decision request", http.StatusBadRequest)
+				return
+			}
+			_, _ = w.Write([]byte(`{
+				"answers": {
+					"decision": {"type": "score", "score": 1.1, "probabilities": [0.1, 0.8, 0.1], "confidence": 0.88}
+				}
+			}`))
+		case "/v1beta/models/gemini-2.5-flash:generateContent":
+			gemGenCalls++
+			_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"{\"decision\":{\"level\":1,\"confidence\":0.9}}"}]}}]}`))
+		default:
+			http.Error(w, "unexpected google path: "+r.URL.Path, http.StatusNotFound)
+		}
 	}))
 	defer gemSrv.Close()
 
@@ -198,6 +259,7 @@ func TestOpenAIAndGoogleProviders(t *testing.T) {
 	_ = store.Vault.Set(ProviderOpenAI, "oa-key")
 	_ = store.Vault.Set(ProviderGoogle, "gem-key")
 
+	// OpenAI default uses dedicated decision model gpt-6-luna via /v1/decisions.
 	res, err := store.EvaluateRequest(t.Context(), Request{
 		Provider:     "openai",
 		State:        "Added panic recovery",
@@ -207,10 +269,26 @@ func TestOpenAIAndGoogleProviders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Yes == nil || !*res.Yes || *res.Probability != 0.87 {
-		t.Fatalf("openai = %+v", res)
+	if oaDecisionCalls != 1 || res.Model != "gpt-6-luna" || res.Yes == nil || !*res.Yes || *res.Probability != 0.94 {
+		t.Fatalf("openai decision = %+v (calls=%d)", res, oaDecisionCalls)
 	}
 
+	// OpenAI generative fallback still works when a chat model is explicitly chosen.
+	res, err = store.EvaluateRequest(t.Context(), Request{
+		Provider:     "openai",
+		Model:        "gpt-4.1-mini",
+		State:        "Added panic recovery",
+		Type:         "noul",
+		Instructions: "Is this defensive?",
+	}, config.Decision{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oaChatCalls != 1 || res.Yes == nil || !*res.Yes || *res.Probability != 0.87 {
+		t.Fatalf("openai chat fallback = %+v (calls=%d)", res, oaChatCalls)
+	}
+
+	// Google default uses dedicated decision model gemini-decision-1 via /v1beta/decisions.
 	res, err = store.EvaluateRequest(t.Context(), Request{
 		Provider:     "google-ai-studio",
 		State:        "Medium patch",
@@ -221,7 +299,23 @@ func TestOpenAIAndGoogleProviders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Level == nil || *res.Level != 1 || res.Label != "moderate" {
-		t.Fatalf("google = %+v", res)
+	if gemDecisionCalls != 1 || res.Model != "gemini-decision-1" || res.Level == nil || *res.Level != 1 || res.Label != "moderate" {
+		t.Fatalf("google decision = %+v (calls=%d)", res, gemDecisionCalls)
+	}
+
+	// Google generative fallback still works when a generative model is explicitly chosen.
+	res, err = store.EvaluateRequest(t.Context(), Request{
+		Provider:     "google-ai-studio",
+		Model:        "gemini-2.5-flash",
+		State:        "Medium patch",
+		Type:         "score",
+		Instructions: "Effort needed",
+		Levels:       []string{"trivial", "moderate", "major"},
+	}, config.Decision{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gemGenCalls != 1 || res.Level == nil || *res.Level != 1 || res.Label != "moderate" {
+		t.Fatalf("google generative fallback = %+v (calls=%d)", res, gemGenCalls)
 	}
 }

@@ -152,7 +152,7 @@ func (s *Store) EvaluateRequest(ctx context.Context, req Request, cfg config.Dec
 	case ProviderOpenRouter:
 		answers, err = s.callOpenRouter(ctx, apiKey, model, stateVal, questions)
 	case ProviderOpenAI:
-		answers, err = s.callOpenAICompat(ctx, s.Endpoints.OpenAI+"/v1/chat/completions", apiKey, model, stateVal, questions)
+		answers, err = s.callOpenAI(ctx, apiKey, model, stateVal, questions)
 	case ProviderGoogle:
 		answers, err = s.callGoogle(ctx, apiKey, model, stateVal, questions)
 	default:

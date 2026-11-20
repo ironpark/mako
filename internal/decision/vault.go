@@ -41,8 +41,8 @@ var Providers = []string{
 var DefaultModels = map[string]string{
 	ProviderTypeSafe:   "jev-latest",
 	ProviderOpenRouter: "typesafe/jev-latest",
-	ProviderOpenAI:     "gpt-4.1-mini",
-	ProviderGoogle:     "gemini-2.5-flash",
+	ProviderOpenAI:     "gpt-6-luna",
+	ProviderGoogle:     "gemini-decision-1",
 }
 
 // maxSecret bounds a key length to fit every platform keychain (Windows
