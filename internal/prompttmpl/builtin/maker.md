@@ -1,6 +1,6 @@
 ---
 description: Have the agent write a template from your description, and save it as you allow
-agents: [claude, codex, pi, omo, opencode]
+agents: [agy, claude, codex, pi, omo, opencode]
 args:
   - name: text
     type: text

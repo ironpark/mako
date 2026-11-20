@@ -78,12 +78,21 @@ func (*Agent) Tool(name string, args json.RawMessage) (string, map[string]any) {
 	case protocol.ToolWebSearch:
 		return kind, agent.Canon(map[string]any{"query": agent.Str(in, "query")})
 	case protocol.ToolTask:
-		// The first of the subagents it starts.
+		// Support both direct invoke_subagent fields (Prompt, Role, TypeName)
+		// and legacy Subagents list entries.
 		var first map[string]any
 		if subs := agent.List(in, "Subagents"); len(subs) > 0 {
 			first, _ = subs[0].(map[string]any)
 		}
-		return kind, agent.Canon(map[string]any{"description": agent.Str(in, "toolSummary"), "prompt": agent.Str(first, "Prompt"), "agent": agent.Str(first, "Role", "Name")})
+		prompt := agent.Str(in, "Prompt")
+		if prompt == "" {
+			prompt = agent.Str(first, "Prompt")
+		}
+		role := agent.Str(in, "Role", "TypeName")
+		if role == "" {
+			role = agent.Str(first, "Role", "Name")
+		}
+		return kind, agent.Canon(map[string]any{"description": agent.Str(in, "toolSummary", "Role"), "prompt": prompt, "agent": role})
 	case protocol.ToolQuestion:
 		return kind, agent.Question(in, "question", "header")
 	}

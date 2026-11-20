@@ -373,6 +373,19 @@ type availableProfile struct {
 	Description string `json:"description" jsonschema:"Specialties and guidance on when to choose this profile."`
 	Spawnable   bool   `json:"spawnable" jsonschema:"Whether this profile enables the Mako MCP tools required for spawning."`
 }
+type spawnablePreset struct {
+	Agent       string `json:"agent" jsonschema:"Agent name to pass to spawn_agent."`
+	Profile     string `json:"profile,omitempty" jsonschema:"Profile name to pass to spawn_agent; omitted for the agent's default configuration."`
+	Target      string `json:"target" jsonschema:"Target identifier: 'agent' for default or 'agent:profile' for a named profile."`
+	Description string `json:"description,omitempty" jsonschema:"Specialties and guidance on when to choose this preset."`
+	Model       string `json:"model,omitempty" jsonschema:"Configured model for this preset, if set."`
+	Effort      string `json:"effort,omitempty" jsonschema:"Configured reasoning effort for this preset, if set."`
+	Yolo        bool   `json:"yolo,omitempty" jsonschema:"Whether YOLO (auto-approve permissions) mode is enabled for this preset."`
+}
+type listAgentProfilesResult struct {
+	Presets []spawnablePreset `json:"presets" jsonschema:"Spawnable agent configurations and profile presets ready to pass to spawn_agent."`
+	Agents  []availableAgent  `json:"agents" jsonschema:"Spawnable agents grouped with their spawnable profiles."`
+}
 type listAgentsResult struct {
 	SelfID  string `json:"self_id"`
 	Project string `json:"project"`
@@ -383,8 +396,8 @@ type listAgentsResult struct {
 	Available   []availableAgent `json:"available"`
 }
 type spawnAgentArgs struct {
-	Agent   string `json:"agent,omitempty" jsonschema:"Agent to launch; defaults to this session's agent. Use list_agents for choices."`
-	Profile string `json:"profile,omitempty" jsonschema:"Exact profile name from list_agents. Choose a spawnable profile whose description fits the task, and set agent to its owning agent name. Omit for the agent's default settings."`
+	Agent   string `json:"agent,omitempty" jsonschema:"Agent to launch; defaults to this session's agent. Use list_agent_profiles for spawnable choices."`
+	Profile string `json:"profile,omitempty" jsonschema:"Exact profile name from list_agent_profiles. Choose a spawnable profile whose description fits the task, and set agent to its owning agent name. Omit for the agent's default settings."`
 	Name    string `json:"name,omitempty"`
 	Prompt  string `json:"prompt" jsonschema:"The task for the new agent. It starts in this project's directory."`
 }
@@ -412,47 +425,82 @@ type stopAgentResult struct {
 const agentMCPSigDisabled = "disabled"
 
 var agentMCPToolNames = []string{
-	"list_agents", "spawn_agent", "send_message", "read_messages", "wait_agent", "stop_agent",
+	"list_agents", "list_agent_profiles", "spawn_agent", "send_message", "read_messages", "wait_agent", "stop_agent",
 	toolListBlocks, toolGetLayout, toolSetLayout, toolPatchLayout, toolUndoLayout,
 	toolShowUI, toolUpdateUI, toolCloseUI, toolSaveTemplate,
 }
 
 type agentMCPSnapshot struct {
-	available      []availableAgent
-	blocks         []layoutdoc.Block
-	listAgentsDesc string
-	spawnAgentDesc string
-	listBlocksDesc string
-	signature      string
+	available             []availableAgent
+	presets               []spawnablePreset
+	blocks                []layoutdoc.Block
+	listAgentsDesc        string
+	listAgentProfilesDesc string
+	spawnAgentDesc        string
+	listBlocksDesc        string
+	signature             string
 }
 
 func (d *Daemon) agentMCPSnapshot() agentMCPSnapshot {
 	available := d.availableAgents()
+	presets := d.spawnablePresets()
 	blocks := d.blocks()
 	sigPayload, _ := json.Marshal(struct {
 		Available []availableAgent  `json:"available"`
+		Presets   []spawnablePreset `json:"presets"`
 		Blocks    []layoutdoc.Block `json:"blocks"`
-	}{available, blocks})
+	}{available, presets, blocks})
 	sum := sha256.Sum256(sigPayload)
 	agentSummaryText := summarizeAvailableForSchema(available)
-	listAgentsDesc := "List sessions in this project, on this node and, for a project of several folders, on other nodes, their IDs, status and messaging support, plus available agent types and profiles with descriptions and spawnable flags. Read the profile descriptions to select the best match for a task before calling spawn_agent. Only spawnable choices can receive the required Mako MCP tools."
-	spawnAgentDesc := "Start a new Mako agent session in the current project with a task. First inspect list_agents and choose a spawnable profile by its description; supply its agent and profile names. The session is visible in Mako and has its own MCP mailbox. Returns its session ID; use send_message/read_messages to coordinate."
+	listAgentsDesc := "List active and saved agent sessions in this project, on this node and, for a project of several folders, on other nodes, with their IDs, status and messaging support, plus available agent types and profiles."
+	listAgentProfilesDesc := "List only the spawnable agent configurations and profile presets available on this node, with each preset's target, description, model, effort and YOLO setting. Call this before spawn_agent to pick the best configuration for a task."
+	spawnAgentDesc := "Start a new Mako agent session in the current project with a task. First inspect list_agent_profiles and choose a spawnable preset by its description and settings; supply its agent and profile names. The session is visible in Mako and has its own MCP mailbox. Returns its session ID; use send_message/read_messages to coordinate."
 	if agentSummaryText != "" {
 		listAgentsDesc += " Current agents: " + agentSummaryText
 		spawnAgentDesc += " Current choices: " + agentSummaryText
+	}
+	if presetSummaryText := summarizePresetsForSchema(presets); presetSummaryText != "" {
+		listAgentProfilesDesc += " Current presets: " + presetSummaryText
 	}
 	listBlocksDesc := "List the blocks a window layout document can place, with each one's props as a JSON Schema: the catalog to build a document from. A document's leaves are these blocks and the panes, which hold the session tabs."
 	if blocksSummaryText := summarizeBlocksForSchema(blocks); blocksSummaryText != "" {
 		listBlocksDesc += " Current blocks: " + blocksSummaryText
 	}
 	return agentMCPSnapshot{
-		available:      available,
-		blocks:         blocks,
-		listAgentsDesc: listAgentsDesc,
-		spawnAgentDesc: spawnAgentDesc,
-		listBlocksDesc: listBlocksDesc,
-		signature:      hex.EncodeToString(sum[:8]),
+		available:             available,
+		presets:               presets,
+		blocks:                blocks,
+		listAgentsDesc:        listAgentsDesc,
+		listAgentProfilesDesc: listAgentProfilesDesc,
+		spawnAgentDesc:        spawnAgentDesc,
+		listBlocksDesc:        listBlocksDesc,
+		signature:             hex.EncodeToString(sum[:8]),
 	}
+}
+
+func summarizePresetsForSchema(presets []spawnablePreset) string {
+	var parts []string
+	for _, p := range presets {
+		var meta []string
+		if p.Model != "" {
+			meta = append(meta, "model="+p.Model)
+		}
+		if p.Effort != "" {
+			meta = append(meta, "effort="+p.Effort)
+		}
+		if p.Yolo {
+			meta = append(meta, "yolo")
+		}
+		entry := p.Target
+		if len(meta) > 0 {
+			entry += "(" + strings.Join(meta, ",") + ")"
+		}
+		if desc := strings.Join(strings.Fields(p.Description), " "); desc != "" {
+			entry += ": " + clipRunes(desc, 60)
+		}
+		parts = append(parts, entry)
+	}
+	return clipRunes(strings.Join(parts, "; "), 1200)
 }
 
 func summarizeAvailableForSchema(list []availableAgent) string {
@@ -509,7 +557,7 @@ func (d *Daemon) newProjectAgentServer(peer *agentPeer, snap agentMCPSnapshot, e
 			Tools:   &sdk.ToolCapabilities{ListChanged: true},
 		},
 		SetCacheable: func(_ context.Context, _ sdk.Request, c *sdk.Cacheable) { c.TTLMs = 0 },
-		Instructions: fmt.Sprintf("You are Mako session %s in project %s. Parent session: %s. Before delegating, use list_agents to inspect available agents and their profile descriptions. Choose a spawnable profile whose specialties match the task, then pass its owning agent name and exact profile name to spawn_agent. If no profile is needed, omit profile and use a spawnable agent default. Use send_message to communicate, with agents of this project on other nodes too, which list_agents lists with their node. A message is typed into its recipient's terminal as a new prompt, headed with its sender, once that agent waits at its prompt, so it never interrupts a turn; messages to you arrive the same way. Until then a message waits in the recipient's inbox: to wait for a reply within a turn, use read_messages and acknowledge what you processed with ack_through, or it will be typed in later as well. Report results to the parent with send_message. To wait for an agent's turn to end, use wait_agent rather than asking list_agents again and again. Of an agent you spawned that waits on the user, or exits without reporting, you hear in a Mako note, typed in as messages are. stop_agent only stops agents you spawned. The mako window's layout is a document you read with get_layout and list_blocks; set_layout, patch_layout and undo_layout change it once the user allows, and only what the user keeps stays. show_ui shows a block of UI of yours in the window, a form say, and the user's taps on it come back to you as messages from the window; update_ui and close_ui change and close it. A UI to keep is a plugin: list_blocks names the folder to write one into.", peer.id, peer.session.Info().GetProject(), peer.parent),
+		Instructions: fmt.Sprintf("You are Mako session %s in project %s. Parent session: %s. Before delegating, use list_agent_profiles to inspect spawnable agent configurations and profile presets (with descriptions, models, efforts and YOLO settings), or list_agents to inspect active project sessions. Choose a spawnable preset whose specialties match the task, then pass its agent and profile names to spawn_agent (omit profile for an agent default). Use send_message to communicate, with agents of this project on other nodes too, which list_agents lists with their node. A message is typed into its recipient's terminal as a new prompt, headed with its sender, once that agent waits at its prompt, so it never interrupts a turn; messages to you arrive the same way. Until then a message waits in the recipient's inbox: to wait for a reply within a turn, use read_messages and acknowledge what you processed with ack_through, or it will be typed in later as well. Report results to the parent with send_message. To wait for an agent's turn to end, use wait_agent rather than asking list_agents again and again. Of an agent you spawned that waits on the user, or exits without reporting, you hear in a Mako note, typed in as messages are. stop_agent only stops agents you spawned. The mako window's layout is a document you read with get_layout and list_blocks; set_layout, patch_layout and undo_layout change it once the user allows, and only what the user keeps stays. show_ui shows a block of UI of yours in the window, a form say, and the user's taps on it come back to you as messages from the window; update_ui and close_ui change and close it. A UI to keep is a plugin: list_blocks names the folder to write one into.", peer.id, peer.session.Info().GetProject(), peer.parent),
 	})
 	if !enabled {
 		return server, agentMCPSigDisabled
@@ -521,6 +569,10 @@ func (d *Daemon) newProjectAgentServer(peer *agentPeer, snap agentMCPSnapshot, e
 func (d *Daemon) addDynamicAgentTools(server *sdk.Server, peer *agentPeer, snap agentMCPSnapshot) {
 	sdk.AddTool(server, &sdk.Tool{Name: "list_agents", Description: snap.listAgentsDesc, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, listAgentsResult, error) {
 		out, err := d.listProjectAgents(peer)
+		return nil, out, err
+	})
+	sdk.AddTool(server, &sdk.Tool{Name: "list_agent_profiles", Description: snap.listAgentProfilesDesc, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, listAgentProfilesResult, error) {
+		out, err := d.listAgentProfiles(peer)
 		return nil, out, err
 	})
 	sdk.AddTool(server, &sdk.Tool{Name: "spawn_agent", Description: snap.spawnAgentDesc}, func(ctx context.Context, _ *sdk.CallToolRequest, in spawnAgentArgs) (*sdk.CallToolResult, agentSummary, error) {
@@ -740,6 +792,81 @@ func (d *Daemon) availableAgents() []availableAgent {
 		out = append(out, available)
 	}
 	return out
+}
+
+func (d *Daemon) spawnablePresets() []spawnablePreset {
+	configured := d.agents()
+	out := []spawnablePreset{}
+	for _, name := range agentspec.Offered(configured) {
+		a, _ := agentspec.Lookup(name, configured)
+		if len(a.Command) == 0 {
+			continue
+		}
+		driver, ok := agents.ByProgram(a.Command[0])
+		if !ok {
+			continue
+		}
+		if _, ok := driver.Driver.(agent.Servers); !ok {
+			continue
+		}
+		if _, ok := driver.Driver.(agent.Prompter); !ok {
+			continue
+		}
+		if d.agentMCPEnabled(nil) {
+			out = append(out, spawnablePreset{
+				Agent:  name,
+				Target: agentspec.Target(name, ""),
+				Yolo:   a.Yolo,
+			})
+		}
+		for _, p := range a.Profiles {
+			if !d.agentMCPEnabled(p.ContextServers) {
+				continue
+			}
+			yolo := a.Yolo
+			if p.Yolo != nil {
+				yolo = *p.Yolo
+			}
+			out = append(out, spawnablePreset{
+				Agent:       name,
+				Profile:     p.Name,
+				Target:      agentspec.Target(name, p.Name),
+				Description: p.Description,
+				Model:       p.Model,
+				Effort:      p.Effort,
+				Yolo:        yolo,
+			})
+		}
+	}
+	return out
+}
+
+func (d *Daemon) listAgentProfiles(peer *agentPeer) (listAgentProfilesResult, error) {
+	if _, err := d.projectCaller(peer); err != nil {
+		return listAgentProfilesResult{}, err
+	}
+	presets := d.spawnablePresets()
+	grouped := []availableAgent{}
+	for _, a := range d.availableAgents() {
+		spawnableProfiles := make([]availableProfile, 0, len(a.Profiles))
+		for _, p := range a.Profiles {
+			if p.Spawnable {
+				spawnableProfiles = append(spawnableProfiles, p)
+			}
+		}
+		if !a.Spawnable && len(spawnableProfiles) == 0 {
+			continue
+		}
+		grouped = append(grouped, availableAgent{
+			Name:      a.Name,
+			Spawnable: a.Spawnable,
+			Profiles:  spawnableProfiles,
+		})
+	}
+	return listAgentProfilesResult{
+		Presets: presets,
+		Agents:  grouped,
+	}, nil
 }
 
 func (d *Daemon) listProjectAgents(peer *agentPeer) (listAgentsResult, error) {

@@ -23,7 +23,7 @@ func New() *Agent {
 		PickerFlags: []string{"--continue", "-c"},
 		// What starts the conversation, which a resumed one already has.
 		Inputs: strings.Fields("--prompt-interactive -i --print -p --prompt"),
-		Values: strings.Fields("--add-dir --agent --effort --mode --model --project --log-file --print-timeout --input-format --output-format --json-schema")}
+		Values: strings.Fields("--add-dir --agent --effort --mode --model --project --settings --log-file --print-timeout --input-format --output-format --json-schema")}
 }
 
 func (*Agent) Info() agent.Info {

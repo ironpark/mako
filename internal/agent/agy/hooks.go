@@ -113,6 +113,7 @@ func hookEntry(hook string) map[string]any {
 // names, which the hook adds.
 type hookInput struct {
 	Event          string `json:"hook_event_name"`
+	CamelEvent     string `json:"hookEventName"`
 	ConversationID string `json:"conversationId"`
 	TranscriptPath string `json:"transcriptPath"`
 	ToolCall       struct {
@@ -126,8 +127,12 @@ func (*Agent) Event(input []byte) (agent.Event, bool) {
 	if json.Unmarshal(input, &in) != nil {
 		return agent.Event{}, false
 	}
+	eventName := in.Event
+	if eventName == "" {
+		eventName = in.CamelEvent
+	}
 	ev := agent.Event{SessionID: in.ConversationID, Transcript: in.TranscriptPath, Tool: in.ToolCall.Name, Input: in.ToolCall.Args}
-	switch in.Event {
+	switch eventName {
 	case "SessionStart":
 		ev.Kind = agent.Started
 	case "PreInvocation":

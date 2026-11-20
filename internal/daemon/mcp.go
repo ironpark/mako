@@ -92,6 +92,7 @@ func (d *Daemon) withContextServers(ctx context.Context, launch *agentspec.Launc
 		return func() {}
 	}
 	cmd0 := launch.Command[0]
+	launchEnv := maps.Clone(launch.Env)
 	cleanup, err := takes.WithServers(&launch.Launch, servers, run, session)
 	if err != nil {
 		release()
@@ -106,7 +107,7 @@ func (d *Daemon) withContextServers(ctx context.Context, launch *agentspec.Launc
 			if d.sessionAgentMCPEnabled(info) {
 				next = append(next, builtin)
 			}
-			_, _ = takes.WithServers(&agent.Launch{Command: []string{cmd0}}, next, run, session)
+			_, _ = takes.WithServers(&agent.Launch{Command: []string{cmd0}, Env: maps.Clone(launchEnv)}, next, run, session)
 		})
 	}
 	ids := make([]string, len(servers))

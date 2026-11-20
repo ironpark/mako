@@ -101,7 +101,7 @@ func TestProjectMCPSpawnMessageAndStop(t *testing.T) {
 	d, parent := projectMCPDaemon(t)
 	client := projectMCPClient(t, d, parent)
 	tools, err := client.ListTools(t.Context(), nil)
-	if err != nil || len(tools.Tools) != 15 {
+	if err != nil || len(tools.Tools) != 16 {
 		t.Fatalf("tools: %v, %v", tools, err)
 	}
 	if !strings.Contains(client.InitializeResult().Instructions, parent.ID()) {
@@ -599,16 +599,23 @@ func TestProjectMCPSettingsReflectLiveAcrossSessions(t *testing.T) {
 		t.Fatal("existing stdio MCP connection did not receive tools/list_changed on config reload")
 	}
 	tools, err := httpClient.ListTools(t.Context(), nil)
-	if err != nil || len(tools.Tools) != 15 {
+	if err != nil || len(tools.Tools) != 16 {
 		t.Fatalf("http tools before disable: %+v, %v", tools, err)
 	}
+	findAvail := func(list []availableAgent, name string) (availableAgent, bool) {
+		i := slices.IndexFunc(list, func(a availableAgent) bool { return a.Name == name })
+		if i < 0 {
+			return availableAgent{}, false
+		}
+		return list[i], true
+	}
 	listed := callProjectTool[listAgentsResult](t, httpClient, "list_agents", struct{}{})
-	if len(listed.Available) == 0 || listed.Available[0].Profiles[0].Description != "Updated race detection" {
+	if cl, ok := findAvail(listed.Available, "claude"); !ok || len(cl.Profiles) == 0 || cl.Profiles[0].Description != "Updated race detection" {
 		t.Fatalf("http session did not reflect live profile edit: %+v", listed.Available)
 	}
 	for _, tl := range tools.Tools {
-		if tl.Name == "list_agents" && !strings.Contains(tl.Description, "Updated race detection") {
-			t.Fatalf("list_agents schema description stayed stale: %q", tl.Description)
+		if (tl.Name == "list_agents" || tl.Name == "list_agent_profiles") && !strings.Contains(tl.Description, "Updated race detection") {
+			t.Fatalf("%s schema description stayed stale: %q", tl.Name, tl.Description)
 		}
 	}
 
@@ -649,7 +656,7 @@ func TestProjectMCPSettingsReflectLiveAcrossSessions(t *testing.T) {
 		t.Fatalf("mcp-%s.json retained mako after disable: %s", httpSess.ID(), mcpCfgBody)
 	}
 
-	// 3. Re-enable built-in mako MCP; existing sessions recover all 15 tools and config without restart.
+	// 3. Re-enable built-in mako MCP; existing sessions recover all 16 tools and config without restart.
 	for len(toolChanged) > 0 {
 		<-toolChanged
 	}
@@ -662,14 +669,126 @@ func TestProjectMCPSettingsReflectLiveAcrossSessions(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("existing stdio MCP connection did not receive tools/list_changed when re-enabled")
 	}
-	if gotTools, err := httpClient.ListTools(t.Context(), nil); err != nil || len(gotTools.Tools) != 15 {
-		t.Fatalf("http tools after re-enable = %d (err=%v), want 15", len(gotTools.Tools), err)
+	if gotTools, err := httpClient.ListTools(t.Context(), nil); err != nil || len(gotTools.Tools) != 16 {
+		t.Fatalf("http tools after re-enable = %d (err=%v), want 16", len(gotTools.Tools), err)
 	}
-	if res := callProjectTool[listAgentsResult](t, stdioClient, "list_agents", struct{}{}); len(res.Available) == 0 || res.Available[0].Profiles[0].Description != "Re-enabled specialist" {
+	if res := callProjectTool[listAgentsResult](t, stdioClient, "list_agents", struct{}{}); func() bool {
+		cl, ok := findAvail(res.Available, "claude")
+		return !ok || len(cl.Profiles) == 0 || cl.Profiles[0].Description != "Re-enabled specialist"
+	}() {
 		t.Fatalf("stdio session did not recover updated state: %+v", res.Available)
 	}
 	mcpCfgBody, err = os.ReadFile(filepath.Join(runDir, "mcp-"+httpSess.ID()+".json"))
 	if err != nil || !strings.Contains(string(mcpCfgBody), `"mako"`) {
 		t.Fatalf("mcp-%s.json did not restore mako on re-enable: %s (%v)", httpSess.ID(), mcpCfgBody, err)
+	}
+}
+
+func TestProjectMCPListAgentProfilesAndSpawnAgy(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	agyHome := t.TempDir()
+	agyCmd, agyRoot := fakeAgent(t, "agy")
+	claudeCmd, claudeRoot := fakeAgent(t, "claude")
+	cfg := &config.Config{
+		NodeID: "node",
+		Agents: map[string]agentspec.Agent{
+			"agy": {
+				Command: []string{agyCmd},
+				Yolo:    true,
+				Env:     map[string]string{"MAKO_FAKE_AGENT": "agy", "MAKO_FAKE_ROOT": agyRoot, "HOME": agyHome},
+				Profiles: []agentspec.Profile{
+					{
+						Name:        "fast",
+						Description: "Fast Gemini Neon worker",
+						Model:       "gemini-4-neon-medium",
+						Effort:      "medium",
+						Args:        []string{"--secret-flag"},
+						Env:         map[string]string{"API_SECRET": "do-not-expose"},
+					},
+					{
+						Name:           "no-mcp",
+						Description:    "Isolated without Mako MCP",
+						ContextServers: new([]string{}),
+					},
+				},
+			},
+			"claude": {
+				Command: []string{claudeCmd},
+				Env:     map[string]string{"MAKO_FAKE_AGENT": "claude", "MAKO_FAKE_ROOT": claudeRoot, "CLAUDE_CONFIG_DIR": claudeRoot},
+				Profiles: []agentspec.Profile{
+					{
+						Name:        "careful",
+						Description: "Careful reviewer",
+						Model:       "opus",
+						Effort:      "high",
+						Yolo:        new(false),
+					},
+				},
+			},
+		},
+	}
+	d := New(cfg, slog.New(slog.DiscardHandler))
+	d.dir, d.ctx, d.mcp, d.hookBinary = t.TempDir(), t.Context(), nil, "/bin/makod"
+	if err := d.loadSessions(d.dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.projectAgents.messages.load(d.dir); err != nil {
+		t.Fatal(err)
+	}
+	run, err := config.RunDir(d.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.listenAgentMCP(t.Context(), run); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(d.sessions.closeAll)
+
+	parent, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "agy", Project: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := projectMCPClient(t, d, parent)
+
+	// Verify list_agent_profiles returns only spawnable defaults and profile presets.
+	profiles := callProjectTool[listAgentProfilesResult](t, client, "list_agent_profiles", struct{}{})
+	data, _ := json.Marshal(profiles)
+	if strings.Contains(string(data), "no-mcp") {
+		t.Fatalf("non-spawnable profile leaked into list_agent_profiles: %s", data)
+	}
+	if strings.Contains(string(data), "do-not-expose") || strings.Contains(string(data), "--secret-flag") {
+		t.Fatalf("raw args/env leaked into list_agent_profiles: %s", data)
+	}
+	findPreset := func(target string) (spawnablePreset, bool) {
+		i := slices.IndexFunc(profiles.Presets, func(p spawnablePreset) bool { return p.Target == target })
+		if i < 0 {
+			return spawnablePreset{}, false
+		}
+		return profiles.Presets[i], true
+	}
+	agyDefault, ok := findPreset("agy")
+	if !ok || !agyDefault.Yolo || agyDefault.Profile != "" {
+		t.Fatalf("missing or wrong agy default preset: %+v (%v)", agyDefault, ok)
+	}
+	agyFast, ok := findPreset("agy:fast")
+	if !ok || agyFast.Agent != "agy" || agyFast.Profile != "fast" || agyFast.Model != "gemini-4-neon-medium" || agyFast.Effort != "medium" || !agyFast.Yolo || agyFast.Description != "Fast Gemini Neon worker" {
+		t.Fatalf("unexpected agy:fast preset: %+v (%v)", agyFast, ok)
+	}
+	claudeCareful, ok := findPreset("claude:careful")
+	if !ok || claudeCareful.Model != "opus" || claudeCareful.Effort != "high" || claudeCareful.Yolo {
+		t.Fatalf("unexpected claude:careful preset: %+v (%v)", claudeCareful, ok)
+	}
+
+	// Verify spawning an agy child agent works via MCP and writes mcp_config.json.
+	childInfo := callProjectTool[agentSummary](t, client, "spawn_agent", spawnAgentArgs{
+		Agent: "agy", Profile: "fast", Prompt: "Check the build", Name: "Agy Fast",
+	})
+	if childInfo.Agent != "agy" || childInfo.Profile != "fast" || !childInfo.Messaging || childInfo.ParentID != parent.ID() {
+		t.Fatalf("unexpected spawned agy child: %+v", childInfo)
+	}
+	mcpPath := filepath.Join(agyHome, ".gemini", "config", "mcp_config.json")
+	mcpBody, err := os.ReadFile(mcpPath)
+	if err != nil || !strings.Contains(string(mcpBody), `"mako"`) {
+		t.Fatalf("expected agy mcp_config.json with mako server at %s: %s (%v)", mcpPath, mcpBody, err)
 	}
 }

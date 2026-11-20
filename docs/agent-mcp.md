@@ -5,9 +5,9 @@ It lets an agent delegate work to a new Mako session and communicate with
 other sessions in the same local project. It is added alongside the
 extension and custom MCP servers already configured for the session.
 
-Claude Code, Codex, OpenCode, pi and omo can receive it through their
-drivers. A configured command must still be recognized as a supported
-agent executable. Shell sessions and drivers without launch-time MCP
+Claude Code, Codex, Antigravity (`agy`), OpenCode, pi and omo can receive it
+through their drivers. A configured command must still be recognized as a
+supported agent executable. Shell sessions and drivers without launch-time MCP
 support do not receive these tools.
 
 ## Tools
@@ -15,6 +15,7 @@ support do not receive these tools.
 | Tool | Arguments | Result |
 | --- | --- | --- |
 | `list_agents` | `{}` | Your `self_id`, project, project sessions with status and parent IDs, and available agent types and profiles with descriptions and `spawnable` flags. `messaging` says whether a session can receive messages now. |
+| `list_agent_profiles` | `{}` | Only the spawnable agent configurations and profile presets on this node (`presets` with `agent`, `profile`, `target`, `description`, `model`, `effort`, `yolo`, plus grouped `agents`). |
 | `spawn_agent` | `prompt`, optional `agent`, `profile`, `name` | Starts a new session in your working directory, with the same worktree metadata. Defaults to your agent type. Returns its session `id`. |
 | `send_message` | `to`, `text` | Sends a message: typed into the recipient's terminal as a prompt once it waits at its prompt, kept in its inbox until then. Returns its `id`, authenticated `from`, `to`, text and creation time. |
 | `read_messages` | Optional `after_id`, `ack_through`, `limit`, `wait_seconds` | Reads your own inbox, for waiting on a reply within a turn. Returns `messages` and `next_after_id`. |
