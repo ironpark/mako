@@ -28,9 +28,6 @@ type PollResponse = {
   count?: number
   prompt?: string
   summary?: string
-  has_user_prompt?: boolean
-  user_prompt_id?: number
-  user_prompt?: string
   child_status?: string
 }
 
@@ -46,11 +43,6 @@ type PendingDelivery = {
   toasted?: boolean
 }
 
-type PendingUserPrompt = {
-  promptId: number
-  text: string
-}
-
 type Creds = { session: string; socket: string; token: string }
 
 let pollStopped = false
@@ -59,8 +51,6 @@ let submittedThrough = 0
 let pollTimer: { cancel(): void } | null = null
 let deliverQueue: PendingDelivery[] = []
 let delivering = false
-let userPromptQueue: PendingUserPrompt[] = []
-let deliveringUserPrompts = false
 let waitingForTurnComplete = false
 let lastChildStatus = ''
 let liveCreds: Creds | null = null
@@ -107,49 +97,6 @@ async function ackMessages($: any, creds: Creds, ackThrough: number) {
     })
   } catch {
     // Daemon will keep it unacknowledged if unreachable.
-  }
-}
-
-async function ackUserPrompt($: any, creds: Creds, promptId: number, ok: boolean, error?: string) {
-  try {
-    await $.http.fetch('http://mako/prompt/ack', {
-      method: 'POST',
-      body: JSON.stringify({
-        session: creds.session,
-        token: creds.token,
-        prompt_id: promptId,
-        ok,
-        ...(error ? { error } : {}),
-      }),
-      socketPath: creds.socket,
-    })
-  } catch {
-    // Daemon will time out waiting for ack if unreachable.
-  }
-}
-
-async function drainUserPrompts($: any, creds: Creds) {
-  if (deliveringUserPrompts || pollStopped) {
-    return
-  }
-  deliveringUserPrompts = true
-  try {
-    while (!pollStopped && userPromptQueue.length > 0) {
-      const head = userPromptQueue.shift()
-      if (!head) {
-        break
-      }
-      let reason = ''
-      try {
-        const result = await $.prompt.submit({ text: head.text })
-        reason = result?.drop ?? ''
-      } catch (err: any) {
-        reason = String(err?.message ?? err ?? '')
-      }
-      await ackUserPrompt($, creds, head.promptId, !reason, reason)
-    }
-  } finally {
-    deliveringUserPrompts = false
   }
 }
 
@@ -239,16 +186,7 @@ async function pollOnce($: any) {
     }
     const data = JSON.parse(res.text || '{}') as PollResponse
     updateChildStatus($, data.child_status ?? '')
-    if (data.has_user_prompt && data.user_prompt && data.user_prompt_id) {
-      nextDelay = 10
-      userPromptQueue.push({
-        promptId: data.user_prompt_id,
-        text: data.user_prompt,
-      })
-      void drainUserPrompts($, creds)
-    }
     if (data.has_messages && data.prompt && data.last_id && data.last_id > submittedThrough) {
-      nextDelay = 10
       submittedThrough = data.last_id
       deliverQueue.push({
         lastId: data.last_id,
@@ -294,7 +232,6 @@ export const register: Register = on => {
       waitingForTurnComplete = false
       submittedThrough = 0
       deliverQueue = []
-      userPromptQueue = []
       lastChildStatus = ''
       scheduleNextPoll($, 100)
       try {

@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -307,7 +306,6 @@ func (d *Daemon) listenLive(ctx context.Context, dir string) {
 	mux.HandleFunc("/live", d.serveLive)
 	mux.HandleFunc("/messages/poll", d.serveLiveMessagesPoll)
 	mux.HandleFunc("/messages/ack", d.serveLiveMessagesAck)
-	mux.HandleFunc("/prompt/ack", d.serveLivePromptAck)
 	mux.HandleFunc("/mako/status", d.serveLiveMakoStatus)
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	context.AfterFunc(ctx, func() { _ = srv.Close() })
@@ -323,210 +321,18 @@ type liveMessagesPollReq struct {
 }
 
 type liveMessagesPollResp struct {
-	HasMessages   bool   `json:"has_messages"`
-	LastID        uint64 `json:"last_id,omitempty"`
-	Count         int    `json:"count,omitempty"`
-	Prompt        string `json:"prompt,omitempty"`
-	Summary       string `json:"summary,omitempty"`
-	HasUserPrompt bool   `json:"has_user_prompt,omitempty"`
-	UserPromptID  uint64 `json:"user_prompt_id,omitempty"`
-	UserPrompt    string `json:"user_prompt,omitempty"`
-	ChildStatus   string `json:"child_status,omitempty"`
+	HasMessages bool   `json:"has_messages"`
+	LastID      uint64 `json:"last_id,omitempty"`
+	Count       int    `json:"count,omitempty"`
+	Prompt      string `json:"prompt,omitempty"`
+	Summary     string `json:"summary,omitempty"`
+	ChildStatus string `json:"child_status,omitempty"`
 }
 
 type liveMessagesAckReq struct {
 	Session    string `json:"session"`
 	Token      string `json:"token"`
 	AckThrough uint64 `json:"ack_through"`
-}
-
-type livePromptAckReq struct {
-	Session  string `json:"session"`
-	Token    string `json:"token"`
-	PromptID uint64 `json:"prompt_id"`
-	OK       bool   `json:"ok"`
-	Error    string `json:"error,omitempty"`
-}
-
-type liveUserPrompt struct {
-	id     uint64
-	text   string
-	picked bool
-	ack    chan error
-}
-
-type livePromptQueue struct {
-	mu      sync.Mutex
-	nextID  uint64
-	items   map[string][]*liveUserPrompt
-	changed map[string]chan struct{}
-}
-
-func (q *livePromptQueue) enqueue(sessionID, text string) (uint64, <-chan error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.nextID++
-	id := q.nextID
-	ch := make(chan error, 1)
-	if q.items == nil {
-		q.items = map[string][]*liveUserPrompt{}
-	}
-	q.items[sessionID] = append(q.items[sessionID], &liveUserPrompt{id: id, text: text, ack: ch})
-	if c, ok := q.changed[sessionID]; ok {
-		close(c)
-		delete(q.changed, sessionID)
-	}
-	return id, ch
-}
-
-// poll atomically claims the oldest unpicked user prompt for sessionID, or
-// returns nil with a channel closed when a new user prompt arrives.
-func (q *livePromptQueue) poll(sessionID string) (*liveUserPrompt, <-chan struct{}) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	for _, item := range q.items[sessionID] {
-		if !item.picked {
-			item.picked = true
-			return item, nil
-		}
-	}
-	if q.changed == nil {
-		q.changed = map[string]chan struct{}{}
-	}
-	c, ok := q.changed[sessionID]
-	if !ok {
-		c = make(chan struct{})
-		q.changed[sessionID] = c
-	}
-	return nil, c
-}
-
-// cancelIfUnpicked removes prompt id if no mod poll has claimed it yet.
-// Returning true guarantees the mod will never see it, making PTY fallback
-// free of duplicate sends.
-func (q *livePromptQueue) cancelIfUnpicked(sessionID string, id uint64) bool {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	list := q.items[sessionID]
-	for i, item := range list {
-		if item.id == id {
-			if item.picked {
-				return false
-			}
-			list = append(list[:i], list[i+1:]...)
-			if len(list) == 0 {
-				delete(q.items, sessionID)
-			} else {
-				q.items[sessionID] = list
-			}
-			return true
-		}
-	}
-	return false
-}
-
-func (q *livePromptQueue) ack(sessionID string, id uint64, ok bool, errMsg string) {
-	q.mu.Lock()
-	list := q.items[sessionID]
-	var target *liveUserPrompt
-	for i, item := range list {
-		if item.id == id {
-			target = item
-			list = append(list[:i], list[i+1:]...)
-			if len(list) == 0 {
-				delete(q.items, sessionID)
-			} else {
-				q.items[sessionID] = list
-			}
-			break
-		}
-	}
-	q.mu.Unlock()
-	if target == nil {
-		return
-	}
-	var err error
-	if !ok {
-		if errMsg == "" {
-			errMsg = "prompt submit refused"
-		}
-		err = errors.New(errMsg)
-	}
-	select {
-	case target.ack <- err:
-	default:
-	}
-}
-
-func (q *livePromptQueue) forget(sessionID string) {
-	q.mu.Lock()
-	list := q.items[sessionID]
-	delete(q.items, sessionID)
-	if c, ok := q.changed[sessionID]; ok {
-		close(c)
-		delete(q.changed, sessionID)
-	}
-	q.mu.Unlock()
-	for _, item := range list {
-		select {
-		case item.ack <- errors.New("session closed"):
-		default:
-		}
-	}
-}
-
-const (
-	livePromptPickupTimeout = 1500 * time.Millisecond
-	livePromptAckTimeout    = 5 * time.Second
-)
-
-// deliverViaClaudeMod delivers a GUI composer prompt directly through Claude's
-// mako-live Mod ($.prompt.submit) when the mod is actively polling. Returns
-// false only when it is safe to fall back to PTY without risking double-send.
-func (d *Daemon) deliverViaClaudeMod(ctx context.Context, sessionID, text string) bool {
-	if !d.projectAgents.isModActive(sessionID) {
-		return false
-	}
-	id, ackCh := d.livePrompts.enqueue(sessionID, text)
-
-	pickupTimer := time.NewTimer(livePromptPickupTimeout)
-	defer pickupTimer.Stop()
-	select {
-	case err := <-ackCh:
-		if err != nil {
-			d.log.Warn("claude mod prompt rejected; falling back to PTY", "session", sessionID, "err", err)
-			return false
-		}
-		return true
-	case <-pickupTimer.C:
-		if d.livePrompts.cancelIfUnpicked(sessionID, id) {
-			d.log.Warn("claude mod did not claim user prompt in time; falling back to PTY", "session", sessionID)
-			return false
-		}
-	case <-ctx.Done():
-		if d.livePrompts.cancelIfUnpicked(sessionID, id) {
-			return false
-		}
-		return true
-	}
-
-	// The mod already claimed the prompt and is calling $.prompt.submit.
-	// Wait for its explicit ack so we only fall back to PTY on explicit drop.
-	ackTimer := time.NewTimer(livePromptAckTimeout)
-	defer ackTimer.Stop()
-	select {
-	case err := <-ackCh:
-		if err != nil {
-			d.log.Warn("claude mod prompt submit dropped; falling back to PTY", "session", sessionID, "err", err)
-			return false
-		}
-		return true
-	case <-ackTimer.C:
-		d.log.Warn("claude mod claimed user prompt without ack; skipping PTY fallback to avoid duplicate", "session", sessionID)
-		return true
-	case <-ctx.Done():
-		return true
-	}
 }
 
 type liveMakoStatusReq struct {
@@ -560,11 +366,9 @@ func (d *Daemon) serveLiveMessagesPoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	release := d.projectAgents.addCLIWaiter(req.Session)
-	releaseMod := d.projectAgents.addModPoller(req.Session)
 	d.projectAgents.markModActive(req.Session, liveMsgModGrace)
 	defer func() {
 		d.projectAgents.markModActive(req.Session, liveMsgModGrace)
-		releaseMod()
 		release()
 	}()
 
@@ -583,60 +387,49 @@ func (d *Daemon) serveLiveMessagesPoll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for {
-		if prompt, promptChanged := d.livePrompts.poll(req.Session); prompt != nil {
+		inbox, changed := d.projectAgents.messages.pending(req.Session)
+		var filtered []agentMessage
+		for _, m := range inbox {
+			if m.ID > req.AfterID {
+				filtered = append(filtered, m)
+			}
+		}
+		if len(filtered) > 0 {
+			batch := deliveryOf(filtered)
+			summary := fmt.Sprintf("%d Mako messages", len(batch))
+			if len(batch) == 1 {
+				var mesh []*protocol.SessionInfo
+				switch {
+				case batch[0].Event:
+					summary = "Mako window event"
+				case batch[0].Note:
+					summary = "Mako note about " + d.agentLabel(batch[0].From, &mesh)
+				default:
+					summary = "Mako message from " + d.agentLabel(batch[0].From, &mesh)
+				}
+			}
 			writeJSON(liveMessagesPollResp{
-				HasUserPrompt: true,
-				UserPromptID:  prompt.id,
-				UserPrompt:    prompt.text,
-				ChildStatus:   d.childStatusSummary(req.Session),
+				HasMessages: true,
+				LastID:      batch[len(batch)-1].ID,
+				Count:       len(batch),
+				Prompt:      d.agentPrompt(batch),
+				Summary:     summary,
+				ChildStatus: d.childStatusSummary(req.Session),
 			})
 			return
-		} else {
-			inbox, msgChanged := d.projectAgents.messages.pending(req.Session)
-			var filtered []agentMessage
-			for _, m := range inbox {
-				if m.ID > req.AfterID {
-					filtered = append(filtered, m)
-				}
-			}
-			if len(filtered) > 0 {
-				batch := deliveryOf(filtered)
-				summary := fmt.Sprintf("%d Mako messages", len(batch))
-				if len(batch) == 1 {
-					var mesh []*protocol.SessionInfo
-					switch {
-					case batch[0].Event:
-						summary = "Mako window event"
-					case batch[0].Note:
-						summary = "Mako note about " + d.agentLabel(batch[0].From, &mesh)
-					default:
-						summary = "Mako message from " + d.agentLabel(batch[0].From, &mesh)
-					}
-				}
-				writeJSON(liveMessagesPollResp{
-					HasMessages: true,
-					LastID:      batch[len(batch)-1].ID,
-					Count:       len(batch),
-					Prompt:      d.agentPrompt(batch),
-					Summary:     summary,
-					ChildStatus: d.childStatusSummary(req.Session),
-				})
-				return
-			}
-			select {
-			case <-promptChanged:
-			case <-msgChanged:
-			case <-deadline.C:
-				writeJSON(liveMessagesPollResp{
-					HasMessages: false,
-					ChildStatus: d.childStatusSummary(req.Session),
-				})
-				return
-			case <-r.Context().Done():
-				return
-			case <-d.ctx.Done():
-				return
-			}
+		}
+		select {
+		case <-changed:
+		case <-deadline.C:
+			writeJSON(liveMessagesPollResp{
+				HasMessages: false,
+				ChildStatus: d.childStatusSummary(req.Session),
+			})
+			return
+		case <-r.Context().Done():
+			return
+		case <-d.ctx.Done():
+			return
 		}
 	}
 }
@@ -762,27 +555,6 @@ func (d *Daemon) serveLiveMessagesAck(w http.ResponseWriter, r *http.Request) {
 		if err := d.projectAgents.messages.delivered(req.Session, req.AckThrough); err != nil {
 			d.log.Warn("live messages: ack not recorded", "session", req.Session, "err", err)
 		}
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (d *Daemon) serveLivePromptAck(w http.ResponseWriter, r *http.Request) {
-	var req livePromptAckReq
-	if r.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req) != nil {
-		http.Error(w, "a prompt ack request", http.StatusBadRequest)
-		return
-	}
-	if _, ok := d.sessions.get(req.Session); !ok {
-		http.Error(w, "no such session", http.StatusNotFound)
-		return
-	}
-	if !hmac.Equal([]byte(req.Token), []byte(d.liveToken(req.Session))) {
-		http.Error(w, "not this session's", http.StatusForbidden)
-		return
-	}
-	d.projectAgents.markModActive(req.Session, liveMsgModGrace)
-	if req.PromptID > 0 {
-		d.livePrompts.ack(req.Session, req.PromptID, req.OK, req.Error)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

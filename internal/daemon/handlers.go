@@ -143,8 +143,13 @@ func canDeliverUserPromptNatively(s *session.Session, text string, keys []byte) 
 }
 
 // deliverNativeUserPrompt submits a GUI composer prompt through the agent's
-// native prompt API when available (Codex app-server thread/queue/add or
-// Claude mako-live $.prompt.submit), returning false to fall back to PTY.
+// native user-turn API when available (Codex app-server thread/queue/add),
+// returning false to fall back to PTY.
+//
+// Claude Code stays on PTY for GUI user prompts because its Mod API
+// ($.prompt.submit) unconditionally wraps messages with a "The mako-live
+// plugin sent a message: ... in the user's place" envelope intended for
+// plugin/inter-agent messages, not direct human turns.
 // Antigravity (agy) stays on PTY for GUI user prompts because its agentapi
 // send-message delivers async notification messages rather than normal user
 // turns and requires an already-established conversation ID.
@@ -155,8 +160,6 @@ func (d *Daemon) deliverNativeUserPrompt(ctx context.Context, s *session.Session
 	switch s.Info().GetAgent() {
 	case "codex":
 		return d.deliverViaCodexBridge(ctx, s.ID(), text)
-	case "claude":
-		return d.deliverViaClaudeMod(ctx, s.ID(), text)
 	default:
 		return false
 	}
