@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/plugin/pack"
 	"github.com/ironpark/mako/internal/plugin/registry"
 )
@@ -46,5 +47,29 @@ func TestIndexListsTheManifestsPermissions(t *testing.T) {
 	}
 	if got := idx.Find("hello").Versions[0].Permissions; !slices.Equal(got, pkg.Manifest.Permissions) {
 		t.Fatalf("listed %v; the manifest asks for %v", got, pkg.Manifest.Permissions)
+	}
+}
+
+func TestInitPluginScaffoldsValidManifest(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "my-board")
+	if err := initPlugin([]string{"my-board", dir}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "plugin.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := plugin.ParseManifest(b)
+	if err != nil {
+		t.Fatalf("scaffolded manifest invalid: %v", err)
+	}
+	if m.ID != "my-board" || len(m.Blocks) != 1 || len(m.Tools) != 1 {
+		t.Fatalf("unexpected manifest: %+v", m)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "main.js")); err != nil {
+		t.Fatalf("missing main.js: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "jsconfig.json")); err != nil {
+		t.Fatalf("missing jsconfig.json: %v", err)
 	}
 }

@@ -38,6 +38,20 @@ class BlockFeedTest {
         assertNull(form.leave(input("c")))
     }
 
+    @Test
+    fun textareaAndTabsValuesAreTrackedInBlockForm() {
+        val ta = UiNode.newBuilder().setId("/note").setKind("textarea").setValue("first").setChange(true).build()
+        val tabs = UiNode.newBuilder().setId("/mode").setKind("tabs").setValue("Board").addOptions("Board").addOptions("Table").setChange(true).build()
+        val root = UiNode.newBuilder().setId("").setKind("column").addChildren(ta).addChildren(tabs).build()
+        val form = BlockForm()
+        form.sync(root)
+        form.set("/note", "second\nline")
+        form.set("/mode", "Table")
+        val vals = form.values(root)
+        assertEquals("second\nline", vals["/note"])
+        assertEquals("Table", vals["/mode"])
+    }
+
     private val shown = BlockState(BlockUpdate.newBuilder().setTree(tree("a")).build(), tree("a"))
 
     /** A page coming back with the link down keeps its tree, with why. */

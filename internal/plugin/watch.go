@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ironpark/mako/internal/uiblock"
@@ -127,22 +128,43 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	if err != nil {
 		return nil, err
 	}
-	// A plugin reads its fields from its own state, not from the
-	// event's values, but they are bounded as an agent's block's are.
-	if _, err := tree.Values(ev.GetValues()); err != nil {
+	vals, err := tree.Values(ev.GetValues())
+	if err != nil {
 		return nil, err
 	}
+	// Expose validated form values by full node ID and by unique trailing key
+	// so event handlers can read current input/textarea values on button clicks.
+	valsMap := map[string]string{}
+	keyCounts := map[string]int{}
+	for id, v := range vals {
+		valsMap[id] = v
+		if idx := strings.LastIndex(id, "/"); idx >= 0 && idx+1 < len(id) {
+			k := id[idx+1:]
+			if !strings.HasPrefix(k, "#") {
+				keyCounts[k]++
+			}
+		}
+	}
+	for id, v := range vals {
+		if idx := strings.LastIndex(id, "/"); idx >= 0 && idx+1 < len(id) {
+			k := id[idx+1:]
+			if keyCounts[k] == 1 {
+				valsMap[k] = v
+			}
+		}
+	}
+	valsJSON, _ := json.Marshal(valsMap)
 	name := msg.Name
 	argsJSON, _ := json.Marshal(msg.Args)
 	args := string(argsJSON)
-	var open string
+	var open, toast string
 	err = p.do(ctx, func() error {
 		if err := p.ensure(); err != nil {
 			return err
 		}
-		_, err := p.invoke("event", true, block, name, args)
-		open = p.openURL
-		p.openURL = ""
+		_, err := p.invoke("event", true, block, name, args, string(valsJSON))
+		open, toast = p.openURL, p.toast
+		p.openURL, p.toast = "", ""
 		p.setErr(block, err)
 		p.afterCall()
 		return err
@@ -150,5 +172,5 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	if err != nil {
 		return nil, err
 	}
-	return &protocol.PluginDone{OpenUrl: open}, nil
+	return &protocol.PluginDone{OpenUrl: open, Toast: toast}, nil
 }

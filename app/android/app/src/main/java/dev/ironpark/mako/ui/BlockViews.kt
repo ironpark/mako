@@ -1,6 +1,9 @@
 package dev.ironpark.mako.ui
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -17,9 +21,13 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -27,19 +35,19 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.CropSquare
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.outlined.WarningAmber
-import androidx.compose.material.icons.outlined.AccountTree
-import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -53,7 +61,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +75,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -75,6 +87,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.ironpark.mako.R
 import dev.ironpark.mako.blocks.BlockForm
 import dev.ironpark.mako.v2.UiNode
 
@@ -126,35 +139,112 @@ private val blockIcons: Map<String, ImageVector> = mapOf(
     "folder" to Icons.Outlined.Folder, "code" to Icons.Outlined.Code, "github" to Icons.Outlined.Code,
     "git-branch" to Icons.Outlined.AccountTree, "clock" to Icons.Outlined.Schedule,
     "external-link" to Icons.AutoMirrored.Outlined.OpenInNew,
+    "file-text" to Icons.Outlined.Description,
+    "arrow-left" to Icons.AutoMirrored.Outlined.ArrowBack,
+    "arrow-right" to Icons.AutoMirrored.Outlined.ArrowForward,
 )
 
 /** The icon of the name, a plain square for one the app does not have. */
 internal fun blockIcon(name: String): ImageVector = blockIcons[name] ?: Icons.Outlined.CropSquare
 
+private data class DragPayload(val value: String, val group: String)
+
+private class BlockDragState {
+    var active by mutableStateOf<DragPayload?>(null)
+
+    fun accepts(n: UiNode): Boolean {
+        val cur = active ?: return false
+        if (!n.drop) return false
+        if (n.dropAcceptCount == 0) return true
+        return n.dropAcceptList.any { it == cur.group }
+    }
+}
+
+private val LocalBlockDrag = compositionLocalOf<BlockDragState?> { null }
+
 /** UiTree draws a block's tree; form holds what the user set in its fields. */
 @Composable
 internal fun UiTree(n: UiNode, form: BlockForm, events: BlockEvents, inLine: Boolean = false, modifier: Modifier = Modifier) {
+    if (LocalBlockDrag.current == null) {
+        val drag = remember { BlockDragState() }
+        CompositionLocalProvider(LocalBlockDrag provides drag) {
+            Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (drag.active != null) {
+                    Surface(
+                        Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                stringResource(R.string.block_dragging),
+                                Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                            TextButton(onClick = { drag.active = null }) {
+                                Text(stringResource(R.string.cancel))
+                            }
+                        }
+                    }
+                }
+                UiNodeView(n, form, events, inLine, Modifier)
+            }
+        }
+        return
+    }
+    UiNodeView(n, form, events, inLine, modifier)
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+private fun interactive(m: Modifier, n: UiNode, tap: (() -> Unit)?, drag: BlockDragState?, events: BlockEvents): Modifier {
+    val canDrop = drag != null && drag.accepts(n)
+    if (canDrop) {
+        return m.clickable {
+            val payload = drag.active?.value.orEmpty()
+            drag.active = null
+            if (payload.isNotEmpty()) events.send(n.id, "drop", payload)
+        }
+    }
+    if (n.drag.isNotEmpty() && drag != null) {
+        return m.combinedClickable(
+            onClick = { tap?.invoke() },
+            onLongClick = { drag.active = DragPayload(n.drag, n.dragGroup) },
+        )
+    }
+    return if (tap == null) m else m.clickable(onClick = tap)
+}
+
+@Composable
+private fun UiNodeView(n: UiNode, form: BlockForm, events: BlockEvents, inLine: Boolean, modifier: Modifier) {
+    val drag = LocalBlockDrag.current
     val tap: (() -> Unit)? = if (n.tap) ({ events.send(n.id, "tap", "") }) else null
+    val mod = interactive(modifier, n, tap, drag, events)
     when (n.kind) {
-        "column", "row", "stack", "list" -> UiContainer(n, form, events, modifier)
+        "column", "row", "stack", "list", "card", "scroll" -> UiContainer(n, form, events, modifier)
+        "table" -> UiTable(n, form, events, modifier)
         "text" -> Text(
-            n.text, tappable(modifier, tap), color = toneColor(n.tone), style = textStyle(n.size), fontWeight = weight(n.weight),
+            n.text, mod, color = toneColor(n.tone), style = textStyle(n.size), fontWeight = weight(n.weight),
             maxLines = if (inLine) 1 else Int.MAX_VALUE, overflow = if (inLine) TextOverflow.Ellipsis else TextOverflow.Clip,
         )
         // A tappable icon is named, by its text or else its icon's name, for
         // a screen reader to say what is tapped.
         "icon" -> Icon(blockIcon(n.icon), if (tap == null) null else n.text.ifEmpty { n.icon },
-            tappable(modifier, tap).size(if (n.size == "large") 22.dp else if (n.size == "small") 14.dp else 18.dp),
+            mod.size(if (n.size == "large") 22.dp else if (n.size == "small") 14.dp else 18.dp),
             tint = toneColor(n.tone.ifEmpty { "muted" }))
-        "pill" -> Pill(n.text, toneColor(n.tone.ifEmpty { "muted" }), tappable(modifier, tap))
+        "pill" -> Pill(n.text, toneColor(n.tone.ifEmpty { "muted" }), mod)
         "chip" -> Surface(
-            tappable(modifier, tap), shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.surfaceVariant,
+            mod, shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.surfaceVariant,
         ) {
             Text(n.text, Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         "button" -> UiButton(n, modifier, tap)
         "input" -> UiInput(n, form, events, modifier)
+        "textarea" -> UiTextarea(n, form, events, modifier)
         // The row is the switch, its label the switch's, as a screen reader says it.
         "toggle" -> Row(
             modifier.fillMaxWidth().toggleable(
@@ -170,8 +260,9 @@ internal fun UiTree(n: UiNode, form: BlockForm, events: BlockEvents, inLine: Boo
             Switch(checked = form.value(n) == "true", onCheckedChange = null, enabled = !n.disabled)
         }
         "select" -> UiSelect(n, form, events, modifier)
-        "markdown" -> BlockMarkdown(n.text, modifier)
-        "code" -> Surface(modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(8.dp)) {
+        "tabs" -> UiTabs(n, form, events, modifier)
+        "markdown" -> BlockMarkdown(n.text, mod)
+        "code" -> Surface(mod.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(8.dp)) {
             Text(n.text, Modifier.horizontalScroll(rememberScrollState()).padding(10.dp),
                 style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, softWrap = false)
         }
@@ -183,28 +274,46 @@ internal fun UiTree(n: UiNode, form: BlockForm, events: BlockEvents, inLine: Boo
     }
 }
 
-private fun tappable(m: Modifier, tap: (() -> Unit)?): Modifier = if (tap == null) m else m.clickable(onClick = tap)
-
 /**
- * A column, row, stack or list; in a row, a child that grows takes its
- * share of the width left. Each child is drawn under its id, so that what
- * it keeps, an input's focus and cursor, a select's menu, follows the node
- * as siblings come, go and move, not its place.
+ * A column, row, stack, list, card or scroll; in a row, a child that grows
+ * takes its share of the width left. Each child is drawn under its id, so
+ * that what it keeps, an input's focus and cursor, a select's menu, follows
+ * the node as siblings come, go and move, not its place.
  */
 @Composable
 private fun UiContainer(n: UiNode, form: BlockForm, events: BlockEvents, modifier: Modifier) {
-    val box = tappable(modifier, if (n.tap) ({ events.send(n.id, "tap", "") }) else null)
+    val drag = LocalBlockDrag.current
+    val tap: (() -> Unit)? = if (n.tap) ({ events.send(n.id, "tap", "") }) else null
+    val box = interactive(modifier, n, tap, drag, events)
+    val canDrop = drag != null && drag.accepts(n)
+    val picked = drag?.active != null && n.drag.isNotEmpty() && drag.active?.value == n.drag
     val content: @Composable (Modifier) -> Unit = { m ->
         when (n.kind) {
             "row" -> {
-                val hasColumn = n.childrenList.any { it.kind == "column" || it.kind == "list" }
+                val hasColumn = n.childrenList.any { it.kind in setOf("column", "list", "card", "scroll") }
                 Row(
                     m.fillMaxWidth().then(if (n.tap) Modifier.padding(vertical = 6.dp) else Modifier),
                     horizontalArrangement = Arrangement.spacedBy((if (n.gap > 0) n.gap else 8.0).dp),
                     verticalAlignment = if (hasColumn) Alignment.Top else Alignment.CenterVertically,
                 ) { n.childrenList.forEach { c -> key(c.id) { RowChild(c, form, events) } } }
             }
-            "stack" -> Box(m) { n.childrenList.forEach { c -> key(c.id) { UiTree(c, form, events) } } }
+            "stack" -> Box(m) { n.childrenList.forEach { c -> key(c.id) { UiNodeView(c, form, events, false, Modifier) } } }
+            "scroll" -> {
+                val gap = (if (n.gap > 0) n.gap else 6.0).dp
+                if (n.direction == "horizontal") {
+                    Row(
+                        m.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(gap),
+                        verticalAlignment = Alignment.Top,
+                    ) { n.childrenList.forEach { c -> key(c.id) { UiNodeView(c, form, events, false, Modifier) } } }
+                } else {
+                    val maxH = if (n.maxHeight > 0) n.maxHeight.dp else 320.dp
+                    Column(
+                        m.fillMaxWidth().heightIn(max = maxH).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(gap),
+                    ) { n.childrenList.forEach { c -> key(c.id) { UiNodeView(c, form, events, false, Modifier) } } }
+                }
+            }
             else -> Column(
                 m.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy((if (n.gap > 0) n.gap else if (n.kind == "list") 0.0 else 6.0).dp),
@@ -214,20 +323,29 @@ private fun UiContainer(n: UiNode, form: BlockForm, events: BlockEvents, modifie
                         if (n.kind == "list" && c.tap) {
                             // The list's row answers the tap, as the desktop's rows do.
                             Box(Modifier.fillMaxWidth().clickable { events.send(c.id, "tap", "") }.padding(vertical = 6.dp)) {
-                                UiTree(c.toBuilder().setTap(false).build(), form, events)
+                                UiNodeView(c.toBuilder().setTap(false).build(), form, events, false, Modifier)
                             }
-                        } else UiTree(c, form, events)
+                        } else UiNodeView(c, form, events, false, Modifier)
                     }
                 }
             }
         }
     }
-    if (n.drag.isNotEmpty() || n.drop) {
+    if (n.kind == "card" || n.drag.isNotEmpty() || n.drop || canDrop || picked) {
+        val border = when {
+            canDrop || picked -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+            else -> MakoColors.cardBorderStroke
+        }
+        val bg = when {
+            canDrop -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f)
+            picked -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.16f)
+            else -> MaterialTheme.colorScheme.surfaceContainerLow
+        }
         Surface(
             modifier = box,
             shape = RoundedCornerShape(10.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            border = MakoColors.cardBorderStroke,
+            color = bg,
+            border = border,
         ) {
             content(Modifier.padding(horizontal = 10.dp, vertical = 8.dp))
         }
@@ -239,7 +357,7 @@ private fun UiContainer(n: UiNode, form: BlockForm, events: BlockEvents, modifie
 @Composable
 private fun RowScope.RowChild(c: UiNode, form: BlockForm, events: BlockEvents) {
     val m = if (c.grow > 0) Modifier.weight(c.grow.toFloat()) else Modifier
-    UiTree(c, form, events, inLine = true, modifier = m)
+    UiNodeView(c, form, events, inLine = true, modifier = m)
 }
 
 @Composable
@@ -311,6 +429,102 @@ private fun UiSelect(n: UiNode, form: BlockForm, events: BlockEvents, modifier: 
                     form.set(n.id, o)
                     if (n.change) events.send(n.id, "change", o)
                 })
+            }
+        }
+    }
+}
+
+/** A multi-line text field; leaving it sends a change if modified. */
+@Composable
+private fun UiTextarea(n: UiNode, form: BlockForm, events: BlockEvents, modifier: Modifier) {
+    OutlinedTextField(
+        value = form.value(n),
+        onValueChange = { form.set(n.id, it) },
+        modifier = modifier.fillMaxWidth()
+            .then(if (n.text.isEmpty()) Modifier else Modifier.semantics { contentDescription = n.text })
+            .onFocusChanged { f ->
+                if (!f.isFocused && n.change) form.leave(n)?.let { events.send(n.id, "change", it) }
+            },
+        enabled = !n.disabled,
+        singleLine = false,
+        minLines = 3,
+        maxLines = 6,
+        placeholder = if (n.text.isEmpty()) null else ({ Text(n.text) }),
+    )
+}
+
+/** A horizontally scrollable strip of tab buttons; tapping sends a change with the chosen label. */
+@Composable
+private fun UiTabs(n: UiNode, form: BlockForm, events: BlockEvents, modifier: Modifier) {
+    val current = form.value(n)
+    Row(
+        modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        n.optionsList.forEach { opt ->
+            val selected = opt == current
+            Surface(
+                modifier = if (n.disabled) Modifier else Modifier.clickable {
+                    form.set(n.id, opt)
+                    if (n.change) events.send(n.id, "change", opt)
+                },
+                shape = RoundedCornerShape(8.dp),
+                color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else MakoColors.cardBorderStroke,
+            ) {
+                Text(
+                    opt,
+                    Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/** A structured table with optional column headers and row children. */
+@Composable
+private fun UiTable(n: UiNode, form: BlockForm, events: BlockEvents, modifier: Modifier) {
+    Surface(
+        modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = MakoColors.cardBorderStroke,
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            if (n.labelsCount > 0) {
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        n.labelsList.forEach { label ->
+                            Text(
+                                label,
+                                Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+                HorizontalDivider()
+            }
+            n.childrenList.forEachIndexed { idx, row ->
+                key(row.id) {
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp)) {
+                        UiNodeView(row, form, events, false, Modifier)
+                    }
+                    if (idx < n.childrenCount - 1) HorizontalDivider()
+                }
             }
         }
     }

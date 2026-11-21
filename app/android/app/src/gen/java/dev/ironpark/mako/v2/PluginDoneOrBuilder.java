@@ -31,4 +31,26 @@ public interface PluginDoneOrBuilder extends
    */
   com.google.protobuf.ByteString
       getOpenUrlBytes();
+
+  /**
+   * <pre>
+   * toast is a short status notice the plugin asked the front-end to show
+   * via mako.toast (revision 41).
+   * </pre>
+   *
+   * <code>string toast = 2 [json_name = "toast"];</code>
+   * @return The toast.
+   */
+  java.lang.String getToast();
+  /**
+   * <pre>
+   * toast is a short status notice the plugin asked the front-end to show
+   * via mako.toast (revision 41).
+   * </pre>
+   *
+   * <code>string toast = 2 [json_name = "toast"];</code>
+   * @return The bytes for toast.
+   */
+  com.google.protobuf.ByteString
+      getToastBytes();
 }

@@ -21,7 +21,9 @@ const host = hostApi(async (method, req) =>
 
 const blocks = new Map();
 const states = new Map();
+const formValues = new Map();
 const commands = new Map();
+const tools = new Map();
 const reloads = new Set();
 let plugin = null;
 
@@ -47,6 +49,10 @@ const mako = Object.freeze({
       need(id);
       return states.get(id);
     },
+    values(id) {
+      need(id);
+      return Object.freeze({ ...(formValues.get(id) || {}) });
+    },
     reload(id) {
       need(id);
       reloads.add(id);
@@ -58,6 +64,13 @@ const mako = Object.freeze({
       if (!declared.commands.includes(id)) throw new Error(`command ${id} is not declared in plugin.toml`);
       if (typeof run !== "function") throw new Error(`command ${id} runs no function`);
       commands.set(id, run);
+    },
+  }),
+  tools: Object.freeze({
+    register(id, run) {
+      if (!(declared.tools || []).includes(id)) throw new Error(`tool ${id} is not declared in plugin.toml`);
+      if (typeof run !== "function") throw new Error(`tool ${id} runs no function`);
+      tools.set(id, run);
     },
   }),
 });
@@ -111,23 +124,40 @@ class UiNode {
     this.n.onChange = [name, ...args];
     return this;
   }
-  drag(payload) {
+  drag(payload, group) {
     this.n.drag = String(payload ?? "");
+    if (group !== undefined) this.n.dragGroup = String(group);
     return this;
   }
   onDrop(name, ...args) {
     this.n.onDrop = [name, ...args];
     return this;
   }
+  dropAccept(...groups) {
+    this.n.dropAccept = groups.map(String);
+    return this;
+  }
 }
 
-const options = ["key", "tone", "weight", "size", "grow", "gap", "icon", "disabled", "onTap", "onChange", "onSubmit", "drag", "onDrop", "placeholder", "labels"];
+const options = [
+  "key", "tone", "weight", "size", "grow", "gap", "icon", "disabled",
+  "onTap", "onChange", "onSubmit", "drag", "dragGroup", "onDrop", "dropAccept",
+  "direction", "maxHeight", "placeholder", "labels",
+];
 
 function node(kind, fields, opts) {
   const n = new UiNode(kind, fields);
   for (const [k, v] of Object.entries(opts || {})) {
     if (!options.includes(k)) throw new Error(`${k} is not an option of a node`);
-    n.n[k] = k === "key" || k === "drag" ? String(v ?? "") : k === "labels" ? children(v).map(String) : v;
+    if (k === "key" || k === "drag" || k === "dragGroup" || k === "direction") {
+      n.n[k] = String(v ?? "");
+    } else if (k === "labels" || k === "dropAccept") {
+      n.n[k] = children(v).map(String);
+    } else if (k === "maxHeight") {
+      n.n[k] = Number(v);
+    } else {
+      n.n[k] = v;
+    }
   }
   return n;
 }
@@ -141,6 +171,8 @@ const ui = Object.freeze({
   column: (c, o) => node("column", { children: children(c) }, o),
   row: (c, o) => node("row", { children: children(c) }, o),
   stack: (c, o) => node("stack", { children: children(c) }, o),
+  card: (c, o) => node("card", { children: children(c) }, o),
+  scroll: (c, o) => node("scroll", { children: children(c) }, o),
   text: (t, o) => node("text", { text: String(t) }, o),
   icon: (name, o) => node("icon", { icon: String(name) }, o),
   pill: (t, o) => node("pill", { text: String(t) }, o),
@@ -148,8 +180,11 @@ const ui = Object.freeze({
   button: (t, o) => node("button", { text: String(t) }, o),
   list: (items, row, o) => node("list", { children: children(items).map((it, i) => row(it, i)) }, o),
   input: (v, o) => node("input", { value: String(v ?? "") }, o),
+  textarea: (v, o) => node("textarea", { value: String(v ?? "") }, o),
   toggle: (c, label, o) => node("toggle", { checked: !!c, text: String(label ?? "") }, o),
   select: (v, opts, o) => node("select", { value: String(v ?? ""), options: children(opts).map(String) }, o),
+  tabs: (v, opts, o) => node("tabs", { value: String(v ?? ""), options: children(opts).map(String) }, o),
+  table: (headers, rows, o) => node("table", { labels: children(headers).map(String), children: children(rows) }, o),
   markdown: (t, o) => node("markdown", { text: String(t) }, o),
   code: (t, language, o) => node("code", { text: String(t), language: language ?? "" }, o),
   progress: (v, o) => node("progress", { progress: Number(v) }, o),
@@ -187,17 +222,29 @@ const R = {
   render(id) {
     return JSON.stringify(need(id).render(states.get(id), ui));
   },
-  async event(id, name, args) {
+  async event(id, name, args, valsJson) {
     const b = need(id);
     const on = b.on || {};
     const h = Object.prototype.hasOwnProperty.call(on, name) ? on[name] : undefined;
     if (typeof h !== "function") throw new Error(`block ${id} takes no message ${name}`);
-    await h(states.get(id), ...JSON.parse(args));
+    const parsedVals = valsJson ? JSON.parse(valsJson) : {};
+    formValues.set(id, parsedVals);
+    try {
+      await h(states.get(id), ...JSON.parse(args));
+    } finally {
+      formValues.delete(id);
+    }
   },
   async command(id) {
     const run = commands.get(id);
     if (!run) throw new Error(`the plugin registered nothing for command ${id}`);
     await run();
+  },
+  async callTool(id, argsJson) {
+    const run = tools.get(id);
+    if (!run) throw new Error(`the plugin registered nothing for tool ${id}`);
+    const res = await run(argsJson ? JSON.parse(argsJson) : {});
+    return JSON.stringify(res === undefined ? null : res);
   },
   // An event a plugin subscribed to: the handler of its kind in the
   // default export's on, if it has one.

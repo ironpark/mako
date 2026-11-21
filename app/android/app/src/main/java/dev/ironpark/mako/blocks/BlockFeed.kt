@@ -66,7 +66,7 @@ private const val RETRY = 1_000L
 private const val MAX_RETRY = 15_000L
 
 /** The kinds of node whose values a block's events carry. */
-private val FIELDS = setOf("input", "toggle", "select")
+private val FIELDS = setOf("input", "textarea", "toggle", "select", "tabs")
 
 /**
  * BlockForm is what the user set in a block's inputs, toggles and selects,

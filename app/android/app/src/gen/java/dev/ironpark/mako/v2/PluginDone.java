@@ -20,6 +20,7 @@ public  final class PluginDone extends
     PluginDoneOrBuilder {
   private PluginDone() {
     openUrl_ = "";
+    toast_ = "";
   }
   public static final int OPEN_URL_FIELD_NUMBER = 1;
   private java.lang.String openUrl_;
@@ -90,6 +91,78 @@ public  final class PluginDone extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     openUrl_ = value.toStringUtf8();
+
+  }
+
+  public static final int TOAST_FIELD_NUMBER = 2;
+  private java.lang.String toast_;
+  /**
+   * <pre>
+   * toast is a short status notice the plugin asked the front-end to show
+   * via mako.toast (revision 41).
+   * </pre>
+   *
+   * <code>string toast = 2 [json_name = "toast"];</code>
+   * @return The toast.
+   */
+  @java.lang.Override
+  public java.lang.String getToast() {
+    return toast_;
+  }
+  /**
+   * <pre>
+   * toast is a short status notice the plugin asked the front-end to show
+   * via mako.toast (revision 41).
+   * </pre>
+   *
+   * <code>string toast = 2 [json_name = "toast"];</code>
+   * @return The bytes for toast.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getToastBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(toast_);
+  }
+  /**
+   * <pre>
+   * toast is a short status notice the plugin asked the front-end to show
+   * via mako.toast (revision 41).
+   * </pre>
+   *
+   * <code>string toast = 2 [json_name = "toast"];</code>
+   * @param value The toast to set.
+   */
+  private void setToast(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    toast_ = value;
+  }
+  /**
+   * <pre>
+   * toast is a short status notice the plugin asked the front-end to show
+   * via mako.toast (revision 41).
+   * </pre>
+   *
+   * <code>string toast = 2 [json_name = "toast"];</code>
+   */
+  private void clearToast() {
+
+    toast_ = getDefaultInstance().getToast();
+  }
+  /**
+   * <pre>
+   * toast is a short status notice the plugin asked the front-end to show
+   * via mako.toast (revision 41).
+   * </pre>
+   *
+   * <code>string toast = 2 [json_name = "toast"];</code>
+   * @param value The bytes for toast to set.
+   */
+  private void setToastBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    toast_ = value.toStringUtf8();
 
   }
 
@@ -268,6 +341,80 @@ public  final class PluginDone extends
       return this;
     }
 
+    /**
+     * <pre>
+     * toast is a short status notice the plugin asked the front-end to show
+     * via mako.toast (revision 41).
+     * </pre>
+     *
+     * <code>string toast = 2 [json_name = "toast"];</code>
+     * @return The toast.
+     */
+    @java.lang.Override
+    public java.lang.String getToast() {
+      return instance.getToast();
+    }
+    /**
+     * <pre>
+     * toast is a short status notice the plugin asked the front-end to show
+     * via mako.toast (revision 41).
+     * </pre>
+     *
+     * <code>string toast = 2 [json_name = "toast"];</code>
+     * @return The bytes for toast.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getToastBytes() {
+      return instance.getToastBytes();
+    }
+    /**
+     * <pre>
+     * toast is a short status notice the plugin asked the front-end to show
+     * via mako.toast (revision 41).
+     * </pre>
+     *
+     * <code>string toast = 2 [json_name = "toast"];</code>
+     * @param value The toast to set.
+     * @return This builder for chaining.
+     */
+    public Builder setToast(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setToast(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * toast is a short status notice the plugin asked the front-end to show
+     * via mako.toast (revision 41).
+     * </pre>
+     *
+     * <code>string toast = 2 [json_name = "toast"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearToast() {
+      copyOnWrite();
+      instance.clearToast();
+      return this;
+    }
+    /**
+     * <pre>
+     * toast is a short status notice the plugin asked the front-end to show
+     * via mako.toast (revision 41).
+     * </pre>
+     *
+     * <code>string toast = 2 [json_name = "toast"];</code>
+     * @param value The bytes for toast to set.
+     * @return This builder for chaining.
+     */
+    public Builder setToastBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setToastBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginDone)
   }
   @java.lang.Override
@@ -285,9 +432,11 @@ public  final class PluginDone extends
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
             "openUrl_",
+            "toast_",
           };
           java.lang.String info =
-              "\u0000\u0001\u0000\u0000\u0001\u0001\u0001\u0000\u0000\u0000\u0001\u0208";
+              "\u0000\u0002\u0000\u0000\u0001\u0002\u0002\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -34,7 +34,7 @@ func (p *plugin) invoke(method string, gesture bool, args ...any) (string, error
 	switch {
 	case errors.As(err, &over):
 		p.kill(over.msg)
-	case method == "load" || method == "event" || method == "command" || method == "sessionEvent":
+	case method == "load" || method == "event" || method == "command" || method == "sessionEvent" || method == "callTool":
 		p.count(&p.failures, "calls", err)
 	}
 	return out, err

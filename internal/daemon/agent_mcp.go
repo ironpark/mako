@@ -29,6 +29,7 @@ import (
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/layoutdoc"
+	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transport"
@@ -51,6 +52,7 @@ type projectAgents struct {
 	watches      map[string]int       // active watch_agent count per caller session
 	cliWaiters   map[string]int       // active `mako-msg wait` / mod long-poll waiters per session (suppress PTY fallback)
 	modPollUntil map[string]time.Time // grace window between mod long-poll cycles so PTY fallback never races
+	pluginTools  map[*sdk.Server][]string
 	agySidecar   *agySidecarClient
 }
 
@@ -515,6 +517,7 @@ type agentMCPSnapshot struct {
 	available             []availableAgent
 	presets               []spawnablePreset
 	blocks                []layoutdoc.Block
+	pluginTools           []plugin.ContributedTool
 	listAgentsDesc        string
 	listAgentProfilesDesc string
 	spawnAgentDesc        string
@@ -526,11 +529,16 @@ func (d *Daemon) agentMCPSnapshot() agentMCPSnapshot {
 	available := d.availableAgents()
 	presets := d.spawnablePresets()
 	blocks := d.blocks()
+	var pluginTools []plugin.ContributedTool
+	if d.plugins != nil {
+		pluginTools = d.plugins.Tools()
+	}
 	sigPayload, _ := json.Marshal(struct {
-		Available []availableAgent  `json:"available"`
-		Presets   []spawnablePreset `json:"presets"`
-		Blocks    []layoutdoc.Block `json:"blocks"`
-	}{available, presets, blocks})
+		Available   []availableAgent         `json:"available"`
+		Presets     []spawnablePreset        `json:"presets"`
+		Blocks      []layoutdoc.Block        `json:"blocks"`
+		PluginTools []plugin.ContributedTool `json:"plugin_tools"`
+	}{available, presets, blocks, pluginTools})
 	sum := sha256.Sum256(sigPayload)
 	agentSummaryText := summarizeAvailableForSchema(available)
 	listAgentsDesc := "List active and saved agent sessions in this project, on this node and, for a project of several folders, on other nodes, with their IDs, status and messaging support, plus available agent types and profiles."
@@ -551,6 +559,7 @@ func (d *Daemon) agentMCPSnapshot() agentMCPSnapshot {
 		available:             available,
 		presets:               presets,
 		blocks:                blocks,
+		pluginTools:           pluginTools,
 		listAgentsDesc:        listAgentsDesc,
 		listAgentProfilesDesc: listAgentProfilesDesc,
 		spawnAgentDesc:        spawnAgentDesc,
@@ -680,6 +689,58 @@ func (d *Daemon) addDynamicAgentTools(server *sdk.Server, peer *agentPeer, snap 
 		return nil, out, err
 	})
 	d.addListBlocksTool(server, peer, snap.listBlocksDesc)
+	d.syncPluginMCPTools(server, peer, snap.pluginTools)
+}
+
+func (d *Daemon) syncPluginMCPTools(server *sdk.Server, peer *agentPeer, tools []plugin.ContributedTool) {
+	d.projectAgents.mu.Lock()
+	if d.projectAgents.pluginTools == nil {
+		d.projectAgents.pluginTools = map[*sdk.Server][]string{}
+	}
+	prev := d.projectAgents.pluginTools[server]
+	nextNames := make([]string, 0, len(tools))
+	for _, tl := range tools {
+		nextNames = append(nextNames, tl.MCPName)
+	}
+	d.projectAgents.pluginTools[server] = nextNames
+	d.projectAgents.mu.Unlock()
+
+	var removed []string
+	for _, old := range prev {
+		if !slices.Contains(nextNames, old) {
+			removed = append(removed, old)
+		}
+	}
+	if len(removed) > 0 {
+		server.RemoveTools(removed...)
+	}
+	for _, tl := range tools {
+		tool := tl
+		rawSchema, _ := json.Marshal(tool.Schema)
+		server.AddTool(&sdk.Tool{
+			Name:        tool.MCPName,
+			Description: tool.Description,
+			InputSchema: json.RawMessage(rawSchema),
+		}, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+			if _, err := d.projectCaller(peer); err != nil {
+				return nil, err
+			}
+			if d.plugins == nil {
+				return nil, errors.New("plugins are not enabled on this node")
+			}
+			var args json.RawMessage
+			if req != nil && req.Params != nil {
+				args = req.Params.Arguments
+			}
+			out, err := d.plugins.CallTool(ctx, tool.PluginID, tool.ID, args)
+			if err != nil {
+				return nil, err
+			}
+			return &sdk.CallToolResult{
+				Content: []sdk.Content{&sdk.TextContent{Text: out}},
+			}, nil
+		})
+	}
 }
 
 func (d *Daemon) registerProjectAgentTools(server *sdk.Server, peer *agentPeer, snap agentMCPSnapshot) {
@@ -747,7 +808,11 @@ func (d *Daemon) syncPeerServerLocked(peer *agentPeer, srv *sdk.Server, snap age
 	case !enabled && prev == agentMCPSigDisabled:
 		return
 	case !enabled:
-		srv.RemoveTools(agentMCPToolNames...)
+		d.projectAgents.mu.Lock()
+		extra := d.projectAgents.pluginTools[srv]
+		delete(d.projectAgents.pluginTools, srv)
+		d.projectAgents.mu.Unlock()
+		srv.RemoveTools(append(slices.Clone(agentMCPToolNames), extra...)...)
 		nextSig = agentMCPSigDisabled
 	case prev == agentMCPSigDisabled:
 		d.registerProjectAgentTools(srv, peer, snap)

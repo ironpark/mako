@@ -37,6 +37,9 @@ public  final class UiNode extends
     series_ = emptyProtobufList();
     labels_ = emptyProtobufList();
     drag_ = "";
+    dragGroup_ = "";
+    dropAccept_ = emptyProtobufList();
+    direction_ = "";
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -1443,6 +1446,269 @@ public  final class UiNode extends
   private void clearDrop() {
 
     drop_ = false;
+  }
+
+  public static final int DRAG_GROUP_FIELD_NUMBER = 24;
+  private java.lang.String dragGroup_;
+  /**
+   * <pre>
+   * drag_group tags a draggable node; drop_accept restricts a drop target to
+   * drags matching one of those groups (empty accepts any group, revision 41).
+   * </pre>
+   *
+   * <code>string drag_group = 24 [json_name = "dragGroup"];</code>
+   * @return The dragGroup.
+   */
+  @java.lang.Override
+  public java.lang.String getDragGroup() {
+    return dragGroup_;
+  }
+  /**
+   * <pre>
+   * drag_group tags a draggable node; drop_accept restricts a drop target to
+   * drags matching one of those groups (empty accepts any group, revision 41).
+   * </pre>
+   *
+   * <code>string drag_group = 24 [json_name = "dragGroup"];</code>
+   * @return The bytes for dragGroup.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getDragGroupBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(dragGroup_);
+  }
+  /**
+   * <pre>
+   * drag_group tags a draggable node; drop_accept restricts a drop target to
+   * drags matching one of those groups (empty accepts any group, revision 41).
+   * </pre>
+   *
+   * <code>string drag_group = 24 [json_name = "dragGroup"];</code>
+   * @param value The dragGroup to set.
+   */
+  private void setDragGroup(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    dragGroup_ = value;
+  }
+  /**
+   * <pre>
+   * drag_group tags a draggable node; drop_accept restricts a drop target to
+   * drags matching one of those groups (empty accepts any group, revision 41).
+   * </pre>
+   *
+   * <code>string drag_group = 24 [json_name = "dragGroup"];</code>
+   */
+  private void clearDragGroup() {
+
+    dragGroup_ = getDefaultInstance().getDragGroup();
+  }
+  /**
+   * <pre>
+   * drag_group tags a draggable node; drop_accept restricts a drop target to
+   * drags matching one of those groups (empty accepts any group, revision 41).
+   * </pre>
+   *
+   * <code>string drag_group = 24 [json_name = "dragGroup"];</code>
+   * @param value The bytes for dragGroup to set.
+   */
+  private void setDragGroupBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    dragGroup_ = value.toStringUtf8();
+
+  }
+
+  public static final int DROP_ACCEPT_FIELD_NUMBER = 25;
+  private com.google.protobuf.Internal.ProtobufList<java.lang.String> dropAccept_;
+  /**
+   * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+   * @return A list containing the dropAccept.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.String> getDropAcceptList() {
+    return dropAccept_;
+  }
+  /**
+   * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+   * @return The count of dropAccept.
+   */
+  @java.lang.Override
+  public int getDropAcceptCount() {
+    return dropAccept_.size();
+  }
+  /**
+   * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+   * @param index The index of the element to return.
+   * @return The dropAccept at the given index.
+   */
+  @java.lang.Override
+  public java.lang.String getDropAccept(int index) {
+    return dropAccept_.get(index);
+  }
+  /**
+   * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+   * @param index The index of the value to return.
+   * @return The bytes of the dropAccept at the given index.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getDropAcceptBytes(int index) {
+    return com.google.protobuf.ByteString.copyFromUtf8(
+        dropAccept_.get(index));
+  }
+  private void ensureDropAcceptIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<java.lang.String> tmp =
+        dropAccept_;  if (!tmp.isModifiable()) {
+      dropAccept_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+  /**
+   * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+   * @param index The index to set the value at.
+   * @param value The dropAccept to set.
+   */
+  private void setDropAccept(
+      int index, java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureDropAcceptIsMutable();
+    dropAccept_.set(index, value);
+  }
+  /**
+   * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+   * @param value The dropAccept to add.
+   */
+  private void addDropAccept(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureDropAcceptIsMutable();
+    dropAccept_.add(value);
+  }
+  /**
+   * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+   * @param values The dropAccept to add.
+   */
+  private void addAllDropAccept(
+      java.lang.Iterable<java.lang.String> values) {
+    ensureDropAcceptIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, dropAccept_);
+  }
+  /**
+   * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+   */
+  private void clearDropAccept() {
+    dropAccept_ = emptyProtobufList();
+  }
+  /**
+   * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+   * @param value The bytes of the dropAccept to add.
+   */
+  private void addDropAcceptBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    ensureDropAcceptIsMutable();
+    dropAccept_.add(value.toStringUtf8());
+  }
+
+  public static final int DIRECTION_FIELD_NUMBER = 26;
+  private java.lang.String direction_;
+  /**
+   * <pre>
+   * direction ("vertical" or "horizontal") and max_height (px) configure a
+   * scroll container (revision 41).
+   * </pre>
+   *
+   * <code>string direction = 26 [json_name = "direction"];</code>
+   * @return The direction.
+   */
+  @java.lang.Override
+  public java.lang.String getDirection() {
+    return direction_;
+  }
+  /**
+   * <pre>
+   * direction ("vertical" or "horizontal") and max_height (px) configure a
+   * scroll container (revision 41).
+   * </pre>
+   *
+   * <code>string direction = 26 [json_name = "direction"];</code>
+   * @return The bytes for direction.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getDirectionBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(direction_);
+  }
+  /**
+   * <pre>
+   * direction ("vertical" or "horizontal") and max_height (px) configure a
+   * scroll container (revision 41).
+   * </pre>
+   *
+   * <code>string direction = 26 [json_name = "direction"];</code>
+   * @param value The direction to set.
+   */
+  private void setDirection(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    direction_ = value;
+  }
+  /**
+   * <pre>
+   * direction ("vertical" or "horizontal") and max_height (px) configure a
+   * scroll container (revision 41).
+   * </pre>
+   *
+   * <code>string direction = 26 [json_name = "direction"];</code>
+   */
+  private void clearDirection() {
+
+    direction_ = getDefaultInstance().getDirection();
+  }
+  /**
+   * <pre>
+   * direction ("vertical" or "horizontal") and max_height (px) configure a
+   * scroll container (revision 41).
+   * </pre>
+   *
+   * <code>string direction = 26 [json_name = "direction"];</code>
+   * @param value The bytes for direction to set.
+   */
+  private void setDirectionBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    direction_ = value.toStringUtf8();
+
+  }
+
+  public static final int MAX_HEIGHT_FIELD_NUMBER = 27;
+  private double maxHeight_;
+  /**
+   * <code>double max_height = 27 [json_name = "maxHeight"];</code>
+   * @return The maxHeight.
+   */
+  @java.lang.Override
+  public double getMaxHeight() {
+    return maxHeight_;
+  }
+  /**
+   * <code>double max_height = 27 [json_name = "maxHeight"];</code>
+   * @param value The maxHeight to set.
+   */
+  private void setMaxHeight(double value) {
+    
+    maxHeight_ = value;
+  }
+  /**
+   * <code>double max_height = 27 [json_name = "maxHeight"];</code>
+   */
+  private void clearMaxHeight() {
+
+    maxHeight_ = 0D;
   }
 
   public static dev.ironpark.mako.v2.UiNode parseFrom(
@@ -3008,6 +3274,274 @@ public  final class UiNode extends
       return this;
     }
 
+    /**
+     * <pre>
+     * drag_group tags a draggable node; drop_accept restricts a drop target to
+     * drags matching one of those groups (empty accepts any group, revision 41).
+     * </pre>
+     *
+     * <code>string drag_group = 24 [json_name = "dragGroup"];</code>
+     * @return The dragGroup.
+     */
+    @java.lang.Override
+    public java.lang.String getDragGroup() {
+      return instance.getDragGroup();
+    }
+    /**
+     * <pre>
+     * drag_group tags a draggable node; drop_accept restricts a drop target to
+     * drags matching one of those groups (empty accepts any group, revision 41).
+     * </pre>
+     *
+     * <code>string drag_group = 24 [json_name = "dragGroup"];</code>
+     * @return The bytes for dragGroup.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getDragGroupBytes() {
+      return instance.getDragGroupBytes();
+    }
+    /**
+     * <pre>
+     * drag_group tags a draggable node; drop_accept restricts a drop target to
+     * drags matching one of those groups (empty accepts any group, revision 41).
+     * </pre>
+     *
+     * <code>string drag_group = 24 [json_name = "dragGroup"];</code>
+     * @param value The dragGroup to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDragGroup(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setDragGroup(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * drag_group tags a draggable node; drop_accept restricts a drop target to
+     * drags matching one of those groups (empty accepts any group, revision 41).
+     * </pre>
+     *
+     * <code>string drag_group = 24 [json_name = "dragGroup"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDragGroup() {
+      copyOnWrite();
+      instance.clearDragGroup();
+      return this;
+    }
+    /**
+     * <pre>
+     * drag_group tags a draggable node; drop_accept restricts a drop target to
+     * drags matching one of those groups (empty accepts any group, revision 41).
+     * </pre>
+     *
+     * <code>string drag_group = 24 [json_name = "dragGroup"];</code>
+     * @param value The bytes for dragGroup to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDragGroupBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setDragGroupBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+     * @return A list containing the dropAccept.
+     */
+    @java.lang.Override
+    public java.util.List<java.lang.String>
+        getDropAcceptList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getDropAcceptList());
+    }
+    /**
+     * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+     * @return The count of dropAccept.
+     */
+    @java.lang.Override
+    public int getDropAcceptCount() {
+      return instance.getDropAcceptCount();
+    }
+    /**
+     * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+     * @param index The index of the element to return.
+     * @return The dropAccept at the given index.
+     */
+    @java.lang.Override
+    public java.lang.String getDropAccept(int index) {
+      return instance.getDropAccept(index);
+    }
+    /**
+     * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the dropAccept at the given index.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getDropAcceptBytes(int index) {
+      return instance.getDropAcceptBytes(index);
+    }
+    /**
+     * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+     * @param index The index to set the value at.
+     * @param value The dropAccept to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDropAccept(
+        int index, java.lang.String value) {
+      copyOnWrite();
+      instance.setDropAccept(index, value);
+      return this;
+    }
+    /**
+     * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+     * @param value The dropAccept to add.
+     * @return This builder for chaining.
+     */
+    public Builder addDropAccept(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.addDropAccept(value);
+      return this;
+    }
+    /**
+     * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+     * @param values The dropAccept to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllDropAccept(
+        java.lang.Iterable<java.lang.String> values) {
+      copyOnWrite();
+      instance.addAllDropAccept(values);
+      return this;
+    }
+    /**
+     * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDropAccept() {
+      copyOnWrite();
+      instance.clearDropAccept();
+      return this;
+    }
+    /**
+     * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+     * @param value The bytes of the dropAccept to add.
+     * @return This builder for chaining.
+     */
+    public Builder addDropAcceptBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.addDropAcceptBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * direction ("vertical" or "horizontal") and max_height (px) configure a
+     * scroll container (revision 41).
+     * </pre>
+     *
+     * <code>string direction = 26 [json_name = "direction"];</code>
+     * @return The direction.
+     */
+    @java.lang.Override
+    public java.lang.String getDirection() {
+      return instance.getDirection();
+    }
+    /**
+     * <pre>
+     * direction ("vertical" or "horizontal") and max_height (px) configure a
+     * scroll container (revision 41).
+     * </pre>
+     *
+     * <code>string direction = 26 [json_name = "direction"];</code>
+     * @return The bytes for direction.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getDirectionBytes() {
+      return instance.getDirectionBytes();
+    }
+    /**
+     * <pre>
+     * direction ("vertical" or "horizontal") and max_height (px) configure a
+     * scroll container (revision 41).
+     * </pre>
+     *
+     * <code>string direction = 26 [json_name = "direction"];</code>
+     * @param value The direction to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDirection(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setDirection(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * direction ("vertical" or "horizontal") and max_height (px) configure a
+     * scroll container (revision 41).
+     * </pre>
+     *
+     * <code>string direction = 26 [json_name = "direction"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDirection() {
+      copyOnWrite();
+      instance.clearDirection();
+      return this;
+    }
+    /**
+     * <pre>
+     * direction ("vertical" or "horizontal") and max_height (px) configure a
+     * scroll container (revision 41).
+     * </pre>
+     *
+     * <code>string direction = 26 [json_name = "direction"];</code>
+     * @param value The bytes for direction to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDirectionBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setDirectionBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>double max_height = 27 [json_name = "maxHeight"];</code>
+     * @return The maxHeight.
+     */
+    @java.lang.Override
+    public double getMaxHeight() {
+      return instance.getMaxHeight();
+    }
+    /**
+     * <code>double max_height = 27 [json_name = "maxHeight"];</code>
+     * @param value The maxHeight to set.
+     * @return This builder for chaining.
+     */
+    public Builder setMaxHeight(double value) {
+      copyOnWrite();
+      instance.setMaxHeight(value);
+      return this;
+    }
+    /**
+     * <code>double max_height = 27 [json_name = "maxHeight"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearMaxHeight() {
+      copyOnWrite();
+      instance.clearMaxHeight();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.UiNode)
   }
   @java.lang.Override
@@ -3049,12 +3583,17 @@ public  final class UiNode extends
             "labels_",
             "drag_",
             "drop_",
+            "dragGroup_",
+            "dropAccept_",
+            "direction_",
+            "maxHeight_",
           };
           java.lang.String info =
-              "\u0000\u0017\u0000\u0000\u0001\u0017\u0017\u0000\u0004\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u001b\u0000\u0000\u0001\u001b\u001b\u0000\u0005\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007\n\u021a" +
               "\u000b\u0000\f\u0208\r\u0007\u000e\u0000\u000f\u0000\u0010\u0007\u0011\u0007\u0012" +
-              "\u001b\u0013\u0208\u0014\u001b\u0015\u021a\u0016\u0208\u0017\u0007";
+              "\u001b\u0013\u0208\u0014\u001b\u0015\u021a\u0016\u0208\u0017\u0007\u0018\u0208\u0019" +
+              "\u021a\u001a\u0208\u001b\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

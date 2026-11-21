@@ -63,6 +63,7 @@ type plugin struct {
 	running bool
 	inst    map[string]*instance
 	changed chan struct{}
+	logs    []*protocol.PluginLog
 
 	// The actor's alone.
 	rt       *jsRuntime
@@ -73,6 +74,26 @@ type plugin struct {
 	lastUsed       time.Time
 	gesture        bool   // the call under way answers the user
 	openURL        string // a link the call asked to open
+	toast          string // a short notice the call asked to show
+}
+
+const maxPluginLogs = 40
+
+func (p *plugin) recordLog(level, msg string) {
+	if level == "" {
+		level = "info"
+	}
+	entry := &protocol.PluginLog{
+		At:      time.Now().UnixMilli(),
+		Level:   level,
+		Message: protocol.Printable(msg),
+	}
+	p.mu.Lock()
+	p.logs = append(p.logs, entry)
+	if len(p.logs) > maxPluginLogs {
+		p.logs = p.logs[len(p.logs)-maxPluginLogs:]
+	}
+	p.mu.Unlock()
 }
 
 // instance is a block of a plugin's: its state lives in the runtime; its
@@ -291,9 +312,17 @@ func (p *plugin) info() *protocol.PluginInfo {
 	for _, c := range man.Commands {
 		out.Commands = append(out.Commands, &protocol.PluginCommand{Id: c.ID, Title: c.Title})
 	}
+	for _, tl := range man.Tools {
+		out.Tools = append(out.Tools, &protocol.PluginTool{Id: tl.ID, Description: tl.Description})
+	}
 	for _, s := range man.Settings {
 		out.Settings = append(out.Settings, p.settings.forFront(s))
 	}
+	if len(p.logs) > 0 {
+		out.Logs = append([]*protocol.PluginLog(nil), p.logs...)
+	}
+	out.StorageUsed = int64(p.store.used())
+	out.StorageQuota = int64(p.m.lim.Storage)
 	return out
 }
 

@@ -76,17 +76,30 @@ func TestPluginTreeIsDrawn(t *testing.T) {
 			Series: []*protocol.UiSeries{{Name: "passed", Tone: "success", Values: []float64{3, 5}}, {Name: "failed", Values: []float64{1, 0}}}},
 		{Id: "/cl", Kind: "chart", Chart: "line", Series: []*protocol.UiSeries{{Values: []float64{1, 4, 2}}}},
 		{Id: "/cs", Kind: "chart", Chart: "sparkline", Text: "Load", Series: []*protocol.UiSeries{{Tone: "accent", Values: []float64{1, 4, 2, 8}}}},
+		{Id: "/tb", Kind: "tabs", Value: "Overview", Options: []string{"Overview", "Logs"}, Change: true},
+		{Id: "/sc", Kind: "scroll", Direction: "vertical", MaxHeight: 160, Children: []*protocol.UiNode{
+			{Id: "/sc/card", Kind: "card", Children: []*protocol.UiNode{
+				{Id: "/sc/card/t", Kind: "text", Text: "Card body"},
+				{Id: "/sc/card/ta", Kind: "textarea", Value: "Notes", Text: "Add notes", Change: true},
+			}},
+		}},
+		{Id: "/tbl", Kind: "table", Labels: []string{"Job", "Result"}, Children: []*protocol.UiNode{
+			{Id: "/tbl/r1", Kind: "row", Children: []*protocol.UiNode{
+				{Id: "/tbl/r1/a", Kind: "text", Text: "unit-tests", Grow: 1},
+				{Id: "/tbl/r1/b", Kind: "pill", Text: "passed", Tone: "success"},
+			}},
+		}},
 	}}
 	m := newModel(config.Default(), "")
 	p := ggui.ProbeBuilder(func() ggui.Widget {
 		return pluginFrame(m, "plugin:ci-status/ci", "ci-status", "CI", &protocol.BlockUpdate{Title: "CI", State: protocol.PluginRunning, Tree: tree})
-	}, ggui.Sz(420, 1100))
+	}, ggui.Sz(420, 1500))
 	defer p.Close()
 	for range 3 {
 		p.Frame()
 	}
 	sem := p.Semantics().String()
-	for _, want := range []string{"CI", "ci-status", "Latest runs", "Refresh", "failure", "main", "Only failures", "bold", "go test", "Builds a day", "Load"} {
+	for _, want := range []string{"CI", "ci-status", "Latest runs", "Refresh", "failure", "main", "Only failures", "bold", "go test", "Builds a day", "Load", "Overview", "Card body", "unit-tests"} {
 		if !strings.Contains(sem, want) {
 			t.Errorf("no %q in:\n%s", want, sem)
 		}
@@ -142,21 +155,24 @@ func TestPluginCommandsAndSettings(t *testing.T) {
 	before := len(m.commands())
 	m.setPlugins([]*protocol.PluginInfo{ciPlugin(protocol.PluginRunning)})
 	cmds := m.commands()
-	if len(cmds) != before+1 {
-		t.Fatalf("%d commands, %d before", len(cmds), before)
+	if len(cmds) != before+2 {
+		t.Fatalf("%d commands, %d before (expected +1 plugin command +1 block open)", len(cmds), before)
 	}
-	found := false
+	foundCmd, foundOpen := false, false
 	for _, c := range cmds {
 		if c.Category == "ci-status" && c.ID == "Re-run the latest failed CI run" && !c.Disabled {
-			found = true
+			foundCmd = true
+		}
+		if c.Category == "ci-status" && strings.Contains(c.ID, "CI") && !c.Disabled {
+			foundOpen = true
 		}
 	}
-	if !found {
-		t.Fatal("the plugin's command is not in the palette under its name")
+	if !foundCmd || !foundOpen {
+		t.Fatalf("missing palette entries: cmd=%v open=%v", foundCmd, foundOpen)
 	}
 	m.setPlugins([]*protocol.PluginInfo{ciPlugin(protocol.PluginWaiting)})
 	for _, c := range m.commands() {
-		if c.Category == "ci-status" && !c.Disabled {
+		if c.Category == "ci-status" && c.ID == "Re-run the latest failed CI run" && !c.Disabled {
 			t.Fatal("a waiting plugin's command can be run")
 		}
 	}
@@ -284,5 +300,76 @@ func TestPluginBlockDragAndDrop(t *testing.T) {
 	p.Frame()
 	if len(got) != 1 || got[0] != (ev{"plugin:kanban/board", "/done", protocol.UiDrop, "c1"}) {
 		t.Fatalf("drop events = %+v, want drop of c1 on /done", got)
+	}
+}
+
+// Drag groups filter which drop zones accept a dragged item: a node tagged
+// dragGroup="card" is rejected by dropAccept=["lane"] and accepted by
+// dropAccept=["card"].
+func TestPluginBlockDragGroupFiltering(t *testing.T) {
+	tree := &protocol.UiNode{Kind: "row", Gap: 12, Children: []*protocol.UiNode{
+		{Id: "/src", Kind: "column", Grow: 1, Children: []*protocol.UiNode{
+			{Id: "/src/c1", Kind: "card", Drag: "c1", DragGroup: "card", Children: []*protocol.UiNode{
+				{Id: "/src/c1/t", Kind: "text", Text: "Card One"},
+			}},
+		}},
+		{Id: "/wrong", Kind: "column", Grow: 1, Drop: true, DropAccept: []string{"lane"}, Children: []*protocol.UiNode{
+			{Id: "/wrong/t", Kind: "text", Text: "Lane only"},
+		}},
+		{Id: "/right", Kind: "column", Grow: 1, Drop: true, DropAccept: []string{"card"}, Children: []*protocol.UiNode{
+			{Id: "/right/t", Kind: "text", Text: "Cards ok"},
+		}},
+	}}
+	type ev struct{ node, kind, value string }
+	var got []ev
+	form := newBlockForm()
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		form.redraw()
+		v := &treeView{
+			block: "plugin:kanban/board",
+			form:  form,
+			onEvent: func(_, node, kind, value string, _ map[string]string) {
+				got = append(got, ev{node, kind, value})
+			},
+		}
+		return v.node(tree, false)
+	}, ggui.Sz(600, 260))
+	defer p.Close()
+	p.Frame()
+
+	center := func(r ggui.Rect) ggui.Point {
+		return ggui.Pt(r.Origin.X+r.Size.W/2, r.Origin.Y+r.Size.H/2)
+	}
+	drag := func(from, to ggui.Point) {
+		p.Press(from)
+		p.Frame()
+		p.Move(ggui.Pt((from.X+to.X)/2, (from.Y+to.Y)/2))
+		p.Frame()
+		p.Move(to)
+		p.Frame()
+		p.Release(to)
+		p.Frame()
+	}
+
+	card, ok := p.Semantics().Find(ggui.RoleText, "Card One")
+	if !ok {
+		t.Fatalf("no Card One:\n%s", p.Semantics().String())
+	}
+	wrong, ok := p.Semantics().Find(ggui.RoleText, "Lane only")
+	if !ok {
+		t.Fatalf("no Lane only:\n%s", p.Semantics().String())
+	}
+	right, ok := p.Semantics().Find(ggui.RoleText, "Cards ok")
+	if !ok {
+		t.Fatalf("no Cards ok:\n%s", p.Semantics().String())
+	}
+
+	drag(center(card.Rect), center(wrong.Rect))
+	if len(got) != 0 {
+		t.Fatalf("drop onto non-matching group fired: %+v", got)
+	}
+	drag(center(card.Rect), center(right.Rect))
+	if len(got) != 1 || got[0] != (ev{"/right", protocol.UiDrop, "c1"}) {
+		t.Fatalf("drop onto matching group = %+v", got)
 	}
 }

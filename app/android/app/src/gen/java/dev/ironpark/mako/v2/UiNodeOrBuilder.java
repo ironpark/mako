@@ -389,4 +389,79 @@ public interface UiNodeOrBuilder extends
    * @return The drop.
    */
   boolean getDrop();
+
+  /**
+   * <pre>
+   * drag_group tags a draggable node; drop_accept restricts a drop target to
+   * drags matching one of those groups (empty accepts any group, revision 41).
+   * </pre>
+   *
+   * <code>string drag_group = 24 [json_name = "dragGroup"];</code>
+   * @return The dragGroup.
+   */
+  java.lang.String getDragGroup();
+  /**
+   * <pre>
+   * drag_group tags a draggable node; drop_accept restricts a drop target to
+   * drags matching one of those groups (empty accepts any group, revision 41).
+   * </pre>
+   *
+   * <code>string drag_group = 24 [json_name = "dragGroup"];</code>
+   * @return The bytes for dragGroup.
+   */
+  com.google.protobuf.ByteString
+      getDragGroupBytes();
+
+  /**
+   * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+   * @return A list containing the dropAccept.
+   */
+  java.util.List<java.lang.String>
+      getDropAcceptList();
+  /**
+   * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+   * @return The count of dropAccept.
+   */
+  int getDropAcceptCount();
+  /**
+   * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+   * @param index The index of the element to return.
+   * @return The dropAccept at the given index.
+   */
+  java.lang.String getDropAccept(int index);
+  /**
+   * <code>repeated string drop_accept = 25 [json_name = "dropAccept"];</code>
+   * @param index The index of the element to return.
+   * @return The dropAccept at the given index.
+   */
+  com.google.protobuf.ByteString
+      getDropAcceptBytes(int index);
+
+  /**
+   * <pre>
+   * direction ("vertical" or "horizontal") and max_height (px) configure a
+   * scroll container (revision 41).
+   * </pre>
+   *
+   * <code>string direction = 26 [json_name = "direction"];</code>
+   * @return The direction.
+   */
+  java.lang.String getDirection();
+  /**
+   * <pre>
+   * direction ("vertical" or "horizontal") and max_height (px) configure a
+   * scroll container (revision 41).
+   * </pre>
+   *
+   * <code>string direction = 26 [json_name = "direction"];</code>
+   * @return The bytes for direction.
+   */
+  com.google.protobuf.ByteString
+      getDirectionBytes();
+
+  /**
+   * <code>double max_height = 27 [json_name = "maxHeight"];</code>
+   * @return The maxHeight.
+   */
+  double getMaxHeight();
 }

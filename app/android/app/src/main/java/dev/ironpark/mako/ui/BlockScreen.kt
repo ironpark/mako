@@ -108,6 +108,7 @@ internal fun BlockScreen(mesh: Mesh, node: String, block: String, title: String,
                     // A link the plugin asked, in answer, to open: a web page alone.
                     val link = done.openUrl
                     if (link.startsWith("https://") || link.startsWith("http://")) runCatching { uri.openUri(link) }
+                    if (done.toast.isNotEmpty()) Toast.makeText(context, done.toast, Toast.LENGTH_SHORT).show()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

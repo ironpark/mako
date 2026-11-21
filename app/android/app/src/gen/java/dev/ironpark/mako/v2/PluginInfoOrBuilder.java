@@ -349,4 +349,73 @@ public interface PluginInfoOrBuilder extends
    * @return The agentsAllowed.
    */
   boolean getAgentsAllowed();
+
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.PluginTool> 
+      getToolsList();
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  dev.ironpark.mako.v2.PluginTool getTools(int index);
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  int getToolsCount();
+
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.PluginLog> 
+      getLogsList();
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  dev.ironpark.mako.v2.PluginLog getLogs(int index);
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  int getLogsCount();
+
+  /**
+   * <pre>
+   * storage_used and storage_quota are the bytes the plugin's KV store holds
+   * and its limit on this node (revision 41).
+   * </pre>
+   *
+   * <code>int64 storage_used = 22 [json_name = "storageUsed"];</code>
+   * @return The storageUsed.
+   */
+  long getStorageUsed();
+
+  /**
+   * <code>int64 storage_quota = 23 [json_name = "storageQuota"];</code>
+   * @return The storageQuota.
+   */
+  long getStorageQuota();
 }

@@ -68,6 +68,12 @@ slots = ["right", "bottom"]   # where a layout might place it: left, right, top,
 id = "rerun"
 title = "Re-run the latest failed CI run"
 
+[[contributes.tool]]      # optional MCP tool exposed to running agents as plugin_<id>_<tool>
+id = "list_runs"
+description = "Return the latest CI runs as JSON"
+[contributes.tool.params]
+branch = { type = "string", description = "Filter by branch name" }
+
 [contributes.settings]    # the settings page is made from this
 repo = { type = "string", label = "Repository", description = "owner/name on GitHub" }
 token = { type = "secret", label = "GitHub token" }
@@ -88,6 +94,7 @@ Plugins and in its blocks' places.
 | `permissions` | At most 16; see [Permissions](#permissions). |
 | `contributes.block` | At most 16: `id` (lowercase letters, digits, hyphens, at most 32), `title` (at most 80 characters), `slots`. |
 | `contributes.command` | At most 32: `id`, `title`. |
+| `contributes.tool` | At most 16: `id`, `description` (at most 240 characters), and optional `params` map (`[contributes.tool.params]` with `type` `string`/`number`/`boolean`, `description`, `required`, at most 16). Exposed to running agents via Mako's built-in MCP server as `plugin_<id>_<tool>`. |
 | `contributes.settings` | At most 32, by key (lowercase letters, digits, `_`): `type` (`string`, `secret`, `boolean`, `number`, `select`), `label`, `description`, `options` (a select's, and only a select's), `default` (of the type; none for a secret). A secret's value is kept in the system's keychain ([Secrets](#secrets)), at most 2 048 bytes. |
 
 Titles, labels and options may not hold control characters or the Unicode
@@ -139,26 +146,36 @@ select's `onChange` sends its value last. Calls into the plugin run one at
 a time.
 
 `mako` is the [Host API](#the-host-api), with `mako.blocks` (`register`,
-`state`, `reload`) and `mako.commands.register`. There are no timers: a
-block that wants to be read again every so often says `refresh`. Its
-types, with every method's, are in
-[mako.d.ts](../internal/plugin/hostapi/mako.d.ts), generated from the
-schema: point your editor at it.
+`state`, `values`, `reload`), `mako.commands.register`, and
+`mako.tools.register`. Inside an event handler, `mako.blocks.values(blockId)`
+returns a map of the block's current form field values (keyed by full node path
+and, when unique, by the node's trailing `key`). `mako.tools.register(id, fn)`
+registers the handler for a `[[contributes.tool]]` declared in the manifest: it
+receives the agent's arguments object and returns any JSON-serializable value
+(or a Promise of one). There are no timers: a block that wants to be read again
+every so often says `refresh`. Its types, with every method's, are in
+[mako.d.ts](../internal/plugin/hostapi/mako.d.ts), generated from the schema:
+point your editor at it.
 
 ## The UI vocabulary
 
 | Kind | Builder | |
 |---|---|---|
 | `column`, `row`, `stack` | `ui.column(children, opts)` | Children one over another, side by side, or over each other. A child with `grow` shares the room left. |
+| `card` | `ui.card(children, opts)` | A bordered surface container for grouping items (such as a Kanban card or summary tile). |
+| `scroll` | `ui.scroll(children, opts)` | Scrollable container: `direction` (`vertical` default, or `horizontal`) and `maxHeight` (px) for vertical scroll areas. |
 | `list` | `ui.list(items, (item, i) => node, opts)` | A column of rows; a row that sends a tap lights up under the pointer, as the window's lists do. |
+| `table` | `ui.table(rows, opts)` | Structured rows with optional header columns (`labels`). |
 | `text` | `ui.text(text, opts)` | `weight` (`medium`, `semibold`), `size` (`small`, `large`), `tone`. |
 | `icon` | `ui.icon(name, opts)` | A [bundled icon](../internal/gui/iconset/icons)'s name; another is drawn as a square. |
 | `pill` | `ui.pill(text, opts)` | A state in a word, on a wash of its tone. |
 | `chip` | `ui.chip(text, opts)` | A name of the machine's kind: a hash, a branch. |
 | `button` | `ui.button(text, opts)` | `icon` beside the text; tone `accent` fills it, `danger` warns. |
 | `input` | `ui.input(value, opts)` | `placeholder`; `onChange` on leaving it, `onSubmit` on Return. |
+| `textarea` | `ui.textarea(value, opts)` | Multi-line text input; `placeholder`; `onChange` on leaving it. |
 | `toggle` | `ui.toggle(checked, label, opts)` | `onChange` with `true` or `false`. |
 | `select` | `ui.select(value, options, opts)` | `onChange` with the option. |
+| `tabs` | `ui.tabs(value, options, opts)` | Horizontal tab strip; `onChange` with the chosen option. |
 | `markdown` | `ui.markdown(text, opts)` | Drawn as the window draws Markdown. |
 | `code` | `ui.code(text, language, opts)` | Monospaced. |
 | `progress` | `ui.progress(value, opts)` | From 0 to 1. |
@@ -167,14 +184,19 @@ schema: point your editor at it.
 
 Options (`opts`, or the node's methods of the same names): `key`, `tone`,
 `weight`, `size`, `grow`, `gap`, `icon`, `disabled`, `onTap`, `onChange`,
-`onSubmit`, `drag`, `onDrop`, `placeholder`, and a chart's `labels`.
+`onSubmit`, `drag`, `dragGroup`, `onDrop`, `dropAccept`, `direction`,
+`maxHeight`, `placeholder`, and a chart's or table's `labels`.
 
-**Drag and drop** (revision 40): set `drag` (a non-empty payload string, up to
-256 bytes) on a container or display node to make it draggable, and
-`onDrop: [name, ...args]` on any target node of the same block. When a dragged
-node is dropped on the target, the block's `on[name]` handler is called with
-`args` followed by the dragged node's `drag` payload. Draggable containers draw
-as cards, and drop zones highlight while a dragged node hovers over them.
+**Drag and drop** (revisions 40–41): set `drag` (a non-empty payload string, up
+to 256 bytes) on a container or display node to make it draggable, and
+`onDrop: [name, ...args]` on any target node of the same block. Optionally tag a
+draggable node with `dragGroup` (lowercase letters, digits, hyphens/underscores)
+and restrict a drop target with `dropAccept: [...]` so only matching groups can
+drop on it. When a dragged node is dropped on an accepting target, the block's
+`on[name]` handler is called with `args` followed by the dragged node's `drag`
+payload. Reorderable items that carry both `drag` and `onDrop` draw an accent
+insertion bar when hovered, and on Android touch screens users can long-press a
+draggable item and tap a highlighted target to drop it.
 
 The chart is new in revision 33 of the protocol: a window or phone that
 does not know a kind draws nothing in its place (the Android app, from
@@ -221,7 +243,7 @@ plugin lacks the permission. The schema, with every field, is
 | `sessions.subscribe({events})` | `sessions:read` | `{events}`: has the plugin told of events of those kinds, by its default export's `on`. |
 | `sessions.unsubscribe({events})` | `sessions:read` | `{events}` left; none named stops them all. |
 | `http.fetch({url, method, headers, body})` | `net:<host>` | `{status, headers, body}`; see [Permissions](#permissions). |
-| `commands.runCommand({id, arg})` | none | `mako.openUrl` with an http(s) link opens it in the browser, only in answer to the user's tap or command. |
+| `commands.runCommand({id, arg})` | none | `mako.openUrl` with an http(s) link opens it in the browser, and `mako.toast` with a short message (at most 240 bytes) shows a transient notice in the window or app — both only in answer to a user's tap, event or command. |
 | `messages.sendMessage({sessionId, text})` | `sessions:write` | `{id}`: leaves a message for a session's agent, headed as the plugin's; see [Agents](#agents). |
 | `messages.startAgent({agent, profile, project, root, prompt, name})` | `sessions:write` | `{requestId, asked}`: asks to start an agent; its outcome comes to `on.agentStarted` or `on.agentRefused`. |
 | `messages.stopAgent({sessionId})` | `sessions:write` | Stops an agent the plugin started. |
@@ -430,8 +452,13 @@ blocks' places, until its folder changes or the user starts it again
 
 ## Developing one
 
-Put the folder in `plugins/` and place a block with a layout document,
-say by `layout.json` beside `gui.json` and *View: Reload window layout*:
+Run `mako plugins init <id>` to scaffold a starter plugin (`plugin.toml`,
+`main.js`, and `jsconfig.json`) directly in your local `plugins/<id>/` folder
+(or pass a second directory argument). Once loaded, you can place any plugin
+block from **Settings ▸ Plugins** (as a right tab, independent right column, or
+bottom panel) or from the Command Palette (*Open/Show/Close \<Block\>*). You can
+also place a block by editing `layout.json` beside `gui.json` and running
+*View: Reload window layout*:
 
 ```json
 {"version":1,"root":{"id":"window","row":[
@@ -444,8 +471,10 @@ The daemon looks at the folder every second. A change is read, checked
 (the manifest, every module compiled) and started in place of the version
 running, with the blocks' state carried over. A version that does not
 read, compile or start leaves the last that did running, its error over
-the block, until a newer one does. `makod -v` logs each load, start, stop
-and request.
+the block, until a newer one does. **Settings ▸ Plugins** shows each plugin's
+storage usage, contributed MCP tools, and recent `mako.log.write` entries, and
+each plugin block header includes a reload button and close button. `makod -v`
+also logs each load, start, stop and request.
 
 Plugins are a node's own: a block of a plugin another node has, in a
 document shared between nodes, shows as missing where the plugin is not

@@ -37,7 +37,9 @@ func (h *host) LogWrite(_ context.Context, req *hostapi.WriteRequest) (*hostapi.
 	if len(msg) > maxLogLine {
 		msg = msg[:maxLogLine]
 	}
-	h.p.m.cfg.Log.Log(context.Background(), l, "plugin: "+strings.ToValidUTF8(msg, "?"), "plugin", h.p.id)
+	clean := strings.ToValidUTF8(msg, "?")
+	h.p.recordLog(req.GetLevel(), clean)
+	h.p.m.cfg.Log.Log(context.Background(), l, "plugin: "+clean, "plugin", h.p.id)
 	return &hostapi.WriteResponse{}, nil
 }
 
@@ -138,7 +140,10 @@ func (h *host) HttpFetch(ctx context.Context, req *hostapi.FetchRequest) (*hosta
 }
 
 // The window's commands a plugin may run.
-const cmdOpenURL = "mako.openUrl"
+const (
+	cmdOpenURL = "mako.openUrl"
+	cmdToast   = "mako.toast"
+)
 
 func (h *host) CommandsRunCommand(_ context.Context, req *hostapi.RunCommandRequest) (*hostapi.RunCommandResponse, error) {
 	switch req.GetId() {
@@ -151,6 +156,13 @@ func (h *host) CommandsRunCommand(_ context.Context, req *hostapi.RunCommandRequ
 			return nil, fmt.Errorf("%s opens an http or https link, without a user in it", cmdOpenURL)
 		}
 		h.p.openURL = u.String()
+		return &hostapi.RunCommandResponse{}, nil
+	case cmdToast:
+		msg := strings.TrimSpace(protocol.Printable(req.GetArg()))
+		if len([]rune(msg)) > 240 {
+			msg = string([]rune(msg)[:240])
+		}
+		h.p.toast = msg
 		return &hostapi.RunCommandResponse{}, nil
 	}
 	return nil, fmt.Errorf("command %q is not one a plugin may run", req.GetId())

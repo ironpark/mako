@@ -1,8 +1,10 @@
 // Kanban board plugin for mako:
 // - Drag cards onto any column to move them, or onto another card to reorder.
-// - Click a card to inspect details, adjust priority, move with buttons, or
-//   dispatch it directly to a running agent session.
-// - Persists board state in mako.storage and reflects live session status.
+// - Explicit ui.card, per-column ui.scroll, inline ui.textarea note editing,
+//   ui.tabs compact switcher, dragGroup/dropAccept filtering, and live form
+//   value reading via mako.blocks.values("board").
+// - Exposes MCP tools (plugin_kanban_list_cards, add_card, move_card) so
+//   running agents can read and update the board in real time.
 
 const STORAGE_KEY = "board:v1";
 
@@ -128,9 +130,11 @@ function renderCard(s, ui, card) {
   ];
 
   if (selected) {
-    if (card.note) {
-      body.push(ui.text(card.note, { size: "small", tone: "muted" }));
-    }
+    body.push(ui.textarea(card.note || "", {
+      key: `note-${card.id}`,
+      placeholder: "Add notes or acceptance criteria…",
+      onChange: ["saveNote", card.id],
+    }));
     const actions = [];
     if (colIdx > 0) {
       actions.push(ui.button("←", { key: "prev", onTap: ["step", card.id, -1] }));
@@ -147,10 +151,12 @@ function renderCard(s, ui, card) {
     body.push(ui.row(actions, { gap: 6 }));
   }
 
-  return ui.column(body, {
+  return ui.card(body, {
     key: card.id,
     gap: 6,
     drag: card.id,
+    dragGroup: "card",
+    dropAccept: ["card"],
     onTap: ["select", card.id],
     onDrop: ["moveBefore", card.col, card.id],
   });
@@ -158,25 +164,23 @@ function renderCard(s, ui, card) {
 
 function renderColumn(s, ui, col) {
   const cards = s.cards.filter((c) => c.col === col.id);
-  const children = [
+  const listItems = cards.length === 0
+    ? [ui.text("Drop a card here", { key: "empty", size: "small", tone: "faint" })]
+    : cards.map((card) => renderCard(s, ui, card));
+
+  return ui.column([
     ui.row([
       ui.icon(col.icon, { size: "small", tone: col.tone }),
       ui.text(col.title, { weight: "semibold" }).grow(),
       ui.pill(String(cards.length), { tone: col.tone }),
     ], { key: "head", gap: 6 }),
     ui.divider({ key: "div" }),
-  ];
-  if (cards.length === 0) {
-    children.push(ui.text("Drop a card here", { key: "empty", size: "small", tone: "faint" }));
-  } else {
-    for (const card of cards) {
-      children.push(renderCard(s, ui, card));
-    }
-  }
-  return ui.column(children, {
+    ui.scroll(listItems, { key: "cards", gap: 8, maxHeight: 420 }),
+  ], {
     key: `col-${col.id}`,
     gap: 8,
     grow: 1,
+    dropAccept: ["card"],
     onDrop: ["moveToColumn", col.id],
   });
 }
@@ -222,16 +226,12 @@ function render(s, ui) {
 
   if (s.viewMode === "compact") {
     const activeCol = COLUMNS.find((c) => c.id === s.activeCol) || COLUMNS[0];
-    const tabs = COLUMNS.map((c) => {
+    const tabLabels = COLUMNS.map((c) => {
       const count = s.cards.filter((x) => x.col === c.id).length;
-      return ui.button(`${c.title} (${count})`, {
-        key: `tab-${c.id}`,
-        tone: c.id === activeCol.id ? "accent" : "",
-        onTap: ["pickCol", c.id],
-        onDrop: ["moveToColumn", c.id],
-      });
+      return `${c.title} (${count})`;
     });
-    rows.push(ui.row(tabs, { key: "tabs", gap: 6 }));
+    const activeLabel = tabLabels[COLUMNS.indexOf(activeCol)] || tabLabels[0];
+    rows.push(ui.tabs(activeLabel, tabLabels, { key: "col-tabs", onChange: ["pickColLabel"] }));
     rows.push(renderColumn(s, ui, activeCol));
   } else {
     rows.push(ui.row(COLUMNS.map((c) => renderColumn(s, ui, c)), { key: "columns", gap: 10 }));
@@ -269,7 +269,7 @@ export default {
         async addCard(s, text) {
           const title = String(text ?? s.draft).trim();
           if (!title) return;
-          s.cards.unshift({
+          const card = {
             id: nextCardId(s.cards),
             col: s.viewMode === "compact" ? s.activeCol : "todo",
             title,
@@ -277,33 +277,45 @@ export default {
             tag: "",
             note: "",
             sessionId: "",
-          });
+          };
+          s.cards.unshift(card);
           s.draft = "";
           s.notice = `Added "${title}".`;
           await saveBoard(s);
+          await mako.log.write({ level: "info", message: `added card ${card.id}: ${title}` });
         },
         async addFromButton(s) {
-          const title = String(s.draft || "").trim();
+          const vals = mako.blocks.values("board");
+          const title = String(vals.draft ?? s.draft ?? "").trim();
           if (!title) return;
-          s.cards.unshift({
+          const card = {
             id: nextCardId(s.cards),
             col: s.viewMode === "compact" ? s.activeCol : "todo",
             title,
-            priority: s.draftPriority || "medium",
+            priority: vals["draft-priority"] || s.draftPriority || "medium",
             tag: "",
             note: "",
             sessionId: "",
-          });
+          };
+          s.cards.unshift(card);
           s.draft = "";
           s.notice = `Added "${title}".`;
           await saveBoard(s);
+          await mako.log.write({ level: "info", message: `added card ${card.id}: ${title}` });
         },
         select(s, cardId) {
           s.selectedId = s.selectedId === cardId ? "" : cardId;
           s.notice = "";
         },
-        pickCol(s, colId) {
-          if (COLUMNS.some((c) => c.id === colId)) s.activeCol = colId;
+        async saveNote(s, cardId, note) {
+          const card = s.cards.find((c) => c.id === cardId);
+          if (!card) return;
+          card.note = String(note ?? "");
+          await saveBoard(s);
+        },
+        pickColLabel(s, label) {
+          const col = COLUMNS.find((c) => String(label).startsWith(c.title));
+          if (col) s.activeCol = col.id;
         },
         async toggleView(s) {
           s.viewMode = s.viewMode === "compact" ? "board" : "compact";
@@ -315,6 +327,7 @@ export default {
             const col = COLUMNS.find((c) => c.id === colId);
             s.notice = `Moved card to ${col ? col.title : colId}.`;
             await saveBoard(s);
+            await mako.log.write({ level: "info", message: `moved ${draggedId} -> ${colId}` });
           }
         },
         async moveBefore(s, colId, beforeCardId, draggedId) {
@@ -363,6 +376,7 @@ export default {
           card.sessionId = target.id;
           if (card.col === "todo") card.col = "doing";
           s.notice = `Sent "${card.title}" to ${target.name}.`;
+          await mako.commands.runCommand({ id: "mako.toast", arg: s.notice });
           await saveBoard(s);
         },
       },
@@ -373,6 +387,7 @@ export default {
       s.cards = defaultCards();
       s.selectedId = "";
       s.notice = "Reset board to demo cards.";
+      await mako.commands.runCommand({ id: "mako.toast", arg: "Kanban reset to demo cards" });
       await saveBoard(s);
     });
 
@@ -380,6 +395,50 @@ export default {
       const s = mako.blocks.state("board");
       s.viewMode = s.viewMode === "compact" ? "board" : "compact";
       await saveBoard(s);
+    });
+
+    // MCP tools exposed to running agents on this node.
+    mako.tools.register("list_cards", (args) => {
+      const s = mako.blocks.state("board");
+      const col = args && args.column ? String(args.column) : "";
+      const cards = col ? s.cards.filter((c) => c.col === col) : s.cards;
+      return { columns: COLUMNS.map((c) => c.id), cards };
+    });
+
+    mako.tools.register("add_card", async (args) => {
+      const s = mako.blocks.state("board");
+      const title = String((args && args.title) || "").trim();
+      if (!title) throw new Error("title is required");
+      const col = COLUMNS.some((c) => c.id === (args && args.column)) ? args.column : "todo";
+      const priority = PRIORITIES.includes(args && args.priority) ? args.priority : "medium";
+      const card = {
+        id: nextCardId(s.cards),
+        col,
+        title,
+        priority,
+        tag: String((args && args.tag) || ""),
+        note: String((args && args.note) || ""),
+        sessionId: "",
+      };
+      s.cards.unshift(card);
+      await saveBoard(s);
+      await mako.log.write({ level: "info", message: `agent added card ${card.id}: ${title}` });
+      return card;
+    });
+
+    mako.tools.register("move_card", async (args) => {
+      const s = mako.blocks.state("board");
+      const id = String((args && args.id) || "");
+      const col = String((args && args.column) || "");
+      if (!COLUMNS.some((c) => c.id === col)) {
+        throw new Error(`unknown column ${col}`);
+      }
+      if (!moveCard(s, id, col, "")) {
+        throw new Error(`card ${id} not found`);
+      }
+      await saveBoard(s);
+      await mako.log.write({ level: "info", message: `agent moved card ${id} -> ${col}` });
+      return { moved: true, id, column: col };
     });
   },
   on: {

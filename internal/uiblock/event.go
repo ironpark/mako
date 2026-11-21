@@ -124,8 +124,8 @@ func (t *Tree) Values(in map[string]string) (map[string]string, error) {
 		switch kind, ok := kinds[id]; {
 		case !ok:
 			continue
-		case kind != KindInput && kind != KindToggle && kind != KindSelect:
-			return nil, fmt.Errorf("node %q is no input, toggle or select of the block", id)
+		case kind != KindInput && kind != KindTextarea && kind != KindToggle && kind != KindSelect && kind != KindTabs:
+			return nil, fmt.Errorf("node %q is no input, textarea, toggle, select or tabs of the block", id)
 		}
 		out[id] = v
 	}

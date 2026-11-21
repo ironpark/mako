@@ -229,9 +229,58 @@ func TestDragAndDropValidationAndMessages(t *testing.T) {
 		`{"kind":"divider","onDrop":["move"]}`,
 		`{"kind":"text","text":"x","drag":"bad\u202eid"}`,
 		`{"kind":"text","text":"x","drag":"` + strings.Repeat("a", maxDrag+1) + `"}`,
+		`{"kind":"text","text":"x","dragGroup":"card"}`,
+		`{"kind":"column","drag":"c1","dragGroup":"Bad Group"}`,
+		`{"kind":"column","dropAccept":["card"]}`,
+		`{"kind":"column","onDrop":["move"],"dropAccept":["Bad Group"]}`,
 	} {
 		if _, err := Read([]byte(bad)); err == nil {
 			t.Errorf("bad tree %s was accepted", bad)
+		}
+	}
+}
+
+func TestRichUIKindsAndDragGroups(t *testing.T) {
+	tr, err := Read([]byte(`{"kind":"column","children":[
+		{"kind":"tabs","key":"mode","value":"Board","options":["Board","Table"],"onChange":["mode"]},
+		{"kind":"scroll","key":"sc","direction":"vertical","maxHeight":360,"onDrop":["move","todo"],"dropAccept":["card"],"children":[
+			{"kind":"card","key":"c1","drag":"c1","dragGroup":"card","onTap":["pick","c1"],"children":[
+				{"kind":"text","text":"Card 1"},
+				{"kind":"textarea","key":"note","value":"hello","placeholder":"Notes","onChange":["note"]}
+			]}
+		]},
+		{"kind":"table","key":"tbl","labels":["Title","Status"],"children":[
+			{"kind":"row","key":"r1","children":[{"kind":"text","text":"Card 1"},{"kind":"pill","text":"Todo"}]}
+		]}
+	]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := nodeOf(tr.Root, "/sc")
+	if sc == nil || sc.GetDirection() != "vertical" || sc.GetMaxHeight() != 360 || len(sc.GetDropAccept()) != 1 || sc.GetDropAccept()[0] != "card" {
+		t.Fatalf("scroll = %+v", sc)
+	}
+	c1 := nodeOf(tr.Root, "/sc/c1")
+	if c1 == nil || c1.GetKind() != KindCard || c1.GetDragGroup() != "card" {
+		t.Fatalf("card = %+v", c1)
+	}
+	vals, err := tr.Values(map[string]string{"/mode": "Table", "/sc/c1/note": "updated\nline 2"})
+	if err != nil || vals["/mode"] != "Table" || vals["/sc/c1/note"] != "updated\nline 2" {
+		t.Fatalf("values = %v, err = %v", vals, err)
+	}
+	// Invalid rich UI attributes are rejected.
+	for _, bad := range []string{
+		`{"kind":"scroll","direction":"diagonal","children":[]}`,
+		`{"kind":"scroll","maxHeight":-10,"children":[]}`,
+		`{"kind":"column","direction":"horizontal","children":[]}`,
+		`{"kind":"column","maxHeight":200,"children":[]}`,
+		`{"kind":"tabs","options":[]}`,
+		`{"kind":"tabs","options":["a","b"],"value":"c"}`,
+		`{"kind":"table","labels":["a"],"children":[{"kind":"text","text":"not a row"}]}`,
+		`{"kind":"textarea","children":[{"kind":"text","text":"bad"}]}`,
+	} {
+		if _, err := Read([]byte(bad)); err == nil {
+			t.Errorf("bad rich UI tree %s was accepted", bad)
 		}
 	}
 }

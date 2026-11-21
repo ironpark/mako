@@ -24,10 +24,11 @@ export interface PluginEvents {
   agentMessage?(event: SessionEvent): void | Promise<void>;
 }
 
-/** What activate is given: the Host API, and the plugin's blocks and commands. */
+/** What activate is given: the Host API, and the plugin's blocks, commands and tools. */
 export interface Mako extends HostApi {
   readonly blocks: Blocks;
   readonly commands: CommandsApi & Commands;
+  readonly tools: Tools;
 }
 
 export interface Blocks {
@@ -35,6 +36,8 @@ export interface Blocks {
   register<S extends object>(id: string, block: Block<S>): void;
   /** The state of a block registered, which a command may change. */
   state<S extends object = any>(id: string): S;
+  /** Latest form field values carried by the current block event, keyed by node id and key. */
+  values(id: string): Record<string, string>;
   /** Has a block's load run again once the current call ends. */
   reload(id: string): void;
 }
@@ -42,6 +45,11 @@ export interface Blocks {
 export interface Commands {
   /** Registers what a command the manifest declares does. */
   register(id: string, run: () => void | Promise<void>): void;
+}
+
+export interface Tools {
+  /** Registers an MCP tool declared under contributes.tool for running agents to call. */
+  register(id: string, run: (args: Record<string, any>) => any | Promise<any>): void;
 }
 
 /** A block: state, loaded and drawn as render says, changed by on's messages. */
@@ -84,12 +92,20 @@ export interface NodeOptions {
   onSubmit?: Message;
   /** Payload carried when this node is dragged onto a drop target. */
   drag?: string;
+  /** Optional drag group tag matched against a target's dropAccept. */
+  dragGroup?: string;
   /** Sent with the dragged node's drag payload last when dropped on this node. */
   onDrop?: Message;
+  /** Restricts this drop target to drags whose dragGroup is in the list. */
+  dropAccept?: string[];
+  /** Scroll container direction: "vertical" (default) or "horizontal". */
+  direction?: "vertical" | "horizontal";
+  /** Scroll container maximum height in px. */
+  maxHeight?: number;
   placeholder?: string;
   /** A chart's caption, said above it and read out with it. */
   caption?: string;
-  /** A chart's names of its points, as many as each series has values. */
+  /** A chart's names of its points, or a table's column headers. */
   labels?: (string | number)[];
 }
 
@@ -112,8 +128,9 @@ export interface UiNode {
   disabled(on?: boolean): this;
   onTap(name: string, ...args: any[]): this;
   onChange(name: string, ...args: any[]): this;
-  drag(payload: string): this;
+  drag(payload: string, group?: string): this;
   onDrop(name: string, ...args: any[]): this;
+  dropAccept(...groups: string[]): this;
 }
 
 /** The UI vocabulary: the only nodes a block draws. */
@@ -121,6 +138,8 @@ export interface Ui {
   column(children: UiNode[], opts?: NodeOptions): UiNode;
   row(children: UiNode[], opts?: NodeOptions): UiNode;
   stack(children: UiNode[], opts?: NodeOptions): UiNode;
+  card(children: UiNode[], opts?: NodeOptions): UiNode;
+  scroll(children: UiNode[], opts?: NodeOptions): UiNode;
   text(text: string, opts?: NodeOptions): UiNode;
   icon(name: string, opts?: NodeOptions): UiNode;
   pill(text: string, opts?: NodeOptions): UiNode;
@@ -128,8 +147,11 @@ export interface Ui {
   button(text: string, opts?: NodeOptions): UiNode;
   list<T>(items: T[], row: (item: T, index: number) => UiNode, opts?: NodeOptions): UiNode;
   input(value: string, opts?: NodeOptions): UiNode;
+  textarea(value: string, opts?: NodeOptions): UiNode;
   toggle(checked: boolean, label: string, opts?: NodeOptions): UiNode;
   select(value: string, options: string[], opts?: NodeOptions): UiNode;
+  tabs(value: string, options: string[], opts?: NodeOptions): UiNode;
+  table(headers: string[], rows: UiNode[], opts?: NodeOptions): UiNode;
   markdown(text: string, opts?: NodeOptions): UiNode;
   code(text: string, language?: string, opts?: NodeOptions): UiNode;
   progress(value: number, opts?: NodeOptions): UiNode;

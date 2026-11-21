@@ -96,6 +96,23 @@ var uiCases = []uiCase{
 		{"kind":"column","key":"todo","onDrop":["move","todo"],"children":[]},
 		{"kind":"column","key":"done","onDrop":["move","done"],"children":[
 			{"kind":"column","key":"c1","drag":"c1","onDrop":["before","done","c1"],"children":[{"kind":"text","text":"Task 1"}]}]}]}`},
+	// Rich UI & typed drag groups (revision 41): card, scroll, textarea, tabs, table, dragGroup, dropAccept.
+	{name: "rich-ui", before: `{"kind":"column","children":[
+		{"kind":"tabs","key":"t","value":"Board","options":["Board","Table"],"onChange":["tab"]},
+		{"kind":"scroll","key":"s","direction":"vertical","maxHeight":320,"onDrop":["move","todo"],"dropAccept":["card"],"children":[
+			{"kind":"card","key":"c1","drag":"c1","dragGroup":"card","children":[
+				{"kind":"text","text":"Alpha"},
+				{"kind":"textarea","key":"n","value":"note 1","placeholder":"Notes","onChange":["note"]}]}]},
+		{"kind":"table","key":"tbl","labels":["Name","State"],"children":[
+			{"kind":"row","key":"r1","children":[{"kind":"text","text":"Alpha"},{"kind":"pill","text":"Todo"}]}]}]}`,
+		next: `{"kind":"column","children":[
+		{"kind":"tabs","key":"t","value":"Table","options":["Board","Table"],"onChange":["tab"]},
+		{"kind":"scroll","key":"s","direction":"horizontal","maxHeight":420,"onDrop":["move","todo"],"dropAccept":["card","lane"],"children":[
+			{"kind":"card","key":"c1","drag":"c1","dragGroup":"card","children":[
+				{"kind":"text","text":"Alpha updated"},
+				{"kind":"textarea","key":"n","value":"note 2","placeholder":"Notes","onChange":["note"]}]}]},
+		{"kind":"table","key":"tbl","labels":["Name","State"],"children":[
+			{"kind":"row","key":"r1","children":[{"kind":"text","text":"Alpha updated"},{"kind":"pill","text":"Done","tone":"success"}]}]}]}`},
 
 	// Ops written by hand: what a front-end must do with them, or refuse.
 	{name: "update-keeps-children", before: `{"kind":"column","children":[{"kind":"row","key":"r","children":[{"kind":"text","text":"kept"}]}]}`,

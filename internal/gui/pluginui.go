@@ -2,6 +2,7 @@ package gui
 
 import (
 	"image/color"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -77,6 +78,7 @@ type blockDrag struct {
 	Block string
 	Node  string
 	Value string
+	Group string
 }
 
 // treeView is a block's tree as it is drawn: the block, and what the user
@@ -107,7 +109,7 @@ func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
 		tap = func() { v.send(id, protocol.UiTap, "") }
 	}
 	switch n.GetKind() {
-	case "column", "row", "stack", "list":
+	case "column", "row", "stack", "card", "scroll", "list", "table":
 		return v.container(n)
 	case "text":
 		t := widget.Text(n.GetText()).Size(textSize(n.GetSize())).Weight(textWeight(n.GetWeight())).Color(toneColor(n.GetTone()))
@@ -144,6 +146,14 @@ func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
 				OnCommit(func(s string) { v.send(id, protocol.UiChange, s) })
 		}
 		return f.Disabled(n.GetDisabled())
+	case "textarea":
+		id := n.GetId()
+		f := ui.TextField(v.form.input(id, n.GetValue())).Key(v.block + id).Lines(4).Placeholder(n.GetText()).Name(cmpTone(n.GetText(), T("Input")))
+		if n.GetChange() {
+			f = f.OnSubmit(func(s string) { v.send(id, protocol.UiSubmit, s) }).
+				OnCommit(func(s string) { v.send(id, protocol.UiChange, s) })
+		}
+		return f.Disabled(n.GetDisabled())
 	case "toggle":
 		id := n.GetId()
 		field := v.form.field(id, strconv.FormatBool(n.GetChecked()))
@@ -162,7 +172,33 @@ func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
 			if n.GetChange() {
 				v.send(id, protocol.UiChange, x)
 			}
-		})).Options(n.GetOptions()).Name(T("Choose")).Disabled(n.GetDisabled())).Width(200)
+		})).Options(n.GetOptions()).Name(T("Choose")).Disabled(n.GetDisabled())).MaxWidth(200)
+	case "tabs":
+		id := n.GetId()
+		field := v.form.field(id, n.GetValue())
+		opts := n.GetOptions()
+		return ggui.View(field, func(active string) ggui.Widget {
+			btns := make([]ggui.Widget, 0, len(opts))
+			for _, opt := range opts {
+				o := opt
+				b := ui.Button(o, func() {
+					if n.GetDisabled() {
+						return
+					}
+					field.Set(o)
+					if n.GetChange() {
+						v.send(id, protocol.UiChange, o)
+					}
+				}).Disabled(n.GetDisabled()).Name(o)
+				if o == active {
+					b = b.Secondary()
+				} else {
+					b = b.Ghost()
+				}
+				btns = append(btns, b)
+			}
+			return widget.Box(widget.Scroll(widget.Row(btns...).Gap(4).Align(widget.AlignCenter)).Horizontal().Shrink().Bar(color.Transparent)).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(3)
+		})
 	case "markdown":
 		return mdview.Column(pluginPage{pageHost{m: v.m}}, n.GetText())
 	case "code":
@@ -225,7 +261,7 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 		}
 		align := widget.AlignCenter
 		for _, c := range n.GetChildren() {
-			if c.GetKind() == "column" || c.GetKind() == "list" {
+			if c.GetKind() == "column" || c.GetKind() == "list" || c.GetKind() == "card" || c.GetKind() == "scroll" {
 				align = widget.AlignStart
 				break
 			}
@@ -233,6 +269,59 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 		return v.dragDrop(v.tappableBox(widget.Row(kids...).Gap(gap).Align(align), n), n)
 	case "stack":
 		return v.dragDrop(widget.Stack(kids...), n)
+	case "card":
+		if gap == 0 {
+			gap = 6
+		}
+		inner := v.tappableBox(widget.Column(kids...).Gap(gap).Stretch(), n)
+		// If dragDrop will draw the card frame/highlight, avoid double framing.
+		if n.GetDrag() != "" || n.GetDrop() {
+			return v.dragDrop(inner, n)
+		}
+		var border color.Color = skin.Border
+		if n.GetTone() != "" {
+			border = toneColor(n.GetTone())
+		}
+		return widget.Box(inner).Fill(skin.Surface1).Border(1, border).Radius(8).Pad(8, 10)
+	case "scroll":
+		horiz := n.GetDirection() == "horizontal"
+		var body ggui.Widget
+		if horiz {
+			if gap == 0 {
+				gap = 8
+			}
+			body = widget.Row(kids...).Gap(gap).Align(widget.AlignStart)
+		} else {
+			if gap == 0 {
+				gap = 6
+			}
+			body = widget.Column(kids...).Gap(gap).Stretch()
+		}
+		sc := widget.Scroll(body).Shrink().Bar(skin.Surface3)
+		if horiz {
+			sc = sc.Horizontal()
+		}
+		var out ggui.Widget = sc
+		if h := n.GetMaxHeight(); h > 0 {
+			out = widget.Box(out).MaxHeight(h)
+		}
+		return v.dragDrop(out, n)
+	case "table":
+		var trows []ggui.Widget
+		if hdrs := n.GetLabels(); len(hdrs) > 0 {
+			cols := make([]ggui.Widget, len(hdrs))
+			for i, h := range hdrs {
+				cols[i] = widget.Expanded(widget.Text(h).Size(11.5).Weight(ggui.WeightSemibold).Color(skin.Muted).NoWrap().Ellipsis())
+			}
+			trows = append(trows, widget.Box(widget.Row(cols...).Gap(8).Align(widget.AlignCenter)).Pad(6, 10).Fill(skin.Surface1), hline())
+		}
+		for i, k := range kids {
+			if i > 0 {
+				trows = append(trows, hline())
+			}
+			trows = append(trows, widget.Box(k).Pad(6, 10))
+		}
+		return v.dragDrop(widget.Box(widget.Column(trows...).Stretch()).Border(1, skin.Border).Radius(8), n)
 	case "list":
 		return v.dragDrop(widget.Column(kids...).Gap(gap).Stretch(), n)
 	}
@@ -243,7 +332,7 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 }
 
 func isContainerKind(kind string) bool {
-	return kind == "column" || kind == "row" || kind == "stack" || kind == "list"
+	return kind == "column" || kind == "row" || kind == "stack" || kind == "card" || kind == "scroll" || kind == "list" || kind == "table"
 }
 
 // dragDrop wires DragSource and DropZone around a node that sets drag or
@@ -256,15 +345,28 @@ func (v *treeView) dragDrop(w ggui.Widget, n *protocol.UiNode) ggui.Widget {
 		return w
 	}
 	id := n.GetId()
-	isCard := drag != "" && isContainerKind(n.GetKind())
-	isLane := drag == "" && isContainerKind(n.GetKind())
+	accept := n.GetDropAccept()
+	isCard := n.GetKind() == "card" || (drag != "" && isContainerKind(n.GetKind()))
+	isLane := !isCard && isContainerKind(n.GetKind())
+	accepts := func(d blockDrag) bool {
+		if d.Block != v.block || d.Node == id || d.Value == "" {
+			return false
+		}
+		if len(accept) > 0 && !slices.Contains(accept, d.Group) {
+			return false
+		}
+		return true
+	}
 	if drop {
 		inner := w
 		over := ggui.State(false)
 		framed := ggui.View(over, func(hot bool) ggui.Widget {
 			switch {
 			case hot && isCard:
-				return widget.Box(inner).Fill(skin.Surface2).Border(1.5, skin.AccentBright).Radius(8).Pad(8, 10)
+				// Show a crisp top insertion bar when reordering onto another card.
+				bar := widget.Box().Height(2).Fill(skin.AccentBright).Radius(1)
+				card := widget.Box(inner).Fill(skin.Surface2).Border(1.5, skin.AccentBright).Radius(8).Pad(8, 10)
+				return widget.Column(bar, card).Gap(4).Stretch()
 			case isCard:
 				return widget.Box(inner).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(8, 10)
 			case hot && isLane:
@@ -279,18 +381,16 @@ func (v *treeView) dragDrop(w ggui.Widget, n *protocol.UiNode) ggui.Widget {
 		})
 		w = widget.DropZone(framed, func(d widget.Dropped[blockDrag]) {
 			over.Set(false)
-			if d.Value.Block != v.block || d.Value.Node == id || d.Value.Value == "" {
+			if !accepts(d.Value) {
 				return
 			}
 			v.send(id, protocol.UiDrop, d.Value.Value)
-		}).Accept(func(d blockDrag) bool {
-			return d.Block == v.block && d.Node != id && d.Value != ""
-		}).OnHover(over.Set)
+		}).Accept(accepts).OnHover(over.Set)
 	} else if isCard {
 		w = widget.Box(w).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(8, 10)
 	}
 	if drag != "" && !n.GetDisabled() {
-		w = widget.DragSource(w, blockDrag{Block: v.block, Node: id, Value: drag})
+		w = widget.DragSource(w, blockDrag{Block: v.block, Node: id, Value: drag, Group: n.GetDragGroup()})
 	}
 	return w
 }

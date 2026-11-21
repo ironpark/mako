@@ -329,3 +329,53 @@ export default {
 		t.Fatalf("the plugin saw %s\nwant %s", kv["seen"], want)
 	}
 }
+
+// A plugin declaring [[contributes.tool]] exposes it to the daemon's agent MCP
+// snapshot as plugin_<id>_<tool>, and calling it executes the registered JS handler.
+func TestPluginContributedMCPTools(t *testing.T) {
+	d := meshDaemon(t, "a")
+	c := dialDaemon(t, d)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	writePlugin(t, d, "helper", map[string]string{
+		"plugin.toml": `id = "helper"
+version = "1.0.0"
+publisher = "test"
+api = 1
+entry = "main.js"
+permissions = []
+
+[[contributes.tool]]
+id = "echo_sum"
+description = "Add two numbers and echo a label"
+[contributes.tool.params]
+label = { type = "string", required = true }
+a = { type = "number", required = true }
+b = { type = "number", required = true }
+`,
+		"main.js": `export default {
+  activate(m) {
+    m.tools.register("echo_sum", (args) => ({ label: args.label, sum: Number(args.a) + Number(args.b) }));
+  },
+};`,
+	})
+	waitFor(t, "helper plugin ready", func() bool {
+		list, err := c.Plugins(ctx)
+		return err == nil && len(list.GetPlugins()) == 1 && list.GetPlugins()[0].GetState() == protocol.PluginReady
+	})
+	snap := d.agentMCPSnapshot()
+	if len(snap.pluginTools) != 1 || snap.pluginTools[0].MCPName != "plugin_helper_echo_sum" {
+		t.Fatalf("pluginTools = %+v", snap.pluginTools)
+	}
+	out, err := d.plugins.CallTool(ctx, "helper", "echo_sum", []byte(`{"label":"total","a":19,"b":23}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Label string  `json:"label"`
+		Sum   float64 `json:"sum"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil || got.Label != "total" || got.Sum != 42 {
+		t.Fatalf("tool result = %s, err = %v", out, err)
+	}
+}

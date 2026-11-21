@@ -28,6 +28,8 @@ const (
 	KindColumn   = "column"
 	KindRow      = "row"
 	KindStack    = "stack"
+	KindCard     = "card"
+	KindScroll   = "scroll"
 	KindText     = "text"
 	KindIcon     = "icon"
 	KindPill     = "pill"
@@ -35,8 +37,11 @@ const (
 	KindButton   = "button"
 	KindList     = "list"
 	KindInput    = "input"
+	KindTextarea = "textarea"
 	KindToggle   = "toggle"
 	KindSelect   = "select"
+	KindTabs     = "tabs"
+	KindTable    = "table"
 	KindMarkdown = "markdown"
 	KindCode     = "code"
 	KindProgress = "progress"
@@ -45,8 +50,8 @@ const (
 )
 
 // Kinds are the vocabulary, in the order docs/plugins.md lists it.
-var Kinds = []string{KindColumn, KindRow, KindStack, KindText, KindIcon, KindPill, KindChip, KindButton,
-	KindList, KindInput, KindToggle, KindSelect, KindMarkdown, KindCode, KindProgress, KindDivider, KindChart}
+var Kinds = []string{KindColumn, KindRow, KindStack, KindCard, KindScroll, KindText, KindIcon, KindPill, KindChip, KindButton,
+	KindList, KindInput, KindTextarea, KindToggle, KindSelect, KindTabs, KindTable, KindMarkdown, KindCode, KindProgress, KindDivider, KindChart}
 
 // Charts are the kinds of chart a chart node draws.
 var Charts = []string{"line", "bar", "sparkline"}
@@ -64,6 +69,10 @@ const (
 	maxTreeText  = 256 << 10
 	maxKey       = 128
 	maxDrag      = 256
+	maxDragGroup = 64
+	maxDropAccept = 16
+	maxScrollH   = 4000
+	maxTableCols = 16
 	maxNodeOpts  = 64
 	maxMessage   = 4 << 10
 	maxGap, maxG = 64, 100
@@ -79,9 +88,10 @@ const (
 )
 
 var (
-	iconName    = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
-	messageName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
-	languageTag = regexp.MustCompile(`^[a-z0-9+#-]{0,24}$`)
+	iconName      = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+	messageName   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
+	languageTag   = regexp.MustCompile(`^[a-z0-9+#-]{0,24}$`)
+	dragGroupName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 )
 
 // jsNode is a node as the prelude writes it.
@@ -106,7 +116,11 @@ type jsNode struct {
 	OnChange    json.RawMessage `json:"onChange"`
 	OnSubmit    json.RawMessage `json:"onSubmit"`
 	Drag        string          `json:"drag"`
+	DragGroup   string          `json:"dragGroup"`
 	OnDrop      json.RawMessage `json:"onDrop"`
+	DropAccept  []string        `json:"dropAccept"`
+	Direction   string          `json:"direction"`
+	MaxHeight   float64         `json:"maxHeight"`
 	Children    []*jsNode       `json:"children"`
 	Chart       string          `json:"chart"`
 	Series      []*jsSeries     `json:"series"`
@@ -225,17 +239,60 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 			return nil, fmt.Errorf("%s: drag payload is over %d bytes or holds control or reordering characters", where(id), maxDrag)
 		}
 		r.text += len(j.Drag)
-		if r.text > maxTreeText {
-			return nil, fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
+	}
+	if j.DragGroup != "" {
+		if j.Drag == "" {
+			return nil, fmt.Errorf("%s: dragGroup requires drag", where(id))
 		}
+		if len(j.DragGroup) > maxDragGroup || !dragGroupName.MatchString(j.DragGroup) {
+			return nil, fmt.Errorf("%s: invalid dragGroup %q", where(id), j.DragGroup)
+		}
+		r.text += len(j.DragGroup)
+	}
+	if len(j.DropAccept) > maxDropAccept {
+		return nil, fmt.Errorf("%s: more than %d dropAccept groups", where(id), maxDropAccept)
+	}
+	for _, g := range j.DropAccept {
+		if len(g) > maxDragGroup || !dragGroupName.MatchString(g) {
+			return nil, fmt.Errorf("%s: invalid dropAccept group %q", where(id), g)
+		}
+		r.text += len(g)
+	}
+	if j.Direction != "" && j.Direction != "vertical" && j.Direction != "horizontal" {
+		return nil, fmt.Errorf("%s: direction %q is not vertical or horizontal", where(id), j.Direction)
+	}
+	if (j.Direction != "" || j.MaxHeight != 0) && j.Kind != KindScroll {
+		return nil, fmt.Errorf("%s: only a scroll node takes direction or maxHeight", where(id))
+	}
+	if !finite(j.MaxHeight, 0, maxScrollH) {
+		return nil, fmt.Errorf("%s: maxHeight is from 0 to %d", where(id), maxScrollH)
+	}
+	if r.text > maxTreeText {
+		return nil, fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
 	}
 	n := &protocol.UiNode{
 		Id: id, Kind: j.Kind, Text: j.Text, Tone: j.Tone, Icon: j.Icon, Weight: j.Weight, Size: j.Size,
 		Value: j.Value, Checked: j.Checked, Options: j.Options, Progress: j.Progress, Language: j.Language,
-		Disabled: j.Disabled, Grow: j.Grow, Gap: j.Gap, Drag: j.Drag,
+		Disabled: j.Disabled, Grow: j.Grow, Gap: j.Gap, Drag: j.Drag, DragGroup: j.DragGroup,
+		DropAccept: j.DropAccept, Direction: j.Direction, MaxHeight: j.MaxHeight,
 	}
-	if j.Kind == KindInput && n.Text == "" {
+	if (j.Kind == KindInput || j.Kind == KindTextarea) && n.Text == "" {
 		n.Text = j.Placeholder
+	}
+	if j.Kind == KindTable {
+		if len(j.Labels) > maxTableCols {
+			return nil, fmt.Errorf("%s: a table has at most %d columns", where(id), maxTableCols)
+		}
+		for _, h := range j.Labels {
+			if len(h) > maxOption || strings.ContainsFunc(h, Spoofing) {
+				return nil, fmt.Errorf("%s: invalid table header %q", where(id), h)
+			}
+			r.text += len(h)
+		}
+		if r.text > maxTreeText {
+			return nil, fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
+		}
+		n.Labels = j.Labels
 	}
 	if err := r.chart(j, n, id); err != nil {
 		return nil, err
@@ -255,7 +312,7 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 		return nil, fmt.Errorf("%s: onDrop: %w", where(id), err)
 	}
 	switch j.Kind {
-	case KindInput, KindToggle, KindSelect:
+	case KindInput, KindTextarea, KindToggle, KindSelect, KindTabs:
 		if a.tap != nil {
 			return nil, fmt.Errorf("%s: a %s takes onChange, not onTap", where(id), j.Kind)
 		}
@@ -274,16 +331,34 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 			return nil, fmt.Errorf("%s: a %s takes onTap, not onChange", where(id), j.Kind)
 		}
 	}
-	if a.submit != nil && j.Kind != KindInput {
-		return nil, fmt.Errorf("%s: only an input takes onSubmit", where(id))
+	if j.Kind == KindTabs {
+		if len(j.Options) == 0 {
+			return nil, fmt.Errorf("%s: tabs requires at least one option", where(id))
+		}
+		if j.Value != "" && !slices.Contains(j.Options, j.Value) {
+			return nil, fmt.Errorf("%s: tabs value %q is not one of its options", where(id), j.Value)
+		}
+	}
+	if a.submit != nil && j.Kind != KindInput && j.Kind != KindTextarea {
+		return nil, fmt.Errorf("%s: only an input or textarea takes onSubmit", where(id))
+	}
+	if len(j.DropAccept) > 0 && a.drop == nil {
+		return nil, fmt.Errorf("%s: dropAccept requires onDrop", where(id))
 	}
 	n.Tap, n.Change, n.Drop = a.tap != nil, a.change != nil || a.submit != nil, a.drop != nil
 	if n.Tap || n.Change || n.Drop {
 		r.t.actions[id] = a
 	}
-	container := j.Kind == KindColumn || j.Kind == KindRow || j.Kind == KindStack || j.Kind == KindList
+	container := j.Kind == KindColumn || j.Kind == KindRow || j.Kind == KindStack || j.Kind == KindCard || j.Kind == KindScroll || j.Kind == KindList || j.Kind == KindTable
 	if !container && len(j.Children) > 0 {
 		return nil, fmt.Errorf("%s: a %s holds no children", where(id), j.Kind)
+	}
+	if j.Kind == KindTable {
+		for i, c := range j.Children {
+			if c != nil && c.Kind != KindRow {
+				return nil, fmt.Errorf("%s: table child %d must be a row, got %q", where(id), i, c.Kind)
+			}
+		}
 	}
 	keys := map[string]bool{}
 	for i, c := range j.Children {
@@ -316,7 +391,7 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 // points.
 func (r *treeReader) chart(j *jsNode, n *protocol.UiNode, id string) error {
 	if j.Kind != KindChart {
-		if j.Chart != "" || len(j.Series) > 0 || len(j.Labels) > 0 {
+		if j.Chart != "" || len(j.Series) > 0 || (len(j.Labels) > 0 && j.Kind != KindTable) {
 			return fmt.Errorf("%s: only a chart has chart, series or labels", where(id))
 		}
 		return nil

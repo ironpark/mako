@@ -353,4 +353,5 @@
     <string name="chart_no_data">No data</string>
     <string name="block_unknown_kind">Can\'t be shown in this version of the app</string>
     <string name="panel_missing">Not installed on %1$s</string>
+    <string name="block_dragging">Moving item · tap a highlighted target to drop</string>
 </resources>

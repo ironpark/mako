@@ -33,7 +33,23 @@ type Manifest struct {
 	Permissions []string // as written, each checked
 	Blocks      []BlockDecl
 	Commands    []CommandDecl
+	Tools       []ToolDecl
 	Settings    []SettingDecl // in the file's order
+}
+
+// ToolDecl is an MCP tool a manifest contributes to running agents.
+type ToolDecl struct {
+	ID          string
+	Description string
+	Params      []ToolParamDecl
+}
+
+// ToolParamDecl is one parameter of a contributed MCP tool.
+type ToolParamDecl struct {
+	Name        string
+	Type        string // "string", "number", "boolean"
+	Description string
+	Required    bool
 }
 
 // BlockDecl is a block a manifest contributes.
@@ -79,6 +95,8 @@ const (
 	maxPermissions = 16
 	maxBlocks      = 16
 	maxCommands    = 32
+	maxTools       = 16
+	maxToolParams  = 16
 	maxSettings    = 32
 	maxOptions     = 32
 	maxTitle       = 80
@@ -92,10 +110,13 @@ var (
 	pluginID = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`)
 	// partID is a block's or command's ID within its plugin.
 	partID     = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$`)
+	toolID     = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 	settingKey = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 	semver     = regexp.MustCompile(`^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})(-[0-9A-Za-z.-]{1,32})?$`)
 	entryPath  = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*\.js$`)
 )
+
+var toolParamTypes = []string{"string", "number", "boolean"}
 
 type rawManifest struct {
 	ID          string   `toml:"id"`
@@ -114,6 +135,15 @@ type rawManifest struct {
 			ID    string `toml:"id"`
 			Title string `toml:"title"`
 		} `toml:"command"`
+		Tool []struct {
+			ID          string `toml:"id"`
+			Description string `toml:"description"`
+			Params      map[string]struct {
+				Type        string `toml:"type"`
+				Description string `toml:"description"`
+				Required    bool   `toml:"required"`
+			} `toml:"params"`
+		} `toml:"tool"`
 		Settings map[string]struct {
 			Type        string   `toml:"type"`
 			Label       string   `toml:"label"`
@@ -196,6 +226,47 @@ func ParseManifest(data []byte) (*Manifest, error) {
 			return nil, err
 		}
 		m.Commands = append(m.Commands, CommandDecl{ID: c.ID, Title: c.Title})
+	}
+	if len(raw.Contributes.Tool) > maxTools {
+		return nil, fmt.Errorf("more than %d tools", maxTools)
+	}
+	for _, tl := range raw.Contributes.Tool {
+		if !toolID.MatchString(tl.ID) {
+			return nil, fmt.Errorf("tool id %q is not lowercase letters, digits and underscores", tl.ID)
+		}
+		if slices.ContainsFunc(m.Tools, func(o ToolDecl) bool { return o.ID == tl.ID }) {
+			return nil, fmt.Errorf("tool %q twice", tl.ID)
+		}
+		if err := checkText("tool "+tl.ID+" description", tl.Description, maxDescription, true); err != nil {
+			return nil, err
+		}
+		if len(tl.Params) > maxToolParams {
+			return nil, fmt.Errorf("tool %s: more than %d params", tl.ID, maxToolParams)
+		}
+		decl := ToolDecl{ID: tl.ID, Description: tl.Description}
+		paramNames := make([]string, 0, len(tl.Params))
+		for k := range tl.Params {
+			paramNames = append(paramNames, k)
+		}
+		slices.Sort(paramNames)
+		for _, k := range paramNames {
+			rp := tl.Params[k]
+			if !settingKey.MatchString(k) {
+				return nil, fmt.Errorf("tool %s param %q: names are lowercase letters, digits and underscores", tl.ID, k)
+			}
+			typ := rp.Type
+			if typ == "" {
+				typ = "string"
+			}
+			if !slices.Contains(toolParamTypes, typ) {
+				return nil, fmt.Errorf("tool %s param %s: type %q is not string, number or boolean", tl.ID, k, typ)
+			}
+			if err := checkText("tool "+tl.ID+" param "+k+" description", rp.Description, maxDescription, false); err != nil {
+				return nil, err
+			}
+			decl.Params = append(decl.Params, ToolParamDecl{Name: k, Type: typ, Description: rp.Description, Required: rp.Required})
+		}
+		m.Tools = append(m.Tools, decl)
 	}
 	if len(raw.Contributes.Settings) > maxSettings {
 		return nil, fmt.Errorf("more than %d settings", maxSettings)

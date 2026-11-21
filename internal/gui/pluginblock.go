@@ -132,12 +132,30 @@ func blockFrame(m *model, name string, origin blockOrigin, title string, u *prot
 		glyph, kind = "bot", T("Agent")
 		who = cmpTone(origin.agent, T("Agent")) + " · " + short(origin.session)
 	}
-	head := widget.Box(widget.Row(
+	headItems := []ggui.Widget{
 		icon(glyph).Size(14).Color(skin.Muted),
 		widget.Expanded(widget.Text(title).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
 		muted(widget.Text(kind).Size(11).NoWrap()),
 		chip(who),
-	).Gap(6).Align(widget.AlignCenter)).Pad(6, 10).Fill(skin.Surface1)
+	}
+	if origin.plugin != "" {
+		pid := origin.plugin
+		if p := m.pluginOf(pid); p != nil && !p.GetInstalled() {
+			headItems = append(headItems, ui.Tooltip(
+				ui.ButtonOf(icon("refresh-cw").Size(12).Color(skin.Muted), func() {
+					m.actOnPlugin(&protocol.PluginAction{PluginId: pid, Op: protocol.PluginReload})
+				}).Ghost().Pad(3).Radius(5).Name(T("Reload block")),
+				T("Reload block"),
+			))
+		}
+		headItems = append(headItems, ui.Tooltip(
+			ui.ButtonOf(icon("x").Size(12).Color(skin.Muted), func() {
+				m.removePluginBlock(name)
+			}).Ghost().Pad(3).Radius(5).Name(T("Close block")),
+			T("Close block"),
+		))
+	}
+	head := widget.Box(widget.Row(headItems...).Gap(6).Align(widget.AlignCenter)).Pad(6, 10).Fill(skin.Surface1)
 	return widget.Box(widget.Box(widget.Column(
 		head,
 		hline(),

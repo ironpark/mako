@@ -83,12 +83,15 @@ func startRuntime(ctx context.Context, v *version, lim Limits, bridge bridgeFunc
 			closeQuietly(rt)
 		}
 	}()
-	declared := map[string][]string{"blocks": {}, "commands": {}}
+	declared := map[string][]string{"blocks": {}, "commands": {}, "tools": {}}
 	for _, b := range v.man.Blocks {
 		declared["blocks"] = append(declared["blocks"], b.ID)
 	}
 	for _, c := range v.man.Commands {
 		declared["commands"] = append(declared["commands"], c.ID)
+	}
+	for _, tl := range v.man.Tools {
+		declared["tools"] = append(declared["tools"], tl.ID)
 	}
 	decl, _ := json.Marshal(declared)
 	if err := rt.Set("__makoDeclared", string(decl)); err != nil {

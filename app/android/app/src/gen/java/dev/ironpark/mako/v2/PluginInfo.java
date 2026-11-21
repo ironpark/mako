@@ -34,6 +34,8 @@ public  final class PluginInfo extends
     key_ = "";
     update_ = "";
     blocked_ = "";
+    tools_ = emptyProtobufList();
+    logs_ = emptyProtobufList();
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -1361,6 +1363,349 @@ public  final class PluginInfo extends
   private void clearAgentsAllowed() {
 
     agentsAllowed_ = false;
+  }
+
+  public static final int TOOLS_FIELD_NUMBER = 20;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.PluginTool> tools_;
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.PluginTool> getToolsList() {
+    return tools_;
+  }
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.PluginToolOrBuilder> 
+      getToolsOrBuilderList() {
+    return tools_;
+  }
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  @java.lang.Override
+  public int getToolsCount() {
+    return tools_.size();
+  }
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.PluginTool getTools(int index) {
+    return tools_.get(index);
+  }
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  public dev.ironpark.mako.v2.PluginToolOrBuilder getToolsOrBuilder(
+      int index) {
+    return tools_.get(index);
+  }
+  private void ensureToolsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.PluginTool> tmp = tools_;
+    if (!tmp.isModifiable()) {
+      tools_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  private void setTools(
+      int index, dev.ironpark.mako.v2.PluginTool value) {
+    java.util.Objects.requireNonNull(value);
+    ensureToolsIsMutable();
+    tools_.set(index, value);
+  }
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  private void addTools(dev.ironpark.mako.v2.PluginTool value) {
+    java.util.Objects.requireNonNull(value);
+    ensureToolsIsMutable();
+    tools_.add(value);
+  }
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  private void addTools(
+      int index, dev.ironpark.mako.v2.PluginTool value) {
+    java.util.Objects.requireNonNull(value);
+    ensureToolsIsMutable();
+    tools_.add(index, value);
+  }
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  private void addAllTools(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.PluginTool> values) {
+    ensureToolsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, tools_);
+  }
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  private void clearTools() {
+    tools_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * tools are the MCP tools the plugin contributes to agents (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+   */
+  private void removeTools(int index) {
+    ensureToolsIsMutable();
+    tools_.remove(index);
+  }
+
+  public static final int LOGS_FIELD_NUMBER = 21;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.PluginLog> logs_;
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.PluginLog> getLogsList() {
+    return logs_;
+  }
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.PluginLogOrBuilder> 
+      getLogsOrBuilderList() {
+    return logs_;
+  }
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  @java.lang.Override
+  public int getLogsCount() {
+    return logs_.size();
+  }
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.PluginLog getLogs(int index) {
+    return logs_.get(index);
+  }
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  public dev.ironpark.mako.v2.PluginLogOrBuilder getLogsOrBuilder(
+      int index) {
+    return logs_.get(index);
+  }
+  private void ensureLogsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.PluginLog> tmp = logs_;
+    if (!tmp.isModifiable()) {
+      logs_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  private void setLogs(
+      int index, dev.ironpark.mako.v2.PluginLog value) {
+    java.util.Objects.requireNonNull(value);
+    ensureLogsIsMutable();
+    logs_.set(index, value);
+  }
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  private void addLogs(dev.ironpark.mako.v2.PluginLog value) {
+    java.util.Objects.requireNonNull(value);
+    ensureLogsIsMutable();
+    logs_.add(value);
+  }
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  private void addLogs(
+      int index, dev.ironpark.mako.v2.PluginLog value) {
+    java.util.Objects.requireNonNull(value);
+    ensureLogsIsMutable();
+    logs_.add(index, value);
+  }
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  private void addAllLogs(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.PluginLog> values) {
+    ensureLogsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, logs_);
+  }
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  private void clearLogs() {
+    logs_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * logs are the most recent log lines the plugin wrote (revision 41).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+   */
+  private void removeLogs(int index) {
+    ensureLogsIsMutable();
+    logs_.remove(index);
+  }
+
+  public static final int STORAGE_USED_FIELD_NUMBER = 22;
+  private long storageUsed_;
+  /**
+   * <pre>
+   * storage_used and storage_quota are the bytes the plugin's KV store holds
+   * and its limit on this node (revision 41).
+   * </pre>
+   *
+   * <code>int64 storage_used = 22 [json_name = "storageUsed"];</code>
+   * @return The storageUsed.
+   */
+  @java.lang.Override
+  public long getStorageUsed() {
+    return storageUsed_;
+  }
+  /**
+   * <pre>
+   * storage_used and storage_quota are the bytes the plugin's KV store holds
+   * and its limit on this node (revision 41).
+   * </pre>
+   *
+   * <code>int64 storage_used = 22 [json_name = "storageUsed"];</code>
+   * @param value The storageUsed to set.
+   */
+  private void setStorageUsed(long value) {
+    
+    storageUsed_ = value;
+  }
+  /**
+   * <pre>
+   * storage_used and storage_quota are the bytes the plugin's KV store holds
+   * and its limit on this node (revision 41).
+   * </pre>
+   *
+   * <code>int64 storage_used = 22 [json_name = "storageUsed"];</code>
+   */
+  private void clearStorageUsed() {
+
+    storageUsed_ = 0L;
+  }
+
+  public static final int STORAGE_QUOTA_FIELD_NUMBER = 23;
+  private long storageQuota_;
+  /**
+   * <code>int64 storage_quota = 23 [json_name = "storageQuota"];</code>
+   * @return The storageQuota.
+   */
+  @java.lang.Override
+  public long getStorageQuota() {
+    return storageQuota_;
+  }
+  /**
+   * <code>int64 storage_quota = 23 [json_name = "storageQuota"];</code>
+   * @param value The storageQuota to set.
+   */
+  private void setStorageQuota(long value) {
+    
+    storageQuota_ = value;
+  }
+  /**
+   * <code>int64 storage_quota = 23 [json_name = "storageQuota"];</code>
+   */
+  private void clearStorageQuota() {
+
+    storageQuota_ = 0L;
   }
 
   public static dev.ironpark.mako.v2.PluginInfo parseFrom(
@@ -2842,6 +3187,377 @@ public  final class PluginInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * tools are the MCP tools the plugin contributes to agents (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.PluginTool> getToolsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getToolsList());
+    }
+    /**
+     * <pre>
+     * tools are the MCP tools the plugin contributes to agents (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+     */
+    @java.lang.Override
+    public int getToolsCount() {
+      return instance.getToolsCount();
+    }/**
+     * <pre>
+     * tools are the MCP tools the plugin contributes to agents (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.PluginTool getTools(int index) {
+      return instance.getTools(index);
+    }
+    /**
+     * <pre>
+     * tools are the MCP tools the plugin contributes to agents (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+     */
+    public Builder setTools(
+        int index, dev.ironpark.mako.v2.PluginTool value) {
+      copyOnWrite();
+      instance.setTools(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * tools are the MCP tools the plugin contributes to agents (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+     */
+    public Builder setTools(
+        int index, dev.ironpark.mako.v2.PluginTool.Builder builderForValue) {
+      copyOnWrite();
+      instance.setTools(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * tools are the MCP tools the plugin contributes to agents (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+     */
+    public Builder addTools(dev.ironpark.mako.v2.PluginTool value) {
+      copyOnWrite();
+      instance.addTools(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * tools are the MCP tools the plugin contributes to agents (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+     */
+    public Builder addTools(
+        int index, dev.ironpark.mako.v2.PluginTool value) {
+      copyOnWrite();
+      instance.addTools(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * tools are the MCP tools the plugin contributes to agents (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+     */
+    public Builder addTools(
+        dev.ironpark.mako.v2.PluginTool.Builder builderForValue) {
+      copyOnWrite();
+      instance.addTools(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * tools are the MCP tools the plugin contributes to agents (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+     */
+    public Builder addTools(
+        int index, dev.ironpark.mako.v2.PluginTool.Builder builderForValue) {
+      copyOnWrite();
+      instance.addTools(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * tools are the MCP tools the plugin contributes to agents (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+     */
+    public Builder addAllTools(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.PluginTool> values) {
+      copyOnWrite();
+      instance.addAllTools(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * tools are the MCP tools the plugin contributes to agents (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+     */
+    public Builder clearTools() {
+      copyOnWrite();
+      instance.clearTools();
+      return this;
+    }
+    /**
+     * <pre>
+     * tools are the MCP tools the plugin contributes to agents (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginTool tools = 20 [json_name = "tools"];</code>
+     */
+    public Builder removeTools(int index) {
+      copyOnWrite();
+      instance.removeTools(index);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * logs are the most recent log lines the plugin wrote (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.PluginLog> getLogsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getLogsList());
+    }
+    /**
+     * <pre>
+     * logs are the most recent log lines the plugin wrote (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+     */
+    @java.lang.Override
+    public int getLogsCount() {
+      return instance.getLogsCount();
+    }/**
+     * <pre>
+     * logs are the most recent log lines the plugin wrote (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.PluginLog getLogs(int index) {
+      return instance.getLogs(index);
+    }
+    /**
+     * <pre>
+     * logs are the most recent log lines the plugin wrote (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+     */
+    public Builder setLogs(
+        int index, dev.ironpark.mako.v2.PluginLog value) {
+      copyOnWrite();
+      instance.setLogs(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * logs are the most recent log lines the plugin wrote (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+     */
+    public Builder setLogs(
+        int index, dev.ironpark.mako.v2.PluginLog.Builder builderForValue) {
+      copyOnWrite();
+      instance.setLogs(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * logs are the most recent log lines the plugin wrote (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+     */
+    public Builder addLogs(dev.ironpark.mako.v2.PluginLog value) {
+      copyOnWrite();
+      instance.addLogs(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * logs are the most recent log lines the plugin wrote (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+     */
+    public Builder addLogs(
+        int index, dev.ironpark.mako.v2.PluginLog value) {
+      copyOnWrite();
+      instance.addLogs(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * logs are the most recent log lines the plugin wrote (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+     */
+    public Builder addLogs(
+        dev.ironpark.mako.v2.PluginLog.Builder builderForValue) {
+      copyOnWrite();
+      instance.addLogs(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * logs are the most recent log lines the plugin wrote (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+     */
+    public Builder addLogs(
+        int index, dev.ironpark.mako.v2.PluginLog.Builder builderForValue) {
+      copyOnWrite();
+      instance.addLogs(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * logs are the most recent log lines the plugin wrote (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+     */
+    public Builder addAllLogs(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.PluginLog> values) {
+      copyOnWrite();
+      instance.addAllLogs(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * logs are the most recent log lines the plugin wrote (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+     */
+    public Builder clearLogs() {
+      copyOnWrite();
+      instance.clearLogs();
+      return this;
+    }
+    /**
+     * <pre>
+     * logs are the most recent log lines the plugin wrote (revision 41).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginLog logs = 21 [json_name = "logs"];</code>
+     */
+    public Builder removeLogs(int index) {
+      copyOnWrite();
+      instance.removeLogs(index);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * storage_used and storage_quota are the bytes the plugin's KV store holds
+     * and its limit on this node (revision 41).
+     * </pre>
+     *
+     * <code>int64 storage_used = 22 [json_name = "storageUsed"];</code>
+     * @return The storageUsed.
+     */
+    @java.lang.Override
+    public long getStorageUsed() {
+      return instance.getStorageUsed();
+    }
+    /**
+     * <pre>
+     * storage_used and storage_quota are the bytes the plugin's KV store holds
+     * and its limit on this node (revision 41).
+     * </pre>
+     *
+     * <code>int64 storage_used = 22 [json_name = "storageUsed"];</code>
+     * @param value The storageUsed to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStorageUsed(long value) {
+      copyOnWrite();
+      instance.setStorageUsed(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * storage_used and storage_quota are the bytes the plugin's KV store holds
+     * and its limit on this node (revision 41).
+     * </pre>
+     *
+     * <code>int64 storage_used = 22 [json_name = "storageUsed"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStorageUsed() {
+      copyOnWrite();
+      instance.clearStorageUsed();
+      return this;
+    }
+
+    /**
+     * <code>int64 storage_quota = 23 [json_name = "storageQuota"];</code>
+     * @return The storageQuota.
+     */
+    @java.lang.Override
+    public long getStorageQuota() {
+      return instance.getStorageQuota();
+    }
+    /**
+     * <code>int64 storage_quota = 23 [json_name = "storageQuota"];</code>
+     * @param value The storageQuota to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStorageQuota(long value) {
+      copyOnWrite();
+      instance.setStorageQuota(value);
+      return this;
+    }
+    /**
+     * <code>int64 storage_quota = 23 [json_name = "storageQuota"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStorageQuota() {
+      copyOnWrite();
+      instance.clearStorageQuota();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginInfo)
   }
   @java.lang.Override
@@ -2881,12 +3597,18 @@ public  final class PluginInfo extends
             "blocked_",
             "agentAsk_",
             "agentsAllowed_",
+            "tools_",
+            dev.ironpark.mako.v2.PluginTool.class,
+            "logs_",
+            dev.ironpark.mako.v2.PluginLog.class,
+            "storageUsed_",
+            "storageQuota_",
           };
           java.lang.String info =
-              "\u0000\u0013\u0000\u0001\u0001\u0013\u0013\u0000\u0006\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0017\u0000\u0001\u0001\u0017\u0017\u0000\b\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0007\u0007\u021a\b\u021a\t\u021a\n\u001b" +
               "\u000b\u001b\f\u001b\r\u0007\u000e\u0208\u000f\u0208\u0010\u0208\u0011\u0208\u0012" +
-              "\u1009\u0000\u0013\u0007";
+              "\u1009\u0000\u0013\u0007\u0014\u001b\u0015\u001b\u0016\u0002\u0017\u0002";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

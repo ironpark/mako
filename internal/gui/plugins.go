@@ -2,15 +2,19 @@ package gui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
+	"github.com/ironpark/ggui/ui"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/layoutdoc"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -98,6 +102,7 @@ func (m *model) actOnPlugin(req *protocol.PluginAction) {
 			m.connErr(errors.New(errorText(err)))
 		} else {
 			openPluginLink(done.GetOpenUrl())
+			m.showPluginToast(done.GetToast())
 		}
 		m.link.pluginsStale.Store(true)
 		m.link.pollNow()
@@ -119,7 +124,15 @@ func (m *model) blockEvent(block, node, kind, value string, values map[string]st
 			return
 		}
 		openPluginLink(done.GetOpenUrl())
+		m.showPluginToast(done.GetToast())
 	})
+}
+
+func (m *model) showPluginToast(msg string) {
+	if msg == "" || m.toaster == nil {
+		return
+	}
+	m.toaster.Push(ui.Toast(msg, ""))
 }
 
 // openPluginLink opens a link a plugin asked to open in answer to the
@@ -156,10 +169,11 @@ func permissionText(p string) string {
 	return p
 }
 
-// pluginCommands are the plugins' commands, for the palette: named for
-// their plugin, so none passes for one of the window's.
+// pluginCommands are the plugins' commands and block open/close actions, for
+// the palette: named for their plugin, so none passes for one of the window's.
 func (m *model) pluginCommands() []command {
 	var out []command
+	doc := ggui.Peek(m.WinDoc)
 	for _, p := range ggui.Peek(m.plugins.List) {
 		usable := p.GetState() == protocol.PluginReady || p.GetState() == protocol.PluginRunning
 		for _, c := range p.GetCommands() {
@@ -167,6 +181,133 @@ func (m *model) pluginCommands() []command {
 			out = append(out, command{ID: c.GetTitle(), Category: id, Keys: []string{"plugin", id, cmd}, Disabled: !usable,
 				Run: func() { m.actOnPlugin(&protocol.PluginAction{PluginId: id, Op: protocol.PluginRun, Command: cmd}) }})
 		}
+		for _, b := range p.GetBlocks() {
+			blockName, title, pid := b.GetName(), b.GetTitle(), p.GetId()
+			placed := doc != nil && doc.BlockPath(blockName) != nil
+			if placed {
+				out = append(out,
+					command{ID: Tf("Show %s", title), Category: pid, Keys: []string{"plugin", "block", "open", pid, title, blockName},
+						Run: func() { m.revealBlock(blockName) }},
+					command{ID: Tf("Close %s", title), Category: pid, Keys: []string{"plugin", "block", "close", "remove", pid, title, blockName},
+						Run: func() { m.removePluginBlock(blockName) }},
+				)
+			} else {
+				defaultPlace := "right-stack"
+				if slices.Contains(b.GetSlots(), "bottom") {
+					defaultPlace = "bottom"
+				}
+				out = append(out,
+					command{ID: Tf("Open %s", title), Category: pid, Keys: []string{"plugin", "block", "open", "show", pid, title, blockName},
+						Run: func() { m.placePluginBlock(blockName, defaultPlace) }},
+				)
+			}
+		}
 	}
 	return out
+}
+
+// pluginBlockNodeID makes a valid, unique layout node ID for a placed plugin block.
+func pluginBlockNodeID(doc *layoutdoc.Doc, blockName string) string {
+	base := strings.TrimPrefix(blockName, "plugin:")
+	base = strings.NewReplacer("/", "-", ":", "-", "_", "-", ".", "-").Replace(base)
+	if base == "" {
+		base = "plugin-block"
+	}
+	id := base
+	for i := 2; doc != nil && doc.Node(id) != nil; i++ {
+		id = base + "-" + string(rune('0'+i%10))
+		if i >= 10 {
+			id = base + "-x"
+		}
+	}
+	return id
+}
+
+// activeLayoutDoc returns the active space's layout document name and parsed doc.
+func (m *model) activeLayoutDoc() (string, *layoutdoc.Doc) {
+	p := m.spacesNow()
+	docName := layoutdoc.DefaultName
+	if sp, ok := p.spaceOf(p.Space); ok && sp.Layout != "" {
+		docName = sp.Layout
+	}
+	if raw := p.WindowLayouts[docName]; len(raw) > 0 {
+		if d, err := layoutdoc.Parse(raw, m.blocks); err == nil {
+			return docName, d
+		}
+	}
+	return docName, layoutdoc.Default()
+}
+
+// placePluginBlock puts a plugin block into the active window layout document
+// ("right-stack", "right-column", or "bottom") directly as the user's own edit.
+func (m *model) placePluginBlock(blockName, placement string) {
+	docName, doc := m.activeLayoutDoc()
+	// Remove any existing occurrence first so switching placement moves cleanly.
+	var ops []layoutdoc.Op
+	if path := doc.BlockPath(blockName); len(path) > 0 {
+		leaf := path[len(path)-1]
+		if leaf.ID != "" {
+			ops = append(ops, layoutdoc.Op{Op: "remove", ID: leaf.ID})
+		}
+	}
+	nodeID := pluginBlockNodeID(doc, blockName)
+	switch placement {
+	case "right-column":
+		ops = append(ops, layoutdoc.Op{
+			Op: "insert", Parent: doc.Root.ID,
+			Node: map[string]any{"id": nodeID, "block": blockName, "size": 460, "collapsible": true},
+		})
+	case "bottom":
+		parent := "workspace"
+		if doc.Node(parent) == nil || doc.Node(parent).Kind != layoutdoc.KindColumn {
+			parent = doc.Root.ID
+		}
+		ops = append(ops, layoutdoc.Op{
+			Op: "insert", Parent: parent,
+			Node: map[string]any{"id": nodeID, "block": blockName, "size": 320, "collapsible": true},
+		})
+	default: // "right-stack"
+		if det := doc.Node(layoutdoc.DetailsNode); det != nil && det.Kind == layoutdoc.KindStack {
+			ops = append(ops,
+				layoutdoc.Op{Op: "insert", Parent: layoutdoc.DetailsNode, Node: blockName},
+				layoutdoc.Op{Op: "select", ID: layoutdoc.DetailsNode, Block: blockName},
+			)
+		} else {
+			ops = append(ops, layoutdoc.Op{
+				Op: "insert", Parent: doc.Root.ID,
+				Node: map[string]any{"id": nodeID, "block": blockName, "size": 380, "collapsible": true},
+			})
+		}
+	}
+	next, err := layoutdoc.Apply(doc, ops, m.blocks)
+	if err != nil {
+		m.tellWindowDoc(err)
+		return
+	}
+	body, err := json.Marshal(next)
+	if err != nil {
+		return
+	}
+	m.setWindowLayout(docName, body)
+	m.revealBlock(blockName)
+}
+
+// removePluginBlock removes a plugin block from the active window layout document.
+func (m *model) removePluginBlock(blockName string) {
+	docName, doc := m.activeLayoutDoc()
+	path := doc.BlockPath(blockName)
+	if len(path) == 0 {
+		return
+	}
+	leaf := path[len(path)-1]
+	next, err := layoutdoc.Apply(doc, []layoutdoc.Op{{Op: "remove", ID: leaf.ID}}, m.blocks)
+	if err != nil {
+		m.tellWindowDoc(err)
+		return
+	}
+	body, err := json.Marshal(next)
+	if err != nil {
+		return
+	}
+	m.setWindowLayout(docName, body)
 }

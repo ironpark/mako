@@ -89,21 +89,21 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 		if v == nil || !contains(commandIDs(v.man), a.GetCommand()) {
 			return nil, fmt.Errorf("the plugin has no command %q", a.GetCommand())
 		}
-		var open string
+		var open, toast string
 		err := p.do(ctx, func() error {
 			if err := p.ensure(); err != nil {
 				return err
 			}
 			_, err := p.invoke("command", true, a.GetCommand())
-			open = p.openURL
-			p.openURL = ""
+			open, toast = p.openURL, p.toast
+			p.openURL, p.toast = "", ""
 			p.afterCall()
 			return err
 		})
 		if err != nil {
 			return nil, err
 		}
-		return &protocol.PluginDone{OpenUrl: open}, nil
+		return &protocol.PluginDone{OpenUrl: open, Toast: toast}, nil
 	case protocol.PluginSet:
 		if v == nil {
 			return nil, errors.New("the plugin's manifest has not been read")

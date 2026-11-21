@@ -1,5 +1,5 @@
 id = "kanban"
-version = "0.1.0"
+version = "0.2.0"
 publisher = "ironpark"
 api = 1
 entry = "main.js"
@@ -17,6 +17,29 @@ title = "Reset Kanban board to demo cards"
 [[contributes.command]]
 id = "toggle-view"
 title = "Toggle Kanban board / compact view"
+
+[[contributes.tool]]
+id = "list_cards"
+description = "List all cards currently on the Kanban board with their id, column, title, priority, tag, and note"
+[contributes.tool.params]
+column = { type = "string", description = "Optional filter: todo, doing, review, or done" }
+
+[[contributes.tool]]
+id = "add_card"
+description = "Add a new card to the Kanban board"
+[contributes.tool.params]
+title = { type = "string", description = "Card title", required = true }
+column = { type = "string", description = "Target column: todo (default), doing, review, or done" }
+priority = { type = "string", description = "low, medium (default), or high" }
+tag = { type = "string", description = "Optional short tag" }
+note = { type = "string", description = "Optional details or acceptance criteria" }
+
+[[contributes.tool]]
+id = "move_card"
+description = "Move an existing Kanban card to another column"
+[contributes.tool.params]
+id = { type = "string", description = "Card id (e.g. c1)", required = true }
+column = { type = "string", description = "Target column: todo, doing, review, or done", required = true }
 
 [contributes.settings]
 view_mode = { type = "select", label = "Default layout", description = "Board shows columns side by side; compact shows one column at a time.", options = ["board", "compact"], default = "board" }

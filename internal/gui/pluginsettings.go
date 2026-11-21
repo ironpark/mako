@@ -1,17 +1,20 @@
 package gui
 
 import (
+	"fmt"
 	"image/color"
 	"maps"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/plugin/pack"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -179,10 +182,100 @@ func pluginCardBody(m *model, p *protocol.PluginInfo) ggui.Widget {
 		rows = append(rows, row(T("Agents"), T("You let it start agents without asking."),
 			ui.Button(T("Ask again"), act(protocol.PluginForgetAgents)).Outline()))
 	}
+	for _, b := range p.GetBlocks() {
+		rows = append(rows, pluginBlockRow(m, b))
+	}
+	if len(p.GetTools()) > 0 {
+		rows = append(rows, pluginToolsRow(id, p.GetTools()))
+	}
 	for _, s := range p.GetSettings() {
 		rows = append(rows, pluginSettingRow(m, id, s))
 	}
+	rows = append(rows, pluginDiagnosticsRow(p))
 	return card(rows...)
+}
+
+// pluginBlockRow lets the user place, focus, or remove a plugin's block from
+// the window layout directly from Settings ▸ Plugins.
+func pluginBlockRow(m *model, b *protocol.PluginBlock) ggui.Widget {
+	name, title := b.GetName(), b.GetTitle()
+	return ggui.Reactive(func() ggui.Widget {
+		doc := m.WinDoc.Get()
+		placed := doc != nil && doc.BlockPath(name) != nil
+		var controls []ggui.Widget
+		if placed {
+			controls = append(controls,
+				ui.Button(T("Show"), func() { m.revealBlock(name) }).Secondary(),
+				ui.Button(T("Right tab"), func() { m.placePluginBlock(name, "right-stack") }).Outline(),
+				ui.Button(T("Right column"), func() { m.placePluginBlock(name, "right-column") }).Outline(),
+				ui.Button(T("Bottom"), func() { m.placePluginBlock(name, "bottom") }).Outline(),
+				ui.Button(T("Remove from layout"), func() { m.removePluginBlock(name) }).Outline(),
+			)
+		} else {
+			controls = append(controls,
+				ui.Button(T("Right tab"), func() { m.placePluginBlock(name, "right-stack") }).Outline(),
+				ui.Button(T("Right column"), func() { m.placePluginBlock(name, "right-column") }).Outline(),
+				ui.Button(T("Bottom"), func() { m.placePluginBlock(name, "bottom") }).Outline(),
+			)
+		}
+		return row(title, name, widget.Row(controls...).Gap(6).Align(widget.AlignCenter))
+	})
+}
+
+// pluginToolsRow lists the MCP tools a plugin exposes to running agents.
+func pluginToolsRow(pluginID string, tools []*protocol.PluginTool) ggui.Widget {
+	var chips []ggui.Widget
+	for _, tl := range tools {
+		chips = append(chips, chip(plugin.MCPToolName(pluginID, tl.GetId())))
+	}
+	return stackedRow(T("Agent tools"),
+		T("Exposed on the built-in MCP server so agents can interact with this plugin directly."),
+		widget.Row(chips...).Gap(6).Align(widget.AlignCenter))
+}
+
+// pluginDiagnosticsRow shows storage usage and a collapsible recent log viewer.
+func pluginDiagnosticsRow(p *protocol.PluginInfo) ggui.Widget {
+	open := ggui.State(false)
+	used, quota := p.GetStorageUsed(), p.GetStorageQuota()
+	storageSummary := fmt.Sprintf("%s / %s", formatPluginBytes(used), formatPluginBytes(quota))
+	if quota == 0 {
+		storageSummary = formatPluginBytes(used)
+	}
+	logs := p.GetLogs()
+	return widget.Box(widget.Column(
+		widget.Row(
+			widget.Expanded(widget.Row(
+				widget.Text(T("Diagnostics & logs")).Size(12.5).Weight(ggui.WeightMedium),
+				muted(widget.Text(fmt.Sprintf("%s: %s", T("Storage"), storageSummary)).Size(12)),
+				muted(widget.Text(fmt.Sprintf("· %d", len(logs))).Size(12)),
+			).Gap(8).Align(widget.AlignCenter)),
+			ggui.View(open, func(o bool) ggui.Widget {
+				return ui.Button(pick(o, T("Show less"), T("Show more")), func() { open.Set(!o) }).Ghost()
+			}),
+		).Gap(8).Align(widget.AlignCenter),
+		reveal(open, func() ggui.Widget {
+			if len(logs) == 0 {
+				return widget.Padding(muted(widget.Text(T("No logs yet.")).Size(12)), 4, 0, 2, 0)
+			}
+			var lines []string
+			for _, entry := range logs {
+				ts := time.UnixMilli(entry.GetAt()).Local().Format("15:04:05")
+				lines = append(lines, fmt.Sprintf("[%s] %s: %s", ts, strings.ToUpper(entry.GetLevel()), entry.GetMessage()))
+			}
+			return widget.Padding(widget.Box(widget.Scroll(toolBlock(strings.Join(lines, "\n"), false)).Shrink().Bar(skin.Surface3)).MaxHeight(180), 6, 0, 2, 0)
+		}),
+	).Gap(4).Stretch()).Pad(10, 16)
+}
+
+func formatPluginBytes(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KiB", float64(n)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
 }
 
 // pluginPermissions lists what a plugin asks for, those allowed marked,

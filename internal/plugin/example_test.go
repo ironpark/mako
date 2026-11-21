@@ -103,9 +103,11 @@ func TestExamplePlugin(t *testing.T) {
 	})
 }
 
-// TestKanbanExamplePlugin runs examples/plugins/kanban: starter cards load,
-// a new card is submitted, dragging a card across columns and onto another
-// card moves and reorders it via UiDrop, and the compact view toggle works.
+// TestKanbanExamplePlugin runs examples/plugins/kanban (v0.2.0): starter cards
+// load with card/scroll/dragGroup/dropAccept nodes, live form values work via
+// mako.blocks.values, dragging across columns and onto another card moves and
+// reorders via UiDrop, compact view uses ui.tabs, MCP tools list/add/move cards,
+// and commands emit mako.toast + plugin diagnostics logs.
 func TestKanbanExamplePlugin(t *testing.T) {
 	r := newRig(t, testLimits, nil,
 		&protocol.SessionInfo{Id: "s1", Name: "builder", Agent: "claude", State: protocol.StateRunning, Status: protocol.AgentIdle})
@@ -128,14 +130,17 @@ func TestKanbanExamplePlugin(t *testing.T) {
 	if card := find(tree, "Draft API spec"); card == nil {
 		t.Fatal("missing starter card")
 	}
-	// Verify drag payload and drop target flags are present on the tree.
-	var hasDrag, hasDrop bool
+	// Verify card kind, scroll wrapper, dragGroup, and dropAccept are present on the tree.
+	var hasDrag, hasDrop, hasScroll bool
 	var walk func(*protocol.UiNode)
 	walk = func(n *protocol.UiNode) {
-		if n.GetDrag() == "c1" {
+		if n.GetKind() == "card" && n.GetDrag() == "c1" && n.GetDragGroup() == "card" {
 			hasDrag = true
 		}
-		if n.GetDrop() && strings.HasSuffix(n.GetId(), "/col-done") {
+		if n.GetKind() == "scroll" && strings.HasSuffix(n.GetId(), "/cards") {
+			hasScroll = true
+		}
+		if n.GetDrop() && strings.HasSuffix(n.GetId(), "/col-done") && len(n.GetDropAccept()) == 1 && n.GetDropAccept()[0] == "card" {
 			hasDrop = true
 		}
 		for _, c := range n.GetChildren() {
@@ -143,12 +148,17 @@ func TestKanbanExamplePlugin(t *testing.T) {
 		}
 	}
 	walk(tree)
-	if !hasDrag || !hasDrop {
-		t.Fatalf("expected draggable card c1 (%v) and drop target col-done (%v)", hasDrag, hasDrop)
+	if !hasDrag || !hasDrop || !hasScroll {
+		t.Fatalf("expected draggable card c1 (%v), scroll (%v), and drop target col-done (%v)", hasDrag, hasScroll, hasDrop)
 	}
 
-	// Add a new card via input submit.
-	if _, err := r.event("plugin:kanban/board", "/addbar/draft", protocol.UiSubmit, "Ship drag and drop"); err != nil {
+	// Add a new card by tapping Add button while passing live form values (mako.blocks.values).
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block:  "plugin:kanban/board",
+		Node:   "/addbar/add-btn",
+		Kind:   protocol.UiTap,
+		Values: map[string]string{"/addbar/draft": "Ship drag and drop", "/addbar/draft-priority": "high"},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	w.until("added card", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
@@ -163,15 +173,15 @@ func TestKanbanExamplePlugin(t *testing.T) {
 		return hasText(n, "Kanban · 2/6 done")
 	})
 
-	// Drop card c2 onto card c3 inside In Progress to reorder before it.
-	if _, err := r.event("plugin:kanban/board", "/columns/col-doing/c3", protocol.UiDrop, "c2"); err != nil {
+	// Drop card c2 onto card c3 inside In Progress/cards scroll container to reorder before it.
+	if _, err := r.event("plugin:kanban/board", "/columns/col-doing/cards/c3", protocol.UiDrop, "c2"); err != nil {
 		t.Fatal(err)
 	}
-	tree = w.until("card moved before c3", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+	w.until("card moved before c3", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
 		var order []string
 		var findCol func(*protocol.UiNode)
 		findCol = func(node *protocol.UiNode) {
-			if strings.HasSuffix(node.GetId(), "/col-doing") {
+			if strings.HasSuffix(node.GetId(), "/col-doing/cards") {
 				for _, ch := range node.GetChildren() {
 					if ch.GetDrag() != "" {
 						order = append(order, ch.GetDrag())
@@ -185,13 +195,64 @@ func TestKanbanExamplePlugin(t *testing.T) {
 		findCol(n)
 		return len(order) == 2 && order[0] == "c2" && order[1] == "c3"
 	})
-	_ = tree
 
-	// Switch to compact view via command.
+	// Exercise MCP tools contributed by kanban: add_card, list_cards, move_card.
+	tools := r.m.Tools()
+	if len(tools) != 3 {
+		t.Fatalf("expected 3 kanban tools, got %d", len(tools))
+	}
+	res, err := r.m.CallTool(t.Context(), "kanban", "add_card", []byte(`{"title":"Agent task","column":"review","priority":"high"}`))
+	if err != nil || !strings.Contains(string(res), `"Agent task"`) {
+		t.Fatalf("add_card: %s, %v", res, err)
+	}
+	w.until("agent card rendered", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "Agent task")
+	})
+	listed, err := r.m.CallTool(t.Context(), "kanban", "list_cards", []byte(`{"column":"review"}`))
+	if err != nil || !strings.Contains(string(listed), `"Agent task"`) {
+		t.Fatalf("list_cards: %s, %v", listed, err)
+	}
+	if _, err := r.m.CallTool(t.Context(), "kanban", "move_card", []byte(`{"id":"c2","column":"done"}`)); err != nil {
+		t.Fatalf("move_card: %v", err)
+	}
+	w.until("agent moved card to done", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "Kanban · 3/7 done")
+	})
+
+	// Reset command returns a toast notice and logs are recorded in PluginInfo diagnostics.
+	done, err := r.act(&protocol.PluginAction{PluginId: "kanban", Op: protocol.PluginRun, Command: "reset"})
+	if err != nil || done.GetToast() == "" {
+		t.Fatalf("reset command: done=%+v err=%v", done, err)
+	}
+	var info *protocol.PluginInfo
+	for _, p := range r.m.List() {
+		if p.GetId() == "kanban" {
+			info = p
+		}
+	}
+	if info == nil || len(info.GetTools()) != 3 || len(info.GetLogs()) == 0 || info.GetStorageUsed() == 0 {
+		t.Fatalf("kanban diagnostics: tools=%d logs=%d storage=%d", len(info.GetTools()), len(info.GetLogs()), info.GetStorageUsed())
+	}
+
+	// Switch to compact view via command and verify ui.tabs renders the column switcher.
 	if _, err := r.act(&protocol.PluginAction{PluginId: "kanban", Op: protocol.PluginRun, Command: "toggle-view"}); err != nil {
 		t.Fatal(err)
 	}
 	w.until("compact view", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
-		return hasText(n, "Board") && hasText(n, "Todo (1)")
+		if !hasText(n, "Board") {
+			return false
+		}
+		var hasTabs bool
+		var scan func(*protocol.UiNode)
+		scan = func(node *protocol.UiNode) {
+			if node.GetKind() == "tabs" && len(node.GetOptions()) == 4 {
+				hasTabs = true
+			}
+			for _, ch := range node.GetChildren() {
+				scan(ch)
+			}
+		}
+		scan(n)
+		return hasTabs
 	})
 }

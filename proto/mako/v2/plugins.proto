@@ -68,6 +68,27 @@ message PluginInfo {
   // agents_allowed says the user let the plugin start agents without
   // asking; "forget_agents" has it ask again.
   bool agents_allowed = 19;
+  // tools are the MCP tools the plugin contributes to agents (revision 41).
+  repeated PluginTool tools = 20;
+  // logs are the most recent log lines the plugin wrote (revision 41).
+  repeated PluginLog logs = 21;
+  // storage_used and storage_quota are the bytes the plugin's KV store holds
+  // and its limit on this node (revision 41).
+  int64 storage_used = 22;
+  int64 storage_quota = 23;
+}
+
+// PluginTool is an MCP tool a plugin contributes to running agents.
+message PluginTool {
+  string id = 1;
+  string description = 2;
+}
+
+// PluginLog is one recent log line written by a plugin via log.write.
+message PluginLog {
+  int64 at = 1; // Unix ms
+  string level = 2;
+  string message = 3;
 }
 
 // PluginAgentAsk is an agent a plugin asks to start (sessions:write):
@@ -135,6 +156,9 @@ message PluginDone {
   // open_url is a link the plugin asked, in answer to this, to open in
   // the browser: the front-end that sent the request opens it.
   string open_url = 1;
+  // toast is a short status notice the plugin asked the front-end to show
+  // via mako.toast (revision 41).
+  string toast = 2;
 }
 
 // WatchBlock follows a plugin's block, plugin:<id>/<block>: the daemon
@@ -245,6 +269,14 @@ message UiNode {
   // value (revision 40).
   string drag = 22;
   bool drop = 23;
+  // drag_group tags a draggable node; drop_accept restricts a drop target to
+  // drags matching one of those groups (empty accepts any group, revision 41).
+  string drag_group = 24;
+  repeated string drop_accept = 25;
+  // direction ("vertical" or "horizontal") and max_height (px) configure a
+  // scroll container (revision 41).
+  string direction = 26;
+  double max_height = 27;
 }
 
 // UiSeries is a series of a chart node: its name, colour token and values,
