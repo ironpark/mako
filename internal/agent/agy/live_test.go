@@ -311,6 +311,23 @@ func TestExtractLiveStreamingCases(t *testing.T) {
 				"esc to cancel                          auto · Gemini 4 Neon · high\n",
 			want: "현재 플러그인이 쓸 수 있는 스토리지는 4가지입니다.",
 		},
+		{
+			name: "last_logged_suppresses_markdown_links_and_rules_and_tables",
+			screen: divider + "\n" +
+				"> 커밋해줘\n\n" +
+				"  2. Plugin SQLite (ctx.db) 구현\n\n" +
+				"  • go.mod에 modernc.org/sqlite 추가 완료\n\n" +
+				"  ┌──────┬───────┐\n" +
+				"  │ Mode │ Speed │\n" +
+				"  ├──────┼───────┤\n" +
+				"  │ Fast │ High  │\n" +
+				"  └──────┴───────┘\n" +
+				"⣾  Thinking...\n" +
+				rule80 + "\n>\n" + rule80 + "\n" +
+				"esc to cancel                          auto · Gemini 4 Neon · high\n",
+			lastLogged: "### 2. Plugin SQLite (`ctx.db`) 구현\n\n- [go.mod](file:///Users/ironpark/Projects/Personal/open-source/mako/go.mod)에 `modernc.org/sqlite` 추가 완료\n\n---\n\n| Mode | Speed |\n| --- | --- |\n| Fast | High |",
+			want:       "",
+		},
 	}
 
 	for _, tc := range cases {
@@ -320,5 +337,82 @@ func TestExtractLiveStreamingCases(t *testing.T) {
 				t.Fatalf("ExtractLive() =\n%q\nwant:\n%q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestExtractBaseline(t *testing.T) {
+	a := New()
+	for _, tc := range []struct {
+		file string
+		want string
+	}{
+		{"screen_idle.txt", ""},
+		{"screen_trust.txt", ""},
+		{"screen_permission.txt", ""},
+		{"screen_slash_menu.txt", ""},
+		{"screen_interrupted.txt", ""},
+		{"screen_done.txt", "Thu Nov 19 13:42:33 KST 2026"},
+	} {
+		t.Run(tc.file, func(t *testing.T) {
+			raw, err := os.ReadFile(filepath.Join("testdata", tc.file))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := a.ExtractBaseline(string(raw)); got != tc.want {
+				t.Fatalf("ExtractBaseline(%s) = %q, want %q", tc.file, got, tc.want)
+			}
+		})
+	}
+
+	// Stacked custom statusLine below idle "? for shortcuts" footer must also be stripped.
+	rule80 := strings.Repeat("─", 80)
+	divider := strings.Repeat("─", 60)
+	idleStacked := divider + "\n" +
+		"> Hello\n\n" +
+		"  Previous completed reply.\n\n" +
+		rule80 + "\n> draft next message\n" + rule80 + "\n" +
+		"? for shortcuts                        auto · Gemini 4 Neon · medium\n" +
+		"main · 12% ctx · 5h 98%\n"
+	if got := a.ExtractBaseline(idleStacked); got != "Previous completed reply." {
+		t.Fatalf("ExtractBaseline(idleStacked) = %q, want %q", got, "Previous completed reply.")
+	}
+}
+
+func TestExtractStatus(t *testing.T) {
+	a := New()
+	for _, tc := range []struct {
+		file string
+		want string
+	}{
+		{"screen_idle.txt", ""},
+		{"screen_trust.txt", ""},
+		{"screen_permission.txt", ""},
+		{"screen_done.txt", ""},
+		{"screen_interrupted.txt", ""},
+		{"screen_slash_menu.txt", ""},
+		{"screen_working.txt", "Generating…"},
+		{"screen_running_command.txt", "Running command…"},
+	} {
+		t.Run(tc.file, func(t *testing.T) {
+			raw, err := os.ReadFile(filepath.Join("testdata", tc.file))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := a.ExtractStatus(string(raw)); got != tc.want {
+				t.Fatalf("ExtractStatus(%s) = %q, want %q", tc.file, got, tc.want)
+			}
+		})
+	}
+
+	rule80 := strings.Repeat("─", 80)
+	divider := strings.Repeat("─", 60)
+	reading := divider + "\n" +
+		"> Check live.go\n\n" +
+		"⢸  Reading file...\n" +
+		rule80 + "\n>\n" + rule80 + "\n" +
+		"esc to cancel                          auto · Gemini 4 Neon · high\n" +
+		"main · 12% ctx · 5h 98%\n"
+	if got := a.ExtractStatus(reading); got != "Reading file…" {
+		t.Fatalf("ExtractStatus(reading) = %q, want %q", got, "Reading file…")
 	}
 }

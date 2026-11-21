@@ -390,9 +390,28 @@ func TestHandleSendKeepsClaudeUserPromptOnPTY(t *testing.T) {
 	})
 }
 
-// An agy session streams its in-flight reply from the PTY screen buffer to
-// WatchChat while working, clears atomically when transcript_full.jsonl catches
-// up, and clears promptly when leaving AgentWorking.
+// textBlocks returns the concatenated text of live "text" blocks only.
+func textBlocks(blocks []*protocol.LiveBlock) string {
+	var out []string
+	for _, b := range blocks {
+		if b.GetKind() == "text" {
+			out = append(out, b.GetText())
+		}
+	}
+	return strings.Join(out, "|")
+}
+
+// statusBlock returns the text of a trailing live "thinking" status block.
+func statusBlock(blocks []*protocol.LiveBlock) string {
+	if n := len(blocks); n > 0 && blocks[n-1].GetKind() == "thinking" {
+		return blocks[n-1].GetText()
+	}
+	return ""
+}
+
+// An agy session streams its in-flight reply and live activity status from the
+// PTY screen buffer to WatchChat while working, clears text atomically when
+// transcript_full.jsonl catches up, and clears promptly when leaving AgentWorking.
 func TestAgyScreenLiveStreamsAndClears(t *testing.T) {
 	d := meshDaemon(t, "agy-live")
 	dir := t.TempDir()
@@ -411,7 +430,7 @@ frame() {
 while IFS= read -r cmd; do
   case "$cmd" in
     spinner)
-      frame "Say hello" "" "⣾  Generating..." "esc to cancel                          auto · Gemini 4 Hydrogen · medium"
+      frame "Say hello" "" "⢸  Reading file..." "esc to cancel                          auto · Gemini 4 Hydrogen · medium"
       ;;
     part1)
       frame "Say hello" "  Hello from agy" "⣾  Generating..." "esc to cancel                          auto · Gemini 4 Hydrogen · medium"
@@ -482,23 +501,26 @@ done`
 		}
 	}
 
-	// Spinner-only frame must not emit a live text block.
+	// Spinner-only frame emits the live activity status ("Reading file…") with no text block.
 	send("spinner")
-	time.Sleep(250 * time.Millisecond)
-	if blocks := d.live.blocks(liveKey("agy-1", "")); len(blocks) != 0 {
-		t.Fatalf("spinner-only emitted blocks: %q", texts(blocks))
-	}
+	next("spinner status", func(l *protocol.ChatLive) bool {
+		return textBlocks(l.GetBlocks()) == "" && statusBlock(l.GetBlocks()) == "Reading file…"
+	})
 
-	// First streamed chunk appears live.
+	// First streamed chunk appears live along with Generating… status.
 	send("part1")
-	next("part1 live text", func(l *protocol.ChatLive) bool { return texts(l.GetBlocks()) == "Hello from agy" })
+	next("part1 live text", func(l *protocol.ChatLive) bool {
+		return textBlocks(l.GetBlocks()) == "Hello from agy" && statusBlock(l.GetBlocks()) == "Generating…"
+	})
 
 	// Monotonic growth updates the same live block.
 	send("part2")
-	next("part2 live text", func(l *protocol.ChatLive) bool { return texts(l.GetBlocks()) == "Hello from agy live stream!" })
+	next("part2 live text", func(l *protocol.ChatLive) bool {
+		return textBlocks(l.GetBlocks()) == "Hello from agy live stream!"
+	})
 
 	// When transcript_full.jsonl writes the completed PLANNER_RESPONSE, WatchChat
-	// signals Logged=true and clears the live block atomically (no duplicate).
+	// signals Logged=true and clears the live text block atomically (no duplicate).
 	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -508,8 +530,8 @@ done`
 	if err != nil {
 		t.Fatal(err)
 	}
-	next("log growth clears live block", func(l *protocol.ChatLive) bool {
-		return l.GetLogged() && len(l.GetBlocks()) == 0
+	next("log growth clears live text block", func(l *protocol.ChatLive) bool {
+		return l.GetLogged() && textBlocks(l.GetBlocks()) == ""
 	})
 
 	// Second turn: streams live, then clears promptly when status leaves AgentWorking.
@@ -523,20 +545,20 @@ done`
 		t.Fatal(err)
 	}
 	send("turn2")
-	next("turn2 live text", func(l *protocol.ChatLive) bool { return texts(l.GetBlocks()) == "Second turn streaming" })
+	next("turn2 live text", func(l *protocol.ChatLive) bool { return textBlocks(l.GetBlocks()) == "Second turn streaming" })
 
 	// Non-monotonic reflow replaces the block cleanly without duplication.
 	send("reflow")
-	next("reflowed live text", func(l *protocol.ChatLive) bool { return texts(l.GetBlocks()) == "Reformatted second turn reply" })
+	next("reflowed live text", func(l *protocol.ChatLive) bool { return textBlocks(l.GetBlocks()) == "Reformatted second turn reply" })
 
-	// A permission dialog appearing mid-stream clears live text even before
-	// status transitions away from AgentWorking.
+	// A permission dialog appearing mid-stream clears live text and status even
+	// before status transitions away from AgentWorking.
 	send("perm")
 	next("permission dialog clears live block", func(l *protocol.ChatLive) bool { return len(l.GetBlocks()) == 0 })
 
 	// Back to streaming, then verify leaving AgentWorking clears promptly.
 	send("turn2")
-	next("turn2 resumed live text", func(l *protocol.ChatLive) bool { return texts(l.GetBlocks()) == "Second turn streaming" })
+	next("turn2 resumed live text", func(l *protocol.ChatLive) bool { return textBlocks(l.GetBlocks()) == "Second turn streaming" })
 
 	s.SetStatus(protocol.AgentDone)
 	next("status change clears live block", func(l *protocol.ChatLive) bool { return len(l.GetBlocks()) == 0 })
@@ -571,15 +593,16 @@ func TestLastLoggedAssistantText(t *testing.T) {
 		t.Fatalf("turn1 = %q, want %q", got, "First reply")
 	}
 
-	// New USER_INPUT clears lastLogged so identical replies on Turn 2 can stream.
+	// New USER_INPUT preserves the previous turn's assistant reply so a newly
+	// submitted turn cannot flash Turn 1's reply before the PTY redraws Turn 2.
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, _ = f.WriteString(`{"step_index":2,"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","content":"<USER_REQUEST>\nSecond\n</USER_REQUEST>"}` + "\n")
 	f.Close()
-	if got := lastLoggedAssistantText(path, logs); got != "" {
-		t.Fatalf("after new USER_INPUT = %q, want empty", got)
+	if got := lastLoggedAssistantText(path, logs); got != "First reply" {
+		t.Fatalf("after new USER_INPUT = %q, want %q", got, "First reply")
 	}
 
 	// Large file (> screenLiveTailWindow) still finds the latest reply from the tail.
@@ -593,6 +616,138 @@ func TestLastLoggedAssistantText(t *testing.T) {
 	f.Close()
 	if got := lastLoggedAssistantText(path, logs); got != "Tail reply" {
 		t.Fatalf("large tail = %q, want %q", got, "Tail reply")
+	}
+}
+
+// Sending a new message to an idle agy session must never briefly flash the
+// previous turn's completed response before agy repaints the new turn prompt,
+// even when USER_INPUT is already logged and the previous reply used markdown
+// links/formatting that render differently on the PTY.
+func TestAgyScreenLiveDoesNotFlashPreviousTurnOnNewMessage(t *testing.T) {
+	d := meshDaemon(t, "agy-no-flash")
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "transcript_full.jsonl")
+	initialLog := `{"step_index":0,"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","content":"<USER_REQUEST>\nFirst question\n</USER_REQUEST>"}` + "\n" +
+		`{"step_index":1,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","content":"Updated [go.mod](file:///repo/go.mod) with ` + "`sqlite`" + `."}` + "\n"
+	if err := os.WriteFile(logPath, []byte(initialLog), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	script := `stty -echo
+rule="────────────────────────────────────────────────────────────────────────────────"
+div="────────────────────────────────────────────────────────────"
+while IFS= read -r cmd; do
+  case "$cmd" in
+    idle1)
+      printf '\033[2J\033[H%s\n> First question\n\n  Updated go.mod with sqlite.\n\n%s\n>\n%s\n? for shortcuts                        auto · Gemini 4 Neon · high' "$div" "$rule" "$rule"
+      ;;
+    submit_race)
+      printf '\033[2J\033[H%s\n> First question\n\n  Updated go.mod with sqlite.\n⣾  Thinking...\n%s\n>\n%s\nesc to cancel                          auto · Gemini 4 Neon · high' "$div" "$rule" "$rule"
+      ;;
+    turn2_prompt)
+      printf '\033[2J\033[H%s\n> First question\n\n  Updated go.mod with sqlite.\n\n%s\n> Second question\n⣾  Thinking...\n%s\n>\n%s\nesc to cancel                          auto · Gemini 4 Neon · high' "$div" "$div" "$rule" "$rule"
+      ;;
+    turn2_stream)
+      printf '\033[2J\033[H%s\n> First question\n\n  Updated go.mod with sqlite.\n\n%s\n> Second question\n\n  Brand new reply!\n⠙  Generating...\n%s\n>\n%s\nesc to cancel                          auto · Gemini 4 Neon · high' "$div" "$div" "$rule" "$rule"
+      ;;
+  esac
+done`
+
+	s, err := session.Start(session.Spec{
+		ID:      "agy-nf",
+		NodeID:  d.cfg.NodeID,
+		Agent:   "agy",
+		Project: dir,
+		Command: []string{"/bin/sh", "-c", script},
+		Cols:    80,
+		Rows:    24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	s.SetConversation("conv-nf", logPath)
+	s.SetStatus(protocol.AgentDone)
+	d.sessions.add(s)
+
+	send := func(cmd string) {
+		t.Helper()
+		if _, err := s.Write([]byte(cmd + "\n")); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Render idle screen after Turn 1 completes.
+	send("idle1")
+	time.Sleep(150 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	got := make(chan *protocol.ChatLive, 32)
+	go func() {
+		_ = dialDaemon(t, d).WatchChat(ctx, &protocol.WatchChat{SessionId: "agy-nf"}, func(l *protocol.ChatLive) { got <- l })
+	}()
+
+	// Wait for initial empty WatchChat frame and allow idle baseline to capture.
+	select {
+	case l := <-got:
+		if len(l.GetBlocks()) != 0 {
+			t.Fatalf("initial idle frame emitted blocks: %q", texts(l.GetBlocks()))
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for initial WatchChat frame")
+	}
+	time.Sleep(200 * time.Millisecond)
+
+	// User submits Turn 2: USER_INPUT is logged, status flips to AgentWorking,
+	// and agy shows the working footer BEFORE painting "> Second question".
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.WriteString(`{"step_index":2,"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","content":"<USER_REQUEST>\nSecond question\n</USER_REQUEST>"}` + "\n")
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	send("submit_race")
+	s.SetStatus(protocol.AgentWorking)
+
+	// Observe WatchChat for 350ms: must NEVER emit Turn 1's text, while live
+	// status ("Thinking…") is shown immediately.
+	sawStatus := false
+	deadline := time.After(350 * time.Millisecond)
+drain:
+	for {
+		select {
+		case l := <-got:
+			if txt := textBlocks(l.GetBlocks()); txt != "" {
+				t.Fatalf("stale previous turn flashed on new message: %q", txt)
+			}
+			if statusBlock(l.GetBlocks()) == "Thinking…" {
+				sawStatus = true
+			}
+		case <-deadline:
+			break drain
+		}
+	}
+	if !sawStatus {
+		t.Fatal("expected Thinking… activity status while waiting for Turn 2")
+	}
+
+	// Once agy paints the new turn prompt and streams Turn 2, it appears live.
+	send("turn2_prompt")
+	time.Sleep(150 * time.Millisecond)
+	send("turn2_stream")
+	for {
+		select {
+		case l := <-got:
+			if textBlocks(l.GetBlocks()) == "Brand new reply!" && statusBlock(l.GetBlocks()) == "Generating…" {
+				return
+			}
+		case <-ctx.Done():
+			t.Fatal("timed out waiting for Turn 2 live stream")
+		}
 	}
 }
 

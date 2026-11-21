@@ -153,6 +153,11 @@ func (h *liveHub) applyLocked(c *liveChat, p livePost) {
 			}
 		case "tool":
 			b.kind, b.tool = "tool", piece.Tool
+		case "thinking":
+			if piece.Text != "" {
+				b.text.Reset()
+				b.text.WriteString(piece.Text)
+			}
 		}
 	}
 	c.posted, c.dirty = time.Now(), true
@@ -180,11 +185,16 @@ func (c *liveChat) look(size int64) (grew bool) {
 	before := len(c.blocks)
 	if size > c.logSize {
 		grew = true
-		switch {
-		case !c.ended.IsZero():
-			c.blocks = nil
-		case len(c.blocks) > 0:
-			c.blocks = c.blocks[len(c.blocks)-1:]
+		// Screen-polled sessions reconcile c.blocks against the updated log
+		// inside poll(size) right before look(now); do not slice away their
+		// text block when a trailing status block is also present.
+		if !c.screenLive {
+			switch {
+			case !c.ended.IsZero():
+				c.blocks = nil
+			case len(c.blocks) > 0:
+				c.blocks = c.blocks[len(c.blocks)-1:]
+			}
 		}
 	}
 	c.logSize, c.looked = size, time.Now()

@@ -196,6 +196,21 @@ type ScreenLive interface {
 	ExtractLive(screen, lastLogged string) string
 }
 
+// ScreenLiveBaseline is optionally implemented alongside ScreenLive to extract
+// the last completed assistant text visible on an idle screen, so the poller
+// can suppress stale pre-turn screen contents during the brief window after a
+// new message is submitted before the TUI redraws the new turn.
+type ScreenLiveBaseline interface {
+	ExtractBaseline(screen string) string
+}
+
+// ScreenLiveStatus is optionally implemented alongside ScreenLive to extract
+// the agent's current live activity label (e.g. "Reading file…",
+// "Running command…", "Thinking…") shown next to its working spinner.
+type ScreenLiveStatus interface {
+	ExtractStatus(screen string) string
+}
+
 // Interrupter is an agent whose turn is stopped from its terminal by
 // other than Escape, which stops most: Interrupt is what is typed there to
 // stop the turn it is on, as a person would at its prompt.

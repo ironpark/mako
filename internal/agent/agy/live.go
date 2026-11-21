@@ -10,10 +10,12 @@ import (
 )
 
 var (
-	spinnerLineRe  = regexp.MustCompile(`^\s*[\x{2801}-\x{28FF}]+(?:\s|$)`)
-	promptFooterRe = regexp.MustCompile(`^\s*\? for shortcuts\b`)
-	numberedListRe = regexp.MustCompile(`^\d+[.)]\s+`)
-	expandHintRe   = regexp.MustCompile(`^(?:\(ctrl\+o to expand\)|(?:…|\.\.\.)\s*\+\d+\s+(?:more\s+)?lines?)$`)
+	spinnerLineRe    = regexp.MustCompile(`^\s*[\x{2801}-\x{28FF}]+(?:\s|$)`)
+	promptFooterRe   = regexp.MustCompile(`^\s*\? for shortcuts\b`)
+	numberedListRe   = regexp.MustCompile(`^\d+[.)]\s+`)
+	expandHintRe     = regexp.MustCompile(`^(?:\(ctrl\+o to expand\)|(?:…|\.\.\.)\s*\+\d+\s+(?:more\s+)?lines?)$`)
+	markdownLinkRe   = regexp.MustCompile(`!?\[([^\]]*)\]\([^)\s]+(?:\s+"[^"]*")?\)`)
+	tableSeparatorRe = regexp.MustCompile(`^\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?$`)
 )
 
 // ExtractLive extracts the currently streaming assistant response text from an
@@ -45,10 +47,112 @@ func (*Agent) ExtractLive(screen, lastLogged string) string {
 		return ""
 	}
 
+	cleaned := extractBodyText(lines, false)
+	if cleaned == "" {
+		return ""
+	}
+
+	// Suppress text already persisted to transcript_full.jsonl.
+	if lastLogged != "" && matchesLogged(cleaned, lastLogged) {
+		return ""
+	}
+	return cleaned
+}
+
+// ExtractBaseline extracts the last completed assistant text currently shown
+// above the prompt composer (including idle screens), excluding dialogs.
+// screenLivePoller snapshots this while idle so a newly submitted turn cannot
+// briefly re-emit the previous turn's response before agy paints the new turn.
+func (*Agent) ExtractBaseline(screen string) string {
+	norm := strings.ReplaceAll(strings.ReplaceAll(screen, "\r\n", "\n"), "\r", "\n")
+	rawLines := strings.Split(norm, "\n")
+	end := trimTrailingBlanks(rawLines)
+	if end == 0 {
+		return ""
+	}
+	lines := rawLines[:end]
+
+	detected := screenRules.Detect(detect.Input{Screen: norm})
+	if detected.State == detect.Blocked || hasDialogFooter(lines) {
+		return ""
+	}
+	return extractBodyText(lines, true)
+}
+
+// ExtractStatus extracts agy's live activity label from its bottom braille
+// spinner line (e.g. "Reading file…", "Running command…", "Generating…",
+// "Thinking…") while the session is actively working. Returns "" when idle,
+// showing a dialog/slash menu, or when no spinner status line is visible.
+func (*Agent) ExtractStatus(screen string) string {
+	norm := strings.ReplaceAll(strings.ReplaceAll(screen, "\r\n", "\n"), "\r", "\n")
+	rawLines := strings.Split(norm, "\n")
+	end := trimTrailingBlanks(rawLines)
+	if end == 0 {
+		return ""
+	}
+	lines := rawLines[:end]
+
+	detected := screenRules.Detect(detect.Input{Screen: norm})
+	if detected.State == detect.Blocked || detected.State == detect.Idle {
+		return ""
+	}
+	if hasIdleOrDialogFooter(lines) {
+		return ""
+	}
+	if detected.State != detect.Working && !hasWorkingIndicator(lines) {
+		return ""
+	}
+
+	// Strip footer (and stacked statusLine) + prompt composer box, then scan
+	// upward across the bottom chrome region for the active braille spinner.
+	footerFloor := max(0, end-10)
+	for i := end - 1; i >= footerFloor; i-- {
+		if isEscCancelLine(lines[i]) {
+			end = i
+			break
+		}
+	}
+	end = trimTrailingBlanks(lines[:end])
+	if end == 0 {
+		return ""
+	}
+	scanFloor := max(0, end-14)
+	for i := end - 1; i >= scanFloor; i-- {
+		if !isSpinnerLine(lines[i]) {
+			continue
+		}
+		if label := normalizeStatusLabel(lines[i]); label != "" {
+			return label
+		}
+	}
+	return ""
+}
+
+func normalizeStatusLabel(line string) string {
+	t := strings.TrimSpace(line)
+	// Strip leading braille spinner rune(s) and separating whitespace.
+	t = strings.TrimLeftFunc(t, func(r rune) bool {
+		return (r >= 0x2801 && r <= 0x28FF) || unicode.IsSpace(r)
+	})
+	t = strings.TrimSpace(t)
+	if t == "" {
+		return ""
+	}
+	if strings.HasSuffix(t, "...") {
+		t = strings.TrimSuffix(t, "...") + "…"
+	}
+	if utf8.RuneCountInString(t) > 120 {
+		runes := []rune(t)
+		t = strings.TrimSpace(string(runes[:120])) + "…"
+	}
+	return t
+}
+
+func extractBodyText(lines []string, includeIdleFooter bool) string {
 	// Step 1: Strip bottom chrome (footer, stacked custom statusLine, prompt
 	// composer box, and working spinner) and infer terminal width from the
 	// prompt box rule.
-	bodyEnd, cols := stripBottomChrome(lines)
+	bodyEnd, cols := stripBottomChrome(lines, includeIdleFooter)
 	if bodyEnd == 0 {
 		return ""
 	}
@@ -74,16 +178,7 @@ func (*Agent) ExtractLive(screen, lastLogged string) string {
 
 	// Step 4: Dedent common margin and rejoin software-wrapped prose lines
 	// while keeping paragraphs, lists, headings, blockquotes, and code fences.
-	cleaned := formatExtractedLines(cand, cols)
-	if cleaned == "" {
-		return ""
-	}
-
-	// Step 5: Suppress text already persisted to transcript_full.jsonl.
-	if lastLogged != "" && matchesLogged(cleaned, lastLogged) {
-		return ""
-	}
-	return cleaned
+	return formatExtractedLines(cand, cols)
 }
 
 func trimTrailingBlanks(lines []string) int {
@@ -100,11 +195,17 @@ func trimTrailingBlanks(lines []string) int {
 func hasIdleOrDialogFooter(lines []string) bool {
 	start := max(0, len(lines)-10)
 	for i := start; i < len(lines); i++ {
-		line := lines[i]
-		if promptFooterRe.MatchString(line) {
+		if promptFooterRe.MatchString(lines[i]) {
 			return true
 		}
-		lower := strings.ToLower(line)
+	}
+	return hasDialogFooter(lines)
+}
+
+func hasDialogFooter(lines []string) bool {
+	start := max(0, len(lines)-10)
+	for i := start; i < len(lines); i++ {
+		lower := strings.ToLower(lines[i])
 		if strings.Contains(lower, "navigate") &&
 			(strings.Contains(lower, "tab amend") ||
 				strings.Contains(lower, "esc skip") ||
@@ -168,17 +269,17 @@ func isTurnDivider(line string) bool {
 	return utf8.RuneCountInString(t) >= 10
 }
 
-// stripBottomChrome removes the working footer (plus any stacked custom
-// statusLine beneath it), the composer prompt box, and trailing spinners/rules.
+// stripBottomChrome removes the footer (plus any stacked custom statusLine
+// beneath it), the composer prompt box, and trailing spinners/rules.
 // It returns the exclusive end index of the conversation body and the inferred
 // terminal column width (0 if unknown).
-func stripBottomChrome(lines []string) (end int, cols int) {
+func stripBottomChrome(lines []string, includeIdleFooter bool) (end int, cols int) {
 	end = len(lines)
 
-	// 1. Strip default working footer and any custom statusLine below it.
+	// 1. Strip default footer and any custom statusLine below it.
 	footerFloor := max(0, end-10)
 	for i := end - 1; i >= footerFloor; i-- {
-		if isEscCancelLine(lines[i]) {
+		if isEscCancelLine(lines[i]) || (includeIdleFooter && promptFooterRe.MatchString(lines[i])) {
 			end = i
 			break
 		}
@@ -722,21 +823,30 @@ func matchesLogged(extracted, logged string) bool {
 	if na == nb {
 		return true
 	}
-	// If only the trailing portion of a long already-logged reply fits in the
-	// buffer, suppress it as well.
-	return len(na) >= 20 && strings.HasSuffix(nb, na)
+	// If only a trailing or interior slice of an already-logged reply fits in
+	// the buffer (e.g. long reply scrolled off top, or trailing rule/tip stripped),
+	// suppress it as well.
+	return utf8.RuneCountInString(na) >= 20 && strings.Contains(nb, na)
 }
 
 // normalizeForCompare strips markdown block/inline markers that agy renders
-// differently on the PTY (heading `#`, list `-`/`+`/`•`, blockquote `>`,
-// backticks, bold/italic `*`/`_`) and collapses whitespace so PTY plain text
-// matches raw markdown stored in transcript_full.jsonl.
+// differently on the PTY (links `[label](url)`, heading `#`, list `-`/`+`/`•`,
+// blockquote `>`, code fences, horizontal rules, table pipes/box borders,
+// backticks, bold/italic/strike `*`/`_`/`~`) and collapses whitespace so PTY
+// plain text matches raw markdown stored in transcript_full.jsonl.
 func normalizeForCompare(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 	inSpace := true
 	for line := range strings.SplitSeq(strings.ReplaceAll(s, "\r\n", "\n"), "\n") {
 		t := strings.TrimSpace(line)
+		if t == "" || isFenceLine(t) || isMarkdownRule(t) || tableSeparatorRe.MatchString(t) {
+			continue
+		}
+		// Replace markdown links/images with their visible label text.
+		if strings.Contains(t, "](") {
+			t = markdownLinkRe.ReplaceAllString(t, "$1")
+		}
 		// Strip line-leading heading prefixes ("## Heading" -> "Heading").
 		if hashes := strings.TrimLeft(t, "#"); len(hashes) < len(t) && (hashes == "" || strings.HasPrefix(hashes, " ") || strings.HasPrefix(hashes, "\t")) {
 			t = strings.TrimSpace(hashes)
@@ -752,9 +862,24 @@ func normalizeForCompare(s string) string {
 				break
 			}
 		}
-		for _, r := range t {
+		runes := []rune(t)
+		for i := 0; i < len(runes); i++ {
+			r := runes[i]
+			// Unescape markdown backslash escapes (e.g. "\_" -> "_").
+			if r == '\\' && i+1 < len(runes) {
+				switch runes[i+1] {
+				case '*', '_', '`', '[', ']', '~', '|', '#', '>':
+					continue
+				}
+			}
 			switch r {
-			case '`', '*', '_', '•':
+			case '`', '*', '_', '~', '•':
+				continue
+			case '|', '─', '━', '═', '│', '┃', '┌', '┐', '└', '┘', '├', '┤', '┬', '┴', '┼', '╭', '╮', '╰', '╯':
+				if !inSpace {
+					b.WriteByte(' ')
+					inSpace = true
+				}
 				continue
 			}
 			if unicode.IsSpace(r) {

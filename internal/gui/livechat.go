@@ -147,14 +147,48 @@ func liveTurns(blocks []*protocol.LiveBlock) []chatTurnItem {
 		turns[i].Key = "live:" + turns[i].Key
 	}
 	if n := len(blocks); n > 0 && blocks[n-1].GetKind() == "thinking" {
-		turns = append(turns, chatTurnItem{Key: "live:thinking", Messages: []*protocol.ChatMessage{{Role: "assistant"}}, Thinking: true})
+		turns = append(turns, chatTurnItem{
+			Key:      "live:thinking",
+			Messages: []*protocol.ChatMessage{{Role: "assistant"}},
+			Thinking: true,
+			Status:   blocks[n-1].GetText(),
+		})
 	}
 	return turns
 }
 
-// thinkingRow says the agent thinks, as its reply streams.
-func thinkingRow() ggui.Widget {
-	return widget.Row(ui.Spinner().Size(13), muted(widget.Text(T("Thinking…")).Size(12.5))).Gap(8).Align(widget.AlignCenter)
+// liveStatusLabel localizes well-known agent activity statuses while passing
+// through any agent-specific status text verbatim.
+func liveStatusLabel(status string) string {
+	switch strings.TrimSpace(status) {
+	case "", "Thinking…", "Thinking...":
+		return T("Thinking…")
+	case "Generating…", "Generating...":
+		return T("Generating…")
+	case "Reading file…", "Reading file...":
+		return T("Reading file…")
+	case "Editing file…", "Editing file...":
+		return T("Editing file…")
+	case "Writing file…", "Writing file...":
+		return T("Writing file…")
+	case "Running command…", "Running command...":
+		return T("Running command…")
+	case "Searching…", "Searching...":
+		return T("Searching…")
+	case "Searching files…", "Searching files...":
+		return T("Searching files…")
+	case "Listing directory…", "Listing directory...":
+		return T("Listing directory…")
+	case "Starting…", "Starting...":
+		return T("Starting…")
+	default:
+		return strings.TrimSpace(status)
+	}
+}
+
+// thinkingRow says what the agent is currently doing as its reply streams.
+func thinkingRow(status string) ggui.Widget {
+	return widget.Row(ui.Spinner().Size(13), muted(widget.Text(liveStatusLabel(status)).Size(12.5))).Gap(8).Align(widget.AlignCenter)
 }
 
 // stringField finds the string fields of JSON that may stop short: each

@@ -302,7 +302,8 @@ fun ChatView(
     val streamBlocks = remember(activeLiveBlocks) {
         activeLiveBlocks.filter { (it.kind == "text" && it.text.isNotBlank()) || (it.kind == "tool" && it.tool.isNotBlank()) }
     }
-    val showThinking = activeLiveBlocks.lastOrNull()?.kind == "thinking"
+    val thinkingBlock = activeLiveBlocks.lastOrNull()?.takeIf { it.kind == "thinking" }
+    val showThinking = thinkingBlock != null
     val hasFeedContent = messages.isNotEmpty() || pending.isNotEmpty() || streamBlocks.isNotEmpty() || showThinking
 
     val links = rememberLinkOpener(mesh, session, onFile)
@@ -464,10 +465,11 @@ fun ChatView(
                                 }
                             }
                         }
-                        if (showThinking) {
+                        if (thinkingBlock != null) {
                             item(key = "live:thinking", contentType = "live_thinking") {
                                 LiveThinkingPill(
-                                    Modifier.animateItem(
+                                    label = thinkingBlock.text.ifBlank { stringResource(R.string.chat_thinking) },
+                                    modifier = Modifier.animateItem(
                                         fadeInSpec = MakoMotion.fastTween(),
                                         placementSpec = MakoMotion.SnappyIntOffsetSpring,
                                     ),
@@ -774,9 +776,9 @@ private fun PendingUserBubble(pending: PendingMessage, modifier: Modifier = Modi
     }
 }
 
-/** Subtle breathing pill shown while the model streams a thinking block. */
+/** Subtle breathing pill shown while the model streams a thinking or activity status block. */
 @Composable
-private fun LiveThinkingPill(modifier: Modifier = Modifier) {
+private fun LiveThinkingPill(label: String, modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "thinkingBreath")
     val textAlpha by transition.animateFloat(
         initialValue = 0.55f,
@@ -800,7 +802,7 @@ private fun LiveThinkingPill(modifier: Modifier = Modifier) {
         ) {
             PulsingStatusDot(StatusColors.Working, active = true, size = 7.dp)
             Text(
-                stringResource(R.string.chat_thinking),
+                label,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.alpha(textAlpha),

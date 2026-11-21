@@ -744,9 +744,10 @@ type chatTurnItem struct {
 	Key      string
 	Messages []*protocol.ChatMessage
 	Agents   []*protocol.SubAgent
-	Folded   bool // a long run folded to a line
-	Sending  bool // a message sent, not yet in the log
-	Thinking bool // the agent thinks, as its reply streams
+	Folded   bool   // a long run folded to a line
+	Sending  bool   // a message sent, not yet in the log
+	Thinking bool   // the agent thinks or reports a live activity status
+	Status   string // live activity label (e.g. "Reading file…"), empty for default "Thinking…"
 }
 
 // chatGap is the room between the feed's turns, and chatTurnEstimate how
@@ -767,7 +768,7 @@ func chatTurnRow(m *model, id string, info *protocol.SessionInfo, state *chatSta
 		return widget.Box()
 	}
 	if t.Thinking {
-		return thinkingRow()
+		return thinkingRow(t.Status)
 	}
 	if t.Sending {
 		label := widget.Row(widget.Spacer(), icon("clock").Size(11).Color(skin.ExtraMuted), widget.Text(T("Sent")).Size(11).Color(skin.ExtraMuted)).Gap(4).Align(widget.AlignCenter)

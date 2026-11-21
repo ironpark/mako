@@ -26,9 +26,15 @@ func TestAReplyStreamingShowsAsTurns(t *testing.T) {
 	if len(msgs) != 2 || msgs[0].GetText() != "Looking" || msgs[1].GetTool() != "Bash" || !msgs[1].GetPending() || msgs[1].GetDetail() != `ls -la "my` {
 		t.Fatalf("messages %v", msgs)
 	}
-	thinking := liveTurns([]*protocol.LiveBlock{{Index: 0, Kind: "text", Text: "a"}, {Index: 1, Kind: "thinking"}})
-	if n := len(thinking); n != 2 || !thinking[n-1].Thinking {
-		t.Fatalf("no line says it thinks: %+v", thinking)
+	thinking := liveTurns([]*protocol.LiveBlock{{Index: 0, Kind: "text", Text: "a"}, {Index: 1, Kind: "thinking", Text: "Reading file…"}})
+	if n := len(thinking); n != 2 || !thinking[n-1].Thinking || thinking[n-1].Status != "Reading file…" {
+		t.Fatalf("no line says it thinks with status: %+v", thinking)
+	}
+	if got := liveStatusLabel("Reading file..."); got == "" {
+		t.Fatal("empty localized status label")
+	}
+	if got := liveStatusLabel("Searching web…"); got != "Searching web…" {
+		t.Fatalf("custom status label = %q, want %q", got, "Searching web…")
 	}
 	if done := liveTurns([]*protocol.LiveBlock{{Index: 0, Kind: "thinking"}, {Index: 1, Kind: "text", Text: "a"}}); len(done) != 1 || done[0].Thinking {
 		t.Fatalf("a thought done still shows: %+v", done)
