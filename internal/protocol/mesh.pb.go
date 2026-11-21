@@ -683,9 +683,13 @@ type NodeState struct {
 	Peers             []*Node                `protobuf:"bytes,4,rep,name=peers,proto3" json:"peers,omitempty"`
 	// workspace is the latest of the windows' workspaces the daemon holds,
 	// for the peers it lets in and that let it in to take up.
-	Workspace     *Workspace `protobuf:"bytes,5,opt,name=workspace,proto3" json:"workspace,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Workspace *Workspace `protobuf:"bytes,5,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	// plugin_sync_digest is a 32-byte SHA-256 digest of all P2P-synced plugin
+	// SQLite buckets on this node (revision 43); peers trusted both ways fetch
+	// and merge buckets via SyncPluginDB only when digests differ.
+	PluginSyncDigest []byte `protobuf:"bytes,6,opt,name=plugin_sync_digest,json=pluginSyncDigest,proto3" json:"plugin_sync_digest,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *NodeState) Reset() {
@@ -749,6 +753,13 @@ func (x *NodeState) GetPeers() []*Node {
 func (x *NodeState) GetWorkspace() *Workspace {
 	if x != nil {
 		return x.Workspace
+	}
+	return nil
+}
+
+func (x *NodeState) GetPluginSyncDigest() []byte {
+	if x != nil {
+		return x.PluginSyncDigest
 	}
 	return nil
 }
@@ -1718,13 +1729,14 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\x0f_allow_template\"\v\n" +
 	"\tListNodes\",\n" +
 	"\x05Nodes\x12#\n" +
-	"\x05nodes\x18\x01 \x03(\v2\r.mako.v2.NodeR\x05nodes\"\xe6\x01\n" +
+	"\x05nodes\x18\x01 \x03(\v2\r.mako.v2.NodeR\x05nodes\"\x94\x02\n" +
 	"\tNodeState\x12!\n" +
 	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\x120\n" +
 	"\bsessions\x18\x02 \x03(\v2\x14.mako.v2.SessionInfoR\bsessions\x12-\n" +
 	"\x12watching_approvals\x18\x03 \x01(\bR\x11watchingApprovals\x12#\n" +
 	"\x05peers\x18\x04 \x03(\v2\r.mako.v2.NodeR\x05peers\x120\n" +
-	"\tworkspace\x18\x05 \x01(\v2\x12.mako.v2.WorkspaceR\tworkspace\"\xdc\x01\n" +
+	"\tworkspace\x18\x05 \x01(\v2\x12.mako.v2.WorkspaceR\tworkspace\x12,\n" +
+	"\x12plugin_sync_digest\x18\x06 \x01(\fR\x10pluginSyncDigest\"\xdc\x01\n" +
 	"\tWorkspace\x12\x10\n" +
 	"\x03doc\x18\x01 \x01(\fR\x03doc\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x17\n" +

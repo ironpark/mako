@@ -30,6 +30,15 @@ export function hostApi(call) {
     commands: Object.freeze({
       runCommand: (req) => call("commands.runCommand", req),
     }),
+    db: Object.freeze({
+      query: (req) => call("db.query", req),
+      exec: (req) => call("db.exec", req),
+      batch: (req) => call("db.batch", req),
+      stats: (req) => call("db.stats", req),
+      syncEnable: (req) => call("db.syncEnable", req),
+      syncPut: (req) => call("db.syncPut", req),
+      syncDelete: (req) => call("db.syncDelete", req),
+    }),
     messages: Object.freeze({
       sendMessage: (req) => call("messages.sendMessage", req),
       startAgent: (req) => call("messages.startAgent", req),

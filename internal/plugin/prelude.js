@@ -73,6 +73,34 @@ function makeContext(ctxJson) {
     getSetting: (k) => host.settings.getSetting(typeof k === "string" ? { key: k, scope: scopeKey } : { ...(k || {}), scope: scopeKey }),
     listSettings: (req) => host.settings.listSettings({ ...(req || {}), scope: scopeKey }),
   });
+  const encodeParams = (params) => Array.isArray(params) ? params.map((v) => JSON.stringify(v === undefined ? null : v)) : [];
+  const scopedDb = Object.freeze({
+    async query(sql, params) {
+      const res = await host.db.query({ sql: String(sql || ""), paramsJson: encodeParams(params), scope: scopeKey });
+      const cols = res.columns || [];
+      const rows = (res.rowsJson || []).map((raw) => {
+        const arr = JSON.parse(raw);
+        const obj = {};
+        for (let i = 0; i < cols.length; i++) obj[cols[i]] = arr[i];
+        return obj;
+      });
+      return { columns: cols, rows, truncated: Boolean(res.truncated) };
+    },
+    exec: (sql, params) => host.db.exec({ sql: String(sql || ""), paramsJson: encodeParams(params), scope: scopeKey }),
+    batch: (stmts) => host.db.batch({
+      statements: (stmts || []).map((st) => ({ sql: String(st.sql || ""), paramsJson: encodeParams(st.params) })),
+      scope: scopeKey,
+    }),
+    stats: () => host.db.stats({ scope: scopeKey }),
+    syncEnable: (table) => host.db.syncEnable({ table: String(table || ""), scope: scopeKey }),
+    syncPut: (table, id, doc) => host.db.syncPut({
+      table: String(table || ""),
+      id: String(id || ""),
+      docJson: typeof doc === "string" ? doc : JSON.stringify(doc === undefined ? {} : doc),
+      scope: scopeKey,
+    }),
+    syncDelete: (table, id) => host.db.syncDelete({ table: String(table || ""), id: String(id || ""), scope: scopeKey }),
+  });
   return Object.freeze({
     scope,
     scopeKey,
@@ -84,6 +112,7 @@ function makeContext(ctxJson) {
     roots: Object.freeze(Array.isArray(raw.roots) ? [...raw.roots] : []),
     storage: scopedStorage,
     settings: scopedSettings,
+    db: scopedDb,
   });
 }
 
@@ -381,6 +410,12 @@ const R = {
     const ev = JSON.parse(json);
     const on = (plugin && plugin.on) || {};
     const h = Object.prototype.hasOwnProperty.call(on, ev.kind) ? on[ev.kind] : undefined;
+    if (typeof h === "function") await h.call(plugin, ev);
+  },
+  async dbSyncEvent(json) {
+    const ev = JSON.parse(json);
+    const on = (plugin && plugin.on) || {};
+    const h = Object.prototype.hasOwnProperty.call(on, "dbSync") ? on.dbSync : undefined;
     if (typeof h === "function") await h.call(plugin, ev);
   },
   save(id, scopeKey) {

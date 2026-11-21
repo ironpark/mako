@@ -1708,6 +1708,73 @@ public  final class PluginInfo extends
     storageQuota_ = 0L;
   }
 
+  public static final int DB_USED_FIELD_NUMBER = 24;
+  private long dbUsed_;
+  /**
+   * <pre>
+   * db_used and db_quota are the bytes the plugin's SQLite databases hold
+   * and its limit on this node (revision 43).
+   * </pre>
+   *
+   * <code>int64 db_used = 24 [json_name = "dbUsed"];</code>
+   * @return The dbUsed.
+   */
+  @java.lang.Override
+  public long getDbUsed() {
+    return dbUsed_;
+  }
+  /**
+   * <pre>
+   * db_used and db_quota are the bytes the plugin's SQLite databases hold
+   * and its limit on this node (revision 43).
+   * </pre>
+   *
+   * <code>int64 db_used = 24 [json_name = "dbUsed"];</code>
+   * @param value The dbUsed to set.
+   */
+  private void setDbUsed(long value) {
+    
+    dbUsed_ = value;
+  }
+  /**
+   * <pre>
+   * db_used and db_quota are the bytes the plugin's SQLite databases hold
+   * and its limit on this node (revision 43).
+   * </pre>
+   *
+   * <code>int64 db_used = 24 [json_name = "dbUsed"];</code>
+   */
+  private void clearDbUsed() {
+
+    dbUsed_ = 0L;
+  }
+
+  public static final int DB_QUOTA_FIELD_NUMBER = 25;
+  private long dbQuota_;
+  /**
+   * <code>int64 db_quota = 25 [json_name = "dbQuota"];</code>
+   * @return The dbQuota.
+   */
+  @java.lang.Override
+  public long getDbQuota() {
+    return dbQuota_;
+  }
+  /**
+   * <code>int64 db_quota = 25 [json_name = "dbQuota"];</code>
+   * @param value The dbQuota to set.
+   */
+  private void setDbQuota(long value) {
+    
+    dbQuota_ = value;
+  }
+  /**
+   * <code>int64 db_quota = 25 [json_name = "dbQuota"];</code>
+   */
+  private void clearDbQuota() {
+
+    dbQuota_ = 0L;
+  }
+
   public static dev.ironpark.mako.v2.PluginInfo parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -3558,6 +3625,77 @@ public  final class PluginInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * db_used and db_quota are the bytes the plugin's SQLite databases hold
+     * and its limit on this node (revision 43).
+     * </pre>
+     *
+     * <code>int64 db_used = 24 [json_name = "dbUsed"];</code>
+     * @return The dbUsed.
+     */
+    @java.lang.Override
+    public long getDbUsed() {
+      return instance.getDbUsed();
+    }
+    /**
+     * <pre>
+     * db_used and db_quota are the bytes the plugin's SQLite databases hold
+     * and its limit on this node (revision 43).
+     * </pre>
+     *
+     * <code>int64 db_used = 24 [json_name = "dbUsed"];</code>
+     * @param value The dbUsed to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDbUsed(long value) {
+      copyOnWrite();
+      instance.setDbUsed(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * db_used and db_quota are the bytes the plugin's SQLite databases hold
+     * and its limit on this node (revision 43).
+     * </pre>
+     *
+     * <code>int64 db_used = 24 [json_name = "dbUsed"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDbUsed() {
+      copyOnWrite();
+      instance.clearDbUsed();
+      return this;
+    }
+
+    /**
+     * <code>int64 db_quota = 25 [json_name = "dbQuota"];</code>
+     * @return The dbQuota.
+     */
+    @java.lang.Override
+    public long getDbQuota() {
+      return instance.getDbQuota();
+    }
+    /**
+     * <code>int64 db_quota = 25 [json_name = "dbQuota"];</code>
+     * @param value The dbQuota to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDbQuota(long value) {
+      copyOnWrite();
+      instance.setDbQuota(value);
+      return this;
+    }
+    /**
+     * <code>int64 db_quota = 25 [json_name = "dbQuota"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDbQuota() {
+      copyOnWrite();
+      instance.clearDbQuota();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginInfo)
   }
   @java.lang.Override
@@ -3603,12 +3741,15 @@ public  final class PluginInfo extends
             dev.ironpark.mako.v2.PluginLog.class,
             "storageUsed_",
             "storageQuota_",
+            "dbUsed_",
+            "dbQuota_",
           };
           java.lang.String info =
-              "\u0000\u0017\u0000\u0001\u0001\u0017\u0017\u0000\b\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0019\u0000\u0001\u0001\u0019\u0019\u0000\b\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0007\u0007\u021a\b\u021a\t\u021a\n\u001b" +
               "\u000b\u001b\f\u001b\r\u0007\u000e\u0208\u000f\u0208\u0010\u0208\u0011\u0208\u0012" +
-              "\u1009\u0000\u0013\u0007\u0014\u001b\u0015\u001b\u0016\u0002\u0017\u0002";
+              "\u1009\u0000\u0013\u0007\u0014\u001b\u0015\u001b\u0016\u0002\u0017\u0002\u0018\u0002" +
+              "\u0019\u0002";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

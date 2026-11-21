@@ -38,6 +38,7 @@ type Limits struct {
 	Idle          time.Duration // with nothing shown or run, until it is stopped
 	Failures      int           // calls failed in a row, after which it is stopped
 	Storage       int           // its store's bytes
+	DBQuota       int           // its SQLite databases' bytes across all scopes
 	Events        int           // events a second from the front-ends, beyond which they are refused
 	Updates       time.Duration // between two updates of a block on a stream
 	HTTPTimeout   time.Duration // an HTTP request's
@@ -55,6 +56,7 @@ var DefaultLimits = Limits{
 	Idle:          5 * time.Minute,
 	Failures:      3,
 	Storage:       1 << 20,
+	DBQuota:       defaultDBQuota,
 	Events:        20,
 	Updates:       100 * time.Millisecond,
 	HTTPTimeout:   10 * time.Second,
@@ -82,6 +84,7 @@ func (l Limits) withDefaults() Limits {
 	pickD(&l.Idle, d.Idle)
 	pick(&l.Failures, d.Failures)
 	pick(&l.Storage, d.Storage)
+	pick(&l.DBQuota, d.DBQuota)
 	pick(&l.Events, d.Events)
 	pickD(&l.Updates, d.Updates)
 	pickD(&l.HTTPTimeout, d.HTTPTimeout)
@@ -117,6 +120,10 @@ type Config struct {
 	Layout LayoutHost
 	// Changed is told when the list of plugins, or how one stands, changes.
 	Changed func()
+	// NodeID identifies this node in CRDT HLC stamps for db:sync replication.
+	NodeID string
+	// SyncChanged is called whenever a plugin's P2P-synced SQLite tables change.
+	SyncChanged func()
 	// Poll is how often the folder is read for changes; 0 for a second.
 	Poll   time.Duration
 	Limits Limits
@@ -151,6 +158,11 @@ type Manager struct {
 	plugins map[string]*plugin
 	wg      sync.WaitGroup
 	events  eventFeed
+
+	syncClock       *syncClock
+	syncDigestMu    sync.Mutex
+	syncDigest      []byte
+	syncDigestValid bool
 }
 
 // New makes a Manager; Run starts it.
@@ -174,9 +186,10 @@ func New(cfg Config) *Manager {
 	ctx, stop := context.WithCancel(context.Background())
 	return &Manager{
 		cfg: cfg, lim: lim, ctx: ctx, stop: stop, installs: cfg.Installs,
-		net:     newFetcher(lim, cfg.Log, cfg.NetTest),
-		grant:   loadGrants(filepath.Join(cfg.DataDir, "grants.json")),
-		plugins: map[string]*plugin{},
+		net:       newFetcher(lim, cfg.Log, cfg.NetTest),
+		grant:     loadGrants(filepath.Join(cfg.DataDir, "grants.json")),
+		plugins:   map[string]*plugin{},
+		syncClock: newSyncClock(cfg.NodeID),
 	}
 }
 

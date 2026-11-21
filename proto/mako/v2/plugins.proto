@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package mako.v2;
 
+import "mako/v2/workspace.proto";
+
 option go_package = "github.com/ironpark/mako/internal/protocol";
 
 // Plugins run in the daemon (docs/plugins.md). A front-end lists them,
@@ -76,6 +78,10 @@ message PluginInfo {
   // and its limit on this node (revision 41).
   int64 storage_used = 22;
   int64 storage_quota = 23;
+  // db_used and db_quota are the bytes the plugin's SQLite databases hold
+  // and its limit on this node (revision 43).
+  int64 db_used = 24;
+  int64 db_quota = 25;
 }
 
 // PluginTool is an MCP tool a plugin contributes to running agents.
@@ -385,4 +391,35 @@ message Panel {
   // kind is "builtin", "plugin", "agent", or "missing" for a plugin's
   // block this node lacks: a hint for the icon to list it with.
   string kind = 3;
+}
+
+// PluginSyncRow is one row-level CRDT entry in a plugin's synced SQLite table
+// (revision 43).
+message PluginSyncRow {
+  string table = 1;
+  string id = 2;
+  string doc = 3;
+  HLC clock = 4;
+  bool deleted = 5;
+}
+
+// PluginSyncBucket holds the synced rows for one (plugin_id, scope) database.
+message PluginSyncBucket {
+  string plugin_id = 1;
+  string scope = 2;
+  bytes digest = 3;
+  repeated PluginSyncRow rows = 4;
+}
+
+// PluginSyncBundle carries all synced plugin DB buckets of a node, exchanged
+// between mutually trusted peers when plugin_sync_digest differs (revision 43).
+message PluginSyncBundle {
+  bytes digest = 1;
+  repeated PluginSyncBucket buckets = 2;
+}
+
+// SyncPluginDB exchanges a peer's PluginSyncBundle and receives the receiver's
+// merged PluginSyncBundle in reply.
+message SyncPluginDB {
+  PluginSyncBundle bundle = 1;
 }

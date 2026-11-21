@@ -37,10 +37,12 @@ type plugin struct {
 	settings    *settingsStore
 	vault       *vault
 	store       *kvStore
+	db          *dbStore
 	logRate     *rateLimit
 	netRate     *rateLimit
 	evRate      *rateLimit
 	secRate     *rateLimit
+	dbRate      *rateLimit
 	trRate      *rateLimit
 	fsRate      *rateLimit
 	fsWriteRate *rateLimit
@@ -174,10 +176,12 @@ func newPlugin(m *Manager, id string) *plugin {
 		settings:    newSettingsStore(filepath.Join(data, "settings.json"), v),
 		vault:       v,
 		store:       newKVStore(filepath.Join(data, "storage.json"), m.lim.Storage),
+		db:          newDBStore(filepath.Join(data, "db"), m.lim.DBQuota, m.syncClock, func() { m.invalidateSyncDigest(true) }),
 		logRate:     newRateLimit(m.lim.Logs, time.Minute),
 		netRate:     newRateLimit(m.lim.HTTPPerMinute, time.Minute),
 		evRate:      newRateLimit(m.lim.Events, time.Second),
 		secRate:     newRateLimit(secretsPerMinute, time.Minute),
+		dbRate:      newRateLimit(dbOpsPerMinute, time.Minute),
 		trRate:      newRateLimit(transcriptsPerMin, time.Minute),
 		fsRate:      newRateLimit(fsReadsPerMin, time.Minute),
 		fsWriteRate: newRateLimit(fsWritesPerMin, time.Minute),
@@ -200,6 +204,7 @@ func (p *plugin) run(ctx context.Context) {
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	defer p.closeRuntime()
+	defer p.db.closeAll()
 	for {
 		select {
 		case job := <-p.jobs:
@@ -376,6 +381,8 @@ func (p *plugin) info() *protocol.PluginInfo {
 	}
 	out.StorageUsed = int64(p.store.used())
 	out.StorageQuota = int64(p.m.lim.Storage)
+	out.DbUsed = p.db.used()
+	out.DbQuota = int64(p.m.lim.DBQuota)
 	return out
 }
 

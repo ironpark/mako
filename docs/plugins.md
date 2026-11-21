@@ -376,6 +376,13 @@ plugin lacks the permission. The schema, with every field, is
 | `storage.setItem({key, value, scope})` | `storage` | `{used, quota}`; refused over the shared quota. |
 | `storage.deleteItem({key, scope})` | `storage` | `{found}`. |
 | `storage.listKeys({prefix, scope})` | `storage` | `{keys}`, sorted, within that scope. |
+| `db.query({sql, paramsJson, scope})` | `db` | `{columns, rowsJson, truncated}`: read-only SQLite query (`SELECT`/`WITH`/`EXPLAIN`, FTS5/JSON1 supported); `ctx.db.query(sql, params)` returns `{columns, rows, truncated}` as row objects. |
+| `db.exec({sql, paramsJson, scope})` | `db` | `{rowsAffected, lastInsertId}`: single DML or DDL statement against the scoped SQLite database. |
+| `db.batch({statements, scope})` | `db` | `{results}`: up to 64 DML/DDL statements run atomically in one transaction. |
+| `db.stats({scope})` | `db` | `{usedBytes, quotaBytes, syncTables}`: total plugin SQLite disk usage, quota, and synced tables in that scope. |
+| `db.syncEnable({table, scope})` | `db:sync` | `{table}`: registers a row-level CRDT synced table `(id, doc, updated_at, deleted)` replicated across mutually trusted peers. |
+| `db.syncPut({table, id, docJson, scope})` | `db:sync` | `{updatedAt}`: stamps a JSON document row with the node's HLC clock, updates SQLite, and schedules P2P replication. |
+| `db.syncDelete({table, id, scope})` | `db:sync` | `{deleted}`: writes a CRDT tombstone for a synced row and replicates the deletion to paired peers. |
 | `sessions.listSessions()` | `sessions:read` | This node's sessions: `id`, `name`, `agent`, `project`, `state`, `status`, `nodeId`. |
 | `sessions.getSession({id})` | `sessions:read` | `{found, session}`. |
 | `sessions.readTranscript({sessionId, before, limit})` | `sessions:read` | A page of a session's conversation, as its agent logged it: `{supported, messages, before, truncated}`, the latest messages, or those before the cursor `before` a page gave; see [Transcripts and events](#transcripts-and-events). |
@@ -459,6 +466,8 @@ the user allows, all of them at once, before the plugin runs at all:
 | Permission | Lets it |
 |---|---|
 | `storage` | Keep keys and values on this node, 1 MiB in all. |
+| `db` | Keep sandboxed per-scope SQLite databases on this node (FTS5 & JSON1 included, 32 MiB total quota, 16 MiB per database file). |
+| `db:sync` | Replicate CRDT-synced SQLite tables (`db.syncEnable`/`syncPut`/`syncDelete`) across mutually trusted Mako nodes over libp2p when workspace sharing is enabled. |
 | `sessions:read` | List this node's sessions and how their agents stand, read their conversations, and hear of what happens to them. |
 | `net:<host>` | Make HTTP requests to that host: by https, on the default port, to exactly that name (`net:api.github.com` is not `uploads.github.com`). No IP address, no `localhost`, no wildcard. |
 | `secrets` | Keep secrets of its own in the system's keychain; see [Secrets](#secrets). |

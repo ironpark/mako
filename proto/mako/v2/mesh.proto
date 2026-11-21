@@ -126,6 +126,10 @@ message NodeState {
   // workspace is the latest of the windows' workspaces the daemon holds,
   // for the peers it lets in and that let it in to take up.
   Workspace workspace = 5;
+  // plugin_sync_digest is a 32-byte SHA-256 digest of all P2P-synced plugin
+  // SQLite buckets on this node (revision 43); peers trusted both ways fetch
+  // and merge buckets via SyncPluginDB only when digests differ.
+  bytes plugin_sync_digest = 6;
 }
 
 // Workspace is what a window shows: its tabs and panes, in each of its

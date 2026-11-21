@@ -317,6 +317,7 @@ func (d *Daemon) state() *protocol.NodeState {
 	st := &protocol.NodeState{Node: node, Sessions: sessions, WatchingApprovals: d.approvals.watchedHere()}
 	if d.syncsWorkspace() {
 		st.Workspace = d.workspace.shared()
+		st.PluginSyncDigest = d.pluginSyncDigest()
 	}
 	return st
 }
@@ -353,7 +354,8 @@ func (d *Daemon) watchState(ctx context.Context) {
 				d.changes.fire(nodesChanged, sessionsChanged)
 			}
 			changed := last == nil || nodesChanged || sessionsChanged || routesChanged || st.GetWatchingApprovals() != last.GetWatchingApprovals() ||
-				!bytes.Equal(st.GetWorkspace().GetDigest(), last.GetWorkspace().GetDigest())
+				!bytes.Equal(st.GetWorkspace().GetDigest(), last.GetWorkspace().GetDigest()) ||
+				!bytes.Equal(st.GetPluginSyncDigest(), last.GetPluginSyncDigest())
 			if d.p2p != nil && (changed || time.Since(sent) >= stateEvery) {
 				digest := st.GetWorkspace().GetDigest()
 				whole := !bytes.Equal(digest, sentDigest)
@@ -423,6 +425,7 @@ func (d *Daemon) encodeState(st *protocol.NodeState, routes map[string]route, re
 	if ws := out.GetWorkspace(); ws != nil && !wholeWorkspace {
 		out.Workspace = &protocol.Workspace{Digest: ws.GetDigest()}
 	}
+	out.PluginSyncDigest = st.GetPluginSyncDigest()
 	shared = marshalState(out)
 	node = d.publicSelf()
 	node.LastSeen = out.Node.LastSeen
@@ -513,6 +516,7 @@ func (d *Daemon) takeState(from p2p.Peer, data []byte) {
 	// node shares its own.
 	if from.TrustedBy && from.Trusts && d.syncsWorkspace() {
 		d.takeWorkspace(node.GetId(), st.GetWorkspace())
+		d.takePluginSyncDigest(node.GetId(), st.GetPluginSyncDigest())
 	}
 	if from.TrustedBy {
 		for _, other := range st.GetPeers() {

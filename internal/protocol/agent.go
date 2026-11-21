@@ -29,7 +29,11 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 42
+const Revision = 43
+
+// RevisionPluginDB adds sandboxed per-scope SQLite databases (mako.db / ctx.db)
+// and P2P CRDT-synced tables replicated between mutually trusted peers.
+const RevisionPluginDB = 43
 
 // RevisionPluginScope adds scope declarations and runtime isolation for plugin
 // blocks, tools, settings, and storage ("global", "space", "project", "session").

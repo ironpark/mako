@@ -165,6 +165,16 @@ export interface PluginEvents {
   sessionSlept?(event: SessionEvent): void | Promise<void>;
   sessionStatus?(event: SessionEvent): void | Promise<void>;
   agentMessage?(event: SessionEvent): void | Promise<void>;
+  /** Fired when CRDT-synced SQLite rows arrive from a trusted peer node. */
+  dbSync?(event: DbSyncEvent): void | Promise<void>;
+}
+
+/** Event delivered to on.dbSync when remote peers merge synced SQLite rows. */
+export interface DbSyncEvent {
+  readonly scope: PluginScope;
+  readonly scopeKey: string;
+  readonly tables: readonly string[];
+  readonly rows: number;
 }
 
 /** What activate is given: the Host API, and the plugin's blocks, commands and tools. */
@@ -191,6 +201,24 @@ export interface ScopedSettingsApi {
   listSettings(): Promise<ListSettingsResponse>;
 }
 
+/** Query result row object mapped from columns and JSON cell values. */
+export interface ScopedDbQueryResult {
+  readonly columns: readonly string[];
+  readonly rows: readonly Record<string, any>[];
+  readonly truncated: boolean;
+}
+
+/** Scoped SQLite and CRDT sync helper bound to a ScopeContext's scopeKey. */
+export interface ScopedDbApi {
+  query(sql: string, params?: readonly any[]): Promise<ScopedDbQueryResult>;
+  exec(sql: string, params?: readonly any[]): Promise<ExecResponse>;
+  batch(statements: readonly { sql: string; params?: readonly any[] }[]): Promise<BatchResponse>;
+  stats(): Promise<StatsResponse>;
+  syncEnable(table: string): Promise<SyncEnableResponse>;
+  syncPut(table: string, id: string, doc: Record<string, any> | string): Promise<SyncPutResponse>;
+  syncDelete(table: string, id: string): Promise<SyncDeleteResponse>;
+}
+
 /** Active workspace scope context passed to block lifecycle hooks and scoped tools. */
 export interface ScopeContext {
   readonly scope: PluginScope;
@@ -203,6 +231,7 @@ export interface ScopeContext {
   readonly roots: readonly string[];
   readonly storage: ScopedStorageApi;
   readonly settings: ScopedSettingsApi;
+  readonly db: ScopedDbApi;
 }
 
 export interface Blocks {

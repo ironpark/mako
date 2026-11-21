@@ -247,14 +247,22 @@ func pluginDiagnosticsRow(p *protocol.PluginInfo) ggui.Widget {
 	if quota == 0 {
 		storageSummary = formatPluginBytes(used)
 	}
+	headerParts := []ggui.Widget{
+		widget.Text(T("Diagnostics & logs")).Size(12.5).Weight(ggui.WeightMedium),
+		muted(widget.Text(fmt.Sprintf("%s: %s", T("Storage"), storageSummary)).Size(12)),
+	}
+	if dbUsed, dbQuota := p.GetDbUsed(), p.GetDbQuota(); dbUsed > 0 || slices.Contains(p.GetPermissions(), "db") || slices.Contains(p.GetPermissions(), "db:sync") {
+		dbSummary := fmt.Sprintf("%s / %s", formatPluginBytes(dbUsed), formatPluginBytes(dbQuota))
+		if dbQuota == 0 {
+			dbSummary = formatPluginBytes(dbUsed)
+		}
+		headerParts = append(headerParts, muted(widget.Text(fmt.Sprintf("· %s: %s", T("Database"), dbSummary)).Size(12)))
+	}
 	logs := p.GetLogs()
+	headerParts = append(headerParts, muted(widget.Text(fmt.Sprintf("· %d", len(logs))).Size(12)))
 	return widget.Box(widget.Column(
 		widget.Row(
-			widget.Expanded(widget.Row(
-				widget.Text(T("Diagnostics & logs")).Size(12.5).Weight(ggui.WeightMedium),
-				muted(widget.Text(fmt.Sprintf("%s: %s", T("Storage"), storageSummary)).Size(12)),
-				muted(widget.Text(fmt.Sprintf("· %d", len(logs))).Size(12)),
-			).Gap(8).Align(widget.AlignCenter)),
+			widget.Expanded(widget.Row(headerParts...).Gap(8).Align(widget.AlignCenter)),
 			ggui.View(open, func(o bool) ggui.Widget {
 				return ui.Button(pick(o, T("Show less"), T("Show more")), func() { open.Set(!o) }).Ghost()
 			}),

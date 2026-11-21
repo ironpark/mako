@@ -1,9 +1,9 @@
 id = "kanban"
-version = "0.3.0"
+version = "0.4.0"
 publisher = "ironpark"
 api = 1
 entry = "main.js"
-permissions = ["storage", "sessions:read", "sessions:write"]
+permissions = ["storage", "db", "db:sync", "sessions:read", "sessions:write"]
 
 [[contributes.block]]
 id = "board"

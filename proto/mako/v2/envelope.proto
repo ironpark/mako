@@ -183,6 +183,10 @@ message Envelope {
     ProviderAction provider_action = 152;
     RunDecision run_decision = 153;
     DecisionResult decision_result = 154;
+
+    // Peer-to-peer plugin SQLite CRDT sync (revision 43).
+    SyncPluginDB sync_plugin_db = 155;
+    PluginSyncBundle plugin_sync_bundle = 156;
   }
 }
 

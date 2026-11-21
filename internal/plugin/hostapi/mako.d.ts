@@ -22,6 +22,16 @@ export interface PluginEvents {
   sessionSlept?(event: SessionEvent): void | Promise<void>;
   sessionStatus?(event: SessionEvent): void | Promise<void>;
   agentMessage?(event: SessionEvent): void | Promise<void>;
+  /** Fired when CRDT-synced SQLite rows arrive from a trusted peer node. */
+  dbSync?(event: DbSyncEvent): void | Promise<void>;
+}
+
+/** Event delivered to on.dbSync when remote peers merge synced SQLite rows. */
+export interface DbSyncEvent {
+  readonly scope: PluginScope;
+  readonly scopeKey: string;
+  readonly tables: readonly string[];
+  readonly rows: number;
 }
 
 /** What activate is given: the Host API, and the plugin's blocks, commands and tools. */
@@ -48,6 +58,24 @@ export interface ScopedSettingsApi {
   listSettings(): Promise<ListSettingsResponse>;
 }
 
+/** Query result row object mapped from columns and JSON cell values. */
+export interface ScopedDbQueryResult {
+  readonly columns: readonly string[];
+  readonly rows: readonly Record<string, any>[];
+  readonly truncated: boolean;
+}
+
+/** Scoped SQLite and CRDT sync helper bound to a ScopeContext's scopeKey. */
+export interface ScopedDbApi {
+  query(sql: string, params?: readonly any[]): Promise<ScopedDbQueryResult>;
+  exec(sql: string, params?: readonly any[]): Promise<ExecResponse>;
+  batch(statements: readonly { sql: string; params?: readonly any[] }[]): Promise<BatchResponse>;
+  stats(): Promise<StatsResponse>;
+  syncEnable(table: string): Promise<SyncEnableResponse>;
+  syncPut(table: string, id: string, doc: Record<string, any> | string): Promise<SyncPutResponse>;
+  syncDelete(table: string, id: string): Promise<SyncDeleteResponse>;
+}
+
 /** Active workspace scope context passed to block lifecycle hooks and scoped tools. */
 export interface ScopeContext {
   readonly scope: PluginScope;
@@ -60,6 +88,7 @@ export interface ScopeContext {
   readonly roots: readonly string[];
   readonly storage: ScopedStorageApi;
   readonly settings: ScopedSettingsApi;
+  readonly db: ScopedDbApi;
 }
 
 export interface Blocks {
@@ -209,6 +238,8 @@ export interface HostApi {
   readonly http: HttpApi;
   /** CommandsService runs the window's commands a plugin may use. */
   readonly commands: CommandsApi;
+  /** DbService gives a plugin sandboxed SQLite databases (per scope) and optional */
+  readonly db: DbApi;
   /** MessagesService acts on this node's sessions: sends their agents */
   readonly messages: MessagesApi;
   /** FilesService reads the files of the projects this node knows, and */
@@ -348,6 +379,60 @@ export interface CommandsApi {
    * Needs no permission.
    */
   runCommand(req?: RunCommandRequest): Promise<RunCommandResponse>;
+}
+
+/**
+ * DbService gives a plugin sandboxed SQLite databases (per scope) and optional
+ * CRDT-replicated synced tables shared across paired Mako nodes over the
+ * daemon's libp2p mesh.
+ */
+export interface DbApi {
+  /**
+   * Query runs a single read-only SQL statement (SELECT / WITH / EXPLAIN).
+   *
+   * Needs db.
+   */
+  query(req?: QueryRequest): Promise<QueryResponse>;
+  /**
+   * Exec runs a single DML or DDL SQL statement.
+   *
+   * Needs db.
+   */
+  exec(req?: ExecRequest): Promise<ExecResponse>;
+  /**
+   * Batch runs up to 64 DML/DDL statements atomically in one transaction.
+   *
+   * Needs db.
+   */
+  batch(req?: BatchRequest): Promise<BatchResponse>;
+  /**
+   * Stats returns the plugin's total SQLite database usage, quota, and
+   * registered synced tables in the requested scope.
+   *
+   * Needs db.
+   */
+  stats(req?: StatsRequest): Promise<StatsResponse>;
+  /**
+   * SyncEnable registers a row-level CRDT synced table backed by SQLite
+   * columns (id, doc, updated_at, deleted) replicated across paired peers.
+   *
+   * Needs db:sync.
+   */
+  syncEnable(req?: SyncEnableRequest): Promise<SyncEnableResponse>;
+  /**
+   * SyncPut stamps a JSON row with the node's HLC clock, writes it to the
+   * synced SQLite table, and schedules P2P replication to trusted peers.
+   *
+   * Needs db:sync.
+   */
+  syncPut(req?: SyncPutRequest): Promise<SyncPutResponse>;
+  /**
+   * SyncDelete marks a synced row as deleted (tombstone) with the node's HLC
+   * clock and schedules P2P replication to trusted peers.
+   *
+   * Needs db:sync.
+   */
+  syncDelete(req?: SyncDeleteRequest): Promise<SyncDeleteResponse>;
 }
 
 /**
@@ -817,6 +902,108 @@ export interface RunCommandRequest {
 
 /** RunCommandResponse says the command was run. */
 export interface RunCommandResponse {
+}
+
+/** QueryRequest is a read-only SQL query against the plugin's database. */
+export interface QueryRequest {
+  sql?: string;
+  /**
+   * params_json are positional SQL parameters encoded as JSON scalars
+   * (string, number, boolean, or null).
+   */
+  paramsJson?: string[];
+  /**
+   * scope is the optional canonical scope key ("" for global, "space:<id>",
+   * "project:<id>", or "session:<id>").
+   */
+  scope?: string;
+}
+
+/** QueryResponse holds query columns and JSON-encoded rows. */
+export interface QueryResponse {
+  columns?: string[];
+  /** rows_json holds each row as a JSON array of column values matching columns. */
+  rowsJson?: string[];
+  /** truncated says more rows existed past the per-query row or byte cap. */
+  truncated?: boolean;
+}
+
+/** ExecRequest is a single DML or DDL SQL statement. */
+export interface ExecRequest {
+  sql?: string;
+  paramsJson?: string[];
+  scope?: string;
+}
+
+/** ExecResponse reports the result of a DML/DDL statement. */
+export interface ExecResponse {
+  rowsAffected?: number;
+  lastInsertId?: number;
+}
+
+/** DbStatement is one SQL statement inside a BatchRequest transaction. */
+export interface DbStatement {
+  sql?: string;
+  paramsJson?: string[];
+}
+
+/** BatchRequest runs multiple statements atomically in one transaction. */
+export interface BatchRequest {
+  statements?: DbStatement[];
+  scope?: string;
+}
+
+/** BatchResponse holds the result of each statement in the batch. */
+export interface BatchResponse {
+  results?: ExecResponse[];
+}
+
+/** StatsRequest asks for database usage and synced tables. */
+export interface StatsRequest {
+  scope?: string;
+}
+
+/** StatsResponse reports total plugin DB bytes, quota, and synced tables. */
+export interface StatsResponse {
+  usedBytes?: number;
+  quotaBytes?: number;
+  syncTables?: string[];
+}
+
+/** SyncEnableRequest registers a synced table name in the database. */
+export interface SyncEnableRequest {
+  table?: string;
+  scope?: string;
+}
+
+/** SyncEnableResponse confirms the synced table name. */
+export interface SyncEnableResponse {
+  table?: string;
+}
+
+/** SyncPutRequest upserts one CRDT-replicated JSON row. */
+export interface SyncPutRequest {
+  table?: string;
+  id?: string;
+  docJson?: string;
+  scope?: string;
+}
+
+/** SyncPutResponse reports the stamped wall time in Unix ms. */
+export interface SyncPutResponse {
+  updatedAt?: number;
+}
+
+/** SyncDeleteRequest tombstones one CRDT-replicated row. */
+export interface SyncDeleteRequest {
+  table?: string;
+  id?: string;
+  scope?: string;
+}
+
+/** SyncDeleteResponse says whether the row existed before deletion. */
+export interface SyncDeleteResponse {
+  deleted?: boolean;
 }
 
 /** SendMessageRequest is a message for a session. */

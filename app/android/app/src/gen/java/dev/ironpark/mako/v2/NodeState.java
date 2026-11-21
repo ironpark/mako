@@ -24,6 +24,7 @@ public  final class NodeState extends
   private NodeState() {
     sessions_ = emptyProtobufList();
     peers_ = emptyProtobufList();
+    pluginSyncDigest_ = com.google.protobuf.ByteString.EMPTY;
   }
   private int bitField0_;
   public static final int NODE_FIELD_NUMBER = 1;
@@ -357,6 +358,51 @@ public  final class NodeState extends
   private void clearWorkspace() {
     workspace_ = null;
     bitField0_ = (bitField0_ & ~0x00000002);
+  }
+
+  public static final int PLUGIN_SYNC_DIGEST_FIELD_NUMBER = 6;
+  private com.google.protobuf.ByteString pluginSyncDigest_;
+  /**
+   * <pre>
+   * plugin_sync_digest is a 32-byte SHA-256 digest of all P2P-synced plugin
+   * SQLite buckets on this node (revision 43); peers trusted both ways fetch
+   * and merge buckets via SyncPluginDB only when digests differ.
+   * </pre>
+   *
+   * <code>bytes plugin_sync_digest = 6 [json_name = "pluginSyncDigest"];</code>
+   * @return The pluginSyncDigest.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString getPluginSyncDigest() {
+    return pluginSyncDigest_;
+  }
+  /**
+   * <pre>
+   * plugin_sync_digest is a 32-byte SHA-256 digest of all P2P-synced plugin
+   * SQLite buckets on this node (revision 43); peers trusted both ways fetch
+   * and merge buckets via SyncPluginDB only when digests differ.
+   * </pre>
+   *
+   * <code>bytes plugin_sync_digest = 6 [json_name = "pluginSyncDigest"];</code>
+   * @param value The pluginSyncDigest to set.
+   */
+  private void setPluginSyncDigest(com.google.protobuf.ByteString value) {
+    java.util.Objects.requireNonNull(value);
+  
+    pluginSyncDigest_ = value;
+  }
+  /**
+   * <pre>
+   * plugin_sync_digest is a 32-byte SHA-256 digest of all P2P-synced plugin
+   * SQLite buckets on this node (revision 43); peers trusted both ways fetch
+   * and merge buckets via SyncPluginDB only when digests differ.
+   * </pre>
+   *
+   * <code>bytes plugin_sync_digest = 6 [json_name = "pluginSyncDigest"];</code>
+   */
+  private void clearPluginSyncDigest() {
+
+    pluginSyncDigest_ = getDefaultInstance().getPluginSyncDigest();
   }
 
   public static dev.ironpark.mako.v2.NodeState parseFrom(
@@ -819,6 +865,52 @@ public  final class NodeState extends
       return this;
     }
 
+    /**
+     * <pre>
+     * plugin_sync_digest is a 32-byte SHA-256 digest of all P2P-synced plugin
+     * SQLite buckets on this node (revision 43); peers trusted both ways fetch
+     * and merge buckets via SyncPluginDB only when digests differ.
+     * </pre>
+     *
+     * <code>bytes plugin_sync_digest = 6 [json_name = "pluginSyncDigest"];</code>
+     * @return The pluginSyncDigest.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getPluginSyncDigest() {
+      return instance.getPluginSyncDigest();
+    }
+    /**
+     * <pre>
+     * plugin_sync_digest is a 32-byte SHA-256 digest of all P2P-synced plugin
+     * SQLite buckets on this node (revision 43); peers trusted both ways fetch
+     * and merge buckets via SyncPluginDB only when digests differ.
+     * </pre>
+     *
+     * <code>bytes plugin_sync_digest = 6 [json_name = "pluginSyncDigest"];</code>
+     * @param value The pluginSyncDigest to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPluginSyncDigest(com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setPluginSyncDigest(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * plugin_sync_digest is a 32-byte SHA-256 digest of all P2P-synced plugin
+     * SQLite buckets on this node (revision 43); peers trusted both ways fetch
+     * and merge buckets via SyncPluginDB only when digests differ.
+     * </pre>
+     *
+     * <code>bytes plugin_sync_digest = 6 [json_name = "pluginSyncDigest"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPluginSyncDigest() {
+      copyOnWrite();
+      instance.clearPluginSyncDigest();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.NodeState)
   }
   @java.lang.Override
@@ -843,10 +935,11 @@ public  final class NodeState extends
             "peers_",
             dev.ironpark.mako.v2.Node.class,
             "workspace_",
+            "pluginSyncDigest_",
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0001\u0001\u0005\u0005\u0000\u0002\u0000\u0001\u1009\u0000\u0002" +
-              "\u001b\u0003\u0007\u0004\u001b\u0005\u1009\u0001";
+              "\u0000\u0006\u0000\u0001\u0001\u0006\u0006\u0000\u0002\u0000\u0001\u1009\u0000\u0002" +
+              "\u001b\u0003\u0007\u0004\u001b\u0005\u1009\u0001\u0006\n";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

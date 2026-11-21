@@ -1970,6 +1970,823 @@ func (*RunCommandResponse) Descriptor() ([]byte, []int) {
 	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{32}
 }
 
+// QueryRequest is a read-only SQL query against the plugin's database.
+type QueryRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Sql   string                 `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
+	// params_json are positional SQL parameters encoded as JSON scalars
+	// (string, number, boolean, or null).
+	ParamsJson []string `protobuf:"bytes,2,rep,name=params_json,json=paramsJson,proto3" json:"params_json,omitempty"`
+	// scope is the optional canonical scope key ("" for global, "space:<id>",
+	// "project:<id>", or "session:<id>").
+	Scope         string `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryRequest) Reset() {
+	*x = QueryRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryRequest) ProtoMessage() {}
+
+func (x *QueryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryRequest.ProtoReflect.Descriptor instead.
+func (*QueryRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *QueryRequest) GetSql() string {
+	if x != nil {
+		return x.Sql
+	}
+	return ""
+}
+
+func (x *QueryRequest) GetParamsJson() []string {
+	if x != nil {
+		return x.ParamsJson
+	}
+	return nil
+}
+
+func (x *QueryRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// QueryResponse holds query columns and JSON-encoded rows.
+type QueryResponse struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Columns []string               `protobuf:"bytes,1,rep,name=columns,proto3" json:"columns,omitempty"`
+	// rows_json holds each row as a JSON array of column values matching columns.
+	RowsJson []string `protobuf:"bytes,2,rep,name=rows_json,json=rowsJson,proto3" json:"rows_json,omitempty"`
+	// truncated says more rows existed past the per-query row or byte cap.
+	Truncated     bool `protobuf:"varint,3,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryResponse) Reset() {
+	*x = QueryResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryResponse) ProtoMessage() {}
+
+func (x *QueryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryResponse.ProtoReflect.Descriptor instead.
+func (*QueryResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *QueryResponse) GetColumns() []string {
+	if x != nil {
+		return x.Columns
+	}
+	return nil
+}
+
+func (x *QueryResponse) GetRowsJson() []string {
+	if x != nil {
+		return x.RowsJson
+	}
+	return nil
+}
+
+func (x *QueryResponse) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+// ExecRequest is a single DML or DDL SQL statement.
+type ExecRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sql           string                 `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
+	ParamsJson    []string               `protobuf:"bytes,2,rep,name=params_json,json=paramsJson,proto3" json:"params_json,omitempty"`
+	Scope         string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecRequest) Reset() {
+	*x = ExecRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecRequest) ProtoMessage() {}
+
+func (x *ExecRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecRequest.ProtoReflect.Descriptor instead.
+func (*ExecRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *ExecRequest) GetSql() string {
+	if x != nil {
+		return x.Sql
+	}
+	return ""
+}
+
+func (x *ExecRequest) GetParamsJson() []string {
+	if x != nil {
+		return x.ParamsJson
+	}
+	return nil
+}
+
+func (x *ExecRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// ExecResponse reports the result of a DML/DDL statement.
+type ExecResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RowsAffected  int32                  `protobuf:"varint,1,opt,name=rows_affected,json=rowsAffected,proto3" json:"rows_affected,omitempty"`
+	LastInsertId  float64                `protobuf:"fixed64,2,opt,name=last_insert_id,json=lastInsertId,proto3" json:"last_insert_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecResponse) Reset() {
+	*x = ExecResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecResponse) ProtoMessage() {}
+
+func (x *ExecResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecResponse.ProtoReflect.Descriptor instead.
+func (*ExecResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *ExecResponse) GetRowsAffected() int32 {
+	if x != nil {
+		return x.RowsAffected
+	}
+	return 0
+}
+
+func (x *ExecResponse) GetLastInsertId() float64 {
+	if x != nil {
+		return x.LastInsertId
+	}
+	return 0
+}
+
+// DbStatement is one SQL statement inside a BatchRequest transaction.
+type DbStatement struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sql           string                 `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
+	ParamsJson    []string               `protobuf:"bytes,2,rep,name=params_json,json=paramsJson,proto3" json:"params_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DbStatement) Reset() {
+	*x = DbStatement{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DbStatement) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DbStatement) ProtoMessage() {}
+
+func (x *DbStatement) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DbStatement.ProtoReflect.Descriptor instead.
+func (*DbStatement) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *DbStatement) GetSql() string {
+	if x != nil {
+		return x.Sql
+	}
+	return ""
+}
+
+func (x *DbStatement) GetParamsJson() []string {
+	if x != nil {
+		return x.ParamsJson
+	}
+	return nil
+}
+
+// BatchRequest runs multiple statements atomically in one transaction.
+type BatchRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Statements    []*DbStatement         `protobuf:"bytes,1,rep,name=statements,proto3" json:"statements,omitempty"`
+	Scope         string                 `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchRequest) Reset() {
+	*x = BatchRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchRequest) ProtoMessage() {}
+
+func (x *BatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchRequest.ProtoReflect.Descriptor instead.
+func (*BatchRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *BatchRequest) GetStatements() []*DbStatement {
+	if x != nil {
+		return x.Statements
+	}
+	return nil
+}
+
+func (x *BatchRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// BatchResponse holds the result of each statement in the batch.
+type BatchResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Results       []*ExecResponse        `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchResponse) Reset() {
+	*x = BatchResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchResponse) ProtoMessage() {}
+
+func (x *BatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchResponse.ProtoReflect.Descriptor instead.
+func (*BatchResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *BatchResponse) GetResults() []*ExecResponse {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
+// StatsRequest asks for database usage and synced tables.
+type StatsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scope         string                 `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatsRequest) Reset() {
+	*x = StatsRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatsRequest) ProtoMessage() {}
+
+func (x *StatsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatsRequest.ProtoReflect.Descriptor instead.
+func (*StatsRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *StatsRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// StatsResponse reports total plugin DB bytes, quota, and synced tables.
+type StatsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UsedBytes     uint32                 `protobuf:"varint,1,opt,name=used_bytes,json=usedBytes,proto3" json:"used_bytes,omitempty"`
+	QuotaBytes    uint32                 `protobuf:"varint,2,opt,name=quota_bytes,json=quotaBytes,proto3" json:"quota_bytes,omitempty"`
+	SyncTables    []string               `protobuf:"bytes,3,rep,name=sync_tables,json=syncTables,proto3" json:"sync_tables,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatsResponse) Reset() {
+	*x = StatsResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatsResponse) ProtoMessage() {}
+
+func (x *StatsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatsResponse.ProtoReflect.Descriptor instead.
+func (*StatsResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *StatsResponse) GetUsedBytes() uint32 {
+	if x != nil {
+		return x.UsedBytes
+	}
+	return 0
+}
+
+func (x *StatsResponse) GetQuotaBytes() uint32 {
+	if x != nil {
+		return x.QuotaBytes
+	}
+	return 0
+}
+
+func (x *StatsResponse) GetSyncTables() []string {
+	if x != nil {
+		return x.SyncTables
+	}
+	return nil
+}
+
+// SyncEnableRequest registers a synced table name in the database.
+type SyncEnableRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Table         string                 `protobuf:"bytes,1,opt,name=table,proto3" json:"table,omitempty"`
+	Scope         string                 `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncEnableRequest) Reset() {
+	*x = SyncEnableRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncEnableRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncEnableRequest) ProtoMessage() {}
+
+func (x *SyncEnableRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncEnableRequest.ProtoReflect.Descriptor instead.
+func (*SyncEnableRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *SyncEnableRequest) GetTable() string {
+	if x != nil {
+		return x.Table
+	}
+	return ""
+}
+
+func (x *SyncEnableRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// SyncEnableResponse confirms the synced table name.
+type SyncEnableResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Table         string                 `protobuf:"bytes,1,opt,name=table,proto3" json:"table,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncEnableResponse) Reset() {
+	*x = SyncEnableResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncEnableResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncEnableResponse) ProtoMessage() {}
+
+func (x *SyncEnableResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncEnableResponse.ProtoReflect.Descriptor instead.
+func (*SyncEnableResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *SyncEnableResponse) GetTable() string {
+	if x != nil {
+		return x.Table
+	}
+	return ""
+}
+
+// SyncPutRequest upserts one CRDT-replicated JSON row.
+type SyncPutRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Table         string                 `protobuf:"bytes,1,opt,name=table,proto3" json:"table,omitempty"`
+	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	DocJson       string                 `protobuf:"bytes,3,opt,name=doc_json,json=docJson,proto3" json:"doc_json,omitempty"`
+	Scope         string                 `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncPutRequest) Reset() {
+	*x = SyncPutRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncPutRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncPutRequest) ProtoMessage() {}
+
+func (x *SyncPutRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncPutRequest.ProtoReflect.Descriptor instead.
+func (*SyncPutRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *SyncPutRequest) GetTable() string {
+	if x != nil {
+		return x.Table
+	}
+	return ""
+}
+
+func (x *SyncPutRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SyncPutRequest) GetDocJson() string {
+	if x != nil {
+		return x.DocJson
+	}
+	return ""
+}
+
+func (x *SyncPutRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// SyncPutResponse reports the stamped wall time in Unix ms.
+type SyncPutResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UpdatedAt     float64                `protobuf:"fixed64,1,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncPutResponse) Reset() {
+	*x = SyncPutResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncPutResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncPutResponse) ProtoMessage() {}
+
+func (x *SyncPutResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncPutResponse.ProtoReflect.Descriptor instead.
+func (*SyncPutResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *SyncPutResponse) GetUpdatedAt() float64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+// SyncDeleteRequest tombstones one CRDT-replicated row.
+type SyncDeleteRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Table         string                 `protobuf:"bytes,1,opt,name=table,proto3" json:"table,omitempty"`
+	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	Scope         string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncDeleteRequest) Reset() {
+	*x = SyncDeleteRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncDeleteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncDeleteRequest) ProtoMessage() {}
+
+func (x *SyncDeleteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncDeleteRequest.ProtoReflect.Descriptor instead.
+func (*SyncDeleteRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *SyncDeleteRequest) GetTable() string {
+	if x != nil {
+		return x.Table
+	}
+	return ""
+}
+
+func (x *SyncDeleteRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SyncDeleteRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// SyncDeleteResponse says whether the row existed before deletion.
+type SyncDeleteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Deleted       bool                   `protobuf:"varint,1,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncDeleteResponse) Reset() {
+	*x = SyncDeleteResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncDeleteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncDeleteResponse) ProtoMessage() {}
+
+func (x *SyncDeleteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncDeleteResponse.ProtoReflect.Descriptor instead.
+func (*SyncDeleteResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *SyncDeleteResponse) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
 var File_mako_plugin_v1_host_proto protoreflect.FileDescriptor
 
 const file_mako_plugin_v1_host_proto_rawDesc = "" +
@@ -2095,7 +2912,63 @@ const file_mako_plugin_v1_host_proto_rawDesc = "" +
 	"\x11RunCommandRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03arg\x18\x02 \x01(\tR\x03arg\"\x14\n" +
-	"\x12RunCommandResponse2\\\n" +
+	"\x12RunCommandResponse\"W\n" +
+	"\fQueryRequest\x12\x10\n" +
+	"\x03sql\x18\x01 \x01(\tR\x03sql\x12\x1f\n" +
+	"\vparams_json\x18\x02 \x03(\tR\n" +
+	"paramsJson\x12\x14\n" +
+	"\x05scope\x18\x03 \x01(\tR\x05scope\"d\n" +
+	"\rQueryResponse\x12\x18\n" +
+	"\acolumns\x18\x01 \x03(\tR\acolumns\x12\x1b\n" +
+	"\trows_json\x18\x02 \x03(\tR\browsJson\x12\x1c\n" +
+	"\ttruncated\x18\x03 \x01(\bR\ttruncated\"V\n" +
+	"\vExecRequest\x12\x10\n" +
+	"\x03sql\x18\x01 \x01(\tR\x03sql\x12\x1f\n" +
+	"\vparams_json\x18\x02 \x03(\tR\n" +
+	"paramsJson\x12\x14\n" +
+	"\x05scope\x18\x03 \x01(\tR\x05scope\"Y\n" +
+	"\fExecResponse\x12#\n" +
+	"\rrows_affected\x18\x01 \x01(\x05R\frowsAffected\x12$\n" +
+	"\x0elast_insert_id\x18\x02 \x01(\x01R\flastInsertId\"@\n" +
+	"\vDbStatement\x12\x10\n" +
+	"\x03sql\x18\x01 \x01(\tR\x03sql\x12\x1f\n" +
+	"\vparams_json\x18\x02 \x03(\tR\n" +
+	"paramsJson\"a\n" +
+	"\fBatchRequest\x12;\n" +
+	"\n" +
+	"statements\x18\x01 \x03(\v2\x1b.mako.plugin.v1.DbStatementR\n" +
+	"statements\x12\x14\n" +
+	"\x05scope\x18\x02 \x01(\tR\x05scope\"G\n" +
+	"\rBatchResponse\x126\n" +
+	"\aresults\x18\x01 \x03(\v2\x1c.mako.plugin.v1.ExecResponseR\aresults\"$\n" +
+	"\fStatsRequest\x12\x14\n" +
+	"\x05scope\x18\x01 \x01(\tR\x05scope\"p\n" +
+	"\rStatsResponse\x12\x1d\n" +
+	"\n" +
+	"used_bytes\x18\x01 \x01(\rR\tusedBytes\x12\x1f\n" +
+	"\vquota_bytes\x18\x02 \x01(\rR\n" +
+	"quotaBytes\x12\x1f\n" +
+	"\vsync_tables\x18\x03 \x03(\tR\n" +
+	"syncTables\"?\n" +
+	"\x11SyncEnableRequest\x12\x14\n" +
+	"\x05table\x18\x01 \x01(\tR\x05table\x12\x14\n" +
+	"\x05scope\x18\x02 \x01(\tR\x05scope\"*\n" +
+	"\x12SyncEnableResponse\x12\x14\n" +
+	"\x05table\x18\x01 \x01(\tR\x05table\"g\n" +
+	"\x0eSyncPutRequest\x12\x14\n" +
+	"\x05table\x18\x01 \x01(\tR\x05table\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\x12\x19\n" +
+	"\bdoc_json\x18\x03 \x01(\tR\adocJson\x12\x14\n" +
+	"\x05scope\x18\x04 \x01(\tR\x05scope\"0\n" +
+	"\x0fSyncPutResponse\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x01 \x01(\x01R\tupdatedAt\"O\n" +
+	"\x11SyncDeleteRequest\x12\x14\n" +
+	"\x05table\x18\x01 \x01(\tR\x05table\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\x12\x14\n" +
+	"\x05scope\x18\x03 \x01(\tR\x05scope\".\n" +
+	"\x12SyncDeleteResponse\x12\x18\n" +
+	"\adeleted\x18\x01 \x01(\bR\adeleted2\\\n" +
 	"\n" +
 	"LogService\x12N\n" +
 	"\x05Write\x12\x1c.mako.plugin.v1.WriteRequest\x1a\x1d.mako.plugin.v1.WriteResponse\"\b\xca\xf3\x18\x04none2\xd5\x01\n" +
@@ -2120,7 +2993,17 @@ const file_mako_plugin_v1_host_proto_rawDesc = "" +
 	"\x05Fetch\x12\x1c.mako.plugin.v1.FetchRequest\x1a\x1d.mako.plugin.v1.FetchResponse\"\a\xca\xf3\x18\x03net2p\n" +
 	"\x0fCommandsService\x12]\n" +
 	"\n" +
-	"RunCommand\x12!.mako.plugin.v1.RunCommandRequest\x1a\".mako.plugin.v1.RunCommandResponse\"\b\xca\xf3\x18\x04noneB2Z0github.com/ironpark/mako/internal/plugin/hostapib\x06proto3"
+	"RunCommand\x12!.mako.plugin.v1.RunCommandRequest\x1a\".mako.plugin.v1.RunCommandResponse\"\b\xca\xf3\x18\x04none2\xdd\x04\n" +
+	"\tDbService\x12L\n" +
+	"\x05Query\x12\x1c.mako.plugin.v1.QueryRequest\x1a\x1d.mako.plugin.v1.QueryResponse\"\x06\xca\xf3\x18\x02db\x12I\n" +
+	"\x04Exec\x12\x1b.mako.plugin.v1.ExecRequest\x1a\x1c.mako.plugin.v1.ExecResponse\"\x06\xca\xf3\x18\x02db\x12L\n" +
+	"\x05Batch\x12\x1c.mako.plugin.v1.BatchRequest\x1a\x1d.mako.plugin.v1.BatchResponse\"\x06\xca\xf3\x18\x02db\x12L\n" +
+	"\x05Stats\x12\x1c.mako.plugin.v1.StatsRequest\x1a\x1d.mako.plugin.v1.StatsResponse\"\x06\xca\xf3\x18\x02db\x12`\n" +
+	"\n" +
+	"SyncEnable\x12!.mako.plugin.v1.SyncEnableRequest\x1a\".mako.plugin.v1.SyncEnableResponse\"\v\xca\xf3\x18\adb:sync\x12W\n" +
+	"\aSyncPut\x12\x1e.mako.plugin.v1.SyncPutRequest\x1a\x1f.mako.plugin.v1.SyncPutResponse\"\v\xca\xf3\x18\adb:sync\x12`\n" +
+	"\n" +
+	"SyncDelete\x12!.mako.plugin.v1.SyncDeleteRequest\x1a\".mako.plugin.v1.SyncDeleteResponse\"\v\xca\xf3\x18\adb:syncB2Z0github.com/ironpark/mako/internal/plugin/hostapib\x06proto3"
 
 var (
 	file_mako_plugin_v1_host_proto_rawDescOnce sync.Once
@@ -2134,7 +3017,7 @@ func file_mako_plugin_v1_host_proto_rawDescGZIP() []byte {
 	return file_mako_plugin_v1_host_proto_rawDescData
 }
 
-var file_mako_plugin_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
+var file_mako_plugin_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
 var file_mako_plugin_v1_host_proto_goTypes = []any{
 	(*WriteRequest)(nil),           // 0: mako.plugin.v1.WriteRequest
 	(*WriteResponse)(nil),          // 1: mako.plugin.v1.WriteResponse
@@ -2169,8 +3052,23 @@ var file_mako_plugin_v1_host_proto_goTypes = []any{
 	(*FetchResponse)(nil),          // 30: mako.plugin.v1.FetchResponse
 	(*RunCommandRequest)(nil),      // 31: mako.plugin.v1.RunCommandRequest
 	(*RunCommandResponse)(nil),     // 32: mako.plugin.v1.RunCommandResponse
-	nil,                            // 33: mako.plugin.v1.FetchRequest.HeadersEntry
-	nil,                            // 34: mako.plugin.v1.FetchResponse.HeadersEntry
+	(*QueryRequest)(nil),           // 33: mako.plugin.v1.QueryRequest
+	(*QueryResponse)(nil),          // 34: mako.plugin.v1.QueryResponse
+	(*ExecRequest)(nil),            // 35: mako.plugin.v1.ExecRequest
+	(*ExecResponse)(nil),           // 36: mako.plugin.v1.ExecResponse
+	(*DbStatement)(nil),            // 37: mako.plugin.v1.DbStatement
+	(*BatchRequest)(nil),           // 38: mako.plugin.v1.BatchRequest
+	(*BatchResponse)(nil),          // 39: mako.plugin.v1.BatchResponse
+	(*StatsRequest)(nil),           // 40: mako.plugin.v1.StatsRequest
+	(*StatsResponse)(nil),          // 41: mako.plugin.v1.StatsResponse
+	(*SyncEnableRequest)(nil),      // 42: mako.plugin.v1.SyncEnableRequest
+	(*SyncEnableResponse)(nil),     // 43: mako.plugin.v1.SyncEnableResponse
+	(*SyncPutRequest)(nil),         // 44: mako.plugin.v1.SyncPutRequest
+	(*SyncPutResponse)(nil),        // 45: mako.plugin.v1.SyncPutResponse
+	(*SyncDeleteRequest)(nil),      // 46: mako.plugin.v1.SyncDeleteRequest
+	(*SyncDeleteResponse)(nil),     // 47: mako.plugin.v1.SyncDeleteResponse
+	nil,                            // 48: mako.plugin.v1.FetchRequest.HeadersEntry
+	nil,                            // 49: mako.plugin.v1.FetchResponse.HeadersEntry
 }
 var file_mako_plugin_v1_host_proto_depIdxs = []int32{
 	6,  // 0: mako.plugin.v1.GetSettingResponse.setting:type_name -> mako.plugin.v1.Setting
@@ -2180,41 +3078,57 @@ var file_mako_plugin_v1_host_proto_depIdxs = []int32{
 	23, // 4: mako.plugin.v1.SessionEvent.message:type_name -> mako.plugin.v1.AgentMessage
 	28, // 5: mako.plugin.v1.ListSessionsResponse.sessions:type_name -> mako.plugin.v1.Session
 	28, // 6: mako.plugin.v1.GetSessionResponse.session:type_name -> mako.plugin.v1.Session
-	33, // 7: mako.plugin.v1.FetchRequest.headers:type_name -> mako.plugin.v1.FetchRequest.HeadersEntry
-	34, // 8: mako.plugin.v1.FetchResponse.headers:type_name -> mako.plugin.v1.FetchResponse.HeadersEntry
-	0,  // 9: mako.plugin.v1.LogService.Write:input_type -> mako.plugin.v1.WriteRequest
-	2,  // 10: mako.plugin.v1.SettingsService.GetSetting:input_type -> mako.plugin.v1.GetSettingRequest
-	4,  // 11: mako.plugin.v1.SettingsService.ListSettings:input_type -> mako.plugin.v1.ListSettingsRequest
-	7,  // 12: mako.plugin.v1.StorageService.GetItem:input_type -> mako.plugin.v1.GetItemRequest
-	9,  // 13: mako.plugin.v1.StorageService.SetItem:input_type -> mako.plugin.v1.SetItemRequest
-	11, // 14: mako.plugin.v1.StorageService.DeleteItem:input_type -> mako.plugin.v1.DeleteItemRequest
-	13, // 15: mako.plugin.v1.StorageService.ListKeys:input_type -> mako.plugin.v1.ListKeysRequest
-	24, // 16: mako.plugin.v1.SessionsService.ListSessions:input_type -> mako.plugin.v1.ListSessionsRequest
-	26, // 17: mako.plugin.v1.SessionsService.GetSession:input_type -> mako.plugin.v1.GetSessionRequest
-	15, // 18: mako.plugin.v1.SessionsService.ReadTranscript:input_type -> mako.plugin.v1.ReadTranscriptRequest
-	18, // 19: mako.plugin.v1.SessionsService.Subscribe:input_type -> mako.plugin.v1.SubscribeRequest
-	20, // 20: mako.plugin.v1.SessionsService.Unsubscribe:input_type -> mako.plugin.v1.UnsubscribeRequest
-	29, // 21: mako.plugin.v1.HttpService.Fetch:input_type -> mako.plugin.v1.FetchRequest
-	31, // 22: mako.plugin.v1.CommandsService.RunCommand:input_type -> mako.plugin.v1.RunCommandRequest
-	1,  // 23: mako.plugin.v1.LogService.Write:output_type -> mako.plugin.v1.WriteResponse
-	3,  // 24: mako.plugin.v1.SettingsService.GetSetting:output_type -> mako.plugin.v1.GetSettingResponse
-	5,  // 25: mako.plugin.v1.SettingsService.ListSettings:output_type -> mako.plugin.v1.ListSettingsResponse
-	8,  // 26: mako.plugin.v1.StorageService.GetItem:output_type -> mako.plugin.v1.GetItemResponse
-	10, // 27: mako.plugin.v1.StorageService.SetItem:output_type -> mako.plugin.v1.SetItemResponse
-	12, // 28: mako.plugin.v1.StorageService.DeleteItem:output_type -> mako.plugin.v1.DeleteItemResponse
-	14, // 29: mako.plugin.v1.StorageService.ListKeys:output_type -> mako.plugin.v1.ListKeysResponse
-	25, // 30: mako.plugin.v1.SessionsService.ListSessions:output_type -> mako.plugin.v1.ListSessionsResponse
-	27, // 31: mako.plugin.v1.SessionsService.GetSession:output_type -> mako.plugin.v1.GetSessionResponse
-	16, // 32: mako.plugin.v1.SessionsService.ReadTranscript:output_type -> mako.plugin.v1.ReadTranscriptResponse
-	19, // 33: mako.plugin.v1.SessionsService.Subscribe:output_type -> mako.plugin.v1.SubscribeResponse
-	21, // 34: mako.plugin.v1.SessionsService.Unsubscribe:output_type -> mako.plugin.v1.UnsubscribeResponse
-	30, // 35: mako.plugin.v1.HttpService.Fetch:output_type -> mako.plugin.v1.FetchResponse
-	32, // 36: mako.plugin.v1.CommandsService.RunCommand:output_type -> mako.plugin.v1.RunCommandResponse
-	23, // [23:37] is the sub-list for method output_type
-	9,  // [9:23] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	48, // 7: mako.plugin.v1.FetchRequest.headers:type_name -> mako.plugin.v1.FetchRequest.HeadersEntry
+	49, // 8: mako.plugin.v1.FetchResponse.headers:type_name -> mako.plugin.v1.FetchResponse.HeadersEntry
+	37, // 9: mako.plugin.v1.BatchRequest.statements:type_name -> mako.plugin.v1.DbStatement
+	36, // 10: mako.plugin.v1.BatchResponse.results:type_name -> mako.plugin.v1.ExecResponse
+	0,  // 11: mako.plugin.v1.LogService.Write:input_type -> mako.plugin.v1.WriteRequest
+	2,  // 12: mako.plugin.v1.SettingsService.GetSetting:input_type -> mako.plugin.v1.GetSettingRequest
+	4,  // 13: mako.plugin.v1.SettingsService.ListSettings:input_type -> mako.plugin.v1.ListSettingsRequest
+	7,  // 14: mako.plugin.v1.StorageService.GetItem:input_type -> mako.plugin.v1.GetItemRequest
+	9,  // 15: mako.plugin.v1.StorageService.SetItem:input_type -> mako.plugin.v1.SetItemRequest
+	11, // 16: mako.plugin.v1.StorageService.DeleteItem:input_type -> mako.plugin.v1.DeleteItemRequest
+	13, // 17: mako.plugin.v1.StorageService.ListKeys:input_type -> mako.plugin.v1.ListKeysRequest
+	24, // 18: mako.plugin.v1.SessionsService.ListSessions:input_type -> mako.plugin.v1.ListSessionsRequest
+	26, // 19: mako.plugin.v1.SessionsService.GetSession:input_type -> mako.plugin.v1.GetSessionRequest
+	15, // 20: mako.plugin.v1.SessionsService.ReadTranscript:input_type -> mako.plugin.v1.ReadTranscriptRequest
+	18, // 21: mako.plugin.v1.SessionsService.Subscribe:input_type -> mako.plugin.v1.SubscribeRequest
+	20, // 22: mako.plugin.v1.SessionsService.Unsubscribe:input_type -> mako.plugin.v1.UnsubscribeRequest
+	29, // 23: mako.plugin.v1.HttpService.Fetch:input_type -> mako.plugin.v1.FetchRequest
+	31, // 24: mako.plugin.v1.CommandsService.RunCommand:input_type -> mako.plugin.v1.RunCommandRequest
+	33, // 25: mako.plugin.v1.DbService.Query:input_type -> mako.plugin.v1.QueryRequest
+	35, // 26: mako.plugin.v1.DbService.Exec:input_type -> mako.plugin.v1.ExecRequest
+	38, // 27: mako.plugin.v1.DbService.Batch:input_type -> mako.plugin.v1.BatchRequest
+	40, // 28: mako.plugin.v1.DbService.Stats:input_type -> mako.plugin.v1.StatsRequest
+	42, // 29: mako.plugin.v1.DbService.SyncEnable:input_type -> mako.plugin.v1.SyncEnableRequest
+	44, // 30: mako.plugin.v1.DbService.SyncPut:input_type -> mako.plugin.v1.SyncPutRequest
+	46, // 31: mako.plugin.v1.DbService.SyncDelete:input_type -> mako.plugin.v1.SyncDeleteRequest
+	1,  // 32: mako.plugin.v1.LogService.Write:output_type -> mako.plugin.v1.WriteResponse
+	3,  // 33: mako.plugin.v1.SettingsService.GetSetting:output_type -> mako.plugin.v1.GetSettingResponse
+	5,  // 34: mako.plugin.v1.SettingsService.ListSettings:output_type -> mako.plugin.v1.ListSettingsResponse
+	8,  // 35: mako.plugin.v1.StorageService.GetItem:output_type -> mako.plugin.v1.GetItemResponse
+	10, // 36: mako.plugin.v1.StorageService.SetItem:output_type -> mako.plugin.v1.SetItemResponse
+	12, // 37: mako.plugin.v1.StorageService.DeleteItem:output_type -> mako.plugin.v1.DeleteItemResponse
+	14, // 38: mako.plugin.v1.StorageService.ListKeys:output_type -> mako.plugin.v1.ListKeysResponse
+	25, // 39: mako.plugin.v1.SessionsService.ListSessions:output_type -> mako.plugin.v1.ListSessionsResponse
+	27, // 40: mako.plugin.v1.SessionsService.GetSession:output_type -> mako.plugin.v1.GetSessionResponse
+	16, // 41: mako.plugin.v1.SessionsService.ReadTranscript:output_type -> mako.plugin.v1.ReadTranscriptResponse
+	19, // 42: mako.plugin.v1.SessionsService.Subscribe:output_type -> mako.plugin.v1.SubscribeResponse
+	21, // 43: mako.plugin.v1.SessionsService.Unsubscribe:output_type -> mako.plugin.v1.UnsubscribeResponse
+	30, // 44: mako.plugin.v1.HttpService.Fetch:output_type -> mako.plugin.v1.FetchResponse
+	32, // 45: mako.plugin.v1.CommandsService.RunCommand:output_type -> mako.plugin.v1.RunCommandResponse
+	34, // 46: mako.plugin.v1.DbService.Query:output_type -> mako.plugin.v1.QueryResponse
+	36, // 47: mako.plugin.v1.DbService.Exec:output_type -> mako.plugin.v1.ExecResponse
+	39, // 48: mako.plugin.v1.DbService.Batch:output_type -> mako.plugin.v1.BatchResponse
+	41, // 49: mako.plugin.v1.DbService.Stats:output_type -> mako.plugin.v1.StatsResponse
+	43, // 50: mako.plugin.v1.DbService.SyncEnable:output_type -> mako.plugin.v1.SyncEnableResponse
+	45, // 51: mako.plugin.v1.DbService.SyncPut:output_type -> mako.plugin.v1.SyncPutResponse
+	47, // 52: mako.plugin.v1.DbService.SyncDelete:output_type -> mako.plugin.v1.SyncDeleteResponse
+	32, // [32:53] is the sub-list for method output_type
+	11, // [11:32] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_mako_plugin_v1_host_proto_init() }
@@ -2229,9 +3143,9 @@ func file_mako_plugin_v1_host_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_plugin_v1_host_proto_rawDesc), len(file_mako_plugin_v1_host_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   35,
+			NumMessages:   50,
 			NumExtensions: 0,
-			NumServices:   6,
+			NumServices:   7,
 		},
 		GoTypes:           file_mako_plugin_v1_host_proto_goTypes,
 		DependencyIndexes: file_mako_plugin_v1_host_proto_depIdxs,

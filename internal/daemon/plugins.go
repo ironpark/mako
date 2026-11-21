@@ -105,6 +105,8 @@ func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan stru
 		ResolveScope: d.resolvePluginScope,
 		Agents:       pluginAgents{d},
 		Layout:       pluginLayout{d},
+		NodeID:       d.cfg.NodeID,
+		SyncChanged:  func() { d.pokeStatus() },
 		Changed:      func() { d.changes.firePlugins(); d.syncProjectAgents() },
 		Installs:     d.store,
 		NetTest:      testhooks.NetTest(),

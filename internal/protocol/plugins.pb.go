@@ -174,8 +174,12 @@ type PluginInfo struct {
 	Logs []*PluginLog `protobuf:"bytes,21,rep,name=logs,proto3" json:"logs,omitempty"`
 	// storage_used and storage_quota are the bytes the plugin's KV store holds
 	// and its limit on this node (revision 41).
-	StorageUsed   int64 `protobuf:"varint,22,opt,name=storage_used,json=storageUsed,proto3" json:"storage_used,omitempty"`
-	StorageQuota  int64 `protobuf:"varint,23,opt,name=storage_quota,json=storageQuota,proto3" json:"storage_quota,omitempty"`
+	StorageUsed  int64 `protobuf:"varint,22,opt,name=storage_used,json=storageUsed,proto3" json:"storage_used,omitempty"`
+	StorageQuota int64 `protobuf:"varint,23,opt,name=storage_quota,json=storageQuota,proto3" json:"storage_quota,omitempty"`
+	// db_used and db_quota are the bytes the plugin's SQLite databases hold
+	// and its limit on this node (revision 43).
+	DbUsed        int64 `protobuf:"varint,24,opt,name=db_used,json=dbUsed,proto3" json:"db_used,omitempty"`
+	DbQuota       int64 `protobuf:"varint,25,opt,name=db_quota,json=dbQuota,proto3" json:"db_quota,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -367,6 +371,20 @@ func (x *PluginInfo) GetStorageUsed() int64 {
 func (x *PluginInfo) GetStorageQuota() int64 {
 	if x != nil {
 		return x.StorageQuota
+	}
+	return 0
+}
+
+func (x *PluginInfo) GetDbUsed() int64 {
+	if x != nil {
+		return x.DbUsed
+	}
+	return 0
+}
+
+func (x *PluginInfo) GetDbQuota() int64 {
+	if x != nil {
+		return x.DbQuota
 	}
 	return 0
 }
@@ -2117,16 +2135,263 @@ func (x *Panel) GetKind() string {
 	return ""
 }
 
+// PluginSyncRow is one row-level CRDT entry in a plugin's synced SQLite table
+// (revision 43).
+type PluginSyncRow struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Table         string                 `protobuf:"bytes,1,opt,name=table,proto3" json:"table,omitempty"`
+	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	Doc           string                 `protobuf:"bytes,3,opt,name=doc,proto3" json:"doc,omitempty"`
+	Clock         *HLC                   `protobuf:"bytes,4,opt,name=clock,proto3" json:"clock,omitempty"`
+	Deleted       bool                   `protobuf:"varint,5,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PluginSyncRow) Reset() {
+	*x = PluginSyncRow{}
+	mi := &file_mako_v2_plugins_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PluginSyncRow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PluginSyncRow) ProtoMessage() {}
+
+func (x *PluginSyncRow) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_plugins_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PluginSyncRow.ProtoReflect.Descriptor instead.
+func (*PluginSyncRow) Descriptor() ([]byte, []int) {
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *PluginSyncRow) GetTable() string {
+	if x != nil {
+		return x.Table
+	}
+	return ""
+}
+
+func (x *PluginSyncRow) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PluginSyncRow) GetDoc() string {
+	if x != nil {
+		return x.Doc
+	}
+	return ""
+}
+
+func (x *PluginSyncRow) GetClock() *HLC {
+	if x != nil {
+		return x.Clock
+	}
+	return nil
+}
+
+func (x *PluginSyncRow) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
+// PluginSyncBucket holds the synced rows for one (plugin_id, scope) database.
+type PluginSyncBucket struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PluginId      string                 `protobuf:"bytes,1,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
+	Scope         string                 `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
+	Digest        []byte                 `protobuf:"bytes,3,opt,name=digest,proto3" json:"digest,omitempty"`
+	Rows          []*PluginSyncRow       `protobuf:"bytes,4,rep,name=rows,proto3" json:"rows,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PluginSyncBucket) Reset() {
+	*x = PluginSyncBucket{}
+	mi := &file_mako_v2_plugins_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PluginSyncBucket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PluginSyncBucket) ProtoMessage() {}
+
+func (x *PluginSyncBucket) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_plugins_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PluginSyncBucket.ProtoReflect.Descriptor instead.
+func (*PluginSyncBucket) Descriptor() ([]byte, []int) {
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *PluginSyncBucket) GetPluginId() string {
+	if x != nil {
+		return x.PluginId
+	}
+	return ""
+}
+
+func (x *PluginSyncBucket) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *PluginSyncBucket) GetDigest() []byte {
+	if x != nil {
+		return x.Digest
+	}
+	return nil
+}
+
+func (x *PluginSyncBucket) GetRows() []*PluginSyncRow {
+	if x != nil {
+		return x.Rows
+	}
+	return nil
+}
+
+// PluginSyncBundle carries all synced plugin DB buckets of a node, exchanged
+// between mutually trusted peers when plugin_sync_digest differs (revision 43).
+type PluginSyncBundle struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Digest        []byte                 `protobuf:"bytes,1,opt,name=digest,proto3" json:"digest,omitempty"`
+	Buckets       []*PluginSyncBucket    `protobuf:"bytes,2,rep,name=buckets,proto3" json:"buckets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PluginSyncBundle) Reset() {
+	*x = PluginSyncBundle{}
+	mi := &file_mako_v2_plugins_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PluginSyncBundle) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PluginSyncBundle) ProtoMessage() {}
+
+func (x *PluginSyncBundle) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_plugins_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PluginSyncBundle.ProtoReflect.Descriptor instead.
+func (*PluginSyncBundle) Descriptor() ([]byte, []int) {
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *PluginSyncBundle) GetDigest() []byte {
+	if x != nil {
+		return x.Digest
+	}
+	return nil
+}
+
+func (x *PluginSyncBundle) GetBuckets() []*PluginSyncBucket {
+	if x != nil {
+		return x.Buckets
+	}
+	return nil
+}
+
+// SyncPluginDB exchanges a peer's PluginSyncBundle and receives the receiver's
+// merged PluginSyncBundle in reply.
+type SyncPluginDB struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Bundle        *PluginSyncBundle      `protobuf:"bytes,1,opt,name=bundle,proto3" json:"bundle,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncPluginDB) Reset() {
+	*x = SyncPluginDB{}
+	mi := &file_mako_v2_plugins_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncPluginDB) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncPluginDB) ProtoMessage() {}
+
+func (x *SyncPluginDB) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_plugins_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncPluginDB.ProtoReflect.Descriptor instead.
+func (*SyncPluginDB) Descriptor() ([]byte, []int) {
+	return file_mako_v2_plugins_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *SyncPluginDB) GetBundle() *PluginSyncBundle {
+	if x != nil {
+		return x.Bundle
+	}
+	return nil
+}
+
 var File_mako_v2_plugins_proto protoreflect.FileDescriptor
 
 const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\n" +
-	"\x15mako/v2/plugins.proto\x12\amako.v2\"\r\n" +
+	"\x15mako/v2/plugins.proto\x12\amako.v2\x1a\x17mako/v2/workspace.proto\"\r\n" +
 	"\vListPlugins\"u\n" +
 	"\aPlugins\x12-\n" +
 	"\aplugins\x18\x01 \x03(\v2\x13.mako.v2.PluginInfoR\aplugins\x12\x18\n" +
 	"\asecrets\x18\x02 \x01(\tR\asecrets\x12!\n" +
-	"\fsecrets_note\x18\x03 \x01(\tR\vsecretsNote\"\xf0\x05\n" +
+	"\fsecrets_note\x18\x03 \x01(\tR\vsecretsNote\"\xa4\x06\n" +
 	"\n" +
 	"PluginInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
@@ -2152,7 +2417,9 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x05tools\x18\x14 \x03(\v2\x13.mako.v2.PluginToolR\x05tools\x12&\n" +
 	"\x04logs\x18\x15 \x03(\v2\x12.mako.v2.PluginLogR\x04logs\x12!\n" +
 	"\fstorage_used\x18\x16 \x01(\x03R\vstorageUsed\x12#\n" +
-	"\rstorage_quota\x18\x17 \x01(\x03R\fstorageQuota\"T\n" +
+	"\rstorage_quota\x18\x17 \x01(\x03R\fstorageQuota\x12\x17\n" +
+	"\adb_used\x18\x18 \x01(\x03R\x06dbUsed\x12\x19\n" +
+	"\bdb_quota\x18\x19 \x01(\x03R\adbQuota\"T\n" +
 	"\n" +
 	"PluginTool\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12 \n" +
@@ -2304,7 +2571,23 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x05Panel\x12\x14\n" +
 	"\x05block\x18\x01 \x01(\tR\x05block\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x12\n" +
-	"\x04kind\x18\x03 \x01(\tR\x04kindB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
+	"\x04kind\x18\x03 \x01(\tR\x04kind\"\x85\x01\n" +
+	"\rPluginSyncRow\x12\x14\n" +
+	"\x05table\x18\x01 \x01(\tR\x05table\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\x12\x10\n" +
+	"\x03doc\x18\x03 \x01(\tR\x03doc\x12\"\n" +
+	"\x05clock\x18\x04 \x01(\v2\f.mako.v2.HLCR\x05clock\x12\x18\n" +
+	"\adeleted\x18\x05 \x01(\bR\adeleted\"\x89\x01\n" +
+	"\x10PluginSyncBucket\x12\x1b\n" +
+	"\tplugin_id\x18\x01 \x01(\tR\bpluginId\x12\x14\n" +
+	"\x05scope\x18\x02 \x01(\tR\x05scope\x12\x16\n" +
+	"\x06digest\x18\x03 \x01(\fR\x06digest\x12*\n" +
+	"\x04rows\x18\x04 \x03(\v2\x16.mako.v2.PluginSyncRowR\x04rows\"_\n" +
+	"\x10PluginSyncBundle\x12\x16\n" +
+	"\x06digest\x18\x01 \x01(\fR\x06digest\x123\n" +
+	"\abuckets\x18\x02 \x03(\v2\x19.mako.v2.PluginSyncBucketR\abuckets\"A\n" +
+	"\fSyncPluginDB\x121\n" +
+	"\x06bundle\x18\x01 \x01(\v2\x19.mako.v2.PluginSyncBundleR\x06bundleB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
 	file_mako_v2_plugins_proto_rawDescOnce sync.Once
@@ -2318,33 +2601,38 @@ func file_mako_v2_plugins_proto_rawDescGZIP() []byte {
 	return file_mako_v2_plugins_proto_rawDescData
 }
 
-var file_mako_v2_plugins_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_mako_v2_plugins_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_mako_v2_plugins_proto_goTypes = []any{
-	(*ListPlugins)(nil),     // 0: mako.v2.ListPlugins
-	(*Plugins)(nil),         // 1: mako.v2.Plugins
-	(*PluginInfo)(nil),      // 2: mako.v2.PluginInfo
-	(*PluginTool)(nil),      // 3: mako.v2.PluginTool
-	(*PluginLog)(nil),       // 4: mako.v2.PluginLog
-	(*PluginAgentAsk)(nil),  // 5: mako.v2.PluginAgentAsk
-	(*PluginBlock)(nil),     // 6: mako.v2.PluginBlock
-	(*PluginCommand)(nil),   // 7: mako.v2.PluginCommand
-	(*PluginSetting)(nil),   // 8: mako.v2.PluginSetting
-	(*PluginAction)(nil),    // 9: mako.v2.PluginAction
-	(*PluginDone)(nil),      // 10: mako.v2.PluginDone
-	(*WatchBlock)(nil),      // 11: mako.v2.WatchBlock
-	(*BlockUpdate)(nil),     // 12: mako.v2.BlockUpdate
-	(*BlockEvent)(nil),      // 13: mako.v2.BlockEvent
-	(*UiNode)(nil),          // 14: mako.v2.UiNode
-	(*UiSeries)(nil),        // 15: mako.v2.UiSeries
-	(*UiOp)(nil),            // 16: mako.v2.UiOp
-	(*ListAgentBlocks)(nil), // 17: mako.v2.ListAgentBlocks
-	(*AgentBlocks)(nil),     // 18: mako.v2.AgentBlocks
-	(*AgentBlock)(nil),      // 19: mako.v2.AgentBlock
-	(*ListPanels)(nil),      // 20: mako.v2.ListPanels
-	(*Panels)(nil),          // 21: mako.v2.Panels
-	(*Panel)(nil),           // 22: mako.v2.Panel
-	nil,                     // 23: mako.v2.PluginSetting.ScopedValuesEntry
-	nil,                     // 24: mako.v2.BlockEvent.ValuesEntry
+	(*ListPlugins)(nil),      // 0: mako.v2.ListPlugins
+	(*Plugins)(nil),          // 1: mako.v2.Plugins
+	(*PluginInfo)(nil),       // 2: mako.v2.PluginInfo
+	(*PluginTool)(nil),       // 3: mako.v2.PluginTool
+	(*PluginLog)(nil),        // 4: mako.v2.PluginLog
+	(*PluginAgentAsk)(nil),   // 5: mako.v2.PluginAgentAsk
+	(*PluginBlock)(nil),      // 6: mako.v2.PluginBlock
+	(*PluginCommand)(nil),    // 7: mako.v2.PluginCommand
+	(*PluginSetting)(nil),    // 8: mako.v2.PluginSetting
+	(*PluginAction)(nil),     // 9: mako.v2.PluginAction
+	(*PluginDone)(nil),       // 10: mako.v2.PluginDone
+	(*WatchBlock)(nil),       // 11: mako.v2.WatchBlock
+	(*BlockUpdate)(nil),      // 12: mako.v2.BlockUpdate
+	(*BlockEvent)(nil),       // 13: mako.v2.BlockEvent
+	(*UiNode)(nil),           // 14: mako.v2.UiNode
+	(*UiSeries)(nil),         // 15: mako.v2.UiSeries
+	(*UiOp)(nil),             // 16: mako.v2.UiOp
+	(*ListAgentBlocks)(nil),  // 17: mako.v2.ListAgentBlocks
+	(*AgentBlocks)(nil),      // 18: mako.v2.AgentBlocks
+	(*AgentBlock)(nil),       // 19: mako.v2.AgentBlock
+	(*ListPanels)(nil),       // 20: mako.v2.ListPanels
+	(*Panels)(nil),           // 21: mako.v2.Panels
+	(*Panel)(nil),            // 22: mako.v2.Panel
+	(*PluginSyncRow)(nil),    // 23: mako.v2.PluginSyncRow
+	(*PluginSyncBucket)(nil), // 24: mako.v2.PluginSyncBucket
+	(*PluginSyncBundle)(nil), // 25: mako.v2.PluginSyncBundle
+	(*SyncPluginDB)(nil),     // 26: mako.v2.SyncPluginDB
+	nil,                      // 27: mako.v2.PluginSetting.ScopedValuesEntry
+	nil,                      // 28: mako.v2.BlockEvent.ValuesEntry
+	(*HLC)(nil),              // 29: mako.v2.HLC
 }
 var file_mako_v2_plugins_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Plugins.plugins:type_name -> mako.v2.PluginInfo
@@ -2354,20 +2642,24 @@ var file_mako_v2_plugins_proto_depIdxs = []int32{
 	5,  // 4: mako.v2.PluginInfo.agent_ask:type_name -> mako.v2.PluginAgentAsk
 	3,  // 5: mako.v2.PluginInfo.tools:type_name -> mako.v2.PluginTool
 	4,  // 6: mako.v2.PluginInfo.logs:type_name -> mako.v2.PluginLog
-	23, // 7: mako.v2.PluginSetting.scoped_values:type_name -> mako.v2.PluginSetting.ScopedValuesEntry
+	27, // 7: mako.v2.PluginSetting.scoped_values:type_name -> mako.v2.PluginSetting.ScopedValuesEntry
 	14, // 8: mako.v2.BlockUpdate.tree:type_name -> mako.v2.UiNode
 	16, // 9: mako.v2.BlockUpdate.ops:type_name -> mako.v2.UiOp
-	24, // 10: mako.v2.BlockEvent.values:type_name -> mako.v2.BlockEvent.ValuesEntry
+	28, // 10: mako.v2.BlockEvent.values:type_name -> mako.v2.BlockEvent.ValuesEntry
 	14, // 11: mako.v2.UiNode.children:type_name -> mako.v2.UiNode
 	15, // 12: mako.v2.UiNode.series:type_name -> mako.v2.UiSeries
 	14, // 13: mako.v2.UiOp.node:type_name -> mako.v2.UiNode
 	19, // 14: mako.v2.AgentBlocks.blocks:type_name -> mako.v2.AgentBlock
 	22, // 15: mako.v2.Panels.panels:type_name -> mako.v2.Panel
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	29, // 16: mako.v2.PluginSyncRow.clock:type_name -> mako.v2.HLC
+	23, // 17: mako.v2.PluginSyncBucket.rows:type_name -> mako.v2.PluginSyncRow
+	24, // 18: mako.v2.PluginSyncBundle.buckets:type_name -> mako.v2.PluginSyncBucket
+	25, // 19: mako.v2.SyncPluginDB.bundle:type_name -> mako.v2.PluginSyncBundle
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_plugins_proto_init() }
@@ -2375,13 +2667,14 @@ func file_mako_v2_plugins_proto_init() {
 	if File_mako_v2_plugins_proto != nil {
 		return
 	}
+	file_mako_v2_workspace_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_plugins_proto_rawDesc), len(file_mako_v2_plugins_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

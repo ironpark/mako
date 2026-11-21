@@ -418,4 +418,21 @@ public interface PluginInfoOrBuilder extends
    * @return The storageQuota.
    */
   long getStorageQuota();
+
+  /**
+   * <pre>
+   * db_used and db_quota are the bytes the plugin's SQLite databases hold
+   * and its limit on this node (revision 43).
+   * </pre>
+   *
+   * <code>int64 db_used = 24 [json_name = "dbUsed"];</code>
+   * @return The dbUsed.
+   */
+  long getDbUsed();
+
+  /**
+   * <code>int64 db_quota = 25 [json_name = "dbQuota"];</code>
+   * @return The dbQuota.
+   */
+  long getDbQuota();
 }

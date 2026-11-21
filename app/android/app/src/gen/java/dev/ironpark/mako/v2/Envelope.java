@@ -141,6 +141,8 @@ public  final class Envelope extends
     PROVIDER_ACTION(152),
     RUN_DECISION(153),
     DECISION_RESULT(154),
+    SYNC_PLUGIN_DB(155),
+    PLUGIN_SYNC_BUNDLE(156),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -271,6 +273,8 @@ public  final class Envelope extends
         case 152: return PROVIDER_ACTION;
         case 153: return RUN_DECISION;
         case 154: return DECISION_RESULT;
+        case 155: return SYNC_PLUGIN_DB;
+        case 156: return PLUGIN_SYNC_BUNDLE;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -6479,6 +6483,126 @@ public  final class Envelope extends
     }
   }
 
+  public static final int SYNC_PLUGIN_DB_FIELD_NUMBER = 155;
+  /**
+   * <pre>
+   * Peer-to-peer plugin SQLite CRDT sync (revision 43).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginDB sync_plugin_db = 155 [json_name = "syncPluginDb"];</code>
+   */
+  @java.lang.Override
+  public boolean hasSyncPluginDb() {
+    return bodyCase_ == 155;
+  }
+  /**
+   * <pre>
+   * Peer-to-peer plugin SQLite CRDT sync (revision 43).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginDB sync_plugin_db = 155 [json_name = "syncPluginDb"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.SyncPluginDB getSyncPluginDb() {
+    if (bodyCase_ == 155) {
+       return (dev.ironpark.mako.v2.SyncPluginDB) body_;
+    }
+    return dev.ironpark.mako.v2.SyncPluginDB.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * Peer-to-peer plugin SQLite CRDT sync (revision 43).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginDB sync_plugin_db = 155 [json_name = "syncPluginDb"];</code>
+   */
+  private void setSyncPluginDb(dev.ironpark.mako.v2.SyncPluginDB value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 155;
+  }
+  /**
+   * <pre>
+   * Peer-to-peer plugin SQLite CRDT sync (revision 43).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginDB sync_plugin_db = 155 [json_name = "syncPluginDb"];</code>
+   */
+  private void mergeSyncPluginDb(dev.ironpark.mako.v2.SyncPluginDB value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 155 &&
+        body_ != dev.ironpark.mako.v2.SyncPluginDB.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.SyncPluginDB.newBuilder((dev.ironpark.mako.v2.SyncPluginDB) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 155;
+  }
+  /**
+   * <pre>
+   * Peer-to-peer plugin SQLite CRDT sync (revision 43).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginDB sync_plugin_db = 155 [json_name = "syncPluginDb"];</code>
+   */
+  private void clearSyncPluginDb() {
+    if (bodyCase_ == 155) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PLUGIN_SYNC_BUNDLE_FIELD_NUMBER = 156;
+  /**
+   * <code>.mako.v2.PluginSyncBundle plugin_sync_bundle = 156 [json_name = "pluginSyncBundle"];</code>
+   */
+  @java.lang.Override
+  public boolean hasPluginSyncBundle() {
+    return bodyCase_ == 156;
+  }
+  /**
+   * <code>.mako.v2.PluginSyncBundle plugin_sync_bundle = 156 [json_name = "pluginSyncBundle"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.PluginSyncBundle getPluginSyncBundle() {
+    if (bodyCase_ == 156) {
+       return (dev.ironpark.mako.v2.PluginSyncBundle) body_;
+    }
+    return dev.ironpark.mako.v2.PluginSyncBundle.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.PluginSyncBundle plugin_sync_bundle = 156 [json_name = "pluginSyncBundle"];</code>
+   */
+  private void setPluginSyncBundle(dev.ironpark.mako.v2.PluginSyncBundle value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 156;
+  }
+  /**
+   * <code>.mako.v2.PluginSyncBundle plugin_sync_bundle = 156 [json_name = "pluginSyncBundle"];</code>
+   */
+  private void mergePluginSyncBundle(dev.ironpark.mako.v2.PluginSyncBundle value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 156 &&
+        body_ != dev.ironpark.mako.v2.PluginSyncBundle.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.PluginSyncBundle.newBuilder((dev.ironpark.mako.v2.PluginSyncBundle) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 156;
+  }
+  /**
+   * <code>.mako.v2.PluginSyncBundle plugin_sync_bundle = 156 [json_name = "pluginSyncBundle"];</code>
+   */
+  private void clearPluginSyncBundle() {
+    if (bodyCase_ == 156) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -12618,6 +12742,126 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Peer-to-peer plugin SQLite CRDT sync (revision 43).
+     * </pre>
+     *
+     * <code>.mako.v2.SyncPluginDB sync_plugin_db = 155 [json_name = "syncPluginDb"];</code>
+     */
+    @java.lang.Override
+    public boolean hasSyncPluginDb() {
+      return instance.hasSyncPluginDb();
+    }
+    /**
+     * <pre>
+     * Peer-to-peer plugin SQLite CRDT sync (revision 43).
+     * </pre>
+     *
+     * <code>.mako.v2.SyncPluginDB sync_plugin_db = 155 [json_name = "syncPluginDb"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.SyncPluginDB getSyncPluginDb() {
+      return instance.getSyncPluginDb();
+    }
+    /**
+     * <pre>
+     * Peer-to-peer plugin SQLite CRDT sync (revision 43).
+     * </pre>
+     *
+     * <code>.mako.v2.SyncPluginDB sync_plugin_db = 155 [json_name = "syncPluginDb"];</code>
+     */
+    public Builder setSyncPluginDb(dev.ironpark.mako.v2.SyncPluginDB value) {
+      copyOnWrite();
+      instance.setSyncPluginDb(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Peer-to-peer plugin SQLite CRDT sync (revision 43).
+     * </pre>
+     *
+     * <code>.mako.v2.SyncPluginDB sync_plugin_db = 155 [json_name = "syncPluginDb"];</code>
+     */
+    public Builder setSyncPluginDb(
+        dev.ironpark.mako.v2.SyncPluginDB.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSyncPluginDb(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Peer-to-peer plugin SQLite CRDT sync (revision 43).
+     * </pre>
+     *
+     * <code>.mako.v2.SyncPluginDB sync_plugin_db = 155 [json_name = "syncPluginDb"];</code>
+     */
+    public Builder mergeSyncPluginDb(dev.ironpark.mako.v2.SyncPluginDB value) {
+      copyOnWrite();
+      instance.mergeSyncPluginDb(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Peer-to-peer plugin SQLite CRDT sync (revision 43).
+     * </pre>
+     *
+     * <code>.mako.v2.SyncPluginDB sync_plugin_db = 155 [json_name = "syncPluginDb"];</code>
+     */
+    public Builder clearSyncPluginDb() {
+      copyOnWrite();
+      instance.clearSyncPluginDb();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.PluginSyncBundle plugin_sync_bundle = 156 [json_name = "pluginSyncBundle"];</code>
+     */
+    @java.lang.Override
+    public boolean hasPluginSyncBundle() {
+      return instance.hasPluginSyncBundle();
+    }
+    /**
+     * <code>.mako.v2.PluginSyncBundle plugin_sync_bundle = 156 [json_name = "pluginSyncBundle"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.PluginSyncBundle getPluginSyncBundle() {
+      return instance.getPluginSyncBundle();
+    }
+    /**
+     * <code>.mako.v2.PluginSyncBundle plugin_sync_bundle = 156 [json_name = "pluginSyncBundle"];</code>
+     */
+    public Builder setPluginSyncBundle(dev.ironpark.mako.v2.PluginSyncBundle value) {
+      copyOnWrite();
+      instance.setPluginSyncBundle(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginSyncBundle plugin_sync_bundle = 156 [json_name = "pluginSyncBundle"];</code>
+     */
+    public Builder setPluginSyncBundle(
+        dev.ironpark.mako.v2.PluginSyncBundle.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPluginSyncBundle(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginSyncBundle plugin_sync_bundle = 156 [json_name = "pluginSyncBundle"];</code>
+     */
+    public Builder mergePluginSyncBundle(dev.ironpark.mako.v2.PluginSyncBundle value) {
+      copyOnWrite();
+      instance.mergePluginSyncBundle(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginSyncBundle plugin_sync_bundle = 156 [json_name = "pluginSyncBundle"];</code>
+     */
+    public Builder clearPluginSyncBundle() {
+      copyOnWrite();
+      instance.clearPluginSyncBundle();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -12753,9 +12997,11 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.ProviderAction.class,
             dev.ironpark.mako.v2.RunDecision.class,
             dev.ironpark.mako.v2.DecisionResult.class,
+            dev.ironpark.mako.v2.SyncPluginDB.class,
+            dev.ironpark.mako.v2.PluginSyncBundle.class,
           };
           java.lang.String info =
-              "\u0000u\u0001\u0000\u0001\u009au\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
+              "\u0000w\u0001\u0000\u0001\u009cw\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
               "\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019" +
               "<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000" +
               "!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000" +
@@ -12769,7 +13015,7 @@ public  final class Envelope extends
               "<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000\u0088<\u0000\u0089<\u0000\u008a<\u0000" +
               "\u008b<\u0000\u008c<\u0000\u008d<\u0000\u008e<\u0000\u008f<\u0000\u0090<\u0000\u0091" +
               "<\u0000\u0092<\u0000\u0093<\u0000\u0094<\u0000\u0095<\u0000\u0096<\u0000\u0097<\u0000" +
-              "\u0098<\u0000\u0099<\u0000\u009a<\u0000";
+              "\u0098<\u0000\u0099<\u0000\u009a<\u0000\u009b<\u0000\u009c<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

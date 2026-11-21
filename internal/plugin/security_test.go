@@ -45,6 +45,8 @@ func TestCallsWithoutPermissionAreRefused(t *testing.T) {
 	r := newRig(t, testLimits, nil)
 	cases := map[string]string{
 		"storage":          `await mako.storage.setItem({ key: "k", value: "v" })`,
+		"db":               `await mako.db.query({ sql: "SELECT 1" })`,
+		"db:sync":          `await mako.db.syncEnable({ table: "items" })`,
 		"sessions:read":    `await mako.sessions.listSessions()`,
 		"net":              `await mako.http.fetch({ url: "https://api.github.com/" })`,
 		"exec":             `await mako.exec.runProcess({ argv: ["sh"] })`,

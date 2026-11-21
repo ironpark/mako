@@ -1,5 +1,6 @@
-// Kanban board plugin for mako (v0.3.0, project-scoped):
-// - Project-scoped: each project has its own isolated Kanban board and storage.
+// Kanban board plugin for mako (v0.4.0, project-scoped + SQLite P2P CRDT sync):
+// - Project-scoped: each project has its own isolated SQLite database synced
+//   across paired Mako nodes via CRDT-replicated rows (`db` + `db:sync`).
 // - Drag cards onto any column to move them, or onto another card to reorder.
 // - Explicit ui.card, per-column ui.scroll, inline ui.textarea note editing,
 //   ui.tabs compact switcher, dragGroup/dropAccept filtering, and live form
@@ -8,6 +9,7 @@
 //   move_card) so running agents read and update only their own project's board.
 
 const STORAGE_KEY = "board:v1";
+const CARDS_TABLE = "cards";
 
 const COLUMNS = [
   { id: "todo", title: "Todo", tone: "muted", icon: "circle" },
@@ -24,11 +26,11 @@ let mako;
 
 function defaultCards() {
   return [
-    { id: "c1", col: "todo", title: "Draft API spec", priority: "high", tag: "design", note: "Outline request/response fields before coding.", sessionId: "" },
-    { id: "c2", col: "todo", title: "Add integration tests", priority: "medium", tag: "qa", note: "Cover drag-and-drop and persistence flows.", sessionId: "" },
-    { id: "c3", col: "doing", title: "Build Kanban prototype", priority: "high", tag: "plugin", note: "Drag cards between columns or onto another card to reorder.", sessionId: "" },
-    { id: "c4", col: "review", title: "Polish mobile transitions", priority: "medium", tag: "android", note: "Verify back navigation animation feels crisp.", sessionId: "" },
-    { id: "c5", col: "done", title: "Enable plugin drag & drop", priority: "low", tag: "core", note: "Added drag and onDrop to the UI block vocabulary.", sessionId: "" },
+    { id: "c1", pos: 1, col: "todo", title: "Draft API spec", priority: "high", tag: "design", note: "Outline request/response fields before coding.", sessionId: "" },
+    { id: "c2", pos: 2, col: "todo", title: "Add integration tests", priority: "medium", tag: "qa", note: "Cover drag-and-drop and persistence flows.", sessionId: "" },
+    { id: "c3", pos: 3, col: "doing", title: "Build Kanban prototype", priority: "high", tag: "plugin", note: "Drag cards between columns or onto another card to reorder.", sessionId: "" },
+    { id: "c4", pos: 4, col: "review", title: "Polish mobile transitions", priority: "medium", tag: "android", note: "Verify back navigation animation feels crisp.", sessionId: "" },
+    { id: "c5", pos: 5, col: "done", title: "Enable plugin drag & drop", priority: "low", tag: "core", note: "Added drag and onDrop to the UI block vocabulary.", sessionId: "" },
   ];
 }
 
@@ -41,12 +43,61 @@ function nextCardId(cards) {
   return `c${max + 1}`;
 }
 
+function resolveCtx(ctx) {
+  return ctx && ctx.db ? ctx : mako.blocks.context("board");
+}
+
+async function ensureSchema(ctx) {
+  const c = resolveCtx(ctx);
+  await c.db.syncEnable(CARDS_TABLE);
+  await c.db.exec(`CREATE INDEX IF NOT EXISTS idx_cards_col ON ${CARDS_TABLE}(json_extract(doc, '$.col'))`);
+}
+
+function normalizePositions(cards) {
+  for (let i = 0; i < cards.length; i++) {
+    cards[i].pos = i + 1;
+  }
+}
+
+async function saveCard(card, ctx) {
+  const c = resolveCtx(ctx);
+  await ensureSchema(c);
+  await c.db.syncPut(CARDS_TABLE, card.id, card);
+}
+
 async function saveBoard(s, ctx) {
-  const store = ctx && ctx.storage ? ctx.storage : mako.blocks.context("board").storage;
-  await store.setItem(
-    STORAGE_KEY,
-    JSON.stringify({ cards: s.cards, viewMode: s.viewMode }),
+  const c = resolveCtx(ctx);
+  await ensureSchema(c);
+  normalizePositions(s.cards);
+  for (const card of s.cards) {
+    await c.db.syncPut(CARDS_TABLE, card.id, card);
+  }
+  await c.storage.setItem(STORAGE_KEY, JSON.stringify({ viewMode: s.viewMode, seeded: true }));
+}
+
+async function readCardsFromDB(ctx) {
+  const c = resolveCtx(ctx);
+  await ensureSchema(c);
+  const res = await c.db.query(
+    `SELECT id, doc FROM ${CARDS_TABLE} WHERE deleted = 0 ORDER BY CAST(COALESCE(json_extract(doc, '$.pos'), 0) AS REAL), id`,
   );
+  const cards = [];
+  for (const row of res.rows || []) {
+    try {
+      const parsed = JSON.parse(row.doc);
+      cards.push({
+        id: row.id,
+        pos: Number(parsed.pos) || 0,
+        col: parsed.col || "todo",
+        title: parsed.title || "",
+        priority: parsed.priority || "medium",
+        tag: parsed.tag || "",
+        note: parsed.note || "",
+        sessionId: parsed.sessionId || "",
+      });
+    } catch {}
+  }
+  return cards;
 }
 
 async function refreshSessions(s) {
@@ -66,24 +117,37 @@ async function refreshSessions(s) {
 }
 
 async function load(s, ctx) {
-  const modeSetting = await ctx.settings.getSetting("view_mode");
+  const c = resolveCtx(ctx);
+  const modeSetting = await c.settings.getSetting("view_mode");
   const fallbackMode = modeSetting.setting && modeSetting.setting.text ? modeSetting.setting.text : "board";
-  const stored = await ctx.storage.getItem(STORAGE_KEY);
+  const stored = await c.storage.getItem(STORAGE_KEY);
+  let legacy = null;
   if (stored.found) {
     try {
-      const parsed = JSON.parse(stored.value);
-      if (Array.isArray(parsed.cards)) {
-        s.cards = parsed.cards;
-      }
-      s.viewMode = parsed.viewMode || fallbackMode;
-    } catch {
+      legacy = JSON.parse(stored.value);
+    } catch {}
+  }
+  s.viewMode = (legacy && legacy.viewMode) || fallbackMode;
+
+  await ensureSchema(c);
+  const dbCards = await readCardsFromDB(c);
+  if (dbCards.length > 0) {
+    s.cards = dbCards;
+  } else if (legacy && Array.isArray(legacy.cards) && legacy.cards.length > 0) {
+    // One-time migration from v0.3.0 KV storage into synced SQLite table.
+    s.cards = legacy.cards;
+    await saveBoard(s, c);
+  } else if (!legacy || !legacy.seeded) {
+    const anyRow = await c.db.query(`SELECT COUNT(*) AS n FROM ${CARDS_TABLE}`);
+    const totalRows = anyRow.rows && anyRow.rows[0] ? Number(anyRow.rows[0].n) : 0;
+    if (totalRows === 0) {
       s.cards = defaultCards();
-      s.viewMode = fallbackMode;
+      await saveBoard(s, c);
+    } else {
+      s.cards = [];
     }
   } else {
-    s.cards = defaultCards();
-    s.viewMode = fallbackMode;
-    await saveBoard(s, ctx);
+    s.cards = [];
   }
   await refreshSessions(s);
 }
@@ -374,6 +438,8 @@ export default {
           const [removed] = s.cards.splice(idx, 1);
           if (s.selectedId === cardId) s.selectedId = "";
           s.notice = `Removed "${removed.title}".`;
+          await ensureSchema(ctx);
+          await ctx.db.syncDelete(CARDS_TABLE, cardId);
           await saveBoard(s, ctx);
         },
         async dispatch(s, cardId) {
@@ -399,7 +465,14 @@ export default {
 
     mako.commands.register("reset", async (ctx) => {
       const s = mako.blocks.state("board", ctx.scopeKey);
-      s.cards = defaultCards();
+      const prevIds = (s.cards || []).map((c) => c.id);
+      const fresh = defaultCards();
+      const freshIds = new Set(fresh.map((c) => c.id));
+      await ensureSchema(ctx);
+      for (const oldId of prevIds) {
+        if (!freshIds.has(oldId)) await ctx.db.syncDelete(CARDS_TABLE, oldId);
+      }
+      s.cards = fresh;
       s.selectedId = "";
       s.notice = "Reset board to demo cards.";
       await mako.commands.runCommand({ id: "mako.toast", arg: "Kanban reset to demo cards" });
@@ -476,6 +549,10 @@ export default {
     },
     async sessionEnded() {
       await refreshSessions(mako.blocks.state("board"));
+    },
+    async dbSync(ev) {
+      const s = mako.blocks.state("board", ev.scopeKey);
+      s.notice = `Synced ${ev.rows} change${ev.rows === 1 ? "" : "s"} from peer.`;
     },
   },
 };

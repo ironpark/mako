@@ -1437,5 +1437,35 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.DecisionResult getDecisionResult();
 
+  /**
+   * <pre>
+   * Peer-to-peer plugin SQLite CRDT sync (revision 43).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginDB sync_plugin_db = 155 [json_name = "syncPluginDb"];</code>
+   * @return Whether the syncPluginDb field is set.
+   */
+  boolean hasSyncPluginDb();
+  /**
+   * <pre>
+   * Peer-to-peer plugin SQLite CRDT sync (revision 43).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginDB sync_plugin_db = 155 [json_name = "syncPluginDb"];</code>
+   * @return The syncPluginDb.
+   */
+  dev.ironpark.mako.v2.SyncPluginDB getSyncPluginDb();
+
+  /**
+   * <code>.mako.v2.PluginSyncBundle plugin_sync_bundle = 156 [json_name = "pluginSyncBundle"];</code>
+   * @return Whether the pluginSyncBundle field is set.
+   */
+  boolean hasPluginSyncBundle();
+  /**
+   * <code>.mako.v2.PluginSyncBundle plugin_sync_bundle = 156 [json_name = "pluginSyncBundle"];</code>
+   * @return The pluginSyncBundle.
+   */
+  dev.ironpark.mako.v2.PluginSyncBundle getPluginSyncBundle();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

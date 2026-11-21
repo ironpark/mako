@@ -180,6 +180,10 @@ func permissionText(p string) string {
 	switch p {
 	case "storage":
 		return T("Keep data on this computer")
+	case "db":
+		return T("Keep structured SQLite databases on this computer")
+	case "db:sync":
+		return T("Sync plugin database tables across your paired computers")
 	case "sessions:read":
 		return T("See this node's sessions and what their agents are doing")
 	case "sessions:write":

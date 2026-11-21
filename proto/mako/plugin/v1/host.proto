@@ -396,3 +396,139 @@ message RunCommandRequest {
 
 // RunCommandResponse says the command was run.
 message RunCommandResponse {}
+
+// DbService gives a plugin sandboxed SQLite databases (per scope) and optional
+// CRDT-replicated synced tables shared across paired Mako nodes over the
+// daemon's libp2p mesh.
+service DbService {
+  // Query runs a single read-only SQL statement (SELECT / WITH / EXPLAIN).
+  rpc Query(QueryRequest) returns (QueryResponse) {
+    option (permission) = "db";
+  }
+  // Exec runs a single DML or DDL SQL statement.
+  rpc Exec(ExecRequest) returns (ExecResponse) {
+    option (permission) = "db";
+  }
+  // Batch runs up to 64 DML/DDL statements atomically in one transaction.
+  rpc Batch(BatchRequest) returns (BatchResponse) {
+    option (permission) = "db";
+  }
+  // Stats returns the plugin's total SQLite database usage, quota, and
+  // registered synced tables in the requested scope.
+  rpc Stats(StatsRequest) returns (StatsResponse) {
+    option (permission) = "db";
+  }
+  // SyncEnable registers a row-level CRDT synced table backed by SQLite
+  // columns (id, doc, updated_at, deleted) replicated across paired peers.
+  rpc SyncEnable(SyncEnableRequest) returns (SyncEnableResponse) {
+    option (permission) = "db:sync";
+  }
+  // SyncPut stamps a JSON row with the node's HLC clock, writes it to the
+  // synced SQLite table, and schedules P2P replication to trusted peers.
+  rpc SyncPut(SyncPutRequest) returns (SyncPutResponse) {
+    option (permission) = "db:sync";
+  }
+  // SyncDelete marks a synced row as deleted (tombstone) with the node's HLC
+  // clock and schedules P2P replication to trusted peers.
+  rpc SyncDelete(SyncDeleteRequest) returns (SyncDeleteResponse) {
+    option (permission) = "db:sync";
+  }
+}
+
+// QueryRequest is a read-only SQL query against the plugin's database.
+message QueryRequest {
+  string sql = 1;
+  // params_json are positional SQL parameters encoded as JSON scalars
+  // (string, number, boolean, or null).
+  repeated string params_json = 2;
+  // scope is the optional canonical scope key ("" for global, "space:<id>",
+  // "project:<id>", or "session:<id>").
+  string scope = 3;
+}
+
+// QueryResponse holds query columns and JSON-encoded rows.
+message QueryResponse {
+  repeated string columns = 1;
+  // rows_json holds each row as a JSON array of column values matching columns.
+  repeated string rows_json = 2;
+  // truncated says more rows existed past the per-query row or byte cap.
+  bool truncated = 3;
+}
+
+// ExecRequest is a single DML or DDL SQL statement.
+message ExecRequest {
+  string sql = 1;
+  repeated string params_json = 2;
+  string scope = 3;
+}
+
+// ExecResponse reports the result of a DML/DDL statement.
+message ExecResponse {
+  int32 rows_affected = 1;
+  double last_insert_id = 2;
+}
+
+// DbStatement is one SQL statement inside a BatchRequest transaction.
+message DbStatement {
+  string sql = 1;
+  repeated string params_json = 2;
+}
+
+// BatchRequest runs multiple statements atomically in one transaction.
+message BatchRequest {
+  repeated DbStatement statements = 1;
+  string scope = 2;
+}
+
+// BatchResponse holds the result of each statement in the batch.
+message BatchResponse {
+  repeated ExecResponse results = 1;
+}
+
+// StatsRequest asks for database usage and synced tables.
+message StatsRequest {
+  string scope = 1;
+}
+
+// StatsResponse reports total plugin DB bytes, quota, and synced tables.
+message StatsResponse {
+  uint32 used_bytes = 1;
+  uint32 quota_bytes = 2;
+  repeated string sync_tables = 3;
+}
+
+// SyncEnableRequest registers a synced table name in the database.
+message SyncEnableRequest {
+  string table = 1;
+  string scope = 2;
+}
+
+// SyncEnableResponse confirms the synced table name.
+message SyncEnableResponse {
+  string table = 1;
+}
+
+// SyncPutRequest upserts one CRDT-replicated JSON row.
+message SyncPutRequest {
+  string table = 1;
+  string id = 2;
+  string doc_json = 3;
+  string scope = 4;
+}
+
+// SyncPutResponse reports the stamped wall time in Unix ms.
+message SyncPutResponse {
+  double updated_at = 1;
+}
+
+// SyncDeleteRequest tombstones one CRDT-replicated row.
+message SyncDeleteRequest {
+  string table = 1;
+  string id = 2;
+  string scope = 3;
+}
+
+// SyncDeleteResponse says whether the row existed before deletion.
+message SyncDeleteResponse {
+  bool deleted = 1;
+}

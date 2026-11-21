@@ -279,6 +279,104 @@ interface types {
     arg: string,
   }
 
+  /// QueryRequest is a read-only SQL query against the plugin's database.
+  record query-request {
+    sql: string,
+    /// params_json are positional SQL parameters encoded as JSON scalars
+    /// (string, number, boolean, or null).
+    params-json: list<string>,
+    /// scope is the optional canonical scope key ("" for global, "space:<id>",
+    /// "project:<id>", or "session:<id>").
+    scope: string,
+  }
+
+  /// QueryResponse holds query columns and JSON-encoded rows.
+  record query-response {
+    columns: list<string>,
+    /// rows_json holds each row as a JSON array of column values matching columns.
+    rows-json: list<string>,
+    /// truncated says more rows existed past the per-query row or byte cap.
+    truncated: bool,
+  }
+
+  /// ExecRequest is a single DML or DDL SQL statement.
+  record exec-request {
+    sql: string,
+    params-json: list<string>,
+    scope: string,
+  }
+
+  /// ExecResponse reports the result of a DML/DDL statement.
+  record exec-response {
+    rows-affected: s32,
+    last-insert-id: f64,
+  }
+
+  /// DbStatement is one SQL statement inside a BatchRequest transaction.
+  record db-statement {
+    sql: string,
+    params-json: list<string>,
+  }
+
+  /// BatchRequest runs multiple statements atomically in one transaction.
+  record batch-request {
+    statements: list<db-statement>,
+    scope: string,
+  }
+
+  /// BatchResponse holds the result of each statement in the batch.
+  record batch-response {
+    results: list<exec-response>,
+  }
+
+  /// StatsRequest asks for database usage and synced tables.
+  record stats-request {
+    scope: string,
+  }
+
+  /// StatsResponse reports total plugin DB bytes, quota, and synced tables.
+  record stats-response {
+    used-bytes: u32,
+    quota-bytes: u32,
+    sync-tables: list<string>,
+  }
+
+  /// SyncEnableRequest registers a synced table name in the database.
+  record sync-enable-request {
+    table: string,
+    scope: string,
+  }
+
+  /// SyncEnableResponse confirms the synced table name.
+  record sync-enable-response {
+    table: string,
+  }
+
+  /// SyncPutRequest upserts one CRDT-replicated JSON row.
+  record sync-put-request {
+    table: string,
+    id: string,
+    doc-json: string,
+    scope: string,
+  }
+
+  /// SyncPutResponse reports the stamped wall time in Unix ms.
+  record sync-put-response {
+    updated-at: f64,
+  }
+
+  /// SyncDeleteRequest tombstones one CRDT-replicated row.
+  record sync-delete-request {
+    table: string,
+    id: string,
+    scope: string,
+  }
+
+  /// SyncDeleteResponse says whether the row existed before deletion.
+  record sync-delete-response {
+    deleted: bool,
+  }
+
   /// SendMessageRequest is a message for a session.
   record send-message-request {
     session-id: string,
@@ -568,6 +666,45 @@ interface commands {
   run-command: func(req: run-command-request) -> result<_, string>;
 }
 
+/// DbService gives a plugin sandboxed SQLite databases (per scope) and optional
+/// CRDT-replicated synced tables shared across paired Mako nodes over the
+/// daemon's libp2p mesh.
+interface db {
+  use types.{query-request, query-response, exec-request, exec-response, batch-request, batch-response, stats-request, stats-response, sync-enable-request, sync-enable-response, sync-put-request, sync-put-response, sync-delete-request, sync-delete-response};
+
+  /// Query runs a single read-only SQL statement (SELECT / WITH / EXPLAIN).
+  /// Needs the permission db.
+  query: func(req: query-request) -> result<query-response, string>;
+
+  /// Exec runs a single DML or DDL SQL statement.
+  /// Needs the permission db.
+  exec: func(req: exec-request) -> result<exec-response, string>;
+
+  /// Batch runs up to 64 DML/DDL statements atomically in one transaction.
+  /// Needs the permission db.
+  batch: func(req: batch-request) -> result<batch-response, string>;
+
+  /// Stats returns the plugin's total SQLite database usage, quota, and
+  /// registered synced tables in the requested scope.
+  /// Needs the permission db.
+  stats: func(req: stats-request) -> result<stats-response, string>;
+
+  /// SyncEnable registers a row-level CRDT synced table backed by SQLite
+  /// columns (id, doc, updated_at, deleted) replicated across paired peers.
+  /// Needs the permission db:sync.
+  sync-enable: func(req: sync-enable-request) -> result<sync-enable-response, string>;
+
+  /// SyncPut stamps a JSON row with the node's HLC clock, writes it to the
+  /// synced SQLite table, and schedules P2P replication to trusted peers.
+  /// Needs the permission db:sync.
+  sync-put: func(req: sync-put-request) -> result<sync-put-response, string>;
+
+  /// SyncDelete marks a synced row as deleted (tombstone) with the node's HLC
+  /// clock and schedules P2P replication to trusted peers.
+  /// Needs the permission db:sync.
+  sync-delete: func(req: sync-delete-request) -> result<sync-delete-response, string>;
+}
+
 /// MessagesService acts on this node's sessions: sends their agents
 /// messages, starts agents and stops those the plugin started. A message
 /// is headed as the plugin's, so that the agent cannot take it for the
@@ -690,6 +827,7 @@ world plugin {
   import sessions;
   import http;
   import commands;
+  import db;
   import messages;
   import files;
   import secrets;

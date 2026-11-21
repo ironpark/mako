@@ -125,6 +125,8 @@ var catalogKo = map[string]string{
 	"Diagnostics & logs":                   "진단 및 로그",
 	"Storage":                              "저장소",
 	"No logs yet.":                         "아직 로그가 없습니다.",
+	"Keep structured SQLite databases on this computer":     "이 컴퓨터에 구조화된 SQLite 데이터베이스 저장",
+	"Sync plugin database tables across your paired computers": "연결된 컴퓨터 간 플러그인 데이터베이스 테이블 동기화",
 	"Read message":                         "메시지 펼치기",
 	"Toggle message %d":                    "메시지 %d 펼치기/접기",
 	"Offered":                              "사용",

@@ -8,6 +8,8 @@ import "context"
 // PermNet stands for net:<host>, the host the call names.
 const (
 	PermNone           = "none"
+	PermDb             = "db"
+	PermDbSync         = "db:sync"
 	PermExec           = "exec"
 	PermFsProject      = "fs:project"
 	PermFsProjectWrite = "fs:project:write"
@@ -20,7 +22,7 @@ const (
 )
 
 // Permissions are those a manifest may ask for, by the names above.
-var Permissions = []string{PermExec, PermFsProject, PermFsProjectWrite, PermLayoutWrite, PermNet, PermSecrets, PermSessionsRead, PermSessionsWrite, PermStorage}
+var Permissions = []string{PermDb, PermDbSync, PermExec, PermFsProject, PermFsProjectWrite, PermLayoutWrite, PermNet, PermSecrets, PermSessionsRead, PermSessionsWrite, PermStorage}
 
 // Handler carries out the Host API's methods that are available; Dispatch
 // calls one only once the caller's permission for it is checked.
@@ -77,6 +79,31 @@ type Handler interface {
 	// URL as its argument, opens an http or https link in the browser, and
 	// only in answer to the user's tap or command.
 	CommandsRunCommand(ctx context.Context, req *RunCommandRequest) (*RunCommandResponse, error)
+	// DbQuery carries out db.query.
+	// Query runs a single read-only SQL statement (SELECT / WITH / EXPLAIN).
+	DbQuery(ctx context.Context, req *QueryRequest) (*QueryResponse, error)
+	// DbExec carries out db.exec.
+	// Exec runs a single DML or DDL SQL statement.
+	DbExec(ctx context.Context, req *ExecRequest) (*ExecResponse, error)
+	// DbBatch carries out db.batch.
+	// Batch runs up to 64 DML/DDL statements atomically in one transaction.
+	DbBatch(ctx context.Context, req *BatchRequest) (*BatchResponse, error)
+	// DbStats carries out db.stats.
+	// Stats returns the plugin's total SQLite database usage, quota, and
+	// registered synced tables in the requested scope.
+	DbStats(ctx context.Context, req *StatsRequest) (*StatsResponse, error)
+	// DbSyncEnable carries out db.syncEnable.
+	// SyncEnable registers a row-level CRDT synced table backed by SQLite
+	// columns (id, doc, updated_at, deleted) replicated across paired peers.
+	DbSyncEnable(ctx context.Context, req *SyncEnableRequest) (*SyncEnableResponse, error)
+	// DbSyncPut carries out db.syncPut.
+	// SyncPut stamps a JSON row with the node's HLC clock, writes it to the
+	// synced SQLite table, and schedules P2P replication to trusted peers.
+	DbSyncPut(ctx context.Context, req *SyncPutRequest) (*SyncPutResponse, error)
+	// DbSyncDelete carries out db.syncDelete.
+	// SyncDelete marks a synced row as deleted (tombstone) with the node's HLC
+	// clock and schedules P2P replication to trusted peers.
+	DbSyncDelete(ctx context.Context, req *SyncDeleteRequest) (*SyncDeleteResponse, error)
 	// MessagesSendMessage carries out messages.sendMessage.
 	// SendMessage leaves a message for a session's agent, typed into its
 	// terminal once it waits at its prompt, as send_message does: a session
@@ -139,6 +166,13 @@ var Methods = []Method{
 	{Name: "sessions.unsubscribe", Permission: PermSessionsRead},
 	{Name: "http.fetch", Permission: PermNet},
 	{Name: "commands.runCommand", Permission: PermNone},
+	{Name: "db.query", Permission: PermDb},
+	{Name: "db.exec", Permission: PermDb},
+	{Name: "db.batch", Permission: PermDb},
+	{Name: "db.stats", Permission: PermDb},
+	{Name: "db.syncEnable", Permission: PermDbSync},
+	{Name: "db.syncPut", Permission: PermDbSync},
+	{Name: "db.syncDelete", Permission: PermDbSync},
 	{Name: "messages.sendMessage", Permission: PermSessionsWrite},
 	{Name: "messages.startAgent", Permission: PermSessionsWrite},
 	{Name: "messages.stopAgent", Permission: PermSessionsWrite},
@@ -218,6 +252,41 @@ func Dispatch(ctx context.Context, grants Grants, h Handler, name string, req []
 		return call(ctx, req, new(FetchRequest), h.HttpFetch)
 	case "commands.runCommand":
 		return call(ctx, req, new(RunCommandRequest), h.CommandsRunCommand)
+	case "db.query":
+		if !grants.Has(PermDb) {
+			return nil, &DeniedError{Method: name, Permission: PermDb}
+		}
+		return call(ctx, req, new(QueryRequest), h.DbQuery)
+	case "db.exec":
+		if !grants.Has(PermDb) {
+			return nil, &DeniedError{Method: name, Permission: PermDb}
+		}
+		return call(ctx, req, new(ExecRequest), h.DbExec)
+	case "db.batch":
+		if !grants.Has(PermDb) {
+			return nil, &DeniedError{Method: name, Permission: PermDb}
+		}
+		return call(ctx, req, new(BatchRequest), h.DbBatch)
+	case "db.stats":
+		if !grants.Has(PermDb) {
+			return nil, &DeniedError{Method: name, Permission: PermDb}
+		}
+		return call(ctx, req, new(StatsRequest), h.DbStats)
+	case "db.syncEnable":
+		if !grants.Has(PermDbSync) {
+			return nil, &DeniedError{Method: name, Permission: PermDbSync}
+		}
+		return call(ctx, req, new(SyncEnableRequest), h.DbSyncEnable)
+	case "db.syncPut":
+		if !grants.Has(PermDbSync) {
+			return nil, &DeniedError{Method: name, Permission: PermDbSync}
+		}
+		return call(ctx, req, new(SyncPutRequest), h.DbSyncPut)
+	case "db.syncDelete":
+		if !grants.Has(PermDbSync) {
+			return nil, &DeniedError{Method: name, Permission: PermDbSync}
+		}
+		return call(ctx, req, new(SyncDeleteRequest), h.DbSyncDelete)
 	case "messages.sendMessage":
 		if !grants.Has(PermSessionsWrite) {
 			return nil, &DeniedError{Method: name, Permission: PermSessionsWrite}

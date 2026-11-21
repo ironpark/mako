@@ -21,8 +21,10 @@ const (
 	TypeRegistryAction  Type = "registry_action"
 	TypeSearchPlugins   Type = "search_plugins"
 	TypePluginListings  Type = "plugin_listings"
-	TypeInstallPlugin   Type = "install_plugin"
-	TypePluginInstalled Type = "plugin_installed"
+	TypeInstallPlugin    Type = "install_plugin"
+	TypePluginInstalled  Type = "plugin_installed"
+	TypeSyncPluginDB     Type = "sync_plugin_db"
+	TypePluginSyncBundle Type = "plugin_sync_bundle"
 )
 
 // The states of a plugin, PluginInfo.state.

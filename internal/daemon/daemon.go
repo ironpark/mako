@@ -80,6 +80,7 @@ type Daemon struct {
 	statusPoke           chan struct{}       // a session's status changed; see watchState
 	workspace            workspaces          // the spaces, projects and layouts; see workspace.go
 	fetching             map[string]bool     // the peers whose workspace is being asked for
+	syncingPluginDB      map[string]bool     // the peers whose plugin DB sync is in flight
 	projects             projectStore        // the projects of several folders; see projects.go
 	linking              map[string]*linkTry // peer ID -> how its link is being made, until one holds
 	ctx                  context.Context     // Run's, for work that outlasts a request
@@ -470,6 +471,8 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleListPanels(ctx, stream, env)
 	case protocol.TypeListRegistries, protocol.TypeRegistryAction, protocol.TypeSearchPlugins, protocol.TypeInstallPlugin:
 		return d.handlePluginStore(ctx, stream, env, fromPeer)
+	case protocol.TypeSyncPluginDB:
+		return d.handleSyncPluginDB(ctx, stream, env, fromPeer)
 
 	case protocol.TypeResize:
 		payload, err := protocol.Body[*protocol.Resize](env)

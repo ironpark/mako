@@ -75,4 +75,16 @@ public interface NodeStateOrBuilder extends
    * @return The workspace.
    */
   dev.ironpark.mako.v2.Workspace getWorkspace();
+
+  /**
+   * <pre>
+   * plugin_sync_digest is a 32-byte SHA-256 digest of all P2P-synced plugin
+   * SQLite buckets on this node (revision 43); peers trusted both ways fetch
+   * and merge buckets via SyncPluginDB only when digests differ.
+   * </pre>
+   *
+   * <code>bytes plugin_sync_digest = 6 [json_name = "pluginSyncDigest"];</code>
+   * @return The pluginSyncDigest.
+   */
+  com.google.protobuf.ByteString getPluginSyncDigest();
 }

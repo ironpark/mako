@@ -157,6 +157,8 @@ type Envelope struct {
 	//	*Envelope_ProviderAction
 	//	*Envelope_RunDecision
 	//	*Envelope_DecisionResult
+	//	*Envelope_SyncPluginDb
+	//	*Envelope_PluginSyncBundle
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1248,6 +1250,24 @@ func (x *Envelope) GetDecisionResult() *DecisionResult {
 	return nil
 }
 
+func (x *Envelope) GetSyncPluginDb() *SyncPluginDB {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SyncPluginDb); ok {
+			return x.SyncPluginDb
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetPluginSyncBundle() *PluginSyncBundle {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_PluginSyncBundle); ok {
+			return x.PluginSyncBundle
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1728,6 +1748,15 @@ type Envelope_DecisionResult struct {
 	DecisionResult *DecisionResult `protobuf:"bytes,154,opt,name=decision_result,json=decisionResult,proto3,oneof"`
 }
 
+type Envelope_SyncPluginDb struct {
+	// Peer-to-peer plugin SQLite CRDT sync (revision 43).
+	SyncPluginDb *SyncPluginDB `protobuf:"bytes,155,opt,name=sync_plugin_db,json=syncPluginDb,proto3,oneof"`
+}
+
+type Envelope_PluginSyncBundle struct {
+	PluginSyncBundle *PluginSyncBundle `protobuf:"bytes,156,opt,name=plugin_sync_bundle,json=pluginSyncBundle,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -1958,6 +1987,10 @@ func (*Envelope_RunDecision) isEnvelope_Body() {}
 
 func (*Envelope_DecisionResult) isEnvelope_Body() {}
 
+func (*Envelope_SyncPluginDb) isEnvelope_Body() {}
+
+func (*Envelope_PluginSyncBundle) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -2027,7 +2060,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xa82\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xb43\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -2168,7 +2201,9 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\tproviders\x18\x97\x01 \x01(\v2\x12.mako.v2.ProvidersH\x00R\tproviders\x12C\n" +
 	"\x0fprovider_action\x18\x98\x01 \x01(\v2\x17.mako.v2.ProviderActionH\x00R\x0eproviderAction\x12:\n" +
 	"\frun_decision\x18\x99\x01 \x01(\v2\x14.mako.v2.RunDecisionH\x00R\vrunDecision\x12C\n" +
-	"\x0fdecision_result\x18\x9a\x01 \x01(\v2\x17.mako.v2.DecisionResultH\x00R\x0edecisionResultB\x06\n" +
+	"\x0fdecision_result\x18\x9a\x01 \x01(\v2\x17.mako.v2.DecisionResultH\x00R\x0edecisionResult\x12>\n" +
+	"\x0esync_plugin_db\x18\x9b\x01 \x01(\v2\x15.mako.v2.SyncPluginDBH\x00R\fsyncPluginDb\x12J\n" +
+	"\x12plugin_sync_bundle\x18\x9c\x01 \x01(\v2\x19.mako.v2.PluginSyncBundleH\x00R\x10pluginSyncBundleB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"I\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -2305,6 +2340,8 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*ProviderAction)(nil),    // 113: mako.v2.ProviderAction
 	(*RunDecision)(nil),       // 114: mako.v2.RunDecision
 	(*DecisionResult)(nil),    // 115: mako.v2.DecisionResult
+	(*SyncPluginDB)(nil),      // 116: mako.v2.SyncPluginDB
+	(*PluginSyncBundle)(nil),  // 117: mako.v2.PluginSyncBundle
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,   // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -2422,11 +2459,13 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	113, // 112: mako.v2.Envelope.provider_action:type_name -> mako.v2.ProviderAction
 	114, // 113: mako.v2.Envelope.run_decision:type_name -> mako.v2.RunDecision
 	115, // 114: mako.v2.Envelope.decision_result:type_name -> mako.v2.DecisionResult
-	115, // [115:115] is the sub-list for method output_type
-	115, // [115:115] is the sub-list for method input_type
-	115, // [115:115] is the sub-list for extension type_name
-	115, // [115:115] is the sub-list for extension extendee
-	0,   // [0:115] is the sub-list for field type_name
+	116, // 115: mako.v2.Envelope.sync_plugin_db:type_name -> mako.v2.SyncPluginDB
+	117, // 116: mako.v2.Envelope.plugin_sync_bundle:type_name -> mako.v2.PluginSyncBundle
+	117, // [117:117] is the sub-list for method output_type
+	117, // [117:117] is the sub-list for method input_type
+	117, // [117:117] is the sub-list for extension type_name
+	117, // [117:117] is the sub-list for extension extendee
+	0,   // [0:117] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -2561,6 +2600,8 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_ProviderAction)(nil),
 		(*Envelope_RunDecision)(nil),
 		(*Envelope_DecisionResult)(nil),
+		(*Envelope_SyncPluginDb)(nil),
+		(*Envelope_PluginSyncBundle)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

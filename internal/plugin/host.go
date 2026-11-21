@@ -231,3 +231,70 @@ func (h *host) SecretsListSecrets(context.Context, *hostapi.ListSecretsRequest) 
 	}
 	return &hostapi.ListSecretsResponse{Names: h.p.vault.list(vaultSecret)}, nil
 }
+
+func (h *host) checkDBRate() error {
+	if !h.p.dbRate.take() {
+		return fmt.Errorf("the plugin called db more than %d times a minute", dbOpsPerMinute)
+	}
+	return nil
+}
+
+func (h *host) DbQuery(ctx context.Context, req *hostapi.QueryRequest) (*hostapi.QueryResponse, error) {
+	if err := h.checkDBRate(); err != nil {
+		return nil, err
+	}
+	return h.p.db.query(ctx, req.GetScope(), req.GetSql(), req.GetParamsJson())
+}
+
+func (h *host) DbExec(ctx context.Context, req *hostapi.ExecRequest) (*hostapi.ExecResponse, error) {
+	if err := h.checkDBRate(); err != nil {
+		return nil, err
+	}
+	return h.p.db.exec(ctx, req.GetScope(), req.GetSql(), req.GetParamsJson())
+}
+
+func (h *host) DbBatch(ctx context.Context, req *hostapi.BatchRequest) (*hostapi.BatchResponse, error) {
+	if err := h.checkDBRate(); err != nil {
+		return nil, err
+	}
+	return h.p.db.batch(ctx, req.GetScope(), req.GetStatements())
+}
+
+func (h *host) DbStats(ctx context.Context, req *hostapi.StatsRequest) (*hostapi.StatsResponse, error) {
+	if err := h.checkDBRate(); err != nil {
+		return nil, err
+	}
+	return h.p.db.stats(ctx, req.GetScope())
+}
+
+func (h *host) DbSyncEnable(ctx context.Context, req *hostapi.SyncEnableRequest) (*hostapi.SyncEnableResponse, error) {
+	if err := h.checkDBRate(); err != nil {
+		return nil, err
+	}
+	if err := h.p.db.syncEnable(ctx, req.GetScope(), req.GetTable()); err != nil {
+		return nil, err
+	}
+	return &hostapi.SyncEnableResponse{Table: req.GetTable()}, nil
+}
+
+func (h *host) DbSyncPut(ctx context.Context, req *hostapi.SyncPutRequest) (*hostapi.SyncPutResponse, error) {
+	if err := h.checkDBRate(); err != nil {
+		return nil, err
+	}
+	ts, err := h.p.db.syncPut(ctx, req.GetScope(), req.GetTable(), req.GetId(), req.GetDocJson())
+	if err != nil {
+		return nil, err
+	}
+	return &hostapi.SyncPutResponse{UpdatedAt: float64(ts)}, nil
+}
+
+func (h *host) DbSyncDelete(ctx context.Context, req *hostapi.SyncDeleteRequest) (*hostapi.SyncDeleteResponse, error) {
+	if err := h.checkDBRate(); err != nil {
+		return nil, err
+	}
+	del, err := h.p.db.syncDelete(ctx, req.GetScope(), req.GetTable(), req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	return &hostapi.SyncDeleteResponse{Deleted: del}, nil
+}
