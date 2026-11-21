@@ -118,3 +118,22 @@ func TestUnreadRepliesDoNotHoldTheSession(t *testing.T) {
 		t.Fatal("Info blocked behind the program's unread input")
 	}
 }
+
+// PlainTextUnwrapped joins soft-wrapped terminal rows back into logical lines.
+func TestPlainTextUnwrappedJoinsSoftWraps(t *testing.T) {
+	long := strings.Repeat("abcdefghij", 6) // 60 cols on a 40-col terminal
+	s, err := Start(Spec{
+		ID:      "unwrap",
+		Command: []string{"/bin/sh", "-c", `printf '%s\n' "` + long + `"; sleep 5`},
+		Cols:    40,
+		Rows:    10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	waitFor(t, func() bool {
+		text, err := s.PlainTextUnwrapped()
+		return err == nil && strings.Contains(text, long)
+	})
+}

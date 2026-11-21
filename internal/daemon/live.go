@@ -80,15 +80,17 @@ type liveHub struct {
 }
 
 type liveChat struct {
-	step    string
-	blocks  []*liveBlock
-	posted  time.Time // when the last post came
-	ended   time.Time // when the step ended, zero while it streams
-	logSize int64     // the log's size when last looked at
-	looked  time.Time
-	dirty   bool // a post came since the followers last heard
-	subs    map[chan *protocol.ChatLive]struct{}
-	stop    context.CancelFunc // the look-out's, while followed
+	step       string
+	blocks     []*liveBlock
+	posted     time.Time // when the last post came
+	ended      time.Time // when the step ended, zero while it streams
+	logSize    int64     // the log's size when last looked at
+	looked     time.Time
+	dirty      bool // a post came since the followers last heard
+	subs       map[chan *protocol.ChatLive]struct{}
+	stop       context.CancelFunc // the look-out's, while followed
+	gen        uint64             // bumped on look-out start/stop to fence stale screen pollers
+	screenLive bool               // true while the active look-out uses a screen poller
 }
 
 type liveBlock struct {
@@ -118,6 +120,25 @@ func (h *liveHub) take(p livePost) (first bool) {
 	defer h.mu.Unlock()
 	c := h.chat(liveKey(p.Session, p.Agent))
 	first, h.seen[p.Session] = !h.seen[p.Session], true
+	h.applyLocked(c, p)
+	return first
+}
+
+// takeForGen applies p only if the chat exists and its active look-out
+// generation still equals gen, fencing out cancelled screen pollers.
+func (h *liveHub) takeForGen(gen uint64, p livePost) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c := h.chats[liveKey(p.Session, p.Agent)]
+	if c == nil || c.gen != gen {
+		return false
+	}
+	h.seen[p.Session] = true
+	h.applyLocked(c, p)
+	return true
+}
+
+func (h *liveHub) applyLocked(c *liveChat, p livePost) {
 	if p.Step != c.step {
 		c.step, c.blocks, c.ended = p.Step, nil, time.Time{}
 	}
@@ -138,7 +159,6 @@ func (h *liveHub) take(p livePost) (first bool) {
 	if p.End {
 		c.ended = c.posted
 	}
-	return first
 }
 
 // block is the step's block index, begun as kind if it is new.
@@ -206,6 +226,19 @@ func (c *liveChat) tell(l *protocol.ChatLive) {
 // once, until stop; size says how large its log is now. The first
 // follower starts its look-out, and the last stops it.
 func (h *liveHub) follow(key string, size func() int64) (feed <-chan *protocol.ChatLive, stop func()) {
+	return h.followWith(key, size, nil)
+}
+
+// followWith is follow with an optional per-tick screen poller factory (used
+// for agents like agy whose in-flight reply is extracted from the PTY screen
+// buffer). When the last follower stops, any screen-polled blocks are cleared
+// synchronously and c.gen is bumped so a superseded look-out cannot mutate a
+// subsequent look-out's state.
+func (h *liveHub) followWith(
+	key string,
+	size func() int64,
+	makePoll func(gen uint64) func(size func() int64) (checked bool, logSize int64),
+) (feed <-chan *protocol.ChatLive, stop func()) {
 	ch := make(chan *protocol.ChatLive, 1)
 	now := size()
 	h.mu.Lock()
@@ -214,9 +247,18 @@ func (h *liveHub) follow(key string, size func() int64) (feed <-chan *protocol.C
 	ch <- c.live(false)
 	c.subs[ch] = struct{}{}
 	if c.stop == nil {
+		c.gen++
+		gen := c.gen
+		var poll func(func() int64) (bool, int64)
+		if makePoll != nil {
+			c.screenLive = true
+			poll = makePoll(gen)
+		} else {
+			c.screenLive = false
+		}
 		ctx, cancel := context.WithCancel(context.Background())
 		c.stop = cancel
-		go h.lookOut(ctx, key, size)
+		go h.lookOut(ctx, key, gen, size, poll)
 	}
 	h.mu.Unlock()
 	return ch, func() {
@@ -226,13 +268,25 @@ func (h *liveHub) follow(key string, size func() int64) (feed <-chan *protocol.C
 		if len(c.subs) == 0 && c.stop != nil {
 			c.stop()
 			c.stop = nil
+			c.gen++
+			if c.screenLive {
+				c.step, c.blocks, c.ended = "", nil, time.Time{}
+				c.dirty = false
+				c.screenLive = false
+			}
 		}
 	}
 }
 
 // lookOut watches the log of the conversation key and tells its followers
-// what changed, until ctx ends.
-func (h *liveHub) lookOut(ctx context.Context, key string, size func() int64) {
+// what changed, until ctx ends or its generation is superseded.
+func (h *liveHub) lookOut(
+	ctx context.Context,
+	key string,
+	gen uint64,
+	size func() int64,
+	poll func(size func() int64) (bool, int64),
+) {
 	tick := time.NewTicker(liveTick)
 	defer tick.Stop()
 	for {
@@ -241,18 +295,30 @@ func (h *liveHub) lookOut(ctx context.Context, key string, size func() int64) {
 			return
 		case <-tick.C:
 		}
+		var checked bool
+		var polledSize int64
+		if poll != nil {
+			checked, polledSize = poll(size)
+		}
 		h.mu.Lock()
 		c := h.chats[key]
-		due := c != nil && (c.streaming() || time.Since(c.looked) >= liveIdle)
-		h.mu.Unlock()
-		if c == nil {
-			return // forgotten
+		if c == nil || c.gen != gen {
+			h.mu.Unlock()
+			return // forgotten or superseded
 		}
+		due := checked || c.streaming() || time.Since(c.looked) >= liveIdle
+		h.mu.Unlock()
 		var now int64
-		if due {
+		if checked {
+			now = polledSize
+		} else if due {
 			now = size() // not under the lock: it reads the disk
 		}
 		h.mu.Lock()
+		if h.chats[key] != c || c.gen != gen {
+			h.mu.Unlock()
+			return // forgotten or superseded
+		}
 		grew := due && c.look(now)
 		if grew || c.dirty {
 			c.tell(c.live(grew))
@@ -638,18 +704,24 @@ func (d *Daemon) handleWatchChat(ctx context.Context, stream *transport.Stream, 
 	if !d.local(req.GetNodeId()) {
 		return d.relayToPeer(ctx, protocol.TypeWatchChat, req, stream)
 	}
-	id, agent := req.GetSessionId(), req.GetAgent()
+	id, subagent := req.GetSessionId(), req.GetAgent()
 	s, ok := d.sessions.get(id)
 	if !ok {
 		return fmt.Errorf("unknown session %s", id)
 	}
-	feed, stop := d.live.follow(liveKey(id, agent), func() int64 {
-		fi, err := os.Stat(d.liveLog(s, agent))
+	key := liveKey(id, subagent)
+	size := func() int64 {
+		fi, err := os.Stat(d.liveLog(s, subagent))
 		if err != nil {
 			return 0
 		}
 		return fi.Size()
-	})
+	}
+	var makePoll func(uint64) func(func() int64) (bool, int64)
+	if subagent == "" {
+		makePoll = screenLivePollerFactory(&d.live, s)
+	}
+	feed, stop := d.live.followWith(key, size, makePoll)
 	defer stop()
 	gone := hungUp(stream)
 	for {

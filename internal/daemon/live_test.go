@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transport"
@@ -386,4 +388,338 @@ func TestHandleSendKeepsClaudeUserPromptOnPTY(t *testing.T) {
 		b, _ := os.ReadFile(ptyOut)
 		return strings.Contains(string(b), "buildx installed")
 	})
+}
+
+// An agy session streams its in-flight reply from the PTY screen buffer to
+// WatchChat while working, clears atomically when transcript_full.jsonl catches
+// up, and clears promptly when leaving AgentWorking.
+func TestAgyScreenLiveStreamsAndClears(t *testing.T) {
+	d := meshDaemon(t, "agy-live")
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "transcript_full.jsonl")
+	if err := os.WriteFile(logPath, []byte(`{"step_index":0,"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","content":"<USER_REQUEST>\nSay hello\n</USER_REQUEST>"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Shell process that renders agy-like frames triggered by commands written to stdin.
+	script := `stty -echo
+rule="────────────────────────────────────────────────────────────────────────────────"
+div="────────────────────────────────────────────────────────────"
+frame() {
+  printf '\033[2J\033[H%s\n> %s\n\n%s\n%s\n%s\n>\n%s\n%s' "$div" "$1" "$2" "$3" "$rule" "$rule" "$4"
+}
+while IFS= read -r cmd; do
+  case "$cmd" in
+    spinner)
+      frame "Say hello" "" "⣾  Generating..." "esc to cancel                          auto · Gemini 4 Hydrogen · medium"
+      ;;
+    part1)
+      frame "Say hello" "  Hello from agy" "⣾  Generating..." "esc to cancel                          auto · Gemini 4 Hydrogen · medium"
+      ;;
+    part2)
+      frame "Say hello" "  Hello from agy live stream!" "⠙  Generating..." "esc to cancel                          auto · Gemini 4 Hydrogen · medium"
+      ;;
+    turn2)
+      frame "Second prompt" "  Second turn streaming" "⠹  Generating..." "esc to cancel                          auto · Gemini 4 Hydrogen · medium"
+      ;;
+    idle)
+      frame "Second prompt" "  Second turn streaming" "" "? for shortcuts                        auto · Gemini 4 Hydrogen · medium"
+      ;;
+    reflow)
+      frame "Second prompt" "  Reformatted second turn reply" "⠹  Generating..." "esc to cancel                          auto · Gemini 4 Hydrogen · medium"
+      ;;
+    perm)
+      printf '\033[2J\033[H%s\n> Second prompt\n\n  Second turn streaming\n\n● Ran (date) (ctrl+o to expand)\n\nRequesting permission for:\n   date\n\n> 1. Yes\n  2. No\n\n  ↑/↓ Navigate · tab Amend · ctrl+g edit/expand command\nesc to cancel                          accept-edits · Gemini 4 Hydrogen · medium' "$div"
+      ;;
+  esac
+done`
+
+	s, err := session.Start(session.Spec{
+		ID:      "agy-1",
+		NodeID:  d.cfg.NodeID,
+		Agent:   "agy",
+		Project: dir,
+		Command: []string{"/bin/sh", "-c", script},
+		Cols:    80,
+		Rows:    24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	s.SetConversation("conv-1", logPath)
+	s.SetStatus(protocol.AgentWorking)
+	d.sessions.add(s)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	got := make(chan *protocol.ChatLive, 32)
+	go func() {
+		_ = dialDaemon(t, d).WatchChat(ctx, &protocol.WatchChat{SessionId: "agy-1"}, func(l *protocol.ChatLive) { got <- l })
+	}()
+
+	next := func(what string, ok func(*protocol.ChatLive) bool) {
+		t.Helper()
+		for {
+			select {
+			case l := <-got:
+				if ok(l) {
+					return
+				}
+			case <-ctx.Done():
+				t.Fatalf("timed out waiting for %s", what)
+			}
+		}
+	}
+
+	// Initial empty snapshot on connect.
+	next("initial WatchChat message", func(l *protocol.ChatLive) bool { return len(l.GetBlocks()) == 0 })
+
+	send := func(cmd string) {
+		t.Helper()
+		if _, err := s.Write([]byte(cmd + "\n")); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Spinner-only frame must not emit a live text block.
+	send("spinner")
+	time.Sleep(250 * time.Millisecond)
+	if blocks := d.live.blocks(liveKey("agy-1", "")); len(blocks) != 0 {
+		t.Fatalf("spinner-only emitted blocks: %q", texts(blocks))
+	}
+
+	// First streamed chunk appears live.
+	send("part1")
+	next("part1 live text", func(l *protocol.ChatLive) bool { return texts(l.GetBlocks()) == "Hello from agy" })
+
+	// Monotonic growth updates the same live block.
+	send("part2")
+	next("part2 live text", func(l *protocol.ChatLive) bool { return texts(l.GetBlocks()) == "Hello from agy live stream!" })
+
+	// When transcript_full.jsonl writes the completed PLANNER_RESPONSE, WatchChat
+	// signals Logged=true and clears the live block atomically (no duplicate).
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.WriteString(`{"step_index":1,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","content":"Hello from agy live stream!"}` + "\n")
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	next("log growth clears live block", func(l *protocol.ChatLive) bool {
+		return l.GetLogged() && len(l.GetBlocks()) == 0
+	})
+
+	// Second turn: streams live, then clears promptly when status leaves AgentWorking.
+	f, err = os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.WriteString(`{"step_index":2,"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","content":"<USER_REQUEST>\nSecond prompt\n</USER_REQUEST>"}` + "\n")
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	send("turn2")
+	next("turn2 live text", func(l *protocol.ChatLive) bool { return texts(l.GetBlocks()) == "Second turn streaming" })
+
+	// Non-monotonic reflow replaces the block cleanly without duplication.
+	send("reflow")
+	next("reflowed live text", func(l *protocol.ChatLive) bool { return texts(l.GetBlocks()) == "Reformatted second turn reply" })
+
+	// A permission dialog appearing mid-stream clears live text even before
+	// status transitions away from AgentWorking.
+	send("perm")
+	next("permission dialog clears live block", func(l *protocol.ChatLive) bool { return len(l.GetBlocks()) == 0 })
+
+	// Back to streaming, then verify leaving AgentWorking clears promptly.
+	send("turn2")
+	next("turn2 resumed live text", func(l *protocol.ChatLive) bool { return texts(l.GetBlocks()) == "Second turn streaming" })
+
+	s.SetStatus(protocol.AgentDone)
+	next("status change clears live block", func(l *protocol.ChatLive) bool { return len(l.GetBlocks()) == 0 })
+
+	// While idle, even if screen still shows text, nothing is re-emitted.
+	send("idle")
+	time.Sleep(250 * time.Millisecond)
+	if blocks := d.live.blocks(liveKey("agy-1", "")); len(blocks) != 0 {
+		t.Fatalf("idle screen emitted blocks: %q", texts(blocks))
+	}
+}
+
+func TestLastLoggedAssistantText(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "transcript_full.jsonl")
+	logs, ok := agents.As[agent.Logs]("agy")
+	if !ok {
+		t.Fatal("agy driver missing Logs")
+	}
+
+	// Empty / missing file returns "".
+	if got := lastLoggedAssistantText(path, logs); got != "" {
+		t.Fatalf("missing file = %q, want empty", got)
+	}
+
+	// Turn 1 reply is returned until a newer USER_INPUT resets it.
+	turn1 := `{"step_index":0,"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","content":"<USER_REQUEST>\nFirst\n</USER_REQUEST>"}` + "\n" +
+		`{"step_index":1,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","content":"First reply"}` + "\n"
+	if err := os.WriteFile(path, []byte(turn1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := lastLoggedAssistantText(path, logs); got != "First reply" {
+		t.Fatalf("turn1 = %q, want %q", got, "First reply")
+	}
+
+	// New USER_INPUT clears lastLogged so identical replies on Turn 2 can stream.
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString(`{"step_index":2,"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","content":"<USER_REQUEST>\nSecond\n</USER_REQUEST>"}` + "\n")
+	f.Close()
+	if got := lastLoggedAssistantText(path, logs); got != "" {
+		t.Fatalf("after new USER_INPUT = %q, want empty", got)
+	}
+
+	// Large file (> screenLiveTailWindow) still finds the latest reply from the tail.
+	pad := `{"step_index":3,"source":"MODEL","type":"GENERIC","status":"DONE","content":"` + strings.Repeat("x", screenLiveTailWindow+4096) + `"}` + "\n"
+	tail := `{"step_index":4,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","content":"Tail reply"}` + "\n"
+	f, err = os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString(pad + tail)
+	f.Close()
+	if got := lastLoggedAssistantText(path, logs); got != "Tail reply" {
+		t.Fatalf("large tail = %q, want %q", got, "Tail reply")
+	}
+}
+
+// Rapid disconnect + reconnect on a screen-polled liveChat synchronously clears
+// old screen blocks and fences out any in-flight poller from the cancelled
+// generation so follower 2 never sees stale blocks or gets its stream clobbered.
+func TestScreenLiveRapidDisconnectReconnectFencesStalePoller(t *testing.T) {
+	var h liveHub
+	k := liveKey("agy-race", "")
+	var size atomic.Int64
+
+	poller1Started := make(chan struct{})
+	poller1Release := make(chan struct{})
+	poller1Done := make(chan bool, 1)
+	var gen1 atomic.Uint64
+
+	// Follower 1 connects; poller 1 emits "Stale text" on tick 1, then blocks
+	// inside poll() on tick 2 while follower 1 disconnects and follower 2 connects.
+	var tick1 atomic.Int32
+	feed1, stop1 := h.followWith(k, size.Load, func(gen uint64) func(func() int64) (bool, int64) {
+		gen1.Store(gen)
+		return func(sz func() int64) (bool, int64) {
+			n := tick1.Add(1)
+			if n == 1 {
+				h.takeForGen(gen, livePost{
+					Session: "agy-race",
+					Step:    "screen:1",
+					Pieces:  []livePiece{{Kind: "text", Index: 0, Text: "Stale text"}},
+				})
+				return true, sz()
+			}
+			if n == 2 {
+				close(poller1Started)
+				<-poller1Release
+				ok := h.takeForGen(gen, livePost{
+					Session: "agy-race",
+					Step:    "screen:1",
+					Pieces:  []livePiece{{Kind: "text", Index: 0, Text: " CORRUPT"}},
+				})
+				poller1Done <- ok
+			}
+			return true, sz()
+		}
+	})
+
+	// Wait until follower 1 sees "Stale text" and poller 1 is parked mid-tick 2.
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case l := <-feed1:
+			if texts(l.GetBlocks()) == "Stale text" {
+				goto parked
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for follower 1 text")
+		}
+	}
+parked:
+	select {
+	case <-poller1Started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for poller 1 tick 2")
+	}
+
+	// Disconnect follower 1 while poller 1 is still mid-poll, and immediately
+	// reconnect follower 2 with a fresh poller.
+	stop1()
+
+	var tick2 atomic.Int32
+	feed2, stop2 := h.followWith(k, size.Load, func(gen uint64) func(func() int64) (bool, int64) {
+		return func(sz func() int64) (bool, int64) {
+			switch tick2.Add(1) {
+			case 1:
+				h.takeForGen(gen, livePost{
+					Session: "agy-race",
+					Step:    "screen:1",
+					Pieces:  []livePiece{{Kind: "text", Index: 0, Text: "Hello"}},
+				})
+			case 2:
+				h.takeForGen(gen, livePost{
+					Session: "agy-race",
+					Step:    "screen:1",
+					Pieces:  []livePiece{{Kind: "text", Index: 0, Text: " world!"}},
+				})
+			}
+			return true, sz()
+		}
+	})
+	defer stop2()
+
+	// Follower 2's initial snapshot must be empty (not "Stale text").
+	initLive := <-feed2
+	if len(initLive.GetBlocks()) != 0 {
+		t.Fatalf("follower 2 saw stale initial blocks: %q", texts(initLive.GetBlocks()))
+	}
+
+	// Wait for follower 2's first chunk, then release the stale poller 1 so it
+	// races directly against follower 2's second monotonic delta.
+	deadline = time.After(3 * time.Second)
+	for {
+		select {
+		case l := <-feed2:
+			if texts(l.GetBlocks()) == "Hello" {
+				goto releaseStale
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for follower 2 initial text")
+		}
+	}
+releaseStale:
+	close(poller1Release)
+	if ok := <-poller1Done; ok {
+		t.Fatalf("stale poller (gen %d) was allowed to mutate active chat", gen1.Load())
+	}
+
+	// Follower 2 must cleanly receive "Hello world!" without clobbering or corruption.
+	deadline = time.After(3 * time.Second)
+	for {
+		select {
+		case l := <-feed2:
+			if got := texts(l.GetBlocks()); got == "Hello world!" {
+				return
+			} else if strings.Contains(got, "CORRUPT") || got == " world!" {
+				t.Fatalf("follower 2 stream corrupted: %q", got)
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for follower 2 delta")
+		}
+	}
 }

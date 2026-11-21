@@ -186,6 +186,16 @@ type LogStatus interface {
 // at once a turn ended unreported.
 type Screen interface{ ScreenRules() *detect.Rules }
 
+// ScreenLive is an agent whose in-flight assistant reply can be extracted
+// from its terminal screen while it works, before its transcript log writes
+// the completed step.
+type ScreenLive interface {
+	// ExtractLive returns the currently streaming assistant text from screen,
+	// excluding chrome, tool boxes, and text already recorded as lastLogged.
+	// It returns "" when no new assistant text is streaming.
+	ExtractLive(screen, lastLogged string) string
+}
+
 // Interrupter is an agent whose turn is stopped from its terminal by
 // other than Escape, which stops most: Interrupt is what is typed there to
 // stop the turn it is on, as a person would at its prompt.

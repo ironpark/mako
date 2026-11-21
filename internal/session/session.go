@@ -748,6 +748,20 @@ func (s *Session) plainTextLocked() (string, error) {
 	return s.term.FormatString(gostty.FormatOptions{Format: gostty.FormatterFormatPlain})
 }
 
+// PlainTextUnwrapped renders the active screen and scrollback as plain text
+// with soft-wrapped terminal rows joined back into logical lines.
+func (s *Session) PlainTextUnwrapped() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited {
+		return s.finalPlain.GetText(), nil
+	}
+	return s.term.FormatString(gostty.FormatOptions{
+		Format: gostty.FormatterFormatPlain,
+		Unwrap: true,
+	})
+}
+
 // replayedModes are the DEC private modes a program sets that a terminal
 // fed its screen must have too: how its keys and the mouse are encoded,
 // and what it is told of. A TUI that asked for the mouse otherwise gets
