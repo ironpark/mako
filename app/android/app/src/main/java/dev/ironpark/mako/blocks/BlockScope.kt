@@ -18,8 +18,8 @@ data class ScopeOption(
     val detail: String = "",
 )
 
-/** Matches internal/plugin's scopeIDRe: 1..128 safe ASCII identifier chars, no slashes or whitespace. */
-private val SCOPE_ID_RE = Regex("^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$")
+/** Matches internal/plugin's scopeIDRe: 1..256 safe ASCII identifier chars (including `:` and `/` for repo: project IDs), no `@` or whitespace. */
+private val SCOPE_ID_RE = Regex("^[A-Za-z0-9_][A-Za-z0-9._:/+-]{0,255}$")
 private val SCOPED_KINDS = setOf(BlockScopeKind.SPACE, BlockScopeKind.PROJECT, BlockScopeKind.SESSION)
 
 /**

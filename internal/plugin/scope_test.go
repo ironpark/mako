@@ -62,8 +62,10 @@ func TestParseScopeKeyValidation(t *testing.T) {
 		{"", protocol.ScopeGlobal, ""},
 		{"space:sp-1", protocol.ScopeSpace, "sp-1"},
 		{"project:proj_123.abc", protocol.ScopeProject, "proj_123.abc"},
+		{"project:repo:github.com/ironpark/mako", protocol.ScopeProject, "repo:github.com/ironpark/mako"},
+		{"project:free:my-workspace", protocol.ScopeProject, "free:my-workspace"},
 		{"session:s1", protocol.ScopeSession, "s1"},
-		{"project:" + strings.Repeat("a", 128), protocol.ScopeProject, strings.Repeat("a", 128)},
+		{"project:" + strings.Repeat("a", 256), protocol.ScopeProject, strings.Repeat("a", 256)},
 	}
 	for _, tc := range good {
 		kind, id, err := parseScopeKey(tc.raw)
@@ -80,14 +82,14 @@ func TestParseScopeKeyValidation(t *testing.T) {
 		"session:",
 		"org:123",
 		"project:../secret",
-		"project:a/b",
-		"project:a:b",
+		"project:repo:github.com/../secret",
 		"project:a@b",
 		"project:a b",
 		"project:a\nb",
 		"project:\u202ebad",
 		"project:-leading-dash",
-		"project:" + strings.Repeat("a", 129),
+		"project:/leading-slash",
+		"project:" + strings.Repeat("a", 257),
 	}
 	for _, raw := range bad {
 		if _, _, err := parseScopeKey(raw); err == nil {
@@ -110,6 +112,20 @@ func TestScopedStorageIsolationAndQuota(t *testing.T) {
 	}
 	if _, err := store.setScoped("project:beta", "k", "beta-val"); err != nil {
 		t.Fatal(err)
+	}
+	// Scope IDs containing slashes/colons (e.g. repo:github.com/owner/repo) must
+	// never collide across key boundaries.
+	if _, err := store.setScoped("project:repo:github.com/a", "b/c", "v1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.setScoped("project:repo:github.com/a/b", "c", "v2"); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok, err := store.getScoped("project:repo:github.com/a", "b/c"); err != nil || !ok || v != "v1" {
+		t.Fatalf("slash scope 1 = (%q, %v, %v)", v, ok, err)
+	}
+	if v, ok, err := store.getScoped("project:repo:github.com/a/b", "c"); err != nil || !ok || v != "v2" {
+		t.Fatalf("slash scope 2 = (%q, %v, %v)", v, ok, err)
 	}
 
 	// Global read/list stays isolated from scoped entries.

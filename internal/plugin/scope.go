@@ -32,8 +32,9 @@ var allowedScopes = []string{
 }
 
 // scopeIDRe bounds a canonical scope key's <id> part: safe ASCII identifier
-// characters, 1 to 128 bytes, no slashes, whitespace, control characters, or @.
-var scopeIDRe = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$`)
+// characters (including `:` and `/` used by Mako's repo:<host>/<owner>/<repo>
+// project IDs), 1 to 256 bytes, no `@`, whitespace, or control characters.
+var scopeIDRe = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._:/+-]{0,255}$`)
 
 // normalizeScope checks a manifest's declared scope, normalizing "" to "global".
 func normalizeScope(raw string) (string, error) {
@@ -49,7 +50,7 @@ func normalizeScope(raw string) (string, error) {
 // validateScopeID checks the <id> component of a canonical scope key.
 func validateScopeID(id string) error {
 	if !scopeIDRe.MatchString(id) || strings.Contains(id, "..") {
-		return fmt.Errorf("scope id %q is not a safe identifier of 1 to 128 characters", id)
+		return fmt.Errorf("scope id %q is not a safe identifier of 1 to 256 characters", id)
 	}
 	return nil
 }

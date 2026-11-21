@@ -162,7 +162,7 @@ func (s *kvStore) keysScoped(scopeKey, prefix string) ([]string, error) {
 			}
 		}
 	} else {
-		ns := scopeStoragePrefix + scopeKey + "/"
+		ns := scopeStoragePrefix + scopeKey + "@"
 		for k := range s.data {
 			if rest, ok := strings.CutPrefix(k, ns); ok && strings.HasPrefix(rest, prefix) {
 				out = append(out, rest)
@@ -201,7 +201,7 @@ func storageKey(scopeKey, key string) (string, error) {
 	if scopeKey == "" {
 		return key, nil
 	}
-	return scopeStoragePrefix + scopeKey + "/" + key, nil
+	return scopeStoragePrefix + scopeKey + "@" + key, nil
 }
 
 func checkKey(key string) error {

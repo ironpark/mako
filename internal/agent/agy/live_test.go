@@ -280,6 +280,37 @@ func TestExtractLiveStreamingCases(t *testing.T) {
 				"esc to cancel                          auto · Gemini 4 Hydrogen · medium\n",
 			want: "",
 		},
+		{
+			name: "swarm_bar_and_artifact_tip_suppressed_when_no_prose",
+			screen: divider + "\n" +
+				"> 지금 플러그인에서 쓸수 있는 스토리지는 어떤식이지?\n\n" +
+				"● ReadFile(internal/plugin/storage.go)\n" +
+				"  ⎿ Read 215 lines\n" +
+				"  └ Tip: Press ctrl+r to review pending artifacts.\n" +
+				rule80 + "\n" +
+				strings.Repeat("─", 56) + "\n" +
+				rule80 + "\n" +
+				strings.Repeat("─", 56) + " ● Swarm(Plugin scope system (rev 42))\n" +
+				"Done · 67 posts · alt+s board · alt+x dismiss\n" +
+				"⠧  Thinking...\n" +
+				rule80 + "\n>\n" + rule80 + "\n" +
+				"esc to cancel                          auto · Gemini 4 Neon · high\n",
+			want: "",
+		},
+		{
+			name: "streaming_prose_preserved_above_swarm_bar_and_tip",
+			screen: divider + "\n" +
+				"> 지금 플러그인에서 쓸수 있는 스토리지는 어떤식이지?\n\n" +
+				"  현재 플러그인이 쓸 수 있는 스토리지는 4가지입니다.\n" +
+				"  └ Tip: Press ctrl+r to review pending artifacts.\n" +
+				rule80 + "\n" +
+				strings.Repeat("─", 56) + " ● Swarm(Plugin scope system (rev 42))\n" +
+				"Done · 67 posts · alt+s board · alt+x dismiss\n" +
+				"⠧  Generating...\n" +
+				rule80 + "\n>\n" + rule80 + "\n" +
+				"esc to cancel                          auto · Gemini 4 Neon · high\n",
+			want: "현재 플러그인이 쓸 수 있는 스토리지는 4가지입니다.",
+		},
 	}
 
 	for _, tc := range cases {

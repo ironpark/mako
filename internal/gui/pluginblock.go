@@ -302,7 +302,7 @@ func followStream(ctx context.Context, watch func(context.Context, func(*protoco
 		var tree *protocol.UiNode
 		stream, restart := context.WithCancel(ctx)
 		lost := false
-		_ = watch(stream, func(u *protocol.BlockUpdate) {
+		err := watch(stream, func(u *protocol.BlockUpdate) {
 			if lost {
 				return
 			}
@@ -326,6 +326,9 @@ func followStream(ctx context.Context, watch func(context.Context, func(*protoco
 		restart()
 		if lost {
 			continue
+		}
+		if err != nil && ctx.Err() == nil && tree == nil {
+			fn(&protocol.BlockUpdate{State: protocol.PluginFailed, Error: err.Error()})
 		}
 		select {
 		case <-ctx.Done():

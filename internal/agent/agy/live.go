@@ -185,52 +185,87 @@ func stripBottomChrome(lines []string) (end int, cols int) {
 	}
 	end = trimTrailingBlanks(lines[:end])
 
-	// 2. Strip the prompt composer box:
-	//    ────────────────────
-	//    > (optional draft)
-	//    ────────────────────
-	if end > 0 && isHorizontalRule(lines[end-1]) {
-		if w := utf8.RuneCountInString(strings.TrimSpace(lines[end-1])); w >= 20 {
-			cols = w
-		}
-		boxTop := -1
-		limit := max(0, end-14)
-		for i := end - 2; i >= limit; i-- {
-			if isHorizontalRule(lines[i]) {
-				if looksLikeComposerBody(lines[i+1 : end-1]) {
-					boxTop = i
-				}
-				break
-			}
-			if isToolHeader(lines[i]) {
-				break
-			}
-		}
-		if boxTop >= 0 {
-			if w := utf8.RuneCountInString(strings.TrimSpace(lines[boxTop])); w > cols && w >= 20 {
+	// 2. Iteratively strip stacked bottom chrome above the footer: composer
+	//    prompt box(es), Swarm status bars, artifact Tip banners, working
+	//    spinners, and horizontal rules.
+	for end > 0 {
+		prev := end
+		// Strip a prompt composer box:
+		//    ────────────────────
+		//    > (optional draft)
+		//    ────────────────────
+		if end > 0 && isHorizontalRule(lines[end-1]) {
+			if w := utf8.RuneCountInString(strings.TrimSpace(lines[end-1])); w >= 20 && w > cols {
 				cols = w
 			}
-			end = boxTop
-		} else {
-			end--
+			boxTop := -1
+			limit := max(0, end-14)
+			for i := end - 2; i >= limit; i-- {
+				if isHorizontalRule(lines[i]) {
+					if looksLikeComposerBody(lines[i+1 : end-1]) {
+						boxTop = i
+					}
+					break
+				}
+				if isToolHeader(lines[i]) {
+					break
+				}
+			}
+			if boxTop >= 0 {
+				if w := utf8.RuneCountInString(strings.TrimSpace(lines[boxTop])); w > cols && w >= 20 {
+					cols = w
+				}
+				end = boxTop
+			} else {
+				end--
+			}
+		} else if end >= 2 && isComposerLine(lines[end-1]) && isHorizontalRule(lines[end-2]) {
+			if w := utf8.RuneCountInString(strings.TrimSpace(lines[end-2])); w >= 20 && w > cols {
+				cols = w
+			}
+			end -= 2
 		}
-	} else if end >= 2 && isComposerLine(lines[end-1]) && isHorizontalRule(lines[end-2]) {
-		if w := utf8.RuneCountInString(strings.TrimSpace(lines[end-2])); w >= 20 {
-			cols = w
-		}
-		end -= 2
-	}
 
-	// 3. Strip trailing blank lines, spinners, and stray rules right above the prompt box.
-	for end > 0 {
-		line := lines[end-1]
-		if strings.TrimSpace(line) == "" || isSpinnerLine(line) || isHorizontalRule(line) {
+		// Strip trailing blanks, spinners, rules, Swarm bars, and Tip banners.
+		for end > 0 && isBottomChromeLine(lines[end-1]) {
 			end--
-			continue
 		}
-		break
+		if end == prev {
+			break
+		}
 	}
 	return end, cols
+}
+
+func isTipLine(line string) bool {
+	t := strings.TrimSpace(line)
+	if t == "" {
+		return false
+	}
+	t = strings.TrimLeft(t, "└╰⎿├│┃ \t")
+	return strings.HasPrefix(t, "Tip:")
+}
+
+func isSwarmChromeLine(line string) bool {
+	t := strings.TrimSpace(line)
+	if t == "" {
+		return false
+	}
+	rest := strings.TrimLeft(t, "─━═ \t")
+	if strings.Contains(rest, "Swarm(") && (startsWithToolGlyph(rest) || isSpinnerLine(rest) || strings.HasPrefix(rest, "Swarm(")) {
+		return true
+	}
+	lower := strings.ToLower(t)
+	return strings.Contains(lower, "alt+s board") || strings.Contains(lower, "alt+x dismiss")
+}
+
+func isBottomChromeLine(line string) bool {
+	return strings.TrimSpace(line) == "" ||
+		isSpinnerLine(line) ||
+		isHorizontalRule(line) ||
+		isTipLine(line) ||
+		isSwarmChromeLine(line) ||
+		isExpandHint(line)
 }
 
 func looksLikeComposerBody(lines []string) bool {
@@ -421,7 +456,7 @@ func skipThroughLastTool(lines []string) int {
 		case isBoxStart(line):
 			i = consumeBox(lines, i)
 			afterLast = i
-		case isAnnouncementLine(line):
+		case isAnnouncementLine(line) || isTipLine(line) || isSwarmChromeLine(line):
 			i++
 			afterLast = i
 		default:
@@ -490,8 +525,7 @@ func consumeBox(lines []string, i int) int {
 func trimEdgeChrome(lines []string) []string {
 	start := 0
 	for start < len(lines) {
-		l := lines[start]
-		if strings.TrimSpace(l) == "" || isSpinnerLine(l) || isHorizontalRule(l) || isExpandHint(l) {
+		if isBottomChromeLine(lines[start]) {
 			start++
 			continue
 		}
@@ -499,8 +533,7 @@ func trimEdgeChrome(lines []string) []string {
 	}
 	end := len(lines)
 	for end > start {
-		l := lines[end-1]
-		if strings.TrimSpace(l) == "" || isSpinnerLine(l) || isHorizontalRule(l) || isExpandHint(l) {
+		if isBottomChromeLine(lines[end-1]) {
 			end--
 			continue
 		}

@@ -90,15 +90,19 @@ class BlockScopeTest {
         assertEquals("session", normalizeScopeKind("session"))
 
         assertEquals("project" to "p_1.2-a", parseScopeKey("project:p_1.2-a"))
+        assertEquals("project" to "repo:github.com/ironpark/mako", parseScopeKey("project:repo:github.com/ironpark/mako"))
+        assertEquals("project" to "free:work", parseScopeKey("project:free:work"))
         assertNull(parseScopeKey(""))
         assertNull(parseScopeKey("global:foo"))
         assertNull(parseScopeKey("project:../bad"))
-        assertNull(parseScopeKey("project:a/b"))
+        assertNull(parseScopeKey("project:a@b"))
+        assertNull(parseScopeKey("project:a b"))
         assertNull(parseScopeKey("project:"))
 
         assertEquals("space:work", scopeKeyOf("space", "work"))
+        assertEquals("project:repo:github.com/ironpark/mako", scopeKeyOf("project", "repo:github.com/ironpark/mako"))
         assertEquals("", scopeKeyOf("global", "work"))
-        assertEquals("", scopeKeyOf("space", "a/b"))
+        assertEquals("", scopeKeyOf("space", "a@b"))
     }
 
     @Test
