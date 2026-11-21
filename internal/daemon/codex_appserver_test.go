@@ -683,19 +683,19 @@ func TestCodexLiveAppServerSmoke(t *testing.T) {
 	}
 	defer stop()
 
-	// Fresh 0-turn thread must NOT bind convID yet (rollout does not exist on disk),
-	// while bridge.threadID() holds the active thread for native delivery and streaming.
-	if b.threadID() == "" {
-		t.Fatal("bridge.threadID() is empty")
+	// Brand-new session must NOT pre-create an unmaterialized thread or pass `resume <id>`
+	// (Codex TUI's `thread/resume` bootstrap fails with -32600 when no rollout exists on disk yet).
+	if b.threadID() != "" {
+		t.Fatalf("new session unexpectedly pre-created thread %q", b.threadID())
 	}
 	if convID != "" {
-		t.Fatalf("0-turn thread prematurely bound convID=%q", convID)
+		t.Fatalf("new session prematurely bound convID=%q", convID)
 	}
 	joined := strings.Join(launch.Command, " ")
-	if !strings.Contains(joined, "--remote") || strings.Contains(joined, "--no-daemon") || strings.Contains(joined, "--add-dir") || !strings.Contains(joined, " -- "+b.threadID()+" -fix-me") {
+	if !strings.Contains(joined, "--remote") || strings.Contains(joined, " resume ") || strings.Contains(joined, "--no-daemon") || strings.Contains(joined, "--add-dir") || !strings.Contains(joined, " -- -fix-me") {
 		t.Fatalf("unexpected rewritten TUI command: %q", launch.Command)
 	}
-	t.Logf("live bridge ready: thread=%s cmd=%q", b.threadID(), launch.Command)
+	t.Logf("live bridge ready: cmd=%q", launch.Command)
 
 	// 3. Clean teardown: process exits and socket file is removed.
 	stop()

@@ -141,15 +141,29 @@ func (b *codexBridge) Close() {
 // turn if busy), falling back to `turn/start` on `-32600` (e.g. ephemeral thread
 // or server without queue support).
 func (b *codexBridge) deliverMessage(ctx context.Context, text string) error {
-	tid := b.threadID()
-	if tid == "" {
-		return errors.New("codex app-server: no active thread")
-	}
 	if ctx == nil {
 		ctx = b.ctx
 	}
 	tctx, cancel := context.WithTimeout(ctx, codexRPCTimeout)
 	defer cancel()
+
+	tid := b.threadID()
+	if tid == "" && b.client != nil {
+		// On a brand-new session where the TUI creates the thread, ThreadLoadedList
+		// can discover the active thread even before the thread/started notification
+		// has been processed by runCodexBridge.
+		if res, err := b.client.ThreadLoadedList(tctx); err == nil && len(res.Data) == 1 && res.Data[0] != "" {
+			b.mu.Lock()
+			if b.tid == "" && !b.ignored[res.Data[0]] {
+				b.tid = res.Data[0]
+			}
+			tid = b.tid
+			b.mu.Unlock()
+		}
+	}
+	if tid == "" {
+		return errors.New("codex app-server: no active thread")
+	}
 
 	input := []codex.UserInput{{Type: "text", Text: text}}
 	_, err := b.client.ThreadQueueAdd(tctx, codex.ThreadQueueAddParams{
@@ -296,40 +310,19 @@ func (d *Daemon) prepareCodexAppServer(
 			return fail("thread/resume failed", err)
 		}
 		threadID = cmp.Or(res.Thread.ID, targetID)
-		threadPath = res.Thread.Path
-		applyThreadMetadata(initUsage, res.Model, res.ReasoningEffort, res.ApprovalPolicy, res.Sandbox)
-	} else {
-		ephemeral := false
-		res, err := client.ThreadStart(bootCtx, codex.ThreadStartParams{
-			Cwd:            cwd,
-			Model:          split.Model,
-			ApprovalPolicy: split.ApprovalPolicy,
-			Sandbox:        split.Sandbox,
-			Ephemeral:      &ephemeral,
-		})
-		if err != nil {
-			return fail("thread/start failed", err)
+		if threadID == "" {
+			return fail("empty thread id", errors.New("server returned empty thread id"))
 		}
-		threadID = res.Thread.ID
 		threadPath = res.Thread.Path
 		applyThreadMetadata(initUsage, res.Model, res.ReasoningEffort, res.ApprovalPolicy, res.Sandbox)
-	}
 
-	if threadID == "" {
-		return fail("empty thread id", errors.New("server returned empty thread id"))
-	}
-	bridge.mu.Lock()
-	bridge.tid = threadID
-	bridge.pendingPath = threadPath
-	bridge.subscribed = true
-	if !initUsage.IsZero() {
-		bridge.initUsage = initUsage
-	}
-	// Only bind ConversationId immediately when resuming an existing conversation
-	// or when the rollout file already exists on disk. A fresh 0-turn thread/start
-	// does not write its rollout file until Turn 1; persisting ConversationId
-	// before materialization would break sleepSession/reattach.
-	if targetID != "" {
+		bridge.mu.Lock()
+		bridge.tid = threadID
+		bridge.pendingPath = threadPath
+		bridge.subscribed = true
+		if !initUsage.IsZero() {
+			bridge.initUsage = initUsage
+		}
 		*conversationID = threadID
 		if threadPath != "" && *transcriptPath == "" {
 			if _, err := os.Stat(threadPath); err == nil {
@@ -337,27 +330,42 @@ func (d *Daemon) prepareCodexAppServer(
 			}
 		}
 		bridge.bound = *transcriptPath != ""
-	} else if threadPath != "" {
-		if _, err := os.Stat(threadPath); err == nil {
-			*conversationID = threadID
-			*transcriptPath = threadPath
-			bridge.bound = true
+		bridge.mu.Unlock()
+	} else {
+		// Brand-new session: let the connected `--remote` TUI bootstrap its own
+		// thread on this managed app-server rather than pre-creating an unmaterialized
+		// 0-turn thread and passing `resume <id>`, which Codex rejects with
+		// `no rollout found for thread id ... (code -32600)`.
+		// The bridge receives `thread/started` as soon as the TUI creates the thread
+		// and subscribes via `thread/resume` once the rollout materializes.
+		bridge.mu.Lock()
+		if !initUsage.IsZero() {
+			bridge.initUsage = initUsage
 		}
+		bridge.mu.Unlock()
 	}
-	bridge.mu.Unlock()
 
-	// Build `codex --remote <addr> [auth...] resume [TUI_FLAGS...] [--] <threadID> [PROMPT]`.
+	// Build the rewritten `--remote` TUI command:
+	// - Resumed session: `codex --remote <addr> [auth...] resume [TUI_FLAGS...] [--] <threadID> [PROMPT]`
+	// - New session:     `codex --remote <addr> [auth...] [TUI_FLAGS...] [--] [PROMPT]`
 	// Place `--` before positional args when a prompt is present so prompts starting
 	// with `-` (e.g. `-fix-me`) are never misparsed as CLI flags.
 	tuiCmd := make([]string, 0, 6+len(tr.extraTUIArgs)+len(split.TUIArgs))
 	tuiCmd = append(tuiCmd, split.Program, "--remote", remoteAddr)
 	tuiCmd = append(tuiCmd, tr.extraTUIArgs...)
-	tuiCmd = append(tuiCmd, "resume")
-	tuiCmd = append(tuiCmd, split.TUIArgs...)
-	if split.HasPrompt {
-		tuiCmd = append(tuiCmd, "--", threadID, split.Prompt)
+	if targetID != "" {
+		tuiCmd = append(tuiCmd, "resume")
+		tuiCmd = append(tuiCmd, split.TUIArgs...)
+		if split.HasPrompt {
+			tuiCmd = append(tuiCmd, "--", threadID, split.Prompt)
+		} else {
+			tuiCmd = append(tuiCmd, threadID)
+		}
 	} else {
-		tuiCmd = append(tuiCmd, threadID)
+		tuiCmd = append(tuiCmd, split.TUIArgs...)
+		if split.HasPrompt {
+			tuiCmd = append(tuiCmd, "--", split.Prompt)
+		}
 	}
 	launch.Command = tuiCmd
 	for k, v := range tr.extraTUIEnv {
@@ -722,6 +730,11 @@ func (d *Daemon) trySubscribeCodexThread(s *session.Session, b *codexBridge, thr
 		}
 	}
 	b.mu.Unlock()
+	u := &protocol.Usage{}
+	applyThreadMetadata(u, res.Model, res.ReasoningEffort, res.ApprovalPolicy, res.Sandbox)
+	if !u.IsZero() && s != nil {
+		s.Report(u)
+	}
 }
 
 // maybeBindCodexThread binds the active thread's ConversationId and rollout path
