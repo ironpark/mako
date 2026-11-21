@@ -22,6 +22,7 @@ public  final class PluginBlock extends
     name_ = "";
     title_ = "";
     slots_ = emptyProtobufList();
+    scope_ = "";
   }
   public static final int NAME_FIELD_NUMBER = 1;
   private java.lang.String name_;
@@ -273,6 +274,78 @@ public  final class PluginBlock extends
     checkByteStringIsUtf8(value);
     ensureSlotsIsMutable();
     slots_.add(value.toStringUtf8());
+  }
+
+  public static final int SCOPE_FIELD_NUMBER = 4;
+  private java.lang.String scope_;
+  /**
+   * <pre>
+   * scope is the block's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 4 [json_name = "scope"];</code>
+   * @return The scope.
+   */
+  @java.lang.Override
+  public java.lang.String getScope() {
+    return scope_;
+  }
+  /**
+   * <pre>
+   * scope is the block's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 4 [json_name = "scope"];</code>
+   * @return The bytes for scope.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getScopeBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(scope_);
+  }
+  /**
+   * <pre>
+   * scope is the block's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 4 [json_name = "scope"];</code>
+   * @param value The scope to set.
+   */
+  private void setScope(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    scope_ = value;
+  }
+  /**
+   * <pre>
+   * scope is the block's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 4 [json_name = "scope"];</code>
+   */
+  private void clearScope() {
+
+    scope_ = getDefaultInstance().getScope();
+  }
+  /**
+   * <pre>
+   * scope is the block's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 4 [json_name = "scope"];</code>
+   * @param value The bytes for scope to set.
+   */
+  private void setScopeBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    scope_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.PluginBlock parseFrom(
@@ -631,6 +704,80 @@ public  final class PluginBlock extends
       return this;
     }
 
+    /**
+     * <pre>
+     * scope is the block's declared scope: "", "global", "space", "project" or
+     * "session" (revision 42).
+     * </pre>
+     *
+     * <code>string scope = 4 [json_name = "scope"];</code>
+     * @return The scope.
+     */
+    @java.lang.Override
+    public java.lang.String getScope() {
+      return instance.getScope();
+    }
+    /**
+     * <pre>
+     * scope is the block's declared scope: "", "global", "space", "project" or
+     * "session" (revision 42).
+     * </pre>
+     *
+     * <code>string scope = 4 [json_name = "scope"];</code>
+     * @return The bytes for scope.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getScopeBytes() {
+      return instance.getScopeBytes();
+    }
+    /**
+     * <pre>
+     * scope is the block's declared scope: "", "global", "space", "project" or
+     * "session" (revision 42).
+     * </pre>
+     *
+     * <code>string scope = 4 [json_name = "scope"];</code>
+     * @param value The scope to set.
+     * @return This builder for chaining.
+     */
+    public Builder setScope(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setScope(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * scope is the block's declared scope: "", "global", "space", "project" or
+     * "session" (revision 42).
+     * </pre>
+     *
+     * <code>string scope = 4 [json_name = "scope"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearScope() {
+      copyOnWrite();
+      instance.clearScope();
+      return this;
+    }
+    /**
+     * <pre>
+     * scope is the block's declared scope: "", "global", "space", "project" or
+     * "session" (revision 42).
+     * </pre>
+     *
+     * <code>string scope = 4 [json_name = "scope"];</code>
+     * @param value The bytes for scope to set.
+     * @return This builder for chaining.
+     */
+    public Builder setScopeBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setScopeBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginBlock)
   }
   @java.lang.Override
@@ -650,10 +797,11 @@ public  final class PluginBlock extends
             "name_",
             "title_",
             "slots_",
+            "scope_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u021a";
+              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u021a\u0004\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

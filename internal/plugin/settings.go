@@ -23,13 +23,17 @@ import (
 // its own without one. A secret is never sent to a front-end, which is
 // told only whether one is set.
 
-const maxSettingText = 1000
+const (
+	maxSettingText    = 1000
+	settingsScopedKey = "@scoped"
+)
 
 type settingsStore struct {
 	mu     sync.Mutex
 	path   string
 	vault  *vault
-	values map[string]any // string, bool or float64
+	values map[string]any            // global: string, bool or float64
+	scoped map[string]map[string]any // scopeKey -> key -> string, bool or float64
 	loaded bool
 }
 
@@ -41,7 +45,7 @@ func newSettingsStore(path string, v *vault) *settingsStore {
 func (s *settingsStore) reset() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.values, s.loaded = nil, false
+	s.values, s.scoped, s.loaded = nil, nil, false
 }
 
 func (s *settingsStore) loadLocked() {
@@ -50,23 +54,62 @@ func (s *settingsStore) loadLocked() {
 	}
 	s.loaded = true
 	s.values = map[string]any{}
+	s.scoped = map[string]map[string]any{}
 	if b, err := os.ReadFile(s.path); err == nil {
-		_ = json.Unmarshal(b, &s.values)
+		raw := map[string]any{}
+		if json.Unmarshal(b, &raw) == nil {
+			if scRaw, ok := raw[settingsScopedKey].(map[string]any); ok {
+				for scopeKey, entries := range scRaw {
+					if _, _, err := parseScopeKey(scopeKey); err != nil || scopeKey == "" {
+						continue
+					}
+					if m, ok := entries.(map[string]any); ok && len(m) > 0 {
+						s.scoped[scopeKey] = m
+					}
+				}
+			}
+			delete(raw, settingsScopedKey)
+			s.values = raw
+		}
 	}
 }
 
-// value is the setting's value, of its type, and whether the user set it:
-// else its default, else the type's zero. A secret's is read from the
-// vault.
+// value is the global setting's value, of its type, and whether the user set it:
+// else its default, else the type's zero. A secret's is read from the vault.
 func (s *settingsStore) value(d SettingDecl) (any, bool, error) {
+	return s.valueScoped(d, "")
+}
+
+// valueScoped returns the setting's effective value in scopeKey: scoped override
+// if set, otherwise global value, otherwise manifest default, otherwise zero.
+func (s *settingsStore) valueScoped(d SettingDecl, scopeKey string) (any, bool, error) {
+	if _, _, err := parseScopeKey(scopeKey); err != nil {
+		return nil, false, err
+	}
 	if d.Type == SettingSecret {
 		s.migrate(d)
+		if scopeKey != "" {
+			v, ok, err := s.vault.get(vaultSetting + d.Key + "@" + scopeKey)
+			if err != nil {
+				return "", false, err
+			}
+			if ok {
+				return v, true, nil
+			}
+		}
 		v, ok, err := s.vault.get(vaultSetting + d.Key)
 		return v, ok, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.loadLocked()
+	if scopeKey != "" {
+		if m := s.scoped[scopeKey]; m != nil {
+			if v, ok := m[d.Key]; ok && fits(d, v) {
+				return v, true, nil
+			}
+		}
+	}
 	if v, ok := s.values[d.Key]; ok && fits(d, v) {
 		return v, true, nil
 	}
@@ -135,6 +178,15 @@ func fits(d SettingDecl, v any) bool {
 
 // set sets d to text as its type reads it; "" unsets it.
 func (s *settingsStore) set(d SettingDecl, text string) error {
+	return s.setScoped(d, "", text)
+}
+
+// setScoped writes a global (scopeKey == "") or scoped override for d; ""
+// unsets the value (or deletes the scoped override so it falls back to global).
+func (s *settingsStore) setScoped(d SettingDecl, scopeKey, text string) error {
+	if _, _, err := parseScopeKey(scopeKey); err != nil {
+		return err
+	}
 	var v any
 	switch {
 	case text == "":
@@ -168,25 +220,52 @@ func (s *settingsStore) set(d SettingDecl, text string) error {
 	}
 	if d.Type == SettingSecret {
 		s.migrate(d)
+		vk := vaultSetting + d.Key
+		if scopeKey != "" {
+			vk = vaultSetting + d.Key + "@" + scopeKey
+		}
 		if v == nil {
-			_, err := s.vault.del(vaultSetting + d.Key)
+			_, err := s.vault.del(vk)
 			return err
 		}
-		return s.vault.set(vaultSetting+d.Key, text)
+		return s.vault.set(vk, text)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.loadLocked()
-	if v == nil {
-		delete(s.values, d.Key)
+	if scopeKey == "" {
+		if v == nil {
+			delete(s.values, d.Key)
+		} else {
+			s.values[d.Key] = v
+		}
 	} else {
-		s.values[d.Key] = v
+		if v == nil {
+			if m := s.scoped[scopeKey]; m != nil {
+				delete(m, d.Key)
+				if len(m) == 0 {
+					delete(s.scoped, scopeKey)
+				}
+			}
+		} else {
+			if s.scoped[scopeKey] == nil {
+				s.scoped[scopeKey] = map[string]any{}
+			}
+			s.scoped[scopeKey][d.Key] = v
+		}
 	}
 	return s.saveLocked()
 }
 
 func (s *settingsStore) saveLocked() error {
-	b, err := json.Marshal(s.values)
+	out := make(map[string]any, len(s.values)+1)
+	for k, v := range s.values {
+		out[k] = v
+	}
+	if len(s.scoped) > 0 {
+		out[settingsScopedKey] = s.scoped
+	}
+	b, err := json.Marshal(out)
 	if err != nil {
 		return err
 	}
@@ -198,7 +277,12 @@ func (s *settingsStore) saveLocked() error {
 
 // forHost is a setting as the plugin reads it.
 func (s *settingsStore) forHost(d SettingDecl) (*hostapi.Setting, error) {
-	v, set, err := s.value(d)
+	return s.forHostScoped(d, "")
+}
+
+// forHostScoped is a setting as the plugin reads it in scopeKey.
+func (s *settingsStore) forHostScoped(d SettingDecl, scopeKey string) (*hostapi.Setting, error) {
+	v, set, err := s.valueScoped(d, scopeKey)
 	if err != nil {
 		return nil, fmt.Errorf("setting %s: %w", d.Key, err)
 	}
@@ -214,24 +298,49 @@ func (s *settingsStore) forHost(d SettingDecl) (*hostapi.Setting, error) {
 	return out, nil
 }
 
+func formatSettingValue(v any) string {
+	switch v := v.(type) {
+	case string:
+		return v
+	case bool:
+		return strconv.FormatBool(v)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	}
+	return ""
+}
+
 // forFront is a setting as a front-end shows it: a secret's value never,
 // nor is it read for this, only whether the vault holds one.
 func (s *settingsStore) forFront(d SettingDecl) *protocol.PluginSetting {
-	out := &protocol.PluginSetting{Key: d.Key, Type: d.Type, Label: d.Label, Description: d.Description,
-		Options: d.Options}
+	out := &protocol.PluginSetting{
+		Key: d.Key, Type: d.Type, Label: d.Label, Description: d.Description,
+		Options: d.Options, Scope: d.Scope,
+	}
 	if d.Type == SettingSecret {
 		out.Set = s.vault.has(vaultSetting+d.Key) || s.legacy(d.Key)
+		if scopes := s.vault.list(vaultSetting + d.Key + "@"); len(scopes) > 0 {
+			out.ScopedSet = scopes
+		}
 		return out
 	}
-	v, set, _ := s.value(d)
+	v, set, _ := s.valueScoped(d, "")
 	out.Set = set
-	switch v := v.(type) {
-	case string:
-		out.Value = v
-	case bool:
-		out.Value = strconv.FormatBool(v)
-	case float64:
-		out.Value = strconv.FormatFloat(v, 'f', -1, 64)
+	out.Value = formatSettingValue(v)
+	s.mu.Lock()
+	s.loadLocked()
+	var scoped map[string]string
+	for scopeKey, m := range s.scoped {
+		if sv, ok := m[d.Key]; ok && fits(d, sv) {
+			if scoped == nil {
+				scoped = map[string]string{}
+			}
+			scoped[scopeKey] = formatSettingValue(sv)
+		}
+	}
+	s.mu.Unlock()
+	if len(scoped) > 0 {
+		out.ScopedValues = scoped
 	}
 	return out
 }

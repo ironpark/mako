@@ -199,4 +199,24 @@ public interface BlockUpdateOrBuilder extends
    * @return The gone.
    */
   boolean getGone();
+
+  /**
+   * <pre>
+   * scope is the canonical scope key of this block instance (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 13 [json_name = "scope"];</code>
+   * @return The scope.
+   */
+  java.lang.String getScope();
+  /**
+   * <pre>
+   * scope is the canonical scope key of this block instance (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 13 [json_name = "scope"];</code>
+   * @return The bytes for scope.
+   */
+  com.google.protobuf.ByteString
+      getScopeBytes();
 }

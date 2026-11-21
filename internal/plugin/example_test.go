@@ -14,7 +14,7 @@ import (
 )
 
 // fakeGitHub answers the example plugin's requests as GitHub's API would,
-// for the repository o/r, and records the runs asked to run again.
+// for the repositories o/r and o/p1, and records the runs asked to run again.
 func fakeGitHub(t *testing.T) (*httptest.Server, func() []string) {
 	t.Helper()
 	var mu sync.Mutex
@@ -30,6 +30,13 @@ func fakeGitHub(t *testing.T) (*httptest.Server, func() []string) {
 				{"id":11,"name":"test","head_branch":"main","run_number":41,"status":"completed","conclusion":"failure","html_url":"https://github.com/o/r/actions/runs/11"},
 				{"id":10,"name":"build","head_branch":"main","run_number":40,"status":"completed","conclusion":"success","html_url":"https://github.com/o/r/actions/runs/10"},
 				{"id":12,"name":"lint","head_branch":"dev","run_number":42,"status":"in_progress","conclusion":null,"html_url":"https://github.com/o/r/actions/runs/12"}]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/o/p1/actions/runs":
+			if r.Header.Get("Authorization") != "Bearer tok" {
+				http.Error(w, "no token", http.StatusUnauthorized)
+				return
+			}
+			io.WriteString(w, `{"workflow_runs":[
+				{"id":21,"name":"deploy-p1","head_branch":"release","run_number":7,"status":"completed","conclusion":"success","html_url":"https://github.com/o/p1/actions/runs/21"}]}`)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/rerun"):
 			mu.Lock()
 			reruns = append(reruns, r.URL.Path)
@@ -48,9 +55,9 @@ func fakeGitHub(t *testing.T) (*httptest.Server, func() []string) {
 }
 
 // TestExamplePlugin runs examples/plugins/ci-status against a stand-in for
-// GitHub: its block lists the runs, a tap on one opens it, its command
-// runs the failed one again, and with GitHub gone it shows the runs it
-// kept.
+// GitHub: its block lists the runs (with global repo fallback and per-project
+// repo override), a tap on one opens it, its command runs the failed one again,
+// and with GitHub gone it shows the runs it kept.
 func TestExamplePlugin(t *testing.T) {
 	gh, reruns := fakeGitHub(t)
 	r := newRig(t, testLimits, map[string]string{"api.github.com": gh.URL},
@@ -93,6 +100,41 @@ func TestExamplePlugin(t *testing.T) {
 	if got := reruns(); len(got) != 1 || got[0] != "/repos/o/r/actions/runs/11/rerun" {
 		t.Fatalf("reruns %v", got)
 	}
+
+	// Set a project-scoped repo override for project:p1 while leaving global fallback intact.
+	if _, err := r.act(&protocol.PluginAction{
+		PluginId: "ci-status",
+		Op:       protocol.PluginSet,
+		Key:      "repo",
+		Value:    "o/p1",
+		Scope:    "project:p1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var repoSetting *protocol.PluginSetting
+	for _, p := range r.m.List() {
+		if p.GetId() == "ci-status" {
+			for _, st := range p.GetSettings() {
+				if st.GetKey() == "repo" {
+					repoSetting = st
+				}
+			}
+		}
+	}
+	if repoSetting == nil || repoSetting.GetScope() != protocol.ScopeProject || repoSetting.GetScopedValues()["project:p1"] != "o/p1" {
+		t.Fatalf("expected project-scoped repo override, got %+v", repoSetting)
+	}
+	wP1 := r.watchScoped("plugin:ci-status/ci", "project:p1")
+	wP1.until("p1 scoped repo runs", func(n *protocol.UiNode, u *protocol.BlockUpdate) bool {
+		return u.GetScope() == "project:p1" && hasText(n, "o/p1") && hasText(n, "deploy-p1")
+	})
+	wP2 := r.watchScoped("plugin:ci-status/ci", "project:p2")
+	wP2.until("p2 global fallback", func(n *protocol.UiNode, u *protocol.BlockUpdate) bool {
+		return u.GetScope() == "project:p2" && hasText(n, "o/r") && hasText(n, "lint")
+	})
+	wP1.cancel()
+	wP2.cancel()
+
 	// GitHub gone, the runs kept in the store are shown, and why.
 	gh.Close()
 	if _, err := r.event("plugin:ci-status/ci", find(tree, "Refresh").GetId(), protocol.UiTap, ""); err != nil {
@@ -103,14 +145,41 @@ func TestExamplePlugin(t *testing.T) {
 	})
 }
 
-// TestKanbanExamplePlugin runs examples/plugins/kanban (v0.2.0): starter cards
-// load with card/scroll/dragGroup/dropAccept nodes, live form values work via
-// mako.blocks.values, dragging across columns and onto another card moves and
-// reorders via UiDrop, compact view uses ui.tabs, MCP tools list/add/move cards,
-// and commands emit mako.toast + plugin diagnostics logs.
+// TestKanbanExamplePlugin runs examples/plugins/kanban (v0.3.0, project-scoped):
+// independent boards and storage per project, ctx.projectName in the board
+// header, card/scroll/dragGroup/dropAccept nodes, live form values via
+// mako.blocks.values, UiDrop across columns and cards, compact view ui.tabs,
+// strictly scoped MCP tools (list_cards/add_card/move_card), and scoped commands.
 func TestKanbanExamplePlugin(t *testing.T) {
-	r := newRig(t, testLimits, nil,
-		&protocol.SessionInfo{Id: "s1", Name: "builder", Agent: "claude", State: protocol.StateRunning, Status: protocol.AgentIdle})
+	r := startRig(t, Config{
+		Limits: testLimits,
+		Sessions: func() []*protocol.SessionInfo {
+			return []*protocol.SessionInfo{
+				{Id: "s1", Name: "builder", Agent: "claude", State: protocol.StateRunning, Status: protocol.AgentIdle},
+			}
+		},
+		ResolveScope: func(scopeKey string) ScopeContext {
+			switch scopeKey {
+			case "project:p1":
+				return ScopeContext{
+					SpaceID:     "sp1",
+					SpaceName:   "Work",
+					ProjectID:   "p1",
+					ProjectName: "Alpha",
+					Roots:       []string{"/tmp/alpha"},
+				}
+			case "project:p2":
+				return ScopeContext{
+					SpaceID:     "sp1",
+					SpaceName:   "Work",
+					ProjectID:   "p2",
+					ProjectName: "Beta",
+					Roots:       []string{"/tmp/beta"},
+				}
+			}
+			return ScopeContext{}
+		},
+	})
 	files := map[string]string{}
 	for _, name := range []string{ManifestName, "main.js"} {
 		b, err := os.ReadFile(filepath.Join("../../examples/plugins/kanban", name))
@@ -123,11 +192,22 @@ func TestKanbanExamplePlugin(t *testing.T) {
 	r.state("kanban", protocol.PluginWaiting)
 	r.grant("kanban")
 
-	w := r.watch("plugin:kanban/board")
-	tree := w.until("starter cards", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
-		return hasText(n, "Draft API spec") && hasText(n, "Build Kanban prototype")
+	// Watch project:p1 and project:p2 simultaneously.
+	w1 := r.watchScoped("plugin:kanban/board", "project:p1")
+	w2 := r.watchScoped("plugin:kanban/board", "project:p2")
+
+	tree1 := w1.until("p1 starter cards", func(n *protocol.UiNode, u *protocol.BlockUpdate) bool {
+		return u.GetScope() == "project:p1" &&
+			hasText(n, "Kanban · Alpha · 1/5 done") &&
+			hasText(n, "Draft API spec") &&
+			hasText(n, "Build Kanban prototype")
 	})
-	if card := find(tree, "Draft API spec"); card == nil {
+	w2.until("p2 starter cards", func(n *protocol.UiNode, u *protocol.BlockUpdate) bool {
+		return u.GetScope() == "project:p2" &&
+			hasText(n, "Kanban · Beta · 1/5 done") &&
+			hasText(n, "Draft API spec")
+	})
+	if card := find(tree1, "Draft API spec"); card == nil {
 		t.Fatal("missing starter card")
 	}
 	// Verify card kind, scroll wrapper, dragGroup, and dropAccept are present on the tree.
@@ -147,37 +227,50 @@ func TestKanbanExamplePlugin(t *testing.T) {
 			walk(c)
 		}
 	}
-	walk(tree)
+	walk(tree1)
 	if !hasDrag || !hasDrop || !hasScroll {
 		t.Fatalf("expected draggable card c1 (%v), scroll (%v), and drop target col-done (%v)", hasDrag, hasScroll, hasDrop)
 	}
 
-	// Add a new card by tapping Add button while passing live form values (mako.blocks.values).
+	// Add a new card in project:p1 by tapping Add button while passing live form values.
 	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
 		Block:  "plugin:kanban/board",
+		Scope:  "project:p1",
 		Node:   "/addbar/add-btn",
 		Kind:   protocol.UiTap,
 		Values: map[string]string{"/addbar/draft": "Ship drag and drop", "/addbar/draft-priority": "high"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	w.until("added card", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
-		return hasText(n, "Ship drag and drop")
+	w1.until("p1 added card", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "Ship drag and drop") && hasText(n, "Kanban · Alpha · 1/6 done")
 	})
 
-	// Drop card c1 onto the Done column: done count rises from 1/6 to 2/6.
-	if _, err := r.event("plugin:kanban/board", "/columns/col-done", protocol.UiDrop, "c1"); err != nil {
+	// Drop card c1 onto the Done column in project:p1: done count rises from 1/6 to 2/6.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:kanban/board",
+		Scope: "project:p1",
+		Node:  "/columns/col-done",
+		Kind:  protocol.UiDrop,
+		Value: "c1",
+	}); err != nil {
 		t.Fatal(err)
 	}
-	w.until("card moved to Done", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
-		return hasText(n, "Kanban · 2/6 done")
+	w1.until("p1 card moved to Done", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "Kanban · Alpha · 2/6 done")
 	})
 
-	// Drop card c2 onto card c3 inside In Progress/cards scroll container to reorder before it.
-	if _, err := r.event("plugin:kanban/board", "/columns/col-doing/cards/c3", protocol.UiDrop, "c2"); err != nil {
+	// Drop card c2 onto card c3 inside In Progress/cards scroll container in project:p1 to reorder before it.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:kanban/board",
+		Scope: "project:p1",
+		Node:  "/columns/col-doing/cards/c3",
+		Kind:  protocol.UiDrop,
+		Value: "c2",
+	}); err != nil {
 		t.Fatal(err)
 	}
-	w.until("card moved before c3", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+	w1.until("p1 card moved before c3", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
 		var order []string
 		var findCol func(*protocol.UiNode)
 		findCol = func(node *protocol.UiNode) {
@@ -196,49 +289,94 @@ func TestKanbanExamplePlugin(t *testing.T) {
 		return len(order) == 2 && order[0] == "c2" && order[1] == "c3"
 	})
 
-	// Exercise MCP tools contributed by kanban: add_card, list_cards, move_card.
+	// Exercise strictly project-scoped MCP tools: list_cards, add_card, move_card.
 	tools := r.m.Tools()
 	if len(tools) != 3 {
 		t.Fatalf("expected 3 kanban tools, got %d", len(tools))
 	}
-	res, err := r.m.CallTool(t.Context(), "kanban", "add_card", []byte(`{"title":"Agent task","column":"review","priority":"high"}`))
-	if err != nil || !strings.Contains(string(res), `"Agent task"`) {
-		t.Fatalf("add_card: %s, %v", res, err)
+	for _, tl := range tools {
+		if tl.Scope != protocol.ScopeProject {
+			t.Fatalf("expected tool %s to have project scope, got %q", tl.ID, tl.Scope)
+		}
 	}
-	w.until("agent card rendered", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+	// Missing ProjectID must be refused.
+	if _, err := r.m.CallToolScoped(t.Context(), "kanban", "add_card", []byte(`{"title":"Should fail"}`), ScopeContext{}); err == nil {
+		t.Fatal("expected add_card without ProjectID to be refused")
+	}
+	if _, err := r.m.CallToolScoped(t.Context(), "kanban", "list_cards", nil, ScopeContext{}); err == nil {
+		t.Fatal("expected list_cards without ProjectID to be refused")
+	}
+	if _, err := r.m.CallToolScoped(t.Context(), "kanban", "move_card", []byte(`{"id":"c1","column":"done"}`), ScopeContext{}); err == nil {
+		t.Fatal("expected move_card without ProjectID to be refused")
+	}
+
+	// Adding and moving cards in p1 affects ONLY p1.
+	res, err := r.m.CallToolScoped(t.Context(), "kanban", "add_card",
+		[]byte(`{"title":"Agent task","column":"review","priority":"high"}`),
+		ScopeContext{ProjectID: "p1"})
+	if err != nil || !strings.Contains(res, `"Agent task"`) {
+		t.Fatalf("add_card p1: %s, %v", res, err)
+	}
+	w1.until("p1 agent card rendered", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
 		return hasText(n, "Agent task")
 	})
-	listed, err := r.m.CallTool(t.Context(), "kanban", "list_cards", []byte(`{"column":"review"}`))
-	if err != nil || !strings.Contains(string(listed), `"Agent task"`) {
-		t.Fatalf("list_cards: %s, %v", listed, err)
+	listedP1, err := r.m.CallToolScoped(t.Context(), "kanban", "list_cards", []byte(`{"column":"review"}`), ScopeContext{ProjectID: "p1"})
+	if err != nil || !strings.Contains(listedP1, `"Agent task"`) {
+		t.Fatalf("list_cards p1: %s, %v", listedP1, err)
 	}
-	if _, err := r.m.CallTool(t.Context(), "kanban", "move_card", []byte(`{"id":"c2","column":"done"}`)); err != nil {
-		t.Fatalf("move_card: %v", err)
+	listedP2, err := r.m.CallToolScoped(t.Context(), "kanban", "list_cards", nil, ScopeContext{ProjectID: "p2"})
+	if err != nil || strings.Contains(listedP2, `"Agent task"`) || strings.Contains(listedP2, `"Ship drag and drop"`) {
+		t.Fatalf("p2 leaked p1 cards: %s, %v", listedP2, err)
 	}
-	w.until("agent moved card to done", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
-		return hasText(n, "Kanban · 3/7 done")
+	if _, err := r.m.CallToolScoped(t.Context(), "kanban", "move_card",
+		[]byte(`{"id":"c2","column":"done"}`),
+		ScopeContext{ProjectID: "p1"}); err != nil {
+		t.Fatalf("move_card p1: %v", err)
+	}
+	w1.until("p1 agent moved card to done", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "Kanban · Alpha · 3/7 done")
 	})
 
-	// Reset command returns a toast notice and logs are recorded in PluginInfo diagnostics.
-	done, err := r.act(&protocol.PluginAction{PluginId: "kanban", Op: protocol.PluginRun, Command: "reset"})
+	// Add an independent card to project:p2 and verify p1 does not see it.
+	if res, err := r.m.CallToolScoped(t.Context(), "kanban", "add_card",
+		[]byte(`{"title":"Beta only task","column":"todo"}`),
+		ScopeContext{ProjectID: "p2"}); err != nil || !strings.Contains(res, `"Beta only task"`) {
+		t.Fatalf("add_card p2: %s, %v", res, err)
+	}
+	w2.until("p2 independent card", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "Beta only task") && hasText(n, "Kanban · Beta · 1/6 done") && !hasText(n, "Agent task")
+	})
+	if listedP1All, err := r.m.CallToolScoped(t.Context(), "kanban", "list_cards", nil, ScopeContext{ProjectID: "p1"}); err != nil || strings.Contains(listedP1All, `"Beta only task"`) {
+		t.Fatalf("p1 leaked p2 card: %s, %v", listedP1All, err)
+	}
+
+	// Reset command scoped to p1 returns a toast notice, resets p1, and leaves p2 intact.
+	done, err := r.act(&protocol.PluginAction{PluginId: "kanban", Op: protocol.PluginRun, Command: "reset", Scope: "project:p1"})
 	if err != nil || done.GetToast() == "" {
 		t.Fatalf("reset command: done=%+v err=%v", done, err)
 	}
+	w1.until("p1 reset", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "Kanban · Alpha · 1/5 done") && !hasText(n, "Agent task")
+	})
+	if listedP2After, err := r.m.CallToolScoped(t.Context(), "kanban", "list_cards", nil, ScopeContext{ProjectID: "p2"}); err != nil || !strings.Contains(listedP2After, `"Beta only task"`) {
+		t.Fatalf("p1 reset disturbed p2: %s, %v", listedP2After, err)
+	}
+
 	var info *protocol.PluginInfo
 	for _, p := range r.m.List() {
 		if p.GetId() == "kanban" {
 			info = p
 		}
 	}
-	if info == nil || len(info.GetTools()) != 3 || len(info.GetLogs()) == 0 || info.GetStorageUsed() == 0 {
-		t.Fatalf("kanban diagnostics: tools=%d logs=%d storage=%d", len(info.GetTools()), len(info.GetLogs()), info.GetStorageUsed())
+	if info == nil || len(info.GetBlocks()) != 1 || info.GetBlocks()[0].GetScope() != protocol.ScopeProject || len(info.GetTools()) != 3 || len(info.GetLogs()) == 0 || info.GetStorageUsed() == 0 {
+		t.Fatalf("kanban diagnostics: blocks=%+v tools=%d logs=%d storage=%d", info.GetBlocks(), len(info.GetTools()), len(info.GetLogs()), info.GetStorageUsed())
 	}
 
-	// Switch to compact view via command and verify ui.tabs renders the column switcher.
-	if _, err := r.act(&protocol.PluginAction{PluginId: "kanban", Op: protocol.PluginRun, Command: "toggle-view"}); err != nil {
+	// Switch project:p1 to compact view via scoped command and verify ui.tabs renders.
+	if _, err := r.act(&protocol.PluginAction{PluginId: "kanban", Op: protocol.PluginRun, Command: "toggle-view", Scope: "project:p1"}); err != nil {
 		t.Fatal(err)
 	}
-	w.until("compact view", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+	w1.until("p1 compact view", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
 		if !hasText(n, "Board") {
 			return false
 		}

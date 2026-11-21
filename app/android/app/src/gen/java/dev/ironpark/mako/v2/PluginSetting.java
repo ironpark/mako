@@ -25,6 +25,8 @@ public  final class PluginSetting extends
     description_ = "";
     options_ = emptyProtobufList();
     value_ = "";
+    scope_ = "";
+    scopedSet_ = emptyProtobufList();
   }
   public static final int KEY_FIELD_NUMBER = 1;
   private java.lang.String key_;
@@ -459,6 +461,338 @@ public  final class PluginSetting extends
   private void clearSet() {
 
     set_ = false;
+  }
+
+  public static final int SCOPE_FIELD_NUMBER = 8;
+  private java.lang.String scope_;
+  /**
+   * <pre>
+   * scope is the setting's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 8 [json_name = "scope"];</code>
+   * @return The scope.
+   */
+  @java.lang.Override
+  public java.lang.String getScope() {
+    return scope_;
+  }
+  /**
+   * <pre>
+   * scope is the setting's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 8 [json_name = "scope"];</code>
+   * @return The bytes for scope.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getScopeBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(scope_);
+  }
+  /**
+   * <pre>
+   * scope is the setting's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 8 [json_name = "scope"];</code>
+   * @param value The scope to set.
+   */
+  private void setScope(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    scope_ = value;
+  }
+  /**
+   * <pre>
+   * scope is the setting's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 8 [json_name = "scope"];</code>
+   */
+  private void clearScope() {
+
+    scope_ = getDefaultInstance().getScope();
+  }
+  /**
+   * <pre>
+   * scope is the setting's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 8 [json_name = "scope"];</code>
+   * @param value The bytes for scope to set.
+   */
+  private void setScopeBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    scope_ = value.toStringUtf8();
+
+  }
+
+  public static final int SCOPED_VALUES_FIELD_NUMBER = 9;
+  private static final class ScopedValuesDefaultEntryHolder {
+    static final com.google.protobuf.MapEntryLite<
+        java.lang.String, java.lang.String> defaultEntry =
+            com.google.protobuf.MapEntryLite
+            .<java.lang.String, java.lang.String>newDefaultInstance(
+                com.google.protobuf.WireFormat.FieldType.STRING,
+                "",
+                com.google.protobuf.WireFormat.FieldType.STRING,
+                "");
+  }
+  private com.google.protobuf.MapFieldLite<
+      java.lang.String, java.lang.String> scopedValues_ =
+          com.google.protobuf.MapFieldLite.emptyMapField();
+  private com.google.protobuf.MapFieldLite<java.lang.String, java.lang.String>
+  internalGetScopedValues() {
+    return scopedValues_;
+  }
+  private com.google.protobuf.MapFieldLite<java.lang.String, java.lang.String>
+  internalGetMutableScopedValues() {
+    if (!scopedValues_.isMutable()) {
+      scopedValues_ = scopedValues_.mutableCopy();
+    }
+    return scopedValues_;
+  }
+  @java.lang.Override
+
+  public int getScopedValuesCount() {
+    return internalGetScopedValues().size();
+  }
+  /**
+   * <pre>
+   * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+   * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+   */
+  @java.lang.Override
+
+  public boolean containsScopedValues(
+      java.lang.String key) {
+    java.util.Objects.requireNonNull(key);
+    return internalGetScopedValues().containsKey(key);
+  }
+  /**
+   * Use {@link #getScopedValuesMap()} instead.
+   */
+  @java.lang.Override
+  @java.lang.Deprecated
+  public java.util.Map<java.lang.String, java.lang.String> getScopedValues() {
+    return getScopedValuesMap();
+  }
+  /**
+   * <pre>
+   * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+   * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+   */
+  @java.lang.Override
+
+  public java.util.Map<java.lang.String, java.lang.String> getScopedValuesMap() {
+    return java.util.Collections.unmodifiableMap(
+        internalGetScopedValues());
+  }
+  /**
+   * <pre>
+   * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+   * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+   */
+  @java.lang.Override
+
+  public /* nullable */
+java.lang.String getScopedValuesOrDefault(
+      java.lang.String key,
+      /* nullable */
+java.lang.String defaultValue) {
+    java.util.Objects.requireNonNull(key);
+    java.util.Map<java.lang.String, java.lang.String> map =
+        internalGetScopedValues();
+    java.lang.String v = map.get(key);
+    return v != null ? v : defaultValue;
+  }
+  /**
+   * <pre>
+   * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+   * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+   */
+  @java.lang.Override
+
+  public java.lang.String getScopedValuesOrThrow(
+      java.lang.String key) {
+    java.util.Objects.requireNonNull(key);
+    java.util.Map<java.lang.String, java.lang.String> map =
+        internalGetScopedValues();
+    java.lang.String v = map.get(key);
+    if (v == null) {
+      throw new java.lang.IllegalArgumentException();
+    }
+    return v;
+  }
+  /**
+   * <pre>
+   * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+   * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+   */
+  private java.util.Map<java.lang.String, java.lang.String>
+  getMutableScopedValuesMap() {
+    return internalGetMutableScopedValues();
+  }
+
+  public static final int SCOPED_SET_FIELD_NUMBER = 10;
+  private com.google.protobuf.Internal.ProtobufList<java.lang.String> scopedSet_;
+  /**
+   * <pre>
+   * scoped_set lists canonical scope keys where a secret override is set
+   * (revision 42); secret values are never sent to front-ends.
+   * </pre>
+   *
+   * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+   * @return A list containing the scopedSet.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.String> getScopedSetList() {
+    return scopedSet_;
+  }
+  /**
+   * <pre>
+   * scoped_set lists canonical scope keys where a secret override is set
+   * (revision 42); secret values are never sent to front-ends.
+   * </pre>
+   *
+   * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+   * @return The count of scopedSet.
+   */
+  @java.lang.Override
+  public int getScopedSetCount() {
+    return scopedSet_.size();
+  }
+  /**
+   * <pre>
+   * scoped_set lists canonical scope keys where a secret override is set
+   * (revision 42); secret values are never sent to front-ends.
+   * </pre>
+   *
+   * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+   * @param index The index of the element to return.
+   * @return The scopedSet at the given index.
+   */
+  @java.lang.Override
+  public java.lang.String getScopedSet(int index) {
+    return scopedSet_.get(index);
+  }
+  /**
+   * <pre>
+   * scoped_set lists canonical scope keys where a secret override is set
+   * (revision 42); secret values are never sent to front-ends.
+   * </pre>
+   *
+   * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+   * @param index The index of the value to return.
+   * @return The bytes of the scopedSet at the given index.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getScopedSetBytes(int index) {
+    return com.google.protobuf.ByteString.copyFromUtf8(
+        scopedSet_.get(index));
+  }
+  private void ensureScopedSetIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<java.lang.String> tmp =
+        scopedSet_;  if (!tmp.isModifiable()) {
+      scopedSet_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+  /**
+   * <pre>
+   * scoped_set lists canonical scope keys where a secret override is set
+   * (revision 42); secret values are never sent to front-ends.
+   * </pre>
+   *
+   * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+   * @param index The index to set the value at.
+   * @param value The scopedSet to set.
+   */
+  private void setScopedSet(
+      int index, java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureScopedSetIsMutable();
+    scopedSet_.set(index, value);
+  }
+  /**
+   * <pre>
+   * scoped_set lists canonical scope keys where a secret override is set
+   * (revision 42); secret values are never sent to front-ends.
+   * </pre>
+   *
+   * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+   * @param value The scopedSet to add.
+   */
+  private void addScopedSet(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureScopedSetIsMutable();
+    scopedSet_.add(value);
+  }
+  /**
+   * <pre>
+   * scoped_set lists canonical scope keys where a secret override is set
+   * (revision 42); secret values are never sent to front-ends.
+   * </pre>
+   *
+   * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+   * @param values The scopedSet to add.
+   */
+  private void addAllScopedSet(
+      java.lang.Iterable<java.lang.String> values) {
+    ensureScopedSetIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, scopedSet_);
+  }
+  /**
+   * <pre>
+   * scoped_set lists canonical scope keys where a secret override is set
+   * (revision 42); secret values are never sent to front-ends.
+   * </pre>
+   *
+   * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+   */
+  private void clearScopedSet() {
+    scopedSet_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * scoped_set lists canonical scope keys where a secret override is set
+   * (revision 42); secret values are never sent to front-ends.
+   * </pre>
+   *
+   * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+   * @param value The bytes of the scopedSet to add.
+   */
+  private void addScopedSetBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    ensureScopedSetIsMutable();
+    scopedSet_.add(value.toStringUtf8());
   }
 
   public static dev.ironpark.mako.v2.PluginSetting parseFrom(
@@ -1008,6 +1342,352 @@ public  final class PluginSetting extends
       return this;
     }
 
+    /**
+     * <pre>
+     * scope is the setting's declared scope: "", "global", "space", "project" or
+     * "session" (revision 42).
+     * </pre>
+     *
+     * <code>string scope = 8 [json_name = "scope"];</code>
+     * @return The scope.
+     */
+    @java.lang.Override
+    public java.lang.String getScope() {
+      return instance.getScope();
+    }
+    /**
+     * <pre>
+     * scope is the setting's declared scope: "", "global", "space", "project" or
+     * "session" (revision 42).
+     * </pre>
+     *
+     * <code>string scope = 8 [json_name = "scope"];</code>
+     * @return The bytes for scope.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getScopeBytes() {
+      return instance.getScopeBytes();
+    }
+    /**
+     * <pre>
+     * scope is the setting's declared scope: "", "global", "space", "project" or
+     * "session" (revision 42).
+     * </pre>
+     *
+     * <code>string scope = 8 [json_name = "scope"];</code>
+     * @param value The scope to set.
+     * @return This builder for chaining.
+     */
+    public Builder setScope(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setScope(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * scope is the setting's declared scope: "", "global", "space", "project" or
+     * "session" (revision 42).
+     * </pre>
+     *
+     * <code>string scope = 8 [json_name = "scope"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearScope() {
+      copyOnWrite();
+      instance.clearScope();
+      return this;
+    }
+    /**
+     * <pre>
+     * scope is the setting's declared scope: "", "global", "space", "project" or
+     * "session" (revision 42).
+     * </pre>
+     *
+     * <code>string scope = 8 [json_name = "scope"];</code>
+     * @param value The bytes for scope to set.
+     * @return This builder for chaining.
+     */
+    public Builder setScopeBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setScopeBytes(value);
+      return this;
+    }
+
+    @java.lang.Override
+
+    public int getScopedValuesCount() {
+      return instance.getScopedValuesMap().size();
+    }
+    /**
+     * <pre>
+     * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+     * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+     */
+    @java.lang.Override
+
+    public boolean containsScopedValues(
+        java.lang.String key) {
+      java.util.Objects.requireNonNull(key);
+      return instance.getScopedValuesMap().containsKey(key);
+    }
+
+    public Builder clearScopedValues() {
+      copyOnWrite();
+      instance.getMutableScopedValuesMap().clear();
+      return this;
+    }
+    /**
+     * <pre>
+     * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+     * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+     */
+
+    public Builder removeScopedValues(
+        java.lang.String key) {
+      java.util.Objects.requireNonNull(key);
+      copyOnWrite();
+      instance.getMutableScopedValuesMap().remove(key);
+      return this;
+    }
+    /**
+     * Use {@link #getScopedValuesMap()} instead.
+     */
+    @java.lang.Override
+    @java.lang.Deprecated
+    public java.util.Map<java.lang.String, java.lang.String> getScopedValues() {
+      return getScopedValuesMap();
+    }
+    /**
+     * <pre>
+     * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+     * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+     */
+    @java.lang.Override
+    public java.util.Map<java.lang.String, java.lang.String> getScopedValuesMap() {
+      return java.util.Collections.unmodifiableMap(
+          instance.getScopedValuesMap());
+    }
+    /**
+     * <pre>
+     * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+     * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+     */
+    @java.lang.Override
+
+    public /* nullable */
+java.lang.String getScopedValuesOrDefault(
+        java.lang.String key,
+        /* nullable */
+java.lang.String defaultValue) {
+      java.util.Objects.requireNonNull(key);
+      java.util.Map<java.lang.String, java.lang.String> map =
+          instance.getScopedValuesMap();
+      return map.containsKey(key) ? map.get(key) : defaultValue;
+    }
+    /**
+     * <pre>
+     * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+     * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+     */
+    @java.lang.Override
+
+    public java.lang.String getScopedValuesOrThrow(
+        java.lang.String key) {
+      java.util.Objects.requireNonNull(key);
+      java.util.Map<java.lang.String, java.lang.String> map =
+          instance.getScopedValuesMap();
+      if (!map.containsKey(key)) {
+        throw new java.lang.IllegalArgumentException();
+      }
+      return map.get(key);
+    }
+    /**
+     * <pre>
+     * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+     * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+     */
+    public Builder putScopedValues(
+        java.lang.String key,
+        java.lang.String value) {
+      java.util.Objects.requireNonNull(key);
+      java.util.Objects.requireNonNull(value);
+      copyOnWrite();
+      instance.getMutableScopedValuesMap().put(key, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+     * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+     * </pre>
+     *
+     * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+     */
+    public Builder putAllScopedValues(
+        java.util.Map<java.lang.String, java.lang.String> values) {
+      copyOnWrite();
+      instance.getMutableScopedValuesMap().putAll(values);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * scoped_set lists canonical scope keys where a secret override is set
+     * (revision 42); secret values are never sent to front-ends.
+     * </pre>
+     *
+     * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+     * @return A list containing the scopedSet.
+     */
+    @java.lang.Override
+    public java.util.List<java.lang.String>
+        getScopedSetList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getScopedSetList());
+    }
+    /**
+     * <pre>
+     * scoped_set lists canonical scope keys where a secret override is set
+     * (revision 42); secret values are never sent to front-ends.
+     * </pre>
+     *
+     * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+     * @return The count of scopedSet.
+     */
+    @java.lang.Override
+    public int getScopedSetCount() {
+      return instance.getScopedSetCount();
+    }
+    /**
+     * <pre>
+     * scoped_set lists canonical scope keys where a secret override is set
+     * (revision 42); secret values are never sent to front-ends.
+     * </pre>
+     *
+     * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+     * @param index The index of the element to return.
+     * @return The scopedSet at the given index.
+     */
+    @java.lang.Override
+    public java.lang.String getScopedSet(int index) {
+      return instance.getScopedSet(index);
+    }
+    /**
+     * <pre>
+     * scoped_set lists canonical scope keys where a secret override is set
+     * (revision 42); secret values are never sent to front-ends.
+     * </pre>
+     *
+     * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the scopedSet at the given index.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getScopedSetBytes(int index) {
+      return instance.getScopedSetBytes(index);
+    }
+    /**
+     * <pre>
+     * scoped_set lists canonical scope keys where a secret override is set
+     * (revision 42); secret values are never sent to front-ends.
+     * </pre>
+     *
+     * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+     * @param index The index to set the value at.
+     * @param value The scopedSet to set.
+     * @return This builder for chaining.
+     */
+    public Builder setScopedSet(
+        int index, java.lang.String value) {
+      copyOnWrite();
+      instance.setScopedSet(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * scoped_set lists canonical scope keys where a secret override is set
+     * (revision 42); secret values are never sent to front-ends.
+     * </pre>
+     *
+     * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+     * @param value The scopedSet to add.
+     * @return This builder for chaining.
+     */
+    public Builder addScopedSet(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.addScopedSet(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * scoped_set lists canonical scope keys where a secret override is set
+     * (revision 42); secret values are never sent to front-ends.
+     * </pre>
+     *
+     * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+     * @param values The scopedSet to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllScopedSet(
+        java.lang.Iterable<java.lang.String> values) {
+      copyOnWrite();
+      instance.addAllScopedSet(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * scoped_set lists canonical scope keys where a secret override is set
+     * (revision 42); secret values are never sent to front-ends.
+     * </pre>
+     *
+     * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearScopedSet() {
+      copyOnWrite();
+      instance.clearScopedSet();
+      return this;
+    }
+    /**
+     * <pre>
+     * scoped_set lists canonical scope keys where a secret override is set
+     * (revision 42); secret values are never sent to front-ends.
+     * </pre>
+     *
+     * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+     * @param value The bytes of the scopedSet to add.
+     * @return This builder for chaining.
+     */
+    public Builder addScopedSetBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.addScopedSetBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginSetting)
   }
   @java.lang.Override
@@ -1031,10 +1711,14 @@ public  final class PluginSetting extends
             "options_",
             "value_",
             "set_",
+            "scope_",
+            "scopedValues_",
+            ScopedValuesDefaultEntryHolder.defaultEntry,
+            "scopedSet_",
           };
           java.lang.String info =
-              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u021a\u0006\u0208\u0007\u0007";
+              "\u0000\n\u0000\u0000\u0001\n\n\u0001\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0004\u0208\u0005\u021a\u0006\u0208\u0007\u0007\b\u0208\t2\n\u021a";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

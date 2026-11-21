@@ -9,6 +9,8 @@ import (
 	"github.com/ironpark/ggui"
 
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gui/i18n"
+	"github.com/ironpark/mako/internal/layoutdoc"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -371,5 +373,247 @@ func TestPluginBlockDragGroupFiltering(t *testing.T) {
 	drag(center(card.Rect), center(right.Rect))
 	if len(got) != 1 || got[0] != (ev{"/right", protocol.UiDrop, "c1"}) {
 		t.Fatalf("drop onto matching group = %+v", got)
+	}
+}
+
+// Scoped blocks with no active target render an empty-scope card (with a quick
+// Pin selector when targets exist) instead of starting a stream.
+func TestScopedBlockEmptyPlaceholder(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	i18n.Set("en")
+	m := newModel(config.Default(), "")
+	m.Spaces.Set(spaceList{
+		Spaces: []space{{ID: "sp1", Name: "Work"}},
+		Projects: []project{
+			{ID: "alpha", Name: "Alpha", Roots: []projectRoot{{Locations: []fileRoot{{Node: "n1", Path: "/src/alpha"}}}}},
+		},
+	})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s1", Agent: "claude", Project: "/src/alpha", NodeId: "n1"}})
+
+	cases := []struct {
+		scope    string
+		wantText string
+		wantChip string
+		wantPin  string
+	}{
+		{protocol.ScopeProject, "Select a project to view this block", "No project", "Pin to a project"},
+		{protocol.ScopeSpace, "Select a space to view this block", "No space", "Pin to a space"},
+		{protocol.ScopeSession, "Select a session to view this block", "No session", "Pin to a session"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.scope, func(t *testing.T) {
+			p := ggui.ProbeBuilder(func() ggui.Widget {
+				return pluginBlock(m, "plugin:kanban/board", "kanban", "Board", tc.scope, nil)
+			}, ggui.Sz(420, 320))
+			defer p.Close()
+			for range 3 {
+				p.Frame()
+			}
+			sem := p.Semantics().String()
+			for _, want := range []string{tc.wantText, tc.wantChip, tc.wantPin, "Block scope"} {
+				if !strings.Contains(sem, want) {
+					t.Errorf("missing %q in:\n%s", want, sem)
+				}
+			}
+			if strings.Contains(sem, "Starting…") {
+				t.Errorf("empty-scope block unexpectedly rendered Starting…:\n%s", sem)
+			}
+		})
+	}
+}
+
+// Scoped blocks resolve Follow vs Pin targets across active space, project,
+// and session, display the active target name in the header chip, and persist
+// pinned scope props into the active layout document via layoutdoc.Apply.
+func TestScopedBlockHeaderChipFollowAndPin(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	i18n.Set("en")
+	layoutJSON := `{"version":1,"root":{"id":"window","row":[
+		{"id":"workspace","column":[{"panes":"main","grow":1},{"id":"board","block":"plugin:kanban/board","size":220}],"grow":1}]}}`
+	m, p := windowProbe(t, windowView, withLayout(t, layoutJSON))
+
+	// Register a project-scoped plugin block and two projects.
+	m.Spaces.Update(func(l spaceList) spaceList {
+		l.Spaces = []space{{ID: "sp1", Name: "Work"}}
+		l.Projects = []project{
+			{ID: "alpha", Name: "Alpha", Roots: []projectRoot{{Locations: []fileRoot{{Node: "n1", Path: "/src/alpha"}}}}},
+			{ID: "beta", Name: "Beta", Roots: []projectRoot{{Locations: []fileRoot{{Node: "n1", Path: "/src/beta"}}}}},
+		}
+		return l
+	})
+	m.setPlugins([]*protocol.PluginInfo{{
+		Id: "kanban", Version: "0.3.0", Publisher: "ironpark", State: protocol.PluginRunning,
+		Blocks: []*protocol.PluginBlock{{Name: "plugin:kanban/board", Title: "Board", Scope: protocol.ScopeProject}},
+	}})
+	for range 3 {
+		p.Frame()
+	}
+
+	// Initially no active project -> empty-scope placeholder & "No project" chip.
+	sem := p.Semantics().String()
+	if !strings.Contains(sem, "Select a project to view this block") || !strings.Contains(sem, "No project") {
+		t.Fatalf("expected empty project scope state:\n%s", sem)
+	}
+
+	// Focus a session belonging to project Alpha -> Follow mode resolves to project:alpha.
+	m.Sessions.Set([]*protocol.SessionInfo{
+		{Id: "s-alpha", Agent: "claude", NodeId: "n1", Project: "/src/alpha"},
+		{Id: "s-beta", Agent: "claude", NodeId: "n1", Project: "/src/beta"},
+	})
+	m.Selected.Set("s-alpha")
+	for range 3 {
+		p.Frame()
+	}
+	sem = p.Semantics().String()
+	if strings.Contains(sem, "Select a project to view this block") {
+		t.Fatalf("expected active project to leave empty-scope state:\n%s", sem)
+	}
+	if !strings.Contains(sem, "Alpha") {
+		t.Fatalf("expected header scope chip to show Alpha:\n%s", sem)
+	}
+
+	// Verify active space and session resolution helpers too.
+	m.setSpace(1)
+	if got := m.resolveActiveScope(protocol.ScopeSpace); got != "space:sp1" {
+		t.Fatalf("resolveActiveScope(space) = %q, want space:sp1", got)
+	}
+	if got := m.resolveActiveScope(protocol.ScopeSession); got != "session:s-alpha" {
+		t.Fatalf("resolveActiveScope(session) = %q, want session:s-alpha", got)
+	}
+
+	// Selecting project Beta in the sidebar updates Follow mode to project:beta.
+	m.Scope.Set(sidebarScope{Space: "sp1", scopeKey: scopeKey{Section: "beta"}})
+	if got := m.resolveActiveScope(protocol.ScopeProject); got != "project:beta" {
+		t.Fatalf("resolveActiveScope(project) with sidebar scope = %q, want project:beta", got)
+	}
+	for range 3 {
+		p.Frame()
+	}
+	if sem = p.Semantics().String(); !strings.Contains(sem, "Beta") {
+		t.Fatalf("expected header scope chip to follow Beta:\n%s", sem)
+	}
+
+	// Pinning the block to project:alpha persists props["scope"] via layoutdoc.Apply + setWindowLayout.
+	m.setPluginBlockScope("plugin:kanban/board", "", "project:alpha")
+	raw := ggui.Peek(m.Spaces).WindowLayouts[layoutdoc.DefaultName]
+	doc, err := layoutdoc.Parse(raw, m.blocks)
+	if err != nil {
+		t.Fatalf("pinned layout failed to parse: %v\n%s", err, string(raw))
+	}
+	node := doc.Node("board")
+	if node == nil || blockPropScope(node.Props) != "project:alpha" {
+		t.Fatalf("pinned node props = %#v, want scope=project:alpha", node)
+	}
+
+	// Applying the updated layout keeps the block pinned to Alpha even while Beta is active.
+	m.showWindowLayout(winSource{body: string(raw)})
+	for range 3 {
+		p.Frame()
+	}
+	if sem = p.Semantics().String(); !strings.Contains(sem, "Block scope: Alpha (pinned)") {
+		t.Fatalf("expected pinned block header chip to show Alpha (pinned):\n%s", sem)
+	}
+
+	// Unpinning clears props["scope"] so the block follows Beta again.
+	m.setPluginBlockScope("plugin:kanban/board", "project:alpha", "")
+	raw = ggui.Peek(m.Spaces).WindowLayouts[layoutdoc.DefaultName]
+	doc, err = layoutdoc.Parse(raw, m.blocks)
+	if err != nil {
+		t.Fatalf("unpinned layout failed to parse: %v", err)
+	}
+	if node := doc.Node("board"); node == nil || blockPropScope(node.Props) != "" {
+		t.Fatalf("unpinned node still has scope prop: %#v", node)
+	}
+}
+
+// Scoped settings render a scope selector on the plugin card, display
+// global defaults vs scoped overrides (including secrets), and show a
+// Reset to default button only when overridden.
+func TestPluginScopedSettingsUI(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	i18n.Set("en")
+	m := newModel(config.Default(), "")
+	m.Spaces.Set(spaceList{
+		Projects: []project{
+			{ID: "alpha", Name: "Alpha"},
+			{ID: "beta", Name: "Beta"},
+		},
+	})
+	scopedPlugin := &protocol.PluginInfo{
+		Id: "ci-status", Version: "0.2.0", Publisher: "ironpark", State: protocol.PluginRunning,
+		Settings: []*protocol.PluginSetting{
+			{
+				Key: "repo", Type: "string", Label: "Repository", Value: "default/repo", Scope: protocol.ScopeProject,
+				ScopedValues: map[string]string{"project:alpha": "acme/alpha"},
+			},
+			{
+				Key: "branch", Type: "string", Label: "Branch", Value: "main", Scope: protocol.ScopeProject,
+			},
+			{
+				Key: "token", Type: "secret", Label: "GitHub token", Set: true, Scope: protocol.ScopeProject,
+				ScopedSet: []string{"project:alpha"},
+			},
+			{
+				Key: "interval", Type: "number", Label: "Poll seconds", Value: "60", Scope: protocol.ScopeGlobal,
+			},
+		},
+	}
+	globalPlugin := ciPlugin(protocol.PluginRunning)
+
+	// Global-only plugin does not show the Settings scope selector.
+	gp := ggui.ProbeBuilder(func() ggui.Widget {
+		return pluginCardBody(m, globalPlugin)
+	}, ggui.Sz(720, 600))
+	defer gp.Close()
+	for range 3 {
+		gp.Frame()
+	}
+	if strings.Contains(gp.Semantics().String(), "Settings scope") {
+		t.Fatalf("global-only plugin unexpectedly showed Settings scope:\n%s", gp.Semantics().String())
+	}
+
+	// Plugin with scoped settings shows scope selector and switches cleanly between scopes.
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		return pluginCardBody(m, scopedPlugin)
+	}, ggui.Sz(760, 820))
+	defer p.Close()
+	for range 3 {
+		p.Frame()
+	}
+	sem := p.Semantics().String()
+	for _, want := range []string{"Settings scope", "Global default", "Repository", "default/repo", "GitHub token"} {
+		if !strings.Contains(sem, want) {
+			t.Errorf("global view missing %q:\n%s", want, sem)
+		}
+	}
+	if strings.Contains(sem, "Reset to default") {
+		t.Errorf("global view should not show Reset to default:\n%s", sem)
+	}
+
+	// Switch to project:alpha (has repo & token overrides, inherits branch, interval is global).
+	m.setPluginSettingScope("ci-status", "project:alpha")
+	for range 3 {
+		p.Frame()
+	}
+	sem = p.Semantics().String()
+	for _, want := range []string{"Alpha", "acme/alpha", "Overridden", "Inherits default", "Applies globally", "Reset to default"} {
+		if !strings.Contains(sem, want) {
+			t.Errorf("project:alpha view missing %q:\n%s", want, sem)
+		}
+	}
+
+	// Switch to project:beta (no overrides -> inherits defaults, no Reset to default).
+	m.setPluginSettingScope("ci-status", "project:beta")
+	for range 3 {
+		p.Frame()
+	}
+	sem = p.Semantics().String()
+	for _, want := range []string{"Beta", "default/repo", "Inherits default", "Applies globally"} {
+		if !strings.Contains(sem, want) {
+			t.Errorf("project:beta view missing %q:\n%s", want, sem)
+		}
+	}
+	if strings.Contains(sem, "Reset to default") || strings.Contains(sem, "acme/alpha") {
+		t.Errorf("project:beta view leaked alpha override:\n%s", sem)
 	}
 }

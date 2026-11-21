@@ -130,7 +130,10 @@ func (*WriteResponse) Descriptor() ([]byte, []int) {
 type GetSettingRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// key is the setting's key in the manifest.
-	Key           string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// scope is the optional canonical scope key ("" for global, "space:<id>",
+	// "project:<id>", or "session:<id>").
+	Scope         string `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -168,6 +171,13 @@ func (*GetSettingRequest) Descriptor() ([]byte, []int) {
 func (x *GetSettingRequest) GetKey() string {
 	if x != nil {
 		return x.Key
+	}
+	return ""
+}
+
+func (x *GetSettingRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
 	}
 	return ""
 }
@@ -219,7 +229,10 @@ func (x *GetSettingResponse) GetSetting() *Setting {
 
 // ListSettingsRequest asks for every setting.
 type ListSettingsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// scope is the optional canonical scope key ("" for global, "space:<id>",
+	// "project:<id>", or "session:<id>").
+	Scope         string `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -252,6 +265,13 @@ func (x *ListSettingsRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ListSettingsRequest.ProtoReflect.Descriptor instead.
 func (*ListSettingsRequest) Descriptor() ([]byte, []int) {
 	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ListSettingsRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
 }
 
 // ListSettingsResponse is every setting, in the manifest's order.
@@ -393,8 +413,11 @@ func (x *Setting) GetSet() bool {
 
 // GetItemRequest names a key.
 type GetItemRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Key   string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// scope is the optional canonical scope key ("" for global, "space:<id>",
+	// "project:<id>", or "session:<id>").
+	Scope         string `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -432,6 +455,13 @@ func (*GetItemRequest) Descriptor() ([]byte, []int) {
 func (x *GetItemRequest) GetKey() string {
 	if x != nil {
 		return x.Key
+	}
+	return ""
+}
+
+func (x *GetItemRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
 	}
 	return ""
 }
@@ -496,7 +526,10 @@ type SetItemRequest struct {
 	// key is at most 256 bytes.
 	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	// value is at most 256 KiB.
-	Value         string `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	Value string `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	// scope is the optional canonical scope key ("" for global, "space:<id>",
+	// "project:<id>", or "session:<id>").
+	Scope         string `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -541,6 +574,13 @@ func (x *SetItemRequest) GetKey() string {
 func (x *SetItemRequest) GetValue() string {
 	if x != nil {
 		return x.Value
+	}
+	return ""
+}
+
+func (x *SetItemRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
 	}
 	return ""
 }
@@ -602,8 +642,11 @@ func (x *SetItemResponse) GetQuota() uint32 {
 
 // DeleteItemRequest names a key.
 type DeleteItemRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Key   string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// scope is the optional canonical scope key ("" for global, "space:<id>",
+	// "project:<id>", or "session:<id>").
+	Scope         string `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -641,6 +684,13 @@ func (*DeleteItemRequest) Descriptor() ([]byte, []int) {
 func (x *DeleteItemRequest) GetKey() string {
 	if x != nil {
 		return x.Key
+	}
+	return ""
+}
+
+func (x *DeleteItemRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
 	}
 	return ""
 }
@@ -692,8 +742,11 @@ func (x *DeleteItemResponse) GetFound() bool {
 
 // ListKeysRequest gives the start of the keys to list.
 type ListKeysRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Prefix        string                 `protobuf:"bytes,1,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Prefix string                 `protobuf:"bytes,1,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	// scope is the optional canonical scope key ("" for global, "space:<id>",
+	// "project:<id>", or "session:<id>").
+	Scope         string `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -731,6 +784,13 @@ func (*ListKeysRequest) Descriptor() ([]byte, []int) {
 func (x *ListKeysRequest) GetPrefix() string {
 	if x != nil {
 		return x.Prefix
+	}
+	return ""
+}
+
+func (x *ListKeysRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
 	}
 	return ""
 }
@@ -1918,12 +1978,14 @@ const file_mako_plugin_v1_host_proto_rawDesc = "" +
 	"\fWriteRequest\x12\x14\n" +
 	"\x05level\x18\x01 \x01(\tR\x05level\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\x0f\n" +
-	"\rWriteResponse\"%\n" +
+	"\rWriteResponse\";\n" +
 	"\x11GetSettingRequest\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\"G\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05scope\x18\x02 \x01(\tR\x05scope\"G\n" +
 	"\x12GetSettingResponse\x121\n" +
-	"\asetting\x18\x01 \x01(\v2\x17.mako.plugin.v1.SettingR\asetting\"\x15\n" +
-	"\x13ListSettingsRequest\"K\n" +
+	"\asetting\x18\x01 \x01(\v2\x17.mako.plugin.v1.SettingR\asetting\"+\n" +
+	"\x13ListSettingsRequest\x12\x14\n" +
+	"\x05scope\x18\x01 \x01(\tR\x05scope\"K\n" +
 	"\x14ListSettingsResponse\x123\n" +
 	"\bsettings\x18\x01 \x03(\v2\x17.mako.plugin.v1.SettingR\bsettings\"\x81\x01\n" +
 	"\aSetting\x12\x10\n" +
@@ -1932,24 +1994,28 @@ const file_mako_plugin_v1_host_proto_rawDesc = "" +
 	"\x04text\x18\x03 \x01(\tR\x04text\x12\x12\n" +
 	"\x04flag\x18\x04 \x01(\bR\x04flag\x12\x16\n" +
 	"\x06number\x18\x05 \x01(\x01R\x06number\x12\x10\n" +
-	"\x03set\x18\x06 \x01(\bR\x03set\"\"\n" +
+	"\x03set\x18\x06 \x01(\bR\x03set\"8\n" +
 	"\x0eGetItemRequest\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\"=\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05scope\x18\x02 \x01(\tR\x05scope\"=\n" +
 	"\x0fGetItemResponse\x12\x14\n" +
 	"\x05found\x18\x01 \x01(\bR\x05found\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value\"8\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\"N\n" +
 	"\x0eSetItemRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value\";\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\x12\x14\n" +
+	"\x05scope\x18\x03 \x01(\tR\x05scope\";\n" +
 	"\x0fSetItemResponse\x12\x12\n" +
 	"\x04used\x18\x01 \x01(\rR\x04used\x12\x14\n" +
-	"\x05quota\x18\x02 \x01(\rR\x05quota\"%\n" +
+	"\x05quota\x18\x02 \x01(\rR\x05quota\";\n" +
 	"\x11DeleteItemRequest\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\"*\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05scope\x18\x02 \x01(\tR\x05scope\"*\n" +
 	"\x12DeleteItemResponse\x12\x14\n" +
-	"\x05found\x18\x01 \x01(\bR\x05found\")\n" +
+	"\x05found\x18\x01 \x01(\bR\x05found\"?\n" +
 	"\x0fListKeysRequest\x12\x16\n" +
-	"\x06prefix\x18\x01 \x01(\tR\x06prefix\"&\n" +
+	"\x06prefix\x18\x01 \x01(\tR\x06prefix\x12\x14\n" +
+	"\x05scope\x18\x02 \x01(\tR\x05scope\"&\n" +
 	"\x10ListKeysResponse\x12\x12\n" +
 	"\x04keys\x18\x01 \x03(\tR\x04keys\"d\n" +
 	"\x15ReadTranscriptRequest\x12\x1d\n" +

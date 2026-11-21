@@ -89,15 +89,20 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 		if v == nil || !contains(commandIDs(v.man), a.GetCommand()) {
 			return nil, fmt.Errorf("the plugin has no command %q", a.GetCommand())
 		}
+		scopeKey := a.GetScope()
+		if _, _, err := parseScopeKey(scopeKey); err != nil {
+			return nil, err
+		}
+		ctxJSON := marshalScopeContext(m.resolveScope(scopeKey))
 		var open, toast string
 		err := p.do(ctx, func() error {
 			if err := p.ensure(); err != nil {
 				return err
 			}
-			_, err := p.invoke("command", true, a.GetCommand())
+			_, err := p.invoke("command", true, a.GetCommand(), ctxJSON)
 			open, toast = p.openURL, p.toast
 			p.openURL, p.toast = "", ""
-			p.afterCall()
+			p.afterCall(scopeKey)
 			return err
 		})
 		if err != nil {
@@ -108,6 +113,10 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 		if v == nil {
 			return nil, errors.New("the plugin's manifest has not been read")
 		}
+		scopeKey := a.GetScope()
+		if _, _, err := parseScopeKey(scopeKey); err != nil {
+			return nil, err
+		}
 		var d *SettingDecl
 		for i := range v.man.Settings {
 			if v.man.Settings[i].Key == a.GetKey() {
@@ -117,7 +126,7 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 		if d == nil {
 			return nil, fmt.Errorf("the plugin declares no setting %q", a.GetKey())
 		}
-		if err := p.settings.set(*d, a.GetValue()); err != nil {
+		if err := p.settings.setScoped(*d, scopeKey, a.GetValue()); err != nil {
 			return nil, err
 		}
 		p.status(func() {})
@@ -129,15 +138,17 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 			p.mu.Lock()
 			var ins []*instance
 			for _, in := range p.inst {
-				if in.loaded {
+				if in.loaded && (scopeKey == "" || in.scopeKey == scopeKey) {
 					ins = append(ins, in)
 				}
 			}
 			p.mu.Unlock()
+			var reloadedKeys []string
 			for _, in := range ins {
 				p.load(in)
+				reloadedKeys = append(reloadedKeys, in.key)
 			}
-			p.renderAll()
+			p.renderMatching(scopeKey, reloadedKeys...)
 		})
 	case protocol.PluginAllowAgent, protocol.PluginDenyAgent:
 		if err := p.answerAgent(a.GetKey(), a.GetOp(), a.GetValue()); err != nil {

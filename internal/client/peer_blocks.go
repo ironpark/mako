@@ -13,7 +13,12 @@ import (
 // WatchBlockOn follows the block of node, as WatchBlock follows one of
 // the daemon's own.
 func (c *Client) WatchBlockOn(ctx context.Context, node, block string, fn func(*protocol.BlockUpdate)) error {
-	return follow(ctx, c, protocol.TypeWatchBlock, &protocol.WatchBlock{Block: block, NodeId: node}, fn)
+	return c.WatchBlockOnScoped(ctx, node, block, "", fn)
+}
+
+// WatchBlockOnScoped follows the block of node in the given canonical scope.
+func (c *Client) WatchBlockOnScoped(ctx context.Context, node, block, scope string, fn func(*protocol.BlockUpdate)) error {
+	return follow(ctx, c, protocol.TypeWatchBlock, &protocol.WatchBlock{Block: block, NodeId: node, Scope: scope}, fn)
 }
 
 // AgentBlocksOn lists the blocks node's agents show.

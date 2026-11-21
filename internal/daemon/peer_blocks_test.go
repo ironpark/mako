@@ -40,11 +40,15 @@ func newBlockPair(t *testing.T) blockPair {
 // followBlock watches a block of node through c, applying the updates to
 // the tree, which each update it hands on holds whole.
 func followBlock(ctx context.Context, c *client.Client, node, block string) (<-chan *protocol.BlockUpdate, <-chan error) {
+	return followBlockScoped(ctx, c, node, block, "")
+}
+
+func followBlockScoped(ctx context.Context, c *client.Client, node, block, scope string) (<-chan *protocol.BlockUpdate, <-chan error) {
 	got := make(chan *protocol.BlockUpdate, 16)
 	ended := make(chan error, 2)
 	go func() {
 		var tree *protocol.UiNode
-		ended <- c.WatchBlockOn(ctx, node, block, func(u *protocol.BlockUpdate) {
+		ended <- c.WatchBlockOnScoped(ctx, node, block, scope, func(u *protocol.BlockUpdate) {
 			switch {
 			case u.GetTree() != nil:
 				tree = u.GetTree()
@@ -56,7 +60,7 @@ func followBlock(ctx context.Context, c *client.Client, node, block string) (<-c
 				}
 				tree = next
 			}
-			got <- &protocol.BlockUpdate{Block: u.GetBlock(), Tree: tree, Plugin: u.GetPlugin(), SessionId: u.GetSessionId(),
+			got <- &protocol.BlockUpdate{Block: u.GetBlock(), Scope: u.GetScope(), Tree: tree, Plugin: u.GetPlugin(), SessionId: u.GetSessionId(),
 				Agent: u.GetAgent(), Title: u.GetTitle(), State: u.GetState(), Gone: u.GetGone()}
 		})
 	}()
@@ -262,4 +266,77 @@ func TestARelayedBlockComesPlain(t *testing.T) {
 	if env.GetBlockUpdate().GetTree().GetText() != long {
 		t.Fatalf("the update: %v", env)
 	}
+}
+
+// Remote peer forwarding preserves Scope on both WatchBlock and BlockEvent.
+func TestANodeLetInWatchesScopedPluginBlock(t *testing.T) {
+	p := newBlockPair(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	setTestWorkspaceSpaceAndProjects(t, p.server, dirA, dirB)
+
+	writePlugin(t, p.server, "rscope", map[string]string{
+		"plugin.toml": `id = "rscope"
+version = "1.0.0"
+publisher = "test"
+api = 1
+entry = "main.js"
+permissions = []
+
+[[contributes.block]]
+id = "counter"
+title = "Counter"
+scope = "project"
+`,
+		"main.js": `export default {
+  activate(m) {
+    m.blocks.register("counter", {
+      state: { n: 0 },
+      render: (s, ui, ctx) => ui.column([ui.button(ctx.projectName + ":" + s.n, { key: "b", onTap: ["tap"] })]),
+      on: { tap(s) { s.n++ } },
+    });
+  },
+};`,
+	})
+	waitForWithin(t, 20*time.Second, "the scoped plugin ready", func() bool {
+		list := p.server.plugins.List()
+		return len(list) == 1 && list[0].GetState() == protocol.PluginReady
+	})
+
+	server := p.server.cfg.NodeID
+	gotA, endedA := followBlockScoped(ctx, p.c, server, "plugin:rscope/counter", "project:p1")
+	gotB, endedB := followBlockScoped(ctx, p.c, server, "plugin:rscope/counter", "project:p2")
+
+	uA := until(ctx, t, gotA, endedA, "Alpha:0")
+	if uA.GetScope() != "project:p1" {
+		t.Fatalf("remote update scope = %q, want project:p1", uA.GetScope())
+	}
+	uB := until(ctx, t, gotB, endedB, "Beta:0")
+	if uB.GetScope() != "project:p2" {
+		t.Fatalf("remote update scope = %q, want project:p2", uB.GetScope())
+	}
+
+	if _, err := p.c.BlockEvent(ctx, &protocol.BlockEvent{
+		NodeId: server,
+		Block:  "plugin:rscope/counter",
+		Scope:  "project:p1",
+		Node:   "/b",
+		Kind:   protocol.UiTap,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	until(ctx, t, gotA, endedA, "Alpha:1")
+	if _, err := p.c.BlockEvent(ctx, &protocol.BlockEvent{
+		NodeId: server,
+		Block:  "plugin:rscope/counter",
+		Scope:  "project:p2",
+		Node:   "/b",
+		Kind:   protocol.UiTap,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	until(ctx, t, gotB, endedB, "Beta:1")
 }

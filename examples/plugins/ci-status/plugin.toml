@@ -17,5 +17,5 @@ id = "rerun"
 title = "Re-run the latest failed CI run"
 
 [contributes.settings]
-repo = { type = "string", label = "Repository", description = "The repository on GitHub, as owner/name." }
+repo = { type = "string", label = "Repository", description = "The repository on GitHub, as owner/name.", scope = "project" }
 token = { type = "secret", label = "GitHub token", description = "A token that may read the repository's Actions, and run them again." }

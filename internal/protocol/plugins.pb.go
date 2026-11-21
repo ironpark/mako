@@ -373,9 +373,12 @@ func (x *PluginInfo) GetStorageQuota() int64 {
 
 // PluginTool is an MCP tool a plugin contributes to running agents.
 type PluginTool struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Description string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	// scope is the tool's declared scope: "", "global", "space", "project" or
+	// "session" (revision 42).
+	Scope         string `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -420,6 +423,13 @@ func (x *PluginTool) GetId() string {
 func (x *PluginTool) GetDescription() string {
 	if x != nil {
 		return x.Description
+	}
+	return ""
+}
+
+func (x *PluginTool) GetScope() string {
+	if x != nil {
+		return x.Scope
 	}
 	return ""
 }
@@ -596,7 +606,10 @@ type PluginBlock struct {
 	Title string `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
 	// slots are where the manifest suggests placing it: "left", "right",
 	// "top", "bottom".
-	Slots         []string `protobuf:"bytes,3,rep,name=slots,proto3" json:"slots,omitempty"`
+	Slots []string `protobuf:"bytes,3,rep,name=slots,proto3" json:"slots,omitempty"`
+	// scope is the block's declared scope: "", "global", "space", "project" or
+	// "session" (revision 42).
+	Scope         string `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -650,6 +663,13 @@ func (x *PluginBlock) GetSlots() []string {
 		return x.Slots
 	}
 	return nil
+}
+
+func (x *PluginBlock) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
 }
 
 // PluginCommand is a command a plugin contributes to the palette.
@@ -716,8 +736,17 @@ type PluginSetting struct {
 	Options     []string `protobuf:"bytes,5,rep,name=options,proto3" json:"options,omitempty"` // a select's
 	// value is the setting as text: "true" or "false" for a boolean, a
 	// number in decimal; never a secret's, which set alone tells of.
-	Value         string `protobuf:"bytes,6,opt,name=value,proto3" json:"value,omitempty"`
-	Set           bool   `protobuf:"varint,7,opt,name=set,proto3" json:"set,omitempty"`
+	Value string `protobuf:"bytes,6,opt,name=value,proto3" json:"value,omitempty"`
+	Set   bool   `protobuf:"varint,7,opt,name=set,proto3" json:"set,omitempty"`
+	// scope is the setting's declared scope: "", "global", "space", "project" or
+	// "session" (revision 42).
+	Scope string `protobuf:"bytes,8,opt,name=scope,proto3" json:"scope,omitempty"`
+	// scoped_values holds non-secret per-scope overrides keyed by canonical scope
+	// key (e.g. "project:<id>", revision 42). Never populated for secrets.
+	ScopedValues map[string]string `protobuf:"bytes,9,rep,name=scoped_values,json=scopedValues,proto3" json:"scoped_values,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// scoped_set lists canonical scope keys where a secret override is set
+	// (revision 42); secret values are never sent to front-ends.
+	ScopedSet     []string `protobuf:"bytes,10,rep,name=scoped_set,json=scopedSet,proto3" json:"scoped_set,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -801,6 +830,27 @@ func (x *PluginSetting) GetSet() bool {
 	return false
 }
 
+func (x *PluginSetting) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *PluginSetting) GetScopedValues() map[string]string {
+	if x != nil {
+		return x.ScopedValues
+	}
+	return nil
+}
+
+func (x *PluginSetting) GetScopedSet() []string {
+	if x != nil {
+		return x.ScopedSet
+	}
+	return nil
+}
+
 // PluginAction acts on a plugin, for the user: op "grant" allows what it
 // asks for, "deny" refuses it, "enable" and "disable" start and stop it
 // being used, "reload" reads its folder again, "run" runs its command
@@ -810,12 +860,15 @@ func (x *PluginSetting) GetSet() bool {
 // "deny_agent" refuses it, and "forget_agents" has the plugin ask again
 // before every agent it starts. Answered by PluginDone.
 type PluginAction struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PluginId      string                 `protobuf:"bytes,1,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
-	Op            string                 `protobuf:"bytes,2,opt,name=op,proto3" json:"op,omitempty"`
-	Command       string                 `protobuf:"bytes,3,opt,name=command,proto3" json:"command,omitempty"`
-	Key           string                 `protobuf:"bytes,4,opt,name=key,proto3" json:"key,omitempty"`
-	Value         string                 `protobuf:"bytes,5,opt,name=value,proto3" json:"value,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	PluginId string                 `protobuf:"bytes,1,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
+	Op       string                 `protobuf:"bytes,2,opt,name=op,proto3" json:"op,omitempty"`
+	Command  string                 `protobuf:"bytes,3,opt,name=command,proto3" json:"command,omitempty"`
+	Key      string                 `protobuf:"bytes,4,opt,name=key,proto3" json:"key,omitempty"`
+	Value    string                 `protobuf:"bytes,5,opt,name=value,proto3" json:"value,omitempty"`
+	// scope is the optional canonical scope key ("" for global, "space:<id>",
+	// "project:<id>", "session:<id>") for scoped settings or commands (revision 42).
+	Scope         string `protobuf:"bytes,6,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -881,6 +934,13 @@ func (x *PluginAction) GetKey() string {
 func (x *PluginAction) GetValue() string {
 	if x != nil {
 		return x.Value
+	}
+	return ""
+}
+
+func (x *PluginAction) GetScope() string {
+	if x != nil {
+		return x.Scope
 	}
 	return ""
 }
@@ -951,7 +1011,10 @@ type WatchBlock struct {
 	Block string                 `protobuf:"bytes,1,opt,name=block,proto3" json:"block,omitempty"`
 	// node_id is the node whose block it is, routed as a request's: a node
 	// let in watches the blocks of the node that lets it in (revision 30).
-	NodeId        string `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	NodeId string `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	// scope is the canonical scope key ("" for global, "space:<id>",
+	// "project:<id>", "session:<id>", revision 42).
+	Scope         string `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1000,6 +1063,13 @@ func (x *WatchBlock) GetNodeId() string {
 	return ""
 }
 
+func (x *WatchBlock) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
 // BlockUpdate is a block's tree, whole or as the changes since the last.
 type BlockUpdate struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1027,7 +1097,9 @@ type BlockUpdate struct {
 	Agent     string `protobuf:"bytes,11,opt,name=agent,proto3" json:"agent,omitempty"`
 	// gone says the block was closed, or its plugin removed: the last
 	// update of the stream.
-	Gone          bool `protobuf:"varint,12,opt,name=gone,proto3" json:"gone,omitempty"`
+	Gone bool `protobuf:"varint,12,opt,name=gone,proto3" json:"gone,omitempty"`
+	// scope is the canonical scope key of this block instance (revision 42).
+	Scope         string `protobuf:"bytes,13,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1146,6 +1218,13 @@ func (x *BlockUpdate) GetGone() bool {
 	return false
 }
 
+func (x *BlockUpdate) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
 // BlockEvent is the user acting on a node of a block's tree: kind "tap",
 // "change" or "submit" with the input's, toggle's or select's value, or
 // "drop" with the dragged node's drag payload as value (revision 40).
@@ -1161,7 +1240,9 @@ type BlockEvent struct {
 	// submit carries every field (revision 27).
 	Values map[string]string `protobuf:"bytes,5,rep,name=values,proto3" json:"values,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// node_id is the node whose block it is, as WatchBlock's (revision 30).
-	NodeId        string `protobuf:"bytes,6,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	NodeId string `protobuf:"bytes,6,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	// scope is the canonical scope key of the target block instance (revision 42).
+	Scope         string `protobuf:"bytes,7,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1234,6 +1315,13 @@ func (x *BlockEvent) GetValues() map[string]string {
 func (x *BlockEvent) GetNodeId() string {
 	if x != nil {
 		return x.NodeId
+	}
+	return ""
+}
+
+func (x *BlockEvent) GetScope() string {
+	if x != nil {
+		return x.Scope
 	}
 	return ""
 }
@@ -2064,11 +2152,12 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x05tools\x18\x14 \x03(\v2\x13.mako.v2.PluginToolR\x05tools\x12&\n" +
 	"\x04logs\x18\x15 \x03(\v2\x12.mako.v2.PluginLogR\x04logs\x12!\n" +
 	"\fstorage_used\x18\x16 \x01(\x03R\vstorageUsed\x12#\n" +
-	"\rstorage_quota\x18\x17 \x01(\x03R\fstorageQuota\">\n" +
+	"\rstorage_quota\x18\x17 \x01(\x03R\fstorageQuota\"T\n" +
 	"\n" +
 	"PluginTool\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12 \n" +
-	"\vdescription\x18\x02 \x01(\tR\vdescription\"K\n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x14\n" +
+	"\x05scope\x18\x03 \x01(\tR\x05scope\"K\n" +
 	"\tPluginLog\x12\x0e\n" +
 	"\x02at\x18\x01 \x01(\x03R\x02at\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\x12\x18\n" +
@@ -2081,14 +2170,15 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x04root\x18\x05 \x01(\tR\x04root\x12\x12\n" +
 	"\x04name\x18\x06 \x01(\tR\x04name\x12\x16\n" +
 	"\x06prompt\x18\a \x01(\tR\x06prompt\x12\x14\n" +
-	"\x05since\x18\b \x01(\x03R\x05since\"M\n" +
+	"\x05since\x18\b \x01(\x03R\x05since\"c\n" +
 	"\vPluginBlock\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
-	"\x05slots\x18\x03 \x03(\tR\x05slots\"5\n" +
+	"\x05slots\x18\x03 \x03(\tR\x05slots\x12\x14\n" +
+	"\x05scope\x18\x04 \x01(\tR\x05scope\"5\n" +
 	"\rPluginCommand\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
-	"\x05title\x18\x02 \x01(\tR\x05title\"\xaf\x01\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\"\xf4\x02\n" +
 	"\rPluginSetting\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x14\n" +
@@ -2096,21 +2186,31 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\vdescription\x18\x04 \x01(\tR\vdescription\x12\x18\n" +
 	"\aoptions\x18\x05 \x03(\tR\aoptions\x12\x14\n" +
 	"\x05value\x18\x06 \x01(\tR\x05value\x12\x10\n" +
-	"\x03set\x18\a \x01(\bR\x03set\"}\n" +
+	"\x03set\x18\a \x01(\bR\x03set\x12\x14\n" +
+	"\x05scope\x18\b \x01(\tR\x05scope\x12M\n" +
+	"\rscoped_values\x18\t \x03(\v2(.mako.v2.PluginSetting.ScopedValuesEntryR\fscopedValues\x12\x1d\n" +
+	"\n" +
+	"scoped_set\x18\n" +
+	" \x03(\tR\tscopedSet\x1a?\n" +
+	"\x11ScopedValuesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x93\x01\n" +
 	"\fPluginAction\x12\x1b\n" +
 	"\tplugin_id\x18\x01 \x01(\tR\bpluginId\x12\x0e\n" +
 	"\x02op\x18\x02 \x01(\tR\x02op\x12\x18\n" +
 	"\acommand\x18\x03 \x01(\tR\acommand\x12\x10\n" +
 	"\x03key\x18\x04 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x05 \x01(\tR\x05value\"=\n" +
+	"\x05value\x18\x05 \x01(\tR\x05value\x12\x14\n" +
+	"\x05scope\x18\x06 \x01(\tR\x05scope\"=\n" +
 	"\n" +
 	"PluginDone\x12\x19\n" +
 	"\bopen_url\x18\x01 \x01(\tR\aopenUrl\x12\x14\n" +
-	"\x05toast\x18\x02 \x01(\tR\x05toast\";\n" +
+	"\x05toast\x18\x02 \x01(\tR\x05toast\"Q\n" +
 	"\n" +
 	"WatchBlock\x12\x14\n" +
 	"\x05block\x18\x01 \x01(\tR\x05block\x12\x17\n" +
-	"\anode_id\x18\x02 \x01(\tR\x06nodeId\"\xb4\x02\n" +
+	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x14\n" +
+	"\x05scope\x18\x03 \x01(\tR\x05scope\"\xca\x02\n" +
 	"\vBlockUpdate\x12\x14\n" +
 	"\x05block\x18\x01 \x01(\tR\x05block\x12\x10\n" +
 	"\x03seq\x18\x02 \x01(\x04R\x03seq\x12#\n" +
@@ -2125,7 +2225,8 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"session_id\x18\n" +
 	" \x01(\tR\tsessionId\x12\x14\n" +
 	"\x05agent\x18\v \x01(\tR\x05agent\x12\x12\n" +
-	"\x04gone\x18\f \x01(\bR\x04gone\"\xed\x01\n" +
+	"\x04gone\x18\f \x01(\bR\x04gone\x12\x14\n" +
+	"\x05scope\x18\r \x01(\tR\x05scope\"\x83\x02\n" +
 	"\n" +
 	"BlockEvent\x12\x14\n" +
 	"\x05block\x18\x01 \x01(\tR\x05block\x12\x12\n" +
@@ -2133,7 +2234,8 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x14\n" +
 	"\x05value\x18\x04 \x01(\tR\x05value\x127\n" +
 	"\x06values\x18\x05 \x03(\v2\x1f.mako.v2.BlockEvent.ValuesEntryR\x06values\x12\x17\n" +
-	"\anode_id\x18\x06 \x01(\tR\x06nodeId\x1a9\n" +
+	"\anode_id\x18\x06 \x01(\tR\x06nodeId\x12\x14\n" +
+	"\x05scope\x18\a \x01(\tR\x05scope\x1a9\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xad\x05\n" +
@@ -2216,7 +2318,7 @@ func file_mako_v2_plugins_proto_rawDescGZIP() []byte {
 	return file_mako_v2_plugins_proto_rawDescData
 }
 
-var file_mako_v2_plugins_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_mako_v2_plugins_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_mako_v2_plugins_proto_goTypes = []any{
 	(*ListPlugins)(nil),     // 0: mako.v2.ListPlugins
 	(*Plugins)(nil),         // 1: mako.v2.Plugins
@@ -2241,7 +2343,8 @@ var file_mako_v2_plugins_proto_goTypes = []any{
 	(*ListPanels)(nil),      // 20: mako.v2.ListPanels
 	(*Panels)(nil),          // 21: mako.v2.Panels
 	(*Panel)(nil),           // 22: mako.v2.Panel
-	nil,                     // 23: mako.v2.BlockEvent.ValuesEntry
+	nil,                     // 23: mako.v2.PluginSetting.ScopedValuesEntry
+	nil,                     // 24: mako.v2.BlockEvent.ValuesEntry
 }
 var file_mako_v2_plugins_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Plugins.plugins:type_name -> mako.v2.PluginInfo
@@ -2251,19 +2354,20 @@ var file_mako_v2_plugins_proto_depIdxs = []int32{
 	5,  // 4: mako.v2.PluginInfo.agent_ask:type_name -> mako.v2.PluginAgentAsk
 	3,  // 5: mako.v2.PluginInfo.tools:type_name -> mako.v2.PluginTool
 	4,  // 6: mako.v2.PluginInfo.logs:type_name -> mako.v2.PluginLog
-	14, // 7: mako.v2.BlockUpdate.tree:type_name -> mako.v2.UiNode
-	16, // 8: mako.v2.BlockUpdate.ops:type_name -> mako.v2.UiOp
-	23, // 9: mako.v2.BlockEvent.values:type_name -> mako.v2.BlockEvent.ValuesEntry
-	14, // 10: mako.v2.UiNode.children:type_name -> mako.v2.UiNode
-	15, // 11: mako.v2.UiNode.series:type_name -> mako.v2.UiSeries
-	14, // 12: mako.v2.UiOp.node:type_name -> mako.v2.UiNode
-	19, // 13: mako.v2.AgentBlocks.blocks:type_name -> mako.v2.AgentBlock
-	22, // 14: mako.v2.Panels.panels:type_name -> mako.v2.Panel
-	15, // [15:15] is the sub-list for method output_type
-	15, // [15:15] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	23, // 7: mako.v2.PluginSetting.scoped_values:type_name -> mako.v2.PluginSetting.ScopedValuesEntry
+	14, // 8: mako.v2.BlockUpdate.tree:type_name -> mako.v2.UiNode
+	16, // 9: mako.v2.BlockUpdate.ops:type_name -> mako.v2.UiOp
+	24, // 10: mako.v2.BlockEvent.values:type_name -> mako.v2.BlockEvent.ValuesEntry
+	14, // 11: mako.v2.UiNode.children:type_name -> mako.v2.UiNode
+	15, // 12: mako.v2.UiNode.series:type_name -> mako.v2.UiSeries
+	14, // 13: mako.v2.UiOp.node:type_name -> mako.v2.UiNode
+	19, // 14: mako.v2.AgentBlocks.blocks:type_name -> mako.v2.AgentBlock
+	22, // 15: mako.v2.Panels.panels:type_name -> mako.v2.Panel
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_plugins_proto_init() }
@@ -2277,7 +2381,7 @@ func file_mako_v2_plugins_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_plugins_proto_rawDesc), len(file_mako_v2_plugins_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   24,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

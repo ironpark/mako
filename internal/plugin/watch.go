@@ -18,8 +18,8 @@ import (
 // renders in between goes as one change (uiblock.Follow). A block is
 // shown, and its plugin running, while a stream watches it.
 
-// view is a block of the plugin's as a stream sends it.
-func (p *plugin) view(block string) uiblock.View {
+// view is a (block, scope) instance of the plugin's as a stream sends it.
+func (p *plugin) view(key, block string) uiblock.View {
 	g, st := p.m.grant.get(p.id), p.installStatus()
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -41,7 +41,7 @@ func (p *plugin) view(block string) uiblock.View {
 			}
 		}
 	}
-	if in, ok := p.inst[block]; ok {
+	if in, ok := p.inst[key]; ok {
 		if in.tree != nil {
 			v.Tree = in.tree.Root
 		}
@@ -57,24 +57,28 @@ func (p *plugin) view(block string) uiblock.View {
 	return v
 }
 
-func (p *plugin) subscribe(block string) {
+func (p *plugin) subscribe(block, scopeKey string) (string, []string) {
 	p.mu.Lock()
-	in, ok := p.inst[block]
-	if !ok {
-		in = &instance{id: block}
-		p.inst[block] = in
-	}
+	in, evicted := p.getOrCreateInstanceLocked(block, scopeKey)
 	in.subs++
+	key := in.key
 	p.mu.Unlock()
+	return key, evicted
 }
 
-func (p *plugin) unsubscribe(block string) {
+func (p *plugin) unsubscribe(key string) {
 	p.mu.Lock()
-	if in, ok := p.inst[block]; ok {
+	var evicted []string
+	if in, ok := p.inst[key]; ok {
 		in.subs--
+		in.lastUsed = time.Now()
+		evicted = p.trimBlockInstancesLocked(in.id, "")
 	}
 	p.mu.Unlock()
-	p.post(func() { p.lastUsed = time.Now() })
+	p.post(func() {
+		p.lastUsed = time.Now()
+		p.evictInstances(evicted)
+	})
 }
 
 // noPlugin is the error of a block of a plugin the node does not have,
@@ -83,23 +87,43 @@ func noPlugin(id string) error {
 	return &protocol.CodedError{Code: protocol.CodeNoPlugin, Message: fmt.Sprintf("no plugin %s on this node", id)}
 }
 
-// Watch follows the block of the name, calling send with each update,
-// until ctx ends, send fails, or the plugin is removed.
+// Watch follows the block of the name in the global scope, calling send with
+// each update, until ctx ends, send fails, or the plugin is removed.
 func (m *Manager) Watch(ctx context.Context, name string, send func(*protocol.BlockUpdate) error) error {
+	return m.WatchScoped(ctx, name, "", send)
+}
+
+// WatchScoped follows the block of the name in the canonical scope key ("" for
+// global, "space:<id>", "project:<id>", or "session:<id>"), calling send with
+// each update until ctx ends, send fails, or the plugin is removed.
+func (m *Manager) WatchScoped(ctx context.Context, name, scope string, send func(*protocol.BlockUpdate) error) error {
 	id, block, ok := splitBlock(name)
 	if !ok {
 		return fmt.Errorf("%q is not a plugin's block", name)
+	}
+	if _, _, err := parseScopeKey(scope); err != nil {
+		return err
 	}
 	p, ok := m.plugin(id)
 	if !ok {
 		return noPlugin(id)
 	}
-	p.subscribe(block)
-	defer p.unsubscribe(block)
-	if !p.post(func() { p.show(block) }) {
+	key, evicted := p.subscribe(block, scope)
+	defer p.unsubscribe(key)
+	if !p.post(func() {
+		p.evictInstances(evicted)
+		p.show(key)
+	}) {
 		return errors.New("the plugin is busy")
 	}
-	return uiblock.Follow(ctx, name, m.lim.Updates, func() uiblock.View { return p.view(block) }, send)
+	wrappedSend := send
+	if scope != "" {
+		wrappedSend = func(u *protocol.BlockUpdate) error {
+			u.Scope = scope
+			return send(u)
+		}
+	}
+	return uiblock.Follow(ctx, name, m.lim.Updates, func() uiblock.View { return p.view(key, block) }, wrappedSend)
 }
 
 // Event is the user acting on a node of a block: the message the node's
@@ -111,6 +135,10 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	if !ok {
 		return nil, fmt.Errorf("%q is not a plugin's block", ev.GetBlock())
 	}
+	scopeKey := ev.GetScope()
+	if _, _, err := parseScopeKey(scopeKey); err != nil {
+		return nil, err
+	}
 	p, ok := m.plugin(id)
 	if !ok {
 		return nil, noPlugin(id)
@@ -118,9 +146,11 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	if !p.evRate.take() {
 		return nil, errors.New("events come faster than the plugin takes them; this one was dropped")
 	}
+	key := instanceKey(block, scopeKey)
 	p.mu.Lock()
 	var tree *uiblock.Tree
-	if in, ok := p.inst[block]; ok {
+	if in, ok := p.inst[key]; ok {
+		in.lastUsed = time.Now()
 		tree = in.tree
 	}
 	p.mu.Unlock()
@@ -157,16 +187,17 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	name := msg.Name
 	argsJSON, _ := json.Marshal(msg.Args)
 	args := string(argsJSON)
+	ctxJSON := marshalScopeContext(m.resolveScope(scopeKey))
 	var open, toast string
 	err = p.do(ctx, func() error {
 		if err := p.ensure(); err != nil {
 			return err
 		}
-		_, err := p.invoke("event", true, block, name, args, string(valsJSON))
+		_, err := p.invoke("event", true, block, scopeKey, ctxJSON, name, args, string(valsJSON))
 		open, toast = p.openURL, p.toast
 		p.openURL, p.toast = "", ""
-		p.setErr(block, err)
-		p.afterCall()
+		p.setErr(key, err)
+		p.afterCall(scopeKey, key)
 		return err
 	})
 	if err != nil {

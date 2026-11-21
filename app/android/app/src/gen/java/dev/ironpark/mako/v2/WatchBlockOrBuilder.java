@@ -43,4 +43,26 @@ public interface WatchBlockOrBuilder extends
    */
   com.google.protobuf.ByteString
       getNodeIdBytes();
+
+  /**
+   * <pre>
+   * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
+   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+   * </pre>
+   *
+   * <code>string scope = 3 [json_name = "scope"];</code>
+   * @return The scope.
+   */
+  java.lang.String getScope();
+  /**
+   * <pre>
+   * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
+   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+   * </pre>
+   *
+   * <code>string scope = 3 [json_name = "scope"];</code>
+   * @return The bytes for scope.
+   */
+  com.google.protobuf.ByteString
+      getScopeBytes();
 }

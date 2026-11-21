@@ -22,10 +22,17 @@ func (c *Client) BlockEvent(ctx context.Context, req *protocol.BlockEvent) (*pro
 	return request[*protocol.PluginDone](ctx, c, protocol.TypeBlockEvent, req)
 }
 
-// WatchBlock follows a plugin's block, calling fn with each update until
-// ctx ends or the stream does; see protocol.WatchBlock.
+// WatchBlock follows a plugin's block in the global scope, calling fn with
+// each update until ctx ends or the stream does; see protocol.WatchBlock.
 func (c *Client) WatchBlock(ctx context.Context, block string, fn func(*protocol.BlockUpdate)) error {
-	return follow(ctx, c, protocol.TypeWatchBlock, &protocol.WatchBlock{Block: block}, fn)
+	return c.WatchBlockScoped(ctx, block, "", fn)
+}
+
+// WatchBlockScoped follows a plugin's block in the given canonical scope
+// ("" for global, "space:<id>", "project:<id>", or "session:<id>"), calling fn
+// with each update until ctx ends or the stream does; see protocol.WatchBlock.
+func (c *Client) WatchBlockScoped(ctx context.Context, block, scope string, fn func(*protocol.BlockUpdate)) error {
+	return follow(ctx, c, protocol.TypeWatchBlock, &protocol.WatchBlock{Block: block, Scope: scope}, fn)
 }
 
 // AgentBlocks lists the blocks the daemon's agents show; see

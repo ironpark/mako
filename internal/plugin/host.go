@@ -60,18 +60,22 @@ func (h *host) SettingsGetSetting(_ context.Context, req *hostapi.GetSettingRequ
 	if err != nil {
 		return nil, err
 	}
-	set, err := h.p.settings.forHost(d)
+	set, err := h.p.settings.forHostScoped(d, req.GetScope())
 	if err != nil {
 		return nil, err
 	}
 	return &hostapi.GetSettingResponse{Setting: set}, nil
 }
 
-func (h *host) SettingsListSettings(context.Context, *hostapi.ListSettingsRequest) (*hostapi.ListSettingsResponse, error) {
+func (h *host) SettingsListSettings(_ context.Context, req *hostapi.ListSettingsRequest) (*hostapi.ListSettingsResponse, error) {
+	scopeKey := req.GetScope()
+	if _, _, err := parseScopeKey(scopeKey); err != nil {
+		return nil, err
+	}
 	out := &hostapi.ListSettingsResponse{}
 	if v := h.p.current(); v != nil {
 		for _, s := range v.man.Settings {
-			set, err := h.p.settings.forHost(s)
+			set, err := h.p.settings.forHostScoped(s, scopeKey)
 			if err != nil {
 				return nil, err
 			}
@@ -82,15 +86,15 @@ func (h *host) SettingsListSettings(context.Context, *hostapi.ListSettingsReques
 }
 
 func (h *host) StorageGetItem(_ context.Context, req *hostapi.GetItemRequest) (*hostapi.GetItemResponse, error) {
-	if err := checkKey(req.GetKey()); err != nil {
+	v, ok, err := h.p.store.getScoped(req.GetScope(), req.GetKey())
+	if err != nil {
 		return nil, err
 	}
-	v, ok := h.p.store.get(req.GetKey())
 	return &hostapi.GetItemResponse{Found: ok, Value: v}, nil
 }
 
 func (h *host) StorageSetItem(_ context.Context, req *hostapi.SetItemRequest) (*hostapi.SetItemResponse, error) {
-	used, err := h.p.store.set(req.GetKey(), req.GetValue())
+	used, err := h.p.store.setScoped(req.GetScope(), req.GetKey(), req.GetValue())
 	if err != nil {
 		return nil, err
 	}
@@ -98,10 +102,7 @@ func (h *host) StorageSetItem(_ context.Context, req *hostapi.SetItemRequest) (*
 }
 
 func (h *host) StorageDeleteItem(_ context.Context, req *hostapi.DeleteItemRequest) (*hostapi.DeleteItemResponse, error) {
-	if err := checkKey(req.GetKey()); err != nil {
-		return nil, err
-	}
-	found, err := h.p.store.del(req.GetKey())
+	found, err := h.p.store.delScoped(req.GetScope(), req.GetKey())
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +110,11 @@ func (h *host) StorageDeleteItem(_ context.Context, req *hostapi.DeleteItemReque
 }
 
 func (h *host) StorageListKeys(_ context.Context, req *hostapi.ListKeysRequest) (*hostapi.ListKeysResponse, error) {
-	return &hostapi.ListKeysResponse{Keys: h.p.store.keys(req.GetPrefix())}, nil
+	keys, err := h.p.store.keysScoped(req.GetScope(), req.GetPrefix())
+	if err != nil {
+		return nil, err
+	}
+	return &hostapi.ListKeysResponse{Keys: keys}, nil
 }
 
 // session is a session as a plugin sees it.

@@ -9,22 +9,24 @@ const tones = { success: "success", failure: "danger", cancelled: "faint", in_pr
 
 let mako;
 
-async function setting(key) {
-  const { setting } = await mako.settings.getSetting({ key });
+async function setting(key, ctx) {
+  const { setting } = ctx && ctx.settings
+    ? await ctx.settings.getSetting(key)
+    : await mako.settings.getSetting({ key });
   return setting ? setting.text : "";
 }
 
-async function github(path, method = "GET") {
+async function github(path, method = "GET", ctx = null) {
   const headers = { Accept: "application/vnd.github+json" };
-  const token = await setting("token");
+  const token = await setting("token", ctx);
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await mako.http.fetch({ url: API + path, method, headers });
   if (res.status >= 300) throw new Error(`GitHub answered ${res.status}`);
   return res.body ? JSON.parse(res.body) : {};
 }
 
-async function load(s) {
-  s.repo = await setting("repo");
+async function load(s, ctx) {
+  s.repo = await setting("repo", ctx);
   const { sessions } = await mako.sessions.listSessions();
   s.working = sessions.filter((x) => x.status === "working").length;
   if (!s.repo) {
@@ -32,16 +34,17 @@ async function load(s) {
     s.error = "Set the repository in Settings ▸ Plugins.";
     return;
   }
+  const store = ctx && ctx.storage ? ctx.storage : mako.storage;
   try {
-    const data = await github(`/repos/${s.repo}/actions/runs?per_page=8`);
+    const data = await github(`/repos/${s.repo}/actions/runs?per_page=8`, "GET", ctx);
     s.runs = (data.workflow_runs || []).map((r) => ({
       id: r.id, name: r.name, branch: r.head_branch, number: r.run_number,
       status: r.conclusion || r.status, url: r.html_url,
     }));
     s.error = "";
-    await mako.storage.setItem({ key: `runs:${s.repo}`, value: JSON.stringify(s.runs) });
+    await store.setItem({ key: `runs:${s.repo}`, value: JSON.stringify(s.runs) });
   } catch (e) {
-    const kept = await mako.storage.getItem({ key: `runs:${s.repo}` });
+    const kept = await store.getItem({ key: `runs:${s.repo}` });
     s.runs = kept.found ? JSON.parse(kept.value) : [];
     s.error = `${e.message}${kept.found ? " (showing the runs last read)" : ""}`;
   }
@@ -84,16 +87,17 @@ export default {
         },
       },
     });
-    mako.commands.register("rerun", async () => {
-      const s = mako.blocks.state("ci");
+    mako.commands.register("rerun", async (ctx) => {
+      const scopeKey = ctx ? ctx.scopeKey : "";
+      const s = mako.blocks.state("ci", scopeKey);
       const failed = s.runs.find((r) => r.status === "failure");
       if (!failed) {
         s.note = "No failed run to run again.";
         return;
       }
-      await github(`/repos/${s.repo}/actions/runs/${failed.id}/rerun`, "POST");
+      await github(`/repos/${s.repo}/actions/runs/${failed.id}/rerun`, "POST", ctx);
       s.note = `Run #${failed.number} was started again.`;
-      mako.blocks.reload("ci");
+      mako.blocks.reload("ci", scopeKey);
     });
   },
 };

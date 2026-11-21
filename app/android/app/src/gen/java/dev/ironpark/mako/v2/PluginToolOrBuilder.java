@@ -33,4 +33,26 @@ public interface PluginToolOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDescriptionBytes();
+
+  /**
+   * <pre>
+   * scope is the tool's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 3 [json_name = "scope"];</code>
+   * @return The scope.
+   */
+  java.lang.String getScope();
+  /**
+   * <pre>
+   * scope is the tool's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 3 [json_name = "scope"];</code>
+   * @return The bytes for scope.
+   */
+  com.google.protobuf.ByteString
+      getScopeBytes();
 }

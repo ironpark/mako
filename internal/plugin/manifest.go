@@ -41,6 +41,7 @@ type Manifest struct {
 type ToolDecl struct {
 	ID          string
 	Description string
+	Scope       string
 	Params      []ToolParamDecl
 }
 
@@ -57,6 +58,7 @@ type BlockDecl struct {
 	ID    string
 	Title string
 	Slots []string
+	Scope string
 }
 
 // CommandDecl is a command a manifest contributes.
@@ -74,6 +76,7 @@ type SettingDecl struct {
 	Description string
 	Options     []string
 	Default     any
+	Scope       string
 }
 
 // The types of setting.
@@ -130,6 +133,7 @@ type rawManifest struct {
 			ID    string   `toml:"id"`
 			Title string   `toml:"title"`
 			Slots []string `toml:"slots"`
+			Scope string   `toml:"scope"`
 		} `toml:"block"`
 		Command []struct {
 			ID    string `toml:"id"`
@@ -138,6 +142,7 @@ type rawManifest struct {
 		Tool []struct {
 			ID          string `toml:"id"`
 			Description string `toml:"description"`
+			Scope       string `toml:"scope"`
 			Params      map[string]struct {
 				Type        string `toml:"type"`
 				Description string `toml:"description"`
@@ -150,6 +155,7 @@ type rawManifest struct {
 			Description string   `toml:"description"`
 			Options     []string `toml:"options"`
 			Default     any      `toml:"default"`
+			Scope       string   `toml:"scope"`
 		} `toml:"settings"`
 	} `toml:"contributes"`
 }
@@ -210,7 +216,11 @@ func ParseManifest(data []byte) (*Manifest, error) {
 				return nil, fmt.Errorf("block %s: slot %q is not one of %s, once", b.ID, s, strings.Join(slots, ", "))
 			}
 		}
-		m.Blocks = append(m.Blocks, BlockDecl{ID: b.ID, Title: b.Title, Slots: b.Slots})
+		scope, err := normalizeScope(b.Scope)
+		if err != nil {
+			return nil, fmt.Errorf("block %s: %w", b.ID, err)
+		}
+		m.Blocks = append(m.Blocks, BlockDecl{ID: b.ID, Title: b.Title, Slots: b.Slots, Scope: scope})
 	}
 	if len(raw.Contributes.Command) > maxCommands {
 		return nil, fmt.Errorf("more than %d commands", maxCommands)
@@ -240,10 +250,14 @@ func ParseManifest(data []byte) (*Manifest, error) {
 		if err := checkText("tool "+tl.ID+" description", tl.Description, maxDescription, true); err != nil {
 			return nil, err
 		}
+		scope, err := normalizeScope(tl.Scope)
+		if err != nil {
+			return nil, fmt.Errorf("tool %s: %w", tl.ID, err)
+		}
 		if len(tl.Params) > maxToolParams {
 			return nil, fmt.Errorf("tool %s: more than %d params", tl.ID, maxToolParams)
 		}
-		decl := ToolDecl{ID: tl.ID, Description: tl.Description}
+		decl := ToolDecl{ID: tl.ID, Description: tl.Description, Scope: scope}
 		paramNames := make([]string, 0, len(tl.Params))
 		for k := range tl.Params {
 			paramNames = append(paramNames, k)
@@ -278,7 +292,11 @@ func ParseManifest(data []byte) (*Manifest, error) {
 			continue
 		}
 		r := raw.Contributes.Settings[k[2]]
-		s := SettingDecl{Key: k[2], Type: r.Type, Label: r.Label, Description: r.Description, Options: r.Options, Default: r.Default}
+		scope, err := normalizeScope(r.Scope)
+		if err != nil {
+			return nil, fmt.Errorf("setting %s: %w", k[2], err)
+		}
+		s := SettingDecl{Key: k[2], Type: r.Type, Label: r.Label, Description: r.Description, Options: r.Options, Default: r.Default, Scope: scope}
 		if err := checkSetting(&s); err != nil {
 			return nil, err
 		}

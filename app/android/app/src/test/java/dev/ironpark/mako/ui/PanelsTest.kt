@@ -49,4 +49,21 @@ class PanelsTest {
         assertEquals(80, panelTitle("y".repeat(200), "x").length)
         assertEquals("s1", agentSession("agent:s1/board"))
     }
+
+    @Test fun panelsPreservePinnedScopesAndDeduplicateIdenticalOnes() {
+        val scopedPages = listOf(
+            LayoutPage("k1", "plugin:kanban/board", "project:p1"),
+            LayoutPage("k2", "plugin:kanban/board", "project:p2"),
+            LayoutPage("k3", "plugin:kanban/board", "project:p1"),
+            LayoutPage("k4", "plugin:notes/notes", "space"),
+        )
+        val list = listOf(
+            listed("plugin:kanban/board", "Kanban", "plugin"),
+            listed("plugin:notes/notes", "Notes", "plugin"),
+        )
+        val got = panels(scopedPages, emptyList(), list)
+        assertEquals(3, got.size)
+        assertEquals(listOf("project:p1", "project:p2", ""), got.map { it.pinnedScope })
+        assertEquals(listOf("project", "project", "space"), got.map { it.scopeKind })
+    }
 }

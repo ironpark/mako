@@ -44,4 +44,22 @@ class WindowLayoutTest {
         val gone = st.toBuilder().putWindowLayouts("default", entry("D", deleted = true)).build()
         assertNull(gone.windowLayout("home"))
     }
+
+    @Test
+    fun layoutPagesExtractsScopePropWhenString() {
+        val doc = """{"version":1,"root":{"id":"w","row":[
+            {"panes":"main"},
+            {"id":"b1","block":"plugin:kanban/board","props":{"scope":"project:p1"}},
+            {"id":"b2","block":"plugin:kanban/board","props":{"scope":"project:p2"}},
+            {"id":"b3","block":"plugin:ci-status/ci","props":{"scope":123}}
+        ]}}"""
+        assertEquals(
+            listOf(
+                LayoutPage("b1", "plugin:kanban/board", "project:p1"),
+                LayoutPage("b2", "plugin:kanban/board", "project:p2"),
+                LayoutPage("b3", "plugin:ci-status/ci", ""),
+            ),
+            layoutPages(doc),
+        )
+    }
 }

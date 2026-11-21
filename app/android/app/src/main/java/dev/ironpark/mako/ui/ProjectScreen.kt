@@ -136,7 +136,7 @@ internal fun ProjectScreen(
     onPicked: () -> Unit,
     onBack: () -> Unit,
     onNew: (ProjectItem) -> Unit,
-    onBlock: (String, Panel) -> Unit,
+    onBlock: (String, Panel, String, String) -> Unit,
     onFiles: (String, String) -> Unit,
     onAgents: (SessionInfo, String) -> Unit,
     onFile: (SessionInfo, ChatLink.File) -> Unit,
@@ -268,7 +268,11 @@ internal fun ProjectScreen(
                     overview = false
                 },
                 onNew = { project?.let(onNew) },
-                onPanel = { p -> panelsNode?.let { onBlock(it, p) } },
+                onPanel = { p ->
+                    val projectId = project?.key?.removePrefix("s:").orEmpty().takeIf { id -> view.projects.any { it.id == id } }.orEmpty()
+                    val sessionId = shown?.takeIf { it.nodeId == panelsNode && !it.ended() }?.id.orEmpty()
+                    panelsNode?.let { onBlock(it, p, projectId, sessionId) }
+                },
             )
         }
     }

@@ -16,11 +16,21 @@ interface types {
   record get-setting-request {
     /// key is the setting's key in the manifest.
     key: string,
+    /// scope is the optional canonical scope key ("" for global, "space:<id>",
+    /// "project:<id>", or "session:<id>").
+    scope: string,
   }
 
   /// GetSettingResponse is a setting's value.
   record get-setting-response {
     setting: option<setting>,
+  }
+
+  /// ListSettingsRequest asks for every setting.
+  record list-settings-request {
+    /// scope is the optional canonical scope key ("" for global, "space:<id>",
+    /// "project:<id>", or "session:<id>").
+    scope: string,
   }
 
   /// ListSettingsResponse is every setting, in the manifest's order.
@@ -48,6 +58,9 @@ interface types {
   /// GetItemRequest names a key.
   record get-item-request {
     key: string,
+    /// scope is the optional canonical scope key ("" for global, "space:<id>",
+    /// "project:<id>", or "session:<id>").
+    scope: string,
   }
 
   /// GetItemResponse is a key's value.
@@ -63,6 +76,9 @@ interface types {
     key: string,
     /// value is at most 256 KiB.
     value: string,
+    /// scope is the optional canonical scope key ("" for global, "space:<id>",
+    /// "project:<id>", or "session:<id>").
+    scope: string,
   }
 
   /// SetItemResponse is the store after the write.
@@ -76,6 +92,9 @@ interface types {
   /// DeleteItemRequest names a key.
   record delete-item-request {
     key: string,
+    /// scope is the optional canonical scope key ("" for global, "space:<id>",
+    /// "project:<id>", or "session:<id>").
+    scope: string,
   }
 
   /// DeleteItemResponse says whether there was a value.
@@ -86,6 +105,9 @@ interface types {
   /// ListKeysRequest gives the start of the keys to list.
   record list-keys-request {
     prefix: string,
+    /// scope is the optional canonical scope key ("" for global, "space:<id>",
+    /// "project:<id>", or "session:<id>").
+    scope: string,
   }
 
   /// ListKeysResponse is the keys.
@@ -460,13 +482,13 @@ interface log {
 /// SettingsService reads the plugin's own settings, which its manifest
 /// declares and the user sets in Settings ▸ Plugins.
 interface settings {
-  use types.{get-setting-request, get-setting-response, list-settings-response};
+  use types.{get-setting-request, get-setting-response, list-settings-request, list-settings-response};
 
   /// GetSetting reads one setting.
   get-setting: func(req: get-setting-request) -> result<get-setting-response, string>;
 
   /// ListSettings reads every setting the manifest declares.
-  list-settings: func() -> result<list-settings-response, string>;
+  list-settings: func(req: list-settings-request) -> result<list-settings-response, string>;
 }
 
 /// StorageService is the plugin's own store of keys and values, on this

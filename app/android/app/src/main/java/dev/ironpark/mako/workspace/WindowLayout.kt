@@ -12,8 +12,11 @@ import dev.ironpark.mako.v2.WorkspaceState
 // own, whose schemas only the computer has. The unit tests check it
 // against a fixture of the Go tests (src/test/resources/blocks).
 
-/** LayoutPage is a block the phone shows a page of: its node's ID in the document, and its name. */
-data class LayoutPage(val id: String, val block: String)
+/**
+ * LayoutPage is a block the phone shows a page of: its node's ID in the
+ * document, its name, and any scope from its props ("scope"), "" for none.
+ */
+data class LayoutPage(val id: String, val block: String, val scope: String = "")
 
 /** The document a space of st shows, by its ID: the one it names, or "default"; null for none, the built-in one. */
 fun WorkspaceState.windowLayout(space: String): String? {
@@ -37,7 +40,10 @@ fun layoutPages(doc: String?): List<LayoutPage> {
 private fun pagesOf(root: LNode): List<LayoutPage> {
     val out = mutableListOf<LayoutPage>()
     fun walk(n: LNode) {
-        if (n.kind == "block" && n.block != "mako.sidebar" && n.block != "mako.header") out += LayoutPage(n.id, n.block)
+        if (n.kind == "block" && n.block != "mako.sidebar" && n.block != "mako.header") {
+            val scope = n.props?.get("scope")?.string().orEmpty()
+            out += LayoutPage(n.id, n.block, scope)
+        }
         n.children.forEach(::walk)
     }
     walk(root)

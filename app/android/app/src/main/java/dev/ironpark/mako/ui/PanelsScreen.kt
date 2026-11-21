@@ -41,6 +41,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.ironpark.mako.Mesh
 import dev.ironpark.mako.R
+import dev.ironpark.mako.blocks.pinnedScopeKey
+import dev.ironpark.mako.blocks.scopeKindOf
 import dev.ironpark.mako.mako
 import dev.ironpark.mako.v2.AgentBlock
 import dev.ironpark.mako.workspace.layoutPages
@@ -58,12 +60,19 @@ internal const val KIND_MISSING = "missing"
 
 /**
  * A panel the list offers: its block, its title, what it is (its plugin's
- * ID; an agent's session's, filled in by who lists it), its kind, and for
- * an agent's block the session showing it.
+ * ID; an agent's session's, filled in by who lists it), its kind, for an
+ * agent's block the session showing it, any pinned canonical scope key from
+ * layout props ("space:<id>", "project:<id>", "session:<id>"), and the block's
+ * declared/inferred scope kind ("", "space", "project", "session").
  */
 internal data class Panel(
-    val block: String, val title: String, val detail: String,
-    val kind: String = KIND_PLUGIN, val session: String = "",
+    val block: String,
+    val title: String,
+    val detail: String,
+    val kind: String = KIND_PLUGIN,
+    val session: String = "",
+    val pinnedScope: String = "",
+    val scopeKind: String = "",
 )
 
 /** The plugin's ID and the block's name of a plugin's block, plugin:<id>/<block>. */
@@ -101,21 +110,25 @@ internal fun panels(
     val seen = mutableSetOf<String>()
     val plugins = mutableListOf<Panel>()
     // The space's layout orders the plugins'; without one, the computer's list does.
-    val laid = pages.map { it.block }.filter { it.startsWith("plugin:") }
-    val order = laid.ifEmpty { listed.orEmpty().filter { it.kind == KIND_PLUGIN || it.kind == KIND_MISSING }.map { it.block } }
-    for (b in order) {
-        if (!seen.add(b)) continue
+    val laid = pages.filter { it.block.startsWith("plugin:") }.map { it.block to it.scope }
+    val order = laid.ifEmpty {
+        listed.orEmpty().filter { it.kind == KIND_PLUGIN || it.kind == KIND_MISSING }.map { it.block to "" }
+    }
+    for ((b, propScope) in order) {
+        val scopeKind = scopeKindOf(pinnedScope = propScope)
+        val pinned = pinnedScopeKey(propScope, scopeKind)
+        if (!seen.add(b + "\u0000" + pinned)) continue
         val (plugin, name) = pluginParts(b)
         val p = said[b]
         val kind = if (p?.kind == KIND_MISSING) KIND_MISSING else KIND_PLUGIN
-        plugins += Panel(b, panelTitle(p?.title.orEmpty(), name), plugin, kind)
+        plugins += Panel(b, panelTitle(p?.title.orEmpty(), name), plugin, kind, pinnedScope = pinned, scopeKind = scopeKind)
     }
     val out = plugins.filter { it.kind != KIND_MISSING } + plugins.filter { it.kind == KIND_MISSING }
     val shown = if (listed == null) agents.map { a -> Panel(a.name, panelTitle(a.title, a.name.substringAfterLast('/')), dotted(a.agent, a.sessionId.take(8)), KIND_AGENT, a.sessionId) }
     else listed.filter { it.kind == KIND_AGENT }.map { p ->
         Panel(p.block, panelTitle(p.title, p.block.substringAfterLast('/')), agentSession(p.block).take(8), KIND_AGENT, agentSession(p.block))
     }
-    return out + shown.filter { seen.add(it.block) }
+    return out + shown.filter { seen.add(it.block + "\u0000") }
 }
 
 /**
@@ -199,7 +212,7 @@ internal fun PanelsScreen(mesh: Mesh, node: String, space: String, onBack: () ->
                     if (error.isNotEmpty()) item {
                         Text(error, Modifier.padding(16.dp, 8.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
-                    items(list, key = { it.block }) { p -> PanelRow(p, mesh.nodeName(node)) { onOpen(p) } }
+                    items(list, key = { "${it.block}\u0000${it.pinnedScope}" }) { p -> PanelRow(p, mesh.nodeName(node)) { onOpen(p) } }
                 }
             }
         }

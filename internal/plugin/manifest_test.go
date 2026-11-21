@@ -77,6 +77,8 @@ on = { type = "boolean", default = true }
 		"select options":    {swap(`type = "select", label = "Mode", options = ["a", "b"], default = "a"`, `type = "select"`), "options"},
 		"default type":      {swap(`default = true`, `default = "yes"`), "default"},
 		"default option":    {swap(`default = "a"`, `default = "c"`), "default"},
+		"block scope":       {swap(`title = "Test"`, "title = \"Test\"\nscope = \"workspace\""), "scope"},
+		"setting scope":     {swap(`type = "boolean", default = true`, `type = "boolean", default = true, scope = "org"`), "scope"},
 	}
 	for name, c := range cases {
 		_, err := ParseManifest([]byte(c.manifest))
@@ -90,5 +92,45 @@ on = { type = "boolean", default = true }
 	}
 	if _, err := ParseManifest(make([]byte, maxManifest+1)); err == nil {
 		t.Error("a huge manifest was taken")
+	}
+}
+
+func TestManifestScopesNormalized(t *testing.T) {
+	raw := manifest("scoped", nil, `
+[[contributes.block]]
+id = "proj"
+title = "Project"
+scope = "project"
+
+[[contributes.tool]]
+id = "t_def"
+description = "Default scope tool"
+
+[[contributes.tool]]
+id = "t_space"
+description = "Space scope tool"
+scope = "space"
+
+[contributes.settings]
+a = { type = "string" }
+b = { type = "string", scope = "session" }
+`)
+	m, err := ParseManifest([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Blocks[0].Scope != "global" || m.Blocks[1].Scope != "project" {
+		t.Fatalf("block scopes = %+v", m.Blocks)
+	}
+	if m.Tools[0].Scope != "global" || m.Tools[1].Scope != "space" {
+		t.Fatalf("tool scopes = %+v", m.Tools)
+	}
+	if m.Settings[0].Scope != "global" || m.Settings[1].Scope != "session" {
+		t.Fatalf("setting scopes = %+v", m.Settings)
+	}
+	// Invalid tool scope rejected strictly.
+	badTool := strings.Replace(raw, `scope = "space"`, `scope = "cluster"`, 1)
+	if _, err := ParseManifest([]byte(badTool)); err == nil || !strings.Contains(err.Error(), "scope") {
+		t.Fatalf("expected invalid tool scope error, got %v", err)
 	}
 }

@@ -59,39 +59,51 @@ func plugins(ctx context.Context, c *client.Client, args []string) error {
 	if storeOps[op] {
 		return pluginStore(ctx, c, op, rest)
 	}
-	if len(rest) == 0 {
-		return fmt.Errorf("plugins %s needs a plugin's ID", op)
-	}
-	req := &protocol.PluginAction{PluginId: rest[0], Op: op}
+	var req *protocol.PluginAction
 	switch op {
-	case protocol.PluginGrant, protocol.PluginDeny, protocol.PluginEnable, protocol.PluginDisable, protocol.PluginReload:
-	case protocol.PluginRun:
-		if len(rest) < 2 {
-			return fmt.Errorf("plugins run needs a command")
-		}
-		req.Command = rest[1]
 	case protocol.PluginSet:
-		if len(rest) < 2 {
-			return fmt.Errorf("plugins set needs a setting's key")
-		}
-		req.Key, req.Value = rest[1], strings.Join(rest[2:], " ")
-	case "allow-agent", "deny-agent":
-		// The ask answered is the one the plugin has waiting now.
-		ask, err := waitingAsk(ctx, c, rest[0])
+		var err error
+		req, err = parsePluginSetAction(rest)
 		if err != nil {
 			return err
 		}
-		req.Op, req.Key = protocol.PluginDenyAgent, ask
-		if op == "allow-agent" {
-			if len(rest) < 2 || (rest[1] != protocol.AgentOnce && rest[1] != protocol.AgentAlways) {
-				return fmt.Errorf("plugins allow-agent <id> once|always")
-			}
-			req.Op, req.Value = protocol.PluginAllowAgent, rest[1]
+	case protocol.PluginRun:
+		pos, scope, err := extractScopeFlag(rest)
+		if err != nil {
+			return err
 		}
-	case "forget-agents":
-		req.Op = protocol.PluginForgetAgents
+		if len(pos) == 0 {
+			return fmt.Errorf("plugins %s needs a plugin's ID", op)
+		}
+		if len(pos) < 2 {
+			return fmt.Errorf("plugins run needs a command")
+		}
+		req = &protocol.PluginAction{PluginId: pos[0], Op: op, Command: pos[1], Scope: scope}
 	default:
-		return fmt.Errorf("unknown plugins command %q", op)
+		if len(rest) == 0 {
+			return fmt.Errorf("plugins %s needs a plugin's ID", op)
+		}
+		req = &protocol.PluginAction{PluginId: rest[0], Op: op}
+		switch op {
+		case protocol.PluginGrant, protocol.PluginDeny, protocol.PluginEnable, protocol.PluginDisable, protocol.PluginReload:
+		case "allow-agent", "deny-agent":
+			// The ask answered is the one the plugin has waiting now.
+			ask, err := waitingAsk(ctx, c, rest[0])
+			if err != nil {
+				return err
+			}
+			req.Op, req.Key = protocol.PluginDenyAgent, ask
+			if op == "allow-agent" {
+				if len(rest) < 2 || (rest[1] != protocol.AgentOnce && rest[1] != protocol.AgentAlways) {
+					return fmt.Errorf("plugins allow-agent <id> once|always")
+				}
+				req.Op, req.Value = protocol.PluginAllowAgent, rest[1]
+			}
+		case "forget-agents":
+			req.Op = protocol.PluginForgetAgents
+		default:
+			return fmt.Errorf("unknown plugins command %q", op)
+		}
 	}
 	done, err := c.PluginAction(ctx, req)
 	if err != nil {
@@ -100,7 +112,65 @@ func plugins(ctx context.Context, c *client.Client, args []string) error {
 	if done.GetOpenUrl() != "" {
 		fmt.Println(done.GetOpenUrl())
 	}
+	if done.GetToast() != "" {
+		fmt.Println(done.GetToast())
+	}
 	return nil
+}
+
+// extractScopeFlag pulls --scope <val>, -scope <val>, --scope=<val>, or
+// -scope=<val> from anywhere in args before "--", returning the remaining
+// positional arguments and the scope value.
+func extractScopeFlag(args []string) ([]string, string, error) {
+	var pos []string
+	var scope string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			pos = append(pos, args[i+1:]...)
+			break
+		}
+		if a == "--scope" || a == "-scope" {
+			if i+1 >= len(args) {
+				return nil, "", fmt.Errorf("%s requires a scope value", a)
+			}
+			scope = args[i+1]
+			i++
+			continue
+		}
+		if v, ok := strings.CutPrefix(a, "--scope="); ok {
+			scope = v
+			continue
+		}
+		if v, ok := strings.CutPrefix(a, "-scope="); ok {
+			scope = v
+			continue
+		}
+		pos = append(pos, a)
+	}
+	return pos, scope, nil
+}
+
+// parsePluginSetAction parses `mako plugins set <id> <key> [value] [--scope <scope>]`,
+// accepting --scope / -scope either before or after the positional arguments.
+func parsePluginSetAction(rest []string) (*protocol.PluginAction, error) {
+	pos, scope, err := extractScopeFlag(rest)
+	if err != nil {
+		return nil, err
+	}
+	if len(pos) == 0 {
+		return nil, fmt.Errorf("plugins set needs a plugin's ID")
+	}
+	if len(pos) < 2 {
+		return nil, fmt.Errorf("plugins set needs a setting's key")
+	}
+	return &protocol.PluginAction{
+		PluginId: pos[0],
+		Op:       protocol.PluginSet,
+		Key:      pos[1],
+		Value:    strings.Join(pos[2:], " "),
+		Scope:    scope,
+	}, nil
 }
 
 // waitingAsk is the ID of the agent the plugin asks to start now.

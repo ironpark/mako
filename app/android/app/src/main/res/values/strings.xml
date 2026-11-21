@@ -354,4 +354,14 @@
     <string name="block_unknown_kind">Can\'t be shown in this version of the app</string>
     <string name="panel_missing">Not installed on %1$s</string>
     <string name="block_dragging">Moving item · tap a highlighted target to drop</string>
+    <string name="block_scope_space">Space</string>
+    <string name="block_scope_project">Project</string>
+    <string name="block_scope_session">Session</string>
+    <string name="block_scope_switch">Switch %1$s</string>
+    <string name="block_scope_needs_space">This panel requires a space on %1$s.</string>
+    <string name="block_scope_needs_space_detail">Create a space on this computer to use this panel.</string>
+    <string name="block_scope_needs_project">This panel requires a project on %1$s.</string>
+    <string name="block_scope_needs_project_detail">Add a project on this computer to use this panel.</string>
+    <string name="block_scope_needs_session">This panel requires a running session on %1$s.</string>
+    <string name="block_scope_needs_session_detail">Start a session on this computer to use this panel.</string>
 </resources>

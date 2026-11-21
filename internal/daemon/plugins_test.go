@@ -6,14 +6,18 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/layoutdoc"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/session"
+	"github.com/ironpark/mako/internal/workspace"
 )
 
 // TestPluginsOverTheSocket puts a plugin in a daemon's plugins folder and
@@ -377,5 +381,440 @@ b = { type = "number", required = true }
 	}
 	if err := json.Unmarshal([]byte(out), &got); err != nil || got.Label != "total" || got.Sum != 42 {
 		t.Fatalf("tool result = %s, err = %v", out, err)
+	}
+}
+
+// setTestWorkspaceSpaceAndProjects populates the daemon's workspace with a space
+// ("sp1" -> "Engineering") holding project "p1" ("Alpha", dirA) and a second
+// project "p2" ("Beta", dirB) outside any space, syncing d.projects.
+func setTestWorkspaceSpaceAndProjects(t *testing.T, d *Daemon, dirA, dirB string) {
+	t.Helper()
+	delta := &protocol.WorkspaceState{
+		Spaces: map[string]*protocol.SpaceEntry{
+			"sp1": {
+				CreatedAt: mark(),
+				Name:      &protocol.StringReg{Value: "Engineering"},
+				Projects: map[string]*protocol.ElementMeta{
+					"p1": {AddedAt: mark()},
+				},
+			},
+		},
+		Projects: map[string]*protocol.ProjectEntry{
+			"p1": {
+				CreatedAt: mark(),
+				Name:      &protocol.StringReg{Value: "Alpha"},
+				Roots: map[string]*protocol.ProjectRootEntry{
+					"r1": {
+						CreatedAt: mark(),
+						Locations: map[string]*protocol.ElementMeta{
+							workspace.LocationKey(d.cfg.NodeID, dirA): {AddedAt: mark()},
+						},
+					},
+				},
+			},
+			"p2": {
+				CreatedAt: mark(),
+				Name:      &protocol.StringReg{Value: "Beta"},
+				Roots: map[string]*protocol.ProjectRootEntry{
+					"r2": {
+						CreatedAt: mark(),
+						Locations: map[string]*protocol.ElementMeta{
+							workspace.LocationKey(d.cfg.NodeID, dirB): {AddedAt: mark()},
+						},
+					},
+				},
+			},
+		},
+	}
+	if !d.workspace.edit(delta) {
+		t.Fatal("workspace edit had no effect")
+	}
+	d.syncWorkspaceProjects()
+}
+
+// TestScopedWatchBlockAndEventIsolation verifies that WatchBlockScoped and
+// BlockEvent isolate state, storage, and updates across two project scopes,
+// while enriching ScopeContext via the daemon's ResolveScope callback.
+func TestScopedWatchBlockAndEventIsolation(t *testing.T) {
+	d := meshDaemon(t, "a")
+	c := dialDaemon(t, d)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	setTestWorkspaceSpaceAndProjects(t, d, dirA, dirB)
+
+	writePlugin(t, d, "scoped", map[string]string{
+		"plugin.toml": `id = "scoped"
+version = "1.0.0"
+publisher = "test"
+api = 1
+entry = "main.js"
+permissions = ["storage"]
+
+[[contributes.block]]
+id = "board"
+title = "Board"
+scope = "project"
+`,
+		"main.js": `export default {
+  activate(m) {
+    m.blocks.register("board", {
+      state: { count: 0 },
+      async load(s, ctx) {
+        const res = await ctx.storage.getItem("count");
+        s.count = res.found ? Number(res.value) : 0;
+      },
+      render: (s, ui, ctx) => ui.column([
+        ui.button(ctx.projectName + ":" + s.count + ":" + ctx.spaceName, { key: "inc", onTap: ["inc"] }),
+      ]),
+      on: {
+        async inc(s) {
+          const ctx = m.blocks.context("board");
+          s.count += 1;
+          await ctx.storage.setItem("count", String(s.count));
+        },
+      },
+    });
+  },
+};`,
+	})
+
+	waitFor(t, "scoped plugin listed", func() bool {
+		list, err := c.Plugins(ctx)
+		return err == nil && len(list.GetPlugins()) == 1 && list.GetPlugins()[0].GetState() == protocol.PluginWaiting
+	})
+	if _, err := c.PluginAction(ctx, &protocol.PluginAction{PluginId: "scoped", Op: protocol.PluginGrant}); err != nil {
+		t.Fatal(err)
+	}
+
+	watchScope := func(scope string) (<-chan *protocol.BlockUpdate, <-chan error) {
+		got := make(chan *protocol.BlockUpdate, 16)
+		ended := make(chan error, 2)
+		go func() {
+			var tree *protocol.UiNode
+			ended <- c.WatchBlockScoped(ctx, "plugin:scoped/board", scope, func(u *protocol.BlockUpdate) {
+				if u.GetTree() != nil {
+					tree = u.GetTree()
+				} else if len(u.GetOps()) > 0 {
+					next, err := protocol.ApplyUi(tree, u.GetOps())
+					if err != nil {
+						ended <- err
+						return
+					}
+					tree = next
+				}
+				got <- &protocol.BlockUpdate{
+					Block: u.GetBlock(),
+					Scope: u.GetScope(),
+					Tree:  tree,
+					State: u.GetState(),
+				}
+			})
+		}()
+		return got, ended
+	}
+
+	gotA, endedA := watchScope("project:p1")
+	gotB, endedB := watchScope("project:p2")
+
+	uA := until(ctx, t, gotA, endedA, "Alpha:0:Engineering")
+	if uA.GetScope() != "project:p1" {
+		t.Fatalf("scope A = %q, want project:p1", uA.GetScope())
+	}
+	uB := until(ctx, t, gotB, endedB, "Beta:0:")
+	if uB.GetScope() != "project:p2" {
+		t.Fatalf("scope B = %q, want project:p2", uB.GetScope())
+	}
+
+	// Tapping p1 increments only p1.
+	if _, err := c.BlockEvent(ctx, &protocol.BlockEvent{
+		Block: "plugin:scoped/board",
+		Scope: "project:p1",
+		Node:  "/inc",
+		Kind:  protocol.UiTap,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	until(ctx, t, gotA, endedA, "Alpha:1:Engineering")
+
+	// Ensure no stray update leaked to p2 before tapping p2.
+	select {
+	case leak := <-gotB:
+		if strings.Contains(treeText(leak.GetTree()), "Beta:1:") || strings.Contains(treeText(leak.GetTree()), "Alpha") {
+			t.Fatalf("update leaked into p2: %s", treeText(leak.GetTree()))
+		}
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	// Tapping p2 increments only p2.
+	if _, err := c.BlockEvent(ctx, &protocol.BlockEvent{
+		Block: "plugin:scoped/board",
+		Scope: "project:p2",
+		Node:  "/inc",
+		Kind:  protocol.UiTap,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	until(ctx, t, gotB, endedB, "Beta:1:")
+}
+
+// TestResolvePluginScopeEnrichment checks daemon-side ScopeContext resolution
+// for space, project, and session scopes against workspace state, projects, and
+// live sessions.
+func TestResolvePluginScopeEnrichment(t *testing.T) {
+	d := meshDaemon(t, "a")
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	dirOther := t.TempDir()
+	setTestWorkspaceSpaceAndProjects(t, d, dirA, dirB)
+
+	startIn := func(id, dir string) *session.Session {
+		t.Helper()
+		s, err := session.Start(session.Spec{
+			ID: id, NodeID: d.cfg.NodeID, Agent: "claude", Project: dir,
+			Command: []string{"sh", "-c", "sleep 30"}, Cols: 40, Rows: 6,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { s.Close() })
+		d.sessions.add(s)
+		return s
+	}
+	startIn("sess-a", dirA)
+	startIn("sess-other", dirOther)
+
+	if sc := d.resolvePluginScope(""); sc.Scope != protocol.ScopeGlobal || sc.ScopeKey != "" {
+		t.Fatalf("global scope = %+v", sc)
+	}
+
+	sp := d.resolvePluginScope("space:sp1")
+	if sp.Scope != protocol.ScopeSpace || sp.ScopeKey != "space:sp1" || sp.SpaceID != "sp1" || sp.SpaceName != "Engineering" {
+		t.Fatalf("space scope = %+v", sp)
+	}
+
+	p1 := d.resolvePluginScope("project:p1")
+	if p1.Scope != protocol.ScopeProject || p1.ScopeKey != "project:p1" ||
+		p1.ProjectID != "p1" || p1.ProjectName != "Alpha" ||
+		!slices.Equal(p1.Roots, []string{dirA}) ||
+		p1.SpaceID != "sp1" || p1.SpaceName != "Engineering" {
+		t.Fatalf("project p1 scope = %+v", p1)
+	}
+
+	p2 := d.resolvePluginScope("project:p2")
+	if p2.Scope != protocol.ScopeProject || p2.ScopeKey != "project:p2" ||
+		p2.ProjectID != "p2" || p2.ProjectName != "Beta" ||
+		!slices.Equal(p2.Roots, []string{dirB}) ||
+		p2.SpaceID != "" || p2.SpaceName != "" {
+		t.Fatalf("project p2 scope = %+v", p2)
+	}
+
+	sa := d.resolvePluginScope("session:sess-a")
+	if sa.Scope != protocol.ScopeSession || sa.ScopeKey != "session:sess-a" ||
+		sa.SessionID != "sess-a" || sa.ProjectID != "p1" || sa.ProjectName != "Alpha" ||
+		!slices.Equal(sa.Roots, []string{dirA}) ||
+		sa.SpaceID != "sp1" || sa.SpaceName != "Engineering" {
+		t.Fatalf("session sess-a scope = %+v", sa)
+	}
+
+	so := d.resolvePluginScope("session:sess-other")
+	if so.Scope != protocol.ScopeSession || so.ScopeKey != "session:sess-other" ||
+		so.SessionID != "sess-other" || so.ProjectID != "" || so.SpaceID != "" ||
+		!slices.Equal(so.Roots, []string{dirOther}) {
+		t.Fatalf("session sess-other scope = %+v", so)
+	}
+}
+
+// TestAgentMCPPluginToolStrictScopeBinding verifies that plugin MCP tools
+// called through an agent's MCP server derive their ScopeContext strictly from
+// the calling agent's session, ignoring any caller-supplied scope arguments.
+func TestAgentMCPPluginToolStrictScopeBinding(t *testing.T) {
+	d := meshDaemon(t, "a")
+	c := dialDaemon(t, d)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	dirUnregistered := t.TempDir()
+	setTestWorkspaceSpaceAndProjects(t, d, dirA, dirB)
+
+	writePlugin(t, d, "scopedtools", map[string]string{
+		"plugin.toml": `id = "scopedtools"
+version = "1.0.0"
+publisher = "test"
+api = 1
+entry = "main.js"
+permissions = []
+
+[[contributes.tool]]
+id = "project_echo"
+description = "Echo project scope context"
+scope = "project"
+[contributes.tool.params]
+scope = { type = "string" }
+project_id = { type = "string" }
+
+[[contributes.tool]]
+id = "space_echo"
+description = "Echo space scope context"
+scope = "space"
+
+[[contributes.tool]]
+id = "session_echo"
+description = "Echo session scope context"
+scope = "session"
+
+[[contributes.tool]]
+id = "global_echo"
+description = "Echo global scope context"
+scope = "global"
+`,
+		"main.js": `export default {
+  activate(m) {
+    const echo = (args, ctx) => ({
+      scope: ctx.scope,
+      scopeKey: ctx.scopeKey,
+      spaceId: ctx.spaceId,
+      spaceName: ctx.spaceName,
+      projectId: ctx.projectId,
+      projectName: ctx.projectName,
+      sessionId: ctx.sessionId,
+      roots: ctx.roots,
+      argScope: args && args.scope ? args.scope : "",
+    });
+    m.tools.register("project_echo", echo);
+    m.tools.register("space_echo", echo);
+    m.tools.register("session_echo", echo);
+    m.tools.register("global_echo", echo);
+  },
+};`,
+	})
+
+	waitFor(t, "scopedtools plugin ready", func() bool {
+		list, err := c.Plugins(ctx)
+		return err == nil && len(list.GetPlugins()) == 1 && list.GetPlugins()[0].GetState() == protocol.PluginReady
+	})
+
+	connectAgentMCP := func(id, dir string) *sdk.ClientSession {
+		t.Helper()
+		_, cleanup := d.projectAgents.server(ctx, "", id, "")
+		t.Cleanup(cleanup)
+		s, err := session.Start(session.Spec{
+			ID: id, NodeID: d.cfg.NodeID, Agent: "claude", Project: dir,
+			Command: []string{"sh", "-c", "sleep 30"}, Cols: 40, Rows: 6,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { s.Close() })
+		d.sessions.add(s)
+		peer := d.projectAgents.activate(s)
+		if peer == nil {
+			t.Fatalf("failed to activate agent peer %s", id)
+		}
+		srv, _ := d.newProjectAgentServer(peer, d.agentMCPSnapshot(), true)
+		ct, st := sdk.NewInMemoryTransports()
+		ss, err := srv.Connect(ctx, st, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = ss.Close() })
+		cli := sdk.NewClient(&sdk.Implementation{Name: "test-agent", Version: "1"}, nil)
+		cs, err := cli.Connect(ctx, ct, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = cs.Close() })
+		return cs
+	}
+
+	callToolJSON := func(cs *sdk.ClientSession, name string, args map[string]any) (map[string]any, error) {
+		res, err := cs.CallTool(ctx, &sdk.CallToolParams{Name: name, Arguments: args})
+		if err != nil {
+			return nil, err
+		}
+		if res.IsError {
+			var msg string
+			if len(res.Content) > 0 {
+				if tc, ok := res.Content[0].(*sdk.TextContent); ok {
+					msg = tc.Text
+				}
+			}
+			return nil, errors.New(msg)
+		}
+		tc, ok := res.Content[0].(*sdk.TextContent)
+		if !ok {
+			t.Fatalf("unexpected content %T", res.Content[0])
+		}
+		var out map[string]any
+		if err := json.Unmarshal([]byte(tc.Text), &out); err != nil {
+			t.Fatalf("unmarshal %q: %v", tc.Text, err)
+		}
+		return out, nil
+	}
+
+	// Agent in project p1 (space sp1) attempts to spoof p2 via tool args.
+	csA := connectAgentMCP("agent-a", dirA)
+	gotProj, err := callToolJSON(csA, "plugin_scopedtools_project_echo", map[string]any{
+		"scope":      "project:p2",
+		"project_id": "p2",
+	})
+	if err != nil {
+		t.Fatalf("project_echo failed: %v", err)
+	}
+	if gotProj["scope"] != "project" || gotProj["scopeKey"] != "project:p1" ||
+		gotProj["projectId"] != "p1" || gotProj["projectName"] != "Alpha" ||
+		gotProj["spaceId"] != "sp1" || gotProj["spaceName"] != "Engineering" ||
+		gotProj["sessionId"] != "agent-a" {
+		t.Fatalf("project_echo scope was not strictly bound to agent-a's project: %+v", gotProj)
+	}
+
+	gotSpace, err := callToolJSON(csA, "plugin_scopedtools_space_echo", nil)
+	if err != nil {
+		t.Fatalf("space_echo failed: %v", err)
+	}
+	if gotSpace["scope"] != "space" || gotSpace["scopeKey"] != "space:sp1" ||
+		gotSpace["spaceId"] != "sp1" || gotSpace["spaceName"] != "Engineering" {
+		t.Fatalf("space_echo = %+v", gotSpace)
+	}
+
+	gotSess, err := callToolJSON(csA, "plugin_scopedtools_session_echo", nil)
+	if err != nil {
+		t.Fatalf("session_echo failed: %v", err)
+	}
+	if gotSess["scope"] != "session" || gotSess["scopeKey"] != "session:agent-a" ||
+		gotSess["sessionId"] != "agent-a" || gotSess["projectId"] != "p1" {
+		t.Fatalf("session_echo = %+v", gotSess)
+	}
+
+	gotGlobal, err := callToolJSON(csA, "plugin_scopedtools_global_echo", nil)
+	if err != nil {
+		t.Fatalf("global_echo failed: %v", err)
+	}
+	if gotGlobal["scope"] != "global" || gotGlobal["scopeKey"] != "" {
+		t.Fatalf("global_echo = %+v", gotGlobal)
+	}
+
+	// Agent in an unregistered directory cannot invoke project/space tools even
+	// when passing spoofed scope/project_id arguments.
+	csOther := connectAgentMCP("agent-other", dirUnregistered)
+	if got, err := callToolJSON(csOther, "plugin_scopedtools_project_echo", map[string]any{
+		"scope":      "project:p1",
+		"project_id": "p1",
+	}); err == nil {
+		t.Fatalf("expected project_echo error for unregistered project, got %+v", got)
+	}
+	if got, err := callToolJSON(csOther, "plugin_scopedtools_space_echo", nil); err == nil {
+		t.Fatalf("expected space_echo error for unregistered project, got %+v", got)
+	}
+	gotOtherSess, err := callToolJSON(csOther, "plugin_scopedtools_session_echo", nil)
+	if err != nil {
+		t.Fatalf("session_echo for unregistered dir failed: %v", err)
+	}
+	if gotOtherSess["scopeKey"] != "session:agent-other" || gotOtherSess["projectId"] != "" {
+		t.Fatalf("session_echo for unregistered dir = %+v", gotOtherSess)
 	}
 }

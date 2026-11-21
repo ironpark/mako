@@ -722,7 +722,8 @@ func (d *Daemon) syncPluginMCPTools(server *sdk.Server, peer *agentPeer, tools [
 			Description: tool.Description,
 			InputSchema: json.RawMessage(rawSchema),
 		}, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
-			if _, err := d.projectCaller(peer); err != nil {
+			s, err := d.projectCaller(peer)
+			if err != nil {
 				return nil, err
 			}
 			if d.plugins == nil {
@@ -732,7 +733,8 @@ func (d *Daemon) syncPluginMCPTools(server *sdk.Server, peer *agentPeer, tools [
 			if req != nil && req.Params != nil {
 				args = req.Params.Arguments
 			}
-			out, err := d.plugins.CallTool(ctx, tool.PluginID, tool.ID, args)
+			scopeCtx := d.sessionScopeContext(s.ID(), s.Info())
+			out, err := d.plugins.CallToolScoped(ctx, tool.PluginID, tool.ID, args, scopeCtx)
 			if err != nil {
 				return nil, err
 			}

@@ -96,17 +96,70 @@ func (p *plugin) recordLog(level, msg string) {
 	p.mu.Unlock()
 }
 
-// instance is a block of a plugin's: its state lives in the runtime; its
-// tree, last error and watchers here.
+// maxScopeInstancesPerBlock bounds how many scope instances of one block stay
+// cached in memory and JS heap at once; actively watched instances are never
+// evicted.
+const maxScopeInstancesPerBlock = 16
+
+// instance is one (block, scope) instance of a plugin: its state lives in the
+// runtime; its tree, last error, watchers, and LRU timestamp here.
 type instance struct {
-	id   string
-	tree *uiblock.Tree // the last render that read; guarded by plugin.mu
-	err  string        // the last call's error; guarded by plugin.mu
-	subs int           // the streams watching it; guarded by plugin.mu
+	key      string        // instanceKey(id, scopeKey)
+	id       string        // block ID from manifest
+	scopeKey string        // canonical scope key: "", "space:<id>", "project:<id>", "session:<id>"
+	tree     *uiblock.Tree // the last render that read; guarded by plugin.mu
+	err      string        // the last call's error; guarded by plugin.mu
+	subs     int           // the streams watching it; guarded by plugin.mu
+	lastUsed time.Time     // LRU timestamp; guarded by plugin.mu
 
 	loaded   bool // the actor's: load ran since the runtime started
 	lastLoad time.Time
 	refresh  time.Duration
+}
+
+// getOrCreateInstanceLocked returns the instance for (blockID, scopeKey),
+// creating it if absent and evicting LRU unwatched instances beyond
+// maxScopeInstancesPerBlock. Caller must hold p.mu.
+func (p *plugin) getOrCreateInstanceLocked(blockID, scopeKey string) (*instance, []string) {
+	key := instanceKey(blockID, scopeKey)
+	now := time.Now()
+	if in, ok := p.inst[key]; ok {
+		in.lastUsed = now
+		return in, nil
+	}
+	in := &instance{key: key, id: blockID, scopeKey: scopeKey, lastUsed: now}
+	p.inst[key] = in
+	evicted := p.trimBlockInstancesLocked(blockID, key)
+	return in, evicted
+}
+
+// trimBlockInstancesLocked evicts the least-recently-used unwatched instances
+// for blockID (excluding keepKey) while total instances for blockID exceed
+// maxScopeInstancesPerBlock. Caller must hold p.mu.
+func (p *plugin) trimBlockInstancesLocked(blockID, keepKey string) []string {
+	var evicted []string
+	for {
+		count := 0
+		var victim *instance
+		for _, in := range p.inst {
+			if in.id != blockID {
+				continue
+			}
+			count++
+			if in.subs > 0 || in.key == keepKey {
+				continue
+			}
+			if victim == nil || in.lastUsed.Before(victim.lastUsed) || (in.lastUsed.Equal(victim.lastUsed) && in.key < victim.key) {
+				victim = in
+			}
+		}
+		if count <= maxScopeInstancesPerBlock || victim == nil {
+			break
+		}
+		delete(p.inst, victim.key)
+		evicted = append(evicted, victim.key)
+	}
+	return evicted
 }
 
 func newPlugin(m *Manager, id string) *plugin {
@@ -307,13 +360,13 @@ func (p *plugin) info() *protocol.PluginInfo {
 	out.AgentAsk, out.AgentsAllowed = p.asks.get().info(), g.AgentsAllowed
 	out.Asked = asked(man, g.Granted)
 	for _, b := range man.Blocks {
-		out.Blocks = append(out.Blocks, &protocol.PluginBlock{Name: blockName(p.id, b.ID), Title: b.Title, Slots: b.Slots})
+		out.Blocks = append(out.Blocks, &protocol.PluginBlock{Name: blockName(p.id, b.ID), Title: b.Title, Slots: b.Slots, Scope: b.Scope})
 	}
 	for _, c := range man.Commands {
 		out.Commands = append(out.Commands, &protocol.PluginCommand{Id: c.ID, Title: c.Title})
 	}
 	for _, tl := range man.Tools {
-		out.Tools = append(out.Tools, &protocol.PluginTool{Id: tl.ID, Description: tl.Description})
+		out.Tools = append(out.Tools, &protocol.PluginTool{Id: tl.ID, Description: tl.Description, Scope: tl.Scope})
 	}
 	for _, s := range man.Settings {
 		out.Settings = append(out.Settings, p.settings.forFront(s))

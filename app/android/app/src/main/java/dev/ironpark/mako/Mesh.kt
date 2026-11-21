@@ -457,6 +457,9 @@ class Mesh(
     /** Whether node takes OpenSession model, effort and yolo overrides (protocol.RevisionTemplatesAndDecisions). */
     fun supportsOpenOverrides(node: String): Boolean = revision(node) >= REVISION_OPEN_OVERRIDES
 
+    /** Whether node supports scoped plugin blocks, tools and settings (protocol.RevisionPluginScope). */
+    fun supportsPluginScope(node: String): Boolean = revision(node) >= REVISION_PLUGIN_SCOPE
+
     /** Types into a session: text pasted as its program asked for pastes, then keys as they are. */
     suspend fun send(s: SessionInfo, text: String = "", keys: String = "") = daemon.send(s.nodeId, s.id, text, keys)
 
@@ -619,6 +622,9 @@ class Mesh(
 
         /** The first protocol revision whose daemon takes OpenSession model, effort and yolo overrides (protocol.RevisionTemplatesAndDecisions). */
         const val REVISION_OPEN_OVERRIDES = 39L
+
+        /** The first protocol revision whose daemon supports scoped plugin blocks, tools and settings (protocol.RevisionPluginScope). */
+        const val REVISION_PLUGIN_SCOPE = 42L
 
         /** How a node's link stands, as Node.link says (protocol.Link*). */
         const val LINK_LINKING = "linking"

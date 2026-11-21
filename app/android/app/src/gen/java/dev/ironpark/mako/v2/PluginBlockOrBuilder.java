@@ -86,4 +86,26 @@ public interface PluginBlockOrBuilder extends
    */
   com.google.protobuf.ByteString
       getSlotsBytes(int index);
+
+  /**
+   * <pre>
+   * scope is the block's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 4 [json_name = "scope"];</code>
+   * @return The scope.
+   */
+  java.lang.String getScope();
+  /**
+   * <pre>
+   * scope is the block's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 4 [json_name = "scope"];</code>
+   * @return The bytes for scope.
+   */
+  com.google.protobuf.ByteString
+      getScopeBytes();
 }

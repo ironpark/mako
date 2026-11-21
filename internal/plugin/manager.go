@@ -107,6 +107,10 @@ type Config struct {
 	// Projects lists the projects this node knows, and their folders on
 	// it, for fs:project; nil knows none.
 	Projects func() []ProjectRoots
+	// ResolveScope enriches a canonical scope key ("space:<id>", "project:<id>",
+	// "session:<id>") with human-readable names and project roots; when nil,
+	// ScopeContext is populated from scopeKey alone.
+	ResolveScope func(scopeKey string) ScopeContext
 	// Agents carries out sessions:write; nil for none.
 	Agents AgentHost
 	// Layout carries out layout:write; nil for none.
@@ -274,6 +278,24 @@ func (m *Manager) List() []*protocol.PluginInfo {
 	return out
 }
 
+// blockPropsForScope returns the layoutdoc JSON schema for a plugin block's
+// props: global blocks take no props, while scoped blocks ("space", "project",
+// "session") accept an optional pinned "scope" string property.
+func blockPropsForScope(scope string) map[string]any {
+	switch scope {
+	case protocol.ScopeSpace, protocol.ScopeProject, protocol.ScopeSession:
+		return map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"scope": map[string]any{"type": "string"},
+			},
+			"additionalProperties": false,
+		}
+	default:
+		return layoutdoc.NoProps()
+	}
+}
+
 // Blocks are the blocks the plugins contribute, for the catalog agents
 // read.
 func (m *Manager) Blocks() []layoutdoc.Block {
@@ -284,14 +306,14 @@ func (m *Manager) Blocks() []layoutdoc.Block {
 			continue
 		}
 		for _, b := range v.man.Blocks {
-			out = append(out, layoutdoc.Block{Name: blockName(p.id, b.ID), Title: b.Title, Props: layoutdoc.NoProps()})
+			out = append(out, layoutdoc.Block{Name: blockName(p.id, b.ID), Title: b.Title, Props: blockPropsForScope(b.Scope)})
 		}
 	}
 	return out
 }
 
-// BlockProps makes the plugins' blocks a layoutdoc.Catalog. A plugin's
-// block takes no props in this version.
+// BlockProps makes the plugins' blocks a layoutdoc.Catalog. Global blocks take
+// no props; scoped blocks accept an optional pinned "scope" string property.
 func (m *Manager) BlockProps(name string) (map[string]any, bool) {
 	id, block, ok := splitBlock(name)
 	if !ok {
@@ -302,10 +324,15 @@ func (m *Manager) BlockProps(name string) (map[string]any, bool) {
 		return nil, false
 	}
 	v := p.current()
-	if v == nil || !slices.ContainsFunc(v.man.Blocks, func(b BlockDecl) bool { return b.ID == block }) {
+	if v == nil {
 		return nil, false
 	}
-	return layoutdoc.NoProps(), true
+	for _, b := range v.man.Blocks {
+		if b.ID == block {
+			return blockPropsForScope(b.Scope), true
+		}
+	}
+	return nil, false
 }
 
 // blockName is a plugin's block's registered name: plugin:<id>/<block>.

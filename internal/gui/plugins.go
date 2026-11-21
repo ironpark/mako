@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -34,6 +35,9 @@ type pluginsState struct {
 	// Secrets is where the daemon keeps its plugins' secrets: the
 	// keychain's name, or "file" with why; "" from an older daemon.
 	Secrets *ggui.StateValue[secretStore]
+	// SettingScope is the scope currently picked in Settings ▸ Plugins for
+	// each plugin ID ("" for global default).
+	SettingScope *ggui.StateValue[map[string]string]
 }
 
 // secretStore is where a node keeps its plugins' secrets.
@@ -52,8 +56,21 @@ func newPluginsState() *pluginsState {
 			}
 			return true
 		}),
-		Later:   ggui.State(map[string]bool{}),
-		Secrets: ggui.State(secretStore{}),
+		Later:        ggui.State(map[string]bool{}),
+		Secrets:      ggui.State(secretStore{}),
+		SettingScope: ggui.State(map[string]string{}).WithEqual(maps.Equal[map[string]string]),
+	}
+}
+
+// scopedBlockProps is the layoutdoc props schema for a scoped plugin block,
+// permitting an optional pinned "scope" key (e.g. "project:<id>").
+func scopedBlockProps() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"scope": map[string]any{"type": "string"},
+		},
+		"additionalProperties": false,
 	}
 }
 
@@ -71,9 +88,19 @@ func (m *model) setPluginList(pl *protocol.Plugins) {
 	var defs []blockDef
 	for _, p := range list {
 		for _, b := range p.GetBlocks() {
-			name, title, id := b.GetName(), b.GetTitle(), p.GetId()
-			defs = append(defs, blockDef{Name: name, Title: title,
-				Build: func(m *model, _ map[string]any) blockView { return blockView{Body: pluginBlock(m, name, id, title)} }})
+			name, title, id, scope := b.GetName(), b.GetTitle(), p.GetId(), b.GetScope()
+			def := blockDef{
+				Name:  name,
+				Title: title,
+				Scope: scope,
+				Build: func(m *model, props map[string]any) blockView {
+					return blockView{Body: pluginBlock(m, name, id, title, scope, props)}
+				},
+			}
+			if isScoped(scope) {
+				def.Props = scopedBlockProps()
+			}
+			defs = append(defs, def)
 		}
 	}
 	m.blocks.replaceOf("plugin:", defs)
@@ -111,11 +138,11 @@ func (m *model) actOnPlugin(req *protocol.PluginAction) {
 
 // blockEvent tells a block's plugin or agent of the user acting on a node
 // of it, with the block's fields as they stand.
-func (m *model) blockEvent(block, node, kind, value string, values map[string]string) {
+func (m *model) blockEvent(block, scope, node, kind, value string, values map[string]string) {
 	if m.post == nil {
 		return
 	}
-	req := &protocol.BlockEvent{Block: block, Node: node, Kind: kind, Value: value, Values: values}
+	req := &protocol.BlockEvent{Block: block, Scope: scope, Node: node, Kind: kind, Value: value, Values: values}
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (*protocol.PluginDone, error) {
 		return c.BlockEvent(ctx, req)
 	}, func(done *protocol.PluginDone, err error) {
@@ -301,6 +328,71 @@ func (m *model) removePluginBlock(blockName string) {
 	}
 	leaf := path[len(path)-1]
 	next, err := layoutdoc.Apply(doc, []layoutdoc.Op{{Op: "remove", ID: leaf.ID}}, m.blocks)
+	if err != nil {
+		m.tellWindowDoc(err)
+		return
+	}
+	body, err := json.Marshal(next)
+	if err != nil {
+		return
+	}
+	m.setWindowLayout(docName, body)
+}
+
+// setPluginBlockScope updates props["scope"] on the active layout document's
+// node for blockName (matching oldScope first when multiple instances exist),
+// persisting via layoutdoc.Apply and setWindowLayout. Passing newScope == ""
+// removes the pinned scope so the block follows the active workspace context.
+func (m *model) setPluginBlockScope(blockName, oldScope, newScope string) {
+	docName, doc := m.activeLayoutDoc()
+	path := doc.PathTo(func(n *layoutdoc.Node) bool {
+		return n.Kind == layoutdoc.KindBlock && n.Block == blockName && blockPropScope(n.Props) == oldScope
+	})
+	if len(path) < 2 {
+		path = doc.BlockPath(blockName)
+	}
+	if len(path) < 2 {
+		return
+	}
+	parent, leaf := path[len(path)-2], path[len(path)-1]
+	idx := slices.Index(parent.Children, leaf)
+	if idx < 0 {
+		return
+	}
+	nextProps := maps.Clone(leaf.Props)
+	if newScope == "" {
+		delete(nextProps, "scope")
+	} else {
+		if nextProps == nil {
+			nextProps = map[string]any{}
+		}
+		nextProps["scope"] = newScope
+	}
+	nodeObj := map[string]any{
+		"id":    leaf.ID,
+		"block": leaf.Block,
+	}
+	if leaf.Size > 0 {
+		nodeObj["size"] = leaf.Size
+	}
+	if leaf.Grow > 0 {
+		nodeObj["grow"] = leaf.Grow
+	}
+	if leaf.Collapsible {
+		nodeObj["collapsible"] = true
+	}
+	if len(nextProps) > 0 {
+		nodeObj["props"] = nextProps
+	}
+	ops := []layoutdoc.Op{
+		{Op: "remove", ID: leaf.ID},
+		{Op: "insert", Parent: parent.ID, Index: &idx, Node: nodeObj},
+	}
+	if parent.Kind == layoutdoc.KindStack {
+		active := parent.Active
+		ops = append(ops, layoutdoc.Op{Op: "select", ID: parent.ID, Active: &active})
+	}
+	next, err := layoutdoc.Apply(doc, ops, m.blocks)
 	if err != nil {
 		m.tellWindowDoc(err)
 		return

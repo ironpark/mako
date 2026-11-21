@@ -86,6 +86,7 @@ type blockDrag struct {
 type treeView struct {
 	m       *model
 	block   string
+	scope   string
 	form    *blockForm
 	onEvent func(block, node, kind, value string, values map[string]string)
 }
@@ -97,7 +98,7 @@ func (v *treeView) send(id, kind, value string) {
 		v.onEvent(v.block, id, kind, value, v.form.values())
 		return
 	}
-	v.m.blockEvent(v.block, id, kind, value, v.form.values())
+	v.m.blockEvent(v.block, v.scope, id, kind, value, v.form.values())
 }
 
 // node draws a node of the tree; inLine says it is a row's child, where
@@ -140,7 +141,7 @@ func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
 		return v.dragDrop(b.Disabled(n.GetDisabled() || !n.GetTap()).Name(n.GetText()), n)
 	case "input":
 		id := n.GetId()
-		f := ui.TextField(v.form.input(id, n.GetValue())).Key(v.block + id).Placeholder(n.GetText()).Name(cmpTone(n.GetText(), T("Input")))
+		f := ui.TextField(v.form.input(id, n.GetValue())).Key(v.block + "\x00" + v.scope + id).Placeholder(n.GetText()).Name(cmpTone(n.GetText(), T("Input")))
 		if n.GetChange() {
 			f = f.OnSubmit(func(s string) { v.send(id, protocol.UiSubmit, s) }).
 				OnCommit(func(s string) { v.send(id, protocol.UiChange, s) })
@@ -148,7 +149,7 @@ func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
 		return f.Disabled(n.GetDisabled())
 	case "textarea":
 		id := n.GetId()
-		f := ui.TextField(v.form.input(id, n.GetValue())).Key(v.block + id).Lines(4).Placeholder(n.GetText()).Name(cmpTone(n.GetText(), T("Input")))
+		f := ui.TextField(v.form.input(id, n.GetValue())).Key(v.block + "\x00" + v.scope + id).Lines(4).Placeholder(n.GetText()).Name(cmpTone(n.GetText(), T("Input")))
 		if n.GetChange() {
 			f = f.OnSubmit(func(s string) { v.send(id, protocol.UiSubmit, s) }).
 				OnCommit(func(s string) { v.send(id, protocol.UiChange, s) })
@@ -441,6 +442,13 @@ func newBlockForm() *blockForm {
 
 // redraw starts a drawing of the tree: the fields it draws are the form's.
 func (f *blockForm) redraw() { f.drawn = map[string]bool{} }
+
+// reset clears all field state, used when a scoped block switches scope.
+func (f *blockForm) reset() {
+	f.fields = map[string]*ggui.StateValue[string]{}
+	f.given = map[string]string{}
+	f.drawn = map[string]bool{}
+}
 
 // field is the value of node id, which the tree gives as given.
 func (f *blockForm) field(id, given string) *ggui.StateValue[string] {

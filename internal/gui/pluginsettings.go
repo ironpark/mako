@@ -188,8 +188,14 @@ func pluginCardBody(m *model, p *protocol.PluginInfo) ggui.Widget {
 	if len(p.GetTools()) > 0 {
 		rows = append(rows, pluginToolsRow(id, p.GetTools()))
 	}
-	for _, s := range p.GetSettings() {
-		rows = append(rows, pluginSettingRow(m, id, s))
+	if len(p.GetSettings()) > 0 {
+		if hasScopedSettings(p.GetSettings()) {
+			rows = append(rows, pluginScopedSettingsSection(m, id, p.GetSettings()))
+		} else {
+			for _, s := range p.GetSettings() {
+				rows = append(rows, pluginSettingRow(m, id, s, ""))
+			}
+		}
 	}
 	rows = append(rows, pluginDiagnosticsRow(p))
 	return card(rows...)
@@ -307,27 +313,242 @@ func pluginPermissions(m *model, p *protocol.PluginInfo, act func(string) func()
 	).Gap(10).Stretch())
 }
 
-// pluginSettingRow is a setting's row, its control as its type is.
-func pluginSettingRow(m *model, id string, s *protocol.PluginSetting) ggui.Widget {
-	key := s.GetKey()
-	set := func(v string) {
-		m.actOnPlugin(&protocol.PluginAction{PluginId: id, Op: protocol.PluginSet, Key: key, Value: v})
+// hasScopedSettings reports whether any setting declares a non-global scope.
+func hasScopedSettings(settings []*protocol.PluginSetting) bool {
+	return slices.ContainsFunc(settings, func(s *protocol.PluginSetting) bool {
+		return isScoped(s.GetScope())
+	})
+}
+
+// settingScopeLabel returns the human-readable display name for a scope kind.
+func settingScopeLabel(scope string) string {
+	switch scope {
+	case protocol.ScopeSpace:
+		return T("Space")
+	case protocol.ScopeProject:
+		return T("Project")
+	case protocol.ScopeSession:
+		return T("Session")
+	default:
+		return ""
 	}
+}
+
+// pluginSettingScopes collects the selectable scope options for a plugin's
+// settings: Global default, available targets for each declared scope kind,
+// and any scope keys that already hold overrides. Reactive.
+func pluginSettingScopes(m *model, settings []*protocol.PluginSetting) []scopeOption {
+	var hasSpace, hasProject, hasSession bool
+	var extraKeys []string
+	for _, s := range settings {
+		switch s.GetScope() {
+		case protocol.ScopeSpace:
+			hasSpace = true
+		case protocol.ScopeProject:
+			hasProject = true
+		case protocol.ScopeSession:
+			hasSession = true
+		}
+		for k := range s.GetScopedValues() {
+			if k != "" {
+				extraKeys = append(extraKeys, k)
+			}
+		}
+		for _, k := range s.GetScopedSet() {
+			if k != "" {
+				extraKeys = append(extraKeys, k)
+			}
+		}
+	}
+	kinds := 0
+	for _, on := range []bool{hasSpace, hasProject, hasSession} {
+		if on {
+			kinds++
+		}
+	}
+	formatLabel := func(kind, name string) string {
+		if kinds <= 1 {
+			return name
+		}
+		switch kind {
+		case protocol.ScopeSpace:
+			return Tf("Space: %s", name)
+		case protocol.ScopeProject:
+			return Tf("Project: %s", name)
+		case protocol.ScopeSession:
+			return Tf("Session: %s", name)
+		}
+		return name
+	}
+
+	opts := []scopeOption{{Key: "", Label: T("Global default")}}
+	seen := map[string]bool{"": true}
+	addKind := func(kind string) {
+		for _, o := range m.scopeOptions(kind) {
+			if seen[o.Key] {
+				continue
+			}
+			seen[o.Key] = true
+			opts = append(opts, scopeOption{Key: o.Key, Label: formatLabel(kind, o.Label)})
+		}
+	}
+	if hasSpace {
+		addKind(protocol.ScopeSpace)
+	}
+	if hasProject {
+		addKind(protocol.ScopeProject)
+	}
+	if hasSession {
+		addKind(protocol.ScopeSession)
+	}
+	slices.Sort(extraKeys)
+	for _, k := range slices.Compact(extraKeys) {
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		kind, _, _ := strings.Cut(k, ":")
+		opts = append(opts, scopeOption{Key: k, Label: formatLabel(kind, m.scopeLabel(k))})
+	}
+	return opts
+}
+
+// setPluginSettingScope records the active settings scope for plugin id.
+func (m *model) setPluginSettingScope(id, scopeKey string) {
+	m.plugins.SettingScope.Update(func(cur map[string]string) map[string]string {
+		next := maps.Clone(cur)
+		if next == nil {
+			next = map[string]string{}
+		}
+		if scopeKey == "" {
+			delete(next, id)
+		} else {
+			next[id] = scopeKey
+		}
+		return next
+	})
+}
+
+// pluginScopedSettingsSection renders the scope selector and every setting row
+// for a plugin that declares at least one scoped setting.
+func pluginScopedSettingsSection(m *model, id string, settings []*protocol.PluginSetting) ggui.Widget {
+	return ggui.Reactive(func() ggui.Widget {
+		selectedScope := m.plugins.SettingScope.Get()[id]
+		opts := pluginSettingScopes(m, settings)
+		currentLabel := T("Global default")
+		for _, o := range opts {
+			if o.Key == selectedScope {
+				currentLabel = o.Label
+				break
+			}
+		}
+		if selectedScope != "" && currentLabel == T("Global default") {
+			currentLabel = m.scopeLabel(selectedScope)
+		}
+		items := make([]ggui.Widget, 0, len(opts))
+		for _, o := range opts {
+			key := o.Key
+			items = append(items, ui.MenuItem(o.Label, func() {
+				m.setPluginSettingScope(id, key)
+			}).Checked(key == selectedScope))
+		}
+		glyph := "globe"
+		if selectedScope != "" {
+			kind, _, _ := strings.Cut(selectedScope, ":")
+			glyph = scopeKindIcon(kind)
+		}
+		face := widget.Row(
+			icon(glyph).Size(13).Color(skin.Muted),
+			widget.Text(currentLabel).Size(12.5).NoWrap(),
+			icon("chevron-down").Size(13).Color(skin.Muted),
+		).Gap(6).Align(widget.AlignCenter)
+		selector := row(
+			T("Settings scope"),
+			T("Edit global defaults or override settings for a specific space or project."),
+			ui.MenuOf(face, items...).Name(Tf("Settings scope: %s", currentLabel)),
+		)
+		children := make([]ggui.Widget, 0, 1+2*len(settings))
+		children = append(children, selector)
+		for _, s := range settings {
+			children = append(children, hline(), pluginSettingRow(m, id, s, selectedScope))
+		}
+		return widget.Column(children...).Stretch()
+	})
+}
+
+// settingRowWithBadges is a setting row with optional status pills/chips beside
+// its label.
+func settingRowWithBadges(title string, badges []ggui.Widget, hint string, control ggui.Widget) ggui.Widget {
+	if len(badges) == 0 {
+		return row(title, hint, control)
+	}
+	head := widget.Row(append([]ggui.Widget{widget.Text(title).Size(13.5)}, badges...)...).Gap(6).Align(widget.AlignCenter)
+	text := []ggui.Widget{head}
+	if hint != "" {
+		text = append(text, muted(widget.Text(hint).Size(12)))
+	}
+	return widget.Box(widget.Row(
+		widget.Expanded(widget.Column(text...).Gap(3).Stretch()),
+		control,
+	).Gap(24)).Pad(14, 16)
+}
+
+// pluginSettingRow is a setting's row, its control as its type is.
+func pluginSettingRow(m *model, id string, s *protocol.PluginSetting, selectedScope string) ggui.Widget {
+	key := s.GetKey()
+	sScope := s.GetScope()
+	applies := selectedScope != "" && isScoped(sScope) && strings.HasPrefix(selectedScope, sScope+":")
+	actionScope := ""
+	if applies {
+		actionScope = selectedScope
+	}
+	set := func(v string) {
+		m.actOnPlugin(&protocol.PluginAction{PluginId: id, Op: protocol.PluginSet, Key: key, Value: v, Scope: actionScope})
+	}
+
+	var badges []ggui.Widget
+	effectiveVal := s.GetValue()
+	overridden := false
+	if applies {
+		if s.GetType() == "secret" {
+			overridden = slices.Contains(s.GetScopedSet(), selectedScope)
+		} else if ov, ok := s.GetScopedValues()[selectedScope]; ok {
+			effectiveVal = ov
+			overridden = true
+		}
+		if overridden {
+			badges = append(badges, pill(T("Overridden"), skin.AccentBright))
+		} else if s.GetType() != "secret" || s.GetSet() {
+			badges = append(badges, chip(T("Inherits default")))
+		}
+	} else if selectedScope != "" {
+		badges = append(badges, chip(T("Applies globally")))
+	} else if isScoped(sScope) {
+		badges = append(badges, chip(settingScopeLabel(sScope)))
+	}
+
+	withReset := func(c ggui.Widget) ggui.Widget {
+		if !applies || !overridden {
+			return c
+		}
+		return widget.Row(c, ui.Button(T("Reset to default"), func() { set("") }).Outline()).Gap(8).Align(widget.AlignCenter)
+	}
+
 	var control ggui.Widget
 	switch s.GetType() {
 	case "boolean":
-		on := s.GetValue() == "true"
-		control = ui.Switch(ggui.Bind(func() bool { return on }, func(v bool) { on = v; set(strconv.FormatBool(v)) }), "").Name(s.GetLabel())
+		on := effectiveVal == "true"
+		control = withReset(ui.Switch(ggui.Bind(func() bool { return on }, func(v bool) { on = v; set(strconv.FormatBool(v)) }), "").Name(s.GetLabel()))
 	case "number":
-		n, _ := strconv.ParseFloat(s.GetValue(), 64)
-		control = widget.Box(ui.NumberInput(ggui.Bind(func() float64 { return n }, func(v float64) {
+		n, _ := strconv.ParseFloat(effectiveVal, 64)
+		control = withReset(widget.Box(ui.NumberInput(ggui.Bind(func() float64 { return n }, func(v float64) {
 			n = v
 			set(strconv.FormatFloat(v, 'f', -1, 64))
-		})).Name(s.GetLabel())).Width(140)
+		})).Name(s.GetLabel())).Width(140))
 	case "select":
-		v := s.GetValue()
-		control = widget.Box(ui.Select(ggui.Bind(func() string { return v }, func(x string) { v = x; set(x) })).
-			Options(s.GetOptions()).Name(s.GetLabel())).Width(200)
+		v := effectiveVal
+		control = withReset(widget.Box(ui.Select(ggui.Bind(func() string { return v }, func(x string) { v = x; set(x) })).
+			Options(s.GetOptions()).Name(s.GetLabel())).Width(200))
 	case "secret":
 		draft := ggui.State("")
 		save := func(v string) {
@@ -336,25 +557,40 @@ func pluginSettingRow(m *model, id string, s *protocol.PluginSetting) ggui.Widge
 				draft.Set("")
 			}
 		}
-		placeholder := pick(s.GetSet(), T("Set; type to replace it"), T("Not set"))
-		field := ui.TextField(draft).Password().Placeholder(placeholder).Name(s.GetLabel()).OnSubmit(save).OnCommit(save)
+		var placeholder string
+		if applies {
+			switch {
+			case overridden:
+				placeholder = T("Overridden; type to replace it")
+			case s.GetSet():
+				placeholder = T("Inherits default; type to override")
+			default:
+				placeholder = T("Not set")
+			}
+		} else {
+			placeholder = pick(s.GetSet(), T("Set; type to replace it"), T("Not set"))
+		}
+		field := ui.TextField(draft).Key("secret:" + id + ":" + key + ":" + actionScope).Password().Placeholder(placeholder).Name(s.GetLabel()).OnSubmit(save).OnCommit(save)
 		parts := []ggui.Widget{widget.Box(field).Width(220)}
-		if s.GetSet() {
+		if applies && overridden {
+			parts = append(parts, ui.Button(T("Reset to default"), func() { set("") }).Outline())
+		} else if !applies && s.GetSet() {
 			parts = append(parts, ui.Button(T("Clear"), func() { set("") }).Outline())
 		}
-		control = widget.Row(parts...).Gap(8)
+		control = widget.Row(parts...).Gap(8).Align(widget.AlignCenter)
 		desc := strings.TrimSpace(s.GetDescription() + " " + secretWhere(ggui.Peek(m.plugins.Secrets)))
-		return row(s.GetLabel(), desc, control)
+		return settingRowWithBadges(s.GetLabel(), badges, desc, control)
 	default:
-		draft := ggui.State(s.GetValue())
+		draft := ggui.State(effectiveVal)
 		save := func(v string) {
-			if v != s.GetValue() {
+			if v != effectiveVal {
 				set(v)
 			}
 		}
-		control = widget.Box(ui.TextField(draft).Name(s.GetLabel()).OnSubmit(save).OnCommit(save)).Width(220)
+		field := ui.TextField(draft).Key("setting:" + id + ":" + key + ":" + actionScope + ":" + effectiveVal).Name(s.GetLabel()).OnSubmit(save).OnCommit(save)
+		control = withReset(widget.Box(field).Width(220))
 	}
-	return row(s.GetLabel(), s.GetDescription(), control)
+	return settingRowWithBadges(s.GetLabel(), badges, s.GetDescription(), control)
 }
 
 // pluginAskBar asks, over the window, to allow what a plugin asks for:

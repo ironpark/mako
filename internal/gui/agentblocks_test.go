@@ -68,7 +68,7 @@ func TestAgentBlockFrame(t *testing.T) {
 		{Id: "/send", Kind: "button", Text: "Send", Tap: true},
 	}}
 	p := ggui.ProbeBuilder(func() ggui.Widget {
-		return blockFrame(m, "agent:1a2b3c4d5e6f/order", blockOrigin{session: "1a2b3c4d5e6f", agent: "claude"}, "Order",
+		return blockFrame(m, "agent:1a2b3c4d5e6f/order", blockOrigin{session: "1a2b3c4d5e6f", agent: "claude"}, "Order", blockScopeState{},
 			&protocol.BlockUpdate{SessionId: "1a2b3c4d5e6f", Agent: "claude", State: protocol.PluginRunning, Tree: tree}, newBlockForm())
 	}, ggui.Sz(400, 300))
 	defer p.Close()

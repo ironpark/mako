@@ -225,13 +225,11 @@ class Daemon(private val socket: () -> String?) {
      * change it (docs/protocol.md, Plugin blocks), until the flow is
      * cancelled; a stream that breaks ends it with the error. Nodes from
      * [dev.ironpark.mako.Mesh.REVISION_PEER_BLOCKS] on serve a node they
-     * let in.
+     * let in; [scope] selects a scoped block instance on nodes from
+     * [dev.ironpark.mako.Mesh.REVISION_PLUGIN_SCOPE] on.
      */
-    fun watchBlock(node: String, block: String): Flow<BlockUpdate> = readFlow(
-        open = { open().also { it.send(envelope { watchBlock = WatchBlock.newBuilder().setNodeId(node).setBlock(block).build() }) } },
-        read = { it.recv().blockUpdate },
-        last = { it.gone },
-    )
+    fun watchBlock(node: String, block: String, scope: String = ""): Flow<BlockUpdate> =
+        watchBlockFlow(open = ::open, send = Stream::send, recv = Stream::recv, node = node, block = block, scope = scope)
 
     /**
      * Tells a block of the user acting on its node, on the node ev names:
@@ -257,6 +255,25 @@ class Daemon(private val socket: () -> String?) {
         const val STAGE_CHUNK = 4 shl 20
     }
 }
+
+internal fun <S : Closeable> watchBlockFlow(
+    open: () -> S,
+    send: (S, Envelope) -> Unit,
+    recv: (S) -> Envelope,
+    node: String,
+    block: String,
+    scope: String = "",
+): Flow<BlockUpdate> = readFlow(
+    open = {
+        open().also {
+            val req = WatchBlock.newBuilder().setNodeId(node).setBlock(block)
+            if (scope.isNotEmpty()) req.setScope(scope)
+            send(it, envelope { watchBlock = req.build() })
+        }
+    },
+    read = { recv(it).blockUpdate },
+    last = { it.gone },
+)
 
 internal fun <S : Closeable> watchChatFlow(
     open: () -> S,

@@ -1,5 +1,5 @@
 id = "kanban"
-version = "0.2.0"
+version = "0.3.0"
 publisher = "ironpark"
 api = 1
 entry = "main.js"
@@ -9,6 +9,7 @@ permissions = ["storage", "sessions:read", "sessions:write"]
 id = "board"
 title = "Kanban"
 slots = ["bottom", "right"]
+scope = "project"
 
 [[contributes.command]]
 id = "reset"
@@ -21,12 +22,14 @@ title = "Toggle Kanban board / compact view"
 [[contributes.tool]]
 id = "list_cards"
 description = "List all cards currently on the Kanban board with their id, column, title, priority, tag, and note"
+scope = "project"
 [contributes.tool.params]
 column = { type = "string", description = "Optional filter: todo, doing, review, or done" }
 
 [[contributes.tool]]
 id = "add_card"
 description = "Add a new card to the Kanban board"
+scope = "project"
 [contributes.tool.params]
 title = { type = "string", description = "Card title", required = true }
 column = { type = "string", description = "Target column: todo (default), doing, review, or done" }
@@ -37,6 +40,7 @@ note = { type = "string", description = "Optional details or acceptance criteria
 [[contributes.tool]]
 id = "move_card"
 description = "Move an existing Kanban card to another column"
+scope = "project"
 [contributes.tool.params]
 id = { type = "string", description = "Card id (e.g. c1)", required = true }
 column = { type = "string", description = "Target column: todo, doing, review, or done", required = true }

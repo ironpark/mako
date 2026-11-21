@@ -26,8 +26,13 @@ data class BlockState(val update: BlockUpdate? = null, val tree: UiNode? = null,
  * kept, with why the stream broke, until a stream gives a new one: a page
  * that comes back with the link down still shows its tree.
  */
-fun followBlock(daemon: Daemon, node: String, block: String, from: BlockState = BlockState()): Flow<BlockState> =
-    followUpdates(from) { daemon.watchBlock(node, block) }
+fun followBlock(
+    daemon: Daemon,
+    node: String,
+    block: String,
+    scope: String = "",
+    from: BlockState = BlockState(),
+): Flow<BlockState> = followUpdates(from) { daemon.watchBlock(node, block, scope) }
 
 /** followBlock of the streams watch opens. */
 internal fun followUpdates(from: BlockState, watch: () -> Flow<BlockUpdate>): Flow<BlockState> = flow {

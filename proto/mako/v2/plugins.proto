@@ -82,6 +82,9 @@ message PluginInfo {
 message PluginTool {
   string id = 1;
   string description = 2;
+  // scope is the tool's declared scope: "", "global", "space", "project" or
+  // "session" (revision 42).
+  string scope = 3;
 }
 
 // PluginLog is one recent log line written by a plugin via log.write.
@@ -113,6 +116,9 @@ message PluginBlock {
   // slots are where the manifest suggests placing it: "left", "right",
   // "top", "bottom".
   repeated string slots = 3;
+  // scope is the block's declared scope: "", "global", "space", "project" or
+  // "session" (revision 42).
+  string scope = 4;
 }
 
 // PluginCommand is a command a plugin contributes to the palette.
@@ -133,6 +139,15 @@ message PluginSetting {
   // number in decimal; never a secret's, which set alone tells of.
   string value = 6;
   bool set = 7;
+  // scope is the setting's declared scope: "", "global", "space", "project" or
+  // "session" (revision 42).
+  string scope = 8;
+  // scoped_values holds non-secret per-scope overrides keyed by canonical scope
+  // key (e.g. "project:<id>", revision 42). Never populated for secrets.
+  map<string, string> scoped_values = 9;
+  // scoped_set lists canonical scope keys where a secret override is set
+  // (revision 42); secret values are never sent to front-ends.
+  repeated string scoped_set = 10;
 }
 
 // PluginAction acts on a plugin, for the user: op "grant" allows what it
@@ -149,6 +164,9 @@ message PluginAction {
   string command = 3;
   string key = 4;
   string value = 5;
+  // scope is the optional canonical scope key ("" for global, "space:<id>",
+  // "project:<id>", "session:<id>") for scoped settings or commands (revision 42).
+  string scope = 6;
 }
 
 // PluginDone answers PluginAction and BlockEvent.
@@ -170,6 +188,9 @@ message WatchBlock {
   // node_id is the node whose block it is, routed as a request's: a node
   // let in watches the blocks of the node that lets it in (revision 30).
   string node_id = 2;
+  // scope is the canonical scope key ("" for global, "space:<id>",
+  // "project:<id>", "session:<id>", revision 42).
+  string scope = 3;
 }
 
 // BlockUpdate is a block's tree, whole or as the changes since the last.
@@ -199,6 +220,8 @@ message BlockUpdate {
   // gone says the block was closed, or its plugin removed: the last
   // update of the stream.
   bool gone = 12;
+  // scope is the canonical scope key of this block instance (revision 42).
+  string scope = 13;
 }
 
 // BlockEvent is the user acting on a node of a block's tree: kind "tap",
@@ -216,6 +239,8 @@ message BlockEvent {
   map<string, string> values = 5;
   // node_id is the node whose block it is, as WatchBlock's (revision 30).
   string node_id = 6;
+  // scope is the canonical scope key of the target block instance (revision 42).
+  string scope = 7;
 }
 
 // UiNode is a node of a plugin block's tree. The kinds are a fixed set

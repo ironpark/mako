@@ -31,25 +31,58 @@ export interface Mako extends HostApi {
   readonly tools: Tools;
 }
 
+/** Declared scope kind of a plugin block, tool, or setting. */
+export type PluginScope = "global" | "space" | "project" | "session";
+
+/** Scoped storage helper bound to a ScopeContext's scopeKey. */
+export interface ScopedStorageApi {
+  getItem(key: string): Promise<GetItemResponse>;
+  setItem(key: string, value: string): Promise<SetItemResponse>;
+  deleteItem(key: string): Promise<DeleteItemResponse>;
+  listKeys(prefix?: string): Promise<ListKeysResponse>;
+}
+
+/** Scoped settings helper bound to a ScopeContext's scopeKey. */
+export interface ScopedSettingsApi {
+  getSetting(key: string): Promise<GetSettingResponse>;
+  listSettings(): Promise<ListSettingsResponse>;
+}
+
+/** Active workspace scope context passed to block lifecycle hooks and scoped tools. */
+export interface ScopeContext {
+  readonly scope: PluginScope;
+  readonly scopeKey: string;
+  readonly spaceId: string;
+  readonly spaceName: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly sessionId: string;
+  readonly roots: readonly string[];
+  readonly storage: ScopedStorageApi;
+  readonly settings: ScopedSettingsApi;
+}
+
 export interface Blocks {
   /** Registers a block the manifest declares under contributes.block. */
   register<S extends object>(id: string, block: Block<S>): void;
-  /** The state of a block registered, which a command may change. */
-  state<S extends object = any>(id: string): S;
+  /** The state of a block registered, optionally for a specific scopeKey. */
+  state<S extends object = any>(id: string, scopeKey?: string): S;
   /** Latest form field values carried by the current block event, keyed by node id and key. */
-  values(id: string): Record<string, string>;
-  /** Has a block's load run again once the current call ends. */
-  reload(id: string): void;
+  values(id: string, scopeKey?: string): Record<string, string>;
+  /** Has a block's load run again once the current call ends, optionally for a specific scopeKey. */
+  reload(id: string, scopeKey?: string): void;
+  /** Returns the active ScopeContext for the block currently being invoked. */
+  context(id: string): ScopeContext;
 }
 
 export interface Commands {
   /** Registers what a command the manifest declares does. */
-  register(id: string, run: () => void | Promise<void>): void;
+  register(id: string, run: (ctx?: ScopeContext) => void | Promise<void>): void;
 }
 
 export interface Tools {
   /** Registers an MCP tool declared under contributes.tool for running agents to call. */
-  register(id: string, run: (args: Record<string, any>) => any | Promise<any>): void;
+  register(id: string, run: (args: Record<string, any>, ctx: ScopeContext) => any | Promise<any>): void;
 }
 
 /** A block: state, loaded and drawn as render says, changed by on's messages. */
@@ -57,11 +90,11 @@ export interface Block<S extends object> {
   /** The state it starts with; JSON. */
   state: S;
   /** Fills the state: when the block is first shown, and every refresh seconds while it shows. */
-  load?(state: S): void | Promise<void>;
+  load?(state: S, ctx: ScopeContext): void | Promise<void>;
   /** Seconds between loads while the block shows; at least 15. */
   refresh?: number;
   /** Draws the state, as a tree of the UI vocabulary. It may not call the Host API. */
-  render(state: S, ui: Ui): UiNode;
+  render(state: S, ui: Ui, ctx: ScopeContext): UiNode;
   /** What each message a node sends does to the state. */
   on?: Record<string, (state: S, ...args: any[]) => void | Promise<void>>;
 }
@@ -477,6 +510,11 @@ export interface WriteResponse {
 export interface GetSettingRequest {
   /** key is the setting's key in the manifest. */
   key?: string;
+  /**
+   * scope is the optional canonical scope key ("" for global, "space:<id>",
+   * "project:<id>", or "session:<id>").
+   */
+  scope?: string;
 }
 
 /** GetSettingResponse is a setting's value. */
@@ -486,6 +524,11 @@ export interface GetSettingResponse {
 
 /** ListSettingsRequest asks for every setting. */
 export interface ListSettingsRequest {
+  /**
+   * scope is the optional canonical scope key ("" for global, "space:<id>",
+   * "project:<id>", or "session:<id>").
+   */
+  scope?: string;
 }
 
 /** ListSettingsResponse is every setting, in the manifest's order. */
@@ -517,6 +560,11 @@ export interface Setting {
 /** GetItemRequest names a key. */
 export interface GetItemRequest {
   key?: string;
+  /**
+   * scope is the optional canonical scope key ("" for global, "space:<id>",
+   * "project:<id>", or "session:<id>").
+   */
+  scope?: string;
 }
 
 /** GetItemResponse is a key's value. */
@@ -532,6 +580,11 @@ export interface SetItemRequest {
   key?: string;
   /** value is at most 256 KiB. */
   value?: string;
+  /**
+   * scope is the optional canonical scope key ("" for global, "space:<id>",
+   * "project:<id>", or "session:<id>").
+   */
+  scope?: string;
 }
 
 /** SetItemResponse is the store after the write. */
@@ -545,6 +598,11 @@ export interface SetItemResponse {
 /** DeleteItemRequest names a key. */
 export interface DeleteItemRequest {
   key?: string;
+  /**
+   * scope is the optional canonical scope key ("" for global, "space:<id>",
+   * "project:<id>", or "session:<id>").
+   */
+  scope?: string;
 }
 
 /** DeleteItemResponse says whether there was a value. */
@@ -555,6 +613,11 @@ export interface DeleteItemResponse {
 /** ListKeysRequest gives the start of the keys to list. */
 export interface ListKeysRequest {
   prefix?: string;
+  /**
+   * scope is the optional canonical scope key ("" for global, "space:<id>",
+   * "project:<id>", or "session:<id>").
+   */
+  scope?: string;
 }
 
 /** ListKeysResponse is the keys. */

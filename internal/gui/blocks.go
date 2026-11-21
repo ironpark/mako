@@ -3,6 +3,7 @@ package gui
 import (
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -24,6 +25,7 @@ import (
 type blockDef struct {
 	Name  string
 	Title string // in English, drawn through T
+	Scope string // "", "global", "space", "project", or "session"
 	// Props is the JSON Schema of the block's props: an object schema whose
 	// properties each give a type. A document's props for the block are
 	// checked against it (layoutdoc.CheckProps).
@@ -73,7 +75,11 @@ func (r *blockRegistry) replaceOf(prefix string, defs []blockDef) bool {
 			continue
 		}
 		d, keep := want[name]
-		if keep && d.Title == r.defs[name].Title {
+		wantProps := d.Props
+		if wantProps == nil {
+			wantProps = layoutdoc.NoProps()
+		}
+		if keep && d.Title == r.defs[name].Title && d.Scope == r.defs[name].Scope && reflect.DeepEqual(wantProps, r.defs[name].Props) {
 			delete(want, name)
 			continue
 		}

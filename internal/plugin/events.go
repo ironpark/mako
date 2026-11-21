@@ -295,7 +295,7 @@ func (p *plugin) deliver(ev *hostapi.SessionEvent, perm string) {
 	if _, err := p.invoke("sessionEvent", false, string(b)); err != nil {
 		p.m.cfg.Log.Debug("plugin's event handler failed", "plugin", p.id, "kind", ev.GetKind(), "err", err)
 	}
-	p.afterCall()
+	p.afterCall("")
 }
 
 func (h *host) SessionsSubscribe(_ context.Context, req *hostapi.SubscribeRequest) (*hostapi.SubscribeResponse, error) {

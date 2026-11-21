@@ -15,6 +15,7 @@ plugin. The design, and what is still to come, is in
 - [A plugin's folder](#a-plugins-folder)
 - [The manifest](#the-manifest)
 - [The module](#the-module)
+- [Scopes](#scopes)
 - [The UI vocabulary](#the-ui-vocabulary)
 - [The Host API](#the-host-api)
 - [Permissions](#permissions)
@@ -63,6 +64,7 @@ permissions = ["net:api.github.com", "storage", "sessions:read"]
 id = "ci"                 # registered as plugin:ci-status/ci
 title = "CI"
 slots = ["right", "bottom"]   # where a layout might place it: left, right, top, bottom
+# scope = "project"       # optional: global (default), space, project, or session
 
 [[contributes.command]]
 id = "rerun"
@@ -71,11 +73,12 @@ title = "Re-run the latest failed CI run"
 [[contributes.tool]]      # optional MCP tool exposed to running agents as plugin_<id>_<tool>
 id = "list_runs"
 description = "Return the latest CI runs as JSON"
+# scope = "project"       # optional: global (default), space, project, or session
 [contributes.tool.params]
 branch = { type = "string", description = "Filter by branch name" }
 
 [contributes.settings]    # the settings page is made from this
-repo = { type = "string", label = "Repository", description = "owner/name on GitHub" }
+repo = { type = "string", label = "Repository", description = "owner/name on GitHub", scope = "project" }
 token = { type = "secret", label = "GitHub token" }
 ```
 
@@ -92,10 +95,10 @@ Plugins and in its blocks' places.
 | `api` | 1. |
 | `entry` | A relative path to a `.js` file in the folder: no `..`, no leading `/` or `./`, no backslash. |
 | `permissions` | At most 16; see [Permissions](#permissions). |
-| `contributes.block` | At most 16: `id` (lowercase letters, digits, hyphens, at most 32), `title` (at most 80 characters), `slots`. |
+| `contributes.block` | At most 16: `id` (lowercase letters, digits, hyphens, at most 32), `title` (at most 80 characters), `slots`, and optional `scope` (`global` default, `space`, `project`, or `session`; see [Scopes](#scopes)). |
 | `contributes.command` | At most 32: `id`, `title`. |
-| `contributes.tool` | At most 16: `id`, `description` (at most 240 characters), and optional `params` map (`[contributes.tool.params]` with `type` `string`/`number`/`boolean`, `description`, `required`, at most 16). Exposed to running agents via Mako's built-in MCP server as `plugin_<id>_<tool>`. |
-| `contributes.settings` | At most 32, by key (lowercase letters, digits, `_`): `type` (`string`, `secret`, `boolean`, `number`, `select`), `label`, `description`, `options` (a select's, and only a select's), `default` (of the type; none for a secret). A secret's value is kept in the system's keychain ([Secrets](#secrets)), at most 2 048 bytes. |
+| `contributes.tool` | At most 16: `id`, `description` (at most 240 characters), optional `scope` (`global` default, `space`, `project`, or `session`), and optional `params` map (`[contributes.tool.params]` with `type` `string`/`number`/`boolean`, `description`, `required`, at most 16). Exposed to running agents via Mako's built-in MCP server as `plugin_<id>_<tool>`. |
+| `contributes.settings` | At most 32, by key (lowercase letters, digits, `_`): `type` (`string`, `secret`, `boolean`, `number`, `select`), `label`, `description`, `options` (a select's, and only a select's), `default` (of the type; none for a secret), and optional `scope` (`global` default, `space`, `project`, or `session`). A secret's value is kept in the system's keychain ([Secrets](#secrets)), at most 2 048 bytes. |
 
 Titles, labels and options may not hold control characters or the Unicode
 marks that reorder or hide text.
@@ -146,16 +149,152 @@ select's `onChange` sends its value last. Calls into the plugin run one at
 a time.
 
 `mako` is the [Host API](#the-host-api), with `mako.blocks` (`register`,
-`state`, `values`, `reload`), `mako.commands.register`, and
-`mako.tools.register`. Inside an event handler, `mako.blocks.values(blockId)`
-returns a map of the block's current form field values (keyed by full node path
-and, when unique, by the node's trailing `key`). `mako.tools.register(id, fn)`
-registers the handler for a `[[contributes.tool]]` declared in the manifest: it
-receives the agent's arguments object and returns any JSON-serializable value
-(or a Promise of one). There are no timers: a block that wants to be read again
-every so often says `refresh`. Its types, with every method's, are in
+`state`, `values`, `reload`, `context`), `mako.commands.register`, and
+`mako.tools.register`. Lifecycle hooks (`load(state, ctx)`,
+`render(state, ui, ctx)`), commands `(ctx)`, and MCP tools `(args, ctx)` each
+receive a [`ScopeContext`](#scopes) `ctx`. Inside an event handler,
+`mako.blocks.context(blockId)` returns the active `ScopeContext`, and
+`mako.blocks.values(blockId, scopeKey?)` returns a map of the block's current
+form field values (keyed by full node path and, when unique, by the node's
+trailing `key`). `mako.tools.register(id, fn)` registers the handler for a
+`[[contributes.tool]]` declared in the manifest: it receives `(args, ctx)` and
+returns any JSON-serializable value (or a Promise of one). There are no timers:
+a block that wants to be read again every so often says `refresh`. Its types,
+with every method's, are in
 [mako.d.ts](../internal/plugin/hostapi/mako.d.ts), generated from the schema:
 point your editor at it.
+
+## Scopes
+
+Protocol revision 42 introduces four plugin scopes so blocks, MCP tools,
+settings, and storage can be isolated per workspace target rather than sharing
+one global instance:
+
+| Scope | Canonical `scopeKey` | Isolated per |
+|---|---|---|
+| `global` (default) | `""` | The node as a whole. |
+| `space` | `space:<spaceId>` | A workspace space. |
+| `project` | `project:<projectId>` | A project (for example, one Kanban board per project). |
+| `session` | `session:<sessionId>` | A single running agent or terminal session. |
+
+Canonical scope IDs must be 1 to 128 safe ASCII identifier characters
+(`[A-Za-z0-9_][A-Za-z0-9._-]{0,127}`, without `..`); invalid scope keys are
+refused everywhere.
+
+### Manifest declarations
+
+Declare `scope` on any block, tool, or setting in `plugin.toml` (omitting it
+defaults to `"global"`):
+
+- **`[[contributes.block]]` `scope`**: The daemon keeps a separate runtime
+  instance `(blockId, scopeKey)` per active scope—independent state, rendered
+  tree, refresh schedule, and sleep/restore persistence. Unwatched instances are
+  cached up to an LRU cap of 16 per block; actively watched instances are never
+  evicted.
+- **`[[contributes.tool]]` `scope`**: Declares the scope boundary required when
+  an agent calls `plugin_<id>_<tool>` over MCP.
+- **`[contributes.settings]` `<key>.scope`**: Allows per-scope overrides on top
+  of the global default. Non-secret overrides are stored under `@scoped` in
+  `settings.json`; secret overrides are stored in the system keychain under
+  `setting:<key>@<scopeKey>` and are never sent to front-ends. Reading a setting
+  in a scope resolves `scoped override → global value → manifest default`;
+  clearing an override (`""`) reverts that scope to the global value.
+
+### JavaScript `ScopeContext` (`ctx`)
+
+`load(state, ctx)`, `render(state, ui, ctx)`, command handlers `(ctx)`, and
+tool handlers `(args, ctx)` receive a frozen `ScopeContext`:
+
+| Field / helper | Description |
+|---|---|
+| `ctx.scope` | `"global"`, `"space"`, `"project"`, or `"session"`. |
+| `ctx.scopeKey` | Canonical scope key (`""`, `"space:<id>"`, `"project:<id>"`, or `"session:<id>"`). |
+| `ctx.spaceId`, `ctx.spaceName` | Resolved space ID and human-readable name (when applicable). |
+| `ctx.projectId`, `ctx.projectName` | Resolved project ID and human-readable name (when applicable). |
+| `ctx.roots` | Read-only array of project root directories on this node. |
+| `ctx.sessionId` | Resolved session ID (when applicable). |
+| `ctx.storage` | Bound storage helper (`getItem(key)`, `setItem(key, value)`, `deleteItem(key)`, `listKeys(prefix?)`) auto-forwarding `{ scope: ctx.scopeKey }`. Scoped keys are isolated under `@scope/<scopeKey>/<key>` and share the plugin's storage quota; raw `@scope/` keys are refused. |
+| `ctx.settings` | Bound settings helper (`getSetting(key)`, `listSettings()`) auto-forwarding `{ scope: ctx.scopeKey }`. |
+
+Inside a block's `on` event handlers, call `mako.blocks.context(blockId)` to
+retrieve the active `ScopeContext`. `mako.blocks.state(id, scopeKey?)`,
+`mako.blocks.values(id, scopeKey?)`, and `mako.blocks.reload(id, scopeKey?)`
+all accept an optional `scopeKey` and default to the currently active call's
+scope.
+
+```js
+mako.blocks.register("board", {
+  state: { cards: [] },
+  async load(s, ctx) {
+    const stored = await ctx.storage.getItem("board:v1");
+    s.cards = stored.found ? JSON.parse(stored.value).cards : [];
+  },
+  render(s, ui, ctx) {
+    const title = ctx.projectName ? `Kanban · ${ctx.projectName}` : "Kanban";
+    return ui.text(title, { weight: "semibold" });
+  },
+  on: {
+    async addCard(s, title) {
+      const ctx = mako.blocks.context("board");
+      s.cards.push({ title });
+      await ctx.storage.setItem("board:v1", JSON.stringify({ cards: s.cards }));
+    },
+  },
+});
+
+mako.tools.register("add_card", async (args, ctx) => {
+  const s = mako.blocks.state("board", ctx.scopeKey);
+  s.cards.push({ title: args.title });
+  await ctx.storage.setItem("board:v1", JSON.stringify({ cards: s.cards }));
+  return { project: ctx.projectName, count: s.cards.length };
+});
+```
+
+See [examples/plugins/kanban](../examples/plugins/kanban) for a full
+`project`-scoped block and MCP tool example, and
+[examples/plugins/ci-status](../examples/plugins/ci-status) for a
+`project`-scoped setting (`repo`) with global fallback.
+
+### MCP tool strict scope boundaries
+
+When a running agent calls a plugin MCP tool (`plugin_<id>_<tool>`), the daemon
+derives `ScopeContext` **strictly from the calling agent's own session** (its
+session ID, the project matching its working folder, and that project's space).
+Tool arguments can never override or specify another scope:
+
+- A `project`-scoped tool called by an agent in Project A can only read or
+  mutate Project A's block state and storage, and is refused if the session has
+  no associated project.
+- Likewise, `space`-scoped and `session`-scoped tools require a matching space
+  or session ID on the calling session.
+- A `global` tool always receives `scopeKey == ""` regardless of the caller's
+  session or project.
+
+### Follow / Pin, empty-scope state, and settings UI
+
+- **Follow vs. Pin (Desktop & Mobile)**: A scoped block follows the window's
+  active space, project, or session by default and automatically re-subscribes
+  when you switch context. Click the scope chip in the block frame header to
+  **Pin** that block instance to a specific space, project, or session (stored
+  as `"scope"` in that layout node's `props`) or switch back to **Follow
+  active**. On Android, tapping the scope chip in the block header opens a menu
+  to switch targets on that computer.
+- **Empty-scope behavior**: When a `space`, `project`, or `session` block is in
+  Follow mode and no matching target is currently active, the window (and
+  Android app) does not open a block stream; instead it renders a native
+  placeholder prompting you to select or pin a target.
+- **Settings scope selector & CLI**: In **Settings ▸ Plugins**, any plugin with
+  scoped settings shows a scope selector (**Global default** plus available
+  spaces or projects). Each setting shows whether it inherits the global
+  default or overrides it for the selected scope, with a **Reset to default**
+  action that clears the override. From a terminal, pass `--scope` to
+  `mako plugins set`:
+
+  ```bash
+  mako plugins set ci-status repo owner/my-repo --scope project:my-proj
+  # Clear the override so project:my-proj falls back to the global value:
+  mako plugins set ci-status repo "" --scope project:my-proj
+  ```
 
 ## The UI vocabulary
 
@@ -231,12 +370,12 @@ plugin lacks the permission. The schema, with every field, is
 | Method | Permission | |
 |---|---|---|
 | `log.write({level, message})` | none | A line in the daemon's log, under the plugin's name; 120 lines a minute. |
-| `settings.getSetting({key})` | none | `{setting: {key, type, text, flag, number, set}}`: the user's value, else the default. |
-| `settings.listSettings()` | none | Every setting. |
-| `storage.getItem({key})` | `storage` | `{found, value}`. |
-| `storage.setItem({key, value})` | `storage` | `{used, quota}`; refused over the quota. |
-| `storage.deleteItem({key})` | `storage` | `{found}`. |
-| `storage.listKeys({prefix})` | `storage` | `{keys}`, sorted. |
+| `settings.getSetting({key, scope})` | none | `{setting: {key, type, text, flag, number, set}}`: the scoped override (when `scope` is set), else the global value, else the default. |
+| `settings.listSettings({scope})` | none | Every setting, resolved for `scope` (or global when omitted). |
+| `storage.getItem({key, scope})` | `storage` | `{found, value}` in global or scoped storage. |
+| `storage.setItem({key, value, scope})` | `storage` | `{used, quota}`; refused over the shared quota. |
+| `storage.deleteItem({key, scope})` | `storage` | `{found}`. |
+| `storage.listKeys({prefix, scope})` | `storage` | `{keys}`, sorted, within that scope. |
 | `sessions.listSessions()` | `sessions:read` | This node's sessions: `id`, `name`, `agent`, `project`, `state`, `status`, `nodeId`. |
 | `sessions.getSession({id})` | `sessions:read` | `{found, session}`. |
 | `sessions.readTranscript({sessionId, before, limit})` | `sessions:read` | A page of a session's conversation, as its agent logged it: `{supported, messages, before, truncated}`, the latest messages, or those before the cursor `before` a page gave; see [Transcripts and events](#transcripts-and-events). |

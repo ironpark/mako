@@ -153,7 +153,9 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                         onPicked = { entry.savedStateHandle["tab"] = "" },
                         onBack = { nav.popBackStack() },
                         onNew = ::newSession,
-                        onBlock = { node, p -> nav.navigate("block/${Uri.encode(node)}/${Uri.encode(p.block)}?title=${Uri.encode(p.title)}") },
+                        onBlock = { node, p, projectId, sessionId ->
+                            nav.navigate(blockRoute(node, p, space = homeState.space.value, project = projectId, session = sessionId))
+                        },
                         onFiles = { node, root -> nav.navigate("files/${Uri.encode(node)}/${Uri.encode(root)}") },
                         onAgents = { s, path -> nav.navigate("agents/${Uri.encode(s.nodeId)}/${Uri.encode(path)}/${Uri.encode(s.id)}") },
                         onFile = { s, link ->
@@ -207,13 +209,23 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                 screen("panels/{node}") { entry ->
                     val node = entry.arguments?.getString("node").orEmpty()
                     PanelsScreen(mesh, node, homeState.space.value, onBack = { nav.popBackStack() }, onOpen = { p ->
-                        nav.navigate("block/${Uri.encode(node)}/${Uri.encode(p.block)}?title=${Uri.encode(p.title)}")
+                        nav.navigate(blockRoute(node, p, space = homeState.space.value))
                     })
                 }
-                screen("block/{node}/{block}?title={title}") { entry ->
+                screen("block/{node}/{block}?title={title}&scope={scope}&scopeKind={scopeKind}&space={space}&project={project}&session={session}") { entry ->
                     val a = entry.arguments
-                    BlockScreen(mesh, a?.getString("node").orEmpty(), a?.getString("block").orEmpty(), a?.getString("title").orEmpty(),
-                        onBack = { nav.popBackStack() })
+                    BlockScreen(
+                        mesh = mesh,
+                        node = a?.getString("node").orEmpty(),
+                        block = a?.getString("block").orEmpty(),
+                        title = a?.getString("title").orEmpty(),
+                        pinnedScope = a?.getString("scope").orEmpty(),
+                        declaredScope = a?.getString("scopeKind").orEmpty(),
+                        activeSpace = a?.getString("space").orEmpty(),
+                        activeProject = a?.getString("project").orEmpty(),
+                        activeSession = a?.getString("session").orEmpty(),
+                        onBack = { nav.popBackStack() },
+                    )
                 }
                 screen("settings") {
                     SettingsScreen(onBack = { nav.popBackStack() }, onNotifications = { nav.navigate("notifications") }, onUpdates = { nav.navigate("updates") })
@@ -247,6 +259,22 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
             }
         }
     }
+}
+
+private fun blockRoute(
+    node: String,
+    panel: Panel,
+    space: String = "",
+    project: String = "",
+    session: String = "",
+): String = buildString {
+    append("block/${Uri.encode(node)}/${Uri.encode(panel.block)}")
+    append("?title=${Uri.encode(panel.title)}")
+    append("&scope=${Uri.encode(panel.pinnedScope)}")
+    append("&scopeKind=${Uri.encode(panel.scopeKind)}")
+    append("&space=${Uri.encode(space)}")
+    append("&project=${Uri.encode(project)}")
+    append("&session=${Uri.encode(session)}")
 }
 
 /** A destination whose content knows the transition it is in, for the elements it shares. */

@@ -134,4 +134,132 @@ public interface PluginSettingOrBuilder extends
    * @return The set.
    */
   boolean getSet();
+
+  /**
+   * <pre>
+   * scope is the setting's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 8 [json_name = "scope"];</code>
+   * @return The scope.
+   */
+  java.lang.String getScope();
+  /**
+   * <pre>
+   * scope is the setting's declared scope: "", "global", "space", "project" or
+   * "session" (revision 42).
+   * </pre>
+   *
+   * <code>string scope = 8 [json_name = "scope"];</code>
+   * @return The bytes for scope.
+   */
+  com.google.protobuf.ByteString
+      getScopeBytes();
+
+  /**
+   * <pre>
+   * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+   * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+   */
+  int getScopedValuesCount();
+  /**
+   * <pre>
+   * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+   * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+   */
+  boolean containsScopedValues(
+      java.lang.String key);
+  /**
+   * Use {@link #getScopedValuesMap()} instead.
+   */
+  @java.lang.Deprecated
+  java.util.Map<java.lang.String, java.lang.String>
+  getScopedValues();
+  /**
+   * <pre>
+   * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+   * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+   */
+  java.util.Map<java.lang.String, java.lang.String>
+  getScopedValuesMap();
+  /**
+   * <pre>
+   * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+   * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+   */
+
+  /* nullable */
+java.lang.String getScopedValuesOrDefault(
+      java.lang.String key,
+      /* nullable */
+java.lang.String defaultValue);
+  /**
+   * <pre>
+   * scoped_values holds non-secret per-scope overrides keyed by canonical scope
+   * key (e.g. "project:&lt;id&gt;", revision 42). Never populated for secrets.
+   * </pre>
+   *
+   * <code>map&lt;string, string&gt; scoped_values = 9 [json_name = "scopedValues"];</code>
+   */
+
+  java.lang.String getScopedValuesOrThrow(
+      java.lang.String key);
+
+  /**
+   * <pre>
+   * scoped_set lists canonical scope keys where a secret override is set
+   * (revision 42); secret values are never sent to front-ends.
+   * </pre>
+   *
+   * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+   * @return A list containing the scopedSet.
+   */
+  java.util.List<java.lang.String>
+      getScopedSetList();
+  /**
+   * <pre>
+   * scoped_set lists canonical scope keys where a secret override is set
+   * (revision 42); secret values are never sent to front-ends.
+   * </pre>
+   *
+   * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+   * @return The count of scopedSet.
+   */
+  int getScopedSetCount();
+  /**
+   * <pre>
+   * scoped_set lists canonical scope keys where a secret override is set
+   * (revision 42); secret values are never sent to front-ends.
+   * </pre>
+   *
+   * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+   * @param index The index of the element to return.
+   * @return The scopedSet at the given index.
+   */
+  java.lang.String getScopedSet(int index);
+  /**
+   * <pre>
+   * scoped_set lists canonical scope keys where a secret override is set
+   * (revision 42); secret values are never sent to front-ends.
+   * </pre>
+   *
+   * <code>repeated string scoped_set = 10 [json_name = "scopedSet"];</code>
+   * @param index The index of the element to return.
+   * @return The scopedSet at the given index.
+   */
+  com.google.protobuf.ByteString
+      getScopedSetBytes(int index);
 }

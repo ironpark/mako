@@ -29,7 +29,20 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 41
+const Revision = 42
+
+// RevisionPluginScope adds scope declarations and runtime isolation for plugin
+// blocks, tools, settings, and storage ("global", "space", "project", "session").
+const RevisionPluginScope = 42
+
+// Plugin scope kinds declared in plugin.toml and reported on PluginBlock,
+// PluginTool, and PluginSetting (revision 42).
+const (
+	ScopeGlobal  = "global"
+	ScopeSpace   = "space"
+	ScopeProject = "project"
+	ScopeSession = "session"
+)
 
 // RevisionPluginRichUI adds card/scroll/textarea/tabs/table UI kinds,
 // drag_group/drop_accept, plugin MCP tools, plugin logs/storage diagnostics,

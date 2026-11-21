@@ -54,6 +54,9 @@ service SettingsService {
 message GetSettingRequest {
   // key is the setting's key in the manifest.
   string key = 1;
+  // scope is the optional canonical scope key ("" for global, "space:<id>",
+  // "project:<id>", or "session:<id>").
+  string scope = 2;
 }
 
 // GetSettingResponse is a setting's value.
@@ -62,7 +65,11 @@ message GetSettingResponse {
 }
 
 // ListSettingsRequest asks for every setting.
-message ListSettingsRequest {}
+message ListSettingsRequest {
+  // scope is the optional canonical scope key ("" for global, "space:<id>",
+  // "project:<id>", or "session:<id>").
+  string scope = 1;
+}
 
 // ListSettingsResponse is every setting, in the manifest's order.
 message ListSettingsResponse {
@@ -111,6 +118,9 @@ service StorageService {
 // GetItemRequest names a key.
 message GetItemRequest {
   string key = 1;
+  // scope is the optional canonical scope key ("" for global, "space:<id>",
+  // "project:<id>", or "session:<id>").
+  string scope = 2;
 }
 
 // GetItemResponse is a key's value.
@@ -126,6 +136,9 @@ message SetItemRequest {
   string key = 1;
   // value is at most 256 KiB.
   string value = 2;
+  // scope is the optional canonical scope key ("" for global, "space:<id>",
+  // "project:<id>", or "session:<id>").
+  string scope = 3;
 }
 
 // SetItemResponse is the store after the write.
@@ -139,6 +152,9 @@ message SetItemResponse {
 // DeleteItemRequest names a key.
 message DeleteItemRequest {
   string key = 1;
+  // scope is the optional canonical scope key ("" for global, "space:<id>",
+  // "project:<id>", or "session:<id>").
+  string scope = 2;
 }
 
 // DeleteItemResponse says whether there was a value.
@@ -149,6 +165,9 @@ message DeleteItemResponse {
 // ListKeysRequest gives the start of the keys to list.
 message ListKeysRequest {
   string prefix = 1;
+  // scope is the optional canonical scope key ("" for global, "space:<id>",
+  // "project:<id>", or "session:<id>").
+  string scope = 2;
 }
 
 // ListKeysResponse is the keys.

@@ -32,7 +32,9 @@ func (m *model) setAgentBlocks(list []*protocol.AgentBlock) {
 		name, origin, title := b.GetName(), blockOrigin{session: b.GetSessionId(), agent: b.GetAgent()}, b.GetTitle()
 		label := cmpTone(title, cmpTone(b.GetAgent(), T("Agent")))
 		defs = append(defs, blockDef{Name: name, Title: label,
-			Build: func(m *model, _ map[string]any) blockView { return blockView{Body: treeBlock(m, name, origin, title)} }})
+			Build: func(m *model, _ map[string]any) blockView {
+				return blockView{Body: treeBlock(m, name, origin, title, "", nil)}
+			}})
 	}
 	m.blocks.replaceOf("agent:", defs)
 	// The window is laid out again only as a block comes, goes or moves:

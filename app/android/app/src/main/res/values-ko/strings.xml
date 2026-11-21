@@ -346,4 +346,14 @@
     <string name="block_unknown_kind">이 버전의 앱에서는 표시할 수 없습니다</string>
     <string name="panel_missing">%1$s에 설치되지 않음</string>
     <string name="block_dragging">항목 이동 중 · 강조된 영역을 눌러 놓으세요</string>
+    <string name="block_scope_space">스페이스</string>
+    <string name="block_scope_project">프로젝트</string>
+    <string name="block_scope_session">세션</string>
+    <string name="block_scope_switch">%1$s 전환</string>
+    <string name="block_scope_needs_space">이 패널을 사용하려면 %1$s에 스페이스가 필요합니다.</string>
+    <string name="block_scope_needs_space_detail">이 컴퓨터에서 스페이스를 만든 뒤 다시 확인하세요.</string>
+    <string name="block_scope_needs_project">이 패널을 사용하려면 %1$s에 프로젝트가 필요합니다.</string>
+    <string name="block_scope_needs_project_detail">이 컴퓨터에서 프로젝트를 추가한 뒤 다시 확인하세요.</string>
+    <string name="block_scope_needs_session">이 패널을 사용하려면 %1$s에 실행 중인 세션이 필요합니다.</string>
+    <string name="block_scope_needs_session_detail">이 컴퓨터에서 세션을 시작한 뒤 다시 확인하세요.</string>
 </resources>

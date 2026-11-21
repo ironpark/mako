@@ -88,17 +88,20 @@ func (p *plugin) check(v *version) error {
 	return nil
 }
 
-// syncInstancesLocked keeps an instance for each block the version
-// declares.
+// syncInstancesLocked keeps a default global instance for each global block
+// the version declares, and drops unwatched instances of removed blocks.
 func (p *plugin) syncInstancesLocked() {
 	for _, b := range p.v.man.Blocks {
-		if _, ok := p.inst[b.ID]; !ok {
-			p.inst[b.ID] = &instance{id: b.ID}
+		if b.Scope == "" || b.Scope == protocol.ScopeGlobal {
+			key := instanceKey(b.ID, "")
+			if _, ok := p.inst[key]; !ok {
+				p.inst[key] = &instance{key: key, id: b.ID, scopeKey: "", lastUsed: time.Now()}
+			}
 		}
 	}
-	for id, in := range p.inst {
-		if !slices.ContainsFunc(p.v.man.Blocks, func(b BlockDecl) bool { return b.ID == id }) && in.subs == 0 {
-			delete(p.inst, id)
+	for key, in := range p.inst {
+		if !slices.ContainsFunc(p.v.man.Blocks, func(b BlockDecl) bool { return b.ID == in.id }) && in.subs == 0 {
+			delete(p.inst, key)
 		}
 	}
 }
@@ -161,8 +164,9 @@ func (p *plugin) ensure() error {
 		in.loaded = false
 	}
 	p.mu.Unlock()
-	for id, state := range p.saved {
-		if _, err := p.invoke("restore", false, id, state); err != nil {
+	for key, state := range p.saved {
+		blockID, scopeKey := splitInstanceKey(key)
+		if _, err := p.invoke("restore", false, blockID, scopeKey, state); err != nil {
 			break
 		}
 	}
@@ -201,14 +205,17 @@ func (p *plugin) sleep(why string) {
 		return
 	}
 	p.mu.Lock()
-	ids := make([]string, 0, len(p.inst))
-	for id := range p.inst {
-		ids = append(ids, id)
+	type saveTarget struct {
+		key, id, scopeKey string
+	}
+	targets := make([]saveTarget, 0, len(p.inst))
+	for key, in := range p.inst {
+		targets = append(targets, saveTarget{key: key, id: in.id, scopeKey: in.scopeKey})
 	}
 	p.mu.Unlock()
-	for _, id := range ids {
-		if s, err := p.invoke("save", false, id); err == nil && len(s) <= maxSavedState && s != "null" {
-			p.saved[id] = s
+	for _, t := range targets {
+		if s, err := p.invoke("save", false, t.id, t.scopeKey); err == nil && len(s) <= maxSavedState && s != "null" {
+			p.saved[t.key] = s
 		}
 		if p.rt == nil {
 			return // saving went over a limit

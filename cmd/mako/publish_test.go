@@ -11,6 +11,7 @@ import (
 	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/plugin/pack"
 	"github.com/ironpark/mako/internal/plugin/registry"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // plugins index lists a package with its manifest's permissions, which a
@@ -71,5 +72,115 @@ func TestInitPluginScaffoldsValidManifest(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "jsconfig.json")); err != nil {
 		t.Fatalf("missing jsconfig.json: %v", err)
+	}
+}
+
+func TestParsePluginSetScopeArgs(t *testing.T) {
+	tests := []struct {
+		name      string
+		args      []string
+		wantID    string
+		wantKey   string
+		wantValue string
+		wantScope string
+		wantErr   bool
+	}{
+		{
+			name:      "no scope",
+			args:      []string{"board", "title", "Sprint", "1"},
+			wantID:    "board",
+			wantKey:   "title",
+			wantValue: "Sprint 1",
+			wantScope: "",
+		},
+		{
+			name:      "double dash scope after value",
+			args:      []string{"board", "title", "Alpha", "--scope", "project:p1"},
+			wantID:    "board",
+			wantKey:   "title",
+			wantValue: "Alpha",
+			wantScope: "project:p1",
+		},
+		{
+			name:      "single dash scope after value",
+			args:      []string{"board", "title", "Alpha", "-scope", "project:p1"},
+			wantID:    "board",
+			wantKey:   "title",
+			wantValue: "Alpha",
+			wantScope: "project:p1",
+		},
+		{
+			name:      "double dash scope before key and value",
+			args:      []string{"board", "--scope", "space:sp1", "title", "Work"},
+			wantID:    "board",
+			wantKey:   "title",
+			wantValue: "Work",
+			wantScope: "space:sp1",
+		},
+		{
+			name:      "double dash scope before plugin id",
+			args:      []string{"--scope", "project:p2", "board", "title", "Beta"},
+			wantID:    "board",
+			wantKey:   "title",
+			wantValue: "Beta",
+			wantScope: "project:p2",
+		},
+		{
+			name:      "equals syntax",
+			args:      []string{"board", "token", "secret", "--scope=session:s1"},
+			wantID:    "board",
+			wantKey:   "token",
+			wantValue: "secret",
+			wantScope: "session:s1",
+		},
+		{
+			name:      "single dash equals syntax before key",
+			args:      []string{"board", "-scope=project:p3", "token"},
+			wantID:    "board",
+			wantKey:   "token",
+			wantValue: "",
+			wantScope: "project:p3",
+		},
+		{
+			name:      "double dash terminator preserves literal flag value",
+			args:      []string{"board", "flag", "--", "--scope", "literal"},
+			wantID:    "board",
+			wantKey:   "flag",
+			wantValue: "--scope literal",
+			wantScope: "",
+		},
+		{
+			name:    "missing scope value",
+			args:    []string{"board", "title", "Alpha", "--scope"},
+			wantErr: true,
+		},
+		{
+			name:    "missing key",
+			args:    []string{"board", "--scope", "project:p1"},
+			wantErr: true,
+		},
+		{
+			name:    "missing plugin id",
+			args:    []string{"--scope", "project:p1"},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parsePluginSetAction(tc.args)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got %+v", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.GetOp() != protocol.PluginSet || got.GetPluginId() != tc.wantID || got.GetKey() != tc.wantKey || got.GetValue() != tc.wantValue || got.GetScope() != tc.wantScope {
+				t.Fatalf("got %+v, want id=%q key=%q value=%q scope=%q", got, tc.wantID, tc.wantKey, tc.wantValue, tc.wantScope)
+			}
+		})
 	}
 }

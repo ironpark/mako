@@ -78,5 +78,21 @@ class BlockFeedTest {
         assertTrue(got.single().missing)
     }
 
+    @Test
+    fun followUpdatesPreservesScopeFromBlockUpdate() = runBlocking {
+        val scoped = BlockUpdate.newBuilder()
+            .setBlock("plugin:kanban/board")
+            .setScope("project:p1")
+            .setTree(tree("v1"))
+            .setGone(true)
+            .build()
+        val got = followUpdates(BlockState()) {
+            flow { emit(scoped) }
+        }.toList()
+        assertEquals(1, got.size)
+        assertEquals("project:p1", got.single().update?.scope)
+        assertEquals(tree("v1"), got.single().tree)
+    }
+
     private fun failing(e: Exception): Flow<BlockUpdate> = flow { throw e }
 }

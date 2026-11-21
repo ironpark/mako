@@ -20,12 +20,18 @@ const host = hostApi(async (method, req) =>
   JSON.parse(bridge(method, JSON.stringify(req === undefined ? {} : req))));
 
 const blocks = new Map();
+// states maps blockId -> Map<scopeKey, stateObj>
 const states = new Map();
+// formValues maps blockId -> Map<scopeKey, valuesObj>
 const formValues = new Map();
+const blockContexts = new Map();
 const commands = new Map();
 const tools = new Map();
-const reloads = new Set();
+// reloads maps `${id}\0${scopeKey}` -> { id, scope }
+const reloads = new Map();
 let plugin = null;
+let activeScope = "";
+let activeCtx = null;
 
 const clone = (v) => JSON.parse(JSON.stringify(v === undefined ? {} : v));
 
@@ -35,6 +41,54 @@ function need(id) {
   return b;
 }
 
+function resolveScopeArg(scopeKey) {
+  return scopeKey === undefined ? activeScope : String(scopeKey || "");
+}
+
+function getState(id, scopeKey) {
+  const b = need(id);
+  const sk = scopeKey || "";
+  let byScope = states.get(id);
+  if (!byScope) {
+    byScope = new Map();
+    states.set(id, byScope);
+  }
+  if (!byScope.has(sk)) {
+    byScope.set(sk, clone(b.state));
+  }
+  return byScope.get(sk);
+}
+
+function makeContext(ctxJson) {
+  const raw = ctxJson ? JSON.parse(ctxJson) : {};
+  const scopeKey = raw.scopeKey || "";
+  const scope = raw.scope || (scopeKey ? scopeKey.split(":")[0] : "global");
+  const scopedStorage = Object.freeze({
+    getItem: (k) => host.storage.getItem(typeof k === "string" ? { key: k, scope: scopeKey } : { ...(k || {}), scope: scopeKey }),
+    setItem: (k, v) => host.storage.setItem(typeof k === "string" ? { key: k, value: String(v ?? ""), scope: scopeKey } : { ...(k || {}), scope: scopeKey }),
+    deleteItem: (k) => host.storage.deleteItem(typeof k === "string" ? { key: k, scope: scopeKey } : { ...(k || {}), scope: scopeKey }),
+    listKeys: (p) => host.storage.listKeys(p === undefined || typeof p === "string" ? { prefix: p || "", scope: scopeKey } : { ...(p || {}), scope: scopeKey }),
+  });
+  const scopedSettings = Object.freeze({
+    getSetting: (k) => host.settings.getSetting(typeof k === "string" ? { key: k, scope: scopeKey } : { ...(k || {}), scope: scopeKey }),
+    listSettings: (req) => host.settings.listSettings({ ...(req || {}), scope: scopeKey }),
+  });
+  return Object.freeze({
+    scope,
+    scopeKey,
+    spaceId: raw.spaceId || "",
+    spaceName: raw.spaceName || "",
+    projectId: raw.projectId || "",
+    projectName: raw.projectName || "",
+    sessionId: raw.sessionId || "",
+    roots: Object.freeze(Array.isArray(raw.roots) ? [...raw.roots] : []),
+    storage: scopedStorage,
+    settings: scopedSettings,
+  });
+}
+
+const defaultGlobalCtx = makeContext("");
+
 const mako = Object.freeze({
   ...host,
   blocks: Object.freeze({
@@ -43,19 +97,27 @@ const mako = Object.freeze({
       if (blocks.has(id)) throw new Error(`block ${id} is registered already`);
       if (!def || typeof def.render !== "function") throw new Error(`block ${id} has no render`);
       blocks.set(id, def);
-      states.set(id, clone(def.state));
+      const byScope = new Map();
+      byScope.set("", clone(def.state));
+      states.set(id, byScope);
     },
-    state(id) {
-      need(id);
-      return states.get(id);
+    state(id, scopeKey) {
+      return getState(id, resolveScopeArg(scopeKey));
     },
-    values(id) {
+    values(id, scopeKey) {
       need(id);
-      return Object.freeze({ ...(formValues.get(id) || {}) });
+      const sk = resolveScopeArg(scopeKey);
+      const byScope = formValues.get(id);
+      return Object.freeze({ ...((byScope && byScope.get(sk)) || {}) });
     },
-    reload(id) {
+    reload(id, scopeKey) {
       need(id);
-      reloads.add(id);
+      const sk = resolveScopeArg(scopeKey);
+      reloads.set(`${id}\0${sk}`, { id, scope: sk });
+    },
+    context(id) {
+      need(id);
+      return blockContexts.get(id) || activeCtx || defaultGlobalCtx;
     },
   }),
   commands: Object.freeze({
@@ -215,36 +277,103 @@ const R = {
     await plugin.activate(mako);
   },
   blocks: () => JSON.stringify([...blocks.keys()]),
-  async load(id) {
+  async load(id, scopeKey, ctxJson) {
     const b = need(id);
-    if (typeof b.load === "function") await b.load(states.get(id));
+    const sk = scopeKey || "";
+    const ctx = makeContext(ctxJson);
+    const prevScope = activeScope;
+    const prevCtx = activeCtx;
+    const prevBlockCtx = blockContexts.get(id);
+    activeScope = sk;
+    activeCtx = ctx;
+    blockContexts.set(id, ctx);
+    try {
+      if (typeof b.load === "function") await b.load(getState(id, sk), ctx);
+    } finally {
+      activeScope = prevScope;
+      activeCtx = prevCtx;
+      if (prevBlockCtx === undefined) blockContexts.delete(id);
+      else blockContexts.set(id, prevBlockCtx);
+    }
   },
-  render(id) {
-    return JSON.stringify(need(id).render(states.get(id), ui));
+  render(id, scopeKey, ctxJson) {
+    const sk = scopeKey || "";
+    const ctx = makeContext(ctxJson);
+    const prevScope = activeScope;
+    const prevCtx = activeCtx;
+    const prevBlockCtx = blockContexts.get(id);
+    activeScope = sk;
+    activeCtx = ctx;
+    blockContexts.set(id, ctx);
+    try {
+      return JSON.stringify(need(id).render(getState(id, sk), ui, ctx));
+    } finally {
+      activeScope = prevScope;
+      activeCtx = prevCtx;
+      if (prevBlockCtx === undefined) blockContexts.delete(id);
+      else blockContexts.set(id, prevBlockCtx);
+    }
   },
-  async event(id, name, args, valsJson) {
+  async event(id, scopeKey, ctxJson, name, args, valsJson) {
     const b = need(id);
+    const sk = scopeKey || "";
+    const ctx = makeContext(ctxJson);
     const on = b.on || {};
     const h = Object.prototype.hasOwnProperty.call(on, name) ? on[name] : undefined;
     if (typeof h !== "function") throw new Error(`block ${id} takes no message ${name}`);
     const parsedVals = valsJson ? JSON.parse(valsJson) : {};
-    formValues.set(id, parsedVals);
+    let byScope = formValues.get(id);
+    if (!byScope) {
+      byScope = new Map();
+      formValues.set(id, byScope);
+    }
+    byScope.set(sk, parsedVals);
+    const prevScope = activeScope;
+    const prevCtx = activeCtx;
+    const prevBlockCtx = blockContexts.get(id);
+    activeScope = sk;
+    activeCtx = ctx;
+    blockContexts.set(id, ctx);
     try {
-      await h(states.get(id), ...JSON.parse(args));
+      await h(getState(id, sk), ...JSON.parse(args));
     } finally {
-      formValues.delete(id);
+      byScope.delete(sk);
+      activeScope = prevScope;
+      activeCtx = prevCtx;
+      if (prevBlockCtx === undefined) blockContexts.delete(id);
+      else blockContexts.set(id, prevBlockCtx);
     }
   },
-  async command(id) {
+  async command(id, ctxJson) {
     const run = commands.get(id);
     if (!run) throw new Error(`the plugin registered nothing for command ${id}`);
-    await run();
+    const ctx = makeContext(ctxJson);
+    const prevScope = activeScope;
+    const prevCtx = activeCtx;
+    activeScope = ctx.scopeKey;
+    activeCtx = ctx;
+    try {
+      await run(ctx);
+    } finally {
+      activeScope = prevScope;
+      activeCtx = prevCtx;
+    }
   },
-  async callTool(id, argsJson) {
+  async callTool(id, argsJson, ctxJson) {
     const run = tools.get(id);
     if (!run) throw new Error(`the plugin registered nothing for tool ${id}`);
-    const res = await run(argsJson ? JSON.parse(argsJson) : {});
-    return JSON.stringify(res === undefined ? null : res);
+    const ctx = makeContext(ctxJson);
+    const prevScope = activeScope;
+    const prevCtx = activeCtx;
+    activeScope = ctx.scopeKey;
+    activeCtx = ctx;
+    try {
+      const res = await run(argsJson ? JSON.parse(argsJson) : {}, ctx);
+      return JSON.stringify(res === undefined ? null : res);
+    } finally {
+      activeScope = prevScope;
+      activeCtx = prevCtx;
+    }
   },
   // An event a plugin subscribed to: the handler of its kind in the
   // default export's on, if it has one.
@@ -254,14 +383,33 @@ const R = {
     const h = Object.prototype.hasOwnProperty.call(on, ev.kind) ? on[ev.kind] : undefined;
     if (typeof h === "function") await h.call(plugin, ev);
   },
-  save: (id) => JSON.stringify(states.has(id) ? states.get(id) : null),
-  restore(id, json) {
+  save(id, scopeKey) {
+    const sk = scopeKey || "";
+    const byScope = states.get(id);
+    return JSON.stringify(byScope && byScope.has(sk) ? byScope.get(sk) : null);
+  },
+  restore(id, scopeKey, json) {
+    const sk = scopeKey || "";
     const v = JSON.parse(json);
-    if (blocks.has(id) && v !== null) states.set(id, v);
+    if (blocks.has(id) && v !== null) {
+      let byScope = states.get(id);
+      if (!byScope) {
+        byScope = new Map();
+        states.set(id, byScope);
+      }
+      byScope.set(sk, v);
+    }
+  },
+  evict(id, scopeKey) {
+    const sk = scopeKey || "";
+    const byScope = states.get(id);
+    if (byScope) byScope.delete(sk);
+    const vals = formValues.get(id);
+    if (vals) vals.delete(sk);
   },
   refresh: (id) => String(Number(need(id).refresh) || 0),
   takeReloads() {
-    const out = [...reloads];
+    const out = [...reloads.values()];
     reloads.clear();
     return JSON.stringify(out);
   },

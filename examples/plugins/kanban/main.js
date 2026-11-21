@@ -1,10 +1,11 @@
-// Kanban board plugin for mako:
+// Kanban board plugin for mako (v0.3.0, project-scoped):
+// - Project-scoped: each project has its own isolated Kanban board and storage.
 // - Drag cards onto any column to move them, or onto another card to reorder.
 // - Explicit ui.card, per-column ui.scroll, inline ui.textarea note editing,
 //   ui.tabs compact switcher, dragGroup/dropAccept filtering, and live form
 //   value reading via mako.blocks.values("board").
-// - Exposes MCP tools (plugin_kanban_list_cards, add_card, move_card) so
-//   running agents can read and update the board in real time.
+// - Exposes project-scoped MCP tools (plugin_kanban_list_cards, add_card,
+//   move_card) so running agents read and update only their own project's board.
 
 const STORAGE_KEY = "board:v1";
 
@@ -40,11 +41,12 @@ function nextCardId(cards) {
   return `c${max + 1}`;
 }
 
-async function saveBoard(s) {
-  await mako.storage.setItem({
-    key: STORAGE_KEY,
-    value: JSON.stringify({ cards: s.cards, viewMode: s.viewMode }),
-  });
+async function saveBoard(s, ctx) {
+  const store = ctx && ctx.storage ? ctx.storage : mako.blocks.context("board").storage;
+  await store.setItem(
+    STORAGE_KEY,
+    JSON.stringify({ cards: s.cards, viewMode: s.viewMode }),
+  );
 }
 
 async function refreshSessions(s) {
@@ -63,10 +65,10 @@ async function refreshSessions(s) {
   }
 }
 
-async function load(s) {
-  const modeSetting = await mako.settings.getSetting({ key: "view_mode" });
+async function load(s, ctx) {
+  const modeSetting = await ctx.settings.getSetting("view_mode");
   const fallbackMode = modeSetting.setting && modeSetting.setting.text ? modeSetting.setting.text : "board";
-  const stored = await mako.storage.getItem({ key: STORAGE_KEY });
+  const stored = await ctx.storage.getItem(STORAGE_KEY);
   if (stored.found) {
     try {
       const parsed = JSON.parse(stored.value);
@@ -81,7 +83,7 @@ async function load(s) {
   } else {
     s.cards = defaultCards();
     s.viewMode = fallbackMode;
-    await saveBoard(s);
+    await saveBoard(s, ctx);
   }
   await refreshSessions(s);
 }
@@ -185,14 +187,17 @@ function renderColumn(s, ui, col) {
   });
 }
 
-function render(s, ui) {
+function render(s, ui, ctx) {
   const total = s.cards.length;
   const doneCount = s.cards.filter((c) => c.col === "done").length;
   const progress = total > 0 ? doneCount / total : 0;
+  const heading = ctx && ctx.projectName
+    ? `Kanban · ${ctx.projectName} · ${doneCount}/${total} done`
+    : `Kanban · ${doneCount}/${total} done`;
 
   const header = ui.row([
     ui.icon("columns-3", { tone: "accent" }),
-    ui.text(`Kanban · ${doneCount}/${total} done`, { weight: "semibold" }).grow(),
+    ui.text(heading, { weight: "semibold" }).grow(),
     ui.button(s.viewMode === "compact" ? "Board" : "Compact", {
       key: "mode",
       onTap: ["toggleView"],
@@ -267,6 +272,7 @@ export default {
           if (PRIORITIES.includes(value)) s.draftPriority = value;
         },
         async addCard(s, text) {
+          const ctx = mako.blocks.context("board");
           const title = String(text ?? s.draft).trim();
           if (!title) return;
           const card = {
@@ -281,11 +287,12 @@ export default {
           s.cards.unshift(card);
           s.draft = "";
           s.notice = `Added "${title}".`;
-          await saveBoard(s);
+          await saveBoard(s, ctx);
           await mako.log.write({ level: "info", message: `added card ${card.id}: ${title}` });
         },
         async addFromButton(s) {
-          const vals = mako.blocks.values("board");
+          const ctx = mako.blocks.context("board");
+          const vals = mako.blocks.values("board", ctx.scopeKey);
           const title = String(vals.draft ?? s.draft ?? "").trim();
           if (!title) return;
           const card = {
@@ -300,7 +307,7 @@ export default {
           s.cards.unshift(card);
           s.draft = "";
           s.notice = `Added "${title}".`;
-          await saveBoard(s);
+          await saveBoard(s, ctx);
           await mako.log.write({ level: "info", message: `added card ${card.id}: ${title}` });
         },
         select(s, cardId) {
@@ -308,36 +315,41 @@ export default {
           s.notice = "";
         },
         async saveNote(s, cardId, note) {
+          const ctx = mako.blocks.context("board");
           const card = s.cards.find((c) => c.id === cardId);
           if (!card) return;
           card.note = String(note ?? "");
-          await saveBoard(s);
+          await saveBoard(s, ctx);
         },
         pickColLabel(s, label) {
           const col = COLUMNS.find((c) => String(label).startsWith(c.title));
           if (col) s.activeCol = col.id;
         },
         async toggleView(s) {
+          const ctx = mako.blocks.context("board");
           s.viewMode = s.viewMode === "compact" ? "board" : "compact";
-          await saveBoard(s);
+          await saveBoard(s, ctx);
         },
         async moveToColumn(s, colId, draggedId) {
+          const ctx = mako.blocks.context("board");
           if (!COLUMNS.some((c) => c.id === colId)) return;
           if (moveCard(s, draggedId, colId, "")) {
             const col = COLUMNS.find((c) => c.id === colId);
             s.notice = `Moved card to ${col ? col.title : colId}.`;
-            await saveBoard(s);
+            await saveBoard(s, ctx);
             await mako.log.write({ level: "info", message: `moved ${draggedId} -> ${colId}` });
           }
         },
         async moveBefore(s, colId, beforeCardId, draggedId) {
+          const ctx = mako.blocks.context("board");
           if (!COLUMNS.some((c) => c.id === colId)) return;
           if (moveCard(s, draggedId, colId, beforeCardId)) {
             s.notice = "";
-            await saveBoard(s);
+            await saveBoard(s, ctx);
           }
         },
         async step(s, cardId, delta) {
+          const ctx = mako.blocks.context("board");
           const card = s.cards.find((c) => c.id === cardId);
           if (!card) return;
           const idx = COLUMNS.findIndex((c) => c.id === card.col);
@@ -345,24 +357,27 @@ export default {
           if (!next) return;
           card.col = next.id;
           s.notice = `Moved "${card.title}" to ${next.title}.`;
-          await saveBoard(s);
+          await saveBoard(s, ctx);
         },
         async cyclePriority(s, cardId) {
+          const ctx = mako.blocks.context("board");
           const card = s.cards.find((c) => c.id === cardId);
           if (!card) return;
           const idx = PRIORITIES.indexOf(card.priority);
           card.priority = PRIORITIES[(idx + 1) % PRIORITIES.length];
-          await saveBoard(s);
+          await saveBoard(s, ctx);
         },
         async remove(s, cardId) {
+          const ctx = mako.blocks.context("board");
           const idx = s.cards.findIndex((c) => c.id === cardId);
           if (idx < 0) return;
           const [removed] = s.cards.splice(idx, 1);
           if (s.selectedId === cardId) s.selectedId = "";
           s.notice = `Removed "${removed.title}".`;
-          await saveBoard(s);
+          await saveBoard(s, ctx);
         },
         async dispatch(s, cardId) {
+          const ctx = mako.blocks.context("board");
           const card = s.cards.find((c) => c.id === cardId);
           if (!card) return;
           await refreshSessions(s);
@@ -377,36 +392,36 @@ export default {
           if (card.col === "todo") card.col = "doing";
           s.notice = `Sent "${card.title}" to ${target.name}.`;
           await mako.commands.runCommand({ id: "mako.toast", arg: s.notice });
-          await saveBoard(s);
+          await saveBoard(s, ctx);
         },
       },
     });
 
-    mako.commands.register("reset", async () => {
-      const s = mako.blocks.state("board");
+    mako.commands.register("reset", async (ctx) => {
+      const s = mako.blocks.state("board", ctx.scopeKey);
       s.cards = defaultCards();
       s.selectedId = "";
       s.notice = "Reset board to demo cards.";
       await mako.commands.runCommand({ id: "mako.toast", arg: "Kanban reset to demo cards" });
-      await saveBoard(s);
+      await saveBoard(s, ctx);
     });
 
-    mako.commands.register("toggle-view", async () => {
-      const s = mako.blocks.state("board");
+    mako.commands.register("toggle-view", async (ctx) => {
+      const s = mako.blocks.state("board", ctx.scopeKey);
       s.viewMode = s.viewMode === "compact" ? "board" : "compact";
-      await saveBoard(s);
+      await saveBoard(s, ctx);
     });
 
-    // MCP tools exposed to running agents on this node.
-    mako.tools.register("list_cards", (args) => {
-      const s = mako.blocks.state("board");
+    // Project-scoped MCP tools exposed to running agents on this node.
+    mako.tools.register("list_cards", (args, ctx) => {
+      const s = mako.blocks.state("board", ctx.scopeKey);
       const col = args && args.column ? String(args.column) : "";
       const cards = col ? s.cards.filter((c) => c.col === col) : s.cards;
-      return { columns: COLUMNS.map((c) => c.id), cards };
+      return { project: ctx.projectName || ctx.projectId, columns: COLUMNS.map((c) => c.id), cards };
     });
 
-    mako.tools.register("add_card", async (args) => {
-      const s = mako.blocks.state("board");
+    mako.tools.register("add_card", async (args, ctx) => {
+      const s = mako.blocks.state("board", ctx.scopeKey);
       const title = String((args && args.title) || "").trim();
       if (!title) throw new Error("title is required");
       const col = COLUMNS.some((c) => c.id === (args && args.column)) ? args.column : "todo";
@@ -421,13 +436,13 @@ export default {
         sessionId: "",
       };
       s.cards.unshift(card);
-      await saveBoard(s);
+      await saveBoard(s, ctx);
       await mako.log.write({ level: "info", message: `agent added card ${card.id}: ${title}` });
       return card;
     });
 
-    mako.tools.register("move_card", async (args) => {
-      const s = mako.blocks.state("board");
+    mako.tools.register("move_card", async (args, ctx) => {
+      const s = mako.blocks.state("board", ctx.scopeKey);
       const id = String((args && args.id) || "");
       const col = String((args && args.column) || "");
       if (!COLUMNS.some((c) => c.id === col)) {
@@ -436,7 +451,7 @@ export default {
       if (!moveCard(s, id, col, "")) {
         throw new Error(`card ${id} not found`);
       }
-      await saveBoard(s);
+      await saveBoard(s, ctx);
       await mako.log.write({ level: "info", message: `agent moved card ${id} -> ${col}` });
       return { moved: true, id, column: col };
     });
@@ -453,7 +468,7 @@ export default {
             changed = true;
           }
         }
-        if (changed) await saveBoard(s);
+        if (changed) await saveBoard(s, mako.blocks.context("board"));
       }
     },
     async sessionStarted() {
