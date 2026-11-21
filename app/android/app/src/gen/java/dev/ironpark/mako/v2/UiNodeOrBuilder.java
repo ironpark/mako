@@ -357,4 +357,36 @@ public interface UiNodeOrBuilder extends
    */
   com.google.protobuf.ByteString
       getLabelsBytes(int index);
+
+  /**
+   * <pre>
+   * drag is the payload carried when this node is dragged, non-empty when
+   * draggable; drop says dropping a dragged node of the same block on this
+   * node is answered by a BlockEvent of kind "drop" with that payload as
+   * value (revision 40).
+   * </pre>
+   *
+   * <code>string drag = 22 [json_name = "drag"];</code>
+   * @return The drag.
+   */
+  java.lang.String getDrag();
+  /**
+   * <pre>
+   * drag is the payload carried when this node is dragged, non-empty when
+   * draggable; drop says dropping a dragged node of the same block on this
+   * node is answered by a BlockEvent of kind "drop" with that payload as
+   * value (revision 40).
+   * </pre>
+   *
+   * <code>string drag = 22 [json_name = "drag"];</code>
+   * @return The bytes for drag.
+   */
+  com.google.protobuf.ByteString
+      getDragBytes();
+
+  /**
+   * <code>bool drop = 23 [json_name = "drop"];</code>
+   * @return The drop.
+   */
+  boolean getDrop();
 }

@@ -87,6 +87,15 @@ var uiCases = []uiCase{
 		next: `{"kind":"column","children":[
 		{"kind":"chart","key":"bars","chart":"bar","labels":["a"],"series":[{"name":"one","values":[42]}]},
 		{"kind":"text","key":"t","text":"CPU","tone":"muted"}]}`},
+	// Drag and drop (revision 40): drag payloads and drop flags move and update across renders.
+	{name: "drag-drop", before: `{"kind":"row","children":[
+		{"kind":"column","key":"todo","onDrop":["move","todo"],"children":[
+			{"kind":"column","key":"c1","drag":"c1","onDrop":["before","todo","c1"],"children":[{"kind":"text","text":"Task 1"}]}]},
+		{"kind":"column","key":"done","onDrop":["move","done"],"children":[]}]}`,
+		next: `{"kind":"row","children":[
+		{"kind":"column","key":"todo","onDrop":["move","todo"],"children":[]},
+		{"kind":"column","key":"done","onDrop":["move","done"],"children":[
+			{"kind":"column","key":"c1","drag":"c1","onDrop":["before","done","c1"],"children":[{"kind":"text","text":"Task 1"}]}]}]}`},
 
 	// Ops written by hand: what a front-end must do with them, or refuse.
 	{name: "update-keeps-children", before: `{"kind":"column","children":[{"kind":"row","key":"r","children":[{"kind":"text","text":"kept"}]}]}`,

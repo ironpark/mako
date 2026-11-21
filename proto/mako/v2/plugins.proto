@@ -178,7 +178,8 @@ message BlockUpdate {
 }
 
 // BlockEvent is the user acting on a node of a block's tree: kind "tap",
-// or "change" or "submit" with the input's, toggle's or select's value.
+// "change" or "submit" with the input's, toggle's or select's value, or
+// "drop" with the dragged node's drag payload as value (revision 40).
 // Answered by PluginDone.
 message BlockEvent {
   string block = 1;
@@ -238,6 +239,12 @@ message UiNode {
   string chart = 19;
   repeated UiSeries series = 20;
   repeated string labels = 21;
+  // drag is the payload carried when this node is dragged, non-empty when
+  // draggable; drop says dropping a dragged node of the same block on this
+  // node is answered by a BlockEvent of kind "drop" with that payload as
+  // value (revision 40).
+  string drag = 22;
+  bool drop = 23;
 }
 
 // UiSeries is a series of a chart node: its name, colour token and values,

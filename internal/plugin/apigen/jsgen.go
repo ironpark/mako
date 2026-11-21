@@ -225,6 +225,10 @@ export interface NodeOptions {
   onChange?: Message;
   /** Sent with an input's text last when Return is pressed. */
   onSubmit?: Message;
+  /** Payload carried when this node is dragged onto a drop target. */
+  drag?: string;
+  /** Sent with the dragged node's drag payload last when dropped on this node. */
+  onDrop?: Message;
   placeholder?: string;
   /** A chart's caption, said above it and read out with it. */
   caption?: string;
@@ -251,6 +255,8 @@ export interface UiNode {
   disabled(on?: boolean): this;
   onTap(name: string, ...args: any[]): this;
   onChange(name: string, ...args: any[]): this;
+  drag(payload: string): this;
+  onDrop(name: string, ...args: any[]): this;
 }
 
 /** The UI vocabulary: the only nodes a block draws. */

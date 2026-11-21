@@ -219,3 +219,70 @@ func TestABlockStreamStartsAgainAfterAnOpThatDoesNotApply(t *testing.T) {
 		t.Fatalf("trees %v, opened %d times", trees, len(opened))
 	}
 }
+
+// Dragging a draggable node onto a drop zone of the same block fires a drop
+// BlockEvent carrying the dragged node's payload, while clicking still fires
+// its tap event.
+func TestPluginBlockDragAndDrop(t *testing.T) {
+	tree := &protocol.UiNode{Kind: "row", Gap: 12, Children: []*protocol.UiNode{
+		{Id: "/todo", Kind: "column", Grow: 1, Drop: true, Children: []*protocol.UiNode{
+			{Id: "/todo/h", Kind: "text", Text: "Todo"},
+			{Id: "/todo/c1", Kind: "column", Drag: "c1", Tap: true, Drop: true, Children: []*protocol.UiNode{
+				{Id: "/todo/c1/t", Kind: "text", Text: "Card One"},
+			}},
+		}},
+		{Id: "/done", Kind: "column", Grow: 1, Drop: true, Children: []*protocol.UiNode{
+			{Id: "/done/h", Kind: "text", Text: "Done"},
+			{Id: "/done/empty", Kind: "text", Text: "Drop here"},
+		}},
+	}}
+	type ev struct{ block, node, kind, value string }
+	var got []ev
+	form := newBlockForm()
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		form.redraw()
+		v := &treeView{
+			block: "plugin:kanban/board",
+			form:  form,
+			onEvent: func(block, node, kind, value string, _ map[string]string) {
+				got = append(got, ev{block, node, kind, value})
+			},
+		}
+		return v.node(tree, false)
+	}, ggui.Sz(600, 300))
+	defer p.Close()
+	p.Frame()
+
+	card, ok := p.Semantics().Find(ggui.RoleButton, "Card One")
+	if !ok {
+		t.Fatalf("no Card One:\n%s", p.Semantics().String())
+	}
+	target, ok := p.Semantics().Find(ggui.RoleText, "Drop here")
+	if !ok {
+		t.Fatalf("no Drop here:\n%s", p.Semantics().String())
+	}
+	center := func(r ggui.Rect) ggui.Point {
+		return ggui.Pt(r.Origin.X+r.Size.W/2, r.Origin.Y+r.Size.H/2)
+	}
+	// Click still fires tap.
+	p.Click(center(card.Rect))
+	p.Frame()
+	if len(got) != 1 || got[0] != (ev{"plugin:kanban/board", "/todo/c1", protocol.UiTap, ""}) {
+		t.Fatalf("tap events = %+v", got)
+	}
+	// Dragging from Card One to the Done column fires a drop event.
+	got = nil
+	from := center(card.Rect)
+	to := center(target.Rect)
+	p.Press(from)
+	p.Frame()
+	p.Move(ggui.Pt((from.X+to.X)/2, (from.Y+to.Y)/2))
+	p.Frame()
+	p.Move(to)
+	p.Frame()
+	p.Release(to)
+	p.Frame()
+	if len(got) != 1 || got[0] != (ev{"plugin:kanban/board", "/done", protocol.UiDrop, "c1"}) {
+		t.Fatalf("drop events = %+v, want drop of c1 on /done", got)
+	}
+}

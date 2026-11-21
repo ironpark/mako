@@ -29,7 +29,11 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 39
+const Revision = 40
+
+// RevisionUiDragDrop adds drag and drop to plugin and agent UI blocks:
+// UiNode.drag and UiNode.drop, and BlockEvent kind "drop".
+const RevisionUiDragDrop = 40
 
 // RevisionTemplatesAndDecisions adds OpenSession model/effort/yolo overrides,
 // RunAgentPrompt one-shot prompts, and local provider keys / RunDecision.

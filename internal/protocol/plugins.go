@@ -70,6 +70,7 @@ const (
 	UiTap    = "tap"
 	UiChange = "change"
 	UiSubmit = "submit"
+	UiDrop   = "drop"
 )
 
 // The codes of the errors the plugin store and plugins' actions return

@@ -189,3 +189,49 @@ func TestEventsCarryTheirMessageAndValues(t *testing.T) {
 		t.Error("an event of a block with no tree was taken")
 	}
 }
+
+func TestDragAndDropValidationAndMessages(t *testing.T) {
+	tr, err := Read([]byte(`{"kind":"row","children":[
+		{"kind":"column","key":"todo","onDrop":["move","todo"],"children":[
+			{"kind":"column","key":"c1","drag":"card-1","onTap":["select","c1"],"onDrop":["before","todo","c1"],"children":[
+				{"kind":"text","text":"First card"}]}]},
+		{"kind":"column","key":"done","onDrop":["move","done"],"children":[
+			{"kind":"text","text":"Empty"}]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	card := nodeOf(tr.Root, "/todo/c1")
+	if card == nil || card.GetDrag() != "card-1" || !card.GetDrop() || !card.GetTap() {
+		t.Fatalf("card = %+v", card)
+	}
+	doneCol := nodeOf(tr.Root, "/done")
+	if doneCol == nil || doneCol.GetDrag() != "" || !doneCol.GetDrop() {
+		t.Fatalf("done column = %+v", doneCol)
+	}
+	m, err := tr.Message(&protocol.BlockEvent{Node: "/done", Kind: protocol.UiDrop, Value: "card-1"})
+	if err != nil || m.Name != "move" || len(m.Args) != 2 || string(m.Args[0]) != `"done"` || string(m.Args[1]) != `"card-1"` {
+		t.Fatalf("drop message = %+v, err = %v", m, err)
+	}
+	// Dropping with an empty or control-character payload, or onto a node without onDrop, is refused.
+	for _, ev := range []*protocol.BlockEvent{
+		{Node: "/done", Kind: protocol.UiDrop, Value: ""},
+		{Node: "/done", Kind: protocol.UiDrop, Value: "bad\x00id"},
+		{Node: "/done/#0", Kind: protocol.UiDrop, Value: "card-1"},
+	} {
+		if _, err := tr.Message(ev); err == nil {
+			t.Errorf("event %+v should have been refused", ev)
+		}
+	}
+	// Inputs and dividers cannot take drag or onDrop; oversized/spoofing drag payloads are refused.
+	for _, bad := range []string{
+		`{"kind":"input","drag":"x"}`,
+		`{"kind":"input","onDrop":["move"]}`,
+		`{"kind":"divider","onDrop":["move"]}`,
+		`{"kind":"text","text":"x","drag":"bad\u202eid"}`,
+		`{"kind":"text","text":"x","drag":"` + strings.Repeat("a", maxDrag+1) + `"}`,
+	} {
+		if _, err := Read([]byte(bad)); err == nil {
+			t.Errorf("bad tree %s was accepted", bad)
+		}
+	}
+}

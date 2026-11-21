@@ -1,0 +1,23 @@
+id = "kanban"
+version = "0.1.0"
+publisher = "ironpark"
+api = 1
+entry = "main.js"
+permissions = ["storage", "sessions:read", "sessions:write"]
+
+[[contributes.block]]
+id = "board"
+title = "Kanban"
+slots = ["bottom", "right"]
+
+[[contributes.command]]
+id = "reset"
+title = "Reset Kanban board to demo cards"
+
+[[contributes.command]]
+id = "toggle-view"
+title = "Toggle Kanban board / compact view"
+
+[contributes.settings]
+view_mode = { type = "select", label = "Default layout", description = "Board shows columns side by side; compact shows one column at a time.", options = ["board", "compact"], default = "board" }
+default_agent = { type = "select", label = "Default agent", description = "Agent used when starting a card directly from the board.", options = ["claude", "codex", "opencode", "pi"], default = "claude" }

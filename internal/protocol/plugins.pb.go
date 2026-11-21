@@ -987,7 +987,8 @@ func (x *BlockUpdate) GetGone() bool {
 }
 
 // BlockEvent is the user acting on a node of a block's tree: kind "tap",
-// or "change" or "submit" with the input's, toggle's or select's value.
+// "change" or "submit" with the input's, toggle's or select's value, or
+// "drop" with the dragged node's drag payload as value (revision 40).
 // Answered by PluginDone.
 type BlockEvent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1120,9 +1121,15 @@ type UiNode struct {
 	// (revision 33). Its series are numbers, each series's colour a token;
 	// labels name the points along its axis; text is its caption. A front-end
 	// that does not know the kind draws nothing in its place.
-	Chart         string      `protobuf:"bytes,19,opt,name=chart,proto3" json:"chart,omitempty"`
-	Series        []*UiSeries `protobuf:"bytes,20,rep,name=series,proto3" json:"series,omitempty"`
-	Labels        []string    `protobuf:"bytes,21,rep,name=labels,proto3" json:"labels,omitempty"`
+	Chart  string      `protobuf:"bytes,19,opt,name=chart,proto3" json:"chart,omitempty"`
+	Series []*UiSeries `protobuf:"bytes,20,rep,name=series,proto3" json:"series,omitempty"`
+	Labels []string    `protobuf:"bytes,21,rep,name=labels,proto3" json:"labels,omitempty"`
+	// drag is the payload carried when this node is dragged, non-empty when
+	// draggable; drop says dropping a dragged node of the same block on this
+	// node is answered by a BlockEvent of kind "drop" with that payload as
+	// value (revision 40).
+	Drag          string `protobuf:"bytes,22,opt,name=drag,proto3" json:"drag,omitempty"`
+	Drop          bool   `protobuf:"varint,23,opt,name=drop,proto3" json:"drop,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1302,6 +1309,20 @@ func (x *UiNode) GetLabels() []string {
 		return x.Labels
 	}
 	return nil
+}
+
+func (x *UiNode) GetDrag() string {
+	if x != nil {
+		return x.Drag
+	}
+	return ""
+}
+
+func (x *UiNode) GetDrop() bool {
+	if x != nil {
+		return x.Drop
+	}
+	return false
 }
 
 // UiSeries is a series of a chart node: its name, colour token and values,
@@ -1906,7 +1927,7 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\anode_id\x18\x06 \x01(\tR\x06nodeId\x1a9\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x88\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb0\x04\n" +
 	"\x06UiNode\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
@@ -1929,7 +1950,9 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\bchildren\x18\x12 \x03(\v2\x0f.mako.v2.UiNodeR\bchildren\x12\x14\n" +
 	"\x05chart\x18\x13 \x01(\tR\x05chart\x12)\n" +
 	"\x06series\x18\x14 \x03(\v2\x11.mako.v2.UiSeriesR\x06series\x12\x16\n" +
-	"\x06labels\x18\x15 \x03(\tR\x06labels\"J\n" +
+	"\x06labels\x18\x15 \x03(\tR\x06labels\x12\x12\n" +
+	"\x04drag\x18\x16 \x01(\tR\x04drag\x12\x12\n" +
+	"\x04drop\x18\x17 \x01(\bR\x04drop\"J\n" +
 	"\bUiSeries\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04tone\x18\x02 \x01(\tR\x04tone\x12\x16\n" +

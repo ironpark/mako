@@ -71,17 +71,30 @@ func pluginIcon(name string) *icons.Widget {
 	return icon(name)
 }
 
+// blockDrag is the payload carried while a draggable node of a block's tree
+// is dragged inside the window. Only drop targets of the same block accept it.
+type blockDrag struct {
+	Block string
+	Node  string
+	Value string
+}
+
 // treeView is a block's tree as it is drawn: the block, and what the user
 // set in its fields.
 type treeView struct {
-	m     *model
-	block string
-	form  *blockForm
+	m       *model
+	block   string
+	form    *blockForm
+	onEvent func(block, node, kind, value string, values map[string]string)
 }
 
 // send tells the block's source of the user acting on node id, with the
 // block's fields as they stand.
 func (v *treeView) send(id, kind, value string) {
+	if v.onEvent != nil {
+		v.onEvent(v.block, id, kind, value, v.form.values())
+		return
+	}
 	v.m.blockEvent(v.block, id, kind, value, v.form.values())
 }
 
@@ -101,13 +114,13 @@ func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
 		if inLine {
 			t = t.NoWrap().Ellipsis()
 		}
-		return tappable(t, n, tap)
+		return v.dragDrop(tappable(t, n, tap), n)
 	case "icon":
-		return tappable(pluginIcon(n.GetIcon()).Size(textSize(n.GetSize())+2).Color(toneColor(cmpTone(n.GetTone(), "muted"))), n, tap)
+		return v.dragDrop(tappable(pluginIcon(n.GetIcon()).Size(textSize(n.GetSize())+2).Color(toneColor(cmpTone(n.GetTone(), "muted"))), n, tap), n)
 	case "pill":
-		return tappable(pill(n.GetText(), toneColor(cmpTone(n.GetTone(), "muted"))), n, tap)
+		return v.dragDrop(tappable(pill(n.GetText(), toneColor(cmpTone(n.GetTone(), "muted"))), n, tap), n)
 	case "chip":
-		return tappable(chip(n.GetText()), n, tap)
+		return v.dragDrop(tappable(chip(n.GetText()), n, tap), n)
 	case "button":
 		var b *ui.ButtonWidget
 		if n.GetIcon() != "" {
@@ -122,7 +135,7 @@ func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
 		default:
 			b = b.Outline()
 		}
-		return b.Disabled(n.GetDisabled() || !n.GetTap()).Name(n.GetText())
+		return v.dragDrop(b.Disabled(n.GetDisabled() || !n.GetTap()).Name(n.GetText()), n)
 	case "input":
 		id := n.GetId()
 		f := ui.TextField(v.form.input(id, n.GetValue())).Key(v.block + id).Placeholder(n.GetText()).Name(cmpTone(n.GetText(), T("Input")))
@@ -189,9 +202,10 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 		var w ggui.Widget
 		if n.GetKind() == "list" && c.GetTap() {
 			id := c.GetId()
-			tapless := proto.CloneOf(c) // drawn as the row's content; the row answers the tap
-			tapless.Tap = false
-			w = listRow(v.node(tapless, false), strings.Join(texts(c), " "), func() { v.send(id, protocol.UiTap, "") })
+			inner := proto.CloneOf(c) // drawn as the row's content; the row answers tap/drag/drop
+			inner.Tap, inner.Drag, inner.Drop = false, "", false
+			w = listRow(v.node(inner, false), strings.Join(texts(c), " "), func() { v.send(id, protocol.UiTap, "") })
+			w = v.dragDrop(w, c)
 		} else {
 			w = v.node(c, row)
 		}
@@ -209,16 +223,76 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 		if gap == 0 {
 			gap = 8
 		}
-		return v.tappableBox(widget.Row(kids...).Gap(gap).Align(widget.AlignCenter), n)
+		align := widget.AlignCenter
+		for _, c := range n.GetChildren() {
+			if c.GetKind() == "column" || c.GetKind() == "list" {
+				align = widget.AlignStart
+				break
+			}
+		}
+		return v.dragDrop(v.tappableBox(widget.Row(kids...).Gap(gap).Align(align), n), n)
 	case "stack":
-		return widget.Stack(kids...)
+		return v.dragDrop(widget.Stack(kids...), n)
 	case "list":
-		return widget.Column(kids...).Gap(gap).Stretch()
+		return v.dragDrop(widget.Column(kids...).Gap(gap).Stretch(), n)
 	}
 	if gap == 0 {
 		gap = 6
 	}
-	return v.tappableBox(widget.Column(kids...).Gap(gap).Stretch(), n)
+	return v.dragDrop(v.tappableBox(widget.Column(kids...).Gap(gap).Stretch(), n), n)
+}
+
+func isContainerKind(kind string) bool {
+	return kind == "column" || kind == "row" || kind == "stack" || kind == "list"
+}
+
+// dragDrop wires DragSource and DropZone around a node that sets drag or
+// onDrop, framing draggable containers as cards and highlighting active drop
+// zones while a dragged node of the same block hovers over them.
+func (v *treeView) dragDrop(w ggui.Widget, n *protocol.UiNode) ggui.Widget {
+	drag := n.GetDrag()
+	drop := n.GetDrop()
+	if drag == "" && !drop {
+		return w
+	}
+	id := n.GetId()
+	isCard := drag != "" && isContainerKind(n.GetKind())
+	isLane := drag == "" && isContainerKind(n.GetKind())
+	if drop {
+		inner := w
+		over := ggui.State(false)
+		framed := ggui.View(over, func(hot bool) ggui.Widget {
+			switch {
+			case hot && isCard:
+				return widget.Box(inner).Fill(skin.Surface2).Border(1.5, skin.AccentBright).Radius(8).Pad(8, 10)
+			case isCard:
+				return widget.Box(inner).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(8, 10)
+			case hot && isLane:
+				return widget.Box(inner).Fill(skin.Surface2).Border(1.5, skin.AccentBright).Radius(8).Pad(8)
+			case isLane:
+				return widget.Box(inner).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(8)
+			case hot:
+				return widget.Box(inner).Border(1.5, skin.AccentBright).Radius(6)
+			default:
+				return inner
+			}
+		})
+		w = widget.DropZone(framed, func(d widget.Dropped[blockDrag]) {
+			over.Set(false)
+			if d.Value.Block != v.block || d.Value.Node == id || d.Value.Value == "" {
+				return
+			}
+			v.send(id, protocol.UiDrop, d.Value.Value)
+		}).Accept(func(d blockDrag) bool {
+			return d.Block == v.block && d.Node != id && d.Value != ""
+		}).OnHover(over.Set)
+	} else if isCard {
+		w = widget.Box(w).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(8, 10)
+	}
+	if drag != "" && !n.GetDisabled() {
+		w = widget.DragSource(w, blockDrag{Block: v.block, Node: id, Value: drag})
+	}
+	return w
 }
 
 func (v *treeView) tappableBox(w ggui.Widget, n *protocol.UiNode) ggui.Widget {

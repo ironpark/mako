@@ -111,15 +111,23 @@ class UiNode {
     this.n.onChange = [name, ...args];
     return this;
   }
+  drag(payload) {
+    this.n.drag = String(payload ?? "");
+    return this;
+  }
+  onDrop(name, ...args) {
+    this.n.onDrop = [name, ...args];
+    return this;
+  }
 }
 
-const options = ["key", "tone", "weight", "size", "grow", "gap", "icon", "disabled", "onTap", "onChange", "onSubmit", "placeholder", "labels"];
+const options = ["key", "tone", "weight", "size", "grow", "gap", "icon", "disabled", "onTap", "onChange", "onSubmit", "drag", "onDrop", "placeholder", "labels"];
 
 function node(kind, fields, opts) {
   const n = new UiNode(kind, fields);
   for (const [k, v] of Object.entries(opts || {})) {
     if (!options.includes(k)) throw new Error(`${k} is not an option of a node`);
-    n.n[k] = k === "key" ? String(v) : k === "labels" ? children(v).map(String) : v;
+    n.n[k] = k === "key" || k === "drag" ? String(v ?? "") : k === "labels" ? children(v).map(String) : v;
   }
   return n;
 }

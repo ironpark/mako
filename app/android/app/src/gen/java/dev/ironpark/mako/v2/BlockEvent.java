@@ -8,7 +8,8 @@ package dev.ironpark.mako.v2;
 /**
  * <pre>
  * BlockEvent is the user acting on a node of a block's tree: kind "tap",
- * or "change" or "submit" with the input's, toggle's or select's value.
+ * "change" or "submit" with the input's, toggle's or select's value, or
+ * "drop" with the dragged node's drag payload as value (revision 40).
  * Answered by PluginDone.
  * </pre>
  *
@@ -515,7 +516,8 @@ java.lang.String defaultValue) {
   /**
    * <pre>
    * BlockEvent is the user acting on a node of a block's tree: kind "tap",
-   * or "change" or "submit" with the input's, toggle's or select's value.
+   * "change" or "submit" with the input's, toggle's or select's value, or
+   * "drop" with the dragged node's drag payload as value (revision 40).
    * Answered by PluginDone.
    * </pre>
    *

@@ -36,6 +36,7 @@ public  final class UiNode extends
     chart_ = "";
     series_ = emptyProtobufList();
     labels_ = emptyProtobufList();
+    drag_ = "";
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -1334,6 +1335,114 @@ public  final class UiNode extends
     checkByteStringIsUtf8(value);
     ensureLabelsIsMutable();
     labels_.add(value.toStringUtf8());
+  }
+
+  public static final int DRAG_FIELD_NUMBER = 22;
+  private java.lang.String drag_;
+  /**
+   * <pre>
+   * drag is the payload carried when this node is dragged, non-empty when
+   * draggable; drop says dropping a dragged node of the same block on this
+   * node is answered by a BlockEvent of kind "drop" with that payload as
+   * value (revision 40).
+   * </pre>
+   *
+   * <code>string drag = 22 [json_name = "drag"];</code>
+   * @return The drag.
+   */
+  @java.lang.Override
+  public java.lang.String getDrag() {
+    return drag_;
+  }
+  /**
+   * <pre>
+   * drag is the payload carried when this node is dragged, non-empty when
+   * draggable; drop says dropping a dragged node of the same block on this
+   * node is answered by a BlockEvent of kind "drop" with that payload as
+   * value (revision 40).
+   * </pre>
+   *
+   * <code>string drag = 22 [json_name = "drag"];</code>
+   * @return The bytes for drag.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getDragBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(drag_);
+  }
+  /**
+   * <pre>
+   * drag is the payload carried when this node is dragged, non-empty when
+   * draggable; drop says dropping a dragged node of the same block on this
+   * node is answered by a BlockEvent of kind "drop" with that payload as
+   * value (revision 40).
+   * </pre>
+   *
+   * <code>string drag = 22 [json_name = "drag"];</code>
+   * @param value The drag to set.
+   */
+  private void setDrag(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    drag_ = value;
+  }
+  /**
+   * <pre>
+   * drag is the payload carried when this node is dragged, non-empty when
+   * draggable; drop says dropping a dragged node of the same block on this
+   * node is answered by a BlockEvent of kind "drop" with that payload as
+   * value (revision 40).
+   * </pre>
+   *
+   * <code>string drag = 22 [json_name = "drag"];</code>
+   */
+  private void clearDrag() {
+
+    drag_ = getDefaultInstance().getDrag();
+  }
+  /**
+   * <pre>
+   * drag is the payload carried when this node is dragged, non-empty when
+   * draggable; drop says dropping a dragged node of the same block on this
+   * node is answered by a BlockEvent of kind "drop" with that payload as
+   * value (revision 40).
+   * </pre>
+   *
+   * <code>string drag = 22 [json_name = "drag"];</code>
+   * @param value The bytes for drag to set.
+   */
+  private void setDragBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    drag_ = value.toStringUtf8();
+
+  }
+
+  public static final int DROP_FIELD_NUMBER = 23;
+  private boolean drop_;
+  /**
+   * <code>bool drop = 23 [json_name = "drop"];</code>
+   * @return The drop.
+   */
+  @java.lang.Override
+  public boolean getDrop() {
+    return drop_;
+  }
+  /**
+   * <code>bool drop = 23 [json_name = "drop"];</code>
+   * @param value The drop to set.
+   */
+  private void setDrop(boolean value) {
+    
+    drop_ = value;
+  }
+  /**
+   * <code>bool drop = 23 [json_name = "drop"];</code>
+   */
+  private void clearDrop() {
+
+    drop_ = false;
   }
 
   public static dev.ironpark.mako.v2.UiNode parseFrom(
@@ -2787,6 +2896,118 @@ public  final class UiNode extends
       return this;
     }
 
+    /**
+     * <pre>
+     * drag is the payload carried when this node is dragged, non-empty when
+     * draggable; drop says dropping a dragged node of the same block on this
+     * node is answered by a BlockEvent of kind "drop" with that payload as
+     * value (revision 40).
+     * </pre>
+     *
+     * <code>string drag = 22 [json_name = "drag"];</code>
+     * @return The drag.
+     */
+    @java.lang.Override
+    public java.lang.String getDrag() {
+      return instance.getDrag();
+    }
+    /**
+     * <pre>
+     * drag is the payload carried when this node is dragged, non-empty when
+     * draggable; drop says dropping a dragged node of the same block on this
+     * node is answered by a BlockEvent of kind "drop" with that payload as
+     * value (revision 40).
+     * </pre>
+     *
+     * <code>string drag = 22 [json_name = "drag"];</code>
+     * @return The bytes for drag.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getDragBytes() {
+      return instance.getDragBytes();
+    }
+    /**
+     * <pre>
+     * drag is the payload carried when this node is dragged, non-empty when
+     * draggable; drop says dropping a dragged node of the same block on this
+     * node is answered by a BlockEvent of kind "drop" with that payload as
+     * value (revision 40).
+     * </pre>
+     *
+     * <code>string drag = 22 [json_name = "drag"];</code>
+     * @param value The drag to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDrag(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setDrag(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * drag is the payload carried when this node is dragged, non-empty when
+     * draggable; drop says dropping a dragged node of the same block on this
+     * node is answered by a BlockEvent of kind "drop" with that payload as
+     * value (revision 40).
+     * </pre>
+     *
+     * <code>string drag = 22 [json_name = "drag"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDrag() {
+      copyOnWrite();
+      instance.clearDrag();
+      return this;
+    }
+    /**
+     * <pre>
+     * drag is the payload carried when this node is dragged, non-empty when
+     * draggable; drop says dropping a dragged node of the same block on this
+     * node is answered by a BlockEvent of kind "drop" with that payload as
+     * value (revision 40).
+     * </pre>
+     *
+     * <code>string drag = 22 [json_name = "drag"];</code>
+     * @param value The bytes for drag to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDragBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setDragBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>bool drop = 23 [json_name = "drop"];</code>
+     * @return The drop.
+     */
+    @java.lang.Override
+    public boolean getDrop() {
+      return instance.getDrop();
+    }
+    /**
+     * <code>bool drop = 23 [json_name = "drop"];</code>
+     * @param value The drop to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDrop(boolean value) {
+      copyOnWrite();
+      instance.setDrop(value);
+      return this;
+    }
+    /**
+     * <code>bool drop = 23 [json_name = "drop"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDrop() {
+      copyOnWrite();
+      instance.clearDrop();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.UiNode)
   }
   @java.lang.Override
@@ -2826,12 +3047,14 @@ public  final class UiNode extends
             "series_",
             dev.ironpark.mako.v2.UiSeries.class,
             "labels_",
+            "drag_",
+            "drop_",
           };
           java.lang.String info =
-              "\u0000\u0015\u0000\u0000\u0001\u0015\u0015\u0000\u0004\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0017\u0000\u0000\u0001\u0017\u0017\u0000\u0004\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007\n\u021a" +
               "\u000b\u0000\f\u0208\r\u0007\u000e\u0000\u000f\u0000\u0010\u0007\u0011\u0007\u0012" +
-              "\u001b\u0013\u0208\u0014\u001b\u0015\u021a";
+              "\u001b\u0013\u0208\u0014\u001b\u0015\u021a\u0016\u0208\u0017\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -102,3 +102,96 @@ func TestExamplePlugin(t *testing.T) {
 		return hasText(n, "showing the runs last read") && hasText(n, "lint")
 	})
 }
+
+// TestKanbanExamplePlugin runs examples/plugins/kanban: starter cards load,
+// a new card is submitted, dragging a card across columns and onto another
+// card moves and reorders it via UiDrop, and the compact view toggle works.
+func TestKanbanExamplePlugin(t *testing.T) {
+	r := newRig(t, testLimits, nil,
+		&protocol.SessionInfo{Id: "s1", Name: "builder", Agent: "claude", State: protocol.StateRunning, Status: protocol.AgentIdle})
+	files := map[string]string{}
+	for _, name := range []string{ManifestName, "main.js"} {
+		b, err := os.ReadFile(filepath.Join("../../examples/plugins/kanban", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[name] = string(b)
+	}
+	r.write("kanban", files)
+	r.state("kanban", protocol.PluginWaiting)
+	r.grant("kanban")
+
+	w := r.watch("plugin:kanban/board")
+	tree := w.until("starter cards", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "Draft API spec") && hasText(n, "Build Kanban prototype")
+	})
+	if card := find(tree, "Draft API spec"); card == nil {
+		t.Fatal("missing starter card")
+	}
+	// Verify drag payload and drop target flags are present on the tree.
+	var hasDrag, hasDrop bool
+	var walk func(*protocol.UiNode)
+	walk = func(n *protocol.UiNode) {
+		if n.GetDrag() == "c1" {
+			hasDrag = true
+		}
+		if n.GetDrop() && strings.HasSuffix(n.GetId(), "/col-done") {
+			hasDrop = true
+		}
+		for _, c := range n.GetChildren() {
+			walk(c)
+		}
+	}
+	walk(tree)
+	if !hasDrag || !hasDrop {
+		t.Fatalf("expected draggable card c1 (%v) and drop target col-done (%v)", hasDrag, hasDrop)
+	}
+
+	// Add a new card via input submit.
+	if _, err := r.event("plugin:kanban/board", "/addbar/draft", protocol.UiSubmit, "Ship drag and drop"); err != nil {
+		t.Fatal(err)
+	}
+	w.until("added card", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "Ship drag and drop")
+	})
+
+	// Drop card c1 onto the Done column: done count rises from 1/6 to 2/6.
+	if _, err := r.event("plugin:kanban/board", "/columns/col-done", protocol.UiDrop, "c1"); err != nil {
+		t.Fatal(err)
+	}
+	w.until("card moved to Done", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "Kanban · 2/6 done")
+	})
+
+	// Drop card c2 onto card c3 inside In Progress to reorder before it.
+	if _, err := r.event("plugin:kanban/board", "/columns/col-doing/c3", protocol.UiDrop, "c2"); err != nil {
+		t.Fatal(err)
+	}
+	tree = w.until("card moved before c3", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		var order []string
+		var findCol func(*protocol.UiNode)
+		findCol = func(node *protocol.UiNode) {
+			if strings.HasSuffix(node.GetId(), "/col-doing") {
+				for _, ch := range node.GetChildren() {
+					if ch.GetDrag() != "" {
+						order = append(order, ch.GetDrag())
+					}
+				}
+			}
+			for _, ch := range node.GetChildren() {
+				findCol(ch)
+			}
+		}
+		findCol(n)
+		return len(order) == 2 && order[0] == "c2" && order[1] == "c3"
+	})
+	_ = tree
+
+	// Switch to compact view via command.
+	if _, err := r.act(&protocol.PluginAction{PluginId: "kanban", Op: protocol.PluginRun, Command: "toggle-view"}); err != nil {
+		t.Fatal(err)
+	}
+	w.until("compact view", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "Board") && hasText(n, "Todo (1)")
+	})
+}

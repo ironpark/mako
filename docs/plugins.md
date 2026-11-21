@@ -167,7 +167,14 @@ schema: point your editor at it.
 
 Options (`opts`, or the node's methods of the same names): `key`, `tone`,
 `weight`, `size`, `grow`, `gap`, `icon`, `disabled`, `onTap`, `onChange`,
-`onSubmit`, `placeholder`, and a chart's `labels`.
+`onSubmit`, `drag`, `onDrop`, `placeholder`, and a chart's `labels`.
+
+**Drag and drop** (revision 40): set `drag` (a non-empty payload string, up to
+256 bytes) on a container or display node to make it draggable, and
+`onDrop: [name, ...args]` on any target node of the same block. When a dragged
+node is dropped on the target, the block's `on[name]` handler is called with
+`args` followed by the dragged node's `drag` payload. Draggable containers draw
+as cards, and drop zones highlight while a dragged node hovers over them.
 
 The chart is new in revision 33 of the protocol: a window or phone that
 does not know a kind draws nothing in its place (the Android app, from

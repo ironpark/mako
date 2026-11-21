@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -55,6 +56,11 @@ func (t *Tree) Message(ev *protocol.BlockEvent) (Message, error) {
 		if raw == nil {
 			raw = a.change
 		}
+	case protocol.UiDrop:
+		if ev.GetValue() == "" || len(ev.GetValue()) > maxDrag || strings.ContainsFunc(ev.GetValue(), Spoofing) {
+			return Message{}, fmt.Errorf("invalid drop payload for %q of %s", ev.GetNode(), ev.GetBlock())
+		}
+		raw = a.drop
 	default:
 		return Message{}, fmt.Errorf("%q is not a kind of event", ev.GetKind())
 	}

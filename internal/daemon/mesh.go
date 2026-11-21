@@ -635,7 +635,10 @@ func (d *Daemon) handleWatch(ctx context.Context, stream *transport.Stream, env 
 	defer stop()
 	// The first says the daemon watches, and that everything is new to
 	// the front-end.
-	if err := stream.Send(protocol.TypeChanged, env.GetId(), &protocol.Changed{Nodes: true, Sessions: true, Access: true}); err != nil {
+	if err := stream.Send(protocol.TypeChanged, env.GetId(), &protocol.Changed{
+		Nodes: true, Sessions: true, Access: true,
+		Workspace: true, Devices: true, Plugins: true, AgentBlocks: true,
+	}); err != nil {
 		return err
 	}
 	gone := hungUp(stream)

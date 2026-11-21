@@ -194,28 +194,45 @@ private fun tappable(m: Modifier, tap: (() -> Unit)?): Modifier = if (tap == nul
 @Composable
 private fun UiContainer(n: UiNode, form: BlockForm, events: BlockEvents, modifier: Modifier) {
     val box = tappable(modifier, if (n.tap) ({ events.send(n.id, "tap", "") }) else null)
-    when (n.kind) {
-        "row" -> Row(
-            box.fillMaxWidth().then(if (n.tap) Modifier.padding(vertical = 6.dp) else Modifier),
-            horizontalArrangement = Arrangement.spacedBy((if (n.gap > 0) n.gap else 8.0).dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) { n.childrenList.forEach { c -> key(c.id) { RowChild(c, form, events) } } }
-        "stack" -> Box(box) { n.childrenList.forEach { c -> key(c.id) { UiTree(c, form, events) } } }
-        else -> Column(
-            box.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy((if (n.gap > 0) n.gap else if (n.kind == "list") 0.0 else 6.0).dp),
-        ) {
-            n.childrenList.forEach { c ->
-                key(c.id) {
-                    if (n.kind == "list" && c.tap) {
-                        // The list's row answers the tap, as the desktop's rows do.
-                        Box(Modifier.fillMaxWidth().clickable { events.send(c.id, "tap", "") }.padding(vertical = 6.dp)) {
-                            UiTree(c.toBuilder().setTap(false).build(), form, events)
-                        }
-                    } else UiTree(c, form, events)
+    val content: @Composable (Modifier) -> Unit = { m ->
+        when (n.kind) {
+            "row" -> {
+                val hasColumn = n.childrenList.any { it.kind == "column" || it.kind == "list" }
+                Row(
+                    m.fillMaxWidth().then(if (n.tap) Modifier.padding(vertical = 6.dp) else Modifier),
+                    horizontalArrangement = Arrangement.spacedBy((if (n.gap > 0) n.gap else 8.0).dp),
+                    verticalAlignment = if (hasColumn) Alignment.Top else Alignment.CenterVertically,
+                ) { n.childrenList.forEach { c -> key(c.id) { RowChild(c, form, events) } } }
+            }
+            "stack" -> Box(m) { n.childrenList.forEach { c -> key(c.id) { UiTree(c, form, events) } } }
+            else -> Column(
+                m.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy((if (n.gap > 0) n.gap else if (n.kind == "list") 0.0 else 6.0).dp),
+            ) {
+                n.childrenList.forEach { c ->
+                    key(c.id) {
+                        if (n.kind == "list" && c.tap) {
+                            // The list's row answers the tap, as the desktop's rows do.
+                            Box(Modifier.fillMaxWidth().clickable { events.send(c.id, "tap", "") }.padding(vertical = 6.dp)) {
+                                UiTree(c.toBuilder().setTap(false).build(), form, events)
+                            }
+                        } else UiTree(c, form, events)
+                    }
                 }
             }
         }
+    }
+    if (n.drag.isNotEmpty() || n.drop) {
+        Surface(
+            modifier = box,
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            border = MakoColors.cardBorderStroke,
+        ) {
+            content(Modifier.padding(horizontal = 10.dp, vertical = 8.dp))
+        }
+    } else {
+        content(box)
     }
 }
 
