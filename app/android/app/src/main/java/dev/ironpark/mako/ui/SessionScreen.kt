@@ -106,6 +106,8 @@ internal fun SessionScreen(
     pinned: Boolean = false,
     terminalFirst: Boolean = false,
     onView: (terminal: Boolean) -> Unit = {},
+    family: List<SessionInfo> = emptyList(),
+    onSelectMember: (String) -> Unit = {},
     footer: @Composable (SessionMenu) -> Unit = {},
 ) {
     val sessions by mesh.sessions.collectAsState()
@@ -272,6 +274,21 @@ internal fun SessionScreen(
                         })
                     },
                 )
+                AnimatedVisibility(
+                    visible = family.size >= 2,
+                    enter = MakoMotion.cardEnter,
+                    exit = MakoMotion.cardExit,
+                ) {
+                    AgentFamilyLane(
+                        family = family,
+                        activeId = id,
+                        nodes = nodes,
+                        onSelect = onSelectMember,
+                        onOpenAgents = if (session != null && session.project.isNotEmpty() && mesh.readsProjectAgents(node)) {
+                            { onAgents(session.project) }
+                        } else null,
+                    )
+                }
                 val showDialog = session != null && !session.hasApproval() && session.hasDialog()
                 AnimatedVisibility(
                     visible = showDialog,
@@ -350,6 +367,9 @@ internal fun SessionScreen(
                             latestMessages = msgs
                             pendingMessages = settlePending(pendingMessages, msgs, System.currentTimeMillis())
                         },
+                        extraWorkingSubagents = if (family.firstOrNull()?.id == session.id) {
+                            family.drop(1).count { it.working() }
+                        } else 0,
                     )
                     else if (pageTab == 1) TerminalTab(term, fits, Modifier.fillMaxSize())
                 }

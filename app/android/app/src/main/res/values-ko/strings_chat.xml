@@ -24,4 +24,10 @@
     <string name="task_killed">강제 종료</string>
     <string name="task_stopped">중지됨</string>
     <string name="task_exit_code">종료 %1$d</string>
+
+    <plurals name="subagents_spawned_count">
+        <item quantity="other">서브에이전트 %1$d개</item>
+    </plurals>
+    <string name="subagent_of">↳ %1$s</string>
+    <string name="open_project_agents">프로젝트 에이전트</string>
 </resources>

@@ -8,6 +8,9 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.TweenSpec
@@ -105,55 +108,56 @@ object MakoMotion {
     fun <T> fastTween(durationMs: Int = FastMs): TweenSpec<T> =
         tween(durationMillis = durationMs, easing = EmphasizedEasing)
 
-    /** Forward drill-down enter: subtle horizontal slide + fade + gentle scale up. */
+    /** Forward drill-down enter: crisp horizontal slide + fade without scale distortion. */
     fun drillEnter(): EnterTransition =
-        slideInHorizontally(tween(EmphasizedMs, easing = EmphasizedEasing)) { (it * 0.18f).toInt() } +
-            fadeIn(tween(StandardMs, easing = EmphasizedEasing)) +
-            scaleIn(tween(EmphasizedMs, easing = EmphasizedEasing), initialScale = 0.985f)
+        slideInHorizontally(tween(StandardMs, easing = FastOutSlowInEasing)) { (it * 0.22f).toInt() } +
+            fadeIn(tween(180, easing = LinearOutSlowInEasing))
 
     /** Forward drill-down exit for the underlying screen: subtle parallax recession. */
     fun drillExit(): ExitTransition =
-        slideOutHorizontally(tween(EmphasizedMs, easing = EmphasizedEasing)) { -(it * 0.08f).toInt() } +
-            fadeOut(tween(FastMs, easing = EmphasizedAccelerate)) +
-            scaleOut(tween(EmphasizedMs, easing = EmphasizedEasing), targetScale = 0.975f)
+        slideOutHorizontally(tween(StandardMs, easing = FastOutSlowInEasing)) { -(it * 0.08f).toInt() } +
+            fadeOut(tween(140, easing = FastOutLinearInEasing))
 
     /** Back navigation enter for the returning underlying screen. */
     fun drillPopEnter(): EnterTransition =
-        slideInHorizontally(tween(EmphasizedMs, easing = EmphasizedEasing)) { -(it * 0.08f).toInt() } +
-            fadeIn(tween(StandardMs, easing = EmphasizedEasing)) +
-            scaleIn(tween(EmphasizedMs, easing = EmphasizedEasing), initialScale = 0.975f)
+        slideInHorizontally(tween(220, easing = FastOutSlowInEasing)) { -(it * 0.08f).toInt() } +
+            fadeIn(tween(180, easing = LinearOutSlowInEasing))
 
-    /** Back navigation exit for the popped drill-down screen. */
+    /** Back navigation exit for the popped drill-down screen: exits swiftly without shrinking or lingering. */
     fun drillPopExit(): ExitTransition =
-        slideOutHorizontally(tween(EmphasizedMs, easing = EmphasizedEasing)) { (it * 0.18f).toInt() } +
-            fadeOut(tween(FastMs, easing = EmphasizedAccelerate)) +
-            scaleOut(tween(EmphasizedMs, easing = EmphasizedEasing), targetScale = 0.985f)
+        slideOutHorizontally(tween(200, easing = FastOutLinearInEasing)) { (it * 0.24f).toInt() } +
+            fadeOut(tween(160, easing = FastOutLinearInEasing))
 
     /** Modal / creation screen enter (e.g. New Session, Scan): subtle upward slide + fade. */
     fun modalEnter(): EnterTransition =
-        slideInVertically(tween(EmphasizedMs, easing = EmphasizedEasing)) { (it * 0.12f).toInt() } +
-            fadeIn(tween(StandardMs, easing = EmphasizedEasing))
+        slideInVertically(tween(StandardMs, easing = FastOutSlowInEasing)) { (it * 0.14f).toInt() } +
+            fadeIn(tween(180, easing = LinearOutSlowInEasing))
 
     /** Modal / creation screen exit: crisp downward slide + fade. */
     fun modalPopExit(): ExitTransition =
-        slideOutVertically(tween(StandardMs, easing = EmphasizedAccelerate)) { (it * 0.12f).toInt() } +
-            fadeOut(tween(FastMs, easing = EmphasizedAccelerate))
+        slideOutVertically(tween(200, easing = FastOutLinearInEasing)) { (it * 0.14f).toInt() } +
+            fadeOut(tween(160, easing = FastOutLinearInEasing))
 
     /** Underlying screen recession when a modal route opens over it. */
     fun modalBackgroundExit(): ExitTransition =
-        fadeOut(tween(StandardMs, easing = EmphasizedEasing)) +
-            scaleOut(tween(EmphasizedMs, easing = EmphasizedEasing), targetScale = 0.98f)
+        fadeOut(tween(160, easing = FastOutLinearInEasing))
 
     /** Underlying screen return when a modal route closes. */
     fun modalBackgroundPopEnter(): EnterTransition =
-        fadeIn(tween(StandardMs, easing = EmphasizedEasing)) +
-            scaleIn(tween(EmphasizedMs, easing = EmphasizedEasing), initialScale = 0.98f)
+        fadeIn(tween(200, easing = LinearOutSlowInEasing))
 
-    /** Clean cross-fade for routes linked by shared element transitions (Home <-> Project). */
-    fun sharedEnter(): EnterTransition = fadeIn(tween(StandardMs, easing = EmphasizedEasing))
+    /** Clean fade-in for routes linked by shared element transitions (Home <-> Project). */
+    fun sharedEnter(): EnterTransition =
+        fadeIn(tween(200, easing = LinearOutSlowInEasing))
 
-    /** Clean cross-fade exit for routes linked by shared element transitions. */
-    fun sharedExit(): ExitTransition = fadeOut(tween(FastMs, easing = EmphasizedEasing))
+    /** Clean fade-out for routes linked by shared element transitions. */
+    fun sharedExit(): ExitTransition =
+        fadeOut(tween(140, easing = FastOutLinearInEasing))
+
+    /** Crisp back exit from a shared-element route (Project -> Home) without shrink or spring tail. */
+    fun sharedPopExit(): ExitTransition =
+        slideOutHorizontally(tween(200, easing = FastOutLinearInEasing)) { (it * 0.16f).toInt() } +
+            fadeOut(tween(140, easing = FastOutLinearInEasing))
 
     /** Smooth vertical reveal for banners, approval cards, compacting notices, and task panels. */
     val cardEnter: EnterTransition =
@@ -177,8 +181,11 @@ object MakoMotion {
     val scaleFadeExit: ExitTransition =
         scaleOut(snappySpring(), targetScale = 0.92f) + fadeOut(tween(FastMs, easing = EmphasizedAccelerate))
 
+    /** Finite-duration shared bounds transform so exiting screens never linger on a spring tail. */
     @OptIn(ExperimentalSharedTransitionApi::class)
-    internal val SharedBoundsTransform = BoundsTransform { _: Rect, _: Rect -> gentleSpring() }
+    internal val SharedBoundsTransform = BoundsTransform { _: Rect, _: Rect ->
+        tween(durationMillis = 220, easing = FastOutSlowInEasing)
+    }
 }
 
 /** Whether a session's status is live and should show a gentle breathing pulse. */

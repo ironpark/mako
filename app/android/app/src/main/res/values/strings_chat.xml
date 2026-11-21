@@ -26,4 +26,11 @@
     <string name="task_killed">Killed</string>
     <string name="task_stopped">Stopped</string>
     <string name="task_exit_code">exit %1$d</string>
+
+    <plurals name="subagents_spawned_count">
+        <item quantity="one">%1$d subagent</item>
+        <item quantity="other">%1$d subagents</item>
+    </plurals>
+    <string name="subagent_of">↳ %1$s</string>
+    <string name="open_project_agents">Project agents</string>
 </resources>

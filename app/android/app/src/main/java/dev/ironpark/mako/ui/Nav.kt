@@ -142,7 +142,7 @@ fun MakoNav(mesh: Mesh, target: MutableStateFlow<SessionRef?>, pairing: MutableS
                     enter = { if (initialState.destination.route == "home") MakoMotion.sharedEnter() else MakoMotion.drillEnter() },
                     exit = drillExit,
                     popEnter = drillPopEnter,
-                    popExit = { if (targetState.destination.route == "home") MakoMotion.sharedExit() else MakoMotion.drillPopExit() },
+                    popExit = { if (targetState.destination.route == "home") MakoMotion.sharedPopExit() else MakoMotion.drillPopExit() },
                 ) { entry ->
                     val key = keyOfRoute(entry.arguments?.getString("key").orEmpty())
                     val tab = entry.arguments?.getString("tab").orEmpty().ifEmpty { null }

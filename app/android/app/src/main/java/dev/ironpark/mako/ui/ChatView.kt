@@ -135,6 +135,7 @@ fun ChatView(
     onFile: (ChatLink.File) -> Unit = {},
     pending: List<PendingMessage> = emptyList(),
     onMessages: (List<ChatMessage>) -> Unit = {},
+    extraWorkingSubagents: Int = 0,
 ) {
     var selectedAgent by rememberSaveable(session.id, agent) { mutableStateOf("") }
     var agentsExpanded by rememberSaveable(session.id, agent) { mutableStateOf(false) }
@@ -504,7 +505,7 @@ fun ChatView(
                         if (agent.isEmpty() && session.working() && streamBlocks.isEmpty() && !showThinking) {
                             item(key = "working") {
                                 Working(
-                                    activeAgents.size,
+                                    activeAgents.size + extraWorkingSubagents,
                                     Modifier.animateItem(
                                         fadeInSpec = MakoMotion.fastTween(),
                                         placementSpec = MakoMotion.SnappyIntOffsetSpring,

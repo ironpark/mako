@@ -160,6 +160,8 @@ internal fun ProjectScreen(
     LaunchedEffect(project?.key) { if (project != null && project.key != projectKey) projectKey = project.key }
     val pinned = remember(view) { view.pinnedSessions.toSet() }
     val tabs = remember(project, pinned) { tabOrder(project?.sessions.orEmpty(), pinned) }
+    val familyIndex = remember(sessions) { SessionFamilyIndex(sessions) }
+    val topTabs = remember(tabs, familyIndex) { familyIndex.topLevelTabs(tabs) }
     val context = LocalContext.current
     val last = remember(context) {
         val prefs = context.getSharedPreferences("home", android.content.Context.MODE_PRIVATE)
@@ -191,12 +193,18 @@ internal fun ProjectScreen(
             onShown(project.key, current)
         }
     }
+    val activeHostId = remember(tabs, current, familyIndex) {
+        familyIndex.hostIn(tabs.map { it.id }, current).ifEmpty { current }
+    }
+    val activeFamily = remember(activeHostId, familyIndex) {
+        if (activeHostId.isEmpty()) emptyList() else familyIndex.family(activeHostId)
+    }
     val haptic = LocalHapticFeedback.current
     fun go(step: Int) {
-        val next = neighbourTab(tabs, current, step) ?: return
+        val next = neighbourTab(topTabs, activeHostId, step) ?: return
         haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
         enterFrom = step
-        current = next
+        current = familyIndex.waitingMember(next)?.id ?: next
     }
     val shown = tabs.firstOrNull { it.id == current }
     val panelsNode = remember(view, nodes) { mesh.panelsNode() }
@@ -224,9 +232,14 @@ internal fun ProjectScreen(
                 terminalFirst = shown.id in onTerminal,
                 onView = { t -> onTerminal = if (t) (onTerminal - shown.id + shown.id).takeLast(32) else onTerminal - shown.id },
                 onPin = if (workspace.editable && view.held) ({ pin -> act { mesh.pinSession(shown, pin) } }) else null,
+                family = activeFamily,
+                onSelectMember = { memberId ->
+                    enterFrom = 0
+                    current = memberId
+                },
                 footer = { menu ->
                     TabBar(
-                        tabs, shown, nodes, elsewhere,
+                        topTabs, tabs, shown, activeHostId, activeFamily.drop(1), nodes, elsewhere,
                         onBack = onBack, onOverview = { overview = true },
                         onNew = { project?.let(onNew) }, onStep = ::go, menu = menu,
                     )
@@ -247,7 +260,7 @@ internal fun ProjectScreen(
             exit = fadeOut(spring(stiffness = 600f)) + scaleOut(spring(stiffness = 600f), targetScale = 1.06f),
         ) {
             TabOverview(
-                mesh, project, tabs, current, nodes, panels, panelsNode, pinned, workspace.editable && view.held,
+                mesh, project, topTabs, tabs, familyIndex, current, activeHostId, nodes, panels, panelsNode, pinned, workspace.editable && view.held,
                 onClose = { if (shown != null) overview = false else onBack() },
                 onPick = { id ->
                     enterFrom = 0
@@ -269,7 +282,8 @@ internal fun ProjectScreen(
  */
 @Composable
 private fun TabBar(
-    tabs: List<SessionInfo>, shown: SessionInfo, nodes: List<Node>, elsewhere: Int,
+    topTabs: List<SessionInfo>, allTabs: List<SessionInfo>, shown: SessionInfo, activeHostId: String,
+    activeKids: List<SessionInfo>, nodes: List<Node>, elsewhere: Int,
     onBack: () -> Unit, onOverview: () -> Unit, onNew: () -> Unit, onStep: (Int) -> Unit, menu: SessionMenu,
 ) {
     var open by remember { mutableStateOf(false) }
@@ -289,7 +303,12 @@ private fun TabBar(
                     }
                 }
                 // As wide as the bar allows on a phone, not wider than reads on a tablet or turned.
-                Box(Modifier.weight(1f)) { TabPill(tabs, shown, nodes, Modifier.widthIn(max = 520.dp).fillMaxWidth(), onOverview, onStep) }
+                Box(Modifier.weight(1f)) {
+                    TabPill(
+                        topTabs, allTabs, shown, activeHostId, activeKids, nodes,
+                        Modifier.widthIn(max = 520.dp).fillMaxWidth(), onOverview, onStep,
+                    )
+                }
                 IconButton(onClick = onNew) { Icon(Icons.Filled.Add, stringResource(R.string.new_tab)) }
                 Box {
                     IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.session_actions)) }
@@ -302,21 +321,29 @@ private fun TabBar(
 
 /**
  * TabPill is the tab shown, as a browser's address bar names its page:
- * how many tabs there are, marked when another waits for you, then the
- * session's agent, status and name. Tapped it shows every tab; swiped, it
- * follows the finger and goes to the tab on that side.
+ * how many top-level tabs there are, marked when another waits for you, then
+ * the session's agent, status, name, and compact Mako subagent status dots.
+ * Tapped it shows every tab; swiped, it follows the finger and goes to the
+ * top-level tab on that side.
  */
 @Composable
 private fun TabPill(
-    tabs: List<SessionInfo>, shown: SessionInfo, nodes: List<Node>, modifier: Modifier,
+    topTabs: List<SessionInfo>, allTabs: List<SessionInfo>, shown: SessionInfo, activeHostId: String,
+    activeKids: List<SessionInfo>, nodes: List<Node>, modifier: Modifier,
     onOverview: () -> Unit, onStep: (Int) -> Unit,
 ) {
     val drag = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val threshold = with(LocalDensity.current) { 56.dp.toPx() }
-    val othersWait = tabs.any { it.id != shown.id && it.needsYou() }
-    val at = tabs.indexOfFirst { it.id == shown.id }
-    val label = stringResource(R.string.tabs_of, at + 1, tabs.size, shown.label())
+    val activeFamilyIds = remember(activeHostId, activeKids) {
+        buildSet {
+            add(activeHostId)
+            for (k in activeKids) add(k.id)
+        }
+    }
+    val othersWait = allTabs.any { it.id !in activeFamilyIds && it.needsYou() }
+    val at = topTabs.indexOfFirst { it.id == activeHostId }.coerceAtLeast(0)
+    val label = stringResource(R.string.tabs_of, at + 1, topTabs.size.coerceAtLeast(1), shown.label())
     val previous = stringResource(R.string.previous_tab)
     val next = stringResource(R.string.next_tab)
     Surface(
@@ -328,10 +355,10 @@ private fun TabPill(
                 contentDescription = label
                 customActions = listOfNotNull(
                     CustomAccessibilityAction(previous) { onStep(-1); true }.takeIf { at > 0 },
-                    CustomAccessibilityAction(next) { onStep(1); true }.takeIf { at < tabs.size - 1 },
+                    CustomAccessibilityAction(next) { onStep(1); true }.takeIf { at < topTabs.size - 1 },
                 )
             }
-            .pointerInput(tabs.size, at) {
+            .pointerInput(topTabs.size, at) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
                         val d = drag.value
@@ -342,13 +369,13 @@ private fun TabPill(
                 ) { change, amount ->
                     change.consume()
                     // Resists towards a side with no tab.
-                    val blocked = (amount < 0 && at >= tabs.size - 1) || (amount > 0 && at <= 0)
+                    val blocked = (amount < 0 && at >= topTabs.size - 1) || (amount > 0 && at <= 0)
                     scope.launch { drag.snapTo(drag.value + amount * if (blocked) 0.25f else 0.6f) }
                 }
             },
     ) {
-        Row(Modifier.padding(start = 8.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            TabCount(tabs.size, othersWait)
+        Row(Modifier.padding(start = 8.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            TabCount(topTabs.size.coerceAtLeast(1), othersWait)
             Row(
                 Modifier.weight(1f).padding(start = 10.dp).offset { IntOffset(drag.value.roundToInt(), 0) }
                     .graphicsLayer { alpha = 1f - (abs(drag.value) / (threshold * 3)).coerceIn(0f, 0.6f) },
@@ -357,7 +384,11 @@ private fun TabPill(
                 AgentAvatar(shown.agent, agentColor(nodes, shown.nodeId, shown.agent), shown.statusColor().takeIf { !shown.ended() }, size = 22.dp)
                 Spacer(Modifier.width(8.dp))
                 Text(shown.label(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (activeKids.isNotEmpty()) {
+                    Spacer(Modifier.width(6.dp))
+                    FamilyDotsPill(activeKids)
+                }
             }
         }
     }
@@ -386,14 +417,15 @@ private fun TabCount(n: Int, waits: Boolean) {
  */
 @Composable
 private fun TabOverview(
-    mesh: Mesh, project: ProjectItem?, tabs: List<SessionInfo>, current: String, nodes: List<Node>,
+    mesh: Mesh, project: ProjectItem?, topTabs: List<SessionInfo>, allTabs: List<SessionInfo>,
+    familyIndex: SessionFamilyIndex, current: String, activeHostId: String, nodes: List<Node>,
     panels: List<Panel>, panelsNode: String?, pinned: Set<String>, canPin: Boolean,
     onClose: () -> Unit, onPick: (String) -> Unit, onNew: () -> Unit, onPanel: (Panel) -> Unit,
 ) {
-    val (ended, live) = tabs.partition { it.state == "exited" }
+    val (ended, live) = topTabs.partition { it.state == "exited" }
     var showEnded by rememberSaveable { mutableStateOf(false) }
     val sum = remember(project) { project?.summary() }
-    val grid = rememberLazyGridState(initialFirstVisibleItemIndex = maxOf(0, live.indexOfFirst { it.id == current }))
+    val grid = rememberLazyGridState(initialFirstVisibleItemIndex = maxOf(0, live.indexOfFirst { it.id == activeHostId }))
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxSize()) {
             Row(
@@ -419,7 +451,7 @@ private fun TabOverview(
                 horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                if (tabs.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }, key = "empty") {
+                if (topTabs.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }, key = "empty") {
                     EmptyState(
                         stringResource(R.string.no_tabs, project?.label.orEmpty()), stringResource(R.string.no_tabs_body),
                         action = stringResource(R.string.new_session_here), onAction = onNew, icon = Icons.Outlined.Inbox,
@@ -427,14 +459,19 @@ private fun TabOverview(
                     )
                 }
                 items(live, key = { it.id }) { s ->
-                    TabCard(mesh, s, project, nodes, s.id == current, s.id in pinned, canPin, Modifier.animateItem()) { onPick(s.id) }
+                    val kids = remember(familyIndex, s.id) { familyIndex.spawned(s.id) }
+                    val target = remember(familyIndex, s.id, current) {
+                        familyIndex.waitingMember(s.id)?.id ?: if (s.id == activeHostId) current else s.id
+                    }
+                    TabCard(mesh, s, kids, project, nodes, s.id == activeHostId, s.id in pinned, canPin, Modifier.animateItem()) { onPick(target) }
                 }
                 if (ended.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }, key = "ended") {
                         FoldHeading(stringResource(R.string.group_ended), ended.size, showEnded, Modifier.offset(x = (-8).dp)) { showEnded = !showEnded }
                     }
                     if (showEnded) items(ended, key = { it.id }) { s ->
-                        TabCard(mesh, s, project, nodes, s.id == current, s.id in pinned, canPin, Modifier.animateItem()) { onPick(s.id) }
+                        val kids = remember(familyIndex, s.id) { familyIndex.spawned(s.id) }
+                        TabCard(mesh, s, kids, project, nodes, s.id == activeHostId, s.id in pinned, canPin, Modifier.animateItem()) { onPick(s.id) }
                     }
                 }
                 if (panels.isNotEmpty() && panelsNode != null) {
@@ -447,7 +484,7 @@ private fun TabOverview(
                                 panels.forEachIndexed { i, p ->
                                     if (i > 0) HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant)
                                     // An agent's panel is named by its session rather than its ID.
-                                    val owner = tabs.firstOrNull { p.block.startsWith("agent:" + it.id + "/") }
+                                    val owner = allTabs.firstOrNull { p.block.startsWith("agent:" + it.id + "/") }
                                     PanelRow(if (owner != null) p.copy(detail = dotted(owner.agent, owner.label())) else p, mesh.nodeName(panelsNode)) { onPanel(p) }
                                 }
                             }
@@ -463,12 +500,13 @@ private fun TabOverview(
 /**
  * TabCard is a tab in the overview: its agent and status, its name, and
  * what it shows now, the question it waits on or the last it said; the
- * one shown outlined.
+ * one shown outlined. When the session has Mako-spawned subagents, the card
+ * displays their compact live status dots and highlights if any child waits.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TabCard(
-    mesh: Mesh, s: SessionInfo, project: ProjectItem?, nodes: List<Node>, current: Boolean, pinned: Boolean, canPin: Boolean,
+    mesh: Mesh, s: SessionInfo, kids: List<SessionInfo>, project: ProjectItem?, nodes: List<Node>, current: Boolean, pinned: Boolean, canPin: Boolean,
     modifier: Modifier = Modifier, onClick: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
@@ -476,19 +514,21 @@ private fun TabCard(
     var stopping by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     val act = actor()
+    val waitingKid = remember(kids) { kids.filter { it.needsYou() }.maxByOrNull { it.waitingSince() } }
+    val displayFocus = if (s.needsYou()) s else (waitingKid ?: s)
     // What was typed and not sent shows in the card's stead, as messengers have it.
     val draft = rememberDrafts()[s.nodeId, s.id].trim().replace(Regex("\\s+"), " ")
-    val preview = rememberPreview(mesh, s)
+    val preview = rememberPreview(mesh, displayFocus)
     val shape = RoundedCornerShape(16.dp)
     val outline = when {
         current -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-        s.needsYou() -> s.statusColor().copy(alpha = 0.5f)
-        else -> Color.Transparent
+        displayFocus.needsYou() -> displayFocus.statusColor().copy(alpha = 0.5f)
+        else -> MakoColors.cardBorder
     }
     Box(modifier) {
         Surface(
             shape = shape, color = MaterialTheme.colorScheme.surfaceContainerLow,
-            modifier = Modifier.fillMaxWidth().height(172.dp).border(if (current) 1.5.dp else 1.dp, outline, shape).clip(shape)
+            modifier = Modifier.fillMaxWidth().height(if (kids.isNotEmpty()) 192.dp else 172.dp).border(if (current) 1.5.dp else 1.dp, outline, shape).clip(shape)
                 .semantics { selected = current; role = Role.Button }
                 .combinedClickable(onClick = onClick, onLongClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -499,7 +539,7 @@ private fun TabCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     AgentAvatar(s.agent, agentColor(nodes, s.nodeId, s.agent), null, size = 22.dp)
                     Spacer(Modifier.width(8.dp))
-                    Text(s.statusText(), style = MaterialTheme.typography.labelMedium, color = s.statusColor(),
+                    Text(displayFocus.statusText(), style = MaterialTheme.typography.labelMedium, color = displayFocus.statusColor(),
                         fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     if (pinned) Icon(Icons.Outlined.PushPin, stringResource(R.string.pinned), Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     IconButton(onClick = { menu = true }, modifier = Modifier.size(36.dp)) {
@@ -511,15 +551,31 @@ private fun TabCard(
                 val error = MaterialTheme.colorScheme.error
                 val draftLabel = stringResource(R.string.draft)
                 Text(
-                    if (draft.isNotEmpty() && !s.needsYou()) buildAnnotatedString {
+                    if (draft.isNotEmpty() && !displayFocus.needsYou()) buildAnnotatedString {
                         withStyle(SpanStyle(color = error, fontWeight = FontWeight.Medium)) { append(draftLabel) }
                         append(" ")
                         append(draft)
                     } else AnnotatedString(preview.text),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = if (preview.code && (draft.isEmpty() || s.needsYou())) FontFamily.Monospace else null,
-                    maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp, end = 8.dp).weight(1f),
+                    fontFamily = if (preview.code && (draft.isEmpty() || displayFocus.needsYou())) FontFamily.Monospace else null,
+                    maxLines = if (kids.isNotEmpty()) 2 else 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp, end = 8.dp).weight(1f),
                 )
+                if (kids.isNotEmpty()) {
+                    Row(
+                        Modifier.padding(top = 6.dp, bottom = 4.dp, end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        FamilyDotsPill(kids)
+                        Text(
+                            pluralStringResource(R.plurals.subagents_spawned_count, kids.size, kids.size),
+                            style = MaterialTheme.typography.labelSmall.tabular(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
                 Text(dotted(project?.tags?.get(s.id), s.agent, ago(s.lastActive())), style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

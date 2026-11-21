@@ -450,8 +450,9 @@ private fun ProjectList(
                                         list.forEachIndexed { i, s ->
                                             key(s.id) {
                                                 val p = items.projectOf(s.id)
+                                                val parent = remember(sessions, s.id) { SessionFamilyIndex(sessions).parent(s) }
                                                 if (i > 0) HorizontalDivider(Modifier.padding(start = 62.dp), color = subtleDivider)
-                                                AttentionRow(mesh, nodes, s, p, now, onOpen = { if (p != null) onProject(p, s.id) })
+                                                AttentionRow(mesh, nodes, s, p, parent, now, onOpen = { if (p != null) onProject(p, s.id) })
                                             }
                                         }
                                     }
@@ -964,7 +965,7 @@ internal fun StatusText(s: SessionInfo) {
  * answered on the row, anything else opens the session, where it is.
  */
 @Composable
-private fun AttentionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, p: ProjectItem?, now: Long, onOpen: () -> Unit) {
+private fun AttentionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, p: ProjectItem?, parent: SessionInfo?, now: Long, onOpen: () -> Unit) {
     val act = actor()
     val tone = s.statusColor()
     val approves = s.hasApproval() && !s.asks() && !s.plans()
@@ -1016,8 +1017,9 @@ private fun AttentionRow(mesh: Mesh, nodes: List<Node>, s: SessionInfo, p: Proje
                         Spacer(Modifier.width(4.dp))
                     }
                     now
+                    val parentTag = parent?.let { stringResource(R.string.subagent_of, it.label()) }
                     Text(
-                        dotted(p?.label ?: baseName(s.project), ago(s.waitingSince())),
+                        dotted(parentTag, p?.label ?: baseName(s.project), ago(s.waitingSince())),
                         style = MaterialTheme.typography.bodySmall.tabular(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
