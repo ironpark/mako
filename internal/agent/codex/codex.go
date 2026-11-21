@@ -147,6 +147,7 @@ func SplitRemoteLaunch(command []string) RemoteLaunchSplit {
 	out.Program = command[0]
 
 	var addDirs []string
+	var approvalsReviewer string
 	var sawResume bool
 	var positional []string
 	var afterDoubleDash bool
@@ -215,14 +216,14 @@ func SplitRemoteLaunch(command []string) RemoteLaunchSplit {
 				out.TUIArgs = append(out.TUIArgs, "--model", v)
 			}
 		case "-a", "--ask-for-approval":
+			// Permission overrides are rejected by `codex --remote ... resume`;
+			// apply them on the managed app-server and thread RPCs instead.
 			if v, ok := nextVal(); ok {
 				out.ApprovalPolicy = v
-				out.TUIArgs = append(out.TUIArgs, "-a", v)
 			}
 		case "-s", "--sandbox":
 			if v, ok := nextVal(); ok {
 				out.Sandbox = v
-				out.TUIArgs = append(out.TUIArgs, "-s", v)
 			}
 		case "-C", "--cd":
 			if v, ok := nextVal(); ok {
@@ -230,14 +231,20 @@ func SplitRemoteLaunch(command []string) RemoteLaunchSplit {
 				out.TUIArgs = append(out.TUIArgs, "-C", v)
 			}
 		case "--approve-for-me":
+			approvalsReviewer = "guardian_subagent"
 			if out.Sandbox == "" {
 				out.Sandbox = "workspace-write"
 			}
-			out.TUIArgs = append(out.TUIArgs, arg)
+		case "--full-auto":
+			if out.ApprovalPolicy == "" {
+				out.ApprovalPolicy = "on-request"
+			}
+			if out.Sandbox == "" {
+				out.Sandbox = "workspace-write"
+			}
 		case "--dangerously-bypass-approvals-and-sandbox", "--yolo":
 			out.ApprovalPolicy = "never"
 			out.Sandbox = "danger-full-access"
-			out.TUIArgs = append(out.TUIArgs, arg)
 		case "-p", "--profile", "--local-provider", "-i", "--image":
 			if v, ok := nextVal(); ok {
 				out.TUIArgs = append(out.TUIArgs, name, v)
@@ -247,6 +254,15 @@ func SplitRemoteLaunch(command []string) RemoteLaunchSplit {
 		}
 	}
 
+	if out.ApprovalPolicy != "" {
+		out.ServerArgs = append(out.ServerArgs, "-c", "approval_policy="+tomlString(out.ApprovalPolicy))
+	}
+	if out.Sandbox != "" {
+		out.ServerArgs = append(out.ServerArgs, "-c", "sandbox_mode="+tomlString(out.Sandbox))
+	}
+	if approvalsReviewer != "" {
+		out.ServerArgs = append(out.ServerArgs, "-c", "approvals_reviewer="+tomlString(approvalsReviewer))
+	}
 	if len(addDirs) > 0 {
 		out.ServerArgs = append(out.ServerArgs, "-c", "sandbox_workspace_write.writable_roots="+jsonString(addDirs))
 	}

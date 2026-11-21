@@ -74,14 +74,16 @@ func TestSplitRemoteLaunch(t *testing.T) {
 		"--disable", "foo",
 		"--strict-config",
 		"-c", `model_reasoning_effort="high"`,
+		"-c", `approval_policy="never"`,
+		"-c", `sandbox_mode="danger-full-access"`,
 		"-c", `sandbox_workspace_write.writable_roots=["/work/shared-a","/work/shared-b"]`,
 	}
 	if !slices.Equal(got.ServerArgs, wantServer) {
 		t.Fatalf("ServerArgs = %q\nwant %q", got.ServerArgs, wantServer)
 	}
+	// Permission overrides must stay off TUIArgs because `codex --remote ... resume` rejects them.
 	wantTUI := []string{
 		"--model", "gpt-6.2-sol",
-		"--dangerously-bypass-approvals-and-sandbox",
 		"-C", "/work/proj",
 	}
 	if !slices.Equal(got.TUIArgs, wantTUI) {
@@ -94,7 +96,7 @@ func TestSplitRemoteLaunch(t *testing.T) {
 		t.Fatalf("prompt = (%v, %q)", got.HasPrompt, got.Prompt)
 	}
 
-	// Resumed launch preserves thread ID and strips resume from TUIArgs.
+	// Resumed launch preserves thread ID and strips resume + permission flags from TUIArgs.
 	resumed := SplitRemoteLaunch([]string{
 		"codex", "-c", `model_reasoning_effort="low"`, "resume", "01a1fa9c-4bba-78b2-8feb-b560a85e0978",
 		"-a", "on-request", "-s", "workspace-write", "--no-daemon",
@@ -105,14 +107,32 @@ func TestSplitRemoteLaunch(t *testing.T) {
 	if resumed.ApprovalPolicy != "on-request" || resumed.Sandbox != "workspace-write" {
 		t.Fatalf("resumed policies = %+v", resumed)
 	}
-	if !slices.Equal(resumed.TUIArgs, []string{"-a", "on-request", "-s", "workspace-write"}) {
-		t.Fatalf("resumed TUIArgs = %q", resumed.TUIArgs)
+	if len(resumed.TUIArgs) != 0 {
+		t.Fatalf("resumed TUIArgs = %q, want empty", resumed.TUIArgs)
+	}
+	wantResumedServer := []string{
+		"-c", `model_reasoning_effort="low"`,
+		"-c", `approval_policy="on-request"`,
+		"-c", `sandbox_mode="workspace-write"`,
+	}
+	if !slices.Equal(resumed.ServerArgs, wantResumedServer) {
+		t.Fatalf("resumed ServerArgs = %q\nwant %q", resumed.ServerArgs, wantResumedServer)
 	}
 
-	// --approve-for-me implies workspace-write sandbox when unset, and `--` preserves dash-prefixed prompts.
+	// --approve-for-me moves to app-server config (guardian_subagent + workspace-write) and stays off TUIArgs.
 	afm := SplitRemoteLaunch([]string{"codex", "--approve-for-me", "--", "-fix-me"})
 	if afm.SkipRemote || afm.Sandbox != "workspace-write" || !afm.HasPrompt || afm.Prompt != "-fix-me" {
 		t.Fatalf("approve-for-me + dash prompt = %+v", afm)
+	}
+	if len(afm.TUIArgs) != 0 {
+		t.Fatalf("approve-for-me TUIArgs = %q, want empty", afm.TUIArgs)
+	}
+	wantAfmServer := []string{
+		"-c", `sandbox_mode="workspace-write"`,
+		"-c", `approvals_reviewer="guardian_subagent"`,
+	}
+	if !slices.Equal(afm.ServerArgs, wantAfmServer) {
+		t.Fatalf("approve-for-me ServerArgs = %q\nwant %q", afm.ServerArgs, wantAfmServer)
 	}
 
 	// Non-TUI subcommands, pickers, worktree, help/version, and explicit --remote skip managed app-server.
