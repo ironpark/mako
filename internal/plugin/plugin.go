@@ -38,11 +38,13 @@ type plugin struct {
 	vault       *vault
 	store       *kvStore
 	db          *dbStore
+	datafs      *datafsStore
 	logRate     *rateLimit
 	netRate     *rateLimit
 	evRate      *rateLimit
 	secRate     *rateLimit
 	dbRate      *rateLimit
+	datafsRate  *rateLimit
 	trRate      *rateLimit
 	fsRate      *rateLimit
 	fsWriteRate *rateLimit
@@ -177,11 +179,13 @@ func newPlugin(m *Manager, id string) *plugin {
 		vault:       v,
 		store:       newKVStore(filepath.Join(data, "storage.json"), m.lim.Storage),
 		db:          newDBStore(filepath.Join(data, "db"), m.lim.DBQuota, m.syncClock, func() { m.invalidateSyncDigest(true) }),
+		datafs:      newDatafsStore(filepath.Join(data, "files"), m.lim.DataFSQuota),
 		logRate:     newRateLimit(m.lim.Logs, time.Minute),
 		netRate:     newRateLimit(m.lim.HTTPPerMinute, time.Minute),
 		evRate:      newRateLimit(m.lim.Events, time.Second),
 		secRate:     newRateLimit(secretsPerMinute, time.Minute),
 		dbRate:      newRateLimit(dbOpsPerMinute, time.Minute),
+		datafsRate:  newRateLimit(datafsOpsPerMinute, time.Minute),
 		trRate:      newRateLimit(transcriptsPerMin, time.Minute),
 		fsRate:      newRateLimit(fsReadsPerMin, time.Minute),
 		fsWriteRate: newRateLimit(fsWritesPerMin, time.Minute),

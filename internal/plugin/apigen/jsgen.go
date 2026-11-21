@@ -219,6 +219,18 @@ export interface ScopedDbApi {
   syncDelete(table: string, id: string): Promise<SyncDeleteResponse>;
 }
 
+/** Scoped private data-directory file helper bound to a ScopeContext's scopeKey. */
+export interface ScopedDatafsApi {
+  read(path: string, opts?: { offset?: number; length?: number }): Promise<ReadDataResponse>;
+  write(path: string, content: string | { text?: string; data?: string; makeDirs?: boolean }, opts?: { makeDirs?: boolean }): Promise<WriteDataResponse>;
+  list(path?: string, opts?: { recursive?: boolean }): Promise<ListDataResponse>;
+  stat(path: string): Promise<StatDataResponse>;
+  mkdir(path: string): Promise<MkdirDataResponse>;
+  delete(path: string, opts?: { recursive?: boolean }): Promise<DeleteDataResponse>;
+  move(fromPath: string, toPath: string, opts?: { makeDirs?: boolean }): Promise<MoveDataResponse>;
+  stats(): Promise<DataStatsResponse>;
+}
+
 /** Active workspace scope context passed to block lifecycle hooks and scoped tools. */
 export interface ScopeContext {
   readonly scope: PluginScope;
@@ -232,6 +244,7 @@ export interface ScopeContext {
   readonly storage: ScopedStorageApi;
   readonly settings: ScopedSettingsApi;
   readonly db: ScopedDbApi;
+  readonly datafs: ScopedDatafsApi;
 }
 
 export interface Blocks {

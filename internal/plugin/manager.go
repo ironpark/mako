@@ -39,6 +39,7 @@ type Limits struct {
 	Failures      int           // calls failed in a row, after which it is stopped
 	Storage       int           // its store's bytes
 	DBQuota       int           // its SQLite databases' bytes across all scopes
+	DataFSQuota   int           // its private data files' bytes across all scopes
 	Events        int           // events a second from the front-ends, beyond which they are refused
 	Updates       time.Duration // between two updates of a block on a stream
 	HTTPTimeout   time.Duration // an HTTP request's
@@ -57,6 +58,7 @@ var DefaultLimits = Limits{
 	Failures:      3,
 	Storage:       1 << 20,
 	DBQuota:       defaultDBQuota,
+	DataFSQuota:   defaultDataFSQuota,
 	Events:        20,
 	Updates:       100 * time.Millisecond,
 	HTTPTimeout:   10 * time.Second,
@@ -85,6 +87,7 @@ func (l Limits) withDefaults() Limits {
 	pick(&l.Failures, d.Failures)
 	pick(&l.Storage, d.Storage)
 	pick(&l.DBQuota, d.DBQuota)
+	pick(&l.DataFSQuota, d.DataFSQuota)
 	pick(&l.Events, d.Events)
 	pickD(&l.Updates, d.Updates)
 	pickD(&l.HTTPTimeout, d.HTTPTimeout)

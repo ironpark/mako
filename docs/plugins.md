@@ -383,6 +383,14 @@ plugin lacks the permission. The schema, with every field, is
 | `db.syncEnable({table, scope})` | `db:sync` | `{table}`: registers a row-level CRDT synced table `(id, doc, updated_at, deleted)` replicated across mutually trusted peers. |
 | `db.syncPut({table, id, docJson, scope})` | `db:sync` | `{updatedAt}`: stamps a JSON document row with the node's HLC clock, updates SQLite, and schedules P2P replication. |
 | `db.syncDelete({table, id, scope})` | `db:sync` | `{deleted}`: writes a CRDT tombstone for a synced row and replicates the deletion to paired peers. |
+| `datafs.readData({path, offset, length, scope})` | `fs:data` | `{found, text, data, size, eof, binary, modifiedMs}`: reads a regular file from the plugin's private per-scope directory (`plugin-data/<id>/files/`). |
+| `datafs.writeData({path, text, data, makeDirs, scope})` | `fs:data` | `{size, usedBytes, quotaBytes}`: atomically writes a regular file inside the plugin's private data directory (up to 4 MiB per file, 64 MiB plugin quota). |
+| `datafs.listData({path, recursive, scope})` | `fs:data` | `{entries, truncated}`: lists files and folders (optionally recursively) inside the plugin's private data directory. |
+| `datafs.statData({path, scope})` | `fs:data` | `{found, dir, size, modifiedMs}`: returns metadata for a file or folder inside the plugin's private data directory. |
+| `datafs.mkdirData({path, scope})` | `fs:data` | Creates a folder (and parents) inside the plugin's private data directory. |
+| `datafs.deleteData({path, recursive, scope})` | `fs:data` | `{deleted}`: removes a file or folder (`recursive: true` for non-empty folders) inside the plugin's private data directory. |
+| `datafs.moveData({fromPath, toPath, makeDirs, scope})` | `fs:data` | Renames or moves a file or folder within the same scope of the plugin's private data directory. |
+| `datafs.dataStats({scope})` | `fs:data` | `{usedBytes, quotaBytes, fileCount}`: returns total bytes and file count across the plugin's private data directory. |
 | `sessions.listSessions()` | `sessions:read` | This node's sessions: `id`, `name`, `agent`, `project`, `state`, `status`, `nodeId`. |
 | `sessions.getSession({id})` | `sessions:read` | `{found, session}`. |
 | `sessions.readTranscript({sessionId, before, limit})` | `sessions:read` | A page of a session's conversation, as its agent logged it: `{supported, messages, before, truncated}`, the latest messages, or those before the cursor `before` a page gave; see [Transcripts and events](#transcripts-and-events). |
@@ -468,6 +476,7 @@ the user allows, all of them at once, before the plugin runs at all:
 | `storage` | Keep keys and values on this node, 1 MiB in all. |
 | `db` | Keep sandboxed per-scope SQLite databases on this node (FTS5 & JSON1 included, 32 MiB total quota, 16 MiB per database file). |
 | `db:sync` | Replicate CRDT-synced SQLite tables (`db.syncEnable`/`syncPut`/`syncDelete`) across mutually trusted Mako nodes over libp2p when workspace sharing is enabled. |
+| `fs:data` | Create, read, list, move, and delete files and folders in the plugin's own sandboxed per-scope data directory (`plugin-data/<id>/files/`, 64 MiB total quota, 4 MiB per file). |
 | `sessions:read` | List this node's sessions and how their agents stand, read their conversations, and hear of what happens to them. |
 | `net:<host>` | Make HTTP requests to that host: by https, on the default port, to exactly that name (`net:api.github.com` is not `uploads.github.com`). No IP address, no `localhost`, no wildcard. |
 | `secrets` | Keep secrets of its own in the system's keychain; see [Secrets](#secrets). |

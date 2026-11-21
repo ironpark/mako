@@ -62,6 +62,7 @@ Plugins (docs/plugins.md; each a folder of plugins/ in the configuration directo
   mako plugins deny <id>            refuse it, and stop the plugin
   mako plugins enable|disable|reload <id>
   mako plugins run <id> <command>   run a plugin's command
+  mako plugins tools [id]           list tools contributed by plugins
   mako plugins set <id> <key> [value] [--scope <scope>]
                                      set a plugin's setting (no value unsets it)
   mako plugins allow-agent <id> once|always

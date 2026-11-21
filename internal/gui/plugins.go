@@ -184,6 +184,8 @@ func permissionText(p string) string {
 		return T("Keep structured SQLite databases on this computer")
 	case "db:sync":
 		return T("Sync plugin database tables across your paired computers")
+	case "fs:data":
+		return T("Keep files and folders in this plugin's private data directory")
 	case "sessions:read":
 		return T("See this node's sessions and what their agents are doing")
 	case "sessions:write":
@@ -298,10 +300,10 @@ func (m *model) placePluginBlock(blockName, placement string) {
 			Node: map[string]any{"id": nodeID, "block": blockName, "size": 320, "collapsible": true},
 		})
 	default: // "right-stack"
-		if det := doc.Node(layoutdoc.DetailsNode); det != nil && det.Kind == layoutdoc.KindStack {
+		if st := firstStackIn(doc.Node(layoutdoc.DetailsNode)); st != nil {
 			ops = append(ops,
-				layoutdoc.Op{Op: "insert", Parent: layoutdoc.DetailsNode, Node: blockName},
-				layoutdoc.Op{Op: "select", ID: layoutdoc.DetailsNode, Block: blockName},
+				layoutdoc.Op{Op: "insert", Parent: st.ID, Node: blockName},
+				layoutdoc.Op{Op: "select", ID: st.ID, Block: blockName},
 			)
 		} else {
 			ops = append(ops, layoutdoc.Op{
@@ -315,12 +317,7 @@ func (m *model) placePluginBlock(blockName, placement string) {
 		m.tellWindowDoc(err)
 		return
 	}
-	body, err := json.Marshal(next)
-	if err != nil {
-		return
-	}
-	m.setWindowLayout(docName, body)
-	m.revealBlock(blockName)
+	m.commitLayoutDoc(docName, next, blockName)
 }
 
 // removePluginBlock removes a plugin block from the active window layout document.
@@ -331,16 +328,12 @@ func (m *model) removePluginBlock(blockName string) {
 		return
 	}
 	leaf := path[len(path)-1]
-	next, err := layoutdoc.Apply(doc, []layoutdoc.Op{{Op: "remove", ID: leaf.ID}}, m.blocks)
-	if err != nil {
-		m.tellWindowDoc(err)
+	next := doc.Clone()
+	m.syncStackActives(next)
+	if !removeNodeAndCollapse(next, leaf.ID) {
 		return
 	}
-	body, err := json.Marshal(next)
-	if err != nil {
-		return
-	}
-	m.setWindowLayout(docName, body)
+	m.commitLayoutDoc(docName, next, "")
 }
 
 // setPluginBlockScope updates props["scope"] on the active layout document's

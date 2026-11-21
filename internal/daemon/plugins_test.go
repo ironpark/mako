@@ -367,9 +367,9 @@ b = { type = "number", required = true }
 		list, err := c.Plugins(ctx)
 		return err == nil && len(list.GetPlugins()) == 1 && list.GetPlugins()[0].GetState() == protocol.PluginReady
 	})
-	snap := d.agentMCPSnapshot()
-	if len(snap.pluginTools) != 1 || snap.pluginTools[0].MCPName != "plugin_helper_echo_sum" {
-		t.Fatalf("pluginTools = %+v", snap.pluginTools)
+	tools := d.plugins.Tools()
+	if len(tools) != 1 || tools[0].PluginID != "helper" || tools[0].ID != "echo_sum" {
+		t.Fatalf("plugin tools = %+v", tools)
 	}
 	out, err := d.plugins.CallTool(ctx, "helper", "echo_sum", []byte(`{"label":"total","a":19,"b":23}`))
 	if err != nil {
@@ -698,7 +698,7 @@ scope = "global"
 		return err == nil && len(list.GetPlugins()) == 1 && list.GetPlugins()[0].GetState() == protocol.PluginReady
 	})
 
-	connectAgentMCP := func(id, dir string) *sdk.ClientSession {
+	connectAgent := func(id, dir string) (*agentPeer, *sdk.ClientSession) {
 		t.Helper()
 		_, cleanup := d.projectAgents.server(ctx, "", id, "")
 		t.Cleanup(cleanup)
@@ -728,37 +728,72 @@ scope = "global"
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = cs.Close() })
-		return cs
+		return peer, cs
 	}
 
-	callToolJSON := func(cs *sdk.ClientSession, name string, args map[string]any) (map[string]any, error) {
-		res, err := cs.CallTool(ctx, &sdk.CallToolParams{Name: name, Arguments: args})
+	callToolCLI := func(peer *agentPeer, toolID string, args map[string]any) (map[string]any, error) {
+		t.Helper()
+		var rawArgs json.RawMessage
+		if args != nil {
+			rawArgs, _ = json.Marshal(args)
+		}
+		resp, err := dialAgentCLI(d.projectAgents.cliSocket, agentCLIRequest{
+			Session:  peer.id,
+			Token:    peer.token,
+			Op:       "plugin_call",
+			PluginID: "scopedtools",
+			ToolID:   toolID,
+			Args:     rawArgs,
+		})
 		if err != nil {
 			return nil, err
 		}
-		if res.IsError {
-			var msg string
-			if len(res.Content) > 0 {
-				if tc, ok := res.Content[0].(*sdk.TextContent); ok {
-					msg = tc.Text
-				}
-			}
-			return nil, errors.New(msg)
-		}
-		tc, ok := res.Content[0].(*sdk.TextContent)
-		if !ok {
-			t.Fatalf("unexpected content %T", res.Content[0])
+		if !resp.OK {
+			return nil, errors.New(resp.Error)
 		}
 		var out map[string]any
-		if err := json.Unmarshal([]byte(tc.Text), &out); err != nil {
-			t.Fatalf("unmarshal %q: %v", tc.Text, err)
+		if err := json.Unmarshal(resp.Output, &out); err != nil {
+			t.Fatalf("unmarshal %q: %v", string(resp.Output), err)
 		}
 		return out, nil
 	}
 
-	// Agent in project p1 (space sp1) attempts to spoof p2 via tool args.
-	csA := connectAgentMCP("agent-a", dirA)
-	gotProj, err := callToolJSON(csA, "plugin_scopedtools_project_echo", map[string]any{
+	listToolIDs := func(peer *agentPeer) []string {
+		t.Helper()
+		resp, err := dialAgentCLI(d.projectAgents.cliSocket, agentCLIRequest{
+			Session:  peer.id,
+			Token:    peer.token,
+			Op:       "plugin_list",
+			PluginID: "scopedtools",
+		})
+		if err != nil || !resp.OK {
+			t.Fatalf("plugin_list failed: resp=%+v err=%v", resp, err)
+		}
+		ids := make([]string, 0, len(resp.Tools))
+		for _, tl := range resp.Tools {
+			ids = append(ids, tl.ID)
+		}
+		slices.Sort(ids)
+		return ids
+	}
+
+	// Agent in project p1 (space sp1): plugin tools are NOT exposed on MCP,
+	// are all visible via mako-plugin CLI, and ignore spoofed scope args.
+	peerA, csA := connectAgent("agent-a", dirA)
+	mcpTools, err := csA.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tl := range mcpTools.Tools {
+		if strings.HasPrefix(tl.Name, "plugin_") {
+			t.Fatalf("plugin tool %q should not be registered on MCP", tl.Name)
+		}
+	}
+	if ids := listToolIDs(peerA); !slices.Equal(ids, []string{"global_echo", "project_echo", "session_echo", "space_echo"}) {
+		t.Fatalf("agent-a visible CLI tools = %v", ids)
+	}
+
+	gotProj, err := callToolCLI(peerA, "project_echo", map[string]any{
 		"scope":      "project:p2",
 		"project_id": "p2",
 	})
@@ -772,7 +807,7 @@ scope = "global"
 		t.Fatalf("project_echo scope was not strictly bound to agent-a's project: %+v", gotProj)
 	}
 
-	gotSpace, err := callToolJSON(csA, "plugin_scopedtools_space_echo", nil)
+	gotSpace, err := callToolCLI(peerA, "space_echo", nil)
 	if err != nil {
 		t.Fatalf("space_echo failed: %v", err)
 	}
@@ -781,7 +816,7 @@ scope = "global"
 		t.Fatalf("space_echo = %+v", gotSpace)
 	}
 
-	gotSess, err := callToolJSON(csA, "plugin_scopedtools_session_echo", nil)
+	gotSess, err := callToolCLI(peerA, "session_echo", nil)
 	if err != nil {
 		t.Fatalf("session_echo failed: %v", err)
 	}
@@ -790,7 +825,7 @@ scope = "global"
 		t.Fatalf("session_echo = %+v", gotSess)
 	}
 
-	gotGlobal, err := callToolJSON(csA, "plugin_scopedtools_global_echo", nil)
+	gotGlobal, err := callToolCLI(peerA, "global_echo", nil)
 	if err != nil {
 		t.Fatalf("global_echo failed: %v", err)
 	}
@@ -798,19 +833,22 @@ scope = "global"
 		t.Fatalf("global_echo = %+v", gotGlobal)
 	}
 
-	// Agent in an unregistered directory cannot invoke project/space tools even
-	// when passing spoofed scope/project_id arguments.
-	csOther := connectAgentMCP("agent-other", dirUnregistered)
-	if got, err := callToolJSON(csOther, "plugin_scopedtools_project_echo", map[string]any{
+	// Agent in an unregistered directory only sees usable global/session tools
+	// in mako-plugin list and cannot invoke project/space tools even with spoofed args.
+	peerOther, _ := connectAgent("agent-other", dirUnregistered)
+	if ids := listToolIDs(peerOther); !slices.Equal(ids, []string{"global_echo", "session_echo"}) {
+		t.Fatalf("agent-other should only see global/session tools, got %v", ids)
+	}
+	if got, err := callToolCLI(peerOther, "project_echo", map[string]any{
 		"scope":      "project:p1",
 		"project_id": "p1",
 	}); err == nil {
 		t.Fatalf("expected project_echo error for unregistered project, got %+v", got)
 	}
-	if got, err := callToolJSON(csOther, "plugin_scopedtools_space_echo", nil); err == nil {
+	if got, err := callToolCLI(peerOther, "space_echo", nil); err == nil {
 		t.Fatalf("expected space_echo error for unregistered project, got %+v", got)
 	}
-	gotOtherSess, err := callToolJSON(csOther, "plugin_scopedtools_session_echo", nil)
+	gotOtherSess, err := callToolCLI(peerOther, "session_echo", nil)
 	if err != nil {
 		t.Fatalf("session_echo for unregistered dir failed: %v", err)
 	}

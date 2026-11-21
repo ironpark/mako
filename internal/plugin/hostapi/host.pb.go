@@ -2787,6 +2787,1029 @@ func (x *SyncDeleteResponse) GetDeleted() bool {
 	return false
 }
 
+// ReadDataRequest names a file and optional byte slice inside the plugin's data dir.
+type ReadDataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Offset        float64                `protobuf:"fixed64,2,opt,name=offset,proto3" json:"offset,omitempty"`
+	Length        uint32                 `protobuf:"varint,3,opt,name=length,proto3" json:"length,omitempty"`
+	Scope         string                 `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReadDataRequest) Reset() {
+	*x = ReadDataRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReadDataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReadDataRequest) ProtoMessage() {}
+
+func (x *ReadDataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReadDataRequest.ProtoReflect.Descriptor instead.
+func (*ReadDataRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *ReadDataRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *ReadDataRequest) GetOffset() float64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *ReadDataRequest) GetLength() uint32 {
+	if x != nil {
+		return x.Length
+	}
+	return 0
+}
+
+func (x *ReadDataRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// ReadDataResponse returns the file's contents when found.
+type ReadDataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Found         bool                   `protobuf:"varint,1,opt,name=found,proto3" json:"found,omitempty"`
+	Text          string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
+	Data          []byte                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	Size          float64                `protobuf:"fixed64,4,opt,name=size,proto3" json:"size,omitempty"`
+	Eof           bool                   `protobuf:"varint,5,opt,name=eof,proto3" json:"eof,omitempty"`
+	Binary        bool                   `protobuf:"varint,6,opt,name=binary,proto3" json:"binary,omitempty"`
+	ModifiedMs    float64                `protobuf:"fixed64,7,opt,name=modified_ms,json=modifiedMs,proto3" json:"modified_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReadDataResponse) Reset() {
+	*x = ReadDataResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReadDataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReadDataResponse) ProtoMessage() {}
+
+func (x *ReadDataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReadDataResponse.ProtoReflect.Descriptor instead.
+func (*ReadDataResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *ReadDataResponse) GetFound() bool {
+	if x != nil {
+		return x.Found
+	}
+	return false
+}
+
+func (x *ReadDataResponse) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *ReadDataResponse) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *ReadDataResponse) GetSize() float64 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
+func (x *ReadDataResponse) GetEof() bool {
+	if x != nil {
+		return x.Eof
+	}
+	return false
+}
+
+func (x *ReadDataResponse) GetBinary() bool {
+	if x != nil {
+		return x.Binary
+	}
+	return false
+}
+
+func (x *ReadDataResponse) GetModifiedMs() float64 {
+	if x != nil {
+		return x.ModifiedMs
+	}
+	return 0
+}
+
+// WriteDataRequest writes text or bytes to a file in the plugin's data dir.
+type WriteDataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Text          string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
+	Data          []byte                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	MakeDirs      bool                   `protobuf:"varint,4,opt,name=make_dirs,json=makeDirs,proto3" json:"make_dirs,omitempty"`
+	Scope         string                 `protobuf:"bytes,5,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WriteDataRequest) Reset() {
+	*x = WriteDataRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WriteDataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WriteDataRequest) ProtoMessage() {}
+
+func (x *WriteDataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WriteDataRequest.ProtoReflect.Descriptor instead.
+func (*WriteDataRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *WriteDataRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *WriteDataRequest) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *WriteDataRequest) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *WriteDataRequest) GetMakeDirs() bool {
+	if x != nil {
+		return x.MakeDirs
+	}
+	return false
+}
+
+func (x *WriteDataRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// WriteDataResponse reports the written size and plugin-wide quota usage.
+type WriteDataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Size          float64                `protobuf:"fixed64,1,opt,name=size,proto3" json:"size,omitempty"`
+	UsedBytes     uint32                 `protobuf:"varint,2,opt,name=used_bytes,json=usedBytes,proto3" json:"used_bytes,omitempty"`
+	QuotaBytes    uint32                 `protobuf:"varint,3,opt,name=quota_bytes,json=quotaBytes,proto3" json:"quota_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WriteDataResponse) Reset() {
+	*x = WriteDataResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WriteDataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WriteDataResponse) ProtoMessage() {}
+
+func (x *WriteDataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WriteDataResponse.ProtoReflect.Descriptor instead.
+func (*WriteDataResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *WriteDataResponse) GetSize() float64 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
+func (x *WriteDataResponse) GetUsedBytes() uint32 {
+	if x != nil {
+		return x.UsedBytes
+	}
+	return 0
+}
+
+func (x *WriteDataResponse) GetQuotaBytes() uint32 {
+	if x != nil {
+		return x.QuotaBytes
+	}
+	return 0
+}
+
+// ListDataRequest lists a directory in the plugin's data dir.
+type ListDataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Recursive     bool                   `protobuf:"varint,2,opt,name=recursive,proto3" json:"recursive,omitempty"`
+	Scope         string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDataRequest) Reset() {
+	*x = ListDataRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDataRequest) ProtoMessage() {}
+
+func (x *ListDataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDataRequest.ProtoReflect.Descriptor instead.
+func (*ListDataRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *ListDataRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *ListDataRequest) GetRecursive() bool {
+	if x != nil {
+		return x.Recursive
+	}
+	return false
+}
+
+func (x *ListDataRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// DataEntry describes one file or directory inside the plugin's data dir.
+type DataEntry struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// path is the slash-separated path relative to the scope root.
+	Path string `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	// name is the entry's base name.
+	Name          string  `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Dir           bool    `protobuf:"varint,3,opt,name=dir,proto3" json:"dir,omitempty"`
+	Size          float64 `protobuf:"fixed64,4,opt,name=size,proto3" json:"size,omitempty"`
+	ModifiedMs    float64 `protobuf:"fixed64,5,opt,name=modified_ms,json=modifiedMs,proto3" json:"modified_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DataEntry) Reset() {
+	*x = DataEntry{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DataEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DataEntry) ProtoMessage() {}
+
+func (x *DataEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DataEntry.ProtoReflect.Descriptor instead.
+func (*DataEntry) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *DataEntry) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *DataEntry) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *DataEntry) GetDir() bool {
+	if x != nil {
+		return x.Dir
+	}
+	return false
+}
+
+func (x *DataEntry) GetSize() float64 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
+func (x *DataEntry) GetModifiedMs() float64 {
+	if x != nil {
+		return x.ModifiedMs
+	}
+	return 0
+}
+
+// ListDataResponse holds directory entries sorted by path.
+type ListDataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entries       []*DataEntry           `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	Truncated     bool                   `protobuf:"varint,2,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDataResponse) Reset() {
+	*x = ListDataResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDataResponse) ProtoMessage() {}
+
+func (x *ListDataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDataResponse.ProtoReflect.Descriptor instead.
+func (*ListDataResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *ListDataResponse) GetEntries() []*DataEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *ListDataResponse) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+// StatDataRequest asks for metadata of a path in the plugin's data dir.
+type StatDataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Scope         string                 `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatDataRequest) Reset() {
+	*x = StatDataRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatDataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatDataRequest) ProtoMessage() {}
+
+func (x *StatDataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatDataRequest.ProtoReflect.Descriptor instead.
+func (*StatDataRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *StatDataRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *StatDataRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// StatDataResponse reports whether a path exists and its metadata.
+type StatDataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Found         bool                   `protobuf:"varint,1,opt,name=found,proto3" json:"found,omitempty"`
+	Dir           bool                   `protobuf:"varint,2,opt,name=dir,proto3" json:"dir,omitempty"`
+	Size          float64                `protobuf:"fixed64,3,opt,name=size,proto3" json:"size,omitempty"`
+	ModifiedMs    float64                `protobuf:"fixed64,4,opt,name=modified_ms,json=modifiedMs,proto3" json:"modified_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatDataResponse) Reset() {
+	*x = StatDataResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatDataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatDataResponse) ProtoMessage() {}
+
+func (x *StatDataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatDataResponse.ProtoReflect.Descriptor instead.
+func (*StatDataResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *StatDataResponse) GetFound() bool {
+	if x != nil {
+		return x.Found
+	}
+	return false
+}
+
+func (x *StatDataResponse) GetDir() bool {
+	if x != nil {
+		return x.Dir
+	}
+	return false
+}
+
+func (x *StatDataResponse) GetSize() float64 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
+func (x *StatDataResponse) GetModifiedMs() float64 {
+	if x != nil {
+		return x.ModifiedMs
+	}
+	return 0
+}
+
+// MkdirDataRequest creates a directory path in the plugin's data dir.
+type MkdirDataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Scope         string                 `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MkdirDataRequest) Reset() {
+	*x = MkdirDataRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MkdirDataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MkdirDataRequest) ProtoMessage() {}
+
+func (x *MkdirDataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MkdirDataRequest.ProtoReflect.Descriptor instead.
+func (*MkdirDataRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *MkdirDataRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *MkdirDataRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// MkdirDataResponse confirms directory creation.
+type MkdirDataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MkdirDataResponse) Reset() {
+	*x = MkdirDataResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MkdirDataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MkdirDataResponse) ProtoMessage() {}
+
+func (x *MkdirDataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MkdirDataResponse.ProtoReflect.Descriptor instead.
+func (*MkdirDataResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{58}
+}
+
+// DeleteDataRequest removes a file or directory in the plugin's data dir.
+type DeleteDataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Recursive     bool                   `protobuf:"varint,2,opt,name=recursive,proto3" json:"recursive,omitempty"`
+	Scope         string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteDataRequest) Reset() {
+	*x = DeleteDataRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteDataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteDataRequest) ProtoMessage() {}
+
+func (x *DeleteDataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteDataRequest.ProtoReflect.Descriptor instead.
+func (*DeleteDataRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *DeleteDataRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *DeleteDataRequest) GetRecursive() bool {
+	if x != nil {
+		return x.Recursive
+	}
+	return false
+}
+
+func (x *DeleteDataRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// DeleteDataResponse says whether the target existed before deletion.
+type DeleteDataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Deleted       bool                   `protobuf:"varint,1,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteDataResponse) Reset() {
+	*x = DeleteDataResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteDataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteDataResponse) ProtoMessage() {}
+
+func (x *DeleteDataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteDataResponse.ProtoReflect.Descriptor instead.
+func (*DeleteDataResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *DeleteDataResponse) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
+// MoveDataRequest moves or renames a file or directory within a scope.
+type MoveDataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FromPath      string                 `protobuf:"bytes,1,opt,name=from_path,json=fromPath,proto3" json:"from_path,omitempty"`
+	ToPath        string                 `protobuf:"bytes,2,opt,name=to_path,json=toPath,proto3" json:"to_path,omitempty"`
+	MakeDirs      bool                   `protobuf:"varint,3,opt,name=make_dirs,json=makeDirs,proto3" json:"make_dirs,omitempty"`
+	Scope         string                 `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MoveDataRequest) Reset() {
+	*x = MoveDataRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MoveDataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MoveDataRequest) ProtoMessage() {}
+
+func (x *MoveDataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MoveDataRequest.ProtoReflect.Descriptor instead.
+func (*MoveDataRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *MoveDataRequest) GetFromPath() string {
+	if x != nil {
+		return x.FromPath
+	}
+	return ""
+}
+
+func (x *MoveDataRequest) GetToPath() string {
+	if x != nil {
+		return x.ToPath
+	}
+	return ""
+}
+
+func (x *MoveDataRequest) GetMakeDirs() bool {
+	if x != nil {
+		return x.MakeDirs
+	}
+	return false
+}
+
+func (x *MoveDataRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// MoveDataResponse confirms the move.
+type MoveDataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MoveDataResponse) Reset() {
+	*x = MoveDataResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MoveDataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MoveDataResponse) ProtoMessage() {}
+
+func (x *MoveDataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MoveDataResponse.ProtoReflect.Descriptor instead.
+func (*MoveDataResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{62}
+}
+
+// DataStatsRequest asks for plugin private file quota and usage.
+type DataStatsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scope         string                 `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DataStatsRequest) Reset() {
+	*x = DataStatsRequest{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DataStatsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DataStatsRequest) ProtoMessage() {}
+
+func (x *DataStatsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DataStatsRequest.ProtoReflect.Descriptor instead.
+func (*DataStatsRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *DataStatsRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+// DataStatsResponse reports plugin-wide file storage usage and quota.
+type DataStatsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UsedBytes     uint32                 `protobuf:"varint,1,opt,name=used_bytes,json=usedBytes,proto3" json:"used_bytes,omitempty"`
+	QuotaBytes    uint32                 `protobuf:"varint,2,opt,name=quota_bytes,json=quotaBytes,proto3" json:"quota_bytes,omitempty"`
+	FileCount     uint32                 `protobuf:"varint,3,opt,name=file_count,json=fileCount,proto3" json:"file_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DataStatsResponse) Reset() {
+	*x = DataStatsResponse{}
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DataStatsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DataStatsResponse) ProtoMessage() {}
+
+func (x *DataStatsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_host_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DataStatsResponse.ProtoReflect.Descriptor instead.
+func (*DataStatsResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_host_proto_rawDescGZIP(), []int{64}
+}
+
+func (x *DataStatsResponse) GetUsedBytes() uint32 {
+	if x != nil {
+		return x.UsedBytes
+	}
+	return 0
+}
+
+func (x *DataStatsResponse) GetQuotaBytes() uint32 {
+	if x != nil {
+		return x.QuotaBytes
+	}
+	return 0
+}
+
+func (x *DataStatsResponse) GetFileCount() uint32 {
+	if x != nil {
+		return x.FileCount
+	}
+	return 0
+}
+
 var File_mako_plugin_v1_host_proto protoreflect.FileDescriptor
 
 const file_mako_plugin_v1_host_proto_rawDesc = "" +
@@ -2968,7 +3991,81 @@ const file_mako_plugin_v1_host_proto_rawDesc = "" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x14\n" +
 	"\x05scope\x18\x03 \x01(\tR\x05scope\".\n" +
 	"\x12SyncDeleteResponse\x12\x18\n" +
-	"\adeleted\x18\x01 \x01(\bR\adeleted2\\\n" +
+	"\adeleted\x18\x01 \x01(\bR\adeleted\"k\n" +
+	"\x0fReadDataRequest\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
+	"\x06offset\x18\x02 \x01(\x01R\x06offset\x12\x16\n" +
+	"\x06length\x18\x03 \x01(\rR\x06length\x12\x14\n" +
+	"\x05scope\x18\x04 \x01(\tR\x05scope\"\xaf\x01\n" +
+	"\x10ReadDataResponse\x12\x14\n" +
+	"\x05found\x18\x01 \x01(\bR\x05found\x12\x12\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\x12\x12\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\x12\x12\n" +
+	"\x04size\x18\x04 \x01(\x01R\x04size\x12\x10\n" +
+	"\x03eof\x18\x05 \x01(\bR\x03eof\x12\x16\n" +
+	"\x06binary\x18\x06 \x01(\bR\x06binary\x12\x1f\n" +
+	"\vmodified_ms\x18\a \x01(\x01R\n" +
+	"modifiedMs\"\x81\x01\n" +
+	"\x10WriteDataRequest\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\x12\x12\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\x12\x1b\n" +
+	"\tmake_dirs\x18\x04 \x01(\bR\bmakeDirs\x12\x14\n" +
+	"\x05scope\x18\x05 \x01(\tR\x05scope\"g\n" +
+	"\x11WriteDataResponse\x12\x12\n" +
+	"\x04size\x18\x01 \x01(\x01R\x04size\x12\x1d\n" +
+	"\n" +
+	"used_bytes\x18\x02 \x01(\rR\tusedBytes\x12\x1f\n" +
+	"\vquota_bytes\x18\x03 \x01(\rR\n" +
+	"quotaBytes\"Y\n" +
+	"\x0fListDataRequest\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1c\n" +
+	"\trecursive\x18\x02 \x01(\bR\trecursive\x12\x14\n" +
+	"\x05scope\x18\x03 \x01(\tR\x05scope\"z\n" +
+	"\tDataEntry\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
+	"\x03dir\x18\x03 \x01(\bR\x03dir\x12\x12\n" +
+	"\x04size\x18\x04 \x01(\x01R\x04size\x12\x1f\n" +
+	"\vmodified_ms\x18\x05 \x01(\x01R\n" +
+	"modifiedMs\"e\n" +
+	"\x10ListDataResponse\x123\n" +
+	"\aentries\x18\x01 \x03(\v2\x19.mako.plugin.v1.DataEntryR\aentries\x12\x1c\n" +
+	"\ttruncated\x18\x02 \x01(\bR\ttruncated\";\n" +
+	"\x0fStatDataRequest\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x14\n" +
+	"\x05scope\x18\x02 \x01(\tR\x05scope\"o\n" +
+	"\x10StatDataResponse\x12\x14\n" +
+	"\x05found\x18\x01 \x01(\bR\x05found\x12\x10\n" +
+	"\x03dir\x18\x02 \x01(\bR\x03dir\x12\x12\n" +
+	"\x04size\x18\x03 \x01(\x01R\x04size\x12\x1f\n" +
+	"\vmodified_ms\x18\x04 \x01(\x01R\n" +
+	"modifiedMs\"<\n" +
+	"\x10MkdirDataRequest\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x14\n" +
+	"\x05scope\x18\x02 \x01(\tR\x05scope\"\x13\n" +
+	"\x11MkdirDataResponse\"[\n" +
+	"\x11DeleteDataRequest\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1c\n" +
+	"\trecursive\x18\x02 \x01(\bR\trecursive\x12\x14\n" +
+	"\x05scope\x18\x03 \x01(\tR\x05scope\".\n" +
+	"\x12DeleteDataResponse\x12\x18\n" +
+	"\adeleted\x18\x01 \x01(\bR\adeleted\"z\n" +
+	"\x0fMoveDataRequest\x12\x1b\n" +
+	"\tfrom_path\x18\x01 \x01(\tR\bfromPath\x12\x17\n" +
+	"\ato_path\x18\x02 \x01(\tR\x06toPath\x12\x1b\n" +
+	"\tmake_dirs\x18\x03 \x01(\bR\bmakeDirs\x12\x14\n" +
+	"\x05scope\x18\x04 \x01(\tR\x05scope\"\x12\n" +
+	"\x10MoveDataResponse\"(\n" +
+	"\x10DataStatsRequest\x12\x14\n" +
+	"\x05scope\x18\x01 \x01(\tR\x05scope\"r\n" +
+	"\x11DataStatsResponse\x12\x1d\n" +
+	"\n" +
+	"used_bytes\x18\x01 \x01(\rR\tusedBytes\x12\x1f\n" +
+	"\vquota_bytes\x18\x02 \x01(\rR\n" +
+	"quotaBytes\x12\x1d\n" +
+	"\n" +
+	"file_count\x18\x03 \x01(\rR\tfileCount2\\\n" +
 	"\n" +
 	"LogService\x12N\n" +
 	"\x05Write\x12\x1c.mako.plugin.v1.WriteRequest\x1a\x1d.mako.plugin.v1.WriteResponse\"\b\xca\xf3\x18\x04none2\xd5\x01\n" +
@@ -3003,7 +4100,17 @@ const file_mako_plugin_v1_host_proto_rawDesc = "" +
 	"SyncEnable\x12!.mako.plugin.v1.SyncEnableRequest\x1a\".mako.plugin.v1.SyncEnableResponse\"\v\xca\xf3\x18\adb:sync\x12W\n" +
 	"\aSyncPut\x12\x1e.mako.plugin.v1.SyncPutRequest\x1a\x1f.mako.plugin.v1.SyncPutResponse\"\v\xca\xf3\x18\adb:sync\x12`\n" +
 	"\n" +
-	"SyncDelete\x12!.mako.plugin.v1.SyncDeleteRequest\x1a\".mako.plugin.v1.SyncDeleteResponse\"\v\xca\xf3\x18\adb:syncB2Z0github.com/ironpark/mako/internal/plugin/hostapib\x06proto3"
+	"SyncDelete\x12!.mako.plugin.v1.SyncDeleteRequest\x1a\".mako.plugin.v1.SyncDeleteResponse\"\v\xca\xf3\x18\adb:sync2\xfe\x05\n" +
+	"\rDatafsService\x12Z\n" +
+	"\bReadData\x12\x1f.mako.plugin.v1.ReadDataRequest\x1a .mako.plugin.v1.ReadDataResponse\"\v\xca\xf3\x18\afs:data\x12]\n" +
+	"\tWriteData\x12 .mako.plugin.v1.WriteDataRequest\x1a!.mako.plugin.v1.WriteDataResponse\"\v\xca\xf3\x18\afs:data\x12Z\n" +
+	"\bListData\x12\x1f.mako.plugin.v1.ListDataRequest\x1a .mako.plugin.v1.ListDataResponse\"\v\xca\xf3\x18\afs:data\x12Z\n" +
+	"\bStatData\x12\x1f.mako.plugin.v1.StatDataRequest\x1a .mako.plugin.v1.StatDataResponse\"\v\xca\xf3\x18\afs:data\x12]\n" +
+	"\tMkdirData\x12 .mako.plugin.v1.MkdirDataRequest\x1a!.mako.plugin.v1.MkdirDataResponse\"\v\xca\xf3\x18\afs:data\x12`\n" +
+	"\n" +
+	"DeleteData\x12!.mako.plugin.v1.DeleteDataRequest\x1a\".mako.plugin.v1.DeleteDataResponse\"\v\xca\xf3\x18\afs:data\x12Z\n" +
+	"\bMoveData\x12\x1f.mako.plugin.v1.MoveDataRequest\x1a .mako.plugin.v1.MoveDataResponse\"\v\xca\xf3\x18\afs:data\x12]\n" +
+	"\tDataStats\x12 .mako.plugin.v1.DataStatsRequest\x1a!.mako.plugin.v1.DataStatsResponse\"\v\xca\xf3\x18\afs:dataB2Z0github.com/ironpark/mako/internal/plugin/hostapib\x06proto3"
 
 var (
 	file_mako_plugin_v1_host_proto_rawDescOnce sync.Once
@@ -3017,7 +4124,7 @@ func file_mako_plugin_v1_host_proto_rawDescGZIP() []byte {
 	return file_mako_plugin_v1_host_proto_rawDescData
 }
 
-var file_mako_plugin_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
+var file_mako_plugin_v1_host_proto_msgTypes = make([]protoimpl.MessageInfo, 67)
 var file_mako_plugin_v1_host_proto_goTypes = []any{
 	(*WriteRequest)(nil),           // 0: mako.plugin.v1.WriteRequest
 	(*WriteResponse)(nil),          // 1: mako.plugin.v1.WriteResponse
@@ -3067,8 +4174,25 @@ var file_mako_plugin_v1_host_proto_goTypes = []any{
 	(*SyncPutResponse)(nil),        // 45: mako.plugin.v1.SyncPutResponse
 	(*SyncDeleteRequest)(nil),      // 46: mako.plugin.v1.SyncDeleteRequest
 	(*SyncDeleteResponse)(nil),     // 47: mako.plugin.v1.SyncDeleteResponse
-	nil,                            // 48: mako.plugin.v1.FetchRequest.HeadersEntry
-	nil,                            // 49: mako.plugin.v1.FetchResponse.HeadersEntry
+	(*ReadDataRequest)(nil),        // 48: mako.plugin.v1.ReadDataRequest
+	(*ReadDataResponse)(nil),       // 49: mako.plugin.v1.ReadDataResponse
+	(*WriteDataRequest)(nil),       // 50: mako.plugin.v1.WriteDataRequest
+	(*WriteDataResponse)(nil),      // 51: mako.plugin.v1.WriteDataResponse
+	(*ListDataRequest)(nil),        // 52: mako.plugin.v1.ListDataRequest
+	(*DataEntry)(nil),              // 53: mako.plugin.v1.DataEntry
+	(*ListDataResponse)(nil),       // 54: mako.plugin.v1.ListDataResponse
+	(*StatDataRequest)(nil),        // 55: mako.plugin.v1.StatDataRequest
+	(*StatDataResponse)(nil),       // 56: mako.plugin.v1.StatDataResponse
+	(*MkdirDataRequest)(nil),       // 57: mako.plugin.v1.MkdirDataRequest
+	(*MkdirDataResponse)(nil),      // 58: mako.plugin.v1.MkdirDataResponse
+	(*DeleteDataRequest)(nil),      // 59: mako.plugin.v1.DeleteDataRequest
+	(*DeleteDataResponse)(nil),     // 60: mako.plugin.v1.DeleteDataResponse
+	(*MoveDataRequest)(nil),        // 61: mako.plugin.v1.MoveDataRequest
+	(*MoveDataResponse)(nil),       // 62: mako.plugin.v1.MoveDataResponse
+	(*DataStatsRequest)(nil),       // 63: mako.plugin.v1.DataStatsRequest
+	(*DataStatsResponse)(nil),      // 64: mako.plugin.v1.DataStatsResponse
+	nil,                            // 65: mako.plugin.v1.FetchRequest.HeadersEntry
+	nil,                            // 66: mako.plugin.v1.FetchResponse.HeadersEntry
 }
 var file_mako_plugin_v1_host_proto_depIdxs = []int32{
 	6,  // 0: mako.plugin.v1.GetSettingResponse.setting:type_name -> mako.plugin.v1.Setting
@@ -3078,57 +4202,74 @@ var file_mako_plugin_v1_host_proto_depIdxs = []int32{
 	23, // 4: mako.plugin.v1.SessionEvent.message:type_name -> mako.plugin.v1.AgentMessage
 	28, // 5: mako.plugin.v1.ListSessionsResponse.sessions:type_name -> mako.plugin.v1.Session
 	28, // 6: mako.plugin.v1.GetSessionResponse.session:type_name -> mako.plugin.v1.Session
-	48, // 7: mako.plugin.v1.FetchRequest.headers:type_name -> mako.plugin.v1.FetchRequest.HeadersEntry
-	49, // 8: mako.plugin.v1.FetchResponse.headers:type_name -> mako.plugin.v1.FetchResponse.HeadersEntry
+	65, // 7: mako.plugin.v1.FetchRequest.headers:type_name -> mako.plugin.v1.FetchRequest.HeadersEntry
+	66, // 8: mako.plugin.v1.FetchResponse.headers:type_name -> mako.plugin.v1.FetchResponse.HeadersEntry
 	37, // 9: mako.plugin.v1.BatchRequest.statements:type_name -> mako.plugin.v1.DbStatement
 	36, // 10: mako.plugin.v1.BatchResponse.results:type_name -> mako.plugin.v1.ExecResponse
-	0,  // 11: mako.plugin.v1.LogService.Write:input_type -> mako.plugin.v1.WriteRequest
-	2,  // 12: mako.plugin.v1.SettingsService.GetSetting:input_type -> mako.plugin.v1.GetSettingRequest
-	4,  // 13: mako.plugin.v1.SettingsService.ListSettings:input_type -> mako.plugin.v1.ListSettingsRequest
-	7,  // 14: mako.plugin.v1.StorageService.GetItem:input_type -> mako.plugin.v1.GetItemRequest
-	9,  // 15: mako.plugin.v1.StorageService.SetItem:input_type -> mako.plugin.v1.SetItemRequest
-	11, // 16: mako.plugin.v1.StorageService.DeleteItem:input_type -> mako.plugin.v1.DeleteItemRequest
-	13, // 17: mako.plugin.v1.StorageService.ListKeys:input_type -> mako.plugin.v1.ListKeysRequest
-	24, // 18: mako.plugin.v1.SessionsService.ListSessions:input_type -> mako.plugin.v1.ListSessionsRequest
-	26, // 19: mako.plugin.v1.SessionsService.GetSession:input_type -> mako.plugin.v1.GetSessionRequest
-	15, // 20: mako.plugin.v1.SessionsService.ReadTranscript:input_type -> mako.plugin.v1.ReadTranscriptRequest
-	18, // 21: mako.plugin.v1.SessionsService.Subscribe:input_type -> mako.plugin.v1.SubscribeRequest
-	20, // 22: mako.plugin.v1.SessionsService.Unsubscribe:input_type -> mako.plugin.v1.UnsubscribeRequest
-	29, // 23: mako.plugin.v1.HttpService.Fetch:input_type -> mako.plugin.v1.FetchRequest
-	31, // 24: mako.plugin.v1.CommandsService.RunCommand:input_type -> mako.plugin.v1.RunCommandRequest
-	33, // 25: mako.plugin.v1.DbService.Query:input_type -> mako.plugin.v1.QueryRequest
-	35, // 26: mako.plugin.v1.DbService.Exec:input_type -> mako.plugin.v1.ExecRequest
-	38, // 27: mako.plugin.v1.DbService.Batch:input_type -> mako.plugin.v1.BatchRequest
-	40, // 28: mako.plugin.v1.DbService.Stats:input_type -> mako.plugin.v1.StatsRequest
-	42, // 29: mako.plugin.v1.DbService.SyncEnable:input_type -> mako.plugin.v1.SyncEnableRequest
-	44, // 30: mako.plugin.v1.DbService.SyncPut:input_type -> mako.plugin.v1.SyncPutRequest
-	46, // 31: mako.plugin.v1.DbService.SyncDelete:input_type -> mako.plugin.v1.SyncDeleteRequest
-	1,  // 32: mako.plugin.v1.LogService.Write:output_type -> mako.plugin.v1.WriteResponse
-	3,  // 33: mako.plugin.v1.SettingsService.GetSetting:output_type -> mako.plugin.v1.GetSettingResponse
-	5,  // 34: mako.plugin.v1.SettingsService.ListSettings:output_type -> mako.plugin.v1.ListSettingsResponse
-	8,  // 35: mako.plugin.v1.StorageService.GetItem:output_type -> mako.plugin.v1.GetItemResponse
-	10, // 36: mako.plugin.v1.StorageService.SetItem:output_type -> mako.plugin.v1.SetItemResponse
-	12, // 37: mako.plugin.v1.StorageService.DeleteItem:output_type -> mako.plugin.v1.DeleteItemResponse
-	14, // 38: mako.plugin.v1.StorageService.ListKeys:output_type -> mako.plugin.v1.ListKeysResponse
-	25, // 39: mako.plugin.v1.SessionsService.ListSessions:output_type -> mako.plugin.v1.ListSessionsResponse
-	27, // 40: mako.plugin.v1.SessionsService.GetSession:output_type -> mako.plugin.v1.GetSessionResponse
-	16, // 41: mako.plugin.v1.SessionsService.ReadTranscript:output_type -> mako.plugin.v1.ReadTranscriptResponse
-	19, // 42: mako.plugin.v1.SessionsService.Subscribe:output_type -> mako.plugin.v1.SubscribeResponse
-	21, // 43: mako.plugin.v1.SessionsService.Unsubscribe:output_type -> mako.plugin.v1.UnsubscribeResponse
-	30, // 44: mako.plugin.v1.HttpService.Fetch:output_type -> mako.plugin.v1.FetchResponse
-	32, // 45: mako.plugin.v1.CommandsService.RunCommand:output_type -> mako.plugin.v1.RunCommandResponse
-	34, // 46: mako.plugin.v1.DbService.Query:output_type -> mako.plugin.v1.QueryResponse
-	36, // 47: mako.plugin.v1.DbService.Exec:output_type -> mako.plugin.v1.ExecResponse
-	39, // 48: mako.plugin.v1.DbService.Batch:output_type -> mako.plugin.v1.BatchResponse
-	41, // 49: mako.plugin.v1.DbService.Stats:output_type -> mako.plugin.v1.StatsResponse
-	43, // 50: mako.plugin.v1.DbService.SyncEnable:output_type -> mako.plugin.v1.SyncEnableResponse
-	45, // 51: mako.plugin.v1.DbService.SyncPut:output_type -> mako.plugin.v1.SyncPutResponse
-	47, // 52: mako.plugin.v1.DbService.SyncDelete:output_type -> mako.plugin.v1.SyncDeleteResponse
-	32, // [32:53] is the sub-list for method output_type
-	11, // [11:32] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	53, // 11: mako.plugin.v1.ListDataResponse.entries:type_name -> mako.plugin.v1.DataEntry
+	0,  // 12: mako.plugin.v1.LogService.Write:input_type -> mako.plugin.v1.WriteRequest
+	2,  // 13: mako.plugin.v1.SettingsService.GetSetting:input_type -> mako.plugin.v1.GetSettingRequest
+	4,  // 14: mako.plugin.v1.SettingsService.ListSettings:input_type -> mako.plugin.v1.ListSettingsRequest
+	7,  // 15: mako.plugin.v1.StorageService.GetItem:input_type -> mako.plugin.v1.GetItemRequest
+	9,  // 16: mako.plugin.v1.StorageService.SetItem:input_type -> mako.plugin.v1.SetItemRequest
+	11, // 17: mako.plugin.v1.StorageService.DeleteItem:input_type -> mako.plugin.v1.DeleteItemRequest
+	13, // 18: mako.plugin.v1.StorageService.ListKeys:input_type -> mako.plugin.v1.ListKeysRequest
+	24, // 19: mako.plugin.v1.SessionsService.ListSessions:input_type -> mako.plugin.v1.ListSessionsRequest
+	26, // 20: mako.plugin.v1.SessionsService.GetSession:input_type -> mako.plugin.v1.GetSessionRequest
+	15, // 21: mako.plugin.v1.SessionsService.ReadTranscript:input_type -> mako.plugin.v1.ReadTranscriptRequest
+	18, // 22: mako.plugin.v1.SessionsService.Subscribe:input_type -> mako.plugin.v1.SubscribeRequest
+	20, // 23: mako.plugin.v1.SessionsService.Unsubscribe:input_type -> mako.plugin.v1.UnsubscribeRequest
+	29, // 24: mako.plugin.v1.HttpService.Fetch:input_type -> mako.plugin.v1.FetchRequest
+	31, // 25: mako.plugin.v1.CommandsService.RunCommand:input_type -> mako.plugin.v1.RunCommandRequest
+	33, // 26: mako.plugin.v1.DbService.Query:input_type -> mako.plugin.v1.QueryRequest
+	35, // 27: mako.plugin.v1.DbService.Exec:input_type -> mako.plugin.v1.ExecRequest
+	38, // 28: mako.plugin.v1.DbService.Batch:input_type -> mako.plugin.v1.BatchRequest
+	40, // 29: mako.plugin.v1.DbService.Stats:input_type -> mako.plugin.v1.StatsRequest
+	42, // 30: mako.plugin.v1.DbService.SyncEnable:input_type -> mako.plugin.v1.SyncEnableRequest
+	44, // 31: mako.plugin.v1.DbService.SyncPut:input_type -> mako.plugin.v1.SyncPutRequest
+	46, // 32: mako.plugin.v1.DbService.SyncDelete:input_type -> mako.plugin.v1.SyncDeleteRequest
+	48, // 33: mako.plugin.v1.DatafsService.ReadData:input_type -> mako.plugin.v1.ReadDataRequest
+	50, // 34: mako.plugin.v1.DatafsService.WriteData:input_type -> mako.plugin.v1.WriteDataRequest
+	52, // 35: mako.plugin.v1.DatafsService.ListData:input_type -> mako.plugin.v1.ListDataRequest
+	55, // 36: mako.plugin.v1.DatafsService.StatData:input_type -> mako.plugin.v1.StatDataRequest
+	57, // 37: mako.plugin.v1.DatafsService.MkdirData:input_type -> mako.plugin.v1.MkdirDataRequest
+	59, // 38: mako.plugin.v1.DatafsService.DeleteData:input_type -> mako.plugin.v1.DeleteDataRequest
+	61, // 39: mako.plugin.v1.DatafsService.MoveData:input_type -> mako.plugin.v1.MoveDataRequest
+	63, // 40: mako.plugin.v1.DatafsService.DataStats:input_type -> mako.plugin.v1.DataStatsRequest
+	1,  // 41: mako.plugin.v1.LogService.Write:output_type -> mako.plugin.v1.WriteResponse
+	3,  // 42: mako.plugin.v1.SettingsService.GetSetting:output_type -> mako.plugin.v1.GetSettingResponse
+	5,  // 43: mako.plugin.v1.SettingsService.ListSettings:output_type -> mako.plugin.v1.ListSettingsResponse
+	8,  // 44: mako.plugin.v1.StorageService.GetItem:output_type -> mako.plugin.v1.GetItemResponse
+	10, // 45: mako.plugin.v1.StorageService.SetItem:output_type -> mako.plugin.v1.SetItemResponse
+	12, // 46: mako.plugin.v1.StorageService.DeleteItem:output_type -> mako.plugin.v1.DeleteItemResponse
+	14, // 47: mako.plugin.v1.StorageService.ListKeys:output_type -> mako.plugin.v1.ListKeysResponse
+	25, // 48: mako.plugin.v1.SessionsService.ListSessions:output_type -> mako.plugin.v1.ListSessionsResponse
+	27, // 49: mako.plugin.v1.SessionsService.GetSession:output_type -> mako.plugin.v1.GetSessionResponse
+	16, // 50: mako.plugin.v1.SessionsService.ReadTranscript:output_type -> mako.plugin.v1.ReadTranscriptResponse
+	19, // 51: mako.plugin.v1.SessionsService.Subscribe:output_type -> mako.plugin.v1.SubscribeResponse
+	21, // 52: mako.plugin.v1.SessionsService.Unsubscribe:output_type -> mako.plugin.v1.UnsubscribeResponse
+	30, // 53: mako.plugin.v1.HttpService.Fetch:output_type -> mako.plugin.v1.FetchResponse
+	32, // 54: mako.plugin.v1.CommandsService.RunCommand:output_type -> mako.plugin.v1.RunCommandResponse
+	34, // 55: mako.plugin.v1.DbService.Query:output_type -> mako.plugin.v1.QueryResponse
+	36, // 56: mako.plugin.v1.DbService.Exec:output_type -> mako.plugin.v1.ExecResponse
+	39, // 57: mako.plugin.v1.DbService.Batch:output_type -> mako.plugin.v1.BatchResponse
+	41, // 58: mako.plugin.v1.DbService.Stats:output_type -> mako.plugin.v1.StatsResponse
+	43, // 59: mako.plugin.v1.DbService.SyncEnable:output_type -> mako.plugin.v1.SyncEnableResponse
+	45, // 60: mako.plugin.v1.DbService.SyncPut:output_type -> mako.plugin.v1.SyncPutResponse
+	47, // 61: mako.plugin.v1.DbService.SyncDelete:output_type -> mako.plugin.v1.SyncDeleteResponse
+	49, // 62: mako.plugin.v1.DatafsService.ReadData:output_type -> mako.plugin.v1.ReadDataResponse
+	51, // 63: mako.plugin.v1.DatafsService.WriteData:output_type -> mako.plugin.v1.WriteDataResponse
+	54, // 64: mako.plugin.v1.DatafsService.ListData:output_type -> mako.plugin.v1.ListDataResponse
+	56, // 65: mako.plugin.v1.DatafsService.StatData:output_type -> mako.plugin.v1.StatDataResponse
+	58, // 66: mako.plugin.v1.DatafsService.MkdirData:output_type -> mako.plugin.v1.MkdirDataResponse
+	60, // 67: mako.plugin.v1.DatafsService.DeleteData:output_type -> mako.plugin.v1.DeleteDataResponse
+	62, // 68: mako.plugin.v1.DatafsService.MoveData:output_type -> mako.plugin.v1.MoveDataResponse
+	64, // 69: mako.plugin.v1.DatafsService.DataStats:output_type -> mako.plugin.v1.DataStatsResponse
+	41, // [41:70] is the sub-list for method output_type
+	12, // [12:41] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_mako_plugin_v1_host_proto_init() }
@@ -3143,9 +4284,9 @@ func file_mako_plugin_v1_host_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_plugin_v1_host_proto_rawDesc), len(file_mako_plugin_v1_host_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   50,
+			NumMessages:   67,
 			NumExtensions: 0,
-			NumServices:   7,
+			NumServices:   8,
 		},
 		GoTypes:           file_mako_plugin_v1_host_proto_goTypes,
 		DependencyIndexes: file_mako_plugin_v1_host_proto_depIdxs,

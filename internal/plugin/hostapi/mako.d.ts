@@ -76,6 +76,18 @@ export interface ScopedDbApi {
   syncDelete(table: string, id: string): Promise<SyncDeleteResponse>;
 }
 
+/** Scoped private data-directory file helper bound to a ScopeContext's scopeKey. */
+export interface ScopedDatafsApi {
+  read(path: string, opts?: { offset?: number; length?: number }): Promise<ReadDataResponse>;
+  write(path: string, content: string | { text?: string; data?: string; makeDirs?: boolean }, opts?: { makeDirs?: boolean }): Promise<WriteDataResponse>;
+  list(path?: string, opts?: { recursive?: boolean }): Promise<ListDataResponse>;
+  stat(path: string): Promise<StatDataResponse>;
+  mkdir(path: string): Promise<MkdirDataResponse>;
+  delete(path: string, opts?: { recursive?: boolean }): Promise<DeleteDataResponse>;
+  move(fromPath: string, toPath: string, opts?: { makeDirs?: boolean }): Promise<MoveDataResponse>;
+  stats(): Promise<DataStatsResponse>;
+}
+
 /** Active workspace scope context passed to block lifecycle hooks and scoped tools. */
 export interface ScopeContext {
   readonly scope: PluginScope;
@@ -89,6 +101,7 @@ export interface ScopeContext {
   readonly storage: ScopedStorageApi;
   readonly settings: ScopedSettingsApi;
   readonly db: ScopedDbApi;
+  readonly datafs: ScopedDatafsApi;
 }
 
 export interface Blocks {
@@ -240,6 +253,8 @@ export interface HostApi {
   readonly commands: CommandsApi;
   /** DbService gives a plugin sandboxed SQLite databases (per scope) and optional */
   readonly db: DbApi;
+  /** DatafsService gives a plugin its own sandboxed, per-scope directory tree */
+  readonly datafs: DatafsApi;
   /** MessagesService acts on this node's sessions: sends their agents */
   readonly messages: MessagesApi;
   /** FilesService reads the files of the projects this node knows, and */
@@ -433,6 +448,69 @@ export interface DbApi {
    * Needs db:sync.
    */
   syncDelete(req?: SyncDeleteRequest): Promise<SyncDeleteResponse>;
+}
+
+/**
+ * DatafsService gives a plugin its own sandboxed, per-scope directory tree
+ * under plugin-data/<id>/files/ for storing and managing files and folders
+ * within a quota.
+ */
+export interface DatafsApi {
+  /**
+   * ReadData reads a regular file from the plugin's private data directory.
+   *
+   * Needs fs:data.
+   */
+  readData(req?: ReadDataRequest): Promise<ReadDataResponse>;
+  /**
+   * WriteData writes a regular file whole, atomically, inside the plugin's
+   * private data directory.
+   *
+   * Needs fs:data.
+   */
+  writeData(req?: WriteDataRequest): Promise<WriteDataResponse>;
+  /**
+   * ListData lists entries in a directory (optionally recursively) inside the
+   * plugin's private data directory.
+   *
+   * Needs fs:data.
+   */
+  listData(req?: ListDataRequest): Promise<ListDataResponse>;
+  /**
+   * StatData returns metadata for a file or directory inside the plugin's
+   * private data directory.
+   *
+   * Needs fs:data.
+   */
+  statData(req?: StatDataRequest): Promise<StatDataResponse>;
+  /**
+   * MkdirData creates a directory (and any missing parents) inside the
+   * plugin's private data directory.
+   *
+   * Needs fs:data.
+   */
+  mkdirData(req?: MkdirDataRequest): Promise<MkdirDataResponse>;
+  /**
+   * DeleteData removes a file or directory inside the plugin's private data
+   * directory.
+   *
+   * Needs fs:data.
+   */
+  deleteData(req?: DeleteDataRequest): Promise<DeleteDataResponse>;
+  /**
+   * MoveData renames or moves a file or directory within the same scope of the
+   * plugin's private data directory.
+   *
+   * Needs fs:data.
+   */
+  moveData(req?: MoveDataRequest): Promise<MoveDataResponse>;
+  /**
+   * DataStats returns total bytes used across the plugin's private data
+   * directory, its quota, and file count.
+   *
+   * Needs fs:data.
+   */
+  dataStats(req?: DataStatsRequest): Promise<DataStatsResponse>;
 }
 
 /**
@@ -1004,6 +1082,125 @@ export interface SyncDeleteRequest {
 /** SyncDeleteResponse says whether the row existed before deletion. */
 export interface SyncDeleteResponse {
   deleted?: boolean;
+}
+
+/** ReadDataRequest names a file and optional byte slice inside the plugin's data dir. */
+export interface ReadDataRequest {
+  path?: string;
+  offset?: number;
+  length?: number;
+  scope?: string;
+}
+
+/** ReadDataResponse returns the file's contents when found. */
+export interface ReadDataResponse {
+  found?: boolean;
+  text?: string;
+  data?: string /* base64 */;
+  size?: number;
+  eof?: boolean;
+  binary?: boolean;
+  modifiedMs?: number;
+}
+
+/** WriteDataRequest writes text or bytes to a file in the plugin's data dir. */
+export interface WriteDataRequest {
+  path?: string;
+  text?: string;
+  data?: string /* base64 */;
+  makeDirs?: boolean;
+  scope?: string;
+}
+
+/** WriteDataResponse reports the written size and plugin-wide quota usage. */
+export interface WriteDataResponse {
+  size?: number;
+  usedBytes?: number;
+  quotaBytes?: number;
+}
+
+/** ListDataRequest lists a directory in the plugin's data dir. */
+export interface ListDataRequest {
+  path?: string;
+  recursive?: boolean;
+  scope?: string;
+}
+
+/** DataEntry describes one file or directory inside the plugin's data dir. */
+export interface DataEntry {
+  /** path is the slash-separated path relative to the scope root. */
+  path?: string;
+  /** name is the entry's base name. */
+  name?: string;
+  dir?: boolean;
+  size?: number;
+  modifiedMs?: number;
+}
+
+/** ListDataResponse holds directory entries sorted by path. */
+export interface ListDataResponse {
+  entries?: DataEntry[];
+  truncated?: boolean;
+}
+
+/** StatDataRequest asks for metadata of a path in the plugin's data dir. */
+export interface StatDataRequest {
+  path?: string;
+  scope?: string;
+}
+
+/** StatDataResponse reports whether a path exists and its metadata. */
+export interface StatDataResponse {
+  found?: boolean;
+  dir?: boolean;
+  size?: number;
+  modifiedMs?: number;
+}
+
+/** MkdirDataRequest creates a directory path in the plugin's data dir. */
+export interface MkdirDataRequest {
+  path?: string;
+  scope?: string;
+}
+
+/** MkdirDataResponse confirms directory creation. */
+export interface MkdirDataResponse {
+}
+
+/** DeleteDataRequest removes a file or directory in the plugin's data dir. */
+export interface DeleteDataRequest {
+  path?: string;
+  recursive?: boolean;
+  scope?: string;
+}
+
+/** DeleteDataResponse says whether the target existed before deletion. */
+export interface DeleteDataResponse {
+  deleted?: boolean;
+}
+
+/** MoveDataRequest moves or renames a file or directory within a scope. */
+export interface MoveDataRequest {
+  fromPath?: string;
+  toPath?: string;
+  makeDirs?: boolean;
+  scope?: string;
+}
+
+/** MoveDataResponse confirms the move. */
+export interface MoveDataResponse {
+}
+
+/** DataStatsRequest asks for plugin private file quota and usage. */
+export interface DataStatsRequest {
+  scope?: string;
+}
+
+/** DataStatsResponse reports plugin-wide file storage usage and quota. */
+export interface DataStatsResponse {
+  usedBytes?: number;
+  quotaBytes?: number;
+  fileCount?: number;
 }
 
 /** SendMessageRequest is a message for a session. */

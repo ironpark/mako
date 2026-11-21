@@ -29,7 +29,6 @@ import (
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/layoutdoc"
-	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transport"
@@ -52,7 +51,6 @@ type projectAgents struct {
 	watches      map[string]int       // active watch_agent count per caller session
 	cliWaiters   map[string]int       // active `mako-msg wait` / mod long-poll waiters per session (suppress PTY fallback)
 	modPollUntil map[string]time.Time // grace window between mod long-poll cycles so PTY fallback never races
-	pluginTools  map[*sdk.Server][]string
 	agySidecar   *agySidecarClient
 }
 
@@ -517,7 +515,6 @@ type agentMCPSnapshot struct {
 	available             []availableAgent
 	presets               []spawnablePreset
 	blocks                []layoutdoc.Block
-	pluginTools           []plugin.ContributedTool
 	listAgentsDesc        string
 	listAgentProfilesDesc string
 	spawnAgentDesc        string
@@ -529,16 +526,11 @@ func (d *Daemon) agentMCPSnapshot() agentMCPSnapshot {
 	available := d.availableAgents()
 	presets := d.spawnablePresets()
 	blocks := d.blocks()
-	var pluginTools []plugin.ContributedTool
-	if d.plugins != nil {
-		pluginTools = d.plugins.Tools()
-	}
 	sigPayload, _ := json.Marshal(struct {
-		Available   []availableAgent         `json:"available"`
-		Presets     []spawnablePreset        `json:"presets"`
-		Blocks      []layoutdoc.Block        `json:"blocks"`
-		PluginTools []plugin.ContributedTool `json:"plugin_tools"`
-	}{available, presets, blocks, pluginTools})
+		Available []availableAgent  `json:"available"`
+		Presets   []spawnablePreset `json:"presets"`
+		Blocks    []layoutdoc.Block `json:"blocks"`
+	}{available, presets, blocks})
 	sum := sha256.Sum256(sigPayload)
 	agentSummaryText := summarizeAvailableForSchema(available)
 	listAgentsDesc := "List active and saved agent sessions in this project, on this node and, for a project of several folders, on other nodes, with their IDs, status and messaging support, plus available agent types and profiles."
@@ -559,7 +551,6 @@ func (d *Daemon) agentMCPSnapshot() agentMCPSnapshot {
 		available:             available,
 		presets:               presets,
 		blocks:                blocks,
-		pluginTools:           pluginTools,
 		listAgentsDesc:        listAgentsDesc,
 		listAgentProfilesDesc: listAgentProfilesDesc,
 		spawnAgentDesc:        spawnAgentDesc,
@@ -654,8 +645,30 @@ func (d *Daemon) agentInstructions(peer *agentPeer) string {
 	default:
 		waitGuidance = "NEVER poll read_messages in a loop. Incoming messages, child status notes, and watch_agent notifications are delivered automatically once your turn ends. Use watch_agent (non-blocking) to register a one-shot push notification when another agent finishes a turn or prints specific terminal text, or run `mako-msg wait --all-children` as a background shell command for event-driven waiting."
 	}
-	return fmt.Sprintf("You are Mako session %s (mode=%s, AGENT_MAKO_SESSION=%s, AGENT_MAKO_MODE=%s) in project %s. Parent session: %s. Before delegating, use list_agent_profiles to inspect spawnable agent configurations and profile presets (with descriptions, models, efforts and YOLO settings), or list_agents to inspect active project sessions. Choose a spawnable preset whose specialties match the task, then pass its agent and profile names to spawn_agent (omit profile for an agent default). Use send_message to communicate, with agents of this project on other nodes too, which list_agents lists with their node. %s Report results to the parent with send_message. Of an agent you spawned that waits on the user, or exits without reporting, you hear in a Mako note. stop_agent only stops agents you spawned. The mako window's layout is a document you read with get_layout and list_blocks; set_layout, patch_layout and undo_layout change it once the user allows, and only what the user keeps stays. show_ui shows a block of UI of yours in the window, a form say, and the user's taps on it come back to you as messages from the window; update_ui and close_ui change and close it. A UI to keep is a plugin: list_blocks names the folder to write one into.",
-		peer.id, mode, peer.id, mode, info.GetProject(), peer.parent, waitGuidance)
+	pluginHint := ""
+	if ids := d.usablePluginIDs(peer); len(ids) > 0 {
+		pluginHint = fmt.Sprintf(" Available plugins via CLI (`mako-plugin list`, `mako-plugin help <plugin> [tool]`, `mako-plugin call <plugin> <tool> [--param val | --json ...]`): %s.", strings.Join(ids, ", "))
+	}
+	return fmt.Sprintf("You are Mako session %s (mode=%s, AGENT_MAKO_SESSION=%s, AGENT_MAKO_MODE=%s) in project %s. Parent session: %s. Before delegating, use list_agent_profiles to inspect spawnable agent configurations and profile presets (with descriptions, models, efforts and YOLO settings), or list_agents to inspect active project sessions. Choose a spawnable preset whose specialties match the task, then pass its agent and profile names to spawn_agent (omit profile for an agent default). Use send_message to communicate, with agents of this project on other nodes too, which list_agents lists with their node. %s Report results to the parent with send_message. Of an agent you spawned that waits on the user, or exits without reporting, you hear in a Mako note. stop_agent only stops agents you spawned. The mako window's layout is a document you read with get_layout and list_blocks; set_layout, patch_layout and undo_layout change it once the user allows, and only what the user keeps stays. show_ui shows a block of UI of yours in the window, a form say, and the user's taps on it come back to you as messages from the window; update_ui and close_ui change and close it. A UI to keep is a plugin: list_blocks names the folder to write one into.%s",
+		peer.id, mode, peer.id, mode, info.GetProject(), peer.parent, waitGuidance, pluginHint)
+}
+
+func (d *Daemon) usablePluginIDs(peer *agentPeer) []string {
+	if d.plugins == nil || peer == nil || peer.session == nil {
+		return nil
+	}
+	scopeCtx := d.sessionScopeContext(peer.session.ID(), peer.session.Info())
+	seen := map[string]bool{}
+	var ids []string
+	for _, tl := range d.plugins.Tools() {
+		if !toolUsableInScope(tl.Scope, scopeCtx) || seen[tl.PluginID] {
+			continue
+		}
+		seen[tl.PluginID] = true
+		ids = append(ids, tl.PluginID)
+	}
+	slices.Sort(ids)
+	return ids
 }
 
 func (d *Daemon) newProjectAgentServer(peer *agentPeer, snap agentMCPSnapshot, enabled bool) (*sdk.Server, string) {
@@ -689,60 +702,6 @@ func (d *Daemon) addDynamicAgentTools(server *sdk.Server, peer *agentPeer, snap 
 		return nil, out, err
 	})
 	d.addListBlocksTool(server, peer, snap.listBlocksDesc)
-	d.syncPluginMCPTools(server, peer, snap.pluginTools)
-}
-
-func (d *Daemon) syncPluginMCPTools(server *sdk.Server, peer *agentPeer, tools []plugin.ContributedTool) {
-	d.projectAgents.mu.Lock()
-	if d.projectAgents.pluginTools == nil {
-		d.projectAgents.pluginTools = map[*sdk.Server][]string{}
-	}
-	prev := d.projectAgents.pluginTools[server]
-	nextNames := make([]string, 0, len(tools))
-	for _, tl := range tools {
-		nextNames = append(nextNames, tl.MCPName)
-	}
-	d.projectAgents.pluginTools[server] = nextNames
-	d.projectAgents.mu.Unlock()
-
-	var removed []string
-	for _, old := range prev {
-		if !slices.Contains(nextNames, old) {
-			removed = append(removed, old)
-		}
-	}
-	if len(removed) > 0 {
-		server.RemoveTools(removed...)
-	}
-	for _, tl := range tools {
-		tool := tl
-		rawSchema, _ := json.Marshal(tool.Schema)
-		server.AddTool(&sdk.Tool{
-			Name:        tool.MCPName,
-			Description: tool.Description,
-			InputSchema: json.RawMessage(rawSchema),
-		}, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
-			s, err := d.projectCaller(peer)
-			if err != nil {
-				return nil, err
-			}
-			if d.plugins == nil {
-				return nil, errors.New("plugins are not enabled on this node")
-			}
-			var args json.RawMessage
-			if req != nil && req.Params != nil {
-				args = req.Params.Arguments
-			}
-			scopeCtx := d.sessionScopeContext(s.ID(), s.Info())
-			out, err := d.plugins.CallToolScoped(ctx, tool.PluginID, tool.ID, args, scopeCtx)
-			if err != nil {
-				return nil, err
-			}
-			return &sdk.CallToolResult{
-				Content: []sdk.Content{&sdk.TextContent{Text: out}},
-			}, nil
-		})
-	}
 }
 
 func (d *Daemon) registerProjectAgentTools(server *sdk.Server, peer *agentPeer, snap agentMCPSnapshot) {
@@ -810,11 +769,7 @@ func (d *Daemon) syncPeerServerLocked(peer *agentPeer, srv *sdk.Server, snap age
 	case !enabled && prev == agentMCPSigDisabled:
 		return
 	case !enabled:
-		d.projectAgents.mu.Lock()
-		extra := d.projectAgents.pluginTools[srv]
-		delete(d.projectAgents.pluginTools, srv)
-		d.projectAgents.mu.Unlock()
-		srv.RemoveTools(append(slices.Clone(agentMCPToolNames), extra...)...)
+		srv.RemoveTools(agentMCPToolNames...)
 		nextSig = agentMCPSigDisabled
 	case prev == agentMCPSigDisabled:
 		d.registerProjectAgentTools(srv, peer, snap)

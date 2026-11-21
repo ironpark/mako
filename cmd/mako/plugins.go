@@ -56,6 +56,9 @@ func plugins(ctx context.Context, c *client.Client, args []string) error {
 	if op == "init" {
 		return initPlugin(rest)
 	}
+	if op == "tools" {
+		return listPluginTools(ctx, c, rest)
+	}
 	if storeOps[op] {
 		return pluginStore(ctx, c, op, rest)
 	}
@@ -114,6 +117,41 @@ func plugins(ctx context.Context, c *client.Client, args []string) error {
 	}
 	if done.GetToast() != "" {
 		fmt.Println(done.GetToast())
+	}
+	return nil
+}
+
+// listPluginTools lists tools contributed by this node's plugins.
+func listPluginTools(ctx context.Context, c *client.Client, args []string) error {
+	filter := ""
+	if len(args) > 0 {
+		filter = args[0]
+	}
+	list, err := c.Plugins(ctx)
+	if err != nil {
+		return err
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "PLUGIN\tTOOL\tSCOPE\tSTATE\tDESCRIPTION")
+	count := 0
+	for _, p := range list.GetPlugins() {
+		if filter != "" && p.GetId() != filter {
+			continue
+		}
+		for _, tl := range p.GetTools() {
+			scope := tl.GetScope()
+			if scope == "" {
+				scope = "global"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", p.GetId(), tl.GetId(), scope, p.GetState(), tl.GetDescription())
+			count++
+		}
+	}
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	if count == 0 {
+		fmt.Println("No plugin tools registered.")
 	}
 	return nil
 }

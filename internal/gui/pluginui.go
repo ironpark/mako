@@ -149,7 +149,14 @@ func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
 		return f.Disabled(n.GetDisabled())
 	case "textarea":
 		id := n.GetId()
-		f := ui.TextField(v.form.input(id, n.GetValue())).Key(v.block + "\x00" + v.scope + id).Lines(4).Placeholder(n.GetText()).Name(cmpTone(n.GetText(), T("Input")))
+		lines := 4
+		switch n.GetSize() {
+		case "large":
+			lines = 14
+		case "small":
+			lines = 3
+		}
+		f := ui.TextField(v.form.input(id, n.GetValue())).Key(v.block + "\x00" + v.scope + id).Lines(lines).Placeholder(n.GetText()).Name(cmpTone(n.GetText(), T("Input")))
 		if n.GetChange() {
 			f = f.OnSubmit(func(s string) { v.send(id, protocol.UiSubmit, s) }).
 				OnCommit(func(s string) { v.send(id, protocol.UiChange, s) })

@@ -133,7 +133,8 @@ type model struct {
 	Tabs       *ggui.StateValue[[]string]    // every pane's tabs, in order
 	Layout     *ggui.StateValue[*layoutNode] // the panes; see layout.go
 	FocusGroup *ggui.StateValue[int]         // the current pane
-	Dragging   *ggui.StateValue[bool]        // a tab is being dragged
+	Dragging      *ggui.StateValue[bool]        // a tab is being dragged
+	StackDragging *ggui.StateValue[bool]        // a right-panel / stack tab is being dragged
 	DragItem   *ggui.StateValue[tabDrag]     // tab or project chip currently dragged from a tab bar
 	DragGhost  *ggui.StateValue[*dragGhost]  // floating preview of the dragged tab or chip
 	ChipHeld   *ggui.StateValue[string]      // foldKey of a project chip currently held down
@@ -334,6 +335,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Layout:              ggui.State(newLayout()).WithEqual(func(a, b *layoutNode) bool { return reflect.DeepEqual(a, b) }),
 		FocusGroup:          ggui.State(1),
 		Dragging:            ggui.State(false),
+		StackDragging:       ggui.State(false),
 		DragItem:            ggui.State(tabDrag{}).WithEqual(tabDragEqual),
 		DragGhost:           ggui.State((*dragGhost)(nil)),
 		ChipHeld:            ggui.State(""),

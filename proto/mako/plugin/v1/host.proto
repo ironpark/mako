@@ -532,3 +532,165 @@ message SyncDeleteRequest {
 message SyncDeleteResponse {
   bool deleted = 1;
 }
+
+// DatafsService gives a plugin its own sandboxed, per-scope directory tree
+// under plugin-data/<id>/files/ for storing and managing files and folders
+// within a quota.
+service DatafsService {
+  // ReadData reads a regular file from the plugin's private data directory.
+  rpc ReadData(ReadDataRequest) returns (ReadDataResponse) {
+    option (permission) = "fs:data";
+  }
+  // WriteData writes a regular file whole, atomically, inside the plugin's
+  // private data directory.
+  rpc WriteData(WriteDataRequest) returns (WriteDataResponse) {
+    option (permission) = "fs:data";
+  }
+  // ListData lists entries in a directory (optionally recursively) inside the
+  // plugin's private data directory.
+  rpc ListData(ListDataRequest) returns (ListDataResponse) {
+    option (permission) = "fs:data";
+  }
+  // StatData returns metadata for a file or directory inside the plugin's
+  // private data directory.
+  rpc StatData(StatDataRequest) returns (StatDataResponse) {
+    option (permission) = "fs:data";
+  }
+  // MkdirData creates a directory (and any missing parents) inside the
+  // plugin's private data directory.
+  rpc MkdirData(MkdirDataRequest) returns (MkdirDataResponse) {
+    option (permission) = "fs:data";
+  }
+  // DeleteData removes a file or directory inside the plugin's private data
+  // directory.
+  rpc DeleteData(DeleteDataRequest) returns (DeleteDataResponse) {
+    option (permission) = "fs:data";
+  }
+  // MoveData renames or moves a file or directory within the same scope of the
+  // plugin's private data directory.
+  rpc MoveData(MoveDataRequest) returns (MoveDataResponse) {
+    option (permission) = "fs:data";
+  }
+  // DataStats returns total bytes used across the plugin's private data
+  // directory, its quota, and file count.
+  rpc DataStats(DataStatsRequest) returns (DataStatsResponse) {
+    option (permission) = "fs:data";
+  }
+}
+
+// ReadDataRequest names a file and optional byte slice inside the plugin's data dir.
+message ReadDataRequest {
+  string path = 1;
+  double offset = 2;
+  uint32 length = 3;
+  string scope = 4;
+}
+
+// ReadDataResponse returns the file's contents when found.
+message ReadDataResponse {
+  bool found = 1;
+  string text = 2;
+  bytes data = 3;
+  double size = 4;
+  bool eof = 5;
+  bool binary = 6;
+  double modified_ms = 7;
+}
+
+// WriteDataRequest writes text or bytes to a file in the plugin's data dir.
+message WriteDataRequest {
+  string path = 1;
+  string text = 2;
+  bytes data = 3;
+  bool make_dirs = 4;
+  string scope = 5;
+}
+
+// WriteDataResponse reports the written size and plugin-wide quota usage.
+message WriteDataResponse {
+  double size = 1;
+  uint32 used_bytes = 2;
+  uint32 quota_bytes = 3;
+}
+
+// ListDataRequest lists a directory in the plugin's data dir.
+message ListDataRequest {
+  string path = 1;
+  bool recursive = 2;
+  string scope = 3;
+}
+
+// DataEntry describes one file or directory inside the plugin's data dir.
+message DataEntry {
+  // path is the slash-separated path relative to the scope root.
+  string path = 1;
+  // name is the entry's base name.
+  string name = 2;
+  bool dir = 3;
+  double size = 4;
+  double modified_ms = 5;
+}
+
+// ListDataResponse holds directory entries sorted by path.
+message ListDataResponse {
+  repeated DataEntry entries = 1;
+  bool truncated = 2;
+}
+
+// StatDataRequest asks for metadata of a path in the plugin's data dir.
+message StatDataRequest {
+  string path = 1;
+  string scope = 2;
+}
+
+// StatDataResponse reports whether a path exists and its metadata.
+message StatDataResponse {
+  bool found = 1;
+  bool dir = 2;
+  double size = 3;
+  double modified_ms = 4;
+}
+
+// MkdirDataRequest creates a directory path in the plugin's data dir.
+message MkdirDataRequest {
+  string path = 1;
+  string scope = 2;
+}
+
+// MkdirDataResponse confirms directory creation.
+message MkdirDataResponse {}
+
+// DeleteDataRequest removes a file or directory in the plugin's data dir.
+message DeleteDataRequest {
+  string path = 1;
+  bool recursive = 2;
+  string scope = 3;
+}
+
+// DeleteDataResponse says whether the target existed before deletion.
+message DeleteDataResponse {
+  bool deleted = 1;
+}
+
+// MoveDataRequest moves or renames a file or directory within a scope.
+message MoveDataRequest {
+  string from_path = 1;
+  string to_path = 2;
+  bool make_dirs = 3;
+  string scope = 4;
+}
+
+// MoveDataResponse confirms the move.
+message MoveDataResponse {}
+
+// DataStatsRequest asks for plugin private file quota and usage.
+message DataStatsRequest {
+  string scope = 1;
+}
+
+// DataStatsResponse reports plugin-wide file storage usage and quota.
+message DataStatsResponse {
+  uint32 used_bytes = 1;
+  uint32 quota_bytes = 2;
+  uint32 file_count = 3;
+}

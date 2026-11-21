@@ -14,7 +14,6 @@ import (
 	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
-	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/plugin/pack"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -228,15 +227,15 @@ func pluginBlockRow(m *model, b *protocol.PluginBlock) ggui.Widget {
 	})
 }
 
-// pluginToolsRow lists the MCP tools a plugin exposes to running agents.
+// pluginToolsRow lists the CLI tools a plugin exposes to running agents.
 func pluginToolsRow(pluginID string, tools []*protocol.PluginTool) ggui.Widget {
 	var chips []ggui.Widget
 	for _, tl := range tools {
-		chips = append(chips, chip(plugin.MCPToolName(pluginID, tl.GetId())))
+		chips = append(chips, chip(pluginID+" "+tl.GetId()))
 	}
 	return stackedRow(T("Agent tools"),
-		T("Exposed on the built-in MCP server so agents can interact with this plugin directly."),
-		widget.Row(chips...).Gap(6).Align(widget.AlignCenter))
+		T("Available to agents via the mako-plugin CLI, automatically scoped to the active session."),
+		widget.Wrap(chips...).Gap(6).RunGap(6))
 }
 
 // pluginDiagnosticsRow shows storage usage and a collapsible recent log viewer.

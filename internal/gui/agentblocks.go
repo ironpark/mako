@@ -91,8 +91,8 @@ func placeOp(d *layoutdoc.Doc, b *protocol.AgentBlock, shown string) layoutdoc.O
 		}
 		return op
 	}
-	if n := d.Node(layoutdoc.DetailsNode); n != nil && n.Kind == layoutdoc.KindStack {
-		return layoutdoc.Op{Op: "insert", Parent: layoutdoc.DetailsNode, Node: name}
+	if st := firstStackIn(d.Node(layoutdoc.DetailsNode)); st != nil {
+		return layoutdoc.Op{Op: "insert", Parent: st.ID, Node: name}
 	}
 	return layoutdoc.Op{Op: "insert", Parent: d.Root.ID, Node: map[string]any{"id": name, "block": name, "size": layoutdoc.DefaultDetailsSize}}
 }

@@ -101,6 +101,50 @@ function makeContext(ctxJson) {
     }),
     syncDelete: (table, id) => host.db.syncDelete({ table: String(table || ""), id: String(id || ""), scope: scopeKey }),
   });
+  const scopedDatafs = Object.freeze({
+    read: (p, opts) => host.datafs.readData({
+      path: String(p || ""),
+      offset: opts?.offset || 0,
+      length: opts?.length || 0,
+      scope: scopeKey,
+    }),
+    write(p, content, opts) {
+      if (content !== null && typeof content === "object") {
+        return host.datafs.writeData({
+          path: String(p || ""),
+          text: content.text !== undefined ? String(content.text) : "",
+          data: content.data !== undefined ? String(content.data) : undefined,
+          makeDirs: content.makeDirs !== undefined ? Boolean(content.makeDirs) : (opts?.makeDirs !== false),
+          scope: scopeKey,
+        });
+      }
+      return host.datafs.writeData({
+        path: String(p || ""),
+        text: String(content ?? ""),
+        makeDirs: opts?.makeDirs !== false,
+        scope: scopeKey,
+      });
+    },
+    list: (p, opts) => host.datafs.listData({
+      path: p === undefined ? "" : String(p || ""),
+      recursive: Boolean(opts?.recursive),
+      scope: scopeKey,
+    }),
+    stat: (p) => host.datafs.statData({ path: String(p || ""), scope: scopeKey }),
+    mkdir: (p) => host.datafs.mkdirData({ path: String(p || ""), scope: scopeKey }),
+    delete: (p, opts) => host.datafs.deleteData({
+      path: String(p || ""),
+      recursive: Boolean(opts?.recursive),
+      scope: scopeKey,
+    }),
+    move: (fromPath, toPath, opts) => host.datafs.moveData({
+      fromPath: String(fromPath || ""),
+      toPath: String(toPath || ""),
+      makeDirs: opts?.makeDirs !== false,
+      scope: scopeKey,
+    }),
+    stats: () => host.datafs.dataStats({ scope: scopeKey }),
+  });
   return Object.freeze({
     scope,
     scopeKey,
@@ -113,6 +157,7 @@ function makeContext(ctxJson) {
     storage: scopedStorage,
     settings: scopedSettings,
     db: scopedDb,
+    datafs: scopedDatafs,
   });
 }
 

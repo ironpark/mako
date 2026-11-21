@@ -197,9 +197,13 @@ func (v *layoutDraw) stack(n *layoutdoc.Node) ggui.Widget {
 		return out
 	}).WithEqual(slices.Equal)
 	choose := func(i int) { st.active.Set(n.Children[i].Block) }
+	body := widget.Stack(
+		ggui.Key(shown, func(i int) ggui.Widget { return pages[i] }),
+		ggui.If(v.m.StackDragging, func() ggui.Widget { return newStackDropZones(v.m, n) }),
+	).Expand()
 	return widget.Box(widget.Column(
-		ggui.View(labels, func(l []string) ggui.Widget { return panelTabs(shown, choose, l...) }),
+		ggui.View(labels, func(l []string) ggui.Widget { return stackTabs(v.m, n, shown, choose, l) }),
 		hline(),
-		widget.Expanded(ggui.Key(shown, func(i int) ggui.Widget { return pages[i] })),
+		widget.Expanded(body),
 	).Stretch()).Fill(skin.Surface0)
 }

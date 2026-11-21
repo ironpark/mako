@@ -298,3 +298,76 @@ func (h *host) DbSyncDelete(ctx context.Context, req *hostapi.SyncDeleteRequest)
 	}
 	return &hostapi.SyncDeleteResponse{Deleted: del}, nil
 }
+
+func (h *host) checkDatafsRate() error {
+	if !h.p.datafsRate.take() {
+		return fmt.Errorf("the plugin called datafs more than %d times a minute", datafsOpsPerMinute)
+	}
+	return nil
+}
+
+func (h *host) DatafsReadData(_ context.Context, req *hostapi.ReadDataRequest) (*hostapi.ReadDataResponse, error) {
+	if err := h.checkDatafsRate(); err != nil {
+		return nil, err
+	}
+	return h.p.datafs.read(req.GetScope(), req.GetPath(), req.GetOffset(), req.GetLength())
+}
+
+func (h *host) DatafsWriteData(_ context.Context, req *hostapi.WriteDataRequest) (*hostapi.WriteDataResponse, error) {
+	if err := h.checkDatafsRate(); err != nil {
+		return nil, err
+	}
+	return h.p.datafs.write(req.GetScope(), req.GetPath(), req.GetText(), req.GetData(), req.GetMakeDirs())
+}
+
+func (h *host) DatafsListData(_ context.Context, req *hostapi.ListDataRequest) (*hostapi.ListDataResponse, error) {
+	if err := h.checkDatafsRate(); err != nil {
+		return nil, err
+	}
+	return h.p.datafs.list(req.GetScope(), req.GetPath(), req.GetRecursive())
+}
+
+func (h *host) DatafsStatData(_ context.Context, req *hostapi.StatDataRequest) (*hostapi.StatDataResponse, error) {
+	if err := h.checkDatafsRate(); err != nil {
+		return nil, err
+	}
+	return h.p.datafs.stat(req.GetScope(), req.GetPath())
+}
+
+func (h *host) DatafsMkdirData(_ context.Context, req *hostapi.MkdirDataRequest) (*hostapi.MkdirDataResponse, error) {
+	if err := h.checkDatafsRate(); err != nil {
+		return nil, err
+	}
+	if err := h.p.datafs.mkdir(req.GetScope(), req.GetPath()); err != nil {
+		return nil, err
+	}
+	return &hostapi.MkdirDataResponse{}, nil
+}
+
+func (h *host) DatafsDeleteData(_ context.Context, req *hostapi.DeleteDataRequest) (*hostapi.DeleteDataResponse, error) {
+	if err := h.checkDatafsRate(); err != nil {
+		return nil, err
+	}
+	del, err := h.p.datafs.remove(req.GetScope(), req.GetPath(), req.GetRecursive())
+	if err != nil {
+		return nil, err
+	}
+	return &hostapi.DeleteDataResponse{Deleted: del}, nil
+}
+
+func (h *host) DatafsMoveData(_ context.Context, req *hostapi.MoveDataRequest) (*hostapi.MoveDataResponse, error) {
+	if err := h.checkDatafsRate(); err != nil {
+		return nil, err
+	}
+	if err := h.p.datafs.move(req.GetScope(), req.GetFromPath(), req.GetToPath(), req.GetMakeDirs()); err != nil {
+		return nil, err
+	}
+	return &hostapi.MoveDataResponse{}, nil
+}
+
+func (h *host) DatafsDataStats(_ context.Context, req *hostapi.DataStatsRequest) (*hostapi.DataStatsResponse, error) {
+	if err := h.checkDatafsRate(); err != nil {
+		return nil, err
+	}
+	return h.p.datafs.stats(req.GetScope())
+}

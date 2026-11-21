@@ -68,9 +68,11 @@ sleep 30
 	}
 	t.Cleanup(d.sessions.closeAll)
 
-	// mako-msg shim must exist in clipTools.
-	if _, err := os.Stat(filepath.Join(d.clipTools, "mako-msg")); err != nil {
-		t.Fatalf("expected mako-msg shim in %s: %v", d.clipTools, err)
+	// mako-msg and mako-plugin shims must exist in clipTools.
+	for _, shim := range []string{"mako-msg", "mako-plugin"} {
+		if _, err := os.Stat(filepath.Join(d.clipTools, shim)); err != nil {
+			t.Fatalf("expected %s shim in %s: %v", shim, d.clipTools, err)
+		}
 	}
 
 	parent, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: project})
@@ -328,4 +330,169 @@ func TestAgySidecarNativeDelivery(t *testing.T) {
 		inbox, _ := d.projectAgents.messages.pending(s.ID())
 		return len(inbox) == 0
 	})
+}
+
+func TestAgentPluginCLI(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	project := t.TempDir()
+
+	binDir := t.TempDir()
+	fakeClaude := filepath.Join(binDir, "claude")
+	if err := os.WriteFile(fakeClaude, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		NodeID: "node",
+		Agents: map[string]agentspec.Agent{
+			"claude": {Command: []string{fakeClaude}},
+		},
+	}
+	d := New(cfg, slog.New(slog.DiscardHandler))
+	d.dir, d.ctx, d.mcp, d.hookBinary = t.TempDir(), t.Context(), nil, "/bin/makod"
+	if err := d.loadSessions(d.dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.projectAgents.messages.load(d.dir); err != nil {
+		t.Fatal(err)
+	}
+	run, err := config.RunDir(d.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.listenHooks(t.Context(), run)
+	if err := d.listenAgentMCP(t.Context(), run); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(d.sessions.closeAll)
+	d.workspace.load(d.dir, d.cfg.NodeID)
+	setTestWorkspaceSpaceAndProjects(t, d, project, t.TempDir())
+
+	// Start plugin manager with a simple tool plugin that accepts typed params and stdin text.
+	pDir := filepath.Join(d.dir, "plugins", "echo")
+	if err := os.MkdirAll(pDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `id = "echo"
+version = "0.1.0"
+publisher = "local"
+api = 1
+entry = "main.js"
+permissions = []
+
+[[contributes.tool]]
+id = "combine"
+description = "Combine a title, repeat count, and body"
+scope = "project"
+[contributes.tool.params]
+title = { type = "string", required = true, description = "Heading text" }
+count = { type = "number", description = "Repeat count" }
+body = { type = "string", description = "Body text" }
+`
+	mainJS := `export default {
+  activate(mako) {
+    mako.tools.register("combine", (args, ctx) => ({
+      scope: ctx.scopeKey,
+      title: args.title,
+      count: args.count,
+      body: args.body,
+    }));
+  },
+};
+`
+	if err := os.WriteFile(filepath.Join(pDir, "plugin.toml"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pDir, "main.js"), []byte(mainJS), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d.startPlugins(t.Context(), d.dir)
+	waitForWithin(t, 5*time.Second, "echo plugin did not become ready", func() bool {
+		for _, p := range d.plugins.List() {
+			if p.GetId() == "echo" && (p.GetState() == protocol.PluginReady || p.GetState() == protocol.PluginRunning) {
+				return true
+			}
+		}
+		return false
+	})
+
+	sess, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: project})
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := d.projectAgents.peer(sess.ID())
+	if peer == nil {
+		t.Fatal("missing session peer")
+	}
+
+	runPluginCLI := func(stdin string, cliArgs ...string) (int, string, string) {
+		t.Helper()
+		t.Setenv("AGENT_MAKO_SESSION", peer.id)
+		t.Setenv(agentMCPTokenEnv, peer.token)
+		var out, errBuf bytes.Buffer
+		code := runAgentPlugin(append([]string{d.projectAgents.cliSocket}, cliArgs...), strings.NewReader(stdin), &out, &errBuf)
+		return code, out.String(), errBuf.String()
+	}
+
+	// 1. list shows echo combine
+	code, out, stderr := runPluginCLI("", "list")
+	if code != 0 || !strings.Contains(out, "echo") || !strings.Contains(out, "combine") {
+		t.Fatalf("list failed: code=%d out=%q stderr=%q", code, out, stderr)
+	}
+
+	// 2. help shows parameters
+	code, out, stderr = runPluginCLI("", "help", "echo", "combine")
+	if code != 0 || !strings.Contains(out, "--title <string, required>") || !strings.Contains(out, "--count <number>") {
+		t.Fatalf("help failed: code=%d out=%q stderr=%q", code, out, stderr)
+	}
+
+	// 3. call with flags, typed integer coercion, and --body - reading from stdin
+	code, out, stderr = runPluginCLI("# Markdown Body\nLine 2", "call", "echo", "combine", "--title", "Hello", "--count", "3", "--body", "-")
+	if code != 0 {
+		t.Fatalf("call flags failed: code=%d out=%q stderr=%q", code, out, stderr)
+	}
+	var got struct {
+		Scope string `json:"scope"`
+		Title string `json:"title"`
+		Count int    `json:"count"`
+		Body  string `json:"body"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("invalid json output %q: %v", out, err)
+	}
+	if got.Title != "Hello" || got.Count != 3 || got.Body != "# Markdown Body\nLine 2" || !strings.HasPrefix(got.Scope, "project:") {
+		t.Fatalf("unexpected call result: %+v", got)
+	}
+
+	// 4. call with --json - reading JSON payload from stdin
+	code, out, stderr = runPluginCLI(`{"title":"FromJSON","count":7,"body":"ok"}`, "call", "echo", "combine", "--json", "-")
+	if code != 0 || !strings.Contains(out, `"FromJSON"`) || !strings.Contains(out, `"count": 7`) {
+		t.Fatalf("call --json failed: code=%d out=%q stderr=%q", code, out, stderr)
+	}
+
+	// 5. AGENT_MAKO_PLUGINS restricts visible and callable tools per environment.
+	t.Setenv("AGENT_MAKO_PLUGINS", "other")
+	code, out, stderr = runPluginCLI("", "list")
+	if code != 0 || strings.Contains(out, "combine") || !strings.Contains(out, "No plugin tools available.") {
+		t.Fatalf("list with AGENT_MAKO_PLUGINS=other should hide echo: code=%d out=%q stderr=%q", code, out, stderr)
+	}
+	code, _, stderr = runPluginCLI("", "call", "echo", "combine", "--title", "Blocked")
+	if code == 0 || !strings.Contains(stderr, "not enabled in this environment") {
+		t.Fatalf("call should be blocked by AGENT_MAKO_PLUGINS=other: code=%d stderr=%q", code, stderr)
+	}
+
+	t.Setenv("AGENT_MAKO_PLUGINS", "echo:combine")
+	code, out, stderr = runPluginCLI("", "list")
+	if code != 0 || !strings.Contains(out, "combine") {
+		t.Fatalf("list with AGENT_MAKO_PLUGINS=echo:combine should show echo combine: code=%d out=%q stderr=%q", code, out, stderr)
+	}
+	code, out, stderr = runPluginCLI("", "call", "echo", "combine", "--title", "Allowed", "--count", "1")
+	if code != 0 || !strings.Contains(out, `"Allowed"`) {
+		t.Fatalf("call with AGENT_MAKO_PLUGINS=echo:combine failed: code=%d out=%q stderr=%q", code, out, stderr)
+	}
+
+	t.Setenv("AGENT_MAKO_PLUGINS", "none")
+	code, out, stderr = runPluginCLI("", "list")
+	if code != 0 || strings.Contains(out, "combine") {
+		t.Fatalf("list with AGENT_MAKO_PLUGINS=none should hide all tools: code=%d out=%q stderr=%q", code, out, stderr)
+	}
 }

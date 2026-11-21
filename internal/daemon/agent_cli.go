@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,19 +14,24 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sort"
+	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/ironpark/mako/internal/agent/agy"
 	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transport"
 )
 
 const (
-	agentMsgArg   = "agent-msg"
-	agySidecarArg = "agy-sidecar"
-	agentCLISock  = "agent-cli.sock"
+	agentMsgArg    = "agent-msg"
+	agentPluginArg = "agent-plugin"
+	agySidecarArg  = "agy-sidecar"
+	agentCLISock   = "agent-cli.sock"
 )
 
 // writeAgentMsgTool writes the `mako-msg` helper script into dir (alongside
@@ -45,10 +51,28 @@ func writeAgentMsgTool(dir, program, socket string) error {
 	return os.WriteFile(filepath.Join(dir, "mako-msg"), []byte(script), 0o700)
 }
 
+// writeAgentPluginTool writes the `mako-plugin` helper script into dir
+// (alongside `mako-msg`) so agents and shells inside a Mako session can
+// discover and call plugin tools via CLI without bloating MCP schemas.
+func writeAgentPluginTool(dir, program, socket string) error {
+	if dir == "" || program == "" || socket == "" {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if runtime.GOOS == "windows" {
+		script := fmt.Sprintf("@echo off\r\n\"%s\" %s \"%s\" %%*\r\n", program, agentPluginArg, socket)
+		return os.WriteFile(filepath.Join(dir, "mako-plugin.cmd"), []byte(script), 0o700)
+	}
+	script := "#!/bin/sh\nexec " + agentspec.JoinArgs([]string{program, agentPluginArg, socket}) + " \"$@\"\n"
+	return os.WriteFile(filepath.Join(dir, "mako-plugin"), []byte(script), 0o700)
+}
+
 type agentCLIRequest struct {
 	Session string `json:"session"`
 	Token   string `json:"token"`
-	Op      string `json:"op"` // wait, read, send, list, profiles, sidecar_subscribe
+	Op      string `json:"op"` // wait, read, send, list, profiles, plugin_list, plugin_call, sidecar_subscribe
 
 	// wait / read options:
 	AfterID       uint64   `json:"after_id,omitempty"`
@@ -65,6 +89,11 @@ type agentCLIRequest struct {
 	// send options:
 	To   string `json:"to,omitempty"`
 	Text string `json:"text,omitempty"`
+
+	// plugin_list / plugin_call options:
+	PluginID string          `json:"plugin_id,omitempty"`
+	ToolID   string          `json:"tool_id,omitempty"`
+	Args     json.RawMessage `json:"args,omitempty"`
 }
 
 type agentCLIResponse struct {
@@ -77,6 +106,8 @@ type agentCLIResponse struct {
 	Sent        *agentMessage            `json:"sent,omitempty"`
 	Agents      *listAgentsResult        `json:"agents,omitempty"`
 	Profiles    *listAgentProfilesResult `json:"profiles,omitempty"`
+	Tools       []plugin.ContributedTool `json:"tools,omitempty"`
+	Output      json.RawMessage          `json:"output,omitempty"`
 	Status      string                   `json:"status,omitempty"`
 	State       string                   `json:"state,omitempty"`
 }
@@ -142,6 +173,7 @@ func (d *Daemon) listenAgentCLI(ctx context.Context, dir string) error {
 	d.projectAgents.cliSocket = path
 	if d.clipTools != "" && d.hookBinary != "" {
 		_ = writeAgentMsgTool(d.clipTools, d.hookBinary, path)
+		_ = writeAgentPluginTool(d.clipTools, d.hookBinary, path)
 	}
 	context.AfterFunc(ctx, func() { _ = ln.Close() })
 	go func() {
@@ -163,7 +195,7 @@ func (d *Daemon) serveAgentCLI(ctx context.Context, conn net.Conn) {
 
 	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	var req agentCLIRequest
-	if err := json.NewDecoder(io.LimitReader(conn, 128<<10)).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(conn, 4<<20)).Decode(&req); err != nil {
 		return
 	}
 	_ = conn.SetReadDeadline(time.Time{})
@@ -258,6 +290,53 @@ func (d *Daemon) serveAgentCLI(ctx context.Context, conn net.Conn) {
 	case "wait":
 		resp := d.cliWait(reqCtx, peer, req)
 		writeResp(resp)
+
+	case "plugin_list":
+		s, err := d.projectCaller(peer)
+		if err != nil {
+			writeResp(agentCLIResponse{Error: err.Error()})
+			return
+		}
+		var tools []plugin.ContributedTool
+		if d.plugins != nil {
+			scopeCtx := d.sessionScopeContext(s.ID(), s.Info())
+			for _, tl := range d.plugins.Tools() {
+				if req.PluginID != "" && tl.PluginID != req.PluginID {
+					continue
+				}
+				if !toolUsableInScope(tl.Scope, scopeCtx) {
+					continue
+				}
+				tools = append(tools, tl)
+			}
+		}
+		writeResp(agentCLIResponse{OK: true, Tools: tools})
+
+	case "plugin_call":
+		s, err := d.projectCaller(peer)
+		if err != nil {
+			writeResp(agentCLIResponse{Error: err.Error()})
+			return
+		}
+		if d.plugins == nil {
+			writeResp(agentCLIResponse{Error: "plugins are not enabled on this node"})
+			return
+		}
+		if req.PluginID == "" || req.ToolID == "" {
+			writeResp(agentCLIResponse{Error: "plugin_id and tool_id are required"})
+			return
+		}
+		scopeCtx := d.sessionScopeContext(s.ID(), s.Info())
+		out, err := d.plugins.CallToolScoped(reqCtx, req.PluginID, req.ToolID, req.Args, scopeCtx)
+		if err != nil {
+			writeResp(agentCLIResponse{Error: err.Error()})
+			return
+		}
+		rawOut := json.RawMessage(out)
+		if !json.Valid(rawOut) {
+			rawOut, _ = json.Marshal(out)
+		}
+		writeResp(agentCLIResponse{OK: true, Output: rawOut})
 
 	default:
 		writeResp(agentCLIResponse{Error: fmt.Sprintf("unknown op %q", req.Op)})
@@ -623,4 +702,428 @@ func runAgentMsg(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	out, _ := json.MarshalIndent(resp, "", "  ")
 	_, _ = stdout.Write(append(out, '\n'))
 	return 0
+}
+
+// toolUsableInScope reports whether a contributed tool declaring scope can be
+// invoked by a session whose resolved ScopeContext is sc.
+func toolUsableInScope(scope string, sc plugin.ScopeContext) bool {
+	switch scope {
+	case "", protocol.ScopeGlobal:
+		return true
+	case protocol.ScopeSession:
+		return sc.SessionID != ""
+	case protocol.ScopeProject:
+		return sc.ProjectID != ""
+	case protocol.ScopeSpace:
+		return sc.SpaceID != ""
+	default:
+		return false
+	}
+}
+
+// pluginEnvFilter parses AGENT_MAKO_PLUGINS (or MAKO_PLUGINS) into a predicate
+// selecting which plugin tools are exposed to this shell environment:
+//   - unset / empty: all tools usable in the session's scope
+//   - "none" / "-": no plugin tools
+//   - comma-separated entries of "<plugin>" or "<plugin>:<tool>"
+func pluginEnvFilter() func(pluginID, toolID string) bool {
+	raw, ok := os.LookupEnv("AGENT_MAKO_PLUGINS")
+	if !ok {
+		raw, ok = os.LookupEnv("MAKO_PLUGINS")
+	}
+	if !ok {
+		return func(string, string) bool { return true }
+	}
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return func(string, string) bool { return true }
+	}
+	if strings.EqualFold(trimmed, "none") || trimmed == "-" {
+		return func(string, string) bool { return false }
+	}
+	allowedPlugins := map[string]bool{}
+	allowedTools := map[string]bool{}
+	for _, entry := range strings.Split(trimmed, ",") {
+		e := strings.TrimSpace(entry)
+		if e == "" {
+			continue
+		}
+		if strings.Contains(e, ":") {
+			allowedTools[e] = true
+		} else {
+			allowedPlugins[e] = true
+		}
+	}
+	return func(pluginID, toolID string) bool {
+		return allowedPlugins[pluginID] || allowedTools[pluginID+":"+toolID]
+	}
+}
+
+func filterToolsByEnv(tools []plugin.ContributedTool, allow func(pluginID, toolID string) bool) []plugin.ContributedTool {
+	var out []plugin.ContributedTool
+	for _, tl := range tools {
+		if allow(tl.PluginID, tl.ID) {
+			out = append(out, tl)
+		}
+	}
+	return out
+}
+
+func dialAgentCLI(socket string, req agentCLIRequest) (agentCLIResponse, error) {
+	conn, err := net.DialTimeout("unix", socket, 3*time.Second)
+	if err != nil {
+		return agentCLIResponse{}, err
+	}
+	defer conn.Close()
+	if err := json.NewEncoder(conn).Encode(req); err != nil {
+		return agentCLIResponse{}, err
+	}
+	var resp agentCLIResponse
+	if err := json.NewDecoder(conn).Decode(&resp); err != nil {
+		return agentCLIResponse{}, err
+	}
+	return resp, nil
+}
+
+// runAgentPlugin implements the `mako-plugin` CLI available in every agent
+// session's PATH, letting agents discover and invoke plugin tools directly
+// from the shell using the session's authenticated project/space/session scope.
+func runAgentPlugin(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	const helpText = `usage:
+  mako-plugin list [--json] [plugin-id]
+  mako-plugin help <plugin-id> [tool-id]
+  mako-plugin call <plugin-id> <tool-id> [--json <json|->] [--<param> <value|-> ...]
+`
+	if len(args) < 2 {
+		fmt.Fprint(stderr, helpText)
+		return 2
+	}
+	socket := args[0]
+	sub := args[1]
+	rest := args[2:]
+
+	if sub == "-h" || sub == "--help" || (sub == "help" && len(rest) == 0) {
+		fmt.Fprint(stdout, helpText)
+		return 0
+	}
+
+	sessionID := os.Getenv("AGENT_MAKO_SESSION")
+	if sessionID == "" {
+		sessionID = os.Getenv("MAKO_SESSION")
+	}
+	token := os.Getenv(agentMCPTokenEnv)
+	if sessionID == "" || token == "" {
+		fmt.Fprintln(stderr, "mako-plugin: missing AGENT_MAKO_SESSION / MAKO_AGENT_MCP_TOKEN in environment")
+		return 1
+	}
+	allowEnv := pluginEnvFilter()
+
+	switch sub {
+	case "list":
+		asJSON := false
+		pluginFilter := ""
+		for _, a := range rest {
+			switch a {
+			case "--json", "-json":
+				asJSON = true
+			default:
+				if strings.HasPrefix(a, "-") {
+					fmt.Fprintf(stderr, "mako-plugin list: unknown flag %q\n", a)
+					return 2
+				}
+				pluginFilter = a
+			}
+		}
+		resp, err := dialAgentCLI(socket, agentCLIRequest{
+			Session:  sessionID,
+			Token:    token,
+			Op:       "plugin_list",
+			PluginID: pluginFilter,
+		})
+		if err != nil {
+			fmt.Fprintln(stderr, "mako-plugin:", err)
+			return 1
+		}
+		if !resp.OK {
+			fmt.Fprintln(stderr, "mako-plugin:", resp.Error)
+			return 1
+		}
+		visible := filterToolsByEnv(resp.Tools, allowEnv)
+		if asJSON {
+			if visible == nil {
+				visible = []plugin.ContributedTool{}
+			}
+			out, _ := json.MarshalIndent(visible, "", "  ")
+			_, _ = stdout.Write(append(out, '\n'))
+			return 0
+		}
+		if len(visible) == 0 {
+			fmt.Fprintln(stdout, "No plugin tools available.")
+			return 0
+		}
+		w := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(w, "PLUGIN\tTOOL\tSCOPE\tDESCRIPTION")
+		for _, tl := range visible {
+			scope := tl.Scope
+			if scope == "" {
+				scope = "global"
+			}
+			desc := strings.TrimPrefix(tl.Description, fmt.Sprintf("[%s plugin] ", tl.PluginID))
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", tl.PluginID, tl.ID, scope, desc)
+		}
+		_ = w.Flush()
+		return 0
+
+	case "help":
+		pluginID := rest[0]
+		toolFilter := ""
+		if len(rest) > 1 {
+			toolFilter = rest[1]
+		}
+		resp, err := dialAgentCLI(socket, agentCLIRequest{
+			Session:  sessionID,
+			Token:    token,
+			Op:       "plugin_list",
+			PluginID: pluginID,
+		})
+		if err != nil {
+			fmt.Fprintln(stderr, "mako-plugin:", err)
+			return 1
+		}
+		if !resp.OK {
+			fmt.Fprintln(stderr, "mako-plugin:", resp.Error)
+			return 1
+		}
+		matched := 0
+		for _, tl := range filterToolsByEnv(resp.Tools, allowEnv) {
+			if toolFilter != "" && tl.ID != toolFilter {
+				continue
+			}
+			matched++
+			scope := tl.Scope
+			if scope == "" {
+				scope = "global"
+			}
+			desc := strings.TrimPrefix(tl.Description, fmt.Sprintf("[%s plugin] ", tl.PluginID))
+			fmt.Fprintf(stdout, "%s %s (%s)\n  %s\n", tl.PluginID, tl.ID, scope, desc)
+			props, _ := tl.Schema["properties"].(map[string]any)
+			reqSet := map[string]bool{}
+			if reqList, ok := tl.Schema["required"].([]any); ok {
+				for _, r := range reqList {
+					if s, ok := r.(string); ok {
+						reqSet[s] = true
+					}
+				}
+			}
+			names := make([]string, 0, len(props))
+			for k := range props {
+				names = append(names, k)
+			}
+			sort.Strings(names)
+			if len(names) == 0 {
+				fmt.Fprintln(stdout, "  (no parameters)")
+			} else {
+				for _, name := range names {
+					pMap, _ := props[name].(map[string]any)
+					typ, _ := pMap["type"].(string)
+					pDesc, _ := pMap["description"].(string)
+					reqTag := ""
+					if reqSet[name] {
+						reqTag = ", required"
+					}
+					if pDesc != "" {
+						fmt.Fprintf(stdout, "  --%s <%s%s>  %s\n", name, typ, reqTag, pDesc)
+					} else {
+						fmt.Fprintf(stdout, "  --%s <%s%s>\n", name, typ, reqTag)
+					}
+				}
+			}
+			fmt.Fprintln(stdout)
+		}
+		if matched == 0 {
+			fmt.Fprintf(stderr, "mako-plugin: no matching tool for %s %s\n", pluginID, toolFilter)
+			return 1
+		}
+		return 0
+
+	case "call":
+		if len(rest) < 2 {
+			fmt.Fprintln(stderr, "usage: mako-plugin call <plugin-id> <tool-id> [--json <json|->] [--<param> <value|-> ...]")
+			return 2
+		}
+		pluginID, toolID := rest[0], rest[1]
+		if !allowEnv(pluginID, toolID) {
+			fmt.Fprintf(stderr, "mako-plugin: tool %s %s is not enabled in this environment\n", pluginID, toolID)
+			return 1
+		}
+		argTokens := rest[2:]
+
+		var argsJSON json.RawMessage
+		if len(argTokens) == 0 {
+			argsJSON = json.RawMessage(`{}`)
+		} else if len(argTokens) >= 1 && (argTokens[0] == "--json" || strings.HasPrefix(argTokens[0], "--json=")) {
+			var raw string
+			if v, ok := strings.CutPrefix(argTokens[0], "--json="); ok {
+				raw = v
+			} else {
+				if len(argTokens) < 2 {
+					fmt.Fprintln(stderr, "mako-plugin call: --json requires a JSON payload or '-' for stdin")
+					return 2
+				}
+				raw = argTokens[1]
+			}
+			if raw == "-" {
+				b, err := io.ReadAll(io.LimitReader(stdin, 3<<20))
+				if err != nil {
+					fmt.Fprintln(stderr, "mako-plugin call:", err)
+					return 1
+				}
+				raw = strings.TrimSpace(string(b))
+			}
+			if !json.Valid([]byte(raw)) {
+				fmt.Fprintln(stderr, "mako-plugin call: invalid JSON argument")
+				return 2
+			}
+			argsJSON = json.RawMessage(raw)
+		} else {
+			// Fetch schema once so flag values can be coerced to their declared JSON types.
+			var paramTypes map[string]string
+			if listResp, err := dialAgentCLI(socket, agentCLIRequest{
+				Session:  sessionID,
+				Token:    token,
+				Op:       "plugin_list",
+				PluginID: pluginID,
+			}); err == nil && listResp.OK {
+				for _, tl := range listResp.Tools {
+					if tl.ID == toolID {
+						if props, ok := tl.Schema["properties"].(map[string]any); ok {
+							paramTypes = make(map[string]string, len(props))
+							for k, v := range props {
+								if m, ok := v.(map[string]any); ok {
+									if t, ok := m["type"].(string); ok {
+										paramTypes[k] = t
+									}
+								}
+							}
+						}
+						break
+					}
+				}
+			}
+			parsed, err := parsePluginCallFlags(argTokens, paramTypes, stdin)
+			if err != nil {
+				fmt.Fprintln(stderr, "mako-plugin call:", err)
+				return 2
+			}
+			b, err := json.Marshal(parsed)
+			if err != nil {
+				fmt.Fprintln(stderr, "mako-plugin call:", err)
+				return 1
+			}
+			argsJSON = b
+		}
+
+		resp, err := dialAgentCLI(socket, agentCLIRequest{
+			Session:  sessionID,
+			Token:    token,
+			Op:       "plugin_call",
+			PluginID: pluginID,
+			ToolID:   toolID,
+			Args:     argsJSON,
+		})
+		if err != nil {
+			fmt.Fprintln(stderr, "mako-plugin:", err)
+			return 1
+		}
+		if !resp.OK {
+			fmt.Fprintln(stderr, "mako-plugin:", resp.Error)
+			return 1
+		}
+		var pretty bytes.Buffer
+		if err := json.Indent(&pretty, resp.Output, "", "  "); err == nil {
+			_, _ = stdout.Write(append(pretty.Bytes(), '\n'))
+		} else {
+			_, _ = stdout.Write(append(resp.Output, '\n'))
+		}
+		return 0
+
+	default:
+		fmt.Fprintf(stderr, "mako-plugin: unknown subcommand %q\n%s", sub, helpText)
+		return 2
+	}
+}
+
+// parsePluginCallFlags parses `--key value` and `--key=value` arguments into a
+// JSON-serializable map, reading stdin when a value is `-` and coercing values
+// to the tool parameter's declared JSON Schema type when known.
+func parsePluginCallFlags(tokens []string, paramTypes map[string]string, stdin io.Reader) (map[string]any, error) {
+	out := map[string]any{}
+	stdinUsed := false
+	for i := 0; i < len(tokens); i++ {
+		tok := tokens[i]
+		if !strings.HasPrefix(tok, "--") || len(tok) <= 2 {
+			return nil, fmt.Errorf("unexpected argument %q (expected --param value or --json '{...}')", tok)
+		}
+		body := tok[2:]
+		key, val, hasEq := strings.Cut(body, "=")
+		if !hasEq {
+			if paramTypes[key] == "boolean" && (i+1 >= len(tokens) || strings.HasPrefix(tokens[i+1], "--")) {
+				out[key] = true
+				continue
+			}
+			if i+1 >= len(tokens) {
+				return nil, fmt.Errorf("flag --%s requires a value", key)
+			}
+			i++
+			val = tokens[i]
+		}
+		if val == "-" {
+			if stdinUsed {
+				return nil, fmt.Errorf("stdin ('-') can only be used once per call")
+			}
+			stdinUsed = true
+			b, err := io.ReadAll(io.LimitReader(stdin, 3<<20))
+			if err != nil {
+				return nil, err
+			}
+			val = string(b)
+		}
+		coerced, err := coercePluginParam(val, paramTypes[key])
+		if err != nil {
+			return nil, fmt.Errorf("--%s: %w", key, err)
+		}
+		out[key] = coerced
+	}
+	return out, nil
+}
+
+func coercePluginParam(raw, typ string) (any, error) {
+	switch typ {
+	case "boolean":
+		b, err := strconv.ParseBool(strings.TrimSpace(raw))
+		if err != nil {
+			return nil, fmt.Errorf("expected boolean, got %q", raw)
+		}
+		return b, nil
+	case "integer":
+		n, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("expected integer, got %q", raw)
+		}
+		return n, nil
+	case "number":
+		f, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+		if err != nil {
+			return nil, fmt.Errorf("expected number, got %q", raw)
+		}
+		return f, nil
+	case "array", "object":
+		var v any
+		if err := json.Unmarshal([]byte(raw), &v); err != nil {
+			return nil, fmt.Errorf("expected JSON %s: %w", typ, err)
+		}
+		return v, nil
+	default:
+		return raw, nil
+	}
 }

@@ -394,3 +394,123 @@ func TestKanbanExamplePlugin(t *testing.T) {
 		return hasTabs
 	})
 }
+
+func TestOKFExamplePlugin(t *testing.T) {
+	r := startRig(t, Config{
+		Limits: testLimits,
+		ResolveScope: func(scopeKey string) ScopeContext {
+			switch scopeKey {
+			case "project:repo:github.com/ironpark/alpha":
+				return ScopeContext{
+					Scope:       protocol.ScopeProject,
+					ScopeKey:    scopeKey,
+					ProjectID:   "repo:github.com/ironpark/alpha",
+					ProjectName: "Alpha",
+					Roots:       []string{"/tmp/alpha"},
+				}
+			case "project:repo:github.com/ironpark/beta":
+				return ScopeContext{
+					Scope:       protocol.ScopeProject,
+					ScopeKey:    scopeKey,
+					ProjectID:   "repo:github.com/ironpark/beta",
+					ProjectName: "Beta",
+					Roots:       []string{"/tmp/beta"},
+				}
+			}
+			return ScopeContext{}
+		},
+	})
+	files := map[string]string{}
+	for _, name := range []string{ManifestName, "main.js", "lib/okf.js"} {
+		b, err := os.ReadFile(filepath.Join("../../examples/plugins/okf", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[name] = string(b)
+	}
+	r.write("okf", files)
+	r.state("okf", protocol.PluginWaiting)
+	r.grant("okf")
+
+	scopeA := "project:repo:github.com/ironpark/alpha"
+	scopeB := "project:repo:github.com/ironpark/beta"
+	ctxA := ScopeContext{ProjectID: "repo:github.com/ironpark/alpha", ProjectName: "Alpha"}
+	ctxB := ScopeContext{ProjectID: "repo:github.com/ironpark/beta", ProjectName: "Beta"}
+
+	// First watch bootstraps starter index.md + concepts/overview.md in Alpha's isolated file vault.
+	wA := r.watchScoped("plugin:okf/vault", scopeA)
+	wA.until("starter OKF vault", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "2 docs") && hasText(n, "Alpha Overview") && hasText(n, "index.md")
+	})
+
+	// Upsert an OKF Decision document linking to concepts/overview and a missing concept.
+	upserted, err := r.m.CallToolScoped(t.Context(), "okf", "upsert_doc", []byte(`{
+		"path": "decisions/001-storage.md",
+		"title": "Use Sandboxed Datafs for OKF",
+		"type": "Decision",
+		"description": "Store OKF bundles as real Markdown files under plugin-data.",
+		"tags": "storage, okf",
+		"status": "active",
+		"source": "architecture review",
+		"verified_by": "team",
+		"body": "# Storage Decision\n\nBuilds on [[concepts/overview]] and [[concepts/sync-plan]]."
+	}`), ctxA)
+	if err != nil || !strings.Contains(upserted, `"saved":true`) {
+		t.Fatalf("upsert_doc: %s, err=%v", upserted, err)
+	}
+	wA.until("new decision reflected in UI", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		if !hasText(n, "Use Sandboxed Datafs for OKF") || !hasText(n, "3 docs") {
+			return false
+		}
+		var hasHealth1 bool
+		var scan func(*protocol.UiNode)
+		scan = func(node *protocol.UiNode) {
+			if node.GetKind() == "tabs" {
+				for _, opt := range node.GetOptions() {
+					if opt == "Health (1)" {
+						hasHealth1 = true
+					}
+				}
+			}
+			for _, ch := range node.GetChildren() {
+				scan(ch)
+			}
+		}
+		scan(n)
+		return hasHealth1
+	})
+
+	// Backlinks on concepts/overview.md include decisions/001-storage.md.
+	overview, err := r.m.CallToolScoped(t.Context(), "okf", "read_doc", []byte(`{"path":"concepts/overview.md"}`), ctxA)
+	if err != nil || !strings.Contains(overview, `"decisions/001-storage.md"`) {
+		t.Fatalf("read_doc backlinks missing: %s, err=%v", overview, err)
+	}
+
+	// Search finds the new document.
+	searched, err := r.m.CallToolScoped(t.Context(), "okf", "search", []byte(`{"query":"sandboxed"}`), ctxA)
+	if err != nil || !strings.Contains(searched, `"decisions/001-storage.md"`) {
+		t.Fatalf("search failed: %s, err=%v", searched, err)
+	}
+
+	// Lint detects the broken [[concepts/sync-plan]] link.
+	linted, err := r.m.CallToolScoped(t.Context(), "okf", "lint", nil, ctxA)
+	if err != nil || !strings.Contains(linted, `"concepts/sync-plan"`) {
+		t.Fatalf("lint missed broken link: %s, err=%v", linted, err)
+	}
+
+	// Move and delete work cleanly and keep Alpha isolated from Beta.
+	if moved, err := r.m.CallToolScoped(t.Context(), "okf", "move_doc", []byte(`{
+		"from_path": "decisions/001-storage.md",
+		"to_path": "decisions/adr-001-storage.md"
+	}`), ctxA); err != nil || !strings.Contains(moved, `"moved":true`) {
+		t.Fatalf("move_doc: %s, err=%v", moved, err)
+	}
+	listB, err := r.m.CallToolScoped(t.Context(), "okf", "list_docs", nil, ctxB)
+	if err != nil || strings.Contains(listB, "adr-001-storage") {
+		t.Fatalf("beta leaked alpha vault: %s, err=%v", listB, err)
+	}
+	if deleted, err := r.m.CallToolScoped(t.Context(), "okf", "delete_doc", []byte(`{"path":"decisions/adr-001-storage.md"}`), ctxA); err != nil || !strings.Contains(deleted, `"deleted":true`) {
+		t.Fatalf("delete_doc: %s, err=%v", deleted, err)
+	}
+	_ = scopeB
+}

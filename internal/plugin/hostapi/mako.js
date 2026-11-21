@@ -39,6 +39,16 @@ export function hostApi(call) {
       syncPut: (req) => call("db.syncPut", req),
       syncDelete: (req) => call("db.syncDelete", req),
     }),
+    datafs: Object.freeze({
+      readData: (req) => call("datafs.readData", req),
+      writeData: (req) => call("datafs.writeData", req),
+      listData: (req) => call("datafs.listData", req),
+      statData: (req) => call("datafs.statData", req),
+      mkdirData: (req) => call("datafs.mkdirData", req),
+      deleteData: (req) => call("datafs.deleteData", req),
+      moveData: (req) => call("datafs.moveData", req),
+      dataStats: (req) => call("datafs.dataStats", req),
+    }),
     messages: Object.freeze({
       sendMessage: (req) => call("messages.sendMessage", req),
       startAgent: (req) => call("messages.startAgent", req),

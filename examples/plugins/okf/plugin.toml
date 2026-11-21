@@ -1,0 +1,80 @@
+id = "okf"
+version = "0.1.0"
+publisher = "ironpark"
+api = 1
+entry = "main.js"
+permissions = ["fs:data"]
+
+[[contributes.block]]
+id = "vault"
+title = "OKF Knowledge"
+slots = ["right", "bottom"]
+scope = "project"
+
+[[contributes.command]]
+id = "rebuild-index"
+title = "Rebuild OKF index.md"
+
+[[contributes.tool]]
+id = "list_docs"
+description = "List all OKF Markdown knowledge documents in this project's vault with their path, type, title, status, tags, and link counts"
+scope = "project"
+[contributes.tool.params]
+type = { type = "string", description = "Optional OKF type filter (Concept, Decision, Architecture, Procedure, Reference, Index)" }
+status = { type = "string", description = "Optional status filter (active, needs_review, deprecated)" }
+tag = { type = "string", description = "Optional tag filter" }
+
+[[contributes.tool]]
+id = "search"
+description = "Search this project's OKF Markdown knowledge documents by keyword across titles, descriptions, tags, and body text"
+scope = "project"
+[contributes.tool.params]
+query = { type = "string", description = "Search query", required = true }
+type = { type = "string", description = "Optional OKF type filter" }
+tag = { type = "string", description = "Optional tag filter" }
+
+[[contributes.tool]]
+id = "read_doc"
+description = "Read an OKF Markdown document by relative path, returning its parsed frontmatter, markdown body, outgoing links, and incoming backlinks"
+scope = "project"
+[contributes.tool.params]
+path = { type = "string", description = "Relative path inside the vault (e.g. index.md or concepts/auth.md)", required = true }
+
+[[contributes.tool]]
+id = "upsert_doc"
+description = "Create or update an OKF v0.2 Markdown document with YAML frontmatter in this project's vault and refresh index.md"
+scope = "project"
+[contributes.tool.params]
+path = { type = "string", description = "Relative .md path (e.g. concepts/auth.md or decisions/001-storage.md)", required = true }
+title = { type = "string", description = "Document title", required = true }
+type = { type = "string", description = "OKF type: Concept (default), Decision, Architecture, Procedure, or Reference" }
+description = { type = "string", description = "Short one-line summary of the document" }
+tags = { type = "string", description = "Comma-separated tags (e.g. auth, security)" }
+status = { type = "string", description = "Lifecycle status: active (default), needs_review, or deprecated" }
+body = { type = "string", description = "Markdown body (supports [[wiki-links]] and relative .md links)", required = true }
+source = { type = "string", description = "Provenance source (e.g. codebase, PR #42, design discussion)" }
+verified_by = { type = "string", description = "Who or what verified this knowledge" }
+
+[[contributes.tool]]
+id = "move_doc"
+description = "Move or rename an OKF Markdown document inside this project's vault"
+scope = "project"
+[contributes.tool.params]
+from_path = { type = "string", description = "Existing relative .md path", required = true }
+to_path = { type = "string", description = "New relative .md path", required = true }
+
+[[contributes.tool]]
+id = "delete_doc"
+description = "Delete an OKF Markdown document from this project's vault and refresh index.md"
+scope = "project"
+[contributes.tool.params]
+path = { type = "string", description = "Relative .md path to delete", required = true }
+
+[[contributes.tool]]
+id = "lint"
+description = "Validate this project's OKF vault and report broken links, missing frontmatter, orphan concepts, and documents needing review"
+scope = "project"
+
+[contributes.settings]
+default_folder = { type = "select", label = "Default folder", description = "Folder suggested when creating a new OKF document.", options = ["concepts", "decisions", "architecture", "procedures", "reference"], default = "concepts", scope = "project" }
+auto_index = { type = "boolean", label = "Auto-update index.md", description = "Automatically regenerate index.md whenever a document is saved, moved, or deleted.", default = true }

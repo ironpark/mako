@@ -11,6 +11,7 @@ const (
 	PermDb             = "db"
 	PermDbSync         = "db:sync"
 	PermExec           = "exec"
+	PermFsData         = "fs:data"
 	PermFsProject      = "fs:project"
 	PermFsProjectWrite = "fs:project:write"
 	PermLayoutWrite    = "layout:write"
@@ -22,7 +23,7 @@ const (
 )
 
 // Permissions are those a manifest may ask for, by the names above.
-var Permissions = []string{PermDb, PermDbSync, PermExec, PermFsProject, PermFsProjectWrite, PermLayoutWrite, PermNet, PermSecrets, PermSessionsRead, PermSessionsWrite, PermStorage}
+var Permissions = []string{PermDb, PermDbSync, PermExec, PermFsData, PermFsProject, PermFsProjectWrite, PermLayoutWrite, PermNet, PermSecrets, PermSessionsRead, PermSessionsWrite, PermStorage}
 
 // Handler carries out the Host API's methods that are available; Dispatch
 // calls one only once the caller's permission for it is checked.
@@ -104,6 +105,37 @@ type Handler interface {
 	// SyncDelete marks a synced row as deleted (tombstone) with the node's HLC
 	// clock and schedules P2P replication to trusted peers.
 	DbSyncDelete(ctx context.Context, req *SyncDeleteRequest) (*SyncDeleteResponse, error)
+	// DatafsReadData carries out datafs.readData.
+	// ReadData reads a regular file from the plugin's private data directory.
+	DatafsReadData(ctx context.Context, req *ReadDataRequest) (*ReadDataResponse, error)
+	// DatafsWriteData carries out datafs.writeData.
+	// WriteData writes a regular file whole, atomically, inside the plugin's
+	// private data directory.
+	DatafsWriteData(ctx context.Context, req *WriteDataRequest) (*WriteDataResponse, error)
+	// DatafsListData carries out datafs.listData.
+	// ListData lists entries in a directory (optionally recursively) inside the
+	// plugin's private data directory.
+	DatafsListData(ctx context.Context, req *ListDataRequest) (*ListDataResponse, error)
+	// DatafsStatData carries out datafs.statData.
+	// StatData returns metadata for a file or directory inside the plugin's
+	// private data directory.
+	DatafsStatData(ctx context.Context, req *StatDataRequest) (*StatDataResponse, error)
+	// DatafsMkdirData carries out datafs.mkdirData.
+	// MkdirData creates a directory (and any missing parents) inside the
+	// plugin's private data directory.
+	DatafsMkdirData(ctx context.Context, req *MkdirDataRequest) (*MkdirDataResponse, error)
+	// DatafsDeleteData carries out datafs.deleteData.
+	// DeleteData removes a file or directory inside the plugin's private data
+	// directory.
+	DatafsDeleteData(ctx context.Context, req *DeleteDataRequest) (*DeleteDataResponse, error)
+	// DatafsMoveData carries out datafs.moveData.
+	// MoveData renames or moves a file or directory within the same scope of the
+	// plugin's private data directory.
+	DatafsMoveData(ctx context.Context, req *MoveDataRequest) (*MoveDataResponse, error)
+	// DatafsDataStats carries out datafs.dataStats.
+	// DataStats returns total bytes used across the plugin's private data
+	// directory, its quota, and file count.
+	DatafsDataStats(ctx context.Context, req *DataStatsRequest) (*DataStatsResponse, error)
 	// MessagesSendMessage carries out messages.sendMessage.
 	// SendMessage leaves a message for a session's agent, typed into its
 	// terminal once it waits at its prompt, as send_message does: a session
@@ -173,6 +205,14 @@ var Methods = []Method{
 	{Name: "db.syncEnable", Permission: PermDbSync},
 	{Name: "db.syncPut", Permission: PermDbSync},
 	{Name: "db.syncDelete", Permission: PermDbSync},
+	{Name: "datafs.readData", Permission: PermFsData},
+	{Name: "datafs.writeData", Permission: PermFsData},
+	{Name: "datafs.listData", Permission: PermFsData},
+	{Name: "datafs.statData", Permission: PermFsData},
+	{Name: "datafs.mkdirData", Permission: PermFsData},
+	{Name: "datafs.deleteData", Permission: PermFsData},
+	{Name: "datafs.moveData", Permission: PermFsData},
+	{Name: "datafs.dataStats", Permission: PermFsData},
 	{Name: "messages.sendMessage", Permission: PermSessionsWrite},
 	{Name: "messages.startAgent", Permission: PermSessionsWrite},
 	{Name: "messages.stopAgent", Permission: PermSessionsWrite},
@@ -287,6 +327,46 @@ func Dispatch(ctx context.Context, grants Grants, h Handler, name string, req []
 			return nil, &DeniedError{Method: name, Permission: PermDbSync}
 		}
 		return call(ctx, req, new(SyncDeleteRequest), h.DbSyncDelete)
+	case "datafs.readData":
+		if !grants.Has(PermFsData) {
+			return nil, &DeniedError{Method: name, Permission: PermFsData}
+		}
+		return call(ctx, req, new(ReadDataRequest), h.DatafsReadData)
+	case "datafs.writeData":
+		if !grants.Has(PermFsData) {
+			return nil, &DeniedError{Method: name, Permission: PermFsData}
+		}
+		return call(ctx, req, new(WriteDataRequest), h.DatafsWriteData)
+	case "datafs.listData":
+		if !grants.Has(PermFsData) {
+			return nil, &DeniedError{Method: name, Permission: PermFsData}
+		}
+		return call(ctx, req, new(ListDataRequest), h.DatafsListData)
+	case "datafs.statData":
+		if !grants.Has(PermFsData) {
+			return nil, &DeniedError{Method: name, Permission: PermFsData}
+		}
+		return call(ctx, req, new(StatDataRequest), h.DatafsStatData)
+	case "datafs.mkdirData":
+		if !grants.Has(PermFsData) {
+			return nil, &DeniedError{Method: name, Permission: PermFsData}
+		}
+		return call(ctx, req, new(MkdirDataRequest), h.DatafsMkdirData)
+	case "datafs.deleteData":
+		if !grants.Has(PermFsData) {
+			return nil, &DeniedError{Method: name, Permission: PermFsData}
+		}
+		return call(ctx, req, new(DeleteDataRequest), h.DatafsDeleteData)
+	case "datafs.moveData":
+		if !grants.Has(PermFsData) {
+			return nil, &DeniedError{Method: name, Permission: PermFsData}
+		}
+		return call(ctx, req, new(MoveDataRequest), h.DatafsMoveData)
+	case "datafs.dataStats":
+		if !grants.Has(PermFsData) {
+			return nil, &DeniedError{Method: name, Permission: PermFsData}
+		}
+		return call(ctx, req, new(DataStatsRequest), h.DatafsDataStats)
 	case "messages.sendMessage":
 		if !grants.Has(PermSessionsWrite) {
 			return nil, &DeniedError{Method: name, Permission: PermSessionsWrite}

@@ -377,6 +377,117 @@ interface types {
     deleted: bool,
   }
 
+  /// ReadDataRequest names a file and optional byte slice inside the plugin's data dir.
+  record read-data-request {
+    path: string,
+    offset: f64,
+    length: u32,
+    scope: string,
+  }
+
+  /// ReadDataResponse returns the file's contents when found.
+  record read-data-response {
+    found: bool,
+    text: string,
+    data: list<u8>,
+    size: f64,
+    eof: bool,
+    binary: bool,
+    modified-ms: f64,
+  }
+
+  /// WriteDataRequest writes text or bytes to a file in the plugin's data dir.
+  record write-data-request {
+    path: string,
+    text: string,
+    data: list<u8>,
+    make-dirs: bool,
+    scope: string,
+  }
+
+  /// WriteDataResponse reports the written size and plugin-wide quota usage.
+  record write-data-response {
+    size: f64,
+    used-bytes: u32,
+    quota-bytes: u32,
+  }
+
+  /// ListDataRequest lists a directory in the plugin's data dir.
+  record list-data-request {
+    path: string,
+    recursive: bool,
+    scope: string,
+  }
+
+  /// DataEntry describes one file or directory inside the plugin's data dir.
+  record data-entry {
+    /// path is the slash-separated path relative to the scope root.
+    path: string,
+    /// name is the entry's base name.
+    name: string,
+    dir: bool,
+    size: f64,
+    modified-ms: f64,
+  }
+
+  /// ListDataResponse holds directory entries sorted by path.
+  record list-data-response {
+    entries: list<data-entry>,
+    truncated: bool,
+  }
+
+  /// StatDataRequest asks for metadata of a path in the plugin's data dir.
+  record stat-data-request {
+    path: string,
+    scope: string,
+  }
+
+  /// StatDataResponse reports whether a path exists and its metadata.
+  record stat-data-response {
+    found: bool,
+    dir: bool,
+    size: f64,
+    modified-ms: f64,
+  }
+
+  /// MkdirDataRequest creates a directory path in the plugin's data dir.
+  record mkdir-data-request {
+    path: string,
+    scope: string,
+  }
+
+  /// DeleteDataRequest removes a file or directory in the plugin's data dir.
+  record delete-data-request {
+    path: string,
+    recursive: bool,
+    scope: string,
+  }
+
+  /// DeleteDataResponse says whether the target existed before deletion.
+  record delete-data-response {
+    deleted: bool,
+  }
+
+  /// MoveDataRequest moves or renames a file or directory within a scope.
+  record move-data-request {
+    from-path: string,
+    to-path: string,
+    make-dirs: bool,
+    scope: string,
+  }
+
+  /// DataStatsRequest asks for plugin private file quota and usage.
+  record data-stats-request {
+    scope: string,
+  }
+
+  /// DataStatsResponse reports plugin-wide file storage usage and quota.
+  record data-stats-response {
+    used-bytes: u32,
+    quota-bytes: u32,
+    file-count: u32,
+  }
+
   /// SendMessageRequest is a message for a session.
   record send-message-request {
     session-id: string,
@@ -705,6 +816,52 @@ interface db {
   sync-delete: func(req: sync-delete-request) -> result<sync-delete-response, string>;
 }
 
+/// DatafsService gives a plugin its own sandboxed, per-scope directory tree
+/// under plugin-data/<id>/files/ for storing and managing files and folders
+/// within a quota.
+interface datafs {
+  use types.{read-data-request, read-data-response, write-data-request, write-data-response, list-data-request, list-data-response, stat-data-request, stat-data-response, mkdir-data-request, delete-data-request, delete-data-response, move-data-request, data-stats-request, data-stats-response};
+
+  /// ReadData reads a regular file from the plugin's private data directory.
+  /// Needs the permission fs:data.
+  read-data: func(req: read-data-request) -> result<read-data-response, string>;
+
+  /// WriteData writes a regular file whole, atomically, inside the plugin's
+  /// private data directory.
+  /// Needs the permission fs:data.
+  write-data: func(req: write-data-request) -> result<write-data-response, string>;
+
+  /// ListData lists entries in a directory (optionally recursively) inside the
+  /// plugin's private data directory.
+  /// Needs the permission fs:data.
+  list-data: func(req: list-data-request) -> result<list-data-response, string>;
+
+  /// StatData returns metadata for a file or directory inside the plugin's
+  /// private data directory.
+  /// Needs the permission fs:data.
+  stat-data: func(req: stat-data-request) -> result<stat-data-response, string>;
+
+  /// MkdirData creates a directory (and any missing parents) inside the
+  /// plugin's private data directory.
+  /// Needs the permission fs:data.
+  mkdir-data: func(req: mkdir-data-request) -> result<_, string>;
+
+  /// DeleteData removes a file or directory inside the plugin's private data
+  /// directory.
+  /// Needs the permission fs:data.
+  delete-data: func(req: delete-data-request) -> result<delete-data-response, string>;
+
+  /// MoveData renames or moves a file or directory within the same scope of the
+  /// plugin's private data directory.
+  /// Needs the permission fs:data.
+  move-data: func(req: move-data-request) -> result<_, string>;
+
+  /// DataStats returns total bytes used across the plugin's private data
+  /// directory, its quota, and file count.
+  /// Needs the permission fs:data.
+  data-stats: func(req: data-stats-request) -> result<data-stats-response, string>;
+}
+
 /// MessagesService acts on this node's sessions: sends their agents
 /// messages, starts agents and stops those the plugin started. A message
 /// is headed as the plugin's, so that the agent cannot take it for the
@@ -828,6 +985,7 @@ world plugin {
   import http;
   import commands;
   import db;
+  import datafs;
   import messages;
   import files;
   import secrets;
