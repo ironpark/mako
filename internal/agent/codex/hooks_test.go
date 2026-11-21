@@ -37,7 +37,7 @@ func TestCodexHooksAreTrustedOverrides(t *testing.T) {
 		`hooks.Stop=[{hooks=[{type="command",command="'/bin/san\"bo' hook '/run/h.sock'",timeout=10}]}]`,
 		`hooks.PermissionRequest=[{hooks=[{type="command",command="'/bin/san\"bo' hook '/run/h.sock'",timeout=86400}]}]`,
 		`hooks.PostCompact=[{hooks=[{type="command",command="'/bin/san\"bo' hook '/run/h.sock'",timeout=10}]}]`,
-		`hooks.Interrupt=[{hooks=[{type="command",command="'/bin/san\"bo' hook '/run/h.sock'",timeout=10}]}]`,
+		`hooks.Interrupt=[{hooks=[{type="command",command="'/bin/san\"bo' hook '/run/h.sock'",timeout=3}]}]`,
 		`hooks.SubagentStart=[{hooks=[{type="command",command="'/bin/san\"bo' hook '/run/h.sock'",timeout=10}]}]`,
 		`hooks.SubagentStop=[{hooks=[{type="command",command="'/bin/san\"bo' hook '/run/h.sock'",timeout=10}]}]`,
 		`"/<session-flags>/config.toml:permission_request:0:0"={trusted_hash="sha256:`,

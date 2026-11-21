@@ -28,7 +28,8 @@ var hookEvents = []agent.HookEvent{
 	{Name: "PostCompact", Timeout: agent.HookTimeout},
 	{Name: "Stop", Timeout: agent.HookTimeout},
 	{Name: "SessionEnd", Timeout: 3},
-	{Name: "Interrupt", Timeout: agent.HookTimeout},
+	// Codex clamps Interrupt hooks to a 3s timeout before computing their trust hash.
+	{Name: "Interrupt", Timeout: 3},
 	{Name: "SubagentStart", Timeout: agent.HookTimeout},
 	{Name: "SubagentStop", Timeout: agent.HookTimeout},
 }
