@@ -26,10 +26,19 @@ type record struct {
 	Timestamp time.Time `json:"timestamp"`
 	// Meta is a turn Claude Code adds for the model, such as the prompt a
 	// slash command expands to; Summary is the summary a compaction leaves.
-	Meta    bool            `json:"isMeta"`
-	Summary bool            `json:"isCompactSummary"`
-	UUID    string          `json:"uuid"`
-	Message json.RawMessage `json:"message"`
+	Meta         bool            `json:"isMeta"`
+	Summary      bool            `json:"isCompactSummary"`
+	UUID         string          `json:"uuid"`
+	Message      json.RawMessage `json:"message"`
+	PluginPrompt *pluginPrompt   `json:"pluginPrompt"`
+}
+
+// pluginPrompt is the unwrapped prompt Claude Code attaches alongside a
+// plugin-submitted turn whose message text is wrapped in
+// "The <name> plugin sent a message: ...".
+type pluginPrompt struct {
+	Name string `json:"name"`
+	Text string `json:"text"`
 }
 
 // Identity is the first record of the session's own, not a subagent's.
@@ -77,8 +86,12 @@ func (d *decoder) Line(line []byte) []*protocol.ChatMessage {
 		}
 		return parsed
 	}
+	pluginText := ""
+	if r.Type == "user" && r.PluginPrompt != nil {
+		pluginText = r.PluginPrompt.Text
+	}
 	out := parsed[:0]
-	for _, m := range unwrap(parsed, &d.command) {
+	for _, m := range unwrap(parsed, &d.command, pluginText) {
 		if d.retyped(m) {
 			continue
 		}

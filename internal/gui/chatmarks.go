@@ -7,8 +7,10 @@ import (
 	"strings"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/widget"
 
+	"github.com/ironpark/mako/internal/gui/mdview"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -133,11 +135,23 @@ func parseMark(line string) (chatMark, bool) {
 	return mark, true
 }
 
+// markPreviewMaxHeight caps a long agent/marked message on initial display
+// (~20 lines of body prose), with a soft bottom fade and Show more / Collapse
+// controls.
+const (
+	markPreviewMaxHeight = 420.0
+	markPreviewFade      = 44.0
+)
+
 // markedTurn is a user turn of marked prompts: each a card, the user's
 // own to the right, as the user's turns go, and the rest to the left.
 func markedTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage, marks []chatMark) ggui.Widget {
 	state := m.chatState(id)
 	sessions := ggui.Peek(m.Sessions)
+	var host mdview.Host = mdview.Base{}
+	if m != nil && info != nil {
+		host = pageHost{m: m, id: id, doc: docInfo{Node: info.GetNodeId(), Path: joinPath(info.GetProject(), "conversation.md")}}
+	}
 	rows := make([]ggui.Widget, 0, len(marks))
 	for i, mk := range marks {
 		if mk.Kind == markNone {
@@ -165,14 +179,106 @@ func markedTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.C
 			glyph, title, detail = icon("file-text").Size(14).Color(skin.AccentBright), "//"+mk.From, T("Prompt template")
 		}
 		// A template's prompt is the user's, said at length: folded, as a
-		// message from an agent is not.
-		open := state.toolOpen(chatMessageKey(msg)+"\x00mark"+strconv.Itoa(i), mk.Kind != markTemplate)
+		// message from an agent is not. Long open messages preview up to
+		// markPreviewMaxHeight (~20 lines) with expand and full-collapse actions.
+		key := chatMessageKey(msg) + "\x00mark" + strconv.Itoa(i)
+		open := state.toolOpen(key, mk.Kind != markTemplate)
+		expanded := state.toolOpen(key+"\x00full", false)
 		header := foldHeader(open, glyph, widget.Text(title).Size(13).Weight(ggui.WeightMedium).NoWrap(), detail, title)
-		body := widget.Padding(widget.Text(mk.Text).Size(13.5).Selectable(), 2, 10, 8, 10)
-		card := widget.Box(widget.Column(header, reveal(open, func() ggui.Widget { return body })).Stretch()).
+		body := reveal(open, func() ggui.Widget {
+			var rendered ggui.Widget
+			if mk.Kind == markEvent {
+				rendered = toolBlock(mk.Text, false)
+			} else {
+				rendered = mdview.Column(host, mk.Text)
+			}
+			padded := widget.Padding(rendered, 2, 10, 8, 10)
+			return ggui.View(expanded, func(full bool) ggui.Widget {
+				return &clampedMarkBody{
+					content:     padded,
+					expandBar:   markBodyBar(T("Show more"), "chevron-down", func() { expanded.Set(true) }, T("Collapse"), func() { open.Set(false) }),
+					collapseBar: markBodyBar(T("Show less"), "chevron-up", func() { expanded.Set(false) }, T("Collapse"), func() { open.Set(false) }),
+					maxH:        markPreviewMaxHeight,
+					fadeH:       markPreviewFade,
+					expanded:    full,
+				}
+			})
+		})
+		card := widget.Box(widget.Column(header, body).Stretch()).
 			Fill(skin.Surface1).Border(1, skin.Border).Radius(12).Pad(4).MaxWidth(680)
 		var w ggui.Widget = &withCopy{content: card, button: copyButton(m, mk.Text)}
 		rows = append(rows, widget.Align(w).At(pick(mk.Kind == markTemplate, 1.0, 0.0), 0))
 	}
 	return widget.Column(rows...).Gap(8).Stretch()
+}
+
+// markBodyBar sits under a long marked card's body, letting the reader expand
+// or shorten the preview, or completely collapse the card, while leaving the
+// bottom-right corner clear for the hover copy button.
+func markBodyBar(primaryLabel, primaryIcon string, onPrimary func(), collapseLabel string, onCollapse func()) ggui.Widget {
+	primary := ui.ButtonOf(widget.Row(
+		icon(primaryIcon).Size(12).Color(skin.Muted),
+		widget.Text(primaryLabel).Size(12).Color(skin.Muted).NoWrap(),
+	).Gap(4).Align(widget.AlignCenter), onPrimary).Ghost().Pad(3, 8).Radius(6).Name(primaryLabel)
+	collapse := ui.ButtonOf(widget.Text(collapseLabel).Size(12).Color(skin.ExtraMuted).NoWrap(), onCollapse).
+		Ghost().Pad(3, 8).Radius(6).Name(collapseLabel)
+	return widget.Box(widget.Column(
+		hline(),
+		widget.Padding(widget.Row(primary, collapse, widget.Spacer()).Gap(4).Align(widget.AlignCenter), 4, 6, 2, 6),
+	).Stretch())
+}
+
+// clampedMarkBody shows content in full when it fits within maxH (or when
+// expanded), and otherwise clips it to maxH with a soft bottom fade and shows
+// expandBar below. Expanded tall bodies keep collapseBar below so they can be
+// returned to preview or fully collapsed without scrolling back to the header.
+type clampedMarkBody struct {
+	content     ggui.Widget
+	expandBar   ggui.Widget
+	collapseBar ggui.Widget
+	maxH        float64
+	fadeH       float64
+	expanded    bool
+
+	contentSize ggui.Size
+	barSize     ggui.Size
+	clipped     bool
+}
+
+func (c *clampedMarkBody) Layout(cs ggui.Constraints, env ggui.Env) ggui.Size {
+	bodyCS := ggui.Constraints{MinW: cs.MinW, MaxW: cs.MaxW, MaxH: ggui.Unbounded}
+	c.contentSize = c.content.Layout(bodyCS, env)
+	if c.contentSize.H <= c.maxH+1 {
+		c.clipped = false
+		c.barSize = ggui.Size{}
+		return cs.Constrain(c.contentSize)
+	}
+	if !c.expanded {
+		c.clipped = true
+		c.barSize = c.expandBar.Layout(bodyCS, env)
+		return cs.Constrain(ggui.Sz(max(c.contentSize.W, c.barSize.W), c.maxH+c.barSize.H))
+	}
+	c.clipped = false
+	c.barSize = c.collapseBar.Layout(bodyCS, env)
+	return cs.Constrain(ggui.Sz(max(c.contentSize.W, c.barSize.W), c.contentSize.H+c.barSize.H))
+}
+
+func (c *clampedMarkBody) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	if c.clipped {
+		clipH := min(c.maxH, r.Size.H)
+		viewRect := ggui.Rct(r.Origin, ggui.Sz(r.Size.W, clipH))
+		contentRect := ggui.Rct(r.Origin, ggui.Sz(r.Size.W, c.contentSize.H))
+		dst.Clip(viewRect).FadeEdges(viewRect, false, 0, min(c.fadeH, clipH), func(dst *ggui.Canvas) {
+			dst.Paint(c.content, contentRect)
+		})
+		barRect := ggui.Rct(ggui.Pt(r.Origin.X, r.Origin.Y+clipH), ggui.Sz(r.Size.W, c.barSize.H))
+		dst.Paint(c.expandBar, barRect)
+		return
+	}
+	contentRect := ggui.Rct(r.Origin, ggui.Sz(r.Size.W, c.contentSize.H))
+	dst.Paint(c.content, contentRect)
+	if c.barSize.H > 0 {
+		barRect := ggui.Rct(ggui.Pt(r.Origin.X, r.Origin.Y+c.contentSize.H), ggui.Sz(r.Size.W, c.barSize.H))
+		dst.Paint(c.collapseBar, barRect)
+	}
 }

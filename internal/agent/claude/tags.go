@@ -25,8 +25,30 @@ const (
 	midTurnEnd = "\n\nThis is how Claude Code surfaces"
 )
 
+// pluginTurn and midTurnPlugin open the envelope Claude Code wraps around a
+// prompt submitted by a plugin (such as mako-live) between turns or mid-turn.
+var (
+	pluginTurn    = regexp.MustCompile(`^The [^\n]+ plugin sent a message:\n`)
+	midTurnPlugin = regexp.MustCompile(`^The [^\n]+ plugin sent a message while you were working:\n`)
+)
+
 // pasted matches the tags Claude Code wraps pasted text in.
 var pasted = regexp.MustCompile(`</?pasted_content[^>]*>`)
+
+// unwrapPluginPrompt strips Claude Code's "The <name> plugin sent a message:"
+// envelope and its trailing "This is how Claude Code surfaces..." note.
+func unwrapPluginPrompt(s string) (string, bool) {
+	loc := pluginTurn.FindStringIndex(s)
+	if loc == nil {
+		return "", false
+	}
+	body := s[loc[1]:]
+	end := strings.LastIndex(body, midTurnEnd)
+	if end < 0 {
+		return "", false
+	}
+	return strings.TrimSpace(body[:end]), true
+}
 
 // inner is the content of s's first <name> tag, trimmed.
 func inner(s, name string) (string, bool) {
@@ -38,8 +60,8 @@ func inner(s, name string) (string, bool) {
 	return strings.TrimSpace(body), true
 }
 
-// midTurnMessages are the messages the user sent while the agent worked,
-// which Claude Code hands it in reminders.
+// midTurnMessages are the messages the user or a plugin sent while the agent
+// worked, which Claude Code hands it in reminders.
 func midTurnMessages(s string) []*protocol.ChatMessage {
 	var out []*protocol.ChatMessage
 	for {
@@ -48,8 +70,19 @@ func midTurnMessages(s string) []*protocol.ChatMessage {
 			return out
 		}
 		body, after, _ := strings.Cut(rest, "</system-reminder>")
-		if text, ok := strings.CutPrefix(strings.TrimSpace(body), midTurn); ok {
-			text, _, _ = strings.Cut(text, midTurnEnd)
+		trimmed := strings.TrimSpace(body)
+		var text string
+		var matched bool
+		if rest, ok := strings.CutPrefix(trimmed, midTurn); ok {
+			text, matched = rest, true
+		} else if loc := midTurnPlugin.FindStringIndex(trimmed); loc != nil {
+			text, matched = trimmed[loc[1]:], true
+		}
+		if matched {
+			if end := strings.LastIndex(text, midTurnEnd); end >= 0 {
+				text = text[:end]
+			}
+			text = strings.TrimSpace(text)
 			if text != "" {
 				out = append(out, &protocol.ChatMessage{Role: "user", Text: text})
 			}
@@ -61,12 +94,12 @@ func midTurnMessages(s string) []*protocol.ChatMessage {
 // unwrap turns the tagged parts of the messages read from a record into
 // what the user saw. command is the last slash command typed, whose output
 // a later record holds.
-func unwrap(messages []*protocol.ChatMessage, command *string) []*protocol.ChatMessage {
+func unwrap(messages []*protocol.ChatMessage, command *string, pluginText string) []*protocol.ChatMessage {
 	var out []*protocol.ChatMessage
 	for _, m := range messages {
 		switch m.GetRole() {
 		case "user":
-			out = append(out, userTurn(m.GetText(), command)...)
+			out = append(out, userTurn(m.GetText(), command, pluginText)...)
 		case "tool":
 			out = append(out, m)
 			if m.GetOutput() {
@@ -80,10 +113,17 @@ func unwrap(messages []*protocol.ChatMessage, command *string) []*protocol.ChatM
 }
 
 // userTurn is a user's turn as the user saw it.
-func userTurn(text string, command *string) []*protocol.ChatMessage {
+func userTurn(text string, command *string, pluginText string) []*protocol.ChatMessage {
 	out := midTurnMessages(text)
 	text = agent.DropTags(text, hidden...)
 	text = strings.TrimSpace(pasted.ReplaceAllString(text, ""))
+	if pluginTurn.MatchString(text) {
+		if pluginText != "" {
+			text = strings.TrimSpace(pluginText)
+		} else if unwrapped, ok := unwrapPluginPrompt(text); ok {
+			text = unwrapped
+		}
+	}
 	// A turn is a command, its output or a notice only when it opens with
 	// the tag: the same tags pasted into a message are the message.
 	leads := func(names ...string) bool {

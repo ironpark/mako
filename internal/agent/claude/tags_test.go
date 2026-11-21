@@ -75,3 +75,57 @@ func decode(body string) []*protocol.ChatMessage {
 	}
 	return out
 }
+
+func TestPluginPromptEnvelopeStripped(t *testing.T) {
+	line := func(fields map[string]any) string {
+		b, _ := json.Marshal(fields)
+		return string(b) + "\n"
+	}
+	makoMsg := "[Mako message 623 from session ab12 (se-build). Answer with send_message to ab12 if it asks for one.]\nbuildx done."
+	footer := "\n\nThis is how Claude Code surfaces a prompt a plugin submits between turns — it starts this turn in the user's place. Address the message above."
+	body := line(map[string]any{
+		"type":         "user",
+		"uuid":         "p1",
+		"message":      map[string]any{"role": "user", "content": "The mako-live plugin sent a message:\n" + makoMsg + footer},
+		"pluginPrompt": map[string]any{"name": "mako-live", "text": makoMsg},
+	}) + line(map[string]any{
+		"type":    "user",
+		"uuid":    "p2",
+		"message": map[string]any{"role": "user", "content": "The mako-live plugin sent a message:\nplain prompt without metadata" + footer},
+	}) + line(map[string]any{
+		"type": "user",
+		"uuid": "p3",
+		"message": map[string]any{
+			"role": "user",
+			"content": []map[string]any{
+				{"type": "tool_result", "tool_use_id": "t1", "content": "ok\n<system-reminder>\nThe mako-live plugin sent a message while you were working:\n" + makoMsg + "\n\nThis is how Claude Code surfaces a prompt a plugin submits while you are working.\n</system-reminder>"},
+			},
+		},
+	}) + line(map[string]any{
+		// Plain user text without Claude's plugin footer must not be altered.
+		"type":    "user",
+		"uuid":    "p4",
+		"message": map[string]any{"role": "user", "content": "The mako-live plugin sent a message:\nliterally typed by user"},
+	})
+	msgs := decode(body)
+	var users []string
+	for _, m := range msgs {
+		if m.GetRole() == "user" {
+			users = append(users, m.GetText())
+		}
+	}
+	want := []string{
+		makoMsg,
+		"plain prompt without metadata",
+		makoMsg,
+		"The mako-live plugin sent a message:\nliterally typed by user",
+	}
+	if len(users) != len(want) {
+		t.Fatalf("got %d user messages, want %d: %q", len(users), len(want), users)
+	}
+	for i := range want {
+		if users[i] != want[i] {
+			t.Errorf("user[%d] = %q, want %q", i, users[i], want[i])
+		}
+	}
+}

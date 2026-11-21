@@ -187,6 +187,51 @@ func TestChatToolRowsFold(t *testing.T) {
 	}
 }
 
+func TestChatTurnsGroupOnlySameToolCalls(t *testing.T) {
+	msgs := []*protocol.ChatMessage{
+		{Role: "tool", Id: "r1", Tool: "Read", Kind: protocol.ToolRead, Detail: "a.go"},
+		{Role: "tool", Id: "r2", Tool: "Read", Kind: protocol.ToolRead, Detail: "b.go"},
+		{Role: "tool", Id: "e1", Tool: "Edit", Kind: protocol.ToolEdit, Detail: "a.go"},
+		{Role: "tool", Id: "b1", Tool: "Bash", Kind: protocol.ToolShell, Detail: "go test ./..."},
+		{Role: "tool", Id: "b2", Tool: "Bash", Kind: protocol.ToolShell, Detail: "git status"},
+		{Role: "tool", Id: "b3", Tool: "Bash", Kind: protocol.ToolShell, Detail: "git diff"},
+	}
+	turns := chatTurns(msgs, nil)
+	if len(turns) != 3 {
+		t.Fatalf("got %d turns, want 3 (Read×2, Edit×1, Bash×3)", len(turns))
+	}
+	if len(turns[0].Messages) != 2 || !turns[0].Folded {
+		t.Fatalf("turn 0 = len %d folded=%v, want len 2 folded=true", len(turns[0].Messages), turns[0].Folded)
+	}
+	if len(turns[1].Messages) != 1 || !turns[1].Folded {
+		t.Fatalf("turn 1 = len %d folded=%v, want len 1 folded=true", len(turns[1].Messages), turns[1].Folded)
+	}
+	if len(turns[2].Messages) != 3 || turns[2].Folded {
+		t.Fatalf("turn 2 = len %d folded=%v, want len 3 folded=false (last run)", len(turns[2].Messages), turns[2].Folded)
+	}
+	// Render the chat and confirm Read×2 is folded into its own header while
+	// Edit stays ungrouped and Bash×3 is open as the latest run.
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
+	m.Selected.Set("s")
+	state := m.chatState("s")
+	state.loading = true
+	state.result.Set(chatResult{Loaded: true, Chat: &protocol.Chat{Supported: true, Conversation: "c", Messages: msgs}})
+	p := ggui.ProbeBuilder(func() ggui.Widget { return chatView(m, "s", 1) }, ggui.Sz(900, 700))
+	defer p.Close()
+	p.Frame()
+	if _, ok := p.Find("Read ×2"); !ok {
+		t.Fatalf("missing grouped Read ×2 header:\n%s", p.Semantics().String())
+	}
+	if _, ok := p.Find("Edit  a.go"); !ok {
+		t.Fatalf("missing standalone Edit row:\n%s", p.Semantics().String())
+	}
+	if _, ok := p.Find("Bash ×3"); !ok {
+		t.Fatalf("missing grouped Bash ×3 header:\n%s", p.Semantics().String())
+	}
+}
+
 // A plain shell has no conversation, so the shortcut leaves it in Terminal.
 func TestShellHasNoChat(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())

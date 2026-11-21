@@ -686,15 +686,26 @@ func (l *lane) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	dst.Paint(l.child, ggui.Rct(ggui.Pt(r.Origin.X+(r.Size.W-l.size.W)/2, r.Origin.Y), l.size))
 }
 
+// toolGroupName names the tool a tool message belongs to so only consecutive
+// calls of the same tool merge into one card/run.
+func toolGroupName(msg *protocol.ChatMessage) string {
+	name, _, _, _, _ := toolParts(msg)
+	return name
+}
+
 // chatTurns draws the conversation: the user on the right, the agent's prose
-// as a page, and each run of tools as one quiet card whose rows fold. A
-// long run folds into one line naming its tools, all but the last run,
-// which is the agent's work in hand.
+// as a page, and each run of consecutive calls to the same tool as one quiet
+// card whose rows fold. A run of repeated calls folds into one line naming
+// the tool and its targets, all but the last run, which is the agent's work
+// in hand.
 func chatTurns(messages []*protocol.ChatMessage, agents map[string]*protocol.SubAgent) []chatTurnItem {
 	var turns []chatTurnItem
+	sameToolRun := func(a, b *protocol.ChatMessage) bool {
+		return a.GetRole() == "tool" && b.GetRole() == "tool" && toolGroupName(a) == toolGroupName(b)
+	}
 	lastRun := -1
 	for i := range messages {
-		if messages[i].GetRole() == "tool" && (i == 0 || messages[i-1].GetRole() != "tool") {
+		if messages[i].GetRole() == "tool" && (i == 0 || !sameToolRun(messages[i-1], messages[i])) {
 			lastRun = i
 		}
 	}
@@ -705,7 +716,7 @@ func chatTurns(messages []*protocol.ChatMessage, agents map[string]*protocol.Sub
 		if messages[i].GetRole() == "tool" {
 			t.Key = "run:" + t.Key
 			t.Folded = start != lastRun
-			for i < len(messages) && messages[i].GetRole() == "tool" {
+			for i < len(messages) && sameToolRun(messages[start], messages[i]) {
 				t.Messages = append(t.Messages, messages[i])
 				t.Agents = append(t.Agents, agents[messages[i].GetId()])
 				i++
@@ -766,34 +777,57 @@ func chatTurnRow(m *model, id string, info *protocol.SessionInfo, state *chatSta
 		return chatTurn(m, id, info, t.Messages[0])
 	}
 	var tools []ggui.Widget
-	var names []string
 	for i, msg := range t.Messages {
 		tools = append(tools, toolRow(m, id, state, msg, t.Agents[i]))
-		name, _, _, _, _ := toolParts(msg)
-		names = append(names, name)
 	}
 	var body ggui.Widget = widget.Column(tools...).Gap(2).Stretch()
 	if len(tools) >= foldRun {
-		body = toolRun(state, chatMessageKey(t.Messages[0]), names, t.Folded, body)
+		body = toolRun(m, id, state, t, body)
 	}
 	return widget.Box(body).Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(6, 8)
 }
 
-// foldRun is how many tool calls in a row fold into one line.
-const foldRun = 3
+// foldRun is how many consecutive calls to the same tool fold into one line.
+const foldRun = 2
 
-// toolRun is a long run of tool calls, folded to a line that counts them
-// and names their tools.
-func toolRun(state *chatState, key string, names []string, folded bool, body ggui.Widget) ggui.Widget {
-	open := state.toolOpen("run:"+key, !folded)
-	var distinct []string
-	for _, n := range names {
-		if !slices.Contains(distinct, n) {
-			distinct = append(distinct, n)
+// toolRun is a run of consecutive calls to the same tool, folded to a line
+// showing that tool's icon, name, count, and target summary.
+func toolRun(m *model, id string, state *chatState, t chatTurnItem, body ggui.Widget) ggui.Widget {
+	first := t.Messages[0]
+	name := toolGroupName(first)
+	var details []string
+	var anyFailed, anyActive bool
+	for i, msg := range t.Messages {
+		_, detail, _, _, failed := toolParts(msg)
+		if detail != "" && !slices.Contains(details, detail) {
+			details = append(details, detail)
+		}
+		if failed {
+			anyFailed = true
+		}
+		if msg.GetPending() || t.Agents[i].GetRunning() {
+			anyActive = true
 		}
 	}
-	title := Tf("%d tool calls", len(names))
-	header := foldHeader(open, icon("layers").Size(14).Color(skin.Muted), widget.Text(title).Size(12.5).NoWrap(), strings.Join(distinct, ", "), title)
+	open := state.toolOpen("run:"+chatMessageKey(first), !t.Folded || anyFailed || anyActive)
+	var glyph ggui.Widget = icon(toolGlyph(first.GetKind())).Size(14).Color(pick(anyFailed, skin.DotDown, skin.Muted))
+	if anyActive {
+		still := glyph
+		glyph = ggui.Reactive(func() ggui.Widget {
+			for i, msg := range t.Messages {
+				if toolLive(m, id, msg, t.Agents[i]) {
+					return ui.Spinner().Size(14)
+				}
+			}
+			return still
+		})
+	}
+	count := "×" + strconv.Itoa(len(t.Messages))
+	title := widget.Row(
+		widget.Text(name).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap(),
+		muted(widget.Text(count).Size(12).NoWrap()),
+	).Gap(6).Align(widget.AlignCenter)
+	header := foldHeader(open, glyph, title, strings.Join(details, ", "), name+" "+count)
 	return widget.Column(header, reveal(open, func() ggui.Widget { return body })).Gap(2).Stretch()
 }
 
